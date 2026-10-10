@@ -11,6 +11,8 @@
 #include "FirstPersonAnimation.h"
 #include "ProjectPaths.h"
 #include "Model.h"
+#include "AnimRetarget.h"
+#include "../Game/IK.h"
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
@@ -711,7 +713,217 @@ void TestCameraEffects() {
     }
 }
 
+// A UE4 mannequin clip (3 spine bones, Z-up, cm, arms in an A) baked onto a UE5 rig (5 spine bones, 2 neck
+// bones, Y-up, m, taller, arms in a T): the chest turns as the source's does, the in-between spine bones take a
+// share, the arm points where the source's points, and the pelvis' lift is scaled to the taller legs.
+static void TestRetargetUe4ToUe5() {
+    auto node = [](std::vector<AnimNode>& v, const std::string& name, int parent, glm::vec3 pos, glm::vec3 scale = glm::vec3(1.0f)) {
+        AnimNode n;
+        n.Name = name;
+        n.Parent = parent;
+        n.BindTRS.T = pos;
+        n.BindTRS.S = scale;
+        n.BindLocal = n.BindTRS.ToMatrix();
+        v.push_back(n);
+        return (int)v.size() - 1;
+    };
+    // Source: X forward, Z up (right-handed, so right is -Y); centimetres under a 0.01 armature.
+    std::vector<AnimNode> src;
+    const int arm = node(src, "Armature", -1, glm::vec3(0.0f), glm::vec3(0.01f));
+    const int sRoot = node(src, "root", arm, glm::vec3(0.0f));
+    const int sPelvis = node(src, "pelvis", sRoot, {0, 0, 90});
+    const int sS1 = node(src, "spine_01", sPelvis, {0, 0, 10});
+    const int sS2 = node(src, "spine_02", sS1, {0, 0, 15});
+    const int sS3 = node(src, "spine_03", sS2, {0, 0, 15});
+    const int sNeck = node(src, "neck_01", sS3, {0, 0, 15});
+    node(src, "head", sNeck, {0, 0, 10});
+    const int sClav = node(src, "clavicle_r", sS3, {0, -5, 10});
+    const int sUp = node(src, "upperarm_r", sClav, {0, -12, 0});
+    node(src, "lowerarm_r", sUp, glm::vec3(0, -1, -1) * (28.0f / std::sqrt(2.0f))); // the A: 45 degrees down
+    for (int side = 0; side < 2; ++side) {
+        const std::string s = side ? "_r" : "_l";
+        const int th = node(src, "thigh" + s, sPelvis, {0, side ? -10.0f : 10.0f, 0});
+        const int ca = node(src, "calf" + s, th, {0, 0, -45});
+        node(src, "foot" + s, ca, {0, 0, -40});
+    }
+    // Target, Y-up facing +Z (right = -X), metres, 1.1x the proportions, arms in a T.
+    std::vector<AnimNode> tgt;
+    const float m = 0.011f;
+    const int tRoot = node(tgt, "root", -1, glm::vec3(0.0f));
+    const int tPelvis = node(tgt, "pelvis", tRoot, glm::vec3(0, 90, 0) * m);
+    int prev = tPelvis;
+    for (int i = 1; i <= 5; ++i) prev = node(tgt, "spine_0" + std::to_string(i), prev, glm::vec3(0, 8, 0) * m);
+    const int tChest = prev;
+    const int tNeck1 = node(tgt, "neck_01", tChest, glm::vec3(0, 8, 0) * m);
+    const int tNeck2 = node(tgt, "neck_02", tNeck1, glm::vec3(0, 7, 0) * m);
+    node(tgt, "head", tNeck2, glm::vec3(0, 10, 0) * m);
+    const int tClav = node(tgt, "clavicle_r", tChest, glm::vec3(-5, 2, 0) * m);
+    const int tUp = node(tgt, "upperarm_r", tClav, glm::vec3(-12, 0, 0) * m);
+    const int tLow = node(tgt, "lowerarm_r", tUp, glm::vec3(-28, 0, 0) * m);
+    for (int side = 0; side < 2; ++side) {
+        const std::string s = side ? "_r" : "_l";
+        const int th = node(tgt, "thigh" + s, tPelvis, glm::vec3(side ? -10.0f : 10.0f, 0, 0) * m);
+        const int ca = node(tgt, "calf" + s, th, glm::vec3(0, -45, 0) * m);
+        node(tgt, "foot" + s, ca, glm::vec3(0, -40, 0) * m);
+    }
+    CHECK(RetargetIsUe4ToUe5(src, tgt));
+    const std::vector<int> match = RetargetMatchNodes(src, tgt);
+    CHECK(match[tChest] == sS3);
+    CHECK(match[tgt[tChest].Parent] == -1); // spine_04 is filled in, not matched
+
+    // The clip: each source spine bone bends 10 degrees forward (+Z toward +X), 30 at the chest;
+    // the pelvis lifts 10 cm.
+    AnimationClip clip;
+    clip.DurationTicks = 10.0f;
+    clip.TicksPerSecond = 10.0f;
+    const glm::quat q10 = glm::angleAxis(glm::radians(10.0f), glm::vec3(0, 1, 0));
+    for (const char* bone : {"spine_01", "spine_02", "spine_03"}) {
+        BoneAnimChannel bend;
+        bend.BoneName = bone;
+        bend.Rotations = {{q10, 0.0f}, {q10, 10.0f}};
+        clip.Channels.push_back(bend);
+    }
+    BoneAnimChannel lift;
+    lift.BoneName = "pelvis";
+    lift.Positions = {{glm::vec3(0, 0, 100), 0.0f}, {glm::vec3(0, 0, 100), 10.0f}};
+    clip.Channels.push_back(lift);
+
+    AnimationClip baked;
+    std::vector<int> nodeChannel;
+    CHECK(RetargetBakeClip(src, clip, tgt, baked, nodeChannel));
+    if (nodeChannel.size() != tgt.size()) return;
+    std::vector<glm::mat4> g(tgt.size()), rest(tgt.size());
+    for (size_t i = 0; i < tgt.size(); ++i) {
+        const int c = nodeChannel[i];
+        const glm::mat4 local = c >= 0 ? baked.Channels[c].Sample(5.0f, tgt[i].BindTRS).ToMatrix() : tgt[i].BindLocal;
+        g[i] = tgt[i].Parent >= 0 ? g[tgt[i].Parent] * local : local;
+        rest[i] = tgt[i].Parent >= 0 ? rest[tgt[i].Parent] * tgt[i].BindLocal : tgt[i].BindLocal;
+    }
+    auto turn = [&](int i) { return glm::degrees(glm::angle(glm::normalize(glm::quat_cast(glm::mat3(g[i])) * glm::inverse(glm::quat_cast(glm::mat3(rest[i])))))); };
+    // The chest turns the source's 30 degrees, forward: its up leans toward the target's front (+Z).
+    CHECK(std::abs(turn(tChest) - 30.0f) < 1.0f);
+    const glm::vec3 chestUp = glm::normalize(glm::vec3(g[tNeck1][3]) - glm::vec3(g[tChest][3]));
+    CHECK(chestUp.z > 0.4f);
+    // The filled-in spine_02 / spine_04 sit between their neighbours (10 / 20 / 30 degrees on the matched ones).
+    const int tS4 = tgt[tChest].Parent, tS3 = tgt[tS4].Parent, tS2 = tgt[tS3].Parent;
+    CHECK(std::abs(turn(tS3) - 20.0f) < 1.0f);
+    CHECK(turn(tS2) > 11.0f && turn(tS2) < 19.0f);
+    CHECK(turn(tS4) > 21.0f && turn(tS4) < 29.0f);
+    // The arm hangs in the source's A (45 degrees down from the T), rotated with the chest.
+    const glm::vec3 armDir = glm::normalize(glm::vec3(g[tLow][3]) - glm::vec3(g[tUp][3]));
+    const glm::vec3 chestRight = glm::normalize(glm::mat3(g[tChest]) * glm::vec3(-1, 0, 0));
+    const glm::vec3 chestDown = glm::normalize(glm::mat3(g[tChest]) * glm::vec3(0, -1, 0));
+    const glm::vec3 want = glm::normalize(chestRight + chestDown);
+    CHECK(glm::degrees(std::acos(glm::clamp(glm::dot(armDir, want), -1.0f, 1.0f))) < 2.0f);
+    // The pelvis lifts 10 cm of source leg, scaled to the target's 1.1x legs.
+    const float lifted = g[tPelvis][3].y - rest[tPelvis][3].y;
+    CHECK(std::abs(lifted - 0.10f * 1.1f) < 0.003f);
+}
+
+// Distance matching: a clip's time follows the character's travel. A path that covers 2 m evenly over the first
+// half and then stands (a stop's settle) - Traveled, Remaining and Pivot read it as the states use them, and the
+// pacing never runs backwards, freezes, or races ahead.
+static void TestDistanceMatching() {
+    using DM = AnimatorController::State::DistanceMode;
+    std::vector<float> curve;
+    for (int i = 0; i <= 10; ++i) curve.push_back(std::min(i, 5) * 0.4f); // 0 .. 2 m by phase 0.5, then still
+    CHECK(std::abs(AnimatorDistanceToPhase(curve, 0.0f, DM::Traveled, 1.0f) - 0.25f) < 1e-5f);
+    CHECK(std::abs(AnimatorDistanceToPhase(curve, 0.0f, DM::Remaining, 0.4f) - 0.4f) < 1e-5f);
+    // Nothing left to travel: where the clip stops moving (its settle then plays on the clock), not its end.
+    CHECK(std::abs(AnimatorDistanceToPhase(curve, 0.0f, DM::Remaining, 0.0f) - 0.5f) < 1e-5f);
+    CHECK(AnimatorDistanceToPhase(curve, 0.0f, DM::Traveled, -1.0f) == 0.0f);
+    // A pivot turning round 1.2 m along: 0.4 m short of it, and 0.2 m past it.
+    CHECK(std::abs(AnimatorDistanceToPhase(curve, 1.2f, DM::Pivot, -0.4f) - 0.2f) < 1e-5f);
+    CHECK(std::abs(AnimatorDistanceToPhase(curve, 1.2f, DM::Pivot, 0.2f) - 0.35f) < 1e-5f);
+    CHECK(AnimatorDistanceToPhase({}, 0.0f, DM::Traveled, 1.0f) < 0.0f);
+    // Monotonic in the distance.
+    float last = -1.0f;
+    bool rising = true;
+    for (float d = 0.0f; d <= 2.0f; d += 0.05f) {
+        const float ph = AnimatorDistanceToPhase(curve, 0.0f, DM::Traveled, d);
+        rising = rising && ph >= last;
+        last = ph;
+    }
+    CHECK(rising);
+    // Pacing: entering jumps straight there; after, 0.35x..3x the clock; with nothing ahead, the clock.
+    CHECK(AnimatorDistanceStep(0.0f, 0.4f, 0.01f, true) == 0.4f);
+    CHECK(std::abs(AnimatorDistanceStep(0.2f, 0.9f, 0.01f, false) - 0.23f) < 1e-6f);
+    CHECK(std::abs(AnimatorDistanceStep(0.2f, 0.201f, 0.01f, false) - 0.2035f) < 1e-6f);
+    CHECK(std::abs(AnimatorDistanceStep(0.5f, 0.5f, 0.01f, false) - 0.51f) < 1e-6f);
+    CHECK(std::abs(AnimatorDistanceStep(0.5f, 0.1f, 0.01f, false) - 0.51f) < 1e-6f);
+    // Through the animator: a one-shot state with a distance parameter follows it, a looping one ignores it.
+    AnimatorController c;
+    c.Parameters = {{"Dist", AnimatorController::ParamType::Float, 0.0f}};
+    AnimatorController::State st;
+    st.Name = "Start";
+    st.Loop = false;
+    st.DistanceParam = "Dist";
+    st.Motions.assign(1, AnimatorController::Motion{});
+    c.Layers[0].States = {st};
+    AnimatorControllerComponent ac;
+    const auto len = [](int, int) { return 2.0f; };
+    const auto phaseAt = [&](int, int, DM mode, float m) { return AnimatorDistanceToPhase(curve, 0.0f, mode, m); };
+    ac.SetFloat("Dist", 0.8f);
+    AdvanceAnimator(c, ac, 0.1f, len, phaseAt); // enters, placed straight at 0.8 m
+    CHECK(std::abs(ac.Layers[0].Stack.back().Phase - 0.2f) < 1e-5f);
+    ac.SetFloat("Dist", 0.9f);
+    AdvanceAnimator(c, ac, 0.1f, len, phaseAt); // clock step 0.05; the travel asks for +0.025
+    CHECK(std::abs(ac.Layers[0].Stack.back().Phase - 0.225f) < 1e-5f);
+    c.Layers[0].States[0].Loop = true;
+    AdvanceAnimator(c, ac, 0.1f, len, phaseAt);
+    CHECK(std::abs(ac.Layers[0].Stack.back().Phase - 0.275f) < 1e-5f);
+    // Saved and loaded.
+    c.Layers[0].States[0].Distance = DM::Pivot;
+    AnimatorController back;
+    CHECK(AnimatorController::FromJsonString(c.ToJsonString(), back) && back.Layers[0].States[0].DistanceParam == "Dist" &&
+          back.Layers[0].States[0].Distance == DM::Pivot);
+}
+
+// Twist bones: a hand turned about its forearm spreads that roll down the forearm's twist bones by where they sit
+// (exact at 0, 90 and 180 degrees); an upper arm's own roll is undone toward the shoulder.
+static void TestTwistBones() {
+    // root -> upper (along +X) -> lower (along +X) -> hand; upper has a twist bone a quarter down it, lower one at half
+    // and one at three quarters.
+    IK::Pose bind(7);
+    std::vector<int> parents = {-1, 0, 1, 2, 1, 2, 2};
+    std::vector<std::string> names = {"root", "upperarm_l", "lowerarm_l", "hand_l", "upperarm_twist_01_l", "lowerarm_twist_02_l", "lowerarm_twist_01_l"};
+    bind[2].T = glm::vec3(0.3f, 0.0f, 0.0f);
+    bind[3].T = glm::vec3(0.28f, 0.0f, 0.0f);
+    bind[4].T = glm::vec3(0.075f, 0.0f, 0.0f);
+    bind[5].T = glm::vec3(0.14f, 0.0f, 0.0f);
+    bind[6].T = glm::vec3(0.21f, 0.0f, 0.0f);
+    const auto upperTwist = IK::FindTwistBones(bind, parents, names, 1, 2);
+    const auto lowerTwist = IK::FindTwistBones(bind, parents, names, 2, 3);
+    CHECK(upperTwist.size() == 1 && std::abs(upperTwist[0].Share - 0.25f) < 1e-5f);
+    CHECK(lowerTwist.size() == 2 && std::abs(lowerTwist[0].Share - 0.5f) < 1e-5f && std::abs(lowerTwist[1].Share - 0.75f) < 1e-5f);
+    const glm::vec3 x(1.0f, 0.0f, 0.0f);
+    auto rollOf = [&](const IK::Pose& p, int node) { // a twist bone's turn about +X off its bind
+        const glm::quat d = glm::normalize(p[node].R * glm::inverse(bind[node].R));
+        return glm::degrees(2.0f * std::atan2(glm::dot(glm::vec3(d.x, d.y, d.z), x), d.w));
+    };
+    for (float deg : {0.0f, 90.0f, 180.0f, -120.0f}) {
+        IK::Pose pose = bind;
+        // The hand rolled, and bent a little (a swing, which the twist bones must not take).
+        pose[3].R = glm::angleAxis(glm::radians(deg), x) * glm::angleAxis(glm::radians(20.0f), glm::vec3(0, 0, 1));
+        const float roll = IK::EndRoll(pose, bind, 2, 3);
+        IK::SpreadTwist(pose, bind, 2, 3, lowerTwist, roll, true);
+        const float want = deg == 180.0f ? std::abs(glm::degrees(roll)) : deg;
+        CHECK(std::abs(std::abs(glm::degrees(roll)) - std::abs(want)) < 0.05f);
+        CHECK(std::abs(std::abs(rollOf(pose, 5)) - std::abs(want) * 0.5f) < 0.05f && std::abs(std::abs(rollOf(pose, 6)) - std::abs(want) * 0.75f) < 0.05f);
+    }
+    // The upper arm rolled 60 degrees in the shoulder: its twist bone near the shoulder turns 45 back.
+    IK::Pose pose = bind;
+    pose[1].R = glm::angleAxis(glm::radians(60.0f), x);
+    const float roll = IK::SegmentRoll(pose, bind, 1, 2);
+    CHECK(std::abs(glm::degrees(roll) - 60.0f) < 0.05f);
+    IK::SpreadTwist(pose, bind, 1, 2, upperTwist, roll, false);
+    CHECK(std::abs(rollOf(pose, 4) + 45.0f) < 0.05f);
+}
+
 void RegisterAnimationTests(UnitTestSupport::TestList& tests) {
+    tests.push_back({"Retarget: UE4 mannequin clip baked onto a UE5 rig", TestRetargetUe4ToUe5});
+    tests.push_back({"Distance matching: phase from travel, paced", TestDistanceMatching});
+    tests.push_back({"Twist bones spread a limb's roll", TestTwistBones});
 
     tests.push_back({"Action camera and firing shake",TestCameraEffects});
     tests.push_back({"ADS reload preserves additive locomotion",TestAdsReloadPreservesAdditiveLocomotion});

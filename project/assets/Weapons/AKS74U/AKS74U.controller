@@ -23,6 +23,10 @@
             "arms": {
               "clip": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Idle.fbx",
               "clipGuid": "4168495e7bad8625"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/AKS74U/ThirdPerson/AKS-74U_A_3P_Idle.fbx",
+              "clipGuid": "62e9fa0ebfe54ddd"
             }
           },
           "name": "Idle",
@@ -41,6 +45,10 @@
             "arms": {
               "clip": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Idle.fbx",
               "clipGuid": "4168495e7bad8625"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/AKS74U/ThirdPerson/AKS-74U_A_3P_Idle.fbx",
+              "clipGuid": "62e9fa0ebfe54ddd"
             }
           },
           "name": "Walk",
@@ -59,6 +67,10 @@
             "arms": {
               "clip": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Idle.fbx",
               "clipGuid": "4168495e7bad8625"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/AKS74U/ThirdPerson/AKS-74U_A_3P_Idle.fbx",
+              "clipGuid": "62e9fa0ebfe54ddd"
             }
           },
           "name": "Sprint",
@@ -74,6 +86,10 @@
             "arms": {
               "clip": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Aim.fbx",
               "clipGuid": "9004884db6cdfb0e"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/AKS74U/ThirdPerson/AKS-74U_A_3P_Aim.fbx",
+              "clipGuid": "338d12b7d0f9f69b"
             }
           },
           "name": "Aim",
@@ -92,6 +108,10 @@
             "arms": {
               "clip": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Idle.fbx",
               "clipGuid": "4168495e7bad8625"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/AKS74U/ThirdPerson/AKS-74U_A_3P_Idle.fbx",
+              "clipGuid": "62e9fa0ebfe54ddd"
             }
           },
           "name": "IdleToSprint",
@@ -108,6 +128,10 @@
             "arms": {
               "clip": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Idle.fbx",
               "clipGuid": "4168495e7bad8625"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/AKS74U/ThirdPerson/AKS-74U_A_3P_Idle.fbx",
+              "clipGuid": "62e9fa0ebfe54ddd"
             }
           },
           "name": "SprintToIdle",
@@ -138,6 +162,10 @@
             "arms": {
               "clip": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Regrip.fbx",
               "clipGuid": "c10ae2c34481e1f7"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/AKS74U/ThirdPerson/AKS-74U_A_3P_Regrip.fbx",
+              "clipGuid": "1a4fcae841344216"
             }
           },
           "name": "Regrip",
@@ -148,7 +176,8 @@
           "priority": 2,
           "speed": 1.0,
           "tags": [
-            "IKOff"
+            "IKOff",
+            "Shouldered"
           ]
         },
         {
@@ -167,6 +196,10 @@
             "weapon": {
               "clip": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Fire.fbx",
               "clipGuid": "77923d570c4ce1c5"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/AKS74U/ThirdPerson/AKS-74U_A_3P_Fire.fbx",
+              "clipGuid": "45e9005bc041a767"
             }
           },
           "name": "Fire",
@@ -228,6 +261,10 @@
             "weapon": {
               "clip": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Inspect.fbx",
               "clipGuid": "0b328cb32a01d270"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/AKS74U/ThirdPerson/AKS-74U_A_3P_Inspect.fbx",
+              "clipGuid": "e424835b8a3ad389"
             }
           },
           "name": "Inspect",
@@ -285,6 +322,10 @@
             "weapon": {
               "clip": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Mag_Check.fbx",
               "clipGuid": "a01aa15f799151d3"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/AKS74U/ThirdPerson/AKS-74U_A_3P_Mag_Check.fbx",
+              "clipGuid": "4db50bfd2e886683"
             }
           },
           "name": "MagCheck",
@@ -323,6 +364,10 @@
             "weapon": {
               "clip": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Melee.fbx",
               "clipGuid": "6fb7b6fdfc2b4941"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/AKS74U/ThirdPerson/AKS-74U_A_3P_Melee.fbx",
+              "clipGuid": "0dfcb29986320ec7"
             }
           },
           "name": "Melee",
@@ -392,6 +437,10 @@
             "weapon": {
               "clip": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Tac_Reload.fbx",
               "clipGuid": "81b5689d2228d3a9"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/AKS74U/ThirdPerson/AKS-74U_A_3P_Tac_Reload.fbx",
+              "clipGuid": "b8ca1bdc33582765"
             }
           },
           "name": "TacReload",
@@ -470,6 +519,10 @@
             "weapon": {
               "clip": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Empty_Reload.fbx",
               "clipGuid": "d0dfc9ab0c48a48d"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/AKS74U/ThirdPerson/AKS-74U_A_3P_Empty_Reload.fbx",
+              "clipGuid": "e99115e417ccda08"
             }
           },
           "name": "EmptyReload",
@@ -496,6 +549,10 @@
             "arms": {
               "clip": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Draw.fbx",
               "clipGuid": "1938b9509f147780"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/AKS74U/ThirdPerson/AKS-74U_A_3P_Draw.fbx",
+              "clipGuid": "c46bdebbc751f372"
             }
           },
           "name": "Draw",
@@ -525,6 +582,10 @@
             "weapon": {
               "clip": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Holster.fbx",
               "clipGuid": "2a62a06dbf117169"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/AKS74U/ThirdPerson/AKS-74U_A_3P_Holster.fbx",
+              "clipGuid": "94f6fddc6539fb54"
             }
           },
           "name": "Holster",
@@ -548,6 +609,10 @@
             "weapon": {
               "clip": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Holster.fbx",
               "clipGuid": "2a62a06dbf117169"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/AKS74U/ThirdPerson/AKS-74U_A_3P_Holster.fbx",
+              "clipGuid": "94f6fddc6539fb54"
             }
           },
           "name": "Holstered",
@@ -966,6 +1031,7 @@
           "exitTime": 1.0,
           "from": "Holster",
           "hasExitTime": true,
+          "offset": 1.0,
           "to": "Holstered"
         },
         {
@@ -1173,6 +1239,10 @@
             "arms": {
               "clip": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Idle.fbx",
               "clipGuid": "4168495e7bad8625"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/AKS74U/ThirdPerson/AKS-74U_A_3P_Idle.fbx",
+              "clipGuid": "62e9fa0ebfe54ddd"
             }
           },
           "name": "Idle",
@@ -1191,6 +1261,10 @@
             "arms": {
               "clip": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Idle.fbx",
               "clipGuid": "4168495e7bad8625"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/AKS74U/ThirdPerson/AKS-74U_A_3P_Idle.fbx",
+              "clipGuid": "62e9fa0ebfe54ddd"
             }
           },
           "name": "Walk",
@@ -1228,6 +1302,10 @@
             "weapon": {
               "clip": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_Sprint.fbx",
               "clipGuid": "438b9b2758b79a49"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/AKS74U/ThirdPerson/AKS-74U_A_3P_Sprint.fbx",
+              "clipGuid": "1ae31bca1a2d569e"
             }
           },
           "name": "Sprint",
@@ -1248,6 +1326,10 @@
             "weapon": {
               "clip": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_IdleToSprint.fbx",
               "clipGuid": "971a40ef2e78a7a9"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/AKS74U/ThirdPerson/AKS-74U_A_3P_IdleToSprint.fbx",
+              "clipGuid": "f74352523d622f93"
             }
           },
           "name": "IdleToSprint",
@@ -1283,6 +1365,10 @@
             "weapon": {
               "clip": "assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_SprintToIdle.fbx",
               "clipGuid": "c5582401991a3963"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/AKS74U/ThirdPerson/AKS-74U_A_3P_SprintToIdle.fbx",
+              "clipGuid": "a2e2fc83e78d3d43"
             }
           },
           "name": "SprintToIdle",
@@ -1663,6 +1749,10 @@
             "arms": {
               "clip": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Walk.fbx",
               "clipGuid": "6e8123547b7ff1e4"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/AKS74U/ThirdPerson/AKS-74U_A_3P_Walk.fbx",
+              "clipGuid": "b14341a72ccbfac1"
             }
           },
           "name": "Walk",
@@ -1684,6 +1774,10 @@
             "arms": {
               "clip": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_Idle.fbx",
               "clipGuid": "4168495e7bad8625"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/AKS74U/ThirdPerson/AKS-74U_A_3P_Idle.fbx",
+              "clipGuid": "62e9fa0ebfe54ddd"
             }
           },
           "position": [
@@ -1809,7 +1903,8 @@
   ],
   "tracks": [
     "arms",
-    "weapon"
+    "weapon",
+    "arms3p"
   ],
   "version": 2
 }

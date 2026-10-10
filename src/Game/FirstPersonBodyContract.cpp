@@ -22,7 +22,8 @@ float LocomotionSpineWeight(const AnimatorControllerComponent& animator, float& 
         if (st.Name == kStateCrouchDown || st.Name == kStateCrouchUp ||
             st.Name == kStateJump || st.Name == kStateFall || st.Name == kStateLand) continue;
         if (st.Name != kStateLocomotion && st.Name != kStateCrouchLoco &&
-            !st.HasTag("Locomotion") && !st.HasTag("Turn") && !st.HasTag("Start") && !st.HasTag("Stop")) continue;
+            !st.HasTag("Locomotion") && !st.HasTag("Turn") && !st.HasTag(kTagStart) && !st.HasTag(kTagStop) &&
+            !st.HasTag(kTagPivot) && !st.HasTag(kTagStep) && !st.HasTag(kTagFidget)) continue;
         gait += weights[s];
         if (st.Name == kStateCrouchLoco || st.HasTag("Crouch")) crouched += weights[s];
     }

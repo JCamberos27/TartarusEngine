@@ -3,10 +3,15 @@
   "matVersion": 2,
   "name": "M_Eye_DarkBrown",
   "properties": {
-    "_AOMap": "",
+    "_AOMap": "assets/Characters/Quantum/Textures/Eyes/T_Eye_Lid_AO.png",
     "_AlbedoMap": "assets/Characters/Quantum/Textures/Eyes/T_Eye_DarkBrown.png",
     "_BaseColor": [
       1.0,
+      1.0,
+      1.0
+    ],
+    "_DetailAlbedoMap": "assets/Characters/Quantum/Textures/Eyes/T_Eye_Lid_Detail.png",
+    "_DetailTiling": [
       1.0,
       1.0
     ],
@@ -22,13 +27,15 @@
     "_MetallicMap": "",
     "_MetallicRoughnessMap": "",
     "_NormalMap": "",
-    "_Roughness": 0.18,
+    "_Roughness": 0.25,
     "_RoughnessMap": "",
     "_Triplanar": false,
     "_TriplanarScale": 1.0
   },
   "shader": "engine://Standard.shader",
   "textureGuids": {
-    "_AlbedoMap": "f2149e3a9cd2a2ea"
+    "_AlbedoMap": "f2149e3a9cd2a2ea",
+    "_AOMap": "89ae1d00503a8dcb",
+    "_DetailAlbedoMap": "82f645e124da9b92"
   }
 }

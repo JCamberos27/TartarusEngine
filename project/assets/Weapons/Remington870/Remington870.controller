@@ -27,6 +27,10 @@
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
               "clipGuid": "abfe8981a8954dee"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Remington870/ThirdPerson/Remington870_A_3P_Idle.fbx",
+              "clipGuid": "bfd2b692eccf99cb"
             }
           },
           "name": "Idle",
@@ -49,6 +53,10 @@
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
               "clipGuid": "abfe8981a8954dee"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Remington870/ThirdPerson/Remington870_A_3P_Idle.fbx",
+              "clipGuid": "bfd2b692eccf99cb"
             }
           },
           "name": "Walk",
@@ -71,6 +79,10 @@
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
               "clipGuid": "abfe8981a8954dee"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Remington870/ThirdPerson/Remington870_A_3P_Idle.fbx",
+              "clipGuid": "bfd2b692eccf99cb"
             }
           },
           "name": "Sprint",
@@ -90,6 +102,10 @@
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
               "clipGuid": "abfe8981a8954dee"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Remington870/ThirdPerson/Remington870_A_3P_Aim.fbx",
+              "clipGuid": "2809d1a84c3f918c"
             }
           },
           "name": "Aim",
@@ -112,6 +128,10 @@
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
               "clipGuid": "abfe8981a8954dee"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Remington870/ThirdPerson/Remington870_A_3P_Idle.fbx",
+              "clipGuid": "bfd2b692eccf99cb"
             }
           },
           "name": "IdleToSprint",
@@ -132,6 +152,10 @@
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
               "clipGuid": "abfe8981a8954dee"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Remington870/ThirdPerson/Remington870_A_3P_Idle.fbx",
+              "clipGuid": "bfd2b692eccf99cb"
             }
           },
           "name": "SprintToIdle",
@@ -166,6 +190,10 @@
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
               "clipGuid": "abfe8981a8954dee"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Remington870/ThirdPerson/Remington870_A_3P_Regrip.fbx",
+              "clipGuid": "6a5e3e925f678c63"
             }
           },
           "name": "Regrip",
@@ -176,7 +204,8 @@
           "priority": 2,
           "speed": 1.0,
           "tags": [
-            "IKOff"
+            "IKOff",
+            "Shouldered"
           ]
         },
         {
@@ -195,6 +224,10 @@
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
               "clipGuid": "abfe8981a8954dee"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Remington870/ThirdPerson/Remington870_A_3P_Fire.fbx",
+              "clipGuid": "569c46e37372b66b"
             }
           },
           "name": "Fire",
@@ -256,6 +289,10 @@
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Inspect.fbx",
               "clipGuid": "66576fcdd35fc5ba"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Remington870/ThirdPerson/Remington870_A_3P_Inspect.fbx",
+              "clipGuid": "8c4df6da6d0abc2a"
             }
           },
           "name": "Inspect",
@@ -309,6 +346,10 @@
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Mag_Check.fbx",
               "clipGuid": "421117bd9c7c899f"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Remington870/ThirdPerson/Remington870_A_3P_Mag_Check.fbx",
+              "clipGuid": "be036830c3f88eac"
             }
           },
           "name": "MagCheck",
@@ -319,8 +360,7 @@
           "priority": 2,
           "speed": 1.0,
           "tags": [
-            "Busy",
-            "ADSCarry"
+            "Busy"
           ]
         },
         {
@@ -347,6 +387,10 @@
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
               "clipGuid": "abfe8981a8954dee"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Remington870/ThirdPerson/Remington870_A_3P_Melee.fbx",
+              "clipGuid": "afbcf6a3d09267c5"
             }
           },
           "name": "Melee",
@@ -376,6 +420,10 @@
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
               "clipGuid": "abfe8981a8954dee"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Remington870/ThirdPerson/Remington870_A_3P_Draw.fbx",
+              "clipGuid": "47773af4ed22bb47"
             }
           },
           "name": "Draw",
@@ -405,6 +453,10 @@
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
               "clipGuid": "abfe8981a8954dee"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Remington870/ThirdPerson/Remington870_A_3P_Holster.fbx",
+              "clipGuid": "1dcd511b0f02b20f"
             }
           },
           "name": "Holster",
@@ -428,6 +480,10 @@
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
               "clipGuid": "abfe8981a8954dee"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Remington870/ThirdPerson/Remington870_A_3P_Holster.fbx",
+              "clipGuid": "1dcd511b0f02b20f"
             }
           },
           "name": "Holstered",
@@ -465,6 +521,10 @@
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Pump.fbx",
               "clipGuid": "21361368df1fe439"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Remington870/ThirdPerson/Remington870_A_3P_Pump.fbx",
+              "clipGuid": "2503327c2726e970"
             }
           },
           "name": "Pump",
@@ -499,6 +559,10 @@
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Reload_Start.fbx",
               "clipGuid": "fffbcc7419088411"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Remington870/ThirdPerson/Remington870_A_3P_Reload_Start.fbx",
+              "clipGuid": "c51f4491cab0fa8d"
             }
           },
           "name": "ReloadStart",
@@ -565,6 +629,10 @@
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Reload_Start_Empty.fbx",
               "clipGuid": "f0216597d55e5ac4"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Remington870/ThirdPerson/Remington870_A_3P_Reload_Start_Empty.fbx",
+              "clipGuid": "e1ac610912a0d1f5"
             }
           },
           "name": "ReloadStartEmpty",
@@ -607,6 +675,10 @@
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Reload_Loop.fbx",
               "clipGuid": "848f46e7578d8189"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Remington870/ThirdPerson/Remington870_A_3P_Reload_Loop.fbx",
+              "clipGuid": "7f9f5149134d39b2"
             }
           },
           "name": "ReloadLoop",
@@ -649,6 +721,10 @@
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Reload_Loop_End.fbx",
               "clipGuid": "0c7074d53b52d312"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Remington870/ThirdPerson/Remington870_A_3P_Reload_Loop_End.fbx",
+              "clipGuid": "cde6ff109a7bed79"
             }
           },
           "name": "ReloadLoopEnd",
@@ -683,6 +759,10 @@
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Reload_End.fbx",
               "clipGuid": "ca979c2223c6ddae"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Remington870/ThirdPerson/Remington870_A_3P_Reload_End.fbx",
+              "clipGuid": "8d0e334f279f628a"
             }
           },
           "name": "ReloadEnd",
@@ -1201,6 +1281,7 @@
           "exitTime": 1.0,
           "from": "Holster",
           "hasExitTime": true,
+          "offset": 1.0,
           "to": "Holstered"
         },
         {
@@ -1488,6 +1569,10 @@
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
               "clipGuid": "abfe8981a8954dee"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Remington870/ThirdPerson/Remington870_A_3P_Idle.fbx",
+              "clipGuid": "bfd2b692eccf99cb"
             }
           },
           "name": "Idle",
@@ -1510,6 +1595,10 @@
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
               "clipGuid": "abfe8981a8954dee"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Remington870/ThirdPerson/Remington870_A_3P_Idle.fbx",
+              "clipGuid": "bfd2b692eccf99cb"
             }
           },
           "name": "Walk",
@@ -1547,6 +1636,10 @@
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
               "clipGuid": "abfe8981a8954dee"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Remington870/ThirdPerson/Remington870_A_3P_Sprint.fbx",
+              "clipGuid": "e1aa1c155f88b5ea"
             }
           },
           "name": "Sprint",
@@ -1567,6 +1660,10 @@
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
               "clipGuid": "abfe8981a8954dee"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Remington870/ThirdPerson/Remington870_A_3P_IdleToSprint.fbx",
+              "clipGuid": "96d474e11e32b41d"
             }
           },
           "name": "IdleToSprint",
@@ -1602,6 +1699,10 @@
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
               "clipGuid": "abfe8981a8954dee"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Remington870/ThirdPerson/Remington870_A_3P_SprintToIdle.fbx",
+              "clipGuid": "a5b76f96b38c016f"
             }
           },
           "name": "SprintToIdle",
@@ -1986,6 +2087,10 @@
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
               "clipGuid": "abfe8981a8954dee"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Remington870/ThirdPerson/Remington870_A_3P_Walk.fbx",
+              "clipGuid": "b21188dfdc3fe8e1"
             }
           },
           "name": "Walk",
@@ -2011,6 +2116,10 @@
             "weapon": {
               "clip": "assets/Weapons/Remington870/Weapon/Remington870_A_W_Idle.fbx",
               "clipGuid": "abfe8981a8954dee"
+            },
+            "arms3p": {
+              "clip": "assets/Weapons/Remington870/ThirdPerson/Remington870_A_3P_Idle.fbx",
+              "clipGuid": "bfd2b692eccf99cb"
             }
           },
           "position": [
@@ -2151,7 +2260,8 @@
   ],
   "tracks": [
     "arms",
-    "weapon"
+    "weapon",
+    "arms3p"
   ],
   "version": 2
 }

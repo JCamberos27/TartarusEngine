@@ -34,6 +34,7 @@ struct PlayerFrame {
     float SinceGrounded{};
     float JumpBuffer{};
     float CrouchBlend{};
+    float CrouchBlendRate{};
     float YawDropped{};
     Vec3 Position{};
     Vec3 Velocity{};
@@ -796,6 +797,8 @@ struct BodyMotionFrame {
     Vec3 LastDir{};
     Vec3 StartDir{};
     Vec3 StopDir{};
+    Vec3 PivotDir{};
+    Vec3 StepDir{};
     float Dt{};
     float ViewYaw{};
     float Yaw{};
@@ -832,6 +835,24 @@ struct BodyMotionFrame {
     float AirborneDelay{};
     float PlayRate{};
     float TurnAngle{};
+    float AccelTime{};
+    float DecelTime{};
+    float Random{};
+    float StartGait{};
+    float StopGait{};
+    float PivotGait{};
+    float StartTurn{};
+    float StartTurnAmount{};
+    float StartDistance{};
+    float StopDistance{};
+    float PivotDistance{};
+    float PivotTravel{};
+    float FidgetTime{};
+    float FidgetNext{};
+    float FidgetIndex{};
+    float SprintRate{};
+    float SprintClip{};
+    float MoveDistance{};
     std::int32_t Grounded{};
     std::int32_t Crouched{};
     std::int32_t WasCrouched{};
@@ -848,6 +869,16 @@ struct BodyMotionFrame {
     std::int32_t Moving{};
     std::int32_t Sprint{};
     std::int32_t Airborne{};
+    std::int32_t Armed{};
+    std::int32_t Busy{};
+    std::int32_t IsStart{};
+    std::int32_t IsStartTurn{};
+    std::int32_t IsStop{};
+    std::int32_t IsPivot{};
+    std::int32_t IsStep{};
+    std::int32_t IsFidget{};
+    std::int32_t IsSprint{};
+    std::int32_t PivotReversed{};
     std::int32_t Triggers{};
 };
 struct NpcCallMemberFrame {

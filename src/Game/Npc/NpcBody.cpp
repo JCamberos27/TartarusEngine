@@ -193,10 +193,17 @@ void NpcBody::Tick(World& world, const NpcBodyInput& in, float dt) {
     const float want = in.HoldFacing || !moving ? in.FacingYaw : NpcYawOf(flat, m_Yaw);
     float offset = FirstPersonBodyWrapAngle(want - m_Yaw);
 
+    const float stillBefore = m_StillTime;
     if (moving) {
         m_Turning = false;
         m_StillTime = 0.0f;
-        m_Yaw += offset * Follow(dt, m_Set.FaceEase);
+        if (ac.HasTag(FPBody::kTagStartTurn)) {
+            // A start that turns: the body takes the clip's own yaw, up to the new heading.
+            const float step = glm::radians(ac.RootMotion.DeltaYaw);
+            if (step * offset > 0.0f) m_Yaw += std::copysign(std::min(std::abs(step), std::abs(offset)), step);
+        } else {
+            m_Yaw += offset * Follow(dt, m_Set.FaceEase);
+        }
     } else {
         m_StillTime += dt;
         if (m_Turning) {
@@ -209,7 +216,9 @@ void NpcBody::Tick(World& world, const NpcBodyInput& in, float dt) {
         } else if (m_StillTime > 0.15f && NpcShouldTurn(offset, m_Set.TurnThreshold)) {
             m_Turning = true;
             m_TurnTime = 0.0f;
-            ac.SetFloat(FPBody::kTurnAngle, std::clamp(glm::degrees(offset), -180.0f, 180.0f));
+            // Never under 45 degrees of clip (each side's smallest), so the two sides' clips never mix.
+            const float deg = std::clamp(glm::degrees(offset), -180.0f, 180.0f);
+            ac.SetFloat(FPBody::kTurnAngle, std::copysign(std::max(std::abs(deg), 45.0f), deg));
         } else if (in.Aiming) {
             // Aiming from where it stands: the shoulders square up to the target (a small shuffle;
             // the turn clips take the big swings).
@@ -229,7 +238,66 @@ void NpcBody::Tick(World& world, const NpcBodyInput& in, float dt) {
     ac.SetFloat(FPBody::kMoveX, m_Move.x);
     ac.SetFloat(FPBody::kMoveY, m_Move.y);
     ac.SetFloat(FPBody::kSpeed, glm::length(m_Move));
-    ac.SetFloat(FPBody::kPlayRate, 1.0f);
+    // The gait loop at the rate its clips travel at the capsule's speed (a blend's shared cycle runs a walk slow), as the
+    // player body's.
+    {
+        const bool loop = !ac.InTransition && (ac.InState(FPBody::kStateLocomotion) || ac.InState(FPBody::kStateCrouchLoco));
+        const float travel = dt > 1e-5f ? glm::length(glm::vec2(ac.RootMotion.DeltaPosition.x, ac.RootMotion.DeltaPosition.z)) / dt : 0.0f;
+        float trim = 1.0f;
+        if (loop && travel > 0.3f && speed > 0.3f) trim = std::clamp(m_RateTrim * speed / travel, 0.8f, 1.5f);
+        m_RateTrim += (trim - m_RateTrim) * Follow(dt, 0.15f);
+    }
+    ac.SetFloat(FPBody::kPlayRate, m_RateTrim);
+    ac.SetFloat(FPBody::kSprintRate, std::clamp(speed / FPBody::kSprintClipSpeed, 0.8f, 1.5f));
+    // Starts, stops and idle fidgets, as the player body has them (the travel is the AI's capsule's either way): moving off
+    // toward a new heading turns the body on the way; otherwise a start the way it goes.
+    const glm::vec2 dir = glm::length(local) > 1e-3f ? glm::normalize(local) : glm::vec2(0.0f, 1.0f);
+    const bool idling = ac.InState(FPBody::kStateLocomotion) || ac.InState(FPBody::kStateCrouchLoco) || ac.HasTag(FPBody::kTagFidget) ||
+                        ac.HasTag(FPBody::kTagStep);
+    const float gait = in.Sprint ? 2.0f : speed > 2.2f ? 1.0f : 0.0f;
+    if (moving && !m_WasMoving && idling && stillBefore > 0.25f) {
+        const float heading = FirstPersonBodyWrapAngle(NpcYawOf(flat, m_Yaw) - m_Yaw);
+        float turn = 0.0f;
+        if (!in.HoldFacing && std::abs(heading) > glm::radians(45.0f)) {
+            turn = std::clamp(std::abs(heading) / glm::radians(45.0f), 1.0f, 4.0f);
+            if (in.Crouched) turn = std::round(turn);
+            turn = std::copysign(turn, heading);
+        }
+        ac.SetFloat(FPBody::kStartX, dir.x);
+        ac.SetFloat(FPBody::kStartY, dir.y);
+        ac.SetFloat(FPBody::kStartGait, gait);
+        ac.SetFloat(FPBody::kStartTurn, turn);
+        ac.SetFloat(FPBody::kStartTurnAmount, std::max(std::abs(turn), 1.0f));
+        ac.SetTrigger(FPBody::kStart);
+        m_StartDistance = 0.0f;
+    }
+    if (moving) { m_LastDir = dir; m_LastSprint = in.Sprint; m_MoveFor += dt; }
+    if (!moving && m_WasMoving) {
+        const bool going = ac.InState(FPBody::kStateLocomotion) || ac.InState(FPBody::kStateCrouchLoco) || ac.HasTag(FPBody::kTagStart) ||
+                           ac.InState(FPBody::kStateSprint);
+        if (going && m_MoveFor >= 0.5f && glm::length(m_Move) > (in.Crouched ? 0.6f : 1.0f)) {
+            ac.SetFloat(FPBody::kStopX, m_LastDir.x);
+            ac.SetFloat(FPBody::kStopY, m_LastDir.y);
+            ac.SetFloat(FPBody::kStopGait, glm::length(m_Move) > 2.2f ? 1.0f : 0.0f);
+            ac.SetTrigger(m_LastSprint && m_LastDir.y > 0.7f ? FPBody::kStopRun : FPBody::kStop);
+        }
+        m_MoveFor = 0.0f;
+    }
+    m_WasMoving = moving;
+    m_StartDistance = ac.HasTag(FPBody::kTagStart) ? m_StartDistance + speed * dt : 0.0f;
+    ac.SetFloat(FPBody::kStartDistance, m_StartDistance);
+    ac.SetFloat(FPBody::kStopDistance, speed * 0.1f);
+    // A soldier stood at ease (not aiming) fidgets now and then: the ready stance's own, or a crouch's.
+    if (!moving && !in.Aiming && !m_Turning && (ac.InState(FPBody::kStateLocomotion) || ac.InState(FPBody::kStateCrouchLoco))) {
+        if (m_FidgetNext <= 0.0f) m_FidgetNext = 10.0f + 10.0f * NextRandom();
+        if (m_StillTime > m_FidgetNext) {
+            ac.SetFloat(FPBody::kFidgetIndex, std::floor(NextRandom() * (in.Crouched ? 6.0f : 2.0f) * 0.9999f));
+            ac.SetTrigger(FPBody::kFidget);
+            m_FidgetNext = m_StillTime + 10.0f + 10.0f * NextRandom();
+        }
+    } else if (moving) {
+        m_FidgetNext = 0.0f;
+    }
     ac.SetBool(FPBody::kSprint, in.Sprint && moving);
     ac.SetBool(FPBody::kGrounded, true);
     ac.SetBool(FPBody::kAirborne, false);

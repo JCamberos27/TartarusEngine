@@ -102,6 +102,16 @@ struct AnimatorController {
         // False keeps it in the pose instead - e.g. a clip whose drift you want left as authored.
         bool RootMotion = true;
         int Priority = 0;            // see Transition::RespectPriority
+        // Distance matching: with DistanceParam set, the state's time comes from how far the character has
+        // gone instead of the clock, so a start, stop or pivot clip's feet keep pace with travel that game code
+        // controls. The parameter is metres: Traveled - since the state began; Remaining - still to go before
+        // the clip's end (a stop); Pivot - signed distance from the clip's turnaround (its farthest point along
+        // the entry direction): negative before it, positive after. The time keeps moving forward between
+        // 0.35x and 3x the clock's rate, and at the clock's own once the travel is used up (a stop's settle), so a
+        // blocked or stalled character can't freeze it. Looping states ignore it.
+        enum class DistanceMode { Traveled = 0, Remaining = 1, Pivot = 2 };
+        std::string DistanceParam;
+        DistanceMode Distance = DistanceMode::Traveled;
         std::vector<std::string> Tags;
         std::vector<Event> Events;
         glm::vec2 Position{0.0f};    // Animator window graph position
@@ -238,17 +248,29 @@ float AnimatorSampleCurve(const AnimatorController& ctrl, const AnimatorControll
                           const std::string& name, float fallback = 1.0f);
 float AnimatorLayerWeight(const AnimatorController& ctrl, const AnimatorControllerComponent& ac, int layer);
 
+// Distance matching (State::DistanceParam): the phase (0..1) at which `state` of `layer`, for the current
+// parameters, is at `metres` as its DistanceMode reads them (see State); < 0 when it can't tell (no clips).
+using AnimatorDistancePhase = std::function<float(int layer, int state, AnimatorController::State::DistanceMode mode, float metres)>;
+// Pure: where along a path of cumulative distances `curve` (sampled evenly over phase 0..1) `metres` falls, as
+// DistanceMode reads it. `turnaround` is the path distance at a pivot's turnaround.
+float AnimatorDistanceToPhase(const std::vector<float>& curve, float turnaround, AnimatorController::State::DistanceMode mode, float metres);
+// The pacing rule distance matching keeps: from `before`, a step toward `want` that is at least 0.35x and at most
+// 3x the clock's natural step `natural`; with `want` not ahead (no travel to match) the clock's own step. The first
+// frame in the state jumps straight to `want`.
+float AnimatorDistanceStep(float before, float want, float natural, bool first);
+
 // Advances one component's state machines by `dt` without touching any model: transitions,
 // crossfade stacks, phases, events and the base-layer state fields. `stateLength(layer, state)`
 // returns a state's length in seconds for the current parameters (<= 0 counts as 1 s). Split
 // out of UpdateAnimatorControllers so the logic is testable without a GPU or model.
+// `distancePhase` (optional) drives distance-matched states.
 void AdvanceAnimator(const AnimatorController& ctrl, AnimatorControllerComponent& ac, float dt,
-                     const std::function<float(int, int)>& stateLength);
+                     const std::function<float(int, int)>& stateLength, const AnimatorDistancePhase& distancePhase = {});
 
 // Starts `ac` in the base layer's `state` (at the end of its first pass) instead of letting Entry pick,
 // with the declared parameters at their defaults where not already set - e.g. a weapon swapped in that
 // has to come out of its holstered state. False (nothing changed) when there's no such state.
-bool AnimatorStartInState(const AnimatorController& ctrl, AnimatorControllerComponent& ac, const std::string& state);
+bool AnimatorStartInState(const AnimatorController& ctrl, AnimatorControllerComponent& ac, const std::string& state, float phase = 1.0f);
 
 // Runs every Animator Controller component for one Play frame: advances the state machines,
 // then samples and blends every layer and poses each entity's model. Followers (Driver set)

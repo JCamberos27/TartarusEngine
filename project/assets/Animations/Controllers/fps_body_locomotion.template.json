@@ -105,6 +105,91 @@
       "name": "PlayRate",
       "type": "float",
       "default": 1.0
+    },
+    {
+      "name": "StartGait",
+      "type": "float",
+      "default": 1.0
+    },
+    {
+      "name": "StopGait",
+      "type": "float",
+      "default": 1.0
+    },
+    {
+      "name": "StartTurn",
+      "type": "float",
+      "default": 0.0
+    },
+    {
+      "name": "StartTurnAmount",
+      "type": "float",
+      "default": 1.0
+    },
+    {
+      "name": "StartDistance",
+      "type": "float",
+      "default": 0.0
+    },
+    {
+      "name": "StopDistance",
+      "type": "float",
+      "default": 0.0
+    },
+    {
+      "name": "PivotDistance",
+      "type": "float",
+      "default": 0.0
+    },
+    {
+      "name": "Pivot",
+      "type": "trigger",
+      "default": 0.0
+    },
+    {
+      "name": "PivotX",
+      "type": "float",
+      "default": 0.0
+    },
+    {
+      "name": "PivotY",
+      "type": "float",
+      "default": 1.0
+    },
+    {
+      "name": "PivotGait",
+      "type": "float",
+      "default": 1.0
+    },
+    {
+      "name": "Step",
+      "type": "trigger",
+      "default": 0.0
+    },
+    {
+      "name": "StepX",
+      "type": "float",
+      "default": 0.0
+    },
+    {
+      "name": "StepY",
+      "type": "float",
+      "default": 1.0
+    },
+    {
+      "name": "Fidget",
+      "type": "trigger",
+      "default": 0.0
+    },
+    {
+      "name": "FidgetIndex",
+      "type": "float",
+      "default": 0.0
+    },
+    {
+      "name": "SprintRate",
+      "type": "float",
+      "default": 1.0
     }
   ],
   "tracks": [
@@ -117,26 +202,25 @@
       "blending": "override",
       "defaultState": "Locomotion",
       "entryPosition": [
-        -260.0,
-        0.0
+        -780,
+        0
       ],
       "anyPosition": [
-        -260.0,
-        -140.0
+        -780,
+        -120
       ],
       "exitPosition": [
-        760.0,
-        0.0
+        780,
+        0
       ],
       "states": [
         {
           "name": "Locomotion",
           "loop": true,
           "speed": 1.0,
-          "speedParam": "PlayRate",
           "position": [
-            0.0,
-            0.0
+            0,
+            0
           ],
           "tags": [
             "Locomotion"
@@ -144,162 +228,183 @@
           "motions": {
             "main": {
               "blendParam": "MoveX",
-              "blendParamY": "MoveY",
               "children": [
                 {
                   "clip": "Ready_Idle_01",
                   "threshold": 0.0,
-                  "thresholdY": 0.0,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": 0.0
                 },
                 {
                   "clip": "Loco_Walk_Fwd",
                   "threshold": 0.0,
-                  "thresholdY": 1.53,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": 1.53
                 },
                 {
                   "clip": "Loco_Walk_Fwd_Left",
                   "threshold": -1.082,
-                  "thresholdY": 1.082,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": 1.082
                 },
                 {
                   "clip": "Loco_Walk_Fwd_Right",
                   "threshold": 1.082,
-                  "thresholdY": 1.082,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": 1.082
                 },
                 {
                   "clip": "Loco_Walk_Left",
                   "threshold": -1.346,
-                  "thresholdY": 0.0,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": 0.0
                 },
                 {
                   "clip": "Loco_Walk_Right",
                   "threshold": 1.586,
-                  "thresholdY": 0.0,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": 0.0
                 },
                 {
                   "clip": "Loco_Walk_Bwd",
                   "threshold": 0.0,
-                  "thresholdY": -1.195,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": -1.195
                 },
                 {
                   "clip": "Loco_Walk_Bwd_Left",
                   "threshold": -0.845,
-                  "thresholdY": -0.845,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": -0.845
                 },
                 {
                   "clip": "Loco_Walk_Bwd_Right",
                   "threshold": 0.845,
-                  "thresholdY": -0.845,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": -0.845
                 },
                 {
                   "clip": "Loco_Jog_Fwd",
                   "threshold": 0.0,
-                  "thresholdY": 3.264,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": 3.264
                 },
                 {
                   "clip": "Loco_Jog_Fwd_Left",
                   "threshold": -2.308,
-                  "thresholdY": 2.308,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": 2.308
                 },
                 {
                   "clip": "Loco_Jog_Fwd_Right",
                   "threshold": 2.308,
-                  "thresholdY": 2.308,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": 2.308
                 },
                 {
                   "clip": "Loco_Jog_Left",
                   "threshold": -2.3,
-                  "thresholdY": 0.0,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": 0.0
                 },
                 {
                   "clip": "Loco_Jog_Right",
                   "threshold": 2.945,
-                  "thresholdY": 0.0,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": 0.0
                 },
                 {
                   "clip": "Loco_Jog_Bwd",
                   "threshold": 0.0,
-                  "thresholdY": -2.261,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": -2.261
                 },
                 {
                   "clip": "Loco_Jog_Bwd_Left",
                   "threshold": -1.599,
-                  "thresholdY": -1.599,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": -1.599
                 },
                 {
                   "clip": "Loco_Jog_Bwd_Right",
                   "threshold": 1.599,
-                  "thresholdY": -1.599,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": -1.599
                 },
                 {
                   "clip": "Loco_Run_Fwd",
                   "threshold": 0.0,
-                  "thresholdY": 4.736,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": 4.736
                 }
-              ]
+              ],
+              "blendParamY": "MoveY"
             }
-          }
+          },
+          "speedParam": "PlayRate"
+        },
+        {
+          "name": "Sprint",
+          "loop": true,
+          "speed": 1.0,
+          "position": [
+            0,
+            -240
+          ],
+          "tags": [
+            "Locomotion",
+            "Sprint"
+          ],
+          "motions": {
+            "main": {
+              "clip": "Loco_Run_Fast_01"
+            }
+          },
+          "speedParam": "SprintRate"
         },
         {
           "name": "Jump",
           "loop": false,
           "speed": 1.0,
           "position": [
-            260.0,
-            -140.0
+            260,
+            -120
+          ],
+          "tags": [
+            "Airborne"
           ],
           "motions": {
             "main": {
               "clip": "Jump"
             }
-          },
-          "tags": [
-            "Airborne"
-          ]
+          }
         },
         {
           "name": "Fall",
           "loop": true,
           "speed": 1.0,
           "position": [
-            520.0,
-            -140.0
+            520,
+            -120
+          ],
+          "tags": [
+            "Airborne"
           ],
           "motions": {
             "main": {
               "clip": "Jump_Fall_Loop"
             }
-          },
-          "tags": [
-            "Airborne"
-          ]
+          }
         },
         {
           "name": "Land",
           "loop": false,
           "speed": 1.4,
           "position": [
-            260.0,
-            140.0
+            520,
+            0
           ],
+          "tags": [],
           "motions": {
             "main": {
               "clip": "Jump_Land_Recovery"
@@ -311,8 +416,11 @@
           "loop": false,
           "speed": 1.0,
           "position": [
-            0.0,
-            140.0
+            0,
+            240
+          ],
+          "tags": [
+            "Turn"
           ],
           "motions": {
             "main": {
@@ -360,197 +468,706 @@
                 }
               ]
             }
-          },
+          }
+        },
+        {
+          "name": "StartWalk",
+          "loop": false,
+          "speed": 1.0,
+          "position": [
+            -260,
+            120
+          ],
           "tags": [
-            "Turn"
-          ]
+            "Start"
+          ],
+          "motions": {
+            "main": {
+              "blendParam": "StartX",
+              "children": [
+                {
+                  "clip": "Loco_Walk_Fwd_Start",
+                  "threshold": 0.0,
+                  "speed": 1.0,
+                  "thresholdY": 1.0
+                },
+                {
+                  "clip": "Loco_Walk_Bwd_Start",
+                  "threshold": 0.0,
+                  "speed": 1.0,
+                  "thresholdY": -1.0
+                },
+                {
+                  "clip": "Loco_Walk_Left_Start",
+                  "threshold": -1.0,
+                  "speed": 1.0,
+                  "thresholdY": 0.0
+                },
+                {
+                  "clip": "Loco_Walk_Right_Start",
+                  "threshold": 1.0,
+                  "speed": 1.0,
+                  "thresholdY": 0.0
+                }
+              ],
+              "blendParamY": "StartY"
+            }
+          },
+          "distanceParam": "StartDistance",
+          "distanceMode": "traveled"
         },
         {
           "name": "Start",
           "loop": false,
           "speed": 1.0,
           "position": [
-            260.0,
-            140.0
+            -260,
+            200
+          ],
+          "tags": [
+            "Start"
           ],
           "motions": {
             "main": {
               "blendParam": "StartX",
-              "blendParamY": "StartY",
               "children": [
                 {
                   "clip": "Loco_Jog_Fwd_Start",
                   "threshold": 0.0,
-                  "thresholdY": 1.0,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": 1.0
                 },
                 {
                   "clip": "Loco_Jog_Bwd_Start",
                   "threshold": 0.0,
-                  "thresholdY": -1.0,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": -1.0
                 },
                 {
                   "clip": "Loco_Jog_Left_Start",
                   "threshold": -1.0,
-                  "thresholdY": 0.0,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": 0.0
                 },
                 {
                   "clip": "Loco_Jog_Right_Start",
                   "threshold": 1.0,
-                  "thresholdY": 0.0,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": 0.0
                 }
-              ]
+              ],
+              "blendParamY": "StartY"
             }
           },
+          "distanceParam": "StartDistance",
+          "distanceMode": "traveled"
+        },
+        {
+          "name": "StartRun",
+          "loop": false,
+          "speed": 1.0,
+          "position": [
+            -260,
+            280
+          ],
           "tags": [
             "Start"
-          ]
+          ],
+          "motions": {
+            "main": {
+              "clip": "Loco_Run_Fwd_Start"
+            }
+          },
+          "distanceParam": "StartDistance",
+          "distanceMode": "traveled"
+        },
+        {
+          "name": "StartTurnL",
+          "loop": false,
+          "speed": 1.0,
+          "position": [
+            -520,
+            120
+          ],
+          "tags": [
+            "Start",
+            "StartTurn"
+          ],
+          "motions": {
+            "main": {
+              "blendParam": "StartTurnAmount",
+              "children": [
+                {
+                  "clip": "Loco_Walk_Start_Turn_L045_Lfoot",
+                  "threshold": 1.0,
+                  "speed": 1.0,
+                  "thresholdY": 0.0
+                },
+                {
+                  "clip": "Loco_Walk_Start_Turn_L090_Lfoot",
+                  "threshold": 2.0,
+                  "speed": 1.0,
+                  "thresholdY": 0.0
+                },
+                {
+                  "clip": "Loco_Walk_Start_Turn_L135_Lfoot",
+                  "threshold": 3.0,
+                  "speed": 1.0,
+                  "thresholdY": 0.0
+                },
+                {
+                  "clip": "Loco_Walk_Start_Turn_L180_Lfoot",
+                  "threshold": 4.0,
+                  "speed": 1.0,
+                  "thresholdY": 0.0
+                },
+                {
+                  "clip": "Loco_Jog_Start_Turn_L045_Lfoot",
+                  "threshold": 1.0,
+                  "speed": 1.0,
+                  "thresholdY": 1.0
+                },
+                {
+                  "clip": "Loco_Jog_Start_Turn_L090_Lfoot",
+                  "threshold": 2.0,
+                  "speed": 1.0,
+                  "thresholdY": 1.0
+                },
+                {
+                  "clip": "Loco_Jog_Start_Turn_L135_Lfoot",
+                  "threshold": 3.0,
+                  "speed": 1.0,
+                  "thresholdY": 1.0
+                },
+                {
+                  "clip": "Loco_Jog_Start_Turn_L180_Lfoot",
+                  "threshold": 4.0,
+                  "speed": 1.0,
+                  "thresholdY": 1.0
+                },
+                {
+                  "clip": "Loco_Run_Start_Turn_L045_Lfoot",
+                  "threshold": 1.0,
+                  "speed": 1.0,
+                  "thresholdY": 2.0
+                },
+                {
+                  "clip": "Loco_Run_Start_Turn_L090_Lfoot",
+                  "threshold": 2.0,
+                  "speed": 1.0,
+                  "thresholdY": 2.0
+                },
+                {
+                  "clip": "Loco_Run_Start_Turn_L135_Lfoot",
+                  "threshold": 3.0,
+                  "speed": 1.0,
+                  "thresholdY": 2.0
+                },
+                {
+                  "clip": "Loco_Run_Start_Turn_L180_Lfoot",
+                  "threshold": 4.0,
+                  "speed": 1.0,
+                  "thresholdY": 2.0
+                }
+              ],
+              "blendParamY": "StartGait"
+            }
+          },
+          "distanceParam": "StartDistance",
+          "distanceMode": "traveled"
+        },
+        {
+          "name": "StartTurnR",
+          "loop": false,
+          "speed": 1.0,
+          "position": [
+            -520,
+            200
+          ],
+          "tags": [
+            "Start",
+            "StartTurn"
+          ],
+          "motions": {
+            "main": {
+              "blendParam": "StartTurnAmount",
+              "children": [
+                {
+                  "clip": "Loco_Walk_Start_Turn_R045_Rfoot",
+                  "threshold": 1.0,
+                  "speed": 1.0,
+                  "thresholdY": 0.0
+                },
+                {
+                  "clip": "Loco_Walk_Start_Turn_R090_Rfoot",
+                  "threshold": 2.0,
+                  "speed": 1.0,
+                  "thresholdY": 0.0
+                },
+                {
+                  "clip": "Loco_Walk_Start_Turn_R135_Rfoot",
+                  "threshold": 3.0,
+                  "speed": 1.0,
+                  "thresholdY": 0.0
+                },
+                {
+                  "clip": "Loco_Walk_Start_Turn_R180_Rfoot",
+                  "threshold": 4.0,
+                  "speed": 1.0,
+                  "thresholdY": 0.0
+                },
+                {
+                  "clip": "Loco_Jog_Start_Turn_R045_Rfoot",
+                  "threshold": 1.0,
+                  "speed": 1.0,
+                  "thresholdY": 1.0
+                },
+                {
+                  "clip": "Loco_Jog_Start_Turn_R090_Rfoot",
+                  "threshold": 2.0,
+                  "speed": 1.0,
+                  "thresholdY": 1.0
+                },
+                {
+                  "clip": "Loco_Jog_Start_Turn_R135_Rfoot",
+                  "threshold": 3.0,
+                  "speed": 1.0,
+                  "thresholdY": 1.0
+                },
+                {
+                  "clip": "Loco_Jog_Start_Turn_R180_Rfoot",
+                  "threshold": 4.0,
+                  "speed": 1.0,
+                  "thresholdY": 1.0
+                },
+                {
+                  "clip": "Loco_Run_Start_Turn_R045_Rfoot",
+                  "threshold": 1.0,
+                  "speed": 1.0,
+                  "thresholdY": 2.0
+                },
+                {
+                  "clip": "Loco_Run_Start_Turn_R090_Rfoot",
+                  "threshold": 2.0,
+                  "speed": 1.0,
+                  "thresholdY": 2.0
+                },
+                {
+                  "clip": "Loco_Run_Start_Turn_R135_Rfoot",
+                  "threshold": 3.0,
+                  "speed": 1.0,
+                  "thresholdY": 2.0
+                },
+                {
+                  "clip": "Loco_Run_Start_Turn_R180_Rfoot",
+                  "threshold": 4.0,
+                  "speed": 1.0,
+                  "thresholdY": 2.0
+                }
+              ],
+              "blendParamY": "StartGait"
+            }
+          },
+          "distanceParam": "StartDistance",
+          "distanceMode": "traveled"
+        },
+        {
+          "name": "StopWalk",
+          "loop": false,
+          "speed": 1.0,
+          "position": [
+            260,
+            120
+          ],
+          "tags": [
+            "Stop"
+          ],
+          "motions": {
+            "main": {
+              "blendParam": "StopX",
+              "children": [
+                {
+                  "clip": "Loco_Walk_Fwd_Stop",
+                  "threshold": 0.0,
+                  "speed": 1.0,
+                  "thresholdY": 1.0
+                },
+                {
+                  "clip": "Loco_Walk_Bwd_Stop",
+                  "threshold": 0.0,
+                  "speed": 1.0,
+                  "thresholdY": -1.0
+                },
+                {
+                  "clip": "Loco_Walk_Left_Stop",
+                  "threshold": -1.0,
+                  "speed": 1.0,
+                  "thresholdY": 0.0
+                },
+                {
+                  "clip": "Loco_Walk_Right_Stop",
+                  "threshold": 1.0,
+                  "speed": 1.0,
+                  "thresholdY": 0.0
+                }
+              ],
+              "blendParamY": "StopY"
+            }
+          },
+          "distanceParam": "StopDistance",
+          "distanceMode": "remaining"
         },
         {
           "name": "Stop",
           "loop": false,
           "speed": 1.0,
           "position": [
-            520.0,
-            140.0
+            260,
+            200
+          ],
+          "tags": [
+            "Stop"
           ],
           "motions": {
             "main": {
               "blendParam": "StopX",
-              "blendParamY": "StopY",
               "children": [
                 {
                   "clip": "Loco_Jog_Fwd_Stop",
                   "threshold": 0.0,
-                  "thresholdY": 1.0,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": 1.0
                 },
                 {
                   "clip": "Loco_Jog_Bwd_Stop",
                   "threshold": 0.0,
-                  "thresholdY": -1.0,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": -1.0
                 },
                 {
                   "clip": "Loco_Jog_Left_Stop",
                   "threshold": -1.0,
-                  "thresholdY": 0.0,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": 0.0
                 },
                 {
                   "clip": "Loco_Jog_Right_Stop",
                   "threshold": 1.0,
-                  "thresholdY": 0.0,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": 0.0
                 }
-              ]
+              ],
+              "blendParamY": "StopY"
             }
           },
-          "tags": [
-            "Stop"
-          ]
+          "distanceParam": "StopDistance",
+          "distanceMode": "remaining"
         },
         {
           "name": "StopRun",
           "loop": false,
           "speed": 1.0,
           "position": [
-            520.0,
-            260.0
+            260,
+            280
+          ],
+          "tags": [
+            "Stop"
           ],
           "motions": {
             "main": {
               "clip": "Loco_Run_Fwd_Stop"
             }
           },
+          "distanceParam": "StopDistance",
+          "distanceMode": "remaining"
+        },
+        {
+          "name": "PivotWalk",
+          "loop": false,
+          "speed": 1.0,
+          "position": [
+            260,
+            -240
+          ],
           "tags": [
-            "Stop"
-          ]
+            "Pivot"
+          ],
+          "motions": {
+            "main": {
+              "blendParam": "PivotX",
+              "children": [
+                {
+                  "clip": "Loco_Walk_Fwd_Pivot",
+                  "threshold": 0.0,
+                  "speed": 1.0,
+                  "thresholdY": 1.0
+                },
+                {
+                  "clip": "Loco_Walk_Bwd_Pivot",
+                  "threshold": 0.0,
+                  "speed": 1.0,
+                  "thresholdY": -1.0
+                },
+                {
+                  "clip": "Loco_Walk_Left_Pivot",
+                  "threshold": -1.0,
+                  "speed": 1.0,
+                  "thresholdY": 0.0
+                },
+                {
+                  "clip": "Loco_Walk_Right_Pivot",
+                  "threshold": 1.0,
+                  "speed": 1.0,
+                  "thresholdY": 0.0
+                }
+              ],
+              "blendParamY": "PivotY"
+            }
+          },
+          "distanceParam": "PivotDistance",
+          "distanceMode": "pivot"
+        },
+        {
+          "name": "PivotJog",
+          "loop": false,
+          "speed": 1.0,
+          "position": [
+            520,
+            -240
+          ],
+          "tags": [
+            "Pivot"
+          ],
+          "motions": {
+            "main": {
+              "blendParam": "PivotX",
+              "children": [
+                {
+                  "clip": "Loco_Jog_Fwd_Pivot",
+                  "threshold": 0.0,
+                  "speed": 1.0,
+                  "thresholdY": 1.0
+                },
+                {
+                  "clip": "Loco_Jog_Bwd_Pivot",
+                  "threshold": 0.0,
+                  "speed": 1.0,
+                  "thresholdY": -1.0
+                },
+                {
+                  "clip": "Loco_Jog_Left_Pivot",
+                  "threshold": -1.0,
+                  "speed": 1.0,
+                  "thresholdY": 0.0
+                },
+                {
+                  "clip": "Loco_Jog_Right_Pivot",
+                  "threshold": 1.0,
+                  "speed": 1.0,
+                  "thresholdY": 0.0
+                }
+              ],
+              "blendParamY": "PivotY"
+            }
+          },
+          "distanceParam": "PivotDistance",
+          "distanceMode": "pivot"
+        },
+        {
+          "name": "IdleStep",
+          "loop": false,
+          "speed": 1.35,
+          "position": [
+            -260,
+            -120
+          ],
+          "tags": [
+            "Step"
+          ],
+          "motions": {
+            "main": {
+              "blendParam": "StepX",
+              "children": [
+                {
+                  "clip": "Ready_Idle_Step_Fwd_L_Foot",
+                  "threshold": 0.0,
+                  "speed": 1.0,
+                  "thresholdY": 1.0
+                },
+                {
+                  "clip": "Ready_Idle_Step_Bwd_R_Foot",
+                  "threshold": 0.0,
+                  "speed": 1.0,
+                  "thresholdY": -1.0
+                },
+                {
+                  "clip": "Ready_Idle_Step_Left",
+                  "threshold": -1.0,
+                  "speed": 1.0,
+                  "thresholdY": 0.0
+                },
+                {
+                  "clip": "Ready_Idle_Step_Right",
+                  "threshold": 1.0,
+                  "speed": 1.0,
+                  "thresholdY": 0.0
+                }
+              ],
+              "blendParamY": "StepY"
+            }
+          }
+        },
+        {
+          "name": "Fidget",
+          "loop": false,
+          "speed": 1.0,
+          "position": [
+            -520,
+            -120
+          ],
+          "tags": [
+            "Fidget"
+          ],
+          "motions": {
+            "main": {
+              "blendParam": "FidgetIndex",
+              "children": [
+                {
+                  "clip": "Ready_Idle_02",
+                  "threshold": 0.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "Ready_Idle_03_Look_Around",
+                  "threshold": 1.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "Stand_Idle_02",
+                  "threshold": 2.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "Stand_Idle_03_Look_Around",
+                  "threshold": 3.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "Stand_Idle_04_Look_Around",
+                  "threshold": 4.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "Stand_Idle_06_Scratch_Arm",
+                  "threshold": 5.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "Stand_Idle_07_Scratch_Leg",
+                  "threshold": 6.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "Stand_Idle_08_Thigh_Tap",
+                  "threshold": 7.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "Stand_Idle_11_Point",
+                  "threshold": 8.0,
+                  "speed": 1.0
+                }
+              ]
+            }
+          }
         },
         {
           "name": "CrouchLoco",
           "loop": true,
           "speed": 1.5,
           "position": [
-            0.0,
-            400.0
+            0,
+            480
+          ],
+          "tags": [
+            "Crouch"
           ],
           "motions": {
             "main": {
               "blendParam": "MoveX",
-              "blendParamY": "MoveY",
               "children": [
                 {
                   "clip": "Crouch_Idle_01",
                   "threshold": 0.0,
-                  "thresholdY": 0.0,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": 0.0
                 },
                 {
                   "clip": "Crouch_Loco_Walk_Fwd",
                   "threshold": 0.0,
-                  "thresholdY": 1.355,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": 1.355
                 },
                 {
                   "clip": "Crouch_Loco_Walk_Fwd_Left",
                   "threshold": -0.957,
-                  "thresholdY": 0.957,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": 0.957
                 },
                 {
                   "clip": "Crouch_Loco_Walk_Fwd_Right",
                   "threshold": 0.957,
-                  "thresholdY": 0.957,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": 0.957
                 },
                 {
                   "clip": "Crouch_Loco_Walk_Left",
                   "threshold": -1.155,
-                  "thresholdY": 0.0,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": 0.0
                 },
                 {
                   "clip": "Crouch_Loco_Walk_Right",
                   "threshold": 1.133,
-                  "thresholdY": 0.0,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": 0.0
                 },
                 {
                   "clip": "Crouch_Loco_Walk_Bwd",
                   "threshold": 0.0,
-                  "thresholdY": -1.123,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": -1.123
                 },
                 {
                   "clip": "Crouch_Loco_Walk_Bwd_Left",
                   "threshold": -0.794,
-                  "thresholdY": -0.794,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": -0.794
                 },
                 {
                   "clip": "Crouch_Loco_Walk_Bwd_Right",
                   "threshold": 0.794,
-                  "thresholdY": -0.794,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": -0.794
                 }
-              ]
+              ],
+              "blendParamY": "MoveY"
             }
           },
-          "tags": [
-            "Crouch"
-          ]
+          "speedParam": "PlayRate"
         },
         {
           "name": "CrouchTurn",
           "loop": false,
           "speed": 1.0,
           "position": [
-            260.0,
-            400.0
+            0,
+            640
+          ],
+          "tags": [
+            "Crouch",
+            "Turn"
           ],
           "motions": {
             "main": {
@@ -598,135 +1215,318 @@
                 }
               ]
             }
-          },
-          "tags": [
-            "Crouch",
-            "Turn"
-          ]
+          }
         },
         {
           "name": "CrouchDown",
           "loop": false,
           "speed": 1.5,
           "position": [
-            520.0,
-            400.0
+            260,
+            400
+          ],
+          "tags": [
+            "Crouch"
           ],
           "motions": {
             "main": {
               "clip": "Stand_Idle_Trans_Crouch_02"
             }
-          },
-          "tags": [
-            "Crouch"
-          ]
+          }
         },
         {
           "name": "CrouchUp",
           "loop": false,
           "speed": 1.5,
           "position": [
-            780.0,
-            400.0
+            260,
+            480
+          ],
+          "tags": [
+            "Crouch"
           ],
           "motions": {
             "main": {
               "clip": "Crouch_Idle_Trans_Stand_01"
             }
-          },
-          "tags": [
-            "Crouch"
-          ]
+          }
         },
         {
           "name": "CrouchStart",
           "loop": false,
-          "speed": 1.5,
+          "speed": 1.0,
           "position": [
-            260.0,
-            540.0
+            -260,
+            400
+          ],
+          "tags": [
+            "Crouch",
+            "Start"
           ],
           "motions": {
             "main": {
               "blendParam": "StartX",
-              "blendParamY": "StartY",
               "children": [
                 {
                   "clip": "Crouch_Loco_Walk_Fwd_Start",
                   "threshold": 0.0,
-                  "thresholdY": 1.0,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": 1.0
                 },
                 {
                   "clip": "Crouch_Loco_Walk_Bwd_Start",
                   "threshold": 0.0,
-                  "thresholdY": -1.0,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": -1.0
                 },
                 {
                   "clip": "Crouch_Loco_Walk_Left_Start",
                   "threshold": -1.0,
-                  "thresholdY": 0.0,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": 0.0
                 },
                 {
                   "clip": "Crouch_Loco_Walk_Right_Start",
                   "threshold": 1.0,
-                  "thresholdY": 0.0,
+                  "speed": 1.0,
+                  "thresholdY": 0.0
+                }
+              ],
+              "blendParamY": "StartY"
+            }
+          },
+          "distanceParam": "StartDistance",
+          "distanceMode": "traveled"
+        },
+        {
+          "name": "CrouchStartTurnL",
+          "loop": false,
+          "speed": 1.0,
+          "position": [
+            -520,
+            400
+          ],
+          "tags": [
+            "Crouch",
+            "Start",
+            "StartTurn"
+          ],
+          "motions": {
+            "main": {
+              "blendParam": "StartTurnAmount",
+              "children": [
+                {
+                  "clip": "Crouch_Loco_Walk_Start_Turn_L045_Lfoot",
+                  "threshold": 1.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "Crouch_Loco_Walk_Start_Turn_L090_Lfoot",
+                  "threshold": 2.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "Crouch_Loco_Walk_Start_Turn_L135_Lfoot",
+                  "threshold": 3.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "Crouch_Loco_Walk_Start_Turn_L180_Lfoot",
+                  "threshold": 4.0,
                   "speed": 1.0
                 }
               ]
             }
           },
+          "distanceParam": "StartDistance",
+          "distanceMode": "traveled"
+        },
+        {
+          "name": "CrouchStartTurnR",
+          "loop": false,
+          "speed": 1.0,
+          "position": [
+            -520,
+            480
+          ],
           "tags": [
             "Crouch",
-            "Start"
-          ]
+            "Start",
+            "StartTurn"
+          ],
+          "motions": {
+            "main": {
+              "blendParam": "StartTurnAmount",
+              "children": [
+                {
+                  "clip": "Crouch_Loco_Walk_Start_Turn_R045_Lfoot",
+                  "threshold": 1.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "Crouch_Loco_Walk_Start_Turn_R090_Lfoot",
+                  "threshold": 2.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "Crouch_Loco_Walk_Start_Turn_R135_Rfoot",
+                  "threshold": 3.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "Crouch_Loco_Walk_Start_Turn_R180_Rfoot",
+                  "threshold": 4.0,
+                  "speed": 1.0
+                }
+              ]
+            }
+          },
+          "distanceParam": "StartDistance",
+          "distanceMode": "traveled"
         },
         {
           "name": "CrouchStop",
           "loop": false,
           "speed": 1.5,
           "position": [
-            520.0,
-            540.0
+            260,
+            560
+          ],
+          "tags": [
+            "Crouch",
+            "Stop"
           ],
           "motions": {
             "main": {
               "blendParam": "StopX",
-              "blendParamY": "StopY",
               "children": [
                 {
                   "clip": "Crouch_Loco_Walk_Fwd_Stop",
                   "threshold": 0.0,
-                  "thresholdY": 1.0,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": 1.0
                 },
                 {
                   "clip": "Crouch_Loco_Walk_Bwd_Stop",
                   "threshold": 0.0,
-                  "thresholdY": -1.0,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": -1.0
                 },
                 {
                   "clip": "Crouch_Loco_Walk_Left_Stop",
                   "threshold": -1.0,
-                  "thresholdY": 0.0,
-                  "speed": 1.0
+                  "speed": 1.0,
+                  "thresholdY": 0.0
                 },
                 {
                   "clip": "Crouch_Loco_Walk_Right_Stop",
                   "threshold": 1.0,
-                  "thresholdY": 0.0,
+                  "speed": 1.0,
+                  "thresholdY": 0.0
+                }
+              ],
+              "blendParamY": "StopY"
+            }
+          },
+          "distanceParam": "StopDistance",
+          "distanceMode": "remaining"
+        },
+        {
+          "name": "CrouchPivot",
+          "loop": false,
+          "speed": 1.0,
+          "position": [
+            520,
+            560
+          ],
+          "tags": [
+            "Crouch",
+            "Pivot"
+          ],
+          "motions": {
+            "main": {
+              "blendParam": "PivotX",
+              "children": [
+                {
+                  "clip": "Crouch_Loco_Walk_Fwd_Pivot",
+                  "threshold": 0.0,
+                  "speed": 1.0,
+                  "thresholdY": 1.0
+                },
+                {
+                  "clip": "Crouch_Loco_Walk_Bwd_Pivot",
+                  "threshold": 0.0,
+                  "speed": 1.0,
+                  "thresholdY": -1.0
+                },
+                {
+                  "clip": "Crouch_Loco_Walk_Left_Pivot",
+                  "threshold": -1.0,
+                  "speed": 1.0,
+                  "thresholdY": 0.0
+                },
+                {
+                  "clip": "Crouch_Loco_Walk_Right_Pivot",
+                  "threshold": 1.0,
+                  "speed": 1.0,
+                  "thresholdY": 0.0
+                }
+              ],
+              "blendParamY": "PivotY"
+            }
+          },
+          "distanceParam": "PivotDistance",
+          "distanceMode": "pivot"
+        },
+        {
+          "name": "CrouchFidget",
+          "loop": false,
+          "speed": 1.0,
+          "position": [
+            -520,
+            560
+          ],
+          "tags": [
+            "Crouch",
+            "Fidget"
+          ],
+          "motions": {
+            "main": {
+              "blendParam": "FidgetIndex",
+              "children": [
+                {
+                  "clip": "Crouch_Idle_02",
+                  "threshold": 0.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "Crouch_Idle_03_Look_Left",
+                  "threshold": 1.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "Crouch_Idle_04_Look_Around",
+                  "threshold": 2.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "Crouch_Idle_05_Look_Behind",
+                  "threshold": 3.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "Crouch_Idle_06_Look_Behind",
+                  "threshold": 4.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "Crouch_Idle_07_Look_Around",
+                  "threshold": 5.0,
                   "speed": 1.0
                 }
               ]
             }
-          },
-          "tags": [
-            "Crouch",
-            "Stop"
-          ]
+          }
         }
       ],
       "transitions": [
@@ -747,6 +1547,702 @@
         },
         {
           "from": "Locomotion",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchLoco",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "CrouchLoco",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartWalk",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "StartWalk",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Start",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "Start",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartRun",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "StartRun",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartTurnL",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "StartTurnL",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartTurnR",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "StartTurnR",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StopWalk",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "StopWalk",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Stop",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "Stop",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StopRun",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "StopRun",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "PivotWalk",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "PivotWalk",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "PivotJog",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "PivotJog",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "IdleStep",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "IdleStep",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Fidget",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "Fidget",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Turn",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "Turn",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Sprint",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "Sprint",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchStart",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "CrouchStart",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchStartTurnL",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "CrouchStartTurnL",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchStartTurnR",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "CrouchStartTurnR",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchStop",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "CrouchStop",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchPivot",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "CrouchPivot",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchFidget",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "CrouchFidget",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchTurn",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "CrouchTurn",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchDown",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "CrouchDown",
+          "to": "Fall",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Airborne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchUp",
+          "to": "Jump",
+          "duration": 0.08,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Jump",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "offset": 0.15
+        },
+        {
+          "from": "CrouchUp",
           "to": "Fall",
           "duration": 0.25,
           "conditions": [
@@ -819,231 +2315,6 @@
         },
         {
           "from": "Locomotion",
-          "to": "Turn",
-          "duration": 0.15,
-          "conditions": [
-            {
-              "mode": "if",
-              "param": "Turning",
-              "threshold": 0.0
-            }
-          ],
-          "hasExitTime": false,
-          "exitTime": 1.0
-        },
-        {
-          "from": "Turn",
-          "to": "Locomotion",
-          "duration": 0.25,
-          "conditions": [
-            {
-              "mode": "ifNot",
-              "param": "Turning",
-              "threshold": 0.0
-            }
-          ],
-          "hasExitTime": false,
-          "exitTime": 1.0
-        },
-        {
-          "from": "Locomotion",
-          "to": "Start",
-          "duration": 0.1,
-          "conditions": [
-            {
-              "mode": "if",
-              "param": "Start",
-              "threshold": 0.0
-            }
-          ],
-          "hasExitTime": false,
-          "exitTime": 1.0
-        },
-        {
-          "from": "Locomotion",
-          "to": "Stop",
-          "duration": 0.15,
-          "conditions": [
-            {
-              "mode": "if",
-              "param": "Stop",
-              "threshold": 0.0
-            }
-          ],
-          "hasExitTime": false,
-          "exitTime": 1.0,
-          "offset": 0.36
-        },
-        {
-          "from": "Locomotion",
-          "to": "StopRun",
-          "duration": 0.15,
-          "conditions": [
-            {
-              "mode": "if",
-              "param": "StopRun",
-              "threshold": 0.0
-            }
-          ],
-          "hasExitTime": false,
-          "exitTime": 1.0,
-          "offset": 0.42
-        },
-        {
-          "from": "Start",
-          "to": "Locomotion",
-          "duration": 0.15,
-          "conditions": [
-            {
-              "mode": "ifNot",
-              "param": "Moving",
-              "threshold": 0.0
-            }
-          ],
-          "hasExitTime": false,
-          "exitTime": 1.0
-        },
-        {
-          "from": "Start",
-          "to": "Locomotion",
-          "duration": 0.2,
-          "conditions": [],
-          "hasExitTime": true,
-          "exitTime": 0.45
-        },
-        {
-          "from": "Start",
-          "to": "Jump",
-          "duration": 0.08,
-          "conditions": [
-            {
-              "mode": "if",
-              "param": "Jump",
-              "threshold": 0.0
-            }
-          ],
-          "hasExitTime": false,
-          "exitTime": 1.0,
-          "offset": 0.15
-        },
-        {
-          "from": "Start",
-          "to": "Fall",
-          "duration": 0.25,
-          "conditions": [
-            {
-              "mode": "if",
-              "param": "Airborne",
-              "threshold": 0.0
-            }
-          ],
-          "hasExitTime": false,
-          "exitTime": 1.0
-        },
-        {
-          "from": "Stop",
-          "to": "Locomotion",
-          "duration": 0.15,
-          "conditions": [
-            {
-              "mode": "if",
-              "param": "Moving",
-              "threshold": 0.0
-            }
-          ],
-          "hasExitTime": false,
-          "exitTime": 1.0
-        },
-        {
-          "from": "Stop",
-          "to": "Locomotion",
-          "duration": 0.25,
-          "conditions": [],
-          "hasExitTime": true,
-          "exitTime": 0.88
-        },
-        {
-          "from": "Stop",
-          "to": "Jump",
-          "duration": 0.08,
-          "conditions": [
-            {
-              "mode": "if",
-              "param": "Jump",
-              "threshold": 0.0
-            }
-          ],
-          "hasExitTime": false,
-          "exitTime": 1.0,
-          "offset": 0.15
-        },
-        {
-          "from": "Stop",
-          "to": "Fall",
-          "duration": 0.25,
-          "conditions": [
-            {
-              "mode": "if",
-              "param": "Airborne",
-              "threshold": 0.0
-            }
-          ],
-          "hasExitTime": false,
-          "exitTime": 1.0
-        },
-        {
-          "from": "StopRun",
-          "to": "Locomotion",
-          "duration": 0.15,
-          "conditions": [
-            {
-              "mode": "if",
-              "param": "Moving",
-              "threshold": 0.0
-            }
-          ],
-          "hasExitTime": false,
-          "exitTime": 1.0
-        },
-        {
-          "from": "StopRun",
-          "to": "Locomotion",
-          "duration": 0.25,
-          "conditions": [],
-          "hasExitTime": true,
-          "exitTime": 0.88
-        },
-        {
-          "from": "StopRun",
-          "to": "Jump",
-          "duration": 0.08,
-          "conditions": [
-            {
-              "mode": "if",
-              "param": "Jump",
-              "threshold": 0.0
-            }
-          ],
-          "hasExitTime": false,
-          "exitTime": 1.0,
-          "offset": 0.15
-        },
-        {
-          "from": "StopRun",
-          "to": "Fall",
-          "duration": 0.25,
-          "conditions": [
-            {
-              "mode": "if",
-              "param": "Airborne",
-              "threshold": 0.0
-            }
-          ],
-          "hasExitTime": false,
-          "exitTime": 1.0
-        },
-        {
-          "from": "Locomotion",
           "to": "CrouchDown",
           "duration": 0.2,
           "conditions": [
@@ -1058,9 +2329,233 @@
           "offset": 0.3
         },
         {
-          "from": "CrouchDown",
-          "to": "Locomotion",
+          "from": "CrouchLoco",
+          "to": "CrouchUp",
           "duration": 0.2,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "CrouchUp",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Locomotion",
+          "to": "CrouchLoco",
+          "duration": 0.3,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Crouched",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartWalk",
+          "to": "CrouchLoco",
+          "duration": 0.3,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Crouched",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Start",
+          "to": "CrouchLoco",
+          "duration": 0.3,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Crouched",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartRun",
+          "to": "CrouchLoco",
+          "duration": 0.3,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Crouched",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartTurnL",
+          "to": "CrouchLoco",
+          "duration": 0.3,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Crouched",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartTurnR",
+          "to": "CrouchLoco",
+          "duration": 0.3,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Crouched",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StopWalk",
+          "to": "CrouchLoco",
+          "duration": 0.3,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Crouched",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Stop",
+          "to": "CrouchLoco",
+          "duration": 0.3,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Crouched",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StopRun",
+          "to": "CrouchLoco",
+          "duration": 0.3,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Crouched",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "PivotWalk",
+          "to": "CrouchLoco",
+          "duration": 0.3,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Crouched",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "PivotJog",
+          "to": "CrouchLoco",
+          "duration": 0.3,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Crouched",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "IdleStep",
+          "to": "CrouchLoco",
+          "duration": 0.3,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Crouched",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Fidget",
+          "to": "CrouchLoco",
+          "duration": 0.3,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Crouched",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Turn",
+          "to": "CrouchLoco",
+          "duration": 0.3,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Crouched",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Sprint",
+          "to": "CrouchLoco",
+          "duration": 0.3,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Crouched",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchLoco",
+          "to": "Locomotion",
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "ifNot",
@@ -1072,118 +2567,97 @@
           "exitTime": 1.0
         },
         {
-          "from": "Turn",
-          "to": "Jump",
-          "duration": 0.08,
-          "conditions": [
-            {
-              "mode": "if",
-              "param": "Jump",
-              "threshold": 0.0
-            }
-          ],
-          "hasExitTime": false,
-          "exitTime": 1.0,
-          "offset": 0.15
-        },
-        {
-          "from": "CrouchLoco",
-          "to": "Jump",
-          "duration": 0.08,
-          "conditions": [
-            {
-              "mode": "if",
-              "param": "Jump",
-              "threshold": 0.0
-            }
-          ],
-          "hasExitTime": false,
-          "exitTime": 1.0,
-          "offset": 0.15
-        },
-        {
-          "from": "CrouchTurn",
-          "to": "Jump",
-          "duration": 0.08,
-          "conditions": [
-            {
-              "mode": "if",
-              "param": "Jump",
-              "threshold": 0.0
-            }
-          ],
-          "hasExitTime": false,
-          "exitTime": 1.0,
-          "offset": 0.15
-        },
-        {
           "from": "CrouchStart",
-          "to": "Jump",
-          "duration": 0.08,
+          "to": "Locomotion",
+          "duration": 0.3,
           "conditions": [
             {
-              "mode": "if",
-              "param": "Jump",
+              "mode": "ifNot",
+              "param": "Crouched",
               "threshold": 0.0
             }
           ],
           "hasExitTime": false,
-          "exitTime": 1.0,
-          "offset": 0.15
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchStartTurnL",
+          "to": "Locomotion",
+          "duration": 0.3,
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Crouched",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchStartTurnR",
+          "to": "Locomotion",
+          "duration": 0.3,
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Crouched",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
         },
         {
           "from": "CrouchStop",
-          "to": "Jump",
-          "duration": 0.08,
+          "to": "Locomotion",
+          "duration": 0.3,
           "conditions": [
             {
-              "mode": "if",
-              "param": "Jump",
+              "mode": "ifNot",
+              "param": "Crouched",
               "threshold": 0.0
             }
           ],
           "hasExitTime": false,
-          "exitTime": 1.0,
-          "offset": 0.15
+          "exitTime": 1.0
         },
         {
-          "from": "CrouchDown",
-          "to": "Jump",
-          "duration": 0.08,
+          "from": "CrouchPivot",
+          "to": "Locomotion",
+          "duration": 0.3,
           "conditions": [
             {
-              "mode": "if",
-              "param": "Jump",
+              "mode": "ifNot",
+              "param": "Crouched",
               "threshold": 0.0
             }
           ],
           "hasExitTime": false,
-          "exitTime": 1.0,
-          "offset": 0.15
+          "exitTime": 1.0
         },
         {
-          "from": "CrouchUp",
-          "to": "Jump",
-          "duration": 0.08,
+          "from": "CrouchFidget",
+          "to": "Locomotion",
+          "duration": 0.3,
           "conditions": [
             {
-              "mode": "if",
-              "param": "Jump",
+              "mode": "ifNot",
+              "param": "Crouched",
               "threshold": 0.0
             }
           ],
           "hasExitTime": false,
-          "exitTime": 1.0,
-          "offset": 0.15
+          "exitTime": 1.0
         },
         {
-          "from": "Turn",
-          "to": "Fall",
-          "duration": 0.25,
+          "from": "CrouchTurn",
+          "to": "Locomotion",
+          "duration": 0.3,
           "conditions": [
             {
-              "mode": "if",
-              "param": "Airborne",
+              "mode": "ifNot",
+              "param": "Crouched",
               "threshold": 0.0
             }
           ],
@@ -1192,26 +2666,12 @@
         },
         {
           "from": "CrouchDown",
-          "to": "Fall",
-          "duration": 0.25,
+          "to": "Locomotion",
+          "duration": 0.2,
           "conditions": [
             {
-              "mode": "if",
-              "param": "Airborne",
-              "threshold": 0.0
-            }
-          ],
-          "hasExitTime": false,
-          "exitTime": 1.0
-        },
-        {
-          "from": "CrouchUp",
-          "to": "Fall",
-          "duration": 0.25,
-          "conditions": [
-            {
-              "mode": "if",
-              "param": "Airborne",
+              "mode": "ifNot",
+              "param": "Crouched",
               "threshold": 0.0
             }
           ],
@@ -1239,20 +2699,6 @@
           "conditions": [],
           "hasExitTime": true,
           "exitTime": 0.92
-        },
-        {
-          "from": "CrouchLoco",
-          "to": "CrouchUp",
-          "duration": 0.2,
-          "conditions": [
-            {
-              "mode": "if",
-              "param": "CrouchUp",
-              "threshold": 0.0
-            }
-          ],
-          "hasExitTime": false,
-          "exitTime": 1.0
         },
         {
           "from": "CrouchUp",
@@ -1291,8 +2737,112 @@
           "exitTime": 0.62
         },
         {
-          "from": "CrouchLoco",
-          "to": "CrouchStart",
+          "from": "Locomotion",
+          "to": "Turn",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Turning",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Turn",
+          "to": "Locomotion",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Turning",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Locomotion",
+          "to": "StartTurnL",
+          "duration": 0.12,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Start",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "StartTurn",
+              "threshold": 0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Locomotion",
+          "to": "StartTurnR",
+          "duration": 0.12,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Start",
+              "threshold": 0.0
+            },
+            {
+              "mode": "less",
+              "param": "StartTurn",
+              "threshold": -0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Locomotion",
+          "to": "StartRun",
+          "duration": 0.1,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Start",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "StartGait",
+              "threshold": 1.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Locomotion",
+          "to": "Start",
+          "duration": 0.1,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Start",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "StartGait",
+              "threshold": 0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Locomotion",
+          "to": "StartWalk",
           "duration": 0.1,
           "conditions": [
             {
@@ -1305,8 +2855,41 @@
           "exitTime": 1.0
         },
         {
-          "from": "CrouchLoco",
-          "to": "CrouchStop",
+          "from": "Locomotion",
+          "to": "StopRun",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "StopRun",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Locomotion",
+          "to": "Stop",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Stop",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "StopGait",
+              "threshold": 0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Locomotion",
+          "to": "StopWalk",
           "duration": 0.15,
           "conditions": [
             {
@@ -1316,103 +2899,35 @@
             }
           ],
           "hasExitTime": false,
-          "exitTime": 1.0,
-          "offset": 0.75
-        },
-        {
-          "from": "CrouchStart",
-          "to": "Locomotion",
-          "duration": 0.2,
-          "conditions": [
-            {
-              "mode": "ifNot",
-              "param": "Crouched",
-              "threshold": 0.0
-            }
-          ],
-          "hasExitTime": false,
           "exitTime": 1.0
         },
         {
-          "from": "CrouchStart",
-          "to": "CrouchLoco",
-          "duration": 0.15,
-          "conditions": [
-            {
-              "mode": "ifNot",
-              "param": "Moving",
-              "threshold": 0.0
-            }
-          ],
-          "hasExitTime": false,
-          "exitTime": 1.0
-        },
-        {
-          "from": "CrouchStart",
-          "to": "CrouchLoco",
-          "duration": 0.2,
-          "conditions": [],
-          "hasExitTime": true,
-          "exitTime": 0.42
-        },
-        {
-          "from": "CrouchStart",
-          "to": "Fall",
-          "duration": 0.25,
-          "conditions": [
-            {
-              "mode": "if",
-              "param": "Airborne",
-              "threshold": 0.0
-            }
-          ],
-          "hasExitTime": false,
-          "exitTime": 1.0
-        },
-        {
-          "from": "CrouchStop",
-          "to": "Locomotion",
-          "duration": 0.2,
-          "conditions": [
-            {
-              "mode": "ifNot",
-              "param": "Crouched",
-              "threshold": 0.0
-            }
-          ],
-          "hasExitTime": false,
-          "exitTime": 1.0
-        },
-        {
-          "from": "CrouchStop",
-          "to": "CrouchLoco",
+          "from": "Locomotion",
+          "to": "PivotJog",
           "duration": 0.15,
           "conditions": [
             {
               "mode": "if",
-              "param": "Moving",
+              "param": "Pivot",
               "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "PivotGait",
+              "threshold": 0.5
             }
           ],
           "hasExitTime": false,
           "exitTime": 1.0
         },
         {
-          "from": "CrouchStop",
-          "to": "CrouchLoco",
-          "duration": 0.2,
-          "conditions": [],
-          "hasExitTime": true,
-          "exitTime": 0.92
-        },
-        {
-          "from": "CrouchStop",
-          "to": "Fall",
-          "duration": 0.25,
+          "from": "Locomotion",
+          "to": "PivotWalk",
+          "duration": 0.15,
           "conditions": [
             {
               "mode": "if",
-              "param": "Airborne",
+              "param": "Pivot",
               "threshold": 0.0
             }
           ],
@@ -1421,12 +2936,31 @@
         },
         {
           "from": "Locomotion",
-          "to": "CrouchLoco",
-          "duration": 0.25,
+          "to": "Sprint",
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "if",
-              "param": "Crouched",
+              "param": "Sprint",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "MoveY",
+              "threshold": 3.9
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Locomotion",
+          "to": "IdleStep",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Step",
               "threshold": 0.0
             }
           ],
@@ -1434,13 +2968,162 @@
           "exitTime": 1.0
         },
         {
-          "from": "Turn",
-          "to": "CrouchLoco",
-          "duration": 0.25,
+          "from": "Locomotion",
+          "to": "Fidget",
+          "duration": 0.45,
           "conditions": [
             {
               "mode": "if",
-              "param": "Crouched",
+              "param": "Fidget",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartWalk",
+          "to": "IdleStep",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Step",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartWalk",
+          "to": "StopRun",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "StopRun",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartWalk",
+          "to": "Stop",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Stop",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "StopGait",
+              "threshold": 0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartWalk",
+          "to": "StopWalk",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Stop",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartWalk",
+          "to": "PivotJog",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Pivot",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "PivotGait",
+              "threshold": 0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartWalk",
+          "to": "PivotWalk",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Pivot",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartWalk",
+          "to": "Locomotion",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Moving",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartWalk",
+          "to": "Sprint",
+          "duration": 0.3,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Sprint",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "MoveY",
+              "threshold": 3.9
+            }
+          ],
+          "hasExitTime": true,
+          "exitTime": 0.5
+        },
+        {
+          "from": "StartWalk",
+          "to": "Locomotion",
+          "duration": 0.25,
+          "conditions": [],
+          "hasExitTime": true,
+          "exitTime": 0.5
+        },
+        {
+          "from": "Start",
+          "to": "IdleStep",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Step",
               "threshold": 0.0
             }
           ],
@@ -1449,12 +3132,560 @@
         },
         {
           "from": "Start",
-          "to": "CrouchLoco",
-          "duration": 0.25,
+          "to": "StopRun",
+          "duration": 0.15,
           "conditions": [
             {
               "mode": "if",
-              "param": "Crouched",
+              "param": "StopRun",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Start",
+          "to": "Stop",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Stop",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "StopGait",
+              "threshold": 0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Start",
+          "to": "StopWalk",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Stop",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Start",
+          "to": "PivotJog",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Pivot",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "PivotGait",
+              "threshold": 0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Start",
+          "to": "PivotWalk",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Pivot",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Start",
+          "to": "Locomotion",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Moving",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Start",
+          "to": "Sprint",
+          "duration": 0.3,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Sprint",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "MoveY",
+              "threshold": 3.9
+            }
+          ],
+          "hasExitTime": true,
+          "exitTime": 0.5
+        },
+        {
+          "from": "Start",
+          "to": "Locomotion",
+          "duration": 0.25,
+          "conditions": [],
+          "hasExitTime": true,
+          "exitTime": 0.5
+        },
+        {
+          "from": "StartRun",
+          "to": "IdleStep",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Step",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartRun",
+          "to": "StopRun",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "StopRun",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartRun",
+          "to": "Stop",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Stop",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "StopGait",
+              "threshold": 0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartRun",
+          "to": "StopWalk",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Stop",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartRun",
+          "to": "PivotJog",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Pivot",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "PivotGait",
+              "threshold": 0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartRun",
+          "to": "PivotWalk",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Pivot",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartRun",
+          "to": "Locomotion",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Moving",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartRun",
+          "to": "Sprint",
+          "duration": 0.3,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Sprint",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "MoveY",
+              "threshold": 3.9
+            }
+          ],
+          "hasExitTime": true,
+          "exitTime": 0.5
+        },
+        {
+          "from": "StartRun",
+          "to": "Locomotion",
+          "duration": 0.25,
+          "conditions": [],
+          "hasExitTime": true,
+          "exitTime": 0.5
+        },
+        {
+          "from": "StartTurnL",
+          "to": "IdleStep",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Step",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartTurnL",
+          "to": "StopRun",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "StopRun",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartTurnL",
+          "to": "Stop",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Stop",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "StopGait",
+              "threshold": 0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartTurnL",
+          "to": "StopWalk",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Stop",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartTurnL",
+          "to": "PivotJog",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Pivot",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "PivotGait",
+              "threshold": 0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartTurnL",
+          "to": "PivotWalk",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Pivot",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartTurnL",
+          "to": "Locomotion",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Moving",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartTurnL",
+          "to": "Sprint",
+          "duration": 0.3,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Sprint",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "MoveY",
+              "threshold": 3.9
+            }
+          ],
+          "hasExitTime": true,
+          "exitTime": 0.5
+        },
+        {
+          "from": "StartTurnL",
+          "to": "Locomotion",
+          "duration": 0.25,
+          "conditions": [],
+          "hasExitTime": true,
+          "exitTime": 0.62
+        },
+        {
+          "from": "StartTurnR",
+          "to": "IdleStep",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Step",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartTurnR",
+          "to": "StopRun",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "StopRun",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartTurnR",
+          "to": "Stop",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Stop",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "StopGait",
+              "threshold": 0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartTurnR",
+          "to": "StopWalk",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Stop",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartTurnR",
+          "to": "PivotJog",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Pivot",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "PivotGait",
+              "threshold": 0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartTurnR",
+          "to": "PivotWalk",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Pivot",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartTurnR",
+          "to": "Locomotion",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Moving",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StartTurnR",
+          "to": "Sprint",
+          "duration": 0.3,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Sprint",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "MoveY",
+              "threshold": 3.9
+            }
+          ],
+          "hasExitTime": true,
+          "exitTime": 0.5
+        },
+        {
+          "from": "StartTurnR",
+          "to": "Locomotion",
+          "duration": 0.25,
+          "conditions": [],
+          "hasExitTime": true,
+          "exitTime": 0.62
+        },
+        {
+          "from": "StopWalk",
+          "to": "Locomotion",
+          "duration": 0.2,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Moving",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "StopWalk",
+          "to": "Locomotion",
+          "duration": 0.3,
+          "conditions": [],
+          "hasExitTime": true,
+          "exitTime": 0.9
+        },
+        {
+          "from": "Stop",
+          "to": "Locomotion",
+          "duration": 0.2,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Moving",
               "threshold": 0.0
             }
           ],
@@ -1463,12 +3694,20 @@
         },
         {
           "from": "Stop",
-          "to": "CrouchLoco",
-          "duration": 0.25,
+          "to": "Locomotion",
+          "duration": 0.3,
+          "conditions": [],
+          "hasExitTime": true,
+          "exitTime": 0.9
+        },
+        {
+          "from": "StopRun",
+          "to": "Locomotion",
+          "duration": 0.2,
           "conditions": [
             {
               "mode": "if",
-              "param": "Crouched",
+              "param": "Moving",
               "threshold": 0.0
             }
           ],
@@ -1477,12 +3716,20 @@
         },
         {
           "from": "StopRun",
-          "to": "CrouchLoco",
-          "duration": 0.25,
+          "to": "Locomotion",
+          "duration": 0.3,
+          "conditions": [],
+          "hasExitTime": true,
+          "exitTime": 0.9
+        },
+        {
+          "from": "PivotWalk",
+          "to": "StopRun",
+          "duration": 0.15,
           "conditions": [
             {
               "mode": "if",
-              "param": "Crouched",
+              "param": "StopRun",
               "threshold": 0.0
             }
           ],
@@ -1490,18 +3737,408 @@
           "exitTime": 1.0
         },
         {
-          "from": "CrouchLoco",
-          "to": "Locomotion",
-          "duration": 0.25,
+          "from": "PivotWalk",
+          "to": "Stop",
+          "duration": 0.15,
           "conditions": [
             {
-              "mode": "ifNot",
-              "param": "Crouched",
+              "mode": "if",
+              "param": "Stop",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "StopGait",
+              "threshold": 0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "PivotWalk",
+          "to": "StopWalk",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Stop",
               "threshold": 0.0
             }
           ],
           "hasExitTime": false,
           "exitTime": 1.0
+        },
+        {
+          "from": "PivotWalk",
+          "to": "Locomotion",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Moving",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "PivotWalk",
+          "to": "Locomotion",
+          "duration": 0.25,
+          "conditions": [],
+          "hasExitTime": true,
+          "exitTime": 0.72
+        },
+        {
+          "from": "PivotJog",
+          "to": "StopRun",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "StopRun",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "PivotJog",
+          "to": "Stop",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Stop",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "StopGait",
+              "threshold": 0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "PivotJog",
+          "to": "StopWalk",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Stop",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "PivotJog",
+          "to": "Locomotion",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Moving",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "PivotJog",
+          "to": "Locomotion",
+          "duration": 0.25,
+          "conditions": [],
+          "hasExitTime": true,
+          "exitTime": 0.72
+        },
+        {
+          "from": "Sprint",
+          "to": "StopRun",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "StopRun",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Sprint",
+          "to": "Locomotion",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Sprint",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Sprint",
+          "to": "Locomotion",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "less",
+              "param": "MoveY",
+              "threshold": 3.6
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "IdleStep",
+          "to": "StartTurnL",
+          "duration": 0.12,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Start",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "StartTurn",
+              "threshold": 0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "IdleStep",
+          "to": "StartTurnR",
+          "duration": 0.12,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Start",
+              "threshold": 0.0
+            },
+            {
+              "mode": "less",
+              "param": "StartTurn",
+              "threshold": -0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "IdleStep",
+          "to": "StartRun",
+          "duration": 0.1,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Start",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "StartGait",
+              "threshold": 1.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "IdleStep",
+          "to": "Start",
+          "duration": 0.1,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Start",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "StartGait",
+              "threshold": 0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "IdleStep",
+          "to": "StartWalk",
+          "duration": 0.1,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Start",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "IdleStep",
+          "to": "Locomotion",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Moving",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "IdleStep",
+          "to": "Locomotion",
+          "duration": 0.3,
+          "conditions": [],
+          "hasExitTime": true,
+          "exitTime": 0.85
+        },
+        {
+          "from": "Fidget",
+          "to": "StartTurnL",
+          "duration": 0.12,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Start",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "StartTurn",
+              "threshold": 0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Fidget",
+          "to": "StartTurnR",
+          "duration": 0.12,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Start",
+              "threshold": 0.0
+            },
+            {
+              "mode": "less",
+              "param": "StartTurn",
+              "threshold": -0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Fidget",
+          "to": "StartRun",
+          "duration": 0.1,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Start",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "StartGait",
+              "threshold": 1.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Fidget",
+          "to": "Start",
+          "duration": 0.1,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Start",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "StartGait",
+              "threshold": 0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Fidget",
+          "to": "StartWalk",
+          "duration": 0.1,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Start",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Fidget",
+          "to": "Locomotion",
+          "duration": 0.2,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Moving",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Fidget",
+          "to": "Turn",
+          "duration": 0.2,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Turning",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "Fidget",
+          "to": "Locomotion",
+          "duration": 0.45,
+          "conditions": [],
+          "hasExitTime": true,
+          "exitTime": 0.9
         },
         {
           "from": "CrouchLoco",
@@ -1532,13 +4169,51 @@
           "exitTime": 1.0
         },
         {
-          "from": "CrouchTurn",
-          "to": "Locomotion",
-          "duration": 0.25,
+          "from": "CrouchLoco",
+          "to": "CrouchStartTurnL",
+          "duration": 0.12,
           "conditions": [
             {
-              "mode": "ifNot",
-              "param": "Crouched",
+              "mode": "if",
+              "param": "Start",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "StartTurn",
+              "threshold": 0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchLoco",
+          "to": "CrouchStartTurnR",
+          "duration": 0.12,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Start",
+              "threshold": 0.0
+            },
+            {
+              "mode": "less",
+              "param": "StartTurn",
+              "threshold": -0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchLoco",
+          "to": "CrouchStart",
+          "duration": 0.1,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Start",
               "threshold": 0.0
             }
           ],
@@ -1547,12 +4222,12 @@
         },
         {
           "from": "CrouchLoco",
-          "to": "Fall",
-          "duration": 0.25,
+          "to": "CrouchStop",
+          "duration": 0.15,
           "conditions": [
             {
               "mode": "if",
-              "param": "Airborne",
+              "param": "Stop",
               "threshold": 0.0
             }
           ],
@@ -1560,18 +4235,328 @@
           "exitTime": 1.0
         },
         {
-          "from": "CrouchTurn",
-          "to": "Fall",
-          "duration": 0.25,
+          "from": "CrouchLoco",
+          "to": "CrouchPivot",
+          "duration": 0.15,
           "conditions": [
             {
               "mode": "if",
-              "param": "Airborne",
+              "param": "Pivot",
               "threshold": 0.0
             }
           ],
           "hasExitTime": false,
           "exitTime": 1.0
+        },
+        {
+          "from": "CrouchLoco",
+          "to": "CrouchFidget",
+          "duration": 0.45,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Fidget",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchStart",
+          "to": "CrouchStop",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Stop",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchStart",
+          "to": "CrouchPivot",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Pivot",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchStart",
+          "to": "CrouchLoco",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Moving",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchStart",
+          "to": "CrouchLoco",
+          "duration": 0.25,
+          "conditions": [],
+          "hasExitTime": true,
+          "exitTime": 0.45
+        },
+        {
+          "from": "CrouchStartTurnL",
+          "to": "CrouchStop",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Stop",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchStartTurnL",
+          "to": "CrouchPivot",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Pivot",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchStartTurnL",
+          "to": "CrouchLoco",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Moving",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchStartTurnL",
+          "to": "CrouchLoco",
+          "duration": 0.25,
+          "conditions": [],
+          "hasExitTime": true,
+          "exitTime": 0.62
+        },
+        {
+          "from": "CrouchStartTurnR",
+          "to": "CrouchStop",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Stop",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchStartTurnR",
+          "to": "CrouchPivot",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Pivot",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchStartTurnR",
+          "to": "CrouchLoco",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Moving",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchStartTurnR",
+          "to": "CrouchLoco",
+          "duration": 0.25,
+          "conditions": [],
+          "hasExitTime": true,
+          "exitTime": 0.62
+        },
+        {
+          "from": "CrouchStop",
+          "to": "CrouchLoco",
+          "duration": 0.2,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Moving",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchStop",
+          "to": "CrouchLoco",
+          "duration": 0.3,
+          "conditions": [],
+          "hasExitTime": true,
+          "exitTime": 0.92
+        },
+        {
+          "from": "CrouchPivot",
+          "to": "CrouchStop",
+          "duration": 0.15,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Stop",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchPivot",
+          "to": "CrouchLoco",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Moving",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchPivot",
+          "to": "CrouchLoco",
+          "duration": 0.25,
+          "conditions": [],
+          "hasExitTime": true,
+          "exitTime": 0.72
+        },
+        {
+          "from": "CrouchFidget",
+          "to": "CrouchStartTurnL",
+          "duration": 0.12,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Start",
+              "threshold": 0.0
+            },
+            {
+              "mode": "greater",
+              "param": "StartTurn",
+              "threshold": 0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchFidget",
+          "to": "CrouchStartTurnR",
+          "duration": 0.12,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Start",
+              "threshold": 0.0
+            },
+            {
+              "mode": "less",
+              "param": "StartTurn",
+              "threshold": -0.5
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchFidget",
+          "to": "CrouchStart",
+          "duration": 0.1,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Start",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchFidget",
+          "to": "CrouchLoco",
+          "duration": 0.2,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Moving",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchFidget",
+          "to": "CrouchTurn",
+          "duration": 0.2,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Turning",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "CrouchFidget",
+          "to": "CrouchLoco",
+          "duration": 0.45,
+          "conditions": [],
+          "hasExitTime": true,
+          "exitTime": 0.9
         }
       ]
     }

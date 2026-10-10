@@ -1,4 +1,5 @@
 #include "Model.h"
+#include "AnimRetarget.h"
 #include "SkinHideBuffer.h"
 #include "MaterialAsset.h"
 #include "ShaderAsset.h"
@@ -133,7 +134,18 @@ void Model::ImportFromFile(const ModelImportSettings& settings) {
 
     unsigned int flags = aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GlobalScale;
     if (settings.ImportNormals) flags |= aiProcess_GenSmoothNormals | aiProcess_CalcTangentSpace;
-    if (settings.ImportSkeleton) flags |= aiProcess_LimitBoneWeights;
+    // The skin audit (--model-report with TARTARUS_SKIN_AUDIT set) reads each vertex's true influence count: Assimp's own
+    // cap is left off and ExtractBoneWeights' (the same rule - the largest four, renormalized) counts what it drops.
+    static const bool s_SkinAudit = [] {
+        char* e = nullptr;
+        size_t n = 0;
+        _dupenv_s(&e, &n, "TARTARUS_SKIN_AUDIT");
+        const bool on = e && *e;
+        std::free(e);
+        return on;
+    }();
+    if (settings.ImportSkeleton && !s_SkinAudit) flags |= aiProcess_LimitBoneWeights;
+    importer.SetPropertyInteger(AI_CONFIG_PP_LBW_MAX_WEIGHTS, MAX_BONE_INFLUENCE); // Assimp's default is four
     if (settings.OptimizeGraph) flags |= aiProcess_JoinIdenticalVertices | aiProcess_OptimizeMeshes;
     // A clip source: the same scale and pivot handling (so its nodes and keys are exactly a full import's), none of the
     // mesh work - those flags only touch meshes, and the meshes aren't read.
@@ -1136,6 +1148,9 @@ Material Model::ExtractMaterial(const aiScene* scene, unsigned int materialIndex
 
 void Model::ExtractBoneWeights(std::vector<ModelVertex>& vertices, aiMesh* mesh, const glm::mat4& offsetFix) {
     bool overflowWarned = false;
+    // Every influence each vertex has, before the cap (the skin stats).
+    std::vector<unsigned char> count(vertices.size(), 0);
+    std::vector<float> total(vertices.size(), 0.0f), dropped(vertices.size(), 0.0f);
     for (unsigned int boneIdx = 0; boneIdx < mesh->mNumBones; ++boneIdx) {
         aiBone* bone = mesh->mBones[boneIdx];
         std::string boneName = bone->mName.C_Str();
@@ -1169,6 +1184,8 @@ void Model::ExtractBoneWeights(std::vector<ModelVertex>& vertices, aiMesh* mesh,
             if (vertexId >= vertices.size()) continue;
 
             ModelVertex& v = vertices[vertexId];
+            if (count[vertexId] < 255) ++count[vertexId];
+            total[vertexId] += weight;
             int slot = 0;
             for (; slot < MAX_BONE_INFLUENCE; ++slot)
                 if (v.BoneIDs[slot] < 0) break;
@@ -1180,11 +1197,22 @@ void Model::ExtractBoneWeights(std::vector<ModelVertex>& vertices, aiMesh* mesh,
                 int smallest = 0;
                 for (int s = 1; s < MAX_BONE_INFLUENCE; ++s)
                     if (v.Weights[s] < v.Weights[smallest]) smallest = s;
-                if (weight <= v.Weights[smallest]) continue;
+                if (weight <= v.Weights[smallest]) { dropped[vertexId] += weight; continue; }
+                dropped[vertexId] += v.Weights[smallest];
                 slot = smallest;
             }
             v.BoneIDs[slot] = boneID;
             v.Weights[slot] = weight;
+        }
+    }
+
+    for (size_t i = 0; i < vertices.size(); ++i) {
+        if (!count[i]) continue;
+        ++m_D->SkinVertices;
+        m_D->SkinMaxInfluences = std::max(m_D->SkinMaxInfluences, (int)count[i]);
+        if (count[i] > MAX_BONE_INFLUENCE) {
+            ++m_D->SkinOverflow;
+            if (total[i] > 1e-6f) m_D->SkinMaxDropped = std::max(m_D->SkinMaxDropped, dropped[i] / total[i]);
         }
     }
 
@@ -1284,7 +1312,7 @@ const AnimationClip* Model::ClipAt(int i, const std::vector<int>** nodeChannel) 
     const AnimationClip& clip = x.Source->Animations[x.SourceIndex];
     if (clip.Channels.size() != x.SourceChannels) return nullptr;    // the source was reimported since
     *nodeChannel = &x.NodeChannel;
-    return &clip;
+    return x.Baked ? x.Baked.get() : &clip;
 }
 
 LocalTRS Model::SampleClipNode(int clipIndex, const AnimationClip& clip, int channel, int node, float ticks) const {
@@ -1346,6 +1374,7 @@ int Model::AttachClip(const Model& source, int sourceIndex, const std::string& r
         std::weak_ptr<SharedData> Target, Source; // a freed model's address can be reused: these say it's still the same
         std::vector<int> NodeChannel;
         std::vector<glm::quat> Correction;
+        std::shared_ptr<const AnimationClip> Baked;
         int Matched = 0;
     };
     static std::mutex s_MatchMutex;
@@ -1361,12 +1390,39 @@ int Model::AttachClip(const Model& source, int sourceIndex, const std::string& r
             }
             x.NodeChannel = it->second.NodeChannel;
             x.Correction = it->second.Correction;
+            x.Baked = it->second.Baked;
+            m_ExternalClips.push_back(std::move(x));
+            return (int)m_D->Animations.size() + (int)m_ExternalClips.size() - 1;
+        }
+    }
+    int matched = 0;
+    auto remember = [&]() {
+        std::lock_guard<std::mutex> lock(s_MatchMutex);
+        if (s_Matches.size() > 4096) s_Matches.clear();
+        Match& mt = s_Matches[mkey];
+        mt.Target = m_D;
+        mt.Source = source.m_D;
+        mt.NodeChannel = x.NodeChannel;
+        mt.Correction = x.Correction;
+        mt.Baked = x.Baked;
+        mt.Matched = matched;
+    };
+    // A UE4 mannequin pack on a UE5 rig: different spine counts, rest poses and proportions - baked onto this
+    // skeleton (AnimRetarget) rather than copying locals by name.
+    if (RetargetIsUe4ToUe5(source.m_D->Nodes, m_D->Nodes)) {
+        auto baked = std::make_shared<AnimationClip>();
+        if (RetargetBakeClip(source.m_D->Nodes, clip, m_D->Nodes, *baked, x.NodeChannel)) {
+            matched = (int)baked->Channels.size();
+            x.Baked = std::move(baked);
+            Log::Info("Animation: '" + ref + "' retargeted from a UE4 mannequin onto '" +
+                      std::filesystem::u8path(m_Path).filename().u8string() + "' (" + std::to_string(matched) + " bones baked).",
+                      LogContext::Asset(m_Path));
+            remember();
             m_ExternalClips.push_back(std::move(x));
             return (int)m_D->Animations.size() + (int)m_ExternalClips.size() - 1;
         }
     }
     x.NodeChannel.assign(m_D->Nodes.size(), -1);
-    int matched = 0;
     {
         std::unordered_map<std::string, int> byName;
         byName.reserve(m_D->Nodes.size());
@@ -1377,16 +1433,6 @@ int Model::AttachClip(const Model& source, int sourceIndex, const std::string& r
                 ++matched;
             }
     }
-    auto remember = [&]() {
-        std::lock_guard<std::mutex> lock(s_MatchMutex);
-        if (s_Matches.size() > 4096) s_Matches.clear();
-        Match& mt = s_Matches[mkey];
-        mt.Target = m_D;
-        mt.Source = source.m_D;
-        mt.NodeChannel = x.NodeChannel;
-        mt.Correction = x.Correction;
-        mt.Matched = matched;
-    };
     if (matched == 0) {
         remember();
         // A bare "-1" at the call site made mixed FBX exports nearly impossible to diagnose.

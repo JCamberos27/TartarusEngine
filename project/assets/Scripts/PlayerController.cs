@@ -54,7 +54,16 @@ public sealed class PlayerController
             if (p.Crouch != 0 && p.Crouched == 0 && p.Grounded != 0) { if (Resize(crouch)) p.Crouched = 1; }
             else if (p.Crouch == 0 && p.Crouched != 0 && Fits(stand)) { Resize(stand); p.Crouched = 0; }
         }
-        p.CrouchBlend += ((p.Crouched != 0 ? 1 : 0) - p.CrouchBlend) * (1 - MathF.Exp(-dt * 10));
+        // The eye's crouch: a critically damped spring (as quick as the old ease, ~0.3 s), so the view never jolts into
+        // the move the way an exponential's first frame did.
+        {
+            const float w = 14f;
+            float goal = p.Crouched != 0 ? 1 : 0, x = p.CrouchBlend - goal, v = p.CrouchBlendRate;
+            float e = MathF.Exp(-w * dt), k = (v + w * x) * dt;
+            p.CrouchBlend = goal + (x + k) * e;
+            p.CrouchBlendRate = (v - w * k) * e;
+            if (MathF.Abs(p.CrouchBlend - goal) < 1e-4f && MathF.Abs(p.CrouchBlendRate) < 1e-3f) { p.CrouchBlend = goal; p.CrouchBlendRate = 0; }
+        }
         float eye = p.EyeHeight * (1 - p.CrouchBlend * (1 - Math.Clamp(p.CrouchHeight / Math.Max(.1f, p.SizeY), 0, 1)) * (p.CrouchHeight > 0 ? 1 : 0));
         bool sprint = p.Crouched == 0 && p.AimHeld == 0 && p.Sprint != 0;
         wish *= p.MoveSpeed * (sprint ? p.SprintMultiplier : 1) * (p.Crouched != 0 ? p.CrouchSpeedMultiplier : 1);

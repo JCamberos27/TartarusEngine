@@ -136,6 +136,7 @@ struct Npc {
 
     // Aim and fire control.
     float AimYaw = -90.0f, AimPitch = 0.0f; // the weapon camera's (degrees, Camera convention)
+    float ReloadHold = 0.0f;                // 0..1 (eased): reloading, the gun's camera levels (FirstPersonBody's reload body hold)
     float AimYawRate = 0.0f, AimPitchRate = 0.0f;
     float LookYaw = -90.0f, LookPitch = 0.0f; // where the eyes look (degrees, Camera convention)
     float TimeOnTarget = 0.0f;

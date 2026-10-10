@@ -35,6 +35,7 @@ public unsafe struct PlayerFrame {
     public float SinceGrounded;
     public float JumpBuffer;
     public float CrouchBlend;
+    public float CrouchBlendRate;
     public float YawDropped;
     public Vector3 Position;
     public Vector3 Velocity;
@@ -823,6 +824,8 @@ internal unsafe struct BodyMotionFrame {
     public Vector3 LastDir;
     public Vector3 StartDir;
     public Vector3 StopDir;
+    public Vector3 PivotDir;
+    public Vector3 StepDir;
     public float Dt;
     public float ViewYaw;
     public float Yaw;
@@ -859,6 +862,24 @@ internal unsafe struct BodyMotionFrame {
     public float AirborneDelay;
     public float PlayRate;
     public float TurnAngle;
+    public float AccelTime;
+    public float DecelTime;
+    public float Random;
+    public float StartGait;
+    public float StopGait;
+    public float PivotGait;
+    public float StartTurn;
+    public float StartTurnAmount;
+    public float StartDistance;
+    public float StopDistance;
+    public float PivotDistance;
+    public float PivotTravel;
+    public float FidgetTime;
+    public float FidgetNext;
+    public float FidgetIndex;
+    public float SprintRate;
+    public float SprintClip;
+    public float MoveDistance;
     private int _Grounded; public bool Grounded {get=>_Grounded!=0;set=>_Grounded=value?1:0;}
     private int _Crouched; public bool Crouched {get=>_Crouched!=0;set=>_Crouched=value?1:0;}
     private int _WasCrouched; public bool WasCrouched {get=>_WasCrouched!=0;set=>_WasCrouched=value?1:0;}
@@ -875,6 +896,16 @@ internal unsafe struct BodyMotionFrame {
     private int _Moving; public bool Moving {get=>_Moving!=0;set=>_Moving=value?1:0;}
     private int _Sprint; public bool Sprint {get=>_Sprint!=0;set=>_Sprint=value?1:0;}
     private int _Airborne; public bool Airborne {get=>_Airborne!=0;set=>_Airborne=value?1:0;}
+    private int _Armed; public bool Armed {get=>_Armed!=0;set=>_Armed=value?1:0;}
+    private int _Busy; public bool Busy {get=>_Busy!=0;set=>_Busy=value?1:0;}
+    private int _IsStart; public bool IsStart {get=>_IsStart!=0;set=>_IsStart=value?1:0;}
+    private int _IsStartTurn; public bool IsStartTurn {get=>_IsStartTurn!=0;set=>_IsStartTurn=value?1:0;}
+    private int _IsStop; public bool IsStop {get=>_IsStop!=0;set=>_IsStop=value?1:0;}
+    private int _IsPivot; public bool IsPivot {get=>_IsPivot!=0;set=>_IsPivot=value?1:0;}
+    private int _IsStep; public bool IsStep {get=>_IsStep!=0;set=>_IsStep=value?1:0;}
+    private int _IsFidget; public bool IsFidget {get=>_IsFidget!=0;set=>_IsFidget=value?1:0;}
+    private int _IsSprint; public bool IsSprint {get=>_IsSprint!=0;set=>_IsSprint=value?1:0;}
+    private int _PivotReversed; public bool PivotReversed {get=>_PivotReversed!=0;set=>_PivotReversed=value?1:0;}
     public int Triggers;
 }
 [StructLayout(LayoutKind.Sequential)]

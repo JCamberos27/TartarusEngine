@@ -859,7 +859,12 @@ void NpcDirector::LateUpdate(World& world, float dt, const PlayerSnapshot& p) {
 void NpcDirector::LatePose(World& world, Npc& n, float dt, const PlayerSnapshot& p, bool alive) {
     const bool armed = n.Weapon && n.Weapon->IsActive();
     n.WeaponCam.Yaw = n.AimYaw;
-    n.WeaponCam.Pitch = n.AimPitch;
+    // Reloading (or checking the gun) the gun's camera levels: the clips reach for the pouch and the shells in the gun's
+    // frame, so with the gun pitched at the target the hand reached for them up or down in the air.
+    const bool reloading = n.Weapon && n.Weapon->IsActive() && n.Weapon->HoldsOnBody();
+    n.ReloadHold += ((reloading ? 1.0f : 0.0f) - n.ReloadHold) * (1.0f - std::exp(-dt / 0.15f));
+    n.WeaponCam.Pitch = n.AimPitch * (1.0f - n.ReloadHold);
+    n.Body.SetFreeHand(n.ReloadHold);
     n.WeaponCam.Roll = 0.0f;
     {
         SubTimer timer(*this, SubBody);
@@ -894,7 +899,7 @@ void NpcDirector::LatePose(World& world, Npc& n, float dt, const PlayerSnapshot&
         const bool haveGun = n.Weapon->WorldGunInput(gun);
         const bool closeToPlayer = !p.Valid || (glm::length(n.Eye - p.Eye) < m_Cfg.MeshCheckRange && n.OnScreen) || MeshChecksEverywhere;
         muzzleShift = n.Body.HoldWeapon(world, n.Weapon->ArmsEntity(), n.Weapon->WeaponEntity(), haveGun ? &gun : nullptr, n.WeaponCam,
-                                        dt, closeToPlayer);
+                                        dt, closeToPlayer, n.Weapon->ThirdPersonArms(), n.Weapon->GunSocket());
     }
     n.Eye = n.Body.Eye();
     if (alive) {

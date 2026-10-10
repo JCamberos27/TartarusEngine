@@ -143,6 +143,8 @@ bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
     if(!m_SlotSets.empty() && !Scripting::EnsureLoaded()) { SetError(Scripting::LastError()); return false; }
     if (m_SlotSets.empty()) return true;
     m_SlotAmmo.assign(m_SlotSets.size(), -1);
+    m_SlotShoulderedButt.assign(m_SlotSets.size(), glm::vec3(0.0f));
+    m_SlotHaveShoulderedButt.assign(m_SlotSets.size(), 0);
     m_SlotAttachmentSelections.assign(m_SlotSets.size(), {{-1, -1, -1}});
     m_Config = std::make_shared<FirstPersonControllerComponent>(config);
     m_SlotAssets = &assets;
@@ -363,13 +365,52 @@ bool FirstPersonPresentation::StartSet(World& world, AssetLibrary& assets, int s
                                            m_Set.Gameplay.RegripMin, m_Set.Gameplay.RegripMax);
     armsAnim.SetInt(K::kAmmo, m_Ammo);
     armsAnim.SetBool(K::kEquipped, true);
-    // A weapon swapped in comes out of its holster (Draw) rather than appearing in the hands.
-    if (holstered && !AnimatorStartInState(*ctrl, armsAnim, "Holstered"))
+    // A weapon swapped in comes out of its holster rather than appearing in the hands: straight into its Draw, so the frame
+    // it arrives on is posed (Holstered for that frame showed the rig's bind pose - the gun and the world arms flashed up
+    // into the hold between the holster and the draw).
+    if (holstered && !AnimatorStartInState(*ctrl, armsAnim, "Draw", 0.0f) && !AnimatorStartInState(*ctrl, armsAnim, "Holstered"))
         Log::Warn("First-person presentation: '" + animationSet + "' has no 'Holstered' state; it appears without a draw.");
 
     if (!AttachAndValidate(assets, *ctrl)) {
         StopSet(world); // this weapon's rigs only: the slot list stays for a fallback
         return false;
+    }
+    // The third-person hold (ThirdPersonGunCorrection): two hidden rigs following the arms, one on the "arms" clips and
+    // one on "arms3p", both raw. Not drawn, no shadow (PoseSourceTag). A 3P clip that won't attach costs only the 3P hold.
+    if (std::find(ctrl->Tracks.begin(), ctrl->Tracks.end(), "arms3p") != ctrl->Tracks.end()) {
+        bool ok = true;
+        auto follower = [&](const char* track, const char* name, std::shared_ptr<Model>& model) {
+            std::shared_ptr<Model> m = assets.InstantiateModel(armsPath);
+            if (!m) { ok = false; return entt::entity(entt::null); }
+            const int t = ctrl->TrackIndex(track);
+            for (const auto& L : ctrl->Layers)
+                for (const auto& s : L.States) {
+                    const auto& motion = s.MotionFor(t);
+                    if (!motion.Clip.empty() && ResolveAnimationClip(*m, motion.Clip, assets) < 0) ok = false;
+                    for (const auto& ch : motion.Children)
+                        if (!ch.Clip.empty() && ResolveAnimationClip(*m, ch.Clip, assets) < 0) ok = false;
+                }
+            model = m;
+            const entt::entity e = world.CreateModelEntity(std::move(m), glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(config.ViewModelScale), name);
+            world.Registry.emplace_or_replace<PoseSourceTag>(e);
+            auto& ac = world.Registry.emplace_or_replace<AnimatorControllerComponent>(e);
+            ac.Controller = m_ControllerPath;
+            ac.Track = track;
+            ac.Driver = m_Arms;
+            ac.UpdateWhenInactive = true;
+            return e;
+        };
+        m_ArmsClip1P = follower("arms", "[Runtime] First Person Arms (1P clips)", m_ArmsClip1PModel);
+        m_ArmsClip3P = follower("arms3p", "[Runtime] First Person Arms (3P clips)", m_ArmsClip3PModel);
+        m_HaveRestGrip = false; // another gun: its own grip
+        if (!ok) {
+            Log::Warn("First-person presentation: '" + animationSet + "' has arms3p clips that won't attach; third person holds the gun as first person does.");
+            for (entt::entity e : {m_ArmsClip1P, m_ArmsClip3P})
+                if (e != entt::null && world.Registry.valid(e)) world.DestroyEntityAndChildren(e);
+            m_ArmsClip1P = m_ArmsClip3P = entt::null;
+            m_ArmsClip1PModel.reset();
+            m_ArmsClip3PModel.reset();
+        }
     }
     m_Procedural.Reset();
     m_CameraShake.Reset(); m_ShakePose={};
@@ -394,9 +435,15 @@ bool FirstPersonPresentation::StartSet(World& world, AssetLibrary& assets, int s
 void FirstPersonPresentation::StopSet(World& world) {
     if (m_WorldWeapon != entt::null && world.Registry.valid(m_WorldWeapon)) world.DestroyEntityAndChildren(m_WorldWeapon);
     m_WorldWeapon = entt::null;
-    m_WorldWeaponShift = glm::vec3(0.0f);
+    m_WorldWeaponModel.reset();
+    m_WorldWeaponDelta = glm::mat4(1.0f);
     if (m_Arms != entt::null && world.Registry.valid(m_Arms)) world.DestroyEntityAndChildren(m_Arms);
     if (m_Weapon != entt::null && world.Registry.valid(m_Weapon)) world.DestroyEntityAndChildren(m_Weapon);
+    for (entt::entity e : {m_ArmsClip1P, m_ArmsClip3P})
+        if (e != entt::null && world.Registry.valid(e)) world.DestroyEntityAndChildren(e);
+    m_ArmsClip1P = m_ArmsClip3P = entt::null;
+    m_ArmsClip1PModel.reset();
+    m_ArmsClip3PModel.reset();
     m_WeaponParticles = m_WorldWeaponParticles = entt::null;
     m_WeaponEmitters.clear(); m_WorldWeaponEmitters.clear();
     m_WeaponAttachmentEntities.clear();
@@ -780,21 +827,83 @@ void FirstPersonPresentation::SetupHandAnchor() {
         m_GunBoxMin = glm::min(m_GunBoxMin, q);
         m_GunBoxMax = glm::max(m_GunBoxMax, q);
     }
+    // The world body's box: the bind vertices, but not those skinned mostly to the spare magazine (or under it).
+    {
+        const Model& m = *m_WeaponModel;
+        std::vector<char> spare(m.BoneCount() > 0 ? m.BoneCount() : 0, 0);
+        for (int n = 0; n < m.NodeCount(); ++n)
+            for (int a = n; a >= 0; a = m.NodeParent(a))
+                if (std::find(m_Set.SpareMagazineBones.begin(), m_Set.SpareMagazineBones.end(), m.NodeName(a)) != m_Set.SpareMagazineBones.end()) {
+                    if (const int id = m.BoneId(m.NodeName(n)); id >= 0 && id < (int)spare.size()) spare[id] = 1;
+                    break;
+                }
+        m_WorldGunBoxMin = glm::vec3(1e30f);
+        m_WorldGunBoxMax = glm::vec3(-1e30f);
+        for (int i = 0; i < m.MeshCount(); ++i)
+            for (const ModelMesh::SkinVertex& sv : m.MeshSkinVertices(i)) {
+                int best = -1;
+                for (int k = 0; k < MAX_BONE_INFLUENCE; ++k)
+                    if (sv.BoneIDs[k] >= 0 && sv.Weights[k] > 0.0f && (best < 0 || sv.Weights[k] > sv.Weights[best])) best = k;
+                if (best >= 0 && sv.BoneIDs[best] < (int)spare.size() && spare[sv.BoneIDs[best]]) continue;
+                const glm::vec3 q = glm::vec3(toRoot * glm::vec4(sv.Position, 1.0f));
+                m_WorldGunBoxMin = glm::min(m_WorldGunBoxMin, q);
+                m_WorldGunBoxMax = glm::max(m_WorldGunBoxMax, q);
+            }
+        if (m_WorldGunBoxMin.x > m_WorldGunBoxMax.x) { m_WorldGunBoxMin = m_GunBoxMin; m_WorldGunBoxMax = m_GunBoxMax; }
+    }
     for (const std::string& bone : anchor.Bones) {
         const int i = m_WeaponModel->NodeIndex(bone);
         if (i < 0) Log::Warn("First-person ADS: the weapon has no '" + bone + "' bone for the hand anchor to carry.");
         else m_AnchorBones.push_back(i);
     }
+    // Each carried bone's mesh centre: the bind vertices skinned mostly to it or a bone under it, in its own space. Through
+    // each bone's skin offset, as the skin draws them: the Remington's Shell was bound 28 cm from its node's bind place.
+    m_AnchorCentres.assign(m_AnchorBones.size(), glm::vec3(0.0f));
+    for (size_t k = 0; k < m_AnchorBones.size(); ++k) {
+        const Model& m = *m_WeaponModel;
+        // Palette id -> the vertex's place in the carried bone's space: (carried <- bone) * offset.
+        std::vector<glm::mat4> toCarried(m.BoneCount() > 0 ? m.BoneCount() : 0, glm::mat4(0.0f));
+        std::vector<char> under(toCarried.size(), 0);
+        const glm::mat4 carriedInv = glm::inverse(globals[m_AnchorBones[k]]);
+        for (int n = 0; n < m.NodeCount(); ++n)
+            for (int a = n; a >= 0; a = m.NodeParent(a))
+                if (a == m_AnchorBones[k]) {
+                    glm::mat4 offset(1.0f);
+                    if (const int id = m.BoneId(m.NodeName(n)); id >= 0 && id < (int)under.size() && m.BoneOffset(m.NodeName(n), offset)) {
+                        under[id] = 1;
+                        toCarried[id] = carriedInv * globals[n] * offset;
+                    }
+                    break;
+                }
+        glm::vec3 sum(0.0f);
+        int count = 0;
+        for (int i = 0; i < m.MeshCount(); ++i)
+            for (const ModelMesh::SkinVertex& sv : m.MeshSkinVertices(i)) {
+                int best = -1;
+                for (int j = 0; j < MAX_BONE_INFLUENCE; ++j)
+                    if (sv.BoneIDs[j] >= 0 && sv.Weights[j] > 0.0f && (best < 0 || sv.Weights[j] > sv.Weights[best])) best = j;
+                if (best >= 0 && sv.BoneIDs[best] < (int)under.size() && under[sv.BoneIDs[best]]) {
+                    sum += glm::vec3(toCarried[sv.BoneIDs[best]] * glm::vec4(sv.Position, 1.0f));
+                    ++count;
+                }
+            }
+        if (count > 0) m_AnchorCentres[k] = sum / (float)count;
+    }
+    // ... and where each rests (the bind pose: seated in the gun, or parked in the pouch), in the weapon model's space.
+    m_AnchorRest.clear();
+    for (size_t k = 0; k < m_AnchorBones.size(); ++k) m_AnchorRest.push_back(glm::vec3(globals[m_AnchorBones[k]] * glm::vec4(m_AnchorCentres[k], 1.0f)));
     if (!m_AnchorBones.empty() && m_World->Registry.valid(m_Weapon)) {
         auto& wrig = m_World->Registry.get_or_emplace<IKRigComponent>(m_Weapon);
         wrig.Offsets.resize(kWeaponAnchorOffset + m_AnchorBones.size()); // slot 0 stays the bolt's
         for (size_t k = 0; k < m_AnchorBones.size(); ++k)
             wrig.Offsets[kWeaponAnchorOffset + k] = IKBoneOffset{m_WeaponModel->NodeName(m_AnchorBones[k])};
     }
-    char msg[200];
-    std::snprintf(msg, sizeof msg, "First-person ADS: hand anchor on (limb %c), gun box (%.3f %.3f %.3f)..(%.3f %.3f %.3f) m.",
+    char msg[320];
+    std::snprintf(msg, sizeof msg, "First-person ADS: hand anchor on (limb %c), gun box (%.3f %.3f %.3f)..(%.3f %.3f %.3f) m, "
+                  "world body's (%.3f %.3f %.3f)..(%.3f %.3f %.3f) m.",
                   m_AnchorLimb == 0 ? 'A' : 'B', m_GunBoxMin.x, m_GunBoxMin.y, m_GunBoxMin.z, m_GunBoxMax.x,
-                  m_GunBoxMax.y, m_GunBoxMax.z);
+                  m_GunBoxMax.y, m_GunBoxMax.z, m_WorldGunBoxMin.x, m_WorldGunBoxMin.y, m_WorldGunBoxMin.z, m_WorldGunBoxMax.x,
+                  m_WorldGunBoxMax.y, m_WorldGunBoxMax.z);
     Log::Info(msg);
 }
 
@@ -807,8 +916,12 @@ void FirstPersonPresentation::WriteHandAnchor(IKRigComponent& rig, const AdsCarr
     IKRigComponent* wrig = !m_AnchorBones.empty() && m_World && m_World->Registry.valid(m_Weapon)
                                ? m_World->Registry.try_get<IKRigComponent>(m_Weapon) : nullptr;
     if (wrig && wrig->Offsets.size() < kWeaponAnchorOffset + m_AnchorBones.size()) wrig = nullptr;
+    m_AnchorApplied.assign(m_AnchorBones.size(), {glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f)});
     if (wrig)
         for (size_t k = 0; k < m_AnchorBones.size(); ++k) {
+            const float rw = std::clamp(wrig->Weight, 0.0f, 1.0f); // as IK::ApplyRig scales them
+            m_AnchorApplied[k] = {wrig->Offsets[kWeaponAnchorOffset + k].Position * rw,
+                                  glm::slerp(glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::normalize(wrig->Offsets[kWeaponAnchorOffset + k].Rotation), rw)};
             wrig->Offsets[kWeaponAnchorOffset + k].Position = glm::vec3(0.0f);
             wrig->Offsets[kWeaponAnchorOffset + k].Rotation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
         }
@@ -1029,6 +1142,17 @@ bool FirstPersonPresentation::StockWorld(glm::vec3& butt, glm::vec3& forward) co
     return true;
 }
 
+glm::mat4 FirstPersonPresentation::ThirdPersonGunCorrection() const {
+    if (!m_ArmsClip1PModel || !m_ArmsClip3PModel || m_ArmsClip1PModel->AppliedLocalPose().empty() ||
+        m_ArmsClip3PModel->AppliedLocalPose().empty())
+        return glm::mat4(1.0f);
+    const std::string& gun = m_Set.WeaponSocket.empty() ? m_Set.Procedural.IK.GunBone : m_Set.WeaponSocket;
+    glm::mat4 first(1.0f), third(1.0f);
+    if (gun.empty() || !m_ArmsClip1PModel->NodeTransform(gun, first) || !m_ArmsClip3PModel->NodeTransform(gun, third))
+        return glm::mat4(1.0f);
+    return third * glm::inverse(first);
+}
+
 bool FirstPersonPresentation::WorldGunInput(FirstPersonWorldGunInput& out) const {
     if (!m_Equipped) return false;
     glm::vec3 butt, forward;
@@ -1060,22 +1184,39 @@ bool FirstPersonPresentation::WorldGunInput(FirstPersonWorldGunInput& out) const
     return true;
 }
 
-void FirstPersonPresentation::PlaceWorldWeapon(World& world, bool split, const glm::vec3& shift) {
+void FirstPersonPresentation::PlaceWorldWeapon(World& world, bool split, const glm::mat4& worldFromFirstPerson,
+                                               const glm::mat4& carriedMove, float carriedWeight, const glm::vec3& carriedHand,
+                                               const glm::mat4* holdingHand) {
     auto& reg = world.Registry;
+    // The free hand's grip at rest (weapon space), for HandAnchor's Off.
+    if (const std::string& st = CurrentState(); !HoldsOnBody() && (st == "Idle" || st == "Walk" || st == "Aim"))
+        if (glm::mat4 h(1.0f); ClipHandInWeapon(h)) {
+            m_RestGrip = m_HaveRestGrip ? m_RestGrip + (glm::vec3(h[3]) - m_RestGrip) * 0.2f : glm::vec3(h[3]);
+            m_HaveRestGrip = true;
+        }
     const bool haveWeapon = m_Weapon != entt::null && reg.valid(m_Weapon);
     if (!split || !haveWeapon) {
         if (m_WorldWeapon != entt::null && reg.valid(m_WorldWeapon)) world.DestroyEntityAndChildren(m_WorldWeapon);
         m_WorldWeapon = entt::null;
+        m_WorldWeaponModel.reset();
         m_WorldWeaponParticles = entt::null; m_WorldWeaponEmitters.clear();
         for (auto e : m_WeaponAttachmentEntities) if (reg.valid(e)) reg.remove<OwnerViewOnlyTag>(e);
         if (haveWeapon) reg.remove<OwnerViewOnlyTag>(m_Weapon);
-        m_WorldWeaponShift = glm::vec3(0.0f);
+        m_WorldWeaponDelta = glm::mat4(1.0f);
         return;
     }
     if (m_WorldWeapon == entt::null || !reg.valid(m_WorldWeapon)) {
-        // The same model object as the first-person gun: one pose (the pump, the shells), drawn twice.
+        // The same model object as the first-person gun: one pose (the pump, the shells), drawn twice. With a hand anchor
+        // its own model, posed from the first-person one's (PoseWorldWeapon): the bones the free hand carries differ.
         const RenderableComponent src = reg.get<RenderableComponent>(m_Weapon); // by value: the create below can move the storage
-        m_WorldWeapon = world.CreateModelEntity(src.ModelRef, glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(m_Scale),
+        std::shared_ptr<Model> model = src.ModelRef;
+        m_WorldWeaponModel.reset();
+        if (!m_AnchorBones.empty() && m_Assets && !m_Set.WeaponModel.empty())
+            if (std::shared_ptr<Model> own = m_Assets->InstantiateModel(ProjectPaths::Resolve(m_Set.WeaponModel))) {
+                model = m_WorldWeaponModel = own;
+                own->SetHiddenNodes(m_SpareMagHidden); // the spare magazine / shell out of the hand (UpdateSpareMagazine)
+            }
+        m_WorldWeapon = world.CreateModelEntity(model, glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(m_Scale),
                                                 "[Runtime] First Person Weapon (world)");
         auto& dst = reg.get<RenderableComponent>(m_WorldWeapon);
         dst.Materials = src.Materials;
@@ -1086,13 +1227,14 @@ void FirstPersonPresentation::PlaceWorldWeapon(World& world, bool split, const g
         for (auto e : m_WeaponAttachmentEntities) if (reg.valid(e)) reg.emplace_or_replace<OwnerViewOnlyTag>(e);
         SetupWorldWeaponParticles();
     }
-    const glm::vec3 scale(glm::length(glm::vec3(m_WeaponWorld[0])), glm::length(glm::vec3(m_WeaponWorld[1])),
-                          glm::length(glm::vec3(m_WeaponWorld[2])));
-    const glm::mat3 r(glm::vec3(m_WeaponWorld[0]) / std::max(scale.x, 1e-6f), glm::vec3(m_WeaponWorld[1]) / std::max(scale.y, 1e-6f),
-                      glm::vec3(m_WeaponWorld[2]) / std::max(scale.z, 1e-6f));
-    world.SetWorldPose(m_WorldWeapon, glm::vec3(m_WeaponWorld[3]) + shift, glm::normalize(glm::quat_cast(r)));
-    m_WorldWeaponShift = shift;
+    const glm::mat4 placed = worldFromFirstPerson * m_WeaponWorld;
+    const glm::vec3 scale(glm::length(glm::vec3(placed[0])), glm::length(glm::vec3(placed[1])), glm::length(glm::vec3(placed[2])));
+    const glm::mat3 r(glm::vec3(placed[0]) / std::max(scale.x, 1e-6f), glm::vec3(placed[1]) / std::max(scale.y, 1e-6f),
+                      glm::vec3(placed[2]) / std::max(scale.z, 1e-6f));
+    world.SetWorldPose(m_WorldWeapon, glm::vec3(placed[3]), glm::normalize(glm::quat_cast(r)));
+    m_WorldWeaponDelta = worldFromFirstPerson;
     reg.get<TransformComponent>(m_WorldWeapon).Scale = scale;
+    if (m_WorldWeaponModel) PoseWorldWeapon(world, carriedMove, carriedWeight, carriedHand, holdingHand);
     if (reg.valid(m_WeaponParticles) && reg.valid(m_WorldWeaponParticles))
         reg.get<TransformComponent>(m_WorldWeaponParticles) = reg.get<TransformComponent>(m_WeaponParticles);
     // Hidden (holstered, unarmed) with the first-person gun.
@@ -1107,10 +1249,172 @@ void FirstPersonPresentation::PlaceWorldWeapon(World& world, bool split, const g
     }
 }
 
+// The world copy's own pose: the first-person gun's, except the bones the free hand carries. Those leave the sights'
+// anchor (WriteHandAnchor's, held to the eye: the world body's hand isn't), and one in the free hand (CarriedHeld) takes
+// the hand's move onto the body exactly as the hand does - the same share, about the hand - so the two go as one: no
+// sliding between them, no wrist in the magazine. One in the gun, or let go (the AK's old magazine), stays where the clip
+// has it on the gun.
+void FirstPersonPresentation::PoseWorldWeapon(World& world, const glm::mat4& carriedMove, float carriedWeight, const glm::vec3& carriedHand,
+                                              const glm::mat4* holdingHand) {
+    if (!m_WeaponModel || !m_WorldWeaponModel) return;
+    const std::vector<LocalTRS>& src = m_WeaponModel->AppliedLocalPose();
+    Model& dst = *m_WorldWeaponModel;
+    if ((int)src.size() != dst.NodeCount()) return; // the first-person gun not posed yet: the bind pose stands
+    thread_local std::vector<LocalTRS> pose;
+    thread_local std::vector<glm::mat4> bones, targets;
+    thread_local std::vector<float> held;
+    pose = src;
+    if (!CarriedBonePoses(bones)) return;
+    const bool haveHeld = CarriedHeld(held) && held.size() == bones.size();
+    const glm::mat4 toWorld = world.ComposeWorldTransform(m_WorldWeapon), toModel = glm::inverse(toWorld);
+    // FirstPersonBody's hand anchor moves the hand by FirstPersonPartialMove about the hand itself: the same, rigidly.
+    const glm::mat4 handPivot = glm::translate(glm::mat4(1.0f), carriedHand);
+    targets.assign(m_AnchorBones.size(), glm::mat4(1.0f));
+    // With the world hand as solved: a part in the hand is held as the first-person clips hold it (its place off their hand),
+    // on the world hand - wherever the third-person clips have taken that hand (a stow re-timed, a reach the arm can't
+    // make). Taking only the hand anchor's move, it left the clips' hand path only as far as the anchor did: re-timed, the
+    // AK's old magazine hung in the air under the gun.
+    glm::mat4 clipHand(1.0f), heldOn(1.0f);
+    const bool onHand = haveHeld && holdingHand && ClipHandInWeapon(clipHand);
+    if (onHand) {
+        auto rigid = [](const glm::mat4& m) {
+            glm::mat4 r(1.0f);
+            for (int c = 0; c < 3; ++c) r[c] = glm::vec4(glm::normalize(glm::vec3(m[c])), 0.0f);
+            r[3] = m[3];
+            return r;
+        };
+        heldOn = rigid(toModel * *holdingHand) * glm::inverse(rigid(clipHand)); // the clips' hand onto the world one (model space)
+    }
+    for (size_t k = 0; k < m_AnchorBones.size(); ++k) {
+        if (onHand) {
+            const float wb = std::clamp(held[k], 0.0f, 1.0f);
+            targets[k] = wb > 0.0f ? FirstPersonPartialMove(heldOn, bones[k], wb) : bones[k];
+            continue;
+        }
+        const float wb = haveHeld ? held[k] * std::clamp(carriedWeight, 0.0f, 1.0f) : 0.0f;
+        targets[k] = wb > 0.0f ? toModel * FirstPersonPartialMove(carriedMove, handPivot, wb) * glm::inverse(handPivot) * toWorld * bones[k] : bones[k];
+    }
+    for (size_t k = 0; k < m_AnchorBones.size(); ++k) dst.SetPoseNodeModelSpace(pose, m_AnchorBones[k], targets[k]);
+    dst.ApplyLocalPose(pose);
+}
+
+bool FirstPersonPresentation::WorldCarriedBones(const World& world, std::vector<glm::vec3>& out) const {
+    out.clear();
+    const entt::entity e = world.Registry.valid(m_WorldWeapon) ? m_WorldWeapon : m_Weapon;
+    const auto* rc = world.Registry.valid(e) ? world.Registry.try_get<RenderableComponent>(e) : nullptr;
+    if (!rc || !rc->ModelRef || !m_WeaponModel) return false;
+    const glm::mat4 toWorld = world.ComposeWorldTransform(e);
+    for (size_t k = 0; k < m_AnchorBones.size(); ++k) {
+        glm::mat4 m(1.0f);
+        const glm::vec3 centre = k < m_AnchorCentres.size() ? m_AnchorCentres[k] : glm::vec3(0.0f);
+        if (rc->ModelRef->NodeTransform(m_WeaponModel->NodeName(m_AnchorBones[k]), m)) out.push_back(glm::vec3(toWorld * m * glm::vec4(centre, 1.0f)));
+    }
+    return !out.empty();
+}
+
+bool FirstPersonPresentation::HandAnchor(FirstPersonHandAnchor& out) const {
+    const auto* rig = m_AnchorLimb >= 0 && m_World && m_World->Registry.valid(m_Arms) ? m_World->Registry.try_get<IKRigComponent>(m_Arms) : nullptr;
+    if (!rig) return false;
+    const IKLimb& limb = m_AnchorLimb == 0 ? rig->LimbA : rig->LimbB;
+    out.Hand = limb.End;
+    out.Socket = limb.Target;
+    out.Mount = glm::translate(glm::mat4(1.0f), m_Set.WeaponMountOffset) * glm::mat4_cast(QuaternionFromEulerYXZ(m_Set.WeaponMountRotation));
+    out.BoxMin = m_WorldGunBoxMin;
+    out.BoxMax = m_WorldGunBoxMax;
+    out.Near = m_Set.Ads.Anchor.Near;
+    out.Far = m_Set.Ads.Anchor.Far;
+    out.Active = HoldsOnBody();
+    // Off its grip from 3 cm, all of it from 10: the world gun's levelling (FirstPersonBody) comes back as the hand does,
+    // not when the state ends - looking up or down, the gun swung 20 degrees back to the aim after the reload was over.
+    out.Off = 1.0f;
+    if (glm::mat4 h(1.0f); m_HaveRestGrip && ClipHandInWeapon(h)) {
+        const float t = std::clamp((glm::length(glm::vec3(h[3]) - m_RestGrip) * glm::length(glm::vec3(m_WeaponWorld[0])) - 0.03f) / 0.07f, 0.0f, 1.0f);
+        out.Off = t * t * (3.0f - 2.0f * t);
+    }
+    return true;
+}
+
+namespace {
+// A carried part in the free hand (the first-person clips'): its centre within kCarriedHeld of the hand - let go past
+// kCarriedLoose (a magazine held by its base has its centre 10-15 cm from the hand bone) - and off its resting place
+// (seated in the gun, parked in the pouch) by kCarriedOff: the hand resting on the handguard is as close to the seated
+// magazine as one holding it.
+constexpr float kCarriedHeld = 0.18f, kCarriedLoose = 0.24f;
+constexpr float kCarriedRest = 0.01f, kCarriedOff = 0.04f;
+} // namespace
+
+bool FirstPersonPresentation::ClipHandInWeapon(glm::mat4& out) const {
+    const auto* rig = m_AnchorLimb >= 0 && m_World && m_World->Registry.valid(m_Arms) ? m_World->Registry.try_get<IKRigComponent>(m_Arms) : nullptr;
+    if (!rig || !m_ArmsModel) return false;
+    const IKLimb& limb = m_AnchorLimb == 0 ? rig->LimbA : rig->LimbB;
+    const Model* clips = m_ArmsClip1PModel && !m_ArmsClip1PModel->AppliedLocalPose().empty() ? m_ArmsClip1PModel.get() : m_ArmsModel.get();
+    glm::mat4 socket(1.0f), live(1.0f), hand(1.0f);
+    if (!clips->NodeTransform(limb.Target, socket) || !clips->NodeTransform(limb.End, hand) || !m_ArmsModel->NodeTransform(limb.Target, live))
+        return false;
+    const glm::mat4 gunOnSocket = glm::inverse(m_ArmsWorld * live) * m_WeaponWorld;
+    out = glm::inverse(gunOnSocket) * glm::inverse(socket) * hand;
+    return true;
+}
+
+bool FirstPersonPresentation::CarriedHeld(std::vector<float>& held, float* heldGap) const {
+    held.clear();
+    if (heldGap) *heldGap = -1.0f;
+    const auto* rig = m_AnchorLimb >= 0 && m_World && m_World->Registry.valid(m_Arms) ? m_World->Registry.try_get<IKRigComponent>(m_Arms) : nullptr;
+    thread_local std::vector<glm::mat4> bones;
+    if (!rig || !m_ArmsModel || !CarriedBonePoses(bones)) return false;
+    // The clips' own hand on their gun (the raw "arms" rig: the arms rig's own has the sights' anchor on it, held to the
+    // eye), put in the weapon model's space through where the gun really sits on the socket.
+    const IKLimb& limb = m_AnchorLimb == 0 ? rig->LimbA : rig->LimbB;
+    const Model* clips = m_ArmsClip1PModel && !m_ArmsClip1PModel->AppliedLocalPose().empty() ? m_ArmsClip1PModel.get() : m_ArmsModel.get();
+    glm::mat4 socket(1.0f), live(1.0f), hand(1.0f);
+    if (!clips->NodeTransform(limb.Target, socket) || !clips->NodeTransform(limb.End, hand) || !m_ArmsModel->NodeTransform(limb.Target, live))
+        return false;
+    const glm::mat4 gunOnSocket = glm::inverse(m_ArmsWorld * live) * m_WeaponWorld;
+    const glm::vec3 handInGun = glm::vec3(glm::inverse(gunOnSocket) * glm::inverse(socket) * hand[3]);
+    const float toMetres = glm::length(glm::vec3(m_WeaponWorld[0]));
+    float most = -1.0f;
+    for (size_t k = 0; k < bones.size(); ++k) {
+        const glm::vec3 centre = glm::vec3(bones[k] * glm::vec4(k < m_AnchorCentres.size() ? m_AnchorCentres[k] : glm::vec3(0.0f), 1.0f));
+        const float gap = glm::length(centre - handInGun) * toMetres;
+        const float off = k < m_AnchorRest.size() ? glm::length(centre - m_AnchorRest[k]) * toMetres : 1.0f;
+        const float h = (1.0f - FirstPersonAnchorWeight(gap, kCarriedHeld, kCarriedLoose)) * FirstPersonAnchorWeight(off, kCarriedRest, kCarriedOff);
+        held.push_back(h);
+        if (h > most) {
+            most = h;
+            if (heldGap) *heldGap = gap;
+        }
+    }
+    return !held.empty();
+}
+
+// The carried bones' model-space poses on the first-person gun, the sights' anchor (WriteHandAnchor, held to the eye) undone.
+bool FirstPersonPresentation::CarriedBonePoses(std::vector<glm::mat4>& out) const {
+    out.clear();
+    if (!m_WeaponModel) return false;
+    const std::vector<LocalTRS>& src = m_WeaponModel->AppliedLocalPose();
+    if ((int)src.size() != m_WeaponModel->NodeCount()) return false;
+    thread_local std::vector<glm::mat4> globals;
+    thread_local std::vector<int> parents;
+    parents.resize(m_WeaponModel->NodeCount());
+    for (int i = 0; i < (int)parents.size(); ++i) parents[i] = m_WeaponModel->NodeParent(i);
+    IK::ComputeGlobals(src, parents, globals);
+    for (size_t k = 0; k < m_AnchorBones.size(); ++k) {
+        glm::mat4 bone = globals[m_AnchorBones[k]];
+        if (k < m_AnchorApplied.size()) {
+            // IK::ApplyRig's offset (OffsetBone about the bone's own place before it: x -> R (x - c) + c + P), undone.
+            const auto& [P, R] = m_AnchorApplied[k];
+            const glm::vec3 c = glm::vec3(bone[3]) - P;
+            bone = glm::translate(glm::mat4(1.0f), c) * glm::mat4_cast(glm::inverse(R)) * glm::translate(glm::mat4(1.0f), -(c + P)) * bone;
+        }
+        out.push_back(bone);
+    }
+    return true;
+}
+
 bool FirstPersonPresentation::MuzzleFrames(glm::vec3& firstPerson, glm::vec3& worldCopy, glm::vec3& bore) const {
     if (!m_HaveMuzzle || !m_RootSeenValid) return false;
     firstPerson = glm::vec3(m_RootWorld * glm::vec4(m_MuzzleLocal, 1.0f));
-    worldCopy = firstPerson + m_WorldWeaponShift;
+    worldCopy = glm::vec3(m_WorldWeaponDelta * glm::vec4(firstPerson, 1.0f));
     const glm::vec3 b = glm::mat3(m_RootWorld) * m_BoreLocal;
     if (glm::dot(b, b) < 1e-12f) return false;
     bore = glm::normalize(b);
@@ -1194,7 +1498,7 @@ void FirstPersonPresentation::WriteIK() {
     if (!m_World || !m_World->Registry.valid(m_Arms)) return;
     auto* rig = m_World->Registry.try_get<IKRigComponent>(m_Arms);
     if (!rig) return;
-    rig->PreserveBaseGrip = ReloadBlocksSprint();
+    rig->PreserveBaseGrip = ActionBlocksSprint();
     const WeaponProceduralPose& p = m_Procedural.Pose();
     const glm::quat C = NormalizeRotation(QuaternionFromEulerYXZ(m_Set.ViewRotation) * QuaternionFromEulerYXZ(m_Rotation));
     const glm::quat Ci = glm::inverse(C);
@@ -1431,14 +1735,16 @@ bool FirstPersonPresentation::HasTag(const char* tag) const {
     return ac && ac->HasTag(tag);
 }
 
-bool FirstPersonPresentation::ReloadBlocksSprint() const {
+bool FirstPersonPresentation::ActionBlocksSprint() const {
     const auto* ac = Animator();
     if (!ac || !m_Equipped) return false;
-    if (ac->GetFloat(K::kReload) > 0.0f || ac->HasTag(K::kTagReload)) return true;
+    for (const char* trigger : {K::kReload, K::kMagCheck, K::kInspect, K::kMelee})
+        if (ac->GetFloat(trigger) > 0.0f) return true;
+    if (ac->HasTag(K::kTagReload) || ac->HasTag(K::kTagBusy)) return true;
     if (!m_Controller || m_Controller->Layers.empty() || ac->Layers.empty()) return false;
     const auto& states = m_Controller->Layers[0].States;
     for (const auto& item : ac->Layers[0].Stack)
-        if (item.State >= 0 && item.State < (int)states.size() && states[item.State].HasTag(K::kTagReload))
+        if (item.State >= 0 && item.State < (int)states.size() && (states[item.State].HasTag(K::kTagReload) || states[item.State].HasTag(K::kTagBusy)))
             return true;
     return false;
 }
@@ -1593,6 +1899,14 @@ void FirstPersonPresentation::SwapToPendingSlot() {
     World& world = *m_World;
     const int slot = m_PendingSlot, previous = m_Slot;
     m_PendingSlot = -1;
+    // Each gun sits in the shoulder its own way: this one's hold kept for a switch back, the next one's (if it has been in hand)
+    // brought out - so its draw settles into the lock with the clip, not with a slide of its own once Idle starts.
+    if (previous >= 0 && previous < (int)m_SlotShoulderedButt.size()) {
+        m_SlotShoulderedButt[previous] = m_ShoulderedButt;
+        m_SlotHaveShoulderedButt[previous] = m_HaveShoulderedButt;
+    }
+    m_HaveShoulderedButt = slot < (int)m_SlotHaveShoulderedButt.size() && m_SlotHaveShoulderedButt[slot];
+    if (m_HaveShoulderedButt) m_ShoulderedButt = m_SlotShoulderedButt[slot];
     m_SlotAmmo[previous] = m_Ammo;
     const float walk = m_WalkSpeed, sprint = m_SprintSpeed;
     if (!StartSet(world, *m_SlotAssets, slot, true)) {
@@ -1646,7 +1960,7 @@ void FirstPersonPresentation::SetEquipped(bool equipped) {
 }
 
 void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool sprinting, bool aiming, float lean, bool grounded) {
-    sprinting=sprinting && !aiming && !ReloadBlocksSprint();
+    sprinting=sprinting && !aiming && !ActionBlocksSprint();
     m_PlayerVelocity = velocity;
     auto* ac = Animator();
     if (!ac) return;
@@ -1704,16 +2018,35 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
             m_Zoom = std::clamp(target + next, 0.0f, 1.0f);
         }
     }
-    // Stock lock: shouldered in the weapon's listed states, or anything carried on the sights.
+    // Stock lock: shouldered in the weapon's listed states, or anything carried on the sights. In the others (a reload, an
+    // inspect) as much as the clip has the gun back where it sits shouldered (the butt in the view, learned at the hip):
+    // the lock comes back with the clip's own return to the hold, not as a move of its own once the state has ended.
     {
         const FirstPersonStockLockSettings& sl = m_Set.StockLock;
         bool shouldered = false;
+        float target = 0.0f;
+        glm::vec3 butt, forward;
+        const bool haveButt = StockWorld(butt, forward);
+        const glm::vec3 buttInView = glm::vec3(m_View * glm::vec4(butt, 1.0f));
         if (sl.Enabled && m_Equipped && !ac->HasTag(K::kTagHidden)) {
             shouldered = m_Zoom > 0.5f;
             for (const std::string& tag : sl.Tags) shouldered = shouldered || ac->HasTag(tag.c_str());
+            target = shouldered ? 1.0f : 0.0f;
+            if (!shouldered && haveButt && m_HaveShoulderedButt) {
+                const float t = std::clamp((glm::length(buttInView - m_ShoulderedButt) - 0.03f) / 0.05f, 0.0f, 1.0f);
+                target = 1.0f - t * t * (3.0f - 2.0f * t); // all of it within 3 cm, none past 8
+            } else if (!shouldered && !m_HaveShoulderedButt && CurrentState() == "Draw") {
+                // A gun's first draw, its hold not learned yet: in over the draw's settle into the hold.
+                const float t = std::clamp((ac->StateTime - 0.5f) / 0.5f, 0.0f, 1.0f);
+                target = t * t * (3.0f - 2.0f * t);
+            }
+        }
+        if (shouldered && haveButt && m_Zoom < 0.05f && m_StockLockWeight > 0.99f) {
+            m_ShoulderedButt = m_HaveShoulderedButt ? glm::mix(m_ShoulderedButt, buttInView, std::min(1.0f, dt * 2.0f)) : buttInView;
+            m_HaveShoulderedButt = true;
         }
         const float step = sl.BlendTime > 0.0f ? dt / sl.BlendTime : 1.0f;
-        m_StockLockWeight = std::clamp(m_StockLockWeight + (shouldered ? step : -step), 0.0f, 1.0f);
+        m_StockLockWeight = std::clamp(m_StockLockWeight + std::clamp(target - m_StockLockWeight, -step, step), 0.0f, 1.0f);
     }
     ac->SetBool(K::kEquipped, m_Equipped);
     ac->SetInt(K::kAmmo, m_Ammo);
@@ -2024,16 +2357,22 @@ void FirstPersonPresentation::UpdateSpareMagazine(const glm::vec3& armsPos, cons
     const glm::vec3 handWorld = armsPos + armsRot * (m_Scale * glm::vec3(hand[3]));
     const float scale = std::max(m_Scale, 1e-6f);
     std::vector<int> hide;
+    m_SpareMagGap = -1.0f;
     for (const std::string& bone : m_Set.SpareMagazineBones) {
         glm::mat4 g(1.0f);
         const int n = m_WeaponModel->NodeIndex(bone);
         if (n < 0 || !m_WeaponModel->NodeTransform(bone, g)) continue; // a collapsed node keeps its pivot
         const glm::vec3 w = weaponPos + weaponRot * (m_Scale * glm::vec3(g[3]));
-        if (glm::length(w - handWorld) / scale > m_Set.SpareMagazineGrabDistance) hide.push_back(n);
+        const float gap = glm::length(w - handWorld) / scale;
+        m_SpareMagGap = m_SpareMagGap < 0.0f ? gap : std::min(m_SpareMagGap, gap);
+        if (gap > m_Set.SpareMagazineGrabDistance) hide.push_back(n);
     }
     if (hide == m_SpareMagHidden) return;
     m_SpareMagHidden = hide;
     m_WeaponModel->SetHiddenNodes(hide);
+    // The world copy's own model (PoseWorldWeapon re-applies its pose each frame) hides the same: the clip, not the world
+    // body's hand, decides whether the hand has it.
+    if (m_WorldWeaponModel) m_WorldWeaponModel->SetHiddenNodes(hide);
     // Re-derive this frame's palette from the animator's pose, so it shows or goes this frame.
     if (m_WeaponModel->HasExternalPose()) {
         const std::vector<LocalTRS> pose = m_WeaponModel->AppliedLocalPose();
@@ -2112,6 +2451,14 @@ void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera,const
             pivot = position + rigRotation * (m_Scale * glm::vec3(socket[3]));
         position = pivot + turn * (position - pivot) + cameraRotation * (aim.HipPosition * hip);
         rigRotation = NormalizeRotation(turn * rigRotation);
+    }
+    // Without the owner's view (an enemy's gun) the rig is only the source of a body's hands and of the gun, both seen
+    // in third person: the whole rig is carried by the third-person hold, which the gun's socket then follows.
+    //     world(x) = position + rigRotation * scale * (C.R x + C.T)
+    if (!m_Options.OwnerView) {
+        const glm::mat4 c = ThirdPersonGunCorrection();
+        position += rigRotation * (m_Scale * glm::vec3(c[3]));
+        rigRotation = NormalizeRotation(rigRotation * QuaternionFromMatrix(c));
     }
 
     world.SetWorldPose(m_Arms, position, rigRotation);
