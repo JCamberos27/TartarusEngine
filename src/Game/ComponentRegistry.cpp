@@ -601,14 +601,8 @@ void RegisterEngineComponents() {
         m.Fields.push_back({ "Foot Lock Ease Out", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FootLockEaseOut), 0.005f,
               "Seconds a foot takes to be released once it lifts.", 0.005f, 1.0f });
         m.Fields.back().Group = "Foot IK (advanced)";
-        m.Fields.push_back({ "Stair Pop Rise", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StairPopRise), 0.005f,
-              "A sudden change of the capsule's height at least this big (metres) counts as a stair: the body eases to the new height instead of popping.", 0.005f, 0.3f });
-        m.Fields.back().Group = "Foot IK (advanced)";
-        m.Fields.push_back({ "Stair Pop Rate", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StairPopRate), 0.1f,
-              "... and only when it is at least this fast (m/s), so a slope doesn't trigger it.", 0.5f, 20.0f });
-        m.Fields.back().Group = "Foot IK (advanced)";
         m.Fields.push_back({ "Stair Ease", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StairEase), 0.005f,
-              "Seconds the body takes to ease up or down a stair (0.03 s when Foot IK is off).", 0.005f, 1.0f });
+              "How softly (seconds) the body - and the camera on it - takes stairs: it follows the ground's ramp under the travel, and its hips the lower foot, on a smooth spring (0.03 s when Foot IK is off).", 0.005f, 1.0f });
         m.Fields.back().Group = "Foot IK (advanced)";
         m.Fields.push_back({ "Elbow Ease", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ElbowEase), 0.005f,
               "Seconds the player body's elbow takes to follow its target direction (smooths elbow jitter).", 0.005f, 1.0f });

@@ -3301,9 +3301,11 @@ int main(int argc, char** argv) {
                     }
                     PROFILE_SCOPE("FP Arms + World Gun");
                     // The body's hands onto the arms rig's, now that the rig is seated.
-                    // Split poses: the body's world twins hold the world gun, the first-person one carried by their chest.
+                    // Split poses: the body's world twins hold the world gun, the first-person one carried to its
+                    // third-person hold and by their chest.
                     firstPersonBody.ArmsLateUpdate(world, firstPersonPresentation.ArmsEntity(),
-                                                   firstPersonPresentation.ViewModelFov(), gameDt, &player.Cam);
+                                                   firstPersonPresentation.ViewModelFov(), gameDt, &player.Cam,
+                                                   firstPersonPresentation.ThirdPersonGunCorrection());
                     if (firstPersonPresentation.IsActive())
                         firstPersonPresentation.PlaceWorldWeapon(world, firstPersonBody.SplitPoses(), firstPersonBody.WorldGunDelta());
                     if (weaponTest) weaponTest->AfterPose(world, firstPersonBody, firstPersonPresentation);

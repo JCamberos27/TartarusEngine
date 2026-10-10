@@ -395,6 +395,35 @@ float FirstPersonBodyFootPelvis(float offL, float offR, float maxDrop, float max
     return std::clamp(std::min(offL, offR), -std::max(maxDrop, 0.0f), std::max(maxRaise, 0.0f));
 }
 
+void FirstPersonBodyStepSpring(float& value, float& velocity, float target, float targetRate, float lag, float dt) {
+    // Critically damped, w = 2 / lag. Sub-stepped, so a long frame stays stable.
+    const float w = 2.0f / std::max(lag, 1e-3f);
+    const int n = std::clamp((int)std::ceil(dt * w / 0.2f), 1, 32);
+    const float h = dt / (float)n;
+    for (int i = 0; i < n; ++i) {
+        velocity += (w * w * (target - value) + 2.0f * w * (targetRate - velocity)) * h;
+        value += velocity * h;
+    }
+}
+
+void FirstPersonBodyGroundRamp(const float* heights, int count, float span, float& height, float& slope) {
+    height = slope = 0.0f;
+    if (count <= 0) return;
+    for (int i = 0; i < count; ++i) height += heights[i];
+    height /= (float)count;
+    // A window two treads long averages a flight of stairs into its slope: fitted over every sample (least squares).
+    // From the two ends alone it flipped between half and all of the true slope as they crossed step edges, and the
+    // body's climb rate - fed straight to its spring - jumped with it.
+    if (count < 2 || span <= 1e-4f) return;
+    float sxx = 0.0f, sxy = 0.0f;
+    for (int i = 0; i < count; ++i) {
+        const float x = span * ((float)i / (float)(count - 1) - 0.5f);
+        sxx += x * x;
+        sxy += x * (heights[i] - height);
+    }
+    slope = sxy / sxx;
+}
+
 glm::vec3 FirstPersonBodyEye(const glm::vec3& restHead, const glm::vec3& head, float bob, const glm::vec3& offset) {
     const float b = std::clamp(bob, 0.0f, 1.0f);
     return restHead + (head - restHead) * b + kRight * offset.x + glm::vec3(0.0f, offset.y, 0.0f) + kForward * offset.z;
@@ -839,16 +868,68 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     if (PhysicsWorld::HasCharacter()) {
         float f[3];
         PhysicsWorld::GetCharacterFootPosition(f);
-        // A stair pops the capsule up (or down) in a frame: the body (and so the camera on its head)
-        // stays where it was and eases to the new height; the legs' IK reaches the step meanwhile.
-        const float rise = f[1] - m_LastCapsuleY;
-        if (cfg.FootIK && m_HaveCapsule && player.Grounded && m_LastGrounded && dt > 0.0f && std::abs(rise) > cfg.StairPopRise &&
-            std::abs(rise) / dt > cfg.StairPopRate)
-            m_StepOffset = std::clamp(m_StepOffset - rise, -0.3f, 0.3f);
-        m_StepOffset -= m_StepOffset * Follow(dt, player.Grounded && cfg.FootIK ? cfg.StairEase : 0.03f);
+        // The body's height is its own, in the world: on stairs the capsule climbs each step in a few frames (Jolt's
+        // stair walk), a staircase the camera on the head felt as a kink every step (~180 m/s^2 on the Sandbox stairs).
+        // The body follows the ground's ramp instead: the ground sampled along the travel over a window two treads
+        // long and averaged - on stairs their slope; standing still the window closes to the ground under the capsule -
+        // plus the hips' drop to the lower foot, on one critically damped spring fed the ramp's climb, so it follows a
+        // flight without lag. The legs' IK reaches each step meanwhile.
+        const float rise = m_HaveCapsule ? f[1] - m_LastCapsuleY : 0.0f;
+        const float capsuleRate = dt > 0.0f ? rise / dt : 0.0f;
+        if (!m_HaveBodyY || std::abs(m_BodyY - f[1]) > 1.0f) { m_BodyY = f[1]; m_BodyVy = 0.0f; m_HaveBodyY = true; } // a teleport
+        float target = f[1], rate = capsuleRate;
+        const bool onFeet = cfg.FootIK && player.Grounded;
+        if (onFeet && dt > 0.0f) {
+            constexpr int kRays = 16;
+            constexpr float kWindow = 0.8f; // metres at a run; it closes below 1 m/s
+            const float speed = glm::length(m_GroundVelocity);
+            const float window = kWindow * std::min(speed, 1.0f);
+            float ramp = 0.0f, slope = 0.0f, uneven = 0.0f;
+            if (window > 0.02f) {
+                const glm::vec3 along = m_GroundVelocity / speed;
+                float heights[kRays];
+                QueryFilter filter;
+                filter.HitTriggers = 0;
+                for (int i = 0; i < kRays; ++i) {
+                    const float s = window * ((i + 0.5f) / kRays - 0.5f);
+                    const float origin[3] = {f[0] + along.x * s, f[1] + 0.5f, f[2] + along.z * s};
+                    const float down[3] = {0.0f, -1.0f, 0.0f};
+                    RaycastHit hit;
+                    // Off an edge, deeper than two stairs (a gap the capsule bridges), or a wall's top: the capsule's own
+                    // ground, so a drop never pulls the body down into it.
+                    const bool ground = PhysicsWorld::RaycastSolid(origin, down, 1.0f, filter, hit) && hit.Hit && hit.Normal[1] > 0.5f &&
+                                        hit.Point[1] - f[1] > -0.42f;
+                    heights[i] = ground ? std::min(hit.Point[1] - f[1], 0.45f) : 0.0f;
+                    uneven = std::max(uneven, ground ? std::abs(heights[i]) : 1.0f); // no ground there: not level
+                }
+                FirstPersonBodyGroundRamp(heights, kRays, window * (kRays - 1) / kRays, ramp, slope);
+            }
+            float hips = 0.0f;
+            if (m_HaveFootGround)
+                hips = FirstPersonBodyFootPelvis(m_FootGround[0] - ramp, m_FootGround[1] - ramp, std::min(cfg.FootIKMaxDrop, 0.3f), cfg.PelvisMaxRaise);
+            // The body's height off the capsule's eases off past 0.35 m toward 0.4 m (walking a ledge's edge, the hips
+            // dropped to a foot over the drop), and with it the ramp's climb fed to the spring: a hard limit, the body
+            // stopped against it with a jolt.
+            float off = ramp + hips * m_FootWeight, free = 1.0f;
+            if (const float over = std::abs(off) - 0.35f; over > 0.0f) {
+                const float t = std::tanh(over / 0.05f);
+                off = std::copysign(0.35f + 0.05f * t, off);
+                free = 1.0f - t * t;
+            }
+            target = f[1] + off;
+            // The ramp climbs at its slope times the speed. Level under the window, the ground's own motion (a lift)
+            // is the capsule's: followed at its rate - as is the capsule's, held at the limit.
+            // (A lift's pace only: faster, the capsule is popping up a step or off an edge.)
+            const float level = std::clamp(1.0f - uneven / 0.03f, 0.0f, 1.0f);
+            const float ground = std::clamp(capsuleRate, -1.5f, 1.5f);
+            rate = slope * speed + (ground - slope * speed) * level;
+            rate = ground + (rate - ground) * free;
+        }
+        FirstPersonBodyStepSpring(m_BodyY, m_BodyVy, target, rate, onFeet ? cfg.StairEase : 0.03f, dt);
+        m_BodyY = std::clamp(m_BodyY, f[1] - 0.5f, f[1] + 0.5f); // a safety: the target stays within 0.4 m
+        m_StepOffset = m_BodyY - f[1];
         m_LastCapsuleY = f[1];
         m_GroundVelocity = glm::vec3(player.Velocity.x, 0.0f, player.Velocity.z);
-        m_LastGrounded = player.Grounded;
         m_HaveCapsule = true;
         m_Feet = glm::vec3(f[0], f[1] + m_StepOffset, f[2]);
     } else {
@@ -1428,6 +1509,7 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
                     !reg.get<AnimatorControllerComponent>(m_Driver).HasTag(FPBody::kTagAirborne);
     m_FootWeight += ((on ? 1.0f : 0.0f) - m_FootWeight) * Follow(dt, cfg.FootIKFade);
     if (m_FootWeight < 1e-3f) {
+        m_HaveFootGround = false;
         m_HaveFoot = false;
         m_FootPlanted[0] = m_FootPlanted[1] = false;
         m_FootLockWeight[0] = m_FootLockWeight[1] = 0.0f;
@@ -1538,7 +1620,11 @@ void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& 
         for (int s = 0; s < 2; ++s) { d.FootOffset[s] = m_FootOffset[s]; d.FootPlanted[s] = m_FootPlanted[s]; d.FootLock[s] = m_FootLockWeight[s]; }
     }
 
-    const float pelvisDelta = (FirstPersonBodyFootPelvis(m_FootOffset[0], m_FootOffset[1], maxDrop, cfg.PelvisMaxRaise) - slide.PelvisDrop) * m_FootWeight;
+    // The hips over the lower foot: the body's height spring takes it (in Tick, next frame), so the whole body - and
+    // the camera on it - drops smoothly. Each foot's ground off the capsule's (the body stands m_StepOffset off it).
+    for (int s = 0; s < 2; ++s) m_FootGround[s] = m_FootOffset[s] + m_StepOffset;
+    m_HaveFootGround = true;
+    const float pelvisDelta = -slide.PelvisDrop * m_FootWeight;
     static const char* const kLegs[2][3] = {{FPBody::kBoneThigh[0], FPBody::kBoneCalf[0], FPBody::kBoneFoot[0]}, {FPBody::kBoneThigh[1], FPBody::kBoneCalf[1], FPBody::kBoneFoot[1]}};
     const glm::quat yawInverse = glm::inverse(yaw);
     for (const auto& mp : m_Models) {
@@ -1787,7 +1873,8 @@ namespace {
 constexpr float kWorldGunChestTurn = 0.3f; // how much of the world body's chest turn (off the player's own) the world gun takes
 } // namespace
 
-void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, float viewModelFov, float dt, const Camera* camera) {
+void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, float viewModelFov, float dt, const Camera* camera,
+                                     const glm::mat4& thirdPersonGun) {
     if (!IsActive()) return;
     auto& reg = world.Registry;
     if (!reg.valid(m_Body)) return;
@@ -2173,7 +2260,8 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     // The world twins (every view but the player's own, and the shadows): the same arm solve. Their chest is the clips'
     // own (no Spine Stability) - it leans into a stop, bobs with the stride - so the gun rides on it: the rig's hands,
     // and the world gun, go wherever the twin's chest has gone from the pieces' (rigid). Held to the steadied camera
-    // instead, a stop's lean back left the hands 16 cm short of the gun.
+    // instead, a stop's lean back left the hands 16 cm short of the gun. Before that the gun is moved to its third-person
+    // hold (the weapon's arms3p clips: lower, off the centreline, into the right shoulder), arms and gun together.
     m_WorldGunDelta = glm::mat4(1.0f);
     if (!m_Twins.empty()) {
         PROFILE_SCOPE("FPB arms: twins");
@@ -2196,6 +2284,8 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                 m_WorldGunDelta = glm::translate(glm::mat4(1.0f), to) * glm::mat4_cast(turn) * glm::translate(glm::mat4(1.0f), -from);
             }
         }
+        const glm::mat4 chestDelta = m_WorldGunDelta;
+        m_WorldGunDelta = chestDelta * rigWorld * thirdPersonGun * glm::inverse(rigWorld);
         const glm::quat turn = IK::Rotation(m_WorldGunDelta);
         for (int s = 0; s < 2; ++s) {
             handPos[s] = glm::vec3(m_WorldGunDelta * glm::vec4(handPos[s], 1.0f));
@@ -2203,7 +2293,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
             rigShoulder[s] = glm::vec3(m_WorldGunDelta * glm::vec4(rigShoulder[s], 1.0f));
             rigElbow[s] = glm::vec3(m_WorldGunDelta * glm::vec4(rigElbow[s], 1.0f));
         }
-        anchorFrame = m_WorldGunDelta * anchorFrame;
+        anchorFrame = chestDelta * anchorFrame; // the shoulders are held on the chest, wherever the hold puts the gun
         anchorInverse = glm::inverse(anchorFrame);
         m_TorsoPointBuffer.clear();
         solveArms(m_TwinModels, m_Twins, m_WorldShoulderAnchor, m_WorldHaveShoulderAnchor, m_WorldElbowAim, m_WorldHaveElbowAim, false);

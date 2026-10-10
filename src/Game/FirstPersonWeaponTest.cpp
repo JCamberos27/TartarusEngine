@@ -9,6 +9,8 @@
 #include "Components.h"
 #include "FirstPersonBody.h"
 #include "FirstPersonPresentation.h"
+#include "GameModuleAPI.h"
+#include "PhysicsWorld.h"
 #include "ProjectPaths.h"
 #include "ShellCasings.h"
 #include "World.h"
@@ -442,8 +444,9 @@ void FirstPersonWeaponTest::BuildBodyProbe() {
                              }
                              // The view: no bump harder than a smooth 0.3 s crouch takes (the eye drops ~30 cm).
                              std::snprintf(buf, sizeof buf, "%s: the view moves smoothly (%.1f m/s2)", sg.Name.c_str(), b.EyeJerk);
-                             if (b.FeetHigh - b.FeetLow < 0.05f) c.Check(b.EyeJerk < 35.0f, buf);
-                             else std::printf("[Body]   (crossed %.0f cm of steps: the view's bump is the stairs')\n", (b.FeetHigh - b.FeetLow) * 100.0f);
+                             // Stairs too: the camera rides them as a ramp (crossed: the climb, for the log).
+                             if (b.FeetHigh - b.FeetLow >= 0.05f) std::printf("[Body]   (crossed %.0f cm of steps)\n", (b.FeetHigh - b.FeetLow) * 100.0f);
+                             c.Check(b.EyeJerk < 35.0f, buf);
                              std::snprintf(buf, sizeof buf, "%s: the world body's hands on the gun (%.1f cm)", sg.Name.c_str(), b.TwinHandGap * 100.0f);
                              c.Check(b.TwinHandGap < 0.02f, buf);
                              c.View = 0;
@@ -487,6 +490,42 @@ void FirstPersonWeaponTest::BuildBodyProbe() {
     add({"crouch_on_the_move", move({0, 1}, false, true), 1.5f, {"CrouchLoco"}, {{0.15f, 1}}});
     add({"stand_on_the_move", move({0, 1}), 1.5f, {"Locomotion"}, {{0.15f, 1}}});
     add({"on_the_move_stop", move({}), 1.6f, {"Stop"}, {}});
+    // Stairs (the Movement Course's: ten 20 cm steps up -X to the Deck): up, down, walking, sprinting. The camera must
+    // ride them as a ramp. The player is put at their foot, and back where it was after.
+    if (m_BodyOnly.empty() || m_BodyOnly.rfind("stairs", 0) == 0) {
+        auto home = std::make_shared<std::pair<glm::vec3, float>>();
+        auto toFoot = [](C& c) {
+            const float f[3] = {-12.4f, 0.02f, -6.0f};
+            PhysicsWorld::SetCharacterFootPosition(f);
+            c.Move = {};
+            c.Sprint = c.Crouch = false;
+            c.Cam->Yaw = 180.0f; // facing -X, up the stairs
+            c.Cam->Pitch = 0.0f;
+        };
+        steps.push_back({"stairs: to the foot", [home, toFoot](C& c) {
+                             float f[3];
+                             PhysicsWorld::GetCharacterFootPosition(f);
+                             *home = {glm::vec3(f[0], f[1], f[2]), c.Cam->Yaw};
+                             toFoot(c);
+                         }, hold(1.5f), 5, nullptr});
+        add({"stairs_up", move({0, 1}), 2.2f, {"Locomotion"}, {{0.9f, 1}, {1.2f, 9}}});
+        add({"stairs_top_stop", move({}), 1.6f, {"Stop"}, {}});
+        steps.push_back({"stairs: face down", [](C& c) { c.Cam->Yaw = 0.0f; }, hold(2.5f), 6, nullptr});
+        add({"stairs_down", move({0, 1}), 2.2f, {"Locomotion"}, {{0.9f, 1}, {1.2f, 9}}});
+        add({"stairs_bottom_stop", move({}), 1.6f, {"Stop"}, {}});
+        steps.push_back({"stairs: to the foot again", toFoot, hold(1.5f), 5, nullptr});
+        add({"stairs_walk_up", move({0, 0.45f}), 3.6f, {"Locomotion"}, {{1.8f, 1}, {2.2f, 9}}});
+        add({"stairs_walk_stop", move({}), 1.8f, {"StopWalk"}, {}});
+        steps.push_back({"stairs: to the foot to sprint", toFoot, hold(1.5f), 5, nullptr});
+        add({"stairs_sprint_up", move({0, 1}, true), 1.5f, {"Sprint"}, {{0.7f, 1}, {0.9f, 9}}});
+        add({"stairs_sprint_stop", move({}), 2.0f, {"StopRun"}, {}});
+        steps.push_back({"stairs: back", [home](C& c) {
+                             const float f[3] = {home->first.x, home->first.y + 0.02f, home->first.z};
+                             PhysicsWorld::SetCharacterFootPosition(f);
+                             c.Cam->Yaw = home->second;
+                             c.Move = {};
+                         }, hold(1.5f), 5, nullptr});
+    }
     if (!m_BodyOnly.empty()) {
         m_Steps = std::move(steps);
         return;
@@ -848,11 +887,22 @@ void FirstPersonWeaponTest::AfterPose(const World& world, const FirstPersonBody&
         static const char* kFeet[2] = {"ball_l", "ball_r"};
         glm::vec3 foot[2];
         if (body.BoneWorld(world, kFeet[0], foot[0]) && body.BoneWorld(world, kFeet[1], foot[1])) {
-            const float ground = std::min(foot[0].y, foot[1].y);
+            // Each ball's height over the ground under it (on stairs the feet stand on different steps): down within
+            // 2 cm of the lower one's is down.
+            float over[2];
+            for (int f = 0; f < 2; ++f) {
+                const float origin[3] = {foot[f].x, foot[f].y + 0.3f, foot[f].z};
+                const float down[3] = {0.0f, -1.0f, 0.0f};
+                QueryFilter filter;
+                filter.HitTriggers = 0;
+                RaycastHit hit;
+                over[f] = PhysicsWorld::RaycastSolid(origin, down, 1.0f, filter, hit) && hit.Hit ? foot[f].y - hit.Point[1] : foot[f].y - body.Feet().y;
+            }
+            const float ground = std::min(over[0], over[1]);
             for (int f = 0; f < 2; ++f) {
                 const glm::vec2 xz(foot[f].x, foot[f].z);
                 const float speed = b.Have && m_Ctx.Dt > 0.0f ? glm::length(xz - glm::vec2(b.LastFoot[f].x, b.LastFoot[f].z)) / m_Ctx.Dt : 1e9f;
-                const bool planted = foot[f].y < ground + 0.02f && speed < 0.5f;
+                const bool planted = over[f] < ground + 0.02f && speed < 0.5f;
                 if (planted) {
                     if (b.PlantFrames[f] == 0) {
                         b.PlantStart[f] = foot[f];
@@ -993,10 +1043,10 @@ void FirstPersonWeaponTest::AfterPose(const World& world, const FirstPersonBody&
     m_EyePrev[1] = m_EyePrev[0];
     m_EyePrev[0] = cam.Position;
     if (m_BodyProbe && m_BodyMeasure && m_Ctx.Dt > 0.0f) {
-        // The eye against where the body stands: the body's own motion in the view (a stair the capsule climbs is the
-        // terrain's, and its own easing - not the animation's).
+        // The camera's height in the world: what the player feels - the clips' bob, the hips' drop and the body's stair
+        // easing (a steady climb is no acceleration; each step's kink is).
         BodyStats& b = m_Body;
-        const float y = cam.Position.y - body.Feet().y;
+        const float y = cam.Position.y;
         b.FeetLow = std::min(b.FeetLow, body.Feet().y);
         b.FeetHigh = std::max(b.FeetHigh, body.Feet().y);
         if (b.EyeFrames >= 2) b.EyeJerk = std::max(b.EyeJerk, std::abs(y - 2.0f * b.EyeY[0] + b.EyeY[1]) / (m_Ctx.Dt * m_Ctx.Dt));
@@ -1007,7 +1057,7 @@ void FirstPersonWeaponTest::AfterPose(const World& world, const FirstPersonBody&
 #pragma warning(suppress : 4996)
         static const bool eyeLog = std::getenv("STOCK_PROBE_EYE") != nullptr;
         if (eyeLog)
-            std::printf("[Eye] t %.3f y %.4f world %.4f at %.2f %.2f state %s\n", m_Ctx.Time, y, cam.Position.y, cam.Position.x, cam.Position.z,
+            std::printf("[Eye] t %.3f y %.4f world %.4f feet %.4f step %.4f at %.2f %.2f state %s\n", m_Ctx.Time, y, cam.Position.y, body.Feet().y, BodyDebug::Info().StepOffset, cam.Position.x, cam.Position.z,
                         BodyDebug::Info().AnimatorState.c_str());
     }
     m_EyeFrames = std::min(m_EyeFrames + 1, 2);

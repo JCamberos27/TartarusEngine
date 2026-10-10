@@ -371,6 +371,42 @@ bool FirstPersonPresentation::StartSet(World& world, AssetLibrary& assets, int s
         StopSet(world); // this weapon's rigs only: the slot list stays for a fallback
         return false;
     }
+    // The third-person hold (ThirdPersonGunCorrection): two hidden rigs following the arms, one on the "arms" clips and
+    // one on "arms3p", both raw. Not drawn, no shadow (PoseSourceTag). A 3P clip that won't attach costs only the 3P hold.
+    if (std::find(ctrl->Tracks.begin(), ctrl->Tracks.end(), "arms3p") != ctrl->Tracks.end()) {
+        bool ok = true;
+        auto follower = [&](const char* track, const char* name, std::shared_ptr<Model>& model) {
+            std::shared_ptr<Model> m = assets.InstantiateModel(armsPath);
+            if (!m) { ok = false; return entt::entity(entt::null); }
+            const int t = ctrl->TrackIndex(track);
+            for (const auto& L : ctrl->Layers)
+                for (const auto& s : L.States) {
+                    const auto& motion = s.MotionFor(t);
+                    if (!motion.Clip.empty() && ResolveAnimationClip(*m, motion.Clip, assets) < 0) ok = false;
+                    for (const auto& ch : motion.Children)
+                        if (!ch.Clip.empty() && ResolveAnimationClip(*m, ch.Clip, assets) < 0) ok = false;
+                }
+            model = m;
+            const entt::entity e = world.CreateModelEntity(std::move(m), glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(config.ViewModelScale), name);
+            world.Registry.emplace_or_replace<PoseSourceTag>(e);
+            auto& ac = world.Registry.emplace_or_replace<AnimatorControllerComponent>(e);
+            ac.Controller = m_ControllerPath;
+            ac.Track = track;
+            ac.Driver = m_Arms;
+            ac.UpdateWhenInactive = true;
+            return e;
+        };
+        m_ArmsClip1P = follower("arms", "[Runtime] First Person Arms (1P clips)", m_ArmsClip1PModel);
+        m_ArmsClip3P = follower("arms3p", "[Runtime] First Person Arms (3P clips)", m_ArmsClip3PModel);
+        if (!ok) {
+            Log::Warn("First-person presentation: '" + animationSet + "' has arms3p clips that won't attach; third person holds the gun as first person does.");
+            for (entt::entity e : {m_ArmsClip1P, m_ArmsClip3P})
+                if (e != entt::null && world.Registry.valid(e)) world.DestroyEntityAndChildren(e);
+            m_ArmsClip1P = m_ArmsClip3P = entt::null;
+            m_ArmsClip1PModel.reset();
+            m_ArmsClip3PModel.reset();
+        }
+    }
     m_Procedural.Reset();
     m_CameraShake.Reset(); m_ShakePose={};
     m_Procedural.Seed(m_Rng()); // a fresh recoil pattern every Play, not the same one each time
@@ -397,6 +433,11 @@ void FirstPersonPresentation::StopSet(World& world) {
     m_WorldWeaponDelta = glm::mat4(1.0f);
     if (m_Arms != entt::null && world.Registry.valid(m_Arms)) world.DestroyEntityAndChildren(m_Arms);
     if (m_Weapon != entt::null && world.Registry.valid(m_Weapon)) world.DestroyEntityAndChildren(m_Weapon);
+    for (entt::entity e : {m_ArmsClip1P, m_ArmsClip3P})
+        if (e != entt::null && world.Registry.valid(e)) world.DestroyEntityAndChildren(e);
+    m_ArmsClip1P = m_ArmsClip3P = entt::null;
+    m_ArmsClip1PModel.reset();
+    m_ArmsClip3PModel.reset();
     m_WeaponParticles = m_WorldWeaponParticles = entt::null;
     m_WeaponEmitters.clear(); m_WorldWeaponEmitters.clear();
     m_WeaponAttachmentEntities.clear();
@@ -1027,6 +1068,17 @@ bool FirstPersonPresentation::StockWorld(glm::vec3& butt, glm::vec3& forward) co
     butt = glm::vec3(m_WeaponWorld * glm::vec4(sum / (float)m_StockVerts.size(), 1.0f));
     forward = -glm::normalize(glm::mat3(m_WeaponWorld) * back);
     return true;
+}
+
+glm::mat4 FirstPersonPresentation::ThirdPersonGunCorrection() const {
+    if (!m_ArmsClip1PModel || !m_ArmsClip3PModel || m_ArmsClip1PModel->AppliedLocalPose().empty() ||
+        m_ArmsClip3PModel->AppliedLocalPose().empty())
+        return glm::mat4(1.0f);
+    const std::string& gun = m_Set.WeaponSocket.empty() ? m_Set.Procedural.IK.GunBone : m_Set.WeaponSocket;
+    glm::mat4 first(1.0f), third(1.0f);
+    if (gun.empty() || !m_ArmsClip1PModel->NodeTransform(gun, first) || !m_ArmsClip3PModel->NodeTransform(gun, third))
+        return glm::mat4(1.0f);
+    return third * glm::inverse(first);
 }
 
 bool FirstPersonPresentation::WorldGunInput(FirstPersonWorldGunInput& out) const {
@@ -2112,6 +2164,14 @@ void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera,const
             pivot = position + rigRotation * (m_Scale * glm::vec3(socket[3]));
         position = pivot + turn * (position - pivot) + cameraRotation * (aim.HipPosition * hip);
         rigRotation = NormalizeRotation(turn * rigRotation);
+    }
+    // Without the owner's view (an enemy's gun) the rig is only the source of a body's hands and of the gun, both seen
+    // in third person: the whole rig is carried by the third-person hold, which the gun's socket then follows.
+    //     world(x) = position + rigRotation * scale * (C.R x + C.T)
+    if (!m_Options.OwnerView) {
+        const glm::mat4 c = ThirdPersonGunCorrection();
+        position += rigRotation * (m_Scale * glm::vec3(c[3]));
+        rigRotation = NormalizeRotation(rigRotation * QuaternionFromMatrix(c));
     }
 
     world.SetWorldPose(m_Arms, position, rigRotation);

@@ -146,6 +146,10 @@ public:
     entt::entity WeaponEntity() const { return m_Weapon; }
     // The arms rig node the play camera is pinned to (empty = the rig's root sits on the camera).
     const std::string& CameraBone() const { return m_CameraBone; }
+    // Third-person hold: how far the gun socket of the controller's "arms3p" clips sits from the "arms" clips' (both
+    // played raw on hidden rigs that mirror the arms' states and times), in the arms rig's model space. The third-person
+    // views carry the rig's hands and the gun by it; the first-person view never does. Identity without an arms3p track.
+    glm::mat4 ThirdPersonGunCorrection() const;
     // Mid-swap counts as equipped: the weapon is only being traded for another, so e.g. the gravity
     // gun mustn't take the mouse in between.
     bool IsEquipped() const { return m_Equipped || m_PendingSlot >= 0; }
@@ -311,6 +315,10 @@ private:
     void SetupWorldWeaponParticles();
     std::shared_ptr<Model> m_ArmsModel;
     std::shared_ptr<Model> m_WeaponModel;
+    // The third-person hold's two hidden pose rigs (ThirdPersonGunCorrection): the "arms" clips raw (the arms rig's own
+    // pose has the IK on it) and the "arms3p" clips. Null without an arms3p track.
+    entt::entity m_ArmsClip1P = entt::null, m_ArmsClip3P = entt::null;
+    std::shared_ptr<Model> m_ArmsClip1PModel, m_ArmsClip3PModel;
     glm::vec3 m_Offset{0.0f};
     glm::vec3 m_Rotation{0.0f};
     float m_Scale = 1.0f;

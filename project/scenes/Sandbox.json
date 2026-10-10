@@ -23412,6 +23412,7 @@
     {
       "Character Outfit": {
         "Auto Hide Skin": true,
+        "Bare Body (debug)": true,
         "Gender": "Male",
         "Locks": "",
         "Race": "Young",
@@ -23521,9 +23522,7 @@
         "Spine Weight 4": 0.6499999761581421,
         "Spine Weight 5": 1.0,
         "Sprint Speed": 4.71999979019165,
-        "Stair Ease": 0.09000000357627869,
-        "Stair Pop Rate": 2.5,
-        "Stair Pop Rise": 0.029999999329447746,
+        "Stair Ease": 0.20000000298023224,
         "Start Idle Time": 0.25,
         "Start Max Move": 0.6000000238418579,
         "Start Stop Clips": true,
