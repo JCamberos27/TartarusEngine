@@ -109,11 +109,13 @@ public:
     // Split poses (Weapon Arms): the body's pieces are what the player's own camera shows. Each piece has a world
     // twin - the same model, its own pose - which every other view and every shadow shows. Both play the same
     // animations (the locomotion clips, the weapon's arm clips through the rig's hands); the twins only skip Spine
-    // Stability, which steadies the player's own camera.
-    void ArmsLateUpdate(World& world, entt::entity weaponArms, float viewModelFov, float dt, const Camera* camera = nullptr);
+    // Stability, which steadies the player's own camera. The twins hold the gun third-person: the rig's hands and the
+    // world gun carried by `thirdPersonGun` (the rig's model space; FirstPersonPresentation::ThirdPersonGunCorrection).
+    void ArmsLateUpdate(World& world, entt::entity weaponArms, float viewModelFov, float dt, const Camera* camera = nullptr,
+                        const glm::mat4& thirdPersonGun = glm::mat4(1.0f));
     bool SplitPoses() const { return !m_Twins.empty(); }
-    // Where the world gun is off the first-person one this frame (rigid, world): the world body's chest from the
-    // player's own (Spine Stability steadies only the latter). Identity with no split.
+    // Where the world gun is off the first-person one this frame (rigid, world): the third-person hold, then the world
+    // body's chest from the player's own (Spine Stability steadies only the latter). Identity with no split.
     const glm::mat4& WorldGunDelta() const { return m_WorldGunDelta; }
     // What the hands are doing, for the idle fidgets: a gun held (the ready stance's own fidgets) and busy with it
     // (aiming, or just fired: no fidget). Set each frame before Tick.
@@ -234,9 +236,16 @@ private:
     bool m_InLand = false;         // the animator is in the landing state (the input drives the capsule)
     float m_FootWeight = 0.0f;     // 0..1: how much foot IK is on (eases at the edges of grounded)
     bool m_HaveFoot = false;
-    float m_StepOffset = 0.0f;     // metres the body is off the capsule's height: a stair's pop, eased out
+    // The body's own height. Stairs: the capsule climbs a step at a time; the body follows the ground's ramp under it
+    // instead (and its hips the lower foot), on one critically damped spring fed the ramp's own climb - so the camera on
+    // the head rides stairs as a slope, without lag or kinks.
+    float m_BodyY = 0.0f, m_BodyVy = 0.0f; // the body's feet height (world) and its rate
+    bool m_HaveBodyY = false;
+    float m_StepOffset = 0.0f;     // ... off the capsule's (m_BodyY - the capsule's foot)
+    float m_FootGround[2] = {0.0f, 0.0f}; // each foot's ground off the capsule's (foot IK, last frame)
+    bool m_HaveFootGround = false;
     float m_LastCapsuleY = 0.0f;
-    bool m_HaveCapsule = false, m_LastGrounded = false;
+    bool m_HaveCapsule = false;
     glm::vec3 m_GroundVelocity{0.0f};           // the capsule's horizontal velocity (foot slide correction)
     IK::FootSlide m_Slide;                      // foot pinning + stride warping (off by default)
     IK::FootSlideOutput m_AppliedSlide;
@@ -397,6 +406,12 @@ void FirstPersonBodyCopyArmShape(const std::vector<FirstPersonArmShapeLink>& lin
 void FirstPersonBodyArmShapeLinksFrom(int count, const std::vector<int>& parents, const int (&clavicles)[2],
                                       const std::function<int(int)>& rigOf, std::vector<FirstPersonArmShapeLink>& out);
 float FirstPersonBodyFootPelvis(float offL, float offR, float maxDrop, float maxRaise);
+// One step of the body's height spring: critically damped toward `target`, fed its rate `targetRate` (so a steady
+// ramp is followed without lag); `lag` seconds is how softly it takes a jump.
+void FirstPersonBodyStepSpring(float& value, float& velocity, float target, float targetRate, float lag, float dt);
+// The ground as a ramp: `heights` sampled evenly along a window of `span` metres (centre to centre), the travel's
+// way. The mean is the ramp's height at the middle; a least-squares fit, its slope (rise per metre).
+void FirstPersonBodyGroundRamp(const float* heights, int count, float span, float& height, float& slope);
 glm::vec3 FirstPersonBodyEye(const glm::vec3& restHead, const glm::vec3& head, float bob, const glm::vec3& offset);
 // A piece's Near Hide: the body's, and for clothing at least Clothing Near Hide.
 float FirstPersonBodyPieceNearHide(float nearHide, float clothingNearHide, bool clothing);

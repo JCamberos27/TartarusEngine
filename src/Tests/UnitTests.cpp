@@ -2200,8 +2200,8 @@ void TestFirstPersonBodyTuning() {
     CHECK(near(body.StartIdleTime, 0.25f) && near(body.StartMaxMove, 0.6f) && near(body.StopMinRunTime, 0.6f) && near(body.StopMinRunTimeCrouched, 0.7f) &&
           near(body.StopMinSpeed, 1.2f) && near(body.StopMinSpeedCrouched, 0.6f) && near(body.StopDebounce, 0.05f) && near(body.StopRunForward, 0.7f));
     CHECK(near(body.FootLockDrift, 0.12f) && near(body.FootPlantedHeight, 0.05f) && near(body.FootRayUp, 0.5f) && near(body.FootRayLength, 1.0f) &&
-          near(body.FootMaxRaise, 0.25f) && near(body.PelvisMaxRaise, 0.0f) && near(body.FootTiltMax, 25.0f) && near(body.StairPopRise, 0.03f) &&
-          near(body.StairPopRate, 2.5f) && near(body.StairEase, 0.09f) && near(body.AirborneDelay, 0.15f));
+          near(body.FootMaxRaise, 0.25f) && near(body.PelvisMaxRaise, 0.0f) && near(body.FootTiltMax, 25.0f) &&
+          near(body.StairEase, 0.2f) && near(body.AirborneDelay, 0.15f));
     CHECK(near(ctrl.JumpBufferTime, 0.12f) && near(ctrl.CoyoteTime, 0.10f));
     for (const RegisteredComponent& rc : ComponentRegistry::All()) {
         const bool isBody = std::string(rc.Meta.Name) == "First Person Body", isCtrl = std::string(rc.Meta.Name) == "First Person Controller";
@@ -2320,6 +2320,37 @@ void TestBlendTree2D() {
     // Foot IK: the pelvis drops to the lower foot (capped), rises a little when both are up.
     CHECK(near(FirstPersonBodyFootPelvis(-0.1f, 0.0f, 0.35f, 0.15f), -0.1f) && near(FirstPersonBodyFootPelvis(0.05f, -0.5f, 0.35f, 0.15f), -0.35f));
     CHECK(near(FirstPersonBodyFootPelvis(0.2f, 0.3f, 0.35f, 0.15f), 0.15f) && near(FirstPersonBodyFootPelvis(0.0f, 0.0f, 0.35f, 0.15f), 0.0f));
+    // Stairs: the ground as a ramp. A slope is fitted exactly; 20 cm steps on 40 cm treads under a 0.8 m window are a
+    // half slope, fitted within a quarter of it whichever way the edges fall (from the ends alone it read 0.27 or 0.53).
+    {
+        float h[16], height = 0.0f, slope = 0.0f;
+        for (int i = 0; i < 16; ++i) h[i] = 0.3f * (0.75f * ((float)i / 15.0f - 0.5f)) + 0.1f;
+        FirstPersonBodyGroundRamp(h, 16, 0.75f, height, slope);
+        CHECK(near(height, 0.1f) && near(slope, 0.3f));
+        float worst = 0.0f;
+        for (float shift = 0.0f; shift < 0.4f; shift += 0.01f) {
+            for (int i = 0; i < 16; ++i) h[i] = 0.2f * std::floor((0.8f * ((i + 0.5f) / 16.0f - 0.5f) + shift) / 0.4f);
+            FirstPersonBodyGroundRamp(h, 16, 0.75f, height, slope);
+            worst = std::max(worst, std::abs(slope - 0.5f));
+        }
+        CHECK(worst < 0.13f);
+    }
+    // The body's height spring: fed a ramp's rate it follows the ramp without lag; a step it takes smoothly (no
+    // overshoot, its acceleration bounded - its speed never jumps).
+    {
+        float y = 0.0f, v = 0.5f, t = 0.0f;
+        for (int i = 0; i < 120; ++i, t += 1.0f / 60.0f) FirstPersonBodyStepSpring(y, v, 0.5f * (t + 1.0f / 60.0f), 0.5f, 0.2f, 1.0f / 60.0f);
+        CHECK(std::abs(y - 0.5f * t) < 0.01f);
+        y = v = 0.0f;
+        float top = 0.0f, jump = 0.0f, last = 0.0f;
+        for (int i = 0; i < 120; ++i) {
+            FirstPersonBodyStepSpring(y, v, 0.2f, 0.0f, 0.2f, 1.0f / 60.0f);
+            top = std::max(top, y);
+            jump = std::max(jump, std::abs(v - last));
+            last = v;
+        }
+        CHECK(near(y, 0.2f) && top <= 0.2001f && jump * 60.0f < 20.5f); // at most w^2 * the step (w = 2 / 0.2 s)
+    }
     // The world gun's mesh keep-out: a gun through two head points is pushed down until both are 5 cm clear.
     {
         const std::vector<glm::vec3> headPoints = {glm::vec3(0.0f), glm::vec3(0.0f, 0.05f, 0.0f)};
@@ -3699,6 +3730,37 @@ void TestFirstPersonShotgunSet() {
 // FirstPersonPresentation drives it - every state 1 s long: the pump after a round, a reload loading
 // one shell per LoadRound until LastRound, an empty start chambering its round, the trigger stopping a
 // reload after the shell in hand, and a swapped-in weapon drawing out of Holstered.
+// The third-person hold (FirstPersonPresentation::ThirdPersonGunCorrection): each weapon's controller plays an
+// "arms3p" clip wherever it plays an "arms" one - that clip's ThirdPerson/ *_A_3P_* version (tools/weapons/add_3p_track.py).
+void TestThirdPersonArmsTrack() {
+    for (const char* rel : {"assets/Weapons/AKS74U/AKS74U.controller", "assets/Weapons/Remington870/Remington870.controller"}) {
+        const std::string path = ProjectPaths::Resolve(rel);
+        AnimatorController ctrl;
+        if (!AnimatorController::LoadFile(path, ctrl)) {
+            std::printf("  (skipped: no %s)\n", path.c_str());
+            continue;
+        }
+        const bool has = std::find(ctrl.Tracks.begin(), ctrl.Tracks.end(), "arms3p") != ctrl.Tracks.end();
+        CHECK(has);
+        if (!has) continue;
+        const int arms = ctrl.TrackIndex("arms"), third = ctrl.TrackIndex("arms3p");
+        CHECK(arms != third);
+        for (const auto& layer : ctrl.Layers)
+            for (const auto& s : layer.States) {
+                const auto& a = s.MotionFor(arms);
+                const auto& b = s.MotionFor(third);
+                if (a.Clip.empty()) continue;
+                std::string want = a.Clip;
+                const size_t fp = want.find("/FirstPerson/"), tag = want.find("_A_FP_");
+                CHECK(fp != std::string::npos && tag != std::string::npos);
+                if (fp == std::string::npos || tag == std::string::npos) continue;
+                want.replace(tag, 6, "_A_3P_");
+                want.replace(fp, 13, "/ThirdPerson/");
+                CHECK(b.Clip == want);
+            }
+    }
+}
+
 void TestRemingtonController() {
     namespace K = FirstPersonAnimatorContract;
     const std::string path = ProjectPaths::Resolve("assets/Weapons/Remington870/Remington870.controller");
@@ -5454,6 +5516,7 @@ int RunUnitTests(const char* filter) {
         {"AK additive ADS walking", TestAKAdditiveWalking},
         {"Sprint transition additive walk", TestSprintTransitionWalk},
         {"RemingtonController", TestRemingtonController},
+        {"ThirdPersonArmsTrack", TestThirdPersonArmsTrack},
         {"FirstPersonAds", TestFirstPersonAds},
         {"BulletHoles", TestBulletHoles},
         {"ShellCasings", TestShellCasings},

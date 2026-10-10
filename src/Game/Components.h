@@ -778,9 +778,7 @@ struct FirstPersonBodyComponent {
     float FootTiltMax = 25.0f; // Foot Tilt Max
     float FootLockEaseIn = 0.04f; // Foot Lock Ease In
     float FootLockEaseOut = 0.08f; // Foot Lock Ease Out
-    float StairPopRise = 0.03f; // Stair Pop Rise
-    float StairPopRate = 2.5f; // Stair Pop Rate
-    float StairEase = 0.09f; // Stair Ease
+    float StairEase = 0.2f; // Stair Ease
     // --- Arm IK (Player body: elbow tracking and clearance) ---
     float ElbowEase = 0.06f; // Elbow Ease
     float ElbowMaxRate = 540.0f; // Elbow Max Rate (degrees/s)
