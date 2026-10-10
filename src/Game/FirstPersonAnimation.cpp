@@ -661,6 +661,7 @@ AnimatorController BuildFirstPersonController(const FirstPersonAnimationSet& set
     for (const char* s : {"MagCheck", "TacReload", "EmptyReload"}) add(S::State, s, exitTo, {}, 0.3f, true);
     for (const std::string& action : adsVariants) add(S::State, "ADS " + action, exitTo, {}, 0.3f, true);
     add(S::State, "Holster", "Holstered", {}, 0.0f, true);
+    L.Transitions.back().Offset = 1.0f; // into Holster's last frame: from its first, the hidden frame between showed the hold
     add(S::State, "Holstered", "Draw", {cond(K::kEquipped, AC::Op::If)}, fadeOf("Draw"));
     return c;
 }

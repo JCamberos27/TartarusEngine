@@ -2562,9 +2562,9 @@
     "meshClearance": 0.05,
     "neckRadius": 0.09,
     "pocket": [
-      -0.045,
-      0.03,
-      0.05
+      -0.055,
+      0.0,
+      0.035
     ],
     "releaseEnd": -70.0,
     "releaseStart": -40.0,
@@ -2572,7 +2572,8 @@
       "Idle",
       "Ready",
       "ADS",
-      "Cycling"
+      "Cycling",
+      "Shouldered"
     ]
   },
   "viewPosition": [

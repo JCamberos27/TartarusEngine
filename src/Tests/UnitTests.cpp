@@ -22,6 +22,7 @@
 #include "AnimatorLint.h"
 #include "RootMotion.h"
 #include "FirstPersonBody.h"
+#include "WeaponJankMeter.h"
 #include "FirstPersonBodyContract.h"
 #include "Curve.h"
 #include "IK.h"
@@ -3726,10 +3727,114 @@ void TestFirstPersonShotgunSet() {
     }
 }
 
-// The Remington 870's own controller (project/assets/Weapons/Remington870), driven the way
-// FirstPersonPresentation drives it - every state 1 s long: the pump after a round, a reload loading
-// one shell per LoadRound until LastRound, an empty start chambering its round, the trigger stopping a
-// reload after the shell in hand, and a swapped-in weapon drawing out of Holstered.
+// The world body's hand anchor: on the gun within Near, on the body from Far, a smoothstep between; and a frame moved
+// part of the way by a rigid move - none of it, all of it, and half its turn at half its weight, its scale kept.
+void TestFirstPersonHandAnchor() {
+    CHECK(FirstPersonAnchorWeight(0.0f, 0.05f, 0.15f) == 0.0f);
+    CHECK(FirstPersonAnchorWeight(0.05f, 0.05f, 0.15f) == 0.0f);
+    CHECK(std::abs(FirstPersonAnchorWeight(0.10f, 0.05f, 0.15f) - 0.5f) < 1e-5f);
+    CHECK(FirstPersonAnchorWeight(0.15f, 0.05f, 0.15f) == 1.0f);
+    CHECK(FirstPersonAnchorWeight(0.40f, 0.05f, 0.15f) == 1.0f);
+    const glm::mat4 move = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 0.3f)) *
+                           glm::mat4_cast(glm::angleAxis(glm::radians(40.0f), glm::vec3(1.0f, 0.0f, 0.0f)));
+    const glm::mat4 hand = glm::translate(glm::mat4(1.0f), glm::vec3(0.1f, 1.2f, -0.4f)) *
+                           glm::mat4_cast(glm::angleAxis(glm::radians(15.0f), glm::vec3(0.0f, 1.0f, 0.0f))) *
+                           glm::scale(glm::mat4(1.0f), glm::vec3(2.0f));
+    auto near = [](const glm::mat4& a, const glm::mat4& b) {
+        for (int c = 0; c < 4; ++c)
+            if (glm::length(a[c] - b[c]) > 1e-4f) return false;
+        return true;
+    };
+    CHECK(near(FirstPersonPartialMove(move, hand, 0.0f), hand));
+    CHECK(near(FirstPersonPartialMove(move, hand, 1.0f), move * hand));
+    const glm::mat4 half = FirstPersonPartialMove(move, hand, 0.5f);
+    CHECK(glm::length(glm::vec3(half[3]) - 0.5f * (glm::vec3(hand[3]) + glm::vec3((move * hand)[3]))) < 1e-4f);
+    CHECK(std::abs(glm::length(glm::vec3(half[0])) - 2.0f) < 1e-4f);
+    const glm::quat turned = IK::Rotation(half) * glm::inverse(IK::Rotation(hand));
+    CHECK(std::abs(glm::degrees(glm::angle(turned)) - 20.0f) < 0.01f);
+}
+
+// The third-person jank meter: a smooth ease is quiet, a one-frame step is one pop, a drift after the state has begun is a
+// settle, a hand off its grip is flagged, and a shot's kick isn't.
+void TestWeaponJankMeter() {
+    auto run = [](auto pos, auto setup) {
+        WeaponJankMeter m;
+        for (int i = 0; i < 120; ++i) {
+            WeaponJankFrame f;
+            f.Dt = 1.0f / 60.0f;
+            f.State = i < 60 ? "TacReload" : "Idle";
+            f.Resting = i >= 60;
+            f.GunPos = pos(i);
+            setup(f, i);
+            m.Push(f);
+        }
+        return m.Events();
+    };
+    auto none = [](WeaponJankFrame&, int) {};
+    // An ease in over 30 frames (smoothstep): no pop, and over before the Idle: no settle.
+    auto ease = run([](int i) { const float t = std::clamp(i / 30.0f, 0.0f, 1.0f); return glm::vec3(0.07f * t * t * (3.0f - 2.0f * t), 0, 0); }, none);
+    CHECK(ease.empty());
+    // A 2 cm step: a pop (one event though it disturbs two frames), at about 2 cm.
+    auto step = run([](int i) { return glm::vec3(i >= 20 ? 0.02f : 0.0f, 0, 0); }, none);
+    CHECK(step.size() == 1 && step[0].What == WeaponJankEvent::Kind::GunPop && step[0].Size > 1.5f && step[0].State == "TacReload");
+    // The same step flagged as a shot's kick: nothing.
+    auto kick = run([](int i) { return glm::vec3(i >= 20 ? 0.02f : 0.0f, 0, 0); }, [](WeaponJankFrame& f, int i) { f.Recoil = i >= 18 && i < 30; });
+    CHECK(kick.empty());
+    // 7 cm slid in slowly half a second into the Idle: a settle of about 7 cm.
+    auto slide = run([](int i) { const float t = std::clamp((i - 90) / 25.0f, 0.0f, 1.0f); return glm::vec3(0, 0.07f * t * t * (3.0f - 2.0f * t), 0); }, none);
+    bool settled = false;
+    for (const WeaponJankEvent& e : slide) settled = settled || (e.What == WeaponJankEvent::Kind::Settle && e.Size > 5.0f && e.State == "Idle");
+    CHECK(settled);
+    // The same slide in the reload (not a resting state): the action's own move, nothing.
+    auto inAction = run([](int i) { const float t = std::clamp((i - 20) / 25.0f, 0.0f, 1.0f); return glm::vec3(0, 0.07f * t * t * (3.0f - 2.0f * t), 0); }, none);
+    CHECK(inAction.empty());
+    // The left hand 3 cm off its grip for a stretch: one Grip event on that side.
+    auto grip = run([](int) { return glm::vec3(0.0f); }, [](WeaponJankFrame& f, int i) { if (i > 40 && i < 50) f.HandGap[0] = 0.03f; });
+    CHECK(grip.size() == 1 && grip[0].What == WeaponJankEvent::Kind::Grip && grip[0].Side == 0 && std::abs(grip[0].Size - 3.0f) < 0.01f);
+}
+
+// The shoulder lock (FirstPersonGunSeat), shared by the player's world body and the soldiers: a shouldered butt goes into
+// the pocket, a gun through the neck comes out of it, and the move is never more than Max Shift.
+void TestFirstPersonGunSeat() {
+    FirstPersonGunSeatBody body;
+    body.UpperL = glm::vec3(0.19f, 1.43f, 0.0f);
+    body.UpperR = glm::vec3(-0.19f, 1.43f, 0.0f);
+    body.Neck = glm::vec3(0.0f, 1.52f, 0.0f);
+    body.Head = glm::vec3(0.0f, 1.62f, 0.0f);
+    FirstPersonWorldGunInput gun;
+    gun.Pocket = glm::vec3(-0.06f, -0.045f, 0.03f);
+    gun.Shouldered = 1.0f;
+    gun.MeshClearance = 0.0f;
+    gun.NeckRadius = 0.09f;
+    gun.HeadRadius = 0.14f;
+    gun.GunLength = 0.45f;
+    gun.MaxShift = 0.3f;
+    const glm::vec3 up(0.0f, 1.0f, 0.0f);
+    const glm::vec3 right = glm::normalize(body.UpperR - body.UpperL);
+    const glm::vec3 front = glm::normalize(glm::cross(up, right));
+    const glm::vec3 pocket = body.UpperR + right * gun.Pocket.x + up * gun.Pocket.y + front * gun.Pocket.z;
+    // Shouldered, 5 cm over the pocket, pointing ahead and clear of the neck: seated, exactly.
+    gun.ButtWorld = pocket + up * 0.05f;
+    gun.ForwardWorld = front;
+    glm::vec3 shift = FirstPersonGunSeat(gun, body);
+    CHECK(glm::length(gun.ButtWorld + shift - pocket) < 1e-4f);
+    // Not shouldered: left where it is.
+    gun.Shouldered = 0.0f;
+    shift = FirstPersonGunSeat(gun, body);
+    CHECK(glm::length(shift) < 1e-5f);
+    // Through the neck (unshouldered): out of the neck sphere.
+    gun.ButtWorld = body.Neck - front * 0.1f;
+    shift = FirstPersonGunSeat(gun, body);
+    const glm::vec3 a = gun.ButtWorld + shift, b = a + front * gun.GunLength;
+    const float t = std::clamp(glm::dot(body.Neck - a, b - a) / glm::dot(b - a, b - a), 0.0f, 1.0f);
+    CHECK(glm::length(a + (b - a) * t - body.Neck) >= gun.NeckRadius - 1e-3f);
+    // Never more than Max Shift.
+    gun.Shouldered = 1.0f;
+    gun.ButtWorld = pocket + up * 2.0f;
+    gun.MaxShift = 0.1f;
+    CHECK(glm::length(FirstPersonGunSeat(gun, body)) <= 0.1f + 1e-5f);
+}
+
 // The third-person hold (FirstPersonPresentation::ThirdPersonGunCorrection): each weapon's controller plays an
 // "arms3p" clip wherever it plays an "arms" one - that clip's ThirdPerson/ *_A_3P_* version (tools/weapons/add_3p_track.py).
 void TestThirdPersonArmsTrack() {
@@ -3761,6 +3866,10 @@ void TestThirdPersonArmsTrack() {
     }
 }
 
+// The Remington 870's own controller (project/assets/Weapons/Remington870), driven the way
+// FirstPersonPresentation drives it - every state 1 s long: the pump after a round, a reload loading
+// one shell per LoadRound until LastRound, an empty start chambering its round, the trigger stopping a
+// reload after the shell in hand, and a swapped-in weapon drawing out of Holstered.
 void TestRemingtonController() {
     namespace K = FirstPersonAnimatorContract;
     const std::string path = ProjectPaths::Resolve("assets/Weapons/Remington870/Remington870.controller");
@@ -5517,6 +5626,9 @@ int RunUnitTests(const char* filter) {
         {"Sprint transition additive walk", TestSprintTransitionWalk},
         {"RemingtonController", TestRemingtonController},
         {"ThirdPersonArmsTrack", TestThirdPersonArmsTrack},
+        {"FirstPersonGunSeat", TestFirstPersonGunSeat},
+        {"WeaponJankMeter", TestWeaponJankMeter},
+        {"FirstPersonHandAnchor", TestFirstPersonHandAnchor},
         {"FirstPersonAds", TestFirstPersonAds},
         {"BulletHoles", TestBulletHoles},
         {"ShellCasings", TestShellCasings},

@@ -13,6 +13,7 @@
 #include "Game/Scripting/ScriptRuntime.h"
 #include "Game/Scripting/PlayerDefinition.h"
 #include "FirstPersonWeaponTest.h" // --weapon-test
+#include "WeaponLab.h"            // --weapon-lab
 #include "BodyDebugDraw.h"
 #include "FirstPersonBody.h"
 #include "World.h"
@@ -454,6 +455,14 @@ int main(int argc, char** argv) {
     // the weapon (default the Remington) held through pitches, turns, rounds and the sights, the butt measured
     // against the body; with --smoke-shots each capture is the Scene view (on the gun and shoulder) beside the Game view.
     bool stockProbeMode = false, stockProbeAk = false;
+    // --weapon-lab (run-weapon-lab.cmd): the editor on the WeaponLab scene, the Scene view (the world body) beside the Game
+    // view, and the Weapon Lab panel (WeaponLab) - the third-person weapon animations worked on by hand.
+    bool weaponLabMode = false;
+    {
+#pragma warning(suppress : 4996)
+        const char* lab = std::getenv("TARTARUS_WEAPON_LAB"); // run-weapon-lab.cmd (its launcher starts the exe without arguments)
+        weaponLabMode = lab && *lab && *lab != '0';
+    }
     // --npc-test [watch|fight|die]: the smoke harness on scenes/Arena.json with the enemy squad played
     // against a scripted player (NpcTest) on a fixed 60 Hz step; with --smoke-shots the Scene view
     // follows the soldiers beside the Game view. Exit code 0 = every check passed.
@@ -548,6 +557,7 @@ int main(int argc, char** argv) {
         }
         else if (a == "--render-height" && i + 1 < argc) { renderHeightArg = std::max(0, std::atoi(argv[++i])); }
         else if (a == "--weapon-test") { smokeTestMode = true; weaponTestMode = true; }
+        else if (a == "--weapon-lab") { weaponLabMode = true; }
         else if (a == "--npc-test") {
             smokeTestMode = true; npcTestMode = true;
             if (i + 1 < argc && argv[i + 1][0] != '-') npcTestScenario = argv[++i];
@@ -989,6 +999,8 @@ int main(int argc, char** argv) {
         Player player;
         FirstPersonPresentation firstPersonPresentation;
         std::unique_ptr<FirstPersonWeaponTest> weaponTest;
+        std::unique_ptr<WeaponLab> weaponLab;
+        if (weaponLabMode) weaponLab = std::make_unique<WeaponLab>();
         if (weaponTestMode) weaponTest = std::make_unique<FirstPersonWeaponTest>(stockProbeMode, stockProbeAk);
         std::unique_ptr<NpcTest> npcTest;
         if (npcTestMode) npcTest = std::make_unique<NpcTest>(npcTestScenario);
@@ -1395,6 +1407,7 @@ int main(int argc, char** argv) {
             if (!editorShotIDE && !last.empty() && !std::filesystem::path(ProjectPaths::Relativize(last)).is_absolute() && std::filesystem::exists(last, sceneEc) && !sceneEc)
                 scenePath = last;
             if (playerMode && !playerCfg.Scenes.empty()) scenePath = ProjectPaths::Resolve(playerCfg.Scenes.front());
+            if (weaponLabMode) scenePath = ProjectPaths::Resolve("scenes/WeaponLab.json");
         }
         AssetLibrary assets;
 
@@ -1580,7 +1593,7 @@ int main(int argc, char** argv) {
 
         EditorLayer editor;
         // --stock-probe captures the Scene view (the body) beside the Game view (the first-person view).
-        if (stockProbeMode || npcTestMode) editor.RequestSceneGameSplit();
+        if (stockProbeMode || npcTestMode || weaponLabMode) editor.RequestSceneGameSplit();
         editor.Init(window.Handle());
         editor.SetHeadless(headless);
         // #148: a hard crash (access violation, stack overflow, abort...) never reaches the
@@ -2101,6 +2114,7 @@ int main(int argc, char** argv) {
         };
         auto stopPlay = [&]() {
             if (!playing) return;
+            if (weaponLab) weaponLab->OnPlayStopped();
             Scripting::Stop(&world,&assets);
             // Runtime-only arms/weapon entities were created after the play snapshot. Remove
             // them before restoring the authored world so they can never be serialized or leak
@@ -2833,7 +2847,7 @@ int main(int argc, char** argv) {
             // #144: `dt` is unscaled (editor camera, UI, capture polling - never slowed or frozen
             // by the game's time scale); `gameDt` is the scaled step every Play system uses.
             Time::SetMaximumDeltaTime(ProjectSettings::Time().MaximumDeltaTime);
-            Time::SetDebugTimeScale(EditorSettings::Get().PhysicsSimTimeScale);
+            Time::SetDebugTimeScale(EditorSettings::Get().PhysicsSimTimeScale * (weaponLab && playing ? weaponLab->TimeScale() : 1.0f));
             // VSync on: the frames are shown on the monitor's refresh, so the game steps in whole refreshes
             // (see Time::SetRefreshPeriod). Adaptive VSync tears late frames, so it is left as measured.
             {
@@ -2911,7 +2925,9 @@ int main(int argc, char** argv) {
             // Pause (F2 / toolbar) and single-frame Step (F3 / toolbar). The toolbar requests are
             // raised during the previous frame's editor draw; consuming them here folds them into
             // the same state the keys drive, one frame later.
-            if (playing && !playerMode && ((!editor.ScriptIDEHasKeyboardFocus() && Shortcuts::TriggeredGlfw("play.pause")) || editor.ConsumePauseToggleRequest()))
+            if (weaponLab) weaponLab->HandleKeys(window.Handle());
+            if (playing && !playerMode && ((!editor.ScriptIDEHasKeyboardFocus() && Shortcuts::TriggeredGlfw("play.pause")) || editor.ConsumePauseToggleRequest() ||
+                                           (weaponLab && weaponLab->ConsumePauseToggle())))
                 paused = !paused;
             // #236 A5 — Error Pause: freeze the sim the frame a fresh error lands.
             if (playing && !paused && !playerMode && EditorModuleHost::ConsoleState().ErrorPause) {
@@ -2923,7 +2939,8 @@ int main(int argc, char** argv) {
             }
             errPauseSeen = Log::CountOf(LogLevel::Error);
             bool stepThisFrame = playing && paused &&
-                ((!editor.ScriptIDEHasKeyboardFocus() && Shortcuts::TriggeredGlfw("play.step")) || editor.ConsumeStepRequest());
+                ((!editor.ScriptIDEHasKeyboardFocus() && Shortcuts::TriggeredGlfw("play.step")) || editor.ConsumeStepRequest() ||
+                 (weaponLab && weaponLab->ConsumeStep()));
             // Mirrors the toolbar's Fullscreen/Restore button — maximize the Game view over
             // the editor panels (only meaningful while playing; setMaximized no-ops otherwise).
             if (playing && !playerMode && !editor.ScriptIDEHasKeyboardFocus() && Shortcuts::TriggeredGlfw("play.maximize")) setMaximized(!playMaximized);
@@ -3161,7 +3178,7 @@ int main(int argc, char** argv) {
                     if (npcTest) npcTest->Drive(player, firstPersonPresentation, npcDirector, playerVitals, gameDt);
                     player.AimHeld=firstPersonPresentation.IsActive() && firstPersonPresentation.IsEquipped() && !playerVitals.IsDead() &&
                         (weaponTest?weaponTest->Aim():((gameHasInput && InputMap::GetButton("Fire2")) || (npcTest && npcTest->Aiming())));
-                    player.SprintBlocked=firstPersonPresentation.ReloadBlocksSprint();
+                    player.SprintBlocked=firstPersonPresentation.ActionBlocksSprint();
                     player.Update(gameDt, world, window.Handle(), gameHasInput && !playerVitals.IsDead());
                     // Before the body places itself: it is the controller's child, posed in world space.
                     if (playControllerEntity != entt::null && world.Registry.valid(playControllerEntity)) {
@@ -3303,12 +3320,26 @@ int main(int argc, char** argv) {
                     // The body's hands onto the arms rig's, now that the rig is seated.
                     // Split poses: the body's world twins hold the world gun, the first-person one carried to its
                     // third-person hold and by their chest.
+                    // The shoulder lock seats that world gun on the twin's shoulder (FirstPersonGunSeat).
+                    FirstPersonWorldGunInput worldGun;
+                    const bool haveWorldGun = firstPersonPresentation.IsActive() && firstPersonPresentation.WorldGunInput(worldGun);
+                    // A reload's pouch and shells: the world body's free hand held to its chest (FirstPersonBody's hand anchor).
+                    FirstPersonHandAnchor handAnchor;
+                    const bool haveAnchor = firstPersonPresentation.IsActive() && firstPersonPresentation.HandAnchor(handAnchor);
                     firstPersonBody.ArmsLateUpdate(world, firstPersonPresentation.ArmsEntity(),
                                                    firstPersonPresentation.ViewModelFov(), gameDt, &player.Cam,
-                                                   firstPersonPresentation.ThirdPersonGunCorrection());
-                    if (firstPersonPresentation.IsActive())
-                        firstPersonPresentation.PlaceWorldWeapon(world, firstPersonBody.SplitPoses(), firstPersonBody.WorldGunDelta());
+                                                   firstPersonPresentation.ThirdPersonGunCorrection(), haveWorldGun ? &worldGun : nullptr,
+                                                   firstPersonPresentation.ThirdPersonArms(), firstPersonPresentation.GunSocket(),
+                                                   haveAnchor ? &handAnchor : nullptr);
+                    if (firstPersonPresentation.IsActive()) {
+                        glm::mat4 holdingHand(1.0f);
+                        const bool haveHolding = haveAnchor && firstPersonBody.BoneWorldMatrix(world, handAnchor.Hand, holdingHand);
+                        firstPersonPresentation.PlaceWorldWeapon(world, firstPersonBody.SplitPoses(), firstPersonBody.WorldGunDelta(),
+                                                                 firstPersonBody.CarriedMove(), firstPersonBody.TwinAnchorWeight(),
+                                                                 firstPersonBody.CarriedHand(), haveHolding ? &holdingHand : nullptr);
+                    }
                     if (weaponTest) weaponTest->AfterPose(world, firstPersonBody, firstPersonPresentation);
+                    if (weaponLab) weaponLab->AfterPose(world, firstPersonBody, firstPersonPresentation, player.Cam, gameDt);
                     // This frame's rounds, down the bore from the muzzle: a hole where each struck.
                     for (const FirstPersonPresentation::ShotHit& hit : firstPersonPresentation.TakeShotHits()) {
                         if (weaponTest) weaponTest->OnHit(hit.Point);
@@ -5070,7 +5101,13 @@ int main(int argc, char** argv) {
                 const std::string recordDir = npcTest ? npcTest->RecordDir() : (weaponTest ? weaponRecordDir : std::string());
                 if ((npcTest || weaponTest) && playing && !recordDir.empty()) {
                     static int recordFrame = 0;
-                    const int recordStep = npcTest ? npcTest->RecordStep() : 2;
+                    // (NPC_TEST_RECORD_STEP=1 under --stock-probe: every frame, 60 fps - the jank sweep's pops last one frame.)
+                    static const int weaponRecordStep = [] {
+#pragma warning(suppress : 4996)
+                        const char* r = std::getenv("NPC_TEST_RECORD_STEP");
+                        return r ? std::max(1, std::atoi(r)) : 2;
+                    }();
+                    const int recordStep = npcTest ? npcTest->RecordStep() : weaponRecordStep;
                     if ((recordFrame++ % recordStep) == 0) {
                         std::error_code ec;
                         std::filesystem::create_directories(recordDir, ec);
@@ -5084,6 +5121,12 @@ int main(int argc, char** argv) {
                             stbi_flip_vertically_on_write(0);
                         };
                         save(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight, "game");
+                        // Which step each frame belongs to (index.txt: frame, step), to cut the video by action.
+                        if (weaponTest)
+                            if (FILE* idx = std::fopen((std::filesystem::path(recordDir) / "index.txt").string().c_str(), "a")) {
+                                std::fprintf(idx, "%05d %s\n", recordFrame / recordStep, weaponTest->StepName().c_str());
+                                std::fclose(idx);
+                            }
                         if (sceneFramebuffer.IsValid()) save(sceneFramebuffer.Handle(), sceneFramebuffer.Width(), sceneFramebuffer.Height(), "scene");
                         glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
                     }
@@ -5132,6 +5175,7 @@ int main(int argc, char** argv) {
                     }
                     gameView.RenderUI(&gameViewStats, window.IsFullscreen(), playing, gameInputEngaged,
                                       /*noSceneCamera=*/!playing && FindActiveSceneCamera(world) == entt::null);
+                    if (weaponLab) weaponLab->DrawPanel(&firstPersonPresentation, playing);
 
                     // Hand the editor this frame's Game-view image rect + framebuffer so the Play-Mode
                     // Stop/Fullscreen overlay can sit over the game viewport and adapt its tint to it.
@@ -5458,6 +5502,16 @@ int main(int argc, char** argv) {
 
             // Count this frame toward the active scene's quota; once it's rendered enough,
             // score it (new GL errors + draw count) and advance to the next scene.
+            // --weapon-lab: the Scene view on the world body, from the side the Weapon Lab panel picked (next frame's).
+            if (weaponLab && playing) {
+                glm::vec3 p;
+                float yaw, pitch;
+                if (weaponLab->SceneCamera(p, yaw, pitch)) {
+                    editorCamera.Position = p;
+                    editorCamera.Yaw = yaw;
+                    editorCamera.Pitch = pitch;
+                }
+            }
             if (smokeTestMode && smokeSceneActive) {
                 ++smokeFramesRendered;
                 if (!outfitShotsDir.empty()) {
@@ -5494,7 +5548,10 @@ int main(int argc, char** argv) {
                             const std::string n = safe(g->Name.empty() ? "character" + std::to_string(g - guys.data()) : g->Name);
                             outfitShots.push_back({n + "_front", g->P + glm::vec3(0.0f, 0.95f, 1.9f), -90.0f, 0.0f});
                             outfitShots.push_back({n + "_back", g->P + glm::vec3(0.0f, 0.95f, -1.9f), 90.0f, 0.0f});
-                            outfitShots.push_back({n + "_head", g->P + glm::vec3(0.0f, 1.62f, 0.55f), -90.0f, 0.0f});
+                            // TARTARUS_SHOT_HEAD_DISTANCE=<m>: the head shot from closer (the eyes), default 0.55.
+                            const char* headDist = std::getenv("TARTARUS_SHOT_HEAD_DISTANCE");
+                            const float hd = headDist ? std::clamp((float)std::atof(headDist), 0.1f, 2.0f) : 0.55f;
+                            outfitShots.push_back({n + "_head", g->P + glm::vec3(0.0f, 1.62f + (0.55f - hd) * 0.2f, hd), -90.0f, 0.0f});
                             outfitShots.push_back({n + "_headback", g->P + glm::vec3(0.0f, 1.75f, -0.55f), 90.0f, -12.0f});
                             if ((int)outfitShots.size() + 4 > kOutfitShotMax) break;
                         }

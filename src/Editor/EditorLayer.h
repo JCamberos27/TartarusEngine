@@ -1289,6 +1289,7 @@ private:
     bool m_LockViewToSelection = false;    // Shift+F: camera position tracks the selection centroid (no reframing).
     glm::vec3 m_LockViewCentroid{0.0f};
     bool m_LockViewHasCentroid = false;
+    std::vector<entt::entity> m_LockViewSelection; // what the centroid was measured on: another selection re-arms it
     bool m_HandPanActive = false;         // a Hand-tool left-drag is in progress (started over the viewport)
     // Live gizmo drag readout: the transform at the instant a drag began, for the delta text.
     glm::vec3 m_GizmoDragStartPos{0.0f};

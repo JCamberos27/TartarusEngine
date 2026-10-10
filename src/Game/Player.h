@@ -77,7 +77,7 @@ public:
     glm::vec2 ScriptMove{0.0f};
     bool ScriptSprint = false;
     bool AimHeld = false; // weapon aim intent blocks sprint without consuming the held sprint input
-    bool SprintBlocked = false; // reload suspension; the held/scripted sprint intent remains available
+    bool SprintBlocked = false; // reload / mag check / inspect / melee suspension; the held/scripted sprint intent remains available
     bool ScriptCrouch = false; // ... and Crouch
 
     // readInput == false keeps the body simulating (gravity, collision, resting on geometry)

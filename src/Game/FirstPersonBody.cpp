@@ -285,6 +285,66 @@ float FirstPersonBodyClearPush(const std::vector<glm::vec3>& points, const glm::
     return maxPush;
 }
 
+glm::vec3 FirstPersonGunSeat(const FirstPersonWorldGunInput& gun, const FirstPersonGunSeatBody& body, glm::vec3* meshPush,
+                             const glm::vec3* cachedMeshPush) {
+    const glm::vec3 up(0.0f, 1.0f, 0.0f);
+    glm::vec3 across = body.UpperR - body.UpperL;
+    across.y = 0.0f;
+    const glm::vec3 right = glm::length(across) > 1e-4f ? glm::normalize(across) : glm::vec3(1.0f, 0.0f, 0.0f);
+    const glm::vec3 front = glm::normalize(glm::cross(up, right));
+    // The butt into the right shoulder pocket while shouldered.
+    const glm::vec3 pocket = body.UpperR + right * gun.Pocket.x + up * gun.Pocket.y + front * gun.Pocket.z;
+    glm::vec3 shift = (pocket - gun.ButtWorld) * std::clamp(gun.Shouldered, 0.0f, 1.0f);
+    // Keep-outs: the neck, and the head (with a hood on it) centred a little over the head bone.
+    const glm::vec3 fwd = glm::length(gun.ForwardWorld) > 1e-4f ? glm::normalize(gun.ForwardWorld) : front;
+    const struct { glm::vec3 Centre; float Radius; } keepOut[2] = {{body.Neck, gun.NeckRadius}, {body.Head + up * 0.07f, gun.HeadRadius}};
+    for (int pass = 0; pass < 4; ++pass)
+        for (const auto& k : keepOut) {
+            const glm::vec3 a = gun.ButtWorld + shift, b = a + fwd * gun.GunLength;
+            const glm::vec3 ab = b - a;
+            const float t = std::clamp(glm::dot(k.Centre - a, ab) / std::max(glm::dot(ab, ab), 1e-9f), 0.0f, 1.0f);
+            glm::vec3 away = a + ab * t - k.Centre;
+            const float d = glm::length(away);
+            if (d >= k.Radius) continue;
+            away = d > 1e-4f ? away / d : right; // dead on: out to the gun's side
+            shift += away * (k.Radius - d);
+        }
+    // The drawn head, neck and hood, whatever the outfit (the spheres are only their rough shape): straight out from the
+    // hood sphere's centre, as far as it takes. On the sights the cheek is welded onto the stock, 2.5 cm off it: kept the
+    // full Mesh Clearance away there, a crouched head (low over the gun) pushed the butt down off the shoulder.
+    const glm::vec3 beforeMesh = shift;
+    const float headClearance = glm::mix(gun.MeshClearance, std::min(gun.MeshClearance, 0.025f), std::clamp(gun.CheekWeld, 0.0f, 1.0f));
+    if (body.HeadPoints && headClearance > 0.0f) {
+        const glm::vec3 a = gun.ButtWorld + shift, b = a + fwd * gun.GunLength;
+        const glm::vec3 centre = keepOut[1].Centre;
+        const glm::vec3 ab = b - a;
+        const float t = std::clamp(glm::dot(centre - a, ab) / std::max(glm::dot(ab, ab), 1e-9f), 0.0f, 1.0f);
+        glm::vec3 away = a + ab * t - centre;
+        away = glm::length(away) > 1e-4f ? glm::normalize(away) : right;
+        const float room = std::max(0.0f, gun.MaxShift - glm::length(shift));
+        shift += away * FirstPersonBodyClearPush(*body.HeadPoints, a, b, away, headClearance, room, 0.01f);
+    }
+    // ... and the drawn torso whenever the butt isn't in the pocket (a reload tucks it under the arm; looking steeply
+    // down, a shouldered stock would lie down the chest): straight out from the chest, by that weight.
+    if (body.TorsoPoints && body.Chest && gun.MeshClearance > 0.0f && gun.TorsoKeepOut > 1e-3f) {
+        const glm::vec3 a = gun.ButtWorld + shift, b = a + fwd * gun.GunLength;
+        const glm::vec3 ab = b - a;
+        const float t = std::clamp(glm::dot(*body.Chest - a, ab) / std::max(glm::dot(ab, ab), 1e-9f), 0.0f, 1.0f);
+        glm::vec3 away = a + ab * t - *body.Chest;
+        away = glm::length(away) > 1e-4f ? glm::normalize(away) : front;
+        const float room = std::max(0.0f, gun.MaxShift - glm::length(shift));
+        shift += away * FirstPersonBodyClearPush(*body.TorsoPoints, a, b, away, gun.MeshClearance, room, 0.01f) *
+                 std::clamp(gun.TorsoKeepOut, 0.0f, 1.0f);
+    }
+    if (body.HeadPoints || body.TorsoPoints) {
+        if (meshPush) *meshPush = shift - beforeMesh;
+    } else if (cachedMeshPush) {
+        shift += *cachedMeshPush;
+    }
+    if (const float len = glm::length(shift); len > gun.MaxShift && len > 1e-6f) shift *= gun.MaxShift / len;
+    return shift;
+}
+
 namespace {
 // The elbow-gap points as structure-of-arrays, padded to a multiple of 4 with far-off dummies, for
 // the SSE loop below: the swivel search measures a few thousand torso points at up to 37 angles.
@@ -1342,6 +1402,13 @@ bool FirstPersonBody::FootHeights(const World& world, float (&out)[2]) const {
 }
 
 bool FirstPersonBody::BoneWorld(const World& world, const std::string& standard, glm::vec3& out, bool worldTwins) const {
+    glm::mat4 m(1.0f);
+    if (!BoneWorldMatrix(world, standard, m, worldTwins)) return false;
+    out = glm::vec3(m[3]);
+    return true;
+}
+
+bool FirstPersonBody::BoneWorldMatrix(const World& world, const std::string& standard, glm::mat4& out, bool worldTwins) const {
     if (!IsActive() || !world.Registry.valid(m_Body)) return false;
     const auto& reg = world.Registry;
     std::string want = reg.get<FirstPersonBodyComponent>(m_Body).ArmsPiece;
@@ -1362,7 +1429,7 @@ bool FirstPersonBody::BoneWorld(const World& world, const std::string& standard,
             if (pass == 0 ? !isArms(k) : m_Pieces[k] != m_Driver) continue;
             glm::mat4 n(1.0f);
             if (!models[k]->NodeTransform(Bone(standard), n)) continue;
-            out = glm::vec3(world.ComposeWorldTransform(ents[k]) * n[3]);
+            out = world.ComposeWorldTransform(ents[k]) * n;
             return true;
         }
     return false;
@@ -1869,12 +1936,29 @@ void FirstPersonBody::ArmTwist(const std::vector<std::shared_ptr<Model>>& models
         if (mp) m_ArmTwist.Apply(*mp, twins ? m_WristRoll : nullptr, twins ? m_WristResidual : nullptr);
 }
 
+float FirstPersonAnchorWeight(float distance, float nearDist, float farDist) {
+    if (farDist <= nearDist) return distance > nearDist ? 1.0f : 0.0f;
+    const float x = std::clamp((distance - nearDist) / (farDist - nearDist), 0.0f, 1.0f);
+    return x * x * (3.0f - 2.0f * x);
+}
+
+glm::mat4 FirstPersonPartialMove(const glm::mat4& move, const glm::mat4& m, float weight) {
+    const glm::vec3 scale(glm::length(glm::vec3(m[0])), glm::length(glm::vec3(m[1])), glm::length(glm::vec3(m[2])));
+    const glm::quat turn = glm::slerp(glm::quat(1.0f, 0.0f, 0.0f, 0.0f), IK::Rotation(move), weight);
+    const glm::vec3 from(m[3]), to(move * m[3]);
+    glm::mat4 out = glm::translate(glm::mat4(1.0f), glm::mix(from, to, weight)) * glm::mat4_cast(glm::normalize(turn * IK::Rotation(m)));
+    for (int c = 0; c < 3; ++c) out[c] *= scale[c];
+    return out;
+}
+
 namespace {
 constexpr float kWorldGunChestTurn = 0.3f; // how much of the world body's chest turn (off the player's own) the world gun takes
 } // namespace
 
 void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, float viewModelFov, float dt, const Camera* camera,
-                                     const glm::mat4& thirdPersonGun) {
+                                     const glm::mat4& thirdPersonGun, const FirstPersonWorldGunInput* gun,
+                                     const Model* thirdPersonRig, const std::string& gunSocket,
+                                     const FirstPersonHandAnchor* handAnchor) {
     if (!IsActive()) return;
     auto& reg = world.Registry;
     if (!reg.valid(m_Body)) return;
@@ -1946,6 +2030,10 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
         m_WorldHaveElbowAim[0] = m_WorldHaveElbowAim[1] = false;
         m_WorldElbowClear[0] = m_WorldElbowClear[1] = 0.0f;
         m_WorldGunDelta = glm::mat4(1.0f);
+        m_WorldGunShift = m_WorldGunShiftLocal = glm::vec3(0.0f);
+        m_FreeHand = m_TwinAnchorWeight = 0.0f;
+        m_CarriedMove = glm::mat4(1.0f);
+        m_WorldHeadTiltDeg = m_WorldHeadTiltWeight = 0.0f;
         if (!m_Twins.empty()) PlaceHeadAttachedTwins(world);
         return;
     }
@@ -1989,6 +2077,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
         }
     }
 
+    const Model* shapeRig = rig; // whose arm shapes and fingers the solve copies: the rig's, the 3P clips' for the twins
     // The arms onto the hands in handPos / handRot: the pieces (first person), then - with the targets
     // moved to the world gun - the twins. Each keeps its own steadiness and elbow state.
     auto solveArms = [&](const std::vector<std::shared_ptr<Model>>& models, const std::vector<entt::entity>& ents,
@@ -2059,7 +2148,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
 
             // The rig's arm shapes first, so the elbows bend the way the animation has them; the solve
             // then only fixes the hands.
-            CopyArmShapeCached(m, *rig, m_ArmsWeight, pose, parents, cfg.ClavicleFollow);
+            CopyArmShapeCached(m, *shapeRig, m_ArmsWeight, pose, parents, cfg.ClavicleFollow);
 
             const glm::mat4 toModel = glm::inverse(pieceWorld);
             // The first piece in `order` works the shoulder moves out; the rest copy them. (What of the torso's
@@ -2183,8 +2272,14 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                         const glm::vec3 outward = s == 0 ? -kRight : kRight; // the upper arm's side (_l is the body's left)
                         glm::vec3 pole = glm::vec3(0.0f, -1.0f, 0.0f) + outward * 0.5f;
                         pole -= axis * glm::dot(pole, axis);
-                        glm::vec3 aim = rigTrust > 0.0f ? glm::normalize(want) * rigTrust : glm::vec3(0.0f);
-                        if (glm::dot(pole, pole) > 1e-8f) aim += glm::normalize(pole) * (1.0f - rigTrust);
+                        // The world body's support arm on the gun: the first-person clips wing that elbow out to the side,
+                        // for the camera - from outside, a forearm level with the gun and the elbow at shoulder height.
+                        // There it hangs down under the gun instead (kFirstPersonSupportHang of the way), and goes back to
+                        // the clip's plane as the hand leaves the gun (a reload's reach).
+                        const float hang = !debug && s == 0 ? kFirstPersonSupportHang * (1.0f - std::clamp(m_FreeHand, 0.0f, 1.0f)) : 0.0f;
+                        const float trust = rigTrust * (1.0f - hang);
+                        glm::vec3 aim = trust > 0.0f ? glm::normalize(want) * trust : glm::vec3(0.0f);
+                        if (glm::dot(pole, pole) > 1e-8f) aim += glm::normalize(pole) * (1.0f - trust);
                         // Where the elbow heads is eased, and turns at most so fast: the rig's clips jump (the melee's
                         // 2-frame blend in), and in a tight fold - the melee's recovery, the body's shoulder nearer the
                         // gun than the rig's - the aim swings as fast as the shoulder-to-hand line does. Followed
@@ -2284,8 +2379,177 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                 m_WorldGunDelta = glm::translate(glm::mat4(1.0f), to) * glm::mat4_cast(turn) * glm::translate(glm::mat4(1.0f), -from);
             }
         }
-        const glm::mat4 chestDelta = m_WorldGunDelta;
+        // The blade (kFirstPersonTwinBlade), shouldered: the chest further side-on, the head back to the view. After the gun
+        // has taken its share of the chest's turn above - the gun keeps its aim; the shoulders turn under it. Not the pelvis:
+        // the legs stay as the clips plant them. The gun goes where the turn takes the right shoulder: its butt rides that
+        // shoulder (left to the shoulder lock, the shift ran out crouched - the stock hung under the pocket).
+        glm::vec3 bladeShift(0.0f);
+        auto driverBone = [&](const char* bone, glm::vec3& out) {
+            for (size_t k = 0; k < m_Pieces.size() && k < m_TwinModels.size(); ++k) {
+                glm::mat4 n(1.0f);
+                if (m_Pieces[k] == m_Driver && m_TwinModels[k] && reg.valid(m_Twins[k]) && m_TwinModels[k]->NodeTransform(Bone(bone), n)) {
+                    out = glm::vec3(world.ComposeWorldTransform(m_Twins[k]) * n[3]);
+                    return true;
+                }
+            }
+            return false;
+        };
+        auto gunShoulder = [&](glm::vec3& out) { return driverBone(FPBody::kBoneUpperArm[1], out); };
+        IK::SpineDistribution twinSpine = m_Spine;
+        twinSpine.PelvisAlpha = 0.0f;
+        const char* const* kSpine = FPBody::kBoneSpine;
+        // Not crouched: hunched over the gun the stock already sits low, and turned as well it fell out of the pocket.
+        if (const float blade = gun ? glm::radians(kFirstPersonTwinBlade) * std::clamp(gun->Shouldered, 0.0f, 1.0f) * std::clamp(m_ArmsWeight, 0.0f, 1.0f) *
+                                          (1.0f - std::clamp(m_SpineCrouch, 0.0f, 1.0f))
+                                    : 0.0f;
+            blade > 1e-4f) {
+            glm::vec3 before(0.0f), after(0.0f);
+            const bool haveBefore = gunShoulder(before);
+            const glm::vec3 up(0.0f, 1.0f, 0.0f);
+            RotateChain({kSpine[0], kSpine[1], kSpine[2], kSpine[3], kSpine[4]}, [&](float n) { return glm::angleAxis(-blade / n, up); },
+                        &m_TwinModels, &twinSpine);
+            RotateChain({"neck_01", "neck_02", cfg.HeadBone}, [&](float n) { return glm::angleAxis(blade / n, up); }, &m_TwinModels, nullptr);
+            if (haveBefore && gunShoulder(after)) bladeShift = after - before;
+        }
+        // Crouched on the sights (kFirstPersonCrouchAimUpright): the spine pitched back over the hips, the head forward by
+        // the same, the gun with the shoulder - the stock then comes into the pocket, the cheek onto the stock.
+        if (const float upright = gun ? glm::radians(kFirstPersonCrouchAimUpright) * std::clamp(m_SpineCrouch, 0.0f, 1.0f) *
+                                            std::clamp(gun->CheekWeld, 0.0f, 1.0f) * std::clamp(m_ArmsWeight, 0.0f, 1.0f)
+                                      : 0.0f;
+            upright > 1e-4f) {
+            glm::vec3 thighL(0.0f), thighR(0.0f), before(0.0f), after(0.0f);
+            if (driverBone(FPBody::kBoneThigh[0], thighL) && driverBone(FPBody::kBoneThigh[1], thighR)) {
+                glm::vec3 side = thighR - thighL; // the hips' right: about it a positive turn takes the top back
+                side.y = 0.0f;
+                glm::mat4 twinWorld(1.0f);
+                for (size_t k = 0; k < m_Pieces.size() && k < m_Twins.size(); ++k)
+                    if (m_Pieces[k] == m_Driver && reg.valid(m_Twins[k])) twinWorld = world.ComposeWorldTransform(m_Twins[k]);
+                side = glm::inverse(glm::mat3(twinWorld)) * side; // the chain turns in the model's space
+                if (glm::dot(side, side) > 1e-10f) {
+                    side = glm::normalize(side);
+                    const bool haveBefore = gunShoulder(before);
+                    // Evenly down the spine (the aim's distribution puts it high, in the chest, and hunched the neck over).
+                    RotateChain({kSpine[0], kSpine[1], kSpine[2], kSpine[3], kSpine[4]}, [&](float n) { return glm::angleAxis(upright / n, side); },
+                                &m_TwinModels, nullptr);
+                    RotateChain({"neck_01", "neck_02", cfg.HeadBone}, [&](float n) { return glm::angleAxis(-upright / n, side); }, &m_TwinModels, nullptr);
+                    if (haveBefore && gunShoulder(after)) bladeShift += after - before;
+                }
+            }
+        }
+        const glm::mat4 chestDelta = glm::translate(glm::mat4(1.0f), bladeShift) * m_WorldGunDelta;
         m_WorldGunDelta = chestDelta * rigWorld * thirdPersonGun * glm::inverse(rigWorld);
+        // The 3P clips' grip: their hands, elbows and fingers where they hold their gun, put on the first-person rig's gun
+        // (so its recoil, sway and sights still carry them), and from there carried with the world gun below. Where the 3P
+        // clips hold the gun as the first-person ones do this is the rig's own pose; where they don't - the support hand
+        // further back on the forend, its elbow under the gun - the world arms follow them.
+        glm::mat4 clipsOnGun(1.0f); // the 3P clips' model space as put on the rig's gun (world, before the hold below)
+        bool haveClips = false;
+        if (thirdPersonRig && !gunSocket.empty() && (int)thirdPersonRig->AppliedLocalPose().size() == thirdPersonRig->NodeCount()) {
+            glm::mat4 first(1.0f), third(1.0f);
+            if (rig->NodeTransform(gunSocket, first) && thirdPersonRig->NodeTransform(gunSocket, third)) {
+                const glm::mat4 onto = rigWorld * first * glm::inverse(third);
+                clipsOnGun = onto;
+                haveClips = true;
+                for (int s = 0; s < 2; ++s) {
+                    glm::mat4 h(1.0f), u(1.0f), l(1.0f);
+                    if (!thirdPersonRig->NodeTransform(kSides[s].Hand, h)) continue;
+                    const glm::mat4 w = onto * h;
+                    handPos[s] = glm::vec3(w[3]);
+                    handRot[s] = IK::Rotation(w);
+                    if (thirdPersonRig->NodeTransform(kSides[s].Upper, u) && thirdPersonRig->NodeTransform(kSides[s].Lower, l)) {
+                        rigShoulder[s] = glm::vec3(onto * u[3]);
+                        rigElbow[s] = glm::vec3(onto * l[3]);
+                    }
+                }
+                shapeRig = thirdPersonRig;
+            }
+        }
+
+        // The shoulder lock: the world gun's butt into the twin's right shoulder pocket while shouldered, and out of its
+        // neck, head and (unshouldered) torso - the soldiers' solve (FirstPersonGunSeat). Without it the gun only followed
+        // the camera's rig, and drifted off the shoulder and into the body as the view turned and the body moved.
+        int armsTwin = -1, driverTwin = -1;
+        for (size_t k = 0; k < m_Pieces.size() && k < m_Twins.size(); ++k) {
+            if (m_Pieces[k] == m_Driver) driverTwin = (int)k;
+            if (armsTwin < 0 && !armsName.empty() && reg.valid(m_Pieces[k]) && reg.all_of<NameComponent>(m_Pieces[k])) {
+                std::string name = reg.get<NameComponent>(m_Pieces[k]).Name;
+                for (char& c : name) c = (char)std::tolower((unsigned char)c);
+                if (name.find(armsName) != std::string::npos) armsTwin = (int)k;
+            }
+        }
+        if (armsTwin < 0) armsTwin = driverTwin;
+        auto twinPoint = [&](int k, const std::string& bone, glm::vec3& out) {
+            if (k < 0 || !reg.valid(m_Twins[k]) || !m_TwinModels[k]) return false;
+            glm::mat4 n(1.0f);
+            if (!m_TwinModels[k]->NodeTransform(Bone(bone), n)) return false;
+            out = glm::vec3(world.ComposeWorldTransform(m_Twins[k]) * n[3]);
+            return true;
+        };
+        // The world gun's butt and bore, where the hold and the chest have put it.
+        FirstPersonWorldGunInput seat;
+        if (gun) {
+            seat = *gun;
+            seat.ButtWorld = glm::vec3(m_WorldGunDelta * glm::vec4(gun->ButtWorld, 1.0f));
+            seat.ForwardWorld = glm::mat3(m_WorldGunDelta) * gun->ForwardWorld;
+        }
+        glm::vec3 shiftTarget(0.0f);
+        m_HeadPointBuffer.clear();
+        if (gun) {
+            PROFILE_SCOPE("FPB world gun seat");
+            FirstPersonGunSeatBody body;
+            if (twinPoint(armsTwin, FPBody::kBoneUpperArm[0], body.UpperL) && twinPoint(armsTwin, FPBody::kBoneUpperArm[1], body.UpperR) &&
+                twinPoint(driverTwin, "neck_01", body.Neck) && twinPoint(driverTwin, cfg.HeadBone, body.Head)) {
+                glm::vec3 chest(0.0f);
+                if (gun->MeshClearance > 0.0f) {
+                    SkinnedPoints(world, BodyRegion::Head, m_HeadPointBuffer);
+                    body.HeadPoints = &m_HeadPointBuffer;
+                    if (gun->TorsoKeepOut > 1e-3f && twinPoint(driverTwin, "spine_05", chest)) {
+                        SkinnedPoints(world, BodyRegion::Torso, m_TorsoPointBuffer);
+                        body.Chest = &chest;
+                        body.TorsoPoints = &m_TorsoPointBuffer;
+                    }
+                }
+                shiftTarget = FirstPersonGunSeat(seat, body) * std::clamp(m_ArmsWeight, 0.0f, 1.0f);
+            }
+        }
+        // Eased in the world body's frame: eased in the world's, turning on the spot left the gun 10 cm behind the pocket.
+        const glm::quat twinTurn = driverTwin >= 0 && reg.valid(m_Twins[driverTwin]) ? IK::Rotation(world.ComposeWorldTransform(m_Twins[driverTwin]))
+                                                                                    : glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+        m_WorldGunShiftLocal += (glm::inverse(twinTurn) * shiftTarget - m_WorldGunShiftLocal) * Follow(dt, 0.05f);
+        m_WorldGunShift = twinTurn * m_WorldGunShiftLocal;
+        BodyDebug::Info().WorldGunShift = glm::length(m_WorldGunShift);
+        m_WorldGunDelta = glm::translate(glm::mat4(1.0f), m_WorldGunShift) * m_WorldGunDelta;
+        seat.ButtWorld += m_WorldGunShift;
+        // The free hand off the gun (below): looking up or down, the gun comes kFirstPersonFreeHandLevel of the way back
+        // toward level about its butt, so the hand works on it in front of the chest - not overhead, at the sky. Level is
+        // the hold's own (its bore off the view, learned with both hands on): from dead level, the hip hold's droop came up
+        // through the reload and settled back down after it, a move of its own once the clip had ended.
+        // In with the state, as the hand sets off; out as the hand comes back onto its grip (once it has been off it), not when
+        // the state ends - looking up or down, the gun swung 20 degrees back to the aim after the reload was over.
+        const bool active = handAnchor && handAnchor->Active;
+        if (!active) m_FreeHandWasOff = false;
+        else if (handAnchor->Off > 0.9f) m_FreeHandWasOff = true;
+        const float freeTarget = active ? (m_FreeHandWasOff ? std::clamp(handAnchor->Off, 0.0f, 1.0f) : 1.0f) : 0.0f;
+        m_FreeHand += (freeTarget - m_FreeHand) * Follow(dt, 0.15f);
+        if (gun && glm::dot(seat.ForwardWorld, seat.ForwardWorld) > 1e-8f) {
+            const glm::vec3 fwd = glm::normalize(seat.ForwardWorld);
+            const glm::vec3 side = glm::cross(fwd, glm::vec3(0.0f, 1.0f, 0.0f));
+            const float pitch = std::asin(std::clamp(fwd.y, -1.0f, 1.0f)); // up is positive; about `side` a positive turn raises it
+            if (camera && m_FreeHand < 1e-3f && gun->Shouldered > 0.9f && gun->CheekWeld < 0.1f) { // the hold itself: not a draw, not the sights
+                const float droop = pitch - std::asin(std::clamp(camera->Front().y, -1.0f, 1.0f));
+                m_HoldDroop = m_HaveHoldDroop ? m_HoldDroop + (droop - m_HoldDroop) * Follow(dt, 0.2f) : droop;
+                m_HaveHoldDroop = true;
+            }
+            if (m_FreeHand > 1e-3f && glm::dot(side, side) > 1e-6f) {
+                const float off = pitch - (m_HaveHoldDroop ? m_HoldDroop : 0.0f);
+                const glm::quat level = glm::angleAxis(-off * kFirstPersonFreeHandLevel * std::clamp(m_FreeHand, 0.0f, 1.0f), glm::normalize(side));
+                m_WorldGunDelta = glm::translate(glm::mat4(1.0f), seat.ButtWorld) * glm::mat4_cast(level) *
+                                  glm::translate(glm::mat4(1.0f), -seat.ButtWorld) * m_WorldGunDelta;
+                seat.ForwardWorld = level * seat.ForwardWorld;
+            }
+        }
+
+
         const glm::quat turn = IK::Rotation(m_WorldGunDelta);
         for (int s = 0; s < 2; ++s) {
             handPos[s] = glm::vec3(m_WorldGunDelta * glm::vec4(handPos[s], 1.0f));
@@ -2293,11 +2557,157 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
             rigShoulder[s] = glm::vec3(m_WorldGunDelta * glm::vec4(rigShoulder[s], 1.0f));
             rigElbow[s] = glm::vec3(m_WorldGunDelta * glm::vec4(rigElbow[s], 1.0f));
         }
+        // The hand anchor: the free hand's trip off the gun - the pouch, the shells - held to the chest. The first-person
+        // sights have the same (FirstPersonPresentation::WriteHandAnchor, held to the eye there). The clips key the hand,
+        // and the magazine or shell in it, relative to the gun, and the world gun aims with the view: looking up or down,
+        // turning, the pouch the hand went for swung about with it, out in the air. Off the gun (past the anchor's Far)
+        // the hand now goes where the clips have it with the gun at the hip looking level - learned, relative to the
+        // chest; on the gun (within Near) it rides the gun; between, a blend. The gun keeps its aim, but for the lowering above.
+        m_CarriedMove = glm::mat4(1.0f);
+        bool anchoring = false;
+        if (m_AnchorClips != thirdPersonRig) { m_AnchorClips = thirdPersonRig; m_HaveChestFromClips = false; } // another gun
+        glm::mat4 chestNode(1.0f);
+        if (handAnchor && haveClips && driverTwin >= 0 && reg.valid(m_Twins[driverTwin]) && m_TwinModels[driverTwin] &&
+            m_TwinModels[driverTwin]->NodeTransform(Bone(FPBody::kBoneSpine[4]), chestNode)) {
+            const glm::mat4 chestWorld = world.ComposeWorldTransform(m_Twins[driverTwin]) * chestNode;
+            glm::mat4 chestRigid(1.0f);
+            for (int c = 0; c < 3; ++c) chestRigid[c] = glm::vec4(glm::normalize(glm::vec3(chestWorld[c])), 0.0f);
+            chestRigid[3] = chestWorld[3];
+            const glm::mat4 clips = m_WorldGunDelta * clipsOnGun;
+            // Learned at the hip (shouldered, not on the sights), looking level, the hand on the gun: the hold the clips'
+            // reaches were authored around. Eased, so a gait's bob or a twitch of the view doesn't jolt it.
+            const bool level = camera && std::abs(camera->Front().y) < 0.17f;
+            const bool hip = !gun || (gun->Shouldered > 0.9f && gun->CheekWeld < 0.1f);
+            // The clips as the first-person rig has them - at the eye - not as the hold carries them (the shoulder lock pulls
+            // the world gun back into the pocket), and moved from the camera to where a body square to its view would have
+            // it: above the hips, a little ahead, facing the way they face. The first person's pouch is keyed off such a
+            // camera; this body stands side-on to its gun with its head out over it, so taken off the real eye the pouch "a
+            // foot left of the eye" was at the back of the waist - the hand reached round behind for the Remington's shells.
+            // From the hips' eye it is where the first person has it: on the left hip.
+            if (level && hip && m_FreeHand < 1e-3f) {
+                glm::mat4 squared = clipsOnGun;
+                glm::vec3 thighL(0.0f), thighR(0.0f), pelvis(0.0f);
+                if (twinPoint(driverTwin, FPBody::kBoneThigh[0], thighL) && twinPoint(driverTwin, FPBody::kBoneThigh[1], thighR) &&
+                    twinPoint(driverTwin, FPBody::kBonePelvis, pelvis)) {
+                    const glm::vec3 up(0.0f, 1.0f, 0.0f);
+                    glm::vec3 across = thighR - thighL, view = camera->Front();
+                    across.y = view.y = 0.0f;
+                    if (glm::dot(across, across) > 1e-6f && glm::dot(view, view) > 1e-6f) {
+                        const glm::vec3 hips = glm::cross(up, glm::normalize(across));
+                        view = glm::normalize(view);
+                        const float yaw = std::atan2(glm::dot(glm::cross(view, hips), up), glm::dot(view, hips));
+                        const glm::vec3 eye(pelvis.x, camera->Position.y, pelvis.z);
+                        squared = glm::translate(glm::mat4(1.0f), eye + hips * kFirstPersonSquareEyeAhead) * glm::mat4_cast(glm::angleAxis(yaw, up)) *
+                                  glm::translate(glm::mat4(1.0f), -camera->Position) * clipsOnGun;
+                    }
+                }
+                const glm::mat4 want = glm::inverse(chestRigid) * squared;
+                m_ChestFromClips = m_HaveChestFromClips ? FirstPersonPartialMove(want * glm::inverse(m_ChestFromClips), m_ChestFromClips,
+                                                                                 Follow(dt, 0.5f))
+                                                        : want;
+                m_HaveChestFromClips = true;
+            }
+            if (m_HaveChestFromClips && m_FreeHand > 1e-3f) {
+                const glm::mat4 move = chestRigid * m_ChestFromClips * glm::inverse(clips);
+                m_CarriedMove = move;
+                int s = -1;
+                for (int k = 0; k < 2; ++k)
+                    if (handAnchor->Hand == kSides[k].Hand) s = k;
+                glm::mat4 h(1.0f), socket(1.0f);
+                if (s >= 0 && thirdPersonRig->NodeTransform(handAnchor->Hand, h) && thirdPersonRig->NodeTransform(handAnchor->Socket, socket)) {
+                    const glm::vec3 inRoot = glm::vec3(glm::inverse(socket * handAnchor->Mount) * h[3]);
+                    const glm::vec3 off = glm::max(glm::max(handAnchor->BoxMin - inRoot, inRoot - handAnchor->BoxMax), glm::vec3(0.0f));
+                    // Eased in time (critically damped, ~0.2 s): from the box's distance alone, a hand leaving the gun at a reach's
+                    // speed crossed Near to Far in three frames, and jumped by the whole of the move in them (5 cm a frame on the
+                    // Remington's shell loop, where the reload has the gun off the shoulder and the move is that big).
+                    const float want = FirstPersonAnchorWeight(glm::length(off), handAnchor->Near, handAnchor->Far) * m_FreeHand;
+                    if (dt > 0.0f) {
+                        const float k = 4.7f / 0.2f, x = m_TwinAnchorWeight - want, e = std::exp(-k * dt);
+                        const float next = (x + (m_TwinAnchorRate + k * x) * dt) * e;
+                        m_TwinAnchorRate = (m_TwinAnchorRate - (m_TwinAnchorRate + k * x) * k * dt) * e;
+                        m_TwinAnchorWeight = std::clamp(want + next, 0.0f, 1.0f);
+                    }
+                    anchoring = true;
+                    const float w = m_TwinAnchorWeight;
+                    m_CarriedHand = handPos[s];
+                    if (w > 0.0f) {
+                        const glm::mat4 hand = FirstPersonPartialMove(move, glm::translate(glm::mat4(1.0f), handPos[s]) * glm::mat4_cast(handRot[s]), w);
+                        handPos[s] = glm::vec3(hand[3]);
+                        handRot[s] = IK::Rotation(hand);
+                        rigShoulder[s] = glm::vec3(FirstPersonPartialMove(move, glm::translate(glm::mat4(1.0f), rigShoulder[s]), w)[3]);
+                        rigElbow[s] = glm::vec3(FirstPersonPartialMove(move, glm::translate(glm::mat4(1.0f), rigElbow[s]), w)[3]);
+                    }
+                }
+            }
+        }
+        if (!anchoring) m_TwinAnchorWeight = m_TwinAnchorRate = 0.0f;
         anchorFrame = chestDelta * anchorFrame; // the shoulders are held on the chest, wherever the hold puts the gun
         anchorInverse = glm::inverse(anchorFrame);
         m_TorsoPointBuffer.clear();
         solveArms(m_TwinModels, m_Twins, m_WorldShoulderAnchor, m_WorldHaveShoulderAnchor, m_WorldElbowAim, m_WorldHaveElbowAim, false);
         ArmTwist(m_TwinModels, true);
+        // The world head onto the stock (the cheek weld, on the sights): the neck tilts it toward where the eye is for the
+        // world gun - the camera, carried with it - by the weld's weight and at most Head Tilt, and never into the gun.
+        const float lock = gun ? std::clamp(gun->CheekWeld, 0.0f, 1.0f) * std::clamp(m_ArmsWeight, 0.0f, 1.0f) : 0.0f;
+        m_WorldHeadTiltDeg = 0.0f;
+        m_WorldHeadTiltWeight = lock;
+        if (camera && lock > 1e-3f && gun->HeadTiltDegrees > 0.0f && driverTwin >= 0 && reg.valid(m_Twins[driverTwin])) {
+            PROFILE_SCOPE("FPB cheek weld");
+            const Model& dm = *m_TwinModels[driverTwin];
+            const int neckNode = dm.NodeIndex(Bone("neck_01")), headNode = dm.NodeIndex(Bone(cfg.HeadBone));
+            if (neckNode >= 0 && headNode >= 0) {
+                const glm::mat4 twinWorld = world.ComposeWorldTransform(m_Twins[driverTwin]);
+                const glm::mat4 toModel = glm::inverse(twinWorld);
+                const glm::vec3 neck = ModelPoint(dm, neckNode), headNow = ModelPoint(dm, headNode);
+                const glm::vec3 eye = glm::vec3(toModel * m_WorldGunDelta * glm::vec4(camera->Position, 1.0f));
+                // The head sits the eye's offset behind and below the eye (the component's Camera Offset).
+                const glm::vec3 headWant = eye - (kRight * cfg.CameraOffset.x + glm::vec3(0.0f, cfg.CameraOffset.y, 0.0f) + kForward * cfg.CameraOffset.z);
+                // Over and down onto the stock - canted toward it and nodding forward - never back.
+                const glm::vec3 from = headNow - neck;
+                glm::vec3 to = headWant - neck;
+                to += kForward * std::max(0.0f, glm::dot(from, kForward) + 0.03f - glm::dot(to, kForward));
+                if (glm::length(from) > 1e-4f && glm::length(to) > 1e-4f) {
+                    const glm::quat none(1.0f, 0.0f, 0.0f, 0.0f);
+                    glm::quat weld(glm::normalize(from), glm::normalize(to));
+                    const float angle = 2.0f * std::acos(std::clamp(std::abs(weld.w), 0.0f, 1.0f));
+                    const float most = glm::radians(gun->HeadTiltDegrees);
+                    if (angle > most && angle > 1e-5f) weld = glm::slerp(none, weld, most / angle);
+                    weld = glm::slerp(none, weld, lock);
+                    // ... onto it, not into it: the drawn head, turned about the neck, stays 2.5 cm off the gun; past that
+                    // the weld gives way (the largest share that clears).
+                    if (!m_HeadPointBuffer.empty()) {
+                        const glm::quat worldRot = IK::Rotation(twinWorld);
+                        const glm::vec3 pivot = glm::vec3(twinWorld * glm::vec4(neck, 1.0f));
+                        const glm::vec3 fwd = glm::length(seat.ForwardWorld) > 1e-4f ? glm::normalize(seat.ForwardWorld) : camera->Front();
+                        const glm::vec3 a = seat.ButtWorld, b = a + fwd * 0.6f;
+                        std::vector<glm::vec3>& moved = m_HeadScratch;
+                        auto clears = [&](float share) {
+                            const glm::quat r = worldRot * glm::slerp(none, weld, share) * glm::inverse(worldRot);
+                            moved.resize(m_HeadPointBuffer.size());
+                            for (size_t i = 0; i < moved.size(); ++i) moved[i] = pivot + r * (m_HeadPointBuffer[i] - pivot);
+                            const glm::vec3 ab = b - a;
+                            const float len2 = std::max(glm::dot(ab, ab), 1e-9f);
+                            for (const glm::vec3& q : moved) {
+                                const float t = std::clamp(glm::dot(q - a, ab) / len2, 0.0f, 1.0f);
+                                if (glm::length(a + ab * t - q) < 0.025f) return false;
+                            }
+                            return true;
+                        };
+                        if (!clears(1.0f)) {
+                            float lo = 0.0f, hi = 1.0f;
+                            for (int it = 0; it < 6; ++it) {
+                                const float mid = 0.5f * (lo + hi);
+                                (clears(mid) ? lo : hi) = mid;
+                            }
+                            weld = glm::slerp(none, weld, lo);
+                        }
+                    }
+                    m_WorldHeadTiltDeg = glm::degrees(2.0f * std::acos(std::clamp(std::abs(weld.w), 0.0f, 1.0f)));
+                    RotateChain({"neck_01", "neck_02"}, [&](float n) { return glm::normalize(glm::slerp(none, weld, 1.0f / n)); },
+                                &m_TwinModels);
+                }
+            }
+        }
         PlaceHeadAttachedTwins(world);
     }
 

@@ -252,6 +252,14 @@ public:
         const auto it = m_D->BoneInfoMap.find(name);
         return it != m_D->BoneInfoMap.end() ? it->second.ID : -1;
     }
+    // A bone's skin offset (inverse bind) matrix: mesh space to the bone's space as the skin was bound - which needn't
+    // match the node's bind transform. False when `name` isn't a skinning bone.
+    bool BoneOffset(const std::string& name, glm::mat4& out) const {
+        const auto it = m_D->BoneInfoMap.find(name);
+        if (it == m_D->BoneInfoMap.end()) return false;
+        out = it->second.OffsetMatrix;
+        return true;
+    }
     const std::string& NodeName(int i) const { return m_D->Nodes[i].Name; }
     int NodeParent(int i) const { return m_D->Nodes[i].Parent; }
     // Every node at its authored bind-local transform.
