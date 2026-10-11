@@ -4,6 +4,10 @@
 #   python tools/assets/asset_manifest.py export <repo> <Used dir>  copies every listed file into <Used dir>
 #   python tools/assets/asset_manifest.py verify <dir> [--hash]     checks <dir> (a repo or a Used folder)
 #
+# The Drive holds the listed payloads and nothing else: code, scenes, prefabs and every .meta live in git.
+# Verifying a Used folder (no .git) also fails on any file under it the CSV doesn't list - a script or a
+# stale .meta there would be copied over a clone's own by an unguarded fetch.
+#
 # "External" = every file under project/assets that .gitignore excludes, whether git still tracks it
 # or not, minus local leftovers (EXCLUDE). The CSV holds project-relative paths, sizes and SHA-256s;
 # the editor reads it so a missing file keeps its tracked .meta (AssetDatabase::ScanProject), and
@@ -97,6 +101,25 @@ def export(repo, used):
     os.makedirs(os.path.join(used, 'project'), exist_ok=True)
     shutil.copy2(os.path.join(repo, CSV_REL), os.path.join(used, CSV_REL))
     print(f'{used}: {copied} copied, {len(rows) - copied} already up to date')
+    extra = unlisted(used, rows)
+    for rel in extra[:20]: print('unlisted ', rel)
+    if extra:
+        print(f'{len(extra)} file(s) on the Drive are not listed assets - move them off Used (code and .meta files belong in git)')
+
+
+def unlisted(used, rows):
+    """Files under a Used folder's project/ that the manifest doesn't list (the CSV copy and Drive/Windows
+    clutter aside), as project-relative paths."""
+    listed = {rel.lower() for rel, _, _ in rows}
+    base = os.path.join(used, 'project')
+    out = []
+    for parent, _, files in os.walk(base):
+        for name in files:
+            rel = os.path.relpath(os.path.join(parent, name), base).replace(os.sep, '/')
+            if rel == 'external_assets.csv' or name.endswith(EXCLUDE_SUFFIXES) or rel.lower() in listed:
+                continue
+            out.append(rel)
+    return sorted(out)
 
 
 def verify(root, check_hash):
@@ -108,10 +131,12 @@ def verify(root, check_hash):
             missing.append(rel)
         elif os.path.getsize(p) != size or (check_hash and sha256(p) != digest):
             wrong.append(rel)
+    extra = [] if os.path.exists(os.path.join(root, '.git')) else unlisted(root, rows)
     for rel in missing[:20]: print('missing  ', rel)
     for rel in wrong[:20]: print('different', rel)
-    print(f'{root}: {len(rows)} listed, {len(missing)} missing, {len(wrong)} different')
-    return 1 if missing or wrong else 0
+    for rel in extra[:20]: print('unlisted ', rel)
+    print(f'{root}: {len(rows)} listed, {len(missing)} missing, {len(wrong)} different, {len(extra)} unlisted')
+    return 1 if missing or wrong or extra else 0
 
 
 if __name__ == '__main__':
