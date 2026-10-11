@@ -23614,7 +23614,7 @@
       "C# Script": {
         "Class": "Tartarus.Gameplay.SquadDefinition",
         "Source": "assets/Scripts/SquadDefinition.cs",
-        "Fields JSON": "{\"Bleed-OutTime\":20.0,\"CorpseTime\":14.0,\"CoverStep\":0.800000011920929,\"CoverReach\":0.8500000238418579,\"CoverSpacing\":0.8999999761581421,\"CrawlSpeed\":0.6000000238418579,\"Difficulty\":1.0,\"FallGravity\":18.0,\"FootIKRange\":25.0,\"HeavyHitDamage\":40.0,\"CoverHeadHeight\":1.5499999523162842,\"HitboxRange\":60.0,\"LimpSpeedScale\":0.6000000238418579,\"LimpTime\":6.0,\"CoverKneeHeight\":0.8500000238418579,\"MeleeDamage\":25.0,\"MeleeHitTime\":0.2199999988079071,\"MeleeTime\":0.550000011920929,\"MeshCheckRange\":12.0,\"NpcDamageScale\":0.44999998807907104,\"Respawn\":true,\"RespawnDelay\":8.0,\"SquadSize\":4,\"StaggerTime\":0.4000000059604645}",
+        "Fields JSON": "{\"Bleed-OutTime\":20.0,\"CorpseTime\":180.0,\"CoverStep\":0.800000011920929,\"CoverReach\":0.8500000238418579,\"CoverSpacing\":0.8999999761581421,\"CrawlSpeed\":0.6000000238418579,\"Difficulty\":1.0,\"FallGravity\":18.0,\"FootIKRange\":25.0,\"HeavyHitDamage\":40.0,\"CoverHeadHeight\":1.5499999523162842,\"HitboxRange\":60.0,\"LimpSpeedScale\":0.6000000238418579,\"LimpTime\":6.0,\"CoverKneeHeight\":0.8500000238418579,\"MeleeDamage\":25.0,\"MeleeHitTime\":0.2199999988079071,\"MeleeTime\":0.550000011920929,\"MeshCheckRange\":12.0,\"NpcDamageScale\":0.44999998807907104,\"Respawn\":true,\"RespawnDelay\":8.0,\"SquadSize\":4,\"StaggerTime\":0.4000000059604645}",
         "Enabled": true,
         "Scripts": "[]",
         "Next Script ID": 1

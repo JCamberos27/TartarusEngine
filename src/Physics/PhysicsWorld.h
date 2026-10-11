@@ -108,10 +108,11 @@ bool     NpcFitsAt(CharacterId id, float cylinderHalfHeight);
 CharacterId NpcCharacterOf(unsigned entity);
 
 // --- Ragdolls ------------------------------------------------------------------------
-// A dead character's body as jointed capsules (Npc/NpcRagdoll.h). Each part is a capsule along its
-// local +X, posed in world space; part 0 is the root, every other names its parent, and a D6 joint at
-// `Anchor` (world) lets it swing `SwingDeg` and twist `TwistDeg` about the parent. The parts don't
-// collide with each other (only the world), and report `entity` when queries or contacts hit them.
+// A dead character's body as jointed capsules (Npc/NpcRagdoll.h), one PhysX reduced-coordinate articulation: each part is a
+// capsule along its local +X, posed in world space; one part is the root (no parent), every other names its parent, and a
+// spherical joint at `Anchor` (world) lets it swing and twist within its limits (exactly: the chain never stretches). The parts
+// collide with the world and with each other (never parent and child; a pair that overlaps in the pose it is built in only
+// once it has come apart), and report `entity` when queries or contacts hit them. At most 16 parts.
 struct RagdollPart {
     int Parent = -1;
     float Position[3] = {0, 0, 0};
@@ -137,6 +138,13 @@ struct RagdollPart {
     float LimitFrame[4] = {0, 0, 0, 1};
     float SwingYMin = -45.0f, SwingYMax = 45.0f, SwingZMin = -45.0f, SwingZMax = 45.0f;
     float TwistMin = -20.0f, TwistMax = 20.0f;
+    // Parts of the same body this one never collides with (bit per part; parent and child never do anyway).
+    unsigned IgnoreMask = 0u;
+    // Anatomical only: a hinge (an elbow, a knee) turns about its flexion axis (the frame's Z) alone; the other two are locked.
+    bool Hinge = false;
+    // The part's friction against the world, times the body's (min-combined: the floor's grip doesn't win it back). Every part
+    // with one shares the first such part's scale.
+    float FrictionScale = 1.0f;
 };
 // Body-wide ragdoll tuning (the defaults are what was hard-coded before it was exposed).
 struct RagdollParams {
@@ -147,8 +155,17 @@ struct RagdollParams {
     // Grip: the part's friction wins against a softer floor (max-combined, so a slick floor material can't make a corpse skate) and its
     // bounce is multiplied (a part with 0 restitution never bounces, whatever the floor's). Off: the floor's average-combined modes.
     bool Grip = false;
-    // PxRigidBody stabilization threshold (mass-normalised kinetic energy below which a part is held still against contact jitter); < 0 = PhysX's.
+    // Stabilization threshold (mass-normalised kinetic energy below which the body is held still against contact jitter); < 0 = PhysX's.
     float StabilizationThreshold = -1.0f;
+    // The flesh over the capsules (m): contacts rest this far out, so the skinned mesh lies on the floor rather than in it.
+    float SkinOffset = 0.0f;
+    // Gravity on the body, as a multiple of the scene's (> 1: it reads heavier at game scale).
+    float GravityScale = 1.0f;
+    // The parts collide with each other (off: only with the world).
+    bool SelfCollision = true;
+    // Joint-space inertia (armature) on each joint, as a fraction of what the joint turns (its part and everything below, about the
+    // joint): a capsule has next to no inertia about its own length, so contact friction spins it through its twist limit.
+    float TwistArmature = 0.0f, SwingArmature = 0.0f;
 };
 int  CreateRagdoll(unsigned entity, const RagdollPart* parts, int count, const RagdollParams* params = nullptr); // -1 on failure
 void DestroyRagdoll(int ragdoll);
@@ -170,8 +187,31 @@ void SetRagdollDrive(int ragdoll, float stiffness, float damping);
 void SetRagdollPartDrive(int ragdoll, int part, float stiffness, float damping);
 // Part `part`'s principal moments of inertia (kg m^2, about its bone axis and the two across it), for tests.
 bool GetRagdollPartInertia(int ragdoll, int part, float outInertia[3]);
-// Where part `part`'s drive wants it, as its rotation (xyzw) relative to its parent from the built pose.
+// Where part `part`'s drive wants it, as its rotation (xyzw) relative to its parent from the built pose (in its joint frame).
 void SetRagdollDriveTarget(int ragdoll, int part, const float rotXYZW[4]);
+// A joint rotation (xyzw, the child's frame against the parent's) as the joint's three positions: twist (about the frame's X),
+// swing about Y, swing about Z, in radians (the rotation vector's components).
+void RagdollRotationToJointAxes(const float rotXYZW[4], float outTwistSwing[3]);
+// Whether parts `a` and `b` of the ragdoll collide with each other now.
+bool RagdollPairCollides(int ragdoll, int a, int b);
+// The joint holding `part` to its parent: its positions now and its limits (radians, as RagdollRotationToJointAxes); any out may be null.
+bool GetRagdollJoint(int ragdoll, int part, float outPos[3], float outLo[3], float outHi[3]);
+// Holds the rigid body of `entity` to part `part` where both are now (a gun in a dead hand), until released or loaded past
+// `breakForce` (N and N m; <= 0: unbreakable). A handle, -1 when either is missing.
+int  AttachToRagdollPart(unsigned entity, int ragdoll, int part, float breakForce);
+bool RagdollAttachmentHeld(int ragdoll, int handle); // false once it broke or was released
+void DetachFromRagdoll(int ragdoll, int handle);
+// The rigid body of `entity` stops colliding with the ragdoll's parts in `partMask` (bit per part); 0 (or a gone ragdoll) undoes it.
+bool IgnoreRagdollParts(unsigned entity, int ragdoll, unsigned partMask);
+// Of the ragdoll's parts in `partMask`, those the rigid body of `entity` overlaps now, each part's capsule grown by `inflate` (m).
+unsigned RagdollPartsOverlapping(unsigned entity, int ragdoll, unsigned partMask, float inflate);
+// Moves the rigid body of `entity` the shortest way out of the ragdoll's parts in `partMask` (and their skin), a few passes; true
+// when it moved. For a body that has to start colliding with parts it is inside of (the contact would only fight it there).
+bool PushOutOfRagdoll(unsigned entity, int ragdoll, unsigned partMask);
+// Part `part`'s capsule: radius and half length (the cylinder's, along its X).
+bool GetRagdollPartShape(int ragdoll, int part, float* outRadius, float* outHalfLength);
+// How deep (m) the worst pair of the ragdoll's parts that collide with each other overlaps now (0: none), and which.
+float RagdollWorstSelfPenetration(int ragdoll, int* outA = nullptr, int* outB = nullptr);
 
 // --- Hitboxes ---------------------------------------------------------------------------
 // Per-bone hitboxes for a living character: kinematic, query-only capsules (along local +X, posed in world space)

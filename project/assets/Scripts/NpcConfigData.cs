@@ -15,7 +15,7 @@ internal static class NpcConfigData
             n.Squad=Math.Clamp(n.Squad,0,16);n.Skill=Math.Clamp(n.Skill,0,1);n.OutfitSeed=Math.Clamp(n.OutfitSeed,0,100000);config=n;
         } else {
             var s=JsonSerializer.Deserialize<SquadDefinition>(fields,Options)??new();
-            s.SquadSize=Math.Clamp(s.SquadSize,0,8);config=s;
+            s.SquadSize=Math.Clamp(s.SquadSize,0,16);config=s;
         }
         return JsonSerializer.Serialize(config.GetType().GetFields(BindingFlags.Instance|BindingFlags.Public|BindingFlags.DeclaredOnly).ToDictionary(f=>f.Name,f=>f.GetValue(config)),Options);
     }

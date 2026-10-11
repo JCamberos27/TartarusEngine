@@ -22,7 +22,7 @@ internal static unsafe class NpcLifecycle
         f.Kill=f.Despawn=f.CallManDown=false;f.StandCylinder=.6f;f.CrouchCylinder=.33f;
         switch(f.Operation){
         case 0:
-            f.Kill=f.Wounded && f.Now-f.WoundedAt>f.BleedOutTime;f.Despawn=f.Dead && f.Now-f.DiedAt>f.CorpseTime;
+            f.Kill=f.Wounded && f.Now-f.WoundedAt>f.BleedOutTime;f.Despawn=f.Dead && f.UnseenFor>=f.UnseenTime && (f.OverCap || f.Now-f.DiedAt>f.CorpseTime);
             f.Crouch=f.Intent.Crouch && f.Intent.Pace!=3;
             f.Speed=f.Crouch?(f.Intent.Pace==0?0:1.9f):f.Intent.Pace switch {0=>0,1=>1.5f,2=>3.2f,3=>4.7f,_=>3.2f};
             if(f.Wounded)f.Speed=f.CrawlSpeed;else if(f.Now<f.LimpUntil)f.Speed*=f.LimpScale;if(f.Now<f.StaggerUntil)f.Speed*=.2f;

@@ -14,6 +14,7 @@
 #include "GameModuleAPI.h" // RaycastHit, QueryFilter, kPlayerEntity
 #include "Log.h"
 #include "NpcBrain.h"
+#include "OutfitSystem.h"
 #include "Profiler.h"
 #include "PhysicsWorld.h"
 #include "ProjectPaths.h"
@@ -160,6 +161,7 @@ const char* NpcDirector::SubName(int s) {
 
 struct NpcDirector::SoldierBody {
     entt::entity Root = entt::null;
+    bool Bare = false; // undressed for a Bare spawn: pooled only for another
     std::vector<std::pair<entt::entity, AnimatorControllerComponent>> Animators; // as built: each soldier starts from these
 };
 
@@ -224,6 +226,7 @@ bool NpcDirector::Start(World& world, AssetLibrary& assets, const FirstPersonCon
         s.Skill = c.Skill;
         s.Brain = c.Brain;
         s.OutfitSeed = c.OutfitSeed;
+        s.Bare = c.Bare;
         const auto* order = reg.try_get<OrderComponent>(e);
         found.push_back({order ? order->Value : (int)entt::to_integral(e), s});
     }
@@ -303,6 +306,8 @@ void NpcDirector::Stop(World& world) {
     for (auto& n : m_Npcs)
         if (n) Despawn(world, *n);
     m_Npcs.clear();
+    for (LooseWeapon& g : m_LooseGuns) g.Gun->Stop(world);
+    m_LooseGuns.clear();
     for (const auto& b : m_Pool)
         if (b && world.Registry.valid(b->Root)) world.DestroyEntityAndChildren(b->Root);
     m_Pool.clear();
@@ -411,9 +416,10 @@ int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
     auto& reg = world.Registry;
     // A body from the pool (a corpse that has gone) when there is one: shown again, its animators as they were built.
     std::shared_ptr<SoldierBody> built;
-    while (!built && !m_Pool.empty()) {
-        built = std::move(m_Pool.back());
-        m_Pool.pop_back();
+    for (size_t k = m_Pool.size(); k-- > 0 && !built;) {
+        if (m_Pool[k] && m_Pool[k]->Bare != sp.Bare) continue; // dressed and undressed bodies are kept apart
+        built = std::move(m_Pool[k]);
+        m_Pool.erase(m_Pool.begin() + (long long)k);
         if (!built || !reg.valid(built->Root)) built.reset();
     }
     const bool reused = built != nullptr;
@@ -424,6 +430,14 @@ int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
         ++m_Reused;
     } else if (!(built = BuildBody(world, assets))) {
         return -1;
+    } else if (sp.Bare) {
+        // Bare: every clothing item off, so the wardrobe dresses the body in its own skin (as Character Outfit's Bare Body).
+        if (OutfitSystem::Pieces(world, built->Root).empty()) OutfitSystem::AdoptExisting(world, assets, built->Root);
+        Wardrobe::Request bare = OutfitSystem::CurrentRequest(world, built->Root);
+        bare.Items.clear();
+        const auto r = OutfitSystem::Apply(world, assets, built->Root, bare);
+        if (!r.Ok) Log::Warn("Enemy AI: a Bare spawn kept its clothes - " + r.Error);
+        built->Bare = true;
     }
     const float entitiesMs = since();
     const entt::entity root = built->Root;
@@ -620,19 +634,12 @@ void NpcDirector::Think(World& world, AssetLibrary& assets, float dt, const Play
     }
     m_Crowd.Update(dt);
 
+    UpdatePersistence(world, p, dt);
     int shooters = 0;
     for (auto& up : m_Npcs) {
         if (!up) continue;
         Npc& n = *up;
-        if (n.Dead) {
-            // The body lies there a while, then goes (and its replacement is on the way).
-            auto life=Life(n,m_Cfg,m_Now);Project("npc.life",life);
-            if (life.Despawn) {
-                Despawn(world, n, /*keepBody=*/true);
-                up.reset();
-            }
-            continue;
-        }
+        if (n.Dead) continue; // (a corpse lies until UpdatePersistence lets it go)
         {
             SubTimer timer(*this, SubMove);
             Move(world, n, dt);
@@ -799,6 +806,7 @@ void NpcDirector::AimAndFire(World& world,Npc& n,const PlayerSnapshot& p,float d
 void NpcDirector::LateUpdate(World& world, float dt, const PlayerSnapshot& p) {
     if (!m_Active || !m_Started) return;
     const auto t0 = std::chrono::steady_clock::now();
+    for (LooseWeapon& g : m_LooseGuns) g.Gun->Update(world, dt);
     for (auto& up : m_Npcs) {
         if (!up) continue;
         Npc& n = *up;
@@ -1185,6 +1193,13 @@ void NpcDirector::FinishDeath(World& world, Npc& n) {
     }
     m_DeathBones.erase(n.Index);
     n.Ragdoll->Update(0.0f); // the pieces take the parts' first pose now
+    // The gun stays in the hand nearest its grip for a moment, then the fingers let go.
+    if (n.Dropped) {
+        const glm::vec3 at = n.Dropped->Position(world);
+        const int hand = glm::length(n.Ragdoll->PartPosition(NpcRagdoll::kHandR) - at) <= glm::length(n.Ragdoll->PartPosition(NpcRagdoll::kHandL) - at)
+                             ? NpcRagdoll::kHandR : NpcRagdoll::kHandL;
+        n.Dropped->SetOwner(n.Ragdoll->Id(), hand);
+    }
     if (TrackDeathPop && n.HaveLastBones) {
         static const char* kBones[3] = {"head", "hand_l", "foot_l"};
         float pop = 0.0f;
@@ -1193,6 +1208,79 @@ void NpcDirector::FinishDeath(World& world, Npc& n) {
             if (n.Body.BoneWorld(kBones[k], b)) pop = std::max(pop, glm::length(b - n.LastBones[k]));
         }
         n.DeathPop = pop;
+    }
+}
+
+bool NpcDirector::PlayerSees(const PlayerSnapshot& p, const glm::vec3& point) {
+    if (!p.Valid) return false;
+    const glm::vec3 d = point - p.Eye;
+    const float dist = glm::length(d);
+    if (dist < 2.0f) return true;   // at the player's feet: as good as seen (it would vanish at the screen's edge)
+    if (dist > 250.0f) return false;
+    // A cone a little wider than any screen's view (the camera's field of view isn't the director's to know).
+    const float fl = glm::length(p.Forward);
+    if (fl > 1e-4f && glm::dot(d / dist, p.Forward / fl) < std::cos(glm::radians(62.0f))) return false;
+    return !CoverSystem::Shielded(point, 0.0f, p.Eye);
+}
+
+// Corpses and the guns they dropped lie at least Corpse Time (a gun: its own Lifetime) and go only once the player hasn't seen
+// them for Unseen Time; past Max Corpses the oldest unseen go first, whatever their age.
+void NpcDirector::UpdatePersistence(World& world, const PlayerSnapshot& p, float dt) {
+    (void)dt;
+    std::vector<Npc*> corpses;
+    int guns = (int)m_LooseGuns.size();
+    for (auto& up : m_Npcs)
+        if (up && up->Dead && !up->DeathPending) { corpses.push_back(up.get()); if (up->Dropped) ++guns; }
+    std::sort(corpses.begin(), corpses.end(), [](const Npc* a, const Npc* b) { return a->DiedAt < b->DiedAt; });
+    const int cap = std::max(m_Cfg.MaxCorpses, 1);
+    int over = (int)corpses.size() - cap;
+    for (Npc* n : corpses) {
+        bool seen = false;
+        if (n->Ragdoll) {
+            for (int part : {0, 1, 2}) if (!seen) seen = PlayerSees(p, n->Ragdoll->PartPosition(part));
+        } else {
+            seen = PlayerSees(p, n->Feet + glm::vec3(0.0f, 0.5f, 0.0f));
+        }
+        if (seen) n->UnseenSince = -1.0f;
+        else if (n->UnseenSince < 0.0f) n->UnseenSince = m_Now;
+        auto life = Life(*n, m_Cfg, m_Now);
+        life.UnseenFor = seen ? 0.0f : m_Now - n->UnseenSince;
+        life.UnseenTime = m_Cfg.UnseenTime;
+        life.OverCap = over > 0;
+        Project("npc.life", life);
+        if (!life.Despawn) continue;
+        --over;
+        // The gun has its own time (0: it goes with the corpse).
+        if (n->Dropped && n->Dropped->Settings().Lifetime > 0.0f) {
+            n->Dropped->ForgetOwner();
+            LooseWeapon g;
+            g.Gun = std::move(n->Dropped);
+            g.DroppedAt = n->DiedAt;
+            g.UnseenSince = n->UnseenSince;
+            m_LooseGuns.push_back(std::move(g));
+        } else if (n->Dropped) {
+            --guns;
+        }
+        Despawn(world, *n, /*keepBody=*/true);
+        for (auto& up : m_Npcs)
+            if (up.get() == n) { up.reset(); break; }
+    }
+    // The loose guns, oldest first.
+    std::stable_sort(m_LooseGuns.begin(), m_LooseGuns.end(), [](const LooseWeapon& a, const LooseWeapon& b) { return a.DroppedAt < b.DroppedAt; });
+    int gunsOver = guns - cap;
+    for (size_t k = 0; k < m_LooseGuns.size();) {
+        LooseWeapon& g = m_LooseGuns[k];
+        const bool seen = PlayerSees(p, g.Gun->Position(world));
+        if (seen) g.UnseenSince = -1.0f;
+        else if (g.UnseenSince < 0.0f) g.UnseenSince = m_Now;
+        const bool unseenLong = !seen && m_Now - g.UnseenSince >= m_Cfg.UnseenTime;
+        if (unseenLong && (gunsOver > 0 || m_Now - g.DroppedAt > g.Gun->Settings().Lifetime)) {
+            g.Gun->Stop(world);
+            m_LooseGuns.erase(m_LooseGuns.begin() + (long long)k);
+            --gunsOver;
+            continue;
+        }
+        ++k;
     }
 }
 

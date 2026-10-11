@@ -10,4 +10,5 @@ public sealed class NpcDefinition : Script
     [Range(0,1)] public float Skill=0.5f;
     public int OutfitSeed=0;
     public NpcBrainKind Brain=NpcBrainKind.Squad;
+    public bool Bare=false;
 }

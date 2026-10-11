@@ -11,6 +11,7 @@
 #include "PhysicsWorld.h"
 #include "Player.h"
 #include "Npc/NpcRagdoll.h"
+#include "Npc/NpcHitboxes.h"
 
 #include <algorithm>
 #include <cmath>
@@ -40,6 +41,7 @@ NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "w
     if (m_Scenario == "reload") m_Duration = 28.0f;
     if (m_Scenario == "flame") m_Duration = 14.0f;
     if (m_Scenario == "blood") m_Duration = 44.0f;
+    if (m_Scenario == "ragdoll") m_Duration = 240.0f;
     if (const char* t = EnvVar("NPC_TEST_SECONDS")) m_Duration = std::max(5.0f, (float)std::atof(t));
     if (const char* r = EnvVar("NPC_TEST_RECORD")) m_RecordDir = r;
     std::cout << "[NpcTest] scenario '" << m_Scenario << "', " << m_Duration << " s" << std::endl;
@@ -70,6 +72,7 @@ void NpcTest::Drive(Player& player, FirstPersonPresentation& weapon, NpcDirector
     if (vitals.IsDead()) return;
     // Default: look north over the arena, toward the squad's end.
     float wantYaw = m_Scenario == "sandbox" ? 180.0f : -90.0f, wantPitch = -3.0f; // sandbox: west, toward the squad
+    if (m_Scenario == "ragdoll") { wantYaw = m_RViewYaw; wantPitch = -10.0f; } // over the bodies (then away from them)
     if (m_Scenario == "fight") {
         // Shoot whoever is in sight: the nearest soldier with a clear line to its chest.
         const Npc* target = nullptr;
@@ -207,6 +210,10 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
     }
     if (m_Scenario == "blood") {
         Blood(world, npcs, now);
+        return;
+    }
+    if (m_Scenario == "ragdoll") {
+        Ragdoll(world, npcs, player);
         return;
     }
     if (m_Scenario == "feet") {
@@ -1321,4 +1328,331 @@ void NpcTest::Blood(World& world, NpcDirector& npcs, float now) {
     default:
         break;
     }
+}
+
+// --- ragdoll: the deaths, watched from four sides ------------------------------------------------------------------------
+namespace {
+// scenes/RagdollTest.json's NPC Spawns, in order.
+enum RagSpawn { RS_Open, RS_Ak, RS_Shotgun, RS_Crate, RS_Stairs, RS_Ledge, RS_Wall, RS_Sprinter, RS_Jogger, RS_Strafer, RS_PileA, RS_PileB, RS_Count };
+struct RagCase {
+    const char* Name;
+    int Spawn;
+    int Part;        // the hitbox part struck
+    float From;      // degrees round the body the round comes from: 0 its front, 90 its left, 180 behind, -90 its right
+    float Damage;
+    int Move;        // 0 stands, 1 sprints, 2 jogs, 3 strafes
+    glm::vec3 MoveTo;
+};
+const RagCase kRagCases[] = {
+    {"open_head_front", RS_Open, 2, 0.0f, 120.0f, 0, {}},
+    {"ak_chest_left", RS_Ak, 1, 90.0f, 45.0f, 0, {}},
+    {"shotgun_back", RS_Shotgun, 1, 180.0f, 150.0f, 0, {}},
+    {"crate_chest_front", RS_Crate, 1, 0.0f, 150.0f, 0, {}},
+    {"stairs_back", RS_Stairs, 1, 180.0f, 60.0f, 0, {}},
+    {"ledge_back", RS_Ledge, 0, 180.0f, 60.0f, 0, {}},
+    {"wall_chest_front", RS_Wall, 1, 0.0f, 60.0f, 0, {}},
+    {"sprint_thigh", RS_Sprinter, 7, 0.0f, 45.0f, 1, {9.0f, 0.0f, 4.0f}},
+    {"jog_chest_right", RS_Jogger, 1, -90.0f, 45.0f, 2, {-9.0f, 0.0f, 8.0f}},
+    {"strafe_head", RS_Strafer, 2, 0.0f, 120.0f, 3, {}},
+    {"pile_first", RS_PileA, 1, 0.0f, 45.0f, 0, {}},
+    {"pile_onto", RS_PileB, 1, 0.0f, 60.0f, 0, {}},
+};
+constexpr int kRagCaseCount = (int)(sizeof(kRagCases) / sizeof(kRagCases[0]));
+// Moments (seconds after the round) each death is frozen at and shot; then once more at rest.
+constexpr float kRagMoments[] = {0.15f, 0.4f, 0.8f, 1.6f};
+constexpr int kRagMomentCount = (int)(sizeof(kRagMoments) / sizeof(kRagMoments[0]));
+constexpr float kRagRestBy = 7.0f;   // a body still moving this long after the round fails the rest check
+struct RagView { const char* Name; float Yaw, Pitch, Dist; bool Ground; };
+const RagView kRagViews[4] = {{"front", 0.0f, -14.0f, 1.9f, false}, {"side", 90.0f, -14.0f, 1.9f, false},
+                              {"high", 225.0f, -55.0f, 2.1f, false}, {"ground", 150.0f, 0.0f, 1.8f, true}};
+constexpr int kFramesPerView = 3; // the camera is placed, the next frame draws with it, the third is kept
+
+Npc* NpcAtSpawn(NpcDirector& npcs, int spawn) {
+    for (const auto& up : npcs.Npcs())
+        if (up && up->SpawnIndex == spawn) return up.get();
+    return nullptr;
+}
+glm::vec3 BodyCentre(const Npc& n) {
+    return n.Ragdoll ? 0.5f * (n.Ragdoll->PartPosition(0) + n.Ragdoll->PartPosition(1)) : n.Feet + glm::vec3(0.0f, 1.0f, 0.0f);
+}
+} // namespace
+
+void NpcTest::Ragdoll(World& world, NpcDirector& npcs, const Player& player) {
+    (void)player;
+    const float now = npcs.Now();
+    npcs.HoldFire = true;
+    npcs.NoLod = true;
+    m_Shot.clear();
+    if (m_RCase < 0) {
+        // Every soldier in before the first death.
+        int alive = 0;
+        for (const auto& up : npcs.Npcs())
+            if (up && !up->Dead) ++alive;
+        if (now < 2.0f || alive < RS_Count) {
+            if (now > 20.0f && !m_Done) {
+                Check(false, "every RagdollTest soldier spawned (" + std::to_string(alive) + " of " + std::to_string(RS_Count) + ")");
+                m_Done = true;
+            }
+            return;
+        }
+        m_RCase = 0;
+        m_RStage = 0;
+        m_RAt = now;
+    }
+    // Every corpse and gun that goes must have been out of sight for Unseen Time first.
+    {
+        static std::vector<std::pair<std::string, float>> seen; // name -> last time the player could see it (-1: never checked)
+        for (auto& [name, last] : seen) {
+            bool there = false;
+            for (const auto& up : npcs.Npcs())
+                if (up && up->Name == name) there = true;
+            if (!there && last > -1e8f) {
+                Check(now - last >= npcs.Settings().UnseenTime - 0.05f,
+                      name + "'s corpse went only after " + std::to_string(npcs.Settings().UnseenTime) + " s out of sight (" + std::to_string(now - last) + " s)");
+                last = -1e9f;
+            }
+        }
+        PlayerSnapshot ps;
+        ps.Valid = true;
+        ps.Eye = player.Cam.Position;
+        ps.Forward = player.Cam.Front();
+        for (const auto& up : npcs.Npcs()) {
+            if (!up || !up->Dead || !up->Ragdoll) continue;
+            auto it = std::find_if(seen.begin(), seen.end(), [&](const auto& e) { return e.first == up->Name; });
+            if (it == seen.end()) { seen.push_back({up->Name, now}); it = seen.end() - 1; }
+            for (int part : {0, 1, 2})
+                if (NpcDirector::PlayerSees(ps, up->Ragdoll->PartPosition(part))) it->second = now;
+        }
+    }
+
+    // A frozen moment: four views of the body, then time goes on.
+    if (m_RFreeze) {
+        Npc* n = m_RName.empty() ? nullptr : NpcAtSpawn(npcs, m_RCase < kRagCaseCount ? kRagCases[m_RCase].Spawn : RS_Open);
+        const int view = m_RFrame / kFramesPerView, sub = m_RFrame % kFramesPerView;
+        if (!n || view >= 4) {
+            m_RFreeze = false;
+            ++m_RMoment;
+            return;
+        }
+        const RagView& v = kRagViews[view];
+        const glm::vec3 c = BodyCentre(*n);
+        const float yaw = m_RYaw + glm::radians(v.Yaw);
+        const glm::vec3 flat(std::sin(yaw), 0.0f, std::cos(yaw));
+        const float pitch = glm::radians(v.Pitch);
+        m_CamPos = c + (flat * std::cos(pitch) - glm::vec3(0.0f, std::sin(pitch), 0.0f)) * v.Dist;
+        if (v.Ground) {
+            float lowest = c.y;
+            if (n->Ragdoll)
+                for (int k = 0; k < NpcRagdoll::kRagParts; ++k) lowest = std::min(lowest, n->Ragdoll->PartPosition(k).y);
+            m_CamPos.y = lowest + 0.15f;
+        }
+        const glm::vec3 d = glm::normalize(c - m_CamPos);
+        m_CamYaw = glm::degrees(std::atan2(d.z, d.x));
+        m_CamPitch = glm::degrees(std::asin(std::clamp(d.y, -1.0f, 1.0f)));
+        m_HaveCam = true;
+        if (sub == kFramesPerView - 1) {
+            char name[128];
+            const bool rest = m_RMoment >= kRagMomentCount;
+            char when[16];
+            if (rest) std::snprintf(when, sizeof when, "rest");
+            else std::snprintf(when, sizeof when, "%04dms", (int)std::lround(kRagMoments[m_RMoment] * 1000.0f));
+            std::snprintf(name, sizeof name, "rag_%02d_%s_%s_%s", m_RCase, m_RName.c_str(), when, v.Name);
+            m_Shot = name;
+        }
+        ++m_RFrame;
+        return;
+    }
+
+    // The persistence stage, after every death.
+    if (m_RCase >= kRagCaseCount) {
+        if (m_RLookAway == 0) {
+            // Looking at the bodies until the last is past Corpse Time: all still there (the check above fails any that went while seen).
+            if (now - m_RLastDeath > npcs.Settings().CorpseTime + 1.0f) {
+                int corpses = 0;
+                for (const auto& up : npcs.Npcs())
+                    if (up && up->Dead) ++corpses;
+                std::printf("[NpcTest] ragdoll: %d corpse(s) and %d loose gun(s) while looked at, %.0f s after the first death\n", corpses,
+                            npcs.LooseGuns(), now - m_RKilledAt);
+                m_RLookAway = 1;
+                m_RLookAwayAt = now;
+                m_RViewYaw = 90.0f; // turn round: nothing of them in view
+            }
+        } else if (now - m_RLookAwayAt > npcs.Settings().UnseenTime + 1.5f) {
+            int corpses = 0;
+            for (const auto& up : npcs.Npcs())
+                if (up && up->Dead) ++corpses;
+            Check(corpses == 0, "out of sight past Corpse Time, every corpse has gone (" + std::to_string(corpses) + " left)");
+            Check(npcs.LooseGuns() == 0, "out of sight past their Lifetime, every dropped gun has gone (" + std::to_string(npcs.LooseGuns()) + " left)");
+            std::printf("[NpcTest] ragdoll worst: self %.1f cm (%s), ground %.1f cm (%s), joint %.1f deg (%s)\n", m_RWorstSelf * 100.0f,
+                        m_RWorstSelfAt.c_str(), m_RWorstGround * 100.0f, m_RWorstGroundAt.c_str(), m_RWorstJoint, m_RWorstJointAt.c_str());
+            PrintCosts(npcs);
+            m_Done = true;
+            m_Duration = now;
+        }
+        return;
+    }
+
+    const RagCase& rc = kRagCases[m_RCase];
+    Npc* n = NpcAtSpawn(npcs, rc.Spawn);
+    if (!n) {
+        Check(false, std::string(rc.Name) + ": its soldier is there");
+        ++m_RCase;
+        m_RStage = 0;
+        m_RAt = now;
+        return;
+    }
+    // The soldier's part centre (its hitbox's middle: the bone to the next).
+    auto partCentre = [&](int part) {
+        const NpcPartDef& d = NpcPartDefOf(part);
+        glm::vec3 a(0.0f), b(0.0f);
+        if (!n->Body.BoneWorld(world, d.Bone, a)) return n->Feet + glm::vec3(0.0f, 1.2f, 0.0f);
+        if (d.End && n->Body.BoneWorld(world, d.End, b)) return 0.5f * (a + b);
+        return a + glm::vec3(0.0f, 0.08f, 0.0f);
+    };
+    if (m_RStage == 0) {
+        // Getting going (the movers), then the round.
+        const float t = now - m_RAt;
+        const float yaw0 = n->Body.Yaw();
+        const glm::vec3 fwd0(std::sin(yaw0), 0.0f, std::cos(yaw0));
+        if (rc.Move != 0 && !n->Dead) {
+            NpcIntent in;
+            in.Move = true;
+            if (rc.Move == 3) {
+                in.MoveTarget = n->Feet + glm::vec3(4.0f, 0.0f, 0.0f);
+                in.Pace = Gait::Walk;
+                in.Aim = true;
+                in.FaceAim = true;
+                in.AimPoint = in.LookPoint = n->Feet + glm::vec3(0.0f, 1.45f, 10.0f);
+            } else {
+                in.MoveTarget = rc.MoveTo;
+                in.Pace = rc.Move == 1 ? Gait::Run : Gait::Jog;
+                in.LookPoint = rc.MoveTo + glm::vec3(0.0f, 1.6f, 0.0f);
+            }
+            n->Intent = in;
+        }
+        const float speed = glm::length(glm::vec2(n->Velocity.x, n->Velocity.z));
+        const float want = rc.Move == 1 ? 3.8f : rc.Move == 2 ? 2.4f : rc.Move == 3 ? 1.0f : 0.0f;
+        const bool ready = rc.Move == 0 ? t > 0.6f : ((speed >= want && t > 1.0f) || t > 4.0f);
+        if (!ready) return;
+        // The round: along its line through the part, from the side the case names.
+        const float from = glm::radians(rc.From);
+        const glm::vec3 left0(std::cos(yaw0), 0.0f, -std::sin(yaw0));
+        const glm::vec3 travel = -(fwd0 * std::cos(from) + left0 * std::sin(from));
+        const glm::vec3 point = partCentre(rc.Part);
+        std::printf("[NpcTest] ragdoll %s: %s killed at %.1f m/s by a %.0f-damage round into %s from %.0f deg\n", rc.Name, n->Name.c_str(), speed,
+                    rc.Damage, NpcPartDefOf(rc.Part).Bone, rc.From);
+        npcs.Kill(world, *n, travel, point, 30.0f + 0.4f * rc.Damage, rc.Part);
+        m_RName = rc.Name;
+        m_RYaw = yaw0; // (the views turn about the body's facing at death)
+        if (m_RCase == 0) m_RKilledAt = now;
+        m_RLastDeath = now;
+        m_RAt = now;
+        m_RStage = 1;
+        m_RMoment = 0;
+        m_RCaseSelf = m_RCaseGround = m_RCaseJoint = m_RGroundNow = 0.0f;
+        m_RCaseGroundAt.clear();
+        m_RCaseJointAt.clear();
+        return;
+    }
+    // Falling and lying: every frame's checks, the frozen moments, then the case's verdict.
+    const float t = now - m_RAt;
+    if (n->Ragdoll) {
+        const int id = n->Ragdoll->Id();
+        int a = -1, b = -1;
+        const float self = PhysicsWorld::RagdollWorstSelfPenetration(id, &a, &b);
+        if (self > m_RCaseSelf) m_RCaseSelf = self;
+        if (self > m_RWorstSelf) {
+            m_RWorstSelf = self;
+            m_RWorstSelfAt = std::string(rc.Name) + " " + NpcRagdollDefOf(a).Bone + "/" + NpcRagdollDefOf(b).Bone + " at " + std::to_string(t) + " s";
+        }
+        float groundNow = 0.0f;
+        for (int k = 0; k < NpcRagdoll::kRagParts; ++k) {
+            // Into the ground: the capsule's lowest point against the solid world under it.
+            float p[3], q[4], r = 0.05f, hl = 0.1f;
+            if (!PhysicsWorld::GetRagdollPart(id, k, p, q) || !PhysicsWorld::GetRagdollPartShape(id, k, &r, &hl)) continue;
+            const glm::vec3 c(p[0], p[1], p[2]), axis = glm::quat(q[3], q[0], q[1], q[2]) * glm::vec3(1.0f, 0.0f, 0.0f);
+            const glm::vec3 end = axis.y < 0.0f ? c + axis * hl : c - axis * hl;
+            const float o[3] = {end.x, end.y + 0.4f, end.z}, down[3] = {0.0f, -1.0f, 0.0f};
+            RaycastHit hit;
+            // (Only a point really inside something counts: a hand hanging past a ledge's edge is under its top, not in it.)
+            const float bottom[3] = {end.x, end.y - r + 0.005f, end.z}, probe[3] = {0.0f, -1.0f, 0.0f};
+            RaycastHit inside;
+            const bool in = PhysicsWorld::RaycastSolid(bottom, probe, 0.001f, QueryFilter{}, inside) && inside.Hit && inside.Distance < 1e-4f;
+            if (in && PhysicsWorld::RaycastSolid(o, down, 2.0f, QueryFilter{}, hit) && hit.Hit && hit.Distance > 1e-3f) {
+                const float into = hit.Point[1] - (end.y - r);
+                groundNow = std::max(groundNow, into);
+                if (into > m_RCaseGround) { m_RCaseGround = into; m_RCaseGroundAt = std::string(NpcRagdollDefOf(k).Bone) + " at " + std::to_string(t).substr(0, 4) + " s"; }
+                if (into > m_RWorstGround) { m_RWorstGround = into; m_RWorstGroundAt = std::string(rc.Name) + " " + NpcRagdollDefOf(k).Bone; }
+            }
+            // Past its range.
+            float pos[3], lo[3], hi[3];
+            if (k > 0 && PhysicsWorld::GetRagdollJoint(id, k, pos, lo, hi))
+                for (int ax = 0; ax < 3; ++ax) {
+                    const float over = glm::degrees(std::max(lo[ax] - pos[ax], pos[ax] - hi[ax]));
+                    if (over > m_RCaseJoint) {
+                        static const char* const kAxisName[3] = {"twist", "swing y", "swing z"};
+                        m_RCaseJoint = over;
+                        m_RCaseJointAt = std::string(NpcRagdollDefOf(k).Bone) + " " + kAxisName[ax] + " at " + std::to_string(t).substr(0, 4) + " s";
+                    }
+                    if (over > m_RWorstJoint) {
+                        static const char* const kAxes[3] = {"twist", "swing y", "swing z"};
+                        m_RWorstJoint = over;
+                        m_RWorstJointAt = std::string(rc.Name) + " " + NpcRagdollDefOf(k).Bone + " " + kAxes[ax];
+                    }
+                }
+        }
+        m_RGroundNow = groundNow;
+    }
+    // (At rest: the body asleep, and its gun too: a gun thrown clear may still be rolling when the body goes to sleep.)
+    const bool rest = n->Ragdoll && ((n->Ragdoll->Asleep() && (!n->Dropped || n->Dropped->Asleep())) || t > kRagRestBy) && t > 2.0f;
+    if (m_RMoment < kRagMomentCount ? t >= kRagMoments[m_RMoment] : (rest && m_RMoment == kRagMomentCount)) {
+        m_RFreeze = true;
+        m_RFrame = 0;
+        return;
+    }
+    if (m_RMoment <= kRagMomentCount) return; // the rest moment is still to come
+    // The verdict.
+    const std::string nm = rc.Name;
+    Check(n->Ragdoll != nullptr, nm + ": a ragdoll took the body");
+    if (n->Ragdoll) {
+        std::printf("[NpcTest] ragdoll %s: self %.1f cm, ground %.1f cm (%s), joints %.1f deg past range (%s), %s after %.2f s (grounded at %.2f s)\n",
+                    rc.Name, m_RCaseSelf * 100.0f, m_RCaseGround * 100.0f, m_RCaseGroundAt.c_str(), m_RCaseJoint, m_RCaseJointAt.c_str(),
+                    n->Ragdoll->Asleep() ? "asleep" : "still moving", t, n->Ragdoll->Motor().GroundedAt());
+        Check(m_RCaseSelf < 0.03f, nm + ": no part of the body inside another (worst " + std::to_string(m_RCaseSelf * 100.0f) + " cm)");
+        Check(m_RCaseGround < 0.06f, nm + ": no part driven into the ground at impact (worst " + std::to_string(m_RCaseGround * 100.0f) + " cm)");
+        Check(m_RGroundNow < 0.01f, nm + ": at rest, nothing inside the ground (" + std::to_string(m_RGroundNow * 100.0f) + " cm)");
+        Check(m_RCaseJoint < 15.0f, nm + ": no joint bent past its range (worst " + std::to_string(m_RCaseJoint) + " deg over, " + m_RCaseJointAt + ")");
+        Check(n->Ragdoll->Asleep(), nm + ": the body comes to rest and sleeps within " + std::to_string((int)kRagRestBy) + " s");
+        if (!n->Ragdoll->Asleep()) {
+            // What keeps it up: the fastest part, and the gun's own motion.
+            float lin = 0.0f, ang = 0.0f;
+            PhysicsWorld::RagdollMotion(n->Ragdoll->Id(), &lin, &ang);
+            BodyState gs;
+            const bool g = n->Dropped && PhysicsWorld::GetBodyState((unsigned)entt::to_integral(n->Dropped->Entity()), gs) && gs.Valid;
+            std::printf("[NpcTest] ragdoll %s: still moving: fastest part %.3f m/s %.2f rad/s, settle %.2f, resting %d; gun %.3f m/s %.2f rad/s\n", rc.Name, lin, ang,
+                        n->Ragdoll->Motor().Settle(), (int)n->Ragdoll->Motor().ForcedToRest(),
+                        g ? glm::length(glm::vec3(gs.Velocity[0], gs.Velocity[1], gs.Velocity[2])) : -1.0f,
+                        g ? glm::length(glm::vec3(gs.AngularVelocity[0], gs.AngularVelocity[1], gs.AngularVelocity[2])) : -1.0f);
+        }
+    }
+    if (n->Dropped) {
+        NpcDroppedWeapon& g = *n->Dropped;
+        const glm::vec3 at = g.Position(world);
+        const float o[3] = {at.x, at.y + 0.5f, at.z}, down[3] = {0.0f, -1.0f, 0.0f};
+        RaycastHit hit;
+        const float above = PhysicsWorld::RaycastSolid(o, down, 3.0f, QueryFilter{}, hit) && hit.Hit ? at.y - hit.Point[1] : 9.0f;
+        const unsigned inside = n->Ragdoll ? PhysicsWorld::RagdollPartsOverlapping((unsigned)entt::to_integral(g.Entity()), n->Ragdoll->Id(), 0xFFFFu, -0.015f) : 0u;
+        std::printf("[NpcTest] ragdoll %s: gun released after %.2f s (delay %.2f), %s, %.1f cm over the ground, inside parts 0x%x\n", rc.Name,
+                    g.Released() ? g.ReleaseDelay() : -1.0f, g.ReleaseDelay(), g.Asleep() ? "asleep" : "moving", above * 100.0f, inside);
+        Check(g.Released() && !g.Held(), nm + ": the gun left the dead hand");
+        Check(g.Asleep(), nm + ": the gun came to rest");
+        const bool onBody = n->Ragdoll && PhysicsWorld::RagdollPartsOverlapping((unsigned)entt::to_integral(g.Entity()), n->Ragdoll->Id(), 0xFFFFu, 0.05f) != 0u;
+        Check(above < 0.15f || onBody, nm + ": the gun lies on the ground or the body, not hanging in the air (" + std::to_string(above * 100.0f) + " cm over the ground)");
+        Check(inside == 0u, nm + ": the gun is not inside the body");
+    }
+    // On to the next.
+    ++m_RCase;
+    m_RStage = 0;
+    m_RAt = now;
+    m_RName.clear();
 }

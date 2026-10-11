@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "Animation.h" // LocalTRS
+#include "FirstPersonBody.h" // FirstPersonArmTwist
 
 class Model;
 class NpcBody;
@@ -58,6 +59,8 @@ public:
     // The strongest joint's strength now (0..1).
     float Strength() const { return m_Strongest; }
     bool ForcedToRest() const { return m_Resting; }
+    // When the pelvis or chest first met the ground (seconds after death; -1: not yet).
+    float GroundedAt() const { return m_GroundedAt; }
     // The body is about to rest kneeling, curled up or propped and its legs are pushing it toward the lying pose (see Rest Pelvis Max).
     bool Pushing() const { return m_Push; }
     const Fall& FallState() const { return m_Fall; }
@@ -86,7 +89,9 @@ public:
     static float WoundGrab(const RagdollSettingsComponent& cfg, const Fall& fall, float t);
 
 private:
-    bool Lying() const; // the pelvis and chest low, the knees and hips not folded past the Rest limits
+    bool Lying() const;   // the pelvis and chest low, the knees and hips not folded past the Rest limits
+    bool Grounded() const; // the pelvis or chest on the solid world
+    bool TipPropped();     // an arm segment at rest pointing up: shoved over (true), so the body doesn't sleep with it raised
     int m_Id = -1;
     int m_HitPart = -1;
     Fall m_Fall;
@@ -94,10 +99,12 @@ private:
     bool m_Resting = false;
     bool m_Push = false;              // not lying once the pose should have formed: the legs push
     bool m_Folded = false;            // not lying (yet): curled up, kneeling or propped
-    float m_Time = 0.0f, m_Settle = 0.0f, m_Still = 0.0f, m_Strongest = 1.0f;
+    float m_Time = 0.0f, m_Settle = 0.0f, m_Still = 0.0f, m_Creep = 0.0f, m_Strongest = 1.0f;
     float m_LooseUntil = 0.0f;        // a round into the body: no settling until then
     float m_AppliedSettle = -1.0f;
     float m_Height0 = 1.0f;           // the pelvis's height at death
+    float m_GroundedAt = -1.0f;       // when the pelvis or chest first met the ground (-1: not yet)
+    int m_Tips = 0;                   // raised arms tipped over before sleeping (a few at most)
     std::shared_ptr<RagdollSettingsComponent> m_Cfg; // a copy (the director's may change under a body that is already down)
 };
 
@@ -124,6 +131,8 @@ public:
                const RagdollSettingsComponent* cfg = nullptr, const BoneSnapshot* prev = nullptr, float prevDt = 0.0f);
     void Stop();
     bool Active() const { return m_Id >= 0; }
+    int Id() const { return m_Id; } // the physics ragdoll (PhysicsWorld), -1 when none
+    const NpcRagdollMotor& Motor() const { return m_Motor; }
     // After the physics step (and after the animators, which are off by then): the pieces' poses. `dt` runs the
     // drives' fade.
     void Update(float dt = 0.0f);
@@ -198,15 +207,21 @@ private:
         struct Link { int Node, A, B; float T; glm::mat4 OffA, OffB; };
         std::vector<Link> Links;
         std::vector<int> Parents;    // the model's node parents (filled on first use)
+        // The fingers: from the grip they died in to a dead hand's loose curl (their bind pose, a little of the grip kept).
+        struct Finger { int Node; glm::quat From, To; };
+        std::vector<Finger> Fingers;
     };
     int m_Id = -1;
     glm::mat4 m_RootInv{1.0f};       // the body's root (frozen at death), inverted
     std::vector<PieceBones> m_Pieces;
+    FirstPersonArmTwist m_ArmTwist;  // a wrist's turn spread up the forearm's twist bones (the skin turns, it doesn't wring)
     bool m_Settled = false;          // asleep, and the pieces already show the resting pose
     float m_Drive = 0.0f;
     NpcRagdollMotor m_Motor;         // the powered body (cfg.PoweredRagdoll); else the legacy fade below
     bool m_Powered = false;
     float m_Time = 0.0f;             // seconds since death
+    float m_FingerTime = 0.0f;       // seconds since death, for the fingers letting go
+    float m_FingerRelaxTime = 0.35f;
     float m_PartFade[kRagParts];        // per part: seconds to limp
     float m_DistalDamping = 0.0f;    // the hands' and feet's joint damping floor
     float m_Stiffness = 700.0f, m_Damping = 60.0f; // the drives' strength, from the settings
