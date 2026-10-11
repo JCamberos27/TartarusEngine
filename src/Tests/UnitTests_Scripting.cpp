@@ -688,6 +688,10 @@ void TestProjectLifecycleAndSession(){
     CHECK(InvokeProject("npc.spawn",&spawn,sizeof spawn));CHECK(spawn.Weapon==1 && std::abs(spawn.Feet.x-1.2f)<.001f);CHECK(spawn.AimYaw==90 && std::abs(spawn.Eye.y-1.62f)<.001f);CHECK(spawn.NextThink==10.1f && spawn.AgentHeight==1.8f);
     NpcLifeFrame life;life.Now=30;life.Wounded=1;life.WoundedAt=10;life.BleedOutTime=10;life.CrawlSpeed=.6f;life.Intent.Pace=3;life.CorpseTime=5;
     CHECK(InvokeProject("npc.life",&life,sizeof life));CHECK(life.Kill && life.Speed==.6f && !life.Despawn);
+    // A corpse goes only unseen: past Corpse Time (or over the cap) and out of sight for Unseen Time.
+    {NpcLifeFrame c;c.Dead=1;c.DiedAt=0;c.CorpseTime=180;c.UnseenTime=3;c.Now=200;c.UnseenFor=1;CHECK(InvokeProject("npc.life",&c,sizeof c));CHECK(!c.Despawn);
+     c.UnseenFor=3.5f;CHECK(InvokeProject("npc.life",&c,sizeof c));CHECK(c.Despawn);c.Now=100;CHECK(InvokeProject("npc.life",&c,sizeof c));CHECK(!c.Despawn);
+     c.OverCap=1;CHECK(InvokeProject("npc.life",&c,sizeof c));CHECK(c.Despawn);c.UnseenFor=0;CHECK(InvokeProject("npc.life",&c,sizeof c));CHECK(!c.Despawn);}
     life.Wounded=0;life.Intent.Crouch=1;life.Intent.Pace=1;life.LimpUntil=40;life.LimpScale=.5f;life.StaggerUntil=40;CHECK(InvokeProject("npc.life",&life,sizeof life));CHECK(life.Crouch && std::abs(life.Speed-.19f)<.0001f);
     life={};life.Operation=1;life.Dt=.1f;life.Gravity=20;life.Want={3,0,0};life.Push={0,0,7};CHECK(InvokeProject("npc.life",&life,sizeof life));CHECK(std::abs(life.Displacement.x-.3f)<.0001f && std::abs(life.Displacement.y+.2f)<.0001f && std::abs(life.Displacement.z-.7f)<.0001f);
     life.Operation=2;life.Grounded=1;life.Intent.Move=1;life.Intent.Crouch=1;life.Intent.Pace=1;life.Intent.Aim=1;life.MeleeAt=-100;life.MeleeTime=.5f;life.FootIKRange=20;life.OnScreen=1;CHECK(InvokeProject("npc.life",&life,sizeof life));CHECK(life.FallSpeed==-1 && life.BlockedTime==.1f && life.Crouch && life.Aim && life.FootIK);

@@ -165,7 +165,14 @@ public:
         float Yaw = 0.0f;
         int Weapon = 0, Squad = 0, Brain = 0, OutfitSeed = 0;
         float Skill = 0.5f;
+        bool Bare = false; // dressed in its own skin, no clothing (ragdoll tests)
     };
+    // Whether the player could see `point` now: in front of the view (a cone a little wider than the screen), near enough and
+    // not behind solid geometry. Corpses and dropped guns only ever go while unseen.
+    static bool PlayerSees(const PlayerSnapshot& p, const glm::vec3& point);
+    // The guns that outlived their corpses (tests).
+    int LooseGuns() const { return (int)m_LooseGuns.size(); }
+    const NpcDroppedWeapon* LooseGun(int i) const { return i >= 0 && i < (int)m_LooseGuns.size() ? m_LooseGuns[(size_t)i].Gun.get() : nullptr; }
     const std::vector<SpawnPoint>& SpawnPoints() const { return m_Spawns; }
 
 private:
@@ -240,6 +247,10 @@ private:
     // going to the next spawn instead of destroyed and built again (about a millisecond of entity building a spawn).
     struct SoldierBody;
     std::unordered_map<entt::entity, std::shared_ptr<SoldierBody>> m_Bodies; // per soldier, living or lying, by root
+    // Guns whose corpse has gone: each lies until its own Lifetime is up and the player hasn't seen it for Unseen Time.
+    struct LooseWeapon { std::unique_ptr<NpcDroppedWeapon> Gun; float DroppedAt = 0.0f, UnseenSince = -1.0f; };
+    std::vector<LooseWeapon> m_LooseGuns;
+    void UpdatePersistence(World& world, const PlayerSnapshot& p, float dt);
     std::vector<std::shared_ptr<SoldierBody>> m_Pool;                        // hidden, ready for the next spawn
     int m_Reused = 0;                                                         // spawns that took a pooled body
     std::shared_ptr<SoldierBody> BuildBody(World& world, AssetLibrary& assets); // from Soldier.json; null on failure

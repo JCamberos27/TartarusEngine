@@ -986,6 +986,8 @@ struct NpcLifeFrame {
     float CowerUntil{};
     float Skill{};
     float Morale{};
+    float UnseenFor{};
+    float UnseenTime{};
     std::int32_t Dead{};
     std::int32_t Wounded{};
     std::int32_t Kill{};
@@ -998,6 +1000,7 @@ struct NpcLifeFrame {
     std::int32_t OnScreen{};
     std::int32_t Grounded{};
     std::int32_t CallManDown{};
+    std::int32_t OverCap{};
     std::int32_t Operation{};
     std::uintptr_t Services{};
     std::uintptr_t Context{};

@@ -3,7 +3,7 @@ namespace Tartarus.Gameplay;
 /// <summary>Project-owned sample NPC configuration.</summary>
 public sealed class SquadDefinition : Script
 {
-    [Range(0,8)] public int SquadSize=4;
+    [Range(0,16)] public int SquadSize=4;
     public float RespawnDelay=8.0f;
     public float Difficulty=1.0f;
     public float NpcDamageScale=0.45f;
@@ -14,7 +14,9 @@ public sealed class SquadDefinition : Script
     public float CrawlSpeed=0.6f;
     public float LimpSpeedScale=0.6f;
     public float LimpTime=6.0f;
-    public float CorpseTime=14.0f;
+    public float CorpseTime=180.0f;
+    [Range(1,64)] public int MaxCorpses=12;
+    public float UnseenTime=3.0f;
     public float FallGravity=18.0f;
     public float MeleeDamage=25.0f;
     public float MeleeTime=0.55f;
