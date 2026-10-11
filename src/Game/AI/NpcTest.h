@@ -31,6 +31,12 @@ class World;
 //   feet    foot IK: a soldier's feet measured over the ground on the flat, then across and up the Arena's ramp
 //   blood   the volumetric blood (scenes/BloodTest.json): a wound, a chest kill against a wall, a head kill and a
 //           corpse shot, each watched from the side in shots through the spray's flight
+//   ragdoll the deaths themselves (scenes/RagdollTest.json): a dozen soldiers, bare and dressed, standing, walking, jogging,
+//           sprinting and strafing, at a ledge, a wall, a crate, on stairs and over another body, each killed by a round from
+//           a set side; every death is frozen at moments through the fall and at rest and shot from four sides (front, side,
+//           high three-quarter, ground level), and checked every frame: no part of a body inside another (self-collision),
+//           none inside the ground, no joint past its range, the gun out of the hand and lying on the floor clear of the body,
+//           the body asleep in time; then the corpses and guns stay while looked at and go once the view turns away
 //   pose    the weapon hold, close up: an AK and a Remington soldier, the AI frozen, put through aim level /
 //           up / down / to the side, at the hip, crouched, strafing, reloading and sprinting; four views of each
 //           and the gun's / elbows' / hands' clearances (NpcBody::MeasureHold) logged and checked
@@ -57,7 +63,9 @@ public:
     bool Aiming() const { return !m_Target.empty(); }   // sights up (rounds go where the view looks)
     bool WantsReload() const { return m_Reload; }
     bool WantsAiOverlay() const { return m_Scenario == "sandbox"; } // the AI overlay in the sandbox shots
-    bool WantsCleanViews() const { return m_Scenario == "blood"; } // no collider / physics-debug overlays (the blood shots)
+    bool WantsCleanViews() const { return m_Scenario == "blood" || m_Scenario == "ragdoll"; } // no collider / physics-debug overlays
+    // Time stands still this frame (the host steps the game by zero): the ragdoll scenario's multi-angle shots of one moment.
+    bool Frozen() const { return m_RFreeze; }
     // The blood scenario's view of the blood, filled by the host each frame.
     struct BloodView {
         bool Loaded = false;
@@ -82,6 +90,20 @@ private:
     void Feet(NpcDirector& npcs, float now);
     void Reload(World& world, NpcDirector& npcs, float now);
     void Blood(World& world, NpcDirector& npcs, float now);
+    void Ragdoll(World& world, NpcDirector& npcs, const Player& player);
+    // ragdoll
+    int m_RCase = -1, m_RStage = 0, m_RMoment = 0, m_RFrame = 0, m_RFrames = 0;
+    float m_RAt = 0.0f, m_RKilledAt = 0.0f, m_RLastDeath = 0.0f, m_RYaw = 0.0f;
+    bool m_RFreeze = false, m_RKilled = false;
+    std::string m_RName;
+    float m_RWorstSelf = 0.0f, m_RWorstGround = 0.0f, m_RWorstJoint = 0.0f;
+    std::string m_RWorstSelfAt, m_RWorstGroundAt, m_RWorstJointAt;
+    float m_RCaseSelf = 0.0f, m_RCaseGround = 0.0f, m_RCaseJoint = 0.0f;
+    std::string m_RCaseGroundAt, m_RCaseJointAt;
+    float m_RGroundNow = 0.0f; // this frame's deepest part into the ground
+    int m_RLookAway = 0;           // the persistence stage: 0 looking at the bodies, 1 turned away
+    float m_RLookAwayAt = 0.0f;
+    float m_RViewYaw = -90.0f;     // the player's view (Drive)
     // blood
     int m_BSurface = 0, m_BImpactsBefore = 0, m_BHolesBefore = 0;
     int m_BStep = 0, m_BCase = 0, m_BShot = 0, m_BSpawnBefore = 0, m_BGearBefore = 0, m_BPuffsBefore = 0, m_BHeadshotsBefore = 0;

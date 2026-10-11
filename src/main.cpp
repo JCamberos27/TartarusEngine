@@ -2268,6 +2268,7 @@ int main(int argc, char** argv) {
             if (npcTestMode && smokeScenesDirArg.empty())
                 smokeScenePaths.assign(1, ProjectPaths::Resolve(npcTestScenario == "sandbox" ? "scenes/Sandbox.json"
                                                               : npcTestScenario == "blood" ? "scenes/BloodTest.json"
+                                                              : npcTestScenario == "ragdoll" ? "scenes/RagdollTest.json"
                                                                                            : "scenes/Arena.json"));
             std::cout << "[SmokeTest] Found " << smokeScenePaths.size() << " scene(s) under "
                       << scenesDir << std::endl;
@@ -2857,7 +2858,8 @@ int main(int argc, char** argv) {
             Time::BeginFrame();
             const float dt = Time::UnscaledDeltaTime();
             // --weapon-test runs on a fixed step, so its timings don't depend on the machine.
-            const float gameDt = weaponTestMode || npcTestMode ? (playing ? 1.0f / 60.0f : 0.0f) : Time::DeltaTime();
+            // (--npc-test ragdoll stops time for a few frames to shoot one moment from four sides.)
+            const float gameDt = weaponTestMode || npcTestMode ? (playing && !(npcTest && npcTest->Frozen()) ? 1.0f / 60.0f : 0.0f) : Time::DeltaTime();
 
             // #158 — shader hot reload (editor only; the scan itself runs at 1 Hz). Engine
             // programs and material shaders recompile when any file they were built from changes;

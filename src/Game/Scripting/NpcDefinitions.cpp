@@ -15,6 +15,7 @@ void Read(NpcSpawnComponent& view,const Json& fields) {
     view.Skill=fields.at("Skill").get<float>();
     view.OutfitSeed=fields.at("OutfitSeed").get<int>();
     view.Brain=fields.at("Brain").get<int>();
+    view.Bare=fields.value("Bare",false);
 }
 void Read(SquadSettingsComponent& view,const Json& fields) {
     view.BodyPrefab=AssetDatabase::FollowRef(fields.at("BodyPrefab").value("path",std::string{}),fields.at("BodyPrefab").value("pathGuid",std::string{}));
@@ -35,6 +36,8 @@ void Read(SquadSettingsComponent& view,const Json& fields) {
     view.LimpSpeedScale=fields.at("LimpSpeedScale").get<float>();
     view.LimpTime=fields.at("LimpTime").get<float>();
     view.CorpseTime=fields.at("CorpseTime").get<float>();
+    view.MaxCorpses=fields.value("MaxCorpses",12);
+    view.UnseenTime=fields.value("UnseenTime",3.0f);
     view.FallGravity=fields.at("FallGravity").get<float>();
     view.MeleeDamage=fields.at("MeleeDamage").get<float>();
     view.MeleeTime=fields.at("MeleeTime").get<float>();

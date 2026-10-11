@@ -1019,6 +1019,8 @@ internal unsafe struct NpcLifeFrame {
     public float CowerUntil;
     public float Skill;
     public float Morale;
+    public float UnseenFor;
+    public float UnseenTime;
     private int _Dead; public bool Dead {get=>_Dead!=0;set=>_Dead=value?1:0;}
     private int _Wounded; public bool Wounded {get=>_Wounded!=0;set=>_Wounded=value?1:0;}
     private int _Kill; public bool Kill {get=>_Kill!=0;set=>_Kill=value?1:0;}
@@ -1031,6 +1033,7 @@ internal unsafe struct NpcLifeFrame {
     private int _OnScreen; public bool OnScreen {get=>_OnScreen!=0;set=>_OnScreen=value?1:0;}
     private int _Grounded; public bool Grounded {get=>_Grounded!=0;set=>_Grounded=value?1:0;}
     private int _CallManDown; public bool CallManDown {get=>_CallManDown!=0;set=>_CallManDown=value?1:0;}
+    private int _OverCap; public bool OverCap {get=>_OverCap!=0;set=>_OverCap=value?1:0;}
     public int Operation;
     public nint Services;
     public nint Context;
