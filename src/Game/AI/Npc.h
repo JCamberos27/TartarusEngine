@@ -74,7 +74,7 @@ struct Npc {
 
     NpcBody Body;
     std::unique_ptr<NpcRagdoll> Ragdoll; // once dead
-    std::unique_ptr<NpcDroppedWeapon> Dropped; // the gun he dropped (lies as long as the corpse)
+    std::unique_ptr<NpcDroppedWeapon> Dropped; // the gun he dropped (handed to the director's loose guns if it outlasts the corpse)
     std::unique_ptr<NpcHitboxes> Hitboxes; // while alive and near the player: the bones the player's rounds hit
     int HitboxTries = 0;
     std::unique_ptr<FirstPersonPresentation> Weapon;
@@ -94,6 +94,7 @@ struct Npc {
     float Health = 100.0f, MaxHealth = 100.0f;
     bool Dead = false;
     float DiedAt = 0.0f;
+    float UnseenSince = -1.0f;      // a corpse: since when the player hasn't seen it (-1: in sight now)
     float LastHurt = -1e9f;
     glm::vec3 LastHurtFrom{0.0f};
     int Hits = 0;

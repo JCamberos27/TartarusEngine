@@ -93,8 +93,16 @@ PxFilterFlags EngineFilterShader(
         const PxU32 la = filterData0.word1 & 31u, lb = filterData1.word1 & 31u;
         if (((mask[la] >> lb) & 1u) == 0u) return PxFilterFlag::eKILL;
     }
-    // The parts of one ragdoll (word2 = its id + 1) never collide with each other.
-    if (filterData0.word2 != 0u && filterData0.word2 == filterData1.word2) return PxFilterFlag::eKILL;
+    // The parts of one ragdoll (word2: its id + 1 in the low half, the part in the high half) collide with each other unless
+    // either one's word3 has the other's bit: parent and child, a pair that overlapped when the body was built (until it
+    // separates), a gun with the hand that held it.
+    {
+        const PxU32 r0 = filterData0.word2 & 0xFFFFu, r1 = filterData1.word2 & 0xFFFFu;
+        if (r0 != 0u && r0 == r1) {
+            const PxU32 p0 = (filterData0.word2 >> 16) & 31u, p1 = (filterData1.word2 >> 16) & 31u;
+            if (((filterData0.word3 >> p1) & 1u) || ((filterData1.word3 >> p0) & 1u)) return PxFilterFlag::eKILL;
+        }
+    }
     if (PxFilterObjectIsTrigger(attributes0) || PxFilterObjectIsTrigger(attributes1)) {
         pairFlags = PxPairFlag::eTRIGGER_DEFAULT;
         return PxFilterFlag::eDEFAULT;
@@ -191,10 +199,29 @@ struct PhysicsState {
     // back to the entity that authored it, for a useful break message. staticByEntity lets a
     // joint's other end be a static collider (#185 hardening).
     std::vector<PxJoint*> joints;
-    // Ragdolls by id: their bodies and joints (released with the scene, or by DestroyRagdoll).
-    // Prev: each part's pose before the latest substep, so GetRagdollPart can interpolate like #168.
-    // Drive: per part, the D6 joint to its parent (null for the root), for the slerp drives.
-    struct Ragdoll { std::vector<PxRigidDynamic*> Bodies; std::vector<PxJoint*> Joints; std::vector<PxTransform> Prev; std::vector<PxD6Joint*> Drive; PxMaterial* Mat = nullptr; };
+    // Ragdolls by id: one reduced-coordinate articulation each (released with the scene, or by DestroyRagdoll).
+    // Bodies: its links by part. Prev: each part's pose before the latest substep, so GetRagdollPart can interpolate like #168.
+    // Drive: per part, the spherical joint to its parent (null for the root). Ignore: per part, the parts its shape doesn't
+    // collide with (the filter's word3); Pending: pairs ignored only because they overlapped at build, let go once apart.
+    // Attach: joints that hold something to a part (a gun in the hand), released with it. ExtraGravity: m/s^2 added downward.
+    struct Ragdoll {
+        PxArticulationReducedCoordinate* Art = nullptr;
+        std::vector<PxArticulationLink*> Bodies;
+        std::vector<PxTransform> Prev;
+        std::vector<PxArticulationJointReducedCoordinate*> Drive;
+        std::vector<PxU32> Ignore;
+        std::vector<std::pair<int, int>> Pending;
+        std::vector<PxJoint*> Attach;
+        std::vector<float> DriveInertia; // per part: what its joint turns (the part and all that hangs off it, about the joint), kg m^2
+        std::vector<PxTransform> Shape;  // per part: its capsule in the link's frame (the link's frame is its joint's: see CreateRagdoll)
+        // per part: a drive target given against the pose the body was built in (the motor's) is the joint's rotation Pre * t * Post
+        // (the joint's zero is the middle of its range, not the build pose: see CreateRagdoll)
+        std::vector<PxQuat> TargetPre, TargetPost;
+        PxMaterial* Mat = nullptr;
+        PxMaterial* SlickMat = nullptr; // the parts with a FrictionScale (the hands): Mat's friction times SlickScale
+        float SlickScale = 1.0f;
+        float ExtraGravity = 0.0f;
+    };
     std::vector<Ragdoll> ragdolls;
     // Per-bone hitboxes of living NPCs (see CreateNpcHitboxes): their kinematic actors, the capsule each shadows while
     // active. hitboxActors: every hitbox actor, for the query filters; hitboxedCapsules: the capsules currently shadowed.
@@ -899,16 +926,19 @@ static PxTransform PlatformPose(const PhysicsState& s, const PxRigidDynamic* bod
 
 void PlayerHitReport::onShapeHit(const PxControllerShapeHit& hit) {
     if (!owner || !hit.actor) return;
-    PxRigidDynamic* body = hit.actor->is<PxRigidDynamic>();
+    // A corpse's part (an articulation link) is pushed like any other body.
+    PxRigidBody* body = hit.actor->is<PxRigidDynamic>() ? static_cast<PxRigidBody*>(hit.actor->is<PxRigidDynamic>())
+                                                         : static_cast<PxRigidBody*>(hit.actor->is<PxArticulationLink>());
     if (!body) return;
     const bool kin = (body->getRigidBodyFlags() & PxRigidBodyFlag::eKINEMATIC);
     const PxVec3 n(hit.worldNormal.x, hit.worldNormal.y, hit.worldNormal.z);
 
     if (kin) {
-        if (n.y > 0.4f) { // standing on top of a moving platform
-            if (owner->playerGround != body) {
-                owner->playerGround = body;
-                const PxTransform gp = PlatformPose(*owner, body);
+        PxRigidDynamic* platform = hit.actor->is<PxRigidDynamic>();
+        if (platform && n.y > 0.4f) { // standing on top of a moving platform
+            if (owner->playerGround != platform) {
+                owner->playerGround = platform;
+                const PxTransform gp = PlatformPose(*owner, platform);
                 owner->playerGroundLastPos = gp.p;
                 owner->playerGroundLastRot = gp.q;
             }
@@ -1035,6 +1065,9 @@ void Create(const World& world) {
     // Resting contacts (a corpse's sixteen parts on the floor) hold still instead of creeping (bodies opt in by their stabilization
     // threshold; PhysX's own default is tiny).
     desc.flags                  |= PxSceneFlag::eENABLE_STABILIZATION;
+    // TGS: the temporal Gauss-Seidel solver holds jointed chains and articulations (the ragdolls' joint limits under a falling
+    // body's weight) far better than the default PGS at the same iteration count.
+    desc.solverType              = PxSolverType::eTGS;
     s->scene = s->physics->createScene(desc);
     if (!s->scene) {
         Log::Error("PhysX: createScene failed — physics disabled for this Play session.");
@@ -1061,7 +1094,7 @@ void Destroy() {
     // Reverse construction order. scene->release() drops every actor/shape it owns. The core
     // (physics, dispatcher, materials, cooked meshes) stays up for the next Play (#167).
     for (PxJoint* j : s->joints)               if (j) j->release(); // #185 PR 11 — before the scene
-    for (auto& r : s->ragdolls) { for (PxJoint* j : r.Joints) if (j) j->release(); if (r.Mat) { r.Mat->release(); r.Mat = nullptr; } }
+    for (auto& r : s->ragdolls) { for (PxJoint* j : r.Attach) if (j) j->release(); if (r.Mat) { r.Mat->release(); r.Mat = nullptr; } if (r.SlickMat) { r.SlickMat->release(); r.SlickMat = nullptr; } } // (the articulations go with the scene)
     if (s->controller)      s->controller->release();
     for (auto& n : s->npcs) if (n.ctrl) n.ctrl->release();
     if (s->controllerMgr)   s->controllerMgr->release();
@@ -1169,6 +1202,8 @@ void DriveGrab(PhysicsState& s, float dt) {
     b->setAngularVelocity(w);
 }
 
+void RagdollBeforeSubstep(PhysicsState& s, PhysicsState::Ragdoll& rd); // (with the ragdolls, below)
+
 // #185 debug — one fixed substep: velocity snapshot (for impact speed), simulate, fetch.
 // Shared by Step() and StepOneSubstep().
 void RunOneSubstep(PhysicsState& s, float fixedStep) {
@@ -1182,6 +1217,7 @@ void RunOneSubstep(PhysicsState& s, float fixedStep) {
     for (auto& rd : s.ragdolls) {
         rd.Prev.resize(rd.Bodies.size());
         for (size_t i = 0; i < rd.Bodies.size(); ++i) rd.Prev[i] = rd.Bodies[i]->getGlobalPose();
+        RagdollBeforeSubstep(s, rd);
     }
     s.scene->simulate(fixedStep);
     s.scene->fetchResults(/*block=*/true);
@@ -1709,6 +1745,7 @@ struct LayerQueryFilter : PxQueryFilterCallback {
             if (const PxRigidDynamic* dyn = actor->is<PxRigidDynamic>();
                 dyn && !(dyn->getRigidBodyFlags() & PxRigidBodyFlag::eKINEMATIC))
                 return PxQueryHitType::eNONE;
+            if (actor->is<PxArticulationLink>()) return PxQueryHitType::eNONE; // a ragdoll's part
         }
         if (shape) {
             if (!triggers && (shape->getFlags() & PxShapeFlag::eTRIGGER_SHAPE)) return PxQueryHitType::eNONE;
@@ -1931,108 +1968,415 @@ bool CharacterFitsAt(float cylinderHalfHeight) {
 }
 
 // --- Ragdolls --------------------------------------------------------------------------------
+// One reduced-coordinate articulation per body: the joints are exact (a limb can't drift off its parent or stretch however hard
+// it is hit, and light hands on heavy forearms don't whip through their limits), each joint is a spherical one whose three
+// axes (twist about the joint frame's X, swing about its Y and Z) are limited and driven, and the parts collide with each other
+// except where the filter says not (see EngineFilterShader).
+
+namespace {
+
+constexpr float kPairClearance = 0.01f; // a pair closer than this (m) at build is let through until it has separated by as much
+
+// The closest distance between segments [p0, p1] and [q0, q1] (Ericson, Real-Time Collision Detection 5.1.9).
+float SegmentDistance(const PxVec3& p0, const PxVec3& p1, const PxVec3& q0, const PxVec3& q1) {
+    const PxVec3 d1 = p1 - p0, d2 = q1 - q0, r = p0 - q0;
+    const float a = d1.dot(d1), e = d2.dot(d2), f = d2.dot(r);
+    float s = 0.0f, t = 0.0f;
+    if (a <= 1e-8f && e <= 1e-8f) return r.magnitude();
+    if (a <= 1e-8f) {
+        t = std::clamp(f / e, 0.0f, 1.0f);
+    } else {
+        const float c = d1.dot(r);
+        if (e <= 1e-8f) {
+            s = std::clamp(-c / a, 0.0f, 1.0f);
+        } else {
+            const float b = d1.dot(d2), denom = a * e - b * b;
+            s = denom > 1e-8f ? std::clamp((b * f - c * e) / denom, 0.0f, 1.0f) : 0.0f;
+            t = (b * s + f) / e;
+            if (t < 0.0f) { t = 0.0f; s = std::clamp(-c / a, 0.0f, 1.0f); }
+            else if (t > 1.0f) { t = 1.0f; s = std::clamp((b - c) / a, 0.0f, 1.0f); }
+        }
+    }
+    return ((p0 + d1 * s) - (q0 + d2 * t)).magnitude();
+}
+
+// The gap between two capsules along local +X (negative: they overlap by that much).
+float CapsuleGap(const PxTransform& a, float ha, float ra, const PxTransform& b, float hb, float rb) {
+    const PxVec3 xa = a.q.getBasisVector0() * ha, xb = b.q.getBasisVector0() * hb;
+    return SegmentDistance(a.p - xa, a.p + xa, b.p - xb, b.p + xb) - ra - rb;
+}
+
+PxShape* LinkShape(PxArticulationLink* link) {
+    PxShape* sh = nullptr;
+    if (link && link->getNbShapes() > 0) link->getShapes(&sh, 1);
+    return sh;
+}
+
+float LinkGap(PxArticulationLink* a, PxArticulationLink* b) {
+    PxShape* sa = LinkShape(a);
+    PxShape* sb = LinkShape(b);
+    PxCapsuleGeometry ga, gb;
+    if (!sa || !sb || sa->getGeometry().getType() != PxGeometryType::eCAPSULE || sb->getGeometry().getType() != PxGeometryType::eCAPSULE)
+        return 1e9f;
+    ga = static_cast<const PxCapsuleGeometry&>(sa->getGeometry());
+    gb = static_cast<const PxCapsuleGeometry&>(sb->getGeometry());
+    return CapsuleGap(a->getGlobalPose() * sa->getLocalPose(), ga.halfHeight, ga.radius, b->getGlobalPose() * sb->getLocalPose(), gb.halfHeight, gb.radius);
+}
+
+// Part `part`'s ignore mask into its shape's filter, and the pairs it is in re-filtered.
+void ApplyPartFilter(PhysicsState& s, PhysicsState::Ragdoll& rd, int part) {
+    PxArticulationLink* link = rd.Bodies[(size_t)part];
+    PxShape* sh = LinkShape(link);
+    if (!sh) return;
+    PxFilterData f = sh->getSimulationFilterData();
+    f.word3 = rd.Ignore[(size_t)part];
+    sh->setSimulationFilterData(f);
+    if (link->getScene()) s.scene->resetFiltering(*link);
+}
+
+bool ValidRagdoll(int ragdoll) {
+    return g_State && ragdoll >= 0 && ragdoll < (int)g_State->ragdolls.size() && g_State->ragdolls[(size_t)ragdoll].Art;
+}
+
+const PxArticulationAxis::Enum kSphericalAxes[3] = {PxArticulationAxis::eTWIST, PxArticulationAxis::eSWING1, PxArticulationAxis::eSWING2};
+
+} // namespace
+
+// Before every substep: the extra gravity, and pairs that overlapped at build let collide once they are apart.
+void RagdollBeforeSubstep(PhysicsState& s, PhysicsState::Ragdoll& rd) {
+    if (!rd.Art || rd.Art->isSleeping()) return;
+    if (rd.ExtraGravity != 0.0f) {
+        const PxVec3 g = s.scene->getGravity();
+        const float gl = g.magnitude();
+        if (gl > 1e-4f) {
+            const PxVec3 extra = g * (rd.ExtraGravity / gl);
+            for (PxArticulationLink* l : rd.Bodies)
+                if (l) l->addForce(extra, PxForceMode::eACCELERATION, false);
+        }
+    }
+    for (size_t k = 0; k < rd.Pending.size();) {
+        const auto [a, b] = rd.Pending[k];
+        if (LinkGap(rd.Bodies[(size_t)a], rd.Bodies[(size_t)b]) > kPairClearance) {
+            rd.Ignore[(size_t)a] &= ~(1u << b);
+            rd.Ignore[(size_t)b] &= ~(1u << a);
+            ApplyPartFilter(s, rd, a);
+            ApplyPartFilter(s, rd, b);
+            rd.Pending.erase(rd.Pending.begin() + (long long)k);
+        } else {
+            ++k;
+        }
+    }
+}
+
+namespace {
+// A rotation vector (axis times angle, radians) as a quaternion, and back (the shorter way round).
+PxQuat RotationFromVector(const PxVec3& v) {
+    const float a = v.magnitude();
+    return a > 1e-8f ? PxQuat(a, v / a) : PxQuat(PxIdentity);
+}
+PxVec3 VectorFromRotation(PxQuat q) {
+    if (q.w < 0.0f) q = -q;
+    float angle = 0.0f;
+    PxVec3 axis(1.0f, 0.0f, 0.0f);
+    q.toRadiansAndUnitAxis(angle, axis);
+    return axis * angle;
+}
+} // namespace
+
+void RagdollRotationToJointAxes(const float rotXYZW[4], float out[3]) {
+    PxQuat q = ToQuat(rotXYZW);
+    if (q.w < 0.0f) q = -q;
+    float angle = 0.0f;
+    PxVec3 axis(1.0f, 0.0f, 0.0f);
+    q.toRadiansAndUnitAxis(angle, axis);
+    // The articulation's spherical joint position is the rotation vector of the child's frame against the parent's, by axis.
+    const PxVec3 v = axis * angle;
+    out[0] = v.x; out[1] = v.y; out[2] = v.z;
+}
 
 int CreateRagdoll(unsigned entity, const RagdollPart* parts, int count, const RagdollParams* params) {
-    if (!g_State || !g_State->scene || !parts || count <= 0) return -1;
+    if (!g_State || !g_State->scene || !parts || count <= 0 || count > 16) return -1;
     PhysicsState& s = *g_State;
+    // Parents first: an articulation link is made under one that exists (the head hangs off the neck, which comes after it).
+    std::vector<int> order;
+    std::vector<char> placed((size_t)count, 0);
+    for (int i = 0; i < count; ++i)
+        if (parts[i].Parent < 0 || parts[i].Parent >= count || parts[i].Parent == i) { order.push_back(i); placed[(size_t)i] = 1; break; }
+    if (order.empty()) return -1;
+    for (bool grew = true; grew && (int)order.size() < count;) {
+        grew = false;
+        for (int i = 0; i < count; ++i)
+            if (!placed[(size_t)i] && parts[i].Parent >= 0 && parts[i].Parent < count && placed[(size_t)parts[i].Parent]) {
+                order.push_back(i);
+                placed[(size_t)i] = 1;
+                grew = true;
+            }
+    }
+    if ((int)order.size() != count) return -1; // a second root, or a loop
     int id = -1;
     for (size_t i = 0; i < s.ragdolls.size(); ++i)
-        if (s.ragdolls[i].Bodies.empty()) { id = (int)i; break; }
+        if (!s.ragdolls[i].Art) { id = (int)i; break; }
     if (id < 0) { id = (int)s.ragdolls.size(); s.ragdolls.emplace_back(); }
     PhysicsState::Ragdoll& rd = s.ragdolls[(size_t)id];
+    rd = PhysicsState::Ragdoll();
     const RagdollParams prm = params ? *params : RagdollParams();
+    PxArticulationReducedCoordinate* art = s.physics->createArticulationReducedCoordinate();
+    if (!art) return -1;
+    art->setSolverIterationCounts((PxU32)std::max(prm.SolverPosIters, 1), (PxU32)std::max(prm.SolverVelIters, 1));
+    art->setSleepThreshold(prm.SleepThreshold);
+    if (prm.StabilizationThreshold >= 0.0f) art->setStabilizationThreshold(prm.StabilizationThreshold);
     PxMaterial* mat = s.physics->createMaterial(prm.StaticFriction, prm.DynamicFriction, prm.Restitution);
     if (prm.Grip) {
         mat->setFrictionCombineMode(PxCombineMode::eMAX);
         mat->setRestitutionCombineMode(PxCombineMode::eMULTIPLY);
     }
+    // A hand slides off an edge it would otherwise hook on (and be levered past its range by the body hanging from it).
+    PxMaterial* slick = nullptr;
+    float slickScale = 1.0f;
+    for (int i = 0; i < count && !slick; ++i)
+        if (std::fabs(parts[i].FrictionScale - 1.0f) > 1e-3f) {
+            slickScale = std::max(parts[i].FrictionScale, 0.0f);
+            slick = s.physics->createMaterial(prm.StaticFriction * slickScale, prm.DynamicFriction * slickScale, prm.Restitution);
+            slick->setFrictionCombineMode(PxCombineMode::eMIN); // (and the floor's grip doesn't win it back)
+            if (prm.Grip) slick->setRestitutionCombineMode(PxCombineMode::eMULTIPLY);
+        }
+    auto poseOf = [&](int i) {
+        const RagdollPart& p = parts[i];
+        return PxTransform(PxVec3(p.Position[0], p.Position[1], p.Position[2]), PxQuat(p.Rotation[0], p.Rotation[1], p.Rotation[2], p.Rotation[3]).getNormalized());
+    };
+    // Who collides with whom: never parent and child; a pair already overlapping in the pose the body is built in is let through
+    // until it has come apart (an arm across the chest holding a gun), then it collides like the rest.
+    rd.Ignore.assign((size_t)count, 0u);
+    for (int i = 0; i < count; ++i)
+        for (int j = 0; j < count; ++j)
+            if (j != i && (parts[i].IgnoreMask & (1u << j))) { rd.Ignore[(size_t)i] |= 1u << j; rd.Ignore[(size_t)j] |= 1u << i; }
+    for (int i = 0; i < count; ++i) {
+        const int pa = parts[i].Parent;
+        if (pa < 0 || pa >= count || pa == i) continue;
+        rd.Ignore[(size_t)i] |= 1u << pa;
+        rd.Ignore[(size_t)pa] |= 1u << i;
+    }
+    if (!prm.SelfCollision) {
+        for (PxU32& m : rd.Ignore) m = 0xFFFFu;
+    } else {
+        for (int i = 0; i < count; ++i)
+            for (int j = i + 1; j < count; ++j) {
+                if (rd.Ignore[(size_t)i] & (1u << j)) continue;
+                const float gap = CapsuleGap(poseOf(i), std::max(parts[i].HalfLength, 0.005f), std::max(parts[i].Radius, 0.01f), poseOf(j),
+                                             std::max(parts[j].HalfLength, 0.005f), std::max(parts[j].Radius, 0.01f));
+                if (gap < kPairClearance) {
+                    rd.Ignore[(size_t)i] |= 1u << j;
+                    rd.Ignore[(size_t)j] |= 1u << i;
+                    rd.Pending.push_back({i, j});
+                }
+            }
+    }
+    rd.Bodies.assign((size_t)count, nullptr);
+    rd.Drive.assign((size_t)count, nullptr);
+    // Each link's frame is its joint's child frame (the root's, its capsule's), and the capsule is turned inside it: PhysX builds
+    // a spherical joint's drive target in the child link's frame but measures the joint in the joint frame, so the two have to be
+    // the same frame or a drive about one axis turns the joint about another (a knee asked to bend pushes into its sideways limit).
+    // A shoulder's zero is the middle of its range (its parent frame: the neutral frame turned there), not the pose the
+    // body is built in: the joint position is a rotation vector, and a limb that may turn far from its zero (an arm raised to aim
+    // swinging down and back) nears the half turn where that vector flips, and where the solver holds the limits worst. From the
+    // middle, no joint is ever more than its half range from zero. The link starts at the build pose's position in that range.
+    std::vector<PxTransform> body((size_t)count), frames((size_t)count);
+    std::vector<PxVec3> centre((size_t)count, PxVec3(0.0f)), start((size_t)count, PxVec3(0.0f));
+    rd.TargetPre.assign((size_t)count, PxQuat(PxIdentity));
+    rd.TargetPost.assign((size_t)count, PxQuat(PxIdentity));
     for (int i = 0; i < count; ++i) {
         const RagdollPart& p = parts[i];
-        const PxTransform pose(PxVec3(p.Position[0], p.Position[1], p.Position[2]),
-                               PxQuat(p.Rotation[0], p.Rotation[1], p.Rotation[2], p.Rotation[3]).getNormalized());
-        PxRigidDynamic* b = s.physics->createRigidDynamic(pose);
-        PxShape* sh = PxRigidActorExt::createExclusiveShape(*b, PxCapsuleGeometry(std::max(p.Radius, 0.01f), std::max(p.HalfLength, 0.005f)), *mat);
-        sh->setSimulationFilterData(PxFilterData(1u, 0u, (PxU32)id + 1u, 0u));
+        const PxTransform cap = poseOf(i);
+        const PxVec3 anchor(p.Anchor[0], p.Anchor[1], p.Anchor[2]);
+        const bool root = i == order[0];
+        if (root || !p.Anatomical) {
+            frames[(size_t)i] = PxTransform(anchor, cap.q);
+            body[(size_t)i] = PxTransform(cap.p, cap.q);
+            continue;
+        }
+        const PxQuat neutral = PxQuat(p.LimitFrame[0], p.LimitFrame[1], p.LimitFrame[2], p.LimitFrame[3]).getNormalized();
+        // Where the bone points in the neutral frame, as the rotation vector of the shortest arc from +X (no twist).
+        const PxVec3 d = neutral.rotateInv(cap.q.rotate(PxVec3(1.0f, 0.0f, 0.0f)));
+        const PxVec3 axis(0.0f, -d.z, d.y);
+        const float sn = axis.magnitude(), theta = std::atan2(sn, d.x);
+        PxVec3 built = sn > 1e-6f ? axis * (theta / sn) : PxVec3(0.0f);
+        // Only a joint whose range spans more than a half turn (a shoulder) can be turned that far from where it was built; the
+        // rest keep the build pose as their zero (their ranges shifted by where the bone points), the frames the drives were tuned in.
+        const bool wide = !p.Hinge && (p.SwingZMax - p.SwingZMin > 180.0f || p.SwingYMax - p.SwingYMin > 180.0f);
+        if (!wide) {
+            frames[(size_t)i] = PxTransform(anchor, neutral);
+            body[(size_t)i] = PxTransform(cap.p, neutral);
+            centre[(size_t)i] = PxVec3(0.0f, built.y, built.z);
+            continue;
+        }
+        const PxVec3 mid(PxPi / 360.0f * (p.TwistMin + p.TwistMax), PxPi / 360.0f * (p.SwingYMin + p.SwingYMax), PxPi / 360.0f * (p.SwingZMin + p.SwingZMax));
+        const PxQuat qBuilt = RotationFromVector(built), qMid = RotationFromVector(mid);
+        frames[(size_t)i] = PxTransform(anchor, (neutral * qMid).getNormalized());
+        body[(size_t)i] = PxTransform(cap.p, (neutral * qBuilt).getNormalized());
+        centre[(size_t)i] = mid;
+        start[(size_t)i] = VectorFromRotation(qMid.getConjugate() * qBuilt);
+        // The motor's targets turn the joint from the build pose in the neutral frame's axes.
+        rd.TargetPre[(size_t)i] = qMid.getConjugate();
+        rd.TargetPost[(size_t)i] = qBuilt;
+    }
+    rd.Shape.assign((size_t)count, PxTransform(PxIdentity));
+    for (int i : order) {
+        const RagdollPart& p = parts[i];
+        const PxTransform pose = poseOf(i); // the capsule's
+        const bool root = i == order[0];
+        PxArticulationLink* link = art->createLink(root ? nullptr : rd.Bodies[(size_t)p.Parent], body[(size_t)i]);
+        if (!link) { art->release(); mat->release(); if (slick) slick->release(); rd = PhysicsState::Ragdoll(); return -1; }
+        const PxTransform shapeLocal = body[(size_t)i].transformInv(pose);
+        rd.Shape[(size_t)i] = shapeLocal;
+        PxShape* sh = PxRigidActorExt::createExclusiveShape(*link, PxCapsuleGeometry(std::max(p.Radius, 0.01f), std::max(p.HalfLength, 0.005f)),
+                                                              slick && std::fabs(p.FrictionScale - 1.0f) > 1e-3f ? *slick : *mat);
+        sh->setLocalPose(shapeLocal);
+        sh->setSimulationFilterData(PxFilterData(1u, 0u, ((PxU32)id + 1u) | ((PxU32)i << 16), rd.Ignore[(size_t)i]));
         sh->setQueryFilterData(PxFilterData(1u, 0u, (PxU32)id + 1u, 0u));
+        if (prm.SkinOffset > 0.0f) {
+            // The flesh over the bone: contacts rest this far out, so the skinned mesh lies on the floor instead of in it.
+            sh->setContactOffset(std::max(sh->getContactOffset(), prm.SkinOffset + 0.02f));
+            sh->setRestOffset(prm.SkinOffset);
+        }
         sh->userData = reinterpret_cast<void*>(static_cast<std::uintptr_t>((2u << 16) | (unsigned)i)); // RaycastBodyParts: ragdoll part i
-        PxRigidBodyExt::setMassAndUpdateInertia(*b, std::max(p.Mass, 0.1f));
+        PxRigidBodyExt::setMassAndUpdateInertia(*link, std::max(p.Mass, 0.1f));
         if (p.InertiaHalfWidth > 0.0f || p.InertiaScale != 1.0f) {
-            PxVec3 I = b->getMassSpaceInertiaTensor();
+            PxVec3 I = link->getMassSpaceInertiaTensor();
             if (p.InertiaHalfWidth > 0.0f) {
                 // A box of the part's width and depth, as long as its capsule: principal axes along the bone, across the body, and
                 // front to back.
-                const float m = b->getMass(), w = 2.0f * p.InertiaHalfWidth, d = 2.0f * std::max(p.InertiaHalfDepth, 0.01f);
+                const float m = link->getMass(), w = 2.0f * p.InertiaHalfWidth, d = 2.0f * std::max(p.InertiaHalfDepth, 0.01f);
                 const float L = 2.0f * (std::max(p.HalfLength, 0.005f) + std::max(p.Radius, 0.01f));
                 PxVec3 lat = pose.q.rotateInv(PxVec3(p.InertiaLateral[0], p.InertiaLateral[1], p.InertiaLateral[2]));
                 lat.x = 0.0f;
                 if (lat.magnitudeSquared() > 1e-6f) {
                     lat.normalize();
                     const PxVec3 x(1.0f, 0.0f, 0.0f), z = x.cross(lat);
-                    b->setCMassLocalPose(PxTransform(PxVec3(0.0f), PxQuat(PxMat33(x, lat, z)).getNormalized()));
+                    link->setCMassLocalPose(shapeLocal * PxTransform(PxVec3(0.0f), PxQuat(PxMat33(x, lat, z)).getNormalized()));
                     I = PxVec3(m / 12.0f * (w * w + d * d), m / 12.0f * (d * d + L * L), m / 12.0f * (w * w + L * L));
                 }
             }
-            b->setMassSpaceInertiaTensor(I * std::max(p.InertiaScale, 0.05f));
+            link->setMassSpaceInertiaTensor(I * std::max(p.InertiaScale, 0.05f));
         }
-        b->setLinearDamping(prm.LinearDamping);
-        b->setAngularDamping(prm.AngularDamping);
-        b->setSolverIterationCounts((PxU32)std::max(prm.SolverPosIters, 1), (PxU32)std::max(prm.SolverVelIters, 1));
-        b->setMaxDepenetrationVelocity(prm.Depenetration);
-        b->setSleepThreshold(prm.SleepThreshold);
-        if (prm.StabilizationThreshold >= 0.0f) b->setStabilizationThreshold(prm.StabilizationThreshold);
-        b->setLinearVelocity(PxVec3(p.Velocity[0], p.Velocity[1], p.Velocity[2]));
-        b->setAngularVelocity(PxVec3(p.AngularVelocity[0], p.AngularVelocity[1], p.AngularVelocity[2]));
-        b->userData = reinterpret_cast<void*>(static_cast<std::uintptr_t>(entity));
-        s.scene->addActor(*b);
-        rd.Bodies.push_back(b);
-    }
-    rd.Mat = mat; // kept for SetRagdollFriction (the shapes hold their own reference too); released with the ragdoll
-    rd.Drive.assign((size_t)count, nullptr);
-    for (int i = 1; i < count; ++i) {
-        const RagdollPart& p = parts[i];
-        if (p.Parent < 0 || p.Parent >= count || p.Parent == i) continue; // any other part (the head hangs off the neck, which comes after it)
-        PxRigidDynamic* parent = rd.Bodies[(size_t)p.Parent];
-        PxRigidDynamic* child = rd.Bodies[(size_t)i];
-        // The joint frame: at the anchor, its X along the child (the twist axis); an anatomical joint's is its neutral frame.
-        const PxTransform childPose = child->getGlobalPose();
-        const PxQuat frameQ = p.Anatomical ? PxQuat(p.LimitFrame[0], p.LimitFrame[1], p.LimitFrame[2], p.LimitFrame[3]).getNormalized() : childPose.q;
-        const PxTransform frame(PxVec3(p.Anchor[0], p.Anchor[1], p.Anchor[2]), frameQ);
-        PxD6Joint* j = PxD6JointCreate(*s.physics, parent, parent->getGlobalPose().transformInv(frame), child, childPose.transformInv(frame));
+        link->setLinearDamping(prm.LinearDamping);
+        link->setAngularDamping(prm.AngularDamping);
+        link->setMaxDepenetrationVelocity(prm.Depenetration);
+        link->userData = reinterpret_cast<void*>(static_cast<std::uintptr_t>(entity));
+        rd.Bodies[(size_t)i] = link;
+        if (root) continue;
+        PxArticulationJointReducedCoordinate* j = link->getInboundJoint();
         if (!j) continue;
-        j->setMotion(PxD6Axis::eTWIST, PxD6Motion::eLIMITED);
-        j->setMotion(PxD6Axis::eSWING1, PxD6Motion::eLIMITED);
-        j->setMotion(PxD6Axis::eSWING2, PxD6Motion::eLIMITED);
+        // The joint frame: at the anchor, its X along the child (the twist axis); an anatomical joint's is its neutral frame turned
+        // to the middle of its range. The child's is the link's own frame there (a translation only).
+        const PxTransform& frame = frames[(size_t)i];
+        // A hinge (an elbow, a knee) turns about its flexion axis alone: it cannot bend sideways or twist at all, whatever loads it.
+        const bool hinge = p.Hinge && p.Anatomical;
+        j->setJointType(hinge ? PxArticulationJointType::eREVOLUTE : PxArticulationJointType::eSPHERICAL);
+        j->setParentPose(body[(size_t)p.Parent].transformInv(frame));
+        j->setChildPose(body[(size_t)i].transformInv(PxTransform(frame.p, body[(size_t)i].q)));
+        for (PxArticulationAxis::Enum ax : kSphericalAxes)
+            j->setMotion(ax, !hinge || ax == PxArticulationAxis::eSWING2 ? PxArticulationMotion::eLIMITED : PxArticulationMotion::eLOCKED);
+        // Kept clear of a half turn: the joint's position is a rotation vector, which flips sign there (a limit at 180 degrees
+        // would let the limb through it).
+        const float lim = PxPi * 150.0f / 180.0f;
+        auto range = [&](float loDeg, float hiDeg, float off, float at, PxArticulationAxis::Enum ax) {
+            if (j->getMotion(ax) == PxArticulationMotion::eLOCKED) return;
+            // (Widened to hold the pose it starts in: an animated pose a little past the anatomical range.)
+            const float lo = std::min(std::clamp(PxPi * loDeg / 180.0f - off, -lim, 0.0f), at - 0.005f);
+            const float hi = std::max(std::clamp(PxPi * hiDeg / 180.0f - off, 0.0f, lim), at + 0.005f);
+            j->setLimitParams(ax, PxArticulationLimit(lo, hi));
+        };
         if (p.Anatomical) {
-            // Built in the death pose, the joint's rest is where it is: the ranges are from the neutral, so each shifts by where the
-            // bone already points (its direction in the neutral frame, as the swing angles PhysX measures: 4 atan(q / (1 + w))),
-            // widened to hold the pose it starts in.
-            const PxVec3 d = frameQ.rotateInv(childPose.q.rotate(PxVec3(1.0f, 0.0f, 0.0f)));
-            const float w = 1.0f + d.x, qy = -d.z, qz = d.y; // the shortest arc from +X to d, unnormalised
-            const float n = std::sqrt(w * w + qy * qy + qz * qz);
-            const float offY = n > 1e-6f ? 4.0f * std::atan2(qy / n, 1.0f + w / n) : 0.0f;
-            const float offZ = n > 1e-6f ? 4.0f * std::atan2(qz / n, 1.0f + w / n) : 0.0f;
-            const float lim = PxPi - 0.02f;
-            auto range = [&](float lo, float hi, float off, float& outLo, float& outHi) {
-                lo = PxPi * lo / 180.0f - off; hi = PxPi * hi / 180.0f - off;
-                outLo = std::clamp(std::min(lo, -0.005f), -lim, 0.0f);
-                outHi = std::clamp(std::max(hi, 0.005f), 0.0f, lim);
-            };
-            float y0, y1, z0, z1;
-            range(p.SwingYMin, p.SwingYMax, offY, y0, y1);
-            range(p.SwingZMin, p.SwingZMax, offZ, z0, z1);
-            j->setPyramidSwingLimit(PxJointLimitPyramid(y0, y1, z0, z1));
-            const float t0 = std::clamp(PxPi * p.TwistMin / 180.0f, -lim, -0.005f), t1 = std::clamp(PxPi * p.TwistMax / 180.0f, 0.005f, lim);
-            j->setTwistLimit(PxJointAngularLimitPair(t0, t1));
+            // The ranges are from the neutral; the joint's zero is their middle.
+            const PxVec3& c = centre[(size_t)i];
+            const PxVec3& at = start[(size_t)i];
+            range(p.TwistMin, p.TwistMax, c.x, at.x, PxArticulationAxis::eTWIST);
+            range(p.SwingYMin, p.SwingYMax, c.y, at.y, PxArticulationAxis::eSWING1);
+            range(p.SwingZMin, p.SwingZMax, c.z, at.z, PxArticulationAxis::eSWING2);
         } else {
-            const float tw = PxPi * std::clamp(p.TwistDeg, 1.0f, 170.0f) / 180.0f;
-            const float sw = PxPi * std::clamp(p.SwingDeg, 1.0f, 170.0f) / 180.0f;
-            j->setTwistLimit(PxJointAngularLimitPair(-tw, tw));
-            j->setSwingLimit(PxJointLimitCone(sw, sw));
+            const float tw = std::clamp(p.TwistDeg, 1.0f, 170.0f), sw = std::clamp(p.SwingDeg, 1.0f, 170.0f);
+            range(-tw, tw, 0.0f, 0.0f, PxArticulationAxis::eTWIST);
+            range(-sw, sw, 0.0f, 0.0f, PxArticulationAxis::eSWING1);
+            range(-sw, sw, 0.0f, 0.0f, PxArticulationAxis::eSWING2);
         }
-        j->setDrivePosition(PxTransform(PxIdentity));
-        if (p.JointDamping > 0.0f) j->setDrive(PxD6Drive::eSLERP, PxD6JointDrive(0.0f, p.JointDamping, PX_MAX_F32, true));
         rd.Drive[(size_t)i] = j;
-        rd.Joints.push_back(j);
+    }
+    // Each joint's drive is a torque spring scaled by what it turns: the part and everything hanging off it, about the joint
+    // (a knee turns the calf and foot, a hip the whole leg, the lower spine the chest, arms and head). So a stiffness reads as
+    // an acceleration (mass independent), as the old slerp drives' did, but by the body's own build, not the solver's.
+    rd.DriveInertia.assign((size_t)count, 0.0f);
+    for (int i = 0; i < count; ++i) {
+        if (!rd.Drive[(size_t)i]) continue;
+        const PxVec3 anchor(parts[i].Anchor[0], parts[i].Anchor[1], parts[i].Anchor[2]);
+        float I = 0.0f;
+        for (int d = 0; d < count; ++d) {
+            bool under = false;
+            for (int a = d, guard = 0; a >= 0 && a < count && guard < count; a = parts[a].Parent, ++guard)
+                if (a == i) { under = true; break; }
+            if (!under || !rd.Bodies[(size_t)d]) continue;
+            const PxVec3 c = (rd.Bodies[(size_t)d]->getGlobalPose() * rd.Bodies[(size_t)d]->getCMassLocalPose()).p;
+            const PxVec3 own = rd.Bodies[(size_t)d]->getMassSpaceInertiaTensor();
+            I += rd.Bodies[(size_t)d]->getMass() * (c - anchor).magnitudeSquared() + (own.x + own.y + own.z) / 3.0f;
+        }
+        rd.DriveInertia[(size_t)i] = std::max(I, 1e-4f);
+        const float damp = std::max(parts[i].JointDamping, 0.0f) * rd.DriveInertia[(size_t)i];
+        for (PxArticulationAxis::Enum ax : kSphericalAxes) {
+            if (rd.Drive[(size_t)i]->getMotion(ax) == PxArticulationMotion::eLOCKED) continue;
+            const float arm = ax == PxArticulationAxis::eTWIST ? prm.TwistArmature : prm.SwingArmature;
+            if (arm > 0.0f) rd.Drive[(size_t)i]->setArmature(ax, arm * rd.DriveInertia[(size_t)i]);
+            rd.Drive[(size_t)i]->setDriveParams(ax, PxArticulationDrive(0.0f, damp, PX_MAX_F32, PxArticulationDriveType::eFORCE));
+            const PxU32 k = ax == PxArticulationAxis::eTWIST ? 0u : ax == PxArticulationAxis::eSWING1 ? 1u : 2u;
+            rd.Drive[(size_t)i]->setDriveTarget(ax, start[(size_t)i][k], false); // (holding the build pose)
+        }
+    }
+    rd.Art = art;
+    rd.Mat = mat; // kept for SetRagdollFriction (the shapes hold their own reference too); released with the ragdoll
+    rd.SlickMat = slick;
+    rd.SlickScale = slickScale;
+    {
+        const float gl = s.scene->getGravity().magnitude();
+        rd.ExtraGravity = gl * (std::max(prm.GravityScale, 0.0f) - 1.0f);
+    }
+    if (!s.scene->addArticulation(*art)) {
+        art->release();
+        mat->release();
+        if (slick) slick->release();
+        rd = PhysicsState::Ragdoll();
+        return -1;
+    }
+    // Every joint where the body was built (its zero is the middle of its range, not there), the links put where that has them
+    // (where they already are).
+    for (int i = 0; i < count; ++i) {
+        PxArticulationJointReducedCoordinate* j = rd.Drive[(size_t)i];
+        if (!j || start[(size_t)i].magnitudeSquared() < 1e-12f) continue;
+        for (int k = 0; k < 3; ++k)
+            if (j->getMotion(kSphericalAxes[k]) != PxArticulationMotion::eLOCKED) j->setJointPosition(kSphericalAxes[k], start[(size_t)i][(PxU32)k]);
+    }
+    art->updateKinematic(PxArticulationKinematicFlag::ePOSITION);
+    // Every part's own motion: the root's as given, the rest as each joint's turn against its parent (the chain carries the
+    // linear velocity the turns imply).
+    const RagdollPart& r = parts[order[0]];
+    art->setRootLinearVelocity(PxVec3(r.Velocity[0], r.Velocity[1], r.Velocity[2]));
+    art->setRootAngularVelocity(PxVec3(r.AngularVelocity[0], r.AngularVelocity[1], r.AngularVelocity[2]));
+    for (int i : order) {
+        PxArticulationJointReducedCoordinate* j = rd.Drive[(size_t)i];
+        if (!j) continue;
+        const RagdollPart& p = parts[i];
+        const RagdollPart& pp = parts[p.Parent];
+        const PxVec3 w(p.AngularVelocity[0] - pp.AngularVelocity[0], p.AngularVelocity[1] - pp.AngularVelocity[1], p.AngularVelocity[2] - pp.AngularVelocity[2]);
+        if (w.magnitudeSquared() < 1e-10f) continue;
+        const PxQuat fq = (rd.Bodies[(size_t)i]->getGlobalPose() * j->getChildPose()).q;
+        const PxVec3 basis[3] = {fq.getBasisVector0(), fq.getBasisVector1(), fq.getBasisVector2()};
+        for (int k = 0; k < 3; ++k) {
+            if (j->getMotion(kSphericalAxes[k]) == PxArticulationMotion::eLOCKED) continue;
+            // Not on out through a limit the pose already sits at (an animated wrist bent to its range edge): the limit would
+            // have to stop it in the first step, and a light hand goes through instead.
+            float v = w.dot(basis[k]);
+            const PxArticulationLimit l = j->getLimitParams(kSphericalAxes[k]);
+            const float at = j->getJointPosition(kSphericalAxes[k]), edge = 0.1f;
+            if ((v > 0.0f && at > l.high - edge) || (v < 0.0f && at < l.low + edge)) v = 0.0f;
+            j->setJointVelocity(kSphericalAxes[k], v);
+        }
     }
     return id;
 }
@@ -2040,36 +2384,36 @@ int CreateRagdoll(unsigned entity, const RagdollPart* parts, int count, const Ra
 void DestroyRagdoll(int ragdoll) {
     if (!g_State || ragdoll < 0 || ragdoll >= (int)g_State->ragdolls.size()) return;
     auto& rd = g_State->ragdolls[(size_t)ragdoll];
-    for (PxJoint* j : rd.Joints) if (j) j->release();
-    for (PxRigidDynamic* b : rd.Bodies) if (b) b->release();
+    for (PxJoint* j : rd.Attach) if (j) j->release();
+    if (rd.Art) rd.Art->release(); // its links, shapes and joints, and out of the scene
     if (rd.Mat) rd.Mat->release();
-    rd.Mat = nullptr;
-    rd.Joints.clear();
-    rd.Bodies.clear();
-    rd.Prev.clear();
-    rd.Drive.clear();
+    if (rd.SlickMat) rd.SlickMat->release();
+    rd = PhysicsState::Ragdoll();
 }
 
 void SetRagdollDamping(int ragdoll, float linear, float angular) {
-    if (!g_State || ragdoll < 0 || ragdoll >= (int)g_State->ragdolls.size()) return;
-    for (PxRigidDynamic* b : g_State->ragdolls[(size_t)ragdoll].Bodies)
+    if (!ValidRagdoll(ragdoll)) return;
+    for (PxArticulationLink* b : g_State->ragdolls[(size_t)ragdoll].Bodies)
         if (b) { b->setLinearDamping(std::max(linear, 0.0f)); b->setAngularDamping(std::max(angular, 0.0f)); }
 }
 
 void SetRagdollFriction(int ragdoll, float staticFriction, float dynamicFriction) {
-    if (!g_State || ragdoll < 0 || ragdoll >= (int)g_State->ragdolls.size()) return;
-    PxMaterial* m = g_State->ragdolls[(size_t)ragdoll].Mat;
-    if (!m) return;
-    m->setStaticFriction(std::max(staticFriction, 0.0f));
-    m->setDynamicFriction(std::max(dynamicFriction, 0.0f));
+    if (!ValidRagdoll(ragdoll)) return;
+    const auto& rd = g_State->ragdolls[(size_t)ragdoll];
+    if (!rd.Mat) return;
+    rd.Mat->setStaticFriction(std::max(staticFriction, 0.0f));
+    rd.Mat->setDynamicFriction(std::max(dynamicFriction, 0.0f));
+    if (rd.SlickMat) {
+        rd.SlickMat->setStaticFriction(std::max(staticFriction, 0.0f) * rd.SlickScale);
+        rd.SlickMat->setDynamicFriction(std::max(dynamicFriction, 0.0f) * rd.SlickScale);
+    }
 }
 
 bool RagdollMotion(int ragdoll, float* outMaxLinear, float* outMaxAngular) {
-    if (!g_State || ragdoll < 0 || ragdoll >= (int)g_State->ragdolls.size()) return false;
+    if (!ValidRagdoll(ragdoll)) return false;
     const auto& rd = g_State->ragdolls[(size_t)ragdoll];
-    if (rd.Bodies.empty()) return false;
     float lin = 0.0f, ang = 0.0f;
-    for (PxRigidDynamic* b : rd.Bodies) {
+    for (PxArticulationLink* b : rd.Bodies) {
         if (!b) continue;
         lin = std::max(lin, b->getLinearVelocity().magnitude());
         ang = std::max(ang, b->getAngularVelocity().magnitude());
@@ -2079,28 +2423,62 @@ bool RagdollMotion(int ragdoll, float* outMaxLinear, float* outMaxAngular) {
     return true;
 }
 
-void RagdollSleep(int ragdoll) {
-    if (!g_State || ragdoll < 0 || ragdoll >= (int)g_State->ragdolls.size()) return;
-    for (PxRigidDynamic* b : g_State->ragdolls[(size_t)ragdoll].Bodies)
-        if (b && !b->isSleeping()) {
-            b->setLinearVelocity(PxVec3(0.0f));
-            b->setAngularVelocity(PxVec3(0.0f));
-            b->putToSleep();
+namespace {
+// What touches a body coming to rest and has come to rest with it (a gun on its arm, a second corpse across it) sleeps with it: a body
+// put to sleep against one still awake is woken by the next step, and the two would keep each other awake for good.
+void SleepRestingNeighbours(PhysicsState& s, const PhysicsState::Ragdoll& rd) {
+    constexpr float kReach = 0.03f, kSlowLinear = 0.3f, kSlowAngular = 2.0f;
+    const auto slow = [&](const PxRigidBody& b) {
+        return b.getLinearVelocity().magnitude() < kSlowLinear && b.getAngularVelocity().magnitude() < kSlowAngular;
+    };
+    PxOverlapHit hits[32];
+    for (PxArticulationLink* l : rd.Bodies) {
+        PxShape* sh = l ? LinkShape(l) : nullptr;
+        if (!sh || sh->getGeometry().getType() != PxGeometryType::eCAPSULE) continue;
+        PxCapsuleGeometry cap = static_cast<const PxCapsuleGeometry&>(sh->getGeometry());
+        cap.radius += std::max(sh->getRestOffset(), 0.0f) + kReach;
+        PxOverlapBuffer buf(hits, 32);
+        if (!s.scene->overlap(cap, l->getGlobalPose() * sh->getLocalPose(), buf, PxQueryFilterData(PxQueryFlag::eDYNAMIC | PxQueryFlag::eNO_BLOCK)))
+            continue;
+        for (PxU32 i = 0; i < buf.getNbTouches(); ++i) {
+            const PxOverlapHit& h = buf.getTouch(i);
+            if (!h.actor || (h.shape && (h.shape->getFlags() & PxShapeFlag::eTRIGGER_SHAPE))) continue;
+            if (PxArticulationLink* other = h.actor->is<PxArticulationLink>()) {
+                PxArticulationReducedCoordinate& art = other->getArticulation();
+                if (&art == rd.Art || art.isSleeping()) continue;
+                PxArticulationLink* links[64];
+                const PxU32 n = art.getLinks(links, 64);
+                bool still = true;
+                for (PxU32 k = 0; k < n && still; ++k) still = slow(*links[k]);
+                if (still) art.putToSleep();
+            } else if (PxRigidDynamic* d = h.actor->is<PxRigidDynamic>()) {
+                if ((d->getRigidBodyFlags() & PxRigidBodyFlag::eKINEMATIC) || d->isSleeping() || !slow(*d)) continue;
+                d->putToSleep();
+            }
         }
+    }
+}
+} // namespace
+
+void RagdollSleep(int ragdoll) {
+    if (!ValidRagdoll(ragdoll)) return;
+    auto& rd = g_State->ragdolls[(size_t)ragdoll];
+    SleepRestingNeighbours(*g_State, rd);
+    if (!rd.Art->isSleeping()) rd.Art->putToSleep(); // (its velocities go to zero)
 }
 
 void RagdollImpulse(int ragdoll, int part, const float impulse[3], const float point[3]) {
-    if (!g_State || ragdoll < 0 || ragdoll >= (int)g_State->ragdolls.size()) return;
+    if (!ValidRagdoll(ragdoll)) return;
     auto& rd = g_State->ragdolls[(size_t)ragdoll];
-    if (part < 0 || part >= (int)rd.Bodies.size()) return;
+    if (part < 0 || part >= (int)rd.Bodies.size() || !rd.Bodies[(size_t)part]) return;
     PxRigidBodyExt::addForceAtPos(*rd.Bodies[(size_t)part], PxVec3(impulse[0], impulse[1], impulse[2]),
                                   PxVec3(point[0], point[1], point[2]), PxForceMode::eIMPULSE, true);
 }
 
 bool GetRagdollPart(int ragdoll, int part, float outPos[3], float outRotXYZW[4]) {
-    if (!g_State || ragdoll < 0 || ragdoll >= (int)g_State->ragdolls.size()) return false;
+    if (!ValidRagdoll(ragdoll)) return false;
     auto& rd = g_State->ragdolls[(size_t)ragdoll];
-    if (part < 0 || part >= (int)rd.Bodies.size()) return false;
+    if (part < 0 || part >= (int)rd.Bodies.size() || !rd.Bodies[(size_t)part]) return false;
     PxTransform t = rd.Bodies[(size_t)part]->getGlobalPose();
     // Drawn between the last two substeps (#168), so a body falling at 240 fps doesn't step at 60.
     if ((size_t)part < rd.Prev.size() && PoseIsFinite(rd.Prev[(size_t)part]) && PoseIsFinite(t)) {
@@ -2110,27 +2488,29 @@ bool GetRagdollPart(int ragdoll, int part, float outPos[3], float outRotXYZW[4])
         const glm::quat q = glm::slerp(glm::quat(a.q.w, a.q.x, a.q.y, a.q.z), glm::quat(t.q.w, t.q.x, t.q.y, t.q.z), alpha);
         t.q = PxQuat(q.x, q.y, q.z, q.w);
     }
+    if ((size_t)part < rd.Shape.size()) t = t * rd.Shape[(size_t)part]; // the capsule's pose (its X along the bone)
     outPos[0] = t.p.x; outPos[1] = t.p.y; outPos[2] = t.p.z;
     outRotXYZW[0] = t.q.x; outRotXYZW[1] = t.q.y; outRotXYZW[2] = t.q.z; outRotXYZW[3] = t.q.w;
     return true;
 }
 
 void SetRagdollDrive(int ragdoll, float stiffness, float damping) {
-    if (!g_State || ragdoll < 0 || ragdoll >= (int)g_State->ragdolls.size()) return;
-    const PxD6JointDrive drive(std::max(stiffness, 0.0f), std::max(damping, 0.0f), PX_MAX_F32, /*isAcceleration=*/true);
-    for (PxD6Joint* j : g_State->ragdolls[(size_t)ragdoll].Drive)
-        if (j) j->setDrive(PxD6Drive::eSLERP, drive);
+    if (!ValidRagdoll(ragdoll)) return;
+    for (size_t i = 0; i < g_State->ragdolls[(size_t)ragdoll].Drive.size(); ++i) SetRagdollPartDrive(ragdoll, (int)i, stiffness, damping);
 }
 
 void SetRagdollPartDrive(int ragdoll, int part, float stiffness, float damping) {
-    if (!g_State || ragdoll < 0 || ragdoll >= (int)g_State->ragdolls.size()) return;
+    if (!ValidRagdoll(ragdoll)) return;
     auto& drive = g_State->ragdolls[(size_t)ragdoll].Drive;
     if (part < 0 || part >= (int)drive.size() || !drive[(size_t)part]) return;
-    drive[(size_t)part]->setDrive(PxD6Drive::eSLERP, PxD6JointDrive(std::max(stiffness, 0.0f), std::max(damping, 0.0f), PX_MAX_F32, true));
+    const float I = g_State->ragdolls[(size_t)ragdoll].DriveInertia[(size_t)part];
+    const PxArticulationDrive d(std::max(stiffness, 0.0f) * I, std::max(damping, 0.0f) * I, PX_MAX_F32, PxArticulationDriveType::eFORCE);
+    for (PxArticulationAxis::Enum ax : kSphericalAxes)
+        if (drive[(size_t)part]->getMotion(ax) != PxArticulationMotion::eLOCKED) drive[(size_t)part]->setDriveParams(ax, d);
 }
 
 bool GetRagdollPartInertia(int ragdoll, int part, float out[3]) {
-    if (!g_State || ragdoll < 0 || ragdoll >= (int)g_State->ragdolls.size() || !out) return false;
+    if (!ValidRagdoll(ragdoll) || !out) return false;
     auto& rd = g_State->ragdolls[(size_t)ragdoll];
     if (part < 0 || part >= (int)rd.Bodies.size() || !rd.Bodies[(size_t)part]) return false;
     const PxVec3 I = rd.Bodies[(size_t)part]->getMassSpaceInertiaTensor();
@@ -2139,17 +2519,214 @@ bool GetRagdollPartInertia(int ragdoll, int part, float out[3]) {
 }
 
 void SetRagdollDriveTarget(int ragdoll, int part, const float rotXYZW[4]) {
-    if (!g_State || ragdoll < 0 || ragdoll >= (int)g_State->ragdolls.size() || !rotXYZW) return;
+    if (!ValidRagdoll(ragdoll) || !rotXYZW) return;
     auto& drive = g_State->ragdolls[(size_t)ragdoll].Drive;
     if (part < 0 || part >= (int)drive.size() || !drive[(size_t)part]) return;
-    drive[(size_t)part]->setDrivePosition(PxTransform(PxVec3(0.0f), ToQuat(rotXYZW)), /*autowake=*/false); // (a sleeping body stays so)
+    // (The target turns the joint from the build pose; the joint's own rotation is from the middle of its range.)
+    const auto& rd = g_State->ragdolls[(size_t)ragdoll];
+    PxQuat q = ToQuat(rotXYZW);
+    if ((size_t)part < rd.TargetPre.size()) q = rd.TargetPre[(size_t)part] * q * rd.TargetPost[(size_t)part];
+    const PxVec3 v = VectorFromRotation(q.getNormalized());
+    const float axes[3] = {v.x, v.y, v.z};
+    for (int k = 0; k < 3; ++k) // (a sleeping body stays so)
+        if (drive[(size_t)part]->getMotion(kSphericalAxes[k]) != PxArticulationMotion::eLOCKED) drive[(size_t)part]->setDriveTarget(kSphericalAxes[k], axes[k], /*autowake=*/false);
 }
 
 bool RagdollAsleep(int ragdoll) {
-    if (!g_State || ragdoll < 0 || ragdoll >= (int)g_State->ragdolls.size()) return true;
-    for (PxRigidDynamic* b : g_State->ragdolls[(size_t)ragdoll].Bodies)
-        if (b && !b->isSleeping()) return false;
+    if (!ValidRagdoll(ragdoll)) return true;
+    return g_State->ragdolls[(size_t)ragdoll].Art->isSleeping();
+}
+
+bool RagdollPairCollides(int ragdoll, int a, int b) {
+    if (!ValidRagdoll(ragdoll)) return false;
+    const auto& rd = g_State->ragdolls[(size_t)ragdoll];
+    if (a < 0 || b < 0 || a >= (int)rd.Ignore.size() || b >= (int)rd.Ignore.size() || a == b) return false;
+    return !(rd.Ignore[(size_t)a] & (1u << b)) && !(rd.Ignore[(size_t)b] & (1u << a));
+}
+
+bool GetRagdollJoint(int ragdoll, int part, float outPos[3], float outLo[3], float outHi[3]) {
+    if (!ValidRagdoll(ragdoll)) return false;
+    auto& drive = g_State->ragdolls[(size_t)ragdoll].Drive;
+    if (part < 0 || part >= (int)drive.size() || !drive[(size_t)part]) return false;
+    PxArticulationJointReducedCoordinate* j = drive[(size_t)part];
+    for (int k = 0; k < 3; ++k) {
+        const bool locked = j->getMotion(kSphericalAxes[k]) == PxArticulationMotion::eLOCKED;
+        if (outPos) outPos[k] = locked ? 0.0f : j->getJointPosition(kSphericalAxes[k]);
+        const PxArticulationLimit l = locked ? PxArticulationLimit(0.0f, 0.0f) : j->getLimitParams(kSphericalAxes[k]);
+        if (outLo) outLo[k] = l.low;
+        if (outHi) outHi[k] = l.high;
+    }
     return true;
+}
+
+int AttachToRagdollPart(unsigned entity, int ragdoll, int part, float breakForce) {
+    if (!ValidRagdoll(ragdoll)) return -1;
+    PhysicsState& s = *g_State;
+    auto& rd = s.ragdolls[(size_t)ragdoll];
+    if (part < 0 || part >= (int)rd.Bodies.size() || !rd.Bodies[(size_t)part]) return -1;
+    auto it = s.bodyByEntity.find(entity);
+    if (it == s.bodyByEntity.end() || !it->second) return -1;
+    PxRigidDynamic* body = it->second;
+    PxArticulationLink* link = rd.Bodies[(size_t)part];
+    // Held where it is (both frames at the body's own pose), by a grip, not a weld: a stiff spring (acceleration units, so the gun's
+    // weight doesn't matter) pulls it back to where the hand has it. A rigid joint would let a heavy gun lever a light hand
+    // through its wrist and elbow limits.
+    const PxTransform at = body->getGlobalPose();
+    PxD6Joint* j = PxD6JointCreate(*s.physics, link, link->getGlobalPose().transformInv(at), body, PxTransform(PxIdentity));
+    if (!j) return -1;
+    for (PxD6Axis::Enum ax : {PxD6Axis::eX, PxD6Axis::eY, PxD6Axis::eZ, PxD6Axis::eTWIST, PxD6Axis::eSWING1, PxD6Axis::eSWING2})
+        j->setMotion(ax, PxD6Motion::eFREE);
+    // Sized by the held body itself (30 rad/s, critically damped), and capped: past the cap the gun lags the hand rather than
+    // dragging it.
+    const float m = std::max(body->getMass(), 0.1f), omega = 30.0f;
+    const PxVec3 I3 = body->getMassSpaceInertiaTensor();
+    const float I = std::max(std::max(I3.x, I3.y), std::max(I3.z, 1e-3f));
+    const PxD6JointDrive linear(m * omega * omega, 2.0f * m * omega, 120.0f, /*isAcceleration=*/false);
+    const PxD6JointDrive angular(I * omega * omega, 2.0f * I * omega, 8.0f, false); // (what a dead wrist can take without turning past its range)
+    for (PxD6Drive::Enum d : {PxD6Drive::eX, PxD6Drive::eY, PxD6Drive::eZ}) j->setDrive(d, linear);
+    j->setDrive(PxD6Drive::eSLERP, angular);
+    j->setDrivePosition(PxTransform(PxIdentity));
+    if (breakForce > 0.0f) j->setBreakForce(breakForce, breakForce);
+    for (size_t k = 0; k < rd.Attach.size(); ++k)
+        if (!rd.Attach[k]) { rd.Attach[k] = j; return (int)k; }
+    rd.Attach.push_back(j);
+    return (int)rd.Attach.size() - 1;
+}
+
+bool RagdollAttachmentHeld(int ragdoll, int handle) {
+    if (!ValidRagdoll(ragdoll)) return false;
+    auto& rd = g_State->ragdolls[(size_t)ragdoll];
+    if (handle < 0 || handle >= (int)rd.Attach.size() || !rd.Attach[(size_t)handle]) return false;
+    return !(rd.Attach[(size_t)handle]->getConstraintFlags() & PxConstraintFlag::eBROKEN);
+}
+
+void DetachFromRagdoll(int ragdoll, int handle) {
+    if (!ValidRagdoll(ragdoll)) return;
+    auto& rd = g_State->ragdolls[(size_t)ragdoll];
+    if (handle < 0 || handle >= (int)rd.Attach.size() || !rd.Attach[(size_t)handle]) return;
+    rd.Attach[(size_t)handle]->release();
+    rd.Attach[(size_t)handle] = nullptr;
+}
+
+bool IgnoreRagdollParts(unsigned entity, int ragdoll, unsigned partMask) {
+    if (!g_State) return false;
+    PhysicsState& s = *g_State;
+    auto it = s.bodyByEntity.find(entity);
+    if (it == s.bodyByEntity.end() || !it->second) return false;
+    PxRigidDynamic* body = it->second;
+    const bool on = partMask != 0u && ValidRagdoll(ragdoll);
+    // Whatever it was passing, it is pushed back out gently, not fired out of the body.
+    body->setMaxDepenetrationVelocity(1.5f);
+    std::vector<PxShape*> shapes(body->getNbShapes());
+    body->getShapes(shapes.data(), (PxU32)shapes.size());
+    for (PxShape* sh : shapes) {
+        PxFilterData f = sh->getSimulationFilterData();
+        // Slot 16 of the ragdoll's own numbering: not one of its parts, so only this object's mask decides.
+        f.word2 = on ? (((PxU32)ragdoll + 1u) | (16u << 16)) : 0u;
+        f.word3 = on ? (partMask & 0xFFFFu) : 0u;
+        sh->setSimulationFilterData(f);
+    }
+    if (body->getScene()) {
+        s.scene->resetFiltering(*body);
+        body->wakeUp(); // (two bodies asleep inside each other would stay so)
+    }
+    return true;
+}
+
+unsigned RagdollPartsOverlapping(unsigned entity, int ragdoll, unsigned partMask, float inflate) {
+    if (!ValidRagdoll(ragdoll)) return 0u;
+    PhysicsState& s = *g_State;
+    auto it = s.bodyByEntity.find(entity);
+    if (it == s.bodyByEntity.end() || !it->second) return 0u;
+    PxRigidDynamic* body = it->second;
+    const auto& rd = s.ragdolls[(size_t)ragdoll];
+    std::vector<PxShape*> shapes(body->getNbShapes());
+    body->getShapes(shapes.data(), (PxU32)shapes.size());
+    const PxTransform bodyPose = body->getGlobalPose();
+    unsigned out = 0u;
+    for (int i = 0; i < (int)rd.Bodies.size() && i < 16; ++i) {
+        if (!(partMask & (1u << i)) || !rd.Bodies[(size_t)i]) continue;
+        PxShape* ps = LinkShape(rd.Bodies[(size_t)i]);
+        if (!ps || ps->getGeometry().getType() != PxGeometryType::eCAPSULE) continue;
+        PxCapsuleGeometry cap = static_cast<const PxCapsuleGeometry&>(ps->getGeometry());
+        cap.radius = std::max(cap.radius + inflate, 0.005f);
+        const PxTransform capPose = rd.Bodies[(size_t)i]->getGlobalPose() * ps->getLocalPose();
+        for (PxShape* sh : shapes)
+            if ((sh->getFlags() & PxShapeFlag::eSIMULATION_SHAPE) &&
+                PxGeometryQuery::overlap(sh->getGeometry(), bodyPose * sh->getLocalPose(), cap, capPose)) { out |= 1u << i; break; }
+    }
+    return out;
+}
+
+bool PushOutOfRagdoll(unsigned entity, int ragdoll, unsigned partMask) {
+    if (!ValidRagdoll(ragdoll) || partMask == 0u) return false;
+    PhysicsState& s = *g_State;
+    auto it = s.bodyByEntity.find(entity);
+    if (it == s.bodyByEntity.end() || !it->second) return false;
+    PxRigidDynamic* body = it->second;
+    const auto& rd = s.ragdolls[(size_t)ragdoll];
+    std::vector<PxShape*> shapes(body->getNbShapes());
+    body->getShapes(shapes.data(), (PxU32)shapes.size());
+    PxTransform pose = body->getGlobalPose();
+    bool moved = false;
+    for (int pass = 0; pass < 4; ++pass) {
+        PxVec3 shift(0.0f);
+        for (int i = 0; i < (int)rd.Bodies.size() && i < 16; ++i) {
+            if (!(partMask & (1u << i)) || !rd.Bodies[(size_t)i]) continue;
+            PxShape* ps = LinkShape(rd.Bodies[(size_t)i]);
+            if (!ps || ps->getGeometry().getType() != PxGeometryType::eCAPSULE) continue;
+            PxCapsuleGeometry cap = static_cast<const PxCapsuleGeometry&>(ps->getGeometry());
+            cap.radius += std::max(ps->getRestOffset(), 0.0f); // (out of the skin too)
+            const PxTransform capPose = rd.Bodies[(size_t)i]->getGlobalPose() * ps->getLocalPose();
+            for (PxShape* sh : shapes) {
+                if (!(sh->getFlags() & PxShapeFlag::eSIMULATION_SHAPE)) continue;
+                PxVec3 dir;
+                PxF32 depth = 0.0f;
+                if (PxGeometryQuery::computePenetration(dir, depth, sh->getGeometry(), pose * sh->getLocalPose(), cap, capPose) && depth > 1e-4f)
+                    shift += dir * (depth + 0.003f);
+            }
+        }
+        if (shift.magnitudeSquared() < 1e-8f) break;
+        // Never down: under a body lying on it, the shortest way out is through the floor. Pinned there, it stays to the contacts.
+        if (shift.y < -0.25f * shift.magnitude()) return false;
+        pose.p += shift;
+        moved = true;
+    }
+    if (moved) {
+        body->setGlobalPose(pose);
+        body->setLinearVelocity(PxVec3(0.0f));
+        body->setAngularVelocity(PxVec3(0.0f));
+    }
+    return moved;
+}
+
+bool GetRagdollPartShape(int ragdoll, int part, float* outRadius, float* outHalfLength) {
+    if (!ValidRagdoll(ragdoll)) return false;
+    const auto& rd = g_State->ragdolls[(size_t)ragdoll];
+    if (part < 0 || part >= (int)rd.Bodies.size()) return false;
+    PxShape* sh = LinkShape(rd.Bodies[(size_t)part]);
+    if (!sh || sh->getGeometry().getType() != PxGeometryType::eCAPSULE) return false;
+    const PxCapsuleGeometry& g = static_cast<const PxCapsuleGeometry&>(sh->getGeometry());
+    if (outRadius) *outRadius = g.radius;
+    if (outHalfLength) *outHalfLength = g.halfHeight;
+    return true;
+}
+
+float RagdollWorstSelfPenetration(int ragdoll, int* outA, int* outB) {
+    if (!ValidRagdoll(ragdoll)) return 0.0f;
+    const auto& rd = g_State->ragdolls[(size_t)ragdoll];
+    float worst = 0.0f;
+    for (int a = 0; a < (int)rd.Bodies.size(); ++a)
+        for (int b = a + 1; b < (int)rd.Bodies.size(); ++b) {
+            if ((rd.Ignore[(size_t)a] & (1u << b)) || (rd.Ignore[(size_t)b] & (1u << a))) continue;
+            const float depth = -LinkGap(rd.Bodies[(size_t)a], rd.Bodies[(size_t)b]);
+            if (depth > worst) {
+                worst = depth;
+                if (outA) *outA = a;
+                if (outB) *outB = b;
+            }
+        }
+    return worst;
 }
 
 // --- Navigation geometry -----------------------------------------------------------------

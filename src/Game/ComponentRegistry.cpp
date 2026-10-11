@@ -1574,6 +1574,23 @@ void RegisterEngineComponents() {
               "Viscous damping of the wrist and ankle joints (acceleration units), kept on after the death drives fade. Keeps the hands and feet from whipping the limb above; 0 = off.", 0.0f, 500.0f });
             m.Fields[m.Fields.size() - 2].Group = "Body Physics";
             m.Fields[m.Fields.size() - 1].Group = "Body Physics";
+            m.Fields.push_back({ "Gravity Scale", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, GravityScale), 0.01f,
+              "Gravity on a dead body as a multiple of the scene's. At 1 a body falls true to scale but reads light on screen; a little more gives it weight.", 0.5f, 3.0f });
+            m.Fields.push_back({ "Skin Offset", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, SkinOffset), 0.001f,
+              "Metres of flesh over the collision capsules: contacts rest this far out, so the skinned body lies on the floor instead of sinking into it.", 0.0f, 0.06f });
+            m.Fields.push_back({ "Self Collision", T::Bool, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, SelfCollision), 0.0f,
+              "The body's parts collide with each other (never a part with the one it hangs from): an arm can't pass through the chest, a leg through the other. A pair already overlapping when the body goes down is let through until it has come apart." });
+            m.Fields.push_back({ "Twist Armature", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, TwistArmature), 0.01f,
+              "Inertia added to each joint's twist, as a fraction of what the joint turns. A limb has almost none about its own length, so friction against the floor or a crate spins it past its twist limit; 0 = off.", 0.0f, 3.0f });
+            m.Fields.push_back({ "Swing Armature", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, SwingArmature), 0.01f,
+              "Inertia added to each joint's bend (the swing axes, and the elbows' and knees' hinge), as a fraction of what the joint turns; 0 = off.", 0.0f, 3.0f });
+            m.Fields.push_back({ "Hand Friction", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HandFriction), 0.01f,
+              "The hands' friction as a fraction of the body's: a hand slides off a stair, ledge or crate edge instead of hooking on it and being bent past its range by the body hanging from it. 1 = as the body.", 0.0f, 1.0f });
+            m.Fields.push_back({ "Finger Relax Time", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, FingerRelaxTime), 0.01f,
+              "Seconds for a dead hand's fingers to let go of the grip they died in (a weapon grip would otherwise stay clawed round a gun that has fallen). 0 = at once.", 0.0f, 3.0f });
+            m.Fields.push_back({ "Finger Curl", T::Float, TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, FingerCurl), 0.01f,
+              "How much of the grip a dead hand's fingers keep: 0 = straight (the rig's bind pose), 1 = the grip as it was.", 0.0f, 1.0f });
+            for (size_t k = m.Fields.size() - 8; k < m.Fields.size(); ++k) m.Fields[k].Group = "Body Physics";
         }
         {
             // The powered ragdoll (NpcRagdollMotor).
@@ -1606,7 +1623,7 @@ void RegisterEngineComponents() {
                 { "Stagger", "Hit Weakness", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HitWeakness), 0.01f, "Strength fraction of the joint the round struck (a struck chest or head gives way; a struck leg buckles). 1 = no different from the rest.", 0.0f, 1.0f },
                 { "Stagger", "Hit Impulse Scale", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HitImpulseScale), 0.05f, "Multiplies the round's shove on the body: the body falls along the shot. 1 = the plain impulse.", 0.0f, 10.0f },
                 { "Stagger", "Hit Body Share", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HitBodyShare), 0.02f, "Share of the shove that pushes the whole body (every part by mass: it is carried along the shot and topples on its feet) rather than only the struck part (which folds around the round). 0 = all on the struck part.", 0.0f, 1.0f },
-                { "Settle", "Down Height", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, DownHeight), 0.02f, "The body is down once its pelvis is below this fraction of its standing height; it then settles (damping and friction ramp up) whatever its speed, so it does not skate along the floor.", 0.05f, 1.0f },
+                { "Settle", "Impact Settle Delay", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, ImpactSettleDelay), 0.02f, "Seconds after the pelvis or chest first meets the ground before the body may settle (damping and friction ramp up): the limbs slump and roll on with their own weight first instead of freezing mid-fall.", 0.0f, 3.0f },
                 { "Settle", "Settle Speed", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, SettleSpeed), 0.02f, "Fastest part speed (m/s) under which the body starts to settle (damping and friction ramp up).", 0.01f, 5.0f },
                 { "Settle", "Settle Delay", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, SettleDelay), 0.05f, "Seconds after death before the body may start to settle.", 0.0f, 5.0f },
                 { "Settle", "Settle Ramp", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, SettleRamp), 0.05f, "Seconds the damping, friction and joint friction take to reach their settled values.", 0.05f, 5.0f },
@@ -1616,6 +1633,8 @@ void RegisterEngineComponents() {
                 { "Settle", "Settle Joint Friction", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, SettleJointFriction), 0.5f, "The joint damper floor once settled (acceleration units): no limb jitter at rest.", 0.0f, 200.0f },
                 { "Settle", "Rest Speed", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, RestSpeed), 0.001f, "Every part slower than this (m/s; rad/s at ten times) for Rest Time and the body is put to sleep, and stays so until hit.", 0.0f, 1.0f },
                 { "Settle", "Rest Time", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, RestTime), 0.05f, "Seconds of stillness before the body is put to sleep.", 0.05f, 5.0f },
+                { "Settle", "Creep Speed", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, CreepSpeed), 0.005f, "m/s (and rad/s x 20): a settled body moving no faster than this for Rest Timeout is put to sleep anyway.", 0.0f, 1.0f },
+                { "Settle", "Rest Timeout", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, RestTimeout), 0.05f, "Seconds a settled body may go on creeping (a gun or another body lying on it, a hand caught at two joint limits) before it is put to sleep anyway. 0 = off.", 0.0f, 10.0f },
                 { "Settle", "Stabilization Threshold", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, StabilizationThreshold), 0.005f, "PhysX stabilization: a part with less kinetic energy per mass than this is held still against contact jitter.", 0.0f, 2.0f },
                 { "Lying", "Relax Delay", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, RelaxDelay), 0.02f, "Seconds after death before the joints' target starts going from the collapse pose to the lying pose.", 0.0f, 4.0f },
                 { "Lying", "Relax Loose", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, RelaxLoose), 0.02f, "The most the settle (joint friction, floor friction and damping ramping up) may reach until the lying pose has formed, so the limbs can still move on the floor. 1 = no limit.", 0.0f, 1.0f },
@@ -1666,6 +1685,8 @@ void RegisterEngineComponents() {
                 if (std::strcmp(f.Name, "Limp Time") == 0) f.Group = "Wounded";
                 if (std::strcmp(f.Name, "Corpse Time") == 0) f.Group = "Corpses";
                 if (std::strcmp(f.Name, "Fall Gravity") == 0) f.Group = "Corpses";
+                if (std::strcmp(f.Name, "Max Corpses") == 0) f.Group = "Corpses";
+                if (std::strcmp(f.Name, "Unseen Time") == 0) f.Group = "Corpses";
                 if (std::strcmp(f.Name, "Melee Damage") == 0) f.Group = "Melee";
                 if (std::strcmp(f.Name, "Melee Time") == 0) f.Group = "Melee";
                 if (std::strcmp(f.Name, "Melee Hit Time") == 0) f.Group = "Melee";
@@ -1697,8 +1718,16 @@ void RegisterEngineComponents() {
               "Tumble: radians per second of spin for each metre per second the gun leaves the hands at (0 = no spin).", 0.0f, 10.0f },
             { "Max Spin", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, MaxSpin), 0.1f,
               "Radians per second.", 0.0f, 40.0f },
-            { "Collision Delay", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, CollisionDelay), 0.01f,
-              "Seconds the gun flies without colliding, so it clears the falling body's arms and torso instead of being thrown off them.", 0.0f, 1.0f },
+            { "Release Delay Min", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, ReleaseDelayMin), 0.01f,
+              "The dead hand keeps its grip a moment and the gun rides the falling arm: at least this long (seconds; each death picks between Min and Max).", 0.0f, 2.0f },
+            { "Release Delay Max", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, ReleaseDelayMax), 0.01f,
+              "At most this long (seconds) before the fingers let go. 0 for both: it leaves the hands at once.", 0.0f, 2.0f },
+            { "Grip Break Force", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, GripBreakForce), 10.0f,
+              "Newtons: the gun is torn out of the hand sooner when it is loaded past this (it strikes the floor, the body lands on it).", 0.0f, 10000.0f },
+            { "Owner Ignore Time", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, OwnerIgnoreTime), 0.01f,
+              "Seconds after the release the gun still passes the dead soldier's hands. Any part it started inside of (an arm across the chest) it passes until it is clear of it.", 0.0f, 2.0f },
+            { "Hull Collider", T::Bool, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, HullCollider), 0.0f,
+              "The gun collides as a convex hull of its own mesh, so it lies on its side as the model does. Off: its bounding box." },
             { "Friction", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, Friction), 0.01f,
               "Static and dynamic friction against the world.", 0.0f, 3.0f },
             { "Bounciness", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, Bounciness), 0.01f,
@@ -1708,12 +1737,13 @@ void RegisterEngineComponents() {
             { "Angular Damping", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, AngularDamping), 0.01f,
               "Per-second spin bleed (higher settles sooner).", 0.0f, 10.0f },
             { "Lifetime", T::Float, TARTARUS_REFLECT_FIELD(DroppedWeaponSettingsComponent, Lifetime), 1.0f,
-              "Seconds before the gun is removed. 0 = it lies as long as the corpse does.", 0.0f, 600.0f },
+              "Seconds the gun lies at least. After that it goes once it has been out of the player's sight for the Squad Settings' Unseen Time (never while seen). 0 = it goes with its corpse.", 0.0f, 3600.0f },
         };
         for (ReflectField& f : m.Fields) {
             if (std::strcmp(f.Name, "Enabled") == 0 || std::strcmp(f.Name, "Lifetime") == 0) f.Group = "Drop";
             else if (std::strcmp(f.Name, "Mass") == 0 || std::strcmp(f.Name, "Impulse Share") == 0 || std::strcmp(f.Name, "Max Shot Speed") == 0 ||
-                     std::strcmp(f.Name, "Spin") == 0 || std::strcmp(f.Name, "Max Spin") == 0 || std::strcmp(f.Name, "Collision Delay") == 0) f.Group = "Throw";
+                     std::strcmp(f.Name, "Spin") == 0 || std::strcmp(f.Name, "Max Spin") == 0) f.Group = "Throw";
+            else if (std::strstr(f.Name, "Release") || std::strstr(f.Name, "Grip") || std::strstr(f.Name, "Owner")) f.Group = "Release";
             else f.Group = "Body Physics";
         }
         Register<DroppedWeaponSettingsComponent>(std::move(m));
