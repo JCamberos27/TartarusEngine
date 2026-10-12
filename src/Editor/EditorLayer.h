@@ -45,7 +45,6 @@ namespace Scripting { struct NativeRequest; }
 class Camera;
 class AssetLibrary;
 class ScreenBlur;
-class CrtScreen;
 class Framebuffer;
 
 // Rect = Unity's "Rect Tool" adapted to 3D: translate handles plus bounding-box corner/edge
@@ -862,9 +861,6 @@ private:
     // EndFrame): the whole framebuffer is blurred and the dialog window redrawn crisp on top.
     std::unique_ptr<ScreenBlur> m_ModalBlur;
     std::unique_ptr<Framebuffer> m_FrostCapture;
-    // Preferences > CRT screen: the frame is drawn into m_CrtFrame, then through the tube shader.
-    std::unique_ptr<CrtScreen> m_Crt;
-    std::unique_ptr<Framebuffer> m_CrtFrame;
 
     // Monitor content-scale factor (1.0 = 96 DPI, 2.0 = 200% Windows scaling, etc.), read once
     // at Init and baked into font sizes and the handful of raw-pixel layout constants below —

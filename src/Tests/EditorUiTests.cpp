@@ -1213,8 +1213,6 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
         g_Started = true;
         g_ScratchScene = (std::filesystem::path(UserPaths::Root()) / "editor-tests-scene.json").generic_string();
         RegisterTests();
-        // The CRT screen effect bends mouse input to match its curved picture; tests click flat.
-        EditorSettings::Get().CrtScreen = false;
         // Let the editor lay out its dock space first.
         g_StepFrames = -30;
         std::cout << "[EditorTest] " << g_Tests.size() << " test(s)" << std::endl;

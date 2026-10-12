@@ -1,0 +1,23 @@
+{
+  "folder": "assets/Architecture/Doors/Models",
+  "guid": "a5a31e6024867844",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 0.10000000149011612,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.0055,
+      -1.619,
+      -0.001
+    ]
+  },
+  "materialRemap": {
+    "Numbers_Mat": "assets/Architecture/Doors/Materials/M_Door_Numbers_A.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}
