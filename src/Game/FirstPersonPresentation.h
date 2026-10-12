@@ -439,7 +439,7 @@ private:
     int m_AnchorLimb = -1;
     glm::vec3 m_GunBoxMin{0.0f}, m_GunBoxMax{0.0f};
     // ... and the gun alone, without the spare magazine (spareMagazineBones: the AK's hangs at the pouch in the bind pose,
-    // so the bind bounds reach the belt and a hand at the pouch never left them): the world body's anchor's box.
+    // so the bind bounds reach the belt and a hand at the pouch never left them): the box both anchors measure from.
     glm::vec3 m_WorldGunBoxMin{0.0f}, m_WorldGunBoxMax{0.0f};
     // Each carried bone's mesh centre in the bone's own space (its pivot can sit well off it - the AK's magazines'): where
     // the world body's anchor measures it from the gun.
