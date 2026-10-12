@@ -1,4 +1,6 @@
 #include "SceneRenderer.h"
+#include <cstdio>
+#include <cstdlib>
 #include <array>
 #include "RenderFrameContext.h"
 
@@ -245,6 +247,12 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
     // Real scene path: emit linear HDR; the shared Tonemapper pass maps it after MSAA resolve.
     // (Offscreen model thumbnails set this to 1 to self-tonemap.)
     program.SetInt("uApplyTonemap", 0);
+}
+
+void SceneRenderer::WarmEffects() {
+    Particles()->WarmUp();
+    FxSpriteRenderer::Get().WarmUp();
+    BloodRenderer::Get().WarmUp();
 }
 
 int SceneRenderer::WarmShaderVariants(World& world) {
@@ -599,6 +607,23 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         return a.ViewDepth < b.ViewDepth;
     };
     std::sort(drawList.begin(), drawList.end(), opaqueOrder);
+    // TARTARUS_TRIS_REPORT=<frame>: the opaque pass's triangles on that frame of the Game view, by size (for budgeting).
+    if (static const int reportAt = [] { char* e = nullptr; size_t n = 0; int at = -1; if (_dupenv_s(&e, &n, "TARTARUS_TRIS_REPORT") == 0 && e) at = std::atoi(e); std::free(e); return at; }();
+        reportAt >= 0 && !ctx.EditorView) {
+        static int frame = 0;
+        if (frame++ == reportAt) {
+            std::vector<const DrawItem*> v;
+            long long total = 0, big = 0;
+            for (const DrawItem& it : drawList) { v.push_back(&it); total += it.Tris; if (it.Tris >= 5000) big += it.Tris; }
+            std::sort(v.begin(), v.end(), [](const DrawItem* a, const DrawItem* b) { return a->Tris > b->Tris; });
+            std::printf("[TrisReport] opaque items %zu, %lld tris, %lld in items >= 5k\n", v.size(), total, big);
+            std::stable_partition(v.begin(), v.end(), [](const DrawItem* d) { return !d->Dynamic; }); // the static ones first
+            for (size_t i = 0; i < v.size() && i < 25; ++i)
+                std::printf("[TrisReport]   %7d tris  %s  at (%.1f, %.1f, %.1f)%s\n", v[i]->Tris, v[i]->Ref->Path().c_str(), v[i]->Centre.x,
+                            v[i]->Centre.y, v[i]->Centre.z, v[i]->Dynamic ? " dynamic" : "");
+            std::fflush(stdout);
+        }
+    }
 
     // #108 — reflection probes are chosen per object (from its bounds centre), not once per
     // frame from the camera position, which gave every object in view the same two probes and

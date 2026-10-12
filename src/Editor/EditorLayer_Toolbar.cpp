@@ -164,7 +164,10 @@ void EditorLayer::DrawViewportActionBar(World& world, AssetLibrary& assets,
         // clean capture like every other viewport overlay.
         if (playing && !m_HideOverlaysThisFrame) {
             ImGuiWindow* vp = ImGui::FindWindowByName(overGame ? EditorPanels::Game : EditorPanels::Scene);
-            if (vp && !vp->Hidden && !vp->SkipItems) {
+            // Only a window drawn this frame or last: in maximized Play the Game window isn't, and after a minute ImGui
+            // frees an inactive window's draw buffers (ConfigMemoryCompactTimer) - adding to it then wrote through null.
+            if (vp && !vp->Hidden && !vp->SkipItems && vp->LastFrameActive >= ImGui::GetFrameCount() - 1 &&
+                !vp->DrawList->CmdBuffer.empty()) {
                 const float t = EditorTheme::Px(2.0f);
                 vp->DrawList->AddRect(ImVec2(imgPos.x + t * 0.5f, imgPos.y + t * 0.5f),
                                       ImVec2(imgPos.x + imgSize.x - t * 0.5f, imgPos.y + imgSize.y - t * 0.5f),

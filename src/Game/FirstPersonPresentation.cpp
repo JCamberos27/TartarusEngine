@@ -60,6 +60,9 @@ void GearSound(const FirstPersonPresentation& p, const std::filesystem::path& se
 struct SharedSetup {
     std::filesystem::file_time_type Time{};
     FirstPersonAnimationSet Set;
+    // The recoil and camera shake profiles the set loaded (they are their own files): the set is reused only while they
+    // are unchanged too.
+    std::filesystem::file_time_type RecoilTime{}, ShakeTime{};
     bool HaveBolt = false;
     glm::vec3 BoltStroke{0.0f};
     bool HaveBarrel = false, BarrelDetected = false;
@@ -164,10 +167,17 @@ void FirstPersonPresentation::PreloadClips(AssetLibrary& assets) {
     // Imported one by one as whole models on this thread they were most of Play's start (~18 s); clip-only, all at
     // once on worker threads, before the first set attaches them.
     const auto start = std::chrono::steady_clock::now();
+    // Each set's clips once per version of its file (an enemy's gun starts on every spawn; its clips are loaded by then).
+    static std::unordered_map<std::string, std::filesystem::file_time_type> s_Preloaded;
     std::vector<std::string> files;
     for (const std::string& setRef : m_SlotSets) {
+        const std::string setPath = ProjectPaths::Resolve(setRef);
+        std::error_code tec;
+        const auto setTime = std::filesystem::last_write_time(std::filesystem::u8path(setPath), tec);
+        if (const auto it = s_Preloaded.find(setPath); it != s_Preloaded.end() && it->second == setTime) continue;
+        s_Preloaded[setPath] = setTime;
         FirstPersonAnimationSet set;
-        if (!FirstPersonAnimationSet::LoadFile(ProjectPaths::Resolve(setRef), set, nullptr) || set.Controller.empty()) continue;
+        if (!FirstPersonAnimationSet::LoadFile(setPath, set, nullptr) || set.Controller.empty()) continue;
         const auto ctrl = GetAnimatorController(set.Controller);
         if (!ctrl) continue;
         auto add = [&](const std::string& clip) {
@@ -188,6 +198,7 @@ void FirstPersonPresentation::PreloadClips(AssetLibrary& assets) {
                     for (const auto& child : m.Children) add(child.Clip);
                 }
     }
+    if (files.empty()) return;
     const int imported = assets.PreloadAnimationSources(files);
     const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
     char line[160];
@@ -236,14 +247,23 @@ bool FirstPersonPresentation::StartSet(World& world, AssetLibrary& assets, int s
     }
     // An enemy's gun takes the definition parsed for the last one (the same file, unchanged since).
     SharedSetup* shared = m_Options.OwnerView ? nullptr : &SharedSetupFor(m_SetFile.u8string(), m_SetFileTime);
-    if (shared && !shared->Set.Controller.empty() && shared->Set.RecoilProfile.empty() && shared->Set.CameraShakeProfile.empty()) {
+    auto profileTime = [](const std::string& ref) {
+        std::error_code ec;
+        return ref.empty() ? std::filesystem::file_time_type{} : std::filesystem::last_write_time(ProjectPaths::Resolve(ref), ec);
+    };
+    if (shared && !shared->Set.Controller.empty() && shared->RecoilTime == profileTime(shared->Set.RecoilProfile) &&
+        shared->ShakeTime == profileTime(shared->Set.CameraShakeProfile)) {
         m_Set = shared->Set;
     } else {
         if (!FirstPersonAnimationSet::LoadFile(setPath, m_Set, &m_LastError)) {
             SetError("could not load '" + animationSet + "': " + m_LastError);
             return false;
         }
-        if (shared) shared->Set = m_Set;
+        if (shared) {
+            shared->Set = m_Set;
+            shared->RecoilTime = profileTime(m_Set.RecoilProfile);
+            shared->ShakeTime = profileTime(m_Set.CameraShakeProfile);
+        }
     }
     if(!m_SlotPrefabs[slot].empty() && !Scripting::ResolveWeaponGameplay(m_SlotPrefabs[slot],m_Set.Gameplay,m_LastError)) {
         SetError(m_LastError);return false;

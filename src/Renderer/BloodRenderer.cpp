@@ -138,6 +138,13 @@ void BloodRenderer::EnsureProgram() {
                                          "BloodVat");
 }
 
+void BloodRenderer::WarmUp() {
+    EnsureProgram();
+    if (!m_DecalProgram)
+        m_DecalProgram = std::make_unique<Shader>(ShaderLibrary::ReadFile("BloodDecal.vert.glsl"),
+                                                  ShaderLibrary::ReadFile("BloodDecal.frag.glsl"), "BloodDecal");
+}
+
 void BloodRenderer::BeginFrame() {
     m_Sprays.clear();
     m_Decals.clear();

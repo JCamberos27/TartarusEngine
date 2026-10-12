@@ -292,6 +292,10 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
         std::snprintf(line, sizeof line, "[NpcTest] t=%5.1f player hp=%3.0f%s  shooters=%d  think=%.2fms late=%.2fms", now, vitals.Health(),
                       vitals.IsDead() ? " DEAD" : "", npcs.ShootersNow(), npcs.LastThinkMs(), npcs.LastLateMs());
         std::cout << line << std::endl;
+        float fastest = 0.0f;
+        if (int awake = 0, asleep = 0, frozen = 0; PhysicsWorld::RagdollCounts(awake, asleep, frozen, &fastest), awake + asleep + frozen > 0)
+            std::printf("[NpcTest]   ragdolls awake %d (fastest part %.2f m/s) asleep %d frozen %d  physics %.2f ms\n", awake, fastest, asleep,
+                        frozen, PhysicsWorld::GetDebugStats().StepMillis);
         if (m_Scenario == "fight" || m_Scenario == "tactics")
             std::cout << "[NpcTest]   player target='" << m_Target << "' err=" << m_AimErr << " shots=" << m_PlayerShots
                       << " yaw=" << player.Cam.Yaw << std::endl;

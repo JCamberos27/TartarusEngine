@@ -45,6 +45,8 @@ public:
         glm::vec4 ClipPlane{0, 0, 0, 1}; // the fluid behind this plane (dot < 0) isn't drawn
     };
     void BeginFrame();
+    // The spray and decal programs compiled now (Play's start), not on the first wound mid-fight.
+    void WarmUp();
     void AddSpray(const Spray& s);
     int QueuedSprays() const { return (int)m_Sprays.size(); }
 
