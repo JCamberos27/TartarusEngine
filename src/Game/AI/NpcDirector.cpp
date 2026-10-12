@@ -411,6 +411,7 @@ std::shared_ptr<NpcDirector::SoldierBody> NpcDirector::BuildBody(World& world, A
 int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
     if (spawnIndex < 0 || spawnIndex >= (int)m_Spawns.size() || m_SoldierJson.empty()) return -1;
     const SpawnPoint& sp = m_Spawns[(size_t)spawnIndex];
+    PROFILE_SCOPE("AI Spawn");
     const auto spawnT0 = std::chrono::steady_clock::now();
     auto since = [&]() { return std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - spawnT0).count(); };
     auto& reg = world.Registry;
@@ -1169,6 +1170,7 @@ void NpcDirector::Kill(World& world, Npc& n, const glm::vec3& dir, const glm::ve
 }
 
 void NpcDirector::FinishDeath(World& world, Npc& n) {
+    PROFILE_SCOPE("AI Death");
     n.DeathPending = false;
     // The gun leaves his hands (copied before the weapon presentation goes) and the arm solve lets go.
     if (n.Weapon && n.Weapon->IsActive()) n.Dropped = NpcDroppedWeapon::Drop(world, n.Body, n.Weapon->WeaponEntity(), n.DeathDir * n.DeathShove);

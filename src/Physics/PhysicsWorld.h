@@ -180,6 +180,10 @@ void RagdollSleep(int ragdoll);
 void RagdollImpulse(int ragdoll, int part, const float impulse[3], const float point[3]);
 bool GetRagdollPart(int ragdoll, int part, float outPos[3], float outRotXYZW[4]);
 bool RagdollAsleep(int ragdoll);
+// At rest long enough to have been frozen (its parts a static copy, out of the solver until something hits it).
+bool RagdollFrozen(int ragdoll);
+// Every ragdoll by state (awake in the solver, asleep in it, frozen out of it).
+void RagdollCounts(int& awake, int& asleep, int& frozen, float* fastestAwake = nullptr); // (its fastest part, m/s)
 // The joints' slerp drives: each part held toward its target orientation (identity: the pose the ragdoll was built in,
 // see SetRagdollDriveTarget) as a spring of `stiffness` / `damping` (acceleration: mass independent). 0 = limp.
 void SetRagdollDrive(int ragdoll, float stiffness, float damping);

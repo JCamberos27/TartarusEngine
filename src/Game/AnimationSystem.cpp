@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cctype>
 #include <mutex>
+#include <unordered_map>
 #include <unordered_set>
 #include "World.h"
 #include "RotationMath.h"
@@ -175,6 +176,23 @@ std::string AnimationClipLabel(const Model& source, int sourceClip) {
 
 namespace {
 int ResolveExternalClip(Model& model, const std::string& clipRef, AssetLibrary& assets) {
+    // A ref already resolved for another rig: straight to its source clip (each soldier spawned attaches its gun rigs' whole
+    // clip lists - the path work, the asset lookup and the label per clip were most of a respawn's frame). Held weakly: a
+    // reimported source is a new model, and the ref resolves again.
+    struct Resolved { std::weak_ptr<Model> Source; int Clip = -1; std::string Label; };
+    static std::mutex s_ResolvedMutex;
+    static std::unordered_map<std::string, Resolved> s_Resolved;
+    {
+        std::unique_lock<std::mutex> lock(s_ResolvedMutex);
+        if (const auto it = s_Resolved.find(clipRef); it != s_Resolved.end()) {
+            const Resolved hit = it->second;
+            if (const std::shared_ptr<Model> src = hit.Source.lock(); src && src.get() != &model && hit.Clip < src->OwnAnimationCount()) {
+                lock.unlock();
+                return model.AttachClip(*src, hit.Clip, clipRef, hit.Label);
+            }
+            s_Resolved.erase(it);
+        }
+    }
     // "path[#clip]" naming a model file.
     const size_t hash = clipRef.find('#');
     const std::string path = clipRef.substr(0, hash);
@@ -204,7 +222,12 @@ int ResolveExternalClip(Model& model, const std::string& clipRef, AssetLibrary& 
             if (src->AnimationName(i) == clipName) { srcClip = i; break; }
         if (srcClip < 0) return -1;
     }
-    return model.AttachClip(*src, srcClip, clipRef, AnimationClipLabel(*src, srcClip));
+    const std::string label = AnimationClipLabel(*src, srcClip);
+    {
+        std::lock_guard<std::mutex> lock(s_ResolvedMutex);
+        s_Resolved[clipRef] = Resolved{src, srcClip, label};
+    }
+    return model.AttachClip(*src, srcClip, clipRef, label);
 }
 } // namespace
 

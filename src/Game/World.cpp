@@ -215,14 +215,30 @@ void World::SyncActiveInHierarchy() {
         if (inactive && !has) deactivate.push_back(e);
         else if (!inactive && has) activate.push_back(e);
     };
+    // Each entity's answer is kept (by slot) as the walks reach it: a parent chain is walked once per frame, not once per
+    // descendant (every frame, ~2,400 entities five levels deep in the apartment floor).
+    static std::vector<std::uint8_t> known; // 0 = not yet, 1 = active, 2 = inactive
+    static std::vector<entt::entity> chain;
+    size_t slots = 0;
+    for (entt::entity e : Registry.view<TransformComponent>()) slots = std::max(slots, (size_t)entt::to_entity(e) + 1);
+    known.assign(slots, 0);
+    auto slotOf = [&](entt::entity e) { const size_t s = (size_t)entt::to_entity(e); return s < known.size() ? s : (size_t)-1; };
     for (entt::entity e : Registry.view<TransformComponent>()) {
         bool inactive = false;
+        chain.clear();
         int depth = 0;
         for (entt::entity walk = e; walk != entt::null && Registry.valid(walk) && depth <= kMaxHierarchyDepth; ++depth) {
+            if (const size_t s = slotOf(walk); s != (size_t)-1 && known[s] && Registry.all_of<TransformComponent>(walk)) {
+                inactive = known[s] == 2;
+                break;
+            }
             if (Registry.all_of<DeactivatedTag>(walk)) { inactive = true; break; }
+            chain.push_back(walk);
             const auto* h = Registry.try_get<HierarchyComponent>(walk);
             walk = h ? h->Parent : entt::null;
         }
+        for (entt::entity c : chain)
+            if (const size_t s = slotOf(c); s != (size_t)-1 && Registry.all_of<TransformComponent>(c)) known[s] = inactive ? 2 : 1;
         consider(e, inactive);
     }
     // Entities without a transform have no hierarchy: only their own checkbox counts.

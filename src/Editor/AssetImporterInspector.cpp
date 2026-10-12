@@ -169,6 +169,16 @@ void AssetImporterInspector::DrawModelSettings(ModelImportSettings& settings, bo
     Row("Optimize Mesh", "Merges identical/duplicate vertices and welds mesh pieces that\nshare a material - fewer draw calls and less GPU memory, purely a\nperformance optimization with no visible difference.");
     isDirty |= EditorUIPrimitives::Checkbox("##OptimizeGraph", &settings.OptimizeGraph);
 
+    Row("Simplify", "The share of each static mesh's triangles kept, 1 = as authored.\nFor a scanned or film-grade prop far denser than any view of it\nneeds: it is drawn in the view, the depth pre-pass and every\nshadow map. Skinned meshes are never simplified.");
+    {
+        float keep = settings.SimplifyRatio;
+        ImGui::SetNextItemWidth(-1.0f);
+        if (ImGui::SliderFloat("##Simplify", &keep, 0.01f, 1.0f, "%.2f", ImGuiSliderFlags_Logarithmic)) {
+            settings.SimplifyRatio = std::clamp(keep, 0.01f, 1.0f);
+            isDirty = true;
+        }
+    }
+
     ImGui::Spacing();
     EditorUIPrimitives::SectionHeader("Rig & Animation");
 

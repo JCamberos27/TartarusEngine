@@ -110,6 +110,9 @@ public:
     // Compiles, at load, every shader-variant program the world's materials will draw through
     // (otherwise each compiles on the first frame that draws it). Returns how many programs it touched.
     static int WarmShaderVariants(World& world);
+    // The combat effects' programs (particles, FX sprites, blood sprays and decals) compiled now: each used to compile
+    // on its first use, mid-fight.
+    static void WarmEffects();
 
     // Draws sky + the opaque and transparent scene geometry for one viewport. `ctx` carries the
     // per-view params (see RenderFrameContext.h and its GL state contract); `in` carries the

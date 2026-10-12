@@ -10,6 +10,9 @@ namespace SamplingProfiler {
     // Call from the thread to sample. Start() clears any previous samples.
     void Start();
     void Stop();
+    // Call once a frame with the frame's time. With TARTARUS_SAMPLE_HITCH_MS=<ms>, Report() keeps only the samples taken
+    // during frames slower than that: what a stutter is made of, not the steady frames around it.
+    void EndFrame(double frameMs);
     // Prints "[PerfSample] <label> ..." lines to stdout: the top `top` functions both ways.
     void Report(const char* label, int top = 40);
 }

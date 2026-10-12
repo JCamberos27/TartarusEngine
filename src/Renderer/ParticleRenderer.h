@@ -26,6 +26,8 @@ public:
     // model's projection and depth-tested against the arms and gun. OwnerViewOnlyTag /
     // HiddenFromOwnerTag systems are shown only in / kept out of the player's own camera.
     int Draw(const World& world, const RenderFrameContext& ctx, bool viewModelPass = false, bool drawViewModel = false);
+    // The programs compiled now (Play's start), not on the first muzzle flame mid-fight.
+    void WarmUp() { EnsureCreated(); }
 
 private:
     void EnsureCreated();

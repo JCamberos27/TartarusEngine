@@ -39,6 +39,9 @@ public:
     int Draw(const glm::mat4& view, const glm::mat4& proj, const int viewport[4], const HdrTarget* target, bool viewModel,
              const std::function<void(Shader&)>& applyFrameState);
 
+    // The program compiled now (Play's start), not on the first muzzle flash mid-fight.
+    void WarmUp();
+
 private:
     FxSpriteRenderer() = default;
     std::vector<Sprite> m_Sprites;

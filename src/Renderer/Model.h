@@ -48,6 +48,11 @@ struct ModelImportSettings {
     bool ImportAnimations = true;
     bool ImportSkeleton = true;  // false imports every mesh as static (no bone weights)
     bool OptimizeGraph = true;   // aiProcess_JoinIdenticalVertices + OptimizeMeshes
+    // The share of each static mesh's triangles kept (meshoptimizer's simplifier, at import), 1 = as authored: a scanned
+    // statue or a film-grade prop can carry hundreds of thousands of triangles that no camera distance in a level needs,
+    // and pays for them in every pass that draws it (the view, the depth pre-pass, every shadow map). Skinned meshes
+    // are never simplified (their vertices are addressed by the outfit hiding).
+    float SimplifyRatio = 1.0f;
     // The up axis the geometry was modelled in. Z stands a Z-up export upright (rotates the root
     // into the engine's Y-up frame: up +Z, front -Y); NegZ is the opposite turn (up -Z, front +Y),
     // for a piece exported lying on its face. Explicit rather than read from the FBX's own UpAxis:
@@ -218,6 +223,8 @@ public:
     // "is a clip still driving the pose", and a held pose still is.
     bool AnimationFinished() const;
     int  BoneCount() const { return m_D->BoneCounter; }
+    // Changes whenever the pose does (a clip advanced, a pose applied): unchanged, the skinned mesh stands as it did.
+    std::uint64_t PoseVersion() const { return m_PoseVersion; }
     // Skinning as imported (--model-report): skinned vertices, how many had more than MAX_BONE_INFLUENCE influences,
     // the most any had, and the largest weight share one lost to the cap.
     void SkinStats(int& vertices, int& overflow, int& maxInfluences, float& maxDropped) const {
