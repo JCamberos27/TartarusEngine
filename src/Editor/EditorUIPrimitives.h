@@ -201,7 +201,7 @@ inline bool Segmented(const char* id, int* current, const char* const* labels, i
     return changed;
 }
 
-// A section heading in the launch screen's voice: tracked monospace capitals in the secondary text
+// A section heading: tracked monospace capitals in the secondary text
 // colour, an optional icon in the accent colour, and a hairline running out to the right edge. Replaces
 // SeparatorText. `text` is set in capitals here; a Font Awesome glyph at its front (the old
 // SeparatorText(ICON_FA_X "  Title") form) becomes the icon.
