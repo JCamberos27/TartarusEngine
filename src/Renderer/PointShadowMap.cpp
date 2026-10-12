@@ -11,6 +11,8 @@ PointShadowMap::~PointShadowMap() { Release(); }
 void PointShadowMap::Release() {
     if (m_Fbo)        { glDeleteFramebuffers(1, &m_Fbo);    m_Fbo = 0; }
     if (m_DepthArray) { glDeleteTextures(1, &m_DepthArray); m_DepthArray = 0; }
+    if (m_StaticFbo)   { glDeleteFramebuffers(1, &m_StaticFbo);  m_StaticFbo = 0; }
+    if (m_StaticArray) { glDeleteTextures(1, &m_StaticArray);    m_StaticArray = 0; }
 }
 
 void PointShadowMap::Configure(int resolution, int cubes) {
@@ -37,6 +39,12 @@ void PointShadowMap::Configure(int resolution, int cubes) {
     glCreateFramebuffers(1, &m_Fbo);
     glNamedFramebufferDrawBuffers(m_Fbo, 0, nullptr); // depth only
 
+    // The static casters' depth, never sampled: only copied from.
+    glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &m_StaticArray);
+    glTextureStorage3D(m_StaticArray, 1, GL_DEPTH_COMPONENT32F, resolution, resolution, cubes * 6);
+    glCreateFramebuffers(1, &m_StaticFbo);
+    glNamedFramebufferDrawBuffers(m_StaticFbo, 0, nullptr);
+
     if (!m_Fbo || !m_DepthArray)
         Log::Error("PointShadowMap: failed to create depth cube array (" + std::to_string(resolution) + ")");
 }
@@ -54,4 +62,24 @@ void PointShadowMap::BeginFace(int slot, int face) const {
     }
     glViewport(0, 0, m_Resolution, m_Resolution);
     glClear(GL_DEPTH_BUFFER_BIT);
+}
+
+void PointShadowMap::BeginStaticFace(int slot, int face) const {
+    slot = std::clamp(slot, 0, std::max(m_Cubes, 1) - 1);
+    face = std::clamp(face, 0, 5);
+    glBindFramebuffer(GL_FRAMEBUFFER, m_StaticFbo);
+    glNamedFramebufferTextureLayer(m_StaticFbo, GL_DEPTH_ATTACHMENT, m_StaticArray, 0, slot * 6 + face);
+    glViewport(0, 0, m_Resolution, m_Resolution);
+    glClear(GL_DEPTH_BUFFER_BIT);
+}
+
+void PointShadowMap::BeginFaceFromStatic(int slot, int face) const {
+    slot = std::clamp(slot, 0, std::max(m_Cubes, 1) - 1);
+    face = std::clamp(face, 0, 5);
+    glNamedFramebufferTextureLayer(m_Fbo, GL_DEPTH_ATTACHMENT, m_DepthArray, 0, slot * 6 + face);
+    glNamedFramebufferTextureLayer(m_StaticFbo, GL_DEPTH_ATTACHMENT, m_StaticArray, 0, slot * 6 + face);
+    glBlitNamedFramebuffer(m_StaticFbo, m_Fbo, 0, 0, m_Resolution, m_Resolution, 0, 0, m_Resolution, m_Resolution,
+                           GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+    glBindFramebuffer(GL_FRAMEBUFFER, m_Fbo);
+    glViewport(0, 0, m_Resolution, m_Resolution);
 }

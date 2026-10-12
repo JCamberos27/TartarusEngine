@@ -1522,8 +1522,19 @@ void PrefetchAnimatorClips(World& world, AssetLibrary& assets) {
     if (now < s_Next) return;
     s_Next = now + std::chrono::milliseconds(500);
     static std::unordered_map<std::string, AssetLibrary::AsyncHandle> s_Requested;
+    // (controller, track) pairs whose files are all loaded, and (model, controller, track) rigs already warmed: a squad
+    // of soldiers is ~40 rigs on a few controllers, and listing, resolving and statting every clip file of each one
+    // twice a second was a ~20 ms frame. Forgotten every 10 s, so a controller edited in place is looked at again.
+    static std::unordered_set<std::uint64_t> s_Ready, s_Warm;
+    static std::chrono::steady_clock::time_point s_Forget = now + std::chrono::seconds(10);
+    if (now >= s_Forget) { s_Ready.clear(); s_Warm.clear(); s_Forget = now + std::chrono::seconds(10); }
+    const auto pairKey = [](const void* a, const void* b, int track) {
+        return ((std::uint64_t)(std::uintptr_t)a * 1099511628211ull) ^ ((std::uint64_t)(std::uintptr_t)b * 31ull) ^ (std::uint64_t)(std::uint32_t)track;
+    };
     // Prefetches one controller's clip files (the rigs' own track, or every track for `track` < 0); true once all are loaded.
     const auto request = [&](const AnimatorController& ctrl, int track) {
+        const std::uint64_t readyKey = pairKey(&ctrl, nullptr, track);
+        if (s_Ready.count(readyKey)) return true;
         bool ready = true;
         std::vector<std::string> files;
         if (track >= 0) files = AnimatorControllerClipFiles(ctrl, track);
@@ -1545,6 +1556,7 @@ void PrefetchAnimatorClips(World& world, AssetLibrary& assets) {
             }
             if (!AssetLibrary::IsReady(it->second)) ready = false;
         }
+        if (ready) s_Ready.insert(readyKey);
         return ready;
     };
     // The enemy squad's soldiers are built at Play from Soldier.json: their controller's clips are loaded too, or the
@@ -1589,8 +1601,11 @@ void PrefetchAnimatorClips(World& world, AssetLibrary& assets) {
         const auto ctrl = GetAnimatorController(ac.Controller);
         if (!ctrl) continue;
         const int track = ctrl->TrackIndex(ac.Track);
+        const std::uint64_t warmKey = pairKey(m, ctrl.get(), track);
+        if (s_Warm.count(warmKey)) continue;
         if (!request(*ctrl, track)) continue;
         Sampler smp{*m, assets, track, {}, {}};
         WarmControllerClips(*ctrl, smp);
+        s_Warm.insert(warmKey);
     }
 }

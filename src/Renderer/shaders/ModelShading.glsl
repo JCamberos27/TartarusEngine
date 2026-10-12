@@ -319,7 +319,9 @@ float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
 }
 
 vec3 FresnelSchlick(float cosTheta, vec3 F0) {
-    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+    float x = clamp(1.0 - cosTheta, 0.0, 1.0);
+    float x2 = x * x;
+    return F0 + (1.0 - F0) * (x2 * x2 * x); // x^5 without pow (exp2/log2) per light per fragment
 }
 
 // PR10 — Clear coat lobe: isotropic GGX with fixed F0 = 0.04. Returns scalar specular term.
@@ -483,46 +485,44 @@ float SunShadow(vec3 worldPos, vec3 N, vec3 L) {
     }
 
     float ndl = max(dot(N, L), 0.0);
-    // Normal offset + depth bias both scale with the selected cascade's world texel size (#117).
-    // The CSM pass now stores the LIGHT-FACING surface (back-face cull, #134), like spot/point,
-    // so a caster's own lit side can self-shadow and the depth bias below carries the acne
-    // protection. Keep the normal offset tiny — just enough to clear PCF kernel bleed at edges;
-    // any more and the shadow's contact edge visibly retreats from the base of what cast it.
-    float texel = uShadowTexelWorld[c];
-    // Bias is expressed in world units (multiples of the cascade texel) and divided into the
-    // cascade's [0,1] depth span so it stays a constant physical offset regardless of cascade
-    // size. Span = 2*radius + pullback; 2*radius == texel*resolution, pullback == 50.
-    vec3 offsetPos = worldPos + N * (texel * (0.5 + 0.5 * (1.0 - ndl)) * uSunShadowNormalBias);
-
-    vec4 lp = uShadowMatrices[c] * vec4(offsetPos, 1.0);
-    vec3 proj = (lp.xyz / lp.w) * 0.5 + 0.5;
-    if (proj.z >= 1.0) return 1.0;
-
-    float bias = (texel * (1.0 + 2.0 * (1.0 - ndl)) * uSunShadowBias) / (texel * uShadowMapResolution + 50.0);
     // Hash gl_FragCoord to a rotation angle — turns kernel banding into per-pixel noise.
     float rot = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) * 6.2831853;
-    // Farther cascades cover more world per texel, so widen the kernel a little to keep the
-    // apparent penumbra roughly constant across the seam.
-    float radius = max(uShadowSoftness, 0.5) * (1.0 + 0.35 * float(c));
 
-    float vis = SampleCascade(c, proj.xy, proj.z - bias, radius, rot);
-
-    // Cross-fade into the next cascade over the last slice of this one.
+    // Cross-fade into the next cascade over the last slice of this one: a fragment in that band
+    // samples both. One loop body rather than a second inlined copy of the filter - the copy
+    // made the whole shader heavier (registers) for the few fragments that take it.
+    float fade = 0.0;
+    int passes = 1;
     if (c + 1 < uShadowCascadeCount) {
         float edge = uCascadeSplits[c];
         float band = edge * 0.12;
-        if (viewDepth > edge - band) {
-            float texel2 = uShadowTexelWorld[c + 1];
-            vec3 offsetPos2 = worldPos + N * (texel2 * (0.5 + 0.5 * (1.0 - ndl)) * uSunShadowNormalBias);
-            vec4 lp2 = uShadowMatrices[c + 1] * vec4(offsetPos2, 1.0);
-            vec3 p2 = (lp2.xyz / lp2.w) * 0.5 + 0.5;
-            if (p2.z < 1.0) {
-                float bias2 = (texel2 * (1.0 + 2.0 * (1.0 - ndl)) * uSunShadowBias) / (texel2 * uShadowMapResolution + 50.0);
-                float v2 = SampleCascade(c + 1, p2.xy, p2.z - bias2,
-                                         max(uShadowSoftness, 0.5) * (1.0 + 0.35 * float(c + 1)), rot);
-                vis = mix(vis, v2, smoothstep(edge - band, edge, viewDepth));
-            }
+        if (viewDepth > edge - band) { fade = smoothstep(edge - band, edge, viewDepth); passes = 2; }
+    }
+    float vis = 1.0;
+    for (int k = 0; k < passes; ++k) {
+        int cc = c + k;
+        // Normal offset + depth bias both scale with the selected cascade's world texel size (#117).
+        // The CSM pass now stores the LIGHT-FACING surface (back-face cull, #134), like spot/point,
+        // so a caster's own lit side can self-shadow and the depth bias below carries the acne
+        // protection. Keep the normal offset tiny — just enough to clear PCF kernel bleed at edges;
+        // any more and the shadow's contact edge visibly retreats from the base of what cast it.
+        float texel = uShadowTexelWorld[cc];
+        // Bias is expressed in world units (multiples of the cascade texel) and divided into the
+        // cascade's [0,1] depth span so it stays a constant physical offset regardless of cascade
+        // size. Span = 2*radius + pullback; 2*radius == texel*resolution, pullback == 50.
+        vec3 offsetPos = worldPos + N * (texel * (0.5 + 0.5 * (1.0 - ndl)) * uSunShadowNormalBias);
+        vec4 lp = uShadowMatrices[cc] * vec4(offsetPos, 1.0);
+        vec3 proj = (lp.xyz / lp.w) * 0.5 + 0.5;
+        if (proj.z >= 1.0) {
+            if (k == 0) return 1.0;
+            break; // past the next cascade's depth: keep this one's
         }
+        float bias = (texel * (1.0 + 2.0 * (1.0 - ndl)) * uSunShadowBias) / (texel * uShadowMapResolution + 50.0);
+        // Farther cascades cover more world per texel, so widen the kernel a little to keep the
+        // apparent penumbra roughly constant across the seam.
+        float radius = max(uShadowSoftness, 0.5) * (1.0 + 0.35 * float(cc));
+        float v = SampleCascade(cc, proj.xy, proj.z - bias, radius, rot);
+        vis = k == 0 ? v : mix(vis, v, fade);
     }
     return vis;
 }
@@ -607,9 +607,10 @@ vec3 ShadePointSpot(uint i, vec3 N, vec3 V, vec3 albedo, vec3 F0, float metallic
     int type = int(lt.PositionType.w);
 
     vec3 toLight = lt.PositionType.xyz - vWorldPos;
-    float dist = length(toLight);
     float range = lt.ColorRange.a;
-    if (dist > range) return vec3(0.0);
+    float dist2 = dot(toLight, toLight);
+    if (dist2 > range * range) return vec3(0.0); // out of reach: before the square root
+    float dist = sqrt(dist2);
     vec3 L = toLight / max(dist, 1e-4);
 
     // Windowed inverse-square: contribution reaches exactly zero at Range, no hard clip.
@@ -618,7 +619,7 @@ vec3 ShadePointSpot(uint i, vec3 N, vec3 V, vec3 albedo, vec3 F0, float metallic
     float atten = window * window / (1.0 + dist * dist);
 
     if (type == 2) {
-        float cosAngle = dot(normalize(-lt.DirCutoff.xyz), L);
+        float cosAngle = dot(-lt.DirCutoff.xyz, L); // aim normalised on upload (LightBuffer)
         float outerCos = lt.DirCutoff.w;
         float innerCos = lt.Params.x;
         if (cosAngle < outerCos) return vec3(0.0);
@@ -643,15 +644,16 @@ vec3 ShadePointSpotAniso(uint i, vec3 N, vec3 V, vec3 albedo, vec3 F0, float met
     Light lt = uLights[i];
     int type = int(lt.PositionType.w);
     vec3 toLight = lt.PositionType.xyz - vWorldPos;
-    float dist = length(toLight);
     float range = lt.ColorRange.a;
-    if (dist > range) return vec3(0.0);
+    float dist2 = dot(toLight, toLight);
+    if (dist2 > range * range) return vec3(0.0); // out of reach: before the square root
+    float dist = sqrt(dist2);
     vec3 L = toLight / max(dist, 1e-4);
     float t = dist / max(range, 1e-4);
     float window = clamp(1.0 - t * t * t * t, 0.0, 1.0);
     float atten = window * window / (1.0 + dist * dist);
     if (type == 2) {
-        float cosAngle = dot(normalize(-lt.DirCutoff.xyz), L);
+        float cosAngle = dot(-lt.DirCutoff.xyz, L); // aim normalised on upload (LightBuffer)
         float outerCos = lt.DirCutoff.w;
         float innerCos = lt.Params.x;
         if (cosAngle < outerCos) return vec3(0.0);
@@ -673,15 +675,16 @@ vec3 ShadePointSpotCC(uint i, vec3 N, vec3 V, float ccRough) {
     Light lt = uLights[i];
     int type = int(lt.PositionType.w);
     vec3 toLight = lt.PositionType.xyz - vWorldPos;
-    float dist = length(toLight);
     float range = lt.ColorRange.a;
-    if (dist > range) return vec3(0.0);
+    float dist2 = dot(toLight, toLight);
+    if (dist2 > range * range) return vec3(0.0); // out of reach: before the square root
+    float dist = sqrt(dist2);
     vec3 L = toLight / max(dist, 1e-4);
     float t = dist / max(range, 1e-4);
     float window = clamp(1.0 - t * t * t * t, 0.0, 1.0);
     float atten = window * window / (1.0 + dist * dist);
     if (type == 2) {
-        float cosAngle = dot(normalize(-lt.DirCutoff.xyz), L);
+        float cosAngle = dot(-lt.DirCutoff.xyz, L); // aim normalised on upload (LightBuffer)
         float outerCos = lt.DirCutoff.w;
         float innerCos = lt.Params.x;
         if (cosAngle < outerCos) return vec3(0.0);
@@ -703,15 +706,16 @@ vec3 ShadePointSpotSheen(uint i, vec3 N, vec3 V, float sheenRoughness) {
     Light lt = uLights[i];
     int type = int(lt.PositionType.w);
     vec3 toLight = lt.PositionType.xyz - vWorldPos;
-    float dist = length(toLight);
     float range = lt.ColorRange.a;
-    if (dist > range) return vec3(0.0);
+    float dist2 = dot(toLight, toLight);
+    if (dist2 > range * range) return vec3(0.0); // out of reach: before the square root
+    float dist = sqrt(dist2);
     vec3 L = toLight / max(dist, 1e-4);
     float t = dist / max(range, 1e-4);
     float window = clamp(1.0 - t * t * t * t, 0.0, 1.0);
     float atten = window * window / (1.0 + dist * dist);
     if (type == 2) {
-        float cosAngle = dot(normalize(-lt.DirCutoff.xyz), L);
+        float cosAngle = dot(-lt.DirCutoff.xyz, L); // aim normalised on upload (LightBuffer)
         float outerCos = lt.DirCutoff.w;
         float innerCos = lt.Params.x;
         if (cosAngle < outerCos) return vec3(0.0);
@@ -733,15 +737,16 @@ vec3 ShadePointSpotSSS(uint i, vec3 N, float thickness) {
     Light lt = uLights[i];
     int type = int(lt.PositionType.w);
     vec3 toLight = lt.PositionType.xyz - vWorldPos;
-    float dist = length(toLight);
     float range = lt.ColorRange.a;
-    if (dist > range) return vec3(0.0);
+    float dist2 = dot(toLight, toLight);
+    if (dist2 > range * range) return vec3(0.0); // out of reach: before the square root
+    float dist = sqrt(dist2);
     vec3 L = toLight / max(dist, 1e-4);
     float t = dist / max(range, 1e-4);
     float window = clamp(1.0 - t * t * t * t, 0.0, 1.0);
     float atten = window * window / (1.0 + dist * dist);
     if (type == 2) {
-        float cosAngle = dot(normalize(-lt.DirCutoff.xyz), L);
+        float cosAngle = dot(-lt.DirCutoff.xyz, L); // aim normalised on upload (LightBuffer)
         float outerCos = lt.DirCutoff.w;
         if (cosAngle < outerCos) return vec3(0.0);
         atten *= smoothstep(outerCos, max(lt.Params.x, outerCos + 1e-3), cosAngle);

@@ -73,6 +73,8 @@ public:
     // its fragments can sit outside the world view's frustum near the eye.
     bool CasterReachesSlice(int c, const glm::vec3& boundsMin, const glm::vec3& boundsMax,
                             float kernelTexels, float normalBias) const;
+    // Cascade c's receiver slice corners in its light clip space (x, y), from Update().
+    const std::array<glm::vec2, 8>& SliceCorners(int c) const { return m_SliceCorners[c]; }
 
 private:
     unsigned int m_DepthArray = 0;
@@ -89,6 +91,12 @@ private:
     // The receiver slice of each cascade (see CasterReachesSlice): its 8 corners in that cascade's
     // light clip space (x, y only - the projection is orthographic).
     std::array<std::array<glm::vec2, 8>, kMaxCascades> m_SliceCorners{};
+    // Each slice's convex hull edge normals and the slice's extent along each (separating axes for
+    // CasterReachesSlice, worked out once per Update rather than per caster).
+    struct SliceAxis { glm::vec2 N; float Min, Max; };
+    std::array<std::array<SliceAxis, 8>, kMaxCascades> m_SliceAxes{};
+    std::array<int, kMaxCascades> m_SliceAxisCount{};
+    std::array<glm::vec2, kMaxCascades> m_SliceMin{}, m_SliceMax{};
     mutable bool m_CompleteChecked = false; // audit GL-204 — one-shot FBO completeness check in Begin()
 
     void Release();
