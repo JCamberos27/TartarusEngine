@@ -827,7 +827,8 @@ void FirstPersonPresentation::SetupHandAnchor() {
         m_GunBoxMin = glm::min(m_GunBoxMin, q);
         m_GunBoxMax = glm::max(m_GunBoxMax, q);
     }
-    // The world body's box: the bind vertices, but not those skinned mostly to the spare magazine (or under it).
+    // The anchor's box (this view's and the world body's): the bind vertices, but not those skinned mostly to the spare
+    // magazine (or under it).
     {
         const Model& m = *m_WeaponModel;
         std::vector<char> spare(m.BoneCount() > 0 ? m.BoneCount() : 0, 0);
@@ -899,8 +900,8 @@ void FirstPersonPresentation::SetupHandAnchor() {
             wrig.Offsets[kWeaponAnchorOffset + k] = IKBoneOffset{m_WeaponModel->NodeName(m_AnchorBones[k])};
     }
     char msg[320];
-    std::snprintf(msg, sizeof msg, "First-person ADS: hand anchor on (limb %c), gun box (%.3f %.3f %.3f)..(%.3f %.3f %.3f) m, "
-                  "world body's (%.3f %.3f %.3f)..(%.3f %.3f %.3f) m.",
+    std::snprintf(msg, sizeof msg, "First-person ADS: hand anchor on (limb %c), bind bounds (%.3f %.3f %.3f)..(%.3f %.3f %.3f) m, "
+                  "anchor box (%.3f %.3f %.3f)..(%.3f %.3f %.3f) m.",
                   m_AnchorLimb == 0 ? 'A' : 'B', m_GunBoxMin.x, m_GunBoxMin.y, m_GunBoxMin.z, m_GunBoxMax.x,
                   m_GunBoxMax.y, m_GunBoxMax.z, m_WorldGunBoxMin.x, m_WorldGunBoxMin.y, m_WorldGunBoxMin.z, m_WorldGunBoxMax.x,
                   m_WorldGunBoxMax.y, m_WorldGunBoxMax.z);
@@ -952,7 +953,7 @@ void FirstPersonPresentation::WriteHandAnchor(IKRigComponent& rig, const AdsCarr
     const glm::vec3 inGun = glm::vec3(glm::inverse(clip[socket] * mount) * glm::vec4(IK::Position(clip[hand]), 1.0f));
     const FirstPersonAdsSettings::HandAnchor& anchor = m_Set.Ads.Anchor;
     const auto weightAt = [&](const glm::vec3& inRoot) {
-        const float x = std::clamp((AdsBoxDistance(inRoot, m_GunBoxMin, m_GunBoxMax) - anchor.Near) / (anchor.Far - anchor.Near), 0.0f, 1.0f);
+        const float x = std::clamp((AdsBoxDistance(inRoot, m_WorldGunBoxMin, m_WorldGunBoxMax) - anchor.Near) / (anchor.Far - anchor.Near), 0.0f, 1.0f);
         return x * x * (3.0f - 2.0f * x) * carry.Weight;
     };
     const float w = weightAt(inGun);
