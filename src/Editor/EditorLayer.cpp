@@ -51,7 +51,6 @@
 #include "TextureCache.h" // Preferences > Rendering's cache size + Clear button (#159)
 #include "gl.h" // DrawEngineMark reads back a patch of the scene texture for its contrast-adaptive tint
 #include "ScreenBlur.h"
-#include "CrtScreen.h"
 #include "Framebuffer.h"
 
 #include <imgui.h>
@@ -328,7 +327,7 @@ void EditorLayer::Init(GLFWwindow* window) {
     }
 
     // The monospace face: the Console body, numeric readouts (Stats, status bar) and the tracked
-    // capitals of section headings, like the launch screen's. A separate ImFont pushed explicitly;
+    // capitals of section headings. A separate ImFont pushed explicitly;
     // the icon range is merged in too so a log row's severity glyph doesn't render as tofu.
     ImFontConfig monoConfig = baseFontConfig;
     std::snprintf(monoConfig.Name, sizeof(monoConfig.Name), "%s", EditorTheme::kMonoFontName);
@@ -1279,19 +1278,6 @@ void EditorLayer::DrawSettingsWindow(World& world) {
                                ICON_FA_TRIANGLE_EXCLAMATION "  Restart the editor to apply the new UI scale.");
         }
 
-        if (SettingsCheckbox("CRT screen", &prefs.CrtScreen)) EditorSettings::Save();
-        if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("Draws the editor like an old monitor: scanlines, phosphor glow and a vignette.");
-        if (prefs.CrtScreen) {
-            if (SettingsCheckbox("Curved glass", &prefs.CrtCurvature)) EditorSettings::Save();
-            if (ImGui::IsItemHovered())
-                EditorUI::SetTooltip("Bulges the picture like the face of a tube. The mouse follows the curve.");
-            SettingsLabel("CRT strength");
-            bool committed = false;
-            EditorUI::SliderFloat("##CRT strength", &prefs.CrtStrength, 0.0f, 1.0f, "%.2f", 0, nullptr, &committed);
-            if (committed) EditorSettings::Save();
-        }
-
         // #154 — how F11 / the Game view's Fullscreen button go fullscreen.
         {
             static const char* kModes[] = {"Borderless window", "Exclusive"};
@@ -2194,24 +2180,6 @@ void EditorLayer::BeginFrame() {
     GLStateCache::Invalidate();
     ImGui_ImplGlfw_NewFrame();
     if (EditorTestInputFn hook = EditorTestInputHook()) hook(); // --editor-tests: synthetic input only
-    // CRT curvature: what's drawn at a point on the glass is the frame at Curve(point), so the
-    // mouse is bent the same way before ImGui reads it — clicks, hovers, gizmos and picking all
-    // land on what's under the cursor.
-    {
-        const EditorSettings& es = EditorSettings::Get();
-        ImGuiViewport* vp = ImGui::GetMainViewport();
-        if (es.CrtScreen && es.CrtCurvature && vp->Size.x > 1.0f && vp->Size.y > 1.0f) {
-            for (ImGuiInputEvent& e : GImGui->InputEventsQueue) {
-                if (e.Type != ImGuiInputEventType_MousePos || e.MousePos.PosX == -FLT_MAX) continue;
-                float x = (e.MousePos.PosX - vp->Pos.x) / vp->Size.x;
-                float y = (e.MousePos.PosY - vp->Pos.y) / vp->Size.y;
-                if (x < 0.0f || y < 0.0f || x > 1.0f || y > 1.0f) continue; // another window
-                CrtScreen::Curve(x, y, 1.0f);
-                e.MousePos.PosX = vp->Pos.x + std::clamp(x, 0.0f, 1.0f) * vp->Size.x;
-                e.MousePos.PosY = vp->Pos.y + std::clamp(y, 0.0f, 1.0f) * vp->Size.y;
-            }
-        }
-    }
     ImGui::NewFrame();
     ImGuizmo::BeginFrame();
     ImViewGuizmo::BeginFrame();
@@ -2220,22 +2188,6 @@ void EditorLayer::BeginFrame() {
 void EditorLayer::EndFrame() {
     ImGui::Render();
     ImDrawData* dd = ImGui::GetDrawData();
-    // The CRT screen draws the frame into an offscreen copy first (seeded with whatever is already
-    // on the back buffer), then through the tube shader onto the back buffer at the end.
-    const EditorSettings& crtPrefs = EditorSettings::Get();
-    const int frameW = dd && dd->Valid ? (int)(dd->DisplaySize.x * dd->FramebufferScale.x) : 0;
-    const int frameH = dd && dd->Valid ? (int)(dd->DisplaySize.y * dd->FramebufferScale.y) : 0;
-    const bool crt = crtPrefs.CrtScreen && frameW > 8 && frameH > 8;
-    unsigned int target = 0;
-    if (crt) {
-        if (!m_CrtFrame) m_CrtFrame = std::make_unique<Framebuffer>();
-        m_CrtFrame->Resize(frameW, frameH);
-        target = m_CrtFrame->Handle();
-        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, target);
-        glBlitFramebuffer(0, 0, frameW, frameH, 0, 0, frameW, frameH, GL_COLOR_BUFFER_BIT, GL_NEAREST);
-        glBindFramebuffer(GL_FRAMEBUFFER, target);
-    }
     // No GLStateShadow_Invalidate() per frame: the backend restores every shadowed state it
     // changes (blend, cull, depth test, scissor, viewport...) and never touches the rest, so the
     // shadow still holds, and re-reading it would put the driver waits back (gl.h). Bindings it
@@ -2255,13 +2207,13 @@ void EditorLayer::EndFrame() {
             if (!m_FrostCapture) m_FrostCapture = std::make_unique<Framebuffer>();
             m_FrostCapture->Resize(w, h);
 
-            glBindFramebuffer(GL_READ_FRAMEBUFFER, target);
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
             glBindFramebuffer(GL_DRAW_FRAMEBUFFER, m_FrostCapture->Handle());
             glBlitFramebuffer(0, 0, w, h, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
-            glBindFramebuffer(GL_FRAMEBUFFER, target);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-            m_ModalBlur->Apply(m_FrostCapture->ColorTexture(), w, h, /*dstFbo=*/target, /*iterations=*/4);
-            glBindFramebuffer(GL_FRAMEBUFFER, target);
+            m_ModalBlur->Apply(m_FrostCapture->ColorTexture(), w, h, /*dstFbo=*/0, /*iterations=*/4);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
             ImDrawData sub;
             sub.DisplayPos = dd->DisplayPos;
@@ -2283,12 +2235,6 @@ void EditorLayer::EndFrame() {
             ImGui_ImplOpenGL3_RenderDrawData(&sub);
             GLStateCache::Invalidate();
         }
-    }
-
-    if (crt) {
-        if (!m_Crt) m_Crt = std::make_unique<CrtScreen>();
-        m_Crt->Apply(m_CrtFrame->ColorTexture(), frameW, frameH, /*dstFbo=*/0, (float)ImGui::GetTime(),
-                     crtPrefs.CrtCurvature ? 1.0f : 0.0f, crtPrefs.CrtStrength);
     }
 }
 // #185 / Phase 6 item 13 — a small physics visual debugger: sim stats, four viewport draw
