@@ -1,6 +1,7 @@
 #include "../Scripting/GameFrames.h"
 #include "../Scripting/ScriptRuntime.h"
 #include <json.hpp>
+#include <unordered_map>
 #include <stdexcept>
 #include "../Scripting/NpcDefinitions.h"
 #include "FoleyAudio.h"
@@ -108,8 +109,14 @@ void ResolveFoley(Scripting::FoleyFrame& f) {if(!Scripting::InvokeProject("audio
 std::string FoleyElement(int id){static std::map<int,std::string> cache;static std::uint64_t generation=~std::uint64_t{};if(generation!=Scripting::CodeGeneration()){cache.clear();generation=Scripting::CodeGeneration();}if(auto it=cache.find(id);it!=cache.end())return it->second;std::string result;if(!Scripting::RequestProject("audio.foley-element",nlohmann::json(id).dump(),result))throw std::runtime_error("Project foley event unavailable");return cache[id]=nlohmann::json::parse(result).get<std::string>();}
 
 }
+// Once per name and script build: every footstep, bullet impact and casing bounce asked the project's C# table again.
 std::string FoleyAudio::SurfaceFromName(const std::string& table,const std::string& name,const std::string& fallback) {
-    std::string result;if(!Scripting::RequestProject("audio.surface",nlohmann::json{{"table",table},{"name",name},{"fallback",fallback}}.dump(),result))throw std::runtime_error("Project surface table unavailable");return nlohmann::json::parse(result).get<std::string>();
+    const std::string request=nlohmann::json{{"table",table},{"name",name},{"fallback",fallback}}.dump();
+    static std::unordered_map<std::string,std::string> cache;static std::uint64_t generation=~std::uint64_t{};
+    if(generation!=Scripting::CodeGeneration()){cache.clear();generation=Scripting::CodeGeneration();}
+    if(auto it=cache.find(request);it!=cache.end())return it->second;
+    std::string result;if(!Scripting::RequestProject("audio.surface",request,result))throw std::runtime_error("Project surface table unavailable");
+    return cache[request]=nlohmann::json::parse(result).get<std::string>();
 }
 float FoleyAudio::LiftHeight(const FoleyAudioComponent& t,float speed){auto f=FoleyRule(7,t);f.Speed=speed;ResolveFoley(f);return f.Result;}
 float FoleyAudio::StepDistance(const FoleyAudioComponent& t,const FoleyPlayerInput& in) {

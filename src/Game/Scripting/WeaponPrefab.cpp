@@ -13,7 +13,9 @@
 #include "World.h"
 #include "Log.h"
 #include <json.hpp>
+#include <filesystem>
 #include <fstream>
+#include <memory>
 #include <unordered_map>
 #include <unordered_set>
 #include <algorithm>
@@ -33,6 +35,45 @@ std::optional<nlohmann::json> WeaponFields(const nlohmann::json& node) {
         if(slot.value("class",std::string{})==kWeaponClass && slot.value("enabled",true))
             return slot.value("fields",nlohmann::json::object());
     return std::nullopt;
+}
+
+// Every soldier's gun reads its prefab when it spawns (its animation set, muzzle effects, gameplay stats and particles):
+// parsed and resolved once per file version, C# build and asset database revision - it was ~12 ms of file reading and JSON
+// parsing per respawn, mid-fight. Only results that succeeded are kept.
+struct CachedPrefab {
+    std::filesystem::file_time_type Time{};
+    std::uint64_t Code = ~0ull, Assets = ~0ull;
+    std::shared_ptr<const nlohmann::json> Json;
+    bool HaveResolve = false;
+    std::string Set;
+    MuzzleEffectSettings Muzzle;
+    bool HaveGameplay = false;
+    FirstPersonWeaponGameplay Gameplay;
+    std::string Fragment; // the particle fragment (InstantiateWeaponParticles with meshes), "" until made
+};
+CachedPrefab& PrefabEntry(const std::string& prefab) {
+    static std::unordered_map<std::string, CachedPrefab> cache;
+    const std::string path = ProjectPaths::Resolve(prefab);
+    std::error_code ec;
+    const auto time = std::filesystem::last_write_time(std::filesystem::u8path(path), ec);
+    CachedPrefab& c = cache[path];
+    if (c.Time != time || c.Code != CodeGeneration() || c.Assets != AssetDatabase::Revision()) {
+        c = CachedPrefab{};
+        c.Time = time;
+        c.Code = CodeGeneration();
+        c.Assets = AssetDatabase::Revision();
+    }
+    return c;
+}
+// The prefab's JSON, parsed once per version (null when it can't be opened; a parse error throws, as before).
+std::shared_ptr<const nlohmann::json> PrefabJson(const std::string& prefab) {
+    CachedPrefab& c = PrefabEntry(prefab);
+    if (!c.Json) {
+        std::ifstream file(ProjectPaths::Resolve(prefab));
+        if (!file) return nullptr;
+        c.Json = std::make_shared<const nlohmann::json>(nlohmann::json::parse(file));
+    }
+    return c.Json;
 }
 
 nlohmann::json ParticleFragment(const nlohmann::json& prefab) {
@@ -216,20 +257,26 @@ entt::entity InstantiateWeaponParticles(World& world, AssetLibrary& assets, cons
     emitters.clear();
     error.clear();
     try {
-        std::ifstream file(ProjectPaths::Resolve(prefab));
-        if (!file) { error = "Cannot open weapon prefab: " + prefab; return entt::null; }
-        auto fragment = ParticleFragment(nlohmann::json::parse(file));
-        // Authoring validation can inspect the full hierarchy without a graphics context.
-        if (!loadMeshes && fragment.contains("models")) {
-            for (auto node : fragment.at("models")) {
-                node.erase("path"); node.erase("pathGuid"); node.erase("materials");
-                fragment["empties"].push_back(std::move(node));
+        CachedPrefab& cached = PrefabEntry(prefab);
+        std::string text = loadMeshes ? cached.Fragment : std::string();
+        if (text.empty()) {
+            const auto json = PrefabJson(prefab);
+            if (!json) { error = "Cannot open weapon prefab: " + prefab; return entt::null; }
+            auto fragment = ParticleFragment(*json);
+            // Authoring validation can inspect the full hierarchy without a graphics context.
+            if (!loadMeshes && fragment.contains("models")) {
+                for (auto node : fragment.at("models")) {
+                    node.erase("path"); node.erase("pathGuid"); node.erase("materials");
+                    fragment["empties"].push_back(std::move(node));
+                }
+                fragment["models"] = nlohmann::json::array();
             }
-            fragment["models"] = nlohmann::json::array();
+            if (fragment.at("empties").empty()) return entt::null;
+            text = fragment.dump();
+            if (loadMeshes) PrefabEntry(prefab).Fragment = text;
         }
-        if (fragment.at("empties").empty()) return entt::null;
         std::vector<entt::entity> created;
-        if (!SceneSerializer::AppendEntitiesFromString(world, assets, fragment.dump(), created)) {
+        if (!SceneSerializer::AppendEntitiesFromString(world, assets, text, created)) {
             for (auto e : created) if (world.Registry.valid(e)) world.DestroyEntityAndChildren(e);
             error = "Cannot load weapon particle systems: " + prefab; return entt::null;
         }
@@ -299,9 +346,14 @@ bool ResolveWeaponPrefab(const std::string& prefab,std::string& animationSet,std
                          MuzzleEffectSettings* muzzle) {
     try {
         error.clear();
-        std::ifstream file(ProjectPaths::Resolve(prefab));
-        if(!file) {error="Cannot open weapon prefab: "+prefab;return false;}
-        const auto json=nlohmann::json::parse(file);
+        if(const CachedPrefab& cached=PrefabEntry(prefab); cached.HaveResolve) {
+            animationSet=cached.Set;
+            if(muzzle)*muzzle=cached.Muzzle;
+            return true;
+        }
+        const auto jsonPtr=PrefabJson(prefab);
+        if(!jsonPtr) {error="Cannot open weapon prefab: "+prefab;return false;}
+        const nlohmann::json& json=*jsonPtr;
         for(const char* collection:{"empties","models","boxes"}) {
             if(!json.contains(collection))continue;
             for(auto entity:json.at(collection)) {
@@ -317,7 +369,7 @@ bool ResolveWeaponPrefab(const std::string& prefab,std::string& animationSet,std
                 const auto& asset=fields.at("AnimationSet");
                 const std::string set=AssetDatabase::FollowRef(asset.value("path",std::string{}),asset.value("pathGuid",std::string{}));
                 if(set.empty()) {error="WeaponDefinition has no Animation Set: "+prefab;return false;}
-                if(muzzle) {
+                {
                     MuzzleEffectSettings result;
                     result.Enabled=fields.at("MuzzleEnabled").get<bool>();
 #define READ_EFFECT(Type, Member) result.Member=fields.at(#Member).get<Type>()
@@ -336,7 +388,9 @@ bool ResolveWeaponPrefab(const std::string& prefab,std::string& animationSet,std
                     const auto fragment=ParticleFragment(json);
                     for(const char* list:{"empties","models"})if(fragment.contains(list))
                         for(const auto& node:fragment.at(list))result.PrefabParticles=result.PrefabParticles || node.contains("Particle System");
-                    *muzzle=std::move(result);
+                    CachedPrefab& entry=PrefabEntry(prefab);
+                    entry.Set=set;entry.Muzzle=result;entry.HaveResolve=true;
+                    if(muzzle)*muzzle=std::move(result);
                 }
                 animationSet=set;return true;
             }
@@ -360,8 +414,10 @@ void ReadProjectWeaponGameplay(FirstPersonWeaponGameplay& result,const nlohmann:
 }
 bool ResolveWeaponGameplay(const std::string& prefab,FirstPersonWeaponGameplay& gameplay,std::string& error) {
     try {
-        std::ifstream file(ProjectPaths::Resolve(prefab));if(!file){error="Cannot open weapon prefab: "+prefab;return false;}
-        const auto json=nlohmann::json::parse(file);
+        if(const CachedPrefab& cached=PrefabEntry(prefab); cached.HaveGameplay) {gameplay=cached.Gameplay;error.clear();return true;}
+        const auto jsonPtr=PrefabJson(prefab);
+        if(!jsonPtr){error="Cannot open weapon prefab: "+prefab;return false;}
+        const nlohmann::json& json=*jsonPtr;
         for(const char* collection:{"empties","models","boxes"})if(json.contains(collection))for(auto entity:json.at(collection)) {
             MigrateLegacyWeaponDefinition(entity);const auto authored=WeaponFields(entity);if(!authored)continue;
             auto fields=*authored;
@@ -379,7 +435,9 @@ bool ResolveWeaponGameplay(const std::string& prefab,FirstPersonWeaponGameplay& 
             }
             std::string resolved;
             if(!RequestProject("weapon.resolve",fields.dump(),resolved)){error="Project weapon stats could not resolve";return false;}
-            ReadProjectWeaponGameplay(gameplay,nlohmann::json::parse(resolved));error.clear();return true;
+            ReadProjectWeaponGameplay(gameplay,nlohmann::json::parse(resolved));error.clear();
+            CachedPrefab& entry=PrefabEntry(prefab);entry.Gameplay=gameplay;entry.HaveGameplay=true;
+            return true;
         }
         error="Prefab has no enabled project WeaponDefinition";
     } catch(const std::exception& why){error=why.what();}

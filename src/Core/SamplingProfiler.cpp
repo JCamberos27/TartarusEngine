@@ -12,6 +12,8 @@
 #include <atomic>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -27,7 +29,10 @@ constexpr size_t kMaxSamples = 200000; // ~3 min at 1 kHz
 struct Sample {
     std::uint64_t Pc[kMaxDepth];
     int Depth;
+    std::uint32_t Frame; // EndFrame's count when it was taken
 };
+std::atomic<std::uint32_t> g_Frame{0};
+std::vector<float> g_FrameMs; // by frame (EndFrame), from Start
 
 std::vector<Sample> g_Samples; // preallocated: the sampler never allocates while the target is suspended
 std::atomic<size_t> g_Count{0};
@@ -73,6 +78,7 @@ void SamplerLoop() {
             ctx.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
             if (GetThreadContext(g_Target, &ctx)) {
                 g_Samples[i].Depth = Unwind(ctx, g_Samples[i].Pc);
+                g_Samples[i].Frame = g_Frame.load(std::memory_order_relaxed);
                 g_Count.store(i + 1, std::memory_order_relaxed);
             }
             ResumeThread(g_Target);
@@ -88,6 +94,8 @@ void Start() {
     Stop();
     if (g_Samples.empty()) g_Samples.resize(kMaxSamples);
     g_Count = 0;
+    g_Frame = 0;
+    g_FrameMs.clear();
     if (!g_Target)
         DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(), &g_Target,
                         THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, 0);
@@ -101,9 +109,32 @@ void Stop() {
     if (g_Thread.joinable()) g_Thread.join();
 }
 
+void EndFrame(double frameMs) {
+    if (!g_Run) return;
+    g_FrameMs.push_back((float)frameMs);
+    g_Frame.store((std::uint32_t)g_FrameMs.size(), std::memory_order_relaxed);
+}
+
 void Report(const char* label, int top) {
     Stop();
-    const size_t count = g_Count.load();
+    size_t count = g_Count.load();
+    // TARTARUS_SAMPLE_HITCH_MS: only the samples from frames slower than that (moved to the front).
+    char hitch[32] = {};
+    if (GetEnvironmentVariableA("TARTARUS_SAMPLE_HITCH_MS", hitch, sizeof(hitch)) > 0) {
+        const float over = (float)std::atof(hitch);
+        size_t kept = 0;
+        int frames = 0;
+        for (float ms : g_FrameMs) frames += ms > over;
+        for (size_t i = 0; i < count; ++i) {
+            const std::uint32_t f = g_Samples[i].Frame;
+            if (f < g_FrameMs.size() && g_FrameMs[f] > over) {
+                if (kept != i) g_Samples[kept] = g_Samples[i];
+                ++kept;
+            }
+        }
+        std::printf("[PerfSample] %s: %zu of %zu samples, from the %d frame(s) over %.1f ms\n", label, kept, count, frames, over);
+        count = kept;
+    }
     HANDLE proc = GetCurrentProcess();
     static bool symInit = false;
     if (!symInit) {
@@ -185,6 +216,31 @@ void Report(const char* label, int top) {
         }
         print("focus", chains);
     }
+    // TARTARUS_SAMPLE_UNDER=<function substring>: what that function's time goes on - every function below it (inclusive),
+    // as a share of all samples.
+    // Several: separated by ';'.
+    char underList[512] = {};
+    GetEnvironmentVariableA("TARTARUS_SAMPLE_UNDER", underList, sizeof(underList));
+    std::stringstream underItems(underList);
+    for (std::string underItem; std::getline(underItems, underItem, ';');) {
+        if (underItem.empty()) continue;
+        const char* under = underItem.c_str();
+        std::unordered_map<std::string, int> below;
+        int total = 0;
+        for (size_t i = 0; i < count; ++i) {
+            const Sample& s = g_Samples[i];
+            int at = -1;
+            for (int d = s.Depth - 1; d >= 0 && at < 0; --d)
+                if (name(s.Pc[d]).find(under) != std::string::npos) at = d;
+            if (at < 0) continue;
+            ++total;
+            seen.clear();
+            for (int d = at; d >= 0; --d)
+                if (seen.insert(name(s.Pc[d])).second) ++below[name(s.Pc[d])];
+        }
+        std::printf("[PerfSample] %s under '%s': %d samples\n", label, under, total);
+        print("under", below);
+    }
     std::fflush(stdout);
 }
 
@@ -196,6 +252,7 @@ namespace SamplingProfiler {
 void Start() {}
 void Stop() {}
 void Report(const char*, int) {}
+void EndFrame(double) {}
 } // namespace SamplingProfiler
 
 #endif

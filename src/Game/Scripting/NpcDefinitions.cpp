@@ -198,9 +198,13 @@ void SyncNpcDefinitions(World& world) {
     for(auto e:world.Registry.view<NpcSpawnComponent>(entt::exclude<CSharpScriptComponent>))SyncNpcDefinition(world,e);
     for(auto e:world.Registry.view<SquadSettingsComponent>(entt::exclude<CSharpScriptComponent>))SyncNpcDefinition(world,e);
 }
+// Once per script build and asset revision: the clip prefetch asks for it twice a second.
 SquadSettingsComponent DefaultSquadDefinition() {
+    static SquadSettingsComponent cached;static std::uint64_t code=~std::uint64_t{},assets=~std::uint64_t{};
+    if(code==CodeGeneration() && assets==AssetDatabase::Revision())return cached;
     std::string resolved;if(!ResolveScriptFields("Tartarus.Gameplay.SquadDefinition","{}",resolved))throw std::runtime_error("Project squad defaults unavailable");
-    SquadSettingsComponent view;Read(view,Json::parse(resolved));return view;
+    SquadSettingsComponent view;Read(view,Json::parse(resolved));
+    cached=view;code=CodeGeneration();assets=AssetDatabase::Revision();return view;
 }
 ImpactAudioComponent DefaultImpactAudioDefinition(){ImpactAudioComponent view;std::string resolved;if(ResolveScriptFields("Tartarus.Gameplay.ImpactAudioDefinition","{}",resolved))Read(view,Json::parse(resolved));return view;}
 WeaponAudioComponent DefaultWeaponAudioDefinition() {

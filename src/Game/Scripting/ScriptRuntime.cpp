@@ -25,6 +25,7 @@
 #include <map>
 #include <mutex>
 #include <json.hpp>
+#include <unordered_set>
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
@@ -311,12 +312,18 @@ void Tick(World& world, AssetLibrary& assets, float dt, bool fixed) {
     if(!fixed && PhysicsWorld::IsActive() && physicsSequence!=PhysicsWorld::EventSequence()) {
         physicsSequence=PhysicsWorld::EventSequence();
         auto events=nlohmann::json::array();
+        // Only for entities with a script: the managed side delivers an event to the target's own scripts and drops the
+        // rest. A pile of bodies touching the floor and each other used to be turned into JSON, parsed and thrown away
+        // every frame (twice per pair, with its contact point and normal).
+        std::unordered_set<std::uint32_t> scripted;
+        for(const auto& b:bindings) scripted.insert(static_cast<std::uint32_t>(b.Entity));
         std::vector<TriggerEvent> triggers(static_cast<size_t>(PhysicsWorld::GetTriggerEvents(nullptr,0)));
         PhysicsWorld::GetTriggerEvents(triggers.data(),static_cast<int>(triggers.size()));
-        for(const auto& e:triggers)events.push_back({{"target",e.Trigger},{"other",e.Other},{"phase",e.Kind},{"trigger",true}});
+        for(const auto& e:triggers)if(scripted.count(e.Trigger))events.push_back({{"target",e.Trigger},{"other",e.Other},{"phase",e.Kind},{"trigger",true}});
         std::vector<ContactEvent> contacts(static_cast<size_t>(PhysicsWorld::GetContactEvents(nullptr,0)));
         PhysicsWorld::GetContactEvents(contacts.data(),static_cast<int>(contacts.size()));
         for(const auto& e:contacts)for(int side=0;side<2;side++) {
+            if(!scripted.count(side?e.B:e.A))continue;
             auto vector=[](const float* v,float sign=1.0f){return nlohmann::json{{"X",sign*v[0]},{"Y",sign*v[1]},{"Z",sign*v[2]}};};
             events.push_back({{"target",side?e.B:e.A},{"other",side?e.A:e.B},{"phase",e.Kind},{"trigger",false},
                 {"point",vector(e.Point)},{"normal",vector(e.Normal,side?-1.0f:1.0f)},{"impulse",e.Impulse},{"speed",e.NormalSpeed}});

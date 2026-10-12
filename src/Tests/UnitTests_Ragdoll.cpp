@@ -984,6 +984,66 @@ void TestRagdollSettlesAndSleeps() {
     PhysicsWorld::Destroy();
 }
 
+// A corpse at rest freezes (out of the solver, a static copy of its parts): rounds still find its parts, a second body falling
+// onto it rests on it without waking it, and a shot thaws it. A solve driven past any sane speed is put back, finite and still.
+void TestRagdollRestingCorpseFreezes() {
+    World world;
+    const entt::entity floorE = world.CreateEmptyEntity(glm::vec3(0.0f, -0.53f, 0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Floor");
+    ColliderComponent col;
+    col.Kind = ColliderComponent::Shape::Box;
+    col.HalfExtents = glm::vec3(40.0f, 0.5f, 40.0f);
+    world.Registry.emplace<ColliderComponent>(floorE, col);
+    world.SyncActiveInHierarchy();
+    world.RebuildWorldTransformCache();
+    PhysicsWorld::Create(world);
+    if (!PhysicsWorld::IsActive()) return;
+    const RagdollSettingsComponent cfg;
+    const PhysicsWorld::RagdollParams prm = NpcRagdoll::BodyParams(cfg);
+    PhysicsWorld::RagdollPart parts[NpcRagdoll::kRagParts];
+    glm::mat4 pw[NpcRagdoll::kRagParts];
+    CHECK(NpcRagdoll::BuildParts(StandingBone, glm::mat4(1.0f), glm::vec3(0.0f), cfg, parts, pw));
+    const int a = PhysicsWorld::CreateRagdoll(4360u, parts, NpcRagdoll::kRagParts, &prm);
+    CHECK(a >= 0);
+    if (a < 0) { PhysicsWorld::Destroy(); return; }
+    auto step = [&](int n) { for (int k = 0; k < n; ++k) PhysicsWorld::Step(1.0f / 60.0f, world, {}); };
+    auto pelvis = [](int id) { float p[3], q[4]; PhysicsWorld::GetRagdollPart(id, 0, p, q); return glm::vec3(p[0], p[1], p[2]); };
+    int frozenAt = -1;
+    for (int k = 0; k < 600 && frozenAt < 0; ++k) { step(1); if (PhysicsWorld::RagdollFrozen(a)) frozenAt = k; }
+    std::printf("[UnitTest] corpse frozen after %.2f s\n", frozenAt / 60.0f);
+    CHECK(frozenAt > 0 && PhysicsWorld::RagdollAsleep(a));
+    const glm::vec3 restA = pelvis(a);
+    // A round from above still strikes its parts.
+    const float from[3] = {restA.x, restA.y + 2.0f, restA.z}, down[3] = {0.0f, -1.0f, 0.0f};
+    PhysicsWorld::BodyPartHit hit;
+    CHECK(PhysicsWorld::RaycastBodyParts(from, down, 4.0f, hit) && hit.Kind == 2 && hit.Entity == 4360u);
+    // A second body dropped onto it comes to rest on it; the first stays frozen where it lay.
+    CHECK(NpcRagdoll::BuildParts(StandingBone, glm::translate(glm::mat4(1.0f), glm::vec3(restA.x, 0.6f, restA.z)), glm::vec3(0.0f), cfg, parts, pw));
+    const int b = PhysicsWorld::CreateRagdoll(4361u, parts, NpcRagdoll::kRagParts, &prm);
+    CHECK(b >= 0);
+    step(240);
+    const glm::vec3 restB = pelvis(b);
+    CHECK(PhysicsWorld::RagdollFrozen(a) && glm::length(pelvis(a) - restA) < 1e-4f);
+    CHECK(std::isfinite(restB.y) && restB.y > restA.y - 0.3f && restB.y < 3.0f);
+    // A shot thaws it: awake, and it moves.
+    const float j[3] = {0.0f, 0.0f, 40.0f}, at[3] = {restA.x, restA.y, restA.z};
+    PhysicsWorld::RagdollImpulse(a, 0, j, at);
+    CHECK(!PhysicsWorld::RagdollFrozen(a) && !PhysicsWorld::RagdollAsleep(a));
+    step(10);
+    CHECK(glm::length(pelvis(a) - restA) > 1e-3f);
+    // Blown up: driven far past any sane speed, put back where it was, finite, at rest.
+    step(300);
+    const float wild[3] = {0.0f, 1e9f, 0.0f};
+    const glm::vec3 beforeB = pelvis(b);
+    PhysicsWorld::RagdollImpulse(b, 0, wild, at);
+    step(1);
+    const glm::vec3 afterB = pelvis(b);
+    CHECK(std::isfinite(afterB.x) && std::isfinite(afterB.y) && std::isfinite(afterB.z) && glm::length(afterB - beforeB) < 0.5f);
+    CHECK(PhysicsWorld::RagdollAsleep(b));
+    PhysicsWorld::DestroyRagdoll(b);
+    PhysicsWorld::DestroyRagdoll(a);
+    PhysicsWorld::Destroy();
+}
+
 // Powered Ragdoll off keeps the old body (no grip, no stabilization); on, the new body physics reach PhysX's parameters. The new fields save and load.
 void TestRagdollPoweredSettings() {
     RagdollSettingsComponent off;
@@ -1906,6 +1966,7 @@ void RegisterRagdollTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"RagdollMuscleToneCurves", TestRagdollMuscleToneCurves});
     tests.push_back({"RagdollMusclesFoldTheKnees", TestRagdollMusclesFoldTheKnees});
     tests.push_back({"RagdollSettlesAndSleeps", TestRagdollSettlesAndSleeps});
+    tests.push_back({"RagdollRestingCorpseFreezes", TestRagdollRestingCorpseFreezes});
     tests.push_back({"RagdollPoweredSettings", TestRagdollPoweredSettings});
     tests.push_back({"RagdollEndsLyingNotKneeling", TestRagdollEndsLyingNotKneeling});
     tests.push_back({"RagdollKneesBuckleWithTheShot", TestRagdollKneesBuckleWithTheShot});

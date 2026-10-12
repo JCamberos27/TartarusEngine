@@ -1892,6 +1892,7 @@ int main(int argc, char** argv) {
             lightBuffer.WarmUp();
             clusterGrid.WarmUp();
             SceneRenderer::WarmShaderVariants(world);
+            SceneRenderer::WarmEffects();
             glUseProgram(0);
             GLStateCache::Invalidate();
         };
@@ -2226,6 +2227,63 @@ int main(int argc, char** argv) {
             auto it = std::find_if(v.begin(), v.end(), [&](const auto& p) { return p.first == name; });
             if (it == v.end()) { v.emplace_back(name, PerfAccum{}); it = v.end() - 1; }
             it->second.Sum += ms; it->second.Max = std::max(it->second.Max, ms); ++it->second.N;
+        };
+        // Stutters: every frame's time (for percentiles) and the worst frames with what that frame spent its time on
+        // (the per-scope maxima above are independent, so they can't say which scope made a hitch).
+        // The profiler hands back the frame before (Profiler::GetLastFrame), so a frame's scopes are attached on the next call.
+        struct PerfWorst { double Ms; int Frame; std::string Scopes; };
+        std::vector<double> perfFrameTimes;
+        std::vector<PerfWorst> perfWorst;
+        PerfWorst perfPending{-1.0, 0, {}};
+        auto perfScopesNow = [] {
+            std::vector<std::pair<float, std::string>> scopes;
+            for (const Profiler::Entry& e : Profiler::GetLastFrame())
+                if (e.Name != "Swap Buffers") scopes.emplace_back(e.Milliseconds, e.Name);
+            std::sort(scopes.begin(), scopes.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+            std::string s;
+            char buf[96];
+            for (size_t i = 0; i < scopes.size() && i < 10 && scopes[i].first >= 0.25f; ++i) {
+                std::snprintf(buf, sizeof(buf), "%s%s %.2f", s.empty() ? "" : ", ", scopes[i].second.c_str(), scopes[i].first);
+                s += buf;
+            }
+            return s;
+        };
+        auto perfSettle = [&](bool haveScopes) {
+            constexpr size_t kKeep = 12;
+            if (perfPending.Ms < 0.0) return;
+            if (perfWorst.size() < kKeep || perfPending.Ms > perfWorst.back().Ms) {
+                if (haveScopes) perfPending.Scopes = perfScopesNow();
+                perfWorst.push_back(std::move(perfPending));
+                std::sort(perfWorst.begin(), perfWorst.end(), [](const PerfWorst& a, const PerfWorst& b) { return a.Ms > b.Ms; });
+                if (perfWorst.size() > kKeep) perfWorst.pop_back();
+            }
+            perfPending = {-1.0, 0, {}};
+        };
+        auto perfRecordFrame = [&](double frameMs, int frame) {
+            perfSettle(true);
+            perfFrameTimes.push_back(frameMs);
+            perfPending = {frameMs, frame, {}};
+        };
+        auto perfReportHitches = [&](const char* label) {
+            perfSettle(false);
+            if (perfFrameTimes.empty()) return;
+            auto report = [&](const char* what, std::vector<double> t) {
+                if (t.empty()) return;
+                std::sort(t.begin(), t.end());
+                auto pct = [&](double p) { return t[std::min(t.size() - 1, (size_t)(p * (double)(t.size() - 1) + 0.5))]; };
+                const double median = pct(0.5);
+                int over2x = 0, over33 = 0;
+                for (double ms : t) { over2x += ms > 2.0 * median; over33 += ms > 33.3; }
+                std::printf("[PerfBench] %s%s frame ms: p50=%.2f p95=%.2f p99=%.2f p99.9=%.2f max=%.2f  hitches(>2x p50)=%d (>33ms)=%d of %zu\n",
+                            label, what, median, pct(0.95), pct(0.99), pct(0.999), t.back(), over2x, over33, t.size());
+            };
+            report("", perfFrameTimes);
+            // Without the first 2 s (Play's start: the squad spawning, the first clips and shaders).
+            if (perfFrameTimes.size() > 240) report(" after 2 s", std::vector<double>(perfFrameTimes.begin() + 120, perfFrameTimes.end()));
+            for (const PerfWorst& w : perfWorst)
+                std::printf("[PerfBench]   worst frame %d %.2f ms: %s\n", w.Frame, w.Ms, w.Scopes.c_str());
+            perfFrameTimes.clear();
+            perfWorst.clear();
         };
         struct SmokeResult { std::string scenePath; int frames; int newGlErrors; int newLogErrors;
                              int drawCalls; bool loadOk; bool pass; std::string cause; };
@@ -3344,6 +3402,7 @@ int main(int argc, char** argv) {
                     if (weaponTest) weaponTest->AfterPose(world, firstPersonBody, firstPersonPresentation);
                     if (weaponLab) weaponLab->AfterPose(world, firstPersonBody, firstPersonPresentation, player.Cam, gameDt);
                     // This frame's rounds, down the bore from the muzzle: a hole where each struck.
+                    PROFILE_SCOPE("Player Shots + Impacts");
                     for (const FirstPersonPresentation::ShotHit& hit : firstPersonPresentation.TakeShotHits()) {
                         if (weaponTest) weaponTest->OnHit(hit.Point);
                         Scripting::GameSessionFrame feedback;feedback.Operation=3;
@@ -3382,6 +3441,7 @@ int main(int argc, char** argv) {
                 if (npcDirector.Active()) {
                     PROFILE_SCOPE("Enemy AI Late");
                     npcDirector.LateUpdate(world, gameDt, playerSnap);
+                    PROFILE_SCOPE("AI Impacts + Flesh Hits");
                     for (const NpcDirector::Impact& imp : npcDirector.TakeImpacts()) {
                         combatFx.Impact(world, imp.Entity, glm::vec3(imp.Point[0], imp.Point[1], imp.Point[2]));
                         worldImpact(imp.Entity, imp.Point, imp.Normal, -glm::vec3(imp.Normal[0], imp.Normal[1], imp.Normal[2]), imp.Radius);
@@ -3417,6 +3477,8 @@ int main(int argc, char** argv) {
                     if (npcTest) npcTest->After(world, npcDirector, playerVitals, player);
                 }
                 combatFx.SetListener(player.Cam.Position, player.Cam.Front());
+                {
+                PROFILE_SCOPE("Combat FX + Foley");
                 combatFx.Update(world, gameDt); // (a no-op until Start: runs with or without a squad)
                 if (playUsesPlayer && combatFx.Active()) {
                     FoleyPlayerInput fi;
@@ -3436,6 +3498,7 @@ int main(int argc, char** argv) {
                         fi.SprintStride = firstPersonPresentation.Set().Procedural.Bob.SprintStride;
                     }
                     FoleyAudio::Get().UpdatePlayer(world, gameDt, fi);
+                }
                 }
                 {
                     PROFILE_SCOPE("Blood");
@@ -3591,10 +3654,10 @@ int main(int argc, char** argv) {
             // models and materials are now all in memory lands in one frame.
             {
             PROFILE_SCOPE("Asset Pump + Outfit Hiding");
-            PrefetchAnimatorClips(world, assets); // clip files for Play, loaded behind the editor
-            assets.PumpAsync(3.0);
-            OutfitSystem::UpdatePending(world, assets);
-            OutfitSystem::UpdateHiding(world); // outfit skin under clothing (only when an outfit's pieces changed)
+            { PROFILE_SCOPE("Clip Prefetch"); PrefetchAnimatorClips(world, assets); } // clip files for Play, loaded behind the editor
+            { PROFILE_SCOPE("Asset Pump"); assets.PumpAsync(3.0); }
+            { PROFILE_SCOPE("Outfit Pending"); OutfitSystem::UpdatePending(world, assets); }
+            { PROFILE_SCOPE("Outfit Hiding"); OutfitSystem::UpdateHiding(world); } // outfit skin under clothing (only when an outfit's pieces changed)
             }
 
             glm::vec3 lightDir(-0.4f, -1.0f, -0.3f);
@@ -3612,24 +3675,26 @@ int main(int argc, char** argv) {
             lightBuffer.Clear();
             bool frameHaveDirectional = false;
             bool frameSunCastShadows = false; // the active directional's per-light Shadow.Enabled
-            glm::mat4 spotShadowVP[SpotShadowMap::kMaxSpots];
-            glm::vec3 spotShadowPos[SpotShadowMap::kMaxSpots];
-            float spotShadowFar[SpotShadowMap::kMaxSpots];
-            float spotShadowHalfTan[SpotShadowMap::kMaxSpots]; // tan(half-FOV) of the map — sizes the shader's texel estimate to the real cone, not an assumed 90° (#134)
-            int spotShadowCount = 0; // shadow-casting spots that got a slot this frame (#119)
+            glm::mat4 spotShadowVP[SpotShadowMap::kMaxSpots] = {};
+            glm::vec3 spotShadowPos[SpotShadowMap::kMaxSpots] = {};
+            float spotShadowFar[SpotShadowMap::kMaxSpots] = {};
+            float spotShadowHalfTan[SpotShadowMap::kMaxSpots] = {}; // tan(half-FOV) of the map — sizes the shader's texel estimate to the real cone, not an assumed 90° (#134)
+            int spotShadowCount = 0; // one past the highest slot in use this frame (#119); spotSlotLive says which are
+            bool spotSlotLive[SpotShadowMap::kMaxSpots] = {};
             int torchShadowSlot = -1; // the player's flashlight's slot (its casters leave out the player)
-            glm::vec3 pointShadowPos[PointShadowMap::kMaxPoints];
-            float pointShadowFar[PointShadowMap::kMaxPoints];
-            int pointShadowCount = 0; // shadow-casting point lights that got a cube this frame (#119)
+            glm::vec3 pointShadowPos[PointShadowMap::kMaxPoints] = {};
+            float pointShadowFar[PointShadowMap::kMaxPoints] = {};
+            int pointShadowCount = 0; // one past the highest cube in use this frame (#119); pointSlotLive says which are
+            bool pointSlotLive[PointShadowMap::kMaxPoints] = {};
             // Per-light shadow multipliers (#140 phase 2), parallel to the slot arrays above.
             // All 1.0 unless the light's ShadowSettings override them -> byte-identical to before.
-            float spotShadowBias[SpotShadowMap::kMaxSpots];
-            float spotShadowNormalBias[SpotShadowMap::kMaxSpots];
-            float spotShadowSoftness[SpotShadowMap::kMaxSpots];
-            float spotShadowNear[SpotShadowMap::kMaxSpots];
-            float pointShadowBias[PointShadowMap::kMaxPoints];
-            float pointShadowNormalBias[PointShadowMap::kMaxPoints];
-            float pointShadowNear[PointShadowMap::kMaxPoints];
+            float spotShadowBias[SpotShadowMap::kMaxSpots] = {};
+            float spotShadowNormalBias[SpotShadowMap::kMaxSpots] = {};
+            float spotShadowSoftness[SpotShadowMap::kMaxSpots] = {};
+            float spotShadowNear[SpotShadowMap::kMaxSpots] = {};
+            float pointShadowBias[PointShadowMap::kMaxPoints] = {};
+            float pointShadowNormalBias[PointShadowMap::kMaxPoints] = {};
+            float pointShadowNear[PointShadowMap::kMaxPoints] = {};
             float frameSunShadowBias = 1.0f, frameSunShadowNormalBias = 1.0f, frameSunShadowSoftness = 1.0f;
 
             // #110 — shadow slots go to the most important shadowed spot / point lights, not the
@@ -3640,6 +3705,36 @@ int main(int argc, char** argv) {
             // score). Last frame's holders get a 25% bonus, so near-ties don't flicker.
             static std::set<entt::entity> s_PrevShadowed;
             std::set<entt::entity> frameShadowed;
+            // Each light keeps its shadow slot - its layer, and with it the cached static depth - for as long as it holds a
+            // shadow; a light taking a shadow gets the free slot unused longest. Slots used to be handed out in registry order
+            // every frame, so one light gaining or losing its shadow (a flickering tube, the flashlight switched on, walking
+            // between rooms) shifted every later light to another layer and redrew all their caches at once.
+            struct StableShadowSlots {
+                entt::entity Owner[SpotShadowMap::kMaxSpots];
+                std::uint64_t Used[SpotShadowMap::kMaxSpots] = {};
+                StableShadowSlots() { for (auto& o : Owner) o = entt::null; }
+                void Assign(const std::vector<entt::entity>& want, int budget, std::uint64_t frame, std::unordered_map<entt::entity, int>& out) {
+                    out.clear();
+                    budget = std::clamp(budget, 0, SpotShadowMap::kMaxSpots);
+                    for (int i = budget; i < SpotShadowMap::kMaxSpots; ++i) Owner[i] = entt::null;
+                    bool taken[SpotShadowMap::kMaxSpots] = {};
+                    for (entt::entity e : want)
+                        for (int i = 0; i < budget; ++i)
+                            if (Owner[i] == e && !taken[i]) { taken[i] = true; Used[i] = frame; out[e] = i; break; }
+                    for (entt::entity e : want) {
+                        if (out.count(e)) continue;
+                        int pick = -1;
+                        for (int i = 0; i < budget; ++i)
+                            if (!taken[i] && (pick < 0 || Used[i] < Used[pick])) pick = i;
+                        if (pick < 0) break;
+                        taken[pick] = true; Owner[pick] = e; Used[pick] = frame; out[e] = pick;
+                    }
+                }
+            };
+            static StableShadowSlots s_SpotSlots, s_PointSlots;
+            static std::unordered_map<entt::entity, int> spotSlotOf, pointSlotOf;
+            const entt::entity kTorchSlotKey = static_cast<entt::entity>(0xFFFFFFF0u); // the flashlight's own key (not an entity)
+            std::vector<entt::entity> chosenSpots, chosenPoints;
             // Per-scene budgets (Lighting > Shadows), clamped to the shader's array ceilings.
             const int spotShadowBudget = std::clamp(world.MaxSpotShadows, 0, SpotShadowMap::kMaxSpots);
             // The player's flashlight: in Play with a player, it's lit and takes the first spot shadow (the scene's spots share the rest).
@@ -3652,6 +3747,8 @@ int main(int argc, char** argv) {
                 std::vector<std::pair<float, entt::entity>> spots, points;
                 for (auto e : world.Registry.view<TransformComponent, LightComponent>()) {
                     const auto& lc = world.Registry.get<LightComponent>(e);
+                    // (Scored on the intensity now: holding a flickering light's shadow through its bright peaks - a TV
+                    // across the living room - cost the main pass ~1.3 ms in Floor3. Its slot, and so its cache, waits for it.)
                     if (!lc.Shadow.Enabled || !world.ShadowsEnabled || lc.Kind == LightComponent::Type::Directional ||
                         lc.Intensity <= 0.0f || world.Registry.all_of<InactiveTag>(e) ||
                         (!playing && editor.IsLightSuppressed(world, e)))
@@ -3663,13 +3760,16 @@ int main(int argc, char** argv) {
                     if (s_PrevShadowed.count(e)) score *= 1.25f;
                     (lc.Kind == LightComponent::Type::Spot ? spots : points).emplace_back(score, e);
                 }
-                auto take = [&](std::vector<std::pair<float, entt::entity>>& v, size_t n) {
+                auto take = [&](std::vector<std::pair<float, entt::entity>>& v, size_t n, std::vector<entt::entity>& chosen) {
                     std::stable_sort(v.begin(), v.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
-                    for (size_t i = 0; i < v.size() && i < n; ++i) frameShadowed.insert(v[i].second);
+                    for (size_t i = 0; i < v.size() && i < n; ++i) { frameShadowed.insert(v[i].second); chosen.push_back(v[i].second); }
                 };
-                take(spots, (size_t)sceneSpotShadowBudget);
-                take(points, (size_t)pointShadowBudget);
+                take(spots, (size_t)sceneSpotShadowBudget, chosenSpots);
+                take(points, (size_t)pointShadowBudget, chosenPoints);
                 s_PrevShadowed = frameShadowed;
+                if (torchLit && world.ShadowsEnabled && spotShadowBudget > 0) chosenSpots.insert(chosenSpots.begin(), kTorchSlotKey);
+                s_SpotSlots.Assign(chosenSpots, spotShadowBudget, (std::uint64_t)frameIndex + 1, spotSlotOf);
+                s_PointSlots.Assign(chosenPoints, pointShadowBudget, (std::uint64_t)frameIndex + 1, pointSlotOf);
                 // Candidates that didn't get a slot, for the Inspector's over-budget warning.
                 std::set<entt::entity> overBudget;
                 for (const auto* v : {&spots, &points})
@@ -3690,8 +3790,10 @@ int main(int argc, char** argv) {
             if (torchLit && lightBuffer.Count() + 2 <= LightBuffer::kMaxLights) {
                 const glm::vec3 pos = flashlight.Position, aim = flashlight.Aim;
                 int slot = -1;
-                if (world.ShadowsEnabled && spotShadowBudget > 0) {
-                    slot = torchShadowSlot = spotShadowCount++;
+                if (const auto it = spotSlotOf.find(kTorchSlotKey); it != spotSlotOf.end()) {
+                    slot = torchShadowSlot = it->second;
+                    spotSlotLive[slot] = true;
+                    spotShadowCount = std::max(spotShadowCount, slot + 1);
                     const glm::vec3 up = std::abs(aim.y) > 0.99f ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
                     const float fov = glm::radians(flashlight.SpillOuterDeg * 2.0f + 4.0f);
                     spotShadowFar[slot] = flashlight.HotRange;
@@ -3756,8 +3858,10 @@ int main(int argc, char** argv) {
                     float cosOuter = cosf(glm::radians(lc.SpotAngleDegrees));
                     float cosInner = cosf(glm::radians(lc.SpotAngleDegrees * 0.9f));
                     int slot = -1;
-                    if (frameShadowed.count(e) && spotShadowCount < spotShadowBudget) {
-                        slot = spotShadowCount++;
+                    if (const auto it = spotSlotOf.find(e); it != spotSlotOf.end()) {
+                        slot = it->second;
+                        spotSlotLive[slot] = true;
+                        spotShadowCount = std::max(spotShadowCount, slot + 1);
                         glm::vec3 up = std::abs(aim.y) > 0.99f ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
                         float fov = glm::radians(std::min(lc.SpotAngleDegrees * 2.0f + 4.0f, 175.0f));
                         float nearP = std::max(lc.Shadow.NearPlane, 1e-3f);
@@ -3776,8 +3880,10 @@ int main(int argc, char** argv) {
                                         ~(std::uint32_t)lc.CullingMask); // #203
                 } else {
                     int slot = -1;
-                    if (frameShadowed.count(e) && pointShadowCount < pointShadowBudget) {
-                        slot = pointShadowCount++;
+                    if (const auto it = pointSlotOf.find(e); it != pointSlotOf.end()) {
+                        slot = it->second;
+                        pointSlotLive[slot] = true;
+                        pointShadowCount = std::max(pointShadowCount, slot + 1);
                         pointShadowPos[slot] = pos;
                         pointShadowFar[slot] = std::max(lc.Range, 0.2f);
                         pointShadowNear[slot] = std::max(lc.Shadow.NearPlane, 1e-3f);
@@ -4003,7 +4109,9 @@ int main(int argc, char** argv) {
                 bool player; // the player's own body and gun (world copies): no shadow in their own flashlight
             };
             // Per caster, its transform and when it last changed; drives LocalCaster::moving.
-            struct CasterMotion { glm::mat4 xform; std::uint64_t moved; };
+            // A skinned caster counts as animated only while its pose changes (PoseVersion): a corpse at rest, or a body held
+            // still, is a static caster like any prop instead of being redrawn into every light's map each frame.
+            struct CasterMotion { glm::mat4 xform; std::uint64_t moved; std::uint64_t pose = 0, posed = 0; };
             static std::unordered_map<std::uint32_t, CasterMotion> s_CasterMotion;
             constexpr std::uint64_t kMovingFrames = 30;
             static std::vector<LocalCaster> localCasters;
@@ -4025,12 +4133,16 @@ int main(int argc, char** argv) {
                     lc.player = world.Registry.any_of<HiddenFromOwnerTag, PlayerBodyTag>(entity);
                     // Skinned, not "has its own clips": a character whose clips live in other files (every NPC
                     // and outfit piece) animates too, and its shadow must follow.
-                    lc.animated = lc.model->HasBones();
                     // First seen counts as settled (unsigned wrap keeps that true on early frames).
                     const std::uint64_t now = (std::uint64_t)frameIndex;
-                    auto [motion, first] = s_CasterMotion.try_emplace(lc.id, CasterMotion{lc.xform, now - kMovingFrames});
-                    if (motion->second.xform != lc.xform) motion->second = {lc.xform, now};
+                    auto [motion, first] = s_CasterMotion.try_emplace(lc.id, CasterMotion{lc.xform, now - kMovingFrames, 0, now});
+                    if (motion->second.xform != lc.xform) { motion->second.xform = lc.xform; motion->second.moved = now; }
                     lc.moving = now - motion->second.moved < kMovingFrames;
+                    if (lc.model->HasBones() && motion->second.pose != lc.model->PoseVersion()) {
+                        motion->second.pose = lc.model->PoseVersion();
+                        motion->second.posed = now;
+                    }
+                    lc.animated = lc.model->HasBones() && now - motion->second.posed < kMovingFrames;
                     glm::vec3 bmin = lc.model->BoundsMin(), bmax = lc.model->BoundsMax();
                     lc.bounded = bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z;
                     if (!lc.bounded) continue;
@@ -4090,7 +4202,13 @@ int main(int argc, char** argv) {
                 int localFarLoc = localShadowShader.Loc("uShadowFar");
                 int localModelLoc = localShadowShader.Loc("uModel");
                 static std::vector<const LocalCaster*> visible;
+                // Per spot slot, last frame's view-projection: a light that moves (the flashlight) draws straight into its
+                // live layer - caching static depth it would throw away next frame was a whole extra draw and layer copy.
+                static glm::mat4 s_SpotLastVP[SpotShadowMap::kMaxSpots] = {};
                 for (int s = 0; s < spotShadowCount; ++s) {
+                    if (!spotSlotLive[s]) continue;
+                    const bool lightMoved = spotShadowVP[s] != s_SpotLastVP[s];
+                    s_SpotLastVP[s] = spotShadowVP[s];
                     Frustum lf = Frustum::FromViewProj(spotShadowVP[s]);
                     visible.clear();
                     bool animated = false;
@@ -4148,6 +4266,14 @@ int main(int argc, char** argv) {
                             if (c->twoSided) glEnable(GL_CULL_FACE);
                         }
                     };
+                    if (lightMoved) {
+                        spotShadowMap.Begin(s);
+                        drawCasters(false);
+                        drawCasters(true);
+                        s_SpotShadowSig[s] = 0; // no cache: the next still frame builds it
+                        s_SpotDynamicRect[s] = glm::ivec4(0, 0, mapRes, mapRes);
+                        continue;
+                    }
                     // Static casters into the cache only when they changed; then the live layer is
                     // that depth plus this frame's animated casters (an NPC standing in the spot
                     // used to redraw the whole arena into it every frame).
@@ -4208,6 +4334,7 @@ int main(int argc, char** argv) {
                 int cubeModelLoc = localShadowShader.Loc("uModel");
                 static std::vector<const LocalCaster*> inRange;
                 for (int s = 0; s < pointShadowCount; ++s) {
+                    if (!pointSlotLive[s]) continue;
                     // The light's whole reach: casters outside it can't show on any face.
                     const glm::vec3 lp = pointShadowPos[s];
                     const float reach = pointShadowFar[s];
@@ -4517,7 +4644,9 @@ int main(int argc, char** argv) {
             // Scene and Game are tabs in the same dock node - at most one is visible at a time, so
             // skip this render entirely when the Scene tab isn't the one showing (#172). Halves
             // per-frame render cost in the common case (editing in one tab or the other).
-            if ((editorUIVisible && editor.IsSceneViewportVisible()) || ((npcTest || stockProbeMode) && playing)) {
+            // (The combat bench measures the game alone: no Scene view beside it.)
+            if ((editorUIVisible && editor.IsSceneViewportVisible() && !(perfBenchMode && npcTest)) ||
+                ((npcTest || stockProbeMode) && playing && !(perfBenchMode && npcTest && smokeShotsDir.empty()))) {
                 PROFILE_SCOPE("Scene View Render");
                 PROFILE_GPU_SCOPE("Scene View Render");
                 glm::vec2 available = editor.GetLastSceneContentRegion();
@@ -5695,29 +5824,65 @@ int main(int argc, char** argv) {
                         sampling = false;
                     }
                 }
-                if (perfBenchMode) {
+                // --perf-bench <scene> --npc-test <scenario>: the combat bench - the scripted fight in the Game view,
+                // maximized, every Play frame measured (stutters included: TARTARUS_PERF_WARMUP frames skipped, 100 by
+                // default), one report when the fight is over.
+                if (perfBenchMode && npcTest) {
                     const auto now = std::chrono::steady_clock::now();
                     const double frameMs = std::chrono::duration<double, std::milli>(now - perfLastFrameEnd).count();
                     perfLastFrameEnd = now;
-                    const int phaseFrame = (smokeFramesRendered - 1) % kPerfPhaseFrames + 1;
-                    if (perfSample && phaseFrame == kPerfBenchWarmup) SamplingProfiler::Start();
-                    if (phaseFrame > kPerfBenchWarmup) {
+                    SamplingProfiler::EndFrame(frameMs);
+                    static int playFrame = 0;
+                    static bool reported = false;
+                    if (playing && !playMaximized) setMaximized(true);
+                    if (!reported && playing && playMaximized && ++playFrame > kPerfBenchWarmup) {
                         perfFrame.Sum += frameMs; perfFrame.Max = std::max(perfFrame.Max, frameMs); ++perfFrame.N;
                         for (const Profiler::Entry& e : Profiler::GetLastFrame()) perfAdd(perfCpu, e.Name, e.Milliseconds);
                         for (const Profiler::Entry& e : Profiler::GetLastFrameGpu()) perfAdd(perfGpu, e.Name, e.Milliseconds);
+                        perfRecordFrame(frameMs, playFrame);
                     }
-                    if (phaseFrame == kPerfPhaseFrames) {
-                        std::printf("[PerfBench] %s (%s)  frames=%d  avg=%.3f ms (%.1f fps)  worst=%.3f ms  draws=%d  window=%dx%d\n",
-                                    std::filesystem::path(smokeScenePaths[smokeSceneIndex]).filename().string().c_str(),
-                                    !playing ? "edit" : playMaximized ? "play-max" : "play", perfFrame.N, perfFrame.N ? perfFrame.Sum / perfFrame.N : 0.0,
-                                    perfFrame.Sum > 0.0 ? 1000.0 * perfFrame.N / perfFrame.Sum : 0.0,
-                                    perfFrame.Max, editor.GetRenderStats().DrawCalls, window.GetWidth(), window.GetHeight());
+                    if (!reported && perfFrame.N > 0 && (smokeFramesRendered >= kSmokeTestFrames - 1 || npcTest->Done())) {
+                        reported = true;
+                        std::printf("[PerfBench] %s (combat)  frames=%d  avg=%.3f ms (%.1f fps)  worst=%.3f ms  draws=%d tris=%d  window=%dx%d\n",
+                                    std::filesystem::path(smokeScenePaths[smokeSceneIndex]).filename().string().c_str(), perfFrame.N,
+                                    perfFrame.Sum / perfFrame.N, perfFrame.Sum > 0.0 ? 1000.0 * perfFrame.N / perfFrame.Sum : 0.0,
+                                    perfFrame.Max, editor.GetRenderStats().DrawCalls, editor.GetRenderStats().Triangles, window.GetWidth(), window.GetHeight());
+                        perfReportHitches("combat");
                         for (auto* v : {&perfCpu, &perfGpu}) {
                             std::sort(v->begin(), v->end(), [](const auto& a, const auto& b) { return a.second.Sum > b.second.Sum; });
                             for (const auto& [name, acc] : *v)
                                 std::printf("[PerfBench]   %s %-34s avg=%8.3f ms  max=%8.3f ms\n", v == &perfCpu ? "CPU" : "GPU",
                                             name.c_str(), acc.Sum / std::max(perfFrame.N, 1), acc.Max);
                         }
+                        std::fflush(stdout);
+                        perfCpu.clear(); perfGpu.clear(); perfFrame = {};
+                    }
+                } else if (perfBenchMode) {
+                    const auto now = std::chrono::steady_clock::now();
+                    const double frameMs = std::chrono::duration<double, std::milli>(now - perfLastFrameEnd).count();
+                    perfLastFrameEnd = now;
+                    SamplingProfiler::EndFrame(frameMs);
+                    const int phaseFrame = (smokeFramesRendered - 1) % kPerfPhaseFrames + 1;
+                    if (perfSample && phaseFrame == kPerfBenchWarmup) SamplingProfiler::Start();
+                    if (phaseFrame > kPerfBenchWarmup) {
+                        perfFrame.Sum += frameMs; perfFrame.Max = std::max(perfFrame.Max, frameMs); ++perfFrame.N;
+                        for (const Profiler::Entry& e : Profiler::GetLastFrame()) perfAdd(perfCpu, e.Name, e.Milliseconds);
+                        for (const Profiler::Entry& e : Profiler::GetLastFrameGpu()) perfAdd(perfGpu, e.Name, e.Milliseconds);
+                        perfRecordFrame(frameMs, phaseFrame);
+                    }
+                    if (phaseFrame == kPerfPhaseFrames) {
+                        std::printf("[PerfBench] %s (%s)  frames=%d  avg=%.3f ms (%.1f fps)  worst=%.3f ms  draws=%d tris=%d  window=%dx%d\n",
+                                    std::filesystem::path(smokeScenePaths[smokeSceneIndex]).filename().string().c_str(),
+                                    !playing ? "edit" : playMaximized ? "play-max" : "play", perfFrame.N, perfFrame.N ? perfFrame.Sum / perfFrame.N : 0.0,
+                                    perfFrame.Sum > 0.0 ? 1000.0 * perfFrame.N / perfFrame.Sum : 0.0,
+                                    perfFrame.Max, editor.GetRenderStats().DrawCalls, editor.GetRenderStats().Triangles, window.GetWidth(), window.GetHeight());
+                        for (auto* v : {&perfCpu, &perfGpu}) {
+                            std::sort(v->begin(), v->end(), [](const auto& a, const auto& b) { return a.second.Sum > b.second.Sum; });
+                            for (const auto& [name, acc] : *v)
+                                std::printf("[PerfBench]   %s %-34s avg=%8.3f ms  max=%8.3f ms\n", v == &perfCpu ? "CPU" : "GPU",
+                                            name.c_str(), acc.Sum / std::max(perfFrame.N, 1), acc.Max);
+                        }
+                        perfReportHitches(!playing ? "edit" : playMaximized ? "play-max" : "play");
                         std::fflush(stdout);
                         if (perfSample) SamplingProfiler::Report(!playing ? "edit" : playMaximized ? "play-max" : "play", 60);
                         perfCpu.clear(); perfGpu.clear(); perfFrame = {};

@@ -10,6 +10,7 @@
 #include "GLStateCache.h"
 #include "DefaultTextures.h"
 #include "PrimitiveMeshes.h"
+#include "meshoptimizer.h"
 #include "gl.h"
 
 #include <glm/gtx/matrix_decompose.hpp>
@@ -381,6 +382,46 @@ void Model::ProcessNode(aiNode* node, const aiScene* scene, const glm::mat4& par
     }
 }
 
+// Import Settings > Simplify: the mesh cut to about `ratio` of its triangles (meshoptimizer, the error capped at 1% of the
+// mesh's size, so a flat or already lean mesh keeps what it needs), then its vertices packed to the ones still used.
+static void SimplifyStatic(std::vector<ModelVertex>& vertices, std::vector<unsigned int>& indices, float ratio) {
+    if (!(ratio > 0.0f && ratio < 1.0f) || indices.size() < 3 * 512 || indices.size() % 3 != 0 || vertices.empty()) return;
+    const size_t target = std::max<size_t>(3 * 64, (size_t)((double)indices.size() * ratio) / 3 * 3);
+    std::vector<unsigned int> out(indices.size());
+    size_t n = meshopt_simplify(out.data(), indices.data(), indices.size(), &vertices[0].Position.x, vertices.size(),
+                                sizeof(ModelVertex), target, 0.01f, 0, nullptr);
+    if (n > 2 * target) {
+        // Barely reduced: the mesh is split at every face (per-face normals or UVs, a scan), and the simplifier keeps every
+        // seam. Collapsed on the shape alone instead - each corner then takes one of its coincident vertices' attributes.
+        std::vector<unsigned int> shape(indices.size());
+        meshopt_generateShadowIndexBuffer(shape.data(), indices.data(), indices.size(), &vertices[0].Position.x, vertices.size(),
+                                          sizeof(float) * 3, sizeof(ModelVertex));
+        const size_t m = meshopt_simplify(out.data(), shape.data(), shape.size(), &vertices[0].Position.x, vertices.size(),
+                                          sizeof(ModelVertex), target, 0.01f, 0, nullptr);
+        if (m < n) n = m;
+        else n = meshopt_simplify(out.data(), indices.data(), indices.size(), &vertices[0].Position.x, vertices.size(),
+                                  sizeof(ModelVertex), target, 0.01f, 0, nullptr);
+    }
+    if (n > 2 * target) {
+        // Still barely reduced (triangle soup, or borders everywhere): clustered, without keeping the topology.
+        const size_t m = meshopt_simplifySloppy(out.data(), indices.data(), indices.size(), &vertices[0].Position.x, vertices.size(),
+                                                sizeof(ModelVertex), nullptr, target, 0.01f, nullptr);
+        if (m >= 3 && m < n) n = m;
+        else n = meshopt_simplify(out.data(), indices.data(), indices.size(), &vertices[0].Position.x, vertices.size(),
+                                  sizeof(ModelVertex), target, 0.01f, 0, nullptr);
+    }
+    if (n < 3 || n >= indices.size()) return;
+    out.resize(n);
+    std::vector<ModelVertex> packed(vertices.size());
+    const size_t used = meshopt_optimizeVertexFetch(packed.data(), out.data(), out.size(), vertices.data(), vertices.size(), sizeof(ModelVertex));
+    packed.resize(used);
+    char line[160];
+    std::snprintf(line, sizeof line, "Model import: a mesh simplified from %zu to %zu triangles (Simplify %.2f).", indices.size() / 3, out.size() / 3, ratio);
+    Log::Info(line);
+    vertices = std::move(packed);
+    indices = std::move(out);
+}
+
 std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene, const glm::mat4& nodeTransform,
                                               const aiNode* node) {
     std::vector<ModelVertex> vertices(mesh->mNumVertices);
@@ -501,6 +542,7 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
     }
 
     if (m_D->Settings.ImportSkeleton) ExtractBoneWeights(vertices, mesh, offsetFix);
+    if (!skinned) SimplifyStatic(vertices, indices, m_D->Settings.SimplifyRatio);
 
     // #98 — bounds, picking, snapping and collider cooking are rebuilt from this CPU copy at
     // the bind pose (same blend as the vertex shader), so they track whatever `bake` folded
