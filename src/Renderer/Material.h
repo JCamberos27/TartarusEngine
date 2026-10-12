@@ -122,7 +122,8 @@ struct Material {
     // across builds.
     // Worked out once per frame per material (it runs per mesh per pass: main, SSAO pre-pass, every shadow map):
     // the cache holds until NextHashFrame(), which the frame loop calls before anything renders. A copy starts
-    // without it, so a material copied and changed within a frame hashes its own values.
+    // without it, so a material copied and changed within a frame hashes its own values. Code that must see an
+    // edit made earlier in the same frame (preview keys) calls ComputeHash().
     std::uint64_t Hash() const {
         if (m_HashCache.Frame == s_HashFrame) return m_HashCache.Value;
         m_HashCache.Value = ComputeHash();

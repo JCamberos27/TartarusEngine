@@ -58,7 +58,8 @@ MaterialPreviewRenderer::~MaterialPreviewRenderer() {
 }
 
 std::uint64_t MaterialPreviewRenderer::ContentKey(const MaterialAsset& m) {
-    std::uint64_t h = m.Mat.Hash();
+    // Uncached: an edit made earlier this frame must change the key now (Hash() holds until the next frame).
+    std::uint64_t h = m.Mat.ComputeHash();
     auto mix = [&h](const void* p, std::size_t n) {
         const unsigned char* b = static_cast<const unsigned char*>(p);
         for (std::size_t i = 0; i < n; ++i) { h ^= b[i]; h *= 1099511628211ull; }
