@@ -469,26 +469,18 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         const bool dynamicItem = renderable.ModelRef->HasBones() || world.Registry.all_of<RigidbodyComponent>(entity);
 
         // Frustum culling: skip the draw call entirely for anything outside the camera's view.
-        // Bounds come from the same Model::BoundsMin/Max already used for gizmo framing and Snap
-        // to Ground - an invalid (never-populated) bounds pair draws unconditionally.
-        glm::vec3 boundsMin = renderable.ModelRef->BoundsMin();
-        glm::vec3 boundsMax = renderable.ModelRef->BoundsMax();
+        // Bounds are the model's as posed (Model::PosedBounds: the bind bounds for anything unskinned or
+        // unposed) - an invalid (never-populated) bounds pair draws unconditionally. A skinned model's bind box,
+        // even padded, isn't enough: a ragdoll's root stays where the NPC stood, and its head, a body length
+        // away on the floor, was culled whenever that spot left the view - pieces blinking out up close.
+        glm::vec3 boundsMin, boundsMax;
+        renderable.ModelRef->PosedBounds(boundsMin, boundsMax);
         bool validBounds = boundsMin.x <= boundsMax.x && boundsMin.y <= boundsMax.y && boundsMin.z <= boundsMax.z;
         // The player's own body in their camera (world or view-model pass) is never culled: the camera sits
         // inside it, and a small piece's bind-pose bounds (a watch, a bracelet at the A-pose wrist, beside
         // and below the eye) missed the frustum while the posed hand was right in front of it.
         const bool playerBody = bodyTag && !ctx.EditorView && ctx.OwnerView;
         if (validBounds && !playerBody) {
-            // Bounds are bind-pose only. A skinned model's limbs can swing well past them, so
-            // inflate around the centre before the frustum test for rigged models (#113).
-            // Check HasBones() rather than HasAnimations() to handle characters whose animation
-            // clips live in other files - they have bones but report HasAnimations() false.
-            if (renderable.ModelRef->HasBones()) {
-                glm::vec3 c = (boundsMin + boundsMax) * 0.5f;
-                glm::vec3 h = (boundsMax - boundsMin) * 0.5f * 1.75f;
-                boundsMin = c - h;
-                boundsMax = c + h;
-            }
             AABB worldBounds = AABB{boundsMin, boundsMax}.Transformed(model);
             const bool seen = (isViewModel ? vmFrustum : camFrustum).Intersects(worldBounds) ||
                               (splitSleeves && vmFrustum.Intersects(worldBounds));
