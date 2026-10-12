@@ -149,7 +149,7 @@ if(NOT imguizmo_POPULATED)
 endif()
 
 # --- meshoptimizer (triangle order for the GPU's post-transform vertex cache) ---
-# Source only: the engine compiles the two files it uses (vertex cache optimizer + allocator)
+# Source only: the engine compiles the files it uses (vertex cache optimizer, simplifier, vertex fetch, index generator, allocator)
 # rather than building the library target, whose install rules would land in the package.
 FetchContent_Declare(
   meshoptimizer
@@ -378,6 +378,9 @@ set(IMGUI_SOURCES
 set(MESHOPT_SOURCES
   ${meshoptimizer_SOURCE_DIR}/src/allocator.cpp
   ${meshoptimizer_SOURCE_DIR}/src/vcacheoptimizer.cpp
+  ${meshoptimizer_SOURCE_DIR}/src/simplifier.cpp
+  ${meshoptimizer_SOURCE_DIR}/src/vfetchoptimizer.cpp
+  ${meshoptimizer_SOURCE_DIR}/src/indexgenerator.cpp
 )
 file(GLOB RECAST_SOURCES
   ${recastnavigation_SOURCE_DIR}/Recast/Source/*.cpp

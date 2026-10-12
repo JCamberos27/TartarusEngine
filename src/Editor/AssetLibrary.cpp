@@ -45,6 +45,7 @@ bool ParseModelImporter(const json& j, ModelImportSettings& s) {
     s.ImportAnimations   = imp.value("importAnimations",  true);
     s.ImportSkeleton     = imp.value("importSkeleton",    true);
     s.OptimizeGraph      = imp.value("optimizeGraph",     true);
+    s.SimplifyRatio      = std::clamp(imp.value("simplify", 1.0f), 0.01f, 1.0f);
     s.MaterialImportMode = (ModelImportSettings::MaterialMode)imp.value("materialImportMode",
                                (int)ModelImportSettings::MaterialMode::ImportEmbedded);
     s.SourceUpAxis       = Model::ParseUpAxis(imp.value("upAxis", std::string("Y")));
@@ -709,6 +710,7 @@ void AssetLibrary::SetModelSettings(const std::string& path, const ModelImportSe
     imp["importAnimations"]  = settings.ImportAnimations;
     imp["importSkeleton"]    = settings.ImportSkeleton;
     imp["optimizeGraph"]     = settings.OptimizeGraph;
+    if (settings.SimplifyRatio < 1.0f) imp["simplify"] = settings.SimplifyRatio;
     imp["materialImportMode"]= (int)settings.MaterialImportMode;
     if (settings.SourceUpAxis != ModelImportSettings::UpAxis::Y) imp["upAxis"] = Model::UpAxisName(settings.SourceUpAxis);
     if (settings.PivotOffset != glm::vec3(0.0f))

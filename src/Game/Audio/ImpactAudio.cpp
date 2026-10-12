@@ -10,13 +10,22 @@
 
 #include <algorithm>
 #include <cmath>
+#include <unordered_map>
 
 namespace {
 Scripting::ImpactFrame Rule(int operation,const ImpactAudioComponent& t,float value=0){
     Scripting::ImpactFrame f;f.Operation=operation;f.Enabled=t.Enabled;f.CasingsEnabled=t.CasingsEnabled;f.MaxContacts=t.CasingMaxContacts;f.Speed=value;f.MinSpeed=t.CasingMinSpeed;f.FullSpeed=t.CasingFullSpeed;f.Volume=t.CasingVolume;f.GainMin=t.CasingGainMin;f.Radius=value;f.ShellRadius=t.ShellRadius;f.Miss=value;f.FlybyRadius=t.FlybyRadius;f.FlybyVolume=t.FlybyVolume;f.FarGain=t.FlybyFarGain;return f;
 }
 void Resolve(Scripting::ImpactFrame& f){if(!Scripting::InvokeProject("audio.impact",&f,sizeof f))throw std::runtime_error("Project impact policy unavailable");}
-nlohmann::json SetPolicy(const char* kind,const std::string& surface,bool shell,float min,float max,int voices){std::string result;if(!Scripting::RequestProject("audio.impact-set",nlohmann::json{{"kind",kind},{"surface",surface},{"shell",shell},{"min",min},{"max",max},{"voices",voices}}.dump(),result))throw std::runtime_error("Project sound set unavailable");return nlohmann::json::parse(result);}
+// Asked of the project's C# policy once per request and script build: every bullet impact and casing bounce asked again.
+nlohmann::json SetPolicy(const char* kind,const std::string& surface,bool shell,float min,float max,int voices){
+    const std::string request=nlohmann::json{{"kind",kind},{"surface",surface},{"shell",shell},{"min",min},{"max",max},{"voices",voices}}.dump();
+    static std::unordered_map<std::string,nlohmann::json> cache;static std::uint64_t generation=~std::uint64_t{};
+    if(generation!=Scripting::CodeGeneration()){cache.clear();generation=Scripting::CodeGeneration();}
+    if(auto it=cache.find(request);it!=cache.end())return it->second;
+    std::string result;if(!Scripting::RequestProject("audio.impact-set",request,result))throw std::runtime_error("Project sound set unavailable");
+    return cache[request]=nlohmann::json::parse(result);
+}
 }
 
 ImpactAudio& ImpactAudio::Get() {

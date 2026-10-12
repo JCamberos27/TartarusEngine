@@ -226,8 +226,20 @@ struct PhysicsState {
         PxMaterial* SlickMat = nullptr; // the parts with a FrictionScale (the hands): Mat's friction times SlickScale
         float SlickScale = 1.0f;
         float ExtraGravity = 0.0f;
+        // The articulation's last sane state (joint positions and root pose, after a substep that left every part finite and
+        // within speed): a blown-up solve (a body piled into others) is put back to it, still, instead of going on as NaN -
+        // which spread to whatever it touched and slowed every later step to hundreds of milliseconds.
+        PxArticulationCache* Good = nullptr;
+        bool Blown = false; // (logged once)
+        // A corpse at rest is frozen: its articulation taken out of the scene and its capsules left as one static actor where
+        // they lay (same filters, materials and part tags). A body falling onto a pile used to wake every corpse in it and
+        // solve them all at the ragdolls' 32 iterations - tens to hundreds of milliseconds a step as the bodies piled up.
+        // A hit (RagdollImpulse), the Player walking into it or anything attached to it puts the articulation back.
+        PxRigidStatic* Frozen = nullptr;
+        float Rest = 0.0f; // seconds asleep (unfrozen)
     };
     std::vector<Ragdoll> ragdolls;
+    std::vector<int> thawRequests; // frozen ragdolls the Player walked into (the CCT's hit report): thawed before the next step
     // Per-bone hitboxes of living NPCs (see CreateNpcHitboxes): their kinematic actors, the capsule each shadows while
     // active. hitboxActors: every hitbox actor, for the query filters; hitboxedCapsules: the capsules currently shadowed.
     struct Hitboxes { std::vector<PxRigidDynamic*> Bodies; const PxRigidActor* Capsule = nullptr; bool Active = false; };
@@ -935,6 +947,12 @@ void PlayerHitReport::onShapeHit(const PxControllerShapeHit& hit) {
     // A corpse's part (an articulation link) is pushed like any other body.
     PxRigidBody* body = hit.actor->is<PxRigidDynamic>() ? static_cast<PxRigidBody*>(hit.actor->is<PxRigidDynamic>())
                                                          : static_cast<PxRigidBody*>(hit.actor->is<PxArticulationLink>());
+    // A frozen corpse (a static copy of its parts): thawed before the next step, and pushed from then on.
+    if (!body && hit.shape && ((std::uintptr_t)hit.shape->userData >> 16) == 2u) {
+        const PxU32 id = hit.shape->getQueryFilterData().word2;
+        if (id > 0u) owner->thawRequests.push_back((int)id - 1);
+        return;
+    }
     if (!body) return;
     const bool kin = (body->getRigidBodyFlags() & PxRigidBodyFlag::eKINEMATIC);
     const PxVec3 n(hit.worldNormal.x, hit.worldNormal.y, hit.worldNormal.z);
@@ -1100,7 +1118,7 @@ void Destroy() {
     // Reverse construction order. scene->release() drops every actor/shape it owns. The core
     // (physics, dispatcher, materials, cooked meshes) stays up for the next Play (#167).
     for (PxJoint* j : s->joints)               if (j) j->release(); // #185 PR 11 — before the scene
-    for (auto& r : s->ragdolls) { for (PxJoint* j : r.Attach) if (j) j->release(); if (r.Mat) { r.Mat->release(); r.Mat = nullptr; } if (r.SlickMat) { r.SlickMat->release(); r.SlickMat = nullptr; } } // (the articulations go with the scene)
+    for (auto& r : s->ragdolls) { if (r.Frozen && r.Art) { r.Art->release(); r.Art = nullptr; } if (r.Good) { r.Good->release(); r.Good = nullptr; } for (PxJoint* j : r.Attach) if (j) j->release(); if (r.Mat) { r.Mat->release(); r.Mat = nullptr; } if (r.SlickMat) { r.SlickMat->release(); r.SlickMat = nullptr; } } // (the articulations go with the scene)
     if (s->controller)      s->controller->release();
     for (auto& n : s->npcs) if (n.ctrl) n.ctrl->release();
     if (s->controllerMgr)   s->controllerMgr->release();
@@ -1209,6 +1227,8 @@ void DriveGrab(PhysicsState& s, float dt) {
 }
 
 void RagdollBeforeSubstep(PhysicsState& s, PhysicsState::Ragdoll& rd); // (with the ragdolls, below)
+void RagdollAfterSubstep(PhysicsState::Ragdoll& rd);
+void FreezeRestingRagdolls(PhysicsState& s, float dt);
 
 // #185 debug — one fixed substep: velocity snapshot (for impact speed), simulate, fetch.
 // Shared by Step() and StepOneSubstep().
@@ -1224,12 +1244,14 @@ void RunOneSubstep(PhysicsState& s, float fixedStep) {
         s.prevPose[body] = body->getGlobalPose(); // #168
     }
     for (auto& rd : s.ragdolls) {
+        if (rd.Frozen) continue;
         rd.Prev.resize(rd.Bodies.size());
         for (size_t i = 0; i < rd.Bodies.size(); ++i) rd.Prev[i] = rd.Bodies[i]->getGlobalPose();
         RagdollBeforeSubstep(s, rd);
     }
     s.scene->simulate(fixedStep);
     s.scene->fetchResults(/*block=*/true);
+    for (auto& rd : s.ragdolls) RagdollAfterSubstep(rd);
     ++s.frameIndex;
     s.simClock += fixedStep;
 }
@@ -1291,6 +1313,7 @@ void Step(float dt, World& world, const std::function<void(float fixedDt)>& onFi
         g_State->stepAccumulator -= fixedStep;
         ++steps;
     }
+    if (steps) FreezeRestingRagdolls(*g_State, fixedStep * (float)steps);
     g_State->lastSubsteps = steps;
     g_State->lastStepMillis = steps ? std::chrono::duration<float, std::milli>(
         std::chrono::steady_clock::now() - t0).count() : 0.0f;
@@ -1766,6 +1789,7 @@ struct LayerQueryFilter : PxQueryFilterCallback {
                 dyn && !(dyn->getRigidBodyFlags() & PxRigidBodyFlag::eKINEMATIC))
                 return PxQueryHitType::eNONE;
             if (actor->is<PxArticulationLink>()) return PxQueryHitType::eNONE; // a ragdoll's part
+            if (shape && ((std::uintptr_t)shape->userData >> 16) == 2u) return PxQueryHitType::eNONE; // a frozen one's
         }
         if (shape) {
             if (!triggers && (shape->getFlags() & PxShapeFlag::eTRIGGER_SHAPE)) return PxQueryHitType::eNONE;
@@ -2054,6 +2078,71 @@ void ApplyPartFilter(PhysicsState& s, PhysicsState::Ragdoll& rd, int part) {
     if (link->getScene()) s.scene->resetFiltering(*link);
 }
 
+// The articulation back in the scene, asleep where it lay (a hit wakes it); the static copy gone.
+void ThawRagdoll(PhysicsState& s, PhysicsState::Ragdoll& rd) {
+    rd.Rest = 0.0f;
+    if (!rd.Frozen) return;
+    s.scene->removeActor(*rd.Frozen);
+    rd.Frozen->release();
+    rd.Frozen = nullptr;
+    if (rd.Art && !rd.Art->getScene()) {
+        s.scene->addArticulation(*rd.Art);
+        rd.Art->putToSleep();
+    }
+}
+
+void FreezeRagdoll(PhysicsState& s, PhysicsState::Ragdoll& rd) {
+    if (rd.Frozen || !rd.Art || !rd.Art->getScene()) return;
+    PxRigidStatic* copy = s.physics->createRigidStatic(PxTransform(PxIdentity));
+    if (!copy) return;
+    for (PxArticulationLink* l : rd.Bodies) {
+        if (!l) continue;
+        const PxTransform pose = l->getGlobalPose();
+        if (!PoseIsFinite(pose)) { copy->release(); return; }
+        PxShape* shapes[4];
+        const PxU32 n = l->getShapes(shapes, 4);
+        for (PxU32 k = 0; k < n; ++k) {
+            const PxShape* src = shapes[k];
+            PxMaterial* mats[4];
+            const PxU16 nm = (PxU16)src->getMaterials(mats, 4);
+            PxShape* c = s.physics->createShape(src->getGeometry(), mats, nm, true, src->getFlags());
+            if (!c) continue;
+            c->setLocalPose(pose * src->getLocalPose());
+            c->setSimulationFilterData(src->getSimulationFilterData());
+            c->setQueryFilterData(src->getQueryFilterData());
+            c->setContactOffset(src->getContactOffset());
+            c->setRestOffset(src->getRestOffset());
+            c->userData = src->userData; // the part tag (RaycastBodyParts)
+            copy->attachShape(*c);
+            c->release();
+        }
+    }
+    copy->userData = rd.Bodies.empty() || !rd.Bodies[0] ? nullptr : rd.Bodies[0]->userData; // the entity
+    s.scene->removeArticulation(*rd.Art);
+    s.scene->addActor(*copy);
+    rd.Frozen = copy;
+}
+
+} // namespace
+
+// Once a frame: corpses asleep a while freeze; the ones walked into thaw.
+void FreezeRestingRagdolls(PhysicsState& s, float dt) {
+    for (int id : s.thawRequests)
+        if (id >= 0 && id < (int)s.ragdolls.size() && s.ragdolls[(size_t)id].Art) ThawRagdoll(s, s.ragdolls[(size_t)id]);
+    s.thawRequests.clear();
+    constexpr float kFreezeAfter = 1.0f;
+    for (auto& rd : s.ragdolls) {
+        if (!rd.Art || rd.Frozen) continue;
+        bool held = false; // a gun still in its hand: that joint needs the link in the scene
+        for (PxJoint* j : rd.Attach) held = held || j;
+        if (held || !rd.Art->isSleeping()) { rd.Rest = 0.0f; continue; }
+        rd.Rest += dt;
+        if (rd.Rest >= kFreezeAfter) FreezeRagdoll(s, rd);
+    }
+}
+
+namespace {
+
 bool ValidRagdoll(int ragdoll) {
     return g_State && ragdoll >= 0 && ragdoll < (int)g_State->ragdolls.size() && g_State->ragdolls[(size_t)ragdoll].Art;
 }
@@ -2063,8 +2152,37 @@ const PxArticulationAxis::Enum kSphericalAxes[3] = {PxArticulationAxis::eTWIST, 
 } // namespace
 
 // Before every substep: the extra gravity, and pairs that overlapped at build let collide once they are apart.
+void RagdollAfterSubstep(PhysicsState::Ragdoll& rd) {
+    if (!rd.Art || rd.Frozen || !rd.Good || rd.Art->isSleeping()) return;
+    // Far past anything a falling body does: only a solve that has come apart moves a part this fast.
+    constexpr float kMaxSpeed = 60.0f, kMaxSpin = 300.0f;
+    bool sane = true;
+    for (PxArticulationLink* l : rd.Bodies) {
+        if (!l) continue;
+        const PxVec3 v = l->getLinearVelocity(), w = l->getAngularVelocity();
+        if (!PoseIsFinite(l->getGlobalPose()) || !v.isFinite() || !w.isFinite() || v.magnitudeSquared() > kMaxSpeed * kMaxSpeed ||
+            w.magnitudeSquared() > kMaxSpin * kMaxSpin) { sane = false; break; }
+    }
+    if (sane) {
+        rd.Art->copyInternalStateToCache(*rd.Good, PxArticulationCacheFlag::ePOSITION | PxArticulationCacheFlag::eROOT_TRANSFORM);
+        return;
+    }
+    const PxU32 dofs = rd.Art->getDofs();
+    for (PxU32 i = 0; i < dofs; ++i) rd.Good->jointVelocity[i] = 0.0f;
+    rd.Good->rootLinkData->worldLinVel = PxVec3(0.0f);
+    rd.Good->rootLinkData->worldAngVel = PxVec3(0.0f);
+    rd.Art->applyCache(*rd.Good, PxArticulationCacheFlag::ePOSITION | PxArticulationCacheFlag::eVELOCITY |
+                                     PxArticulationCacheFlag::eROOT_TRANSFORM | PxArticulationCacheFlag::eROOT_VELOCITIES, false);
+    rd.Art->updateKinematic(PxArticulationKinematicFlag::ePOSITION | PxArticulationKinematicFlag::eVELOCITY);
+    rd.Art->putToSleep();
+    if (!rd.Blown) {
+        rd.Blown = true;
+        Log::Warn("PhysX: a ragdoll's solve blew up (a part non-finite or past 60 m/s) - put back to its last sane pose, at rest.");
+    }
+}
+
 void RagdollBeforeSubstep(PhysicsState& s, PhysicsState::Ragdoll& rd) {
-    if (!rd.Art || rd.Art->isSleeping()) return;
+    if (!rd.Art || rd.Frozen || rd.Art->isSleeping()) return;
     if (rd.ExtraGravity != 0.0f) {
         const PxVec3 g = s.scene->getGravity();
         const float gl = g.magnitude();
@@ -2398,6 +2516,8 @@ int CreateRagdoll(unsigned entity, const RagdollPart* parts, int count, const Ra
             j->setJointVelocity(kSphericalAxes[k], v);
         }
     }
+    rd.Good = art->createCache();
+    if (rd.Good) art->copyInternalStateToCache(*rd.Good, PxArticulationCacheFlag::ePOSITION | PxArticulationCacheFlag::eROOT_TRANSFORM);
     return id;
 }
 
@@ -2405,6 +2525,8 @@ void DestroyRagdoll(int ragdoll) {
     if (!g_State || ragdoll < 0 || ragdoll >= (int)g_State->ragdolls.size()) return;
     auto& rd = g_State->ragdolls[(size_t)ragdoll];
     for (PxJoint* j : rd.Attach) if (j) j->release();
+    if (rd.Frozen) { g_State->scene->removeActor(*rd.Frozen); rd.Frozen->release(); }
+    if (rd.Good) rd.Good->release();
     if (rd.Art) rd.Art->release(); // its links, shapes and joints, and out of the scene
     if (rd.Mat) rd.Mat->release();
     if (rd.SlickMat) rd.SlickMat->release();
@@ -2434,7 +2556,7 @@ bool RagdollMotion(int ragdoll, float* outMaxLinear, float* outMaxAngular) {
     const auto& rd = g_State->ragdolls[(size_t)ragdoll];
     float lin = 0.0f, ang = 0.0f;
     for (PxArticulationLink* b : rd.Bodies) {
-        if (!b) continue;
+        if (!b || rd.Frozen) continue; // (frozen: still)
         lin = std::max(lin, b->getLinearVelocity().magnitude());
         ang = std::max(ang, b->getAngularVelocity().magnitude());
     }
@@ -2483,14 +2605,15 @@ void SleepRestingNeighbours(PhysicsState& s, const PhysicsState::Ragdoll& rd) {
 void RagdollSleep(int ragdoll) {
     if (!ValidRagdoll(ragdoll)) return;
     auto& rd = g_State->ragdolls[(size_t)ragdoll];
-    SleepRestingNeighbours(*g_State, rd);
-    if (!rd.Art->isSleeping()) rd.Art->putToSleep(); // (its velocities go to zero)
+    SleepRestingNeighbours(*g_State, rd); // (a frozen body's parts are where they lay: it still finds them)
+    if (!rd.Frozen && !rd.Art->isSleeping()) rd.Art->putToSleep(); // (its velocities go to zero)
 }
 
 void RagdollImpulse(int ragdoll, int part, const float impulse[3], const float point[3]) {
     if (!ValidRagdoll(ragdoll)) return;
     auto& rd = g_State->ragdolls[(size_t)ragdoll];
     if (part < 0 || part >= (int)rd.Bodies.size() || !rd.Bodies[(size_t)part]) return;
+    ThawRagdoll(*g_State, rd);
     PxRigidBodyExt::addForceAtPos(*rd.Bodies[(size_t)part], PxVec3(impulse[0], impulse[1], impulse[2]),
                                   PxVec3(point[0], point[1], point[2]), PxForceMode::eIMPULSE, true);
 }
@@ -2554,8 +2677,26 @@ void SetRagdollDriveTarget(int ragdoll, int part, const float rotXYZW[4]) {
 
 bool RagdollAsleep(int ragdoll) {
     if (!ValidRagdoll(ragdoll)) return true;
-    return g_State->ragdolls[(size_t)ragdoll].Art->isSleeping();
+    const auto& rd = g_State->ragdolls[(size_t)ragdoll];
+    return rd.Frozen || rd.Art->isSleeping();
 }
+
+void RagdollCounts(int& awake, int& asleep, int& frozen, float* fastestAwake) {
+    awake = asleep = frozen = 0;
+    if (fastestAwake) *fastestAwake = 0.0f;
+    if (!g_State) return;
+    for (const auto& rd : g_State->ragdolls) {
+        if (!rd.Art) continue;
+        if (rd.Frozen) { ++frozen; continue; }
+        if (rd.Art->isSleeping()) { ++asleep; continue; }
+        ++awake;
+        if (fastestAwake)
+            for (PxArticulationLink* l : rd.Bodies)
+                if (l) *fastestAwake = std::max(*fastestAwake, l->getLinearVelocity().magnitude());
+    }
+}
+
+bool RagdollFrozen(int ragdoll) { return ValidRagdoll(ragdoll) && g_State->ragdolls[(size_t)ragdoll].Frozen; }
 
 bool RagdollPairCollides(int ragdoll, int a, int b) {
     if (!ValidRagdoll(ragdoll)) return false;
@@ -2584,6 +2725,7 @@ int AttachToRagdollPart(unsigned entity, int ragdoll, int part, float breakForce
     PhysicsState& s = *g_State;
     auto& rd = s.ragdolls[(size_t)ragdoll];
     if (part < 0 || part >= (int)rd.Bodies.size() || !rd.Bodies[(size_t)part]) return -1;
+    ThawRagdoll(s, rd);
     auto it = s.bodyByEntity.find(entity);
     if (it == s.bodyByEntity.end() || !it->second) return -1;
     PxRigidDynamic* body = it->second;
@@ -2789,6 +2931,7 @@ int CollectStaticGeometry(std::vector<float>& verts, std::vector<int>& tris, boo
         for (PxShape* sh : shapes) {
             if (sh->getFlags() & PxShapeFlag::eTRIGGER_SHAPE) continue;
             if (!(sh->getFlags() & PxShapeFlag::eSIMULATION_SHAPE)) continue;
+            if (((std::uintptr_t)sh->userData >> 16) == 2u) continue; // a frozen corpse's part (FreezeRagdoll): not ground
             const PxTransform pose = actorPose * sh->getLocalPose();
             const PxGeometry& g = sh->getGeometry();
             switch (g.getType()) {
@@ -3076,7 +3219,8 @@ bool RaycastBodyParts(const float origin[3], const float dir[3], float maxDistan
             return PxQueryHitType::eBLOCK;
         }
     } filter;
-    PxQueryFilterData fd(PxQueryFlag::eDYNAMIC | PxQueryFlag::ePREFILTER);
+    // (Static too: a frozen corpse's parts, see FreezeRagdoll. Only tagged shapes pass the filter.)
+    PxQueryFilterData fd(PxQueryFlag::eDYNAMIC | PxQueryFlag::eSTATIC | PxQueryFlag::ePREFILTER);
     PxRaycastBuffer buf;
     if (!g_State->scene->raycast(PxVec3(origin[0], origin[1], origin[2]), d, maxDistance, buf, PxHitFlag::eDEFAULT, fd, &filter) ||
         !buf.hasBlock || !buf.block.shape)

@@ -67,10 +67,7 @@ int FxSpriteRenderer::Draw(const glm::mat4& view, const glm::mat4& proj, const i
     gpu.clear();
     for (const auto& p : sorted) gpu.push_back(p.second);
 
-    if (!m_Program) {
-        m_Program = std::make_unique<Shader>(ShaderLibrary::ReadFile("FxSprite.vert.glsl"), ShaderLibrary::ReadFile("FxSprite.frag.glsl"), "FxSprite");
-        glCreateVertexArrays(1, &m_Vao);
-    }
+    WarmUp();
     if (gpu.size() > m_Capacity) {
         if (m_Buffer) glDeleteBuffers(1, &m_Buffer);
         m_Capacity = std::max<size_t>(gpu.size() * 2, 256);
@@ -108,4 +105,10 @@ int FxSpriteRenderer::Draw(const glm::mat4& view, const glm::mat4& proj, const i
     glBindVertexArray(0);
     GLStateCache::Invalidate();
     return 1;
+}
+
+void FxSpriteRenderer::WarmUp() {
+    if (m_Program) return;
+    m_Program = std::make_unique<Shader>(ShaderLibrary::ReadFile("FxSprite.vert.glsl"), ShaderLibrary::ReadFile("FxSprite.frag.glsl"), "FxSprite");
+    glCreateVertexArrays(1, &m_Vao);
 }

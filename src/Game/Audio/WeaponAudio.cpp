@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <unordered_map>
 #include <cmath>
 #include <cstdlib>
 #include <cctype>
@@ -1350,10 +1351,21 @@ void WeaponAudio::UpdateAmbience(float dt) {
     }
 }
 
+// A set with no recordings is looked for again at most every few seconds (files imported meanwhile), not on every use:
+// each look scans the manifest and the folder, and a surface without impact takes was asked for by every round into it.
+static bool RetryEmptySet(const std::string& key) {
+    static std::unordered_map<std::string, std::chrono::steady_clock::time_point> s_Next;
+    const auto now = std::chrono::steady_clock::now();
+    auto& next = s_Next[key];
+    if (now < next) return false;
+    next = now + std::chrono::seconds(5);
+    return true;
+}
+
 SoundSet* WeaponAudio::KeySet(const std::string& key, const std::function<void(SoundSet&)>& init) {
     auto it = m_Keyed.find(key);
     if (it != m_Keyed.end()) {
-        if (it->second.Files.empty()) FillSet(it->second);
+        if (it->second.Files.empty() && RetryEmptySet(key)) FillSet(it->second);
         return &it->second;
     }
     SoundSet s;
@@ -1542,7 +1554,7 @@ SoundSet* WeaponAudio::EventSet(WeaponAudioProfile& p, const std::string& elemen
         FillSet(s);
         it = p.Events.emplace(element, std::move(s)).first;
         for (const std::string& f : it->second.Files) m_Player.Backend().Preload(f);
-    } else if (it->second.Files.empty()) {
+    } else if (it->second.Files.empty() && RetryEmptySet(it->second.Key)) {
         FillSet(it->second);
     }
     return &it->second;
