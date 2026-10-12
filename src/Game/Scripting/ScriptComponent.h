@@ -10,6 +10,8 @@ struct ScriptSlot {
     bool Enabled=true;
 };
 std::vector<ScriptSlot> GetSlots(const CSharpScriptComponent& component);
+// Slot `id`'s Enabled without copying the slots; false when the component has no such slot. Throws like GetSlots.
+bool SlotEnabled(const CSharpScriptComponent& component,std::uint32_t id,bool& enabled);
 void SetSlots(CSharpScriptComponent& component,const std::vector<ScriptSlot>& slots);
 void Attach(CSharpScriptComponent& component,const std::string& source,const std::string& className);
 }

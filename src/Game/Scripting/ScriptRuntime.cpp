@@ -44,6 +44,7 @@ std::uint64_t physicsSequence=~std::uint64_t{};
 std::set<std::string> rejectedScripts;
 HANDLE buildProcess = nullptr;
 std::filesystem::file_time_type assemblyTime{};
+std::chrono::steady_clock::time_point nextAssemblyCheck{};
 bool buildPending=false;
 std::chrono::steady_clock::time_point buildAfter;
 thread_local std::string description;
@@ -285,20 +286,20 @@ void Tick(World& world, AssetLibrary& assets, float dt, bool fixed) {
     auto active=[&](const Binding& b) {
         if(!world.Registry.valid(b.Entity) || world.Registry.all_of<InactiveTag>(b.Entity)) return false;
         const auto* component=world.Registry.try_get<CSharpScriptComponent>(b.Entity); if(!component) return false;
-        for(const auto& slot:GetSlots(*component)) if(slot.Id==b.Slot.Id) return slot.Enabled;
-        return false;
+        bool enabled=false; return SlotEnabled(*component,b.Slot.Id,enabled) && enabled;
     };
     auto send=[&](const Binding& b,int phase) {
         if(!world.Registry.valid(b.Entity) || !world.Registry.all_of<CSharpScriptComponent>(b.Entity)) return;
         const auto id=static_cast<std::uint32_t>(b.Entity);
-        const std::string key=std::to_string(id)+":"+std::to_string(b.Slot.Id)+b.Slot.Class+b.Slot.Fields;
-        if(rejectedScripts.count(key)) return;
+        auto key=[&]{return std::to_string(id)+":"+std::to_string(b.Slot.Id)+b.Slot.Class+b.Slot.Fields;};
+        if(!rejectedScripts.empty() && rejectedScripts.count(key())) return;
         EntityFrame f; f.Dt=dt; f.Entity=id; f.Script=b.Slot.Id; f.Phase=phase;
         f.ClassName=b.Slot.Class.c_str(); f.Fields=b.Slot.Fields.c_str();
         // Component.enabled stays true when only its GameObject is inactive.
-        if(const auto* c=world.Registry.try_get<CSharpScriptComponent>(b.Entity))
-            for(const auto& slot:GetSlots(*c)) if(slot.Id==b.Slot.Id) f.Enabled=slot.Enabled;
-        if(!Invoke(3,&f,sizeof f)) rejectedScripts.insert(key);
+        if(const auto* c=world.Registry.try_get<CSharpScriptComponent>(b.Entity)) {
+            bool enabled=false; if(SlotEnabled(*c,b.Slot.Id,enabled)) f.Enabled=enabled;
+        }
+        if(!Invoke(3,&f,sizeof f)) rejectedScripts.insert(key());
     };
     for(auto id:live) if(!current.count(id)) {
         EntityFrame f; f.Entity=static_cast<std::uint32_t>(id); f.Script=static_cast<std::uint32_t>(id>>32);
@@ -444,6 +445,7 @@ void Poll() {
             Fail("Build failed; running assembly retained.\n"+content); return;
         }
         Log::Info("C# build succeeded.");
+        nextAssemblyCheck={};
         error.clear();
         ClearDescriptions();
         if(!dispatch) { attemptedLoad=false; EnsureLoaded(); }
@@ -465,6 +467,10 @@ void Poll() {
     }
     if(buildPending && !buildProcess && std::chrono::steady_clock::now()>=buildAfter) { Build(); return; }
     if(!dispatch || buildProcess) return;
+    // The gameplay assembly's time stamp is two file-system calls; Poll runs every tick, so look 4 times a second.
+    const auto clock=std::chrono::steady_clock::now();
+    if(clock<nextAssemblyCheck) return;
+    nextAssemblyCheck=clock+std::chrono::milliseconds(250);
     std::error_code ec; auto now=std::filesystem::last_write_time(GameplayPath(),ec);
     if(!ec && now!=assemblyTime) {
         const auto path=GameplayPath().u8string();

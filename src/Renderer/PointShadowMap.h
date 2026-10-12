@@ -25,6 +25,11 @@ public:
     // Binds the shadow FBO targeting cube `slot`'s face `face` (0..5 = +X,-X,+Y,-Y,+Z,-Z),
     // sets the viewport, clears its depth. Does NOT restore the previous framebuffer.
     void BeginFace(int slot, int face) const;
+    // The static-caster cache (a second cube array): BeginStaticFace clears and binds cube `slot`'s face in it;
+    // BeginFaceFromStatic copies that cached face into the live map and binds the live face for the moving
+    // casters drawn on top (like SpotShadowMap's static layer).
+    void BeginStaticFace(int slot, int face) const;
+    void BeginFaceFromStatic(int slot, int face) const;
 
     unsigned int DepthCubeArray() const { return m_DepthArray; }
     int Resolution() const { return m_Resolution; }
@@ -35,6 +40,8 @@ public:
 private:
     unsigned int m_DepthArray = 0;
     unsigned int m_Fbo = 0;
+    unsigned int m_StaticArray = 0;
+    unsigned int m_StaticFbo = 0;
     int m_Resolution = 0;
     int m_Cubes = 0;
     mutable bool m_CompleteChecked = false; // audit #358 — one-shot FBO completeness check in Begin()
