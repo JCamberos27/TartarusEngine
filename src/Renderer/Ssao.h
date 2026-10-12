@@ -6,8 +6,9 @@ class Shader;
 
 // Screen-space ambient occlusion (PR15). Owns:
 //   - A depth-only FBO for the camera pre-pass (filled by main.cpp using the shadow shader).
-//   - An R8 raw occlusion FBO written by Compute().
-//   - An R8 blurred occlusion FBO written by Blur() — this is what the model shader reads.
+//   - A half-resolution RG16F raw occlusion FBO written by Compute() (occlusion + view z).
+//   - A full-resolution R8 blurred occlusion FBO written by Blur() (a depth-aware upsample) —
+//     this is what the model shader reads.
 // Noise texture and kernel samples are fixed-seed so the output is deterministic.
 class Ssao {
 public:
@@ -28,12 +29,14 @@ public:
     unsigned int DepthFbo() const { return m_DepthFbo; }
     unsigned int DepthTex() const { return m_DepthTex; }
 
-    // SSAO compute pass — reads DepthTex() and the noise texture, writes raw R8 occlusion.
-    // proj is the same projection matrix used for the depth pre-pass.
+    // SSAO compute pass — reads DepthTex() and the noise texture, writes the raw occlusion at half
+    // resolution (a quarter of the 32-tap work; occlusion is low-frequency and Blur() upsamples it
+    // by depth). proj is the same projection matrix used for the depth pre-pass.
     // #160: radius (view-space units) and depth bias used to be hard-coded 0.5 / 0.025.
     void Compute(Shader& ssaoShader, const glm::mat4& proj, float radius = 0.5f, float bias = 0.025f);
 
-    // 4x4 box blur pass — reads raw occlusion, writes final blurred occlusion.
+    // Full-resolution 4x4 (half-resolution texel) box blur, weighed by depth — reads the raw
+    // occlusion and DepthTex(), writes the final blurred occlusion.
     void Blur(Shader& blurShader);
 
     // Final blurred R8 occlusion texture. Bind as uSSAOMap (unit 15) before drawScene.
@@ -56,6 +59,8 @@ private:
     unsigned int m_KernelUploadedTo = 0; // program the kernel uniforms were last set on (#160)
 
     int m_Width = 0, m_Height = 0;
+    int m_HalfWidth = 0, m_HalfHeight = 0; // the raw occlusion's size
+    glm::mat4 m_Proj{1.0f};                // Compute()'s projection, for Blur()'s view depths
     bool m_Valid = false; // all FBOs validated complete this Create() (audit #358)
 
     void Release();

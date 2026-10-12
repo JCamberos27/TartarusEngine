@@ -155,6 +155,38 @@ void CascadedShadowMap::Update(const glm::mat4& camView, const glm::mat4& camPro
                 m_SliceCorners[c][i + 4 * k] = glm::vec2(p) / p.w;
             }
         }
+        // The slice's footprint is the convex hull of its corners: SAT against an axis-aligned rectangle
+        // needs only the rectangle's axes (the bounds test) and the hull's edge normals.
+        const std::array<glm::vec2, 8>& s = m_SliceCorners[c];
+        m_SliceMin[c] = m_SliceMax[c] = s[0];
+        for (const glm::vec2& p : s) { m_SliceMin[c] = glm::min(m_SliceMin[c], p); m_SliceMax[c] = glm::max(m_SliceMax[c], p); }
+        std::array<glm::vec2, 8> pts = s;
+        std::sort(pts.begin(), pts.end(), [](const glm::vec2& a, const glm::vec2& b) { return a.x < b.x || (a.x == b.x && a.y < b.y); });
+        std::array<glm::vec2, 16> hull{};
+        int h = 0;
+        const auto cross = [](const glm::vec2& o, const glm::vec2& a, const glm::vec2& b) {
+            return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+        };
+        for (int i = 0; i < 8; ++i) { // monotone chain: lower hull, then upper
+            while (h >= 2 && cross(hull[h - 2], hull[h - 1], pts[i]) <= 0.0f) --h;
+            hull[h++] = pts[i];
+        }
+        for (int i = 6, lower = h + 1; i >= 0; --i) {
+            while (h >= lower && cross(hull[h - 2], hull[h - 1], pts[i]) <= 0.0f) --h;
+            hull[h++] = pts[i];
+        }
+        int axes = 0;
+        for (int i = 0; i + 1 < h && axes < 8; ++i) {
+            const glm::vec2 d = hull[i + 1] - hull[i];
+            const glm::vec2 n(-d.y, d.x);
+            if (glm::dot(n, n) < 1e-12f) continue;
+            SliceAxis& ax = m_SliceAxes[c][axes++];
+            ax.N = n;
+            ax.Min = std::numeric_limits<float>::max();
+            ax.Max = -ax.Min;
+            for (const glm::vec2& p : s) { const float v = glm::dot(n, p); ax.Min = std::min(ax.Min, v); ax.Max = std::max(ax.Max, v); }
+        }
+        m_SliceAxisCount[c] = axes;
     }
 }
 
@@ -180,23 +212,14 @@ bool CascadedShadowMap::CasterReachesSlice(int c, const glm::vec3& boundsMin, co
     hi += glm::vec2(margin);
 
     // Separating axes between that rectangle and the slice's convex footprint: the rectangle's two
-    // axes, then the direction between every pair of slice corners (a superset of the hull's edges,
-    // so a separation found is real and every hull edge is tried).
-    const std::array<glm::vec2, 8>& s = m_SliceCorners[c];
-    glm::vec2 sMin = s[0], sMax = s[0];
-    for (const glm::vec2& p : s) { sMin = glm::min(sMin, p); sMax = glm::max(sMax, p); }
-    if (sMax.x < lo.x || sMin.x > hi.x || sMax.y < lo.y || sMin.y > hi.y) return false;
-    const glm::vec2 rect[4] = {{lo.x, lo.y}, {hi.x, lo.y}, {hi.x, hi.y}, {lo.x, hi.y}};
-    for (int a = 0; a < 8; ++a)
-        for (int b = a + 1; b < 8; ++b) {
-            const glm::vec2 d = s[b] - s[a];
-            const glm::vec2 n(-d.y, d.x);
-            if (glm::dot(n, n) < 1e-12f) continue;
-            float s0 = std::numeric_limits<float>::max(), s1 = -s0, r0 = s0, r1 = -s0;
-            for (const glm::vec2& p : s) { const float v = glm::dot(n, p); s0 = std::min(s0, v); s1 = std::max(s1, v); }
-            for (const glm::vec2& p : rect) { const float v = glm::dot(n, p); r0 = std::min(r0, v); r1 = std::max(r1, v); }
-            if (s1 < r0 || r1 < s0) return false;
-        }
+    // axes, then the slice hull's edge normals (with the slice's extent along each, from Update).
+    if (m_SliceMax[c].x < lo.x || m_SliceMin[c].x > hi.x || m_SliceMax[c].y < lo.y || m_SliceMin[c].y > hi.y) return false;
+    const glm::vec2 mid = (lo + hi) * 0.5f, half = (hi - lo) * 0.5f;
+    for (int a = 0; a < m_SliceAxisCount[c]; ++a) {
+        const SliceAxis& ax = m_SliceAxes[c][a];
+        const float centre = glm::dot(ax.N, mid), radius = std::abs(ax.N.x) * half.x + std::abs(ax.N.y) * half.y;
+        if (ax.Max < centre - radius || centre + radius < ax.Min) return false;
+    }
     return true;
 }
 

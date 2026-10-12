@@ -2874,6 +2874,7 @@ int main(int argc, char** argv) {
                 }
             }
             Profiler::BeginFrame();
+            Material::NextHashFrame(); // materials may have been edited since the last frame's hashes
             GLStateCache::ResetFrameStats();
             Model::BeginRenderFrame(); // next slice of the bone-palette ring
 
@@ -3715,6 +3716,10 @@ int main(int argc, char** argv) {
                 // Lights panel solo/mute is an editing aid only — Play renders every light (#140).
                 if (!playing && editor.IsLightSuppressed(world, e)) continue;
                 const auto& lc = world.Registry.get<LightComponent>(e);
+                // A dark point or spot light (a scripted flash between flashes) adds nothing, but every fragment in its
+                // range would still shade it. (A directional keeps its slot: it decides the cascade pass below.)
+                if (lc.Kind != LightComponent::Type::Directional &&
+                    (lc.Intensity <= 0.0f || glm::dot(lc.Color, lc.Color) <= 0.0f)) continue;
                 glm::mat4 m = world.ComposeWorldTransform(e);
                 glm::vec3 pos = glm::vec3(m[3]);
                 glm::vec3 aim = glm::normalize(glm::vec3(m * glm::vec4(0, 0, -1, 0)));
@@ -4018,7 +4023,9 @@ int main(int argc, char** argv) {
                     lc.id = static_cast<std::uint32_t>(entity);
                     lc.twoSided = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
                     lc.player = world.Registry.any_of<HiddenFromOwnerTag, PlayerBodyTag>(entity);
-                    lc.animated = lc.model->HasAnimations();
+                    // Skinned, not "has its own clips": a character whose clips live in other files (every NPC
+                    // and outfit piece) animates too, and its shadow must follow.
+                    lc.animated = lc.model->HasBones();
                     // First seen counts as settled (unsigned wrap keeps that true on early frames).
                     const std::uint64_t now = (std::uint64_t)frameIndex;
                     auto [motion, first] = s_CasterMotion.try_emplace(lc.id, CasterMotion{lc.xform, now - kMovingFrames});
@@ -4056,7 +4063,9 @@ int main(int argc, char** argv) {
             static bool s_SpotHadAnimated[SpotShadowMap::kMaxSpots] = {};
             // Per spot, the texels its animated casters covered when last drawn ({x0, y0, x1, y1}).
             static glm::ivec4 s_SpotDynamicRect[SpotShadowMap::kMaxSpots] = {};
-            static std::uint64_t s_PointShadowSig[PointShadowMap::kMaxPoints] = {};
+            static std::uint64_t s_PointShadowSig[PointShadowMap::kMaxPoints] = {}; // the static casters'
+            // Per point light and cube face: moving casters were drawn into the live face last frame.
+            static bool s_PointFaceHadDynamic[PointShadowMap::kMaxPoints][6] = {};
             if (world.ShadowsEnabled && spotShadowCount > 0) {
                 PROFILE_SCOPE("Spot Shadow Pass");
                 PROFILE_GPU_SCOPE("Spot Shadow Pass");
@@ -4204,7 +4213,6 @@ int main(int argc, char** argv) {
                     const float reach = pointShadowFar[s];
                     const AABB range{lp - glm::vec3(reach), lp + glm::vec3(reach)};
                     inRange.clear();
-                    bool animated = false;
                     std::uint64_t sig = 1469598103934665603ull;
                     const unsigned int map = pointShadowMap.DepthCubeArray();
                     const int res = pointShadowMap.Resolution() * 64 + pointShadowMap.Cubes(); // a reallocation
@@ -4213,29 +4221,45 @@ int main(int argc, char** argv) {
                     sig = hashBytes(sig, &lp, sizeof lp);
                     sig = hashBytes(sig, &pointShadowNear[s], sizeof pointShadowNear[s]);
                     sig = hashBytes(sig, &reach, sizeof reach);
+                    // Animated or recently moved casters are drawn over each face's cached static depth; the
+                    // rest make the static signature (as the spot maps do). A face redraws only when the static
+                    // casters changed or a moving one is in it (or was, last frame): an NPC walking past a lamp
+                    // used to redraw all six faces of every cube in reach, with every caster, every frame.
                     for (const LocalCaster& c : localCasters) {
                         if (c.bounded && !range.Intersects(c.bounds)) continue;
                         inRange.push_back(&c);
-                        animated = animated || c.animated;
-                        sig = hashCaster(sig, c);
+                        if (!(c.animated || c.moving)) sig = hashCaster(sig, c);
                     }
-                    if (!animated && sig == s_PointShadowSig[s]) continue; // unchanged: keep the cube
-                    s_PointShadowSig[s] = animated ? 0 : sig;
+                    const bool staticChanged = sig != s_PointShadowSig[s];
+                    s_PointShadowSig[s] = sig;
                     glm::mat4 proj = MakePerspective(90.0f, 1.0f, pointShadowNear[s], reach); // #202
                     localShadowShader.SetVec3(cubeLightPosLoc, lp);
                     localShadowShader.SetFloat(cubeFarLoc, reach);
                     for (int f = 0; f < 6; ++f) {
-                        pointShadowMap.BeginFace(s, f);
                         glm::mat4 vp = proj * glm::lookAt(lp, lp + kFaceDir[f], kFaceUp[f]);
-                        localShadowShader.SetMat4(cubeLightViewProjLoc, vp);
                         Frustum lf = Frustum::FromViewProj(vp);
-                        for (const LocalCaster* c : inRange) {
-                            if (c->bounded && !lf.Intersects(c->bounds)) continue;
-                            localShadowShader.SetMat4(cubeModelLoc, c->xform);
-                            if (c->twoSided) glDisable(GL_CULL_FACE);
-                            c->model->DrawDepthOnly(localShadowShader, *c->materials, 1, c->visible);
-                            if (c->twoSided) glEnable(GL_CULL_FACE);
+                        bool dynamicHere = false;
+                        for (const LocalCaster* c : inRange)
+                            if ((c->animated || c->moving) && (!c->bounded || lf.Intersects(c->bounds))) { dynamicHere = true; break; }
+                        if (!staticChanged && !dynamicHere && !s_PointFaceHadDynamic[s][f]) continue; // keep the face
+                        s_PointFaceHadDynamic[s][f] = dynamicHere;
+                        localShadowShader.SetMat4(cubeLightViewProjLoc, vp);
+                        const auto drawCasters = [&](bool dynamicOnes) {
+                            for (const LocalCaster* c : inRange) {
+                                if ((c->animated || c->moving) != dynamicOnes) continue;
+                                if (c->bounded && !lf.Intersects(c->bounds)) continue;
+                                localShadowShader.SetMat4(cubeModelLoc, c->xform);
+                                if (c->twoSided) glDisable(GL_CULL_FACE);
+                                c->model->DrawDepthOnly(localShadowShader, *c->materials, 1, c->visible);
+                                if (c->twoSided) glEnable(GL_CULL_FACE);
+                            }
+                        };
+                        if (staticChanged) {
+                            pointShadowMap.BeginStaticFace(s, f);
+                            drawCasters(false);
                         }
+                        pointShadowMap.BeginFaceFromStatic(s, f);
+                        if (dynamicHere) drawCasters(true);
                     }
                 }
 
