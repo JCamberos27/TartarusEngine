@@ -580,7 +580,7 @@ How it works (`src/Tests/EditorUiTests.cpp`):
   Queries match a label, an exact label, a predicate, or a **tag**.
 * Input is synthetic: steps queue mouse and key events through `io.Add*Event`, and
   `EditorTestInputHook` drops whatever the OS backend reported, so a real cursor over the hidden
-  window can't interfere. The CRT screen effect is turned off so clicks land flat.
+  window can't interfere.
 
 ### Tagging widgets
 

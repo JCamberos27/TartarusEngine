@@ -2,8 +2,7 @@
 // The editor's design tokens: every colour, font role and metric the panels draw with, in one
 // place. The look is an old white-phosphor terminal: pitch-black surfaces, white phosphor text, greys
 // for everything secondary, and the phosphor itself (full white) as the one accent — a selection or
-// the primary button is inverse video. Letter-spaced monospace capitals for headings, and
-// Preferences > CRT screen draws it all through the launch screen's tube (CrtScreen.frag.glsl).
+// the primary button is inverse video. Letter-spaced monospace capitals for headings.
 //
 // Header-only and dependent on nothing but ImGui, so the host (EditorLayer*.cpp) and every
 // reloadable editor module (EditorModule*.cpp) include it directly and draw with the same values

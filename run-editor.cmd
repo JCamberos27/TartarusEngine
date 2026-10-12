@@ -2,24 +2,16 @@
 setlocal
 rem Launch the Tartarus Engine editor, always from the latest build of whatever is
 rem checked out. The desktop "Tartarus Engine" shortcut points here so a double-click
-rem can never run a stale exe again.
+rem can never run a stale exe again. The build and the editor's load log show in this
+rem console, which closes once the editor window is up.
 cd /d "%~dp0"
-
-rem Windows Terminal (the default console on Windows 11) ignores the launch screen's window
-rem sizing, font and centring, so reopen in the classic console window. The desktop shortcut
-rem starts conhost with "classic" itself, which skips the hop. Both start it minimized: the
-rem launch screen shows the window once it has sized and centred it.
-if /i not "%~1"=="classic" (
-  start "" /min conhost.exe cmd /c ""%~f0" classic"
-  exit /b 0
-)
+title Tartarus Engine
 
 echo Closing any running Tartarus Engine instances...
 taskkill /F /IM TartarusEngine.exe >nul 2>&1
 
 rem A fresh clone has no build folder yet; configure it once (the first build is slow).
 if not exist "build\CMakeCache.txt" (
-  powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\launcher\launch-screen.ps1" -Reveal
   echo First run: configuring the build - this can take a couple of minutes...
   cmake -S . -B build -A x64
   if errorlevel 1 (
@@ -30,33 +22,29 @@ if not exist "build\CMakeCache.txt" (
   )
 )
 
-rem The launch screen (tools\launcher) plays while the Release build runs behind it: the CRT
-rem window (launch-crt.ps1), or the console screen (launch-screen.ps1) where WPF can't start
-rem (exit 99, nothing built yet). Output goes to build\last-build.log. Exit codes: 0 built;
-rem 10 / 11 the build failed and the screen already showed the errors and asked - launch the
-rem previous build / close. Anything else (the screen itself failed) falls back to the plain
-rem report below.
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\launcher\launch-crt.ps1" -Build -Launch
-if errorlevel 12 if not errorlevel 13 exit /b 0
-if errorlevel 99 if not errorlevel 100 (
-  powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\launcher\launch-screen.ps1" -Build
-)
-if errorlevel 11 exit /b 1
-if errorlevel 10 goto launch
+echo.
+echo Building (Release)...
+cmake --build build --config Release --parallel
 if errorlevel 1 (
-  powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\launcher\launch-screen.ps1" -Reveal
   echo.
-  echo *** BUILD FAILED - last lines of build\last-build.log: ***
-  powershell -NoProfile -Command "Get-Content build\last-build.log -Tail 25"
-  echo.
+  echo *** BUILD FAILED - see the errors above. ***
   echo The previous build does NOT contain your latest changes.
   echo.
   choice /C YN /N /M "Launch the previous build anyway? [Y/N] "
   if errorlevel 2 exit /b 1
 )
 
+if not exist "build\Release\TartarusEngine.exe" (
+  echo.
+  echo *** No build\Release\TartarusEngine.exe to launch. ***
+  pause
+  exit /b 1
+)
+
 rem The engine resolves its shipped assets from the exe's own location (EnginePaths, audit
-rem #355) and walks up for project/, so the working directory no longer matters - launch it
-rem in place.
-:launch
-start "" "build\Release\TartarusEngine.exe"
+rem #355) and walks up for project/, so the working directory doesn't matter. The Release
+rem editor has no console of its own: follow its log file here while it loads.
+echo.
+echo Starting the editor...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\follow-editor-log.ps1" -Exe "%~dp0build\Release\TartarusEngine.exe"
+if errorlevel 1 pause
