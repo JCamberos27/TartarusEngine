@@ -263,5 +263,6 @@ bool RetargetBakeClip(const std::vector<AnimNode>& source, const AnimationClip& 
             if (moves[i]) ch.Positions.push_back({PositionOf(local), t});
         }
     }
+    for (BoneAnimChannel& ch : out.Channels) ch.Finalize();
     return true;
 }

@@ -3,14 +3,14 @@
 #include <json.hpp>
 #include <algorithm>
 #include <set>
+#include <unordered_map>
 #include <stdexcept>
 #include <limits>
 namespace Scripting {
-std::vector<ScriptSlot> GetSlots(const CSharpScriptComponent& component) {
+namespace {
+std::vector<ScriptSlot> ParseExtraSlots(const std::string& scripts) {
     std::vector<ScriptSlot> slots;
-    if(!component.ClassName.empty() || !component.SourcePath.empty())
-        slots.push_back({0,component.SourcePath,component.ClassName,component.Fields,component.Enabled});
-    const auto extra=nlohmann::json::parse(component.Scripts);
+    const auto extra=nlohmann::json::parse(scripts);
     if(!extra.is_array()) throw std::runtime_error("C# Scripts must be an array");
     std::set<std::uint32_t> ids{0};
     for(const auto& value:extra) {
@@ -22,6 +22,29 @@ std::vector<ScriptSlot> GetSlots(const CSharpScriptComponent& component) {
         slots.push_back(std::move(slot));
     }
     return slots;
+}
+// The script runtime asks for every component's slots several times per tick; parsing the Scripts JSON each
+// time was ~5% of a Play frame. Parsed results are kept per Scripts text (per thread; bounded).
+const std::vector<ScriptSlot>& ExtraSlotsCached(const std::string& scripts) {
+    thread_local std::unordered_map<std::string,std::vector<ScriptSlot>> cache;
+    if(auto it=cache.find(scripts); it!=cache.end()) return it->second;
+    auto slots=ParseExtraSlots(scripts); // throws before anything is cached
+    if(cache.size()>=256) cache.clear();
+    return cache.emplace(scripts,std::move(slots)).first->second;
+}
+}
+std::vector<ScriptSlot> GetSlots(const CSharpScriptComponent& component) {
+    std::vector<ScriptSlot> slots;
+    if(!component.ClassName.empty() || !component.SourcePath.empty())
+        slots.push_back({0,component.SourcePath,component.ClassName,component.Fields,component.Enabled});
+    const auto& extra=ExtraSlotsCached(component.Scripts);
+    slots.insert(slots.end(),extra.begin(),extra.end());
+    return slots;
+}
+bool SlotEnabled(const CSharpScriptComponent& component,std::uint32_t id,bool& enabled) {
+    if(id==0 && (!component.ClassName.empty() || !component.SourcePath.empty())) { enabled=component.Enabled; return true; }
+    for(const auto& slot:ExtraSlotsCached(component.Scripts)) if(slot.Id==id) { enabled=slot.Enabled; return true; }
+    return false;
 }
 void SetSlots(CSharpScriptComponent& component,const std::vector<ScriptSlot>& slots) {
     for(const auto& old:GetSlots(component)) component.NextScriptId=std::max(component.NextScriptId,static_cast<int>(old.Id)+1);

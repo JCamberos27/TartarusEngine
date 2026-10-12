@@ -1275,6 +1275,7 @@ void Model::ReadAnimations(const aiScene* scene) {
             for (unsigned int k = 0; k < channel->mNumScalingKeys; ++k) {
                 bac.Scales.push_back({AiToGlm(channel->mScalingKeys[k].mValue), (float)channel->mScalingKeys[k].mTime});
             }
+            bac.Finalize();
             clip.Channels.push_back(std::move(bac));
         }
         // #113 — resolve node -> channel once here, not by name per node per frame.

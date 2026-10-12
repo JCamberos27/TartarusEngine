@@ -1,12 +1,15 @@
 #version 460 core
 in vec2 vUV;
-out float FragColor;
+// Half resolution (Ssao::Compute): R = occlusion, G = this texel's view-space z, which SsaoBlur's
+// depth-aware upsample weighs each texel by.
+out vec2 FragColor;
 
 uniform sampler2D uDepth;
 uniform sampler2D uNoise;
 uniform mat4 uProjection;
 uniform mat4 uInvProjection;
-uniform vec2 uScreenSize;
+uniform vec2 uScreenSize;   // this pass's (half-resolution) target size: the noise tiles over 4x4 of its texels
+uniform ivec2 uDepthSize;   // the full-resolution depth pre-pass
 uniform vec3 uKernel[32];
 uniform float uRadius;
 uniform float uBias;
@@ -28,11 +31,15 @@ float ViewZ(float depth) {
 }
 
 void main() {
-    float depth = texture(uDepth, vUV).r;
+    // Each half-resolution texel takes one full-resolution depth (the top-left of its 2x2): a real
+    // surface's depth, never an average across an edge.
+    ivec2 full = min(ivec2(gl_FragCoord.xy) * 2, uDepthSize - 1);
+    vec2 uv = (vec2(full) + 0.5) / vec2(uDepthSize);
+    float depth = texelFetch(uDepth, full, 0).r;
     // Sky / far-plane pixels have depth ~1.0 — no geometry, no occlusion.
-    if (depth >= 0.9999) { FragColor = 1.0; return; }
+    if (depth >= 0.9999) { FragColor = vec2(1.0, -1e6); return; }
 
-    vec3 fragPos = ReconstructViewPos(vUV, depth);
+    vec3 fragPos = ReconstructViewPos(uv, depth);
 
     // Reconstruct view-space normal from depth derivatives, then orient it toward the eye.
     // "Toward the eye" means against the view RAY to this pixel (fragPos, the eye is at the
@@ -45,7 +52,7 @@ void main() {
 
     // Randomise the TBN tangent frame using the tiling noise texture.
     vec3 rvec = normalize(vec3(
-        texture(uNoise, vUV * (uScreenSize / 4.0)).rg * 2.0 - 1.0, 0.0));
+        texture(uNoise, gl_FragCoord.xy / 4.0).rg * 2.0 - 1.0, 0.0));
     vec3 T = normalize(rvec - N * dot(rvec, N));
     vec3 B = cross(N, T);
     mat3 TBN = mat3(T, B, N);
@@ -68,5 +75,5 @@ void main() {
         occlusion += (sampleZ >= samplePos.z + uBias ? 1.0 : 0.0) * rangeCheck;
     }
 
-    FragColor = 1.0 - (occlusion / 32.0);
+    FragColor = vec2(1.0 - (occlusion / 32.0), fragPos.z);
 }

@@ -15,6 +15,7 @@
 #include "../Renderer/Animation.h"
 #include "../Renderer/SceneRenderer.h"
 #include "../Renderer/MaterialAsset.h"
+#include "../Renderer/CascadedShadowMap.h"
 #include <filesystem>
 #include <json.hpp>
 #include <random>
@@ -285,7 +286,116 @@ static void Test_PrefabInstance_HandWrittenComponentsDiffByJsonKey() {
     fs::remove_all(dir, ec);
 }
 
+// CasterReachesSlice tests the slice hull's edges (precomputed in Update) instead of the direction between every
+// pair of slice corners; both are complete separating-axis tests, so they must agree on every caster.
+static void Test_CascadedShadowMap_SliceTestMatchesAllPairs() {
+    CascadedShadowMap csm;
+    const glm::mat4 view = glm::lookAt(glm::vec3(3.0f, 1.7f, -2.0f), glm::vec3(10.0f, 1.0f, 20.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    const glm::mat4 proj = glm::perspective(glm::radians(70.0f), 16.0f / 9.0f, 0.05f, 500.0f);
+    csm.Update(view, proj, glm::normalize(glm::vec3(-0.4f, -0.8f, 0.3f)), 150.0f);
+    const auto reference = [&](int c, const glm::vec3& bmin, const glm::vec3& bmax, float kernel, float bias) {
+        if (c <= 0 || c >= csm.Count()) return true;
+        const glm::mat4& vp = csm.LightViewProj(c);
+        glm::vec2 lo(1e30f), hi(-1e30f);
+        for (int k = 0; k < 8; ++k) {
+            const glm::vec4 q = vp * glm::vec4((k & 1) ? bmax.x : bmin.x, (k & 2) ? bmax.y : bmin.y, (k & 4) ? bmax.z : bmin.z, 1.0f);
+            lo = glm::min(lo, glm::vec2(q) / q.w);
+            hi = glm::max(hi, glm::vec2(q) / q.w);
+        }
+        const float texels = std::max(kernel, 0.5f) * (1.0f + 0.35f * (float)c) * 1.25f + std::max(bias, 0.0f) + 3.0f;
+        lo -= glm::vec2(texels * 2.0f / (float)csm.Resolution());
+        hi += glm::vec2(texels * 2.0f / (float)csm.Resolution());
+        const auto& s = csm.SliceCorners(c);
+        const glm::vec2 rect[4] = {{lo.x, lo.y}, {hi.x, lo.y}, {hi.x, hi.y}, {lo.x, hi.y}};
+        const glm::vec2 axes0[2] = {{1.0f, 0.0f}, {0.0f, 1.0f}};
+        const auto separated = [&](const glm::vec2& n) {
+            float s0 = 1e30f, s1 = -1e30f, r0 = 1e30f, r1 = -1e30f;
+            for (const glm::vec2& p : s) { s0 = std::min(s0, glm::dot(n, p)); s1 = std::max(s1, glm::dot(n, p)); }
+            for (const glm::vec2& p : rect) { r0 = std::min(r0, glm::dot(n, p)); r1 = std::max(r1, glm::dot(n, p)); }
+            return s1 < r0 || r1 < s0;
+        };
+        for (const glm::vec2& n : axes0) if (separated(n)) return false;
+        for (int a = 0; a < 8; ++a)
+            for (int b = a + 1; b < 8; ++b) {
+                const glm::vec2 d = s[b] - s[a];
+                if (glm::dot(d, d) > 1e-12f && separated(glm::vec2(-d.y, d.x))) return false;
+            }
+        return true;
+    };
+    std::mt19937 rng(7);
+    std::uniform_real_distribution<float> pos(-120.0f, 160.0f), size(0.05f, 6.0f);
+    int disagree = 0, culled = 0;
+    for (int i = 0; i < 4000; ++i) {
+        const glm::vec3 a(pos(rng), pos(rng) * 0.1f, pos(rng)), e(size(rng), size(rng), size(rng));
+        for (int c = 0; c < csm.Count(); ++c) {
+            const bool got = csm.CasterReachesSlice(c, a, a + e, 3.0f, 1.0f), want = reference(c, a, a + e, 3.0f, 1.0f);
+            disagree += got != want;
+            culled += !want;
+        }
+    }
+    CHECK(disagree == 0);
+    CHECK(culled > 1000); // the slices do cull: the test exercises both answers
+}
+
+// Material::Hash is cached per frame: an edit shows from the next frame on, and a copy changed within the frame
+// hashes its own values (the draw loop's material dedupe and sort keys must never mix two materials up).
+static void Test_Material_HashCachePerFrame() {
+    Material::NextHashFrame();
+    Material a;
+    const std::uint64_t h0 = a.Hash();
+    CHECK(h0 == a.ComputeHash());
+    Material b = a;
+    b.BaseColor = glm::vec3(0.2f, 0.4f, 0.6f);
+    CHECK(b.Hash() == b.ComputeHash() && b.Hash() != h0);
+    a.Roughness = 0.9f;
+    CHECK(a.Hash() == h0); // same frame: the cached value
+    Material::NextHashFrame();
+    CHECK(a.Hash() == a.ComputeHash() && a.Hash() != h0);
+    Material c;
+    c = b; // assignment drops the cache too
+    c.Metallic = 1.0f;
+    CHECK(c.Hash() == c.ComputeHash() && c.Hash() != b.Hash());
+}
+
+// BoneAnimChannel::Finalize's fast paths (constant tracks, evenly spaced keys) sample exactly what the general
+// search does, including at and between keys, outside the clip, and on unevenly spaced tracks.
+static void Test_BoneAnimChannel_FinalizeMatchesSearch() {
+    std::mt19937 rng(11);
+    std::uniform_real_distribution<float> u(-1.0f, 1.0f);
+    BoneAnimChannel ch;
+    for (int k = 0; k < 40; ++k) {
+        const float t = 2.0f + 1.5f * (float)k; // evenly spaced
+        ch.Positions.push_back({glm::vec3(u(rng), u(rng), u(rng)), t});
+        ch.Rotations.push_back({glm::normalize(glm::quat(1.0f + u(rng) * 0.2f, u(rng) * 0.2f, u(rng) * 0.2f, u(rng) * 0.2f)), t});
+        ch.Scales.push_back({glm::vec3(1.0f), t}); // constant
+    }
+    BoneAnimChannel uneven = ch;
+    for (size_t k = 0; k < uneven.Rotations.size(); ++k) uneven.Rotations[k].TimeTicks += (k % 3 == 1) ? 0.4f : 0.0f;
+    BoneAnimChannel fast = ch, fastUneven = uneven;
+    fast.Finalize();
+    fastUneven.Finalize();
+    CHECK(fast.PositionInfo.Uniform && !fast.PositionInfo.Constant && fast.ScaleInfo.Constant);
+    CHECK(!fastUneven.RotationInfo.Uniform);
+    LocalTRS bind;
+    float worst = 0.0f;
+    for (int s = -20; s < 2000; ++s) {
+        const float t = (float)s * 0.0371f;
+        for (int pass = 0; pass < 2; ++pass) {
+            const LocalTRS a = (pass ? uneven : ch).Sample(t, bind), b = (pass ? fastUneven : fast).Sample(t, bind);
+            worst = std::max({worst, glm::length(a.T - b.T), glm::length(a.S - b.S), 1.0f - std::abs(glm::dot(a.R, b.R))});
+        }
+        // Exactly on a key.
+        const float k = 2.0f + 1.5f * (float)(s % 40);
+        const LocalTRS a = ch.Sample(k, bind), b = fast.Sample(k, bind);
+        worst = std::max({worst, glm::length(a.T - b.T), 1.0f - std::abs(glm::dot(a.R, b.R))});
+    }
+    CHECK(worst < 1e-5f);
+}
+
 void RegisterEngineTests(UnitTestSupport::TestList& tests) {
+    tests.push_back({"BoneAnimChannel::FinalizeMatchesSearch", Test_BoneAnimChannel_FinalizeMatchesSearch});
+    tests.push_back({"Material::HashCachePerFrame", Test_Material_HashCachePerFrame});
+    tests.push_back({"CascadedShadowMap::SliceTestMatchesAllPairs", Test_CascadedShadowMap_SliceTestMatchesAllPairs});
     tests.push_back({"World::RaycastToleratesRenderableWithoutModel", Test_World_RaycastToleratesRenderableWithoutModel});
     tests.push_back({"PrefabInstance::HandWrittenComponentsDiffByJsonKey", Test_PrefabInstance_HandWrittenComponentsDiffByJsonKey});
     tests.push_back({"FirstPersonController::NewFieldsRoundTrip", Test_FirstPersonController_NewFieldsRoundTrip});

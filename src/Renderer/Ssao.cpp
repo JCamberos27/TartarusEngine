@@ -5,6 +5,7 @@
 #include "Shader.h"
 #include "gl.h"
 #include <glm/gtc/matrix_transform.hpp>
+#include <algorithm>
 #include <random>
 #include <string>
 
@@ -28,6 +29,7 @@ void Ssao::Release() {
     if (m_BlurColor) { glDeleteTextures(1, &m_BlurColor);      m_BlurColor = 0; }
     if (m_NoiseTex)  { glDeleteTextures(1, &m_NoiseTex);       m_NoiseTex  = 0; }
     m_Width = m_Height = 0;
+    m_HalfWidth = m_HalfHeight = 0;
     m_Valid = false;
 }
 
@@ -83,9 +85,11 @@ void Ssao::Create(int width, int height) {
 
     const GLenum kColor0 = GL_COLOR_ATTACHMENT0;
 
-    // Raw SSAO pass: R8 occlusion
+    // Raw SSAO pass: half resolution, occlusion + view z (RG16F)
+    m_HalfWidth = std::max((width + 1) / 2, 1);
+    m_HalfHeight = std::max((height + 1) / 2, 1);
     glCreateTextures(GL_TEXTURE_2D, 1, &m_SsaoColor);
-    glTextureStorage2D(m_SsaoColor, 1, GL_R8, width, height);
+    glTextureStorage2D(m_SsaoColor, 1, GL_RG16F, m_HalfWidth, m_HalfHeight);
     glTextureParameteri(m_SsaoColor, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTextureParameteri(m_SsaoColor, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTextureParameteri(m_SsaoColor, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -109,7 +113,7 @@ void Ssao::Create(int width, int height) {
     // record it so IsValid() reports false. Callers then skip the SSAO passes entirely and the
     // scene renders without ambient occlusion, instead of the passes running against a bad FBO.
     bool ok = GLFramebufferCheck::Complete("Ssao depth pre-pass", m_DepthFbo, width, height);
-    ok = GLFramebufferCheck::Complete("Ssao raw occlusion", m_SsaoFbo, width, height) && ok;
+    ok = GLFramebufferCheck::Complete("Ssao raw occlusion", m_SsaoFbo, m_HalfWidth, m_HalfHeight) && ok;
     ok = GLFramebufferCheck::Complete("Ssao blur", m_BlurFbo, width, height) && ok;
     m_Valid = ok;
 
@@ -139,7 +143,8 @@ void Ssao::WarmUp(Shader& ssaoShader, Shader& blurShader) {
 void Ssao::Compute(Shader& ssaoShader, const glm::mat4& proj, float radius, float bias) {
     GLStateScope restore; // #160 - put depth/blend/cull back as the caller had them
     glBindFramebuffer(GL_FRAMEBUFFER, m_SsaoFbo);
-    glViewport(0, 0, m_Width, m_Height);
+    glViewport(0, 0, m_HalfWidth, m_HalfHeight);
+    m_Proj = proj;
     glDisable(GL_DEPTH_TEST);
     glDepthMask(GL_FALSE);
     glDisable(GL_BLEND);
@@ -155,7 +160,8 @@ void Ssao::Compute(Shader& ssaoShader, const glm::mat4& proj, float radius, floa
 
     ssaoShader.SetMat4("uProjection",    proj);
     ssaoShader.SetMat4("uInvProjection", glm::inverse(proj));
-    ssaoShader.SetVec2("uScreenSize",    glm::vec2((float)m_Width, (float)m_Height));
+    ssaoShader.SetVec2("uScreenSize",    glm::vec2((float)m_HalfWidth, (float)m_HalfHeight));
+    glUniform2i(ssaoShader.Loc("uDepthSize"), m_Width, m_Height);
     ssaoShader.SetFloat("uRadius",       radius);
     ssaoShader.SetFloat("uBias",         bias);
     // #160 - the kernel never changes, so upload it once per program (again only if the program
@@ -186,6 +192,10 @@ void Ssao::Blur(Shader& blurShader) {
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, m_SsaoColor);
     blurShader.SetInt("uSsao", 0);
+    glActiveTexture(GL_TEXTURE0 + 1);
+    glBindTexture(GL_TEXTURE_2D, m_DepthTex);
+    blurShader.SetInt("uDepth", 1);
+    blurShader.SetMat4("uProjection", m_Proj);
 
     glBindVertexArray(m_Vao);
     glDrawArrays(GL_TRIANGLES, 0, 3);

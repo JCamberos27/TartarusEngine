@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <string>
 #include <vector>
 #include <glm/glm.hpp>
@@ -47,6 +48,18 @@ struct BoneAnimChannel {
     // Samples at `timeTicks`; a component with no keys keeps `bind`'s value (a channel that only
     // animates rotation leaves the node's authored translation / scale alone).
     LocalTRS Sample(float timeTicks, const LocalTRS& bind) const;
+
+    // What Finalize() found out about a track, for Sample's fast paths: every key the same value (most bones'
+    // translation and scale in a baked clip), or keys evenly spaced in time (the key found by arithmetic, not a
+    // search). Taken only while the track still has Count keys; an unfinalized channel samples the general way.
+    struct TrackInfo {
+        std::uint32_t Count = 0;
+        bool Constant = false, Uniform = false;
+        float T0 = 0.0f, InvStep = 0.0f;
+    };
+    TrackInfo PositionInfo, RotationInfo, ScaleInfo;
+    // Call once the keys are built (import, retarget).
+    void Finalize();
     glm::mat4 Interpolate(float timeTicks) const; // Sample() with identity defaults, as a matrix
 };
 

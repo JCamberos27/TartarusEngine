@@ -120,7 +120,19 @@ struct Material {
     // mesh per pass, and one serial multiply chain over ~60 words was latency-bound (the byte-wise
     // FNV loop before it showed up in the shadow passes). Runtime-only: never saved or compared
     // across builds.
+    // Worked out once per frame per material (it runs per mesh per pass: main, SSAO pre-pass, every shadow map):
+    // the cache holds until NextHashFrame(), which the frame loop calls before anything renders. A copy starts
+    // without it, so a material copied and changed within a frame hashes its own values.
     std::uint64_t Hash() const {
+        if (m_HashCache.Frame == s_HashFrame) return m_HashCache.Value;
+        m_HashCache.Value = ComputeHash();
+        m_HashCache.Frame = s_HashFrame;
+        return m_HashCache.Value;
+    }
+    // A new frame: every material's Hash() is worked out again on first use (values may have been edited since).
+    static void NextHashFrame() { if (++s_HashFrame == 0) s_HashFrame = 1; }
+
+    std::uint64_t ComputeHash() const {
         std::uint32_t words[64];
         std::size_t n = 0;
         auto put = [&words, &n](const void* p, std::size_t bytes) {
@@ -169,4 +181,15 @@ struct Material {
         for (int k = 1; k < 4; ++k) { h = (h ^ lane[k]) * 1099511628211ull; h ^= h >> 29; }
         return h;
     }
+
+private:
+    struct HashCache {
+        std::uint64_t Value = 0;
+        std::uint32_t Frame = 0; // 0 = none (s_HashFrame is never 0)
+        HashCache() = default;
+        HashCache(const HashCache&) {}
+        HashCache& operator=(const HashCache&) { Frame = 0; return *this; }
+    };
+    mutable HashCache m_HashCache;
+    inline static std::uint32_t s_HashFrame = 1;
 };

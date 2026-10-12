@@ -181,6 +181,11 @@ struct PhysicsState {
     // #168 - each dynamic body's pose before the most recent substep, so the rendered pose can
     // be interpolated between it and the current one. Rebuilt every substep (never stale).
     std::unordered_map<PxRigidDynamic*, PxTransform> prevPose;
+    // A sleeping body's pose as last written to its TransformComponent (local Position/Rotation): while it sleeps
+    // and the component still holds it, the writeback skips it (pose conversion and Euler hint, every frame,
+    // for every settled body in the scene).
+    struct SettledWrite { glm::vec3 Position; glm::quat Rotation; };
+    std::unordered_map<PxRigidDynamic*, SettledWrite> settled;
     // #185 PR 5 — trigger state. triggerOverlaps: rigidbody pairs currently inside a trigger
     // (maintained by onTrigger). playerTriggers: trigger entities the Player capsule is inside
     // (maintained by a per-frame overlap query). triggerEvents: this frame's transitions,
@@ -628,6 +633,7 @@ void RemoveActor(PhysicsState& s, std::uint32_t id) {
         drop(s.dynamics);
         drop(s.kinematics);
         s.prevPose.erase(b);
+        s.settled.erase(b);
         s.kinematicFramePose.erase(b);
         s.preStepVel.erase(b);
         s.jointed.erase(b);
@@ -1211,6 +1217,9 @@ void RunOneSubstep(PhysicsState& s, float fixedStep) {
     s.preStepVel.clear();
     s.prevPose.clear();
     for (auto& [body, e] : s.dynamics) {
+        // A sleeping body has no velocity and won't have moved: no entry reads as zero velocity and as no
+        // interpolation (the current pose), the same thing.
+        if (body->isSleeping()) continue;
         s.preStepVel[body] = body->getLinearVelocity();
         s.prevPose[body] = body->getGlobalPose(); // #168
     }
@@ -1297,6 +1306,16 @@ void Step(float dt, World& world, const std::function<void(float fixedDt)>& onFi
         if (!world.Registry.valid(e)) continue;
         auto* tc = world.Registry.try_get<TransformComponent>(e);
         if (!tc) continue;
+        // (Root bodies only: a child's local pose also moves with its parent.)
+        const auto* hier = world.Registry.try_get<HierarchyComponent>(e);
+        const bool sleeping = body->isSleeping() && (!hier || hier->Parent == entt::null);
+        if (sleeping) {
+            if (const auto it = g_State->settled.find(body);
+                it != g_State->settled.end() && it->second.Position == tc->Position && it->second.Rotation == tc->Rotation)
+                continue;
+        } else {
+            g_State->settled.erase(body);
+        }
         const PxTransform p = body->getGlobalPose();
         if (!PoseIsFinite(p)) { // #185 — blow-up guard: don't poison the TransformComponent
             body->setLinearVelocity(PxVec3(0.0f));
@@ -1334,6 +1353,7 @@ void Step(float dt, World& world, const std::function<void(float fixedDt)>& onFi
         }
         world.SetWorldPose(e, glm::vec3(shown.p.x, shown.p.y, shown.p.z),
                            glm::quat(shown.q.w, shown.q.x, shown.q.y, shown.q.z));
+        if (sleeping) g_State->settled[body] = {tc->Position, tc->Rotation};
     }
 
     // --- Trigger transitions (#185 PR 5) -----------------------------------------------
