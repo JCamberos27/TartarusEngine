@@ -5233,6 +5233,57 @@ void TestIKSolver() {
 
 } // namespace
 
+// A ragdoll keeps its root where the NPC stood while the body lies a body length away. The culling bounds
+// (Model::PosedBounds) must hold every skinned vertex of the posed piece; the bind box padded 1.75x didn't (a
+// fallen head was culled whenever the spot it stood on left the view - parts blinking out up close). Needs the pack.
+void TestPosedBounds() {
+    const char* path = "assets/Characters/Quantum/Models/European/Quantum_Head.fbx";
+    if (!std::filesystem::exists(ProjectPaths::Resolve(path))) {
+        Log::Info("PosedBounds: no Quantum pack - skipped.");
+        return;
+    }
+    auto model = Model::ImportDeferred(ProjectPaths::Resolve(path), ModelImportSettings{});
+    CHECK(model != nullptr);
+    if (!model) return;
+    glm::vec3 lo, hi;
+    model->PosedBounds(lo, hi);
+    CHECK(lo == model->BoundsMin() && hi == model->BoundsMax()); // nothing poses it: the bind bounds
+    const int pelvis = model->NodeIndex("pelvis");
+    CHECK(pelvis >= 0);
+    if (pelvis < 0) return;
+    // Laid on its back, four of its own sizes forward of the root.
+    const glm::vec3 bmin = model->BoundsMin(), bmax = model->BoundsMax(), size = bmax - bmin;
+    const float reach = 4.0f * std::max({size.x, size.y, size.z});
+    std::vector<LocalTRS> pose;
+    model->BindLocalPose(pose);
+    const glm::mat4 was = model->PoseNodeModelSpace(pose, pelvis);
+    const glm::vec3 at(was[3]);
+    model->SetPoseNodeModelSpace(pose, pelvis, glm::translate(glm::mat4(1.0f), at + glm::vec3(0.0f, 0.0f, reach)) *
+                                                    glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f)) *
+                                                    glm::translate(glm::mat4(1.0f), -at) * was);
+    model->ApplyLocalPose(pose);
+    model->PosedBounds(lo, hi);
+    const glm::vec3 c = (bmin + bmax) * 0.5f, h = size * 0.5f * 1.75f; // the old culling box
+    int total = 0, inside = 0, outsideOld = 0;
+    for (int mi = 0; mi < model->MeshCount(); ++mi)
+        for (const auto& v : model->MeshSkinVertices(mi)) {
+            glm::mat4 m(0.0f);
+            float tw = 0.0f;
+            for (int i = 0; i < MAX_BONE_INFLUENCE; ++i)
+                if (v.BoneIDs[i] >= 0) { m += model->FinalBoneMatrix(v.BoneIDs[i]) * v.Weights[i]; tw += v.Weights[i]; }
+            if (tw <= 1e-4f) m = glm::mat4(1.0f);
+            const glm::vec3 p(m * glm::vec4(v.Position, 1.0f));
+            ++total;
+            inside += glm::all(glm::greaterThanEqual(p, lo)) && glm::all(glm::lessThanEqual(p, hi));
+            outsideOld += glm::any(glm::lessThan(p, c - h)) || glm::any(glm::greaterThan(p, c + h));
+        }
+    Log::Info("PosedBounds: " + std::to_string(inside) + "/" + std::to_string(total) + " inside, " + std::to_string(outsideOld) +
+              " outside the padded bind box");
+    CHECK(total > 0 && inside == total);
+    CHECK(outsideOld == total); // what the old test culled
+    CHECK(hi.z - lo.z < reach); // still a tight box, not grown to take in the root
+}
+
 // --- Importing an asset pack laid out <Asset>/Models/x.fbx + <Asset>/Textures/.../x_*.png -----
 // The Quantum Hawaiian shirt's loose short sleeve over the arms: the skin Hidden works out in the bind pose
 // must stay under the cloth once the arms swing down (both meshes CPU-skinned, every bone under upperarm_l/_r
@@ -5596,6 +5647,7 @@ int RunUnitTests(const char* filter) {
         {"TextureCacheHash", TestTextureCacheHash},
         {"TextureCacheVariants", TestTextureCacheVariants},
         {"OutfitEdgeBandPosed", TestOutfitEdgeBandPosed},
+        {"PosedBounds", TestPosedBounds},
         {"OutfitRigidUnderHood", TestOutfitRigidUnderHood},
         {"AssetPackImport", TestAssetPackImport},
         {"MaterialRobustness", TestMaterialRobustness},

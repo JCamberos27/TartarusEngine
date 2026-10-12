@@ -550,15 +550,27 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
     std::vector<glm::vec3> posed;
     if (skinned) {
         posed.reserve(vertices.size());
+        auto& boxMin = m_D->BoneBoxMin;
+        auto& boxMax = m_D->BoneBoxMax;
+        if (boxMin.empty()) { boxMin.assign(MAX_BONES, glm::vec3(1e30f)); boxMax.assign(MAX_BONES, glm::vec3(-1e30f)); }
         for (const ModelVertex& v : vertices) {
             glm::mat4 skin(0.0f);
             float total = 0.0f;
             for (int k = 0; k < MAX_BONE_INFLUENCE; ++k) {
                 if (v.BoneIDs[k] < 0) continue;
-                skin += m_D->BindPoseBones[std::clamp(v.BoneIDs[k], 0, MAX_BONES - 1)] * v.Weights[k];
+                const int b = std::clamp(v.BoneIDs[k], 0, MAX_BONES - 1);
+                skin += m_D->BindPoseBones[b] * v.Weights[k];
                 total += v.Weights[k];
+                // PosedBounds: a skinned vertex is a weighted mean of its bones' moves, so it stays inside the
+                // box of each bone's moved box.
+                boxMin[(size_t)b] = glm::min(boxMin[(size_t)b], v.Position);
+                boxMax[(size_t)b] = glm::max(boxMax[(size_t)b], v.Position);
             }
-            if (total <= 0.0001f) skin = glm::mat4(1.0f);
+            if (total <= 0.0001f) {
+                skin = glm::mat4(1.0f);
+                m_D->UnweightedMin = glm::min(m_D->UnweightedMin, v.Position);
+                m_D->UnweightedMax = glm::max(m_D->UnweightedMax, v.Position);
+            }
             const glm::vec3 p = glm::vec3(skin * glm::vec4(v.Position, 1.0f));
             posed.push_back(p);
             m_D->BoundsMin = glm::min(m_D->BoundsMin, p);
@@ -1766,6 +1778,36 @@ void Model::ResolvePalette() const {
         const AnimNode& n = nodes[i];
         if (n.BoneId >= 0) m_FinalBoneMatrices[n.BoneId] = AffineMul(AffineMul(m_D->GlobalInverseTransform, m_NodeGlobals[i]), n.BoneOffset);
     }
+}
+
+void Model::PosedBounds(glm::vec3& outMin, glm::vec3& outMax) const {
+    outMin = m_D->BoundsMin;
+    outMax = m_D->BoundsMax;
+    const bool posed = m_ExternalPose || (m_Anim.Clip >= 0 && m_Anim.Clip < AnimationCount()) || m_FadeDuration > 0.0f;
+    const int bones = std::min(m_D->BoneCounter, (int)m_D->BoneBoxMin.size());
+    if (!posed || bones <= 0) return; // the bind pose: the bind bounds are exact
+    if (m_PaletteDirty) ResolvePalette();
+    if (m_FinalBoneMatrices.size() < (size_t)bones) return;
+    if (m_PosedBoundsVersion != m_PoseVersion) {
+        glm::vec3 lo = m_D->UnweightedMin, hi = m_D->UnweightedMax;
+        for (int b = 0; b < bones; ++b) {
+            const glm::vec3 bmin = m_D->BoneBoxMin[(size_t)b], bmax = m_D->BoneBoxMax[(size_t)b];
+            if (bmin.x > bmax.x) continue; // no vertex on this bone
+            const glm::mat4& m = m_FinalBoneMatrices[(size_t)b];
+            const glm::vec3 c = glm::vec3(m * glm::vec4((bmin + bmax) * 0.5f, 1.0f));
+            const glm::vec3 h = (bmax - bmin) * 0.5f;
+            const glm::vec3 e = glm::abs(glm::vec3(m[0])) * h.x + glm::abs(glm::vec3(m[1])) * h.y + glm::abs(glm::vec3(m[2])) * h.z;
+            lo = glm::min(lo, c - e);
+            hi = glm::max(hi, c + e);
+        }
+        if (lo.x > hi.x) { lo = m_D->BoundsMin; hi = m_D->BoundsMax; }
+        const glm::vec3 pad(0.02f); // weights that don't quite sum to one
+        m_PosedMin = lo - pad;
+        m_PosedMax = hi + pad;
+        m_PosedBoundsVersion = m_PoseVersion;
+    }
+    outMin = m_PosedMin;
+    outMax = m_PosedMax;
 }
 
 void Model::SetHiddenNodes(const std::vector<int>& nodes) {

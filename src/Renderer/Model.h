@@ -321,6 +321,10 @@ public:
     void SetPath(const std::string& path) { m_Path = path; }
     glm::vec3 BoundsMin() const { return m_D->BoundsMin; }
     glm::vec3 BoundsMax() const { return m_D->BoundsMax; }
+    // The skin's model-space box as it is posed now (the bind bounds while nothing poses it): each bone's bind
+    // vertices boxed and moved by its skinning matrix, so it holds every skinned vertex however far the pose
+    // takes them. For culling: a ragdoll's root stays where the body stood while the body lies a body length away.
+    void PosedBounds(glm::vec3& outMin, glm::vec3& outMax) const;
 
     // Draw with per-submesh MaterialAsset slots (PR5). slot[i] non-null overrides submesh i's
     // imported material. Empty or short slots fall back to the imported mesh material.
@@ -422,6 +426,10 @@ private:
         std::vector<AnimationClip> Animations;
         std::vector<glm::mat4> BindPoseBones; // #98 — palette with no clip playing
         glm::vec3 BoundsMin{1e30f}, BoundsMax{-1e30f};
+        // PosedBounds: per bone ID, the box of the (unskinned) vertices it has any weight on; and the skinned
+        // meshes' vertices with no weight at all, which the shader leaves where they are.
+        std::vector<glm::vec3> BoneBoxMin, BoneBoxMax;
+        glm::vec3 UnweightedMin{1e30f}, UnweightedMax{-1e30f};
         ModelImportSettings Settings;
     };
     std::shared_ptr<SharedData> m_D = std::make_shared<SharedData>();
@@ -452,6 +460,8 @@ private:
     void ResolveAppliedPose() const;     // the node globals
     void ResolvePalette() const;         // the palette (resolves the globals first)
     std::uint64_t m_PoseVersion = 1; // bumped whenever m_FinalBoneMatrices is rewritten
+    mutable std::uint64_t m_PosedBoundsVersion = 0; // PosedBounds' box below is for this pose (0 = none yet)
+    mutable glm::vec3 m_PosedMin{0.0f}, m_PosedMax{0.0f};
     // Where this frame's palette already sits in the bone ring (UploadBoneMatrices), and for what.
     struct BoneUpload {
         std::uint64_t Epoch = ~0ull, Version = 0;
