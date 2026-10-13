@@ -29,7 +29,7 @@ struct GravityGunSettings {
     float MinThrowSpeed = 0.0f;   // m/s for a quick click
     float MaxThrowSpeed = 0.0f;  // m/s fully charged
     float ChargeTime = 0.0f;      // seconds of holding left mouse to reach MaxThrowSpeed
-    float BackspinRevPerSec = 0.0f; // spin given to a thrown round body (a basketball shot's backspin)
+    float BackspinRevPerSec = 0.0f; // spin given to a thrown round body (e.g. a shot's backspin)
 };
 
 // The player's default physics-interaction tool while in Play mode — a Half-Life-2-style gravity

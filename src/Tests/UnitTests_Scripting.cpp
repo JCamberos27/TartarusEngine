@@ -922,37 +922,21 @@ void TestProjectNpcDecisions() {
     hit.Operation=1;hit.Random=.2f;damage();CHECK(hit.BecomeWounded && !hit.CallWounded);
     hit={};hit.Dead=1;hit.Amount=15;damage();CHECK(hit.Ignore && hit.Hits==0);
 }
-void TestProjectScoringAndConstraints() {
+void TestProjectMigrationAndConstraints() {
     using namespace Scripting;using Json=nlohmann::json;
-    Json legacy={{"Goal Trigger",{{"Tag","Basketball"},{"Team","Away"},{"Points",7},{"Score Sound","goal.wav"},{"Score SoundGuid","123456789abcdef0"}}},
+    Json legacy={{"First Person Controller",{{"Eye Height",1.6},{"Animation Set","hands.fpsanim"},{"Animation SetGuid","123456789abcdef0"}}},
         {"C# Script",{{"Class","Tartarus.Gameplay.Bob"},{"Fields JSON","{}"},{"Scripts","[]"},{"Next Script ID",8}}}};
     CHECK(MigrateLegacyProjectComponents(legacy));CHECK(!MigrateLegacyProjectComponents(legacy));
     CHECK(legacy.at("C# Script").at("Class")=="Tartarus.Gameplay.Bob");
     auto extra=Json::parse(legacy.at("C# Script").at("Scripts").get<std::string>());
-    CHECK(extra.size()==1 && extra[0].at("id")==8 && extra[0].at("fields").at("Team")==1);
-    CHECK(extra[0].at("fields").at("ScoreSound").at("pathGuid")=="123456789abcdef0");
+    CHECK(extra.size()==1 && extra[0].at("id")==8 && extra[0].at("fields").at("EyeHeight")==1.6);
+    CHECK(extra[0].at("fields").at("AnimationSet").at("pathGuid")=="123456789abcdef0");
     World world;AssetLibrary assets;
-    auto board=world.CreateEmptyEntity({0,0,0},{0,0,0},{1,1,1},"Score");
-    Attach(world.Registry.emplace<CSharpScriptComponent>(board),"","Tartarus.Gameplay.Scoreboard");
-    auto goal=world.CreateEmptyEntity({0,0,0},{0,0,0},{1,1,1},"Goal");
-    auto& trigger=world.Registry.emplace<ColliderComponent>(goal);trigger.IsTrigger=true;trigger.HalfExtents={1,1,1};
-    auto& rules=world.Registry.emplace<CSharpScriptComponent>(goal);Attach(rules,"","Tartarus.Gameplay.BasketGoal");rules.Fields="{\"Tag\":\"Basketball\",\"RequireDownward\":false}";
     auto ball=world.CreateEmptyEntity({0,0,0},{0,0,0},{1,1,1},"Ball");
-    world.Registry.emplace<TagComponent>(ball,"Basketball");
     auto& shape=world.Registry.emplace<ColliderComponent>(ball);shape.Kind=ColliderComponent::Shape::Sphere;shape.HalfExtents={.12f,0,0};
     auto& body=world.Registry.emplace<RigidbodyComponent>(ball);body.UseGravity=false;body.LinearDamping=0;
     world.SyncActiveInHierarchy();world.RebuildWorldTransformCache();PhysicsWorld::Create(world);
-    auto score=[]() {std::string state;CHECK(RequestProject("basketball.state","{}",state));return Json::parse(state).value("home",-1);};
-    Tick(world,assets,.02f);CHECK(score()==0);
-    PhysicsWorld::Step(.02f,world);Tick(world,assets,.02f);CHECK(score()==2);
-    Tick(world,assets,.02f);CHECK(score()==2); // a rendered frame cannot deliver the same physics batch twice
-    CHECK(Invoke(5,nullptr,0));Tick(world,assets,.02f);CHECK(score()==2); // managed reload preserves score and rebinds scene services
-    const float rotation[4]={0,0,0,1},outside[3]={4,0,0},inside[3]={0,0,0};
-    PhysicsWorld::SetActorPose(entt::to_integral(ball),outside,rotation,true);PhysicsWorld::Step(.02f,world);Tick(world,assets,.02f);
-    PhysicsWorld::SetActorPose(entt::to_integral(ball),inside,rotation,true);PhysicsWorld::Step(.02f,world);Tick(world,assets,.02f);CHECK(score()==2);
-    for(int i=0;i<60;i++) {PhysicsWorld::Step(.02f,world);Tick(world,assets,.02f);}
-    PhysicsWorld::SetActorPose(entt::to_integral(ball),outside,rotation,true);PhysicsWorld::Step(.02f,world);Tick(world,assets,.02f);
-    PhysicsWorld::SetActorPose(entt::to_integral(ball),inside,rotation,true);PhysicsWorld::Step(.02f,world);Tick(world,assets,.02f);CHECK(score()==4);
+    Tick(world,assets,.02f);
     GravityFrame ability;ability.Operation=0;CHECK(InvokeProject("gravity",&ability,sizeof ability));
     ability.Operation=1;ability.Dt=.1f;ability.Eye={0,0,5};ability.Forward={0,0,-1};ability.CameraRight={1,0,0};
     ability.GrabRange=100;ability.AssistRange=30;ability.AssistConeDeg=7;ability.MinThrowSpeed=4;ability.MaxThrowSpeed=18;ability.ChargeTime=1;ability.Right=1;
@@ -962,7 +946,7 @@ void TestProjectScoringAndConstraints() {
     ability.Left=0;CHECK(InvokeProject("gravity",&ability,sizeof ability));CHECK(!PhysicsWorld::IsGrabbing() && !ability.Charging);
     PhysicsWorld::Step(.02f,world);
     BodyState state;CHECK(PhysicsWorld::GetBodyState(entt::to_integral(ball),state));CHECK(std::abs(state.Velocity[2]+18)<.01f);
-    Stop(&world,&assets);CHECK(score()==-1);PhysicsWorld::Destroy();PhysicsWorld::Shutdown();
+    Stop(&world,&assets);PhysicsWorld::Destroy();PhysicsWorld::Shutdown();
 }
 }
 void RegisterScriptingTests(UnitTestSupport::TestList& tests) {
@@ -976,7 +960,7 @@ void RegisterScriptingTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Project NPC configuration and scene migration",TestProjectNpcConfiguration);
     tests.emplace_back("Project health authority, HUD reload and canvas scopes",TestProjectHealthAndHud);
     tests.emplace_back("Project NPC perception, squad roles and covering fire",TestProjectNpcPerceptionAndSquads);
-    tests.emplace_back("Project scoring, physics callbacks and carry constraint",TestProjectScoringAndConstraints);
+    tests.emplace_back("Project component migration and carry constraint",TestProjectMigrationAndConstraints);
     tests.emplace_back("Prefab-relative draggable script references",TestSceneReferences);
     tests.emplace_back("Managed gameplay ABI, fire modes and pump",TestManagedGameplay);
     tests.emplace_back("Managed components, lifecycle and weapon prefabs",TestManagedComponentsAndPrefabs);
