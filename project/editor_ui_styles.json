@@ -96,9 +96,6 @@
     "Foley Audio": {
       "color": "#4C8DF6"
     },
-    "Goal Trigger": {
-      "color": "#6E6CF2"
-    },
     "Health": {
       "color": "#E5484D"
     },
@@ -107,9 +104,6 @@
     },
     "Impact Audio": {
       "color": "#F2994A"
-    },
-    "Impact Sound": {
-      "color": "#8BC34A"
     },
     "Joint": {
       "color": "#E5484D"
@@ -152,12 +146,6 @@
     },
     "Rigidbody": {
       "color": "#6E6CF2"
-    },
-    "Score Digit": {
-      "color": "#E26CB2"
-    },
-    "Scoreboard": {
-      "color": "#9B6CF2"
     },
     "Squad Settings": {
       "color": "#F2C94C"

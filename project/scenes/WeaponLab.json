@@ -41,30 +41,6 @@
   "gradeTint": 0.0,
   "libraryMaterials": [
     {
-      "path": "assets/Environments/Sandbox/Materials/court_floor.mat",
-      "pathGuid": "af2c57edb9eeead3"
-    },
-    {
-      "path": "assets/Environments/Sandbox/Materials/arena_glass.mat",
-      "pathGuid": "2b02bddbbc176106"
-    },
-    {
-      "path": "assets/Props/Basketball/Materials/backboard_glass.mat",
-      "pathGuid": "a00f0b02ee9bb028"
-    },
-    {
-      "path": "assets/Props/Basketball/Materials/rim.mat",
-      "pathGuid": "e62f07d31b9df2ce"
-    },
-    {
-      "path": "assets/Props/Basketball/Materials/net.mat",
-      "pathGuid": "9a60da12561af3f2"
-    },
-    {
-      "path": "assets/Props/Basketball/Materials/basketball.mat",
-      "pathGuid": "9ec0856b3181ad4f"
-    },
-    {
       "path": "assets/Environments/Sandbox/Materials/water.mat",
       "pathGuid": "7b94769ce0f84595"
     },
@@ -218,18 +194,6 @@
     }
   ],
   "libraryModels": [
-    {
-      "path": "assets/Props/Basketball/Models/rim.obj",
-      "pathGuid": "aa06bf914b4a03c0"
-    },
-    {
-      "path": "assets/Props/Basketball/Models/net.obj",
-      "pathGuid": "9f5eb74f6735cbca"
-    },
-    {
-      "path": "assets/Props/Basketball/Models/basketball.obj",
-      "pathGuid": "3e65fa8b4567e911"
-    },
     {
       "path": "assets/Weapons/AKS74U/FirstPerson/AKS-74U_A_FP_ADS.fbx",
       "pathGuid": "101cd70269fca765"
@@ -833,30 +797,6 @@
     {
       "path": "assets/Materials/Prototype/proto_grid_orange.png",
       "pathGuid": "c389fb6bc574bb89"
-    },
-    {
-      "path": "assets/Props/Basketball/Textures/court_floor.jpg",
-      "pathGuid": "fd3b90b6c8f0b253"
-    },
-    {
-      "path": "assets/Props/Basketball/Textures/wood_detail.png",
-      "pathGuid": "e5f0e29613cac82f"
-    },
-    {
-      "path": "assets/Props/Basketball/Textures/wood_seams_normal.png",
-      "pathGuid": "346137cb492678b5"
-    },
-    {
-      "path": "assets/Props/Basketball/Textures/backboard.png",
-      "pathGuid": "caf13370e27a0035"
-    },
-    {
-      "path": "assets/Props/Basketball/Textures/basketball_albedo.png",
-      "pathGuid": "3821385da1bbeb84"
-    },
-    {
-      "path": "assets/Props/Basketball/Textures/basketball_normal.png",
-      "pathGuid": "a631a899eff1effb"
     },
     {
       "path": "assets/Weapons/AKS74U/Textures/AKS74U_Albedo_Transparency.png",

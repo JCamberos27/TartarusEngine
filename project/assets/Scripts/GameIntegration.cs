@@ -53,7 +53,6 @@ internal static unsafe class GameIntegration
         "npc.name" or "npc.spawn-plan" => NpcLifecycle.Request(operation,json),
         "content.path" or "content.blood" or "content.knife" => ContentTools.Request(operation,json),
         "npc.config" => NpcConfigData.Resolve(json),
-        "basketball.state" => System.Text.Json.JsonSerializer.Serialize(new {home=Scoreboard.Boards.FirstOrDefault()?.Home??-1,away=Scoreboard.Boards.FirstOrDefault()?.Away??-1}),
         _ => throw new ArgumentException("Unknown project request: "+operation)
     };
 }

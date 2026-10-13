@@ -102,7 +102,7 @@ jobs:
       # Keyed like the cache above, on CMakeLists.txt plus the two PhysX helper scripts. A
       # narrower key on PHYSX_GIT_TAG alone would survive unrelated CMakeLists edits, but it
       # would also let a changed ExternalProject flag restore a stale PhysX silently - and
-      # /fp:fast vs /fp:precise here was already the cause of a real bug (a thrown basketball
+      # /fp:fast vs /fp:precise here was already the cause of a real bug (a thrown ball
       # freezing mid-air, #312). Slower and honest beats faster and quietly wrong.
       #
       # No matrix.config in the key on purpose: PhysX builds debug AND release in one

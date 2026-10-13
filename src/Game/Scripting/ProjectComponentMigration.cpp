@@ -7,7 +7,7 @@ namespace Scripting {
 bool MigrateLegacyProjectComponents(nlohmann::json& entity) {
     using Json=nlohmann::json;
     bool changed=false;
-    for(const auto& pair:{std::pair{"Goal Trigger","BasketGoal"},std::pair{"Scoreboard","Scoreboard"},std::pair{"Score Digit","ScoreDigit"},std::pair{"Impact Sound","ImpactSound"},std::pair{"First Person Controller","PlayerDefinition"},std::pair{"Impact Audio","ImpactAudioDefinition"},std::pair{"Weapon Audio","WeaponAudioDefinition"},std::pair{"Foley Audio","FoleyDefinition"},std::pair{"FX & HUD Settings","EffectsDefinition"},std::pair{"Health","Health"},std::pair{"NPC Spawn","NpcDefinition"},std::pair{"Squad Settings","SquadDefinition"}}) {
+    for(const auto& pair:{std::pair{"First Person Controller","PlayerDefinition"},std::pair{"Impact Audio","ImpactAudioDefinition"},std::pair{"Weapon Audio","WeaponAudioDefinition"},std::pair{"Foley Audio","FoleyDefinition"},std::pair{"FX & HUD Settings","EffectsDefinition"},std::pair{"Health","Health"},std::pair{"NPC Spawn","NpcDefinition"},std::pair{"Squad Settings","SquadDefinition"}}) {
         if(!entity.contains(pair.first))continue;
         const auto& legacy=entity.at(pair.first);Json fields=Json::object();
         for(const auto& [key,value]:legacy.items()) {
@@ -35,10 +35,7 @@ bool MigrateLegacyProjectComponents(nlohmann::json& entity) {
             if((name=="Weapon" || name=="Brain") && value.is_string() && std::string(pair.first)=="NPC Spawn") {
                 fields[name]=name=="Weapon"?(value=="Remington 870"?1:value=="Random"?2:0):(value=="Training Dummy"?1:0);continue;
             }
-            if((name=="Team" || name=="Place") && value.is_string()) {
-                fields[name]=(value=="Away" || value=="Tens")?1:0;continue;
-            }
-            if((name=="DataFile" || name=="Clip" || name=="ScoreSound" || name=="PrimaryWeaponPrefab" || name=="SecondaryWeaponPrefab" || name=="AnimationSet" || name=="SecondaryAnimationSet") && value.is_string()) {
+            if((name=="DataFile" || name=="Clip" || name=="PrimaryWeaponPrefab" || name=="SecondaryWeaponPrefab" || name=="AnimationSet" || name=="SecondaryAnimationSet") && value.is_string()) {
                 const auto guid=legacy.value(key+"Guid",std::string{});
                 fields[name]={{"path",value},{"pathGuid",guid}};
             } else if((name=="ViewModelOffset" || name=="ViewModelRotation") && value.is_array())fields[name]={{"X",value.at(0)},{"Y",value.at(1)},{"Z",value.at(2)}};

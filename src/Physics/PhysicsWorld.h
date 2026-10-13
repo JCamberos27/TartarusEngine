@@ -394,7 +394,7 @@ void SetActorPose(unsigned entity, const float posXYZ[3], const float rotationXY
 void GrabBody(unsigned entity);
 void UpdateGrab(const float target[3], const float targetVelocity[3], const float targetRotation[4]);
 // `backspinRadPerSec` > 0 also spins a round (sphere-collider) body backwards about the axis
-// across the throw, the way a shot basketball leaves the hand.
+// across the throw, the way a shot ball leaves the hand.
 void ReleaseBody(bool launch, const float impulse[3], float backspinRadPerSec = 0.0f);
 bool IsGrabbing();
 // The entity the gravity gun holds, or 0xFFFFFFFF.
