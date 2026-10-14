@@ -398,13 +398,23 @@ std::shared_ptr<NpcDirector::SoldierBody> NpcDirector::BuildBody(World& world, A
     for (entt::entity e : created) {
         const auto* h = reg.try_get<HierarchyComponent>(e);
         if (built->Root == entt::null && (!h || h->Parent == entt::null)) built->Root = e;
-        if (const auto* ac = reg.try_get<AnimatorControllerComponent>(e)) built->Animators.push_back({e, *ac});
     }
     if (built->Root == entt::null) {
         for (entt::entity e : created)
             if (reg.valid(e)) world.DestroyEntityAndChildren(e);
         return nullptr;
     }
+    // A prefab saved before its wardrobe's body changed gets the new parts now, before the body (and its ragdoll) reads
+    // its pieces: rebuilt later, a new piece (the hands) was left out of both and played the idle on its own.
+    OutfitSystem::RefreshBody(world, assets, built->Root);
+    std::vector<entt::entity> all;
+    for (entt::entity e : created)
+        if (reg.valid(e)) all.push_back(e);
+    if (const auto* h = reg.try_get<HierarchyComponent>(built->Root))
+        for (entt::entity c : h->Children)
+            if (reg.valid(c) && std::find(all.begin(), all.end(), c) == all.end()) all.push_back(c);
+    for (entt::entity e : all)
+        if (const auto* ac = reg.try_get<AnimatorControllerComponent>(e)) built->Animators.push_back({e, *ac});
     return built;
 }
 
