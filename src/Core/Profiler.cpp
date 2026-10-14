@@ -65,7 +65,8 @@ bool TryReadBack(GpuFrame& f) {
 }
 
 void Profiler::BeginFrame() {
-    g_LastFrame = std::move(g_CurrentFrame);
+    // Swapped, not moved: the moved-from list lost its capacity and regrew from empty every frame.
+    std::swap(g_LastFrame, g_CurrentFrame);
     g_CurrentFrame.clear();
 
     if (!glQueryCounter || !glGetQueryObjectiv || !glGetQueryObjectui64v) return;
@@ -87,12 +88,16 @@ void Profiler::PushSample(const std::string& name, float milliseconds) {
     g_CurrentFrame.push_back({name, milliseconds});
 }
 
+void Profiler::PushSample(const char* name, float milliseconds) {
+    g_CurrentFrame.push_back({std::string(name), milliseconds});
+}
+
 const std::vector<Profiler::Entry>& Profiler::GetLastFrame() {
     return g_LastFrame;
 }
 
-Profiler::ScopeTimer::ScopeTimer(std::string name)
-    : m_Name(std::move(name)), m_Start(std::chrono::steady_clock::now()) {}
+Profiler::ScopeTimer::ScopeTimer(const char* name)
+    : m_Name(name), m_Start(std::chrono::steady_clock::now()) {}
 
 Profiler::ScopeTimer::~ScopeTimer() {
     auto elapsed = std::chrono::steady_clock::now() - m_Start;
