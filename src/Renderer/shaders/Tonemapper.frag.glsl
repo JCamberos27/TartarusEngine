@@ -95,9 +95,16 @@ vec3 TonemapAgX(vec3 val) {
     return pow(val, vec3(2.2)); // undo AgX's built-in ~2.2 so the shared gamma below is the only one
 }
 
+// A NaN or infinite texel (a degenerate normal, a 16-bit float overflow) is dropped to black here, not
+// left to the tone curve and colour grade, whose min/max/clamp do whatever the driver does with it.
+vec3 Finite(vec3 c) { return any(isnan(c)) || any(isinf(c)) ? vec3(0.0) : c; }
+
 void main() {
     float exposure = uExposure;
-    if (uAutoExposure != 0) exposure *= exp2(-texelFetch(uAdaptedEv, ivec2(0), 0).r);
+    if (uAutoExposure != 0) {
+        float ev = texelFetch(uAdaptedEv, ivec2(0), 0).r;
+        exposure *= (isnan(ev) || isinf(ev)) ? 1.0 : exp2(-ev);
+    }
     vec3 hdr;
     if (uChromatic > 0.0) {
         // Lateral chromatic aberration: red and blue sampled radially outward/inward from the
@@ -107,9 +114,9 @@ void main() {
     } else {
         hdr = texture(uHdr, vUV).rgb;
     }
-    hdr *= exposure;
+    hdr = Finite(hdr) * exposure;
     if (uBloomEnabled != 0)
-        hdr += texture(uBloom, vUV).rgb * uBloomIntensity * (exposure / uExposure);
+        hdr += Finite(texture(uBloom, vUV).rgb) * uBloomIntensity * (exposure / uExposure);
 
     hdr = Grade(hdr);
 

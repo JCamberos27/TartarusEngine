@@ -33,6 +33,7 @@ public:
     void ResolveTo() const;
 
     unsigned int ResolvedColorTexture() const { return m_ResolveColor; } // RGBA16F, linear-filtered, sampleable
+    unsigned int ResolveFbo() const { return m_ResolveFbo; } // holds ResolvedColorTexture(), for a readback
 
     // Mid-pass: resolves only the depth into ResolvedDepthTexture() (provisioning it on first use) -
     // for a pass that reconstructs the surfaces drawn so far while the MSAA target stays bound (the

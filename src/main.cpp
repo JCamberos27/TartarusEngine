@@ -475,7 +475,7 @@ int main(int argc, char** argv) {
         }
         std::error_code ec;
         for (const char* f : {"imgui.ini", "editor_prefs.json", "shortcuts.json"})
-            fs::copy_file(real / f, scratch / f, fs::copy_options::overwrite_existing, ec);
+            fs::corowfile(real / f, scratch / f, fs::corowoptions::overwrite_existing, ec);
         if (opt.editorShotDefaultLayout) fs::remove(scratch / "imgui.ini", ec);
     }
 
@@ -4244,6 +4244,60 @@ int main(int argc, char** argv) {
                 editor.SetGameViewOpenState(gameView.IsWindowOpen());
             }
 
+            // TARTARUS_HDR_PROBE=1: once a second in Play, what the game camera's frame holds before and after the tone
+            // curve - non-finite and extreme HDR texels, the brightest one and where, and how much of the finished image
+            // is white - logged per view, to find which stage turns a frame white or black. A full readback: debug only.
+            static const bool hdrProbe = [] { const char* v = std::getenv("TARTARUS_HDR_PROBE"); return v && *v && *v != '0'; }();
+            static double hdrProbeNext[2] = {0.0, 0.0};
+            auto probeHdr = [&](int probeView, int pw, int ph, const glm::vec3& probeEye) {
+                std::vector<float> probePx((size_t)pw * ph * 4);
+                glBindFramebuffer(GL_READ_FRAMEBUFFER, gameHdr.ResolveFbo());
+                glReadPixels(0, 0, pw, ph, GL_RGBA, GL_FLOAT, probePx.data());
+                glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+                size_t nanCount = 0, infCount = 0, over1Count = 0, over100Count = 0, over1e4Count = 0;
+                double probeLumaSum = 0.0;
+                float probeMaxLuma = 0.0f;
+                int probeMaxX = 0, probeMaxY = 0;
+                for (int row = 0; row < ph; ++row)
+                    for (int col = 0; col < pw; ++col) {
+                        const float* texel = &probePx[((size_t)row * pw + col) * 4];
+                        if (std::isnan(texel[0]) || std::isnan(texel[1]) || std::isnan(texel[2])) { ++nanCount; continue; }
+                        if (std::isinf(texel[0]) || std::isinf(texel[1]) || std::isinf(texel[2])) { ++infCount; continue; }
+                        const float texelLuma = 0.2126f * texel[0] + 0.7152f * texel[1] + 0.0722f * texel[2];
+                        probeLumaSum += texelLuma;
+                        over1Count += texelLuma > 1.0f;
+                        over100Count += texelLuma > 100.0f;
+                        over1e4Count += texelLuma > 1.0e4f;
+                        if (texelLuma > probeMaxLuma) { probeMaxLuma = texelLuma; probeMaxX = col; probeMaxY = ph - 1 - row; }
+                    }
+                const size_t probeCount = (size_t)pw * ph;
+                char probeLine[512];
+                std::snprintf(probeLine, sizeof probeLine,
+                              "HDR probe [%s] %dx%d: NaN %zu, Inf %zu, luma>1 %.1f%%, >100 %zu, >1e4 %zu, mean luma %.3g, max %.3g at (%d, %d) "
+                              "from the top left; scene exposure %.2f EV, eye (%.2f, %.2f, %.2f)",
+                              probeView == 0 ? "Game view" : "Play", pw, ph, nanCount, infCount,
+                              100.0 * (double)over1Count / (double)probeCount, over100Count, over1e4Count,
+                              probeLumaSum / (double)std::max<size_t>(probeCount - nanCount - infCount, 1),
+                              (double)probeMaxLuma, probeMaxX, probeMaxY,
+                              (double)world.ExposureEV, (double)probeEye.x, (double)probeEye.y, (double)probeEye.z);
+                Log::Info(probeLine);
+            };
+            auto probeLdr = [&](int probeView, unsigned probeFbo, int pw, int ph) {
+                glBindFramebuffer(GL_READ_FRAMEBUFFER, probeFbo);
+                std::vector<unsigned char> probePx = Screenshot::GrabRegion(0, 0, pw, ph);
+                glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+                size_t whiteCount = 0, blackCount = 0;
+                for (size_t at = 0; at + 3 < probePx.size(); at += 4) {
+                    whiteCount += probePx[at] >= 250 && probePx[at + 1] >= 250 && probePx[at + 2] >= 250;
+                    blackCount += probePx[at] <= 5 && probePx[at + 1] <= 5 && probePx[at + 2] <= 5;
+                }
+                const double probeCount = (double)std::max<size_t>(probePx.size() / 4, 1);
+                char probeLine[160];
+                std::snprintf(probeLine, sizeof probeLine, "HDR probe [%s] finished %dx%d: %.1f%% white, %.1f%% black",
+                              probeView == 0 ? "Game view" : "Play", pw, ph,
+                              100.0 * (double)whiteCount / probeCount, 100.0 * (double)blackCount / probeCount);
+                Log::Info(probeLine);
+            };
             // The game camera's frame, from the HDR clear to the HUD: drawn at rw x rh, shown at outW x outH in `outFbo`
             // (upscaled when smaller). The docked Game view and Free-Aspect maximized play differ only in what they pass:
             // `postSlot` is the post chain's motion-blur history, and `overlayInPlayOnly` keeps the physics debug overlay to Play.
@@ -4284,6 +4338,12 @@ int main(int argc, char** argv) {
                     drawThrowArc(view, proj, eye);
 
                 gameHdr.ResolveTo();
+                const int probeSlot = std::clamp(postSlot, 0, 1);
+                const bool probeNow = hdrProbe && playing && glfwGetTime() >= hdrProbeNext[probeSlot];
+                if (probeNow) {
+                    hdrProbeNext[probeSlot] = glfwGetTime() + 1.0;
+                    probeHdr(probeSlot, rw, rh, eye);
+                }
 
                 // PR16: Bloom for the Game view - own Bloom instance (see gameBloom declaration).
                 unsigned int bloomGlowTex   = 0u;
@@ -4325,6 +4385,7 @@ int main(int argc, char** argv) {
                                    MakePlayerHudState(playerVitals, player.Cam.Position, player.Cam.Yaw), (float)glfwGetTime());
                     drawCombatHud(outFbo, outW, outH, view, proj);
                 }
+                if (probeNow) probeLdr(probeSlot, outFbo, outW, outH);
             };
 
             // --- Game View offscreen pass -----------------------------------------------------

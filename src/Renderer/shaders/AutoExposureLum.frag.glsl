@@ -15,6 +15,7 @@ void main() {
     for (int i = 0; i < 4; ++i) {
         vec2 o = (vec2(i & 1, i >> 1) - 0.5) * uTexel * 0.5;
         vec3 c = texture(uHdr, vUV + o).rgb;
+        if (any(isnan(c)) || any(isinf(c))) c = vec3(0.0); // or the mean below, and the exposure, goes with it
         sum += log2(max(dot(max(c, vec3(0.0)), kLuma), 1e-5));
     }
     FragLogLum = sum * 0.25;

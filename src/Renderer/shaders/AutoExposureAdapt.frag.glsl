@@ -17,6 +17,8 @@ void main() {
     float target = clamp(textureLod(uLum, vec2(0.5), uTopMip).r - kLog2MidGrey, uMinEv, uMaxEv);
     if (uReset != 0) { FragEv = target; return; }
     float prev = texelFetch(uPrev, ivec2(0), 0).r;
+    // A bad value is never carried: last frame's EV feeds this frame's, so it would stick for good.
+    if (isnan(prev) || isinf(prev)) { FragEv = target; return; }
     // A brighter scene than we're exposed for (target > prev) adapts at Speed Up.
     float speed = target > prev ? uSpeedUp : uSpeedDown;
     FragEv = prev + (target - prev) * (1.0 - exp(-uDt * speed));
