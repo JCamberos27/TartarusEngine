@@ -20,6 +20,7 @@ public:
     ~ModelMesh();
 
     bool NeedsUpload() const { return m_VAO == 0; }
+    unsigned int VertexBuffer() const { return m_VBO; } // ModelVertex[], read by PreSkin.comp.glsl
     void FinishUpload();
 
     // `instances` > 1 draws that many instances (the sun's layered cascade pass).

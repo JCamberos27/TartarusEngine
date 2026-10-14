@@ -17,13 +17,21 @@ uniform int uUseSkinning;
 // on every Draw(); this used to declare the old never-uploaded uniform array, so a skinned model
 // with a clip playing collapsed to a point and got no selection outline.
 layout(std430, binding = 1) readonly buffer BoneBlock { mat4 uBones[]; };
+// uUseSkinning 2: skinned once this frame already (Model::PreSkin).
+#include "SkinnedVertex.glsl"
+layout(std430, binding = 26) readonly buffer SkinnedBlock { uint uSkinned[]; };
+uniform int uSkinBase;
 uniform float uThickness;
 
 void main() {
     vec4 localPos = vec4(aPos, 1.0);
     vec3 localNormal = aNormal;
 
-    if (uUseSkinning == 1) {
+    if (uUseSkinning == 2) {
+        uint s = uint(gl_VertexID + uSkinBase) * kSkinnedWords;
+        localPos = vec4(uintBitsToFloat(uSkinned[s]), uintBitsToFloat(uSkinned[s + 1u]), uintBitsToFloat(uSkinned[s + 2u]), 1.0);
+        localNormal = UnpackUnitOct(uSkinned[s + 3u]);
+    } else if (uUseSkinning == 1) {
         int boneIds[8] = int[8](aBoneIDs.x, aBoneIDs.y, aBoneIDs.z, aBoneIDs.w, aBoneIDs2.x, aBoneIDs2.y, aBoneIDs2.z, aBoneIDs2.w);
         float boneWeights[8] = float[8](aWeights.x, aWeights.y, aWeights.z, aWeights.w, aWeights2.x, aWeights2.y, aWeights2.z, aWeights2.w);
         mat4 skinMat = mat4(0.0);

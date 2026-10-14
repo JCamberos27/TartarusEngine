@@ -14,10 +14,15 @@ uniform mat4 uModel;
 uniform mat4 uNormalMatrix; // mat3 inverse-transpose of uModel in a mat4 (loader has no mat3fv)
 uniform mat4 uView;
 uniform mat4 uProj;
+// 0 = not skinned, 1 = skin here from the bone palette, 2 = already skinned this frame (Model::PreSkin): read the
+// vertex from the skinned buffer at gl_VertexID + uSkinBase.
 uniform int uUseSkinning;
 // Bone palette as an std430 SSBO (binding 1), uploaded per skinned draw (#104). MAX_BONES=512
 // entries (#113); the index is clamped to the buffer's length so a bad index can't read past it.
 layout(std430, binding = 1) readonly buffer BoneBlock { mat4 uBones[]; };
+#include "SkinnedVertex.glsl"
+layout(std430, binding = 26) readonly buffer SkinnedBlock { uint uSkinned[]; };
+uniform int uSkinBase;
 
 out vec3 vWorldPos;
 out vec3 vNormal;
@@ -68,7 +73,7 @@ void main() {
         uint word = uCollarVertBits[clamp(id >> 5, 0, uCollarVertBits.length() - 1)];
         if (((word >> uint(id & 31)) & 1u) != 0u) vHidden = 1.0;
     }
-    if (uUseSkinning == 1) {
+    if (uUseSkinning != 0) {
         int boneIds[8] = int[8](aBoneIDs.x, aBoneIDs.y, aBoneIDs.z, aBoneIDs.w, aBoneIDs2.x, aBoneIDs2.y, aBoneIDs2.z, aBoneIDs2.w);
         float boneWeights[8] = float[8](aWeights.x, aWeights.y, aWeights.z, aWeights.w, aWeights2.x, aWeights2.y, aWeights2.z, aWeights2.w);
         for (int i = 0; i < 8; ++i)
@@ -82,20 +87,27 @@ void main() {
             }
             vHidden += uBoneMaskMode == 1 ? masked : 1.0 - masked;
         }
-        mat4 skinMat = mat4(0.0);
-        float totalWeight = 0.0;
-        for (int i = 0; i < 8; ++i) {
-            if (boneIds[i] >= 0) {
-                skinMat += uBones[clamp(boneIds[i], 0, uBones.length() - 1)] * boneWeights[i]; // never OOB (#98)
-                totalWeight += boneWeights[i];
+        if (uUseSkinning == 2) {
+            uint s = uint(gl_VertexID + uSkinBase) * kSkinnedWords;
+            localPos = vec4(uintBitsToFloat(uSkinned[s]), uintBitsToFloat(uSkinned[s + 1u]), uintBitsToFloat(uSkinned[s + 2u]), 1.0);
+            localNormal = UnpackUnitOct(uSkinned[s + 3u]);
+            localTangent = UnpackUnitOct(uSkinned[s + 4u]);
+        } else {
+            mat4 skinMat = mat4(0.0);
+            float totalWeight = 0.0;
+            for (int i = 0; i < 8; ++i) {
+                if (boneIds[i] >= 0) {
+                    skinMat += uBones[clamp(boneIds[i], 0, uBones.length() - 1)] * boneWeights[i]; // never OOB (#98)
+                    totalWeight += boneWeights[i];
+                }
             }
+            if (totalWeight <= 0.0001) {
+                skinMat = mat4(1.0);
+            }
+            localPos = skinMat * localPos;
+            localNormal = mat3(skinMat) * aNormal;
+            localTangent = mat3(skinMat) * aTangent;
         }
-        if (totalWeight <= 0.0001) {
-            skinMat = mat4(1.0);
-        }
-        localPos = skinMat * localPos;
-        localNormal = mat3(skinMat) * aNormal;
-        localTangent = mat3(skinMat) * aTangent;
     }
 
     vec4 world = uModel * localPos;
