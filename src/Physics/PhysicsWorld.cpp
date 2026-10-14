@@ -1,6 +1,7 @@
 #include "PhysicMaterialAsset.h"
 #include "PhysicsWorld.h"
 
+#include "JobSystem.h"
 #include "Log.h"
 #include "ProjectSettings.h"
 #include "TimeService.h"
@@ -141,6 +142,23 @@ struct PlayerHitReport : PxUserControllerHitReport {
     void onObstacleHit(const PxControllerObstacleHit&) override {}
 };
 
+// PhysX's tasks run on the engine's job pool (Core/JobSystem.h) instead of a PxDefaultCpuDispatcher's own threads,
+// which on top of the pool oversubscribed the CPU during every step. Tasks are queued, never run inline; the
+// thread waiting in Step() runs them too, and with --jobs 0 it is the only one that does. Results are the same
+// whatever runs them: the scene has eENABLE_ENHANCED_DETERMINISM.
+class JobDispatcher final : public PxCpuDispatcher {
+public:
+    void submitTask(PxBaseTask& task) override { Jobs::Submit(nullptr, &RunTask, &task, 0, 1); }
+    uint32_t getWorkerCount() const override { return std::max(1u, Jobs::WorkerCount()); }
+
+private:
+    static void RunTask(void* data, std::uint32_t, std::uint32_t) {
+        PxBaseTask* task = static_cast<PxBaseTask*>(data);
+        task->run();
+        task->release();
+    }
+};
+
 // #167 - everything that doesn't depend on the scene lives for the whole editor session: the
 // foundation, PxPhysics, the CPU dispatcher, materials and the cooked-mesh cache. Before, all of
 // it was torn down on every Stop and rebuilt on every Play, so each Play re-cooked every mesh
@@ -150,7 +168,7 @@ struct PhysicsCore {
     EngineErrorCallback     errorCallback;
     PxFoundation*           foundation      = nullptr;
     PxPhysics*              physics         = nullptr;
-    PxDefaultCpuDispatcher* dispatcher      = nullptr;
+    JobDispatcher*          dispatcher      = nullptr;
     PxMaterial*             defaultMaterial = nullptr;
     PxU32                   workers         = 1;
     std::map<long long, PxMaterial*>                 materialCache; // key: GetMaterial()
@@ -179,7 +197,7 @@ struct PhysicsState {
     // Borrowed from PhysicsCore (#167) - never released here.
     PxFoundation*          foundation   = nullptr;
     PxPhysics*             physics      = nullptr;
-    PxDefaultCpuDispatcher* dispatcher  = nullptr;
+    JobDispatcher*        dispatcher    = nullptr;
     PxScene*              scene         = nullptr;
     PxMaterial*           defaultMaterial = nullptr;
     PxControllerManager*  controllerMgr = nullptr; // #185 PR 3
@@ -1075,15 +1093,12 @@ bool EnsureCore() {
     }
 #endif
 
-    // Keep the worker pool modest: the engine is otherwise single-threaded, and PR 2 only has
-    // static actors. hardware_concurrency() can report 0 — clamp to at least 1.
-    unsigned hw = std::thread::hardware_concurrency();
-    c->workers = std::max<PxU32>(1, std::min<PxU32>(hw ? hw - 1 : 1, 4));
-    c->dispatcher = PxDefaultCpuDispatcherCreate(c->workers);
+    c->dispatcher = new JobDispatcher(); // the engine's job pool (see JobDispatcher)
+    c->workers = c->dispatcher->getWorkerCount();
     c->defaultMaterial = c->physics->createMaterial(0.6f, 0.6f, 0.0f);
 
     g_Core = c;
-    Log::Info("PhysX initialised (" + std::to_string(c->workers) + " worker threads).");
+    Log::Info("PhysX initialised (tasks on the job pool, " + std::to_string(c->workers) + " worker threads).");
     return true;
 }
 
@@ -1131,7 +1146,7 @@ void Create(const World& world) {
 
     g_State = s;
     ++g_SimulationGeneration;
-    Log::Info("PhysX world created (" + std::to_string(g_Core->workers) + " worker threads).");
+    Log::Info("PhysX world created (tasks on the job pool, " + std::to_string(g_Core->workers) + " worker threads).");
 
     BuildActors(*s, world);
     BuildJoints(*s, world); // #185 PR 11
@@ -1165,7 +1180,7 @@ void Shutdown() {
     for (auto& kv : c->convexCache)            if (kv.second) kv.second->release(); // #185 PR 6/12
     for (auto& kv : c->triangleCache)          if (kv.second) kv.second->release();
     if (c->defaultMaterial) c->defaultMaterial->release();
-    if (c->dispatcher)      c->dispatcher->release();
+    delete c->dispatcher;
     if (c->physics)         c->physics->release();
 #ifdef TARTARUS_PHYSX_PVD
     if (c->pvd) {
@@ -1278,6 +1293,9 @@ void RunOneSubstep(PhysicsState& s, float fixedStep) {
         RagdollBeforeSubstep(s, rd);
     }
     s.scene->simulate(fixedStep);
+    // Run physics tasks here while the step is in flight (JobDispatcher), rather than sleeping in fetchResults.
+    while (!s.scene->checkResults(/*block=*/false))
+        if (!Jobs::RunOne()) std::this_thread::yield();
     s.scene->fetchResults(/*block=*/true);
     for (auto& rd : s.ragdolls) RagdollAfterSubstep(rd);
     ++s.frameIndex;
