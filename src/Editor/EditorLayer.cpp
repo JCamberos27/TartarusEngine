@@ -1576,7 +1576,8 @@ void EditorLayer::DrawSettingsWindow(World& world) {
             if (ImGui::IsItemHovered())
                 EditorUI::SetTooltip("The Game view and Play render the 3D frame at this height and upscale it to\n"
                                      "the screen (sharpened bicubic). On a 4K monitor, 1080p costs what a real\n"
-                                     "1080p monitor would. The HUD and editor UI stay at native resolution.");
+                                     "1080p monitor would. The HUD and editor UI stay at native resolution.\n"
+                                     "An exact resolution picked in the Game view's menu renders at that size instead.");
             if (prefs.RenderHeight == 0) ImGui::BeginDisabled();
             SettingsLabel("Upscale sharpness");
             ImGui::SliderFloat("##Upscale sharpness", &prefs.RenderSharpness, 0.0f, 1.0f, "%.2f");
