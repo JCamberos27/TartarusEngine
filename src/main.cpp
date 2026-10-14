@@ -1961,6 +1961,15 @@ int main(int argc, char** argv) {
                     SmokeChecks::MaterialPreviews(world);
                 }
 
+                // smoke_min: the once-per-frame GPU skinning (Model::PreSkin) against the CPU's blend. The committed scenes
+                // have no skinned characters, so this is what runs its shader on CI.
+                if (smokeSceneActive && smokeFramesRendered == 15 &&
+                    smokeScenePaths[smokeSceneIndex].find("smoke_min") != std::string::npos) {
+                    std::string preSkinWhy;
+                    if (Model::PreSkinSelfTest(preSkinWhy)) std::cout << "[SmokeTest]   pre-skin matches the CPU skinning" << std::endl;
+                    else Log::Error("[SmokeTest] pre-skin: " + preSkinWhy);
+                }
+
                 // #176 - a smoke_prefab* scene: a Prefab Mode round trip (Tests/SmokeChecks.cpp).
                 if (smokeSceneActive && smokeFramesRendered == 15 &&
                     smokeScenePaths[smokeSceneIndex].find("smoke_prefab") != std::string::npos) {
@@ -3261,6 +3270,22 @@ int main(int argc, char** argv) {
             {
                 const Camera& lodCam = playing ? *gameCam : editorCamera;
                 world.ApplyLod(lodCam.Position, lodCam.ProjectionMatrix(1.0f));
+            }
+            // Skin every character once, here, before the first pass that draws one: the shadow maps, the SSAO
+            // pre-pass and each view then read the skinned vertices instead of each re-skinning ~1M triangles in
+            // its own vertex shader (#552's "skinned characters drawn in every pass"). Anything left out (a model
+            // posed after this point, an editor preview) skins in the vertex shader as before.
+            {
+                PROFILE_SCOPE("Pre-Skin");
+                PROFILE_GPU_SCOPE("Pre-Skin");
+                static std::vector<Model*> s_PreSkinModels;
+                s_PreSkinModels.clear();
+                for (auto preSkinEntity : world.Registry.view<TransformComponent, RenderableComponent>()) {
+                    if (world.Registry.any_of<InactiveTag, LodCulledTag, PoseSourceTag>(preSkinEntity)) continue; // not drawn
+                    Model* preSkinModel = world.Registry.get<RenderableComponent>(preSkinEntity).ModelRef.get();
+                    if (preSkinModel && preSkinModel->BoneCount() > 0) s_PreSkinModels.push_back(preSkinModel);
+                }
+                Model::PreSkin(s_PreSkinModels);
             }
             // Spot and point casters, gathered once for every light and cube face (each used to
             // walk the whole registry again). Animated models are culled on bounds padded around
