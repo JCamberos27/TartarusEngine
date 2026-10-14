@@ -429,28 +429,6 @@
       ]
     },
     {
-      "id": 384,
-      "name": "Props / David",
-      "order": 383,
-      "parentId": -1,
-      "position": [
-        0.0,
-        0.0,
-        -100.668
-      ],
-      "rotation": [
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
       "id": 386,
       "name": "Props / Electrical",
       "order": 385,
@@ -9409,30 +9387,6 @@
       "pathGuid": "f77922a90676bafd",
       "position": [
         0.054,
-        0.0,
-        0.0
-      ],
-      "rotation": [
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
-      "id": 385,
-      "name": "David",
-      "order": 384,
-      "parentId": 384,
-      "path": "assets/Props/David/Models/David.fbx",
-      "pathGuid": "c431445fe85d98c4",
-      "position": [
-        0.636,
         0.0,
         0.0
       ],
