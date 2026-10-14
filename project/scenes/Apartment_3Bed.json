@@ -19488,7 +19488,7 @@
       "id": 653,
       "name": "AI Director",
       "order": 653,
-      "parentId": -1,
+      "parentId": 659,
       "position": [
         6.5,
         0.0,
@@ -19518,7 +19518,7 @@
       "id": 654,
       "name": "Enemy Spawn 1 (Living Room)",
       "order": 654,
-      "parentId": 1,
+      "parentId": 659,
       "position": [
         4.76,
         0.1,
@@ -19548,7 +19548,7 @@
       "id": 655,
       "name": "Enemy Spawn 2 (Kitchen)",
       "order": 655,
-      "parentId": 1,
+      "parentId": 659,
       "position": [
         9.46,
         0.1,
@@ -19578,7 +19578,7 @@
       "id": 656,
       "name": "Enemy Spawn 3 (Master Bedroom)",
       "order": 656,
-      "parentId": 1,
+      "parentId": 659,
       "position": [
         3.16,
         0.1,
@@ -19608,7 +19608,7 @@
       "id": 657,
       "name": "Enemy Spawn 4 (Bedroom 2)",
       "order": 657,
-      "parentId": 1,
+      "parentId": 659,
       "position": [
         7.96,
         0.1,
@@ -19657,6 +19657,28 @@
         6.5,
         1.3,
         5.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 659,
+      "name": "Enemies",
+      "order": 659,
+      "parentId": -1,
+      "position": [
+        0.0,
+        0.0,
+        0.0
       ],
       "rotation": [
         0.0,

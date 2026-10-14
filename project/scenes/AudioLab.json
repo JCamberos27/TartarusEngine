@@ -2526,9 +2526,9 @@
     },
     {
       "id": 10,
-      "name": "Lab / NPC Squads (disabled)",
+      "name": "Enemies (disabled)",
       "order": 9,
-      "parentId": 1,
+      "parentId": -1,
       "position": [
         0,
         0,
