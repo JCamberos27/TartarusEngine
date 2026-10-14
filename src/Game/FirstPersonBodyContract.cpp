@@ -244,6 +244,13 @@ void Add(std::vector<Check>& out, Severity s, std::string msg, std::string hint 
 
 } // namespace
 
+bool IsArmsPiece(const FirstPersonBodyComponent& cfg, const std::string& pieceName) {
+    const std::string name = Lower(pieceName);
+    for (const std::string* want : {&cfg.ArmsPiece, &cfg.HandsPiece})
+        if (!want->empty() && name.find(Lower(*want)) != std::string::npos) return true;
+    return false;
+}
+
 Severity Worst(const std::vector<Check>& checks) {
     Severity w = Severity::Ok;
     for (const Check& c : checks)
@@ -337,7 +344,7 @@ std::vector<Check> Validate(const ValidationInput& in) {
         if (cfg.WeaponArms && !cfg.ArmsPiece.empty()) {
             bool any = false;
             for (const std::string& n : in.PieceNames)
-                if (Lower(n).find(Lower(cfg.ArmsPiece)) != std::string::npos) any = true;
+                if (IsArmsPiece(cfg, n)) any = true;
             if (!any)
                 Add(out, Severity::Warning, "No body piece is named like '" + cfg.ArmsPiece + "' (Arms Piece).",
                     "Weapon Arms needs the piece that is the arms: rename it or change Arms Piece.");

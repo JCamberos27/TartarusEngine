@@ -22,6 +22,7 @@
 #include <set>
 #include <cstdio>
 #include <fstream>
+#include <functional>
 #include <future>
 #include <iostream>
 #include <map>
@@ -213,6 +214,93 @@ int CheckRules(const OutfitSystem::Catalog& cat, int seeds) {
     return bad;
 }
 
+// A modular body's arms (the "Arms" part, no hands) under each top and jacket: a sleeve that covers them down
+// to the hands (the "Hands" part) lets the wardrobe leave the arms out; a shorter one must keep them. An arm
+// vertex is bare when no cloth lies over it (OutfitCoverage::Covered, generous outward: loose sleeves) and the
+// hands piece isn't within kHandsReach of it; only the forearm counts (within kForearmReach of either hand's
+// middle) - what's left bare at the shoulder and armpit is inside the garment. Problems: the rules leave the
+// arms out under a sleeve that leaves the forearm bare (a hole between cuff and hand). Notes: a full sleeve the
+// rules don't use.
+constexpr float kHandsReach = 0.012f;
+constexpr float kForearmReach = 0.25f;
+int CheckSleeves(const Wardrobe::Wardrobe& w, const OutfitSystem::Catalog& cat,
+                 const std::function<const OutfitCoverage::Mesh&(const std::string&)>& mesh) {
+    int problems = 0;
+    for (int g = 0; g < 2; ++g) {
+        const Wardrobe::Gender sex = (Wardrobe::Gender)g;
+        std::string armsPath, handsPath;
+        for (const auto& [part, model] : w.Body(sex).Parts) {
+            if (part == "Arms") armsPath = model;
+            if (part == "Hands") handsPath = model;
+        }
+        if (armsPath.empty() || handsPath.empty()) continue;
+        const OutfitCoverage::Mesh& arms = mesh(armsPath);
+        const OutfitCoverage::Mesh& hands = mesh(handsPath);
+        if (arms.Positions.empty() || hands.Positions.empty()) continue;
+        // The hands' vertices on a grid of kHandsReach cells: a bare arm vertex looks in the 27 around it.
+        auto cellOf = [](const glm::vec3& p) { return glm::ivec3(glm::floor(p / kHandsReach)); };
+        auto key = [](const glm::ivec3& c) { return ((std::int64_t)c.x * 73856093) ^ ((std::int64_t)c.y * 19349663) ^ ((std::int64_t)c.z * 83492791); };
+        std::multimap<std::int64_t, glm::vec3> grid;
+        glm::vec3 handMiddle[2] = {glm::vec3(0.0f), glm::vec3(0.0f)}; // each hand's vertex average (by side of x = 0)
+        int handCount[2] = {0, 0};
+        for (const auto& p : hands.Positions) {
+            grid.emplace(key(cellOf(p)), p);
+            handMiddle[p.x < 0.0f] += p;
+            ++handCount[p.x < 0.0f];
+        }
+        for (int s = 0; s < 2; ++s) handMiddle[s] /= (float)std::max(handCount[s], 1);
+        auto nearHands = [&](const glm::vec3& p) {
+            const glm::ivec3 c = cellOf(p);
+            for (int x = -1; x <= 1; ++x)
+                for (int y = -1; y <= 1; ++y)
+                    for (int z = -1; z <= 1; ++z) {
+                        const auto range = grid.equal_range(key(c + glm::ivec3(x, y, z)));
+                        for (auto it = range.first; it != range.second; ++it)
+                            if (glm::distance(it->second, p) <= kHandsReach) return true;
+                    }
+            return false;
+        };
+        const Wardrobe::RaceDef* race = Wardrobe::FindRace(w, sex, "");
+        int full = 0, shorter = 0;
+        for (const auto& item : cat.Items) {
+            if (item.Sex != sex || (item.Slot != "Top" && item.Slot != "Outerwear")) continue;
+            const OutfitCoverage::Mesh& cloth = mesh(item.Path);
+            if (cloth.Positions.empty()) continue;
+            OutfitCoverage::Settings loose;
+            loose.Outward = 0.10f;
+            const auto covered = OutfitCoverage::Covered(arms, cloth, loose);
+            int bare = 0;
+            for (size_t v = 0; v < arms.Positions.size() && v < covered.size(); ++v) {
+                const glm::vec3& p = arms.Positions[v];
+                if (covered[v] || std::min(glm::distance(p, handMiddle[0]), glm::distance(p, handMiddle[1])) > kForearmReach) continue;
+                if (!nearHands(p)) ++bare;
+            }
+            Wardrobe::Request req;
+            req.Sex = sex;
+            req.Race = race ? race->Name : std::string();
+            req.Items[item.Slot] = item.Path;
+            const auto resolved = Wardrobe::Resolve(w, cat.Items, req);
+            const bool armsOut = std::none_of(resolved.Pieces.begin(), resolved.Pieces.end(),
+                                              [](const Wardrobe::Piece& p) { return p.Slot == "Arms"; });
+            const bool sleeved = bare == 0;
+            (sleeved ? full : shorter)++;
+            if (armsOut && !sleeved) {
+                ++problems;
+                std::printf("[OutfitAudit] sleeves: %s leaves %d forearm vertices bare, but the rules take the arms off\n",
+                            item.Stem.c_str(), bare);
+            } else if (!armsOut && sleeved) {
+                std::printf("[OutfitAudit] sleeves: %s covers the arms (%d bare) - the rules could take them off\n",
+                            item.Stem.c_str(), bare);
+            } else {
+                std::printf("[OutfitAudit] sleeves: %s %s (%d bare)\n", item.Stem.c_str(),
+                            armsOut ? "takes the arms off" : "keeps the arms", bare);
+            }
+        }
+        std::printf("[OutfitAudit] sleeves %s: %d full, %d short or none\n", Wardrobe::GenderName(sex), full, shorter);
+    }
+    return problems;
+}
+
 } // namespace
 
 int Run(AssetLibrary& assets, const std::string& wardrobe, const std::string& csvPath, bool geometry, bool posed) {
@@ -284,6 +372,7 @@ int Run(AssetLibrary& assets, const std::string& wardrobe, const std::string& cs
         }
     }
     std::cout << "[OutfitAudit] " << pairs.size() << " pairs\n";
+    const int sleeveProblems = CheckSleeves(w, *cat, mesh);
 
     // Geometry on this thread (GL), the maths on every core.
     for (const auto& p : pairs) { mesh(p.Under->Path); mesh(p.Over->Path); }
@@ -416,7 +505,7 @@ int Run(AssetLibrary& assets, const std::string& wardrobe, const std::string& cs
     }
     // Animated clipping is reported, not failed on: cloth sways off the skin it was hidden against by design
     // (the edge band); the count is for comparing before and after a change.
-    return clipping + ruleProblems;
+    return clipping + ruleProblems + sleeveProblems;
 }
 
 namespace {

@@ -470,7 +470,10 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
     // per-mesh "skip the bake" would skin a later mesh with an earlier mesh's offsets. Folding
     // inverse(C) into this mesh's offsets instead makes C == I for it too, so every mesh bakes
     // nodeTransform and every bone's stored offset means the same thing.
-    const glm::mat4 bake = nodeTransform;
+    // SkinIgnoresMeshNode: the node's parent frame only (the root's up axis and pivot still apply).
+    const glm::mat4 bake = skinned && m_D->Settings.SkinIgnoresMeshNode && node
+                               ? nodeTransform * glm::inverse(AiToGlm(node->mTransformation))
+                               : nodeTransform;
     glm::mat4 offsetFix(1.0f);
     if (skinned) {
         const aiBone* first = mesh->mBones[0];

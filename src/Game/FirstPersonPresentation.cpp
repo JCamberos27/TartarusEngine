@@ -2063,7 +2063,7 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
             }
         }
         if (shouldered && haveButt && m_Zoom < 0.05f && m_StockLockWeight > 0.99f) {
-            m_ShoulderedButt = m_HaveShoulderedButt ? glm::mix(m_ShoulderedButt, buttInView, std::min(1.0f, dt * 2.0f)) : buttInView;
+            m_ShoulderedButt = m_HaveShoulderedButt ? glm::mix(m_ShoulderedButt, buttInView, 1.0f - std::exp(-dt * 2.0f)) : buttInView;
             m_HaveShoulderedButt = true;
         }
         const float step = sl.BlendTime > 0.0f ? dt / sl.BlendTime : 1.0f;
@@ -2177,37 +2177,7 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
     }
     m_PlayerLookBaseline = glm::vec2(camera.Pitch, camera.Yaw);
     m_HavePlayerLookBaseline = true;
-    // Recoil view punch and lean, on the camera the whole frame renders from.
-    {
-        const WeaponProceduralPose& p = m_Procedural.Pose();
-        // The lean's side step stops short of walls, or it would put the eye through them; the
-        // roll shrinks with it, so leaning against a wall reads as blocked rather than broken.
-        float side = p.CameraSide, roll = p.CameraRoll;
-        if (std::fabs(side) > 1e-4f) {
-            const glm::vec3 dir = camera.Right() * (side > 0.0f ? 1.0f : -1.0f);
-            const float origin[3] = {camera.Position.x, camera.Position.y, camera.Position.z};
-            const float d[3] = {dir.x, dir.y, dir.z};
-            // keeps the near plane off the wall; tunable from FirstPersonControllerComponent
-            RaycastHit hit;
-            QueryFilter filter;
-            filter.HitTriggers = 0;
-            if (PhysicsWorld::SphereCastFiltered(origin, d, m_EyeRadius, std::fabs(side), filter, hit) && hit.Hit) {
-                const float room = std::max(0.0f, hit.Distance - 0.02f);
-                const float fraction = room / std::fabs(side);
-                side *= fraction;
-                roll *= fraction;
-            }
-        }
-        // Never punch the view past straight up/down, where the look basis flips.
-        const float pitch = std::clamp(camera.Pitch + p.CameraKick.x, -89.0f, 89.0f) - camera.Pitch;
-        m_KickAngles = glm::vec3(pitch, p.CameraKick.y, roll);
-        camera.Pitch += m_KickAngles.x;
-        camera.Yaw += m_KickAngles.y;
-        camera.Roll += m_KickAngles.z;
-        m_KickOffset = camera.Right() * (side + p.CameraOffset.x) + camera.Up() * p.CameraOffset.y - camera.Front() * p.CameraOffset.z;
-        camera.Position += m_KickOffset;
-        m_KickApplied = true;
-    }
+    ApplyViewPunch(camera);
     // What's in front of the gun, for it pulling back off walls - probed from where the eye
     // actually is this frame (leaned, bobbed) and along the rolled barrel line, so peeking past a
     // corner doesn't hit the corner the body is behind. The nearer hit wins, so a wall on the
@@ -2256,6 +2226,54 @@ void FirstPersonPresentation::Update(World& world, Camera& camera) {
 
     ApplyHidden(world);
     PlaceRigs(world, camera);
+}
+
+void FirstPersonPresentation::RefreshViewKick(Camera& camera) {
+    if (!IsActive() || !m_KickApplied) return;
+    RemoveViewKick(camera);
+    // This frame's aim climb, as Update takes it; the look baseline moves with it, so next frame doesn't read the
+    // climb as the player's own look.
+    const glm::vec2 climb = m_Procedural.ConsumeAimKick();
+    const glm::vec2 before(camera.Pitch, camera.Yaw);
+    camera.Pitch = std::clamp(camera.Pitch + climb.x, -89.0f, 89.0f);
+    camera.Yaw += climb.y;
+    m_Procedural.DiscardClampedAim(glm::vec2(climb.x - (camera.Pitch - before.x), 0.0f));
+    m_PlayerLookBaseline += glm::vec2(camera.Pitch, camera.Yaw) - before;
+    ApplyViewPunch(camera);
+}
+
+void FirstPersonPresentation::ApplyViewPunch(Camera& camera) {
+    // Recoil view punch and lean, on the camera the whole frame renders from.
+    {
+        const WeaponProceduralPose& p = m_Procedural.Pose();
+        // The lean's side step stops short of walls, or it would put the eye through them; the
+        // roll shrinks with it, so leaning against a wall reads as blocked rather than broken.
+        float side = p.CameraSide, roll = p.CameraRoll;
+        if (std::fabs(side) > 1e-4f) {
+            const glm::vec3 dir = camera.Right() * (side > 0.0f ? 1.0f : -1.0f);
+            const float origin[3] = {camera.Position.x, camera.Position.y, camera.Position.z};
+            const float d[3] = {dir.x, dir.y, dir.z};
+            // keeps the near plane off the wall; tunable from FirstPersonControllerComponent
+            RaycastHit hit;
+            QueryFilter filter;
+            filter.HitTriggers = 0;
+            if (PhysicsWorld::SphereCastFiltered(origin, d, m_EyeRadius, std::fabs(side), filter, hit) && hit.Hit) {
+                const float room = std::max(0.0f, hit.Distance - 0.02f);
+                const float fraction = room / std::fabs(side);
+                side *= fraction;
+                roll *= fraction;
+            }
+        }
+        // Never punch the view past straight up/down, where the look basis flips.
+        const float pitch = std::clamp(camera.Pitch + p.CameraKick.x, -89.0f, 89.0f) - camera.Pitch;
+        m_KickAngles = glm::vec3(pitch, p.CameraKick.y, roll);
+        camera.Pitch += m_KickAngles.x;
+        camera.Yaw += m_KickAngles.y;
+        camera.Roll += m_KickAngles.z;
+        m_KickOffset = camera.Right() * (side + p.CameraOffset.x) + camera.Up() * p.CameraOffset.y - camera.Front() * p.CameraOffset.z;
+        camera.Position += m_KickOffset;
+        m_KickApplied = true;
+    }
 }
 
 // Aiming with cover just ahead leans out around it: whichever side clears the edge soonest (the

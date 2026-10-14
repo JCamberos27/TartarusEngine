@@ -261,8 +261,10 @@ private:
     glm::vec3 m_ArmedEyeDelta{0.0f}; // the shoulder-anchored eye minus the head's, in the body's frame (slow)
     bool m_HaveArmedEye = false;
     entt::entity m_PoseSource = entt::null; // the arms rig while it carries PoseSourceTag (not drawn, no shadow)
-    bool m_ArmsEasedOut = false;   // the arms piece is hidden while it eases off a holstered gun
-    int m_ArmsShadow = 1;          // its RenderableComponent::CastShadows before that
+    // The arms pieces hidden while they ease off a holstered gun, each with its RenderableComponent::CastShadows before that.
+    std::vector<std::pair<entt::entity, int>> m_ArmsEasedOut;
+    // Whether piece `e` is part of the arms (FPBody::IsArmsPiece on its name, with this body's settings).
+    bool IsArmsPiece(const entt::registry& reg, entt::entity e) const;
     bool m_InLand = false;         // the animator is in the landing state (the input drives the capsule)
     float m_FootWeight = 0.0f;     // 0..1: how much foot IK is on (eases at the edges of grounded)
     bool m_HaveFoot = false;

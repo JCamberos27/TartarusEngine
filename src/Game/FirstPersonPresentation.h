@@ -75,6 +75,10 @@ public:
     // Takes the view punch / lean back off the camera. Call before anything reads or integrates
     // the camera as the player's own (Player::Update), and when Play stops.
     void RemoveViewKick(Camera& camera);
+    // After Tick: swaps the punch, lean and aim climb Update put on `camera` (worked out last frame) for this
+    // frame's, so a shot's kick shows the frame it fires instead of the next. Optional: without it the
+    // kick shows a frame later, as before.
+    void RefreshViewKick(Camera& camera);
 
     // Vertical FOV in degrees for that sub-pass, or a non-positive value when there is nothing
     // to put in it (no animation set is running). Only Start()/Stop() change it.
@@ -371,6 +375,8 @@ private:
     glm::vec3 m_PeekFrom{0.0f}; // where the eye was when the peek side was picked
     bool m_Aiming = false;
     void UpdateCornerPeek(const Camera& camera);
+    // The procedural pose's view punch, lean and offset onto `camera` (m_KickAngles / m_KickOffset).
+    void ApplyViewPunch(Camera& camera);
     float m_WallSide = 0.0f;      // its surface normal along the view's right (-1..1)
     // Tucked far enough off a wall that the gun can't fire or aim.
     bool WallBlocked() const {

@@ -494,6 +494,13 @@ float FirstPersonBodyPieceNearHide(float nearHide, float clothingNearHide, bool 
     return clothing ? std::max(body, clothingNearHide) : body;
 }
 
+bool FirstPersonBody::IsArmsPiece(const entt::registry& reg, entt::entity e) const {
+    if (!reg.valid(m_Body) || !reg.valid(e)) return false;
+    const auto* cfg = reg.try_get<FirstPersonBodyComponent>(m_Body);
+    const auto* name = reg.try_get<NameComponent>(e);
+    return cfg && name && FPBody::IsArmsPiece(*cfg, name->Name);
+}
+
 bool FirstPersonBodyNearHidden(const glm::vec3& p, const glm::vec3& eye, const glm::vec3& right, float radius, float width) {
     if (radius <= 0.0f) return false;
     const glm::vec3 d = p - eye;
@@ -615,9 +622,7 @@ bool FirstPersonBody::Start(World& world, Player& player) {
         auto& bodyTag = reg.emplace_or_replace<PlayerBodyTag>(e);
         bodyTag.NearHide = std::max(cfg.NearHide, 0.0f);
         // The torso's shoulders, out of the camera's view (the arms piece keeps its own).
-        const std::string pieceName = lower(reg.all_of<NameComponent>(e) ? reg.get<NameComponent>(e).Name : std::string());
-        const std::string armsName = lower(cfg.ArmsPiece);
-        const bool isArms = !armsName.empty() && pieceName.find(armsName) != std::string::npos;
+        const bool isArms = IsArmsPiece(reg, e);
         if (!isArms) {
             int count = 0;
             for (const std::string& b : names(cfg.CameraHiddenBones))
@@ -1201,13 +1206,8 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
             right = ModelPoint(*model, m_ShoulderNode[1]);
         }
         if (!armRig || armRig->AppliedLocalPose().empty()) return;
-        std::string want = cfg.ArmsPiece;
-        for (char& c : want) c = (char)std::tolower((unsigned char)c);
-        for (size_t k = 0; k < m_Pieces.size() && !want.empty(); ++k) {
-            if (m_Pieces[k] == m_Body || !reg.valid(m_Pieces[k]) || !reg.all_of<NameComponent>(m_Pieces[k])) continue;
-            std::string name = reg.get<NameComponent>(m_Pieces[k]).Name;
-            for (char& c : name) c = (char)std::tolower((unsigned char)c);
-            if (name.find(want) == std::string::npos) continue;
+        for (size_t k = 0; k < m_Pieces.size(); ++k) {
+            if (m_Pieces[k] == m_Body || !IsArmsPiece(reg, m_Pieces[k])) continue;
             const Model& m = *m_Models[k];
             IK::Pose pose = m.AppliedLocalPose();
             const int ul = m.NodeIndex(Bone(FPBody::kBoneUpperArm[0])), ur = m.NodeIndex(Bone(FPBody::kBoneUpperArm[1]));
@@ -1411,14 +1411,7 @@ bool FirstPersonBody::BoneWorld(const World& world, const std::string& standard,
 bool FirstPersonBody::BoneWorldMatrix(const World& world, const std::string& standard, glm::mat4& out, bool worldTwins) const {
     if (!IsActive() || !world.Registry.valid(m_Body)) return false;
     const auto& reg = world.Registry;
-    std::string want = reg.get<FirstPersonBodyComponent>(m_Body).ArmsPiece;
-    for (char& c : want) c = (char)std::tolower((unsigned char)c);
-    auto isArms = [&](size_t k) {
-        if (want.empty() || !reg.all_of<NameComponent>(m_Pieces[k])) return false;
-        std::string name = reg.get<NameComponent>(m_Pieces[k]).Name;
-        for (char& c : name) c = (char)std::tolower((unsigned char)c);
-        return name.find(want) != std::string::npos;
-    };
+    auto isArms = [&](size_t k) { return IsArmsPiece(reg, m_Pieces[k]); };
     // The world twins when poses are split (what every view but the player's camera shows), else the pieces.
     const bool twins = worldTwins && !m_Twins.empty();
     const auto& ents = twins ? m_Twins : m_Pieces;
@@ -2005,11 +1998,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     // rig's do); off, it is an ordinary piece of the body again.
     for (size_t k = 0; k < m_Pieces.size(); ++k) {
         const entt::entity e = m_Pieces[k];
-        if (e == m_Body || !reg.valid(e) || !reg.all_of<NameComponent>(e)) continue;
-        std::string name = reg.get<NameComponent>(e).Name, want = reg.get<FirstPersonBodyComponent>(m_Body).ArmsPiece;
-        for (char& c : name) c = (char)std::tolower((unsigned char)c);
-        for (char& c : want) c = (char)std::tolower((unsigned char)c);
-        if (want.empty() || name.find(want) == std::string::npos) continue;
+        if (e == m_Body || !reg.valid(e) || !IsArmsPiece(reg, e)) continue;
         if (viewModelArms) {
             if (!reg.all_of<ViewModelTag>(e)) { reg.emplace<ViewModelTag>(e); m_ArmsTagged.push_back(e); }
         } else if (reg.all_of<ViewModelTag>(e)) {
@@ -2018,10 +2007,15 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
         // Easing off a holstered gun the pose is still the rig's (its hands, no gun to hold): shown, it
         // would be a pair of hands hanging in the view for a few frames. Hidden until it has settled.
         auto& rc = reg.get<RenderableComponent>(e);
-        const bool easeOut = armsHidden;
-        if (easeOut && !m_ArmsEasedOut) { m_ArmsShadow = (int)rc.CastShadows; m_ArmsEasedOut = true; }
-        if (easeOut) rc.CastShadows = RenderableComponent::ShadowCasting::ShadowsOnly;
-        else if (m_ArmsEasedOut) { rc.CastShadows = (RenderableComponent::ShadowCasting)m_ArmsShadow; m_ArmsEasedOut = false; }
+        // Per piece: the arms and the hands may both be pieces, each with its own setting to go back to.
+        auto saved = std::find_if(m_ArmsEasedOut.begin(), m_ArmsEasedOut.end(), [e](const auto& s) { return s.first == e; });
+        if (armsHidden) {
+            if (saved == m_ArmsEasedOut.end()) m_ArmsEasedOut.emplace_back(e, (int)rc.CastShadows);
+            rc.CastShadows = RenderableComponent::ShadowCasting::ShadowsOnly;
+        } else if (saved != m_ArmsEasedOut.end()) {
+            rc.CastShadows = (RenderableComponent::ShadowCasting)saved->second;
+            m_ArmsEasedOut.erase(saved);
+        }
     }
     if (m_ArmsWeight < 1e-3f || !haveRig) {
         m_HaveShoulderAnchor[0] = m_HaveShoulderAnchor[1] = false;
@@ -2051,8 +2045,6 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     // nearly straight, most of all). Steady, each shoulder is held at a slow average of where it sits
     // relative to the eye (in the chest's view frame), and each elbow bends in the plane the rig's does.
     const float steady = std::clamp(cfg.ArmSteadiness, 0.0f, 1.0f) * m_ArmsWeight;
-    std::string armsName = cfg.ArmsPiece;
-    for (char& c : armsName) c = (char)std::tolower((unsigned char)c);
 
     struct Side { const char *Clavicle, *Upper, *Lower, *Hand; };
     static const Side kSides[2] = {{FPBody::kBoneClavicle[0], FPBody::kBoneUpperArm[0], FPBody::kBoneLowerArm[0], FPBody::kBoneHand[0]},
@@ -2087,14 +2079,9 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
         // the same world offset is given to every piece's clavicle, so the arms stay on the torso's shoulders.
         // Worked out per piece, the arms came off the chest (in any view but the camera's, and in shadows).
         std::vector<size_t> order;
+        size_t armsFirst = 0; // the arms pieces lead, in their own order (the arms, then the hands)
         for (size_t k = 0; k < m_Models.size(); ++k) {
-            bool isArms = false;
-            if (!armsName.empty() && reg.valid(m_Pieces[k]) && reg.all_of<NameComponent>(m_Pieces[k])) {
-                std::string name = reg.get<NameComponent>(m_Pieces[k]).Name;
-                for (char& c : name) c = (char)std::tolower((unsigned char)c);
-                isArms = name.find(armsName) != std::string::npos;
-            }
-            if (isArms) order.insert(order.begin(), k);
+            if (reg.valid(m_Pieces[k]) && IsArmsPiece(reg, m_Pieces[k])) order.insert(order.begin() + (std::ptrdiff_t)armsFirst++, k);
             else order.push_back(k);
         }
         glm::quat clavTurn[2] = {glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f)}; // world: the source's, given to the rest
@@ -2471,11 +2458,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
         int armsTwin = -1, driverTwin = -1;
         for (size_t k = 0; k < m_Pieces.size() && k < m_Twins.size(); ++k) {
             if (m_Pieces[k] == m_Driver) driverTwin = (int)k;
-            if (armsTwin < 0 && !armsName.empty() && reg.valid(m_Pieces[k]) && reg.all_of<NameComponent>(m_Pieces[k])) {
-                std::string name = reg.get<NameComponent>(m_Pieces[k]).Name;
-                for (char& c : name) c = (char)std::tolower((unsigned char)c);
-                if (name.find(armsName) != std::string::npos) armsTwin = (int)k;
-            }
+            if (armsTwin < 0 && reg.valid(m_Pieces[k]) && IsArmsPiece(reg, m_Pieces[k])) armsTwin = (int)k;
         }
         if (armsTwin < 0) armsTwin = driverTwin;
         auto twinPoint = [&](int k, const std::string& bone, glm::vec3& out) {
@@ -2755,10 +2738,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
         };
         size_t armsK = m_Models.size();
         for (size_t k = 0; k < m_Pieces.size() && k < m_Models.size(); ++k) {
-            if (!m_Models[k] || !reg.valid(m_Pieces[k]) || !reg.all_of<NameComponent>(m_Pieces[k])) continue;
-            std::string name = reg.get<NameComponent>(m_Pieces[k]).Name;
-            for (char& c : name) c = (char)std::tolower((unsigned char)c);
-            if (!armsName.empty() && name.find(armsName) != std::string::npos) { armsK = k; break; }
+            if (m_Models[k] && reg.valid(m_Pieces[k]) && IsArmsPiece(reg, m_Pieces[k])) { armsK = k; break; }
         }
         for (int s = 0; s < 2; ++s) {
             glm::vec3 p[4];

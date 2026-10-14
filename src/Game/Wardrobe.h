@@ -64,6 +64,7 @@ struct CoverRule {
     std::vector<std::string> NameHasAny;   // the item's file name contains one of these (empty = any)
     std::vector<std::string> NameLacksAll; // ... and none of these
     int Skin = -1;                         // -1 any; 0 the item carries no skin of its own; 1 it does
+    int Gender = -1;                       // -1 both bodies, else only this Gender's (their parts differ)
     std::vector<std::string> Hide;         // parts not built
     std::string Replace, With;             // part -> body alternate (BodyDef::Alternates)
 };

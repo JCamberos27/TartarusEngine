@@ -428,6 +428,9 @@ void RegisterEngineComponents() {
         m.Fields.push_back({ "Arms Piece", T::String, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, ArmsPiece), 0.0f,
               "The child piece that is the body's arms (its name contains this). With Weapon Arms it is\n"
               "drawn with the gun, in the view-model pass, so its hands sit exactly where the rig's do." });
+        m.Fields.push_back({ "Hands Piece", T::String, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, HandsPiece), 0.0f,
+              "The child piece that is the body's hands, on a body whose hands are a piece of their own (a long\n"
+              "sleeve hides the arms piece and leaves this one). It goes wherever the arms piece goes." });
         m.Fields.push_back({ "Turn Threshold", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, TurnThreshold), 1.0f,
               "Standing still, the body keeps its heading until the view is this many degrees off it,\n"
               "then turns on the spot with the turn clips. 0 = the body always faces the view.", 0.0f, 170.0f });
@@ -694,7 +697,7 @@ void RegisterEngineComponents() {
         {
             static const std::pair<const char*, const char*> kGroups[] = {
                 {"Head Bone", "Camera"}, {"Camera Offset", "Camera"}, {"Armed Eye Offset", "Camera"}, {"Head Bob", "Camera"}, {"Camera Smoothing", "Camera"},
-                {"Weapon Arms", "Arms"}, {"Spine Aim", "Arms"}, {"Spine Aim Down", "Arms"}, {"Shoulder Line Match", "Arms"}, {"Arms Piece", "Arms"},
+                {"Weapon Arms", "Arms"}, {"Spine Aim", "Arms"}, {"Spine Aim Down", "Arms"}, {"Shoulder Line Match", "Arms"}, {"Arms Piece", "Arms"}, {"Hands Piece", "Arms"},
                 {"Turn Threshold", "Turning"}, {"Spine Twist", "Turning"}, {"Max Turn Rate", "Turning"},
                 {"Crouch Height", "Crouch"}, {"Crouch Speed", "Crouch"},
                 {"Foot IK", "Foot IK"}, {"Foot IK Max Drop", "Foot IK"}, {"Bone Map", "Camera"}, {"Start Stop Clips", "Locomotion"},
