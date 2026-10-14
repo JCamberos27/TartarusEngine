@@ -475,7 +475,7 @@ int main(int argc, char** argv) {
         }
         std::error_code ec;
         for (const char* f : {"imgui.ini", "editor_prefs.json", "shortcuts.json"})
-            fs::corowfile(real / f, scratch / f, fs::corowoptions::overwrite_existing, ec);
+            fs::copy_file(real / f, scratch / f, fs::copy_options::overwrite_existing, ec);
         if (opt.editorShotDefaultLayout) fs::remove(scratch / "imgui.ini", ec);
     }
 
@@ -4265,9 +4265,9 @@ int main(int argc, char** argv) {
                         if (std::isinf(texel[0]) || std::isinf(texel[1]) || std::isinf(texel[2])) { ++infCount; continue; }
                         const float texelLuma = 0.2126f * texel[0] + 0.7152f * texel[1] + 0.0722f * texel[2];
                         probeLumaSum += texelLuma;
-                        over1Count += texelLuma > 1.0f;
-                        over100Count += texelLuma > 100.0f;
-                        over1e4Count += texelLuma > 1.0e4f;
+                        if (texelLuma > 1.0f) ++over1Count;
+                        if (texelLuma > 100.0f) ++over100Count;
+                        if (texelLuma > 1.0e4f) ++over1e4Count;
                         if (texelLuma > probeMaxLuma) { probeMaxLuma = texelLuma; probeMaxX = col; probeMaxY = ph - 1 - row; }
                     }
                 const size_t probeCount = (size_t)pw * ph;
@@ -4288,8 +4288,8 @@ int main(int argc, char** argv) {
                 glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
                 size_t whiteCount = 0, blackCount = 0;
                 for (size_t at = 0; at + 3 < probePx.size(); at += 4) {
-                    whiteCount += probePx[at] >= 250 && probePx[at + 1] >= 250 && probePx[at + 2] >= 250;
-                    blackCount += probePx[at] <= 5 && probePx[at + 1] <= 5 && probePx[at + 2] <= 5;
+                    if (probePx[at] >= 250 && probePx[at + 1] >= 250 && probePx[at + 2] >= 250) ++whiteCount;
+                    if (probePx[at] <= 5 && probePx[at + 1] <= 5 && probePx[at + 2] <= 5) ++blackCount;
                 }
                 const double probeCount = (double)std::max<size_t>(probePx.size() / 4, 1);
                 char probeLine[160];
