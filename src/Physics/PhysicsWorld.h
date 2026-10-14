@@ -234,8 +234,10 @@ void DestroyNpcHitboxes(int id);
 
 // A ray against body parts only - the hitboxes of living characters and the parts of ragdolls - for which part of
 // a body a round struck. `kind` 1 = hitbox, 2 = ragdoll part; `part` is the index in the soldier's part order.
+// The shape tag a body part carries in PxShape::userData: (kind << 16) | part index.
+enum BodyPartKind : int { kBodyPartNone = 0, kBodyPartHitbox = 1, kBodyPartRagdoll = 2 };
 struct BodyPartHit {
-    int Kind = 0;
+    int Kind = kBodyPartNone; // a BodyPartKind
     unsigned Entity = 0xFFFFFFFFu;
     int Part = -1;
     float Distance = 0.0f;

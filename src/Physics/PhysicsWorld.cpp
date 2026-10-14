@@ -390,6 +390,14 @@ std::uint32_t UserDataToEntity(void* p) {
     return static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(p));
 }
 
+using PhysicsWorld::kBodyPartHitbox;
+using PhysicsWorld::kBodyPartRagdoll;
+// A body part's shape tag (see BodyPartKind): (kind << 16) | part index; untagged shapes hold nullptr.
+void* BodyPartTag(unsigned kind, unsigned part) {
+    return reinterpret_cast<void*>(static_cast<std::uintptr_t>((kind << 16) | part));
+}
+unsigned BodyPartKindOf(const void* tag) { return (unsigned)(reinterpret_cast<std::uintptr_t>(tag) >> 16); }
+
 // The legacy AABB collider size (World.cpp's ColliderWorldBounds, kept in step): the entity's
 // render bounds scaled by its transform, or a plain unit box for a mesh-less entity. Returned
 // as centre + half-extents in world space, axis-aligned.
@@ -965,7 +973,7 @@ void PlayerHitReport::onShapeHit(const PxControllerShapeHit& hit) {
     PxRigidBody* body = hit.actor->is<PxRigidDynamic>() ? static_cast<PxRigidBody*>(hit.actor->is<PxRigidDynamic>())
                                                          : static_cast<PxRigidBody*>(hit.actor->is<PxArticulationLink>());
     // A frozen corpse (a static copy of its parts): thawed before the next step, and pushed from then on.
-    if (!body && hit.shape && ((std::uintptr_t)hit.shape->userData >> 16) == 2u) {
+    if (!body && hit.shape && BodyPartKindOf(hit.shape->userData) == kBodyPartRagdoll) {
         const PxU32 id = hit.shape->getQueryFilterData().word2;
         if (id > 0u) owner->thawRequests.push_back((int)id - 1);
         return;
@@ -1507,22 +1515,31 @@ bool HasCharacter() {
     return g_State && g_State->controller;
 }
 
+namespace {
+// The capsule controller every character uses, the player's and the NPCs' alike.
+// (The caller places it: `position` is the capsule centre.)
+PxCapsuleControllerDesc CapsuleControllerDesc(float radius, float cylinderHalfHeight) {
+    PxCapsuleControllerDesc desc;
+    desc.radius        = radius;
+    desc.height        = 2.0f * cylinderHalfHeight; // cylinder segment (sphere-centre to sphere-centre)
+    desc.upDirection   = PxVec3(0.0f, 1.0f, 0.0f);
+    desc.stepOffset    = 0.3f;                  // auto-climb ledges up to this tall
+    desc.slopeLimit    = std::cos(0.8726646f);  // walkable up to ~50 degrees
+    desc.contactOffset = 0.05f;
+    desc.material      = g_State->defaultMaterial;
+    desc.climbingMode  = PxCapsuleClimbingMode::eCONSTRAINED; // don't let the sphere cap boost climbs
+    return desc;
+}
+} // namespace
+
 void CreateCharacter(float radius, float cylinderHalfHeight, const float footPos[3]) {
     if (!g_State || !g_State->controllerMgr || g_State->controller) return;
     if (radius <= 0.0f || cylinderHalfHeight <= 0.0f) return;
 
     const float halfCapsule = radius + cylinderHalfHeight; // foot -> centre distance
 
-    PxCapsuleControllerDesc desc;
-    desc.radius       = radius;
-    desc.height       = 2.0f * cylinderHalfHeight; // cylinder segment (sphere-centre to sphere-centre)
+    PxCapsuleControllerDesc desc = CapsuleControllerDesc(radius, cylinderHalfHeight);
     desc.position     = PxExtendedVec3(footPos[0], footPos[1] + halfCapsule, footPos[2]);
-    desc.upDirection  = PxVec3(0.0f, 1.0f, 0.0f);
-    desc.stepOffset   = 0.3f;                       // auto-climb ledges up to this tall
-    desc.slopeLimit   = std::cos(0.8726646f);       // walkable up to ~50 degrees
-    desc.contactOffset = 0.05f;
-    desc.material     = g_State->defaultMaterial;
-    desc.climbingMode = PxCapsuleClimbingMode::eCONSTRAINED; // don't let the sphere cap boost climbs
     desc.reportCallback = &g_State->hitReport;               // #185 PR 10 — push bodies / ride platforms
 
     if (!desc.isValid()) {
@@ -1813,7 +1830,7 @@ struct LayerQueryFilter : PxQueryFilterCallback {
                 dyn && !(dyn->getRigidBodyFlags() & PxRigidBodyFlag::eKINEMATIC))
                 return PxQueryHitType::eNONE;
             if (actor->is<PxArticulationLink>()) return PxQueryHitType::eNONE; // a ragdoll's part
-            if (shape && ((std::uintptr_t)shape->userData >> 16) == 2u) return PxQueryHitType::eNONE; // a frozen one's
+            if (shape && BodyPartKindOf(shape->userData) == kBodyPartRagdoll) return PxQueryHitType::eNONE; // a frozen one's
         }
         if (shape) {
             if (!triggers && (shape->getFlags() & PxShapeFlag::eTRIGGER_SHAPE)) return PxQueryHitType::eNONE;
@@ -2400,7 +2417,7 @@ int CreateRagdoll(unsigned entity, const RagdollPart* parts, int count, const Ra
             sh->setContactOffset(std::max(sh->getContactOffset(), prm.SkinOffset + 0.02f));
             sh->setRestOffset(prm.SkinOffset);
         }
-        sh->userData = reinterpret_cast<void*>(static_cast<std::uintptr_t>((2u << 16) | (unsigned)i)); // RaycastBodyParts: ragdoll part i
+        sh->userData = BodyPartTag(kBodyPartRagdoll, (unsigned)i); // RaycastBodyParts: ragdoll part i
         PxRigidBodyExt::setMassAndUpdateInertia(*link, std::max(p.Mass, 0.1f));
         if (p.InertiaHalfWidth > 0.0f || p.InertiaScale != 1.0f) {
             PxVec3 I = link->getMassSpaceInertiaTensor();
@@ -2955,7 +2972,7 @@ int CollectStaticGeometry(std::vector<float>& verts, std::vector<int>& tris, boo
         for (PxShape* sh : shapes) {
             if (sh->getFlags() & PxShapeFlag::eTRIGGER_SHAPE) continue;
             if (!(sh->getFlags() & PxShapeFlag::eSIMULATION_SHAPE)) continue;
-            if (((std::uintptr_t)sh->userData >> 16) == 2u) continue; // a frozen corpse's part (FreezeRagdoll): not ground
+            if (BodyPartKindOf(sh->userData) == kBodyPartRagdoll) continue; // a frozen corpse's part (FreezeRagdoll): not ground
             const PxTransform pose = actorPose * sh->getLocalPose();
             const PxGeometry& g = sh->getGeometry();
             switch (g.getType()) {
@@ -3047,16 +3064,8 @@ PxCapsuleController* NpcController(CharacterId id) {
 
 CharacterId CreateNpcCharacter(unsigned entity, float radius, float cylinderHalfHeight, const float footPos[3]) {
     if (!g_State || !g_State->controllerMgr || radius <= 0.0f || cylinderHalfHeight <= 0.0f) return kNoCharacter;
-    PxCapsuleControllerDesc desc;
-    desc.radius        = radius;
-    desc.height        = 2.0f * cylinderHalfHeight;
+    PxCapsuleControllerDesc desc = CapsuleControllerDesc(radius, cylinderHalfHeight);
     desc.position      = PxExtendedVec3(footPos[0], footPos[1] + radius + cylinderHalfHeight, footPos[2]);
-    desc.upDirection   = PxVec3(0.0f, 1.0f, 0.0f);
-    desc.stepOffset    = 0.3f;
-    desc.slopeLimit    = std::cos(0.8726646f);
-    desc.contactOffset = 0.05f;
-    desc.material      = g_State->defaultMaterial;
-    desc.climbingMode  = PxCapsuleClimbingMode::eCONSTRAINED;
     if (!desc.isValid()) return kNoCharacter;
     PxController* c = g_State->controllerMgr->createController(desc);
     if (!c) {
@@ -3190,7 +3199,7 @@ int CreateNpcHitboxes(CharacterId owner, const HitCapsule* parts, int count) {
         sh->setFlag(PxShapeFlag::eSCENE_QUERY_SHAPE, true);
         sh->setSimulationFilterData(PxFilterData(1u, 0u, 0u, 0u)); // the Default layer, as the capsule
         sh->setQueryFilterData(PxFilterData(1u, 0u, 0u, 0u));
-        sh->userData = reinterpret_cast<void*>(static_cast<std::uintptr_t>((1u << 16) | (unsigned)i));
+        sh->userData = BodyPartTag(kBodyPartHitbox, (unsigned)i);
         b->setRigidBodyFlag(PxRigidBodyFlag::eKINEMATIC, true);
         b->userData = reinterpret_cast<void*>(static_cast<std::uintptr_t>(entity));
         s.scene->addActor(*b);

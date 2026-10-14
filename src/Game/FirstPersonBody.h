@@ -489,6 +489,46 @@ void FirstPersonBodyArmShapeLinks(const Model& m, const Model& rig, const std::v
                                   std::vector<FirstPersonArmShapeLink>& out);
 void FirstPersonBodyCopyArmShape(const std::vector<FirstPersonArmShapeLink>& links, const Model& rig, float weight,
                                  std::vector<LocalTRS>& pose, float clavicleWeight);
+// The arm solve's steps the player's body (FirstPersonBody::LateUpdate) and the soldiers' (NpcBody::WeaponEye /
+// HoldWeapon) share. Where the two have come to differ, the difference is a parameter, each keeping its own.
+// Frame-rate independent approach toward a target over `seconds`: the share of the way to go this step. 1 (a snap) at
+// `snapBelow` seconds or less.
+float FirstPersonBodyFollow(float dt, float seconds, float snapBelow = 1e-4f);
+// A rotation's angle, radians (0..pi).
+float FirstPersonBodyAngleOf(const glm::quat& q);
+// `q` limited to `maxAngle` (radians), then `weight` of it (0..1).
+glm::quat FirstPersonBodyLimitTurn(const glm::quat& q, float maxAngle, float weight);
+// The collarbone turned about its inner end so the upper arm heads for `want` (model space), by at most `maxAngle` -
+// never slid, which stretched the skin between neck and shoulder. Returns the turn made (model space).
+glm::quat FirstPersonBodyTurnClavicle(std::vector<LocalTRS>& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals,
+                                      int clav, int upper, const glm::vec3& want, float maxAngle);
+// Reach Lean: the turn (model space) the chest at node `chest` takes toward the hand furthest out of reach once its
+// collarbone has turned all it may (`shoulderMax`), at most `leanMax`, `weight` of it. Per side the arm's nodes (-1 none),
+// whether it holds the gun and the hand's target (world, `toModel` into model space). False when no hand is out of reach.
+bool FirstPersonBodyReachLean(const std::vector<glm::mat4>& globals, const int (&upper)[2], const int (&lower)[2], const int (&hand)[2],
+                              const int (&clav)[2], const bool (&haveHand)[2], const glm::vec3 (&handPos)[2], const glm::mat4& toModel,
+                              int chest, float shoulderMax, float leanMax, float weight, glm::quat& turn);
+// The arms rig's shoulders off its camera bone (the upper arms' and the camera bone's model-space nodes, the rig's world
+// transform), in the view's frame (x right, y up, z forward).
+glm::vec3 FirstPersonBodyRigEyeToShoulders(const glm::mat4& rigWorld, const glm::mat4& upperL, const glm::mat4& upperR,
+                                           const glm::mat4& cameraBone, const Camera& cam);
+// The shoulders the eye hangs off (model space), a step on: `slow` follows the clips' `animated` shoulders over half a
+// second, `eased` follows Head Bob of their motion about it over `smoothing` seconds and never trails them by more than
+// `eyeSlack` - pulled back in over `slackSeconds`, or snapped there at 0. `have` false starts both on `animated`.
+void FirstPersonBodyFollowShoulders(glm::vec3& slow, glm::vec3& eased, bool& have, const glm::vec3& animated, float headBob,
+                                    float smoothing, float eyeSlack, float slackSeconds, float dt);
+// Armed Eye Offset (the body's frame: x right, y up, z forward) in model space, by how much of it applies at `pitchRadians`.
+glm::vec3 FirstPersonBodyArmedEyeOffset(const glm::vec3& offset, float pitchRadians);
+// The largest share (0..1) of a move that `clears` says is clear: 1 when all of it is, else found in six halvings.
+template <class Clears> float FirstPersonBodyLargestClearShare(Clears&& clears) {
+    if (clears(1.0f)) return 1.0f;
+    float lo = 0.0f, hi = 1.0f;
+    for (int it = 0; it < 6; ++it) {
+        const float mid = 0.5f * (lo + hi);
+        (clears(mid) ? lo : hi) = mid;
+    }
+    return lo;
+}
 // FirstPersonBodyArmShapeLinks' core, by node index: `rigOf(i)` is body node i's counterpart in the rig (-1 none),
 // `clavicles` the body's two collarbone nodes (-1 none). The nodes under a clavicle (parents come first), in order.
 void FirstPersonBodyArmShapeLinksFrom(int count, const std::vector<int>& parents, const int (&clavicles)[2],

@@ -258,6 +258,11 @@ struct ReflectComponent {
     // in the single-select Inspector and pinned windows. Editor-only; never serialized.
     std::vector<ReflectButton> Buttons;
     std::vector<ReflectStatic> Statics;
+
+    // Keys this component was saved under before (an old Name or Key). Read only, in order, when the
+    // component's own key is absent. Renaming a component's Name: set Key to the old Name (keeps the
+    // files as they are), or list the old Name here (re-saved files move to the new one).
+    std::vector<const char*> LegacyKeys;
 };
 
 // The component's stable JSON key — Key when set, else Name (see ReflectComponent::Key).
@@ -266,4 +271,13 @@ struct ReflectComponent {
 // with a legacy JSON key spelling doesn't silently desync — see ReflectComponent::Key.
 inline const char* ReflectComponentKey(const ReflectComponent& c) {
     return (c.Key && c.Key[0]) ? c.Key : c.Name;
+}
+
+// The name a prefab override record ("c") or a lookup by component names this component with: its display
+// Name (what the records have always held), its Key, or one of its LegacyKeys.
+inline bool ReflectComponentMatches(const ReflectComponent& c, const char* name) {
+    if (!name) return false;
+    if (std::strcmp(c.Name, name) == 0 || std::strcmp(ReflectComponentKey(c), name) == 0) return true;
+    for (const char* k : c.LegacyKeys) if (k && std::strcmp(k, name) == 0) return true;
+    return false;
 }

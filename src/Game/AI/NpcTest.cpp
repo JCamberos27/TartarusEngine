@@ -606,7 +606,7 @@ void NpcTest::Deaths(World& world, NpcDirector& npcs, float now) {
             from(*a, part, origin, dir);
             const float o[3] = {origin.x, origin.y, origin.z}, d[3] = {dir.x, dir.y, dir.z};
             PhysicsWorld::BodyPartHit bp;
-            if (PhysicsWorld::RaycastBodyParts(o, d, 6.0f, bp) && bp.Kind == 1 && bp.Part == part && bp.Entity == RootId(*a)) ++right;
+            if (PhysicsWorld::RaycastBodyParts(o, d, 6.0f, bp) && bp.Kind == PhysicsWorld::kBodyPartHitbox && bp.Part == part && bp.Entity == RootId(*a)) ++right;
             else wrong += std::string(" ") + NpcPartDefOf(part).Bone + "->" + std::to_string(bp.Part);
         }
         std::printf("[NpcTest] hitbox rays: %d / %d parts named correctly%s\n", right, NpcRagdoll::kParts, wrong.c_str());
@@ -710,7 +710,7 @@ void NpcTest::Deaths(World& world, NpcDirector& npcs, float now) {
             const glm::vec3 c = corpse->Ragdoll->PartPosition(1);
             const float o[3] = {c.x - 3.0f, c.y, c.z}, d[3] = {1.0f, 0.0f, 0.0f};
             PhysicsWorld::BodyPartHit bp;
-            const bool part = PhysicsWorld::RaycastBodyParts(o, d, 6.0f, bp) && bp.Kind == 2 && bp.Entity == RootId(*corpse);
+            const bool part = PhysicsWorld::RaycastBodyParts(o, d, 6.0f, bp) && bp.Kind == PhysicsWorld::kBodyPartRagdoll && bp.Entity == RootId(*corpse);
             Check(part, "a ray at a corpse names a ragdoll part");
             w.Damage = 34.0f;
             npcs.OnPlayerHit(world, RootId(*corpse), c, glm::vec3(o[0], o[1], o[2]), glm::vec3(1.0f, 0.0f, 0.0f), w, nullptr, nullptr);

@@ -96,6 +96,21 @@ FrameState SceneRenderer::GatherFrameState(World& world, const RenderFrameContex
     return fs;
 }
 
+bool PosedWorldBounds(const Model& model, const glm::mat4& xform, AABB& out) {
+    glm::vec3 bmin, bmax;
+    model.PosedBounds(bmin, bmax);
+    if (!(bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z)) return false;
+    out = AABB{bmin, bmax}.Transformed(xform);
+    return true;
+}
+
+bool HiddenInEditorView(const World& world, entt::entity entity, unsigned layerVisibleMask) {
+    if (world.Registry.all_of<HiddenInSceneTag>(entity)) return true;
+    const auto* lc = world.Registry.try_get<LayerComponent>(entity);
+    const int layer = lc ? lc->Layer : 0;
+    return layer >= 0 && layer < 32 && !((layerVisibleMask >> layer) & 1u);
+}
+
 void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const {
     const RenderFrameContext& ctx = *fs.ctx;
     const SceneRenderInputs&  in  = *fs.in;
@@ -440,12 +455,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
 
         // Editor Scene viewport only: per-entity SceneVis hide (#236 B) + per-layer visibility
         // mask (#236 A1). The scene, saves and Game view are unaffected.
-        if (ctx.EditorView) {
-            if (world.Registry.all_of<HiddenInSceneTag>(entity)) continue;
-            const auto* lc = world.Registry.try_get<LayerComponent>(entity);
-            const int layer = lc ? lc->Layer : 0;
-            if (layer >= 0 && layer < 32 && !((in.layerVisibleMask >> layer) & 1u)) continue;
-        }
+        if (ctx.EditorView && HiddenInEditorView(world, entity, in.layerVisibleMask)) continue;
         auto& renderable = world.Registry.get<RenderableComponent>(entity);
         if (!renderable.ModelRef) continue; // its model failed to load (or isn't assigned yet): nothing to draw
         // #163 - Shadows Only: drawn by the shadow passes, never in the camera view.
@@ -497,15 +507,16 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // unposed) - an invalid (never-populated) bounds pair draws unconditionally. A skinned model's bind box,
         // even padded, isn't enough: a ragdoll's root stays where the NPC stood, and its head, a body length
         // away on the floor, was culled whenever that spot left the view - pieces blinking out up close.
-        glm::vec3 boundsMin, boundsMax;
-        renderable.ModelRef->PosedBounds(boundsMin, boundsMax);
-        bool validBounds = boundsMin.x <= boundsMax.x && boundsMin.y <= boundsMax.y && boundsMin.z <= boundsMax.z;
         // The player's own body in their camera (world or view-model pass) is never culled: the camera sits
         // inside it, and a small piece's bind-pose bounds (a watch, a bracelet at the A-pose wrist, beside
         // and below the eye) missed the frustum while the posed hand was right in front of it.
         const bool playerBody = bodyTag && !ctx.EditorView && ctx.OwnerView;
+        // (The local bounds, not PosedWorldBounds: their centre sorts the transparent draws below.)
+        glm::vec3 boundsMin, boundsMax;
+        renderable.ModelRef->PosedBounds(boundsMin, boundsMax);
+        const bool validBounds = boundsMin.x <= boundsMax.x && boundsMin.y <= boundsMax.y && boundsMin.z <= boundsMax.z;
         if (validBounds && !playerBody) {
-            AABB worldBounds = AABB{boundsMin, boundsMax}.Transformed(model);
+            const AABB worldBounds = AABB{boundsMin, boundsMax}.Transformed(model);
             const bool seen = (isViewModel ? vmFrustum : camFrustum).Intersects(worldBounds) ||
                               (splitSleeves && vmFrustum.Intersects(worldBounds));
             if (!seen) {
