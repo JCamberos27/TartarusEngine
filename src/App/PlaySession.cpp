@@ -98,10 +98,10 @@ void PlaySession::Start() {
                                                    (std::uint32_t)entt::to_integral(e));
         if (!r.Ok) Log::Warn("Character Outfit: Randomize On Play - " + r.Error);
     }
-    // Bare Body (debug; the gait probe's player body): every item off, so the wardrobe dresses the character in its
+    // Bare Body (debug; the gait probe's and the animation sweep's player body): every item off, so the wardrobe dresses the character in its
     // own body parts - the animation and skinning seen without clothing. Undone by Stop like the above.
     for (auto [e, outfit] : m_World.Registry.view<CharacterOutfitComponent>(entt::exclude<InactiveTag>).each()) {
-        const bool probeBody = m_WeaponTest && m_WeaponTest->GaitProbe() && m_World.Registry.all_of<FirstPersonBodyComponent>(e);
+        const bool probeBody = m_WeaponTest && m_WeaponTest->BareBody() && m_World.Registry.all_of<FirstPersonBodyComponent>(e);
         if (!outfit.BareBody && !probeBody) continue;
         if (OutfitSystem::Pieces(m_World, e).empty()) OutfitSystem::AdoptExisting(m_World, m_Assets, e);
         Wardrobe::Request bare = OutfitSystem::CurrentRequest(m_World, e);

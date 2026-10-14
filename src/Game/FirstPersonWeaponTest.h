@@ -91,6 +91,8 @@ public:
     bool Done() const { return m_Step >= m_Steps.size(); }
     // The gait probe (STOCK_PROBE_GAIT): starts on the scene's most open floor, the player's body unclothed.
     bool GaitProbe() const { return m_GaitProbe; }
+    // The player's body unclothed for the run (the gait probe, the animation sweep): the clips and the skinning seen bare.
+    bool BareBody() const { return m_GaitProbe || m_AnimSweep; }
     // The gait, hold and pose probes start on the open floor (room to walk every way, nothing in the shots).
     bool OpenFloor() const { return m_GaitProbe || m_BodyProbe || m_PoseProbe; }
     int Failures() const { return m_Failures; }
@@ -183,6 +185,11 @@ private:
     float m_OrbitDeg = 0.0f; // View 10's place round the body
     float m_SinceShot = 1e3f;
     void PrintJank(Ctx& c);
+    // STOCK_PROBE_POSE=anims: every weapon clip played through once - idle, the hip and the sights, firing, every reload,
+    // the actions, walk and sprint with their transitions, holster and draw - on the bare body, both views captured every
+    // 10th frame from a turn of close views on the arms, the hands and the gun (anim_<gun>_<nn>_<clip>_f<frame>_<view>).
+    void BuildAnimSweep();
+    bool m_AnimSweep = false;
     void BuildPoseProbe(); // STOCK_PROBE_POSE=1: the third-person body standing / crouched, at the hip and on the sights
     void BuildSprintProbe(); // STOCK_PROBE_SPRINT=1: walk -> sprint -> walk, capturing entry/exit
     // STOCK_PROBE_GAIT=1: walk, jog and sprint every way and a crouch walk, the torso measured against the hips on the
