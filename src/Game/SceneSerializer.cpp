@@ -701,7 +701,7 @@ JointComponent JointFromJson(const json& jc) {
 }
 
 void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, entt::entity entity) {
-    if(j.contains("Impact Audio") || j.contains("Weapon Audio") || j.contains("Foley Audio") || j.contains("FX & HUD Settings") || j.contains("Weapon Definition") || j.contains("Goal Trigger") || j.contains("Scoreboard") || j.contains("Score Digit") || j.contains("Impact Sound") || j.contains("First Person Controller") || j.contains("Health") || j.contains("NPC Spawn") || j.contains("Squad Settings")) {
+    if(j.contains("Impact Audio") || j.contains("Weapon Audio") || j.contains("Foley Audio") || j.contains("FX & HUD Settings") || j.contains("Weapon Definition") || j.contains("First Person Controller") || j.contains("Health") || j.contains("NPC Spawn") || j.contains("Squad Settings")) {
         auto migrated=j;
         Scripting::MigrateLegacyWeaponDefinition(migrated);
         Scripting::MigrateLegacyProjectComponents(migrated);
