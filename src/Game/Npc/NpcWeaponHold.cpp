@@ -746,7 +746,7 @@ void NpcBody::TrackGun(const glm::vec3& position, float dt) {
     if (m_HaveGunPrev) {
         const glm::vec3 v = (position - m_GunPrev) / dt;
         // A teleport (a respawn, a held frame catching up) is no velocity worth keeping; the rest is eased over ~3 frames.
-        if (glm::length(v) < 40.0f) m_GunVelocity += (v - m_GunVelocity) * std::min(1.0f, dt * 40.0f);
+        if (glm::length(v) < 40.0f) m_GunVelocity += (v - m_GunVelocity) * (1.0f - std::exp(-dt * 40.0f));
     }
     m_GunPrev = position;
     m_HaveGunPrev = true;

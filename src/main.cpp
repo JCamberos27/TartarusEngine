@@ -3307,6 +3307,8 @@ int main(int argc, char** argv) {
                                                      (session.AimHeld!=0) || (npcTest && npcTest->Aiming()), 0.0f,
                                                      player.Grounded);
                         }
+                        // This frame's recoil on the view (Tick just worked it out), not last frame's.
+                        firstPersonPresentation.RefreshViewKick(player.Cam);
                     }
                     player.Cam.Fov = firstPersonPresentation.WorldFov(playBaseFov);
                 }
