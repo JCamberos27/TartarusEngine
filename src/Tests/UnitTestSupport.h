@@ -37,3 +37,4 @@ void RegisterRecoilPortTests(UnitTestSupport::TestList& tests);
 void RegisterSwayPortTests(UnitTestSupport::TestList& tests);
 void RegisterEngineTests(UnitTestSupport::TestList& tests);    // UnitTests_Engine.cpp
 void RegisterBloodTests(UnitTestSupport::TestList& tests);     // UnitTests_Blood.cpp
+void RegisterJobTests(UnitTestSupport::TestList& tests);       // UnitTests_Jobs.cpp
