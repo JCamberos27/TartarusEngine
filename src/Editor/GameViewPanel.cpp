@@ -12,6 +12,8 @@
 
 void GameViewPanel::SetPreset(const ResolutionPreset& preset) {
     m_CurrentPreset = preset;
+    m_Zoom = 0.0f;
+    m_Pan = ImVec2(0.0f, 0.0f);
     SaveSettings();
 }
 
@@ -126,8 +128,32 @@ void GameViewPanel::DrawAspectControl() {
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip(showStats ? "Hide the Game view stats overlay"
                                                                    : "Show the Game view stats overlay");
     }
+    ImGui::SameLine(0.0f, 10.0f * EditorTheme::Scale());
+    DrawScaleControl();
     // Fullscreen dropped from here — it's in the viewport transport overlay and on F11.
     // "Maximize on Play" -> Preferences > Viewport; Stats overlay -> the main toolbar Stats button.
+}
+
+// Unity's Scale slider: from the smaller of fit and 1:1 up to 8x. At the fit end it reads "Fit" and
+// follows the panel as it resizes; right-click returns to it.
+void GameViewPanel::DrawScaleControl() {
+    const float lo = std::min(m_FitScale, 1.0f), hi = 8.0f;
+    float value = m_Zoom > 0.0f ? m_Zoom : m_FitScale;
+    char format[16];
+    std::snprintf(format, sizeof format, "%s", m_Zoom > 0.0f ? "%.2fx" : "Fit");
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextUnformatted("Scale");
+    ImGui::SameLine(0.0f, 4.0f * EditorTheme::Scale());
+    ImGui::SetNextItemWidth(140.0f * EditorTheme::Scale());
+    if (ImGui::SliderFloat("##gvscale", &value, lo, hi, format, ImGuiSliderFlags_Logarithmic)) {
+        m_Zoom = std::abs(value - m_FitScale) <= 0.01f * m_FitScale ? 0.0f : value;
+        if (m_Zoom == 0.0f) m_Pan = ImVec2(0.0f, 0.0f);
+    }
+    if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) { m_Zoom = 0.0f; m_Pan = ImVec2(0.0f, 0.0f); }
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Framebuffer pixels per screen pixel (1.00x = 1:1). Fit shows the whole frame.\n"
+                             "Scroll over the view to zoom (while it isn't controlling the game), drag with\n"
+                             "the middle mouse button to pan. Right-click here to go back to Fit.");
 }
 
 void GameViewPanel::DrawCustomResolutionModal() {
@@ -210,14 +236,52 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
         // reads as an intentional letterbox/pillarbox instead of an unrendered gap.
         dl->AddRectFilled(containerStart, ImVec2(containerStart.x + avail.x, containerStart.y + avail.y), IM_COL32(0, 0, 0, 255));
 
-        ImVec2 imagePos(containerStart.x + rect.Offset.x, containerStart.y + rect.Offset.y);
+        // Scale: the fitted rect is the default; zoomed, the frame is drawn at framebuffer size x zoom,
+        // centred (plus the pan) and clipped to the panel - only the part on screen is submitted, with
+        // its matching UVs, so the item (hover, clicks) is exactly what's visible.
+        const float fbW = (float)std::max(m_Framebuffer.Width(), 1), fbH = (float)std::max(m_Framebuffer.Height(), 1);
+        m_FitScale = std::max(rect.Size.x / fbW, 1e-3f);
+        const float scale = m_Zoom > 0.0f ? m_Zoom : m_FitScale;
+        const ImVec2 shown(fbW * scale, fbH * scale);
+        // Panned no further than the image's edge reaching the panel's (none along an axis it fits).
+        m_Pan.x = std::clamp(m_Pan.x, -std::max(0.0f, (shown.x - avail.x) * 0.5f), std::max(0.0f, (shown.x - avail.x) * 0.5f));
+        m_Pan.y = std::clamp(m_Pan.y, -std::max(0.0f, (shown.y - avail.y) * 0.5f), std::max(0.0f, (shown.y - avail.y) * 0.5f));
+        const ImVec2 fullMin(containerStart.x + (avail.x - shown.x) * 0.5f + m_Pan.x,
+                             containerStart.y + (avail.y - shown.y) * 0.5f + m_Pan.y);
+        const ImVec2 visMin(std::max(fullMin.x, containerStart.x), std::max(fullMin.y, containerStart.y));
+        const ImVec2 visMax(std::min(fullMin.x + shown.x, containerStart.x + avail.x),
+                            std::min(fullMin.y + shown.y, containerStart.y + avail.y));
+        const ImVec2 imagePos = visMin;
+        rect.Size = ImVec2(std::max(visMax.x - visMin.x, 1.0f), std::max(visMax.y - visMin.y, 1.0f));
         m_ViewImagePos = imagePos;
         m_ViewImageSize = rect.Size;
         ImGui::SetCursorScreenPos(imagePos);
-        // uv0=(0,1)/uv1=(1,0): OpenGL textures are bottom-left origin, ImGui::Image expects
-        // top-left, so this flips the framebuffer's color attachment right-side up.
-        ImGui::Image((ImTextureID)(intptr_t)m_Framebuffer.ColorTexture(), rect.Size, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
+        // OpenGL textures are bottom-left origin and ImGui::Image expects top-left, so v runs 1 -> 0
+        // down the image (the whole frame: uv0=(0,1), uv1=(1,0)).
+        const ImVec2 uv0((visMin.x - fullMin.x) / shown.x, 1.0f - (visMin.y - fullMin.y) / shown.y);
+        const ImVec2 uv1((visMax.x - fullMin.x) / shown.x, 1.0f - (visMax.y - fullMin.y) / shown.y);
+        ImGui::Image((ImTextureID)(intptr_t)m_Framebuffer.ColorTexture(), rect.Size, uv0, uv1);
         m_ViewHovered = ImGui::IsItemHovered();
+
+        // Zoom with the wheel about the cursor, pan with the middle button - not while the game has input.
+        if (!(playing && inputEngaged)) {
+            ImGuiIO& io = ImGui::GetIO();
+            if (m_ViewHovered && io.MouseWheel != 0.0f) {
+                const float next = std::clamp(scale * std::pow(1.15f, io.MouseWheel), std::min(m_FitScale, 1.0f), 8.0f);
+                // Keep the framebuffer point under the cursor where it is.
+                const ImVec2 centre(containerStart.x + avail.x * 0.5f, containerStart.y + avail.y * 0.5f);
+                const ImVec2 rel(io.MousePos.x - centre.x - m_Pan.x, io.MousePos.y - centre.y - m_Pan.y);
+                m_Pan.x -= rel.x * (next / scale - 1.0f);
+                m_Pan.y -= rel.y * (next / scale - 1.0f);
+                m_Zoom = std::abs(next - m_FitScale) <= 0.01f * m_FitScale ? 0.0f : next;
+                if (m_Zoom == 0.0f) m_Pan = ImVec2(0.0f, 0.0f);
+            }
+            if (m_ViewHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Middle)) m_Panning = true;
+            if (!ImGui::IsMouseDown(ImGuiMouseButton_Middle)) m_Panning = false;
+            if (m_Panning) { m_Pan.x += io.MouseDelta.x; m_Pan.y += io.MouseDelta.y; }
+        } else {
+            m_Panning = false;
+        }
 
         // #54 — used to sample the rendered image's luminance behind the top-left and bottom
         // overlays (throttled ~10 Hz, eased) and steer them between light-on-dark and

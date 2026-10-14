@@ -5035,7 +5035,10 @@ int main(int argc, char** argv) {
                 gameView.ComputeTargetSize(available, gvWidth, gvHeight);
                 gameView.GetFramebuffer().Resize(gvWidth, gvHeight);
                 int gvRw, gvRh; // internal 3D resolution
-                Upscaler::InternalSize(gvWidth, gvHeight, EditorSettings::Get().RenderHeight, gvRw, gvRh);
+                // An exact resolution picked in the Game view renders at exactly that size: under the
+                // Game render resolution cap, 1440p or 4K was 1080p upscaled, so picking it changed nothing.
+                const bool exactRes = gameView.GetCurrentPreset().Mode == AspectRatioMode::FixedResolution;
+                Upscaler::InternalSize(gvWidth, gvHeight, exactRes ? 0 : EditorSettings::Get().RenderHeight, gvRw, gvRh);
                 const bool gvScaled = gvRw != gvWidth || gvRh != gvHeight;
                 gameHdr.Resize(gvRw, gvRh, world.MsaaSamples);
                 gameHdr.BindForRender();
