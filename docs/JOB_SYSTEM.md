@@ -344,8 +344,10 @@ Windows 11. Two things about it shape the plan:
 
 ## Open questions
 
-* Minimum spec: the dev machine has far more cores than a typical player PC. The default pool size, the inline
-  threshold and the chunk grain should be checked on a 6-core / 12-thread machine too, once a minimum spec is set.
+Decided: there is no minimum-spec target for now. Pool size, inline threshold and chunk grain are tuned for the
+dev machine above; the pool still sizes itself from the running machine's core count, so smaller CPUs get fewer
+workers rather than a fixed 17.
+
 * Whether to move to C++20 for `std::atomic::wait`, `std::latch` and `std::span`. Not required by this plan.
 * Whether the editor Scene view and Game view should keep rendering separately each frame, or share one visibility
   build when their cameras match.
