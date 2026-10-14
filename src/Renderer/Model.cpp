@@ -7,6 +7,7 @@
 #include "AssetDatabase.h"
 #include "Texture.h"
 #include "Shader.h"
+#include "ShaderLibrary.h"
 #include "GLStateCache.h"
 #include "DefaultTextures.h"
 #include "PrimitiveMeshes.h"
@@ -14,6 +15,7 @@
 #include "gl.h"
 
 #include <glm/gtx/matrix_decompose.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
@@ -29,6 +31,7 @@
 #include <fstream>
 #include <set>
 #include <cstring>
+#include <cstddef>
 #include <map>
 #include <mutex>
 #include <chrono>
@@ -1929,7 +1932,7 @@ struct MaterialLocs {
     int alphaClip, alphaCutoff; // #101
     int hasHeight, heightMap, hasDetailAlbedo, detailAlbedoMap, hasDetailNormal, detailNormalMap; // #102
     // UploadBoneMatrices and DrawDepthOnly (the shadow / depth pre-pass programs).
-    int useSkinning, uvTiling, uvOffset, depthAlbedo, alphaTest;
+    int useSkinning, skinBase, uvTiling, uvOffset, depthAlbedo, alphaTest;
 };
 
 MaterialLocs ResolveMaterialLocs(Shader& shader) {
@@ -1963,6 +1966,7 @@ MaterialLocs ResolveMaterialLocs(Shader& shader) {
     L.hasDetailNormal = shader.Loc("uHasDetailNormalMap");
     L.detailNormalMap = shader.Loc("uDetailNormalMap");
     L.useSkinning = shader.Loc("uUseSkinning");
+    L.skinBase = shader.Loc("uSkinBase");
     L.uvTiling = shader.Loc("uUVTiling");
     L.uvOffset = shader.Loc("uUVOffset");
     L.depthAlbedo = shader.Loc("uAlbedo");
@@ -1999,6 +2003,65 @@ std::uint64_t g_BoneEpoch = 0;
 GLintptr g_BoundOffset = -1;
 GLsizeiptr g_BoundSize = 0;
 
+// Model::PreSkin's output (SSBO binding 26, SkinnedVertex.glsl): this frame's skinned vertices, model after model.
+// One buffer, rewritten each frame: GL runs the next frame's skinning after this frame's draws that read it.
+constexpr unsigned kSkinSourceBinding = 25;  // the mesh's ModelVertex buffer, while PreSkin.comp.glsl runs
+constexpr unsigned kSkinnedBinding = 26;
+constexpr GLsizeiptr kSkinnedVertexBytes = 20; // kSkinnedWords * 4
+constexpr GLsizeiptr kSkinnedMaxBytes = 128ll * 1024 * 1024; // GL's minimum SSBO size limit; 6.7M vertices
+unsigned int g_SkinnedBuffer = 0;
+GLsizeiptr g_SkinnedBytes = 0;
+bool g_SkinnedBound = false;
+std::uint64_t g_SkinFrame = 1; // PreSkinRange::Frame of the skinning the buffer holds now
+
+// The vertex shaders declare the block whether or not they read it: keep binding 26 on a real buffer.
+void EnsureSkinnedBinding() {
+    if (!g_SkinnedBuffer) {
+        glCreateBuffers(1, &g_SkinnedBuffer);
+        glNamedBufferStorage(g_SkinnedBuffer, 256, nullptr, 0);
+        g_SkinnedBytes = 256;
+    }
+    if (g_SkinnedBound) return;
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kSkinnedBinding, g_SkinnedBuffer);
+    g_SkinnedBound = true;
+}
+
+// PreSkin.comp.glsl, built on first use, and bound (null when it doesn't build: everything skins per pass).
+Shader* BindPreSkinProgram() {
+    static std::unique_ptr<Shader> program;
+    static bool failed = false;
+    if (failed) return nullptr;
+    if (!program) {
+        try {
+            program = std::make_unique<Shader>(ShaderLibrary::ReadFileRequired("PreSkin.comp.glsl"), "PreSkin");
+        } catch (const std::exception& e) {
+            failed = true;
+            Log::Error(std::string("Pre-skinning is off (characters skin in each pass's vertex shader): ") + e.what());
+            return nullptr;
+        }
+    }
+    Shader& cs = *program;
+    cs.Bind();
+    // ModelVertex's layout in words, from the struct itself (the value cache makes these free after the first call).
+    static_assert(sizeof(ModelVertex) % 4 == 0 && sizeof(int) == 4 && sizeof(float) == 4, "PreSkin reads ModelVertex as words");
+    cs.SetInt("uStride", (int)(sizeof(ModelVertex) / 4));
+    cs.SetInt("uOffNormal", (int)(offsetof(ModelVertex, Normal) / 4));
+    cs.SetInt("uOffTangent", (int)(offsetof(ModelVertex, Tangent) / 4));
+    cs.SetInt("uOffBones", (int)(offsetof(ModelVertex, BoneIDs) / 4));
+    cs.SetInt("uOffWeights", (int)(offsetof(ModelVertex, Weights) / 4));
+    return &cs;
+}
+
+// Skins `count` vertices of `sourceVbo` (ModelVertex[]) with the palette on binding 1 into the buffer on binding 26,
+// from vertex `outBase` on. `cs` is BindPreSkinProgram's, still bound.
+void DispatchPreSkin(Shader& cs, unsigned sourceVbo, unsigned count, unsigned outBase) {
+    static const int countLoc = cs.Loc("uCount"), baseLoc = cs.Loc("uOutBase");
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kSkinSourceBinding, sourceVbo);
+    cs.SetInt(countLoc, (int)count);
+    cs.SetInt(baseLoc, (int)outBase);
+    glDispatchCompute((count + 63) / 64, 1, 1);
+}
+
 void EnsureBoneRing() {
     if (g_BoneRing) return;
     glCreateBuffers(1, &g_BoneRing);
@@ -2020,29 +2083,22 @@ void Model::BeginRenderFrame() {
     g_BoneSlice = (g_BoneSlice + 1) % kBoneRingSlices;
     g_BoneCursor = 0;
     ++g_BoneEpoch;
+    ++g_SkinFrame; // last frame's skinned vertices are stale
 }
 
-void Model::UploadBoneMatrices(Shader& shader) const {
-    // #98 — skin whenever there are bones: the clip's pose while playing, else the bind pose.
-    const bool skinning = m_D->BoneCounter > 0;
-    shader.SetInt(CachedMaterialLocs(shader).useSkinning, skinning ? 1 : 0);
-
-    EnsureBoneRing();
-    const GLsizeiptr matBytes = (GLsizeiptr)sizeof(glm::mat4);
-    if (!skinning) {
-        // The vertex shader still declares the block: keep binding 1 on a real range (whatever
-        // palette was bound last is fine - it's never read), never dangling.
-        if (g_BoundOffset < 0) BindBoneRange(0, matBytes);
-        return;
-    }
+const std::vector<glm::mat4>* Model::SkinPalette(int& count) const {
     if (m_PaletteDirty) ResolvePalette();
     const bool posed = m_ExternalPose || (m_Anim.Clip >= 0 && m_Anim.Clip < AnimationCount()) || m_FadeDuration > 0.0f;
     const std::vector<glm::mat4>& palette =
         posed && m_FinalBoneMatrices.size() >= (size_t)MAX_BONES ? m_FinalBoneMatrices : m_D->BindPoseBones;
     // Only the rig's own bones (#113), not the whole MAX_BONES palette.
-    const int count = std::clamp(m_D->BoneCounter, 1, MAX_BONES);
-    if (palette.size() < (size_t)count) return;
-    const GLsizeiptr bytes = count * matBytes;
+    count = std::clamp(m_D->BoneCounter, 1, MAX_BONES);
+    return palette.size() < (size_t)count ? nullptr : &palette;
+}
+
+void Model::BindBonePalette(const std::vector<glm::mat4>& palette, int count) const {
+    EnsureBoneRing();
+    const GLsizeiptr bytes = count * (GLsizeiptr)sizeof(glm::mat4);
     BoneUpload& u = m_BoneUpload;
     if (u.Epoch != g_BoneEpoch || u.Version != m_PoseVersion || u.Palette != palette.data() || u.Count != count) {
         const GLsizeiptr slot = (bytes + g_BoneAlign - 1) / g_BoneAlign * g_BoneAlign;
@@ -2056,6 +2112,192 @@ void Model::UploadBoneMatrices(Shader& shader) const {
         u.Count = count;
     }
     BindBoneRange((GLintptr)u.Offset, bytes);
+}
+
+bool Model::UploadBoneMatrices(Shader& shader) const {
+    // #98 — skin whenever there are bones: the clip's pose while playing, else the bind pose.
+    const bool skinning = m_D->BoneCounter > 0;
+    const MaterialLocs& locs = CachedMaterialLocs(shader);
+    EnsureBoneRing();
+    EnsureSkinnedBinding();
+    if (!skinning) {
+        shader.SetInt(locs.useSkinning, 0);
+        // The vertex shader still declares the block: keep binding 1 on a real range (whatever
+        // palette was bound last is fine - it's never read), never dangling.
+        if (g_BoundOffset < 0) BindBoneRange(0, (GLsizeiptr)sizeof(glm::mat4));
+        return false;
+    }
+    int count = 0;
+    const std::vector<glm::mat4>* palette = SkinPalette(count);
+    const PreSkinRange& p = m_PreSkin;
+    if (palette && p.Frame == g_SkinFrame && p.Version == m_PoseVersion && p.Palette == palette->data() && p.Count == count) {
+        shader.SetInt(locs.useSkinning, 2); // skinned already this frame: the palette isn't read
+        if (g_BoundOffset < 0) BindBoneRange(0, (GLsizeiptr)sizeof(glm::mat4));
+        return true;
+    }
+    shader.SetInt(locs.useSkinning, 1);
+    if (palette) BindBonePalette(*palette, count);
+    return false;
+}
+
+void Model::PreSkin(const std::vector<Model*>& models) {
+    ++g_SkinFrame; // a second call in one frame rewrites the buffer: what the first one skinned is stale
+    static const bool disabled = [] {
+        char* e = nullptr;
+        size_t n = 0;
+        _dupenv_s(&e, &n, "TARTARUS_NO_PRESKIN");
+        const bool off = e && *e && *e != '0';
+        std::free(e);
+        return off;
+    }();
+    if (disabled || models.empty()) return;
+
+    // What gets skinned: each model with bones and every sub-mesh on the GPU, once, while the buffer's cap allows
+    // (anything past it skins in the vertex shader).
+    static std::vector<std::pair<Model*, const std::vector<glm::mat4>*>> work;
+    static std::vector<int> counts;
+    work.clear();
+    counts.clear();
+    GLsizeiptr vertices = 0;
+    for (Model* m : models) {
+        if (!m || m->m_D->BoneCounter <= 0 || m->m_PreSkin.Frame == g_SkinFrame) continue;
+        bool uploaded = true;
+        GLsizeiptr n = 0;
+        for (const auto& mesh : m->m_D->Meshes) {
+            if (mesh->NeedsUpload()) { uploaded = false; break; }
+            n += mesh->VertexCount();
+        }
+        int count = 0;
+        const std::vector<glm::mat4>* palette = uploaded && n > 0 ? m->SkinPalette(count) : nullptr;
+        if (!palette || (vertices + n) * kSkinnedVertexBytes > kSkinnedMaxBytes) continue;
+        m->m_PreSkin.Frame = g_SkinFrame; // claimed (a model listed twice is skinned once); filled in below
+        m->m_PreSkin.Base = (int)vertices;
+        vertices += n;
+        work.emplace_back(m, palette);
+        counts.push_back(count);
+    }
+    if (work.empty()) return;
+    Shader* cs = BindPreSkinProgram();
+    if (!cs) {
+        for (const auto& item : work) item.first->m_PreSkin.Frame = ~0ull; // not skinned: they skin per pass
+        return;
+    }
+
+    // Grown, never shrunk, with headroom so a respawn doesn't reallocate it.
+    if (vertices * kSkinnedVertexBytes > g_SkinnedBytes) {
+        const GLsizeiptr bytes = std::min(kSkinnedMaxBytes, vertices * kSkinnedVertexBytes * 3 / 2);
+        if (g_SkinnedBuffer) glDeleteBuffers(1, &g_SkinnedBuffer);
+        glCreateBuffers(1, &g_SkinnedBuffer);
+        glNamedBufferStorage(g_SkinnedBuffer, bytes, nullptr, 0); // written and read by the GPU only
+        g_SkinnedBytes = bytes;
+        g_SkinnedBound = false;
+    }
+    EnsureSkinnedBinding();
+
+    for (size_t w = 0; w < work.size(); ++w) {
+        Model& m = *work[w].first;
+        const std::vector<glm::mat4>& palette = *work[w].second;
+        m.BindBonePalette(palette, counts[w]);
+        unsigned first = (unsigned)m.m_PreSkin.Base;
+        for (const auto& mesh : m.m_D->Meshes) {
+            const unsigned n = mesh->VertexCount();
+            if (n) DispatchPreSkin(*cs, mesh->VertexBuffer(), n, first);
+            first += n;
+        }
+        PreSkinRange& p = m.m_PreSkin;
+        p.Version = m.m_PoseVersion;
+        p.Palette = palette.data();
+        p.Count = counts[w];
+    }
+    // Every pass after this reads the vertices in its vertex shader.
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+}
+
+bool Model::PreSkinSelfTest(std::string& why) {
+    // Vertices with every influence count from none to eight (and a bone index past the palette), random
+    // positions, normals and tangents, skinned by a random palette on the GPU and on the CPU.
+    constexpr int kBones = 6, kVerts = 300;
+    std::uint32_t seed = 12345u;
+    auto rnd = [&seed] { seed = seed * 1664525u + 1013904223u; return (float)(seed >> 8) / 16777216.0f * 2.0f - 1.0f; };
+    std::vector<glm::mat4> palette(kBones);
+    for (glm::mat4& b : palette) {
+        const glm::vec3 axis = glm::normalize(glm::vec3(rnd(), rnd(), rnd()) + glm::vec3(0.0f, 0.0f, 1.5f));
+        b = glm::translate(glm::mat4(1.0f), glm::vec3(rnd(), rnd(), rnd())) * glm::rotate(glm::mat4(1.0f), rnd() * 3.0f, axis) *
+            glm::scale(glm::mat4(1.0f), glm::vec3(1.0f + 0.3f * rnd()));
+    }
+    std::vector<ModelVertex> verts(kVerts);
+    for (int i = 0; i < kVerts; ++i) {
+        ModelVertex& v = verts[(size_t)i];
+        v.Position = glm::vec3(rnd(), rnd(), rnd()) * 2.0f;
+        v.Normal = glm::normalize(glm::vec3(rnd(), rnd(), rnd()) + glm::vec3(0.0f, 0.01f, 0.0f));
+        v.Tangent = glm::normalize(glm::cross(v.Normal, glm::vec3(0.3f, 0.9f, 0.1f)));
+        const int influences = i % (MAX_BONE_INFLUENCE + 1);
+        for (int k = 0; k < influences; ++k) {
+            v.BoneIDs[k] = (i * 7 + k * 3) % (kBones + 1); // kBones itself: past the palette, clamped like the shaders
+            v.Weights[k] = 0.1f + 0.5f * (rnd() * 0.5f + 0.5f);
+        }
+    }
+    auto cpuSkin = [&](const ModelVertex& v, glm::vec3& p, glm::vec3& n, glm::vec3& t) {
+        glm::mat4 m(0.0f);
+        float total = 0.0f;
+        for (int k = 0; k < MAX_BONE_INFLUENCE; ++k)
+            if (v.BoneIDs[k] >= 0) { m += palette[(size_t)std::clamp(v.BoneIDs[k], 0, kBones - 1)] * v.Weights[k]; total += v.Weights[k]; }
+        if (total <= 0.0001f) m = glm::mat4(1.0f);
+        p = glm::vec3(m * glm::vec4(v.Position, 1.0f));
+        n = glm::normalize(glm::mat3(m) * v.Normal);
+        t = glm::normalize(glm::mat3(m) * v.Tangent);
+    };
+    auto unpackOct = [](std::uint32_t bits) {
+        const float x = std::max((float)(std::int16_t)(bits & 0xffffu) / 32767.0f, -1.0f);
+        const float y = std::max((float)(std::int16_t)(bits >> 16) / 32767.0f, -1.0f);
+        glm::vec3 n(x, y, 1.0f - std::abs(x) - std::abs(y));
+        const float t = std::max(-n.z, 0.0f);
+        n.x += n.x >= 0.0f ? -t : t;
+        n.y += n.y >= 0.0f ? -t : t;
+        return glm::normalize(n);
+    };
+
+    Shader* cs = BindPreSkinProgram();
+    if (!cs) { why = "PreSkin.comp.glsl didn't build"; return false; }
+    GLuint src = 0, bones = 0, out = 0;
+    glCreateBuffers(1, &src);
+    glCreateBuffers(1, &bones);
+    glCreateBuffers(1, &out);
+    glNamedBufferStorage(src, (GLsizeiptr)(verts.size() * sizeof(ModelVertex)), verts.data(), 0);
+    glNamedBufferStorage(bones, (GLsizeiptr)(palette.size() * sizeof(glm::mat4)), palette.data(), 0);
+    constexpr unsigned kOutBase = 7; // not the buffer's start, as a model after the first lands
+    const GLsizeiptr outBytes = ((GLsizeiptr)kOutBase + kVerts) * kSkinnedVertexBytes;
+    glNamedBufferStorage(out, outBytes, nullptr, 0);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, bones);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kSkinnedBinding, out);
+    DispatchPreSkin(*cs, src, (unsigned)kVerts, kOutBase);
+    glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
+    std::vector<std::uint32_t> words((size_t)outBytes / 4);
+    glGetNamedBufferSubData(out, 0, outBytes, words.data());
+    // Put the bindings the draws rely on back.
+    g_BoundOffset = -1;
+    g_BoundSize = 0;
+    g_SkinnedBound = false;
+    glDeleteBuffers(1, &src);
+    glDeleteBuffers(1, &bones);
+    glDeleteBuffers(1, &out);
+
+    float worstPos = 0.0f, worstDir = 1.0f;
+    for (int i = 0; i < kVerts; ++i) {
+        glm::vec3 p, n, t;
+        cpuSkin(verts[(size_t)i], p, n, t);
+        const std::uint32_t* w = &words[(size_t)(kOutBase + (unsigned)i) * 5];
+        glm::vec3 gp;
+        std::memcpy(&gp, w, sizeof gp);
+        worstPos = std::max(worstPos, glm::length(gp - p) / std::max(1.0f, glm::length(p)));
+        worstDir = std::min({worstDir, glm::dot(unpackOct(w[3]), n), glm::dot(unpackOct(w[4]), t)});
+    }
+    if (worstPos > 1e-4f || worstDir < 0.99999f) {
+        why = "GPU skinning differs from the CPU's: position error " + std::to_string(worstPos) + ", direction cos " +
+              std::to_string(worstDir);
+        return false;
+    }
+    return true;
 }
 
 namespace {
@@ -2207,9 +2449,12 @@ void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const Shade
 } // namespace
 
 void Model::Draw(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset>>& slots) {
-    UploadBoneMatrices(shader);
+    const bool preSkinned = UploadBoneMatrices(shader);
     const MaterialLocs& locs = CachedMaterialLocs(shader);
+    int skinBase = m_PreSkin.Base; // this sub-mesh's first vertex in the skinned buffer
     for (int i = 0; i < (int)m_D->Meshes.size(); ++i) {
+        if (preSkinned) shader.SetInt(locs.skinBase, skinBase);
+        skinBase += (int)m_D->Meshes[i]->VertexCount();
         bool hasSlot = i < (int)slots.size() && slots[i];
         const Material& mat = hasSlot ? slots[i]->Mat : m_D->Meshes[i]->Mat;
         if (hasSlot && slots[i]->Shader)
@@ -2310,6 +2555,7 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
 
     Shader*             lastProg = nullptr;
     const MaterialLocs* locs = nullptr;
+    bool                preSkinned = false; // the same answer for every program: it's the model's pose
     ShaderStateScope stateScope; // #104
 
     int firstVertex = 0; // this sub-mesh's first vertex in the model (an outfit piece's hide bits, SkinHideBuffer)
@@ -2336,7 +2582,7 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
             // the selector only binds a program the first time it applies frame state to it, and
             // glUniform* always targets the currently bound program.
             prog->Bind();
-            UploadBoneMatrices(*prog);           // uUseSkinning + bone SSBO
+            preSkinned = UploadBoneMatrices(*prog); // uUseSkinning + bone SSBO (or this frame's skinned vertices)
             locs = &CachedMaterialLocs(*prog);
             prog->SetMat4(prog->Loc("uModel"), xform);
             prog->SetMat4(prog->Loc("uNormalMatrix"), nrm);
@@ -2348,6 +2594,7 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
         // In the transparent pass each submesh uses its own slot's opacity (#112).
         prog->SetFloat("uOpacity", pass == MeshPass::Transparent ? slots[i]->Opacity : opacity);
         prog->SetInt("uHideVertBase", meshFirstVertex);
+        if (preSkinned) prog->SetInt(locs->skinBase, m_PreSkin.Base + meshFirstVertex);
 
         const Material& mat = hasSlot ? slots[i]->Mat : m_D->Meshes[i]->Mat;
         if (hasSlot && slots[i]->Shader)
@@ -2366,10 +2613,13 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
 
 void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset>>& slots, int instances,
                           const VisibleIndexBuffer* visible) {
-    UploadBoneMatrices(shader);
+    const bool preSkinned = UploadBoneMatrices(shader);
     const MaterialLocs& locs = CachedMaterialLocs(shader);
     ShaderStateScope stateScope; // #104 — a Cull Off (double-sided) shader casts from both sides
+    int skinBase = m_PreSkin.Base; // this sub-mesh's first vertex in the skinned buffer
     for (int i = 0; i < (int)m_D->Meshes.size(); ++i) {
+        const int meshSkinBase = skinBase;
+        skinBase += (int)m_D->Meshes[i]->VertexCount();
         bool hasSlot = i < (int)slots.size() && slots[i];
         // Transparent materials don't cast shadows — skip them in the depth-only pass.
         if (hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::Transparent) continue;
@@ -2401,6 +2651,7 @@ void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<Mate
             }
             shader.SetInt(locs.depthAlbedo, 0);
         }
+        if (preSkinned) shader.SetInt(locs.skinBase, meshSkinBase);
         if (useVisible)
             m_D->Meshes[i]->DrawIndices(visible->Id(), visible->MeshRange(i).Offset, visible->MeshRange(i).Count, instances);
         else
