@@ -68,9 +68,8 @@ def living(b):
                 dz=0.02)
     b.shelf_row(r, bs, 3, [('Books_A', 0.0), ('Painting_Table_E', 0.0), ('Decorative_Plate', 0.0)],
                 dz=0.02)
-    # a small shrine on the south wall: a half-moon table, the statue, candles, the crucifix above
+    # a small shrine on the south wall: a half-moon table, candles, the crucifix above
     shrine = b.wall(r, 'S', 5.0, 'Sidetable_B', collide=True)
-    b.on(r, shrine, 'David', scale=0.16)
     b.on(r, shrine, 'Candle_A', dx=-0.3, dz=0.02)
     b.on(r, shrine, 'Candle_B', dx=0.3, dz=0.02)
     b.hang(r, 'S', 5.0, 'Cross', 1.55)

@@ -21707,32 +21707,6 @@
     },
     {
       "castShadows": 0,
-      "id": 352,
-      "name": "David",
-      "order": 352,
-      "parentId": 302,
-      "path": "assets/Props/David/Models/David.fbx",
-      "pathGuid": "c431445fe85d98c4",
-      "position": [
-        5.0,
-        0.824,
-        9.7495
-      ],
-      "rotation": [
-        0.0,
-        1.0,
-        0.0,
-        0.0
-      ],
-      "scale": [
-        0.16,
-        0.16,
-        0.16
-      ],
-      "static": true
-    },
-    {
-      "castShadows": 0,
       "id": 353,
       "name": "Candle_A",
       "order": 353,
