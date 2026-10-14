@@ -6,6 +6,7 @@
 #include "TextureCache.h"
 #include "stb_image.h"
 #include "stb_dxt.h"
+#include <glm/glm.hpp>
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -219,6 +220,67 @@ bool EncodeBlockCompressed(const unsigned char* px, int w, int h, int channels, 
     return true;
 }
 
+// A tangent-space normal map (RGB or RGBA, x y z in 0..255) to BC5: x and y only, z rebuilt in the
+// shader (ModelFragment.glsl). BC1 squeezed all three into one 4-colour palette per block, which
+// made the lighting blocky. Each mip level is the box average of the unit vectors above it,
+// renormalized: averaging the bytes left shortened (too flat) normals in the distance.
+void EncodeNormalBC5(const unsigned char* px, int w, int h, int channels, bool mips, TextureCache::Image& out) {
+    const size_t texels = (size_t)w * h;
+    std::vector<glm::vec3> level(texels);
+    for (size_t i = 0; i < texels; ++i) {
+        const unsigned char* s = px + i * channels;
+        const glm::vec3 n(s[0] / 127.5f - 1.0f, s[1] / 127.5f - 1.0f, s[2] / 127.5f - 1.0f);
+        const float len = glm::length(n);
+        level[i] = len > 1e-6f ? n / len : glm::vec3(0.0f, 0.0f, 1.0f);
+    }
+    out.GLFormat = GL_COMPRESSED_RG_RGTC2;
+    out.LevelSizes.clear();
+    out.Pixels.clear();
+    auto toByte = [](float v) { return (unsigned char)std::lround(std::clamp(v * 0.5f + 0.5f, 0.0f, 1.0f) * 255.0f); };
+    int lw = w, lh = h;
+    for (;;) {
+        const int bx = (lw + 3) / 4, by = (lh + 3) / 4;
+        const size_t start = out.Pixels.size();
+        out.Pixels.resize(start + (size_t)bx * by * 16);
+        unsigned char* dst = out.Pixels.data() + start;
+        unsigned char block[16 * 2];
+        for (int y = 0; y < by; ++y) {
+            for (int x = 0; x < bx; ++x, dst += 16) {
+                // 4x4 texels, clamped at the edge so partial blocks repeat the border.
+                for (int j = 0; j < 4; ++j) {
+                    const int sy = std::min(y * 4 + j, lh - 1);
+                    for (int i = 0; i < 4; ++i) {
+                        const glm::vec3& n = level[(size_t)sy * lw + std::min(x * 4 + i, lw - 1)];
+                        block[(j * 4 + i) * 2 + 0] = toByte(n.x);
+                        block[(j * 4 + i) * 2 + 1] = toByte(n.y);
+                    }
+                }
+                stb_compress_bc5_block(dst, block);
+            }
+        }
+        out.LevelSizes.push_back((uint32_t)(out.Pixels.size() - start));
+        if (!mips || (lw == 1 && lh == 1)) break;
+        const int nw = std::max(1, lw / 2), nh = std::max(1, lh / 2);
+        // The same footprint as ResizeBox, over the vectors.
+        std::vector<glm::vec3> next((size_t)nw * nh);
+        for (int y = 0; y < nh; ++y) {
+            const int sy0 = (int)((float)y * lh / nh);
+            const int sy1 = std::min(std::max(sy0 + 1, (int)((float)(y + 1) * lh / nh)), lh);
+            for (int x = 0; x < nw; ++x) {
+                const int sx0 = (int)((float)x * lw / nw);
+                const int sx1 = std::min(std::max(sx0 + 1, (int)((float)(x + 1) * lw / nw)), lw);
+                glm::vec3 sum(0.0f);
+                for (int sy = sy0; sy < sy1; ++sy)
+                    for (int sx = sx0; sx < sx1; ++sx) sum += level[(size_t)sy * lw + sx];
+                const float len = glm::length(sum);
+                next[(size_t)y * nw + x] = len > 1e-6f ? sum / len : glm::vec3(0.0f, 0.0f, 1.0f);
+            }
+        }
+        level = std::move(next);
+        lw = nw; lh = nh;
+    }
+}
+
 } // namespace
 
 void Texture::InitGpuCaps() {
@@ -369,6 +431,12 @@ TextureCpuData Decode(const std::string& path, std::vector<unsigned char> memory
     // (no S3TC), which is then what gets cached under these settings.
     TextureCache::Image encoded;
     if (settings.CompressionMode != TextureImportSettings::Compression::None &&
+        effective.TextureType == TextureImportSettings::Type::NormalMap && c >= 3) {
+        EncodeNormalBC5(pixels, entry.Width, entry.Height, c, effective.GenerateMipmaps, encoded);
+        entry.GLFormat = encoded.GLFormat;
+        entry.LevelSizes = std::move(encoded.LevelSizes);
+        entry.Pixels = std::move(encoded.Pixels);
+    } else if (settings.CompressionMode != TextureImportSettings::Compression::None &&
         EncodeBlockCompressed(pixels, entry.Width, entry.Height, c, effective.IsSRGB, effective.GenerateMipmaps,
                               settings.CompressionMode == TextureImportSettings::Compression::HighQuality, encoded)) {
         entry.GLFormat = encoded.GLFormat;

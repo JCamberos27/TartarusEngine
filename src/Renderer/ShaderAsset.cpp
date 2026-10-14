@@ -390,6 +390,7 @@ void ShaderAsset::BuildBindings() {
         b.Uniform = "u" + stem;
         b.HasUniform = "uHas" + stem;
         b.Builtin = MaterialAsset::IsBuiltinProp(m_Props[i].Name);
+        if (b.Builtin) MaterialAsset::ResolveBuiltin(m_Props[i].Name, b.Type, b.GetTex, b.GetVal);
         if (m_Props[i].Type == ShaderPropType::Texture2D) {
             if (unit == 8) unit = 16; // skip the engine's reserved 8..15
             if (unit >= s_MaxUnits) {
