@@ -37,6 +37,17 @@ struct LaunchOptions {
     bool perfBenchMode = false, perfSample = false;
     int perfResW = 0, perfResH = 0;
     int renderHeightArg = -1; // --render-height N: this run's render resolution (0 = native)
+    // --perf-csv <file> (with --perf-bench): every reported phase's frame time and CPU / GPU scopes appended to <file>
+    // as CSV rows, with the machine and job settings, for tools/perf_compare.py to diff two runs.
+    std::string perfCsv;
+    // --jobs N: N job worker threads (Core/JobSystem.h); 0 runs every job inline on the calling thread, the
+    // single-threaded reference. Default (-1): one per physical core but the main thread's.
+    int jobWorkers = -1;
+    // --jobs-shuffle: jobs inline, with each ParallelFor's chunks in a fixed random order (finds order dependence).
+    bool jobsShuffle = false;
+    // --fixed-step: every frame advances the clocks by exactly 1/60 s, whatever it took, so two runs of the same
+    // scenes render the same frames (the image comparison in tools/compare_shots.py relies on it).
+    bool fixedStep = false;
     // --resave <in.json> <out.json>: load a scene and immediately re-serialize it, then exit.
     // The one headless path that exercises the SAVE side of the serializer - round-trip tests
     // (prefab overrides #302 Part B, the reflected-component migrations, ...) all need it. Still

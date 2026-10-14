@@ -77,6 +77,7 @@
 #include "Bloom.h"                 // PR16: threshold + blur bloom post-process
 #include "GLStateCache.h"
 #include "Profiler.h"
+#include "JobSystem.h"
 #include "SamplingProfiler.h" // --perf-sample
 #include "Frustum.h"
 #include "PhysicsWorld.h" // #185 — PhysX world stepped during Play
@@ -433,6 +434,12 @@ int main(int argc, char** argv) {
     LaunchOptions opt = ParseLaunchOptions(argc, argv);
     // The tools that run and exit before anything is set up (App/CliTools.h): --unit-tests, --model-report, ...
     if (const int code = RunEarlyCliTool(argc, argv); code >= 0) return code;
+    // The engine's job pool (Core/JobSystem.h, docs/JOB_SYSTEM.md): --jobs N workers (0 = every job inline), joined
+    // on the way out of main whichever return it takes. Started before anything that queues work (PhysX steps on it).
+    Jobs::SetShuffle(opt.jobsShuffle);
+    Jobs::Init(opt.jobWorkers);
+    struct JobsShutdown { ~JobsShutdown() { Jobs::Shutdown(); } } jobsShutdown;
+    if (opt.fixedStep) Time::SetFixedFrameStep(1.0 / 60.0);
     const bool resaveMode = !opt.resaveIn.empty();
     // --smoke-test and --resave are non-interactive: no splash, and fatal errors go to stderr +
     // a nonzero exit instead of a modal MessageBox that a headless/CI desktop never dismisses
@@ -1000,7 +1007,7 @@ int main(int argc, char** argv) {
             in.ViewProj = p * v;
             in.CamPos = player.Cam.Position;
             in.CamYawDeg = player.Cam.Yaw;
-            in.RealTime = (float)glfwGetTime();
+            in.RealTime = (float)Time::RealtimeSinceStartup(); // --fixed-step: the fixed clock
             in.PlayerDead = playerVitals.IsDead();
             in.Armed = firstPersonPresentation.IsActive() && firstPersonPresentation.IsEquipped();
             if (in.Armed) {
@@ -1031,7 +1038,7 @@ int main(int argc, char** argv) {
                     weaponFx.AddBeam(laser.From, laser.To, laser.BeamColor, 1.0f);
                     if (laser.Hit) weaponFx.AddSpot(laser.To, laser.Normal, laser.SpotColor);
                 }
-                weaponFx.Draw(v, p, eye, h, (float)glfwGetTime());
+                weaponFx.Draw(v, p, eye, h, (float)Time::RealtimeSinceStartup());
             };
         };
         entt::entity& playCameraEntity = play.CameraEntity;
@@ -1727,6 +1734,37 @@ int main(int argc, char** argv) {
                 std::printf("[PerfBench]   worst frame %d %.2f ms: %s\n", w.Frame, w.Ms, w.Scopes.c_str());
             perfFrameTimes.clear();
             perfWorst.clear();
+        };
+        // --perf-csv: the phase just measured as CSV rows (frame percentiles, then every CPU / GPU scope's average and
+        // max), appended so several runs - jobs on and off, before and after a change - land in one file or several
+        // for tools/perf_compare.py. Called before perfReportHitches, which clears the frame times.
+        auto perfCsvWrite = [&](const std::string& scene, const char* phase) {
+            if (opt.perfCsv.empty() || perfFrame.N == 0) return;
+            std::error_code csvEc;
+            const bool fresh = !std::filesystem::exists(opt.perfCsv, csvEc) || std::filesystem::file_size(opt.perfCsv, csvEc) == 0;
+            FILE* csv = std::fopen(opt.perfCsv.c_str(), "a");
+            if (!csv) { Log::Error("--perf-csv: can't write " + opt.perfCsv); return; }
+            if (fresh) std::fprintf(csv, "scene,phase,kind,name,avg_ms,max_ms,frames,jobs,window\n");
+            const std::string csvJobs = Jobs::Shuffle() ? "shuffle" : std::to_string(Jobs::WorkerCount());
+            const std::string csvWin = std::to_string(window.GetWidth()) + "x" + std::to_string(window.GetHeight());
+            auto row = [&](const char* kind, const std::string& scope, double avgMs, double maxMs) {
+                std::string quoted = scope;
+                std::replace(quoted.begin(), quoted.end(), '"', '\'');
+                std::fprintf(csv, "%s,%s,%s,\"%s\",%.4f,%.4f,%d,%s,%s\n", scene.c_str(), phase, kind, quoted.c_str(), avgMs, maxMs,
+                             perfFrame.N, csvJobs.c_str(), csvWin.c_str());
+            };
+            row("frame", "avg", perfFrame.Sum / perfFrame.N, perfFrame.Max);
+            if (!perfFrameTimes.empty()) {
+                std::vector<double> sorted = perfFrameTimes;
+                std::sort(sorted.begin(), sorted.end());
+                for (double q : {0.5, 0.95, 0.99}) {
+                    const double ms = sorted[std::min(sorted.size() - 1, (size_t)(q * (double)(sorted.size() - 1) + 0.5))];
+                    row("frame", q == 0.5 ? "p50" : q == 0.95 ? "p95" : "p99", ms, ms);
+                }
+            }
+            for (const auto& [scope, acc] : perfCpu) row("cpu", scope, acc.Sum / perfFrame.N, acc.Max);
+            for (const auto& [scope, acc] : perfGpu) row("gpu", scope, acc.Sum / perfFrame.N, acc.Max);
+            std::fclose(csv);
         };
         struct SmokeResult { std::string scenePath; int frames; int newGlErrors; int newLogErrors;
                              int drawCalls; bool loadOk; bool pass; std::string cause; };
@@ -4322,7 +4360,7 @@ int main(int argc, char** argv) {
                                    crosshairDot(view, proj, outW, outH));
                 if (playing && playUsesPlayer && npcDirector.Active()) {
                     playerHud.Draw(outFbo, outW, outH,
-                                   MakePlayerHudState(playerVitals, player.Cam.Position, player.Cam.Yaw), (float)glfwGetTime());
+                                   MakePlayerHudState(playerVitals, player.Cam.Position, player.Cam.Yaw), (float)Time::RealtimeSinceStartup());
                     drawCombatHud(outFbo, outW, outH, view, proj);
                 }
             };
@@ -4894,6 +4932,7 @@ int main(int argc, char** argv) {
                                     std::filesystem::path(smokeScenePaths[smokeSceneIndex]).filename().string().c_str(), perfFrame.N,
                                     perfFrame.Sum / perfFrame.N, perfFrame.Sum > 0.0 ? 1000.0 * perfFrame.N / perfFrame.Sum : 0.0,
                                     perfFrame.Max, editor.GetRenderStats().DrawCalls, editor.GetRenderStats().Triangles, window.GetWidth(), window.GetHeight());
+                        perfCsvWrite(std::filesystem::path(smokeScenePaths[smokeSceneIndex]).filename().string(), "combat");
                         perfReportHitches("combat");
                         for (auto* v : {&perfCpu, &perfGpu}) {
                             std::sort(v->begin(), v->end(), [](const auto& a, const auto& b) { return a.second.Sum > b.second.Sum; });
@@ -4929,6 +4968,8 @@ int main(int argc, char** argv) {
                                 std::printf("[PerfBench]   %s %-34s avg=%8.3f ms  max=%8.3f ms\n", v == &perfCpu ? "CPU" : "GPU",
                                             name.c_str(), acc.Sum / std::max(perfFrame.N, 1), acc.Max);
                         }
+                        perfCsvWrite(std::filesystem::path(smokeScenePaths[smokeSceneIndex]).filename().string(),
+                                     !playing ? "edit" : playMaximized ? "play-max" : "play");
                         perfReportHitches(!playing ? "edit" : playMaximized ? "play-max" : "play");
                         std::fflush(stdout);
                         if (opt.perfSample) SamplingProfiler::Report(!playing ? "edit" : playMaximized ? "play-max" : "play", 60);

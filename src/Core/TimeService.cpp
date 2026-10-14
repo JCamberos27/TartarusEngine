@@ -31,6 +31,11 @@ float  g_MaxDelta = 0.1f;
 double g_RefreshPeriod = 0.0; // SetRefreshPeriod; 0 = deltas as measured
 double g_Unpaced = 0.0;       // measured time not yet handed out as whole refreshes (+ ahead, - behind)
 double g_AvgDelta = 0.0;      // the measured delta, averaged over the last ~20 frames
+double g_FixedStep = 0.0;     // SetFixedFrameStep; 0 = the clock is the wall clock
+double g_FixedClock = 0.0;    // the clock while it is fixed: FixedStep per BeginFrame
+double g_WallFrameStart = -1.0; // glfwGetTime() at the last BeginFrame even while the clock is fixed (LimitFps)
+
+double Now() { return g_FixedStep > 0.0 ? g_FixedClock : glfwGetTime(); }
 
 #if defined(_WIN32)
 // A high-resolution waitable timer (Windows 10 1803+) wakes within ~0.5 ms of its due time,
@@ -65,7 +70,9 @@ double PaceDelta(double measured, double period, double& unpaced) {
 }
 
 void BeginFrame() {
-    const double now = glfwGetTime();
+    if (g_FixedStep > 0.0 && g_FrameStart >= 0.0) g_FixedClock += g_FixedStep;
+    const double now = Now();
+    g_WallFrameStart = glfwGetTime();
     g_RealDelta = g_FrameStart < 0.0 ? 0.0f : (float)(now - g_FrameStart);
     if (g_RealDelta < 0.0f) g_RealDelta = 0.0f;
     g_FrameStart = now;
@@ -97,7 +104,13 @@ float RealDeltaTime() { return g_RealDelta; }
 
 double TimeSinceStartup() { return g_Time; }
 double UnscaledTimeSinceStartup() { return g_UnscaledTime; }
-double RealtimeSinceStartup() { return glfwGetTime(); }
+double RealtimeSinceStartup() { return Now(); }
+
+void SetFixedFrameStep(double seconds) {
+    g_FixedStep = seconds > 0.0 ? seconds : 0.0;
+    g_FixedClock = 0.0;
+    g_FrameStart = -1.0;
+}
 
 std::uint64_t FrameCount() { return g_FrameCount; }
 
@@ -117,8 +130,8 @@ float FixedDeltaTime() {
 }
 
 void LimitFps(int targetFps) {
-    if (targetFps <= 0 || g_FrameStart < 0.0) return;
-    const double frameEnd = g_FrameStart + 1.0 / (double)targetFps;
+    if (targetFps <= 0 || g_WallFrameStart < 0.0) return;
+    const double frameEnd = g_WallFrameStart + 1.0 / (double)targetFps;
 
     // Coarse wait, leaving a margin the wake-up can't overshoot, then spin (yielding) the rest.
     // Window.cpp raises the Windows timer resolution to 1 ms, which tightens the Sleep fallback.

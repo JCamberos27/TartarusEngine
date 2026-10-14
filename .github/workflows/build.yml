@@ -219,6 +219,42 @@ jobs:
           Write-Host "smoke test exited with $($p.ExitCode)"
           exit $p.ExitCode
 
+      # docs/JOB_SYSTEM.md, Phase 0: moving work onto the job system must not change a single pixel. The smoke
+      # scenes are captured twice on a fixed 1/60 s clock (--fixed-step, so frame N is the same frame in both runs):
+      # with four job workers, then with every job inline on the main thread (--jobs 0, the single-threaded
+      # reference), and tools/compare_shots.py compares them bit for bit. Release only: the two configs render the
+      # same frames, and each capture run costs a few minutes on llvmpipe. Before the crash-dump assertion below, so
+      # a crash in these runs fails it too.
+      - name: Job system image check (4 workers vs --jobs 0)
+        if: matrix.config == 'Release'
+        timeout-minutes: 20
+        shell: pwsh
+        env:
+          GALLIUM_DRIVER: llvmpipe
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          MESA_GL_VERSION_OVERRIDE: "4.6"
+          MESA_GLSL_VERSION_OVERRIDE: "460"
+        run: |
+          $exe = "build\${{ matrix.config }}\TartarusEngine.exe"
+          foreach ($run in @(@{ Dir = "shots-jobs"; Jobs = "4" }, @{ Dir = "shots-inline"; Jobs = "0" })) {
+            $argList = @("--smoke-test", "--fixed-step", "--jobs", $run.Jobs, "--smoke-shots", $run.Dir)
+            $p = Start-Process -FilePath $exe -ArgumentList $argList -NoNewWindow -Wait -PassThru
+            if ($p.ExitCode -ne 0) { throw "the $($run.Dir) capture run exited with $($p.ExitCode)" }
+          }
+          python tools/compare_shots.py shots-inline shots-jobs --diff-dir shots-diff
+          if ($LASTEXITCODE -ne 0) { throw "frames rendered with job workers differ from --jobs 0 (see the job-shots artifact)" }
+
+      - name: Upload the job system captures
+        if: failure() && matrix.config == 'Release' && hashFiles('shots-inline/*') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: job-shots
+          path: |
+            shots-inline/
+            shots-jobs/
+            shots-diff/
+          retention-days: 14
+
       # The smoke step above gates on its own exit code, but a process can render every smoke scene,
       # report success and THEN fault on the way out. CrashHandler catches that and writes a
       # minidump, so a dump existing is a failure even when the exit code was 0. That teardown

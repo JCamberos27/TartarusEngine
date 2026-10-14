@@ -28,6 +28,10 @@ LaunchOptions ParseLaunchOptions(int argc, char** argv) {
             if (std::sscanf(argv[++i], "%dx%d", &o.perfResW, &o.perfResH) != 2 || o.perfResW <= 0 || o.perfResH <= 0)
                 o.perfResW = o.perfResH = 0;
         }
+        else if (a == "--perf-csv" && i + 1 < argc) { o.perfCsv = argv[++i]; }
+        else if (a == "--jobs" && i + 1 < argc) { o.jobWorkers = std::max(0, std::atoi(argv[++i])); }
+        else if (a == "--jobs-shuffle") { o.jobsShuffle = true; }
+        else if (a == "--fixed-step") { o.fixedStep = true; }
         else if (a == "--render-height" && i + 1 < argc) { o.renderHeightArg = std::max(0, std::atoi(argv[++i])); }
         else if (a == "--weapon-test") { o.smokeTestMode = true; o.weaponTestMode = true; }
         else if (a == "--weapon-lab") { o.weaponLabMode = true; }

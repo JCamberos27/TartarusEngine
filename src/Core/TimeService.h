@@ -47,6 +47,11 @@ void SetRefreshPeriod(double seconds);
 // between frames (start it at 0).
 double PaceDelta(double measured, double period, double& unpaced);
 
+// --fixed-step: from now on every BeginFrame advances the clock by exactly `seconds` (0 = back to the wall clock),
+// and RealtimeSinceStartup reads that clock, so a run renders the same frames whatever the machine's speed.
+// LimitFps still waits on the wall clock.
+void SetFixedFrameStep(double seconds);
+
 // Frames begun since startup.
 std::uint64_t FrameCount();
 
