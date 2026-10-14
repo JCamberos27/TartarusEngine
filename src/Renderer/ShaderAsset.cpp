@@ -6,6 +6,7 @@
 #include "Shader.h"
 #include "ShaderLibrary.h"
 #include "Log.h"
+#include "JobSystem.h"
 #include "MaterialAsset.h"
 
 #include <fstream>
@@ -513,6 +514,7 @@ void ShaderAsset::ForgetFailedVariants() {
 }
 
 Shader* ShaderAsset::Variant(ShaderVariantKey key) {
+    JOBS_ASSERT_NOT_WORKER("ShaderAsset::Variant"); // compiles a missing variant (GL) and inserts into m_Variants
     auto it = m_Variants.find(key);
     if (it == m_Variants.end()) {
         CompileVariant(key);

@@ -4,6 +4,7 @@
 #include "Log.h"
 #include "gl.h"
 #include "GLStateCache.h"
+#include "JobSystem.h"
 #include <GLFW/glfw3.h>
 #include <glm/gtc/type_ptr.hpp>
 #include <algorithm>
@@ -157,6 +158,7 @@ unsigned int Shader::Compile(unsigned int type, const std::string& src) {
 }
 
 void Shader::Bind() const {
+    JOBS_ASSERT_NOT_WORKER("Shader::Bind");
     GLStateCache::UseProgram(m_Program);
 }
 

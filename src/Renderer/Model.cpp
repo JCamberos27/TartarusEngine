@@ -8,6 +8,7 @@
 #include "Texture.h"
 #include "Shader.h"
 #include "GLStateCache.h"
+#include "JobSystem.h"
 #include "DefaultTextures.h"
 #include "PrimitiveMeshes.h"
 #include "meshoptimizer.h"
@@ -2023,6 +2024,7 @@ void Model::BeginRenderFrame() {
 }
 
 void Model::UploadBoneMatrices(Shader& shader) const {
+    JOBS_ASSERT_NOT_WORKER("Model::UploadBoneMatrices"); // writes the bone ring with glNamedBufferSubData
     // #98 — skin whenever there are bones: the clip's pose while playing, else the bind pose.
     const bool skinning = m_D->BoneCounter > 0;
     shader.SetInt(CachedMaterialLocs(shader).useSkinning, skinning ? 1 : 0);

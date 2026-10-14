@@ -193,8 +193,12 @@ int StatsGetProfilerSamplesFn(EditorModuleProfilerSample* outArr, int maxCount, 
     const int srcCount = (int)src.size();
     const int n = maxCount < srcCount ? maxCount : srcCount;
     for (int i = 0; i < n; ++i) {
-        std::snprintf(outArr[i].Name, sizeof(outArr[i].Name), "%s", src[(size_t)i].Name.c_str());
-        outArr[i].Milliseconds = src[(size_t)i].Milliseconds;
+        // Samples from job workers and other threads say whose they are (Profiler::Entry::Thread).
+        const Profiler::Entry& e = src[(size_t)i];
+        if (e.Thread > 0) std::snprintf(outArr[i].Name, sizeof(outArr[i].Name), "[w%d] %s", e.Thread, e.Name.c_str());
+        else if (e.Thread < 0) std::snprintf(outArr[i].Name, sizeof(outArr[i].Name), "[bg] %s", e.Name.c_str());
+        else std::snprintf(outArr[i].Name, sizeof(outArr[i].Name), "%s", e.Name.c_str());
+        outArr[i].Milliseconds = e.Milliseconds;
     }
     return n;
 }

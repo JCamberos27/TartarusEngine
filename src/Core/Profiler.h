@@ -14,12 +14,16 @@ public:
     struct Entry {
         std::string Name;
         float Milliseconds;
+        int Thread = 0; // 0 = the main thread, 1..N = job worker N (Core/JobSystem.h), -1 = any other thread
     };
 
     // Call once at the top of the frame, before any PROFILE_SCOPE for that frame starts -
     // rotates last frame's collected entries out for GetLastFrame() and starts a fresh list.
     static void BeginFrame();
 
+    // Any thread. The main thread's samples go straight into the frame; every other thread's into its own buffer,
+    // merged into the frame at the next BeginFrame (so a job's samples land in the frame it ran in, as long as the
+    // frame waits for its jobs - which every job group does).
     static void PushSample(const std::string& name, float milliseconds);
     static void PushSample(const char* name, float milliseconds); // builds the entry's name in place
 

@@ -1,10 +1,47 @@
 #include "Profiler.h"
+#include "JobSystem.h"
 #include "gl.h"
 #include <algorithm>
+#include <memory>
+#include <mutex>
+#include <thread>
 
 namespace {
 std::vector<Profiler::Entry> g_CurrentFrame;
 std::vector<Profiler::Entry> g_LastFrame;
+
+// Static initialisation runs on the thread that runs main(), as Log.cpp relies on too.
+const std::thread::id g_MainThread = std::this_thread::get_id();
+
+// Samples from any thread but the main one: a buffer per thread (its own lock is uncontended but for BeginFrame),
+// registered once. Buffers outlive their threads, so a thread exiting mid-frame keeps its samples for the merge.
+struct ThreadSamples {
+    std::mutex Mutex;
+    std::vector<Profiler::Entry> Entries;
+};
+std::mutex g_ThreadSamplesMutex;
+std::vector<std::shared_ptr<ThreadSamples>> g_ThreadSamples;
+
+ThreadSamples& ThisThreadSamples() {
+    thread_local std::shared_ptr<ThreadSamples> mine = [] {
+        auto s = std::make_shared<ThreadSamples>();
+        std::lock_guard<std::mutex> lock(g_ThreadSamplesMutex);
+        g_ThreadSamples.push_back(s);
+        return s;
+    }();
+    return *mine;
+}
+
+void PushFromAnyThread(Profiler::Entry e) {
+    if (std::this_thread::get_id() == g_MainThread) {
+        g_CurrentFrame.push_back(std::move(e));
+        return;
+    }
+    e.Thread = Jobs::OnWorker() ? (int)Jobs::ThisWorker() : -1;
+    ThreadSamples& s = ThisThreadSamples();
+    std::lock_guard<std::mutex> lock(s.Mutex);
+    s.Entries.push_back(std::move(e));
+}
 
 // #147 - GPU scopes are timed with GL_TIMESTAMP pairs, not GL_TIME_ELAPSED: elapsed-time queries
 // can't nest (a nested scope made the outer one's glBeginQuery an error), timestamps can. Each
@@ -65,6 +102,15 @@ bool TryReadBack(GpuFrame& f) {
 }
 
 void Profiler::BeginFrame() {
+    // Other threads' samples belong to the frame that just ended.
+    {
+        std::lock_guard<std::mutex> lock(g_ThreadSamplesMutex);
+        for (const std::shared_ptr<ThreadSamples>& t : g_ThreadSamples) {
+            std::lock_guard<std::mutex> tl(t->Mutex);
+            for (Profiler::Entry& e : t->Entries) g_CurrentFrame.push_back(std::move(e));
+            t->Entries.clear();
+        }
+    }
     // Swapped, not moved: the moved-from list lost its capacity and regrew from empty every frame.
     std::swap(g_LastFrame, g_CurrentFrame);
     g_CurrentFrame.clear();
@@ -85,11 +131,11 @@ void Profiler::BeginFrame() {
 }
 
 void Profiler::PushSample(const std::string& name, float milliseconds) {
-    g_CurrentFrame.push_back({name, milliseconds});
+    PushFromAnyThread({name, milliseconds});
 }
 
 void Profiler::PushSample(const char* name, float milliseconds) {
-    g_CurrentFrame.push_back({std::string(name), milliseconds});
+    PushFromAnyThread({std::string(name), milliseconds});
 }
 
 const std::vector<Profiler::Entry>& Profiler::GetLastFrame() {
@@ -110,6 +156,7 @@ const std::vector<Profiler::Entry>& Profiler::GetLastFrameGpu() {
 }
 
 Profiler::GpuScopeTimer::GpuScopeTimer(const char* name) {
+    JOBS_ASSERT_NOT_WORKER("PROFILE_GPU_SCOPE");
     if (!glGenQueries || !glQueryCounter) return; // loader didn't resolve these entry points
     GpuFrame& f = g_GpuFrames[g_GpuCurrent];
     const int begin = TakeQuery(f);
