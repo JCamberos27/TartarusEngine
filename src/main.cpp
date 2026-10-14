@@ -56,6 +56,7 @@
 #include "Tests/EditorUiTests.h" // --editor-tests
 #include "App/LaunchOptions.h"
 #include "App/CliTools.h"
+#include "App/PlaySession.h"
 #include "Tests/SmokeChecks.h"
 #include "OutfitAudit.h"
 #include "ClipAnalysis.h"
@@ -415,48 +416,12 @@ static std::string WritePngTo(const std::string& dir, const std::string& name, i
     return out;
 }
 
-// #165 - the scene's First Person Controller (first active one in creation order), if any.
-static entt::entity FindFirstPersonController(World& world) {
-    Scripting::SyncPlayerDefinitions(world);
-    entt::entity best = entt::null;
-    int bestOrder = 0x7fffffff;
-    for (auto e : world.Registry.view<const FirstPersonControllerComponent, const TransformComponent>()) {
-        if (world.Registry.all_of<InactiveTag>(e)) continue;
-        const auto* ord = world.Registry.try_get<OrderComponent>(e);
-        int o = ord ? ord->Value : 0;
-        if (o < bestOrder) { bestOrder = o; best = e; }
-    }
-    return best;
-}
-
-// #165 - yaw/pitch (Camera's convention) of an entity's forward (-Z) axis. Roll is dropped:
-// Camera has none.
-static void YawPitchFromWorld(const glm::mat4& m, float& yawDeg, float& pitchDeg) {
-    glm::vec3 f = -glm::vec3(m[2]);
-    const float len = glm::length(f);
-    f = len > 1e-6f ? f / len : glm::vec3(0.0f, 0.0f, -1.0f);
-    yawDeg = glm::degrees(std::atan2(f.z, f.x));
-    pitchDeg = std::clamp(glm::degrees(std::asin(std::clamp(f.y, -1.0f, 1.0f))), -89.0f, 89.0f);
-}
-
 // #165 - the roll that, applied on top of yaw/pitch, lines Camera::Up() up with the entity's own
 // +Y, so a tilted scene Camera plays back tilted exactly like the edit-mode Game preview.
 static float RollFromWorld(const glm::mat4& m, const Camera& unrolled) {
     const glm::vec3 up = glm::vec3(m[1]);
     const float x = -glm::dot(up, unrolled.Right()), y = glm::dot(up, unrolled.Up());
     return (x * x + y * y) > 1e-12f ? glm::degrees(std::atan2(x, y)) : 0.0f;
-}
-
-static entt::entity FindActiveSceneCamera(const World& world) {
-    entt::entity best = entt::null;
-    int bestOrder = 0x7fffffff;
-    for (auto e : world.Registry.view<const CameraComponent, const TransformComponent>()) {
-        if (world.Registry.all_of<InactiveTag>(e)) continue;
-        const auto* ord = world.Registry.try_get<OrderComponent>(e);
-        int o = ord ? ord->Value : 0;
-        if (o < bestOrder) { bestOrder = o; best = e; }
-    }
-    return best;
 }
 
 int main(int argc, char** argv) {
@@ -990,8 +955,9 @@ int main(int argc, char** argv) {
         };
         CombatHud combatHud;        // ammo, kill feed, radio subtitles, awareness chevrons, AI debug overlay
         DevPanel devPanel;          // F7 / F8 / F9 dev tools in Play
-        glm::vec3 deathCamOffset(0.0f); // the death camera's drop, on the camera only after the late pose
-        float deathCamRoll = 0.0f;
+        PlayState play; // Play's state bits (App/PlaySession.h); the locals named after them alias its fields
+        glm::vec3& deathCamOffset = play.DeathCamOffset;
+        float& deathCamRoll = play.DeathCamRoll;
         int playerAmmoSeen = -1, playerSlotSeen = -1; // for "the player fired this frame"
         PlayerSnapshot playerSnap;
         ShellCasings shellCasings;  // the spent cases on the ground
@@ -1008,12 +974,10 @@ int main(int argc, char** argv) {
                                  glm::vec4(1.6f, 0.08f, 0.05f, i == 0 ? 0.9f : 0.55f));
             throwArc.Draw(v, p, eye);
         };
-        // #165 - what Play renders through: the first-person player (playUsesPlayer), or the
-        // scene's Camera entity, mirrored each frame into playSceneCam.
-        bool playUsesPlayer = true;
-        bool playGravityGun = true;
-        float playBaseFov = 58.7f;          // the player's vertical FOV / mouse sensitivity; the
-        float playBaseSensitivity = 0.1f;   // weapon's ADS zoom scales both from these each frame
+        bool& playUsesPlayer = play.UsesPlayer;
+        bool& playGravityGun = play.GravityGun;
+        float& playBaseFov = play.BaseFov;
+        float& playBaseSensitivity = play.BaseSensitivity;
         // With a weapon (Animation Set) on the controller, the gravity gun is the unarmed slot:
         // live only while the weapon is holstered (2 / scroll / Holster), off while it's in hand.
         auto gravityGunLive = [&] {
@@ -1070,10 +1034,8 @@ int main(int argc, char** argv) {
                 weaponFx.Draw(v, p, eye, h, (float)glfwGetTime());
             };
         };
-        entt::entity playCameraEntity = entt::null;
-        // The scene's First Person Controller while Playing: it rides the player's feet and yaw, so
-        // selecting it (and Shift+F in the Scene view) tracks the player. Play reverts it on Stop.
-        entt::entity playControllerEntity = entt::null;
+        entt::entity& playCameraEntity = play.CameraEntity;
+        entt::entity& playControllerEntity = play.ControllerEntity;
         Camera playSceneCam;
         // Default spawn/editor-camera start: south of the Sandbox's Character Plaza, looking north
         // over it with the physics playground (east) and movement course (west) in view either side.
@@ -1559,20 +1521,12 @@ int main(int argc, char** argv) {
         SceneRenderer sceneRenderer;  // audit #359 pass 2 — the scene-draw pass, formerly a lambda here
 
         Camera editorCamera;
-        // Play is no longer a whole-screen mode swap. Three independent bits describe the state:
-        //   editorUIVisible - the editor panels + dockspace are shown (true whenever NOT maximized)
-        //   playing         - the scene is simulating; the Game panel renders from the player camera
-        //   playMaximized   - the Game view fills the window and the editor panels are hidden
-        // Pressing Play just flips `playing`; the game runs inside the docked Game panel with the
-        // editor still fully usable. The Fullscreen button next to Stop toggles `playMaximized`.
-        bool editorUIVisible = true;
-        bool playing = false;
-        bool paused = false;   // #236: simulation frozen, rendering continues; Step advances one frame
-        bool playMaximized = false;
-        // In-panel play is click-to-focus: the game only reads mouse/keyboard once the user has
-        // clicked inside the Game view. Esc (or Stop) hands control back to the editor. Ignored
-        // while maximized — that path uses the cursor-lock state directly, like the old Play mode.
-        bool gameInputEngaged = false;
+        // What Play's state bits mean: PlayState (App/PlaySession.h).
+        bool& editorUIVisible = play.EditorUIVisible;
+        bool& playing = play.Playing;
+        bool& paused = play.Paused;
+        bool& playMaximized = play.Maximized;
+        bool& gameInputEngaged = play.GameInputEngaged;
         editorCamera.Position = player.Cam.Position;
         editorCamera.Yaw = player.Cam.Yaw;
         editorCamera.Pitch = player.Cam.Pitch;
@@ -1626,244 +1580,14 @@ int main(int argc, char** argv) {
         bool lastDirty = false;
         bool titleInitialized = false;
 
-        // Unity's play-mode contract: entering Play snapshots the scene and leaving it restores
-        // that snapshot, so gameplay (shot crates, moved objects) never silently becomes an
-        // edit. EditorLayer owns the snapshot; main.cpp owns the state bits.
-        int errPauseSeen = 0; // #236 A5 — error count baseline for "Error Pause", re-armed each Play
-        auto startPlay = [&]() {
-            if (playing) return;
-            if (editor.InPrefabMode()) editor.ExitPrefabMode(world, assets); // #176 - Play runs the scene
-            if (EditorModuleHost::ConsoleState().ClearOnPlay) Log::Clear(); // #236 A5
-            editor.OnEnterPlayMode(world);
-            // Character Outfit's Randomize On Play: dressed afresh, after the snapshot so Stop brings the
-            // edited outfit back. It loads in the background; FirstPersonBody takes the new pieces once
-            // they're on (OutfitChanged). A body not built yet (untagged parts) is adopted first, or
-            // Randomize would build a second body over it.
-            for (auto [e, outfit] : world.Registry.view<CharacterOutfitComponent>(entt::exclude<InactiveTag>).each()) {
-                if (!outfit.RandomizeOnPlay) continue;
-                if (OutfitSystem::Pieces(world, e).empty()) OutfitSystem::AdoptExisting(world, assets, e);
-                const auto r = OutfitSystem::Randomize(world, assets, e,
-                                                       (std::uint32_t)std::chrono::steady_clock::now().time_since_epoch().count() ^
-                                                           (std::uint32_t)entt::to_integral(e));
-                if (!r.Ok) Log::Warn("Character Outfit: Randomize On Play - " + r.Error);
-            }
-            // Bare Body (debug; the gait probe's player body): every item off, so the wardrobe dresses the character in its
-            // own body parts - the animation and skinning seen without clothing. Undone by Stop like the above.
-            for (auto [e, outfit] : world.Registry.view<CharacterOutfitComponent>(entt::exclude<InactiveTag>).each()) {
-                const bool probeBody = weaponTest && weaponTest->GaitProbe() && world.Registry.all_of<FirstPersonBodyComponent>(e);
-                if (!outfit.BareBody && !probeBody) continue;
-                if (OutfitSystem::Pieces(world, e).empty()) OutfitSystem::AdoptExisting(world, assets, e);
-                Wardrobe::Request bare = OutfitSystem::CurrentRequest(world, e);
-                bare.Items.clear();
-                const auto r = OutfitSystem::Submit(world, assets, e, bare);
-                if (!r.Ok) Log::Warn("Character Outfit: Bare Body - " + r.Error);
-            }
-            Time::SetTimeScale(ProjectSettings::Time().TimeScale); // #144 - each run starts from the project's scale
-            errPauseSeen = Log::CountOf(LogLevel::Error); // ignore errors that predate this run
-            playing = true;
-            playMaximized = false;
-            editorUIVisible = true;
-            gameInputEngaged = false;
-            gameView.OnPlayStateChanged(true);
-            editor.RequestGameTabFocus(); // show what you just started
-            // #165 - pick what Play runs: a First Person Controller entity (spawn there, with its
-            // settings), else the scene's Camera (no player), else the legacy default player
-            // dropped in at the editor camera so Play inspects what you were just working on.
-            // The editor camera is left where it is — the Scene tab stays usable during play.
-            player = Player{};
-            flashlight = Flashlight{};
-            // The player's fall is its own game-feel value (the First Person Controller's Gravity,
-            // 18 m/s^2 when there's none), not the physics world's Earth gravity.
-            playUsesPlayer = false;
-            playGravityGun = false;
-            gravityGun.Settings = GravityGunSettings{};
-            playCameraEntity = entt::null;
-            playControllerEntity = FindFirstPersonController(world);
-            {   // the scene's effect and HUD tuning: the first FX / HUD Settings component, defaults when none
-                FxHudSettingsComponent fx=Scripting::DefaultEffectsDefinition();
-                if (const auto first = world.Registry.view<FxHudSettingsComponent>(); first.begin() != first.end()) { // the first one counts
-                    const entt::entity e = *first.begin();
-                    fx = world.Registry.get<FxHudSettingsComponent>(e);
-                }
-                combatFx.Settings = fx;
-                combatHud.Settings = fx;
-                weaponFx.Settings = fx;
-            }
-            bloodFx.Clear();
-            fxSprites.Clear();
-            {   // the scene's blood tuning: the first Blood Settings component, defaults when none
-                BloodSettingsComponent b;
-                if (const auto all = world.Registry.view<BloodSettingsComponent>(); all.begin() != all.end())
-                    b = world.Registry.get<BloodSettingsComponent>(*all.begin());
-                bloodFx.Config.Enabled = b.Enabled;
-                bloodFx.Config.Size = b.Size;
-                bloodFx.Config.MaxSprays = b.MaxSprays;
-                bloodFx.Config.MaxDecals = b.MaxStains;
-                bloodFx.Config.DecalLifetime = b.StainLifetime;
-                bloodFx.Config.DrySeconds = b.DrySeconds;
-                bloodFx.Config.Speed = b.Speed;
-                bloodFx.Config.Pools = b.Pools;
-                bloodFx.Config.BodySplats = b.BodySplats;
-                bloodFx.Config.GearSpatter = b.GearSpatter;
-                bloodFx.Config.EnergyScale = b.EnergyScale;
-                bloodFx.Config.ImpactPuffs = b.ImpactPuffs;
-                bloodFx.Config.Gore = b.Gore;
-            }
-            BloodRenderer::Get().Load(); // once; a missing import just leaves the blood off
-            KnifeFxLibrary::Get().Load(); // likewise the Knife packs (--import-knife-fx)
-            if (entt::entity ctrl = playControllerEntity; ctrl != entt::null) {
-                playUsesPlayer=true;
-                gravityGun.Reset();
-                const auto& fp = world.Registry.get<FirstPersonControllerComponent>(ctrl);
-                player.MoveSpeed = fp.MoveSpeed;
-                player.Gravity = -std::abs(fp.Gravity);
-                player.SprintMultiplier = fp.SprintMultiplier;
-                player.JumpSpeed = fp.JumpSpeed;
-                player.JumpBufferTime = fp.JumpBufferTime;
-                player.CoyoteTime = fp.CoyoteTime;
-                player.GroundAccelTime = fp.GroundAccelTime;
-                player.GroundDecelTime = fp.GroundDecelTime;
-                player.AirAccelTime = fp.AirAccelTime;
-                player.EyeHeight = fp.EyeHeight;
-                player.Size = glm::vec3(fp.CapsuleRadius * 2.0f, std::max(fp.CapsuleHeight, fp.CapsuleRadius * 2.0f + 0.1f),
-                                        fp.CapsuleRadius * 2.0f);
-                player.MouseSensitivity = fp.MouseSensitivity;
-                playBaseSensitivity = fp.MouseSensitivity;
-                playBaseFov = fp.VerticalFov();
-                player.InvertY = fp.InvertY;
-                player.StickLookDegPerSec = fp.StickLookDegPerSec;
-                player.KillY = fp.KillY;
-                player.Cam.Fov = fp.VerticalFov();
-                playGravityGun = fp.GravityGun;
-                gravityGun.Settings.GrabRange = fp.GrabRange;
-                gravityGun.Settings.AssistRange = fp.AssistRange;
-                gravityGun.Settings.AssistConeDeg = fp.AssistConeDeg;
-                gravityGun.Settings.ScrollTurnDeg = fp.ScrollTurnDeg;
-                gravityGun.Settings.MinThrowSpeed = fp.MinThrowSpeed;
-                gravityGun.Settings.MaxThrowSpeed = std::max(fp.MaxThrowSpeed, fp.MinThrowSpeed);
-                gravityGun.Settings.ChargeTime = fp.ThrowChargeTime;
-                gravityGun.Settings.BackspinRevPerSec = fp.ThrowBackspin;
-                const glm::mat4 spawn = world.ComposeWorldTransform(ctrl);
-                player.RespawnFeet = glm::vec3(spawn[3]);
-                player.Cam.Position = player.RespawnFeet + glm::vec3(0.0f, player.EyeHeight, 0.0f);
-                YawPitchFromWorld(spawn, player.Cam.Yaw, player.Cam.Pitch);
-                // --stock-probe runs, strafes and turns for metres at a time: it starts on open ground (the
-                // Sandbox's shooting range lane), wherever the scene's spawn is, so runs stay comparable.
-                if (opt.stockProbeMode) {
-                    player.RespawnFeet = glm::vec3(45.0f, 0.1f, -2.5f);
-                    // The gait probe walks, jogs and sprints metres every way and films the whole body: the open floor
-                    // with the most room round it - rays out at knee and chest height in 16 directions, over ground at about 0.
-                    if (weaponTest && weaponTest->OpenFloor()) {
-                        QueryFilter f;
-                        f.HitTriggers = 0;
-                        float best = -1.0f;
-                        for (float gx = -54.0f; gx <= 54.0f; gx += 3.0f)
-                            for (float gz = -54.0f; gz <= 54.0f; gz += 3.0f) {
-                                RaycastHit h;
-                                const float top[3] = {gx, 3.0f, gz}, down[3] = {0.0f, -1.0f, 0.0f};
-                                if (!PhysicsWorld::RaycastSolid(top, down, 4.0f, f, h) || !h.Hit || std::abs(h.Point[1]) > 0.15f) continue;
-                                float room = 14.0f;
-                                for (int a = 0; a < 16 && room > best; ++a)
-                                    for (float y : {0.4f, 1.3f}) {
-                                        const float o[3] = {gx, h.Point[1] + y, gz};
-                                        const float d[3] = {std::cos((float)a * 0.3927f), 0.0f, std::sin((float)a * 0.3927f)};
-                                        RaycastHit side;
-                                        if (PhysicsWorld::RaycastSolid(o, d, room, f, side) && side.Hit) room = std::min(room, side.Distance);
-                                    }
-                                if (room > best) { best = room; player.RespawnFeet = glm::vec3(gx, h.Point[1] + 0.1f, gz); }
-                            }
-                        std::printf("[Gait] start at (%.0f, %.0f), %.1f m clear all round\n", player.RespawnFeet.x, player.RespawnFeet.z, best);
-                    }
-                    player.Cam.Position = player.RespawnFeet + glm::vec3(0.0f, player.EyeHeight, 0.0f);
-                }
-                // FPS presentation is opt-in on the controller (its Animation Set). With the
-                // gravity gun also on, that becomes the unarmed slot - see gravityGunLive.
-                firstPersonPresentation.Start(world, assets, fp);
-                firstPersonBody.Start(world, player); // a First Person Body in the scene: root-motion movement
-                // The weapon's walk / sprint clip rates follow what the player really moves at (the body's speeds).
-                if (firstPersonBody.IsActive() && firstPersonPresentation.IsActive())
-                    firstPersonPresentation.SetLocomotionSpeeds(player.MoveSpeed, player.MoveSpeed * player.SprintMultiplier);
-                PlayerVitalsSettings vitals;
-                vitals.MaxHealth = fp.MaxHealth;
-                vitals.RegenDelay = fp.RegenDelay;
-                vitals.RegenRate = fp.RegenRate;
-                vitals.RespawnDelay = fp.RespawnDelay;
-                vitals.SpawnProtection = fp.SpawnProtection;
-                playerVitals.Reset(vitals);
-                // The enemy squad, when the scene has NPC Spawns - not under --weapon-test / --stock-probe, which put the
-                // player's gun through its paces alone (a squad would shoot the player or step into the muzzle's line).
-                const bool squadStarted = !weaponTest && npcDirector.Start(world, assets, &fp);
-                if (npcTest) std::printf("[NpcTest] squad %s (%zu spawn points)\n", squadStarted ? "started" : "not started", npcDirector.SpawnPoints().size());
-                if (squadStarted) {
-                    devPanel.Reset(playerVitals, npcDirector);
-                    combatHud.Reset();
-                    combatFx.Start(world);
-                    if (npcTest && !npcTest->RecordDir().empty()) {
-                        std::error_code ec;
-                        std::filesystem::create_directories(npcTest->RecordDir(), ec);
-                        combatFx.SetAudioLog((std::filesystem::path(npcTest->RecordDir()) / "audio.txt").string());
-                    }
-                }
-                // Play-mode audio (the guns' report layers, gear sounds, foley) and the muzzle effects don't wait for a squad:
-                // a scene with no NPC Spawns, --weapon-test and --stock-probe have the player's gun too.
-                if (!combatFx.Active()) {
-                    combatFx.Start(world);
-                    if (weaponTest) {
-                        // WEAPON_TEST_AUDIO_LOG=<file>, or NPC_TEST_RECORD=<dir> (-> <dir>/audio.txt): every weapon / foley voice, timed.
-#pragma warning(suppress : 4996)
-                        const char* logFile = std::getenv("WEAPON_TEST_AUDIO_LOG");
-#pragma warning(suppress : 4996)
-                        const char* recordDir = std::getenv("NPC_TEST_RECORD");
-                        if (logFile && *logFile) combatFx.SetAudioLog(logFile);
-                        else if (recordDir && *recordDir) {
-                            std::error_code ec;
-                            std::filesystem::create_directories(recordDir, ec);
-                            combatFx.SetAudioLog((std::filesystem::path(recordDir) / "audio.txt").string());
-                        }
-                    }
-                }
-            } else if ((playCameraEntity = FindActiveSceneCamera(world)) != entt::null) {
-                playUsesPlayer = false;
-                playGravityGun = false;
-            } else {
-                player.Cam.Position = editorCamera.Position;
-                player.Cam.Yaw = editorCamera.Yaw;
-                player.Cam.Pitch = editorCamera.Pitch;
-            }
-            window.SetCursorLocked(false); // click the Game view to take control
-        };
-        auto stopPlay = [&]() {
-            if (!playing) return;
-            if (weaponLab) weaponLab->OnPlayStopped();
-            Scripting::Stop(&world,&assets);
-            // Runtime-only arms/weapon entities were created after the play snapshot. Remove
-            // them before restoring the authored world so they can never be serialized or leak
-            // into another scene after a stop.
-            firstPersonPresentation.RemoveViewKick(player.Cam);
-            combatFx.Stop(world);
-            npcDirector.Stop(world);
-            player.Cam.Position -= deathCamOffset;
-            player.Cam.Roll -= deathCamRoll;
-            deathCamOffset = glm::vec3(0.0f);
-            deathCamRoll = 0.0f;
-            firstPersonPresentation.Stop(world);
-            firstPersonBody.Stop(world);
-            bulletHoles.Clear();
-            bloodFx.Clear();
-            BloodRenderer::Get().BeginFrame(); // nothing of Play's blood left in the editor
-            fxSprites.Clear();
-            FxSpriteRenderer::Get().BeginFrame();
-            shellCasings.Clear(world);
-            editor.OnExitPlayMode(world, assets);
-            playing = false;
-            paused = false;
-            playMaximized = false;
-            editorUIVisible = true;
-            gameInputEngaged = false;
-            gameView.OnPlayStateChanged(false);
-            editor.RequestSceneTabFocus();
-            window.SetCursorLocked(false);
-        };
+        // Entering and leaving Play (App/PlaySession.h): snapshot on Play, restore on Stop.
+        int& errPauseSeen = play.ErrPauseSeen;
+        PlaySession playSession(play, opt, window, world, assets, editor, gameView, editorCamera, player, flashlight, gravityGun,
+                                firstPersonPresentation, firstPersonBody, combatFx, combatHud, weaponFx, bloodFx, fxSprites,
+                                playerVitals, npcDirector, devPanel, bulletHoles, shellCasings, weaponTest.get(), weaponLab.get(),
+                                npcTest.get());
+        auto startPlay = [&]() { playSession.Start(); };
+        auto stopPlay = [&]() { playSession.Stop(); };
         auto togglePlay = [&]() { if (playing) stopPlay(); else startPlay(); };
         // Fullscreen/Restore button next to Stop: maximize the Game view over the editor panels
         // (equivalent to the old whole-window Play look), or drop back to windowed in-panel play.
