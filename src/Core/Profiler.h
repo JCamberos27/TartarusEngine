@@ -21,6 +21,7 @@ public:
     static void BeginFrame();
 
     static void PushSample(const std::string& name, float milliseconds);
+    static void PushSample(const char* name, float milliseconds); // builds the entry's name in place
 
     // Entries from the most recently COMPLETED frame - i.e. if you're reading this while
     // building this frame's UI (as the Stats overlay does), you're seeing last frame's numbers,
@@ -31,14 +32,16 @@ public:
     // goes out of scope. Use via the PROFILE_SCOPE(name) macro below rather than directly, so
     // the variable name (which must be unique per scope) isn't something every call site has to
     // pick by hand.
+    // `name` is a string literal (or otherwise outlives the scope): kept as a pointer, copied once
+    // into the frame's entry when the scope ends.
     class ScopeTimer {
     public:
-        explicit ScopeTimer(std::string name);
+        explicit ScopeTimer(const char* name);
         ~ScopeTimer();
         ScopeTimer(const ScopeTimer&) = delete;
         ScopeTimer& operator=(const ScopeTimer&) = delete;
     private:
-        std::string m_Name;
+        const char* m_Name;
         std::chrono::steady_clock::time_point m_Start;
     };
 

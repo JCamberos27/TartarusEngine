@@ -65,6 +65,22 @@ public:
 
 using TriggerPair = std::pair<std::uint32_t, std::uint32_t>; // (trigger entity, other entity)
 
+// A per-step table (a body's pose or velocity before the step) refilled every substep. Refilling an
+// unordered_map after clear() freed and reallocated a node per awake body per substep; this keeps the
+// nodes and marks which entries the current refill wrote, so a body skipped this time reads as absent.
+template <class K, class V>
+struct RefilledMap {
+    std::unordered_map<K, std::pair<V, std::uint32_t>> Map;
+    std::uint32_t Stamp = 1;
+    void BeginRefill() { if (++Stamp == 0) { Map.clear(); Stamp = 1; } } // what clear() was
+    void Set(K k, const V& v) { auto& e = Map[k]; e.first = v; e.second = Stamp; }
+    const V* Find(K k) const {
+        const auto it = Map.find(k);
+        return it != Map.end() && it->second.second == Stamp ? &it->second.first : nullptr;
+    }
+    void Erase(K k) { Map.erase(k); }
+};
+
 struct PhysicsState;
 
 // PhysX calls this back during fetchResults. onTrigger feeds trigger enter/exit; onContact
@@ -180,7 +196,7 @@ struct PhysicsState {
     std::vector<std::pair<PxRigidDynamic*, entt::entity>> kinematics;
     // #168 - each dynamic body's pose before the most recent substep, so the rendered pose can
     // be interpolated between it and the current one. Rebuilt every substep (never stale).
-    std::unordered_map<PxRigidDynamic*, PxTransform> prevPose;
+    RefilledMap<PxRigidDynamic*, PxTransform> prevPose;
     // A sleeping body's pose as last written to its TransformComponent (local Position/Rotation): while it sleeps
     // and the component still holds it, the writeback skips it (pose conversion and Euler hint, every frame,
     // for every settled body in the scene).
@@ -271,10 +287,10 @@ struct PhysicsState {
     // pose only advances on frames where a substep runs, so carrying the Player by it moved the
     // capsule 0 or 2 steps' worth per frame at high refresh rates (judder); the target moves
     // every frame, in step with what the renderer draws.
-    std::unordered_map<const PxRigidDynamic*, PxTransform> kinematicFramePose;
+    RefilledMap<const PxRigidDynamic*, PxTransform> kinematicFramePose;
     // #185 hardening — every dynamic body's linear velocity captured just before simulate(),
     // so onContact (post-solve) can report the real closing speed of an impact.
-    std::unordered_map<const PxActor*, PxVec3> preStepVel;
+    RefilledMap<const PxActor*, PxVec3> preStepVel;
     // #185 hardening — gravity-gun grab (physics-playground debug harness). The held body plus
     // the gravity flag / angular damping saved at grab time so ReleaseBody restores them.
     PxRigidDynamic* grabbed = nullptr;
@@ -645,10 +661,10 @@ void RemoveActor(PhysicsState& s, std::uint32_t id) {
         };
         drop(s.dynamics);
         drop(s.kinematics);
-        s.prevPose.erase(b);
+        s.prevPose.Erase(b);
         s.settled.erase(b);
-        s.kinematicFramePose.erase(b);
-        s.preStepVel.erase(b);
+        s.kinematicFramePose.Erase(b);
+        s.preStepVel.Erase(b);
         s.jointed.erase(b);
         if (s.grabbed == b) { s.grabbed = nullptr; s.grabHasTarget = false; s.grabHasRotation = false; }
         if (s.playerGround == b) s.playerGround = nullptr;
@@ -862,8 +878,8 @@ void SimEventCallback::onTrigger(PxTriggerPair* pairs, PxU32 count) {
 // resting state.
 float NormalClosingSpeed(PhysicsState& s, const PxActor* a0, const PxActor* a1, const PxVec3& n) {
     auto vel = [&](const PxActor* a) -> PxVec3 {
-        auto it = a ? s.preStepVel.find(a) : s.preStepVel.end();
-        return it != s.preStepVel.end() ? it->second : PxVec3(0.0f);
+        const PxVec3* v = a ? s.preStepVel.Find(a) : nullptr;
+        return v ? *v : PxVec3(0.0f);
     };
     return std::abs((vel(a0) - vel(a1)).dot(n));
 }
@@ -939,8 +955,8 @@ void SimEventCallback::onConstraintBreak(PxConstraintInfo* constraints, PxU32 co
 // The pose a moving platform is carried by: this frame's authored target (#168), else the
 // simulated pose (a kinematic with no Transform-driven target).
 static PxTransform PlatformPose(const PhysicsState& s, const PxRigidDynamic* body) {
-    auto it = s.kinematicFramePose.find(body);
-    return it != s.kinematicFramePose.end() ? it->second : body->getGlobalPose();
+    const PxTransform* p = s.kinematicFramePose.Find(body);
+    return p ? *p : body->getGlobalPose();
 }
 
 void PlayerHitReport::onShapeHit(const PxControllerShapeHit& hit) {
@@ -1238,14 +1254,14 @@ void FreezeRestingRagdolls(PhysicsState& s, float dt);
 // Shared by Step() and StepOneSubstep().
 void RunOneSubstep(PhysicsState& s, float fixedStep) {
     DriveGrab(s, fixedStep);
-    s.preStepVel.clear();
-    s.prevPose.clear();
+    s.preStepVel.BeginRefill();
+    s.prevPose.BeginRefill();
     for (auto& [body, e] : s.dynamics) {
         // A sleeping body has no velocity and won't have moved: no entry reads as zero velocity and as no
         // interpolation (the current pose), the same thing.
         if (body->isSleeping()) continue;
-        s.preStepVel[body] = body->getLinearVelocity();
-        s.prevPose[body] = body->getGlobalPose(); // #168
+        s.preStepVel.Set(body, body->getLinearVelocity());
+        s.prevPose.Set(body, body->getGlobalPose()); // #168
     }
     for (auto& rd : s.ragdolls) {
         if (rd.Frozen) continue;
@@ -1291,14 +1307,14 @@ void Step(float dt, World& world, const std::function<void(float fixedDt)>& onFi
 
     // Kinematic bodies are driven by their TransformComponent (e.g. an Animator-moved platform):
     // push this frame's authored pose into the actor before stepping so it sweeps other bodies.
-    g_State->kinematicFramePose.clear();
+    g_State->kinematicFramePose.BeginRefill();
     for (auto& [body, e] : g_State->kinematics) {
         if (!world.Registry.valid(e)) continue;
         if (!world.Registry.all_of<TransformComponent>(e)) continue;
         const TransformComponent w = world.WorldSpaceTransform(e); // #114
         const PxTransform target(ToPx(w.Position), QuatToPx(w.Rotation));
         body->setKinematicTarget(target);
-        g_State->kinematicFramePose[body] = target; // #168
+        g_State->kinematicFramePose.Set(body, target); // #168
     }
 
     // Fixed-timestep accumulator: gameplay physics must not vary with frame rate. Cap the
@@ -1353,7 +1369,7 @@ void Step(float dt, World& world, const std::function<void(float fixedDt)>& onFi
             body->putToSleep();
             const TransformComponent w = world.WorldSpaceTransform(e); // #114
             body->setGlobalPose(PxTransform(ToPx(w.Position), QuatToPx(w.Rotation)));
-            g_State->prevPose.erase(body); // #168 - don't blend from the blown-up pose
+            g_State->prevPose.Erase(body); // #168 - don't blend from the blown-up pose
             Log::Warn("PhysX: " + EntityLogRef(world.Registry, e) +
                       " produced a non-finite pose — frozen at its last good transform.", EntityLogContext(world.Registry, e));
             continue;
@@ -1367,8 +1383,8 @@ void Step(float dt, World& world, const std::function<void(float fixedDt)>& onFi
         // (Interpolate) made it judder against the view whenever the player moved.
         const int mode = body == g_State->grabbed ? 2 : (rb ? rb->Interpolation : 1);
         if (mode == 1) {
-            if (auto it = g_State->prevPose.find(body); it != g_State->prevPose.end() && PoseIsFinite(it->second)) {
-                const PxTransform& a = it->second;
+            if (const PxTransform* prev = g_State->prevPose.Find(body); prev && PoseIsFinite(*prev)) {
+                const PxTransform& a = *prev;
                 shown.p = a.p + (p.p - a.p) * alpha;
                 const glm::quat qa(a.q.w, a.q.x, a.q.y, a.q.z), qb(p.q.w, p.q.x, p.q.y, p.q.z);
                 const glm::quat q = glm::slerp(qa, qb, alpha);
@@ -3411,14 +3427,14 @@ void StepOneSubstep(World& world) {
     g_State->triggerEvents.clear();
     g_State->enteredThisFrame.clear();
     g_State->contactEvents.clear();
-    g_State->kinematicFramePose.clear();
+    g_State->kinematicFramePose.BeginRefill();
     for (auto& [body, e] : g_State->kinematics) {
         if (!world.Registry.valid(e)) continue;
         if (world.Registry.all_of<TransformComponent>(e)) {
             const TransformComponent w = world.WorldSpaceTransform(e); // #114
             const PxTransform target(ToPx(w.Position), QuatToPx(w.Rotation));
             body->setKinematicTarget(target);
-            g_State->kinematicFramePose[body] = target; // #168
+            g_State->kinematicFramePose.Set(body, target); // #168
         }
     }
     RunOneSubstep(*g_State, FixedStep());

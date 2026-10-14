@@ -1209,13 +1209,16 @@ void FirstPersonBody::LateUpdate(World& world, Camera& camera, float dt, entt::e
         for (size_t k = 0; k < m_Pieces.size(); ++k) {
             if (m_Pieces[k] == m_Body || !IsArmsPiece(reg, m_Pieces[k])) continue;
             const Model& m = *m_Models[k];
-            IK::Pose pose = m.AppliedLocalPose();
+            // Scratch kept between calls: this runs five or six times a frame.
+            thread_local IK::Pose pose;
+            thread_local std::vector<int> parents;
+            thread_local std::vector<glm::mat4> globals;
+            pose = m.AppliedLocalPose();
             const int ul = m.NodeIndex(Bone(FPBody::kBoneUpperArm[0])), ur = m.NodeIndex(Bone(FPBody::kBoneUpperArm[1]));
             if (pose.empty() || (int)pose.size() != m.NodeCount() || ul < 0 || ur < 0) break;
-            std::vector<int> parents(pose.size());
+            parents.resize(pose.size());
             for (int i = 0; i < (int)pose.size(); ++i) parents[i] = m.NodeParent(i);
             CopyArmShapeCached(m, *armRig, m_ArmsWeight, pose, parents, cfg.ClavicleFollow);
-            std::vector<glm::mat4> globals;
             IK::ComputeGlobals(pose, parents, globals);
             left = IK::Position(globals[ul]);
             right = IK::Position(globals[ur]);
@@ -1797,16 +1800,20 @@ void FirstPersonBody::RotateSpine(const std::function<glm::quat(float)>& stepFor
 
 void FirstPersonBody::RotateChain(const std::vector<std::string>& chain, const std::function<glm::quat(float)>& stepFor,
                                   const std::vector<std::shared_ptr<Model>>* models, const IK::SpineDistribution* dist) {
-    std::vector<int> parents;
-    std::vector<glm::mat4> globals;
+    // Scratch kept between calls (several chains a frame, each over every piece's full pose).
+    thread_local std::vector<int> parents;
+    thread_local std::vector<glm::mat4> globals;
+    thread_local IK::Pose pose;
+    thread_local std::vector<int> bones, slot; // slot: the bone's place in the chain (its weight and limit)
     const auto& list = models ? *models : m_Models;
     for (size_t k = 0; k < list.size(); ++k) {
         const auto& mp = list[k];
         if (!mp) continue;
         Model& m = *mp;
-        IK::Pose pose = m.AppliedLocalPose();
+        pose = m.AppliedLocalPose();
         if (pose.empty() || (int)pose.size() != m.NodeCount()) continue;
-        std::vector<int> bones, slot; // slot: the bone's place in the chain (its weight and limit)
+        bones.clear();
+        slot.clear();
         for (size_t c = 0; c < chain.size(); ++c)
             if (const int i = m.NodeIndex(Bone(chain[c])); i >= 0) { bones.push_back(i); slot.push_back((int)c); }
         if (bones.empty()) continue;
