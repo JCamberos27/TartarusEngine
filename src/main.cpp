@@ -5006,7 +5006,9 @@ int main(int argc, char** argv) {
                         std::cout << "[NpcTest] " << npcTest->Checks() << " checks, " << npcTest->Failures() << " failure(s)" << std::endl;
                     }
                     if (newErrors > 0)       cause += std::to_string(newErrors) + " new GL error(s); ";
-                    if (drawCalls <= 0)      cause += "zero draw calls; ";
+                    // --smoke-shots leaves the Scene view looking up at the sky for its last capture, where there is
+                    // nothing to draw: the plain --smoke-test run checks the draw count, a capture run doesn't.
+                    if (drawCalls <= 0 && opt.smokeShotsDir.empty()) cause += "zero draw calls; ";
                     // A smoke_play* scene must actually have completed its Play -> Stop cycles.
                     if (smokePlayScene && smokePlayCycles < 2)
                         cause += "play-mode cycles incomplete (" + std::to_string(smokePlayCycles) + "/2); ";
