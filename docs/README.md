@@ -28,6 +28,7 @@ guide's boundaries before assuming Unity package or serialization compatibility.
 
 ## Related engine systems
 
+* [Job system and multithreaded frames](JOB_SYSTEM.md): design plan for moving culling, animation and draw-list building onto worker threads.
 * [Project assets](PROJECT_ASSETS.md): folder layout, weapon files, and duplicate consolidation.
 * [Weapon reimport](WEAPON_REIMPORT.md): repeating the AKS74U and Remington 870 authored-export import.
 * [Procedural recoil](PROCEDURAL_RECOIL.md), [weapon camera](WEAPON_CAMERA.md),
