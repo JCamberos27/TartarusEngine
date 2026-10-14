@@ -71,7 +71,6 @@ PACKS = [
      'textures': ['Furniture/Arm_Chair_01/Textures', 'Furniture/Chesterfield_Sofa/Textures/4096',
                   'Furniture/Sofa_01/Textures', 'Furniture/Sofa_02/Textures', 'Furniture/Sofa_03/Textures']},
     {'dest': 'Props/Cross', 'models': ['Props/Cross/Cross.fbx'], 'textures': ['Props/Cross/Textures']},
-    {'dest': 'Props/David', 'models': ['Props/David/David.fbx'], 'textures': []},
     {'dest': 'Props/Electrical', 'models': ['Props/Electrical/Light_Switches/Models/Light_Switches.fbx',
                                             'Props/Electrical/Outlets/Outlet_Electrical.fbx', 'Props/Electrical/Outlets/Outlet_Gfi.fbx'],
      'textures': ['Props/Electrical/Light_Switches/Light_Switches_Textures/*', 'Props/Electrical/Outlets/Textures/*']},
@@ -120,12 +119,11 @@ FLAT = {
     'Glass_Clear': {'base': [0.92, 0.95, 0.97], 'metal': 0.0, 'rough': 0.04, 'opacity': 0.18},
     'Window_Light': {'base': [0.0, 0.0, 0.0], 'metal': 0.0, 'rough': 0.6, 'emissive': [0.85, 0.92, 1.0], 'strength': 2.5},
     'Plastic_White': {'base': [0.86, 0.86, 0.84], 'metal': 0.0, 'rough': 0.45},
-    'Marble_White': {'base': [0.86, 0.85, 0.82], 'metal': 0.0, 'rough': 0.32},
     'Steel_Blade': {'base': [0.62, 0.62, 0.64], 'metal': 1.0, 'rough': 0.28},
 }
 FLAT_MATERIALS = {
     'Cabinets_glass': 'Glass_Clear', 'Clocks_glass': 'Glass_Clear', 'Emissive': 'Window_Light', 'Plastic': 'Plastic_White',
-    ('David', 'DefaultMaterial'): 'Marble_White', ('Knife', 'DefaultMaterial'): 'Steel_Blade',
+    ('Knife', 'DefaultMaterial'): 'Steel_Blade',
 }
 # Materials made from another set's maps with new colour / finish: the door hardware's "White" set paints the lever
 # and rosettes flat white, so brass multiplies its albedo by a brass tint (the detail - keyholes, screws - stays)
@@ -139,7 +137,7 @@ EMISSIVE = {'Lamps_B': ([1.0, 0.86, 0.68], 3.0), 'Lamps_C': ([1.0, 0.9, 0.75], 3
             'Lamps_Table_On': ([1.0, 0.86, 0.68], 3.0), 'Clocks': ([1.0, 1.0, 1.0], 1.0)}
 
 # Files whose units are off by a power of ten (no unit metadata, or wrong): extra import scale.
-SCALE = {'Door_Op_1': 0.1, 'Door_Op_2': 0.1, 'David': 0.01, 'Knife': 0.01}
+SCALE = {'Door_Op_1': 0.1, 'Door_Op_2': 0.1, 'Knife': 0.01}
 # Kit files that stack every variant in one place: the nodes left out (importer excludeNodes). Each door keeps
 # lock set 1 (lever handle + cylinder) with deadbolt 11 and their strike plates, the hanging (unhooked) chain and
 # one house number.
