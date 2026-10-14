@@ -1255,6 +1255,23 @@ void TestIKSetGlobalsBatch() {
     }
 }
 
+// A hitch past the fixed step's catch-up cap is dropped, not carried: the hitch frame runs the cap's steps and the
+// next ordinary frame no extra one.
+void TestPhysicsHitchCatchUp() {
+    World world;
+    PhysicsWorld::Create(world);
+    const float fixed = PhysicsWorld::GetDebugStats().FixedStep;
+    PhysicsWorld::Step(1.0f, world, {});
+    CHECK(PhysicsWorld::GetDebugStats().Substeps == 4);
+    PhysicsWorld::Step(fixed * 0.5f, world, {});
+    CHECK(PhysicsWorld::GetDebugStats().Substeps == 0);
+    PhysicsWorld::Step(fixed * 0.6f, world, {});
+    CHECK(PhysicsWorld::GetDebugStats().Substeps == 1);
+    PhysicsWorld::Step(fixed * 2.0f, world, {});
+    CHECK(PhysicsWorld::GetDebugStats().Substeps == 2);
+    PhysicsWorld::Destroy();
+}
+
 // The per-bone hitboxes: while active the unscoped queries (the player's shots) hit them and skip the capsule; a scoped one
 // (an NPC's) is the other way round; a ray over body parts says which part; a ragdoll's parts answer the same ray.
 void TestNpcBodyParts() {
@@ -5689,6 +5706,7 @@ int RunUnitTests(const char* filter) {
         {"NpcHitRegions", TestNpcHitRegions},
         {"IKSetGlobalsBatch", TestIKSetGlobalsBatch},
         {"NpcBodyParts", TestNpcBodyParts},
+        {"PhysicsHitchCatchUp", TestPhysicsHitchCatchUp},
         {"PhysicsWorldSync", TestPhysicsWorldSync},
         {"PhysicalSky", TestPhysicalSky},
         {"AiMath", TestAiMath},

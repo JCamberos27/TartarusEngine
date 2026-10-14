@@ -265,6 +265,7 @@ struct PhysicsState {
     PxVec3          playerGroundLastPos{0.0f};
     PxQuat          playerGroundLastRot{PxIdentity};
     bool            playerGroundHitThisMove = false;
+    float           playerMoveDt = 0.0f;  // the step of the move in progress (MoveCharacter), for the push
     float           platformYawDeltaDeg = 0.0f; // this frame's platform spin, for Player yaw
     // #168 - each kinematic's pose as authored THIS frame (its kinematic target). The simulated
     // pose only advances on frames where a substep runs, so carrying the Player by it moved the
@@ -973,10 +974,13 @@ void PlayerHitReport::onShapeHit(const PxControllerShapeHit& hit) {
 
     // Push proportional to how hard we walked into it. Impulse scales with mass so the
     // resulting velocity change is ~constant regardless of body weight (a heavy crate still
-    // budges, a light one doesn't rocket away). Strength is project-tunable.
+    // budges, a light one doesn't rocket away). Strength is project-tunable, per 60 Hz move: the
+    // player moves once per rendered frame, so the impulse scales with the move's step (at 144 fps
+    // a crate was shoved 2.4x as hard as at 60).
     const PxVec3 dir(hit.dir.x, hit.dir.y, hit.dir.z);
     const float mass = body->getMass() > 0.0f ? body->getMass() : 1.0f;
-    const float strength = ProjectSettings::Physics().PlayerPushStrength;
+    const float rate = owner->playerMoveDt > 0.0f ? std::min(owner->playerMoveDt * 60.0f, 6.0f) : 1.0f;
+    const float strength = ProjectSettings::Physics().PlayerPushStrength * rate;
     PxRigidBodyExt::addForceAtPos(*body, dir * (strength * mass),
                                   PxVec3((float)hit.worldPos.x, (float)hit.worldPos.y, (float)hit.worldPos.z),
                                   PxForceMode::eIMPULSE, true);
@@ -1299,15 +1303,18 @@ void Step(float dt, World& world, const std::function<void(float fixedDt)>& onFi
 
     // Fixed-timestep accumulator: gameplay physics must not vary with frame rate. Cap the
     // catch-up at kMaxSubSteps so a big hitch (asset load, breakpoint) doesn't trigger a
-    // multi-second simulation spiral on the next frame.
+    // multi-second simulation spiral on the next frame. What's past the cap is dropped: capped a
+    // step higher, the hitch frame ran its kMaxSubSteps and left a whole step owed, so the next
+    // ordinary frame ran two (a lurch right after the hitch).
     const float fixedStep = FixedStep();
     g_State->stepAccumulator += dt;
-    if (g_State->stepAccumulator > fixedStep * (kMaxSubSteps + 1))
-        g_State->stepAccumulator = fixedStep * (kMaxSubSteps + 1);
+    if (g_State->stepAccumulator > fixedStep * kMaxSubSteps)
+        g_State->stepAccumulator = fixedStep * kMaxSubSteps;
 
     const auto t0 = std::chrono::steady_clock::now();
     int steps = 0;
-    while (g_State->stepAccumulator >= fixedStep && steps < kMaxSubSteps) {
+    // (A few microseconds of slack: float rounding must not leave the last of a whole number of steps owed.)
+    while (g_State->stepAccumulator >= fixedStep - 1e-6f && steps < kMaxSubSteps) {
         if (onFixedStep) onFixedStep(fixedStep); // FixedUpdate runs before the sim, as in Unity
         RunOneSubstep(*g_State, fixedStep);
         g_State->stepAccumulator -= fixedStep;
@@ -1554,6 +1561,7 @@ unsigned MoveCharacter(const float disp[3], float dt) {
     // #185 PR 10 — ride a moving platform: add the ground kinematic's translation since the
     // last move, and expose its yaw change for Player::Update to fold into the camera.
     g_State->playerGroundHitThisMove = false;
+    g_State->playerMoveDt = dt;
     g_State->platformYawDeltaDeg = 0.0f;
     if (g_State->playerGround) {
         const PxTransform gp = PlatformPose(*g_State, g_State->playerGround);

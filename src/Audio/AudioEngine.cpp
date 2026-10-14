@@ -41,6 +41,7 @@ std::unordered_map<std::string, std::shared_ptr<const PreloadedClip>> s_Preloade
 struct Voice {
     std::unique_ptr<ma_sound> Sound;         // null when the slot is free
     std::unique_ptr<ma_lpf_node> Lpf;        // occlusion low-pass, between the sound and its splitter / bus
+    double LpfHz = 0.0;                      // its cutoff now (SetOcclusion skips a reinit that changes nothing)
     std::unique_ptr<ma_splitter_node> Split; // output 0: the bus, output 1: the reverb send (its volume is the send level)
     std::unique_ptr<ma_audio_buffer> Buffer; // non-null only for a voice playing preloaded data (#202)
     std::shared_ptr<const PreloadedClip> Clip; // keeps Buffer's PCM alive past Unload() (#171)
@@ -646,6 +647,7 @@ AudioEngine::SoundHandle AudioEngine::Play(const std::string& path, float volume
 
     Voice& voice = s_Voices[index];
     voice.Sound = std::move(sound);
+    voice.LpfHz = lpf ? std::clamp((double)fx->Cutoff, 80.0, 20000.0) : 0.0;
     voice.Lpf = std::move(lpf);
     voice.Split = std::move(split);
     voice.Buffer = std::move(buffer);
@@ -667,6 +669,10 @@ void AudioEngine::SetOcclusion(SoundHandle handle, float cutoffHz, float gain) {
     if (!v.Lpf) return;
     ma_node_set_output_bus_volume(v.Lpf.get(), 0, std::max(gain, 0.0f));
     const double hz = (cutoffHz <= 0.0f || cutoffHz >= 20000.0f) ? 20000.0 : std::max(80.0, (double)cutoffHz);
+    // The coefficients are rewritten under the audio thread, which reads them as it filters: only when the cutoff
+    // really moves (half a percent is inaudible), not every frame the glide holds still.
+    if (std::abs(hz - v.LpfHz) <= v.LpfHz * 0.005) return;
+    v.LpfHz = hz;
     ma_lpf_node_config lc = ma_lpf_node_config_init(2, ma_engine_get_sample_rate(&s_Engine), hz, 2);
     ma_lpf_node_reinit(&lc.lpf, v.Lpf.get());
 }

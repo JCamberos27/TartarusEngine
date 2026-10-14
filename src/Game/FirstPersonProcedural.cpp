@@ -925,7 +925,7 @@ const WeaponProceduralPose& WeaponProceduralState::Update(const WeaponProcedural
             if (!r.Enabled) m_AimPending = m_AimRecoverable = m_AimOutstanding = glm::vec2(0.0f);
         }
     } else if (r.Enabled) {
-        m_Unity.Update(r.Unity,in.Ads,in.Dt,m_Rng);
+        m_Unity.Update(r.Unity,in.Ads,dt,m_Rng); // the clamped step: a hitch must not fling the recoil springs
         if (m_SemiRecoveryTime >= 0.0f) {
             m_SemiRecoveryTime = std::max(0.0f,m_SemiRecoveryTime - dt);
             if (m_SemiRecoveryTime <= 0.000001f) {
