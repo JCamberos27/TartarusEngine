@@ -3983,16 +3983,11 @@ int main(int argc, char** argv) {
                     sc.visible = hide ? hide->Visible.get() : nullptr;
                     sc.xform = world.GetCachedWorldTransform(entity);
                     sc.twoSided = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
-                    glm::vec3 bmin = sc.model->BoundsMin(), bmax = sc.model->BoundsMax();
+                    // As posed (Model::PosedBounds), the bounds the main pass culls with.
+                    glm::vec3 bmin, bmax;
+                    sc.model->PosedBounds(bmin, bmax);
                     sc.bounded = bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z;
                     if (!sc.bounded) continue;
-                    // Bounds are bind-pose only (#113): pad rigged models around the centre so
-                    // a swinging limb stays inside, the same inflation the main pass culls with.
-                    // HasBones(): a character's clips may live in other files, so HasAnimations() misses it.
-                    if (sc.model->HasBones()) {
-                        const glm::vec3 c = (bmin + bmax) * 0.5f, h = (bmax - bmin) * 0.5f * 1.75f;
-                        bmin = c - h; bmax = c + h;
-                    }
                     sc.bounds = AABB{bmin, bmax}.Transformed(sc.xform);
                     casterMin = glm::min(casterMin, sc.bounds.Min);
                     casterMax = glm::max(casterMax, sc.bounds.Max);
@@ -4157,13 +4152,10 @@ int main(int argc, char** argv) {
                         motion->second.posed = now;
                     }
                     lc.animated = lc.model->HasBones() && now - motion->second.posed < kMovingFrames;
-                    glm::vec3 bmin = lc.model->BoundsMin(), bmax = lc.model->BoundsMax();
+                    glm::vec3 bmin, bmax;
+                    lc.model->PosedBounds(bmin, bmax); // as posed, like the main pass
                     lc.bounded = bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z;
                     if (!lc.bounded) continue;
-                    if (lc.animated) { // bind-pose bounds (#113): room for a swinging limb
-                        const glm::vec3 c = (bmin + bmax) * 0.5f, h = (bmax - bmin) * 0.5f * 1.75f;
-                        bmin = c - h; bmax = c + h;
-                    }
                     lc.bounds = AABB{bmin, bmax}.Transformed(lc.xform);
                 }
             }
@@ -4613,13 +4605,9 @@ int main(int argc, char** argv) {
                         rc.Materials[0]->RenderQueue == MaterialAsset::Queue::Transparent) continue;
                     if (rc.CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) continue; // #163: not in view
                     const glm::mat4 model = world.GetCachedWorldTransform(entity);
-                    glm::vec3 bmin = rc.ModelRef->BoundsMin(), bmax = rc.ModelRef->BoundsMax();
+                    glm::vec3 bmin, bmax;
+                    rc.ModelRef->PosedBounds(bmin, bmax); // as posed, like the main pass
                     if (bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z) {
-                        // same inflation as the main pass
-                        if (rc.ModelRef->HasBones()) {
-                            const glm::vec3 c = (bmin + bmax) * 0.5f, hext = (bmax - bmin) * 0.5f * 1.75f;
-                            bmin = c - hext; bmax = c + hext;
-                        }
                         if (!frustum.Intersects(AABB{bmin, bmax}.Transformed(model))) continue;
                     }
                     shadowShader.SetMat4(modelLoc, model);
