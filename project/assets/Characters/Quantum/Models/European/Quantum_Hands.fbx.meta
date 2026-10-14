@@ -1,0 +1,12 @@
+{
+  "folder": "assets/Characters/Quantum/Models/European",
+  "guid": "d00075b82bb2bfad",
+  "importer": {
+    "skinIgnoresMeshNode": true
+  },
+  "materialRemap": {
+    "M_Quantum_Arms": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Arms.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

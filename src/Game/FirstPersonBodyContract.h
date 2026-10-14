@@ -168,6 +168,10 @@ struct ValidationInput {
     int BodyCount = 1;                     // First Person Body components in the scene
 };
 
+// Whether a body piece named `pieceName` is part of the arms: its name contains the Arms Piece or the Hands
+// Piece (case-insensitive; an empty setting matches nothing).
+bool IsArmsPiece(const FirstPersonBodyComponent& cfg, const std::string& pieceName);
+
 // Every problem (and a few notes) with a body setup, worst first. An empty result means all clear.
 std::vector<Check> Validate(const ValidationInput& in);
 // The worst severity in a result (Ok when empty).

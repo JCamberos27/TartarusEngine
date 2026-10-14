@@ -200,6 +200,8 @@ bool Parse(const std::string& jsonText, Wardrobe& out, std::string* error) {
             r.NameHasAny = Strings(c, "nameHasAny");
             r.NameLacksAll = Strings(c, "nameLacksAll");
             r.Skin = c.contains("skin") && c["skin"].is_boolean() ? (c["skin"].get<bool>() ? 1 : 0) : -1;
+            const std::string g = String(c, "gender");
+            r.Gender = IEquals(g, "Female") ? 1 : IEquals(g, "Male") ? 0 : -1;
             r.Hide = Strings(c, "hide");
             r.Replace = String(c, "replace");
             r.With = String(c, "with");
@@ -457,6 +459,7 @@ Resolved Resolve(const Wardrobe& w, const std::vector<Item>& catalog, const Requ
         if (!rule.NameHasAny.empty() && !AnyIn(item.Stem, rule.NameHasAny)) continue;
         if (AnyIn(item.Stem, rule.NameLacksAll)) continue;
         if (rule.Skin >= 0 && (rule.Skin == 1) != item.Skin) continue;
+        if (rule.Gender >= 0 && rule.Gender != (int)request.Sex) continue;
         for (const auto& hide : rule.Hide) {
             const size_t before = parts.size();
             parts.erase(std::remove_if(parts.begin(), parts.end(), [&](const auto& p) { return p.first == hide; }), parts.end());
