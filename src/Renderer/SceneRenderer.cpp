@@ -255,19 +255,42 @@ void SceneRenderer::WarmEffects() {
     BloodRenderer::Get().WarmUp();
 }
 
-int SceneRenderer::WarmShaderVariants(World& world) {
-    std::unordered_map<ShaderAsset*, std::vector<ShaderVariantKey>> done;
+namespace {
+using WarmedVariants = std::unordered_map<ShaderAsset*, std::vector<ShaderVariantKey>>;
+int WarmMaterials(const RenderableComponent& rc, WarmedVariants& done) {
     int built = 0;
-    for (auto entity : world.Registry.view<RenderableComponent>()) {
-        for (const auto& ma : world.Registry.get<RenderableComponent>(entity).Materials) {
-            if (!ma || !ma->Shader) continue;
-            const ShaderVariantKey key = ShaderVariantKeyFor(ma->Mat, *ma->Shader);
-            std::vector<ShaderVariantKey>& keys = done[ma->Shader.get()];
-            if (std::find(keys.begin(), keys.end(), key) != keys.end()) continue;
-            keys.push_back(key);
-            ma->Shader->Variant(key);
-            ++built;
-        }
+    for (const auto& ma : rc.Materials) {
+        if (!ma || !ma->Shader) continue;
+        const ShaderVariantKey key = ShaderVariantKeyFor(ma->Mat, *ma->Shader);
+        std::vector<ShaderVariantKey>& keys = done[ma->Shader.get()];
+        if (std::find(keys.begin(), keys.end(), key) != keys.end()) continue;
+        keys.push_back(key);
+        ma->Shader->Variant(key);
+        ++built;
+    }
+    return built;
+}
+} // namespace
+
+int SceneRenderer::WarmShaderVariants(World& world) {
+    WarmedVariants done;
+    int built = 0;
+    for (auto entity : world.Registry.view<RenderableComponent>())
+        built += WarmMaterials(world.Registry.get<RenderableComponent>(entity), done);
+    return built;
+}
+
+int SceneRenderer::WarmShaderVariants(World& world, entt::entity root) {
+    WarmedVariants done;
+    int built = 0;
+    std::vector<entt::entity> stack{root};
+    while (!stack.empty()) {
+        const entt::entity e = stack.back();
+        stack.pop_back();
+        if (!world.Registry.valid(e)) continue;
+        if (const auto* rc = world.Registry.try_get<RenderableComponent>(e)) built += WarmMaterials(*rc, done);
+        if (const auto* h = world.Registry.try_get<HierarchyComponent>(e))
+            stack.insert(stack.end(), h->Children.begin(), h->Children.end());
     }
     return built;
 }
@@ -342,7 +365,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     auto programFor = [&](const MaterialAsset* ma, std::uint32_t& key) -> Shader* {
         key = 0;
         if (ma && ma->Shader) {
-            key = ShaderVariantKeyFor(ma->Mat, *ma->Shader);
+            key = ShaderVariantKeyForCached(ma->Mat, *ma->Shader);
             if (Shader* v = ma->Shader->Variant(key)) return v;
         }
         return &modelShader;
@@ -424,6 +447,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             if (layer >= 0 && layer < 32 && !((in.layerVisibleMask >> layer) & 1u)) continue;
         }
         auto& renderable = world.Registry.get<RenderableComponent>(entity);
+        if (!renderable.ModelRef) continue; // its model failed to load (or isn't assigned yet): nothing to draw
         // #163 - Shadows Only: drawn by the shadow passes, never in the camera view.
         if (renderable.CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) continue;
         if (world.Registry.all_of<PoseSourceTag>(entity)) continue; // animated only (the first-person arms rig)
@@ -592,13 +616,58 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     // front-to-back within a material (#112 — cheaper overdraw: nearer surfaces fill depth
     // first and hide what is behind them). Shared with the view-model sub-pass, which draws the
     // same way under a different projection.
-    const auto opaqueOrder = [](const DrawItem& a, const DrawItem& b) {
-        if (a.Dynamic != b.Dynamic) return !a.Dynamic; // the static world first: the blood decals go between
-        if (a.Prog != b.Prog) return std::less<const Shader*>()(a.Prog, b.Prog);
-        if (a.MatKey != b.MatKey) return a.MatKey < b.MatKey;
-        return a.ViewDepth < b.ViewDepth;
+    // A DrawItem is ~250 bytes: sorting the lists in place moved each one O(log n) times. The sort runs on a
+    // small key per item (its sort fields and its index), then every item moves once into its place. Equal
+    // keys keep their gather order (the index breaks the tie), so the order is the same every frame.
+    struct SortKey {
+        std::uint64_t A, B; // A: Dynamic + program (opaque) or the queue index (transparent); B: material key
+        float Depth;
+        std::uint32_t Index;
     };
-    std::sort(drawList.begin(), drawList.end(), opaqueOrder);
+    static std::vector<SortKey> sortKeys;
+    static std::vector<DrawItem> sortScratch;
+    const auto sortItems = [](std::vector<DrawItem>& list, auto makeKey, auto less) {
+        sortKeys.clear();
+        for (std::uint32_t i = 0; i < (std::uint32_t)list.size(); ++i) {
+            SortKey k = makeKey(list[i]);
+            k.Index = i;
+            sortKeys.push_back(k);
+        }
+        std::sort(sortKeys.begin(), sortKeys.end(), [&less](const SortKey& a, const SortKey& b) {
+            if (less(a, b)) return true;
+            if (less(b, a)) return false;
+            return a.Index < b.Index;
+        });
+        sortScratch.clear();
+        for (const SortKey& k : sortKeys) sortScratch.push_back(std::move(list[k.Index]));
+        list.swap(sortScratch);
+    };
+    // The static world first (the blood decals go between), then by program (the costliest switch), material,
+    // and front to back. A user-space pointer leaves the top bit free for Dynamic.
+    const auto sortOpaque = [&](std::vector<DrawItem>& list) {
+        sortItems(list,
+            [](const DrawItem& d) {
+                return SortKey{(d.Dynamic ? 1ull << 63 : 0ull) | (std::uint64_t)(std::uintptr_t)d.Prog, d.MatKey, d.ViewDepth, 0u};
+            },
+            [](const SortKey& a, const SortKey& b) {
+                if (a.A != b.A) return a.A < b.A;
+                if (a.B != b.B) return a.B < b.B;
+                return a.Depth < b.Depth;
+            });
+    };
+    // Transparent: QueueIndex ascending, then ViewDepth descending (farthest first), then MatKey.
+    const auto sortTransparent = [&](std::vector<DrawItem>& list) {
+        sortItems(list,
+            [](const DrawItem& d) {
+                return SortKey{(std::uint64_t)((std::int64_t)d.QueueIndex) ^ (1ull << 63), d.MatKey, d.ViewDepth, 0u};
+            },
+            [](const SortKey& a, const SortKey& b) {
+                if (a.A != b.A) return a.A < b.A;
+                if (a.Depth != b.Depth) return a.Depth > b.Depth;
+                return a.B < b.B;
+            });
+    };
+    sortOpaque(drawList);
     // TARTARUS_TRIS_REPORT=<frame>: the opaque pass's triangles on that frame of the Game view, by size (for budgeting).
     if (static const int reportAt = [] { char* e = nullptr; size_t n = 0; int at = -1; if (_dupenv_s(&e, &n, "TARTARUS_TRIS_REPORT") == 0 && e) at = std::atoi(e); std::free(e); return at; }();
         reportAt >= 0 && !ctx.EditorView) {
@@ -642,12 +711,9 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         prog.SetInt("uHideBoneCount", hideCount);
         prog.SetInt("uBoneMaskMode", probeItem->BoneMaskMode);
         if (probeItem->BoneMaskMode) {
-            static const char* const kMask[16] = {
-                "uBoneMask[0]",  "uBoneMask[1]",  "uBoneMask[2]",  "uBoneMask[3]",
-                "uBoneMask[4]",  "uBoneMask[5]",  "uBoneMask[6]",  "uBoneMask[7]",
-                "uBoneMask[8]",  "uBoneMask[9]",  "uBoneMask[10]", "uBoneMask[11]",
-                "uBoneMask[12]", "uBoneMask[13]", "uBoneMask[14]", "uBoneMask[15]"};
-            for (int w = 0; w < 16; ++w) prog.SetInt(kMask[w], (int)probeItem->BoneMask[w]); // the bits, as GLSL ints
+            int mask[16];
+            for (int w = 0; w < 16; ++w) mask[w] = (int)probeItem->BoneMask[w]; // the bits, as GLSL ints
+            prog.SetIntArray("uBoneMask[0]", 16, mask); // one upload, not 16
         }
         prog.SetInt("uSSAOEnabled", activeFs->ssaoOn && !probeItem->NoSsao ? 1 : 0);
         SkinHideBuffer::Bind(probeItem->HideVerts);
@@ -734,12 +800,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         }
 
         // Sort: QueueIndex ascending, then ViewDepth descending (farthest first), then MatKey.
-        std::sort(transparentList.begin(), transparentList.end(),
-            [](const DrawItem& a, const DrawItem& b) {
-                if (a.QueueIndex != b.QueueIndex) return a.QueueIndex < b.QueueIndex;
-                if (a.ViewDepth  != b.ViewDepth)  return a.ViewDepth  > b.ViewDepth;
-                return a.MatKey < b.MatKey;
-            });
+        sortTransparent(transparentList);
 
         glEnable(GL_BLEND);
         glDepthMask(GL_FALSE);
@@ -816,7 +877,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         ApplyFrameState(modelShader, vmFs);
         modelShader.SetInt("uAlphaBlend", 0);
 
-        std::sort(viewModelList.begin(), viewModelList.end(), opaqueOrder);
+        sortOpaque(viewModelList);
         for (const DrawItem& it : viewModelList) {
             probeItem = &it;
             it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, 1.0f, perDraw, it.Pass, it.DoubleSided, it.Visible);
@@ -847,12 +908,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                 glActiveTexture(GL_TEXTURE0);
             }
 
-            std::sort(viewModelTransparentList.begin(), viewModelTransparentList.end(),
-                [](const DrawItem& a, const DrawItem& b) {
-                    if (a.QueueIndex != b.QueueIndex) return a.QueueIndex < b.QueueIndex;
-                    if (a.ViewDepth  != b.ViewDepth)  return a.ViewDepth  > b.ViewDepth;
-                    return a.MatKey < b.MatKey;
-                });
+            sortTransparent(viewModelTransparentList);
 
             glEnable(GL_BLEND);
             glDepthMask(GL_FALSE);

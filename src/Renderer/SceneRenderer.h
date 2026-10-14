@@ -3,6 +3,7 @@
 #include <glm/glm.hpp>
 #include <cstdint>
 #include <unordered_map>
+#include <entt/entity/fwd.hpp>
 #include "RenderStats.h"
 
 // Per-run tally of meshes drawn through each ShaderAsset variant key (audit #354). Key 0 means
@@ -110,6 +111,9 @@ public:
     // Compiles, at load, every shader-variant program the world's materials will draw through
     // (otherwise each compiles on the first frame that draws it). Returns how many programs it touched.
     static int WarmShaderVariants(World& world);
+    // The same for one entity and everything under it: a body built mid-play (an NPC spawn, a new outfit
+    // piece) would otherwise compile its new variants on the frame that first draws it.
+    static int WarmShaderVariants(World& world, entt::entity root);
     // The combat effects' programs (particles, FX sprites, blood sprays and decals) compiled now: each used to compile
     // on its first use, mid-fight.
     static void WarmEffects();

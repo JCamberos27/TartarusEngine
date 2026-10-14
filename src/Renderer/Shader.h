@@ -50,6 +50,7 @@ public:
     // (audit PERF-102: the spot/point shadow uniform uploads in the scene pass).
     void SetVec3Array(std::string_view name, int count, const glm::vec3* data) const;
     void SetFloatArray(std::string_view name, int count, const float* data) const;
+    void SetIntArray(std::string_view name, int count, const int* data) const;
 
     // Re-reads vertFile and fragFile via ShaderLibrary, recompiles and relinks the program in
     // place, and clears the uniform location cache. Throws on compile/link failure (the old
@@ -97,7 +98,7 @@ private:
     // The last value each scalar / vector uniform was given, by location: a draw loop sets the same
     // few dozen per draw, mostly unchanged since the last, and those skip the driver call. Only a
     // write made while this program is bound is remembered; a write while another is bound (it lands
-    // on that one) makes every program forget, so no cache ever holds a value GL no longer has.
+    // on that one) makes that program forget, so no cache ever holds a value GL no longer has.
     struct UniformValue { std::uint32_t Bits[4]; bool Set; };
     mutable std::vector<UniformValue> m_Values;
     mutable std::uint64_t m_ValuesEpoch = 0;
