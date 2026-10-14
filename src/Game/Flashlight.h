@@ -18,7 +18,7 @@ struct Flashlight {
 
     // ~7500 K LED.
     glm::vec3 Color{0.74f, 0.85f, 1.0f};
-    float HotIntensity = 9.0f, HotRange = 16.0f, HotOuterDeg = 11.0f, HotInnerDeg = 3.5f;
+    float HotIntensity = 12.0f, HotRange = 16.0f, HotOuterDeg = 18.0f, HotInnerDeg = 10.0f;
     float SpillIntensity = 1.4f, SpillRange = 9.0f, SpillOuterDeg = 32.0f, SpillInnerDeg = 13.0f;
     float ShadowNear = 0.25f;                          // past the player's own arms and gun
     glm::vec3 Offset{0.17f, -0.14f, 0.12f};            // camera right / up / forward, metres

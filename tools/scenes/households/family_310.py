@@ -343,8 +343,11 @@ def player(b):
 
 def npcs(b):
     # The Sandbox's Combine squad, moved in: the director (squad rules) and four soldiers in the rooms off the hall, each on
-    # the clearest patch of floor in its room and facing the front door. Respawn stays on, so the flat refills.
-    b.from_sandbox('AI Director')['position'] = [6.5, 0.0, 7.0]
+    # the clearest patch of floor in its room and facing the front door. Respawn stays on, so the flat refills. All of
+    # them under one top-level Enemies group (at the origin, so the positions stay world ones), like the other scenes.
+    enemies = b.s.empty('Enemies')
+    director = b.from_sandbox('AI Director')
+    director.update({'parentId': enemies, 'position': [6.5, 0.0, 7.0]})
     spawn = next(e for e in b._sandbox['empties'] if e['name'] == 'Enemy Spawn 1')
     door = (12.25, 4.8)
     for n, (room, weapon, skill) in enumerate((('Living Room', 0, 0.6), ('Kitchen', 1, 0.55),
@@ -356,7 +359,7 @@ def npcs(b):
         fields.update({'Weapon': weapon, 'Skill': skill, 'OutfitSeed': n})
         e['C# Script']['Fields JSON'] = json.dumps(fields, separators=(',', ':'))
         yaw = math.degrees(math.atan2(door[0] - x, door[1] - z))
-        e.update({'id': i, 'order': i, 'parentId': b.root, 'name': f'Enemy Spawn {n} ({room})',
+        e.update({'id': i, 'order': i, 'parentId': enemies, 'name': f'Enemy Spawn {n} ({room})',
                   'position': [round(x, 3), 0.1, round(z, 3)], 'rotation': k.yaw_quat(yaw)})
         b.s.empties.append(e)
 
