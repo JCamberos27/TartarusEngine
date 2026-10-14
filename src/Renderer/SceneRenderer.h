@@ -3,6 +3,7 @@
 #include <glm/glm.hpp>
 #include <cstdint>
 #include <unordered_map>
+#include <vector>
 #include <entt/entity/fwd.hpp>
 #include "RenderStats.h"
 
@@ -15,6 +16,37 @@ void ResetVariantDrawCounts();
 }
 
 class World;
+class Model;
+struct Frustum;
+struct RenderableComponent;
+
+// The one culling walk every pass shares (the camera view, the SSAO pre-pass, the sun and local shadow gathers):
+// each active, LOD-visible renderable with a model, in registry order, filtered by what the pass asks for.
+struct VisibilityQuery {
+    // Shadow casters: Cast Shadows not Off, and every copy of a split pose but the first-person one (the world copy
+    // casts in every view). Otherwise what a camera sees: not Shadows Only, and the view's own copy of a split pose.
+    bool ShadowCasters = false;
+    bool OwnerView = false;          // camera views: the player's own camera (sees the first-person copy)
+    bool EditorView = false;         // the editor Scene view: its per-entity hide and layer visibility apply
+    unsigned LayerVisibleMask = ~0u; //   which layers it shows
+    bool SkipViewModels = false;     // ViewModelTag geometry left out
+    bool SkipPlayerBody = false;     // PlayerBodyTag pieces left out
+    bool SkipTransparent = false;    // a transparent first material slot left out
+    const Frustum* Cull = nullptr;   // when set, anything with bounds outside it is left out
+};
+struct VisibleRenderable {
+    entt::entity Entity;
+    RenderableComponent* Renderable;
+    glm::mat4 Xform;              // the cached world transform
+    glm::vec3 LocalMin, LocalMax; // the model's bounds as posed (Model::PosedBounds)
+    // Those bounds in world space; Bounded is false when the model has none (a never-populated pair), which draws or
+    // casts without a frustum test.
+    glm::vec3 WorldMin, WorldMax;
+    bool Bounded;
+};
+// Clears `out` and fills it with what passes `q`.
+void GatherVisible(World& world, const VisibilityQuery& q, std::vector<VisibleRenderable>& out);
+
 class Sky;
 class SkyAtmosphere;
 class Shader;

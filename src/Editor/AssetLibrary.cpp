@@ -21,6 +21,14 @@ using json = nlohmann::json;
 namespace {
 const std::string kPrimitivePrefix = "primitive://";
 
+// A .meta that won't parse (or holds the wrong types) is skipped as before, but no longer silently.
+// Call only from inside a catch block: it rethrows the current exception to read its message.
+void WarnBadMeta(const std::string& path) {
+    try { throw; }
+    catch (const std::exception& e) { Log::Warn("Assets: ignored unreadable .meta data for '" + path + "': " + e.what()); }
+    catch (...) { Log::Warn("Assets: ignored unreadable .meta data for '" + path + "'."); }
+}
+
 // Reads import settings from a .meta JSON object into `s`. Returns true if the "importer"
 // key was present (even if individual sub-keys were absent and defaulted).
 bool ParseTextureImporter(const json& j, TextureImportSettings& s) {
@@ -208,7 +216,7 @@ void AssetLibrary::PrepareModelImport(const std::string& path) {
                 ModelImportSettings s;
                 if (ParseModelImporter(j, s)) m_ModelSettings[path] = s;
                 ApplyMetaBrowserData(j, path, m_AssetFolder, m_DisplayNames, m_Labels, m_AllLabelsDirty);
-            } catch (...) {}
+            } catch (...) { WarnBadMeta(path); }
         }
     }
     AdoptDiskFolder(path);
@@ -278,7 +286,7 @@ void AssetLibrary::ResolveTextureSettings(const std::string& path, TextureUse us
                 TextureImportSettings s;
                 if (ParseTextureImporter(j, s)) m_TextureSettings[path] = s;
                 ApplyMetaBrowserData(j, path, m_AssetFolder, m_DisplayNames, m_Labels, m_AllLabelsDirty);
-            } catch (...) {}
+            } catch (...) { WarnBadMeta(path); }
         }
     }
 
@@ -340,7 +348,7 @@ void AssetLibrary::RegisterSound(const std::string& path) {
             try {
                 json j = json::parse(metaStr);
                 ApplyMetaBrowserData(j, path, m_AssetFolder, m_DisplayNames, m_Labels, m_AllLabelsDirty);
-            } catch (...) {}
+            } catch (...) { WarnBadMeta(path); }
         }
         AdoptDiskFolder(path);
     }
@@ -396,7 +404,7 @@ std::shared_ptr<MaterialAsset> AssetLibrary::LoadMaterial(const std::string& pat
         try {
             json j = json::parse(metaStr);
             ApplyMetaBrowserData(j, path, m_AssetFolder, m_DisplayNames, m_Labels, m_AllLabelsDirty);
-        } catch (...) {}
+        } catch (...) { WarnBadMeta(path); }
     }
     AdoptDiskFolder(path);
     return ma;
@@ -439,7 +447,7 @@ void AssetLibrary::RegisterPrefab(const std::string& path) {
             try {
                 json j = json::parse(metaStr);
                 ApplyMetaBrowserData(j, path, m_AssetFolder, m_DisplayNames, m_Labels, m_AllLabelsDirty);
-            } catch (...) {}
+            } catch (...) { WarnBadMeta(path); }
         }
         AdoptDiskFolder(path);
     }
@@ -556,7 +564,7 @@ void AssetLibrary::AdoptDiskFolder(const std::string& path, const std::string* m
     try {
         const json j = json::parse(metaJson ? *metaJson : AssetDatabase::ReadMetaFields(path));
         if (j.contains("folder")) return;                            // chosen in the browser
-    } catch (...) {}
+    } catch (...) { WarnBadMeta(path); }
     const std::string folder = DiskFolderFor(path);
     if (!folder.empty()) m_AssetFolder[path] = folder;
 }
@@ -567,7 +575,7 @@ std::string AssetLibrary::BrowserFolderFor(const std::string& path) {
     try {
         const json j = json::parse(AssetDatabase::ReadMetaFields(path));
         if (j.contains("folder") && j["folder"].is_string()) return AddFolderPath(j["folder"].get<std::string>());
-    } catch (...) {}
+    } catch (...) { WarnBadMeta(path); }
     return DiskFolderFor(path);
 }
 
@@ -909,7 +917,7 @@ std::map<std::string, std::string> AssetLibrary::MaterialRemap(const std::string
         if (j.contains("materialRemap") && j["materialRemap"].is_object())
             for (const auto& [name, v] : j["materialRemap"].items())
                 if (v.is_string() && !v.get<std::string>().empty()) remap[name] = v.get<std::string>();
-    } catch (...) {}
+    } catch (...) { WarnBadMeta(modelPath); }
     m_MaterialRemap[key] = remap;
     return remap;
 }

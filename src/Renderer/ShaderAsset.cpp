@@ -235,7 +235,8 @@ PropParse ParsePropLine(const std::string& rawLine, ShaderProperty& out, std::st
             break;
         }
         default:
-            try { out.DefaultFloat = std::stof(def.empty() ? "0" : def); } catch (...) {}
+            try { out.DefaultFloat = std::stof(def.empty() ? "0" : def); }
+            catch (...) { Log::Warn("Shader: property '" + out.Name + "' has a default that isn't a number ('" + def + "'); using 0."); }
             break;
         }
     }
