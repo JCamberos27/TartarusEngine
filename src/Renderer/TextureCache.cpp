@@ -48,7 +48,8 @@ constexpr char kMagic[4] = {'T', 'T', 'E', 'X'};
 // v6: one entry per (texture, settings) - the filename carries the settings hash. A texture loaded two ways (a model's
 // own material at the defaults, a material asset at its .meta's) used to share one entry and evict each other every
 // session: both re-decoded and, the compressed one, re-encoded on every Play (~7 s for one 4K weapon set).
-constexpr uint32_t kVersion = 6;
+// v7: a compressed normal map (TextureType NormalMap) is BC5 (x, y; z rebuilt in the shader) with renormalized mips, not BC1.
+constexpr uint32_t kVersion = 7;
 // A variant whose settings aren't the texture's current .meta ones is still wanted (a model's own material loads it at
 // the defaults); it goes only once nothing has used it for this long.
 constexpr auto kUnusedVariantAge = std::chrono::hours(24 * 14);

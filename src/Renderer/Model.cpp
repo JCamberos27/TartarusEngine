@@ -2130,16 +2130,8 @@ void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const Shade
     // #99 — the redundant-bind skip must also see custom (non-builtin) shader properties;
     // Material::Hash() only covers the built-in fields, so two materials differing only in an
     // ExtraProp used to render with whichever was bound first.
-    size_t hash = mat.Hash();
-    auto mix = [&hash](size_t v) { hash ^= v + 0x9e3779b97f4a7c15ull + (hash << 6) + (hash >> 2); };
-    for (const auto& [name, p] : mat.ExtraProps) {
-        mix(std::hash<std::string>{}(name));
-        mix(std::hash<float>{}(p.F));
-        for (int c = 0; c < 4; ++c) mix(std::hash<float>{}(p.V[c]));
-        mix((size_t)p.B); mix((size_t)p.I);
-        mix(std::hash<const void*>{}(p.Tex.get()));
-    }
-    mix((size_t)ma.RenderQueue);
+    size_t hash = (size_t)mat.HashWithExtraProps();
+    hash ^= (size_t)ma.RenderQueue + 0x9e3779b97f4a7c15ull + (hash << 6) + (hash >> 2);
     if (GLStateCache::MaterialAlreadyBound(hash, shader.Program())) return;
     // #101 — cutout for the AlphaTest queue (Standard.shader includes ModelFragment's uAlphaClip).
     shader.SetInt("uAlphaClip", (mat.AlphaClip || ma.RenderQueue == MaterialAsset::Queue::AlphaTest) ? 1 : 0);
@@ -2163,7 +2155,7 @@ void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const Shade
         case ShaderPropType::Texture2D: {
             const std::string& hasName = b.HasUniform;
             const std::shared_ptr<Texture>& tex =
-                builtin ? MaterialAsset::GetTexture(mat, pname)
+                builtin ? (b.GetTex ? b.GetTex(mat) : MaterialAsset::GetTexture(mat, pname))
                         : (extra ? extra->Tex : MaterialAsset::GetTexture(mat, pname) /*null*/);
             if (tex && tex->IsValid()) {
                 tex->Bind(b.TextureUnit);
@@ -2183,26 +2175,26 @@ void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const Shade
         }
         case ShaderPropType::Color:
         case ShaderPropType::Vec3:
-            shader.SetVec3(uname, builtin ? MaterialAsset::GetColor(mat, pname)
+            shader.SetVec3(uname, builtin ? (b.GetVal ? glm::vec3(b.GetVal(mat)) : MaterialAsset::GetColor(mat, pname))
                                           : (extra ? glm::vec3(extra->V)
                                                    : glm::vec3(prop.DefaultVec)));
             break;
         // #99 — vec2/vec4 uniforms need the matching setter; glUniform3f on them is
         // GL_INVALID_OPERATION and the value was silently never set.
         case ShaderPropType::Vec2:
-            shader.SetVec2(uname, builtin ? glm::vec2(MaterialAsset::GetVec(mat, pname))
+            shader.SetVec2(uname, builtin ? glm::vec2(b.GetVal ? b.GetVal(mat) : MaterialAsset::GetVec(mat, pname))
                                           : glm::vec2(extra ? extra->V : prop.DefaultVec));
             break;
         case ShaderPropType::Vec4:
             shader.SetVec4(uname, extra ? extra->V : prop.DefaultVec);
             break;
         case ShaderPropType::Float:
-            shader.SetFloat(uname, builtin ? MaterialAsset::GetFloat(mat, pname)
+            shader.SetFloat(uname, builtin ? (b.GetVal ? b.GetVal(mat).x : MaterialAsset::GetFloat(mat, pname))
                                            : (extra ? extra->F : prop.DefaultFloat));
             break;
         case ShaderPropType::Bool:
         case ShaderPropType::Int:
-            shader.SetInt(uname, builtin ? (MaterialAsset::GetBool(mat, pname) ? 1 : 0)
+            shader.SetInt(uname, builtin ? ((b.GetVal ? b.GetVal(mat).x != 0.0f : MaterialAsset::GetBool(mat, pname)) ? 1 : 0)
                                          : (extra ? (prop.Type == ShaderPropType::Bool
                                                          ? (extra->B ? 1 : 0) : extra->I)
                                                   : (prop.DefaultBool ? 1 : 0)));

@@ -100,6 +100,13 @@ struct MaterialAsset {
     // #104 — Int / Vec2-4 / Color-with-alpha values, for custom properties (ExtraProps).
     static int       GetInt  (const Material& m, const std::string& name);
     static glm::vec4 GetVec  (const Material& m, const std::string& name);
+    // The built-in field that GetTexture (Texture2D) / GetColor (Color, Vec3) / GetVec (Vec2) /
+    // GetFloat (Float) / GetBool (Bool, Int) would read for `name`, as a plain function: `val`
+    // returns it in .x / .xy / .xyz (a bool as 0 or 1). Both stay null when that getter has no
+    // built-in field of that name (it would look in ExtraProps instead).
+    static void ResolveBuiltin(const std::string& name, ShaderPropType type,
+                               const std::shared_ptr<Texture>& (*&tex)(const Material&),
+                               glm::vec4 (*&val)(const Material&));
     // The colour as authored, for editing. GetColor pre-multiplies _EmissiveColor by
     // _EmissiveStrength (what the renderer uploads); editing that value and writing it back
     // multiplied the strength in twice.

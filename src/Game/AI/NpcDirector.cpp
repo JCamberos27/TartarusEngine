@@ -18,6 +18,7 @@
 #include "Profiler.h"
 #include "PhysicsWorld.h"
 #include "ProjectPaths.h"
+#include "SceneRenderer.h"
 #include "SceneSerializer.h"
 #include "World.h"
 
@@ -384,6 +385,8 @@ bool NpcDirector::LateStart(World& world, AssetLibrary& assets) {
             SetTreeActive(world, spare->Root, false);
             m_Pool.push_back(std::move(spare));
         }
+    // The soldiers' and their guns' shader variants compiled now, at Play start, not on the frame each first draws.
+    SceneRenderer::WarmShaderVariants(world);
     return true;
 }
 
@@ -518,6 +521,7 @@ int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
         n->Weapon->SetLocomotionSpeeds(spawn.JogSpeed, spawn.RunSpeed);
     }
     const float weaponMs = since() - weaponT0;
+    if (!reused) SceneRenderer::WarmShaderVariants(world, built->Root); // a new body's variants, before its first draw
     n->WeaponCam.Fov = cfg.ViewModelFov;
     n->AimYaw=spawn.AimYaw;n->AimPitch=0;n->LookYaw=spawn.AimYaw;n->Eye=Unpack(spawn.Eye);n->SightEye=n->Eye;
     n->Intent.AimPoint=n->Intent.LookPoint=Unpack(spawn.LookPoint);n->Doing=Behaviour::Idle;n->DoingSince=m_Now;n->NextLook=spawn.NextLook;n->NextThink=spawn.NextThink;

@@ -25,3 +25,11 @@ ShaderVariantKey ShaderVariantKeyFor(const Material& m, const ShaderAsset& sa) {
 
     return key;
 }
+
+ShaderVariantKey ShaderVariantKeyForCached(const Material& m, const ShaderAsset& sa) {
+    ShaderVariantKey key = 0;
+    if (m.CachedVariantKey(&sa, key)) return key;
+    key = ShaderVariantKeyFor(m, sa);
+    m.StoreVariantKey(&sa, key);
+    return key;
+}
