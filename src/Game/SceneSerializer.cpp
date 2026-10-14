@@ -28,6 +28,7 @@
 #include <iostream>
 #include <unordered_map>
 #include <set>
+#include <mutex>
 #include <functional>
 #include <algorithm>
 #include <cstring>
@@ -654,7 +655,7 @@ void WriteCommonComponents(json& j, const World& world, entt::entity entity) {
         json cj;
         for (const auto& f : rc.Meta.Fields)
             if (!f.NonSerialized) cj[ReflectFieldKey(f)] = ReflectFieldToJson(f, f.Address(comp));
-        j[rc.Meta.Name] = cj;
+        j[ReflectComponentKey(rc.Meta)] = cj; // Name unless Key is set: a renamed label keeps its files
     }
 }
 
@@ -666,6 +667,8 @@ ColliderComponent ColliderFromJson(const json& c) {
     int shape = c.value("shape", 0); // absent => Box (0), the pre-#185 shape
     collider.Kind = (shape >= 0 && shape <= 4) ? (ColliderComponent::Shape)shape
                                                : ColliderComponent::Shape::Box;
+    if (collider.Kind != (ColliderComponent::Shape)shape)
+        Log::Warn("Scene: collider shape " + std::to_string(shape) + " is not a known shape; loaded as a Box.");
     if (c.contains("halfExtents"))
         collider.HalfExtents = JsonToVec3(c["halfExtents"], glm::vec3(0.0f));
     if (c.contains("center"))
@@ -689,6 +692,8 @@ JointComponent JointFromJson(const json& jc) {
     JointComponent joint;
     int ty = jc.value("type", 0);
     joint.Kind = (ty >= 0 && ty <= 4) ? (JointComponent::Type)ty : JointComponent::Type::Fixed;
+    if (joint.Kind != (JointComponent::Type)ty)
+        Log::Warn("Scene: joint type " + std::to_string(ty) + " is not a known type; loaded as Fixed.");
     joint.ConnectedOrder = jc.value("connectedOrder", -1);
     if (jc.contains("anchor")) joint.Anchor = JsonToVec3(jc["anchor"], glm::vec3(0.0f));
     if (jc.contains("axis"))   joint.Axis   = JsonToVec3(jc["axis"], glm::vec3(1.0f, 0.0f, 0.0f));
@@ -698,6 +703,25 @@ JointComponent JointFromJson(const json& jc) {
     joint.LimitLower  = jc.value("limitLower", -45.0f);
     joint.LimitUpper  = jc.value("limitUpper", 45.0f);
     return joint;
+}
+
+// A component block (an object under a capitalised key, the way the generic pass writes them) that no registered
+// component reads: a component that was renamed without a LegacyKeys entry, or removed. Its data is dropped on the
+// next save, so say so, once per key per run. (The hand-written blocks are lowercase: "collider", "joint", ...)
+void WarnUnknownComponentBlocks(const json& j) {
+    static std::mutex warnedMutex;
+    static std::set<std::string> warned;
+    for (auto it = j.begin(); it != j.end(); ++it) {
+        const std::string& key = it.key();
+        if (!it->is_object() || key.empty() || !std::isupper((unsigned char)key[0])) continue;
+        bool known = false;
+        for (const auto& rc : ComponentRegistry::All())
+            if (ReflectComponentMatches(rc.Meta, key.c_str())) { known = true; break; }
+        if (known) continue;
+        std::lock_guard<std::mutex> lock(warnedMutex);
+        if (warned.insert(key).second)
+            Log::Warn("Scene: no component reads the \"" + key + "\" block; its data will be dropped on save.");
+    }
 }
 
 void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, entt::entity entity) {
@@ -803,10 +827,15 @@ void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, ent
     // Missing fields keep the component's own default (the component was just default-added).
     for (const auto& rc : ComponentRegistry::All()) {
         if (!rc.Meta.GenericSerialize) continue; // hand-coded elsewhere (e.g. Mesh Renderer)
-        if (!j.contains(rc.Meta.Name)) continue;
+        const json* found = nullptr;
+        if (auto it = j.find(ReflectComponentKey(rc.Meta)); it != j.end()) found = &*it;
+        for (size_t i = 0; !found && i < rc.Meta.LegacyKeys.size(); ++i)
+            if (const char* legacy = rc.Meta.LegacyKeys[i]; legacy)
+                if (auto it = j.find(legacy); it != j.end()) found = &*it;
+        if (!found) continue;
         rc.Add(world.Registry, entity);
         void* comp = rc.Get(world.Registry, entity);
-        const json& cj = j.at(rc.Meta.Name);
+        const json& cj = *found;
         for (const auto& f : rc.Meta.Fields) {
             if (f.NonSerialized) continue; // vInspector display-only field
             // #43: key off ReflectFieldKey, with a LegacyNames fallback — so a scene saved under a
@@ -822,6 +851,7 @@ void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, ent
             }
         }
     }
+    WarnUnknownComponentBlocks(j);
     Scripting::SyncPlayerDefinition(world,entity);Scripting::SyncNpcDefinition(world,entity);
 }
 
@@ -979,7 +1009,7 @@ void ApplyPrefabOverride(World& world, AssetLibrary& assets, entt::entity e,
         return;
     }
     for (const auto& rc : ComponentRegistry::All()) {
-        if (rc.Meta.Name != comp) continue;
+        if (!ReflectComponentMatches(rc.Meta, comp.c_str())) continue;
         if (!rc.Has(world.Registry, e)) rc.Add(world.Registry, e);
         void* c = rc.Get(world.Registry, e);
         for (const auto& f : rc.Meta.Fields)
@@ -1752,7 +1782,7 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
                     if (e == entt::null) continue;
                     const std::string cn = ov.value("c", std::string());
                     for (const auto& rc : ComponentRegistry::All()) {
-                        if (rc.Meta.Name != cn) continue;
+                        if (!ReflectComponentMatches(rc.Meta, cn.c_str())) continue;
                         if (op == "addComponent")         { if (!rc.Has(world.Registry, e)) rc.Add(world.Registry, e); }
                         else if (op == "removeComponent") { if (rc.Has(world.Registry, e)) rc.Remove(world.Registry, e); }
                         break;
@@ -2230,7 +2260,8 @@ bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string
     g_MigrationLog.clear();
     // #83 — keep the current world so a malformed file can't leave a half-loaded one behind.
     std::string previous;
-    try { previous = SaveToString(world, assets); } catch (...) {}
+    try { previous = SaveToString(world, assets); }
+    catch (...) { Log::Warn("Scene: couldn't snapshot the current world before loading '" + path + "'; a failed load can't restore it."); }
     bool ok = true;
     try {
         ApplyAssetLibraryJson(assets, root); // before ApplySceneJson: harmless either order, but library assets should exist first
@@ -2472,7 +2503,7 @@ namespace {
 const RegisteredComponent* FindSerialisableComponent(const char* name) {
     if (!name || !*name) return nullptr;
     for (const auto& rc : ComponentRegistry::All())
-        if (rc.Meta.GenericSerialize && std::strcmp(rc.Meta.Name, name) == 0) return &rc;
+        if (rc.Meta.GenericSerialize && ReflectComponentMatches(rc.Meta, name)) return &rc;
     return nullptr; // unknown, or hand-coded (Mesh Renderer and friends)
 }
 } // namespace

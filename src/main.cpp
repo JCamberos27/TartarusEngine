@@ -12,6 +12,7 @@
 #include "FirstPersonPresentation.h"
 #include "Game/Scripting/ScriptRuntime.h"
 #include "Game/Scripting/PlayerDefinition.h"
+#include "Game/Scripting/GameCommands.h"
 #include "FirstPersonWeaponTest.h" // --weapon-test
 #include "WeaponLab.h"            // --weapon-lab
 #include "BodyDebugDraw.h"
@@ -53,6 +54,10 @@
 #include "GameModuleAPI.h" // #170 smoke: QueryFilter / RaycastHit
 #include "Tests/UnitTests.h" // #173
 #include "Tests/EditorUiTests.h" // --editor-tests
+#include "App/LaunchOptions.h"
+#include "App/CliTools.h"
+#include "App/PlaySession.h"
+#include "Tests/SmokeChecks.h"
 #include "OutfitAudit.h"
 #include "ClipAnalysis.h"
 #include "OutfitTestScene.h"
@@ -391,28 +396,24 @@ static PostSettings MakePostSettings(const World& world, unsigned int bloomTex, 
     return p;
 }
 
-// #165 - the scene's First Person Controller (first active one in creation order), if any.
-static entt::entity FindFirstPersonController(World& world) {
-    Scripting::SyncPlayerDefinitions(world);
-    entt::entity best = entt::null;
-    int bestOrder = 0x7fffffff;
-    for (auto e : world.Registry.view<const FirstPersonControllerComponent, const TransformComponent>()) {
-        if (world.Registry.all_of<InactiveTag>(e)) continue;
-        const auto* ord = world.Registry.try_get<OrderComponent>(e);
-        int o = ord ? ord->Value : 0;
-        if (o < bestOrder) { bestOrder = o; best = e; }
-    }
-    return best;
+// The harnesses' PNG captures: framebuffer `fbo`'s w x h pixels, top row first (GL reads bottom up). Leaves the read
+// framebuffer at 0.
+static std::vector<unsigned char> GrabTopDown(unsigned fbo, int w, int h) {
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo);
+    std::vector<unsigned char> px = Screenshot::GrabRegion(0, 0, w, h);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+    std::vector<unsigned char> flipped(px.size());
+    for (int y = 0; y < h; ++y)
+        std::memcpy(&flipped[(size_t)y * w * 4], &px[(size_t)(h - 1 - y) * w * 4], (size_t)w * 4);
+    return flipped;
 }
-
-// #165 - yaw/pitch (Camera's convention) of an entity's forward (-Z) axis. Roll is dropped:
-// Camera has none.
-static void YawPitchFromWorld(const glm::mat4& m, float& yawDeg, float& pitchDeg) {
-    glm::vec3 f = -glm::vec3(m[2]);
-    const float len = glm::length(f);
-    f = len > 1e-6f ? f / len : glm::vec3(0.0f, 0.0f, -1.0f);
-    yawDeg = glm::degrees(std::atan2(f.z, f.x));
-    pitchDeg = std::clamp(glm::degrees(std::asin(std::clamp(f.y, -1.0f, 1.0f))), -89.0f, 89.0f);
+// Writes `rgba` (w x h, top row first) to dir/name.png, making dir if needed. Returns the path.
+static std::string WritePngTo(const std::string& dir, const std::string& name, int w, int h, const std::vector<unsigned char>& rgba) {
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    const std::string out = (std::filesystem::path(dir) / (name + ".png")).string();
+    stbi_write_png(out.c_str(), w, h, 4, rgba.data(), w * 4);
+    return out;
 }
 
 // #165 - the roll that, applied on top of yaw/pitch, lines Camera::Up() up with the entity's own
@@ -423,320 +424,21 @@ static float RollFromWorld(const glm::mat4& m, const Camera& unrolled) {
     return (x * x + y * y) > 1e-12f ? glm::degrees(std::atan2(x, y)) : 0.0f;
 }
 
-static entt::entity FindActiveSceneCamera(const World& world) {
-    entt::entity best = entt::null;
-    int bestOrder = 0x7fffffff;
-    for (auto e : world.Registry.view<const CameraComponent, const TransformComponent>()) {
-        if (world.Registry.all_of<InactiveTag>(e)) continue;
-        const auto* ord = world.Registry.try_get<OrderComponent>(e);
-        int o = ord ? ord->Value : 0;
-        if (o < bestOrder) { bestOrder = o; best = e; }
-    }
-    return best;
-}
-
 int main(int argc, char** argv) {
     // Before anything else: on a crash, write a minidump to %LOCALAPPDATA%\TartarusEngine\Crashes
     // and tell the user, instead of vanishing with a bare exit 139 (#148).
     CrashHandler::Install();
 
-    // --smoke-test: headless-as-possible CI/manual smoke check (audit #187). Loads every scene
-    // under project/scenes/, renders a fixed number of frames of each through the exact same
-    // per-frame render path the interactive editor uses (see the `smokeTestMode` branches
-    // sprinkled through the main loop below), then checks for new GL debug-callback errors and
-    // a nonzero draw count before moving to the next scene. Exits 0 if every scene passed, or a
-    // nonzero code if any failed — parsed here, before anything else, so it can never be
-    // confused with a scene-path or other future argument.
-    bool smokeTestMode = false;
-    // --weapon-test: the smoke harness on the Sandbox only, with the weapons played through by
-    // script in Play (FirstPersonWeaponTest) on a fixed 60 Hz step. Exit code 0 = every check passed.
-    bool weaponTestMode = false;
-    // --stock-probe [remington|ak]: the same harness with the stock probe script (FirstPersonWeaponTest):
-    // the weapon (default the Remington) held through pitches, turns, rounds and the sights, the butt measured
-    // against the body; with --smoke-shots each capture is the Scene view (on the gun and shoulder) beside the Game view.
-    bool stockProbeMode = false, stockProbeAk = false;
-    // --weapon-lab (run-weapon-lab.cmd): the editor on the WeaponLab scene, the Scene view (the world body) beside the Game
-    // view, and the Weapon Lab panel (WeaponLab) - the third-person weapon animations worked on by hand.
-    bool weaponLabMode = false;
-    {
-#pragma warning(suppress : 4996)
-        const char* lab = std::getenv("TARTARUS_WEAPON_LAB"); // run-weapon-lab.cmd (its launcher starts the exe without arguments)
-        weaponLabMode = lab && *lab && *lab != '0';
-    }
-    // --npc-test [watch|fight|die]: the smoke harness on scenes/Arena.json with the enemy squad played
-    // against a scripted player (NpcTest) on a fixed 60 Hz step; with --smoke-shots the Scene view
-    // follows the soldiers beside the Game view. Exit code 0 = every check passed.
-    bool npcTestMode = false;
-    std::string npcTestScenario;
-    // --perf-bench [dir|scene.json]: the smoke-test harness with VSync, the FPS cap and GL debug output
-    // off, a longer per-scene run, and an averaged CPU/GPU profiler breakdown printed per scene: edit
-    // mode, then Play in the docked Game view, then Play maximized. --perf-res WxH sizes the window
-    // (default: maximized) so runs at a given resolution are repeatable. --perf-sample adds a
-    // statistical main-thread CPU profile of each phase (SamplingProfiler): the hottest functions.
-    bool perfBenchMode = false, perfSample = false;
-    int perfResW = 0, perfResH = 0;
-    int renderHeightArg = -1; // --render-height N: this run's render resolution (0 = native)
-    // --resave <in.json> <out.json>: load a scene and immediately re-serialize it, then exit.
-    // The one headless path that exercises the SAVE side of the serializer — round-trip tests
-    // (prefab overrides #302 Part B, the reflected-component migrations, ...) all need it. Still
-    // spins up the GL context (texture/mesh loading needs it) but never enters the main loop.
-    std::string resaveIn, resaveOut;
-    // --smoke-test [dir]: an optional directory of .json scenes to load. Defaults to the
-    // engine's own committed regression scenes (assets/test-scenes/), falling back to the
-    // user project's scenes/ folder — so the harness still means something when the user
-    // project is empty (audit TEST-101).
-    std::string smokeScenesDirArg;
-    // --undo-bench: one-shot headless timing of SceneSerializer::SaveToString/LoadFromString at
-    // synthetic scene sizes (audit ARCH-203 / #375). Investigates whether undo/redo's whole-scene
-    // JSON round-trip is cheap enough to leave as-is, before committing to a diff-based redesign.
-    bool undoBenchMode = false;
-    // --asset-load-bench: one-shot headless timing of AssetLibrary::LoadTexture's decode/upload
-    // split at synthetic library sizes (audit ARCH-201 / #375). The committed project has no
-    // external texture/model assets to bench against, so this synthesizes PNGs the same way
-    // --undo-bench synthesizes entities.
-    bool assetLoadBenchMode = false;
-    // #174 - `--build [outDir]`: File > Build without the UI (CI packaging, scripted builds).
-    // Uses Project Settings > Build; outDir overrides its Output Folder. Exit 0 on success.
-    bool buildMode = false;
-    std::string buildOutArg;
-    int buildCancelAt = -1;
-    // --smoke-shots <dir> (with --smoke-test): saves three Scene-view PNGs per scene - toward the
-    // horizon, a higher angle behind, and up at the sky - for reviewing rendering changes (the
-    // physical sky's, first) without driving the editor.
-    std::string smokeShotsDir;
-    // --outfit-shots <dir> [scene.json|dir]: the smoke test, with the Scene view framed on the scene's
-    // characters instead (CharacterOutfitComponent): the first row, then each picked character full length
-    // from the front and back and its head close up - for reviewing outfit and skin-hiding changes.
-    // Characters are picked spread along each row, or by name with TARTARUS_SHOT_NAMES="Name1,Name2"; each also
-    // gets a "_headback" shot. TARTARUS_SHOT_POSE="<clip>@<fraction>" holds every skinned piece in that pose.
-    std::string outfitShotsDir;
-    // --outfit-audit [wardrobe] [report.csv]: the wardrobe's rules (presets, Randomize) and every pair of
-    // outfit pieces worn one over the other, checked for clipping (OutfitAudit); --outfit-rules: the rules
-    // only; --outfit-posed: the pairs in 32 animation poses too. Exit code: 0 clean, 1 problems.
-    bool outfitAuditMode = false, outfitAuditGeometry = true, outfitAuditPosed = false;
-    // --gen-outfit-scenes: builds project/scenes/OutfitTest/*.json with the outfit system (OutfitTestScene).
-    bool outfitScenesMode = false;
-    // --outfit-cost [scene.json ...]: draw cost of the wardrobe's models and of each scene (OutfitAudit::RunCost).
-    bool outfitCostMode = false;
-    // --outfit-selftest: the OutfitSystem API end to end on the real wardrobe (OutfitAudit::RunSelfTest).
-    bool outfitSelfTestMode = false;
-    // --clip-report <rig> <clip or folder ...>: each animation clip attached to the rig (as the animator does) and
-    // measured - travel, heading change, entry / exit direction and speed, a pivot's plant (ClipAnalysis::PrintReport).
-    bool clipReportMode = false;
-    std::vector<std::string> clipReportArgs;
-    // --editor-shot <dir>: the interactive editor at 1920x1080 (or --perf-res), stepped through a few
-    // fixed views (an entity selected, the Console, the Game view, Settings), each saved as a PNG of the
-    // whole window, then closed - for reviewing editor UI changes without driving the desktop. It runs
-    // on a copy of the user's editor prefs and layout (%LOCALAPPDATA%\TartarusEngine-Shot), never the
-    // real ones. --editor-shot-select <name> picks the selected entity (default: Player Spawn);
-    // --editor-shot-default-layout starts from the default dock layout instead of the user's;
-    // --editor-shot-scale <s> sets the UI scale (as Preferences > General > UI scale would).
-    // --editor-tests [filter]: end-to-end tests of the editor UI (Tests/EditorUiTests.cpp) in the
-    // real editor: a hidden 1920x1080 window, a fresh scratch user folder
-    // (%LOCALAPPDATA%\TartarusEngine-Test), an empty in-memory scene. Exit code 0 = all passed.
-    bool editorTestsMode = false;
-    std::string editorTestsFilter;
-    std::string editorShotDir, editorShotSelect = "Player Spawn";
-    bool editorShotDefaultLayout = false;
-    bool editorShotCurves = false; // capture the real themed recoil curve widget in isolation
-    bool editorShotIDE = false; // one focused IDE capture; use --project with a small fixture
-    float editorShotScale = 0.0f;
-    std::vector<std::string> outfitCostScenes;
-    std::string outfitAuditWardrobe = "assets/Characters/Quantum/Quantum.wardrobe", outfitAuditCsv;
-    for (int i = 1; i < argc; ++i) {
-        std::string a = argv[i];
-        if (a == "--smoke-test" || a == "--perf-bench") {
-            smokeTestMode = true;
-            perfBenchMode = a == "--perf-bench";
-            if (i + 1 < argc && argv[i + 1][0] != '-') smokeScenesDirArg = argv[++i];
-        }
-        else if (a == "--perf-sample") { perfSample = true; }
-        else if (a == "--perf-res" && i + 1 < argc) {
-            if (std::sscanf(argv[++i], "%dx%d", &perfResW, &perfResH) != 2 || perfResW <= 0 || perfResH <= 0)
-                perfResW = perfResH = 0;
-        }
-        else if (a == "--render-height" && i + 1 < argc) { renderHeightArg = std::max(0, std::atoi(argv[++i])); }
-        else if (a == "--weapon-test") { smokeTestMode = true; weaponTestMode = true; }
-        else if (a == "--weapon-lab") { weaponLabMode = true; }
-        else if (a == "--npc-test") {
-            smokeTestMode = true; npcTestMode = true;
-            if (i + 1 < argc && argv[i + 1][0] != '-') npcTestScenario = argv[++i];
-        }
-        else if (a == "--stock-probe") {
-            smokeTestMode = true; weaponTestMode = true; stockProbeMode = true;
-            if (i + 1 < argc && (std::string(argv[i + 1]) == "ak" || std::string(argv[i + 1]) == "remington")) stockProbeAk = std::string(argv[++i]) == "ak";
-        }
-        else if (a == "--smoke-shots" && i + 1 < argc) { smokeShotsDir = argv[++i]; }
-        else if (a == "--editor-shot" && i + 1 < argc) { editorShotDir = argv[++i]; }
-        else if (a == "--editor-tests") {
-            editorTestsMode = true;
-            if (i + 1 < argc && argv[i + 1][0] != '-') editorTestsFilter = argv[++i];
-        }
-        else if (a == "--editor-shot-select" && i + 1 < argc) { editorShotSelect = argv[++i]; }
-        else if (a == "--editor-shot-default-layout") { editorShotDefaultLayout = true; }
-        else if (a == "--editor-shot-curves") { editorShotCurves = true; }
-        else if (a == "--editor-shot-ide") { editorShotIDE = true; }
-        else if (a == "--editor-shot-scale" && i + 1 < argc) { editorShotScale = (float)std::atof(argv[++i]); }
-        else if (a == "--outfit-shots" && i + 1 < argc) {
-            smokeTestMode = true;
-            outfitShotsDir = argv[++i];
-            if (i + 1 < argc && argv[i + 1][0] != '-') smokeScenesDirArg = argv[++i];
-        }
-        else if (a == "--resave" && i + 2 < argc) { resaveIn = argv[i + 1]; resaveOut = argv[i + 2]; i += 2; }
-        else if (a == "--undo-bench") { undoBenchMode = true; }
-        else if (a == "--gen-outfit-scenes") { outfitScenesMode = true; }
-        else if (a == "--outfit-audit" || a == "--outfit-rules" || a == "--outfit-posed") {
-            // --outfit-posed: --outfit-audit plus each pair skinned through walk/run/crouch/... poses.
-            outfitAuditMode = true;
-            outfitAuditGeometry = a != "--outfit-rules";
-            outfitAuditPosed = a == "--outfit-posed";
-            if (i + 1 < argc && argv[i + 1][0] != '-') outfitAuditWardrobe = argv[++i];
-            if (i + 1 < argc && argv[i + 1][0] != '-') outfitAuditCsv = argv[++i];
-        }
-        else if (a == "--outfit-selftest") { outfitSelfTestMode = true; }
-        else if (a == "--clip-report") {
-            clipReportMode = true;
-            while (i + 1 < argc && argv[i + 1][0] != '-') clipReportArgs.push_back(argv[++i]);
-        }
-        else if (a == "--outfit-cost") {
-            outfitCostMode = true;
-            while (i + 1 < argc && argv[i + 1][0] != '-') outfitCostScenes.push_back(argv[++i]);
-        }
-        else if (a == "--asset-load-bench") { assetLoadBenchMode = true; }
-        else if (a == "--build") {
-            buildMode = true;
-            if (i + 1 < argc && argv[i + 1][0] != '-') buildOutArg = argv[++i];
-        }
-        // Test hook: cancel the --build once this many files are copied (checks Cancel cleans up).
-        else if (a == "--build-cancel-at" && i + 1 < argc) { buildCancelAt = std::atoi(argv[++i]); }
-        // #151 - open a specific project folder instead of the one found next to the exe.
-        else if (a == "--project" && i + 1 < argc) {
-            std::error_code ec;
-            const std::filesystem::path dir = std::filesystem::absolute(argv[++i], ec);
-            if (!ec && std::filesystem::is_directory(dir, ec))
-                ProjectPaths::SetRootOverride(dir.lexically_normal().string());
-            else
-                std::cerr << "--project: '" << argv[i] << "' is not a folder; ignoring it." << std::endl;
-        }
-    }
-    // Explicit, headless upgrade through the same parser/serializer as the Inspector.
-    for (int i=1;i+1<argc;++i) if (std::string(argv[i])=="--migrate-recoil") {
-        RecoilAsset asset; std::string error;
-        if (!RecoilAsset::LoadFile(argv[i+1],asset,&error) || !asset.SaveFile(argv[i+1])) {
-            std::cerr << "[RecoilMigration] " << error << '\n'; return 1;
-        }
-        std::cout << "[RecoilMigration] " << argv[i+1] << " -> RecoilAnimData v2\n"; return 0;
-    }
-    // #173 - `--unit-tests`: pure C++ tests, run before any window / GL / audio / PhysX exists
-    // so they work on a GPU-less CI runner. Exit code = failed checks (0 = pass).
-    for (int i = 1; i < argc; ++i) {
-        if (std::string(argv[i]) != "--unit-tests") continue;
-        CrashHandler::SetInteractive(false);
-        const char* filter=i+1<argc && argv[i+1][0]!='-'?argv[i+1]:nullptr;
-        return RunUnitTests(filter) == 0 ? 0 : 1;
-    }
-    // `--import-blood-fx <VolumetricBloodFX package dir>`: converts the volumetric blood sims and
-    // decals into project/assets/Effects/Blood (git-ignored; docs/BLOOD_FX.md). No GL needed.
-    for (int i = 1; i + 1 < argc; ++i) {
-        if (std::string(argv[i]) != "--import-blood-fx") continue;
-        CrashHandler::SetInteractive(false);
-        std::string output;if(!Scripting::RequestProject("content.path",nlohmann::json("blood").dump(),output)){Log::Error("This project has no content import configuration.");return 1;}
-        return BloodFxImport::ImportPackage(argv[i+1],ProjectPaths::Resolve(nlohmann::json::parse(output).get<std::string>()))?0:1;
-    }
-    // `--import-knife-fx <folder holding the extracted Knife packs>`: the Real Blood and PRO Effects textures
-    // into project/assets/Effects/Knife (git-ignored; docs/BLOOD_FX.md). No GL needed.
-    for (int i = 1; i + 1 < argc; ++i) {
-        if (std::string(argv[i]) != "--import-knife-fx") continue;
-        CrashHandler::SetInteractive(false);
-        std::string output;if(!Scripting::RequestProject("content.path",nlohmann::json("knife").dump(),output)){Log::Error("This project has no content import configuration.");return 1;}
-        return KnifeFxImport::ImportPacks(argv[i+1],ProjectPaths::Resolve(nlohmann::json::parse(output).get<std::string>()))?0:1;
-    }
-    // `--model-report <folder or model> [more ...]`: imports each .fbx/.obj/.gltf/.glb with its .meta's import settings
-    // (materials skipped) and prints its size in meters, its bounds and its mesh count, one line per model - checks
-    // scale and up-axis after an asset import. No GL needed. Exit 1 if any model fails to import.
-    for (int i = 1; i < argc; ++i) {
-        if (std::string(argv[i]) != "--model-report") continue;
-        CrashHandler::SetInteractive(false);
-        namespace fs = std::filesystem;
-        std::vector<fs::path> files;
-        const auto isModel = [](const fs::path& p) {
-            std::string e = p.extension().string();
-            for (char& c : e) c = (char)std::tolower((unsigned char)c);
-            return e == ".fbx" || e == ".obj" || e == ".gltf" || e == ".glb";
-        };
-        for (int j = i + 1; j < argc && argv[j][0] != '-'; ++j) {
-            std::error_code ec;
-            if (fs::is_directory(argv[j], ec)) {
-                for (const auto& f : fs::recursive_directory_iterator(argv[j], ec))
-                    if (f.is_regular_file() && isModel(f.path())) files.push_back(f.path());
-            } else if (isModel(argv[j])) files.push_back(argv[j]);
-        }
-        std::sort(files.begin(), files.end());
-        int failed = 0;
-        for (const auto& f : files) {
-            ModelImportSettings s;
-            s.MaterialImportMode = ModelImportSettings::MaterialMode::None;
-            s.ImportAnimations = false;
-            if (std::ifstream in(f.string() + ".meta"); in) {
-                const nlohmann::json j = nlohmann::json::parse(in, nullptr, false);
-                if (j.is_object() && j.contains("importer") && j["importer"].is_object()) {
-                    const auto& imp = j["importer"];
-                    s.GlobalScale = imp.value("globalScale", 1.0f);
-                    s.ImportSkeleton = imp.value("importSkeleton", true);
-                    s.SkinIgnoresMeshNode = imp.value("skinIgnoresMeshNode", false);
-                    s.SourceUpAxis = Model::ParseUpAxis(imp.value("upAxis", std::string("Y")));
-                    if (imp.contains("pivotOffset") && imp["pivotOffset"].is_array() && imp["pivotOffset"].size() == 3)
-                        s.PivotOffset = {imp["pivotOffset"][0].get<float>(), imp["pivotOffset"][1].get<float>(), imp["pivotOffset"][2].get<float>()};
-                    if (imp.contains("excludeNodes") && imp["excludeNodes"].is_array())
-                        for (const auto& n : imp["excludeNodes"])
-                            if (n.is_string()) s.ExcludeNodes.push_back(n.get<std::string>());
-                }
-            }
-            const auto model = Model::ImportDeferred(f.string(), s);
-            if (!model || model->MeshCount() == 0) {
-                ++failed;
-                std::cout << "[ModelReport] FAILED " << f.generic_string() << "\n";
-                continue;
-            }
-            const glm::vec3 lo = model->BoundsMin(), hi = model->BoundsMax(), size = hi - lo;
-            std::string mats;
-            for (int m = 0; m < model->MeshCount(); ++m) {
-                const std::string& name = model->MeshMaterial(m).Name;
-                if (("|" + mats + "|").find("|" + name + "|") == std::string::npos) mats += (mats.empty() ? "" : "|") + name;
-            }
-            std::printf("[ModelReport] %s size %.3f %.3f %.3f min %.3f %.3f %.3f max %.3f %.3f %.3f meshes %d materials %s\n",
-                        f.generic_string().c_str(), size.x, size.y, size.z, lo.x, lo.y, lo.z, hi.x, hi.y, hi.z,
-                        model->MeshCount(), mats.c_str());
-            int skinned = 0, overflow = 0, most = 0;
-            float lost = 0.0f;
-            model->SkinStats(skinned, overflow, most, lost);
-            if (skinned) {
-                std::printf("[ModelReport]   skin: %d vertices, %d over %d influences (most %d), largest weight lost %.1f%%\n", skinned,
-                            overflow, MAX_BONE_INFLUENCE, most, lost * 100.0f);
-                // Where the rig's landmarks sit in the bind pose: pieces of one body must agree on these.
-                std::string bones;
-                for (const char* name : {"root", "pelvis", "hand_l", "hand_r"}) {
-                    glm::mat4 n(1.0f);
-                    if (!model->NodeTransform(name, n)) continue;
-                    char buf[96];
-                    std::snprintf(buf, sizeof buf, " %s %.3f %.3f %.3f", name, n[3][0], n[3][1], n[3][2]);
-                    bones += buf;
-                }
-                if (!bones.empty()) std::printf("[ModelReport]   bind:%s\n", bones.c_str());
-            }
-        }
-        std::cout << "[ModelReport] " << files.size() << " models, " << failed << " failed" << std::endl;
-        return failed ? 1 : 0;
-    }
-    // `--audio-test [scene]`: the audio engine's own test, offline (no window, no audio device): a scripted tour of a scene's reverb zones.
-    for (int i = 1; i < argc; ++i)
-        if (std::string(argv[i]) == "--audio-test") return RunAudioTest(argc, argv);
-    const bool resaveMode = !resaveIn.empty();
+    // What the command line asks for (App/LaunchOptions.h); --project applies as it is read.
+    LaunchOptions opt = ParseLaunchOptions(argc, argv);
+    // The tools that run and exit before anything is set up (App/CliTools.h): --unit-tests, --model-report, ...
+    if (const int code = RunEarlyCliTool(argc, argv); code >= 0) return code;
+    const bool resaveMode = !opt.resaveIn.empty();
     // --smoke-test and --resave are non-interactive: no splash, and fatal errors go to stderr +
     // a nonzero exit instead of a modal MessageBox that a headless/CI desktop never dismisses
     // (audit BUG-102).
-    const bool headless = smokeTestMode || resaveMode || undoBenchMode || assetLoadBenchMode || outfitAuditMode || outfitScenesMode || outfitCostMode || outfitSelfTestMode || clipReportMode || editorTestsMode;
-    if (editorTestsMode) {
+    const bool headless = opt.smokeTestMode || resaveMode || opt.undoBenchMode || opt.assetLoadBenchMode || opt.outfitAuditMode || opt.outfitScenesMode || opt.outfitCostMode || opt.outfitSelfTestMode || opt.clipReportMode || opt.editorTestsMode;
+    if (opt.editorTestsMode) {
         // A fresh scratch user folder every run: default prefs and layout, no bookmarks, tabs or
         // favorites - the tests start from a known state and never touch the user's own files.
         namespace fs = std::filesystem;
@@ -748,10 +450,10 @@ int main(int argc, char** argv) {
         }
         std::error_code ec;
         for (const auto& entry : fs::directory_iterator(scratch, ec)) fs::remove_all(entry.path(), ec);
-        EditorUiTests::Configure(editorTestsFilter);
+        EditorUiTests::Configure(opt.editorTestsFilter);
     }
-    CrashHandler::SetInteractive(!headless && editorShotDir.empty()); // #148: no crash dialog on an unattended run
-    if (!editorShotDir.empty()) {
+    CrashHandler::SetInteractive(!headless && opt.editorShotDir.empty()); // #148: no crash dialog on an unattended run
+    if (!opt.editorShotDir.empty()) {
         // The prefs and layout the user sees, copied into a scratch user folder that this run may
         // freely rewrite (window placement, layout, last scene).
         // UserPaths resolves its root once, on first use, so the real folder is found from
@@ -774,7 +476,7 @@ int main(int argc, char** argv) {
         std::error_code ec;
         for (const char* f : {"imgui.ini", "editor_prefs.json", "shortcuts.json"})
             fs::copy_file(real / f, scratch / f, fs::copy_options::overwrite_existing, ec);
-        if (editorShotDefaultLayout) fs::remove(scratch / "imgui.ini", ec);
+        if (opt.editorShotDefaultLayout) fs::remove(scratch / "imgui.ini", ec);
     }
 
     // #148: `--crash-test <kind>` deliberately crashes through one path so the handler (dump,
@@ -801,37 +503,7 @@ int main(int argc, char** argv) {
     // the working directory, so a launch from the repo root or an unrelated CWD still finds
     // them (audit #355 / BUG-102).
     EnginePaths::Init(argv[0]);
-    if (buildMode) { // #174 - no window, GL or audio needed: this only copies files
-        CrashHandler::SetInteractive(false);
-        LayerRegistry::Load();
-        AssetDatabase::ScanProject(); // #132 - GUIDs, so moved build scenes / shaders resolve
-        ProjectSettings::Load();
-        ShaderLibrary::Init(EnginePaths::Resolve("assets/shaders")); // #208 - shader validation resolves engine:// refs
-        ProjectSettings::BuildSettings bs = ProjectSettings::Build();
-        if (!buildOutArg.empty()) bs.OutputDir = std::filesystem::absolute(buildOutArg).string();
-        if (bs.Scenes.empty() && !ProjectSettings::StartupScene().empty()) bs.Scenes.push_back(ProjectSettings::StartupScene());
-        // On a worker thread with progress, the same way the editor's Build button runs it.
-        BuildPipeline::Progress progress;
-        auto future = std::async(std::launch::async, [&] { return BuildPipeline::Build(bs, &progress); });
-        int lastShown = -1;
-        while (future.wait_for(std::chrono::milliseconds(20)) != std::future_status::ready) {
-            const int done = progress.Done.load(), total = progress.Total.load();
-            if (buildCancelAt >= 0 && done >= buildCancelAt) progress.Cancel.store(true);
-            if (total > 0 && done * 10 / total != lastShown) {
-                lastShown = done * 10 / total;
-                std::cout << "[Build] " << BuildPipeline::StageLabel((BuildPipeline::Stage)progress.StageNow.load())
-                          << " " << done << "/" << total << "\n";
-            }
-        }
-        const BuildPipeline::Report r = future.get();
-        std::cout << "[Build] " << r.Message << "\n";
-        if (r.Ok) {
-            std::cout << "[Build] " << r.ExePath << "\n";
-            for (const auto& [group, bytes] : r.BytesByGroup)
-                std::cout << "[Build]   " << group << ": " << bytes / 1024 << " KB\n";
-        }
-        return r.Ok ? 0 : 1;
-    }
+    if (opt.buildMode) return RunBuildTool(opt.buildOutArg, opt.buildCancelAt); // #174 - no window, GL or audio needed: this only copies files
 
     // #174 - a player.json next to the exe (written by File > Build) makes this run as the built
     // game: its own project folder and user-data folder, straight into Play, no editor UI.
@@ -850,7 +522,7 @@ int main(int argc, char** argv) {
 
     // #132 - register the project's assets on a worker thread while the window, GL context and
     // shaders come up. Any GUID lookup made before it finishes waits for it.
-    if (!undoBenchMode && !assetLoadBenchMode) AssetDatabase::BeginScanProject();
+    if (!opt.undoBenchMode && !opt.assetLoadBenchMode) AssetDatabase::BeginScanProject();
 
     // #146: a persistent log for bug reports (Unity's Editor.log). Headless runs get their own
     // file so a smoke test on a dev machine doesn't rotate away the last real editor session's.
@@ -859,11 +531,11 @@ int main(int argc, char** argv) {
     try {
         // Per-user preferences, loaded before anything reads them. No GL or project state needed.
         EditorSettings::Load();
-        if (!editorShotDir.empty() && editorShotScale > 0.0f) EditorSettings::Get().UiScaleOverride = editorShotScale;
+        if (!opt.editorShotDir.empty() && opt.editorShotScale > 0.0f) EditorSettings::Get().UiScaleOverride = opt.editorShotScale;
         // A benchmark measures native resolution unless it asks for a render height, so its
         // numbers stay comparable from run to run and machine to machine.
-        if (renderHeightArg >= 0) EditorSettings::Get().RenderHeight = renderHeightArg;
-        else if (perfBenchMode) EditorSettings::Get().RenderHeight = 0;
+        if (opt.renderHeightArg >= 0) EditorSettings::Get().RenderHeight = opt.renderHeightArg;
+        else if (opt.perfBenchMode) EditorSettings::Get().RenderHeight = 0;
         // The editor starts with no splash: the console shows the load log until the main window
         // presents its first frame (see Window::Show). Only a built game can opt into one.
         SplashScreen splash;
@@ -879,7 +551,7 @@ int main(int argc, char** argv) {
         // for it regardless of build config / env (audit #356) — otherwise newGlErrors is
         // structurally always 0 in a Release run and the harness only checks "did it draw".
         // Set before the Window exists: it decides whether to request a debug context (#157).
-        if (smokeTestMode && !perfBenchMode) GLDebug::ForceEnable();
+        if (opt.smokeTestMode && !opt.perfBenchMode) GLDebug::ForceEnable();
         Window window(1280, 720, playerMode ? playerCfg.ProductName : std::string("Tartarus Engine"));
         // #174 - the product's own icon, if the build was given one. The editor keeps the icon
         // compiled into the exe's resources (app_icon.rc), which is also what a player falls
@@ -1012,10 +684,10 @@ int main(int argc, char** argv) {
         FirstPersonPresentation firstPersonPresentation;
         std::unique_ptr<FirstPersonWeaponTest> weaponTest;
         std::unique_ptr<WeaponLab> weaponLab;
-        if (weaponLabMode) weaponLab = std::make_unique<WeaponLab>();
-        if (weaponTestMode) weaponTest = std::make_unique<FirstPersonWeaponTest>(stockProbeMode, stockProbeAk);
+        if (opt.weaponLabMode) weaponLab = std::make_unique<WeaponLab>();
+        if (opt.weaponTestMode) weaponTest = std::make_unique<FirstPersonWeaponTest>(opt.stockProbeMode, opt.stockProbeAk);
         std::unique_ptr<NpcTest> npcTest;
-        if (npcTestMode) npcTest = std::make_unique<NpcTest>(npcTestScenario);
+        if (opt.npcTestMode) npcTest = std::make_unique<NpcTest>(opt.npcTestScenario);
         NpcTest::BloodView npcTestBlood; // what the blood scenario reads of the blood each frame
         float npcTestBloodGpuSum = 0.0f;
         int npcTestBloodGpuFrames = 0;
@@ -1283,8 +955,9 @@ int main(int argc, char** argv) {
         };
         CombatHud combatHud;        // ammo, kill feed, radio subtitles, awareness chevrons, AI debug overlay
         DevPanel devPanel;          // F7 / F8 / F9 dev tools in Play
-        glm::vec3 deathCamOffset(0.0f); // the death camera's drop, on the camera only after the late pose
-        float deathCamRoll = 0.0f;
+        PlayState play; // Play's state bits (App/PlaySession.h); the locals named after them alias its fields
+        glm::vec3& deathCamOffset = play.DeathCamOffset;
+        float& deathCamRoll = play.DeathCamRoll;
         int playerAmmoSeen = -1, playerSlotSeen = -1; // for "the player fired this frame"
         PlayerSnapshot playerSnap;
         ShellCasings shellCasings;  // the spent cases on the ground
@@ -1301,12 +974,10 @@ int main(int argc, char** argv) {
                                  glm::vec4(1.6f, 0.08f, 0.05f, i == 0 ? 0.9f : 0.55f));
             throwArc.Draw(v, p, eye);
         };
-        // #165 - what Play renders through: the first-person player (playUsesPlayer), or the
-        // scene's Camera entity, mirrored each frame into playSceneCam.
-        bool playUsesPlayer = true;
-        bool playGravityGun = true;
-        float playBaseFov = 58.7f;          // the player's vertical FOV / mouse sensitivity; the
-        float playBaseSensitivity = 0.1f;   // weapon's ADS zoom scales both from these each frame
+        bool& playUsesPlayer = play.UsesPlayer;
+        bool& playGravityGun = play.GravityGun;
+        float& playBaseFov = play.BaseFov;
+        float& playBaseSensitivity = play.BaseSensitivity;
         // With a weapon (Animation Set) on the controller, the gravity gun is the unarmed slot:
         // live only while the weapon is holstered (2 / scroll / Holster), off while it's in hand.
         auto gravityGunLive = [&] {
@@ -1363,10 +1034,8 @@ int main(int argc, char** argv) {
                 weaponFx.Draw(v, p, eye, h, (float)glfwGetTime());
             };
         };
-        entt::entity playCameraEntity = entt::null;
-        // The scene's First Person Controller while Playing: it rides the player's feet and yaw, so
-        // selecting it (and Shift+F in the Scene view) tracks the player. Play reverts it on Stop.
-        entt::entity playControllerEntity = entt::null;
+        entt::entity& playCameraEntity = play.CameraEntity;
+        entt::entity& playControllerEntity = play.ControllerEntity;
         Camera playSceneCam;
         // Default spawn/editor-camera start: south of the Sandbox's Character Plaza, looking north
         // over it with the physics playground (east) and movement course (west) in view either side.
@@ -1396,15 +1065,15 @@ int main(int argc, char** argv) {
             placement.Height = es.WindowHeight;
             placement.Maximized = es.WindowMaximized;
             if (!playerMode && !window.ApplyPlacement(placement)) window.Maximize();
-            if (perfBenchMode && perfResW > 0) {
+            if (opt.perfBenchMode && opt.perfResW > 0) {
                 glfwRestoreWindow(window.Handle());
-                glfwSetWindowSize(window.Handle(), perfResW, perfResH);
-            } else if (!editorShotDir.empty() || editorTestsMode) {
+                glfwSetWindowSize(window.Handle(), opt.perfResW, opt.perfResH);
+            } else if (!opt.editorShotDir.empty() || opt.editorTestsMode) {
                 glfwRestoreWindow(window.Handle());
-                glfwSetWindowSize(window.Handle(), perfResW > 0 ? perfResW : 1920, perfResW > 0 ? perfResH : 1080);
+                glfwSetWindowSize(window.Handle(), opt.perfResW > 0 ? opt.perfResW : 1920, opt.perfResW > 0 ? opt.perfResH : 1080);
             }
             // --editor-tests: hidden, so the desktop's real mouse and keyboard never reach it.
-            if (editorTestsMode) glfwHideWindow(window.Handle());
+            if (opt.editorTestsMode) glfwHideWindow(window.Handle());
         }
         LayerRegistry::Load(); // LayerComponent slot names (#236 A1)
         ProjectSettings::Load(); // physics + tags (#236 A4); project/settings.json
@@ -1416,47 +1085,47 @@ int main(int argc, char** argv) {
         {
             const std::string& last = EditorSettings::Get().LastScenePath;
             std::error_code sceneEc;
-            if (!editorShotIDE && !last.empty() && !std::filesystem::path(ProjectPaths::Relativize(last)).is_absolute() && std::filesystem::exists(last, sceneEc) && !sceneEc)
+            if (!opt.editorShotIDE && !last.empty() && !std::filesystem::path(ProjectPaths::Relativize(last)).is_absolute() && std::filesystem::exists(last, sceneEc) && !sceneEc)
                 scenePath = last;
             if (playerMode && !playerCfg.Scenes.empty()) scenePath = ProjectPaths::Resolve(playerCfg.Scenes.front());
-            if (weaponLabMode) scenePath = ProjectPaths::Resolve("scenes/WeaponLab.json");
+            if (opt.weaponLabMode) scenePath = ProjectPaths::Resolve("scenes/WeaponLab.json");
         }
         AssetLibrary assets;
 
         if (resaveMode) {
             // false: --resave's whole point is choosing where the migrated scene lands
             // (resaveOut, below) — Load() must not also silently overwrite resaveIn (audit #77).
-            if (!SceneSerializer::Load(world, assets, resaveIn, /*persistMigration=*/false)) {
-                std::cerr << "[Resave] FAILED to load '" << resaveIn << "'\n";
+            if (!SceneSerializer::Load(world, assets, opt.resaveIn, /*persistMigration=*/false)) {
+                std::cerr << "[Resave] FAILED to load '" << opt.resaveIn << "'\n";
                 return 2;
             }
-            if (!SceneSerializer::Save(world, assets, resaveOut)) {
-                std::cerr << "[Resave] FAILED to save '" << resaveOut << "'\n";
+            if (!SceneSerializer::Save(world, assets, opt.resaveOut)) {
+                std::cerr << "[Resave] FAILED to save '" << opt.resaveOut << "'\n";
                 return 3;
             }
-            std::cout << "[Resave] " << resaveIn << " -> " << resaveOut << "\n";
+            std::cout << "[Resave] " << opt.resaveIn << " -> " << opt.resaveOut << "\n";
             return 0;
         }
 
-        if (outfitScenesMode) return OutfitTestScene::Generate(assets);
+        if (opt.outfitScenesMode) return OutfitTestScene::Generate(assets);
 
-        if (clipReportMode) {
+        if (opt.clipReportMode) {
             namespace fs = std::filesystem;
-            if (clipReportArgs.size() < 2) { std::cout << "[ClipReport] usage: --clip-report <rig> <clip or folder ...>\n"; return 2; }
-            auto rig = assets.LoadModel(ProjectPaths::Resolve(clipReportArgs[0]));
-            if (!rig) { std::cout << "[ClipReport] no rig " << clipReportArgs[0] << "\n"; return 2; }
+            if (opt.clipReportArgs.size() < 2) { std::cout << "[ClipReport] usage: --clip-report <rig> <clip or folder ...>\n"; return 2; }
+            auto rig = assets.LoadModel(ProjectPaths::Resolve(opt.clipReportArgs[0]));
+            if (!rig) { std::cout << "[ClipReport] no rig " << opt.clipReportArgs[0] << "\n"; return 2; }
             std::vector<std::string> refs;
-            for (size_t k = 1; k < clipReportArgs.size(); ++k) {
+            for (size_t k = 1; k < opt.clipReportArgs.size(); ++k) {
                 std::error_code ec;
-                const fs::path full = ProjectPaths::Resolve(clipReportArgs[k]);
+                const fs::path full = ProjectPaths::Resolve(opt.clipReportArgs[k]);
                 if (fs::is_directory(full, ec)) {
                     std::vector<std::string> found;
                     for (const auto& f : fs::directory_iterator(full, ec))
                         if (f.is_regular_file() && f.path().extension() == ".fbx")
-                            found.push_back((fs::path(clipReportArgs[k]) / f.path().filename()).generic_string());
+                            found.push_back((fs::path(opt.clipReportArgs[k]) / f.path().filename()).generic_string());
                     std::sort(found.begin(), found.end());
                     refs.insert(refs.end(), found.begin(), found.end());
-                } else refs.push_back(clipReportArgs[k]);
+                } else refs.push_back(opt.clipReportArgs[k]);
             }
             const int root = rig->FindRootMotionNode();
             for (const std::string& ref : refs)
@@ -1464,24 +1133,24 @@ int main(int argc, char** argv) {
             return 0;
         }
 
-        if (outfitSelfTestMode) {
-            const int failures = OutfitAudit::RunSelfTest(assets, outfitAuditWardrobe);
+        if (opt.outfitSelfTestMode) {
+            const int failures = OutfitAudit::RunSelfTest(assets, opt.outfitAuditWardrobe);
             return failures < 0 ? 2 : (failures > 0 ? 1 : 0);
         }
 
-        if (outfitCostMode) {
-            if (outfitCostScenes.empty())
+        if (opt.outfitCostMode) {
+            if (opt.outfitCostScenes.empty())
                 for (const char* s : {"scenes/OutfitTest/Presets.json", "scenes/OutfitTest/Randomized.json", "scenes/OutfitTest/Items.json"})
-                    outfitCostScenes.push_back(s);
-            return OutfitAudit::RunCost(assets, outfitAuditWardrobe, outfitCostScenes) < 0 ? 2 : 0;
+                    opt.outfitCostScenes.push_back(s);
+            return OutfitAudit::RunCost(assets, opt.outfitAuditWardrobe, opt.outfitCostScenes) < 0 ? 2 : 0;
         }
 
-        if (outfitAuditMode) {
-            const int clipping = OutfitAudit::Run(assets, outfitAuditWardrobe, outfitAuditCsv, outfitAuditGeometry, outfitAuditPosed);
+        if (opt.outfitAuditMode) {
+            const int clipping = OutfitAudit::Run(assets, opt.outfitAuditWardrobe, opt.outfitAuditCsv, opt.outfitAuditGeometry, opt.outfitAuditPosed);
             return clipping < 0 ? 2 : (clipping > 0 ? 1 : 0);
         }
 
-        if (undoBenchMode) {
+        if (opt.undoBenchMode) {
             // Mirrors what a single Undo/Redo call does today (EditorLayer_Scene.cpp): one
             // SaveToString for the entry being pushed, plus a full SaveToString+LoadFromString
             // round-trip to restore the other side. Empty entities only (CreateBox would time
@@ -1513,7 +1182,7 @@ int main(int argc, char** argv) {
             return 0;
         }
 
-        if (assetLoadBenchMode) {
+        if (opt.assetLoadBenchMode) {
             // Synthesizes N procedural PNGs (mixed sizes so DownsampleBox gets exercised too),
             // loads them all through AssetLibrary::LoadTexture, and reports the decode/upload
             // split TextureLoadStats measured inside Texture::UploadFromFile. Run twice per N:
@@ -1578,7 +1247,7 @@ int main(int argc, char** argv) {
         // The smoke harness (and --weapon-test / --npc-test / --perf-bench, built on it) loads its own
         // scenes in the loop below, so the startup scene would be loaded only to be thrown away - for
         // the Sandbox, 666 objects and every model it uses, before the first test scene.
-        const bool loadStartupScene = !smokeTestMode && !editorTestsMode;
+        const bool loadStartupScene = !opt.smokeTestMode && !opt.editorTestsMode;
         // persistMigration is false for every headless mode: the harness must never rewrite a scene
         // just from opening it for a read-only check (audit #77). Ordinary interactive startup keeps
         // the existing "upgrade once" behavior.
@@ -1605,7 +1274,7 @@ int main(int argc, char** argv) {
 
         EditorLayer editor;
         // --stock-probe captures the Scene view (the body) beside the Game view (the first-person view).
-        if (stockProbeMode || npcTestMode || weaponLabMode) editor.RequestSceneGameSplit();
+        if (opt.stockProbeMode || opt.npcTestMode || opt.weaponLabMode) editor.RequestSceneGameSplit();
         editor.Init(window.Handle());
         editor.SetHeadless(headless);
         // #148: a hard crash (access violation, stack overflow, abort...) never reaches the
@@ -1821,10 +1490,10 @@ int main(int argc, char** argv) {
         // --perf-bench: the Game view renders at the benchmarked size, not whatever the saved preset
         // is (a saved "1920x1080 FHD" rendered every --perf-res at 1080p): --perf-res exactly, else
         // the whole window.
-        if (perfBenchMode) {
+        if (opt.perfBenchMode) {
             ResolutionPreset bench = ResolutionManager::BuiltInPresets()[0]; // Free Aspect
-            if (perfResW > 0 && perfResH > 0)
-                bench = {"Perf Bench", AspectRatioMode::FixedResolution, perfResW, perfResH, (float)perfResW / (float)perfResH};
+            if (opt.perfResW > 0 && opt.perfResH > 0)
+                bench = {"Perf Bench", AspectRatioMode::FixedResolution, opt.perfResW, opt.perfResH, (float)opt.perfResW / (float)opt.perfResH};
             gameView.UsePresetThisSession(bench);
         }
         // The editor's own "Scene" tab renders into this rather than straight into the
@@ -1852,20 +1521,12 @@ int main(int argc, char** argv) {
         SceneRenderer sceneRenderer;  // audit #359 pass 2 — the scene-draw pass, formerly a lambda here
 
         Camera editorCamera;
-        // Play is no longer a whole-screen mode swap. Three independent bits describe the state:
-        //   editorUIVisible - the editor panels + dockspace are shown (true whenever NOT maximized)
-        //   playing         - the scene is simulating; the Game panel renders from the player camera
-        //   playMaximized   - the Game view fills the window and the editor panels are hidden
-        // Pressing Play just flips `playing`; the game runs inside the docked Game panel with the
-        // editor still fully usable. The Fullscreen button next to Stop toggles `playMaximized`.
-        bool editorUIVisible = true;
-        bool playing = false;
-        bool paused = false;   // #236: simulation frozen, rendering continues; Step advances one frame
-        bool playMaximized = false;
-        // In-panel play is click-to-focus: the game only reads mouse/keyboard once the user has
-        // clicked inside the Game view. Esc (or Stop) hands control back to the editor. Ignored
-        // while maximized — that path uses the cursor-lock state directly, like the old Play mode.
-        bool gameInputEngaged = false;
+        // What Play's state bits mean: PlayState (App/PlaySession.h).
+        bool& editorUIVisible = play.EditorUIVisible;
+        bool& playing = play.Playing;
+        bool& paused = play.Paused;
+        bool& playMaximized = play.Maximized;
+        bool& gameInputEngaged = play.GameInputEngaged;
         editorCamera.Position = player.Cam.Position;
         editorCamera.Yaw = player.Cam.Yaw;
         editorCamera.Pitch = player.Cam.Pitch;
@@ -1919,244 +1580,14 @@ int main(int argc, char** argv) {
         bool lastDirty = false;
         bool titleInitialized = false;
 
-        // Unity's play-mode contract: entering Play snapshots the scene and leaving it restores
-        // that snapshot, so gameplay (shot crates, moved objects) never silently becomes an
-        // edit. EditorLayer owns the snapshot; main.cpp owns the state bits.
-        int errPauseSeen = 0; // #236 A5 — error count baseline for "Error Pause", re-armed each Play
-        auto startPlay = [&]() {
-            if (playing) return;
-            if (editor.InPrefabMode()) editor.ExitPrefabMode(world, assets); // #176 - Play runs the scene
-            if (EditorModuleHost::ConsoleState().ClearOnPlay) Log::Clear(); // #236 A5
-            editor.OnEnterPlayMode(world);
-            // Character Outfit's Randomize On Play: dressed afresh, after the snapshot so Stop brings the
-            // edited outfit back. It loads in the background; FirstPersonBody takes the new pieces once
-            // they're on (OutfitChanged). A body not built yet (untagged parts) is adopted first, or
-            // Randomize would build a second body over it.
-            for (auto [e, outfit] : world.Registry.view<CharacterOutfitComponent>(entt::exclude<InactiveTag>).each()) {
-                if (!outfit.RandomizeOnPlay) continue;
-                if (OutfitSystem::Pieces(world, e).empty()) OutfitSystem::AdoptExisting(world, assets, e);
-                const auto r = OutfitSystem::Randomize(world, assets, e,
-                                                       (std::uint32_t)std::chrono::steady_clock::now().time_since_epoch().count() ^
-                                                           (std::uint32_t)entt::to_integral(e));
-                if (!r.Ok) Log::Warn("Character Outfit: Randomize On Play - " + r.Error);
-            }
-            // Bare Body (debug; the gait probe's player body): every item off, so the wardrobe dresses the character in its
-            // own body parts - the animation and skinning seen without clothing. Undone by Stop like the above.
-            for (auto [e, outfit] : world.Registry.view<CharacterOutfitComponent>(entt::exclude<InactiveTag>).each()) {
-                const bool probeBody = weaponTest && weaponTest->GaitProbe() && world.Registry.all_of<FirstPersonBodyComponent>(e);
-                if (!outfit.BareBody && !probeBody) continue;
-                if (OutfitSystem::Pieces(world, e).empty()) OutfitSystem::AdoptExisting(world, assets, e);
-                Wardrobe::Request bare = OutfitSystem::CurrentRequest(world, e);
-                bare.Items.clear();
-                const auto r = OutfitSystem::Submit(world, assets, e, bare);
-                if (!r.Ok) Log::Warn("Character Outfit: Bare Body - " + r.Error);
-            }
-            Time::SetTimeScale(ProjectSettings::Time().TimeScale); // #144 - each run starts from the project's scale
-            errPauseSeen = Log::CountOf(LogLevel::Error); // ignore errors that predate this run
-            playing = true;
-            playMaximized = false;
-            editorUIVisible = true;
-            gameInputEngaged = false;
-            gameView.OnPlayStateChanged(true);
-            editor.RequestGameTabFocus(); // show what you just started
-            // #165 - pick what Play runs: a First Person Controller entity (spawn there, with its
-            // settings), else the scene's Camera (no player), else the legacy default player
-            // dropped in at the editor camera so Play inspects what you were just working on.
-            // The editor camera is left where it is — the Scene tab stays usable during play.
-            player = Player{};
-            flashlight = Flashlight{};
-            // The player's fall is its own game-feel value (the First Person Controller's Gravity,
-            // 18 m/s^2 when there's none), not the physics world's Earth gravity.
-            playUsesPlayer = false;
-            playGravityGun = false;
-            gravityGun.Settings = GravityGunSettings{};
-            playCameraEntity = entt::null;
-            playControllerEntity = FindFirstPersonController(world);
-            {   // the scene's effect and HUD tuning: the first FX / HUD Settings component, defaults when none
-                FxHudSettingsComponent fx=Scripting::DefaultEffectsDefinition();
-                if (const auto first = world.Registry.view<FxHudSettingsComponent>(); first.begin() != first.end()) { // the first one counts
-                    const entt::entity e = *first.begin();
-                    fx = world.Registry.get<FxHudSettingsComponent>(e);
-                }
-                combatFx.Settings = fx;
-                combatHud.Settings = fx;
-                weaponFx.Settings = fx;
-            }
-            bloodFx.Clear();
-            fxSprites.Clear();
-            {   // the scene's blood tuning: the first Blood Settings component, defaults when none
-                BloodSettingsComponent b;
-                if (const auto all = world.Registry.view<BloodSettingsComponent>(); all.begin() != all.end())
-                    b = world.Registry.get<BloodSettingsComponent>(*all.begin());
-                bloodFx.Config.Enabled = b.Enabled;
-                bloodFx.Config.Size = b.Size;
-                bloodFx.Config.MaxSprays = b.MaxSprays;
-                bloodFx.Config.MaxDecals = b.MaxStains;
-                bloodFx.Config.DecalLifetime = b.StainLifetime;
-                bloodFx.Config.DrySeconds = b.DrySeconds;
-                bloodFx.Config.Speed = b.Speed;
-                bloodFx.Config.Pools = b.Pools;
-                bloodFx.Config.BodySplats = b.BodySplats;
-                bloodFx.Config.GearSpatter = b.GearSpatter;
-                bloodFx.Config.EnergyScale = b.EnergyScale;
-                bloodFx.Config.ImpactPuffs = b.ImpactPuffs;
-                bloodFx.Config.Gore = b.Gore;
-            }
-            BloodRenderer::Get().Load(); // once; a missing import just leaves the blood off
-            KnifeFxLibrary::Get().Load(); // likewise the Knife packs (--import-knife-fx)
-            if (entt::entity ctrl = playControllerEntity; ctrl != entt::null) {
-                playUsesPlayer=true;
-                gravityGun.Reset();
-                const auto& fp = world.Registry.get<FirstPersonControllerComponent>(ctrl);
-                player.MoveSpeed = fp.MoveSpeed;
-                player.Gravity = -std::abs(fp.Gravity);
-                player.SprintMultiplier = fp.SprintMultiplier;
-                player.JumpSpeed = fp.JumpSpeed;
-                player.JumpBufferTime = fp.JumpBufferTime;
-                player.CoyoteTime = fp.CoyoteTime;
-                player.GroundAccelTime = fp.GroundAccelTime;
-                player.GroundDecelTime = fp.GroundDecelTime;
-                player.AirAccelTime = fp.AirAccelTime;
-                player.EyeHeight = fp.EyeHeight;
-                player.Size = glm::vec3(fp.CapsuleRadius * 2.0f, std::max(fp.CapsuleHeight, fp.CapsuleRadius * 2.0f + 0.1f),
-                                        fp.CapsuleRadius * 2.0f);
-                player.MouseSensitivity = fp.MouseSensitivity;
-                playBaseSensitivity = fp.MouseSensitivity;
-                playBaseFov = fp.VerticalFov();
-                player.InvertY = fp.InvertY;
-                player.StickLookDegPerSec = fp.StickLookDegPerSec;
-                player.KillY = fp.KillY;
-                player.Cam.Fov = fp.VerticalFov();
-                playGravityGun = fp.GravityGun;
-                gravityGun.Settings.GrabRange = fp.GrabRange;
-                gravityGun.Settings.AssistRange = fp.AssistRange;
-                gravityGun.Settings.AssistConeDeg = fp.AssistConeDeg;
-                gravityGun.Settings.ScrollTurnDeg = fp.ScrollTurnDeg;
-                gravityGun.Settings.MinThrowSpeed = fp.MinThrowSpeed;
-                gravityGun.Settings.MaxThrowSpeed = std::max(fp.MaxThrowSpeed, fp.MinThrowSpeed);
-                gravityGun.Settings.ChargeTime = fp.ThrowChargeTime;
-                gravityGun.Settings.BackspinRevPerSec = fp.ThrowBackspin;
-                const glm::mat4 spawn = world.ComposeWorldTransform(ctrl);
-                player.RespawnFeet = glm::vec3(spawn[3]);
-                player.Cam.Position = player.RespawnFeet + glm::vec3(0.0f, player.EyeHeight, 0.0f);
-                YawPitchFromWorld(spawn, player.Cam.Yaw, player.Cam.Pitch);
-                // --stock-probe runs, strafes and turns for metres at a time: it starts on open ground (the
-                // Sandbox's shooting range lane), wherever the scene's spawn is, so runs stay comparable.
-                if (stockProbeMode) {
-                    player.RespawnFeet = glm::vec3(45.0f, 0.1f, -2.5f);
-                    // The gait probe walks, jogs and sprints metres every way and films the whole body: the open floor
-                    // with the most room round it - rays out at knee and chest height in 16 directions, over ground at about 0.
-                    if (weaponTest && weaponTest->OpenFloor()) {
-                        QueryFilter f;
-                        f.HitTriggers = 0;
-                        float best = -1.0f;
-                        for (float gx = -54.0f; gx <= 54.0f; gx += 3.0f)
-                            for (float gz = -54.0f; gz <= 54.0f; gz += 3.0f) {
-                                RaycastHit h;
-                                const float top[3] = {gx, 3.0f, gz}, down[3] = {0.0f, -1.0f, 0.0f};
-                                if (!PhysicsWorld::RaycastSolid(top, down, 4.0f, f, h) || !h.Hit || std::abs(h.Point[1]) > 0.15f) continue;
-                                float room = 14.0f;
-                                for (int a = 0; a < 16 && room > best; ++a)
-                                    for (float y : {0.4f, 1.3f}) {
-                                        const float o[3] = {gx, h.Point[1] + y, gz};
-                                        const float d[3] = {std::cos((float)a * 0.3927f), 0.0f, std::sin((float)a * 0.3927f)};
-                                        RaycastHit side;
-                                        if (PhysicsWorld::RaycastSolid(o, d, room, f, side) && side.Hit) room = std::min(room, side.Distance);
-                                    }
-                                if (room > best) { best = room; player.RespawnFeet = glm::vec3(gx, h.Point[1] + 0.1f, gz); }
-                            }
-                        std::printf("[Gait] start at (%.0f, %.0f), %.1f m clear all round\n", player.RespawnFeet.x, player.RespawnFeet.z, best);
-                    }
-                    player.Cam.Position = player.RespawnFeet + glm::vec3(0.0f, player.EyeHeight, 0.0f);
-                }
-                // FPS presentation is opt-in on the controller (its Animation Set). With the
-                // gravity gun also on, that becomes the unarmed slot - see gravityGunLive.
-                firstPersonPresentation.Start(world, assets, fp);
-                firstPersonBody.Start(world, player); // a First Person Body in the scene: root-motion movement
-                // The weapon's walk / sprint clip rates follow what the player really moves at (the body's speeds).
-                if (firstPersonBody.IsActive() && firstPersonPresentation.IsActive())
-                    firstPersonPresentation.SetLocomotionSpeeds(player.MoveSpeed, player.MoveSpeed * player.SprintMultiplier);
-                PlayerVitalsSettings vitals;
-                vitals.MaxHealth = fp.MaxHealth;
-                vitals.RegenDelay = fp.RegenDelay;
-                vitals.RegenRate = fp.RegenRate;
-                vitals.RespawnDelay = fp.RespawnDelay;
-                vitals.SpawnProtection = fp.SpawnProtection;
-                playerVitals.Reset(vitals);
-                // The enemy squad, when the scene has NPC Spawns - not under --weapon-test / --stock-probe, which put the
-                // player's gun through its paces alone (a squad would shoot the player or step into the muzzle's line).
-                const bool squadStarted = !weaponTest && npcDirector.Start(world, assets, &fp);
-                if (npcTest) std::printf("[NpcTest] squad %s (%zu spawn points)\n", squadStarted ? "started" : "not started", npcDirector.SpawnPoints().size());
-                if (squadStarted) {
-                    devPanel.Reset(playerVitals, npcDirector);
-                    combatHud.Reset();
-                    combatFx.Start(world);
-                    if (npcTest && !npcTest->RecordDir().empty()) {
-                        std::error_code ec;
-                        std::filesystem::create_directories(npcTest->RecordDir(), ec);
-                        combatFx.SetAudioLog((std::filesystem::path(npcTest->RecordDir()) / "audio.txt").string());
-                    }
-                }
-                // Play-mode audio (the guns' report layers, gear sounds, foley) and the muzzle effects don't wait for a squad:
-                // a scene with no NPC Spawns, --weapon-test and --stock-probe have the player's gun too.
-                if (!combatFx.Active()) {
-                    combatFx.Start(world);
-                    if (weaponTest) {
-                        // WEAPON_TEST_AUDIO_LOG=<file>, or NPC_TEST_RECORD=<dir> (-> <dir>/audio.txt): every weapon / foley voice, timed.
-#pragma warning(suppress : 4996)
-                        const char* logFile = std::getenv("WEAPON_TEST_AUDIO_LOG");
-#pragma warning(suppress : 4996)
-                        const char* recordDir = std::getenv("NPC_TEST_RECORD");
-                        if (logFile && *logFile) combatFx.SetAudioLog(logFile);
-                        else if (recordDir && *recordDir) {
-                            std::error_code ec;
-                            std::filesystem::create_directories(recordDir, ec);
-                            combatFx.SetAudioLog((std::filesystem::path(recordDir) / "audio.txt").string());
-                        }
-                    }
-                }
-            } else if ((playCameraEntity = FindActiveSceneCamera(world)) != entt::null) {
-                playUsesPlayer = false;
-                playGravityGun = false;
-            } else {
-                player.Cam.Position = editorCamera.Position;
-                player.Cam.Yaw = editorCamera.Yaw;
-                player.Cam.Pitch = editorCamera.Pitch;
-            }
-            window.SetCursorLocked(false); // click the Game view to take control
-        };
-        auto stopPlay = [&]() {
-            if (!playing) return;
-            if (weaponLab) weaponLab->OnPlayStopped();
-            Scripting::Stop(&world,&assets);
-            // Runtime-only arms/weapon entities were created after the play snapshot. Remove
-            // them before restoring the authored world so they can never be serialized or leak
-            // into another scene after a stop.
-            firstPersonPresentation.RemoveViewKick(player.Cam);
-            combatFx.Stop(world);
-            npcDirector.Stop(world);
-            player.Cam.Position -= deathCamOffset;
-            player.Cam.Roll -= deathCamRoll;
-            deathCamOffset = glm::vec3(0.0f);
-            deathCamRoll = 0.0f;
-            firstPersonPresentation.Stop(world);
-            firstPersonBody.Stop(world);
-            bulletHoles.Clear();
-            bloodFx.Clear();
-            BloodRenderer::Get().BeginFrame(); // nothing of Play's blood left in the editor
-            fxSprites.Clear();
-            FxSpriteRenderer::Get().BeginFrame();
-            shellCasings.Clear(world);
-            editor.OnExitPlayMode(world, assets);
-            playing = false;
-            paused = false;
-            playMaximized = false;
-            editorUIVisible = true;
-            gameInputEngaged = false;
-            gameView.OnPlayStateChanged(false);
-            editor.RequestSceneTabFocus();
-            window.SetCursorLocked(false);
-        };
+        // Entering and leaving Play (App/PlaySession.h): snapshot on Play, restore on Stop.
+        int& errPauseSeen = play.ErrPauseSeen;
+        PlaySession playSession(play, opt, window, world, assets, editor, gameView, editorCamera, player, flashlight, gravityGun,
+                                firstPersonPresentation, firstPersonBody, combatFx, combatHud, weaponFx, bloodFx, fxSprites,
+                                playerVitals, npcDirector, devPanel, bulletHoles, shellCasings, weaponTest.get(), weaponLab.get(),
+                                npcTest.get());
+        auto startPlay = [&]() { playSession.Start(); };
+        auto stopPlay = [&]() { playSession.Stop(); };
         auto togglePlay = [&]() { if (playing) stopPlay(); else startPlay(); };
         // Fullscreen/Restore button next to Stop: maximize the Game view over the editor panels
         // (equivalent to the old whole-window Play look), or drop back to windowed in-panel play.
@@ -2179,8 +1610,8 @@ int main(int argc, char** argv) {
         bool exitApproved = false;
 
         // --editor-shot: each view gets kEditorShotFrames frames - set up halfway, captured at the end.
-        const int kEditorShotFrames = editorShotIDE ? 450 : 150; // allow the async Roslyn result to reach the captured IDE frame
-        const std::vector<const char*> kEditorShots = editorShotIDE ? std::vector<const char*>{"script-ide"} : editorShotCurves ? std::vector<const char*>{"recoil-curves","recoil-targets","recoil-smoothing","recoil-layers","recoil-misc"} : std::vector<const char*>{"overview", "inspector", "enhancers", "bookmarks", "favorites", "console", "game", "settings", "settings-viewport",
+        const int kEditorShotFrames = opt.editorShotIDE ? 450 : 150; // allow the async Roslyn result to reach the captured IDE frame
+        const std::vector<const char*> kEditorShots = opt.editorShotIDE ? std::vector<const char*>{"script-ide"} : opt.editorShotCurves ? std::vector<const char*>{"recoil-curves","recoil-targets","recoil-smoothing","recoil-layers","recoil-misc"} : std::vector<const char*>{"overview", "inspector", "enhancers", "bookmarks", "favorites", "console", "game", "settings", "settings-viewport",
                                                    "settings-performance", "project-settings", "project-tags", "project-build",
                                                    "lighting", "animator"};
         int editorShotFrame = 0;
@@ -2213,7 +1644,7 @@ int main(int argc, char** argv) {
         // three fixed ones, each saved as <scene>_<name>.png after 30 frames on it (an asset gallery, a set dressing).
         struct ShotCamera { std::string Name; glm::vec3 Position; float Yaw, Pitch; };
         std::vector<ShotCamera> shotCameras;
-        if (const char* cams = std::getenv("TARTARUS_SHOT_CAMERAS"); cams && !smokeShotsDir.empty()) {
+        if (const char* cams = std::getenv("TARTARUS_SHOT_CAMERAS"); cams && !opt.smokeShotsDir.empty()) {
             std::stringstream all(cams);
             std::string item;
             while (std::getline(all, item, ';')) {
@@ -2226,8 +1657,8 @@ int main(int argc, char** argv) {
             }
         }
         constexpr int kShotCameraStart = 40, kShotCameraSettle = 30;
-        const int kSmokeTestFrames = weaponTestMode || npcTestMode ? 60 * 60 * 6 : perfBenchMode ? 3 * kPerfPhaseFrames
-                                   : !outfitShotsDir.empty() ? kOutfitShotStart + kOutfitShotSettle * kOutfitShotMax + 1
+        const int kSmokeTestFrames = opt.weaponTestMode || opt.npcTestMode ? 60 * 60 * 6 : opt.perfBenchMode ? 3 * kPerfPhaseFrames
+                                   : !opt.outfitShotsDir.empty() ? kOutfitShotStart + kOutfitShotSettle * kOutfitShotMax + 1
                                    : !shotCameras.empty() ? kShotCameraStart + kShotCameraSettle * (int)shotCameras.size() + 1 : 100;
         struct OutfitShot { std::string Name; glm::vec3 Position; float Yaw, Pitch; };
         std::vector<OutfitShot> outfitShots;
@@ -2314,12 +1745,12 @@ int main(int argc, char** argv) {
         // teardown ordering that #389 broke. smokePlayCycles counts completed Stop transitions.
         bool smokePlayScene = false;
         int  smokePlayCycles = 0;
-        if (smokeTestMode) {
+        if (opt.smokeTestMode) {
             // Scene source: explicit --smoke-test <dir> arg, else the engine's committed
             // regression scenes, else the user project's scenes/ (audit TEST-101).
             std::string scenesDir;
-            if (!smokeScenesDirArg.empty()) {
-                scenesDir = smokeScenesDirArg;
+            if (!opt.smokeScenesDirArg.empty()) {
+                scenesDir = opt.smokeScenesDirArg;
             } else {
                 std::string engineScenes = EnginePaths::Resolve("assets/test-scenes");
                 std::error_code exEc;
@@ -2334,11 +1765,11 @@ int main(int argc, char** argv) {
                     smokeScenePaths.push_back(entry.path().string());
             }
             std::sort(smokeScenePaths.begin(), smokeScenePaths.end());
-            if (weaponTestMode) smokeScenePaths.assign(1, ProjectPaths::Resolve("scenes/Sandbox.json"));
-            if (npcTestMode && smokeScenesDirArg.empty())
-                smokeScenePaths.assign(1, ProjectPaths::Resolve(npcTestScenario == "sandbox" ? "scenes/Sandbox.json"
-                                                              : npcTestScenario == "blood" ? "scenes/BloodTest.json"
-                                                              : npcTestScenario == "ragdoll" ? "scenes/RagdollTest.json"
+            if (opt.weaponTestMode) smokeScenePaths.assign(1, ProjectPaths::Resolve("scenes/Sandbox.json"));
+            if (opt.npcTestMode && opt.smokeScenesDirArg.empty())
+                smokeScenePaths.assign(1, ProjectPaths::Resolve(opt.npcTestScenario == "sandbox" ? "scenes/Sandbox.json"
+                                                              : opt.npcTestScenario == "blood" ? "scenes/BloodTest.json"
+                                                              : opt.npcTestScenario == "ragdoll" ? "scenes/RagdollTest.json"
                                                                                            : "scenes/Arena.json"));
             std::cout << "[SmokeTest] Found " << smokeScenePaths.size() << " scene(s) under "
                       << scenesDir << std::endl;
@@ -2397,7 +1828,7 @@ int main(int argc, char** argv) {
             }
             // Advance the smoke test: load the next scene (or, once every scene's frame quota is
             // met, fall through and stop the whole loop below).
-            if (smokeTestMode) {
+            if (opt.smokeTestMode) {
                 if (smokeSceneIndex >= smokeScenePaths.size()) break;
                 if (!smokeSceneActive) {
                     const std::string& path = smokeScenePaths[smokeSceneIndex];
@@ -2518,214 +1949,22 @@ int main(int argc, char** argv) {
                     smokePlayCycles = 0;
                 }
 
-                // #132 - a smoke_project_sync* scene checks the project watcher end to end: files
-                // added, moved (the .meta left behind) and deleted outside the editor, applied by
-                // SyncProjectChanges. Each step pumps the watcher (inside this one frame) until
-                // it lands or 3 s pass.
+                // #132 - a smoke_project_sync* scene: the project watcher end to end (Tests/SmokeChecks.cpp).
                 if (smokeSceneActive && smokeFramesRendered == 15 &&
                     smokeScenePaths[smokeSceneIndex].find("smoke_project_sync") != std::string::npos) {
-                    namespace fs = std::filesystem;
-                    std::error_code se;
-                    const fs::path dir = ProjectPaths::Resolve("__smoke_sync");
-                    fs::remove_all(dir, se);
-                    fs::create_directories(dir, se);
-                    auto pump = [&](auto done) {
-                        for (int i = 0; i < 60 && !done(); ++i) {
-                            std::this_thread::sleep_for(std::chrono::milliseconds(50));
-                            editor.SyncProjectChanges(world, assets);
-                        }
-                        return (bool)done();
-                    };
-                    const std::string a = (dir / "a.png").string();
-                    const std::string m = (dir / "m.mat").string();
-                    const std::string c = (dir / "c.png").string();      // renamed in place
-                    const std::string b = (dir / "sub" / "c.png").string(); // then moved to a subfolder
-                    unsigned char px[4 * 4 * 4];
-                    for (int i = 0; i < 64; ++i) px[i] = (unsigned char)(i * 4);
-                    stbi_write_png(a.c_str(), 4, 4, 4, px, 16);
-                    const bool added = pump([&] { return !assets.FindListed(a).empty(); });
-                    const AssetGuid guidA = AssetDatabase::GuidForPath(a);
-                    const bool metaA = fs::exists(a + ".meta", se);
-                    // A material using it, and a scene reference (the sky path string).
-                    AtomicFile::WriteBytes(m, "{\"matVersion\":1,\"albedoMap\":\"" + fs::path(a).generic_string() + "\"}");
-                    std::this_thread::sleep_for(std::chrono::milliseconds(3100)); // past the self-write window
-                    std::ofstream(m, std::ios::app) << "\n";                        // an outside edit: re-import it
-                    const bool matAdded = pump([&] { return !assets.FindListed(m).empty(); });
-                    const std::string savedSky = world.SkyHdriPath;
-                    world.SkyHdriPath = a;
-                    // Rename it in place, alone: its .meta stays behind and must be carried over.
-                    fs::rename(a, c, se);
-                    const bool renamed = pump([&] { return !assets.FindListed(c).empty() && assets.FindListed(a).empty(); });
-                    const bool renamedGuid = guidA.IsValid() && AssetDatabase::GuidForPath(c) == guidA &&
-                                             fs::exists(c + ".meta", se) && !fs::exists(a + ".meta", se);
-                    // Then move it, with its .meta (what Explorer / git do), into a subfolder.
-                    fs::create_directories(dir / "sub", se);
-                    fs::rename(c + ".meta", b + ".meta", se);
-                    fs::rename(c, b, se);
-                    const bool moved = pump([&] { return !assets.FindListed(b).empty() && assets.FindListed(c).empty(); });
-                    const bool sameGuid = renamedGuid && AssetDatabase::GuidForPath(b) == guidA;
-                    const bool metaMoved = fs::exists(b + ".meta", se) && !fs::exists(c + ".meta", se);
-                    const bool skyFollowed = AssetDatabase::PathKey(world.SkyHdriPath) == AssetDatabase::PathKey(b);
-                    std::shared_ptr<MaterialAsset> mat = assets.LoadMaterial(assets.FindListed(m));
-                    const bool matFollowed = mat && mat->Mat.AlbedoMap &&
-                        AssetDatabase::PathKey(mat->AlbedoMapPath) == AssetDatabase::PathKey(b);
-                    world.SkyHdriPath = savedSky;
-                    // Delete it; its .meta goes with it.
-                    fs::remove(b, se);
-                    const bool removed = pump([&] { return assets.FindListed(b).empty(); });
-                    const bool metaCleaned = !fs::exists(b + ".meta", se);
-                    std::cout << "[SmokeTest]   project sync added=" << added << " meta=" << metaA << " matAdded=" << matAdded
-                              << " renamed=" << renamed << " moved=" << moved << " sameGuid=" << sameGuid << " metaMoved=" << metaMoved
-                              << " skyFollowed=" << skyFollowed << " matFollowed=" << matFollowed
-                              << " removed=" << removed << " metaCleaned=" << metaCleaned << "\n";
-                    if (!(added && metaA && matAdded && renamed && moved && sameGuid && metaMoved && skyFollowed && matFollowed && removed && metaCleaned))
-                        Log::Error("[SmokeTest] project sync check failed.");
-                    fs::remove_all(dir, se);
-                    pump([] { return false; }); // let the clean-up events drain before the next scene
+                    SmokeChecks::ProjectSync(editor, world, assets);
                 }
 
-                // #107 - a smoke_materials* scene renders every loaded material, plus a chrome, a
-                // see-through and a glass one, through the material preview. Each must draw
-                // something distinct from the backdrop, lit from above (so the Inspector's flipped
-                // UVs are right), and ContentKey must follow edits. PNGs land in %TEMP% for a look.
+                // #107 - a smoke_materials* scene: every material through the material preview (Tests/SmokeChecks.cpp).
                 if (smokeSceneActive && smokeFramesRendered == 15 &&
                     smokeScenePaths[smokeSceneIndex].find("smoke_materials") != std::string::npos) {
-                    namespace fs = std::filesystem;
-                    std::error_code pe;
-                    const fs::path outDir = fs::temp_directory_path(pe) / "TartarusSmokeMaterialPreview";
-                    fs::create_directories(outDir, pe);
-                    // The scene's own materials: whatever else is still loaded (the startup scene's - the Sandbox
-                    // player's black clothing, near the backdrop's colour) isn't what this scene tests.
-                    std::vector<std::shared_ptr<MaterialAsset>> mats;
-                    for (auto [e, rc] : world.Registry.view<RenderableComponent>().each())
-                        for (const auto& m : rc.Materials)
-                            if (m && std::find(mats.begin(), mats.end(), m) == mats.end()) mats.push_back(m);
-                    auto extra = [&](const char* name, auto setup) {
-                        auto m = std::make_shared<MaterialAsset>();
-                        m->Name = name;
-                        setup(*m);
-                        mats.push_back(m);
-                    };
-                    extra("chrome", [](MaterialAsset& m) { m.Mat.BaseColor = glm::vec3(0.95f); m.Mat.Metallic = 1.0f; m.Mat.Roughness = 0.08f; });
-                    extra("red_plastic", [](MaterialAsset& m) { m.Mat.BaseColor = glm::vec3(0.8f, 0.05f, 0.05f); m.Mat.Roughness = 0.45f; });
-                    extra("see_through", [](MaterialAsset& m) { m.Mat.BaseColor = glm::vec3(0.1f, 0.3f, 0.9f);
-                                                                m.RenderQueue = MaterialAsset::Queue::Transparent; m.Opacity = 0.35f; });
-                    MaterialPreviewRenderer preview;
-                    const int kPx = 128;
-                    unsigned int readFbo = 0;
-                    glGenFramebuffers(1, &readFbo);
-                    int bad = 0, drawn = 0;
-                    std::string names;
-                    for (const auto& m : mats) {
-                        if (!m || m->Missing) continue;
-                        const unsigned int tex = preview.Render(m, MaterialPreviewRenderer::Shape::Sphere, 0.5f, 0.3f, kPx, kPx);
-                        std::vector<unsigned char> px((size_t)kPx * kPx * 4);
-                        GLint prevRead = 0;
-                        glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevRead);
-                        glBindFramebuffer(GL_READ_FRAMEBUFFER, readFbo);
-                        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
-                        if (tex) glReadPixels(0, 0, kPx, kPx, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
-                        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
-                        glBindFramebuffer(GL_READ_FRAMEBUFFER, (unsigned int)prevRead);
-                        auto at = [&](int x, int y) { const unsigned char* p = &px[((size_t)y * kPx + x) * 4]; return glm::vec3(p[0], p[1], p[2]); };
-                        // Average over a band: GL rows run bottom-up, so y > kPx/2 is the top of the image.
-                        auto band = [&](int y0, int y1) {
-                            glm::vec3 sum(0.0f); int n = 0;
-                            for (int y = y0; y < y1; ++y) for (int x = kPx * 3 / 8; x < kPx * 5 / 8; ++x) { sum += at(x, y); ++n; }
-                            return sum / (float)std::max(n, 1);
-                        };
-                        const glm::vec3 corner = at(2, 2), centre = band(kPx * 7 / 16, kPx * 9 / 16);
-                        const glm::vec3 top = band(kPx * 5 / 8, kPx * 3 / 4), bottom = band(kPx / 4, kPx * 3 / 8);
-                        const float lum = [](glm::vec3 c) { return c.r * 0.3f + c.g * 0.59f + c.b * 0.11f; }(top);
-                        const float lumB = bottom.r * 0.3f + bottom.g * 0.59f + bottom.b * 0.11f;
-                        const bool distinct = glm::length(centre - corner) > 12.0f;
-                        const bool opaque = m->RenderQueue == MaterialAsset::Queue::Opaque && m->Mat.TransmissionStrength <= 0.0f;
-                        const bool litFromAbove = !opaque || lum >= lumB - 2.0f; // not meaningful through glass
-                        ++drawn;
-                        const std::string name = m->Name.empty() ? fs::path(m->Path).stem().string() : m->Name;
-                        names += " " + name;
-                        if (!tex || !distinct || !litFromAbove) {
-                            ++bad;
-                            Log::Error("[SmokeTest] material preview '" + name + "' tex=" + std::to_string(tex) +
-                                       " distinct=" + std::to_string(distinct) + " litFromAbove=" + std::to_string(litFromAbove));
-                        }
-                        // Flip to top-down rows for the PNG.
-                        std::vector<unsigned char> flipped(px.size());
-                        for (int y = 0; y < kPx; ++y)
-                            std::memcpy(&flipped[(size_t)y * kPx * 4], &px[(size_t)(kPx - 1 - y) * kPx * 4], (size_t)kPx * 4);
-                        stbi_write_png((outDir / (name + ".png")).string().c_str(), kPx, kPx, 4, flipped.data(), kPx * 4);
-                    }
-                    glDeleteFramebuffers(1, &readFbo);
-                    // ContentKey: stable, and follows a value edit and a queue change.
-                    bool keyOk = !mats.empty();
-                    if (keyOk) {
-                        MaterialAsset& m = *mats.back();
-                        const std::uint64_t k0 = MaterialPreviewRenderer::ContentKey(m);
-                        keyOk = k0 == MaterialPreviewRenderer::ContentKey(m);
-                        m.Mat.BaseColor.r += 0.1f;
-                        const std::uint64_t k1 = MaterialPreviewRenderer::ContentKey(m);
-                        m.RenderQueue = MaterialAsset::Queue::Opaque;
-                        const std::uint64_t k2 = MaterialPreviewRenderer::ContentKey(m);
-                        keyOk = keyOk && k1 != k0 && k2 != k1;
-                    }
-                    std::cout << "[SmokeTest]   material previews drawn=" << drawn << " bad=" << bad << " keyOk=" << keyOk
-                              << " (" << outDir.string() << ":" << names << ")" << std::endl;
-                    if (bad || !keyOk || drawn < 4) Log::Error("[SmokeTest] material preview check failed.");
+                    SmokeChecks::MaterialPreviews(world);
                 }
 
-                // #176 - a smoke_prefab* scene round-trips Prefab Mode: save a box as a temp
-                // prefab, place two instances, open the prefab, add a child, go back to the
-                // scene, and check both instances picked the child up and the scene's own
-                // objects came back.
+                // #176 - a smoke_prefab* scene: a Prefab Mode round trip (Tests/SmokeChecks.cpp).
                 if (smokeSceneActive && smokeFramesRendered == 15 &&
                     smokeScenePaths[smokeSceneIndex].find("smoke_prefab") != std::string::npos) {
-                    std::error_code pe;
-                    const std::filesystem::path dir = std::filesystem::temp_directory_path(pe) / "TartarusSmokePrefab";
-                    std::filesystem::create_directories(dir, pe);
-                    const std::string prefabPath = (dir / "crate.prefab").string();
-                    const size_t sceneEntities = world.Registry.storage<entt::entity>().in_use();
-                    entt::entity src = world.CreateBox(glm::vec3(0.0f, 0.5f, 0.0f), glm::vec3(1.0f), glm::vec3(0.8f, 0.5f, 0.2f),
-                                                       glm::vec3(0.0f), "Crate");
-                    SceneSerializer::SavePrefab(world, src, prefabPath);
-                    world.DestroyEntityAndChildren(src);
-                    auto countChildren = [&](entt::entity e) {
-                        int n = 0;
-                        for (auto [c, h] : world.Registry.view<HierarchyComponent>().each()) if (h.Parent == e) ++n;
-                        return n;
-                    };
-                    for (float x : {-2.0f, 2.0f}) {
-                        entt::entity inst = SceneSerializer::InstantiatePrefab(world, assets, prefabPath);
-                        world.Registry.get<TransformComponent>(inst).Position.x = x;
-                    }
-                    editor.EnterPrefabMode(world, assets, prefabPath);
-                    const bool entered = editor.InPrefabMode();
-                    int rootsInPrefab = 0;
-                    entt::entity proot = entt::null;
-                    for (auto [e, t] : world.Registry.view<TransformComponent>().each()) {
-                        const auto* h = world.Registry.try_get<HierarchyComponent>(e);
-                        if (!h || h->Parent == entt::null) { ++rootsInPrefab; proot = e; }
-                    }
-                    if (proot != entt::null) {
-                        entt::entity child = world.CreateEmptyEntity(glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Lid");
-                        world.SetParent(child, proot);
-                        // Imported meshes are initially top-level, including on an edit path
-                        // that hasn't marked the prefab dirty. Closing must save them too.
-                        world.CreateEmptyEntity(glm::vec3(2.0f, 1.0f, 0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Dropped Mesh");
-                    }
-                    editor.ExitPrefabMode(world, assets);
-                    const bool saved = !editor.InPrefabMode();
-                    int instances = 0, withChild = 0;
-                    for (auto [e, pi] : world.Registry.view<PrefabInstanceComponent>().each()) {
-                        ++instances;
-                        if (countChildren(e) == 2) ++withChild;
-                    }
-                    const size_t after = world.Registry.storage<entt::entity>().in_use();
-                    std::cout << "[SmokeTest]   prefab mode entered=" << entered << " rootsInPrefab=" << rootsInPrefab
-                              << " saved=" << saved << " exited=" << !editor.InPrefabMode() << " instances=" << instances
-                              << " withChild=" << withChild << " sceneEntities=" << sceneEntities << "->" << after << "\n";
-                    if (!entered || !saved || editor.InPrefabMode() || instances != 2 || withChild != 2)
-                        Log::Error("[SmokeTest] Prefab Mode round trip failed.");
-                    std::filesystem::remove_all(dir, pe);
+                    SmokeChecks::PrefabMode(editor, world, assets);
                 }
 
                 // Play-mode cycles for a smoke_play* scene: enter at 20 / 55, stop at 40 / 75,
@@ -2849,7 +2088,7 @@ int main(int argc, char** argv) {
             const float dt = Time::UnscaledDeltaTime();
             // --weapon-test runs on a fixed step, so its timings don't depend on the machine.
             // (--npc-test ragdoll stops time for a few frames to shoot one moment from four sides.)
-            const float gameDt = weaponTestMode || npcTestMode ? (playing && !(npcTest && npcTest->Frozen()) ? 1.0f / 60.0f : 0.0f) : Time::DeltaTime();
+            const float gameDt = opt.weaponTestMode || opt.npcTestMode ? (playing && !(npcTest && npcTest->Frozen()) ? 1.0f / 60.0f : 0.0f) : Time::DeltaTime();
 
             // #158 — shader hot reload (editor only; the scan itself runs at 1 Hz). Engine
             // programs and material shaders recompile when any file they were built from changes;
@@ -2870,7 +2109,7 @@ int main(int argc, char** argv) {
 
             // Frame-pacing preferences are live: changing VSync / FPS Limit in Preferences takes
             // effect on the very next frame. SetVSync only touches the driver on an actual change.
-            if (const int wantVSync = perfBenchMode ? 0 : playerMode ? (playerCfg.VSync ? 1 : 0) : EditorSettings::Get().VSyncMode;
+            if (const int wantVSync = opt.perfBenchMode ? 0 : playerMode ? (playerCfg.VSync ? 1 : 0) : EditorSettings::Get().VSyncMode;
                 wantVSync != appliedVSyncMode) {
                 appliedVSyncMode = wantVSync;
                 window.SetVSync(appliedVSyncMode);
@@ -3009,7 +2248,7 @@ int main(int argc, char** argv) {
             }
 
             // --editor-tests: this frame's synthetic input and checks, before ImGui reads input.
-            if (editorTestsMode && EditorUiTests::BeforeFrame(editor, world, assets, editorCamera)) {
+            if (opt.editorTestsMode && EditorUiTests::BeforeFrame(editor, world, assets, editorCamera)) {
                 exitApproved = true;
                 window.SetShouldClose(true);
             }
@@ -3136,7 +2375,7 @@ int main(int argc, char** argv) {
                     const EditorSettings& es = EditorSettings::Get();
                     PhysicsWorld::SetDebugDrawFlags(es.PhysicsDebugDrawFlags);
                     BodyDebug::SetEnabled(playing && es.ShowBodyDebug);
-                    PhysicsWorld::SetEventLogging(es.LogPhysicsEvents || smokeTestMode); // #169
+                    PhysicsWorld::SetEventLogging(es.LogPhysicsEvents || opt.smokeTestMode); // #169
                     PhysicsWorld::SetQueryRecording((es.PhysicsDebugDrawFlags & PhysicsWorld::PDD_Raycasts) != 0u);
                 }
                 // Step the PhysX world (#185): kinematic bodies pushed from their Transforms,
@@ -3204,20 +2443,20 @@ int main(int argc, char** argv) {
                         Scripting::GameSessionFrame session;session.HasInput=gameHasInput;session.GravityLive=gravityGunLive();session.Dead=playerVitals.IsDead();session.Equipped=firstPersonPresentation.IsEquipped();session.Scroll=(float)Input::GetScrollDeltaY();
                         if(!Scripting::InvokeProject("session",&session,sizeof session))throw std::runtime_error("Project session input unavailable");
                         const bool wasEquipped=firstPersonPresentation.IsEquipped();
-                        if(session.Commands&1)firstPersonPresentation.SelectSlot(0);
-                        if(session.Commands&2)firstPersonPresentation.SelectSlot(1);
-                        if(session.Commands&4)firstPersonPresentation.SetEquipped(false);
-                        if(session.Commands&131072)flashlight.Toggle(player.Cam.Position);
-                        if(session.Commands&8)firstPersonPresentation.CycleSlot(session.SlotDirection);
-                        if(session.Commands&16){Scripting::GameSessionFrame equip;equip.Operation=4;equip.Equipped=firstPersonPresentation.IsEquipped();Scripting::InvokeProject("session",&equip,sizeof equip);firstPersonPresentation.SetEquipped(equip.Equipped!=0);}
+                        if(session.Commands&Scripting::kSessionSlot1)firstPersonPresentation.SelectSlot(0);
+                        if(session.Commands&Scripting::kSessionSlot2)firstPersonPresentation.SelectSlot(1);
+                        if(session.Commands&Scripting::kSessionUnarmed)firstPersonPresentation.SetEquipped(false);
+                        if(session.Commands&Scripting::kSessionFlashlight)flashlight.Toggle(player.Cam.Position);
+                        if(session.Commands&Scripting::kSessionCycleSlot)firstPersonPresentation.CycleSlot(session.SlotDirection);
+                        if(session.Commands&Scripting::kSessionHolster){Scripting::GameSessionFrame equip;equip.Operation=4;equip.Equipped=firstPersonPresentation.IsEquipped();Scripting::InvokeProject("session",&equip,sizeof equip);firstPersonPresentation.SetEquipped(equip.Equipped!=0);}
                         if(playGravityGun && !wasEquipped && firstPersonPresentation.IsEquipped()){
                             if(PhysicsWorld::IsGrabbing())PhysicsWorld::ReleaseBody(false,nullptr);gravityGun.Reset();
                         }
-                        if(session.Commands&64)firstPersonPresentation.ToggleFireMode();
-                        if(session.Commands&32){firstPersonPresentation.UpdateTrigger(session.FirePressed!=0,session.FireHeld!=0);firstPersonPresentation.UpdateReloadKey(session.ReloadHeld!=0,gameDt);}
-                        if(session.Commands&128)firstPersonPresentation.TriggerAction("Inspect");
-                        if(session.Commands&256)firstPersonPresentation.TriggerAction("Melee");
-                        if(session.Commands&512)firstPersonPresentation.ResetReloadKey();
+                        if(session.Commands&Scripting::kSessionFireMode)firstPersonPresentation.ToggleFireMode();
+                        if(session.Commands&Scripting::kSessionWeaponInput){firstPersonPresentation.UpdateTrigger(session.FirePressed!=0,session.FireHeld!=0);firstPersonPresentation.UpdateReloadKey(session.ReloadHeld!=0,gameDt);}
+                        if(session.Commands&Scripting::kSessionInspect)firstPersonPresentation.TriggerAction("Inspect");
+                        if(session.Commands&Scripting::kSessionMelee)firstPersonPresentation.TriggerAction("Melee");
+                        if(session.Commands&Scripting::kSessionResetReload)firstPersonPresentation.ResetReloadKey();
                         if (npcTest && !playerVitals.IsDead()) {
                             firstPersonPresentation.UpdateTrigger(npcTest->Firing(), npcTest->Firing());
                             if (npcTest->WantsReload()) firstPersonPresentation.Reload();
@@ -3262,7 +2501,7 @@ int main(int argc, char** argv) {
                     Scripting::GameSessionFrame session;session.Operation=1;session.Invisible=devPanel.Invisible;session.InfiniteAmmo=devPanel.InfiniteAmmo;session.PlayerValid=playerSnap.Valid;session.Armed=firstPersonPresentation.IsActive();session.Magazine=firstPersonPresentation.MagazineSize();
                     if(!Scripting::InvokeProject("session",&session,sizeof session))throw std::runtime_error("Project cheat policy unavailable");playerSnap.Valid=session.PlayerValid!=0;
                     npcDirector.Think(world,assets,gameDt,playerSnap);
-                    if(session.Commands&1024){firstPersonPresentation.SetAmmo(session.Ammo);playerAmmoSeen=firstPersonPresentation.Ammo();}
+                    if(session.Commands&Scripting::kSessionRefillAmmo){firstPersonPresentation.SetAmmo(session.Ammo);playerAmmoSeen=firstPersonPresentation.Ammo();}
 
                 }
                 // The Play-mode camera is the ears: positional sources (#201) attenuate and pan
@@ -3344,9 +2583,9 @@ int main(int argc, char** argv) {
                         feedback.NpcHit=npcDirector.Active() && npcDirector.OnPlayerHit(world,hit.Entity,hit.Point,hit.Origin,hit.Direction,firstPersonPresentation.Set().Gameplay,&killed,&head,&aliveWhenHit);
                         feedback.Killed=killed;feedback.Head=head;feedback.AliveHit=aliveWhenHit;
                         if(!Scripting::InvokeProject("session",&feedback,sizeof feedback))throw std::runtime_error("Project hit feedback unavailable");
-                        if(feedback.Commands&16384){playerVitals.MarkHit(killed,head);combatFx.Play(killed?CombatFx::Cue::HitmarkerKill:CombatFx::Cue::Hitmarker,hit.Point);}
-                        if(feedback.Commands&32768)combatHud.OnKill(npcDirector,hit.Entity,head);
-                        if(!(feedback.Commands&65536))continue;
+                        if(feedback.Commands&Scripting::kSessionHitmarker){playerVitals.MarkHit(killed,head);combatFx.Play(killed?CombatFx::Cue::HitmarkerKill:CombatFx::Cue::Hitmarker,hit.Point);}
+                        if(feedback.Commands&Scripting::kSessionKillFeed)combatHud.OnKill(npcDirector,hit.Entity,head);
+                        if(!(feedback.Commands&Scripting::kSessionWorldImpact))continue;
                         combatFx.Impact(world, hit.Entity, glm::vec3(hit.Point[0], hit.Point[1], hit.Point[2]));
                         worldImpact(hit.Entity, hit.Point, hit.Normal, glm::vec3(hit.Direction[0], hit.Direction[1], hit.Direction[2]), hit.HoleRadius);
                     }
@@ -3496,12 +2735,12 @@ int main(int argc, char** argv) {
                     playerVitals.Tick(gameDt);
                     Scripting::GameSessionFrame session;session.Operation=2;session.JustDied=playerVitals.JustDied();session.WantsRespawn=playerVitals.WantsRespawn();session.Dead=playerVitals.IsDead();session.RespawnFeet={player.RespawnFeet.x,player.RespawnFeet.y,player.RespawnFeet.z};session.EyeHeight=player.EyeHeight;
                     if(!Scripting::InvokeProject("session",&session,sizeof session))throw std::runtime_error("Project respawn orchestration unavailable");
-                    if(session.Commands&2048) {
+                    if(session.Commands&Scripting::kSessionDied) {
                         firstPersonPresentation.SetEquipped(false);
                         if (PhysicsWorld::IsGrabbing()) PhysicsWorld::ReleaseBody(false, nullptr);
                         gravityGun.Reset();
                     }
-                    if(session.Commands&4096) {
+                    if(session.Commands&Scripting::kSessionRespawn) {
                         // Back at the spawn, full health and ammo, weapon drawn, a moment untouchable.
                         const float f[3] = {session.Position.x,session.Position.y,session.Position.z};
                         PhysicsWorld::SetCharacterFootPosition(f);
@@ -3516,7 +2755,7 @@ int main(int argc, char** argv) {
                     }
                     // Dead: the view sinks to the floor and rolls over, on the camera only (taken off
                     // again at the top of the next frame).
-                    if(session.Commands&8192) {
+                    if(session.Commands&Scripting::kSessionDeadCamera) {
                         deathCamOffset = playerVitals.DeathCameraOffset();
                         deathCamRoll = playerVitals.DeathCameraRoll();
                         player.Cam.Position += deathCamOffset;
@@ -3891,24 +3130,24 @@ int main(int argc, char** argv) {
                 // #160 — world bounds of everything that casts, so the cascades' near planes
                 // reach every occluder.
                 glm::vec3 casterMin(std::numeric_limits<float>::max()), casterMax(-std::numeric_limits<float>::max());
-                for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
-                    if (world.Registry.any_of<InactiveTag, LodCulledTag, PoseSourceTag, OwnerViewOnlyTag>(entity)) continue;
-                    auto& r = world.Registry.get<RenderableComponent>(entity);
-                    // #163 - Cast Shadows: Off skips; Two Sided draws without back-face culling.
-                    if (!r.ModelRef || r.CastShadows == RenderableComponent::ShadowCasting::Off) continue;
+                VisibilityQuery casts; // #163 - Cast Shadows: Off skips
+                casts.ShadowCasters = true;
+                static std::vector<VisibleRenderable> casting;
+                GatherVisible(world, casts, casting);
+                for (const VisibleRenderable& v : casting) {
+                    const auto& r = *v.Renderable;
                     SunCaster& sc = sunCasters.emplace_back();
                     sc.model = r.ModelRef.get();
                     sc.materials = &r.Materials;
-                    const auto* hide = world.Registry.try_get<OutfitHideTag>(entity);
+                    const auto* hide = world.Registry.try_get<OutfitHideTag>(v.Entity);
                     sc.visible = hide ? hide->Visible.get() : nullptr;
-                    sc.xform = world.GetCachedWorldTransform(entity);
+                    sc.xform = v.Xform;
+                    // #163 - Cast Shadows: Two Sided draws without back-face culling.
                     sc.twoSided = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
                     // As posed (Model::PosedBounds), the bounds the main pass culls with.
-                    glm::vec3 bmin, bmax;
-                    sc.model->PosedBounds(bmin, bmax);
-                    sc.bounded = bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z;
+                    sc.bounded = v.Bounded;
+                    sc.bounds = AABB{v.WorldMin, v.WorldMax};
                     if (!sc.bounded) continue;
-                    sc.bounds = AABB{bmin, bmax}.Transformed(sc.xform);
                     casterMin = glm::min(casterMin, sc.bounds.Min);
                     casterMax = glm::max(casterMax, sc.bounds.Max);
                 }
@@ -4047,16 +3286,19 @@ int main(int argc, char** argv) {
             localCasters.clear();
             if (world.ShadowsEnabled && (spotShadowCount > 0 || pointShadowCount > 0)) {
                 PROFILE_SCOPE("Local Shadow Gather");
-                for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
-                    if (world.Registry.any_of<InactiveTag, LodCulledTag, PoseSourceTag, OwnerViewOnlyTag>(entity)) continue;
-                    auto& r = world.Registry.get<RenderableComponent>(entity);
-                    if (!r.ModelRef || r.CastShadows == RenderableComponent::ShadowCasting::Off) continue; // #163
+                VisibilityQuery casts; // #163: not Cast Shadows Off
+                casts.ShadowCasters = true;
+                static std::vector<VisibleRenderable> casting;
+                GatherVisible(world, casts, casting);
+                for (const VisibleRenderable& v : casting) {
+                    const entt::entity entity = v.Entity;
+                    const auto& r = *v.Renderable;
                     LocalCaster& lc = localCasters.emplace_back();
                     lc.model = r.ModelRef.get();
                     lc.materials = &r.Materials;
                     const auto* hide = world.Registry.try_get<OutfitHideTag>(entity);
                     lc.visible = hide ? hide->Visible.get() : nullptr;
-                    lc.xform = world.GetCachedWorldTransform(entity);
+                    lc.xform = v.Xform;
                     lc.id = static_cast<std::uint32_t>(entity);
                     lc.twoSided = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
                     lc.player = world.Registry.any_of<HiddenFromOwnerTag, PlayerBodyTag>(entity);
@@ -4072,11 +3314,8 @@ int main(int argc, char** argv) {
                         motion->second.posed = now;
                     }
                     lc.animated = lc.model->HasBones() && now - motion->second.posed < kMovingFrames;
-                    glm::vec3 bmin, bmax;
-                    lc.model->PosedBounds(bmin, bmax); // as posed, like the main pass
-                    lc.bounded = bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z;
-                    if (!lc.bounded) continue;
-                    lc.bounds = AABB{bmin, bmax}.Transformed(lc.xform);
+                    lc.bounded = v.Bounded; // as posed, like the main pass
+                    lc.bounds = AABB{v.WorldMin, v.WorldMax};
                 }
             }
             // A local shadow map is only redrawn when something it sees changed: its light, the
@@ -4504,34 +3743,25 @@ int main(int argc, char** argv) {
                 shadowShader.SetInt("uUseSkinning", 0);
                 const int modelLoc = shadowShader.Loc("uModel");
                 const Frustum frustum = Frustum::FromViewProj(proj * view);
-                for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
-                    if (world.Registry.any_of<InactiveTag, LodCulledTag>(entity)) continue;
-                    if (world.Registry.any_of<ViewModelTag, PoseSourceTag>(entity)) continue; // see note above
-                    // Split poses: each view's own copy (the player's camera the first-person one).
-                    if (editorView ? world.Registry.all_of<OwnerViewOnlyTag>(entity) : world.Registry.all_of<HiddenFromOwnerTag>(entity)) continue;
-                    // The player's own body in the camera's view: its shoulders and whatever is within Near
-                    // Hide are discarded in the main pass, so here they would occlude from nowhere. The main
-                    // pass gives these pieces no SSAO to match (SceneRenderer, DrawItem::NoSsao).
-                    if (!editorView && world.Registry.all_of<PlayerBodyTag>(entity)) continue;
-                    if (editorView) {
-                        if (world.Registry.all_of<HiddenInSceneTag>(entity)) continue;
-                        const auto* lc = world.Registry.try_get<LayerComponent>(entity);
-                        const int layer = lc ? lc->Layer : 0;
-                        if (layer >= 0 && layer < 32 && !((sceneInputs.layerVisibleMask >> layer) & 1u)) continue;
-                    }
-                    auto& rc = world.Registry.get<RenderableComponent>(entity);
-                    if (!rc.ModelRef) continue;
-                    if (!rc.Materials.empty() && rc.Materials[0] &&
-                        rc.Materials[0]->RenderQueue == MaterialAsset::Queue::Transparent) continue;
-                    if (rc.CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) continue; // #163: not in view
-                    const glm::mat4 model = world.GetCachedWorldTransform(entity);
-                    glm::vec3 bmin, bmax;
-                    rc.ModelRef->PosedBounds(bmin, bmax); // as posed, like the main pass
-                    if (bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z) {
-                        if (!frustum.Intersects(AABB{bmin, bmax}.Transformed(model))) continue;
-                    }
-                    shadowShader.SetMat4(modelLoc, model);
-                    const auto* hide = world.Registry.try_get<OutfitHideTag>(entity);
+                // What the view sees (each view's own copy of a split pose - the player's camera the first-person
+                // one), opaque, in the frustum as posed like the main pass; no view-model geometry (see note above).
+                VisibilityQuery seen;
+                seen.OwnerView = !editorView;
+                seen.EditorView = editorView;
+                seen.LayerVisibleMask = sceneInputs.layerVisibleMask;
+                seen.SkipViewModels = true;
+                // The player's own body in the camera's view: its shoulders and whatever is within Near
+                // Hide are discarded in the main pass, so here they would occlude from nowhere. The main
+                // pass gives these pieces no SSAO to match (SceneRenderer, DrawItem::NoSsao).
+                seen.SkipPlayerBody = !editorView;
+                seen.SkipTransparent = true;
+                seen.Cull = &frustum;
+                static std::vector<VisibleRenderable> visible;
+                GatherVisible(world, seen, visible);
+                for (const VisibleRenderable& v : visible) {
+                    auto& rc = *v.Renderable;
+                    shadowShader.SetMat4(modelLoc, v.Xform);
+                    const auto* hide = world.Registry.try_get<OutfitHideTag>(v.Entity);
                     rc.ModelRef->DrawDepthOnly(shadowShader, rc.Materials, 1, hide ? hide->Visible.get() : nullptr);
                 }
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -4567,8 +3797,8 @@ int main(int argc, char** argv) {
             // skip this render entirely when the Scene tab isn't the one showing (#172). Halves
             // per-frame render cost in the common case (editing in one tab or the other).
             // (The combat bench measures the game alone: no Scene view beside it.)
-            if ((editorUIVisible && editor.IsSceneViewportVisible() && !(perfBenchMode && npcTest)) ||
-                ((npcTest || stockProbeMode) && playing && !(perfBenchMode && npcTest && smokeShotsDir.empty()))) {
+            if ((editorUIVisible && editor.IsSceneViewportVisible() && !(opt.perfBenchMode && npcTest)) ||
+                ((npcTest || opt.stockProbeMode) && playing && !(opt.perfBenchMode && npcTest && opt.smokeShotsDir.empty()))) {
                 PROFILE_SCOPE("Scene View Render");
                 PROFILE_GPU_SCOPE("Scene View Render");
                 glm::vec2 available = editor.GetLastSceneContentRegion();
@@ -4843,7 +4073,7 @@ int main(int argc, char** argv) {
                 // stand down (a shoot-click or strafe key shouldn't also poke the editor).
                 editor.SetGameInputActive(gameHasInput);
                 // --editor-shot: set up the next view a second ahead of its capture (below).
-                if (!editorShotDir.empty()) {
+                if (!opt.editorShotDir.empty()) {
                     const int step = editorShotFrame++ / kEditorShotFrames;
                     if (editorShotFrame % kEditorShotFrames == kEditorShotFrames / 2 && step < (int)std::size(kEditorShots)) {
                         const std::string view = kEditorShots[step];
@@ -4859,7 +4089,7 @@ int main(int argc, char** argv) {
                         if (view == "overview") {
                             EditorModuleHost::ConsoleState().Visible = true; // a tab now, in front for "console"
                             for (auto [e, n] : world.Registry.view<NameComponent>().each())
-                                if (n.Name == editorShotSelect) {
+                                if (n.Name == opt.editorShotSelect) {
                                     if (const auto* o = world.Registry.try_get<OrderComponent>(e)) editor.SelectEntityByOrder(world, o->Value);
                                     break;
                                 }
@@ -4923,7 +4153,7 @@ int main(int argc, char** argv) {
                 // this frame's pointers first.
                 editorModule.SetFrameContext(&editor, &world, &assets, &editorCamera);
                 if (devKeys) editorModule.Draw(editorUIVisible, dt);
-                if (!editorShotDir.empty() && editorShotCurves) {
+                if (!opt.editorShotDir.empty() && opt.editorShotCurves) {
                     static RecoilAsset curvePreview;
                     static bool loaded = false;
                     if (!loaded) {
@@ -5014,6 +4244,89 @@ int main(int argc, char** argv) {
                 editor.SetGameViewOpenState(gameView.IsWindowOpen());
             }
 
+            // The game camera's frame, from the HDR clear to the HUD: drawn at rw x rh, shown at outW x outH in `outFbo`
+            // (upscaled when smaller). The docked Game view and Free-Aspect maximized play differ only in what they pass:
+            // `postSlot` is the post chain's motion-blur history, and `overlayInPlayOnly` keeps the physics debug overlay to Play.
+            auto renderGameFrame = [&](const glm::mat4& view, const glm::mat4& proj, const glm::vec3& eye, int rw, int rh,
+                                       unsigned outFbo, int outW, int outH, int postSlot, bool overlayInPlayOnly,
+                                       EditorLayer::RenderStats& stats) {
+                const bool scaled = rw != outW || rh != outH;
+                gameHdr.Resize(rw, rh, world.MsaaSamples);
+                gameHdr.BindForRender();
+                glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                // SSAO depth pre-pass - the Game view's own Ssao instance/resolution, apart from the Scene view's (see the
+                // gameSsao declaration). The two callers are mutually exclusive per frame, so no resize thrash.
+                if (world.SsaoEnabled) gameSsao.Resize(rw, rh);
+                if (world.SsaoEnabled && gameSsao.IsValid()) { // audit #358 - skip if any FBO incomplete
+                    PROFILE_SCOPE("SSAO Depth Pre-pass (Game)");
+                    PROFILE_GPU_SCOPE("SSAO Depth Pre-pass (Game)");
+                    ssaoDepthPrepass(gameSsao, rw, rh, view, proj, /*editorView=*/false);
+
+                    gameHdr.BindForRender(); // restore for the main scene draw below
+                }
+
+                drawScene(RenderFrameContext{ view, proj, eye, /*Unlit=*/false,
+                              /*EditorView=*/false, /*DebugView=*/0,
+                              &gameHdr, &gameOpaqueColor, &gameSsao,
+                              firstPersonPresentation.ViewModelFov(),
+                              weaponOverlay(playing && playUsesPlayer, view, proj, eye, rh),
+                              /*OwnerView=*/playing && playUsesPlayer },
+                          &stats);
+
+                // Physics debug overlay over the game view (#185, F5) - depth-tested, no depth write.
+                if ((playing || !overlayInPlayOnly) && EditorSettings::Get().PlayDebugOverlay) {
+                    glEnable(GL_DEPTH_TEST); glDepthMask(GL_FALSE);
+                    colliderGizmo.Draw(view, proj, world, EditorSettings::Get().ShowColliders);
+                    glDepthMask(GL_TRUE);
+                }
+                if (playing && playUsesPlayer && gravityGunLive() && gravityGun.IsCharging())
+                    drawThrowArc(view, proj, eye);
+
+                gameHdr.ResolveTo();
+
+                // PR16: Bloom for the Game view - own Bloom instance (see gameBloom declaration).
+                unsigned int bloomGlowTex   = 0u;
+                float        bloomGlowIntensity = 0.0f;
+                if (world.BloomEnabled) {
+                    PROFILE_GPU_SCOPE("Bloom (Game)");
+                    gameBloom.Resize(rw, rh);
+                    if (gameBloom.IsValid()) { // audit #358 - no glow if any mip FBO is incomplete
+                        gameBloom.Compute(bloomThreshShader, bloomDownsampleShader, bloomUpsampleShader,
+                                          gameHdr.ResolvedColorTexture(),
+                                          world.BloomThreshold,
+                                          world.BloomKnee);
+                        bloomGlowTex       = gameBloom.GlowTexture();
+                        bloomGlowIntensity = world.BloomIntensity;
+                    }
+                    GLStateCache::Invalidate();
+                }
+                {
+                PROFILE_GPU_SCOPE("Tonemap");
+                const PostSettings post = WithDepthEffects(MakePostSettings(world, bloomGlowTex, bloomGlowIntensity, dt, 1, eye), world, gameHdr, view, proj, postSlot);
+                if (scaled) {
+                    gameLdr.Resize(rw, rh);
+                    tonemapper.Apply(gameHdr.ResolvedColorTexture(), gameLdr.Handle(), rw, rh, post);
+                } else {
+                    tonemapper.Apply(gameHdr.ResolvedColorTexture(), outFbo, outW, outH, post);
+                }
+                }
+                if (scaled) {
+                    PROFILE_GPU_SCOPE("Upscale");
+                    upscaler.Apply(gameLdr.ColorTexture(), rw, rh, outFbo, 0, 0, outW, outH, EditorSettings::Get().RenderSharpness);
+                }
+                if (playing && playUsesPlayer)
+                    crosshair.Draw(outFbo, outW, outH,
+                                   gravityGunLive() && gravityGun.IsHolding(),
+                                   gravityGunLive() && gravityGun.IsCharging() ? gravityGun.Charge() : -1.0f,
+                                   crosshairDot(view, proj, outW, outH));
+                if (playing && playUsesPlayer && npcDirector.Active()) {
+                    playerHud.Draw(outFbo, outW, outH,
+                                   MakePlayerHudState(playerVitals, player.Cam.Position, player.Cam.Yaw), (float)glfwGetTime());
+                    drawCombatHud(outFbo, outW, outH, view, proj);
+                }
+            };
+
             // --- Game View offscreen pass -----------------------------------------------------
             // Rendered whenever the Game panel is actually the visible tab (Scene and Game share
             // one dock node, so only one of them is ever showing - #172) or maximized play has a
@@ -5039,11 +4352,6 @@ int main(int argc, char** argv) {
                 // Game render resolution cap, 1440p or 4K was 1080p upscaled, so picking it changed nothing.
                 const bool exactRes = gameView.GetCurrentPreset().Mode == AspectRatioMode::FixedResolution;
                 Upscaler::InternalSize(gvWidth, gvHeight, exactRes ? 0 : EditorSettings::Get().RenderHeight, gvRw, gvRh);
-                const bool gvScaled = gvRw != gvWidth || gvRh != gvHeight;
-                gameHdr.Resize(gvRw, gvRh, world.MsaaSamples);
-                gameHdr.BindForRender();
-                glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
                 float gvAspect = (float)gvWidth / (float)gvHeight;
                 glm::mat4 gvView, gvProj;
@@ -5065,96 +4373,19 @@ int main(int argc, char** argv) {
                     gvProj = gameCam->ProjectionMatrix(gvAspect);
                     gvEye = gameCam->Position;
                 }
-                // SSAO depth pre-pass for the Game view — own Ssao instance/resolution from the
-                // Scene view's (see gameSsao declaration). Game view has no unlit mode.
-                if (world.SsaoEnabled) gameSsao.Resize(gvRw, gvRh);
-                if (world.SsaoEnabled && gameSsao.IsValid()) { // audit #358 — skip if any FBO incomplete
-                    PROFILE_SCOPE("SSAO Depth Pre-pass (Game)");
-                    PROFILE_GPU_SCOPE("SSAO Depth Pre-pass (Game)");
-                    ssaoDepthPrepass(gameSsao, gvRw, gvRh, gvView, gvProj, /*editorView=*/false);
-
-                    gameHdr.BindForRender(); // restore for the main scene draw below
-                }
-
                 EditorLayer::RenderStats gvRenderStats;
-                drawScene(RenderFrameContext{ gvView, gvProj, gvEye, /*Unlit=*/false,
-                              /*EditorView=*/false, /*DebugView=*/0,
-                              &gameHdr, &gameOpaqueColor, &gameSsao,
-                              firstPersonPresentation.ViewModelFov(),
-                              weaponOverlay(playing && playUsesPlayer, gvView, gvProj, gvEye, gvRh),
-                              /*OwnerView=*/playing && playUsesPlayer },
-                          &gvRenderStats);
-
-                // Physics debug overlay over the game view (#185, F5) — depth-tested, no depth write.
-                if (playing && EditorSettings::Get().PlayDebugOverlay) {
-                    glEnable(GL_DEPTH_TEST); glDepthMask(GL_FALSE);
-                    colliderGizmo.Draw(gvView, gvProj, world, EditorSettings::Get().ShowColliders);
-                    glDepthMask(GL_TRUE);
-                }
-                if (playing && playUsesPlayer && gravityGunLive() && gravityGun.IsCharging())
-                    drawThrowArc(gvView, gvProj, gvEye);
-
-                gameHdr.ResolveTo();
-
-                // PR16: Bloom for the Game view — own Bloom instance (see gameBloom declaration).
-                unsigned int gvBloomGlowTex   = 0u;
-                float        gvBloomIntensity = 0.0f;
-                if (world.BloomEnabled) {
-                    PROFILE_GPU_SCOPE("Bloom (Game)");
-                    gameBloom.Resize(gvRw, gvRh);
-                    if (gameBloom.IsValid()) { // audit #358 — no glow if any mip FBO is incomplete
-                        gameBloom.Compute(bloomThreshShader, bloomDownsampleShader, bloomUpsampleShader,
-                                          gameHdr.ResolvedColorTexture(),
-                                          world.BloomThreshold,
-                                          world.BloomKnee);
-                        gvBloomGlowTex   = gameBloom.GlowTexture();
-                        gvBloomIntensity = world.BloomIntensity;
-                    }
-                    GLStateCache::Invalidate();
-                }
-                {
-                PROFILE_GPU_SCOPE("Tonemap");
-                const PostSettings gvPost = WithDepthEffects(MakePostSettings(world, gvBloomGlowTex, gvBloomIntensity, dt, 1, gvEye), world, gameHdr, gvView, gvProj, 0);
-                if (gvScaled) {
-                    gameLdr.Resize(gvRw, gvRh);
-                    tonemapper.Apply(gameHdr.ResolvedColorTexture(), gameLdr.Handle(), gvRw, gvRh, gvPost);
-                } else {
-                    tonemapper.Apply(gameHdr.ResolvedColorTexture(), gameView.GetFramebuffer().Handle(), gvWidth, gvHeight, gvPost);
-                }
-                }
-                if (gvScaled) {
-                    PROFILE_GPU_SCOPE("Upscale");
-                    upscaler.Apply(gameLdr.ColorTexture(), gvRw, gvRh, gameView.GetFramebuffer().Handle(),
-                                   0, 0, gvWidth, gvHeight, EditorSettings::Get().RenderSharpness);
-                }
-                if (playing && playUsesPlayer)
-                    crosshair.Draw(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight,
-                                   gravityGunLive() && gravityGun.IsHolding(),
-                                   gravityGunLive() && gravityGun.IsCharging() ? gravityGun.Charge() : -1.0f,
-                                   crosshairDot(gvView, gvProj, gvWidth, gvHeight));
-                if (playing && playUsesPlayer && npcDirector.Active()) {
-                    playerHud.Draw(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight,
-                                   MakePlayerHudState(playerVitals, player.Cam.Position, player.Cam.Yaw), (float)glfwGetTime());
-                    drawCombatHud(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight, gvView, gvProj);
-                }
+                renderGameFrame(gvView, gvProj, gvEye, gvRw, gvRh, gameView.GetFramebuffer().Handle(), gvWidth, gvHeight,
+                                /*postSlot=*/0, /*overlayInPlayOnly=*/true, gvRenderStats);
                 // --weapon-test --smoke-shots <dir>: the Game view through the reloads.
                 const std::string harnessShot = weaponTest ? weaponTest->ShotName() : npcTest ? npcTest->ShotName() : std::string();
-                if ((weaponTest || npcTest) && !smokeShotsDir.empty() && !harnessShot.empty()) {
+                if ((weaponTest || npcTest) && !opt.smokeShotsDir.empty() && !harnessShot.empty()) {
                     // With --stock-probe the Scene view goes on the left, as the editor is laid out.
-                    auto grab = [](unsigned fbo, int w, int h) {
-                        glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo);
-                        std::vector<unsigned char> px = Screenshot::GrabRegion(0, 0, w, h);
-                        std::vector<unsigned char> flipped(px.size());
-                        for (int y = 0; y < h; ++y)
-                            std::memcpy(&flipped[(size_t)y * w * 4], &px[(size_t)(h - 1 - y) * w * 4], (size_t)w * 4);
-                        return flipped;
-                    };
-                    std::vector<unsigned char> game = grab(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight);
+                    std::vector<unsigned char> game = GrabTopDown(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight);
                     int outW = gvWidth, outH = gvHeight;
                     std::vector<unsigned char> image = std::move(game);
-                    if ((stockProbeMode || npcTest) && sceneFramebuffer.IsValid()) {
+                    if ((opt.stockProbeMode || npcTest) && sceneFramebuffer.IsValid()) {
                         const int sw = sceneFramebuffer.Width(), sh = sceneFramebuffer.Height();
-                        std::vector<unsigned char> scene = grab(sceneFramebuffer.Handle(), sw, sh);
+                        std::vector<unsigned char> scene = GrabTopDown(sceneFramebuffer.Handle(), sw, sh);
                         outW = sw + 8 + gvWidth;
                         outH = std::max(sh, gvHeight);
                         std::vector<unsigned char> both((size_t)outW * outH * 4, 0);
@@ -5165,11 +4396,7 @@ int main(int argc, char** argv) {
                             std::memcpy(&both[((size_t)y * outW + sw + 8) * 4], &image[(size_t)y * gvWidth * 4], (size_t)gvWidth * 4);
                         image = std::move(both);
                     }
-                    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-                    std::error_code ec;
-                    std::filesystem::create_directories(smokeShotsDir, ec);
-                    const std::string out = (std::filesystem::path(smokeShotsDir) / (harnessShot + ".png")).string();
-                    stbi_write_png(out.c_str(), outW, outH, 4, image.data(), outW * 4);
+                    WritePngTo(opt.smokeShotsDir, harnessShot, outW, outH, image);
                 }
                 // NPC_TEST_RECORD=<dir>: both views every other frame (30 fps of the fixed 60 Hz), for a video.
                 // (--weapon-test records the same way: its frames are the fixed step too, 30 fps, into the same dir.)
@@ -5322,83 +4549,12 @@ int main(int argc, char** argv) {
                 int mw = window.GetWidth(), mh = window.GetHeight();
                 int mRw, mRh; // internal 3D resolution
                 Upscaler::InternalSize(mw, mh, EditorSettings::Get().RenderHeight, mRw, mRh);
-                const bool mScaled = mRw != mw || mRh != mh;
-                gameHdr.Resize(mRw, mRh, world.MsaaSamples);
-                gameHdr.BindForRender();
-                glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
                 float aspect = (float)mw / (float)mh;
                 glm::mat4 view = gameCam->ViewMatrix();
                 glm::mat4 proj = gameCam->ProjectionMatrix(aspect);
-
-                // SSAO depth pre-pass — same gameSsao instance the docked Game view uses; the two
-                // paths are mutually exclusive per frame (if/else-if above), so no resize thrash.
-                if (world.SsaoEnabled) gameSsao.Resize(mRw, mRh);
-                if (world.SsaoEnabled && gameSsao.IsValid()) { // audit #358
-                    PROFILE_SCOPE("SSAO Depth Pre-pass (Game)");
-                    PROFILE_GPU_SCOPE("SSAO Depth Pre-pass (Game)");
-                    ssaoDepthPrepass(gameSsao, mRw, mRh, view, proj, /*editorView=*/false);
-
-                    gameHdr.BindForRender(); // restore for the main scene draw below
-                }
-
                 EditorLayer::RenderStats stats;
-                drawScene(RenderFrameContext{ view, proj, gameCam->Position, /*Unlit=*/false,
-                              /*EditorView=*/false, /*DebugView=*/0,
-                              &gameHdr, &gameOpaqueColor, &gameSsao,
-                              firstPersonPresentation.ViewModelFov(),
-                              weaponOverlay(playing && playUsesPlayer, view, proj, gameCam->Position, mRh),
-                              /*OwnerView=*/playing && playUsesPlayer },
-                          &stats);
+                renderGameFrame(view, proj, gameCam->Position, mRw, mRh, 0, mw, mh, /*postSlot=*/1, /*overlayInPlayOnly=*/false, stats);
                 editor.SetRenderStats(stats);
-                // Physics debug overlay over the game view (#185, F5).
-                if (EditorSettings::Get().PlayDebugOverlay) {
-                    glEnable(GL_DEPTH_TEST); glDepthMask(GL_FALSE);
-                    colliderGizmo.Draw(view, proj, world, EditorSettings::Get().ShowColliders);
-                    glDepthMask(GL_TRUE);
-                }
-                if (playing && playUsesPlayer && gravityGunLive() && gravityGun.IsCharging())
-                    drawThrowArc(view, proj, gameCam->Position);
-                gameHdr.ResolveTo();
-
-                // PR16: Bloom — same gameBloom instance the docked Game view uses.
-                unsigned int mwBloomGlowTex   = 0u;
-                float        mwBloomIntensity = 0.0f;
-                if (world.BloomEnabled) {
-                    PROFILE_GPU_SCOPE("Bloom (Game)");
-                    gameBloom.Resize(mRw, mRh);
-                    if (gameBloom.IsValid()) { // audit #358
-                        gameBloom.Compute(bloomThreshShader, bloomDownsampleShader, bloomUpsampleShader,
-                                          gameHdr.ResolvedColorTexture(),
-                                          world.BloomThreshold,
-                                          world.BloomKnee);
-                        mwBloomGlowTex   = gameBloom.GlowTexture();
-                        mwBloomIntensity = world.BloomIntensity;
-                    }
-                    GLStateCache::Invalidate();
-                }
-                {
-                PROFILE_GPU_SCOPE("Tonemap");
-                const PostSettings mPost = WithDepthEffects(MakePostSettings(world, mwBloomGlowTex, mwBloomIntensity, dt, 1, gameCam->Position), world, gameHdr, view, proj, 1);
-                if (mScaled) {
-                    gameLdr.Resize(mRw, mRh);
-                    tonemapper.Apply(gameHdr.ResolvedColorTexture(), gameLdr.Handle(), mRw, mRh, mPost);
-                } else {
-                    tonemapper.Apply(gameHdr.ResolvedColorTexture(), 0, mw, mh, mPost);
-                }
-                }
-                if (mScaled) {
-                    PROFILE_GPU_SCOPE("Upscale");
-                    upscaler.Apply(gameLdr.ColorTexture(), mRw, mRh, 0, 0, 0, mw, mh, EditorSettings::Get().RenderSharpness);
-                }
-                if (playing && playUsesPlayer)
-                    crosshair.Draw(0, mw, mh, gravityGunLive() && gravityGun.IsHolding(),
-                                   gravityGunLive() && gravityGun.IsCharging() ? gravityGun.Charge() : -1.0f,
-                                   crosshairDot(view, proj, mw, mh));
-                if (playing && playUsesPlayer && npcDirector.Active()) {
-                    playerHud.Draw(0, mw, mh, MakePlayerHudState(playerVitals, player.Cam.Position, player.Cam.Yaw), (float)glfwGetTime());
-                    drawCombatHud(0, mw, mh, view, proj);
-                }
             }
 
             {
@@ -5502,21 +4658,14 @@ int main(int argc, char** argv) {
                 for (const Screenshot::Finished& f : Screenshot::PollFinished())
                     editor.OnCaptureDone(f.Ok ? f.Path : std::string(), f.Width, f.Height);
                 // --editor-shot: the whole window, once each view has settled.
-                if (!editorShotDir.empty() && editorShotFrame > 0 && editorShotFrame % kEditorShotFrames == 0) {
+                if (!opt.editorShotDir.empty() && editorShotFrame > 0 && editorShotFrame % kEditorShotFrames == 0) {
                     const int step = editorShotFrame / kEditorShotFrames - 1;
                     if (step < (int)std::size(kEditorShots)) {
                         int w = 0, h = 0;
                         glfwGetFramebufferSize(window.Handle(), &w, &h);
-                        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-                        std::vector<unsigned char> px = Screenshot::GrabRegion(0, 0, w, h);
-                        std::vector<unsigned char> flipped(px.size());
-                        for (int y = 0; y < h; ++y)
-                            std::memcpy(&flipped[(size_t)y * w * 4], &px[(size_t)(h - 1 - y) * w * 4], (size_t)w * 4);
+                        std::vector<unsigned char> flipped = GrabTopDown(0, w, h);
                         for (size_t i = 3; i < flipped.size(); i += 4) flipped[i] = 255;
-                        std::error_code ec;
-                        std::filesystem::create_directories(editorShotDir, ec);
-                        const std::string out = (std::filesystem::path(editorShotDir) / (std::string(kEditorShots[step]) + ".png")).string();
-                        stbi_write_png(out.c_str(), w, h, 4, flipped.data(), w * 4);
+                        const std::string out = WritePngTo(opt.editorShotDir, kEditorShots[step], w, h, flipped);
                         std::cout << "[EditorShot] " << out << std::endl;
                     }
                     if (step + 1 >= (int)std::size(kEditorShots)) { exitApproved = true; window.SetShouldClose(true); }
@@ -5555,7 +4704,7 @@ int main(int argc, char** argv) {
             // Software frame cap. Runs whatever the VSync mode is, but it's really for VSync Off
             // (with VSync On the driver already blocks in SwapBuffers). 0 = uncapped.
             // #143: in the background and not playing, hold to the (lower) Background FPS too.
-            int fpsCap = perfBenchMode ? 0 : EditorSettings::Get().FpsLimit;
+            int fpsCap = opt.perfBenchMode ? 0 : EditorSettings::Get().FpsLimit;
             const int bgCap = EditorSettings::Get().UnfocusedFpsLimit;
             if (bgCap > 0 && !playing && !headless && !glfwGetWindowAttrib(window.Handle(), GLFW_FOCUSED))
                 fpsCap = fpsCap > 0 ? std::min(fpsCap, bgCap) : bgCap;
@@ -5592,9 +4741,9 @@ int main(int argc, char** argv) {
                     editorCamera.Pitch = pitch;
                 }
             }
-            if (smokeTestMode && smokeSceneActive) {
+            if (opt.smokeTestMode && smokeSceneActive) {
                 ++smokeFramesRendered;
-                if (!outfitShotsDir.empty()) {
+                if (!opt.outfitShotsDir.empty()) {
                     // Poses from the characters as the scene loaded them (rows run along +X, one behind another).
                     if (smokeFramesRendered == 1) {
                         outfitShots.clear();
@@ -5658,17 +4807,8 @@ int main(int argc, char** argv) {
                     if (rel >= 0 && rel % kOutfitShotSettle == kOutfitShotSettle - 1 && shot < (int)outfitShots.size() &&
                         sceneFramebuffer.IsValid()) {
                         const int w = sceneFramebuffer.Width(), h = sceneFramebuffer.Height();
-                        glBindFramebuffer(GL_READ_FRAMEBUFFER, sceneFramebuffer.Handle());
-                        std::vector<unsigned char> px = Screenshot::GrabRegion(0, 0, w, h);
-                        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-                        std::vector<unsigned char> flipped(px.size());
-                        for (int y = 0; y < h; ++y)
-                            std::memcpy(&flipped[(size_t)y * w * 4], &px[(size_t)(h - 1 - y) * w * 4], (size_t)w * 4);
-                        std::error_code ec;
-                        std::filesystem::create_directories(outfitShotsDir, ec);
                         const std::string stem = std::filesystem::path(smokeScenePaths[smokeSceneIndex]).stem().string();
-                        const std::string out = (std::filesystem::path(outfitShotsDir) / (stem + "_" + outfitShots[shot].Name + ".png")).string();
-                        stbi_write_png(out.c_str(), w, h, 4, flipped.data(), w * 4);
+                        WritePngTo(opt.outfitShotsDir, stem + "_" + outfitShots[shot].Name, w, h, GrabTopDown(sceneFramebuffer.Handle(), w, h));
                     }
                     const int next = std::max(0, smokeFramesRendered + 1 - kOutfitShotStart) / kOutfitShotSettle;
                     if (next < (int)outfitShots.size()) {
@@ -5678,22 +4818,13 @@ int main(int argc, char** argv) {
                     } else if (smokeFramesRendered > kOutfitShotStart) {
                         smokeFramesRendered = std::max(smokeFramesRendered, kSmokeTestFrames - 1); // all taken
                     }
-                } else if (!smokeShotsDir.empty() && !perfBenchMode && !shotCameras.empty()) {
+                } else if (!opt.smokeShotsDir.empty() && !opt.perfBenchMode && !shotCameras.empty()) {
                     const int shot = (smokeFramesRendered - kShotCameraStart) / kShotCameraSettle;
                     if (smokeFramesRendered >= kShotCameraStart && (smokeFramesRendered - kShotCameraStart) % kShotCameraSettle == 0 &&
                         shot < (int)shotCameras.size() && sceneFramebuffer.IsValid()) {
                         const int w = sceneFramebuffer.Width(), h = sceneFramebuffer.Height();
-                        glBindFramebuffer(GL_READ_FRAMEBUFFER, sceneFramebuffer.Handle());
-                        std::vector<unsigned char> px = Screenshot::GrabRegion(0, 0, w, h);
-                        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-                        std::vector<unsigned char> flipped(px.size());
-                        for (int y = 0; y < h; ++y)
-                            std::memcpy(&flipped[(size_t)y * w * 4], &px[(size_t)(h - 1 - y) * w * 4], (size_t)w * 4);
-                        std::error_code ec;
-                        std::filesystem::create_directories(smokeShotsDir, ec);
                         const std::string stem = std::filesystem::path(smokeScenePaths[smokeSceneIndex]).stem().string();
-                        const std::string out = (std::filesystem::path(smokeShotsDir) / (stem + "_" + shotCameras[shot].Name + ".png")).string();
-                        stbi_write_png(out.c_str(), w, h, 4, flipped.data(), w * 4);
+                        WritePngTo(opt.smokeShotsDir, stem + "_" + shotCameras[shot].Name, w, h, GrabTopDown(sceneFramebuffer.Handle(), w, h));
                     }
                     // The pose for the NEXT frame: each camera holds from the previous capture up to its own.
                     const int next = smokeFramesRendered + 1;
@@ -5702,7 +4833,7 @@ int main(int argc, char** argv) {
                     editorCamera.Position = shotCameras[pose].Position;
                     editorCamera.Yaw = shotCameras[pose].Yaw;
                     editorCamera.Pitch = shotCameras[pose].Pitch;
-                } else if (!smokeShotsDir.empty() && !perfBenchMode) {
+                } else if (!opt.smokeShotsDir.empty() && !opt.perfBenchMode) {
                     // Frames 40 / 70 / 100 are captured after 30+ frames at each pose, so
                     // temporally accumulated effects have converged; the pose for the NEXT frame
                     // is set here too.
@@ -5711,17 +4842,8 @@ int main(int argc, char** argv) {
                     for (int p = 0; p < 3; ++p) {
                         if (smokeFramesRendered != kPoses[p].CaptureFrame || !sceneFramebuffer.IsValid()) continue;
                         const int w = sceneFramebuffer.Width(), h = sceneFramebuffer.Height();
-                        glBindFramebuffer(GL_READ_FRAMEBUFFER, sceneFramebuffer.Handle());
-                        std::vector<unsigned char> px = Screenshot::GrabRegion(0, 0, w, h);
-                        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-                        std::vector<unsigned char> flipped(px.size());
-                        for (int y = 0; y < h; ++y)
-                            std::memcpy(&flipped[(size_t)y * w * 4], &px[(size_t)(h - 1 - y) * w * 4], (size_t)w * 4);
-                        std::error_code ec;
-                        std::filesystem::create_directories(smokeShotsDir, ec);
                         const std::string stem = std::filesystem::path(smokeScenePaths[smokeSceneIndex]).stem().string();
-                        const std::string out = (std::filesystem::path(smokeShotsDir) / (stem + "_" + std::to_string(p) + ".png")).string();
-                        stbi_write_png(out.c_str(), w, h, 4, flipped.data(), w * 4);
+                        WritePngTo(opt.smokeShotsDir, stem + "_" + std::to_string(p), w, h, GrabTopDown(sceneFramebuffer.Handle(), w, h));
                     }
                     const int next = smokeFramesRendered + 1;
                     const ShotPose& pose = kPoses[next <= 40 ? 0 : next <= 70 ? 1 : 2];
@@ -5740,7 +4862,7 @@ int main(int argc, char** argv) {
                     }
                 }
                 // --npc-test --perf-sample: a CPU profile of the fight itself (the squad up and shooting).
-                if (npcTest && perfSample) {
+                if (npcTest && opt.perfSample) {
                     static bool sampling = false;
                     if (smokeFramesRendered == 900) { SamplingProfiler::Start(); sampling = true; }
                     if (sampling && (smokeFramesRendered >= kSmokeTestFrames - 1 || npcTest->Done())) {
@@ -5752,7 +4874,7 @@ int main(int argc, char** argv) {
                 // --perf-bench <scene> --npc-test <scenario>: the combat bench - the scripted fight in the Game view,
                 // maximized, every Play frame measured (stutters included: TARTARUS_PERF_WARMUP frames skipped, 100 by
                 // default), one report when the fight is over.
-                if (perfBenchMode && npcTest) {
+                if (opt.perfBenchMode && npcTest) {
                     const auto now = std::chrono::steady_clock::now();
                     const double frameMs = std::chrono::duration<double, std::milli>(now - perfLastFrameEnd).count();
                     perfLastFrameEnd = now;
@@ -5782,13 +4904,13 @@ int main(int argc, char** argv) {
                         std::fflush(stdout);
                         perfCpu.clear(); perfGpu.clear(); perfFrame = {};
                     }
-                } else if (perfBenchMode) {
+                } else if (opt.perfBenchMode) {
                     const auto now = std::chrono::steady_clock::now();
                     const double frameMs = std::chrono::duration<double, std::milli>(now - perfLastFrameEnd).count();
                     perfLastFrameEnd = now;
                     SamplingProfiler::EndFrame(frameMs);
                     const int phaseFrame = (smokeFramesRendered - 1) % kPerfPhaseFrames + 1;
-                    if (perfSample && phaseFrame == kPerfBenchWarmup) SamplingProfiler::Start();
+                    if (opt.perfSample && phaseFrame == kPerfBenchWarmup) SamplingProfiler::Start();
                     if (phaseFrame > kPerfBenchWarmup) {
                         perfFrame.Sum += frameMs; perfFrame.Max = std::max(perfFrame.Max, frameMs); ++perfFrame.N;
                         for (const Profiler::Entry& e : Profiler::GetLastFrame()) perfAdd(perfCpu, e.Name, e.Milliseconds);
@@ -5809,7 +4931,7 @@ int main(int argc, char** argv) {
                         }
                         perfReportHitches(!playing ? "edit" : playMaximized ? "play-max" : "play");
                         std::fflush(stdout);
-                        if (perfSample) SamplingProfiler::Report(!playing ? "edit" : playMaximized ? "play-max" : "play", 60);
+                        if (opt.perfSample) SamplingProfiler::Report(!playing ? "edit" : playMaximized ? "play-max" : "play", 60);
                         perfCpu.clear(); perfGpu.clear(); perfFrame = {};
                         if (smokeFramesRendered < kSmokeTestFrames) {
                             if (!playing) togglePlay();
@@ -5883,7 +5005,7 @@ int main(int argc, char** argv) {
             throw;
         }
 
-        if (editorTestsMode) {
+        if (opt.editorTestsMode) {
             // Like the smoke test: nothing from this run is saved back (the scene is in memory only).
             const int code = EditorUiTests::ExitCode();
             editor.Shutdown();
@@ -5892,7 +5014,7 @@ int main(int argc, char** argv) {
             PhysicsWorld::Shutdown();
             return code;
         }
-        if (smokeTestMode) {
+        if (opt.smokeTestMode) {
             // Deliberately skip the normal exit path entirely (no play-mode revert, no
             // save-on-exit) — smoke-tested scenes were never really "open" from the user's
             // point of view and must not get written back to disk.
