@@ -60,14 +60,10 @@ project/assets/**/*.[bB][iI][nN]
 project/assets/**/*.[oO][bB][jJ]
 project/assets/**/*.[bB][lL][eE][nN][dD]
 # ...except content made for this project (procedural / modelled here), which stays in git:
-# tools/gen_sandbox_assets.py output (basketball, court, two basketball sounds), the prototype grids,
-# the Apartment
+# the prototype grids, the Apartment
 # meshes (modelled from measurements; its baked textures are NOT ours to be sure, so they go to Drive),
 # the UV-transform test quad, and the generated brow/lash cards.
-!project/assets/Props/Basketball/**
 !project/assets/Materials/Prototype/**
-!project/assets/Audio/basket_score.wav
-!project/assets/Audio/basketball_bounce.wav
 !project/assets/Environments/Apartment/Models/**
 !project/assets/Test/**
 !project/assets/Characters/Quantum/Textures/Eyes/T_Brows_Lashes.png

@@ -7,7 +7,7 @@ import argparse
 import json
 from pathlib import Path
 
-TYPES = {"Impact Audio":"ImpactAudioDefinition","Weapon Audio":"WeaponAudioDefinition","Foley Audio":"FoleyDefinition","FX & HUD Settings":"EffectsDefinition","Goal Trigger": "BasketGoal", "Scoreboard": "Scoreboard", "Score Digit": "ScoreDigit", "Impact Sound": "ImpactSound", "First Person Controller": "PlayerDefinition", "Health": "Health", "NPC Spawn": "NpcDefinition", "Squad Settings": "SquadDefinition"}
+TYPES = {"Impact Audio":"ImpactAudioDefinition","Weapon Audio":"WeaponAudioDefinition","Foley Audio":"FoleyDefinition","FX & HUD Settings":"EffectsDefinition","First Person Controller": "PlayerDefinition", "Health": "Health", "NPC Spawn": "NpcDefinition", "Squad Settings": "SquadDefinition"}
 
 def migrate(entity):
     changed = False
@@ -22,12 +22,10 @@ def migrate(entity):
             if name.endswith("Guid"):
                 continue
             name = {"KillHeight": "KillY", "StickLookDeg/Sec": "StickLookDegPerSec", "ViewModelFOV": "ViewModelFov", "FieldofView": "FieldOfView"}.get(name, name)
-            if name in ("DataFile", "Clip", "ScoreSound", "PrimaryWeaponPrefab", "SecondaryWeaponPrefab", "AnimationSet", "SecondaryAnimationSet") and isinstance(value, str):
+            if name in ("DataFile", "Clip", "PrimaryWeaponPrefab", "SecondaryWeaponPrefab", "AnimationSet", "SecondaryAnimationSet") and isinstance(value, str):
                 value = {"path": value, "pathGuid": legacy.get(key + "Guid", "")}
             if name in ("ViewModelOffset", "ViewModelRotation") and isinstance(value, list):
                 value = dict(zip(("X", "Y", "Z"), value))
-            if name in ("Team", "Place") and isinstance(value, str):
-                value = int(value in ("Away", "Tens"))
             name={'NPCDamageScale': 'NpcDamageScale', 'CoverSampleSpacing': 'CoverSpacing', 'LowCoverHeight': 'CoverKneeHeight', 'HighCoverHeight': 'CoverHeadHeight', 'CoverPeekStep': 'CoverStep', 'DamageScale': 'NpcDamageScale'}.get(name,name)
             if old=="NPC Spawn" and name in ("Weapon","Brain") and isinstance(value,str):
                 value=({"Remington 870":1,"Random":2}.get(value,0) if name=="Weapon" else int(value=="Training Dummy"))
