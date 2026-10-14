@@ -15,6 +15,16 @@ void ResetVariantDrawCounts();
 }
 
 class World;
+class Model;
+struct AABB;
+
+// The culling rules every pass shares (the camera view, the SSAO pre-pass, the sun and local shadow gathers).
+// The model's bounds as posed (Model::PosedBounds) in world space; false when it has none (a never-populated
+// pair), which draws or casts without a frustum test.
+bool PosedWorldBounds(const Model& model, const glm::mat4& xform, AABB& out);
+// The editor Scene view only: hidden by the entity's own toggle (HiddenInSceneTag) or by its layer's visibility.
+bool HiddenInEditorView(const World& world, entt::entity entity, unsigned layerVisibleMask);
+
 class Sky;
 class SkyAtmosphere;
 class Shader;

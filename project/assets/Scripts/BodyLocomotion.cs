@@ -67,7 +67,7 @@ internal static class BodyLocomotion
         bool idling=f.IsLocomotion || f.IsCrouchLoco || f.IsStep || f.IsFidget;
         bool plain=f.StartStopClips && f.Grounded && idling && !f.Turning;
         bool going=f.StartStopClips && f.Grounded && !f.Turning && (f.IsLocomotion || f.IsCrouchLoco || f.IsStart || f.IsPivot || f.IsSprint);
-        if(f.StartStopClips && f.Grounded && !f.Moving && f.Move.Length()<.4f && f.Crouched!=f.WasCrouched){if(f.Crouched && f.IsLocomotion)f.Triggers|=1;if(!f.Crouched && f.IsCrouchLoco)f.Triggers|=2;}
+        if(f.StartStopClips && f.Grounded && !f.Moving && f.Move.Length()<.4f && f.Crouched!=f.WasCrouched){if(f.Crouched && f.IsLocomotion)f.Triggers|=BodyMotionTrigger.CrouchDown;if(!f.Crouched && f.IsCrouchLoco)f.Triggers|=BodyMotionTrigger.CrouchUp;}
         f.WasCrouched=f.Crouched;
         float moveClip=f.Move.Length();
         if(f.Moving){
@@ -81,12 +81,12 @@ internal static class BodyLocomotion
                     float amount=Math.Clamp(MathF.Abs(lag)/(45*Rad),1,4);if(f.Crouched)amount=MathF.Round(amount);
                     f.StartTurn=MathF.CopySign(amount,lag);f.StartTurnAmount=amount;
                 }
-                f.Triggers|=4;f.MoveDistance=0;
+                f.Triggers|=BodyMotionTrigger.Start;f.MoveDistance=0;
             }
             // The travel reversing at speed: a pivot - the feet plant and push off the other way.
             float pivotMin=f.Crouched?PivotMinSpeedCrouched:PivotMinSpeed;
             if(going && !f.IsPivot && moveClip>pivotMin && Vector3.Dot(dir,f.Move/moveClip)<-.5f){
-                f.PivotDir=f.Move/moveClip;f.PivotGait=Gait(moveClip,false);f.PivotReversed=false;f.PivotTravel=0;f.Triggers|=64;
+                f.PivotDir=f.Move/moveClip;f.PivotGait=Gait(moveClip,false);f.PivotReversed=false;f.PivotTravel=0;f.Triggers|=BodyMotionTrigger.Pivot;
             }
             f.LastDir=dir;f.LastSprint=sprint;f.IdleTime=0;f.MoveTime+=f.Dt;f.MoveDistance+=movingSpeed*f.Dt;
         }
@@ -95,9 +95,9 @@ internal static class BodyLocomotion
             bool released=before<f.StopDebounce && f.IdleTime>=f.StopDebounce;
             // A tap: one small step its way instead of a start cut short (the start has already given way to the idle
             // when the key lifts).
-            if(released && (f.IsStart || f.IsLocomotion) && !f.Crouched && f.MoveTime<StepMaxTime && f.MoveDistance>.03f){f.StepDir=f.LastDir;f.Triggers|=128;}
+            if(released && (f.IsStart || f.IsLocomotion) && !f.Crouched && f.MoveTime<StepMaxTime && f.MoveDistance>.03f){f.StepDir=f.LastDir;f.Triggers|=BodyMotionTrigger.Step;}
             else if(going && enough && released && moveClip>(f.Crouched?f.StopMinSpeedCrouched:f.StopMinSpeed)){
-                f.StopDir=f.LastDir;f.StopGait=Gait(moveClip,false);f.Triggers|=f.LastSprint && f.LastDir.Y>f.StopRunForward?16:8;
+                f.StopDir=f.LastDir;f.StopGait=Gait(moveClip,false);f.Triggers|=f.LastSprint && f.LastDir.Y>f.StopRunForward?BodyMotionTrigger.StopRun:BodyMotionTrigger.Stop;
             }
             if(released)f.MoveTime=0;
         }
@@ -109,7 +109,7 @@ internal static class BodyLocomotion
             var local=Local(moving,f.Yaw);float along=local.X*f.PivotDir.X+local.Y*f.PivotDir.Y;
             if(!f.PivotReversed && along>.05f)f.PivotDistance=-DistanceToTurn(along,wishSpeed,f.AccelTime);
             else {f.PivotReversed=true;f.PivotTravel+=movingSpeed*f.Dt;f.PivotDistance=f.PivotTravel;}
-        } else if((f.Triggers&64)==0){f.PivotDistance=0;f.PivotReversed=false;}
+        } else if((f.Triggers&BodyMotionTrigger.Pivot)==0){f.PivotDistance=0;f.PivotReversed=false;}
         // Idle variety: after a while stood still, one fidget (with a gun, the ready stance's own; never while
         // aiming or just after shooting).
         bool fidgetable=f.Grounded && !f.Moving && !f.Turning && !f.Busy && moveClip<.1f && (f.IsLocomotion || f.IsCrouchLoco);
@@ -118,8 +118,8 @@ internal static class BodyLocomotion
         else if((f.FidgetTime+=f.Dt)>=f.FidgetNext){
             int pick=(int)MathF.Floor(f.Random*997)%997;
             f.FidgetIndex=f.Crouched?pick%6:f.Armed?pick%2:2+pick%7;
-            f.Triggers|=256;f.FidgetTime=0;f.FidgetNext=0;
+            f.Triggers|=BodyMotionTrigger.Fidget;f.FidgetTime=0;f.FidgetNext=0;
         }
-        f.Sprint=sprint;f.Airborne=f.AirTime>f.AirborneDelay;if(f.Jumped)f.Triggers|=32;
+        f.Sprint=sprint;f.Airborne=f.AirTime>f.AirborneDelay;if(f.Jumped)f.Triggers|=BodyMotionTrigger.Jump;
     }
 }

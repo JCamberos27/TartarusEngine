@@ -18,9 +18,7 @@
 
 namespace {
 
-float Follow(float dt, float timeConstant) {
-    return timeConstant > 0.0f ? 1.0f - std::exp(-dt / timeConstant) : 1.0f;
-}
+float Follow(float dt, float timeConstant) { return FirstPersonBodyFollow(dt, timeConstant, 0.0f); }
 
 // A damped spring toward `target` (semi-implicit, in steps no longer than 1/60 s): `zeta` under 1 lets the
 // body carry a touch past where it turns to and settle back, which reads as weight rather than a camera.
