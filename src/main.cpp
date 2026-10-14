@@ -3130,20 +3130,23 @@ int main(int argc, char** argv) {
                 // #160 — world bounds of everything that casts, so the cascades' near planes
                 // reach every occluder.
                 glm::vec3 casterMin(std::numeric_limits<float>::max()), casterMax(-std::numeric_limits<float>::max());
-                for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
-                    if (world.Registry.any_of<InactiveTag, LodCulledTag, PoseSourceTag, OwnerViewOnlyTag>(entity)) continue;
-                    auto& r = world.Registry.get<RenderableComponent>(entity);
-                    // #163 - Cast Shadows: Off skips; Two Sided draws without back-face culling.
-                    if (!r.ModelRef || r.CastShadows == RenderableComponent::ShadowCasting::Off) continue;
+                VisibilityQuery casts; // #163 - Cast Shadows: Off skips
+                casts.ShadowCasters = true;
+                static std::vector<VisibleRenderable> casting;
+                GatherVisible(world, casts, casting);
+                for (const VisibleRenderable& v : casting) {
+                    const auto& r = *v.Renderable;
                     SunCaster& sc = sunCasters.emplace_back();
                     sc.model = r.ModelRef.get();
                     sc.materials = &r.Materials;
-                    const auto* hide = world.Registry.try_get<OutfitHideTag>(entity);
+                    const auto* hide = world.Registry.try_get<OutfitHideTag>(v.Entity);
                     sc.visible = hide ? hide->Visible.get() : nullptr;
-                    sc.xform = world.GetCachedWorldTransform(entity);
+                    sc.xform = v.Xform;
+                    // #163 - Cast Shadows: Two Sided draws without back-face culling.
                     sc.twoSided = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
                     // As posed (Model::PosedBounds), the bounds the main pass culls with.
-                    sc.bounded = PosedWorldBounds(*sc.model, sc.xform, sc.bounds);
+                    sc.bounded = v.Bounded;
+                    sc.bounds = AABB{v.WorldMin, v.WorldMax};
                     if (!sc.bounded) continue;
                     casterMin = glm::min(casterMin, sc.bounds.Min);
                     casterMax = glm::max(casterMax, sc.bounds.Max);
@@ -3283,16 +3286,19 @@ int main(int argc, char** argv) {
             localCasters.clear();
             if (world.ShadowsEnabled && (spotShadowCount > 0 || pointShadowCount > 0)) {
                 PROFILE_SCOPE("Local Shadow Gather");
-                for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
-                    if (world.Registry.any_of<InactiveTag, LodCulledTag, PoseSourceTag, OwnerViewOnlyTag>(entity)) continue;
-                    auto& r = world.Registry.get<RenderableComponent>(entity);
-                    if (!r.ModelRef || r.CastShadows == RenderableComponent::ShadowCasting::Off) continue; // #163
+                VisibilityQuery casts; // #163: not Cast Shadows Off
+                casts.ShadowCasters = true;
+                static std::vector<VisibleRenderable> casting;
+                GatherVisible(world, casts, casting);
+                for (const VisibleRenderable& v : casting) {
+                    const entt::entity entity = v.Entity;
+                    const auto& r = *v.Renderable;
                     LocalCaster& lc = localCasters.emplace_back();
                     lc.model = r.ModelRef.get();
                     lc.materials = &r.Materials;
                     const auto* hide = world.Registry.try_get<OutfitHideTag>(entity);
                     lc.visible = hide ? hide->Visible.get() : nullptr;
-                    lc.xform = world.GetCachedWorldTransform(entity);
+                    lc.xform = v.Xform;
                     lc.id = static_cast<std::uint32_t>(entity);
                     lc.twoSided = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
                     lc.player = world.Registry.any_of<HiddenFromOwnerTag, PlayerBodyTag>(entity);
@@ -3308,7 +3314,8 @@ int main(int argc, char** argv) {
                         motion->second.posed = now;
                     }
                     lc.animated = lc.model->HasBones() && now - motion->second.posed < kMovingFrames;
-                    lc.bounded = PosedWorldBounds(*lc.model, lc.xform, lc.bounds); // as posed, like the main pass
+                    lc.bounded = v.Bounded; // as posed, like the main pass
+                    lc.bounds = AABB{v.WorldMin, v.WorldMax};
                 }
             }
             // A local shadow map is only redrawn when something it sees changed: its light, the
@@ -3736,26 +3743,25 @@ int main(int argc, char** argv) {
                 shadowShader.SetInt("uUseSkinning", 0);
                 const int modelLoc = shadowShader.Loc("uModel");
                 const Frustum frustum = Frustum::FromViewProj(proj * view);
-                for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
-                    if (world.Registry.any_of<InactiveTag, LodCulledTag>(entity)) continue;
-                    if (world.Registry.any_of<ViewModelTag, PoseSourceTag>(entity)) continue; // see note above
-                    // Split poses: each view's own copy (the player's camera the first-person one).
-                    if (editorView ? world.Registry.all_of<OwnerViewOnlyTag>(entity) : world.Registry.all_of<HiddenFromOwnerTag>(entity)) continue;
-                    // The player's own body in the camera's view: its shoulders and whatever is within Near
-                    // Hide are discarded in the main pass, so here they would occlude from nowhere. The main
-                    // pass gives these pieces no SSAO to match (SceneRenderer, DrawItem::NoSsao).
-                    if (!editorView && world.Registry.all_of<PlayerBodyTag>(entity)) continue;
-                    if (editorView && HiddenInEditorView(world, entity, sceneInputs.layerVisibleMask)) continue;
-                    auto& rc = world.Registry.get<RenderableComponent>(entity);
-                    if (!rc.ModelRef) continue;
-                    if (!rc.Materials.empty() && rc.Materials[0] &&
-                        rc.Materials[0]->RenderQueue == MaterialAsset::Queue::Transparent) continue;
-                    if (rc.CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) continue; // #163: not in view
-                    const glm::mat4 model = world.GetCachedWorldTransform(entity);
-                    AABB bounds; // as posed, like the main pass
-                    if (PosedWorldBounds(*rc.ModelRef, model, bounds) && !frustum.Intersects(bounds)) continue;
-                    shadowShader.SetMat4(modelLoc, model);
-                    const auto* hide = world.Registry.try_get<OutfitHideTag>(entity);
+                // What the view sees (each view's own copy of a split pose - the player's camera the first-person
+                // one), opaque, in the frustum as posed like the main pass; no view-model geometry (see note above).
+                VisibilityQuery seen;
+                seen.OwnerView = !editorView;
+                seen.EditorView = editorView;
+                seen.LayerVisibleMask = sceneInputs.layerVisibleMask;
+                seen.SkipViewModels = true;
+                // The player's own body in the camera's view: its shoulders and whatever is within Near
+                // Hide are discarded in the main pass, so here they would occlude from nowhere. The main
+                // pass gives these pieces no SSAO to match (SceneRenderer, DrawItem::NoSsao).
+                seen.SkipPlayerBody = !editorView;
+                seen.SkipTransparent = true;
+                seen.Cull = &frustum;
+                static std::vector<VisibleRenderable> visible;
+                GatherVisible(world, seen, visible);
+                for (const VisibleRenderable& v : visible) {
+                    auto& rc = *v.Renderable;
+                    shadowShader.SetMat4(modelLoc, v.Xform);
+                    const auto* hide = world.Registry.try_get<OutfitHideTag>(v.Entity);
                     rc.ModelRef->DrawDepthOnly(shadowShader, rc.Materials, 1, hide ? hide->Visible.get() : nullptr);
                 }
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);

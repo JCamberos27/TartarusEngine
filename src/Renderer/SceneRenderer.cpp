@@ -96,19 +96,50 @@ FrameState SceneRenderer::GatherFrameState(World& world, const RenderFrameContex
     return fs;
 }
 
-bool PosedWorldBounds(const Model& model, const glm::mat4& xform, AABB& out) {
-    glm::vec3 bmin, bmax;
-    model.PosedBounds(bmin, bmax);
-    if (!(bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z)) return false;
-    out = AABB{bmin, bmax}.Transformed(xform);
-    return true;
-}
-
-bool HiddenInEditorView(const World& world, entt::entity entity, unsigned layerVisibleMask) {
+// The editor Scene view only: hidden by the entity's own toggle (HiddenInSceneTag, #236 B) or by its layer's
+// visibility (#236 A1).
+static bool HiddenInEditorView(const World& world, entt::entity entity, unsigned layerVisibleMask) {
     if (world.Registry.all_of<HiddenInSceneTag>(entity)) return true;
     const auto* lc = world.Registry.try_get<LayerComponent>(entity);
     const int layer = lc ? lc->Layer : 0;
     return layer >= 0 && layer < 32 && !((layerVisibleMask >> layer) & 1u);
+}
+
+void GatherVisible(World& world, const VisibilityQuery& q, std::vector<VisibleRenderable>& out) {
+    out.clear();
+    for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
+        // GameObject active / LOD level (#163); PoseSourceTag is animated only (the first-person arms rig).
+        if (world.Registry.any_of<InactiveTag, LodCulledTag, PoseSourceTag>(entity)) continue;
+        // Split poses: the first-person copy only in the player's own camera, the world copy everywhere else (and
+        // the world copy is the one that casts).
+        if ((q.ShadowCasters || !q.OwnerView) ? world.Registry.all_of<OwnerViewOnlyTag>(entity)
+                                            : world.Registry.all_of<HiddenFromOwnerTag>(entity)) continue;
+        if (q.SkipViewModels && world.Registry.all_of<ViewModelTag>(entity)) continue;
+        if (q.SkipPlayerBody && world.Registry.all_of<PlayerBodyTag>(entity)) continue;
+        if (q.EditorView && HiddenInEditorView(world, entity, q.LayerVisibleMask)) continue;
+        auto& r = world.Registry.get<RenderableComponent>(entity);
+        if (!r.ModelRef) continue; // its model failed to load (or isn't assigned yet): nothing to draw
+        // #163 - Cast Shadows: Off never casts; Shadows Only is drawn by the shadow passes, never in a camera view.
+        if (q.ShadowCasters ? r.CastShadows == RenderableComponent::ShadowCasting::Off
+                            : r.CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) continue;
+        if (q.SkipTransparent && !r.Materials.empty() && r.Materials[0] &&
+            r.Materials[0]->RenderQueue == MaterialAsset::Queue::Transparent) continue;
+        VisibleRenderable v;
+        v.Entity = entity;
+        v.Renderable = &r;
+        v.Xform = world.GetCachedWorldTransform(entity);
+        r.ModelRef->PosedBounds(v.LocalMin, v.LocalMax);
+        v.Bounded = v.LocalMin.x <= v.LocalMax.x && v.LocalMin.y <= v.LocalMax.y && v.LocalMin.z <= v.LocalMax.z;
+        if (v.Bounded) {
+            const AABB wb = AABB{v.LocalMin, v.LocalMax}.Transformed(v.Xform);
+            if (q.Cull && !q.Cull->Intersects(wb)) continue;
+            v.WorldMin = wb.Min;
+            v.WorldMax = wb.Max;
+        } else {
+            v.WorldMin = v.WorldMax = glm::vec3(0.0f);
+        }
+        out.push_back(v);
+    }
 }
 
 void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const {
@@ -450,19 +481,17 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     viewModelTransparentList.clear();
     bool anyTransmission = false; // #112 — refraction capture only when something samples it
 
-    for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
-        if (world.Registry.any_of<InactiveTag, LodCulledTag>(entity)) continue; // GameObject active / LOD level (#163)
-
-        // Editor Scene viewport only: per-entity SceneVis hide (#236 B) + per-layer visibility
-        // mask (#236 A1). The scene, saves and Game view are unaffected.
-        if (ctx.EditorView && HiddenInEditorView(world, entity, in.layerVisibleMask)) continue;
-        auto& renderable = world.Registry.get<RenderableComponent>(entity);
-        if (!renderable.ModelRef) continue; // its model failed to load (or isn't assigned yet): nothing to draw
-        // #163 - Shadows Only: drawn by the shadow passes, never in the camera view.
-        if (renderable.CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) continue;
-        if (world.Registry.all_of<PoseSourceTag>(entity)) continue; // animated only (the first-person arms rig)
-        // Split poses: the first-person copy only in the player's own camera, the world copy everywhere else.
-        if (ctx.OwnerView ? world.Registry.all_of<HiddenFromOwnerTag>(entity) : world.Registry.all_of<OwnerViewOnlyTag>(entity)) continue;
+    // What this camera sees (GatherVisible): the editor Scene view's own hide filters, no Shadows Only, its copy of a
+    // split pose. The frustum test is below - it has two frusta and an exemption.
+    VisibilityQuery inView;
+    inView.OwnerView = ctx.OwnerView;
+    inView.EditorView = ctx.EditorView;
+    inView.LayerVisibleMask = in.layerVisibleMask;
+    static std::vector<VisibleRenderable> visible;
+    GatherVisible(world, inView, visible);
+    for (const VisibleRenderable& vis : visible) {
+        const entt::entity entity = vis.Entity;
+        auto& renderable = *vis.Renderable;
         // Tagged view-model geometry belongs to the sub-pass below when there is one; with no
         // sub-pass this view draws it here like anything else. `isViewModel` is therefore just
         // "route to the other list", not "hide".
@@ -499,7 +528,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         const float layerPull = outfitLayer ? outfitLayer->Pull : 0.0f;
         const auto* outfitPiece = world.Registry.try_get<OutfitPieceComponent>(entity);
         const bool clothing = outfitPiece && !(outfitPiece->Flags & OutfitPieceBodyPart);
-        glm::mat4 model = world.GetCachedWorldTransform(entity);
+        glm::mat4 model = vis.Xform;
         const bool dynamicItem = renderable.ModelRef->HasBones() || world.Registry.all_of<RigidbodyComponent>(entity);
 
         // Frustum culling: skip the draw call entirely for anything outside the camera's view.
@@ -511,12 +540,11 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // inside it, and a small piece's bind-pose bounds (a watch, a bracelet at the A-pose wrist, beside
         // and below the eye) missed the frustum while the posed hand was right in front of it.
         const bool playerBody = bodyTag && !ctx.EditorView && ctx.OwnerView;
-        // (The local bounds, not PosedWorldBounds: their centre sorts the transparent draws below.)
-        glm::vec3 boundsMin, boundsMax;
-        renderable.ModelRef->PosedBounds(boundsMin, boundsMax);
-        const bool validBounds = boundsMin.x <= boundsMax.x && boundsMin.y <= boundsMax.y && boundsMin.z <= boundsMax.z;
+        const glm::vec3& boundsMin = vis.LocalMin; // (their centre also sorts the transparent draws below)
+        const glm::vec3& boundsMax = vis.LocalMax;
+        const bool validBounds = vis.Bounded;
         if (validBounds && !playerBody) {
-            const AABB worldBounds = AABB{boundsMin, boundsMax}.Transformed(model);
+            const AABB worldBounds{vis.WorldMin, vis.WorldMax};
             const bool seen = (isViewModel ? vmFrustum : camFrustum).Intersects(worldBounds) ||
                               (splitSleeves && vmFrustum.Intersects(worldBounds));
             if (!seen) {
