@@ -1,6 +1,18 @@
 # Job system and multithreaded frames (design)
 
-Status: proposal. No engine code changes yet; this document is the plan the implementation PRs follow.
+Status: approved. Phases 0 and 1 are implemented (`src/Core/JobSystem.h`, the tools below); Phases 2-5 are the plan
+the next PRs follow.
+
+## Using it today
+
+| What | How |
+| --- | --- |
+| Worker count | `--jobs N` (default: one per physical core but the main thread's); `--jobs 0` runs every job inline |
+| Order bugs | `--jobs-shuffle`: jobs inline, each `ParallelFor`'s chunks in a fixed random order |
+| Repeatable frames | `--fixed-step`: every frame advances the clocks by exactly 1/60 s |
+| Timings | `--perf-bench --perf-csv out.csv`, then `python tools/perf_compare.py before.csv after.csv` |
+| Same pixels | `--smoke-test --fixed-step --smoke-shots DIR` twice, then `python tools/compare_shots.py A B`; CI runs this with 4 workers against `--jobs 0` on every Release build |
+| Profiler | worker samples show in the Stats panel as `[wN] name` |
 
 ## Why
 
@@ -191,17 +203,22 @@ option), and is checked against the single-threaded path before merge.
 
 * Record per-scope CPU times from the existing profiler for two reference scenes: a heavy NPC scene (the NPC test
   from `NpcTest.cpp`) and a static-heavy smoke scene. These are the numbers each later phase is measured against.
-* Add an image comparison to the `--smoke-test` run: render a fixed set of frames and diff them. Every later phase
-  must match bit-for-bit with jobs on, jobs inline, and jobs in a debug "shuffle" mode that runs chunks in a random
-  order on one thread (this flushes out order dependence without real races).
+  Done as `--perf-csv` on the existing `--perf-bench`, plus `tools/perf_compare.py` to diff two runs.
+* Add an image comparison: render a fixed set of frames and diff them. Every later phase must match bit-for-bit with
+  jobs on, jobs inline, and jobs in a debug "shuffle" mode that runs chunks in a random order on one thread (this
+  flushes out order dependence without real races). Done as `--fixed-step` (frame N is the same frame on every run),
+  `--jobs 0` / `--jobs-shuffle`, `tools/compare_shots.py`, and a CI step comparing 4 workers against `--jobs 0`.
 * There is no ThreadSanitizer on MSVC. Clang-cl's `-fsanitize=thread` does not support Windows either, so the
   safety net is the thread-role asserts above, the shuffle mode, and code review against the ownership rules.
 
 ### Phase 1: the job system itself
 
-* `JobSystem.h/.cpp` as above, unit tests in `UnitTests_Engine.cpp` (counters, nested `ParallelFor`, inline mode,
-  shutdown with pending jobs).
+* `JobSystem.h/.cpp` as above, unit tests in `UnitTests_Jobs.cpp` (counters, nested `ParallelFor`, inline mode,
+  shuffle, exceptions, shutdown with pending jobs). The non-blocking `ParallelFor` / `Run` reject a temporary
+  callable at compile time, since it would be destroyed before the queued chunks call it.
 * Per-worker profiler buffers and a per-thread view in the Stats panel.
+* `JOBS_ASSERT_NOT_WORKER` in `Shader::Bind`, `ShaderAsset::Variant`, `Model::UploadBoneMatrices` and GPU profiler
+  scopes (Debug builds; a hit logs an error, which fails the smoke test).
 * The PhysX dispatcher adapter.
 * Optional in the same phase: move `AssetLibrary`'s and `AssetThumbnailLoader`'s private thread pools onto
   long-running jobs, or at least cap them so the machine is not oversubscribed. These are editor-time and lower
