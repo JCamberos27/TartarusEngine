@@ -141,6 +141,15 @@ private:
     int m_CustomWidth = 1920;
     int m_CustomHeight = 1080;
 
+    // Unity's Scale: framebuffer pixels per screen pixel. 0 = fit the panel (the default); 1 = 1:1.
+    // Zoomed past the panel, the image is clipped to it and pans with the middle mouse button.
+    // Per session, like Unity's; a new preset goes back to fit.
+    float m_Zoom = 0.0f;
+    ImVec2 m_Pan{0.0f, 0.0f};    // the image centre's offset from the panel's, in screen pixels
+    float m_FitScale = 1.0f;     // the fit scale as of the last draw (the slider's floor)
+    bool m_Panning = false;
+
     void DrawAspectControl();
+    void DrawScaleControl();
     void DrawCustomResolutionModal();
 };
