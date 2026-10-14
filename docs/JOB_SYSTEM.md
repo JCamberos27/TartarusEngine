@@ -56,7 +56,7 @@ namespace Jobs {
 struct Counter;                           // atomic count of unfinished jobs; a job group waits on one
 using JobFn = void (*)(void* data, std::uint32_t begin, std::uint32_t end);
 
-void Init(unsigned workerCount);          // hardware threads - 1, clamped to [1, 15]; main thread is worker 0
+void Init(unsigned workerCount);          // see "Pool size" below; main thread is worker 0
 void Shutdown();
 
 void Run(Counter& c, std::function<void()> fn);                       // one job
@@ -74,6 +74,10 @@ Implementation choices:
 
 * **Fixed pool, one worker per spare hardware thread.** The main thread is worker 0 and helps while it waits, so
   a `Wait` never parks the thread that owns the GL context.
+* **Pool size.** The dev machine is an i9-7980XE (18 cores / 36 threads). Default to one worker per physical
+  core minus one (17), not per hardware thread: culling and pose evaluation are memory-bound, and two
+  hyper-threads on one core share its caches and load ports, so the second thread adds little. The cap and the
+  SMT choice are settings, tuned with Phase 0's numbers.
 * **Per-worker work-stealing deques** (Chase-Lev). The first version can use one mutex-guarded queue; the API does
   not change when the queue does, and with tens of jobs per frame a single queue is not the bottleneck. Move to
   deques once profiling shows contention.
@@ -323,10 +327,25 @@ GPU-bound (the scene renders at the GPU's limit), none of this shows in FPS unti
 * **Debuggability.** Crashes inside jobs have the worker's stack, not the caller's. Inline mode reproduces most
   issues on the main thread; the crash handler should also record which job was running on each worker.
 
+## Target hardware
+
+Dev machine: Intel i9-7980XE (18 cores / 36 threads, Skylake-X, 24.75 MB L3), 32 GB DDR4, GTX 1080 Ti 11 GB,
+Windows 11. Two things about it shape the plan:
+
+* **Memory bandwidth, not cores, will limit scaling.** The RAM is two DIMMs (dual-channel on a quad-channel
+  platform) running at 2133 MHz with XMP off. Culling and pose evaluation stream through transforms, bounds and
+  bone matrices, so on this setup they will stop scaling well before 17 workers. Enabling XMP (3200 MHz) and
+  populating four slots would roughly double usable bandwidth. Phase 0 baselines should note the memory config so
+  later numbers are comparable.
+* **The GPU may be the limit first.** A GTX 1080 Ti rendering the 4K monitor with HDR, MSAA, CSM and clustered
+  lighting can be GPU-bound, in which case CPU savings show as lower main-thread time but not higher FPS. Phase 0
+  records both CPU and GPU scope times (`PROFILE_GPU_SCOPE`) so this is visible. Persistent coherent mapping
+  (Phase 3) is well supported on Pascal.
+
 ## Open questions
 
-* Target hardware: how many cores the minimum and recommended specs assume. It sets the pool size cap and whether
-  the inline threshold is worth tuning.
+* Minimum spec: the dev machine has far more cores than a typical player PC. The default pool size, the inline
+  threshold and the chunk grain should be checked on a 6-core / 12-thread machine too, once a minimum spec is set.
 * Whether to move to C++20 for `std::atomic::wait`, `std::latch` and `std::span`. Not required by this plan.
 * Whether the editor Scene view and Game view should keep rendering separately each frame, or share one visibility
   build when their cameras match.
