@@ -689,6 +689,83 @@ bool MaterialAsset::GetBool(const Material& m, const std::string& n) {
     return it != m.ExtraProps.end() && it->second.B;
 }
 
+void MaterialAsset::ResolveBuiltin(const std::string& n, ShaderPropType type,
+                                   const std::shared_ptr<Texture>& (*&tex)(const Material&),
+                                   glm::vec4 (*&val)(const Material&)) {
+    using TexFn = const std::shared_ptr<Texture>& (*)(const Material&);
+    using ValFn = glm::vec4 (*)(const Material&);
+    struct TexEntry { const char* Name; TexFn Fn; };
+    struct ValEntry { const char* Name; ValFn Fn; };
+    // Each table is the matching Get* above, field for field (same order, same pre-multiply).
+    static const TexEntry kTex[] = {
+        {"_AlbedoMap",            [](const Material& m) -> const std::shared_ptr<Texture>& { return m.AlbedoMap; }},
+        {"_NormalMap",            [](const Material& m) -> const std::shared_ptr<Texture>& { return m.NormalMap; }},
+        {"_MetallicRoughnessMap", [](const Material& m) -> const std::shared_ptr<Texture>& { return m.MetallicRoughnessMap; }},
+        {"_MetallicMap",          [](const Material& m) -> const std::shared_ptr<Texture>& { return m.MetallicMap; }},
+        {"_RoughnessMap",         [](const Material& m) -> const std::shared_ptr<Texture>& { return m.RoughnessMap; }},
+        {"_AOMap",                [](const Material& m) -> const std::shared_ptr<Texture>& { return m.AOMap; }},
+        {"_EmissiveMap",          [](const Material& m) -> const std::shared_ptr<Texture>& { return m.EmissiveMap; }},
+        {"_ClearCoatMap",         [](const Material& m) -> const std::shared_ptr<Texture>& { return m.ClearCoatMap; }},
+        {"_ThicknessMap",         [](const Material& m) -> const std::shared_ptr<Texture>& { return m.ThicknessMap; }},
+        {"_HeightMap",            [](const Material& m) -> const std::shared_ptr<Texture>& { return m.HeightMap; }},
+        {"_DetailAlbedoMap",      [](const Material& m) -> const std::shared_ptr<Texture>& { return m.DetailAlbedoMap; }},
+        {"_DetailNormalMap",      [](const Material& m) -> const std::shared_ptr<Texture>& { return m.DetailNormalMap; }},
+    };
+    static const ValEntry kColor[] = {
+        {"_BaseColor",       [](const Material& m) { return glm::vec4(m.BaseColor, 0.0f); }},
+        {"_EmissiveColor",   [](const Material& m) { return glm::vec4(m.EmissiveColor * m.EmissiveStrength, 0.0f); }},
+        {"_Sheen",           [](const Material& m) { return glm::vec4(m.Sheen, 0.0f); }},
+        {"_SubsurfaceColor", [](const Material& m) { return glm::vec4(m.SubsurfaceColor, 0.0f); }},
+    };
+    static const ValEntry kVec[] = {
+        {"_UVTiling",     [](const Material& m) { return glm::vec4(m.UVTiling, 0.0f, 0.0f); }},
+        {"_UVOffset",     [](const Material& m) { return glm::vec4(m.UVOffset, 0.0f, 0.0f); }},
+        {"_DetailTiling", [](const Material& m) { return glm::vec4(m.DetailTiling, 0.0f, 0.0f); }},
+    };
+    static const ValEntry kFloat[] = {
+        {"_Metallic",             [](const Material& m) { return glm::vec4(m.Metallic, 0, 0, 0); }},
+        {"_Roughness",            [](const Material& m) { return glm::vec4(m.Roughness, 0, 0, 0); }},
+        {"_EmissiveStrength",     [](const Material& m) { return glm::vec4(m.EmissiveStrength, 0, 0, 0); }},
+        {"_TriplanarScale",       [](const Material& m) { return glm::vec4(m.TriplanarScale, 0, 0, 0); }},
+        {"_ClearCoat",            [](const Material& m) { return glm::vec4(m.ClearCoat, 0, 0, 0); }},
+        {"_ClearCoatRoughness",   [](const Material& m) { return glm::vec4(m.ClearCoatRoughness, 0, 0, 0); }},
+        {"_Anisotropy",           [](const Material& m) { return glm::vec4(m.Anisotropy, 0, 0, 0); }},
+        {"_AnisotropyRotation",   [](const Material& m) { return glm::vec4(m.AnisotropyRotation, 0, 0, 0); }},
+        {"_SheenRoughness",       [](const Material& m) { return glm::vec4(m.SheenRoughness, 0, 0, 0); }},
+        {"_Thickness",            [](const Material& m) { return glm::vec4(m.Thickness, 0, 0, 0); }},
+        {"_TransmissionStrength", [](const Material& m) { return glm::vec4(m.TransmissionStrength, 0, 0, 0); }},
+        {"_IOR",                  [](const Material& m) { return glm::vec4(m.IOR, 0, 0, 0); }},
+        {"_NormalStrength",       [](const Material& m) { return glm::vec4(m.NormalStrength, 0, 0, 0); }},
+        {"_ParallaxScale",        [](const Material& m) { return glm::vec4(m.ParallaxScale, 0, 0, 0); }},
+    };
+    static const ValEntry kBool[] = {
+        {"_Triplanar",          [](const Material& m) { return glm::vec4(m.Triplanar ? 1.0f : 0.0f, 0, 0, 0); }},
+        {"_NormalFlipY",        [](const Material& m) { return glm::vec4(m.NormalFlipY ? 1.0f : 0.0f, 0, 0, 0); }},
+        {"_DoubleSided",        [](const Material& m) { return glm::vec4(m.DoubleSided ? 1.0f : 0.0f, 0, 0, 0); }},
+        {"_VertexColors",       [](const Material& m) { return glm::vec4(m.UseVertexColor ? 1.0f : 0.0f, 0, 0, 0); }},
+        {"_SpecularHighlights", [](const Material& m) { return glm::vec4(m.SpecularHighlights ? 1.0f : 0.0f, 0, 0, 0); }},
+        {"_GlossyReflections",  [](const Material& m) { return glm::vec4(m.GlossyReflections ? 1.0f : 0.0f, 0, 0, 0); }},
+    };
+    tex = nullptr;
+    val = nullptr;
+    auto findVal = [&n](const ValEntry* begin, const ValEntry* end) -> ValFn {
+        for (const ValEntry* e = begin; e != end; ++e) if (n == e->Name) return e->Fn;
+        return nullptr;
+    };
+    switch (type) {
+    case ShaderPropType::Texture2D:
+        for (const TexEntry& e : kTex) if (n == e.Name) { tex = e.Fn; break; }
+        break;
+    case ShaderPropType::Color:
+    case ShaderPropType::Vec3:  val = findVal(std::begin(kColor), std::end(kColor)); break;
+    case ShaderPropType::Vec2:  val = findVal(std::begin(kVec), std::end(kVec)); break;
+    case ShaderPropType::Float: val = findVal(std::begin(kFloat), std::end(kFloat)); break;
+    case ShaderPropType::Bool:
+    case ShaderPropType::Int:   val = findVal(std::begin(kBool), std::end(kBool)); break;
+    default: break;
+    }
+}
+
 void MaterialAsset::SetTexture(Material& m, const std::string& n, const std::shared_ptr<Texture>& tex) {
     if (n == "_AlbedoMap")            { m.AlbedoMap = tex; return; }
     if (n == "_NormalMap")            { m.NormalMap = tex; return; }

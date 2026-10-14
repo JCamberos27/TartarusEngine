@@ -133,6 +133,36 @@ struct Material {
     // A new frame: every material's Hash() is worked out again on first use (values may have been edited since).
     static void NextHashFrame() { if (++s_HashFrame == 0) s_HashFrame = 1; }
 
+    // ShaderVariantKeyForCached's per-frame slot, for the one shader this material links.
+    bool CachedVariantKey(const void* shader, std::uint32_t& key) const {
+        if (m_VariantCache.Frame != s_HashFrame || m_VariantOwner != shader) return false;
+        key = (std::uint32_t)m_VariantCache.Value;
+        return true;
+    }
+    void StoreVariantKey(const void* shader, std::uint32_t key) const {
+        m_VariantCache.Value = key;
+        m_VariantCache.Frame = s_HashFrame;
+        m_VariantOwner = shader;
+    }
+
+    // Hash() folded with every ExtraProp (BindMaterialDataDriven's redundant-bind key, #99), cached per frame
+    // like Hash(): hashing each custom property's name and values ran per mesh per pass.
+    std::uint64_t HashWithExtraProps() const {
+        if (m_ExtraHashCache.Frame == s_HashFrame) return m_ExtraHashCache.Value;
+        size_t hash = (size_t)Hash();
+        auto mix = [&hash](size_t v) { hash ^= v + 0x9e3779b97f4a7c15ull + (hash << 6) + (hash >> 2); };
+        for (const auto& [name, p] : ExtraProps) {
+            mix(std::hash<std::string>{}(name));
+            mix(std::hash<float>{}(p.F));
+            for (int c = 0; c < 4; ++c) mix(std::hash<float>{}(p.V[c]));
+            mix((size_t)p.B); mix((size_t)p.I);
+            mix(std::hash<const void*>{}(p.Tex.get()));
+        }
+        m_ExtraHashCache.Value = hash;
+        m_ExtraHashCache.Frame = s_HashFrame;
+        return hash;
+    }
+
     std::uint64_t ComputeHash() const {
         std::uint32_t words[64];
         std::size_t n = 0;
@@ -192,5 +222,8 @@ private:
         HashCache& operator=(const HashCache&) { Frame = 0; return *this; }
     };
     mutable HashCache m_HashCache;
+    mutable HashCache m_ExtraHashCache;
+    mutable HashCache m_VariantCache; // a copy drops it (HashCache), so the owner below needs no reset
+    mutable const void* m_VariantOwner = nullptr;
     inline static std::uint32_t s_HashFrame = 1;
 };

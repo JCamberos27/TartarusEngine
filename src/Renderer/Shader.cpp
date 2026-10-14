@@ -188,14 +188,22 @@ int Shader::LocSlow(std::string_view name) const {
 }
 
 namespace {
-// Bumped whenever a uniform write lands on a program other than its Shader's (see m_Values).
-std::uint64_t g_UniformEpoch = 1;
+// Per program name: bumped when a uniform write meant for another Shader lands on this program
+// (it was the one bound), so only that program's remembered values are dropped (see m_Values).
+// Every other program's cache survives: one stray write used to make all of them re-upload.
+std::vector<std::uint64_t> g_ProgramEpoch;
+std::uint64_t& EpochOf(unsigned int program) {
+    if (program >= g_ProgramEpoch.size()) g_ProgramEpoch.resize((size_t)program + 1, 1);
+    return g_ProgramEpoch[program];
+}
 } // namespace
 
 bool Shader::SameValue(int loc, const void* data, int words) const {
     if (loc < 0) return true; // absent uniform: glUniform* with -1 is a no-op anyway
-    if (GLStateCache::CurrentProgram() != m_Program) { ++g_UniformEpoch; return false; }
-    if (m_ValuesEpoch != g_UniformEpoch) { m_Values.clear(); m_ValuesEpoch = g_UniformEpoch; }
+    const unsigned int bound = GLStateCache::CurrentProgram();
+    if (bound != m_Program) { ++EpochOf(bound); return false; }
+    const std::uint64_t epoch = EpochOf(m_Program);
+    if (m_ValuesEpoch != epoch) { m_Values.clear(); m_ValuesEpoch = epoch; }
     if (loc >= 4096) return false;
     if ((size_t)loc >= m_Values.size()) m_Values.resize((size_t)loc + 1, UniformValue{{0, 0, 0, 0}, false});
     UniformValue& v = m_Values[(size_t)loc];
@@ -208,7 +216,8 @@ bool Shader::SameValue(int loc, const void* data, int words) const {
 }
 
 void Shader::Forget(int loc, int count) const {
-    if (GLStateCache::CurrentProgram() != m_Program) { ++g_UniformEpoch; return; }
+    const unsigned int bound = GLStateCache::CurrentProgram();
+    if (bound != m_Program) { ++EpochOf(bound); return; }
     for (int i = std::max(loc, 0); i < loc + count && (size_t)i < m_Values.size(); ++i) m_Values[(size_t)i].Set = false;
 }
 
@@ -234,6 +243,13 @@ void Shader::SetFloatArray(std::string_view name, int count, const float* data) 
     const int loc = Loc(name);
     Forget(loc, count);
     glUniform1fv(loc, count, data);
+}
+
+void Shader::SetIntArray(std::string_view name, int count, const int* data) const {
+    if (count <= 0) return;
+    const int loc = Loc(name);
+    Forget(loc, count);
+    glUniform1iv(loc, count, data);
 }
 
 void Shader::SetVec2(std::string_view name, const glm::vec2& v) const { SetVec2(Loc(name), v); }

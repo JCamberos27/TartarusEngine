@@ -598,20 +598,23 @@ vec3 ShadeLight(vec3 N, vec3 V, vec3 L, vec3 radiance, vec3 albedo, vec3 F0,
     return (kD * albedo / PI + specular) * radiance * max(dot(N, L), 0.0);
 }
 
-// Full shading for one point or spot light (index into uLights): range check, windowed
-// inverse-square falloff, spot cone + shadow, point shadow. Returns its Lo contribution, or
-// zero if the fragment is out of range / outside the cone. Shared by the clustered loop and
-// the non-clustered fallback.
-vec3 ShadePointSpot(uint i, vec3 N, vec3 V, vec3 albedo, vec3 F0, float metallic, float roughness) {
+// One point or spot light (index into uLights) as seen from this fragment: range check, windowed
+// inverse-square falloff, spot cone + shadow, point shadow. False when it contributes nothing (out of
+// range / outside the cone / shadowed); otherwise L and the radiance that reaches here. Every lobe a
+// material shades (base, clear coat, sheen, subsurface) takes these, so the falloff and the shadow
+// fetch happen once per light, not once per lobe.
+bool PointSpotLight(uint i, vec3 N, out vec3 L, out vec3 radiance) {
     Light lt = uLights[i];
     int type = int(lt.PositionType.w);
+    L = vec3(0.0);
+    radiance = vec3(0.0);
 
     vec3 toLight = lt.PositionType.xyz - vWorldPos;
     float range = lt.ColorRange.a;
     float dist2 = dot(toLight, toLight);
-    if (dist2 > range * range) return vec3(0.0); // out of reach: before the square root
+    if (dist2 > range * range) return false; // out of reach: before the square root
     float dist = sqrt(dist2);
-    vec3 L = toLight / max(dist, 1e-4);
+    L = toLight / max(dist, 1e-4);
 
     // Windowed inverse-square: contribution reaches exactly zero at Range, no hard clip.
     float t = dist / max(range, 1e-4);
@@ -622,144 +625,29 @@ vec3 ShadePointSpot(uint i, vec3 N, vec3 V, vec3 albedo, vec3 F0, float metallic
         float cosAngle = dot(-lt.DirCutoff.xyz, L); // aim normalised on upload (LightBuffer)
         float outerCos = lt.DirCutoff.w;
         float innerCos = lt.Params.x;
-        if (cosAngle < outerCos) return vec3(0.0);
+        if (cosAngle < outerCos) return false;
         atten *= smoothstep(outerCos, max(innerCos, outerCos + 1e-3), cosAngle);
         // Early-out before the shadow-map sample, not just before shading (#191) — a fragment at
         // the far edge of the cone/range falloff is already at atten==0 here, so this skips a
         // full shadow-array texture fetch that would just get multiplied away.
-        if (atten <= 0.0) return vec3(0.0);
+        if (atten <= 0.0) return false;
         atten *= SpotShadow(int(lt.Params.y), vWorldPos, N); // #119
     } else {
-        if (atten <= 0.0) return vec3(0.0);
+        if (atten <= 0.0) return false;
         atten *= PointShadow(int(lt.Params.y), vWorldPos, lt.PositionType.xyz, N); // #119
     }
-    if (atten <= 0.0) return vec3(0.0);
-    return ShadeLight(N, V, L, lt.ColorRange.rgb * atten, albedo, F0, metallic, roughness);
+    if (atten <= 0.0) return false;
+    radiance = lt.ColorRange.rgb * atten;
+    return true;
 }
 
-#ifdef _ANISO
-// Anisotropic version of ShadePointSpot — identical attenuation/shadow logic, calls ShadeLightAniso.
-vec3 ShadePointSpotAniso(uint i, vec3 N, vec3 V, vec3 albedo, vec3 F0, float metallic, float roughness,
-                          vec3 T, vec3 B) {
-    Light lt = uLights[i];
-    int type = int(lt.PositionType.w);
-    vec3 toLight = lt.PositionType.xyz - vWorldPos;
-    float range = lt.ColorRange.a;
-    float dist2 = dot(toLight, toLight);
-    if (dist2 > range * range) return vec3(0.0); // out of reach: before the square root
-    float dist = sqrt(dist2);
-    vec3 L = toLight / max(dist, 1e-4);
-    float t = dist / max(range, 1e-4);
-    float window = clamp(1.0 - t * t * t * t, 0.0, 1.0);
-    float atten = window * window / (1.0 + dist * dist);
-    if (type == 2) {
-        float cosAngle = dot(-lt.DirCutoff.xyz, L); // aim normalised on upload (LightBuffer)
-        float outerCos = lt.DirCutoff.w;
-        float innerCos = lt.Params.x;
-        if (cosAngle < outerCos) return vec3(0.0);
-        atten *= smoothstep(outerCos, max(innerCos, outerCos + 1e-3), cosAngle);
-        if (atten <= 0.0) return vec3(0.0);
-        atten *= SpotShadow(int(lt.Params.y), vWorldPos, N);
-    } else {
-        if (atten <= 0.0) return vec3(0.0);
-        atten *= PointShadow(int(lt.Params.y), vWorldPos, lt.PositionType.xyz, N);
-    }
-    if (atten <= 0.0) return vec3(0.0);
-    return ShadeLightAniso(N, V, L, lt.ColorRange.rgb * atten, albedo, F0, metallic, roughness, T, B);
+// Full shading for one point or spot light: its Lo contribution, or zero. The decal and sprite
+// shaders' clustered loops use it; the model shader runs PointSpotLight itself and shades each lobe.
+vec3 ShadePointSpot(uint i, vec3 N, vec3 V, vec3 albedo, vec3 F0, float metallic, float roughness) {
+    vec3 L, radiance;
+    if (!PointSpotLight(i, N, L, radiance)) return vec3(0.0);
+    return ShadeLight(N, V, L, radiance, albedo, F0, metallic, roughness);
 }
-#endif
-
-#ifdef _CLEARCOAT
-// Clear coat contribution from one point/spot light — same attenuation as ShadePointSpot.
-vec3 ShadePointSpotCC(uint i, vec3 N, vec3 V, float ccRough) {
-    Light lt = uLights[i];
-    int type = int(lt.PositionType.w);
-    vec3 toLight = lt.PositionType.xyz - vWorldPos;
-    float range = lt.ColorRange.a;
-    float dist2 = dot(toLight, toLight);
-    if (dist2 > range * range) return vec3(0.0); // out of reach: before the square root
-    float dist = sqrt(dist2);
-    vec3 L = toLight / max(dist, 1e-4);
-    float t = dist / max(range, 1e-4);
-    float window = clamp(1.0 - t * t * t * t, 0.0, 1.0);
-    float atten = window * window / (1.0 + dist * dist);
-    if (type == 2) {
-        float cosAngle = dot(-lt.DirCutoff.xyz, L); // aim normalised on upload (LightBuffer)
-        float outerCos = lt.DirCutoff.w;
-        float innerCos = lt.Params.x;
-        if (cosAngle < outerCos) return vec3(0.0);
-        atten *= smoothstep(outerCos, max(innerCos, outerCos + 1e-3), cosAngle);
-        if (atten <= 0.0) return vec3(0.0);
-        atten *= SpotShadow(int(lt.Params.y), vWorldPos, N);
-    } else {
-        if (atten <= 0.0) return vec3(0.0);
-        atten *= PointShadow(int(lt.Params.y), vWorldPos, lt.PositionType.xyz, N);
-    }
-    if (atten <= 0.0) return vec3(0.0);
-    return lt.ColorRange.rgb * atten * max(dot(N, L), 0.0) * ClearCoatLobe(N, V, L, ccRough);
-}
-#endif
-
-#ifdef _SHEEN
-// Sheen contribution from one point/spot light — same attenuation as ShadePointSpot.
-vec3 ShadePointSpotSheen(uint i, vec3 N, vec3 V, float sheenRoughness) {
-    Light lt = uLights[i];
-    int type = int(lt.PositionType.w);
-    vec3 toLight = lt.PositionType.xyz - vWorldPos;
-    float range = lt.ColorRange.a;
-    float dist2 = dot(toLight, toLight);
-    if (dist2 > range * range) return vec3(0.0); // out of reach: before the square root
-    float dist = sqrt(dist2);
-    vec3 L = toLight / max(dist, 1e-4);
-    float t = dist / max(range, 1e-4);
-    float window = clamp(1.0 - t * t * t * t, 0.0, 1.0);
-    float atten = window * window / (1.0 + dist * dist);
-    if (type == 2) {
-        float cosAngle = dot(-lt.DirCutoff.xyz, L); // aim normalised on upload (LightBuffer)
-        float outerCos = lt.DirCutoff.w;
-        float innerCos = lt.Params.x;
-        if (cosAngle < outerCos) return vec3(0.0);
-        atten *= smoothstep(outerCos, max(innerCos, outerCos + 1e-3), cosAngle);
-        if (atten <= 0.0) return vec3(0.0);
-        atten *= SpotShadow(int(lt.Params.y), vWorldPos, N);
-    } else {
-        if (atten <= 0.0) return vec3(0.0);
-        atten *= PointShadow(int(lt.Params.y), vWorldPos, lt.PositionType.xyz, N);
-    }
-    if (atten <= 0.0) return vec3(0.0);
-    return SheenLobe(N, V, L, sheenRoughness) * lt.ColorRange.rgb * atten;
-}
-#endif
-
-#ifdef _SUBSURFACE
-// Subsurface back-lit transmission from one point/spot light.
-vec3 ShadePointSpotSSS(uint i, vec3 N, float thickness) {
-    Light lt = uLights[i];
-    int type = int(lt.PositionType.w);
-    vec3 toLight = lt.PositionType.xyz - vWorldPos;
-    float range = lt.ColorRange.a;
-    float dist2 = dot(toLight, toLight);
-    if (dist2 > range * range) return vec3(0.0); // out of reach: before the square root
-    float dist = sqrt(dist2);
-    vec3 L = toLight / max(dist, 1e-4);
-    float t = dist / max(range, 1e-4);
-    float window = clamp(1.0 - t * t * t * t, 0.0, 1.0);
-    float atten = window * window / (1.0 + dist * dist);
-    if (type == 2) {
-        float cosAngle = dot(-lt.DirCutoff.xyz, L); // aim normalised on upload (LightBuffer)
-        float outerCos = lt.DirCutoff.w;
-        if (cosAngle < outerCos) return vec3(0.0);
-        atten *= smoothstep(outerCos, max(lt.Params.x, outerCos + 1e-3), cosAngle);
-        if (atten <= 0.0) return vec3(0.0);
-        atten *= SpotShadow(int(lt.Params.y), vWorldPos, N); // #102: no light through occluders
-    } else {
-        if (atten <= 0.0) return vec3(0.0);
-        atten *= PointShadow(int(lt.Params.y), vWorldPos, lt.PositionType.xyz, N);
-    }
-    if (atten <= 0.0) return vec3(0.0);
-    return SubsurfaceTransmission(N, L, lt.ColorRange.rgb * atten, thickness);
-}
-#endif
 
 // Per-axis blend weights for triplanar projection, sharpened (raised to a power) so the blend
 // zone between two faces is narrow instead of muddying most of the surface.

@@ -32,6 +32,14 @@ uniform vec4 uBloodFresh; // BloodPalette: rgb fresh, a its roughness on cloth /
 uniform vec4 uBloodDried; // rgb dried, a its roughness
 
 // How much of this fragment is under blood (x), its pooled core (y) and how dried (z).
+// A normal map's tangent-space normal. A BC5 one (Texture.cpp EncodeNormalBC5) stores only x and y, so it
+// samples with blue 0: z is rebuilt from the unit length. Three-channel maps keep their own z.
+vec3 UnpackNormal(vec3 s) {
+    vec3 n = s * 2.0 - 1.0;
+    if (s.b == 0.0) n.z = sqrt(max(1.0 - dot(n.xy, n.xy), 0.0));
+    return n;
+}
+
 vec3 BloodSplatCover() {
     vec3 acc = vec3(0.0);
     vec3 bn = normalize(vBindNormal);
@@ -92,16 +100,19 @@ void main() {
         float layerStep = 1.0 / layers;
         vec2 delta = Vt.xy / max(Vt.z, 0.1) * uParallaxScale * layerStep;
         float layerDepth = 0.0;
-        float depthHere = 1.0 - texture(uHeightMap, uv).r;
+        // The loop's trip count differs between neighbouring pixels, so texture()'s implicit derivatives
+        // inside it are undefined (the mip level jumped: shimmer). Take them from the unshifted UV, once.
+        vec2 uvDx = dFdx(uv), uvDy = dFdy(uv);
+        float depthHere = 1.0 - textureGrad(uHeightMap, uv, uvDx, uvDy).r;
         vec2 cur = uv;
         for (int k = 0; k < 32 && layerDepth < depthHere; ++k) {
             cur -= delta;
-            depthHere = 1.0 - texture(uHeightMap, cur).r;
+            depthHere = 1.0 - textureGrad(uHeightMap, cur, uvDx, uvDy).r;
             layerDepth += layerStep;
         }
         vec2 prev = cur + delta;
         float after = depthHere - layerDepth;
-        float before = (1.0 - texture(uHeightMap, prev).r) - layerDepth + layerStep;
+        float before = (1.0 - textureGrad(uHeightMap, prev, uvDx, uvDy).r) - layerDepth + layerStep;
         float w = after / (after - before + 1e-5);
         uv = mix(cur, prev, clamp(w, 0.0, 1.0));
     }
@@ -141,10 +152,10 @@ void main() {
     if (uHasNormalMap == 1 || uHasDetailNormalMap == 1) {
         // #102 — strength (scales the tangent-space slope), DirectX green flip, and a detail
         // normal map combined with whiteout blending.
-        vec3 tn = uHasNormalMap == 1 ? texture(uNormalMap, uv).rgb * 2.0 - 1.0 : vec3(0.0, 0.0, 1.0);
+        vec3 tn = uHasNormalMap == 1 ? UnpackNormal(texture(uNormalMap, uv).rgb) : vec3(0.0, 0.0, 1.0);
         if (uNormalFlipY == 1) tn.y = -tn.y;
         if (uHasDetailNormalMap == 1) {
-            vec3 dn = texture(uDetailNormalMap, detailUV).rgb * 2.0 - 1.0;
+            vec3 dn = UnpackNormal(texture(uDetailNormalMap, detailUV).rgb);
             if (uNormalFlipY == 1) dn.y = -dn.y;
             tn = vec3(tn.xy + dn.xy, tn.z * dn.z);
         }
@@ -258,46 +269,35 @@ void main() {
 
     // Point + spot lights: this fragment's froxel list when clustering is active (#120),
     // otherwise every light (offscreen preview path, no compute pass).
-    if (uClusterEnabled == 1) {
+    // One loop for both: the light index comes from the froxel's list or straight from uLights.
+    bool clustered = uClusterEnabled == 1;
+    uint lightOffset = 0u;
+    uint lightCount = uLightCount;
+    if (clustered) {
         uint cl = clusterIndex();
-        uint offset = uClusterRange[cl].offset;
-        uint count = uClusterRange[cl].count;
-        for (uint j = 0u; j < count; ++j) {
-            uint li = uClusterLightIndices[offset + j];
-            if (!LightAffects(li)) continue; // #203
+        lightOffset = uClusterRange[cl].offset;
+        lightCount = uClusterRange[cl].count;
+    }
+    for (uint j = 0u; j < lightCount; ++j) {
+        uint li = clustered ? uClusterLightIndices[lightOffset + j] : j;
+        if (!clustered && int(uLights[li].PositionType.w) == 0) continue; // the sun is shaded above
+        if (!LightAffects(li)) continue; // #203
+        vec3 L, radiance;
+        if (!PointSpotLight(li, N, L, radiance)) continue;
 #ifdef _ANISO
-            Lo += ShadePointSpotAniso(li, N, V, albedo, F0, metallic, roughness, anisoT, anisoB);
+        Lo += ShadeLightAniso(N, V, L, radiance, albedo, F0, metallic, roughness, anisoT, anisoB);
 #else
-            Lo += ShadePointSpot(li, N, V, albedo, F0, metallic, roughness);
+        Lo += ShadeLight(N, V, L, radiance, albedo, F0, metallic, roughness);
 #endif
 #ifdef _CLEARCOAT
-            LoCc += ShadePointSpotCC(li, N, V, ccRough) * ccStrength;
+        LoCc += radiance * max(dot(N, L), 0.0) * ClearCoatLobe(N, V, L, ccRough) * ccStrength;
 #endif
 #ifdef _SHEEN
-            LoSheen += ShadePointSpotSheen(li, N, V, sheenRough);
+        LoSheen += SheenLobe(N, V, L, sheenRough) * radiance;
 #endif
 #ifdef _SUBSURFACE
-            LoSSS += ShadePointSpotSSS(li, N, sssThickness);
+        LoSSS += SubsurfaceTransmission(N, L, radiance, sssThickness);
 #endif
-        }
-    } else {
-        for (uint i = 0u; i < uLightCount; ++i) {
-            if (int(uLights[i].PositionType.w) == 0 || !LightAffects(i)) continue;
-#ifdef _ANISO
-            Lo += ShadePointSpotAniso(i, N, V, albedo, F0, metallic, roughness, anisoT, anisoB);
-#else
-            Lo += ShadePointSpot(i, N, V, albedo, F0, metallic, roughness);
-#endif
-#ifdef _CLEARCOAT
-            LoCc += ShadePointSpotCC(i, N, V, ccRough) * ccStrength;
-#endif
-#ifdef _SHEEN
-            LoSheen += ShadePointSpotSheen(i, N, V, sheenRough);
-#endif
-#ifdef _SUBSURFACE
-            LoSSS += ShadePointSpotSSS(i, N, sssThickness);
-#endif
-        }
     }
 
     // PR15 — SSAO: sample the blurred occlusion map at this fragment's screen position.

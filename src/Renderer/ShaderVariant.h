@@ -16,3 +16,6 @@ struct Material;
 // Bit i corresponds to sa.Keywords()[i]; a keyword the shader doesn't declare contributes
 // nothing. A material with no lobes active returns 0 — the byte-identical zero-keyword variant.
 ShaderVariantKey ShaderVariantKeyFor(const Material& mat, const ShaderAsset& sa);
+// The same, worked out once per frame per material (Material::Hash()'s rule: an edit shows from the next
+// frame). The scene draw asks for it per mesh per pass; the keyword string compares added up.
+ShaderVariantKey ShaderVariantKeyForCached(const Material& mat, const ShaderAsset& sa);

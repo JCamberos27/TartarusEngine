@@ -6,6 +6,8 @@
 #include <glm/glm.hpp>
 
 class Shader;
+class Texture;
+struct Material;
 
 using ShaderVariantKey = uint32_t;
 
@@ -75,6 +77,11 @@ struct PropertyBinding {
     // the property is one of Material's built-in fields (MaterialAsset::IsBuiltinProp).
     std::string Uniform, HasUniform;
     bool Builtin = false;
+    // For a built-in property, the Material field it reads, resolved here from the name and type
+    // (MaterialAsset::ResolveBuiltin) so a material bind never walks MaterialAsset::Get*'s string
+    // compares. Null when the name has no field of this type: the bind falls back to Get*.
+    const std::shared_ptr<Texture>& (*GetTex)(const Material&) = nullptr;
+    glm::vec4 (*GetVal)(const Material&) = nullptr;
 };
 
 class ShaderAsset {

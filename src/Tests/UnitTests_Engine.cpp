@@ -16,6 +16,7 @@
 #include "../Renderer/SceneRenderer.h"
 #include "../Renderer/MaterialAsset.h"
 #include "../Renderer/CascadedShadowMap.h"
+#include "../Renderer/Texture.h"
 #include <filesystem>
 #include <json.hpp>
 #include <random>
@@ -357,6 +358,76 @@ static void Test_Material_HashCachePerFrame() {
     CHECK(c.Hash() == c.ComputeHash() && c.Hash() != b.Hash());
 }
 
+// The data-driven bind's redundant-bind key (custom properties included) is cached per frame like Hash():
+// an ExtraProp edit shows from the next frame, and a copy hashes its own values.
+static void Test_Material_ExtraPropsHashPerFrame() {
+    Material::NextHashFrame();
+    Material a;
+    a.ExtraProps["_Glow"] = MaterialProp{};
+    const std::uint64_t h0 = a.HashWithExtraProps();
+    CHECK(h0 != a.Hash()); // the custom property is in it
+    a.ExtraProps["_Glow"].F = 2.0f;
+    CHECK(a.HashWithExtraProps() == h0); // same frame: the cached value
+    Material::NextHashFrame();
+    CHECK(a.HashWithExtraProps() != h0);
+    Material b = a;
+    b.ExtraProps["_Glow"].F = 3.0f;
+    CHECK(b.HashWithExtraProps() != a.HashWithExtraProps());
+}
+
+// A compressed normal map becomes BC5 (x, y) with one level per mip, and every level decodes to unit-length
+// normals pointing the way the source's do: the 1x1 level is the renormalized mean, not a shortened one.
+static void Test_Texture_NormalMapBC5Renormalized() {
+    const int w = 8, h = 8;
+    std::vector<unsigned char> raw((size_t)w * h * 4);
+    std::mt19937 rng(5);
+    std::uniform_real_distribution<float> u(-0.7f, 0.7f);
+    glm::vec3 sum(0.0f);
+    std::vector<glm::vec3> src;
+    for (int i = 0; i < w * h; ++i) {
+        const glm::vec3 n = glm::normalize(glm::vec3(u(rng), u(rng), 1.0f));
+        src.push_back(n);
+        sum += n;
+        for (int c = 0; c < 3; ++c) raw[(size_t)i * 4 + c] = (unsigned char)std::lround((n[c] * 0.5f + 0.5f) * 255.0f);
+        raw[(size_t)i * 4 + 3] = 255;
+    }
+    TextureImportSettings s;
+    s.TextureType = TextureImportSettings::Type::NormalMap;
+    s.CompressionMode = TextureImportSettings::Compression::Normal;
+    const TextureCpuData d = Texture::DecodeMemory("unit-test-normal", raw, w, h, s);
+    CHECK(d.Ok && d.GLFormat == 0x8DBD /*GL_COMPRESSED_RG_RGTC2*/);
+    CHECK(d.LevelSizes.size() == 4); // 8, 4, 2, 1
+    // One BC5 channel block (8 bytes) at texel (x, y) of its 4x4.
+    auto channel = [](const unsigned char* b, int t) {
+        const int e0 = b[0], e1 = b[1];
+        std::uint64_t bits = 0;
+        for (int k = 0; k < 6; ++k) bits |= (std::uint64_t)b[2 + k] << (8 * k);
+        const int idx = (int)((bits >> (3 * t)) & 7);
+        float pal[8] = {(float)e0, (float)e1};
+        if (e0 > e1) for (int k = 1; k <= 6; ++k) pal[k + 1] = ((7 - k) * e0 + k * e1) / 7.0f;
+        else { for (int k = 1; k <= 4; ++k) pal[k + 1] = ((5 - k) * e0 + k * e1) / 5.0f; pal[6] = 0.0f; pal[7] = 255.0f; }
+        return pal[idx] / 255.0f * 2.0f - 1.0f;
+    };
+    auto texel = [&](const unsigned char* block, int t) {
+        const float x = channel(block, t), y = channel(block + 8, t);
+        return glm::vec3(x, y, std::sqrt(std::max(1.0f - x * x - y * y, 0.0f)));
+    };
+    // Level 0, the first block's 16 texels: close to the source, and x, y inside the unit circle.
+    const unsigned char* level0 = d.Pixels.data();
+    for (int t = 0; t < 16; ++t) {
+        const glm::vec3 n = texel(level0, t);
+        CHECK(glm::dot(glm::vec2(n), glm::vec2(n)) <= 1.0f + 1e-3f);
+        CHECK(glm::dot(n, src[(size_t)(t / 4) * w + (t % 4)]) > 0.99f);
+    }
+    // The 1x1 level: the mean direction, at full length (x, y as far out as the normalized mean's).
+    size_t offset = 0;
+    for (size_t l = 0; l + 1 < d.LevelSizes.size(); ++l) offset += d.LevelSizes[l];
+    const glm::vec3 last = texel(d.Pixels.data() + offset, 0);
+    const glm::vec3 mean = glm::normalize(sum);
+    CHECK(glm::dot(last, mean) > 0.998f);
+    CHECK(std::abs(glm::length(glm::vec2(last)) - glm::length(glm::vec2(mean))) < 0.03f);
+}
+
 // BoneAnimChannel::Finalize's fast paths (constant tracks, evenly spaced keys) sample exactly what the general
 // search does, including at and between keys, outside the clip, and on unevenly spaced tracks.
 static void Test_BoneAnimChannel_FinalizeMatchesSearch() {
@@ -395,6 +466,8 @@ static void Test_BoneAnimChannel_FinalizeMatchesSearch() {
 void RegisterEngineTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"BoneAnimChannel::FinalizeMatchesSearch", Test_BoneAnimChannel_FinalizeMatchesSearch});
     tests.push_back({"Material::HashCachePerFrame", Test_Material_HashCachePerFrame});
+    tests.push_back({"Material::ExtraPropsHashPerFrame", Test_Material_ExtraPropsHashPerFrame});
+    tests.push_back({"Texture::NormalMapBC5Renormalized", Test_Texture_NormalMapBC5Renormalized});
     tests.push_back({"CascadedShadowMap::SliceTestMatchesAllPairs", Test_CascadedShadowMap_SliceTestMatchesAllPairs});
     tests.push_back({"World::RaycastToleratesRenderableWithoutModel", Test_World_RaycastToleratesRenderableWithoutModel});
     tests.push_back({"PrefabInstance::HandWrittenComponentsDiffByJsonKey", Test_PrefabInstance_HandWrittenComponentsDiffByJsonKey});
