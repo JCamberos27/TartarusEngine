@@ -73,6 +73,9 @@ void UpdatePending(World& world, AssetLibrary& assets);
 // wears - a scene saved before the wardrobe's body changed. Each outfit is checked once per wardrobe
 // generation; UpdatePending calls this.
 void RefreshBodies(World& world, AssetLibrary& assets);
+// The same for one outfit, now (Apply: may load on the spot): for a body about to be read, like a soldier built from
+// its prefab. True if it was rebuilt.
+bool RefreshBody(World& world, AssetLibrary& assets, entt::entity root);
 // Drops every waiting change for `world`: its registry is being replaced (scene load, undo, redo, Stop).
 void CancelPending(const World& world);
 // Puts `item` (a model path; "" = take it off) in `slot`.
