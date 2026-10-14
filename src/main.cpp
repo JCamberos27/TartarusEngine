@@ -683,6 +683,7 @@ int main(int argc, char** argv) {
                     const auto& imp = j["importer"];
                     s.GlobalScale = imp.value("globalScale", 1.0f);
                     s.ImportSkeleton = imp.value("importSkeleton", true);
+                    s.SkinIgnoresMeshNode = imp.value("skinIgnoresMeshNode", false);
                     s.SourceUpAxis = Model::ParseUpAxis(imp.value("upAxis", std::string("Y")));
                     if (imp.contains("pivotOffset") && imp["pivotOffset"].is_array() && imp["pivotOffset"].size() == 3)
                         s.PivotOffset = {imp["pivotOffset"][0].get<float>(), imp["pivotOffset"][1].get<float>(), imp["pivotOffset"][2].get<float>()};
@@ -709,9 +710,20 @@ int main(int argc, char** argv) {
             int skinned = 0, overflow = 0, most = 0;
             float lost = 0.0f;
             model->SkinStats(skinned, overflow, most, lost);
-            if (skinned)
+            if (skinned) {
                 std::printf("[ModelReport]   skin: %d vertices, %d over %d influences (most %d), largest weight lost %.1f%%\n", skinned,
                             overflow, MAX_BONE_INFLUENCE, most, lost * 100.0f);
+                // Where the rig's landmarks sit in the bind pose: pieces of one body must agree on these.
+                std::string bones;
+                for (const char* name : {"root", "pelvis", "hand_l", "hand_r"}) {
+                    glm::mat4 n(1.0f);
+                    if (!model->NodeTransform(name, n)) continue;
+                    char buf[96];
+                    std::snprintf(buf, sizeof buf, " %s %.3f %.3f %.3f", name, n[3][0], n[3][1], n[3][2]);
+                    bones += buf;
+                }
+                if (!bones.empty()) std::printf("[ModelReport]   bind:%s\n", bones.c_str());
+            }
         }
         std::cout << "[ModelReport] " << files.size() << " models, " << failed << " failed" << std::endl;
         return failed ? 1 : 0;
@@ -3295,6 +3307,8 @@ int main(int argc, char** argv) {
                                                      (session.AimHeld!=0) || (npcTest && npcTest->Aiming()), 0.0f,
                                                      player.Grounded);
                         }
+                        // This frame's recoil on the view (Tick just worked it out), not last frame's.
+                        firstPersonPresentation.RefreshViewKick(player.Cam);
                     }
                     player.Cam.Fov = firstPersonPresentation.WorldFov(playBaseFov);
                 }

@@ -56,6 +56,7 @@ bool ParseModelImporter(const json& j, ModelImportSettings& s) {
     if (imp.contains("excludeNodes") && imp["excludeNodes"].is_array())
         for (const auto& n : imp["excludeNodes"])
             if (n.is_string() && !n.get<std::string>().empty()) s.ExcludeNodes.push_back(n.get<std::string>());
+    s.SkinIgnoresMeshNode = imp.value("skinIgnoresMeshNode", false);
     s.ClipTrims.clear();
     if (imp.contains("clipTrims") && imp["clipTrims"].is_array())
         for (const auto& t : imp["clipTrims"])
@@ -716,6 +717,7 @@ void AssetLibrary::SetModelSettings(const std::string& path, const ModelImportSe
     if (settings.PivotOffset != glm::vec3(0.0f))
         imp["pivotOffset"] = {settings.PivotOffset.x, settings.PivotOffset.y, settings.PivotOffset.z};
     if (!settings.ExcludeNodes.empty()) imp["excludeNodes"] = settings.ExcludeNodes;
+    if (settings.SkinIgnoresMeshNode) imp["skinIgnoresMeshNode"] = true;
     if (!settings.ClipTrims.empty()) {
         json trims = json::array();
         for (const auto& t : settings.ClipTrims) trims.push_back({{"clip", t.Clip}, {"start", t.StartSeconds}, {"end", t.EndSeconds}});

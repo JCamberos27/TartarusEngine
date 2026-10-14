@@ -587,6 +587,54 @@ void UpdatePending(World& world, AssetLibrary& assets) {
         }
         if (ready.After) ready.After(world, assets, ready.Root);
     }
+    RefreshBodies(world, assets);
+}
+
+namespace {
+// Whether `root`'s body parts aren't what its wardrobe builds for what it wears now: a scene or prefab saved before the
+// wardrobe's body changed (the arms split into arms and hands) still has the old parts.
+bool BodyStale(World& world, AssetLibrary& assets, entt::entity root) {
+    const auto& reg = world.Registry;
+    const auto pieces = Pieces(world, root);
+    if (pieces.empty()) return false; // not built yet (or by hand): nothing to bring up to date
+    Result r;
+    const auto cat = CatalogFor(world, assets, root, r);
+    if (!cat) return false;
+    std::map<std::string, std::string> want, have;
+    for (const auto& p : Wardrobe::Resolve(cat->W, cat->Items, CurrentRequest(world, root)).Pieces)
+        if (p.BodyPart) want[p.Slot] = Lower(Rel(p.Path));
+    for (const auto& [slot, e] : pieces)
+        if (const auto& p = reg.get<OutfitPieceComponent>(e); p.Flags & OutfitPieceBodyPart) {
+            const auto* rc = reg.try_get<RenderableComponent>(e);
+            have[slot] = rc && rc->ModelRef ? Lower(Rel(rc->ModelRef->Path())) : std::string();
+        }
+    return want != have;
+}
+} // namespace
+
+void RefreshBodies(World& world, AssetLibrary& assets) {
+    auto& reg = world.Registry;
+    std::vector<entt::entity> stale;
+    for (auto [root, outfit] : reg.view<CharacterOutfitComponent>().each()) {
+        if (outfit.BodyChecked == WardrobeGeneration()) continue;
+        if (IsPending(world, root)) continue; // a change on its way builds the body anyway
+        outfit.BodyChecked = WardrobeGeneration();
+        if (BodyStale(world, assets, root)) stale.push_back(root);
+    }
+    for (entt::entity root : stale) {
+        Log::Info("Character Outfit: rebuilding an outfit whose body parts predate its wardrobe.");
+        Submit(world, assets, root, CurrentRequest(world, root));
+    }
+}
+
+bool RefreshBody(World& world, AssetLibrary& assets, entt::entity root) {
+    auto* outfit = world.Registry.try_get<CharacterOutfitComponent>(root);
+    if (!outfit) return false;
+    outfit->BodyChecked = WardrobeGeneration();
+    if (!BodyStale(world, assets, root)) return false;
+    const Result r = Apply(world, assets, root, CurrentRequest(world, root));
+    if (!r.Ok) Log::Warn("Character Outfit: " + r.Error);
+    return r.Ok;
 }
 
 namespace {

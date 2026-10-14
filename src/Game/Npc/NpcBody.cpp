@@ -78,13 +78,18 @@ bool NpcBody::Start(World& world, entt::entity root) {
         }
     }
     if (m_Driver == entt::null) { m_Pieces.clear(); m_Models.clear(); return false; }
-    // The arms piece: the weapon hold's source (its shoulders and elbows are worked out on it).
-    for (size_t k = 0; k < m_Pieces.size(); ++k)
-        if (const auto* nc = reg.try_get<NameComponent>(m_Pieces[k])) {
-            std::string name = nc->Name;
-            for (char& c : name) c = (char)std::tolower((unsigned char)c);
-            if (name == "arms") { m_ArmsIndex = (int)k; break; }
-        }
+    // The arms piece: the weapon hold's source (its shoulders and elbows are worked out on it). A long sleeve
+    // leaves a modular body only its hands: then those (the same skeleton).
+    m_ArmsIndex = -1;
+    for (const char* want : {"arms", "hands"}) {
+        for (size_t k = 0; k < m_Pieces.size() && m_ArmsIndex < 0; ++k)
+            if (const auto* nc = reg.try_get<NameComponent>(m_Pieces[k])) {
+                std::string name = nc->Name;
+                for (char& c : name) c = (char)std::tolower((unsigned char)c);
+                if (name == want) m_ArmsIndex = (int)k;
+            }
+        if (m_ArmsIndex >= 0) break;
+    }
     for (entt::entity e : m_Pieces) {
         auto& ac = reg.get<AnimatorControllerComponent>(e);
         ac.Driver = e == m_Driver ? entt::null : m_Driver;

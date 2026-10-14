@@ -1255,6 +1255,23 @@ void TestIKSetGlobalsBatch() {
     }
 }
 
+// A hitch past the fixed step's catch-up cap is dropped, not carried: the hitch frame runs the cap's steps and the
+// next ordinary frame no extra one.
+void TestPhysicsHitchCatchUp() {
+    World world;
+    PhysicsWorld::Create(world);
+    const float fixed = PhysicsWorld::GetDebugStats().FixedStep;
+    PhysicsWorld::Step(1.0f, world, {});
+    CHECK(PhysicsWorld::GetDebugStats().Substeps == 4);
+    PhysicsWorld::Step(fixed * 0.5f, world, {});
+    CHECK(PhysicsWorld::GetDebugStats().Substeps == 0);
+    PhysicsWorld::Step(fixed * 0.6f, world, {});
+    CHECK(PhysicsWorld::GetDebugStats().Substeps == 1);
+    PhysicsWorld::Step(fixed * 2.0f, world, {});
+    CHECK(PhysicsWorld::GetDebugStats().Substeps == 2);
+    PhysicsWorld::Destroy();
+}
+
 // The per-bone hitboxes: while active the unscoped queries (the player's shots) hit them and skip the capsule; a scoped one
 // (an NPC's) is the other way round; a ray over body parts says which part; a ragdoll's parts answer the same ray.
 void TestNpcBodyParts() {
@@ -2478,13 +2495,16 @@ void TestWardrobe() {
       ],
       "bodies": {
         "Male": {"parts": [{"part": "Torso", "model": "Body/Torso.fbx"}, {"part": "Legs", "model": "Body/Legs.fbx"},
-                           {"part": "Feet", "model": "Body/Feet.fbx"}],
+                           {"part": "Feet", "model": "Body/Feet.fbx"}, {"part": "Arms", "model": "Body/Arms.fbx"},
+                           {"part": "Hands", "model": "Body/Hands.fbx"}],
                  "alternates": {"ShoeFeet": "Body/Feet_Shoes.fbx"},
                  "races": [{"name": "European", "head": "Body/Head.fbx", "skin": ""},
                            {"name": "Afro", "head": "Body/Head_Afro.fbx", "skin": "_Afro", "parts": {"Torso": "Body/Torso_Afro.fbx"}}]},
-        "Female": {"parts": [{"part": "Torso", "model": "F/Body.fbx"}], "races": [{"name": "European", "head": "F/Head.fbx"}]}
+        "Female": {"parts": [{"part": "Torso", "model": "F/Body.fbx"}, {"part": "Arms", "model": "F/Arms_Full.fbx"}],
+                   "races": [{"name": "European", "head": "F/Head.fbx"}]}
       },
       "covers": [{"slot": "Pants", "nameLacksAll": ["Shorts"], "hide": ["Legs"]},
+                 {"slot": "Top", "gender": "Male", "nameHasAny": ["Hoodie"], "hide": ["Arms"]},
                  {"slot": "Shoes", "skin": false, "replace": "Feet", "with": "ShoeFeet"}],
       "clears": [{"slot": "Hat", "pathHasAny": ["/WithHair/"], "clear": "Hair"},
                  {"slot": "Outerwear", "nameHasAny": ["Shirt"], "clear": "Top"}],
@@ -2494,7 +2514,8 @@ void TestWardrobe() {
     Wardrobe::Wardrobe w;
     std::string err;
     CHECK(Wardrobe::Parse(text, w, &err));
-    CHECK(w.Bodies[0].Parts.size() == 3 && w.Bodies[0].Parts[0].second == "assets/Chars/Body/Torso.fbx");
+    CHECK(w.Bodies[0].Parts.size() == 5 && w.Bodies[0].Parts[0].second == "assets/Chars/Body/Torso.fbx");
+    CHECK(w.Covers.size() == 3 && w.Covers[1].Gender == (int)Wardrobe::Gender::Male && w.Covers[0].Gender == -1);
     CHECK(!Wardrobe::Parse("{}", w, &err) && !err.empty());
     CHECK(Wardrobe::Parse(text, w, &err));
 
@@ -2569,6 +2590,21 @@ void TestWardrobe() {
     req.Items = {{"Top", "assets/Chars/Clothing/Male/Tops/SKM_Tshirt.fbx"}};
     r = Wardrobe::Resolve(w, cat, req);
     CHECK(pieceFor(r, "Top").empty() && Wardrobe::Stem(pieceFor(r, "Torso")) == "Body");
+    // A long sleeve takes a modular body's arms off and leaves its hands; a T-shirt keeps both. The rule is the male
+    // body's: the female one's arms carry their hands.
+    CHECK(add("Clothing/Male/Tops/SKM_Hoodie.fbx") && add("Clothing/Female/Tops/SKM_F_Hoodie.fbx"));
+    req = Wardrobe::Request{};
+    req.Race = "European";
+    req.Items = {{"Top", "assets/Chars/Clothing/Male/Tops/SKM_Hoodie.fbx"}};
+    r = Wardrobe::Resolve(w, cat, req);
+    CHECK(pieceFor(r, "Arms").empty() && Wardrobe::Stem(pieceFor(r, "Hands")) == "Hands");
+    req.Items = {{"Top", "assets/Chars/Clothing/Male/Tops/SKM_Tshirt.fbx"}};
+    r = Wardrobe::Resolve(w, cat, req);
+    CHECK(!pieceFor(r, "Arms").empty() && !pieceFor(r, "Hands").empty());
+    req.Sex = Wardrobe::Gender::Female;
+    req.Items = {{"Top", "assets/Chars/Clothing/Female/Tops/SKM_F_Hoodie.fbx"}};
+    r = Wardrobe::Resolve(w, cat, req);
+    CHECK(!pieceFor(r, "Top").empty() && Wardrobe::Stem(pieceFor(r, "Arms")) == "Arms_Full");
 
     // Skin: the race's variant when it exists, else the base.
     const Wardrobe::RaceDef& afro = w.Bodies[0].Races[1];
@@ -3055,6 +3091,13 @@ void TestFirstPersonBodyValidate() {
     r = FPBody::Validate(in);
     CHECK(has(r, "'TurnAngle'") && has(r, "state 'Stop'") && has(r, "'foot_l'") && has(r, "'Airborne' tag") && has(r, "'Arms' (Arms Piece)"));
     CHECK(r.front().Level == FPBody::Severity::Warning);
+    // A modular body's hands are part of the arms (under a long sleeve they are all there is of them).
+    in.PieceNames = {"Quantum_Head", "Hands"};
+    CHECK(!has(FPBody::Validate(in), "(Arms Piece)"));
+    FirstPersonBodyComponent armsCfg;
+    CHECK(FPBody::IsArmsPiece(armsCfg, "Arms") && FPBody::IsArmsPiece(armsCfg, "Quantum_HANDS") && !FPBody::IsArmsPiece(armsCfg, "Torso"));
+    armsCfg.HandsPiece.clear();
+    CHECK(!FPBody::IsArmsPiece(armsCfg, "Hands") && FPBody::IsArmsPiece(armsCfg, "Arms"));
 
     // Features that are off need nothing: a bare controller is fine for a body with every option off.
     FirstPersonBodyComponent plain;
@@ -5663,6 +5706,7 @@ int RunUnitTests(const char* filter) {
         {"NpcHitRegions", TestNpcHitRegions},
         {"IKSetGlobalsBatch", TestIKSetGlobalsBatch},
         {"NpcBodyParts", TestNpcBodyParts},
+        {"PhysicsHitchCatchUp", TestPhysicsHitchCatchUp},
         {"PhysicsWorldSync", TestPhysicsWorldSync},
         {"PhysicalSky", TestPhysicalSky},
         {"AiMath", TestAiMath},
