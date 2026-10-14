@@ -213,12 +213,24 @@ public:
     }
 
     // Skins whenever the model has bones: the current clip's pose while one plays, otherwise the
-    // bind pose (#98 — a rig with no clip playing used to render in raw mesh space).
-    void UploadBoneMatrices(Shader& shader) const;
+    // bind pose (#98 — a rig with no clip playing used to render in raw mesh space). Returns true when
+    // PreSkin already skinned this pose this frame: the draw then reads those vertices (uUseSkinning 2)
+    // and each sub-mesh's uSkinBase must be set (m_PreSkin.Base + its first vertex).
+    bool UploadBoneMatrices(Shader& shader) const;
     // Call once at the top of each rendered frame: starts the next slice of the bone-palette ring
     // UploadBoneMatrices writes into (each skinned model's palette goes up once per frame and
     // every later pass that frame - shadow cascades, depth pre-pass, main pass - rebinds it).
     static void BeginRenderFrame();
+    // Skins every listed model's vertices once, on the GPU, into one buffer the later passes read
+    // (PreSkin.comp.glsl). A character used to be skinned again by the vertex shader of every pass that
+    // drew it: each sun cascade run, spot light, point cube face, the SSAO pre-pass and each camera
+    // view. Call it after the frame's poses are final and before its first pass; a model it leaves
+    // out, or whose pose changes after it, skins in the vertex shader as before. Models without bones
+    // are skipped. TARTARUS_NO_PRESKIN=1 turns it off (for A/B benches).
+    static void PreSkin(const std::vector<Model*>& models);
+    // --smoke-test: skins random vertices (none to eight influences) with PreSkin's shader and compares them with the
+    // CPU's blend. False, with the reason, when they differ or the shader doesn't build.
+    static bool PreSkinSelfTest(std::string& why);
     bool IsPlayingAnimation() const { return m_Anim.Clip >= 0; }
     // Has the current clip run out? True when nothing is set to play, false while a wrapping clip
     // runs, and - unlike IsPlayingAnimation(), which a ClampForever clip never clears - true for a
@@ -474,6 +486,17 @@ private:
         int Count = 0;
     };
     mutable BoneUpload m_BoneUpload;
+    // Where PreSkin put this frame's skinned vertices, and for which pose and palette.
+    struct PreSkinRange {
+        std::uint64_t Frame = ~0ull, Version = 0;
+        const void* Palette = nullptr;
+        int Count = 0;
+        int Base = 0;
+    };
+    mutable PreSkinRange m_PreSkin;
+    // The palette this pose skins with (null when there is none to upload) and its bone count.
+    const std::vector<glm::mat4>* SkinPalette(int& count) const;
+    void BindBonePalette(const std::vector<glm::mat4>& palette, int count) const; // into this frame's bone ring
     mutable std::vector<glm::mat4> m_NodeGlobals; // scratch, one per AnimNode
     // ApplyLocalPose fills only the globals the skinning palette needs (bones and their ancestors: a
     // clothing piece carries the whole ~350-node skeleton to skin a few dozen of it); NodeTransform

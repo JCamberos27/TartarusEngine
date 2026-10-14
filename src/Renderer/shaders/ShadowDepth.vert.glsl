@@ -18,11 +18,17 @@ uniform int uCascadeFirst;
 uniform mat4 uCascadeViewProj[4];
 uniform int uUseSkinning;
 layout(std430, binding = 1) readonly buffer BoneBlock { mat4 uBones[]; }; // shared with the model VS (#104)
+// uUseSkinning 2: skinned once this frame already (Model::PreSkin, SkinnedVertex.glsl); only the position is read.
+layout(std430, binding = 26) readonly buffer SkinnedBlock { uint uSkinned[]; };
+uniform int uSkinBase;
 out vec2 vUV;
 out vec3 vWorldPos; // used by the local-light (spot/point) depth FS; the sun FS ignores it
 void main() {
     vec4 localPos = vec4(aPos, 1.0);
-    if (uUseSkinning == 1) {
+    if (uUseSkinning == 2) {
+        uint s = uint(gl_VertexID + uSkinBase) * 5u;
+        localPos = vec4(uintBitsToFloat(uSkinned[s]), uintBitsToFloat(uSkinned[s + 1u]), uintBitsToFloat(uSkinned[s + 2u]), 1.0);
+    } else if (uUseSkinning == 1) {
         int boneIds[8] = int[8](aBoneIDs.x, aBoneIDs.y, aBoneIDs.z, aBoneIDs.w, aBoneIDs2.x, aBoneIDs2.y, aBoneIDs2.z, aBoneIDs2.w);
         float boneWeights[8] = float[8](aWeights.x, aWeights.y, aWeights.z, aWeights.w, aWeights2.x, aWeights2.y, aWeights2.z, aWeights2.w);
         mat4 skinMat = mat4(0.0);
