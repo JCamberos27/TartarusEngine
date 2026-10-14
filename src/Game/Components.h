@@ -658,6 +658,9 @@ struct FirstPersonBodyComponent {
     // Weapon Arms holds it is drawn with the gun in the view-model pass, so its hands sit exactly
     // where the first-person rig's do.
     std::string ArmsPiece = "Arms";
+    // A modular body's hands, when they are a piece of their own (a long sleeve hides the arms and leaves
+    // the hands): treated as part of the arms - drawn with them, hidden with them.
+    std::string HandsPiece = "Hands";
     // How much of the camera's pitch the spine takes (0 = the body stays upright, 1 = the chest
     // tilts as far as the view), so the shoulders follow the view and the hands stay in reach.
     float SpineAim = 0.0f;
@@ -836,6 +839,7 @@ struct CharacterOutfitComponent {
     int LinkedVersion = -1;          // runtime: the Version whose pieces were last linked to the driving animator
     std::uint64_t HideWaiting = 0;   // runtime: the pieces the hiding is waiting on coverage for ...
     std::uint64_t HideRetryFrame = 0;// ... and when UpdateHiding looks again
+    int BodyChecked = -1;            // runtime: the wardrobe generation its body parts were last checked against
 };
 
 // One piece of a Character Outfit (a child of the object with the Character Outfit component). Set by

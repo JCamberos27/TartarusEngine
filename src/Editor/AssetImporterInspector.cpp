@@ -188,6 +188,9 @@ void AssetImporterInspector::DrawModelSettings(ModelImportSettings& settings, bo
     Row("Import Skeleton", "Reads bone weights so the mesh can be posed/animated. Off\nimports every mesh as static geometry, baked at its bind pose -\ncheaper, but Import Animation has nothing to play without this.");
     isDirty |= EditorUIPrimitives::Checkbox("##ImportSkeleton", &settings.ImportSkeleton);
 
+    Row("Skin Ignores Mesh Node", "For an export whose skinned mesh shows up offset from its skeleton: the skin\nalready places the vertices, but the mesh node still carries a transform, applied\non top. On skips that node transform for skinned meshes. Apply to reimport.");
+    isDirty |= EditorUIPrimitives::Checkbox("##SkinIgnoresMeshNode", &settings.SkinIgnoresMeshNode);
+
     // Clip trims: cut a clip to a range of its take.
     Row("Clip Trims", "Cut a clip to a range (seconds) of the source take: only that range plays, and it is the\nclip's length everywhere (loops, blend trees, root motion, the Animator's analysis).\nEnd 0 = to the end of the take. Apply to reimport.");
     {

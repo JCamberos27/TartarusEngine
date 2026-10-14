@@ -65,6 +65,10 @@ struct ModelImportSettings {
     // Nodes left out of the import, with everything under them: kit files that ship every variant
     // stacked in one place (a door with ten handles, ten lock sets and every house number).
     std::vector<std::string> ExcludeNodes;
+    // Skinned meshes skip their own node's transform: for an export whose skin already binds the vertices where
+    // they belong while the mesh node still carries an offset (the modular Quantum arms and hands: they sat
+    // 19 cm ahead of the wrists). Off = the node's frame is baked in, as Assimp hands it over.
+    bool SkinIgnoresMeshNode = false;
     MaterialMode MaterialImportMode = MaterialMode::ImportEmbedded;
     // Clips cut to a range of the source (seconds): the take is longer than the motion you want, or holds
     // two motions. Only the range plays, and it is the clip's length everywhere (looping, blend trees,

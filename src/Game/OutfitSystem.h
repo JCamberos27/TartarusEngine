@@ -69,6 +69,10 @@ bool IsPending(const World& world, entt::entity root, int* done = nullptr, int* 
 // Applies every waiting change whose assets have all loaded. Call once per frame, after
 // AssetLibrary::PumpAsync and before UpdateHiding.
 void UpdatePending(World& world, AssetLibrary& assets);
+// Rebuilds (through Submit) every outfit whose body parts aren't what its wardrobe now builds for what it
+// wears - a scene saved before the wardrobe's body changed. Each outfit is checked once per wardrobe
+// generation; UpdatePending calls this.
+void RefreshBodies(World& world, AssetLibrary& assets);
 // Drops every waiting change for `world`: its registry is being replaced (scene load, undo, redo, Stop).
 void CancelPending(const World& world);
 // Puts `item` (a model path; "" = take it off) in `slot`.

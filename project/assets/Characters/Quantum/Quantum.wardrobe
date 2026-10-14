@@ -21,7 +21,8 @@
     "Male": {
       "parts": [
         { "part": "Torso",      "model": "Models/European/Quantum_Torso.fbx" },
-        { "part": "Arms",       "model": "FirstPerson/Quantum_Arms_FP.fbx" },
+        { "part": "Arms",       "model": "Models/European/Quantum_Arms.fbx" },
+        { "part": "Hands",      "model": "Models/European/Quantum_Hands.fbx" },
         { "part": "Legs",       "model": "Models/European/Quantum_Legs.fbx" },
         { "part": "Feet",       "model": "Models/European/Quantum_Feet.fbx" },
         { "part": "UnderPants", "model": "Models/European/Quantum_UnderPants.fbx" }
@@ -58,7 +59,11 @@
     { "slot": "Pants", "skin": true, "hide": ["Legs", "UnderPants"] },
     { "slot": "Pants", "skin": false, "nameHasAny": ["Shorts", "Breeches"], "hide": ["UnderPants"] },
     { "slot": "Shoes", "skin": false, "nameLacksAll": ["Flip_Flops"], "replace": "Feet", "with": "ShoeFeet" },
-    { "slot": "Shoes", "skin": true, "hide": ["Feet"] }
+    { "slot": "Shoes", "skin": true, "hide": ["Feet"] },
+    { "slot": "Top", "gender": "Male", "nameHasAny": ["SKM_Hoodie", "SKM_Shirt_Classic"], "hide": ["Arms"] },
+    { "slot": "Outerwear", "gender": "Male",
+      "nameHasAny": ["SKM_Bomber_", "SKM_Coat_", "SKM_Jacket_Classic", "SKM_Jacket_Shirt", "SKM_Jacket_Winter",
+                     "SKM_Jeans_Jacket", "SKM_Leather_Jacket", "SKM_Puffer_Jacket"], "hide": ["Arms"] }
   ],
 
   "tags": [
