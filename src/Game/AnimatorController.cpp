@@ -115,6 +115,15 @@ float ParamValue(const std::vector<AnimatorParam>& params, const std::string& na
     return fallback;
 }
 
+// ParamValue(params, prefix + name) without building the string: this runs per layer per rig per frame.
+float ParamValue(const std::vector<AnimatorParam>& params, std::string_view prefix, const std::string& name, float fallback) {
+    for (const auto& p : params)
+        if (p.Name.size() == prefix.size() + name.size() && p.Name.compare(0, prefix.size(), prefix) == 0 &&
+            p.Name.compare(prefix.size(), name.size(), name) == 0)
+            return p.Value;
+    return fallback;
+}
+
 AnimatorController::Motion MotionFromJson(const json& m) {
     AnimatorController::Motion out;
     if (!m.is_object()) return out;
@@ -892,7 +901,7 @@ float AnimatorLayerWeight(const AnimatorController& ctrl, const AnimatorControll
     if (layer < 0 || layer >= (int)ctrl.Layers.size()) return 0.0f;
     if (layer == 0) return 1.0f;
     const auto& l = ctrl.Layers[layer];
-    float weight = l.Weight * std::clamp(ParamValue(ac.Params, "LayerWeight:" + l.Name, 1.0f), 0.0f, 1.0f);
+    float weight = l.Weight * std::clamp(ParamValue(ac.Params, "LayerWeight:", l.Name, 1.0f), 0.0f, 1.0f);
     if (!l.WeightCurve.empty()) {
         int source = layer;
         if (!l.WeightCurveLayer.empty()) {
