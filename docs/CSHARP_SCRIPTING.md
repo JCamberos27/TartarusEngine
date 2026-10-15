@@ -8,17 +8,13 @@ The complete gameplay and editor API, with examples and supported boundaries, is
 in [SCRIPTING_API.md](SCRIPTING_API.md). Editor sources under `assets/Editor` compile separately
 into `Tartarus.Editor.dll`; their windows and commands appear in the C# Tools panel.
 
-Player and weapon gameplay now runs in `project/assets/Scripts/PlayerController.cs` and
-`WeaponController.cs`. The editor, renderer, PhysX integration, animation evaluation, IK,
-audio and procedural pose evaluation remain C++. Pellet spread, ray queries and impact-force
-rules also run in the C# weapon controller, with native physics and effect services.
-`FirstPersonPresentation` is the native
-presentation adapter; it sends animator tags/events and descriptor values to the C# weapon
-controller and executes its animation/audio/recoil commands.
-
-Project C# also owns locomotion actions. Enemy AI, spawning and squads, health (the native
-Health component), damage, player vitals, the Play session's input and respawn, the gravity gun,
-combat HUD, dev panel, sound policy, outfit choices and content-pack catalogs are native C++. Native adapters execute geometric, animation, audio and rendering work.
+All sample gameplay is native C++: player movement (`src/Game/Player.cpp`), weapon fire,
+reload, chamber, pellet and loadout rules (`src/Game/WeaponRules.cpp` and
+`FirstPersonPresentation::FireShot`), body locomotion actions (`src/Game/BodyLocomotion.cpp`,
+graph template filled by `FirstPersonBodyController.cpp`), enemy AI, spawning and squads,
+health, damage, player vitals, the Play session, the gravity gun, combat HUD, dev panel, sound
+policy, outfit choices and content-pack catalogs. C# remains available for placed-object
+`MonoBehaviour` scripts and editor tools.
 
 ## Build and edit
 
