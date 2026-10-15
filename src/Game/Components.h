@@ -1174,6 +1174,15 @@ struct TransformControllerComponent {
     float Elapsed = 0.0f;
 };
 
+// Hit points. Rounds that hit an entity with one take Current down (Combat/Damage.h); at 0 it
+// is dead. Current is runtime-only: it starts at Max each Play.
+struct HealthComponent {
+    float Max = 100.0f;
+    bool Invulnerable = false;
+    // --- runtime (not serialized)
+    float Current = -1.0f; // < 0 = not started yet (reads as Max)
+};
+
 // Where an enemy soldier appears in Play (Npc/NpcSpawner.h). The enemy squad is built from these.
 struct NpcSpawnComponent {
     int Weapon = 0;        // 0 = AKS-74U, 1 = Remington 870, 2 = either, picked at random
