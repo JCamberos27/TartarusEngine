@@ -244,70 +244,6 @@ internal unsafe struct NpcBrainFrame {
     public NpcIntentFrame Intent;
 }
 [StructLayout(LayoutKind.Sequential)]
-internal unsafe struct VitalsFrame {
-    public float MaxHealth;
-    public float RegenDelay;
-    public float RegenRate;
-    public float RespawnDelay;
-    public float SpawnProtection;
-    public float Health;
-    public float SinceHit;
-    public float DeadTime;
-    public float Protection;
-    public float DamageTaken;
-    public float HurtFlash;
-    public float Hitmarker;
-    public float Dt;
-    public float Amount;
-    public float Taken;
-    public float Health01;
-    public float RespawnProgress;
-    public float DeathFade;
-    public float DeathDrop;
-    public float DeathRoll;
-    public float EyeHeight;
-    public float CameraYaw;
-    public int Operation;
-    public int GodMode;
-    public int Dead;
-    public int JustDied;
-    public int DiedThisTick;
-    public int Deaths;
-    public int HitmarkerKill;
-    public int HitmarkerHead;
-    public int Indicators;
-    public int WantsRespawn;
-    public Vector3 Source;
-    public fixed float SourceX[8];
-    public fixed float SourceY[8];
-    public fixed float SourceZ[8];
-    public fixed float Age[8];
-    public fixed float Strength[8];
-    public fixed float ArcAngle[8];
-    public fixed float ArcAlpha[8];
-}
-[StructLayout(LayoutKind.Sequential)]
-internal unsafe struct DamageFrame {
-    public float Distance;
-    public float Start;
-    public float End;
-    public float MinScale;
-    public float Damage;
-    public float HeadMultiplier;
-    public float LimbMultiplier;
-    public float HitY;
-    public float FootY;
-    public float Height;
-    public float Yaw;
-    public float Result;
-    public int Operation;
-    public int Zone;
-    public int Region;
-    public int Part;
-    public Vector3 Camera;
-    public Vector3 Source;
-}
-[StructLayout(LayoutKind.Sequential)]
 internal unsafe struct AiRuleFrame {
     public float Distance;
     public float Angle;
@@ -410,53 +346,6 @@ internal unsafe struct AiChoiceFrame {
     public int Change;
     public int Delay;
     public fixed float Scores[11];
-}
-[StructLayout(LayoutKind.Sequential)]
-internal unsafe struct NpcDamageFrame {
-    public float Now;
-    public float Amount;
-    public float Health;
-    public float MaxHealth;
-    public float LastHurt;
-    public float Suppression;
-    public float TimeOnTarget;
-    public float Awareness;
-    public float LastSeen;
-    public float Uncertainty;
-    public float ReactionLeft;
-    public float LimpUntil;
-    public float StaggerUntil;
-    public float NextThink;
-    public float LimpTime;
-    public float HeavyHitDamage;
-    public float StaggerTime;
-    public float WoundChance;
-    public float Random;
-    public float Shove;
-    public int Operation;
-    public int UseHealth;
-    public int Entity;
-    public int Dead;
-    public int Wounded;
-    public int Attacker;
-    public int Zone;
-    public int Part;
-    public int Hits;
-    public int Known;
-    public int Visible;
-    public int WoundRolled;
-    public int Dummy;
-    public int Ignore;
-    public int Kill;
-    public int Flinch;
-    public int NeedRandom;
-    public int BecomeWounded;
-    public int CallWounded;
-    public Vector3 Direction;
-    public Vector3 LastHurtFrom;
-    public Vector3 LastKnown;
-    public Vector3 PlayerFeet;
-    public Vector3 PushVelocity;
 }
 [StructLayout(LayoutKind.Sequential)]
 internal unsafe struct NpcMemoryFrame {
@@ -949,39 +838,6 @@ internal unsafe struct NpcShotPoseFrame {
     public int Weapon;
     public nint Services;
     public nint Context;
-}
-[StructLayout(LayoutKind.Sequential)]
-internal unsafe struct GameSessionFrame {
-    private int _HasInput; public bool HasInput {get=>_HasInput!=0;set=>_HasInput=value?1:0;}
-    private int _GravityLive; public bool GravityLive {get=>_GravityLive!=0;set=>_GravityLive=value?1:0;}
-    private int _Dead; public bool Dead {get=>_Dead!=0;set=>_Dead=value?1:0;}
-    private int _Equipped; public bool Equipped {get=>_Equipped!=0;set=>_Equipped=value?1:0;}
-    private int _FirePressed; public bool FirePressed {get=>_FirePressed!=0;set=>_FirePressed=value?1:0;}
-    private int _FireHeld; public bool FireHeld {get=>_FireHeld!=0;set=>_FireHeld=value?1:0;}
-    private int _ReloadHeld; public bool ReloadHeld {get=>_ReloadHeld!=0;set=>_ReloadHeld=value?1:0;}
-    private int _Invisible; public bool Invisible {get=>_Invisible!=0;set=>_Invisible=value?1:0;}
-    private int _InfiniteAmmo; public bool InfiniteAmmo {get=>_InfiniteAmmo!=0;set=>_InfiniteAmmo=value?1:0;}
-    private int _PlayerValid; public bool PlayerValid {get=>_PlayerValid!=0;set=>_PlayerValid=value?1:0;}
-    private int _Armed; public bool Armed {get=>_Armed!=0;set=>_Armed=value?1:0;}
-    private int _JustDied; public bool JustDied {get=>_JustDied!=0;set=>_JustDied=value?1:0;}
-    private int _WantsRespawn; public bool WantsRespawn {get=>_WantsRespawn!=0;set=>_WantsRespawn=value?1:0;}
-    private int _NpcHit; public bool NpcHit {get=>_NpcHit!=0;set=>_NpcHit=value?1:0;}
-    private int _AliveHit; public bool AliveHit {get=>_AliveHit!=0;set=>_AliveHit=value?1:0;}
-    private int _Killed; public bool Killed {get=>_Killed!=0;set=>_Killed=value?1:0;}
-    private int _Head; public bool Head {get=>_Head!=0;set=>_Head=value?1:0;}
-    private int _AimHeld; public bool AimHeld {get=>_AimHeld!=0;set=>_AimHeld=value?1:0;}
-    private int _SprintHeld; public bool SprintHeld {get=>_SprintHeld!=0;set=>_SprintHeld=value?1:0;}
-    public Vector3 Position;
-    public Vector3 Velocity;
-    public Vector3 Camera;
-    public Vector3 RespawnFeet;
-    public float Scroll;
-    public float EyeHeight;
-    public int Operation;
-    public int Commands;
-    public int SlotDirection;
-    public int Ammo;
-    public int Magazine;
 }
 [StructLayout(LayoutKind.Sequential)]
 internal unsafe struct NpcShotEffectFrame {

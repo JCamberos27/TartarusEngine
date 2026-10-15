@@ -10,11 +10,8 @@ internal static unsafe class GameIntegration
         if(data==0)return false;
         switch(operation)
         {
-            case "vitals" when size==Unsafe.SizeOf<VitalsFrame>(): VitalsRules.Update(ref *(VitalsFrame*)data);return true;
-            case "damage" when size==Unsafe.SizeOf<DamageFrame>(): DamageRules.Update(ref *(DamageFrame*)data);return true;
             case "ai.rules" when size==Unsafe.SizeOf<AiRuleFrame>(): AiRules.Update(ref *(AiRuleFrame*)data);return true;
             case "ai.choose" when size==Unsafe.SizeOf<AiChoiceFrame>(): NpcDecisions.Choose(ref *(AiChoiceFrame*)data);return true;
-            case "npc.damage" when size==Unsafe.SizeOf<NpcDamageFrame>(): NpcDamageRules.Update(ref *(NpcDamageFrame*)data);return true;
             case "npc.behaviour" when size==Unsafe.SizeOf<NpcBrainFrame>(): NpcBehaviour.Update((NpcBrainFrame*)data);return true;
             case "npc.perception" when size==Unsafe.SizeOf<NpcPerceptionFrame>():NpcPerception.Update(ref *(NpcPerceptionFrame*)data);return true;
             case "npc.squads" when size==Unsafe.SizeOf<NpcSquadFrame>():NpcSquads.Update(ref *(NpcSquadFrame*)data);return true;
@@ -26,7 +23,6 @@ internal static unsafe class GameIntegration
             case "npc.player-noise" when size==Unsafe.SizeOf<NpcPlayerNoiseFrame>():NpcLifecycle.Noise(ref *(NpcPlayerNoiseFrame*)data);return true;
             case "npc.respawn" when size==Unsafe.SizeOf<NpcRespawnFrame>():NpcLifecycle.Respawn(ref *(NpcRespawnFrame*)data);return true;
             case "npc.shot-pose" when size==Unsafe.SizeOf<NpcShotPoseFrame>():NpcLifecycle.Pose(ref *(NpcShotPoseFrame*)data);return true;
-            case "session" when size==Unsafe.SizeOf<GameSessionFrame>():GameSession.Update(ref *(GameSessionFrame*)data);return true;
             case "npc.shot-effects" when size==Unsafe.SizeOf<NpcShotEffectFrame>():NpcShotEffects.Update(ref *(NpcShotEffectFrame*)data);return true;
             case "weapon.loadout" when size==Unsafe.SizeOf<WeaponLoadoutFrame>():WeaponLoadout.Update(ref *(WeaponLoadoutFrame*)data);return true;
             default:return false;
@@ -35,8 +31,6 @@ internal static unsafe class GameIntegration
     public static string Request(string operation,string json) => operation switch
     {
         "body.roles" or "body.graph" or "body.pick" => BodyGraphAuthoring.Request(operation,json),
-        "bone-region" => System.Text.Json.JsonSerializer.Serialize(DamageRules.BoneRegion(System.Text.Json.JsonSerializer.Deserialize<string>(json))),
-        "health.create" or "health.remove" or "health.kill" or "health.read" => HealthRules.Request(operation,json),
         "npc.name" or "npc.spawn-plan" => NpcLifecycle.Request(operation,json),
         _ => throw new ArgumentException("Unknown project request: "+operation)
     };
