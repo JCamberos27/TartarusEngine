@@ -16,7 +16,7 @@ rules also run in the C# weapon controller, with native physics and effect servi
 presentation adapter; it sends animator tags/events and descriptor values to the C# weapon
 controller and executes its animation/audio/recoil commands.
 
-Project C# also owns enemy AI/spawning/squads and locomotion actions. Health (the native
+Project C# also owns locomotion actions. Enemy AI, spawning and squads, health (the native
 Health component), damage, player vitals, the Play session's input and respawn, the gravity gun,
 combat HUD, dev panel, sound policy, outfit choices and content-pack catalogs are native C++. Native adapters execute geometric, animation, audio and rendering work.
 
