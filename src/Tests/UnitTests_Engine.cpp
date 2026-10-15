@@ -5,6 +5,9 @@
 #include "../Game/GravityGun.h"
 #include "../Game/Scripting/ScriptRuntime.h"
 #include "../Game/CombatHud.h"
+#include "../Game/DevPanel.h"
+#include "../Game/AI/NpcDirector.h"
+#include "../Game/Combat/PlayerVitals.h"
 #include "../Game/Combat/CombatFx.h"
 #include "../Renderer/WeaponFxRenderer.h"
 #include "AssetLibrary.h"
@@ -130,6 +133,26 @@ static void Test_FxHud_SettingsDrivePureHelpers() {
     CHECK(CombatHud::NextStreak(s, 1, 3.9f) == 1);
     s.FeedLife = 9.0f;
     CHECK(!CombatHud::FeedExpired(s, 4.6f) && CombatHud::FeedExpired(s, 9.5f));
+}
+
+// The kill feed and the dev panel's reset are native again (they were project C# for a while).
+static void Test_CombatHud_KillFeedAndDevReset() {
+    NpcDirector npcs;
+    CombatHud hud;
+    hud.Reset();
+    for (int i = 0; i < 7; ++i) hud.OnKill(npcs, 1000u + (unsigned)i, i == 0);
+    CHECK(hud.Kills() == 7 && hud.FeedRows() == 5); // the feed keeps the last five rows
+    hud.Reset();
+    CHECK(hud.Kills() == 0 && hud.FeedRows() == 0);
+
+    DevPanel panel;
+    panel.Open = panel.InfiniteAmmo = panel.Invisible = panel.AiOverlay = true;
+    PlayerVitals vitals;
+    vitals.GodMode = true;
+    npcs.Frozen = npcs.HoldFire = true;
+    panel.Reset(vitals, npcs);
+    CHECK(!panel.Open && !panel.InfiniteAmmo && !panel.Invisible && !panel.AiOverlay);
+    CHECK(!vitals.GodMode && !npcs.Frozen && !npcs.HoldFire);
 }
 
 static glm::mat4 RandomAffine(std::mt19937& rng) {
@@ -474,6 +497,7 @@ void RegisterEngineTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"FxHudSettings::RoundTrip", Test_FxHudSettings_RoundTrip});
     tests.push_back({"BloodSettings::RoundTrip", Test_BloodSettings_RoundTrip});
     tests.push_back({"GravityGun::AssistReach", Test_GravityGun_AssistReach});
+    tests.push_back({"CombatHud kill feed and DevPanel reset", Test_CombatHud_KillFeedAndDevReset});
     tests.push_back({"Model::AffinePaletteMatchesGeneric", Test_Model_AffinePaletteMatchesGeneric});
     tests.push_back({"Model::AxisCorrection", Test_Model_AxisCorrection});
     tests.push_back({"SceneRenderer::WarmShaderVariantsSkipsShaderless", Test_SceneRenderer_WarmShaderVariantsSkipsShaderless});

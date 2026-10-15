@@ -21,7 +21,8 @@ public:
 
     // A new Play: everything back to normal.
     void Reset(PlayerVitals& vitals, NpcDirector& npcs);
-    void Keys(PlayerVitals& vitals,NpcDirector& npcs);
+    // F7 the panel, F8 god mode, F9 the AI overlay: call once per Play frame.
+    void Keys(PlayerVitals& vitals, NpcDirector& npcs);
 
     struct Context {
         World* WorldPtr = nullptr;

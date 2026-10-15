@@ -83,14 +83,6 @@ schema={'PlayerFrame': {'float': 'Dt Yaw Pitch MoveX MoveY LookPitch LookYaw Siz
                           'LimbMultiplier HitY FootY Height Yaw Result',
                  'int': 'Operation Zone Region Part',
                  'Vec3': 'Camera Source'},
- 'GravityFrame': {'float': 'Dt Yaw Scroll GrabRange AssistRange AssistConeDeg '
-                           'ScrollTurnDeg MinThrowSpeed MaxThrowSpeed '
-                           'ChargeTime Backspin HoldDistance Charge HoldYaw '
-                           'RotationW PredictSpeed',
-                  'int': 'Operation Left Right Alt Control LeftPrev RightPrev '
-                         'Charging HaveHoldPoint Handle Held',
-                  'Vec3': 'Eye Forward CameraRight PrevHoldPoint HoldVelocity '
-                          'Rotation'},
  'AiRuleFrame': {'float': 'Distance Angle Speed Suppression Alertness Focal '
                           'Peripheral Range BaseRate Dt Now Rate Awareness '
                           'LastSeen LastHeard Uncertainty TimeOnTarget '
@@ -124,8 +116,6 @@ schema={'PlayerFrame': {'float': 'Dt Yaw Pitch MoveX MoveY LookPitch LookYaw Siz
                            'NeedRandom BecomeWounded CallWounded',
                     'Vec3': 'Direction LastHurtFrom LastKnown PlayerFeet '
                             'PushVelocity'}}
-schema['NpcHudFrame']={'Vec3':'Feet','float':'Health Awareness Suppression','bool32':'Dead Known Visible Crouched Attack Flank Push','int':'Behaviour Role','ptr':'Name Why'}
-schema['CombatHudFrame']={'Vec3':'Camera','float':'Now RealTime CameraYaw FeedLife StreakWindow','bool32':'Head PlayerDead Armed Reloading God InfiniteAmmo AiOverlay','int':'Operation Unit Ammo Magazine NpcCount DebugFloatCount Kills Rows Streak Result','ptr':'FireMode Npcs DebugLines','float16':'ViewProjection'}
 schema['NpcMemoryFrame']={'bool32':'Known Visible','float':'Awareness LastSeen LastHeard Uncertainty','Vec3':'LastKnown LastVelocity'}
 schema['NpcPlayerFrame']={'bool32':'Valid Crouched Dead Fired Reloading Sprinting','float':'Height Radius Health','Vec3':'Eye Feet Velocity Forward'}
 schema['NpcNoiseFrame']={'Vec3':'Position','float':'Radius Loudness Time','int':'Source'}
@@ -140,14 +130,12 @@ schema['BodyMotionFrame']={'Vec3':'Velocity WishVelocity Move LastDir StartDir S
 schema['NpcCallMemberFrame']={'Vec3':'Feet Eye GlanceAt','float':'LastCallout GlanceUntil Awareness NextChatter','bool32':'Exists Dummy Dead Fire Known Reloading Suppress TriggerHeld VcReloading VcCovering VcSuspicious','int':'Index Squad Behaviour'}
 schema['NpcCallChannelFrame']={'float':'BusyUntil RespAt','int':'OnAirPriority','bool32':'RespPending','float20':'LastEvent'}
 schema['NpcCalloutsFrame']={'NpcPlayerFrame':'Player','float':'Now','bool32':'PlayerWasDead','int':'Operation Caller Kind Random MemberCount ChannelCount','ptr':'Members Channels'}
-schema['WardrobeRandomFrame']={'ptr':'Input Context Services'}
 schema['NpcSpawnFrame']={'Vec3':'Position Feet Eye LookPoint','float':'Now Yaw AimYaw NextLook NextThink Radius StandCylinder AgentRadius AgentHeight JogSpeed RunSpeed','int':'Index Weapon Random Count','ptr':'Members'}
 schema['NpcLifeFrame']={'NpcIntentFrame':'Intent','NpcMemoryFrame':'Memory','Vec3':'Feet Eye Want Velocity Push Displacement Origin End','float':'Now Dt WoundedAt DiedAt BleedOutTime CorpseTime CrawlSpeed LimpScale LimpUntil StaggerUntil Speed Gravity FallSpeed BlockedTime MeleeAt MeleeTime PlayerDistance FootIKRange StandCylinder CrouchCylinder Suppression CowerUntil Skill Morale UnseenFor UnseenTime','bool32':'Dead Wounded Kill Despawn Crouch Aim Sprint FootIK FootIKEverywhere OnScreen Grounded CallManDown OverCap','int':'Operation','ptr':'Services Context'}
 schema['NpcPlayerNoiseFrame']={'NpcPlayerFrame':'Player','NpcNoiseFrame':'Gun Step Reload','Vec3':'Post','float':'Now Dt FootstepTimer Still','int':'Count'}
 schema['NpcRespawnPointFrame']={'Vec3':'Position','bool32':'Seen'}
 schema['NpcRespawnFrame']={'NpcPlayerFrame':'Player','float':'Now Timer','int':'Alive Wanted Count Best','bool32':'Ready Discard','ptr':'Points'}
 schema['NpcShotPoseFrame']={'NpcPlayerFrame':'Player','NpcIntentFrame':'Intent','NpcMemoryFrame':'Memory','Vec3':'Feet Eye Velocity SeenPoint BlindOffset CoverPosition Peek CameraOffset Shot','float':'Now Dt AimYaw AimPitch BlindLift MeleeAt MeleeTime TimeOnTarget Suppression Skill Difficulty LastHurt Roll','bool32':'Alive HighCover TriggerHeld FirstShot Wounded HaveShot','int':'VisiblePoints Weapon','ptr':'Services Context'}
-schema['DevFrame']={'bool32':'Open InfiniteAmmo Invisible AiOverlay God Frozen HoldFire HaveBloodLab BloodLab','float':'Difficulty TimeScale','int':'Operation Count Alive Known Wanted Spawns Result','ptr':'Members Services Context'}
 schema['GameSessionFrame']={'bool32':'HasInput GravityLive Dead Equipped FirePressed FireHeld ReloadHeld Invisible InfiniteAmmo PlayerValid Armed JustDied WantsRespawn NpcHit AliveHit Killed Head','Vec3':'Position Velocity Camera RespawnFeet','float':'Scroll EyeHeight','int':'Operation Commands SlotDirection Ammo Magazine'}
 schema['FoleyFrame']['float']+=' Dt PrevVy Vy MinStepSpeed FootLiftMoving FootLiftHeight'
 schema['FoleyFrame']['bool32']+=' Grounded PrevGrounded Jumped HaveFootHeights StepsFromFeet Landing ResetFeet ResetSteps UseFeet UseDistance'
