@@ -232,9 +232,20 @@ inline ImVec4 Mix(ImVec4 a, ImVec4 b, float t) {
 inline float UserStripeW()  { return Px(3.0f); }
 constexpr float UserWashAlpha = 0.10f; // gradient wash, at its strongest (left) end
 constexpr float UserFlatAlpha = 0.13f; // flat wash
+// Black Glass is monochrome: the colours picked for rows, folders, component headers and tabs show
+// in white there (the stripe, the glyph and the wash keep their shape, just not their hue). The
+// Glass style is the one whose panels are translucent, which both the host and TartarusEditor.dll
+// can see through the shared ImGui context.
+inline bool MonochromeUserColors() {
+    return ImGui::GetCurrentContext() != nullptr && ImGui::GetStyle().Colors[ImGuiCol_WindowBg].w < 0.999f;
+}
+// A packed user colour as it should draw: itself, or (Black Glass) white with its alpha kept.
+inline unsigned UserPacked(unsigned packed) {
+    return (packed != 0 && MonochromeUserColors()) ? ((packed & 0xFF000000u) | 0x00E6E8E6u) : packed;
+}
 // An IM_COL32 user colour as a float colour, alpha forced opaque.
 inline ImVec4 UserColor(unsigned packed) {
-    ImVec4 c = ImGui::ColorConvertU32ToFloat4(packed);
+    ImVec4 c = ImGui::ColorConvertU32ToFloat4(UserPacked(packed));
     c.w = 1.0f;
     return c;
 }
