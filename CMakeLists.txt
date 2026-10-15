@@ -739,6 +739,12 @@ install(FILES
 #
 # Library/ and screenshots/ are per-user output, not content. .shutter.wav is the exception -
 # the Screenshots folder's own sound, which is tracked and has to come along.
+#
+# The allowed folders also hold third-party files a developer fetched from the shared Drive
+# (project/external_assets.csv lists them): the recorded sounds under assets/Audio/<category>/,
+# the Apartment's baked textures and the prop packs' meshes and textures under assets/Props/.
+# Absent on CI, present locally - so they are excluded here too. What remains is what git
+# tracks (the Apartment meshes, the prop materials and .meta sidecars, ...).
 foreach(_projdir scenes scripts assets/Scripts assets/Audio assets/Environments assets/Props assets/Materials assets/Test
                  assets/Animations/Controllers)
   if(EXISTS "${CMAKE_SOURCE_DIR}/project/${_projdir}")
@@ -747,7 +753,10 @@ foreach(_projdir scenes scripts assets/Scripts assets/Audio assets/Environments 
             PATTERN "*.recovery.json" EXCLUDE
             PATTERN "obj" EXCLUDE
             PATTERN "bin" EXCLUDE
-            PATTERN "*.json.bak"      EXCLUDE)
+            PATTERN "*.json.bak"      EXCLUDE
+            REGEX "/assets/Audio/[^/]+/.*\\.wav$" EXCLUDE
+            REGEX "/assets/Environments/Apartment/Textures/.*\\.png$" EXCLUDE
+            REGEX "/assets/Props/.*\\.(png|fbx)$" EXCLUDE)
   endif()
 endforeach()
 install(FILES
