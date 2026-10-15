@@ -1,4 +1,3 @@
-#include "../Scripting/NpcDefinitions.h"
 #include "../Scripting/GameFrames.h"
 #include "../Scripting/ScriptRuntime.h"
 #include <json.hpp>
@@ -35,7 +34,7 @@ ImpactAudio& ImpactAudio::Get() {
 
 void ImpactAudio::Start(World& world) {
     Stop();
-    Scripting::SyncNpcDefinitions(world);m_T=Scripting::DefaultImpactAudioDefinition();
+    m_T=ImpactAudioComponent{};
     if (const auto first = world.Registry.view<ImpactAudioComponent>(); first.begin() != first.end()) { // the first one counts
         const entt::entity e = *first.begin();
         m_T = world.Registry.get<ImpactAudioComponent>(e);

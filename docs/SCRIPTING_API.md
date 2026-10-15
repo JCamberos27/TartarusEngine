@@ -242,9 +242,8 @@ and cleared by the next animation update. Native parameters store integer values
 * `Light`: `type` (`Point`, `Spot`, `Directional`), `color` (Vector3 RGB), `intensity`, `range`.
 * `Collider`: `halfExtents` and its complete reflected `data` view.
 * `AudioSource`: `clip`, `volume`, `loop`, `playOnStart` and `data`. Use Audio for explicit voices.
-* Project `Tartarus.Gameplay.PlayerDefinition` is a script with authored movement, view,
-  health, ability and weapon-slot fields. It replaces the native First Person Controller
-  component and its former SDK wrapper.
+* First Person Controller holds the player's authored movement, view, ability and weapon-slot
+  fields. Read and edit it through `GetNativeComponent` like any other native component.
 
 Camera, Light and other ReflectedComponents all expose `NativeType` and `data`. These modify
 native **authored data**, not every subsystem's already-created resources. Changing a body
@@ -266,19 +265,18 @@ Label, Kind, Min, Max, Tooltip and EnumLabels. Kind values follow the native ref
 Native enum data is an **integer index**, not a C# enum name. Prefer stable Key over display Label.
 
 ```csharp
-var definition = gameObject.GetComponent<Tartarus.Gameplay.WeaponDefinition>();
-if (definition != null) Debug.Log(definition.Description);
+if (gameObject.HasNativeComponent("Weapon Definition"))
+    Debug.Log(gameObject.GetNativeComponent("Weapon Definition").Get<string>("Description"));
 
 foreach (var component in ComponentCatalog.GetAll())
     foreach (var field in component.Fields)
         Debug.Log($"{component.Name}.{field.Key}: {field.Tooltip}");
 ```
 
-`Tartarus.Gameplay.WeaponDefinition` is a project C# script in `assets/Scripts/WeaponDefinition.cs`,
-not a native component or Runtime SDK wrapper. Its `Description`, `AnimationSet` and muzzle
-settings use ordinary script serialization and the project's custom Inspector. Native weapon
-presentation resolves its C# defaults/overrides and consumes an effect snapshot. Older native
-Weapon Definition data converts to a script on load; saving writes the C# representation.
+Weapon Definition is a native component on the weapon prefab's root. Its description,
+animation set, gameplay, damage and muzzle settings serialize like any native component and
+use the project's custom Inspector. Prefabs and scenes saved while it was the C# script
+`Tartarus.Gameplay.WeaponDefinition` convert to the native component on load.
 
 `Get<T>(field)` deserializes the native value; use the exact corresponding type.
 `Set<T>(field,value)` validates type, finite numeric data, enum index and native field bounds.

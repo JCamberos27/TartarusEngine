@@ -1,6 +1,5 @@
 #include "../Scripting/GameFrames.h"
 #include "../Scripting/ScriptRuntime.h"
-#include "../Scripting/NpcDefinitions.h"
 #include "../Scripting/ScriptComponent.h"
 #include <json.hpp>
 #include <stdexcept>
@@ -205,7 +204,8 @@ void NpcDirector::ApplySettings(const entt::registry& reg) {
     if (auto settings = reg.view<const SquadSettingsComponent>(); settings.begin() != settings.end()) {
         const auto& s = reg.get<const SquadSettingsComponent>(*settings.begin());
         m_Cfg=s;
-    } else m_Cfg=Scripting::DefaultSquadDefinition();
+    } else m_Cfg=SquadSettingsComponent{};
+    m_Cfg.SquadSize=std::clamp(m_Cfg.SquadSize,0,16);
     m_SquadSize=m_Cfg.SquadSize;m_RespawnDelay=m_Cfg.RespawnDelay;m_Difficulty=m_Cfg.Difficulty;m_DamageScale=m_Cfg.NpcDamageScale;m_Respawn=m_Cfg.Respawn;
     if (auto rag = reg.view<const RagdollSettingsComponent>(); rag.begin() != rag.end()) m_RagdollCfg = reg.get<const RagdollSettingsComponent>(*rag.begin());
     else m_RagdollCfg = RagdollSettingsComponent();
@@ -213,7 +213,7 @@ void NpcDirector::ApplySettings(const entt::registry& reg) {
 
 bool NpcDirector::Start(World& world, AssetLibrary& assets, const FirstPersonControllerComponent* playerConfig) {
     (void)assets;
-    Stop(world);Scripting::SyncNpcDefinitions(world);
+    Stop(world);
     auto& reg = world.Registry;
     std::vector<std::pair<int, SpawnPoint>> found;
     for (auto e : reg.view<NpcSpawnComponent>()) {
@@ -223,11 +223,11 @@ bool NpcDirector::Start(World& world, AssetLibrary& assets, const FirstPersonCon
         SpawnPoint s;
         s.Pos = glm::vec3(w[3]);
         s.Yaw = NpcYawOf(glm::vec3(w[2]), 0.0f);
-        s.Weapon = c.Weapon;
-        s.Squad = c.Squad;
-        s.Skill = c.Skill;
-        s.Brain = c.Brain;
-        s.OutfitSeed = c.OutfitSeed;
+        s.Weapon = std::clamp(c.Weapon, 0, 2);
+        s.Squad = std::clamp(c.Squad, 0, 16);
+        s.Skill = std::clamp(c.Skill, 0.0f, 1.0f);
+        s.Brain = std::clamp(c.Brain, 0, 1);
+        s.OutfitSeed = std::clamp(c.OutfitSeed, 0, 100000);
         // NPC_TEST_BARE=1 (--npc-test): every soldier bare, the animation and the skinning seen without clothing.
         static const bool allBare = [] {
             char* e = nullptr;

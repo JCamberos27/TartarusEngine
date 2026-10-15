@@ -1,14 +1,12 @@
 #include "WeaponPrefab.h"
 #include "WeaponAttachments.h"
-#include "ScriptComponent.h"
+#include "ProjectComponentMigration.h"
+#include "ComponentJson.h"
 #include "ProjectPaths.h"
 #include "AssetDatabase.h"
 #include "ScriptReferences.h"
 #include "Components.h"
 #include "FirstPersonAnimation.h"
-#include "ScriptRuntime.h"
-#include <optional>
-#include <limits>
 #include "SceneSerializer.h"
 #include "World.h"
 #include "Log.h"
@@ -23,26 +21,18 @@
 namespace Scripting {
 namespace {
 
-constexpr const char* kWeaponClass="Tartarus.Gameplay.WeaponDefinition";
-std::optional<nlohmann::json> WeaponFields(const nlohmann::json& node) {
-    if(!node.contains("C# Script")) return std::nullopt;
-    const auto& script=node.at("C# Script");
-    if(script.value("Class",std::string{})==kWeaponClass && script.value("Enabled",true))
-        return nlohmann::json::parse(script.value("Fields JSON",std::string("{}")));
-    const auto extra=nlohmann::json::parse(script.value("Scripts",std::string("[]")));
-    if(!extra.is_array())throw std::runtime_error("C# Scripts must be an array");
-    for(const auto& slot:extra)
-        if(slot.value("class",std::string{})==kWeaponClass && slot.value("enabled",true))
-            return slot.value("fields",nlohmann::json::object());
-    return std::nullopt;
+constexpr const char* kAttachmentComponents[] = {"Muzzle Attachment", "Grip Attachment", "Optic Attachment"};
+bool IsAttachment(const nlohmann::json& node) {
+    for (const char* key : kAttachmentComponents) if (node.contains(key)) return true;
+    return false;
 }
 
 // Every soldier's gun reads its prefab when it spawns (its animation set, muzzle effects, gameplay stats and particles):
-// parsed and resolved once per file version, C# build and asset database revision - it was ~12 ms of file reading and JSON
+// parsed and resolved once per file version and asset database revision - it was ~12 ms of file reading and JSON
 // parsing per respawn, mid-fight. Only results that succeeded are kept.
 struct CachedPrefab {
     std::filesystem::file_time_type Time{};
-    std::uint64_t Code = ~0ull, Assets = ~0ull;
+    std::uint64_t Assets = ~0ull;
     std::shared_ptr<const nlohmann::json> Json;
     bool HaveResolve = false;
     std::string Set;
@@ -57,23 +47,34 @@ CachedPrefab& PrefabEntry(const std::string& prefab) {
     std::error_code ec;
     const auto time = std::filesystem::last_write_time(std::filesystem::u8path(path), ec);
     CachedPrefab& c = cache[path];
-    if (c.Time != time || c.Code != CodeGeneration() || c.Assets != AssetDatabase::Revision()) {
+    if (c.Time != time || c.Assets != AssetDatabase::Revision()) {
         c = CachedPrefab{};
         c.Time = time;
-        c.Code = CodeGeneration();
         c.Assets = AssetDatabase::Revision();
     }
     return c;
 }
 // The prefab's JSON, parsed once per version (null when it can't be opened; a parse error throws, as before).
+// A prefab saved while weapons were C# scripts reads as the native components it holds now.
 std::shared_ptr<const nlohmann::json> PrefabJson(const std::string& prefab) {
     CachedPrefab& c = PrefabEntry(prefab);
     if (!c.Json) {
         std::ifstream file(ProjectPaths::Resolve(prefab));
         if (!file) return nullptr;
-        c.Json = std::make_shared<const nlohmann::json>(nlohmann::json::parse(file));
+        auto json = nlohmann::json::parse(file);
+        for (const char* collection : {"empties", "models", "boxes"})
+            if (json.contains(collection)) for (auto& node : json.at(collection)) ConvertScriptDefinitions(node);
+        c.Json = std::make_shared<const nlohmann::json>(std::move(json));
     }
     return c.Json;
+}
+// The prefab's Weapon Definition block (null when it has none).
+const nlohmann::json* WeaponBlock(const nlohmann::json& prefab) {
+    for (const char* collection : {"empties", "models", "boxes"})
+        if (prefab.contains(collection))
+            for (const auto& node : prefab.at(collection))
+                if (const auto it = node.find("Weapon Definition"); it != node.end()) return &*it;
+    return nullptr;
 }
 
 nlohmann::json ParticleFragment(const nlohmann::json& prefab) {
@@ -91,26 +92,14 @@ nlohmann::json ParticleFragment(const nlohmann::json& prefab) {
                 transformNode["scale"] = node.value("size", nlohmann::json::array({1,1,1}));
             }
             nodes.emplace(id, std::move(transformNode));
-            if (weapon < 0 && (node.contains("Weapon Definition") || WeaponFields(node))) weapon = id;
+            if (weapon < 0 && node.contains("Weapon Definition")) weapon = id;
         }
     }
     Json fragment = {{"formatVersion", prefab.value("formatVersion", 4)}, {"empties", Json::array()}};
     if (weapon < 0) return fragment;
     std::unordered_set<int> needed;
     std::unordered_set<int> attachments;
-    for (const auto& [id, node] : nodes) {
-        if (!node.contains("C# Script")) continue;
-        const auto& script = node.at("C# Script");
-        const auto className = script.value("Class", std::string{});
-        if (className == "Tartarus.Gameplay.MuzzleAttachment" || className == "Tartarus.Gameplay.GripAttachment" ||
-            className == "Tartarus.Gameplay.OpticAttachment") attachments.insert(id);
-        const auto extra = Json::parse(script.value("Scripts", std::string("[]")), nullptr, false);
-        if (extra.is_array()) for (const auto& slot : extra) {
-            const auto name = slot.value("class", std::string{});
-            if (name == "Tartarus.Gameplay.MuzzleAttachment" || name == "Tartarus.Gameplay.GripAttachment" ||
-                name == "Tartarus.Gameplay.OpticAttachment") attachments.insert(id);
-        }
-    }
+    for (const auto& [id, node] : nodes) if (IsAttachment(node)) attachments.insert(id);
     std::unordered_set<int> rendered;
     for (const auto& [id, node] : nodes) {
         std::unordered_set<int> ancestors;
@@ -134,7 +123,8 @@ nlohmann::json ParticleFragment(const nlohmann::json& prefab) {
     for (int id : ordered) {
         const auto& source = nodes.at(id);
         Json node;
-        for (const char* key : {"id", "order", "parentId", "name", "position", "rotation", "scale", "active", "Particle System", "C# Script"})
+        for (const char* key : {"id", "order", "parentId", "name", "position", "rotation", "scale", "active", "Particle System", "C# Script",
+                                "Muzzle Attachment", "Grip Attachment", "Optic Attachment"})
             if (source.contains(key)) node[key] = source.at(key);
         if (rendered.count(id) && source.contains("path")) {
             for (const char* key : {"path", "pathGuid", "materials", "visible", "castShadows"})
@@ -171,35 +161,37 @@ void WeaponAttachments::Load(World& world, entt::entity root, std::array<int, 3>
     m_Selected = {{-1, -1, -1}};
     if (!world.Registry.valid(root)) return;
     std::vector<entt::entity> ordered;
-    for (auto e : world.Registry.view<CSharpScriptComponent>()) if (Below(world, e, root)) ordered.push_back(e);
+    auto collect = [&](auto view) { for (auto e : view) if (Below(world, e, root)) ordered.push_back(e); };
+    collect(world.Registry.view<MuzzleAttachmentComponent>());
+    collect(world.Registry.view<GripAttachmentComponent>());
+    collect(world.Registry.view<OpticAttachmentComponent>());
     std::sort(ordered.begin(), ordered.end(), [&](auto a, auto b) {
         const auto* ao = world.Registry.try_get<OrderComponent>(a);
         const auto* bo = world.Registry.try_get<OrderComponent>(b);
         return (ao ? ao->Value : (int)entt::to_integral(a)) < (bo ? bo->Value : (int)entt::to_integral(b));
     });
-    for (auto e : ordered) for (const auto& slot : GetSlots(world.Registry.get<CSharpScriptComponent>(e))) {
-        if (!slot.Enabled) continue;
-        int kind = slot.Class == "Tartarus.Gameplay.MuzzleAttachment" ? 0 :
-                   slot.Class == "Tartarus.Gameplay.GripAttachment" ? 1 :
-                   slot.Class == "Tartarus.Gameplay.OpticAttachment" ? 2 : -1;
-        if (kind < 0) continue;
-        const auto fields = nlohmann::json::parse(slot.Fields, nullptr, false);
-        if (!fields.is_object()) { Log::Warn("Weapon attachment has invalid script fields: " + slot.Class); continue; }
-        try {
+    auto add = [&](entt::entity e, int kind, const std::string& point, const std::string& flash) {
         WeaponAttachment a; a.Entity = e;
-        a.Point = Reference(world, e, fields.value(kind == 0 ? "MuzzleTransform" : "AimPoint", kind == 0 ? "Muzzle" : kind == 2 ? "Aim Point" : ""));
-        a.Flash = Reference(world, e, fields.value("MuzzleFlash", std::string("Muzzle")));
+        a.Point = Reference(world, e, point);
+        a.Flash = Reference(world, e, flash);
         // An attachment cannot accidentally reference another category's objects.
         if (!Below(world, a.Point, e)) a.Point = entt::null;
         if (!Below(world, a.Flash, e)) a.Flash = entt::null;
-        a.FiringSounds = fields.value("FiringSounds", std::string{});
-        a.FiringSoundProfile = fields.value("FiringSoundProfile", std::string{});
-        a.AimBlendTime = std::clamp(fields.value("AimBlendTime", .2f), 0.0f, 1.0f);
-        a.DefaultOptic = fields.value("DefaultOptic", false);
         if (m_Selected[kind] < 0 && !world.Registry.all_of<DeactivatedTag>(e)) m_Selected[kind] = (int)m_Items[kind].size();
         m_Items[kind].push_back(std::move(a));
-        } catch (const nlohmann::json::exception& ex) {
-            Log::Warn("Weapon attachment has invalid script fields: " + slot.Class + ": " + ex.what());
+        return &m_Items[kind].back();
+    };
+    for (auto e : ordered) {
+        if (const auto* m = world.Registry.try_get<MuzzleAttachmentComponent>(e); m && m->Enabled) {
+            auto* a = add(e, 0, m->MuzzleTransform, m->MuzzleFlash);
+            a->FiringSounds = m->FiringSounds;
+            a->FiringSoundProfile = m->FiringSoundProfile;
+        }
+        if (const auto* g = world.Registry.try_get<GripAttachmentComponent>(e); g && g->Enabled) add(e, 1, "", "");
+        if (const auto* o = world.Registry.try_get<OpticAttachmentComponent>(e); o && o->Enabled) {
+            auto* a = add(e, 2, o->AimPoint, "");
+            a->AimBlendTime = std::clamp(o->AimBlendTime, 0.0f, 1.0f);
+            a->DefaultOptic = o->DefaultOptic;
         }
     }
     for (int kind = 0; kind < 3; ++kind) {
@@ -297,51 +289,6 @@ entt::entity InstantiateWeaponParticles(World& world, AssetLibrary& assets, cons
 }
 
 
-bool MigrateLegacyWeaponDefinition(nlohmann::json& entity) {
-    using Json=nlohmann::json;
-    if(!entity.contains("Weapon Definition"))return false;
-    Json fields=Json::object();
-    for(const auto& [oldName,value]:entity.at("Weapon Definition").items()) {
-        std::string name=oldName;name.erase(std::remove(name.begin(),name.end(),' '),name.end());
-        auto converted=value;
-        if((name=="AnimationSet" || name=="FlameTexture") && value.is_string())converted={{"path",value},{"pathGuid",""}};
-        if((name=="LightColor" || name=="FlameColor") && value.is_array())
-            converted={{"X",value.at(0)},{"Y",value.at(1)},{"Z",value.at(2)}};
-        fields[name]=std::move(converted);
-    }
-    auto script=entity.value("C# Script",Json::object());
-    auto extra=Json::parse(script.value("Scripts",std::string("[]")));
-    if(!extra.is_array())throw std::runtime_error("C# Scripts must be an array");
-    bool found=false;
-    if(script.value("Class",std::string{})==kWeaponClass) {
-        auto current=Json::parse(script.value("Fields JSON",std::string("{}")));
-        for(const auto& [name,value]:fields.items())if(!current.contains(name))current[name]=value;
-        script["Fields JSON"]=current.dump();found=true;
-    }
-    for(auto& slot:extra)if(slot.value("class",std::string{})==kWeaponClass) {
-        auto current=slot.value("fields",Json::object());
-        for(const auto& [name,value]:fields.items())if(!current.contains(name))current[name]=value;
-        slot["fields"]=std::move(current);found=true;
-    }
-    if(!found && !entity.contains("C# Script")) {
-        script["Class"]=kWeaponClass;script["Source"]="assets/Scripts/WeaponDefinition.cs";
-        script["Fields JSON"]=fields.dump();script["Enabled"]=true;
-        script["Next Script ID"]=std::max(1,script.value("Next Script ID",0));
-    } else if(!found) {
-        int id=std::max(1,script.value("Next Script ID",1));
-        for(const auto& slot:extra) {
-            const int previous=slot.at("id").get<int>();
-            if(previous<1 || previous>=std::numeric_limits<int>::max())throw std::runtime_error("Invalid C# script slot ID");
-            id=std::max(id,previous+1);
-        }
-        if(id==std::numeric_limits<int>::max())throw std::runtime_error("Too many C# script slots");
-        extra.push_back({{"id",id},{"source","assets/Scripts/WeaponDefinition.cs"},{"class",kWeaponClass},{"fields",fields},{"enabled",true}});
-        script["Next Script ID"]=id+1;
-    }
-    script["Scripts"]=extra.dump();entity["C# Script"]=std::move(script);
-    entity.erase("Weapon Definition");return true;
-}
-
 bool ResolveWeaponPrefab(const std::string& prefab,std::string& animationSet,std::string& error,
                          MuzzleEffectSettings* muzzle) {
     try {
@@ -354,92 +301,46 @@ bool ResolveWeaponPrefab(const std::string& prefab,std::string& animationSet,std
         const auto jsonPtr=PrefabJson(prefab);
         if(!jsonPtr) {error="Cannot open weapon prefab: "+prefab;return false;}
         const nlohmann::json& json=*jsonPtr;
-        for(const char* collection:{"empties","models","boxes"}) {
-            if(!json.contains(collection))continue;
-            for(auto entity:json.at(collection)) {
-                MigrateLegacyWeaponDefinition(entity);
-                const auto authored=WeaponFields(entity);
-                if(!authored)continue;
-                // Defaults, field types and the authored schema belong to the project C# class.
-                std::string resolved;
-                if(!ResolveScriptFields(kWeaponClass,authored->dump(),resolved)) {
-                    error="Cannot resolve C# WeaponDefinition settings. Check the gameplay build: "+prefab;return false;
-                }
-                const auto fields=nlohmann::json::parse(resolved);
-                const auto& asset=fields.at("AnimationSet");
-                const std::string set=AssetDatabase::FollowRef(asset.value("path",std::string{}),asset.value("pathGuid",std::string{}));
-                if(set.empty()) {error="WeaponDefinition has no Animation Set: "+prefab;return false;}
-                {
-                    MuzzleEffectSettings result;
-                    result.Enabled=fields.at("MuzzleEnabled").get<bool>();
-#define READ_EFFECT(Type, Member) result.Member=fields.at(#Member).get<Type>()
-                    READ_EFFECT(float,FlashTime);READ_EFFECT(float,LightIntensity);READ_EFFECT(float,PlayerFlashScale);READ_EFFECT(float,LightRange);
-                    READ_EFFECT(int,MuzzleStyle);READ_EFFECT(float,FlameGlow);READ_EFFECT(float,FlameScale);
-                    READ_EFFECT(float,FlameLifetimeMin);READ_EFFECT(float,FlameLifetimeMax);READ_EFFECT(float,FlameLengthMin);READ_EFFECT(float,FlameLengthMax);
-                    READ_EFFECT(float,FlameWidthMin);READ_EFFECT(float,FlameWidthMax);READ_EFFECT(std::string,FlashSprite);READ_EFFECT(float,FlashLifetime);
-                    READ_EFFECT(float,FlashSizeMin);READ_EFFECT(float,FlashSizeMax);READ_EFFECT(float,FlashIntensity);READ_EFFECT(bool,SideJets);READ_EFFECT(bool,CoreGlow);
-                    READ_EFFECT(int,SparkCount);READ_EFFECT(bool,Smoke);READ_EFFECT(bool,AfterfireSmoke);READ_EFFECT(float,SmokeScale);
-                    READ_EFFECT(float,SmokeLifetimeMin);READ_EFFECT(float,SmokeLifetimeMax);READ_EFFECT(float,SmokeAlpha);
-#undef READ_EFFECT
-                    auto color=[&](const char* name) {const auto& c=fields.at(name);return glm::vec3(c.at("X").get<float>(),c.at("Y").get<float>(),c.at("Z").get<float>());};
-                    result.LightColor=color("LightColor");result.FlameColor=color("FlameColor");
-                    const auto& flame=fields.at("FlameTexture");
-                    result.FlameTexture=AssetDatabase::FollowRef(flame.value("path",std::string{}),flame.value("pathGuid",std::string{}));
-                    const auto fragment=ParticleFragment(json);
-                    for(const char* list:{"empties","models"})if(fragment.contains(list))
-                        for(const auto& node:fragment.at(list))result.PrefabParticles=result.PrefabParticles || node.contains("Particle System");
-                    CachedPrefab& entry=PrefabEntry(prefab);
-                    entry.Set=set;entry.Muzzle=result;entry.HaveResolve=true;
-                    if(muzzle)*muzzle=std::move(result);
-                }
-                animationSet=set;return true;
-            }
-        }
-        error="Prefab has no enabled C# WeaponDefinition: "+prefab;
+        const nlohmann::json* block=WeaponBlock(json);
+        if(!block) {error="Prefab has no Weapon Definition: "+prefab;return false;}
+        WeaponDefinitionComponent weapon;
+        ReadComponentJson("Weapon Definition",*block,&weapon);
+        if(weapon.AnimationSet.empty()) {error="Weapon Definition has no Animation Set: "+prefab;return false;}
+        MuzzleEffectSettings result=weapon.Muzzle;
+        const auto fragment=ParticleFragment(json);
+        for(const char* list:{"empties","models"})if(fragment.contains(list))
+            for(const auto& node:fragment.at(list))result.PrefabParticles=result.PrefabParticles || node.contains("Particle System");
+        CachedPrefab& entry=PrefabEntry(prefab);
+        entry.Set=weapon.AnimationSet;entry.Muzzle=result;entry.HaveResolve=true;
+        if(muzzle)*muzzle=std::move(result);
+        animationSet=weapon.AnimationSet;return true;
     } catch(const std::exception& e) {error="Invalid weapon prefab '"+prefab+"': "+e.what();}
     return false;
-}
-void ReadProjectWeaponGameplay(FirstPersonWeaponGameplay& result,const nlohmann::json& fields) {
-#define READ(Type, Member) result.Member=fields.at(#Member).get<Type>()
-    READ(int,Magazine);READ(float,RoundsPerMinute);READ(bool,AllowFullAuto);READ(int,BurstRounds);
-    READ(float,ReloadHoldSeconds);READ(float,RegripMin);READ(float,RegripMax);READ(float,ImpactImpulse);READ(float,ImpactMaxSpeed);
-    READ(float,BulletHoleRadius);READ(float,ZeroDistance);READ(bool,HasSightLine);READ(int,Pellets);
-    READ(float,SpreadHip);READ(float,SpreadAds);READ(bool,CycleAfterShot);READ(float,CycleDelay);
-    READ(float,Damage);READ(float,HeadMultiplier);READ(float,LimbMultiplier);READ(float,FalloffStart);READ(float,FalloffEnd);READ(float,FalloffMin);
-#undef READ
-    result.Reload=(FirstPersonWeaponGameplay::ReloadMode)fields.at("Reload").get<int>();
-    for(auto pair:{std::pair{"SightOrigin",&result.SightOrigin},std::pair{"SightDirection",&result.SightDirection}}) {
-        const auto& v=fields.at(pair.first);*pair.second={v.at("X").get<float>(),v.at("Y").get<float>(),v.at("Z").get<float>()};
-    }
 }
 bool ResolveWeaponGameplay(const std::string& prefab,FirstPersonWeaponGameplay& gameplay,std::string& error) {
     try {
         if(const CachedPrefab& cached=PrefabEntry(prefab); cached.HaveGameplay) {gameplay=cached.Gameplay;error.clear();return true;}
         const auto jsonPtr=PrefabJson(prefab);
         if(!jsonPtr){error="Cannot open weapon prefab: "+prefab;return false;}
-        const nlohmann::json& json=*jsonPtr;
-        for(const char* collection:{"empties","models","boxes"})if(json.contains(collection))for(auto entity:json.at(collection)) {
-            MigrateLegacyWeaponDefinition(entity);const auto authored=WeaponFields(entity);if(!authored)continue;
-            auto fields=*authored;
-            // Old prefabs receive stats from their old animation descriptor exactly once on read.
-            if(!fields.contains("Magazine")) {
-                const auto& ref=fields.at("AnimationSet");
-                const auto path=AssetDatabase::FollowRef(ref.value("path",std::string{}),ref.value("pathGuid",std::string{}));
-                std::ifstream descriptor(ProjectPaths::Resolve(path));
-                if(descriptor) {
-                    const auto legacy=nlohmann::json::parse(descriptor);std::string imported;
-                    if(!RequestProject("weapon.import",legacy.value("gameplay",nlohmann::json::object()).dump(),imported)){error="Legacy weapon stats could not migrate";return false;}
-                    const auto defaults=nlohmann::json::parse(imported);
-                    for(const auto& [name,value]:defaults.items())if(!fields.contains(name))fields[name]=value;
+        const nlohmann::json* block=WeaponBlock(*jsonPtr);
+        if(!block){error="Prefab has no Weapon Definition";return false;}
+        WeaponDefinitionComponent weapon;
+        // Old prefabs take their stats from their old animation descriptor's gameplay block; the prefab's own values win.
+        if(!block->contains("Magazine")) {
+            ReadComponentJson("Weapon Definition",*block,&weapon);
+            std::ifstream descriptor(ProjectPaths::Resolve(weapon.AnimationSet));
+            if(descriptor) {
+                const auto legacy=nlohmann::json::parse(descriptor);
+                if(!ImportLegacyWeaponGameplay(legacy.value("gameplay",nlohmann::json::object()),weapon.Gameplay,error)) {
+                    error="Legacy weapon stats could not migrate: "+error;return false;
                 }
             }
-            std::string resolved;
-            if(!RequestProject("weapon.resolve",fields.dump(),resolved)){error="Project weapon stats could not resolve";return false;}
-            ReadProjectWeaponGameplay(gameplay,nlohmann::json::parse(resolved));error.clear();
-            CachedPrefab& entry=PrefabEntry(prefab);entry.Gameplay=gameplay;entry.HaveGameplay=true;
-            return true;
         }
-        error="Prefab has no enabled project WeaponDefinition";
+        ReadComponentJson("Weapon Definition",*block,&weapon);
+        if(!NormalizeWeaponGameplay(weapon.Gameplay,error))return false;
+        gameplay=weapon.Gameplay;
+        CachedPrefab& entry=PrefabEntry(prefab);entry.Gameplay=gameplay;entry.HaveGameplay=true;
+        return true;
     } catch(const std::exception& why){error=why.what();}
     return false;
 }

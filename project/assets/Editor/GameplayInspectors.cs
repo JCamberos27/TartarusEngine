@@ -57,15 +57,15 @@ public sealed class FpsBodyInspector : GameplayInspector
     }
 }
 
-[CustomEditor("Tartarus.Gameplay.PlayerDefinition")]
+[CustomEditor("First Person Controller")]
 public sealed class PlayerInspector : GameplayInspector
 {
     protected override string[] Pages => ["Overview", "Movement", "Jump & Crouch", "View & Input", "Weapons", "Gravity Gun", "Health"];
-    protected override string Summary => "Project player settings for movement, view, health, weapon slots and the gravity ability.";
+    protected override string Summary => "Player settings for movement, view, health, weapon slots and the gravity ability.";
     protected override string PageFor(SerializedProperty p)
     {
-        if (Has(p, "Grab", "Assist", "ScrollTurn", "Held", "Throw", "GravityGun")) return "Gravity Gun";
-        if (Has(p, "Weapon", "Animation", "ViewModel", "CameraBone")) return "Weapons";
+        if (Has(p, "Grab", "Assist", "Scroll Turn", "Held", "Throw", "Gravity Gun")) return "Gravity Gun";
+        if (Has(p, "Weapon", "Animation", "View Model", "Camera Bone")) return "Weapons";
         if (Has(p, "Health", "Regen", "Respawn", "Protection")) return "Health";
         if (Has(p, "Jump", "Coyote", "Crouch", "Ground Snap")) return "Jump & Crouch";
         if (Has(p, "Look", "Yaw", "Pitch", "Input", "Sensitivity", "Eye", "FOV", "Field of View", "Invert")) return "View & Input";
@@ -74,11 +74,11 @@ public sealed class PlayerInspector : GameplayInspector
     }
 }
 
-[CustomEditor("Tartarus.Gameplay.WeaponDefinition")]
+[CustomEditor("Weapon Definition")]
 public sealed class WeaponInspector : GameplayInspector
 {
     protected override string[] Pages => ["Overview", "Gameplay", "Damage", "Muzzle Light", "Smoke"];
-    protected override string Summary => "This project script owns weapon stats, damage and muzzle effects. Animation Set supplies rigs, animation, recoil and camera profiles. Save prefab changes before starting Play.";
+    protected override string Summary => "Weapon stats, damage and muzzle effects. Animation Set supplies rigs, animation, recoil and camera profiles. Save prefab changes before starting Play.";
     protected override string PageFor(SerializedProperty property) => property.Group.Length > 0 ? property.Group : "Overview";
 }
 

@@ -8,7 +8,6 @@
 #include "Npc/NpcRagdoll.h"
 #include "PhysicsWorld.h"
 #include "SceneSerializer.h"
-#include "Scripting/ScriptComponent.h"
 #include "World.h"
 
 #include <glm/glm.hpp>
@@ -405,9 +404,8 @@ void TestRagdollAndSquadSettingsRoundTrip() {
     const entt::entity e = world.CreateEmptyEntity(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Rules");
     auto& rag = world.Registry.emplace<RagdollSettingsComponent>(e);
     rag.DriveFade = 0.9f; rag.CalfFlexMax = 100.0f; rag.PelvisMass = 20.0f; rag.AnatomicalLimits = false; rag.SolverPosIters = 30; rag.CorpseShotBase = 3.0f;
-    auto& scripts = world.Registry.emplace<CSharpScriptComponent>(e);
-    Scripting::Attach(scripts, "assets/Scripts/SquadDefinition.cs", "Tartarus.Gameplay.SquadDefinition");
-    scripts.Fields = R"({"HeavyHitDamage":77,"CoverReach":1.25,"MeleeTime":0.8,"FallGravity":9.81,"CorpseTime":99,"HitboxRange":30})";
+    auto& squad = world.Registry.emplace<SquadSettingsComponent>(e);
+    squad.HeavyHitDamage = 77.0f; squad.CoverReach = 1.25f; squad.MeleeTime = 0.8f; squad.FallGravity = 9.81f; squad.CorpseTime = 99.0f; squad.HitboxRange = 30.0f;
     const std::string json = SceneSerializer::SaveToString(world, assets);
     World back;
     AssetLibrary assets2;

@@ -1,7 +1,6 @@
 #include "WeaponAudio.h"
 #include "../Scripting/GameFrames.h"
 #include "../Scripting/ScriptRuntime.h"
-#include "../Scripting/NpcDefinitions.h"
 #include <stdexcept>
 
 #include "Components.h"
@@ -650,7 +649,7 @@ WeaponAudioProfile::Layer* WeaponAudioProfile::LayerByName(const std::string& na
 }
 
 WeaponAudioProfile WeaponAudioProfile::Default(const std::string& gun) {
-    WeaponAudioProfile p;p.Gun=gun;p.ApplyComponent(Scripting::DefaultWeaponAudioDefinition());
+    WeaponAudioProfile p;p.Gun=gun;p.ApplyComponent(WeaponAudioComponent{});
     const auto data=ProjectAudio("audio.default-profile",gun);
     for(auto it=data.at("layers").begin();it!=data.at("layers").end();++it)if(auto* layer=p.LayerByName(it.key()))layer->Set.Key=it.value().at("key").get<std::string>();
     p.ApplyJson(data.dump());return p;
@@ -888,7 +887,6 @@ void WeaponAudio::Start(World& world, const std::string& projectRoot) {
         }
     }
     for (const auto& value : ProjectAudio("audio.profiles")) {const auto gun=value.get<std::string>();m_Profiles[gun]=WeaponAudioProfile::Default(gun);}
-    Scripting::SyncNpcDefinitions(world);
     for (const entt::entity e : world.Registry.view<WeaponAudioComponent>()) {
         const WeaponAudioComponent& c = world.Registry.get<WeaponAudioComponent>(e);
         if (c.Gun.empty()) continue;

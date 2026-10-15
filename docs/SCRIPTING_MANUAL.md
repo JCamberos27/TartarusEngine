@@ -307,10 +307,10 @@ The default weapon prefabs are:
 * `assets/Weapons/Remington870/Remington870.prefab`
 
 Weapon assets may be licensed/local project content rather than part of a distributable
-sample. The project-owned `Tartarus.Gameplay.WeaponDefinition` C# script in
-`assets/Scripts/WeaponDefinition.cs` stores a description, `.fpsanim` asset reference and muzzle
-settings. It replaces the former native Weapon Definition component; older prefab/scene data
-converts on read and saves as an ordinary C# script without discarding other script slots.
+sample. The prefab root's native Weapon Definition component stores a description, `.fpsanim`
+asset reference, gameplay and damage numbers, and muzzle settings. Prefabs and scenes saved
+while it was a C# script (`Tartarus.Gameplay.WeaponDefinition`) convert on read, keeping the
+other script slots.
 That set bundles rigs, animator/controller settings, recoil, shake, sound identity and
 gameplay values. The native presentation path constructs the camera-bound first-person rigs.
 
@@ -348,7 +348,7 @@ causes load/reload validation to fail. Modify the existing implementation when c
 
 ### Player configuration versus behavior
 
-Use project PlayerDefinition fields for authored movement speed, gravity, capsule size, sprint,
+Use First Person Controller fields for authored movement speed, gravity, capsule size, sprint,
 crouch and jump tuning. Use PlayerController.cs when changing the algorithm itself. Its
 PlayerFrame is a per-call data contract: configuration comes in, motion state comes back out.
 Some configuration fields are copied when the native player is initialized; editing authored

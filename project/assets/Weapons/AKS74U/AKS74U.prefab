@@ -137,17 +137,6 @@
       ]
     },
     {
-      "C# Script": {
-        "Class": "Tartarus.Gameplay.MuzzleAttachment",
-        "Enabled": true,
-        "Fields JSON": "{\"FiringSoundProfile\":\"ak\",\"FiringSounds\":\"\",\"MuzzleFlash\":\"Muzzle Flash\",\"MuzzleTransform\":\"Muzzle Flash\"}",
-        "Next Script ID": 1,
-        "Scripts": "[]",
-        "Source": {
-          "path": "assets/Scripts/Weapons/Attachments/MuzzleAttachment.cs",
-          "pathGuid": "18ba5f59bdab989a"
-        }
-      },
       "id": 5,
       "name": "Default Muzzle",
       "order": 5,
@@ -167,20 +156,15 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "Muzzle Attachment": {
+        "Firing Sound Profile": "ak",
+        "Firing Sounds": "",
+        "Muzzle Flash": "Muzzle Flash",
+        "Muzzle Transform": "Muzzle Flash"
+      }
     },
     {
-      "C# Script": {
-        "Class": "Tartarus.Gameplay.GripAttachment",
-        "Enabled": true,
-        "Fields JSON": "{}",
-        "Next Script ID": 1,
-        "Scripts": "[]",
-        "Source": {
-          "path": "assets/Scripts/Weapons/Attachments/GripAttachment.cs",
-          "pathGuid": "4324a234ac1feab5"
-        }
-      },
       "id": 6,
       "name": "Default Grip",
       "order": 6,
@@ -200,20 +184,10 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "Grip Attachment": {}
     },
     {
-      "C# Script": {
-        "Class": "Tartarus.Gameplay.OpticAttachment",
-        "Enabled": true,
-        "Fields JSON": "{\"AimPoint\":\"AimPoint_Default\",\"AimBlendTime\":0.2,\"DefaultOptic\":true}",
-        "Next Script ID": 1,
-        "Scripts": "[]",
-        "Source": {
-          "path": "assets/Scripts/Weapons/Attachments/OpticAttachment.cs",
-          "pathGuid": "190ce9c4c235c4fd"
-        }
-      },
       "id": 7,
       "name": "Iron Sights",
       "order": 7,
@@ -233,7 +207,12 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "Optic Attachment": {
+        "Aim Point": "AimPoint_Default",
+        "Aim Blend Time": 0.2,
+        "Default Optic": true
+      }
     },
     {
       "Particle System": {
@@ -616,16 +595,82 @@
         1.0,
         1.0
       ],
-      "C# Script": {
-        "Source": {
-          "path": "assets/Scripts/Weapons/WeaponDefinition.cs",
-          "pathGuid": "b72f5e84c34b4013"
+      "Weapon Definition": {
+        "Afterfire Smoke": false,
+        "Animation Set": {
+          "path": "assets/Weapons/AKS74U/AKS74U.fpsanim",
+          "pathGuid": "c0ff631aac421f76"
         },
-        "Class": "Tartarus.Gameplay.WeaponDefinition",
-        "Fields JSON": "{\"AfterfireSmoke\":false,\"AnimationSet\":{\"path\":\"assets/Weapons/AKS74U/AKS74U.fpsanim\",\"pathGuid\":\"c0ff631aac421f76\"},\"CoreGlow\":true,\"Description\":\"5.45 mm rifle. 30-round magazine, selectable semi/full-auto, magazine reload.\",\"FlameColor\":{\"X\":1.0,\"Y\":0.1469999998807907,\"Z\":0.01769999973475933},\"FlameGlow\":150.0,\"FlameLengthMax\":0.3199999928474426,\"FlameLengthMin\":0.1599999964237213,\"FlameLifetimeMax\":0.17499999701976776,\"FlameLifetimeMin\":0.125,\"FlameScale\":1.75,\"FlameTexture\":{\"path\":\"assets/Effects/Muzzle/T_MuzzleFlame.png\",\"pathGuid\":\"80898ac73b45551f\"},\"FlameWidthMax\":0.05999999865889549,\"FlameWidthMin\":0.03999999910593033,\"FlashIntensity\":14.0,\"FlashLifetime\":0.06499999761581421,\"FlashSizeMax\":0.3400000035762787,\"FlashSizeMin\":0.25999999046325684,\"FlashSprite\":\"muzzle_star\",\"FlashTime\":0.054999999701976776,\"LightColor\":{\"X\":1.0,\"Y\":0.7200000286102295,\"Z\":0.3799999952316284},\"LightIntensity\":18.0,\"LightRange\":7.0,\"MuzzleEnabled\":true,\"MuzzleStyle\":1,\"PlayerFlashScale\":0.3499999940395355,\"SideJets\":true,\"Smoke\":false,\"SmokeAlpha\":0.18000000715255737,\"SmokeLifetimeMax\":3.0,\"SmokeLifetimeMin\":2.0,\"SmokeScale\":1.0,\"SparkCount\":9,\"Magazine\":30,\"RoundsPerMinute\":700.0,\"AllowFullAuto\":true,\"BurstRounds\":0,\"ReloadHoldSeconds\":0.35,\"RegripMin\":10.0,\"RegripMax\":20.0,\"ImpactImpulse\":5.0,\"ImpactMaxSpeed\":7.0,\"ZeroDistance\":25.0,\"BulletHoleRadius\":0.0027,\"Damage\":34.0,\"HeadMultiplier\":3.0,\"LimbMultiplier\":0.75,\"FalloffStart\":25.0,\"FalloffEnd\":60.0,\"FalloffMin\":0.6,\"HasSightLine\":true,\"SightOrigin\":{\"X\":0.28145,\"Y\":0.05775,\"Z\":0.00013},\"SightDirection\":{\"X\":-0.999992,\"Y\":-0.00393,\"Z\":-0.000798}}",
-        "Enabled": true,
-        "Scripts": "[]",
-        "Next Script ID": 1
+        "Core Glow": true,
+        "Description": "5.45 mm rifle. 30-round magazine, selectable semi/full-auto, magazine reload.",
+        "Flame Color": [
+          1.0,
+          0.1469999998807907,
+          0.01769999973475933
+        ],
+        "Flame Glow": 150.0,
+        "Flame Length Max": 0.3199999928474426,
+        "Flame Length Min": 0.1599999964237213,
+        "Flame Lifetime Max": 0.17499999701976776,
+        "Flame Lifetime Min": 0.125,
+        "Flame Scale": 1.75,
+        "Flame Texture": {
+          "path": "assets/Effects/Muzzle/T_MuzzleFlame.png",
+          "pathGuid": "80898ac73b45551f"
+        },
+        "Flame Width Max": 0.05999999865889549,
+        "Flame Width Min": 0.03999999910593033,
+        "Flash Intensity": 14.0,
+        "Flash Lifetime": 0.06499999761581421,
+        "Flash Size Max": 0.3400000035762787,
+        "Flash Size Min": 0.25999999046325684,
+        "Flash Sprite": "muzzle_star",
+        "Flash Time": 0.054999999701976776,
+        "Light Color": [
+          1.0,
+          0.7200000286102295,
+          0.3799999952316284
+        ],
+        "Light Intensity": 18.0,
+        "Light Range": 7.0,
+        "Muzzle Enabled": true,
+        "Muzzle Style": 1,
+        "Player Flash Scale": 0.3499999940395355,
+        "Side Jets": true,
+        "Smoke": false,
+        "Smoke Alpha": 0.18000000715255737,
+        "Smoke Lifetime Max": 3.0,
+        "Smoke Lifetime Min": 2.0,
+        "Smoke Scale": 1.0,
+        "Spark Count": 9,
+        "Magazine": 30,
+        "Rounds Per Minute": 700.0,
+        "Allow Full Auto": true,
+        "Burst Rounds": 0,
+        "Reload Hold Seconds": 0.35,
+        "Regrip Min": 10.0,
+        "Regrip Max": 20.0,
+        "Impact Impulse": 5.0,
+        "Impact Max Speed": 7.0,
+        "Zero Distance": 25.0,
+        "Bullet Hole Radius": 0.0027,
+        "Damage": 34.0,
+        "Head Multiplier": 3.0,
+        "Limb Multiplier": 0.75,
+        "Falloff Start": 25.0,
+        "Falloff End": 60.0,
+        "Falloff Min": 0.6,
+        "Has Sight Line": true,
+        "Sight Origin": [
+          0.28145,
+          0.05775,
+          0.00013
+        ],
+        "Sight Direction": [
+          -0.999992,
+          -0.00393,
+          -0.000798
+        ]
       }
     }
   ]

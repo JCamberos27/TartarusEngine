@@ -65,13 +65,9 @@
         1,
         1
       ],
-      "C# Script": {
-        "Class": "Tartarus.Gameplay.PlayerDefinition",
-        "Source": "assets/Scripts/PlayerDefinition.cs",
-        "Fields JSON": "{\"EyeHeight\":1.2,\"FieldOfView\":90.0}",
-        "Enabled": true,
-        "Scripts": "[]",
-        "Next Script ID": 1
+      "First Person Controller": {
+        "Eye Height": 1.2,
+        "Field of View": 90.0
       }
     },
     {
