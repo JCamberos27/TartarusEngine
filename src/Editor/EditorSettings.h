@@ -147,6 +147,21 @@ struct EditorSettings {
     // this is on, so turning it back off resumes the user's own spin rate.
     bool ReduceMotion = false;
 
+    // The editor's look (Preferences > General > Editor theme). 0 = Tartarus, the phosphor terminal
+    // look (EditorTheme.h) and the default; 1 = Glass, the opt-in macOS-style theme
+    // (docs/EDITOR_DESIGN_SYSTEM.md, src/Editor/Glass/). Glass also unlocks the Glass Workspace
+    // panels (Window > Glass Workspace) and the frosted viewport HUDs below. Applied live.
+    int  EditorThemeId = 0;
+    // Glass only: the frosted HUD cards over the Scene viewport (selection, scene stats, compile /
+    // snap notifications), and whether they blur the scene behind them (a compute pass, see
+    // GlassBackdrop.h) or just tint it.
+    bool GlassViewportHuds = true;
+    bool GlassFrostedBlur = true;
+    // Glass Workspace panels' visibility (Window > Glass Workspace).
+    bool ShowGlassHierarchy = false;
+    bool ShowGlassInspector = false;
+    bool ShowGlassAssets = false;
+
     // Phase 6 item 10 — name of the layout preset (<user>/layouts/<name>.ini, #184) that
     // Window > Reset Layout rebuilds to, in place of the four shipped Default/Wide/Tall/Focus
     // arrangements. Empty means "use the shipped Default layout" — the original behavior.

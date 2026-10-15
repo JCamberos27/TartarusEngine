@@ -5772,6 +5772,7 @@ int RunUnitTests(const char* filter) {
     RegisterEngineTests(tests);
     { void RegisterScriptingTests(UnitTestSupport::TestList&); RegisterScriptingTests(tests); }
     RegisterBloodTests(tests);
+    RegisterGlassTests(tests);
     { void RegisterAudioTests(UnitTestSupport::TestList&); RegisterAudioTests(tests); } // UnitTests_Audio.cpp
     for (const auto& [name, fn] : tests) {
         if(filter && std::string(name).find(filter)==std::string::npos) continue;

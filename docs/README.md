@@ -12,6 +12,7 @@ Run `python tools/assets/check_git_assets.py` before committing or pushing.
 * [History and custom Inspectors](EDITOR_HISTORY_AND_INSPECTORS.md): global undo and C# Inspector authoring.
 * [Script IDE](SCRIPT_IDE.md): embedded C# editing, semantic navigation, compilation and recovery.
 * [Curve editor](CURVE_EDITOR.md): shared curve authoring tools.
+* [Glass design system](EDITOR_DESIGN_SYSTEM.md): the opt-in macOS-style editor theme, motion language, Glass Workspace panels and frosted viewport HUDs.
 
 ## C# gameplay and editor scripting
 

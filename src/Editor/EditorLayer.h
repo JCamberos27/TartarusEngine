@@ -80,6 +80,7 @@ struct AssetGridCell {
 #include "BuildPipeline.h" // #174 (complete types: a build runs in a std::future)
 
 struct AnimatorWindowState; // the Animator window's state (EditorLayer_Animator*.cpp)
+struct GlassEditorState;    // the Glass theme's state (Glass/GlassEditorState.h)
 
 class EditorLayer {
     friend struct EditorHistoryTestAccess;
@@ -677,6 +678,28 @@ public:
     // content, in the same draw-list ordering as anything else in that window, always on top of
     // its own host background rather than underneath it.
     void SetSceneTexture(unsigned int glColorTexture) { m_SceneColorTexture = glColorTexture; }
+    // Same, with the texture's pixel size: the Glass theme's frosted HUDs blur this image (they
+    // need its real size, which can differ from the window rect by the framebuffer scale).
+    void SetSceneTexture(unsigned int glColorTexture, int width, int height) {
+        m_SceneColorTexture = glColorTexture;
+        m_SceneTexW = width;
+        m_SceneTexH = height;
+    }
+
+    // --- Glass theme (opt-in macOS-style look; EditorLayer_Glass.cpp, docs/EDITOR_DESIGN_SYSTEM.md)
+    // True while Preferences > General > Editor theme is "Glass".
+    bool GlassThemeActive() const;
+    // Switches theme at the start of the next frame (the style can't change under a frame's
+    // pushed style stack). 0 = Tartarus, 1 = Glass. Persists to editor prefs.
+    void RequestEditorTheme(int themeId) { m_PendingThemeId = themeId; }
+    // A gizmo drag just ended with snapping on: the Glass HUD pops a ring where it landed.
+    void GlassNotifySnap();
+    // --smoke-test (smoke_glass* scenes, Tests/SmokeChecks.cpp): turns the Glass theme and every
+    // Glass surface on without touching the saved preferences, or puts back what was there.
+    // Takes effect at the next BeginFrame, like RequestEditorTheme.
+    void SetGlassThemeForTest(bool on);
+    // The frosted HUDs' blurred Scene texture from the last frame (0 = none / Glass is off).
+    unsigned int GlassBackdropTextureForTest() const;
 
     // True while a modal dialog (Save changes?, Recover unsaved changes?, a confirm prompt) is
     // open. main.cpp reads it to frost the Scene viewport behind the dim scrim.
@@ -936,6 +959,7 @@ private:
     glm::vec2 m_ViewportSize{1280.0f, 720.0f};
     bool m_SceneViewportVisible = true;
     unsigned int m_SceneColorTexture = 0;
+    int m_SceneTexW = 0, m_SceneTexH = 0; // 0 = unknown (old SetSceneTexture overload)
     glm::vec2 m_LastSceneContentRegion{0.0f, 0.0f};
 
     // Primary selection. entt::entity handles stay valid across insertions/deletions elsewhere
@@ -2383,6 +2407,23 @@ private:
     // region with its own opaque plate, not a separate floating window — collapsible to a thin
     // strip via EditorSettings::ToolPaletteCollapsed.
     void DrawToolPalette(World& world, Camera& editorCamera);
+
+    // --- Glass theme (EditorLayer_Glass.cpp) -------------------------------------------------
+    // Created on first use while Glass is active, destroyed when it's switched off.
+    std::unique_ptr<GlassEditorState> m_Glass;
+    int m_PendingThemeId = -1;                 // RequestEditorTheme, applied in BeginFrame
+    void ApplyPendingTheme();                  // BeginFrame, before ImGui::NewFrame
+    void GlassFrameBegin();                    // BeginFrame, after ImGui::NewFrame
+    void ReleaseGlass();                       // frees the backdrop's GL objects and all state
+    void ApplyGizmoAccent();                   // ImGuizmo's hover colour follows the theme accent
+    GlassEditorState& GlassState();            // m_Glass, created on demand
+    void DrawGlassWorkspace(World& world, AssetLibrary& assets);   // the three Glass panels
+    void DrawGlassHierarchy(World& world, AssetLibrary& assets);
+    void DrawGlassInspector(World& world, AssetLibrary& assets);
+    void DrawGlassLibrary(World& world, AssetLibrary& assets);
+    void DrawGlassViewportOverlays(World& world);                  // inside the Scene window
+    void PollGlassNotifications();                                 // compile errors -> toasts
+    void PushGlassToast(const std::string& title, const std::string& body, bool error);
     // True for the frame(s) the mouse is hovering or dragging the nav gizmo above — set inside
     // DrawViewGizmo() (called before HandleViewportPicking() in Draw()) so picking can skip
     // starting a box-select/pick from a click that's actually meant for the nav gizmo. The nav

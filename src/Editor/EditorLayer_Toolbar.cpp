@@ -797,6 +797,16 @@ void EditorLayer::DrawWindowMenuBody() {
             if(ImGui::MenuItem("Script IDE"))OpenScriptIDE();
             bool toolsVisible=Scripting::EditorToolsVisible();
             if(ImGui::MenuItem("C# Tools",nullptr,&toolsVisible))Scripting::SetEditorToolsVisible(toolsVisible);
+            // The Glass theme's own panels (EditorLayer_Glass.cpp); listed only while it's selected.
+            if (GlassThemeActive() && ImGui::BeginMenu(ICON_FA_TABLE_CELLS_LARGE "  Glass Workspace")) {
+                EditorSettings& gs = EditorSettings::Get();
+                if (ImGui::MenuItem(ICON_FA_LIST "  Objects", nullptr, &gs.ShowGlassHierarchy)) EditorSettings::Save();
+                if (ImGui::MenuItem(ICON_FA_SLIDERS "  Properties", nullptr, &gs.ShowGlassInspector)) EditorSettings::Save();
+                if (ImGui::MenuItem(ICON_FA_TABLE_CELLS_LARGE "  Library", nullptr, &gs.ShowGlassAssets)) EditorSettings::Save();
+                ImGui::Separator();
+                if (ImGui::MenuItem(ICON_FA_GAUGE_HIGH "  Viewport HUDs", nullptr, &gs.GlassViewportHuds)) EditorSettings::Save();
+                ImGui::EndMenu();
+            }
             ImGui::Separator();
             if (ImGui::MenuItem(ICON_FA_CUBES "  Physics Debug", nullptr, &EditorSettings::Get().ShowPhysicsPanel))
                 EditorSettings::Save();

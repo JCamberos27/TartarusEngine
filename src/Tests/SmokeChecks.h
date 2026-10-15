@@ -14,5 +14,9 @@ void ProjectSync(EditorLayer& editor, World& world, AssetLibrary& assets);
 void MaterialPreviews(World& world);
 // smoke_prefab*: a Prefab Mode round trip - a child added in the prefab reaches both placed instances.
 void PrefabMode(EditorLayer& editor, World& world, AssetLibrary& assets);
+// smoke_glass*: the opt-in Glass editor theme end to end - switched on (all three Glass panels, the
+// frosted viewport HUDs and their compute blur, a toast and a snap ring), then off again, after
+// which its animation state must hold no memory. Called every frame of the scene; acts on a few.
+void GlassTheme(EditorLayer& editor, World& world, int frame);
 
 } // namespace SmokeChecks
