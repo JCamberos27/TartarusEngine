@@ -3,7 +3,6 @@
 #include <json.hpp>
 #include <unordered_map>
 #include <stdexcept>
-#include "../Scripting/NpcDefinitions.h"
 #include "FoleyAudio.h"
 
 #include "GameModuleAPI.h"
@@ -78,8 +77,7 @@ FoleyAudio& FoleyAudio::Get() {
 
 void FoleyAudio::Start(World& world) {
     Stop();
-    Scripting::SyncNpcDefinitions(world);
-    m_T = Scripting::DefaultFoleyDefinition();
+    m_T = FoleyAudioComponent{};
     if (const auto first = world.Registry.view<FoleyAudioComponent>(); first.begin() != first.end()) { // the first one counts
         const entt::entity e = *first.begin();
         m_T = world.Registry.get<FoleyAudioComponent>(e);

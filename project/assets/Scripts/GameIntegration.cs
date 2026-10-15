@@ -48,11 +48,9 @@ internal static unsafe class GameIntegration
         "audio.surface" => FoleyPolicy.Surface(json),
         "body.roles" or "body.graph" or "body.pick" => BodyGraphAuthoring.Request(operation,json),
         "bone-region" => System.Text.Json.JsonSerializer.Serialize(DamageRules.BoneRegion(System.Text.Json.JsonSerializer.Deserialize<string>(json))),
-        "weapon.import" or "weapon.resolve" => WeaponData.Request(operation,json),
         "health.create" or "health.remove" or "health.kill" or "health.read" => HealthRules.Request(operation,json),
         "npc.name" or "npc.spawn-plan" => NpcLifecycle.Request(operation,json),
         "content.path" or "content.blood" or "content.knife" => ContentTools.Request(operation,json),
-        "npc.config" => NpcConfigData.Resolve(json),
         _ => throw new ArgumentException("Unknown project request: "+operation)
     };
 }

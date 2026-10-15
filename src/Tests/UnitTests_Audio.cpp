@@ -1,5 +1,3 @@
-#include "Scripting/NpcDefinitions.h"
-#include "../Game/Scripting/NpcDefinitions.h"
 #include "../Game/Scripting/ScriptRuntime.h"
 #include "UnitTestSupport.h"
 
@@ -389,7 +387,7 @@ void TestAnimEventPlaysItsSet() {
 }
 
 void TestProfileComponentAndJson() {
-    WeaponAudioComponent c=Scripting::DefaultWeaponAudioDefinition();
+    WeaponAudioComponent c=WeaponAudioComponent{};
     c.Gun = "ak";
     c.Volume = 0.5f;
     c.CloseFullDistance = 30.0f;
@@ -419,8 +417,7 @@ void TestProfileComponentAndJson() {
         weapon |= std::string(rc.Meta.Name) == "Weapon Audio";
         foley |= std::string(rc.Meta.Name) == "Foley Audio";
     }
-    CHECK(!weapon && !foley);
-    std::string fields;CHECK(Scripting::ResolveScriptFields("Tartarus.Gameplay.WeaponAudioDefinition","{}",fields));CHECK(Scripting::ResolveScriptFields("Tartarus.Gameplay.FoleyDefinition","{}",fields));
+    CHECK(weapon && foley);
 }
 
 void TestAudioManifestGroupsVariants() {
@@ -483,7 +480,7 @@ void TestFoleyFootstepCadence() {
     FakeBackend be;
     WeaponAudio::Get().StartForTest("", &be);
     FoleyAudio& fo = FoleyAudio::Get();
-    FoleyAudioComponent t=Scripting::DefaultFoleyDefinition(); // defaults
+    FoleyAudioComponent t=FoleyAudioComponent{}; // defaults
     auto stepsAt = [&](float speed, bool sprint, bool crouch, float seconds) {
         fo.StartForTest(t);
         WeaponAudio::Get().ClearHistory();
@@ -515,7 +512,7 @@ void TestFoleyFootstepCadence() {
     // Slower strides (the scale tunes it) mean fewer steps.
     t.StepStrideScale = 2.0f;
     CHECK(std::abs(stepsAt(2.0f, false, false, 10.0f) - 12) <= 1);
-    t = Scripting::DefaultFoleyDefinition();
+    t = FoleyAudioComponent{};
     // Airborne: no steps. Disabled: none either.
     {
         fo.StartForTest(t);
@@ -599,7 +596,7 @@ void TestFoleyFootstepCadence() {
         fo.StartForTest(t);
         const float h[2] = {0.1f, 0.1f};
         CHECK(!fo.NpcFeet(world, 7, glm::vec3(0.0f), h, false, 2.0f, dt));
-        t = Scripting::DefaultFoleyDefinition();
+        t = FoleyAudioComponent{};
     }
     {
         // The detector alone: a foot that never rose past Lift Height never lands.
@@ -619,7 +616,7 @@ void TestFoleyFootstepCadence() {
         }
         CHECK(downs == 1 && landedAt >= 24 && landedAt <= 26); // the tread is reached at frame 24
         // A walk's first stride lifts the ankle ~3.5 cm: a step when moving (Foot Lift Moving), none when standing (Foot Lift Height).
-        FoleyAudioComponent ft=Scripting::DefaultFoleyDefinition();
+        FoleyAudioComponent ft=FoleyAudioComponent{};
         CHECK(FoleyAudio::LiftHeight(ft, 2.0f) == ft.FootLiftMoving && FoleyAudio::LiftHeight(ft, 0.0f) == ft.FootLiftHeight);
         auto shuffle = [&](float lift) {
             FootContactDetector sd;
@@ -667,7 +664,7 @@ void TestFoleyFootstepCadence() {
 }
 
 void TestFoleyRules() {
-    FoleyAudioComponent t=Scripting::DefaultFoleyDefinition();
+    FoleyAudioComponent t=FoleyAudioComponent{};
     // Surfaces by the ground's material / tag / name, in table order, case-insensitive; the default otherwise.
     CHECK(FoleyAudio::SurfaceFromName(t.SurfaceTable, "Assets/Materials/WoodPlank.physicmaterial", "concrete") == "wood");
     CHECK(FoleyAudio::SurfaceFromName(t.SurfaceTable, "Metal Grate 02", "concrete") == "metal");
@@ -699,7 +696,7 @@ void TestFoleyLandingAndJump() {
     WeaponAudio& wa = WeaponAudio::Get();
     wa.StartForTest("", &be);
     FoleyAudio& fo = FoleyAudio::Get();
-    FoleyAudioComponent t=Scripting::DefaultFoleyDefinition();
+    FoleyAudioComponent t=FoleyAudioComponent{};
     auto land = [&](float fallSpeed) {
         fo.StartForTest(t);
         wa.ClearHistory();
@@ -1486,7 +1483,7 @@ void TestReverbFollowsListenerSpace() {
 }
 
 void TestCasingContactGating() {
-    auto t=Scripting::DefaultImpactAudioDefinition();
+    auto t=ImpactAudioComponent{};
     CHECK(t.CasingMaxContacts == 2);
     // The first contacts of a case sound, the third does not; a soft touch is silent; a case that never lands fast enough is silent.
     CHECK(ImpactAudio::CasingContactAudible(t, 0, 3.0f) && ImpactAudio::CasingContactAudible(t, 1, 3.0f));
@@ -1554,7 +1551,7 @@ void TestCasingContactGating() {
 }
 
 void TestImpactSurfaceMappingAndFlesh() {
-    auto t=Scripting::DefaultImpactAudioDefinition();
+    auto t=ImpactAudioComponent{};
     FakeBackend be;
     WeaponAudio& wa = WeaponAudio::Get();
     wa.StartForTest("", &be);
@@ -1578,7 +1575,7 @@ void TestImpactSurfaceMappingAndFlesh() {
     t.SurfaceTable = "wood=thing;metal=wall";
     ia.SetTuning(t);
     CHECK(ia.SurfaceOf(world, mk("Thing", "", "")) == "wood" && ia.SurfaceOf(world, mk("Wall", "", "")) == "metal"); // the table is the component's
-    t=Scripting::DefaultImpactAudioDefinition();
+    t=ImpactAudioComponent{};
     ia.SetTuning(t);
     // Impact plays its surface's set at the hit point, 3D; surfaces with no takes use the default; two within the interval are one.
     for (const char* s : {"concrete", "metal", "flesh"})
@@ -1607,7 +1604,7 @@ void TestImpactSurfaceMappingAndFlesh() {
 }
 
 void TestFlybyRadiusAndNoDoubling() {
-    auto t=Scripting::DefaultImpactAudioDefinition();
+    auto t=ImpactAudioComponent{};
     // Gain: full at a graze, FlybyFarGain at the radius, gone beyond.
     CHECK(std::fabs(ImpactAudio::FlybyGain(t, 0.0f) - t.FlybyVolume) < 1e-5f);
     CHECK(std::fabs(ImpactAudio::FlybyGain(t, t.FlybyRadius) - t.FlybyVolume * t.FlybyFarGain) < 1e-4f);

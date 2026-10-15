@@ -98,15 +98,11 @@
         1,
         1
       ],
-      "C# Script": {
-        "Source": {
-          "path": "assets/Scripts/Weapons/Attachments/MuzzleAttachment.cs"
-        },
-        "Class": "Tartarus.Gameplay.MuzzleAttachment",
-        "Enabled": true,
-        "Scripts": "[]",
-        "Next Script ID": 1,
-        "Fields JSON": "{\"MuzzleTransform\":\"Muzzle Flash\",\"MuzzleFlash\":\"Muzzle Flash\",\"FiringSounds\":\"\",\"FiringSoundProfile\":\"870\"}"
+      "Muzzle Attachment": {
+        "Muzzle Transform": "Muzzle Flash",
+        "Muzzle Flash": "Muzzle Flash",
+        "Firing Sounds": "",
+        "Firing Sound Profile": "870"
       }
     },
     {
@@ -130,16 +126,7 @@
         1,
         1
       ],
-      "C# Script": {
-        "Source": {
-          "path": "assets/Scripts/Weapons/Attachments/GripAttachment.cs"
-        },
-        "Class": "Tartarus.Gameplay.GripAttachment",
-        "Enabled": true,
-        "Scripts": "[]",
-        "Next Script ID": 1,
-        "Fields JSON": "{}"
-      }
+      "Grip Attachment": {}
     },
     {
       "id": 4,
@@ -347,16 +334,51 @@
         "Track": "weapon",
         "rootMotion": "Off"
       },
-      "C# Script": {
-        "Source": {
-          "path": "assets/Scripts/Weapons/WeaponDefinition.cs",
-          "pathGuid": "b72f5e84c34b4013"
+      "Weapon Definition": {
+        "Muzzle Enabled": true,
+        "Flash Time": 0.055,
+        "Light Intensity": 26,
+        "Player Flash Scale": 0.35,
+        "Light Range": 7,
+        "Light Color": [
+          1,
+          0.72,
+          0.38
+        ],
+        "Smoke": false,
+        "Afterfire Smoke": false,
+        "Smoke Scale": 1,
+        "Smoke Lifetime Min": 2,
+        "Smoke Lifetime Max": 3,
+        "Smoke Alpha": 0.35,
+        "Description": "12-gauge pump shotgun. 6 shells, 8 pellets per shot, per-shell reload and manual pump cycle.",
+        "Animation Set": {
+          "path": "assets/Weapons/Remington870/Remington870.fpsanim",
+          "pathGuid": "4e3925bded078f9a"
         },
-        "Class": "Tartarus.Gameplay.WeaponDefinition",
-        "Fields JSON": "{\"MuzzleEnabled\":true,\"FlashTime\":0.055,\"LightIntensity\":26,\"PlayerFlashScale\":0.35,\"LightRange\":7,\"LightColor\":{\"X\":1,\"Y\":0.72,\"Z\":0.38},\"Smoke\":false,\"AfterfireSmoke\":false,\"SmokeScale\":1,\"SmokeLifetimeMin\":2,\"SmokeLifetimeMax\":3,\"SmokeAlpha\":0.35,\"Description\":\"12-gauge pump shotgun. 6 shells, 8 pellets per shot, per-shell reload and manual pump cycle.\",\"AnimationSet\":{\"path\":\"assets/Weapons/Remington870/Remington870.fpsanim\",\"pathGuid\":\"4e3925bded078f9a\"},\"Magazine\":6,\"RoundsPerMinute\":70.0,\"AllowFullAuto\":false,\"BurstRounds\":0,\"ReloadHoldSeconds\":0.35,\"RegripMin\":10.0,\"RegripMax\":20.0,\"ImpactImpulse\":14.0,\"ImpactMaxSpeed\":9.0,\"ZeroDistance\":15.0,\"BulletHoleRadius\":0.0042,\"Pellets\":8,\"Damage\":14.0,\"HeadMultiplier\":2.0,\"LimbMultiplier\":0.75,\"FalloffStart\":8.0,\"FalloffEnd\":25.0,\"FalloffMin\":0.2,\"SpreadHip\":3.5,\"SpreadAds\":2.2,\"CycleAfterShot\":true,\"CycleDelay\":0.12,\"Reload\":1}",
-        "Enabled": true,
-        "Scripts": "[]",
-        "Next Script ID": 1
+        "Magazine": 6,
+        "Rounds Per Minute": 70.0,
+        "Allow Full Auto": false,
+        "Burst Rounds": 0,
+        "Reload Hold Seconds": 0.35,
+        "Regrip Min": 10.0,
+        "Regrip Max": 20.0,
+        "Impact Impulse": 14.0,
+        "Impact Max Speed": 9.0,
+        "Zero Distance": 15.0,
+        "Bullet Hole Radius": 0.0042,
+        "Pellets": 8,
+        "Damage": 14.0,
+        "Head Multiplier": 2.0,
+        "Limb Multiplier": 0.75,
+        "Falloff Start": 8.0,
+        "Falloff End": 25.0,
+        "Falloff Min": 0.2,
+        "Spread Hip": 3.5,
+        "Spread Ads": 2.2,
+        "Cycle After Shot": true,
+        "Cycle Delay": 0.12,
+        "Reload": "Per Round"
       }
     }
   ],
