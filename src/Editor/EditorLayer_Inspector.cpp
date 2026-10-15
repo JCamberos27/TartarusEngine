@@ -38,9 +38,6 @@
 #include "ReflectAttributes.h" // vInspector attributes: EvaluateFieldState
 #include "ParticleSystem.h"
 #include "CurveEditor.h"
-#include "Scripting/ScriptRuntime.h"
-#include "Scripting/ScriptComponent.h"
-#include "ScriptReferenceWidgets.h"
 #include <json.hpp>
 #include "Shortcuts.h" // vInspector hover keys
 #include <cstring>
@@ -86,27 +83,6 @@ using namespace EditorInternal;
 
 
 namespace {
-
-std::string ScriptComponentTitle(const CSharpScriptComponent& component) {
-    std::string title;
-    try {
-        for (const auto& slot : Scripting::GetSlots(component)) {
-            std::string name = slot.Class;
-            if (!name.empty()) {
-                const auto separator = name.find_last_of(".+");
-                if (separator != std::string::npos) name.erase(0, separator + 1);
-            } else if (!slot.Source.empty()) {
-                name = std::filesystem::path(slot.Source).stem().string();
-            }
-            if (name.empty()) continue;
-            if (!title.empty()) title += ", ";
-            title += name;
-        }
-    } catch (const std::exception&) {
-        // Keep malformed script data inspectable so it can be repaired.
-    }
-    return title.empty() ? "Script" : title;
-}
 
 // Approximate blackbody colour (linear RGB, normalised so the brightest channel is 1) for a
 // colour temperature in Kelvin. Cheap piecewise fit — good enough for authoring a warm lamp vs
@@ -2049,8 +2025,7 @@ void EditorLayer::DrawReflectedField(World& world, AssetLibrary& assets, const R
             if (payloadType && ImGui::BeginDragDropTarget()) {
                 const ImGuiPayload* p = ImGui::AcceptDragDropPayload(payloadType);
                 if (p && f.AssetKind == ReflectAssetKind::Script &&
-                    std::filesystem::path((const char*)p->Data).extension() != ".tescript" &&
-                    std::filesystem::path((const char*)p->Data).extension() != ".cs") p = nullptr;
+                    std::filesystem::path((const char*)p->Data).extension() != ".tescript") p = nullptr;
                 if (p) {
                     std::string path((const char*)p->Data);
                     StageUndo(world);
@@ -2554,13 +2529,6 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             if (!rc.Meta.GenericInspector) continue; // Mesh Renderer: hand-coded, no multi-select section
 
             std::string displayTitle;
-            if (std::strcmp(rc.Meta.Name, "C# Script") == 0) {
-                for (const auto e : sel) {
-                    const std::string title = ScriptComponentTitle(world.Registry.get<CSharpScriptComponent>(e));
-                    if (displayTitle.empty()) displayTitle = title;
-                    else if (displayTitle != title) { displayTitle = "Scripts (Mixed)"; break; }
-                }
-            }
             ImGui::Spacing();
             if (BeginComponentSection(rc.Meta.Icon, rc.Meta.Name, false, mrm, rc.Meta.Tooltip,
                     nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
@@ -3234,8 +3202,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         // Key) themselves; see their comments.
         const bool compAdded = SceneSerializer::IsPrefabComponentAdded(world, entity, rc.Meta.Name);
         bool reflPfRevert = false, reflPfApply = false;
-        const std::string displayTitle = std::strcmp(rc.Meta.Name, "C# Script") == 0
-            ? ScriptComponentTitle(registry.get<CSharpScriptComponent>(entity)) : std::string{};
+        const std::string displayTitle;
         const bool reflOpen = BeginComponentSection(rc.Meta.Icon, rc.Meta.Name, true, reflRemoved,
             rc.Meta.Tooltip, &reflReset, &reflCopy, &reflPaste,
             compAdded ? &reflPfRevert : nullptr, compAdded ? &reflPfApply : nullptr,
@@ -3311,9 +3278,7 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
         }
         if (reflPaste) PasteComponentFromClip(world, entity);
         if (reflOpen) {
-            // Shared with the Editor Enhancers pinned component windows. (This used to `continue`
-            // straight past the removal below after a managed inspector drew, so the header's x
-            // did nothing on an open C# script section.)
+            // Shared with the Editor Enhancers pinned component windows.
             DrawReflectedComponentFields(world, assets, rc, entity);
             EndComponentSection();
         }
@@ -3340,18 +3305,13 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     InspectorEnd();
 }
 
-// The body of one reflected component for one entity: the Top extras, a C# managed inspector
-// when the component has one, else every visible field (grouped into TreeNodes, VisibleIf
+// The body of one reflected component for one entity: the Top extras, every visible field (grouped into TreeNodes, VisibleIf
 // honoured), then the Bottom extras. No header - the caller owns that (the Inspector's
 // BeginComponentSection, or a pinned component window's title bar).
 void EditorLayer::DrawReflectedComponentFields(World& world, AssetLibrary& assets, const RegisteredComponent& rc, entt::entity entity) {
     void* fbase = rc.Get(world.Registry, entity);
     if (!fbase) return;
     DrawReflectedComponentExtra(rc.Meta.Name, world, entity, ReflectExtraPhase::Top);
-    if (DrawManagedInspector(world, assets, entity, rc.Meta.Name)) {
-        DrawReflectedComponentExtra(rc.Meta.Name, world, entity, ReflectExtraPhase::Bottom);
-        return;
-    }
     // #6 Defect #44 — a one-element selection so the field switch below (shared with
     // multi-select) takes its no-mixed-value path; see DrawReflectedField. Visibility (VisibleIf,
     // conditions) and greying out (ReadOnly, EnableIf) are resolved there too.
@@ -3525,7 +3485,7 @@ const RegisteredComponent* RegisteredByName(const char* name) {
     return nullptr;
 }
 
-// The Bool field named exactly "Enabled" many components carry (C# Script, Transform Controller,
+// The Bool field named exactly "Enabled" many components carry (Transform Controller,
 // IK Rig, Audio Listener, ...): what the A hover key flips and what dims a header when off.
 const ReflectField* FindEnabledField(const ReflectComponent& meta) {
     for (const ReflectField& f : meta.Fields)
@@ -4228,314 +4188,6 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
         return;
     }
 
-    if(std::strcmp(componentName,"C# Script")==0 && phase==ReflectExtraPhase::Top) {
-        auto* component=registry.try_get<CSharpScriptComponent>(entity); if(!component) return;
-        using Json=nlohmann::json;
-        try {
-            auto slots=Scripting::GetSlots(*component);
-            const Json& types=Scripting::DescribeJson(); // vInspector: parsed once per assembly
-            const auto classes=types.value("classes",std::vector<std::string>{});
-            if(Scripting::Building() || Scripting::BuildPending()) ImGui::TextDisabled("Compiling C#...");
-            auto persist=[&](bool changed,bool immediate=false) {
-                if(ImGui::IsItemActivated() || (changed && immediate)) StageUndo(world);
-                if(changed) Scripting::SetSlots(*component,slots);
-                if((changed && immediate) || ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world,"Edit C# Script");
-            };
-            int remove=-1;
-            for(size_t index=0;index<slots.size();++index) {
-                auto& slot=slots[index]; ImGui::PushID(static_cast<int>(slot.Id));
-                const auto dot=slot.Class.find_last_of('.');
-                const std::string label=slot.Class.substr(dot==std::string::npos?0:dot+1);
-                // Each behaviour is a framed sub-header in the component header's voice: the
-                // raised strip, the code glyph and the class name.
-                const bool open=EditorUIPrimitives::FramedFoldout((std::string(ICON_FA_CODE "  ")+(label.empty()?std::string("Choose a class"):label)+"###behaviour").c_str(),
-                                                                ImGuiTreeNodeFlags_DefaultOpen);
-                if(open) {
-                    PropertyLabel("Enabled"); persist(ImGui::Checkbox("##enabled",&slot.Enabled),true);
-                    // The class picker and the source file. Once a class is set they move under
-                    // Advanced (vInspector), so the behaviour's own fields lead.
-                    auto drawClassAndSource=[&]() {
-                        PropertyLabel("Script"); ImGui::SetNextItemWidth(-FLT_MIN);
-                        if(ImGui::BeginCombo("##class",slot.Class.empty()?"(choose a class)":slot.Class.c_str())) {
-                            for(const auto& name:classes) if(ImGui::Selectable(name.c_str(),name==slot.Class)) {
-                                slot.Class=name; slot.Fields="{}"; persist(true,true);
-                            }
-                            ImGui::EndCombo();
-                        }
-                        PropertyLabel("Source"); ImGui::SetNextItemWidth(-FLT_MIN);
-                        static const char* const extensions[]={".cs",nullptr};
-                        AssetPathPickerOptions options; options.Extensions=extensions; options.DragPayload="ASSET_FILE_PATH";
-                        options.DialogFilter="C# Script\0*.cs\0All Files\0*.*\0"; options.Owner=m_Window;
-                        if(AssetPathPicker("##source",slot.Source,options)) {
-                            const auto stem=std::filesystem::path(slot.Source).stem().string();
-                            const auto found=std::find_if(classes.begin(),classes.end(),[&](const std::string& name) {
-                                return name==stem || (name.size()>stem.size() && name.compare(name.size()-stem.size(),stem.size(),stem)==0 && name[name.size()-stem.size()-1]=='.');
-                            });
-                            if(!slot.Source.empty()) { slot.Class=found==classes.end()?"Tartarus.Gameplay."+stem:*found; slot.Fields="{}"; }
-                            persist(true,true);
-                        }
-                    };
-                    if(slot.Class.empty()) drawClassAndSource();
-                    if(!slot.Class.empty() && m_AssetsPtr) {
-                        AssetLibrary& scriptAssets=*m_AssetsPtr;
-                        const std::uint32_t entityId=static_cast<std::uint32_t>(entt::to_integral(entity));
-                        const Json& metadata=Scripting::DescribeJson(slot.Class);
-                        if(metadata.contains("error")) ImGui::TextWrapped("%s",metadata.at("error").get<std::string>().c_str());
-                        Json fields=Json::parse(slot.Fields,nullptr,false);
-                        if(!fields.is_object()) { ImGui::TextWrapped("Saved fields are invalid. Editing a field below will repair them."); fields=Json::object(); }
-                        const auto beforeCustom=slot.Fields;
-                        const bool custom=metadata.contains("fields") && DrawManagedInspector(world,scriptAssets,entity,slot.Class,&slot.Fields,metadata.dump(),slot.Id);
-                        if(custom && slot.Fields!=beforeCustom) Scripting::SetSlots(*component,slots);
-                        const Json noFields=Json::array();
-                        const Json& fieldList=metadata.contains("fields")?metadata.at("fields"):noFields;
-                        // A field's current value: the saved one, else the C# default.
-                        auto valueOf=[&](const std::string& name)->Json {
-                            if(fields.contains(name)) return fields.at(name);
-                            for(const auto& f:fieldList) if(f.value("name",std::string{})==name) return f.value("default",Json());
-                            return Json();
-                        };
-                        // [HideIf] / [DisableIf]: {"field","value"} against the named field's value.
-                        auto conditionMet=[&](const Json& c) {
-                            if(!c.is_object() || !c.contains("field")) return false;
-                            const Json v=valueOf(c.at("field").get<std::string>());
-                            const Json& want=c.contains("value")?c.at("value"):Json(true);
-                            if(v.is_number() && want.is_number()) return v.get<double>()==want.get<double>();
-                            return v==want;
-                        };
-                        // Runs a [Button] / [OnValueChanged] method; the saved fields come back.
-                        auto runMethod=[&](const std::string& method,const char* undoLabel) {
-                            std::string after;
-                            if(undoLabel) PushUndo(world,undoLabel);
-                            if(!Scripting::InvokeEditorMethod(world,scriptAssets,slot.Class,entityId,slot.Id,slot.Fields,method,after)) {
-                                Log::Warn("C#: "+slot.Class+"."+method+"() could not run - see the Console.");
-                                return false;
-                            }
-                            if(!after.empty() && after!=slot.Fields) { slot.Fields=after; fields=Json::parse(after,nullptr,false); if(!fields.is_object()) fields=Json::object(); }
-                            return true;
-                        };
-                        auto drawField=[&](const Json& field) {
-                            const std::string name=field.at("name"), kind=field.at("kind"), tip=field.value("tooltip",std::string{});
-                            const std::string onChanged=field.value("onChanged",std::string{});
-                            const Json value=valueOf(name);
-                            const bool disabled=field.value("readOnly",false) || conditionMet(field.value("disableIf",Json()));
-                            // Saves an edit right after the widget that made it (persist reads that widget's
-                            // activation / deactivation for undo), running [OnValueChanged] first: the method may
-                            // adjust other fields, and its result is what's saved.
-                            auto commit=[&](bool changed,bool immediate) {
-                                if(changed) { slot.Fields=fields.dump(); if(!onChanged.empty()) runMethod(onChanged,nullptr); }
-                                persist(changed,immediate);
-                            };
-                            ImGui::PushID(name.c_str());
-                            ImGui::BeginDisabled(disabled);
-                            if(kind=="dict") {
-                                // Dictionary<string, scalar>: one row per entry, plus an add row.
-                                const std::string vk=field.value("valueKind",std::string("string"));
-                                Json dict=value.is_object()?value:Json::object();
-                                EditorUIPrimitives::SectionHeader(name.c_str());
-                                std::string removeKey;
-                                for(auto it=dict.begin();it!=dict.end();++it) {
-                                    ImGui::PushID(it.key().c_str());
-                                    PropertyLabel(it.key().c_str());
-                                    const float bw=ImGui::GetFrameHeight();
-                                    ImGui::SetNextItemWidth(-(bw+ImGui::GetStyle().ItemInnerSpacing.x));
-                                    Json& v=it.value(); bool c=false, now=false;
-                                    try {
-                                        if(vk=="float") { float x=v.get<float>(); c=ImGui::DragFloat("##v",&x,.05f); if(c) v=x; }
-                                        else if(vk=="int") { int x=v.get<int>(); c=ImGui::DragInt("##v",&x,1); if(c) v=x; }
-                                        else if(vk=="bool") { bool x=v.get<bool>(); c=ImGui::Checkbox("##v",&x); now=true; if(c) v=x; }
-                                        else { std::string x=v.is_string()?v.get<std::string>():std::string{}; c=InputTextString("##v","",x); if(c) v=x; }
-                                    } catch(const std::exception&) { ImGui::TextDisabled("(wrong type)"); }
-                                    if(c) fields[name]=dict;
-                                    commit(c,now);
-                                    ImGui::SameLine(0.0f,ImGui::GetStyle().ItemInnerSpacing.x);
-                                    if(DangerIconButton(ICON_FA_XMARK,"Remove this entry",ImVec2(bw,0.0f))) removeKey=it.key();
-                                    ImGui::PopID();
-                                }
-                                if(!removeKey.empty()) { dict.erase(removeKey); fields[name]=dict; commit(true,true); }
-                                std::string& newKey=m_ScriptDictNewKey[ImGui::GetID("##newkey")];
-                                PropertyLabel("New key");
-                                const float bw=ImGui::GetFrameHeight();
-                                ImGui::SetNextItemWidth(-(bw+ImGui::GetStyle().ItemInnerSpacing.x));
-                                InputTextString("##newkey","key",newKey);
-                                ImGui::SameLine(0.0f,ImGui::GetStyle().ItemInnerSpacing.x);
-                                const bool canAdd=!newKey.empty() && !dict.contains(newKey);
-                                if(ActionButton(ICON_FA_PLUS,canAdd?"Add this key":"Type a new, unused key",false,ImVec2(bw,0.0f)) && canAdd) {
-                                    dict[newKey]=vk=="float"?Json(0.0f):vk=="int"?Json(0):vk=="bool"?Json(false):Json(std::string{});
-                                    newKey.clear(); fields[name]=dict; commit(true,true);
-                                }
-                            } else {
-                                PropertyLabel(name.c_str(),tip.empty()?nullptr:tip.c_str());
-                                ImGui::SetNextItemWidth(-FLT_MIN);
-                                bool changed=false, immediate=false;
-                                try {
-                                const bool range=field.contains("min") && !field.at("min").is_null() && !field.at("max").is_null();
-                                if(kind=="scene-ref" || kind=="sound-refs" || kind=="choice" || kind=="asset-ref") {
-                                    auto reference=value;
-                                    changed=DrawScriptReferenceField(world,entity,field,reference,m_Window);immediate=true;
-                                    if(changed) fields[name]=reference;
-                                } else if(kind=="float") {
-                                    float number=value.get<float>();
-                                    changed=range?ImGui::SliderFloat("##value",&number,field.at("min").get<float>(),field.at("max").get<float>())
-                                        :ImGui::DragFloat("##value",&number,.05f);
-                                    if(changed) fields[name]=number;
-                                } else if(kind=="int") {
-                                    int number=value.get<int>(); changed=range?ImGui::SliderInt("##value",&number,field.at("min").get<int>(),field.at("max").get<int>())
-                                        :ImGui::DragInt("##value",&number,1);
-                                    if(changed) fields[name]=number;
-                                } else if(kind=="bool") {
-                                    bool checked=value.get<bool>(); changed=ImGui::Checkbox("##value",&checked); immediate=true;
-                                    if(changed) fields[name]=checked;
-                                } else if(kind=="string") {
-                                    std::string text=value.is_null()?std::string{}:value.get<std::string>();
-                                    changed=InputTextString("##value","",text); if(changed) fields[name]=text;
-                                } else if(kind=="vec3" || kind=="color") {
-                                    float vector[3]={value.value("X",0.f),value.value("Y",0.f),value.value("Z",0.f)};
-                                    changed=kind=="color"?EditorUI::ColorEditLinear("##value",vector):ImGui::DragFloat3("##value",vector,.05f);
-                                    if(changed) fields[name]={{"X",vector[0]},{"Y",vector[1]},{"Z",vector[2]}};
-                                } else if(kind=="enum") {
-                                    const auto labels=field.at("labels").get<std::vector<std::string>>();
-                                    const auto values=field.at("values").get<std::vector<int>>();
-                                    const int number=value.get<int>(); std::string preview="(unknown)";
-                                    for(size_t i=0;i<values.size();++i) if(values[i]==number) preview=labels[i];
-                                    if(ImGui::BeginCombo("##value",preview.c_str())) {
-                                        for(size_t i=0;i<values.size();++i) if(ImGui::Selectable(labels[i].c_str(),values[i]==number)) {
-                                            fields[name]=values[i]; changed=true; immediate=true;
-                                        }
-                                        ImGui::EndCombo();
-                                    }
-                                } else ImGui::TextDisabled("Type not supported by the field Inspector");
-                                } catch(const std::exception&) { ImGui::TextDisabled("Saved value has the wrong type; reset this script's fields"); }
-                                if(EditorTestProbeActive()) EditorTestTag(("cs:"+name).c_str());
-                                commit(changed,immediate);
-                            }
-                            // [Variants]: quick-pick chips under the field.
-                            const Json variants=field.value("variants",Json::array());
-                            if(!disabled && variants.is_array() && !variants.empty()) {
-                                ImGui::SetCursorPosX(ImGui::GetCursorPosX()+EditorTheme::PropertyLabelWidth());
-                                EditorTheme::PushSmall();
-                                const auto labels=field.value("labels",std::vector<std::string>{});
-                                const auto values=field.value("values",std::vector<int>{});
-                                for(size_t i=0;i<variants.size();++i) {
-                                    const Json& v=variants[i];
-                                    std::string label=v.is_string()?v.get<std::string>():v.dump();
-                                    if(kind=="enum" && v.is_number_integer())
-                                        for(size_t k=0;k<values.size() && k<labels.size();++k) if(values[k]==v.get<int>()) label=labels[k];
-                                    const bool current=value.is_number() && v.is_number() ? value.get<double>()==v.get<double>() : value==v;
-                                    if(i>0) ImGui::SameLine(0.0f,EditorTheme::Px(3.0f));
-                                    ImGui::PushID(static_cast<int>(i));
-                                    if(ActionButton(label.c_str(),"Set this value",current) && !current) { fields[name]=v; commit(true,true); }
-                                    if(EditorTestProbeActive()) EditorTestTag(("cs:"+name+"="+label).c_str());
-                                    ImGui::PopID();
-                                }
-                                EditorTheme::PopFont();
-                            }
-                            ImGui::EndDisabled();
-                            ImGui::PopID();
-                        };
-                        // Fields of one tab ("" = untabbed): headers, foldout runs, [HideIf], then that tab's buttons.
-                        auto drawSet=[&](const std::string& tab) {
-                            std::string openFoldout; bool foldoutOpen=true;
-                            if(!custom) for(const auto& field:fieldList) {
-                                if(field.value("tab",std::string{})!=tab) continue;
-                                const std::string foldout=field.value("foldout",std::string{});
-                                if(foldout!=openFoldout) {
-                                    if(!openFoldout.empty() && foldoutOpen) ImGui::TreePop();
-                                    openFoldout=foldout; foldoutOpen=true;
-                                    if(!openFoldout.empty()) foldoutOpen=EditorUIPrimitives::FramedFoldout((openFoldout+"###foldout:"+openFoldout).c_str());
-                                }
-                                if(!openFoldout.empty() && !foldoutOpen) continue;
-                                const std::string header=field.value("header",std::string{});
-                                if(!header.empty()) EditorUIPrimitives::SectionHeader(header.c_str());
-                                if(conditionMet(field.value("hideIf",Json()))) continue;
-                                drawField(field);
-                            }
-                            if(!openFoldout.empty() && foldoutOpen) ImGui::TreePop();
-                            // [Button] methods.
-                            for(const auto& button:metadata.value("buttons",Json::array())) {
-                                if(button.value("tab",std::string{})!=tab) continue;
-                                const std::string method=button.value("method",std::string{}), label=button.value("label",method);
-                                ImGui::PushID(method.c_str());
-                                if(EditorUIPrimitives::SecondaryButton(label.c_str(),ImVec2(-FLT_MIN,0.0f))) {
-                                    const std::string beforeRun=slot.Fields;
-                                    if(runMethod(method,label.c_str()) && slot.Fields!=beforeRun) Scripting::SetSlots(*component,slots);
-                                }
-                                ImGui::PopID();
-                            }
-                        };
-                        drawSet("");
-                        std::vector<std::string> tabs;
-                        auto noteTab=[&](const Json& item) {
-                            const std::string t=item.value("tab",std::string{});
-                            if(!t.empty() && std::find(tabs.begin(),tabs.end(),t)==tabs.end()) tabs.push_back(t);
-                        };
-                        if(!custom) for(const auto& field:fieldList) noteTab(field);
-                        for(const auto& button:metadata.value("buttons",Json::array())) noteTab(button);
-                        if(!tabs.empty()) {
-                            // [Tab] groups: a segmented switch, the chosen tab remembered per behaviour.
-                            int& tabIndex=*ImGui::GetStateStorage()->GetIntRef(ImGui::GetID("##scriptTab"),0);
-                            tabIndex=std::clamp(tabIndex,0,(int)tabs.size()-1);
-                            std::vector<const char*> tabNames;
-                            for(const auto& t:tabs) tabNames.push_back(t.c_str());
-                            ImGui::Dummy(ImVec2(0.0f,EditorTheme::Px(2.0f)));
-                            EditorUIPrimitives::Segmented("##scriptTabs",&tabIndex,tabNames.data(),(int)tabNames.size());
-                            drawSet(tabs[(size_t)tabIndex]);
-                        }
-                        // [ShowInInspector] read-outs, refreshed at most four times a second.
-                        const Json& shows=metadata.contains("shows") && metadata.at("shows").is_array()?metadata.at("shows"):noFields;
-                        if(!shows.empty()) {
-                            auto& cache=m_ScriptShowCache[(static_cast<std::uint64_t>(slot.Id)<<32)|entityId];
-                            const double now=ImGui::GetTime();
-                            if(now-cache.Time>0.25 || cache.Class!=slot.Class) {
-                                cache.Time=now; cache.Class=slot.Class; cache.Values.clear();
-                                const Json values=Json::parse(Scripting::ShowValues(world,scriptAssets,slot.Class,entityId,slot.Id,slot.Fields),nullptr,false);
-                                if(values.is_object()) for(auto it=values.begin();it!=values.end();++it)
-                                    cache.Values.emplace_back(it.key(),it.value().is_string()?it.value().get<std::string>():it.value().dump());
-                            }
-                            for(const auto& [showName,showText]:cache.Values) {
-                                PropertyLabel(showName.c_str());
-                                ImGui::AlignTextToFramePadding();
-                                EditorTheme::PushSmall(); ImGui::TextColored(EditorTheme::Dim,ICON_FA_EYE); EditorTheme::PopFont();
-                                if(ImGui::IsItemHovered()) EditorUI::SetTooltip("Read-only: [ShowInInspector], refreshed while shown.");
-                                ImGui::SameLine();
-                                EditorTheme::PushMonoSmall(); ImGui::TextColored(EditorTheme::Secondary,"%s",showText.c_str()); EditorTheme::PopFont();
-                            }
-                        }
-                    }
-                    if(!slot.Source.empty()) {
-                        ImGui::Dummy(ImVec2(0.0f,EditorTheme::Px(2.0f)));
-                        if(EditorUIPrimitives::SecondaryButton(ICON_FA_CODE "  Edit in Script IDE"))OpenScriptIDE(ProjectPaths::Resolve(slot.Source));
-                        ImGui::SameLine();
-                        if(EditorUIPrimitives::SecondaryButton(ICON_FA_PEN_TO_SQUARE "  Open Script"))
-                            OsShell::OpenFile(ProjectPaths::Resolve(slot.Source));
-                        if(ImGui::IsItemHovered()) EditorUI::SetTooltip("Open the C# source in your code editor");
-                    }
-                    if(ImGui::TreeNode("Advanced##script")) {
-                        if(!slot.Class.empty()) drawClassAndSource();
-                        PropertyLabel("Class"); ImGui::SetNextItemWidth(-FLT_MIN);
-                        persist(InputTextString("##classname","Fully qualified class name",slot.Class));
-                        if(EditorUIPrimitives::SecondaryButton(ICON_FA_ROTATE_LEFT "  Reset Fields")) {
-                            slot.Fields="{}"; persist(true,true);
-                        }
-                        ImGui::TreePop();
-                    }
-                    if(DangerIconButton(ICON_FA_XMARK "  Remove Script","Remove this script from the object")) remove=static_cast<int>(index);
-                    ImGui::TreePop();
-                }
-                ImGui::PopID();
-            }
-            if(remove>=0) { PushUndo(world,"Remove C# Script"); slots.erase(slots.begin()+remove); Scripting::SetSlots(*component,slots); }
-            ImGui::SetNextItemWidth(-FLT_MIN);
-            if(ImGui::BeginCombo("##addscript","Add Script",ImGuiComboFlags_HeightLarge)) {
-                if(classes.empty()) ImGui::TextDisabled("Save a C# script to compile it first");
-                for(const auto& name:classes) if(ImGui::Selectable(name.c_str())) {
-                    PushUndo(world,"Add C# Script"); Scripting::Attach(*component,"",name);
-                }
-                ImGui::EndCombo();
-            }
-        } catch(const std::exception& why) { ImGui::TextWrapped("C# Inspector: %s",why.what()); }
-        return;
-    }
-
     // #128 — Unity's "needs a Collider" box: a Rigidbody with no Collider isn't added to the
     // physics world at all, so it silently never falls or collides.
     if (std::strcmp(componentName, "Rigidbody") == 0 && phase == ReflectExtraPhase::Top &&
@@ -5196,10 +4848,6 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
 void EditorLayer::DrawReflectedComponentExtraMulti(const char* componentName, World& world,
                                                    const std::vector<entt::entity>& sel,
                                                    ReflectExtraPhase phase) {
-    if(std::strcmp(componentName,"C# Script")==0 && phase==ReflectExtraPhase::Top) {
-        ImGui::TextWrapped("Select one object to edit its script stack and Inspector fields.");
-        return;
-    }
     if (std::strcmp(componentName, "Rigidbody") == 0 && phase == ReflectExtraPhase::Top) { // #128
         int missing = 0;
         for (entt::entity e : sel) if (!world.Registry.all_of<ColliderComponent>(e)) ++missing;

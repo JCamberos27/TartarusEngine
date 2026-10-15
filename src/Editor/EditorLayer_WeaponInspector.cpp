@@ -1383,7 +1383,7 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
         r.Float("Max Speed", g.ImpactMaxSpeed, 0.1f, 0.0f, 50.0f, "%.1f m/s", "Caps the velocity one round can add, so light props fly without rocketing off.");
     }
 
-    if(!s.HasLegacyGameplay) ImGui::TextWrapped("Weapon stats and damage are authored on the prefab root C# WeaponDefinition script.");
+    if(!s.HasLegacyGameplay) ImGui::TextWrapped("Weapon stats and damage are authored on the prefab root's Weapon Definition.");
     const FirstPersonBarrelReport* barrel = FindBarrelReport(path);
     std::snprintf(summary, sizeof summary, "%s, %s", s.Muzzle.Auto ? "auto muzzle" : "set muzzle", s.Laser.Enabled ? "laser" : "no laser");
     if (r.Section(ICON_FA_LOCATION_CROSSHAIRS, "Barrel & Laser", summary, true)) DrawBarrel(r, s, barrel);

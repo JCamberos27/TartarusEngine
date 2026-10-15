@@ -9,23 +9,15 @@ This also applies to re-exported weapon FBXs and sounds derived from third-party
 Run `python tools/assets/check_git_assets.py` before committing or pushing.
 
 * [Editor Enhancers](EDITOR_ENHANCERS.md): hierarchy and folder styles, Inspector attributes, tabs, favorites and ruler.
-* [History and custom Inspectors](EDITOR_HISTORY_AND_INSPECTORS.md): global undo and C# Inspector authoring.
-* [Script IDE](SCRIPT_IDE.md): embedded C# editing, semantic navigation, compilation and recovery.
+* [History and Inspectors](EDITOR_HISTORY_AND_INSPECTORS.md): global undo and gameplay Inspectors.
+* [Script IDE](SCRIPT_IDE.md): embedded C++, shader and .tescript editing, module rebuilds and recovery.
 * [Curve editor](CURVE_EDITOR.md): shared curve authoring tools.
 * [Black Glass design system](EDITOR_DESIGN_SYSTEM.md): the opt-in editor theme (solid black panels, real blurred glass under everything that floats), its motion language, Glass Workspace panels and viewport HUDs.
 
-## C# gameplay and editor scripting
+## Gameplay code
 
-| Document | Use it for |
-| --- | --- |
-| [Scripting manual](SCRIPTING_MANUAL.md) | Start here: setup, tutorials, player/weapon customization, prefab workflow and troubleshooting. |
-| [Complete API reference](SCRIPTING_API.md) | Implemented classes, methods, field types, lifecycle, native data access and limitations. |
-| [Gameplay frame reference](SCRIPTING_FRAMES.md) | Every PlayerFrame, WeaponFrame and ShotFrame member, operation and flag. |
-| [Implementation overview](CSHARP_SCRIPTING.md) | Native/managed ownership, build integration, AK/870 migration and research sources. |
-
-The tutorials target the APIs implemented in this repository. The editor is C++; C# provides
-gameplay and editor extensions. Editor tools and gameplay compile independently. See each
-guide's boundaries before assuming Unity package or serialization compatibility.
+[Gameplay code](GAMEPLAY_CODE.md): where player, weapon and body code lives, components, and
+hot-reloading the game and editor modules. Everything is native C++.
 
 ## Related engine systems
 

@@ -41,7 +41,6 @@ struct GLFWwindow;
 struct RootMotionOptions;
 class World;
 class ScriptIDE;
-namespace Scripting { struct NativeRequest; }
 class Camera;
 class AssetLibrary;
 class ScreenBlur;
@@ -1176,11 +1175,6 @@ private:
     void DrawLightingPanel(World& world);
     void DrawAudioDebugPanel(World& world); // EditorLayer_AudioDebug.cpp
     void DrawAssetLibraryPanel(World& world, AssetLibrary& assets); // EditorLayer_AssetLibraryPanel.cpp
-    void DrawManagedEditorTools(World& world, AssetLibrary& assets, float dt);
-    bool DrawManagedInspector(World& world,AssetLibrary& assets,entt::entity entity,const std::string& type,
-                              std::string* fields=nullptr,const std::string& metadata="{}",std::uint32_t slot=0);
-    int ManagedEditorService(World& world,AssetLibrary& assets,int op,Scripting::NativeRequest& request,
-                             int& windows,int& widgets,int& groups,bool inlineInspector);
     void DrawEnvironmentSettings(World& world, float itemWidth);
     void DrawPhysicalSkySettings(World& world, float itemWidth); // EditorLayer_Sky.cpp
     void DrawPostProcessSettings(World& world, float itemWidth);
@@ -2260,15 +2254,6 @@ private:
     ImGuiID m_CurSectionId = 0;
     bool m_CurSectionMeasure = false;  // fully open and still: record its body height
     bool m_CurSectionAlpha = false;    // a fade alpha was pushed for the body
-    // vInspector C# attributes: the "New key" text of each Dictionary field's add row (by ImGui ID),
-    // and each script slot's [ShowInInspector] read-outs, refreshed at most four times a second.
-    std::unordered_map<ImGuiID, std::string> m_ScriptDictNewKey;
-    struct ScriptShowCache {
-        double Time = -1.0;
-        std::string Class;
-        std::vector<std::pair<std::string, std::string>> Values;
-    };
-    std::unordered_map<std::uint64_t, ScriptShowCache> m_ScriptShowCache;
 
     // Single-slot component clipboard (#236): "Copy Component" on a header header snapshots the
     // component; "Paste Component Values" on a matching header (or the same kind on another

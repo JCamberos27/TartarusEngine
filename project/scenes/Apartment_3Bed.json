@@ -18207,13 +18207,12 @@
       ]
     },
     {
-      "C# Script": {
-        "Class": "Tartarus.Gameplay.LightFlicker",
-        "Enabled": true,
-        "Fields JSON": "{\"Mode\": 1, \"MinInterval\": 0.12, \"MaxInterval\": 1.4, \"Depth\": 0.55, \"Seed\": 7}",
-        "Next Script ID": 1,
-        "Scripts": "[]",
-        "Source": "assets/Scripts/LightFlicker.cs"
+      "Light Flicker": {
+        "Depth": 0.55,
+        "Max Interval": 1.4,
+        "Min Interval": 0.12,
+        "Mode": "Tv",
+        "Seed": 7
       },
       "Light": {
         "Angular Size": 0.53,
@@ -18928,13 +18927,12 @@
       ]
     },
     {
-      "C# Script": {
-        "Class": "Tartarus.Gameplay.LightFlicker",
-        "Enabled": true,
-        "Fields JSON": "{\"Mode\": 0, \"MinInterval\": 3.0, \"MaxInterval\": 11.0, \"Depth\": 0.95, \"Seed\": 3}",
-        "Next Script ID": 1,
-        "Scripts": "[]",
-        "Source": "assets/Scripts/LightFlicker.cs"
+      "Light Flicker": {
+        "Depth": 0.95,
+        "Max Interval": 11.0,
+        "Min Interval": 3.0,
+        "Mode": "Fluorescent",
+        "Seed": 3
       },
       "Light": {
         "Angular Size": 0.53,
@@ -19044,13 +19042,12 @@
       ]
     },
     {
-      "C# Script": {
-        "Class": "Tartarus.Gameplay.LightFlicker",
-        "Enabled": true,
-        "Fields JSON": "{\"Mode\": 0, \"MinInterval\": 6.0, \"MaxInterval\": 18.0, \"Depth\": 0.8, \"Seed\": 11}",
-        "Next Script ID": 1,
-        "Scripts": "[]",
-        "Source": "assets/Scripts/LightFlicker.cs"
+      "Light Flicker": {
+        "Depth": 0.8,
+        "Max Interval": 18.0,
+        "Min Interval": 6.0,
+        "Mode": "Fluorescent",
+        "Seed": 11
       },
       "Light": {
         "Angular Size": 0.53,

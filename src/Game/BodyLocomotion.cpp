@@ -1,5 +1,5 @@
 #include "BodyLocomotion.h"
-#include "Scripting/GameCommands.h"
+#include "GameCommands.h"
 
 #include <glm/glm.hpp>
 
@@ -8,7 +8,7 @@
 
 namespace BodyLocomotion {
 namespace {
-using namespace Scripting;
+using namespace Gameplay;
 constexpr float kPi = 3.14159265358979f, kTau = 2 * kPi, Rad = kPi / 180;
 constexpr float WalkJogSplit = 2.2f;     // clip m/s: below, a walk's start / stop / pivot; above, a jog's
 constexpr float StartTurnMin = 40;       // degrees the body is off where it should face before a start turns it

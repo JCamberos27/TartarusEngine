@@ -89,11 +89,9 @@ under `extern/imcurve`. Its Unlicense text is retained in `extern/imcurve/LICENS
 as `assets/licenses/ImCurve.txt`; integration changes are documented in `extern/imcurve/README.md`.
 Upstream: https://github.com/jsoulier/imcurve.
 
-## Embedded C# IDE
+## Embedded Script IDE
 
 ImGuiColorTextEdit, commit ca2f9f1462e3b60e56351bc466acda448c5ea50d, is vendored under `extern/ImGuiColorTextEdit` with local integration patches. Copyright (c) 2017 BalazsJako; MIT license, reproduced in `extern/ImGuiColorTextEdit/LICENSE` and staged as `assets/licenses/ImGuiColorTextEdit.txt`. Upstream: https://github.com/BalazsJako/ImGuiColorTextEdit.
-
-The editor-only Roslyn analysis helper references Microsoft.CodeAnalysis and Microsoft.CodeAnalysis.CSharp from the installed .NET SDK. These compiler components are distributed under the MIT license by the .NET Foundation and contributors; see https://github.com/dotnet/roslyn/blob/main/License.txt. They are staged under Managed/IDE and excluded from exported games.
 
 ---
 

@@ -17,8 +17,8 @@ each contain the complete weapon setup:
 
 | Extension / folder | Purpose |
 |---|---|
-| `.prefab` | Instantiable weapon model with the project C# WeaponDefinition script and native Animator Controller |
-| `.fpsanim` | First-person presentation settings, animation clips and recoil/shake references; gameplay data lives in the prefab's C# WeaponDefinition |
+| `.prefab` | Instantiable weapon model with its Weapon Definition component and Animator Controller |
+| `.fpsanim` | First-person presentation settings, animation clips and recoil/shake references; gameplay data lives in the prefab's Weapon Definition |
 | `.controller` | Animator state graph and transitions |
 | `.recoil` | Recoil profile |
 | `.camerashake` | Camera shake profile |
@@ -32,9 +32,8 @@ graphs, clips, import settings, or prefab identities. File extensions now remain
 visible so several assets named AKS74U are distinguishable.
 
 Body controllers live under `assets/Animations/Controllers`, motion capture under
-`assets/Animations/Mocap`, and NPC controllers under `assets/AI`. Gameplay C# is
-under `assets/Scripts`; editor C# is under `assets/Editor`; native engine and
-editor implementation is under `src/`. Scenes, screenshots, and custom shaders
+`assets/Animations/Mocap`, and NPC controllers under `assets/AI`. Engine, editor
+and gameplay code is under `src/` (see [Gameplay code](GAMEPLAY_CODE.md)). Scenes, screenshots, and custom shaders
 remain under `project/scenes`, `project/screenshots`, and `project/shaders`.
 
 ## Duplicate audit and consolidation

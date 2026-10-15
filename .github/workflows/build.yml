@@ -12,8 +12,6 @@ name: Build
 #    GUI-subsystem binary, which PowerShell does not wait for, so the step passed while tests
 #    failed (#351). Native tools are invoked through Start-Process -PassThru and waited for
 #    explicitly for that reason - do the same for anything added here that is meant to gate.
-#    Steps that can run `dotnet build` wait with WaitForExit rather than -Wait, which would also
-#    wait for the compiler server it leaves running.
 #  - The crash-dump assertion ran against a smoke process that had not finished, for the same
 #    reason (#354).
 #  - The --smoke-test step was continue-on-error because hosted runners have no GPU and this
@@ -55,9 +53,6 @@ jobs:
         config: [Debug, Release]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
 
       - name: Third-party asset policy
         if: matrix.config == 'Debug'
@@ -146,9 +141,7 @@ jobs:
       # (Debug is a console subsystem app, so it gated correctly all along.)
       #
       # Start-Process -PassThru + WaitForExit waits for either subsystem and hands back the real
-      # exit code; -NoNewWindow keeps the test output in this log. Not -Wait: that also waits for
-      # every descendant, and the C# build test's `dotnet build` leaves its compiler server
-      # (VBCSCompiler) alive for minutes after the engine exits. Reading Handle first keeps
+      # exit code; -NoNewWindow keeps the test output in this log. Reading Handle first keeps
       # ExitCode available once the process is gone.
       - name: Unit tests
         timeout-minutes: 5
@@ -328,7 +321,7 @@ jobs:
           # ZIP built from this config, and it is header-only. This is the durable guard: whoever
           # adds the next dependency finds out from a red build rather than from a user.
           $expected = @(
-            "assets", "project", "Managed", "LICENSE", "README-FIRST-RUN.txt", "THIRD-PARTY-NOTICES.md",
+            "assets", "project", "LICENSE", "README-FIRST-RUN.txt", "THIRD-PARTY-NOTICES.md",
             "TartarusEngine.exe", "TartarusEditor.dll", "TartarusGame.dll",
             "PhysX.dll", "PhysXCommon.dll", "PhysXCooking.dll", "PhysXFoundation.dll"
           )

@@ -11,7 +11,7 @@
 #include "SystemFonts.h"
 #include "AssetLibrary.h"
 #include "World.h"
-#include "Scripting/ScriptRuntime.h"
+#include "GameModuleBuild.h"
 #include "Camera.h"
 #include "Model.h"
 #include "Texture.h"
@@ -544,7 +544,7 @@ void EditorLayer::Shutdown() {
     // FreeGpuResources(), not this. ImGui_Impl*_Shutdown() and DestroyContext() must not run twice.
     if (m_ShutdownDone) return;
     m_ShutdownDone = true;
-    Scripting::StopEditorScripts();
+    GameModuleBuild::Shutdown();
 
     // A build still running: stop it at the next file and wait, so it isn't cut off mid-copy.
     CancelBuild();
@@ -2587,7 +2587,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     m_EditorCameraPtr = &editorCamera;
     m_EditWorldPtr = &world;
     BeginGlobalUndoFrame(world);
-    DrawManagedEditorTools(world,assets,dt);
+    GameModuleBuild::Poll();
     if(!m_ScriptIDE)m_ScriptIDE=std::make_unique<ScriptIDE>();
     CurveEditor::DrawWindows([this]{m_RequestGlobalUndo=true;},[this]{m_RequestGlobalRedo=true;},!m_UndoStack.empty(),!m_RedoStack.empty());
 
@@ -3122,7 +3122,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         if (m_FavVisible) sctx = 0;
         Shortcuts::BeginFrame(sctx);
     }
-    // Asset windows, custom C# editors and curves all share the chronological history.
+    // Asset windows, Inspectors and curves all share the chronological history.
     // A text field keeps its native character-edit undo until editing is committed.
     if(!m_GameInputActive && !ScriptIDEHasKeyboardFocus() && !ImGui::GetIO().WantTextInput && ImGui::GetIO().KeyCtrl) {
         if(ImGui::IsKeyPressed(ImGuiKey_Z,false) && !ImGui::GetIO().KeyShift) Undo(world,assets);

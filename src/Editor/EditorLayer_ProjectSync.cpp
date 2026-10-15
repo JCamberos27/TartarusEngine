@@ -25,8 +25,6 @@
 #include "ProjectPaths.h"
 #include "ProjectSettings.h"
 #include "ProjectWatcher.h"
-#include "Scripting/ScriptRuntime.h"
-#include "Scripting/ScriptComponent.h"
 #include "SceneSerializer.h"
 #include "World.h"
 
@@ -76,13 +74,6 @@ int RetargetSceneReferences(World& world, const std::string& oldPath, const std:
         }
     }
     // Placed models are per-entity instances that each carry the file path.
-    for(auto [e,s]:reg.view<CSharpScriptComponent>().each()) {
-        try {
-            auto slots=Scripting::GetSlots(s); bool changed=false;
-            for(auto& slot:slots) if(slot.Id!=0 && Retarget(slot.Source,oldPath,newPath)) { ++n; changed=true; }
-            if(changed) Scripting::SetSlots(s,slots);
-        } catch(const std::exception&) { }
-    }
     for (auto [e, rend] : reg.view<RenderableComponent>().each())
         if (rend.ModelRef && SameFile(AbsoluteOf(rend.ModelRef->Path()), oldPath)) { rend.ModelRef->SetPath(newPath); ++n; }
     for (auto [e, pi] : reg.view<PrefabInstanceComponent>().each()) n += Retarget(pi.SourcePath, oldPath, newPath) ? 1 : 0;
@@ -124,16 +115,9 @@ void EditorLayer::SyncProjectChanges(World& world, AssetLibrary& assets) {
         AssetDatabase::ScanProject();
         InvalidateScenesListing();
         InvalidateProjectAssetIndex();
-        Scripting::RequestBuild();
     }
     for (const auto& c : changes) {
         using K = ProjectWatcher::Change::Kind;
-        auto source=[](const std::string& path) {
-            const auto p=fs::path(path);
-            for(const auto& part:p) if(part=="bin" || part=="obj") return false;
-            return p.extension()==".cs" || p.extension()==".csproj";
-        };
-        if(source(c.Path) || source(c.OldPath)) Scripting::RequestBuild();
         if (c.Type == K::Modified) m_AssetThumbs.Invalidate(fs::path(c.Path).lexically_normal().string());
         else if (ChangesAssetIndex(c.Path) || (c.Type == K::Renamed && ChangesAssetIndex(c.OldPath)))
             InvalidateProjectAssetIndex(); // the Asset Browser's list of files on disk

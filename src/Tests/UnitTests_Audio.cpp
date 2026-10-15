@@ -1,4 +1,3 @@
-#include "../Game/Scripting/ScriptRuntime.h"
 #include "UnitTestSupport.h"
 
 #include "../Game/Audio/FoleyAudio.h"
