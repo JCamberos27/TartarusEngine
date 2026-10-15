@@ -2529,8 +2529,8 @@ void EditorLayer::OpenPinnedComponent(World& world, entt::entity entity, const c
     m_Pins.push_back(std::move(p));
 }
 
-// One small floating editor per pin, showing the same field body the Inspector draws (so undo,
-// prefab override tints and the C# managed inspector all behave identically). A pin whose scene
+// One small floating editor per pin, showing the same field body the Inspector draws (so undo and
+// prefab override tints behave identically). A pin whose scene
 // isn't open is kept but not drawn; one whose object or component is gone says so until closed.
 void EditorLayer::DrawPinnedComponentWindows(World& world, AssetLibrary& assets) {
     if (m_Pins.empty()) return;

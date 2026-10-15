@@ -29,8 +29,7 @@
 #include "FirstPersonWeaponWizard.h"
 #include "ClipAnalysis.h"
 #include "FirstPersonAnimation.h"
-#include "Scripting/WeaponPrefab.h"
-#include "Scripting/ScriptRuntime.h"
+#include "WeaponPrefab.h"
 #include "FirstPersonAdsCarry.h"
 #include "AudioEngine.h"
 #include "AI/AiMath.h"
@@ -4002,7 +4001,7 @@ void TestRemingtonController() {
     FirstPersonAnimationSet set;
     std::string error;
     CHECK(FirstPersonAnimationSet::LoadFile(ProjectPaths::Resolve("assets/Weapons/Remington870/Remington870.fpsanim"), set, &error));
-    CHECK(Scripting::ResolveWeaponGameplay("assets/Weapons/Remington870/Remington870.prefab", set.Gameplay, error));
+    CHECK(Gameplay::ResolveWeaponGameplay("assets/Weapons/Remington870/Remington870.prefab", set.Gameplay, error));
 
     // Every state's clips attach to the rigs they play on - what Play checks before the weapon may
     // start (a one-frame export, say, carries no take and wouldn't). Needs the arms (Quantum pack).
@@ -5766,7 +5765,7 @@ int RunUnitTests(const char* filter) {
     RegisterRecoilPortTests(tests);
     RegisterSwayPortTests(tests);
     RegisterEngineTests(tests);
-    { void RegisterScriptingTests(UnitTestSupport::TestList&); RegisterScriptingTests(tests); }
+    { void RegisterGameplayTests(UnitTestSupport::TestList&); RegisterGameplayTests(tests); }
     RegisterBloodTests(tests);
     RegisterGlassTests(tests);
     { void RegisterAudioTests(UnitTestSupport::TestList&); RegisterAudioTests(tests); } // UnitTests_Audio.cpp

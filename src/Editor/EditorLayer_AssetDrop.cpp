@@ -10,8 +10,6 @@
 #include "Model.h"
 #include "World.h"
 #include "Components.h"
-#include "Scripting/ScriptComponent.h"
-#include "Scripting/ScriptRuntime.h"
 #include <json.hpp>
 #include "ProjectPaths.h"
 #include "Log.h"
@@ -82,7 +80,6 @@ std::string EditorLayer::AssetDropHint(World& world, entt::entity target, const 
             return world.Registry.all_of<FirstPersonControllerComponent>(target) ? "Use " + file + " as " + name + "'s weapon"
                                                                                 : std::string();
         if (ext == ".tescript" && IsTransformControllerScript(path)) return "Add a Transform Controller to " + name;
-        if (ext == ".cs") return "Add a C# Script to " + name;
     }
     return {};
 }
@@ -167,13 +164,6 @@ bool EditorLayer::ApplyAssetDrop(World& world, AssetLibrary& assets, entt::entit
             }
             PushUndo(world, "Set Weapon Definition");
             fpc->AnimationSet = rel;
-            return true;
-        }
-        if (ext == ".cs") {
-            PushUndo(world,"Add C# Script");
-            auto& script=world.Registry.get_or_emplace<CSharpScriptComponent>(target);
-            Scripting::Attach(script,rel,"Tartarus.Gameplay."+std::filesystem::path(path).stem().string());
-            Scripting::RequestBuild();
             return true;
         }
         if (ext == ".tescript") {

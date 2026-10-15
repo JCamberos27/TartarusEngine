@@ -30,7 +30,6 @@
 #include "ProjectPaths.h"
 #include "ProjectSettings.h"
 #include "UserPaths.h"
-#include "Scripting/ScriptRuntime.h"
 #include "GLStateCache.h"
 #include "Framebuffer.h"
 #include "gl.h"
@@ -195,7 +194,6 @@ void EditorLayer::ReloadHistoryFiles(AssetLibrary& assets,const std::vector<Edit
         if(file.Path==std::filesystem::path(Enhancers::Palette::Path()))Enhancers::Palette::Load();
         if(file.Path==std::filesystem::path(Enhancers::FolderStyles::Path()))Enhancers::FolderStyles::Get().Load();
         if(file.Path==std::filesystem::path(Enhancers::UiStyles::Path()))Enhancers::UiStyles::Get().Load();
-        if(file.Path.extension()==".cs" || file.Path.extension()==".csproj")Scripting::RequestBuild();
     }
     if(assetIdentity)AssetDatabase::ScanProject();
 }
@@ -1327,14 +1325,6 @@ std::string EditorLayer::ImportDroppedFile(World& world, AssetLibrary& assets, C
             return "sound";
         }
         Log::Error("Failed to load sound '" + path + "'.");
-    } else if (ext == ".cs") {
-        const std::string projectPath=CopyAssetIntoProject(path,"Scripts");
-        AssetDatabase::EnsureGuid(projectPath);
-        assets.SetAssetFolder(projectPath,targetFolder);
-        InvalidateAnimationListing();
-        InvalidateProjectAssetIndex();
-        Log::Info("Imported C# script '"+name+"'. Build C# Gameplay to compile it.");
-        return "script";
     } else if (ext == ".json") {
         // A dropped scene file offers to open it rather than silently doing nothing —
         // "import" has no other meaning for a whole scene.

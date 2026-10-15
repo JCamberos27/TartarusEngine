@@ -217,19 +217,6 @@ Report Build(const ProjectSettings::BuildSettings& s, Progress* progress) {
             if (e.is_regular_file() && e.path().extension() == ".dll" && !copy.File(e.path(), out / e.path().filename(), "Runtime"))
                 return false;
         }
-        const fs::path managed = exeDir / "Managed";
-        if (!fs::is_directory(managed, ec)) { copy.Error="C# runtime is missing. Build TartarusScripts first."; return false; }
-        if (!copy.Tree(managed, out / "Managed", "C# runtime", [](const fs::directory_entry& e) {
-                const auto name=e.path().filename().string();
-                return name=="obj" || name=="bin" || name=="IDE" || name=="SDK" || name.rfind("Tartarus.Editor.",0)==0 || name.rfind("Tartarus.Gameplay.",0)==0;
-            })) return false;
-        // Export exactly the project's assembly, even when absent or older than the sample's staged build.
-        const fs::path scriptsBin=projectRoot/"Scripts/bin";
-        if(fs::is_directory(scriptsBin,ec)) {
-            if(!copy.Tree(scriptsBin,out/"project/Scripts/bin","C# gameplay",[](const fs::directory_entry& e) {
-                const auto name=e.path().filename().string();return name.rfind("Tartarus.Editor.",0)==0 || name=="obj";
-            }))return false;
-        }
         const fs::path engineAssets = exeDir / "assets";
         if (fs::is_directory(engineAssets, ec) &&
             !copy.Tree(engineAssets, out / "assets", "Engine",
@@ -237,7 +224,7 @@ Report Build(const ProjectSettings::BuildSettings& s, Progress* progress) {
             return false;
         if (!copy.Tree(projectRoot, out / "project", "Project assets", [](const fs::directory_entry& e) {
                 const std::string name = e.path().filename().string();
-                if (e.is_directory()) return IsEditorOnlyProjectDir(name) || name=="Editor" || name=="obj" || name=="bin";
+                if (e.is_directory()) return IsEditorOnlyProjectDir(name);
                 if(name.rfind("Tartarus.Editor.",0)==0 || name=="editor-build.log") return true;
                 return name.size() > 12 && name.compare(name.size() - 12, 12, ".backup.json") == 0;
             }))

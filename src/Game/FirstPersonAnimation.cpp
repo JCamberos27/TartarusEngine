@@ -3,7 +3,7 @@
 #include "AtomicFile.h"
 #include "AssetDatabase.h"
 #include "ProjectPaths.h"
-#include "Scripting/WeaponPrefab.h"
+#include "WeaponPrefab.h"
 #include <stdexcept>
 
 #include <json.hpp>
@@ -157,7 +157,7 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
     parsed.Gameplay=FirstPersonWeaponGameplay{};
     if (const auto g = root.find("gameplay"); g != root.end() && g->is_object()) {
         std::string why;
-        if(!Scripting::ImportLegacyWeaponGameplay(*g,parsed.Gameplay,why))return Fail(error,why);
+        if(!Gameplay::ImportLegacyWeaponGameplay(*g,parsed.Gameplay,why))return Fail(error,why);
         // Older presentation-only ADS fields remain a read compatibility path.
         parsed.Ads.Zoom=Number(*g,"adsZoom",parsed.Ads.Zoom);
         parsed.Ads.ViewModelZoom=Number(*g,"adsViewModelZoom",parsed.Ads.ViewModelZoom);

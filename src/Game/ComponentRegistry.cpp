@@ -72,21 +72,6 @@ void Add(RegisteredComponent entry) { Storage().push_back(std::move(entry)); }
 void RegisterEngineComponents() {
     using T = ReflectFieldType;
 
-    Register<CSharpScriptComponent>({
-        "C# Script", ICON_FA_CODE, "Attach C# behaviours. Saving a source compiles it automatically; fields are edited below.", "Scripts",
-        {
-            {"Source", T::AssetRef, TARTARUS_REFLECT_FIELD(CSharpScriptComponent, SourcePath), 0.0f, "C# source asset (class name below selects its runtime type)."},
-            {"Class", T::String, TARTARUS_REFLECT_FIELD(CSharpScriptComponent, ClassName)},
-            {"Fields JSON", T::String, TARTARUS_REFLECT_FIELD(CSharpScriptComponent, Fields), 0.0f, "JSON object of public field values, for example {\"Height\":0.5}."},
-            {"Enabled", T::Bool, TARTARUS_REFLECT_FIELD(CSharpScriptComponent, Enabled)},
-            {"Scripts", T::String, TARTARUS_REFLECT_FIELD(CSharpScriptComponent, Scripts)},
-            {"Next Script ID", T::Int, TARTARUS_REFLECT_FIELD(CSharpScriptComponent, NextScriptId)},
-        }
-    });
-    for(auto& f : Storage().back().Meta.Fields) {
-        f.EditorHidden=true;
-        if(std::strcmp(f.Name,"Source")==0) f.AssetKind=ReflectAssetKind::Script;
-    }
     Register<WeaponDefinitionComponent>({
         "Weapon Definition", ICON_FA_CROSSHAIRS, "What this weapon prefab is: its animation set (rigs, animation, recoil and camera profiles), its gameplay\n"
         "numbers and damage, and its muzzle light and smoke. Save prefab changes before starting Play.", "Gameplay",
@@ -328,6 +313,26 @@ void RegisterEngineComponents() {
               "Scale pulse cycles per second.", 0.0f, 50.0f },
         },
     });
+
+    {
+        ReflectComponent m;
+        m.Name = "Light Flicker"; m.Icon = ICON_FA_LIGHTBULB; m.Category = "Rendering";
+        m.Tooltip = "Flickers the Light on this object while playing: a fluorescent tube's stutters, a TV's shifting glow, or a candle's shimmer.";
+        m.Fields = {
+            { "Mode", T::Enum, TARTARUS_REFLECT_FIELD(LightFlickerComponent, Mode), 0.0f,
+              "Fluorescent: steady with bursts of off/on stutters. Tv: shifting brightness and tint. Candle: fast small noise." },
+            { "Min Interval", T::Float, TARTARUS_REFLECT_FIELD(LightFlickerComponent, MinInterval), 0.05f,
+              "Shortest wait between events, seconds (Fluorescent: between stutter bursts; Tv: between picture changes).", 0.05f, 60.0f },
+            { "Max Interval", T::Float, TARTARUS_REFLECT_FIELD(LightFlickerComponent, MaxInterval), 0.05f,
+              "Longest wait between events, seconds.", 0.05f, 60.0f },
+            { "Depth", T::Float, TARTARUS_REFLECT_FIELD(LightFlickerComponent, Depth), 0.01f,
+              "How far the light dips: 1 = all the way off.", 0.0f, 1.0f },
+            { "Seed", T::Int, TARTARUS_REFLECT_FIELD(LightFlickerComponent, Seed), 1.0f,
+              "Random seed, so lights with the same settings don't flicker in step." },
+        };
+        m.Fields[0].EnumLabels = "Fluorescent\0Tv\0Candle\0"; m.Fields[0].EnumCount = 3;
+        Register<LightFlickerComponent>(std::move(m));
+    }
 
     // Migrated from hand-coded serialization/Inspector code onto reflection (#184) — the third
     // such migration. Unlike Camera/Audio/Collider (all ruled out: they carry multi-select
@@ -2464,7 +2469,6 @@ void RegisterEngineComponents() {
         {"First Person Controller", "Primary Weapon Prefab"},
         {"First Person Controller", "Secondary Weapon Prefab"},
         {"Weapon Audio", "Data File"},
-        {"C# Script", "Source"},
     };
     for (const auto& [component, field] : kAssetPathFields)
         for (RegisteredComponent& rc : Storage())

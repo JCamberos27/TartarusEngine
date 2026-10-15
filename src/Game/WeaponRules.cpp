@@ -4,11 +4,11 @@
 
 namespace WeaponRules {
 namespace {
-bool Has(const Scripting::WeaponFrame& w, int tag) { return (w.Tags & tag) != 0; }
-void ResetBurst(Scripting::WeaponFrame& w) { w.BurstRemaining = 0; w.Commands |= EndBurst; }
+bool Has(const Gameplay::WeaponFrame& w, int tag) { return (w.Tags & tag) != 0; }
+void ResetBurst(Gameplay::WeaponFrame& w) { w.BurstRemaining = 0; w.Commands |= EndBurst; }
 }
 
-void Update(Scripting::WeaponFrame& w) {
+void Update(Gameplay::WeaponFrame& w) {
     w.Commands = 0; w.Result = 0;
     switch (w.Operation) {
     case 1: { // Fire request
@@ -86,7 +86,7 @@ void Update(Scripting::WeaponFrame& w) {
     }
 }
 
-void UpdateLoadout(Scripting::WeaponLoadoutFrame& f) {
+void UpdateLoadout(Gameplay::WeaponLoadoutFrame& f) {
     f.Commands = 0;
     if (f.Operation == 3) {
         auto* ammo = reinterpret_cast<int*>(f.SlotAmmo);

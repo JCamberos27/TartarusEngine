@@ -26,15 +26,8 @@
 #include "Enhancers/EnhancerCore.h"
 #include "Enhancers/EnhancerUserState.h"
 #include "Enhancers/TabState.h"
-#include "Scripting/ScriptRuntime.h"
-#include "Scripting/ScriptComponent.h"
 
 #include <imgui.h>
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h> // GetModuleFileNameW (the C# test assembly next to the exe)
 #include <IconsFontAwesome6.h>
 #include <imgui_internal.h>
 #include <json.hpp>
@@ -165,10 +158,6 @@ struct EditorUiTestAccess {
     static std::string& CurrentFolder(EditorLayer& e) { return e.m_CurrentAssetFolder; }
     static void NavigateFolder(EditorLayer& e, const std::string& f) { e.NavigateAssetFolder(f); }
     static std::string SceneKey(EditorLayer& e) { return e.CurrentSceneKey(); }
-    static std::vector<std::pair<std::string, std::string>> ShowValues(EditorLayer& e, std::uint32_t slot, std::uint32_t entity) {
-        auto it = e.m_ScriptShowCache.find((static_cast<std::uint64_t>(slot) << 32) | entity);
-        return it == e.m_ScriptShowCache.end() ? std::vector<std::pair<std::string, std::string>>{} : it->second.Values;
-    }
 };
 using X = EditorUiTestAccess;
 
@@ -577,15 +566,6 @@ Query PlusBesideNewKey() {
 Step TypeText(std::string text) {
     return {"type " + text, [text](Ctx&) { ImGui::GetIO().AddInputCharactersUTF8(text.c_str()); return true; }};
 }
-// A field of the first C# script on Alpha, from its saved JSON (null when not saved).
-nlohmann::json ScriptField(Ctx& c, const char* field) {
-    const auto* comp = c.W.Registry.try_get<CSharpScriptComponent>(ByName(c.W, "Alpha"));
-    if (!comp) return nlohmann::json();
-    const auto slots = Scripting::GetSlots(*comp);
-    if (slots.empty()) return nlohmann::json();
-    const nlohmann::json j = nlohmann::json::parse(slots[0].Fields, nullptr, false);
-    return j.is_object() && j.contains(field) ? j.at(field) : nlohmann::json();
-}
 // Scratch values a test carries between its steps.
 double g_Number = 0.0;
 std::string g_Text;
@@ -945,61 +925,6 @@ void RegisterTests() {
         Key(ImGuiKey_Enter), Wait(3),
         ExpectTrue("Min Distance = 2", [](Ctx& c) { return c.W.Registry.get<AudioSourceComponent>(ByName(c.W, "Beta")).MinDistance == 2.0f; }),
     });
-    // ------------------------------------------------------------------ 10. C# script attributes
-    // The project's assets/Editor has a [CustomEditor("*")] for every script, so this exercises the
-    // managed inspector path (SerializedProperty / PropertyField / EditorHost) - what the user sees.
-    Add("attributes: C# script attributes, buttons, OnValueChanged, dictionary, read-outs", {
-        FreshScene(),
-        Do("load the test assembly and attach AttributeProbe", [](Ctx& c) {
-            wchar_t exe[32768]{};
-            GetModuleFileNameW(nullptr, exe, 32768);
-            const std::string fixture = (std::filesystem::path(exe).parent_path() / "ScriptTests/Tartarus.Gameplay.Tests.dll").u8string();
-            if (!std::filesystem::exists(std::filesystem::u8path(fixture))) { Fail("test assembly not built: " + fixture); return; }
-            if (!Scripting::Invoke(0, const_cast<char*>(fixture.c_str()), Scripting::kVersion)) { Fail("couldn't load the test assembly"); return; }
-            X::PushUndo(c.E, c.W, "Attach AttributeProbe");
-            auto& comp = c.W.Registry.emplace<CSharpScriptComponent>(ByName(c.W, "Alpha"));
-            Scripting::Attach(comp, "", "Tartarus.Tests.AttributeProbe");
-        }), Wait(2),
-        SelectByName("Alpha"), Wait(3),
-        Click(Header("C# Script")), Wait(4),
-        ExpectTrue("Hits is read-only", [](Ctx&) { const UiItem* f = Find(ByTag("cs:Hits")); return f && (f->ItemFlags & ImGuiItemFlags_Disabled); }),
-        ExpectTrue("Note hidden while Advanced is off", [](Ctx&) { return Find(ByTagPrefix("cs:Note=")) == nullptr; }),
-        ExpectTrue("Boost enabled (Mode = Slow)", [](Ctx&) { const UiItem* f = Find(ByTag("cs:Boost")); return f && !(f->ItemFlags & ImGuiItemFlags_Disabled); }),
-        ExpectTrue("Script / Source rows moved under Advanced", [](Ctx&) { return Find(ByExact("##class", kInspector)) == nullptr; }),
-        Click(ByTag("cs:Advanced")), Wait(3),
-        ExpectTrue("Note shown once Advanced is on", [](Ctx&) { return Find(ByTagPrefix("cs:Note=")) != nullptr; }),
-        Do("Mode = Off", [](Ctx& c) {
-            X::PushUndo(c.E, c.W, "Change Mode");
-            auto& comp = c.W.Registry.get<CSharpScriptComponent>(ByName(c.W, "Alpha"));
-            auto slots = Scripting::GetSlots(comp);
-            nlohmann::json f = nlohmann::json::parse(slots[0].Fields, nullptr, false);
-            if (!f.is_object()) f = nlohmann::json::object();
-            f["Mode"] = 0;
-            slots[0].Fields = f.dump();
-            Scripting::SetSlots(comp, slots);
-        }), Wait(3),
-        ExpectTrue("Boost greyed out while Mode = Off", [](Ctx&) { const UiItem* f = Find(ByTag("cs:Boost")); return f && (f->ItemFlags & ImGuiItemFlags_Disabled); }),
-        Click(ByExact("5##Speed", kInspector)), Wait(3),
-        ExpectTrue("variant chip set Speed = 5", [](Ctx& c) { return ScriptField(c, "Speed") == nlohmann::json(5.0); }),
-        Click(ByLabel("DoubleSpeed", kInspector)), Wait(3),
-        ExpectTrue("DoubleSpeed button ran (10)", [](Ctx& c) { return ScriptField(c, "Speed") == nlohmann::json(10.0); }),
-        Click(ByTag("cs:Max Speed"), ImGuiMod_Ctrl), Wait(3), // Ctrl+click: type a value
-        TypeText("4"), Key(ImGuiKey_Enter), Wait(4),
-        ExpectTrue("OnValueChanged clamped Speed to MaxSpeed", [](Ctx& c) { return ScriptField(c, "Speed") == nlohmann::json(4.0); }),
-        Click(ByLabel("Reset Hits", kInspector)), Wait(3),
-        ExpectTrue("Reset Hits ran", [](Ctx& c) { return ScriptField(c, "Hits") == nlohmann::json(0); }),
-        Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
-        Expect("undo brings Hits back", [](Ctx& c) {
-            const auto v=ScriptField(c,"Hits");
-            return v.is_null() || v==nlohmann::json(3) ? std::string() : "Hits="+v.dump()+", Speed="+ScriptField(c,"Speed").dump();
-        }),
-        Click(ByTagPrefix("cs:New key##Weights=")), Wait(2),
-        TypeText("legs"), Wait(2),
-        Click(ByExact("Add##Weights", kInspector)), Wait(3),
-        ExpectTrue("dictionary key added", [](Ctx& c) { const auto w = ScriptField(c, "Weights"); return w.is_object() && w.contains("legs") && w.contains("head"); }),
-        Until("read-out shows Doubled = 8", [](Ctx&) { return Find(ByTag("cs:Doubled##show=8")) != nullptr; }, 5000),
-    });
-
     // ------------------------------------------------------------------ 11. Inspector tabs
     Add("tabs: drop a Hierarchy row on the Inspector; selecting returns to Selection", {
         FreshScene(), Wait(2),

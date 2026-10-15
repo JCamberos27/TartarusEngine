@@ -191,7 +191,7 @@ pops and the shake.
 
 **Triggers.**
 
-* *Compile failure toasts.* The HUD watches the log. A new error that starts with `C# error:`, or
+* *Compile failure toasts.* The HUD watches the log. A new error that starts with `Module rebuild failed`, or
   contains `failed to compile` or `compile error`, becomes a red toast that pops and shakes. It
   only reacts to errors logged after the HUD first appears, never to the backlog.
 * *Grid snap.* Ending a gizmo drag with snapping on plays the snap pop at the cursor.
@@ -267,7 +267,7 @@ put it is remembered. A panel you undock becomes glass, like every other floatin
   red, green or blue axis bar. Non-finite input is rejected. Edits are undoable as Move, Rotate and
   Scale.
 * **Reflected components.** These use the same field drawers as the classic Inspector, so every
-  reflected field, attribute and custom C# inspector works. Right-click a card header to *Reset*
+  reflected field and attribute works. Right-click a card header to *Reset*
   or *Remove* it; both are undoable. The *Add Component* menu sits at the bottom.
 
 ### Library (Asset Browser grid)

@@ -115,10 +115,10 @@ class Scene:
         write_json(path, self.data)
 
 
-def script(cls, source, **fields):
-    """The "C# Script" component for a gameplay script class (fields in its Fields JSON)."""
-    return {'C# Script': {'Class': cls, 'Source': source, 'Fields JSON': json.dumps(fields), 'Enabled': True,
-                          'Scripts': '[]', 'Next Script ID': 1}}
+def light_flicker(Mode=0, MinInterval=4.0, MaxInterval=15.0, Depth=1.0, Seed=1):
+    """The native "Light Flicker" component (Mode: 0 Fluorescent, 1 Tv, 2 Candle)."""
+    return {'Light Flicker': {'Mode': ['Fluorescent', 'Tv', 'Candle'][Mode], 'Min Interval': MinInterval,
+                              'Max Interval': MaxInterval, 'Depth': Depth, 'Seed': Seed}}
 
 
 def from_mat(repo, mat_path, **overrides):

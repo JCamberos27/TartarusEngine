@@ -1,5 +1,6 @@
 #include "GameModuleAPI.h"
 #include "TransformControllerSystem.h"
+#include "LightFlickerSystem.h"
 
 namespace {
 
@@ -13,6 +14,7 @@ void OnUnload() {}
 // pick up the new code without restarting.
 void Update(const GameModuleHostAPI&, World& world, float deltaTime) {
     UpdateTransformControllers(world, deltaTime);
+    UpdateLightFlickers(world, deltaTime);
 }
 
 const GameModuleAPI kAPI{

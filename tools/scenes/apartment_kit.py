@@ -119,7 +119,6 @@ WARM = (1.0, 0.72, 0.45)
 LAMP = (1.0, 0.66, 0.38)
 TUBE = (0.82, 0.95, 1.0)
 TV = (0.55, 0.7, 1.0)
-FLICKER = ('Tartarus.Gameplay.LightFlicker', 'assets/Scripts/LightFlicker.cs')
 MODES = {'Fluorescent': 0, 'Tv': 1, 'Candle': 2}
 
 
@@ -546,7 +545,7 @@ class Builder:
     def light(self, room, name, pos, intensity, rng, color, shadows=True, spot=None, flicker=None, fill=0.14, **kw):
         """A light that's on, plus a wide, faint, shadowless fill of the same colour: the bounce this renderer
         doesn't compute, so the room around a lamp isn't pure black."""
-        extra = k.script(*FLICKER, **flicker) if flicker else {}
+        extra = k.light_flicker(**flicker) if flicker else {}
         if 'yaw' in kw:
             kw['yaw'] = self.turn(kw['yaw'])
         self.s.light(f'{room} - {name}', self.group('Lighting'), self.pos(pos), intensity, rng, color, shadows,

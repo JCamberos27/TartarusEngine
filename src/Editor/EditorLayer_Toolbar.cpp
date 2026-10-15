@@ -3,7 +3,7 @@
 // History panels. Split out of EditorLayer.cpp for build time (#179).
 
 #include "EditorLayer.h"
-#include "Scripting/ScriptRuntime.h"
+#include "GameModuleBuild.h"
 #include "EditorPanels.h"
 #include "EditorLayerInternal.h"
 #include "EditorIcons.h"
@@ -29,7 +29,6 @@
 #include "AssetImporterInspector.h"
 #include "Profiler.h"
 #include "ProjectPaths.h"
-#include "../Game/Scripting/ScriptRuntime.h"
 #include "LayerRegistry.h"
 #include "GLStateCache.h"
 #include "Framebuffer.h"
@@ -666,8 +665,13 @@ void EditorLayer::DrawFileMenuBody(World& world, AssetLibrary& assets) {
                 ImGui::EndMenu();
             }
             ImGui::Separator();
-            if (ImGui::MenuItem(ICON_FA_CODE "  Build C# Gameplay & Editor", nullptr, false, !Scripting::Building()))
-                Scripting::Build();
+            if (ImGui::MenuItem(ICON_FA_CODE "  Rebuild Game & Editor Modules", nullptr, false,
+                                GameModuleBuild::Available() && !GameModuleBuild::Running()))
+                GameModuleBuild::Start();
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip(GameModuleBuild::Available()
+                    ? "Compiles TartarusGame and TartarusEditor; the running editor hot reloads them."
+                    : "Needs the engine's source checkout and CMake build folder.");
             // Same path as the window's close button, so unsaved changes still prompt first.
             if (ImGui::MenuItem(ICON_FA_RIGHT_FROM_BRACKET "  Exit", "Alt+F4") && m_Window)
                 glfwSetWindowShouldClose(m_Window, GLFW_TRUE);
@@ -774,8 +778,6 @@ void EditorLayer::DrawWindowMenuBody() {
                 EditorSettings::Save();
             ImGui::MenuItem(ICON_FA_CLOCK_ROTATE_LEFT "  History", nullptr, &m_ShowHistory);
             if(ImGui::MenuItem("Script IDE"))OpenScriptIDE();
-            bool toolsVisible=Scripting::EditorToolsVisible();
-            if(ImGui::MenuItem("C# Tools",nullptr,&toolsVisible))Scripting::SetEditorToolsVisible(toolsVisible);
             // The Glass theme's own panels (EditorLayer_Glass.cpp); listed only while it's selected.
             if (GlassThemeActive() && ImGui::BeginMenu(ICON_FA_TABLE_CELLS_LARGE "  Glass Workspace")) {
                 EditorSettings& gs = EditorSettings::Get();
