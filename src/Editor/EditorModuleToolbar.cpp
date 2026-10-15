@@ -45,8 +45,8 @@ void Tooltip(const EditorModuleHostAPI& host, const char* text) {
     if (host.SetTooltip) host.SetTooltip(text);
 }
 
-// The window controls, macOS-style: close, minimize and zoom as red, yellow and green "traffic
-// lights" at the right of the title bar. Their glyphs (x, -, +) show while the pointer is over the
+// The window controls, macOS-style: minimize, zoom and close as yellow, green and red "traffic
+// lights" at the right of the title bar, in that order. Their glyphs (-, +, x) show while the pointer is over the
 // group, as on a Mac. The OS title bar is removed (Win32 custom frame in Window.cpp); these act
 // on the host's GLFW window through callbacks. Returns the group's width plus its margin.
 float DrawTrafficLights(const EditorModuleHostAPI& host, float toolbarH) {
@@ -61,11 +61,12 @@ float DrawTrafficLights(const EditorModuleHostAPI& host, float toolbarH) {
                                                          ImVec2(group.Max.x + gap * 0.5f, toolbarH)) &&
                               ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
     const bool maxed = host.WindowIsMaximized && host.WindowIsMaximized();
-    struct Light { const char* id; ImU32 fill; ImU32 glyph; const char* tip; };
+    enum class Kind { Minimize, Zoom, Close };
+    struct Light { const char* id; Kind kind; ImU32 fill; ImU32 glyph; const char* tip; };
     const Light lights[3] = {
-        {"win_close", IM_COL32(0xFF, 0x5F, 0x57, 255), IM_COL32(0x4D, 0x00, 0x00, 230), "Close"},
-        {"win_min",   IM_COL32(0xFE, 0xBC, 0x2E, 255), IM_COL32(0x99, 0x57, 0x00, 230), "Minimize"},
-        {"win_max",   IM_COL32(0x28, 0xC8, 0x40, 255), IM_COL32(0x00, 0x65, 0x00, 230), maxed ? "Restore" : "Maximize"},
+        {"win_min",   Kind::Minimize, IM_COL32(0xFE, 0xBC, 0x2E, 255), IM_COL32(0x99, 0x57, 0x00, 230), "Minimize"},
+        {"win_max",   Kind::Zoom,     IM_COL32(0x28, 0xC8, 0x40, 255), IM_COL32(0x00, 0x65, 0x00, 230), maxed ? "Restore" : "Maximize"},
+        {"win_close", Kind::Close,    IM_COL32(0xFF, 0x5F, 0x57, 255), IM_COL32(0x4D, 0x00, 0x00, 230), "Close"},
     };
     ImDrawList* dl = ImGui::GetWindowDrawList();
     const ImVec2 cursor = ImGui::GetCursorScreenPos();
@@ -89,10 +90,10 @@ float DrawTrafficLights(const EditorModuleHostAPI& host, float toolbarH) {
         if (groupHovered) {
             const float r = d * 0.24f, t = std::max(1.0f, EditorTheme::Px(1.4f));
             const ImU32 g = lights[i].glyph;
-            if (i == 0) {
+            if (lights[i].kind == Kind::Close) {
                 dl->AddLine(ImVec2(c.x - r, c.y - r), ImVec2(c.x + r, c.y + r), g, t);
                 dl->AddLine(ImVec2(c.x - r, c.y + r), ImVec2(c.x + r, c.y - r), g, t);
-            } else if (i == 1) {
+            } else if (lights[i].kind == Kind::Minimize) {
                 dl->AddLine(ImVec2(c.x - r * 1.25f, c.y), ImVec2(c.x + r * 1.25f, c.y), g, t);
             } else {
                 dl->AddLine(ImVec2(c.x - r * 1.25f, c.y), ImVec2(c.x + r * 1.25f, c.y), g, t);
@@ -100,9 +101,9 @@ float DrawTrafficLights(const EditorModuleHostAPI& host, float toolbarH) {
             }
         }
         if (pressed) {
-            if (i == 0 && host.WindowClose) host.WindowClose();
-            else if (i == 1 && host.WindowMinimize) host.WindowMinimize();
-            else if (i == 2 && host.WindowToggleMaximize) host.WindowToggleMaximize();
+            if (lights[i].kind == Kind::Close && host.WindowClose) host.WindowClose();
+            else if (lights[i].kind == Kind::Minimize && host.WindowMinimize) host.WindowMinimize();
+            else if (lights[i].kind == Kind::Zoom && host.WindowToggleMaximize) host.WindowToggleMaximize();
         }
     }
     ImGui::SetCursorScreenPos(cursor);
@@ -147,16 +148,8 @@ void Draw(const EditorModuleHostAPI& host) {
     }
 
     if (ImGui::BeginMenuBar()) {
-        // The engine's monogram, then the menus: plain words, like every desktop application.
+        // The menus: plain words, like every desktop application.
         ImGui::Dummy(ImVec2(EditorTheme::Px(6.0f), 0.0f));
-        if (const unsigned int mark = host.GetEngineMarkTexture ? host.GetEngineMarkTexture() : 0u) {
-            const float s = std::floor(toolbarH * 0.62f);
-            const ImVec2 p = ImGui::GetCursorScreenPos();
-            ImGui::GetWindowDrawList()->AddImage((ImTextureID)(intptr_t)mark, ImVec2(p.x, std::floor((toolbarH - s) * 0.5f)),
-                                                 ImVec2(p.x + s, std::floor((toolbarH - s) * 0.5f) + s), ImVec2(0, 0), ImVec2(1, 1),
-                                                 EditorTheme::U32(EditorTheme::Accent));
-            ImGui::Dummy(ImVec2(s + EditorTheme::Px(8.0f), 0.0f));
-        }
         ImGui::PushStyleColor(ImGuiCol_Text, EditorTheme::Secondary);
         // Inside an open menu: the ordinary text colour and frame padding again.
         auto menu = [&](const char* label) {

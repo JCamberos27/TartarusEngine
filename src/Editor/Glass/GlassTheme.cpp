@@ -78,7 +78,6 @@ void DrawSoftShadow(ImDrawList* dl, ImVec2 min, ImVec2 max, float radius, float 
 void DrawFrostedPlate(ImDrawList* dl, ImVec2 min, ImVec2 max, float radius, ImTextureID blurTex,
                       ImVec2 vpMin, ImVec2 vpMax, float alpha) {
     if (alpha <= 0.0f) return;
-    DrawSoftShadow(dl, min, max, radius, 0.45f * alpha, Px(Space2));
     if (blurTex != (ImTextureID)0 && vpMax.x > vpMin.x && vpMax.y > vpMin.y) {
         // The blurred scene, sampled under exactly this rect: the plate's corners map to the same
         // spot of the blurred texture the sharp scene image shows there, so the glass lines up
@@ -93,10 +92,10 @@ void DrawFrostedPlate(ImDrawList* dl, ImVec2 min, ImVec2 max, float radius, ImTe
         ImGui::ShadeVertsLinearUV(dl, vtxStart, dl->VtxBuffer.Size, min, max, uvMin, uvMax, true);
         dl->PopTexture();
     }
-    // The 25% black tint over the blur. Without a blur the plate is the opaque fallback instead, so
-    // its text stays legible over anything the scene shows.
+    // The chrome's tint over the blur (the same glass as the action bar and tool rail). Without a
+    // blur the plate is the opaque fallback instead, so its text stays legible over anything.
     const bool blurred = blurTex != (ImTextureID)0 && vpMax.x > vpMin.x && vpMax.y > vpMin.y;
-    const ImVec4 tint = blurred ? GlassTint : GlassFallback;
+    const ImVec4 tint = blurred ? OverlayTint : GlassFallback;
     DrawSquircle(dl, min, max, U32(WithAlpha(tint, tint.w * alpha)), radius);
     // The 1 px edge of 15% white.
     DrawSquircleBorder(dl, min, max, U32(WithAlpha(GlassEdge, GlassEdge.w * alpha)), radius, 1.0f);

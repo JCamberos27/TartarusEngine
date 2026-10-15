@@ -405,10 +405,8 @@ file(GLOB RECAST_SOURCES
   ${recastnavigation_SOURCE_DIR}/DetourCrowd/Source/*.cpp
 )
 
-# App icon (Windows only — .rc is an MSVC resource script). Baked into the exe itself so any
-# shortcut targeting it keeps showing the icon across rebuilds; nothing to re-link externally.
+# Version info (Windows only — .rc is an MSVC resource script). The exe carries no icon of its own.
 if(WIN32)
-  list(APPEND ENGINE_SOURCES ${CMAKE_SOURCE_DIR}/extern/branding/app_icon.rc)
   list(APPEND ENGINE_SOURCES ${CMAKE_BINARY_DIR}/generated/TartarusVersion.rc)
   # UTF-8 active code page + long-path awareness (#139 / #149) — see the file's comment.
   list(APPEND ENGINE_SOURCES ${CMAKE_SOURCE_DIR}/src/TartarusEngine.manifest)
@@ -641,14 +639,6 @@ add_custom_command(TARGET TartarusEngine POST_BUILD
     "$<TARGET_FILE_DIR:TartarusEngine>/assets/fonts/JetBrainsMono-Regular.ttf"
 )
 
-# Editor mark (the "TE" monogram, no text) — same copy-next-to-exe treatment as the icon font.
-add_custom_command(TARGET TartarusEngine POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:TartarusEngine>/assets/branding"
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    "${CMAKE_SOURCE_DIR}/extern/branding/tartarus_engine_mark.png"
-    "$<TARGET_FILE_DIR:TartarusEngine>/assets/branding/tartarus_engine_mark.png"
-)
-
 # GLSL shader files — copied next to the exe so ShaderLibrary::ReadFile("assets/shaders/...")
 # resolves correctly at runtime.
 add_custom_command(TARGET TartarusEngine POST_BUILD
@@ -735,10 +725,6 @@ install(FILES
   "${CMAKE_SOURCE_DIR}/extern/fonts/InterVariable.ttf"
   "${CMAKE_SOURCE_DIR}/extern/fonts/JetBrainsMono-Regular.ttf"
   DESTINATION "assets/fonts"
-)
-install(FILES
-  "${CMAKE_SOURCE_DIR}/extern/branding/tartarus_engine_mark.png"
-  DESTINATION "assets/branding"
 )
 
 # The sample project, as an ALLOW-LIST of directories rather than "project/ minus exclusions".

@@ -36,7 +36,7 @@ namespace EditorInternal {
 // a future font/metric change leaves a visible gap or clips the row.
 inline constexpr float kToolbarHeight = 30.0f;
 // Height of the window-wide status bar under the dock space (EditorLayer::DrawStatusBar).
-inline constexpr float kStatusBarHeight = 24.0f;
+inline constexpr float kStatusBarHeight = 32.0f;
 
 
 // --- Dialog primitive (Phase 1 item 4) ------------------------------------------------------

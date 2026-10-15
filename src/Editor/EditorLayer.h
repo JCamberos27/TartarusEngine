@@ -239,8 +239,7 @@ public:
     // menu/popup (shared ImGuiContext). Defined in EditorLayer_Toolbar.cpp.
     void DrawFileMenuBody(World& world, AssetLibrary& assets);
     void DrawEditMenuBody(World& world, AssetLibrary& assets);
-    // The engine monogram texture (0 = none) and the open scene's title, for the menu bar.
-    unsigned int EngineMarkTexture() const;
+    // The open scene's title, for the menu bar.
     std::string SceneTitle() const;
     bool SceneDirty() const { return m_Dirty; }
     bool IsInPlayMode() const { return m_InPlayMode; }
@@ -646,8 +645,7 @@ public:
     bool IsSceneViewportVisible() const { return m_SceneViewportVisible; }
 
     // Read by the reloadable Stats module (EditorModuleStats.cpp) through EditorModuleHostAPI —
-    // the HUD lays itself out against these, shows the smoothed frame time, and pushes back the
-    // engine-mark hide flag when its capped height would overlap the corner monogram.
+    // the HUD lays itself out against these and shows the smoothed frame time.
     float UIScale() const { return m_UIScale; }
     float SmoothedFrameMs() const { return m_SmoothedFrameMs; }
     // Phase 6 item 5 — raw (unsmoothed) per-frame ms, oldest-to-newest, for the Statistics
@@ -733,7 +731,7 @@ public:
     // reads chronologically (Screenshot::Save's filenames are date/time-suffixed).
     std::vector<std::string> ListScreenshotsSorted() const;
     // Set by main.cpp for the single frame a "clean viewport" capture renders — every editor
-    // overlay (grid, gizmos, entity icons, light gizmos, engine mark, HUDs, status bar) skips.
+    // overlay (grid, gizmos, entity icons, light gizmos, HUDs, status bar) skips.
     void SetHideOverlaysThisFrame(bool v) { m_HideOverlaysThisFrame = v; }
     // The window was created see-through (Window::SeeThrough). While Black Glass is on, the frame
     // then leaves the desktop showing behind the glass instead of the scene's ambient field.
@@ -1528,17 +1526,10 @@ private:
     // user has actually clicked a row, then never again this session (audit #70).
     bool m_HierarchyRowHintDone = false;
 
-    // Engine mark (the "TE" monogram, no text), spinning slowly in the viewport's bottom-left
-    // corner — loaded once in Init() from assets/branding/ (a build-time copy of
-    // extern/branding/, same treatment as the icon font). Null and silently skipped if the
-    // file's missing.
-    std::unique_ptr<Texture> m_MarkTexture;
     // Phase 1 item 5 — the JetBrains Mono face, baked once in Init(). Owned by ImGui's font
     // atlas (freed with the ImGuiContext), so this is a non-owning pointer; null only if the
     // bundled TTF couldn't be read off disk. GetMonoFont() (host API) exposes it to modules.
     ImFont* m_MonoFont = nullptr;
-    float m_MarkSpinAngle = 0.0f; // radians, advanced by dt * EngineMarkSpinSpeed each frame in DrawEngineMark()
-    float m_MarkHue = 0.0f;        // 0..1, advanced each frame; drives the tint when EngineMarkRgb is on
     bool m_ShutdownDone = false;       // guards the clean-exit-only tail of Shutdown()
     std::unique_ptr<ScriptIDE> m_ScriptIDE;
     bool m_GpuResourcesFreed = false;  // guards FreeGpuResources() (also reachable from ~EditorLayer)
@@ -1559,7 +1550,6 @@ private:
     glm::vec2 m_MarkVel{0.0f, 0.0f}; // px/sec, non-zero only while bouncing
     bool m_MarkBouncing = false;
     bool m_MarkPosValid = false;     // false until first laid out, so it doesn't fly in from (0,0)
-    void DrawEngineMark(float dt);
 
     // The full-width toolbar strip + its dropdown menus moved into TartarusEditor.dll
     // (EditorModuleToolbar.cpp, issue #229). The host keeps the menu/popup *bodies* — declared
@@ -2017,9 +2007,6 @@ private:
     // module reload, and so this class's toolbar button can still toggle the panel. Nothing about
     // the Console needs EditorLayer member state any more.
 
-    // The spinning corner monogram is governed by EditorSettings (EngineMarkEnabled / SpinSpeed /
-    // Rgb) so the choice persists and the Preferences + Window-menu controls share one source of
-    // truth. (Was m_ShowEngineMark — a session-only bool — before the Preferences controls landed.)
 
     // (PushAdaptiveHudText, AsyncLuminanceReadback, SampleTextureLuminance and
     // ContrastForLuminance were here — the async GPU luminance sampling every viewport HUD used
