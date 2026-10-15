@@ -735,6 +735,10 @@ public:
     // Set by main.cpp for the single frame a "clean viewport" capture renders — every editor
     // overlay (grid, gizmos, entity icons, light gizmos, engine mark, HUDs, status bar) skips.
     void SetHideOverlaysThisFrame(bool v) { m_HideOverlaysThisFrame = v; }
+    // The window was created see-through (Window::SeeThrough). While Black Glass is on, the frame
+    // then leaves the desktop showing behind the glass instead of the scene's ambient field.
+    void SetWindowSeeThrough(bool v) { m_WindowSeeThrough = v; }
+    bool DesktopShowsThrough() const { return m_WindowSeeThrough && GlassThemeActive(); }
     bool OverlaysHidden() const { return m_HideOverlaysThisFrame; }
 
     // The Scene window's own content-region size as of the LAST frame it was drawn (zero before
@@ -904,6 +908,7 @@ private:
     bool m_PauseToggleRequested = false;
     bool m_StepRequested = false;
     bool m_Headless = false;
+    bool m_WindowSeeThrough = false;
     std::set<entt::entity> m_ShadowOverBudget; // #110, see SetShadowOverBudget
     int m_SpotShadowBudget = 4, m_PointShadowBudget = 2; // #110 - this frame's caps, for the warning tooltip
     bool m_GameInputActive = false; // see SetGameInputActive

@@ -1294,6 +1294,11 @@ void EditorLayer::DrawSettingsWindow(World& world) {
                                      "(Window \xE2\x96\xB8 Glass Workspace). Applies immediately.");
         }
         if (prefs.EditorThemeId == 1) {
+            if (SettingsCheckbox("See-through window", &prefs.GlassSeeThroughWindow)) EditorSettings::Save();
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("The editor window itself is glass: the desktop shows through the panels, blurred,\n"
+                                     "the way Explorer does with a transparency theme. Off: the panels show a blur\n"
+                                     "of the scene instead. Takes effect the next time the editor starts.");
             if (SettingsCheckbox("Frosted blur", &prefs.GlassFrostedBlur)) EditorSettings::Save();
             if (ImGui::IsItemHovered())
                 EditorUI::SetTooltip("Blur what's behind every glass surface (a GPU compute pass per surface that\n"

@@ -312,6 +312,7 @@ void __stdcall glEnable(GLenum cap);
 void __stdcall glDisable(GLenum cap);
 void __stdcall glDepthFunc(GLenum func);
 void __stdcall glDepthMask(GLboolean flag);
+void __stdcall glColorMask(GLboolean r, GLboolean g, GLboolean b, GLboolean a);
 void __stdcall glCullFace(GLenum mode);
 void __stdcall glPolygonOffset(GLfloat factor, GLfloat units);
 void __stdcall glFrontFace(GLenum mode);

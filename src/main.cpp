@@ -557,7 +557,20 @@ int main(int argc, char** argv) {
         // structurally always 0 in a Release run and the harness only checks "did it draw".
         // Set before the Window exists: it decides whether to request a debug context (#157).
         if (opt.smokeTestMode && !opt.perfBenchMode) GLDebug::ForceEnable();
-        Window window(1280, 720, playerMode ? playerCfg.ProductName : std::string("Tartarus Engine"));
+        // Black Glass's see-through window: the editor only (never a player build or a headless or
+        // screenshot run, whose frames must stay opaque). TARTARUS_SEE_THROUGH=1 forces it for a
+        // screenshot run so its alpha can be checked.
+        bool seeThroughWindow = !playerMode && !headless && EditorSettings::Get().EditorThemeId == 1 &&
+                                EditorSettings::Get().GlassSeeThroughWindow && opt.editorShotDir.empty();
+        {
+            char* forced = nullptr;
+            size_t forcedLen = 0;
+            if (_dupenv_s(&forced, &forcedLen, "TARTARUS_SEE_THROUGH") == 0 && forced) {
+                seeThroughWindow = !playerMode && !headless && forced[0] == '1';
+                std::free(forced);
+            }
+        }
+        Window window(1280, 720, playerMode ? playerCfg.ProductName : std::string("Tartarus Engine"), seeThroughWindow);
         // #174 - the product's own icon, if the build was given one. The editor keeps the icon
         // compiled into the exe's resources (app_icon.rc), which is also what a player falls
         // back to when IconPath is empty or the file won't decode.
@@ -1282,6 +1295,7 @@ int main(int argc, char** argv) {
         if (opt.stockProbeMode || opt.npcTestMode || opt.weaponLabMode) editor.RequestSceneGameSplit();
         editor.Init(window.Handle());
         editor.SetHeadless(headless);
+        editor.SetWindowSeeThrough(window.SeeThrough());
         // #148: a hard crash (access violation, stack overflow, abort...) never reaches the
         // exception-path EmergencyRecoverySave, so the crash handler gets its own hook. Pointers
         // live in statics because the handler takes a plain function; the guard below clears the
@@ -2278,7 +2292,9 @@ int main(int argc, char** argv) {
             // frame in any gap between panels would show as flicker/ghosting.
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
             glViewport(0, 0, window.GetWidth(), window.GetHeight());
-            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+            // A see-through window starts each frame fully transparent: the desktop shows wherever
+            // the editor's glass leaves it.
+            glClearColor(0.0f, 0.0f, 0.0f, editor.DesktopShowsThrough() ? 0.0f : 1.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
             // The camera the Game view (and maximized play) renders from: the player while
@@ -4720,6 +4736,17 @@ int main(int argc, char** argv) {
                 editor.SetHideOverlaysThisFrame(false);
             }
 
+            // A see-through window shows the desktop only behind the editor's own glass: maximized
+            // Play, or any theme but Black Glass, presents fully opaque whatever alpha it wrote.
+            if (window.SeeThrough() && (playMaximized || !editor.DesktopShowsThrough())) {
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                glDisable(GL_SCISSOR_TEST);
+                glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_TRUE);
+                glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+                glClear(GL_COLOR_BUFFER_BIT);
+                glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+                GLStateCache::Invalidate();
+            }
             const double traceBeforeSwap = glfwGetTime();
             {
                 PROFILE_SCOPE("Swap Buffers");

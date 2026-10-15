@@ -7,7 +7,9 @@ struct GLFWwindow;
 
 class Window {
 public:
-    Window(int width, int height, const std::string& title);
+    // `seeThrough`: a per-pixel transparent framebuffer with the desktop blurred behind it (Black
+    // Glass's see-through window). Only a request: SeeThrough() says whether the OS granted it.
+    Window(int width, int height, const std::string& title, bool seeThrough = false);
     ~Window();
 
     bool ShouldClose() const;
@@ -90,6 +92,9 @@ public:
     void SetFullscreen(bool fullscreen);
     void ToggleFullscreen() { SetFullscreen(!m_IsFullscreen); }
     bool IsFullscreen() const { return m_IsFullscreen; }
+    // True when the window was created see-through: whatever the frame leaves at alpha < 1 shows
+    // the blurred desktop behind the window.
+    bool SeeThrough() const { return m_SeeThrough; }
     // Connected monitor names, in glfwGetMonitors() order (for the Preferences picker).
     static std::vector<std::string> MonitorNames();
 
@@ -111,6 +116,7 @@ private:
 
     int m_VSyncMode = 1;
     bool m_IsFullscreen = false;
+    bool m_SeeThrough = false;
     FullscreenMode m_FsMode = FullscreenMode::Borderless;
     int m_FsMonitor = -1;
     FullscreenMode m_ActiveFsMode = FullscreenMode::Borderless; // how the current fullscreen was entered
