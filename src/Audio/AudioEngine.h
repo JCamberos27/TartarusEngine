@@ -38,6 +38,11 @@ public:
     // (#171), so the PCM lives until the last voice playing it is reaped.
     static bool Unload(const std::string& path);
     static void UnloadAll();
+    // Re-decodes a preloaded sound after its file changed on disk (`path` absolute; preloaded
+    // entries under a project-relative name match too). Voices already playing keep the old PCM;
+    // a failed decode keeps the old copy. False when the sound isn't preloaded (streamed sounds
+    // read the file on each Play anyway) or didn't decode.
+    static bool Reload(const std::string& path);
 
     // Starts a voice and returns its handle (InvalidHandle if the engine is down or the file
     // failed to load). Voices start unspatialized — full volume regardless of listener position,

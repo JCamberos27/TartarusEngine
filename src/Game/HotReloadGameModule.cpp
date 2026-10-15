@@ -1,6 +1,7 @@
 #include "HotReloadGameModule.h"
 
 #include "GameModuleAPI.h"
+#include "GameRules.h"
 #include "Log.h"
 #include "World.h"
 #include "PhysicsWorld.h" // #185 PR 2 — Raycast is backed by the host-side PhysX world
@@ -156,16 +157,17 @@ HotReloadGameModule::~HotReloadGameModule() {
     Shutdown();
 }
 
-void HotReloadGameModule::Initialize(const fs::path& sourceModule) {
+void HotReloadGameModule::Initialize(const fs::path& sourceModule, bool watch) {
     Shutdown();
     m_SourceModule = sourceModule;
+    m_Watch = watch;
     m_PollElapsed = 0.0f;
     Reload(true);
 }
 
-void HotReloadGameModule::Tick(World& world, float deltaTime, bool playing) {
-    m_PollElapsed += deltaTime;
-    if (m_PollElapsed >= 0.35f) {
+void HotReloadGameModule::Tick(World& world, float deltaTime, float realDeltaTime, bool playing) {
+    m_PollElapsed += realDeltaTime;
+    if (m_Watch && m_PollElapsed >= 0.35f) {
         m_PollElapsed = 0.0f;
         std::error_code ec;
         const fs::file_time_type sourceWrite = fs::last_write_time(m_SourceModule, ec);
@@ -219,6 +221,8 @@ bool HotReloadGameModule::Reload(bool initialLoad) {
     fs::copy_file(m_SourceModule, copyPath, fs::copy_options::overwrite_existing, ec);
     if (ec) {
         Log::Warn("Hot reload: TartarusGame.dll is still being written; will retry.");
+        std::error_code rmEc;
+        fs::remove(copyPath, rmEc); // a partial copy
         return false;
     }
 
@@ -242,12 +246,14 @@ bool HotReloadGameModule::Reload(bool initialLoad) {
     // The candidate is validated; only now touch the live module. HotReloadSwap owns the order
     // (#187): old SaveState -> old OnUnload + free -> new OnLoad(state), with a rollback to the
     // previous build if the new OnLoad rejects itself.
+    GameRules::UseModule(nullptr); // nothing may call into the old build once it's freed
     HotReloadSwap::Slot<GameModuleAPI> live{static_cast<HMODULE>(m_Handle), m_API, m_LoadedCopy};
     const HotReloadSwap::Result result = HotReloadSwap::Swap<GameModuleAPI>(
         live, {candidate, candidateAPI, copyPath}, &ResolveAPI, "Hot reload");
     m_Handle = live.Handle;
     m_API = live.Api;
     m_LoadedCopy = live.Copy;
+    GameRules::UseModule(m_API); // the new build, or the previous one after a rollback
 
     if (result != HotReloadSwap::Result::Committed) {
         m_LastFailedSourceWrite = sourceWrite; // this build rejected itself; wait for the next one
@@ -260,6 +266,7 @@ bool HotReloadGameModule::Reload(bool initialLoad) {
 }
 
 void HotReloadGameModule::Shutdown() {
+    GameRules::UseModule(nullptr);
     HotReloadSwap::Slot<GameModuleAPI> live{static_cast<HMODULE>(m_Handle), m_API, m_LoadedCopy};
     HotReloadSwap::Unload(live);
     m_Handle = nullptr;

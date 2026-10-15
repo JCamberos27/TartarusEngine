@@ -3,6 +3,7 @@
 #include "ProjectComponentMigration.h"
 #include "ComponentJson.h"
 #include "ProjectPaths.h"
+#include "LiveReload.h"
 #include "AssetDatabase.h"
 #include "SceneReferences.h"
 #include "Components.h"
@@ -44,6 +45,9 @@ struct CachedPrefab {
 CachedPrefab& PrefabEntry(const std::string& prefab) {
     static std::unordered_map<std::string, CachedPrefab> cache;
     const std::string path = ProjectPaths::Resolve(prefab);
+    const auto found = cache.find(path);
+    // A shipped game's prefabs don't change under it: skip the per-lookup stat once cached.
+    if (found != cache.end() && !LiveReload::Enabled() && found->second.Assets == AssetDatabase::Revision()) return found->second;
     std::error_code ec;
     const auto time = std::filesystem::last_write_time(std::filesystem::u8path(path), ec);
     CachedPrefab& c = cache[path];

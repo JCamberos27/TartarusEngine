@@ -1,6 +1,7 @@
 #include "AudioEngine.h"
 #include "Log.h"
 #include "AssetDatabase.h"
+#include "ProjectPaths.h"
 #include "ConvolutionReverb.h"
 #include "LoudnessMeter.h"
 #include "MasterLimiter.h"
@@ -10,6 +11,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <map>
 #include <memory>
@@ -542,6 +544,22 @@ bool AudioEngine::Unload(const std::string& path) {
 
 void AudioEngine::UnloadAll() {
     s_Preloaded.clear();
+}
+
+bool AudioEngine::Reload(const std::string& path) {
+    namespace fs = std::filesystem;
+    const fs::path changed = fs::u8path(path).lexically_normal();
+    std::vector<std::string> keys;
+    for (const auto& [key, clip] : s_Preloaded)
+        if (key == path || fs::u8path(ProjectPaths::Resolve(key)).lexically_normal() == changed) keys.push_back(key);
+    bool reloaded = false;
+    for (const std::string& key : keys) {
+        const std::shared_ptr<const PreloadedClip> previous = s_Preloaded[key];
+        s_Preloaded.erase(key);
+        if (Load(key)) reloaded = true;
+        else s_Preloaded[key] = previous;
+    }
+    return reloaded;
 }
 
 AudioEngine::SoundHandle AudioEngine::Play(const std::string& path, float volume, bool loop, Bus bus, float startOffsetSeconds, const VoiceFx* fx) {

@@ -7,6 +7,7 @@
 #include "CameraEffects.h"
 #include "IK.h"
 #include "Log.h"
+#include "LiveReload.h"
 #include "Model.h"
 #include "Profiler.h"
 #include "ProjectPaths.h"
@@ -599,7 +600,7 @@ std::shared_ptr<const AnimatorController> GetAnimatorController(const std::strin
     Entry& e = cache[abs];
     const auto now = std::chrono::steady_clock::now();
     // A stat per lookup is cheap, but lookups happen per entity per frame: check twice a second.
-    if (e.Ctrl && now - e.Checked < std::chrono::milliseconds(500)) return e.Ctrl;
+    if (e.Ctrl && (!LiveReload::Enabled() || now - e.Checked < std::chrono::milliseconds(500))) return e.Ctrl;
     if (e.Failed && now - e.Checked < std::chrono::seconds(2)) return nullptr;
     e.Checked = now;
     std::error_code ec;

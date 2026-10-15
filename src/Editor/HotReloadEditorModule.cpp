@@ -737,6 +737,8 @@ bool HotReloadEditorModule::Reload(bool initialLoad) {
     fs::copy_file(m_SourceModule, copyPath, fs::copy_options::overwrite_existing, ec);
     if (ec) {
         Log::Warn("Editor hot reload: TartarusEditor.dll is still being written; will retry.");
+        std::error_code rmEc;
+        fs::remove(copyPath, rmEc); // a partial copy
         return false;
     }
 
