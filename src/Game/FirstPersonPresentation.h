@@ -1,8 +1,8 @@
 #pragma once
 
 #include "FirstPersonAdsCarry.h"
-#include "Scripting/GameFrames.h"
-#include "Scripting/WeaponAttachments.h"
+#include "GameFrames.h"
+#include "WeaponAttachments.h"
 #include "FirstPersonAnimation.h"
 #include "FirstPersonBody.h" // FirstPersonStockLockInput
 #include "ShellCasings.h"      // CasingSpawn
@@ -29,9 +29,9 @@ struct FirstPersonControllerComponent;
 // The visual entities exist only between Play and Stop.
 //
 // Animation is the weapon's Animator Controller: the arms entity runs it (track "arms") and the
-// weapon entity follows it in lockstep (track "weapon", Driver = arms). This class is the
-// native presentation adapter for C# gameplay. It exchanges ammo, fire-mode and timer state
-// with the script and talks to the animator through its parameters, tags and events.
+// weapon entity follows it in lockstep (track "weapon", Driver = arms). This class drives
+// presentation for the weapon rules (WeaponRules.h). It exchanges ammo, fire-mode and timer state
+// with them and talks to the animator through its parameters, tags and events.
 //
 // Procedural motion (recoil, sway, bob, breathing, aim, state offsets, lean) runs through
 // WeaponProceduralState and lands on the arms rig's gun bone as an IK Rig offset, with two-bone
@@ -129,8 +129,8 @@ public:
     void SelectSlot(int slot);
     // The scroll wheel wraps through weapon slots (`step` +1 / -1).
     void CycleSlot(int step);
-    void CycleAttachment(Scripting::AttachmentKind kind);
-    int AttachmentCount(Scripting::AttachmentKind kind) const { return m_Attachments.Count(kind); }
+    void CycleAttachment(Gameplay::AttachmentKind kind);
+    int AttachmentCount(Gameplay::AttachmentKind kind) const { return m_Attachments.Count(kind); }
 
     int Ammo() const { return m_Ammo; }
     void SetAmmo(int rounds) { m_Ammo = rounds < 0 ? 0 : rounds; } // tests: a part-empty magazine to reload
@@ -339,7 +339,7 @@ private:
     std::vector<entt::entity> m_WeaponEmitters, m_WorldWeaponEmitters;
     std::vector<entt::entity> m_WeaponAttachmentEntities;
     glm::mat4 m_ParticleBindInverse{1.0f};
-    Scripting::WeaponAttachments m_Attachments, m_WorldAttachments;
+    Gameplay::WeaponAttachments m_Attachments, m_WorldAttachments;
     std::vector<std::array<int, 3>> m_SlotAttachmentSelections;
     glm::vec3 m_OpticOffset{0.0f}, m_OpticFromOffset{0.0f};
     glm::quat m_OpticRotation{1, 0, 0, 0}, m_OpticFromRotation{1, 0, 0, 0};
@@ -509,7 +509,7 @@ private:
     float m_RegripDelay = 15.0f;
     float m_ReloadSeconds=0;
     bool m_ReloadDown=false, m_ReloadFired=false;
-    Scripting::WeaponLoadoutFrame RunLoadout(int operation,int value=0);
-    Scripting::WeaponFrame RunGameplay(int operation,float dt=0.0f,bool pressed=false,bool held=false,int events=0);
+    Gameplay::WeaponLoadoutFrame RunLoadout(int operation,int value=0);
+    Gameplay::WeaponFrame RunGameplay(int operation,float dt=0.0f,bool pressed=false,bool held=false,int events=0);
     std::mt19937 m_Rng{std::random_device{}()};
 };

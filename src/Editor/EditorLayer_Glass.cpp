@@ -432,10 +432,10 @@ void EditorLayer::PollGlassNotifications() {
     for (size_t i = first; i < entries.size(); ++i) {
         const LogEntry& e = entries[i];
         if (e.Level != LogLevel::Error) continue;
-        const bool csharp = e.Message.rfind("C# error:", 0) == 0;
+        const bool module = e.Message.rfind("Module rebuild failed", 0) == 0;
         const bool shader = ContainsNoCase(e.Message, "failed to compile") || ContainsNoCase(e.Message, "compile error");
-        if (!csharp && !shader) continue;
-        PushGlassToast(csharp ? "Script compile failed" : "Shader compile failed", e.Message, true);
+        if (!module && !shader) continue;
+        PushGlassToast(module ? "Module rebuild failed" : "Shader compile failed", e.Message, true);
     }
     g.LastLogSeq = newest;
 }

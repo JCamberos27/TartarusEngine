@@ -516,20 +516,6 @@ struct ParticleSystemComponent {
     std::shared_ptr<ParticleCurveCache> Curves;
 };
 
-// #165 - the built-in first-person player, as a component. In Play the player spawns at this
-// entity's position (feet) facing its forward (-Z), with these settings. Without one, Play
-// renders through the scene's Camera (a fixed/animated shot, no player); with neither, it falls
-// back to the old behaviour (a default player dropped in at the editor camera).
-// Fully qualified class and public field values are saved in scenes, prefabs and undo snapshots.
-struct CSharpScriptComponent {
-    std::string SourcePath;
-    std::string ClassName;
-    std::string Fields = "{}";
-    bool Enabled = true;
-    // Additional slots use stable IDs so removing one doesn't transfer its runtime state.
-    std::string Scripts = "[]";
-    int NextScriptId = 0;
-};
 
 // A weapon prefab's root: what the weapon is and how it plays. The .fpsanim Animation Set owns the
 // animator, rigs, recoil, shake and audio; the gameplay numbers and the muzzle effects live here.
@@ -559,6 +545,10 @@ struct OpticAttachmentComponent {
     float AimBlendTime = 0.2f;          // seconds to move between aim points when changing optics while aiming
 };
 
+// #165 - the built-in first-person player, as a component. In Play the player spawns at this
+// entity's position (feet) facing its forward (-Z), with these settings. Without one, Play
+// renders through the scene's Camera (a fixed/animated shot, no player); with neither, it falls
+// back to the old behaviour (a default player dropped in at the editor camera).
 struct FirstPersonControllerComponent {
     std::string PrimaryWeaponPrefab;
     std::string SecondaryWeaponPrefab;
@@ -1172,6 +1162,27 @@ struct TransformControllerComponent {
     glm::quat BaseRotation{1.0f, 0.0f, 0.0f, 0.0f};
     glm::vec3 BaseScale{1.0f};
     float Elapsed = 0.0f;
+};
+
+// Drives the Light on its entity: a fluorescent tube that stutters now and then, a TV screen's
+// restless glow, or a candle's fast shimmer. Works around the light's authored intensity and colour
+// while playing; Play -> Stop reloads the authored scene, so they come back untouched.
+struct LightFlickerComponent {
+    enum class FlickerMode : int { Fluorescent = 0, Tv = 1, Candle = 2 };
+    int Mode = 0;              // FlickerMode
+    float MinInterval = 4.0f;  // shortest wait between events, seconds
+    float MaxInterval = 15.0f; // longest wait between events, seconds
+    float Depth = 1.0f;        // how far the light dips: 1 = all the way off
+    int Seed = 1;              // so lights with the same settings don't flicker in step
+
+    // Runtime scratch, never serialized.
+    bool Started = false;
+    float BaseIntensity = 0.0f;
+    glm::vec3 BaseColor{1.0f};
+    float Wait = 0.0f, Level = 1.0f, Target = 1.0f, Time = 0.0f;
+    glm::vec3 Tint{1.0f};
+    int Pulses = 0;
+    std::uint32_t Rng = 1;
 };
 
 // Hit points. Rounds that hit an entity with one take Current down (Combat/Damage.h); at 0 it

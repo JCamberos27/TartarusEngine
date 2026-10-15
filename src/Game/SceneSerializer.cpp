@@ -13,7 +13,7 @@
 #include "AssetGuid.h"
 #include "ProjectPaths.h"
 #include "EditorSettings.h"
-#include "Scripting/ProjectComponentMigration.h"
+#include "ProjectComponentMigration.h"
 
 #include "Log.h"
 #include "SpotShadowMap.h"
@@ -725,7 +725,7 @@ void WarnUnknownComponentBlocks(const json& j) {
 void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, entt::entity entity) {
     if(j.contains("C# Script")) {
         auto migrated=j;
-        if(Scripting::ConvertScriptDefinitions(migrated)) {
+        if(Gameplay::ConvertScriptDefinitions(migrated)) {
             ReadCommonComponents(migrated,world,assets,entity);
             return;
         }

@@ -2,7 +2,6 @@
 // thumbnails, and asset delete/rename/duplicate. Split out of EditorLayer.cpp (#179).
 
 #include "EditorLayer.h"
-#include "Scripting/ScriptRuntime.h"
 #include "EditorTheme.h"
 #include "EditorUIPrimitives.h"
 #include "EditorLayerInternal.h"
@@ -2051,7 +2050,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
         }
         if ((cell.kind == Cell::Kind::Shader || cell.kind == Cell::Kind::Script) &&
             ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-            if(cell.kind==Cell::Kind::Script)OpenScriptIDE(cell.key);else OsShell::OpenFile(cell.key);
+            OpenScriptIDE(cell.key);
         }
         // #176 - double-click opens the prefab in Prefab Mode, like Unity (drag it into the scene,
         // or right-click > Place Instance, to place one).
@@ -2207,7 +2206,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                     m_SelectedAssetIsFolder = false;
                 }
                 if (ImGui::MenuItem(ICON_FA_UP_RIGHT_FROM_SQUARE "  Open Externally")) OsShell::OpenFile(cell.key);
-                if(cell.kind==Cell::Kind::Script && ImGui::MenuItem("Open in Script IDE"))OpenScriptIDE(cell.key);
+                if((cell.kind==Cell::Kind::Script || cell.kind==Cell::Kind::Shader) && ImGui::MenuItem("Open in Script IDE"))OpenScriptIDE(cell.key);
                 if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Show in folder")) OsShell::ShowInFolder(cell.key);
                 if (m_ExtraAssetSelection.empty() && ImGui::MenuItem(ICON_FA_COPY "  Copy Path")) {
                     ImGui::SetClipboardText(cell.key.c_str());
@@ -2459,33 +2458,6 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
     if (ImGui::BeginPopup("##BrowserBgContext")) {
         if (ImGui::MenuItem(ICON_FA_FOLDER_PLUS "  New Folder")) makeNewFolder();
         ImGui::Separator();
-        if (ImGui::MenuItem(ICON_FA_CODE "  Create C# Script")) {
-            const auto dir=std::filesystem::u8path(ProjectPaths::Resolve(NewAssetFolder("assets/Scripts")));
-            std::error_code ec; std::filesystem::create_directories(dir,ec);
-            std::string name="NewScript"; int index=1;
-            while(std::filesystem::exists(dir/(name+".cs"),ec)) name="NewScript"+std::to_string(index++);
-            const auto file=dir/(name+".cs");
-            const std::string source="using Tartarus;\nusing System.Numerics;\n\nnamespace Tartarus.Gameplay;\n\npublic sealed class "+name+" : MonoBehaviour\n{\n    public override void Awake() { }\n    public override void Start() { }\n    public override void Update() { }\n    public override void FixedUpdate() { }\n    public override void OnDestroy() { }\n}\n";
-            if(AtomicFile::WriteBytes(file,source)) {
-                AssetDatabase::EnsureGuid(file.string()); InvalidateProjectAssetIndex();
-                m_SelectedAssetKey=file.string(); m_SelectedAssetIsFolder=false; OpenScriptIDE(file.string());
-                Scripting::RequestBuild();
-                Log::Info("Created C# script "+ProjectPaths::Relativize(file.string())+". Save to compile; drag onto an object to attach.");
-            } else Log::Error("Could not create C# script.");
-        }
-        if (ImGui::MenuItem(ICON_FA_CODE "  Create C# Editor Script")) {
-            const auto dir=std::filesystem::u8path(ProjectPaths::Resolve("assets/Editor"));
-            std::error_code ec;std::filesystem::create_directories(dir,ec);
-            std::string name="NewEditorTool";int index=1;
-            while(std::filesystem::exists(dir/(name+".cs"),ec)) name="NewEditorTool"+std::to_string(index++);
-            const auto file=dir/(name+".cs");
-            const std::string source="using Tartarus;\nusing Tartarus.Editor;\n\nnamespace Tartarus.EditorTools;\n\npublic sealed class "+name+" : EditorWindow\n{\n    public override void OnGUI()\n    {\n        EditorGUILayout.Label(\"Hello from C# editor tools\");\n    }\n}\n";
-            if(!ec && AtomicFile::WriteBytes(file,source)) {
-                AssetDatabase::EnsureGuid(file.string());InvalidateProjectAssetIndex();
-                m_SelectedAssetKey=file.string();m_SelectedAssetIsFolder=false;OpenScriptIDE(file.string());
-                Scripting::RequestBuild();Log::Info("Created editor tool. Save to compile; open it from the C# Tools panel.");
-            } else Log::Error("Could not create C# editor script.");
-        }
         if (ImGui::MenuItem(ICON_FA_DROPLET "  Create Material")) {
             // #87 — the file used to be built from the VIRTUAL folder name with no root, so it
             // landed relative to the process CWD (usually build/Release/, wiped by a clean

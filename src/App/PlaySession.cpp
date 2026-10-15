@@ -21,7 +21,6 @@
 #include "FxSpriteRenderer.h"
 #include "GameModuleAPI.h"
 #include "GameViewPanel.h"
-#include "Game/Scripting/ScriptRuntime.h"
 #include "GravityGun.h"
 #include "HotReloadEditorModule.h"
 #include "KnifeFxLibrary.h"
@@ -284,7 +283,6 @@ void PlaySession::Start() {
 void PlaySession::Stop() {
     if (!m_State.Playing) return;
     if (m_WeaponLab) m_WeaponLab->OnPlayStopped();
-    Scripting::Stop(&m_World,&m_Assets);
     // Runtime-only arms/weapon entities were created after the play snapshot. Remove
     // them before restoring the authored world so they can never be serialized or leak
     // into another scene after a stop.

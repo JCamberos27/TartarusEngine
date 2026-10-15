@@ -1,7 +1,7 @@
 #include "FirstPersonPresentation.h"
 #include "FirstPersonMovementInput.h"
 #include "WeaponRules.h"
-#include "Scripting/WeaponPrefab.h"
+#include "WeaponPrefab.h"
 
 #include "AnimationSystem.h"
 #include "Audio/WeaponAudio.h"
@@ -134,7 +134,7 @@ bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
         MuzzleEffectSettings muzzle;
         if(!slot.first->empty()) {
             std::string why;
-            if(!Scripting::ResolveWeaponPrefab(*slot.first,set,why,&muzzle)) { SetError(why); return false; }
+            if(!Gameplay::ResolveWeaponPrefab(*slot.first,set,why,&muzzle)) { SetError(why); return false; }
         }
         if(!set.empty()) {
             m_SlotSets.push_back(set);m_SlotPrefabs.push_back(*slot.first);m_SlotMuzzles.push_back(muzzle);
@@ -264,7 +264,7 @@ bool FirstPersonPresentation::StartSet(World& world, AssetLibrary& assets, int s
             shared->ShakeTime = profileTime(m_Set.CameraShakeProfile);
         }
     }
-    if(!m_SlotPrefabs[slot].empty() && !Scripting::ResolveWeaponGameplay(m_SlotPrefabs[slot],m_Set.Gameplay,m_LastError)) {
+    if(!m_SlotPrefabs[slot].empty() && !Gameplay::ResolveWeaponGameplay(m_SlotPrefabs[slot],m_Set.Gameplay,m_LastError)) {
         SetError(m_LastError);return false;
     }
     {
@@ -528,7 +528,7 @@ void FirstPersonPresentation::SetupWeaponParticles() {
     m_WeaponAttachmentEntities.clear();
     if (m_Slot >= (int)m_SlotPrefabs.size() || m_SlotPrefabs[m_Slot].empty()) return;
     std::string error;
-    m_WeaponParticles = Scripting::InstantiateWeaponParticles(world, *m_Assets, m_SlotPrefabs[m_Slot], m_WeaponEmitters, error);
+    m_WeaponParticles = Gameplay::InstantiateWeaponParticles(world, *m_Assets, m_SlotPrefabs[m_Slot], m_WeaponEmitters, error);
     if (!error.empty()) Log::Warn(error);
     if (!world.Registry.valid(m_WeaponParticles)) return;
     // Prefab child transforms are in model space. Apply the animated root's delta
@@ -577,11 +577,11 @@ void FirstPersonPresentation::SetupWorldWeaponParticles() {
 void FirstPersonPresentation::ApplyMuzzleAttachment() {
     if (!m_World || m_Slot < 0 || m_Slot >= (int)m_SlotMuzzles.size()) return;
     auto& fx = m_SlotMuzzles[m_Slot];
-    const auto* muzzle = m_Attachments.Selected(Scripting::AttachmentKind::Muzzle);
+    const auto* muzzle = m_Attachments.Selected(Gameplay::AttachmentKind::Muzzle);
     fx.FiringSounds = muzzle ? muzzle->FiringSounds : std::string{};
     fx.FiringSoundProfile = muzzle ? muzzle->FiringSoundProfile : std::string{};
     glm::mat4 pose(1);
-    if (m_Attachments.Pose(*m_World, m_WeaponParticles, Scripting::AttachmentKind::Muzzle, pose)) {
+    if (m_Attachments.Pose(*m_World, m_WeaponParticles, Gameplay::AttachmentKind::Muzzle, pose)) {
         pose = m_ParticleBindInverse * pose;
         m_MuzzleLocal = glm::vec3(pose[3]);
         m_BoreLocal = glm::normalize(glm::mat3(pose) * glm::vec3(0, 0, -1));
@@ -589,15 +589,15 @@ void FirstPersonPresentation::ApplyMuzzleAttachment() {
     }
 }
 
-void FirstPersonPresentation::CycleAttachment(Scripting::AttachmentKind kind) {
+void FirstPersonPresentation::CycleAttachment(Gameplay::AttachmentKind kind) {
     if (!m_World || !IsEquipped() || !m_Attachments.Cycle(*m_World, kind)) return;
     m_SlotAttachmentSelections[m_Slot] = m_Attachments.Indices();
     m_WorldAttachments.Load(*m_World, m_WorldWeaponParticles, m_Attachments.Indices());
-    if (kind == Scripting::AttachmentKind::Muzzle) {
+    if (kind == Gameplay::AttachmentKind::Muzzle) {
         SetupMuzzle(glm::length(m_BoltStroke) >= 1e-5f ? m_WeaponModel->NodeIndex(m_Set.Procedural.Recoil.BoltBone) : -1);
         ApplyMuzzleAttachment();
     }
-    if (kind == Scripting::AttachmentKind::Optic) {
+    if (kind == Gameplay::AttachmentKind::Optic) {
         m_OpticFromOffset = m_OpticOffset; m_OpticFromRotation = m_OpticRotation;
         m_OpticBlendElapsed = 0;
         if (const auto* optic = m_Attachments.Selected(kind)) m_OpticBlendTime = optic->AimBlendTime;
@@ -1624,9 +1624,9 @@ void FirstPersonPresentation::ReloadIfChanged(float dt) {
         const auto time = std::filesystem::last_write_time(ProjectPaths::Resolve(m_SlotPrefabs[m_Slot]), prefabError);
         if (!prefabError && time != m_SlotPrefabTimes[m_Slot]) {
             std::string set, why; MuzzleEffectSettings muzzle;
-            if (Scripting::ResolveWeaponPrefab(m_SlotPrefabs[m_Slot], set, why, &muzzle)) {
+            if (Gameplay::ResolveWeaponPrefab(m_SlotPrefabs[m_Slot], set, why, &muzzle)) {
                 std::string gameplayError;
-                if(!Scripting::ResolveWeaponGameplay(m_SlotPrefabs[m_Slot],m_Set.Gameplay,gameplayError))Log::Warn(gameplayError);
+                if(!Gameplay::ResolveWeaponGameplay(m_SlotPrefabs[m_Slot],m_Set.Gameplay,gameplayError))Log::Warn(gameplayError);
                 m_SlotMuzzles[m_Slot] = muzzle; m_SlotPrefabTimes[m_Slot] = time;
                 SetupWeaponParticles();
             } else Log::Warn("Weapon particle systems: " + why);
@@ -1655,7 +1655,7 @@ void FirstPersonPresentation::ReloadIfChanged(float dt) {
         Log::Warn("First-person presentation: kept the running weapon tuning; the edited file doesn't load: " + why);
         return;
     }
-    if(!m_SlotPrefabs[m_Slot].empty() && !Scripting::ResolveWeaponGameplay(m_SlotPrefabs[m_Slot],fresh.Gameplay,why)) {
+    if(!m_SlotPrefabs[m_Slot].empty() && !Gameplay::ResolveWeaponGameplay(m_SlotPrefabs[m_Slot],fresh.Gameplay,why)) {
         Log::Warn("Kept running project weapon stats: "+why);return;
     }
     // Numbers (and the IK bones) only: the rigs and controller need a restart of Play to change.
@@ -1775,8 +1775,8 @@ const std::string& FirstPersonPresentation::CurrentState() const {
     return ac ? ac->StateName : kNone;
 }
 
-Scripting::WeaponFrame FirstPersonPresentation::RunGameplay(int operation,float dt,bool pressed,bool held,int events) {
-    Scripting::WeaponFrame f;
+Gameplay::WeaponFrame FirstPersonPresentation::RunGameplay(int operation,float dt,bool pressed,bool held,int events) {
+    Gameplay::WeaponFrame f;
     const auto& g=m_Set.Gameplay;
     f.Operation=operation; f.Dt=dt; f.Pressed=pressed; f.Held=held; f.Events=events;
     auto* ac=Animator();
@@ -1915,8 +1915,8 @@ void FirstPersonPresentation::FireShot() {
     }
 }
 
-Scripting::WeaponLoadoutFrame FirstPersonPresentation::RunLoadout(int operation,int value){
-    Scripting::WeaponLoadoutFrame f;f.Operation=operation;f.Value=value;f.Count=(int)m_SlotAmmo.size();f.Slot=m_Slot;f.Pending=m_PendingSlot;f.Ammo=m_Ammo;f.Magazine=m_Set.Gameplay.Magazine;f.Burst=m_BurstRemaining;f.CycleWait=m_CycleWait;f.Active=IsActive();f.Equipped=m_Equipped;f.Requested=value!=0;f.Chambered=m_Chambered;f.SlotAmmo=reinterpret_cast<std::uintptr_t>(m_SlotAmmo.data());
+Gameplay::WeaponLoadoutFrame FirstPersonPresentation::RunLoadout(int operation,int value){
+    Gameplay::WeaponLoadoutFrame f;f.Operation=operation;f.Value=value;f.Count=(int)m_SlotAmmo.size();f.Slot=m_Slot;f.Pending=m_PendingSlot;f.Ammo=m_Ammo;f.Magazine=m_Set.Gameplay.Magazine;f.Burst=m_BurstRemaining;f.CycleWait=m_CycleWait;f.Active=IsActive();f.Equipped=m_Equipped;f.Requested=value!=0;f.Chambered=m_Chambered;f.SlotAmmo=reinterpret_cast<std::uintptr_t>(m_SlotAmmo.data());
     if(auto* ac=Animator()){f.Hidden=ac->HasTag(K::kTagHidden);f.InTransition=ac->InTransition;}
     WeaponRules::UpdateLoadout(f);
     m_PendingSlot=f.Pending;m_Ammo=f.Ammo;m_Chambered=f.Chambered!=0;m_CycleWait=f.CycleWait;m_BurstRemaining=f.Burst;
@@ -2556,7 +2556,7 @@ void FirstPersonPresentation::PlaceRigs(World& world, const Camera& camera,const
     glm::mat4 optic(1), referenceOptic(1), animatedRoot(1);
     glm::vec3 opticTarget(0);
     glm::quat opticTurn(1, 0, 0, 0);
-    if (m_Attachments.Pose(world, m_WeaponParticles, Scripting::AttachmentKind::Optic, optic) &&
+    if (m_Attachments.Pose(world, m_WeaponParticles, Gameplay::AttachmentKind::Optic, optic) &&
         m_Attachments.ReferenceOpticPose(world, m_WeaponParticles, referenceOptic) &&
         m_WeaponModel->NodeTransform(m_Set.WeaponRoot.empty() ? "root" : m_Set.WeaponRoot, animatedRoot)) {
         const glm::mat4 weaponPose = glm::translate(glm::mat4(1), weaponPosition) * glm::mat4_cast(weaponRotation) *

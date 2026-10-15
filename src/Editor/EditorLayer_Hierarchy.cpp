@@ -20,7 +20,6 @@
 #include "MaterialAsset.h"
 #include "AudioEngine.h"
 #include "SceneSerializer.h"
-#include "Scripting/ScriptComponent.h"
 #include "AABB.h"
 #include "Log.h"
 #include "EditorSettings.h"
