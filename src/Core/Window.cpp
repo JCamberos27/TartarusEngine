@@ -54,17 +54,27 @@ void ApplyBlackTitleBar(GLFWwindow* handle) {
 // per-pixel alpha (GLFW_TRANSPARENT_FRAMEBUFFER) decides how much of it shows. The accent policy
 // is the long-standing, undocumented call the Windows shell itself uses for blurred surfaces;
 // resolved at run time, so a Windows without it just gets the transparency, unblurred.
-void ApplyBlurBehind(GLFWwindow* handle) {
+constexpr int kAccentTintOnly    = 2; // ACCENT_ENABLE_TRANSPARENTGRADIENT: a flat tint, no blur
+constexpr int kAccentBlurBehind  = 3; // ACCENT_ENABLE_BLURBEHIND
+// The tint shown while a drag has the blur off (0xAABBGGRR): close to how dark the glass reads,
+// so the window doesn't flash the bare, bright desktop while the blur is away.
+constexpr DWORD kDragTint        = 0xCC000000;
+
+void SetAccent(HWND hwnd, int accentState, DWORD gradientColor = 0) {
     struct AccentPolicy { int AccentState; int AccentFlags; DWORD GradientColor; int AnimationId; };
     struct CompositionData { int Attribute; void* Data; SIZE_T SizeOfData; };
     using SetCompositionFn = BOOL(WINAPI*)(HWND, CompositionData*);
-    HMODULE user32 = GetModuleHandleW(L"user32.dll");
-    auto set = user32 ? reinterpret_cast<SetCompositionFn>(GetProcAddress(user32, "SetWindowCompositionAttribute")) : nullptr;
+    static const SetCompositionFn set = [] {
+        HMODULE user32 = GetModuleHandleW(L"user32.dll");
+        return user32 ? reinterpret_cast<SetCompositionFn>(GetProcAddress(user32, "SetWindowCompositionAttribute")) : nullptr;
+    }();
     if (!set) return;
-    AccentPolicy accent{3 /* ACCENT_ENABLE_BLURBEHIND */, 0, 0, 0};
+    AccentPolicy accent{accentState, 0, gradientColor, 0};
     CompositionData data{19 /* WCA_ACCENT_POLICY */, &accent, sizeof(accent)};
-    set(glfwGetWin32Window(handle), &data);
+    set(hwnd, &data);
 }
+
+void ApplyBlurBehind(GLFWwindow* handle) { SetAccent(glfwGetWin32Window(handle), kAccentBlurBehind); }
 
 // --- Borderless custom frame -------------------------------------------------------------
 // The window keeps its real OS styles (WS_OVERLAPPEDWINDOW) — so Aero-snap, the drop shadow,
@@ -122,6 +132,17 @@ LRESULT CALLBACK TartarusWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         if (g_FramedWindow && g_FramedWindow->TitleBarDragActive()) return HTCAPTION;
         return HTCLIENT;
     }
+    case WM_ENTERSIZEMOVE:
+        // A drag on the frame or the title bar runs Windows' modal move/size loop. With the blur
+        // accent on, DWM re-blurs the desktop behind the whole window for every mouse step and
+        // falls behind the mouse, so the drag lags and the queued steps keep resizing the window
+        // after the button is released. Swap the blur for a cheap dark tint for the drag; the
+        // blur comes back on release.
+        if (g_FramedWindow && g_FramedWindow->SeeThrough()) SetAccent(hwnd, kAccentTintOnly, kDragTint);
+        break;
+    case WM_EXITSIZEMOVE:
+        if (g_FramedWindow && g_FramedWindow->SeeThrough()) SetAccent(hwnd, kAccentBlurBehind);
+        break;
     case WM_GETMINMAXINFO: {
         // Keep a maximized borderless window inside the monitor work area (don't cover the taskbar).
         MINMAXINFO* mmi = reinterpret_cast<MINMAXINFO*>(lParam);
