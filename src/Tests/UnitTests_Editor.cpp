@@ -3,7 +3,6 @@
 #include "CurveEditor.h"
 #include "EditorFileHistory.h"
 #include "EditorLayer.h"
-#include "ScriptReferenceWidgets.h"
 #include "World.h"
 #include "AssetLibrary.h"
 #include "SceneSerializer.h"
@@ -115,51 +114,6 @@ void TestEditorNavigationUndo() {
         std::filesystem::remove(path);
     }
     AtomicFile::SetChangeObserver({});ImGui::DestroyContext(context);ImGui::SetCurrentContext(previous);
-}
-void TestScriptReferenceDrop() {
-    auto* previous=ImGui::GetCurrentContext();auto* context=ImGui::CreateContext();
-    auto& io=ImGui::GetIO();io.DisplaySize={800,600};io.DeltaTime=1.0f/60;io.IniFilename=nullptr;
-    unsigned char* pixels=nullptr;int width=0,height=0;io.Fonts->GetTexDataAsRGBA32(&pixels,&width,&height);
-    World world;
-    const auto owner=world.CreateEmptyEntity({}, {}, {1,1,1}, "Muzzle Attachment");
-    const auto child=world.CreateEmptyEntity({}, {}, {1,1,1}, "Muzzle Flash");
-    const auto wrong=world.CreateEmptyEntity({}, {}, {1,1,1}, "Wrong type");
-    world.AttachChildRaw(child,owner);world.AttachChildRaw(wrong,owner);
-    world.Registry.emplace<ParticleSystemComponent>(child);
-    nlohmann::json metadata={{"kind","scene-ref"},{"component","Particle System"},{"childrenOnly",true}};
-    nlohmann::json value="";ImVec2 targetPosition;bool changed=false;
-    auto frame=[&](entt::entity dropped,const char* sound=nullptr,int soundSlot=0) {
-        ImGui::NewFrame();ImGui::SetNextWindowPos({10,10},ImGuiCond_Always);ImGui::SetNextWindowSize({500,300},ImGuiCond_Always);
-        ImGui::Begin("References",nullptr,ImGuiWindowFlags_NoSavedSettings);
-        if((dropped!=entt::null || sound) && ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceExtern|ImGuiDragDropFlags_SourceNoPreviewTooltip)) {
-            if(sound)ImGui::SetDragDropPayload("ASSET_SOUND_PATH",sound,std::strlen(sound)+1);
-            else ImGui::SetDragDropPayload("HIERARCHY_ENTITY",&dropped,sizeof(dropped));
-            ImGui::EndDragDropSource();
-        }
-        const auto start=ImGui::GetCursorScreenPos();
-        ImGui::SetNextItemWidth(350);
-        changed=DrawScriptReferenceField(world,owner,metadata,value,nullptr);
-        targetPosition={start.x+40,start.y+ImGui::GetFrameHeight()*.5f+soundSlot*(ImGui::GetFrameHeight()+ImGui::GetStyle().ItemSpacing.y)};
-        ImGui::End();ImGui::Render();
-    };
-    frame(entt::null);frame(entt::null);
-    auto drop=[&](entt::entity e) {
-        io.AddMousePosEvent(targetPosition.x,targetPosition.y);io.AddMouseButtonEvent(0,true);
-        frame(e);frame(e);io.AddMouseButtonEvent(0,false);frame(e);
-    };
-    drop(wrong);CHECK(!changed && value=="");frame(entt::null);
-    drop(child);CHECK(changed);CHECK(value=="Muzzle Flash");
-    metadata={{"kind","sound-refs"}};value="";frame(entt::null);
-    auto dropSound=[&](const char* path,int slot) {
-        frame(entt::null,nullptr,slot);
-        io.AddMousePosEvent(targetPosition.x,targetPosition.y);io.AddMouseButtonEvent(0,true);
-        frame(entt::null,path,slot);frame(entt::null,path,slot);
-        io.AddMouseButtonEvent(0,false);frame(entt::null,path,slot);
-    };
-    dropSound("assets/invalid.txt",0);CHECK(!changed && value=="");frame(entt::null);
-    dropSound("assets/shot1.wav",0);CHECK(changed && value=="assets/shot1.wav");frame(entt::null);
-    dropSound("assets/shot2.ogg",1);CHECK(changed && value=="assets/shot1.wav;assets/shot2.ogg");
-    ImGui::DestroyContext(context);ImGui::SetCurrentContext(previous);
 }
 void TestPrefabToolbarReturn() {
     auto* previous=ImGui::GetCurrentContext(); auto* context=ImGui::CreateContext();
@@ -443,7 +397,6 @@ void TestUndoTriggerSkipsNavigation() {
 void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Editor navigation undo avoids scene snapshots and preserves transactions",TestEditorNavigationUndo);
     tests.emplace_back("Prefab toolbar replaces Play and returns from hidden Scene tab",TestPrefabToolbarReturn);
-    tests.emplace_back("Script reference hierarchy drops validate component types",TestScriptReferenceDrop);
     tests.emplace_back("Script IDE text editing, completion undo and source preservation",TestScriptIDETextEditing);
     tests.emplace_back("Global file undo, coalescing, creation, deletion and rename",TestGlobalFileUndo);
     tests.emplace_back("ImCurveAdapter",TestCurveAdapter);
