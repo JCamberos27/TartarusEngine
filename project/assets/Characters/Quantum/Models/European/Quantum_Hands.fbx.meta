@@ -2,6 +2,12 @@
   "folder": "assets/Characters/Quantum/Models/European",
   "guid": "d00075b82bb2bfad",
   "importer": {
+    "globalScale": 1.0,
+    "importAnimations": true,
+    "importNormals": true,
+    "importSkeleton": true,
+    "materialImportMode": 0,
+    "optimizeGraph": true,
     "skinIgnoresMeshNode": true
   },
   "materialRemap": {

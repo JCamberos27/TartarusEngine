@@ -236,7 +236,56 @@
     "assets/Weapons/Remington870/Textures",
     "assets/Weapons/Remington870/Weapon",
     "scripts",
-    "assets/Weapons/AKS74U/Attachments"
+    "assets/Weapons/AKS74U/Attachments",
+    "assets/Architecture",
+    "assets/Architecture/Building",
+    "assets/Architecture/Building/Textures",
+    "assets/Architecture/Doors",
+    "assets/Architecture/Doors/Textures",
+    "assets/Characters/Quantum/Textures/Clothing/Accessories",
+    "assets/Characters/Quantum/Textures/Clothing/Bags",
+    "assets/Characters/Quantum/Textures/Clothing/Outerwear",
+    "assets/Characters/Quantum/Textures/Clothing/Outerwear/Coat",
+    "assets/Characters/Quantum/Textures/Clothing/Outerwear/Jacket_Classic",
+    "assets/Characters/Quantum/Textures/Clothing/Outerwear/Jacket_Jeans",
+    "assets/Characters/Quantum/Textures/Clothing/Outerwear/Jacket_Winter",
+    "assets/Characters/Quantum/Textures/Clothing/Outerwear/Vest_Jeans",
+    "assets/Characters/Quantum/Textures/Clothing/Pants/Jeans",
+    "assets/Characters/Quantum/Textures/Clothing/Tops/Shirt_Hawaiian",
+    "assets/Effects/Blood",
+    "assets/Furniture",
+    "assets/Furniture/Bathroom",
+    "assets/Furniture/Bathroom/Textures",
+    "assets/Furniture/Bedroom",
+    "assets/Furniture/Bedroom/Textures",
+    "assets/Furniture/Decor",
+    "assets/Furniture/Decor/Textures",
+    "assets/Furniture/Garage",
+    "assets/Furniture/Garage/Textures",
+    "assets/Furniture/Kids_Room",
+    "assets/Furniture/Kids_Room/Textures",
+    "assets/Furniture/Kitchen",
+    "assets/Furniture/Kitchen/Textures",
+    "assets/Furniture/Lighting",
+    "assets/Furniture/Lighting/Textures",
+    "assets/Furniture/Living_Room",
+    "assets/Furniture/Living_Room/Textures",
+    "assets/Furniture/Office",
+    "assets/Furniture/Office/Textures",
+    "assets/Furniture/Seating",
+    "assets/Furniture/Seating/Textures",
+    "assets/Props/Cross",
+    "assets/Props/Cross/Textures",
+    "assets/Props/Electrical",
+    "assets/Props/Electrical/Textures",
+    "assets/Props/Holy_Bible",
+    "assets/Props/Holy_Bible/Textures",
+    "assets/Props/Knife",
+    "assets/Props/Medical_Supplies",
+    "assets/Props/Medical_Supplies/Textures",
+    "assets/Props/Money",
+    "assets/Props/Money/Textures",
+    "assets/Weapons/AKS74U/Attachments/Textures"
   ],
   "audio": {
     "busVolumes": [
@@ -433,6 +482,16 @@
       "name": "FireMode",
       "negative": -1,
       "positive": 66
+    },
+    {
+      "altNegative": -1,
+      "altPositive": -1,
+      "gamepadAxis": -1,
+      "gamepadButton": -1,
+      "invertGamepadAxis": false,
+      "name": "Flashlight",
+      "negative": -1,
+      "positive": 70
     }
   ],
   "physics": {
@@ -480,11 +539,11 @@
     "playerPushStrength": 2.0,
     "solverIterations": 8
   },
+  "startupScene": "scenes/Sandbox.json",
+  "startupSceneGuid": "52ed5cade6cc1e55",
   "tags": [],
   "time": {
     "maximumDeltaTime": 0.10000000149011612,
     "timeScale": 1.0
-  },
-  "startupScene": "scenes/Sandbox.json",
-  "startupSceneGuid": "52ed5cade6cc1e55"
+  }
 }
