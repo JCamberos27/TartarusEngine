@@ -111,7 +111,7 @@ public:
     void SetPlayerMoveInput(glm::vec2 rightForward) { m_SwayMoveInput=rightForward; m_HaveSwayMoveInput=true; }
     // The R key: tap = Reload, hold = MagCheck (see FirstPersonReloadButton).
     void UpdateReloadKey(bool down, float dt);
-    void ResetReloadKey() { m_ManagedReloadSeconds=0; m_ManagedReloadDown=false; m_ManagedReloadFired=false; }
+    void ResetReloadKey() { m_ReloadSeconds=0; m_ReloadDown=false; m_ReloadFired=false; }
     // Sets the Reload trigger when the magazine isn't full and no reload is running; the
     // magazine refills on the controller's Refill event (so a reload cut short doesn't count).
     bool Reload();
@@ -507,8 +507,8 @@ private:
     bool m_HavePlayerLookBaseline = false;
     float m_ReloadPoll = 0.0f;
     float m_RegripDelay = 15.0f;
-    float m_ManagedReloadSeconds=0;
-    bool m_ManagedReloadDown=false, m_ManagedReloadFired=false;
+    float m_ReloadSeconds=0;
+    bool m_ReloadDown=false, m_ReloadFired=false;
     Scripting::WeaponLoadoutFrame RunLoadout(int operation,int value=0);
     Scripting::WeaponFrame RunGameplay(int operation,float dt=0.0f,bool pressed=false,bool held=false,int events=0);
     std::mt19937 m_Rng{std::random_device{}()};
