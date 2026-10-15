@@ -146,7 +146,11 @@ RevealRow::RevealRow(int index) {
 
 RevealRow::~RevealRow() {
     if (m_PushedAlpha) ImGui::PopStyleVar();
-    if (m_Shift != 0.0f) ImGui::SetCursorPosY(ImGui::GetCursorPosY() - m_Shift);
+    // Take the shift back out of the layout directly. SetCursorPosY would flag the move as a
+    // SetCursorPos with no item after it: the shift is smaller than ItemSpacing, so the cursor
+    // stays past CursorMaxPos and ImGui asserts if the row was the last thing in its window,
+    // group or table.
+    if (m_Shift != 0.0f) ImGui::GetCurrentWindow()->DC.CursorPos.y -= m_Shift;
 }
 
 } // namespace Glass

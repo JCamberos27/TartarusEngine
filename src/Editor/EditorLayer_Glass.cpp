@@ -1174,7 +1174,21 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
     const ImTextureID blur = (ImTextureID)(intptr_t)g.BlurTexture;
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    const ImVec2 savedCursor = ImGui::GetCursorScreenPos();
+    // The HUDs are placed with SetCursorScreenPos and reserve their rects as items (so they're
+    // hit-tested and block viewport picking). Snapshot the window's layout cursor and restore it
+    // exactly at the end, so they leave no trace in the Scene window's layout or content size.
+    // (Restoring with SetCursorScreenPos would put the cursor past CursorMaxPos with no item
+    // after it, which ImGui rejects at End().)
+    ImGuiWindow* const sceneWindow = ImGui::GetCurrentWindow();
+    struct LayoutCursor {
+        ImVec2 pos, prevLine, max, idealMax, currLine, prevLineSize;
+        float currBase, prevBase;
+        bool sameLine, setPos;
+    };
+    const ImGuiWindowTempData& dc0 = sceneWindow->DC;
+    const LayoutCursor savedLayout{dc0.CursorPos, dc0.CursorPosPrevLine, dc0.CursorMaxPos, dc0.IdealMaxPos,
+                                   dc0.CurrLineSize, dc0.PrevLineSize, dc0.CurrLineTextBaseOffset,
+                                   dc0.PrevLineTextBaseOffset, dc0.IsSameLine, dc0.IsSetPos};
     const float margin = Glass::Px(Glass::Space2);
     const float pad = Glass::Px(Glass::Space1h);
     const float radius = Glass::Px(Glass::RadiusCard);
@@ -1333,5 +1347,15 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
         }
     }
 
-    ImGui::SetCursorScreenPos(savedCursor);
+    ImGuiWindowTempData& dc = sceneWindow->DC;
+    dc.CursorPos = savedLayout.pos;
+    dc.CursorPosPrevLine = savedLayout.prevLine;
+    dc.CursorMaxPos = savedLayout.max;
+    dc.IdealMaxPos = savedLayout.idealMax;
+    dc.CurrLineSize = savedLayout.currLine;
+    dc.PrevLineSize = savedLayout.prevLineSize;
+    dc.CurrLineTextBaseOffset = savedLayout.currBase;
+    dc.PrevLineTextBaseOffset = savedLayout.prevBase;
+    dc.IsSameLine = savedLayout.sameLine;
+    dc.IsSetPos = savedLayout.setPos;
 }

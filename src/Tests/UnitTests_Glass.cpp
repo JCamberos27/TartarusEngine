@@ -245,6 +245,45 @@ void TestGlassRevealClipGuard() {
     CHECK(Glass::Motion().LiveCount() == 0);
 }
 
+// Staggered rows shift the layout cursor and take the shift back after the row. That must leave
+// ImGui's layout valid when a row is the last thing in its window: the stagger outlives the
+// height animation, so for a few frames the reveal is at rest while its last rows still settle.
+// (A SetCursorPos-style move past CursorMaxPos with no item after it asserts at End().)
+void TestGlassRevealRowsKeepLayoutValid() {
+    HeadlessImGui gui;
+    const ImGuiID reveal = 0xC0DEu;
+    bool open = false, wasOpen = false;
+    float afterY = 0.0f, startY = 0.0f;
+    bool sawStaggerAtRest = false;
+    auto body = [&] {
+        startY = ImGui::GetCursorScreenPos().y;
+        if (Glass::BeginReveal(reveal, open, wasOpen)) {
+            const bool moving = Glass::CurrentRevealMoving();
+            for (int i = 0; i < 10; ++i) {
+                Glass::RevealRow row(i);
+                ImGui::PushID(i);
+                ImGui::Button("row", ImVec2(200.0f, 20.0f));
+                ImGui::PopID();
+            }
+            const float shiftedRowGap = ImGui::GetCursorScreenPos().y - startY;
+            if (!moving && shiftedRowGap > 0.0f && Glass::Motion().LiveCount() > 0) sawStaggerAtRest = true;
+            Glass::EndReveal();
+        }
+        afterY = ImGui::GetCursorScreenPos().y;
+        // Nothing after this: the window ends right on the reveal's last row.
+    };
+    gui.Frame(body);
+    open = true;
+    gui.Frame(body);
+    wasOpen = true;
+    for (int f = 0; f < 60; ++f) gui.Frame(body);
+    CHECK(sawStaggerAtRest);
+    // Settled: exactly the natural height, no residue from the shifts.
+    const float full = 10.0f * (20.0f + ImGui::GetStyle().ItemSpacing.y);
+    CHECK(Near(afterY - startY, full, 0.5f));
+    CHECK(Glass::Motion().LiveCount() == 0);
+}
+
 void TestGlassMotionButtonPolicy() {
     HeadlessImGui gui;
     ImGuiIO& io = ImGui::GetIO();
@@ -331,6 +370,7 @@ void RegisterGlassTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Glass motion: abandoned animations are swept", TestGlassMotionStaleSweep);
     tests.emplace_back("Glass motion: fast pointer sweeps don't light rows", TestGlassVelocityGate);
     tests.emplace_back("Glass layout: reveal moves the layout and clips hit-testing", TestGlassRevealClipGuard);
+    tests.emplace_back("Glass layout: staggered rows keep ImGui's layout valid", TestGlassRevealRowsKeepLayoutValid);
     tests.emplace_back("Glass layout: moving buttons stay clickable", TestGlassMotionButtonPolicy);
     tests.emplace_back("Glass motion: springs, curves and stagger", TestGlassSprings);
 }
