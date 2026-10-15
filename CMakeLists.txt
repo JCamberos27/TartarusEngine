@@ -297,10 +297,19 @@ file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS
 
 # Gameplay code lives in a separately-built DLL so it can be rebuilt and reloaded while the
 # editor executable remains open. Keep module entry points and systems out of the host target.
-list(REMOVE_ITEM ENGINE_SOURCES
+# The reloadable modules' sources. Module-only files leave the engine; the first-person rules are
+# shared: the engine keeps its own copy (used until a module with matching frames loads, and by
+# the unit tests) and TartarusGame compiles another, so editing them hot-reloads.
+set(TARTARUS_GAME_MODULE_ONLY_SOURCES
   ${CMAKE_SOURCE_DIR}/src/Game/GameModule.cpp
   ${CMAKE_SOURCE_DIR}/src/Game/TransformControllerSystem.cpp
   ${CMAKE_SOURCE_DIR}/src/Game/LightFlickerSystem.cpp
+)
+set(TARTARUS_GAME_SHARED_SOURCES
+  ${CMAKE_SOURCE_DIR}/src/Game/WeaponRules.cpp
+  ${CMAKE_SOURCE_DIR}/src/Game/BodyLocomotion.cpp
+)
+set(TARTARUS_EDITOR_MODULE_SOURCES
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModule.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleToolbar.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleAssetBrowser.cpp
@@ -310,6 +319,17 @@ list(REMOVE_ITEM ENGINE_SOURCES
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleStats.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleHistory.cpp
 )
+list(REMOVE_ITEM ENGINE_SOURCES ${TARTARUS_GAME_MODULE_ONLY_SOURCES} ${TARTARUS_EDITOR_MODULE_SOURCES})
+
+# The Script IDE asks for a module rebuild when it saves one of these (GameModuleBuild.cpp reads
+# this list), so the list lives here once instead of being copied into the editor.
+set(_tartarus_module_manifest "")
+foreach(_src IN LISTS TARTARUS_GAME_MODULE_ONLY_SOURCES TARTARUS_GAME_SHARED_SOURCES TARTARUS_EDITOR_MODULE_SOURCES)
+  file(RELATIVE_PATH _rel ${CMAKE_SOURCE_DIR} ${_src})
+  string(APPEND _tartarus_module_manifest "${_rel}\n")
+endforeach()
+file(WRITE ${CMAKE_BINARY_DIR}/TartarusModules.sources.tmp "${_tartarus_module_manifest}")
+configure_file(${CMAKE_BINARY_DIR}/TartarusModules.sources.tmp ${CMAKE_BINARY_DIR}/TartarusModules.sources COPYONLY)
 
 # The GLFW backend sets every viewport's GLFW_MOUSE_PASSTHROUGH each frame, and GLFW applies it
 # unconditionally: a SetWindowLongW + SetLayeredWindowAttributes round trip per window per frame
@@ -415,11 +435,7 @@ endif()
 
 add_executable(TartarusEngine ${ENGINE_SOURCES} ${IMGUI_SOURCES} ${MESHOPT_SOURCES} ${RECAST_SOURCES})
 
-add_library(TartarusGame SHARED
-  ${CMAKE_SOURCE_DIR}/src/Game/GameModule.cpp
-  ${CMAKE_SOURCE_DIR}/src/Game/TransformControllerSystem.cpp
-  ${CMAKE_SOURCE_DIR}/src/Game/LightFlickerSystem.cpp
-)
+add_library(TartarusGame SHARED ${TARTARUS_GAME_MODULE_ONLY_SOURCES} ${TARTARUS_GAME_SHARED_SOURCES})
 
 # Reloadable editor tools intentionally use a narrow host callback table rather than sharing
 # EditorLayer's ImGui/undo/scene lifetime across a DLL boundary. That lets a tool panel reload
@@ -432,14 +448,7 @@ add_library(TartarusGame SHARED
 # drives platform/renderer. Core/Log.cpp is likewise NOT built here — a second copy would give the
 # DLL its own private, permanently-empty log; it reads the host's through the callback table.
 add_library(TartarusEditor SHARED
-  ${CMAKE_SOURCE_DIR}/src/Editor/EditorModule.cpp
-  ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleToolbar.cpp
-  ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleAssetBrowser.cpp
-  ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleHierarchy.cpp
-  ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleInspector.cpp
-  ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleConsole.cpp
-  ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleStats.cpp
-  ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleHistory.cpp
+  ${TARTARUS_EDITOR_MODULE_SOURCES}
   ${imgui_SOURCE_DIR}/imgui.cpp
   ${imgui_SOURCE_DIR}/imgui_draw.cpp
   ${imgui_SOURCE_DIR}/imgui_tables.cpp

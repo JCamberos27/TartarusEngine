@@ -156,4 +156,14 @@ struct WeaponLoadoutFrame {
     std::int32_t Commands{};
     std::uintptr_t SlotAmmo{};
 };
+
+// Identifies these structs to a hot-reloaded game module (GameModuleAPI::FramesLayout): the host
+// only calls a module's rules when the module was built against the same frames. Bump
+// kFramesRevision whenever a field is added, removed, retyped or reordered.
+constexpr std::uint32_t kFramesRevision = 1;
+constexpr std::uint32_t FramesLayout() {
+    return kFramesRevision * 0x9E3779B1u ^ (static_cast<std::uint32_t>(sizeof(BodyMotionFrame)) * 0x10000u +
+                                             static_cast<std::uint32_t>(sizeof(WeaponFrame)) * 0x100u +
+                                             static_cast<std::uint32_t>(sizeof(WeaponLoadoutFrame)));
+}
 }

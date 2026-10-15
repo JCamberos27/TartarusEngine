@@ -6,6 +6,7 @@
 #include <mutex>
 #include <sstream>
 #include <thread>
+#include <vector>
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
@@ -34,14 +35,20 @@ std::string g_Log;
 
 fs::path BinaryRoot() { return fs::u8path(TARTARUS_BINARY_DIR); }
 
-// The source files each reloadable target compiles (mirrors the add_library lists in CMakeLists.txt).
-constexpr const char* kReloadable[] = {
-    "src/Game/GameModule.cpp", "src/Game/TransformControllerSystem.cpp", "src/Game/LightFlickerSystem.cpp",
-    "src/Game/TransformControllerSystem.h", "src/Game/LightFlickerSystem.h",
-    "src/Editor/EditorModule.cpp", "src/Editor/EditorModuleToolbar.cpp", "src/Editor/EditorModuleAssetBrowser.cpp",
-    "src/Editor/EditorModuleHierarchy.cpp", "src/Editor/EditorModuleInspector.cpp", "src/Editor/EditorModuleConsole.cpp",
-    "src/Editor/EditorModuleStats.cpp", "src/Editor/EditorModuleHistory.cpp",
-};
+// The sources the reloadable targets compile, as CMake lists them (TartarusModules.sources in the
+// build folder, one source-relative path per line). Read once.
+const std::vector<std::string>& ReloadableSources() {
+    static const std::vector<std::string> sources = [] {
+        std::vector<std::string> list;
+        std::ifstream in(BinaryRoot() / "TartarusModules.sources");
+        for (std::string line; std::getline(in, line);) {
+            while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
+            if (!line.empty()) list.push_back(line);
+        }
+        return list;
+    }();
+    return sources;
+}
 
 void Run() {
     const fs::path log = BinaryRoot() / "TartarusModules.build.log";
@@ -111,8 +118,13 @@ bool IsReloadableSource(const fs::path& path) {
     std::error_code ec;
     const fs::path relative = fs::relative(fs::absolute(path, ec), SourceRoot(), ec).lexically_normal();
     if (ec) return false;
-    for (const char* source : kReloadable)
-        if (_stricmp(relative.generic_u8string().c_str(), source) == 0) return true;
+    // A module source, or the header beside one (WeaponRules.h next to WeaponRules.cpp).
+    const std::string file = relative.generic_u8string();
+    const fs::path ext = relative.extension();
+    const bool header = ext == ".h" || ext == ".hpp" || ext == ".inl";
+    const std::string asSource = header ? fs::path(relative).replace_extension(".cpp").generic_u8string() : file;
+    for (const std::string& source : ReloadableSources())
+        if (_stricmp(asSource.c_str(), source.c_str()) == 0) return true;
     return false;
 }
 }

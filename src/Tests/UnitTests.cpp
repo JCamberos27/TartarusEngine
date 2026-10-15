@@ -64,6 +64,7 @@
 #include "ImportQueueManager.h"
 #include "SceneSerializer.h" // #121
 #include "AnimationSystem.h"           // #123 - the spin systems, driven frame by frame below
+#include "GameRules.h"
 #include "HotReloadGameModule.h"      // Spin / Transform Controller run inside TartarusGame.dll, not the exe
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -571,12 +572,16 @@ void TestSpinSystemsAboutDiagonalAxis() {
         entt::entity e = world.CreateEmptyEntity(glm::vec3(0.0f), base, glm::vec3(1.0f), "t");
         TransformControllerComponent ctl; ctl.RotationDegPerSec = glm::vec3(0.0f, 45.0f, 45.0f);
         world.Registry.emplace<TransformControllerComponent>(e, ctl);
-        gameModule.Tick(world, 2.0f, true);
+        gameModule.Tick(world, 2.0f, 0.0f, true);
         CHECK(near(glm::mat3_cast(world.Registry.get<TransformComponent>(e).Rotation),
                    matrixOf(base) * turnAbout(glm::normalize(ctl.RotationDegPerSec), glm::length(ctl.RotationDegPerSec) * 2.0f), 1e-3f));
     }
 
+    // The module also carries the weapon/body rules, built against these same frames, so the
+    // engine calls its copies while it's loaded and its own again once it's gone.
+    CHECK(GameRules::FromModule());
     gameModule.Shutdown();
+    CHECK(!GameRules::FromModule());
 }
 
 // #369 - a texture a .mat names as a data map defaults to linear (and a normal map to the NormalMap
