@@ -72,8 +72,8 @@ constexpr int   AmbientBlurLevels = 6;     // as deep as the HUD glass: colour f
 constexpr float AmbientSaturation = 1.0f;
 constexpr float AmbientCeiling    = 0.46f; // highlights capped before anything sits on them
 constexpr float AmbientDim        = 0.12f; // black laid straight over the field (dock gaps show this)
-constexpr float GlassPanelAlpha   = 0.25f; // a docked panel: black at this alpha over the field
-constexpr float GlassChromeAlpha  = 0.35f; // menu bar, tab strips, status bar: a little darker
+constexpr float GlassPanelAlpha   = 0.85f; // a docked panel: black at this alpha over the field
+constexpr float GlassChromeAlpha  = 0.90f; // menu bar, tab strips, status bar: a little darker
 // Corners of floating windows and popups at 1x. Docked panels stay square, as in Tartarus.
 constexpr float GlassWindowRounding = 10.0f;
 constexpr float GlassPopupRounding  = 8.0f;
