@@ -3427,32 +3427,22 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         ImGui::EndPopup();
     }
 
-    // Play-mode tint (#236 R2): a warm border around the WHOLE editor window (not just the
-    // Scene rect — that hides behind the Game tab) + a centred tag, so it's unmistakable that
-    // edits now revert on Stop.
+    // Play mode no longer frames the editor or tags it (the title bar's PLAYING tag says it). A
+    // slowed or frozen time scale is still called out at the top centre, since it looks like a
+    // performance problem or a stuck simulation until you remember setting it (Q12).
     if (m_InPlayMode) {
-        const ImGuiViewport* vp = ImGui::GetMainViewport();
-        ImDrawList* dl = ImGui::GetForegroundDrawList();
-        const ImU32 col = EditorTheme::U32(EditorTheme::Accent);
-        const float t = 3.0f;
-        ImVec2 a(vp->Pos.x + t * 0.5f, vp->Pos.y + t * 0.5f);
-        ImVec2 b(vp->Pos.x + vp->Size.x - t * 0.5f, vp->Pos.y + vp->Size.y - t * 0.5f);
-        dl->AddRect(a, b, col, 0.0f, 0, t);
-        // Q12 — a slow-mo/frozen physics step is easy to forget about once you leave Preferences,
-        // and looks identical to a performance problem or a stuck simulation until you remember
-        // to check; the one place that's genuinely unmissable while Playing is this banner.
-        std::string tag = "PLAY MODE \xE2\x80\x94 changes revert on Stop";
         const float timeScale = Time::EffectiveTimeScale(); // #144: the game's scale x the slow-mo slider
         if (std::fabs(timeScale - 1.0f) > 0.001f) {
-            char scaleBuf[32];
-            std::snprintf(scaleBuf, sizeof(scaleBuf), "  \xE2\x80\xA2  Time %.2fx", timeScale);
-            tag += scaleBuf;
+            const ImGuiViewport* vp = ImGui::GetMainViewport();
+            ImDrawList* dl = ImGui::GetForegroundDrawList();
+            char tag[32];
+            std::snprintf(tag, sizeof(tag), "Time %.2fx", timeScale);
+            ImVec2 ts = ImGui::CalcTextSize(tag);
+            ImVec2 tp(vp->Pos.x + vp->Size.x * 0.5f - ts.x * 0.5f, vp->Pos.y + 4.0f);
+            dl->AddRectFilled(ImVec2(tp.x - 7.0f, tp.y - 2.0f), ImVec2(tp.x + ts.x + 7.0f, tp.y + ts.y + 3.0f),
+                              EditorUIPrimitives::kHudPlateColor, 3.0f * m_UIScale);
+            dl->AddText(tp, EditorTheme::U32(EditorTheme::Accent), tag);
         }
-        ImVec2 ts = ImGui::CalcTextSize(tag.c_str());
-        ImVec2 tp(vp->Pos.x + vp->Size.x * 0.5f - ts.x * 0.5f, vp->Pos.y + 4.0f);
-        dl->AddRectFilled(ImVec2(tp.x - 7.0f, tp.y - 2.0f), ImVec2(tp.x + ts.x + 7.0f, tp.y + ts.y + 3.0f),
-                          EditorUIPrimitives::kHudPlateColor, 3.0f * m_UIScale);
-        dl->AddText(tp, col, tag.c_str());
     }
 
     // Transient fly-speed readout — large, centred toward the bottom of the viewport (#236 R2).
