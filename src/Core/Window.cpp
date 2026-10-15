@@ -212,7 +212,15 @@ Window::Window(int width, int height, const std::string& title, bool seeThrough)
 #endif
     m_SeeThrough = seeThrough && glfwGetWindowAttrib(m_Handle, GLFW_TRANSPARENT_FRAMEBUFFER) == GLFW_TRUE;
 #if defined(_WIN32)
-    if (m_SeeThrough) ApplyBlurBehind(m_Handle);
+    if (m_SeeThrough) {
+        ApplyBlurBehind(m_Handle);
+        // DWM still draws the system minimize / maximize / close buttons under a custom frame;
+        // an opaque client hides them, a see-through one lets them show. Without WS_SYSMENU there
+        // are none to show: the editor draws its own (the title bar's traffic lights).
+        HWND hwnd = glfwGetWin32Window(m_Handle);
+        SetWindowLongPtrW(hwnd, GWL_STYLE, GetWindowLongPtrW(hwnd, GWL_STYLE) & ~(LONG_PTR)WS_SYSMENU);
+        SetWindowPos(hwnd, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    }
 #endif
     // Deliberately NOT shown here. Showing before anything is drawn flashes an unpainted
     // framebuffer (a white rectangle over garbage) for as long as loading takes. main() calls
