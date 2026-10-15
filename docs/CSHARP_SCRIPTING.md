@@ -152,10 +152,10 @@ The two supplied prefabs are:
 Each has a placed weapon model, an Animator Controller on its weapon track, and a Weapon
 Definition with a description and GUID-tracked `.fpsanim` reference. That descriptor bundles
 the arms/weapon rigs, materials, controller, recoil, camera shake, muzzle, ejection, audio
-identity and presentation values. WeaponDefinition owns gameplay values. Drop a prefab into a scene or double-click for Prefab Mode;
+identity and presentation values. Weapon Definition owns gameplay values. Drop a prefab into a scene or double-click for Prefab Mode;
 the existing linked-instance overrides and Apply/Revert controls work on these components.
 
-On the project PlayerDefinition, **Primary Weapon Prefab** and **Secondary Weapon Prefab** choose
+On First Person Controller, **Primary Weapon Prefab** and **Secondary Weapon Prefab** choose
 the player's two slots. A supplied prefab takes priority over that slot's legacy Animation
 Set field. Existing scenes using AK/870 descriptors now reference their corresponding
 prefabs. Legacy `.fpsanim` slot references remain readable. The runtime resolves the bundle

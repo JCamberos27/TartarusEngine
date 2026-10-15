@@ -1,5 +1,6 @@
 #include "LayerRegistry.h"
 #include "SceneSerializer.h"
+#include "ComponentJson.h"
 #include "AtomicFile.h"
 #include "World.h"
 #include "AssetLibrary.h"
@@ -12,10 +13,7 @@
 #include "AssetGuid.h"
 #include "ProjectPaths.h"
 #include "EditorSettings.h"
-#include "Scripting/WeaponPrefab.h"
 #include "Scripting/ProjectComponentMigration.h"
-#include "Scripting/PlayerDefinition.h"
-#include "Scripting/NpcDefinitions.h"
 
 #include "Log.h"
 #include "SpotShadowMap.h"
@@ -482,7 +480,7 @@ json ReflectFieldToJson(const ReflectField& f, const void* fp) {
     return nullptr;
 }
 
-void ReflectFieldFromJson(const ReflectField& f, void* fp, const json& v, AssetLibrary& assets) {
+void ReflectFieldFromJson(const ReflectField& f, void* fp, const json& v, AssetLibrary* assets) {
     switch (f.Type) {
         case ReflectFieldType::Bool:   *static_cast<bool*>(fp)  = v.get<bool>(); break;
         case ReflectFieldType::Int:    *static_cast<int*>(fp)   = v.get<int>(); break;
@@ -497,7 +495,7 @@ void ReflectFieldFromJson(const ReflectField& f, void* fp, const json& v, AssetL
             path = ResolveAssetRef(v);  // handles both v1 plain string and v2 {path,pathGuid}
             // Make the referenced asset list in the library even if nothing else imported it,
             // so the Inspector's picker can still show / re-select it.
-            if (!path.empty() && f.AssetKind == ReflectAssetKind::Sound) assets.RegisterSound(path);
+            if (assets && !path.empty() && f.AssetKind == ReflectAssetKind::Sound) assets->RegisterSound(path);
             break;
         }
         case ReflectFieldType::Enum:
@@ -725,12 +723,13 @@ void WarnUnknownComponentBlocks(const json& j) {
 }
 
 void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, entt::entity entity) {
-    if(j.contains("Impact Audio") || j.contains("Weapon Audio") || j.contains("Foley Audio") || j.contains("FX & HUD Settings") || j.contains("Weapon Definition") || j.contains("First Person Controller") || j.contains("Health") || j.contains("NPC Spawn") || j.contains("Squad Settings")) {
+    if(j.contains("Health") || j.contains("C# Script")) {
         auto migrated=j;
-        Scripting::MigrateLegacyWeaponDefinition(migrated);
-        Scripting::MigrateLegacyProjectComponents(migrated);
-        ReadCommonComponents(migrated,world,assets,entity);
-        return;
+        const bool health=Scripting::MigrateLegacyProjectComponents(migrated);
+        if(Scripting::ConvertScriptDefinitions(migrated) || health) {
+            ReadCommonComponents(migrated,world,assets,entity);
+            return;
+        }
     }
     if (j.contains("tag")) world.Registry.emplace_or_replace<TagComponent>(entity, j["tag"].get<std::string>());
     if (!j.value("active", true)) world.Registry.emplace_or_replace<DeactivatedTag>(entity);
@@ -842,17 +841,16 @@ void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, ent
             // field's old key (before an Inspector-label rename) still loads instead of silently
             // keeping the component's default for that field.
             const char* key = ReflectFieldKey(f);
-            if (cj.contains(key)) { ReflectFieldFromJson(f, f.Address(comp), cj.at(key), assets); continue; }
+            if (cj.contains(key)) { ReflectFieldFromJson(f, f.Address(comp), cj.at(key), &assets); continue; }
             for (int i = 0; i < f.LegacyNameCount; ++i) {
                 if (f.LegacyNames[i] && cj.contains(f.LegacyNames[i])) {
-                    ReflectFieldFromJson(f, f.Address(comp), cj.at(f.LegacyNames[i]), assets);
+                    ReflectFieldFromJson(f, f.Address(comp), cj.at(f.LegacyNames[i]), &assets);
                     break;
                 }
             }
         }
     }
     WarnUnknownComponentBlocks(j);
-    Scripting::SyncPlayerDefinition(world,entity);Scripting::SyncNpcDefinition(world,entity);
 }
 
 // --- Prefab per-field overrides (#236 A2 stage 3 / #302 Part B) --------------------------
@@ -1013,7 +1011,7 @@ void ApplyPrefabOverride(World& world, AssetLibrary& assets, entt::entity e,
         if (!rc.Has(world.Registry, e)) rc.Add(world.Registry, e);
         void* c = rc.Get(world.Registry, e);
         for (const auto& f : rc.Meta.Fields)
-            if (ReflectFieldMatchesKey(f, field.c_str())) { ReflectFieldFromJson(f, f.Address(c), v, assets); return; }
+            if (ReflectFieldMatchesKey(f, field.c_str())) { ReflectFieldFromJson(f, f.Address(c), v, &assets); return; }
         return;
     }
 }
@@ -2189,6 +2187,25 @@ void WarnNonPortablePaths(const json& node, const std::string& pointer) {
 
 } // namespace
 
+bool ReadComponentJson(const char* component, const json& block, void* instance) {
+    if (!block.is_object() || !instance) return false;
+    for (const auto& rc : ComponentRegistry::All()) {
+        if (!ReflectComponentMatches(rc.Meta, component)) continue;
+        for (const auto& f : rc.Meta.Fields) {
+            if (f.NonSerialized) continue;
+            const char* key = ReflectFieldKey(f);
+            if (block.contains(key)) { ReflectFieldFromJson(f, f.Address(instance), block.at(key), nullptr); continue; }
+            for (int i = 0; i < f.LegacyNameCount; ++i)
+                if (f.LegacyNames[i] && block.contains(f.LegacyNames[i])) {
+                    ReflectFieldFromJson(f, f.Address(instance), block.at(f.LegacyNames[i]), nullptr);
+                    break;
+                }
+        }
+        return true;
+    }
+    return false;
+}
+
 bool SceneSerializer::Save(const World& world, const AssetLibrary& assets, const std::string& path) {
     // #82 — build the whole document in memory FIRST, and only then touch the file, through
     // AtomicFile (temp + flush + atomic replace). The old version opened a truncating ofstream
@@ -2548,10 +2565,10 @@ bool SceneSerializer::ApplyComponentPresetJson(World& world, AssetLibrary& asset
     for (const auto& f : rc->Meta.Fields) {
         if (f.NonSerialized) continue;
         const char* key = ReflectFieldKey(f);
-        if (fit->contains(key)) { ReflectFieldFromJson(f, f.Address(comp), fit->at(key), assets); continue; }
+        if (fit->contains(key)) { ReflectFieldFromJson(f, f.Address(comp), fit->at(key), &assets); continue; }
         for (int i = 0; i < f.LegacyNameCount; ++i) {
             if (f.LegacyNames[i] && fit->contains(f.LegacyNames[i])) {
-                ReflectFieldFromJson(f, f.Address(comp), fit->at(f.LegacyNames[i]), assets);
+                ReflectFieldFromJson(f, f.Address(comp), fit->at(f.LegacyNames[i]), &assets);
                 break;
             }
         }

@@ -1,4 +1,3 @@
-#include "Scripting/NpcDefinitions.h"
 #include "Scripting/ScriptRuntime.h"
 #include "AnimatorController.h"
 #include "AnimationSystem.h"
@@ -1572,7 +1571,7 @@ void PrefetchAnimatorClips(World& world, AssetLibrary& assets) {
     // first soldier spawned stalls its frame on them.
     if (!world.Registry.view<NpcSpawnComponent>().empty()) {
         static std::vector<std::string> s_SoldierControllers;
-        static std::string s_Path;auto path=Scripting::DefaultSquadDefinition().BodyPrefab;
+        static std::string s_Path;auto path=SquadSettingsComponent{}.BodyPrefab;
         // The first active squad's body prefab (a loop that always breaks is C4702 in Debug).
         const auto squads = world.Registry.view<SquadSettingsComponent>(entt::exclude<InactiveTag>);
         if (squads.begin() != squads.end()) path = world.Registry.get<SquadSettingsComponent>(*squads.begin()).BodyPrefab;
