@@ -38,7 +38,6 @@
 #include "ReflectAttributes.h" // vInspector attributes: EvaluateFieldState
 #include "ParticleSystem.h"
 #include "CurveEditor.h"
-#include "ScriptReferenceWidgets.h"
 #include <json.hpp>
 #include "Shortcuts.h" // vInspector hover keys
 #include <cstring>
