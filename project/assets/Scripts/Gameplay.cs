@@ -18,11 +18,10 @@ public sealed class Gameplay : IProjectIntegration
         default:return GameIntegration.Invoke(operation,frame,size);
         }
     }
-    public string SaveState()=>System.Text.Json.JsonSerializer.Serialize(new {hud=CombatHud.Save(),health=HealthRules.Save()});
+    public string SaveState()=>System.Text.Json.JsonSerializer.Serialize(new {health=HealthRules.Save()});
     public void LoadState(string json) {
-        using var doc=System.Text.Json.JsonDocument.Parse(json);var r=doc.RootElement;
-        if(r.TryGetProperty("hud",out var h)){CombatHud.Load(h.GetString()!);if(r.TryGetProperty("health",out var health))HealthRules.Load(health.GetString()!);}
-        else CombatHud.Load(json);
+        using var doc=System.Text.Json.JsonDocument.Parse(json);
+        if(doc.RootElement.TryGetProperty("health",out var health))HealthRules.Load(health.GetString()!);
     }
     public string Request(string operation,string json) => GameIntegration.Request(operation,json);
 }

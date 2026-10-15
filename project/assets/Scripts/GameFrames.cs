@@ -308,42 +308,6 @@ internal unsafe struct DamageFrame {
     public Vector3 Source;
 }
 [StructLayout(LayoutKind.Sequential)]
-internal unsafe struct GravityFrame {
-    public float Dt;
-    public float Yaw;
-    public float Scroll;
-    public float GrabRange;
-    public float AssistRange;
-    public float AssistConeDeg;
-    public float ScrollTurnDeg;
-    public float MinThrowSpeed;
-    public float MaxThrowSpeed;
-    public float ChargeTime;
-    public float Backspin;
-    public float HoldDistance;
-    public float Charge;
-    public float HoldYaw;
-    public float RotationW;
-    public float PredictSpeed;
-    public int Operation;
-    public int Left;
-    public int Right;
-    public int Alt;
-    public int Control;
-    public int LeftPrev;
-    public int RightPrev;
-    public int Charging;
-    public int HaveHoldPoint;
-    public int Handle;
-    public int Held;
-    public Vector3 Eye;
-    public Vector3 Forward;
-    public Vector3 CameraRight;
-    public Vector3 PrevHoldPoint;
-    public Vector3 HoldVelocity;
-    public Vector3 Rotation;
-}
-[StructLayout(LayoutKind.Sequential)]
 internal unsafe struct AiRuleFrame {
     public float Distance;
     public float Angle;
@@ -493,54 +457,6 @@ internal unsafe struct NpcDamageFrame {
     public Vector3 LastKnown;
     public Vector3 PlayerFeet;
     public Vector3 PushVelocity;
-}
-[StructLayout(LayoutKind.Sequential)]
-internal unsafe struct NpcHudFrame {
-    public Vector3 Feet;
-    public float Health;
-    public float Awareness;
-    public float Suppression;
-    private int _Dead; public bool Dead {get=>_Dead!=0;set=>_Dead=value?1:0;}
-    private int _Known; public bool Known {get=>_Known!=0;set=>_Known=value?1:0;}
-    private int _Visible; public bool Visible {get=>_Visible!=0;set=>_Visible=value?1:0;}
-    private int _Crouched; public bool Crouched {get=>_Crouched!=0;set=>_Crouched=value?1:0;}
-    private int _Attack; public bool Attack {get=>_Attack!=0;set=>_Attack=value?1:0;}
-    private int _Flank; public bool Flank {get=>_Flank!=0;set=>_Flank=value?1:0;}
-    private int _Push; public bool Push {get=>_Push!=0;set=>_Push=value?1:0;}
-    public int Behaviour;
-    public int Role;
-    public nint Name;
-    public nint Why;
-}
-[StructLayout(LayoutKind.Sequential)]
-internal unsafe struct CombatHudFrame {
-    public Vector3 Camera;
-    public float Now;
-    public float RealTime;
-    public float CameraYaw;
-    public float FeedLife;
-    public float StreakWindow;
-    private int _Head; public bool Head {get=>_Head!=0;set=>_Head=value?1:0;}
-    private int _PlayerDead; public bool PlayerDead {get=>_PlayerDead!=0;set=>_PlayerDead=value?1:0;}
-    private int _Armed; public bool Armed {get=>_Armed!=0;set=>_Armed=value?1:0;}
-    private int _Reloading; public bool Reloading {get=>_Reloading!=0;set=>_Reloading=value?1:0;}
-    private int _God; public bool God {get=>_God!=0;set=>_God=value?1:0;}
-    private int _InfiniteAmmo; public bool InfiniteAmmo {get=>_InfiniteAmmo!=0;set=>_InfiniteAmmo=value?1:0;}
-    private int _AiOverlay; public bool AiOverlay {get=>_AiOverlay!=0;set=>_AiOverlay=value?1:0;}
-    public int Operation;
-    public int Unit;
-    public int Ammo;
-    public int Magazine;
-    public int NpcCount;
-    public int DebugFloatCount;
-    public int Kills;
-    public int Rows;
-    public int Streak;
-    public int Result;
-    public nint FireMode;
-    public nint Npcs;
-    public nint DebugLines;
-    public fixed float ViewProjection[16];
 }
 [StructLayout(LayoutKind.Sequential)]
 internal unsafe struct NpcMemoryFrame {
@@ -955,12 +871,6 @@ internal unsafe struct NpcCalloutsFrame {
     public nint Channels;
 }
 [StructLayout(LayoutKind.Sequential)]
-internal unsafe struct WardrobeRandomFrame {
-    public nint Input;
-    public nint Context;
-    public nint Services;
-}
-[StructLayout(LayoutKind.Sequential)]
 internal unsafe struct NpcSpawnFrame {
     public Vector3 Position;
     public Vector3 Feet;
@@ -1104,30 +1014,6 @@ internal unsafe struct NpcShotPoseFrame {
     private int _HaveShot; public bool HaveShot {get=>_HaveShot!=0;set=>_HaveShot=value?1:0;}
     public int VisiblePoints;
     public int Weapon;
-    public nint Services;
-    public nint Context;
-}
-[StructLayout(LayoutKind.Sequential)]
-internal unsafe struct DevFrame {
-    private int _Open; public bool Open {get=>_Open!=0;set=>_Open=value?1:0;}
-    private int _InfiniteAmmo; public bool InfiniteAmmo {get=>_InfiniteAmmo!=0;set=>_InfiniteAmmo=value?1:0;}
-    private int _Invisible; public bool Invisible {get=>_Invisible!=0;set=>_Invisible=value?1:0;}
-    private int _AiOverlay; public bool AiOverlay {get=>_AiOverlay!=0;set=>_AiOverlay=value?1:0;}
-    private int _God; public bool God {get=>_God!=0;set=>_God=value?1:0;}
-    private int _Frozen; public bool Frozen {get=>_Frozen!=0;set=>_Frozen=value?1:0;}
-    private int _HoldFire; public bool HoldFire {get=>_HoldFire!=0;set=>_HoldFire=value?1:0;}
-    private int _HaveBloodLab; public bool HaveBloodLab {get=>_HaveBloodLab!=0;set=>_HaveBloodLab=value?1:0;}
-    private int _BloodLab; public bool BloodLab {get=>_BloodLab!=0;set=>_BloodLab=value?1:0;}
-    public float Difficulty;
-    public float TimeScale;
-    public int Operation;
-    public int Count;
-    public int Alive;
-    public int Known;
-    public int Wanted;
-    public int Spawns;
-    public int Result;
-    public nint Members;
     public nint Services;
     public nint Context;
 }
