@@ -22,7 +22,7 @@
 #include "MaterialAsset.h"
 #include "ShaderAsset.h"
 #include "AudioEngine.h"
-#include "Screenshot.h"
+#include "OsShell.h"
 #include "SceneSerializer.h"
 #include "AABB.h"
 #include "Log.h"
@@ -907,7 +907,7 @@ void EditorLayer::DrawShaderPreviewInspector(AssetLibrary& assets, const std::st
     }
     ImGui::Spacing();
 
-    if (EditorUIPrimitives::SecondaryButton(ICON_FA_UP_RIGHT_FROM_SQUARE "  Open Externally")) Screenshot::OpenFile(key);
+    if (EditorUIPrimitives::SecondaryButton(ICON_FA_UP_RIGHT_FROM_SQUARE "  Open Externally")) OsShell::OpenFile(key);
     ImGui::Spacing();
 
     EditorUIPrimitives::SectionHeader("Source");
@@ -3663,7 +3663,7 @@ bool EditorLayer::BeginComponentSection(const char* icon,
     // Tabs & Headers: this component type's colour / icon (Enhancers::UiStyles). Drawing only -
     // the header's id stays keyed by the default icon, so restyling never resets its open state.
     const Enhancers::UiStyle* headerStyle = es.ComponentHeaderColors ? Enhancers::UiStyles::Get().Component(label) : nullptr;
-    const unsigned headerColor = headerStyle ? headerStyle->Color : 0u;
+    const unsigned headerColor = EditorTheme::UserPacked(headerStyle ? headerStyle->Color : 0u);
     const char* headerIcon = icon;
     if (headerStyle && !headerStyle->Icon.empty())
         if (const char* g = Enhancers::FAIconGlyph(headerStyle->Icon.c_str())) headerIcon = g;
@@ -4506,7 +4506,7 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
                         if(EditorUIPrimitives::SecondaryButton(ICON_FA_CODE "  Edit in Script IDE"))OpenScriptIDE(ProjectPaths::Resolve(slot.Source));
                         ImGui::SameLine();
                         if(EditorUIPrimitives::SecondaryButton(ICON_FA_PEN_TO_SQUARE "  Open Script"))
-                            Screenshot::OpenFile(ProjectPaths::Resolve(slot.Source));
+                            OsShell::OpenFile(ProjectPaths::Resolve(slot.Source));
                         if(ImGui::IsItemHovered()) EditorUI::SetTooltip("Open the C# source in your code editor");
                     }
                     if(ImGui::TreeNode("Advanced##script")) {

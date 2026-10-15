@@ -606,6 +606,7 @@ inline void KeyCap(const char* key) {
 // `selT` / `hovT` are 0..1 fades (EditorTheme::AnimT); the wash eases back as the row is selected.
 inline void DrawStyledRowBackground(ImDrawList* dl, ImVec2 rowMin, ImVec2 rowMax, float colorX, unsigned color,
                                     int fill, float selT, float hovT) {
+    color = EditorTheme::UserPacked(color);
     if (color && fill != 0) {
         const ImU32 rgb = color & 0x00FFFFFFu;
         const float washK = 1.0f - 0.65f * selT;

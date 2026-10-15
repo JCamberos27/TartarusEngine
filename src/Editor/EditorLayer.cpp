@@ -17,7 +17,6 @@
 #include "Texture.h"
 #include "Material.h"
 #include "AudioEngine.h"
-#include "Screenshot.h"
 #include "SceneSerializer.h"
 #include "AABB.h"
 #include "Texture.h"
@@ -49,9 +48,12 @@
 #include "TimeService.h"
 #include "Window.h" // Preferences > Display: connected monitors for fullscreen (#154) // play banner shows the effective time scale (#144)
 #include "TextureCache.h" // Preferences > Rendering's cache size + Clear button (#159)
-#include "gl.h" // DrawEngineMark reads back a patch of the scene texture for its contrast-adaptive tint
+#include "gl.h"
 #include "ScreenBlur.h"
 #include "Framebuffer.h"
+#include "Glass/GlassEditorState.h" // m_Glass (complete type for ~EditorLayer)
+#include "Glass/GlassCompositor.h"   // LiftGreyText (grey text on glass)
+#include "Glass/GlassTheme.h"       // ConfigureMacEngineTheme (the opt-in Glass theme)
 
 #include <imgui.h>
 #include <imgui_internal.h> // DockBuilder* — only used once, to lay out the default dock tree on first run
@@ -265,6 +267,7 @@ void EditorLayer::Init(GLFWwindow* window) {
         gz.Colors[ImGuizmo::PLANE_Y] = ImVec4(0.95f, 0.78f, 0.25f, 0.00f);
         gz.Colors[ImGuizmo::PLANE_Z] = ImVec4(0.95f, 0.78f, 0.25f, 0.00f);
         gz.Colors[ImGuizmo::SELECTION] = EditorTheme::AccentBright; // a hovered / dragged handle
+        ApplyGizmoAccent(); // the Glass theme's accent instead, when it's selected
         // The in-use rotation arc: the palette's orange (Palette::Defaults) rather than
         // ImGuizmo's stock, so a live rotate reads as part of the same spectrum as the axes.
         gz.Colors[ImGuizmo::ROTATION_USING_BORDER] = EditorTheme::Rgb(0xF2, 0x99, 0x4A);
@@ -339,10 +342,6 @@ void EditorLayer::Init(GLFWwindow* window) {
     ImGui_ImplOpenGL3_Init("#version 460");
     GLStateShadow_Invalidate(); // its own loader set GL state behind the engine's (gl.h)
 
-    // Wordmark removed in the #92 UI pass — only the corner monogram remains as branding.
-
-    m_MarkTexture = std::make_unique<Texture>(EnginePaths::Resolve("assets/branding/tartarus_engine_mark.png"));
-    if (!m_MarkTexture->IsValid()) m_MarkTexture.reset();
 }
 
 static void SetSharedMetrics(ImGuiStyle& style) {
@@ -395,6 +394,32 @@ void EditorLayer::ApplyThemeStyle() {
     }
 
     ImGuiStyle& style = ImGui::GetStyle();
+    if (GlassThemeActive()) {
+        // The opt-in Black Glass theme (Preferences > General > Editor theme): Tartarus's own
+        // sizes, spacing and palette, with glass materials over them (GlassTheme.h).
+        style = s_baseStyle;
+        ApplyTartarusPalette(style);
+        ApplyGlassMaterials(style);
+        static const auto logGlassWarn = [](const char* msg) { Log::Warn(std::string("[Glass theme] ") + msg); };
+        using namespace EditorUIPrimitives;
+        // Floors against a panel over the brightest the ambient field can get.
+        const float worstField = Glass::AmbientCeiling * (1.0f - Glass::AmbientDim);
+        const ImVec4 field(worstField, worstField, worstField, 1.0f);
+        const ImVec4 panel = CompositeOver(style.Colors[ImGuiCol_WindowBg], field);
+        AssertContrastFloor("Text vs glass panel", style.Colors[ImGuiCol_Text], panel, 4.5f, logGlassWarn);
+        // Grey text is lifted on glass by the compositor (Glass::LiftGreyText).
+        const auto lifted = [](ImVec4 grey) {
+            const float v = (float)Glass::LiftGreyText((int)(grey.x * 255.0f + 0.5f)) / 255.0f;
+            return ImVec4(v, v, v, 1.0f);
+        };
+        AssertContrastFloor("Secondary vs glass panel", lifted(EditorTheme::Secondary), panel, 4.5f, logGlassWarn);
+        AssertContrastFloor("TextDisabled vs glass panel", lifted(style.Colors[ImGuiCol_TextDisabled]), panel, 3.0f, logGlassWarn);
+        AssertContrastFloor("Text vs glass fallback", style.Colors[ImGuiCol_Text], Glass::GlassFallback, 4.5f, logGlassWarn);
+        static const auto logGlassIconWarn = [](const char* msg) { Log::Warn(std::string("[Icons] ") + msg); };
+        EditorIcons::AssertEditorIconsUnique(logGlassIconWarn);
+        style.ScaleAllSizes(m_UIScale);
+        return;
+    }
     style = s_baseStyle;
     ApplyTartarusPalette(style);
 
@@ -506,6 +531,11 @@ void EditorLayer::FreeGpuResources() {
     ClearMaterialThumbnails(); // #107
     m_AssetThumbs.Clear();
     if (m_ThumbnailBlitFbo) { glDeleteFramebuffers(1, &m_ThumbnailBlitFbo); m_ThumbnailBlitFbo = 0; }
+    if (m_Glass) { // the Glass theme's frosted-HUD blur chain and its window compositor
+        m_Glass->Backdrop.Release();
+        m_Glass->Ambient.Release();
+        m_Glass->Compositor.Release();
+    }
 }
 
 void EditorLayer::Shutdown() {
@@ -1145,10 +1175,11 @@ void EditorLayer::DrawSettingsWindow(World& world) {
     // finds the category holding it, not only a category whose own name matches. Keep these in
     // step with the category bodies below (labels plus the obvious synonyms).
     static const char* kEditorCatKeywords[] = {
-        "tooltips ui scale display dpi zoom text size fullscreen borderless exclusive monitor",
+        "tooltips ui scale display dpi zoom text size fullscreen borderless exclusive monitor "
+        "appearance editor theme glass tartarus macos frosted blur hud viewport overlays",
         "gizmo size transform gizmo vertex pick radius snap frame camera on select field of view fov "
         "fly speed near far clip plane game view maximize on play light gizmos opacity arrow disc "
-        "scale selected light corner monogram engine mark spin speed prism reduce motion animation",
+        "scale selected light reduce motion animation",
         "grid show grid line spacing major line every fade distance axis lines thickness opacity "
         "snapping move snap rotate snap scale snap increment",
         "auto-save autosave interval minutes backup recovery",
@@ -1243,6 +1274,35 @@ void EditorLayer::DrawSettingsWindow(World& world) {
         if (SettingsCheckbox("Show editor tooltips", &prefs.ShowTooltips)) EditorSettings::Save();
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Hover hints on Inspector fields, Hierarchy rows and toolbar buttons.");
+
+        EditorUIPrimitives::SectionHeader("Appearance");
+        {
+            static const char* kThemes[] = {"Tartarus", "Black Glass"};
+            int themeId = m_PendingThemeId >= 0 ? m_PendingThemeId : prefs.EditorThemeId;
+            SettingsLabel("Editor theme");
+            if (ImGui::Combo("##Editor theme", &themeId, kThemes, IM_ARRAYSIZE(kThemes))) RequestEditorTheme(themeId);
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Tartarus: the phosphor-terminal look (default).\n"
+                                     "Black Glass: the Tartarus layout and sizes in see-through black glass over a blur\n"
+                                     "of the scene, with real blurred glass under everything that floats (menus, popups,\n"
+                                     "tooltips, dialogs, undocked windows, viewport overlays). It adds the Objects, Properties and Library panels\n"
+                                     "(Window \xE2\x96\xB8 Glass Workspace). Applies immediately.");
+        }
+        if (prefs.EditorThemeId == 1) {
+            if (SettingsCheckbox("See-through window", &prefs.GlassSeeThroughWindow)) EditorSettings::Save();
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("The editor window itself is glass: the desktop shows through the panels, blurred,\n"
+                                     "the way Explorer does with a transparency theme. Off: the panels show a blur\n"
+                                     "of the scene instead. Takes effect the next time the editor starts.");
+            if (SettingsCheckbox("Frosted blur", &prefs.GlassFrostedBlur)) EditorSettings::Save();
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Blur what's behind every glass surface (a GPU compute pass per surface that\n"
+                                     "needs a fresh backdrop). Off: glass is an opaque near-black instead.");
+            if (SettingsCheckbox("Viewport HUDs", &prefs.GlassViewportHuds)) EditorSettings::Save();
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Glass cards over the Scene view: the selection, scene stats,\n"
+                                     "compile-error notifications and the snap indicator.");
+        }
 
         EditorUIPrimitives::SectionHeader("Display");
         // 0 = auto (follow the monitor). Present the slider from 0.75; a value at/below the
@@ -1398,33 +1458,10 @@ void EditorLayer::DrawSettingsWindow(World& world) {
             EditorUI::SetTooltip("Screen size of the parts that aren't tied to a world measurement (the directional arrow, the sun disc).");
         if (!prefs.ShowLightGizmos) ImGui::EndDisabled();
 
-        EditorUIPrimitives::SectionHeader("Corner monogram");
-        if (SettingsCheckbox("Show engine mark", &prefs.EngineMarkEnabled)) EditorSettings::Save();
-        if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("The spinning TE monogram in the viewport's bottom-left corner.");
-        if (!prefs.EngineMarkEnabled) ImGui::BeginDisabled();
-        SettingsLabel("Spin speed");
-        {
-            bool committed = false;
-            EditorUI::SliderFloat("##Spin speed", &prefs.EngineMarkSpinSpeed, 0.0f, 4.0f, "%.2f rad/s",
-                                  0, nullptr, &committed);
-            if (committed) EditorSettings::Save();
-        }
-        if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("How fast the monogram turns. 0 parks it; the default 0.52 is one revolution every ~12 s.");
-        {
-            // Phase 1 item 9 — the Prism editor THEME is gone (collapsed into Dark/Light), so
-            // this is a plain independent toggle now; it no longer has a theme to defer to.
-            if (SettingsCheckbox("Prism", &prefs.EngineMarkPrism)) EditorSettings::Save();
-            if (ImGui::IsItemHovered())
-                EditorUI::SetTooltip("Paint the monogram with a slowly-drifting spectral gradient instead of the fixed grey.");
-        }
-        if (!prefs.EngineMarkEnabled) ImGui::EndDisabled();
-
         EditorUIPrimitives::SectionHeader("Motion");
         if (SettingsCheckbox("Reduce motion", &prefs.ReduceMotion)) EditorSettings::Save();
         if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("Parks the corner monogram's spin/hue drift and makes the nav-gizmo view-preset camera snap instantly instead of easing.");
+            EditorUI::SetTooltip("Makes the nav-gizmo view-preset camera snap instantly instead of easing, and parks the editor's animations.");
         break;
 
     case 2: // Grid & Snapping
@@ -2175,6 +2212,7 @@ void EditorLayer::DrawProjectSettingsBody(World& /*world*/) {
 }
 
 void EditorLayer::BeginFrame() {
+    ApplyPendingTheme(); // a theme switch from Preferences, between frames (never under a pushed style)
     ImGui_ImplOpenGL3_NewFrame();
     // Creating its device objects (first frame) leaves bindings at zero rather than restoring the
     // engine's (ImGuiGLHooks.cpp); the binding cache must not trust what it last bound.
@@ -2184,6 +2222,7 @@ void EditorLayer::BeginFrame() {
     ImGui::NewFrame();
     ImGuizmo::BeginFrame();
     ImViewGuizmo::BeginFrame();
+    GlassFrameBegin(); // Glass theme only: motion clock, wallpaper, notifications
 }
 
 void EditorLayer::EndFrame() {
@@ -2193,6 +2232,13 @@ void EditorLayer::EndFrame() {
     // changes (blend, cull, depth test, scissor, viewport...) and never touches the rest, so the
     // shadow still holds, and re-reading it would put the driver waits back (gl.h). Bindings it
     // leaves at zero instead of restoring (ImGuiGLHooks.cpp), hence the binding-cache reset.
+    if (GlassThemeActive()) {
+        // Black glass: the compositor renders the same draw data with a blurred glass plate under
+        // every floating window (modals included, so the full-screen modal blur below isn't used).
+        GlassState().Compositor.Render(dd, EditorSettings::Get().GlassFrostedBlur);
+        GLStateCache::Invalidate();
+        return;
+    }
     ImGui_ImplOpenGL3_RenderDrawData(dd);
     GLStateCache::Invalidate();
 
@@ -2376,157 +2422,11 @@ void EditorLayer::DrawPlayModeOverlays(World& world) {
     DrawPhysicsHud(/*maximized=*/true);
 }
 
-unsigned int EditorLayer::EngineMarkTexture() const { return m_MarkTexture ? m_MarkTexture->GLHandle() : 0u; }
-
 std::string EditorLayer::SceneTitle() const {
     const std::string stem = std::filesystem::path(m_CurrentScenePath).stem().string();
     return stem.empty() ? std::string("Untitled") : stem;
 }
 
-void EditorLayer::DrawEngineMark(float dt) {
-    if (!m_MarkTexture) return;
-    if (m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) return;
-
-    // Spin rate is user-set (Preferences > Viewport). Default 0.52 rad/s is a full turn every
-    // ~12 s — a slow idle spin, not a dizzying logo-spinner; 0 parks it. Phase 6 item 12: Reduce
-    // Motion parks both the spin and the Prism hue drift below without touching the user's own
-    // EngineMarkSpinSpeed value, so turning Reduce Motion back off resumes their chosen rate.
-    const float kTwoPi = 6.28318530718f;
-    const bool reduceMotion = EditorSettings::Get().ReduceMotion;
-    float spinSpeed = reduceMotion ? 0.0f : EditorSettings::Get().EngineMarkSpinSpeed;
-    m_MarkSpinAngle = fmodf(m_MarkSpinAngle + dt * spinSpeed, kTwoPi);
-    if (m_MarkSpinAngle < 0.0f) m_MarkSpinAngle += kTwoPi; // stay in [0, 2pi) even for a negative speed
-    // Prism mode's spectral band drifts through the wheel on its own clock, independent of spin
-    // (so it still moves at spin speed 0). Gentle — this is ambient colour, not a strobe.
-    m_MarkHue = fmodf(m_MarkHue + dt * (reduceMotion ? 0.0f : 0.6f), 1.0f); // ~1.7 s per full sweep of the wheel
-
-    float size = 54.0f * m_UIScale; // 25% down from the #19-P19 bump; still reads as a mark, less visual weight
-    float margin = 14.0f * m_UIScale;
-    float half = size * 0.5f;
-    // Rests in the bottom-right corner of the Scene view: the left edge belongs to the tool palette.
-    ImVec2 cornerC(m_ViewportPos.x + m_ViewportSize.x - margin - half,
-                   m_ViewportPos.y + m_ViewportSize.y - margin - half);
-
-    // dt is used to drive motion/eases below — clamp it so a one-off hitch (first frame, a stall
-    // elsewhere in the frame) can't teleport the mark. Motion is otherwise fully dt-scaled, so
-    // it runs identically smooth at any refresh rate.
-    float sdt = dt; if (sdt < 0.0f) sdt = 0.0f; if (sdt > 0.05f) sdt = 0.05f;
-
-    // --- idle detection -> DVD-screensaver bounce ----------------------------------------------
-    ImGuiIO& io = ImGui::GetIO();
-    bool userActive =
-        io.MouseDelta.x != 0.0f || io.MouseDelta.y != 0.0f ||
-        io.MouseWheel != 0.0f || io.MouseWheelH != 0.0f ||
-        io.MouseDown[0] || io.MouseDown[1] || io.MouseDown[2] ||
-        io.InputQueueCharacters.Size > 0 ||
-        io.KeyCtrl || io.KeyShift || io.KeyAlt || io.KeySuper;
-    if (!userActive) {
-        for (int i = 0; i < ImGuiKey_NamedKey_COUNT; ++i)
-            if (io.KeysData[i].Down) { userActive = true; break; }
-    }
-    if (userActive) m_MarkIdleTime = 0.0f; else m_MarkIdleTime += dt;
-
-    const float kIdleDelay = 30.0f;
-    if (!m_MarkPosValid) { m_MarkPos = {cornerC.x, cornerC.y}; m_MarkPosValid = true; }
-
-    // Rect the mark centre must stay within so the whole quad fits inside the viewport.
-    float minX = m_ViewportPos.x + half, maxX = m_ViewportPos.x + m_ViewportSize.x - half;
-    float minY = m_ViewportPos.y + half, maxY = m_ViewportPos.y + m_ViewportSize.y - half;
-    if (maxX < minX) maxX = minX;
-    if (maxY < minY) maxY = minY;
-
-    if (m_MarkIdleTime >= kIdleDelay) {
-        if (!m_MarkBouncing) {
-            m_MarkBouncing = true;
-            // Launch from the current spot on a diagonal; the exact angle drifts with the spin
-            // phase so it isn't identical every time, no RNG needed.
-            const float kSpeed = 230.0f * m_UIScale; // px/sec
-            float ang = 0.6f + 0.9f * m_MarkSpinAngle / kTwoPi + kTwoPi * 0.125f;
-            m_MarkVel = {cosf(ang) * kSpeed, sinf(ang) * kSpeed};
-            const float kMin = 90.0f * m_UIScale; // keep both components lively (no near-vertical/horizontal crawl)
-            if (fabsf(m_MarkVel.x) < kMin) m_MarkVel.x = (m_MarkVel.x < 0.0f ? -kMin : kMin);
-            if (fabsf(m_MarkVel.y) < kMin) m_MarkVel.y = (m_MarkVel.y < 0.0f ? -kMin : kMin);
-        }
-        m_MarkPos += m_MarkVel * sdt;
-        if (m_MarkPos.x <= minX) { m_MarkPos.x = minX; m_MarkVel.x =  fabsf(m_MarkVel.x); }
-        if (m_MarkPos.x >= maxX) { m_MarkPos.x = maxX; m_MarkVel.x = -fabsf(m_MarkVel.x); }
-        if (m_MarkPos.y <= minY) { m_MarkPos.y = minY; m_MarkVel.y =  fabsf(m_MarkVel.y); }
-        if (m_MarkPos.y >= maxY) { m_MarkPos.y = maxY; m_MarkVel.y = -fabsf(m_MarkVel.y); }
-    } else {
-        m_MarkBouncing = false;
-        m_MarkVel = {0.0f, 0.0f};
-        // Critically-damped-ish ease back to the corner — ~0.16 s to settle, no overshoot.
-        float k = 1.0f - expf(-sdt / 0.16f);
-        m_MarkPos += (glm::vec2{cornerC.x, cornerC.y} - m_MarkPos) * k;
-    }
-    // Keep it inside even across a viewport resize.
-    m_MarkPos.x = m_MarkPos.x < minX ? minX : (m_MarkPos.x > maxX ? maxX : m_MarkPos.x);
-    m_MarkPos.y = m_MarkPos.y < minY ? minY : (m_MarkPos.y > maxY ? maxY : m_MarkPos.y);
-    ImVec2 center(m_MarkPos.x, m_MarkPos.y);
-
-    // --- fixed tint (#54) ---------------------------------------------------------------------
-    // Used to read back the scene patch behind the mark every ~10 Hz (an async PBO GPU readback)
-    // and ease the tint toward white over dark content / black over light content. Unlike the
-    // text HUDs, the mark can't sensibly get an opaque backing plate without turning a small
-    // corner monogram into a visible box — so instead of the general "opaque plate" fix, it's
-    // simply always the near-white tint that used to be its "no sample yet" default. This is a
-    // small accepted tradeoff (slightly lower contrast over a very bright corner of the scene)
-    // for deleting the whole luminance-sampling subsystem; the mark is decorative chrome, not
-    // load-bearing information, and Q10 (Epic #10) already has it off by default with a
-    // preference to enable.
-    // Phase 1 item 9 — the Prism editor THEME is gone; this is purely the independent monogram
-    // toggle now (EditorSettings::EngineMarkPrism), not a theme check.
-    const bool prism = EditorSettings::Get().EngineMarkPrism;
-    const int markV = 255;
-
-    // Appended to the Scene window's own draw list and clipped to the viewport rect — NOT the
-    // foreground list, which paints over every panel (the mark would then sit on top of the
-    // Preferences window, the Inspector, any popup overlapping the viewport). At the Scene
-    // window's z-order a panel on top correctly covers it. Same treatment as DrawEntityIcons.
-    ImGuiWindow* sceneWin = ImGui::FindWindowByName(EditorPanels::Scene);
-    ImDrawList* dl = sceneWin ? sceneWin->DrawList : ImGui::GetForegroundDrawList();
-    dl->PushClipRect(ImVec2(m_ViewportPos.x, m_ViewportPos.y),
-                     ImVec2(m_ViewportPos.x + m_ViewportSize.x, m_ViewportPos.y + m_ViewportSize.y), true);
-
-    // Spin about the vertical (Y) axis — a sign turning on a post. The horizontal extent
-    // foreshortens by cos(angle), collapses to a line edge-on, then comes back mirrored. Full
-    // height is kept; only the left/right edges move.
-    float hx = half * cosf(m_MarkSpinAngle);
-    ImVec2 p1(center.x - hx, center.y - half); // top-left
-    ImVec2 p2(center.x + hx, center.y - half); // top-right
-    ImVec2 p3(center.x + hx, center.y + half); // bottom-right
-    ImVec2 p4(center.x - hx, center.y + half); // bottom-left
-    const ImVec2 uv1(0, 0), uv2(1, 0), uv3(1, 1), uv4(0, 1);
-    const ImTextureID tex = (ImTextureID)(intptr_t)m_MarkTexture->GLHandle();
-
-    if (prism) {
-        // A spectral band smeared left -> right across the mark, the whole band drifting slowly
-        // through the wheel — dispersion through glass, not a flat strobing hue. Needs per-vertex
-        // colour, so the quad is written into the draw list by hand (AddImageQuad is one colour).
-        const float markHue = m_MarkHue;
-        float rL, gL, bL, rR, gR, bR;
-        ImGui::ColorConvertHSVtoRGB(markHue,                        0.62f, 1.0f, rL, gL, bL);
-        ImGui::ColorConvertHSVtoRGB(fmodf(markHue + 0.30f, 1.0f),   0.62f, 1.0f, rR, gR, bR);
-        const int a = 205;
-        ImU32 colL = IM_COL32((int)(rL*255+0.5f), (int)(gL*255+0.5f), (int)(bL*255+0.5f), a);
-        ImU32 colR = IM_COL32((int)(rR*255+0.5f), (int)(gR*255+0.5f), (int)(bR*255+0.5f), a);
-        dl->PushTextureID(tex);
-        dl->PrimReserve(6, 4);
-        ImDrawIdx v = (ImDrawIdx)dl->_VtxCurrentIdx;
-        dl->PrimWriteIdx(v); dl->PrimWriteIdx((ImDrawIdx)(v + 1)); dl->PrimWriteIdx((ImDrawIdx)(v + 2));
-        dl->PrimWriteIdx(v); dl->PrimWriteIdx((ImDrawIdx)(v + 2)); dl->PrimWriteIdx((ImDrawIdx)(v + 3));
-        dl->PrimWriteVtx(p1, uv1, colL);
-        dl->PrimWriteVtx(p2, uv2, colR);
-        dl->PrimWriteVtx(p3, uv3, colR);
-        dl->PrimWriteVtx(p4, uv4, colL);
-        dl->PopTextureID();
-    } else {
-        dl->AddImageQuad(tex, p1, p2, p3, p4, uv1, uv2, uv3, uv4,
-                         IM_COL32(markV, markV, markV, 190)); // contrast-adaptive grey
-    }
-
-    dl->PopClipRect();
-}
 bool EditorLayer::IsMouseOverSceneViewport() const {
     // Geometric test against the same rect picking/gizmos already trust (ViewportPos()/
     // ViewportSize(), zeroed whenever the "Scene" tab isn't the active one) — deliberately NOT
@@ -2692,7 +2592,6 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     CurveEditor::DrawWindows([this]{m_RequestGlobalUndo=true;},[this]{m_RequestGlobalRedo=true;},!m_UndoStack.empty(),!m_RedoStack.empty());
 
     m_ThumbnailBudgetThisFrame = 3; // at most this many new Asset Browser model thumbnails per frame
-    m_ScreenshotThumbBudgetThisFrame = 8; // at most this many new Asset Browser screenshot thumbnails per frame (#176)
     m_AssetThumbs.Pump(8); // unloaded assets' tiles, decoded off-thread: upload a few per frame
 
     if (m_AssetRefreshFlash > 0.0f) m_AssetRefreshFlash = std::max(0.0f, m_AssetRefreshFlash - dt); // #236 G
@@ -2711,7 +2610,6 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     DrawAnimatorWindow(world); // Animator v2
     DrawPhysicsDebugWindow(world); // #185 debug tooling
     DrawPhysicsHud();             // #185 D
-    DrawScreenshotPreview(world, assets);
 
     // Auto-save: skipped while Playing (Draw() DOES run during in-panel Play — #90) - the same reason OnExitPlayMode's revert-to-snapshot exists, autosaving
     // transient gameplay state would be wrong. Skipped entirely when nothing's actually unsaved,
@@ -2757,8 +2655,6 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     // (same pos/size/constraints this used to set) and reaches host state through
     // EditorModuleHostAPI. The dock host below still starts at y = toolbarH.
 
-    // (The top-right wordmark overlay was removed in the #92 UI pass — the corner monogram
-    // (DrawEngineMark) is the only branding mark now.)
 
     const float statusH = StatusBarHeightPx(); // the status bar sits under the dock space
     ImGui::SetNextWindowPos(ImVec2(0, toolbarH));
@@ -2974,14 +2870,14 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         // EditorLayer_ToolPalette.cpp for why. Skipped for a clean capture, same as every other
         // viewport overlay.
         if (!m_HideOverlaysThisFrame) DrawToolPalette(world, editorCamera);
+        DrawGlassViewportOverlays(world); // Glass theme only: the frosted HUDs (skips clean captures itself)
     } else {
         m_ViewportPos = {0.0f, 0.0f};
         m_ViewportSize = {0.0f, 0.0f};
     }
     ImGui::End();
 
-    if (EditorSettings::Get().EngineMarkEnabled && !m_HideOverlaysThisFrame)
-        DrawEngineMark(dt);
+    DrawGlassWorkspace(world, assets); // Glass theme only: Objects / Properties / Library (Window menu)
 
     // (Every editor panel's window is drawn by the reloadable editor module now — Console, the
     // Statistics HUD, the top toolbar, the Asset Browser, the Scene Hierarchy and the Inspector.
@@ -3026,7 +2922,6 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         // re-checks m_HideOverlaysThisFrame so a clean capture still suppresses it.
     }
     DrawStatusBar(world, editorCamera);
-    DrawCaptureFeedback(dt);
 
     // "Look through light" (#140 phase 4): the Inspector/Lights-panel buttons can't see the
     // camera, so they queue a light here; act on it once, then run the per-frame Esc/banner.
@@ -3528,32 +3423,22 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         ImGui::EndPopup();
     }
 
-    // Play-mode tint (#236 R2): a warm border around the WHOLE editor window (not just the
-    // Scene rect — that hides behind the Game tab) + a centred tag, so it's unmistakable that
-    // edits now revert on Stop.
+    // Play mode no longer frames the editor or tags it (the red Stop button says it). A
+    // slowed or frozen time scale is still called out at the top centre, since it looks like a
+    // performance problem or a stuck simulation until you remember setting it (Q12).
     if (m_InPlayMode) {
-        const ImGuiViewport* vp = ImGui::GetMainViewport();
-        ImDrawList* dl = ImGui::GetForegroundDrawList();
-        const ImU32 col = EditorTheme::U32(EditorTheme::Accent);
-        const float t = 3.0f;
-        ImVec2 a(vp->Pos.x + t * 0.5f, vp->Pos.y + t * 0.5f);
-        ImVec2 b(vp->Pos.x + vp->Size.x - t * 0.5f, vp->Pos.y + vp->Size.y - t * 0.5f);
-        dl->AddRect(a, b, col, 0.0f, 0, t);
-        // Q12 — a slow-mo/frozen physics step is easy to forget about once you leave Preferences,
-        // and looks identical to a performance problem or a stuck simulation until you remember
-        // to check; the one place that's genuinely unmissable while Playing is this banner.
-        std::string tag = "PLAY MODE \xE2\x80\x94 changes revert on Stop";
         const float timeScale = Time::EffectiveTimeScale(); // #144: the game's scale x the slow-mo slider
         if (std::fabs(timeScale - 1.0f) > 0.001f) {
-            char scaleBuf[32];
-            std::snprintf(scaleBuf, sizeof(scaleBuf), "  \xE2\x80\xA2  Time %.2fx", timeScale);
-            tag += scaleBuf;
+            const ImGuiViewport* vp = ImGui::GetMainViewport();
+            ImDrawList* dl = ImGui::GetForegroundDrawList();
+            char tag[32];
+            std::snprintf(tag, sizeof(tag), "Time %.2fx", timeScale);
+            ImVec2 ts = ImGui::CalcTextSize(tag);
+            ImVec2 tp(vp->Pos.x + vp->Size.x * 0.5f - ts.x * 0.5f, vp->Pos.y + 4.0f);
+            dl->AddRectFilled(ImVec2(tp.x - 7.0f, tp.y - 2.0f), ImVec2(tp.x + ts.x + 7.0f, tp.y + ts.y + 3.0f),
+                              EditorUIPrimitives::kHudPlateColor, 3.0f * m_UIScale);
+            dl->AddText(tp, EditorTheme::U32(EditorTheme::Accent), tag);
         }
-        ImVec2 ts = ImGui::CalcTextSize(tag.c_str());
-        ImVec2 tp(vp->Pos.x + vp->Size.x * 0.5f - ts.x * 0.5f, vp->Pos.y + 4.0f);
-        dl->AddRectFilled(ImVec2(tp.x - 7.0f, tp.y - 2.0f), ImVec2(tp.x + ts.x + 7.0f, tp.y + ts.y + 3.0f),
-                          EditorUIPrimitives::kHudPlateColor, 3.0f * m_UIScale);
-        dl->AddText(tp, col, tag.c_str());
     }
 
     // Transient fly-speed readout — large, centred toward the bottom of the viewport (#236 R2).

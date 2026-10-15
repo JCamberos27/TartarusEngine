@@ -735,7 +735,7 @@ void Draw(const EditorModuleHostAPI& host) {
             "Search every asset by name, across all folders.\n"
             "Type multiple words to match all of them (AND).\n"
             "t:Model / t:Texture / t:Material / t:Shader / t:Sound / t:Scene /\n"
-            "  t:Prefab / t:Screenshot / t:Folder\n"
+            "  t:Prefab / t:Folder\n"
             "  restricts by type - listing several ORs them together.\n"
             "l:label restricts by label (set in an asset's right-click\n"
             "  menu) - listing several ANDs them, requiring every one.");
@@ -752,7 +752,7 @@ void Draw(const EditorModuleHostAPI& host) {
 
     bool anyFilterActive = false;
     for (const char* t : {"t:model", "t:texture", "t:material", "t:shader", "t:sound", "t:scene",
-                          "t:prefab", "t:screenshot", "t:folder"})
+                          "t:prefab", "t:folder"})
         anyFilterActive |= SearchHasToken(search, t);
     for (const auto& lbl : knownLabels)
         anyFilterActive |= SearchHasToken(search, "l:" + lbl);
@@ -786,7 +786,7 @@ void Draw(const EditorModuleHostAPI& host) {
         static const std::pair<const char*, const char*> kTypes[] = {
             {"Model", "model"}, {"Texture", "texture"}, {"Material", "material"}, // #184
             {"Shader", "shader"}, {"Sound", "sound"}, {"Scene", "scene"},
-            {"Prefab", "prefab"}, {"Screenshot", "screenshot"}, {"Folder", "folder"},
+            {"Prefab", "prefab"}, {"Folder", "folder"},
         };
         for (const auto& [label, token] : kTypes) {
             const std::string full = std::string("t:") + token;

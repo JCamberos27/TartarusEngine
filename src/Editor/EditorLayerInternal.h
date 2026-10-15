@@ -36,7 +36,7 @@ namespace EditorInternal {
 // a future font/metric change leaves a visible gap or clips the row.
 inline constexpr float kToolbarHeight = 30.0f;
 // Height of the window-wide status bar under the dock space (EditorLayer::DrawStatusBar).
-inline constexpr float kStatusBarHeight = 24.0f;
+inline constexpr float kStatusBarHeight = 32.0f;
 
 
 // --- Dialog primitive (Phase 1 item 4) ------------------------------------------------------
@@ -463,24 +463,6 @@ inline void UniquifyName(World& world, entt::entity e) {
     std::string desired = nc->Name;
     nc->Name.clear();
     nc->Name = UniqueNameFor(world, desired);
-}
-
-// A screenshot on disk already holds display-encoded (sRGB) bytes. Load it as literal color
-// (IsSRGB = false) so the Asset Browser thumbnail and the lightbox render it at true brightness
-// — the default sRGB path hardware-linearizes on sample, which is right for a 3D albedo map but
-// visibly darkens a UI image.
-//
-// maxSize controls the two very different jobs this shares: the lightbox (DrawScreenshotPreview)
-// wants the full-quality capture since the user can scroll-to-zoom into it, so it passes 0 (no
-// cap, see TextureImportSettings::MaxTextureSize). The Asset Browser grid thumbnail renders at
-// ~96px, so it caps small to cut decode/VRAM cost (#176) instead of loading (and nearest-
-// downsampling, #207) the full-res capture just to shrink it back down for display.
-inline std::shared_ptr<Texture> LoadScreenshotTexture(const std::string& path, int maxSize) {
-    TextureImportSettings s;
-    s.IsSRGB = false;
-    s.WrapMode = TextureImportSettings::Wrap::ClampToEdge;
-    s.MaxTextureSize = maxSize;
-    return std::make_shared<Texture>(path, s);
 }
 
 // --- Clip pickers (EditorLayer_Animator.cpp) -----------------------------------------------------

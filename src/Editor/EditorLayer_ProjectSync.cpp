@@ -245,11 +245,9 @@ bool EditorLayer::RenameAssetFile(World& world, AssetLibrary& assets, const std:
         auto& ts = Enhancers::TabState::Get();
         if (rekey(ts.Inspector.Tabs) | rekey(ts.Inspector.Closed) | rekey(ts.Starred)) ts.MarkDirty();
     }
-    m_ShotThumbs.erase(oldKey);
     m_AssetThumbs.Invalidate(oldKey);
     InvalidateProjectAssetIndex();
     InvalidateScenesListing();
-    InvalidateShotsListing();
     Log::Info("Renamed '" + fs::path(oldAbs).filename().string() + "' to '" + fs::path(newAbs).filename().string() + "'" +
               (refs ? " - " + std::to_string(refs) + " reference(s) in the scene updated." : "."));
     return true;

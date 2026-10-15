@@ -288,18 +288,11 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
         // dark-on-light. Fixed opaque plates + fixed light text are legible over anything.
 
         // In-panel play: first click inside the running view captures mouse/keyboard for the
-        // game; until then, a hint sits over the image. (Esc releases — handled in main.cpp.)
+        // game. (Esc releases — handled in main.cpp.)
         if (playing && !inputEngaged) {
             if (m_ViewHovered && (ImGui::IsMouseClicked(ImGuiMouseButton_Left) || ImGui::IsMouseClicked(ImGuiMouseButton_Right))) {
                 m_EngageClickPending = true;
             }
-            const char* hint = "Click to control  \xE2\x80\xA2  Esc to release";
-            ImVec2 ts = ImGui::CalcTextSize(hint);
-            ImVec2 anchor(imagePos.x + (rect.Size.x - ts.x) * 0.5f,
-                          imagePos.y + rect.Size.y - ts.y - 16.0f);
-            EditorUIPrimitives::DrawHudPlate(dl, ImVec2(anchor.x - 10.0f, anchor.y - 6.0f),
-                              ImVec2(anchor.x + ts.x + 10.0f, anchor.y + ts.y + 6.0f), 4.0f);
-            dl->AddText(anchor, EditorUIPrimitives::kHudTextColor, hint);
         } else if (!playing && noSceneCamera) {
             const char* hint = "No Camera in scene - previewing the editor view. Create " ICON_FA_ANGLE_RIGHT " Camera to place one.";
             ImVec2 ts = ImGui::CalcTextSize(hint);

@@ -132,20 +132,28 @@ struct EditorSettings {
     // all-bits-set both mean "no filter" (every kind shown).
     int  HierarchyTypeFilterMask = 0;
 
-    // --- Corner "engine mark": the spinning TE monogram in the Scene viewport's bottom-left.
-    // EngineMarkSpinSpeed is radians/sec (0 parks it). EngineMarkPrism paints the monogram with
-    // a slowly-drifting spectral gradient instead of the default contrast-adaptive grey.
-    // Controls live in Preferences > Viewport and the Window menu.
-    bool  EngineMarkEnabled   = true;
-    float EngineMarkSpinSpeed = 0.52f;
-    bool  EngineMarkPrism     = false;
-
-    // Phase 6 item 12 — parks the corner monogram's spin and hue drift, and makes the nav-gizmo
-    // view-preset camera transition (EditorLayer_Gizmos.cpp's m_ViewTransition) snap instantly
-    // instead of easing over its usual 0.28s, for anyone sensitive to on-screen motion. Doesn't
-    // touch EngineMarkSpinSpeed itself - that preference is preserved, just not applied while
-    // this is on, so turning it back off resumes the user's own spin rate.
+    // Phase 6 item 12 - makes the nav-gizmo view-preset camera transition (EditorLayer_Gizmos.cpp's
+    // m_ViewTransition) snap instantly instead of easing over its usual 0.28s, and parks the
+    // editor's animations, for anyone sensitive to on-screen motion.
     bool ReduceMotion = false;
+
+    // The editor's look (Preferences > General > Editor theme). 0 = Tartarus, the phosphor terminal
+    // look (EditorTheme.h) and the default; 1 = Glass, the opt-in macOS-style theme
+    // (docs/EDITOR_DESIGN_SYSTEM.md, src/Editor/Glass/). Glass also unlocks the Glass Workspace
+    // panels (Window > Glass Workspace) and the frosted viewport HUDs below. Applied live.
+    int  EditorThemeId = 0;
+    // Glass only: the frosted HUD cards over the Scene viewport (selection, scene stats, compile /
+    // snap notifications), and whether they blur the scene behind them (a compute pass, see
+    // GlassBackdrop.h) or just tint it.
+    bool GlassViewportHuds = true;
+    bool GlassFrostedBlur = true;
+    // Black Glass: the editor window itself is see-through, with the desktop blurred behind it
+    // (like Explorer with a transparency theme). Read when the window is created: next launch.
+    bool GlassSeeThroughWindow = true;
+    // Glass Workspace panels' visibility (Window > Glass Workspace).
+    bool ShowGlassHierarchy = false;
+    bool ShowGlassInspector = false;
+    bool ShowGlassAssets = false;
 
     // Phase 6 item 10 — name of the layout preset (<user>/layouts/<name>.ini, #184) that
     // Window > Reset Layout rebuilds to, in place of the four shipped Default/Wide/Tall/Focus
@@ -206,19 +214,6 @@ struct EditorSettings {
     // Edited from the toolbar's Gizmos/visibility popup.
     unsigned LayerVisibleMask  = 0xFFFFFFFFu;
     unsigned LayerPickLockMask = 0u;
-
-    // --- Capture (screenshot) tool. Images always write to project/screenshots/ (so the Asset
-    // Browser's "Screenshots" folder finds them). Controls live in Preferences > Capture and the
-    // toolbar's camera button. CaptureMode: 0 full editor window, 1 Scene viewport only,
-    // 2 Scene viewport with all editor overlays hidden, 3 Game view. CaptureScale (1/2/4)
-    // supersamples the viewport modes. CaptureResPreset: 0 = match the viewport (with
-    // CaptureScale applied), 1..4 = a fixed 720p/1080p/1440p/2160p render. CaptureFormat: 0 PNG, 1 JPG.
-    int  CaptureMode      = 1;
-    int  CaptureScale     = 1;
-    int  CaptureResPreset = 0;
-    int  CaptureFormat    = 0;
-    bool CaptureFlash  = true;
-    bool CaptureSound  = true;
 
     // --- Scene-view tool state (#135). EditorLayer owns the live copies (m_ShowGrid,
     // m_SnapTranslation, ...), which dozens of menus/hotkeys/toolbar buttons edit directly;

@@ -15,7 +15,6 @@
 #include "Texture.h"
 #include "Material.h"
 #include "AudioEngine.h"
-#include "Screenshot.h"
 #include "SceneSerializer.h"
 #include "AABB.h"
 #include "Log.h"
@@ -519,8 +518,7 @@ void EditorLayer::UpdateViewTransition(Camera& editorCamera, float dt) {
     }
 
     // Phase 6 item 12 — Reduce Motion snaps straight to the target instead of easing over
-    // kDuration below, the same "any transition" scope named alongside the monogram spin
-    // (DrawEngineMark, EditorLayer.cpp).
+    // kDuration below.
     if (EditorSettings::Get().ReduceMotion) {
         editorCamera.Yaw = m_ViewTransition.ToYaw;
         editorCamera.Pitch = m_ViewTransition.ToPitch;
@@ -1954,6 +1952,7 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
         m_GizmoDragStartRot = transform.EulerDegrees();
         m_GizmoDragStartScale = transform.Scale;
     }
+    if (!isUsingNow && m_GizmoWasUsing && snapActive) GlassNotifySnap(); // Glass theme: the snap ring
     m_GizmoWasUsing = isUsingNow;
 
     if (isUsingNow) {
@@ -2716,6 +2715,7 @@ void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
             PushGizmoEditToPhysics(r.entity, newWorld); // #185
         }
     }
+    if (!isUsingNow && m_GizmoWasUsing && snapActive) GlassNotifySnap(); // Glass theme: the snap ring
     m_GizmoWasUsing = isUsingNow;
 
     EndGizmoOverlay();

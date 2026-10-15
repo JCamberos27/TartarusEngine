@@ -49,6 +49,7 @@ LaunchOptions ParseLaunchOptions(int argc, char** argv) {
         else if (a == "--editor-shot-default-layout") { o.editorShotDefaultLayout = true; }
         else if (a == "--editor-shot-curves") { o.editorShotCurves = true; }
         else if (a == "--editor-shot-ide") { o.editorShotIDE = true; }
+        else if (a == "--editor-shot-glass") { o.editorShotGlass = true; }
         else if (a == "--editor-shot-scale" && i + 1 < argc) { o.editorShotScale = (float)std::atof(argv[++i]); }
         else if (a == "--outfit-shots" && i + 1 < argc) {
             o.smokeTestMode = true;

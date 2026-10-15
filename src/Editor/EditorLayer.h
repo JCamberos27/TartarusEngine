@@ -63,7 +63,7 @@ enum class ReflectAssetKind; // ComponentReflection.h
 struct ReflectField;        // ComponentReflection.h
 
 struct AssetGridCell {
-    enum class Kind { Folder, Model, Texture, Material, Sound, Scene, Prefab, Screenshot, Shader, Animator, Weapon, Hdri, Script, Recoil, CameraShake } kind;
+    enum class Kind { Folder, Model, Texture, Material, Sound, Scene, Prefab, Shader, Animator, Weapon, Hdri, Script, Recoil, CameraShake } kind;
     std::string key;
     std::string display;
     std::shared_ptr<Model> model;
@@ -80,6 +80,7 @@ struct AssetGridCell {
 #include "BuildPipeline.h" // #174 (complete types: a build runs in a std::future)
 
 struct AnimatorWindowState; // the Animator window's state (EditorLayer_Animator*.cpp)
+struct GlassEditorState;    // the Glass theme's state (Glass/GlassEditorState.h)
 
 class EditorLayer {
     friend struct EditorHistoryTestAccess;
@@ -146,7 +147,7 @@ public:
     void FrameOpenedScene(World& world, const std::string& path);
 
     // The floating action bar centered over the Scene/Game viewport — Undo/Redo/Save, the
-    // Play/Stop/Pause/Step/Fullscreen transport, and the panel-toggle/Capture/notification
+    // Play/Stop/Pause/Step/Fullscreen transport, and the panel-toggle/notification
     // cluster that used to live in the toolbar's one-click icon row (that row is gone; see
     // EditorModuleToolbar.cpp's file comment). main.cpp calls this every frame, unconditionally.
     // Clicks only raise request flags — main.cpp owns the play/maximize/cursor state itself.
@@ -238,8 +239,7 @@ public:
     // menu/popup (shared ImGuiContext). Defined in EditorLayer_Toolbar.cpp.
     void DrawFileMenuBody(World& world, AssetLibrary& assets);
     void DrawEditMenuBody(World& world, AssetLibrary& assets);
-    // The engine monogram texture (0 = none) and the open scene's title, for the menu bar.
-    unsigned int EngineMarkTexture() const;
+    // The open scene's title, for the menu bar.
     std::string SceneTitle() const;
     bool SceneDirty() const { return m_Dirty; }
     bool IsInPlayMode() const { return m_InPlayMode; }
@@ -258,7 +258,6 @@ public:
     }
     void DrawViewMenuBody(World& world, Camera& editorCamera);
     void DrawWindowMenuBody();
-    void DrawCaptureOptionsPopupBody();
     void DrawGridSnapPopupBody(); // #236 — grid spacing + per-op snap increments, opened from the toolbar magnet's caret
     void DrawGizmosPopupBody();   // #236 — master gizmo switch + per-type visibility, opened from the toolbar Gizmos caret
     // Also the module's Add menu (via the host glue); still used by Shift+A quick-add and the
@@ -645,8 +644,7 @@ public:
     bool IsSceneViewportVisible() const { return m_SceneViewportVisible; }
 
     // Read by the reloadable Stats module (EditorModuleStats.cpp) through EditorModuleHostAPI —
-    // the HUD lays itself out against these, shows the smoothed frame time, and pushes back the
-    // engine-mark hide flag when its capped height would overlap the corner monogram.
+    // the HUD lays itself out against these and shows the smoothed frame time.
     float UIScale() const { return m_UIScale; }
     float SmoothedFrameMs() const { return m_SmoothedFrameMs; }
     // Phase 6 item 5 — raw (unsmoothed) per-frame ms, oldest-to-newest, for the Statistics
@@ -677,38 +675,43 @@ public:
     // content, in the same draw-list ordering as anything else in that window, always on top of
     // its own host background rather than underneath it.
     void SetSceneTexture(unsigned int glColorTexture) { m_SceneColorTexture = glColorTexture; }
+    // Same, with the texture's pixel size: the Glass theme's frosted HUDs blur this image (they
+    // need its real size, which can differ from the window rect by the framebuffer scale).
+    void SetSceneTexture(unsigned int glColorTexture, int width, int height) {
+        m_SceneColorTexture = glColorTexture;
+        m_SceneTexW = width;
+        m_SceneTexH = height;
+    }
+
+    // --- Glass theme (opt-in macOS-style look; EditorLayer_Glass.cpp, docs/EDITOR_DESIGN_SYSTEM.md)
+    // True while Preferences > General > Editor theme is "Glass".
+    bool GlassThemeActive() const;
+    // Switches theme at the start of the next frame (the style can't change under a frame's
+    // pushed style stack). 0 = Tartarus, 1 = Glass. Persists to editor prefs.
+    void RequestEditorTheme(int themeId) { m_PendingThemeId = themeId; }
+    // A gizmo drag just ended with snapping on: the Glass HUD pops a ring where it landed.
+    void GlassNotifySnap();
+    // --smoke-test (smoke_glass* scenes, Tests/SmokeChecks.cpp): turns the Glass theme and every
+    // Glass surface on without touching the saved preferences, or puts back what was there.
+    // Takes effect at the next BeginFrame, like RequestEditorTheme.
+    void SetGlassThemeForTest(bool on);
+    // The frosted HUDs' blurred Scene texture from the last frame (0 = none / Glass is off).
+    unsigned int GlassBackdropTextureForTest() const;
+    // Last frame's glass compositor numbers: glass surfaces drawn, framebuffer captures blurred.
+    int GlassSurfacesForTest() const;
+    int GlassCapturesForTest() const;
 
     // True while a modal dialog (Save changes?, Recover unsaved changes?, a confirm prompt) is
     // open. main.cpp reads it to frost the Scene viewport behind the dim scrim.
     bool AnyModalOpen() const;
 
-    // --- Capture (screenshot) tool -----------------------------------------------------------
-    // The toolbar camera button, the PrintScreen key and Preferences all call RequestCapture();
-    // main.cpp does the grab from the right framebuffer for the chosen mode, then OnCaptureDone.
-    // `primed` guards the one-frame ordering gap: the trigger (toolbar / key / sentinel) fires
-    // after the Scene view has already rendered for the frame, so a viewport shot that needs a
-    // resized render target waits until the NEXT frame — main.cpp sets primed once it has
-    // rendered the scene at the requested size, and only then does the grab run.
-    struct CaptureRequest { bool pending = false; bool primed = false; int mode = 0; int scale = 1; int format = 0; int resW = 0; int resH = 0; };
-    void RequestCapture();                       // snapshots the current EditorSettings capture prefs
-    CaptureRequest PeekCaptureRequest() const { return m_CaptureReq; }
-    void PrimeCaptureRequest() { m_CaptureReq.primed = true; }
-    CaptureRequest ConsumeCaptureRequest() { CaptureRequest r = m_CaptureReq; m_CaptureReq.pending = false; m_CaptureReq.primed = false; return r; }
-    // #153 - the grab happened: flash + shutter sound right away. The file itself is encoded in
-    // the background; OnCaptureDone runs once it's on disk (or failed, with an empty path).
-    void OnCaptureTaken();
-    void OnCaptureDone(const std::string& path, int w, int h);
-    void DrawCaptureFeedback(float dt);          // fading white flash only; called from Draw()
-    // Double-clicking a shot in the Asset Browser's Screenshots folder opens a centred, sleek
-    // in-editor lightbox instead of shelling out to the OS viewer.
-    void OpenScreenshotPreview(const std::string& path);
-    void DrawScreenshotPreview(World& world, AssetLibrary& assets); // centred image lightbox; called from Draw()
-    // Phase 6 item 7 — every image file in the screenshots folder, sorted so </>-arrow nav
-    // reads chronologically (Screenshot::Save's filenames are date/time-suffixed).
-    std::vector<std::string> ListScreenshotsSorted() const;
     // Set by main.cpp for the single frame a "clean viewport" capture renders — every editor
-    // overlay (grid, gizmos, entity icons, light gizmos, engine mark, HUDs, status bar) skips.
+    // overlay (grid, gizmos, entity icons, light gizmos, HUDs, status bar) skips.
     void SetHideOverlaysThisFrame(bool v) { m_HideOverlaysThisFrame = v; }
+    // The window was created see-through (Window::SeeThrough). While Black Glass is on, the frame
+    // then leaves the desktop showing behind the glass instead of the scene's ambient field.
+    void SetWindowSeeThrough(bool v) { m_WindowSeeThrough = v; }
+    bool DesktopShowsThrough() const { return m_WindowSeeThrough && GlassThemeActive(); }
     bool OverlaysHidden() const { return m_HideOverlaysThisFrame; }
 
     // The Scene window's own content-region size as of the LAST frame it was drawn (zero before
@@ -852,10 +855,7 @@ private:
 
     GLFWwindow* m_Window = nullptr;
 
-    CaptureRequest m_CaptureReq;
     bool m_HideOverlaysThisFrame = false;
-    float m_CaptureFlashT = 0.0f;              // eased 1 -> 0 over ~0.35s after a shot
-    std::string m_LastCapturePath;
 
     // Frosted backdrop behind modal dialogs — created lazily the first time a modal opens (see
     // EndFrame): the whole framebuffer is blurred and the dialog window redrawn crisp on top.
@@ -878,6 +878,7 @@ private:
     bool m_PauseToggleRequested = false;
     bool m_StepRequested = false;
     bool m_Headless = false;
+    bool m_WindowSeeThrough = false;
     std::set<entt::entity> m_ShadowOverBudget; // #110, see SetShadowOverBudget
     int m_SpotShadowBudget = 4, m_PointShadowBudget = 2; // #110 - this frame's caps, for the warning tooltip
     bool m_GameInputActive = false; // see SetGameInputActive
@@ -936,6 +937,7 @@ private:
     glm::vec2 m_ViewportSize{1280.0f, 720.0f};
     bool m_SceneViewportVisible = true;
     unsigned int m_SceneColorTexture = 0;
+    int m_SceneTexW = 0, m_SceneTexH = 0; // 0 = unknown (old SetSceneTexture overload)
     glm::vec2 m_LastSceneContentRegion{0.0f, 0.0f};
 
     // Primary selection. entt::entity handles stay valid across insertions/deletions elsewhere
@@ -1496,17 +1498,10 @@ private:
     // user has actually clicked a row, then never again this session (audit #70).
     bool m_HierarchyRowHintDone = false;
 
-    // Engine mark (the "TE" monogram, no text), spinning slowly in the viewport's bottom-left
-    // corner — loaded once in Init() from assets/branding/ (a build-time copy of
-    // extern/branding/, same treatment as the icon font). Null and silently skipped if the
-    // file's missing.
-    std::unique_ptr<Texture> m_MarkTexture;
     // Phase 1 item 5 — the JetBrains Mono face, baked once in Init(). Owned by ImGui's font
     // atlas (freed with the ImGuiContext), so this is a non-owning pointer; null only if the
     // bundled TTF couldn't be read off disk. GetMonoFont() (host API) exposes it to modules.
     ImFont* m_MonoFont = nullptr;
-    float m_MarkSpinAngle = 0.0f; // radians, advanced by dt * EngineMarkSpinSpeed each frame in DrawEngineMark()
-    float m_MarkHue = 0.0f;        // 0..1, advanced each frame; drives the tint when EngineMarkRgb is on
     bool m_ShutdownDone = false;       // guards the clean-exit-only tail of Shutdown()
     std::unique_ptr<ScriptIDE> m_ScriptIDE;
     bool m_GpuResourcesFreed = false;  // guards FreeGpuResources() (also reachable from ~EditorLayer)
@@ -1527,12 +1522,11 @@ private:
     glm::vec2 m_MarkVel{0.0f, 0.0f}; // px/sec, non-zero only while bouncing
     bool m_MarkBouncing = false;
     bool m_MarkPosValid = false;     // false until first laid out, so it doesn't fly in from (0,0)
-    void DrawEngineMark(float dt);
 
     // The full-width toolbar strip + its dropdown menus moved into TartarusEditor.dll
     // (EditorModuleToolbar.cpp, issue #229). The host keeps the menu/popup *bodies* — declared
     // in the public bridge block above (DrawFileMenuBody / DrawViewMenuBody / DrawWindowMenuBody
-    // / DrawCaptureOptionsPopupBody / DrawAddEntityItems, all declared in the public bridge block
+    // / DrawAddEntityItems, all declared in the public bridge block
     // above).
     bool m_OpenQuickAdd = false; // set by the Shift+A shortcut, consumed next frame in Draw()
     std::string m_LastSelectedName; // last valid scene selection, shown in the Inspector empty state
@@ -1725,14 +1719,6 @@ private:
     void CopyPreviewTexture(unsigned int src, unsigned int& dst, int size, std::vector<unsigned char>* pixelsOut);
     void InvalidateModelThumbnail(const std::string& path = ""); // empty = clear all (e.g. a freed Model could be reallocated at the same address)
 
-    // Thumbnails for the Asset Browser's "Screenshots" folder — keyed by file path, kept in sync
-    // with what's on disk each cache refresh (#175; entries drop when their file is gone).
-    // Loading is capped by its own per-frame budget (#176) so opening a folder of many captures
-    // decodes/uploads a few at a time instead of stalling on the frame the folder is opened;
-    // unloaded entries just aren't inserted into the map yet, so they're retried next frame.
-    std::unordered_map<std::string, std::shared_ptr<Texture>> m_ShotThumbs;
-    int m_ScreenshotThumbBudgetThisFrame = 0;
-
     // Sound-cell waveform envelopes (#236 G), decoded once per path via AudioEngine.
     // Empty vector = decode failed / not audio; cached either way.
     std::unordered_map<std::string, std::vector<float>> m_SoundWaveforms;
@@ -1752,7 +1738,7 @@ public:
     void SetAssetFavoritesOnly(bool on) { m_AssetFavoritesOnly = on; }
 private:
 
-    // Cached directory listings backing the filesystem-based "Scenes" and "Screenshots" folders
+    // Cached directory listings backing the filesystem-based "Scenes" folder
     // (#175) — std::filesystem::directory_iterator used to run every single frame while either
     // folder was open or a search/filter was active. Now refreshed only on a short timer, when
     // the Asset Browser regains focus, or right after an operation that actually creates/deletes/
@@ -1763,7 +1749,6 @@ private:
         bool valid = false;
     };
     AssetDirListingCache m_ScenesListingCache;
-    AssetDirListingCache m_ShotsListingCache;
     // Same idea for project/shaders/ — Phase 6 item 15's "browsable" Shaders folder.
     AssetDirListingCache m_ShadersListingCache;
     // Animator Controllers (.controller) and weapon definitions (.fpsanim) anywhere under the
@@ -1772,11 +1757,9 @@ private:
     float m_AssetListingRefreshTimer = 0.0f;   // ticks up in DrawAssetBrowser; see kAssetListingRefreshInterval
     bool m_AssetBrowserFocusedLastFrame = false; // edge-detects m_AssetBrowserFocused for "just gained focus"
     void RefreshScenesListingIfNeeded();
-    void RefreshShotsListingIfNeeded();
     void RefreshShadersListingIfNeeded();
     void RefreshAnimationListingIfNeeded();
     void InvalidateScenesListing() { m_ScenesListingCache.valid = false; }
-    void InvalidateShotsListing() { m_ShotsListingCache.valid = false; }
     void InvalidateShadersListing() { m_ShadersListingCache.valid = false; }
     void InvalidateAnimationListing() { m_AnimationListingCache.valid = false; }
     // Every model / texture / material / sound / prefab file under the project, so the grid lists
@@ -1826,17 +1809,6 @@ public:
     float AssetRefreshFlash() const { return m_AssetRefreshFlash; }
 private:
     float m_AssetRefreshFlash = 0.0f;
-
-    // The screenshot lightbox (DrawScreenshotPreview). Its own full-res Texture, not a m_ShotThumbs
-    // entry, so it survives that map being pruned and isn't size-capped to the thumbnail budget.
-    std::string m_ShotPreviewPath;
-    std::shared_ptr<Texture> m_ShotPreviewTex;
-    bool m_ShotPreviewOpen = false;
-    float m_ShotPreviewAnim = 0.0f;              // 0->1 pop-in ease
-    float m_ShotPreviewZoom = 1.0f;              // 1 = fit-to-canvas; scroll wheel scales it
-    ImVec2 m_ShotPreviewPan{0.0f, 0.0f};         // image offset within the canvas, in pixels
-    bool m_ShotPreviewPanning = false;
-    bool m_ShotPreviewPressOutside = false;       // the active L-press began on the dimmed backdrop
 
     // Drains dropped/imported files a few per frame instead of all at once in a single
     // synchronous stall — see ImportQueueManager.h for why this isn't a background thread.
@@ -1985,9 +1957,6 @@ private:
     // module reload, and so this class's toolbar button can still toggle the panel. Nothing about
     // the Console needs EditorLayer member state any more.
 
-    // The spinning corner monogram is governed by EditorSettings (EngineMarkEnabled / SpinSpeed /
-    // Rgb) so the choice persists and the Preferences + Window-menu controls share one source of
-    // truth. (Was m_ShowEngineMark — a session-only bool — before the Preferences controls landed.)
 
     // (PushAdaptiveHudText, AsyncLuminanceReadback, SampleTextureLuminance and
     // ContrastForLuminance were here — the async GPU luminance sampling every viewport HUD used
@@ -2383,6 +2352,23 @@ private:
     // region with its own opaque plate, not a separate floating window — collapsible to a thin
     // strip via EditorSettings::ToolPaletteCollapsed.
     void DrawToolPalette(World& world, Camera& editorCamera);
+
+    // --- Glass theme (EditorLayer_Glass.cpp) -------------------------------------------------
+    // Created on first use while Glass is active, destroyed when it's switched off.
+    std::unique_ptr<GlassEditorState> m_Glass;
+    int m_PendingThemeId = -1;                 // RequestEditorTheme, applied in BeginFrame
+    void ApplyPendingTheme();                  // BeginFrame, before ImGui::NewFrame
+    void GlassFrameBegin();                    // BeginFrame, after ImGui::NewFrame
+    void ReleaseGlass();                       // frees the backdrop's GL objects and all state
+    void ApplyGizmoAccent();                   // ImGuizmo's hover colour follows the theme accent
+    GlassEditorState& GlassState();            // m_Glass, created on demand
+    void DrawGlassWorkspace(World& world, AssetLibrary& assets);   // the three Glass panels
+    void DrawGlassHierarchy(World& world, AssetLibrary& assets);
+    void DrawGlassInspector(World& world, AssetLibrary& assets);
+    void DrawGlassLibrary(World& world, AssetLibrary& assets);
+    void DrawGlassViewportOverlays(World& world);                  // inside the Scene window
+    void PollGlassNotifications();                                 // compile errors -> toasts
+    void PushGlassToast(const std::string& title, const std::string& body, bool error);
     // True for the frame(s) the mouse is hovering or dragging the nav gizmo above — set inside
     // DrawViewGizmo() (called before HandleViewportPicking() in Draw()) so picking can skip
     // starting a box-select/pick from a click that's actually meant for the nav gizmo. The nav
