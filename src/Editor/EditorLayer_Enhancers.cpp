@@ -586,7 +586,7 @@ struct BookmarkAction {
 
 // The header button: the bookmark glyph, lit while the current item is bookmarked or a compatible
 // drag is over it (the tooltip gives the count). Click opens the list.
-// `toggleLabel` names the current item ("Alpha", "Bob.cs"); nullptr when there is nothing to add.
+// `toggleLabel` names the current item ("Alpha", "npc_soldier.controller"); nullptr when there is nothing to add.
 void BookmarkButton(const char* id, float h, const char* toggleLabel, bool currentStarred,
                     const std::vector<BookmarkRow>& rows, bool dropHot, BookmarkAction& out, bool forceOpen = false) {
     ImGui::PushID(id);
