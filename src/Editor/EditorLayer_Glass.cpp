@@ -220,19 +220,34 @@ struct CardTable {
     void End() { if (open) ImGui::EndTable(); open = false; }
 };
 
-// A Glass Workspace panel's first open: a tab in the dock node of its classic counterpart (the
-// Objects panel next to the Hierarchy, and so on), selected, so it takes that place in the layout
-// instead of floating over it. `fallbackPos` is used when the counterpart isn't docked. Once the
-// window exists (or imgui.ini knows it) the user's own placement wins.
-void PlaceGlassPanel(const char* glassName, const char* classicName, ImVec2 fallbackPos, ImVec2 size) {
+// A Glass Workspace panel's placement, called before its Begin every frame. On its first open
+// it becomes a selected tab in the dock node of its classic counterpart (the Objects panel next
+// to the Hierarchy, and so on), so it takes that place in the layout instead of floating over
+// it. The counterpart may not be docked yet on the first frames (the default layout is built
+// during the frame), so this keeps trying for a while, floating at `fallbackPos` meanwhile.
+// `placed` latches once it has docked, given up, or imgui.ini already had a placement for it
+// (the user's own placement wins). A floating Glass panel draws a near-opaque background: over
+// other windows a translucent one lets their text show through.
+void PlaceGlassPanel(const char* glassName, const char* classicName, ImVec2 fallbackPos, ImVec2 size,
+                     GlassEditorState::Placement& placed) {
     ImGui::SetNextWindowPos(fallbackPos, ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(size, ImGuiCond_FirstUseEver);
-    if (ImGui::FindWindowByName(glassName) || ImGui::FindWindowSettingsByID(ImHashStr(glassName))) return;
-    const ImGuiWindow* classic = ImGui::FindWindowByName(classicName);
-    if (classic && classic->DockId != 0) {
-        ImGui::SetNextWindowDockID(classic->DockId, ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowFocus();
+    const ImGuiWindow* self = ImGui::FindWindowByName(glassName);
+    if (!placed.Done) {
+        if (!self && ImGui::FindWindowSettingsByID(ImHashStr(glassName))) {
+            placed.Done = true; // known from imgui.ini: leave it where the user put it
+        } else {
+            const ImGuiWindow* classic = ImGui::FindWindowByName(classicName);
+            if (classic && classic->DockId != 0) {
+                ImGui::SetNextWindowDockID(classic->DockId, ImGuiCond_Always);
+                ImGui::SetNextWindowFocus();
+                placed.Done = true;
+            } else if (++placed.Frames > 120) {
+                placed.Done = true; // no docked counterpart (closed, or a custom layout): stay floating
+            }
+        }
     }
+    if (self && !self->DockIsActive) ImGui::SetNextWindowBgAlpha(0.97f);
 }
 
 // Starts a card row: top padding. Returns the row's top (screen y).
@@ -436,7 +451,7 @@ void EditorLayer::DrawGlassHierarchy(World& world, AssetLibrary& assets) {
         const ImGuiViewport* vp = ImGui::GetMainViewport();
         PlaceGlassPanel(EditorPanels::GlassHierarchy, EditorPanels::Hierarchy,
                         ImVec2(vp->WorkPos.x + Glass::Px(Glass::Space4), vp->WorkPos.y + Glass::Px(Glass::Space4) * 3.0f),
-                        ImVec2(Glass::Px(300.0f), Glass::Px(520.0f)));
+                        ImVec2(Glass::Px(300.0f), Glass::Px(520.0f)), g.PlaceObjects);
     }
     bool windowOpen = true;
     const bool visible = ImGui::Begin(EditorPanels::GlassHierarchy, &windowOpen);
@@ -662,7 +677,7 @@ void EditorLayer::DrawGlassInspector(World& world, AssetLibrary& assets) {
         PlaceGlassPanel(EditorPanels::GlassInspector, EditorPanels::Inspector,
                         ImVec2(vp->WorkPos.x + vp->WorkSize.x - Glass::Px(360.0f) - Glass::Px(Glass::Space4),
                                vp->WorkPos.y + Glass::Px(Glass::Space4) * 3.0f),
-                        ImVec2(Glass::Px(360.0f), Glass::Px(560.0f)));
+                        ImVec2(Glass::Px(360.0f), Glass::Px(560.0f)), g.PlaceProperties);
     }
     bool windowOpen = true;
     const bool visible = ImGui::Begin(EditorPanels::GlassInspector, &windowOpen);
@@ -731,9 +746,10 @@ void EditorLayer::DrawGlassInspector(World& world, AssetLibrary& assets) {
             for (const auto& rc : ComponentRegistry::All()) count += rc.Has(reg, e) ? 1 : 0;
             ImGui::PushStyleColor(ImGuiCol_Text, Glass::TextTertiary);
             if (HasGroupSelection())
-                ImGui::Text("%d components  \xC2\xB7  %d objects selected, editing the primary", count, (int)m_ExtraSelection.size() + 1);
+                ImGui::Text("%d component%s  \xC2\xB7  %d objects selected, editing the primary", count, count == 1 ? "" : "s",
+                            (int)m_ExtraSelection.size() + 1);
             else
-                ImGui::Text("%d components%s", count, reg.all_of<InactiveTag>(e) ? "  \xC2\xB7  inactive" : "");
+                ImGui::Text("%d component%s%s", count, count == 1 ? "" : "s", reg.all_of<InactiveTag>(e) ? "  \xC2\xB7  inactive" : "");
             ImGui::PopStyleColor();
             EndCard(top + in.Shift());
         }
@@ -899,7 +915,7 @@ void EditorLayer::DrawGlassLibrary(World& world, AssetLibrary& assets) {
         PlaceGlassPanel(EditorPanels::GlassAssets, EditorPanels::Assets,
                         ImVec2(vp->WorkPos.x + (vp->WorkSize.x - Glass::Px(640.0f)) * 0.5f,
                                vp->WorkPos.y + vp->WorkSize.y - Glass::Px(360.0f) - Glass::Px(Glass::Space4)),
-                        ImVec2(Glass::Px(640.0f), Glass::Px(360.0f)));
+                        ImVec2(Glass::Px(640.0f), Glass::Px(360.0f)), g.PlaceLibrary);
     }
     bool windowOpen = true;
     const bool visible = ImGui::Begin(EditorPanels::GlassAssets, &windowOpen);
@@ -1100,7 +1116,10 @@ void EditorLayer::DrawGlassLibrary(World& world, AssetLibrary& assets) {
                             const float radius = Glass::Px(Glass::RadiusCard);
                             if (glow > 0.0f)
                                 Glass::DrawSoftShadow(dl, drawn.Min, drawn.Max, radius, Glass::TileShadowAlpha * glow * a, Glass::Px(Glass::Space1));
-                            const ImVec4 plate = selected ? Glass::Field : Glass::WithAlpha(Glass::Field, Glass::Field.w * glow);
+                            // A faint resting plate, so a tile (glyph and name) reads as one object.
+                            const float restPlate = 0.45f;
+                            const ImVec4 plate = selected ? Glass::Field
+                                                          : Glass::WithAlpha(Glass::Field, Glass::Field.w * (restPlate + (1.0f - restPlate) * glow));
                             if (plate.w > 0.0f) Glass::DrawSquircle(dl, drawn.Min, drawn.Max, Col(plate), radius);
 
                             // The thumbnail (real image when there is one, else the kind glyph).
@@ -1138,7 +1157,7 @@ void EditorLayer::DrawGlassLibrary(World& world, AssetLibrary& assets) {
                                                     ImVec2(1.0f, flipV ? 0.0f : 1.0f), Col(ImVec4(1, 1, 1, 1)), Glass::Px(Glass::RadiusRow));
                             } else {
                                 const char* glyph = AssetGlyph(cell);
-                                const float gsz = ts * 0.46f;
+                                const float gsz = ts * 0.56f;
                                 const ImVec2 gs = ImGui::GetFont()->CalcTextSizeA(gsz, FLT_MAX, 0.0f, glyph);
                                 dl->AddText(ImGui::GetFont(), gsz, ImVec2(tMin.x + (ts - gs.x) * 0.5f, tMin.y + (ts - gs.y) * 0.5f),
                                             Col(isFolder ? Glass::TextSecondary : Glass::MixOklab(Glass::TextTertiary, Glass::TextSecondary, glow)), glyph);
@@ -1248,7 +1267,7 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
             int comps = 0;
             for (const auto& rc : ComponentRegistry::All()) comps += rc.Has(reg, shown) ? 1 : 0;
             if (HasGroupSelection() && has) std::snprintf(caption, sizeof(caption), "%d selected", (int)m_ExtraSelection.size() + 1);
-            else std::snprintf(caption, sizeof(caption), "%d components", comps);
+            else std::snprintf(caption, sizeof(caption), "%d component%s", comps, comps == 1 ? "" : "s");
             dl->AddText(ImVec2(x, y), Col(Glass::TextTertiary, t), caption);
             y += lineH + Glass::Px(Glass::SpaceHalf);
             if (tf) {

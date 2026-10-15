@@ -16,6 +16,13 @@
 #include <vector>
 
 struct GlassEditorState {
+    // --- Panel placement (first open docks next to the classic panel; EditorLayer_Glass.cpp) ----
+    struct Placement {
+        bool Done = false;
+        int  Frames = 0;
+    };
+    Placement PlaceObjects, PlaceProperties, PlaceLibrary;
+
     // --- Frosted HUDs ---------------------------------------------------------------------------
     GlassBackdrop Backdrop;
     unsigned int  BlurTexture = 0; // this frame's blurred Scene image (0 = tint only)
