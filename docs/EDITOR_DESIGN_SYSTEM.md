@@ -232,6 +232,11 @@ All three panels are built on `ImGui::BeginTable` with an `ImGuiListClipper`. No
 columns. They share the editor's selection, undo, drag-and-drop payloads and context menus, so they
 can be used next to, or instead of, the classic panels.
 
+On first open each panel docks as a selected tab next to its classic counterpart (Objects with the
+Hierarchy, Properties with the Inspector, Library with the Asset Browser); after that, wherever you
+put it is remembered. A Glass panel you undock draws a near-opaque background (0.97), because a
+translucent window over other windows lets their text show through.
+
 ### Objects (Scene Hierarchy)
 
 * **Rows.** Full-width rows (`Selectable` spanning all columns). The primary selection is a squircle
