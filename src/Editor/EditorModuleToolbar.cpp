@@ -46,15 +46,16 @@ void Tooltip(const EditorModuleHostAPI& host, const char* text) {
 }
 
 // The window controls, macOS-style: close, minimize and zoom as red, yellow and green "traffic
-// lights" at the left of the title bar. Their glyphs (x, -, +) show while the pointer is over the
+// lights" at the right of the title bar. Their glyphs (x, -, +) show while the pointer is over the
 // group, as on a Mac. The OS title bar is removed (Win32 custom frame in Window.cpp); these act
-// on the host's GLFW window through callbacks. Returns the group's width (for the layout after it).
+// on the host's GLFW window through callbacks. Returns the group's width plus its margin.
 float DrawTrafficLights(const EditorModuleHostAPI& host, float toolbarH) {
     const float d = std::floor(EditorTheme::Px(12.0f));     // light diameter
     const float gap = std::floor(EditorTheme::Px(8.0f));    // between lights
-    const float edge = std::floor(EditorTheme::Px(13.0f));  // from the window's left edge
-    const ImVec2 origin(ImGui::GetWindowPos().x + edge, ImGui::GetWindowPos().y + std::floor((toolbarH - d) * 0.5f));
+    const float edge = std::floor(EditorTheme::Px(13.0f));  // from the window's right edge
     const float groupW = d * 3.0f + gap * 2.0f;
+    const ImVec2 origin(ImGui::GetWindowPos().x + ImGui::GetWindowWidth() - edge - groupW,
+                        ImGui::GetWindowPos().y + std::floor((toolbarH - d) * 0.5f));
     const ImRect group(origin, ImVec2(origin.x + groupW, origin.y + d));
     const bool groupHovered = ImGui::IsMouseHoveringRect(ImVec2(group.Min.x - gap * 0.5f, 0.0f),
                                                          ImVec2(group.Max.x + gap * 0.5f, toolbarH)) &&
@@ -147,9 +148,7 @@ void Draw(const EditorModuleHostAPI& host) {
 
     if (ImGui::BeginMenuBar()) {
         // The engine's monogram, then the menus: plain words, like every desktop application.
-        // The traffic lights first, at the left edge, then the monogram and the menus.
-        const float lightsW = DrawTrafficLights(host, toolbarH);
-        ImGui::Dummy(ImVec2(lightsW + EditorTheme::Px(14.0f), 0.0f));
+        ImGui::Dummy(ImVec2(EditorTheme::Px(6.0f), 0.0f));
         if (const unsigned int mark = host.GetEngineMarkTexture ? host.GetEngineMarkTexture() : 0u) {
             const float s = std::floor(toolbarH * 0.62f);
             const ImVec2 p = ImGui::GetCursorScreenPos();
@@ -226,7 +225,7 @@ void Draw(const EditorModuleHostAPI& host) {
             const float total = tw + dot + tagW;
             const float x = std::floor((winW - total) * 0.5f);
             const float menusEnd = ImGui::GetCursorScreenPos().x + EditorTheme::Px(24.0f);
-            const float controlsStart = winW - EditorTheme::Px(24.0f);
+            const float controlsStart = winW - EditorTheme::Px(13.0f + 12.0f * 3.0f + 8.0f * 2.0f + 24.0f);
             if (x > menusEnd && x + total < controlsStart) {
                 ImDrawList* dl = ImGui::GetWindowDrawList();
                 const float y = std::floor((toolbarH - fontH) * 0.5f);
@@ -249,6 +248,9 @@ void Draw(const EditorModuleHostAPI& host) {
             }
         }
 
+
+        // The traffic lights, at the right edge.
+        DrawTrafficLights(host, toolbarH);
 
         ImGui::EndMenuBar();
     }
