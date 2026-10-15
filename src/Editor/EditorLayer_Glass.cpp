@@ -812,25 +812,22 @@ void EditorLayer::DrawGlassInspector(World& world, AssetLibrary& assets) {
                             ImGui::PushID(a);
                             float& value = (*rows[r].v)[a];
                             const float old = value;
+                            // The flat axis bar: red / green / blue, just left of the field. Outside it,
+                            // because a DragFloat centres its number, and in a narrow field the number
+                            // spans the whole frame, so no padding keeps a bar inside clear of it.
                             const ImVec2 p = ImGui::GetCursorScreenPos();
+                            const float barW = Glass::Px(3.0f), fh = ImGui::GetFrameHeight();
+                            ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(p.x, p.y + fh * 0.2f), ImVec2(p.x + barW, p.y + fh * 0.8f),
+                                                                      Col(axis[a]), barW * 0.5f);
+                            ImGui::SetCursorScreenPos(ImVec2(p.x + barW + Glass::Px(Glass::SpaceHalf), p.y));
                             ImGui::SetNextItemWidth(-FLT_MIN);
-                            // Room on the left of the number for the axis bar.
-                            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
-                                                ImVec2(Glass::Px(Glass::Space2), ImGui::GetStyle().FramePadding.y));
                             const bool changed = ImGui::DragFloat("##v", &value, rows[r].speed, 0.0f, 0.0f, "%.3f");
-                            ImGui::PopStyleVar();
                             if (ImGui::IsItemActivated()) activated = true;
                             if (ImGui::IsItemDeactivatedAfterEdit()) committed = true;
                             if (changed) {
                                 if (!std::isfinite(value)) value = old; // never a nan/inf transform
                                 else if (value == 0.0f) value = 0.0f;   // no "-0.000"
                             }
-                            // The flat axis bar: red / green / blue, inside the field's left edge.
-                            const float barW = Glass::Px(3.0f), fh = ImGui::GetFrameHeight();
-                            ImGui::GetWindowDrawList()->AddRectFilled(
-                                ImVec2(p.x + Glass::Px(Glass::SpaceHalf), p.y + fh * 0.25f),
-                                ImVec2(p.x + Glass::Px(Glass::SpaceHalf) + barW, p.y + fh * 0.75f),
-                                Col(axis[a]), barW * 0.5f);
                             if (ImGui::IsItemHovered() && !ImGui::IsItemActive())
                                 EditorUI::SetTooltip("%.9g\nDrag to change; double-click to type", value);
                             ImGui::PopID();
