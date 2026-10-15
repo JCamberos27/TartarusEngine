@@ -622,7 +622,7 @@ void TestEmptyProject() {
     CHECK(!Building());CHECK(fs::exists(project/"Scripts/bin/Tartarus.Gameplay.dll"));CHECK(Invoke(5,nullptr,0));
     const auto types=nlohmann::json::parse(Describe());CHECK(types.at("classes").size()==1);
     CHECK(!fs::exists(project/"assets/Scripts/WeaponController.cs"));CHECK(!fs::exists(project/"assets/Scripts/PlayerController.cs"));
-    CHECK(!InvokeProject("npc.combat",&game,sizeof game));
+    CHECK(!InvokeProject("weapon.loadout",&game,sizeof game));
     World world;AssetLibrary assets;auto entity=world.CreateEmptyEntity({},{},{1,1,1},"Plain");
     auto& script=world.Registry.emplace<CSharpScriptComponent>(entity);Attach(script,"assets/Scripts/Ordinary.cs","Ordinary");Tick(world,assets,.02f);
     CHECK(world.Registry.get<NameComponent>(entity).Name=="ordinary script ran");CHECK(world.Registry.view<FirstPersonControllerComponent>().empty());CHECK(world.Registry.view<NpcSpawnComponent>().empty());
@@ -643,52 +643,13 @@ void TestExportedProjectHost() {
     CHECK(world.Registry.view<FirstPersonControllerComponent>().empty());CHECK(world.Registry.view<NpcSpawnComponent>().empty());
     Stop(&world,&assets);
 }
-void TestProjectLifecycleAndLoadout(){
+void TestProjectWeaponLoadout(){
     using namespace Scripting;
-    NpcMateFrame member;member.Feet={0,0,0};NpcSpawnFrame spawn;spawn.Position={0,0,0};spawn.Yaw=0;spawn.Now=10;spawn.Index=2;spawn.Weapon=2;spawn.Random=3;spawn.Count=1;spawn.Members=reinterpret_cast<std::uintptr_t>(&member);
-    CHECK(InvokeProject("npc.spawn",&spawn,sizeof spawn));CHECK(spawn.Weapon==1 && std::abs(spawn.Feet.x-1.2f)<.001f);CHECK(spawn.AimYaw==90 && std::abs(spawn.Eye.y-1.62f)<.001f);CHECK(spawn.NextThink==10.1f && spawn.AgentHeight==1.8f);
-    NpcLifeFrame life;life.Now=30;life.Wounded=1;life.WoundedAt=10;life.BleedOutTime=10;life.CrawlSpeed=.6f;life.Intent.Pace=3;life.CorpseTime=5;
-    CHECK(InvokeProject("npc.life",&life,sizeof life));CHECK(life.Kill && life.Speed==.6f && !life.Despawn);
-    // A corpse goes only unseen: past Corpse Time (or over the cap) and out of sight for Unseen Time.
-    {NpcLifeFrame c;c.Dead=1;c.DiedAt=0;c.CorpseTime=180;c.UnseenTime=3;c.Now=200;c.UnseenFor=1;CHECK(InvokeProject("npc.life",&c,sizeof c));CHECK(!c.Despawn);
-     c.UnseenFor=3.5f;CHECK(InvokeProject("npc.life",&c,sizeof c));CHECK(c.Despawn);c.Now=100;CHECK(InvokeProject("npc.life",&c,sizeof c));CHECK(!c.Despawn);
-     c.OverCap=1;CHECK(InvokeProject("npc.life",&c,sizeof c));CHECK(c.Despawn);c.UnseenFor=0;CHECK(InvokeProject("npc.life",&c,sizeof c));CHECK(!c.Despawn);}
-    life.Wounded=0;life.Intent.Crouch=1;life.Intent.Pace=1;life.LimpUntil=40;life.LimpScale=.5f;life.StaggerUntil=40;CHECK(InvokeProject("npc.life",&life,sizeof life));CHECK(life.Crouch && std::abs(life.Speed-.19f)<.0001f);
-    life={};life.Operation=1;life.Dt=.1f;life.Gravity=20;life.Want={3,0,0};life.Push={0,0,7};CHECK(InvokeProject("npc.life",&life,sizeof life));CHECK(std::abs(life.Displacement.x-.3f)<.0001f && std::abs(life.Displacement.y+.2f)<.0001f && std::abs(life.Displacement.z-.7f)<.0001f);
-    life.Operation=2;life.Grounded=1;life.Intent.Move=1;life.Intent.Crouch=1;life.Intent.Pace=1;life.Intent.Aim=1;life.MeleeAt=-100;life.MeleeTime=.5f;life.FootIKRange=20;life.OnScreen=1;CHECK(InvokeProject("npc.life",&life,sizeof life));CHECK(life.FallSpeed==-1 && life.BlockedTime==.1f && life.Crouch && life.Aim && life.FootIK);
-    life.Operation=3;life.Now=10;life.Origin={0,0,0};life.End={0,0,20};life.Eye={1.2f,0,10};CHECK(InvokeProject("npc.life",&life,sizeof life));CHECK(life.Memory.Known && life.Memory.Awareness==1 && life.Suppression>0);
-    NpcPlayerNoiseFrame noise;noise.Now=10;noise.Dt=.1f;noise.Player.Valid=1;noise.Player.Fired=1;noise.Player.Reloading=1;noise.Player.Velocity={0,0,5};noise.Player.Feet={0,0,3};CHECK(InvokeProject("npc.player-noise",&noise,sizeof noise));CHECK(noise.Gun.Radius==85 && noise.Step.Radius==16 && noise.Reload.Source==-2 && noise.FootstepTimer==.32f && noise.Still==0);noise.Player.Crouched=1;noise.Step={};CHECK(InvokeProject("npc.player-noise",&noise,sizeof noise));CHECK(noise.Step.Radius==0);
-    NpcRespawnPointFrame points[2];points[0].Position={0,0,30};points[0].Seen=1;points[1].Position={0,0,25};NpcRespawnFrame respawn;respawn.Now=10;respawn.Timer=8;respawn.Wanted=4;respawn.Player.Valid=1;respawn.Points=reinterpret_cast<std::uintptr_t>(points);respawn.Count=2;
-    CHECK(InvokeProject("npc.respawn",&respawn,sizeof respawn));CHECK(respawn.Best==1 && respawn.Ready && !respawn.Discard && respawn.Timer==12);respawn.Alive=4;CHECK(InvokeProject("npc.respawn",&respawn,sizeof respawn));CHECK(respawn.Discard && !respawn.Ready);
-    NpcShotEffectFrame shot;shot.Player.Valid=1;shot.Player.Eye={1,1,10};shot.Origin={0,1,0};shot.End={0,1,20};shot.FirstPellet=1;shot.Reach=5;CHECK(InvokeProject("npc.shot-effects",&shot,sizeof shot));CHECK(shot.Commands==7 && shot.Tracer==1 && shot.Miss==1);shot.Shotgun=1;CHECK(InvokeProject("npc.shot-effects",&shot,sizeof shot));CHECK(shot.Commands==5 && shot.Tracer==1);
-    shot.Operation=2;shot.Friendly=1;shot.Damage=40;shot.Suppression=.9f;CHECK(InvokeProject("npc.shot-effects",&shot,sizeof shot));CHECK(shot.Damage==20 && shot.Suppression==1 && shot.Commands==(32|64));
     int ammo[2]={3,7};WeaponLoadoutFrame loadout;loadout.Operation=3;loadout.Count=2;loadout.SlotAmmo=reinterpret_cast<std::uintptr_t>(ammo);loadout.Active=1;loadout.Magazine=30;loadout.CycleWait=2;CHECK(InvokeProject("weapon.loadout",&loadout,sizeof loadout));CHECK(ammo[0]==-1 && ammo[1]==-1 && loadout.Ammo==30 && loadout.Chambered && loadout.CycleWait==0);
     loadout.Operation=0;loadout.Slot=0;loadout.Pending=-1;loadout.Value=1;loadout.Equipped=1;CHECK(InvokeProject("weapon.loadout",&loadout,sizeof loadout));CHECK(loadout.Pending==1 && !loadout.Equipped && loadout.Commands==12);
     loadout.Operation=2;loadout.Requested=0;loadout.Burst=3;CHECK(InvokeProject("weapon.loadout",&loadout,sizeof loadout));CHECK(loadout.Pending==-1 && loadout.Burst==0 && loadout.Commands==6);
 }
-void TestProjectNpcCombat() {
-    using namespace Scripting;
-    struct Context {bool Friend=false;int Rays=0;} context;
-    NpcCombatFrame f;f.Context=reinterpret_cast<std::uintptr_t>(&context);
-    f.Services=reinterpret_cast<std::uintptr_t>(+[](std::uintptr_t ptr,NpcServiceFrame* r)->int {
-        auto& c=*reinterpret_cast<Context*>(ptr);if(r->Operation==2){++c.Rays;return c.Friend;}r->Value=r->A.x;return 1;
-    });
-    f.Now=10;f.Dt=.1f;f.MeleeAt=-100;f.MeleeLanded=1;f.MeleeTime=.55f;f.MeleeHitTime=.22f;f.MeleeDamage=25;f.Difficulty=1;f.Known=1;
-    f.Player.Valid=1;f.Player.Height=1.8f;f.Player.Feet={0,0,1};f.Operation=2;
-    CHECK(InvokeProject("npc.combat",&f,sizeof f));CHECK(f.CallMelee && f.Melees==1 && !f.MeleeLanded && f.MeleeAt==10 && f.Damage==0);
-    f.Now=10.1f;f.CallMelee=0;CHECK(InvokeProject("npc.combat",&f,sizeof f));CHECK(f.Damage==0 && !f.MeleeLanded);
-    f.Now=10.23f;CHECK(InvokeProject("npc.combat",&f,sizeof f));CHECK(f.Damage==25 && f.MeleeHits==1 && f.MeleeLanded);
-    f={};f.Context=reinterpret_cast<std::uintptr_t>(&context);f.Services=reinterpret_cast<std::uintptr_t>(+[](std::uintptr_t ptr,NpcServiceFrame* r)->int {auto& c=*reinterpret_cast<Context*>(ptr);if(r->Operation==2){++c.Rays;return c.Friend;}r->Value=r->A.x;return 1;});
-    f.Operation=1;f.Now=20;f.Dt=.1f;f.MeleeAt=-100;f.MeleeTime=.55f;f.Ammo=30;f.AmmoSeen=30;f.Equipped=1;f.HasAttackToken=1;f.Visible=1;f.Intent.Fire=1;f.Intent.AimPoint={0,0,20};f.Intent.Aim=1;f.Player.Valid=1;f.AllowFullAuto=1;
-    CHECK(InvokeProject("npc.combat",&f,sizeof f));CHECK(f.Pressed && f.Held && f.BurstLeft==3 && f.ToggleAuto && context.Rays==1);
-    f.Ammo=29;CHECK(InvokeProject("npc.combat",&f,sizeof f));CHECK(f.ShotsFired==1 && f.BurstLeft==2 && f.GunNoise && !f.FirstShot);
-    context.Friend=true;CHECK(InvokeProject("npc.combat",&f,sizeof f));CHECK(!f.Held && f.BurstLeft==0 && f.BlockedTime==.3f && f.BurstPause==.35f);
-    context.Friend=false;f.BurstPause=0;f.ReactionLeft=1;CHECK(InvokeProject("npc.combat",&f,sizeof f));CHECK(!f.Pressed && !f.Held);
-    f.ReactionLeft=0;f.Intent.Pace=3;f.Intent.Move=1;f.Velocity={0,0,4};CHECK(InvokeProject("npc.combat",&f,sizeof f));CHECK(f.Sprinting && !f.Held);
-    f.Shotgun=1;f.Reloading=1;f.Known=1;f.Player.Feet={0,0,1};CHECK(InvokeProject("npc.combat",&f,sizeof f));CHECK(f.Pressed && !f.Held);
-    f.Reloading=0;f.Ammo=0;f.Intent.Pace=0;f.Intent.Move=0;CHECK(InvokeProject("npc.combat",&f,sizeof f));CHECK(f.Reload && !f.Held);
-}
-void TestProjectLocomotionAndCallouts() {
+void TestProjectLocomotion() {
     using namespace Scripting;
     BodyMotionFrame body;body.Dt=.01f;body.Grounded=1;body.IsLocomotion=1;body.TurnThreshold=55;body.TurnLagMargin=60;body.TurnLagFloor=90;body.TurnMinTime=.1f;body.TurnTimeout=2;body.TurnEndAngle=20;body.ViewYaw=glm::radians(100.0f);
     CHECK(InvokeProject("body.motion",&body,sizeof body));CHECK(body.Turning && body.SetTurnAngle && std::abs(body.TurnAngle-100)<.01f);
@@ -716,13 +677,6 @@ void TestProjectLocomotionAndCallouts() {
     CHECK(InvokeProject("body.motion",&body,sizeof body));CHECK((body.Triggers&256) && body.FidgetIndex>=0 && body.FidgetIndex<=1 && body.FidgetTime==0);
     body.Triggers=0;body.Busy=1;body.FidgetNext=1;body.FidgetTime=.995f;CHECK(InvokeProject("body.motion",&body,sizeof body));CHECK(!(body.Triggers&256) && body.FidgetTime==0);
     body={};body.Grounded=1;body.IsLocomotion=1;body.StartStopClips=1;body.Crouched=1;CHECK(InvokeProject("body.motion",&body,sizeof body));CHECK(body.Triggers==1 && body.WasCrouched);
-    NpcCallMemberFrame members[2];NpcCallChannelFrame channel;std::fill_n(channel.LastEvent,20,-1e9f);
-    for(int i=0;i<2;++i){members[i].Exists=1;members[i].Index=i;members[i].Feet={float(i),0,0};members[i].LastCallout=-1e9f;}
-    NpcCalloutsFrame radio;radio.Now=10;radio.Caller=0;radio.Kind=0;radio.MemberCount=2;radio.ChannelCount=1;radio.Members=reinterpret_cast<std::uintptr_t>(members);radio.Channels=reinterpret_cast<std::uintptr_t>(&channel);radio.Random=0xBA4C;
-    CHECK(InvokeProject("npc.callouts",&radio,sizeof radio));CHECK(channel.LastEvent[0]==10 && channel.OnAirPriority==7 && members[0].LastCallout==10 && members[1].GlanceUntil>10);
-    radio.Now=11;radio.Caller=1;radio.Kind=11;CHECK(InvokeProject("npc.callouts",&radio,sizeof radio));CHECK(channel.LastEvent[11]<0 && members[1].LastCallout<0);
-    radio.Kind=9;CHECK(InvokeProject("npc.callouts",&radio,sizeof radio));CHECK(channel.LastEvent[9]==11 && channel.OnAirPriority==9);
-    members[0].Dummy=1;radio.Now=20;radio.Caller=0;CHECK(InvokeProject("npc.callouts",&radio,sizeof radio));CHECK(channel.LastEvent[9]==11);
 }
 void TestProjectCanvasScopes() {
     using namespace Scripting;
@@ -736,27 +690,6 @@ void TestProjectCanvasScopes() {
         measure.Script=2;measure.Value=20;CHECK(RuntimeCanvasService(measure));CHECK(std::abs(measure.Value-17.25f)<.001f);
     }
     query.Entity=oldToken;query.Script=2;CHECK(!RuntimeCanvasService(query));
-}
-void TestProjectNpcPerceptionAndSquads() {
-    using namespace Scripting;
-    struct Services {int Rays=0,Randoms=0;} services;
-    NpcPerceptionFrame f;f.Context=reinterpret_cast<std::uintptr_t>(&services);
-    f.Services=reinterpret_cast<std::uintptr_t>(+[](std::uintptr_t context,NpcServiceFrame* r)->int {
-        auto& s=*reinterpret_cast<Services*>(context);if(r->Operation==0){++s.Randoms;r->Value=.5f;return 1;}if(r->Operation==1){++s.Rays;return 1;}return 0;
-    });
-    f.Now=1;f.Dt=.1f;f.Eye={0,1.7f,0};f.PinnedSince=-1;f.AimYaw=f.LookYaw=-90;f.Skill=.5f;f.Difficulty=1;
-    f.Memory.LastSeen=f.Memory.LastHeard=-1e9f;f.Player.Valid=1;f.Player.Height=1.8f;f.Player.Eye={0,1.7f,-8};f.Player.Feet={0,0,-8};
-    CHECK(InvokeProject("npc.perception",&f,sizeof f));CHECK(f.VisiblePoints==5 && services.Rays==5 && f.Memory.Visible && f.Memory.Awareness>0);
-    f.Now+=.12f;CHECK(InvokeProject("npc.perception",&f,sizeof f));CHECK(f.Memory.Known && f.FirstShot && (f.Calls&4));
-    const int rayCount=services.Rays;f.NextLook=f.Now+1;f.Suppression=.8f;CHECK(InvokeProject("npc.perception",&f,sizeof f));CHECK(services.Rays==rayCount && f.PinnedSince==f.Now);
-    NpcSquadMemberFrame members[4];int ids[4]={0,1,2,3};
-    for(int i=0;i<4;++i){members[i].Exists=1;members[i].Health=members[i].MaxHealth=100;members[i].Memory.Known=members[i].Memory.Visible=1;members[i].Memory.LastSeen=0;members[i].Fire=1;members[i].Feet={0,0,float(i+1)};members[i].Cover=i;members[i].Doing=4;members[i].Skill=.5f;}
-    members[3].Shotgun=1;NpcSquadFrame squad;squad.Members=reinterpret_cast<std::uintptr_t>(members);squad.MemberIds=reinterpret_cast<std::uintptr_t>(ids);squad.TotalCount=squad.MemberCount=4;
-    squad.Now=30;squad.Difficulty=1;squad.FlankHolder=squad.PincerHolder=squad.PushHolder=squad.CoverRequest=squad.CoverFirer=-1;squad.Player.Valid=1;squad.Player.Health=1;
-    CHECK(InvokeProject("npc.squads",&squad,sizeof squad));CHECK(members[0].Role==0 && members[3].Role==2 && squad.FlankHolder==3 && members[3].HasFlank);CHECK(squad.AttackerCount==3 && members[0].HasAttack && members[2].HasAttack && !members[3].HasAttack);
-    for(auto& m:members){m.Memory.Visible=0;m.Fire=0;m.TriggerHeld=0;}
-    squad.Now=30.3f;squad.CoverRequest=3;squad.CoverRequestAt=squad.Now;squad.CoverFireUntil=-1e9f;
-    CHECK(InvokeProject("npc.squads",&squad,sizeof squad));CHECK(squad.CoverFirer==1 && members[1].CoverFireOrder==32.8f && members[1].CallCovering && squad.CoverOrders==1);CHECK(squad.AttackerCount==0);
 }
 void TestProjectNpcConfiguration() {
     using namespace Scripting;using Json=nlohmann::json;
@@ -788,60 +721,6 @@ void TestProjectNpcConfiguration() {
     CHECK(defaults.SquadSize==4 && defaults.Difficulty==1 && defaults.NpcDamageScale==.45f);
     CHECK(defaults.BodyPrefab=="assets/AI/Soldier.json" && !defaults.RiflePrefab.empty());
 }
-void TestProjectNpcBehaviour() {
-    using namespace Scripting;
-    struct Fixture {
-        NpcCoverFrame Cover;
-        int Index=0,Claims=0,Releases=0,Radio=0;
-        bool Navigation=true,Shield=true;
-    } fixture;
-    fixture.Cover.Pos={0,0,6};fixture.Cover.Normal={0,0,1};fixture.Cover.ClaimedBy=-1;fixture.Cover.LastUsed=-1e9f;
-    NpcBrainFrame f;f.Context=reinterpret_cast<std::uintptr_t>(&fixture);
-    f.Services=reinterpret_cast<std::uintptr_t>(+[](std::uintptr_t ptr,NpcServiceFrame* r)->int {
-        auto& data=*reinterpret_cast<Fixture*>(ptr);
-        switch(r->Operation) {
-        case 0:r->Value=.5f;return 1;
-        case 1:case 2:r->C=r->A;return data.Navigation;
-        case 3:case 15:return data.Navigation;
-        case 4:return data.Shield && r->Value<1.0f;
-        case 5:r->Value=6;return 1;
-        case 6:r->Cover=data.Cover;return 1;
-        case 7:r->Data=reinterpret_cast<std::uintptr_t>(&data.Index);r->Count=1;return 1;
-        case 8:++data.Claims;return 1;
-        case 9:++data.Releases;return 1;
-        case 12:++data.Radio;return 1;
-        case 13:return 1;
-        default:return 0;
-        }
-    });
-    f.Now=10;f.Threat={0,0,20};f.Known=f.Visible=1;f.Index=3;f.Cover=-1;f.CoverCount=1;f.SquadCount=1;
-    f.MemoryLastSeen=f.LastOwnSight=10;f.Ammo01=1;f.Skill=.5f;f.PlayerHeight=1.8f;
-    f.CowerUntil=f.GlanceUntil=f.LastHurt=f.LastBlindFire=-1e9f;f.PinnedSince=-1;f.BoundWaitFrom=-1;
-    auto invoke=[&](int operation,int target=0) {f.Operation=operation;f.TargetBehaviour=target;CHECK(InvokeProject("npc.behaviour",&f,sizeof f));};
-    invoke(2);CHECK(f.Result==0 && f.CoverGood && f.SearchCoverCalled && fixture.Claims==1);
-    f.Cover=-1;fixture.Shield=false;invoke(2);CHECK(f.Result==-1 && fixture.Claims==1);
-    fixture.Shield=true;invoke(1,3);CHECK(f.Doing==3 && f.Cover==0 && f.Phase==0 && f.DoingSince==10);
-    f.BoundWaitFrom=10;f.SquadCoverFireUntil=0;invoke(0);CHECK(!f.Intent.Move && f.Intent.Crouch && f.Intent.Fire && f.SquadCoverRequest==3);
-    f.SquadCoverFireUntil=11;invoke(0);CHECK(f.Intent.Move && f.BoundWaitFrom<0 && f.CoveredBounds==1);
-    f.Feet=f.Cover>=0?fixture.Cover.Pos:Vec3{};invoke(0);CHECK(f.Doing==4 && f.Phase==0 && f.PhaseUntil>10);
-    f.Ammo01=.4f;invoke(0);CHECK(f.Intent.Reload && f.Intent.Crouch && !f.Intent.Fire);
-    f.Ammo01=1;f.Suppression=.65f;f.PinnedSince=8;invoke(0);CHECK(f.Phase==3 && f.LastBlindFire==10 && f.BlindFires==1);
-    invoke(0);CHECK(f.Intent.BlindFire && f.Intent.Suppress && f.Intent.Fire);
-    f.CowerUntil=11;invoke(0);CHECK(f.Intent.Cower==1 && !f.Intent.Fire);
-    f.CowerUntil=-1;f.Doing=2;f.Phase=0;f.Feet={0,0,0};f.Suppression=0;fixture.Navigation=false;invoke(0);CHECK(!f.Intent.Move);
-    fixture.Navigation=true;f.Doing=5;f.SquadFlankHolder=3;f.HasFlankToken=1;invoke(1,0);CHECK(!f.HasFlankToken && f.SquadFlankHolder==-1 && f.SquadFlankDoneAt==10);
-    f.Doing=7;f.Phase=1;f.SearchStep=4;f.PhaseUntil=9;invoke(0);CHECK(!f.Known && f.MemoryAwareness==.4f && f.Phase==-1);
-}
-void TestProjectNpcDecisions() {
-    using namespace Scripting;
-    AiChoiceFrame f;f.Operation=1;f.Now=20;f.LastSeen=20;f.LastHeard=-1e9f;f.Health=f.MaxHealth=100;f.Cover=-1;f.Phase=-1;f.LastHurt=-1e9f;f.LimpUntil=-1e9f;f.Known=f.Visible=1;f.Distance=20;f.LastOwnSight=20;
-    auto choose=[&](){CHECK(InvokeProject("ai.choose",&f,sizeof f));};
-    choose();CHECK(f.Best==3 && f.Change && f.NextThink>20); // take cover
-    f.Health=20;f.LastHurt=20;choose();CHECK(f.Best==8); // hurt: retreat
-    f.CoverSearchBlocked=1;choose();CHECK(f.Delay && !f.Change && f.NextThink==20); // one cover search per frame
-    f.Wounded=1;choose();CHECK(f.Best==10 && f.Change); // wounded soldiers crawl instead of choosing an attack
-    f.Wounded=0;f.CoverSearchBlocked=0;f.Health=100;f.LastHurt=-1e9f;f.HasFlank=1;f.PlayerStill=12;f.LimpUntil=25;choose();CHECK(f.Scores[5]==0 && f.Scores[6]==0); // limping prevents flank/push
-}
 void TestHealthMigration() {
     using namespace Scripting;using Json=nlohmann::json;
     // A Health script slot from the C# era becomes the native Health component, next to the scripts that stay.
@@ -858,16 +737,12 @@ void TestHealthMigration() {
 }
 }
 void RegisterScriptingTests(UnitTestSupport::TestList& tests) {
-    tests.emplace_back("Project NPC lifecycle and loadout rules",TestProjectLifecycleAndLoadout);
-    tests.emplace_back("Project body actions and squad callout scheduling",TestProjectLocomotionAndCallouts);
+    tests.emplace_back("Project weapon loadout rules",TestProjectWeaponLoadout);
+    tests.emplace_back("Project body actions",TestProjectLocomotion);
     tests.emplace_back("Empty project host and generic bootstrap",TestEmptyProject);
     tests.emplace_back("Exported generic project host",TestExportedProjectHost);
-    tests.emplace_back("Project NPC melee, burst fire and reload",TestProjectNpcCombat);
-    tests.emplace_back("Project NPC behavior selection",TestProjectNpcDecisions);
-    tests.emplace_back("Project NPC states, cover and navigation",TestProjectNpcBehaviour);
     tests.emplace_back("Project NPC configuration and scene migration",TestProjectNpcConfiguration);
     tests.emplace_back("Project canvas scopes",TestProjectCanvasScopes);
-    tests.emplace_back("Project NPC perception, squad roles and covering fire",TestProjectNpcPerceptionAndSquads);
     tests.emplace_back("Health script slot becomes the native component",TestHealthMigration);
     tests.emplace_back("Prefab-relative draggable script references",TestSceneReferences);
     tests.emplace_back("Managed gameplay ABI, fire modes and pump",TestManagedGameplay);
