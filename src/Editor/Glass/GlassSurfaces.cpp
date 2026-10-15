@@ -60,9 +60,22 @@ int GlassifySolids(ImDrawList* dl) {
         const int b = (int)((c >> IM_COL32_B_SHIFT) & 0xFF);
         const int hi = r > g ? (r > b ? r : b) : (g > b ? g : b);
         const int lo = r < g ? (r < b ? r : b) : (g < b ? g : b);
-        if (hi > 0x2C || hi - lo > 3) continue;
-        // #0E (raised) -> 6% white, #1C (hover) -> 11%, #2A (pressed) -> 16%.
-        v.col = hi <= 0x06 ? IM_COL32(0, 0, 0, 90) : IM_COL32(255, 255, 255, (int)((float)hi * 1.55f));
+        if (hi - lo > 3) continue; // has a hue: content, status or axis colour
+        if (hi >= GreyTextMin && hi <= GreyTextMax) {
+            // Grey text and icons (Secondary, Dim): lifted so they read over a bright field.
+            const int lift = LiftGreyText(hi) - hi;
+            v.col = IM_COL32(r + lift, g + lift, b + lift, 255);
+            ++changed;
+            continue;
+        }
+        if (hi > 0x2C) continue;
+        // Black fields and canvases: a light inset veil. Raised surfaces (component headers,
+        // buttons, cards): dark glass, so they stand apart from the lighter panel. Hover: a white
+        // lift. Pressed and hairlines: a brighter white edge.
+        if (hi <= 0x06)      v.col = IM_COL32(0, 0, 0, 77);
+        else if (hi <= 0x14) v.col = IM_COL32(0, 0, 0, 158);
+        else if (hi <= 0x20) v.col = IM_COL32(255, 255, 255, 20);
+        else                 v.col = IM_COL32(255, 255, 255, 36);
         ++changed;
     }
     return changed;

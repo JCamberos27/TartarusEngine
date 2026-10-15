@@ -58,11 +58,19 @@ int ConvertToGlass(ImDrawList* dl, const ImU32* clear, int clearCount, ImU32 bor
 
 // Turns the Tartarus panels' own solid fills into glass, in place. Their surfaces (component
 // headers, buttons, rows, hairlines) are opaque near-blacks the panel code picks itself, so they
-// would sit on the glass as black slabs. Every opaque grey vertex at or below #2C becomes a wash
-// that lifts the glass by the same step instead: black (#00-#06) a light black veil, the lifted
-// greys white at an alpha that keeps their order. Anything with hue, any brighter grey (text,
-// icons) and anything already translucent is left alone. Returns how many vertices changed.
+// would sit on the glass as black slabs. Every opaque grey vertex at or below #2C becomes glass
+// instead: black (#00-#06) a light black veil, raised surfaces (#07-#14) dark glass that stands
+// apart from the panel, hover (#15-#20) and pressed / hairlines (#21-#2C) white lifts. Grey text
+// and icons (GreyTextMin-GreyTextMax) are lifted by LiftGreyText so they read over a bright field.
+// Anything with hue, primary text and anything already translucent is left alone. Returns how
+// many vertices changed.
 int GlassifySolids(ImDrawList* dl);
+
+// Grey text on glass: Tartarus's Dim (#6A) and Secondary (#9C) sit on black, and over the lighter
+// glass they lose contrast. The compositor maps that band up into #A4-#C8, keeping its order.
+constexpr int GreyTextMin = 0x50;
+constexpr int GreyTextMax = 0xB8;
+constexpr int LiftGreyText(int v) { return 0x9C + (v - GreyTextMin) / 2; }
 
 // A surface's arrival pose: scaled about `pivot`, then moved by `offset`, at `alpha` opacity.
 struct SurfacePose {
