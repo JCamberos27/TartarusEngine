@@ -3663,7 +3663,7 @@ bool EditorLayer::BeginComponentSection(const char* icon,
     // Tabs & Headers: this component type's colour / icon (Enhancers::UiStyles). Drawing only -
     // the header's id stays keyed by the default icon, so restyling never resets its open state.
     const Enhancers::UiStyle* headerStyle = es.ComponentHeaderColors ? Enhancers::UiStyles::Get().Component(label) : nullptr;
-    const unsigned headerColor = headerStyle ? headerStyle->Color : 0u;
+    const unsigned headerColor = EditorTheme::UserPacked(headerStyle ? headerStyle->Color : 0u);
     const char* headerIcon = icon;
     if (headerStyle && !headerStyle->Icon.empty())
         if (const char* g = Enhancers::FAIconGlyph(headerStyle->Icon.c_str())) headerIcon = g;

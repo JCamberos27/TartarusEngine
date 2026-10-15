@@ -1874,7 +1874,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             GetFolderVisual(assets, cell.key, folderVis);
             if (folderVis.Icon[0]) icon = folderVis.Icon;
         }
-        const ImU32 folderTint = (isFolder && folderVis.Color) ? (folderVis.Color | 0xFF000000u) : 0u;
+        const ImU32 folderTint = (isFolder && folderVis.Color) ? (EditorTheme::UserPacked(folderVis.Color) | 0xFF000000u) : 0u;
 
         // The asset-type colour: the tile's bottom stripe in Grid view.
         auto kindColor = [&]() -> ImVec4 {
