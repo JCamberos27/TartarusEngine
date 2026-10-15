@@ -1229,14 +1229,21 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
     const ImVec2 vMax(vMin.x + m_ViewportSize.x, vMin.y + m_ViewportSize.y);
     if (m_ViewportSize.x < Glass::Px(200.0f) || m_ViewportSize.y < Glass::Px(120.0f)) return;
 
-    // The blurred scene behind the plates. One compute chain per frame, only while a HUD shows.
+    // The blurred scene behind the plates: one compute chain per frame, run at the end once the plates
+    // are drawn, over only the part of the Scene image under them (and none when no plate shows). The
+    // plates draw with the blurred texture, reserved now so its name holds, and get their UVs at the end.
     g.BlurTexture = 0;
-    if (prefs.GlassFrostedBlur && m_SceneColorTexture != 0) {
-        const int w = m_SceneTexW > 0 ? m_SceneTexW : (int)m_ViewportSize.x;
-        const int h = m_SceneTexH > 0 ? m_SceneTexH : (int)m_ViewportSize.y;
-        g.BlurTexture = g.Backdrop.Update(m_SceneColorTexture, w, h, Glass::GlassBlurLevels, Glass::GlassSaturation, Glass::GlassCeiling);
-    }
-    const ImTextureID blur = (ImTextureID)(intptr_t)g.BlurTexture;
+    g.FrostedPlates.clear();
+    const int sceneW = m_SceneTexW > 0 ? m_SceneTexW : (int)m_ViewportSize.x;
+    const int sceneH = m_SceneTexH > 0 ? m_SceneTexH : (int)m_ViewportSize.y;
+    const unsigned int blurTarget = prefs.GlassFrostedBlur && m_SceneColorTexture != 0
+                                        ? g.Backdrop.Reserve(sceneW, sceneH, Glass::GlassBlurLevels) : 0u;
+    const ImTextureID blur = (ImTextureID)(intptr_t)blurTarget;
+    auto frosted = [&](ImDrawList* d, ImVec2 mn, ImVec2 mx, float rad, float alpha) {
+        int vtx[2];
+        Glass::DrawFrostedPlate(d, mn, mx, rad, blur, vMin, vMax, alpha, vtx);
+        if (vtx[1] > vtx[0]) g.FrostedPlates.push_back({vtx[0], vtx[1], mn, mx});
+    };
 
     ImDrawList* dl = ImGui::GetWindowDrawList();
     // The HUDs are placed with SetCursorScreenPos and reserve their rects as items (so they're
@@ -1285,7 +1292,7 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
             bool hov = false, held = false;
             if (Glass::MotionButton(ImGui::GetID("##hudSel"), rest, drawn, &hov, &held) && has) m_PendingFrameSelect = true;
             if (hov) EditorUI::SetTooltip("Click to frame the selection");
-            Glass::DrawFrostedPlate(dl, drawn.Min, drawn.Max, radius, blur, vMin, vMax, t);
+            frosted(dl, drawn.Min, drawn.Max, radius, t);
             float y = drawn.Min.y + pad;
             const float x = drawn.Min.x + pad;
             const auto* hc = reg.try_get<HierarchyComponent>(shown);
@@ -1327,7 +1334,7 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
         ImGui::SetCursorScreenPos(r.Min);
         bool hov = false, held = false;
         Glass::MotionButton(ImGui::GetID("##hudStats"), r, r, &hov, &held);
-        Glass::DrawFrostedPlate(dl, r.Min, r.Max, r.GetHeight() * 0.5f, blur, vMin, vMax);
+        frosted(dl, r.Min, r.Max, r.GetHeight() * 0.5f, 1.0f);
         dl->AddText(ImVec2(r.Min.x + pad, r.GetCenter().y - lineH * 0.5f), Col(Glass::TextSecondary), stats);
     }
 
@@ -1378,7 +1385,7 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
                 EditorUI::SetTooltip("Click to dismiss. The full message is in the Console.");
             }
             if (alpha > 0.0f) {
-                Glass::DrawFrostedPlate(dl, drawn.Min, drawn.Max, radius, blur, vMin, vMax, alpha);
+                frosted(dl, drawn.Min, drawn.Max, radius, alpha);
                 const ImVec4 status = toast.Error ? Glass::Danger : Glass::Accent;
                 const float barW = Glass::Px(3.0f);
                 dl->AddRectFilled(ImVec2(drawn.Min.x + pad * 0.5f, drawn.Min.y + pad), ImVec2(drawn.Min.x + pad * 0.5f + barW, drawn.Max.y - pad),
@@ -1410,6 +1417,36 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
             const float a = 1.0f - Glass::EaseProgress(Glass::HoverIn, p);
             dl->AddCircle(g.SnapAt, r, Col(Glass::Accent, a), 0, Glass::Px(2.0f));
             dl->AddCircleFilled(g.SnapAt, Glass::Px(3.0f), Col(Glass::Accent, a));
+        }
+    }
+
+    // Now the plates are drawn: blur the Scene image under them (out by the blur's reach, on its coarsest
+    // level's grid so it holds still as a plate moves) and point their UVs into that blurred rect.
+    if (blurTarget != 0 && !g.FrostedPlates.empty()) {
+        ImRect u(g.FrostedPlates[0].Min, g.FrostedPlates[0].Max);
+        for (const auto& p : g.FrostedPlates) u.Add(ImRect(p.Min, p.Max));
+        // Screen -> Scene texels (bottom-up), as the Scene window shows the image.
+        const float kx = (float)sceneW / (vMax.x - vMin.x), ky = (float)sceneH / (vMax.y - vMin.y);
+        auto texX = [&](float x) { return (x - vMin.x) * kx; };
+        auto texY = [&](float y) { return (vMax.y - y) * ky; };
+        int x0 = 0, y0 = 0, x1 = sceneW, y1 = sceneH;
+        if (!Glass::FullFrameBlur()) {
+            const float reach = (float)GlassBackdrop::BlurReach(Glass::GlassBlurLevels);
+            const float grid = (float)(1 << Glass::GlassBlurLevels);
+            x0 = std::max(0, (int)(std::floor((texX(u.Min.x) - reach) / grid) * grid));
+            y0 = std::max(0, (int)(std::floor((texY(u.Max.y) - reach) / grid) * grid));
+            x1 = std::min(sceneW, (int)(std::ceil((texX(u.Max.x) + reach) / grid) * grid));
+            y1 = std::min(sceneH, (int)(std::ceil((texY(u.Min.y) + reach) / grid) * grid));
+        }
+        const unsigned int out = g.Backdrop.UpdateRect(m_SceneColorTexture, sceneW, sceneH, x0, y0, x1 - x0, y1 - y0,
+                                                       Glass::GlassBlurLevels, Glass::GlassSaturation, Glass::GlassCeiling);
+        if (out == blurTarget) {
+            g.BlurTexture = out;
+            for (const auto& p : g.FrostedPlates) {
+                const ImVec2 uvMin(g.Backdrop.OutU(texX(p.Min.x)), g.Backdrop.OutV(texY(p.Min.y)));
+                const ImVec2 uvMax(g.Backdrop.OutU(texX(p.Max.x)), g.Backdrop.OutV(texY(p.Max.y)));
+                ImGui::ShadeVertsLinearUV(dl, p.First, p.End, p.Min, p.Max, uvMin, uvMax, true);
+            }
         }
     }
 

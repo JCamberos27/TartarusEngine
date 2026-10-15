@@ -13,7 +13,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
-#include <unordered_map>
+#include <cstdlib>
 
 namespace Glass {
 
@@ -119,7 +119,7 @@ SurfacePose GlassCompositor::PoseFor(ImGuiWindow* group, SurfaceKind kind, bool 
     return pose;
 }
 
-void GlassCompositor::Capture(int w, int h) {
+void GlassCompositor::Capture(int w, int h, const CaptureRect& rect) {
     PROFILE_GPU_SCOPE("Glass Capture");
     if (!m_CaptureTex || w != m_CaptureW || h != m_CaptureH) {
         if (m_CaptureFbo) glDeleteFramebuffers(1, &m_CaptureFbo);
@@ -135,12 +135,15 @@ void GlassCompositor::Capture(int w, int h) {
         m_CaptureW = w;
         m_CaptureH = h;
     }
-    // A blit honours the scissor test, and the UI pass may have left it on.
+    // A blit honours the scissor test, and the UI pass may have left it on. Only the rect: the copy
+    // keeps the framebuffer's coordinates, and the blur reads nothing outside it.
     const bool scissor = glIsEnabled(GL_SCISSOR_TEST) == GL_TRUE;
     if (scissor) glDisable(GL_SCISSOR_TEST);
-    glBlitNamedFramebuffer(0, m_CaptureFbo, 0, 0, w, h, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    glBlitNamedFramebuffer(0, m_CaptureFbo, rect.X0, rect.Y0, rect.X1, rect.Y1, rect.X0, rect.Y0, rect.X1, rect.Y1,
+                           GL_COLOR_BUFFER_BIT, GL_NEAREST);
     if (scissor) glEnable(GL_SCISSOR_TEST);
-    m_BlurTex = m_Blur.Update(m_CaptureTex, w, h, GlassBlurLevels, GlassSaturation, GlassCeiling);
+    m_BlurTex = m_Blur.UpdateRect(m_CaptureTex, w, h, rect.X0, rect.Y0, rect.X1 - rect.X0, rect.Y1 - rect.Y0, GlassBlurLevels,
+                                  GlassSaturation, GlassCeiling);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     GLStateCache::Invalidate();
     ++m_StatCaptures;
@@ -166,6 +169,17 @@ void GlassCompositor::Flush(ImDrawData* dd, std::vector<ImDrawList*>& pending, b
     GLStateCache::Invalidate();
 }
 
+bool FullFrameBlur() {
+    static const bool on = [] {
+        char* e = nullptr;
+        size_t n = 0;
+        const bool set = _dupenv_s(&e, &n, "TARTARUS_GLASS_FULL_CAPTURE") == 0 && e && *e && *e != '0';
+        std::free(e);
+        return set;
+    }();
+    return on;
+}
+
 void GlassCompositor::Render(ImDrawData* dd, bool blur) {
     m_StatSurfaces = 0;
     m_StatCaptures = 0;
@@ -179,28 +193,35 @@ void GlassCompositor::Render(ImDrawData* dd, bool blur) {
     const int fbH = (int)(dd->DisplaySize.y * dd->FramebufferScale.y);
     const ImVec2 dispMin = dd->DisplayPos;
     const ImVec2 dispMax(dd->DisplayPos.x + dd->DisplaySize.x, dd->DisplayPos.y + dd->DisplaySize.y);
+    const int listCount = dd->CmdLists.Size;
 
-    // Which window drew each list.
-    std::unordered_map<const ImDrawList*, ImGuiWindow*> owner;
-    owner.reserve((size_t)g.Windows.Size);
+    // Which window drew each list (sorted, looked up by binary search).
+    m_Owner.clear();
     for (ImGuiWindow* w : g.Windows)
-        if (w->Active && !w->Hidden) owner[w->DrawList] = w;
+        if (w->Active && !w->Hidden) m_Owner.emplace_back(w->DrawList, w);
+    std::sort(m_Owner.begin(), m_Owner.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+    auto ownerOf = [&](const ImDrawList* dl) -> ImGuiWindow* {
+        const auto it = std::lower_bound(m_Owner.begin(), m_Owner.end(), dl, [](const auto& e, const ImDrawList* k) { return e.first < k; });
+        return it != m_Owner.end() && it->first == dl ? it->second : nullptr;
+    };
 
     const ImU32 titleCols[3] = {ImGui::GetColorU32(ImGuiCol_TitleBg), ImGui::GetColorU32(ImGuiCol_TitleBgActive),
                                 ImGui::GetColorU32(ImGuiCol_TitleBgCollapsed)};
     const ImU32 border = ImGui::GetColorU32(ImGuiCol_Border);
 
     // --- 1. Classify, convert and pose every list (CPU only) ---------------------------------------
-    struct Group { SurfacePose Pose; float Rim = 0.0f; };
-    std::unordered_map<ImGuiWindow*, Group> groups;
-    std::vector<ListInfo> info((size_t)dd->CmdLists.Size);
+    m_Groups.clear();
+    m_Info.assign((size_t)listCount, ListInfo{});
+    m_Bounds.resize((size_t)listCount);
     m_SeenNext.clear();
-    for (int i = 0; i < dd->CmdLists.Size; ++i) {
+    for (int i = 0; i < listCount; ++i) {
         ImDrawList* dl = dd->CmdLists[i];
-        ListInfo& li = info[(size_t)i];
-        auto it = owner.find(dl);
-        if (it == owner.end()) continue;
-        ImGuiWindow* w = it->second;
+        ListInfo& li = m_Info[(size_t)i];
+        ImGuiWindow* w = ownerOf(dl);
+        if (!w) {
+            m_Bounds[(size_t)i] = DrawListBounds(dl);
+            continue;
+        }
         li.Window = w;
         ImGuiWindow* tree = w->RootWindowDockTree ? w->RootWindowDockTree : w;
         const SurfaceKind treeKind = ClassifyTree(tree, vp);
@@ -236,17 +257,17 @@ void GlassCompositor::Render(ImDrawData* dd, bool blur) {
         float rim = 0.0f;
         SurfacePose pose;
         if (li.Group) {
-            auto git = groups.find(li.Group);
-            if (git == groups.end()) {
-                const SurfaceKind gk = li.Kind;
+            auto git = std::find_if(m_Groups.begin(), m_Groups.end(), [&](const Group& gr) { return gr.Window == li.Group; });
+            if (git == m_Groups.end()) {
                 const bool appeared = m_Seen.find(li.Group->ID) == m_Seen.end();
-                Group gr;
-                gr.Pose = PoseFor(li.Group, gk, appeared, &gr.Rim);
-                git = groups.emplace(li.Group, gr).first;
+                Group gr{li.Group, SurfacePose{}, 0.0f};
+                gr.Pose = PoseFor(li.Group, li.Kind, appeared, &gr.Rim);
+                m_Groups.push_back(gr);
+                git = m_Groups.end() - 1;
             }
             m_SeenNext.insert(li.Group->ID);
-            pose = git->second.Pose;
-            rim = git->second.Rim;
+            pose = git->Pose;
+            rim = git->Rim;
         }
 
         if (glassList) {
@@ -279,41 +300,88 @@ void GlassCompositor::Render(ImDrawData* dd, bool blur) {
         // A docked panel keeps its own background in place while its content arrives.
         const ImU32 anchored = (li.Kind == SurfaceKind::Panel && li.Group == w) ? FindWindowBackground(dl, w->Rect()) : 0u;
         ApplyPose(dl, pose, anchored);
+        m_Bounds[(size_t)i] = DrawListBounds(dl);
     }
     m_Seen.swap(m_SeenNext);
 
-    // --- 2. Render back to front, laying glass under each surface ----------------------------------
-    std::vector<ImDrawList*> pending;
-    pending.reserve((size_t)dd->CmdLists.Size + 8);
-    std::vector<ImRect> dirty; // what has been drawn since the last capture
-    bool haveCapture = false, texturesSent = false;
+    // --- 2. Plan the captures (CPU only) -----------------------------------------------------------
+    // The same walk as the render below: which capture each plate samples, and so the part of the
+    // frame each capture has to blur - the union of its plates. A plate past kMaxCapturesPerFrame reuses
+    // the last capture, so it widens that one.
+    auto drawsPlate = [&](const ListInfo& li) {
+        return li.Plate && li.Alpha > 0.0f && li.PlateRect.GetWidth() >= 1.0f && li.PlateRect.GetHeight() >= 1.0f;
+    };
+    m_PlateCapture.assign((size_t)listCount, -1);
+    m_CaptureUse.clear();
+    if (blur) {
+        m_Dirty.clear();
+        for (int i = 0; i < listCount; ++i) {
+            const ListInfo& li = m_Info[(size_t)i];
+            if (drawsPlate(li)) {
+                const ImRect& r = li.PlateRect;
+                bool stale = m_CaptureUse.empty();
+                for (const ImRect& d : m_Dirty) stale = stale || Overlaps(d, r);
+                if (stale && (int)m_CaptureUse.size() < kMaxCapturesPerFrame) {
+                    m_CaptureUse.push_back(r);
+                    m_Dirty.clear();
+                } else {
+                    m_CaptureUse.back().Add(r);
+                }
+                m_PlateCapture[(size_t)i] = (int)m_CaptureUse.size() - 1;
+                ImRect reach = r;
+                reach.ClipWithFull(ImRect(dispMin, dispMax));
+                m_Dirty.push_back(reach);
+            }
+            const ImRect& b = m_Bounds[(size_t)i];
+            if (b.Min.x < b.Max.x) m_Dirty.push_back(b);
+        }
+    }
+    // Each capture's framebuffer rect (GL pixels, bottom-up): its plates, out by the blur's reach, on the
+    // grid of the blur's coarsest level so the result doesn't shift as a surface moves.
+    m_CaptureRects.clear();
+    {
+        const int reach = GlassBackdrop::BlurReach(GlassBlurLevels);
+        const int grid = 1 << std::clamp(GlassBlurLevels, 1, 8);
+        const float sx = dd->FramebufferScale.x, sy = dd->FramebufferScale.y;
+        for (const ImRect& u : m_CaptureUse) {
+            CaptureRect c{0, 0, fbW, fbH};
+            if (!FullFrameBlur()) {
+                const float x0 = (u.Min.x - dispMin.x) * sx, x1 = (u.Max.x - dispMin.x) * sx;
+                const float y0 = (float)fbH - (u.Max.y - dispMin.y) * sy, y1 = (float)fbH - (u.Min.y - dispMin.y) * sy;
+                auto down = [&](float v) { return (int)std::floor((v - (float)reach) / (float)grid) * grid; };
+                auto up = [&](float v) { return (int)std::ceil((v + (float)reach) / (float)grid) * grid; };
+                c = {std::max(down(x0), 0), std::max(down(y0), 0), std::min(up(x1), fbW), std::min(up(y1), fbH)};
+                if (c.X1 - c.X0 < 8 || c.Y1 - c.Y0 < 8) c = {0, 0, fbW, fbH};
+            }
+            m_CaptureRects.push_back(c);
+        }
+    }
+
+    // --- 3. Render back to front, laying glass under each surface ----------------------------------
+    m_Pending.clear();
+    int captured = -1;            // the capture the blur texture holds now
+    bool texturesSent = false;
     size_t plateCount = 0;
     const ImU32 fallback = U32(GlassFallback);
-    for (int i = 0; i < dd->CmdLists.Size; ++i) {
-        const ListInfo& li = info[(size_t)i];
-        if (li.Plate && li.Alpha > 0.0f && li.PlateRect.GetWidth() >= 1.0f && li.PlateRect.GetHeight() >= 1.0f) {
+    for (int i = 0; i < listCount; ++i) {
+        const ListInfo& li = m_Info[(size_t)i];
+        if (drawsPlate(li)) {
             ++m_StatSurfaces;
             const ImRect r = li.PlateRect;
             // Everything that floats (popups, menus, tooltips, floating windows, the Scene view's
             // overlays) is the same glass as the editor's chrome: the chrome's dark tint over the
             // blur and a faint edge, with no drop shadow.
-            constexpr float spread = 0.0f;
             const ImVec4 tint = OverlayTint;
-            ImRect reach(r.Min.x - spread, r.Min.y - spread, r.Max.x + spread, r.Max.y + spread * 1.4f);
+            ImRect reach = r;
             reach.ClipWithFull(ImRect(dispMin, dispMax));
 
-            bool useBlur = blur;
-            if (useBlur) {
-                bool stale = !haveCapture;
-                for (const ImRect& d : dirty) stale = stale || Overlaps(d, r);
-                if (stale && m_StatCaptures < kMaxCapturesPerFrame) {
-                    Flush(dd, pending, texturesSent);
-                    Capture(fbW, fbH);
-                    haveCapture = m_BlurTex != 0;
-                    dirty.clear();
-                }
-                useBlur = haveCapture;
+            const int k = m_PlateCapture[(size_t)i];
+            if (k >= 0 && k != captured) {
+                Flush(dd, m_Pending, texturesSent);
+                Capture(fbW, fbH, m_CaptureRects[(size_t)k]);
+                captured = k;
             }
+            const bool useBlur = k >= 0 && m_BlurTex != 0;
 
             if (plateCount >= m_Plates.size())
                 m_Plates.push_back(std::make_unique<ImDrawList>(ImGui::GetDrawListSharedData()));
@@ -325,8 +393,10 @@ void GlassCompositor::Render(ImDrawData* dd, bool blur) {
             plate->PushClipRect(reach.Min, reach.Max);
             const float a = li.Alpha;
             if (useBlur) {
-                const ImVec2 uv0((r.Min.x - dispMin.x) / dd->DisplaySize.x, 1.0f - (r.Min.y - dispMin.y) / dd->DisplaySize.y);
-                const ImVec2 uv1((r.Max.x - dispMin.x) / dd->DisplaySize.x, 1.0f - (r.Max.y - dispMin.y) / dd->DisplaySize.y);
+                // The plate's corners in framebuffer pixels (bottom-up), then into the blurred rect.
+                const float sx = dd->FramebufferScale.x, sy = dd->FramebufferScale.y;
+                const ImVec2 uv0(m_Blur.OutU((r.Min.x - dispMin.x) * sx), m_Blur.OutV((float)fbH - (r.Min.y - dispMin.y) * sy));
+                const ImVec2 uv1(m_Blur.OutU((r.Max.x - dispMin.x) * sx), m_Blur.OutV((float)fbH - (r.Max.y - dispMin.y) * sy));
                 plate->AddImageRounded(ImTextureRef((ImTextureID)(intptr_t)m_BlurTex), r.Min, r.Max, uv0, uv1,
                                        IM_COL32(255, 255, 255, (int)(255.0f * a + 0.5f)), li.PlateRounding);
                 plate->AddRectFilled(r.Min, r.Max, U32(WithAlpha(tint, tint.w * a)), li.PlateRounding);
@@ -336,15 +406,11 @@ void GlassCompositor::Render(ImDrawData* dd, bool blur) {
             }
             plate->PopClipRect();
             plate->PopTexture();
-            pending.push_back(plate);
-            dirty.push_back(reach);
+            m_Pending.push_back(plate);
         }
-        ImDrawList* dl = dd->CmdLists[i];
-        pending.push_back(dl);
-        const ImRect b = DrawListBounds(dl);
-        if (b.Min.x < b.Max.x) dirty.push_back(b);
+        m_Pending.push_back(dd->CmdLists[i]);
     }
-    Flush(dd, pending, texturesSent);
+    Flush(dd, m_Pending, texturesSent);
 }
 
 } // namespace Glass

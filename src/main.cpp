@@ -545,6 +545,7 @@ int main(int argc, char** argv) {
         }
         // A benchmark measures native resolution unless it asks for a render height, so its
         // numbers stay comparable from run to run and machine to machine.
+        if (opt.perfBenchMode && opt.perfGlass) EditorSettings::SetThemeForRun(1);
         if (opt.renderHeightArg >= 0) EditorSettings::Get().RenderHeight = opt.renderHeightArg;
         else if (opt.perfBenchMode) EditorSettings::Get().RenderHeight = 0;
         // The editor starts with no splash: the console shows the load log until the main window

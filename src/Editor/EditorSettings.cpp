@@ -42,6 +42,7 @@ void MigrateLegacyPrefsIfNeeded() {
 // call, Save() just raises this flag and Flush() (once per frame from the editor loop, and on
 // shutdown) does the one real write (audit CPP-206 / PERF-211).
 bool g_PrefsDirty = false;
+int g_SavedThemeId = -1; // >= 0: SetThemeForRun changed the theme for this run only; this is the one to keep
 
 // #126 — root.value(key, default) THROWS json::type_error when the key exists with the wrong
 // type (a hand edit, an older/newer build), and nothing caught it, so one bad key in
@@ -259,6 +260,11 @@ void EditorSettings::Save() {
     g_PrefsDirty = true;
 }
 
+void EditorSettings::SetThemeForRun(int themeId) {
+    if (g_SavedThemeId < 0) g_SavedThemeId = Get().EditorThemeId;
+    Get().EditorThemeId = themeId;
+}
+
 void EditorSettings::Flush() {
     if (!g_PrefsDirty) return;
     g_PrefsDirty = false;
@@ -326,7 +332,7 @@ void EditorSettings::Flush() {
     root["hierarchySortDesc"] = Get().HierarchySortDesc;
     root["hierarchyTypeFilterMask"] = Get().HierarchyTypeFilterMask;
     root["reduceMotion"] = Get().ReduceMotion;
-    root["glassTheme"] = Get().EditorThemeId;
+    root["glassTheme"] = g_SavedThemeId >= 0 ? g_SavedThemeId : Get().EditorThemeId;
     root["glassViewportHuds"] = Get().GlassViewportHuds;
     root["glassFrostedBlur"] = Get().GlassFrostedBlur;
     root["glassSeeThroughWindow"] = Get().GlassSeeThroughWindow;
