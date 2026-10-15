@@ -157,6 +157,9 @@ struct EditorSettings {
     // GlassBackdrop.h) or just tint it.
     bool GlassViewportHuds = true;
     bool GlassFrostedBlur = true;
+    // Black Glass: the editor window itself is see-through, with the desktop blurred behind it
+    // (like Explorer with a transparency theme). Read when the window is created: next launch.
+    bool GlassSeeThroughWindow = true;
     // Glass Workspace panels' visibility (Window > Glass Workspace).
     bool ShowGlassHierarchy = false;
     bool ShowGlassInspector = false;

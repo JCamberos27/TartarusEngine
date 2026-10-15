@@ -153,6 +153,7 @@ void EditorSettings::Load() {
     s.EditorThemeId = std::clamp(SafeValue(root, "glassTheme", s.EditorThemeId), 0, 1);
     s.GlassViewportHuds = SafeValue(root, "glassViewportHuds", s.GlassViewportHuds);
     s.GlassFrostedBlur = SafeValue(root, "glassFrostedBlur", s.GlassFrostedBlur);
+    s.GlassSeeThroughWindow = SafeValue(root, "glassSeeThroughWindow", s.GlassSeeThroughWindow);
     s.ShowGlassHierarchy = SafeValue(root, "showGlassHierarchy", s.ShowGlassHierarchy);
     s.ShowGlassInspector = SafeValue(root, "showGlassInspector", s.ShowGlassInspector);
     s.ShowGlassAssets = SafeValue(root, "showGlassAssets", s.ShowGlassAssets);
@@ -344,6 +345,7 @@ void EditorSettings::Flush() {
     root["glassTheme"] = Get().EditorThemeId;
     root["glassViewportHuds"] = Get().GlassViewportHuds;
     root["glassFrostedBlur"] = Get().GlassFrostedBlur;
+    root["glassSeeThroughWindow"] = Get().GlassSeeThroughWindow;
     root["showGlassHierarchy"] = Get().ShowGlassHierarchy;
     root["showGlassInspector"] = Get().ShowGlassInspector;
     root["showGlassAssets"] = Get().ShowGlassAssets;

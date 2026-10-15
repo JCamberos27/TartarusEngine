@@ -50,6 +50,22 @@ void ApplyBlackTitleBar(GLFWwindow* handle) {
     DwmSetWindowAttribute(hwnd, DWMWA_TEXT_COLOR, &white, sizeof(white));
 }
 
+// The desktop blurred behind the window (Black Glass's see-through window). The framebuffer's own
+// per-pixel alpha (GLFW_TRANSPARENT_FRAMEBUFFER) decides how much of it shows. The accent policy
+// is the long-standing, undocumented call the Windows shell itself uses for blurred surfaces;
+// resolved at run time, so a Windows without it just gets the transparency, unblurred.
+void ApplyBlurBehind(GLFWwindow* handle) {
+    struct AccentPolicy { int AccentState; int AccentFlags; DWORD GradientColor; int AnimationId; };
+    struct CompositionData { int Attribute; void* Data; SIZE_T SizeOfData; };
+    using SetCompositionFn = BOOL(WINAPI*)(HWND, CompositionData*);
+    HMODULE user32 = GetModuleHandleW(L"user32.dll");
+    auto set = user32 ? reinterpret_cast<SetCompositionFn>(GetProcAddress(user32, "SetWindowCompositionAttribute")) : nullptr;
+    if (!set) return;
+    AccentPolicy accent{3 /* ACCENT_ENABLE_BLURBEHIND */, 0, 0, 0};
+    CompositionData data{19 /* WCA_ACCENT_POLICY */, &accent, sizeof(accent)};
+    set(glfwGetWin32Window(handle), &data);
+}
+
 // --- Borderless custom frame -------------------------------------------------------------
 // The window keeps its real OS styles (WS_OVERLAPPEDWINDOW) — so Aero-snap, the drop shadow,
 // resize and the maximize animation all still work — but WM_NCCALCSIZE swallows the standard
@@ -155,7 +171,7 @@ void RemoveCustomFrame(GLFWwindow* handle) {
 } // namespace
 #endif
 
-Window::Window(int width, int height, const std::string& title)
+Window::Window(int width, int height, const std::string& title, bool seeThrough)
     : m_Width(width), m_Height(height) {
     glfwSetErrorCallback(GlfwErrorCallback);
 
@@ -182,6 +198,7 @@ Window::Window(int width, int height, const std::string& title)
     // Stay hidden until the title bar is recolored below, so it never flashes the default
     // light title bar for a frame before switching to black.
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, seeThrough ? GLFW_TRUE : GLFW_FALSE);
 
     m_Handle = glfwCreateWindow(width, height, title.c_str(), nullptr, nullptr);
     if (!m_Handle) {
@@ -192,6 +209,10 @@ Window::Window(int width, int height, const std::string& title)
 #if defined(_WIN32)
     ApplyBlackTitleBar(m_Handle);
     InstallCustomFrame(this, m_Handle); // remove the OS caption; editor draws its own controls
+#endif
+    m_SeeThrough = seeThrough && glfwGetWindowAttrib(m_Handle, GLFW_TRANSPARENT_FRAMEBUFFER) == GLFW_TRUE;
+#if defined(_WIN32)
+    if (m_SeeThrough) ApplyBlurBehind(m_Handle);
 #endif
     // Deliberately NOT shown here. Showing before anything is drawn flashes an unpainted
     // framebuffer (a white rectangle over garbage) for as long as loading takes. main() calls

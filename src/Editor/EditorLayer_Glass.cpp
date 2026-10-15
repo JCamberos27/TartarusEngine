@@ -377,8 +377,13 @@ void EditorLayer::GlassFrameBegin() {
     Glass::ImAnimContext& motion = Glass::Motion();
     motion.SetReduceMotion(EditorSettings::Get().ReduceMotion);
     motion.NewFrame();
-    // The ambient field behind every panel: the Scene image, blurred until only colour is left.
+    // A see-through window shows the blurred desktop behind every panel: nothing to paint.
+    // Otherwise the ambient field: the Scene image, blurred until only colour is left.
     GlassEditorState& g = GlassState();
+    if (DesktopShowsThrough()) {
+        PollGlassNotifications();
+        return;
+    }
     unsigned int ambient = 0;
     if (EditorSettings::Get().GlassFrostedBlur && m_SceneColorTexture != 0) {
         const int w = m_SceneTexW > 0 ? m_SceneTexW : (int)m_ViewportSize.x;
