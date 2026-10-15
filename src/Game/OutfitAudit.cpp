@@ -214,8 +214,9 @@ int CheckRules(const OutfitSystem::Catalog& cat, int seeds) {
     return bad;
 }
 
-// A modular body's arms (the "Arms" part, no hands) under each top and jacket: a sleeve that covers them down
-// to the hands (the "Hands" part) lets the wardrobe leave the arms out; a shorter one must keep them. An arm
+// A modular body's arms (the "Arms" part) under each top and jacket: a sleeve that covers them down to the hands
+// (a "Hands" part, or the "SleeveHands" alternate the rules swap the arms for) lets the wardrobe leave the arms out
+// - just the hands under it; a shorter one must keep them. An arm
 // vertex is bare when no cloth lies over it (OutfitCoverage::Covered, generous outward: loose sleeves) and the
 // hands piece isn't within kHandsReach of it; only the forearm counts (within kForearmReach of either hand's
 // middle) - what's left bare at the shoulder and armpit is inside the garment. Problems: the rules leave the
@@ -233,6 +234,9 @@ int CheckSleeves(const Wardrobe::Wardrobe& w, const OutfitSystem::Catalog& cat,
             if (part == "Arms") armsPath = model;
             if (part == "Hands") handsPath = model;
         }
+        // The male body: one arms piece (hands and all), swapped for the hands alone under a long sleeve.
+        if (const auto alt = w.Body(sex).Alternates.find("SleeveHands"); handsPath.empty() && alt != w.Body(sex).Alternates.end())
+            handsPath = alt->second;
         if (armsPath.empty() || handsPath.empty()) continue;
         const OutfitCoverage::Mesh& arms = mesh(armsPath);
         const OutfitCoverage::Mesh& hands = mesh(handsPath);
@@ -280,8 +284,10 @@ int CheckSleeves(const Wardrobe::Wardrobe& w, const OutfitSystem::Catalog& cat,
             req.Race = race ? race->Name : std::string();
             req.Items[item.Slot] = item.Path;
             const auto resolved = Wardrobe::Resolve(w, cat.Items, req);
-            const bool armsOut = std::none_of(resolved.Pieces.begin(), resolved.Pieces.end(),
-                                              [](const Wardrobe::Piece& p) { return p.Slot == "Arms"; });
+            // Out: no Arms piece, or the hands alone in its place.
+            const bool armsOut = std::none_of(resolved.Pieces.begin(), resolved.Pieces.end(), [&](const Wardrobe::Piece& p) {
+                return p.Slot == "Arms" && Wardrobe::Stem(p.Path) != Wardrobe::Stem(handsPath);
+            });
             const bool sleeved = bare == 0;
             (sleeved ? full : shorter)++;
             if (armsOut && !sleeved) {
