@@ -532,6 +532,12 @@ int main(int argc, char** argv) {
         // Per-user preferences, loaded before anything reads them. No GL or project state needed.
         EditorSettings::Load();
         if (!opt.editorShotDir.empty() && opt.editorShotScale > 0.0f) EditorSettings::Get().UiScaleOverride = opt.editorShotScale;
+        if (!opt.editorShotDir.empty() && opt.editorShotGlass) {
+            // Only the scratch copy of the prefs (TartarusEngine-Shot) is changed.
+            EditorSettings& shotPrefs = EditorSettings::Get();
+            shotPrefs.EditorThemeId = 1;
+            shotPrefs.ShowGlassHierarchy = shotPrefs.ShowGlassInspector = shotPrefs.ShowGlassAssets = true;
+        }
         // A benchmark measures native resolution unless it asks for a render height, so its
         // numbers stay comparable from run to run and machine to machine.
         if (opt.renderHeightArg >= 0) EditorSettings::Get().RenderHeight = opt.renderHeightArg;

@@ -416,7 +416,12 @@ void EditorLayer::DrawGlassHierarchy(World& world, AssetLibrary& assets) {
     GlassEditorState& g = GlassState();
     auto& reg = world.Registry;
 
-    ImGui::SetNextWindowSize(ImVec2(Glass::Px(300.0f), Glass::Px(520.0f)), ImGuiCond_FirstUseEver);
+    {
+        // First open: floating at the left of the editor, clear of the menu and toolbar.
+        const ImGuiViewport* vp = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + Glass::Px(Glass::Space4), vp->WorkPos.y + Glass::Px(Glass::Space4) * 3.0f), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(Glass::Px(300.0f), Glass::Px(520.0f)), ImGuiCond_FirstUseEver);
+    }
     bool windowOpen = true;
     const bool visible = ImGui::Begin(EditorPanels::GlassHierarchy, &windowOpen);
     if (!windowOpen) {
@@ -635,7 +640,13 @@ void EditorLayer::DrawGlassInspector(World& world, AssetLibrary& assets) {
     GlassEditorState& g = GlassState();
     auto& reg = world.Registry;
 
-    ImGui::SetNextWindowSize(ImVec2(Glass::Px(360.0f), Glass::Px(560.0f)), ImGuiCond_FirstUseEver);
+    {
+        // First open: floating at the right of the editor.
+        const ImGuiViewport* vp = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x - Glass::Px(360.0f) - Glass::Px(Glass::Space4),
+                                       vp->WorkPos.y + Glass::Px(Glass::Space4) * 3.0f), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(Glass::Px(360.0f), Glass::Px(560.0f)), ImGuiCond_FirstUseEver);
+    }
     bool windowOpen = true;
     const bool visible = ImGui::Begin(EditorPanels::GlassInspector, &windowOpen);
     if (!windowOpen) {
@@ -865,7 +876,13 @@ void EditorLayer::DrawGlassLibrary(World& world, AssetLibrary& assets) {
     if (!prefs.ShowGlassAssets) return;
     GlassEditorState& g = GlassState();
 
-    ImGui::SetNextWindowSize(ImVec2(Glass::Px(640.0f), Glass::Px(360.0f)), ImGuiCond_FirstUseEver);
+    {
+        // First open: floating along the bottom centre of the editor.
+        const ImGuiViewport* vp = ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + (vp->WorkSize.x - Glass::Px(640.0f)) * 0.5f,
+                                       vp->WorkPos.y + vp->WorkSize.y - Glass::Px(360.0f) - Glass::Px(Glass::Space4)), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(Glass::Px(640.0f), Glass::Px(360.0f)), ImGuiCond_FirstUseEver);
+    }
     bool windowOpen = true;
     const bool visible = ImGui::Begin(EditorPanels::GlassAssets, &windowOpen);
     if (!windowOpen) {
