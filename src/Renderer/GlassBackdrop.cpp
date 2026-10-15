@@ -61,8 +61,9 @@ bool GlassBackdrop::EnsurePrograms() {
 
 void GlassBackdrop::EnsureTargets(int w, int h, int levels, bool grow) {
     if (grow) {
-        // UpdateRect: at least the rect, in 256-texel steps, and never smaller than what is there.
-        auto step = [](int n) { return (n + 255) / 256 * 256; };
+        // UpdateRect: at least the rect plus Run's one-texel edge pad, in 256-texel steps, and never
+        // smaller than what is there.
+        auto step = [](int n) { return (n + 1 + 255) / 256 * 256; };
         w = std::max(step(w), m_W);
         h = std::max(step(h), m_H);
         levels = std::max(levels, m_Levels);
@@ -202,8 +203,12 @@ unsigned int GlassBackdrop::Run(unsigned int srcTex, int texW, int texH, int x, 
     m_Resolve->SetVec4("uSrcClamp", chainClamp(0, hw, hh));
     m_Resolve->SetFloat("uSaturation", saturation);
     m_Resolve->SetFloat("uCeiling", std::clamp(ceiling, 0.05f, 1.0f));
-    glUniform2i(m_Resolve->Loc("uDstSize"), hw, hh);
-    m_Resolve->DispatchCompute(Groups(hw), Groups(hh), 1);
+    // One texel past the data on the right and top, a copy of the edge (the shader clamps its taps):
+    // a plate's bilinear lookup at the data's last half texel then reads the edge again, as
+    // CLAMP_TO_EDGE does on Update's exact-size Out, instead of a stale texel from an earlier rect.
+    const int outW = std::min(hw + 1, m_W), outH = std::min(hh + 1, m_H);
+    glUniform2i(m_Resolve->Loc("uDstSize"), outW, outH);
+    m_Resolve->DispatchCompute(Groups(outW), Groups(outH), 1);
     // ImGui samples Out in a fragment shader later this frame.
     glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
 
