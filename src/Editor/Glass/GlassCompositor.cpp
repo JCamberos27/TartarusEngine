@@ -215,8 +215,6 @@ void GlassCompositor::Render(ImDrawData* dd, bool blur) {
                 li.Plate = true;
                 li.PlateRect = w->Rect();
                 li.PlateRounding = w->WindowRounding;
-                // A floating viewport overlay (the action bar) draws the HUD plate colour.
-                li.Overlay = FindWindowBackground(dl, w->Rect()) == EditorUIPrimitives::kHudPlateColor;
             }
         } else {
             ImGuiWindow* root = w->RootWindow ? w->RootWindow : w;
@@ -229,7 +227,6 @@ void GlassCompositor::Render(ImDrawData* dd, bool blur) {
                 FindWindowBackground(dl, w->Rect()) == EditorUIPrimitives::kHudPlateColor) {
                 glassList = clearOwnBg = true;
                 li.Plate = true;
-                li.Overlay = true;
                 li.PlateRect = w->Rect();
                 li.PlateRounding = w->WindowRounding;
             }
@@ -266,10 +263,13 @@ void GlassCompositor::Render(ImDrawData* dd, bool blur) {
         }
         // Whatever solid fills are left (component headers, buttons, rows, hairlines in a panel,
         // the menu bar, a popup's items) become glass washes too. The Scene and Game views are
-        // left exactly as drawn: the 3D image, the gizmos and the toolbar are content.
+        // left exactly as drawn: the 3D image, the gizmos and the overlays are content. The Game
+        // view's own strip above its image (resolution, scale) is chrome, so it becomes glass too.
         {
             const ImGuiWindow* root = w->RootWindow ? w->RootWindow : w;
-            if (!std::strstr(root->Name, "###Scene") && !std::strstr(root->Name, "###Game")) GlassifySolids(dl);
+            const bool scene = std::strstr(root->Name, "###Scene") != nullptr;
+            const bool gameImage = std::strstr(root->Name, "###Game") != nullptr && w == root;
+            if (!scene && !gameImage) GlassifySolids(dl);
         }
         if (li.Plate) {
             li.PlateRect = pose.Apply(li.PlateRect);
@@ -294,13 +294,11 @@ void GlassCompositor::Render(ImDrawData* dd, bool blur) {
         if (li.Plate && li.Alpha > 0.0f && li.PlateRect.GetWidth() >= 1.0f && li.PlateRect.GetHeight() >= 1.0f) {
             ++m_StatSurfaces;
             const ImRect r = li.PlateRect;
-            const bool tooltip = li.Kind == SurfaceKind::Tooltip;
-            // Popups, tooltips and floating windows float over the editor: a soft shadow and the
-            // light glass tint. An overlay plate inside a panel (the Scene view's action bar and
-            // tool rail) matches the editor's chrome instead: darker, and no shadow.
-            const bool overlay = li.Overlay;
-            const float spread = overlay || tooltip ? 0.0f : li.Kind == SurfaceKind::Window ? Px(Space3) : Px(Space1h);
-            const ImVec4 tint = overlay ? OverlayTint : GlassTint;
+            // Everything that floats (popups, menus, tooltips, floating windows, the Scene view's
+            // overlays) is the same glass as the editor's chrome: the chrome's dark tint over the
+            // blur and a faint edge, with no drop shadow.
+            constexpr float spread = 0.0f;
+            const ImVec4 tint = OverlayTint;
             ImRect reach(r.Min.x - spread, r.Min.y - spread, r.Max.x + spread, r.Max.y + spread * 1.4f);
             reach.ClipWithFull(ImRect(dispMin, dispMax));
 
@@ -326,7 +324,6 @@ void GlassCompositor::Render(ImDrawData* dd, bool blur) {
             plate->PushTexture(ImGui::GetIO().Fonts->TexRef);
             plate->PushClipRect(reach.Min, reach.Max);
             const float a = li.Alpha;
-            if (spread > 0.0f) DrawSoftShadow(plate, r.Min, r.Max, li.PlateRounding, 0.35f * a, spread);
             if (useBlur) {
                 const ImVec2 uv0((r.Min.x - dispMin.x) / dd->DisplaySize.x, 1.0f - (r.Min.y - dispMin.y) / dd->DisplaySize.y);
                 const ImVec2 uv1((r.Max.x - dispMin.x) / dd->DisplaySize.x, 1.0f - (r.Max.y - dispMin.y) / dd->DisplaySize.y);
