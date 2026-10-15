@@ -2017,6 +2017,9 @@ private:
     std::string m_HierarchyFilter;   // plain substring, or "t:SomeTag" to filter by TagComponent
     entt::entity m_RenamingEntity = entt::null;
     bool m_EntityRenameJustStarted = false;
+    // Set when a blank name was refused: Enter already deactivated the field, so the next frame
+    // gives it keyboard focus back (keeping the typed text) instead of leaving it dead.
+    bool m_EntityRenameRefocus = false;
     char m_EntityRenameBuffer[128] = {};
     // Mirrors m_RenameRejectedFlash for the Asset Browser (#38 B12): seconds left to show the
     // "name can't be blank" inline error when a Hierarchy rename sanitizes down to nothing.
