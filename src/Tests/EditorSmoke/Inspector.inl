@@ -76,7 +76,17 @@ Step InspReveal(Query q) {
     auto tries = std::make_shared<int>(0);
     return {"reveal", [q, tries](Ctx&) {
         const UiItem* it = Find(q);
-        if (!it) return false;
+        if (!it) {
+            // A clipped widget is registered without its label (ImGui returns before reporting
+            // it), so a label query can't see it: page the panel down until it shows up.
+            if (++*tries > 30) return false;
+            for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+                if (w->WasActive && !w->Hidden && w->ScrollMax.y > 0.0f && Contains(w->Name, q.Root.empty() ? kInspector : q.Root)) {
+                    ImGui::SetScrollY(w, std::min(w->Scroll.y + w->InnerRect.GetHeight() * 0.5f, w->ScrollMax.y));
+                    break;
+                }
+            return false;
+        }
         if (it->Rect.Min.y >= it->Clip.Min.y && it->Rect.Max.y <= it->Clip.Max.y) return true;
         if (++*tries > 30) return true; // can't scroll further: let the click report it
         ImGuiWindow* w = ImGui::FindWindowByName(it->Window.c_str());
@@ -115,6 +125,8 @@ std::vector<Step> InspCat(std::vector<std::vector<Step>> parts) {
 }
 bool InspNear(float a, float b, float eps = 1e-3f) { return std::fabs(a - b) <= eps; }
 std::string InspPresetDir() { return ProjectPaths::Resolve("presets"); }
+// A throwaway folder inside the project for files a test needs the editor to find; tests delete it.
+std::string InspScratchDir() { return ProjectPaths::Resolve("editor-smoke-scratch"); }
 std::set<std::string> InspListDir(const std::string& dir) {
     std::set<std::string> out;
     std::error_code ec;
@@ -133,6 +145,7 @@ void RegisterInspectorTests() {
         Add("inspector: Add Component > " + name + ": added, section draws, Remove, undo, redo", {
             FreshScene(), Wait(2),
             SelectByName("Alpha"), Wait(3),
+            InspReveal(ByLabel("Add Component", kInspector)),
             Click(ByLabel("Add Component", kInspector)), Wait(3),
             TypeText(name), Wait(3),
             Click(InspPopup(entry)), Wait(3),
@@ -151,6 +164,7 @@ void RegisterInspectorTests() {
     Add("inspector: Add Component > Mesh Renderer: mesh, Lighting fields, Material; remove keeps the mesh; undo, redo", {
         FreshScene(), Wait(2),
         SelectByName("Alpha"), Wait(3),
+        InspReveal(ByLabel("Add Component", kInspector)),
         Click(ByLabel("Add Component", kInspector)), Wait(3),
         TypeText("Mesh Renderer"), Wait(3),
         Click(InspPopup(ICON_FA_DRAW_POLYGON "  Mesh Renderer")), Wait(3),
@@ -197,6 +211,7 @@ void RegisterInspectorTests() {
     Add("inspector: Add Component search narrows the list; a present component is greyed out", {
         FreshScene(), Wait(2),
         SelectByName("Beta"), Wait(3),
+        InspReveal(ByLabel("Add Component", kInspector)), // section open states carry over between tests
         Click(ByLabel("Add Component", kInspector)), Wait(3),
         Shot("unfiltered"),
         TypeText("light"), Wait(3),
@@ -265,18 +280,53 @@ void RegisterInspectorTests() {
              return c.W.Registry.get<TransformControllerComponent>(ByName(c.W, "Alpha")).RotationDegPerSec.z ==
                     TransformControllerComponent{}.RotationDegPerSec.z;
          }),
+         // Script Path is an asset picker (a searchable dropdown of the project's .tescript files),
+         // not a text field. The project ships none, so make one in a scratch folder (deleted at
+         // the end) and wait out the picker's 4 s project-scan cache.
+         Do("make a scratch script", [](Ctx&) {
+             std::error_code ec;
+             std::filesystem::create_directories(InspScratchDir(), ec);
+             std::ofstream(InspScratchDir() + "/spin.tescript") << "// editor smoke test\n";
+         }),
+         // The field's tag sits on its last item, the browse button (a native dialog: never
+         // clicked unattended); the dropdown is the item to its left on the same row.
          InspReveal(ByTag("field:Transform Controller/Script Path")),
-         Click(ByTag("field:Transform Controller/Script Path")), Wait(3),
-         Key(ImGuiKey_A, ImGuiMod_Ctrl), TypeText("spin.tescript"), Wait(2), Key(ImGuiKey_Enter), Wait(3),
-         ExpectTrue("Script Path typed", [](Ctx& c) {
-             return c.W.Registry.get<TransformControllerComponent>(ByName(c.W, "Alpha")).ScriptPath == "spin.tescript";
+         Click([] {
+             Query q;
+             q.Root = kInspector;
+             q.Pred = [](const UiItem& it) {
+                 const UiItem* browse = Find(ByTag("field:Transform Controller/Script Path"));
+                 return browse && it.Id != browse->Id && it.Rect.Max.x <= browse->Rect.Min.x &&
+                        it.Rect.Max.x > browse->Rect.Min.x - 40.0f &&
+                        it.Rect.GetCenter().y > browse->Rect.Min.y && it.Rect.GetCenter().y < browse->Rect.Max.y;
+             };
+             return q;
+         }()), Wait(3),
+         TypeText("spin"),
+         // The picker re-walks the project at most every 4 s, and only while open: an earlier
+         // scan this run may still be cached, so keep it open until the new file is listed.
+         Until("the scratch script is listed", [](Ctx&) {
+             for (const UiItem& it : g_Reg.Last) if (it.Label == "##row" && Contains(it.Root, "##Combo")) return true;
+             return false;
+         }, 360),
+         Shot("picker", {kInspector}),
+         Click([] {
+             Query q;
+             q.Exact = "##row";
+             q.Pred = [](const UiItem& it) { return Contains(it.Root, "##Combo"); };
+             return q;
+         }()), Wait(3),
+         Expect("Script Path picked", [](Ctx& c) {
+             const std::string p = c.W.Registry.get<TransformControllerComponent>(ByName(c.W, "Alpha")).ScriptPath;
+             return p.find("spin.tescript") != std::string::npos ? std::string() : "Script Path is '" + p + "'";
          }),
          Shot("edited", {kInspector}),
          Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
          ExpectTrue("undo -> default", [](Ctx& c) {
              return c.W.Registry.get<TransformControllerComponent>(ByName(c.W, "Alpha")).ScriptPath ==
                     TransformControllerComponent{}.ScriptPath;
-         })},
+         }),
+         Do("delete the scratch script", [](Ctx&) { std::error_code ec; std::filesystem::remove_all(InspScratchDir(), ec); })},
     }));
     Add("inspector: Particle System int (typed) and colour (hex); undo each", InspCat({
         {FreshScene(),
@@ -284,7 +334,18 @@ void RegisterInspectorTests() {
              X::PushUndo(c.E, c.W, "Add Particle System");
              c.W.Registry.emplace<ParticleSystemComponent>(ByName(c.W, "Alpha"));
          }), Wait(2),
-         SelectByName("Alpha"), Wait(3), InspOpen("Particle System"), InspUntilOpen("Particle System"), Wait(3)},
+         SelectByName("Alpha"), Wait(3), InspOpen("Particle System"), InspUntilOpen("Particle System"), Wait(3),
+         Shot("groups", {kInspector}),
+         Expect("each field group has one header", [](Ctx&) {
+             std::set<std::string> seen;
+             for (const UiItem& it : g_Reg.Last)
+                 if (Contains(it.Window, "Particle System") && (it.Status & ImGuiItemStatusFlags_Openable) &&
+                     !seen.insert(Visible(it.Label)).second)
+                     return "two '" + Visible(it.Label) + "' headers";
+             return std::string();
+         }),
+         InspReveal(ByExact("Emission", kInspector)), Click(ByExact("Emission", kInspector)), Wait(3),
+         Until("Max Particles shown", [](Ctx&) { return Find(ByTag("field:Particle System/Max Particles")) != nullptr; })},
         InspTypeInto(ByTag("field:Particle System/Max Particles"), "64"),
         {ExpectTrue("Max Particles = 64", [](Ctx& c) { return c.W.Registry.get<ParticleSystemComponent>(ByName(c.W, "Alpha")).MaxParticles == 64; }),
          Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
@@ -293,10 +354,12 @@ void RegisterInspectorTests() {
          })},
         [] {
             // Start Color's hex field: the first ColorEdit hex input in the Particle System section.
+            // Off screen it has no label (clipped widgets aren't reported); InspReveal pages to it.
             Query hex;
             hex.Root = kInspector;
             hex.Pred = [](const UiItem& it) { return it.Label == "##Text" && Contains(it.Window, "Particle System"); };
             return std::vector<Step>{
+                InspReveal(ByExact("Lifetime", kInspector)), Click(ByExact("Lifetime", kInspector)), Wait(3),
                 InspReveal(hex), Click(hex), Wait(3),
                 Key(ImGuiKey_A, ImGuiMod_Ctrl), TypeText("FF0000"), Wait(2), Key(ImGuiKey_Enter), Wait(3),
                 ExpectTrue("Start Color = red", [](Ctx& c) {

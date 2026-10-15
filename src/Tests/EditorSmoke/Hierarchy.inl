@@ -22,6 +22,9 @@ struct EditorSmokeAccess_Hierarchy {
     }
     static void ClearFilter(EditorLayer& e) { e.m_HierarchyFilter.clear(); }
     static const std::string& Filter(EditorLayer& e) { return e.m_HierarchyFilter; }
+    // Set-up edits made in code skip PushUndo; drop the cached undo baseline so the next real
+    // edit snapshots the scene as it is now, not as it was before the set-up.
+    static void RebaseUndo(EditorLayer& e) { e.m_CurrentUndoScene.clear(); }
 };
 namespace {
 using HX = EditorSmokeAccess_Hierarchy;
@@ -89,6 +92,7 @@ Step HierFresh() {
 Step HierParent(const char* child, const char* parent) {
     return Do(std::string("parent ") + child + " under " + parent, [child, parent](Ctx& c) {
         if (!c.W.SetParent(ByName(c.W, child), ByName(c.W, parent))) Fail(std::string("could not parent ") + child);
+        HX::RebaseUndo(c.E);
     });
 }
 // The toolbar's Expand all button (row open state lives in the Hierarchy window's storage, so
@@ -471,7 +475,15 @@ void RegisterHierarchyTests() {
         Drag(ByTag("row:Gamma"), [](Ctx&, ImVec2& out) {
             const UiItem* a = Find(ByTag("row:Alpha"));
             if (!a) return false;
-            out = ImVec2(a->Rect.GetCenter().x, a->Rect.Max.y - 2.0f); // the "insert after" strip below Alpha's name
+            // The middle of the "insert after" strip below Alpha's name. Same geometry as the
+            // row's drop zone (EditorLayer_Hierarchy.cpp): parent within +/-0.3 pitch of the
+            // midline, insert-after from 0.3 to 0.5 pitch below it. The pitch is measured from the
+            // rows; the midline is half a frame height below the row top, and the row's frame height
+            // (pitch minus its ~2px gap) is taller than the tree node's own 23px hit rect.
+            const UiItem* b = Find(ByTag("row:Beta"));
+            if (!b) return false;
+            const float pitch = b->Rect.Min.y - a->Rect.Min.y;
+            out = ImVec2(a->Rect.GetCenter().x, a->Rect.Min.y + pitch * 0.9f - 1.0f);
             return true;
         }), Wait(3),
         Expect("Gamma now right after Alpha", [](Ctx& c) {
