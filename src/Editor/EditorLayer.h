@@ -700,6 +700,9 @@ public:
     void SetGlassThemeForTest(bool on);
     // The frosted HUDs' blurred Scene texture from the last frame (0 = none / Glass is off).
     unsigned int GlassBackdropTextureForTest() const;
+    // Last frame's glass compositor numbers: glass surfaces drawn, framebuffer captures blurred.
+    int GlassSurfacesForTest() const;
+    int GlassCapturesForTest() const;
 
     // True while a modal dialog (Save changes?, Recover unsaved changes?, a confirm prompt) is
     // open. main.cpp reads it to frost the Scene viewport behind the dim scrim.

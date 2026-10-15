@@ -399,21 +399,22 @@ void EditorLayer::ApplyThemeStyle() {
 
     ImGuiStyle& style = ImGui::GetStyle();
     if (GlassThemeActive()) {
-        // The opt-in Glass theme (Preferences > General > Editor theme): a complete style of its
-        // own over ImGui's defaults, so nothing of the Tartarus metrics leaks into it.
+        // The opt-in Black Glass theme (Preferences > General > Editor theme): a complete style of
+        // its own over ImGui's defaults, so nothing of the Tartarus metrics leaks into it.
         style = ImGuiStyle();
         ConfigureMacEngineTheme(style);
         static const auto logGlassWarn = [](const char* msg) { Log::Warn(std::string("[Glass theme] ") + msg); };
         using namespace EditorUIPrimitives;
-        // Floors against what the surfaces look like over the wallpaper (they're translucent).
-        const ImVec4 panel = Glass::CompositeOnWallpaper(Glass::SurfacePanel);
-        const ImVec4 raised = Glass::CompositeOnWallpaper(Glass::SurfaceRaised);
+        // Floors against the solid surfaces; text on glass sits on GlassFallback at worst.
+        const ImVec4 panel = Glass::Panel;
+        const ImVec4 raised = Glass::Raised;
         AssertContrastFloor("Text vs panel", Glass::TextPrimary, panel, 4.5f, logGlassWarn);
         AssertContrastFloor("Secondary vs panel", Glass::TextSecondary, panel, 4.5f, logGlassWarn);
         AssertContrastFloor("Tertiary vs panel", Glass::TextTertiary, panel, 3.0f, logGlassWarn);
         AssertContrastFloor("Accent vs panel", Glass::Accent, panel, 3.0f, logGlassWarn);
         AssertContrastFloor("Text vs card", Glass::TextPrimary, raised, 4.5f, logGlassWarn);
-        AssertContrastFloor("OnAccent vs Accent", Glass::OnAccent, Glass::Accent, 3.0f, logGlassWarn);
+        AssertContrastFloor("OnAccent vs Accent", Glass::OnAccent, Glass::Accent, 4.5f, logGlassWarn);
+        AssertContrastFloor("Text vs glass fallback", Glass::TextPrimary, Glass::GlassFallback, 4.5f, logGlassWarn);
         static const auto logGlassIconWarn = [](const char* msg) { Log::Warn(std::string("[Icons] ") + msg); };
         EditorIcons::AssertEditorIconsUnique(logGlassIconWarn);
         style.ScaleAllSizes(m_UIScale);
@@ -530,7 +531,10 @@ void EditorLayer::FreeGpuResources() {
     ClearMaterialThumbnails(); // #107
     m_AssetThumbs.Clear();
     if (m_ThumbnailBlitFbo) { glDeleteFramebuffers(1, &m_ThumbnailBlitFbo); m_ThumbnailBlitFbo = 0; }
-    if (m_Glass) m_Glass->Backdrop.Release(); // the Glass theme's frosted-HUD blur chain
+    if (m_Glass) { // the Glass theme's frosted-HUD blur chain and its window compositor
+        m_Glass->Backdrop.Release();
+        m_Glass->Compositor.Release();
+    }
 }
 
 void EditorLayer::Shutdown() {
@@ -1272,27 +1276,26 @@ void EditorLayer::DrawSettingsWindow(World& world) {
 
         EditorUIPrimitives::SectionHeader("Appearance");
         {
-            static const char* kThemes[] = {"Tartarus", "Glass"};
+            static const char* kThemes[] = {"Tartarus", "Black Glass"};
             int themeId = m_PendingThemeId >= 0 ? m_PendingThemeId : prefs.EditorThemeId;
             SettingsLabel("Editor theme");
             if (ImGui::Combo("##Editor theme", &themeId, kThemes, IM_ARRAYSIZE(kThemes))) RequestEditorTheme(themeId);
             if (ImGui::IsItemHovered())
                 EditorUI::SetTooltip("Tartarus: the phosphor-terminal look (default).\n"
-                                     "Glass: a macOS-style theme with translucent panels, animated lists and\n"
-                                     "frosted viewport HUDs. It adds the Objects, Properties and Library panels\n"
+                                     "Black Glass: solid black panels, and real blurred glass under everything that\n"
+                                     "floats (menus, popups, tooltips, dialogs, undocked windows, viewport overlays),\n"
+                                     "with motion as they arrive. It adds the Objects, Properties and Library panels\n"
                                      "(Window \xE2\x96\xB8 Glass Workspace). Applies immediately.");
         }
         if (prefs.EditorThemeId == 1) {
+            if (SettingsCheckbox("Frosted blur", &prefs.GlassFrostedBlur)) EditorSettings::Save();
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Blur what's behind every glass surface (a GPU compute pass per surface that\n"
+                                     "needs a fresh backdrop). Off: glass is an opaque near-black instead.");
             if (SettingsCheckbox("Viewport HUDs", &prefs.GlassViewportHuds)) EditorSettings::Save();
             if (ImGui::IsItemHovered())
-                EditorUI::SetTooltip("Floating glass cards over the Scene view: the selection, scene stats,\n"
+                EditorUI::SetTooltip("Glass cards over the Scene view: the selection, scene stats,\n"
                                      "compile-error notifications and the snap indicator.");
-            if (!prefs.GlassViewportHuds) ImGui::BeginDisabled();
-            if (SettingsCheckbox("Frosted blur", &prefs.GlassFrostedBlur)) EditorSettings::Save();
-            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-                EditorUI::SetTooltip("Blur the scene behind the HUD cards (a small GPU compute pass each frame).\n"
-                                     "Off: the cards use a plain translucent tint.");
-            if (!prefs.GlassViewportHuds) ImGui::EndDisabled();
         }
 
         EditorUIPrimitives::SectionHeader("Display");
@@ -2246,6 +2249,13 @@ void EditorLayer::EndFrame() {
     // changes (blend, cull, depth test, scissor, viewport...) and never touches the rest, so the
     // shadow still holds, and re-reading it would put the driver waits back (gl.h). Bindings it
     // leaves at zero instead of restoring (ImGuiGLHooks.cpp), hence the binding-cache reset.
+    if (GlassThemeActive()) {
+        // Black glass: the compositor renders the same draw data with a blurred glass plate under
+        // every floating window (modals included, so the full-screen modal blur below isn't used).
+        GlassState().Compositor.Render(dd, EditorSettings::Get().GlassFrostedBlur);
+        GLStateCache::Invalidate();
+        return;
+    }
     ImGui_ImplOpenGL3_RenderDrawData(dd);
     GLStateCache::Invalidate();
 

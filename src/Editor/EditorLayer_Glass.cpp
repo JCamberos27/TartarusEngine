@@ -247,7 +247,6 @@ void PlaceGlassPanel(const char* glassName, const char* classicName, ImVec2 fall
             }
         }
     }
-    if (self && !self->DockIsActive) ImGui::SetNextWindowBgAlpha(0.97f);
 }
 
 // Starts a card row: top padding. Returns the row's top (screen y).
@@ -270,7 +269,7 @@ void EndCard(float top) {
     ImGui::TablePushBackgroundChannel();
     ImDrawList* dl = ImGui::GetWindowDrawList();
     const ImVec2 mn(t->OuterRect.Min.x, top), mx(t->OuterRect.Max.x, bottom);
-    Glass::DrawSquircle(dl, mn, mx, Col(Glass::Resolve(Glass::SurfaceRaised)), Glass::Px(Glass::RadiusCard));
+    Glass::DrawSquircle(dl, mn, mx, Col(Glass::Card), Glass::Px(Glass::RadiusCard));
     Glass::DrawSquircleBorder(dl, mn, mx, Col(Glass::Hairline), Glass::Px(Glass::RadiusCard), 1.0f);
     ImGui::TablePopBackgroundChannel();
 }
@@ -327,6 +326,7 @@ void EditorLayer::ApplyGizmoAccent() {
 void EditorLayer::ReleaseGlass() {
     if (m_Glass) {
         m_Glass->Backdrop.Release();
+        m_Glass->Compositor.Release();
         m_Glass.reset();
     }
     Glass::Motion().Reset();
@@ -365,6 +365,8 @@ void EditorLayer::SetGlassThemeForTest(bool on) {
 }
 
 unsigned int EditorLayer::GlassBackdropTextureForTest() const { return m_Glass ? m_Glass->BlurTexture : 0u; }
+int EditorLayer::GlassSurfacesForTest() const { return m_Glass ? m_Glass->Compositor.GlassSurfaces() : 0; }
+int EditorLayer::GlassCapturesForTest() const { return m_Glass ? m_Glass->Compositor.Captures() : 0; }
 
 void EditorLayer::GlassFrameBegin() {
     if (!GlassThemeActive()) return;
@@ -1217,7 +1219,7 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
     if (prefs.GlassFrostedBlur && m_SceneColorTexture != 0) {
         const int w = m_SceneTexW > 0 ? m_SceneTexW : (int)m_ViewportSize.x;
         const int h = m_SceneTexH > 0 ? m_SceneTexH : (int)m_ViewportSize.y;
-        g.BlurTexture = g.Backdrop.Update(m_SceneColorTexture, w, h);
+        g.BlurTexture = g.Backdrop.Update(m_SceneColorTexture, w, h, Glass::GlassBlurLevels, Glass::GlassSaturation, Glass::GlassCeiling);
     }
     const ImTextureID blur = (ImTextureID)(intptr_t)g.BlurTexture;
 
@@ -1239,7 +1241,7 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
                                    dc0.PrevLineTextBaseOffset, dc0.IsSameLine, dc0.IsSetPos};
     const float margin = Glass::Px(Glass::Space2);
     const float pad = Glass::Px(Glass::Space1h);
-    const float radius = Glass::Px(Glass::RadiusCard);
+    const float radius = Glass::Px(Glass::GlassRadius); // floating surfaces: 14 px
     const float lineH = ImGui::GetTextLineHeight();
     Glass::ImAnimContext& motion = Glass::Motion();
     auto& reg = world.Registry;

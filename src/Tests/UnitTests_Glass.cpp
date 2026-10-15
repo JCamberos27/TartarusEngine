@@ -1,10 +1,12 @@
-// The opt-in Glass editor theme (src/Editor/Glass/, docs/EDITOR_DESIGN_SYSTEM.md): its style, the
-// linear-light surface maths, the motion runtime's zero-memory-at-rest contract, the clipping guard
-// and the input responsiveness policy. Headless: a private ImGui context, no GL.
+// The opt-in Black Glass editor theme (src/Editor/Glass/, docs/EDITOR_DESIGN_SYSTEM.md): its style,
+// the compositor's CPU side (finding and clearing a floating window's solid look, the arrival
+// pose), the motion runtime's zero-memory-at-rest contract, the clipping guard and the input
+// responsiveness policy. Headless: a private ImGui context, no GL.
 
 #include "UnitTestSupport.h"
 
 #include "EditorUIPrimitives.h"
+#include "Glass/GlassCompositor.h"
 #include "Glass/GlassLayout.h"
 #include "Glass/GlassMotion.h"
 #include "Glass/GlassTheme.h"
@@ -61,24 +63,36 @@ void TestGlassThemeStyle() {
     HeadlessImGui gui;
     ImGuiStyle style;
     ConfigureMacEngineTheme(style);
-    // The 8 px spatial law and the 10-12 px rounding.
-    CHECK(style.WindowRounding == Glass::RadiusWindow && style.WindowRounding == 12.0f);
-    CHECK(style.FrameRounding == Glass::RadiusControl && style.FrameRounding == 10.0f);
-    CHECK(style.TabRounding == 10.0f && style.PopupRounding == 12.0f && style.ChildRounding == 12.0f);
+    // 14 px on floating surfaces, smaller radii nested inside; the 8 px spatial law.
+    CHECK(style.WindowRounding == Glass::GlassRadius && style.WindowRounding == 14.0f);
+    CHECK(style.PopupRounding == 14.0f);
+    CHECK(style.FrameRounding == Glass::RadiusControl && style.FrameRounding == 8.0f);
+    CHECK(style.TabRounding == 8.0f && style.ChildRounding == 10.0f);
     CHECK(style.WindowPadding.x == 16.0f && style.WindowPadding.y == 16.0f);
     CHECK(style.ItemSpacing.x == 8.0f && style.ItemSpacing.y == 8.0f);
     CHECK(style.FrameBorderSize == 0.0f); // flat fields: depth comes from fill, not outlines
+    CHECK(style.WindowBorderSize == 1.0f && style.PopupBorderSize == 1.0f); // the edge glass re-colours
     // Every colour slot was written (no magenta sentinel left behind).
     for (int i = 0; i < ImGuiCol_COUNT; ++i) {
         const ImVec4 c = style.Colors[i];
         CHECK(!(c.x == 1.0f && c.y == 0.0f && c.z == 1.0f && c.w == 1.0f));
     }
-    // Typography and the one accent.
+    // Solid where you work: docked panels and the solid fallbacks are opaque.
+    const ImVec4 bg = style.Colors[ImGuiCol_WindowBg];
+    CHECK(bg.x == Glass::Panel.x && bg.w == 1.0f);
+    CHECK(style.Colors[ImGuiCol_PopupBg].x == Glass::PopupSolid.x && style.Colors[ImGuiCol_PopupBg].w == 1.0f);
+    // A floating window's title bar is its body colour, so the compositor clears both together.
+    for (ImGuiCol t : {ImGuiCol_TitleBg, ImGuiCol_TitleBgActive, ImGuiCol_TitleBgCollapsed})
+        CHECK(std::memcmp(&style.Colors[t], &bg, sizeof(bg)) == 0);
+    CHECK(style.Colors[ImGuiCol_MenuBarBg].x == 0.0f && style.Colors[ImGuiCol_MenuBarBg].w == 1.0f);
+    // Monochrome: no hue in the chrome. Every UI colour is a grey (axis / status colours are
+    // content and aren't ImGuiCol slots).
+    for (int i = 0; i < ImGuiCol_COUNT; ++i) {
+        const ImVec4 c = style.Colors[i];
+        CHECK(Near(c.x, c.y, 0.02f) && Near(c.y, c.z, 0.02f));
+    }
+    CHECK(style.Colors[ImGuiCol_TabSelectedOverline].x == Glass::Accent.x);
     CHECK(style.Colors[ImGuiCol_Text].x == Glass::TextPrimary.x && style.Colors[ImGuiCol_Text].w == 1.0f);
-    CHECK(style.Colors[ImGuiCol_TextDisabled].x == Glass::TextTertiary.x);
-    CHECK(style.Colors[ImGuiCol_TabSelectedOverline].z == Glass::Accent.z);
-    // Translucent panels at the token opacity.
-    CHECK(Near(style.Colors[ImGuiCol_WindowBg].w, Glass::SurfacePanel.opacity, 1e-6f));
     // Calling it twice gives the same style (no accumulation).
     ImGuiStyle again = style;
     ConfigureMacEngineTheme(again);
@@ -88,37 +102,135 @@ void TestGlassThemeStyle() {
 
 void TestGlassContrast() {
     using EditorUIPrimitives::ContrastRatio;
-    const ImVec4 panel = Glass::CompositeOnWallpaper(Glass::SurfacePanel);
-    const ImVec4 card = Glass::CompositeOnWallpaper(Glass::SurfaceRaised);
-    CHECK(ContrastRatio(Glass::TextPrimary, panel) >= 4.5f);
-    CHECK(ContrastRatio(Glass::TextSecondary, panel) >= 4.5f);
-    CHECK(ContrastRatio(Glass::TextTertiary, panel) >= 3.0f);
-    CHECK(ContrastRatio(Glass::Accent, panel) >= 3.0f);
-    CHECK(ContrastRatio(Glass::TextPrimary, card) >= 4.5f);
-    CHECK(ContrastRatio(Glass::OnAccent, Glass::Accent) >= 3.0f);
+    for (const ImVec4& surface : {Glass::Panel, Glass::Card, Glass::Raised, Glass::GlassFallback}) {
+        CHECK(ContrastRatio(Glass::TextPrimary, surface) >= 4.5f);
+        CHECK(ContrastRatio(Glass::TextSecondary, surface) >= 4.5f);
+        CHECK(ContrastRatio(Glass::TextTertiary, surface) >= 3.0f);
+    }
+    CHECK(ContrastRatio(Glass::OnAccent, Glass::Accent) >= 4.5f);
+    // Glass over the brightest thing a scene can show: the blur's highlights are capped at
+    // GlassCeiling, then the 25% black tint goes over them. White text still reads at 4.5:1.
+    const float worst = Glass::GlassCeiling * (1.0f - Glass::GlassTint.w);
+    CHECK(ContrastRatio(Glass::TextPrimary, ImVec4(worst, worst, worst, 1.0f)) >= 4.5f);
+    // The glass material is the spec: a 25% black tint and a 15% white edge.
+    CHECK(Glass::GlassTint.x == 0.0f && Near(Glass::GlassTint.w, 0.25f, 1e-6f));
+    CHECK(Glass::GlassEdge.x == 1.0f && Near(Glass::GlassEdge.w, 0.15f, 1e-6f));
 }
 
-void TestGlassLinearBlend() {
-    // The corrected colour, blended the way the ImGui GL backend blends (encoded space), lands on
-    // the linear-light composite of the original tint.
-    const Glass::GlassSurface surfaces[] = {Glass::SurfacePanel, Glass::SurfaceRaised, Glass::SurfaceFloat, Glass::SurfaceHud};
-    for (const auto& s : surfaces) {
-        const ImVec4 c = Glass::LinearCorrectOver(s.tint, s.opacity, Glass::Wallpaper);
-        CHECK(Near(c.w, s.opacity, 1e-6f));
-        const float* tint = &s.tint.x;
-        const float* back = &Glass::Wallpaper.x;
-        const float* got = &c.x;
-        for (int k = 0; k < 3; ++k) {
-            const float want = Glass::LinearToSrgb(s.opacity * Glass::SrgbToLinear(tint[k]) +
-                                                   (1.0f - s.opacity) * Glass::SrgbToLinear(back[k]));
-            const float blended = s.opacity * got[k] + (1.0f - s.opacity) * back[k];
-            CHECK(Near(blended, want, 2e-3f));
-        }
+void TestGlassCompositorConvert() {
+    HeadlessImGui gui;
+    ImGuiStyle& style = ImGui::GetStyle();
+    ConfigureMacEngineTheme(style);
+    // A floating window, an overlay with a translucent background, and one with none.
+    ImGui::NewFrame();
+    ImGui::SetNextWindowPos(ImVec2(100.0f, 80.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(240.0f, 160.0f), ImGuiCond_Always);
+    ImGui::Begin("Floating", nullptr, ImGuiWindowFlags_NoSavedSettings);
+    ImGui::TextUnformatted("glass");
+    ImGui::Separator();
+    ImGui::End();
+    ImGui::SetNextWindowPos(ImVec2(420.0f, 80.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.35f);
+    ImGui::Begin("##hint", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
+    ImGui::TextUnformatted("overlay");
+    ImGui::End();
+    ImGui::SetNextWindowPos(ImVec2(420.0f, 300.0f), ImGuiCond_Always);
+    ImGui::Begin("##bare", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoSavedSettings);
+    ImGui::TextUnformatted("bare");
+    ImGui::End();
+    ImGui::Render();
+
+    ImGuiWindow* floating = ImGui::FindWindowByName("Floating");
+    ImGuiWindow* hint = ImGui::FindWindowByName("##hint");
+    ImGuiWindow* bare = ImGui::FindWindowByName("##bare");
+    CHECK(floating && hint && bare);
+    if (!floating || !hint || !bare) return;
+
+    // The background is found, at the colour ImGui drew it (alpha overrides included).
+    const ImU32 panel = ImGui::GetColorU32(ImGuiCol_WindowBg);
+    CHECK(Glass::FindWindowBackground(floating->DrawList, floating->Rect()) == panel);
+    const ImU32 hintBg = Glass::FindWindowBackground(hint->DrawList, hint->Rect());
+    CHECK(hintBg != 0 && ((hintBg >> IM_COL32_A_SHIFT) & 0xFF) == 89u); // 0.35 * 255
+    CHECK(Glass::FindWindowBackground(bare->DrawList, bare->Rect()) == 0);
+
+    // Converting: the body and title bar go transparent, the border and the separator (both
+    // hairline) become the 15% white edge, the text is untouched.
+    ImDrawList* dl = floating->DrawList;
+    const ImU32 text = ImGui::GetColorU32(ImGuiCol_Text);
+    int textBefore = 0;
+    for (const ImDrawVert& v : dl->VtxBuffer) textBefore += v.col == text ? 1 : 0;
+    const ImU32 clear[2] = {panel, ImGui::GetColorU32(ImGuiCol_TitleBgActive)};
+    const ImU32 border = ImGui::GetColorU32(ImGuiCol_Border);
+    const ImU32 edge = Glass::U32(Glass::GlassEdge);
+    const int cleared = Glass::ConvertToGlass(dl, clear, 2, border, edge);
+    CHECK(cleared > 0);
+    int textAfter = 0, edges = 0, solid = 0;
+    for (const ImDrawVert& v : dl->VtxBuffer) {
+        textAfter += v.col == text ? 1 : 0;
+        edges += v.col == edge ? 1 : 0;
+        solid += (v.col == panel || v.col == border) ? 1 : 0;
     }
-    // The transfer functions invert each other.
-    for (float v = 0.0f; v <= 1.0f; v += 0.05f) CHECK(Near(Glass::LinearToSrgb(Glass::SrgbToLinear(v)), v, 1e-4f));
-    // Opaque and clear are passed through.
-    CHECK(Glass::LinearCorrectOver(Glass::TextPrimary, 1.0f, Glass::Wallpaper).x == Glass::TextPrimary.x);
+    CHECK(textAfter == textBefore && textAfter > 0);
+    CHECK(edges > 0);
+    CHECK(solid == 0);
+    CHECK(Glass::FindWindowBackground(dl, floating->Rect()) == 0); // nothing left to clear
+}
+
+void TestGlassCompositorPose() {
+    HeadlessImGui gui;
+    ImGui::NewFrame();
+    ImGui::Render();
+    ImDrawList dl(ImGui::GetDrawListSharedData());
+    dl._ResetForNewFrame();
+    dl.PushTexture(ImGui::GetIO().Fonts->TexRef);
+    dl.PushClipRect(ImVec2(0.0f, 0.0f), ImVec2(100.0f, 100.0f));
+    dl.AddRectFilled(ImVec2(10.0f, 10.0f), ImVec2(30.0f, 30.0f), IM_COL32(255, 255, 255, 200));
+    const ImRect before = Glass::DrawListBounds(&dl);
+    CHECK(Near(before.Max.x, 100.0f, 1e-4f));
+
+    Glass::SurfacePose identity;
+    CHECK(identity.Identity());
+    Glass::ApplyPose(&dl, identity); // a no-op
+    CHECK(dl.VtxBuffer[0].pos.x >= 9.0f);
+
+    Glass::SurfacePose pose;
+    pose.pivot = ImVec2(10.0f, 10.0f);
+    pose.scale = 0.5f;
+    pose.offset = ImVec2(0.0f, 4.0f);
+    pose.alpha = 0.5f;
+    CHECK(!pose.Identity());
+    Glass::ApplyPose(&dl, pose);
+    bool inside = true, faded = true;
+    for (const ImDrawVert& v : dl.VtxBuffer) {
+        inside = inside && v.pos.x >= 9.0f && v.pos.x <= 21.0f && v.pos.y >= 13.0f && v.pos.y <= 25.0f;
+        const unsigned int a = (v.col >> IM_COL32_A_SHIFT) & 0xFF;
+        faded = faded && (a == 0 || a == 100);
+    }
+    CHECK(inside);
+    CHECK(faded);
+    // The clip rect moved with it: (0,0)-(100,100) about (10,10) at 50%, down 4.
+    const ImRect after = Glass::DrawListBounds(&dl);
+    CHECK(Near(after.Min.x, 5.0f, 1e-4f) && Near(after.Min.y, 9.0f, 1e-4f));
+    CHECK(Near(after.Max.x, 55.0f, 1e-4f) && Near(after.Max.y, 59.0f, 1e-4f));
+}
+
+void TestGlassArrivalMotion() {
+    // Every arrival curve starts at rest-at-zero and lands on 1; the window pop overshoots a little
+    // and settles; the arrival poses start visibly smaller / lower than where they land.
+    for (const Glass::MotionSpec* s : {&Glass::FloatIn, &Glass::TooltipIn, &Glass::WindowFade, &Glass::PanelIn, &Glass::RimGlint}) {
+        CHECK(Glass::EaseProgress(*s, 0.0f) == 0.0f);
+        CHECK(Near(Glass::EaseProgress(*s, 1.0f), 1.0f, 1e-3f));
+    }
+    float maxPop = 0.0f;
+    for (float t = 0.0f; t <= 1.0f; t += 0.01f) maxPop = std::max(maxPop, Glass::EaseProgress(Glass::WindowPop, t));
+    CHECK(maxPop > 1.01f && maxPop < 1.12f);
+    CHECK(Near(Glass::EaseProgress(Glass::WindowPop, 1.0f), 1.0f, 0.01f));
+    CHECK(Glass::DampingRatio(Glass::WindowPop.p0, Glass::WindowPop.p1, Glass::WindowPop.p2) < 1.0f);
+    float maxGlide = 0.0f;
+    for (float t = 0.0f; t <= 1.0f; t += 0.01f) maxGlide = std::max(maxGlide, Glass::EaseProgress(Glass::SelectionGlide, t));
+    CHECK(maxGlide > 1.02f); // the selection visibly lands
+    CHECK(Near(Glass::EaseProgress(Glass::SelectionGlide, 1.0f), 1.0f, 0.01f));
+    CHECK(Glass::FloatInFromScale < 1.0f && Glass::WindowPopFromScale < 1.0f && Glass::PanelInRisePx > 0.0f);
 }
 
 void TestGlassMotionZeroAtRest() {
@@ -398,9 +510,11 @@ void TestGlassSprings() {
 } // namespace
 
 void RegisterGlassTests(UnitTestSupport::TestList& tests) {
-    tests.emplace_back("Glass theme: complete style on the 8 px grid", TestGlassThemeStyle);
-    tests.emplace_back("Glass theme: text and accent contrast over the translucent surfaces", TestGlassContrast);
-    tests.emplace_back("Glass theme: surfaces blend as in linear light", TestGlassLinearBlend);
+    tests.emplace_back("Glass theme: complete, monochrome style on the 8 px grid", TestGlassThemeStyle);
+    tests.emplace_back("Glass theme: text contrast on solid surfaces and over the brightest glass", TestGlassContrast);
+    tests.emplace_back("Glass compositor: finds and clears a floating window's solid look", TestGlassCompositorConvert);
+    tests.emplace_back("Glass compositor: arrival pose moves vertices and clip rects", TestGlassCompositorPose);
+    tests.emplace_back("Glass motion: arrival curves and springs", TestGlassArrivalMotion);
     tests.emplace_back("Glass motion: no entries and no bytes at rest", TestGlassMotionZeroAtRest);
     tests.emplace_back("Glass motion: abandoned animations are swept", TestGlassMotionStaleSweep);
     tests.emplace_back("Glass motion: fast pointer sweeps don't light rows", TestGlassVelocityGate);

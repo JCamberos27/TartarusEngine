@@ -5,7 +5,7 @@
 // (GlassTheme.cpp), the motion runtime (GlassMotion.cpp), the panels (EditorLayer_Glass.cpp) and
 // the unit tests (UnitTests_Glass.cpp) all read one source and can't drift.
 //
-// Opt-in: nothing reads these unless Preferences > General > Editor theme is "Glass". The default
+// Opt-in: nothing reads these unless Preferences > General > Editor theme is "Black Glass". The default
 // Tartarus theme (EditorTheme.h) is untouched.
 //
 // Host-only. The reloadable editor module (TartarusEditor.dll) doesn't include this; it keeps
@@ -18,67 +18,82 @@ namespace Glass {
 constexpr ImVec4 Rgb(int r, int g, int b, float a = 1.0f) { return ImVec4((float)r / 255.0f, (float)g / 255.0f, (float)b / 255.0f, a); }
 
 // =================================================================================================
-// 1. The 'Apple Dark' palette: three layers
+// 1. The 'Black glass' palette: two materials, no in-between
 // =================================================================================================
-// Layer 1: the base wallpaper canvas. The deepest neutral, behind every floating element. Painted
-// once per frame into ImGui's background draw list (a faint vertical gradient from Top to Bottom),
-// so docking gaps and the space around floating windows read as one continuous desk.
-constexpr ImVec4 WallpaperTop    = Rgb(0x14, 0x14, 0x17); // obsidian, lifted a hair at the top edge
-constexpr ImVec4 WallpaperBottom = Rgb(0x0B, 0x0B, 0x0D); // obsidian
-constexpr ImVec4 Wallpaper       = Rgb(0x0E, 0x0E, 0x10); // the solid used for contrast math and linear prep
+// The rule: things that float are glass, things you work in are solid. Docked panels, the menu bar,
+// the status bar and the dock gaps are solid black, lifted only by a few steps of near-black. What
+// floats (popups, menus, tooltips, combo lists, modals, undocked windows, the viewport toolbar and
+// tool rail, the viewport HUDs and notifications) is glass: a heavy blur of whatever is behind it,
+// a 25% black tint and a 1 px edge of 15% white. GlassCompositor.cpp renders that blur for ImGui
+// windows; DrawFrostedPlate does it for the HUD cards drawn inside the Scene view.
+//
+// The UI itself is monochrome: white text on black, no accent hue in the chrome. Colour comes from
+// content (the scene in the viewport) and from colours that carry meaning (axes, asset kinds,
+// status). The solid steps are the default Tartarus theme's (EditorTheme.h), so the two themes
+// share one black.
 
-// Layer 2: translucent glassmorphic surfaces. Authored as "this colour at this opacity", the way a
-// designer specifies them; GlassTheme.cpp converts each into the colour ImGui must blend so that
-// ImGui's gamma-space blend over the wallpaper lands on the linear-light result (see
-// LinearCorrectOver). Space greys after Apple's dark systemGray6/5/4.
-struct GlassSurface { ImVec4 tint; float opacity; };
-// Panels and popups are only lightly translucent: a floating window (Preferences, the Animator, an
-// undocked panel) sits over other windows, and more see-through than this lets their text bleed
-// into its own. The glass effect proper is the frosted HUDs over the 3D view (SurfaceHud + blur).
-constexpr GlassSurface SurfacePanel   = {Rgb(0x1C, 0x1C, 0x1E), 0.94f}; // panels (WindowBg)
-constexpr GlassSurface SurfaceRaised  = {Rgb(0x2C, 0x2C, 0x2E), 0.74f}; // headers, cards, tabs
-constexpr GlassSurface SurfaceFloat   = {Rgb(0x26, 0x26, 0x29), 0.95f}; // popups, menus, tooltips
-constexpr GlassSurface SurfaceHud     = {Rgb(0x1E, 0x1E, 0x21), 0.58f}; // viewport HUDs, over the blur
-constexpr GlassSurface SurfaceTitle   = {Rgb(0x16, 0x16, 0x18), 0.90f}; // title / menu / status bars
+// --- Solid ----------------------------------------------------------------------------------------
+constexpr ImVec4 Base     = Rgb(0x00, 0x00, 0x00); // menu bar, status bar, dock gaps, the canvas
+constexpr ImVec4 Panel    = Rgb(0x05, 0x05, 0x05); // a docked panel (WindowBg)
+constexpr ImVec4 Card     = Rgb(0x09, 0x09, 0x09); // a card inside a panel (component bodies)
+constexpr ImVec4 Raised   = Rgb(0x0E, 0x0E, 0x0E); // headers, the selected tab, table headers
+constexpr ImVec4 Hover    = Rgb(0x1C, 0x1C, 0x1C);
+constexpr ImVec4 Pressed  = Rgb(0x2A, 0x2A, 0x2A);
+constexpr ImVec4 Hairline = Rgb(0x24, 0x24, 0x24); // 1 px borders and rules on solid surfaces
 
-// Fields, hover and press washes are drawn over a surface rather than the wallpaper, so they are
-// plain white at low alpha: they lighten whatever surface they sit on by the same perceived step.
+// --- Glass ----------------------------------------------------------------------------------------
+constexpr ImVec4 GlassTint   = Rgb(0x00, 0x00, 0x00, 0.25f); // laid over the blurred backdrop
+constexpr ImVec4 GlassEdge   = Rgb(0xFF, 0xFF, 0xFF, 0.15f); // the 1 px border of a glass surface
+constexpr float  GlassRadius = 14.0f;                        // corners of floating surfaces (1x)
+// The blur: the backdrop pyramid (GlassBackdrop) runs this many half-resolution levels deep. Each
+// level doubles the footprint, so 6 levels is a ~128 px soft field at full resolution: no shape
+// survives, only colour, as on the Windows Start menu and acrylic windows.
+constexpr int    GlassBlurLevels = 6;
+constexpr float  GlassSaturation = 0.85f; // a touch of grey: colour fields, not a coloured window
+// Highlights behind glass are compressed to this encoded luminance before the tint, so white text
+// on glass keeps >= 4.5:1 over anything: 0.52 * 0.75 (the tint) = a #636363 worst case.
+constexpr float  GlassCeiling    = 0.52f;
+// Where no blur is available (Frosted blur off in Preferences, a compute-shader failure, a window
+// dragged out to its own OS window) glass falls back to this opaque near-black, so text on it
+// stays legible over anything.
+constexpr ImVec4 GlassFallback = Rgb(0x14, 0x14, 0x14);
+// A popup's own background colour (ImGuiCol_PopupBg) and a floating window's title bar. The
+// compositor removes these from glass windows and paints the glass instead, so they only show
+// where the compositor doesn't run (see GlassFallback).
+constexpr ImVec4 PopupSolid = GlassFallback;
+
+// Fields, hover and press washes are plain white at low alpha: they lighten whatever they sit on
+// (solid black or glass) by the same perceived step.
 constexpr ImVec4 Field        = Rgb(0xFF, 0xFF, 0xFF, 0.055f);
 constexpr ImVec4 FieldHover   = Rgb(0xFF, 0xFF, 0xFF, 0.085f);
 constexpr ImVec4 FieldActive  = Rgb(0xFF, 0xFF, 0xFF, 0.115f);
 constexpr ImVec4 WashHover    = Rgb(0xFF, 0xFF, 0xFF, 0.060f);
 constexpr ImVec4 WashPressed  = Rgb(0xFF, 0xFF, 0xFF, 0.100f);
-constexpr ImVec4 Hairline     = Rgb(0xFF, 0xFF, 0xFF, 0.080f); // borders: a light edge, never a dark one
 constexpr ImVec4 Separator    = Rgb(0xFF, 0xFF, 0xFF, 0.100f);
-constexpr ImVec4 GlassEdge    = Rgb(0xFF, 0xFF, 0xFF, 0.140f); // the top-lit rim on a frosted HUD
 constexpr ImVec4 Shadow       = Rgb(0x00, 0x00, 0x00, 0.450f);
 
-// Layer 3: typography and the accent.
-// San Francisco-style off-whites. Primary is Apple's #F5F5F7 label colour; secondary a low-contrast
-// dusk grey for metadata; tertiary for disabled and placeholder text.
-constexpr ImVec4 TextPrimary   = Rgb(0xF5, 0xF5, 0xF7);
-constexpr ImVec4 TextSecondary = Rgb(0xA1, 0xA1, 0xA6);
-constexpr ImVec4 TextTertiary  = Rgb(0x6E, 0x6E, 0x73);
-// The one vibrant, monochromatic accent: active selection, the underline of the active tab, focus,
-// and gizmo states that are "critical" (the handle being dragged). Every accent variant is this one
-// hue at a different strength, never a second hue.
-constexpr ImVec4 Accent       = Rgb(0x0A, 0x84, 0xFF);        // systemBlue (dark)
-constexpr ImVec4 AccentBright = Rgb(0x40, 0x9C, 0xFF);        // hover / pressed on an accent fill
-constexpr ImVec4 AccentWash   = Rgb(0x0A, 0x84, 0xFF, 0.24f); // selected row body
-constexpr ImVec4 AccentGlow   = Rgb(0x0A, 0x84, 0xFF, 0.45f); // focus ring, drop target
-constexpr ImVec4 OnAccent     = Rgb(0xFF, 0xFF, 0xFF);
+// --- Text and the (monochrome) accent -------------------------------------------------------------
+constexpr ImVec4 TextPrimary   = Rgb(0xE6, 0xE8, 0xE6); // white, a hair off pure
+constexpr ImVec4 TextSecondary = Rgb(0x9C, 0x9E, 0x9C); // labels, captions, metadata
+constexpr ImVec4 TextTertiary  = Rgb(0x6A, 0x6C, 0x6A); // hints, disabled, placeholders
+// Selection, the active tab's underline, focus and "on" are white, never a hue. A selected pill is
+// inverse video: a white fill with black text.
+constexpr ImVec4 Accent       = Rgb(0xF4, 0xF6, 0xF4);
+constexpr ImVec4 AccentBright = Rgb(0xFF, 0xFF, 0xFF);
+constexpr ImVec4 AccentWash   = Rgb(0xFF, 0xFF, 0xFF, 0.12f); // selected row body
+constexpr ImVec4 AccentGlow   = Rgb(0xFF, 0xFF, 0xFF, 0.40f); // focus ring, drop target
+constexpr ImVec4 OnAccent     = Rgb(0x00, 0x00, 0x00);
 
-// Fixed-meaning status colours (never stand in for the accent).
-constexpr ImVec4 Danger  = Rgb(0xFF, 0x45, 0x3A);
-constexpr ImVec4 Warning = Rgb(0xFF, 0xD6, 0x0A);
-constexpr ImVec4 Success = Rgb(0x30, 0xD1, 0x58);
+// Fixed-meaning status colours (EditorTheme's muted set).
+constexpr ImVec4 Danger  = Rgb(0xE8, 0x5C, 0x54);
+constexpr ImVec4 Warning = Rgb(0xE6, 0xA4, 0x50);
+constexpr ImVec4 Success = Rgb(0x7C, 0xD8, 0x8C);
 
-// Flat axis colours for vector rows and gizmo labels. The macOS window-control hues, a step
-// brighter so they read as a 3px bar on the glass. Z is a cooler, lighter blue than the accent so
-// "Z" and "selected" never look alike.
-constexpr ImVec4 AxisX = Rgb(0xFF, 0x5F, 0x57);
-constexpr ImVec4 AxisY = Rgb(0x28, 0xC8, 0x40);
-constexpr ImVec4 AxisZ = Rgb(0x5A, 0xA9, 0xFF);
+// Axis colours for vector rows and gizmo labels: the editor's own (EditorTheme.h), since colour
+// that carries meaning is the one place hue belongs.
+constexpr ImVec4 AxisX = Rgb(0xE5, 0x48, 0x4D);
+constexpr ImVec4 AxisY = Rgb(0x4C, 0xC3, 0x8A);
+constexpr ImVec4 AxisZ = Rgb(0x4C, 0x8D, 0xF6);
 
 // =================================================================================================
 // 2. The continuous rounding and spacing law
@@ -101,15 +116,16 @@ constexpr float Space2    = U * 2.0f; // 16 px: window padding, between groups
 constexpr float Space3    = U * 3.0f; // 24 px: between sections
 constexpr float Space4    = U * 4.0f; // 32 px: outer margin of floating HUDs from the viewport edge
 
-// Corner radii: "squircle-like" 10-12 px everywhere. ImGui's own widgets round with circular
-// arcs at these radii; surfaces the Glass layer draws itself (HUDs, cards, tiles, selection
+// Corner radii: 14 px on floating surfaces, smaller and nested inside them. Docked panels are
+// attached to an edge and stay square (ImGui never rounds a docked window). ImGui's own widgets
+// round with circular arcs at these radii; surfaces the Glass layer draws itself (HUDs, cards, tiles, selection
 // panels) use DrawSquircle's continuous-curvature corner, which reads as the same radius but
 // without the visible tangent break.
-constexpr float RadiusWindow  = 12.0f;
-constexpr float RadiusCard    = 12.0f;
-constexpr float RadiusControl = 10.0f; // frames, tabs, buttons, input boxes
-constexpr float RadiusRow     = 8.0f;  // a selection panel inside a list (row inset 4 px from a 12 px card)
-constexpr float RadiusGrab    = 10.0f;
+constexpr float RadiusWindow  = GlassRadius; // floating windows, popups, menus, tooltips
+constexpr float RadiusCard    = 10.0f;
+constexpr float RadiusControl = 8.0f;  // frames, tabs, buttons, input boxes
+constexpr float RadiusRow     = 6.0f;  // a selection panel inside a list (row inset 4 px from a 10 px card)
+constexpr float RadiusGrab    = 8.0f;
 
 constexpr float Concentric(float outerRadius, float inset) {
     return outerRadius - inset > RadiusRow ? outerRadius - inset : RadiusRow;
@@ -158,7 +174,9 @@ constexpr int Spring      = 33;
 // --- Category 1: high-frequency navigation (tree rows, asset tiles) -----------------------------
 constexpr MotionSpec HoverIn       = {EaseId::OutCubic, 0, 0, 0, 0, 140.0f};
 constexpr MotionSpec HoverOut      = {EaseId::OutCubic, 0, 0, 0, 0, 280.0f}; // a slower release reads as a trail
-constexpr MotionSpec SelectionGlide = {GLASS_EASE_SMOOTH, 220.0f};          // the selection panel sliding row to row
+// The selection panel sliding row to row: a spring with a small (~9%) overshoot, so it visibly
+// lands. zeta = 16 / (2 sqrt(170)) = 0.61, zeta * omega_n = 8 (settled well before u = 1).
+constexpr MotionSpec SelectionGlide = {EaseId::Spring, 1.0f, 170.0f, 16.0f, 0.0f, 380.0f};
 // Visual deltas (all at 1x UI scale)
 constexpr float HoverWashAlpha   = 0.060f; // row body 0 -> 6% white
 constexpr float HoverTextMix     = 1.0f;   // secondary -> primary text, full blend in OKLAB
@@ -202,6 +220,29 @@ constexpr float SnapRingToScale   = 1.00f;
 // seconds (Glass::SpringImpulse), not an ImAnim tween, so it needs no channel at all.
 struct ShakeSpec { float mass, stiffness, damping, amplitudePx, durationMs; };
 constexpr ShakeSpec ErrorShake = {1.0f, 1600.0f, 16.0f, 10.0f, 520.0f}; // f ~ 6.4 Hz, zeta = 0.2
+
+// --- Category 4: surfaces arriving (GlassCompositor.cpp) ----------------------------------------
+// Every floating glass surface eases in when it appears, and a docked panel fades up when its tab
+// is switched to. Applied to the window's finished vertices at render time, so it covers every
+// window in the editor without touching any panel's code. Input is live from the first frame.
+// Menus, combo lists and context menus: fade, settle down from 6 px above, grow from 96%.
+constexpr MotionSpec FloatIn        = {EaseId::OutCubic, 0, 0, 0, 0, 200.0f};
+constexpr float      FloatInFromScale = 0.96f;
+constexpr float      FloatInDropPx    = 6.0f;
+// Tooltips: a quick fade only (they follow the pointer; anything more is noise).
+constexpr MotionSpec TooltipIn      = {EaseId::OutCubic, 0, 0, 0, 0, 120.0f};
+// Modals and undocked windows: a spring pop from 94% about their centre. zeta = 20 / (2 sqrt(220))
+// = 0.67 (a ~6% overshoot), zeta * omega_n = 10.
+constexpr MotionSpec WindowPop      = {EaseId::Spring, 1.0f, 220.0f, 20.0f, 0.0f, 460.0f};
+constexpr float      WindowPopFromScale = 0.94f;
+constexpr MotionSpec WindowFade     = {EaseId::OutCubic, 0, 0, 0, 0, 180.0f};
+// A docked panel whose tab is switched to (or that opens): its content fades up from 6 px below.
+constexpr MotionSpec PanelIn        = {EaseId::OutCubic, 0, 0, 0, 0, 220.0f};
+constexpr float      PanelInRisePx  = 6.0f;
+// The rim glint: as a glass surface arrives, its 1 px edge catches the light (up to this much
+// extra white) and cools back to GlassEdge.
+constexpr MotionSpec RimGlint       = {EaseId::OutCubic, 0, 0, 0, 0, 700.0f};
+constexpr float      RimGlintBoost  = 0.35f;
 
 #undef GLASS_EASE_SMOOTH
 

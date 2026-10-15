@@ -258,10 +258,16 @@ void GlassTheme(EditorLayer& editor, World& world, int frame) {
             Log::Error("[SmokeTest] glass: the theme never switched on");
         } else if (editor.IsSceneViewportVisible() && editor.GlassBackdropTextureForTest() == 0) {
             Log::Error("[SmokeTest] glass: the frosted HUDs produced no blurred backdrop");
+        } else if (editor.IsSceneViewportVisible() && editor.GlassSurfacesForTest() == 0) {
+            // The viewport toolbar and tool rail float over the Scene view: they must be glass.
+            Log::Error("[SmokeTest] glass: no floating window was composited as glass");
+        } else if (editor.GlassSurfacesForTest() > 0 && editor.GlassCapturesForTest() == 0) {
+            Log::Error("[SmokeTest] glass: glass surfaces were drawn without blurring what's behind them");
         } else {
             std::cout << "[SmokeTest]   glass: panels and HUDs drawn, backdrop texture "
-                      << editor.GlassBackdropTextureForTest() << ", " << Glass::Motion().LiveCount()
-                      << " animation(s) live" << std::endl;
+                      << editor.GlassBackdropTextureForTest() << ", " << editor.GlassSurfacesForTest()
+                      << " glass surface(s) from " << editor.GlassCapturesForTest() << " capture(s), "
+                      << Glass::Motion().LiveCount() << " animation(s) live" << std::endl;
         }
         editor.SetGlassThemeForTest(false);
     } else if (frame == 80) {

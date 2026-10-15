@@ -1,27 +1,34 @@
-# Glass: the editor design system
+# Black Glass: the editor design system
 
-Glass is an opt-in, macOS-inspired look for the Tartarus editor. It covers a palette, a spacing
-law, a motion language, a complete `ImGuiStyle`, three Glass Workspace panels, frosted viewport HUDs
-and the GPU path behind them. The default Tartarus theme is unchanged; nothing in this document
-runs until you switch to Glass.
+Black Glass is an opt-in look for the Tartarus editor with one rule: **things that float are glass,
+things you work in are solid.** Docked panels, the menu bar and the status bar are solid black.
+Everything that floats over them (menus, popups, combo lists, context menus, tooltips, modals,
+undocked windows, the viewport toolbar, tool rail, overlays, HUDs and notifications) is real
+blurred glass over whatever is behind it. The chrome is monochrome: white text on black, with colour
+coming only from content (the scene) and from colours that carry meaning (axes, asset kinds, status).
 
-**Turn it on:** *Preferences > General > Appearance > Editor theme > Glass*. Two more options
+It covers a palette, a spacing law, a motion language, a complete `ImGuiStyle`, a compositor that
+puts glass under every floating ImGui window, three Glass Workspace panels and the viewport HUDs.
+The default Tartarus theme is unchanged; nothing in this document runs until you switch to it.
+
+**Turn it on:** *Preferences > General > Appearance > Editor theme > Black Glass*. Two more options
 appear there:
 
-* *Viewport HUDs* shows the floating selection card, stats pill and notifications over the Scene view.
-* *Frosted blur* turns the blur behind those HUDs on or off. With it off they use a flat tint.
+* *Frosted blur* blurs what is behind every glass surface. With it off, glass is an opaque near-black.
+* *Viewport HUDs* shows the selection card, stats pill and notifications over the Scene view.
 
 *Window > Glass Workspace* toggles the Objects, Properties and Library panels and the HUDs.
 The setting is stored as `glassTheme` in the editor preferences.
 
 | Where | What |
 | --- | --- |
-| `src/Editor/Glass/GlassTokens.h` | Every number in this document: palette, spacing, radii, type, motion. |
-| `src/Editor/Glass/GlassTheme.{h,cpp}` | `ConfigureMacEngineTheme`, linear-space colour prep, wallpaper, squircles, frosted plates. |
+| `src/Editor/Glass/GlassTokens.h` | Every number in this document: palette, glass material, spacing, radii, type, motion. |
+| `src/Editor/Glass/GlassTheme.{h,cpp}` | `ConfigureMacEngineTheme`, the canvas, squircles, glass HUD plates. |
+| `src/Editor/Glass/GlassCompositor.{h,cpp}`, `GlassSurfaces.cpp` | Glass under every floating window, and the arrival motion. |
 | `src/Editor/Glass/GlassMotion.{h,cpp}` | `ImAnimContext`: the zero-at-rest animation map in front of ImAnim. |
 | `src/Editor/Glass/GlassLayout.{h,cpp}` | Clip guard, animated-height reveals, staggered rows, the input policy, `MotionButton`. |
 | `src/Editor/EditorLayer_Glass.cpp` | The panels, HUDs, notifications and theme lifecycle. |
-| `src/Renderer/GlassBackdrop.{h,cpp}` and `shaders/Glass*.comp.glsl` | The frosted-glass compute pipeline. |
+| `src/Renderer/GlassBackdrop.{h,cpp}` and `shaders/Glass*.comp.glsl` | The blur compute pipeline. |
 | `src/Tests/UnitTests_Glass.cpp`, `tests/smoke-scenes/smoke_glass.json` | Tests. |
 
 ImAnim ([soufianekhiat/ImAnim](https://github.com/soufianekhiat/ImAnim), MIT) is fetched by CMake
@@ -29,88 +36,70 @@ at a pinned commit and compiled with the other vendored ImGui sources.
 
 ---
 
-## 1. Palette: three layers
+## 1. Palette: two materials, no in-between
 
-All values are sRGB. "Prepared" is the colour actually written to the `ImGuiStyle`; see
-[Linear-space blending](#linear-space-blending).
+All values are sRGB.
 
-### Layer 1: the wallpaper canvas
+### Solid black
 
-The deepest neutral, behind every floating element. `Glass::DrawWallpaper()` paints it once per
-frame into ImGui's background draw list as a faint vertical gradient, so docking gaps and the
-space around floating windows read as one continuous desk.
+Where you work. The steps are the default Tartarus theme's (`EditorTheme.h`), so both themes share
+one black. `Glass::DrawWallpaper()` paints `Base` behind everything each frame.
 
-| Token | HEX | RGBA (0-255) | Use |
-| --- | --- | --- | --- |
-| `WallpaperTop` | `#141417` | 20, 20, 23, 255 | Top of the gradient |
-| `WallpaperBottom` | `#0B0B0D` | 11, 11, 13, 255 | Bottom of the gradient |
-| `Wallpaper` | `#0E0E10` | 14, 14, 16, 255 | Solid reference for contrast and linear prep |
+| Token | HEX | Use |
+| --- | --- | --- |
+| `Base` | `#000000` | Menu bar, status bar, dock gaps, unselected tabs, the canvas |
+| `Panel` | `#050505` | A docked panel (`WindowBg`), the selected tab |
+| `Card` | `#090909` | A card inside a panel (Inspector component bodies) |
+| `Raised` | `#0E0E0E` | Headers, table headers |
+| `Hover` / `Pressed` | `#1C1C1C` / `#2A2A2A` | Tab hover and press |
+| `Hairline` | `#242424` | 1 px borders and rules on solid surfaces |
 
-### Layer 2: translucent glass surfaces
+### Glass
 
-Each surface is specified the way a designer specifies one: a tint plus an opacity.
+What floats. Every glass surface is three layers:
 
-| Token | Tint | Opacity | Prepared RGBA | Used for |
-| --- | --- | --- | --- | --- |
-| `SurfacePanel` | `#1C1C1E` | 0.94 | `#1C1C1E` @ 0.94 | Panels (`WindowBg`, `ChildBg`) |
-| `SurfaceRaised` | `#2C2C2E` | 0.74 | `#2F2F31` @ 0.74 | Headers, cards, tabs |
-| `SurfaceFloat` | `#262629` | 0.95 | `#262629` @ 0.95 | Popups, menus, tooltips |
-| `SurfaceHud` | `#1E1E21` | 0.58 | `#202023` @ 0.58 | Viewport HUDs, over the blur |
-| `SurfaceTitle` | `#161618` | 0.90 | `#161618` @ 0.90 | Title, menu and status bars |
+| Layer | Value | Notes |
+| --- | --- | --- |
+| Backdrop | The blur of whatever is behind it | 6 half-resolution levels deep: no shape survives, only colour fields. Saturation ×0.85; highlights capped at encoded luminance 0.52 |
+| `GlassTint` | `#000000` @ 0.25 | Over the backdrop |
+| `GlassEdge` | `#FFFFFF` @ 0.15 | 1 px border |
+| `GlassRadius` | 14 px | Corners of floating surfaces. Docked panels are square |
+| `GlassFallback` | `#141414` | Opaque stand-in where there is no blur (*Frosted blur* off, a shader failure, a window dragged out to its own OS window) |
 
-Panels and popups are only lightly translucent. A floating window sits over other windows, and
-anything more see-through lets their text bleed into its own. The glass effect proper is the
-frosted HUDs over the 3D view.
+The highlight cap keeps white text legible on glass over anything: the brightest a backdrop can
+be is 0.52, and under the tint that is `#636363`, which still gives `TextPrimary` 4.5:1.
 
-Washes drawn *on* a surface are plain white at low alpha, so they lighten any surface by the same
-perceived step:
+Washes drawn on a surface are plain white at low alpha, so they lighten black and glass alike:
 
 | Token | RGBA | Use |
 | --- | --- | --- |
 | `Field` / `FieldHover` / `FieldActive` | `#FFFFFF` @ 0.055 / 0.085 / 0.115 | Input boxes, sliders, combos |
 | `WashHover` / `WashPressed` | `#FFFFFF` @ 0.060 / 0.100 | Row and button hover and press |
-| `Hairline` | `#FFFFFF` @ 0.080 | Borders: a light edge, never a dark outline |
-| `Separator` | `#FFFFFF` @ 0.100 | Separators, resize grips |
-| `GlassEdge` | `#FFFFFF` @ 0.140 | Top-lit rim of a frosted HUD |
-| `Shadow` | `#000000` @ 0.450 | Soft card shadows |
+| `Separator` | `#FFFFFF` @ 0.100 | Separators drawn by the Glass panels |
+| `Shadow` | `#000000` @ 0.450 | Soft shadows under floating surfaces |
 
-### Layer 3: typography and the accent
+### Text and the accent
 
 | Token | HEX | Use |
 | --- | --- | --- |
-| `TextPrimary` | `#F5F5F7` | Off-white labels and values |
-| `TextSecondary` | `#A1A1A6` | Dusk grey: metadata, captions, unhovered rows |
-| `TextTertiary` | `#6E6E73` | Disabled and placeholder text |
-| `Accent` | `#0A84FF` | **The** accent: selection, active-tab underline, focus, critical gizmo states |
-| `AccentBright` | `#409CFF` | Hover or press on an accent fill; the active gizmo handle |
-| `AccentWash` | `#0A84FF` @ 0.24 | Selected row body |
-| `AccentGlow` | `#0A84FF` @ 0.45 | Focus ring, drop target |
-| `OnAccent` | `#FFFFFF` | Text on an accent fill |
+| `TextPrimary` | `#E6E8E6` | Labels and values |
+| `TextSecondary` | `#9C9E9C` | Metadata, captions, unhovered rows |
+| `TextTertiary` | `#6A6C6A` | Disabled and placeholder text |
+| `Accent` | `#F4F6F4` | Selection, the active tab's line, focus, "on" |
+| `AccentBright` | `#FFFFFF` | Hover or press on an accent fill; the active gizmo handle |
+| `AccentWash` | `#FFFFFF` @ 0.12 | Selected row body |
+| `AccentGlow` | `#FFFFFF` @ 0.40 | Focus ring, drop target |
+| `OnAccent` | `#000000` | Text on an accent fill (inverse video) |
 
-The accent is one hue at different strengths and is never used decoratively. Status colours have
-fixed meanings and never stand in for it: `Danger #FF453A`, `Warning #FFD60A`, `Success #30D158`.
-Axis colours for vector rows are `X #FF5F57`, `Y #28C840` and `Z #5AA9FF`. Z is deliberately lighter
-and cooler than the accent so that "Z" and "selected" never look alike.
+There is no accent hue. Status colours have fixed meanings: `Danger #E85C54`, `Warning #E6A450`,
+`Success #7CD88C`. Axis colours are the editor's own: `X #E5484D`, `Y #4CC38A`, `Z #4C8DF6`.
 
-While Glass is active, ImGuizmo's selection colour is set to the Glass `AccentBright`. It goes
-back to the Tartarus accent when you switch away.
-
-### Linear-space blending
-
-The ImGui OpenGL backend blends in the framebuffer's encoded (sRGB) space; the UI pass never
-enables `GL_FRAMEBUFFER_SRGB`. An 80% grey glass over a near-black wallpaper blended in encoded
-space lands darker and muddier than the physically correct linear-light composite.
-
-`Glass::LinearCorrectOver(tint, a, backdrop)` solves for the colour `C'` that makes ImGui's blend
-`a·C' + (1−a)·B` equal `Encode(a·Linear(C) + (1−a)·Linear(B))` over the wallpaper. Every surface
-colour in the style array goes through it (`Glass::Resolve`), so the alphas in `ImGuiCol_*` are
-the designer's opacities and the RGB is pre-compensated. Over the wallpaper the correction is
-exact. Over anything else, such as a 3D view behind a floating window, it errs in the right
-direction.
+While Black Glass is active, ImGuizmo's selection colour is `AccentBright`. It goes back to the
+Tartarus accent when you switch away.
 
 `ApplyThemeStyle` checks, whenever the theme is applied, that the text tokens clear WCAG contrast
-against the *composited* panel and raised surfaces (`CompositeOnWallpaper`). A failure is logged
-as a warning with the prefix `[Glass theme]`. The unit tests enforce the same floors.
+on the solid surfaces and on `GlassFallback`. A failure is logged as a warning with the prefix
+`[Glass theme]`. The unit tests enforce the same floors, plus the worst case over glass.
 
 ---
 
@@ -134,15 +123,17 @@ Space(k) = k · U · uiScale        k ∈ {0, 0.5, 1, 1.5, 2, 3, 4}
 Nothing is ever 3, 5, 6 or 10 px. Every length goes through `Glass::Px()` or `ScaleAllSizes`, so the
 law holds at every UI scale.
 
-**Radii.** Squircle-like corners of 10 to 12 px:
+**Radii.** 14 px on floating surfaces, smaller and nested inside them:
 
 | Token | px | Applies to |
 | --- | --- | --- |
-| `RadiusWindow` | 12 | Windows, popups |
-| `RadiusCard` | 12 | Child windows, Inspector cards, HUDs, asset tiles |
-| `RadiusControl` | 10 | Frames, buttons, tabs, scrollbars |
-| `RadiusGrab` | 10 | Slider grabs |
-| `RadiusRow` | 8 | A selection panel inside a list (4 px inset from a 12 px card) |
+| `RadiusWindow` (`GlassRadius`) | 14 | Floating windows, popups, menus, tooltips, HUDs |
+| `RadiusCard` | 10 | Child windows, Inspector cards, asset tiles |
+| `RadiusControl` | 8 | Frames, buttons, tabs, scrollbars |
+| `RadiusGrab` | 8 | Slider grabs |
+| `RadiusRow` | 6 | A selection panel inside a list (4 px inset from a 10 px card) |
+
+Docked panels are attached to an edge and stay square.
 
 Nested shapes are concentric: `Concentric(outer, inset) = max(outer − inset, RadiusRow)`, so a
 card's corners stay parallel to its window's corners.
@@ -174,7 +165,7 @@ long, soft landing.
 | **1. Navigation hovers** | Row / tile hover in | `OutCubic` | n/a | 140 | Row wash alpha 0 → 0.06; text Secondary → Primary (OKLAB mix) |
 | | Hover out | `OutCubic` | n/a | 280 | Back to rest; the slower release reads as a trail |
 | | Asset tile hover | `OutCubic` | n/a | 140 in / 280 out | Scale 1.00 → 1.03; lift 0 → 2 px; shadow alpha 0 → 0.35 |
-| | Selection panel glide | smooth bezier | n/a | 220 | Panel slides row to row; 3 px accent bar rides with it |
+| | Selection panel glide | spring | **1 / 170 / 16** (ζ ≈ 0.61) | 380 | Panel slides row to row and lands with a ~9% overshoot; 3 px accent bar rides with it |
 | | **Velocity gate** | none | n/a | n/a | While the pointer moves faster than **1800 px/s** (EMA weight 0.35), unlit rows don't start a hover-in. No channel is created, so there's no comet trail |
 | **2. Structural reveals** | Accordion open | smooth bezier | n/a | 320 | Height 0 → natural height (re-measured every frame) |
 | | Accordion close | smooth bezier | n/a | 240 | Natural height → 0 |
@@ -186,6 +177,11 @@ long, soft landing.
 | | Toast exit | `InCubic` | n/a | 180 | Alpha 1 → 0, scale −4%; auto-dismiss after 4200 ms (paused while hovered) |
 | | Grid snap pop | spring | **1 / 260 / 14** (ζ ≈ 0.43) | 420 | Accent ring at the snap point, scale 0.60 → 1.00, fading out |
 | | Compile-fail shake | spring impulse (real time) | **1 / 1600 / 16** (ζ = 0.2, f ≈ 6.4 Hz) | 520 | Horizontal ±10 px, decaying to 0 |
+| **4. Arrivals** (every window, `GlassCompositor`) | Menu, combo list, context menu | `OutCubic` | n/a | 200 | Alpha 0 → 1; scale 0.96 → 1.00 from its top edge; settles down from 6 px above |
+| | Tooltip | `OutCubic` | n/a | 120 | Alpha 0 → 1 |
+| | Modal or undocked window | spring + `OutCubic` | **1 / 220 / 20** (ζ ≈ 0.67) | 460 (fade 180) | Scale 0.94 → 1.00 about its centre with a ~6% overshoot; alpha 0 → 1 |
+| | Docked panel shown (tab switch, open) | `OutCubic` | n/a | 220 | Content alpha 0 → 1, rising 6 px; the panel's own background stays put |
+| | Rim glint | `OutCubic` | n/a | 700 | A glass surface's edge starts 35% brighter and cools to 15% white |
 
 The shake is not a tween. `Glass::SpringImpulse(t, m, k, c, A)` is a pure function of the time since
 the error, so it holds no animation state at all.
@@ -200,6 +196,8 @@ pops and the shake.
   only reacts to errors logged after the HUD first appears, never to the backlog.
 * *Grid snap.* Ending a gizmo drag with snapping on plays the snap pop at the cursor.
 * *Toast limits.* At most 4 toasts show at once. Click a toast to dismiss it.
+* *Arrivals.* A surface arrives the first frame it is drawn after not being drawn: a menu opening,
+  a tooltip appearing, a panel's tab being selected, every panel at launch.
 
 ---
 
@@ -216,13 +214,17 @@ Call it on a default-constructed `ImGuiStyle`, then apply `ScaleAllSizes(uiScale
   * Padding and spacing: `WindowPadding` 16,16; `FramePadding` 12,8; `ItemSpacing` 8,8;
     `ItemInnerSpacing` 8,4; `CellPadding` 8,4; `IndentSpacing` 16.
   * Sizes: `ScrollbarSize` 12; `GrabMinSize` 12.
-  * Rounding: windows, popups and children 12; frames, tabs, scrollbars and grabs 10.
-  * Borders: a 1 px hairline on windows; no frame borders and no tab-bar rule.
+  * Rounding: floating windows and popups 14; children 10; frames, tabs, scrollbars and grabs 8.
+  * Borders: a 1 px hairline on windows and popups (15% white once they are glass); no frame
+    borders and no tab-bar rule. A 2 px seam between docked panels.
   * `DisabledAlpha` 0.42.
-* **The whole `ImGuiCol_` array.** The unit tests check that every slot was written and none is
-  left at the sentinel. Surfaces are linear-prepared as described above. Text, accent and washes
-  come straight from the tokens. Tabs read as raised glass with the accent underline on the active
-  tab. Docking preview, nav highlight, drag-drop target and text selection all use the one accent.
+* **The whole `ImGuiCol_` array.** The unit tests check that every slot was written, none is left
+  at the sentinel, and every slot is a grey (no hue in the chrome). Docked panels are `Panel`; the
+  canvas, menu bar and resting tabs are `Base`; the selected tab joins its panel and carries a 1 px
+  white line. Floating windows and popups are written *solid* (`WindowBg` `Panel`, `PopupBg`
+  `GlassFallback`, title bars the same colour as the body, borders `Hairline`), because the
+  compositor finds exactly those colours on each floating window and replaces them with glass
+  (see 6.1). Anywhere it doesn't run, they are the right fallback.
 
 The reloadable editor module (`TartarusEditor.dll`) doesn't include any Glass headers. It inherits
 the Glass style through the shared ImGui context. Its hand-coded `EditorTheme` fills stay in the
@@ -238,8 +240,7 @@ can be used next to, or instead of, the classic panels.
 
 On first open each panel docks as a selected tab next to its classic counterpart (Objects with the
 Hierarchy, Properties with the Inspector, Library with the Asset Browser); after that, wherever you
-put it is remembered. A Glass panel you undock draws a near-opaque background (0.97), because a
-translucent window over other windows lets their text show through.
+put it is remembered. A panel you undock becomes glass, like every other floating window.
 
 ### Objects (Scene Hierarchy)
 
@@ -283,7 +284,7 @@ translucent window over other windows lets their text show through.
 
 ### Viewport HUDs
 
-These are floating frosted-glass plates over the Scene view. They are hidden for viewports under
+These are glass plates over the Scene view, drawn inside it with the blurred scene behind them. They are hidden for viewports under
 200×120 and in clean captures.
 
 * **Selection card** (bottom right). Shows the glyph, name, component count (or how many are
@@ -297,38 +298,71 @@ These are floating frosted-glass plates over the Scene view. They are hidden for
 
 ## 6. Architecture
 
-### 6.1 Frosted glass on OpenGL 4.6
+### 6.1 Glass on OpenGL 4.6
 
-The HUD glass shows a real blur of the 3D scene behind it, produced entirely in compute
-(`GlassBackdrop`):
+ImGui has no blur, so the glass needs two pieces: a blur, and something that puts it under each
+floating window at the right moment.
+
+**The blur (`GlassBackdrop`).** A compute pyramid, entirely on the GPU:
 
 ```
-Scene colour (RGBA8, display-encoded, viewport size)
+Source (RGBA8, display-encoded)
   │  1. Downsample  src → D0 → … → D(n−1)   13-tap (Jimenez) filter per level,
   │                                          sRGB decoded to linear on the first read  [RGBA16F mips, half res]
   │  2. Upsample    D(n−1) → U(n−2) → … → U0 3×3 tent per level, pure blur (no add-back) [RGBA16F]
-  │  3. Resolve     U0 → Out                 linear → sRGB encode, saturation ×1.12   [RGBA8, half res]
+  │  3. Resolve     U0 → Out                 linear → sRGB, saturation ×0.85,
+  │                                          highlights capped at luminance 0.52         [RGBA8, half res]
   ▼
-Glass::DrawFrostedPlate: samples Out with UVs mapped from the plate's screen rect into the
-viewport, so each plate shows exactly the blurred scene behind it. Then the SurfaceHud tint,
-the GlassEdge rim lit from the top, and a soft shadow.
+Out, sampled with UVs mapped from a surface's screen rect, so it shows exactly what is behind it.
 ```
 
-* **Source.** No extra copy is needed: the editor already resolves the tonemapped scene into its
-  own texture (`SetSceneTexture`).
-* **Levels.** Up to 5, clamped so the smallest level stays at least 4 px on its short side. That
-  stops the blur "breathing" as the viewport resizes.
-* **Cost.** Each level is a quarter of the one above, so the whole chain costs about 1.4× its first
-  downsample. It shows as **"Glass Backdrop"** in the Statistics GPU scopes. It hasn't been
-  profiled on the 1080 Ti yet.
-* **Barriers.** `glMemoryBarrier(TEXTURE_FETCH | SHADER_IMAGE_ACCESS)` runs between passes. No pass
-  reads the mip level it writes.
-* **State.** Afterwards the image and texture unit 0 are unbound and the GL state cache is
-  invalidated.
-* **Lifetime.** It runs only on frames where a frosted HUD is visible and *Frosted blur* is on. It
-  holds no GPU memory until first used and frees everything when the theme is switched off.
-* **Fallback.** If a shader fails to compile, one error is logged and the HUDs fall back to a flat
-  tint.
+* **Levels.** 6, clamped so the smallest level stays at least 4 px on its short side. That stops
+  the blur "breathing" as the window resizes.
+* **Cost.** Each level is a quarter of the one above, so the chain costs about 1.4× its first
+  downsample. It shows as **"Glass Backdrop"** (and the copy before it as **"Glass Capture"**) in
+  the Statistics GPU scopes. Not yet profiled on the 1080 Ti.
+* **Barriers and state.** `glMemoryBarrier(TEXTURE_FETCH | SHADER_IMAGE_ACCESS)` between passes; no
+  pass reads the mip level it writes. Afterwards the image and texture unit 0 are unbound and the
+  GL state cache is invalidated.
+* **Fallback.** If a shader fails to compile, one error is logged and glass falls back to
+  `GlassFallback`.
+
+**Floating windows (`GlassCompositor`).** In place of the single
+`ImGui_ImplOpenGL3_RenderDrawData` call, `EditorLayer::EndFrame` hands the frame's draw data to the
+compositor, which renders the draw lists back to front itself:
+
+```
+for each draw list (back to front):
+  if it is a glass surface:
+    render everything queued so far          → the framebuffer holds exactly what is behind it
+    if anything drawn since the last capture overlaps this surface:
+      copy the framebuffer, blur it          → GlassBackdrop
+    draw the plate: soft shadow, the blur under the window's rect and rounding, the 25% tint
+  queue the draw list
+render the rest
+```
+
+* **What is glass.** A window whose dock tree root is a popup, menu, combo list or context menu; a
+  tooltip; a modal; an undocked window or floating dock node. Also any child window drawn on the
+  viewport HUD plate (the Scene view's tool rail). Not: docked panels, the menu bar and status bar
+  (they span the window), and overlays with no background.
+* **Clearing the solid look.** ImGui has already drawn each floating window solid. Its background is
+  the first thing `Begin` draws, so the compositor reads its exact colour back from the first vertex
+  of the window's draw list (checking it sits on the window's left edge) and makes every vertex of
+  that colour, and of the title bar colours, transparent. Vertices in the `Hairline` border colour
+  become the 15% white edge. No panel's code knows about glass.
+* **Correct layering.** Because each surface captures what is under it at that point in the frame,
+  a menu over the Scene view shows the scene, a menu over a panel shows the panel, and a submenu
+  shows its parent menu blurred under it.
+* **Shared captures.** The compositor tracks what has been drawn since the last capture (the union
+  of each list's clip rects). A surface that doesn't overlap any of it reuses the last blur, so the
+  viewport toolbar and the tool rail blur once between them. At most 6 captures a frame.
+* **Arrival motion.** The same pass applies category 4 of the motion table to each surface's
+  finished vertices and clip rects (`ApplyPose`): it covers every window without code changes, and
+  input is live from the first frame. Timings are `Glass::Motion()` pulses, so nothing is held once
+  a surface has settled.
+* **Viewport HUDs** are drawn inside the Scene window, so they use the blurred scene image directly
+  (`DrawFrostedPlate`) with the same tint, edge and radius.
 
 ### 6.2 `ImAnimContext`: zero memory at rest
 
@@ -406,9 +440,14 @@ Elements stay clickable and hit-accurate while they animate:
 
 **Unit tests** (`--unit-tests`, `UnitTests_Glass.cpp`):
 
-* Every style slot is written and the metrics sit on the 8 px grid.
-* WCAG contrast of the text tokens on the composited surfaces.
-* The linear-blend algebra round-trips.
+* Every style slot is written, every one is a grey, and the metrics sit on the 8 px grid.
+* WCAG contrast of the text tokens on the solid surfaces, on `GlassFallback` and over the
+  brightest possible glass.
+* The compositor finds a floating window's background (including alpha overrides), ignores a
+  window with none, and clears it without touching its text; the arrival pose moves vertices and
+  clip rects.
+* The arrival curves start at 0 and land on 1; the window pop and selection glide overshoot and
+  settle.
 * `ImAnimContext` holds 0 entries and 0 bytes at rest, before and after a hover, pulse or toggle,
   including under Reduce motion. Abandoned entries are swept.
 * The velocity gate blocks a fast sweep and allows a slow one.
@@ -421,7 +460,7 @@ Elements stay clickable and hit-accurate while they animate:
 
 | Frame | Action |
 | --- | --- |
-| 15 | Select an object and switch the editor to Glass |
+| 15 | Select an object and switch the editor to Black Glass |
 | 20 | Fire a snap pop and a warning |
 | 70 | Check that the theme is live and the frosted backdrop produced a texture whenever the viewport is visible |
 | 70–80 | Switch back to Tartarus |
@@ -438,7 +477,10 @@ The test restores every preference it touched.
 * **Objects panel.** It doesn't accept reparent drops yet. Use the classic Hierarchy for that.
 * **Library panel.** It has no context menu, and follows the Asset Browser's current folder and
   search filter.
-* **Blur cost.** The frosted blur re-runs every frame while a HUD shows. It doesn't yet skip frames
-  where the scene didn't change.
-* **Translucency.** Panel translucency reads against the wallpaper only. The editor doesn't use
-  ImGui multi-viewports, so windows are not see-through to the OS desktop.
+* **Blur cost.** The blur re-runs every frame while glass shows. It doesn't yet skip frames where
+  nothing behind it changed.
+* **No desktop see-through.** Glass blurs the editor's own frame, not the Windows desktop. (Windows
+  11 acrylic behind the whole GLFW window is possible, but would make the editor stop being solid
+  black, so it isn't done.)
+* **Closing has no motion.** ImGui stops drawing a window the frame it closes, so surfaces arrive
+  with motion but leave at once.
