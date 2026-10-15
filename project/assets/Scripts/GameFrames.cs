@@ -666,73 +666,6 @@ internal unsafe struct NpcCombatFrame {
     public nint WeaponState;
 }
 [StructLayout(LayoutKind.Sequential)]
-internal unsafe struct AudioShotFrame {
-    public double Now;
-    public double LastShot;
-    public double LastTail;
-    public float PitchMin;
-    public float PitchMax;
-    public float Random;
-    public float Distance;
-    public float Volume;
-    public float PlayerGain;
-    public float TailMinInterval;
-    public float TailDuckPerVoice;
-    public float BurstGap;
-    public float Pitch;
-    private int _At2D; public bool At2D {get=>_At2D!=0;set=>_At2D=value?1:0;}
-    public int Count;
-    public int TailVoices;
-    public fixed int Player2D[5];
-    public fixed int Every[5];
-    public fixed int Play[5];
-    public fixed float Near[5];
-    public fixed float Far[5];
-    public fixed float NearWeight[5];
-    public fixed float FarWeight[5];
-    public fixed float Gain[5];
-}
-[StructLayout(LayoutKind.Sequential)]
-internal unsafe struct FoleyFrame {
-    public float SprintStride;
-    public float WalkStride;
-    public float StepStrideScale;
-    public float CrouchStrideScale;
-    public float FallSpeed;
-    public float LandMinSpeed;
-    public float LandFullSpeed;
-    public float LandVolume;
-    public float LandHeavySpeed;
-    public float Speed;
-    public float RunSpeed;
-    public float CrouchVolume;
-    public float RunVolume;
-    public float WalkVolume;
-    public float NpcStepVolume;
-    public float Result;
-    public float Gain;
-    public float Dt;
-    public float PrevVy;
-    public float Vy;
-    public float MinStepSpeed;
-    public float FootLiftMoving;
-    public float FootLiftHeight;
-    private int _Sprinting; public bool Sprinting {get=>_Sprinting!=0;set=>_Sprinting=value?1:0;}
-    private int _Crouched; public bool Crouched {get=>_Crouched!=0;set=>_Crouched=value?1:0;}
-    private int _Grounded; public bool Grounded {get=>_Grounded!=0;set=>_Grounded=value?1:0;}
-    private int _PrevGrounded; public bool PrevGrounded {get=>_PrevGrounded!=0;set=>_PrevGrounded=value?1:0;}
-    private int _Jumped; public bool Jumped {get=>_Jumped!=0;set=>_Jumped=value?1:0;}
-    private int _HaveFootHeights; public bool HaveFootHeights {get=>_HaveFootHeights!=0;set=>_HaveFootHeights=value?1:0;}
-    private int _StepsFromFeet; public bool StepsFromFeet {get=>_StepsFromFeet!=0;set=>_StepsFromFeet=value?1:0;}
-    private int _Landing; public bool Landing {get=>_Landing!=0;set=>_Landing=value?1:0;}
-    private int _ResetFeet; public bool ResetFeet {get=>_ResetFeet!=0;set=>_ResetFeet=value?1:0;}
-    private int _ResetSteps; public bool ResetSteps {get=>_ResetSteps!=0;set=>_ResetSteps=value?1:0;}
-    private int _UseFeet; public bool UseFeet {get=>_UseFeet!=0;set=>_UseFeet=value?1:0;}
-    private int _UseDistance; public bool UseDistance {get=>_UseDistance!=0;set=>_UseDistance=value?1:0;}
-    public int Operation;
-    public int Element;
-}
-[StructLayout(LayoutKind.Sequential)]
 internal unsafe struct BodyMotionFrame {
     public Vector3 Velocity;
     public Vector3 WishVelocity;
@@ -1075,30 +1008,6 @@ internal unsafe struct NpcShotEffectFrame {
     public int Operation;
     public int Commands;
     public int Tracer;
-}
-[StructLayout(LayoutKind.Sequential)]
-internal unsafe struct ImpactFrame {
-    public double Now;
-    public double Last;
-    public double Interval;
-    public float Speed;
-    public float MinSpeed;
-    public float FullSpeed;
-    public float Volume;
-    public float GainMin;
-    public float Gain;
-    public float Radius;
-    public float ShellRadius;
-    public float Miss;
-    public float FlybyRadius;
-    public float FlybyVolume;
-    public float FarGain;
-    private int _Enabled; public bool Enabled {get=>_Enabled!=0;set=>_Enabled=value?1:0;}
-    private int _CasingsEnabled; public bool CasingsEnabled {get=>_CasingsEnabled!=0;set=>_CasingsEnabled=value?1:0;}
-    public int Operation;
-    public int Contact;
-    public int MaxContacts;
-    public int Result;
 }
 [StructLayout(LayoutKind.Sequential)]
 internal unsafe struct WeaponLoadoutFrame {

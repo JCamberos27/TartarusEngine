@@ -19,8 +19,6 @@ internal static unsafe class GameIntegration
             case "npc.perception" when size==Unsafe.SizeOf<NpcPerceptionFrame>():NpcPerception.Update(ref *(NpcPerceptionFrame*)data);return true;
             case "npc.squads" when size==Unsafe.SizeOf<NpcSquadFrame>():NpcSquads.Update(ref *(NpcSquadFrame*)data);return true;
             case "npc.combat" when size==Unsafe.SizeOf<NpcCombatFrame>():NpcCombat.Update(ref *(NpcCombatFrame*)data);return true;
-            case "audio.shot" when size==Unsafe.SizeOf<AudioShotFrame>():AudioPolicy.Shot(ref *(AudioShotFrame*)data);return true;
-            case "audio.foley" when size==Unsafe.SizeOf<FoleyFrame>():FoleyPolicy.Update(ref *(FoleyFrame*)data);return true;
             case "body.motion" when size==Unsafe.SizeOf<BodyMotionFrame>():BodyLocomotion.Update(ref *(BodyMotionFrame*)data);return true;
             case "npc.callouts" when size==Unsafe.SizeOf<NpcCalloutsFrame>():NpcCallouts.Update(ref *(NpcCalloutsFrame*)data);return true;
             case "npc.spawn" when size==Unsafe.SizeOf<NpcSpawnFrame>():NpcLifecycle.Spawn(ref *(NpcSpawnFrame*)data);return true;
@@ -30,17 +28,12 @@ internal static unsafe class GameIntegration
             case "npc.shot-pose" when size==Unsafe.SizeOf<NpcShotPoseFrame>():NpcLifecycle.Pose(ref *(NpcShotPoseFrame*)data);return true;
             case "session" when size==Unsafe.SizeOf<GameSessionFrame>():GameSession.Update(ref *(GameSessionFrame*)data);return true;
             case "npc.shot-effects" when size==Unsafe.SizeOf<NpcShotEffectFrame>():NpcShotEffects.Update(ref *(NpcShotEffectFrame*)data);return true;
-            case "audio.impact" when size==Unsafe.SizeOf<ImpactFrame>():ImpactPolicy.Update(ref *(ImpactFrame*)data);return true;
             case "weapon.loadout" when size==Unsafe.SizeOf<WeaponLoadoutFrame>():WeaponLoadout.Update(ref *(WeaponLoadoutFrame*)data);return true;
             default:return false;
         }
     }
     public static string Request(string operation,string json) => operation switch
     {
-        "audio.gun" or "audio.folder" or "audio.prefix" or "audio.parse" or "audio.default-profile" or "audio.profiles" or "audio.environment-profile" => AudioPolicy.Request(operation,json),
-        "audio.foley-element" or "audio.foley-candidates" => FoleyPolicy.Request(operation,json),
-        "audio.cue" or "audio.impact-set" or "audio.impact-surface" => ImpactPolicy.Request(operation,json),
-        "audio.surface" => FoleyPolicy.Surface(json),
         "body.roles" or "body.graph" or "body.pick" => BodyGraphAuthoring.Request(operation,json),
         "bone-region" => System.Text.Json.JsonSerializer.Serialize(DamageRules.BoneRegion(System.Text.Json.JsonSerializer.Deserialize<string>(json))),
         "health.create" or "health.remove" or "health.kill" or "health.read" => HealthRules.Request(operation,json),
