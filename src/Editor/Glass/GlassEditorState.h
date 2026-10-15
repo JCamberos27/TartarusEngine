@@ -28,6 +28,10 @@ struct GlassEditorState {
     // --- Frosted HUDs ---------------------------------------------------------------------------
     GlassBackdrop Backdrop;
     unsigned int  BlurTexture = 0; // this frame's blurred Scene image (0 = tint only)
+    // This frame's frosted plates: their blur-sampling vertices and screen rects. The Scene image is
+    // blurred only under them, once they're drawn, and their UVs then set into that blurred rect.
+    struct FrostedPlate { int First, End; ImVec2 Min, Max; };
+    std::vector<FrostedPlate> FrostedPlates;
     // The ambient field behind the docked panels: the Scene image blurred much further.
     GlassBackdrop Ambient;
 

@@ -23,6 +23,7 @@ LaunchOptions ParseLaunchOptions(int argc, char** argv) {
             if (i + 1 < argc && argv[i + 1][0] != '-') o.smokeScenesDirArg = argv[++i];
         }
         else if (a == "--perf-sample") { o.perfSample = true; }
+        else if (a == "--perf-glass") { o.perfGlass = true; }
         else if (a == "--perf-res" && i + 1 < argc) {
 #pragma warning(suppress : 4996)
             if (std::sscanf(argv[++i], "%dx%d", &o.perfResW, &o.perfResH) != 2 || o.perfResW <= 0 || o.perfResH <= 0)
