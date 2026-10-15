@@ -5,7 +5,9 @@
 
 #include <IconsFontAwesome6.h>
 
+#include <algorithm>
 #include <cstring>
+#include <iterator>
 
 // ---------------------------------------------------------------------------------------------
 // House rule: ship components and controls fully wired, or not visible (#215)
@@ -1183,6 +1185,24 @@ void RegisterEngineComponents() {
         { ReflectField f{"Speed Curve",T::String,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, SpeedCurve),0.0f,"Edited in its separate curve window.",0.0f,0.0f}; f.Group="Lifetime"; f.EditorHidden=true; m.Fields.push_back(f); }
         { ReflectField f{"Emission Curve",T::String,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, EmissionCurve),0.0f,"Edited in its separate curve window.",0.0f,0.0f}; f.Group="Lifetime"; f.EditorHidden=true; m.Fields.push_back(f); }
         { ReflectField f{"Curve Editor ID",T::String,TARTARUS_REFLECT_FIELD(ParticleSystemComponent, EditorCurveIdentity)}; f.EditorHidden=true; m.Fields.push_back(f); }
+        // The Inspector folds each run of consecutive same-Group fields into one TreeNode, and the
+        // list above interleaves groups (the base fields, then each module's extras), which drew
+        // 14 headers with Emission / Lifetime / Shape / Motion / Rendering repeated. Gather each
+        // group into one run, in module order, keeping the order inside each group.
+        {
+            static const char* const kGroupOrder[] = {"Emission", "Shape", "Lifetime", "Motion", "Collision", "Rendering"};
+            auto rank = [](const ReflectField& f) {
+                for (int i = 0; i < (int)std::size(kGroupOrder); ++i)
+                    if (f.Group && std::strcmp(f.Group, kGroupOrder[i]) == 0) return i;
+                return (int)std::size(kGroupOrder); // ungrouped (hidden bookkeeping) last
+            };
+            std::stable_sort(m.Fields.begin(), m.Fields.end(),
+                             [&](const ReflectField& a, const ReflectField& b) { return rank(a) < rank(b); });
+            // One pointer per group name: the Inspector compares Group by pointer, and identical
+            // literals are only merged when the compiler pools strings (/GF).
+            for (ReflectField& f : m.Fields)
+                if (rank(f) < (int)std::size(kGroupOrder)) f.Group = kGroupOrder[rank(f)];
+        }
         Register<ParticleSystemComponent>(std::move(m));
     }
 
