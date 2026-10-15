@@ -83,7 +83,7 @@ void GlassBackdrop::EnsureTargets(int w, int h, int levels) {
     m_Levels = levels;
 }
 
-unsigned int GlassBackdrop::Update(unsigned int srcTex, int width, int height, int levels, float saturation) {
+unsigned int GlassBackdrop::Update(unsigned int srcTex, int width, int height, int levels, float saturation, float ceiling) {
     if (srcTex == 0 || width < 8 || height < 8) return 0;
     if (!EnsurePrograms()) return 0;
     PROFILE_GPU_SCOPE("Glass Backdrop");
@@ -139,6 +139,7 @@ unsigned int GlassBackdrop::Update(unsigned int srcTex, int width, int height, i
     glBindImageTexture(0, m_Out, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA8);
     m_Resolve->SetFloat("uSrcLod", 0.0f);
     m_Resolve->SetFloat("uSaturation", saturation);
+    m_Resolve->SetFloat("uCeiling", std::clamp(ceiling, 0.05f, 1.0f));
     glUniform2i(m_Resolve->Loc("uDstSize"), hw, hh);
     m_Resolve->DispatchCompute(Groups(hw), Groups(hh), 1);
     // ImGui samples Out in a fragment shader later this frame.

@@ -32,7 +32,9 @@ public:
     // Blurs `srcTex` (width x height, display-encoded RGB(A)8). Returns the blurred texture's GL name,
     // or 0 if the GPU path is unavailable (shader compile failure is logged once, then the HUDs
     // fall back to a plain translucent tint). `levels` is clamped so the smallest level is >= 4 px.
-    unsigned int Update(unsigned int srcTex, int width, int height, int levels = 5, float saturation = 1.12f);
+    // `ceiling` caps the result's encoded luminance (1 = no cap), for glass that carries text.
+    unsigned int Update(unsigned int srcTex, int width, int height, int levels = 5, float saturation = 1.12f,
+                        float ceiling = 1.0f);
 
     unsigned int Texture() const { return m_Out; }
     // Frees every GL object (textures and programs). The next Update recreates them.

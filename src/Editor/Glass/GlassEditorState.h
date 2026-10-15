@@ -1,12 +1,14 @@
 #pragma once
 // EditorLayer's state for the Glass theme (EditorLayer::m_Glass, EditorLayer_Glass.cpp): the
-// frosted backdrop, the Glass Workspace panels' scratch and the viewport notifications.
+// frosted backdrop, the glass compositor, the Glass Workspace panels' scratch and the viewport
+// notifications.
 //
 // Created the first frame the Glass theme is active and destroyed when it's switched off, so the
 // default Tartarus theme carries none of it. Animation state is not kept here: it lives in
 // Glass::Motion() and exists only while something moves (GlassMotion.h).
 
 #include "GlassBackdrop.h"
+#include "GlassCompositor.h"
 
 #include <entt/entt.hpp>
 #include <imgui.h>
@@ -26,6 +28,9 @@ struct GlassEditorState {
     // --- Frosted HUDs ---------------------------------------------------------------------------
     GlassBackdrop Backdrop;
     unsigned int  BlurTexture = 0; // this frame's blurred Scene image (0 = tint only)
+
+    // --- Glass under every floating window (EditorLayer::EndFrame renders through it) -----------
+    Glass::GlassCompositor Compositor;
 
     // --- Hierarchy ------------------------------------------------------------------------------
     struct Row {

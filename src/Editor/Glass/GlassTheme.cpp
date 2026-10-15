@@ -8,38 +8,6 @@
 
 namespace Glass {
 
-float SrgbToLinear(float c) {
-    return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f);
-}
-
-float LinearToSrgb(float c) {
-    c = c < 0.0f ? 0.0f : (c > 1.0f ? 1.0f : c);
-    return c <= 0.0031308f ? c * 12.92f : 1.055f * std::pow(c, 1.0f / 2.4f) - 0.055f;
-}
-
-ImVec4 LinearCorrectOver(ImVec4 tint, float opacity, ImVec4 backdrop) {
-    if (opacity <= 0.0f) return ImVec4(tint.x, tint.y, tint.z, 0.0f);
-    if (opacity >= 1.0f) return ImVec4(tint.x, tint.y, tint.z, 1.0f);
-    const float a = opacity;
-    auto channel = [a](float c, float b) {
-        // The encoded value the linear-light composite produces...
-        const float target = LinearToSrgb(a * SrgbToLinear(c) + (1.0f - a) * SrgbToLinear(b));
-        // ...and the source value whose encoded-space blend reaches it: a*x + (1-a)*b = target.
-        const float x = (target - (1.0f - a) * b) / a;
-        return x < 0.0f ? 0.0f : (x > 1.0f ? 1.0f : x);
-    };
-    return ImVec4(channel(tint.x, backdrop.x), channel(tint.y, backdrop.y), channel(tint.z, backdrop.z), a);
-}
-
-ImVec4 Resolve(const GlassSurface& s) { return LinearCorrectOver(s.tint, s.opacity, Wallpaper); }
-
-ImVec4 CompositeOnWallpaper(const GlassSurface& s) {
-    const ImVec4 c = Resolve(s);
-    const float a = c.w;
-    return ImVec4(Wallpaper.x + (c.x - Wallpaper.x) * a, Wallpaper.y + (c.y - Wallpaper.y) * a,
-                  Wallpaper.z + (c.z - Wallpaper.z) * a, 1.0f);
-}
-
 float Scale() { return EditorTheme::Scale(); }
 float Px(float designPx) { return designPx * Scale(); }
 
@@ -110,7 +78,7 @@ void DrawSoftShadow(ImDrawList* dl, ImVec2 min, ImVec2 max, float radius, float 
 void DrawFrostedPlate(ImDrawList* dl, ImVec2 min, ImVec2 max, float radius, ImTextureID blurTex,
                       ImVec2 vpMin, ImVec2 vpMax, float alpha) {
     if (alpha <= 0.0f) return;
-    DrawSoftShadow(dl, min, max, radius, 0.55f * alpha, Px(Space2));
+    DrawSoftShadow(dl, min, max, radius, 0.45f * alpha, Px(Space2));
     if (blurTex != (ImTextureID)0 && vpMax.x > vpMin.x && vpMax.y > vpMin.y) {
         // The blurred scene, sampled under exactly this rect: the plate's corners map to the same
         // spot of the blurred texture the sharp scene image shows there, so the glass lines up
@@ -125,21 +93,19 @@ void DrawFrostedPlate(ImDrawList* dl, ImVec2 min, ImVec2 max, float radius, ImTe
         ImGui::ShadeVertsLinearUV(dl, vtxStart, dl->VtxBuffer.Size, min, max, uvMin, uvMax, true);
         dl->PopTexture();
     }
-    // The tint sits on the blur, so the plate keeps its value whatever the scene does behind it.
-    ImVec4 tint = Resolve(SurfaceHud);
-    tint.w *= alpha;
-    DrawSquircle(dl, min, max, U32(tint), radius);
-    // A rim lit from above: the top edge brighter than the sides, as if the glass caught light.
+    // The 25% black tint over the blur. Without a blur the plate is the opaque fallback instead, so
+    // its text stays legible over anything the scene shows.
+    const bool blurred = blurTex != (ImTextureID)0 && vpMax.x > vpMin.x && vpMax.y > vpMin.y;
+    const ImVec4 tint = blurred ? GlassTint : GlassFallback;
+    DrawSquircle(dl, min, max, U32(WithAlpha(tint, tint.w * alpha)), radius);
+    // The 1 px edge of 15% white.
     DrawSquircleBorder(dl, min, max, U32(WithAlpha(GlassEdge, GlassEdge.w * alpha)), radius, 1.0f);
-    dl->AddLine(ImVec2(min.x + radius, min.y + 1.0f), ImVec2(max.x - radius, min.y + 1.0f),
-                U32(WithAlpha(TextPrimary, 0.10f * alpha)), 1.0f);
 }
 
 void DrawWallpaper() {
     ImGuiViewport* vp = ImGui::GetMainViewport();
     ImDrawList* bg = ImGui::GetBackgroundDrawList(vp);
-    const ImU32 top = U32(WallpaperTop), bottom = U32(WallpaperBottom);
-    bg->AddRectFilledMultiColor(vp->Pos, ImVec2(vp->Pos.x + vp->Size.x, vp->Pos.y + vp->Size.y), top, top, bottom, bottom);
+    bg->AddRectFilled(vp->Pos, ImVec2(vp->Pos.x + vp->Size.x, vp->Pos.y + vp->Size.y), U32(Base));
 }
 
 } // namespace Glass
@@ -155,7 +121,7 @@ void ConfigureMacEngineTheme(ImGuiStyle& style) {
     style.DisabledAlpha            = 0.42f;
     style.WindowPadding            = ImVec2(Space2, Space2);      // 16, 16: nothing crowds a window edge
     style.WindowRounding           = RadiusWindow;                // floating windows
-    style.WindowBorderSize         = 1.0f;                        // a light hairline rim, not a dark outline
+    style.WindowBorderSize         = 1.0f;                        // hairline; 15% white once it's glass
     style.WindowMinSize            = ImVec2(U * 12.0f, U * 8.0f);
     style.WindowTitleAlign         = ImVec2(0.5f, 0.5f);          // centred titles, the macOS way
     style.WindowMenuButtonPosition = ImGuiDir_None;
@@ -182,8 +148,8 @@ void ConfigureMacEngineTheme(ImGuiStyle& style) {
     style.ImageBorderSize          = 0.0f;
     style.TabRounding              = RadiusControl;
     style.TabBorderSize            = 0.0f;
-    style.TabBarBorderSize         = 0.0f;                        // no rule under the strip: glass floats
-    style.TabBarOverlineSize       = 2.0f;                        // the accent underline/overline
+    style.TabBarBorderSize         = 0.0f;                        // no rule under the strip
+    style.TabBarOverlineSize       = 1.0f;                        // a quiet white line over the selected tab
     style.TabCloseButtonMinWidthSelected   = 0.0f;
     style.TabCloseButtonMinWidthUnselected = 0.0f;                // close glyph on hover only
     style.TreeLinesFlags           = ImGuiTreeNodeFlags_DrawLinesNone;
@@ -202,7 +168,7 @@ void ConfigureMacEngineTheme(ImGuiStyle& style) {
     style.SeparatorTextPadding     = ImVec2(Space2, SpaceHalf);
     style.DisplayWindowPadding     = ImVec2(Space3, Space3);
     style.DisplaySafeAreaPadding   = ImVec2(SpaceHalf, SpaceHalf);
-    style.DockingSeparatorSize     = SpaceHalf;                   // 4 px of wallpaper between docked panels
+    style.DockingSeparatorSize     = 2.0f;                        // a thin black seam between docked panels
     style.DockingNodeHasCloseButton = true;
     style.AntiAliasedLines         = true;
     style.AntiAliasedLinesUseTex   = true;
@@ -219,75 +185,75 @@ void ConfigureMacEngineTheme(ImGuiStyle& style) {
     ImVec4* c = style.Colors;
     for (int i = 0; i < ImGuiCol_COUNT; ++i) c[i] = ImVec4(1.0f, 0.0f, 1.0f, 1.0f);
 
-    const ImVec4 panel  = Resolve(SurfacePanel);
-    const ImVec4 raised = Resolve(SurfaceRaised);
-    const ImVec4 floatg = Resolve(SurfaceFloat);
-    const ImVec4 title  = Resolve(SurfaceTitle);
-    const ImVec4 clear  = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+    const ImVec4 clear = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
 
+    // Solid where you work, glass where it floats. Floating windows and popups are drawn here
+    // with solid colours (WindowBg / PopupBg / the title bar); GlassCompositor removes exactly
+    // those from each floating window and lays the blurred glass underneath instead. Anywhere the
+    // compositor doesn't run, the solid colours are the correct fallback.
     c[ImGuiCol_Text]                  = TextPrimary;
     c[ImGuiCol_TextDisabled]          = TextTertiary;
-    c[ImGuiCol_WindowBg]              = panel;
+    c[ImGuiCol_WindowBg]              = Panel;
     c[ImGuiCol_ChildBg]               = clear;
-    c[ImGuiCol_PopupBg]               = floatg;
-    c[ImGuiCol_Border]                = Hairline;
+    c[ImGuiCol_PopupBg]               = PopupSolid;
+    c[ImGuiCol_Border]                = Hairline;                 // the compositor turns it into GlassEdge on glass
     c[ImGuiCol_BorderShadow]          = clear;
     c[ImGuiCol_FrameBg]               = Field;
     c[ImGuiCol_FrameBgHovered]        = FieldHover;
     c[ImGuiCol_FrameBgActive]         = FieldActive;
-    c[ImGuiCol_TitleBg]               = title;
-    c[ImGuiCol_TitleBgActive]         = title;
-    c[ImGuiCol_TitleBgCollapsed]      = WithAlpha(title, title.w * 0.75f);
-    c[ImGuiCol_MenuBarBg]             = title;
+    c[ImGuiCol_TitleBg]               = Panel;                    // only floating windows have title bars,
+    c[ImGuiCol_TitleBgActive]         = Panel;                    // and those are glass: same colour as the
+    c[ImGuiCol_TitleBgCollapsed]      = Panel;                    // body so the compositor clears both
+    c[ImGuiCol_MenuBarBg]             = Base;
     c[ImGuiCol_ScrollbarBg]           = clear;
-    c[ImGuiCol_ScrollbarGrab]         = Rgb(0xFF, 0xFF, 0xFF, 0.16f);
-    c[ImGuiCol_ScrollbarGrabHovered]  = Rgb(0xFF, 0xFF, 0xFF, 0.26f);
-    c[ImGuiCol_ScrollbarGrabActive]   = Rgb(0xFF, 0xFF, 0xFF, 0.36f);
-    c[ImGuiCol_CheckMark]             = OnAccent;
+    c[ImGuiCol_ScrollbarGrab]         = Rgb(0xFF, 0xFF, 0xFF, 0.12f);
+    c[ImGuiCol_ScrollbarGrabHovered]  = Rgb(0xFF, 0xFF, 0xFF, 0.22f);
+    c[ImGuiCol_ScrollbarGrabActive]   = Rgb(0xFF, 0xFF, 0xFF, 0.34f);
+    c[ImGuiCol_CheckMark]             = OnAccent;                 // black tick on a white box
     c[ImGuiCol_CheckboxSelectedBg]    = Accent;
-    c[ImGuiCol_SliderGrab]            = Rgb(0xFF, 0xFF, 0xFF, 0.80f);
-    c[ImGuiCol_SliderGrabActive]      = OnAccent;
-    c[ImGuiCol_Button]                = Rgb(0xFF, 0xFF, 0xFF, 0.08f);
-    c[ImGuiCol_ButtonHovered]         = Rgb(0xFF, 0xFF, 0xFF, 0.13f);
-    c[ImGuiCol_ButtonActive]          = Rgb(0xFF, 0xFF, 0xFF, 0.18f);
-    c[ImGuiCol_Header]                = AccentWash;               // a selected row: the accent, washed
+    c[ImGuiCol_SliderGrab]            = Rgb(0xFF, 0xFF, 0xFF, 0.70f);
+    c[ImGuiCol_SliderGrabActive]      = AccentBright;
+    c[ImGuiCol_Button]                = Rgb(0xFF, 0xFF, 0xFF, 0.07f);
+    c[ImGuiCol_ButtonHovered]         = Rgb(0xFF, 0xFF, 0xFF, 0.12f);
+    c[ImGuiCol_ButtonActive]          = Rgb(0xFF, 0xFF, 0xFF, 0.17f);
+    c[ImGuiCol_Header]                = AccentWash;               // a selected row: white, washed
     c[ImGuiCol_HeaderHovered]         = WashHover;
-    c[ImGuiCol_HeaderActive]          = WithAlpha(Accent, 0.32f);
-    c[ImGuiCol_Separator]             = Separator;
-    c[ImGuiCol_SeparatorHovered]      = WithAlpha(Accent, 0.60f);
+    c[ImGuiCol_HeaderActive]          = WashPressed;
+    c[ImGuiCol_Separator]             = Hairline;
+    c[ImGuiCol_SeparatorHovered]      = Rgb(0xFF, 0xFF, 0xFF, 0.35f);
     c[ImGuiCol_SeparatorActive]       = Accent;
     c[ImGuiCol_ResizeGrip]            = clear;
-    c[ImGuiCol_ResizeGripHovered]     = WithAlpha(Accent, 0.45f);
+    c[ImGuiCol_ResizeGripHovered]     = Rgb(0xFF, 0xFF, 0xFF, 0.30f);
     c[ImGuiCol_ResizeGripActive]      = Accent;
-    c[ImGuiCol_InputTextCursor]       = Accent;
-    c[ImGuiCol_TabHovered]            = Rgb(0xFF, 0xFF, 0xFF, 0.10f);
-    c[ImGuiCol_Tab]                   = clear;                    // resting tabs float on the strip
-    c[ImGuiCol_TabSelected]           = raised;
+    c[ImGuiCol_InputTextCursor]       = AccentBright;
+    c[ImGuiCol_TabHovered]            = Hover;
+    c[ImGuiCol_Tab]                   = Base;                     // resting tabs sit on the black strip
+    c[ImGuiCol_TabSelected]           = Panel;                    // the selected one joins its panel
     c[ImGuiCol_TabSelectedOverline]   = Accent;
-    c[ImGuiCol_TabDimmed]             = clear;
-    c[ImGuiCol_TabDimmedSelected]     = WithAlpha(raised, raised.w * 0.70f);
+    c[ImGuiCol_TabDimmed]             = Base;
+    c[ImGuiCol_TabDimmedSelected]     = Panel;
     c[ImGuiCol_TabDimmedSelectedOverline] = clear;
-    c[ImGuiCol_DockingPreview]        = WithAlpha(Accent, 0.32f);
-    c[ImGuiCol_DockingEmptyBg]        = clear;                    // the wallpaper shows through
+    c[ImGuiCol_DockingPreview]        = Rgb(0xFF, 0xFF, 0xFF, 0.18f);
+    c[ImGuiCol_DockingEmptyBg]        = Base;
     c[ImGuiCol_PlotLines]             = TextSecondary;
-    c[ImGuiCol_PlotLinesHovered]      = Accent;
-    c[ImGuiCol_PlotHistogram]         = Accent;
+    c[ImGuiCol_PlotLinesHovered]      = AccentBright;
+    c[ImGuiCol_PlotHistogram]         = TextSecondary;
     c[ImGuiCol_PlotHistogramHovered]  = AccentBright;
-    c[ImGuiCol_TableHeaderBg]         = raised;
+    c[ImGuiCol_TableHeaderBg]         = Raised;
     c[ImGuiCol_TableBorderStrong]     = Hairline;
     c[ImGuiCol_TableBorderLight]      = Rgb(0xFF, 0xFF, 0xFF, 0.05f);
     c[ImGuiCol_TableRowBg]            = clear;
     c[ImGuiCol_TableRowBgAlt]         = Rgb(0xFF, 0xFF, 0xFF, 0.025f);
     c[ImGuiCol_TextLink]              = AccentBright;
-    c[ImGuiCol_TextSelectedBg]        = WithAlpha(Accent, 0.35f);
-    c[ImGuiCol_TreeLines]             = Separator;
+    c[ImGuiCol_TextSelectedBg]        = Rgb(0xFF, 0xFF, 0xFF, 0.25f);
+    c[ImGuiCol_TreeLines]             = Hairline;
     c[ImGuiCol_DragDropTarget]        = Accent;
-    c[ImGuiCol_DragDropTargetBg]      = WithAlpha(Accent, 0.12f);
+    c[ImGuiCol_DragDropTargetBg]      = Rgb(0xFF, 0xFF, 0xFF, 0.08f);
     c[ImGuiCol_UnsavedMarker]         = TextPrimary;
     c[ImGuiCol_NavCursor]             = AccentGlow;
     c[ImGuiCol_NavWindowingHighlight] = WithAlpha(TextPrimary, 0.70f);
     c[ImGuiCol_NavWindowingDimBg]     = Rgb(0x00, 0x00, 0x00, 0.40f);
-    c[ImGuiCol_ModalWindowDimBg]      = Rgb(0x00, 0x00, 0x00, 0.48f);
+    c[ImGuiCol_ModalWindowDimBg]      = Rgb(0x00, 0x00, 0x00, 0.45f);
 
     for (int i = 0; i < ImGuiCol_COUNT; ++i) {
         const ImVec4 v = c[i];
