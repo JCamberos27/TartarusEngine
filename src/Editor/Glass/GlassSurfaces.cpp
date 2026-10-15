@@ -73,7 +73,7 @@ int GlassifySolids(ImDrawList* dl) {
         // buttons, cards): dark glass, so they stand apart from the lighter panel. Hover: a white
         // lift. Pressed and hairlines: a brighter white edge.
         if (hi <= 0x06)      v.col = IM_COL32(0, 0, 0, 77);
-        else if (hi <= 0x14) v.col = IM_COL32(0, 0, 0, 158);
+        else if (hi <= 0x14) v.col = IM_COL32(0, 0, 0, 204);
         else if (hi <= 0x20) v.col = IM_COL32(255, 255, 255, 20);
         else                 v.col = IM_COL32(255, 255, 255, 36);
         ++changed;
