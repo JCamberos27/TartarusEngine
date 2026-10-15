@@ -15,6 +15,7 @@
 #include "EditorLayer.h"
 #include "AssetDatabase.h"
 #include "AssetLibrary.h"
+#include "AudioEngine.h"
 #include "AtomicFile.h"
 #include "ComponentRegistry.h"
 #include "Enhancers/EnhancerUserState.h" // renamed assets keep their favorites / bookmarks
@@ -291,6 +292,11 @@ void EditorLayer::OnExternalRemove(World& /*world*/, AssetLibrary& assets, const
 
 void EditorLayer::OnExternalModify(World& world, AssetLibrary& assets, const std::string& path) {
     if (AtomicFile::WrittenBySelfRecently(path)) return; // our own save
+    if (SameFile(path, ProjectPaths::Resolve("settings.json"))) {
+        ProjectSettings::Load(); // the same reload an undo of a settings change does
+        Log::Info("Reloaded Project Settings (settings.json changed outside the editor).");
+        return;
+    }
     const std::string type = AssetDatabase::AssetType(path);
     const std::string listed = assets.FindListed(path);
     // A new file written the safe way (a temp file renamed over the target, as editors and
@@ -301,6 +307,7 @@ void EditorLayer::OnExternalModify(World& world, AssetLibrary& assets, const std
     else if (type == "model" && !listed.empty()) reloaded = assets.ReimportModel(listed);
     else if (type == "material" && !listed.empty()) reloaded = assets.ReloadMaterial(listed);
     else if (type == "prefab") { SceneSerializer::ClearPrefabPristineCache(); reloaded = !listed.empty(); }
+    else if (type == "audio") reloaded = AudioEngine::Reload(path); // preloaded clips; streamed ones re-read on play
     else if (type == "scene") {
         InvalidateScenesListing();
         if (SameFile(m_CurrentScenePath, path))

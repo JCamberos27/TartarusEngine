@@ -3,6 +3,7 @@
 #include "InputMap.h"
 #include "PostProcessVolume.h"
 #include "TimeService.h"
+#include "LiveReload.h"
 #include <limits>
 #include "CrashHandler.h"
 #include "Shader.h"
@@ -522,6 +523,8 @@ int main(int argc, char** argv) {
         const std::filesystem::path shipped = std::filesystem::path(EnginePaths::ExeDir()) / "project";
         if (std::filesystem::is_directory(shipped, pe)) ProjectPaths::SetRootOverride(shipped.string());
     }
+    // A shipped game doesn't watch its files for edits; a development build still does.
+    LiveReload::SetEnabled(!playerMode || playerCfg.DevelopmentBuild);
 
     // #132 - register the project's assets on a worker thread while the window, GL context and
     // shaders come up. Any GUID lookup made before it finishes waits for it.
@@ -696,7 +699,7 @@ int main(int argc, char** argv) {
             // TARTARUS_EDITOR_MODULE_FILENAME, see CMakeLists.txt) rather than being hardcoded
             // here — a Debug build's CMAKE_DEBUG_POSTFIX makes these "TartarusGamed.dll" /
             // "TartarusEditord.dll", not the plain names a Release build produces.
-            gameModule.Initialize(executable.parent_path() / TARTARUS_GAME_MODULE_FILENAME);
+            gameModule.Initialize(executable.parent_path() / TARTARUS_GAME_MODULE_FILENAME, LiveReload::Enabled());
             // The window handle is what native dialogs the module opens (the Console's "Save...")
             // are parented to.
             editorModule.Initialize(executable.parent_path() / TARTARUS_EDITOR_MODULE_FILENAME, window.Handle());
@@ -2125,11 +2128,11 @@ int main(int argc, char** argv) {
             // (--npc-test ragdoll stops time for a few frames to shoot one moment from four sides.)
             const float gameDt = opt.weaponTestMode || opt.npcTestMode ? (playing && !(npcTest && npcTest->Frozen()) ? 1.0f / 60.0f : 0.0f) : Time::DeltaTime();
 
-            // #158 — shader hot reload (editor only; the scan itself runs at 1 Hz). Engine
+            // #158 — shader hot reload (editor and development builds; the scan itself runs at 1 Hz). Engine
             // programs and material shaders recompile when any file they were built from changes;
             // a failed compile keeps the previous program and logs the error. Not while the Scene
             // camera is being dragged: the folder walk would land in the middle of the motion.
-            if (!headless && !camDragActive) {
+            if (!headless && !camDragActive && LiveReload::Enabled()) {
                 const std::vector<std::string> changedShaders =
                     ShaderLibrary::PollChangedFiles({ProjectPaths::Resolve("shaders")});
                 if (!changedShaders.empty()) {
@@ -2825,7 +2828,7 @@ int main(int argc, char** argv) {
             // without closing the editor or discarding this World.
             {
                 PROFILE_SCOPE("Game Module Tick");
-                gameModule.Tick(world, gameDt, simThisFrame);
+                gameModule.Tick(world, gameDt, dt, simThisFrame);
             }
 
             // #177 - particles run while editing too (real time) so an emitter can be tuned live;

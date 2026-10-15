@@ -1,4 +1,6 @@
 #include "GameModuleAPI.h"
+#include "BodyLocomotion.h"
+#include "WeaponRules.h"
 #include "TransformControllerSystem.h"
 #include "LightFlickerSystem.h"
 
@@ -9,9 +11,9 @@ namespace {
 bool OnLoad(const void* /*state*/, std::size_t /*stateSize*/) { return true; }
 void OnUnload() {}
 
-// The Transform Controller is the first gameplay system hosted in the reloadable module. Edit
-// this DLL (or add future gameplay systems here), build TartarusGame, and the open editor will
-// pick up the new code without restarting.
+// Gameplay systems hosted in the reloadable module. Edit one (or add another here), save it in
+// the Script IDE or build TartarusGame, and the open editor picks the new code up without
+// restarting.
 void Update(const GameModuleHostAPI&, World& world, float deltaTime) {
     UpdateTransformControllers(world, deltaTime);
     UpdateLightFlickers(world, deltaTime);
@@ -24,6 +26,12 @@ const GameModuleAPI kAPI{
     &Update,
     /*SaveState=*/nullptr,
     /*FixedUpdate=*/nullptr,
+    // The first-person rules: the engine calls these instead of its built-in copies, so editing
+    // WeaponRules.cpp or BodyLocomotion.cpp reloads like the systems above.
+    Gameplay::FramesLayout(),
+    &WeaponRules::Update,
+    &WeaponRules::UpdateLoadout,
+    &BodyLocomotion::Update,
 };
 
 } // namespace

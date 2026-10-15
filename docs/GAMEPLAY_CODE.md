@@ -36,7 +36,9 @@ registered nor allow-listed with a reason.
 Two DLLs are rebuilt and reloaded while the editor runs:
 
 * **TartarusGame**: gameplay systems ticked while playing. `GameModule.cpp` calls each system's
-  update. Today that is the Transform Controller and Light Flicker systems.
+  update. Today that is the Transform Controller and Light Flicker systems. It also carries the
+  weapon and body rules (`WeaponRules.cpp`, `BodyLocomotion.cpp`): the engine calls the module's
+  copies through `GameRules.h`, so tuning fire, reload or locomotion logic reloads mid-Play too.
 * **TartarusEditor**: editor panels and tools (`src/Editor/EditorModule*.cpp`).
 
 Edit their sources in the [Script IDE](SCRIPT_IDE.md) or any other editor, then save in the IDE,
@@ -44,14 +46,36 @@ press F6, or use **Rebuild Game & Editor Modules**. The host notices the new DLL
 of it and swaps it in. A failed build leaves the running modules alone. Both modules compile with
 `/W4 /WX`, so warnings fail the build.
 
-To add a reloadable system: write `UpdateMySystem(World&, float)` in its own `.cpp`, add it to the
-`TartarusGame` sources and the host's `REMOVE_ITEM` list in `CMakeLists.txt`, call it from
-`GameModule.cpp`'s `Update`, and list the file in `kReloadable` in `src/Editor/GameModuleBuild.cpp`
-so saving it from the IDE triggers a rebuild. Keep its state in components, since the module's
-globals are lost on reload.
+The rules exchange `GameFrames.h` structs with the engine. Changing those structs means a full
+rebuild: bump `kFramesRevision` in that header, and until the engine is rebuilt it keeps using
+its own copies of the rules (the log says so) instead of calling a module built against other
+frames.
 
-Code outside the two modules (renderer, physics, the player and weapon systems above) needs a
+To add a reloadable system: write `UpdateMySystem(World&, float)` in its own `.cpp`, add it to
+`TARTARUS_GAME_MODULE_ONLY_SOURCES` in `CMakeLists.txt` and call it from `GameModule.cpp`'s
+`Update`. CMake also writes that list to `TartarusModules.sources` in the build folder, which is
+how the Script IDE knows saving the file (or the header beside it) should rebuild the modules.
+Keep its state in components, since the module's globals are lost on reload. The module links
+only glm and EnTT, so a system that needs the renderer, physics or audio goes through the host
+callbacks in `GameModuleAPI.h`.
+
+Code outside the two modules (renderer, physics, player movement, weapon presentation) needs a
 normal rebuild and restart.
+
+## Asset hot reload
+
+| Asset | Reloads | Where |
+| --- | --- | --- |
+| Shaders and material shaders | on save, within a second | `ShaderLibrary::PollChangedFiles` |
+| Textures, models, materials, prefabs | when changed outside the editor | `EditorLayer::OnExternalModify` |
+| Preloaded audio clips | when changed outside the editor; playing voices finish on the old sound | `AudioEngine::Reload` |
+| `settings.json` (Project Settings) | when changed outside the editor | `EditorLayer::OnExternalModify` |
+| Animator Controllers | on the next lookup, at most twice a second | `GetAnimatorController` |
+| `.fpsanim`, `.recoil`, `.camerashake`, weapon prefabs | while the weapon is out, four times a second | `FirstPersonPresentation::ReloadIfChanged` |
+
+Scenes don't reload under you: the editor warns and **File > Revert Scene** loads the new
+version. A shipped game turns all of this off at startup (`LiveReload.h`) so it never polls its
+files; a development build keeps it.
 
 ## Adding a gameplay component
 

@@ -1,5 +1,7 @@
 #include "FirstPersonPresentation.h"
 #include "FirstPersonMovementInput.h"
+#include "GameRules.h"
+#include "LiveReload.h"
 #include "WeaponRules.h"
 #include "WeaponPrefab.h"
 
@@ -1821,7 +1823,7 @@ Gameplay::WeaponFrame FirstPersonPresentation::RunGameplay(int operation,float d
     if(ac->HasTag(K::kTagIdle)) f.Tags|=32;
     if(ac->HasTag(K::kTagReady)) f.Tags|=64;
     if(ac->HasTag(K::kTagIKOff)) f.Tags|=128;
-    WeaponRules::Update(f);
+    GameRules::UpdateWeapon(f);
     m_Ammo=f.Ammo;
     m_FireCooldown=f.Cooldown;
     m_CycleWait=f.CycleWait;
@@ -1918,7 +1920,7 @@ void FirstPersonPresentation::FireShot() {
 Gameplay::WeaponLoadoutFrame FirstPersonPresentation::RunLoadout(int operation,int value){
     Gameplay::WeaponLoadoutFrame f;f.Operation=operation;f.Value=value;f.Count=(int)m_SlotAmmo.size();f.Slot=m_Slot;f.Pending=m_PendingSlot;f.Ammo=m_Ammo;f.Magazine=m_Set.Gameplay.Magazine;f.Burst=m_BurstRemaining;f.CycleWait=m_CycleWait;f.Active=IsActive();f.Equipped=m_Equipped;f.Requested=value!=0;f.Chambered=m_Chambered;f.SlotAmmo=reinterpret_cast<std::uintptr_t>(m_SlotAmmo.data());
     if(auto* ac=Animator()){f.Hidden=ac->HasTag(K::kTagHidden);f.InTransition=ac->InTransition;}
-    WeaponRules::UpdateLoadout(f);
+    GameRules::UpdateWeaponLoadout(f);
     m_PendingSlot=f.Pending;m_Ammo=f.Ammo;m_Chambered=f.Chambered!=0;m_CycleWait=f.CycleWait;m_BurstRemaining=f.Burst;
     if(f.Commands&2){m_Procedural.EndBurst();m_Procedural.SetFiring(false);}
     if(f.Commands&8)GearSound(*this,m_SetFile,m_Options.OwnerView,f.Equipped!=0);
@@ -2005,7 +2007,7 @@ void FirstPersonPresentation::Tick(float dt, const glm::vec3& velocity, bool spr
         SwapToPendingSlot();
         return;
     }
-    if (m_Options.HotReload) ReloadIfChanged(dt);
+    if (m_Options.HotReload && LiveReload::Enabled()) ReloadIfChanged(dt);
     RunGameplay(7,dt);
     const FirstPersonWeaponGameplay& g=m_Set.Gameplay;
     const float planarSpeed=glm::length(glm::vec2(velocity.x,velocity.z));
