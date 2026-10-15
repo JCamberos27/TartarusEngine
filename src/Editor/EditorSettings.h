@@ -320,6 +320,9 @@ struct EditorSettings {
     // changed (audit CPP-206 / PERF-211).
     static void Flush();
 
+    // This run's editor theme (--perf-glass), not written back: Flush keeps the saved one.
+    static void SetThemeForRun(int themeId);
+
     // Absolute path to editor_prefs.json (per-user storage, see UserPaths.h). Exposed so
     // SceneSerializer's format-version migration (#9, Phase M item 1) can read a pre-v3 scene's
     // legacy post-processing/shadow values straight off disk — those fields no longer exist on
