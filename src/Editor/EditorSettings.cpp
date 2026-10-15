@@ -144,9 +144,6 @@ void EditorSettings::Load() {
     s.HierarchySortMode = SafeValue(root, "hierarchySortMode", s.HierarchySortMode);
     s.HierarchySortDesc = SafeValue(root, "hierarchySortDesc", s.HierarchySortDesc);
     s.HierarchyTypeFilterMask = SafeValue(root, "hierarchyTypeFilterMask", s.HierarchyTypeFilterMask);
-    s.EngineMarkEnabled = SafeValue(root, "engineMarkEnabled", s.EngineMarkEnabled);
-    s.EngineMarkSpinSpeed = SafeValue(root, "engineMarkSpinSpeed", s.EngineMarkSpinSpeed);
-    s.EngineMarkPrism = SafeValue(root, "engineMarkPrism", s.EngineMarkPrism);
     s.ReduceMotion = SafeValue(root, "reduceMotion", s.ReduceMotion);
     // "glassTheme", not the retired "editorTheme": old prefs files still carry that key with
     // values from the removed theme picker, and must not switch Glass on by accident.
@@ -251,7 +248,6 @@ void EditorSettings::Load() {
     if (s.SceneCameraFar <= s.SceneCameraNear) s.SceneCameraFar = s.SceneCameraNear + 1.0f;
     clampF(s.LightGizmoOpacity, 0.0f, 1.0f, 0.5f);
     clampF(s.LightGizmoScale, 0.25f, 3.0f, 1.0f);
-    clampF(s.EngineMarkSpinSpeed, 0.0f, 4.0f, 0.52f);
     s.CaptureMode = std::clamp(s.CaptureMode, 0, 3);
     s.CaptureScale = std::clamp(s.CaptureScale, 1, 4);
     s.CaptureFormat = std::clamp(s.CaptureFormat, 0, 1);
@@ -338,9 +334,6 @@ void EditorSettings::Flush() {
     root["hierarchySortMode"] = Get().HierarchySortMode;
     root["hierarchySortDesc"] = Get().HierarchySortDesc;
     root["hierarchyTypeFilterMask"] = Get().HierarchyTypeFilterMask;
-    root["engineMarkEnabled"] = Get().EngineMarkEnabled;
-    root["engineMarkSpinSpeed"] = Get().EngineMarkSpinSpeed;
-    root["engineMarkPrism"] = Get().EngineMarkPrism;
     root["reduceMotion"] = Get().ReduceMotion;
     root["glassTheme"] = Get().EditorThemeId;
     root["glassViewportHuds"] = Get().GlassViewportHuds;

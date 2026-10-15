@@ -74,6 +74,9 @@ constexpr float AmbientCeiling    = 0.46f; // highlights capped before anything 
 constexpr float AmbientDim        = 0.12f; // black laid straight over the field (dock gaps show this)
 constexpr float GlassPanelAlpha   = 0.15f; // a docked panel: black at this alpha over the field
 constexpr float GlassChromeAlpha  = 0.80f; // menu bar, tab strips, status bar: a little darker
+// The Scene view's floating overlays (action bar, tool rail, stats pill, selection card): glass in
+// the chrome's tint over the blurred scene, with the panels' faint edge and no drop shadow.
+constexpr ImVec4 OverlayTint = Rgb(0x00, 0x00, 0x00, GlassChromeAlpha);
 // Corners of floating windows and popups at 1x. Docked panels stay square, as in Tartarus.
 constexpr float GlassWindowRounding = 10.0f;
 constexpr float GlassPopupRounding  = 8.0f;

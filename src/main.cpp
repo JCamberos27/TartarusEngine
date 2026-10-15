@@ -571,9 +571,8 @@ int main(int argc, char** argv) {
             }
         }
         Window window(1280, 720, playerMode ? playerCfg.ProductName : std::string("Tartarus Engine"), seeThroughWindow);
-        // #174 - the product's own icon, if the build was given one. The editor keeps the icon
-        // compiled into the exe's resources (app_icon.rc), which is also what a player falls
-        // back to when IconPath is empty or the file won't decode.
+        // #174 - the product's own icon, if the build was given one. The exe carries no icon of
+        // its own, so without one Windows shows its default.
         if (playerMode && !playerCfg.IconPath.empty())
             window.SetIconFromFile(EnginePaths::Resolve(playerCfg.IconPath));
         if (playerMode && !playerCfg.Fullscreen) window.UseStandardFrame();

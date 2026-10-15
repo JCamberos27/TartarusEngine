@@ -215,6 +215,8 @@ void GlassCompositor::Render(ImDrawData* dd, bool blur) {
                 li.Plate = true;
                 li.PlateRect = w->Rect();
                 li.PlateRounding = w->WindowRounding;
+                // A floating viewport overlay (the action bar) draws the HUD plate colour.
+                li.Overlay = FindWindowBackground(dl, w->Rect()) == EditorUIPrimitives::kHudPlateColor;
             }
         } else {
             ImGuiWindow* root = w->RootWindow ? w->RootWindow : w;
@@ -227,6 +229,7 @@ void GlassCompositor::Render(ImDrawData* dd, bool blur) {
                 FindWindowBackground(dl, w->Rect()) == EditorUIPrimitives::kHudPlateColor) {
                 glassList = clearOwnBg = true;
                 li.Plate = true;
+                li.Overlay = true;
                 li.PlateRect = w->Rect();
                 li.PlateRounding = w->WindowRounding;
             }
@@ -292,7 +295,12 @@ void GlassCompositor::Render(ImDrawData* dd, bool blur) {
             ++m_StatSurfaces;
             const ImRect r = li.PlateRect;
             const bool tooltip = li.Kind == SurfaceKind::Tooltip;
-            const float spread = li.Kind == SurfaceKind::Window ? Px(Space3) : tooltip ? 0.0f : Px(Space1h);
+            // Popups, tooltips and floating windows float over the editor: a soft shadow and the
+            // light glass tint. An overlay plate inside a panel (the Scene view's action bar and
+            // tool rail) matches the editor's chrome instead: darker, and no shadow.
+            const bool overlay = li.Overlay;
+            const float spread = overlay || tooltip ? 0.0f : li.Kind == SurfaceKind::Window ? Px(Space3) : Px(Space1h);
+            const ImVec4 tint = overlay ? OverlayTint : GlassTint;
             ImRect reach(r.Min.x - spread, r.Min.y - spread, r.Max.x + spread, r.Max.y + spread * 1.4f);
             reach.ClipWithFull(ImRect(dispMin, dispMax));
 
@@ -324,7 +332,7 @@ void GlassCompositor::Render(ImDrawData* dd, bool blur) {
                 const ImVec2 uv1((r.Max.x - dispMin.x) / dd->DisplaySize.x, 1.0f - (r.Max.y - dispMin.y) / dd->DisplaySize.y);
                 plate->AddImageRounded(ImTextureRef((ImTextureID)(intptr_t)m_BlurTex), r.Min, r.Max, uv0, uv1,
                                        IM_COL32(255, 255, 255, (int)(255.0f * a + 0.5f)), li.PlateRounding);
-                plate->AddRectFilled(r.Min, r.Max, U32(WithAlpha(GlassTint, GlassTint.w * a)), li.PlateRounding);
+                plate->AddRectFilled(r.Min, r.Max, U32(WithAlpha(tint, tint.w * a)), li.PlateRounding);
             } else {
                 plate->AddRectFilled(r.Min, r.Max, (fallback & ~IM_COL32_A_MASK) |
                                      ((ImU32)(255.0f * a + 0.5f) << IM_COL32_A_SHIFT), li.PlateRounding);

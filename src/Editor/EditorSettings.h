@@ -132,19 +132,9 @@ struct EditorSettings {
     // all-bits-set both mean "no filter" (every kind shown).
     int  HierarchyTypeFilterMask = 0;
 
-    // --- Corner "engine mark": the spinning TE monogram in the Scene viewport's bottom-left.
-    // EngineMarkSpinSpeed is radians/sec (0 parks it). EngineMarkPrism paints the monogram with
-    // a slowly-drifting spectral gradient instead of the default contrast-adaptive grey.
-    // Controls live in Preferences > Viewport and the Window menu.
-    bool  EngineMarkEnabled   = true;
-    float EngineMarkSpinSpeed = 0.52f;
-    bool  EngineMarkPrism     = false;
-
-    // Phase 6 item 12 — parks the corner monogram's spin and hue drift, and makes the nav-gizmo
-    // view-preset camera transition (EditorLayer_Gizmos.cpp's m_ViewTransition) snap instantly
-    // instead of easing over its usual 0.28s, for anyone sensitive to on-screen motion. Doesn't
-    // touch EngineMarkSpinSpeed itself - that preference is preserved, just not applied while
-    // this is on, so turning it back off resumes the user's own spin rate.
+    // Phase 6 item 12 - makes the nav-gizmo view-preset camera transition (EditorLayer_Gizmos.cpp's
+    // m_ViewTransition) snap instantly instead of easing over its usual 0.28s, and parks the
+    // editor's animations, for anyone sensitive to on-screen motion.
     bool ReduceMotion = false;
 
     // The editor's look (Preferences > General > Editor theme). 0 = Tartarus, the phosphor terminal

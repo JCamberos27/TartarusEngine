@@ -129,6 +129,7 @@ private:
         ImGuiWindow* Group = nullptr; // whose arrival pose this list follows (null = none)
         SurfaceKind  Kind = SurfaceKind::None;
         bool         Plate = false;   // draw a glass plate under this list
+        bool         Overlay = false; // a Scene view overlay (HUD plate colour): chrome glass, no shadow
         ImRect       PlateRect;
         float        PlateRounding = 0.0f;
         float        Alpha = 1.0f;

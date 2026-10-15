@@ -332,7 +332,7 @@ void EditorLayer::DrawStatusBar(World& world, Camera& editorCamera) {
     dl->AddLine(ImVec2(wpos.x, wpos.y + 0.5f), ImVec2(wpos.x + (float)ww, wpos.y + 0.5f),
                 EditorTheme::U32(EditorTheme::Hairline));
 
-    EditorTheme::PushMonoSmall();
+    EditorTheme::PushMono();
     const float textH = ImGui::GetFontSize();
     const float textY = wpos.y + std::floor((barH - textH) * 0.5f);
     const float padX = EditorTheme::Px(10.0f);

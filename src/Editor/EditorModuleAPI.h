@@ -523,7 +523,7 @@ struct EditorModuleHostAPI {
 
     // --- Editor UI pass (API v38) ---
     void (*DrawEditMenuBody)() = nullptr;
-    unsigned int (*GetEngineMarkTexture)() = nullptr; // a GL texture name, 0 = none
+    unsigned int (*GetEngineMarkTexture)() = nullptr; // retired: the engine mark is gone; kept for the struct layout, always null
     // The open scene's name (no extension) into `out`, and whether it has unsaved changes / the
     // editor is in Play.
     void (*GetSceneTitle)(char* out, int n, bool* outDirty, bool* outPlaying) = nullptr;
