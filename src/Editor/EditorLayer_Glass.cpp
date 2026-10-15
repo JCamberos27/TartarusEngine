@@ -127,7 +127,6 @@ const char* AssetGlyph(const AssetGridCell& cell) {
         case K::Sound:       return ICON_FA_MUSIC;
         case K::Scene:       return ICON_FA_MAP;
         case K::Prefab:      return ICON_FA_BOX_ARCHIVE;
-        case K::Screenshot:  return ICON_FA_IMAGE;
         case K::Shader:      return ICON_FA_FILE_CODE;
         case K::Animator:    return ICON_FA_DIAGRAM_PROJECT;
         case K::Weapon:      return ICON_FA_CROSSHAIRS;
@@ -152,7 +151,6 @@ const char* AssetPayloadType(AssetGridCell::Kind k) {
         case K::Prefab:   return "ASSET_PREFAB_PATH";
         case K::Sound:    return "ASSET_SOUND_PATH";
         case K::Scene:
-        case K::Screenshot:
         case K::Shader:   return nullptr; // not placeable
         default:          return "ASSET_FILE_PATH";
     }
@@ -1111,7 +1109,6 @@ void EditorLayer::DrawGlassLibrary(World& world, AssetLibrary& assets) {
                             using K = AssetGridCell::Kind;
                             if (isFolder) NavigateAssetFolder(cell.key);
                             else if (cell.kind == K::Scene) RequestOpenScene(world, assets, cell.key);
-                            else if (cell.kind == K::Screenshot) OpenScreenshotPreview(cell.key);
                             else if (cell.kind == K::Animator) OpenAnimatorWindow(ProjectPaths::Relativize(cell.key));
                             else if (cell.kind == K::Prefab) EnterPrefabMode(world, assets, cell.key);
                             else if (cell.kind == K::Script) OpenScriptIDE(cell.key);
@@ -1170,7 +1167,7 @@ void EditorLayer::DrawGlassLibrary(World& world, AssetLibrary& assets) {
                                     tex = t.Tex;
                                     flipV = t.FlipV;
                                 }
-                            } else if (cell.texture && (cell.kind == AssetGridCell::Kind::Texture || cell.kind == AssetGridCell::Kind::Screenshot)) {
+                            } else if (cell.texture && cell.kind == AssetGridCell::Kind::Texture) {
                                 tex = cell.texture->GLHandle();
                                 aspect = cell.texture->Height() > 0 ? (float)cell.texture->Width() / (float)cell.texture->Height() : 1.0f;
                             } else if (cell.kind == AssetGridCell::Kind::Model && cell.model) {
@@ -1318,8 +1315,8 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
         }
     }
 
-    // --- Scene stats pill, above the selection card ------------------------------------------------
-    {
+    // --- Scene stats pill, above the selection card (the action bar's stats toggle) ---------------
+    if (EditorSettings::Get().GameViewShowStats) {
         char stats[96];
         const int objects = (int)reg.view<const NameComponent>().size();
         const float ms = std::max(0.01f, m_SmoothedFrameMs);

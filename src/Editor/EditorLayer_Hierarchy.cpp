@@ -19,7 +19,6 @@
 #include "Material.h"
 #include "MaterialAsset.h"
 #include "AudioEngine.h"
-#include "Screenshot.h"
 #include "SceneSerializer.h"
 #include "Scripting/ScriptComponent.h"
 #include "Scripting/PlayerDefinition.h"

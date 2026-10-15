@@ -78,7 +78,6 @@
 #define EDITOR_ICON_STATISTICS ICON_FA_CHART_SIMPLE
 #define EDITOR_ICON_CONSOLE    ICON_FA_TERMINAL
 #define EDITOR_ICON_HISTORY    ICON_FA_CLOCK_ROTATE_LEFT
-#define EDITOR_ICON_CAPTURE    ICON_FA_CAMERA_RETRO
 #define EDITOR_ICON_CARET_DOWN ICON_FA_CARET_DOWN
 
 // --- Window controls ---------------------------------------------------------------------------------
@@ -111,7 +110,7 @@ inline constexpr IconEntry kAllIcons[] = {
     {"SnapToGround", EDITOR_ICON_SNAP_TO_GROUND},
     {"Undo", EDITOR_ICON_UNDO}, {"Redo", EDITOR_ICON_REDO}, {"Save", EDITOR_ICON_SAVE},
     {"Statistics", EDITOR_ICON_STATISTICS}, {"Console", EDITOR_ICON_CONSOLE},
-    {"History", EDITOR_ICON_HISTORY}, {"Capture", EDITOR_ICON_CAPTURE},
+    {"History", EDITOR_ICON_HISTORY},
     {"CaretDown", EDITOR_ICON_CARET_DOWN},
     {"WindowMinimize", EDITOR_ICON_WINDOW_MINIMIZE}, {"WindowMaximize", EDITOR_ICON_WINDOW_MAXIMIZE},
     {"WindowRestore", EDITOR_ICON_WINDOW_RESTORE}, {"WindowClose", EDITOR_ICON_WINDOW_CLOSE},

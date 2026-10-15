@@ -393,8 +393,8 @@ struct EditorModuleHostAPI {
     // and so it survives a reload. `recursive` matches the Alt+click "and everything under it".
     bool (*IsAssetFolderExpanded)(const char* path) = nullptr;
     void (*SetAssetFolderExpanded)(const char* path, bool expand, bool recursive) = nullptr;
-    // Per-frame setup the host does before the module draws the tree: ensure the "Scenes"/
-    // "Screenshots" virtual folders exist, refresh the on-disk listing caches, and expand the
+    // Per-frame setup the host does before the module draws the tree: ensure the "Scenes"
+    // virtual folder exists, refresh the on-disk listing caches, and expand the
     // ancestors of the current folder when it changed from elsewhere. Fills `outReveal` with the
     // folder that should scroll itself into view this frame (empty = none) — the old
     // m_RevealAssetFolderInTree one-shot.

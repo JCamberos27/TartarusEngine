@@ -84,7 +84,6 @@ ResolvedFolderStyle FolderStyles::Resolve(const std::string& path, const FolderS
     ResolvedFolderStyle out;
     // Built-in: the Asset Browser's filesystem-backed virtual folders.
     if (path == "Scenes")           { out.Icon = "map";      out.IconSource = FolderStyleSource::Builtin; }
-    else if (path == "Screenshots") { out.Icon = "camera";   out.IconSource = FolderStyleSource::Builtin; }
     else if (path == "Shaders")     { out.Icon = "file-code"; out.IconSource = FolderStyleSource::Builtin; }
     else if (AutoIcons && summary) {
         const FolderKind k = DominantKind(*summary);

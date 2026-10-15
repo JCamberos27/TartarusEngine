@@ -17,7 +17,6 @@
 #include "Texture.h"
 #include "Material.h"
 #include "AudioEngine.h"
-#include "Screenshot.h"
 #include "SceneSerializer.h"
 #include "AABB.h"
 #include "Texture.h"
@@ -2593,7 +2592,6 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     CurveEditor::DrawWindows([this]{m_RequestGlobalUndo=true;},[this]{m_RequestGlobalRedo=true;},!m_UndoStack.empty(),!m_RedoStack.empty());
 
     m_ThumbnailBudgetThisFrame = 3; // at most this many new Asset Browser model thumbnails per frame
-    m_ScreenshotThumbBudgetThisFrame = 8; // at most this many new Asset Browser screenshot thumbnails per frame (#176)
     m_AssetThumbs.Pump(8); // unloaded assets' tiles, decoded off-thread: upload a few per frame
 
     if (m_AssetRefreshFlash > 0.0f) m_AssetRefreshFlash = std::max(0.0f, m_AssetRefreshFlash - dt); // #236 G
@@ -2612,7 +2610,6 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     DrawAnimatorWindow(world); // Animator v2
     DrawPhysicsDebugWindow(world); // #185 debug tooling
     DrawPhysicsHud();             // #185 D
-    DrawScreenshotPreview(world, assets);
 
     // Auto-save: skipped while Playing (Draw() DOES run during in-panel Play — #90) - the same reason OnExitPlayMode's revert-to-snapshot exists, autosaving
     // transient gameplay state would be wrong. Skipped entirely when nothing's actually unsaved,
@@ -2925,7 +2922,6 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         // re-checks m_HideOverlaysThisFrame so a clean capture still suppresses it.
     }
     DrawStatusBar(world, editorCamera);
-    DrawCaptureFeedback(dt);
 
     // "Look through light" (#140 phase 4): the Inspector/Lights-panel buttons can't see the
     // camera, so they queue a light here; act on it once, then run the per-frame Esc/banner.
@@ -3427,7 +3423,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         ImGui::EndPopup();
     }
 
-    // Play mode no longer frames the editor or tags it (the title bar's PLAYING tag says it). A
+    // Play mode no longer frames the editor or tags it (the red Stop button says it). A
     // slowed or frozen time scale is still called out at the top centre, since it looks like a
     // performance problem or a stuck simulation until you remember setting it (Q12).
     if (m_InPlayMode) {

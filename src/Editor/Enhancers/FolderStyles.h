@@ -15,7 +15,7 @@
 // undo journals it - styling a folder is undoable like any other project-file edit.
 //
 // A folder's look resolves in layers, each overriding only what it sets:
-//   built-in (Scenes / Screenshots / Shaders) -> automatic icon from its content -> the first
+//   built-in (Scenes / Shaders) -> automatic icon from its content -> the first
 //   matching rule -> the folder's own style.
 namespace Enhancers {
 
