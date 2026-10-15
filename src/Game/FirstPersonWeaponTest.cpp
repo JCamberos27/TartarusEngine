@@ -333,6 +333,8 @@ std::string ShotStem(const std::string& s) {
 void FirstPersonWeaponTest::BuildPoseProbe() {
 #pragma warning(suppress : 4996)
     if (const char* only = std::getenv("STOCK_PROBE_POSE"); only && std::string(only) == "jank") { BuildJankProbe(); return; }
+#pragma warning(suppress : 4996)
+    if (const char* only = std::getenv("STOCK_PROBE_POSE"); only && std::string(only) == "anims") { BuildAnimSweep(); return; }
     using C = Ctx;
     auto hold = [](float s) { return [s](C& c) { return c.Time >= s; }; };
     const bool ak = m_ProbeAk;
@@ -587,6 +589,76 @@ void FirstPersonWeaponTest::BuildJankProbe() {
     seg(ak ? "switch to the Remington" : "switch to the AK", [ak](C& c) { c.P->SelectSlot(ak ? 1 : 0); }, true, 0.5f);
     seg(ak ? "switch back to the AK" : "switch back to the Remington", [ak](C& c) { c.P->SelectSlot(ak ? 0 : 1); }, true, 0.5f);
     steps.push_back({"jank", [this](C&) { m_JankTrack = false; }, nullptr, 1.0f, [this](C& c) { PrintJank(c); }});
+    m_Steps = std::move(steps);
+}
+
+void FirstPersonWeaponTest::BuildAnimSweep() {
+    using C = Ctx;
+    m_AnimSweep = true;
+    auto hold = [](float s) { return [s](C& c) { return c.Time >= s; }; };
+    static const auto resting = [](const std::string& st) { return st == "Idle" || st == "Aim" || st == "Walk" || st == "Sprint"; };
+    // The close views in turn: the front right (the whole hold), the left arm, the right arm, the right side, the front left.
+    static const int kViews[5] = {2, 8, 7, 1, 3};
+    static const char* kViewNames[11] = {"stock", "right", "front_r", "front_l", "left", "back_r", "back_l", "arm_r", "arm_l", "legs", "orbit"};
+    const bool ak = m_ProbeAk;
+    const std::string gun = ak ? "ak" : "rem";
+    std::vector<Step> steps = {{"in hand at Play", nullptr, [](C& c) { return c.State() == "Idle"; }, 30.0f, nullptr}};
+    if (!ak)
+        steps.push_back({"to the Remington", [](C& c) { c.P->SelectSlot(1); c.Cam->Pitch = 0.0f; },
+                         [](C& c) { return c.P->Slot() == 1 && c.State() == "Idle"; }, 180.0f, nullptr});
+    steps.push_back({"settle", [](C& c) { c.View = 2; }, hold(1.5f), 5.0f, nullptr});
+    // One clip (or hold): `begin` once, `tick` each frame; done once an action it started has played out and the gun is
+    // resting again (or, for a hold, after `min` seconds). Every 10th frame is captured, the view turning every shot (set
+    // two frames ahead: the Scene camera follows a frame late).
+    auto shots = std::make_shared<int>(0);
+    int index = 0;
+    auto seg = [&](const std::string& name, std::function<void(C&)> begin, bool action, float min = 0.3f,
+                   std::function<void(C&)> tick = nullptr, std::function<bool(C&)> done = nullptr) {
+        char stem[96];
+        std::snprintf(stem, sizeof stem, "anim_%s_%02d_%s", gun.c_str(), index++, name.c_str());
+        const std::string prefix = ShotStem(stem);
+        steps.push_back({name, [begin](C& c) { if (begin) begin(c); },
+                         [action, min, tick, done, prefix, shots](C& c) {
+                             if (tick) tick(c);
+                             const int f = (int)std::lround(c.Time / std::max(c.Dt, 1e-4f));
+                             const int view = kViews[((f + 2) / 10) % 5];
+                             c.View = view;
+                             if (f % 10 == 0) {
+                                 c.Shot = prefix + "_f" + std::to_string(1000 + f).substr(1) + "_" + kViewNames[view];
+                                 ++*shots;
+                             }
+                             if (done) return c.Time >= min && done(c);
+                             bool acted = !action;
+                             for (const std::string& st : c.States) acted = acted || !resting(st);
+                             return c.Time >= min && acted && resting(c.State());
+                         }, 14.0f, nullptr});
+        steps.push_back({name + " after", nullptr, hold(0.25f), 2.0f, nullptr});
+    };
+    auto pullsAt = [](std::vector<float> times) {
+        return [times](C& c) {
+            for (float t : times) if (c.Time >= t && c.Time - c.Dt < t) ++c.Pulls;
+        };
+    };
+    const int half = ak ? 15 : 3;
+    seg("idle", nullptr, false, 1.0f);
+    seg("hip_fire", nullptr, false, 1.4f, pullsAt({0.05f, 0.7f}));
+    if (ak) seg("hip_burst", [](C& c) { c.Trigger = true; }, false, 0.8f, [](C& c) { if (c.Time > 0.5f) c.Trigger = false; });
+    seg(ak ? "tac_reload" : "reload", [half](C& c) { c.P->SetAmmo(half); c.P->Reload(); }, true);
+    seg("empty_reload", [](C& c) { c.P->SetAmmo(0); c.P->Reload(); }, true);
+    seg("mag_check", [](C& c) { c.P->TriggerAction("MagCheck"); }, true);
+    seg("inspect", [](C& c) { c.P->TriggerAction("Inspect"); }, true);
+    seg("regrip", [](C& c) { c.P->TriggerAction("Fidget"); }, true);
+    seg("melee", [](C& c) { c.P->TriggerAction("Melee"); }, true);
+    seg("aim", [](C& c) { c.Aim = true; }, false, 0.8f);
+    seg("aim_fire", nullptr, false, 1.3f, pullsAt({0.05f, 0.7f}));
+    seg("aim_reload", [half](C& c) { c.P->SetAmmo(half); c.P->Reload(); }, true);
+    seg("aim_down", [](C& c) { c.Aim = false; }, false, 0.6f);
+    seg("walk", [](C& c) { c.Move = {0.0f, 0.45f}; }, false, 1.2f);
+    seg("sprint", [](C& c) { c.Move = {0.0f, 1.0f}; c.Sprint = true; }, false, 1.5f);
+    seg("sprint_stop", [](C& c) { c.Move = {}; c.Sprint = false; }, false, 1.2f);
+    seg("holster", [](C& c) { c.P->SetEquipped(false); }, false, 0.5f, nullptr, [](C& c) { return c.State() == "Holstered"; });
+    seg("draw", [](C& c) { c.P->SetEquipped(true); }, true, 0.5f);
+    steps.push_back({"done", nullptr, nullptr, 1.0f, [shots, gun](C&) { std::printf("[AnimSweep] %s: %d captures\n", gun.c_str(), *shots); }});
     m_Steps = std::move(steps);
 }
 

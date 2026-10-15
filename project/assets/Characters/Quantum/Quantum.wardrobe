@@ -21,13 +21,13 @@
     "Male": {
       "parts": [
         { "part": "Torso",      "model": "Models/European/Quantum_Torso.fbx" },
-        { "part": "Arms",       "model": "Models/European/Quantum_Arms.fbx" },
-        { "part": "Hands",      "model": "Models/European/Quantum_Hands.fbx" },
+        { "part": "Arms",       "model": "FirstPerson/Quantum_Arms_FP.fbx" },
         { "part": "Legs",       "model": "Models/European/Quantum_Legs.fbx" },
         { "part": "Feet",       "model": "Models/European/Quantum_Feet.fbx" },
         { "part": "UnderPants", "model": "Models/European/Quantum_UnderPants.fbx" }
       ],
-      "alternates": { "ShoeFeet": "Models/Clothing/Male/Shoes/Quantum_Feet_Shoes.fbx" },
+      "alternates": { "ShoeFeet": "Models/Clothing/Male/Shoes/Quantum_Feet_Shoes.fbx",
+                      "SleeveHands": "Models/European/Quantum_Hands.fbx" },
       "races": [
         { "name": "European", "head": "Models/European/Quantum_Head.fbx", "skin": "",      "tone": [0.86, 0.66, 0.54] },
         { "name": "Afro",     "head": "Models/Afro/Quantum_Head_Afro.fbx", "skin": "_Afro", "tone": [0.40, 0.26, 0.18],
@@ -60,10 +60,10 @@
     { "slot": "Pants", "skin": false, "nameHasAny": ["Shorts", "Breeches"], "hide": ["UnderPants"] },
     { "slot": "Shoes", "skin": false, "nameLacksAll": ["Flip_Flops"], "replace": "Feet", "with": "ShoeFeet" },
     { "slot": "Shoes", "skin": true, "hide": ["Feet"] },
-    { "slot": "Top", "gender": "Male", "nameHasAny": ["SKM_Hoodie", "SKM_Shirt_Classic"], "hide": ["Arms"] },
+    { "slot": "Top", "gender": "Male", "nameHasAny": ["SKM_Hoodie", "SKM_Shirt_Classic"], "replace": "Arms", "with": "SleeveHands" },
     { "slot": "Outerwear", "gender": "Male",
       "nameHasAny": ["SKM_Bomber_", "SKM_Coat_", "SKM_Jacket_Classic", "SKM_Jacket_Shirt", "SKM_Jacket_Winter",
-                     "SKM_Jeans_Jacket", "SKM_Leather_Jacket", "SKM_Puffer_Jacket"], "hide": ["Arms"] }
+                     "SKM_Jeans_Jacket", "SKM_Leather_Jacket", "SKM_Puffer_Jacket"], "replace": "Arms", "with": "SleeveHands" }
   ],
 
   "tags": [

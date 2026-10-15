@@ -4740,7 +4740,17 @@ int main(int argc, char** argv) {
             // close so the splash never disappears before there's something to replace it.
             if (!firstFramePresented) {
                 firstFramePresented = true;
-                window.Show();
+                // TARTARUS_HIDDEN=1 (a headless run on a desktop someone is using): the window never shows or takes the
+                // focus; everything renders to its framebuffers the same.
+                static const bool keepHidden = [] {
+                    char* e = nullptr;
+                    size_t n = 0;
+                    _dupenv_s(&e, &n, "TARTARUS_HIDDEN");
+                    const bool on = e && *e && *e != '0';
+                    std::free(e);
+                    return on;
+                }();
+                if (!keepHidden || !headless) window.Show();
                 if (playerMode && !playerCfg.Fullscreen) {
                     // #174 - centre the windowed game in the primary monitor's work area. Done
                     // once shown, when the frame size (title bar, borders) is known.
