@@ -15,7 +15,6 @@
 #include "Texture.h"
 #include "Material.h"
 #include "AudioEngine.h"
-#include "Screenshot.h"
 #include "SceneSerializer.h"
 #include "AABB.h"
 #include "Log.h"

@@ -2603,8 +2603,7 @@ Enhancers::FolderKind FolderKindOf(AssetGridCell::Kind k) {
     switch (k) {
         case K::Model:      return F::Model;
         case K::Texture:
-        case K::Hdri:
-        case K::Screenshot: return F::Texture;
+        case K::Hdri:       return F::Texture;
         case K::Material:   return F::Material;
         case K::Sound:      return F::Sound;
         case K::Prefab:     return F::Prefab;

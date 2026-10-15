@@ -63,7 +63,7 @@ enum class ReflectAssetKind; // ComponentReflection.h
 struct ReflectField;        // ComponentReflection.h
 
 struct AssetGridCell {
-    enum class Kind { Folder, Model, Texture, Material, Sound, Scene, Prefab, Screenshot, Shader, Animator, Weapon, Hdri, Script, Recoil, CameraShake } kind;
+    enum class Kind { Folder, Model, Texture, Material, Sound, Scene, Prefab, Shader, Animator, Weapon, Hdri, Script, Recoil, CameraShake } kind;
     std::string key;
     std::string display;
     std::shared_ptr<Model> model;
@@ -147,7 +147,7 @@ public:
     void FrameOpenedScene(World& world, const std::string& path);
 
     // The floating action bar centered over the Scene/Game viewport — Undo/Redo/Save, the
-    // Play/Stop/Pause/Step/Fullscreen transport, and the panel-toggle/Capture/notification
+    // Play/Stop/Pause/Step/Fullscreen transport, and the panel-toggle/notification
     // cluster that used to live in the toolbar's one-click icon row (that row is gone; see
     // EditorModuleToolbar.cpp's file comment). main.cpp calls this every frame, unconditionally.
     // Clicks only raise request flags — main.cpp owns the play/maximize/cursor state itself.
@@ -258,7 +258,6 @@ public:
     }
     void DrawViewMenuBody(World& world, Camera& editorCamera);
     void DrawWindowMenuBody();
-    void DrawCaptureOptionsPopupBody();
     void DrawGridSnapPopupBody(); // #236 — grid spacing + per-op snap increments, opened from the toolbar magnet's caret
     void DrawGizmosPopupBody();   // #236 — master gizmo switch + per-type visibility, opened from the toolbar Gizmos caret
     // Also the module's Add menu (via the host glue); still used by Shift+A quick-add and the
@@ -706,30 +705,6 @@ public:
     // open. main.cpp reads it to frost the Scene viewport behind the dim scrim.
     bool AnyModalOpen() const;
 
-    // --- Capture (screenshot) tool -----------------------------------------------------------
-    // The toolbar camera button, the PrintScreen key and Preferences all call RequestCapture();
-    // main.cpp does the grab from the right framebuffer for the chosen mode, then OnCaptureDone.
-    // `primed` guards the one-frame ordering gap: the trigger (toolbar / key / sentinel) fires
-    // after the Scene view has already rendered for the frame, so a viewport shot that needs a
-    // resized render target waits until the NEXT frame — main.cpp sets primed once it has
-    // rendered the scene at the requested size, and only then does the grab run.
-    struct CaptureRequest { bool pending = false; bool primed = false; int mode = 0; int scale = 1; int format = 0; int resW = 0; int resH = 0; };
-    void RequestCapture();                       // snapshots the current EditorSettings capture prefs
-    CaptureRequest PeekCaptureRequest() const { return m_CaptureReq; }
-    void PrimeCaptureRequest() { m_CaptureReq.primed = true; }
-    CaptureRequest ConsumeCaptureRequest() { CaptureRequest r = m_CaptureReq; m_CaptureReq.pending = false; m_CaptureReq.primed = false; return r; }
-    // #153 - the grab happened: flash + shutter sound right away. The file itself is encoded in
-    // the background; OnCaptureDone runs once it's on disk (or failed, with an empty path).
-    void OnCaptureTaken();
-    void OnCaptureDone(const std::string& path, int w, int h);
-    void DrawCaptureFeedback(float dt);          // fading white flash only; called from Draw()
-    // Double-clicking a shot in the Asset Browser's Screenshots folder opens a centred, sleek
-    // in-editor lightbox instead of shelling out to the OS viewer.
-    void OpenScreenshotPreview(const std::string& path);
-    void DrawScreenshotPreview(World& world, AssetLibrary& assets); // centred image lightbox; called from Draw()
-    // Phase 6 item 7 — every image file in the screenshots folder, sorted so </>-arrow nav
-    // reads chronologically (Screenshot::Save's filenames are date/time-suffixed).
-    std::vector<std::string> ListScreenshotsSorted() const;
     // Set by main.cpp for the single frame a "clean viewport" capture renders — every editor
     // overlay (grid, gizmos, entity icons, light gizmos, HUDs, status bar) skips.
     void SetHideOverlaysThisFrame(bool v) { m_HideOverlaysThisFrame = v; }
@@ -880,10 +855,7 @@ private:
 
     GLFWwindow* m_Window = nullptr;
 
-    CaptureRequest m_CaptureReq;
     bool m_HideOverlaysThisFrame = false;
-    float m_CaptureFlashT = 0.0f;              // eased 1 -> 0 over ~0.35s after a shot
-    std::string m_LastCapturePath;
 
     // Frosted backdrop behind modal dialogs — created lazily the first time a modal opens (see
     // EndFrame): the whole framebuffer is blurred and the dialog window redrawn crisp on top.
@@ -1554,7 +1526,7 @@ private:
     // The full-width toolbar strip + its dropdown menus moved into TartarusEditor.dll
     // (EditorModuleToolbar.cpp, issue #229). The host keeps the menu/popup *bodies* — declared
     // in the public bridge block above (DrawFileMenuBody / DrawViewMenuBody / DrawWindowMenuBody
-    // / DrawCaptureOptionsPopupBody / DrawAddEntityItems, all declared in the public bridge block
+    // / DrawAddEntityItems, all declared in the public bridge block
     // above).
     bool m_OpenQuickAdd = false; // set by the Shift+A shortcut, consumed next frame in Draw()
     std::string m_LastSelectedName; // last valid scene selection, shown in the Inspector empty state
@@ -1747,14 +1719,6 @@ private:
     void CopyPreviewTexture(unsigned int src, unsigned int& dst, int size, std::vector<unsigned char>* pixelsOut);
     void InvalidateModelThumbnail(const std::string& path = ""); // empty = clear all (e.g. a freed Model could be reallocated at the same address)
 
-    // Thumbnails for the Asset Browser's "Screenshots" folder — keyed by file path, kept in sync
-    // with what's on disk each cache refresh (#175; entries drop when their file is gone).
-    // Loading is capped by its own per-frame budget (#176) so opening a folder of many captures
-    // decodes/uploads a few at a time instead of stalling on the frame the folder is opened;
-    // unloaded entries just aren't inserted into the map yet, so they're retried next frame.
-    std::unordered_map<std::string, std::shared_ptr<Texture>> m_ShotThumbs;
-    int m_ScreenshotThumbBudgetThisFrame = 0;
-
     // Sound-cell waveform envelopes (#236 G), decoded once per path via AudioEngine.
     // Empty vector = decode failed / not audio; cached either way.
     std::unordered_map<std::string, std::vector<float>> m_SoundWaveforms;
@@ -1774,7 +1738,7 @@ public:
     void SetAssetFavoritesOnly(bool on) { m_AssetFavoritesOnly = on; }
 private:
 
-    // Cached directory listings backing the filesystem-based "Scenes" and "Screenshots" folders
+    // Cached directory listings backing the filesystem-based "Scenes" folder
     // (#175) — std::filesystem::directory_iterator used to run every single frame while either
     // folder was open or a search/filter was active. Now refreshed only on a short timer, when
     // the Asset Browser regains focus, or right after an operation that actually creates/deletes/
@@ -1785,7 +1749,6 @@ private:
         bool valid = false;
     };
     AssetDirListingCache m_ScenesListingCache;
-    AssetDirListingCache m_ShotsListingCache;
     // Same idea for project/shaders/ — Phase 6 item 15's "browsable" Shaders folder.
     AssetDirListingCache m_ShadersListingCache;
     // Animator Controllers (.controller) and weapon definitions (.fpsanim) anywhere under the
@@ -1794,11 +1757,9 @@ private:
     float m_AssetListingRefreshTimer = 0.0f;   // ticks up in DrawAssetBrowser; see kAssetListingRefreshInterval
     bool m_AssetBrowserFocusedLastFrame = false; // edge-detects m_AssetBrowserFocused for "just gained focus"
     void RefreshScenesListingIfNeeded();
-    void RefreshShotsListingIfNeeded();
     void RefreshShadersListingIfNeeded();
     void RefreshAnimationListingIfNeeded();
     void InvalidateScenesListing() { m_ScenesListingCache.valid = false; }
-    void InvalidateShotsListing() { m_ShotsListingCache.valid = false; }
     void InvalidateShadersListing() { m_ShadersListingCache.valid = false; }
     void InvalidateAnimationListing() { m_AnimationListingCache.valid = false; }
     // Every model / texture / material / sound / prefab file under the project, so the grid lists
@@ -1848,17 +1809,6 @@ public:
     float AssetRefreshFlash() const { return m_AssetRefreshFlash; }
 private:
     float m_AssetRefreshFlash = 0.0f;
-
-    // The screenshot lightbox (DrawScreenshotPreview). Its own full-res Texture, not a m_ShotThumbs
-    // entry, so it survives that map being pruned and isn't size-capped to the thumbnail budget.
-    std::string m_ShotPreviewPath;
-    std::shared_ptr<Texture> m_ShotPreviewTex;
-    bool m_ShotPreviewOpen = false;
-    float m_ShotPreviewAnim = 0.0f;              // 0->1 pop-in ease
-    float m_ShotPreviewZoom = 1.0f;              // 1 = fit-to-canvas; scroll wheel scales it
-    ImVec2 m_ShotPreviewPan{0.0f, 0.0f};         // image offset within the canvas, in pixels
-    bool m_ShotPreviewPanning = false;
-    bool m_ShotPreviewPressOutside = false;       // the active L-press began on the dimmed backdrop
 
     // Drains dropped/imported files a few per frame instead of all at once in a single
     // synchronous stall — see ImportQueueManager.h for why this isn't a background thread.

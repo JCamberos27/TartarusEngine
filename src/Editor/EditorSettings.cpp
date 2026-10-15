@@ -175,12 +175,6 @@ void EditorSettings::Load() {
     s.PlayDebugOverlay = SafeValue(root, "playDebugOverlay", s.PlayDebugOverlay);
     s.LayerVisibleMask = SafeValue(root, "layerVisibleMask", s.LayerVisibleMask);
     s.LayerPickLockMask = SafeValue(root, "layerPickLockMask", s.LayerPickLockMask);
-    s.CaptureMode = SafeValue(root, "captureMode", s.CaptureMode);
-    s.CaptureScale = SafeValue(root, "captureScale", s.CaptureScale);
-    s.CaptureResPreset = SafeValue(root, "captureResPreset", s.CaptureResPreset);
-    s.CaptureFormat = SafeValue(root, "captureFormat", s.CaptureFormat);
-    s.CaptureFlash = SafeValue(root, "captureFlash", s.CaptureFlash);
-    s.CaptureSound = SafeValue(root, "captureSound", s.CaptureSound);
     s.ViewShowGrid = SafeValue(root, "viewShowGrid", s.ViewShowGrid);
     s.ViewShowGizmo = SafeValue(root, "viewShowGizmo", s.ViewShowGizmo);
     s.ViewFrameOnSelect = SafeValue(root, "viewFrameOnSelect", s.ViewFrameOnSelect);
@@ -248,9 +242,6 @@ void EditorSettings::Load() {
     if (s.SceneCameraFar <= s.SceneCameraNear) s.SceneCameraFar = s.SceneCameraNear + 1.0f;
     clampF(s.LightGizmoOpacity, 0.0f, 1.0f, 0.5f);
     clampF(s.LightGizmoScale, 0.25f, 3.0f, 1.0f);
-    s.CaptureMode = std::clamp(s.CaptureMode, 0, 3);
-    s.CaptureScale = std::clamp(s.CaptureScale, 1, 4);
-    s.CaptureFormat = std::clamp(s.CaptureFormat, 0, 1);
     // #135 — same ranges as the Preferences / toolbar sliders.
     clampF(s.GizmoSize, 0.05f, 0.40f, 0.15f);
     clampF(s.VertexPickPixels, 5.0f, 150.0f, 35.0f);
@@ -361,12 +352,6 @@ void EditorSettings::Flush() {
     root["playDebugOverlay"] = Get().PlayDebugOverlay;
     root["layerVisibleMask"] = Get().LayerVisibleMask;
     root["layerPickLockMask"] = Get().LayerPickLockMask;
-    root["captureMode"] = Get().CaptureMode;
-    root["captureScale"] = Get().CaptureScale;
-    root["captureResPreset"] = Get().CaptureResPreset;
-    root["captureFormat"] = Get().CaptureFormat;
-    root["captureFlash"] = Get().CaptureFlash;
-    root["captureSound"] = Get().CaptureSound;
     root["viewShowGrid"] = Get().ViewShowGrid;
     root["viewShowGizmo"] = Get().ViewShowGizmo;
     root["viewFrameOnSelect"] = Get().ViewFrameOnSelect;

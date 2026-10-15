@@ -203,44 +203,7 @@ void Draw(const EditorModuleHostAPI& host) {
         }
         ImGui::PopStyleColor();
 
-        // The open scene, centred in the title bar like a document title: its name, an accent dot
-        // while it has unsaved changes, and a PLAYING tag in Play.
-        if (host.GetSceneTitle) {
-            char title[128] = {};
-            bool dirty = false, playing = false;
-            host.GetSceneTitle(title, (int)sizeof(title), &dirty, &playing);
-            const float tw = ImGui::CalcTextSize(title).x;
-            const float dot = dirty ? EditorTheme::Px(14.0f) : 0.0f;
-            EditorTheme::PushHeading();
-            const char* tag = "P L A Y I N G";
-            const float tagW = playing ? ImGui::CalcTextSize(tag).x + EditorTheme::Px(22.0f) : 0.0f;
-            EditorTheme::PopFont();
-            const float total = tw + dot + tagW;
-            const float x = std::floor((winW - total) * 0.5f);
-            const float menusEnd = ImGui::GetCursorScreenPos().x + EditorTheme::Px(24.0f);
-            const float controlsStart = winW - EditorTheme::Px(13.0f + 12.0f * 3.0f + 8.0f * 2.0f + 24.0f);
-            if (x > menusEnd && x + total < controlsStart) {
-                ImDrawList* dl = ImGui::GetWindowDrawList();
-                const float y = std::floor((toolbarH - fontH) * 0.5f);
-                dl->AddText(ImVec2(x, y), EditorTheme::U32(playing ? EditorTheme::Accent : EditorTheme::Secondary), title);
-                float cx = x + tw;
-                if (dirty) {
-                    dl->AddCircleFilled(ImVec2(cx + EditorTheme::Px(8.0f), y + fontH * 0.55f), EditorTheme::Px(3.0f),
-                                        EditorTheme::U32(EditorTheme::Accent));
-                    cx += dot;
-                }
-                if (playing) {
-                    EditorTheme::PushHeading();
-                    const float th = ImGui::GetFontSize();
-                    const ImVec2 mn(cx + EditorTheme::Px(10.0f), std::floor((toolbarH - th) * 0.5f) - EditorTheme::Px(3.0f));
-                    const ImVec2 mx(mn.x + ImGui::CalcTextSize(tag).x + EditorTheme::Px(12.0f), mn.y + th + EditorTheme::Px(6.0f));
-                    dl->AddRectFilled(mn, mx, EditorTheme::U32(EditorTheme::AccentWash), EditorTheme::Px(3.0f));
-                    dl->AddText(ImVec2(mn.x + EditorTheme::Px(6.0f), mn.y + EditorTheme::Px(3.0f)), EditorTheme::U32(EditorTheme::Accent), tag);
-                    EditorTheme::PopFont();
-                }
-            }
-        }
-
+        // (No centred scene title: the window title in the taskbar still names the scene.)
 
         // The traffic lights, at the right edge.
         DrawTrafficLights(host, toolbarH);

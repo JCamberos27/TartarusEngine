@@ -15,7 +15,7 @@
 #include "Texture.h"
 #include "Material.h"
 #include "AudioEngine.h"
-#include "Screenshot.h"
+#include "OsShell.h"
 #include "SceneSerializer.h"
 #include "AABB.h"
 #include "Log.h"
@@ -92,7 +92,14 @@ void EditorLayer::DrawPlayTransportButtons(bool playing, bool maximized, bool pa
         ImGui::PopStyleColor(3);
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Play the scene in the Game panel (F1)");
     } else {
-        if (ActionButton(ICON_FA_STOP "  Stop", "Stop and revert the scene (F1)")) m_PlayStopRequested = true;
+        // Stop is the red counterpart of the green Play.
+        const ImVec4 red = EditorTheme::Danger;
+        ImGui::PushStyleColor(ImGuiCol_Text,          red);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(red.x, red.y, red.z, 0.20f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(red.x, red.y, red.z, 0.32f));
+        if (ImGui::Button(ICON_FA_STOP "  Stop")) m_PlayStopRequested = true;
+        ImGui::PopStyleColor(3);
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Stop and revert the scene (F1)");
 
         // Pause toggle + single-frame Step (#236). Pause reads as pressed-in while active; Step
         // is only meaningful (and only enabled) once paused.
@@ -121,7 +128,7 @@ void EditorLayer::DrawPlayTransportButtons(bool playing, bool maximized, bool pa
 
 // The floating action bar centered over whichever of the Scene/Game viewports is on screen —
 // Undo/Redo/Save, the Play/Stop/Pause/Step/Fullscreen transport, and the panel-toggle /
-// screenshot / notification cluster that all used to live in the toolbar's one-click icon row.
+// notification cluster that all used to live in the toolbar's one-click icon row.
 // Moving them here (instead of a fixed toolbar strip) means they're always over the content
 // they act on, in both Scene and Game view, and freed the toolbar down to just its menu bar
 // (kToolbarHeight shrank to match — more of the window is now viewport). Replaces the old
@@ -230,9 +237,11 @@ void EditorLayer::DrawViewportActionBar(World& world, AssetLibrary& assets,
     // --- Panel toggles ------------------------------------------------------------------------
     divider();
     {
-        bool showStats = EditorSettings::Get().SceneShowStats;
-        if (ActionButton(EDITOR_ICON_STATISTICS, "Toggle Statistics", showStats)) {
-            EditorSettings::Get().SceneShowStats = !showStats;
+        // The stats drawn over the view itself (the Game view's readout, the Scene view's stats
+        // pill). The Statistics panel is Window > Statistics.
+        bool showStats = EditorSettings::Get().GameViewShowStats;
+        if (ActionButton(EDITOR_ICON_STATISTICS, "Show stats over the view", showStats)) {
+            EditorSettings::Get().GameViewShowStats = !showStats;
             EditorSettings::Save();
         }
     }
@@ -254,26 +263,6 @@ void EditorLayer::DrawViewportActionBar(World& world, AssetLibrary& assets,
     }
     ImGui::SameLine();
     if (ActionButton(EDITOR_ICON_HISTORY, "Toggle History", m_ShowHistory)) m_ShowHistory = !m_ShowHistory;
-
-    // --- Capture -------------------------------------------------------------------------------
-    divider();
-    {
-        char tip[128];
-        const EditorSettings& s = EditorSettings::Get();
-        static const char* kModes[] = { "Full editor window", "Scene viewport",
-                                        "Scene viewport (clean)", "Game view" };
-        const int cm = std::clamp(s.CaptureMode, 0, 3);
-        std::snprintf(tip, sizeof(tip), "Capture screenshot \xe2\x80\x94 %s%s (Print Screen)",
-                      kModes[cm], (cm == 1 || cm == 2) && s.CaptureScale > 1 ? " x2+" : "");
-        if (ActionButton(EDITOR_ICON_CAPTURE, tip)) RequestCapture();
-        ImGui::SameLine(0.0f, 1.0f * m_UIScale);
-        if (ActionButton(EDITOR_ICON_CARET_DOWN, "Capture options")) ImGui::OpenPopup("##ActionBarCapturePopup");
-        if (ImGui::BeginPopup("##ActionBarCapturePopup")) {
-            if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) ImGui::CloseCurrentPopup();
-            DrawCaptureOptionsPopupBody();
-            ImGui::EndPopup();
-        }
-    }
 
     ImGui::PopStyleColor(2);
     ImGui::End();
@@ -418,7 +407,7 @@ void EditorLayer::DrawStatusBar(World& world, Camera& editorCamera) {
         if (segment(x, segs[i].Text.c_str(), segs[i].Color, segs[i].Tip, id)) {
             switch (segs[i].Action) {
                 case 1: EditorSettings::Get().SceneShowStats = true; EditorSettings::Save(); break;
-                case 2: if (!m_CurrentScenePath.empty()) Screenshot::ShowInFolder(m_CurrentScenePath); break;
+                case 2: if (!m_CurrentScenePath.empty()) OsShell::ShowInFolder(m_CurrentScenePath); break;
                 case 3: SetLockViewToSelection(false); break;
                 case 4: FocusOnSelection(world, editorCamera); break;
                 case 5: SetHandToolActive(!m_HandTool); break;
@@ -558,16 +547,6 @@ void EditorLayer::DrawHistoryListBody(World& world, AssetLibrary& assets) {
         ImGui::PopID();
     }
 }
-// Fixed output sizes offered by the Capture popup's "Resolution" dropdown. Index 0 keeps the
-// live viewport size (and lets Supersample apply); the rest force an exact render target.
-// Shared by the toolbar popup and RequestCapture().
-static const struct { const char* label; int w, h; } kCaptureRes[] = {
-    { "Match viewport", 0,    0    },
-    { "1280 x 720",     1280, 720  },
-    { "1920 x 1080",    1920, 1080 },
-    { "2560 x 1440",    2560, 1440 },
-    { "3840 x 2160",    3840, 2160 },
-};
 
 float EditorLayer::ToolbarHeightPx() const { return kToolbarHeight * m_UIScale; }
 float EditorLayer::StatusBarHeightPx() const { return kStatusBarHeight * m_UIScale; }
@@ -914,46 +893,6 @@ void EditorLayer::DrawWindowMenuBody() {
             }
 }
 
-// The capture options popup body (Mode / Resolution / Supersample / Format / Flash / Sound +
-// "Capture now" + "Open screenshots folder"). The module owns the toolbar camera button and the
-// caret that opens this; the module wraps the call in its own BeginPopup("##CapturePopup") and
-// xpMenuTextPush/Pop.
-void EditorLayer::DrawCaptureOptionsPopupBody() {
-    auto& cs = EditorSettings::Get();
-    static const char* kModes[] = { "Full editor window", "Scene viewport", "Scene viewport (clean)", "Game view" };
-    {
-        {
-            ImGui::PushItemWidth(150.0f * m_UIScale);
-            ImGui::TextDisabled("Capture");
-            if (ImGui::Combo("Mode", &cs.CaptureMode, kModes, IM_ARRAYSIZE(kModes))) EditorSettings::Save();
-            const bool viewportMode = (cs.CaptureMode == 1 || cs.CaptureMode == 2);
-            ImGui::BeginDisabled(!viewportMode);
-            const char* kResLabels[IM_ARRAYSIZE(kCaptureRes)];
-            for (int i = 0; i < IM_ARRAYSIZE(kCaptureRes); ++i) kResLabels[i] = kCaptureRes[i].label;
-            if (ImGui::Combo("Resolution", &cs.CaptureResPreset, kResLabels, IM_ARRAYSIZE(kResLabels)))
-                EditorSettings::Save();
-            ImGui::EndDisabled();
-            ImGui::BeginDisabled(!viewportMode || cs.CaptureResPreset != 0);
-            static const char* kScales[] = { "1x", "2x", "4x" };
-            int si = cs.CaptureScale >= 4 ? 2 : (cs.CaptureScale >= 2 ? 1 : 0);
-            if (ImGui::Combo("Supersample", &si, kScales, IM_ARRAYSIZE(kScales))) {
-                cs.CaptureScale = si == 2 ? 4 : (si == 1 ? 2 : 1); EditorSettings::Save();
-            }
-            ImGui::EndDisabled();
-            static const char* kFmt[] = { "PNG", "JPG" };
-            if (ImGui::Combo("Format", &cs.CaptureFormat, kFmt, IM_ARRAYSIZE(kFmt))) EditorSettings::Save();
-            if (EditorUIPrimitives::Checkbox("Flash", &cs.CaptureFlash)) EditorSettings::Save();
-            ImGui::SameLine();
-            if (EditorUIPrimitives::Checkbox("Sound", &cs.CaptureSound)) EditorSettings::Save();
-            ImGui::Separator();
-            if (ImGui::MenuItem(ICON_FA_CAMERA_RETRO "  Capture now")) { RequestCapture(); ImGui::CloseCurrentPopup(); }
-            if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open screenshots folder"))
-                Screenshot::ShowInFolder(m_LastCapturePath.empty() ? Screenshot::Dir() : m_LastCapturePath);
-            ImGui::PopItemWidth();
-        }
-    }
-}
-
 void EditorLayer::DrawGridSnapPopupBody() {
     auto& gs = EditorSettings::Get();
     ImGui::PushItemWidth(120.0f * m_UIScale);
@@ -1111,9 +1050,3 @@ void EditorLayer::DrawGizmosPopupBody() {
     }
 }
 
-void EditorLayer::RequestCapture() {
-    const auto& s = EditorSettings::Get();
-    const int rp = std::clamp(s.CaptureResPreset, 0, (int)IM_ARRAYSIZE(kCaptureRes) - 1);
-    m_CaptureReq = { /*pending*/ true, /*primed*/ false, s.CaptureMode, std::max(1, s.CaptureScale),
-                     s.CaptureFormat, kCaptureRes[rp].w, kCaptureRes[rp].h };
-}

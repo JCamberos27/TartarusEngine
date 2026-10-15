@@ -465,24 +465,6 @@ inline void UniquifyName(World& world, entt::entity e) {
     nc->Name = UniqueNameFor(world, desired);
 }
 
-// A screenshot on disk already holds display-encoded (sRGB) bytes. Load it as literal color
-// (IsSRGB = false) so the Asset Browser thumbnail and the lightbox render it at true brightness
-// — the default sRGB path hardware-linearizes on sample, which is right for a 3D albedo map but
-// visibly darkens a UI image.
-//
-// maxSize controls the two very different jobs this shares: the lightbox (DrawScreenshotPreview)
-// wants the full-quality capture since the user can scroll-to-zoom into it, so it passes 0 (no
-// cap, see TextureImportSettings::MaxTextureSize). The Asset Browser grid thumbnail renders at
-// ~96px, so it caps small to cut decode/VRAM cost (#176) instead of loading (and nearest-
-// downsampling, #207) the full-res capture just to shrink it back down for display.
-inline std::shared_ptr<Texture> LoadScreenshotTexture(const std::string& path, int maxSize) {
-    TextureImportSettings s;
-    s.IsSRGB = false;
-    s.WrapMode = TextureImportSettings::Wrap::ClampToEdge;
-    s.MaxTextureSize = maxSize;
-    return std::make_shared<Texture>(path, s);
-}
-
 // --- Clip pickers (EditorLayer_Animator.cpp) -----------------------------------------------------
 // Model files anywhere under the project (project-relative, sorted), so a picker can offer an
 // animation file that no scene has loaded yet - it loads when picked. Rescanned every few seconds.
