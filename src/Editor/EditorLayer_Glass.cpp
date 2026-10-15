@@ -220,6 +220,21 @@ struct CardTable {
     void End() { if (open) ImGui::EndTable(); open = false; }
 };
 
+// A Glass Workspace panel's first open: a tab in the dock node of its classic counterpart (the
+// Objects panel next to the Hierarchy, and so on), selected, so it takes that place in the layout
+// instead of floating over it. `fallbackPos` is used when the counterpart isn't docked. Once the
+// window exists (or imgui.ini knows it) the user's own placement wins.
+void PlaceGlassPanel(const char* glassName, const char* classicName, ImVec2 fallbackPos, ImVec2 size) {
+    ImGui::SetNextWindowPos(fallbackPos, ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(size, ImGuiCond_FirstUseEver);
+    if (ImGui::FindWindowByName(glassName) || ImGui::FindWindowSettingsByID(ImHashStr(glassName))) return;
+    const ImGuiWindow* classic = ImGui::FindWindowByName(classicName);
+    if (classic && classic->DockId != 0) {
+        ImGui::SetNextWindowDockID(classic->DockId, ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowFocus();
+    }
+}
+
 // Starts a card row: top padding. Returns the row's top (screen y).
 float BeginCard() {
     ImGui::TableNextRow();
@@ -417,10 +432,11 @@ void EditorLayer::DrawGlassHierarchy(World& world, AssetLibrary& assets) {
     auto& reg = world.Registry;
 
     {
-        // First open: floating at the left of the editor, clear of the menu and toolbar.
+        // First open: docked with the Hierarchy, or floating at the left of the editor.
         const ImGuiViewport* vp = ImGui::GetMainViewport();
-        ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + Glass::Px(Glass::Space4), vp->WorkPos.y + Glass::Px(Glass::Space4) * 3.0f), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(Glass::Px(300.0f), Glass::Px(520.0f)), ImGuiCond_FirstUseEver);
+        PlaceGlassPanel(EditorPanels::GlassHierarchy, EditorPanels::Hierarchy,
+                        ImVec2(vp->WorkPos.x + Glass::Px(Glass::Space4), vp->WorkPos.y + Glass::Px(Glass::Space4) * 3.0f),
+                        ImVec2(Glass::Px(300.0f), Glass::Px(520.0f)));
     }
     bool windowOpen = true;
     const bool visible = ImGui::Begin(EditorPanels::GlassHierarchy, &windowOpen);
@@ -610,13 +626,13 @@ void EditorLayer::DrawGlassHierarchy(World& world, AssetLibrary& assets) {
                 g.SelectionRowPrev = target;
                 const float y = baseY + (at - (float)baseIndex) * rowH;
                 const ImRect panel(table->OuterRect.Min.x + inset, y, table->OuterRect.Max.x - inset, y + rowH);
-                ImGui::TablePushBackgroundChannel();
+                // After the clipper loop no cell is current, so not TablePush/PopBackgroundChannel.
+                Glass::TableBackground under;
                 Glass::DrawSquircle(dl, panel.Min, panel.Max, Col(Glass::AccentWash), Glass::Px(Glass::RadiusRow));
                 const float barW = Glass::Px(3.0f), barInset = Glass::Px(6.0f);
                 dl->AddRectFilled(ImVec2(panel.Min.x + Glass::Px(Glass::SpaceHalf), panel.Min.y + barInset),
                                   ImVec2(panel.Min.x + Glass::Px(Glass::SpaceHalf) + barW, panel.Max.y - barInset),
                                   Col(Glass::Accent), barW * 0.5f);
-                ImGui::TablePopBackgroundChannel();
             } else {
                 g.SelectionRowPrev = -1.0f;
             }
@@ -641,11 +657,12 @@ void EditorLayer::DrawGlassInspector(World& world, AssetLibrary& assets) {
     auto& reg = world.Registry;
 
     {
-        // First open: floating at the right of the editor.
+        // First open: docked with the Inspector, or floating at the right of the editor.
         const ImGuiViewport* vp = ImGui::GetMainViewport();
-        ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x - Glass::Px(360.0f) - Glass::Px(Glass::Space4),
-                                       vp->WorkPos.y + Glass::Px(Glass::Space4) * 3.0f), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(Glass::Px(360.0f), Glass::Px(560.0f)), ImGuiCond_FirstUseEver);
+        PlaceGlassPanel(EditorPanels::GlassInspector, EditorPanels::Inspector,
+                        ImVec2(vp->WorkPos.x + vp->WorkSize.x - Glass::Px(360.0f) - Glass::Px(Glass::Space4),
+                               vp->WorkPos.y + Glass::Px(Glass::Space4) * 3.0f),
+                        ImVec2(Glass::Px(360.0f), Glass::Px(560.0f)));
     }
     bool windowOpen = true;
     const bool visible = ImGui::Begin(EditorPanels::GlassInspector, &windowOpen);
@@ -877,11 +894,12 @@ void EditorLayer::DrawGlassLibrary(World& world, AssetLibrary& assets) {
     GlassEditorState& g = GlassState();
 
     {
-        // First open: floating along the bottom centre of the editor.
+        // First open: docked with the Asset Browser, or floating along the bottom centre.
         const ImGuiViewport* vp = ImGui::GetMainViewport();
-        ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + (vp->WorkSize.x - Glass::Px(640.0f)) * 0.5f,
-                                       vp->WorkPos.y + vp->WorkSize.y - Glass::Px(360.0f) - Glass::Px(Glass::Space4)), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowSize(ImVec2(Glass::Px(640.0f), Glass::Px(360.0f)), ImGuiCond_FirstUseEver);
+        PlaceGlassPanel(EditorPanels::GlassAssets, EditorPanels::Assets,
+                        ImVec2(vp->WorkPos.x + (vp->WorkSize.x - Glass::Px(640.0f)) * 0.5f,
+                               vp->WorkPos.y + vp->WorkSize.y - Glass::Px(360.0f) - Glass::Px(Glass::Space4)),
+                        ImVec2(Glass::Px(640.0f), Glass::Px(360.0f)));
     }
     bool windowOpen = true;
     const bool visible = ImGui::Begin(EditorPanels::GlassAssets, &windowOpen);

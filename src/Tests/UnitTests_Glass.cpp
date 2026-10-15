@@ -284,6 +284,41 @@ void TestGlassRevealRowsKeepLayoutValid() {
     CHECK(Glass::Motion().LiveCount() == 0);
 }
 
+// Drawing under a table's rows after an ImGuiListClipper loop (the Objects panel's gliding
+// selection panel): no cell is current there, which ImGui's own background-channel push/pop
+// can't handle (it indexes the columns with -1). Glass::TableBackground can, and restores the
+// channel and clip rect it found.
+void TestGlassTableBackgroundAfterClipper() {
+    HeadlessImGui gui;
+    bool sawNoCell = false, restored = false, drewInBackground = false;
+    gui.Frame([&] {
+        if (!ImGui::BeginTable("##t", 2)) return;
+        ImGuiListClipper clipper;
+        clipper.Begin(200, 20.0f);
+        while (clipper.Step())
+            for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i) {
+                ImGui::TableNextRow(ImGuiTableRowFlags_None, 20.0f);
+                ImGui::TableSetColumnIndex(0);
+                ImGui::Text("%d", i);
+            }
+        ImGuiTable* t = ImGui::GetCurrentTable();
+        sawNoCell = t->CurrentColumn < 0;
+        const int channel = t->DrawSplitter->_Current;
+        const ImRect clip = ImGui::GetCurrentWindow()->ClipRect;
+        {
+            Glass::TableBackground under;
+            drewInBackground = t->DrawSplitter->_Current == t->Bg2DrawChannelCurrent;
+            ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(0, 0), ImVec2(10, 10), IM_COL32_WHITE);
+        }
+        const ImRect after = ImGui::GetCurrentWindow()->ClipRect;
+        restored = t->DrawSplitter->_Current == channel && after.Min.x == clip.Min.x && after.Max.y == clip.Max.y;
+        ImGui::EndTable();
+    });
+    CHECK(sawNoCell);
+    CHECK(drewInBackground);
+    CHECK(restored);
+}
+
 void TestGlassMotionButtonPolicy() {
     HeadlessImGui gui;
     ImGuiIO& io = ImGui::GetIO();
@@ -371,6 +406,7 @@ void RegisterGlassTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Glass motion: fast pointer sweeps don't light rows", TestGlassVelocityGate);
     tests.emplace_back("Glass layout: reveal moves the layout and clips hit-testing", TestGlassRevealClipGuard);
     tests.emplace_back("Glass layout: staggered rows keep ImGui's layout valid", TestGlassRevealRowsKeepLayoutValid);
+    tests.emplace_back("Glass layout: drawing under a table after a clipped loop", TestGlassTableBackgroundAfterClipper);
     tests.emplace_back("Glass layout: moving buttons stay clickable", TestGlassMotionButtonPolicy);
     tests.emplace_back("Glass motion: springs, curves and stagger", TestGlassSprings);
 }
