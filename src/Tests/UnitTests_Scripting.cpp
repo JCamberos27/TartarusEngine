@@ -643,7 +643,7 @@ void TestExportedProjectHost() {
     CHECK(world.Registry.view<FirstPersonControllerComponent>().empty());CHECK(world.Registry.view<NpcSpawnComponent>().empty());
     Stop(&world,&assets);
 }
-void TestProjectLifecycleAndSession(){
+void TestProjectLifecycleAndLoadout(){
     using namespace Scripting;
     NpcMateFrame member;member.Feet={0,0,0};NpcSpawnFrame spawn;spawn.Position={0,0,0};spawn.Yaw=0;spawn.Now=10;spawn.Index=2;spawn.Weapon=2;spawn.Random=3;spawn.Count=1;spawn.Members=reinterpret_cast<std::uintptr_t>(&member);
     CHECK(InvokeProject("npc.spawn",&spawn,sizeof spawn));CHECK(spawn.Weapon==1 && std::abs(spawn.Feet.x-1.2f)<.001f);CHECK(spawn.AimYaw==90 && std::abs(spawn.Eye.y-1.62f)<.001f);CHECK(spawn.NextThink==10.1f && spawn.AgentHeight==1.8f);
@@ -662,10 +662,6 @@ void TestProjectLifecycleAndSession(){
     CHECK(InvokeProject("npc.respawn",&respawn,sizeof respawn));CHECK(respawn.Best==1 && respawn.Ready && !respawn.Discard && respawn.Timer==12);respawn.Alive=4;CHECK(InvokeProject("npc.respawn",&respawn,sizeof respawn));CHECK(respawn.Discard && !respawn.Ready);
     NpcShotEffectFrame shot;shot.Player.Valid=1;shot.Player.Eye={1,1,10};shot.Origin={0,1,0};shot.End={0,1,20};shot.FirstPellet=1;shot.Reach=5;CHECK(InvokeProject("npc.shot-effects",&shot,sizeof shot));CHECK(shot.Commands==7 && shot.Tracer==1 && shot.Miss==1);shot.Shotgun=1;CHECK(InvokeProject("npc.shot-effects",&shot,sizeof shot));CHECK(shot.Commands==5 && shot.Tracer==1);
     shot.Operation=2;shot.Friendly=1;shot.Damage=40;shot.Suppression=.9f;CHECK(InvokeProject("npc.shot-effects",&shot,sizeof shot));CHECK(shot.Damage==20 && shot.Suppression==1 && shot.Commands==(32|64));
-    GameSessionFrame session;session.HasInput=1;session.Scroll=-1;CHECK(InvokeProject("session",&session,sizeof session));CHECK(session.SlotDirection==1 && (session.Commands&8));session.HasInput=0;CHECK(InvokeProject("session",&session,sizeof session));CHECK(session.Commands==512 && session.SlotDirection==0);
-    session.Operation=1;session.Invisible=1;session.InfiniteAmmo=1;session.PlayerValid=1;session.Armed=1;session.Magazine=30;CHECK(InvokeProject("session",&session,sizeof session));CHECK(!session.PlayerValid && session.Ammo==30 && session.Commands==1024);
-    session={};session.Operation=2;session.Dead=1;session.WantsRespawn=1;session.RespawnFeet={2,3,4};session.EyeHeight=1.5f;CHECK(InvokeProject("session",&session,sizeof session));CHECK(session.Commands==4096 && session.Position.x==2 && session.Camera.y==4.5f);
-    session.Operation=3;session.NpcHit=1;session.AliveHit=1;session.Killed=1;CHECK(InvokeProject("session",&session,sizeof session));CHECK(session.Commands==(16384|32768));session.AliveHit=0;session.Killed=0;CHECK(InvokeProject("session",&session,sizeof session));CHECK(session.Commands==0);
     int ammo[2]={3,7};WeaponLoadoutFrame loadout;loadout.Operation=3;loadout.Count=2;loadout.SlotAmmo=reinterpret_cast<std::uintptr_t>(ammo);loadout.Active=1;loadout.Magazine=30;loadout.CycleWait=2;CHECK(InvokeProject("weapon.loadout",&loadout,sizeof loadout));CHECK(ammo[0]==-1 && ammo[1]==-1 && loadout.Ammo==30 && loadout.Chambered && loadout.CycleWait==0);
     loadout.Operation=0;loadout.Slot=0;loadout.Pending=-1;loadout.Value=1;loadout.Equipped=1;CHECK(InvokeProject("weapon.loadout",&loadout,sizeof loadout));CHECK(loadout.Pending==1 && !loadout.Equipped && loadout.Commands==12);
     loadout.Operation=2;loadout.Requested=0;loadout.Burst=3;CHECK(InvokeProject("weapon.loadout",&loadout,sizeof loadout));CHECK(loadout.Pending==-1 && loadout.Burst==0 && loadout.Commands==6);
@@ -728,21 +724,8 @@ void TestProjectLocomotionAndCallouts() {
     radio.Kind=9;CHECK(InvokeProject("npc.callouts",&radio,sizeof radio));CHECK(channel.LastEvent[9]==11 && channel.OnAirPriority==9);
     members[0].Dummy=1;radio.Now=20;radio.Caller=0;CHECK(InvokeProject("npc.callouts",&radio,sizeof radio));CHECK(channel.LastEvent[9]==11);
 }
-void TestProjectHealthAndHud() {
-    using namespace Scripting;using Json=nlohmann::json;
-    Json legacy={{"Health",{{"Max",250},{"Invulnerable",true}}}};
-    CHECK(MigrateLegacyProjectComponents(legacy));CHECK(!MigrateLegacyProjectComponents(legacy));
-    CHECK(legacy["C# Script"]["Class"]=="Tartarus.Gameplay.Health");
-    std::string output;CHECK(RequestProject("health.create",R"({"entity":4242,"fields":{"Max":250,"Invulnerable":false}})",output));
-    NpcDamageFrame damage;damage.UseHealth=1;damage.Entity=4242;damage.Amount=30;damage.Zone=1;damage.Attacker=1;
-    CHECK(InvokeProject("npc.damage",&damage,sizeof damage));CHECK(damage.Health==220 && damage.MaxHealth==250 && !damage.Ignore);
-    // Projection inputs cannot replace authoritative health.
-    damage.Health=999;damage.Amount=20;CHECK(InvokeProject("npc.damage",&damage,sizeof damage));CHECK(damage.Health==200);
-    CHECK(Invoke(5,nullptr,0));
-    damage.Operation=2;CHECK(InvokeProject("npc.damage",&damage,sizeof damage));CHECK(damage.Health==200 && damage.MaxHealth==250);
-    CHECK(RequestProject("health.create",R"({"entity":4242,"fields":{"Max":250,"Invulnerable":true}})",output));
-    damage.Operation=0;damage.Amount=50;damage.Ignore=0;CHECK(InvokeProject("npc.damage",&damage,sizeof damage));CHECK(damage.Ignore && damage.Health==250);
-    CHECK(RequestProject("health.remove",R"({"entity":4242})",output));damage.Ignore=0;damage.Operation=2;CHECK(InvokeProject("npc.damage",&damage,sizeof damage));CHECK(damage.Ignore);
+void TestProjectCanvasScopes() {
+    using namespace Scripting;
     // Canvas handles work only in their drawing scope; nested scopes restore their parent.
     NativeRequest query;CHECK(!RuntimeCanvasService(query));std::uint32_t oldToken=0;
     HudText outer;outer.Begin(640,480);
@@ -858,31 +841,24 @@ void TestProjectNpcDecisions() {
     f.CoverSearchBlocked=1;choose();CHECK(f.Delay && !f.Change && f.NextThink==20); // one cover search per frame
     f.Wounded=1;choose();CHECK(f.Best==10 && f.Change); // wounded soldiers crawl instead of choosing an attack
     f.Wounded=0;f.CoverSearchBlocked=0;f.Health=100;f.LastHurt=-1e9f;f.HasFlank=1;f.PlayerStill=12;f.LimpUntil=25;choose();CHECK(f.Scores[5]==0 && f.Scores[6]==0); // limping prevents flank/push
-    NpcDamageFrame hit;hit.Now=10;hit.Amount=60;hit.Health=hit.MaxHealth=100;hit.Attacker=-1;hit.Zone=0;hit.Part=-1;
-    auto damage=[&](){CHECK(InvokeProject("npc.damage",&hit,sizeof hit));};
-    damage();CHECK(hit.Kill && hit.Health==40 && hit.Known && hit.Hits==1); // the player's headshot executes
-    hit={};hit.Now=10;hit.Amount=20;hit.Health=hit.MaxHealth=100;hit.Attacker=-1;hit.Zone=2;hit.Part=-1;hit.LimpTime=4;hit.HeavyHitDamage=15;hit.StaggerTime=.5f;hit.Direction={0,0,-1};
-    damage();CHECK(!hit.Kill && hit.Health==80 && hit.LimpUntil==14 && hit.StaggerUntil==10.5f && hit.Flinch);
-    CHECK(hit.PushVelocity.z<0 && hit.ReactionLeft>=.5f);
-    hit={};hit.Now=10;hit.Amount=15;hit.Health=30;hit.MaxHealth=100;hit.Attacker=-1;hit.Zone=1;hit.Part=-1;hit.WoundChance=.35f;
-    damage();CHECK(hit.NeedRandom && hit.WoundRolled && !hit.Kill);
-    hit.Operation=1;hit.Random=.2f;damage();CHECK(hit.BecomeWounded && !hit.CallWounded);
-    hit={};hit.Dead=1;hit.Amount=15;damage();CHECK(hit.Ignore && hit.Hits==0);
 }
-void TestProjectMigration() {
+void TestHealthMigration() {
     using namespace Scripting;using Json=nlohmann::json;
-    // The old native Health block becomes the project's Health script, next to the scripts already there.
-    Json legacy={{"Health",{{"Max Health",150},{"Regen Delay",3},{"Death SoundGuid","123456789abcdef0"}}},
-        {"C# Script",{{"Class","Tartarus.Gameplay.Bob"},{"Fields JSON","{}"},{"Scripts","[]"},{"Next Script ID",8}}}};
-    CHECK(MigrateLegacyProjectComponents(legacy));CHECK(!MigrateLegacyProjectComponents(legacy));
-    CHECK(!legacy.contains("Health") && legacy.at("C# Script").at("Class")=="Tartarus.Gameplay.Bob");
-    auto extra=Json::parse(legacy.at("C# Script").at("Scripts").get<std::string>());
-    CHECK(extra.size()==1 && extra[0].at("id")==8 && extra[0].at("class")=="Tartarus.Gameplay.Health");
-    CHECK(extra[0].at("fields").at("MaxHealth")==150 && !extra[0].at("fields").contains("DeathSoundGuid"));
+    // A Health script slot from the C# era becomes the native Health component, next to the scripts that stay.
+    Json node={{"C# Script",{{"Class","Tartarus.Gameplay.Bob"},{"Fields JSON","{}"},{"Next Script ID",9},
+        {"Scripts",Json::array({{{"id",8},{"class","Tartarus.Gameplay.Health"},{"fields",{{"Max",150},{"Invulnerable",true}}},{"enabled",true}}}).dump()}}}};
+    CHECK(ConvertScriptDefinitions(node));CHECK(!ConvertScriptDefinitions(node));
+    CHECK(node.at("C# Script").at("Class")=="Tartarus.Gameplay.Bob" && Json::parse(node.at("C# Script").at("Scripts").get<std::string>()).empty());
+    CHECK(node.at("Health").at("Max")==150 && node.at("Health").at("Invulnerable")==true);
+    // The native block loads as the component again (Current starts unset: Play fills it).
+    World world;AssetLibrary assets;
+    CHECK(SceneSerializer::LoadFromString(world,assets,Json{{"formatVersion",4},{"empties",Json::array({{{"id",0},{"name","Crate"},{"Health",{{"Max",40},{"Invulnerable",false}}}}})}}.dump()));
+    auto healthy=world.Registry.view<HealthComponent>();CHECK(healthy.size()==1);
+    if(healthy.size()==1){const auto& h=healthy.get<HealthComponent>(healthy.front());CHECK(h.Max==40 && !h.Invulnerable && h.Current<0);}
 }
 }
 void RegisterScriptingTests(UnitTestSupport::TestList& tests) {
-    tests.emplace_back("Project NPC lifecycle and session rules",TestProjectLifecycleAndSession);
+    tests.emplace_back("Project NPC lifecycle and loadout rules",TestProjectLifecycleAndLoadout);
     tests.emplace_back("Project body actions and squad callout scheduling",TestProjectLocomotionAndCallouts);
     tests.emplace_back("Empty project host and generic bootstrap",TestEmptyProject);
     tests.emplace_back("Exported generic project host",TestExportedProjectHost);
@@ -890,9 +866,9 @@ void RegisterScriptingTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Project NPC behavior selection",TestProjectNpcDecisions);
     tests.emplace_back("Project NPC states, cover and navigation",TestProjectNpcBehaviour);
     tests.emplace_back("Project NPC configuration and scene migration",TestProjectNpcConfiguration);
-    tests.emplace_back("Project health authority and canvas scopes",TestProjectHealthAndHud);
+    tests.emplace_back("Project canvas scopes",TestProjectCanvasScopes);
     tests.emplace_back("Project NPC perception, squad roles and covering fire",TestProjectNpcPerceptionAndSquads);
-    tests.emplace_back("Project component migration",TestProjectMigration);
+    tests.emplace_back("Health script slot becomes the native component",TestHealthMigration);
     tests.emplace_back("Prefab-relative draggable script references",TestSceneReferences);
     tests.emplace_back("Managed gameplay ABI, fire modes and pump",TestManagedGameplay);
     tests.emplace_back("Managed components, lifecycle and weapon prefabs",TestManagedComponentsAndPrefabs);

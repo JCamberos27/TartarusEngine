@@ -197,6 +197,17 @@ void RegisterEngineComponents() {
             {"Aim Blend Time", T::Float, TARTARUS_REFLECT_FIELD(OpticAttachmentComponent, AimBlendTime), 0.01f, "Seconds to move between aim points when changing optics while aiming.", 0.0f, 1.0f},
         }
     });
+    Register<HealthComponent>({
+        "Health", ICON_FA_HEART,
+        "Hit points: rounds that hit this object take them away, and at 0 it is dead.\n"
+        "Starts full every Play.",
+        "Gameplay",
+        {
+            { "Max", T::Float, TARTARUS_REFLECT_FIELD(HealthComponent, Max), 1.0f, "Full health.", 1.0f, 100000.0f },
+            { "Invulnerable", T::Bool, TARTARUS_REFLECT_FIELD(HealthComponent, Invulnerable), 0.0f,
+              "Hits register but take nothing." },
+        },
+    });
     {
         ReflectComponent m;
         m.Name = "NPC Spawn"; m.Icon = ICON_FA_PERSON_RIFLE; m.Category = "AI";

@@ -723,10 +723,9 @@ void WarnUnknownComponentBlocks(const json& j) {
 }
 
 void ReadCommonComponents(const json& j, World& world, AssetLibrary& assets, entt::entity entity) {
-    if(j.contains("Health") || j.contains("C# Script")) {
+    if(j.contains("C# Script")) {
         auto migrated=j;
-        const bool health=Scripting::MigrateLegacyProjectComponents(migrated);
-        if(Scripting::ConvertScriptDefinitions(migrated) || health) {
+        if(Scripting::ConvertScriptDefinitions(migrated)) {
             ReadCommonComponents(migrated,world,assets,entity);
             return;
         }

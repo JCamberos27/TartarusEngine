@@ -10,7 +10,6 @@
 #include "Player.h"
 #include "FirstPersonPresentation.h"
 #include "Game/Scripting/ScriptRuntime.h"
-#include "Game/Scripting/GameCommands.h"
 #include "FirstPersonWeaponTest.h" // --weapon-test
 #include "WeaponLab.h"            // --weapon-lab
 #include "BodyDebugDraw.h"
@@ -2477,31 +2476,45 @@ int main(int argc, char** argv) {
                         // The weapon owns Fire1/Fire2/FireMode/Reload/Inspect/Melee while it's in
                         // hand. With the gravity gun on the controller, holstering hands the mouse
                         // to it instead (gravityGunLive), so the two never read the same frame.
-                        // 1 = the AK, 2 = the Remington, 3 = unarmed; the wheel steps through them too. F = the flashlight.
-                        Scripting::GameSessionFrame session;session.HasInput=gameHasInput;session.GravityLive=gravityGunLive();session.Dead=playerVitals.IsDead();session.Equipped=firstPersonPresentation.IsEquipped();session.Scroll=(float)Input::GetScrollDeltaY();
-                        if(!Scripting::InvokeProject("session",&session,sizeof session))throw std::runtime_error("Project session input unavailable");
-                        const bool wasEquipped=firstPersonPresentation.IsEquipped();
-                        if(session.Commands&Scripting::kSessionSlot1)firstPersonPresentation.SelectSlot(0);
-                        if(session.Commands&Scripting::kSessionSlot2)firstPersonPresentation.SelectSlot(1);
-                        if(session.Commands&Scripting::kSessionUnarmed)firstPersonPresentation.SetEquipped(false);
-                        if(session.Commands&Scripting::kSessionFlashlight)flashlight.Toggle(player.Cam.Position);
-                        if(session.Commands&Scripting::kSessionCycleSlot)firstPersonPresentation.CycleSlot(session.SlotDirection);
-                        if(session.Commands&Scripting::kSessionHolster){Scripting::GameSessionFrame equip;equip.Operation=4;equip.Equipped=firstPersonPresentation.IsEquipped();Scripting::InvokeProject("session",&equip,sizeof equip);firstPersonPresentation.SetEquipped(equip.Equipped!=0);}
-                        if(playGravityGun && !wasEquipped && firstPersonPresentation.IsEquipped()){
-                            if(PhysicsWorld::IsGrabbing())PhysicsWorld::ReleaseBody(false,nullptr);gravityGun.Reset();
+                        // Weapon1/Weapon2/Weapon3/Holster always switch between them; F is the flashlight.
+                        const bool weaponInput = gameHasInput && !gravityGunLive() && !playerVitals.IsDead();
+                        if (gameHasInput && !playerVitals.IsDead()) {
+                            const bool wasEquipped = firstPersonPresentation.IsEquipped();
+                            // 1 = the Animation Set, 2 = the Secondary Animation Set, 3 = unarmed (the gravity gun).
+                            if (InputMap::GetButtonDown("Weapon1")) firstPersonPresentation.SelectSlot(0);
+                            if (InputMap::GetButtonDown("Weapon2")) firstPersonPresentation.SelectSlot(1);
+                            if (InputMap::GetButtonDown("Weapon3")) firstPersonPresentation.SetEquipped(false);
+                            if (InputMap::GetButtonDown("Flashlight")) flashlight.Toggle(player.Cam.Position);
+                            // The wheel is the gravity gun's hold distance, so it only switches without one:
+                            // through the weapons, then unarmed.
+                            if (!playGravityGun && Input::GetScrollDeltaY() != 0.0)
+                                firstPersonPresentation.CycleSlot(Input::GetScrollDeltaY() < 0.0 ? 1 : -1);
+                            if (InputMap::GetButtonDown("Holster"))
+                                firstPersonPresentation.SetEquipped(!firstPersonPresentation.IsEquipped());
+                            // Drawing the weapon drops whatever the gravity gun was holding.
+                            if (playGravityGun && !wasEquipped && firstPersonPresentation.IsEquipped()) {
+                                if (PhysicsWorld::IsGrabbing()) PhysicsWorld::ReleaseBody(false, nullptr);
+                                gravityGun.Reset();
+                            }
                         }
-                        if(session.Commands&Scripting::kSessionFireMode)firstPersonPresentation.ToggleFireMode();
-                        if(session.Commands&Scripting::kSessionWeaponInput){firstPersonPresentation.UpdateTrigger(session.FirePressed!=0,session.FireHeld!=0);firstPersonPresentation.UpdateReloadKey(session.ReloadHeld!=0,gameDt);}
-                        if(session.Commands&Scripting::kSessionInspect)firstPersonPresentation.TriggerAction("Inspect");
-                        if(session.Commands&Scripting::kSessionMelee)firstPersonPresentation.TriggerAction("Melee");
-                        if(session.Commands&Scripting::kSessionResetReload)firstPersonPresentation.ResetReloadKey();
+                        if (weaponInput) {
+                            if (InputMap::GetButtonDown("FireMode")) firstPersonPresentation.ToggleFireMode();
+                            firstPersonPresentation.UpdateTrigger(InputMap::GetButtonDown("Fire1"),
+                                                                  InputMap::GetButton("Fire1"));
+                            // R is tap-to-reload, hold-to-check-the-magazine.
+                            firstPersonPresentation.UpdateReloadKey(InputMap::GetButton("Reload"), gameDt);
+                            if (InputMap::GetButtonDown("Inspect")) firstPersonPresentation.TriggerAction("Inspect");
+                            if (InputMap::GetButtonDown("Melee")) firstPersonPresentation.TriggerAction("Melee");
+                        } else {
+                            firstPersonPresentation.ResetReloadKey(); // focus lost mid-press: never resolve it as a tap
+                        }
                         if (npcTest && !playerVitals.IsDead()) {
                             firstPersonPresentation.UpdateTrigger(npcTest->Firing(), npcTest->Firing());
                             if (npcTest->WantsReload()) firstPersonPresentation.Reload();
                         }
                         // No lean key: aiming at a corner peeks around it (the presentation's corner peek).
-                        firstPersonPresentation.Tick(gameDt, player.Velocity, session.SprintHeld!=0,
-                                                     (session.AimHeld!=0) || (npcTest && npcTest->Aiming()), 0.0f,
+                        firstPersonPresentation.Tick(gameDt, player.Velocity, gameHasInput && InputMap::GetButton("Sprint"),
+                                                     (weaponInput && InputMap::GetButton("Fire2")) || (npcTest && npcTest->Aiming()), 0.0f,
                                                      player.Grounded);
                         }
                         // This frame's recoil on the view (Tick just worked it out), not last frame's.
@@ -2536,10 +2549,12 @@ int main(int argc, char** argv) {
                             playerSnap.Reloading = firstPersonPresentation.IsReloading();
                         }
                     }
-                    Scripting::GameSessionFrame session;session.Operation=1;session.Invisible=devPanel.Invisible;session.InfiniteAmmo=devPanel.InfiniteAmmo;session.PlayerValid=playerSnap.Valid;session.Armed=firstPersonPresentation.IsActive();session.Magazine=firstPersonPresentation.MagazineSize();
-                    if(!Scripting::InvokeProject("session",&session,sizeof session))throw std::runtime_error("Project cheat policy unavailable");playerSnap.Valid=session.PlayerValid!=0;
-                    npcDirector.Think(world,assets,gameDt,playerSnap);
-                    if(session.Commands&Scripting::kSessionRefillAmmo){firstPersonPresentation.SetAmmo(session.Ammo);playerAmmoSeen=firstPersonPresentation.Ammo();}
+                    if (devPanel.Invisible) playerSnap.Valid = false; // dev panel: the squad can't see or hear the player
+                    npcDirector.Think(world, assets, gameDt, playerSnap);
+                    if (devPanel.InfiniteAmmo && firstPersonPresentation.IsActive()) {
+                        firstPersonPresentation.SetAmmo(firstPersonPresentation.MagazineSize());
+                        playerAmmoSeen = firstPersonPresentation.Ammo();
+                    }
 
                 }
                 // The Play-mode camera is the ears: positional sources (#201) attenuate and pan
@@ -2616,14 +2631,18 @@ int main(int argc, char** argv) {
                     PROFILE_SCOPE("Player Shots + Impacts");
                     for (const FirstPersonPresentation::ShotHit& hit : firstPersonPresentation.TakeShotHits()) {
                         if (weaponTest) weaponTest->OnHit(hit.Point);
-                        Scripting::GameSessionFrame feedback;feedback.Operation=3;
-                        bool killed=false,head=false,aliveWhenHit=false;
-                        feedback.NpcHit=npcDirector.Active() && npcDirector.OnPlayerHit(world,hit.Entity,hit.Point,hit.Origin,hit.Direction,firstPersonPresentation.Set().Gameplay,&killed,&head,&aliveWhenHit);
-                        feedback.Killed=killed;feedback.Head=head;feedback.AliveHit=aliveWhenHit;
-                        if(!Scripting::InvokeProject("session",&feedback,sizeof feedback))throw std::runtime_error("Project hit feedback unavailable");
-                        if(feedback.Commands&Scripting::kSessionHitmarker){playerVitals.MarkHit(killed,head);combatFx.Play(killed?CombatFx::Cue::HitmarkerKill:CombatFx::Cue::Hitmarker,hit.Point);}
-                        if(feedback.Commands&Scripting::kSessionKillFeed)combatHud.OnKill(npcDirector,hit.Entity,head);
-                        if(!(feedback.Commands&Scripting::kSessionWorldImpact))continue;
+                        if (npcDirector.Active()) {
+                            bool killed = false, head = false, aliveWhenHit = false;
+                            if (npcDirector.OnPlayerHit(world, hit.Entity, hit.Point, hit.Origin, hit.Direction,
+                                                        firstPersonPresentation.Set().Gameplay, &killed, &head, &aliveWhenHit)) {
+                                if (aliveWhenHit) {
+                                    playerVitals.MarkHit(killed, head);
+                                    combatFx.Play(killed ? CombatFx::Cue::HitmarkerKill : CombatFx::Cue::Hitmarker, hit.Point);
+                                }
+                                if (killed) combatHud.OnKill(npcDirector, hit.Entity, head);
+                                continue; // a soldier, not a wall: no hole
+                            }
+                        }
                         combatFx.Impact(world, hit.Entity, glm::vec3(hit.Point[0], hit.Point[1], hit.Point[2]));
                         worldImpact(hit.Entity, hit.Point, hit.Normal, glm::vec3(hit.Direction[0], hit.Direction[1], hit.Direction[2]), hit.HoleRadius);
                     }
@@ -2769,21 +2788,18 @@ int main(int argc, char** argv) {
                     }
                 }
                 if (playUsesPlayer) {
-                    playerVitals.SetEyeHeight(player.EyeHeight);
                     playerVitals.Tick(gameDt);
-                    Scripting::GameSessionFrame session;session.Operation=2;session.JustDied=playerVitals.JustDied();session.WantsRespawn=playerVitals.WantsRespawn();session.Dead=playerVitals.IsDead();session.RespawnFeet={player.RespawnFeet.x,player.RespawnFeet.y,player.RespawnFeet.z};session.EyeHeight=player.EyeHeight;
-                    if(!Scripting::InvokeProject("session",&session,sizeof session))throw std::runtime_error("Project respawn orchestration unavailable");
-                    if(session.Commands&Scripting::kSessionDied) {
+                    if (playerVitals.JustDied()) {
                         firstPersonPresentation.SetEquipped(false);
                         if (PhysicsWorld::IsGrabbing()) PhysicsWorld::ReleaseBody(false, nullptr);
                         gravityGun.Reset();
                     }
-                    if(session.Commands&Scripting::kSessionRespawn) {
+                    if (playerVitals.WantsRespawn()) {
                         // Back at the spawn, full health and ammo, weapon drawn, a moment untouchable.
-                        const float f[3] = {session.Position.x,session.Position.y,session.Position.z};
+                        const float f[3] = {player.RespawnFeet.x, player.RespawnFeet.y, player.RespawnFeet.z};
                         PhysicsWorld::SetCharacterFootPosition(f);
-                        player.Velocity={session.Velocity.x,session.Velocity.y,session.Velocity.z};
-                        player.Cam.Position={session.Camera.x,session.Camera.y,session.Camera.z};
+                        player.Velocity = glm::vec3(0.0f);
+                        player.Cam.Position = player.RespawnFeet + glm::vec3(0.0f, player.EyeHeight, 0.0f);
                         if (playControllerEntity != entt::null && world.Registry.valid(playControllerEntity))
                             YawPitchFromWorld(world.ComposeWorldTransform(playControllerEntity), player.Cam.Yaw, player.Cam.Pitch);
                         playerVitals.Respawned();
@@ -2793,9 +2809,11 @@ int main(int argc, char** argv) {
                     }
                     // Dead: the view sinks to the floor and rolls over, on the camera only (taken off
                     // again at the top of the next frame).
-                    if(session.Commands&Scripting::kSessionDeadCamera) {
-                        deathCamOffset = playerVitals.DeathCameraOffset();
-                        deathCamRoll = playerVitals.DeathCameraRoll();
+                    if (playerVitals.IsDead()) {
+                        const float t = std::clamp(playerVitals.DeadTime() / 0.9f, 0.0f, 1.0f);
+                        const float ease = t * t * (3.0f - 2.0f * t);
+                        deathCamOffset = glm::vec3(0.0f, -(player.EyeHeight - 0.35f) * ease, 0.0f);
+                        deathCamRoll = 32.0f * ease;
                         player.Cam.Position += deathCamOffset;
                         player.Cam.Roll += deathCamRoll;
                     }

@@ -10,8 +10,9 @@ PhysX remain C++. Use `Tartarus` for gameplay, `Tartarus.Editor` for editor exte
 `UnityEngine` compatibility layer. Engine forward is **-Z**, up is +Y, distances are world
 units, transform rotations use radians internally and `Transform.Rotate` takes degrees.
 
-Project C# owns player/weapon rules, vitals/damage, scoring, NPC AI/spawning/squads and
-locomotion actions. The gravity gun, combat HUD, dev panel, sound policy and outfit choices are native.
+Project C# owns player/weapon rules, NPC AI/spawning/squads and locomotion actions. Health
+(the native Health component), damage, player vitals, the Play session's input and respawn, the
+gravity gun, combat HUD, dev panel, sound policy and outfit choices are native.
 
 Physics events call `Script.OnTriggerEnter/Stay/Exit(GameObject)` and
 `OnCollisionEnter/Stay/Exit(Collision)` once per completed physics batch, after Start and
