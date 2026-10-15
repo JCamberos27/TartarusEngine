@@ -131,6 +131,22 @@ void EndReveal() {
 float CurrentRevealT() { return s_Reveals.Size ? s_Reveals.back().t : 1.0f; }
 bool CurrentRevealMoving() { return s_Reveals.Size ? s_Reveals.back().moving : false; }
 
+TableBackground::TableBackground() {
+    ImGuiWindow* window = ImGui::GetCurrentWindow();
+    m_Table = ImGui::GetCurrentTable();
+    IM_ASSERT(m_Table && "Glass::TableBackground outside a table");
+    m_SavedClip = window->ClipRect;
+    m_SavedChannel = m_Table->DrawSplitter->_Current;
+    ImGui::SetWindowClipRectBeforeSetChannel(window, m_Table->Bg2ClipRectForDrawCmd);
+    m_Table->DrawSplitter->SetCurrentChannel(window->DrawList, m_Table->Bg2DrawChannelCurrent);
+}
+
+TableBackground::~TableBackground() {
+    ImGuiWindow* window = ImGui::GetCurrentWindow();
+    ImGui::SetWindowClipRectBeforeSetChannel(window, m_SavedClip);
+    m_Table->DrawSplitter->SetCurrentChannel(window->DrawList, m_SavedChannel);
+}
+
 RevealRow::RevealRow(int index) {
     if (s_Reveals.Size == 0) return;
     const RevealFrame& f = s_Reveals.back();

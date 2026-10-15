@@ -40,6 +40,22 @@ public:
     ClipGuard& operator=(const ClipGuard&) = delete;
 };
 
+// RAII: draws go to the current table's background channel (under every cell's content), then
+// back to whatever channel was current. Unlike ImGui::TablePushBackgroundChannel/Pop it is valid
+// outside a cell too, e.g. after an ImGuiListClipper loop has ended the last row (Pop would index
+// the table's columns with CurrentColumn == -1). Requires a current table.
+class TableBackground {
+public:
+    TableBackground();
+    ~TableBackground();
+    TableBackground(const TableBackground&) = delete;
+    TableBackground& operator=(const TableBackground&) = delete;
+private:
+    ImGuiTable* m_Table;
+    ImRect      m_SavedClip;
+    int         m_SavedChannel;
+};
+
 // --- Reveals ----------------------------------------------------------------------------------------
 // A section body whose height eases between 0 and its natural height:
 //

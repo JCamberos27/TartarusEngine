@@ -4130,6 +4130,7 @@ int main(int argc, char** argv) {
                                 }
                             focus("###Scene");
                             focus("###Assets");
+                            if (opt.editorShotGlass) { focus("###GlassHierarchy"); focus("###GlassInspector"); focus("###GlassAssets"); }
                         }
                         else if (view == "inspector") editor.SetExpandAllComponents(true);
                         // Editor Enhancers: the Inspector and Asset Browser in front (their header rows,
