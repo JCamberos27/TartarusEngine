@@ -1,5 +1,3 @@
-#include "Scripting/ScriptRuntime.h"
-#include <json.hpp>
 #include "CombatFx.h"
 #include <sstream>
 
@@ -13,7 +11,6 @@
 #include "World.h"
 
 #include <algorithm>
-#include <map>
 #include <cmath>
 #include <utility>
 
@@ -24,6 +21,24 @@ constexpr float kFlameAhead = 0.01f;   // the flame's seat ahead of the muzzle f
 
 // The recorded one-shots CombatFx plays itself (manifest keys, tools/audio build_ui.py): the hitmarker ticks and a body falling.
 // Each is a keyed set of WeaponAudio, so the manifest's mix_db is its level; nothing here scales it.
+SoundSet* UiSet(const char* key) {
+    return WeaponAudio::Get().KeySet(key, [](SoundSet& s) {
+        s.MaxVoices = 4;
+        s.StealFadeTime = 0.01f;
+        s.ReverbSend = 0.0f; // a HUD tick is not in the room
+        s.Occlusion = 0;
+    });
+}
+SoundSet* BodyFallSet() {
+    return WeaponAudio::Get().KeySet("snd.body_fall", [](SoundSet& s) {
+        s.MinDistance = 2.0f;
+        s.MaxDistance = 30.0f;
+        s.MaxVoices = 4;
+        s.PitchMin = 0.95f;
+        s.PitchMax = 1.05f;
+        s.VolumeJitterDb = 1.0f;
+    });
+}
 void PlaySet(SoundSet* set, const glm::vec3& pos, bool at2D, float volume) {
     if (set && !set->Files.empty()) WeaponAudio::Get().PlayKeyed(*set, pos, at2D, volume);
 }
@@ -368,13 +383,17 @@ void CombatFx::Whizz(const glm::vec3& point, float miss) {
 
 void CombatFx::Play(Cue cue, const glm::vec3& pos, bool at2D, float volume) {
     if (!m_Active) return;
-    static std::map<int,nlohmann::json> policies;static std::uint64_t generation=~std::uint64_t{};
-    if(generation!=Scripting::CodeGeneration()){policies.clear();generation=Scripting::CodeGeneration();}
-    auto found=policies.find((int)cue);if(found==policies.end()){std::string text;if(!Scripting::RequestProject("audio.cue",nlohmann::json((int)cue).dump(),text))return;found=policies.emplace((int)cue,nlohmann::json::parse(text)).first;}
-    const auto& policy=found->second;const int kind=policy.at("kind").get<int>();
-    if(kind==1){ImpactAudio::Get().Flesh(pos,at2D,volume);return;}
-    if(kind==2){const auto key=policy.at("key").get<std::string>();auto* set=WeaponAudio::Get().KeySet(key,[&](SoundSet& value){value=SoundSet::FromJson(key,policy.at("set").dump(),value);});PlaySet(set,pos,policy.value("at2d",false)||at2D,volume);}
-
+    switch (cue) {
+    // The pump, the reload and the dry fire are the weapons' own: an animator's snd.* event plays the recorded take
+    // (snd.<gun>.pump_back, mag_out, dry_fire ...), so these cues make no sound of their own.
+    case Cue::Pump:
+    case Cue::Reload:
+    case Cue::DryFire: break;
+    case Cue::BodyFall: PlaySet(BodyFallSet(), pos, at2D, volume); break;
+    case Cue::FleshHit: ImpactAudio::Get().Flesh(pos, at2D, volume); break; // the recorded flesh impact (snd.impact.flesh)
+    case Cue::Hitmarker: PlaySet(UiSet("snd.ui.hitmarker"), pos, true, volume); break;
+    case Cue::HitmarkerKill: PlaySet(UiSet("snd.ui.hitmarker_kill"), pos, true, volume); break;
+    }
 }
 
 void CombatFx::Update(World& world, float dt) {
