@@ -584,7 +584,7 @@ void RegisterTests() {
         FreshScene(), Wait(2),
         SelectByName("Alpha"), Wait(2),
         SelectByName("Beta"), Wait(2),
-        Do("select an asset", [](Ctx& c) { X::SelectAsset(c.E, "assets/Scripts/Bob.cs"); }), Wait(2),
+        Do("select an asset", [](Ctx& c) { X::SelectAsset(c.E, "assets/AI/npc_soldier.controller"); }), Wait(2),
         Key(ImGuiKey_LeftBracket, ImGuiMod_Ctrl), Wait(2),
         Expect("back to Beta", [](Ctx& c) { return ExpectSelected(c, "Beta"); }),
         Key(ImGuiKey_LeftBracket, ImGuiMod_Ctrl), Wait(2),
@@ -593,7 +593,7 @@ void RegisterTests() {
         Key(ImGuiKey_RightBracket, ImGuiMod_Ctrl), Wait(2),
         Expect("forward to the asset", [](Ctx& c) {
             if (X::Selected(c.E) != entt::null) return "an object is selected: " + NameOf(c.W, X::Selected(c.E));
-            return X::AssetKey(c.E) == "assets/Scripts/Bob.cs" ? std::string() : "asset key is '" + X::AssetKey(c.E) + "'";
+            return X::AssetKey(c.E) == "assets/AI/npc_soldier.controller" ? std::string() : "asset key is '" + X::AssetKey(c.E) + "'";
         }),
     });
     Add("history: survives undo (entities rebuilt by the reload)", {
@@ -701,7 +701,7 @@ void RegisterTests() {
     });
     Add("nav bar: asset bookmark", {
         FreshScene(), Wait(2),
-        Do("select an asset", [](Ctx& c) { X::SelectAsset(c.E, "assets/Scripts/Bob.cs"); }), Wait(3),
+        Do("select an asset", [](Ctx& c) { X::SelectAsset(c.E, "assets/AI/npc_soldier.controller"); }), Wait(3),
         Click(ByLabel(ICON_FA_BOOKMARK, kInspector)), Wait(3),
         Click(ByTag("bm:toggle")), Wait(3),
         ExpectTrue("asset bookmarked", [](Ctx&) {
@@ -710,10 +710,10 @@ void RegisterTests() {
         }),
         SelectByName("Beta"), Wait(3),
         Click(ByLabel(ICON_FA_BOOKMARK, kInspector)), Wait(3),
-        Click(ByTag("bm:Bob.cs")), Wait(3),
+        Click(ByTag("bm:npc_soldier.controller")), Wait(3),
         Expect("asset shown", [](Ctx& c) {
             if (X::Selected(c.E) != entt::null) return std::string("an object is still selected");
-            return X::AssetKey(c.E) == "assets/Scripts/Bob.cs" ? std::string() : "asset is " + X::AssetKey(c.E);
+            return X::AssetKey(c.E) == "assets/AI/npc_soldier.controller" ? std::string() : "asset is " + X::AssetKey(c.E);
         }),
     });
     Add("nav bar: drop a Hierarchy row to bookmark it", {
@@ -1057,14 +1057,14 @@ void RegisterTests() {
     });
     Add("favorites: the asset star is a favorite and undoes", {
         FreshScene(), Wait(2),
-        Do("star an asset", [](Ctx& c) { c.E.SetAssetFavorites({"assets/Scripts/Bob.cs"}, true); }), Wait(4),
-        ExpectTrue("starred", [](Ctx& c) { return c.E.IsAssetFavorite("assets/Scripts/Bob.cs"); }),
+        Do("star an asset", [](Ctx& c) { c.E.SetAssetFavorites({"assets/AI/npc_soldier.controller"}, true); }), Wait(4),
+        ExpectTrue("starred", [](Ctx& c) { return c.E.IsAssetFavorite("assets/AI/npc_soldier.controller"); }),
         ExpectTrue("on a page", [](Ctx&) {
             return Enhancers::FindFavorite(Enhancers::EnhancerUserState::Get().FavoritePages,
-                                           Enhancers::EditorRef::MakeAsset("assets/Scripts/Bob.cs")) >= 0;
+                                           Enhancers::EditorRef::MakeAsset("assets/AI/npc_soldier.controller")) >= 0;
         }),
         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(4),
-        ExpectTrue("undo un-stars it", [](Ctx& c) { return !c.E.IsAssetFavorite("assets/Scripts/Bob.cs"); }),
+        ExpectTrue("undo un-stars it", [](Ctx& c) { return !c.E.IsAssetFavorite("assets/AI/npc_soldier.controller"); }),
     });
 
     // ------------------------------------------------------------------ 14. Ruler
