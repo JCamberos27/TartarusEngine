@@ -662,10 +662,6 @@ void TestProjectLifecycleAndSession(){
     CHECK(InvokeProject("npc.respawn",&respawn,sizeof respawn));CHECK(respawn.Best==1 && respawn.Ready && !respawn.Discard && respawn.Timer==12);respawn.Alive=4;CHECK(InvokeProject("npc.respawn",&respawn,sizeof respawn));CHECK(respawn.Discard && !respawn.Ready);
     NpcShotEffectFrame shot;shot.Player.Valid=1;shot.Player.Eye={1,1,10};shot.Origin={0,1,0};shot.End={0,1,20};shot.FirstPellet=1;shot.Reach=5;CHECK(InvokeProject("npc.shot-effects",&shot,sizeof shot));CHECK(shot.Commands==7 && shot.Tracer==1 && shot.Miss==1);shot.Shotgun=1;CHECK(InvokeProject("npc.shot-effects",&shot,sizeof shot));CHECK(shot.Commands==5 && shot.Tracer==1);
     shot.Operation=2;shot.Friendly=1;shot.Damage=40;shot.Suppression=.9f;CHECK(InvokeProject("npc.shot-effects",&shot,sizeof shot));CHECK(shot.Damage==20 && shot.Suppression==1 && shot.Commands==(32|64));
-    DevFrame dev;dev.Open=dev.God=dev.Frozen=dev.InfiniteAmmo=1;CHECK(InvokeProject("dev",&dev,sizeof dev));CHECK(!dev.Open && !dev.God && !dev.Frozen && !dev.InfiniteAmmo);
-    struct Actions{int Kills=0,Spawns=0;} actions;NpcMateFrame mates[2];mates[1].Dead=1;dev.Operation=3;dev.Members=reinterpret_cast<std::uintptr_t>(mates);dev.Count=2;dev.Context=reinterpret_cast<std::uintptr_t>(&actions);
-    dev.Services=reinterpret_cast<std::uintptr_t>(+[](std::uintptr_t ptr,NpcServiceFrame* req)->int{auto& a=*reinterpret_cast<Actions*>(ptr);if(req->Operation==0){++a.Kills;return 1;}if(req->Operation==1){++a.Spawns;return a.Spawns>1;}return 0;});
-    CHECK(InvokeProject("dev",&dev,sizeof dev));CHECK(dev.Result==1 && actions.Kills==1);dev.Operation=4;dev.Alive=1;dev.Wanted=3;dev.Spawns=2;CHECK(InvokeProject("dev",&dev,sizeof dev));CHECK(dev.Result==2 && actions.Spawns==3);
     GameSessionFrame session;session.HasInput=1;session.Scroll=-1;CHECK(InvokeProject("session",&session,sizeof session));CHECK(session.SlotDirection==1 && (session.Commands&8));session.HasInput=0;CHECK(InvokeProject("session",&session,sizeof session));CHECK(session.Commands==512 && session.SlotDirection==0);
     session.Operation=1;session.Invisible=1;session.InfiniteAmmo=1;session.PlayerValid=1;session.Armed=1;session.Magazine=30;CHECK(InvokeProject("session",&session,sizeof session));CHECK(!session.PlayerValid && session.Ammo==30 && session.Commands==1024);
     session={};session.Operation=2;session.Dead=1;session.WantsRespawn=1;session.RespawnFeet={2,3,4};session.EyeHeight=1.5f;CHECK(InvokeProject("session",&session,sizeof session));CHECK(session.Commands==4096 && session.Position.x==2 && session.Camera.y==4.5f);
@@ -673,8 +669,6 @@ void TestProjectLifecycleAndSession(){
     int ammo[2]={3,7};WeaponLoadoutFrame loadout;loadout.Operation=3;loadout.Count=2;loadout.SlotAmmo=reinterpret_cast<std::uintptr_t>(ammo);loadout.Active=1;loadout.Magazine=30;loadout.CycleWait=2;CHECK(InvokeProject("weapon.loadout",&loadout,sizeof loadout));CHECK(ammo[0]==-1 && ammo[1]==-1 && loadout.Ammo==30 && loadout.Chambered && loadout.CycleWait==0);
     loadout.Operation=0;loadout.Slot=0;loadout.Pending=-1;loadout.Value=1;loadout.Equipped=1;CHECK(InvokeProject("weapon.loadout",&loadout,sizeof loadout));CHECK(loadout.Pending==1 && !loadout.Equipped && loadout.Commands==12);
     loadout.Operation=2;loadout.Requested=0;loadout.Burst=3;CHECK(InvokeProject("weapon.loadout",&loadout,sizeof loadout));CHECK(loadout.Pending==-1 && loadout.Burst==0 && loadout.Commands==6);
-    if (!std::filesystem::exists(ProjectPaths::Resolve("assets/Editor/Content/BloodImport.json"))) return; // sample package: no catalogs
-    std::string response;CHECK(RequestProject("content.blood","{}",response));CHECK(nlohmann::json::parse(response).at("Sims").size()==11);CHECK(RequestProject("content.knife","{}",response));CHECK(nlohmann::json::parse(response).at("Sources").size()==39);
 }
 void TestProjectNpcCombat() {
     using namespace Scripting;
@@ -744,12 +738,8 @@ void TestProjectHealthAndHud() {
     CHECK(InvokeProject("npc.damage",&damage,sizeof damage));CHECK(damage.Health==220 && damage.MaxHealth==250 && !damage.Ignore);
     // Projection inputs cannot replace authoritative health.
     damage.Health=999;damage.Amount=20;CHECK(InvokeProject("npc.damage",&damage,sizeof damage));CHECK(damage.Health==200);
-    CombatHudFrame hud;hud.Operation=0;CHECK(InvokeProject("hud",&hud,sizeof hud));
-    hud.Operation=1;hud.Now=10;hud.Unit=2;hud.StreakWindow=4;CHECK(InvokeProject("hud",&hud,sizeof hud));CHECK(hud.Kills==1 && hud.Rows==1);
-    hud.Now=11;CHECK(InvokeProject("hud",&hud,sizeof hud));CHECK(hud.Kills==2 && hud.Rows==2);
     CHECK(Invoke(5,nullptr,0));
     damage.Operation=2;CHECK(InvokeProject("npc.damage",&damage,sizeof damage));CHECK(damage.Health==200 && damage.MaxHealth==250);
-    hud.Operation=3;hud.Streak=1;hud.Now=4;CHECK(InvokeProject("hud",&hud,sizeof hud));CHECK(hud.Kills==2 && hud.Rows==2 && hud.Result==2);
     CHECK(RequestProject("health.create",R"({"entity":4242,"fields":{"Max":250,"Invulnerable":true}})",output));
     damage.Operation=0;damage.Amount=50;damage.Ignore=0;CHECK(InvokeProject("npc.damage",&damage,sizeof damage));CHECK(damage.Ignore && damage.Health==250);
     CHECK(RequestProject("health.remove",R"({"entity":4242})",output));damage.Ignore=0;damage.Operation=2;CHECK(InvokeProject("npc.damage",&damage,sizeof damage));CHECK(damage.Ignore);
@@ -763,7 +753,6 @@ void TestProjectHealthAndHud() {
         measure.Script=2;measure.Value=20;CHECK(RuntimeCanvasService(measure));CHECK(std::abs(measure.Value-17.25f)<.001f);
     }
     query.Entity=oldToken;query.Script=2;CHECK(!RuntimeCanvasService(query));
-    hud.Operation=0;CHECK(InvokeProject("hud",&hud,sizeof hud));
 }
 void TestProjectNpcPerceptionAndSquads() {
     using namespace Scripting;
@@ -880,7 +869,7 @@ void TestProjectNpcDecisions() {
     hit.Operation=1;hit.Random=.2f;damage();CHECK(hit.BecomeWounded && !hit.CallWounded);
     hit={};hit.Dead=1;hit.Amount=15;damage();CHECK(hit.Ignore && hit.Hits==0);
 }
-void TestProjectMigrationAndConstraints() {
+void TestProjectMigration() {
     using namespace Scripting;using Json=nlohmann::json;
     // The old native Health block becomes the project's Health script, next to the scripts already there.
     Json legacy={{"Health",{{"Max Health",150},{"Regen Delay",3},{"Death SoundGuid","123456789abcdef0"}}},
@@ -890,26 +879,10 @@ void TestProjectMigrationAndConstraints() {
     auto extra=Json::parse(legacy.at("C# Script").at("Scripts").get<std::string>());
     CHECK(extra.size()==1 && extra[0].at("id")==8 && extra[0].at("class")=="Tartarus.Gameplay.Health");
     CHECK(extra[0].at("fields").at("MaxHealth")==150 && !extra[0].at("fields").contains("DeathSoundGuid"));
-    World world;AssetLibrary assets;
-    auto ball=world.CreateEmptyEntity({0,0,0},{0,0,0},{1,1,1},"Ball");
-    auto& shape=world.Registry.emplace<ColliderComponent>(ball);shape.Kind=ColliderComponent::Shape::Sphere;shape.HalfExtents={.12f,0,0};
-    auto& body=world.Registry.emplace<RigidbodyComponent>(ball);body.UseGravity=false;body.LinearDamping=0;
-    world.SyncActiveInHierarchy();world.RebuildWorldTransformCache();PhysicsWorld::Create(world);
-    Tick(world,assets,.02f);
-    GravityFrame ability;ability.Operation=0;CHECK(InvokeProject("gravity",&ability,sizeof ability));
-    ability.Operation=1;ability.Dt=.1f;ability.Eye={0,0,5};ability.Forward={0,0,-1};ability.CameraRight={1,0,0};
-    ability.GrabRange=100;ability.AssistRange=30;ability.AssistConeDeg=7;ability.MinThrowSpeed=4;ability.MaxThrowSpeed=18;ability.ChargeTime=1;ability.Right=1;
-    CHECK(InvokeProject("gravity",&ability,sizeof ability));CHECK(PhysicsWorld::GrabbedEntity()==entt::to_integral(ball));
-    ability.Left=1;for(int i=0;i<10;i++)CHECK(InvokeProject("gravity",&ability,sizeof ability));
-    CHECK(ability.Charging && ability.Charge>.99f && ability.PredictSpeed==18);
-    ability.Left=0;CHECK(InvokeProject("gravity",&ability,sizeof ability));CHECK(!PhysicsWorld::IsGrabbing() && !ability.Charging);
-    PhysicsWorld::Step(.02f,world);
-    BodyState state;CHECK(PhysicsWorld::GetBodyState(entt::to_integral(ball),state));CHECK(std::abs(state.Velocity[2]+18)<.01f);
-    Stop(&world,&assets);PhysicsWorld::Destroy();PhysicsWorld::Shutdown();
 }
 }
 void RegisterScriptingTests(UnitTestSupport::TestList& tests) {
-    tests.emplace_back("Project NPC lifecycle, session rules and content configuration",TestProjectLifecycleAndSession);
+    tests.emplace_back("Project NPC lifecycle and session rules",TestProjectLifecycleAndSession);
     tests.emplace_back("Project body actions and squad callout scheduling",TestProjectLocomotionAndCallouts);
     tests.emplace_back("Empty project host and generic bootstrap",TestEmptyProject);
     tests.emplace_back("Exported generic project host",TestExportedProjectHost);
@@ -917,9 +890,9 @@ void RegisterScriptingTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Project NPC behavior selection",TestProjectNpcDecisions);
     tests.emplace_back("Project NPC states, cover and navigation",TestProjectNpcBehaviour);
     tests.emplace_back("Project NPC configuration and scene migration",TestProjectNpcConfiguration);
-    tests.emplace_back("Project health authority, HUD reload and canvas scopes",TestProjectHealthAndHud);
+    tests.emplace_back("Project health authority and canvas scopes",TestProjectHealthAndHud);
     tests.emplace_back("Project NPC perception, squad roles and covering fire",TestProjectNpcPerceptionAndSquads);
-    tests.emplace_back("Project component migration and carry constraint",TestProjectMigrationAndConstraints);
+    tests.emplace_back("Project component migration",TestProjectMigration);
     tests.emplace_back("Prefab-relative draggable script references",TestSceneReferences);
     tests.emplace_back("Managed gameplay ABI, fire modes and pump",TestManagedGameplay);
     tests.emplace_back("Managed components, lifecycle and weapon prefabs",TestManagedComponentsAndPrefabs);

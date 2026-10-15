@@ -6,7 +6,6 @@
 #include "EnginePaths.h"
 #include "FirstPersonProcedural.h" // RecoilAsset
 #include "Game/Audio/AudioTest.h"
-#include "Game/Scripting/ScriptRuntime.h"
 #include "AssetDatabase.h"
 #include "KnifeFxImport.h"
 #include "LayerRegistry.h"
@@ -132,16 +131,14 @@ int RunEarlyCliTool(int argc, char** argv) {
     for (int i = 1; i + 1 < argc; ++i) {
         if (std::string(argv[i]) != "--import-blood-fx") continue;
         CrashHandler::SetInteractive(false);
-        std::string output;if(!Scripting::RequestProject("content.path",nlohmann::json("blood").dump(),output)){Log::Error("This project has no content import configuration.");return 1;}
-        return BloodFxImport::ImportPackage(argv[i+1],ProjectPaths::Resolve(nlohmann::json::parse(output).get<std::string>()))?0:1;
+        return BloodFxImport::ImportPackage(argv[i + 1], ProjectPaths::Resolve("assets/Effects/Blood")) ? 0 : 1;
     }
     // `--import-knife-fx <folder holding the extracted Knife packs>`: the Real Blood and PRO Effects textures
     // into project/assets/Effects/Knife (git-ignored). No GL needed.
     for (int i = 1; i + 1 < argc; ++i) {
         if (std::string(argv[i]) != "--import-knife-fx") continue;
         CrashHandler::SetInteractive(false);
-        std::string output;if(!Scripting::RequestProject("content.path",nlohmann::json("knife").dump(),output)){Log::Error("This project has no content import configuration.");return 1;}
-        return KnifeFxImport::ImportPacks(argv[i+1],ProjectPaths::Resolve(nlohmann::json::parse(output).get<std::string>()))?0:1;
+        return KnifeFxImport::ImportPacks(argv[i + 1], ProjectPaths::Resolve("assets/Effects/Knife")) ? 0 : 1;
     }
     for (int i = 1; i < argc; ++i) {
         if (std::string(argv[i]) != "--model-report") continue;

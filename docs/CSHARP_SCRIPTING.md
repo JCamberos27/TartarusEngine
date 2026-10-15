@@ -16,9 +16,9 @@ rules also run in the C# weapon controller, with native physics and effect servi
 presentation adapter; it sends animator tags/events and descriptor values to the C# weapon
 controller and executes its animation/audio/recoil commands.
 
-Project C# also owns health/damage, scoring, gravity, enemy AI/spawning/squads, HUD/developer
-content, sound policy, locomotion actions, outfit choices and content-pack catalogs. Native
-adapters execute geometric, animation, audio and rendering work.
+Project C# also owns health/damage, scoring, enemy AI/spawning/squads, sound policy and
+locomotion actions. The gravity gun, combat HUD, dev panel, outfit choices and content-pack
+catalogs are native C++. Native adapters execute geometric, animation, audio and rendering work.
 
 ## Build and edit
 
