@@ -10,7 +10,9 @@
 //     if it belongs to a glass surface:
 //       render everything queued so far          (the framebuffer now holds what is behind it)
 //       if anything drawn since the last capture overlaps it:
-//         copy the framebuffer and blur it       (GlassBackdrop: a 6-level compute pyramid)
+//         copy the framebuffer and blur it       (GlassBackdrop: a 6-level compute pyramid; only the
+//                                                 part under the surfaces that use this capture, plus
+//                                                 the blur's reach, so it matches a whole-frame blur)
 //       draw the glass plate under the window    (the blur sampled under its exact rect and
 //                                                 rounding, then the 25% black tint)
 //     queue the draw list
@@ -99,6 +101,10 @@ ImRect DrawListBounds(const ImDrawList* dl);
 // neither (the menu bar, the status bar, overlays with no background).
 enum class SurfaceKind : unsigned char { None, Popup, Tooltip, Window, Hud, Panel };
 
+// TARTARUS_GLASS_FULL_CAPTURE=1: every glass blur covers the whole frame or Scene image, as before the
+// blurs were limited to what the glass shows (for A/B benches and comparing shots).
+bool FullFrameBlur();
+
 // --- The compositor ----------------------------------------------------------------------------------
 
 class GlassCompositor {
@@ -134,8 +140,11 @@ private:
         float        Alpha = 1.0f;
     };
 
+    // One planned capture: the framebuffer rect (GL pixels, bottom-up) it copies and blurs.
+    struct CaptureRect { int X0, Y0, X1, Y1; };
+
     SurfacePose PoseFor(ImGuiWindow* group, SurfaceKind kind, bool appeared, float* rimBoost);
-    void Capture(int w, int h);
+    void Capture(int w, int h, const CaptureRect& rect);
     void Flush(ImDrawData* dd, std::vector<ImDrawList*>& pending, bool& texturesSent);
 
     GlassBackdrop m_Blur;
@@ -144,6 +153,17 @@ private:
     unsigned int m_BlurTex = 0;
     std::vector<std::unique_ptr<ImDrawList>> m_Plates; // reused across frames
     std::unordered_set<ImGuiID> m_Seen, m_SeenNext;      // surfaces drawn last frame / this frame
+    // Per-frame scratch, kept so a frame allocates nothing once the editor has settled.
+    struct Group { ImGuiWindow* Window; SurfacePose Pose; float Rim; };
+    std::vector<std::pair<const ImDrawList*, ImGuiWindow*>> m_Owner; // sorted by list
+    std::vector<Group> m_Groups;
+    std::vector<ListInfo> m_Info;
+    std::vector<ImRect> m_Bounds;     // each list's DrawListBounds
+    std::vector<int> m_PlateCapture;  // per list: the capture its plate samples (-1 = none / no plate)
+    std::vector<ImRect> m_CaptureUse; // per capture: the union of the plates that sample it (display px)
+    std::vector<CaptureRect> m_CaptureRects;
+    std::vector<ImDrawList*> m_Pending;
+    std::vector<ImRect> m_Dirty;
     int m_StatSurfaces = 0, m_StatCaptures = 0;
 };
 

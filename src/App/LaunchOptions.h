@@ -34,7 +34,9 @@ struct LaunchOptions {
     // mode, then Play in the docked Game view, then Play maximized. --perf-res WxH sizes the window
     // (default: maximized) so runs at a given resolution are repeatable. --perf-sample adds a
     // statistical main-thread CPU profile of each phase (SamplingProfiler): the hottest functions.
-    bool perfBenchMode = false, perfSample = false;
+    // --perf-glass: the bench runs the editor in the Black Glass theme (this run only; the saved theme
+    // is kept), to measure its glass compositor and blurs.
+    bool perfBenchMode = false, perfSample = false, perfGlass = false;
     int perfResW = 0, perfResH = 0;
     int renderHeightArg = -1; // --render-height N: this run's render resolution (0 = native)
     // --resave <in.json> <out.json>: load a scene and immediately re-serialize it, then exit.

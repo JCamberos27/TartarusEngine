@@ -13,7 +13,10 @@ layout(binding = 0) uniform sampler2D uSrc;
 layout(binding = 0, rgba16f) uniform writeonly image2D uDst;
 
 uniform float uSrcLod;      // level of uSrc to read
-uniform vec2  uSrcTexel;    // 1 / size of that level
+uniform vec2  uSrcTexel;    // 1 / that level's size in the texture
+uniform vec4  uSrcClamp;    // the uv range (texel centres) of that level that holds data: every tap stays inside
+uniform vec2  uSrcOrigin;   // where the part being blurred starts in it, in texels
+uniform vec2  uSrcSize;     // and its size: it maps onto the whole of uDst
 uniform ivec2 uDstSize;
 uniform int   uDecodeSrgb;
 
@@ -22,14 +25,14 @@ vec3 SrgbToLinear(vec3 c) {
 }
 
 vec3 Tap(vec2 uv) {
-    vec3 c = textureLod(uSrc, uv, uSrcLod).rgb;
+    vec3 c = textureLod(uSrc, clamp(uv, uSrcClamp.xy, uSrcClamp.zw), uSrcLod).rgb;
     return uDecodeSrgb != 0 ? SrgbToLinear(c) : c;
 }
 
 void main() {
     ivec2 p = ivec2(gl_GlobalInvocationID.xy);
     if (p.x >= uDstSize.x || p.y >= uDstSize.y) return;
-    vec2 uv = (vec2(p) + 0.5) / vec2(uDstSize);
+    vec2 uv = (uSrcOrigin + (vec2(p) + 0.5) * (uSrcSize / vec2(uDstSize))) * uSrcTexel;
     vec2 t = uSrcTexel;
 
     vec3 a = Tap(uv + t * vec2(-2.0, -2.0));

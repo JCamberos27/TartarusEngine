@@ -48,9 +48,11 @@ void DrawSoftShadow(ImDrawList* dl, ImVec2 min, ImVec2 max, float radius, float 
 // sampled under exactly this rect, the 25% black tint, the 15% white edge and a soft shadow.
 // `blurTex` 0 = no blur available (the option is off, or the GPU path failed): falls back to the
 // opaque GlassFallback.
-// `viewportMin`/`viewportMax` is the screen rect the blurred texture covers.
+// `viewportMin`/`viewportMax` is the screen rect the blurred texture covers. `blurVtx` (optional)
+// receives the [first, end) vertices that sample the blur ({0, 0} when none), for a caller that
+// blurs only part of the scene to set their UVs again once it has (EditorLayer's viewport HUDs).
 void DrawFrostedPlate(ImDrawList* dl, ImVec2 min, ImVec2 max, float radius, ImTextureID blurTex,
-                      ImVec2 viewportMin, ImVec2 viewportMax, float alpha = 1.0f);
+                      ImVec2 viewportMin, ImVec2 viewportMax, float alpha = 1.0f, int* blurVtx = nullptr);
 
 inline ImU32 U32(ImVec4 c) { return ImGui::ColorConvertFloat4ToU32(c); }
 inline ImVec4 WithAlpha(ImVec4 c, float a) { return ImVec4(c.x, c.y, c.z, a); }

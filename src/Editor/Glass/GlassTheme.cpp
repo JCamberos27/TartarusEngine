@@ -76,7 +76,8 @@ void DrawSoftShadow(ImDrawList* dl, ImVec2 min, ImVec2 max, float radius, float 
 }
 
 void DrawFrostedPlate(ImDrawList* dl, ImVec2 min, ImVec2 max, float radius, ImTextureID blurTex,
-                      ImVec2 vpMin, ImVec2 vpMax, float alpha) {
+                      ImVec2 vpMin, ImVec2 vpMax, float alpha, int* blurVtx) {
+    if (blurVtx) blurVtx[0] = blurVtx[1] = 0;
     if (alpha <= 0.0f) return;
     if (blurTex != (ImTextureID)0 && vpMax.x > vpMin.x && vpMax.y > vpMin.y) {
         // The blurred scene, sampled under exactly this rect: the plate's corners map to the same
@@ -90,6 +91,7 @@ void DrawFrostedPlate(ImDrawList* dl, ImVec2 min, ImVec2 max, float radius, ImTe
         PathSquircle(dl, min, max, radius);
         dl->PathFillConvex(IM_COL32(255, 255, 255, (int)(255.0f * alpha)));
         ImGui::ShadeVertsLinearUV(dl, vtxStart, dl->VtxBuffer.Size, min, max, uvMin, uvMax, true);
+        if (blurVtx) { blurVtx[0] = vtxStart; blurVtx[1] = dl->VtxBuffer.Size; }
         dl->PopTexture();
     }
     // The chrome's tint over the blur (the same glass as the action bar and tool rail). Without a

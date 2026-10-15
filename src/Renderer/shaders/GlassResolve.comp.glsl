@@ -11,6 +11,8 @@ layout(binding = 0) uniform sampler2D uSrc;
 layout(binding = 0, rgba8) uniform writeonly image2D uDst;
 
 uniform float uSrcLod;
+uniform vec2  uSrcTexel; // 1 / the source level's size in the texture (uDst's size is the part that holds data)
+uniform vec4  uSrcClamp; // the uv range (texel centres) of it that holds data
 uniform ivec2 uDstSize;
 uniform float uSaturation;
 uniform float uCeiling;
@@ -23,7 +25,7 @@ vec3 LinearToSrgb(vec3 c) {
 void main() {
     ivec2 p = ivec2(gl_GlobalInvocationID.xy);
     if (p.x >= uDstSize.x || p.y >= uDstSize.y) return;
-    vec2 uv = (vec2(p) + 0.5) / vec2(uDstSize);
+    vec2 uv = clamp((vec2(p) + 0.5) * uSrcTexel, uSrcClamp.xy, uSrcClamp.zw);
     vec3 c = textureLod(uSrc, uv, uSrcLod).rgb;
     float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
     c = max(mix(vec3(luma), c, uSaturation), vec3(0.0));
