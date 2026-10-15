@@ -1282,9 +1282,9 @@ void EditorLayer::DrawSettingsWindow(World& world) {
             if (ImGui::Combo("##Editor theme", &themeId, kThemes, IM_ARRAYSIZE(kThemes))) RequestEditorTheme(themeId);
             if (ImGui::IsItemHovered())
                 EditorUI::SetTooltip("Tartarus: the phosphor-terminal look (default).\n"
-                                     "Black Glass: solid black panels, and real blurred glass under everything that\n"
-                                     "floats (menus, popups, tooltips, dialogs, undocked windows, viewport overlays),\n"
-                                     "with motion as they arrive. It adds the Objects, Properties and Library panels\n"
+                                     "Black Glass: the Tartarus layout and sizes in see-through black glass over a blur\n"
+                                     "of the scene, with real blurred glass under everything that floats (menus, popups,\n"
+                                     "tooltips, dialogs, undocked windows, viewport overlays). It adds the Objects, Properties and Library panels\n"
                                      "(Window \xE2\x96\xB8 Glass Workspace). Applies immediately.");
         }
         if (prefs.EditorThemeId == 1) {
