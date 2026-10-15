@@ -176,6 +176,29 @@ void TestGlassCompositorConvert() {
     CHECK(Glass::FindWindowBackground(dl, floating->Rect()) == 0); // nothing left to clear
 }
 
+void TestGlassifySolids() {
+    HeadlessImGui gui;
+    ImGui::NewFrame();
+    ImGui::Render();
+    ImDrawList dl(ImGui::GetDrawListSharedData());
+    dl._ResetForNewFrame();
+    dl.PushTexture(ImGui::GetIO().Fonts->TexRef);
+    dl.PushClipRect(ImVec2(0.0f, 0.0f), ImVec2(100.0f, 100.0f));
+    const ImU32 black = IM_COL32(0, 0, 0, 255), raised = IM_COL32(0x0E, 0x0E, 0x0E, 255);
+    const ImU32 pressed = IM_COL32(0x2A, 0x2A, 0x2A, 255), text = IM_COL32(0xE6, 0xE8, 0xE6, 255);
+    const ImU32 hue = IM_COL32(0x20, 0x08, 0x08, 255), veil = IM_COL32(0x0E, 0x0E, 0x0E, 128);
+    for (ImU32 c : {black, raised, pressed, text, hue, veil}) dl.AddRectFilled(ImVec2(0, 0), ImVec2(10, 10), c);
+    const int vtx = dl.VtxBuffer.Size / 6; // AddRectFilled without rounding: 4 vertices each
+    CHECK(Glass::GlassifySolids(&dl) == vtx * 3);
+    auto at = [&](int i) { return dl.VtxBuffer[i * vtx].col; };
+    CHECK(at(0) == IM_COL32(0, 0, 0, 90));                       // black: a light veil
+    const unsigned int aRaised = (at(1) >> IM_COL32_A_SHIFT) & 0xFF, aPressed = (at(2) >> IM_COL32_A_SHIFT) & 0xFF;
+    CHECK((at(1) & ~IM_COL32_A_MASK) == IM_COL32(255, 255, 255, 0) && aRaised > 0 && aRaised < aPressed && aPressed < 80);
+    CHECK(at(3) == text);                                        // text untouched
+    CHECK(at(4) == hue);                                         // a colour with hue untouched
+    CHECK(at(5) == veil);                                        // already translucent: untouched
+}
+
 void TestGlassCompositorPose() {
     HeadlessImGui gui;
     ImGui::NewFrame();
@@ -514,6 +537,7 @@ void RegisterGlassTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Glass theme: text contrast on solid surfaces and over the brightest glass", TestGlassContrast);
     tests.emplace_back("Glass compositor: finds and clears a floating window's solid look", TestGlassCompositorConvert);
     tests.emplace_back("Glass compositor: arrival pose moves vertices and clip rects", TestGlassCompositorPose);
+    tests.emplace_back("Glass: panel solids become washes, text and hues untouched", TestGlassifySolids);
     tests.emplace_back("Glass motion: arrival curves and springs", TestGlassArrivalMotion);
     tests.emplace_back("Glass motion: no entries and no bytes at rest", TestGlassMotionZeroAtRest);
     tests.emplace_back("Glass motion: abandoned animations are swept", TestGlassMotionStaleSweep);

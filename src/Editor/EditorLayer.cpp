@@ -399,22 +399,21 @@ void EditorLayer::ApplyThemeStyle() {
 
     ImGuiStyle& style = ImGui::GetStyle();
     if (GlassThemeActive()) {
-        // The opt-in Black Glass theme (Preferences > General > Editor theme): a complete style of
-        // its own over ImGui's defaults, so nothing of the Tartarus metrics leaks into it.
-        style = ImGuiStyle();
-        ConfigureMacEngineTheme(style);
+        // The opt-in Black Glass theme (Preferences > General > Editor theme): Tartarus's own
+        // sizes, spacing and palette, with glass materials over them (GlassTheme.h).
+        style = s_baseStyle;
+        ApplyTartarusPalette(style);
+        ApplyGlassMaterials(style);
         static const auto logGlassWarn = [](const char* msg) { Log::Warn(std::string("[Glass theme] ") + msg); };
         using namespace EditorUIPrimitives;
-        // Floors against the solid surfaces; text on glass sits on GlassFallback at worst.
-        const ImVec4 panel = Glass::Panel;
-        const ImVec4 raised = Glass::Raised;
-        AssertContrastFloor("Text vs panel", Glass::TextPrimary, panel, 4.5f, logGlassWarn);
-        AssertContrastFloor("Secondary vs panel", Glass::TextSecondary, panel, 4.5f, logGlassWarn);
-        AssertContrastFloor("Tertiary vs panel", Glass::TextTertiary, panel, 3.0f, logGlassWarn);
-        AssertContrastFloor("Accent vs panel", Glass::Accent, panel, 3.0f, logGlassWarn);
-        AssertContrastFloor("Text vs card", Glass::TextPrimary, raised, 4.5f, logGlassWarn);
-        AssertContrastFloor("OnAccent vs Accent", Glass::OnAccent, Glass::Accent, 4.5f, logGlassWarn);
-        AssertContrastFloor("Text vs glass fallback", Glass::TextPrimary, Glass::GlassFallback, 4.5f, logGlassWarn);
+        // Floors against a panel over the brightest the ambient field can get.
+        const float worstField = Glass::AmbientCeiling * (1.0f - Glass::AmbientDim);
+        const ImVec4 field(worstField, worstField, worstField, 1.0f);
+        const ImVec4 panel = CompositeOver(style.Colors[ImGuiCol_WindowBg], field);
+        AssertContrastFloor("Text vs glass panel", style.Colors[ImGuiCol_Text], panel, 4.5f, logGlassWarn);
+        AssertContrastFloor("Secondary vs glass panel", EditorTheme::Secondary, panel, 4.5f, logGlassWarn);
+        AssertContrastFloor("TextDisabled vs glass panel", style.Colors[ImGuiCol_TextDisabled], panel, 3.0f, logGlassWarn);
+        AssertContrastFloor("Text vs glass fallback", style.Colors[ImGuiCol_Text], Glass::GlassFallback, 4.5f, logGlassWarn);
         static const auto logGlassIconWarn = [](const char* msg) { Log::Warn(std::string("[Icons] ") + msg); };
         EditorIcons::AssertEditorIconsUnique(logGlassIconWarn);
         style.ScaleAllSizes(m_UIScale);
@@ -533,6 +532,7 @@ void EditorLayer::FreeGpuResources() {
     if (m_ThumbnailBlitFbo) { glDeleteFramebuffers(1, &m_ThumbnailBlitFbo); m_ThumbnailBlitFbo = 0; }
     if (m_Glass) { // the Glass theme's frosted-HUD blur chain and its window compositor
         m_Glass->Backdrop.Release();
+        m_Glass->Ambient.Release();
         m_Glass->Compositor.Release();
     }
 }

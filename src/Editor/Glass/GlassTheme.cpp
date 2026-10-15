@@ -102,13 +102,69 @@ void DrawFrostedPlate(ImDrawList* dl, ImVec2 min, ImVec2 max, float radius, ImTe
     DrawSquircleBorder(dl, min, max, U32(WithAlpha(GlassEdge, GlassEdge.w * alpha)), radius, 1.0f);
 }
 
-void DrawWallpaper() {
+void DrawWallpaper(ImTextureID ambient) {
     ImGuiViewport* vp = ImGui::GetMainViewport();
     ImDrawList* bg = ImGui::GetBackgroundDrawList(vp);
-    bg->AddRectFilled(vp->Pos, ImVec2(vp->Pos.x + vp->Size.x, vp->Pos.y + vp->Size.y), U32(Base));
+    const ImVec2 mn = vp->Pos, mx(vp->Pos.x + vp->Size.x, vp->Pos.y + vp->Size.y);
+    bg->AddRectFilled(mn, mx, U32(Base));
+    if (ambient == (ImTextureID)0) return;
+    // The whole blurred Scene image over the whole window (v runs 1 -> 0: GL textures are bottom-up).
+    bg->AddImage(ImTextureRef(ambient), mn, mx, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
+    bg->AddRectFilled(mn, mx, U32(Rgb(0x00, 0x00, 0x00, AmbientDim)));
 }
 
 } // namespace Glass
+
+void ApplyGlassMaterials(ImGuiStyle& style) {
+    using namespace Glass;
+    ImVec4* c = style.Colors;
+    const ImVec4 clear = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+    const ImVec4 panel = Rgb(0x00, 0x00, 0x00, GlassPanelAlpha);
+    const ImVec4 chrome = Rgb(0x00, 0x00, 0x00, GlassChromeAlpha);
+    auto white = [](float a) { return Rgb(0xFF, 0xFF, 0xFF, a); };
+
+    // Where you work: black glass over the ambient field.
+    c[ImGuiCol_WindowBg]            = panel;
+    c[ImGuiCol_ChildBg]             = clear;
+    c[ImGuiCol_MenuBarBg]           = chrome;
+    c[ImGuiCol_DockingEmptyBg]      = clear;
+    // A docked node's tab strip is drawn in the title colours; on a floating window the compositor
+    // removes these and lays the blur underneath instead.
+    c[ImGuiCol_TitleBg]             = chrome;
+    c[ImGuiCol_TitleBgActive]       = chrome;
+    c[ImGuiCol_TitleBgCollapsed]    = chrome;
+    // What floats: drawn solid here, glass once the compositor runs (GlassFallback otherwise).
+    c[ImGuiCol_PopupBg]             = PopupSolid;
+
+    // Tabs sit on the strip as washes; the selected one is lit like a raised surface.
+    c[ImGuiCol_Tab]                 = clear;
+    c[ImGuiCol_TabHovered]          = white(0.08f);
+    c[ImGuiCol_TabSelected]         = white(0.06f);
+    c[ImGuiCol_TabDimmed]           = clear;
+    c[ImGuiCol_TabDimmedSelected]   = white(0.04f);
+
+    // Fields, buttons and headers lighten whatever is behind them instead of covering it.
+    c[ImGuiCol_FrameBg]             = white(0.045f);
+    c[ImGuiCol_FrameBgHovered]      = white(0.080f);
+    c[ImGuiCol_FrameBgActive]       = white(0.110f);
+    c[ImGuiCol_Button]              = white(0.060f);
+    c[ImGuiCol_ButtonHovered]       = white(0.110f);
+    c[ImGuiCol_ButtonActive]        = white(0.160f);
+    c[ImGuiCol_HeaderHovered]       = white(0.060f);
+    c[ImGuiCol_TableHeaderBg]       = white(0.050f);
+    c[ImGuiCol_TableBorderLight]    = white(0.050f);
+
+    // Hints and placeholders a step brighter than Tartarus's Dim: glass sits lighter than black.
+    c[ImGuiCol_TextDisabled]        = Rgb(0x86, 0x88, 0x86);
+
+    // Thin, quiet edges.
+    c[ImGuiCol_Border]              = white(0.10f);
+    c[ImGuiCol_Separator]           = white(0.08f);
+    c[ImGuiCol_TableBorderStrong]   = white(0.10f);
+
+    style.WindowRounding = GlassWindowRounding; // floating windows only: docked ones are never rounded
+    style.PopupRounding  = GlassPopupRounding;
+}
 
 // =================================================================================================
 // The theme
