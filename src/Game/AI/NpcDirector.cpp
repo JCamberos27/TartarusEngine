@@ -26,6 +26,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -227,7 +228,16 @@ bool NpcDirector::Start(World& world, AssetLibrary& assets, const FirstPersonCon
         s.Skill = c.Skill;
         s.Brain = c.Brain;
         s.OutfitSeed = c.OutfitSeed;
-        s.Bare = c.Bare;
+        // NPC_TEST_BARE=1 (--npc-test): every soldier bare, the animation and the skinning seen without clothing.
+        static const bool allBare = [] {
+            char* e = nullptr;
+            size_t n = 0;
+            _dupenv_s(&e, &n, "NPC_TEST_BARE");
+            const bool on = e && *e && *e != '0';
+            std::free(e);
+            return on;
+        }();
+        s.Bare = c.Bare || allBare;
         const auto* order = reg.try_get<OrderComponent>(e);
         found.push_back({order ? order->Value : (int)entt::to_integral(e), s});
     }

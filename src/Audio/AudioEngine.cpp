@@ -215,8 +215,9 @@ bool s_BusesReady = false;
 float s_BusVolume[AudioEngine::kBusCount] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
 float s_MasterVolume = 1.0f;
 bool s_MutedFlag = false;
+bool s_EnvMuted = false; // TARTARUS_MUTE=1: a test run on a desktop someone is using - everything mixes as ever, silently
 void ApplyMasterVolume(ma_engine& engine) {
-    ma_engine_set_volume(&engine, s_MutedFlag ? 0.0f : s_MasterVolume);
+    ma_engine_set_volume(&engine, s_MutedFlag || s_EnvMuted ? 0.0f : s_MasterVolume);
 }
 std::vector<uint32_t> s_FreeSlots;
 bool s_Paused = false;
@@ -329,6 +330,19 @@ bool InitImpl(bool offline, int rate) {
     }
     s_Initialized = true;
     s_Offline = offline;
+#ifdef _WIN32
+    {
+        char* env = nullptr;
+        size_t len = 0;
+        if (_dupenv_s(&env, &len, "TARTARUS_MUTE") == 0 && env) {
+            s_EnvMuted = *env && *env != '0';
+            std::free(env);
+        }
+    }
+#else
+    if (const char* env = std::getenv("TARTARUS_MUTE")) s_EnvMuted = *env && *env != '0';
+#endif
+    ApplyMasterVolume(s_Engine);
     s_BusesReady = true;
     for (int b = 0; b < AudioEngine::kBusCount; ++b) {
         if (ma_sound_group_init(&s_Engine, 0, nullptr, &s_Buses[b]) != MA_SUCCESS) {
