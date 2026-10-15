@@ -355,9 +355,7 @@ def npcs(b):
         (x, z), _ = b.clear_spot(room)
         e = json.loads(json.dumps(spawn))
         i = b.s._next()
-        fields = json.loads(e['C# Script']['Fields JSON'])
-        fields.update({'Weapon': weapon, 'Skill': skill, 'OutfitSeed': n})
-        e['C# Script']['Fields JSON'] = json.dumps(fields, separators=(',', ':'))
+        e['NPC Spawn'].update({'Weapon': ('AKS-74U', 'Remington 870')[weapon], 'Skill': skill, 'Outfit Seed': n})
         yaw = math.degrees(math.atan2(door[0] - x, door[1] - z))
         e.update({'id': i, 'order': i, 'parentId': enemies, 'name': f'Enemy Spawn {n} ({room})',
                   'position': [round(x, 3), 0.1, round(z, 3)], 'rotation': k.yaw_quat(yaw)})

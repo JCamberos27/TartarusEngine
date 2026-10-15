@@ -1,5 +1,5 @@
 #include "FirstPersonWeaponGameplay.h"
-#include "Scripting/WeaponPrefab.h"
+#include "WeaponPrefab.h"
 
 #include <algorithm>
 #include <cmath>
@@ -46,7 +46,7 @@ bool NormalizeWeaponGameplay(FirstPersonWeaponGameplay& w, std::string& error) {
     return true;
 }
 
-namespace Scripting {
+namespace Gameplay {
 bool ImportLegacyWeaponGameplay(const json& g, FirstPersonWeaponGameplay& w, std::string& error) {
     w = FirstPersonWeaponGameplay{};
     if (!g.is_object()) return NormalizeWeaponGameplay(w, error);

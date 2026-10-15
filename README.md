@@ -78,9 +78,9 @@ onto the new `main`, or recreate them.
 
 ## Build and run
 
-Install the .NET 10 SDK alongside Visual Studio's C++ toolchain. The editor and engine remain
-native; gameplay and editor C# tools build through the SDK. See the [scripting manual](docs/SCRIPTING_MANUAL.md)
-and [documentation index](docs/README.md) for the player/weapon scripts, in-editor IDE and curve tools.
+Install Visual Studio's C++ toolchain and CMake. Engine, editor and gameplay are all native C++;
+gameplay and editor tools build as hot-reloadable modules. See the [documentation index](docs/README.md)
+for gameplay code, the in-editor Script IDE and curve tools.
 
     cmake --build build --config Release --target TartarusEngine
 

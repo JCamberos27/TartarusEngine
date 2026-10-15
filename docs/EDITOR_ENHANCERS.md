@@ -14,7 +14,7 @@ Status by phase:
 | 1 | vHierarchy: row styles, separators, tree lines, component minimap, scene selector, nav bar, hover keys | Done |
 | 2 | vFolders: folder styles, rules, auto icons, content minimap, bookmarks | Done |
 | 3a | vInspector: nav bar, identity-based selection history, floating component windows, multi-component copy/paste, keep play-mode changes, hover keys, animations | Done |
-| 3b | vInspector: field attributes (C++ and C#), Reset to Default, C# buttons / read-outs / dictionaries | Done |
+| 3b | vInspector: field attributes, Reset to Default | Done |
 | 4 | vTabs: tab strips in the Inspector and Asset Browser | Done |
 | 5 | vFavorites: hold-Alt favorites overlay with pages | Done |
 | 6 | vRuler: Shift+R surface, bounds and reference-object measuring | Done |
@@ -128,8 +128,8 @@ Rows show the icons of their registered components (up to the preference's maxim
 * **Click** an icon to select the row. The Inspector opens that component's section, scrolls it
   to the top and briefly outlines it.
 * **Alt+click** an icon to open a **pinned component window**: a small floating editor for that
-  one component. It uses the Inspector's own field drawing, so undo, prefab override tints and C#
-  managed inspectors behave the same. Pins last for the session. A pin for another scene is
+  one component. It uses the Inspector's own field drawing, so undo and prefab override tints
+  behave the same. Pins last for the session. A pin for another scene is
   hidden until that scene is open again.
 
 ### Navigation bar
@@ -382,16 +382,6 @@ unit tested.
 Audio Source uses this: Volume Rolloff, Min / Max Distance and Doppler Level grey out unless
 3D Sound is on.
 
-### Field attributes (C# scripts)
-
-`[Foldout]`, `[Tab]`, `[ReadOnly]`, `[HideIf]`, `[DisableIf]`, `[Variants]`, `[OnValueChanged]`,
-`[Button]`, `[ShowInInspector]` and `Dictionary<string, scalar>` fields. See
-[SCRIPTING_API.md](SCRIPTING_API.md) for each. The Inspector reads them from the class
-description, which is now parsed once per class and dropped on every assembly reload, instead of
-every frame. Buttons and `[OnValueChanged]` use op 13 and the read-outs use op 14, through the
-existing JSON request. The combined engine uses scripting ABI version 3, with editor method
-and read-out operations separated from project integration operations.
-
 ## vTabs
 
 Tab strips at the top of the Inspector and under the Asset Browser toolbar. A strip appears once
@@ -592,8 +582,6 @@ costs nothing unless the harness is running. Conventions in use:
 | --- | --- |
 | `row:<Name>` | a Hierarchy row |
 | `field:<Component>/<Field>` | a reflected C++ component field |
-| `cs:<Field>` | a C# script field, button or read-out |
-| `cs:<Field>=<Label>` | one `[Variants]` chip of a C# field |
 
 Widgets drawn by the hot-reloadable editor module (toolbar, folder tree) have their own ImGui
 copy without the hooks, so tests can't address them.

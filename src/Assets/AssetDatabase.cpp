@@ -100,7 +100,6 @@ const std::unordered_map<std::string, std::string>& KnownExtensions() {
         {".recoil", "recoil"},
         {".camerashake", "camerashake"},
         {".tescript", "script"},
-        {".cs", "script"},
         {".physicmaterial", "physicmaterial"}, // #170
         {".preset", "preset"},                 // #178 - saved component settings
     };

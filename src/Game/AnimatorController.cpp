@@ -1,4 +1,3 @@
-#include "Scripting/ScriptRuntime.h"
 #include "AnimatorController.h"
 #include "AnimationSystem.h"
 #include "AssetLibrary.h"

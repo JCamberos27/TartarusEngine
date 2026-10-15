@@ -9,7 +9,7 @@
 #include "Camera.h"
 #include "Player.h"
 #include "FirstPersonPresentation.h"
-#include "Game/Scripting/ScriptRuntime.h"
+#include "Editor/GameModuleBuild.h"
 #include "FirstPersonWeaponTest.h" // --weapon-test
 #include "WeaponLab.h"            // --weapon-lab
 #include "BodyDebugDraw.h"
@@ -1632,7 +1632,7 @@ int main(int argc, char** argv) {
         bool exitApproved = false;
 
         // --editor-shot: each view gets kEditorShotFrames frames - set up halfway, captured at the end.
-        const int kEditorShotFrames = opt.editorShotIDE ? 450 : 150; // allow the async Roslyn result to reach the captured IDE frame
+        const int kEditorShotFrames = 150;
         const std::vector<const char*> kEditorShots = opt.editorShotIDE ? std::vector<const char*>{"script-ide"} : opt.editorShotCurves ? std::vector<const char*>{"recoil-curves","recoil-targets","recoil-smoothing","recoil-layers","recoil-misc"} : std::vector<const char*>{"overview", "inspector", "enhancers", "bookmarks", "favorites", "console", "game", "settings", "settings-viewport",
                                                    "settings-performance", "project-settings", "project-tags", "project-build",
                                                    "lighting", "animator"};
@@ -2422,7 +2422,7 @@ int main(int argc, char** argv) {
                 {
                 PROFILE_SCOPE("Physics Step");
                 PhysicsWorld::Step(gameDt, world,
-                                   [&](float fixedDt) { gameModule.FixedTick(world, fixedDt); Scripting::Tick(world,assets,fixedDt,true); });
+                                   [&](float fixedDt) { gameModule.FixedTick(world, fixedDt); });
                 }
                 if (playUsesPlayer) {
                     PROFILE_SCOPE("Player + FP Update");
@@ -2826,8 +2826,6 @@ int main(int argc, char** argv) {
             {
                 PROFILE_SCOPE("Game Module Tick");
                 gameModule.Tick(world, gameDt, simThisFrame);
-                if (simThisFrame) Scripting::Tick(world,assets,gameDt);
-                else Scripting::Poll();
             }
 
             // #177 - particles run while editing too (real time) so an emitter can be tuned live;
@@ -4126,7 +4124,7 @@ int main(int argc, char** argv) {
                     const int step = editorShotFrame++ / kEditorShotFrames;
                     if (editorShotFrame % kEditorShotFrames == kEditorShotFrames / 2 && step < (int)std::size(kEditorShots)) {
                         const std::string view = kEditorShots[step];
-                        if(view=="script-ide")editor.OpenScriptIDE(ProjectPaths::Resolve("assets/Scripts/Bob.cs"));
+                        if(view=="script-ide")editor.OpenScriptIDE(GameModuleBuild::Available() ? (GameModuleBuild::SourceRoot()/"src/Game/LightFlickerSystem.cpp").u8string() : std::string());
                         auto focus = [](const char* title) {
                             for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
                                 if (std::strstr(w->Name, title) && std::strncmp(w->Name, "##", 2) != 0 && !(w->Flags & ImGuiWindowFlags_ChildWindow)) {

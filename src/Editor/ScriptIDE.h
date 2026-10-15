@@ -2,7 +2,8 @@
 #include <memory>
 #include <string>
 
-// Native dockable editor; compiler analysis runs in a separate Roslyn process.
+// Native dockable editor for the engine's C++ sources, project shaders and .tescript files. Saving a
+// reloadable module source rebuilds it in the background (GameModuleBuild) for hot reload.
 class ScriptIDE {
 public:
     ScriptIDE();

@@ -300,6 +300,7 @@ file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS
 list(REMOVE_ITEM ENGINE_SOURCES
   ${CMAKE_SOURCE_DIR}/src/Game/GameModule.cpp
   ${CMAKE_SOURCE_DIR}/src/Game/TransformControllerSystem.cpp
+  ${CMAKE_SOURCE_DIR}/src/Game/LightFlickerSystem.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModule.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleToolbar.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleAssetBrowser.cpp
@@ -414,41 +415,10 @@ endif()
 
 add_executable(TartarusEngine ${ENGINE_SOURCES} ${IMGUI_SOURCES} ${MESHOPT_SOURCES} ${RECAST_SOURCES})
 
-# The managed host/SDK is engine infrastructure; building the sample is an explicit option.
-find_program(TARTARUS_DOTNET dotnet REQUIRED)
-set(TARTARUS_MANAGED_DIR "${CMAKE_BINARY_DIR}/$<CONFIG>/Managed")
-file(GLOB TARTARUS_SDK_SOURCE CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/managed/Tartarus.Runtime/*.cs" "${CMAKE_SOURCE_DIR}/managed/Tartarus.Runtime/*.csproj")
-add_custom_target(TartarusRuntime
-  COMMAND ${TARTARUS_DOTNET} build "${CMAKE_SOURCE_DIR}/managed/Tartarus.CodeAnalysis/Tartarus.CodeAnalysis.csproj"
-    --configuration $<IF:$<CONFIG:Debug>,Debug,Release> --output "${TARTARUS_MANAGED_DIR}/IDE" --configfile "${CMAKE_SOURCE_DIR}/NuGet.Config" --nologo
-  COMMAND ${TARTARUS_DOTNET} build "${CMAKE_SOURCE_DIR}/managed/Tartarus.Runtime/Tartarus.Runtime.csproj"
-    --configuration $<IF:$<CONFIG:Debug>,Debug,Release> --output "${TARTARUS_MANAGED_DIR}" --configfile "${CMAKE_SOURCE_DIR}/NuGet.Config" --nologo
-  COMMAND ${CMAKE_COMMAND} -E make_directory "${TARTARUS_MANAGED_DIR}/SDK"
-  COMMAND ${CMAKE_COMMAND} -E rm -f "${TARTARUS_MANAGED_DIR}/SDK/GameplayContracts.cs"
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${TARTARUS_SDK_SOURCE} "${CMAKE_SOURCE_DIR}/NuGet.Config" "${TARTARUS_MANAGED_DIR}/SDK"
-  COMMAND ${CMAKE_COMMAND} -E make_directory "${TARTARUS_MANAGED_DIR}/SDK/Templates"
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/project/Scripts/Tartarus.Gameplay.csproj" "${CMAKE_SOURCE_DIR}/project/Scripts/Tartarus.Editor.csproj" "${CMAKE_SOURCE_DIR}/project/Scripts/Directory.Build.props" "${TARTARUS_MANAGED_DIR}/SDK/Templates"
-  VERBATIM
-)
-option(TARTARUS_BUILD_SAMPLE_GAME "Build the workspace's sample gameplay/editor scripts" ON)
-add_custom_target(TartarusScripts
-  COMMAND ${TARTARUS_DOTNET} build "${CMAKE_SOURCE_DIR}/project/Scripts/Tartarus.Gameplay.csproj"
-    --configuration $<IF:$<CONFIG:Debug>,Debug,Release> --output "${CMAKE_SOURCE_DIR}/project/Scripts/bin" --configfile "${CMAKE_SOURCE_DIR}/NuGet.Config" --nologo
-  COMMAND ${TARTARUS_DOTNET} build "${CMAKE_SOURCE_DIR}/project/Scripts/Tartarus.Editor.csproj"
-    --configuration $<IF:$<CONFIG:Debug>,Debug,Release> --output "${CMAKE_SOURCE_DIR}/project/Scripts/bin" --configfile "${CMAKE_SOURCE_DIR}/NuGet.Config" --nologo
-  COMMAND ${TARTARUS_DOTNET} build "${CMAKE_SOURCE_DIR}/tests/managed/Tartarus.Gameplay.Tests.csproj"
-    --configuration $<IF:$<CONFIG:Debug>,Debug,Release> --output "${CMAKE_BINARY_DIR}/$<CONFIG>/ScriptTests" --configfile "${CMAKE_SOURCE_DIR}/NuGet.Config" --nologo
-  VERBATIM
-)
-add_dependencies(TartarusScripts TartarusRuntime)
-add_dependencies(TartarusEngine TartarusRuntime)
-if(TARTARUS_BUILD_SAMPLE_GAME)
-  add_dependencies(TartarusEngine TartarusScripts)
-endif()
-
 add_library(TartarusGame SHARED
   ${CMAKE_SOURCE_DIR}/src/Game/GameModule.cpp
   ${CMAKE_SOURCE_DIR}/src/Game/TransformControllerSystem.cpp
+  ${CMAKE_SOURCE_DIR}/src/Game/LightFlickerSystem.cpp
 )
 
 # Reloadable editor tools intentionally use a narrow host callback table rather than sharing
@@ -532,6 +502,11 @@ add_dependencies(TartarusEngine TartarusGame TartarusEditor)
 target_compile_definitions(TartarusEngine PRIVATE
   TARTARUS_GAME_MODULE_FILENAME="$<TARGET_FILE_NAME:TartarusGame>"
   TARTARUS_EDITOR_MODULE_FILENAME="$<TARGET_FILE_NAME:TartarusEditor>"
+  # The Script IDE rebuilds the reloadable modules in place (GameModuleBuild.cpp). A packaged
+  # player has no source tree here and simply reports the rebuild as unavailable.
+  TARTARUS_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+  TARTARUS_BINARY_DIR="${CMAKE_BINARY_DIR}"
+  TARTARUS_CMAKE_COMMAND="${CMAKE_COMMAND}"
   # Shown in the viewport status bar so the running build (Debug vs an optimized config) is
   # obvious at a glance — Debug is ~2x the frame time.
   TARTARUS_BUILD_CONFIG="$<CONFIG>"
@@ -697,14 +672,6 @@ endforeach()
 # Executable and the two hot-reloadable modules. $<TARGET_FILE:...> is the .dll for a SHARED
 # library on Windows, which skips the .lib/.exp import pair an end user has no use for.
 install(TARGETS TartarusEngine RUNTIME DESTINATION ".")
-install(DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIG>/Managed/" DESTINATION "Managed"
-  PATTERN "obj" EXCLUDE PATTERN "bin" EXCLUDE
-  PATTERN "Tartarus.Gameplay*" EXCLUDE PATTERN "Tartarus.Editor*" EXCLUDE)
-if(TARTARUS_BUILD_SAMPLE_GAME)
-  install(DIRECTORY "${CMAKE_SOURCE_DIR}/project/Scripts/bin/" DESTINATION "project/Scripts/bin"
-    FILES_MATCHING PATTERN "Tartarus.Gameplay.dll" PATTERN "Tartarus.Gameplay.deps.json"
-    PATTERN "Tartarus.Editor.dll" PATTERN "Tartarus.Editor.deps.json")
-endif()
 install(FILES
   $<TARGET_FILE:TartarusGame>
   $<TARGET_FILE:TartarusEditor>

@@ -1,5 +1,5 @@
-#include "Scripting/GameFrames.h"
-#include "Scripting/GameCommands.h"
+#include "GameFrames.h"
+#include "GameCommands.h"
 #include "BodyLocomotion.h"
 #include <stdexcept>
 #include "FirstPersonBody.h"
@@ -1086,7 +1086,7 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
 
     if(!reg.valid(m_Driver)){m_Body=entt::null;return;}
     auto& ac=reg.get<AnimatorControllerComponent>(m_Driver);
-    Scripting::BodyMotionFrame f;
+    Gameplay::BodyMotionFrame f;
     f.Velocity={player.Velocity.x,player.Velocity.y,player.Velocity.z};
     f.WishVelocity={player.WishVelocity.x,player.WishVelocity.y,player.WishVelocity.z};
     f.Move={m_Move.x,m_Move.y,0};
@@ -1158,7 +1158,7 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     // Mid-crossfade (crouching on the move, a stop easing out) nothing new starts on top, nor does one still pending from
     // the frame the fade began: the fade would be cut short and the view jolt with it (a crouch into a crouched start
     // dropped the eye 33 cm in 0.08 s). The loop picks up the move.
-    if(ac.InTransition){f.Triggers&=~(Scripting::kBodyStart|Scripting::kBodyPivot|Scripting::kBodyFidget);for(const char* t:{FPBody::kStart,FPBody::kPivot,FPBody::kFidget})ac.ResetTrigger(t);}
+    if(ac.InTransition){f.Triggers&=~(Gameplay::kBodyStart|Gameplay::kBodyPivot|Gameplay::kBodyFidget);for(const char* t:{FPBody::kStart,FPBody::kPivot,FPBody::kFidget})ac.ResetTrigger(t);}
     m_Loco.StartDistance=f.StartDistance;m_Loco.PivotDistance=f.PivotDistance;m_Loco.PivotTravel=f.PivotTravel;m_Loco.MoveDistance=f.MoveDistance;
     m_Loco.FidgetTime=f.FidgetTime;m_Loco.FidgetNext=f.FidgetNext;m_Loco.FidgetIndex=f.FidgetIndex;
     m_Loco.StartGait=f.StartGait;m_Loco.StopGait=f.StopGait;m_Loco.PivotGait=f.PivotGait;m_Loco.StartTurn=f.StartTurn;m_Loco.StartTurnAmount=f.StartTurnAmount;
@@ -1177,11 +1177,11 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     m_Move={f.Move.x,f.Move.y};m_LastDir={f.LastDir.x,f.LastDir.y};m_Grounded=player.Grounded;m_InLand=ac.InState(FPBody::kStateLand);m_MaxTurnRate=cfg.MaxTurnRate;m_TurnThreshold=cfg.TurnThreshold;
     world.SetWorldPose(m_Body,m_Feet,YawRotation(m_Yaw));
     if(f.SetTurnAngle)ac.SetFloat(FPBody::kTurnAngle,f.TurnAngle);ac.SetBool(FPBody::kTurning,f.Turning!=0);ac.SetBool(FPBody::kMoving,f.Moving!=0);
-    if(f.Triggers&Scripting::kBodyStart){ac.SetFloat(FPBody::kStartX,f.StartDir.x);ac.SetFloat(FPBody::kStartY,f.StartDir.y);ac.SetFloat(FPBody::kStartGait,f.StartGait);ac.SetFloat(FPBody::kStartTurn,f.StartTurn);ac.SetFloat(FPBody::kStartTurnAmount,f.StartTurnAmount);}
-    if(f.Triggers&(Scripting::kBodyStop|Scripting::kBodyStopRun)){ac.SetFloat(FPBody::kStopX,f.StopDir.x);ac.SetFloat(FPBody::kStopY,f.StopDir.y);ac.SetFloat(FPBody::kStopGait,f.StopGait);}
-    if(f.Triggers&Scripting::kBodyPivot){ac.SetFloat(FPBody::kPivotX,f.PivotDir.x);ac.SetFloat(FPBody::kPivotY,f.PivotDir.y);ac.SetFloat(FPBody::kPivotGait,f.PivotGait);}
-    if(f.Triggers&Scripting::kBodyStep){ac.SetFloat(FPBody::kStepX,f.StepDir.x);ac.SetFloat(FPBody::kStepY,f.StepDir.y);}
-    if(f.Triggers&Scripting::kBodyFidget)ac.SetFloat(FPBody::kFidgetIndex,f.FidgetIndex);
+    if(f.Triggers&Gameplay::kBodyStart){ac.SetFloat(FPBody::kStartX,f.StartDir.x);ac.SetFloat(FPBody::kStartY,f.StartDir.y);ac.SetFloat(FPBody::kStartGait,f.StartGait);ac.SetFloat(FPBody::kStartTurn,f.StartTurn);ac.SetFloat(FPBody::kStartTurnAmount,f.StartTurnAmount);}
+    if(f.Triggers&(Gameplay::kBodyStop|Gameplay::kBodyStopRun)){ac.SetFloat(FPBody::kStopX,f.StopDir.x);ac.SetFloat(FPBody::kStopY,f.StopDir.y);ac.SetFloat(FPBody::kStopGait,f.StopGait);}
+    if(f.Triggers&Gameplay::kBodyPivot){ac.SetFloat(FPBody::kPivotX,f.PivotDir.x);ac.SetFloat(FPBody::kPivotY,f.PivotDir.y);ac.SetFloat(FPBody::kPivotGait,f.PivotGait);}
+    if(f.Triggers&Gameplay::kBodyStep){ac.SetFloat(FPBody::kStepX,f.StepDir.x);ac.SetFloat(FPBody::kStepY,f.StepDir.y);}
+    if(f.Triggers&Gameplay::kBodyFidget)ac.SetFloat(FPBody::kFidgetIndex,f.FidgetIndex);
     // The gait loop's own ground speed (stride warp's reference): what the animator's clips travelled last frame, exactly as
     // played (blend, play rate, length). Only in a settled loop; a start, stop or fade is left to the feet's estimate.
     // Rate trim: a blend's clips share one cycle, so a walk blended with the idle's long loop plays slow and its feet fall
