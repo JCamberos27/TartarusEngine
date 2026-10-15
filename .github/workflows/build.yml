@@ -59,6 +59,14 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Third-party asset policy
+        if: matrix.config == 'Debug'
+        run: python tools/assets/check_git_assets.py
+
+      - name: Asset export regression
+        if: matrix.config == 'Debug'
+        run: python -m unittest discover -s tools/assets -p 'test_*.py'
+
       # Structural guard for #302 / #184: every ECS component must be registered with
       # ComponentRegistry (auto-generates its serialization + Inspector + Add Component) or
       # explicitly allow-listed with a reason. Pure static check, no build needed — run it
