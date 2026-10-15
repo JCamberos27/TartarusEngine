@@ -12,6 +12,7 @@
 #include "ProjectPaths.h"
 #include "SceneSerializer.h"
 #include "World.h"
+#include "Glass/GlassMotion.h"
 #include "gl.h"
 
 // stb_image_write.h's own sprintf() use, and entt's deprecated storage::in_use() (the entity counts, as main.cpp reads them).
@@ -236,6 +237,46 @@ void PrefabMode(EditorLayer& editor, World& world, AssetLibrary& assets) {
     if (!entered || !saved || editor.InPrefabMode() || instances != 2 || withChild != 2)
         Log::Error("[SmokeTest] Prefab Mode round trip failed.");
     std::filesystem::remove_all(dir, pe);
+}
+
+// The Glass theme: on at frame 15 (applied at the next BeginFrame), checked at 70 after ~55 frames
+// of drawing every Glass surface over the scene, off at 70, and its memory checked at 80.
+void GlassTheme(EditorLayer& editor, World& world, int frame) {
+    if (frame == 15) {
+        // Something selected, so the Properties panel and the selection HUD have content.
+        for (entt::entity e : world.Registry.view<const NameComponent>()) {
+            const auto* order = world.Registry.try_get<OrderComponent>(e);
+            if (order && world.Registry.get<const NameComponent>(e).Name == "Cube") { editor.SelectEntityByOrder(world, order->Value); break; }
+        }
+        editor.SetGlassThemeForTest(true);
+        std::cout << "[SmokeTest]   glass: theme on" << std::endl;
+    } else if (frame == 20) {
+        editor.GlassNotifySnap(); // the snap ring, drawn for the next ~25 frames
+        Log::Warn("[SmokeTest] glass: a warning (not a compile error) must not raise a toast");
+    } else if (frame == 70) {
+        if (!editor.GlassThemeActive()) {
+            Log::Error("[SmokeTest] glass: the theme never switched on");
+        } else if (editor.IsSceneViewportVisible() && editor.GlassBackdropTextureForTest() == 0) {
+            Log::Error("[SmokeTest] glass: the frosted HUDs produced no blurred backdrop");
+        } else if (editor.IsSceneViewportVisible() && editor.GlassSurfacesForTest() == 0) {
+            // The viewport toolbar and tool rail float over the Scene view: they must be glass.
+            Log::Error("[SmokeTest] glass: no floating window was composited as glass");
+        } else if (editor.GlassSurfacesForTest() > 0 && editor.GlassCapturesForTest() == 0) {
+            Log::Error("[SmokeTest] glass: glass surfaces were drawn without blurring what's behind them");
+        } else {
+            std::cout << "[SmokeTest]   glass: panels and HUDs drawn, backdrop texture "
+                      << editor.GlassBackdropTextureForTest() << ", " << editor.GlassSurfacesForTest()
+                      << " glass surface(s) from " << editor.GlassCapturesForTest() << " capture(s), "
+                      << Glass::Motion().LiveCount() << " animation(s) live" << std::endl;
+        }
+        editor.SetGlassThemeForTest(false);
+    } else if (frame == 80) {
+        if (editor.GlassThemeActive()) Log::Error("[SmokeTest] glass: the theme never switched back off");
+        else if (Glass::Motion().LiveCount() != 0 || Glass::Motion().HeldBytes() != 0)
+            Log::Error("[SmokeTest] glass: animation state still holds " + std::to_string(Glass::Motion().HeldBytes()) +
+                       " bytes after the theme was switched off");
+        else std::cout << "[SmokeTest]   glass: theme off, animation memory released" << std::endl;
+    }
 }
 
 } // namespace SmokeChecks

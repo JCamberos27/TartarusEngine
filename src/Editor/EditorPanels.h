@@ -24,6 +24,10 @@ inline constexpr const char* Settings     = ICON_FA_GEAR "  Settings###Settings"
 inline constexpr const char* PhysicsDebug = ICON_FA_CUBES "  Physics Debug###PhysicsDebug";
 inline constexpr const char* Animator     = ICON_FA_DIAGRAM_PROJECT "  Animator###Animator";
 inline constexpr const char* AssetLibrary = ICON_FA_BOX_ARCHIVE "  Asset Library###AssetLibrary";
+// The Glass Workspace (opt-in Glass theme, EditorLayer_Glass.cpp).
+inline constexpr const char* GlassHierarchy = ICON_FA_LIST "  Objects###GlassHierarchy";
+inline constexpr const char* GlassInspector = ICON_FA_SLIDERS "  Properties###GlassInspector";
+inline constexpr const char* GlassAssets    = ICON_FA_TABLE_CELLS_LARGE "  Library###GlassAssets";
 
 // Layouts saved before the panels had stable ids (imgui.ini, layout presets) name the windows by
 // their old titles. Renames those [Window][...] sections so the docked positions carry over.

@@ -48,7 +48,6 @@
 #include "TintOverlayRenderer.h"
 #include "HdrTarget.h"
 #include "OpaqueColorCopy.h"
-#include "Screenshot.h"
 #include "Tonemapper.h"
 #include "Upscaler.h"
 #include "GameModuleAPI.h" // #170 smoke: QueryFilter / RaycastHit
@@ -396,11 +395,18 @@ static PostSettings MakePostSettings(const World& world, unsigned int bloomTex, 
     return p;
 }
 
+// Read `w` x `h` RGBA8 pixels out of the bound READ framebuffer from (x, y), GL's bottom-left origin.
+static std::vector<unsigned char> GrabRegion(int x, int y, int w, int h) {
+    std::vector<unsigned char> px((size_t)std::max(w, 0) * std::max(h, 0) * 4);
+    if (w > 0 && h > 0) glReadPixels(x, y, w, h, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
+    return px;
+}
+
 // The harnesses' PNG captures: framebuffer `fbo`'s w x h pixels, top row first (GL reads bottom up). Leaves the read
 // framebuffer at 0.
 static std::vector<unsigned char> GrabTopDown(unsigned fbo, int w, int h) {
     glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo);
-    std::vector<unsigned char> px = Screenshot::GrabRegion(0, 0, w, h);
+    std::vector<unsigned char> px = GrabRegion(0, 0, w, h);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
     std::vector<unsigned char> flipped(px.size());
     for (int y = 0; y < h; ++y)
@@ -532,6 +538,11 @@ int main(int argc, char** argv) {
         // Per-user preferences, loaded before anything reads them. No GL or project state needed.
         EditorSettings::Load();
         if (!opt.editorShotDir.empty() && opt.editorShotScale > 0.0f) EditorSettings::Get().UiScaleOverride = opt.editorShotScale;
+        if (!opt.editorShotDir.empty() && opt.editorShotGlass) {
+            // Only the scratch copy of the prefs (TartarusEngine-Shot) is changed.
+            EditorSettings& shotPrefs = EditorSettings::Get();
+            shotPrefs.EditorThemeId = 1;
+        }
         // A benchmark measures native resolution unless it asks for a render height, so its
         // numbers stay comparable from run to run and machine to machine.
         if (opt.renderHeightArg >= 0) EditorSettings::Get().RenderHeight = opt.renderHeightArg;
@@ -552,10 +563,22 @@ int main(int argc, char** argv) {
         // structurally always 0 in a Release run and the harness only checks "did it draw".
         // Set before the Window exists: it decides whether to request a debug context (#157).
         if (opt.smokeTestMode && !opt.perfBenchMode) GLDebug::ForceEnable();
-        Window window(1280, 720, playerMode ? playerCfg.ProductName : std::string("Tartarus Engine"));
-        // #174 - the product's own icon, if the build was given one. The editor keeps the icon
-        // compiled into the exe's resources (app_icon.rc), which is also what a player falls
-        // back to when IconPath is empty or the file won't decode.
+        // Black Glass's see-through window: the editor only (never a player build or a headless or
+        // screenshot run, whose frames must stay opaque). TARTARUS_SEE_THROUGH=1 forces it for a
+        // screenshot run so its alpha can be checked.
+        bool seeThroughWindow = !playerMode && !headless && EditorSettings::Get().EditorThemeId == 1 &&
+                                EditorSettings::Get().GlassSeeThroughWindow && opt.editorShotDir.empty();
+        {
+            char* forced = nullptr;
+            size_t forcedLen = 0;
+            if (_dupenv_s(&forced, &forcedLen, "TARTARUS_SEE_THROUGH") == 0 && forced) {
+                seeThroughWindow = !playerMode && !headless && forced[0] == '1';
+                std::free(forced);
+            }
+        }
+        Window window(1280, 720, playerMode ? playerCfg.ProductName : std::string("Tartarus Engine"), seeThroughWindow);
+        // #174 - the product's own icon, if the build was given one. The exe carries no icon of
+        // its own, so without one Windows shows its default.
         if (playerMode && !playerCfg.IconPath.empty())
             window.SetIconFromFile(EnginePaths::Resolve(playerCfg.IconPath));
         if (playerMode && !playerCfg.Fullscreen) window.UseStandardFrame();
@@ -1277,6 +1300,7 @@ int main(int argc, char** argv) {
         if (opt.stockProbeMode || opt.npcTestMode || opt.weaponLabMode) editor.RequestSceneGameSplit();
         editor.Init(window.Handle());
         editor.SetHeadless(headless);
+        editor.SetWindowSeeThrough(window.SeeThrough());
         // #148: a hard crash (access violation, stack overflow, abort...) never reaches the
         // exception-path EmergencyRecoverySave, so the crash handler gets its own hook. Pointers
         // live in statics because the handler takes a plain function; the guard below clears the
@@ -1970,6 +1994,10 @@ int main(int argc, char** argv) {
                     else Log::Error("[SmokeTest] pre-skin: " + preSkinWhy);
                 }
 
+                // A smoke_glass* scene: the opt-in Glass editor theme on, drawn, then off (Tests/SmokeChecks.cpp).
+                if (smokeSceneActive && smokeScenePaths[smokeSceneIndex].find("smoke_glass") != std::string::npos)
+                    SmokeChecks::GlassTheme(editor, world, smokeFramesRendered);
+
                 // #176 - a smoke_prefab* scene: a Prefab Mode round trip (Tests/SmokeChecks.cpp).
                 if (smokeSceneActive && smokeFramesRendered == 15 &&
                     smokeScenePaths[smokeSceneIndex].find("smoke_prefab") != std::string::npos) {
@@ -2269,7 +2297,9 @@ int main(int argc, char** argv) {
             // frame in any gap between panels would show as flicker/ghosting.
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
             glViewport(0, 0, window.GetWidth(), window.GetHeight());
-            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+            // A see-through window starts each frame fully transparent: the desktop shows wherever
+            // the editor's glass leaves it.
+            glClearColor(0.0f, 0.0f, 0.0f, editor.DesktopShowsThrough() ? 0.0f : 1.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
             // The camera the Game view (and maximized play) renders from: the player while
@@ -3806,18 +3836,6 @@ int main(int argc, char** argv) {
             // regardless of whether Scene or Game is the currently active tab — cheap enough not
             // to bother skipping, and keeps this block's shape identical to the Game View pass
             // just below it. Runs during in-panel play too — the Scene tab stays live then.
-            // Capture prep: a pending Scene/clean-viewport shot renders THIS frame at the
-            // requested supersample (capped so a 4K viewport can't ask for a 16K MSAA target)
-            // and, for "clean", with editor overlays suppressed. The grab itself happens after
-            // the frame is composed (below).
-            EditorLayer::CaptureRequest capReq = editor.PeekCaptureRequest();
-            int capScale = 1;
-            if (capReq.pending && (capReq.mode == 1 || capReq.mode == 2)) {
-                capScale = std::max(1, capReq.scale);
-                editor.SetHideOverlaysThisFrame(capReq.mode == 2);
-                editor.PrimeCaptureRequest();  // this frame's Scene render IS the one we grab
-            }
-
             // Scene and Game are tabs in the same dock node - at most one is visible at a time, so
             // skip this render entirely when the Scene tab isn't the one showing (#172). Halves
             // per-frame render cost in the common case (editing in one tab or the other).
@@ -3830,19 +3848,8 @@ int main(int argc, char** argv) {
                 if (available.x < 1.0f || available.y < 1.0f) {
                     available = {(float)window.GetWidth(), (float)window.GetHeight()};
                 }
-                int scW = std::max((int)available.x, 1);
-                int scH = std::max((int)available.y, 1);
-                while (capScale > 1 && ((long long)scW * capScale > 8192 || (long long)scH * capScale > 8192))
-                    capScale /= 2;
-                scW *= capScale;
-                scH *= capScale;
-
-                // A pending viewport shot with a fixed Resolution preset overrides the live
-                // viewport size entirely (Supersample is forced off in that case by the UI).
-                if (capReq.pending && (capReq.mode == 1 || capReq.mode == 2) && capReq.resW > 0) {
-                    scW = capReq.resW;
-                    scH = capReq.resH;
-                }
+                const int scW = std::max((int)available.x, 1);
+                const int scH = std::max((int)available.y, 1);
 
                 sceneFramebuffer.Resize(scW, scH);
                 sceneHdr.Resize(scW, scH, world.MsaaSamples);
@@ -4089,7 +4096,7 @@ int main(int argc, char** argv) {
                 }
 
                 Framebuffer::BindDefault(window.GetWidth(), window.GetHeight());
-                editor.SetSceneTexture(sceneFramebuffer.ColorTexture());
+                editor.SetSceneTexture(sceneFramebuffer.ColorTexture(), sceneFramebuffer.Width(), sceneFramebuffer.Height());
             }
 
             {
@@ -4120,6 +4127,7 @@ int main(int argc, char** argv) {
                                 }
                             focus("###Scene");
                             focus("###Assets");
+                            if (opt.editorShotGlass) { focus("###GlassHierarchy"); focus("###GlassInspector"); focus("###GlassAssets"); }
                         }
                         else if (view == "inspector") editor.SetExpandAllComponents(true);
                         // Editor Enhancers: the Inspector and Asset Browser in front (their header rows,
@@ -4141,6 +4149,18 @@ int main(int argc, char** argv) {
                             editor.OpenAnimatorWindow("assets/Animations/Controllers/fps_body_locomotion.controller");
                         }
                     }
+                }
+                if (!opt.editorShotDir.empty() && opt.editorShotGlass) {
+                    // --editor-shot-glass: keep the Glass Workspace tabs in front of the classic tabs that
+                    // share their dock nodes, in the views that are about those panels (the per-view focus
+                    // above, and windows appearing, would otherwise leave Hierarchy / Inspector / Console on top).
+                    const int glassStep = (editorShotFrame - 1) / kEditorShotFrames;
+                    const char* glassView = glassStep >= 0 && glassStep < (int)std::size(kEditorShots) ? kEditorShots[glassStep] : "";
+                    if (std::strcmp(glassView, "overview") == 0 || std::strcmp(glassView, "inspector") == 0)
+                        for (const char* title : {"###GlassHierarchy", "###GlassInspector", "###GlassAssets"})
+                            for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+                                if (std::strstr(w->Name, title) && w->DockNode && w->DockNode->TabBar)
+                                    w->DockNode->TabBar->NextSelectedTabId = w->TabId;
                 }
                 if (editorUIVisible) editor.Draw(world, assets, editorCamera, dt);
                 else if (playing && devKeys) editor.DrawPlayModeOverlays(world); // #185 — physics panel + HUD over maximized play
@@ -4241,7 +4261,7 @@ int main(int argc, char** argv) {
             // hidden (maximized play) so the game view never becomes draggable.
             window.SetTitleBarDragActive(editorUIVisible && editor.WantsWindowDrag());
 
-            // Undo/Redo/Save, Play/Stop/Pause/Step/Restore, and the panel-toggle/Capture/
+            // Undo/Redo/Save, Play/Stop/Pause/Step/Restore, and the panel-toggle/
             // notification cluster all live in this one floating action bar now, centered over
             // whichever of Scene/Game is on screen — drawn unconditionally, not just during
             // maximized play (the toolbar's old Zone B icon row is gone; see
@@ -4401,6 +4421,9 @@ int main(int argc, char** argv) {
                 EditorLayer::RenderStats gvRenderStats;
                 renderGameFrame(gvView, gvProj, gvEye, gvRw, gvRh, gameView.GetFramebuffer().Handle(), gvWidth, gvHeight,
                                 /*postSlot=*/0, /*overlayInPlayOnly=*/true, gvRenderStats);
+                // With the Scene view hidden (the Game tab in front), the Game view is the frame on
+                // screen: the Statistics panel reports it, so it agrees with the Game view's overlay.
+                if (!editor.IsSceneViewportVisible()) editor.SetRenderStats(gvRenderStats);
                 // --weapon-test --smoke-shots <dir>: the Game view through the reloads.
                 const std::string harnessShot = weaponTest ? weaponTest->ShotName() : npcTest ? npcTest->ShotName() : std::string();
                 if ((weaponTest || npcTest) && !opt.smokeShotsDir.empty() && !harnessShot.empty()) {
@@ -4445,7 +4468,7 @@ int main(int argc, char** argv) {
                         std::filesystem::create_directories(recordDir, ec);
                         auto save = [&](unsigned fbo, int w, int h, const char* stem) {
                             glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo);
-                            std::vector<unsigned char> px = Screenshot::GrabRegion(0, 0, w, h);
+                            std::vector<unsigned char> px = GrabRegion(0, 0, w, h);
                             stbi_flip_vertically_on_write(1);
                             char name[64];
                             std::snprintf(name, sizeof name, "%s_%05d.jpg", stem, recordFrame / recordStep);
@@ -4469,8 +4492,10 @@ int main(int argc, char** argv) {
                 // bar) so the readout is legible instead of jittering with every frame's 1/dt.
                 // Kept here rather than reusing EditorLayer's, which isn't updated during
                 // maximized play - exactly when this overlay is most visible.
+                // With the editor UI up, the same smoothed figure the Statistics panel shows.
                 static float smoothedMs = 16.6f;
                 smoothedMs = smoothedMs * 0.92f + Time::RealDeltaTime() * 1000.0f * 0.08f;
+                if (editorUIVisible && editor.SmoothedFrameMs() > 0.0001f) smoothedMs = editor.SmoothedFrameMs();
                 gameViewStats.FPS = smoothedMs > 0.0001f ? (int)(1000.0f / smoothedMs + 0.5f) : 0;
                 gameViewStats.FrameMs = smoothedMs;
                 gameViewStats.DrawCalls = gvRenderStats.DrawCalls;
@@ -4616,72 +4641,7 @@ int main(int argc, char** argv) {
                     break;
             }
 
-            // Capture: PrintScreen, or a ".shot" sentinel file next to the exe (triggerable
-            // without keyboard focus). Both just raise a request; it's serviced next.
             {
-                bool ps = Shortcuts::TriggeredGlfw("capture.now");
-                // The sentinel only exists to let an external script trigger a capture, so a
-                // quarter-second of latency is irrelevant — stat'ing the filesystem every single
-                // frame (up to 240x/sec at the FPS cap) just to poll a rarely-present file isn't
-                // worth it. Throttle the check to ~4 Hz instead.
-                static float shotPollAccum = 0.0f;
-                shotPollAccum += dt;
-                bool sentinel = false;
-                if (shotPollAccum >= 0.25f) {
-                    shotPollAccum = 0.0f;
-                    std::error_code shotEc;
-                    // Next to the exe as documented, not the CWD - the shortcut and run-editor.cmd
-                    // don't guarantee any particular working directory (#143).
-                    static const std::filesystem::path shotPath =
-                        std::filesystem::path(EnginePaths::ExeDir()) / ".shot";
-                    sentinel = std::filesystem::exists(shotPath, shotEc);
-                    if (sentinel) std::filesystem::remove(shotPath, shotEc);
-                }
-                if (ps || sentinel) editor.RequestCapture();
-            }
-
-            // Service a pending capture now that the frame is fully composited on the back
-            // buffer. Full-editor grabs the back buffer; the viewport modes grab the offscreen
-            // FBOs they already rendered into this frame (clean/supersampled where asked).
-            {
-                EditorLayer::CaptureRequest cap = editor.PeekCaptureRequest();
-                // Viewport modes need the Scene view re-rendered at the target size first; that
-                // happens at the top of the NEXT frame, which sets `primed`. Full-editor / Game
-                // modes read a buffer that's already correct, so they fire the same frame.
-                const bool needsResizedRender = cap.mode == 1 || cap.mode == 2;
-                if (cap.pending && needsResizedRender && !cap.primed) {
-                    // wait one frame — leave the request pending, skip the grab
-                } else if (cap.pending) {
-                    editor.ConsumeCaptureRequest();
-                    const std::string sceneName =
-                        std::filesystem::path(editor.CurrentScenePath()).stem().string();
-                    // #153 - only the pixel read happens here (it needs the GL context); the PNG/JPG
-                    // encode runs on Screenshot's worker and is reported below via PollFinished.
-                    std::string outPath; int outW = 0, outH = 0;
-                    if (cap.mode == 3) {
-                        Framebuffer& gv = gameView.GetFramebuffer();
-                        if (gv.IsValid()) {
-                            outW = gv.Width(); outH = gv.Height();
-                            glBindFramebuffer(GL_READ_FRAMEBUFFER, gv.Handle());
-                            outPath = Screenshot::SaveAsync(Screenshot::GrabRegion(0, 0, outW, outH),
-                                                            outW, outH, true, cap.format, sceneName);
-                        }
-                    } else if (cap.mode == 1 || cap.mode == 2) {
-                        outW = sceneFramebuffer.Width(); outH = sceneFramebuffer.Height();
-                        glBindFramebuffer(GL_READ_FRAMEBUFFER, sceneFramebuffer.Handle());
-                        outPath = Screenshot::SaveAsync(Screenshot::GrabRegion(0, 0, outW, outH),
-                                                        outW, outH, true, cap.format, sceneName);
-                    } else { // 0 = full editor window
-                        outW = window.GetWidth(); outH = window.GetHeight();
-                        glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-                        outPath = Screenshot::SaveAsync(Screenshot::GrabRegion(0, 0, outW, outH),
-                                                        outW, outH, true, cap.format, sceneName);
-                    }
-                    if (outPath.empty()) editor.OnCaptureDone({}, outW, outH); // nothing to encode
-                    else                 editor.OnCaptureTaken();
-                }
-                for (const Screenshot::Finished& f : Screenshot::PollFinished())
-                    editor.OnCaptureDone(f.Ok ? f.Path : std::string(), f.Width, f.Height);
                 // --editor-shot: the whole window, once each view has settled.
                 if (!opt.editorShotDir.empty() && editorShotFrame > 0 && editorShotFrame % kEditorShotFrames == 0) {
                     const int step = editorShotFrame / kEditorShotFrames - 1;
@@ -4698,6 +4658,17 @@ int main(int argc, char** argv) {
                 editor.SetHideOverlaysThisFrame(false);
             }
 
+            // A see-through window shows the desktop only behind the editor's own glass: maximized
+            // Play, or any theme but Black Glass, presents fully opaque whatever alpha it wrote.
+            if (window.SeeThrough() && (playMaximized || !editor.DesktopShowsThrough())) {
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                glDisable(GL_SCISSOR_TEST);
+                glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_TRUE);
+                glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+                glClear(GL_COLOR_BUFFER_BIT);
+                glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+                GLStateCache::Invalidate();
+            }
             const double traceBeforeSwap = glfwGetTime();
             {
                 PROFILE_SCOPE("Swap Buffers");
@@ -5102,7 +5073,6 @@ int main(int argc, char** argv) {
             }
         }
         editor.Shutdown();
-        Screenshot::WaitForPending(); // #153 - a capture still encoding when the editor closes
         editorModule.Shutdown();
         AudioEngine::Shutdown();
         PhysicsWorld::Shutdown(); // #167 - the session-lifetime PhysX core

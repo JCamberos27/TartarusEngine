@@ -2603,8 +2603,7 @@ Enhancers::FolderKind FolderKindOf(AssetGridCell::Kind k) {
     switch (k) {
         case K::Model:      return F::Model;
         case K::Texture:
-        case K::Hdri:
-        case K::Screenshot: return F::Texture;
+        case K::Hdri:       return F::Texture;
         case K::Material:   return F::Material;
         case K::Sound:      return F::Sound;
         case K::Prefab:     return F::Prefab;
@@ -2918,7 +2917,7 @@ void EditorLayer::DrawFolderBookmarkBar(AssetLibrary& assets) {
         if (vis.Color) { // the folder's colour as a thin underline on its chip
             const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
             ImGui::GetWindowDrawList()->AddLine(ImVec2(mn.x + EditorTheme::Px(6.0f), mx.y - 1.0f), ImVec2(mx.x - EditorTheme::Px(6.0f), mx.y - 1.0f),
-                                                vis.Color | 0xFF000000u, EditorTheme::Px(2.0f));
+                                                EditorTheme::UserPacked(vis.Color) | 0xFF000000u, EditorTheme::Px(2.0f));
         }
         if (clicked && exists) NavigateAssetFolder(r.Path);
         if (hov) EditorUI::SetTooltip(exists ? "%s\nClick to open, right-click to remove." : "%s\nThis folder no longer exists - right-click to remove.",

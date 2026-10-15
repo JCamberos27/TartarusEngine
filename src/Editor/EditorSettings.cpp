@@ -144,10 +144,16 @@ void EditorSettings::Load() {
     s.HierarchySortMode = SafeValue(root, "hierarchySortMode", s.HierarchySortMode);
     s.HierarchySortDesc = SafeValue(root, "hierarchySortDesc", s.HierarchySortDesc);
     s.HierarchyTypeFilterMask = SafeValue(root, "hierarchyTypeFilterMask", s.HierarchyTypeFilterMask);
-    s.EngineMarkEnabled = SafeValue(root, "engineMarkEnabled", s.EngineMarkEnabled);
-    s.EngineMarkSpinSpeed = SafeValue(root, "engineMarkSpinSpeed", s.EngineMarkSpinSpeed);
-    s.EngineMarkPrism = SafeValue(root, "engineMarkPrism", s.EngineMarkPrism);
     s.ReduceMotion = SafeValue(root, "reduceMotion", s.ReduceMotion);
+    // "glassTheme", not the retired "editorTheme": old prefs files still carry that key with
+    // values from the removed theme picker, and must not switch Glass on by accident.
+    s.EditorThemeId = std::clamp(SafeValue(root, "glassTheme", s.EditorThemeId), 0, 1);
+    s.GlassViewportHuds = SafeValue(root, "glassViewportHuds", s.GlassViewportHuds);
+    s.GlassFrostedBlur = SafeValue(root, "glassFrostedBlur", s.GlassFrostedBlur);
+    s.GlassSeeThroughWindow = SafeValue(root, "glassSeeThroughWindow", s.GlassSeeThroughWindow);
+    s.ShowGlassHierarchy = SafeValue(root, "showGlassHierarchy", s.ShowGlassHierarchy);
+    s.ShowGlassInspector = SafeValue(root, "showGlassInspector", s.ShowGlassInspector);
+    s.ShowGlassAssets = SafeValue(root, "showGlassAssets", s.ShowGlassAssets);
     s.DefaultLayoutPreset = SafeValue(root, "defaultLayoutPreset", s.DefaultLayoutPreset);
     s.ShowLightGizmos = SafeValue(root, "showLightGizmos", s.ShowLightGizmos);
     s.LightGizmoSelectedOnly = SafeValue(root, "lightGizmoSelectedOnly", s.LightGizmoSelectedOnly);
@@ -169,12 +175,6 @@ void EditorSettings::Load() {
     s.PlayDebugOverlay = SafeValue(root, "playDebugOverlay", s.PlayDebugOverlay);
     s.LayerVisibleMask = SafeValue(root, "layerVisibleMask", s.LayerVisibleMask);
     s.LayerPickLockMask = SafeValue(root, "layerPickLockMask", s.LayerPickLockMask);
-    s.CaptureMode = SafeValue(root, "captureMode", s.CaptureMode);
-    s.CaptureScale = SafeValue(root, "captureScale", s.CaptureScale);
-    s.CaptureResPreset = SafeValue(root, "captureResPreset", s.CaptureResPreset);
-    s.CaptureFormat = SafeValue(root, "captureFormat", s.CaptureFormat);
-    s.CaptureFlash = SafeValue(root, "captureFlash", s.CaptureFlash);
-    s.CaptureSound = SafeValue(root, "captureSound", s.CaptureSound);
     s.ViewShowGrid = SafeValue(root, "viewShowGrid", s.ViewShowGrid);
     s.ViewShowGizmo = SafeValue(root, "viewShowGizmo", s.ViewShowGizmo);
     s.ViewFrameOnSelect = SafeValue(root, "viewFrameOnSelect", s.ViewFrameOnSelect);
@@ -242,10 +242,6 @@ void EditorSettings::Load() {
     if (s.SceneCameraFar <= s.SceneCameraNear) s.SceneCameraFar = s.SceneCameraNear + 1.0f;
     clampF(s.LightGizmoOpacity, 0.0f, 1.0f, 0.5f);
     clampF(s.LightGizmoScale, 0.25f, 3.0f, 1.0f);
-    clampF(s.EngineMarkSpinSpeed, 0.0f, 4.0f, 0.52f);
-    s.CaptureMode = std::clamp(s.CaptureMode, 0, 3);
-    s.CaptureScale = std::clamp(s.CaptureScale, 1, 4);
-    s.CaptureFormat = std::clamp(s.CaptureFormat, 0, 1);
     // #135 — same ranges as the Preferences / toolbar sliders.
     clampF(s.GizmoSize, 0.05f, 0.40f, 0.15f);
     clampF(s.VertexPickPixels, 5.0f, 150.0f, 35.0f);
@@ -329,10 +325,14 @@ void EditorSettings::Flush() {
     root["hierarchySortMode"] = Get().HierarchySortMode;
     root["hierarchySortDesc"] = Get().HierarchySortDesc;
     root["hierarchyTypeFilterMask"] = Get().HierarchyTypeFilterMask;
-    root["engineMarkEnabled"] = Get().EngineMarkEnabled;
-    root["engineMarkSpinSpeed"] = Get().EngineMarkSpinSpeed;
-    root["engineMarkPrism"] = Get().EngineMarkPrism;
     root["reduceMotion"] = Get().ReduceMotion;
+    root["glassTheme"] = Get().EditorThemeId;
+    root["glassViewportHuds"] = Get().GlassViewportHuds;
+    root["glassFrostedBlur"] = Get().GlassFrostedBlur;
+    root["glassSeeThroughWindow"] = Get().GlassSeeThroughWindow;
+    root["showGlassHierarchy"] = Get().ShowGlassHierarchy;
+    root["showGlassInspector"] = Get().ShowGlassInspector;
+    root["showGlassAssets"] = Get().ShowGlassAssets;
     root["defaultLayoutPreset"] = Get().DefaultLayoutPreset;
     root["showLightGizmos"] = Get().ShowLightGizmos;
     root["lightGizmoSelectedOnly"] = Get().LightGizmoSelectedOnly;
@@ -352,12 +352,6 @@ void EditorSettings::Flush() {
     root["playDebugOverlay"] = Get().PlayDebugOverlay;
     root["layerVisibleMask"] = Get().LayerVisibleMask;
     root["layerPickLockMask"] = Get().LayerPickLockMask;
-    root["captureMode"] = Get().CaptureMode;
-    root["captureScale"] = Get().CaptureScale;
-    root["captureResPreset"] = Get().CaptureResPreset;
-    root["captureFormat"] = Get().CaptureFormat;
-    root["captureFlash"] = Get().CaptureFlash;
-    root["captureSound"] = Get().CaptureSound;
     root["viewShowGrid"] = Get().ViewShowGrid;
     root["viewShowGizmo"] = Get().ViewShowGizmo;
     root["viewFrameOnSelect"] = Get().ViewFrameOnSelect;

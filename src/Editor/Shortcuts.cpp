@@ -220,10 +220,6 @@ void BuildDefaultTable() {
     Register("build.settings",   "Open Build Settings",    Ctx_Global, CSk(ImGuiKey_B)); // #174
     Register("build.run",        "Build and Run",          Ctx_Global, Ck(ImGuiKey_B));
 
-    // --- Capture (Ctx_App, evaluated via TriggeredGlfw like the play controls above — capture
-    // has to work even with editor UI hidden / no panel focused). ---
-    Register("capture.now",      "Capture Screenshot",     Ctx_App, K(ImGuiKey_PrintScreen));
-
     // --- Editor Enhancers / vHierarchy hover keys (Ctx_HierarchyHover) — act on the row under the
     // mouse, or on the whole selection when that row is part of it. Bare letters are safe here:
     // the dispatcher withholds Ctx_Viewport while the mouse is over the Hierarchy, and the panel's

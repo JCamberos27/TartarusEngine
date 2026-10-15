@@ -17,7 +17,7 @@
 #include "Texture.h"
 #include "Material.h"
 #include "AudioEngine.h"
-#include "Screenshot.h"
+#include "OsShell.h"
 #include "ShaderLibrary.h" // built-in shaders in the Shaders folder (#104)
 #include "SceneSerializer.h"
 #include "AABB.h"
@@ -142,7 +142,7 @@ std::string UsageTooltip(const std::vector<std::string>& users) {
 struct ParsedAssetSearch {
     std::vector<std::string> nameTerms;
     std::vector<std::string> typeTerms;  // lowercased kind names: "model","texture","material","shader",
-                                         // "sound","scene","prefab","screenshot","folder"
+                                         // "sound","scene","prefab","folder"
     std::vector<std::string> labelTerms; // lowercased
 };
 
@@ -533,10 +533,6 @@ void EditorLayer::InvalidateModelThumbnail(const std::string& path) {
     m_ThumbnailLRU.erase(it->second.second);
     m_ModelThumbnails.erase(it);
 }
-// Small, cheap load for the Asset Browser grid thumbnail (~96px on screen).
-static std::shared_ptr<Texture> LoadScreenshotThumbTexture(const std::string& path) {
-    return LoadScreenshotTexture(path, 384);
-}
 void EditorLayer::BeginRenameAsset(const std::string& key, bool isFolder, const std::string& currentName) {
     m_RenamingAssetKey = key;
     m_RenamingIsFolder = isFolder;
@@ -730,23 +726,6 @@ bool EditorLayer::PerformAssetDelete(World& world, AssetLibrary& assets, const s
                 if (why.empty()) why = "the file may be open in another program or write-protected";
                 fail("\"" + leaf + "\" — " + why + ".");
                 Log::Error("Couldn't recycle scene file '" + key + "': " + why);
-                return false;
-            }
-        }
-
-        // A screenshot is also a plain file on disk (project/screenshots/).
-        std::string ext = std::filesystem::path(key).extension().string();
-        for (char& c : ext) c = (char)tolower((unsigned char)c);
-        if ((ext == ".png" || ext == ".jpg" || ext == ".jpeg") && std::filesystem::exists(key, ec)) {
-            m_ShotThumbs.erase(key);
-            std::string why;
-            if (FileDialog::RecycleFile(key, why)) {
-                Log::Info("Sent screenshot to Recycle Bin: " + leaf);
-                InvalidateShotsListing(); // (#175) screenshots/ just lost a file
-            } else {
-                if (why.empty()) why = "the file may be open in another program or write-protected";
-                if (!m_DeleteError.empty()) m_DeleteError += "\n";
-                m_DeleteError += "\xE2\x80\xA2 \"" + leaf + "\" — " + why + ".";
                 return false;
             }
         }
@@ -950,14 +929,13 @@ void EditorLayer::DuplicateSelectedAsset(World& world, AssetLibrary& assets) {
             return {};
         }
 
-        // (#175) A duplicated Scene or Screenshot (neither is an AssetLibrary entry — see the
-        // "registered" checks below) still just copied a real file into scenes/ or screenshots/,
+        // (#175) A duplicated Scene (not an AssetLibrary entry — see the "registered" checks
+        // below) still just copied a real file into scenes/,
         // so the corresponding cached directory listing needs invalidating same as any other
         // create. Harmless if the extension happens to belong to something else entirely.
         std::string dupExt = candidate.extension().string();
         for (char& c : dupExt) c = (char)tolower((unsigned char)c);
         if (dupExt == ".json") InvalidateScenesListing();
-        else if (dupExt == ".png" || dupExt == ".jpg" || dupExt == ".jpeg") InvalidateShotsListing();
         else if (dupExt == ".controller" || dupExt == ".fpsanim" || dupExt == ".recoil" || dupExt==".camerashake") InvalidateAnimationListing();
 
         std::string newPath = candidate.generic_string();
@@ -1168,7 +1146,6 @@ const char* AssetKindLabel(Cell::Kind k) {
         case Cell::Kind::Texture:    return "Texture";
         case Cell::Kind::Material:   return "Material";
         case Cell::Kind::Sound:      return "Sound";
-        case Cell::Kind::Screenshot: return "Screenshot";
         case Cell::Kind::Shader:     return "Shader";
         case Cell::Kind::Animator:   return "Animator Controller";
         case Cell::Kind::Weapon:     return "Weapon Definition";
@@ -1220,12 +1197,10 @@ std::string FormatModifiedTime(const std::filesystem::file_time_type& t) {
 // file). See the header for why this replaced a per-frame directory_iterator (#175).
 void EditorLayer::RefreshAssetBrowser() {
     InvalidateScenesListing();
-    InvalidateShotsListing();
     InvalidateShadersListing();
     InvalidateAnimationListing();
     InvalidateProjectAssetIndex();
     InvalidateModelThumbnail();          // clears every cached model thumbnail
-    m_ShotThumbs.clear();                // shared_ptr<Texture> entries free their GL textures here
     m_AssetThumbs.Clear();
     m_AssetListingRefreshTimer = 0.0f;
     m_AssetRefreshFlash = 1.6f; // drives the module's brief "Assets refreshed" confirmation
@@ -1300,7 +1275,7 @@ std::vector<EditorLayer::ProjectAssetFile> EditorLayer::ScanProjectAssetFiles(co
          !ec && it != fs::recursive_directory_iterator(); it.increment(ec)) {
         std::error_code entryEc;
         if (it->is_directory(entryEc)) {
-            // Library/ is caches; screenshots/ has its own virtual folder; dot-folders are tooling.
+            // Library/ is caches; screenshots/ holds old editor captures; dot-folders are tooling.
             const std::string dir = it->path().filename().string();
             if (dir=="bin" || dir=="obj" || (it.depth() == 0 && (dir == "Library" || dir == "screenshots")) || (!dir.empty() && dir[0] == '.'))
                 it.disable_recursion_pending();
@@ -1375,7 +1350,7 @@ void EditorLayer::RefreshProjectAssetIndexIfNeeded(AssetLibrary& assets) {
 std::string EditorLayer::NewAssetFolder(const std::string& fallback) const {
     const std::string& f = m_CurrentAssetFolder;
     // The virtual folders listing special directories are not places to create assets in.
-    if (f.empty() || f == "Scenes" || f == "Screenshots" || f == "Shaders" || f == "Animation" ||
+    if (f.empty() || f == "Scenes" || f == "Shaders" || f == "Animation" ||
         f.find("..") != std::string::npos || f.find(':') != std::string::npos)
         return fallback;
     std::string lower = f;
@@ -1432,23 +1407,6 @@ bool EditorLayer::LoadUnloadedAsset(AssetLibrary& assets, AssetGridCell& cell) {
     return ok;
 }
 
-// Same idea for project/screenshots/ — see RefreshScenesListingIfNeeded above.
-void EditorLayer::RefreshShotsListingIfNeeded() {
-    if (m_ShotsListingCache.valid) return;
-    m_ShotsListingCache.paths.clear();
-    std::error_code ec;
-    const std::string shotsDir = Screenshot::Dir();
-    for (const auto& entry : std::filesystem::directory_iterator(shotsDir, ec)) {
-        if (!entry.is_regular_file()) continue;
-        std::string ext = entry.path().extension().string();
-        for (char& c : ext) c = (char)tolower((unsigned char)c);
-        if (ext != ".png" && ext != ".jpg" && ext != ".jpeg") continue;
-        if (entry.path().filename().string().rfind('.', 0) == 0) continue; // .shutter.wav etc.
-        m_ShotsListingCache.paths.push_back(entry.path().generic_string());
-    }
-    m_ShotsListingCache.valid = true;
-}
-
 // kind 0/1/2 = model / texture / sound; 3 = any (Phase 5 item 5's unified "Import Asset..." —
 // ImportDroppedFile already infers the real type from the extension regardless of which kind
 // picked the dialog's filter, so kind only ever chooses what the OS file picker shows/defaults
@@ -1488,7 +1446,7 @@ void EditorLayer::AssetBrowserMoveAssetToFolder(World& world, AssetLibrary& asse
 
 namespace {
 // True if `path` names an existing entry inside directory `dir`. Used below to recognise the two
-// raw filesystem-backed virtual folders (Screenshots/Scenes) that AssetFolder() doesn't know about.
+// raw filesystem-backed virtual folders (Scenes/Shaders) that AssetFolder() doesn't know about.
 bool IsUnder(const std::string& path, const std::string& dir) {
     std::error_code ec;
     auto rel = std::filesystem::relative(path, dir, ec);
@@ -1503,12 +1461,11 @@ bool EditorLayer::PingAssetPath(AssetLibrary& assets, const std::string& path) {
     std::error_code ec;
     if (path.empty() || !std::filesystem::exists(path, ec)) return false;
 
-    // Screenshots and Scenes are raw filesystem-backed virtual folders (RefreshShotsListingIfNeeded
-    // / RefreshScenesListingIfNeeded above) rather than AssetLibrary entries, so AssetFolder() would
-    // return "" (root) for them — check those two directories first, same as the grid does.
+    // Scenes and Shaders are raw filesystem-backed virtual folders (RefreshScenesListingIfNeeded
+    // above) rather than AssetLibrary entries, so AssetFolder() would return "" (root) for them —
+    // check those directories first, same as the grid does.
     std::string folder;
-    if (IsUnder(path, Screenshot::Dir())) folder = "Screenshots";
-    else if (IsUnder(path, ProjectPaths::Resolve("scenes"))) folder = "Scenes";
+    if (IsUnder(path, ProjectPaths::Resolve("scenes"))) folder = "Scenes";
     else if (IsUnder(path, ProjectPaths::Resolve("shaders"))) folder = "Shaders";
     else folder = assets.AssetFolder(path);
 
@@ -1532,11 +1489,9 @@ std::string EditorLayer::AssetBrowserTreeFrameSetup(AssetLibrary& assets) {
     if (focusGained || m_AssetListingRefreshTimer >= kAssetListingRefreshInterval) {
         m_AssetListingRefreshTimer = 0.0f;
         InvalidateScenesListing();
-        InvalidateShotsListing();
         InvalidateAnimationListing();
     }
     assets.CreateFolder("Scenes");
-    assets.CreateFolder("Screenshots");
     RefreshProjectAssetIndexIfNeeded(assets); // registers the folders of files nothing has loaded yet
     InstallFolderPathHook(assets); // vFolders: styles + bookmarks follow a renamed / deleted folder
 
@@ -1626,41 +1581,6 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
         }
     }
 
-    // Same idea for the Capture tool's output: a "Screenshots" folder listing every PNG/JPG
-    // under project/screenshots/ (thumbnails loaded lazily, cached, and dropped when the file
-    // disappears). Not AssetLibrary entries — real image files, browsable and deletable here.
-    static const std::string kShotsFolder = "Screenshots";
-    assets.CreateFolder(kShotsFolder);
-    if ((filtering && inSearchScope(kShotsFolder)) || m_CurrentAssetFolder == kShotsFolder) {
-        RefreshShotsListingIfNeeded(); // (#175) cached — see m_ShotsListingCache
-        std::set<std::string> seen;
-        for (const auto& path : m_ShotsListingCache.paths) {
-            std::string name = std::filesystem::path(path).stem().string();
-            // A screenshot is an image: both t:Screenshot and t:Texture find it (#184).
-            if (!MatchesAssetSearch(parsedSearch, name, "screenshot", {}) &&
-                !MatchesAssetSearch(parsedSearch, name, "texture", {})) continue;
-            seen.insert(path);
-            auto it = m_ShotThumbs.find(path);
-            std::shared_ptr<Texture> thumb;
-            if (it != m_ShotThumbs.end()) {
-                thumb = it->second;
-            } else if (m_ScreenshotThumbBudgetThisFrame > 0) {
-                // Not loaded yet and budget's still open this frame: decode/upload it now and
-                // cache it. Otherwise leave it out of the map so the cell falls back to the
-                // folder glyph (see the Cell::Kind::Screenshot draw below) and gets retried on
-                // a later frame once the budget resets (#176) — same pattern as ModelThumbnail.
-                m_ScreenshotThumbBudgetThisFrame--;
-                thumb = m_ShotThumbs.emplace(path, LoadScreenshotThumbTexture(path)).first->second;
-            }
-            cells.push_back({Cell::Kind::Screenshot, path, name, nullptr, thumb});
-        }
-        // Drop thumbnails for files that were deleted since last frame. O(n) single pass against
-        // the `seen` set built above, rather than an std::find over a vector per map entry (#176).
-        for (auto it = m_ShotThumbs.begin(); it != m_ShotThumbs.end();)
-            it = (seen.find(it->first) == seen.end())
-                     ? m_ShotThumbs.erase(it) : std::next(it);
-    }
-
     for (const auto& folder : assets.Folders()) {
         bool show = filtering ? (MatchesAssetSearch(parsedSearch, LeafNameOf(folder), "folder", {})
                                  && inSearchScope(ParentFolderOf(folder)))
@@ -1747,7 +1667,6 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
                 case Cell::Kind::Texture:    return 4;
                 case Cell::Kind::Material:   return 5;
                 case Cell::Kind::Sound:      return 6;
-                case Cell::Kind::Screenshot: return 7;
                 case Cell::Kind::Shader:     return 8;
                 case Cell::Kind::Animator:   return 9;
                 case Cell::Kind::Weapon:     return 10;
@@ -1857,7 +1776,6 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             : cell.kind == Cell::Kind::Model ? (cell.model && cell.model->HasAnimations() ? ICON_FA_FILM : ICON_FA_CUBE)
             : cell.kind == Cell::Kind::Scene ? ICON_FA_MAP
             : cell.kind == Cell::Kind::Prefab ? ICON_FA_BOX_ARCHIVE
-            : cell.kind == Cell::Kind::Screenshot ? ICON_FA_IMAGE
             : cell.kind == Cell::Kind::Material ? ICON_FA_DROPLET
             : cell.kind == Cell::Kind::Shader ? ICON_FA_FILE_CODE
             : cell.kind == Cell::Kind::Animator ? ICON_FA_DIAGRAM_PROJECT
@@ -1874,7 +1792,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             GetFolderVisual(assets, cell.key, folderVis);
             if (folderVis.Icon[0]) icon = folderVis.Icon;
         }
-        const ImU32 folderTint = (isFolder && folderVis.Color) ? (folderVis.Color | 0xFF000000u) : 0u;
+        const ImU32 folderTint = (isFolder && folderVis.Color) ? (EditorTheme::UserPacked(folderVis.Color) | 0xFF000000u) : 0u;
 
         // The asset-type colour: the tile's bottom stripe in Grid view.
         auto kindColor = [&]() -> ImVec4 {
@@ -1893,7 +1811,6 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 case Cell::Kind::Weapon:     return EditorTheme::Warning;
                 case Cell::Kind::Recoil:     return EditorTheme::Warning;
                 case Cell::Kind::CameraShake:return EditorTheme::Warning;
-                case Cell::Kind::Screenshot: return EditorTheme::Info;
             }
             return EditorTheme::Secondary;
         };
@@ -1936,7 +1853,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 ImVec2 imgPos(tileMin.x + (cellWidth - m_AssetIconSize) * 0.5f, tileMin.y + cellPadding * 0.5f);
                 dl->AddImage((ImTextureID)(intptr_t)unloadedThumb.Tex, imgPos,
                              ImVec2(imgPos.x + m_AssetIconSize, imgPos.y + m_AssetIconSize), thumbUv0, thumbUv1);
-            } else if (cell.texture && (cell.kind == Cell::Kind::Texture || cell.kind == Cell::Kind::Screenshot)) {
+            } else if (cell.texture && cell.kind == Cell::Kind::Texture) {
                 float aspect = cell.texture->Height() > 0 ? (float)cell.texture->Width() / (float)cell.texture->Height() : 1.0f;
                 ImVec2 imgSize = aspect >= 1.0f ? ImVec2(m_AssetIconSize, m_AssetIconSize / aspect) : ImVec2(m_AssetIconSize * aspect, m_AssetIconSize);
                 ImVec2 imgPos(tileMin.x + (cellWidth - imgSize.x) * 0.5f, tileMin.y + cellPadding * 0.5f + (m_AssetIconSize - imgSize.y) * 0.5f);
@@ -2050,7 +1967,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                                        : (cell.kind == Cell::Kind::Material) ? MaterialThumbnail(cell.material) : 0u; // #107
             if (unloadedThumb.Tex) {
                 ImGui::Image((ImTextureID)(intptr_t)unloadedThumb.Tex, ImVec2(rowIconSize, rowIconSize), thumbUv0, thumbUv1);
-            } else if (cell.texture && (cell.kind == Cell::Kind::Texture || cell.kind == Cell::Kind::Screenshot)) {
+            } else if (cell.texture && cell.kind == Cell::Kind::Texture) {
                 ImGui::Image((ImTextureID)(intptr_t)cell.texture->GLHandle(), ImVec2(rowIconSize, rowIconSize));
             } else if (rowModelThumb) {
                 ImGui::Image((ImTextureID)(intptr_t)rowModelThumb, ImVec2(rowIconSize, rowIconSize), ImVec2(0, 1), ImVec2(1, 0));
@@ -2129,15 +2046,12 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
         if (cell.kind == Cell::Kind::Scene && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
             RequestOpenScene(world, assets, cell.key);
         }
-        if (cell.kind == Cell::Kind::Screenshot && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-            OpenScreenshotPreview(cell.key); // centred in-editor lightbox (Show in folder is on the context menu)
-        }
         if (cell.kind == Cell::Kind::Animator && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
             OpenAnimatorWindow(ProjectPaths::Relativize(cell.key));
         }
         if ((cell.kind == Cell::Kind::Shader || cell.kind == Cell::Kind::Script) &&
             ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-            if(cell.kind==Cell::Kind::Script)OpenScriptIDE(cell.key);else Screenshot::OpenFile(cell.key);
+            if(cell.kind==Cell::Kind::Script)OpenScriptIDE(cell.key);else OsShell::OpenFile(cell.key);
         }
         // #176 - double-click opens the prefab in Prefab Mode, like Unity (drag it into the scene,
         // or right-click > Place Instance, to place one).
@@ -2187,7 +2101,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 }
                 ImGui::EndDragDropTarget();
             }
-        } else if (cell.kind != Cell::Kind::Scene && cell.kind != Cell::Kind::Screenshot &&
+        } else if (cell.kind != Cell::Kind::Scene &&
                    cell.kind != Cell::Kind::Shader) { // not placeable — nothing to drag into the viewport
             const char* payloadType = cell.kind == Cell::Kind::Model ? "ASSET_MODEL_PATH"
                 : cell.kind == Cell::Kind::Texture || cell.kind == Cell::Kind::Hdri ? "ASSET_TEXTURE_PATH" // the sky's HDRI field takes .hdr
@@ -2222,10 +2136,6 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             } else if (cell.kind == Cell::Kind::Prefab) {
                 EditorUI::SetTooltip("%s\n\nDrag into the viewport to place an instance,\nor double-click to place one at the origin.",
                     cell.display.c_str());
-            } else if (cell.kind == Cell::Kind::Screenshot) {
-                // Defect #17 — this used to fall into the folder-oriented default below ("Drag
-                // assets onto it to file them here"), which only makes sense for an actual folder.
-                EditorUI::SetTooltip("%s\n\nDouble-click to preview.", cell.display.c_str());
             } else if (cell.kind == Cell::Kind::Shader) {
                 EditorUI::SetTooltip("%s\n\nDouble-click to open externally.\nSelect to preview + compile status in the Inspector.",
                     cell.display.c_str());
@@ -2286,40 +2196,6 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                     EditorUI::SetTooltip("This scene is open — open a different scene first.");
                 ImGui::EndPopup();
             }
-        } else if (cell.kind == Cell::Kind::Screenshot) {
-            // Also a real file on disk, not a library asset: Show in folder + Delete.
-            if (ImGui::BeginPopupContextItem()) {
-                if (!IsAssetSelected(cell.key, false)) {
-                    ClearAssetSelection();
-                    m_SelectedAssetKey = cell.key;
-                    m_SelectedAssetIsFolder = false;
-                }
-                if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Show in folder")) Screenshot::ShowInFolder(cell.key);
-                if (m_ExtraAssetSelection.empty() && ImGui::MenuItem(ICON_FA_COPY "  Copy Path")) {
-                    ImGui::SetClipboardText(cell.key.c_str());
-                    Log::Info("Copied path: " + cell.key);
-                }
-                {
-                    std::vector<std::string> favKeys{ m_SelectedAssetKey };
-                    for (const auto& e : m_ExtraAssetSelection) favKeys.push_back(e.Key);
-                    const bool allFav = std::all_of(favKeys.begin(), favKeys.end(),
-                        [&](const std::string& k) { return IsAssetFavorite(k); });
-                    std::string lbl = std::string(ICON_FA_STAR "  ") +
-                        (allFav ? "Remove from Favorites" : "Add to Favorites"); // #19 — en-US, matches IsAssetFavorite/SetAssetFavorites
-                    if (favKeys.size() > 1) lbl += " (" + std::to_string(favKeys.size()) + ")";
-                    if (ImGui::MenuItem(lbl.c_str())) SetAssetFavorites(favKeys, !allFav);
-                }
-                std::vector<AssetKeyRef> shotsForAction;
-                shotsForAction.push_back({m_SelectedAssetKey, false});
-                for (const auto& e : m_ExtraAssetSelection) shotsForAction.push_back(e);
-                const bool multi = shotsForAction.size() > 1;
-                ImGui::Separator();
-                ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
-                if (ImGui::MenuItem(multi ? ICON_FA_TRASH "  Delete Selected" : ICON_FA_TRASH "  Delete"))
-                    RequestDeleteAssets(world, assets, shotsForAction, /*skipDialog=*/false);
-                ImGui::PopStyleColor();
-                ImGui::EndPopup();
-            }
         } else if (cell.kind == Cell::Kind::Shader) {
             // Also a real file on disk, not a library asset (item 15): Open externally, Show in
             // folder, Copy Path, Delete — no favorites/rename, this isn't a placeable/reference
@@ -2330,9 +2206,9 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                     m_SelectedAssetKey = cell.key;
                     m_SelectedAssetIsFolder = false;
                 }
-                if (ImGui::MenuItem(ICON_FA_UP_RIGHT_FROM_SQUARE "  Open Externally")) Screenshot::OpenFile(cell.key);
+                if (ImGui::MenuItem(ICON_FA_UP_RIGHT_FROM_SQUARE "  Open Externally")) OsShell::OpenFile(cell.key);
                 if(cell.kind==Cell::Kind::Script && ImGui::MenuItem("Open in Script IDE"))OpenScriptIDE(cell.key);
-                if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Show in folder")) Screenshot::ShowInFolder(cell.key);
+                if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Show in folder")) OsShell::ShowInFolder(cell.key);
                 if (m_ExtraAssetSelection.empty() && ImGui::MenuItem(ICON_FA_COPY "  Copy Path")) {
                     ImGui::SetClipboardText(cell.key.c_str());
                     Log::Info("Copied path: " + cell.key);

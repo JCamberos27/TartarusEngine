@@ -94,11 +94,13 @@ struct LaunchOptions {
     // on a copy of the user's editor prefs and layout (%LOCALAPPDATA%\TartarusEngine-Shot), never the
     // real ones. --editor-shot-select <name> picks the selected entity (default: Player Spawn);
     // --editor-shot-default-layout starts from the default dock layout instead of the user's;
-    // --editor-shot-scale <s> sets the UI scale (as Preferences > General > UI scale would).
+    // --editor-shot-scale <s> sets the UI scale (as Preferences > General > UI scale would);
+    // --editor-shot-glass captures with the Glass theme and its Glass Workspace panels on.
     std::string editorShotDir, editorShotSelect = "Player Spawn";
     bool editorShotDefaultLayout = false;
     bool editorShotCurves = false; // capture the real themed recoil curve widget in isolation
     bool editorShotIDE = false; // one focused IDE capture; use --project with a small fixture
+    bool editorShotGlass = false;
     float editorShotScale = 0.0f;
     // --editor-tests [filter]: end-to-end tests of the editor UI (Tests/EditorUiTests.cpp) in the
     // real editor: a hidden 1920x1080 window, a fresh scratch user folder
