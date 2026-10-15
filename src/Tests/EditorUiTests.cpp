@@ -308,6 +308,7 @@ std::string g_ShotDir;
 std::string g_ShotPending; // path without extension, set by a Shot step, taken by AfterFrame
 std::vector<std::string> g_ShotNonBlank;
 bool g_ShotDone = false;
+bool g_ShotForLastReport = false; // the pending shot is a failed test's, already reported
 std::string Slug(const std::string& s) {
     std::string out;
     for (unsigned char ch : s) {
@@ -1380,6 +1381,12 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
             g_Reports.push_back(g_Cur);
             g_Cur = TestReport{};
             g_ShotPending.clear();
+            // A failed test leaves its state on screen for the rest of this frame: capture it.
+            if (g_TestFailed) {
+                g_ShotPending = Slug(t.Name) + "/failure";
+                g_ShotNonBlank.clear();
+                g_ShotForLastReport = true;
+            }
             if (g_TestFailed) {
                 ++g_Failed;
                 g_FailLines.push_back(t.Name + " -- " + g_FailMessage);
@@ -1439,6 +1446,11 @@ void AfterFrame(int fbWidth, int fbHeight) {
     std::error_code ec;
     std::filesystem::create_directories(out.parent_path(), ec);
     stbi_write_png(out.string().c_str(), fbWidth, fbHeight, 4, top.data(), fbWidth * 4);
+    if (g_ShotForLastReport && !g_Reports.empty()) {
+        g_Reports.back().Shots.push_back(rel + ".png");
+        g_ShotForLastReport = false;
+        return;
+    }
     g_Cur.Shots.push_back(rel + ".png");
 
     // The windows that must have drawn something: not one flat colour across their inner rect.
