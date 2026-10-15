@@ -6,6 +6,8 @@
 #include "FirstPersonAnimation.h"
 #include "../Game/Scripting/ProjectComponentMigration.h"
 #include "../Game/Scripting/GameFrames.h"
+#include "../Game/WeaponRules.h"
+#include "../Game/BodyLocomotion.h"
 #include "../Game/Scripting/WeaponAttachments.h"
 #include "MaterialAsset.h"
 #include "ShaderLibrary.h"
@@ -64,36 +66,34 @@ void TestSceneReferences() {
     CHECK(!SceneReferencePath(world,muzzle,duplicate));
     CHECK(ResolveSceneReference(world,muzzle,"Missing")==entt::null);
 }
-void TestManagedGameplay() {
+void TestNativeWeaponRules() {
     using namespace Scripting;
-    CHECK(EnsureLoaded());
     WeaponFrame w; w.Equipped=1; w.Chambered=1; w.Ammo=30; w.Magazine=30; w.Rpm=700;
     w.AllowFullAuto=1; w.RecoilProfile=1; w.Tags=32;
-    w.Operation=1; CHECK(InvokeProject("weapon",&w,sizeof w)); CHECK(w.Result==1 && (w.Commands&2));
-    w.Operation=2; CHECK(InvokeProject("weapon",&w,sizeof w)); CHECK(w.Ammo==29);
-    w.Operation=5; CHECK(InvokeProject("weapon",&w,sizeof w)); CHECK(w.Result==1 && (w.Commands&64));
-    w.Operation=8; w.Events=1; CHECK(InvokeProject("weapon",&w,sizeof w)); CHECK(w.Ammo==30);
-    w.Operation=6; CHECK(InvokeProject("weapon",&w,sizeof w)); CHECK(w.FullAuto==1);
-    w.Operation=3; w.Held=1; w.Cooldown=.05f; CHECK(InvokeProject("weapon",&w,sizeof w)); CHECK(w.Result==0);
-    w.Operation=7; w.Dt=.1f; CHECK(InvokeProject("weapon",&w,sizeof w)); CHECK(w.Cooldown==0);
-    w.Operation=3; CHECK(InvokeProject("weapon",&w,sizeof w)); CHECK(w.Result==1);
+    w.Operation=1; WeaponRules::Update(w); CHECK(w.Result==1 && (w.Commands&2));
+    w.Operation=2; WeaponRules::Update(w); CHECK(w.Ammo==29);
+    w.Operation=5; WeaponRules::Update(w); CHECK(w.Result==1 && (w.Commands&64));
+    w.Operation=8; w.Events=1; WeaponRules::Update(w); CHECK(w.Ammo==30);
+    w.Operation=6; WeaponRules::Update(w); CHECK(w.FullAuto==1);
+    w.Operation=3; w.Held=1; w.Cooldown=.05f; WeaponRules::Update(w); CHECK(w.Result==0);
+    w.Operation=7; w.Dt=.1f; WeaponRules::Update(w); CHECK(w.Cooldown==0);
+    w.Operation=3; WeaponRules::Update(w); CHECK(w.Result==1);
     // The shotgun commits a shell, delays cycling, and chambers only after the pump state finishes.
     w.FullAuto=0; w.AllowFullAuto=0; w.PerRound=1; w.CycleAfterShot=1;
     w.CycleDelay=.12f; w.Magazine=6; w.Ammo=6; w.Operation=2;
-    CHECK(InvokeProject("weapon",&w,sizeof w)); CHECK(w.Ammo==5 && w.Chambered==0);
-    w.Operation=1; CHECK(InvokeProject("weapon",&w,sizeof w)); CHECK(w.Result==0);
-    w.Operation=7; w.Dt=.2f; CHECK(InvokeProject("weapon",&w,sizeof w)); CHECK(w.Commands&16);
-    w.Tags=8; CHECK(InvokeProject("weapon",&w,sizeof w)); CHECK(w.CycleSeen==1 && w.Chambered==0);
-    w.Tags=32; CHECK(InvokeProject("weapon",&w,sizeof w)); CHECK(w.Chambered==1);
-    w.Tags=2; w.Operation=1; CHECK(InvokeProject("weapon",&w,sizeof w)); CHECK(w.Result==0 && w.StopReload==1);
+    WeaponRules::Update(w); CHECK(w.Ammo==5 && w.Chambered==0);
+    w.Operation=1; WeaponRules::Update(w); CHECK(w.Result==0);
+    w.Operation=7; w.Dt=.2f; WeaponRules::Update(w); CHECK(w.Commands&16);
+    w.Tags=8; WeaponRules::Update(w); CHECK(w.CycleSeen==1 && w.Chambered==0);
+    w.Tags=32; WeaponRules::Update(w); CHECK(w.Chambered==1);
+    w.Tags=2; w.Operation=1; WeaponRules::Update(w); CHECK(w.Result==0 && w.StopReload==1);
     w.Ammo=0; w.Chambered=0; w.Events=2; w.Operation=8;
-    CHECK(InvokeProject("weapon",&w,sizeof w)); CHECK(w.Ammo==1 && w.Chambered==1);
-    w.Operation=9; w.Held=1; w.Dt=.1f; w.HoldSeconds=.35f; CHECK(InvokeProject("weapon",&w,sizeof w));
-    w.Held=0; CHECK(InvokeProject("weapon",&w,sizeof w)); CHECK(w.Result==1);
-    w.Held=1; w.Dt=.4f; CHECK(InvokeProject("weapon",&w,sizeof w)); CHECK(w.Commands==0);
-    CHECK(InvokeProject("weapon",&w,sizeof w)); CHECK(w.Commands&128);
-    w.Held=0; CHECK(InvokeProject("weapon",&w,sizeof w)); CHECK(w.Result==0);
-    CHECK(!InvokeProject("weapon",&w,sizeof w-1)); // a mismatched ABI is rejected before reading memory
+    WeaponRules::Update(w); CHECK(w.Ammo==1 && w.Chambered==1);
+    w.Operation=9; w.Held=1; w.Dt=.1f; w.HoldSeconds=.35f; WeaponRules::Update(w);
+    w.Held=0; WeaponRules::Update(w); CHECK(w.Result==1);
+    w.Held=1; w.Dt=.4f; WeaponRules::Update(w); CHECK(w.Commands==0);
+    WeaponRules::Update(w); CHECK(w.Commands&128);
+    w.Held=0; WeaponRules::Update(w); CHECK(w.Result==0);
     World world; Player player; player.Gravity=0; player.Cam.Yaw=-90; player.Cam.Position={0,2,0};
     player.ScriptedMove=true; player.ScriptMove={0,1}; player.MoveSpeed=6;
     player.Update(.1f,world,nullptr,false);
@@ -351,37 +351,6 @@ void TestMaterialShaderSelection() {
     CHECK(material.ShaderPath=="engine://RedDot.shader");
 }
 
-void TestManagedBallistics() {
-    using namespace Scripting;
-    World world;
-    ShotFrame shot; shot.Direction={0,0,-1}; shot.Range=100; shot.Pellets=8; shot.Spread=3;
-    shot.RandomSeed=42; shot.BulletHoleRadius=.025f;
-    int count=0;
-    CHECK(InvokeProjectWithTrace(world,"shot",&shot,sizeof shot,[&](const NativeRequest& trace) {
-        ++count; CHECK(trace.Result==0 && trace.Entity==0xFFFFFFFFu);
-        const glm::vec3 delta(trace.B.x-trace.A.x,trace.B.y-trace.A.y,trace.B.z-trace.A.z);
-        CHECK(std::abs(glm::length(delta)-100)<.001f);
-        CHECK(glm::dot(glm::normalize(delta),glm::vec3(0,0,-1))>=std::cos(glm::radians(3.01f)));
-    }));
-    CHECK(count==8);
-    auto target=world.CreateEmptyEntity({0,0,-5},{0,0,0},{1,1,1},"Target");
-    auto& collider=world.Registry.emplace<ColliderComponent>(target); collider.HalfExtents={2,2,.5f};
-    auto& body=world.Registry.emplace<RigidbodyComponent>(target);
-    body.Mass=2; body.UseGravity=false; body.LinearDamping=0;
-    world.SyncActiveInHierarchy(); world.RebuildWorldTransformCache(); PhysicsWorld::Create(world);
-    CHECK(PhysicsWorld::IsActive());
-    shot.Spread=0; shot.ImpactImpulse=100; shot.ImpactMaxSpeed=3;
-    count=0;
-    CHECK(InvokeProjectWithTrace(world,"shot",&shot,sizeof shot,[&](const NativeRequest& trace) {
-        ++count; CHECK(trace.Result==1 && trace.Entity==entt::to_integral(target));
-        CHECK(std::abs(trace.B.z+4.5f)<.001f);
-    }));
-    CHECK(count==8);
-    PhysicsWorld::Step(.02f,world);
-    BodyState state; CHECK(PhysicsWorld::GetBodyState(entt::to_integral(target),state));
-    CHECK(std::abs(state.Velocity[2]+3)<.01f); // the capped impulse is shared between eight pellets
-    PhysicsWorld::Destroy(); PhysicsWorld::Shutdown();
-}
 void TestManagedEditorBuild() {
     Scripting::RequestBuild(); CHECK(Scripting::BuildPending());
     const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(20);
@@ -613,7 +582,7 @@ void TestEmptyProject() {
     fs::path project=fs::u8path(ProjectPaths::Resolve(""));if(project.filename().empty())project=project.parent_path();
     if(project.filename()!="boundary-empty-project")return; // run only in its isolated process/project
     CHECK(EnsureLoaded());CHECK(nlohmann::json::parse(Describe()).at("classes").empty());
-    PlayerFrame game;CHECK(!InvokeProject("player",&game,sizeof game));
+    WeaponFrame game;CHECK(!InvokeProject("weapon",&game,sizeof game));
     std::string response;CHECK(!RequestProject("weapon.resolve","{}",response));
     const auto source=project/"assets/Scripts/Ordinary.cs";fs::create_directories(source.parent_path());
     std::ofstream(source)<<"using Tartarus; public sealed class Ordinary : Script {public override void Update(float dt){var obj=gameObject;obj.name=\"ordinary script ran\";}}";
@@ -634,7 +603,7 @@ void TestExportedProjectHost() {
     if(project.filename()!="project" || project.parent_path().filename()!="boundary-empty-export")return;
     CHECK(EnsureLoaded());
     const auto types=nlohmann::json::parse(Describe());CHECK(types.at("classes").size()==1);
-    PlayerFrame frame;CHECK(!InvokeProject("player",&frame,sizeof frame));
+    WeaponFrame frame;CHECK(!InvokeProject("weapon",&frame,sizeof frame));
     std::string response;CHECK(!RequestProject("weapon.resolve","{}",response));
     CHECK(!fs::exists(project/"assets/Scripts/WeaponController.cs"));CHECK(!fs::exists(project/"assets/Scripts/PlayerController.cs"));
     World world;AssetLibrary assets;auto entity=world.CreateEmptyEntity({},{},{1,1,1},"Exported plain object");
@@ -645,38 +614,38 @@ void TestExportedProjectHost() {
 }
 void TestProjectWeaponLoadout(){
     using namespace Scripting;
-    int ammo[2]={3,7};WeaponLoadoutFrame loadout;loadout.Operation=3;loadout.Count=2;loadout.SlotAmmo=reinterpret_cast<std::uintptr_t>(ammo);loadout.Active=1;loadout.Magazine=30;loadout.CycleWait=2;CHECK(InvokeProject("weapon.loadout",&loadout,sizeof loadout));CHECK(ammo[0]==-1 && ammo[1]==-1 && loadout.Ammo==30 && loadout.Chambered && loadout.CycleWait==0);
-    loadout.Operation=0;loadout.Slot=0;loadout.Pending=-1;loadout.Value=1;loadout.Equipped=1;CHECK(InvokeProject("weapon.loadout",&loadout,sizeof loadout));CHECK(loadout.Pending==1 && !loadout.Equipped && loadout.Commands==12);
-    loadout.Operation=2;loadout.Requested=0;loadout.Burst=3;CHECK(InvokeProject("weapon.loadout",&loadout,sizeof loadout));CHECK(loadout.Pending==-1 && loadout.Burst==0 && loadout.Commands==6);
+    int ammo[2]={3,7};WeaponLoadoutFrame loadout;loadout.Operation=3;loadout.Count=2;loadout.SlotAmmo=reinterpret_cast<std::uintptr_t>(ammo);loadout.Active=1;loadout.Magazine=30;loadout.CycleWait=2;WeaponRules::UpdateLoadout(loadout);CHECK(ammo[0]==-1 && ammo[1]==-1 && loadout.Ammo==30 && loadout.Chambered && loadout.CycleWait==0);
+    loadout.Operation=0;loadout.Slot=0;loadout.Pending=-1;loadout.Value=1;loadout.Equipped=1;WeaponRules::UpdateLoadout(loadout);CHECK(loadout.Pending==1 && !loadout.Equipped && loadout.Commands==12);
+    loadout.Operation=2;loadout.Requested=0;loadout.Burst=3;WeaponRules::UpdateLoadout(loadout);CHECK(loadout.Pending==-1 && loadout.Burst==0 && loadout.Commands==6);
 }
 void TestProjectLocomotion() {
     using namespace Scripting;
     BodyMotionFrame body;body.Dt=.01f;body.Grounded=1;body.IsLocomotion=1;body.TurnThreshold=55;body.TurnLagMargin=60;body.TurnLagFloor=90;body.TurnMinTime=.1f;body.TurnTimeout=2;body.TurnEndAngle=20;body.ViewYaw=glm::radians(100.0f);
-    CHECK(InvokeProject("body.motion",&body,sizeof body));CHECK(body.Turning && body.SetTurnAngle && std::abs(body.TurnAngle-100)<.01f);
-    body.IsTurn=1;body.IsLocomotion=0;body.Dt=.11f;body.RootYaw=60;body.StateTime=.4f;CHECK(InvokeProject("body.motion",&body,sizeof body));CHECK(body.Turning && std::abs(body.Yaw-glm::radians(60.0f))<.001f);
-    body.RootYaw=30;CHECK(InvokeProject("body.motion",&body,sizeof body));CHECK(!body.Turning && std::abs(body.TurnDone-glm::radians(90.0f))<.001f);
+    BodyLocomotion::Update(body);CHECK(body.Turning && body.SetTurnAngle && std::abs(body.TurnAngle-100)<.01f);
+    body.IsTurn=1;body.IsLocomotion=0;body.Dt=.11f;body.RootYaw=60;body.StateTime=.4f;BodyLocomotion::Update(body);CHECK(body.Turning && std::abs(body.Yaw-glm::radians(60.0f))<.001f);
+    body.RootYaw=30;BodyLocomotion::Update(body);CHECK(!body.Turning && std::abs(body.TurnDone-glm::radians(90.0f))<.001f);
     body={};body.Dt=.01f;body.Grounded=1;body.IsLocomotion=1;body.StartStopClips=1;body.IdleTime=2;body.StartIdleTime=.5f;body.StartMaxMove=.7f;body.ParamSmoothing=.2f;body.PlayerRunSpeed=4;body.PlayerSprintSpeed=6;body.RunSpeed=3.264f;body.ClipSprint=4.736f;body.WishVelocity={0,0,4};body.MaxPlayRate=2;
-    CHECK(InvokeProject("body.motion",&body,sizeof body));CHECK((body.Triggers&4) && body.StartDir.y==1 && body.Moving);
+    BodyLocomotion::Update(body);CHECK((body.Triggers&4) && body.StartDir.y==1 && body.Moving);
     CHECK(body.StartTurn==0 && body.StartGait==1);
     // Moving off toward a view the body lags by ~90 degrees: a start that turns it, to the left, ~2 steps of 45.
     body.Triggers=0;body.IdleTime=2;body.Move={};body.TurnThreshold=30;body.TurnLagFloor=90;body.TurnMoveEase=.08f;body.ViewYaw=glm::radians(100.0f);
     body.WishVelocity={4*std::sin(glm::radians(100.0f)),0,4*std::cos(glm::radians(100.0f))};
-    CHECK(InvokeProject("body.motion",&body,sizeof body));CHECK((body.Triggers&4) && body.StartTurn>1.8f && body.StartTurn<2.3f && body.StartTurnAmount==body.StartTurn);
+    BodyLocomotion::Update(body);CHECK((body.Triggers&4) && body.StartTurn>1.8f && body.StartTurn<2.3f && body.StartTurnAmount==body.StartTurn);
     // Jogging forward, the input reverses: a pivot from the forward travel (the jog's).
     body={};body.Dt=.01f;body.Grounded=1;body.IsLocomotion=1;body.StartStopClips=1;body.PlayerRunSpeed=4;body.RunSpeed=3.264f;body.ParamSmoothing=.2f;body.Move={0,3,0};body.WishVelocity={0,0,-4};
-    CHECK(InvokeProject("body.motion",&body,sizeof body));CHECK((body.Triggers&64) && body.PivotDir.y>.99f && body.PivotGait==1);
+    BodyLocomotion::Update(body);CHECK((body.Triggers&64) && body.PivotDir.y>.99f && body.PivotGait==1);
     // In the pivot, still going the old way at 2 m/s toward 3 the other way (accel 0.1 s): 4.7 cm to the turnaround.
     body.Triggers=0;body.IsPivot=1;body.IsLocomotion=0;body.Velocity={0,0,2};body.WishVelocity={0,0,-3};body.AccelTime=.1f;
-    CHECK(InvokeProject("body.motion",&body,sizeof body));CHECK(std::abs(body.PivotDistance+(.2f-.3f*std::log(1+2.0f/3)))<1e-4f && !body.PivotReversed);
-    body.Velocity={0,0,-1};CHECK(InvokeProject("body.motion",&body,sizeof body));CHECK(body.PivotReversed && std::abs(body.PivotDistance-.01f)<1e-4f);
+    BodyLocomotion::Update(body);CHECK(std::abs(body.PivotDistance+(.2f-.3f*std::log(1+2.0f/3)))<1e-4f && !body.PivotReversed);
+    body.Velocity={0,0,-1};BodyLocomotion::Update(body);CHECK(body.PivotReversed && std::abs(body.PivotDistance-.01f)<1e-4f);
     // A tap: let go 0.2 s into a start - one step its way.
     body={};body.Dt=.06f;body.Grounded=1;body.IsStart=1;body.StartStopClips=1;body.StopDebounce=.05f;body.MoveTime=.2f;body.MoveDistance=.3f;body.LastDir={1,0,0};
-    CHECK(InvokeProject("body.motion",&body,sizeof body));CHECK((body.Triggers&128) && !(body.Triggers&8) && body.StepDir.x==1);
+    BodyLocomotion::Update(body);CHECK((body.Triggers&128) && !(body.Triggers&8) && body.StepDir.x==1);
     // Stood still long enough with a gun: one of the ready stance's fidgets; busy with the gun, none.
     body={};body.Dt=.01f;body.Grounded=1;body.IsLocomotion=1;body.Armed=1;body.Random=.5f;body.FidgetNext=1;body.FidgetTime=.995f;
-    CHECK(InvokeProject("body.motion",&body,sizeof body));CHECK((body.Triggers&256) && body.FidgetIndex>=0 && body.FidgetIndex<=1 && body.FidgetTime==0);
-    body.Triggers=0;body.Busy=1;body.FidgetNext=1;body.FidgetTime=.995f;CHECK(InvokeProject("body.motion",&body,sizeof body));CHECK(!(body.Triggers&256) && body.FidgetTime==0);
-    body={};body.Grounded=1;body.IsLocomotion=1;body.StartStopClips=1;body.Crouched=1;CHECK(InvokeProject("body.motion",&body,sizeof body));CHECK(body.Triggers==1 && body.WasCrouched);
+    BodyLocomotion::Update(body);CHECK((body.Triggers&256) && body.FidgetIndex>=0 && body.FidgetIndex<=1 && body.FidgetTime==0);
+    body.Triggers=0;body.Busy=1;body.FidgetNext=1;body.FidgetTime=.995f;BodyLocomotion::Update(body);CHECK(!(body.Triggers&256) && body.FidgetTime==0);
+    body={};body.Grounded=1;body.IsLocomotion=1;body.StartStopClips=1;body.Crouched=1;BodyLocomotion::Update(body);CHECK(body.Triggers==1 && body.WasCrouched);
 }
 void TestProjectCanvasScopes() {
     using namespace Scripting;
@@ -737,21 +706,20 @@ void TestHealthMigration() {
 }
 }
 void RegisterScriptingTests(UnitTestSupport::TestList& tests) {
-    tests.emplace_back("Project weapon loadout rules",TestProjectWeaponLoadout);
-    tests.emplace_back("Project body actions",TestProjectLocomotion);
+    tests.emplace_back("Native weapon loadout rules",TestProjectWeaponLoadout);
+    tests.emplace_back("Native body locomotion actions",TestProjectLocomotion);
     tests.emplace_back("Empty project host and generic bootstrap",TestEmptyProject);
     tests.emplace_back("Exported generic project host",TestExportedProjectHost);
     tests.emplace_back("Project NPC configuration and scene migration",TestProjectNpcConfiguration);
     tests.emplace_back("Project canvas scopes",TestProjectCanvasScopes);
     tests.emplace_back("Health script slot becomes the native component",TestHealthMigration);
     tests.emplace_back("Prefab-relative draggable script references",TestSceneReferences);
-    tests.emplace_back("Managed gameplay ABI, fire modes and pump",TestManagedGameplay);
+    tests.emplace_back("Native weapon rules, fire modes and pump",TestNativeWeaponRules);
     tests.emplace_back("Managed components, lifecycle and weapon prefabs",TestManagedComponentsAndPrefabs);
     tests.emplace_back("C# definition slots convert to native components",TestScriptDefinitionConversion);
     tests.emplace_back("Weapon prefab particle systems",TestWeaponPrefabParticles);
     tests.emplace_back("Weapon attachment selection, poses and world clone",TestWeaponAttachments);
     tests.emplace_back("Material shader selection and red-dot defaults",TestMaterialShaderSelection);
-    tests.emplace_back("Managed ballistics, spread and capped pellet impulse",TestManagedBallistics);
     tests.emplace_back("Managed editor background build and reload",TestManagedEditorBuild);
     tests.emplace_back("Managed Unity workflow, multiple scripts and component access",TestManagedUnityWorkflow);
     tests.emplace_back("Managed scene API, native fields and C# editor tools",TestManagedApiAndEditor);

@@ -1,6 +1,4 @@
 #include "Player.h"
-#include "Scripting/ScriptRuntime.h"
-#include "Scripting/GameFrames.h"
 #include "Input.h"
 #include "InputMap.h"
 #include "PhysicsWorld.h"
@@ -14,63 +12,115 @@ glm::vec3 PlayerMovementTarget(const glm::vec3& wish, const glm::vec3& rootVeloc
     return glm::mix(planarWish,glm::vec3(rootVelocity.x,0.0f,rootVelocity.z),std::clamp(rootWeight,0.0f,1.0f));
 }
 
+namespace {
+float WrapDeg(float d) { d = std::fmod(d, 360.0f); return d > 180.0f ? d - 360.0f : d <= -180.0f ? d + 360.0f : d; }
+glm::vec3 CharacterFeet() { glm::vec3 f; PhysicsWorld::GetCharacterFootPosition(&f.x); return f; }
+void SetCharacterFeet(const glm::vec3& f) { PhysicsWorld::SetCharacterFootPosition(&f.x); }
+unsigned MoveCharacter(const glm::vec3& d, float dt) { return PhysicsWorld::MoveCharacter(&d.x, dt); }
+}
+
 void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) {
     (void)world; (void)window;
-    Scripting::PlayerFrame f;
-    f.Dt=std::max(0.0f,dt); f.Yaw=Cam.Yaw; f.Pitch=Cam.Pitch;
-    f.SizeX=Size.x; f.SizeY=Size.y; f.ReadInput=readInput;
-    f.MoveX=ScriptedMove?ScriptMove.x:(readInput?InputMap::GetAxis("Horizontal"):0.0f);
-    f.MoveY=ScriptedMove?ScriptMove.y:(readInput?InputMap::GetAxis("Vertical"):0.0f);
-    f.Sprint=!SprintBlocked && (ScriptedMove?ScriptSprint:(readInput&&InputMap::GetButton("Sprint")));
-    f.Crouch=ScriptedMove?ScriptCrouch:(readInput&&InputMap::GetButton("Crouch"));
-    f.JumpDown=readInput&&InputMap::GetButtonDown("Jump"); f.AimHeld=AimHeld;
-    LookDeltaInput=glm::vec2(0);
-    if(readInput) {
-        const float mousePitch=static_cast<float>(Input::GetMouseDeltaY())*(InvertY?-1.0f:1.0f)*MouseSensitivity;
-        const float stickPitch=-Input::GetGamepadAxis(GLFW_GAMEPAD_AXIS_RIGHT_Y)*(InvertY?-1.0f:1.0f)*StickLookDegPerSec*dt;
-        f.LookPitch=std::clamp(std::clamp(Cam.Pitch+mousePitch,-89.0f,89.0f)+stickPitch,-89.0f,89.0f)-Cam.Pitch;
-        f.LookYaw=static_cast<float>(Input::GetMouseDeltaX())*MouseSensitivity+Input::GetGamepadAxis(GLFW_GAMEPAD_AXIS_RIGHT_X)*StickLookDegPerSec*dt;
-        LookDeltaInput={mousePitch+stickPitch,f.LookYaw};
+    dt = std::max(0.0f, dt);
+    glm::vec2 move(ScriptedMove ? ScriptMove.x : (readInput ? InputMap::GetAxis("Horizontal") : 0.0f),
+                   ScriptedMove ? ScriptMove.y : (readInput ? InputMap::GetAxis("Vertical") : 0.0f));
+    const bool sprintKey = !SprintBlocked && (ScriptedMove ? ScriptSprint : (readInput && InputMap::GetButton("Sprint")));
+    const bool crouchKey = ScriptedMove ? ScriptCrouch : (readInput && InputMap::GetButton("Crouch"));
+    const bool jumpDown = readInput && InputMap::GetButtonDown("Jump");
+    LookDeltaInput = glm::vec2(0);
+    YawDropped = 0.0f;
+    if (readInput) {
+        const float mousePitch = static_cast<float>(Input::GetMouseDeltaY()) * (InvertY ? -1.0f : 1.0f) * MouseSensitivity;
+        const float stickPitch = -Input::GetGamepadAxis(GLFW_GAMEPAD_AXIS_RIGHT_Y) * (InvertY ? -1.0f : 1.0f) * StickLookDegPerSec * dt;
+        // The camera clamps the mouse pass and the stick pass separately; these are their combined angles.
+        const float lookPitch = std::clamp(std::clamp(Cam.Pitch + mousePitch, -89.0f, 89.0f) + stickPitch, -89.0f, 89.0f) - Cam.Pitch;
+        const float lookYaw = static_cast<float>(Input::GetMouseDeltaX()) * MouseSensitivity +
+                              Input::GetGamepadAxis(GLFW_GAMEPAD_AXIS_RIGHT_X) * StickLookDegPerSec * dt;
+        LookDeltaInput = {mousePitch + stickPitch, lookYaw};
+        const float before = Cam.Yaw;
+        Cam.Yaw += lookYaw;
+        Cam.Pitch = std::clamp(Cam.Pitch + lookPitch, -89.0f, 89.0f);
+        // The body can only turn so fast: beyond the free range, view turn past MaxYawRate is dropped.
+        if (MaxYawRate > 0.0f && dt > 0.0f) {
+            const float reach = std::max(std::abs(WrapDeg(before - YawFreeCenter)), YawFreeRange) + MaxYawRate * dt;
+            const float after = WrapDeg(Cam.Yaw - YawFreeCenter);
+            if (std::abs(after) > reach) { YawDropped = std::abs(after) - reach; Cam.Yaw = YawFreeCenter + std::copysign(reach, after); }
+        }
     }
-    f.EyeHeight=EyeHeight;
-    f.MoveSpeed=MoveSpeed;
-    f.SprintMultiplier=SprintMultiplier;
-    f.JumpSpeed=JumpSpeed;
-    f.Gravity=Gravity;
-    f.MouseSensitivity=MouseSensitivity;
-    f.StickLookDegPerSec=StickLookDegPerSec;
-    f.KillY=KillY;
+    const float yaw = glm::radians(Cam.Yaw);
+    const glm::vec3 forward(std::cos(yaw), 0.0f, std::sin(yaw)), right(-std::sin(yaw), 0.0f, std::cos(yaw));
+    glm::vec3 wish = right * move.x + forward * move.y;
+    if (glm::dot(wish, wish) > 1.0f) wish = glm::normalize(wish);
+    MoveInput = {glm::dot(wish, right), glm::dot(wish, forward)};
+
+    const float radius = std::max(0.05f, Size.x * 0.5f);
+    const float stand = std::max(0.05f, Size.y * 0.5f - radius), crouch = std::max(0.05f, CrouchHeight * 0.5f - radius);
+    const bool hasCharacter = PhysicsWorld::HasCharacter();
+    if (CrouchHeight <= 0.0f) {
+        if (Crouched && hasCharacter) PhysicsWorld::ResizeCharacter(stand);
+        Crouched = false;
+    } else if (hasCharacter) {
+        if (crouchKey && !Crouched && Grounded) { if (PhysicsWorld::ResizeCharacter(crouch)) Crouched = true; }
+        else if (!crouchKey && Crouched && PhysicsWorld::CharacterFitsAt(stand)) { PhysicsWorld::ResizeCharacter(stand); Crouched = false; }
+    }
+    // The eye's crouch: a critically damped spring (as quick as the old ease, ~0.3 s), so the view never jolts into
+    // the move the way an exponential's first frame did.
+    {
+        const float w = 14.0f;
+        const float goal = Crouched ? 1.0f : 0.0f, x = CrouchBlend - goal, v = CrouchBlendRate;
+        const float e = std::exp(-w * dt), k = (v + w * x) * dt;
+        CrouchBlend = goal + (x + k) * e;
+        CrouchBlendRate = (v - w * k) * e;
+        if (std::abs(CrouchBlend - goal) < 1e-4f && std::abs(CrouchBlendRate) < 1e-3f) { CrouchBlend = goal; CrouchBlendRate = 0.0f; }
+    }
+    const float eye = EyeHeight * (1.0f - CrouchBlend * (1.0f - std::clamp(CrouchHeight / std::max(0.1f, Size.y), 0.0f, 1.0f)) * (CrouchHeight > 0.0f ? 1.0f : 0.0f));
+    const bool sprint = !Crouched && !AimHeld && sprintKey;
+    wish *= MoveSpeed * (sprint ? SprintMultiplier : 1.0f) * (Crouched ? CrouchSpeedMultiplier : 1.0f);
+    WishVelocity = wish;
     // A sprint clip can keep contributing fast root travel during its exit fade.
     // While reloading, walk input owns travel so that residual cannot keep us sprinting.
-    f.RootMotionWeight=SprintBlocked?0.0f:RootMotionWeight;
-    f.MaxYawRate=MaxYawRate;
-    f.YawFreeCenter=YawFreeCenter;
-    f.YawFreeRange=YawFreeRange;
-    f.CrouchHeight=CrouchHeight;
-    f.CrouchSpeedMultiplier=CrouchSpeedMultiplier;
-    f.JumpBufferTime=JumpBufferTime;
-    f.CoyoteTime=CoyoteTime;
-    f.GroundAccelTime=GroundAccelTime;
-    f.GroundDecelTime=GroundDecelTime;
-    f.AirAccelTime=AirAccelTime;
-    f.CrouchBlend=CrouchBlend;
-    f.CrouchBlendRate=CrouchBlendRate;
-    f.YawDropped=YawDropped;
-    f.Position={Cam.Position.x,Cam.Position.y,Cam.Position.z};
-    f.Velocity={Velocity.x,Velocity.y,Velocity.z};
-    f.RespawnFeet={RespawnFeet.x,RespawnFeet.y,RespawnFeet.z};
-    f.RootMotionVelocity={RootMotionVelocity.x,RootMotionVelocity.y,RootMotionVelocity.z};
-    f.WishVelocity={WishVelocity.x,WishVelocity.y,WishVelocity.z};
-    f.SinceGrounded=m_SinceGrounded; f.JumpBuffer=m_JumpBuffer;
-    f.Grounded=Grounded; f.Crouched=Crouched; f.Jumped=Jumped;
-    if(!Scripting::InvokeProject("player",&f,sizeof f)) return;
-    Cam.Yaw=f.Yaw; Cam.Pitch=f.Pitch; MoveInput={f.MoveX,f.MoveY};
-    m_SinceGrounded=f.SinceGrounded; m_JumpBuffer=f.JumpBuffer;
-    Grounded=f.Grounded!=0; Crouched=f.Crouched!=0; Jumped=f.Jumped!=0;
-    CrouchBlend=f.CrouchBlend; CrouchBlendRate=f.CrouchBlendRate; YawDropped=f.YawDropped;
-    Cam.Position={f.Position.x,f.Position.y,f.Position.z};
-    Velocity={f.Velocity.x,f.Velocity.y,f.Velocity.z};
-    WishVelocity={f.WishVelocity.x,f.WishVelocity.y,f.WishVelocity.z};
+    const float rootWeight = SprintBlocked ? 0.0f : RootMotionWeight;
+    const glm::vec3 target = PlayerMovementTarget(wish, RootMotionVelocity, rootWeight, sprint);
+    const glm::vec3 horizontal = PlayerApproachVelocity(glm::vec3(Velocity.x, 0.0f, Velocity.z), target, dt,
+                                                        Grounded ? GroundAccelTime : AirAccelTime, Grounded ? GroundDecelTime : AirAccelTime);
+    Velocity.x = horizontal.x; Velocity.z = horizontal.z;
+    const bool wasGrounded = Grounded;
+    Jumped = false;
+    m_SinceGrounded = wasGrounded ? 0.0f : m_SinceGrounded + dt;
+    m_JumpBuffer = readInput && jumpDown ? JumpBufferTime : std::max(0.0f, m_JumpBuffer - dt);
+    if (readInput && m_JumpBuffer > 0.0f && (wasGrounded || m_SinceGrounded < CoyoteTime) && Velocity.y <= 0.1f) {
+        const bool canStand = !Crouched || (hasCharacter && PhysicsWorld::CharacterFitsAt(stand));
+        if (canStand) {
+            if (Crouched) { PhysicsWorld::ResizeCharacter(stand); Crouched = false; }
+            Velocity.y = JumpSpeed; Jumped = true; m_JumpBuffer = 0.0f; m_SinceGrounded = 1000.0f;
+        }
+    }
+    Velocity.y += Gravity * dt;
+    const glm::vec3 feet = Cam.Position - glm::vec3(0.0f, eye, 0.0f);
+    if (!PhysicsWorld::IsActive()) { Cam.Position += Velocity * dt; Grounded = false; return; }
+    if (!hasCharacter) PhysicsWorld::CreateCharacter(radius, stand, &feet.x);
+    const glm::vec3 from = CharacterFeet();
+    const unsigned flags = MoveCharacter(Velocity * dt, dt);
+    // Blocked by a wall: carry on at the speed actually travelled, not the speed asked for.
+    if ((GroundAccelTime > 0.0f || GroundDecelTime > 0.0f || AirAccelTime > 0.0f) && dt > 0.0f) {
+        glm::vec3 travelled = (CharacterFeet() - from) / dt; travelled.y = 0.0f;
+        if (glm::length(travelled) < glm::length(glm::vec2(Velocity.x, Velocity.z))) { Velocity.x = travelled.x; Velocity.z = travelled.z; }
+    }
+    Grounded = (flags & PhysicsWorld::CC_DOWN) != 0;
+    // Walking off a step down: stay on the ground rather than fall the last few centimetres.
+    if (!Grounded && wasGrounded && !Jumped && Velocity.y <= 0.0f) {
+        const glm::vec3 before = CharacterFeet();
+        if (MoveCharacter(glm::vec3(0.0f, -0.3f, 0.0f), dt) & PhysicsWorld::CC_DOWN) Grounded = true;
+        else SetCharacterFeet(before);
+    }
+    if ((Grounded && Velocity.y < 0.0f) || ((flags & PhysicsWorld::CC_UP) && Velocity.y > 0.0f)) Velocity.y = 0.0f;
+    Cam.Yaw += PhysicsWorld::PlatformYawDelta();
+    Cam.Position = CharacterFeet() + glm::vec3(0.0f, eye, 0.0f);
+    if (Cam.Position.y < KillY) {
+        SetCharacterFeet(RespawnFeet);
+        Cam.Position = RespawnFeet + glm::vec3(0.0f, eye, 0.0f);
+        Velocity = glm::vec3(0.0f);
+    }
 }
 
 glm::vec3 PlayerApproachVelocity(const glm::vec3& current, const glm::vec3& target, float dt, float accelTime, float decelTime) {

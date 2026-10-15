@@ -1,61 +1,44 @@
-"""Generate sample-project adapter frames. These are game contracts, not engine SDK types."""
+"""Generate the frames the native gameplay rules read and write (weapon, loadout, body locomotion)."""
 from pathlib import Path
 root=Path(__file__).resolve().parents[1]
-schema={'PlayerFrame': {'float': 'Dt Yaw Pitch MoveX MoveY LookPitch LookYaw SizeX SizeY EyeHeight '
-                          'MoveSpeed SprintMultiplier JumpSpeed Gravity MouseSensitivity '
-                          'StickLookDegPerSec KillY RootMotionWeight MaxYawRate YawFreeCenter '
-                          'YawFreeRange CrouchHeight CrouchSpeedMultiplier JumpBufferTime '
-                          'CoyoteTime GroundAccelTime GroundDecelTime AirAccelTime SinceGrounded '
-                          'JumpBuffer CrouchBlend CrouchBlendRate YawDropped',
-                 'Vec3': 'Position Velocity RespawnFeet RootMotionVelocity WishVelocity',
-                 'int': 'ReadInput Sprint JumpDown Crouch AimHeld Grounded Crouched Jumped'},
- 'WeaponFrame': {'float': 'Dt Rpm CycleDelay HoldSeconds RegripMin RegripMax Cooldown CycleWait '
-                          'IdleTime RegripDelay SinceShot SinceUnhidden ReloadHeldSeconds Random',
-                 'int': 'Operation Ammo Magazine BurstRounds AllowFullAuto PerRound CycleAfterShot '
-                        'HipProcedural RecoilProfile UnityRecoil Equipped Chambered CycleSeen '
-                        'StopReload FullAuto BurstRemaining WaitingShot Tags InTransition '
-                        'WallBlocked Pressed Held ReloadWasDown ReloadHoldFired Events Commands '
-                        'Result'},
- 'ShotFrame': {'Vec3': 'Origin Direction',
-               'float': 'Spread ImpactImpulse ImpactMaxSpeed BulletHoleRadius Range',
-               'int': 'Pellets RandomSeed'},
- 'BodyMotionFrame': {'Vec3': 'Velocity WishVelocity Move LastDir StartDir StopDir PivotDir StepDir',
-                     'float': 'Dt ViewYaw Yaw Twist AirTime IdleTime MoveTime TurnTime TurnDone '
-                              'RootYaw StateTime PlayerRunSpeed PlayerSprintSpeed RunSpeed '
-                              'ClipSprint Responsiveness MaxPlayRate ParamSmoothing TurnThreshold '
-                              'TurnMinTime TurnEndAngle TurnTimeout TurnMoveEase TurnLagMargin '
-                              'TurnLagFloor StopDebounce StartIdleTime StartMaxMove '
-                              'StopMinRunTimeCrouched StopMinRunTime StopMinSpeedCrouched '
-                              'StopMinSpeed StopRunForward AirborneDelay PlayRate TurnAngle '
-                              'AccelTime DecelTime Random StartGait StopGait PivotGait StartTurn '
-                              'StartTurnAmount StartDistance StopDistance PivotDistance '
-                              'PivotTravel FidgetTime FidgetNext FidgetIndex SprintRate SprintClip '
-                              'MoveDistance',
-                     'bool32': 'Grounded Crouched WasCrouched StartStopClips Turning IsTurn '
-                               'IsCrouchTurn IsLocomotion IsCrouchLoco Jumped Still SetTurnAngle '
-                               'LastSprint Moving Sprint Airborne Armed Busy IsStart IsStartTurn '
-                               'IsStop IsPivot IsStep IsFidget IsSprint PivotReversed',
+schema={'BodyMotionFrame': {'Vec3': 'Velocity WishVelocity Move LastDir StartDir StopDir PivotDir StepDir',
+                     'bool32': 'Grounded Crouched WasCrouched StartStopClips Turning IsTurn IsCrouchTurn '
+                               'IsLocomotion IsCrouchLoco Jumped Still SetTurnAngle LastSprint Moving Sprint '
+                               'Airborne Armed Busy IsStart IsStartTurn IsStop IsPivot IsStep IsFidget '
+                               'IsSprint PivotReversed',
+                     'float': 'Dt ViewYaw Yaw Twist AirTime IdleTime MoveTime TurnTime TurnDone RootYaw '
+                              'StateTime PlayerRunSpeed PlayerSprintSpeed RunSpeed ClipSprint Responsiveness '
+                              'MaxPlayRate ParamSmoothing TurnThreshold TurnMinTime TurnEndAngle TurnTimeout '
+                              'TurnMoveEase TurnLagMargin TurnLagFloor StopDebounce StartIdleTime '
+                              'StartMaxMove StopMinRunTimeCrouched StopMinRunTime StopMinSpeedCrouched '
+                              'StopMinSpeed StopRunForward AirborneDelay PlayRate TurnAngle AccelTime '
+                              'DecelTime Random StartGait StopGait PivotGait StartTurn StartTurnAmount '
+                              'StartDistance StopDistance PivotDistance PivotTravel FidgetTime FidgetNext '
+                              'FidgetIndex SprintRate SprintClip MoveDistance',
                      'int': 'Triggers'},
+ 'WeaponFrame': {'float': 'Dt Rpm CycleDelay HoldSeconds RegripMin RegripMax Cooldown CycleWait IdleTime '
+                          'RegripDelay SinceShot SinceUnhidden ReloadHeldSeconds Random',
+                 'int': 'Operation Ammo Magazine BurstRounds AllowFullAuto PerRound CycleAfterShot '
+                        'HipProcedural RecoilProfile UnityRecoil Equipped Chambered CycleSeen StopReload '
+                        'FullAuto BurstRemaining WaitingShot Tags InTransition WallBlocked Pressed Held '
+                        'ReloadWasDown ReloadHoldFired Events Commands Result'},
  'WeaponLoadoutFrame': {'bool32': 'Active Equipped Requested Chambered Hidden InTransition',
                         'float': 'CycleWait',
                         'int': 'Operation Value Count Slot Pending Ammo Magazine Burst Commands',
                         'ptr': 'SlotAmmo'}}
 cpp=['// Generated by tools/generate_game_frames.py. Project adapter ABI, not engine SDK.','#pragma once','#include "ScriptAbi.h"','namespace Scripting {']
-cs=['// Generated by tools/generate_game_frames.py. Project adapter ABI, not engine SDK.','using System.Numerics;','using System.Runtime.InteropServices;','namespace Tartarus.Gameplay;']
 for name,groups in schema.items():
- cpp.append('struct '+name+' {');cs+=['[StructLayout(LayoutKind.Sequential)]',('public' if name in ['PlayerFrame','WeaponFrame','ShotFrame'] else 'internal')+' unsafe struct '+name+' {']
+ cpp.append('struct '+name+' {')
  for kind,names in groups.items():
   for field in names.split():
    if kind=='bool32':
-    cpp.append(f'    std::int32_t {field}{{}};');cs.append(f'    private int _{field}; public bool {field} {{get=>_{field}!=0;set=>_{field}=value?1:0;}}')
+    cpp.append(f'    std::int32_t {field}{{}};')
    elif kind.startswith('int') and kind[3:].isdigit():
-    count=int(kind[3:]);cpp.append(f'    std::int32_t {field}[{count}]{{}};');cs.append(f'    public fixed int {field}[{count}];')
+    count=int(kind[3:]);cpp.append(f'    std::int32_t {field}[{count}]{{}};')
    elif kind.startswith('float') and kind[5:].isdigit():
-    count=int(kind[5:]);cpp.append(f'    float {field}[{count}]{{}};');cs.append(f'    public fixed float {field}[{count}];')
+    count=int(kind[5:]);cpp.append(f'    float {field}[{count}]{{}};')
    else:
     cpp.append(f'    {dict(double="double",float="float",int="std::int32_t",Vec3="Vec3",floats="const float*",vectors="const Vec3*",ptr="std::uintptr_t").get(kind,kind)} {field}{{}};')
-    cs.append(f'    public {dict(double="double",float="float",int="int",Vec3="Vector3",floats="float*",vectors="Vector3*",ptr="nint").get(kind,kind)} {field};')
- cpp.append('};');cs.append('}')
+ cpp.append('};')
 cpp.append('}')
 (root/'src/Game/Scripting/GameFrames.h').write_text('\n'.join(cpp)+'\n')
-(root/'project/assets/Scripts/GameFrames.cs').write_text('\n'.join(cs)+'\n')
