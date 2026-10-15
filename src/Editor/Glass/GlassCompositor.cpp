@@ -156,7 +156,9 @@ void GlassCompositor::Flush(ImDrawData* dd, std::vector<ImDrawList*>& pending, b
     sub.Textures = texturesSent ? nullptr : dd->Textures;
     for (ImDrawList* l : pending) sub.AddDrawList(l);
     pending.clear();
-    if (sub.CmdListsCount == 0) return;
+    // AddDrawList no longer counts into the obsolete CmdListsCount (ImGui 1.92.9): read CmdLists.
+    if (sub.CmdLists.Size == 0) return;
+    sub.CmdListsCount = sub.CmdLists.Size;
     sub.Valid = true;
     ImGui_ImplOpenGL3_RenderDrawData(&sub);
     texturesSent = true;
