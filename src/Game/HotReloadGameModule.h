@@ -14,8 +14,11 @@ public:
     HotReloadGameModule(const HotReloadGameModule&) = delete;
     HotReloadGameModule& operator=(const HotReloadGameModule&) = delete;
 
-    void Initialize(const std::filesystem::path& sourceModule);
-    void Tick(World& world, float deltaTime, bool playing);
+    // `watch` false (a shipped game) loads the module once and never polls it for a rebuild.
+    void Initialize(const std::filesystem::path& sourceModule, bool watch = true);
+    // `deltaTime` is game time (what Update receives); `realDeltaTime` paces the rebuild poll, so
+    // a paused or time-scale-0 game still picks a rebuild up.
+    void Tick(World& world, float deltaTime, float realDeltaTime, bool playing);
     // The module's FixedUpdate, if it has one (#144). PhysicsWorld::Step calls this per sub-step.
     void FixedTick(World& world, float fixedDeltaTime);
     void Shutdown();
@@ -33,6 +36,7 @@ private:
     void* m_Handle = nullptr;
     const struct GameModuleAPI* m_API = nullptr;
     float m_PollElapsed = 0.0f;
+    bool m_Watch = true;
     unsigned int m_Generation = 0;
 };
 

@@ -4,6 +4,7 @@
 #include <cstdint>
 
 class World;
+namespace Gameplay { struct WeaponFrame; struct WeaponLoadoutFrame; struct BodyMotionFrame; }
 
 // Deliberately small and versioned: the host keeps ownership of the World, renderer, editor,
 // and every long-lived resource. A hot-reloaded module only receives a non-owning view for its
@@ -11,7 +12,8 @@ class World;
 // v8 (#187): OnLoad receives the previous module's saved state and returns false to reject a
 // build (the host then restores the previous one); SaveState added.
 // v9 (#144): FixedUpdate, and host GetTime / SetTimeScale.
-constexpr std::uint32_t kGameModuleAPIVersion = 12; // v12: Input Manager (GetAxis, GetButton*, GetKey*, GetMouseDelta)
+// v12: Input Manager (GetAxis, GetButton*, GetKey*, GetMouseDelta).
+constexpr std::uint32_t kGameModuleAPIVersion = 13; // v13: the weapon and body rules, reloadable
 
 // Unity's Time, as seen by the game module (#144). Seconds throughout. POD.
 struct GameTime {
@@ -208,6 +210,15 @@ struct GameModuleAPI {
     // step length - zero, one or several times a frame depending on frame rate and time scale.
     // Forces and anything that must be frame-rate independent belong here, as in Unity.
     void (*FixedUpdate)(const GameModuleHostAPI& host, World& world, float fixedDeltaTime) = nullptr;
+
+    // v13. The first-person rules (WeaponRules / BodyLocomotion), so editing them hot-reloads like
+    // any module system. Each reads and writes one frame from GameFrames.h. The host checks
+    // FramesLayout against its own (GameFrames::Layout()) and keeps its built-in copies when the
+    // module was built against different frame structs; any of these may be null.
+    std::uint32_t FramesLayout = 0;
+    void (*UpdateWeapon)(Gameplay::WeaponFrame& frame) = nullptr;
+    void (*UpdateWeaponLoadout)(Gameplay::WeaponLoadoutFrame& frame) = nullptr;
+    void (*UpdateBodyMotion)(Gameplay::BodyMotionFrame& frame) = nullptr;
 };
 
 using GetGameModuleAPIFn = const GameModuleAPI* (*)();

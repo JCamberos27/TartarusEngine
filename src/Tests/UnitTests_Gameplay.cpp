@@ -22,6 +22,7 @@
 #include "Player.h"
 #include "PhysicsWorld.h"
 #include "GameModuleAPI.h"
+#include "GameRules.h"
 #include <chrono>
 #include <thread>
 #include <set>
@@ -433,7 +434,37 @@ void TestHealthMigration() {
     if(healthy.size()==1){const auto& h=healthy.get<HealthComponent>(healthy.front());CHECK(h.Max==40 && !h.Invulnerable && h.Current<0);}
 }
 }
+// The host calls a loaded game module's weapon/body rules only when the module was built against
+// the same frames, and falls back to its built-in copies otherwise.
+void TestGameRulesDispatch() {
+    const GameModuleAPI* previous = GameRules::Module();
+    struct Probe { static void Weapon(Gameplay::WeaponFrame& w) { w.Result = 777; } };
+    GameModuleAPI fake;
+    fake.FramesLayout = Gameplay::FramesLayout();
+    fake.UpdateWeapon = &Probe::Weapon;
+
+    Gameplay::WeaponFrame w;
+    GameRules::UseModule(nullptr);
+    CHECK(!GameRules::FromModule());
+    w.Operation = 7; GameRules::UpdateWeapon(w);
+    CHECK(w.Result != 777);
+
+    GameRules::UseModule(&fake);
+    CHECK(GameRules::FromModule());
+    GameRules::UpdateWeapon(w);
+    CHECK(w.Result == 777);
+
+    fake.FramesLayout ^= 1u; // built against other frames
+    GameRules::UseModule(&fake);
+    CHECK(!GameRules::FromModule());
+    w.Result = 0; GameRules::UpdateWeapon(w);
+    CHECK(w.Result != 777);
+
+    GameRules::UseModule(previous);
+}
+
 void RegisterGameplayTests(UnitTestSupport::TestList& tests) {
+    tests.emplace_back("Game module weapon/body rules dispatch",TestGameRulesDispatch);
     tests.emplace_back("Native weapon loadout rules",TestProjectWeaponLoadout);
     tests.emplace_back("Native body locomotion actions",TestProjectLocomotion);
     tests.emplace_back("Project NPC configuration and scene migration",TestProjectNpcConfiguration);
