@@ -45,51 +45,67 @@ void Tooltip(const EditorModuleHostAPI& host, const char* text) {
     if (host.SetTooltip) host.SetTooltip(text);
 }
 
-// Minimize / maximize-restore / close, right-aligned in the toolbar's menu-bar row. The OS title
-// bar is removed (Win32 custom frame in Window.cpp); these act on the host's GLFW window through
-// callbacks.
-void DrawWindowControls(const EditorModuleHostAPI& host) {
-    const float h = ImGui::GetFrameHeight();
-    const float bw = ImFloor(h * 1.6f);
-    const ImGuiStyle& st = ImGui::GetStyle();
-    const float startX = ImGui::GetWindowWidth() - bw * 3.0f;
-    ImGui::SameLine(startX > 0.0f ? startX : 0.0f);
-
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, st.ItemSpacing.y));
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f); // flat window controls, no hairline box
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, EditorUIPrimitives::FlatHover());
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, EditorUIPrimitives::FlatPressed());
-    ImGui::PushStyleColor(ImGuiCol_Text, EditorTheme::Secondary);
-
-    ImGui::PushID("win_min");
-    if (ImGui::Button(EDITOR_ICON_WINDOW_MINIMIZE, ImVec2(bw, 0.0f)) && host.WindowMinimize) host.WindowMinimize();
-    if (ImGui::IsItemHovered()) Tooltip(host, "Minimize");
-    ImGui::PopID();
-    ImGui::SameLine();
-
+// The window controls, macOS-style: close, minimize and zoom as red, yellow and green "traffic
+// lights" at the left of the title bar. Their glyphs (x, -, +) show while the pointer is over the
+// group, as on a Mac. The OS title bar is removed (Win32 custom frame in Window.cpp); these act
+// on the host's GLFW window through callbacks. Returns the group's width (for the layout after it).
+float DrawTrafficLights(const EditorModuleHostAPI& host, float toolbarH) {
+    const float d = std::floor(EditorTheme::Px(12.0f));     // light diameter
+    const float gap = std::floor(EditorTheme::Px(8.0f));    // between lights
+    const float edge = std::floor(EditorTheme::Px(13.0f));  // from the window's left edge
+    const ImVec2 origin(ImGui::GetWindowPos().x + edge, ImGui::GetWindowPos().y + std::floor((toolbarH - d) * 0.5f));
+    const float groupW = d * 3.0f + gap * 2.0f;
+    const ImRect group(origin, ImVec2(origin.x + groupW, origin.y + d));
+    const bool groupHovered = ImGui::IsMouseHoveringRect(ImVec2(group.Min.x - gap * 0.5f, 0.0f),
+                                                         ImVec2(group.Max.x + gap * 0.5f, toolbarH)) &&
+                              ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
     const bool maxed = host.WindowIsMaximized && host.WindowIsMaximized();
-    ImGui::PushID("win_max");
-    if (ImGui::Button(maxed ? EDITOR_ICON_WINDOW_RESTORE : EDITOR_ICON_WINDOW_MAXIMIZE, ImVec2(bw, 0.0f)) && host.WindowToggleMaximize)
-        host.WindowToggleMaximize();
-    if (ImGui::IsItemHovered()) Tooltip(host, maxed ? "Restore" : "Maximize");
-    ImGui::PopID();
-    ImGui::SameLine();
-
-    {
-        // Close turns the system red on hover, like every Windows title bar.
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, EditorTheme::Rgb(0xC4, 0x2B, 0x1C));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, EditorTheme::Rgb(0xA3, 0x24, 0x18));
+    struct Light { const char* id; ImU32 fill; ImU32 glyph; const char* tip; };
+    const Light lights[3] = {
+        {"win_close", IM_COL32(0xFF, 0x5F, 0x57, 255), IM_COL32(0x4D, 0x00, 0x00, 230), "Close"},
+        {"win_min",   IM_COL32(0xFE, 0xBC, 0x2E, 255), IM_COL32(0x99, 0x57, 0x00, 230), "Minimize"},
+        {"win_max",   IM_COL32(0x28, 0xC8, 0x40, 255), IM_COL32(0x00, 0x65, 0x00, 230), maxed ? "Restore" : "Maximize"},
+    };
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const ImVec2 cursor = ImGui::GetCursorScreenPos();
+    for (int i = 0; i < 3; ++i) {
+        const ImVec2 mn(origin.x + (d + gap) * (float)i, origin.y);
+        const ImVec2 c(mn.x + d * 0.5f, mn.y + d * 0.5f);
+        // A hit area a little larger than the light (half the gap each side, the strip's height).
+        ImGui::SetCursorScreenPos(ImVec2(mn.x - gap * 0.5f, ImGui::GetWindowPos().y));
+        ImGui::PushID(lights[i].id);
+        const bool pressed = ImGui::InvisibleButton("##light", ImVec2(d + gap, toolbarH));
+        const bool held = ImGui::IsItemActive();
+        if (ImGui::IsItemHovered()) Tooltip(host, lights[i].tip);
+        ImGui::PopID();
+        ImU32 fill = lights[i].fill;
+        if (held) { // pressed: a shade darker, as on macOS
+            ImVec4 f = ImGui::ColorConvertU32ToFloat4(fill);
+            fill = ImGui::ColorConvertFloat4ToU32(ImVec4(f.x * 0.78f, f.y * 0.78f, f.z * 0.78f, 1.0f));
+        }
+        dl->AddCircleFilled(c, d * 0.5f, fill, 24);
+        dl->AddCircle(c, d * 0.5f - 0.5f, IM_COL32(0, 0, 0, 40), 24, 1.0f);
+        if (groupHovered) {
+            const float r = d * 0.24f, t = std::max(1.0f, EditorTheme::Px(1.4f));
+            const ImU32 g = lights[i].glyph;
+            if (i == 0) {
+                dl->AddLine(ImVec2(c.x - r, c.y - r), ImVec2(c.x + r, c.y + r), g, t);
+                dl->AddLine(ImVec2(c.x - r, c.y + r), ImVec2(c.x + r, c.y - r), g, t);
+            } else if (i == 1) {
+                dl->AddLine(ImVec2(c.x - r * 1.25f, c.y), ImVec2(c.x + r * 1.25f, c.y), g, t);
+            } else {
+                dl->AddLine(ImVec2(c.x - r * 1.25f, c.y), ImVec2(c.x + r * 1.25f, c.y), g, t);
+                dl->AddLine(ImVec2(c.x, c.y - r * 1.25f), ImVec2(c.x, c.y + r * 1.25f), g, t);
+            }
+        }
+        if (pressed) {
+            if (i == 0 && host.WindowClose) host.WindowClose();
+            else if (i == 1 && host.WindowMinimize) host.WindowMinimize();
+            else if (i == 2 && host.WindowToggleMaximize) host.WindowToggleMaximize();
+        }
     }
-    ImGui::PushID("win_close");
-    if (ImGui::Button(EDITOR_ICON_WINDOW_CLOSE, ImVec2(bw, 0.0f)) && host.WindowClose) host.WindowClose();
-    if (ImGui::IsItemHovered()) Tooltip(host, "Close");
-    ImGui::PopID();
-    ImGui::PopStyleColor(2);
-
-    ImGui::PopStyleColor(4);
-    ImGui::PopStyleVar(3);
+    ImGui::SetCursorScreenPos(cursor);
+    return edge + groupW;
 }
 
 } // namespace
@@ -131,7 +147,9 @@ void Draw(const EditorModuleHostAPI& host) {
 
     if (ImGui::BeginMenuBar()) {
         // The engine's monogram, then the menus: plain words, like every desktop application.
-        ImGui::Dummy(ImVec2(EditorTheme::Px(6.0f), 0.0f));
+        // The traffic lights first, at the left edge, then the monogram and the menus.
+        const float lightsW = DrawTrafficLights(host, toolbarH);
+        ImGui::Dummy(ImVec2(lightsW + EditorTheme::Px(14.0f), 0.0f));
         if (const unsigned int mark = host.GetEngineMarkTexture ? host.GetEngineMarkTexture() : 0u) {
             const float s = std::floor(toolbarH * 0.62f);
             const ImVec2 p = ImGui::GetCursorScreenPos();
@@ -208,7 +226,7 @@ void Draw(const EditorModuleHostAPI& host) {
             const float total = tw + dot + tagW;
             const float x = std::floor((winW - total) * 0.5f);
             const float menusEnd = ImGui::GetCursorScreenPos().x + EditorTheme::Px(24.0f);
-            const float controlsStart = winW - std::floor(ImGui::GetFrameHeight() * 1.6f) * 3.0f - EditorTheme::Px(24.0f);
+            const float controlsStart = winW - EditorTheme::Px(24.0f);
             if (x > menusEnd && x + total < controlsStart) {
                 ImDrawList* dl = ImGui::GetWindowDrawList();
                 const float y = std::floor((toolbarH - fontH) * 0.5f);
@@ -231,9 +249,6 @@ void Draw(const EditorModuleHostAPI& host) {
             }
         }
 
-        // Custom window controls, right-aligned â€” the OS title bar is gone (Win32 custom frame,
-        // Window.cpp), so minimize / maximize-restore / close live here instead.
-        DrawWindowControls(host);
 
         ImGui::EndMenuBar();
     }
