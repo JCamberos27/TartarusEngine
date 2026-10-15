@@ -136,22 +136,26 @@ void ApplyGlassMaterials(ImGuiStyle& style) {
     // What floats: drawn solid here, glass once the compositor runs (GlassFallback otherwise).
     c[ImGuiCol_PopupBg]             = PopupSolid;
 
-    // Tabs sit on the strip as washes; the selected one is lit like a raised surface.
+    auto black = [](float a) { return Rgb(0x00, 0x00, 0x00, a); };
+    // Tabs, headers and selections are dark glass: they stand apart from the lighter panel and the
+    // white text on them gets the most contrast. Hover lifts with white, as everywhere.
     c[ImGuiCol_Tab]                 = clear;
     c[ImGuiCol_TabHovered]          = white(0.08f);
-    c[ImGuiCol_TabSelected]         = white(0.06f);
+    c[ImGuiCol_TabSelected]         = black(0.62f);
     c[ImGuiCol_TabDimmed]           = clear;
-    c[ImGuiCol_TabDimmedSelected]   = white(0.04f);
+    c[ImGuiCol_TabDimmedSelected]   = black(0.45f);
+    c[ImGuiCol_Header]              = black(0.55f); // a selected row
+    c[ImGuiCol_HeaderHovered]       = white(0.07f);
+    c[ImGuiCol_HeaderActive]        = black(0.70f);
+    c[ImGuiCol_TableHeaderBg]       = black(0.50f);
 
-    // Fields, buttons and headers lighten whatever is behind them instead of covering it.
-    c[ImGuiCol_FrameBg]             = white(0.045f);
-    c[ImGuiCol_FrameBgHovered]      = white(0.080f);
-    c[ImGuiCol_FrameBgActive]       = white(0.110f);
-    c[ImGuiCol_Button]              = white(0.060f);
-    c[ImGuiCol_ButtonHovered]       = white(0.110f);
-    c[ImGuiCol_ButtonActive]        = white(0.160f);
-    c[ImGuiCol_HeaderHovered]       = white(0.060f);
-    c[ImGuiCol_TableHeaderBg]       = white(0.050f);
+    // Fields sit in the glass as dark insets; buttons are dark glass that lifts under the pointer.
+    c[ImGuiCol_FrameBg]             = black(0.30f);
+    c[ImGuiCol_FrameBgHovered]      = black(0.40f);
+    c[ImGuiCol_FrameBgActive]       = black(0.50f);
+    c[ImGuiCol_Button]              = black(0.45f);
+    c[ImGuiCol_ButtonHovered]       = white(0.10f);
+    c[ImGuiCol_ButtonActive]        = black(0.65f);
     c[ImGuiCol_TableBorderLight]    = white(0.050f);
 
     // Hints and placeholders a step brighter than Tartarus's Dim: glass sits lighter than black.

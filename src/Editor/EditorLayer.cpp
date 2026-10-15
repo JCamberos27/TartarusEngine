@@ -53,6 +53,7 @@
 #include "ScreenBlur.h"
 #include "Framebuffer.h"
 #include "Glass/GlassEditorState.h" // m_Glass (complete type for ~EditorLayer)
+#include "Glass/GlassCompositor.h"   // LiftGreyText (grey text on glass)
 #include "Glass/GlassTheme.h"       // ConfigureMacEngineTheme (the opt-in Glass theme)
 
 #include <imgui.h>
@@ -411,8 +412,13 @@ void EditorLayer::ApplyThemeStyle() {
         const ImVec4 field(worstField, worstField, worstField, 1.0f);
         const ImVec4 panel = CompositeOver(style.Colors[ImGuiCol_WindowBg], field);
         AssertContrastFloor("Text vs glass panel", style.Colors[ImGuiCol_Text], panel, 4.5f, logGlassWarn);
-        AssertContrastFloor("Secondary vs glass panel", EditorTheme::Secondary, panel, 4.5f, logGlassWarn);
-        AssertContrastFloor("TextDisabled vs glass panel", style.Colors[ImGuiCol_TextDisabled], panel, 3.0f, logGlassWarn);
+        // Grey text is lifted on glass by the compositor (Glass::LiftGreyText).
+        const auto lifted = [](ImVec4 grey) {
+            const float v = (float)Glass::LiftGreyText((int)(grey.x * 255.0f + 0.5f)) / 255.0f;
+            return ImVec4(v, v, v, 1.0f);
+        };
+        AssertContrastFloor("Secondary vs glass panel", lifted(EditorTheme::Secondary), panel, 4.5f, logGlassWarn);
+        AssertContrastFloor("TextDisabled vs glass panel", lifted(style.Colors[ImGuiCol_TextDisabled]), panel, 3.0f, logGlassWarn);
         AssertContrastFloor("Text vs glass fallback", style.Colors[ImGuiCol_Text], Glass::GlassFallback, 4.5f, logGlassWarn);
         static const auto logGlassIconWarn = [](const char* msg) { Log::Warn(std::string("[Icons] ") + msg); };
         EditorIcons::AssertEditorIconsUnique(logGlassIconWarn);

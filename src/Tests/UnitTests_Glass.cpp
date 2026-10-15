@@ -186,17 +186,20 @@ void TestGlassifySolids() {
     dl.PushClipRect(ImVec2(0.0f, 0.0f), ImVec2(100.0f, 100.0f));
     const ImU32 black = IM_COL32(0, 0, 0, 255), raised = IM_COL32(0x0E, 0x0E, 0x0E, 255);
     const ImU32 pressed = IM_COL32(0x2A, 0x2A, 0x2A, 255), text = IM_COL32(0xE6, 0xE8, 0xE6, 255);
+    const ImU32 dim = IM_COL32(0x6A, 0x6C, 0x6A, 255);
     const ImU32 hue = IM_COL32(0x20, 0x08, 0x08, 255), veil = IM_COL32(0x0E, 0x0E, 0x0E, 128);
-    for (ImU32 c : {black, raised, pressed, text, hue, veil}) dl.AddRectFilled(ImVec2(0, 0), ImVec2(10, 10), c);
-    const int vtx = dl.VtxBuffer.Size / 6; // AddRectFilled without rounding: 4 vertices each
-    CHECK(Glass::GlassifySolids(&dl) == vtx * 3);
+    for (ImU32 c : {black, raised, pressed, text, hue, veil, dim}) dl.AddRectFilled(ImVec2(0, 0), ImVec2(10, 10), c);
+    const int vtx = dl.VtxBuffer.Size / 7; // AddRectFilled without rounding: 4 vertices each
+    CHECK(Glass::GlassifySolids(&dl) == vtx * 4); // black, raised, pressed and the grey text
     auto at = [&](int i) { return dl.VtxBuffer[i * vtx].col; };
-    CHECK(at(0) == IM_COL32(0, 0, 0, 90));                       // black: a light veil
-    const unsigned int aRaised = (at(1) >> IM_COL32_A_SHIFT) & 0xFF, aPressed = (at(2) >> IM_COL32_A_SHIFT) & 0xFF;
-    CHECK((at(1) & ~IM_COL32_A_MASK) == IM_COL32(255, 255, 255, 0) && aRaised > 0 && aRaised < aPressed && aPressed < 80);
-    CHECK(at(3) == text);                                        // text untouched
+    CHECK(at(0) == IM_COL32(0, 0, 0, 77));                       // black: a light inset veil
+    CHECK((at(1) & ~IM_COL32_A_MASK) == 0u && ((at(1) >> IM_COL32_A_SHIFT) & 0xFF) > 77u); // raised: dark glass
+    CHECK((at(2) & ~IM_COL32_A_MASK) == IM_COL32(255, 255, 255, 0)); // pressed / hairline: a white lift
+    CHECK(at(3) == text);                                        // primary text untouched
     CHECK(at(4) == hue);                                         // a colour with hue untouched
     CHECK(at(5) == veil);                                        // already translucent: untouched
+    const int up = Glass::LiftGreyText(0x6C) - 0x6C;             // grey text: lifted by its brightest channel
+    CHECK(up > 0 && at(6) == IM_COL32(0x6A + up, 0x6C + up, 0x6A + up, 255));
 }
 
 void TestGlassCompositorPose() {
