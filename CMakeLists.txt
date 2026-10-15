@@ -148,6 +148,22 @@ if(NOT imguizmo_POPULATED)
   FetchContent_Populate(imguizmo)
 endif()
 
+# --- ImAnim (tweens, springs and easing for Dear ImGui; the opt-in Glass editor theme) ---
+# Source only: one .cpp/.h pair compiled into the host (src/Editor/Glass/GlassMotion.cpp is its
+# only user). Its own CMakeLists builds a demo against every ImPlatform backend, and its
+# submodules (the demo's ImGui, ImPlatform, Sharpmake) are not needed, so they're not fetched.
+# Pinned to a commit on "main" (no tagged releases); upgrade alongside ImGui.
+FetchContent_Declare(
+  imanim
+  GIT_REPOSITORY https://github.com/soufianekhiat/ImAnim.git
+  GIT_TAG 1ea19a55a28d54acb7f7f22a617f969aec2a073e # main
+  GIT_SUBMODULES ""
+)
+FetchContent_GetProperties(imanim)
+if(NOT imanim_POPULATED)
+  FetchContent_Populate(imanim)
+endif()
+
 # --- meshoptimizer (triangle order for the GPU's post-transform vertex cache) ---
 # Source only: the engine compiles the files it uses (vertex cache optimizer, simplifier, vertex fetch, index generator, allocator)
 # rather than building the library target, whose install rules would land in the package.
@@ -374,6 +390,7 @@ set(IMGUI_SOURCES
   ${IMGUI_GLFW_BACKEND}
   ${IMGUI_GL3_BACKEND}
   ${imguizmo_SOURCE_DIR}/src/ImGuizmo.cpp
+  ${imanim_SOURCE_DIR}/im_anim.cpp
 )
 set(MESHOPT_SOURCES
   ${meshoptimizer_SOURCE_DIR}/src/allocator.cpp
@@ -552,6 +569,7 @@ target_include_directories(TartarusEngine PRIVATE
   ${imgui_SOURCE_DIR}
   ${imgui_SOURCE_DIR}/backends
   ${imguizmo_SOURCE_DIR}/src
+  ${imanim_SOURCE_DIR}
   ${meshoptimizer_SOURCE_DIR}/src
   ${recastnavigation_SOURCE_DIR}/Recast/Include
   ${recastnavigation_SOURCE_DIR}/Detour/Include

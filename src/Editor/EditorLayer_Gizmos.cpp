@@ -1954,6 +1954,7 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
         m_GizmoDragStartRot = transform.EulerDegrees();
         m_GizmoDragStartScale = transform.Scale;
     }
+    if (!isUsingNow && m_GizmoWasUsing && snapActive) GlassNotifySnap(); // Glass theme: the snap ring
     m_GizmoWasUsing = isUsingNow;
 
     if (isUsingNow) {
@@ -2716,6 +2717,7 @@ void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
             PushGizmoEditToPhysics(r.entity, newWorld); // #185
         }
     }
+    if (!isUsingNow && m_GizmoWasUsing && snapActive) GlassNotifySnap(); // Glass theme: the snap ring
     m_GizmoWasUsing = isUsingNow;
 
     EndGizmoOverlay();

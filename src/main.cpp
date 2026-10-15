@@ -1970,6 +1970,10 @@ int main(int argc, char** argv) {
                     else Log::Error("[SmokeTest] pre-skin: " + preSkinWhy);
                 }
 
+                // A smoke_glass* scene: the opt-in Glass editor theme on, drawn, then off (Tests/SmokeChecks.cpp).
+                if (smokeSceneActive && smokeScenePaths[smokeSceneIndex].find("smoke_glass") != std::string::npos)
+                    SmokeChecks::GlassTheme(editor, world, smokeFramesRendered);
+
                 // #176 - a smoke_prefab* scene: a Prefab Mode round trip (Tests/SmokeChecks.cpp).
                 if (smokeSceneActive && smokeFramesRendered == 15 &&
                     smokeScenePaths[smokeSceneIndex].find("smoke_prefab") != std::string::npos) {
@@ -4089,7 +4093,7 @@ int main(int argc, char** argv) {
                 }
 
                 Framebuffer::BindDefault(window.GetWidth(), window.GetHeight());
-                editor.SetSceneTexture(sceneFramebuffer.ColorTexture());
+                editor.SetSceneTexture(sceneFramebuffer.ColorTexture(), sceneFramebuffer.Width(), sceneFramebuffer.Height());
             }
 
             {

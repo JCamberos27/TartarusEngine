@@ -148,6 +148,14 @@ void EditorSettings::Load() {
     s.EngineMarkSpinSpeed = SafeValue(root, "engineMarkSpinSpeed", s.EngineMarkSpinSpeed);
     s.EngineMarkPrism = SafeValue(root, "engineMarkPrism", s.EngineMarkPrism);
     s.ReduceMotion = SafeValue(root, "reduceMotion", s.ReduceMotion);
+    // "glassTheme", not the retired "editorTheme": old prefs files still carry that key with
+    // values from the removed theme picker, and must not switch Glass on by accident.
+    s.EditorThemeId = std::clamp(SafeValue(root, "glassTheme", s.EditorThemeId), 0, 1);
+    s.GlassViewportHuds = SafeValue(root, "glassViewportHuds", s.GlassViewportHuds);
+    s.GlassFrostedBlur = SafeValue(root, "glassFrostedBlur", s.GlassFrostedBlur);
+    s.ShowGlassHierarchy = SafeValue(root, "showGlassHierarchy", s.ShowGlassHierarchy);
+    s.ShowGlassInspector = SafeValue(root, "showGlassInspector", s.ShowGlassInspector);
+    s.ShowGlassAssets = SafeValue(root, "showGlassAssets", s.ShowGlassAssets);
     s.DefaultLayoutPreset = SafeValue(root, "defaultLayoutPreset", s.DefaultLayoutPreset);
     s.ShowLightGizmos = SafeValue(root, "showLightGizmos", s.ShowLightGizmos);
     s.LightGizmoSelectedOnly = SafeValue(root, "lightGizmoSelectedOnly", s.LightGizmoSelectedOnly);
@@ -333,6 +341,12 @@ void EditorSettings::Flush() {
     root["engineMarkSpinSpeed"] = Get().EngineMarkSpinSpeed;
     root["engineMarkPrism"] = Get().EngineMarkPrism;
     root["reduceMotion"] = Get().ReduceMotion;
+    root["glassTheme"] = Get().EditorThemeId;
+    root["glassViewportHuds"] = Get().GlassViewportHuds;
+    root["glassFrostedBlur"] = Get().GlassFrostedBlur;
+    root["showGlassHierarchy"] = Get().ShowGlassHierarchy;
+    root["showGlassInspector"] = Get().ShowGlassInspector;
+    root["showGlassAssets"] = Get().ShowGlassAssets;
     root["defaultLayoutPreset"] = Get().DefaultLayoutPreset;
     root["showLightGizmos"] = Get().ShowLightGizmos;
     root["lightGizmoSelectedOnly"] = Get().LightGizmoSelectedOnly;

@@ -52,6 +52,8 @@
 #include "gl.h" // DrawEngineMark reads back a patch of the scene texture for its contrast-adaptive tint
 #include "ScreenBlur.h"
 #include "Framebuffer.h"
+#include "Glass/GlassEditorState.h" // m_Glass (complete type for ~EditorLayer)
+#include "Glass/GlassTheme.h"       // ConfigureMacEngineTheme (the opt-in Glass theme)
 
 #include <imgui.h>
 #include <imgui_internal.h> // DockBuilder* — only used once, to lay out the default dock tree on first run
@@ -265,6 +267,7 @@ void EditorLayer::Init(GLFWwindow* window) {
         gz.Colors[ImGuizmo::PLANE_Y] = ImVec4(0.95f, 0.78f, 0.25f, 0.00f);
         gz.Colors[ImGuizmo::PLANE_Z] = ImVec4(0.95f, 0.78f, 0.25f, 0.00f);
         gz.Colors[ImGuizmo::SELECTION] = EditorTheme::AccentBright; // a hovered / dragged handle
+        ApplyGizmoAccent(); // the Glass theme's accent instead, when it's selected
         // The in-use rotation arc: the palette's orange (Palette::Defaults) rather than
         // ImGuizmo's stock, so a live rotate reads as part of the same spectrum as the axes.
         gz.Colors[ImGuizmo::ROTATION_USING_BORDER] = EditorTheme::Rgb(0xF2, 0x99, 0x4A);
@@ -395,6 +398,27 @@ void EditorLayer::ApplyThemeStyle() {
     }
 
     ImGuiStyle& style = ImGui::GetStyle();
+    if (GlassThemeActive()) {
+        // The opt-in Glass theme (Preferences > General > Editor theme): a complete style of its
+        // own over ImGui's defaults, so nothing of the Tartarus metrics leaks into it.
+        style = ImGuiStyle();
+        ConfigureMacEngineTheme(style);
+        static const auto logGlassWarn = [](const char* msg) { Log::Warn(std::string("[Glass theme] ") + msg); };
+        using namespace EditorUIPrimitives;
+        // Floors against what the surfaces look like over the wallpaper (they're translucent).
+        const ImVec4 panel = Glass::CompositeOnWallpaper(Glass::SurfacePanel);
+        const ImVec4 raised = Glass::CompositeOnWallpaper(Glass::SurfaceRaised);
+        AssertContrastFloor("Text vs panel", Glass::TextPrimary, panel, 4.5f, logGlassWarn);
+        AssertContrastFloor("Secondary vs panel", Glass::TextSecondary, panel, 4.5f, logGlassWarn);
+        AssertContrastFloor("Tertiary vs panel", Glass::TextTertiary, panel, 3.0f, logGlassWarn);
+        AssertContrastFloor("Accent vs panel", Glass::Accent, panel, 3.0f, logGlassWarn);
+        AssertContrastFloor("Text vs card", Glass::TextPrimary, raised, 4.5f, logGlassWarn);
+        AssertContrastFloor("OnAccent vs Accent", Glass::OnAccent, Glass::Accent, 3.0f, logGlassWarn);
+        static const auto logGlassIconWarn = [](const char* msg) { Log::Warn(std::string("[Icons] ") + msg); };
+        EditorIcons::AssertEditorIconsUnique(logGlassIconWarn);
+        style.ScaleAllSizes(m_UIScale);
+        return;
+    }
     style = s_baseStyle;
     ApplyTartarusPalette(style);
 
@@ -506,6 +530,7 @@ void EditorLayer::FreeGpuResources() {
     ClearMaterialThumbnails(); // #107
     m_AssetThumbs.Clear();
     if (m_ThumbnailBlitFbo) { glDeleteFramebuffers(1, &m_ThumbnailBlitFbo); m_ThumbnailBlitFbo = 0; }
+    if (m_Glass) m_Glass->Backdrop.Release(); // the Glass theme's frosted-HUD blur chain
 }
 
 void EditorLayer::Shutdown() {
@@ -1145,7 +1170,8 @@ void EditorLayer::DrawSettingsWindow(World& world) {
     // finds the category holding it, not only a category whose own name matches. Keep these in
     // step with the category bodies below (labels plus the obvious synonyms).
     static const char* kEditorCatKeywords[] = {
-        "tooltips ui scale display dpi zoom text size fullscreen borderless exclusive monitor",
+        "tooltips ui scale display dpi zoom text size fullscreen borderless exclusive monitor "
+        "appearance editor theme glass tartarus macos frosted blur hud viewport overlays",
         "gizmo size transform gizmo vertex pick radius snap frame camera on select field of view fov "
         "fly speed near far clip plane game view maximize on play light gizmos opacity arrow disc "
         "scale selected light corner monogram engine mark spin speed prism reduce motion animation",
@@ -1243,6 +1269,31 @@ void EditorLayer::DrawSettingsWindow(World& world) {
         if (SettingsCheckbox("Show editor tooltips", &prefs.ShowTooltips)) EditorSettings::Save();
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Hover hints on Inspector fields, Hierarchy rows and toolbar buttons.");
+
+        EditorUIPrimitives::SectionHeader("Appearance");
+        {
+            static const char* kThemes[] = {"Tartarus", "Glass"};
+            int themeId = m_PendingThemeId >= 0 ? m_PendingThemeId : prefs.EditorThemeId;
+            SettingsLabel("Editor theme");
+            if (ImGui::Combo("##Editor theme", &themeId, kThemes, IM_ARRAYSIZE(kThemes))) RequestEditorTheme(themeId);
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Tartarus: the phosphor-terminal look (default).\n"
+                                     "Glass: a macOS-style theme with translucent panels, animated lists and\n"
+                                     "frosted viewport HUDs. It adds the Objects, Properties and Library panels\n"
+                                     "(Window \xE2\x96\xB8 Glass Workspace). Applies immediately.");
+        }
+        if (prefs.EditorThemeId == 1) {
+            if (SettingsCheckbox("Viewport HUDs", &prefs.GlassViewportHuds)) EditorSettings::Save();
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Floating glass cards over the Scene view: the selection, scene stats,\n"
+                                     "compile-error notifications and the snap indicator.");
+            if (!prefs.GlassViewportHuds) ImGui::BeginDisabled();
+            if (SettingsCheckbox("Frosted blur", &prefs.GlassFrostedBlur)) EditorSettings::Save();
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+                EditorUI::SetTooltip("Blur the scene behind the HUD cards (a small GPU compute pass each frame).\n"
+                                     "Off: the cards use a plain translucent tint.");
+            if (!prefs.GlassViewportHuds) ImGui::EndDisabled();
+        }
 
         EditorUIPrimitives::SectionHeader("Display");
         // 0 = auto (follow the monitor). Present the slider from 0.75; a value at/below the
@@ -2175,6 +2226,7 @@ void EditorLayer::DrawProjectSettingsBody(World& /*world*/) {
 }
 
 void EditorLayer::BeginFrame() {
+    ApplyPendingTheme(); // a theme switch from Preferences, between frames (never under a pushed style)
     ImGui_ImplOpenGL3_NewFrame();
     // Creating its device objects (first frame) leaves bindings at zero rather than restoring the
     // engine's (ImGuiGLHooks.cpp); the binding cache must not trust what it last bound.
@@ -2184,6 +2236,7 @@ void EditorLayer::BeginFrame() {
     ImGui::NewFrame();
     ImGuizmo::BeginFrame();
     ImViewGuizmo::BeginFrame();
+    GlassFrameBegin(); // Glass theme only: motion clock, wallpaper, notifications
 }
 
 void EditorLayer::EndFrame() {
@@ -2974,6 +3027,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         // EditorLayer_ToolPalette.cpp for why. Skipped for a clean capture, same as every other
         // viewport overlay.
         if (!m_HideOverlaysThisFrame) DrawToolPalette(world, editorCamera);
+        DrawGlassViewportOverlays(world); // Glass theme only: the frosted HUDs (skips clean captures itself)
     } else {
         m_ViewportPos = {0.0f, 0.0f};
         m_ViewportSize = {0.0f, 0.0f};
@@ -2982,6 +3036,8 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
 
     if (EditorSettings::Get().EngineMarkEnabled && !m_HideOverlaysThisFrame)
         DrawEngineMark(dt);
+
+    DrawGlassWorkspace(world, assets); // Glass theme only: Objects / Properties / Library (Window menu)
 
     // (Every editor panel's window is drawn by the reloadable editor module now — Console, the
     // Statistics HUD, the top toolbar, the Asset Browser, the Scene Hierarchy and the Inspector.
