@@ -32,9 +32,12 @@ constexpr ImVec4 Wallpaper       = Rgb(0x0E, 0x0E, 0x10); // the solid used for 
 // ImGui's gamma-space blend over the wallpaper lands on the linear-light result (see
 // LinearCorrectOver). Space greys after Apple's dark systemGray6/5/4.
 struct GlassSurface { ImVec4 tint; float opacity; };
-constexpr GlassSurface SurfacePanel   = {Rgb(0x1C, 0x1C, 0x1E), 0.80f}; // docked panels (WindowBg)
+// Panels and popups are only lightly translucent: a floating window (Preferences, the Animator, an
+// undocked panel) sits over other windows, and more see-through than this lets their text bleed
+// into its own. The glass effect proper is the frosted HUDs over the 3D view (SurfaceHud + blur).
+constexpr GlassSurface SurfacePanel   = {Rgb(0x1C, 0x1C, 0x1E), 0.94f}; // panels (WindowBg)
 constexpr GlassSurface SurfaceRaised  = {Rgb(0x2C, 0x2C, 0x2E), 0.74f}; // headers, cards, tabs
-constexpr GlassSurface SurfaceFloat   = {Rgb(0x26, 0x26, 0x29), 0.86f}; // popups, menus, tooltips
+constexpr GlassSurface SurfaceFloat   = {Rgb(0x26, 0x26, 0x29), 0.95f}; // popups, menus, tooltips
 constexpr GlassSurface SurfaceHud     = {Rgb(0x1E, 0x1E, 0x21), 0.58f}; // viewport HUDs, over the blur
 constexpr GlassSurface SurfaceTitle   = {Rgb(0x16, 0x16, 0x18), 0.90f}; // title / menu / status bars
 

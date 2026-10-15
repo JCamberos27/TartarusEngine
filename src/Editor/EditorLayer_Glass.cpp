@@ -1235,6 +1235,9 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
 
     // --- Selection card, bottom-right --------------------------------------------------------------
     float stackBottom = vMax.y - margin; // the stats pill sits above whatever is in this corner
+    // The engine mark (DrawEngineMark) owns the bottom-right corner: the HUD stack sits to its left.
+    const bool markShown = EditorSettings::Get().EngineMarkEnabled && m_MarkTexture != nullptr;
+    const float right = vMax.x - margin - (markShown ? 54.0f * m_UIScale + Glass::Px(Glass::Space1) : 0.0f);
     {
         const bool has = reg.valid(m_Selected);
         const ImGuiID presentId = ImGui::GetID("##hudSelPresent");
@@ -1250,7 +1253,7 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
             const auto* tf = reg.try_get<TransformComponent>(shown);
             const float w = Glass::Px(260.0f);
             const float h = pad * 2.0f + lineH * 2.0f + Glass::Px(Glass::SpaceHalf) + (tf ? lineH + Glass::Px(Glass::SpaceHalf) : 0.0f);
-            const ImRect rest(ImVec2(vMax.x - margin - w, vMax.y - margin - h), ImVec2(vMax.x - margin, vMax.y - margin));
+            const ImRect rest(ImVec2(right - w, vMax.y - margin - h), ImVec2(right, vMax.y - margin));
             const ImRect drawn = Scaled(rest, 0.96f + 0.04f * t, ImVec2(0.0f, Glass::Px(Glass::RevealRowShiftPx) * (1.0f - t)));
             ImGui::SetCursorScreenPos(rest.Min);
             bool hov = false, held = false;
@@ -1294,7 +1297,7 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
         std::snprintf(stats, sizeof(stats), "%d objects   %.0f fps   %.1f ms", objects, 1000.0f / ms, ms);
         const ImVec2 ts = ImGui::CalcTextSize(stats);
         const float h = lineH + Glass::Px(Glass::Space1) * 2.0f - Glass::Px(Glass::SpaceHalf);
-        const ImRect r(ImVec2(vMax.x - margin - ts.x - pad * 2.0f, stackBottom - h), ImVec2(vMax.x - margin, stackBottom));
+        const ImRect r(ImVec2(right - ts.x - pad * 2.0f, stackBottom - h), ImVec2(right, stackBottom));
         ImGui::SetCursorScreenPos(r.Min);
         bool hov = false, held = false;
         Glass::MotionButton(ImGui::GetID("##hudStats"), r, r, &hov, &held);

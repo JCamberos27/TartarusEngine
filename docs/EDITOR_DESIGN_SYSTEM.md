@@ -52,11 +52,15 @@ Each surface is specified the way a designer specifies one: a tint plus an opaci
 
 | Token | Tint | Opacity | Prepared RGBA | Used for |
 | --- | --- | --- | --- | --- |
-| `SurfacePanel` | `#1C1C1E` | 0.80 | `#1D1D1F` @ 0.80 | Docked panels (`WindowBg`, `ChildBg`) |
+| `SurfacePanel` | `#1C1C1E` | 0.94 | `#1C1C1E` @ 0.94 | Panels (`WindowBg`, `ChildBg`) |
 | `SurfaceRaised` | `#2C2C2E` | 0.74 | `#2F2F31` @ 0.74 | Headers, cards, tabs |
-| `SurfaceFloat` | `#262629` | 0.86 | `#27272A` @ 0.86 | Popups, menus, tooltips |
+| `SurfaceFloat` | `#262629` | 0.95 | `#262629` @ 0.95 | Popups, menus, tooltips |
 | `SurfaceHud` | `#1E1E21` | 0.58 | `#202023` @ 0.58 | Viewport HUDs, over the blur |
 | `SurfaceTitle` | `#161618` | 0.90 | `#161618` @ 0.90 | Title, menu and status bars |
+
+Panels and popups are only lightly translucent. A floating window sits over other windows, and
+anything more see-through lets their text bleed into its own. The glass effect proper is the
+frosted HUDs over the 3D view.
 
 Washes drawn *on* a surface are plain white at low alpha, so they lighten any surface by the same
 perceived step:

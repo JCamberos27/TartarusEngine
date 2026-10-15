@@ -4153,6 +4153,18 @@ int main(int argc, char** argv) {
                         }
                     }
                 }
+                if (!opt.editorShotDir.empty() && opt.editorShotGlass) {
+                    // --editor-shot-glass: keep the Glass Workspace tabs in front of the classic tabs that
+                    // share their dock nodes, in the views that are about those panels (the per-view focus
+                    // above, and windows appearing, would otherwise leave Hierarchy / Inspector / Console on top).
+                    const int glassStep = (editorShotFrame - 1) / kEditorShotFrames;
+                    const char* glassView = glassStep >= 0 && glassStep < (int)std::size(kEditorShots) ? kEditorShots[glassStep] : "";
+                    if (std::strcmp(glassView, "overview") == 0 || std::strcmp(glassView, "inspector") == 0)
+                        for (const char* title : {"###GlassHierarchy", "###GlassInspector", "###GlassAssets"})
+                            for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+                                if (std::strstr(w->Name, title) && w->DockNode && w->DockNode->TabBar)
+                                    w->DockNode->TabBar->NextSelectedTabId = w->TabId;
+                }
                 if (editorUIVisible) editor.Draw(world, assets, editorCamera, dt);
                 else if (playing && devKeys) editor.DrawPlayModeOverlays(world); // #185 — physics panel + HUD over maximized play
                 if (playing && devKeys && playUsesPlayer && npcDirector.Active() && devPanel.Open) {
