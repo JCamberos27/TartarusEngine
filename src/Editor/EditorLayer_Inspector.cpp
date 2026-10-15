@@ -4603,8 +4603,15 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
                 const float kBtnX = contentRight - kBtnW;
                 const float eyedropX = kBtnX - lcStyle.ItemSpacing.x - eyedropW;
                 const float colorEditRight = eyedropX - 4.0f; // EyedropperButton's own SameLine gap
-                ImGui::SetNextItemWidth(colorEditRight - ImGui::GetCursorPosX());
-                EditorUI::ColorEditLinear("##LightColor", &light->Color.x, ImGuiColorEditFlags_DisplayHex);
+                const float colorEditW = colorEditRight - ImGui::GetCursorPosX();
+                // At the default Inspector width the swatch, eyedropper and K leave the hex text a
+                // ~28px sliver ("#I"). Below what "#RRGGBB" needs, show the swatch alone; its
+                // picker popup still takes hex.
+                const float hexNeedW = ImGui::CalcTextSize("#DDDDDD").x + lcStyle.FramePadding.x * 2.0f +
+                                       lcStyle.ItemInnerSpacing.x + ImGui::GetFrameHeight();
+                ImGui::SetNextItemWidth(colorEditW);
+                EditorUI::ColorEditLinear("##LightColor", &light->Color.x,
+                                          ImGuiColorEditFlags_DisplayHex | (colorEditW < hexNeedW ? ImGuiColorEditFlags_NoInputs : 0));
                 if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
                 EyedropperButton(this, world, &light->Color);
                 ImGui::SameLine(kBtnX);

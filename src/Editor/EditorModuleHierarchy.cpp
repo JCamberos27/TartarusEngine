@@ -95,16 +95,19 @@ void Draw(const EditorModuleHostAPI& host) {
     const int newSortPacked = sortMode * 2 + (sortDesc ? 1 : 0);
     if (newSortPacked != sortPacked && host.SetHierarchySort) host.SetHierarchySort(newSortPacked);
 
+    // Applied after EndPanelToolbar: the toolbar pushes its own ID, and the rows' open/closed
+    // flags must be written with only the window's ID scope current, or they land on IDs no row
+    // ever reads and the buttons do nothing.
+    int expandRequest = -1; // -1 none, 1 expand, 0 collapse
     ImGui::SameLine();
-    if (EditorUIPrimitives::ActionButton(ICON_FA_ANGLES_DOWN, "Expand all", host.SetTooltip, false, ImVec2(iconW, iconW)) &&
-        host.HierarchyExpandAll)
-        host.HierarchyExpandAll(true);
+    if (EditorUIPrimitives::ActionButton(ICON_FA_ANGLES_DOWN, "Expand all", host.SetTooltip, false, ImVec2(iconW, iconW)))
+        expandRequest = 1;
     ImGui::SameLine();
-    if (EditorUIPrimitives::ActionButton(ICON_FA_ANGLES_UP, "Collapse all", host.SetTooltip, false, ImVec2(iconW, iconW)) &&
-        host.HierarchyExpandAll)
-        host.HierarchyExpandAll(false);
+    if (EditorUIPrimitives::ActionButton(ICON_FA_ANGLES_UP, "Collapse all", host.SetTooltip, false, ImVec2(iconW, iconW)))
+        expandRequest = 0;
     ImGui::PopStyleVar();
     EditorUIPrimitives::EndPanelToolbar();
+    if (expandRequest >= 0 && host.HierarchyExpandAll) host.HierarchyExpandAll(expandRequest == 1);
 
     // Editor Enhancers / vHierarchy: scene selector, Back/Forward, bookmark chips (API v39).
     if (host.DrawHierarchyNavBar) host.DrawHierarchyNavBar();

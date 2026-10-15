@@ -1377,13 +1377,15 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
     const float miniRight = rowMax.x - rowIconsBandW - EditorTheme::Px(2.0f);
     const float miniLeft = miniRight - miniW;
     const float mouseX = ImGui::GetIO().MousePos.x;
-    const bool overMinimap = rowHovered && miniCount > 0 && mouseX >= miniLeft && mouseX < miniRight;
-    const bool overRowIcons = rowHovered && (mouseX > rowMax.x - rowIconsBandW || overMinimap);
     int hoveredMini = -1; // index into miniIdx, or miniCount for the "+N" chip
-    if (overMinimap) {
+    if (rowHovered && miniCount > 0 && mouseX >= miniLeft && mouseX < miniRight) {
         const float rel = mouseX - (miniLeft + EditorTheme::Px(4.0f));
         hoveredMini = rel < 0.0f ? -1 : std::min((int)(rel / miniCellW), miniCount);
     }
+    // Only an actual icon (or the "+N" chip) counts: the strip's leading padding used to count as
+    // "over the minimap", which carved a dead zone out of the row where a click did nothing.
+    const bool overMinimap = hoveredMini >= 0;
+    const bool overRowIcons = rowHovered && (mouseX > rowMax.x - rowIconsBandW || overMinimap);
     if (rowHovered) m_HierarchyHoverEntity = entity; // hover keys act on this row
 
     if (ImGui::IsItemClicked() && clickOnArrow) {
