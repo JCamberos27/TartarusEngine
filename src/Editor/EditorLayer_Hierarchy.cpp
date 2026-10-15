@@ -530,6 +530,8 @@ void EditorLayer::SelectHierarchyRange(World& world, entt::entity target, bool a
 }
 
 void EditorLayer::DeleteSelection(World& world) {
+    // Nothing selected: no empty undo entry, no "Deleted 0 objects" log.
+    if (!HasAnySelection()) return;
     PushUndo(world, "Delete");
 
     // entt::entity handles don't shift when another entity is destroyed (unlike the vector
@@ -1203,6 +1205,9 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
             ImGui::SetKeyboardFocusHere();
             snprintf(m_EntityRenameBuffer, sizeof(m_EntityRenameBuffer), "%s", name.Name.c_str());
             m_EntityRenameJustStarted = false;
+        } else if (m_EntityRenameRefocus) {
+            ImGui::SetKeyboardFocusHere();
+            m_EntityRenameRefocus = false;
         }
         bool submitted = ImGui::InputText("##Rename", m_EntityRenameBuffer, sizeof(m_EntityRenameBuffer),
                 ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
@@ -1220,6 +1225,8 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
                 // still in it and flash an inline error instead of committing or closing.
                 rejected = true;
                 m_EntityRenameRejectedFlash = 1.6f;
+                m_EntityRenameRefocus = true; // Enter took focus off the field; give it back
+
             } else {
                 PushUndo(world, "Rename");
                 name.Name = sanitized;
