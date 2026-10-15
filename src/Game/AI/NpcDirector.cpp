@@ -502,13 +502,11 @@ int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
     const float bodyMs = since();
     n->Cct = PhysicsWorld::CreateNpcCharacter(Id(root), spawn.Radius, spawn.StandCylinder, &feet.x);
     n->Agent = m_Crowd.Add(feet, spawn.AgentRadius, spawn.AgentHeight, spawn.JogSpeed);
-    auto& scripts=reg.get_or_emplace<CSharpScriptComponent>(root);
-    auto slots=Scripting::GetSlots(scripts);std::string healthFields;
-    for(const auto& slot:slots)if(slot.Class=="Tartarus.Gameplay.Health" && slot.Enabled){healthFields=slot.Fields;break;}
-    if(healthFields.empty()){Scripting::Attach(scripts,"assets/Scripts/Health.cs","Tartarus.Gameplay.Health");healthFields="{}";}
-    std::string resolved,state;
-    if(!Scripting::ResolveScriptFields("Tartarus.Gameplay.Health",healthFields,resolved) || !Scripting::RequestProject("health.create",nlohmann::json{{"entity",Id(root)},{"fields",nlohmann::json::parse(resolved)}}.dump(),state))throw std::runtime_error("Project health unavailable");
-    const auto health=nlohmann::json::parse(state);n->Health=health.at("Current").get<float>();n->MaxHealth=health.at("Max").get<float>();
+    // The soldier prefab's Health (Max, Invulnerable) when it has one; 100 otherwise.
+    auto& health = reg.get_or_emplace<HealthComponent>(root);
+    health.Max = std::clamp(health.Max, 1.0f, 100000.0f);
+    health.Current = health.Max;
+    n->Health = n->MaxHealth = health.Max;
 
     // The weapon: the player's own, on a camera at the soldier's eyes.
     const int weapon=spawn.Weapon;
@@ -554,7 +552,6 @@ int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
 }
 
 void NpcDirector::Despawn(World& world, Npc& n, bool keepBody) {
-    std::string healthResult;Scripting::RequestProject("health.remove",nlohmann::json{{"entity",Id(n.Root)}}.dump(),healthResult);
     m_Cover.Release(n.Index, m_Now);
     n.Hitboxes.reset();
     n.Ragdoll.reset();
@@ -612,9 +609,11 @@ void NpcDirector::Think(World& world, AssetLibrary& assets, float dt, const Play
     bool anyoneSees = false;
     for (auto& up : m_Npcs) {
         if (!up || up->Dead) continue;
-        Scripting::NpcDamageFrame health;health.Operation=2;health.UseHealth=1;health.Entity=(int)Id(up->Root);
-        if(!Scripting::InvokeProject("npc.damage",&health,sizeof health))throw std::runtime_error("Project health snapshot unavailable");
-        if(!health.Ignore){up->Health=health.Health;up->MaxHealth=health.MaxHealth;if(health.Kill){Kill(world,*up,{0,0,1},up->Feet,0);continue;}}
+        // Health is the soldier's Health component: something else (the dev panel, a script) may have changed it.
+        if (const auto* h = world.Registry.try_get<HealthComponent>(up->Root)) {
+            up->Health = h->Current; up->MaxHealth = h->Max;
+            if (h->Current <= 0.0f) { Kill(world, *up, {0, 0, 1}, up->Feet, 0); continue; }
+        }
         SubTimer timer(*this, SubPerceive);
         Perceive(world, *up, p, dt);
         anyoneSees = anyoneSees || up->Mem.Visible;
@@ -1109,29 +1108,63 @@ void NpcDirector::OnPlayerShotLine(const glm::vec3& origin, const glm::vec3& end
 
 void NpcDirector::ApplyDamage(World& world, Npc& n, float amount, HitZone zone, const glm::vec3& point, const glm::vec3& dir, int attacker,
                               int part) {
-    Scripting::NpcDamageFrame f;
-    auto pack=[](const glm::vec3& v){return Scripting::Vec3{v.x,v.y,v.z};};
-    auto unpack=[](const Scripting::Vec3& v){return glm::vec3(v.x,v.y,v.z);};
-    f.Now=m_Now;f.Amount=amount;f.Health=n.Health;f.MaxHealth=n.MaxHealth;f.LastHurt=n.LastHurt;f.Suppression=n.Suppression;
-    f.TimeOnTarget=n.TimeOnTarget;f.Awareness=n.Mem.Awareness;f.LastSeen=n.Mem.LastSeen;f.Uncertainty=n.Mem.Uncertainty;
-    f.ReactionLeft=n.ReactionLeft;f.LimpUntil=n.LimpUntil;f.StaggerUntil=n.StaggerUntil;f.NextThink=n.NextThink;
-    f.LimpTime=m_Cfg.LimpTime;f.HeavyHitDamage=m_Cfg.HeavyHitDamage;f.StaggerTime=m_Cfg.StaggerTime;f.WoundChance=m_WoundChance;
-    f.UseHealth=1;f.Entity=(int)Id(n.Root);f.Dead=n.Dead;f.Wounded=n.Wounded;f.Attacker=attacker;f.Zone=static_cast<int>(zone);f.Part=part;f.Hits=n.Hits;
-    f.Known=n.Mem.Known;f.Visible=n.Mem.Visible;f.WoundRolled=n.WoundRolled;f.Dummy=n.Dummy;
-    f.Direction=pack(dir);f.LastHurtFrom=pack(n.LastHurtFrom);f.LastKnown=pack(n.Mem.LastKnown);f.PlayerFeet=pack(m_Player.Feet);f.PushVelocity=pack(n.PushVel);
-    auto invoke=[&](int operation){f.Operation=operation;if(!Scripting::InvokeProject("npc.damage",&f,sizeof f))throw std::runtime_error("Project NPC damage rules unavailable");};
-    invoke(0);if(f.Ignore)return;
-    if(f.NeedRandom) {f.Random=std::uniform_real_distribution<float>(0,1)(m_Rng);invoke(1);}
-    n.Health=f.Health;n.LastHurt=f.LastHurt;n.LastHurtFrom=unpack(f.LastHurtFrom);n.Hits=f.Hits;n.Suppression=f.Suppression;n.TimeOnTarget=f.TimeOnTarget;
-    n.Mem.Known=f.Known!=0;n.Mem.Awareness=f.Awareness;n.Mem.LastKnown=unpack(f.LastKnown);n.Mem.LastSeen=f.LastSeen;n.Mem.Uncertainty=f.Uncertainty;
-    n.ReactionLeft=f.ReactionLeft;n.LimpUntil=f.LimpUntil;n.StaggerUntil=f.StaggerUntil;n.NextThink=f.NextThink;n.PushVel=unpack(f.PushVelocity);n.WoundRolled=f.WoundRolled!=0;
-    if(f.Kill) {Kill(world,n,dir,point,f.Shove,part);return;}
-    if(f.Flinch) {
-        n.Body.Flinch(world,dir,&point,part);
-        if(m_RagdollCfg.HitFlinch && part>=0)m_Flinch[n.Index].Hit(n.Body,part,dir,amount,m_Now,m_RagdollCfg);
+    if (n.Dead || amount <= 0.0f) return;
+    // Its Health component holds the hit points (and may make it invulnerable: the hit registers, nothing else).
+    auto* health = world.Registry.try_get<HealthComponent>(n.Root);
+    if (health) {
+        if (health->Invulnerable) return;
+        n.Health = health->Current;
+        n.MaxHealth = health->Max;
     }
-    if(f.BecomeWounded)BecomeWounded(n);
-    if(f.CallWounded)Callout(n,CallKind::Wounded);
+    const bool wasWounded = n.Wounded;
+    // The finer region: from the bone when the hitboxes answered, else from the zone (the capsule's lower half is legs).
+    const HitRegion region = part >= 0 ? RegionFromPart(part)
+                             : zone == HitZone::Head ? HitRegion::Head
+                             : zone == HitZone::Limb ? HitRegion::Leg
+                                                     : HitRegion::Torso;
+    n.Health -= amount;
+    n.LastHurt = m_Now;
+    n.LastHurtFrom = -dir;
+    ++n.Hits;
+    if (health) health->Current = std::max(0.0f, n.Health);
+    n.Suppression = std::min(1.0f, n.Suppression + 0.5f);
+    n.TimeOnTarget *= 0.3f;
+    if (attacker < 0) {
+        // Shot by the player: now it knows where from.
+        const bool was = n.Mem.Known;
+        n.Mem.Known = true;
+        n.Mem.Awareness = 1.0f;
+        if (!n.Mem.Visible) {
+            n.Mem.LastKnown = m_Player.Feet;
+            n.Mem.LastSeen = m_Now;
+            n.Mem.Uncertainty = 1.5f;
+        }
+        if (!was) n.ReactionLeft = std::max(n.ReactionLeft, 0.35f);
+    }
+    // Dead: out of health, a head shot that is enough, or hit again while already down.
+    if (n.Health <= 0.0f || (zone == HitZone::Head && attacker < 0 && amount >= 60.0f) || (wasWounded && attacker < 0)) {
+        Kill(world, n, dir, point, 30.0f + 0.4f * amount, part);
+        return;
+    }
+    // It flinches the way it was hit (where it was hit), and a leg hit leaves it limping.
+    n.Body.Flinch(world, dir, &point, part);
+    if (m_RagdollCfg.HitFlinch && part >= 0) m_Flinch[n.Index].Hit(n.Body, part, dir, amount, m_Now, m_RagdollCfg); // a kick on the struck region
+    n.NextThink = std::min(n.NextThink, m_Now); // rethink now
+    if (region == HitRegion::Leg) n.LimpUntil = m_Now + m_Cfg.LimpTime;
+    if (attacker < 0 && amount >= m_Cfg.HeavyHitDamage) {
+        // A heavy hit: a beat of aim lost, and a small shove back along the round.
+        n.StaggerUntil = m_Now + m_Cfg.StaggerTime;
+        n.ReactionLeft = std::max(n.ReactionLeft, m_Cfg.StaggerTime);
+        const glm::vec3 flat(dir.x, 0.0f, dir.z);
+        if (glm::dot(flat, flat) > 1e-6f) n.PushVel += glm::normalize(flat) * 1.8f;
+        if (glm::length(n.PushVel) > 2.5f) n.PushVel = glm::normalize(n.PushVel) * 2.5f;
+    }
+    // Close to death from a leg or the body: it may go down wounded instead of fighting on (once a life).
+    if (attacker < 0 && !n.Dummy && !n.WoundRolled && n.Health < 0.2f * n.MaxHealth && (region == HitRegion::Leg || region == HitRegion::Torso)) {
+        n.WoundRolled = true;
+        if (std::uniform_real_distribution<float>(0.0f, 1.0f)(m_Rng) < m_WoundChance) BecomeWounded(n);
+    }
+    if (n.Health < 0.35f * n.MaxHealth && !n.Wounded) Callout(n, CallKind::Wounded);
 }
 
 void NpcDirector::BecomeWounded(Npc& n) {
@@ -1148,11 +1181,10 @@ void NpcDirector::BecomeWounded(Npc& n) {
 }
 
 void NpcDirector::Kill(World& world, Npc& n, const glm::vec3& dir, const glm::vec3& point, float shove, int part) {
-    (void)world;
     if (n.Dead) return;
     n.Dead = true;
     n.Wounded = false;
-    std::string healthResult;Scripting::RequestProject("health.kill",nlohmann::json{{"entity",Id(n.Root)}}.dump(),healthResult);
+    if (auto* h = world.Registry.try_get<HealthComponent>(n.Root)) h->Current = 0.0f;
     n.Health = 0.0f;
     n.DiedAt = m_Now;
     n.Doing = Behaviour::Dead;

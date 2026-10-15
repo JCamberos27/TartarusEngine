@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <cctype>
 #include <cstring>
-#include <limits>
 #include <stdexcept>
 
 namespace Scripting {
@@ -25,6 +24,7 @@ constexpr Definition kDefinitions[]={
     {"Tartarus.Gameplay.MuzzleAttachment","Muzzle Attachment"},
     {"Tartarus.Gameplay.GripAttachment","Grip Attachment"},
     {"Tartarus.Gameplay.OpticAttachment","Optic Attachment"},
+    {"Tartarus.Gameplay.Health","Health"},
 };
 // C# field names that are not the native label with its spaces taken out.
 constexpr std::pair<const char*,const char*> kRenamed[]={
@@ -115,40 +115,6 @@ bool ConvertScriptDefinitions(Json& entity) {
     const bool primary=!script.value("Class",std::string{}).empty() || script.contains("Source");
     if(!primary && kept.empty())entity.erase("C# Script");
     else script["Scripts"]=kept.dump();
-    return true;
-}
-
-bool MigrateLegacyProjectComponents(Json& entity) {
-    if(!entity.contains("Health"))return false;
-    const auto& legacy=entity.at("Health");Json fields=Json::object();
-    for(const auto& [key,value]:legacy.items()) {
-        std::string name=key;name.erase(std::remove(name.begin(),name.end(),' '),name.end());
-        if(name.size()>4 && name.compare(name.size()-4,4,"Guid")==0)continue;
-        fields[name]=value;
-    }
-    const std::string type="Tartarus.Gameplay.Health";
-    const std::string source="assets/Scripts/Health.cs";
-    auto script=entity.value("C# Script",Json::object());
-    auto extra=Json::parse(script.value("Scripts",std::string("[]")));
-    if(!extra.is_array())throw std::runtime_error("C# Scripts must be an array");
-    bool found=false;
-    auto merge=[&](Json& current) {for(const auto& [key,value]:fields.items())if(!current.contains(key))current[key]=value;found=true;};
-    if(script.value("Class",std::string{})==type) {auto current=Json::parse(script.value("Fields JSON",std::string("{}")));merge(current);script["Fields JSON"]=current.dump();}
-    for(auto& slot:extra)if(slot.value("class",std::string{})==type)merge(slot["fields"]);
-    if(!found && !entity.contains("C# Script")) {
-        script["Class"]=type;script["Source"]=source;script["Fields JSON"]=fields.dump();script["Enabled"]=true;
-        script["Next Script ID"]=std::max(1,script.value("Next Script ID",0));
-    } else if(!found) {
-        int id=std::max(1,script.value("Next Script ID",1));
-        for(const auto& slot:extra) {
-            const int previous=slot.at("id").get<int>();
-            if(previous<1 || previous>=std::numeric_limits<int>::max())throw std::runtime_error("Invalid C# script slot ID");
-            id=std::max(id,previous+1);
-        }
-        if(id==std::numeric_limits<int>::max())throw std::runtime_error("Too many C# script slots");
-        extra.push_back({{"id",id},{"source",source},{"class",type},{"fields",fields},{"enabled",true}});script["Next Script ID"]=id+1;
-    }
-    script["Scripts"]=extra.dump();entity["C# Script"]=std::move(script);entity.erase("Health");
     return true;
 }
 }

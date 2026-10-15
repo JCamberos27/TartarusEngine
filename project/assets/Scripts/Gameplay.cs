@@ -18,10 +18,5 @@ public sealed class Gameplay : IProjectIntegration
         default:return GameIntegration.Invoke(operation,frame,size);
         }
     }
-    public string SaveState()=>System.Text.Json.JsonSerializer.Serialize(new {health=HealthRules.Save()});
-    public void LoadState(string json) {
-        using var doc=System.Text.Json.JsonDocument.Parse(json);
-        if(doc.RootElement.TryGetProperty("health",out var health))HealthRules.Load(health.GetString()!);
-    }
     public string Request(string operation,string json) => GameIntegration.Request(operation,json);
 }
