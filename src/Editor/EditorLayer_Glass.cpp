@@ -346,11 +346,11 @@ void EditorLayer::ApplyPendingTheme() {
 }
 
 void EditorLayer::SetGlassThemeForTest(bool on) {
-    struct Saved { int Theme; bool Huds, Blur, Objects, Properties, Library; };
-    static Saved s_Saved = {0, true, true, false, false, false};
+    struct Saved { bool Huds, Blur, Objects, Properties, Library; };
+    static Saved s_Saved = {true, true, false, false, false};
     EditorSettings& p = EditorSettings::Get();
     if (on) {
-        s_Saved = {p.EditorThemeId, p.GlassViewportHuds, p.GlassFrostedBlur, p.ShowGlassHierarchy, p.ShowGlassInspector, p.ShowGlassAssets};
+        s_Saved = {p.GlassViewportHuds, p.GlassFrostedBlur, p.ShowGlassHierarchy, p.ShowGlassInspector, p.ShowGlassAssets};
         p.GlassViewportHuds = p.GlassFrostedBlur = true;
         p.ShowGlassHierarchy = p.ShowGlassInspector = p.ShowGlassAssets = true;
         m_PendingThemeId = 1;
@@ -360,7 +360,10 @@ void EditorLayer::SetGlassThemeForTest(bool on) {
         p.ShowGlassHierarchy = s_Saved.Objects;
         p.ShowGlassInspector = s_Saved.Properties;
         p.ShowGlassAssets = s_Saved.Library;
-        m_PendingThemeId = s_Saved.Theme;
+        // Always back to Tartarus, even when the user's own prefs have Glass selected: the smoke
+        // check is "switching off releases everything", which restoring "on" would never test.
+        // A headless run never writes prefs, so the user's saved choice is untouched.
+        m_PendingThemeId = 0;
     }
 }
 
