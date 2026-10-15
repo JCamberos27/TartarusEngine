@@ -345,12 +345,20 @@ Query ByTag(std::string tag) { Query q; q.Tag = std::move(tag); return q; }
 Query RightEnd(Query q) { q.AnchorX = 0.97f; return q; }
 Query ByTagPrefix(std::string prefix) { Query q; q.TagPrefix = std::move(prefix); return q; }
 
+// Some widgets never report their label to the hooks (the pinned ImGui's BeginCombo has no
+// ITEM_INFO), so a combo can't be found by label. Such an unlabelled item still matches `label`
+// when its ID is `label` hashed in its window's own ID scope (nothing extra pushed).
+bool UnlabelledIdMatches(const UiItem& it, const std::string& label) {
+    if (!it.Label.empty()) return false;
+    const ImGuiWindow* w = ImGui::FindWindowByName(it.Window.c_str());
+    return w && it.Id == ImHashStr(label.c_str(), 0, w->ID);
+}
 std::vector<const UiItem*> FindAll(const Query& q) {
     std::vector<const UiItem*> out;
     for (const UiItem& it : g_Reg.Last) {
         if (!q.Tag.empty() && it.Tag != q.Tag) continue;
         if (!q.TagPrefix.empty() && it.Tag.compare(0, q.TagPrefix.size(), q.TagPrefix) != 0) continue;
-        if (!q.Exact.empty() && it.Label != q.Exact) continue;
+        if (!q.Exact.empty() && it.Label != q.Exact && !UnlabelledIdMatches(it, q.Exact)) continue;
         if (!q.Label.empty() && !Contains(Visible(it.Label), q.Label)) continue;
         if (!q.Root.empty() && !Contains(it.Root, q.Root)) continue;
         if (q.Pred && !q.Pred(it)) continue;
@@ -1123,7 +1131,15 @@ void RegisterTests() {
             const auto& s = Enhancers::TabState::Get().Inspector;
             return s.Tabs.size() == 2 && s.Tabs[0].Label == "Gamma" && s.Active == 0;
         }),
-        Click(ByExact("##tab", kInspector, 2), 0, 2), Wait(3), // the third "##tab" is the second pinned tab
+        // Middle-click a tab that is actually on screen: at the default layout width the strip only
+        // fits the active tab, and the others are scrolled out of view (their items still exist).
+        Click([] {
+            Query q = ByExact("##tab", kInspector);
+            q.Pred = [](const UiItem& it) {
+                return it.Rect.Min.x >= it.Clip.Min.x && it.Rect.Max.x <= it.Clip.Max.x && it.Rect.GetWidth() > 8.0f;
+            };
+            return q;
+        }(), 0, 2), Wait(3),
         ExpectTrue("middle-click closed it", [](Ctx&) { return Enhancers::TabState::Get().Inspector.Tabs.size() == 1; }),
         ExpectTrue("no undo entries from tab use", [](Ctx& c) { return (double)X::UndoDepth(c.E) == g_Number; }),
     });
