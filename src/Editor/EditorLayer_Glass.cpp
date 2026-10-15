@@ -771,8 +771,14 @@ void EditorLayer::DrawGlassInspector(World& world, AssetLibrary& assets) {
             if (Glass::BeginReveal(ImGui::GetID("body"), open, wasOpen)) {
                 ImGui::Dummy(ImVec2(0.0f, Glass::Px(Glass::SpaceHalf)));
                 ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(Glass::Px(Glass::SpaceHalf), Glass::Px(2.0f)));
-                if (ImGui::BeginTable("##xyz", 4, ImGuiTableFlags_NoSavedSettings | ImGuiTableFlags_NoPadOuterX)) {
-                    ImGui::TableSetupColumn("##label", ImGuiTableColumnFlags_WidthFixed, Glass::Px(72.0f));
+                // Label | X | Y | Z on one line when the fields get room for their numbers; in a narrow
+                // panel the label goes on its own line above the three fields instead.
+                const float labelW = ImGui::CalcTextSize("Rotation").x + Glass::Px(Glass::Space1);
+                const float cellPadX = Glass::Px(Glass::SpaceHalf) * 2.0f;
+                const float fieldW = (ImGui::GetContentRegionAvail().x - labelW) / 3.0f - cellPadX;
+                const bool stacked = fieldW < Glass::Px(76.0f);
+                if (ImGui::BeginTable("##xyz", stacked ? 3 : 4, ImGuiTableFlags_NoSavedSettings | ImGuiTableFlags_NoPadOuterX)) {
+                    if (!stacked) ImGui::TableSetupColumn("##label", ImGuiTableColumnFlags_WidthFixed, labelW);
                     ImGui::TableSetupColumn("X", ImGuiTableColumnFlags_WidthStretch);
                     ImGui::TableSetupColumn("Y", ImGuiTableColumnFlags_WidthStretch);
                     ImGui::TableSetupColumn("Z", ImGuiTableColumnFlags_WidthStretch);
@@ -783,20 +789,25 @@ void EditorLayer::DrawGlassInspector(World& world, AssetLibrary& assets) {
                                             {"Scale", &tf->Scale, 0.05f, "Scale"}};
                     const ImVec4 axis[3] = {Glass::AxisX, Glass::AxisY, Glass::AxisZ};
                     for (int r = 0; r < 3; ++r) {
-                        ImGui::TableNextRow(ImGuiTableRowFlags_None, ImGui::GetFrameHeight());
                         ImGui::PushID(r);
+                        // Stacked: the label is a row of its own above the fields (same cascade step,
+                        // so the two settle together); otherwise it's the first column.
+                        if (stacked) ImGui::TableNextRow();
+                        else ImGui::TableNextRow(ImGuiTableRowFlags_None, ImGui::GetFrameHeight());
                         {
                             ImGui::TableSetColumnIndex(0);
                             Glass::RevealRow cascade(r);
-                            ImGui::AlignTextToFramePadding();
+                            if (!stacked) ImGui::AlignTextToFramePadding();
                             ImGui::PushStyleColor(ImGuiCol_Text, Glass::TextSecondary);
                             ImGui::TextUnformatted(rows[r].label);
                             ImGui::PopStyleColor();
                         }
+                        if (stacked) ImGui::TableNextRow(ImGuiTableRowFlags_None, ImGui::GetFrameHeight());
+                        const int firstField = stacked ? 0 : 1;
                         const glm::vec3 before = *rows[r].v;
                         bool activated = false, committed = false;
                         for (int a = 0; a < 3; ++a) {
-                            ImGui::TableSetColumnIndex(a + 1);
+                            ImGui::TableSetColumnIndex(a + firstField);
                             Glass::RevealRow cascade(r);
                             ImGui::PushID(a);
                             float& value = (*rows[r].v)[a];
@@ -1004,9 +1015,12 @@ void EditorLayer::DrawGlassLibrary(World& world, AssetLibrary& assets) {
         ImGui::TextUnformatted(m_AssetSearchFilter.empty() ? "This folder is empty" : "No matches");
         ImGui::PopStyleColor();
     } else {
-        const float tileW = Glass::Px(104.0f);
-        const float thumb = tileW - Glass::Px(Glass::Space2) * 2.0f;
+        // Tiles shrink (thumbnail 72 down to 32 px) so at least one whole row, names included,
+        // fits a short panel: a Library docked in a low strip still shows what each tile is.
         const float labelH = ImGui::GetTextLineHeight() + Glass::Px(Glass::Space1);
+        const float chromeH = Glass::Px(Glass::Space1) + Glass::Px(Glass::SpaceHalf) + labelH + Glass::Px(Glass::SpaceHalf) * 2.0f;
+        const float thumb = std::clamp(ImGui::GetContentRegionAvail().y - chromeH, Glass::Px(32.0f), Glass::Px(72.0f));
+        const float tileW = std::max(thumb + Glass::Px(Glass::Space2) * 2.0f, Glass::Px(88.0f));
         const float tileH = Glass::Px(Glass::Space1) + thumb + Glass::Px(Glass::SpaceHalf) + labelH;
         const float gapX = Glass::Px(Glass::Space1);
         const float avail = ImGui::GetContentRegionAvail().x;
