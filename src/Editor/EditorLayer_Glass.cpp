@@ -816,7 +816,7 @@ void EditorLayer::DrawGlassInspector(World& world, AssetLibrary& assets) {
                             ImGui::SetNextItemWidth(-FLT_MIN);
                             // Room on the left of the number for the axis bar.
                             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
-                                                ImVec2(Glass::Px(Glass::Space1h), ImGui::GetStyle().FramePadding.y));
+                                                ImVec2(Glass::Px(Glass::Space2), ImGui::GetStyle().FramePadding.y));
                             const bool changed = ImGui::DragFloat("##v", &value, rows[r].speed, 0.0f, 0.0f, "%.3f");
                             ImGui::PopStyleVar();
                             if (ImGui::IsItemActivated()) activated = true;
