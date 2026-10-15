@@ -564,6 +564,8 @@ int main(int argc, char** argv) {
         // structurally always 0 in a Release run and the harness only checks "did it draw".
         // Set before the Window exists: it decides whether to request a debug context (#157).
         if (opt.smokeTestMode && !opt.perfBenchMode) GLDebug::ForceEnable();
+        // --editor-tests fails a test on any GL debug error, so it needs the debug output too.
+        if (opt.editorTestsMode) GLDebug::ForceEnable();
         // Black Glass's see-through window: the editor only (never a player build or a headless or
         // screenshot run, whose frames must stay opaque). TARTARUS_SEE_THROUGH=1 forces it for a
         // screenshot run so its alpha can be checked.
@@ -1097,7 +1099,16 @@ int main(int argc, char** argv) {
                 glfwSetWindowSize(window.Handle(), opt.perfResW > 0 ? opt.perfResW : 1920, opt.perfResW > 0 ? opt.perfResH : 1080);
             }
             // --editor-tests: hidden, so the desktop's real mouse and keyboard never reach it.
-            if (opt.editorTestsMode) glfwHideWindow(window.Handle());
+            // TARTARUS_EDITOR_TEST_SHOW=1 keeps it shown (CI, where nobody is at the desktop): the
+            // harness drops OS input either way, and a shown window's back buffer is always defined
+            // for its screenshots.
+            if (opt.editorTestsMode) {
+                char* show = nullptr;
+                size_t showLen = 0;
+                const bool keepShown = _dupenv_s(&show, &showLen, "TARTARUS_EDITOR_TEST_SHOW") == 0 && show && show[0] == '1';
+                std::free(show);
+                if (!keepShown) glfwHideWindow(window.Handle());
+            }
         }
         LayerRegistry::Load(); // LayerComponent slot names (#236 A1)
         ProjectSettings::Load(); // physics + tags (#236 A4); project/settings.json
@@ -4674,6 +4685,12 @@ int main(int argc, char** argv) {
                     if (step + 1 >= (int)std::size(kEditorShots)) { exitApproved = true; window.SetShouldClose(true); }
                 }
                 editor.SetHideOverlaysThisFrame(false);
+            }
+            // --editor-tests: a Shot() step's capture of this finished frame.
+            if (opt.editorTestsMode) {
+                int fbW = 0, fbH = 0;
+                glfwGetFramebufferSize(window.Handle(), &fbW, &fbH);
+                EditorUiTests::AfterFrame(fbW, fbH);
             }
 
             // A see-through window shows the desktop only behind the editor's own glass: maximized

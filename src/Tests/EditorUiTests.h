@@ -18,6 +18,9 @@ void Configure(const std::string& filter);
 bool Enabled();
 // main.cpp, once per frame right before EditorLayer::BeginFrame(). True once every test ran.
 bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera& camera);
+// main.cpp, once per frame after the editor has drawn into the default framebuffer and before
+// SwapBuffers: takes the screenshot a Shot() step asked for, if any.
+void AfterFrame(int fbWidth, int fbHeight);
 // 0 when every test passed (valid after BeforeFrame returned true).
 int ExitCode();
 

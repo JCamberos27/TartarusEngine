@@ -234,6 +234,7 @@ jobs:
           MESA_GL_VERSION_OVERRIDE: "4.6"
           MESA_GLSL_VERSION_OVERRIDE: "460"
           TARTARUS_EDITOR_TEST_SHOTS: ${{ github.workspace }}\editor-test-shots
+          TARTARUS_EDITOR_TEST_SHOW: "1"
         run: |
           $exe = "build\${{ matrix.config }}\TartarusEngine.exe"
           $p = Start-Process -FilePath $exe -ArgumentList "--editor-tests" -NoNewWindow -Wait -PassThru

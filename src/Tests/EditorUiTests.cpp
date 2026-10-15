@@ -26,6 +26,12 @@
 #include "Enhancers/EnhancerCore.h"
 #include "Enhancers/EnhancerUserState.h"
 #include "Enhancers/TabState.h"
+#include "EditorTestHooks.h"
+#include "GLDebug.h"
+#include "Log.h"
+#include "gl.h"
+
+#include <stb_image_write.h>
 
 #include <imgui.h>
 #include <IconsFontAwesome6.h>
@@ -34,6 +40,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
+#include <fstream>
 #include <cmath>
 #include <cstdarg>
 #include <cstdio>
@@ -100,6 +108,11 @@ void EditorTestProbe_Tag(ImGuiID id, const char* tag) {
     if (id == 0 || !tag) return;
     g_Reg.Get(id).Tag = tag;
 }
+namespace {
+// Handed to TartarusEditor.dll through ImGuiContext::TestEngine (EditorTestHooks.h), so items the
+// module draws land in the same registry.
+const EditorTestHookTable g_HookTable{&ImGuiTestEngineHook_ItemAdd, &ImGuiTestEngineHook_ItemInfo};
+} // namespace
 
 // =============================================================================================
 // Access to the editor's internals (EditorLayer befriends this)
@@ -210,6 +223,101 @@ void Fail(const std::string& msg) {
     if (!g_TestFailed) { g_TestFailed = true; g_FailMessage = msg; }
 }
 
+// --- Health monitor ---------------------------------------------------------------------------
+// Checked every frame of every test, so a test fails on the first broken thing it touches even
+// when its own expectations pass: a new error in the editor log, a GL debug error, an ImGui
+// recoverable error (Begin/End mismatch, bad PushID...), a conflicting widget id, or a NaN in a
+// transform. Warnings are recorded in the report without failing.
+struct TestReport {
+    std::string Name;
+    bool Passed = false;
+    std::string Failure;
+    std::vector<std::string> Warnings, Errors, Shots;
+    double Seconds = 0.0;
+};
+std::vector<TestReport> g_Reports;
+TestReport g_Cur;
+std::chrono::steady_clock::time_point g_TestStart;
+int g_GlErrBase = 0;
+unsigned long long g_LogSeqSeen = 0;
+std::vector<std::string> g_AllowLog;   // this test: error lines containing one of these are expected
+std::vector<std::string> g_ImGuiErrors; // filled by the ImGui error callback
+std::string g_LastImGuiError;
+
+void OnImGuiError(ImGuiContext*, void*, const char* msg) {
+    const std::string m = msg ? msg : "(no message)";
+    if (g_ImGuiErrors.size() < 50) g_ImGuiErrors.push_back(m);
+}
+bool Allowed(const std::string& line) {
+    for (const std::string& a : g_AllowLog) if (line.find(a) != std::string::npos) return true;
+    return false;
+}
+std::string Trim(std::string s, size_t n = 300) {
+    if (s.size() > n) s = s.substr(0, n) + "...";
+    for (char& ch : s) if (ch == '\n' || ch == '\r') ch = ' ';
+    return s;
+}
+void ResetHealth() {
+    g_GlErrBase = GLDebug::ErrorCount();
+    for (const LogEntry& e : Log::Entries()) g_LogSeqSeen = std::max(g_LogSeqSeen, e.Seq);
+    g_AllowLog.clear();
+    g_ImGuiErrors.clear();
+}
+void CheckHealth(World& w) {
+    for (const LogEntry& e : Log::Entries()) {
+        if (e.Seq <= g_LogSeqSeen) continue;
+        g_LogSeqSeen = std::max(g_LogSeqSeen, e.Seq);
+        if (e.Level == LogLevel::Warning) {
+            if (g_Cur.Warnings.size() < 40) g_Cur.Warnings.push_back(Trim(e.Message));
+        } else if (e.Level == LogLevel::Error) {
+            if (g_Cur.Errors.size() < 40) g_Cur.Errors.push_back(Trim(e.Message));
+            if (!Allowed(e.Message)) Fail("editor logged an error: " + Trim(e.Message));
+        }
+    }
+    if (GLDebug::IsEnabled() && GLDebug::ErrorCount() > g_GlErrBase) {
+        g_GlErrBase = GLDebug::ErrorCount();
+        Fail("GL debug error (see the logged GL[...] line)");
+    }
+    if (!g_ImGuiErrors.empty()) {
+        Fail("ImGui error: " + Trim(g_ImGuiErrors.front()));
+        g_ImGuiErrors.clear();
+    }
+    ImGuiContext& g = *ImGui::GetCurrentContext();
+    if (g.DebugDrawIdConflictsId != 0) {
+        std::string label = "?";
+        for (const UiItem& it : g_Reg.Last) if (it.Id == g.DebugDrawIdConflictsId) { label = it.Label + " in " + it.Window; break; }
+        Fail("conflicting ImGui ids (" + label + ")");
+    }
+    for (auto [e, t] : w.Registry.view<const TransformComponent>().each()) {
+        const float v[10] = {t.Position.x, t.Position.y, t.Position.z, t.Rotation.w, t.Rotation.x,
+                             t.Rotation.y, t.Rotation.z, t.Scale.x, t.Scale.y, t.Scale.z};
+        for (const float x : v)
+            if (!std::isfinite(x)) {
+                Fail("non-finite transform on an object");
+                return;
+            }
+    }
+}
+
+// --- Screenshots -------------------------------------------------------------------------------
+// Shot("name") captures the whole editor window after the frame is drawn into
+// <TARTARUS_EDITOR_TEST_SHOTS or the scratch folder>/editor-test-shots/<test>/<name>.png. The
+// listed windows must not be blank (one flat colour) in it - a panel that drew nothing, a black
+// viewport.
+std::string g_ShotDir;
+std::string g_ShotPending; // path without extension, set by a Shot step, taken by AfterFrame
+std::vector<std::string> g_ShotNonBlank;
+bool g_ShotDone = false;
+std::string Slug(const std::string& s) {
+    std::string out;
+    for (unsigned char ch : s) {
+        if (std::isalnum(ch)) out += (char)std::tolower(ch);
+        else if (!out.empty() && out.back() != '-') out += '-';
+    }
+    while (!out.empty() && out.back() == '-') out.pop_back();
+    return out.substr(0, 80);
+}
+
 // --- Item queries ------------------------------------------------------------------------------
 std::string Visible(const std::string& label) {
     const size_t at = label.find("##");
@@ -279,6 +387,26 @@ void MouseTo(ImVec2 p) { ImGui::GetIO().AddMousePosEvent(p.x, p.y); }
 // --- Step builders ----------------------------------------------------------------------------
 Step Do(std::string name, std::function<void(Ctx&)> fn) {
     return {std::move(name), [fn](Ctx& c) { fn(c); return true; }};
+}
+// Expects the editor to log errors containing `fragment` for the rest of this test (a test that
+// does something invalid on purpose, or an asset CI doesn't have).
+Step AllowLogError(std::string fragment) {
+    return Do("allow logged error '" + fragment + "'", [fragment](Ctx&) { g_AllowLog.push_back(fragment); });
+}
+// Captures the editor window once this frame is drawn (see g_ShotDir); `nonBlank` lists window
+// names (substring, e.g. "###Scene") that must not be one flat colour in the capture.
+Step Shot(std::string name, std::vector<std::string> nonBlank = {}) {
+    auto phase = std::make_shared<int>(0);
+    return {"shot " + name, [name, nonBlank, phase](Ctx&) {
+        if (*phase == 0) {
+            g_ShotPending = Slug(g_Cur.Name) + "/" + Slug(name);
+            g_ShotNonBlank = nonBlank;
+            g_ShotDone = false;
+            *phase = 1;
+            return false;
+        }
+        return g_ShotDone;
+    }, 30};
 }
 Step Wait(int frames) {
     auto n = std::make_shared<int>(0);
@@ -578,6 +706,26 @@ void Add(std::string name, std::vector<Step> steps) {
 // =============================================================================================
 // The tests
 // =============================================================================================
+// The editor smoke suites: every panel, menu, tool and action of the editor (see
+// src/Tests/EditorSmoke/README.md). Included here, inside this file's anonymous namespace, so they
+// share the harness above; each defines Register<Suite>Tests().
+#include "EditorSmoke/Menus.inl"
+#include "EditorSmoke/Panels.inl"
+#include "EditorSmoke/Hierarchy.inl"
+#include "EditorSmoke/Inspector.inl"
+#include "EditorSmoke/SceneTools.inl"
+#include "EditorSmoke/PlayMode.inl"
+#include "EditorSmoke/Prefabs.inl"
+#include "EditorSmoke/SaveLoad.inl"
+#include "EditorSmoke/Assets.inl"
+#include "EditorSmoke/Animator.inl"
+#include "EditorSmoke/Curves.inl"
+#include "EditorSmoke/Particles.inl"
+#include "EditorSmoke/ScriptIDE.inl"
+#include "EditorSmoke/HotReload.inl"
+#include "EditorSmoke/Settings.inl"
+#include "EditorSmoke/Scenes.inl"
+
 void RegisterTests() {
     // ------------------------------------------------------------------ 1. Selection history
     Add("history: back and forward through objects and an asset", {
@@ -1105,12 +1253,55 @@ void RegisterTests() {
         Key(ImGuiKey_R), Wait(2),
         ExpectTrue("plain R did not start the ruler", [](Ctx& c) { return !X::RulerHeld(c.E); }),
     });
+
+    // ------------------------------------------------------------------ Editor smoke suites
+    RegisterMenusTests();
+    RegisterPanelsTests();
+    RegisterHierarchyTests();
+    RegisterInspectorTests();
+    RegisterSceneToolsTests();
+    RegisterPlayModeTests();
+    RegisterPrefabsTests();
+    RegisterSaveLoadTests();
+    RegisterAssetsTests();
+    RegisterAnimatorTests();
+    RegisterCurvesTests();
+    RegisterParticlesTests();
+    RegisterScriptIDETests();
+    RegisterHotReloadTests();
+    RegisterSettingsTests();
+    RegisterScenesTests();
 }
 } // namespace
 
 // =============================================================================================
 // Driver
 // =============================================================================================
+namespace {
+// <shots>/report.md: every test with its result, failure, logged errors/warnings and shots.
+void WriteReport() {
+    std::ofstream f(std::filesystem::path(g_ShotDir) / "report.md", std::ios::binary);
+    if (!f) return;
+    f << "# Editor smoke test report\n\n" << g_Passed << " passed, " << g_Failed << " failed";
+    if (g_Skipped) f << ", " << g_Skipped << " filtered out";
+    f << "\n\n| Result | Test | Seconds | Errors | Warnings | Shots |\n|---|---|---|---|---|---|\n";
+    for (const TestReport& r : g_Reports) {
+        char secs[16];
+        std::snprintf(secs, sizeof secs, "%.1f", r.Seconds);
+        f << "| " << (r.Passed ? "PASS" : "**FAIL**") << " | " << r.Name << " | " << secs << " | " << r.Errors.size() << " | "
+          << r.Warnings.size() << " | " << r.Shots.size() << " |\n";
+    }
+    for (const TestReport& r : g_Reports) {
+        if (r.Passed && r.Errors.empty() && r.Warnings.empty() && r.Shots.empty()) continue;
+        f << "\n## " << (r.Passed ? "PASS " : "FAIL ") << r.Name << "\n\n";
+        if (!r.Passed) f << "Failure: `" << r.Failure << "`\n\n";
+        for (const std::string& e : r.Errors) f << "- error: `" << e << "`\n";
+        for (const std::string& w : r.Warnings) f << "- warning: `" << w << "`\n";
+        for (const std::string& s : r.Shots) f << "- shot: [" << s << "](" << s << ")\n";
+    }
+}
+} // namespace
+
 namespace EditorUiTests {
 
 void Configure(const std::string& filter) {
@@ -1129,6 +1320,9 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
     ImGuiContext* ctx = ImGui::GetCurrentContext();
     if (!ctx) return false;
     ctx->TestEngineHookItems = true;
+    ctx->TestEngine = const_cast<EditorTestHookTable*>(&g_HookTable);
+    ctx->ErrorCallback = &OnImGuiError;
+    ctx->IO.ConfigErrorRecoveryEnableAssert = false; // reported by OnImGuiError and failed instead
     g_Reg.NextFrame();
     EditorTestInputHook() = &KeepOnlyHarnessInput;
     g_QueueEnd = ctx->InputEventsQueue.Size;
@@ -1137,6 +1331,16 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
     if (!g_Started) {
         g_Started = true;
         g_ScratchScene = (std::filesystem::path(UserPaths::Root()) / "editor-tests-scene.json").generic_string();
+        {
+            char* v = nullptr;
+            size_t n = 0;
+            if (_dupenv_s(&v, &n, "TARTARUS_EDITOR_TEST_SHOTS") == 0 && v) { g_ShotDir = v; std::free(v); }
+            if (g_ShotDir.empty()) g_ShotDir = (std::filesystem::path(UserPaths::Root()) / "editor-test-shots").string();
+            std::error_code ec;
+            std::filesystem::remove_all(g_ShotDir, ec);
+            std::filesystem::create_directories(g_ShotDir, ec);
+            std::cout << "[EditorTest] screenshots -> " << g_ShotDir << std::endl;
+        }
         RegisterTests();
         // Let the editor lay out its dock space first.
         g_StepFrames = -30;
@@ -1170,6 +1374,12 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
                                     it.Id, it.Label.c_str(), it.Tag.c_str(), it.Window.c_str(), it.Rect.Min.x, it.Rect.Min.y,
                                     it.Rect.Max.x, it.Rect.Max.y, it.Clip.Min.x, it.Clip.Min.y, it.Clip.Max.x, it.Clip.Max.y, (unsigned)it.ItemFlags);
             }
+            g_Cur.Passed = !g_TestFailed;
+            g_Cur.Failure = g_TestFailed ? g_FailMessage : std::string();
+            g_Cur.Seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - g_TestStart).count();
+            g_Reports.push_back(g_Cur);
+            g_Cur = TestReport{};
+            g_ShotPending.clear();
             if (g_TestFailed) {
                 ++g_Failed;
                 g_FailLines.push_back(t.Name + " -- " + g_FailMessage);
@@ -1184,6 +1394,13 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
             g_StepFrames = 0;
             ++g_TestIndex;
         };
+        if (g_Cur.Name != t.Name) {
+            g_Cur = TestReport{};
+            g_Cur.Name = t.Name;
+            g_TestStart = std::chrono::steady_clock::now();
+            ResetHealth();
+        }
+        CheckHealth(world);
         if (g_TestFailed || g_StepIndex >= t.Steps.size()) { finishTest(); return false; }
 
         Step& s = t.Steps[g_StepIndex];
@@ -1202,7 +1419,54 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
     std::cout << "[EditorTest] " << g_Passed << " passed, " << g_Failed << " failed";
     if (g_Skipped) std::cout << ", " << g_Skipped << " filtered out";
     std::cout << std::endl;
+    WriteReport();
     return true;
+}
+
+void AfterFrame(int fbWidth, int fbHeight) {
+    if (!g_Enabled || g_ShotPending.empty() || fbWidth <= 0 || fbHeight <= 0) return;
+    const std::string rel = g_ShotPending;
+    g_ShotPending.clear();
+    g_ShotDone = true;
+    std::vector<unsigned char> px((size_t)fbWidth * fbHeight * 4);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+    glReadPixels(0, 0, fbWidth, fbHeight, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
+    std::vector<unsigned char> top(px.size());
+    for (int y = 0; y < fbHeight; ++y)
+        std::memcpy(&top[(size_t)y * fbWidth * 4], &px[(size_t)(fbHeight - 1 - y) * fbWidth * 4], (size_t)fbWidth * 4);
+    for (size_t i = 3; i < top.size(); i += 4) top[i] = 255;
+    const std::filesystem::path out = std::filesystem::path(g_ShotDir) / (rel + ".png");
+    std::error_code ec;
+    std::filesystem::create_directories(out.parent_path(), ec);
+    stbi_write_png(out.string().c_str(), fbWidth, fbHeight, 4, top.data(), fbWidth * 4);
+    g_Cur.Shots.push_back(rel + ".png");
+
+    // The windows that must have drawn something: not one flat colour across their inner rect.
+    ImGuiContext& g = *ImGui::GetCurrentContext();
+    const ImVec2 scale = g.IO.DisplayFramebufferScale;
+    for (const std::string& name : g_ShotNonBlank) {
+        ImGuiWindow* win = nullptr;
+        for (ImGuiWindow* w : g.Windows)
+            if (w->WasActive && !w->Hidden && Contains(w->Name, name) && !Contains(w->Name, "/")) { win = w; break; }
+        if (!win) { Fail("shot " + rel + ": window " + name + " is not shown"); continue; }
+        const int x0 = std::clamp((int)(win->InnerRect.Min.x * scale.x), 0, fbWidth - 1);
+        const int y0 = std::clamp((int)(win->InnerRect.Min.y * scale.y), 0, fbHeight - 1);
+        const int x1 = std::clamp((int)(win->InnerRect.Max.x * scale.x), 0, fbWidth);
+        const int y1 = std::clamp((int)(win->InnerRect.Max.y * scale.y), 0, fbHeight);
+        if (x1 - x0 < 4 || y1 - y0 < 4) { Fail("shot " + rel + ": window " + name + " has no area"); continue; }
+        const unsigned char* first = &top[((size_t)y0 * fbWidth + x0) * 4];
+        bool flat = true;
+        for (int y = y0; y < y1 && flat; y += 2)
+            for (int x = x0; x < x1; x += 2) {
+                const unsigned char* p = &top[((size_t)y * fbWidth + x) * 4];
+                if (std::abs(p[0] - first[0]) > 3 || std::abs(p[1] - first[1]) > 3 || std::abs(p[2] - first[2]) > 3) { flat = false; break; }
+            }
+        if (flat) {
+            char rgb[32];
+            std::snprintf(rgb, sizeof rgb, "%d,%d,%d", first[0], first[1], first[2]);
+            Fail("shot " + rel + ": window " + name + " is blank (flat " + rgb + ")");
+        }
+    }
 }
 
 } // namespace EditorUiTests
