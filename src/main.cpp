@@ -536,7 +536,6 @@ int main(int argc, char** argv) {
             // Only the scratch copy of the prefs (TartarusEngine-Shot) is changed.
             EditorSettings& shotPrefs = EditorSettings::Get();
             shotPrefs.EditorThemeId = 1;
-            shotPrefs.ShowGlassHierarchy = shotPrefs.ShowGlassInspector = shotPrefs.ShowGlassAssets = true;
         }
         // A benchmark measures native resolution unless it asks for a render height, so its
         // numbers stay comparable from run to run and machine to machine.

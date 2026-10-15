@@ -28,6 +28,8 @@ struct GlassEditorState {
     // --- Frosted HUDs ---------------------------------------------------------------------------
     GlassBackdrop Backdrop;
     unsigned int  BlurTexture = 0; // this frame's blurred Scene image (0 = tint only)
+    // The ambient field behind the docked panels: the Scene image blurred much further.
+    GlassBackdrop Ambient;
 
     // --- Glass under every floating window (EditorLayer::EndFrame renders through it) -----------
     Glass::GlassCompositor Compositor;

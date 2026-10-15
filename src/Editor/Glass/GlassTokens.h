@@ -62,6 +62,22 @@ constexpr ImVec4 GlassFallback = Rgb(0x14, 0x14, 0x14);
 // where the compositor doesn't run (see GlassFallback).
 constexpr ImVec4 PopupSolid = GlassFallback;
 
+// --- Glass over the Tartarus look -----------------------------------------------------------------
+// Black Glass keeps the Tartarus theme's sizes, spacing, fonts and panels and changes only the
+// materials (ApplyGlassMaterials). Behind every docked panel lies the ambient field: the Scene
+// image blurred until only colour is left, stretched over the whole window and dimmed. Panels,
+// tab strips, the menu bar and the status bar are black glass over it, so the scene's colour
+// glows faintly through the whole editor.
+constexpr int   AmbientBlurLevels = 6;     // as deep as the HUD glass: colour fields, no shapes
+constexpr float AmbientSaturation = 1.0f;
+constexpr float AmbientCeiling    = 0.46f; // highlights capped before anything sits on them
+constexpr float AmbientDim        = 0.12f; // black laid straight over the field (dock gaps show this)
+constexpr float GlassPanelAlpha   = 0.50f; // a docked panel: black at this alpha over the field
+constexpr float GlassChromeAlpha  = 0.62f; // menu bar, tab strips, status bar: a little darker
+// Corners of floating windows and popups at 1x. Docked panels stay square, as in Tartarus.
+constexpr float GlassWindowRounding = 10.0f;
+constexpr float GlassPopupRounding  = 8.0f;
+
 // Fields, hover and press washes are plain white at low alpha: they lighten whatever they sit on
 // (solid black or glass) by the same perceived step.
 constexpr ImVec4 Field        = Rgb(0xFF, 0xFF, 0xFF, 0.055f);

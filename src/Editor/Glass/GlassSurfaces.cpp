@@ -49,6 +49,25 @@ int ConvertToGlass(ImDrawList* dl, const ImU32* clear, int clearCount, ImU32 bor
     return cleared;
 }
 
+int GlassifySolids(ImDrawList* dl) {
+    if (!dl) return 0;
+    int changed = 0;
+    for (ImDrawVert& v : dl->VtxBuffer) {
+        const ImU32 c = v.col;
+        if (((c & IM_COL32_A_MASK) >> IM_COL32_A_SHIFT) != 255u) continue;
+        const int r = (int)((c >> IM_COL32_R_SHIFT) & 0xFF);
+        const int g = (int)((c >> IM_COL32_G_SHIFT) & 0xFF);
+        const int b = (int)((c >> IM_COL32_B_SHIFT) & 0xFF);
+        const int hi = r > g ? (r > b ? r : b) : (g > b ? g : b);
+        const int lo = r < g ? (r < b ? r : b) : (g < b ? g : b);
+        if (hi > 0x2C || hi - lo > 3) continue;
+        // #0E (raised) -> 6% white, #1C (hover) -> 11%, #2A (pressed) -> 16%.
+        v.col = hi <= 0x06 ? IM_COL32(0, 0, 0, 90) : IM_COL32(255, 255, 255, (int)((float)hi * 1.55f));
+        ++changed;
+    }
+    return changed;
+}
+
 void ApplyPose(ImDrawList* dl, const SurfacePose& pose, ImU32 anchored) {
     if (!dl || pose.Identity()) return;
     const float a = pose.alpha < 0.0f ? 0.0f : (pose.alpha > 1.0f ? 1.0f : pose.alpha);

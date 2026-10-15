@@ -326,6 +326,7 @@ void EditorLayer::ApplyGizmoAccent() {
 void EditorLayer::ReleaseGlass() {
     if (m_Glass) {
         m_Glass->Backdrop.Release();
+        m_Glass->Ambient.Release();
         m_Glass->Compositor.Release();
         m_Glass.reset();
     }
@@ -376,7 +377,16 @@ void EditorLayer::GlassFrameBegin() {
     Glass::ImAnimContext& motion = Glass::Motion();
     motion.SetReduceMotion(EditorSettings::Get().ReduceMotion);
     motion.NewFrame();
-    Glass::DrawWallpaper();
+    // The ambient field behind every panel: the Scene image, blurred until only colour is left.
+    GlassEditorState& g = GlassState();
+    unsigned int ambient = 0;
+    if (EditorSettings::Get().GlassFrostedBlur && m_SceneColorTexture != 0) {
+        const int w = m_SceneTexW > 0 ? m_SceneTexW : (int)m_ViewportSize.x;
+        const int h = m_SceneTexH > 0 ? m_SceneTexH : (int)m_ViewportSize.y;
+        ambient = g.Ambient.Update(m_SceneColorTexture, w, h, Glass::AmbientBlurLevels, Glass::AmbientSaturation,
+                                   Glass::AmbientCeiling);
+    }
+    Glass::DrawWallpaper((ImTextureID)(intptr_t)ambient);
     PollGlassNotifications();
 }
 

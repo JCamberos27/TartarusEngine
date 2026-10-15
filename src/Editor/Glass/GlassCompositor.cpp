@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <unordered_map>
 
 namespace Glass {
@@ -259,6 +260,13 @@ void GlassCompositor::Render(ImDrawData* dd, bool blur) {
             }
             const ImVec4 edge = WithAlpha(GlassEdge, ImMin(1.0f, GlassEdge.w + rim));
             ConvertToGlass(dl, clear, n, border, U32(edge));
+        }
+        // Whatever solid fills are left (component headers, buttons, rows, hairlines in a panel,
+        // the menu bar, a popup's items) become glass washes too. The Scene and Game views are
+        // left exactly as drawn: the 3D image, the gizmos and the toolbar are content.
+        {
+            const ImGuiWindow* root = w->RootWindow ? w->RootWindow : w;
+            if (!std::strstr(root->Name, "###Scene") && !std::strstr(root->Name, "###Game")) GlassifySolids(dl);
         }
         if (li.Plate) {
             li.PlateRect = pose.Apply(li.PlateRect);

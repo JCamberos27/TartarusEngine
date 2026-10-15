@@ -56,6 +56,14 @@ ImU32 FindWindowBackground(const ImDrawList* dl, const ImRect& windowRect);
 // are skipped. Returns how many vertices were cleared.
 int ConvertToGlass(ImDrawList* dl, const ImU32* clear, int clearCount, ImU32 border, ImU32 edge);
 
+// Turns the Tartarus panels' own solid fills into glass, in place. Their surfaces (component
+// headers, buttons, rows, hairlines) are opaque near-blacks the panel code picks itself, so they
+// would sit on the glass as black slabs. Every opaque grey vertex at or below #2C becomes a wash
+// that lifts the glass by the same step instead: black (#00-#06) a light black veil, the lifted
+// greys white at an alpha that keeps their order. Anything with hue, any brighter grey (text,
+// icons) and anything already translucent is left alone. Returns how many vertices changed.
+int GlassifySolids(ImDrawList* dl);
+
 // A surface's arrival pose: scaled about `pivot`, then moved by `offset`, at `alpha` opacity.
 struct SurfacePose {
     ImVec2 pivot = ImVec2(0.0f, 0.0f);
