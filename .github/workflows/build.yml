@@ -46,7 +46,7 @@ jobs:
     # Backstop: a hung build or smoke test must not sit on a runner until GitHub's 6-hour
     # job ceiling. The compile + cached deps finish well inside this; anything approaching it
     # is a hang worth failing fast on.
-    timeout-minutes: 30
+    timeout-minutes: 50
     strategy:
       fail-fast: false
       matrix:
@@ -219,6 +219,53 @@ jobs:
           $p = Start-Process -FilePath $exe -ArgumentList "--smoke-test" -NoNewWindow -Wait -PassThru
           Write-Host "smoke test exited with $($p.ExitCode)"
           exit $p.ExitCode
+
+      # The editor smoke test (--editor-tests, src/Tests/EditorUiTests.cpp + EditorSmoke_*.cpp):
+      # drives every panel, menu and tool of the real editor with synthetic input, under the same
+      # llvmpipe context as the smoke test. Exit code is 0 only when every test passed. It writes
+      # its screenshots to editor-test-shots/, uploaded below whether it passed or not.
+      - name: Editor smoke test (Mesa llvmpipe)
+        if: always() && steps.mesa.outcome == 'success'
+        timeout-minutes: 20
+        shell: pwsh
+        env:
+          GALLIUM_DRIVER: llvmpipe
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          MESA_GL_VERSION_OVERRIDE: "4.6"
+          MESA_GLSL_VERSION_OVERRIDE: "460"
+          TARTARUS_EDITOR_TEST_SHOTS: ${{ github.workspace }}\editor-test-shots
+        run: |
+          $exe = "build\${{ matrix.config }}\TartarusEngine.exe"
+          $p = Start-Process -FilePath $exe -ArgumentList "--editor-tests" -NoNewWindow -Wait -PassThru
+          Write-Host "editor tests exited with $($p.ExitCode)"
+          exit $p.ExitCode
+
+      # The editor screenshot tour (--editor-shot) on the default layout: one PNG per main view, for
+      # a human to look over. Not a gate on its own (the editor test above is); the crash-dump step
+      # below still catches a crash here.
+      - name: Editor screenshot tour (Mesa llvmpipe)
+        if: always() && matrix.config == 'Release'
+        timeout-minutes: 10
+        continue-on-error: true
+        shell: pwsh
+        env:
+          GALLIUM_DRIVER: llvmpipe
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          MESA_GL_VERSION_OVERRIDE: "4.6"
+          MESA_GLSL_VERSION_OVERRIDE: "460"
+        run: |
+          $exe = "build\${{ matrix.config }}\TartarusEngine.exe"
+          $p = Start-Process -FilePath $exe -ArgumentList "--editor-shot","editor-test-shots\tour","--editor-shot-default-layout" -NoNewWindow -Wait -PassThru
+          Write-Host "editor screenshot tour exited with $($p.ExitCode)"
+          exit $p.ExitCode
+
+      - name: Upload editor screenshots
+        if: always() && hashFiles('editor-test-shots/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: editor-test-shots-${{ matrix.config }}
+          path: editor-test-shots/
+          retention-days: 14
 
       # The smoke step above gates on its own exit code, but a process can render every smoke scene,
       # report success and THEN fault on the way out. CrashHandler catches that and writes a
