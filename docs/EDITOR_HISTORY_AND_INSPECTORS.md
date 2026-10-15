@@ -18,10 +18,9 @@ Select a `.recoil` asset to tune its scalar settings and view read-only X/Y/Z cu
 
 These editors compile into `Tartarus.Editor.dll`, independently of gameplay, and are excluded from game exports. The native editor, world and ImGui ownership remain C++. Source-save compilation/reload is the same workflow used by editor windows.
 
-Weapon Definition targets `Tartarus.Gameplay.WeaponDefinition`, an ordinary project script in
-`assets/Scripts/WeaponDefinition.cs`. Its schema/defaults and Inspector belong to C#; it has no
-native component registration. Animation Set uses an `AssetReference` with a GUID-preserving
-picker, and light tint uses `[Color]`. Older native data migrates to a C# slot on read.
+Weapon Definition and First Person Controller target the native components of those names;
+their fields keep the C++ asset pickers and bounds, and the C# Inspector only arranges them
+into pages. Scenes saved while they were C# scripts convert to the native components on read.
 
 ## Writing a custom Inspector
 

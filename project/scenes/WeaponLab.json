@@ -1161,13 +1161,68 @@
         1.0,
         1.0
       ],
-      "C# Script": {
-        "Class": "Tartarus.Gameplay.PlayerDefinition",
-        "Source": "assets/Scripts/PlayerDefinition.cs",
-        "Fields JSON": "{\"AirAccelTime\":0.0,\"AnimationSet\":{\"path\":\"assets/Weapons/AKS74U/AKS74U.fpsanim\",\"pathGuid\":\"c0ff631aac421f76\"},\"AssistConeDeg\":7.0,\"AssistRange\":30.0,\"CameraBone\":\"head\",\"CapsuleHeight\":1.850000023841858,\"CapsuleRadius\":0.30000001192092896,\"CoyoteTime\":0.10000000149011612,\"EyeHeight\":1.7000000476837158,\"EyeRadius\":0.11999999731779099,\"GrabRange\":100.0,\"Gravity\":18.0,\"GravityGun\":true,\"GroundAccelTime\":0.08,\"GroundDecelTime\":0.1,\"InvertY\":false,\"JumpBufferTime\":0.11999999731779099,\"JumpSpeed\":5.5,\"KillY\":-20.0,\"MaxHealth\":100.0,\"MaxThrowSpeed\":16.0,\"MinThrowSpeed\":3.5,\"MouseSensitivity\":0.05000000074505806,\"MoveSpeed\":4.0,\"RegenDelay\":5.0,\"RegenRate\":30.0,\"RespawnDelay\":3.0,\"ScrollTurnDeg\":15.0,\"SecondaryAnimationSet\":{\"path\":\"assets/Weapons/Remington870/Remington870.fpsanim\",\"pathGuid\":\"4e3925bded078f9a\"},\"SpawnProtection\":2.0,\"SprintMultiplier\":1.600000023841858,\"StickLookDegPerSec\":180.0,\"ThrowBackspin\":2.0,\"ThrowChargeTime\":1.100000023841858,\"ViewModelFov\":50.0,\"ViewModelOffset\":{\"X\":0.05620000138878822,\"Y\":-0.03200000151991844,\"Z\":0.0},\"ViewModelRotation\":{\"X\":-0.23999999463558197,\"Y\":0.38999998569488525,\"Z\":0.0},\"ViewModelScale\":1.0,\"PrimaryWeaponPrefab\":{\"path\":\"assets/Weapons/AKS74U/AKS74U.prefab\",\"pathGuid\":\"b19271e02ef840f1\"},\"SecondaryWeaponPrefab\":{\"path\":\"assets/Weapons/Remington870/Remington870.prefab\",\"pathGuid\":\"cf1fec9edad348ec\"},\"FieldOfView\":90.0}",
-        "Enabled": true,
-        "Scripts": "[]",
-        "Next Script ID": 1
+      "First Person Controller": {
+        "Air Accel Time": 0.0,
+        "Animation Set": {
+          "path": "assets/Weapons/AKS74U/AKS74U.fpsanim",
+          "pathGuid": "c0ff631aac421f76"
+        },
+        "Assist Cone Deg": 7.0,
+        "Assist Range": 30.0,
+        "Camera Bone": "head",
+        "Capsule Height": 1.850000023841858,
+        "Capsule Radius": 0.30000001192092896,
+        "Coyote Time": 0.10000000149011612,
+        "Eye Height": 1.7000000476837158,
+        "Eye Radius": 0.11999999731779099,
+        "Grab Range": 100.0,
+        "Gravity": 18.0,
+        "Gravity Gun": true,
+        "Ground Accel Time": 0.08,
+        "Ground Decel Time": 0.1,
+        "Invert Y": false,
+        "Jump Buffer Time": 0.11999999731779099,
+        "Jump Speed": 5.5,
+        "Kill Height": -20.0,
+        "Max Health": 100.0,
+        "Max Throw Speed": 16.0,
+        "Min Throw Speed": 3.5,
+        "Mouse Sensitivity": 0.05000000074505806,
+        "Move Speed": 4.0,
+        "Regen Delay": 5.0,
+        "Regen Rate": 30.0,
+        "Respawn Delay": 3.0,
+        "Scroll Turn Deg": 15.0,
+        "Secondary Animation Set": {
+          "path": "assets/Weapons/Remington870/Remington870.fpsanim",
+          "pathGuid": "4e3925bded078f9a"
+        },
+        "Spawn Protection": 2.0,
+        "Sprint Multiplier": 1.600000023841858,
+        "Stick Look Deg/Sec": 180.0,
+        "Throw Backspin": 2.0,
+        "Throw Charge Time": 1.100000023841858,
+        "View Model FOV": 50.0,
+        "View Model Offset": [
+          0.05620000138878822,
+          -0.03200000151991844,
+          0.0
+        ],
+        "View Model Rotation": [
+          -0.23999999463558197,
+          0.38999998569488525,
+          0.0
+        ],
+        "View Model Scale": 1.0,
+        "Primary Weapon Prefab": {
+          "path": "assets/Weapons/AKS74U/AKS74U.prefab",
+          "pathGuid": "b19271e02ef840f1"
+        },
+        "Secondary Weapon Prefab": {
+          "path": "assets/Weapons/Remington870/Remington870.prefab",
+          "pathGuid": "cf1fec9edad348ec"
+        },
+        "Field of View": 90.0
       }
     },
     {

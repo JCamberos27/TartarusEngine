@@ -179,9 +179,7 @@ void TestRecoilProfile() {
     weapon.Procedural.Recoil.BoltBone = "action";
     weapon.Procedural.Recoil.BoltTravel = {0.0f, 0.0f, 0.02f};
     weapon.Procedural.Recoil.BoltCycle = 0.08f;
-    std::string defaults;
-    CHECK(Scripting::RequestProject("weapon.import", "{}", defaults));
-    Scripting::ReadProjectWeaponGameplay(weapon.Gameplay, json::parse(defaults));
+    weapon.Gameplay = FirstPersonWeaponGameplay{};
     weapon.HasLegacyGameplay = true; // explicitly exercise old descriptor compatibility
     weapon.Gameplay.BurstRounds = 3;
     const auto definition = TempDir() / "profile-weapon.fpsanim";
@@ -4050,9 +4048,7 @@ void TestRemingtonController() {
 void TestFirstPersonAnimationFSM() {
     namespace K = FirstPersonAnimatorContract;
     FirstPersonAnimationSet set;
-    std::string defaults;
-    CHECK(Scripting::RequestProject("weapon.import", "{}", defaults));
-    Scripting::ReadProjectWeaponGameplay(set.Gameplay, json::parse(defaults));
+    set.Gameplay = FirstPersonWeaponGameplay{};
     set.ArmsModel = "arms.fbx";
     set.WeaponModel = "weapon.fbx";
     const char* withWeapon[] = {"IdleToSprint", "Sprint", "SprintToIdle", "Holster", "Fire", "TacReload",

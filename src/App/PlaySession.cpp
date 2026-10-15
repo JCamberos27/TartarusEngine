@@ -21,8 +21,6 @@
 #include "FxSpriteRenderer.h"
 #include "GameModuleAPI.h"
 #include "GameViewPanel.h"
-#include "Game/Scripting/NpcDefinitions.h"
-#include "Game/Scripting/PlayerDefinition.h"
 #include "Game/Scripting/ScriptRuntime.h"
 #include "GravityGun.h"
 #include "HotReloadEditorModule.h"
@@ -49,7 +47,6 @@
 #include <filesystem>
 
 entt::entity FindFirstPersonController(World& world) {
-    Scripting::SyncPlayerDefinitions(world);
     entt::entity best = entt::null;
     int bestOrder = 0x7fffffff;
     for (auto e : world.Registry.view<const FirstPersonControllerComponent, const TransformComponent>()) {
@@ -131,7 +128,7 @@ void PlaySession::Start() {
     m_State.CameraEntity = entt::null;
     m_State.ControllerEntity = FindFirstPersonController(m_World);
     {   // the scene's effect and HUD tuning: the first FX / HUD Settings component, defaults when none
-        FxHudSettingsComponent fx=Scripting::DefaultEffectsDefinition();
+        FxHudSettingsComponent fx;
         if (const auto first = m_World.Registry.view<FxHudSettingsComponent>(); first.begin() != first.end()) { // the first one counts
             const entt::entity e = *first.begin();
             fx = m_World.Registry.get<FxHudSettingsComponent>(e);

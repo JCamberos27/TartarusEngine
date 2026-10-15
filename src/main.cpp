@@ -1,4 +1,3 @@
-#include "Game/Scripting/NpcDefinitions.h"
 #include "Window.h"
 #include "Input.h"
 #include "InputMap.h"
@@ -11,7 +10,6 @@
 #include "Player.h"
 #include "FirstPersonPresentation.h"
 #include "Game/Scripting/ScriptRuntime.h"
-#include "Game/Scripting/PlayerDefinition.h"
 #include "Game/Scripting/GameCommands.h"
 #include "FirstPersonWeaponTest.h" // --weapon-test
 #include "WeaponLab.h"            // --weapon-lab

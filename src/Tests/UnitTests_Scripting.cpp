@@ -1,7 +1,5 @@
 #include "UnitTestSupport.h"
 #include "../Game/Scripting/ScriptRuntime.h"
-#include "../Game/Scripting/PlayerDefinition.h"
-#include "../Game/Scripting/NpcDefinitions.h"
 #include "../Game/Scripting/RuntimeCanvas.h"
 #include "../Renderer/HudText.h"
 #include "../Game/Scripting/WeaponPrefab.h"
@@ -108,13 +106,9 @@ void TestManagedComponentsAndPrefabs() {
     auto& script=world.Registry.emplace<CSharpScriptComponent>(e);
     script.ClassName="Tartarus.Gameplay.Bob";
     script.Fields="{\"Height\":0.5,\"Speed\":2}";
-    Scripting::Attach(script,"assets/Scripts/WeaponDefinition.cs","Tartarus.Gameplay.WeaponDefinition");
-    auto slots=Scripting::GetSlots(script);
-    slots.back().Fields=nlohmann::json{{"Description","870 pump shotgun"},{"AnimationSet",{{"path","assets/Weapons/Remington870/Remington870.fpsanim"},{"pathGuid",""}}}}.dump();
-    Scripting::SetSlots(script,slots);
-    Scripting::Attach(script,"assets/Scripts/PlayerDefinition.cs","Tartarus.Gameplay.PlayerDefinition");
-    slots=Scripting::GetSlots(script);slots.back().Fields=R"({"PrimaryWeaponPrefab":{"path":"assets/Weapons/AKS74U/AKS74U.prefab","pathGuid":""}})";
-    Scripting::SetSlots(script,slots);Scripting::SyncPlayerDefinitions(world);
+    auto& weapon=world.Registry.emplace<WeaponDefinitionComponent>(e);
+    weapon.Description="870 pump shotgun";weapon.AnimationSet="assets/Weapons/Remington870/Remington870.fpsanim";
+    world.Registry.emplace<FirstPersonControllerComponent>(e).PrimaryWeaponPrefab="assets/Weapons/AKS74U/AKS74U.prefab";
     auto& smoke=world.Registry.emplace<ParticleSystemComponent>(e);
     smoke.Emitting=false;smoke.ShaderMode=1;smoke.SmokeDensity=2.3f;smoke.SmokeNoiseScale=4.2f;
     smoke.SmokeTurbulence=.47f;smoke.SmokeSoftness=.72f;smoke.SmokeEvolution=.83f;
@@ -125,9 +119,9 @@ void TestManagedComponentsAndPrefabs() {
     if(view.begin()==view.end())return;
     auto restored=*view.begin();
     CHECK(world.Registry.get<CSharpScriptComponent>(restored).Fields=="{\"Height\":0.5,\"Speed\":2}");
-    const auto restoredSlots=Scripting::GetSlots(world.Registry.get<CSharpScriptComponent>(restored));
-    CHECK(restoredSlots.size()==3 && restoredSlots[1].Class=="Tartarus.Gameplay.WeaponDefinition" && restoredSlots[2].Class=="Tartarus.Gameplay.PlayerDefinition");
-    CHECK(nlohmann::json::parse(restoredSlots[1].Fields).at("Description")=="870 pump shotgun");
+    CHECK(Scripting::GetSlots(world.Registry.get<CSharpScriptComponent>(restored)).size()==1);
+    const auto* restoredWeapon=world.Registry.try_get<WeaponDefinitionComponent>(restored);
+    CHECK(restoredWeapon && restoredWeapon->Description=="870 pump shotgun" && restoredWeapon->AnimationSet=="assets/Weapons/Remington870/Remington870.fpsanim");
     CHECK(world.Registry.get<FirstPersonControllerComponent>(restored).PrimaryWeaponPrefab=="assets/Weapons/AKS74U/AKS74U.prefab");
     const auto& restoredSmoke=world.Registry.get<ParticleSystemComponent>(restored);
     CHECK(restoredSmoke.ShaderMode==1 && restoredSmoke.Texture.empty());
@@ -179,55 +173,53 @@ void TestManagedComponentsAndPrefabs() {
         if (world.Registry.valid(particleRoot)) world.DestroyEntityAndChildren(particleRoot);
     }
 }
-void TestCSharpWeaponDefinitionMigration() {
+void TestScriptDefinitionConversion() {
     using Json=nlohmann::json;
     using namespace Scripting;
-    CHECK(EnsureLoaded());
-    for(const auto& component:ComponentRegistry::All())CHECK(std::string(component.Meta.Name)!="Weapon Definition");
-    std::string resolved;
-    CHECK(ResolveScriptFields("Tartarus.Gameplay.WeaponDefinition","{}",resolved));
-    const auto defaults=Json::parse(resolved);
-    CHECK(defaults.at("AnimationSet").at("path")=="" && defaults.at("LightIntensity")==18);
-    CHECK(defaults.at("MuzzleEnabled")==true && defaults.at("FlameGlow")==150 && defaults.at("SparkCount")==9);
+    bool registered=false;
+    for(const auto& component:ComponentRegistry::All())registered|=std::string(component.Meta.Name)=="Weapon Definition";
+    CHECK(registered);
     const std::string guid="123456789abcdef0";
-    Json node={{"id",0},{"name","Legacy weapon"},{"Weapon Definition",{
-        {"Description","Authored description"},{"Animation Set",{{"path","old.fpsanim"},{"pathGuid",guid}}},
-        {"Light Color",{.2,.4,.6}},{"Light Intensity",27},{"Flame Glow",99},{"Smoke",false}}},
+    const Json weaponFields={{"Description","Authored description"},{"AnimationSet",{{"path","old.fpsanim"},{"pathGuid",guid}}},
+        {"LightColor",{{"X",.2},{"Y",.4},{"Z",.6}}},{"LightIntensity",27},{"FlameGlow",99},{"Smoke",false},{"Magazine",6},{"Reload",1}};
+    Json node={{"id",0},{"name","Legacy weapon"},
         {"C# Script",{{"Class","Tartarus.Gameplay.Bob"},{"Fields JSON","{\"Height\":0.75}"},
-            {"Scripts",Json::array({{{"id",9},{"class","Tartarus.Gameplay.OpticAttachment"},{"fields",{{"AimTransform","Sight"}}}}}).dump()},
-            {"Next Script ID",2}}}};
-    CHECK(MigrateLegacyWeaponDefinition(node));CHECK(!MigrateLegacyWeaponDefinition(node));
+            {"Scripts",Json::array({
+                {{"id",9},{"class","Tartarus.Gameplay.OpticAttachment"},{"fields",{{"AimPoint","Sight"},{"AimBlendTime",.3}}},{"enabled",true}},
+                {{"id",10},{"class","Tartarus.Gameplay.GripAttachment"},{"fields",Json::object()},{"enabled",false}},
+                {{"id",11},{"class","Tartarus.Gameplay.WeaponDefinition"},{"fields",weaponFields},{"enabled",true}},
+                {{"id",12},{"class","Tartarus.Gameplay.Unrelated"},{"fields",Json::object()},{"enabled",true}}}).dump()},
+            {"Next Script ID",13}}}};
+    CHECK(ConvertScriptDefinitions(node));CHECK(!ConvertScriptDefinitions(node));
+    // Ordinary scripts stay where they were; only the definitions leave the C# component.
     const auto& script=node.at("C# Script");
     CHECK(script.at("Class")=="Tartarus.Gameplay.Bob" && script.at("Fields JSON")=="{\"Height\":0.75}");
     const auto extra=Json::parse(script.at("Scripts").get<std::string>());
-    CHECK(extra.size()==2 && extra[0]["id"]==9 && extra[1]["id"]==10 && script["Next Script ID"]==11);
-    const auto& fields=extra[1].at("fields");
-    CHECK(fields.at("AnimationSet").at("pathGuid")==guid && fields.at("LightColor").at("Y")==.4);
-    CHECK(ResolveScriptFields("Tartarus.Gameplay.WeaponDefinition",fields.dump(),resolved));
-    const auto settings=Json::parse(resolved);
-    CHECK(settings.at("Description")=="Authored description" && settings.at("LightIntensity")==27 && settings.at("FlameGlow")==99 && settings.at("Smoke")==false);
-    // Older snapshots migrate on read and save as ordinary C# slots, without losing other scripts.
-    auto legacy=node;legacy["Weapon Definition"]={{"Description","Legacy fallback"}};
+    CHECK(extra.size()==1 && extra[0].at("id")==12);
+    const auto& weapon=node.at("Weapon Definition");
+    CHECK(weapon.at("Description")=="Authored description" && weapon.at("Animation Set").at("pathGuid")==guid);
+    CHECK(weapon.at("Light Color")==Json::array({.2,.4,.6}) && weapon.at("Light Intensity")==27 && weapon.at("Smoke")==false);
+    CHECK(node.at("Optic Attachment").at("Aim Point")=="Sight" && node.at("Grip Attachment").at("Enabled")==false);
+    // A definition that was the only script removes the C# component entirely.
+    Json only={{"C# Script",{{"Class","Tartarus.Gameplay.SquadDefinition"},{"Fields JSON",R"({"SquadSize":6,"CoverSpacing":1.2})"},{"Enabled",true}}}};
+    CHECK(ConvertScriptDefinitions(only));
+    CHECK(!only.contains("C# Script") && only.at("Squad Settings").at("Squad Size")==6 && only.at("Squad Settings").at("Cover Sample Spacing")==1.2);
+    // Older snapshots convert on read and save as native components.
+    Json legacy=node;legacy.erase("Weapon Definition");legacy.erase("Optic Attachment");legacy.erase("Grip Attachment");
+    legacy["C# Script"]["Scripts"]=Json::array({{{"id",11},{"class","Tartarus.Gameplay.WeaponDefinition"},{"fields",weaponFields},{"enabled",true}}}).dump();
     World world;AssetLibrary assets;
     CHECK(SceneSerializer::LoadFromString(world,assets,Json{{"formatVersion",4},{"empties",Json::array({legacy})}}.dump()));
-    const auto saved=Json::parse(SceneSerializer::SaveToString(world));
-    CHECK(!saved.at("empties").at(0).contains("Weapon Definition"));
-    const auto savedExtra=Json::parse(saved.at("empties").at(0).at("C# Script").at("Scripts").get<std::string>());
-    CHECK(savedExtra.size()==2 && savedExtra[1].at("fields").at("Description")=="Authored description");
-    // Keep an incomplete user script setup intact rather than replacing its primary slot.
-    Json incomplete={{"Weapon Definition",{{"Description","Legacy"}}},
-        {"C# Script",{{"Class",""},{"Source","assets/Scripts/Unfinished.cs"},{"Fields JSON","{}"}}}};
-    CHECK(MigrateLegacyWeaponDefinition(incomplete));
-    CHECK(incomplete["C# Script"]["Class"]=="" && incomplete["C# Script"]["Source"]=="assets/Scripts/Unfinished.cs");
-    CHECK(Json::parse(incomplete["C# Script"]["Scripts"].get<std::string>()).at(0).at("class")=="Tartarus.Gameplay.WeaponDefinition");
-    const auto metadata=Json::parse(Describe("Tartarus.Gameplay.WeaponDefinition"));
-    bool asset=false,color=false,hidden=false;
-    for(const auto& f:metadata.at("fields")) {
-        if(f.at("name")=="AnimationSet")asset=f.at("kind")=="asset-ref" && f.at("extensions")==Json::array({".fpsanim"});
-        if(f.at("name")=="LightColor")color=f.at("kind")=="color";
-        if(f.at("name")=="FlameGlow")hidden=true;
+    auto loaded=world.Registry.view<WeaponDefinitionComponent,CSharpScriptComponent>();
+    CHECK(loaded.begin()!=loaded.end());
+    if(loaded.begin()!=loaded.end()) {
+        const auto& w=loaded.get<WeaponDefinitionComponent>(loaded.front());
+        CHECK(w.Description=="Authored description" && w.AnimationSet=="old.fpsanim" && w.Muzzle.LightIntensity==27 && !w.Muzzle.Smoke);
+        CHECK(std::abs(w.Muzzle.LightColor.y-.4f)<1e-6f && w.Gameplay.Magazine==6 && w.Gameplay.Reload==FirstPersonWeaponGameplay::ReloadMode::PerRound);
+        CHECK(loaded.get<CSharpScriptComponent>(loaded.front()).ClassName=="Tartarus.Gameplay.Bob");
     }
-    CHECK(asset && color && !hidden);
+    const auto saved=Json::parse(SceneSerializer::SaveToString(world));
+    CHECK(saved.at("empties").at(0).at("Weapon Definition").at("Description")=="Authored description");
+    CHECK(Json::parse(saved.at("empties").at(0).at("C# Script").at("Scripts").get<std::string>()).empty());
     FirstPersonWeaponGameplay weaponStats;
     std::string statsError;
     if(std::filesystem::exists(ProjectPaths::Resolve("assets/Weapons/Remington870/Remington870.prefab"))) {
@@ -251,12 +243,6 @@ void TestWeaponPrefabParticles() {
     })}};
     { std::ofstream file(path); file << data.dump(); }
     std::string set, error; MuzzleEffectSettings muzzle;
-    CHECK(Scripting::ResolveWeaponPrefab(path.u8string(),set,error,&muzzle));
-    CHECK(muzzle.PrefabParticles);
-    CHECK(Scripting::MigrateLegacyWeaponDefinition(data["empties"][0]));
-    CHECK(!Scripting::MigrateLegacyWeaponDefinition(data["empties"][0]));
-    CHECK(!data["empties"][0].contains("Weapon Definition"));
-    {std::ofstream file(path);file<<data.dump();}
     CHECK(Scripting::ResolveWeaponPrefab(path.u8string(),set,error,&muzzle));
     CHECK(muzzle.PrefabParticles && muzzle.LightIntensity==18 && set=="test.fpsanim");
     World world; AssetLibrary assets;
@@ -284,32 +270,35 @@ void TestWeaponPrefabParticles() {
 
 void TestWeaponAttachments() {
     using namespace Scripting;
-    using Json = nlohmann::json;
     World world; AssetLibrary assets;
     auto root=world.CreateEmptyEntity({2,3,4},{0,90,0},{1,1,1},"Weapon");
     auto child=[&](entt::entity parent,const char* name,glm::vec3 position=glm::vec3(0)) {
         auto e=world.CreateEmptyEntity(position,{0,0,0},{1,1,1},name);
         world.AttachChildRaw(e,parent); return e;
     };
-    auto script=[&](entt::entity owner,const char* type,Json fields) {
-        auto& c=world.Registry.emplace<CSharpScriptComponent>(owner);
-        c.ClassName=std::string("Tartarus.Gameplay.")+type; c.Fields=fields.dump();
+    auto muzzleAttachment=[&](entt::entity owner,const char* sounds,const char* profile) {
+        auto& m=world.Registry.emplace<MuzzleAttachmentComponent>(owner);
+        m.MuzzleTransform="Flash"; m.MuzzleFlash="Flash"; m.FiringSounds=sounds; m.FiringSoundProfile=profile;
+    };
+    auto opticAttachment=[&](entt::entity owner,bool reference,float blend) -> OpticAttachmentComponent& {
+        auto& o=world.Registry.emplace<OpticAttachmentComponent>(owner);
+        o.AimPoint="Aim"; o.DefaultOptic=reference; o.AimBlendTime=blend; return o;
     };
     auto muzzle=child(root,"Standard muzzle"), otherMuzzle=child(root,"Suppressor");
     auto flash=child(muzzle,"Flash",{0,0,-.7f}), otherFlash=child(otherMuzzle,"Flash",{0,0,-.9f});
     world.Registry.emplace<ParticleSystemComponent>(flash);
     world.Registry.emplace<ParticleSystemComponent>(otherFlash);
-    script(muzzle,"MuzzleAttachment",{{"MuzzleTransform","Flash"},{"MuzzleFlash","Flash"},{"FiringSoundProfile","ak"}});
-    script(otherMuzzle,"MuzzleAttachment",{{"MuzzleTransform","Flash"},{"MuzzleFlash","Flash"},{"FiringSounds","quiet1.wav;quiet2.wav"}});
+    muzzleAttachment(muzzle,"","ak");
+    muzzleAttachment(otherMuzzle,"quiet1.wav;quiet2.wav","");
     world.Registry.emplace<DeactivatedTag>(otherMuzzle);
-    auto grip=child(root,"Grip"); script(grip,"GripAttachment",Json::object());
+    auto grip=child(root,"Grip"); world.Registry.emplace<GripAttachmentComponent>(grip);
     auto irons=child(root,"Irons"), optic=child(root,"Red dot");
     child(irons,"Aim",{0,.1f,0}); child(optic,"Aim",{0,.2f,-.1f});
-    script(irons,"OpticAttachment",{{"AimPoint","Aim"},{"DefaultOptic",true}});
-    script(optic,"OpticAttachment",{{"AimPoint","Aim"},{"AimBlendTime",.3f}});
+    opticAttachment(irons,true,.2f);
+    opticAttachment(optic,false,.3f);
     world.Registry.emplace<DeactivatedTag>(irons);
-    // Malformed authoring must not prevent the valid attachments from loading.
-    auto broken=child(root,"Broken optic"); script(broken,"OpticAttachment",{{"AimPoint",17}});
+    // A switched-off attachment is not one of the choices.
+    auto disabled=child(root,"Disabled optic"); opticAttachment(disabled,false,.2f).Enabled=false;
     WeaponAttachments attachments; attachments.Load(world,root);
     CHECK(attachments.Count(AttachmentKind::Muzzle)==2 && attachments.Count(AttachmentKind::Optic)==2);
     CHECK(attachments.Selected(AttachmentKind::Muzzle)->Entity==muzzle);
@@ -609,40 +598,12 @@ void TestManagedApiAndEditor() {
     CHECK(DrawEditorInspector(world,assets,inspector,inspectorServices));
     CHECK(groups==0);
     CHECK(nlohmann::json::parse(returnedFields).value("Height",0.0f)==.75f);
-    const std::string selectedAsset=R"({"path":"selected.fpsanim","pathGuid":"123456789abcdef0"})";
-    auto weaponServices=[&](int op,NativeRequest& r) {
-        if(op==115 && nlohmann::json::parse(r.Text).value("label",std::string{})=="Find setting") {r.Text=" ";return 1;}
-        if(op==132) {r.Text=selectedAsset.c_str();return 1;}
-        if(op==133) {r.A={.2f,.4f,.6f};return 1;}
-        return inspectorServices(op,r);
-    };
-    payload=nlohmann::json{{"type","Tartarus.Gameplay.WeaponDefinition"},{"native",false},{"values",nlohmann::json::object()},
-        {"metadata",nlohmann::json::parse(Describe("Tartarus.Gameplay.WeaponDefinition"))}}.dump();
+    // The gameplay inspectors page native components too (the weapon's stats are a native component again).
+    nativeFields=0;
+    payload=nlohmann::json{{"type","Weapon Definition"},{"native",true}}.dump();
     inspector={};inspector.Entity=entt::to_integral(entity);inspector.Text=payload.c_str();
-    CHECK(DrawEditorInspector(world,assets,inspector,weaponServices));
-    const auto weaponFields=nlohmann::json::parse(returnedFields);
-    CHECK(groups==0 && weaponFields.at("AnimationSet").at("path")=="selected.fpsanim");
-    CHECK(weaponFields.at("AnimationSet").at("pathGuid")=="123456789abcdef0" && std::abs(weaponFields.at("LightColor").at("Y").get<float>()-.4f)<1e-6f);
-    int references=0;
-    auto referenceServices=[&](int op,NativeRequest& r) {
-        if(op==132) {
-            const auto data=nlohmann::json::parse(r.Text);
-            CHECK(data.at("metadata").at("kind")=="scene-ref" || data.at("metadata").at("kind")=="sound-refs" || data.at("metadata").at("kind")=="choice");
-            CHECK(r.Entity==entt::to_integral(entity));++references;
-            static std::string assigned;
-            assigned=data.at("metadata").at("name")=="MuzzleFlash"?"Flash":data.at("value").get<std::string>();
-            r.Text=assigned.c_str();return 1;
-        }
-        return inspectorServices(op,r);
-    };
-    const auto muzzleMetadata=nlohmann::json::parse(Describe("Tartarus.Gameplay.MuzzleAttachment"));
-    payload=nlohmann::json{{"type","Tartarus.Gameplay.MuzzleAttachment"},{"native",false},{"values",{{"MuzzleFlash","Old Flash"}}},{"metadata",muzzleMetadata}}.dump();
-    inspector={};inspector.Entity=entt::to_integral(entity);inspector.Text=payload.c_str();
-    CHECK(DrawEditorInspector(world,assets,inspector,referenceServices));
-    CHECK(references==4 && groups==0);
-    CHECK(nlohmann::json::parse(returnedFields).at("MuzzleFlash")=="Flash");
-    const auto opticMetadata=nlohmann::json::parse(Describe("Tartarus.Gameplay.OpticAttachment"));
-    CHECK(opticMetadata.at("fields").at(0).at("kind")=="scene-ref");
+    CHECK(DrawEditorInspector(world,assets,inspector,inspectorServices));
+    CHECK(groups==0 && nativeFields>0);
     StopEditorScripts();
 }
 }
@@ -827,35 +788,32 @@ void TestProjectNpcPerceptionAndSquads() {
 }
 void TestProjectNpcConfiguration() {
     using namespace Scripting;using Json=nlohmann::json;
-    Json legacy={{"NPC Spawn",{{"Weapon","Remington 870"},{"Brain","Training Dummy"},{"Skill",.7f},{"Squad",2}}},
-        {"Squad Settings",{{"Squad Size",6},{"NPC Damage Scale",.8f},{"Cover Sample Spacing",1.2f},{"Low Cover Height",.75f}}},
-        {"C# Script",{{"Class","Tartarus.Gameplay.Bob"},{"Enabled",false},{"Fields JSON","{}"},{"Scripts","[]"},{"Next Script ID",7}}}};
-    CHECK(MigrateLegacyProjectComponents(legacy));CHECK(!MigrateLegacyProjectComponents(legacy));
-    const auto slots=Json::parse(legacy["C# Script"]["Scripts"].get<std::string>());
-    CHECK(slots.size()==2 && slots[0]["id"]==7 && slots[1]["id"]==8);
-    CHECK(slots[0]["fields"]["Weapon"]==1 && slots[0]["fields"]["Brain"]==1);
-    CHECK(slots[1]["fields"]["NpcDamageScale"]==.8f && slots[1]["fields"]["CoverSpacing"]==1.2f);
-    World world;AssetLibrary assets;const auto entity=world.CreateEmptyEntity({},{},{1,1,1},"NPC config");
-    auto& script=world.Registry.emplace<CSharpScriptComponent>(entity);
-    script.ClassName="Tartarus.Gameplay.Bob";script.Enabled=false;script.Scripts=slots.dump();script.NextScriptId=9;
-    SyncNpcDefinitions(world);
-    CHECK((world.Registry.all_of<NpcSpawnComponent,SquadSettingsComponent>(entity)));
-    CHECK(world.Registry.get<NpcSpawnComponent>(entity).Weapon==1 && world.Registry.get<NpcSpawnComponent>(entity).Brain==1);
-    CHECK(world.Registry.get<NpcSpawnComponent>(entity).Skill==.7f);
-    CHECK(world.Registry.get<SquadSettingsComponent>(entity).SquadSize==6 && world.Registry.get<SquadSettingsComponent>(entity).CoverKneeHeight==.75f);
+    // Scenes saved while NPC Spawn and Squad Settings were C# definitions read back as the native components.
+    Json legacy={{"id",0},{"name","NPC config"},
+        {"C# Script",{{"Class","Tartarus.Gameplay.Bob"},{"Enabled",false},{"Fields JSON","{}"},{"Next Script ID",9},{"Scripts",Json::array({
+            {{"id",7},{"class","Tartarus.Gameplay.NpcDefinition"},{"fields",{{"Weapon",1},{"Brain",1},{"Skill",.7},{"Squad",2}}},{"enabled",true}},
+            {{"id",8},{"class","Tartarus.Gameplay.SquadDefinition"},{"fields",{{"SquadSize",6},{"NpcDamageScale",.8},{"CoverSpacing",1.2},{"CoverKneeHeight",.75}}},{"enabled",true}}}).dump()}}}};
+    World world;AssetLibrary assets;
+    CHECK(SceneSerializer::LoadFromString(world,assets,Json{{"formatVersion",4},{"empties",Json::array({legacy})}}.dump()));
+    auto converted=world.Registry.view<NpcSpawnComponent,SquadSettingsComponent,CSharpScriptComponent>();
+    CHECK(converted.begin()!=converted.end());
+    if(converted.begin()==converted.end())return;
+    const auto entity=converted.front();
+    const auto& spawn=world.Registry.get<NpcSpawnComponent>(entity);
+    const auto& squad=world.Registry.get<SquadSettingsComponent>(entity);
+    CHECK(spawn.Weapon==1 && spawn.Brain==1 && std::abs(spawn.Skill-.7f)<1e-6f && spawn.Squad==2);
+    CHECK(squad.SquadSize==6 && std::abs(squad.NpcDamageScale-.8f)<1e-6f && std::abs(squad.CoverSpacing-1.2f)<1e-6f && std::abs(squad.CoverKneeHeight-.75f)<1e-6f);
+    CHECK(GetSlots(world.Registry.get<CSharpScriptComponent>(entity)).size()==1);
     const auto snapshot=SceneSerializer::SaveToString(world);
-    CHECK(snapshot.find("NPC Spawn")==std::string::npos && snapshot.find("Squad Settings")==std::string::npos);
+    CHECK(snapshot.find("NpcDefinition")==std::string::npos && snapshot.find("SquadDefinition")==std::string::npos);
     World restored;CHECK(SceneSerializer::LoadFromString(restored,assets,snapshot));
     const auto views=restored.Registry.view<NpcSpawnComponent,SquadSettingsComponent>();CHECK(views.begin()!=views.end());
     if(views.begin()!=views.end()) {
         CHECK(views.get<NpcSpawnComponent>(views.front()).Squad==2);
-        CHECK(views.get<SquadSettingsComponent>(views.front()).NpcDamageScale==.8f);
+        CHECK(std::abs(views.get<SquadSettingsComponent>(views.front()).NpcDamageScale-.8f)<1e-6f);
     }
-    world.Registry.remove<CSharpScriptComponent>(entity);SyncNpcDefinitions(world);
-    CHECK((!world.Registry.any_of<NpcSpawnComponent,SquadSettingsComponent>(entity)));
-    std::string resolved;CHECK(RequestProject("npc.config",R"({"class":"Tartarus.Gameplay.NpcDefinition","fields":{"Weapon":99,"Brain":-1,"Skill":5}})",resolved));
-    auto normalized=Json::parse(resolved);CHECK(normalized["Weapon"]==2 && normalized["Brain"]==0 && normalized["Skill"]==1);
-    auto defaults=DefaultSquadDefinition();CHECK(defaults.SquadSize==4 && defaults.Difficulty==1 && defaults.NpcDamageScale==.45f);
+    const SquadSettingsComponent defaults;
+    CHECK(defaults.SquadSize==4 && defaults.Difficulty==1 && defaults.NpcDamageScale==.45f);
     CHECK(defaults.BodyPrefab=="assets/AI/Soldier.json" && !defaults.RiflePrefab.empty());
 }
 void TestProjectNpcBehaviour() {
@@ -924,13 +882,14 @@ void TestProjectNpcDecisions() {
 }
 void TestProjectMigrationAndConstraints() {
     using namespace Scripting;using Json=nlohmann::json;
-    Json legacy={{"First Person Controller",{{"Eye Height",1.6},{"Animation Set","hands.fpsanim"},{"Animation SetGuid","123456789abcdef0"}}},
+    // The old native Health block becomes the project's Health script, next to the scripts already there.
+    Json legacy={{"Health",{{"Max Health",150},{"Regen Delay",3},{"Death SoundGuid","123456789abcdef0"}}},
         {"C# Script",{{"Class","Tartarus.Gameplay.Bob"},{"Fields JSON","{}"},{"Scripts","[]"},{"Next Script ID",8}}}};
     CHECK(MigrateLegacyProjectComponents(legacy));CHECK(!MigrateLegacyProjectComponents(legacy));
-    CHECK(legacy.at("C# Script").at("Class")=="Tartarus.Gameplay.Bob");
+    CHECK(!legacy.contains("Health") && legacy.at("C# Script").at("Class")=="Tartarus.Gameplay.Bob");
     auto extra=Json::parse(legacy.at("C# Script").at("Scripts").get<std::string>());
-    CHECK(extra.size()==1 && extra[0].at("id")==8 && extra[0].at("fields").at("EyeHeight")==1.6);
-    CHECK(extra[0].at("fields").at("AnimationSet").at("pathGuid")=="123456789abcdef0");
+    CHECK(extra.size()==1 && extra[0].at("id")==8 && extra[0].at("class")=="Tartarus.Gameplay.Health");
+    CHECK(extra[0].at("fields").at("MaxHealth")==150 && !extra[0].at("fields").contains("DeathSoundGuid"));
     World world;AssetLibrary assets;
     auto ball=world.CreateEmptyEntity({0,0,0},{0,0,0},{1,1,1},"Ball");
     auto& shape=world.Registry.emplace<ColliderComponent>(ball);shape.Kind=ColliderComponent::Shape::Sphere;shape.HalfExtents={.12f,0,0};
@@ -964,7 +923,7 @@ void RegisterScriptingTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Prefab-relative draggable script references",TestSceneReferences);
     tests.emplace_back("Managed gameplay ABI, fire modes and pump",TestManagedGameplay);
     tests.emplace_back("Managed components, lifecycle and weapon prefabs",TestManagedComponentsAndPrefabs);
-    tests.emplace_back("C# WeaponDefinition defaults, migration and script slot preservation",TestCSharpWeaponDefinitionMigration);
+    tests.emplace_back("C# definition slots convert to native components",TestScriptDefinitionConversion);
     tests.emplace_back("Weapon prefab particle systems",TestWeaponPrefabParticles);
     tests.emplace_back("Weapon attachment selection, poses and world clone",TestWeaponAttachments);
     tests.emplace_back("Material shader selection and red-dot defaults",TestMaterialShaderSelection);

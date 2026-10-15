@@ -11,6 +11,7 @@
 #include "IK.h"        // IK::SpineDistribution
 #include "SwayModifier.h"
 #include "MuzzleEffects.h"
+#include "FirstPersonWeaponGameplay.h"
 #include <entt/entt.hpp>
 
 class SkinHideBuffer; // OutfitHideTag, PlayerBodyTag
@@ -530,55 +531,79 @@ struct CSharpScriptComponent {
     int NextScriptId = 0;
 };
 
+// A weapon prefab's root: what the weapon is and how it plays. The .fpsanim Animation Set owns the
+// animator, rigs, recoil, shake and audio; the gameplay numbers and the muzzle effects live here.
+struct WeaponDefinitionComponent {
+    std::string Description;
+    std::string AnimationSet;
+    MuzzleEffectSettings Muzzle;
+    FirstPersonWeaponGameplay Gameplay;
+};
+
+// Interchangeable children of a weapon prefab: one active per category (the first active one, or
+// the player's pick). References are hierarchy paths relative to the attachment's own object.
+struct MuzzleAttachmentComponent {
+    bool Enabled = true;
+    std::string MuzzleTransform = "Muzzle"; // its local -Z is the bore direction
+    std::string MuzzleFlash = "Muzzle";     // the flash Particle System
+    std::string FiringSounds;               // audio assets; empty uses the gun's layered audio
+    std::string FiringSoundProfile;         // "", "ak" or "870": the layered profile when Firing Sounds is empty
+};
+struct GripAttachmentComponent {
+    bool Enabled = true;
+};
+struct OpticAttachmentComponent {
+    bool Enabled = true;
+    std::string AimPoint = "Aim Point"; // its local -Z points along the sight line
+    bool DefaultOptic = false;          // the iron-sight aim point the weapon's ADS animation was made for
+    float AimBlendTime = 0.2f;          // seconds to move between aim points when changing optics while aiming
+};
+
 struct FirstPersonControllerComponent {
-    FirstPersonControllerComponent();
-    std::string ResolvedScriptFields;
-    std::uint64_t ResolvedCodeGeneration=0;
-    std::uint64_t ResolvedAssetRevision=0;
     std::string PrimaryWeaponPrefab;
     std::string SecondaryWeaponPrefab;
-    float MoveSpeed{};
-    float SprintMultiplier{};
-    float JumpSpeed{};
-    float JumpBufferTime{}; // a jump pressed this long (seconds) before landing still happens on landing
-    float CoyoteTime{};     // a jump pressed this long after stepping off an edge still counts
+    float MoveSpeed = 6.0f;
+    float SprintMultiplier = 1.6f;
+    float JumpSpeed = 5.5f;
+    float JumpBufferTime = 0.12f; // a jump pressed this long (seconds) before landing still happens on landing
+    float CoyoteTime = 0.10f;     // a jump pressed this long after stepping off an edge still counts
     // Seconds (time constants) the move takes to reach the input's speed on the ground, to slow down,
     // and to steer in the air. 0 = instant.
-    float GroundAccelTime{};
-    float GroundDecelTime{};
-    float AirAccelTime{};
-    float EyeHeight{};
-    float CapsuleRadius{};
-    float CapsuleHeight{};
-    float MouseSensitivity{};  // degrees per pixel
-    bool  InvertY{};
+    float GroundAccelTime = 0.0f;
+    float GroundDecelTime = 0.0f;
+    float AirAccelTime = 0.0f;
+    float EyeHeight = 1.6f;
+    float CapsuleRadius = 0.3f;
+    float CapsuleHeight = 1.8f;
+    float MouseSensitivity = 0.1f;  // degrees per pixel
+    bool  InvertY = false;
     // HORIZONTAL degrees on a 16:9 screen - the "FOV 90" of a shooter's settings menu. The
     // camera itself is vertical (VerticalFov); a wider screen sees more at the sides (Hor+).
-    float FieldOfView{};
+    float FieldOfView = 90.0f;
     float VerticalFov() const {
         const float h = glm::radians(std::clamp(FieldOfView, 1.0f, 179.0f));
         return glm::degrees(2.0f * std::atan(std::tan(0.5f * h) * (9.0f / 16.0f)));
     }
     // Gamepad right stick look speed (turn rate, not a delta)
-    float StickLookDegPerSec{};  // degrees per second; Gamepad Input group
+    float StickLookDegPerSec = 180.0f;  // degrees per second; Gamepad Input group
     // Camera lean collision: the sphere radius used for wall-detection during camera lean
-    float EyeRadius{};            // metres; keeps the near plane off the wall; Camera group
-    float KillY{};           // falling below this respawns at the spawn point
-    bool  GravityGun{};        // the built-in pick-up/throw tool (right/left mouse)
-    float Gravity{};          // m/s^2 pulling the player down - game feel, separate from the physics world's
+    float EyeRadius = 0.12f;            // metres; keeps the near plane off the wall; Camera group
+    float KillY = -20.0f;           // falling below this respawns at the spawn point
+    bool  GravityGun = true;        // the built-in pick-up/throw tool (right/left mouse)
+    float Gravity = 18.0f;          // m/s^2 pulling the player down - game feel, separate from the physics world's
     // Gravity gun throw: hold left mouse to charge from Min to Max Throw Speed over Charge Time.
-    float MinThrowSpeed{};     // m/s, a tap
-    float MaxThrowSpeed{};    // m/s, fully charged
-    float ThrowChargeTime{};   // seconds to full power
-    float ThrowBackspin{};     // revolutions per second given to a thrown ball (round bodies only)
+    float MinThrowSpeed = 4.0f;     // m/s, a tap
+    float MaxThrowSpeed = 18.0f;    // m/s, fully charged
+    float ThrowChargeTime = 1.0f;   // seconds to full power
+    float ThrowBackspin = 2.0f;     // revolutions per second given to a thrown ball (round bodies only)
     // Gravity gun grab: aiming distance for the primary pick-up ray
-    float GrabRange{};       // metres; Gravity Gun group
+    float GrabRange = 100.0f;       // metres; Gravity Gun group
     // Gravity gun aim assist: search radius when no object is under the exact crosshair
-    float AssistRange{};      // metres; Gravity Gun group
+    float AssistRange = 30.0f;      // metres; Gravity Gun group
     // Gravity gun assist cone: within this many degrees of the crosshair
-    float AssistConeDeg{};     // degrees; Gravity Gun group
+    float AssistConeDeg = 7.0f;     // degrees; Gravity Gun group
     // Gravity gun scroll-wheel tuning: rotation applied per scroll notch while holding an object
-    float ScrollTurnDeg{};    // degrees per notch; Gravity Gun group
+    float ScrollTurnDeg = 15.0f;    // degrees per notch; Gravity Gun group
 
     // Optional camera-bound arms + weapon presentation. The .fpsanim asset defines paired clips;
     // leaving this empty preserves the existing controller exactly (including Sandbox gravity gun
@@ -592,19 +617,19 @@ struct FirstPersonControllerComponent {
     // rigs are authored standing in their own scene (feet at y=0, head near y=1.56): without a
     // bone anchor the model's root goes where the camera is and the whole rig floats ~1 m above
     // the view. Leave empty to fall back to positioning the model's root directly on the camera.
-    std::string CameraBone{};
+    std::string CameraBone = "head";
     glm::vec3 ViewModelOffset{};
     glm::vec3 ViewModelRotation{};
-    float ViewModelScale{};
-    float ViewModelFov{};
+    float ViewModelScale = 1.0f;
+    float ViewModelFov = 60.0f;
     // The player's health (Combat/PlayerVitals.h): enemies' rounds take it, it comes back
     // RegenRate per second after RegenDelay seconds unhurt, and at 0 the player dies and respawns
     // here RespawnDelay seconds later, untouchable for SpawnProtection seconds.
-    float MaxHealth{};
-    float RegenDelay{};
-    float RegenRate{};
-    float RespawnDelay{};
-    float SpawnProtection{};
+    float MaxHealth = 100.0f;
+    float RegenDelay = 5.0f;
+    float RegenRate = 30.0f;
+    float RespawnDelay = 3.0f;
+    float SpawnProtection = 2.0f;
 };
 
 // True first person (FirstPersonBody.h): the player's own full body, drawn in the world under the
@@ -1151,53 +1176,47 @@ struct TransformControllerComponent {
 
 // Where an enemy soldier appears in Play (Npc/NpcSpawner.h). The enemy squad is built from these.
 struct NpcSpawnComponent {
-    std::string ResolvedScriptFields;
-    std::uint64_t ResolvedCodeGeneration=0;
-    std::uint64_t ResolvedAssetRevision=0;
-    int Weapon {};
-    int Squad {};
-    float Skill {};
-    int OutfitSeed {};
-    int Brain {};
-    bool Bare {};
+    int Weapon = 0;        // 0 = AKS-74U, 1 = Remington 870, 2 = either, picked at random
+    int Squad = 0;         // NPCs with the same Squad fight together
+    float Skill = 0.5f;    // 0 (green) .. 1 (veteran): reaction, accuracy, aggression
+    int OutfitSeed = 0;    // 0 = a random outfit each Play
+    int Brain = 0;         // 0 = the squad AI, 1 = a training dummy (stands still, takes hits)
+    bool Bare = false;     // no outfit: the bare body
 };
 
 // The fight's rules, on any object in the scene (the first one counts).
 struct SquadSettingsComponent {
-    std::string ResolvedScriptFields;
-    std::uint64_t ResolvedCodeGeneration=0;
-    std::uint64_t ResolvedAssetRevision=0;
-    int SquadSize {};
-    float RespawnDelay {};
-    float Difficulty {};
-    float NpcDamageScale {};
-    bool Respawn {};
-    float HeavyHitDamage {};
-    float StaggerTime {};
-    float BleedOutTime {};
-    float CrawlSpeed {};
-    float LimpSpeedScale {};
-    float LimpTime {};
-    float CorpseTime {};
-    int MaxCorpses {};
-    float UnseenTime {};
-    float FallGravity {};
-    float MeleeDamage {};
-    float MeleeTime {};
-    float MeleeHitTime {};
-    float HitboxRange {};
-    float FootIKRange {};
-    float MeshCheckRange {};
-    float CoverSpacing {};
-    float CoverReach {};
-    float CoverKneeHeight {};
-    float CoverHeadHeight {};
-    float CoverStep {};
-    std::string BodyPrefab;
-    std::string RiflePrefab;
-    std::string ShotgunPrefab;
-    std::string RifleAnimationSet;
-    std::string ShotgunAnimationSet;
+    int SquadSize = 4;
+    float RespawnDelay = 8.0f;
+    float Difficulty = 1.0f;
+    float NpcDamageScale = 0.45f;
+    bool Respawn = true;
+    float HeavyHitDamage = 40.0f;
+    float StaggerTime = 0.4f;
+    float BleedOutTime = 20.0f;
+    float CrawlSpeed = 0.6f;
+    float LimpSpeedScale = 0.6f;
+    float LimpTime = 6.0f;
+    float CorpseTime = 180.0f;
+    int MaxCorpses = 12;
+    float UnseenTime = 3.0f;
+    float FallGravity = 18.0f;
+    float MeleeDamage = 25.0f;
+    float MeleeTime = 0.55f;
+    float MeleeHitTime = 0.22f;
+    float HitboxRange = 60.0f;
+    float FootIKRange = 25.0f;
+    float MeshCheckRange = 12.0f;
+    float CoverSpacing = 0.9f;
+    float CoverReach = 0.85f;
+    float CoverKneeHeight = 0.85f;
+    float CoverHeadHeight = 1.55f;
+    float CoverStep = 0.8f;
+    std::string BodyPrefab = "assets/AI/Soldier.json";
+    std::string RiflePrefab = "assets/Weapons/AKS74U/AKS74U.prefab";
+    std::string ShotgunPrefab = "assets/Weapons/Remington870/Remington870.prefab";
+    std::string RifleAnimationSet = "assets/Weapons/AKS74U/AKS74U.fpsanim";
+    std::string ShotgunAnimationSet = "assets/Weapons/Remington870/Remington870.fpsanim";
 };
 
 // Present only on entities that are parented, or that have at least one child â€” an entity with
@@ -1246,22 +1265,18 @@ struct ReflectionProbeComponent {
 // Scene-level visual effects and HUD settings (Lane P quality pass).
 // Add one to the scene to tune muzzle flash, laser beam and HUD display parameters.
 // Defaults match the values these effects had before they were tunable; read once when Play starts.
-// Unregistered cached projection of project C# fields; never authored or saved.
 struct FxHudSettingsComponent {
-    float FlashTime{};
-    float PlayerFlashScale{};
-    float FlameGlow{};
-    float FlameScale{};
-    int MuzzleStyle{};
-    float BeamRange{};
-    float BeamHalfWidth{};
-    float BeamFalloff{};
-    float BeamBend{};
-    float FeedLife{};
-    float StreakWindow{};
-    std::string ResolvedScriptFields;
-    unsigned long long ResolvedCodeGeneration{};
-    unsigned long long ResolvedAssetRevision{};
+    float FlashTime = 0.055f;
+    float PlayerFlashScale = 0.35f;
+    float FlameGlow = 150.0f;
+    float FlameScale = 1.75f;
+    int MuzzleStyle = 1;
+    float BeamRange = 150.0f;
+    float BeamHalfWidth = 0.0015f;
+    float BeamFalloff = 2.5f;
+    float BeamBend = 4.0f;
+    float FeedLife = 4.5f;
+    float StreakWindow = 4.0f;
 };
 
 // The volumetric blood (docs/BLOOD_FX.md, Game/Combat/BloodFx): on any object in the scene (the first one counts);
@@ -1527,87 +1542,79 @@ struct DroppedWeaponSettingsComponent {
 // One gun's audio tuning (Game/Audio/WeaponAudio): add one per gun, Gun naming it ("ak", "870"); a gun with none uses these
 // defaults. The per-event sets (reloads, ADS, equip ...) live in the Data File, a json of SoundSets by element; sets with no
 // entry there are filled from the audio manifest by key (snd.<Gun>.<element>).
-// Unregistered cached projection of project C# fields; never authored or saved.
 struct WeaponAudioComponent {
-    std::string Gun{};
-    bool Enabled{};
-    float Volume{};
-    float PlayerGain{};
-    float ShotPitchMin{};
-    float ShotPitchMax{};
-    float VolumeJitterDb{};
-    float CloseFullDistance{};
-    float CloseZeroDistance{};
-    float FarMinWeight{};
-    float FarMaxWeight{};
-    float MaxDistance{};
-    float FarMaxDistance{};
-    float ShotMinDistance{};
-    float BassMinDistance{};
-    float EventMinDistance{};
-    float EventMaxDistance{};
-    int ShotMaxVoices{};
-    int TailMaxVoices{};
-    float TailFadeTime{};
-    float TailMinInterval{};
-    float TailDuckPerVoice{};
-    int TailEvery{};
-    int FarEvery{};
-    float BurstGap{};
-    std::string DataFile{};
-    bool EnvEnabled{};
-    int EnvRayCount{};
-    float EnvMaxDistance{};
-    float EnvIndoorCover{};
-    float EnvUrbanWall{};
-    float EnvUrbanDistance{};
-    float EnvLargeRoomDistance{};
-    float EnvBlendFraction{};
-    float EnvBlendDistance{};
-    float EnvRefreshInterval{};
-    float EnvRefreshMoveDistance{};
-    float EnvMatchRadius{};
-    float EnvTailGainOutdoorOpen{};
-    float EnvTailGainOutdoorUrban{};
-    float EnvTailGainIndoorSmall{};
-    float EnvTailGainIndoorLarge{};
-    bool EnvDebugDraw{};
-    std::string ResolvedScriptFields;
-    unsigned long long ResolvedCodeGeneration{};
-    unsigned long long ResolvedAssetRevision{};
+    std::string Gun = "ak";
+    bool Enabled = true;
+    float Volume = 1.0f;
+    float PlayerGain = 0.75f;
+    float ShotPitchMin = 0.96f;
+    float ShotPitchMax = 1.04f;
+    float VolumeJitterDb = 0.5f;
+    float CloseFullDistance = 18.0f;
+    float CloseZeroDistance = 43.0f;
+    float FarMinWeight = 0.1f;
+    float FarMaxWeight = 1.0f;
+    float MaxDistance = 90.0f;
+    float FarMaxDistance = 160.0f;
+    float ShotMinDistance = 3.0f;
+    float BassMinDistance = 6.0f;
+    float EventMinDistance = 1.5f;
+    float EventMaxDistance = 25.0f;
+    int ShotMaxVoices = 6;
+    int TailMaxVoices = 3;
+    float TailFadeTime = 0.25f;
+    float TailMinInterval = 0.0f;
+    float TailDuckPerVoice = 0.3f;
+    int TailEvery = 2;
+    int FarEvery = 3;
+    float BurstGap = 0.4f;
+    std::string DataFile = "";
+    bool EnvEnabled = true;
+    int EnvRayCount = 12;
+    float EnvMaxDistance = 40.0f;
+    float EnvIndoorCover = 0.7f;
+    float EnvUrbanWall = 0.35f;
+    float EnvUrbanDistance = 25.0f;
+    float EnvLargeRoomDistance = 8.0f;
+    float EnvBlendFraction = 0.15f;
+    float EnvBlendDistance = 0.3f;
+    float EnvRefreshInterval = 0.25f;
+    float EnvRefreshMoveDistance = 1.0f;
+    float EnvMatchRadius = 2.0f;
+    float EnvTailGainOutdoorOpen = 1.0f;
+    float EnvTailGainOutdoorUrban = 1.0f;
+    float EnvTailGainIndoorSmall = 1.0f;
+    float EnvTailGainIndoorLarge = 1.0f;
+    bool EnvDebugDraw = false;
 };
 // Footsteps, jumps, landings and the sprint cloth loop (Game/Audio/FoleyAudio). One per scene (the first counts).
-// Unregistered cached projection of project C# fields; never authored or saved.
 struct FoleyAudioComponent {
-    bool Enabled{};
-    float Volume{};
-    float WalkVolume{};
-    float RunVolume{};
-    float CrouchVolume{};
-    float VolumeJitterDb{};
-    float PitchMin{};
-    float PitchMax{};
-    float StepStrideScale{};
-    float CrouchStrideScale{};
-    float MinStepSpeed{};
-    float RunSpeed{};
-    bool StepsFromFeet{};
-    float FootLiftHeight{};
-    float FootLiftMoving{};
-    float FootContactHeight{};
-    float JumpVolume{};
-    float LandVolume{};
-    float LandMinSpeed{};
-    float LandFullSpeed{};
-    float LandHeavySpeed{};
-    float NpcStepVolume{};
-    float NpcStepMaxDistance{};
-    float NpcStepMinDistance{};
-    std::string DefaultSurface{};
-    std::string SurfaceTable{};
-    std::string ResolvedScriptFields;
-    unsigned long long ResolvedCodeGeneration{};
-    unsigned long long ResolvedAssetRevision{};
+    bool Enabled = true;
+    float Volume = 1.0f;
+    float WalkVolume = 1.0f;
+    float RunVolume = 1.0f;
+    float CrouchVolume = 0.55f;
+    float VolumeJitterDb = 1.0f;
+    float PitchMin = 0.94f;
+    float PitchMax = 1.06f;
+    float StepStrideScale = 1.0f;
+    float CrouchStrideScale = 0.8f;
+    float MinStepSpeed = 0.6f;
+    float RunSpeed = 4.5f;
+    bool StepsFromFeet = true;
+    float FootLiftHeight = 0.05f;
+    float FootLiftMoving = 0.025f;
+    float FootContactHeight = 0.02f;
+    float JumpVolume = 1.0f;
+    float LandVolume = 1.0f;
+    float LandMinSpeed = 2.5f;
+    float LandFullSpeed = 9.0f;
+    float LandHeavySpeed = 6.0f;
+    float NpcStepVolume = 1.0f;
+    float NpcStepMaxDistance = 28.0f;
+    float NpcStepMinDistance = 2.5f;
+    std::string DefaultSurface = "concrete";
+    std::string SurfaceTable = "wood=wood,plank,floor,parquet;metal=metal,steel,iron,grate;glass=glass;carpet=carpet,rug;water=water,puddle;concrete=concrete,asphalt,tile,stone,gravel,dirt,soil,sand,grass";
 };
 // A designer-placed space for sound: inside the volume the shots' tail is the Tail Class's, the runtime reverb convolves with the
 // zone's impulse response and the zone's ambience bed fades in; all crossfaded over Fade Distance at the edge. A shot in no zone falls
@@ -1772,37 +1779,34 @@ struct AudioMixComponent {
                                        // (AAA practice: fights -18..-20, a whole session about -24), the limiter all but idle
 };
 // Bullet impacts, shell casings and rounds passing the listener (Game/Audio/ImpactAudio). One per scene (the first counts).
-// Runtime projection of project ImpactAudioDefinition; not authored or serialized.
 struct ImpactAudioComponent {
-    bool Enabled{};
-    std::string SurfaceTable{};
-    std::string DefaultSurface{};
-    bool CasingsEnabled{};
-    int CasingMaxContacts{};
-    float CasingMinSpeed{};
-    float CasingFullSpeed{};
-    float CasingGainMin{};
-    float CasingVolume{};
-    float CasingMinDistance{};
-    float CasingMaxDistance{};
-    int CasingMaxVoices{};
-    float ShellRadius{};
-    bool ImpactsEnabled{};
-    float ImpactVolume{};
-    float ImpactMinDistance{};
-    float ImpactMaxDistance{};
-    int ImpactMaxVoices{};
-    float ImpactMinInterval{};
-    bool FleshUsesRecordings{};
-    float FleshVolume{};
-    bool FlybyEnabled{};
-    float FlybyRadius{};
-    float FlybyVolume{};
-    float FlybyMinInterval{};
-    float FlybyMinDistance{};
-    float FlybyMaxDistance{};
-    float FlybyFarGain{};
-    std::string ResolvedScriptFields;
-    std::uint64_t ResolvedCodeGeneration=0,ResolvedAssetRevision=0;
+    bool Enabled = true;
+    std::string SurfaceTable = "metal=metal,steel,iron,grate;wood=wood,plank,floor,parquet;tile=tile;carpet=carpet,rug;glass=glass;ice=ice,snow;dirt=dirt,soil,sand,grass,gravel,mud;concrete=concrete,asphalt,stone,brick";
+    std::string DefaultSurface = "concrete";
+    bool CasingsEnabled = true;
+    int CasingMaxContacts = 2;
+    float CasingMinSpeed = 0.9f;
+    float CasingFullSpeed = 4.0f;
+    float CasingGainMin = 0.25f;
+    float CasingVolume = 1.0f;
+    float CasingMinDistance = 1.5f;
+    float CasingMaxDistance = 25.0f;
+    int CasingMaxVoices = 6;
+    float ShellRadius = 0.0075f;
+    bool ImpactsEnabled = true;
+    float ImpactVolume = 1.0f;
+    float ImpactMinDistance = 2.0f;
+    float ImpactMaxDistance = 60.0f;
+    int ImpactMaxVoices = 8;
+    float ImpactMinInterval = 0.03f;
+    bool FleshUsesRecordings = true;
+    float FleshVolume = 1.0f;
+    bool FlybyEnabled = true;
+    float FlybyRadius = 5.0f;
+    float FlybyVolume = 1.0f;
+    float FlybyMinInterval = 0.07f;
+    float FlybyMinDistance = 0.5f;
+    float FlybyMaxDistance = 14.0f;
+    float FlybyFarGain = 0.35f;
 };
 // ---- end lane S ----

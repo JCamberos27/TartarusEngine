@@ -3,8 +3,6 @@
 #include "RuntimeGui.h"
 #include "Input.h"
 #include "ScriptComponent.h"
-#include "PlayerDefinition.h"
-#include "NpcDefinitions.h"
 #include "ScriptServices.h"
 #include "World.h"
 #include "AssetLibrary.h"
@@ -269,7 +267,6 @@ bool InvokeProjectWithTrace(World& world,const char* operation,void* data,int si
 }
 void Tick(World& world, AssetLibrary& assets, float dt, bool fixed) {
     activeWorld=&world; activeAssets=&assets;
-    SyncPlayerDefinitions(world);SyncNpcDefinitions(world);
     Poll();
     std::set<std::uint64_t> current;
     struct Binding { entt::entity Entity; ScriptSlot Slot; };

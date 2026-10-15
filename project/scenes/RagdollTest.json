@@ -636,14 +636,6 @@
       ]
     },
     {
-      "C# Script": {
-        "Class": "Tartarus.Gameplay.PlayerDefinition",
-        "Enabled": true,
-        "Fields JSON": "{\"AnimationSet\":{\"path\":\"assets/Weapons/AKS74U/AKS74U.fpsanim\",\"pathGuid\":\"c0ff631aac421f76\"},\"CameraBone\":\"head\",\"CapsuleHeight\":1.850000023841858,\"CapsuleRadius\":0.30000001192092896,\"CoyoteTime\":0.10000000149011612,\"EyeHeight\":1.7000000476837158,\"Gravity\":18.0,\"GravityGun\":true,\"InvertY\":false,\"JumpBufferTime\":0.11999999731779099,\"JumpSpeed\":5.5,\"KillY\":-20.0,\"MaxThrowSpeed\":16.0,\"MinThrowSpeed\":3.5,\"MouseSensitivity\":0.05000000074505806,\"MoveSpeed\":4.0,\"SecondaryAnimationSet\":{\"path\":\"assets/Weapons/Remington870/Remington870.fpsanim\",\"pathGuid\":\"4e3925bded078f9a\"},\"SprintMultiplier\":1.600000023841858,\"ThrowBackspin\":2.0,\"ThrowChargeTime\":1.100000023841858,\"ViewModelFov\":50.0,\"ViewModelOffset\":{\"X\":0.05620000138878822,\"Y\":-0.03200000151991844,\"Z\":0.0},\"ViewModelRotation\":{\"X\":-0.23999999463558197,\"Y\":0.38999998569488525,\"Z\":0.0},\"ViewModelScale\":1.0,\"PrimaryWeaponPrefab\":{\"path\":\"assets/Weapons/AKS74U/AKS74U.prefab\",\"pathGuid\":\"b19271e02ef840f1\"},\"SecondaryWeaponPrefab\":{\"path\":\"assets/Weapons/Remington870/Remington870.prefab\",\"pathGuid\":\"cf1fec9edad348ec\"},\"FieldOfView\":90.0}",
-        "Next Script ID": 1,
-        "Scripts": "[]",
-        "Source": "assets/Scripts/PlayerDefinition.cs"
-      },
       "id": 13,
       "name": "Player Spawn",
       "order": 13,
@@ -663,7 +655,56 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "First Person Controller": {
+        "Animation Set": {
+          "path": "assets/Weapons/AKS74U/AKS74U.fpsanim",
+          "pathGuid": "c0ff631aac421f76"
+        },
+        "Camera Bone": "head",
+        "Capsule Height": 1.850000023841858,
+        "Capsule Radius": 0.30000001192092896,
+        "Coyote Time": 0.10000000149011612,
+        "Eye Height": 1.7000000476837158,
+        "Gravity": 18.0,
+        "Gravity Gun": true,
+        "Invert Y": false,
+        "Jump Buffer Time": 0.11999999731779099,
+        "Jump Speed": 5.5,
+        "Kill Height": -20.0,
+        "Max Throw Speed": 16.0,
+        "Min Throw Speed": 3.5,
+        "Mouse Sensitivity": 0.05000000074505806,
+        "Move Speed": 4.0,
+        "Secondary Animation Set": {
+          "path": "assets/Weapons/Remington870/Remington870.fpsanim",
+          "pathGuid": "4e3925bded078f9a"
+        },
+        "Sprint Multiplier": 1.600000023841858,
+        "Throw Backspin": 2.0,
+        "Throw Charge Time": 1.100000023841858,
+        "View Model FOV": 50.0,
+        "View Model Offset": [
+          0.05620000138878822,
+          -0.03200000151991844,
+          0.0
+        ],
+        "View Model Rotation": [
+          -0.23999999463558197,
+          0.38999998569488525,
+          0.0
+        ],
+        "View Model Scale": 1.0,
+        "Primary Weapon Prefab": {
+          "path": "assets/Weapons/AKS74U/AKS74U.prefab",
+          "pathGuid": "b19271e02ef840f1"
+        },
+        "Secondary Weapon Prefab": {
+          "path": "assets/Weapons/Remington870/Remington870.prefab",
+          "pathGuid": "cf1fec9edad348ec"
+        },
+        "Field of View": 90.0
+      }
     },
     {
       "Character Outfit": {
@@ -802,14 +843,6 @@
       ]
     },
     {
-      "C# Script": {
-        "Class": "Tartarus.Gameplay.SquadDefinition",
-        "Enabled": true,
-        "Fields JSON": "{\"Difficulty\": 1.0, \"NpcDamageScale\": 0.45, \"Respawn\": false, \"RespawnDelay\": 8.0, \"SquadSize\": 12, \"CorpseTime\": 20.0, \"MaxCorpses\": 16, \"UnseenTime\": 3.0}",
-        "Next Script ID": 1,
-        "Scripts": "[]",
-        "Source": "assets/Scripts/SquadDefinition.cs"
-      },
       "Dropped Weapon Settings": {
         "Lifetime": 20.0
       },
@@ -832,17 +865,19 @@
         1,
         1,
         1
-      ]
+      ],
+      "Squad Settings": {
+        "Difficulty": 1.0,
+        "NPC Damage Scale": 0.45,
+        "Respawn": false,
+        "Respawn Delay": 8.0,
+        "Squad Size": 12,
+        "Corpse Time": 20.0,
+        "Max Corpses": 16,
+        "Unseen Time": 3.0
+      }
     },
     {
-      "C# Script": {
-        "Class": "Tartarus.Gameplay.NpcDefinition",
-        "Enabled": true,
-        "Fields JSON": "{\"Brain\": 1, \"OutfitSeed\": 0, \"Skill\": 0.5, \"Squad\": 0, \"Weapon\": 0, \"Bare\": true}",
-        "Next Script ID": 1,
-        "Scripts": "[]",
-        "Source": "assets/Scripts/NpcDefinition.cs"
-      },
       "id": 26,
       "name": "Enemy Spawn 1 - Open (bare)",
       "order": 26,
@@ -862,17 +897,17 @@
         1,
         1,
         1
-      ]
+      ],
+      "NPC Spawn": {
+        "Brain": "Training Dummy",
+        "Outfit Seed": 0,
+        "Skill": 0.5,
+        "Squad": 0,
+        "Weapon": "AKS-74U",
+        "Bare": true
+      }
     },
     {
-      "C# Script": {
-        "Class": "Tartarus.Gameplay.NpcDefinition",
-        "Enabled": true,
-        "Fields JSON": "{\"Brain\": 1, \"OutfitSeed\": 0, \"Skill\": 0.5, \"Squad\": 0, \"Weapon\": 0, \"Bare\": false}",
-        "Next Script ID": 1,
-        "Scripts": "[]",
-        "Source": "assets/Scripts/NpcDefinition.cs"
-      },
       "id": 27,
       "name": "Enemy Spawn 2 - AK (dressed)",
       "order": 27,
@@ -892,17 +927,17 @@
         1,
         1,
         1
-      ]
+      ],
+      "NPC Spawn": {
+        "Brain": "Training Dummy",
+        "Outfit Seed": 0,
+        "Skill": 0.5,
+        "Squad": 0,
+        "Weapon": "AKS-74U",
+        "Bare": false
+      }
     },
     {
-      "C# Script": {
-        "Class": "Tartarus.Gameplay.NpcDefinition",
-        "Enabled": true,
-        "Fields JSON": "{\"Brain\": 1, \"OutfitSeed\": 0, \"Skill\": 0.5, \"Squad\": 0, \"Weapon\": 1, \"Bare\": false}",
-        "Next Script ID": 1,
-        "Scripts": "[]",
-        "Source": "assets/Scripts/NpcDefinition.cs"
-      },
       "id": 28,
       "name": "Enemy Spawn 3 - Remington (dressed)",
       "order": 28,
@@ -922,17 +957,17 @@
         1,
         1,
         1
-      ]
+      ],
+      "NPC Spawn": {
+        "Brain": "Training Dummy",
+        "Outfit Seed": 0,
+        "Skill": 0.5,
+        "Squad": 0,
+        "Weapon": "Remington 870",
+        "Bare": false
+      }
     },
     {
-      "C# Script": {
-        "Class": "Tartarus.Gameplay.NpcDefinition",
-        "Enabled": true,
-        "Fields JSON": "{\"Brain\": 1, \"OutfitSeed\": 0, \"Skill\": 0.5, \"Squad\": 0, \"Weapon\": 0, \"Bare\": false}",
-        "Next Script ID": 1,
-        "Scripts": "[]",
-        "Source": "assets/Scripts/NpcDefinition.cs"
-      },
       "id": 29,
       "name": "Enemy Spawn 4 - Crate (dressed)",
       "order": 29,
@@ -952,17 +987,17 @@
         1,
         1,
         1
-      ]
+      ],
+      "NPC Spawn": {
+        "Brain": "Training Dummy",
+        "Outfit Seed": 0,
+        "Skill": 0.5,
+        "Squad": 0,
+        "Weapon": "AKS-74U",
+        "Bare": false
+      }
     },
     {
-      "C# Script": {
-        "Class": "Tartarus.Gameplay.NpcDefinition",
-        "Enabled": true,
-        "Fields JSON": "{\"Brain\": 1, \"OutfitSeed\": 0, \"Skill\": 0.5, \"Squad\": 0, \"Weapon\": 0, \"Bare\": true}",
-        "Next Script ID": 1,
-        "Scripts": "[]",
-        "Source": "assets/Scripts/NpcDefinition.cs"
-      },
       "id": 30,
       "name": "Enemy Spawn 5 - Stairs (bare)",
       "order": 30,
@@ -982,17 +1017,17 @@
         1,
         1,
         1
-      ]
+      ],
+      "NPC Spawn": {
+        "Brain": "Training Dummy",
+        "Outfit Seed": 0,
+        "Skill": 0.5,
+        "Squad": 0,
+        "Weapon": "AKS-74U",
+        "Bare": true
+      }
     },
     {
-      "C# Script": {
-        "Class": "Tartarus.Gameplay.NpcDefinition",
-        "Enabled": true,
-        "Fields JSON": "{\"Brain\": 1, \"OutfitSeed\": 0, \"Skill\": 0.5, \"Squad\": 0, \"Weapon\": 0, \"Bare\": true}",
-        "Next Script ID": 1,
-        "Scripts": "[]",
-        "Source": "assets/Scripts/NpcDefinition.cs"
-      },
       "id": 31,
       "name": "Enemy Spawn 6 - Ledge (bare)",
       "order": 31,
@@ -1012,17 +1047,17 @@
         1,
         1,
         1
-      ]
+      ],
+      "NPC Spawn": {
+        "Brain": "Training Dummy",
+        "Outfit Seed": 0,
+        "Skill": 0.5,
+        "Squad": 0,
+        "Weapon": "AKS-74U",
+        "Bare": true
+      }
     },
     {
-      "C# Script": {
-        "Class": "Tartarus.Gameplay.NpcDefinition",
-        "Enabled": true,
-        "Fields JSON": "{\"Brain\": 1, \"OutfitSeed\": 0, \"Skill\": 0.5, \"Squad\": 0, \"Weapon\": 0, \"Bare\": true}",
-        "Next Script ID": 1,
-        "Scripts": "[]",
-        "Source": "assets/Scripts/NpcDefinition.cs"
-      },
       "id": 32,
       "name": "Enemy Spawn 7 - Wall (bare)",
       "order": 32,
@@ -1042,17 +1077,17 @@
         1,
         1,
         1
-      ]
+      ],
+      "NPC Spawn": {
+        "Brain": "Training Dummy",
+        "Outfit Seed": 0,
+        "Skill": 0.5,
+        "Squad": 0,
+        "Weapon": "AKS-74U",
+        "Bare": true
+      }
     },
     {
-      "C# Script": {
-        "Class": "Tartarus.Gameplay.NpcDefinition",
-        "Enabled": true,
-        "Fields JSON": "{\"Brain\": 1, \"OutfitSeed\": 0, \"Skill\": 0.5, \"Squad\": 0, \"Weapon\": 0, \"Bare\": true}",
-        "Next Script ID": 1,
-        "Scripts": "[]",
-        "Source": "assets/Scripts/NpcDefinition.cs"
-      },
       "id": 33,
       "name": "Enemy Spawn 8 - Sprinter (bare)",
       "order": 33,
@@ -1072,17 +1107,17 @@
         1,
         1,
         1
-      ]
+      ],
+      "NPC Spawn": {
+        "Brain": "Training Dummy",
+        "Outfit Seed": 0,
+        "Skill": 0.5,
+        "Squad": 0,
+        "Weapon": "AKS-74U",
+        "Bare": true
+      }
     },
     {
-      "C# Script": {
-        "Class": "Tartarus.Gameplay.NpcDefinition",
-        "Enabled": true,
-        "Fields JSON": "{\"Brain\": 1, \"OutfitSeed\": 0, \"Skill\": 0.5, \"Squad\": 0, \"Weapon\": 1, \"Bare\": false}",
-        "Next Script ID": 1,
-        "Scripts": "[]",
-        "Source": "assets/Scripts/NpcDefinition.cs"
-      },
       "id": 34,
       "name": "Enemy Spawn 9 - Jogger (dressed)",
       "order": 34,
@@ -1102,17 +1137,17 @@
         1,
         1,
         1
-      ]
+      ],
+      "NPC Spawn": {
+        "Brain": "Training Dummy",
+        "Outfit Seed": 0,
+        "Skill": 0.5,
+        "Squad": 0,
+        "Weapon": "Remington 870",
+        "Bare": false
+      }
     },
     {
-      "C# Script": {
-        "Class": "Tartarus.Gameplay.NpcDefinition",
-        "Enabled": true,
-        "Fields JSON": "{\"Brain\": 1, \"OutfitSeed\": 0, \"Skill\": 0.5, \"Squad\": 0, \"Weapon\": 0, \"Bare\": true}",
-        "Next Script ID": 1,
-        "Scripts": "[]",
-        "Source": "assets/Scripts/NpcDefinition.cs"
-      },
       "id": 35,
       "name": "Enemy Spawn 10 - Strafer (bare)",
       "order": 35,
@@ -1132,17 +1167,17 @@
         1,
         1,
         1
-      ]
+      ],
+      "NPC Spawn": {
+        "Brain": "Training Dummy",
+        "Outfit Seed": 0,
+        "Skill": 0.5,
+        "Squad": 0,
+        "Weapon": "AKS-74U",
+        "Bare": true
+      }
     },
     {
-      "C# Script": {
-        "Class": "Tartarus.Gameplay.NpcDefinition",
-        "Enabled": true,
-        "Fields JSON": "{\"Brain\": 1, \"OutfitSeed\": 0, \"Skill\": 0.5, \"Squad\": 0, \"Weapon\": 0, \"Bare\": false}",
-        "Next Script ID": 1,
-        "Scripts": "[]",
-        "Source": "assets/Scripts/NpcDefinition.cs"
-      },
       "id": 36,
       "name": "Enemy Spawn 11 - Pile A (dressed)",
       "order": 36,
@@ -1162,17 +1197,17 @@
         1,
         1,
         1
-      ]
+      ],
+      "NPC Spawn": {
+        "Brain": "Training Dummy",
+        "Outfit Seed": 0,
+        "Skill": 0.5,
+        "Squad": 0,
+        "Weapon": "AKS-74U",
+        "Bare": false
+      }
     },
     {
-      "C# Script": {
-        "Class": "Tartarus.Gameplay.NpcDefinition",
-        "Enabled": true,
-        "Fields JSON": "{\"Brain\": 1, \"OutfitSeed\": 0, \"Skill\": 0.5, \"Squad\": 0, \"Weapon\": 0, \"Bare\": true}",
-        "Next Script ID": 1,
-        "Scripts": "[]",
-        "Source": "assets/Scripts/NpcDefinition.cs"
-      },
       "id": 37,
       "name": "Enemy Spawn 12 - Pile B (bare)",
       "order": 37,
@@ -1192,7 +1227,15 @@
         1,
         1,
         1
-      ]
+      ],
+      "NPC Spawn": {
+        "Brain": "Training Dummy",
+        "Outfit Seed": 0,
+        "Skill": 0.5,
+        "Squad": 0,
+        "Weapon": "AKS-74U",
+        "Bare": true
+      }
     }
   ],
   "exposureEV": 0.0,

@@ -3,7 +3,6 @@
 #include "AtomicFile.h"
 #include "AssetDatabase.h"
 #include "ProjectPaths.h"
-#include "Scripting/ScriptRuntime.h"
 #include "Scripting/WeaponPrefab.h"
 #include <stdexcept>
 
@@ -155,15 +154,10 @@ bool FirstPersonAnimationSet::FromJsonString(const std::string& text, FirstPerso
     }
 
     parsed.HasLegacyGameplay=root.contains("gameplay");
-    {
-        std::string defaults;
-        if(!Scripting::RequestProject("weapon.import","{}",defaults))return Fail(error,"Project weapon defaults unavailable");
-        Scripting::ReadProjectWeaponGameplay(parsed.Gameplay,json::parse(defaults));
-    }
+    parsed.Gameplay=FirstPersonWeaponGameplay{};
     if (const auto g = root.find("gameplay"); g != root.end() && g->is_object()) {
-        std::string resolved;
-        if(!Scripting::RequestProject("weapon.import",g->dump(),resolved))return Fail(error,"Project weapon data validation failed: " + Scripting::LastError());
-        Scripting::ReadProjectWeaponGameplay(parsed.Gameplay,json::parse(resolved));
+        std::string why;
+        if(!Scripting::ImportLegacyWeaponGameplay(*g,parsed.Gameplay,why))return Fail(error,why);
         // Older presentation-only ADS fields remain a read compatibility path.
         parsed.Ads.Zoom=Number(*g,"adsZoom",parsed.Ads.Zoom);
         parsed.Ads.ViewModelZoom=Number(*g,"adsViewModelZoom",parsed.Ads.ViewModelZoom);
@@ -834,4 +828,3 @@ std::vector<FPBody::Check> FirstPersonWeaponValidate(const FirstPersonWeaponChec
     return out;
 }
 
-FirstPersonWeaponGameplay::FirstPersonWeaponGameplay() = default;
