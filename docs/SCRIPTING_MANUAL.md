@@ -43,9 +43,9 @@ flowchart TD
 | Task | Where to work |
 | --- | --- |
 | Add behavior to a placed object | A `MonoBehaviour` under `project/assets/Scripts` or another non-Editor asset folder. |
-| Change default player movement | `project/assets/Scripts/PlayerController.cs`. |
-| Change AK/870 fire, reload, chamber or pellet rules | `project/assets/Scripts/WeaponController.cs`. |
-| Route the built-in gameplay callbacks | `project/assets/Scripts/Gameplay.cs`, the project's `IProjectIntegration` implementation. |
+| Change default player movement | `src/Game/Player.cpp` (native). |
+| Change AK/870 fire, reload, chamber or loadout rules | `src/Game/WeaponRules.cpp`; pellets and impacts in `FirstPersonPresentation::FireShot` (native). |
+| Change body locomotion actions | `src/Game/BodyLocomotion.cpp` (native). |
 | Add an editor window or command | A C# source below an assets folder named `Editor`. |
 | Change an animator graph or recoil curve | The corresponding native controller/descriptor/recoil asset and existing editor UI. |
 | Add a native engine binding | Runtime SDK plus C++ service bridge; rebuild and restart. |

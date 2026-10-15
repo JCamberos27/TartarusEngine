@@ -1,6 +1,6 @@
 #include "FirstPersonPresentation.h"
 #include "FirstPersonMovementInput.h"
-#include "Scripting/ScriptRuntime.h"
+#include "WeaponRules.h"
 #include "Scripting/WeaponPrefab.h"
 
 #include "AnimationSystem.h"
@@ -143,7 +143,6 @@ bool FirstPersonPresentation::Start(World& world, AssetLibrary& assets,
                 std::filesystem::last_write_time(ProjectPaths::Resolve(*slot.first),ec));
         }
     }
-    if(!m_SlotSets.empty() && !Scripting::EnsureLoaded()) { SetError(Scripting::LastError()); return false; }
     if (m_SlotSets.empty()) return true;
     m_SlotAmmo.assign(m_SlotSets.size(), -1);
     m_SlotShoulderedButt.assign(m_SlotSets.size(), glm::vec3(0.0f));
@@ -1798,9 +1797,9 @@ Scripting::WeaponFrame FirstPersonPresentation::RunGameplay(int operation,float 
     f.FullAuto=m_FullAuto;
     f.BurstRemaining=m_BurstRemaining;
     f.WaitingShot=m_WaitingAnimatedShot;
-    f.ReloadHeldSeconds=m_ManagedReloadSeconds;
-    f.ReloadWasDown=m_ManagedReloadDown;
-    f.ReloadHoldFired=m_ManagedReloadFired;
+    f.ReloadHeldSeconds=m_ReloadSeconds;
+    f.ReloadWasDown=m_ReloadDown;
+    f.ReloadHoldFired=m_ReloadFired;
     f.Rpm=g.RoundsPerMinute;
     f.CycleDelay=g.CycleDelay;
     f.HoldSeconds=g.ReloadHoldSeconds;
@@ -1822,7 +1821,7 @@ Scripting::WeaponFrame FirstPersonPresentation::RunGameplay(int operation,float 
     if(ac->HasTag(K::kTagIdle)) f.Tags|=32;
     if(ac->HasTag(K::kTagReady)) f.Tags|=64;
     if(ac->HasTag(K::kTagIKOff)) f.Tags|=128;
-    if(!Scripting::InvokeProject("weapon",&f,sizeof f)) { f.Commands=0; f.Result=0; return f; }
+    WeaponRules::Update(f);
     m_Ammo=f.Ammo;
     m_FireCooldown=f.Cooldown;
     m_CycleWait=f.CycleWait;
@@ -1837,9 +1836,9 @@ Scripting::WeaponFrame FirstPersonPresentation::RunGameplay(int operation,float 
     m_FullAuto=f.FullAuto!=0;
     m_BurstRemaining=f.BurstRemaining;
     m_WaitingAnimatedShot=f.WaitingShot!=0;
-    m_ManagedReloadSeconds=f.ReloadHeldSeconds;
-    m_ManagedReloadDown=f.ReloadWasDown!=0;
-    m_ManagedReloadFired=f.ReloadHoldFired!=0;
+    m_ReloadSeconds=f.ReloadHeldSeconds;
+    m_ReloadDown=f.ReloadWasDown!=0;
+    m_ReloadFired=f.ReloadHoldFired!=0;
     if(f.Commands&8) { m_Procedural.EndBurst(); m_Procedural.SetFiring(false); }
     if(f.Commands&1) WeaponSound(*this,m_SetFile,m_Options.OwnerView,"dry_fire");
     if(f.Commands&4) ac->SetTrigger(K::kFire);
@@ -1878,32 +1877,48 @@ void FirstPersonPresentation::FireShot() {
                     EmitParticleBurst(*m_World, e, ps->BurstCount);
     glm::vec3 line = m_BoreDir;
     if (m_HasShotTarget && glm::length(m_ShotTarget - m_Muzzle) > 1e-3f) line = glm::normalize(m_ShotTarget - m_Muzzle);
-    Scripting::ShotFrame frame;
-    frame.Origin={m_Muzzle.x,m_Muzzle.y,m_Muzzle.z}; frame.Direction={line.x,line.y,line.z};
-    frame.Spread=HasTag(K::kTagAds)?g.SpreadAds:g.SpreadHip;
-    frame.ImpactImpulse=g.ImpactImpulse; frame.ImpactMaxSpeed=g.ImpactMaxSpeed;
-    frame.BulletHoleRadius=g.BulletHoleRadius; frame.Range=300; frame.Pellets=g.Pellets;
-    frame.RandomSeed=static_cast<std::int32_t>(m_Rng());
-    int pellet=0;
-    Scripting::InvokeProjectWithTrace(*m_World,"shot",&frame,sizeof frame,[&](const Scripting::NativeRequest& trace) {
-        const glm::vec3 origin(trace.A.x,trace.A.y,trace.A.z), point(trace.B.x,trace.B.y,trace.B.z);
-        const bool struck=trace.Result!=0;
+    // A shotgun's round is several pellets, each down its own line inside the spread cone; the
+    // round's shove is shared between them.
+    const float spread = HasTag(K::kTagAds) ? g.SpreadAds : g.SpreadHip;
+    const int pellets = std::max(1, g.Pellets);
+    std::uniform_real_distribution<float> unit(0.0f, 1.0f);
+    for (int p = 0; p < pellets; ++p) {
+        const glm::vec3 dir = pellets > 1 || spread > 0.0f ? FirstPersonPelletDirection(line, spread, unit(m_Rng), unit(m_Rng))
+                                                           : line;
+        const float o[3] = {m_Muzzle.x, m_Muzzle.y, m_Muzzle.z}, d[3] = {dir.x, dir.y, dir.z};
+        RaycastHit hit;
+        QueryFilter filter;
+        filter.HitTriggers = 0;
+        const bool recording = PhysicsWorld::GetQueryRecording();
+        PhysicsWorld::SetQueryRecording(false);
+        const bool struck = PhysicsWorld::RaycastFiltered(o, d, 300.0f, filter, hit) && hit.Hit;
+        PhysicsWorld::SetQueryRecording(recording);
         if (m_ShotTraces.size() < 256)
-            m_ShotTraces.push_back({origin,point,struck,pellet==0,trace.Entity});
-        if(struck && m_ShotHits.size()<256) {
-            const glm::vec3 delta=point-origin;
-            const glm::vec3 direction=glm::length(delta)>1e-6f?glm::normalize(delta):line;
-            m_ShotHits.push_back({point,{trace.C.x,trace.C.y,trace.C.z},trace.Entity,trace.Value,
-                                  origin,direction,std::max(1,frame.Pellets)});
-        }
-        ++pellet;
-    });
+            m_ShotTraces.push_back({m_Muzzle, struck ? glm::vec3(hit.Point[0], hit.Point[1], hit.Point[2]) : m_Muzzle + dir * 300.0f,
+                                    struck, p == 0, struck ? hit.Entity : 0xFFFFFFFFu});
+        if (!struck) continue;
+        // Bounded, in case nothing drains it (no renderer this session).
+        if (m_ShotHits.size() < 256)
+            m_ShotHits.push_back({glm::vec3(hit.Point[0], hit.Point[1], hit.Point[2]),
+                                  glm::vec3(hit.Normal[0], hit.Normal[1], hit.Normal[2]), hit.Entity, g.BulletHoleRadius,
+                                  m_Muzzle, dir, pellets});
+        if (g.ImpactImpulse <= 0.0f) continue;
+        const auto e = static_cast<entt::entity>(hit.Entity);
+        const auto* rb = m_World->Registry.valid(e) ? m_World->Registry.try_get<RigidbodyComponent>(e) : nullptr;
+        if (!rb || rb->IsKinematic) continue;
+        // Light props: capped at ImpactMaxSpeed of velocity change; heavy ones just get the impulse.
+        float impulse = g.ImpactImpulse;
+        if (g.ImpactMaxSpeed > 0.0f) impulse = std::min(impulse, g.ImpactMaxSpeed * std::max(rb->Mass, 0.01f));
+        const glm::vec3 j = dir * (impulse / (float)pellets);
+        const float jv[3] = {j.x, j.y, j.z};
+        PhysicsWorld::AddForceAtPosition(hit.Entity, jv, hit.Point, ForceMode::Impulse);
+    }
 }
 
 Scripting::WeaponLoadoutFrame FirstPersonPresentation::RunLoadout(int operation,int value){
     Scripting::WeaponLoadoutFrame f;f.Operation=operation;f.Value=value;f.Count=(int)m_SlotAmmo.size();f.Slot=m_Slot;f.Pending=m_PendingSlot;f.Ammo=m_Ammo;f.Magazine=m_Set.Gameplay.Magazine;f.Burst=m_BurstRemaining;f.CycleWait=m_CycleWait;f.Active=IsActive();f.Equipped=m_Equipped;f.Requested=value!=0;f.Chambered=m_Chambered;f.SlotAmmo=reinterpret_cast<std::uintptr_t>(m_SlotAmmo.data());
     if(auto* ac=Animator()){f.Hidden=ac->HasTag(K::kTagHidden);f.InTransition=ac->InTransition;}
-    if(!Scripting::InvokeProject("weapon.loadout",&f,sizeof f))return f;
+    WeaponRules::UpdateLoadout(f);
     m_PendingSlot=f.Pending;m_Ammo=f.Ammo;m_Chambered=f.Chambered!=0;m_CycleWait=f.CycleWait;m_BurstRemaining=f.Burst;
     if(f.Commands&2){m_Procedural.EndBurst();m_Procedural.SetFiring(false);}
     if(f.Commands&8)GearSound(*this,m_SetFile,m_Options.OwnerView,f.Equipped!=0);

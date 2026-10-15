@@ -8,7 +8,7 @@
 #
 # then run tools/gen_npc_soldier.py for the soldiers' copy. Usage: python tools/gen_body_locomotion.py <repo root>
 #
-# The game drives it from BodyLocomotion.cs (the player) and NpcBody (the soldiers). Travel is the capsule's
+# The game drives it from BodyLocomotion.cpp (the player) and NpcBody (the soldiers). Travel is the capsule's
 # (input-led): the starts, stops and pivots are distance matched (a state's distanceParam) so their feet keep
 # pace with it, and the loops play at the rate the capsule moves.
 import json

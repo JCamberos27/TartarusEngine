@@ -1,6 +1,6 @@
 #include "Scripting/GameFrames.h"
 #include "Scripting/GameCommands.h"
-#include "Scripting/ScriptRuntime.h"
+#include "BodyLocomotion.h"
 #include <stdexcept>
 #include "FirstPersonBody.h"
 #include "Profiler.h"
@@ -1154,7 +1154,7 @@ void FirstPersonBody::Tick(World& world, const Player& player, const Camera& cam
     f.FidgetTime=m_Loco.FidgetTime;f.FidgetNext=m_Loco.FidgetNext;f.FidgetIndex=m_Loco.FidgetIndex;
     f.StartGait=m_Loco.StartGait;f.StopGait=m_Loco.StopGait;f.PivotGait=m_Loco.PivotGait;f.StartTurn=m_Loco.StartTurn;f.StartTurnAmount=m_Loco.StartTurnAmount;
     f.PivotDir={m_Loco.PivotDir.x,m_Loco.PivotDir.y,0};f.StepDir={m_Loco.StepDir.x,m_Loco.StepDir.y,0};f.PivotReversed=m_Loco.PivotReversed;
-    if(!Scripting::InvokeProject("body.motion",&f,sizeof f))throw std::runtime_error("Project locomotion unavailable");
+    BodyLocomotion::Update(f);
     // Mid-crossfade (crouching on the move, a stop easing out) nothing new starts on top, nor does one still pending from
     // the frame the fade began: the fade would be cut short and the view jolt with it (a crouch into a crouched start
     // dropped the eye 33 cm in 0.08 s). The loop picks up the move.

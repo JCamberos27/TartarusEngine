@@ -1,5 +1,4 @@
-// The bit flags the project gameplay scripts set in a frame's Triggers (GameFrames.h). The values are ABI:
-// project/assets/Scripts/GameplayContracts.cs holds the same numbers (BodyMotionTrigger).
+// The bit flags BodyLocomotion::Update sets in BodyMotionFrame::Triggers (GameFrames.h).
 #pragma once
 namespace Scripting {
 
