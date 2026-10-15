@@ -7,7 +7,7 @@
 //   2 additive - muzzle flashes and sparks: shape x colour, no coverage.
 // Soft against the scene's depth so nothing cuts a hard line where it meets a surface.
 
-vec3 vWorldPos; // ModelShading's functions read it: here the sprite's fragment
+vec3 vWorldPos = vec3(0.0); // ModelShading's functions read it: here the sprite's fragment
 #include "ModelShading.glsl"
 
 struct FxSprite {

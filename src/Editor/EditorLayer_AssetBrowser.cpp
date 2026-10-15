@@ -1001,6 +1001,7 @@ void EditorLayer::CommitRename(World& world, AssetLibrary& assets) {
         // edit. Leave the field open with the raw text still in it so the user can fix it, and
         // flash an inline error instead.
         m_RenameRejectedFlash = 1.6f;
+        m_RenamingJustStarted = true; // Enter took focus off the field; give it back next frame
         return;
     }
     if (m_RenamingIsFolder) {
@@ -1033,6 +1034,7 @@ void EditorLayer::CommitRename(World& world, AssetLibrary& assets) {
                 if (!RenameAssetFile(world, assets, m_RenamingAssetKey, newKey, why)) {
                     Log::Error("Couldn't rename '" + oldP.filename().string() + "': " + why + ".");
                     m_RenameRejectedFlash = 1.6f;
+                    m_RenamingJustStarted = true; // Enter took focus off the field; give it back next frame
                     return;
                 }
                 if (m_SelectedAssetKey == m_RenamingAssetKey) m_SelectedAssetKey = newKey;
