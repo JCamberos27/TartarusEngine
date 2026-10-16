@@ -69,6 +69,10 @@ bool IsPending(const World& world, entt::entity root, int* done = nullptr, int* 
 // Applies every waiting change whose assets have all loaded. Call once per frame, after
 // AssetLibrary::PumpAsync and before UpdateHiding.
 void UpdatePending(World& world, AssetLibrary& assets);
+// Whether the next UpdatePending(world) is about to change it: a waiting change whose assets have all loaded,
+// or an outfit whose body it hasn't checked against the wardrobe yet (RefreshBodies). The editor journals
+// an edit made without an undo step before then (EditorLayer::JournalBeforeOutfitLanding).
+bool LandingDue(const World& world);
 // Goes up each time UpdatePending changes a world: a waiting change landing, or a stale body being rebuilt. Neither
 // is an edit of its own - one finishes an edit made frames earlier, the other brings a scene just opened up to
 // date - so the editor folds them into its undo baseline (EditorLayer::BeginGlobalUndoFrame).

@@ -2938,7 +2938,10 @@ int main(int argc, char** argv) {
             PROFILE_SCOPE("Asset Pump + Outfit Hiding");
             { PROFILE_SCOPE("Clip Prefetch"); PrefetchAnimatorClips(world, assets); } // clip files for Play, loaded behind the editor
             { PROFILE_SCOPE("Asset Pump"); assets.PumpAsync(3.0); }
-            { PROFILE_SCOPE("Outfit Pending"); OutfitSystem::UpdatePending(world, assets); }
+            { PROFILE_SCOPE("Outfit Pending");
+              // #15 - an edit made without an undo step stays its own step, not part of the baseline the landing makes.
+              if (!playerMode && OutfitSystem::LandingDue(world)) editor.JournalBeforeOutfitLanding(world);
+              OutfitSystem::UpdatePending(world, assets); }
             { PROFILE_SCOPE("Outfit Hiding"); OutfitSystem::UpdateHiding(world); } // outfit skin under clothing (only when an outfit's pieces changed)
             }
 
