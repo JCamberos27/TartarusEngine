@@ -1397,6 +1397,15 @@ private:
     void EnsureUndoScene(const World& world);
     void BeginSceneUndo(const World& world, const std::string& label);
     void FinishGlobalUndo(const World& world, bool force = false);
+    // #15 - before Undo / Redo restore a snapshot: a scene change made with no undo step (the
+    // world no longer matches m_CurrentUndoScene) is pushed as a step of its own, so restoring
+    // never throws it away along with the step being undone. True when it pushed one.
+    bool JournalUnrecordedChange(const World& world, const std::string& currentJson);
+    // The same, serializing the scene itself (when there is a baseline to compare with). For the
+    // places that drop m_CurrentUndoScene after changing the world on purpose (external file
+    // changes) or set the history aside (Play, Prefab Mode): a change made before them would
+    // otherwise end up in the new baseline, and the next Ctrl+Z would revert it unseen.
+    void JournalUnrecordedChange(const World& world);
     void ReloadHistoryFiles(AssetLibrary& assets,const std::vector<EditorFileHistory::State>& files);
     void RefreshAfterHistoryFiles(const std::vector<EditorFileHistory::State>& files);
 
