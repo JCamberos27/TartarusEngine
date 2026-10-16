@@ -1670,14 +1670,6 @@ bool Enabled() { return g_Enabled; }
 
 int ExitCode() { return g_Failed == 0 && g_Passed > 0 ? 0 : 1; }
 
-void EndProcess(int code) {
-    std::cout.flush();
-    std::cerr.flush();
-    std::fflush(nullptr);
-    watchdog::TerminateProcess(watchdog::GetCurrentProcess(), (unsigned int)code);
-    std::abort(); // unreachable: TerminateProcess on our own process doesn't return
-}
-
 bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera& camera) {
     if (!g_Enabled) return true;
     if (g_Done) return true;
