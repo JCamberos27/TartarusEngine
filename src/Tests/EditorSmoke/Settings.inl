@@ -328,6 +328,57 @@ void RegisterSettingsTests() {
          CloseByX(EditorPanels::Settings), UntilGone(EditorPanels::Settings)},
     }));
 
+    // ... and writes a .meta only when its import settings changed. Every undo rewrote the importer block
+    // of each loaded model whose .meta had one: an empty "excludeNodes" dropped, pivotOffset -0.0055
+    // turned into -0.005499999970197678 (the door models' tracked .meta files after a scenes run).
+    {
+        namespace fs = std::filesystem;
+        auto dir = [] { return ProjectPaths::Resolve("editor-smoke-scratch-meta"); };
+        auto model = [dir] { return (fs::u8path(dir()) / "SmokeMeta.gltf").u8string(); };
+        auto readMeta = [model] {
+            std::ifstream f(fs::u8path(model() + ".meta"), std::ios::binary);
+            return std::string(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+        };
+        auto loaded = std::make_shared<std::shared_ptr<Model>>();
+        Add("settings: an undo leaves an unchanged model .meta as it was, byte for byte", Seq({
+            {Do("a scratch model whose .meta is written like the door models'", [dir, model, loaded](Ctx& c) {
+                 std::error_code ec;
+                 fs::remove_all(fs::u8path(dir()), ec);
+                 fs::create_directories(fs::u8path(dir()), ec);
+                 fs::copy_file(fs::u8path(ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf")), fs::u8path(model()), ec);
+                 if (ec) { Fail("couldn't copy the model: " + ec.message()); return; }
+                 std::ofstream(fs::u8path(model() + ".meta"), std::ios::binary)
+                     << "{\n  \"guid\": \"5e0a7c1d2b3f4a69\",\n  \"importer\": {\n    \"excludeNodes\": [],\n    \"globalScale\": 0.10000000149011612,\n"
+                        "    \"importAnimations\": false,\n    \"importNormals\": true,\n    \"importSkeleton\": false,\n"
+                        "    \"materialImportMode\": 1,\n    \"optimizeGraph\": true,\n"
+                        "    \"pivotOffset\": [\n      -0.0055,\n      -1.619,\n      -0.001\n    ]\n  },\n"
+                        "  \"metaVersion\": 1,\n  \"type\": \"model\"\n}\n";
+                 *loaded = c.A.LoadModel(model());
+                 if (!*loaded) Fail("couldn't load the scratch model");
+             }),
+             FreshScene(), WaitSeconds(1.0),
+             Do("note its .meta as the load left it", [readMeta](Ctx&) { g_Text = readMeta(); }),
+             Do("rename Alpha (an undo step)", [](Ctx& c) {
+                 X::PushUndo(c.E, c.W, "Rename Alpha");
+                 c.W.Registry.get<NameComponent>(ByName(c.W, "Alpha")).Name = "Alpha 2";
+             }), Wait(3),
+             HoverPanel(kScene), Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
+             Until("undo puts the name back", [](Ctx& c) { return ByName(c.W, "Alpha") != entt::null; }),
+             Expect("the .meta is as it was", [readMeta](Ctx&) {
+                 const std::string now = readMeta();
+                 return now == g_Text ? std::string() : "the undo rewrote it:\n" + now;
+             })},
+        }), [dir, loaded](Ctx& c) {
+            if (*loaded) c.A.RemoveModel(*loaded);
+            loaded->reset();
+            const auto& folders = c.A.Folders();
+            if (std::find(folders.begin(), folders.end(), "editor-smoke-scratch-meta") != folders.end())
+                c.A.DeleteFolderRecursive("editor-smoke-scratch-meta");
+            std::error_code ec;
+            fs::remove_all(fs::u8path(dir()), ec);
+        });
+    }
+
     // Shortcuts has no checkbox either: rebind one (press-to-bind), then reset it from its row.
     Add("settings: Shortcuts - rebind Invert Selection, then reset it", Seq({
         {FreshScene(), Wait(2)},
