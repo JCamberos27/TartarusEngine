@@ -64,6 +64,44 @@ private:
     std::array<int, EditorSoundEvents::kEventCount> m_Repeats{};
 };
 
+// Phase 2: the sounds read off ImGui's own state once a frame, so every widget gets them - built-in ImGui sliders and
+// combos as much as the shared primitives, in the host and in modules alike (they share one ImGuiContext). The decision is
+// this pure state machine over a per-frame snapshot (unit-tested); ObserveImGui fills the snapshot from the live context.
+struct UiFrame {
+    unsigned ActiveId = 0;      // the widget held / being edited
+    bool Edited = false;        // ...changed its value this frame
+    bool MouseDown = false, MouseReleased = false, EnterPressed = false;
+    float MouseX01 = 0.5f;      // across the window
+    float MouseDx = 0.0f, MouseDy = 0.0f; // px this frame
+    unsigned HoveredId = 0;
+    bool HoverInMenu = false;   // the hovered item is in a menu, popup, dropdown, the menu bar or the toolbar
+    bool HoverInPickMenu = false; // ...in a menu / dropdown / context menu whose items are picks (not a modal)
+    int PopupDepth = 0;         // open popups (menus, dropdowns, context menus, modals)
+    bool DragActive = false;    // an in-editor drag & drop payload is held
+    bool DropTargetHovered = false; // ...over a target that would take it
+};
+struct UiSound {
+    Event E;
+    float X01;
+    float Pitch = 1.0f;
+};
+class UiObserver {
+public:
+    static constexpr float kTickPx = 7.0f;       // mouse travel per slider detent
+    static constexpr float kPitchSpanPx = 500.0f; // net travel for the full pitch swing...
+    static constexpr float kPitchSwing = 0.08f;   // ...of +-8%
+    void Step(const UiFrame& f, std::vector<UiSound>& out);
+    void Reset() { *this = UiObserver{}; }
+
+private:
+    UiFrame m_Prev;
+    bool m_Primed = false;
+    bool m_Sliding = false;
+    unsigned m_SlideId = 0;
+    float m_TickAccum = 0.0f, m_Net = 0.0f;
+};
+void ObserveImGui(); // host, once a frame before ImGui::Render
+
 // The files of `event` in `dir`: <Name>.wav, else <Name>_1.wav, <Name>_2.wav ... in order.
 std::vector<std::string> FindVariants(const std::string& dir, Event e);
 
@@ -78,7 +116,7 @@ Settings FromEditorSettings();      // EditorSettings' saved values over the def
 void Update();
 const Settings& Current();
 void SetWindowFocused(bool focused);
-void Play(Event e, float screenX01 = -1.0f);
+void Play(Event e, float screenX01 = -1.0f, float pitchScale = 1.0f);
 // Screen x of the last ImGui item, as Play's screenX01 (needs a current ImGui frame).
 float LastItemScreenX();
 // For tests and the (Phase 3) Sound Board.
