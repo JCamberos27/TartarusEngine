@@ -224,8 +224,10 @@ jobs:
       # drives every panel, menu and tool of the real editor with synthetic input, under the same
       # llvmpipe context as the smoke test. Exit code is 0 only when every test passed. It writes
       # its screenshots to editor-test-shots/, uploaded below whether it passed or not.
+      # Release only: Debug gave identical results at twice the time. The Scenes suite is skipped
+      # because CI has none of the external assets its scenes load (each would wait for nothing).
       - name: Editor smoke test (Mesa llvmpipe)
-        if: always() && steps.mesa.outcome == 'success'
+        if: always() && steps.mesa.outcome == 'success' && matrix.config == 'Release'
         timeout-minutes: 30
         shell: pwsh
         env:
@@ -235,6 +237,7 @@ jobs:
           MESA_GLSL_VERSION_OVERRIDE: "460"
           TARTARUS_EDITOR_TEST_SHOTS: ${{ github.workspace }}\editor-test-shots
           TARTARUS_EDITOR_TEST_SHOW: "1"
+          TARTARUS_EDITOR_TEST_EXCLUDE: "scenes:"
         run: |
           $exe = "build\${{ matrix.config }}\TartarusEngine.exe"
           $p = Start-Process -FilePath $exe -ArgumentList "--editor-tests" -NoNewWindow -Wait -PassThru
