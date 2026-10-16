@@ -220,6 +220,18 @@ void EditorLayer::ClearRedoHistory() {
     m_RedoBaseJson.shrink_to_fit();
 }
 
+// Writes LastScenePath to the prefs now, outside the undo journal. Left to the frame's coalesced
+// Flush, the write landed after New/Open/Save As had cleared the history and was journaled as an
+// "Edit editor_prefs.json" step, so the first Ctrl+Z after opening a scene only rewrote the prefs.
+void EditorLayer::RememberLastScene(const std::string& path) {
+    EditorSettings::Get().LastScenePath = path;
+    EditorSettings::Save();
+    const bool wasApplying = m_GlobalUndoApplying;
+    m_GlobalUndoApplying = true; // the AtomicFile observer ignores writes while this is set
+    EditorSettings::Flush();
+    m_GlobalUndoApplying = wasApplying;
+}
+
 void EditorLayer::ClearUndoHistory() {
     m_GlobalUndoActive=false;m_FileJournal.Clear();m_GlobalUndoScene.clear();m_GlobalUndoSelection.clear();
     m_GlobalUndoHasScene=false;m_CurrentUndoScene.clear();
@@ -270,8 +282,7 @@ bool EditorLayer::DoSaveAs(World& world, AssetLibrary& assets) {
     ClearRecoverySnapshot();       // clears the snapshot for the PREVIOUS path (still current here)
     m_CurrentScenePath = path;
     m_LoadFailedScenePath.clear(); // #84
-    EditorSettings::Get().LastScenePath = path; // reopen this one next launch (#95)
-    EditorSettings::Save();
+    RememberLastScene(path); // reopen this one next launch (#95)
     m_Dirty = false;
     m_SavedUndoDepth = m_ContentDepth; // this history position now matches disk
     m_AutoSaveTimer = 0.0f;
@@ -1090,8 +1101,7 @@ void EditorLayer::NewScene(World& world, AssetLibrary& assets) {
         m_LoadFailedScenePath.clear(); // #84
         m_Dirty = false;                       // matches disk
         m_SavedUndoDepth = m_ContentDepth;
-        EditorSettings::Get().LastScenePath = pathStr;
-        EditorSettings::Save();
+        RememberLastScene(pathStr);
         InvalidateScenesListing(); // (#175) wrote a new file under scenes/
     } else {
         // Couldn't write (read-only project dir, …) — fall back to untitled-in-memory: Save
@@ -1120,8 +1130,7 @@ void EditorLayer::OpenScene(World& world, AssetLibrary& assets, const std::strin
     InvalidateModelThumbnail();
     ClearRecoverySnapshot(); // drop the outgoing scene's snapshot before switching away from it
     m_CurrentScenePath = path;
-    EditorSettings::Get().LastScenePath = path; // reopen this one next launch (#95)
-    EditorSettings::Save();
+    RememberLastScene(path); // reopen this one next launch (#95)
     ClearSelection();
     m_SoloLights.clear();
     m_MutedLights.clear();

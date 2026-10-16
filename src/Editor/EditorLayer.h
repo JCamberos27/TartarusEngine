@@ -1426,6 +1426,7 @@ private:
                                 UndoEntry& outEntry, std::string& outFullJson);
     void ClearRedoHistory();  // redo stack + its base, kept in lockstep
     void ClearUndoHistory();  // both stacks and both bases - for New/Open/recovery-restore
+    void RememberLastScene(const std::string& path); // LastScenePath, written now and never journaled as an undo step
 
     // Set at the top of every Draw() call - PushUndo needs AssetLibrary to snapshot its state
     // (folders, display names, import settings) alongside the entity graph, but threading an
