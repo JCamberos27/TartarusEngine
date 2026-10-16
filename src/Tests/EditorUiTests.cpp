@@ -342,7 +342,14 @@ Query ByLabel(std::string label, std::string root = {}) { Query q; q.Label = std
 Query ByExact(std::string label, std::string root = {}, int nth = 0) {
     Query q; q.Exact = std::move(label); q.Root = std::move(root); q.Nth = nth; return q;
 }
-Query ByTag(std::string tag) { Query q; q.Tag = std::move(tag); return q; }
+// Hierarchy rows ("row:<name>") are clicked on their name side: at a narrow panel width the
+// row's centre lands on its component icons, which take the click for themselves.
+Query ByTag(std::string tag) {
+    Query q;
+    if (tag.rfind("row:", 0) == 0) q.AnchorX = 0.25f;
+    q.Tag = std::move(tag);
+    return q;
+}
 // The same item, clicked near its right end (a row's x button).
 Query RightEnd(Query q) { q.AnchorX = 0.97f; return q; }
 Query ByTagPrefix(std::string prefix) { Query q; q.TagPrefix = std::move(prefix); return q; }
