@@ -95,6 +95,12 @@ Step InspReveal(Query q) {
         return false;
     }, 120};
 }
+// One of the Particle System section's Restart / Emit Burst / Clear buttons.
+Query InspParticleButton(const char* label) {
+    Query q = ByExact(label, kInspector);
+    q.Pred = [](const UiItem& it) { return Contains(it.Window, "Particle System"); };
+    return q;
+}
 // Clicks a component's "..." button and waits until its menu shows `item` in the same place on
 // consecutive frames: on its first frame the popup is not yet moved back inside a narrow window,
 // so clicking the item then misses it (and the menu stays open).
@@ -380,6 +386,19 @@ void RegisterInspectorTests() {
                  if (Contains(it.Window, "Particle System") && (it.Status & ImGuiItemStatusFlags_Openable) &&
                      !seen.insert(Visible(it.Label)).second)
                      return "two '" + Visible(it.Label) + "' headers";
+             return std::string();
+         }),
+         // #13: the Restart / Emit Burst / Clear row ran past the right edge of a narrow Inspector.
+         InspReveal(InspParticleButton("Clear")), Wait(2),
+         Shot("buttons", {kInspector}),
+         Expect("Restart, Emit Burst and Clear fit inside the Inspector", [](Ctx&) {
+             for (const char* label : {"Restart", "Emit Burst", "Clear"}) {
+                 const UiItem* it = Find(InspParticleButton(label));
+                 if (!it) return std::string("no '") + label + "' button";
+                 if (it->Rect.Max.x > it->Clip.Max.x + 0.5f)
+                     return std::string("'") + label + "' ends at x=" + std::to_string((int)it->Rect.Max.x) +
+                            ", past the edge at " + std::to_string((int)it->Clip.Max.x);
+             }
              return std::string();
          }),
          InspReveal(ByExact("Emission", kInspector)), Click(ByExact("Emission", kInspector)), Wait(3),
