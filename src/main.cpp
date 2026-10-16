@@ -446,9 +446,23 @@ int main(int argc, char** argv) {
         // A fresh scratch user folder every run: default prefs and layout, no bookmarks, tabs or
         // favorites - the tests start from a known state and never touch the user's own files.
         namespace fs = std::filesystem;
-        UserPaths::SetAppName("TartarusEngine-Test");
+        // TARTARUS_EDITOR_TEST_INSTANCE=<name> gives this run its own folder
+        // (TartarusEngine-Test-<name>), so runs from different checkouts at the same time don't
+        // overwrite each other's prefs. Letters, digits, '-' and '_' only.
+        std::string scratchName = "TartarusEngine-Test";
+        {
+            char* inst = nullptr;
+            size_t instLen = 0;
+            if (_dupenv_s(&inst, &instLen, "TARTARUS_EDITOR_TEST_INSTANCE") == 0 && inst && inst[0]) {
+                const std::string s(inst);
+                if (std::all_of(s.begin(), s.end(), [](unsigned char ch) { return std::isalnum(ch) || ch == '-' || ch == '_'; }))
+                    scratchName += "-" + s;
+            }
+            free(inst);
+        }
+        UserPaths::SetAppName(scratchName);
         const fs::path scratch = UserPaths::Root();
-        if (scratch.filename() != "TartarusEngine-Test") {
+        if (scratch.filename() != scratchName) {
             std::cerr << "--editor-tests: could not set up a scratch user folder; refusing to run." << std::endl;
             return 1;
         }
@@ -538,17 +552,10 @@ int main(int argc, char** argv) {
         // Per-user preferences, loaded before anything reads them. No GL or project state needed.
         EditorSettings::Load();
         if (!opt.editorShotDir.empty() && opt.editorShotScale > 0.0f) EditorSettings::Get().UiScaleOverride = opt.editorShotScale;
-        if (opt.editorTestsMode) {
-            // TARTARUS_EDITOR_TEST_SCALE=1.0: pin the UI scale (CI's runner is 96 DPI, so 1.0), so a
-            // high-DPI desktop can reproduce its layout together with TARTARUS_EDITOR_TEST_SIZE.
-            char* sc = nullptr;
-            size_t scLen = 0;
-            if (_dupenv_s(&sc, &scLen, "TARTARUS_EDITOR_TEST_SCALE") == 0 && sc) {
-                const float v = static_cast<float>(std::atof(sc));
-                if (v > 0.0f) EditorSettings::Get().UiScaleOverride = v;
-            }
-            std::free(sc);
-        }
+        // TARTARUS_EDITOR_TEST_SCALE=1 (with TARTARUS_EDITOR_TEST_SIZE=1044x788) reproduces CI's
+        // layout on a high-DPI desktop. Only the tests' scratch prefs are changed.
+        if (const char* sc = std::getenv("TARTARUS_EDITOR_TEST_SCALE"); sc && opt.editorTestsMode && std::atof(sc) > 0.0)
+            EditorSettings::Get().UiScaleOverride = (float)std::atof(sc);
         if (!opt.editorShotDir.empty() && opt.editorShotGlass) {
             // Only the scratch copy of the prefs (TartarusEngine-Shot) is changed.
             EditorSettings& shotPrefs = EditorSettings::Get();
