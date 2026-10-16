@@ -315,6 +315,10 @@ void EditorLayer::RecordSelectionHistory(const World& world) {
     // append to either history.
     if (m_SelHistoryNavigating) { m_SelHistoryNavigating = false; m_EditPushedThisFrame = false; return; }
 
+    // Same objects under new handles: Stop, Undo and Redo rebuild every entity and restore the
+    // selection by order. That isn't a pick - no undo step, no history entry.
+    if (prev == entry) { m_EditPushedThisFrame = false; return; }
+
     // vTabs: selecting something brings the Inspector back to its Selection tab, so it shows what
     // was just picked. (The Inspector lock is what keeps a view while selecting elsewhere.) A scene
     // switch alone isn't a pick.

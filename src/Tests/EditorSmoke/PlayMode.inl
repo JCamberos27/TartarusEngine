@@ -176,6 +176,8 @@ void RegisterPlayModeTests() {
 
     Add("playmode: a First Person Player on a floor plays and stops cleanly", {
         FreshScene(), Wait(2),
+        // Project .wav files are gitignored (a fresh checkout, CI, has none): the landing foley can't load.
+        AllowLogError("Audio: failed to load sound"),
         Do("floor and sun", [](Ctx& c) {
             const glm::vec3 zero(0.0f);
             const entt::entity floor = c.W.CreateModelEntity(c.A.CreatePrimitive("cube"), glm::vec3(0, -0.5f, 0), zero, glm::vec3(40, 1, 40), "Floor");
