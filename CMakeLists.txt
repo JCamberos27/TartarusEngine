@@ -318,6 +318,7 @@ set(TARTARUS_EDITOR_MODULE_SOURCES
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleConsole.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleStats.cpp
   ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleHistory.cpp
+  ${CMAKE_SOURCE_DIR}/src/Editor/EditorModuleTestHooks.cpp
 )
 list(REMOVE_ITEM ENGINE_SOURCES ${TARTARUS_GAME_MODULE_ONLY_SOURCES} ${TARTARUS_EDITOR_MODULE_SOURCES})
 
@@ -476,7 +477,9 @@ function(tartarus_enable_release_debug_info target)
 endfunction()
 
 # Must match the host's ImGui configuration exactly — the two copies share one ImGuiContext.
-target_compile_definitions(TartarusEditor PRIVATE IMGUI_DEFINE_MATH_OPERATORS)
+# IMGUI_ENABLE_TEST_ENGINE as in the host: the module's items reach the --editor-tests registry
+# through the forwarders in EditorModuleTestHooks.cpp (see EditorTestHooks.h).
+target_compile_definitions(TartarusEditor PRIVATE IMGUI_DEFINE_MATH_OPERATORS IMGUI_ENABLE_TEST_ENGINE)
 target_compile_options(TartarusEditor PRIVATE
   $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX /MP>
   $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
