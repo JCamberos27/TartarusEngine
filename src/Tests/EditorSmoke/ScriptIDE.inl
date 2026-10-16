@@ -310,13 +310,21 @@ void RegisterScriptIDETests() {
     Add("scriptide: Open in Script IDE from a shader's Asset Browser menu", Join({
         {FreshScene(), Wait(2),
          Do("browse the Shaders folder", [](Ctx& c) { g_Text = X::CurrentFolder(c.E); X::NavigateFolder(c.E, "Shaders"); }),
+         // A small window can leave a floating panel (the Animator) over the docked Asset Browser.
+         Do("bring the Asset Browser to the front", [](Ctx& c) {
+             c.E.SetShowAssetBrowser(true);
+             if (ImGuiWindow* w = Shown(EditorPanels::Animator); w && !w->DockIsActive) c.E.SetShowAnimator(false);
+             ImGui::FocusWindow(ImGui::FindWindowByName(EditorPanels::Assets));
+         }),
          Wait(5),
-         RightClick([] {
+         [] {
              Query q;
              q.Root = kAssets;
              q.Pred = [](const UiItem& it) { return it.Label == "##tile" || Contains(Visible(it.Label), "(built-in)"); };
-             return q;
-         }()),
+             Step s = RightClick(q);
+             s.Name = "right-click a shader in the Asset Browser";
+             return s;
+         }(),
          Wait(2),
          Click(MenuItem("Open in Script IDE")),
          UntilSeconds("the IDE shows the shader", [](Ctx&) { return IdeWindow() && Find(IdeTabEndingWith(".shader")); }, 10),
