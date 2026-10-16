@@ -699,6 +699,16 @@ Query Header(const char* component) {
     };
     return q;
 }
+// The Particle System's curves header: "Lifetime & Emission Curves", or "Curves" in a narrow Inspector.
+Query ParticleCurvesHeader() {
+    Query q;
+    q.Root = kInspector;
+    q.Pred = [](const UiItem& it) {
+        const std::string id = "###ParticleCurves";
+        return it.Label.size() > id.size() && it.Label.compare(it.Label.size() - id.size(), id.size(), id) == 0;
+    };
+    return q;
+}
 // Clicks `q` unless `shown` is already on screen - e.g. a header an earlier test left open.
 Step ClickUnlessShown(Query q, Query shown) {
     Step click = Click(std::move(q));
