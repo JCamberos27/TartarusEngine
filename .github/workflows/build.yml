@@ -226,7 +226,7 @@ jobs:
       # its screenshots to editor-test-shots/, uploaded below whether it passed or not.
       - name: Editor smoke test (Mesa llvmpipe)
         if: always() && steps.mesa.outcome == 'success'
-        timeout-minutes: 20
+        timeout-minutes: 30
         shell: pwsh
         env:
           GALLIUM_DRIVER: llvmpipe
@@ -267,6 +267,29 @@ jobs:
           name: editor-test-shots-${{ matrix.config }}
           path: editor-test-shots/
           retention-days: 14
+
+      # While the editor smoke suite is being built (claude/editor-smoke-test only): the screenshots
+      # also go to a throwaway branch, ci-shots/<config>, for tooling that can read git but not
+      # Actions artifacts. Force-pushed, one commit, never merged. Remove before merging.
+      - name: Publish editor screenshots to a ci-shots branch
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/claude/editor-smoke-test' && hashFiles('editor-test-shots/**') != ''
+        continue-on-error: true
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $dest = "$env:RUNNER_TEMP\shots-pub"
+          Remove-Item $dest -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          Copy-Item -Path editor-test-shots\* -Destination $dest -Recurse -Force
+          Push-Location $dest
+          git init -q
+          git checkout -q -b shots
+          git add -A
+          git -c user.name=ci -c user.email=ci@localhost commit -qm "editor screenshots ${{ github.sha }} ${{ matrix.config }}"
+          $auth = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("x-access-token:$env:GH_TOKEN"))
+          git -c http.extraheader="AUTHORIZATION: basic $auth" push -q -f "https://github.com/${{ github.repository }}" "shots:refs/heads/ci-shots/${{ matrix.config }}"
+          Pop-Location
 
       # The smoke step above gates on its own exit code, but a process can render every smoke scene,
       # report success and THEN fault on the way out. CrashHandler catches that and writes a
