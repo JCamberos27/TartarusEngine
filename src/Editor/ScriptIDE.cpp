@@ -333,8 +333,12 @@ void ScriptIDE::Impl::Draw() {
         if(EditorUIPrimitives::SecondaryButton("Reload disk version"))ClosePath="reload:"+Active->Path;ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Overwrite disk with buffer"))Save(*Active,true);
     }
     if(FindVisible) {
-        Field("Find",Find,180);ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Previous"))FindNext(true);ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Next"))FindNext();ImGui::SameLine();ImGui::Checkbox("Replace",&ReplaceVisible);ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Close find"))FindVisible=false;
-        if(ReplaceVisible && Active && !Active->Editor.IsReadOnly()){Field("With",Replace,180);ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Replace match") && Active->Editor.GetSelectedText()==Find){Active->Editor.ReplaceSelection(Replace);Persist();}ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Replace all") && !Find.empty()){auto text=Active->Editor.GetText();size_t p=0;while((p=text.find(Find,p))!=std::string::npos){text.replace(p,Find.size(),Replace);p+=Replace.size();}Active->Editor.SelectAll();Active->Editor.ReplaceSelection(text);Persist();}}
+        // A narrow pane wraps the bar instead of clipping its buttons (Close find included).
+        const float right=ImGui::GetCursorScreenPos().x+ImGui::GetContentRegionAvail().x;
+        auto flow=[&](float width){if(ImGui::GetItemRectMax().x+ImGui::GetStyle().ItemSpacing.x+width<=right)ImGui::SameLine();};
+        auto button=[](const char* label){return ImGui::CalcTextSize(label,nullptr,true).x+ImGui::GetStyle().FramePadding.x*2;};
+        Field("Find",Find,180);flow(button("Previous"));if(EditorUIPrimitives::SecondaryButton("Previous"))FindNext(true);flow(button("Next"));if(EditorUIPrimitives::SecondaryButton("Next"))FindNext();flow(ImGui::GetFrameHeight()+ImGui::GetStyle().ItemInnerSpacing.x+ImGui::CalcTextSize("Replace").x);ImGui::Checkbox("Replace",&ReplaceVisible);flow(button("Close find"));if(EditorUIPrimitives::SecondaryButton("Close find"))FindVisible=false;
+        if(ReplaceVisible && Active && !Active->Editor.IsReadOnly()){Field("With",Replace,180);flow(button("Replace match"));if(EditorUIPrimitives::SecondaryButton("Replace match") && Active->Editor.GetSelectedText()==Find){Active->Editor.ReplaceSelection(Replace);Persist();}flow(button("Replace all"));if(EditorUIPrimitives::SecondaryButton("Replace all") && !Find.empty()){auto text=Active->Editor.GetText();size_t p=0;while((p=text.find(Find,p))!=std::string::npos){text.replace(p,Find.size(),Replace);p+=Replace.size();}Active->Editor.SelectAll();Active->Editor.ReplaceSelection(text);Persist();}}
     }
     const float paneHeight=std::max(1.0f,ImGui::GetContentRegionAvail().y);
     const float infoMin=std::min(64.0f*scale,paneHeight*.3f);
