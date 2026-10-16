@@ -248,9 +248,22 @@ Step RightClickAt(std::string what, std::function<bool(Ctx&, ImVec2&)> where) {
         }
     }, 120};
 }
+// GridBackground, making room when there is none. In a short panel (1920x1080 at the desktop's
+// 150%) the tiles can fill every row even scrolled to the end: they shrink a step a frame until a
+// spot opens up, staying in grid view. It runs as the right-click's own search, not a step before
+// it, since a tile the importer adds late can fill a spot found earlier. The tiles keep that size (putting it back would reflow the
+// grid under the rename field a new folder opens); every test here starts at 64 px (EnsureScratch).
+bool RoomyGridBackground(Ctx& c, ImVec2& out) {
+    if (GridBackground(c, out)) return true;
+    ImGuiWindow* w = ListWindow();
+    if (!w || w->Scroll.y < w->ScrollMax.y) return false; // GridBackground is scrolling it to the end
+    AX::IconSize(c.E) -= 4.0f;
+    if (AX::ViewMode(c.E) != 0) AX::IconSize(c.E) += 4.0f; // any smaller is the list view: as small as it goes
+    return false;
+}
 // Right-click on the grid's background, then an entry of its menu.
 Steps BackgroundMenu(const char* item) {
-    return {RightClickAt("the grid background", GridBackground), Wait(3),
+    return {RightClickAt("the grid background", RoomyGridBackground), Wait(3),
             Click(MenuItem(item)), Wait(4)};
 }
 // Right-click a tile, then an entry of its context menu.
