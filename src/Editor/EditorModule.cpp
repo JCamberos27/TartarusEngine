@@ -1,5 +1,6 @@
 #include "EditorModuleAPI.h"
 #include "EditorTheme.h"
+#include "EditorSoundEvents.h"
 
 #include <imgui.h>
 
@@ -51,6 +52,8 @@ bool BindImGuiToHost(const EditorModuleHostAPI& host) {
     ImGui::SetCurrentContext(context);
     // The host's motion runtime, for this binary's copy of the EditorTheme::Motion* helpers.
     EditorTheme::SetMotionHooks(host.GetMotionHooks ? host.GetMotionHooks() : nullptr);
+    // And its sounds, for this binary's copy of the primitives' click sounds.
+    EditorSoundEvents::PlaySlot() = host.PlayUISound;
     return true;
 }
 

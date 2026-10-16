@@ -626,6 +626,13 @@ add_custom_command(TARGET TartarusEngine POST_BUILD
     "$<TARGET_FILE_DIR:TartarusEngine>/assets/fonts/JetBrainsMono-Regular.ttf"
 )
 
+# The editor's UI sounds (EditorSound; CC BY-SA adaptations, see resources/EditorSounds/LICENSE.md), next to the exe like the fonts.
+add_custom_command(TARGET TartarusEngine POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+    "${CMAKE_SOURCE_DIR}/resources/EditorSounds"
+    "$<TARGET_FILE_DIR:TartarusEngine>/assets/editor_sounds"
+)
+
 # GLSL shader files — copied next to the exe so ShaderLibrary::ReadFile("assets/shaders/...")
 # resolves correctly at runtime.
 add_custom_command(TARGET TartarusEngine POST_BUILD
@@ -705,6 +712,7 @@ install(FILES
   "${CMAKE_SOURCE_DIR}/extern/fonts/JetBrainsMono-Regular.ttf"
   DESTINATION "assets/fonts"
 )
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/resources/EditorSounds/" DESTINATION "assets/editor_sounds")
 
 # The sample project, as an ALLOW-LIST of directories rather than "project/ minus exclusions".
 #

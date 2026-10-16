@@ -3,6 +3,7 @@
 // EditorLayer.cpp for build time (#179).
 
 #include <iterator>
+#include "EditorSound.h"
 #include "EditorTheme.h"
 #include "EditorPanels.h"
 #include "MaterialAsset.h"
@@ -370,6 +371,7 @@ bool EditorLayer::DoSaveAs(World& world, AssetLibrary& assets) {
     m_SavedUndoDepth = m_ContentDepth; // this history position now matches disk
     m_AutoSaveTimer = 0.0f;
     InvalidateScenesListing(); // (#175) may have written a new file under scenes/
+    EditorSound::Play(EditorSound::Event::Save);
     return true;
 }
 
@@ -403,6 +405,7 @@ bool EditorLayer::DoSave(World& world, AssetLibrary& assets) {
     m_SavedUndoDepth = m_ContentDepth; // this history position now matches disk
     m_AutoSaveTimer = 0.0f;
     ClearRecoverySnapshot();            // the real file is now current — the snapshot is stale
+    EditorSound::Play(EditorSound::Event::Save);
     return true;
 }
 
@@ -960,6 +963,7 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
     RefreshAfterHistoryFiles(entry.Files);
     RefreshDirtyFromHistory(); // "*" clears when history returns to the last-saved point (#22 P22)
     m_CurrentUndoScene.clear();EnsureUndoScene(world);
+    EditorSound::Play(EditorSound::Event::Undo); // a jump back several steps is one sound (its cooldown)
 }
 
 void EditorLayer::Redo(World& world, AssetLibrary& assets) {
@@ -1001,6 +1005,7 @@ void EditorLayer::Redo(World& world, AssetLibrary& assets) {
     RefreshAfterHistoryFiles(entry.Files);
     RefreshDirtyFromHistory(); // "*" clears when history returns to the last-saved point (#22 P22)
     m_CurrentUndoScene.clear();EnsureUndoScene(world);
+    EditorSound::Play(EditorSound::Event::Redo);
 }
 
 void EditorLayer::JumpToUndoEntry(World& world, AssetLibrary& assets, size_t undoStackIndex) {
