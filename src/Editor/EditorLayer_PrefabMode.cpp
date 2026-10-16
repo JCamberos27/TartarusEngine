@@ -101,6 +101,7 @@ void EditorLayer::EnterPrefabMode(World& world, AssetLibrary& assets, const std:
     m_Dirty = false;
     m_SavedUndoDepth = m_ContentDepth;
     SelectItem(root, false);
+    m_EditPushedThisFrame = true; // selecting the root is part of opening, not a "Select" undo step
     EnsureUndoScene(world);
     if (m_EditorCameraPtr) FrameSceneBounds(world, *m_EditorCameraPtr);
     Log::Info("Opened prefab " + ProjectPaths::Relativize(path) + " - Back to Scene saves it.");
@@ -166,6 +167,7 @@ void EditorLayer::ExitPrefabMode(World& world, AssetLibrary& assets, bool save) 
     SceneSerializer::LoadFromString(world, assets, m_PrefabModeSceneSnapshot);
     m_PrefabModeSceneSnapshot.clear();
     RestorePrePrefabHistory();
+    m_EditPushedThisFrame = true; // the cleared selection is part of leaving, not a "Deselect" undo step
     EnsureUndoScene(world);
     const std::string was = m_PrefabModePath;
     m_PrefabModePath.clear();

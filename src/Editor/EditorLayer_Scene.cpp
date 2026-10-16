@@ -670,7 +670,10 @@ void EditorLayer::PushUndo(const World& world, const std::string& label, bool se
     // match (Q6/Phase 6 item 6): a scene-identical push whose ONLY difference is a new selection
     // is exactly what RecordSelectionHistory's "Select" entries look like, and those must NOT be
     // deduped away — that's the whole point of unifying selection changes into this same stack.
-    if (!m_UndoStack.empty() && m_UndoStack.back().Hash == entry.Hash &&
+    // A selection entry is never compared at all: it holds the PRE-change selection and the top
+    // entry's hash, so the first pick after an edit (which left the selection alone) matched that
+    // edit's entry exactly and was dropped. RecordSelectionHistory only pushes real changes.
+    if (!selectionOnly && !m_UndoStack.empty() && m_UndoStack.back().Hash == entry.Hash &&
         m_UndoStack.back().SelectedOrders == entry.SelectedOrders) {
         ClearRedoHistory(); // still a fresh edit intent — a stale redo branch shouldn't survive it
         RefreshDirtyFromHistory();
