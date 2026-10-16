@@ -8,6 +8,7 @@
 // without the hooks and can't be addressed; everything the Enhancers draw is host-side.
 
 #include "EditorUiTests.h"
+#include "MotionDemo.h"
 
 #include "EditorLayer.h"
 #include "EditorPanels.h"
@@ -17,6 +18,7 @@
 #include "World.h"
 #include "AssetLibrary.h"
 #include "Camera.h"
+#include "Log.h"
 #include "Components.h"
 #include "ComponentRegistry.h"
 #include "SceneSerializer.h"
@@ -158,6 +160,10 @@ struct EditorUiTestAccess {
     static std::string& CurrentFolder(EditorLayer& e) { return e.m_CurrentAssetFolder; }
     static void NavigateFolder(EditorLayer& e, const std::string& f) { e.NavigateAssetFolder(f); }
     static std::string SceneKey(EditorLayer& e) { return e.CurrentSceneKey(); }
+    // The motion demo.
+    static void Frame(EditorLayer& e, World& w, Camera& cam) { e.FocusOnSelection(w, cam); }
+    static void Duplicate(EditorLayer& e, World& w, AssetLibrary& a) { e.DuplicateSelection(w, a, false); }
+    static void RequestPause(EditorLayer& e) { e.m_PauseToggleRequested = true; }
 };
 using X = EditorUiTestAccess;
 
@@ -201,6 +207,7 @@ int g_QueueEnd = 0;
 void KeepOnlyHarnessInput() {
     ImGuiContext* ctx = ImGui::GetCurrentContext();
     if (!ctx || !g_Enabled) return;
+    MotionDemo::PinImGuiDelta(); // a demo run: exactly 1/60 s per frame
     auto& q = ctx->InputEventsQueue;
     q.resize(std::min(g_QueueEnd, q.Size));
 }
@@ -576,9 +583,155 @@ void Add(std::string name, std::vector<Step> steps) {
 }
 
 // =============================================================================================
+// The Glass motion demo (MotionDemo.h): a scripted tour of the editor's motion, recorded at 60 fps.
+// Only registered when TARTARUS_MOTION_DEMO / TARTARUS_FFMPEG ask for it.
+// =============================================================================================
+// Moves the pointer to `to` over `frames` frames on a smooth curve, as a hand would.
+Step Glide(std::function<bool(Ctx&, ImVec2&)> to, int frames = 26) {
+    struct G { int f = -1; ImVec2 a, b; };
+    auto g = std::make_shared<G>();
+    return {"glide", [to, frames, g](Ctx& c) {
+        if (g->f < 0) {
+            if (!to(c, g->b)) return false;
+            const ImVec2 cur = ImGui::GetIO().MousePos;
+            g->a = ImGui::IsMousePosValid(&cur) ? cur : g->b;
+            g->f = 0;
+        }
+        ++g->f;
+        const float t = std::min(1.0f, (float)g->f / (float)frames);
+        const float e = t * t * (3.0f - 2.0f * t);
+        MouseTo(ImVec2(g->a.x + (g->b.x - g->a.x) * e, g->a.y + (g->b.y - g->a.y) * e));
+        return g->f >= frames;
+    }, frames + 240};
+}
+std::function<bool(Ctx&, ImVec2&)> AtPoint(std::function<ImVec2(Ctx&)> p) {
+    return [p](Ctx& c, ImVec2& out) { out = p(c); return true; };
+}
+// A press and release where the pointer is, a few frames apart so the press reads on video.
+std::vector<Step> ClickHere(int holdFrames = 6) {
+    return {MouseButton(0, true), Wait(holdFrames), MouseButton(0, false)};
+}
+// A docked panel's tab in the dock space (its label is the window's name).
+Query Tab(const char* windowId) {
+    Query q;
+    const std::string id = windowId;
+    q.Pred = [id](const UiItem& it) { return Contains(it.Label, id) && it.Rect.GetHeight() < 60.0f && it.Rect.GetWidth() < 400.0f; };
+    return q;
+}
+std::vector<Step> Cat(std::initializer_list<std::vector<Step>> parts) {
+    std::vector<Step> out;
+    for (const auto& p : parts) out.insert(out.end(), p.begin(), p.end());
+    return out;
+}
+
+void RegisterMotionDemo() {
+    Add("motion demo", Cat({
+        {
+            FreshScene(),
+            Do("demo scene", [](Ctx& c) {
+                c.W.CreateModelEntity(c.A.CreatePrimitive("cube"), glm::vec3(-2.5f, 0, 0), glm::vec3(0, 25, 0), glm::vec3(1), "Near Cube");
+                c.W.CreateModelEntity(c.A.CreatePrimitive("cube"), glm::vec3(3, 0.5f, -6), glm::vec3(0, 40, 0), glm::vec3(2), "Far Cube");
+                c.W.CreateModelEntity(c.A.CreatePrimitive("sphere"), glm::vec3(0.5f, 0, -2), glm::vec3(0), glm::vec3(1.2f), "Sphere");
+                c.W.CreateModelEntity(c.A.CreatePrimitive("plane"), glm::vec3(0, -1.0f, -3), glm::vec3(0), glm::vec3(24, 1, 24), "Ground");
+                c.Cam.Position = glm::vec3(0.0f, 2.0f, 8.0f);
+                c.Cam.Yaw = -90.0f;
+                c.Cam.Pitch = -10.0f;
+                c.Cam.Orthographic = false;
+                c.E.RequestEditorTheme(1); // Black Glass
+            }),
+            WaitSeconds(2.0), // the theme and its glass settle
+            Move("start at the viewport", [](Ctx& c) {
+                const glm::vec2 p = c.E.ViewportPos(), s = c.E.ViewportSize();
+                return ImVec2(p.x + s.x * 0.55f, p.y + s.y * 0.55f);
+            }),
+            WaitSeconds(0.2),
+            Do("record", [](Ctx&) {
+                const ImVec2 d = ImGui::GetIO().DisplaySize;
+                MotionDemo::StartRecording((int)d.x, (int)d.y);
+            }),
+            WaitSeconds(0.8),
+            // 1. Hover: rows light as the pointer passes (velocity-gated), then select one.
+            Glide(AtItem(ByTag("row:Alpha")), 34), WaitSeconds(0.35),
+            Glide(AtItem(ByTag("row:Beta")), 16), WaitSeconds(0.35),
+            Glide(AtItem(ByTag("row:Gamma")), 16), WaitSeconds(0.35),
+            Glide(AtItem(ByTag("row:Beta")), 16),
+        },
+        ClickHere(),
+        {
+            WaitSeconds(0.9),
+            // 2. A component foldout: the chevron turns and the body reveals.
+            Glide(AtItem(Header("Light")), 30), WaitSeconds(0.3),
+        },
+        ClickHere(), {WaitSeconds(0.9)}, ClickHere(),
+        {
+            WaitSeconds(1.0),
+            // 3. Tools: the rail's marker glides from tool to tool.
+            Do("rotate", [](Ctx& c) { c.E.SetGizmoOpIndex(1); }), WaitSeconds(0.6),
+            Do("scale", [](Ctx& c) { c.E.SetGizmoOpIndex(2); }), WaitSeconds(0.6),
+            Do("transform", [](Ctx& c) { c.E.SetGizmoOpIndex(4); }), WaitSeconds(0.6),
+            Do("move", [](Ctx& c) { c.E.SetGizmoOpIndex(0); }), WaitSeconds(0.8),
+            // 4. Frame selection (F): the camera glides on the UI's curve.
+            SelectByName("Far Cube"), Do("frame", [](Ctx& c) { X::Frame(c.E, c.W, c.Cam); }), WaitSeconds(1.2),
+            SelectByName("Near Cube"), Do("frame", [](Ctx& c) { X::Frame(c.E, c.W, c.Cam); }), WaitSeconds(1.2),
+            // 5. Dock tabs: the overline glides, the focused panel's edge glints.
+            Glide(AtItem(Tab("###Game")), 30), WaitSeconds(0.2),
+        },
+        ClickHere(), {WaitSeconds(0.9), Glide(AtItem(Tab("###Scene")), 22), WaitSeconds(0.2)}, ClickHere(),
+        {
+            WaitSeconds(0.9),
+            // 6. Drag a row: the ghost trails, the reorder marker glides slot to slot, and on the
+            // drop it hops in and the moved row flashes.
+            Glide(AtItem(ByTag("row:Gamma")), 30), WaitSeconds(0.2),
+            MouseButton(0, true), WaitSeconds(0.1),
+            Glide(AtItem(ByTag("row:Gamma"), ImVec2(14.0f, -6.0f)), 8),
+            Glide(AtItem(ByTag("row:Beta"), ImVec2(0.0f, 9.0f)), 26), WaitSeconds(0.4),
+            Glide(AtItem(ByTag("row:Alpha"), ImVec2(0.0f, 9.0f)), 20), WaitSeconds(0.4),
+            Glide(AtItem(ByTag("row:Alpha")), 14), WaitSeconds(0.5),
+            MouseButton(0, false), WaitSeconds(1.2),
+            // ...and a drag let go over nothing drifts home.
+            Glide(AtItem(ByTag("row:Sphere")), 26), WaitSeconds(0.2),
+            MouseButton(0, true), WaitSeconds(0.1),
+            Glide(AtItem(ByTag("row:Sphere"), ImVec2(14.0f, -6.0f)), 8),
+            Glide(AtPoint([](Ctx& c) {
+                const glm::vec2 p = c.E.ViewportPos(), s = c.E.ViewportSize();
+                return ImVec2(p.x + s.x * 0.12f, p.y + s.y * 0.08f); // the viewport's top-left, under the rail: no target
+            }), 40), WaitSeconds(0.3),
+            MouseButton(0, false), WaitSeconds(1.0),
+            // 7. Duplicate: the copy's row flashes once.
+            SelectByName("Beta"), WaitSeconds(0.3),
+            Do("duplicate", [](Ctx& c) { X::Duplicate(c.E, c.W, c.A); }), WaitSeconds(1.2),
+            // 8. Save: the unsaved dot becomes a check that draws on and fades.
+            Key(ImGuiKey_S, ImGuiMod_Ctrl), WaitSeconds(1.6),
+            // 9. Play: triangle morphs to square, the play frame breathes, dims on pause.
+            Glide(AtItem(ByExact("##transport")), 34), WaitSeconds(0.2),
+        },
+        ClickHere(), {WaitSeconds(2.6), Glide(AtItem(ByLabel("Pause")), 22), WaitSeconds(0.2)}, ClickHere(),
+        {WaitSeconds(1.4), Glide(AtItem(ByLabel("Resume")), 10), WaitSeconds(0.2)}, ClickHere(),
+        {WaitSeconds(1.2), Glide(AtItem(ByExact("##transport")), 22), WaitSeconds(0.2)}, ClickHere(),
+        {
+            WaitSeconds(1.2),
+            // 10. A module reload that landed: a toast whose check draws on.
+            Do("module reloaded", [](Ctx&) { Log::Info("Hot reload: TartarusGame module reloaded."); }), WaitSeconds(2.2),
+            // 11. Preferences: the checkbox tick draws on and erases; the About title staggers in.
+            Do("preferences", [](Ctx& c) { c.E.OpenPreferences(); }), WaitSeconds(0.9),
+            Glide(AtItem([] { Query q; q.Pred = [](const UiItem& it) { return (it.Status & ImGuiItemStatusFlags_Checkable) != 0 && Contains(it.Root, "Settings"); }; return q; }()), 30),
+            WaitSeconds(0.3),
+        },
+        ClickHere(), {WaitSeconds(0.9)}, ClickHere(),
+        {
+            WaitSeconds(0.9),
+            Do("about", [](Ctx& c) { c.E.OpenAbout(); }), WaitSeconds(2.0),
+            Do("close", [](Ctx& c) { c.E.CloseSettingsWindow(); }), WaitSeconds(1.0),
+            Do("stop", [](Ctx&) { MotionDemo::StopRecording(); }),
+        },
+    }));
+}
+
+// =============================================================================================
 // The tests
 // =============================================================================================
 void RegisterTests() {
+    if (MotionDemo::Active()) { RegisterMotionDemo(); return; } // a demo run is only the demo
     // ------------------------------------------------------------------ 1. Selection history
     Add("history: back and forward through objects and an asset", {
         FreshScene(), Wait(2),
