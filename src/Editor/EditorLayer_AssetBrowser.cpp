@@ -401,7 +401,7 @@ unsigned int EditorLayer::ModelThumbnail(Model& model) {
         m_ThumbnailLRU.pop_back();
         auto evictIt = m_ModelThumbnails.find(evictPath);
         if (evictIt != m_ModelThumbnails.end()) {
-            if (evictIt->second.first) glDeleteTextures(1, &evictIt->second.first);
+            if (evictIt->second.first) m_RetiredThumbnailTextures.push_back(evictIt->second.first);
             m_ModelThumbnails.erase(evictIt);
         }
     }
@@ -521,16 +521,21 @@ void EditorLayer::ClearMaterialThumbnails() {
 
 void EditorLayer::InvalidateModelThumbnail(const std::string& path) {
     if (path.empty()) { // clear all — a reimport can rebuild any model in place
-        for (auto& [p, entry] : m_ModelThumbnails) { (void)p; if (entry.first) glDeleteTextures(1, &entry.first); }
+        for (auto& [p, entry] : m_ModelThumbnails) { (void)p; if (entry.first) m_RetiredThumbnailTextures.push_back(entry.first); }
         m_ModelThumbnails.clear();
         m_ThumbnailLRU.clear();
         return;
     }
     auto it = m_ModelThumbnails.find(path);
     if (it == m_ModelThumbnails.end()) return;
-    if (it->second.first) glDeleteTextures(1, &it->second.first);
+    if (it->second.first) m_RetiredThumbnailTextures.push_back(it->second.first);
     m_ThumbnailLRU.erase(it->second.second);
     m_ModelThumbnails.erase(it);
+}
+void EditorLayer::FreeRetiredThumbnailTextures() {
+    if (m_RetiredThumbnailTextures.empty()) return;
+    glDeleteTextures((GLsizei)m_RetiredThumbnailTextures.size(), m_RetiredThumbnailTextures.data());
+    m_RetiredThumbnailTextures.clear();
 }
 void EditorLayer::BeginRenameAsset(const std::string& key, bool isFolder, const std::string& currentName) {
     m_RenamingAssetKey = key;
@@ -1722,8 +1727,9 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
     }
 
     // Ctrl+A - select every currently-visible item (respecting the active search/filter, same
-    // as Unity's own "select all visible items in list").
-    if (m_AssetBrowserFocused && m_RenamingAssetKey.empty() && ImGui::GetIO().KeyCtrl
+    // as Unity's own "select all visible items in list"). Not while a text field (the search box,
+    // the labels popup) has the keyboard: there Ctrl+A selects its text.
+    if (m_AssetBrowserFocused && m_RenamingAssetKey.empty() && !ImGui::GetIO().WantTextInput && ImGui::GetIO().KeyCtrl
         && ImGui::IsKeyPressed(ImGuiKey_A) && !cells.empty()) {
         ClearAssetSelection();
         m_SelectedAssetKey = cells[0].key;
@@ -2244,7 +2250,13 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             if (ImGui::MenuItem(ICON_FA_PEN "  Rename (F2)", nullptr, false, m_ExtraAssetSelection.empty())) {
                 BeginRenameAsset(cell.key, isFolder, cell.display);
             }
-            if (ImGui::MenuItem(ICON_FA_TAG "  Edit Labels...")) {
+            // The labels popup opens nested in this context menu, so the menu has to stay open
+            // for it (a MenuItem normally closes its popup, and the nested popup with it); Apply
+            // closes both.
+            ImGui::PushItemFlag(ImGuiItemFlags_AutoClosePopups, false);
+            const bool editLabels = ImGui::MenuItem(ICON_FA_TAG "  Edit Labels...");
+            ImGui::PopItemFlag();
+            if (editLabels) {
                 std::string joined;
                 for (const auto& lbl : assets.Labels(cell.key)) {
                     if (!joined.empty()) joined += ", ";
@@ -2253,6 +2265,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 snprintf(m_LabelsEditBuffer, sizeof(m_LabelsEditBuffer), "%s", joined.c_str());
                 ImGui::OpenPopup("##EditLabels");
             }
+            bool labelsApplied = false;
             if (ImGui::BeginPopup("##EditLabels")) {
                 ImGui::TextDisabled("Comma-separated labels - searchable as l:label");
                 ImGui::SetNextItemWidth(240.0f * m_UIScale); // #37
@@ -2271,9 +2284,11 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                     PushUndo(world, "Edit Labels");
                     assets.SetLabels(cell.key, labels);
                     ImGui::CloseCurrentPopup();
+                    labelsApplied = true;
                 }
                 ImGui::EndPopup();
             }
+            if (labelsApplied) ImGui::CloseCurrentPopup(); // the context menu too
             if (m_ExtraAssetSelection.empty() && ImGui::MenuItem(ICON_FA_COPY "  Copy Path")) {
                 ImGui::SetClipboardText(cell.key.c_str());
                 Log::Info("Copied path: " + cell.key);
@@ -2495,6 +2510,7 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
                 AssetDatabase::EnsureGuid(target.u8string());
                 m_SelectedAssetKey=target.u8string(); m_SelectedAssetIsFolder=false;
                 InvalidateAnimationListing();
+                InvalidateProjectAssetIndex(); // listed in the folder without a manual refresh
             } else Log::Error("Could not create camera shake asset.");
         }
         if (ImGui::MenuItem(ICON_FA_BURST "  Create Recoil Profile")) {
@@ -2511,6 +2527,7 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
                 m_SelectedAssetKey = recoilPath.u8string();
                 m_SelectedAssetIsFolder = false;
                 InvalidateAnimationListing();
+                InvalidateProjectAssetIndex(); // listed in the folder without a manual refresh
             } else Log::Error("Could not create recoil profile.");
         }
         if (ImGui::MenuItem(ICON_FA_PERSON_WALKING "  Create Body Locomotion Controller")) {
@@ -2533,6 +2550,7 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
             });
             if (c.SaveFile(ProjectPaths::Resolve(rel))) {
                 InvalidateAnimationListing();
+                InvalidateProjectAssetIndex(); // listed in the folder without a manual refresh
                 OpenAnimatorWindow(rel);
                 Log::Info("Created " + rel + ": " + std::to_string(found) + " of " + std::to_string(total) +
                           " clip slots filled by name. Fill the rest in the Animator (Lint lists them).");
@@ -2557,6 +2575,7 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
             c.Layers[0].DefaultState = "Idle";
             if (c.SaveFile(ProjectPaths::Resolve(rel))) {
                 InvalidateAnimationListing();
+                InvalidateProjectAssetIndex(); // listed in the folder without a manual refresh
                 OpenAnimatorWindow(rel);
                 Log::Info("Created " + rel + ".");
             } else {

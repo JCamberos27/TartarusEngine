@@ -1415,6 +1415,7 @@ private:
     void BeginSceneUndo(const World& world, const std::string& label);
     void FinishGlobalUndo(const World& world, bool force = false);
     void ReloadHistoryFiles(AssetLibrary& assets,const std::vector<EditorFileHistory::State>& files);
+    void RefreshAfterHistoryFiles(const std::vector<EditorFileHistory::State>& files);
 
     // Delta-chain plumbing. `entry`'s own full state is `newFullJson`: it becomes the stack's
     // new top (held in full in `baseJson`), and the outgoing top is re-encoded as a patch off it.
@@ -1708,6 +1709,10 @@ private:
     std::unordered_map<std::string, std::pair<unsigned int, std::list<std::string>::iterator>> m_ModelThumbnails;
     unsigned int m_ThumbnailBlitFbo = 0;
     int m_ThumbnailBudgetThisFrame = 0;
+    // Thumbnails dropped mid-frame (a Reimport from a tile's menu, an LRU eviction) may already be
+    // in this frame's draw lists, so their textures are deleted at the start of the next frame.
+    std::vector<unsigned int> m_RetiredThumbnailTextures;
+    void FreeRetiredThumbnailTextures();
     unsigned int ModelThumbnail(Model& model); // cached GL texture, or 0 while over this frame's budget
 
     // #107 - Asset Browser material thumbnails: the material on a sphere, from the same

@@ -92,7 +92,7 @@ bool ChangesAssetIndex(const std::string& path) {
     if (rel == "library" || rel.rfind("library/", 0) == 0) return false;
     const std::string type = AssetDatabase::AssetType(path);
     if (type == "model" || type == "texture" || type == "material" || type == "audio" || type == "prefab" ||
-        type == "animatorcontroller" || type == "firstpersonanimationset" || type == "recoil" || type == "hdri" || type == "script")
+        type == "animatorcontroller" || type == "firstpersonanimationset" || type == "recoil" || type == "camerashake" || type == "hdri" || type == "script")
         return true;
     return type.empty() && fs::path(path).extension().empty();
 }
@@ -257,15 +257,10 @@ void EditorLayer::OnExternalAdd(World& world, AssetLibrary& assets, const std::s
 
     if (imported && assets.AssetFolder(path).empty()) {
         // File it in the Asset Browser folder matching its folder on disk (creating the path).
+        // Registered in memory only: it's found again from disk on every load, so it isn't
+        // written to project/settings.json (#14).
         const std::string rel = fs::path(ProjectPaths::Relativize(path)).parent_path().generic_string();
-        if (!rel.empty() && !fs::path(rel).is_absolute()) {
-            std::string prefix;
-            for (const auto& part : fs::path(rel)) {
-                prefix = prefix.empty() ? part.generic_string() : prefix + "/" + part.generic_string();
-                assets.CreateFolder(prefix);
-            }
-            assets.SetAssetFolder(path, rel);
-        }
+        if (!rel.empty() && !fs::path(rel).is_absolute()) assets.SetAssetFolder(path, assets.AddFolderPath(rel));
     }
     if (imported || type == "scene")
         Log::Info("Imported '" + ProjectPaths::Relativize(path) + "' (added outside the editor).");
