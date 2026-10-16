@@ -2485,6 +2485,9 @@ bool EditorLayer::OtherWindowOwnsKeyboard() const {
     if (nav->DockIsActive || nav->DockNode) return false;      // a docked panel — allow shortcuts
     if (nav == ImGui::FindWindowByName(EditorPanels::Scene)) return false; // the viewport itself
     if (nav == ImGui::FindWindowByName("##DockHost")) return false; // "the dockspace"
+    // The menu strip: closing a menu hands focus back to it, which blocked every global shortcut
+    // (Ctrl+Shift+H after Create > Cube did nothing) until something else was clicked.
+    if (nav == ImGui::FindWindowByName("##Toolbar")) return false;
     return true;                                               // a real floating window has focus
 }
 
