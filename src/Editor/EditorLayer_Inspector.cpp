@@ -488,15 +488,18 @@ float Vec3RowDragWidth(float buttonW, float innerSpacing) {
 // when the panel is narrow (the exact value is always in the tooltip and shown while editing).
 // `room` is the field's width inside its padding.
 const char* FitAxisFormat(float v, float room) {
-    if (std::fabs(v) < 5.0e-4f) return "0.000"; // never "-0.000" from float dust (#24 P13)
     if (std::fabs(v) >= 1.0e6f) return "%.4g";  // never a ~30-digit decimal (#44 P27)
+    // Zero is a literal, never "-0.000" from float dust (#24 P13), but it drops decimals at the
+    // same widths as any other value: a fixed "0.000" sat beside "0.10" and "7.20" in one row.
     static const char* kFormats[] = {"%.3f", "%.2f", "%.1f", "%.0f"};
-    for (const char* f : kFormats) {
+    static const char* kZeros[] = {"0.000", "0.00", "0.0", "0"};
+    const bool zero = std::fabs(v) < 5.0e-4f;
+    for (size_t i = 0; i < std::size(kFormats); ++i) {
         char buf[32];
-        std::snprintf(buf, sizeof(buf), f, v);
-        if (ImGui::CalcTextSize(buf).x <= room) return f;
+        std::snprintf(buf, sizeof(buf), kFormats[i], v);
+        if (ImGui::CalcTextSize(zero ? kZeros[i] : buf).x <= room) return zero ? kZeros[i] : kFormats[i];
     }
-    return "%.0f";
+    return zero ? "0" : "%.0f";
 }
 
 // Unity/Hazel-style vector row: a colored X/Y/Z button (click to zero that axis) glued to
