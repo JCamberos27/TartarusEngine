@@ -141,6 +141,18 @@ Step RestoreProjectFiles() {
     });
 }
 nlohmann::json ProjectJson() { return ReadJson(SettingsPath()); }
+// The first .meta under project/assets written after `since`, or "" when none was.
+std::filesystem::file_time_type g_MetaSince;
+std::string MetaWrittenSince(std::filesystem::file_time_type since) {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    for (fs::recursive_directory_iterator it(ProjectPaths::Resolve("assets"), ec), end; !ec && it != end; it.increment(ec)) {
+        if (it->path().extension() != ".meta") continue;
+        std::error_code tec;
+        if (fs::last_write_time(it->path(), tec) > since && !tec) return ProjectPaths::Relativize(it->path().string());
+    }
+    return {};
+}
 float FileGravityY() {
     const nlohmann::json j = ProjectJson();
     try { return j.at("physics").at("gravity").at(1).get<float>(); } catch (...) { return NAN; }
@@ -226,15 +238,28 @@ void RegisterSettingsTests() {
     // Performance has no prefs checkbox: its first checkbox (Auto exposure) is a scene setting,
     // so it is an undo step; the render resolution combo is the prefs setting here.
     Add("settings: Performance - Auto exposure undoes; render resolution persists", Seq({
-        {FreshScene(), Wait(2)},
+        // A material whose folder comes from disk (its .meta has none), loaded before the scene
+        // so the undo snapshot carries that folder - which the undo must not write to the .meta.
+        {Do("load a material", [](Ctx& c) {
+             c.A.LoadMaterial(ProjectPaths::Resolve("assets/Characters/Quantum/Materials/Clothing/Tops/TShirt/M_TShirt_Gray.mat"));
+         }),
+         FreshScene(), Wait(2)},
         OpenCategory(false, 4),
         {Shot("performance", {"###Settings"}),
-         Do("note", [](Ctx& c) { g_Number = c.W.AutoExposure ? 1.0 : 0.0; g_Vec.x = (float)X::UndoDepth(c.E); }),
+         Do("note", [](Ctx& c) {
+             g_Number = c.W.AutoExposure ? 1.0 : 0.0; g_Vec.x = (float)X::UndoDepth(c.E);
+             g_MetaSince = std::filesystem::file_time_type::clock::now();
+         }),
          Click(ByExact("Auto exposure", "###Settings")), Wait(3),
          ExpectTrue("auto exposure toggled", [](Ctx& c) { return c.W.AutoExposure != Noted(); }),
          ExpectTrue("one undo step", [](Ctx& c) { return (float)X::UndoDepth(c.E) == g_Vec.x + 1.0f; }),
          Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
          Until("undo restores it", [](Ctx& c) { return c.W.AutoExposure == Noted(); }),
+         // An undo re-applies every asset's metadata; that used to rewrite ~90 tracked .meta files.
+         Expect("the undo wrote no .meta", [](Ctx&) {
+             const std::string m = MetaWrittenSince(g_MetaSince);
+             return m.empty() ? std::string() : "wrote " + m;
+         }),
          Do("note the resolution", [](Ctx&) { g_Vec.y = (float)EditorSettings::Get().RenderHeight; }),
          Click(ByExact("##Game render resolution", "###Settings")),
          Until("resolution list open", [](Ctx&) { return Find(ComboItem("720p")) != nullptr; }), Wait(1),
