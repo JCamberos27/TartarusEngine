@@ -235,7 +235,13 @@ void EditorLayer::DrawAnimatorWindow(World& world) {
     AnimatorWindowState& W = *m_AnimatorWin;
     AssetLibrary* assets = m_AssetsPtr;
 
-    ImGui::SetNextWindowSize(ImVec2(1100.0f * m_UIScale, 620.0f * m_UIScale), ImGuiCond_FirstUseEver);
+    // First use: centred, and never wider or taller than the screen (on a small display a fixed
+    // 1100px window left its close button off-screen).
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + vp->WorkSize.y * 0.5f),
+                            ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(std::min(1100.0f * m_UIScale, vp->WorkSize.x * 0.9f),
+                                    std::min(620.0f * m_UIScale, vp->WorkSize.y * 0.9f)), ImGuiCond_FirstUseEver);
     PushTabChromeText();
     const bool open = ImGui::Begin(EditorPanels::Animator, &m_ShowAnimator);
     PopTabChromeText();
