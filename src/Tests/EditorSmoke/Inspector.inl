@@ -95,26 +95,21 @@ Step InspReveal(Query q) {
         return false;
     }, 120};
 }
-// Clicks a component's "..." button until its menu shows `item`: now and then the first click
-// opens nothing (seen at both window sizes, a different component each run).
+// Clicks a component's "..." button and waits until its menu shows `item` in the same place on
+// consecutive frames: on its first frame the popup is not yet moved back inside a narrow window,
+// so clicking the item then misses it (and the menu stays open).
 Step InspOpenMenu(std::string component, const char* item) {
     auto click = std::make_shared<Step>(Click(MoreButton(component.c_str())));
-    auto state = std::make_shared<int>(0); // 0 = clicking, > 0 = frames waited for the menu
-    auto tries = std::make_shared<int>(0);
-    return {"open the " + component + " menu", [component, item, click, state, tries](Ctx& c) {
-        if (*state == 0) {
-            if (click->Fn(c)) *state = 1;
-            return false;
-        }
-        // A few frames more once it shows: on its first frame the popup is not yet moved back
-        // inside a narrow window, so the item's rect is still off to the side.
-        if (Find(MenuItem(item))) { *state = std::max(*state, 100); return ++*state >= 104; }
-        if (++*state < 10) return false;
-        if (++*tries >= 3) return true; // let the next step report it
-        ImGui::ClosePopupsExceptModals();
-        *click = Click(MoreButton(component.c_str()));
-        *state = 0;
-        return false;
+    auto clicked = std::make_shared<bool>(false);
+    auto last = std::make_shared<ImRect>();
+    auto still = std::make_shared<int>(0);
+    return {"open the " + component + " menu", [item, click, clicked, last, still](Ctx& c) {
+        if (!*clicked) { *clicked = click->Fn(c); return false; }
+        const UiItem* it = Find(MenuItem(item));
+        if (!it) { *still = 0; return false; }
+        *still = (it->Rect.Min.x == last->Min.x && it->Rect.Min.y == last->Min.y) ? *still + 1 : 0;
+        *last = it->Rect;
+        return *still >= 2;
     }, 240};
 }
 // Opens a component section unless it is already open (open state is per object order and
