@@ -13,7 +13,10 @@
 #include <imgui.h>
 #include <imgui_internal.h> // ImTextCharFromUtf8, ImFontBaked
 
+#include "EditorMotionHooks.h"
+
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 
 namespace EditorTheme {
@@ -224,6 +227,89 @@ inline float AnimT(ImGuiID id, bool on, float duration = MotionFast) {
 }
 inline ImVec4 Mix(ImVec4 a, ImVec4 b, float t) {
     return ImVec4(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t, a.w + (b.w - a.w) * t);
+}
+
+// --- The motion bridge (EditorMotionHooks.h) --------------------------------------------------------
+// One table per binary: the host installs its own at startup, the module installs the host's every
+// Draw. Every helper below falls back to AnimT when no table is installed.
+inline const EditorMotionHooks*& MotionHooksSlot() { static const EditorMotionHooks* s_Hooks = nullptr; return s_Hooks; }
+inline void SetMotionHooks(const EditorMotionHooks* hooks) { MotionHooksSlot() = hooks; }
+inline const EditorMotionHooks* MotionHooks() { return MotionHooksSlot(); }
+
+inline bool MotionReduced() {
+    const EditorMotionHooks* h = MotionHooks();
+    return h && h->ReduceMotion && h->ReduceMotion();
+}
+// A hover wash 0..1 (the Glass velocity-gated glow when the bridge is installed).
+inline float MotionHover(ImGuiID id, bool hovered) {
+    const EditorMotionHooks* h = MotionHooks();
+    if (h && h->HoverGlow) return h->HoverGlow(id, hovered);
+    return AnimT(id, hovered);
+}
+// A float easing to `target` from `rest` with a token's timing.
+inline float MotionAnimate(ImGuiID id, float target, float rest, EditorMotionToken token, float fallbackSeconds = MotionFast) {
+    const EditorMotionHooks* h = MotionHooks();
+    if (h && h->Animate) return h->Animate(id, target, rest, (int)token);
+    // Fallback: a 0..1 fade toward whichever end `target` is nearer, remapped onto rest..target.
+    const float t = AnimT(id, std::fabs(target - rest) > 1e-4f, fallbackSeconds);
+    return rest + (target - rest) * t;
+}
+// 0..1 openness for a flag that flips. Remembers last frame's flag in the window's state storage
+// (one int per widget, ImGui's own memory) so callers don't have to.
+inline float MotionToggle(ImGuiID id, bool open, EditorMotionToken token, float fallbackSeconds = MotionNormal) {
+    ImGuiStorage* st = ImGui::GetStateStorage();
+    const ImGuiID wasKey = id ^ 0x7A55E0F1u;
+    const bool wasOpen = st->GetInt(wasKey, open ? 1 : 0) != 0;
+    st->SetInt(wasKey, open ? 1 : 0);
+    const EditorMotionHooks* h = MotionHooks();
+    if (h && h->Toggle) return h->Toggle(id, open, wasOpen, (int)token);
+    return AnimT(id, open, fallbackSeconds);
+}
+// A glide to a moving target. Remembers last frame's target like MotionToggle.
+inline float MotionFollow(ImGuiID id, float target, EditorMotionToken token = EditorMotionToken::Glide) {
+    ImGuiStorage* st = ImGui::GetStateStorage();
+    const ImGuiID prevKey = id ^ 0x3F011C0Bu;
+    const float prev = st->GetFloat(prevKey, target);
+    st->SetFloat(prevKey, target);
+    const EditorMotionHooks* h = MotionHooks();
+    if (h && h->Follow) return h->Follow(id, target, prev, (int)token);
+    return target;
+}
+// An OKLAB colour tween (a straight mix through AnimT when the bridge is missing).
+inline ImVec4 MotionColor(ImGuiID id, ImVec4 target, ImVec4 rest, EditorMotionToken token) {
+    const EditorMotionHooks* h = MotionHooks();
+    if (h && h->AnimateColor) {
+        const float t4[4] = {target.x, target.y, target.z, target.w};
+        const float r4[4] = {rest.x, rest.y, rest.z, rest.w};
+        float o4[4] = {target.x, target.y, target.z, target.w};
+        h->AnimateColor(id, t4, r4, (int)token, o4);
+        return ImVec4(o4[0], o4[1], o4[2], o4[3]);
+    }
+    return target;
+}
+inline void MotionPulse(ImGuiID id, EditorMotionToken token) {
+    const EditorMotionHooks* h = MotionHooks();
+    if (h && h->Pulse) h->Pulse(id, (int)token);
+}
+inline float MotionPulseProgress(ImGuiID id) {
+    const EditorMotionHooks* h = MotionHooks();
+    return (h && h->PulseProgress) ? h->PulseProgress(id) : 1.0f;
+}
+inline void MotionTriggerWiggle(ImGuiID id) {
+    const EditorMotionHooks* h = MotionHooks();
+    if (h && h->TriggerWiggle) h->TriggerWiggle(id);
+}
+inline float MotionWiggle(ImGuiID id) {
+    const EditorMotionHooks* h = MotionHooks();
+    return (h && h->Wiggle) ? h->Wiggle(id) : 0.0f;
+}
+inline void MotionScrollToY(float y) {
+    const EditorMotionHooks* h = MotionHooks();
+    if (h && h->ScrollToY) h->ScrollToY(y); else ImGui::SetScrollY(y);
+}
+inline void MotionScrollToBottom() {
+    const EditorMotionHooks* h = MotionHooks();
+    if (h && h->ScrollToBottom) h->ScrollToBottom(); else ImGui::SetScrollY(ImGui::GetScrollMaxY());
 }
 
 // --- User colours (row styles, folder colours, tab and favourite tints) ---------------------------

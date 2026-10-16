@@ -2231,7 +2231,7 @@ void EditorLayer::BeginFrame() {
     ImGui::NewFrame();
     ImGuizmo::BeginFrame();
     ImViewGuizmo::BeginFrame();
-    GlassFrameBegin(); // Glass theme only: motion clock, wallpaper, notifications
+    GlassFrameBegin(); // motion clock (every theme); Glass only: wallpaper, notifications
 }
 
 void EditorLayer::EndFrame() {

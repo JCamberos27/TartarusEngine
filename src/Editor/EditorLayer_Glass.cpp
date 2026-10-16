@@ -34,6 +34,7 @@
 #include "Glass/GlassEditorState.h"
 #include "Glass/GlassLayout.h"
 #include "Glass/GlassMotion.h"
+#include "Glass/GlassMotionHooks.h"
 #include "Glass/GlassTheme.h"
 #include "Glass/GlassTokens.h"
 
@@ -371,10 +372,13 @@ int EditorLayer::GlassSurfacesForTest() const { return m_Glass ? m_Glass->Compos
 int EditorLayer::GlassCapturesForTest() const { return m_Glass ? m_Glass->Compositor.Captures() : 0; }
 
 void EditorLayer::GlassFrameBegin() {
-    if (!GlassThemeActive()) return;
+    // The motion runtime ticks in every theme: the shared widgets and the editor module animate
+    // through it (EditorMotionHooks.h) whether or not Glass is on. At rest it costs nothing.
+    EditorTheme::SetMotionHooks(&Glass::HostMotionHooks());
     Glass::ImAnimContext& motion = Glass::Motion();
     motion.SetReduceMotion(EditorSettings::Get().ReduceMotion);
     motion.NewFrame();
+    if (!GlassThemeActive()) return;
     // A see-through window shows the blurred desktop behind every panel: nothing to paint.
     // Otherwise the ambient field: the Scene image, blurred until only colour is left.
     GlassEditorState& g = GlassState();

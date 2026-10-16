@@ -263,6 +263,28 @@ constexpr float      PanelInRisePx  = 6.0f;
 constexpr MotionSpec RimGlint       = {EaseId::OutCubic, 0, 0, 0, 0, 700.0f};
 constexpr float      RimGlintBoost  = 0.35f;
 
+// --- Category 5: controls (buttons, checkboxes, fields; EditorUIPrimitives via the bridge) -------
+// A press squashes quickly and releases on a spring with a small overshoot. zeta = 24 /
+// (2 sqrt(300)) = 0.69 (~5% overshoot), zeta * omega_n = 12.
+constexpr MotionSpec PressDown      = {EaseId::OutCubic, 0, 0, 0, 0, 90.0f};
+constexpr MotionSpec PressRelease   = {EaseId::Spring, 1.0f, 300.0f, 24.0f, 0.0f, 260.0f};
+constexpr float      PressScale     = 0.97f;
+// A checkbox tick draws on along its path; unchecking erases it faster.
+constexpr MotionSpec CheckDraw      = {GLASS_EASE_SMOOTH, 180.0f};
+constexpr MotionSpec CheckErase     = {EaseId::OutCubic, 0, 0, 0, 0, 120.0f};
+// An input's 1 px focus ring.
+constexpr MotionSpec FocusIn        = {EaseId::OutCubic, 0, 0, 0, 0, 120.0f};
+constexpr MotionSpec FocusOut       = {EaseId::OutCubic, 0, 0, 0, 0, 200.0f};
+constexpr float      FocusRingAlpha = 0.55f;
+// Rejected input: one small horizontal wiggle (f ~ 6.4 Hz, zeta = 0.3), much gentler than the
+// compile-failure shake.
+constexpr ShakeSpec  InvalidWiggle  = {1.0f, 1600.0f, 24.0f, 3.0f, 360.0f};
+// A one-off wash (a new or reparented row, a new console error): up instantly, fades out.
+constexpr MotionSpec RowFlash       = {EaseId::OutCubic, 0, 0, 0, 0, 600.0f};
+constexpr float      RowFlashAlpha  = 0.10f;
+// An eased scroll jump (reveal a row, jump to the console's bottom).
+constexpr MotionSpec ScrollEase     = {GLASS_EASE_SMOOTH, 280.0f};
+
 #undef GLASS_EASE_SMOOTH
 
 } // namespace Glass
