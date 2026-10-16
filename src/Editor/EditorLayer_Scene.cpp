@@ -122,8 +122,13 @@ void EditorLayer::BeginGlobalUndoFrame(const World& world) {
             absolute==std::filesystem::path(Enhancers::UiStyles::Path());
         const bool preferences=enhancers || absolute==std::filesystem::path(EditorSettings::PrefsFilePath()) ||
             absolute==std::filesystem::path(UserPaths::Resolve("shortcuts.json")) || absolute==std::filesystem::path(UserPaths::Resolve("asset_favorites.json"));
-        if(ec || relative.empty() || (*relative.begin()==".." && !preferences)) return;
-        for(const auto& part:relative) if(part=="Library" || part=="bin" || part=="obj") return;
+        // Per-user files live in %LOCALAPPDATA%, which may be on another drive than the project
+        // (CI: C: vs D:), where there is no relative path at all - so they skip the project test.
+        if(ec) return;
+        if(!preferences) {
+            if(relative.empty() || *relative.begin()=="..") return;
+            for(const auto& part:relative) if(part=="Library" || part=="bin" || part=="obj") return;
+        }
         if(!m_GlobalUndoActive) {
             m_GlobalUndoHasScene=false;
             m_GlobalUndoScene.clear();
