@@ -1389,6 +1389,7 @@ private:
     // Last committed authored state. Navigation must never serialize the scene; controls
     // that report a change after updating their value still need this pre-edit state.
     std::string m_CurrentUndoScene;
+    unsigned m_OutfitLandedSeen = 0; // OutfitSystem::LandedGeneration() as of the last baseline (#15)
     bool m_ViewportNavDrag = false; // a right/middle drag that began over the Scene view is held (UndoTrigger.h)
     bool m_RequestGlobalUndo = false, m_RequestGlobalRedo = false;
     std::string m_GlobalUndoScene, m_GlobalUndoLabel;
