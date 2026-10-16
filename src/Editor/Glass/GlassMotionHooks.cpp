@@ -63,7 +63,46 @@ void EnsureCheckPath() {
     ImAnimContext::DefinePath(kCheckPath, ImVec2(0.18f, 0.50f), segs, 2);
 }
 
+constexpr ImGuiID kPlayPath = 0x504C5931u; // "PLY1"
+constexpr ImGuiID kStopPath = 0x53545031u; // "STP1"
+
+void EnsureTransportPaths() {
+    if (ImAnimContext::PathDefined(kPlayPath)) return;
+    // Both clockwise from the top-left, so the morph turns corner into corner. The triangle's
+    // centroid sits a touch right of centre, like the Font Awesome glyph it replaces.
+    const PathSeg play[] = {
+        {PathSeg::Line, ImVec2(0, 0), ImVec2(0, 0), ImVec2(0.90f, 0.50f)},
+        {PathSeg::Line, ImVec2(0, 0), ImVec2(0, 0), ImVec2(0.22f, 0.90f)},
+        {PathSeg::Line, ImVec2(0, 0), ImVec2(0, 0), ImVec2(0.22f, 0.10f)},
+    };
+    ImAnimContext::DefinePath(kPlayPath, ImVec2(0.22f, 0.10f), play, 3);
+    const PathSeg stop[] = {
+        {PathSeg::Line, ImVec2(0, 0), ImVec2(0, 0), ImVec2(0.86f, 0.14f)},
+        {PathSeg::Line, ImVec2(0, 0), ImVec2(0, 0), ImVec2(0.86f, 0.86f)},
+        {PathSeg::Line, ImVec2(0, 0), ImVec2(0, 0), ImVec2(0.14f, 0.86f)},
+        {PathSeg::Line, ImVec2(0, 0), ImVec2(0, 0), ImVec2(0.14f, 0.14f)},
+    };
+    ImAnimContext::DefinePath(kStopPath, ImVec2(0.14f, 0.14f), stop, 4);
+}
+
 } // namespace
+
+void DrawTransportGlyph(ImDrawList* dl, ImVec2 c, float size, float stopT, ImU32 col) {
+    if (!dl) return;
+    EnsureTransportPaths();
+    stopT = stopT < 0.0f ? 0.0f : (stopT > 1.0f ? 1.0f : stopT);
+    constexpr int kSamples = 32;
+    ImVec2 pts[kSamples];
+    const ImVec2 o(c.x - size * 0.5f, c.y - size * 0.5f);
+    for (int i = 0; i < kSamples; ++i) {
+        const float t = (float)i / (float)kSamples;
+        const ImVec2 p = stopT <= 0.0f ? ImAnimContext::PathPoint(kPlayPath, t)
+                       : stopT >= 1.0f ? ImAnimContext::PathPoint(kStopPath, t)
+                                       : ImAnimContext::PathMorph(kPlayPath, kStopPath, t, stopT);
+        pts[i] = ImVec2(o.x + p.x * size, o.y + p.y * size);
+    }
+    dl->AddConvexPolyFilled(pts, kSamples, col);
+}
 
 void DrawCheckmark(ImDrawList* dl, ImVec2 pos, float size, float t, ImU32 col, float thickness) {
     if (t <= 0.0f || !dl) return;
