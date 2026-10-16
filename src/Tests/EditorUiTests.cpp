@@ -152,6 +152,12 @@ struct EditorUiTestAccess {
         e.m_FavPage = 0;
         e.m_Dirty = false;
     }
+    // Floating tool windows a failed test can leave up; in a narrow window they cover the panels.
+    static void CloseToolWindows(EditorLayer& e) {
+        e.m_ShowAnimator = false;
+        e.m_ShowAudioDebug = false;
+        EditorSettings::Get().ShowAssetLibrary = false;
+    }
     static std::string& ScenePath(EditorLayer& e) { return e.m_CurrentScenePath; }
     static void Deselect(EditorLayer& e) { e.ClearSelection(); e.ClearAssetSelection(); }
     static size_t UndoDepth(EditorLayer& e) { return e.m_UndoStack.size(); }
@@ -602,6 +608,7 @@ Step FreshScene() {
         ImGui::GetCurrentContext()->InputTextDeactivatedState.ClearFreeMemory();
         ImGui::SetWindowFocus(nullptr);
         c.E.CloseSettingsWindow();
+        X::CloseToolWindows(c.E);
         EditorModuleHost::ConsoleState().Filter[0] = 0;
         X::ResetScene(c.E, c.W, g_ScratchScene);
         Enhancers::EnhancerUserState::Get().Reset();

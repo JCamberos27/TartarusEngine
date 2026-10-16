@@ -95,6 +95,23 @@ Step InspReveal(Query q) {
         return false;
     }, 120};
 }
+// Clicks a component's "..." button and waits until its menu shows `item` in the same place on
+// consecutive frames: on its first frame the popup is not yet moved back inside a narrow window,
+// so clicking the item then misses it (and the menu stays open).
+Step InspOpenMenu(std::string component, const char* item) {
+    auto click = std::make_shared<Step>(Click(MoreButton(component.c_str())));
+    auto clicked = std::make_shared<bool>(false);
+    auto last = std::make_shared<ImRect>();
+    auto still = std::make_shared<int>(0);
+    return {"open the " + component + " menu", [item, click, clicked, last, still](Ctx& c) {
+        if (!*clicked) { *clicked = click->Fn(c); return false; }
+        const UiItem* it = Find(MenuItem(item));
+        if (!it) { *still = 0; return false; }
+        *still = (it->Rect.Min.x == last->Min.x && it->Rect.Min.y == last->Min.y) ? *still + 1 : 0;
+        *last = it->Rect;
+        return *still >= 2;
+    }, 240};
+}
 // Opens a component section unless it is already open (open state is per object order and
 // survives between tests).
 Step InspOpen(std::string component) {
@@ -152,7 +169,7 @@ void RegisterInspectorTests() {
             ExpectTrue("added to Alpha", [rcp](Ctx& c) { return rcp->Has(c.W.Registry, ByName(c.W, "Alpha")); }),
             InspOpen(name), InspUntilOpen(name), WaitSeconds(0.3),
             Shot("section", {kInspector}),
-            Click(MoreButton(name.c_str())), Wait(2),
+            InspOpenMenu(name, "Remove Component"),
             Click(MenuItem("Remove Component")), WaitSeconds(0.5),
             ExpectTrue("removed", [rcp](Ctx& c) { return !rcp->Has(c.W.Registry, ByName(c.W, "Alpha")); }),
             Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
