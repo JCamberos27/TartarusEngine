@@ -45,8 +45,9 @@ jobs:
     runs-on: windows-latest
     # Backstop: a hung build or smoke test must not sit on a runner until GitHub's 6-hour
     # job ceiling. The compile + cached deps finish well inside this; anything approaching it
-    # is a hang worth failing fast on.
-    timeout-minutes: 50
+    # is a hang worth failing fast on. A good Release run takes ~49 min (the editor tests and tour
+    # alone ~30), so the cap sits above the step limits added up: build 15 + smoke 4 + editor 25 + tour 10.
+    timeout-minutes: 65
     strategy:
       fail-fast: false
       matrix:
@@ -238,6 +239,9 @@ jobs:
           TARTARUS_EDITOR_TEST_SHOTS: ${{ github.workspace }}\editor-test-shots
           TARTARUS_EDITOR_TEST_SHOW: "1"
           TARTARUS_EDITOR_TEST_EXCLUDE: "scenes:"
+          # The run's own watchdog aborts (with a crash dump, uploaded below) before this step's
+          # timeout, so a hang still leaves the log naming the test and step it stopped in.
+          TARTARUS_EDITOR_TEST_DEADLINE: "25"
         run: |
           $exe = "build\${{ matrix.config }}\TartarusEngine.exe"
           $p = Start-Process -FilePath $exe -ArgumentList "--editor-tests" -NoNewWindow -Wait -PassThru
@@ -258,6 +262,8 @@ jobs:
           MESA_GL_VERSION_OVERRIDE: "4.6"
           MESA_GLSL_VERSION_OVERRIDE: "460"
         run: |
+          # A timed-out step above leaves its editor running (killing the shell doesn't end it).
+          Get-Process TartarusEngine -ErrorAction SilentlyContinue | Stop-Process -Force
           $exe = "build\${{ matrix.config }}\TartarusEngine.exe"
           $p = Start-Process -FilePath $exe -ArgumentList "--editor-shot","editor-test-shots\tour","--editor-shot-default-layout" -NoNewWindow -Wait -PassThru
           Write-Host "editor screenshot tour exited with $($p.ExitCode)"

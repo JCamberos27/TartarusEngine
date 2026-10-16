@@ -45,6 +45,7 @@
 #include <json.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <chrono>
 #include <fstream>
@@ -57,8 +58,10 @@
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <set>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -284,6 +287,76 @@ struct TestReport {
 std::vector<TestReport> g_Reports;
 TestReport g_Cur;
 std::chrono::steady_clock::time_point g_TestStart;
+
+// A wall-clock watchdog for the run. Steps time out in frames, so a main thread blocked inside a
+// frame, or frames slowed to a crawl, never reach that check; on CI the step then rode its
+// timeout and the job lost its whole log (the editor outlived the killed shell). The watchdog
+// thread names the test and step whenever no frame has finished for a minute or one test has run
+// for 3 minutes, and aborts the run (CrashHandler writes a minidump with every thread's stack)
+// when frames have stopped for 4 minutes or the run passes TARTARUS_EDITOR_TEST_DEADLINE minutes.
+namespace watchdog {
+std::atomic<uint64_t> g_Frames{0};
+std::mutex g_Mutex;
+std::string g_Where = "startup"; // "<test> / step '<step>'", under g_Mutex
+size_t g_WhereTest = SIZE_MAX, g_WhereStep = SIZE_MAX;
+
+void Note(const std::string& test, const std::string& step, size_t testIndex, size_t stepIndex) {
+    g_Frames.fetch_add(1, std::memory_order_relaxed);
+    if (testIndex == g_WhereTest && stepIndex == g_WhereStep) return;
+    g_WhereTest = testIndex;
+    g_WhereStep = stepIndex;
+    std::lock_guard<std::mutex> lk(g_Mutex);
+    g_Where = test + " / step '" + step + "'";
+}
+
+void Start() {
+    double deadlineMin = 0.0;
+    {
+        char* v = nullptr;
+        size_t n = 0;
+        if (_dupenv_s(&v, &n, "TARTARUS_EDITOR_TEST_DEADLINE") == 0 && v) { deadlineMin = std::atof(v); std::free(v); }
+    }
+    std::thread([deadlineMin] {
+        using clock = std::chrono::steady_clock;
+        const auto runStart = clock::now();
+        auto lastFrameAt = runStart, whereSince = runStart;
+        uint64_t lastFrames = 0;
+        std::string lastWhere;
+        bool slowNoted = false;
+        for (;;) {
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+            if (g_Done) return;
+            const auto now = clock::now();
+            const uint64_t frames = g_Frames.load(std::memory_order_relaxed);
+            if (frames != lastFrames) { lastFrames = frames; lastFrameAt = now; }
+            std::string where;
+            {
+                std::lock_guard<std::mutex> lk(g_Mutex);
+                where = g_Where;
+            }
+            const std::string test = where.substr(0, where.find(" / step '"));
+            if (test != lastWhere.substr(0, lastWhere.find(" / step '"))) { whereSince = now; slowNoted = false; }
+            lastWhere = where;
+            const auto secs = [&](clock::time_point t) { return (long long)std::chrono::duration_cast<std::chrono::seconds>(now - t).count(); };
+            const long long stalled = secs(lastFrameAt), inTest = secs(whereSince), total = secs(runStart);
+            if (stalled >= 60 && stalled % 60 < 5)
+                std::printf("[EditorTest] WATCHDOG: no frame finished for %llds, in %s (frame %llu)\n", stalled, where.c_str(), (unsigned long long)frames);
+            if (inTest >= 180 && !slowNoted) {
+                slowNoted = true;
+                std::printf("[EditorTest] WATCHDOG: %s has run for %llds (frame %llu)\n", where.c_str(), inTest, (unsigned long long)frames);
+            }
+            const bool hung = stalled >= 240, late = deadlineMin > 0.0 && total >= (long long)(deadlineMin * 60.0);
+            if (hung || late) {
+                std::printf("[EditorTest] WATCHDOG: %s - aborting in %s (frame %llu) for a crash dump\n",
+                            hung ? "frames stopped for 4 minutes" : "past TARTARUS_EDITOR_TEST_DEADLINE", where.c_str(), (unsigned long long)frames);
+                std::fflush(stdout);
+                std::abort();
+            }
+            std::fflush(stdout);
+        }
+    }).detach();
+}
+} // namespace watchdog
 int g_GlErrBase = 0;
 unsigned long long g_LogSeqSeen = 0;
 std::vector<std::string> g_AllowLog;   // this test: error lines containing one of these are expected
@@ -1647,7 +1720,9 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
         // Let the editor lay out its dock space first.
         g_StepFrames = -30;
         std::cout << "[EditorTest] " << g_Tests.size() << " test(s)" << std::endl;
+        watchdog::Start();
     }
+    watchdog::Note("startup", "layout", SIZE_MAX, SIZE_MAX);
     if (g_StepFrames < 0) { ++g_StepFrames; return false; }
 
     Ctx c{editor, world, assets, camera};
@@ -1720,6 +1795,7 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
         if (g_TestFailed || g_StepIndex >= t.Steps.size()) { finishTest(); return false; }
 
         Step& s = t.Steps[g_StepIndex];
+        watchdog::Note(t.Name, s.Name, g_TestIndex, g_StepIndex);
         const bool done = s.Fn(c);
         ++g_StepFrames;
         if (done) { ++g_StepIndex; g_StepFrames = 0; }
