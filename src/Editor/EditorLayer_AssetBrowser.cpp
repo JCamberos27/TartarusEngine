@@ -401,7 +401,7 @@ unsigned int EditorLayer::ModelThumbnail(Model& model) {
         m_ThumbnailLRU.pop_back();
         auto evictIt = m_ModelThumbnails.find(evictPath);
         if (evictIt != m_ModelThumbnails.end()) {
-            if (evictIt->second.first) glDeleteTextures(1, &evictIt->second.first);
+            if (evictIt->second.first) m_RetiredThumbnailTextures.push_back(evictIt->second.first);
             m_ModelThumbnails.erase(evictIt);
         }
     }
@@ -521,16 +521,21 @@ void EditorLayer::ClearMaterialThumbnails() {
 
 void EditorLayer::InvalidateModelThumbnail(const std::string& path) {
     if (path.empty()) { // clear all — a reimport can rebuild any model in place
-        for (auto& [p, entry] : m_ModelThumbnails) { (void)p; if (entry.first) glDeleteTextures(1, &entry.first); }
+        for (auto& [p, entry] : m_ModelThumbnails) { (void)p; if (entry.first) m_RetiredThumbnailTextures.push_back(entry.first); }
         m_ModelThumbnails.clear();
         m_ThumbnailLRU.clear();
         return;
     }
     auto it = m_ModelThumbnails.find(path);
     if (it == m_ModelThumbnails.end()) return;
-    if (it->second.first) glDeleteTextures(1, &it->second.first);
+    if (it->second.first) m_RetiredThumbnailTextures.push_back(it->second.first);
     m_ThumbnailLRU.erase(it->second.second);
     m_ModelThumbnails.erase(it);
+}
+void EditorLayer::FreeRetiredThumbnailTextures() {
+    if (m_RetiredThumbnailTextures.empty()) return;
+    glDeleteTextures((GLsizei)m_RetiredThumbnailTextures.size(), m_RetiredThumbnailTextures.data());
+    m_RetiredThumbnailTextures.clear();
 }
 void EditorLayer::BeginRenameAsset(const std::string& key, bool isFolder, const std::string& currentName) {
     m_RenamingAssetKey = key;
