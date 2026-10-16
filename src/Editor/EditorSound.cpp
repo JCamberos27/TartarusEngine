@@ -64,6 +64,7 @@ struct State {
     double LastAlertMs = -1e9;
     int AlertStorm = 0;
     std::array<std::vector<std::string>, kEventCount> Files;
+    std::array<bool, kEventCount> Override{};
 } s;
 
 double NowMs() {
@@ -150,6 +151,7 @@ void Init(const std::string& builtInDir, const std::string& overrideDir) {
     int found = 0, overridden = 0;
     for (int i = 0; i < kEventCount; ++i) {
         std::vector<std::string> files = FindVariants(overrideDir, (Event)i);
+        s.Override[i] = !files.empty();
         if (!files.empty()) ++overridden;
         else files = FindVariants(builtInDir, (Event)i);
         files.erase(std::remove_if(files.begin(), files.end(), [](const std::string& f) { return !AudioEngine::Load(f); }), files.end());
@@ -183,6 +185,25 @@ Settings FromEditorSettings() {
     }
     return v;
 }
+
+void ToEditorSettings(const Settings& v) {
+    EditorSettings& e = EditorSettings::Get();
+    e.EditorSoundsEnabled = v.Enabled;
+    e.EditorSoundsVolume = std::clamp(v.Master, 0.0f, 1.0f);
+    e.EditorSoundCategoryOn.assign(v.CategoryOn.begin(), v.CategoryOn.end());
+    e.EditorSoundCategoryVolume.assign(v.CategoryVolume.begin(), v.CategoryVolume.end());
+}
+
+bool Audition(Event e, int variant) {
+    if (!s.Ready) return false;
+    const auto& files = s.Files[std::clamp((int)e, 0, kEventCount - 1)];
+    if (variant < 0 || variant >= (int)files.size()) return false;
+    const bool ok = AudioEngine::PlayEditor(files[variant], DbToGain(Info(e).GainDb));
+    if (ok) ++s.Played;
+    return ok;
+}
+
+bool IsOverride(Event e) { return s.Override[std::clamp((int)e, 0, kEventCount - 1)]; }
 
 void Update() {
     if (!s.Ready) return;
