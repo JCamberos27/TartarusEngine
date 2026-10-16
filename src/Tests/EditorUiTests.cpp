@@ -27,6 +27,8 @@
 #include "Enhancers/EnhancerUserState.h"
 #include "Enhancers/TabState.h"
 #include "EditorTestHooks.h"
+#include "EditorModuleAPI.h"       // EditorConsoleState
+#include "HotReloadEditorModule.h" // EditorModuleHost::ConsoleState()
 #include "GLDebug.h"
 #include "Log.h"
 #include "gl.h"
@@ -581,6 +583,14 @@ Step FreshScene() {
     return Do("fresh scene", [](Ctx& c) {
         if (X::InPlay(c.E)) X::RequestPlayStop(c.E);
         ImGui::ClosePopupsExceptModals(); // a menu or popover a previous test left open
+        // A test that failed midway can leave a field mid-edit, keyboard focus in a panel, the
+        // Settings window up or a Console filter typed: any of those swallows the next test's
+        // keys and clicks, so one failure cascaded through the rest of a suite.
+        ImGui::ClearActiveID();
+        ImGui::GetCurrentContext()->InputTextDeactivatedState.ClearFreeMemory();
+        ImGui::SetWindowFocus(nullptr);
+        c.E.CloseSettingsWindow();
+        EditorModuleHost::ConsoleState().Filter[0] = 0;
         X::ResetScene(c.E, c.W, g_ScratchScene);
         Enhancers::EnhancerUserState::Get().Reset();
         Enhancers::TabState::Get().Reset();
@@ -1477,10 +1487,12 @@ void AfterFrame(int fbWidth, int fbHeight) {
         for (ImGuiWindow* w : g.Windows)
             if (w->WasActive && !w->Hidden && Contains(w->Name, name) && !Contains(w->Name, "/")) { win = w; break; }
         if (!win) { Fail("shot " + rel + ": window " + name + " is not shown"); continue; }
-        const int x0 = std::clamp((int)(win->InnerRect.Min.x * scale.x), 0, fbWidth - 1);
-        const int y0 = std::clamp((int)(win->InnerRect.Min.y * scale.y), 0, fbHeight - 1);
-        const int x1 = std::clamp((int)(win->InnerRect.Max.x * scale.x), 0, fbWidth);
-        const int y1 = std::clamp((int)(win->InnerRect.Max.y * scale.y), 0, fbHeight);
+        // A window that is only a menu bar (the ##Toolbar strip) has an empty inner rect.
+        const ImRect area = win->InnerRect.GetHeight() >= 4.0f ? win->InnerRect : win->Rect();
+        const int x0 = std::clamp((int)(area.Min.x * scale.x), 0, fbWidth - 1);
+        const int y0 = std::clamp((int)(area.Min.y * scale.y), 0, fbHeight - 1);
+        const int x1 = std::clamp((int)(area.Max.x * scale.x), 0, fbWidth);
+        const int y1 = std::clamp((int)(area.Max.y * scale.y), 0, fbHeight);
         if (x1 - x0 < 4 || y1 - y0 < 4) { Fail("shot " + rel + ": window " + name + " has no area"); continue; }
         const unsigned char* first = &top[((size_t)y0 * fbWidth + x0) * 4];
         bool flat = true;
