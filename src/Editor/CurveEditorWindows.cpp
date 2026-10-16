@@ -156,7 +156,10 @@ void DrawWindows(const std::function<void()>& undo,const std::function<void()>& 
         if(it->first.first!=ctx){++it;continue;}auto& w=it->second;bool open=true;
         const std::string file=w.Bound.Source?fs::u8path(w.Bound.Source->Path).stem().u8string():"Curve";
         const std::string title=file+" / "+w.Bound.Title+"###curve:"+w.Key;
-        ImGui::SetNextWindowSize({1100,740},ImGuiCond_FirstUseEver);
+        // Centred, and no bigger than the editor window (a small window would put the close button off-screen).
+        const ImGuiViewport* vp=ImGui::GetMainViewport();
+        ImGui::SetNextWindowPos({vp->WorkPos.x+vp->WorkSize.x*0.5f,vp->WorkPos.y+vp->WorkSize.y*0.5f},ImGuiCond_FirstUseEver,{0.5f,0.5f});
+        ImGui::SetNextWindowSize({std::min(1100.0f,vp->WorkSize.x*0.92f),std::min(740.0f,vp->WorkSize.y*0.92f)},ImGuiCond_FirstUseEver);
         if(w.Focus){ImGui::SetNextWindowFocus();w.Focus=false;}
         if(ImGui::Begin(title.c_str(),&open)) {
             if(w.Bound.Source) {
