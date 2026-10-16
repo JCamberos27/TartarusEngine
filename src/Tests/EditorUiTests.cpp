@@ -22,6 +22,7 @@
 #include "SceneSerializer.h"
 #include "ProjectPaths.h"
 #include "UserPaths.h"
+#include "ScriptIDE.h"      // CancelPrompts - a test left "Unsaved script" up
 #include "EditorTheme.h"
 #include "Enhancers/EnhancerCore.h"
 #include "Enhancers/EnhancerUserState.h"
@@ -153,6 +154,33 @@ struct EditorUiTestAccess {
         e.m_Dirty = false;
     }
     // Floating tool windows a failed test can leave up; in a narrow window they cover the panels.
+    // Every dialog a test can leave up. The editor's confirmations (BeginCenteredModal) reopen
+    // themselves each frame while their flag is set, so closing ImGui's popups alone brings them
+    // straight back: the flags and the requests waiting to open one go too.
+    static void CloseDialogs(EditorLayer& e) {
+        e.m_RecoveryPromptPending = false;              // Recover Unsaved Changes?
+        e.m_SceneVersionWarning.clear();                // Newer Scene Format
+        e.m_ExitPromptPending = false;                  // Save changes? (quit)
+        e.m_ExitDecision = EditorLayer::ExitDecision::None;
+        e.m_RevertPromptPending = false;                // Revert Scene?
+        e.m_ScenePromptPending = false;                 // Save changes? (New / Open Scene)
+        e.m_PendingSceneSwitch = EditorLayer::PendingSceneSwitch::None;
+        e.m_PendingScenePath.clear();
+        e.m_ShowSaveLayout = false;                     // Save Layout
+        e.m_ShowArrayDuplicate = false;                 // Duplicate Array
+        e.m_OpenDeleteConfirmRequested = false;         // Delete Asset?
+        e.m_PendingDelete.clear();
+        e.m_OpenDiskDeleteRequested = false;            // Delete from Disk?
+        e.m_PendingDiskDelete.clear();
+        e.m_PendingDiskDeleteRefs.clear();
+        e.m_OpenDeleteErrorRequested = false;           // Can't Delete
+        e.m_DeleteError.clear();
+        e.m_OpenWeaponWizard = false;                   // New First-Person Weapon
+        if (e.m_ScriptIDE) e.m_ScriptIDE->CancelPrompts(); // Unsaved script
+        // Then ImGui's popup stack, modals included (Remove parameter?, Custom Resolution and the
+        // rest open once and stay up only there).
+        if (ImGuiContext* g = ImGui::GetCurrentContext(); g && g->OpenPopupStack.Size > 0) ImGui::ClosePopupToLevel(0, false);
+    }
     static void CloseToolWindows(EditorLayer& e) {
         e.m_ShowAnimator = false;
         e.m_ShowAudioDebug = false;
@@ -1520,6 +1548,10 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
             ++g_TestIndex;
         };
         if (g_Cur.Name != t.Name) {
+            // Whatever the last test left up (a failed one stops mid-dialog) goes before this one
+            // starts - a frame after the failure screenshot, which shows it. Otherwise a modal
+            // left open blocks every click of every later test.
+            X::CloseDialogs(editor);
             g_Cur = TestReport{};
             g_Cur.Name = t.Name;
             g_TestStart = std::chrono::steady_clock::now();

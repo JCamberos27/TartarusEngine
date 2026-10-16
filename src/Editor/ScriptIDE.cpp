@@ -261,6 +261,7 @@ void ScriptIDE::Draw(unsigned int sceneDockId){impl->SceneDockId=sceneDockId;imp
 bool ScriptIDE::HasUnsavedFiles() const {return std::any_of(impl->Documents.begin(),impl->Documents.end(),[](const auto& d){return d->Dirty();});}
 bool ScriptIDE::OwnsKeyboard() const {return impl->KeyboardActive;}
 bool ScriptIDE::SaveAll(){return impl->SaveAll();}
+void ScriptIDE::CancelPrompts(){impl->ClosePath.clear();}
 void ScriptIDE::DiscardAll(){for(auto& d:impl->Documents)if(d->Dirty()){impl->Reload(*d);if(d->Dirty())d->Editor.SetText(d->Saved);}impl->Persist();}
 
 void ScriptIDE::Impl::Draw() {
