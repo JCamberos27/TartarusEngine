@@ -154,6 +154,7 @@ struct EditorUiTestAccess {
     static std::string& ScenePath(EditorLayer& e) { return e.m_CurrentScenePath; }
     static void Deselect(EditorLayer& e) { e.ClearSelection(); e.ClearAssetSelection(); }
     static size_t UndoDepth(EditorLayer& e) { return e.m_UndoStack.size(); }
+    static std::string UndoTop(EditorLayer& e) { return e.m_UndoStack.empty() ? std::string("-") : e.m_UndoStack.back().Label; }
     static void PushUndo(EditorLayer& e, World& w, const char* label) { e.PushUndo(w, label); }
     static bool InPlay(EditorLayer& e) { return e.m_InPlayMode; }
     static void RequestPlayStop(EditorLayer& e) { e.m_PlayStopRequested = true; }
@@ -1266,14 +1267,23 @@ void RegisterTests() {
     });
     Add("favorites: the asset star is a favorite and undoes", {
         FreshScene(), Wait(2),
+        Do("note the undo depth", [](Ctx& c) { g_Number = (double)X::UndoDepth(c.E); }),
         Do("star an asset", [](Ctx& c) { c.E.SetAssetFavorites({"assets/AI/npc_soldier.controller"}, true); }), Wait(4),
         ExpectTrue("starred", [](Ctx& c) { return c.E.IsAssetFavorite("assets/AI/npc_soldier.controller"); }),
         ExpectTrue("on a page", [](Ctx&) {
             return Enhancers::FindFavorite(Enhancers::EnhancerUserState::Get().FavoritePages,
                                            Enhancers::EditorRef::MakeAsset("assets/AI/npc_soldier.controller")) >= 0;
         }),
+        Until("the star is an undo step", [](Ctx& c) { return (double)X::UndoDepth(c.E) > g_Number; }, 60),
+        Do("note the depth with it", [](Ctx& c) { g_Number = (double)X::UndoDepth(c.E); }),
         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(4),
-        ExpectTrue("undo un-stars it", [](Ctx& c) { return !c.E.IsAssetFavorite("assets/AI/npc_soldier.controller"); }),
+        Expect("undo un-stars it", [](Ctx& c) {
+            if (!c.E.IsAssetFavorite("assets/AI/npc_soldier.controller")) return std::string();
+            const ImGuiIO& io = ImGui::GetIO();
+            return "still starred; undo depth " + std::to_string((int)g_Number) + " -> " + std::to_string(X::UndoDepth(c.E)) +
+                   ", top '" + X::UndoTop(c.E) + "', wantText=" + std::to_string((int)io.WantTextInput) +
+                   " activeId=" + std::to_string(ImGui::GetActiveID());
+        }),
     });
 
     // ------------------------------------------------------------------ 14. Ruler
