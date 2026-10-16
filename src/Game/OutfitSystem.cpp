@@ -573,6 +573,14 @@ unsigned g_LandedGeneration = 0;
 
 unsigned LandedGeneration() { return g_LandedGeneration; }
 
+bool LandingDue(const World& world) {
+    for (const auto& pc : Waiting())
+        if (pc.W == &world && AllReady(pc.Tickets)) return true;
+    for (auto [root, outfit] : world.Registry.view<const CharacterOutfitComponent>().each())
+        if (outfit.BodyChecked != WardrobeGeneration() && !IsPending(world, root)) return true;
+    return false;
+}
+
 void UpdatePending(World& world, AssetLibrary& assets) {
     auto& list = Waiting();
     for (size_t i = 0; i < list.size();) {

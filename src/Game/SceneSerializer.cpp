@@ -2356,6 +2356,67 @@ bool SceneSerializer::SameSceneContent(const std::string& a, const std::string& 
     }
 }
 
+namespace {
+// #15 - takes out of a SaveToString snapshot what the outfit system builds: every Outfit Piece and
+// what's under it, and each Character Outfit's gender and race (set from the pieces' request). The
+// ids left are numbered again in the order written, as SaveToString numbers them, so an entity
+// written after a piece that came or went still compares equal.
+void StripOutfits(json& scene) {
+    constexpr const char* kEntityArrays[] = {"boxes", "models", "empties", "prefabInstances"};
+    auto entries = [&](auto&& each) {
+        for (const char* k : kEntityArrays)
+            if (auto it = scene.find(k); it != scene.end() && it->is_array())
+                for (auto& e : *it)
+                    if (e.is_object()) each(e);
+    };
+    std::set<int> dropped;
+    // A child can be written before its parent: go round until nothing more joins.
+    for (bool grew = true; grew;) {
+        grew = false;
+        entries([&](const json& e) {
+            const int id = e.value("id", -1);
+            if (dropped.count(id)) return;
+            if (e.contains("Outfit Piece") || dropped.count(e.value("parentId", -1))) { dropped.insert(id); grew = true; }
+        });
+    }
+    std::unordered_map<int, int> renumbered;
+    int next = 0;
+    for (const char* k : kEntityArrays) {
+        auto it = scene.find(k);
+        if (it == scene.end() || !it->is_array()) continue;
+        json kept = json::array();
+        for (auto& e : *it) {
+            if (e.is_object() && dropped.count(e.value("id", -1))) continue;
+            if (e.is_object()) renumbered[e.value("id", -1)] = next++;
+            kept.push_back(std::move(e));
+        }
+        *it = std::move(kept);
+    }
+    entries([&](json& e) {
+        e["id"] = renumbered[e.value("id", -1)];
+        const auto parent = renumbered.find(e.value("parentId", -1));
+        e["parentId"] = parent != renumbered.end() ? parent->second : -1;
+        if (auto outfit = e.find("Character Outfit"); outfit != e.end() && outfit->is_object()) {
+            outfit->erase("Gender");
+            outfit->erase("Race");
+        }
+    });
+}
+} // namespace
+
+bool SceneSerializer::SameSceneContentApartFromOutfits(const std::string& a, const std::string& b) {
+    if (a == b) return true;
+    try {
+        json ja = json::parse(a), jb = json::parse(b);
+        for (const char* k : kLibraryKeys) { ja.erase(k); jb.erase(k); }
+        StripOutfits(ja);
+        StripOutfits(jb);
+        return ja == jb;
+    } catch (const std::exception&) {
+        return false;
+    }
+}
+
 std::string SceneSerializer::WithLibraryState(const std::string& scene, const std::string& library) {
     try {
         json out = json::parse(scene);

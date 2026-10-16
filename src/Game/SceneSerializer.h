@@ -48,6 +48,9 @@ namespace SceneSerializer {
     // #15 - two of those snapshots hold the same scene (entities and scene settings), whatever
     // their AssetLibrary state, which the Asset Browser re-lists on its own between undo steps.
     bool SameSceneContent(const std::string& a, const std::string& b);
+    // The same, leaving out what the outfit system builds (OutfitSystem::UpdatePending, UpdateAttachments):
+    // Outfit Piece entities with everything under them, and a Character Outfit's gender and race.
+    bool SameSceneContentApartFromOutfits(const std::string& a, const std::string& b);
     // `scene`'s scene with `library`'s AssetLibrary state (both SaveToString snapshots). Empty
     // when either won't parse.
     std::string WithLibraryState(const std::string& scene, const std::string& library);
