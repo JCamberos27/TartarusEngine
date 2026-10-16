@@ -23,5 +23,9 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
 void AfterFrame(int fbWidth, int fbHeight);
 // 0 when every test passed (valid after BeforeFrame returned true).
 int ExitCode();
+// Flushes the output and ends the process with `code` without running exit(): on CI the CRT's
+// ExitProcess first kills every other thread (the watchdog too), then DLL detach can stall for
+// many minutes or forever, so nothing is left to end it. Call once the editor has shut down.
+[[noreturn]] void EndProcess(int code);
 
 } // namespace EditorUiTests
