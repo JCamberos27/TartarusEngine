@@ -95,48 +95,11 @@ Step InspReveal(Query q) {
         return false;
     }, 120};
 }
-// Clicks a popup / menu / combo entry once it has stayed in the same place for two frames. A popup
-// is placed over its first frames (moved back inside the window, shrunk as a search narrows the
-// Add Component list, flipped when it doesn't fit below), and a click on its entry's earlier rect
-// lands outside it: the popup closes and nothing is chosen.
-Step InspClickSettled(Query q) {
-    auto click = std::make_shared<Step>(Click(q));
-    auto last = std::make_shared<ImRect>();
-    auto still = std::make_shared<int>(0);
-    const std::string name = click->Name;
-    return {name, [q, click, last, still](Ctx& c) {
-        if (*still < 2) {
-            const UiItem* it = Find(q);
-            if (!it) { *still = 0; return false; }
-            *still = (it->Rect.Min.x == last->Min.x && it->Rect.Min.y == last->Min.y) ? *still + 1 : 0;
-            *last = it->Rect;
-            return false;
-        }
-        return click->Fn(c);
-    }, 240};
-}
 // One of the Particle System section's Restart / Emit Burst / Clear buttons.
 Query InspParticleButton(const char* label) {
     Query q = ByExact(label, kInspector);
     q.Pred = [](const UiItem& it) { return Contains(it.Window, "Particle System"); };
     return q;
-}
-// Clicks a component's "..." button and waits until its menu shows `item` in the same place on
-// consecutive frames: on its first frame the popup is not yet moved back inside a narrow window,
-// so clicking the item then misses it (and the menu stays open).
-Step InspOpenMenu(std::string component, const char* item) {
-    auto click = std::make_shared<Step>(Click(MoreButton(component.c_str())));
-    auto clicked = std::make_shared<bool>(false);
-    auto last = std::make_shared<ImRect>();
-    auto still = std::make_shared<int>(0);
-    return {"open the " + component + " menu", [item, click, clicked, last, still](Ctx& c) {
-        if (!*clicked) { *clicked = click->Fn(c); return false; }
-        const UiItem* it = Find(MenuItem(item));
-        if (!it) { *still = 0; return false; }
-        *still = (it->Rect.Min.x == last->Min.x && it->Rect.Min.y == last->Min.y) ? *still + 1 : 0;
-        *last = it->Rect;
-        return *still >= 2;
-    }, 240};
 }
 // Opens a component section unless it is already open (open state is per object order and
 // survives between tests).
@@ -191,12 +154,12 @@ void RegisterInspectorTests() {
             InspReveal(ByLabel("Add Component", kInspector)),
             Click(ByLabel("Add Component", kInspector)), Wait(3),
             TypeText(name), Wait(3),
-            InspClickSettled(InspPopup(entry)), Wait(3),
+            Click(InspPopup(entry)), Wait(3),
             ExpectTrue("added to Alpha", [rcp](Ctx& c) { return rcp->Has(c.W.Registry, ByName(c.W, "Alpha")); }),
             InspOpen(name), InspUntilOpen(name), WaitSeconds(0.3),
             Shot("section", {kInspector}),
-            InspOpenMenu(name, "Remove Component"),
-            InspClickSettled(MenuItem("Remove Component")), WaitSeconds(0.5),
+            Click(MoreButton(name.c_str())), Wait(2),
+            Click(MenuItem("Remove Component")), WaitSeconds(0.5),
             ExpectTrue("removed", [rcp](Ctx& c) { return !rcp->Has(c.W.Registry, ByName(c.W, "Alpha")); }),
             Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
             ExpectTrue("undo puts it back", [rcp](Ctx& c) { return rcp->Has(c.W.Registry, ByName(c.W, "Alpha")); }),
@@ -210,21 +173,21 @@ void RegisterInspectorTests() {
         InspReveal(ByLabel("Add Component", kInspector)),
         Click(ByLabel("Add Component", kInspector)), Wait(3),
         TypeText("Mesh Renderer"), Wait(3),
-        InspClickSettled(InspPopup(ICON_FA_DRAW_POLYGON "  Mesh Renderer")), Wait(3),
+        Click(InspPopup(ICON_FA_DRAW_POLYGON "  Mesh Renderer")), Wait(3),
         ExpectTrue("added", [](Ctx& c) { return c.W.Registry.all_of<RenderableComponent>(ByName(c.W, "Alpha")); }),
         InspOpen("Mesh Renderer"), InspUntilOpen("Mesh Renderer"), WaitSeconds(0.3),
         Until("a Material section too", [](Ctx&) { return Find(Header("Material")) != nullptr; }),
         Shot("mesh renderer", {kInspector}),
         // Mesh: the button opens the primitive list.
         Click(ByExact("Cube", kInspector)), Wait(2),
-        InspClickSettled(InspPopup(ICON_FA_CIRCLE "  Sphere")), Wait(3),
+        Click(InspPopup(ICON_FA_CIRCLE "  Sphere")), Wait(3),
         Until("mesh is now a Sphere", [](Ctx&) { return Find(ByExact("Sphere", kInspector)) != nullptr; }),
         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
         Until("undo -> Cube", [](Ctx&) { return Find(ByExact("Cube", kInspector)) != nullptr; }),
         // Cast Shadows (combo) and Receive Shadows (checkbox).
         InspReveal(ByExact("##CastShadows", kInspector)),
         Click(ByExact("##CastShadows", kInspector)), Wait(2),
-        InspClickSettled(InspComboItem("Two Sided")), Wait(3),
+        Click(InspComboItem("Two Sided")), Wait(3),
         ExpectTrue("Cast Shadows = Two Sided", [](Ctx& c) {
             return (int)c.W.Registry.get<RenderableComponent>(ByName(c.W, "Alpha")).CastShadows == 2;
         }),
@@ -240,7 +203,7 @@ void RegisterInspectorTests() {
         ExpectTrue("undo", [](Ctx& c) { return (c.W.Registry.get<RenderableComponent>(ByName(c.W, "Alpha")).ReceiveShadows ? 1.0 : 0.0) == g_Number; }),
         // Remove from the section menu: the mesh is parked, not lost.
         Click(MoreButton("Mesh Renderer")), Wait(2),
-        InspClickSettled(MenuItem("Remove Component")), WaitSeconds(0.5),
+        Click(MenuItem("Remove Component")), WaitSeconds(0.5),
         ExpectTrue("removed; mesh kept detached", [](Ctx& c) {
             const entt::entity a = ByName(c.W, "Alpha");
             return !c.W.Registry.all_of<RenderableComponent>(a) && c.W.Registry.all_of<DetachedMeshComponent>(a);
@@ -302,7 +265,7 @@ void RegisterInspectorTests() {
          InspReveal(ByTag("field:Audio Source/Output")),
          Click(ByTag("field:Audio Source/Output")), Wait(2),
          Shot("output combo"),
-         InspClickSettled(InspComboItem("Music")), Wait(3),
+         Click(InspComboItem("Music")), Wait(3),
          ExpectTrue("Output = Music", [](Ctx& c) { return c.W.Registry.get<AudioSourceComponent>(ByName(c.W, "Beta")).Output == 1; }),
          Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
          ExpectTrue("undo -> SFX", [](Ctx& c) { return c.W.Registry.get<AudioSourceComponent>(ByName(c.W, "Beta")).Output == 0; })},
@@ -379,7 +342,7 @@ void RegisterInspectorTests() {
         InspReveal(ByLabel("Add Component", kInspector)),
         Click(ByLabel("Add Component", kInspector)), Wait(3),
         TypeText("Transform Controller"), Wait(3),
-        InspClickSettled(InspPopup(ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT "  Transform Controller")), Wait(3),
+        Click(InspPopup(ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT "  Transform Controller")), Wait(3),
         InspOpen("Transform Controller"), InspUntilOpen("Transform Controller"),
         InspReveal(ByTag("field:Transform Controller/Script Path")), Wait(2),
         Shot("script path", {kInspector}),
@@ -475,7 +438,7 @@ void RegisterInspectorTests() {
         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
         ExpectTrue("undo -> not static", [](Ctx& c) { return !c.W.Registry.all_of<StaticTag>(ByName(c.W, "Alpha")); }),
         Click(ByExact("##Tag", kInspector)), Wait(2),
-        InspClickSettled(InspComboItem(ICON_FA_PLUS "  New tag...")), Wait(3),
+        Click(InspComboItem(ICON_FA_PLUS "  New tag...")), Wait(3),
         TypeText("Enemy"), Wait(2), Key(ImGuiKey_Enter), Wait(3),
         ExpectTrue("tagged Enemy", [](Ctx& c) {
             const auto* t = c.W.Registry.try_get<TagComponent>(ByName(c.W, "Alpha"));
@@ -492,7 +455,7 @@ void RegisterInspectorTests() {
             return it && !(it->ItemFlags & ImGuiItemFlags_Disabled);
         }),
         Shot("object actions"),
-        InspClickSettled(InspPopup(ICON_FA_CLONE "  Duplicate")), Wait(3),
+        Click(InspPopup(ICON_FA_CLONE "  Duplicate")), Wait(3),
         Expect("Alpha (1) created and shown", [](Ctx& c) {
             if (ByName(c.W, "Alpha (1)") == entt::null) return std::string("no Alpha (1)");
             return ExpectSelected(c, "Alpha (1)");
@@ -501,7 +464,7 @@ void RegisterInspectorTests() {
         ExpectTrue("undo removes the copy", [](Ctx& c) { return ByName(c.W, "Alpha (1)") == entt::null; }),
         SelectByName("Alpha"), Wait(3),
         Click(ObjectMenu()), Wait(2),
-        InspClickSettled(InspPopup(ICON_FA_TRASH "  Delete")), Wait(3),
+        Click(InspPopup(ICON_FA_TRASH "  Delete")), Wait(3),
         ExpectTrue("Alpha deleted, Inspector empty", [](Ctx& c) { return ByName(c.W, "Alpha") == entt::null && X::Selection(c.E).empty(); }),
         Shot("nothing selected", {kInspector}),
         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
@@ -510,11 +473,11 @@ void RegisterInspectorTests() {
     Add("inspector: object actions: Copy All Components, Paste Components as New; undo", {
         FreshScene(), Wait(2), SelectByName("Beta"), Wait(3),
         Click(ObjectMenu()), Wait(2),
-        InspClickSettled(InspPopup(ICON_FA_COPY "  Copy All Components")), Wait(2),
+        Click(InspPopup(ICON_FA_COPY "  Copy All Components")), Wait(2),
         ExpectTrue("clipboard holds Beta's components", [](Ctx& c) { return X::Clipboard(c.E).size() >= 2; }),
         SelectByName("Alpha"), Wait(3),
         Click(ObjectMenu()), Wait(2),
-        InspClickSettled(MenuItem("Paste Components as New")), Wait(3),
+        Click(MenuItem("Paste Components as New")), Wait(3),
         Expect("Alpha got the Light and the Audio Source", [](Ctx& c) {
             const entt::entity a = ByName(c.W, "Alpha");
             const auto* l = c.W.Registry.try_get<LightComponent>(a);
@@ -534,11 +497,11 @@ void RegisterInspectorTests() {
         FreshScene(), Wait(2), SelectByName("Beta"), Wait(3),
         Click(MoreButton("Light")), Wait(2),
         Shot("light menu"),
-        InspClickSettled(InspPopup(ICON_FA_COPY "  Copy Component")), Wait(2),
+        Click(InspPopup(ICON_FA_COPY "  Copy Component")), Wait(2),
         ExpectTrue("Light on the component clipboard", [](Ctx& c) { return IX::ClipKind(c.E) == "Light"; }),
         SelectByName("Gamma"), Wait(3),
         Click(MoreButton("Light")), Wait(2),
-        InspClickSettled(InspPopup(ICON_FA_PASTE "  Paste Component Values")), Wait(3),
+        Click(InspPopup(ICON_FA_PASTE "  Paste Component Values")), Wait(3),
         ExpectTrue("Gamma's intensity = 9", [](Ctx& c) { return c.W.Registry.get<LightComponent>(ByName(c.W, "Gamma")).Intensity == 9.0f; }),
         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
         ExpectTrue("undo -> 1", [](Ctx& c) { return c.W.Registry.get<LightComponent>(ByName(c.W, "Gamma")).Intensity == 1.0f; }),
@@ -547,17 +510,17 @@ void RegisterInspectorTests() {
     Add("inspector: Transform menu Reset, Copy Component and Paste onto another object; undo", {
         FreshScene(), Wait(2), SelectByName("Alpha"), Wait(3),
         Click(MoreButton("Transform")), Wait(2),
-        InspClickSettled(InspPopup(ICON_FA_COPY "  Copy Component")), Wait(2),
+        Click(InspPopup(ICON_FA_COPY "  Copy Component")), Wait(2),
         SelectByName("Gamma"), Wait(3),
         Click(MoreButton("Transform")), Wait(2),
-        InspClickSettled(InspPopup(ICON_FA_PASTE "  Paste Component Values")), Wait(3),
+        Click(InspPopup(ICON_FA_PASTE "  Paste Component Values")), Wait(3),
         ExpectTrue("Gamma moved to Alpha's position", [](Ctx& c) {
             return InspNear(c.W.Registry.get<TransformComponent>(ByName(c.W, "Gamma")).Position.x, -3.0f);
         }),
         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
         ExpectTrue("undo -> 3", [](Ctx& c) { return InspNear(c.W.Registry.get<TransformComponent>(ByName(c.W, "Gamma")).Position.x, 3.0f); }),
         Click(MoreButton("Transform")), Wait(2),
-        InspClickSettled(InspPopup(ICON_FA_ROTATE_LEFT "  Reset")), Wait(3),
+        Click(InspPopup(ICON_FA_ROTATE_LEFT "  Reset")), Wait(3),
         ExpectTrue("reset to the origin", [](Ctx& c) { return c.W.Registry.get<TransformComponent>(ByName(c.W, "Gamma")).Position == glm::vec3(0.0f); }),
         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
         ExpectTrue("undo -> 3", [](Ctx& c) { return InspNear(c.W.Registry.get<TransformComponent>(ByName(c.W, "Gamma")).Position.x, 3.0f); }),
@@ -565,7 +528,7 @@ void RegisterInspectorTests() {
     Add("inspector: component menu Reset to defaults; undo", {
         FreshScene(), Wait(2), SelectByName("Beta"), Wait(3),
         Click(MoreButton("Light")), Wait(2),
-        InspClickSettled(InspPopup(ICON_FA_ROTATE_LEFT "  Reset")), Wait(3),
+        Click(InspPopup(ICON_FA_ROTATE_LEFT "  Reset")), Wait(3),
         ExpectTrue("Light back to defaults", [](Ctx& c) { return c.W.Registry.get<LightComponent>(ByName(c.W, "Beta")).Intensity == LightComponent{}.Intensity; }),
         ExpectTrue("still has its Audio Source", [](Ctx& c) { return c.W.Registry.all_of<AudioSourceComponent>(ByName(c.W, "Beta")); }),
         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
@@ -579,7 +542,7 @@ void RegisterInspectorTests() {
             FreshScene(), Wait(2), SelectByName("Beta"), Wait(3),
             Do("list the presets folder", [before](Ctx&) { *before = InspListDir(InspPresetDir()); g_Text.clear(); }),
             Click(MoreButton("Light")), Wait(2),
-            InspClickSettled(InspPopup(ICON_FA_FLOPPY_DISK "  Save Preset")), Wait(3),
+            Click(InspPopup(ICON_FA_FLOPPY_DISK "  Save Preset")), Wait(3),
             Expect("a new Light preset file", [before](Ctx&) {
                 for (const std::string& p : InspListDir(InspPresetDir()))
                     if (!before->count(p) && std::filesystem::path(p).extension() == ".preset") {
@@ -593,7 +556,7 @@ void RegisterInspectorTests() {
                 c.W.Registry.get<LightComponent>(ByName(c.W, "Beta")).Intensity = 42.0f;
             }), Wait(2),
             Click(MoreButton("Light")), Wait(2),
-            InspClickSettled(InspPopup(ICON_FA_SLIDERS "  Apply Preset")), Wait(3),
+            Click(InspPopup(ICON_FA_SLIDERS "  Apply Preset")), Wait(3),
             Click(presetItem), Wait(3),
             ExpectTrue("preset applied: intensity 9 again", [](Ctx& c) { return c.W.Registry.get<LightComponent>(ByName(c.W, "Beta")).Intensity == 9.0f; }),
             Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),

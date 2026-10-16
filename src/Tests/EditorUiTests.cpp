@@ -485,18 +485,33 @@ Step MoveToItem(Query q) {
         return true;
     }, 90};
 }
+// An entry of a popup, menu or combo list. ImGui places those windows over their first frames
+// (auto-fit, moved back inside the editor, flipped when they don't fit below, shrunk as a search
+// narrows them), so an entry's rect can still move after it is first seen.
+bool InPopupWindow(const UiItem& it) {
+    return Contains(it.Root, "##Popup") || Contains(it.Root, "##Menu") || Contains(it.Root, "##Combo");
+}
 // Moves onto the item, presses and releases `button` with `mods` held. Waits up to the timeout for
-// the item to appear (a popup opening, a section expanding).
+// the item to appear (a popup opening, a section expanding). A popup / menu / combo entry is
+// clicked only once its rect has held still for two frames: a click on where it was a frame
+// earlier lands outside the popup, which then closes with nothing chosen.
 Step Click(Query q, int mods = 0, int button = 0, int clicks = 1) {
     auto phase = std::make_shared<int>(0);
+    auto last = std::make_shared<ImRect>();
+    auto still = std::make_shared<int>(0);
     const std::string desc = "click " + (q.Tag.empty() ? (q.Exact.empty() ? q.Label : q.Exact) : q.Tag);
-    return {desc, [q, mods, button, clicks, phase](Ctx&) {
+    return {desc, [q, mods, button, clicks, phase, last, still](Ctx&) {
         ImGuiIO& io = ImGui::GetIO();
         switch (*phase) {
             case 0: {
                 const UiItem* it = Find(q);
                 ImVec2 p;
-                if (!it || !ClickPoint(*it, p)) return false;
+                if (!it || !ClickPoint(*it, p)) { *still = 0; return false; }
+                if (InPopupWindow(*it)) {
+                    *still = (it->Rect.Min.x == last->Min.x && it->Rect.Min.y == last->Min.y) ? *still + 1 : 0;
+                    *last = it->Rect;
+                    if (*still < 2) return false;
+                }
                 if (q.AnchorX >= 0.0f) p.x = it->Rect.Min.x + it->Rect.GetWidth() * q.AnchorX;
                 MouseTo(p);
                 Mods(mods, true);
