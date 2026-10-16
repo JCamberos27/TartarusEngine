@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <cstddef>
 
+struct EditorMotionHooks; // EditorMotionHooks.h
+
 // The editor host owns ImGui, the renderer, scene data, undo history, and window lifetime.
 // Reloadable editor modules describe their UI through this deliberately small callback surface.
 // That keeps an in-flight scene safe when a DLL is replaced.
@@ -139,7 +141,9 @@
 //   40 - Editor Enhancers / vFolders: GetFolderVisual (icon / colour / content minimap per folder),
 //        GetFolderTreeFlags, DrawFolderContextMenuBody, SetHoveredAssetFolder (hover keys),
 //        DrawFolderNavBar (folder bookmark chips).
-constexpr std::uint32_t kEditorModuleAPIVersion = 40;
+//   41 - Glass Motion round 2: GetMotionHooks, the host's EditorMotionHooks table
+//        (EditorMotionHooks.h), so module widgets animate through Glass::Motion().
+constexpr std::uint32_t kEditorModuleAPIVersion = 41;
 
 // Editor Enhancers / vFolders (API v40): how one Asset Browser folder looks. POD - crosses the
 // module boundary. Glyphs are UTF-8 Font Awesome characters (at most 4 bytes + NUL).
@@ -544,6 +548,11 @@ struct EditorModuleHostAPI {
     // Folder bookmark chips, under the toolbar. Draws nothing when there are none and nothing is
     // being dragged.
     void (*DrawFolderNavBar)() = nullptr;
+
+    // --- Glass Motion round 2 (API v41) ---
+    // The host's motion table. A function (not a data pointer) so every slot after Version stays a
+    // function pointer, which CountUnassignedHostSlots relies on.
+    const EditorMotionHooks* (*GetMotionHooks)() = nullptr;
 };
 
 struct EditorModuleAPI {

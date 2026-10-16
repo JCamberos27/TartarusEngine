@@ -34,6 +34,8 @@
 #include "Glass/GlassEditorState.h"
 #include "Glass/GlassLayout.h"
 #include "Glass/GlassMotion.h"
+#include "Glass/GlassMotionHooks.h"
+#include "Glass/GlassDragMotion.h"
 #include "Glass/GlassTheme.h"
 #include "Glass/GlassTokens.h"
 
@@ -324,7 +326,6 @@ void EditorLayer::ApplyGizmoAccent() {
 void EditorLayer::ReleaseGlass() {
     if (m_Glass) {
         m_Glass->Backdrop.Release();
-        m_Glass->Ambient.Release();
         m_Glass->Compositor.Release();
         m_Glass.reset();
     }
@@ -371,25 +372,16 @@ int EditorLayer::GlassSurfacesForTest() const { return m_Glass ? m_Glass->Compos
 int EditorLayer::GlassCapturesForTest() const { return m_Glass ? m_Glass->Compositor.Captures() : 0; }
 
 void EditorLayer::GlassFrameBegin() {
-    if (!GlassThemeActive()) return;
+    // The motion runtime ticks in every theme: the shared widgets and the editor module animate
+    // through it (EditorMotionHooks.h) whether or not Glass is on. At rest it costs nothing.
+    EditorTheme::SetMotionHooks(&Glass::HostMotionHooks());
     Glass::ImAnimContext& motion = Glass::Motion();
     motion.SetReduceMotion(EditorSettings::Get().ReduceMotion);
     motion.NewFrame();
+    if (!GlassThemeActive()) return;
     // A see-through window shows the blurred desktop behind every panel: nothing to paint.
-    // Otherwise the ambient field: the Scene image, blurred until only colour is left.
-    GlassEditorState& g = GlassState();
-    if (DesktopShowsThrough()) {
-        PollGlassNotifications();
-        return;
-    }
-    unsigned int ambient = 0;
-    if (EditorSettings::Get().GlassFrostedBlur && m_SceneColorTexture != 0) {
-        const int w = m_SceneTexW > 0 ? m_SceneTexW : (int)m_ViewportSize.x;
-        const int h = m_SceneTexH > 0 ? m_SceneTexH : (int)m_ViewportSize.y;
-        ambient = g.Ambient.Update(m_SceneColorTexture, w, h, Glass::AmbientBlurLevels, Glass::AmbientSaturation,
-                                   Glass::AmbientCeiling);
-    }
-    Glass::DrawWallpaper((ImTextureID)(intptr_t)ambient);
+    // Otherwise the panels sit over the plain black canvas.
+    if (!DesktopShowsThrough()) Glass::DrawWallpaper();
     PollGlassNotifications();
 }
 
@@ -431,6 +423,11 @@ void EditorLayer::PollGlassNotifications() {
     while (first > 0 && entries[first - 1].Seq > g.LastLogSeq) --first;
     for (size_t i = first; i < entries.size(); ++i) {
         const LogEntry& e = entries[i];
+        // A hot reload that landed: a quiet success toast whose check draws on.
+        if (e.Level == LogLevel::Info && e.Message.rfind("Hot reload: TartarusGame module reloaded", 0) == 0) {
+            PushGlassToast("Module reloaded", "Your code changes are live.", false);
+            continue;
+        }
         if (e.Level != LogLevel::Error) continue;
         const bool module = e.Message.rfind("Module rebuild failed", 0) == 0;
         const bool shader = ContainsNoCase(e.Message, "failed to compile") || ContainsNoCase(e.Message, "compile error");
@@ -580,10 +577,10 @@ void EditorLayer::DrawGlassHierarchy(World& world, AssetLibrary& assets) {
                         else SelectItem(e, io.KeyCtrl);
                     }
                     if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) m_PendingFrameSelect = true;
-                    if (ImGui::BeginDragDropSource()) {
+                    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip)) {
                         ImGui::SetDragDropPayload("HIERARCHY_ENTITY", &e, sizeof(entt::entity));
                         const auto* nm = reg.try_get<NameComponent>(e);
-                        ImGui::TextUnformatted(nm && !nm->Name.empty() ? nm->Name.c_str() : "Object");
+                        Glass::DragGhostLabel(ICON_FA_CUBE, nm && !nm->Name.empty() ? nm->Name.c_str() : "Object");
                         ImGui::EndDragDropSource();
                     }
                     if (ImGui::BeginPopupContextItem("##ctx")) {
@@ -837,14 +834,28 @@ void EditorLayer::DrawGlassInspector(World& world, AssetLibrary& assets) {
                             const float barW = Glass::Px(3.0f), fh = ImGui::GetFrameHeight();
                             ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(p.x, p.y + fh * 0.2f), ImVec2(p.x + barW, p.y + fh * 0.8f),
                                                                       Col(axis[a]), barW * 0.5f);
-                            ImGui::SetCursorScreenPos(ImVec2(p.x + barW + Glass::Px(Glass::SpaceHalf), p.y));
+                            // A rejected value wiggles the field once and tints its ring red.
+                            const ImGuiID wiggleId = ImGui::GetID("##reject");
+                            Glass::ImAnimContext& motion = Glass::Motion();
+                            const bool rejecting = motion.PulseActive(wiggleId);
+                            const float wiggle = motion.Wiggle(wiggleId, Glass::InvalidWiggle);
+                            ImGui::SetCursorScreenPos(ImVec2(p.x + barW + Glass::Px(Glass::SpaceHalf) + wiggle, p.y));
                             ImGui::SetNextItemWidth(-FLT_MIN);
                             const bool changed = ImGui::DragFloat("##v", &value, rows[r].speed, 0.0f, 0.0f, "%.3f");
                             if (ImGui::IsItemActivated()) activated = true;
                             if (ImGui::IsItemDeactivatedAfterEdit()) committed = true;
                             if (changed) {
-                                if (!std::isfinite(value)) value = old; // never a nan/inf transform
+                                if (!std::isfinite(value)) { value = old; motion.TriggerWiggle(wiggleId, Glass::InvalidWiggle); } // never a nan/inf transform
                                 else if (value == 0.0f) value = 0.0f;   // no "-0.000"
+                            }
+                            {
+                                const ImVec2 fmn = ImGui::GetItemRectMin(), fmx = ImGui::GetItemRectMax();
+                                EditorUIPrimitives::FocusRing(ImGui::GetItemID(), fmn, fmx, ImGui::IsItemActive());
+                                const ImVec4 clear = EditorTheme::WithAlpha(EditorTheme::Danger, 0.0f);
+                                const ImVec4 ring = motion.AnimateColor(wiggleId ^ 0x5EDu, rejecting ? EditorTheme::Danger : clear, clear,
+                                                                        Glass::FocusIn, Glass::FocusOut);
+                                if (ring.w > 0.004f)
+                                    ImGui::GetWindowDrawList()->AddRect(fmn, fmx, EditorTheme::U32(ring), ImGui::GetStyle().FrameRounding, 0, 1.0f);
                             }
                             if (ImGui::IsItemHovered() && !ImGui::IsItemActive())
                                 EditorUI::SetTooltip("%.9g\nDrag to change; double-click to type", value);
@@ -1114,9 +1125,9 @@ void EditorLayer::DrawGlassLibrary(World& world, AssetLibrary& assets) {
                             else if (cell.kind == K::Script) OpenScriptIDE(cell.key);
                         }
                         if (const char* payload = AssetPayloadType(cell.kind)) {
-                            if (ImGui::BeginDragDropSource()) {
+                            if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip)) {
                                 ImGui::SetDragDropPayload(payload, cell.key.c_str(), cell.key.size() + 1);
-                                ImGui::TextUnformatted(cell.display.c_str());
+                                Glass::DragGhostLabel(isFolder ? ICON_FA_FOLDER : ICON_FA_FILE, cell.display.c_str());
                                 ImGui::EndDragDropSource();
                             }
                         }
@@ -1392,7 +1403,15 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
                                   Col(status, alpha), barW * 0.5f);
                 const float tx = drawn.Min.x + pad + Glass::Px(Glass::Space1);
                 float ty = drawn.Min.y + pad;
-                dl->AddText(ImVec2(tx, ty), Col(status, alpha), toast.Error ? ICON_FA_CIRCLE_EXCLAMATION : ICON_FA_CIRCLE_DOT);
+                if (toast.Error) {
+                    dl->AddText(ImVec2(tx, ty), Col(status, alpha), ICON_FA_CIRCLE_EXCLAMATION);
+                } else {
+                    // A success: its check draws on just after the pop lands.
+                    const float fs = ImGui::GetFontSize();
+                    const float draw = motion.ReduceMotion() ? 1.0f
+                        : Glass::EaseProgress(Glass::ToastCheckDraw, (age - popDur * 0.35f) / (Glass::ToastCheckDraw.durationMs * 0.001f));
+                    Glass::DrawCheckmark(dl, ImVec2(tx, ty + fs * 0.05f), fs * 0.95f, draw, Col(status, alpha), std::max(1.0f, fs * 0.12f));
+                }
                 dl->AddText(ImVec2(tx + ImGui::GetFontSize() * 1.5f, ty), Col(Glass::TextPrimary, alpha), toast.Title.c_str());
                 ty += lineH + Glass::Px(Glass::SpaceHalf);
                 dl->AddText(nullptr, 0.0f, ImVec2(tx, ty), Col(Glass::TextSecondary, alpha), toast.Body.c_str(), nullptr, wrap);

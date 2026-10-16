@@ -17,7 +17,17 @@
 //     (iam_pool_clear). An idle editor holds no animation memory at all.
 //
 // Timers (Pulse) follow the same rule: an entry exists from Start until the frame after it
-// reports 1.0, then it's gone, and a missing timer reads as "finished".
+// reports 1.0, then it's gone, and a missing timer reads as "finished". Colour and 2D tweens and
+// keyframe-clip instances are gated the same way.
+//
+// Procedural motion (Noise, Wiggle, Oscillate) is deliberately *not* ImAnim's oscillator / shake /
+// noise channels: those keep a per-id state block forever (im_anim.cpp g_osc_map, g_shake_map,
+// g_noise_states). Glass evaluates them as pure functions of time instead (ImAnim's stateless
+// iam_noise_2d, SpringImpulse), so they hold nothing.
+//
+// Clip and path *definitions* (DefineClip, DefinePath) are the one fixed exception: a handful of
+// small authored shapes registered once at startup and kept for the life of the editor. They are
+// not animation state and are not counted by HeldBytes.
 //
 // Host-only (EditorLayer_Glass.cpp, the unit tests). One instance per process: Glass::Motion().
 
@@ -34,6 +44,22 @@ namespace Glass {
 float SpringImpulse(float tSeconds, float mass, float stiffness, float damping, float amplitude);
 // Damping ratio of (m, k, c): < 1 under-damped (overshoots), 1 critical, > 1 over-damped.
 float DampingRatio(float mass, float stiffness, float damping);
+
+// A keyframe of an authored clip (DefineClip): `channel` reaches `value` at `timeMs`, eased from
+// the previous key on that channel with `ease` (an iam_ease_type; EaseId mirrors the common ones).
+struct ClipKey {
+    ImGuiID channel;
+    float   timeMs;
+    float   value;
+    int     ease;
+};
+
+// One segment of an authored path (DefinePath), in whatever unit space the caller scales from
+// (Glass paths are defined in a 0..1 box). Line uses `end`; Cubic uses c1, c2, end.
+struct PathSeg {
+    enum Kind : int { Line, Cubic } kind;
+    ImVec2 c1, c2, end;
+};
 
 class ImAnimContext {
 public:
@@ -63,6 +89,58 @@ public:
     // faster than the gate, a row that isn't already lit doesn't light (no channel is created).
     float HoverGlow(ImGuiID id, bool hovered);
 
+    // A colour that eases to `target` in OKLAB (ImAnim's iam_tween_color), so grey to white or
+    // white to red never passes through a muddy midpoint. Same rest rules as Animate.
+    ImVec4 AnimateColor(ImGuiID id, ImVec4 target, ImVec4 rest, const MotionSpec& in, const MotionSpec& out);
+    ImVec4 AnimateColor(ImGuiID id, ImVec4 target, ImVec4 rest, const MotionSpec& spec) { return AnimateColor(id, target, rest, spec, spec); }
+
+    // A point that eases to `target` (ImAnim's iam_tween_vec2): a tab underline's x and width, a
+    // drag ghost trailing the cursor. Follow2 is Follow for two components.
+    ImVec2 Animate2(ImGuiID id, ImVec2 target, ImVec2 rest, const MotionSpec& spec);
+    ImVec2 Follow2(ImGuiID id, ImVec2 target, ImVec2 previousTarget, const MotionSpec& spec) {
+        return Animate2(id, target, Live(id) ? target : previousTarget, spec);
+    }
+
+    // --- Procedural, stateless (pure functions of the motion clock; no entry, no channel) ---
+    // Smooth noise in [-amplitude, amplitude], drifting at `speedHz`. `seed` picks the stream.
+    float Noise(ImGuiID seed, float speedHz, float amplitude) const;
+    // A sine in [-1, 1] at `hz` (play-mode breathing). Returns 0 under Reduce Motion.
+    float Oscillate(float hz, float phase = 0.0f) const;
+    // A one-shot horizontal wiggle (invalid input): TriggerWiggle starts it, Wiggle reads the
+    // offset in px (0 when idle). Rides on a Pulse, evaluated with SpringImpulse.
+    void  TriggerWiggle(ImGuiID id, const ShakeSpec& spec);
+    float Wiggle(ImGuiID id, const ShakeSpec& spec);
+
+    // --- Keyframe clips (ImAnim's iam_clip) ---
+    // Register an authored clip once (startup). Keys are grouped by channel in time order.
+    static void DefineClip(ImGuiID clipId, const ClipKey* keys, int count);
+    static bool ClipDefined(ImGuiID clipId);
+    static float ClipSeconds(ImGuiID clipId);
+    // Play `clipId` on instance `id` (restarts it if it's already playing). The instance is an
+    // entry like any other: gone the frame after it finishes. Reduce Motion skips it.
+    void  PlayClip(ImGuiID id, ImGuiID clipId);
+    // A channel's value on a playing instance; `fallback` once it has finished or never ran (pass
+    // the clip's final value, so a finished clip reads exactly like a settled one).
+    float ClipFloat(ImGuiID id, ImGuiID channel, float fallback);
+    bool  ClipPlaying(ImGuiID id) const;
+
+    // --- Motion paths (ImAnim's iam_path) ---
+    static void   DefinePath(ImGuiID pathId, ImVec2 start, const PathSeg* segs, int count);
+    static bool   PathDefined(ImGuiID pathId);
+    // A point at arc-length fraction t (0..1) of the path, in its definition space.
+    static ImVec2 PathPoint(ImGuiID pathId, float t);
+    // A point on the blend of two paths (iam_path_morph): `blend` 0 is path a, 1 is path b.
+    static ImVec2 PathMorph(ImGuiID pathA, ImGuiID pathB, float t, float blend);
+
+    // --- Text and scroll ---
+    // Per-character stagger (iam_text_stagger: fade + rise) into the current window's draw list.
+    // `progress` 0..1 over TextStaggerSeconds. Under Reduce Motion it draws settled.
+    void  TextStagger(ImGuiID id, const char* text, ImVec2 pos, ImU32 col, float progress, float charDelayMs, float charMs, float risePx);
+    static float TextStaggerSeconds(const char* text, float charDelayMs, float charMs);
+    // Ease the current window's scroll (iam_scroll_to_y). Reduce Motion jumps.
+    void ScrollToY(float y, const MotionSpec& spec);
+    void ScrollToBottom(const MotionSpec& spec);
+
     // One-shot timers for staggered sequences and notifications.
     void  Pulse(ImGuiID id, float durationSeconds, float delaySeconds = 0.0f);
     // 0..1 progress of a pulse, 1 when it has finished or never existed. Touching it keeps it alive.
@@ -88,6 +166,10 @@ public:
     // Diagnostics: live entries, and the bytes this map holds (0 when idle).
     int    LiveCount() const { return m_Entries.Size; }
     size_t HeldBytes() const;
+    // The i-th live entry's id and kind (0 tween, 1 pulse, 2 colour, 3 vec2, 4 clip), for a smoke
+    // check's failure message.
+    ImGuiID LiveId(int i) const { return m_Entries[i].id; }
+    int     LiveKind(int i) const { return (int)m_Entries[i].kind; }
     double Now() const { return m_Time; }
 
     // Drops everything, ImAnim's pools included (tests, theme switch).
@@ -98,11 +180,12 @@ public:
     static constexpr int kImAnimGcInterval = 30;             // frames between iam_gc() sweeps
 
 private:
-    enum class Kind : unsigned char { Tween, Pulse };
+    enum class Kind : unsigned char { Tween, Pulse, Color, Vec2, Clip };
     struct Entry {
         ImGuiID id;
         Kind    kind;
         float   from;      // tween: value at activation (ImAnim's init value); pulse: unused
+        ImVec4  from4;     // colour / vec2 tween: value at activation
         float   aux;       // caller scratch (SetAux), e.g. a reveal's natural height
         double  start;     // pulse: start time (s)
         float   duration;  // pulse: seconds
@@ -123,6 +206,9 @@ private:
     double          m_Time = 0.0;
     float           m_PointerSpeed = 0.0f;
     bool            m_ReduceMotion = false;
+    int             m_LiveClips = 0; // Clip entries: iam_clip_update only runs while one plays
+    bool            m_ClipSlotsDirty = false; // a destroyed instance still holds its ImAnim slot
+    void            ReclaimClipSlots();
 };
 
 ImAnimContext& Motion();

@@ -64,15 +64,9 @@ constexpr ImVec4 PopupSolid = GlassFallback;
 
 // --- Glass over the Tartarus look -----------------------------------------------------------------
 // Black Glass keeps the Tartarus theme's sizes, spacing, fonts and panels and changes only the
-// materials (ApplyGlassMaterials). Behind every docked panel lies the ambient field: the Scene
-// image blurred until only colour is left, stretched over the whole window and dimmed. Panels,
-// tab strips, the menu bar and the status bar are black glass over it, so the scene's colour
-// glows faintly through the whole editor.
-constexpr int   AmbientBlurLevels = 6;     // as deep as the HUD glass: colour fields, no shapes
-constexpr float AmbientSaturation = 1.0f;
-constexpr float AmbientCeiling    = 0.46f; // highlights capped before anything sits on them
-constexpr float AmbientDim        = 0.12f; // black laid straight over the field (dock gaps show this)
-constexpr float GlassPanelAlpha   = 0.15f; // a docked panel: black at this alpha over the field
+// materials (ApplyGlassMaterials). Panels, tab strips, the menu bar and the status bar are black
+// glass over the black canvas, or over the desktop when the window is see-through.
+constexpr float GlassPanelAlpha   = 0.15f; // a docked panel: black at this alpha over the canvas
 constexpr float GlassChromeAlpha  = 0.80f; // menu bar, tab strips, status bar: a little darker
 // Everything that floats (popups, menus, tooltips, floating windows and the Scene view's overlays):
 // glass in the chrome's tint over the blur, with a faint edge and no drop shadow.
@@ -262,6 +256,85 @@ constexpr float      PanelInRisePx  = 6.0f;
 // extra white) and cools back to GlassEdge.
 constexpr MotionSpec RimGlint       = {EaseId::OutCubic, 0, 0, 0, 0, 700.0f};
 constexpr float      RimGlintBoost  = 0.35f;
+
+// --- Category 5: controls (buttons, checkboxes, fields; EditorUIPrimitives via the bridge) -------
+// A press squashes quickly and releases on a spring with a small overshoot. zeta = 24 /
+// (2 sqrt(300)) = 0.69 (~5% overshoot), zeta * omega_n = 12.
+constexpr MotionSpec PressDown      = {EaseId::OutCubic, 0, 0, 0, 0, 90.0f};
+constexpr MotionSpec PressRelease   = {EaseId::Spring, 1.0f, 300.0f, 24.0f, 0.0f, 260.0f};
+constexpr float      PressScale     = 0.97f;
+// A checkbox tick draws on along its path; unchecking erases it faster.
+constexpr MotionSpec CheckDraw      = {GLASS_EASE_SMOOTH, 180.0f};
+constexpr MotionSpec CheckErase     = {EaseId::OutCubic, 0, 0, 0, 0, 120.0f};
+// An input's 1 px focus ring.
+constexpr MotionSpec FocusIn        = {EaseId::OutCubic, 0, 0, 0, 0, 120.0f};
+constexpr MotionSpec FocusOut       = {EaseId::OutCubic, 0, 0, 0, 0, 200.0f};
+constexpr float      FocusRingAlpha = 0.55f;
+// Rejected input: one small horizontal wiggle (f ~ 6.4 Hz, zeta = 0.3), much gentler than the
+// compile-failure shake.
+constexpr ShakeSpec  InvalidWiggle  = {1.0f, 1600.0f, 24.0f, 3.0f, 360.0f};
+// A one-off wash (a new or reparented row, a new console error): up instantly, fades out.
+constexpr MotionSpec RowFlash       = {EaseId::OutCubic, 0, 0, 0, 0, 600.0f};
+constexpr float      RowFlashAlpha  = 0.10f;
+// An eased scroll jump (reveal a row, jump to the console's bottom).
+constexpr MotionSpec ScrollEase     = {GLASS_EASE_SMOOTH, 280.0f};
+
+// --- Category 6: the dock space (GlassDockMotion.cpp) -------------------------------------------
+// The selected tab's overline glides with SelectionGlide. A docked panel that takes focus: its edge
+// glints white and cools.
+constexpr MotionSpec DockRimGlint   = {EaseId::OutCubic, 0, 0, 0, 0, 600.0f};
+constexpr float      DockRimAlpha   = 0.22f;
+
+// --- Category 7: play mode and the viewport -----------------------------------------------------
+// Play <-> Stop: the transport glyph morphs triangle <-> square (iam_path_morph) and its colour
+// crosses green -> red in OKLAB.
+constexpr MotionSpec TransportMorph  = {GLASS_EASE_SMOOTH, 220.0f};
+// The play-mode frame: a 1 px white inner border on the Scene and Game views. Fades in on Play,
+// breathes very slightly while playing, dims while paused.
+constexpr MotionSpec PlayFrameIn     = {EaseId::OutCubic, 0, 0, 0, 0, 240.0f};
+constexpr MotionSpec PlayFrameOut    = {EaseId::OutCubic, 0, 0, 0, 0, 320.0f};
+constexpr float      PlayFrameAlpha  = 0.22f;
+constexpr float      PlayFrameBreath = 0.04f;  // +-
+constexpr float      PlayFrameHz     = 0.25f;  // one breath every 4 s
+constexpr float      PlayFramePaused = 0.12f;
+// Frame selection (F): the camera glides on the smooth curve, a little longer for a longer trip.
+constexpr MotionSpec CameraFrame          = {GLASS_EASE_SMOOTH, 340.0f};
+constexpr float      CameraFramePerOctaveMs = 40.0f; // + per doubling of distance (world units)
+constexpr float      CameraFrameMaxMs       = 560.0f;
+
+// --- Category 8: drag and drop, lists (GlassDragMotion.cpp, the Hierarchy) ---------------------
+// The drag ghost trails the cursor with a slight lag and fades up as the drag starts.
+constexpr MotionSpec DragGhostFollow  = {EaseId::OutCubic, 0, 0, 0, 0, 90.0f};
+constexpr MotionSpec DragGhostIn      = {EaseId::OutCubic, 0, 0, 0, 0, 140.0f};
+constexpr float      DragGhostOffsetPx = 14.0f; // right of and below the cursor
+constexpr float      DragGhostShadowAlpha = 0.30f;
+// Released on a target: it hops in along a short arc, shrinking and fading. Cancelled: it drifts home.
+constexpr MotionSpec DropFly          = {EaseId::OutCubic, 0, 0, 0, 0, 260.0f};
+constexpr MotionSpec DropReturn       = {GLASS_EASE_SMOOTH, 240.0f};
+constexpr float      DropFlyToScale   = 0.55f;
+constexpr float      DropArcLiftPx    = 18.0f;
+// The Hierarchy's reorder / reparent marker glides between slots instead of jumping.
+constexpr MotionSpec DropMarkerGlide  = {EaseId::OutCubic, 0, 0, 0, 0, 110.0f};
+
+// --- Category 9: feedback moments (GlassFeedbackMotion.cpp) --------------------------------------
+// Save: the check draws on, holds, fades (a keyframe clip).
+constexpr float      SaveCheckDrawMs   = 240.0f;
+constexpr float      SaveCheckFadeAtMs = 700.0f;
+constexpr float      SaveCheckTotalMs  = 1000.0f;
+// Progress: a determinate fill glides to each new value.
+constexpr MotionSpec ProgressGlide     = {EaseId::OutCubic, 0, 0, 0, 0, 260.0f};
+// Busy: the indeterminate segment's sweep, and the noise drifting its width and brightness.
+constexpr float      BusySweepSeconds  = 1.4f;
+constexpr float      BusySegment       = 0.30f;  // of the track
+constexpr float      BusySegmentDrift  = 0.08f;  // +-
+constexpr float      BusyBrightDrift   = 0.18f;  // alpha 0.64 .. 1.0
+constexpr float      BusyNoiseHz       = 0.8f;
+// Headlines (empty states, About): characters fade and rise in, one after another.
+constexpr float      HeadlineCharMs     = 14.0f;  // stagger between characters
+constexpr float      HeadlineCharFadeMs = 220.0f;
+constexpr float      HeadlineRisePx     = 4.0f;
+// A module rebuild that succeeded: a quiet toast with a check drawn on.
+constexpr MotionSpec ToastCheckDraw    = {GLASS_EASE_SMOOTH, 320.0f};
 
 #undef GLASS_EASE_SMOOTH
 

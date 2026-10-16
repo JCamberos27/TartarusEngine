@@ -187,6 +187,10 @@ std::vector<int> g_FilteredIndices;
 std::vector<int> g_RowCounts;
 unsigned int g_FilterCacheRevision = (unsigned int)-1; // forces a rebuild on first draw
 int g_SelectedEntry = -1; // log index of the row picked for the detail pane; -1 = none
+// The newest log index already offered a flash (new errors flash once). Unprimed until the first
+// draw, so the backlog shown at startup or after a module reload never flashes.
+int  g_FlashSeenIndex = -1;
+bool g_FlashPrimed = false;
 std::string g_FilterCacheFilter;
 bool g_FilterCacheShowInfo = true;
 bool g_FilterCacheShowWarning = true;
@@ -429,6 +433,17 @@ void Draw(const EditorModuleHostAPI& host) {
                                                           ImVec2(std::max(ImGui::GetContentRegionAvail().x, rowW), 0.0f));
                 {
                     ImDrawList* rowDl = ImGui::GetWindowDrawList();
+                    // A new error flashes its row red once (Glass RowFlash, through the motion bridge).
+                    const ImGuiID flashId = (ImGuiID)entryIndex * 2654435761u ^ 0xE5507F1Au;
+                    if (g_FlashPrimed && entry.Level == EditorModuleLogLevel_Error && entryIndex > g_FlashSeenIndex)
+                        EditorTheme::MotionPulse(flashId, EditorMotionToken::Flash);
+                    const float fp = EditorTheme::MotionPulseProgress(flashId);
+                    if (fp < 1.0f) {
+                        const float k = 1.0f - fp;
+                        rowDl->AddRectFilled(ImVec2(ImGui::GetWindowPos().x, rowTop.y),
+                                             ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowWidth(), rowTop.y + rowHeight),
+                                             EditorTheme::U32(EditorTheme::WithAlpha(EditorUIPrimitives::DangerColor(), 0.16f * k * k * k)));
+                    }
                     rowDl->AddRectFilled(rowTop, ImVec2(rowTop.x + EditorTheme::Px(2.0f), rowTop.y + rowHeight - 1.0f),
                                          EditorTheme::U32(EditorTheme::WithAlpha(color, entry.Level == EditorModuleLogLevel_Info ? 0.35f : 1.0f)));
                     float x = rowTop.x + gapS;
@@ -517,11 +532,15 @@ void Draw(const EditorModuleHostAPI& host) {
             }
         }
         clipper.End();
+        // Every entry up to the newest shown has had its chance to flash. A cleared log restarts
+        // the indices, so the mark follows it down.
+        g_FlashSeenIndex = g_FilteredIndices.empty() ? -1 : g_FilteredIndices.back();
+        g_FlashPrimed = true;
 
         // Only when something actually arrived, so scrolling back through history isn't yanked to
-        // the bottom on every single frame.
+        // the bottom on every single frame. Eased (Glass ScrollEase) rather than a jump.
         if (state.AutoScroll && revision != state.SeenRevision) {
-            ImGui::SetScrollHereY(1.0f);
+            EditorTheme::MotionScrollToY(std::max(0.0f, ImGui::GetCursorPosY() - ImGui::GetWindowHeight()));
         }
         state.SeenRevision = revision;
     }

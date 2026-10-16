@@ -9,6 +9,7 @@
 #include "Glass/GlassCompositor.h"
 #include "Glass/GlassLayout.h"
 #include "Glass/GlassMotion.h"
+#include "Glass/GlassMotionHooks.h"
 #include "Glass/GlassTheme.h"
 #include "Glass/GlassTokens.h"
 
@@ -533,9 +534,135 @@ void TestGlassSprings() {
     CHECK(Glass::StaggerDelay(-2, 20.0f, 8) == 0.0f);
 }
 
+// Round 2: colour and 2D tweens, the procedural helpers, clips and paths, all zero at rest.
+void TestGlassMotionRound2ZeroAtRest() {
+    HeadlessImGui gui;
+    Glass::ImAnimContext& m = Glass::Motion();
+    const ImVec4 grey(0.5f, 0.5f, 0.5f, 1.0f), red(0.9f, 0.2f, 0.2f, 1.0f);
+    // A colour at rest makes nothing; one heading away holds one entry and lands back to none.
+    gui.Frame([&] { CHECK(m.AnimateColor(1u, grey, grey, Glass::FocusIn).x == grey.x); });
+    CHECK(m.LiveCount() == 0 && m.HeldBytes() == 0);
+    ImVec4 c = grey;
+    for (int f = 0; f < 3; ++f) gui.Frame([&] { c = m.AnimateColor(1u, red, grey, Glass::FocusIn, Glass::FocusOut); });
+    CHECK(m.LiveCount() == 1 && c.x > grey.x && c.x < red.x);
+    for (int f = 0; f < 60; ++f) gui.Frame([&] { c = m.AnimateColor(1u, grey, grey, Glass::FocusIn, Glass::FocusOut); });
+    CHECK(Near(c.x, grey.x, 1e-3f) && m.LiveCount() == 0 && m.HeldBytes() == 0);
+    // A 2D glide departs from last frame's target and is forgotten once it lands.
+    ImVec2 v(0, 0);
+    for (int f = 0; f < 2; ++f) gui.Frame([&] { v = m.Follow2(2u, ImVec2(100, 40), ImVec2(0, 0), Glass::DragGhostFollow); });
+    CHECK(v.x > 0.0f && v.x < 100.0f && m.LiveCount() == 1);
+    for (int f = 0; f < 30; ++f) gui.Frame([&] { v = m.Follow2(2u, ImVec2(100, 40), ImVec2(100, 40), Glass::DragGhostFollow); });
+    CHECK(Near(v.x, 100.0f, 0.1f) && m.LiveCount() == 0 && m.HeldBytes() == 0);
+    // Noise and Oscillate are pure functions of the clock: bounded, moving, holding nothing.
+    float n0 = 0.0f, n1 = 0.0f;
+    gui.Frame([&] { n0 = m.Noise(3u, 2.0f, 5.0f); });
+    for (int f = 0; f < 20; ++f) gui.Frame([&] { n1 = m.Noise(3u, 2.0f, 5.0f); CHECK(std::fabs(m.Oscillate(0.25f)) <= 1.0f); });
+    CHECK(std::fabs(n0) <= 5.0f && std::fabs(n1) <= 5.0f && n0 != n1);
+    CHECK(m.LiveCount() == 0 && m.HeldBytes() == 0);
+    // The reject wiggle: moves, then returns to 0 with nothing held.
+    float peak = 0.0f, w = 0.0f;
+    gui.Frame([&] { m.TriggerWiggle(4u, Glass::InvalidWiggle); });
+    for (int f = 0; f < 40; ++f) gui.Frame([&] { w = m.Wiggle(4u, Glass::InvalidWiggle); peak = std::max(peak, std::fabs(w)); });
+    CHECK(peak > 0.5f && w == 0.0f && m.LiveCount() == 0 && m.HeldBytes() == 0);
+    // Reduce Motion: a colour lands at once and the procedural helpers are still.
+    m.SetReduceMotion(true);
+    gui.Frame([&] {
+        CHECK(m.AnimateColor(1u, red, grey, Glass::FocusIn).x == red.x);
+        CHECK(m.Noise(3u, 2.0f, 5.0f) == 0.0f && m.Oscillate(1.0f) == 0.0f);
+    });
+    CHECK(m.LiveCount() == 0);
+    m.SetReduceMotion(false);
+}
+
+void TestGlassClipsAndPaths() {
+    HeadlessImGui gui;
+    Glass::ImAnimContext& m = Glass::Motion();
+    // A two-key clip: 0 -> 1 over 100 ms. Its instance is an entry only while it plays.
+    constexpr ImGuiID kClip = 0x54434C50u, kInst = 0x54494E53u, kCh = 0x5443484Eu;
+    const Glass::ClipKey keys[] = {{kCh, 0.0f, 0.0f, Glass::EaseId::OutCubic}, {kCh, 100.0f, 1.0f, Glass::EaseId::OutCubic}};
+    Glass::ImAnimContext::DefineClip(kClip, keys, 2);
+    CHECK(Glass::ImAnimContext::ClipDefined(kClip));
+    CHECK(Near(Glass::ImAnimContext::ClipSeconds(kClip), 0.1f, 1e-3f));
+    gui.Frame([&] { m.PlayClip(kInst, kClip); });
+    CHECK(m.ClipPlaying(kInst) && m.LiveCount() == 1);
+    float v = -1.0f;
+    gui.Frame([&] { v = m.ClipFloat(kInst, kCh, 1.0f); });
+    CHECK(v > 0.0f && v < 1.0f);
+    for (int f = 0; f < 20; ++f) gui.Frame([&] { v = m.ClipFloat(kInst, kCh, 1.0f); });
+    CHECK(Near(v, 1.0f, 1e-3f) && !m.ClipPlaying(kInst) && m.LiveCount() == 0 && m.HeldBytes() == 0);
+    // Reduce Motion skips a clip entirely.
+    m.SetReduceMotion(true);
+    gui.Frame([&] { m.PlayClip(kInst, kClip); });
+    CHECK(!m.ClipPlaying(kInst) && m.LiveCount() == 0);
+    m.SetReduceMotion(false);
+    // Paths: endpoints, constant-speed midpoint, and a morph that is path a at 0 and b at 1.
+    constexpr ImGuiID kA = 0x50415441u, kB = 0x50415442u;
+    const Glass::PathSeg a[] = {{Glass::PathSeg::Line, ImVec2(0, 0), ImVec2(0, 0), ImVec2(1, 0)}};
+    const Glass::PathSeg b[] = {{Glass::PathSeg::Line, ImVec2(0, 0), ImVec2(0, 0), ImVec2(1, 1)}};
+    Glass::ImAnimContext::DefinePath(kA, ImVec2(0, 0), a, 1);
+    Glass::ImAnimContext::DefinePath(kB, ImVec2(0, 1), b, 1);
+    CHECK(Near(Glass::ImAnimContext::PathPoint(kA, 0.0f).x, 0.0f, 1e-3f));
+    CHECK(Near(Glass::ImAnimContext::PathPoint(kA, 1.0f).x, 1.0f, 1e-3f));
+    CHECK(Near(Glass::ImAnimContext::PathPoint(kA, 0.5f).x, 0.5f, 0.02f));
+    CHECK(Near(Glass::ImAnimContext::PathMorph(kA, kB, 0.5f, 0.0f).y, 0.0f, 0.02f));
+    CHECK(Near(Glass::ImAnimContext::PathMorph(kA, kB, 0.5f, 1.0f).y, 1.0f, 0.02f));
+}
+
+void TestGlassRound2Tokens() {
+    // The press release springs back with a small overshoot and settles inside its duration.
+    const Glass::MotionSpec& r = Glass::PressRelease;
+    const float zeta = Glass::DampingRatio(r.p0, r.p1, r.p2);
+    CHECK(zeta > 0.5f && zeta < 0.9f);
+    CHECK(zeta * std::sqrt(r.p1 / r.p0) >= 5.0f);
+    CHECK(Near(Glass::EaseProgress(r, 1.0f), 1.0f, 0.01f));
+    // The reject wiggle is gentler than the compile-failure shake.
+    CHECK(Glass::InvalidWiggle.amplitudePx < Glass::ErrorShake.amplitudePx);
+    CHECK(Glass::DampingRatio(Glass::InvalidWiggle.mass, Glass::InvalidWiggle.stiffness, Glass::InvalidWiggle.damping) >
+          Glass::DampingRatio(Glass::ErrorShake.mass, Glass::ErrorShake.stiffness, Glass::ErrorShake.damping));
+    // Every new curve starts at 0 and lands on 1.
+    for (const Glass::MotionSpec* s : {&Glass::PressDown, &Glass::CheckDraw, &Glass::CheckErase, &Glass::FocusIn, &Glass::FocusOut,
+                                       &Glass::RowFlash, &Glass::ScrollEase, &Glass::DockRimGlint, &Glass::TransportMorph,
+                                       &Glass::PlayFrameIn, &Glass::PlayFrameOut, &Glass::CameraFrame, &Glass::DragGhostFollow,
+                                       &Glass::DragGhostIn, &Glass::DropFly, &Glass::DropReturn, &Glass::DropMarkerGlide,
+                                       &Glass::ProgressGlide, &Glass::ToastCheckDraw}) {
+        CHECK(Near(Glass::EaseProgress(*s, 0.0f), 0.0f, 1e-4f));
+        CHECK(Near(Glass::EaseProgress(*s, 1.0f), 1.0f, 1e-3f));
+    }
+    CHECK(Glass::CameraFrame.durationMs <= Glass::CameraFrameMaxMs);
+    CHECK(Glass::SaveCheckDrawMs < Glass::SaveCheckFadeAtMs && Glass::SaveCheckFadeAtMs < Glass::SaveCheckTotalMs);
+}
+
+// The shared widgets through the motion bridge: a checkbox press and a segmented glide settle back
+// to nothing held.
+void TestGlassBridgeWidgetsSettle() {
+    HeadlessImGui gui;
+    EditorTheme::SetMotionHooks(&Glass::HostMotionHooks());
+    Glass::ImAnimContext& m = Glass::Motion();
+    bool on = false;
+    int seg = 0;
+    const char* labels[] = {"A", "B", "C"};
+    auto body = [&] {
+        EditorUIPrimitives::Checkbox("check", &on);
+        EditorUIPrimitives::Segmented("seg", &seg, labels, 3);
+    };
+    gui.Frame(body);
+    CHECK(m.LiveCount() == 0);
+    on = true;
+    seg = 2;
+    gui.Frame(body);
+    CHECK(m.LiveCount() > 0); // the tick draws on, the pill glides
+    for (int f = 0; f < 60; ++f) gui.Frame(body);
+    CHECK(m.LiveCount() == 0 && m.HeldBytes() == 0);
+    EditorTheme::SetMotionHooks(nullptr);
+}
+
 } // namespace
 
 void RegisterGlassTests(UnitTestSupport::TestList& tests) {
+    tests.emplace_back("Glass motion: colour / 2D tweens and procedural helpers hold nothing at rest", TestGlassMotionRound2ZeroAtRest);
+    tests.emplace_back("Glass motion: keyframe clips and paths", TestGlassClipsAndPaths);
+    tests.emplace_back("Glass motion: round 2 tokens", TestGlassRound2Tokens);
+    tests.emplace_back("Glass motion: bridged widgets settle to nothing held", TestGlassBridgeWidgetsSettle);
     tests.emplace_back("Glass theme: complete, monochrome style on the 8 px grid", TestGlassThemeStyle);
     tests.emplace_back("Glass theme: text contrast on solid surfaces and over the brightest glass", TestGlassContrast);
     tests.emplace_back("Glass compositor: finds and clears a floating window's solid look", TestGlassCompositorConvert);

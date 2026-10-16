@@ -53,6 +53,9 @@
 #include "Framebuffer.h"
 #include "Glass/GlassEditorState.h" // m_Glass (complete type for ~EditorLayer)
 #include "Glass/GlassCompositor.h"   // LiftGreyText (grey text on glass)
+#include "Glass/GlassDockMotion.h"   // tab overline glide, focus rim, play frame
+#include "Glass/GlassDragMotion.h"   // the drag ghost
+#include "Glass/GlassFeedbackMotion.h" // the About title's staggered headline
 #include "Glass/GlassTheme.h"       // ConfigureMacEngineTheme (the opt-in Glass theme)
 
 #include <imgui.h>
@@ -402,10 +405,8 @@ void EditorLayer::ApplyThemeStyle() {
         ApplyGlassMaterials(style);
         static const auto logGlassWarn = [](const char* msg) { Log::Warn(std::string("[Glass theme] ") + msg); };
         using namespace EditorUIPrimitives;
-        // Floors against a panel over the brightest the ambient field can get.
-        const float worstField = Glass::AmbientCeiling * (1.0f - Glass::AmbientDim);
-        const ImVec4 field(worstField, worstField, worstField, 1.0f);
-        const ImVec4 panel = CompositeOver(style.Colors[ImGuiCol_WindowBg], field);
+        // Floors against a panel over the black canvas.
+        const ImVec4 panel = CompositeOver(style.Colors[ImGuiCol_WindowBg], Glass::Base);
         AssertContrastFloor("Text vs glass panel", style.Colors[ImGuiCol_Text], panel, 4.5f, logGlassWarn);
         // Grey text is lifted on glass by the compositor (Glass::LiftGreyText).
         const auto lifted = [](ImVec4 grey) {
@@ -534,7 +535,6 @@ void EditorLayer::FreeGpuResources() {
     if (m_ThumbnailBlitFbo) { glDeleteFramebuffers(1, &m_ThumbnailBlitFbo); m_ThumbnailBlitFbo = 0; }
     if (m_Glass) { // the Glass theme's frosted-HUD blur chain and its window compositor
         m_Glass->Backdrop.Release();
-        m_Glass->Ambient.Release();
         m_Glass->Compositor.Release();
     }
 }
@@ -1909,7 +1909,14 @@ void EditorLayer::DrawSettingsWindow(World& world) {
 
     case 7: { // About
         EditorUIPrimitives::SectionHeader("About");
-        ImGui::TextUnformatted("Tartarus Engine " TARTARUS_VERSION);
+        {
+            // The name fades and rises in, letter by letter, each time the page opens.
+            static const char* kTitle = "Tartarus Engine " TARTARUS_VERSION;
+            const ImVec2 at = ImGui::GetCursorScreenPos();
+            const ImVec2 size = Glass::StaggeredHeadline(ImGui::GetID("##aboutTitle"), kTitle, at,
+                                                         ImGui::GetColorU32(ImGuiCol_Text));
+            ImGui::Dummy(size);
+        }
         ImGui::TextDisabled("Hand-rolled C++17 / OpenGL 4.6 editor.");
         ImGui::Spacing();
         EditorUIPrimitives::SectionHeader("System");
@@ -2231,10 +2238,13 @@ void EditorLayer::BeginFrame() {
     ImGui::NewFrame();
     ImGuizmo::BeginFrame();
     ImViewGuizmo::BeginFrame();
-    GlassFrameBegin(); // Glass theme only: motion clock, wallpaper, notifications
+    GlassFrameBegin(); // motion clock (every theme); Glass only: wallpaper, notifications
 }
 
 void EditorLayer::EndFrame() {
+    if (m_MotionDockspaceId != 0) Glass::DockFocusRim(m_MotionDockspaceId); // after every panel
+    Glass::DrawPlayFrame(m_MotionPlaying, m_MotionPaused);
+    Glass::DrawDragGhost();
     ImGui::Render();
     ImDrawData* dd = ImGui::GetDrawData();
     // No GLStateShadow_Invalidate() per frame: the backend restores every shadowed state it
@@ -2816,7 +2826,11 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     // it only listed the tabs already visible right next to it, so it was pure clutter.
     // NoCloseButton drops the node-level x at the right end of every tab bar (each tab keeps its
     // own close box, which is the one that means "close this panel").
+    // The selected tab's overline glides between tabs (Glass/GlassDockMotion.h).
+    const float overline = Glass::BeginDockTabMotion();
     ImGui::DockSpace(dockspaceId, ImVec2(0, 0), ImGuiDockNodeFlags_NoWindowMenuButton | ImGuiDockNodeFlags_NoCloseButton);
+    Glass::EndDockTabMotion(dockspaceId, overline);
+    m_MotionDockspaceId = dockspaceId;
     ImGui::End();
 
     // Submit the IDE after its dockspace is alive so ImGui can attach it to the Scene node.
