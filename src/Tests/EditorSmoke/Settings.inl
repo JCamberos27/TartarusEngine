@@ -27,7 +27,7 @@ using SA = EditorSmokeAccess_Settings;
 const char* const kMachineCats[] = {
     ICON_FA_UNIVERSAL_ACCESS "  General", ICON_FA_CAMERA "  Viewport", ICON_FA_TABLE_CELLS "  Grid & Snapping",
     ICON_FA_CLOCK "  Auto-Save", ICON_FA_GAUGE_HIGH "  Performance", ICON_FA_KEYBOARD "  Shortcuts",
-    ICON_FA_WAND_MAGIC_SPARKLES "  Editor Enhancers", ICON_FA_CIRCLE_INFO "  About",
+    ICON_FA_WAND_MAGIC_SPARKLES "  Editor Enhancers", ICON_FA_VOLUME_HIGH "  Sounds", ICON_FA_CIRCLE_INFO "  About",
 };
 const char* const kProjectCats[] = {ICON_FA_PERSON_FALLING_BURST "  Physics", ICON_FA_TAGS "  Tags & Layers", ICON_FA_HAMMER "  Build"};
 
@@ -422,10 +422,18 @@ void RegisterSettingsTests() {
         {CloseByX(EditorPanels::Settings), UntilGone(EditorPanels::Settings)},
     }));
 
+    Add("settings: Sounds - Editor sounds persists", Seq({
+        {FreshScene(), Wait(2)},
+        OpenCategory(false, 7),
+        {Shot("sounds", {"###Settings"})},
+        TogglePref("Editor sounds", "editorSoundsEnabled", [](Ctx&) { return EditorSettings::Get().EditorSoundsEnabled; }),
+        {CloseByX(EditorPanels::Settings), UntilGone(EditorPanels::Settings)},
+    }));
+
     // About has nothing to change (Copy report would overwrite the user's clipboard).
     Add("settings: About shows the version and the system report", Seq({
         {FreshScene(), Wait(2)},
-        OpenCategory(false, 7),
+        OpenCategory(false, 8),
         {ExpectTrue("Copy report is there", [](Ctx&) { return Find(ByLabel("Copy report", "###Settings")) != nullptr; }),
          Shot("about", {"###Settings"}),
          CloseByX(EditorPanels::Settings), UntilGone(EditorPanels::Settings)},
