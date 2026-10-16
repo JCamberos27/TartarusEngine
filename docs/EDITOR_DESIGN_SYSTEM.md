@@ -26,6 +26,8 @@ The setting is stored as `glassTheme` in the editor preferences.
 | `src/Editor/Glass/GlassTheme.{h,cpp}` | `ConfigureMacEngineTheme`, the canvas, squircles, glass HUD plates. |
 | `src/Editor/Glass/GlassCompositor.{h,cpp}`, `GlassSurfaces.cpp` | Glass under every floating window, and the arrival motion. |
 | `src/Editor/Glass/GlassMotion.{h,cpp}` | `ImAnimContext`: the zero-at-rest animation map in front of ImAnim. |
+| `src/Editor/EditorMotionHooks.h`, `src/Editor/Glass/GlassMotionHooks.{h,cpp}` | The motion bridge: `Glass::Motion()` for the shared widgets and the editor module (API v41). |
+| `src/Editor/Glass/GlassDockMotion.{h,cpp}`, `GlassDragMotion.{h,cpp}`, `GlassFeedbackMotion.{h,cpp}` | Categories 6 to 9: the dock space and viewports, the drag ghost, feedback moments. |
 | `src/Editor/Glass/GlassLayout.{h,cpp}` | Clip guard, animated-height reveals, staggered rows, the input policy, `MotionButton`. |
 | `src/Editor/EditorLayer_Glass.cpp` | The panels, HUDs, notifications and theme lifecycle. |
 | `src/Renderer/GlassBackdrop.{h,cpp}` and `shaders/Glass*.comp.glsl` | The blur compute pipeline. |
@@ -182,6 +184,27 @@ long, soft landing.
 | | Modal or undocked window | spring + `OutCubic` | **1 / 220 / 20** (ζ ≈ 0.67) | 460 (fade 180) | Scale 0.94 → 1.00 about its centre with a ~6% overshoot; alpha 0 → 1 |
 | | Docked panel shown (tab switch, open) | `OutCubic` | n/a | 220 | Content alpha 0 → 1, rising 6 px; the panel's own background stays put |
 | | Rim glint | `OutCubic` | n/a | 700 | A glass surface's edge starts 35% brighter and cools to 15% white |
+| **5. Controls** (`EditorUIPrimitives`, every theme, through the motion bridge) | Button press | `OutCubic` down, spring up | **1 / 300 / 24** (ζ ≈ 0.69) | 90 / 260 | Scale 1.00 → 0.97 while held; springs back with a ~5% overshoot |
+| | Checkbox tick | smooth bezier / `OutCubic` | n/a | 180 / 120 | The tick draws on along its path (`iam_path`); the edge goes Strong → AccentDeep |
+| | Segmented selection | spring | `SelectionGlide` | 380 | One accent pill glides between segments |
+| | Field focus ring | `OutCubic` | n/a | 120 / 200 | 1 px ring, alpha 0 → 0.55 |
+| | Rejected input | spring impulse (real time) | **1 / 1600 / 24** (ζ = 0.3) | 360 | ±3 px wiggle; the ring tints red (OKLAB colour tween) |
+| | Row flash (new, duplicated or moved row; new Console error) | `OutCubic` | n/a | 600 | A one-off wash, 10% white (16% red for errors), fading out |
+| | Eased scroll (reveal a row, Console auto-scroll) | smooth bezier | n/a | 280 | `iam_scroll_to_y`; a row already on screen doesn't scroll |
+| **6. Dock space** | Selected tab overline | spring | `SelectionGlide` | 380 | The 1 px line slides and resizes to the next tab |
+| | Panel focus | `OutCubic` | n/a | 600 | The newly focused panel's edge glints 22% white and cools |
+| **7. Play mode, viewport** | Play ↔ Stop | smooth bezier | n/a | 220 | Triangle morphs into square (`iam_path_morph`); green → red in OKLAB |
+| | Play-mode frame | `OutCubic` | n/a | 240 in / 320 out | 1 px white inner border on Scene and Game: alpha 0.22 ± 0.04 breathing at 0.25 Hz; 0.12 while paused |
+| | Tool rail | spring | `SelectionGlide` | 380 | A 2 px accent bar glides to the active tool |
+| | Frame selection (F) | smooth bezier | n/a | 340 + 40 per doubling of distance, ≤ 560 | The camera's glide uses the UI's own curve |
+| **8. Drag and drop** | Drag ghost | `OutCubic` | n/a | follow 90, fade in 140 | A dark chip (glyph + label) trailing the cursor by 14 px |
+| | Drop on a target | `OutCubic` | n/a | 260 | Hops into the target along an 18 px arc, shrinking to 55% and fading |
+| | Drop cancelled | smooth bezier | n/a | 240 | Drifts back to where the drag started and fades |
+| | Hierarchy drop marker | `OutCubic` | n/a | 110 | The reorder line / parent box glides between slots |
+| **9. Feedback** | Save | keyframe clip (`iam_clip`) | n/a | draw 240, hold to 700, fade to 1000 | The status bar's unsaved dot gives way to a check that draws on, holds and fades |
+| | Progress | `OutCubic` | n/a | 260 | A determinate fill glides to each value; an indeterminate segment eases across in 1.4 s, its width (30 ± 8%) and alpha (0.64–1.0) drifting on smooth noise |
+| | Module reloaded | smooth bezier | n/a | 320 | A quiet toast whose check draws on after the pop lands |
+| | Headlines (empty states, About) | `OutCubic` per character | n/a | 14 per char, 220 each | `iam_text_stagger`: fade and rise 4 px, when the headline first appears |
 
 The shake is not a tween. `Glass::SpringImpulse(t, m, k, c, A)` is a pure function of the time since
 the error, so it holds no animation state at all.
@@ -394,6 +417,32 @@ Helpers on top of the map:
 * `HoverGlow` is the hover tween with the velocity gate.
 * `Aux` stores per-entry scratch, such as a reveal's measured height.
 * `MixOklab` and `EaseProgress` blend colours and ease progress with ImAnim's own evaluators.
+* `AnimateColor` (`iam_tween_color`, OKLAB) and `Animate2` / `Follow2` (`iam_tween_vec2`) follow
+  the same rest rules as `Animate`, on their own channels.
+* `PlayClip` / `ClipFloat` play an authored `iam_clip`. An instance is an entry only while it
+  plays; the frame it finishes it is destroyed and its slot reclaimed.
+* `PathPoint` / `PathMorph` evaluate authored `iam_path`s at constant speed.
+* `TextStagger` draws `iam_text_stagger`; `ScrollToY` / `ScrollToBottom` ease a window's scroll.
+* `Noise`, `Oscillate` and `Wiggle` are **stateless**. ImAnim's own oscillator, shake and noise
+  channels keep a state block per id forever, so Glass evaluates `iam_noise_2d` and
+  `SpringImpulse` as pure functions of the motion clock instead.
+
+**The one fixed exception.** Clip and path *definitions* (the save check, the checkmark, the Play
+and Stop shapes) are registered once and kept for the editor's lifetime. They are a few hundred
+bytes of authored shapes, not animation state, and `HeldBytes()` doesn't count them. The clip
+system is initialised with room for 16 clips and 8 instances instead of ImAnim's default 256 /
+4096.
+
+**Every theme.** The motion clock ticks whether or not Glass is on (`EditorLayer::GlassFrameBegin`),
+because the shared widgets and the editor module animate through it.
+
+**The motion bridge.** `EditorUIPrimitives` and the reloadable module can't include the Glass
+headers. They call `EditorTheme::Motion*` (`EditorTheme.h`), which goes through an
+`EditorMotionHooks` table of plain C function pointers. The host installs its table at the start of
+every frame. The module receives the same table through `EditorModuleHostAPI::GetMotionHooks`
+(API v41) and installs it on its side in `Draw`. A motion is named by an `EditorMotionToken`, and the host maps it
+to its `MotionSpec`, so no Glass type crosses the boundary. With no table installed, every helper
+falls back to `EditorTheme::AnimT`.
 
 ### 6.3 Clipping guard during height animation
 

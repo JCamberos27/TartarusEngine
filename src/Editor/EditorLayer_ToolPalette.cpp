@@ -100,7 +100,12 @@ void EditorLayer::DrawToolPalette(World& world, Camera& editorCamera) {
         noteActive(!handTool && gizmoOp == 4);
 
         if (activeY >= 0.0f) {
-            const float y = EditorTheme::MotionFollow(ImGui::GetID("##toolGlide"), activeY) + ImGui::GetWindowPos().y;
+            // Glide only when the tool changes; a rescale or rail collapse just moves with it.
+            const int tool = handTool ? -1 : gizmoOp;
+            const bool switched = m_ToolGlideLast != -2 && m_ToolGlideLast != tool;
+            m_ToolGlideLast = tool;
+            const float y = EditorTheme::MotionFollow(ImGui::GetID("##toolGlide"), activeY, EditorMotionToken::Glide, !switched) +
+                            ImGui::GetWindowPos().y;
             const float inset = 5.0f * m_UIScale, w = 2.0f * m_UIScale;
             const float x = railX - 3.0f * m_UIScale; // in the padding, just inside the child's clip
             ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(x, y + inset), ImVec2(x + w, y + activeH - inset),

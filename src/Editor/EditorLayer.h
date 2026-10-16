@@ -2377,6 +2377,7 @@ private:
     unsigned int m_MotionDockspaceId = 0;      // the editor dock space, for Glass::DockFocusRim
     bool m_MotionPlaying = false;              // last DrawViewportActionBar's play state, for
     bool m_MotionPaused = false;               //   Glass::DrawPlayFrame
+    int  m_ToolGlideLast = -2;                 // the tool rail's last active tool (-2 = none yet)
     int m_PendingThemeId = -1;                 // RequestEditorTheme, applied in BeginFrame
     void ApplyPendingTheme();                  // BeginFrame, before ImGui::NewFrame
     void GlassFrameBegin();                    // BeginFrame, after ImGui::NewFrame

@@ -166,6 +166,10 @@ public:
     // Diagnostics: live entries, and the bytes this map holds (0 when idle).
     int    LiveCount() const { return m_Entries.Size; }
     size_t HeldBytes() const;
+    // The i-th live entry's id and kind (0 tween, 1 pulse, 2 colour, 3 vec2, 4 clip), for a smoke
+    // check's failure message.
+    ImGuiID LiveId(int i) const { return m_Entries[i].id; }
+    int     LiveKind(int i) const { return (int)m_Entries[i].kind; }
     double Now() const { return m_Time; }
 
     // Drops everything, ImAnim's pools included (tests, theme switch).

@@ -436,6 +436,11 @@ void EditorLayer::PollGlassNotifications() {
     while (first > 0 && entries[first - 1].Seq > g.LastLogSeq) --first;
     for (size_t i = first; i < entries.size(); ++i) {
         const LogEntry& e = entries[i];
+        // A hot reload that landed: a quiet success toast whose check draws on.
+        if (e.Level == LogLevel::Info && e.Message.rfind("Hot reload: TartarusGame module reloaded", 0) == 0) {
+            PushGlassToast("Module reloaded", "Your code changes are live.", false);
+            continue;
+        }
         if (e.Level != LogLevel::Error) continue;
         const bool module = e.Message.rfind("Module rebuild failed", 0) == 0;
         const bool shader = ContainsNoCase(e.Message, "failed to compile") || ContainsNoCase(e.Message, "compile error");
@@ -1411,7 +1416,15 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
                                   Col(status, alpha), barW * 0.5f);
                 const float tx = drawn.Min.x + pad + Glass::Px(Glass::Space1);
                 float ty = drawn.Min.y + pad;
-                dl->AddText(ImVec2(tx, ty), Col(status, alpha), toast.Error ? ICON_FA_CIRCLE_EXCLAMATION : ICON_FA_CIRCLE_DOT);
+                if (toast.Error) {
+                    dl->AddText(ImVec2(tx, ty), Col(status, alpha), ICON_FA_CIRCLE_EXCLAMATION);
+                } else {
+                    // A success: its check draws on just after the pop lands.
+                    const float fs = ImGui::GetFontSize();
+                    const float draw = motion.ReduceMotion() ? 1.0f
+                        : Glass::EaseProgress(Glass::ToastCheckDraw, (age - popDur * 0.35f) / (Glass::ToastCheckDraw.durationMs * 0.001f));
+                    Glass::DrawCheckmark(dl, ImVec2(tx, ty + fs * 0.05f), fs * 0.95f, draw, Col(status, alpha), std::max(1.0f, fs * 0.12f));
+                }
                 dl->AddText(ImVec2(tx + ImGui::GetFontSize() * 1.5f, ty), Col(Glass::TextPrimary, alpha), toast.Title.c_str());
                 ty += lineH + Glass::Px(Glass::SpaceHalf);
                 dl->AddText(nullptr, 0.0f, ImVec2(tx, ty), Col(Glass::TextSecondary, alpha), toast.Body.c_str(), nullptr, wrap);
