@@ -71,30 +71,6 @@ Query InspAxisButton(int row) {
     Query q = ByExact("X", kInspector, row);
     return q;
 }
-// Scrolls the Inspector (or whatever scrolls the item) until `q` is fully on screen.
-Step InspReveal(Query q) {
-    auto tries = std::make_shared<int>(0);
-    return {"reveal", [q, tries](Ctx&) {
-        const UiItem* it = Find(q);
-        if (!it) {
-            // A clipped widget is registered without its label (ImGui returns before reporting
-            // it), so a label query can't see it: page the panel down until it shows up.
-            if (++*tries > 30) return false;
-            for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
-                if (w->WasActive && !w->Hidden && w->ScrollMax.y > 0.0f && Contains(w->Name, q.Root.empty() ? kInspector : q.Root)) {
-                    ImGui::SetScrollY(w, std::min(w->Scroll.y + w->InnerRect.GetHeight() * 0.5f, w->ScrollMax.y));
-                    break;
-                }
-            return false;
-        }
-        if (it->Rect.Min.y >= it->Clip.Min.y && it->Rect.Max.y <= it->Clip.Max.y) return true;
-        if (++*tries > 30) return true; // can't scroll further: let the click report it
-        ImGuiWindow* w = ImGui::FindWindowByName(it->Window.c_str());
-        while (w && w->ScrollMax.y <= 0.0f) w = w->ParentWindow;
-        if (w) ImGui::SetScrollFromPosY(w, it->Rect.GetCenter().y - w->Pos.y, 0.5f);
-        return false;
-    }, 120};
-}
 // One of the Particle System section's Restart / Emit Burst / Clear buttons.
 Query InspParticleButton(const char* label) {
     Query q = ByExact(label, kInspector);
@@ -102,15 +78,17 @@ Query InspParticleButton(const char* label) {
     return q;
 }
 // Opens a component section unless it is already open (open state is per object order and
-// survives between tests).
+// survives between tests, so a section above may be open and push this header out of view).
 Step InspOpen(std::string component) {
     Step click = Click(Header(component.c_str()));
+    auto reveal = std::make_shared<Step>(InspReveal(Header(component.c_str())));
     auto state = std::make_shared<int>(-1);
     click.Name = "open section " + component;
-    click.Fn = [inner = click.Fn, component, state](Ctx& c) {
+    click.Fn = [inner = click.Fn, component, reveal, state](Ctx& c) {
         if (*state < 0) {
+            if (!reveal->Fn(c)) return false; // header not drawn yet, or scrolled out of view
             const int o = SectionOpen(component.c_str());
-            if (o < 0) return false; // header not drawn yet
+            if (o < 0) return false;
             *state = o == 1 ? 1 : 0;
         }
         return *state == 1 || inner(c);
