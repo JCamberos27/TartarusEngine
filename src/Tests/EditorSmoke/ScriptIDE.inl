@@ -4,13 +4,15 @@
 // The Script IDE (src/Editor/ScriptIDE.cpp) keeps its documents behind a pimpl, so these tests
 // check what a user can see from outside: the IDE window and its tabs (ImGui's tab bars carry the
 // unsaved marker), EditorLayer::HasUnsavedScripts(), the files on disk and the IDE's
-// session.json. Every file a test types into is a scratch copy under project/work/ (gitignored);
+// session.json (in the run's scratch user folder, so a killed run's tabs and unsaved buffers
+// never reach the next run). Every file a test types into is a scratch copy under project/work/ (gitignored);
 // the one real engine shader touched (the staged copy next to the exe) is restored byte for byte.
 
 } // namespace
 #include "GameModuleBuild.h"
 #include "ShaderLibrary.h"
 #include "ScriptIDEThemes.h"
+#include "ScriptIDE.h"
 namespace {
 namespace smoke_ide {
 namespace fs = std::filesystem;
@@ -31,7 +33,7 @@ bool WriteText(const fs::path& p, const std::string& text) {
     return static_cast<bool>(f);
 }
 fs::path Scratch(const std::string& name) { return fs::path(ProjectPaths::Resolve("work/editor-smoke-ide")) / name; }
-fs::path SessionFile() { return fs::path(ProjectPaths::Resolve("Library/IDE")) / "session.json"; }
+fs::path SessionFile() { return fs::u8path(ScriptIDE::SessionFile()); }
 int SessionTheme() {
     const nlohmann::json j = nlohmann::json::parse(ReadText(SessionFile()), nullptr, false);
     return j.is_object() ? j.value("theme", -1) : -1;
