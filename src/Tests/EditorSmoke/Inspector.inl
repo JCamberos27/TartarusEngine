@@ -345,6 +345,27 @@ void RegisterInspectorTests() {
          }),
          Do("delete the scratch script", [](Ctx&) { std::error_code ec; std::filesystem::remove_all(InspScratchDir(), ec); })},
     }));
+    // #12: Add Component gave a new Transform Controller a Script Path that doesn't exist, so the
+    // field was red (missing) from the start.
+    Add("inspector: a new Transform Controller's Script Path isn't missing", {
+        FreshScene(), Wait(2),
+        SelectByName("Alpha"), Wait(3),
+        InspReveal(ByLabel("Add Component", kInspector)),
+        Click(ByLabel("Add Component", kInspector)), Wait(3),
+        TypeText("Transform Controller"), Wait(3),
+        Click(InspPopup(ICON_FA_ARROWS_UP_DOWN_LEFT_RIGHT "  Transform Controller")), Wait(3),
+        InspOpen("Transform Controller"), InspUntilOpen("Transform Controller"),
+        InspReveal(ByTag("field:Transform Controller/Script Path")), Wait(2),
+        Shot("script path", {kInspector}),
+        Expect("Script Path is empty or names a file that exists", [](Ctx& c) {
+            const auto* tc = c.W.Registry.try_get<TransformControllerComponent>(ByName(c.W, "Alpha"));
+            if (!tc) return std::string("no Transform Controller on Alpha");
+            std::error_code ec;
+            if (tc->ScriptPath.empty() || std::filesystem::exists(std::filesystem::u8path(ProjectPaths::Resolve(tc->ScriptPath)), ec))
+                return std::string();
+            return "'" + tc->ScriptPath + "' doesn't exist";
+        }),
+    });
     Add("inspector: Particle System int (typed) and colour (hex); undo each", InspCat({
         {FreshScene(),
          Do("add a Particle System", [](Ctx& c) {
