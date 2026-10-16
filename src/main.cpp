@@ -446,9 +446,23 @@ int main(int argc, char** argv) {
         // A fresh scratch user folder every run: default prefs and layout, no bookmarks, tabs or
         // favorites - the tests start from a known state and never touch the user's own files.
         namespace fs = std::filesystem;
-        UserPaths::SetAppName("TartarusEngine-Test");
+        // TARTARUS_EDITOR_TEST_INSTANCE=<name> gives this run its own folder
+        // (TartarusEngine-Test-<name>), so runs from different checkouts at the same time don't
+        // overwrite each other's prefs. Letters, digits, '-' and '_' only.
+        std::string scratchName = "TartarusEngine-Test";
+        {
+            char* inst = nullptr;
+            size_t instLen = 0;
+            if (_dupenv_s(&inst, &instLen, "TARTARUS_EDITOR_TEST_INSTANCE") == 0 && inst && inst[0]) {
+                const std::string s(inst);
+                if (std::all_of(s.begin(), s.end(), [](unsigned char ch) { return std::isalnum(ch) || ch == '-' || ch == '_'; }))
+                    scratchName += "-" + s;
+            }
+            free(inst);
+        }
+        UserPaths::SetAppName(scratchName);
         const fs::path scratch = UserPaths::Root();
-        if (scratch.filename() != "TartarusEngine-Test") {
+        if (scratch.filename() != scratchName) {
             std::cerr << "--editor-tests: could not set up a scratch user folder; refusing to run." << std::endl;
             return 1;
         }
