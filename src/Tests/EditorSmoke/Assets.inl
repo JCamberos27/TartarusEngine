@@ -416,7 +416,20 @@ void RegisterAssetsTests() {
              return HasFolder(c, std::string(kFolder) + "/Smoke Folder") && !HasFolder(c, std::string(kFolder) + "/New Folder");
          }),
          UntilListed("Smoke Folder"),
-         ExpectTrue("two undo entries (create, rename)", [](Ctx& c) { return (double)X::UndoDepth(c.E) >= g_Number + 2; })},
+         ExpectTrue("two undo entries (create, rename)", [](Ctx& c) { return (double)X::UndoDepth(c.E) >= g_Number + 2; }),
+         // Asset undo / redo re-lists the browser.
+         Expect("the rename is the newest undo step", [](Ctx& c) {
+             return Contains(X::UndoTop(c.E), "Rename") ? std::string() : "top '" + X::UndoTop(c.E) + "'";
+         }),
+         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(4),
+         Until("undo lists New Folder again", [](Ctx& c) {
+             return HasFolder(c, std::string(kFolder) + "/New Folder") && CellIndex(c, "New Folder") >= 0 && CellIndex(c, "Smoke Folder") < 0;
+         }, 120),
+         Key(ImGuiKey_Y, ImGuiMod_Ctrl), Wait(4),
+         Until("redo lists Smoke Folder again", [](Ctx& c) {
+             return HasFolder(c, std::string(kFolder) + "/Smoke Folder") && CellIndex(c, "Smoke Folder") >= 0 && CellIndex(c, "New Folder") < 0;
+         }, 120),
+         ExpectTrue("no Assets refreshed note for an undo", [](Ctx& c) { return AX::RefreshFlash(c.E) <= 0.0f; })},
         BackgroundMenu("Create Material"),
         {Until("New Material.mat written", [](Ctx&) { return FileExists(DirFile("New Material.mat")); }, 60)},
         RenameTo("Smoke Mat"),
@@ -462,6 +475,15 @@ void RegisterAssetsTests() {
              Expect("l:smokelabel finds just the image", [](Ctx& c) {
                  return AX::Cells(c.E).size() == 1 && CellIndex(c, "Smoke Tex.png") == 0 ? std::string() : "listed:" + ListedNames(c);
              }),
+             Do("clear the search", [](Ctx& c) { AX::Search(c.E).clear(); }), Wait(4),
+             // Undo takes the label off again.
+             Expect("Edit Labels is the newest undo step", [](Ctx& c) {
+                 return Contains(X::UndoTop(c.E), "Label") ? std::string() : "top '" + X::UndoTop(c.E) + "'";
+             }),
+             Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(4),
+             Until("undo removes the label", [](Ctx& c) { return c.A.Labels(CellKey(c, "Smoke Tex.png")).count("smokelabel") == 0; }, 60),
+             Do("search l:smokelabel", [](Ctx& c) { AX::Search(c.E) = "l:smokelabel"; }), Wait(4),
+             Expect("l:smokelabel finds nothing", [](Ctx& c) { return AX::Cells(c.E).empty() ? std::string() : "listed:" + ListedNames(c); }),
              Do("clear the search", [](Ctx& c) { AX::Search(c.E).clear(); }), Wait(4)},
             // Favorites: add, favorites-only view, remove.
             TileMenu("Smoke Cube.obj", "Add to Favorites"),
