@@ -224,6 +224,8 @@ bool g_Started = false, g_Done = false;
 // a mouse-up), then this frame's harness events; everything after (the OS cursor and keys the
 // backend still reports before ImGui::NewFrame) is dropped.
 int g_QueueEnd = 0;
+// The ids of the harness's own events still in the queue (ImGui trickles some to the next frame).
+std::vector<ImU32> g_HarnessEventIds;
 void KeepOnlyHarnessInput() {
     ImGuiContext* ctx = ImGui::GetCurrentContext();
     if (!ctx || !g_Enabled) return;
@@ -1405,12 +1407,23 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
     ctx->IO.ConfigErrorRecoveryEnableAssert = false; // reported by OnImGuiError and failed instead
     g_Reg.NextFrame();
     EditorTestInputHook() = &KeepOnlyHarnessInput;
-    // Another window opening (a second editor running its own tests) can take the OS focus; the
-    // focus-lost event PollEvents queued would release every key and button a step is holding.
+    // Only the harness's own events stay in the queue. What PollEvents queued since last frame is the
+    // OS reaching a window nobody is using: another window opening or closing (a second editor
+    // running its own tests) can take the OS focus, whose focus-lost event releases every key and
+    // button a step is holding, or send a cursor-leave, which the backend reports as the mouse
+    // position -FLT_MAX - a step's press then lands on no window and clears ImGui's focus.
     for (int i = ctx->InputEventsQueue.Size - 1; i >= 0; --i)
-        if (ctx->InputEventsQueue[i].Type == ImGuiInputEventType_Focus) ctx->InputEventsQueue.erase(ctx->InputEventsQueue.Data + i);
+        if (std::find(g_HarnessEventIds.begin(), g_HarnessEventIds.end(), ctx->InputEventsQueue[i].EventId) == g_HarnessEventIds.end())
+            ctx->InputEventsQueue.erase(ctx->InputEventsQueue.Data + i);
     g_QueueEnd = ctx->InputEventsQueue.Size;
-    struct QueueMark { ImGuiContext* c; ~QueueMark() { g_QueueEnd = c->InputEventsQueue.Size; } } mark{ctx};
+    struct QueueMark {
+        ImGuiContext* c;
+        ~QueueMark() {
+            g_QueueEnd = c->InputEventsQueue.Size;
+            g_HarnessEventIds.clear();
+            for (const ImGuiInputEvent& e : c->InputEventsQueue) g_HarnessEventIds.push_back(e.EventId);
+        }
+    } mark{ctx};
 
     if (!g_Started) {
         g_Started = true;
