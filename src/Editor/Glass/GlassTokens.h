@@ -322,6 +322,26 @@ constexpr float      DropArcLiftPx    = 18.0f;
 // The Hierarchy's reorder / reparent marker glides between slots instead of jumping.
 constexpr MotionSpec DropMarkerGlide  = {EaseId::OutCubic, 0, 0, 0, 0, 110.0f};
 
+// --- Category 9: feedback moments (GlassFeedbackMotion.cpp) --------------------------------------
+// Save: the check draws on, holds, fades (a keyframe clip).
+constexpr float      SaveCheckDrawMs   = 240.0f;
+constexpr float      SaveCheckFadeAtMs = 700.0f;
+constexpr float      SaveCheckTotalMs  = 1000.0f;
+// Progress: a determinate fill glides to each new value.
+constexpr MotionSpec ProgressGlide     = {EaseId::OutCubic, 0, 0, 0, 0, 260.0f};
+// Busy: the indeterminate segment's sweep, and the noise drifting its width and brightness.
+constexpr float      BusySweepSeconds  = 1.4f;
+constexpr float      BusySegment       = 0.30f;  // of the track
+constexpr float      BusySegmentDrift  = 0.08f;  // +-
+constexpr float      BusyBrightDrift   = 0.18f;  // alpha 0.64 .. 1.0
+constexpr float      BusyNoiseHz       = 0.8f;
+// Headlines (empty states, About): characters fade and rise in, one after another.
+constexpr float      HeadlineCharMs     = 14.0f;  // stagger between characters
+constexpr float      HeadlineCharFadeMs = 220.0f;
+constexpr float      HeadlineRisePx     = 4.0f;
+// A module rebuild that succeeded: a quiet toast with a check drawn on.
+constexpr MotionSpec ToastCheckDraw    = {GLASS_EASE_SMOOTH, 320.0f};
+
 #undef GLASS_EASE_SMOOTH
 
 } // namespace Glass

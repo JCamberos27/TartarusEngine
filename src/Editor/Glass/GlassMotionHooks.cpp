@@ -1,5 +1,6 @@
 #include "GlassMotionHooks.h"
 
+#include "GlassFeedbackMotion.h" // StaggeredHeadline
 #include "GlassMotion.h"
 #include "GlassTokens.h"
 
@@ -52,6 +53,9 @@ void HookDrawCheckmark(ImDrawList* dl, float x, float y, float size, float t, un
 void HookScrollToY(float y) { Motion().ScrollToY(y, ScrollEase); }
 void HookScrollToBottom() { Motion().ScrollToBottom(ScrollEase); }
 bool HookReduceMotion() { return Motion().ReduceMotion(); }
+void HookStaggeredHeadline(unsigned id, const char* text, float x, float y, unsigned col) {
+    StaggeredHeadline(id, text, ImVec2(x, y), col);
+}
 
 void EnsureCheckPath() {
     if (ImAnimContext::PathDefined(kCheckPath)) return;
@@ -136,6 +140,7 @@ const EditorMotionHooks& HostMotionHooks() {
         h.ScrollToY      = &HookScrollToY;
         h.ScrollToBottom = &HookScrollToBottom;
         h.ReduceMotion   = &HookReduceMotion;
+        h.StaggeredHeadline = &HookStaggeredHeadline;
         return h;
     }();
     return s_Hooks;

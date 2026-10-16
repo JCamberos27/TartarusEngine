@@ -250,8 +250,12 @@ inline bool Segmented(const char* id, int* current, const char* const* labels, i
             x += w;
         }
         const ImGuiID pid = ImGui::GetID("##glide");
-        const float gx = EditorTheme::MotionFollow(pid, selX - start.x) + start.x;
-        const float gw = EditorTheme::MotionFollow(pid ^ 0x9E3779B9u, selW);
+        // Glide only when the choice changes; a reflow (resize, theme, font) just moves with it.
+        ImGuiStorage* st = ImGui::GetStateStorage();
+        const bool switched = st->GetInt(pid ^ 0x51u, *current) != *current;
+        st->SetInt(pid ^ 0x51u, *current);
+        const float gx = EditorTheme::MotionFollow(pid, selX - start.x, EditorMotionToken::Glide, !switched) + start.x;
+        const float gw = EditorTheme::MotionFollow(pid ^ 0x9E3779B9u, selW, EditorMotionToken::Glide, !switched);
         const float h = ImGui::GetFrameHeight();
         ImDrawList* dl = ImGui::GetWindowDrawList();
         // The strip's body first (the buttons go transparent), so the pill shows through every
@@ -435,8 +439,18 @@ inline void EmptyState(const char* icon, const char* text, const char* hint = nu
                     EditorTheme::U32(EditorTheme::Strong), icon);
         y += isz.y + gap;
     }
-    dl->AddText(EditorTheme::UiFont(), EditorTheme::BodySize(), ImVec2(cx - tsz.x * 0.5f, y),
-                EditorTheme::U32(EditorTheme::Secondary), text);
+    {
+        // The headline's characters fade and rise in the first time the empty state shows.
+        const EditorMotionHooks* h = EditorTheme::MotionHooks();
+        const ImVec2 at(cx - tsz.x * 0.5f, y);
+        if (h && h->StaggeredHeadline) {
+            EditorTheme::PushBody();
+            h->StaggeredHeadline(ImGui::GetID(text), text, at.x, at.y, EditorTheme::U32(EditorTheme::Secondary));
+            EditorTheme::PopFont();
+        } else {
+            dl->AddText(EditorTheme::UiFont(), EditorTheme::BodySize(), at, EditorTheme::U32(EditorTheme::Secondary), text);
+        }
+    }
     y += tsz.y;
     if (hint) {
         y += EditorTheme::Px(4.0f);

@@ -51,4 +51,7 @@ struct EditorMotionHooks {
     void (*ScrollToBottom)() = nullptr;
     // Preferences > Reduce Motion.
     bool (*ReduceMotion)() = nullptr;
+    // A headline whose characters fade and rise in when it first appears (static after that), in
+    // the current font, into the current window's draw list at (x, y), top-left.
+    void (*StaggeredHeadline)(unsigned id, const char* text, float x, float y, unsigned col) = nullptr;
 };

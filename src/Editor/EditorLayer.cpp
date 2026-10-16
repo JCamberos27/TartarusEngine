@@ -55,6 +55,7 @@
 #include "Glass/GlassCompositor.h"   // LiftGreyText (grey text on glass)
 #include "Glass/GlassDockMotion.h"   // tab overline glide, focus rim, play frame
 #include "Glass/GlassDragMotion.h"   // the drag ghost
+#include "Glass/GlassFeedbackMotion.h" // the About title's staggered headline
 #include "Glass/GlassTheme.h"       // ConfigureMacEngineTheme (the opt-in Glass theme)
 
 #include <imgui.h>
@@ -1911,7 +1912,14 @@ void EditorLayer::DrawSettingsWindow(World& world) {
 
     case 7: { // About
         EditorUIPrimitives::SectionHeader("About");
-        ImGui::TextUnformatted("Tartarus Engine " TARTARUS_VERSION);
+        {
+            // The name fades and rises in, letter by letter, each time the page opens.
+            static const char* kTitle = "Tartarus Engine " TARTARUS_VERSION;
+            const ImVec2 at = ImGui::GetCursorScreenPos();
+            const ImVec2 size = Glass::StaggeredHeadline(ImGui::GetID("##aboutTitle"), kTitle, at,
+                                                         ImGui::GetColorU32(ImGuiCol_Text));
+            ImGui::Dummy(size);
+        }
         ImGui::TextDisabled("Hand-rolled C++17 / OpenGL 4.6 editor.");
         ImGui::Spacing();
         EditorUIPrimitives::SectionHeader("System");

@@ -25,6 +25,8 @@
 #include "EditorTheme.h"
 #include "Glass/GlassMotion.h"        // the Play/Stop morph
 #include "Glass/GlassMotionHooks.h"   // DrawTransportGlyph
+#include "Glass/GlassFeedbackMotion.h" // the save check, the busy shimmer
+#include "Glass/GlassTokens.h"
 #include "PhysicsWorld.h"             // #185 — PDD_* debug-draw channel flags
 #include "EditorModuleAPI.h"          // EditorConsoleState — the Console panel lives in the module now
 #include "HotReloadEditorModule.h"    // EditorModuleHost::ConsoleState()
@@ -390,10 +392,19 @@ void EditorLayer::DrawStatusBar(World& world, Camera& editorCamera) {
             segs.push_back({b, EditorTheme::Warning, s_HitchTip.c_str(), 1});
         }
     }
+    // Saving (dirty -> clean with a file): the unsaved dot gives way to a check that draws on,
+    // holds and fades (a Glass keyframe clip, kSaveClip). The check is drawn over two spaces that
+    // stand in for the dot while it plays.
+    static bool s_WasDirty = m_Dirty;
+    if (s_WasDirty && !m_Dirty && !m_CurrentScenePath.empty()) Glass::PlaySaveCheck();
+    s_WasDirty = m_Dirty;
+    const bool saveCheck = Glass::SaveCheckPlaying();
+    float sceneSegX = -1.0f, sceneSegW = 0.0f;
     {
         std::string sceneName = std::filesystem::path(m_CurrentScenePath).filename().string();
         if (sceneName.empty()) sceneName = "Untitled";
         if (m_Dirty) sceneName += " \xe2\x80\xa2"; // a dot: unsaved changes
+        else if (saveCheck) sceneName += "   ";    // room for the save check
         segs.push_back({sceneName, m_Dirty ? EditorTheme::Accent : EditorTheme::Secondary,
                         m_CurrentScenePath.empty() ? "Untitled scene: save it to give it a file"
                                                    : "Show the scene file in its folder", 2});
@@ -418,6 +429,7 @@ void EditorLayer::DrawStatusBar(World& world, Camera& editorCamera) {
         const float w = ImGui::CalcTextSize(segs[i].Text.c_str()).x;
         x -= w;
         char id[16]; snprintf(id, sizeof(id), "s%zu", i);
+        if (segs[i].Action == 2) { sceneSegX = x; sceneSegW = w; }
         if (segment(x, segs[i].Text.c_str(), segs[i].Color, segs[i].Tip, id)) {
             switch (segs[i].Action) {
                 case 1: EditorSettings::Get().SceneShowStats = true; EditorSettings::Save(); break;
@@ -438,13 +450,21 @@ void EditorLayer::DrawStatusBar(World& world, Camera& editorCamera) {
         }
     }
 
-    // --- progress: a build or an asset import in flight -------------------------------------------
+    if (saveCheck && sceneSegX >= 0.0f) {
+        const float sz = textH * 0.8f;
+        const float cx = sceneSegX + sceneSegW - ImGui::CalcTextSize("  ").x * 0.5f - sz * 0.5f;
+        Glass::DrawSaveCheck(dl, ImVec2(cx, textY + (textH - sz) * 0.5f), sz, EditorTheme::Accent);
+    }
+
+    // --- progress: a build, a module rebuild or an asset import in flight -------------------------
     // A mono label plus a thin bar (track Hairline, fill Accent, like the launcher's loading bar),
-    // just left of the right cluster; hidden when idle. A build wins over an import.
+    // just left of the right cluster; hidden when idle. A build wins over a module rebuild, which
+    // wins over an import. The fill glides to each new value; an indeterminate bar shimmers.
     float buildFrac = 0.0f;
     std::string buildLabel;
     const bool building = BuildProgressInfo(buildFrac, buildLabel);
-    if (building || m_ImportQueue.IsActive()) {
+    const bool rebuilding = !building && GameModuleBuild::Running();
+    if (building || rebuilding || m_ImportQueue.IsActive()) {
         int total = m_ImportQueue.BatchTotal();
         int done = std::max(0, total - m_ImportQueue.PendingCount());
         char label[64];
@@ -453,6 +473,7 @@ void EditorLayer::DrawStatusBar(World& world, Camera& editorCamera) {
             total = buildFrac >= 0.0f ? 1000 : 0;
             done = (int)(buildFrac * 1000.0f);
         }
+        else if (rebuilding) { snprintf(label, sizeof(label), "Rebuilding modules..."); total = 0; }
         else if (total > 0) snprintf(label, sizeof(label), "Importing %d/%d", std::min(done + 1, total), total);
         else snprintf(label, sizeof(label), "Importing...");
         const float labelW = ImGui::CalcTextSize(label).x;
@@ -466,14 +487,22 @@ void EditorLayer::DrawStatusBar(World& world, Camera& editorCamera) {
         dl->AddRectFilled(ImVec2(bx, by), ImVec2(bx + barW, by + barH2), EditorTheme::U32(EditorTheme::Hairline));
         if (total > 0) {
             const float f = std::clamp((float)done / (float)total, 0.0f, 1.0f);
-            dl->AddRectFilled(ImVec2(bx, by), ImVec2(bx + barW * f, by + barH2), EditorTheme::U32(EditorTheme::Accent));
+            // Glides forward; a new batch starting over from 0 snaps rather than sliding back.
+            static float s_LastFill = 0.0f;
+            const float prev = f < s_LastFill ? f : s_LastFill;
+            s_LastFill = f;
+            const float fg = std::clamp(Glass::Motion().Follow(ImGui::GetID("##progressFill"), f, prev, Glass::ProgressGlide), 0.0f, 1.0f);
+            dl->AddRectFilled(ImVec2(bx, by), ImVec2(bx + barW * fg, by + barH2), EditorTheme::U32(EditorTheme::Accent));
         } else {
-            // Indeterminate: an accent segment sweeping across the track.
-            const float segW = barW * 0.3f;
-            const float t = std::fmod((float)ImGui::GetTime() * 0.9f, 1.0f);
+            // Indeterminate: an accent segment easing across the track, its width and brightness
+            // drifting on smooth noise so it reads as work, not a metronome (Glass::BusyShimmer).
+            float segFrac = 0.3f, bright = 1.0f, t = 0.0f;
+            Glass::BusyShimmer((float)ImGui::GetTime(), t, segFrac, bright);
+            const float segW = barW * segFrac;
             const float sx = bx - segW + (barW + segW) * t;
             dl->PushClipRect(ImVec2(bx, by), ImVec2(bx + barW, by + barH2), true);
-            dl->AddRectFilled(ImVec2(sx, by), ImVec2(sx + segW, by + barH2), EditorTheme::U32(EditorTheme::Accent));
+            dl->AddRectFilled(ImVec2(sx, by), ImVec2(sx + segW, by + barH2),
+                              EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Accent, bright)), barH2 * 0.5f);
             dl->PopClipRect();
         }
         leftLimit = x0;

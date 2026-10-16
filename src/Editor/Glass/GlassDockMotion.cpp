@@ -53,7 +53,12 @@ void EndDockTabMotion(ImGuiID dockspaceId, float size) {
         if ((col & IM_COL32_A_MASK) == 0) continue;
 
         const ImVec2 target(IM_TRUNC(tab->Offset - bar->ScrollingAnim), tab->Width);
-        const ImVec2 prev(last.GetFloat(node->ID, target.x), last.GetFloat(node->ID ^ 1u, target.y));
+        // Glide only when the selected tab changes. A reflow (a resize, a theme switch, a tab
+        // added beside it) moves the line with the tab, so it never lags behind a dragged splitter.
+        const int lastTab = last.GetInt(node->ID ^ 2u, 0);
+        const bool switched = lastTab != 0 && lastTab != (int)bar->VisibleTabId;
+        const ImVec2 prev = switched ? ImVec2(last.GetFloat(node->ID, target.x), last.GetFloat(node->ID ^ 1u, target.y)) : target;
+        last.SetInt(node->ID ^ 2u, (int)bar->VisibleTabId);
         last.SetFloat(node->ID, target.x);
         last.SetFloat(node->ID ^ 1u, target.y);
         const ImVec2 v = Motion().Follow2(node->ID ^ kOverlineSalt, target, prev, SelectionGlide);
@@ -76,12 +81,17 @@ void EndDockTabMotion(ImGuiID dockspaceId, float size) {
 }
 
 void DockFocusRim(ImGuiID dockspaceId) {
-    ImGuiContext& g = *ImGui::GetCurrentContext();
-    ImGuiWindow* focused = g.NavWindow ? g.NavWindow->RootWindow : nullptr;
+    ImGuiContext& gc = *ImGui::GetCurrentContext();
+    ImGuiWindow* focused = gc.NavWindow ? gc.NavWindow->RootWindow : nullptr;
     const bool docked = focused && focused->DockIsActive && focused->DockNode &&
                         ImGui::DockNodeGetRootNode(focused->DockNode)->ID == dockspaceId;
     const ImGuiID id = docked ? focused->ID : 0;
-    if (id != 0 && id != s_FocusedPanel && s_FocusedPanel != 0) {
+    // Only a focus change the user made (a click, Ctrl+Tab) glints; code moving focus (a theme
+    // switch, a panel opening itself) stays quiet.
+    const ImGuiIO& io = gc.IO;
+    const bool byUser = io.MouseClicked[0] || io.MouseClicked[1] || io.MouseClicked[2] || gc.NavWindowingTarget != nullptr ||
+                        gc.NavWindowingTargetAnim != nullptr;
+    if (id != 0 && id != s_FocusedPanel && s_FocusedPanel != 0 && byUser) {
         s_RimPanel = id;
         Motion().Pulse(kRimPulse, DockRimGlint.durationMs * 0.001f);
     }

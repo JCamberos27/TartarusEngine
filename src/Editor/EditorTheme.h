@@ -265,11 +265,13 @@ inline float MotionToggle(ImGuiID id, bool open, EditorMotionToken token, float 
     if (h && h->Toggle) return h->Toggle(id, open, wasOpen, (int)token);
     return AnimT(id, open, fallbackSeconds);
 }
-// A glide to a moving target. Remembers last frame's target like MotionToggle.
-inline float MotionFollow(ImGuiID id, float target, EditorMotionToken token = EditorMotionToken::Glide) {
+// A glide to a moving target. Remembers last frame's target like MotionToggle. `snap`: the target
+// moved for a reason that shouldn't animate (a reflow, a resize) - follow it at once; a glide
+// already in flight still lands.
+inline float MotionFollow(ImGuiID id, float target, EditorMotionToken token = EditorMotionToken::Glide, bool snap = false) {
     ImGuiStorage* st = ImGui::GetStateStorage();
     const ImGuiID prevKey = id ^ 0x3F011C0Bu;
-    const float prev = st->GetFloat(prevKey, target);
+    const float prev = snap ? target : st->GetFloat(prevKey, target);
     st->SetFloat(prevKey, target);
     const EditorMotionHooks* h = MotionHooks();
     if (h && h->Follow) return h->Follow(id, target, prev, (int)token);
