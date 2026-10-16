@@ -64,6 +64,7 @@ void EditorLayer::EnterPrefabMode(World& world, AssetLibrary& assets, const std:
         return;
     }
     FinishGlobalUndo(world,true);
+    JournalUnrecordedChange(world); // #15 - Back to Scene drops the baseline; keep that change a step
     CancelEyedropper();
     m_PrefabModeSceneSnapshot = SceneSerializer::SaveToString(world);
     m_PrePrefabHistory = { m_UndoStack, m_RedoStack, m_UndoBaseJson, m_RedoBaseJson,
