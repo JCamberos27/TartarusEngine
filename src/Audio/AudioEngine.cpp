@@ -218,14 +218,45 @@ float s_BusVolume[AudioEngine::kBusCount] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
 float s_MasterVolume = 1.0f;
 bool s_MutedFlag = false;
 bool s_EnvMuted = false; // TARTARUS_MUTE=1: a test run on a desktop someone is using - everything mixes as ever, silently
-void ApplyMasterVolume(ma_engine& engine) {
-    ma_engine_set_volume(&engine, s_MutedFlag || s_EnvMuted ? 0.0f : s_MasterVolume);
-}
 std::vector<uint32_t> s_FreeSlots;
 bool s_Paused = false;
 
 std::unique_ptr<ma_sound> s_PreviewSound;
 std::string s_PreviewPath;
+
+// The editor's UI sounds: their own group on the endpoint, beside the limiter rather than through it.
+struct EditorVoice {
+    std::unique_ptr<ma_sound> Sound;
+    std::unique_ptr<ma_audio_buffer> Buffer;
+    std::shared_ptr<const PreloadedClip> Clip;
+};
+ma_sound_group s_EditorGroup;
+bool s_EditorGroupReady = false;
+float s_EditorVolume = 1.0f;
+std::vector<EditorVoice> s_EditorVoices; // oldest first
+
+void FreeEditorVoice(EditorVoice& v) {
+    if (v.Sound) {
+        ma_sound_stop(v.Sound.get());
+        ma_sound_uninit(v.Sound.get());
+    }
+    if (v.Buffer) ma_audio_buffer_uninit(v.Buffer.get());
+    v = EditorVoice{};
+}
+
+// The game's mix ends in the limiter, so master and Mute go on its output: the editor's sounds beside it on the endpoint keep
+// their own level (and so does the Asset Browser preview, which plays at the master level by its own volume). Without a limiter
+// (a mono device) everything shares the endpoint and master stays the engine volume. TARTARUS_MUTE is the endpoint: all of it.
+void ApplyMasterVolume(ma_engine& engine) {
+    const float master = s_MutedFlag ? 0.0f : s_MasterVolume;
+    if (s_Limiter) {
+        ma_node_set_output_bus_volume(&s_Limiter->Base, 0, master);
+        ma_engine_set_volume(&engine, s_EnvMuted ? 0.0f : 1.0f);
+    } else {
+        ma_engine_set_volume(&engine, s_EnvMuted ? 0.0f : master);
+    }
+    if (s_PreviewSound) ma_sound_set_volume(s_PreviewSound.get(), s_Limiter ? master : 1.0f);
+}
 
 constexpr uint32_t kIndexBits = 16;
 constexpr uint32_t kIndexMask = (1u << kIndexBits) - 1u;
@@ -409,6 +440,11 @@ bool InitImpl(bool offline, int rate) {
         }
         UpdateReturnGains();
     }
+    // The editor's UI sounds: a group of their own straight on the endpoint (no parent group), beside the limiter.
+    s_EditorGroupReady = ma_sound_group_init(&s_Engine, 0, nullptr, &s_EditorGroup) == MA_SUCCESS;
+    if (s_EditorGroupReady) ma_sound_group_set_volume(&s_EditorGroup, s_EditorVolume);
+    else Log::Warn("Audio: could not create the editor sound group; editor UI sounds are off.");
+    ApplyMasterVolume(s_Engine); // again, now that the limiter it applies to exists
     if (!capture.empty()) AudioEngine::StartCapture(capture);
     return true;
 }
@@ -441,6 +477,10 @@ void AudioEngine::Shutdown() {
     StopAll();
     s_Voices.clear();
     s_FreeSlots.clear();
+    for (EditorVoice& v : s_EditorVoices) FreeEditorVoice(v);
+    s_EditorVoices.clear();
+    if (s_EditorGroupReady) ma_sound_group_uninit(&s_EditorGroup);
+    s_EditorGroupReady = false;
     UnloadAll();
     s_Paused = false;
     if (s_BusesReady) for (int b = 0; b < kBusCount; ++b) ma_sound_group_uninit(&s_Buses[b]);
@@ -499,6 +539,15 @@ void AudioEngine::Update() {
     if (s_PreviewSound && (ma_sound_at_end(s_PreviewSound.get()) ||
                            !ma_sound_is_playing(s_PreviewSound.get()))) {
         StopPreview();
+    }
+    for (size_t i = 0; i < s_EditorVoices.size();) {
+        EditorVoice& v = s_EditorVoices[i];
+        if (ma_sound_at_end(v.Sound.get()) || !ma_sound_is_playing(v.Sound.get())) {
+            FreeEditorVoice(v);
+            s_EditorVoices.erase(s_EditorVoices.begin() + (std::ptrdiff_t)i);
+        } else {
+            ++i;
+        }
     }
     if (s_EncoderOpen && !s_TapsExternal) { // AUDIO_CAPTURE: keep the file fed
         std::vector<float> a, b, c;
@@ -1131,10 +1180,48 @@ void AudioEngine::PlayPreview(const std::string& path) {
         return;
     }
     ma_sound_set_spatialization_enabled(sound.get(), MA_FALSE);
-    ma_sound_start(sound.get());
     s_PreviewSound = std::move(sound);
     s_PreviewPath = path;
+    ApplyMasterVolume(s_Engine); // its level
+    ma_sound_start(s_PreviewSound.get());
 }
+
+bool AudioEngine::PlayEditor(const std::string& path, float volume, float pitch, float pan) {
+    if (!s_Initialized || !s_EditorGroupReady) return false;
+    if (s_Preloaded.find(path) == s_Preloaded.end() && !Load(path)) return false; // UI clips are tiny: decode once, keep
+    std::shared_ptr<const PreloadedClip> clip = s_Preloaded[path];
+    EditorVoice v;
+    v.Clip = clip;
+    v.Buffer = std::make_unique<ma_audio_buffer>();
+    ma_audio_buffer_config bc = ma_audio_buffer_config_init(clip->Format, clip->Channels, clip->FrameCount, clip->Data.data(), nullptr);
+    if (ma_audio_buffer_init(&bc, v.Buffer.get()) != MA_SUCCESS) return false;
+    v.Sound = std::make_unique<ma_sound>();
+    if (ma_sound_init_from_data_source(&s_Engine, (ma_data_source*)v.Buffer.get(), MA_SOUND_FLAG_NO_SPATIALIZATION, &s_EditorGroup,
+                                       v.Sound.get()) != MA_SUCCESS) {
+        ma_audio_buffer_uninit(v.Buffer.get());
+        return false;
+    }
+    ma_sound_set_volume(v.Sound.get(), std::max(volume, 0.0f));
+    ma_sound_set_pitch(v.Sound.get(), std::clamp(pitch, 0.25f, 4.0f));
+    ma_sound_set_pan(v.Sound.get(), std::clamp(pan, -1.0f, 1.0f));
+    if (ma_sound_start(v.Sound.get()) != MA_SUCCESS) {
+        FreeEditorVoice(v);
+        return false;
+    }
+    if ((int)s_EditorVoices.size() >= kEditorVoices) {
+        FreeEditorVoice(s_EditorVoices.front());
+        s_EditorVoices.erase(s_EditorVoices.begin());
+    }
+    s_EditorVoices.push_back(std::move(v));
+    return true;
+}
+
+void AudioEngine::SetEditorVolume(float volume) {
+    s_EditorVolume = std::clamp(volume, 0.0f, 1.0f);
+    if (s_EditorGroupReady) ma_sound_group_set_volume(&s_EditorGroup, s_EditorVolume);
+}
+
+int AudioEngine::EditorVoiceCount() { return (int)s_EditorVoices.size(); }
 
 void AudioEngine::StopPreview() {
     if (s_PreviewSound) {

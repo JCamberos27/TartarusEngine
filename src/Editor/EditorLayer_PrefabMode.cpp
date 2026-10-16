@@ -6,6 +6,7 @@
 // Auto Save), restores the scene snapshot and history - and because a scene stores prefab
 // instances as links, every instance of the edited prefab comes back with the changes.
 #include "EditorLayer.h"
+#include "EditorSound.h"
 #include "EditorTheme.h"
 #include "EditorLayerInternal.h"
 #include "EditorUIHelpers.h"
@@ -134,6 +135,7 @@ bool EditorLayer::SavePrefabMode(World& world) {
     SceneSerializer::ClearPrefabPristineCache(); // instances diff their overrides against the new file
     m_Dirty = false;
     m_SavedUndoDepth = m_ContentDepth;
+    EditorSound::Play(EditorSound::Event::Save);
     return true;
 }
 
