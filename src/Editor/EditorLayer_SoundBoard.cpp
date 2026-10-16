@@ -60,6 +60,15 @@ void EditorLayer::DrawEditorSoundPreferences() {
         if (!on) ImGui::EndDisabled();
         ImGui::PopID();
     }
+    const int premium = EditorSound::PremiumEventCount();
+    if (premium == 0) ImGui::BeginDisabled();
+    if (SettingsCheckbox("Premium sounds (Drive)", &s.UsePremium)) Commit(s);
+    if (premium == 0) ImGui::EndDisabled();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        EditorUI::SetTooltip(premium ? "Plays the paid Drive set where it has the event (%d of them) and the built-in set for the rest. "
+                                       "Compare the two on the Sound Board first."
+                                     : "The paid Drive set isn't fetched into this project (assets/Audio/EditorUI): run tools/assets/fetch-assets.ps1.",
+                             premium);
     if (!s.Enabled) ImGui::EndDisabled();
     SettingsLabel("##SoundBoard");
     if (SecondaryButton(ICON_FA_VOLUME_HIGH "  Open Sound Board")) m_ShowSoundBoard = true;
@@ -68,7 +77,7 @@ void EditorLayer::DrawEditorSoundPreferences() {
 
 void EditorLayer::DrawSoundBoardPanel() {
     if (!m_ShowSoundBoard) return;
-    ImGui::SetNextWindowSize(ImVec2(460.0f * m_UIScale, 560.0f * m_UIScale), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(640.0f * m_UIScale, 600.0f * m_UIScale), ImGuiCond_FirstUseEver);
     PushTabChromeText();
     const bool open = ImGui::Begin(EditorPanels::SoundBoard, &m_ShowSoundBoard);
     PopTabChromeText();
@@ -80,8 +89,9 @@ void EditorLayer::DrawSoundBoardPanel() {
                   st.Master * 100.0f, EditorSound::PlayedCount(), AudioEngine::EditorVoiceCount());
     ImGui::TextDisabled("%s", line);
     if (!st.Enabled) HintText("Editor sounds are off (Preferences > Editor Sounds), so the buttons below are silent.");
-    HintText("A row's numbered buttons play each of its variants. Files marked Drive come from the premium set fetched into "
-             "assets/Audio/EditorUI; the rest are the built-in set.");
+    HintText("Each numbered button plays one variant. Built-in is the set in git; Drive is the paid premium set, when it has been "
+             "fetched into assets/Audio/EditorUI. The set an event plays now is bright, the other dimmed (Preferences > Sounds > "
+             "Premium sounds switches).");
 
     // The board's own buttons don't click: what they play is the point.
     EditorSoundEvents::ScopedClickSilence quiet;
@@ -91,8 +101,9 @@ void EditorLayer::DrawSoundBoardPanel() {
         ImGui::PushID(c);
         if (ImGui::BeginTable("##events", 3, flags)) {
             ImGui::TableSetupColumn("Event", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-            ImGui::TableSetupColumn("Play", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-            ImGui::TableSetupColumn("Source", ImGuiTableColumnFlags_WidthFixed, ImGui::GetFontSize() * 4.0f);
+            ImGui::TableSetupColumn("Built-in", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("Drive", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            if (c == 0) ImGui::TableHeadersRow();
             for (int i = 0; i < EditorSoundEvents::kEventCount; ++i) {
                 const EditorSound::Event e = (EditorSound::Event)i;
                 const EditorSound::EventInfo& info = EditorSound::Info(e);
@@ -101,23 +112,30 @@ void EditorLayer::DrawSoundBoardPanel() {
                 ImGui::TableNextRow();
                 ImGui::TableNextColumn();
                 ImGui::AlignTextToFramePadding();
+                // The set it plays now is bright; the other is dim.
                 ImGui::TextUnformatted(info.Name);
-                ImGui::TableNextColumn();
-                const std::vector<std::string>& files = EditorSound::Files(e);
-                if (files.empty()) ImGui::TextDisabled("no file");
-                for (int v = 0; v < (int)files.size(); ++v) {
-                    if (v > 0) ImGui::SameLine();
-                    char label[32];
-                    std::snprintf(label, sizeof(label), ICON_FA_PLAY " %d##v%d", v + 1, v);
-                    if (SecondaryButton(label)) EditorSound::Audition(e, v);
-                    if (ImGui::IsItemHovered())
-                        EditorUI::SetTooltip("%s", std::filesystem::u8path(files[v]).filename().u8string().c_str());
+                for (int set = 0; set < 2; ++set) {
+                    ImGui::TableNextColumn();
+                    const bool premium = set == 1;
+                    const std::vector<std::string>& files = premium ? EditorSound::PremiumFiles(e) : EditorSound::BuiltInFiles(e);
+                    if (files.empty()) {
+                        ImGui::AlignTextToFramePadding();
+                        ImGui::TextDisabled(premium ? "-" : "no file");
+                        continue;
+                    }
+                    const bool active = premium == EditorSound::IsOverride(e);
+                    if (!active) ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.55f);
+                    for (int v = 0; v < (int)files.size(); ++v) {
+                        if (v > 0) ImGui::SameLine();
+                        char label[32];
+                        std::snprintf(label, sizeof(label), ICON_FA_PLAY " %d##%c%d", v + 1, premium ? 'p' : 'b', v);
+                        if (SecondaryButton(label)) EditorSound::Audition(e, v, premium);
+                        if (ImGui::IsItemHovered())
+                            EditorUI::SetTooltip("%s%s", std::filesystem::u8path(files[v]).filename().u8string().c_str(),
+                                                 active ? "  (playing now)" : "");
+                    }
+                    if (!active) ImGui::PopStyleVar();
                 }
-                ImGui::TableNextColumn();
-                ImGui::AlignTextToFramePadding();
-                if (files.empty()) ImGui::TextUnformatted("");
-                else if (EditorSound::IsOverride(e)) ImGui::TextUnformatted("Drive");
-                else ImGui::TextDisabled("Built-in");
                 ImGui::PopID();
             }
             ImGui::EndTable();

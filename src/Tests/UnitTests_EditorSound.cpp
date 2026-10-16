@@ -284,6 +284,36 @@ void TestEditorSoundGizmo() {
     CHECK(count(Event::SliderRelease) == 1 && out.size() == 1);
 }
 
+// Both sets load; the premium one plays only where the user opted in and it has the event.
+void TestEditorSoundPremiumSet() {
+    namespace fs = std::filesystem;
+    const fs::path base = fs::temp_directory_path() / "tartarus_editor_sets_ut";
+    std::error_code ec;
+    fs::remove_all(base, ec);
+    fs::create_directories(base / "builtin", ec);
+    fs::create_directories(base / "premium", ec);
+    WriteToneWav(base / "builtin" / "Click_1.wav", 48000, 0.05f, 0.1f);
+    WriteToneWav(base / "builtin" / "Click_2.wav", 48000, 0.05f, 0.1f);
+    WriteToneWav(base / "builtin" / "Save.wav", 48000, 0.05f, 0.1f);
+    WriteToneWav(base / "premium" / "Click.wav", 48000, 0.05f, 0.1f);
+    EditorSound::Settings st;
+    EditorSound::Apply(st); // UsePremium off (the default)
+    EditorSound::Init((base / "builtin").string(), (base / "premium").string());
+    CHECK(EditorSound::PremiumEventCount() == 1);
+    CHECK(EditorSound::BuiltInFiles(Event::Click).size() == 2 && EditorSound::PremiumFiles(Event::Click).size() == 1);
+    CHECK(!EditorSound::IsOverride(Event::Click) && EditorSound::VariantCount(Event::Click) == 2);
+    st.UsePremium = true;
+    EditorSound::Apply(st);
+    CHECK(EditorSound::IsOverride(Event::Click) && EditorSound::VariantCount(Event::Click) == 1);
+    CHECK(!EditorSound::IsOverride(Event::Save) && EditorSound::VariantCount(Event::Save) == 1); // no premium Save: built-in
+    st.UsePremium = false;
+    EditorSound::Apply(st);
+    CHECK(!EditorSound::IsOverride(Event::Click) && EditorSound::VariantCount(Event::Click) == 2);
+    EditorSound::Shutdown();
+    EditorSound::Apply(EditorSound::Settings{});
+    fs::remove_all(base, ec);
+}
+
 } // namespace
 
 void RegisterEditorSoundTests(UnitTestSupport::TestList& tests) {
@@ -292,5 +322,6 @@ void RegisterEditorSoundTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Editor sounds: a single file or numbered variants", TestEditorSoundFindVariants);
     tests.emplace_back("Editor sounds: sliders, menus, hover and drag & drop read off ImGui's state", TestEditorSoundUiObserver);
     tests.emplace_back("Editor sounds: the transform gizmo's grab, snap ticks and release", TestEditorSoundGizmo);
+    tests.emplace_back("Editor sounds: the premium Drive set is opt-in, event by event", TestEditorSoundPremiumSet);
     tests.emplace_back("Editor sounds: their own output, outside the game's mix, Mute and pause", TestEditorSoundSeparateOutput);
 }
