@@ -335,8 +335,10 @@ void RegisterSettingsTests() {
 
     // ---------------------------------------------------------------------------- UI scale
     Add("settings: UI scale override by typing, restart warning, Auto resets it", Seq({
+        // TARTARUS_EDITOR_TEST_SCALE starts the run on an override, so note it and put it back.
         {FreshScene(), Wait(2),
-         ExpectTrue("starts on Auto", [](Ctx&) { return EditorSettings::Get().UiScaleOverride <= 0.0f; })},
+         Do("note the starting override", [](Ctx&) { g_Vec.x = EditorSettings::Get().UiScaleOverride; }),
+         ExpectTrue("doesn't start on 1.25", [](Ctx&) { return std::fabs(g_Vec.x - 1.25f) > 1e-4f; })},
         OpenCategory(false, 0),
         {Do("note the live scale", [](Ctx& c) { g_Number = SA::UiScale(c.E); })},
         CtrlClickType(ByExact("##UI scale", "###Settings"), "1.25"),
@@ -354,7 +356,8 @@ void RegisterSettingsTests() {
          ExpectTrue("back on Auto", [](Ctx&) { return EditorSettings::Get().UiScaleOverride == 0.0f; }),
          Until("editor_prefs.json uiScaleOverride 0", [](Ctx&) { return Prefs().value("uiScaleOverride", -1.0f) == 0.0f; }),
          Until("the Auto button is gone", [](Ctx&) { return Find(ByExact("Auto##uiscale", "###Settings")) == nullptr; }),
-         CloseByX(EditorPanels::Settings), UntilGone(EditorPanels::Settings)},
+         CloseByX(EditorPanels::Settings), UntilGone(EditorPanels::Settings),
+         Do("restore the starting override", [](Ctx&) { EditorSettings::Get().UiScaleOverride = g_Vec.x; EditorSettings::Save(); })},
     }));
 
     // ------------------------------------------------------------------------------ Search
