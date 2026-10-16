@@ -612,7 +612,7 @@ std::vector<Step> ClickHere(int holdFrames = 6) {
     return {MouseButton(0, true), Wait(holdFrames), MouseButton(0, false)};
 }
 // A docked panel's tab in the dock space (its label is the window's name).
-Query Tab(const char* windowId) {
+Query DockTab(const char* windowId) {
     Query q;
     const std::string id = windowId;
     q.Pred = [id](const UiItem& it) { return Contains(it.Label, id) && it.Rect.GetHeight() < 60.0f && it.Rect.GetWidth() < 400.0f; };
@@ -674,9 +674,9 @@ void RegisterMotionDemo() {
             SelectByName("Far Cube"), Do("frame", [](Ctx& c) { X::Frame(c.E, c.W, c.Cam); }), WaitSeconds(1.2),
             SelectByName("Near Cube"), Do("frame", [](Ctx& c) { X::Frame(c.E, c.W, c.Cam); }), WaitSeconds(1.2),
             // 5. Dock tabs: the overline glides, the focused panel's edge glints.
-            Glide(AtItem(Tab("###Game")), 30), WaitSeconds(0.2),
+            Glide(AtItem(DockTab("###Game")), 30), WaitSeconds(0.2),
         },
-        ClickHere(), {WaitSeconds(0.9), Glide(AtItem(Tab("###Scene")), 22), WaitSeconds(0.2)}, ClickHere(),
+        ClickHere(), {WaitSeconds(0.9), Glide(AtItem(DockTab("###Scene")), 22), WaitSeconds(0.2)}, ClickHere(),
         {
             WaitSeconds(0.9),
             // 6. Drag a row: the ghost trails, the reorder marker glides slot to slot, and on the
