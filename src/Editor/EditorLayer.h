@@ -1024,6 +1024,9 @@ private:
     // Set by the keyboard nav when it moves the selection: the next frame's row draw scrolls this
     // entity into view, then clears it.
     entt::entity m_HierarchyScrollToEntity = entt::null;
+    // A row that was just created, duplicated or moved: a one-off wash (Glass::RowFlash), and
+    // optionally an eased scroll to it.
+    void FlashHierarchyRow(entt::entity e, bool reveal = true);
     // The selection the Hierarchy last opened the parents of (DrawHierarchyTreeBody): rows start
     // collapsed, so a new selection made elsewhere gets its ancestors opened once.
     entt::entity m_HierarchyRevealed = entt::null;
@@ -1035,6 +1038,15 @@ private:
     // that dwell began. Reset when the cursor leaves it or a drag ends.
     entt::entity m_HierarchySpringRow = entt::null;
     double m_HierarchySpringSince = 0.0;
+    // The reorder / reparent marker of a row drag: the hovered row records it, the tree draws it
+    // once after the rows so it can glide from slot to slot (Glass::DropMarkerGlide).
+    struct HierarchyDropMarker {
+        int   Frame = -1, LastDrawn = -1;
+        float X0 = 0, X1 = 0, Y0 = 0, Y1 = 0; // content space (screen y + scroll - window y)
+        bool  Parent = false;                 // a parent box, or an insert line at Edge
+        float Edge = 0;
+        float PrevY0 = 0, PrevY1 = 0;
+    } m_HierarchyDropMarker;
     // Shift+Click on `target`: select every row between m_SelectionAnchor and `target`
     // inclusive along m_HierarchyVisibleOrder. `additive` (Ctrl+Shift) keeps the existing
     // selection and adds the range; otherwise the range replaces it. `target` becomes primary.

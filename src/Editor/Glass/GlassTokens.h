@@ -308,6 +308,20 @@ constexpr MotionSpec CameraFrame          = {GLASS_EASE_SMOOTH, 340.0f};
 constexpr float      CameraFramePerOctaveMs = 40.0f; // + per doubling of distance (world units)
 constexpr float      CameraFrameMaxMs       = 560.0f;
 
+// --- Category 8: drag and drop, lists (GlassDragMotion.cpp, the Hierarchy) ---------------------
+// The drag ghost trails the cursor with a slight lag and fades up as the drag starts.
+constexpr MotionSpec DragGhostFollow  = {EaseId::OutCubic, 0, 0, 0, 0, 90.0f};
+constexpr MotionSpec DragGhostIn      = {EaseId::OutCubic, 0, 0, 0, 0, 140.0f};
+constexpr float      DragGhostOffsetPx = 14.0f; // right of and below the cursor
+constexpr float      DragGhostShadowAlpha = 0.30f;
+// Released on a target: it hops in along a short arc, shrinking and fading. Cancelled: it drifts home.
+constexpr MotionSpec DropFly          = {EaseId::OutCubic, 0, 0, 0, 0, 260.0f};
+constexpr MotionSpec DropReturn       = {GLASS_EASE_SMOOTH, 240.0f};
+constexpr float      DropFlyToScale   = 0.55f;
+constexpr float      DropArcLiftPx    = 18.0f;
+// The Hierarchy's reorder / reparent marker glides between slots instead of jumping.
+constexpr MotionSpec DropMarkerGlide  = {EaseId::OutCubic, 0, 0, 0, 0, 110.0f};
+
 #undef GLASS_EASE_SMOOTH
 
 } // namespace Glass

@@ -35,6 +35,7 @@
 #include "Glass/GlassLayout.h"
 #include "Glass/GlassMotion.h"
 #include "Glass/GlassMotionHooks.h"
+#include "Glass/GlassDragMotion.h"
 #include "Glass/GlassTheme.h"
 #include "Glass/GlassTokens.h"
 
@@ -584,10 +585,10 @@ void EditorLayer::DrawGlassHierarchy(World& world, AssetLibrary& assets) {
                         else SelectItem(e, io.KeyCtrl);
                     }
                     if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) m_PendingFrameSelect = true;
-                    if (ImGui::BeginDragDropSource()) {
+                    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip)) {
                         ImGui::SetDragDropPayload("HIERARCHY_ENTITY", &e, sizeof(entt::entity));
                         const auto* nm = reg.try_get<NameComponent>(e);
-                        ImGui::TextUnformatted(nm && !nm->Name.empty() ? nm->Name.c_str() : "Object");
+                        Glass::DragGhostLabel(ICON_FA_CUBE, nm && !nm->Name.empty() ? nm->Name.c_str() : "Object");
                         ImGui::EndDragDropSource();
                     }
                     if (ImGui::BeginPopupContextItem("##ctx")) {
@@ -1132,9 +1133,9 @@ void EditorLayer::DrawGlassLibrary(World& world, AssetLibrary& assets) {
                             else if (cell.kind == K::Script) OpenScriptIDE(cell.key);
                         }
                         if (const char* payload = AssetPayloadType(cell.kind)) {
-                            if (ImGui::BeginDragDropSource()) {
+                            if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip)) {
                                 ImGui::SetDragDropPayload(payload, cell.key.c_str(), cell.key.size() + 1);
-                                ImGui::TextUnformatted(cell.display.c_str());
+                                Glass::DragGhostLabel(isFolder ? ICON_FA_FOLDER : ICON_FA_FILE, cell.display.c_str());
                                 ImGui::EndDragDropSource();
                             }
                         }
