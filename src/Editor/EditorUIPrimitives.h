@@ -281,7 +281,11 @@ inline bool SearchField(const char* id, char* buf, size_t bufSize, const char* h
         // The clear button, inside the field's right end.
         const float h = mx.y - mn.y;
         const ImVec2 bmin(mx.x - h, mn.y), bmax(mx.x, mx.y);
-        const bool hov = ImGui::IsMouseHoveringRect(bmin, bmax) && ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
+        // AllowWhenBlockedByActiveItem: while the field itself is being typed in it is the active
+        // item, and without the flag the window doesn't count as hovered, so the x ignored clicks
+        // for exactly the case it exists for (clear what you just typed).
+        const bool hov = ImGui::IsMouseHoveringRect(bmin, bmax) &&
+                         ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
         EditorTheme::PushSmall();
         const ImVec2 xsz = ImGui::CalcTextSize(ICON_FA_XMARK);
         dl->AddText(ImVec2((bmin.x + bmax.x - xsz.x) * 0.5f, (bmin.y + bmax.y - xsz.y) * 0.5f),
@@ -292,6 +296,10 @@ inline bool SearchField(const char* id, char* buf, size_t bufSize, const char* h
             buf[0] = '\0';
             changed = true;
             ImGui::ClearActiveID();
+            // Deactivating a field that was being typed in saves its text, and the field writes
+            // that back into `buf` next frame: the x "cleared" a focused search and the text came
+            // straight back. Drop the saved copy so the clear sticks.
+            ImGui::GetCurrentContext()->InputTextDeactivatedState.ClearFreeMemory();
         }
     }
     ImGui::PopID();
