@@ -632,8 +632,11 @@ int CountUnassignedHostSlots(const EditorModuleHostAPI& api) {
     static_assert(sizeof(EditorModuleHostAPI) % sizeof(void*) == 0, "unexpected EditorModuleHostAPI layout");
     constexpr std::size_t slots = sizeof(EditorModuleHostAPI) / sizeof(void*) - 1;
     const auto* bytes = reinterpret_cast<const unsigned char*>(&api) + sizeof(void*);
+    // Retired slots stay null on purpose (kept only for the struct layout); not a missing callback.
+    constexpr std::size_t retiredEngineMark = offsetof(EditorModuleHostAPI, GetEngineMarkTexture) / sizeof(void*) - 1;
     int unassigned = 0;
     for (std::size_t i = 0; i < slots; ++i) {
+        if (i == retiredEngineMark) continue;
         void* slot = nullptr;
         std::memcpy(&slot, bytes + i * sizeof(void*), sizeof(void*));
         if (!slot) ++unassigned;

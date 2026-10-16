@@ -5,6 +5,7 @@
 #include "EditorUIPrimitives.h"
 #include "EditorSettings.h"
 #include <IconsFontAwesome6.h>
+#include <imgui_internal.h> // ImRect, FindWindowByName (the action bar's rect)
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -313,6 +314,15 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
                 stats->FPS, stats->FrameMs, stats->DrawCalls, stats->Triangles, stats->Vertices,
                 stats->CamPos[0], stats->CamPos[1], stats->CamPos[2], stats->CamYaw, stats->CamPitch);
             ImVec2 textSize = ImGui::CalcTextSize(buf);
+            // The floating action bar (EditorLayer::DrawViewportActionBar) is centred along the
+            // image's top edge; in a Game panel narrower than about twice its width it reached
+            // over this plate and covered the end of the FPS line. Drop below it then. Its rect
+            // is last frame's, which is where it is drawn again this frame.
+            if (ImGuiWindow* bar = ImGui::FindWindowByName("##ViewportActionBar");
+                bar && bar->WasActive && !bar->Hidden) {
+                const ImRect plate(statsPos, ImVec2(statsPos.x + textSize.x + 12.0f, statsPos.y + textSize.y + 8.0f));
+                if (plate.Overlaps(bar->Rect())) statsPos.y = bar->Rect().Max.y + 6.0f;
+            }
             EditorUIPrimitives::DrawHudPlate(dl, statsPos,
                 ImVec2(statsPos.x + textSize.x + 12.0f, statsPos.y + textSize.y + 8.0f), 3.0f);
             dl->AddText(ImVec2(statsPos.x + 6.0f, statsPos.y + 4.0f), EditorUIPrimitives::kHudTextColor, buf);

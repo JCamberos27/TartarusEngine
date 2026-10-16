@@ -528,6 +528,7 @@ void EditorLayer::FreeGpuResources() {
     for (auto& [path, entry] : m_ModelThumbnails) { (void)path; if (entry.first) glDeleteTextures(1, &entry.first); }
     m_ModelThumbnails.clear();
     m_ThumbnailLRU.clear();
+    FreeRetiredThumbnailTextures();
     ClearMaterialThumbnails(); // #107
     m_AssetThumbs.Clear();
     if (m_ThumbnailBlitFbo) { glDeleteFramebuffers(1, &m_ThumbnailBlitFbo); m_ThumbnailBlitFbo = 0; }
@@ -1144,7 +1145,15 @@ void EditorLayer::DrawLightingPanel(World& world) {
 void EditorLayer::DrawSettingsWindow(World& world) {
     if (!m_ShowPreferences) return;
 
-    ImGui::SetNextWindowSize(ImVec2(700.0f * m_UIScale, 460.0f * m_UIScale), ImGuiCond_FirstUseEver);
+    // Fit inside the editor window (opened at the default spot, 60 px in): at 1.5x UI scale a
+    // 700 px window is wider than a 1044 px editor, which put its close button off-screen.
+    {
+        const ImVec2 work = ImGui::GetMainViewport()->WorkSize;
+        const float margin = 120.0f;
+        ImGui::SetNextWindowSize(ImVec2(ImMin(700.0f * m_UIScale, ImMax(work.x - margin, 320.0f)),
+                                        ImMin(460.0f * m_UIScale, ImMax(work.y - margin, 240.0f))),
+                                 ImGuiCond_FirstUseEver);
+    }
     PushTabChromeText(); // no-op now (Windows XP removed, Phase 1 item 9) — see PanelChromeIsLight
     const bool settingsOpen = ImGui::Begin(EditorPanels::Settings, &m_ShowPreferences);
     PopTabChromeText();
@@ -2485,6 +2494,9 @@ bool EditorLayer::OtherWindowOwnsKeyboard() const {
     if (nav->DockIsActive || nav->DockNode) return false;      // a docked panel — allow shortcuts
     if (nav == ImGui::FindWindowByName(EditorPanels::Scene)) return false; // the viewport itself
     if (nav == ImGui::FindWindowByName("##DockHost")) return false; // "the dockspace"
+    // The menu strip: closing a menu hands focus back to it, which blocked every global shortcut
+    // (Ctrl+Shift+H after Create > Cube did nothing) until something else was clicked.
+    if (nav == ImGui::FindWindowByName("##Toolbar")) return false;
     return true;                                               // a real floating window has focus
 }
 
@@ -2577,7 +2589,15 @@ void EditorLayer::SyncViewportPrefs() {
     sync(p.GizmoPivotCenter, m_GizmoPivotCenter);
     sync(p.ActiveTool, (int)m_GizmoOp);
     sync(p.ShadingMode, (int)m_ShadingMode);
-    if (changed) EditorSettings::Save();
+    if (!changed) return;
+    // Picking a tool or toggling the grid is not an authored edit: write it outside the undo
+    // journal (like RememberLastScene), or each one became an "Edit editor_prefs.json" undo step
+    // that Ctrl+Z spent first and that cleared the redo stack.
+    EditorSettings::Save();
+    const bool wasApplying = m_GlobalUndoApplying;
+    m_GlobalUndoApplying = true; // the AtomicFile observer ignores writes while this is set
+    EditorSettings::Flush();
+    m_GlobalUndoApplying = wasApplying;
 }
 
 void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera, float dt) {
@@ -2591,6 +2611,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     if(!m_ScriptIDE)m_ScriptIDE=std::make_unique<ScriptIDE>();
     CurveEditor::DrawWindows([this]{m_RequestGlobalUndo=true;},[this]{m_RequestGlobalRedo=true;},!m_UndoStack.empty(),!m_RedoStack.empty());
 
+    FreeRetiredThumbnailTextures(); // last frame's draw lists are rendered by now
     m_ThumbnailBudgetThisFrame = 3; // at most this many new Asset Browser model thumbnails per frame
     m_AssetThumbs.Pump(8); // unloaded assets' tiles, decoded off-thread: upload a few per frame
 

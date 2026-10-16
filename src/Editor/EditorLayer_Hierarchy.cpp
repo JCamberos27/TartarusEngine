@@ -315,6 +315,10 @@ void EditorLayer::RecordSelectionHistory(const World& world) {
     // append to either history.
     if (m_SelHistoryNavigating) { m_SelHistoryNavigating = false; m_EditPushedThisFrame = false; return; }
 
+    // Same objects under new handles: Stop, Undo and Redo rebuild every entity and restore the
+    // selection by order. That isn't a pick - no undo step, no history entry.
+    if (prev == entry) { m_EditPushedThisFrame = false; return; }
+
     // vTabs: selecting something brings the Inspector back to its Selection tab, so it shows what
     // was just picked. (The Inspector lock is what keeps a view while selecting elsewhere.) A scene
     // switch alone isn't a pick.
@@ -530,6 +534,8 @@ void EditorLayer::SelectHierarchyRange(World& world, entt::entity target, bool a
 }
 
 void EditorLayer::DeleteSelection(World& world) {
+    // Nothing selected: no empty undo entry, no "Deleted 0 objects" log.
+    if (!HasAnySelection()) return;
     PushUndo(world, "Delete");
 
     // entt::entity handles don't shift when another entity is destroyed (unlike the vector
@@ -1203,6 +1209,9 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
             ImGui::SetKeyboardFocusHere();
             snprintf(m_EntityRenameBuffer, sizeof(m_EntityRenameBuffer), "%s", name.Name.c_str());
             m_EntityRenameJustStarted = false;
+        } else if (m_EntityRenameRefocus) {
+            ImGui::SetKeyboardFocusHere();
+            m_EntityRenameRefocus = false;
         }
         bool submitted = ImGui::InputText("##Rename", m_EntityRenameBuffer, sizeof(m_EntityRenameBuffer),
                 ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
@@ -1220,6 +1229,8 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
                 // still in it and flash an inline error instead of committing or closing.
                 rejected = true;
                 m_EntityRenameRejectedFlash = 1.6f;
+                m_EntityRenameRefocus = true; // Enter took focus off the field; give it back
+
             } else {
                 PushUndo(world, "Rename");
                 name.Name = sanitized;
@@ -1370,13 +1381,15 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
     const float miniRight = rowMax.x - rowIconsBandW - EditorTheme::Px(2.0f);
     const float miniLeft = miniRight - miniW;
     const float mouseX = ImGui::GetIO().MousePos.x;
-    const bool overMinimap = rowHovered && miniCount > 0 && mouseX >= miniLeft && mouseX < miniRight;
-    const bool overRowIcons = rowHovered && (mouseX > rowMax.x - rowIconsBandW || overMinimap);
     int hoveredMini = -1; // index into miniIdx, or miniCount for the "+N" chip
-    if (overMinimap) {
+    if (rowHovered && miniCount > 0 && mouseX >= miniLeft && mouseX < miniRight) {
         const float rel = mouseX - (miniLeft + EditorTheme::Px(4.0f));
         hoveredMini = rel < 0.0f ? -1 : std::min((int)(rel / miniCellW), miniCount);
     }
+    // Only an actual icon (or the "+N" chip) counts: the strip's leading padding used to count as
+    // "over the minimap", which carved a dead zone out of the row where a click did nothing.
+    const bool overMinimap = hoveredMini >= 0;
+    const bool overRowIcons = rowHovered && (mouseX > rowMax.x - rowIconsBandW || overMinimap);
     if (rowHovered) m_HierarchyHoverEntity = entity; // hover keys act on this row
 
     if (ImGui::IsItemClicked() && clickOnArrow) {

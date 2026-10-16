@@ -281,7 +281,11 @@ inline bool SearchField(const char* id, char* buf, size_t bufSize, const char* h
         // The clear button, inside the field's right end.
         const float h = mx.y - mn.y;
         const ImVec2 bmin(mx.x - h, mn.y), bmax(mx.x, mx.y);
-        const bool hov = ImGui::IsMouseHoveringRect(bmin, bmax) && ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
+        // AllowWhenBlockedByActiveItem: while the field itself is being typed in it is the active
+        // item, and without the flag the window doesn't count as hovered, so the x ignored clicks
+        // for exactly the case it exists for (clear what you just typed).
+        const bool hov = ImGui::IsMouseHoveringRect(bmin, bmax) &&
+                         ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
         EditorTheme::PushSmall();
         const ImVec2 xsz = ImGui::CalcTextSize(ICON_FA_XMARK);
         dl->AddText(ImVec2((bmin.x + bmax.x - xsz.x) * 0.5f, (bmin.y + bmax.y - xsz.y) * 0.5f),
@@ -292,6 +296,10 @@ inline bool SearchField(const char* id, char* buf, size_t bufSize, const char* h
             buf[0] = '\0';
             changed = true;
             ImGui::ClearActiveID();
+            // Deactivating a field that was being typed in saves its text, and the field writes
+            // that back into `buf` next frame: the x "cleared" a focused search and the text came
+            // straight back. Drop the saved copy so the clear sticks.
+            ImGui::GetCurrentContext()->InputTextDeactivatedState.ClearFreeMemory();
         }
     }
     ImGui::PopID();
@@ -315,7 +323,9 @@ inline void Chip(const char* text, ImVec4 tint) {
 }
 
 // What a panel shows when it has nothing to show: a large dim icon, a line of text and a hint,
-// centred in the remaining space.
+// centred in the remaining space. A space too short for all three (the Favorites overlay over a
+// 1080p Assets panel at 150%) drops the icon, then the hint, then the top margin, so the text
+// still shows instead of only the top of the icon.
 inline void EmptyState(const char* icon, const char* text, const char* hint = nullptr) {
     const ImVec2 avail = ImGui::GetContentRegionAvail();
     const ImVec2 origin = ImGui::GetCursorScreenPos();
@@ -329,13 +339,21 @@ inline void EmptyState(const char* icon, const char* text, const char* hint = nu
     EditorTheme::PushSmall();
     const ImVec2 hsz = hint ? ImGui::CalcTextSize(hint, nullptr, false, avail.x - EditorTheme::Px(24.0f)) : ImVec2(0, 0);
     EditorTheme::PopFont();
-    const float gap = EditorTheme::Px(10.0f);
-    const float total = isz.y + gap + tsz.y + (hint ? EditorTheme::Px(4.0f) + hsz.y : 0.0f);
-    float y = origin.y + std::max(EditorTheme::Px(12.0f), (avail.y - total) * 0.42f);
+    const float gap = EditorTheme::Px(10.0f), minTop = EditorTheme::Px(12.0f);
+    bool showIcon = true;
+    auto height = [&] { return (showIcon ? isz.y + gap : 0.0f) + tsz.y + (hint ? EditorTheme::Px(4.0f) + hsz.y : 0.0f); };
+    if (avail.y > 0.0f && minTop + height() > avail.y) showIcon = false;
+    if (avail.y > 0.0f && minTop + height() > avail.y) hint = nullptr;
+    const float total = height();
+    float top = std::max(minTop, (avail.y - total) * 0.42f);
+    if (avail.y > 0.0f && top + total > avail.y) top = std::max(0.0f, (avail.y - total) * 0.5f); // even the text is tight
+    float y = origin.y + top;
     const float cx = origin.x + avail.x * 0.5f;
-    dl->AddText(EditorTheme::UiFont(), EditorTheme::Px(28.0f), ImVec2(cx - isz.x * 0.5f, y),
-                EditorTheme::U32(EditorTheme::Strong), icon);
-    y += isz.y + gap;
+    if (showIcon) {
+        dl->AddText(EditorTheme::UiFont(), EditorTheme::Px(28.0f), ImVec2(cx - isz.x * 0.5f, y),
+                    EditorTheme::U32(EditorTheme::Strong), icon);
+        y += isz.y + gap;
+    }
     dl->AddText(EditorTheme::UiFont(), EditorTheme::BodySize(), ImVec2(cx - tsz.x * 0.5f, y),
                 EditorTheme::U32(EditorTheme::Secondary), text);
     y += tsz.y;

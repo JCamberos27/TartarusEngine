@@ -6,7 +6,7 @@
 // what the blood absorbs, the pooled core hides it. Dual-source blending: dst = Add + dst * Mul.
 
 // ModelShading's functions read vWorldPos; here it's the reconstructed surface.
-vec3 vWorldPos;
+vec3 vWorldPos = vec3(0.0);
 #include "ModelShading.glsl"
 
 struct BloodDecal {
