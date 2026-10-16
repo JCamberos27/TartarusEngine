@@ -20,7 +20,7 @@ done; it fails the test when it times out (default 240 frames).
 | `Do(name, fn)` | Run code once |
 | `Wait(n)`, `WaitSeconds(s)`, `Until(name, pred, timeout)` | Wait |
 | `Expect(name, fn -> std::string)` / `ExpectTrue(name, fn -> bool)` | Check; a non-empty string / false fails |
-| `Click(q, mods, button, clicks)`, `RightClick(q)`, `DoubleClick(q)` | Waits for the item, then clicks its centre |
+| `Click(q, mods, button, clicks)`, `RightClick(q)`, `DoubleClick(q)` | Waits for the item, then clicks its centre (a popup / menu / combo entry once it has held still for two frames) |
 | `Key(ImGuiKey, mods)`, `KeyDown`, `KeyUp`, `TypeText("...")`, `Wheel(dy)` | Keyboard / wheel |
 | `Drag(from, AtItem(to))`, `MoveToItem(q)`, `HoverPanel("###Scene")`, `MouseButton(b, down)` | Pointer |
 | `Shot("name", {"###Scene"})` | Screenshot to `editor-test-shots/<test>/<name>.png`; the listed windows must not be blank |
