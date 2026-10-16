@@ -133,6 +133,10 @@ void EditorSettings::Load() {
     s.SceneCameraNear = SafeValue(root, "sceneCameraNear", s.SceneCameraNear);
     s.SceneCameraFar = SafeValue(root, "sceneCameraFar", s.SceneCameraFar);
     s.AudioMuted = SafeValue(root, "audioMuted", s.AudioMuted);
+    s.EditorSoundsEnabled = SafeValue(root, "editorSoundsEnabled", s.EditorSoundsEnabled);
+    s.EditorSoundsVolume = SafeValue(root, "editorSoundsVolume", s.EditorSoundsVolume);
+    s.EditorSoundCategoryOn = SafeValue(root, "editorSoundCategoryOn", s.EditorSoundCategoryOn);
+    s.EditorSoundCategoryVolume = SafeValue(root, "editorSoundCategoryVolume", s.EditorSoundCategoryVolume);
     s.AssetSearchGlobal = SafeValue(root, "assetSearchGlobal", s.AssetSearchGlobal);
     s.GameViewPresetLabel = SafeValue(root, "gameViewPresetLabel", s.GameViewPresetLabel);
     s.GameViewPresetWidth = SafeValue(root, "gameViewPresetWidth", s.GameViewPresetWidth);
@@ -319,6 +323,10 @@ void EditorSettings::Flush() {
     root["sceneCameraNear"] = Get().SceneCameraNear;
     root["sceneCameraFar"] = Get().SceneCameraFar;
     root["audioMuted"] = Get().AudioMuted;
+    root["editorSoundsEnabled"] = Get().EditorSoundsEnabled;
+    root["editorSoundsVolume"] = Get().EditorSoundsVolume;
+    if (!Get().EditorSoundCategoryOn.empty()) root["editorSoundCategoryOn"] = Get().EditorSoundCategoryOn;
+    if (!Get().EditorSoundCategoryVolume.empty()) root["editorSoundCategoryVolume"] = Get().EditorSoundCategoryVolume;
     root["assetSearchGlobal"] = Get().AssetSearchGlobal;
     root["gameViewPresetLabel"] = Get().GameViewPresetLabel;
     root["gameViewPresetWidth"] = Get().GameViewPresetWidth;

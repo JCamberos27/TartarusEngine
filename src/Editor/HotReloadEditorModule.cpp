@@ -14,6 +14,7 @@
 #include "AssetLibrary.h"
 #include "Camera.h"
 #include "Glass/GlassMotionHooks.h"
+#include "EditorSound.h"
 
 #include <cstddef>
 #include <cstdio>
@@ -497,6 +498,9 @@ void HierSetSort(int packed) {
 // --- Asset Browser Details view (API v26, Phase 5 item 4) --------------------------------
 int  AbGetViewMode()                { return g_Editor ? g_Editor->GetAssetViewMode() : 0; }
 const EditorMotionHooks* GetHostMotionHooks() { return &Glass::HostMotionHooks(); }
+void HostPlayUISound(int event, float screenX01) {
+    if (event >= 0 && event < EditorSoundEvents::kEventCount) EditorSound::Play((EditorSoundEvents::Event)event, screenX01);
+}
 
 // Built field-by-field, by name (#172 follow-up): the old positional aggregate initializer
 // compiled cleanly with any two same-signature entries swapped (e.g. GetShowGrid <->
@@ -620,6 +624,7 @@ EditorModuleHostAPI MakeHostAPI() {
     api.SetHierarchySort = &HierSetSort;
     api.GetAssetViewMode = &AbGetViewMode;
     api.GetMotionHooks = &GetHostMotionHooks;
+    api.PlayUISound = &HostPlayUISound;
     return api;
 }
 

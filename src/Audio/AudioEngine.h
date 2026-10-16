@@ -203,7 +203,7 @@ public:
     static void SetPaused(bool paused);
     static bool IsPaused();
 
-    // Master mute — silences the whole engine output without stopping any voice (they keep
+    // Master mute — silences the game's output (not the editor's UI sounds, see PlayEditor) without stopping any voice (they keep
     // their playback position, so unmuting resumes mid-clip). Used by the editor's
     // View ▸ Mute Audio toggle (#236 R2 toolbar tail).
     static void SetMuted(bool muted);
@@ -220,6 +220,15 @@ public:
     static void PlayPreview(const std::string& path);
     static void StopPreview();
     static bool IsPreviewPlaying(const std::string& path);
+
+    // Editor UI sounds (src/Editor/EditorSound): a separate output wired straight to the device. None of the game's mix reaches
+    // it - not the buses, the ducking, the limiter, the meters or the capture - and neither do the master volume, View > Mute
+    // Audio or SetPaused: it has its own volume. TARTARUS_MUTE still silences it. Fire-and-forget one-shots, decoded into
+    // memory on first use; pan -1..1 (left..right). At most kEditorVoices at once: a new one replaces the oldest.
+    static constexpr int kEditorVoices = 24;
+    static bool PlayEditor(const std::string& path, float volume, float pitch = 1.0f, float pan = 0.0f);
+    static void SetEditorVolume(float volume); // 0..1
+    static int EditorVoiceCount();
 
     static bool IsInitialized();
 

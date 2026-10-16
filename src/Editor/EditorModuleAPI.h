@@ -143,7 +143,9 @@ struct EditorMotionHooks; // EditorMotionHooks.h
 //        DrawFolderNavBar (folder bookmark chips).
 //   41 - Glass Motion round 2: GetMotionHooks, the host's EditorMotionHooks table
 //        (EditorMotionHooks.h), so module widgets animate through Glass::Motion().
-constexpr std::uint32_t kEditorModuleAPIVersion = 41;
+//   42 - Editor UI sounds: PlayUISound, so the shared primitives' clicks in module panels play
+//        through the host's EditorSound (EditorSoundEvents::Event values).
+constexpr std::uint32_t kEditorModuleAPIVersion = 42;
 
 // Editor Enhancers / vFolders (API v40): how one Asset Browser folder looks. POD - crosses the
 // module boundary. Glyphs are UTF-8 Font Awesome characters (at most 4 bytes + NUL).
@@ -553,6 +555,10 @@ struct EditorModuleHostAPI {
     // The host's motion table. A function (not a data pointer) so every slot after Version stays a
     // function pointer, which CountUnassignedHostSlots relies on.
     const EditorMotionHooks* (*GetMotionHooks)() = nullptr;
+
+    // --- Editor UI sounds (API v42) ---
+    // EditorSound::Play: `event` is an EditorSoundEvents::Event, screenX01 where the control is across the window (< 0 = centred).
+    void (*PlayUISound)(int event, float screenX01) = nullptr;
 };
 
 struct EditorModuleAPI {

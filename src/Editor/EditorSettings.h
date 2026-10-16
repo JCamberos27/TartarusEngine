@@ -103,6 +103,14 @@ struct EditorSettings {
     // session stays muted after a restart.
     bool AudioMuted = false;
 
+    // Editor UI sounds (EditorSound): their own output, so AudioMuted above doesn't silence them - this does. All on at a low
+    // level by default. Per category (EditorSoundEvents::Category order: Clicks, Sliders, Hover, Panels, Drag & Drop,
+    // Notifications, Play Mode) a switch and a volume; a short or missing list keeps the defaults for the rest.
+    bool EditorSoundsEnabled = true;
+    float EditorSoundsVolume = 0.35f;
+    std::vector<bool> EditorSoundCategoryOn;
+    std::vector<float> EditorSoundCategoryVolume;
+
     // Asset Browser search scope (#236 G): false = current folder + subfolders (Unity's
     // default), true = the whole project. Toggled by the button next to the search box.
     bool AssetSearchGlobal = false;

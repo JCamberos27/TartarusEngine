@@ -51,6 +51,15 @@ timestamp prefix actually lines up, and copied next to the executable at build t
 the faces above. SIL OFL 1.1 — see `extern/fonts/JetBrainsMono-OFL.txt`. Copyright 2020 The
 JetBrains Mono Project Authors. Upstream: <https://github.com/JetBrains/JetBrainsMono>
 
+### Editor UI sounds
+
+`resources/EditorSounds/*.wav` (copied next to the exe as `assets/editor_sounds/`) are adaptations, cut, pitched,
+filtered and levelled by `tools/audio/build_editor_ui.py`, of two desktop sound themes. Each file keeps its source's
+license. The per-file sources and changes are in `resources/EditorSounds/LICENSE.md`.
+
+- **KDE Ocean Sound Theme** by Guilherme Marçal Silva (KDE), CC BY-SA 4.0: <https://invent.kde.org/plasma/ocean-sound-theme>
+- **WoodenBeaver / Touch-Remix** by madsrh, via Ubuntu Yaru, CC BY-SA 3.0: <https://github.com/ubuntu/yaru>
+
 ---
 
 ## Fetched at configure time (CMake `FetchContent`)

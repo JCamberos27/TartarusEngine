@@ -1,0 +1,219 @@
+#include "UnitTestSupport.h"
+
+#include "../Audio/AudioEngine.h"
+#include "../Editor/EditorSound.h"
+
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <set>
+#include <string>
+#include <vector>
+
+// Unit tests for the editor's UI sounds (Editor/EditorSound): the scheduler's rules and the engine's separate editor output.
+
+namespace {
+
+using EditorSound::Event;
+using EditorSound::Scheduler;
+using EditorSound::Settings;
+using EditorSound::Voice;
+
+void WriteToneWav(const std::filesystem::path& path, int rate, float seconds, float amp) {
+    const int frames = (int)(seconds * (float)rate);
+    std::ofstream f(path, std::ios::binary);
+    auto u32 = [&](std::uint32_t v) { f.write(reinterpret_cast<const char*>(&v), 4); };
+    auto u16 = [&](std::uint16_t v) { f.write(reinterpret_cast<const char*>(&v), 2); };
+    f.write("RIFF", 4); u32(36 + (std::uint32_t)frames * 2); f.write("WAVE", 4);
+    f.write("fmt ", 4); u32(16); u16(1); u16(1); u32((std::uint32_t)rate); u32((std::uint32_t)rate * 2); u16(2); u16(16);
+    f.write("data", 4); u32((std::uint32_t)frames * 2);
+    for (int i = 0; i < frames; ++i) {
+        const auto s = (std::int16_t)std::lround(amp * std::sin(6.2831853f * 880.0f * (float)i / (float)rate) * 32767.0f);
+        f.write(reinterpret_cast<const char*>(&s), 2);
+    }
+}
+
+void SetEnv(const char* name, const char* value) {
+#ifdef _WIN32
+    _putenv_s(name, value);
+#else
+    setenv(name, value, 1);
+#endif
+}
+
+void TestEditorSoundEventTable() {
+    std::set<std::string> names;
+    for (int i = 0; i < EditorSoundEvents::kEventCount; ++i) {
+        const EditorSound::EventInfo& info = EditorSound::Info((Event)i);
+        CHECK(info.Name && *info.Name);
+        names.insert(info.Name);
+        CHECK(info.CooldownMs > 0.0f && info.PitchJitter >= 0.0f && info.PitchJitter < 0.1f);
+        // Notifications and Play mode carry meaning from no place on screen: never panned.
+        if (info.Cat == EditorSound::Category::Notifications || info.Cat == EditorSound::Category::PlayMode) CHECK(info.Centred);
+    }
+    CHECK((int)names.size() == EditorSoundEvents::kEventCount);
+    for (int c = 0; c < EditorSoundEvents::kCategoryCount; ++c) CHECK(*EditorSound::CategoryName((EditorSound::Category)c));
+}
+
+void TestEditorSoundSchedulerRules() {
+    Settings st;
+    Scheduler sch(7u);
+    Voice v;
+    // No files: silent.
+    CHECK(!sch.Decide(Event::Click, 0.0, 0.5f, true, st, v));
+
+    // Variants round-robin and never repeat back to back; pitch stays inside the jitter.
+    sch.SetVariantCount(Event::Click, 3);
+    int last = -1;
+    std::set<int> seen;
+    double t = 1000.0;
+    for (int i = 0; i < 300; ++i, t += 500.0) {
+        CHECK(sch.Decide(Event::Click, t, 0.5f, true, st, v));
+        CHECK(v.Variant >= 0 && v.Variant < 3 && v.Variant != last);
+        CHECK(std::fabs(v.Pitch - 1.0f) <= EditorSound::Info(Event::Click).PitchJitter + 1e-6f);
+        CHECK(std::fabs(v.Gain - 1.0f) < 1e-4f); // spaced out: no repeat attenuation
+        last = v.Variant;
+        seen.insert(v.Variant);
+    }
+    CHECK(seen.size() == 3);
+
+    // Cooldown: a retrigger sooner than it is dropped.
+    const float cd = EditorSound::Info(Event::Click).CooldownMs;
+    CHECK(!sch.Decide(Event::Click, t - 500.0 + cd * 0.5, 0.5f, true, st, v));
+
+    // Rapid repeats: each one quieter, down to the floor; a pause resets it.
+    sch.Reset();
+    float prev = 2.0f;
+    double now = 0.0;
+    for (int i = 0; i < 8; ++i, now += cd + 1.0) {
+        CHECK(sch.Decide(Event::Click, now, 0.5f, true, st, v));
+        CHECK(v.Gain <= prev + 1e-6f);
+        prev = v.Gain;
+    }
+    CHECK(std::fabs(20.0f * std::log10(prev) - Scheduler::kRepeatFloorDb) < 0.01f);
+    CHECK(sch.Decide(Event::Click, now + 1000.0, 0.5f, true, st, v) && std::fabs(v.Gain - 1.0f) < 1e-4f);
+
+    // Pan: the window's edges pan kPanWidth, the middle and "no position" are centred, notifications never move.
+    sch.Reset();
+    CHECK(sch.Decide(Event::Click, 0.0, 0.0f, true, st, v) && std::fabs(v.Pan + Scheduler::kPanWidth) < 1e-5f);
+    CHECK(sch.Decide(Event::Click, 1000.0, 1.0f, true, st, v) && std::fabs(v.Pan - Scheduler::kPanWidth) < 1e-5f);
+    CHECK(sch.Decide(Event::Click, 2000.0, -1.0f, true, st, v) && v.Pan == 0.0f);
+    sch.SetVariantCount(Event::NotifyError, 1);
+    CHECK(sch.Decide(Event::NotifyError, 0.0, 0.0f, true, st, v) && v.Pan == 0.0f && v.Variant == 0);
+
+    // In the background only notifications play.
+    sch.Reset();
+    CHECK(!sch.Decide(Event::Click, 0.0, 0.5f, false, st, v));
+    CHECK(sch.Decide(Event::NotifyError, 0.0, 0.5f, false, st, v));
+
+    // The switches: all off, a category off, a category at 0, master at 0.
+    sch.Reset();
+    Settings off = st;
+    off.Enabled = false;
+    CHECK(!sch.Decide(Event::Click, 0.0, 0.5f, true, off, v));
+    off = st;
+    off.CategoryOn[(int)EditorSound::Category::Clicks] = false;
+    CHECK(!sch.Decide(Event::Click, 0.0, 0.5f, true, off, v));
+    CHECK(sch.Decide(Event::NotifyError, 0.0, 0.5f, true, off, v)); // other categories unaffected
+    off = st;
+    off.CategoryVolume[(int)EditorSound::Category::Clicks] = 0.5f;
+    CHECK(sch.Decide(Event::Click, 0.0, 0.5f, true, off, v) && std::fabs(v.Gain - 0.5f) < 1e-4f);
+    off.Master = 0.0f;
+    CHECK(!sch.Decide(Event::Click, 5000.0, 0.5f, true, off, v));
+}
+
+void TestEditorSoundFindVariants() {
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::temp_directory_path() / "tartarus_editor_sound_ut";
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+    fs::create_directories(dir, ec);
+    WriteToneWav(dir / "Click_1.wav", 48000, 0.05f, 0.1f);
+    WriteToneWav(dir / "Click_2.wav", 48000, 0.05f, 0.1f);
+    WriteToneWav(dir / "Click_4.wav", 48000, 0.05f, 0.1f); // after a gap: not a variant
+    WriteToneWav(dir / "Save.wav", 48000, 0.05f, 0.1f);
+    CHECK(EditorSound::FindVariants(dir.string(), Event::Click).size() == 2);
+    CHECK(EditorSound::FindVariants(dir.string(), Event::Save).size() == 1);
+    CHECK(EditorSound::FindVariants(dir.string(), Event::Undo).empty());
+    CHECK(EditorSound::FindVariants("", Event::Click).empty());
+    fs::remove_all(dir, ec);
+}
+
+// The editor output is beside the game's mix: Mute and master don't reach it, the limiter's taps don't hear it, the voice cap holds.
+void TestEditorSoundSeparateOutput() {
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::temp_directory_path() / "tartarus_editor_out_ut";
+    std::error_code ec;
+    fs::create_directories(dir, ec);
+    const int rate = 48000;
+    const std::string tone = (dir / "tick.wav").string();
+    WriteToneWav(tone, rate, 0.2f, 0.5f);
+
+    // TARTARUS_MUTE silences the endpoint, editor output included; an offline engine reaches no speaker, so unmute it here.
+    std::string envMute;
+#ifdef _WIN32
+    char* m = nullptr;
+    size_t len = 0;
+    if (_dupenv_s(&m, &len, "TARTARUS_MUTE") == 0 && m) {
+        envMute = m;
+        std::free(m);
+    }
+#else
+    if (const char* m = std::getenv("TARTARUS_MUTE")) envMute = m;
+#endif
+    SetEnv("TARTARUS_MUTE", "0");
+    AudioEngine::InitOffline(rate);
+    SetEnv("TARTARUS_MUTE", envMute.c_str());
+    CHECK(AudioEngine::IsInitialized());
+    if (!AudioEngine::IsInitialized()) return;
+    AudioEngine::EnableTaps(true);
+    AudioEngine::SetMuted(true);
+    AudioEngine::SetMasterVolume(0.0f);
+    AudioEngine::SetEditorVolume(1.0f);
+    CHECK(AudioEngine::PlayEditor(tone, 1.0f, 1.0f, -1.0f));
+    std::vector<float> out(2 * 480), master, pre, wet;
+    float peakL = 0.0f, peakR = 0.0f;
+    for (int i = 0; i < 10; ++i) {
+        AudioEngine::RenderOffline(out.data(), 480);
+        for (int k = 0; k < 480; ++k) {
+            peakL = std::max(peakL, std::fabs(out[2 * k]));
+            peakR = std::max(peakR, std::fabs(out[2 * k + 1]));
+        }
+    }
+    AudioEngine::DrainTaps(master, pre, wet);
+    float tapPeak = 0.0f;
+    for (float s : master) tapPeak = std::max(tapPeak, std::fabs(s));
+    CHECK(peakL > 0.1f);              // audible though the game is muted at master 0
+    CHECK(peakL > peakR * 1.5f);      // panned left
+    CHECK(tapPeak < 1e-6f);           // not in the game mix / capture
+    CHECK(AudioEngine::EditorVoiceCount() == 1);
+    AudioEngine::SetPaused(true);     // the game's pause doesn't stop it
+    CHECK(AudioEngine::EditorVoiceCount() == 1);
+    AudioEngine::SetPaused(false);
+
+    // The cap: never more than kEditorVoices; the oldest goes.
+    for (int i = 0; i < AudioEngine::kEditorVoices + 6; ++i) AudioEngine::PlayEditor(tone, 0.1f);
+    CHECK(AudioEngine::EditorVoiceCount() == AudioEngine::kEditorVoices);
+    // Reaped once they end.
+    for (int i = 0; i < 40; ++i) { AudioEngine::RenderOffline(nullptr, 480); AudioEngine::Update(); }
+    CHECK(AudioEngine::EditorVoiceCount() == 0);
+    CHECK(!AudioEngine::PlayEditor((dir / "missing.wav").string(), 1.0f));
+
+    AudioEngine::SetMuted(false);
+    AudioEngine::SetMasterVolume(1.0f);
+    AudioEngine::EnableTaps(false);
+    AudioEngine::Shutdown();
+    fs::remove_all(dir, ec);
+}
+
+} // namespace
+
+void RegisterEditorSoundTests(UnitTestSupport::TestList& tests) {
+    tests.emplace_back("Editor sounds: every event named, notifications and Play mode centred", TestEditorSoundEventTable);
+    tests.emplace_back("Editor sounds: variants, cooldown, rapid repeats, pan, focus and switches", TestEditorSoundSchedulerRules);
+    tests.emplace_back("Editor sounds: a single file or numbered variants", TestEditorSoundFindVariants);
+    tests.emplace_back("Editor sounds: their own output, outside the game's mix, Mute and pause", TestEditorSoundSeparateOutput);
+}
