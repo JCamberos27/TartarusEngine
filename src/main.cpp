@@ -2143,7 +2143,9 @@ int main(int argc, char** argv) {
             // programs and material shaders recompile when any file they were built from changes;
             // a failed compile keeps the previous program and logs the error. Not while the Scene
             // camera is being dragged: the folder walk would land in the middle of the motion.
-            if (!headless && !camDragActive && LiveReload::Enabled()) {
+            // --editor-tests runs "headless" (hidden window) but drives the editor like a user, and
+            // its Script IDE suite checks this very path, so it keeps the poll.
+            if ((!headless || opt.editorTestsMode) && !camDragActive && LiveReload::Enabled()) {
                 const std::vector<std::string> changedShaders =
                     ShaderLibrary::PollChangedFiles({ProjectPaths::Resolve("shaders")});
                 if (!changedShaders.empty()) {
