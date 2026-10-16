@@ -4178,10 +4178,16 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
 
     if(std::strcmp(componentName,"Particle System")==0 && phase==ReflectExtraPhase::Bottom) {
         auto* ps=registry.try_get<ParticleSystemComponent>(entity);if(!ps)return;
+        // A narrow Inspector clipped "Clear" past the right edge: a button that doesn't fit after
+        // the previous one wraps onto the next line (as the X/Y/Z rows do).
+        auto nextButton=[](const char* label) {
+            ImGui::SameLine();
+            if(ImGui::GetContentRegionAvail().x<ButtonWidth(label))ImGui::NewLine();
+        };
         if(ImGui::Button("Restart"))RestartParticleSystem(*ps);
-        ImGui::SameLine();
+        nextButton("Emit Burst");
         if(ImGui::Button("Emit Burst"))EmitParticleBurst(world,entity,std::max(1,ps->BurstCount));
-        ImGui::SameLine();if(ImGui::Button("Clear"))ps->Live.clear();
+        nextButton("Clear");if(ImGui::Button("Clear"))ps->Live.clear();
         ImGui::TextDisabled("%zu / %d particles",ps->Live.size(),ps->MaxParticles);
         if(ImGui::CollapsingHeader("Lifetime & Emission Curves")) {
             if(ps->EditorCurveIdentity.empty()) {
