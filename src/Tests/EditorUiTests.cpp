@@ -518,18 +518,33 @@ Step MoveToItem(Query q) {
         return true;
     }, 90};
 }
+// An entry of a popup, menu or combo list. ImGui places those windows over their first frames
+// (auto-fit, moved back inside the editor, flipped when they don't fit below, shrunk as a search
+// narrows them), so an entry's rect can still move after it is first seen.
+bool InPopupWindow(const UiItem& it) {
+    return Contains(it.Root, "##Popup") || Contains(it.Root, "##Menu") || Contains(it.Root, "##Combo");
+}
 // Moves onto the item, presses and releases `button` with `mods` held. Waits up to the timeout for
-// the item to appear (a popup opening, a section expanding).
+// the item to appear (a popup opening, a section expanding). A popup / menu / combo entry is
+// clicked only once its rect has held still for two frames: a click on where it was a frame
+// earlier lands outside the popup, which then closes with nothing chosen.
 Step Click(Query q, int mods = 0, int button = 0, int clicks = 1) {
     auto phase = std::make_shared<int>(0);
+    auto last = std::make_shared<ImRect>();
+    auto still = std::make_shared<int>(0);
     const std::string desc = "click " + (q.Tag.empty() ? (q.Exact.empty() ? q.Label : q.Exact) : q.Tag);
-    return {desc, [q, mods, button, clicks, phase](Ctx&) {
+    return {desc, [q, mods, button, clicks, phase, last, still](Ctx&) {
         ImGuiIO& io = ImGui::GetIO();
         switch (*phase) {
             case 0: {
                 const UiItem* it = Find(q);
                 ImVec2 p;
-                if (!it || !ClickPoint(*it, p)) return false;
+                if (!it || !ClickPoint(*it, p)) { *still = 0; return false; }
+                if (InPopupWindow(*it)) {
+                    *still = (it->Rect.Min.x == last->Min.x && it->Rect.Min.y == last->Min.y) ? *still + 1 : 0;
+                    *last = it->Rect;
+                    if (*still < 2) return false;
+                }
                 if (q.AnchorX >= 0.0f) p.x = it->Rect.Min.x + it->Rect.GetWidth() * q.AnchorX;
                 MouseTo(p);
                 Mods(mods, true);
@@ -750,6 +765,34 @@ int SectionOpen(const char* component) {
     if (!h) return -1;
     ImGuiWindow* w = ImGui::FindWindowByName(h->Window.c_str());
     return w ? w->StateStorage.GetInt(h->Id, 0) : -1;
+}
+
+// Scrolls the Inspector (or whatever scrolls the item) until `q` is fully on screen. A tall section
+// (an open Light) pushes the ones below it out of a 1080p Inspector at 150% DPI.
+Step InspReveal(Query q) {
+    auto tries = std::make_shared<int>(0);
+    return {"reveal", [q, tries](Ctx&) {
+        const UiItem* it = Find(q);
+        if (!it) {
+            // A clipped widget is registered without its label (ImGui returns before reporting
+            // it), so a label query can't see it: page the panel down until it shows up, from the
+            // top again once at the bottom (an earlier test can leave the panel scrolled past it).
+            if (++*tries > 30) return false;
+            for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+                if (w->WasActive && !w->Hidden && w->ScrollMax.y > 0.0f && Contains(w->Name, q.Root.empty() ? kInspector : q.Root)) {
+                    ImGui::SetScrollY(w, w->Scroll.y >= w->ScrollMax.y ? 0.0f
+                                                                       : std::min(w->Scroll.y + w->InnerRect.GetHeight() * 0.5f, w->ScrollMax.y));
+                    break;
+                }
+            return false;
+        }
+        if (it->Rect.Min.y >= it->Clip.Min.y && it->Rect.Max.y <= it->Clip.Max.y) return true;
+        if (++*tries > 30) return true; // can't scroll further: let the click report it
+        ImGuiWindow* w = ImGui::FindWindowByName(it->Window.c_str());
+        while (w && w->ScrollMax.y <= 0.0f) w = w->ParentWindow;
+        if (w) ImGui::SetScrollFromPosY(w, it->Rect.GetCenter().y - w->Pos.y, 0.5f);
+        return false;
+    }, 120};
 }
 
 // The object actions "..." in the Inspector's header card.
@@ -1046,6 +1089,7 @@ void RegisterTests() {
         Key(ImGuiKey_E, ImGuiMod_Ctrl | ImGuiMod_Shift), WaitSeconds(0.3),
         ExpectTrue("all collapsed", [](Ctx&) { return SectionOpen("Light") == 0 && SectionOpen("Transform") == 0; }),
         Key(ImGuiKey_E, ImGuiMod_Ctrl | ImGuiMod_Shift), WaitSeconds(0.3),
+        InspReveal(Header("Audio Source")), // below the expanded Light
         ExpectTrue("all expanded", [](Ctx&) { return SectionOpen("Light") == 1 && SectionOpen("Audio Source") == 1; }),
         Key(ImGuiKey_E, ImGuiMod_Ctrl | ImGuiMod_Shift), WaitSeconds(0.3), // collapse again so the header stays put
         MoveToItem(Header("Audio Source")), Wait(2),
@@ -1061,7 +1105,7 @@ void RegisterTests() {
             c.W.Registry.emplace<AudioListenerComponent>(ByName(c.W, "Beta"));
         }), Wait(2),
         SelectByName("Beta"), Wait(3),
-        MoveToItem(Header("Audio Listener")), Wait(2),
+        InspReveal(Header("Audio Listener")), MoveToItem(Header("Audio Listener")), Wait(2),
         Key(ImGuiKey_A), Wait(3),
         ExpectTrue("Enabled off", [](Ctx& c) { return !c.W.Registry.get<AudioListenerComponent>(ByName(c.W, "Beta")).Enabled; }),
         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
@@ -1071,13 +1115,13 @@ void RegisterTests() {
         FreshScene(),
         Do("animations off", [](Ctx&) { EditorSettings::Get().InspectorAnimations = false; }), Wait(2),
         SelectByName("Beta"), Wait(3),
-        MoveToItem(Header("Audio Source")), Wait(2),
+        InspReveal(Header("Audio Source")), MoveToItem(Header("Audio Source")), Wait(2),
         Key(ImGuiKey_X), Wait(2),
         ExpectTrue("removed the same frame", [](Ctx& c) { return !c.W.Registry.all_of<AudioSourceComponent>(ByName(c.W, "Beta")); }),
         Do("minimal mode on", [](Ctx&) { EditorSettings::Get().InspectorMinimal = true; }),
         HoverPanel(kHierarchy), Wait(3),
         ExpectTrue("no Light actions button while not hovered", [](Ctx&) { return Find(MoreButton("Light")) == nullptr; }),
-        MoveToItem(Header("Light")), Wait(3),
+        InspReveal(Header("Light")), MoveToItem(Header("Light")), Wait(3),
         ExpectTrue("actions button on hover", [](Ctx&) { return Find(MoreButton("Light")) != nullptr; }),
         Do("settings back", [](Ctx&) { EditorSettings::Get().InspectorMinimal = false; EditorSettings::Get().InspectorAnimations = true; }),
     });
@@ -1118,7 +1162,7 @@ void RegisterTests() {
     Add("attributes: Audio Source distances grey out without 3D Sound; Reset to Default", {
         FreshScene(), Wait(2),
         SelectByName("Beta"), Wait(3),
-        Click(Header("Audio Source")), Wait(3),
+        InspReveal(Header("Audio Source")), Click(Header("Audio Source")), Wait(3),
         ExpectTrue("enabled while 3D", [](Ctx&) {
             const UiItem* f = Find(ByTag("field:Audio Source/Min Distance"));
             return f && !(f->ItemFlags & ImGuiItemFlags_Disabled);
@@ -1132,7 +1176,7 @@ void RegisterTests() {
             X::PushUndo(c.E, c.W, "Change Volume");
             c.W.Registry.get<AudioSourceComponent>(ByName(c.W, "Beta")).Volume = 0.77f;
         }), Wait(2),
-        RightClick(ByTag("field:Audio Source/Volume")), Wait(2),
+        InspReveal(ByTag("field:Audio Source/Volume")), RightClick(ByTag("field:Audio Source/Volume")), Wait(2),
         Click(MenuItem("Reset to Default")), Wait(3),
         ExpectTrue("volume back to default", [](Ctx& c) {
             return c.W.Registry.get<AudioSourceComponent>(ByName(c.W, "Beta")).Volume == AudioSourceComponent{}.Volume;
@@ -1148,7 +1192,9 @@ void RegisterTests() {
     Add("typing: Ctrl+click a native float and type a value", {
         FreshScene(), Wait(2),
         SelectByName("Beta"), Wait(3),
+        InspReveal(Header("Audio Source")),
         ClickUnlessShown(Header("Audio Source"), ByTag("field:Audio Source/Min Distance")), Wait(3),
+        InspReveal(ByTag("field:Audio Source/Min Distance")),
         Click(ByTag("field:Audio Source/Min Distance"), ImGuiMod_Ctrl), Wait(3),
         TypeText("2"), Wait(2),
         Key(ImGuiKey_Enter), Wait(3),
