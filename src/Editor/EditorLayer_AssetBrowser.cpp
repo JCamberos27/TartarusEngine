@@ -1722,8 +1722,9 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
     }
 
     // Ctrl+A - select every currently-visible item (respecting the active search/filter, same
-    // as Unity's own "select all visible items in list").
-    if (m_AssetBrowserFocused && m_RenamingAssetKey.empty() && ImGui::GetIO().KeyCtrl
+    // as Unity's own "select all visible items in list"). Not while a text field (the search box,
+    // the labels popup) has the keyboard: there Ctrl+A selects its text.
+    if (m_AssetBrowserFocused && m_RenamingAssetKey.empty() && !ImGui::GetIO().WantTextInput && ImGui::GetIO().KeyCtrl
         && ImGui::IsKeyPressed(ImGuiKey_A) && !cells.empty()) {
         ClearAssetSelection();
         m_SelectedAssetKey = cells[0].key;
