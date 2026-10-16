@@ -107,6 +107,7 @@
 #include "PlayerConfig.h" // #174
 #include "BuildPipeline.h"
 #include "UserPaths.h"
+#include "ScriptIDE.h"
 #include "EnginePaths.h"
 #include "LayerRegistry.h"
 #include "ProjectSettings.h"
@@ -447,14 +448,31 @@ int main(int argc, char** argv) {
         // A fresh scratch user folder every run: default prefs and layout, no bookmarks, tabs or
         // favorites - the tests start from a known state and never touch the user's own files.
         namespace fs = std::filesystem;
-        UserPaths::SetAppName("TartarusEngine-Test");
+        // TARTARUS_EDITOR_TEST_INSTANCE=<name> gives this run its own folder
+        // (TartarusEngine-Test-<name>), so runs from different checkouts at the same time don't
+        // overwrite each other's prefs. Letters, digits, '-' and '_' only.
+        std::string scratchName = "TartarusEngine-Test";
+        {
+            char* inst = nullptr;
+            size_t instLen = 0;
+            if (_dupenv_s(&inst, &instLen, "TARTARUS_EDITOR_TEST_INSTANCE") == 0 && inst && inst[0]) {
+                const std::string s(inst);
+                if (std::all_of(s.begin(), s.end(), [](unsigned char ch) { return std::isalnum(ch) || ch == '-' || ch == '_'; }))
+                    scratchName += "-" + s;
+            }
+            free(inst);
+        }
+        UserPaths::SetAppName(scratchName);
         const fs::path scratch = UserPaths::Root();
-        if (scratch.filename() != "TartarusEngine-Test") {
+        if (scratch.filename() != scratchName) {
             std::cerr << "--editor-tests: could not set up a scratch user folder; refusing to run." << std::endl;
             return 1;
         }
         std::error_code ec;
         for (const auto& entry : fs::directory_iterator(scratch, ec)) fs::remove_all(entry.path(), ec);
+        // The Script IDE's session (open tabs, unsaved buffers) lives in the project; this run's goes
+        // in the scratch folder instead, so it starts with no tabs and leaves the user's alone.
+        ScriptIDE::SetSessionDirectory(UserPaths::Resolve("IDE"));
         EditorUiTests::Configure(opt.editorTestsFilter);
     }
     CrashHandler::SetInteractive(!headless && opt.editorShotDir.empty()); // #148: no crash dialog on an unattended run
@@ -539,6 +557,10 @@ int main(int argc, char** argv) {
         // Per-user preferences, loaded before anything reads them. No GL or project state needed.
         EditorSettings::Load();
         if (!opt.editorShotDir.empty() && opt.editorShotScale > 0.0f) EditorSettings::Get().UiScaleOverride = opt.editorShotScale;
+        // TARTARUS_EDITOR_TEST_SCALE=1 (with TARTARUS_EDITOR_TEST_SIZE=1044x788) reproduces CI's
+        // layout on a high-DPI desktop. Only the tests' scratch prefs are changed.
+        if (const char* sc = std::getenv("TARTARUS_EDITOR_TEST_SCALE"); sc && opt.editorTestsMode && std::atof(sc) > 0.0)
+            EditorSettings::Get().UiScaleOverride = (float)std::atof(sc);
         if (!opt.editorShotDir.empty() && opt.editorShotGlass) {
             // Only the scratch copy of the prefs (TartarusEngine-Shot) is changed.
             EditorSettings& shotPrefs = EditorSettings::Get();
@@ -565,6 +587,8 @@ int main(int argc, char** argv) {
         // structurally always 0 in a Release run and the harness only checks "did it draw".
         // Set before the Window exists: it decides whether to request a debug context (#157).
         if (opt.smokeTestMode && !opt.perfBenchMode) GLDebug::ForceEnable();
+        // --editor-tests fails a test on any GL debug error, so it needs the debug output too.
+        if (opt.editorTestsMode) GLDebug::ForceEnable();
         // Black Glass's see-through window: the editor only (never a player build or a headless or
         // screenshot run, whose frames must stay opaque). TARTARUS_SEE_THROUGH=1 forces it for a
         // screenshot run so its alpha can be checked.
@@ -1094,11 +1118,37 @@ int main(int argc, char** argv) {
                 glfwRestoreWindow(window.Handle());
                 glfwSetWindowSize(window.Handle(), opt.perfResW, opt.perfResH);
             } else if (!opt.editorShotDir.empty() || opt.editorTestsMode) {
+                // TARTARUS_EDITOR_TEST_SIZE=WxH sizes the test window alone (e.g. 1044x788, CI's runner).
+                int testW = opt.perfResW > 0 ? opt.perfResW : 1920, testH = opt.perfResW > 0 ? opt.perfResH : 1080;
+                char* size = nullptr;
+                size_t sizeLen = 0;
+                if (_dupenv_s(&size, &sizeLen, "TARTARUS_EDITOR_TEST_SIZE") == 0 && size) {
+                    int w = 0, h = 0;
+                    if (sscanf_s(size, "%dx%d", &w, &h) == 2 && w > 0 && h > 0) { testW = w; testH = h; }
+                }
+                std::free(size);
                 glfwRestoreWindow(window.Handle());
-                glfwSetWindowSize(window.Handle(), opt.perfResW > 0 ? opt.perfResW : 1920, opt.perfResW > 0 ? opt.perfResH : 1080);
+                glfwSetWindowSize(window.Handle(), testW, testH);
+                // GLFW adds the OS frame to reach that client size, but the custom frame makes the
+                // whole window client (Window.cpp, WM_NCCALCSIZE), so the editor came out a frame
+                // larger - by more on a high-DPI desktop (1066x844 for 1044x788 at 150%), which
+                // left the Inspector wider than CI's. Take the difference back off.
+                int gotW = 0, gotH = 0;
+                glfwGetFramebufferSize(window.Handle(), &gotW, &gotH);
+                if (gotW > 0 && gotH > 0 && (gotW != testW || gotH != testH))
+                    glfwSetWindowSize(window.Handle(), std::max(1, 2 * testW - gotW), std::max(1, 2 * testH - gotH));
             }
             // --editor-tests: hidden, so the desktop's real mouse and keyboard never reach it.
-            if (opt.editorTestsMode) glfwHideWindow(window.Handle());
+            // TARTARUS_EDITOR_TEST_SHOW=1 keeps it shown (CI, where nobody is at the desktop): the
+            // harness drops OS input either way, and a shown window's back buffer is always defined
+            // for its screenshots.
+            if (opt.editorTestsMode) {
+                char* show = nullptr;
+                size_t showLen = 0;
+                const bool keepShown = _dupenv_s(&show, &showLen, "TARTARUS_EDITOR_TEST_SHOW") == 0 && show && show[0] == '1';
+                std::free(show);
+                if (!keepShown) glfwHideWindow(window.Handle());
+            }
         }
         LayerRegistry::Load(); // LayerComponent slot names (#236 A1)
         ProjectSettings::Load(); // physics + tags (#236 A4); project/settings.json
@@ -2134,7 +2184,9 @@ int main(int argc, char** argv) {
             // programs and material shaders recompile when any file they were built from changes;
             // a failed compile keeps the previous program and logs the error. Not while the Scene
             // camera is being dragged: the folder walk would land in the middle of the motion.
-            if (!headless && !camDragActive && LiveReload::Enabled()) {
+            // --editor-tests runs "headless" (hidden window) but drives the editor like a user, and
+            // its Script IDE suite checks this very path, so it keeps the poll.
+            if ((!headless || opt.editorTestsMode) && !camDragActive && LiveReload::Enabled()) {
                 const std::vector<std::string> changedShaders =
                     ShaderLibrary::PollChangedFiles({ProjectPaths::Resolve("shaders")});
                 if (!changedShaders.empty()) {
@@ -4156,8 +4208,10 @@ int main(int argc, char** argv) {
                         else if (view == "bookmarks") editor.ShotOpenInspectorBookmarks();
                         else if (view == "favorites") { ImGui::ClosePopupsExceptModals(); editor.ShotSetFavoritesLocked(true); }
                         else if (view == "console") { editor.ShotSetFavoritesLocked(false); EditorModuleHost::ConsoleState().Visible = true; focus("###Console"); }
-                        else if (view == "game") focus("###Game");
-                        else if (view == "settings") editor.OpenPreferences();
+                        // The Game tab the way Play brings it forward: focusing the window alone left
+                        // Scene in front, so this shot showed the Scene view.
+                        else if (view == "game") editor.RequestGameTabFocus();
+                        else if (view == "settings") { editor.RequestSceneTabFocus(); editor.OpenPreferences(); }
                         else if (view == "settings-viewport") editor.OpenSettingsCategory(false, 1);
                         else if (view == "settings-performance") editor.OpenSettingsCategory(false, 4);
                         else if (view == "project-settings") editor.OpenProjectSettings();
@@ -4677,6 +4731,12 @@ int main(int argc, char** argv) {
                     if (step + 1 >= (int)std::size(kEditorShots)) { exitApproved = true; window.SetShouldClose(true); }
                 }
                 editor.SetHideOverlaysThisFrame(false);
+            }
+            // --editor-tests: a Shot() step's capture of this finished frame.
+            if (opt.editorTestsMode) {
+                int fbW = 0, fbH = 0;
+                glfwGetFramebufferSize(window.Handle(), &fbW, &fbH);
+                EditorUiTests::AfterFrame(fbW, fbH);
             }
 
             // A see-through window shows the desktop only behind the editor's own glass: maximized

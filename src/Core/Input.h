@@ -14,6 +14,9 @@ public:
     static bool IsKeyDown(int key);
     static bool IsKeyPressed(int key);  // true only on the frame the key went down
     static bool IsKeyReleased(int key); // true only on the frame the key went up
+    // Test hook (--editor-tests): the next Update() reads `key` as down for that one frame, even
+    // with the window unfocused, so the editor smoke tests can press main-loop keys (F1..F4).
+    static void SimulateKeyTap(int key);
 
     static bool IsMouseButtonDown(int button);
     static bool IsMouseButtonPressed(int button);  // frame the button went down
