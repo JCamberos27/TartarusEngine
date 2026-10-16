@@ -30,6 +30,11 @@
 #include "GLStateCache.h"
 #include "Framebuffer.h"
 #include "gl.h"
+#include "Glass/GlassDragMotion.h" // the drag ghost
+#include "Glass/GlassMotion.h"     // the drop marker glide, the new-row flash
+#include "Glass/GlassTokens.h"
+
+#include <cstdio>
 
 #include <imgui.h>
 #include <imgui_internal.h> // ImMax/ImFloor, ImGuiWindow, and the item-flag helpers the panels use
@@ -604,8 +609,20 @@ void EditorLayer::DuplicateSelection(World& world, AssetLibrary& assets, bool in
     for (size_t i = 0; i < created.size(); ++i) {
         if (i == 0) m_Selected = created[i];
         else m_ExtraSelection.push_back(created[i]);
+        FlashHierarchyRow(created[i], /*reveal=*/i == 0);
     }
     Log::Info("Duplicated " + std::to_string(created.size()) + (created.size() == 1 ? " object." : " objects."));
+}
+
+namespace {
+constexpr ImGuiID kRowFlashSalt = 0xF1A5B0A7u;
+ImGuiID RowFlashId(entt::entity e) { return (ImGuiID)entt::to_integral(e) * 2654435761u ^ kRowFlashSalt; }
+} // namespace
+
+void EditorLayer::FlashHierarchyRow(entt::entity e, bool reveal) {
+    if (e == entt::null) return;
+    Glass::Motion().Pulse(RowFlashId(e), Glass::RowFlash.durationMs * 0.001f);
+    if (reveal) m_HierarchyScrollToEntity = e;
 }
 
 void EditorLayer::DuplicateSelectionArray(World& world, AssetLibrary& assets,
@@ -982,10 +999,16 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
                 const ImVec2 bgMax(rp.x + ImGui::GetContentRegionAvail().x, rp.y + rowH);
                 const bool hov = ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(bgMin, bgMax);
                 const float selT = EditorTheme::AnimT(ImGui::GetID("##rowSel"), IsSelected(row.Entity), EditorTheme::MotionNormal);
-                const float hovT = EditorTheme::AnimT(ImGui::GetID("##rowHov"), hov);
+                const float hovT = EditorTheme::MotionHover(ImGui::GetID("##rowHov"), hov); // velocity-gated
                 EditorUIPrimitives::DrawStyledRowBackground(rowDl, bgMin, bgMax, std::floor(rp.x + row.Depth * indentW),
                                                             styled ? style->Color : 0u, styled ? (int)style->FillMode : 0,
                                                             selT, hovT);
+                // A row that was just created, duplicated or moved flashes once (FlashHierarchyRow).
+                const ImGuiID flashId = RowFlashId(row.Entity);
+                if (Glass::Motion().PulseActive(flashId)) {
+                    const float a = Glass::RowFlashAlpha * (1.0f - Glass::EaseProgress(Glass::RowFlash, Glass::Motion().PulseProgress(flashId)));
+                    rowDl->AddRectFilled(bgMin, bgMax, EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Accent, a)));
+                }
             }
 
             // Tree lines: one vertical guide per ancestor level that still has rows below, plus
@@ -1040,6 +1063,29 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
         }
     }
 
+    // The row drag's reorder / reparent marker, recorded by the hovered row: drawn here, after the
+    // rows, gliding from the slot it marked last frame.
+    {
+        HierarchyDropMarker& mk = m_HierarchyDropMarker;
+        if (mk.Frame == ImGui::GetFrameCount()) {
+            if (mk.LastDrawn != mk.Frame - 1) { mk.PrevY0 = mk.Y0; mk.PrevY1 = mk.Y1; } // a new hover: no glide in
+            Glass::ImAnimContext& motion = Glass::Motion();
+            const ImGuiID mid = ImGui::GetID("##dropMarker");
+            const float y0c = motion.Follow(mid, mk.Y0, mk.PrevY0, Glass::DropMarkerGlide);
+            const float y1c = motion.Follow(mid ^ 0x1u, mk.Y1, mk.PrevY1, Glass::DropMarkerGlide);
+            mk.PrevY0 = mk.Y0; mk.PrevY1 = mk.Y1;
+            mk.LastDrawn = mk.Frame;
+            const float toScreen = ImGui::GetWindowPos().y - ImGui::GetScrollY();
+            const float y0 = y0c + toScreen, y1 = y1c + toScreen;
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            const ImU32 accent = EditorTheme::U32(EditorTheme::Accent);
+            const ImU32 fill   = EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Accent, 0.16f));
+            dl->AddRectFilled(ImVec2(mk.X0, y0), ImVec2(mk.X1, y1), fill);
+            if (mk.Parent) dl->AddRect(ImVec2(mk.X0, y0), ImVec2(mk.X1, y1), accent, 3.0f, 0, 2.0f);
+            else           dl->AddLine(ImVec2(mk.X0, y0 + mk.Edge), ImVec2(mk.X1, y0 + mk.Edge), accent, 2.0f);
+        }
+    }
+
     // Auto-scroll while a row is being dragged near the panel's top/bottom edge — otherwise you
     // can only drop among the rows that happen to be on screen when the drag starts.
     if (const ImGuiPayload* drag = ImGui::GetDragDropPayload();
@@ -1074,7 +1120,7 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
                                                                             : std::vector<entt::entity>{dragged};
                 StageUndo(world);
                 for (entt::entity e : toUnparent) {
-                    if (world.Registry.valid(e)) world.SetParent(e, entt::null);
+                    if (world.Registry.valid(e)) { world.SetParent(e, entt::null); FlashHierarchyRow(e, false); }
                 }
                 CommitStagedUndo(world, "Reparent");
             }
@@ -1352,7 +1398,13 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
 
     // Keyboard nav asked to reveal this row last frame — bring it into view, once.
     if (entity == m_HierarchyScrollToEntity) {
-        ImGui::SetScrollHereY(0.5f);
+        // Centre it, easing there (Glass::ScrollEase) rather than jumping. A row already on screen
+        // stays put.
+        const float top = ImGui::GetWindowPos().y, h = ImGui::GetWindowHeight();
+        if (rowMin.y < top || rowMax.y > top + h) {
+            const float centre = (rowMin.y + rowMax.y) * 0.5f - top + ImGui::GetScrollY();
+            EditorTheme::MotionScrollToY(std::clamp(centre - h * 0.5f, 0.0f, ImGui::GetScrollMaxY()));
+        }
         m_HierarchyScrollToEntity = entt::null;
     }
 
@@ -1448,13 +1500,15 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
     }
 
     // Drag a row onto another row to re-parent it (Unity's core Hierarchy gesture).
-    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoDisableHover)) {
+    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoDisableHover | ImGuiDragDropFlags_SourceNoPreviewTooltip)) {
         ImGui::SetDragDropPayload("HIERARCHY_ENTITY", &entity, sizeof(entt::entity));
         // Dragging a row that's part of a multi-selection carries (and will re-parent) the whole
         // selection — the preview says so instead of naming just the one row under the mouse.
+        // The preview is the Glass drag ghost (GlassDragMotion.h), not ImGui's tooltip.
         size_t dragCount = IsSelected(entity) ? GetSelectedItems().size() : 1;
-        if (dragCount > 1) ImGui::Text("%d objects", (int)dragCount);
-        else ImGui::Text("%s", label.c_str());
+        char ghost[64];
+        if (dragCount > 1) std::snprintf(ghost, sizeof(ghost), "%d objects", (int)dragCount);
+        Glass::DragGhostLabel(dragCount > 1 ? ICON_FA_LAYER_GROUP : ICON_FA_CUBE, dragCount > 1 ? ghost : label.c_str());
         ImGui::EndDragDropSource();
     }
     // Row drop zone for reordering / reparenting. Deliberately NOT ImGui's BeginDragDropTarget
@@ -1494,16 +1548,19 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
                 m_HierarchySpringRow = entt::null;
             }
 
-            ImDrawList* dl = ImGui::GetWindowDrawList();
-            const ImU32 accent = EditorTheme::U32(EditorTheme::Accent);
-            const ImU32 fill   = EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Accent, 0.16f));
             float y0, y1, edge;
             if (zone == 0)      { y0 = midY - pInset; y1 = midY + pInset; edge = -1.0f; }
             else if (zone > 0)  { y0 = midY + pInset; y1 = midY + half;   edge = y0 + 1.0f; }
             else                { y0 = midY - half;   y1 = midY - pInset; edge = y1 - 1.0f; }
-            dl->AddRectFilled(ImVec2(rowMin.x, y0), ImVec2(rowMax.x, y1), fill);
-            if (edge < 0.0f) dl->AddRect(ImVec2(rowMin.x, y0), ImVec2(rowMax.x, y1), accent, 3.0f, 0, 2.0f);
-            else             dl->AddLine(ImVec2(rowMin.x, edge), ImVec2(rowMax.x, edge), accent, 2.0f);
+            // Recorded, not drawn: the tree draws the marker after the rows (DrawHierarchyDropMarker)
+            // so it can glide between slots.
+            const float toContent = ImGui::GetScrollY() - ImGui::GetWindowPos().y;
+            HierarchyDropMarker& mk = m_HierarchyDropMarker;
+            mk.Frame = ImGui::GetFrameCount();
+            mk.X0 = rowMin.x; mk.X1 = rowMax.x;
+            mk.Y0 = y0 + toContent; mk.Y1 = y1 + toContent;
+            mk.Parent = edge < 0.0f;
+            mk.Edge = edge < 0.0f ? 0.0f : edge - y0; // relative to Y0
             ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
 
             if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
@@ -1529,6 +1586,10 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
                     } else {
                         ReorderHierarchySiblings(world, moving, entity, zone > 0);
                     }
+                    for (entt::entity e : moving) FlashHierarchyRow(e, /*reveal=*/false);
+                    // This zone handles the release itself (no AcceptDragDropPayload), so tell
+                    // the drag ghost it landed.
+                    Glass::DragGhostDelivered(ImVec2((rowMin.x + rowMax.x) * 0.5f, (y0 + y1) * 0.5f));
                 }
             }
         }

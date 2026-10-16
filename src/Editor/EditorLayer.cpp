@@ -53,7 +53,8 @@
 #include "Framebuffer.h"
 #include "Glass/GlassEditorState.h" // m_Glass (complete type for ~EditorLayer)
 #include "Glass/GlassCompositor.h"   // LiftGreyText (grey text on glass)
-#include "Glass/GlassDockMotion.h"   // tab overline glide, focus rim
+#include "Glass/GlassDockMotion.h"   // tab overline glide, focus rim, play frame
+#include "Glass/GlassDragMotion.h"   // the drag ghost
 #include "Glass/GlassTheme.h"       // ConfigureMacEngineTheme (the opt-in Glass theme)
 
 #include <imgui.h>
@@ -2238,6 +2239,7 @@ void EditorLayer::BeginFrame() {
 void EditorLayer::EndFrame() {
     if (m_MotionDockspaceId != 0) Glass::DockFocusRim(m_MotionDockspaceId); // after every panel
     Glass::DrawPlayFrame(m_MotionPlaying, m_MotionPaused);
+    Glass::DrawDragGhost();
     ImGui::Render();
     ImDrawData* dd = ImGui::GetDrawData();
     // No GLStateShadow_Invalidate() per frame: the backend restores every shadowed state it
