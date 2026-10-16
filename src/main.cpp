@@ -5096,8 +5096,7 @@ int main(int argc, char** argv) {
             editorModule.Shutdown();
             AudioEngine::Shutdown();
             PhysicsWorld::Shutdown();
-            // Not `return`: exit() would kill the watchdog before DLL detach, which hangs on CI.
-            EditorUiTests::EndProcess(code);
+            return code;
         }
         if (opt.smokeTestMode) {
             // Deliberately skip the normal exit path entirely (no play-mode revert, no
