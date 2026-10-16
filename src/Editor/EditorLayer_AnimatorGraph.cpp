@@ -130,7 +130,8 @@ void DrawGraphCanvas(AnimCtx& cx) {
             hi = glm::max(hi, p + glm::vec2(sz.x, sz.y));
         }
         const glm::vec2 ext = hi - lo + glm::vec2(80.0f);
-        W.Zoom = std::clamp(std::min(csz.x / ext.x, csz.y / ext.y), 0.25f, 1.5f);
+        // Down to the wheel's own minimum: a big graph in a small window still fits whole.
+        W.Zoom = std::clamp(std::min(csz.x / ext.x, csz.y / ext.y), 0.1f, 1.5f);
         const glm::vec2 mid = (lo + hi) * 0.5f;
         W.Pan = csz * 0.5f - ImVec2(mid.x, mid.y) * W.Zoom;
     }
@@ -505,7 +506,7 @@ void DrawGraphCanvas(AnimCtx& cx) {
         // Zoom about the mouse.
         if (io.MouseWheel != 0.0f) {
             const glm::vec2 before = toWorld(mouse);
-            W.Zoom = std::clamp(W.Zoom * (io.MouseWheel > 0 ? 1.1f : 1.0f / 1.1f), 0.2f, 2.5f);
+            W.Zoom = std::clamp(W.Zoom * (io.MouseWheel > 0 ? 1.1f : 1.0f / 1.1f), 0.1f, 2.5f);
             const ImVec2 after = toScreen(before);
             W.Pan = W.Pan + (mouse - after);
         }
