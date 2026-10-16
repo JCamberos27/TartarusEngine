@@ -246,7 +246,7 @@ void DrawSelectionPanel(AnimCtx& cx) {
                             for (float st : ft.ContactStarts) { char b[16]; std::snprintf(b, sizeof b, "%s%.2f", starts.empty() ? "" : ", ", st); starts += b; }
                             ImGui::Text("%s: plants at %s (of 1.0), down %.0f%%, stride %.2f m", ft.Bone.c_str(), starts.empty() ? "-" : starts.c_str(), ft.ContactFraction * 100.0f, ft.Stride);
                         }
-                        HintText("Blue = left foot planted, orange = right. Use the plant times for Stop transition offsets \nand Start exit times; the stride against the speed tells if the feet will slide.");
+                        HintText("Blue = left foot planted, orange = right. Use the plant times for Stop transition offsets and Start exit times; the stride against the speed tells if the feet will slide.");
                         ImGui::TreePop();
                     }
                     ImGui::PopID();
@@ -809,7 +809,7 @@ void DrawSelectionPanel(AnimCtx& cx) {
                 }
             }
         } else {
-            HintText("Entry transitions pick the state a layer starts in (and\nreturns to through Exit): the first one whose\nconditions hold, else the default state.");
+            HintText("Entry transitions pick the state a layer starts in (and returns to through Exit): the first one whose conditions hold, else the default state.");
         }
         if (tr.FromKind == AC::Source::Any) {
             row("Respect Priority");
