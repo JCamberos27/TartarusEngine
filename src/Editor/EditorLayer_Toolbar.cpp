@@ -100,8 +100,13 @@ void EditorLayer::DrawPlayTransportButtons(bool playing, bool maximized, bool pa
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(col.x, col.y, col.z, 0.20f));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(col.x, col.y, col.z, 0.32f));
         const int vtx = EditorUIPrimitives::PressBegin();
-        if (ImGui::Button("##transport", ImVec2(glyphW + textSz.x + pad.x * 2.0f, ImGui::GetFrameHeight())))
-            m_PlayStopRequested = true;
+        // Labelled Play / Stop (one ###transport ID, so the morph keeps its state) for tooltips,
+        // tests and screen readers; the label itself is drawn transparent, the glyph and text below.
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+        const bool pressed = ImGui::Button(playing ? "  Stop###transport" : "  Play###transport",
+                                           ImVec2(glyphW + textSz.x + pad.x * 2.0f, ImGui::GetFrameHeight()));
+        ImGui::PopStyleColor();
+        if (pressed) m_PlayStopRequested = true;
         const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
         ImDrawList* dl = ImGui::GetWindowDrawList();
         const float cy = (mn.y + mx.y) * 0.5f;
