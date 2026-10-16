@@ -177,6 +177,39 @@ Step RightClickLabel(std::string tag) {
         return ++*phase > 2;
     }, 120};
 }
+// Opens the Light section, clicking its header again until it shows open: InspOpen reads the
+// open state once, which can be the previous selection's on the frame the selection changes.
+Step OpenLight() {
+    auto frames = std::make_shared<int>(0);
+    return {"open the Light section", [frames](Ctx&) {
+        if (SectionOpen("Light") == 1) return true;
+        if ((*frames)++ % 20 != 0) return false;
+        const UiItem* h = Find(Header("Light"));
+        ImVec2 p;
+        if (!h || !ClickPoint(*h, p)) return false;
+        MouseTo(p);
+        ImGui::GetIO().AddMouseButtonEvent(0, true);
+        ImGui::GetIO().AddMouseButtonEvent(0, false);
+        return false;
+    }, 200};
+}
+// Clicks `q` (press, release a frame later) until `done`, re-finding it each time: the prefab mode
+// bar auto-sizes and re-centres when its title gains or loses the "*", moving its buttons.
+Step ClickUntil(Query q, std::string what, std::function<bool(Ctx&)> done) {
+    auto frames = std::make_shared<int>(0);
+    return {what, [q, done, frames](Ctx& c) {
+        if (done(c)) return true;
+        const int k = (*frames)++ % 15;
+        if (k == 0) {
+            const UiItem* it = Find(q);
+            ImVec2 p;
+            if (it && ClickPoint(*it, p)) { MouseTo(p); ImGui::GetIO().AddMouseButtonEvent(0, true); }
+        } else if (k == 1) {
+            ImGui::GetIO().AddMouseButtonEvent(0, false);
+        }
+        return false;
+    }, 200};
+}
 bool ModeBarShown() { return Find(ByLabel("Scene", kModeBar)) != nullptr; }
 bool ActionBarShown() {
     ImGuiWindow* w = ImGui::FindWindowByName(kActionBar);
@@ -258,7 +291,7 @@ void RegisterPrefabsTests() {
         Shot("prefab mode", {kScene}),
         // Edit 1, saved with Ctrl+S.
         SelectLamp("Crate"), Wait(3),
-        InspOpen("Light"), InspUntilOpen("Light"),
+        OpenLight(),
         InspReveal(ByTag("field:Light/Intensity")), Click(ByTag("field:Light/Intensity"), ImGuiMod_Ctrl), Wait(3),
         TypeText("7"), Wait(2), Key(ImGuiKey_Enter), Wait(3),
         ExpectTrue("intensity 7, unsaved", [](Ctx& c) { return std::fabs(LampIntensity(c.W, "Crate") - 7.0f) < 1e-4f && PF::Dirty(c.E); }),
@@ -277,15 +310,13 @@ void RegisterPrefabsTests() {
             c.W.Registry.get<TransformComponent>(ChildOf(c.W, "Crate", "Crate Lamp")).Position = glm::vec3(0, 2.5f, 0);
         }), Wait(3),
         ExpectTrue("dirty again", [](Ctx& c) { return PF::Dirty(c.E); }),
-        Click(ByLabel("Save", kModeBar)),
-        Until("saved by the button", [](Ctx& c) { return !PF::Dirty(c.E); }),
+        ClickUntil(ByLabel("Save", kModeBar), "saved by the button", [](Ctx& c) { return !PF::Dirty(c.E); }),
         // Edit 3, left unsaved: Back to Scene saves it.
         Do("rename the lamp", [](Ctx& c) {
             X::PushUndo(c.E, c.W, "Rename");
             c.W.Registry.get<NameComponent>(ChildOf(c.W, "Crate", "Crate Lamp")).Name = "Crate Bulb";
         }), Wait(3),
-        Click(ByLabel("Scene", kModeBar)),
-        Until("back in the scene", [](Ctx& c) { return !c.E.InPrefabMode(); }),
+        ClickUntil(ByLabel("Scene", kModeBar), "back in the scene", [](Ctx& c) { return !c.E.InPrefabMode(); }),
         Until("the action bar is back", [](Ctx&) { return ActionBarShown() && !ModeBarShown(); }), Wait(3),
         Expect("both instances picked up every edit and kept their own placement", [](Ctx& c) {
             std::string out;
@@ -323,7 +354,7 @@ void RegisterPrefabsTests() {
         Until("the part-of-instance banner", [](Ctx&) { return Find(ByLabel("Open Prefab", kInspector)) != nullptr; }),
         ExpectTrue("no override yet", [](Ctx& c) { return !Overridden(c, "Crate A"); }),
         Remember(&g_Before),
-        InspOpen("Light"), InspUntilOpen("Light"),
+        OpenLight(),
         InspReveal(ByTag("field:Light/Intensity")), Click(ByTag("field:Light/Intensity"), ImGuiMod_Ctrl), Wait(3),
         TypeText("5"), Wait(2), Key(ImGuiKey_Enter), Wait(3),
         Expect("intensity 5, an override", [](Ctx& c) {
@@ -360,7 +391,7 @@ void RegisterPrefabsTests() {
         Place("Crate A", glm::vec3(-4, 0, 0)), Place("Crate B", glm::vec3(4, 0, 0)),
         Do("a clean history", [](Ctx& c) { PA::ClearUndo(c.E); }),
         SelectLamp("Crate A"), Wait(3),
-        InspOpen("Light"), InspUntilOpen("Light"),
+        OpenLight(),
         InspReveal(ByTag("field:Light/Intensity")), Click(ByTag("field:Light/Intensity"), ImGuiMod_Ctrl), Wait(3),
         TypeText("5"), Wait(2), Key(ImGuiKey_Enter), Wait(3),
         ExpectTrue("an override, recorded as an edit", [](Ctx& c) { return Overridden(c, "Crate A") && Contains(PA::UndoLabels(c.E), "Edit Light"); }),
