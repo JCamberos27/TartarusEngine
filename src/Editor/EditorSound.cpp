@@ -2,8 +2,10 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstring>
 #include <filesystem>
 #include <imgui.h>
+#include <imgui_internal.h>
 #include "../Audio/AudioEngine.h"
 #include "Log.h"
 #include "EditorSettings.h"
@@ -35,6 +37,15 @@ const EventInfo kEvents[kEventCount] = {
     {"Save",             Category::Notifications,-2.0f, 300.0f, 0.0f,  true},
     {"Undo",             Category::Clicks,       -2.0f,  60.0f, 0.02f, true},
     {"Redo",             Category::Clicks,       -2.0f,  60.0f, 0.02f, true},
+    {"Hover",            Category::Hover,         6.0f,  45.0f, 0.03f, false},
+    {"SliderGrab",       Category::Sliders,       0.0f,  60.0f, 0.02f, false},
+    {"SliderTick",       Category::Sliders,      -4.0f,  40.0f, 0.0f,  false},
+    {"SliderRelease",    Category::Sliders,       0.0f,  60.0f, 0.02f, false},
+    {"MenuOpen",         Category::Panels,        0.0f,  60.0f, 0.02f, false},
+    {"MenuClose",        Category::Panels,        0.0f,  60.0f, 0.02f, false},
+    {"DragStart",        Category::DragDrop,      0.0f, 150.0f, 0.02f, false},
+    {"DropAccept",       Category::DragDrop,      0.0f, 150.0f, 0.0f,  false},
+    {"DropReject",       Category::DragDrop,      0.0f, 150.0f, 0.0f,  false},
 };
 
 const char* kCategoryNames[kCategoryCount] = {"Clicks", "Sliders", "Hover", "Panels", "Drag & Drop", "Notifications", "Play Mode"};
@@ -217,13 +228,93 @@ void Apply(const Settings& v) {
 const Settings& Current() { return s.Values; }
 void SetWindowFocused(bool focused) { s.Focused = focused; }
 
-void Play(Event e, float screenX01) {
+void Play(Event e, float screenX01, float pitchScale) {
     if (!s.Ready) return;
     Voice v;
     if (!s.Sched.Decide(e, NowMs(), screenX01, s.Focused, s.Values, v)) return;
+    v.Pitch *= pitchScale;
     const auto& files = s.Files[(int)e];
     if (v.Variant < 0 || v.Variant >= (int)files.size()) return;
     if (AudioEngine::PlayEditor(files[v.Variant], v.Gain, v.Pitch, v.Pan)) ++s.Played;
+}
+
+void UiObserver::Step(const UiFrame& f, std::vector<UiSound>& out) {
+    if (!m_Primed) { // the first frame only sets the baseline
+        m_Primed = true;
+        m_Prev = f;
+        return;
+    }
+    const UiFrame& p = m_Prev;
+    // Sliders, drag fields, colour pickers: a held widget whose value changes under a pressed mouse. Buttons and checkboxes
+    // never edit while the mouse is down (they act on release), and typing has no mouse down, so neither reads as a slide.
+    if (!m_Sliding && f.ActiveId != 0 && f.Edited && f.MouseDown) {
+        m_Sliding = true;
+        m_SlideId = f.ActiveId;
+        m_TickAccum = m_Net = 0.0f;
+        out.push_back({Event::SliderGrab, f.MouseX01});
+    } else if (m_Sliding && f.ActiveId == m_SlideId) {
+        if (f.Edited) {
+            m_TickAccum += std::fabs(f.MouseDx) + std::fabs(f.MouseDy);
+            m_Net += f.MouseDx - f.MouseDy; // right and up raise the pitch
+            if (m_TickAccum >= kTickPx) {
+                m_TickAccum = std::fmod(m_TickAccum, kTickPx);
+                const float pitch = 1.0f + std::clamp(m_Net / kPitchSpanPx, -1.0f, 1.0f) * kPitchSwing;
+                out.push_back({Event::SliderTick, f.MouseX01, pitch});
+            }
+        }
+    } else if (m_Sliding) { // let go (or focus moved on)
+        m_Sliding = false;
+        out.push_back({Event::SliderRelease, f.MouseX01});
+    }
+
+    // Popups: one more is a menu opening; one fewer is a pick (released on / Enter in it) or a close.
+    if (f.PopupDepth > p.PopupDepth) out.push_back({Event::MenuOpen, f.MouseX01});
+    else if (f.PopupDepth < p.PopupDepth)
+        out.push_back({(p.HoverInPickMenu && p.HoveredId != 0 && (f.MouseReleased || f.EnterPressed)) ? Event::Click : Event::MenuClose,
+                       f.MouseX01});
+
+    // Hover: a new item under a moving cursor, only in menus, dropdowns, the menu bar and the toolbar, never while a button is down.
+    if (f.HoverInMenu && f.HoveredId != 0 && f.HoveredId != p.HoveredId && !f.MouseDown && (f.MouseDx != 0.0f || f.MouseDy != 0.0f))
+        out.push_back({Event::Hover, f.MouseX01});
+
+    // Drag & drop: picked up; dropped where the last frame had a target that would take it, or not.
+    if (f.DragActive && !p.DragActive) out.push_back({Event::DragStart, f.MouseX01});
+    else if (!f.DragActive && p.DragActive) out.push_back({p.DropTargetHovered ? Event::DropAccept : Event::DropReject, f.MouseX01});
+
+    m_Prev = f;
+}
+
+void ObserveImGui() {
+    static UiObserver observer;
+    static std::vector<UiSound> sounds;
+    if (!s.Ready || !ImGui::GetCurrentContext()) return;
+    const ImGuiContext& g = *GImGui;
+    UiFrame f;
+    f.ActiveId = g.ActiveId;
+    f.Edited = g.ActiveIdHasBeenEditedThisFrame;
+    f.MouseDown = g.IO.MouseDown[0];
+    f.MouseReleased = g.IO.MouseReleased[0];
+    f.EnterPressed = ImGui::IsKeyPressed(ImGuiKey_Enter, false) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter, false);
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    if (vp && vp->Size.x > 0.0f && ImGui::IsMousePosValid())
+        f.MouseX01 = std::clamp((g.IO.MousePos.x - vp->Pos.x) / vp->Size.x, 0.0f, 1.0f);
+    if (ImGui::IsMousePosValid() && ImGui::IsMousePosValid(&g.IO.MousePosPrev)) {
+        f.MouseDx = g.IO.MouseDelta.x;
+        f.MouseDy = g.IO.MouseDelta.y;
+    }
+    f.HoveredId = g.HoveredId;
+    if (const ImGuiWindow* w = g.HoveredWindow) {
+        // Menus, dropdowns and context menus (not modals: their buttons click for themselves) are where an item is a pick.
+        f.HoverInPickMenu = (w->Flags & ImGuiWindowFlags_ChildMenu) != 0 ||
+                            ((w->Flags & ImGuiWindowFlags_Popup) != 0 && (w->Flags & ImGuiWindowFlags_Modal) == 0);
+        f.HoverInMenu = f.HoverInPickMenu || std::strcmp(w->Name, "##MainMenuBar") == 0 || std::strstr(w->Name, "##Toolbar") != nullptr;
+    }
+    f.PopupDepth = g.OpenPopupStack.Size;
+    f.DragActive = g.DragDropActive && (g.DragDropSourceFlags & ImGuiDragDropFlags_SourceExtern) == 0;
+    f.DropTargetHovered = f.DragActive && g.DragDropAcceptIdPrev != 0;
+    sounds.clear();
+    observer.Step(f, sounds);
+    for (const UiSound& u : sounds) Play(u.E, u.X01, u.Pitch);
 }
 
 float LastItemScreenX() {

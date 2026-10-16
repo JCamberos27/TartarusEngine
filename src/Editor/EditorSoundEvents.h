@@ -28,6 +28,16 @@ enum class Event : uint8_t {
     Save,
     Undo,
     Redo,
+    // Phase 2: read off ImGui's own state once a frame (EditorSound::ObserveImGui), so every widget gets them
+    Hover,             // a new item under the cursor in a menu, dropdown or the toolbar
+    SliderGrab,        // a slider / drag field / colour picker starts changing under the mouse
+    SliderTick,        // ...a detent as it moves (pitch follows the direction)
+    SliderRelease,     // ...let go
+    MenuOpen,          // a popup, menu, dropdown or modal opens
+    MenuClose,         // ...closes without a pick
+    DragStart,         // a drag & drop payload is picked up
+    DropAccept,        // ...dropped on a target that takes it
+    DropReject,        // ...let go anywhere else
     Count
 };
 
