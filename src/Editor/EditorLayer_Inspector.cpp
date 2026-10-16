@@ -4192,7 +4192,15 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
         if(ImGui::Button("Emit Burst"))EmitParticleBurst(world,entity,std::max(1,ps->BurstCount));
         nextButton("Clear");if(ImGui::Button("Clear"))ps->Live.clear();
         ImGui::TextDisabled("%zu / %d particles",ps->Live.size(),ps->MaxParticles);
-        if(ImGui::CollapsingHeader("Lifetime & Emission Curves")) {
+        // A narrow Inspector cut the header's title off mid-word at the right edge: when the full
+        // title doesn't fit beside the arrow, it shortens to "Curves" (same id, so the open state
+        // carries over) and the full title moves to the tooltip.
+        const char* curvesTitle="Lifetime & Emission Curves";
+        const float curvesNeed=ImGui::GetFontSize()+ImGui::GetStyle().FramePadding.x*4.0f+ImGui::CalcTextSize(curvesTitle).x;
+        const bool curvesFit=ImGui::GetContentRegionAvail().x>=curvesNeed;
+        const bool curvesOpen=ImGui::CollapsingHeader(curvesFit?"Lifetime & Emission Curves###ParticleCurves":"Curves###ParticleCurves");
+        if(!curvesFit && ImGui::IsItemHovered())EditorUI::SetTooltip("%s",curvesTitle);
+        if(curvesOpen) {
             if(ps->EditorCurveIdentity.empty()) {
                 PushUndo(world,"Initialize Particle Curves");ps->EditorCurveIdentity=AssetGuid::Generate().ToString();
             }

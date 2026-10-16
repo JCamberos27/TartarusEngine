@@ -215,8 +215,8 @@ void RegisterCurvesTests() {
              c.W.Registry.emplace<ParticleSystemComponent>(ByName(c.W, "Alpha"));
          }), Wait(2),
          SelectByName("Alpha"), Wait(3), InspOpen("Particle System"), InspUntilOpen("Particle System"), Wait(3),
-         InspReveal(ByLabel("Lifetime & Emission Curves", kInspector)),
-         ClickUnlessShown(ByLabel("Lifetime & Emission Curves", kInspector), ByExact("Edit Curve", kInspector)),
+         InspReveal(ParticleCurvesHeader()),
+         ClickUnlessShown(ParticleCurvesHeader(), ByExact("Edit Curve", kInspector)),
          Wait(3),
          InspReveal(ByExact("Edit Curve", kInspector)),
          Shot("inspector-curves", {kInspector}),

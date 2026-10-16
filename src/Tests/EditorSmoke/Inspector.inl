@@ -421,6 +421,19 @@ void RegisterInspectorTests() {
              }
              return std::string();
          }),
+         // The curves header's title was cut off mid-word at the right edge of a narrow Inspector.
+         InspReveal(ParticleCurvesHeader()), Wait(2),
+         Expect("the curves header's title fits inside the Inspector", [](Ctx&) {
+             const UiItem* it = Find(ParticleCurvesHeader());
+             if (!it) return std::string("no curves header");
+             const ImGuiStyle& st = ImGui::GetStyle();
+             const std::string title = Visible(it->Label);
+             // A framed header draws its title after the arrow: font size + 3 frame paddings in.
+             const float textEnd = it->Rect.Min.x + ImGui::GetFontSize() + st.FramePadding.x * 3.0f + ImGui::CalcTextSize(title.c_str()).x;
+             const float edge = std::min(it->Rect.Max.x - st.FramePadding.x, it->Clip.Max.x);
+             return textEnd <= edge + 0.5f ? std::string()
+                 : "'" + title + "' ends at x=" + std::to_string((int)textEnd) + ", past the edge at " + std::to_string((int)edge);
+         }),
          InspReveal(ByExact("Emission", kInspector)), Click(ByExact("Emission", kInspector)), Wait(3),
          Until("Max Particles shown", [](Ctx&) { return Find(ByTag("field:Particle System/Max Particles")) != nullptr; })},
         InspTypeInto(ByTag("field:Particle System/Max Particles"), "64"),
