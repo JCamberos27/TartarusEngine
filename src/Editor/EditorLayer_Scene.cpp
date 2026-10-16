@@ -20,6 +20,7 @@
 #include "Material.h"
 #include "AudioEngine.h"
 #include "SceneSerializer.h"
+#include "OutfitSystem.h"
 #include "AABB.h"
 #include "PhysicsWorld.h"
 #include "Log.h"
@@ -106,6 +107,13 @@ void EditorLayer::BeginSceneUndo(const World& world, const std::string& label) {
 }
 
 void EditorLayer::BeginGlobalUndoFrame(const World& world) {
+    // #15 - an outfit change landed since last frame (a scene just opened rebuilding a stale body,
+    // or the async half of an outfit edit already on the undo stack): part of the baseline, not
+    // an unrecorded change for the next Undo to journal.
+    if (const unsigned landed = OutfitSystem::LandedGeneration(); landed != m_OutfitLandedSeen) {
+        m_OutfitLandedSeen = landed;
+        if (!m_GlobalUndoActive) m_CurrentUndoScene.clear();
+    }
     // Initialize once per scene/history context, before any controls mutate it. Mouse/key
     // activity alone is not an authored edit (camera fly, scrollbars, search, docking, etc.).
     EnsureUndoScene(world);
