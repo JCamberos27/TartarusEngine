@@ -4206,8 +4206,10 @@ int main(int argc, char** argv) {
                         else if (view == "bookmarks") editor.ShotOpenInspectorBookmarks();
                         else if (view == "favorites") { ImGui::ClosePopupsExceptModals(); editor.ShotSetFavoritesLocked(true); }
                         else if (view == "console") { editor.ShotSetFavoritesLocked(false); EditorModuleHost::ConsoleState().Visible = true; focus("###Console"); }
-                        else if (view == "game") focus("###Game");
-                        else if (view == "settings") editor.OpenPreferences();
+                        // The Game tab the way Play brings it forward: focusing the window alone left
+                        // Scene in front, so this shot showed the Scene view.
+                        else if (view == "game") editor.RequestGameTabFocus();
+                        else if (view == "settings") { editor.RequestSceneTabFocus(); editor.OpenPreferences(); }
                         else if (view == "settings-viewport") editor.OpenSettingsCategory(false, 1);
                         else if (view == "settings-performance") editor.OpenSettingsCategory(false, 4);
                         else if (view == "project-settings") editor.OpenProjectSettings();
