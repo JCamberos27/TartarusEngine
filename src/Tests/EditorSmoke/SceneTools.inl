@@ -47,6 +47,7 @@ struct EditorSmokeAccess_SceneTools {
     static bool& ShowHistory(EditorLayer& e) { return e.m_ShowHistory; }
     static bool& ShowAssets(EditorLayer& e) { return e.m_ShowAssetBrowser; }
     static size_t RedoDepth(EditorLayer& e) { return e.m_RedoStack.size(); }
+    static unsigned ExternalSyncs(EditorLayer& e) { return e.m_ExternalSyncs; }
     static void ClearUndo(EditorLayer& e) { e.ClearUndoHistory(); }
     // The History panel's rows as DrawHistoryListBody draws them: the undo stack oldest first
     // (selection steps behind a pointer glyph), "Current", then the redo stack oldest first.
@@ -687,8 +688,14 @@ void RegisterSceneToolsTests() {
     {
         auto dropDir = [] { return ProjectPaths::Resolve("editor-smoke-scratch-undo"); };
         auto dropPath = [dropDir] { return (std::filesystem::u8path(dropDir()) / "SmokeDrop.prefab").u8string(); };
+        // The scratch folder made / deleted outside AtomicFile: noted as the editor's own, or the project
+        // watcher reports it, late, as an outside change in whichever test runs next.
+        auto noteDrop = [dropDir, dropPath] {
+            for (const std::string& p : {dropDir(), dropPath(), dropPath() + ".meta"}) AtomicFile::NoteSelfWrite(std::filesystem::u8path(p));
+        };
         Add("scenetools: a prefab dropped onto the editor is its own undo step; Ctrl+Z after an edit and a drop takes back only the drop", Seq({
-            {Do("write a scratch prefab (Dropped Crate)", [dropDir, dropPath](Ctx&) {
+            {Do("write a scratch prefab (Dropped Crate)", [dropDir, dropPath, noteDrop](Ctx&) {
+                noteDrop();
                 std::error_code ec;
                 std::filesystem::remove_all(std::filesystem::u8path(dropDir()), ec);
                 std::filesystem::create_directories(std::filesystem::u8path(dropDir()), ec);
@@ -718,12 +725,13 @@ void RegisterSceneToolsTests() {
                      ? std::string() : "history: " + ST::UndoLabels(c.E);
              })},
             Tidy(),
-        }), [dropDir, dropPath](Ctx& c) {
+        }), [dropDir, dropPath, noteDrop](Ctx& c) {
             c.A.RemovePrefab(dropPath());
             // The drop filed the prefab under an Asset Browser folder for its directory.
             const auto& folders = c.A.Folders();
             if (std::find(folders.begin(), folders.end(), "editor-smoke-scratch-undo") != folders.end())
                 c.A.DeleteFolderRecursive("editor-smoke-scratch-undo");
+            noteDrop();
             std::error_code ec;
             std::filesystem::remove_all(std::filesystem::u8path(dropDir()), ec);
         });
@@ -763,6 +771,56 @@ void RegisterSceneToolsTests() {
          })},
         Tidy(),
     }));
+
+    // The same when the project watcher syncs a file changed outside the editor in the frame the
+    // scene changes. The sync (start of the frame) dropped the undo baseline and the frame's
+    // BeginGlobalUndoFrame took it again, so a change made in between - this test's step runs there -
+    // went into the baseline, and the next Ctrl+Z took the rename back with it (CI, on PR #583: the
+    // drop test's scratch folder going was reported late). The sync now takes the baseline itself.
+    {
+        auto watchDir = [] { return ProjectPaths::Resolve("editor-smoke-scratch-watch"); };
+        auto watchFile = [watchDir] { return (std::filesystem::u8path(watchDir()) / "outside.txt").u8string(); };
+        auto synced = std::make_shared<unsigned>(0);
+        Add("scenetools: a scene change in the frame an outside file change is synced is still its own step at the next Ctrl+Z", Seq({
+            ToolScene(),
+            {Do("note Gamma's intensity", [](Ctx& c) { g_Number = c.W.Registry.get<LightComponent>(ByName(c.W, "Gamma")).Intensity; }),
+             Do("rename Alpha (an undo step)", [](Ctx& c) {
+                 X::PushUndo(c.E, c.W, "Rename Alpha");
+                 c.W.Registry.get<NameComponent>(ByName(c.W, "Alpha")).Name = "Alpha 2";
+             }), Wait(3),
+             Do("write a file outside the editor (not through AtomicFile)", [watchDir, watchFile, synced](Ctx& c) {
+                 *synced = ST::ExternalSyncs(c.E);
+                 std::error_code ec;
+                 std::filesystem::create_directories(std::filesystem::u8path(watchDir()), ec);
+                 std::ofstream(std::filesystem::u8path(watchFile())) << "outside";
+             }),
+             Until("the editor syncs it, and Gamma dims with no undo step in that same frame", [synced](Ctx& c) {
+                 if (ST::ExternalSyncs(c.E) == *synced) return false;
+                 c.W.Registry.get<LightComponent>(ByName(c.W, "Gamma")).Intensity = 0.25f;
+                 return true;
+             }, 600), Wait(3),
+             // A later sync (the file after its folder) journals the dimming first: the same step.
+             Expect("only the rename is a step so far, plus at most the dimming", [](Ctx& c) {
+                 const size_t d = X::UndoDepth(c.E);
+                 return d == 1 || (d == 2 && ST::TopLabel(c.E) == "Unrecorded Change") ? std::string() : "history: " + ST::UndoLabels(c.E);
+             }),
+             HoverPanel(kScene), Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
+             Expect("Ctrl+Z takes back only the dimming", [](Ctx& c) {
+                 if (ByName(c.W, "Alpha 2") == entt::null) return "the rename was undone too; history: " + ST::UndoLabels(c.E);
+                 const float i = c.W.Registry.get<LightComponent>(ByName(c.W, "Gamma")).Intensity;
+                 return i == (float)g_Number ? std::string() : "Gamma's intensity is " + std::to_string(i);
+             }),
+             Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
+             ExpectTrue("the next undoes the rename", [](Ctx& c) { return ByName(c.W, "Alpha") != entt::null; })},
+            Tidy(),
+        }), [watchDir, watchFile](Ctx&) {
+            // Noted as the editor's own, so the watcher's late report of it is no outside change for the next test.
+            AtomicFile::NoteSelfWrite(std::filesystem::u8path(watchFile()));
+            AtomicFile::NoteSelfWrite(std::filesystem::u8path(watchDir()));
+            std::error_code ec;
+            std::filesystem::remove_all(std::filesystem::u8path(watchDir()), ec);
+        });
+    }
 
     Add("scenetools: F frames the selection; viewport click selects, Ctrl+click adds, empty space clears, a box drag selects", Seq({
         ToolScene(),
