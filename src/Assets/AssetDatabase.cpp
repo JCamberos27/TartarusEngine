@@ -658,6 +658,7 @@ bool MergeMetaFields(const std::string& path, const std::string& fieldsJson) {
 
     std::string meta = MetaPath(path);
     json j = ReadMetaFull(meta);
+    const json before = j;
 
     if (!j.contains("metaVersion")) j["metaVersion"] = 1;
     if (!j.contains("guid"))        j["guid"] = guid.ToString();
@@ -667,6 +668,9 @@ bool MergeMetaFields(const std::string& path, const std::string& fieldsJson) {
     }
 
     for (auto& [key, val] : incoming.items()) j[key] = val;
+    // Nothing new: leave the file alone. An undo re-applies every asset's metadata, and a
+    // rewrite that changes nothing still dirties tracked .meta files.
+    if (j == before) return true;
 
     return AtomicFile::WriteJson(meta, j); // atomic — see WriteMetaFile (audit CPP-206)
 }
