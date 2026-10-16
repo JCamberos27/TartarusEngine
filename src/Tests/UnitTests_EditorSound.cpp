@@ -209,11 +209,63 @@ void TestEditorSoundSeparateOutput() {
     fs::remove_all(dir, ec);
 }
 
+// The Phase 2 state machine: slider grab / ticks / release, menus, hover and drag & drop from frame snapshots.
+void TestEditorSoundUiObserver() {
+    using EditorSound::UiFrame;
+    using EditorSound::UiObserver;
+    using EditorSound::UiSound;
+    UiObserver o;
+    std::vector<UiSound> out;
+    auto step = [&](const UiFrame& f) { out.clear(); o.Step(f, out); };
+    auto has = [&](Event e) { return std::any_of(out.begin(), out.end(), [e](const UiSound& u) { return u.E == e; }); };
+    UiFrame f;
+    step(f); // baseline
+    CHECK(out.empty());
+
+    // A button press: held, mouse down, never edited while down -> nothing here (the primitive clicks for itself).
+    f.ActiveId = 7; f.MouseDown = true; step(f); CHECK(out.empty());
+    f.ActiveId = 0; f.MouseDown = false; f.MouseReleased = true; f.Edited = true; step(f); CHECK(out.empty());
+    f.MouseReleased = false; f.Edited = false;
+
+    // A slider: grab on the first edit under a pressed mouse, a tick per kTickPx of travel, release when it lets go.
+    f.ActiveId = 9; f.MouseDown = true; f.Edited = true; f.MouseDx = 1.0f; step(f);
+    CHECK(has(Event::SliderGrab) && out.size() == 1);
+    int ticks = 0;
+    float lastPitch = 0.0f;
+    for (int i = 0; i < 40; ++i) {
+        f.MouseDx = 2.0f; step(f);
+        for (const UiSound& u : out) if (u.E == Event::SliderTick) { ++ticks; CHECK(u.Pitch >= lastPitch - 1e-6f); lastPitch = u.Pitch; }
+    }
+    CHECK(ticks == (int)(2.0f * 40 / UiObserver::kTickPx) || ticks == (int)(2.0f * 40 / UiObserver::kTickPx) + 1);
+    CHECK(lastPitch > 1.0f && lastPitch <= 1.0f + UiObserver::kPitchSwing + 1e-6f); // dragged right: pitch went up
+    f.MouseDx = 0.0f; f.Edited = false; step(f); CHECK(out.empty()); // held still: quiet
+    f.ActiveId = 0; f.MouseDown = false; step(f); CHECK(has(Event::SliderRelease));
+
+    // Menus: open; a pick (released on an item in a menu) clicks; Escape / click-away closes.
+    f.PopupDepth = 1; step(f); CHECK(has(Event::MenuOpen));
+    f.HoverInMenu = f.HoverInPickMenu = true; f.HoveredId = 3; f.MouseDx = 1.0f; step(f); CHECK(has(Event::Hover));
+    step(f); CHECK(out.empty()); // same item: no second hover
+    f.HoveredId = 4; f.MouseDown = true; step(f); CHECK(!has(Event::Hover)); // never while a button is down
+    f.MouseDown = false; f.MouseReleased = true; f.PopupDepth = 0; step(f); CHECK(has(Event::Click) && !has(Event::MenuClose));
+    f.MouseReleased = false; f.HoverInMenu = f.HoverInPickMenu = false; f.HoveredId = 0;
+    f.PopupDepth = 1; step(f);
+    f.PopupDepth = 0; step(f); CHECK(has(Event::MenuClose));
+    f.HoveredId = 11; f.MouseDx = 3.0f; step(f); CHECK(!has(Event::Hover)); // a panel row: no hover sound
+
+    // Drag & drop: pick up, then dropped on a target that took it vs. let go elsewhere.
+    f.DragActive = true; step(f); CHECK(has(Event::DragStart));
+    f.DropTargetHovered = true; step(f);
+    f.DragActive = false; f.DropTargetHovered = false; step(f); CHECK(has(Event::DropAccept));
+    f.DragActive = true; step(f);
+    f.DragActive = false; step(f); CHECK(has(Event::DropReject));
+}
+
 } // namespace
 
 void RegisterEditorSoundTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Editor sounds: every event named, notifications and Play mode centred", TestEditorSoundEventTable);
     tests.emplace_back("Editor sounds: variants, cooldown, rapid repeats, pan, focus and switches", TestEditorSoundSchedulerRules);
     tests.emplace_back("Editor sounds: a single file or numbered variants", TestEditorSoundFindVariants);
+    tests.emplace_back("Editor sounds: sliders, menus, hover and drag & drop read off ImGui's state", TestEditorSoundUiObserver);
     tests.emplace_back("Editor sounds: their own output, outside the game's mix, Mute and pause", TestEditorSoundSeparateOutput);
 }
