@@ -174,7 +174,7 @@ struct AssetLibrary::AsyncLoader {
     }
 };
 
-AssetLibrary::AssetLibrary() : m_Folders(ProjectSettings::AssetFolders()) {}
+AssetLibrary::AssetLibrary() : m_Folders(ProjectSettings::AssetFolders()), m_SavedFolders(m_Folders) {}
 AssetLibrary::~AssetLibrary() = default;
 
 AssetLibrary::AsyncLoader& AssetLibrary::Async() {
