@@ -2821,13 +2821,10 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             ImGui::TextDisabled("%s", pi.SourcePath.c_str());
             if (!pi.Missing && m_AssetsPtr && !m_InPlayMode) { // #176
                 const std::string src = pi.SourcePath;
-                if (ActionButton(ICON_FA_PEN_TO_SQUARE " Open Prefab", "Edit the prefab itself in Prefab Mode; every instance picks up the changes")) {
-                    EnterPrefabMode(world, *m_AssetsPtr, src);
-                    ImGui::EndChild(); // the header card
-                    ImGui::PopStyleVar(2);
-                    ImGui::PopStyleColor(2);
-                    return; // the world was just replaced; this entity is gone
-                }
+                // Deferred to DrawPrefabModeBar, after every panel has drawn: entering here replaced
+                // the world mid-Inspector, and the early return left the ID / colour stacks unbalanced.
+                if (ActionButton(ICON_FA_PEN_TO_SQUARE " Open Prefab", "Edit the prefab itself in Prefab Mode; every instance picks up the changes"))
+                    m_InspectorRequestedPrefab = src;
             }
             ImGui::TextDisabled(isRoot
                 ? "Transform / name / tag are kept per-instance; other fields track the prefab unless overridden."
