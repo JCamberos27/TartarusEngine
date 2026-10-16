@@ -528,6 +528,7 @@ void EditorLayer::FreeGpuResources() {
     for (auto& [path, entry] : m_ModelThumbnails) { (void)path; if (entry.first) glDeleteTextures(1, &entry.first); }
     m_ModelThumbnails.clear();
     m_ThumbnailLRU.clear();
+    FreeRetiredThumbnailTextures();
     ClearMaterialThumbnails(); // #107
     m_AssetThumbs.Clear();
     if (m_ThumbnailBlitFbo) { glDeleteFramebuffers(1, &m_ThumbnailBlitFbo); m_ThumbnailBlitFbo = 0; }
@@ -1144,7 +1145,15 @@ void EditorLayer::DrawLightingPanel(World& world) {
 void EditorLayer::DrawSettingsWindow(World& world) {
     if (!m_ShowPreferences) return;
 
-    ImGui::SetNextWindowSize(ImVec2(700.0f * m_UIScale, 460.0f * m_UIScale), ImGuiCond_FirstUseEver);
+    // Fit inside the editor window (opened at the default spot, 60 px in): at 1.5x UI scale a
+    // 700 px window is wider than a 1044 px editor, which put its close button off-screen.
+    {
+        const ImVec2 work = ImGui::GetMainViewport()->WorkSize;
+        const float margin = 120.0f;
+        ImGui::SetNextWindowSize(ImVec2(ImMin(700.0f * m_UIScale, ImMax(work.x - margin, 320.0f)),
+                                        ImMin(460.0f * m_UIScale, ImMax(work.y - margin, 240.0f))),
+                                 ImGuiCond_FirstUseEver);
+    }
     PushTabChromeText(); // no-op now (Windows XP removed, Phase 1 item 9) — see PanelChromeIsLight
     const bool settingsOpen = ImGui::Begin(EditorPanels::Settings, &m_ShowPreferences);
     PopTabChromeText();
@@ -2602,6 +2611,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     if(!m_ScriptIDE)m_ScriptIDE=std::make_unique<ScriptIDE>();
     CurveEditor::DrawWindows([this]{m_RequestGlobalUndo=true;},[this]{m_RequestGlobalRedo=true;},!m_UndoStack.empty(),!m_RedoStack.empty());
 
+    FreeRetiredThumbnailTextures(); // last frame's draw lists are rendered by now
     m_ThumbnailBudgetThisFrame = 3; // at most this many new Asset Browser model thumbnails per frame
     m_AssetThumbs.Pump(8); // unloaded assets' tiles, decoded off-thread: upload a few per frame
 

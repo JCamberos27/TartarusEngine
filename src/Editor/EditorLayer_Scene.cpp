@@ -122,8 +122,13 @@ void EditorLayer::BeginGlobalUndoFrame(const World& world) {
             absolute==std::filesystem::path(Enhancers::UiStyles::Path());
         const bool preferences=enhancers || absolute==std::filesystem::path(EditorSettings::PrefsFilePath()) ||
             absolute==std::filesystem::path(UserPaths::Resolve("shortcuts.json")) || absolute==std::filesystem::path(UserPaths::Resolve("asset_favorites.json"));
-        if(ec || relative.empty() || (*relative.begin()==".." && !preferences)) return;
-        for(const auto& part:relative) if(part=="Library" || part=="bin" || part=="obj") return;
+        // Per-user files live in %LOCALAPPDATA%, which may be on another drive than the project
+        // (CI: C: vs D:), where there is no relative path at all - so they skip the project test.
+        if(ec) return;
+        if(!preferences) {
+            if(relative.empty() || *relative.begin()=="..") return;
+            for(const auto& part:relative) if(part=="Library" || part=="bin" || part=="obj") return;
+        }
         if(!m_GlobalUndoActive) {
             m_GlobalUndoHasScene=false;
             m_GlobalUndoScene.clear();
@@ -813,6 +818,23 @@ void EditorLayer::CommitStagedUndo(const World& world, const std::string& label)
     m_EditPushedThisFrame = true; // Q6 — see PushUndo's matching line
 }
 
+// An undo / redo step that put files back (an asset created, renamed or edited, a label, a
+// .meta) - the Asset Browser re-lists the project and redraws those files' thumbnails. Quietly:
+// a full RefreshAssetBrowser() on every step dropped every thumbnail and flashed "refreshed".
+void EditorLayer::RefreshAfterHistoryFiles(const std::vector<EditorFileHistory::State>& files) {
+    if (files.empty()) return;
+    InvalidateScenesListing();
+    InvalidateShadersListing();
+    InvalidateAnimationListing();
+    InvalidateProjectAssetIndex();
+    for (const auto& file : files) {
+        const std::string path = file.Path.lexically_normal().string();
+        m_AssetThumbs.Invalidate(path);
+        InvalidateModelThumbnail(path);
+        InvalidateModelThumbnail(ProjectPaths::Relativize(path));
+    }
+}
+
 void EditorLayer::Undo(World& world, AssetLibrary& assets) {
     FinishGlobalUndo(world,true);
     CancelEyedropper(); // #93 — the registry is about to be rebuilt
@@ -846,7 +868,8 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
     if (!entry.AssetPath.empty()) RestoreMaterialFile(assets, entry.AssetPath, entry.AssetJson); // #107
     // An asset-only step leaves the scene as it is — skip the full registry rebuild. So does a
     // selection-only step (#138): its stored state is only a placeholder (see PushUndo).
-    if (!entry.SelectionOnly && !entry.AssetOnly && (entry.AssetPath.empty() || HashSceneJson(currentJson) != entry.Hash)) {
+    const bool sceneReloaded = !entry.SelectionOnly && !entry.AssetOnly && (entry.AssetPath.empty() || HashSceneJson(currentJson) != entry.Hash);
+    if (sceneReloaded) {
         if (!SceneSerializer::LoadFromString(world, assets, targetJson)) {
             // #83 — a snapshot that can't be applied must not leave a half-loaded world.
             Log::Error("Undo failed - the scene was left as it was.");
@@ -854,8 +877,8 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
         }
     }
     RestoreSelectionByOrder(world, entry.SelectedOrders);
-    InvalidateModelThumbnail(); // LoadFromString may rebuild the asset library
-    RefreshAssetBrowser();
+    if (sceneReloaded) InvalidateModelThumbnail(); // LoadFromString may rebuild the asset library
+    RefreshAfterHistoryFiles(entry.Files);
     RefreshDirtyFromHistory(); // "*" clears when history returns to the last-saved point (#22 P22)
     m_CurrentUndoScene.clear();EnsureUndoScene(world);
 }
@@ -886,15 +909,16 @@ void EditorLayer::Redo(World& world, AssetLibrary& assets) {
     std::string targetJson;
     if (!PopHistoryEntry(m_RedoStack, m_RedoBaseJson, entry, targetJson)) return;
     if (!entry.AssetPath.empty()) RestoreMaterialFile(assets, entry.AssetPath, entry.AssetJson); // #107
-    if (!entry.SelectionOnly && !entry.AssetOnly && (entry.AssetPath.empty() || HashSceneJson(currentJson) != entry.Hash)) { // #138
+    const bool sceneReloaded = !entry.SelectionOnly && !entry.AssetOnly && (entry.AssetPath.empty() || HashSceneJson(currentJson) != entry.Hash); // #138
+    if (sceneReloaded) {
         if (!SceneSerializer::LoadFromString(world, assets, targetJson)) {
             Log::Error("Redo failed - the scene was left as it was."); // #83
             SceneSerializer::LoadFromString(world, assets, currentJson);
         }
     }
     RestoreSelectionByOrder(world, entry.SelectedOrders);
-    InvalidateModelThumbnail(); // LoadFromString may rebuild the asset library
-    RefreshAssetBrowser();
+    if (sceneReloaded) InvalidateModelThumbnail(); // LoadFromString may rebuild the asset library
+    RefreshAfterHistoryFiles(entry.Files);
     RefreshDirtyFromHistory(); // "*" clears when history returns to the last-saved point (#22 P22)
     m_CurrentUndoScene.clear();EnsureUndoScene(world);
 }

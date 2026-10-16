@@ -152,6 +152,12 @@ struct EditorUiTestAccess {
         e.m_FavPage = 0;
         e.m_Dirty = false;
     }
+    // Floating tool windows a failed test can leave up; in a narrow window they cover the panels.
+    static void CloseToolWindows(EditorLayer& e) {
+        e.m_ShowAnimator = false;
+        e.m_ShowAudioDebug = false;
+        EditorSettings::Get().ShowAssetLibrary = false;
+    }
     static std::string& ScenePath(EditorLayer& e) { return e.m_CurrentScenePath; }
     static void Deselect(EditorLayer& e) { e.ClearSelection(); e.ClearAssetSelection(); }
     static size_t UndoDepth(EditorLayer& e) { return e.m_UndoStack.size(); }
@@ -203,6 +209,7 @@ struct Test {
 };
 
 std::string g_Filter;
+std::vector<std::string> g_Exclude; // lowercase name prefixes from TARTARUS_EDITOR_TEST_EXCLUDE
 bool g_Enabled = false;
 std::vector<Test> g_Tests;
 size_t g_TestIndex = 0, g_StepIndex = 0;
@@ -601,6 +608,7 @@ Step FreshScene() {
         ImGui::GetCurrentContext()->InputTextDeactivatedState.ClearFreeMemory();
         ImGui::SetWindowFocus(nullptr);
         c.E.CloseSettingsWindow();
+        X::CloseToolWindows(c.E);
         EditorModuleHost::ConsoleState().Filter[0] = 0;
         X::ResetScene(c.E, c.W, g_ScratchScene);
         Enhancers::EnhancerUserState::Get().Reset();
@@ -1417,6 +1425,25 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
             std::filesystem::create_directories(g_ShotDir, ec);
             std::cout << "[EditorTest] screenshots -> " << g_ShotDir << std::endl;
         }
+        {
+            // TARTARUS_EDITOR_TEST_EXCLUDE=scenes:,assets: skips every test whose name starts with
+            // one of the comma-separated prefixes (CI skips the suites that need missing assets).
+            char* v = nullptr;
+            size_t n = 0;
+            std::string list;
+            if (_dupenv_s(&v, &n, "TARTARUS_EDITOR_TEST_EXCLUDE") == 0 && v) { list = v; std::free(v); }
+            std::transform(list.begin(), list.end(), list.begin(), [](unsigned char ch) { return (char)std::tolower(ch); });
+            size_t start = 0;
+            while (start <= list.size()) {
+                size_t end = list.find(',', start);
+                if (end == std::string::npos) end = list.size();
+                std::string p = list.substr(start, end - start);
+                p.erase(0, p.find_first_not_of(' '));
+                p.erase(p.find_last_not_of(' ') + 1);
+                if (!p.empty()) { g_Exclude.push_back(p); std::cout << "[EditorTest] excluding " << p << std::endl; }
+                start = end + 1;
+            }
+        }
         RegisterTests();
         // Let the editor lay out its dock space first.
         g_StepFrames = -30;
@@ -1430,6 +1457,9 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
         std::string lower = t.Name;
         std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char ch) { return (char)std::tolower(ch); });
         if (!g_Filter.empty() && lower.find(g_Filter) == std::string::npos) { ++g_Skipped; ++g_TestIndex; continue; }
+        if (std::any_of(g_Exclude.begin(), g_Exclude.end(), [&](const std::string& p) { return lower.rfind(p, 0) == 0; })) {
+            ++g_Skipped; ++g_TestIndex; continue;
+        }
 
         auto finishTest = [&]() {
             // Release anything a failed test may have left held.
