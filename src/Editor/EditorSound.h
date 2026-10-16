@@ -102,6 +102,16 @@ private:
 };
 void ObserveImGui(); // host, once a frame before ImGui::Render
 
+// The viewport's transform gizmo, which isn't an ImGui item: the slider sounds for its drag. A grab when it engages, a release when
+// it lets go, and between them a tick for each snap step it lands on (snapping) or per stretch of mouse travel (free).
+struct GizmoTracker {
+    static constexpr float kFreeTickPx = 14.0f; // free drags tick half as densely as a slider
+    bool Using = false;
+    float TickAccum = 0.0f, Net = 0.0f;
+    void Step(bool usingNow, bool moved, bool snapped, float mouseDx, float mouseDy, float x01, std::vector<UiSound>& out);
+};
+void GizmoFrame(bool usingNow, bool moved, bool snapped);
+
 // The files of `event` in `dir`: <Name>.wav, else <Name>_1.wav, <Name>_2.wav ... in order.
 std::vector<std::string> FindVariants(const std::string& dir, Event e);
 
