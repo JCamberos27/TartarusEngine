@@ -724,6 +724,7 @@ void RegisterHierarchyTests() {
         Until("expanded: 3 rows", [](Ctx& c) { return HierVisible(c) == 3; }),
         Click(HierChevron("Alpha")), Wait(3),
         ExpectTrue("chevron collapsed Alpha", [](Ctx& c) { return HierVisible(c) == 2; }),
+        WaitSeconds(0.5), // past the double-click time: two quick clicks on one spot are a double-click
         Click(HierChevron("Alpha")), Wait(3),
         ExpectTrue("chevron expanded it", [](Ctx& c) { return HierVisible(c) == 3; }),
         Click(ByExact(ICON_FA_ANGLES_UP, kHierarchy)), Wait(3),
