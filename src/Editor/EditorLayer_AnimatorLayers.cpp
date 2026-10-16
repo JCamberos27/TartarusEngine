@@ -208,7 +208,7 @@ void DrawLayersAndParameters(AnimCtx& cx) {
 
             // Tracks
             EditorUIPrimitives::SectionHeader("Tracks");
-            HintText("Clip sets per state, for rigs animated together\n(e.g. arms + weapon). An object picks one with\nits component's Track field.");
+            HintText("Clip sets per state, for rigs animated together (e.g. arms + weapon). An object picks one with its component's Track field.");
             int removeTrack = -1;
             for (int t = 0; t < (int)D.Tracks.size(); ++t) {
                 ImGui::PushID(1000 + t);
