@@ -15,6 +15,8 @@
 #include <map>
 #include <set>
 #include <json.hpp>
+#include <charconv>
+#include <cstdlib>
 
 using json = nlohmann::json;
 
@@ -705,9 +707,16 @@ TextureImportSettings AssetLibrary::GetTextureSettings(const std::string& path) 
     return it != m_TextureSettings.end() ? it->second : TextureImportSettings{};
 }
 
-void AssetLibrary::SetTextureSettings(const std::string& path, const TextureImportSettings& settings, bool writeMeta) {
-    m_TextureSettings[path] = settings;
-    if (!writeMeta) return;
+namespace {
+// A float as the shortest decimal that reads back as it: -0.0055f is written "-0.0055", not the
+// double it widens to (-0.005499999970197678), which rewrote hand-written .meta values with noise.
+double ShortFloat(float v) {
+    char buf[32];
+    const auto r = std::to_chars(buf, buf + sizeof buf, v);
+    return r.ec == std::errc() ? std::strtod(std::string(buf, r.ptr).c_str(), nullptr) : (double)v;
+}
+
+json TextureImporterJson(const TextureImportSettings& settings) {
     json imp;
     imp["textureType"]    = (int)settings.TextureType;
     imp["generateMipmaps"]= settings.GenerateMipmaps;
@@ -717,6 +726,51 @@ void AssetLibrary::SetTextureSettings(const std::string& path, const TextureImpo
     imp["maxTextureSize"] = settings.MaxTextureSize;
     imp["anisoLevel"]     = settings.AnisoLevel;
     imp["compression"]    = (int)settings.CompressionMode;
+    return imp;
+}
+
+json ModelImporterJson(const ModelImportSettings& settings) {
+    json imp;
+    imp["globalScale"]       = ShortFloat(settings.GlobalScale);
+    imp["importNormals"]     = settings.ImportNormals;
+    imp["importAnimations"]  = settings.ImportAnimations;
+    imp["importSkeleton"]    = settings.ImportSkeleton;
+    imp["optimizeGraph"]     = settings.OptimizeGraph;
+    if (settings.SimplifyRatio < 1.0f) imp["simplify"] = ShortFloat(settings.SimplifyRatio);
+    imp["materialImportMode"]= (int)settings.MaterialImportMode;
+    if (settings.SourceUpAxis != ModelImportSettings::UpAxis::Y) imp["upAxis"] = Model::UpAxisName(settings.SourceUpAxis);
+    if (settings.PivotOffset != glm::vec3(0.0f))
+        imp["pivotOffset"] = {ShortFloat(settings.PivotOffset.x), ShortFloat(settings.PivotOffset.y), ShortFloat(settings.PivotOffset.z)};
+    if (!settings.ExcludeNodes.empty()) imp["excludeNodes"] = settings.ExcludeNodes;
+    if (settings.SkinIgnoresMeshNode) imp["skinIgnoresMeshNode"] = true;
+    if (!settings.ClipTrims.empty()) {
+        json trims = json::array();
+        for (const auto& t : settings.ClipTrims)
+            trims.push_back({{"clip", t.Clip}, {"start", ShortFloat(t.StartSeconds)}, {"end", ShortFloat(t.EndSeconds)}});
+        imp["clipTrims"] = trims;
+    }
+    return imp;
+}
+
+// The importer block `path`'s .meta holds now, read back into settings and written out the way
+// `toJson` writes them; null when there is none. An undo restores every asset's import settings
+// (see SceneSerializer's assetMeta), so a write whose settings are already there is skipped: it
+// rewrote untouched .meta files (dropped keys spelled differently, float noise) on every undo.
+template <class Settings, class Parse, class ToJson>
+json CurrentImporterJson(const std::string& path, Parse parse, ToJson toJson) {
+    try {
+        Settings cur;
+        if (parse(json::parse(AssetDatabase::ReadMetaFields(path)), cur)) return toJson(cur);
+    } catch (...) {}
+    return nullptr;
+}
+} // namespace
+
+void AssetLibrary::SetTextureSettings(const std::string& path, const TextureImportSettings& settings, bool writeMeta) {
+    m_TextureSettings[path] = settings;
+    if (!writeMeta) return;
+    const json imp = TextureImporterJson(settings);
+    if (CurrentImporterJson<TextureImportSettings>(path, ParseTextureImporter, TextureImporterJson) == imp) return;
     AssetDatabase::MergeMetaFields(path, json{{"importer", imp}}.dump());
 }
 
@@ -728,24 +782,8 @@ ModelImportSettings AssetLibrary::GetModelSettings(const std::string& path) cons
 void AssetLibrary::SetModelSettings(const std::string& path, const ModelImportSettings& settings, bool writeMeta) {
     m_ModelSettings[path] = settings;
     if (!writeMeta) return;
-    json imp;
-    imp["globalScale"]       = settings.GlobalScale;
-    imp["importNormals"]     = settings.ImportNormals;
-    imp["importAnimations"]  = settings.ImportAnimations;
-    imp["importSkeleton"]    = settings.ImportSkeleton;
-    imp["optimizeGraph"]     = settings.OptimizeGraph;
-    if (settings.SimplifyRatio < 1.0f) imp["simplify"] = settings.SimplifyRatio;
-    imp["materialImportMode"]= (int)settings.MaterialImportMode;
-    if (settings.SourceUpAxis != ModelImportSettings::UpAxis::Y) imp["upAxis"] = Model::UpAxisName(settings.SourceUpAxis);
-    if (settings.PivotOffset != glm::vec3(0.0f))
-        imp["pivotOffset"] = {settings.PivotOffset.x, settings.PivotOffset.y, settings.PivotOffset.z};
-    if (!settings.ExcludeNodes.empty()) imp["excludeNodes"] = settings.ExcludeNodes;
-    if (settings.SkinIgnoresMeshNode) imp["skinIgnoresMeshNode"] = true;
-    if (!settings.ClipTrims.empty()) {
-        json trims = json::array();
-        for (const auto& t : settings.ClipTrims) trims.push_back({{"clip", t.Clip}, {"start", t.StartSeconds}, {"end", t.EndSeconds}});
-        imp["clipTrims"] = trims;
-    }
+    const json imp = ModelImporterJson(settings);
+    if (CurrentImporterJson<ModelImportSettings>(path, ParseModelImporter, ModelImporterJson) == imp) return;
     AssetDatabase::MergeMetaFields(path, json{{"importer", imp}}.dump());
 }
 

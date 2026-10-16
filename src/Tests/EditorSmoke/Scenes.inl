@@ -22,6 +22,13 @@ struct EditorSmokeAccess_Scenes {
         e.m_Dirty = false;
         e.RequestOpenScene(w, a, path);
     }
+    // The undo stack's labels that aren't selection steps (opening a scene and playing it is none).
+    static std::string EditSteps(EditorLayer& e) {
+        std::string s;
+        for (const auto& u : e.m_UndoStack)
+            if (!u.SelectionOnly) s += (s.empty() ? "" : ", ") + u.Label;
+        return s;
+    }
 };
 namespace {
 namespace smoke_scenes {
@@ -154,6 +161,13 @@ void RegisterScenesTests() {
             Wait(3),
             Expect("still the same scene after Stop", [path](Ctx& c) {
                 return X::ScenePath(c.E) == path ? std::string() : "open scene is '" + X::ScenePath(c.E) + "'";
+            }),
+            // #15: what the editor does to a scene it just opened (an outfit rebuilding its body) is
+            // no "Unrecorded Change" for Play to journal.
+            Expect("opening, clicking and playing made no undo step and left it clean", [](Ctx& c) {
+                const std::string steps = SA::EditSteps(c.E);
+                if (!steps.empty()) return "undo steps: " + steps;
+                return c.E.IsDirty() ? std::string("the scene is dirty") : std::string();
             }),
             Do("Scene tab in front", [](Ctx& c) { c.E.RequestSceneTabFocus(); }),
             FreshScene(), Wait(3), // back on the scratch scene: nothing can save over the real one
