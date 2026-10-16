@@ -538,6 +538,17 @@ int main(int argc, char** argv) {
         // Per-user preferences, loaded before anything reads them. No GL or project state needed.
         EditorSettings::Load();
         if (!opt.editorShotDir.empty() && opt.editorShotScale > 0.0f) EditorSettings::Get().UiScaleOverride = opt.editorShotScale;
+        if (opt.editorTestsMode) {
+            // TARTARUS_EDITOR_TEST_SCALE=1.0: pin the UI scale (CI's runner is 96 DPI, so 1.0), so a
+            // high-DPI desktop can reproduce its layout together with TARTARUS_EDITOR_TEST_SIZE.
+            char* sc = nullptr;
+            size_t scLen = 0;
+            if (_dupenv_s(&sc, &scLen, "TARTARUS_EDITOR_TEST_SCALE") == 0 && sc) {
+                const float v = static_cast<float>(std::atof(sc));
+                if (v > 0.0f) EditorSettings::Get().UiScaleOverride = v;
+            }
+            std::free(sc);
+        }
         if (!opt.editorShotDir.empty() && opt.editorShotGlass) {
             // Only the scratch copy of the prefs (TartarusEngine-Shot) is changed.
             EditorSettings& shotPrefs = EditorSettings::Get();
