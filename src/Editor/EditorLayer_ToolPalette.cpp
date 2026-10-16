@@ -63,25 +63,54 @@ void EditorLayer::DrawToolPalette(World& world, Camera& editorCamera) {
     if (!collapsed) {
         ImGui::Separator();
 
+        // The exclusive tools (Hand + the five gizmo modes) share one 2 px accent bar at the rail's
+        // left edge that glides to whichever is active (Glass SelectionGlide).
+        float activeY = -1.0f, activeH = 0.0f, railX = 0.0f;
+        auto noteActive = [&](bool on) {
+            if (!on) return;
+            activeY = ImGui::GetItemRectMin().y - ImGui::GetWindowPos().y;
+            activeH = ImGui::GetItemRectSize().y;
+            railX = ImGui::GetItemRectMin().x;
+        };
+
         const bool handTool = m_HandTool;
         if (ActionButton(EDITOR_ICON_HAND_TOOL, "Hand — drag to pan the view (Q)", handTool, ImVec2(btn, btn)))
             SetHandToolActive(!handTool);
+        noteActive(handTool);
 
         const int gizmoOp = GizmoOpIndex(); // 0 Translate 1 Rotate 2 Scale 3 Rect 4 Universal
         if (ActionButton(EDITOR_ICON_TRANSLATE, "Translate (W)", !handTool && gizmoOp == 0, ImVec2(btn, btn)))
             SetGizmoOpIndex(0);
+        noteActive(!handTool && gizmoOp == 0);
         if (ActionButton(EDITOR_ICON_ROTATE, "Rotate (E)", !handTool && gizmoOp == 1, ImVec2(btn, btn)))
             SetGizmoOpIndex(1);
+        noteActive(!handTool && gizmoOp == 1);
         if (ActionButton(EDITOR_ICON_SCALE, "Scale (R)", !handTool && gizmoOp == 2, ImVec2(btn, btn)))
             SetGizmoOpIndex(2);
+        noteActive(!handTool && gizmoOp == 2);
         if (ActionButton(EDITOR_ICON_RECT_TOOL,
                 "Rect — move + non-uniform scale via corner/edge handles (T)",
                 !handTool && gizmoOp == 3, ImVec2(btn, btn)))
             SetGizmoOpIndex(3);
+        noteActive(!handTool && gizmoOp == 3);
         if (ActionButton(EDITOR_ICON_UNIVERSAL,
                 "Transform — move + rotate + scale in one gizmo (Y)",
                 !handTool && gizmoOp == 4, ImVec2(btn, btn)))
             SetGizmoOpIndex(4);
+        noteActive(!handTool && gizmoOp == 4);
+
+        if (activeY >= 0.0f) {
+            // Glide only when the tool changes; a rescale or rail collapse just moves with it.
+            const int tool = handTool ? -1 : gizmoOp;
+            const bool switched = m_ToolGlideLast != -2 && m_ToolGlideLast != tool;
+            m_ToolGlideLast = tool;
+            const float y = EditorTheme::MotionFollow(ImGui::GetID("##toolGlide"), activeY, EditorMotionToken::Glide, !switched) +
+                            ImGui::GetWindowPos().y;
+            const float inset = 5.0f * m_UIScale, w = 2.0f * m_UIScale;
+            const float x = railX - 3.0f * m_UIScale; // in the padding, just inside the child's clip
+            ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(x, y + inset), ImVec2(x + w, y + activeH - inset),
+                                                      EditorTheme::U32(EditorTheme::Accent), w * 0.5f);
+        }
 
         ImGui::Separator();
 

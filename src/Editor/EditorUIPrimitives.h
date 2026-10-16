@@ -56,6 +56,37 @@ inline ImVec4 InfoColor()    { return EditorTheme::Info; }
 inline ImVec4 FlatHover()   { return ImVec4(1.0f, 1.0f, 1.0f, 0.07f); }
 inline ImVec4 FlatPressed() { return ImVec4(1.0f, 1.0f, 1.0f, 0.12f); }
 
+// --- Control motion (Glass category 5, through EditorTheme::Motion*) -------------------------------
+// The press squash: while the last item is held its vertices (everything drawn since `vtxStart`)
+// shrink toward its centre, and spring back on release with a small overshoot. The hit rect is
+// the item's rest rect, which always contains the drawn one, so a press never slips off.
+constexpr float kPressScale = 0.97f; // Glass::PressScale
+inline int PressBegin() { return ImGui::GetWindowDrawList()->VtxBuffer.Size; }
+inline void PressEnd(int vtxStart) {
+    const ImGuiID id = ImGui::GetItemID();
+    if (id == 0) return;
+    const float v = EditorTheme::MotionAnimate(id ^ 0x50E55ED1u, ImGui::IsItemActive() ? 1.0f : 0.0f, 0.0f,
+                                               EditorMotionToken::Press);
+    if (std::fabs(v) < 1e-4f) return;
+    const float s = 1.0f - (1.0f - kPressScale) * v;
+    const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+    const ImVec2 c((mn.x + mx.x) * 0.5f, (mn.y + mx.y) * 0.5f);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    for (int i = vtxStart; i < dl->VtxBuffer.Size; ++i) {
+        ImVec2& p = dl->VtxBuffer[i].pos;
+        p = ImVec2(c.x + (p.x - c.x) * s, c.y + (p.y - c.y) * s);
+    }
+}
+
+// The 1 px focus ring of a field: fades in as it takes focus and out as it lets go. `id` is the
+// field's item id; draws over `mn`..`mx`.
+inline void FocusRing(ImGuiID id, ImVec2 mn, ImVec2 mx, bool focused) {
+    const float a = EditorTheme::MotionAnimate(id ^ 0xF0C05A11u, focused ? 1.0f : 0.0f, 0.0f, EditorMotionToken::Focus);
+    if (a <= 0.004f) return;
+    ImGui::GetWindowDrawList()->AddRect(mn, mx, EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Accent, 0.55f * a)),
+                                        ImGui::GetStyle().FrameRounding, 0, 1.0f);
+}
+
 // Three button treatments across the whole editor (#160), plus a destructive variant:
 //   ActionButton    flat; no body at rest, a faint wash on hover. Toolbar tools, panel toggles,
 //                   low-frequency icon actions. `active` = a toggle that is on: accent glyph on an
@@ -93,6 +124,7 @@ inline bool ActionButton(const char* icon, const char* tooltip, TooltipFn toolti
     // Button() folds its label into its ID, so two buttons showing the same glyph would collide;
     // scope the ID to the (unique) tooltip string instead.
     ImGui::PushID(tooltip);
+    const int vtx = PressBegin();
     const bool clicked = ImGui::Button(icon, size);
     ImGui::PopID();
     ImGui::PopStyleVar();
@@ -102,6 +134,7 @@ inline bool ActionButton(const char* icon, const char* tooltip, TooltipFn toolti
         ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(mn.x + k * 1.5f, mx.y - k), ImVec2(mx.x - k * 1.5f, mx.y),
                                                   EditorTheme::U32(acc), k * 0.5f);
     }
+    PressEnd(vtx);
     ImGui::PopStyleColor(4);
     if (tooltipFn && ImGui::IsItemHovered()) tooltipFn(tooltip);
     return clicked;
@@ -125,7 +158,9 @@ inline bool DangerIconButton(const char* icon, const char* tooltip, TooltipFn to
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(danger.x, danger.y, danger.z, 0.26f));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
     ImGui::PushID(tooltip);
+    const int vtx = PressBegin();
     const bool clicked = ImGui::Button(icon, size);
+    PressEnd(vtx);
     ImGui::PopID();
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(4);
@@ -135,13 +170,32 @@ inline bool DangerIconButton(const char* icon, const char* tooltip, TooltipFn to
 
 // Defect #20 / #73: an unchecked box needs a visible edge. The frame's own hairline is faint on
 // the near-black panels, so this draws a stronger one over the item afterwards (real
-// ImGui::Checkbox handles all behaviour).
+// ImGui::Checkbox handles all behaviour). The tick isn't ImGui's: it draws on along its path as
+// the box is checked and erases as it is cleared, and the edge brightens with it.
 inline bool Checkbox(const char* label, bool* v) {
+    const ImGuiContext& g = *ImGui::GetCurrentContext();
+    const bool mixed = (g.CurrentItemFlags & ImGuiItemFlags_MixedValue) != 0; // ImGui draws its own dash
+    const ImVec4 tick = ImGui::GetStyleColorVec4(ImGuiCol_CheckMark);
+    const int vtx = PressBegin();
+    if (!mixed) ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(0, 0, 0, 0));
     const bool changed = ImGui::Checkbox(label, v);
+    if (!mixed) ImGui::PopStyleColor();
     const ImVec2 mn = ImGui::GetItemRectMin();
     const float sz = ImGui::GetFrameHeight();
-    ImGui::GetWindowDrawList()->AddRect(mn, ImVec2(mn.x + sz, mn.y + sz),
-        EditorTheme::U32(*v ? EditorTheme::AccentDeep : EditorTheme::Strong), ImGui::GetStyle().FrameRounding, 0, 1.0f);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const float t = mixed ? (*v ? 1.0f : 0.0f) : EditorTheme::MotionToggle(ImGui::GetItemID() ^ 0xC4EC4B01u, *v, EditorMotionToken::Check);
+    if (!mixed && t > 0.0f) {
+        const float pad = std::max(1.0f, std::floor(sz / 5.0f));
+        const float thick = std::max(1.0f, sz / 7.0f);
+        const EditorMotionHooks* h = EditorTheme::MotionHooks();
+        if (h && h->DrawCheckmark)
+            h->DrawCheckmark(dl, mn.x + pad, mn.y + pad, sz - pad * 2.0f, t, EditorTheme::U32(tick), thick);
+        else if (*v)
+            ImGui::RenderCheckMark(dl, ImVec2(mn.x + pad, mn.y + pad), EditorTheme::U32(tick), sz - pad * 2.0f);
+    }
+    dl->AddRect(mn, ImVec2(mn.x + sz, mn.y + sz),
+        EditorTheme::U32(EditorTheme::Mix(EditorTheme::Strong, EditorTheme::AccentDeep, t)), ImGui::GetStyle().FrameRounding, 0, 1.0f);
+    PressEnd(vtx);
     return changed;
 }
 
@@ -151,7 +205,9 @@ inline bool SecondaryButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, EditorTheme::Hover);
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,  EditorTheme::Pressed);
     ImGui::PushStyleColor(ImGuiCol_Border,        EditorTheme::Strong);
+    const int vtx = PressBegin();
     const bool clicked = ImGui::Button(label, size);
+    PressEnd(vtx);
     ImGui::PopStyleColor(4);
     return clicked;
 }
@@ -164,7 +220,9 @@ inline bool PrimaryButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,  EditorTheme::AccentDeep);
     ImGui::PushStyleColor(ImGuiCol_Border,        EditorTheme::AccentDeep);
     ImGui::PushStyleColor(ImGuiCol_Text,          EditorTheme::OnAccent);
+    const int vtx = PressBegin();
     const bool clicked = ImGui::Button(label, size);
+    PressEnd(vtx);
     ImGui::PopStyleColor(5);
     return clicked;
 }
@@ -178,12 +236,40 @@ inline bool Segmented(const char* id, int* current, const char* const* labels, i
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y));
     ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0.0f);
     const ImVec2 start = ImGui::GetCursorScreenPos();
+    // The selection is one accent pill that glides from segment to segment. Segment rects are known
+    // before the buttons are submitted (same sizing as Button), so the pill is drawn first, under
+    // them, and the chosen button itself stays transparent. A right-aligned width (< 0) can't be
+    // measured up front: those strips keep the static per-button fill.
+    const bool glide = itemWidth >= 0.0f && *current >= 0 && *current < count;
+    if (glide) {
+        const ImVec2 pad = ImGui::GetStyle().FramePadding;
+        float x = start.x, selX = start.x, selW = 0.0f;
+        for (int i = 0; i < count; ++i) {
+            const float w = itemWidth > 0.0f ? itemWidth : ImGui::CalcTextSize(labels[i], nullptr, true).x + pad.x * 2.0f;
+            if (i == *current) { selX = x; selW = w; }
+            x += w;
+        }
+        const ImGuiID pid = ImGui::GetID("##glide");
+        // Glide only when the choice changes; a reflow (resize, theme, font) just moves with it.
+        ImGuiStorage* st = ImGui::GetStateStorage();
+        const bool switched = st->GetInt(pid ^ 0x51u, *current) != *current;
+        st->SetInt(pid ^ 0x51u, *current);
+        const float gx = EditorTheme::MotionFollow(pid, selX - start.x, EditorMotionToken::Glide, !switched) + start.x;
+        const float gw = EditorTheme::MotionFollow(pid ^ 0x9E3779B9u, selW, EditorMotionToken::Glide, !switched);
+        const float h = ImGui::GetFrameHeight();
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        // The strip's body first (the buttons go transparent), so the pill shows through every
+        // segment it crosses.
+        dl->AddRectFilled(start, ImVec2(x, start.y + h), EditorTheme::U32(EditorTheme::Field));
+        dl->AddRectFilled(ImVec2(gx, start.y), ImVec2(gx + gw, start.y + h), EditorTheme::U32(EditorTheme::AccentWash));
+    }
     for (int i = 0; i < count; ++i) {
         if (i > 0) ImGui::SameLine();
         const bool on = *current == i;
-        ImGui::PushStyleColor(ImGuiCol_Button,        on ? EditorTheme::AccentWash : EditorTheme::Field);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, on ? EditorTheme::WithAlpha(EditorTheme::Accent, 0.20f) : EditorTheme::Hover);
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  on ? EditorTheme::WithAlpha(EditorTheme::Accent, 0.28f) : EditorTheme::Pressed);
+        const ImVec4 body = glide ? ImVec4(0, 0, 0, 0) : (on ? EditorTheme::AccentWash : EditorTheme::Field);
+        ImGui::PushStyleColor(ImGuiCol_Button,        body);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, on ? EditorTheme::WithAlpha(EditorTheme::Accent, glide ? 0.08f : 0.20f) : EditorTheme::Hover);
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  on ? EditorTheme::WithAlpha(EditorTheme::Accent, glide ? 0.14f : 0.28f) : EditorTheme::Pressed);
         ImGui::PushStyleColor(ImGuiCol_Text,          on ? EditorTheme::AccentBright : EditorTheme::Secondary);
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
         ImGui::PushID(i);
@@ -275,8 +361,7 @@ inline bool SearchField(const char* id, char* buf, size_t bufSize, const char* h
     dl->AddText(ImVec2(mn.x + pad.x + (iconW - gsz.x) * 0.35f, (mn.y + mx.y - gsz.y) * 0.5f),
                 EditorTheme::U32(focused || buf[0] ? EditorTheme::Accent : EditorTheme::Dim), ICON_FA_MAGNIFYING_GLASS);
     EditorTheme::PopFont();
-    if (focused) dl->AddRect(mn, mx, EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Accent, 0.55f)),
-                             ImGui::GetStyle().FrameRounding, 0, 1.0f);
+    FocusRing(ImGui::GetItemID(), mn, mx, focused);
     if (buf[0]) {
         // The clear button, inside the field's right end.
         const float h = mx.y - mn.y;
@@ -354,8 +439,18 @@ inline void EmptyState(const char* icon, const char* text, const char* hint = nu
                     EditorTheme::U32(EditorTheme::Strong), icon);
         y += isz.y + gap;
     }
-    dl->AddText(EditorTheme::UiFont(), EditorTheme::BodySize(), ImVec2(cx - tsz.x * 0.5f, y),
-                EditorTheme::U32(EditorTheme::Secondary), text);
+    {
+        // The headline's characters fade and rise in the first time the empty state shows.
+        const EditorMotionHooks* h = EditorTheme::MotionHooks();
+        const ImVec2 at(cx - tsz.x * 0.5f, y);
+        if (h && h->StaggeredHeadline) {
+            EditorTheme::PushBody();
+            h->StaggeredHeadline(ImGui::GetID(text), text, at.x, at.y, EditorTheme::U32(EditorTheme::Secondary));
+            EditorTheme::PopFont();
+        } else {
+            dl->AddText(EditorTheme::UiFont(), EditorTheme::BodySize(), at, EditorTheme::U32(EditorTheme::Secondary), text);
+        }
+    }
     y += tsz.y;
     if (hint) {
         y += EditorTheme::Px(4.0f);
@@ -516,7 +611,7 @@ inline bool FramedFoldout(const char* label, ImGuiTreeNodeFlags flags = 0) {
     const float fs = ImGui::GetFontSize();
     const float cy = std::floor((mn.y + mx.y) * 0.5f);
     const bool hov = ImGui::IsItemHovered();
-    const float t = EditorTheme::AnimT(ImGui::GetItemID() ^ 0x5F01D0E7u, open, EditorTheme::MotionNormal);
+    const float t = EditorTheme::MotionToggle(ImGui::GetItemID() ^ 0x5F01D0E7u, open, EditorMotionToken::Chevron);
     DrawChevron(dl, ImVec2(std::floor(x0 + style.FramePadding.x + fs * 0.5f) + 0.5f, cy + 0.5f), EditorTheme::Px(8.0f),
                 t * 1.5707963f, EditorTheme::U32(hov ? EditorTheme::Secondary : EditorTheme::Dim));
     const char* end = ImGui::FindRenderedTextEnd(label);
@@ -577,7 +672,7 @@ inline bool Pill(const char* id, const char* icon, const char* label, bool selec
     const bool hov = ImGui::IsItemHovered();
     const bool held = ImGui::IsItemActive();
     if (hoveredOut) *hoveredOut = hov;
-    const float ht = EditorTheme::AnimT(ImGui::GetItemID(), hov || held);
+    const float ht = EditorTheme::MotionHover(ImGui::GetItemID(), hov || held);
     ImDrawList* dl = ImGui::GetWindowDrawList();
     const ImVec2 mx(mn.x + w, mn.y + h);
     ImVec4 bg = selected ? EditorTheme::AccentWash : EditorTheme::Raised;

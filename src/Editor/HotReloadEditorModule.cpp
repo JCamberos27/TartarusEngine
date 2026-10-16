@@ -13,6 +13,7 @@
 #include "GLStateCache.h"
 #include "AssetLibrary.h"
 #include "Camera.h"
+#include "Glass/GlassMotionHooks.h"
 
 #include <cstddef>
 #include <cstdio>
@@ -495,6 +496,7 @@ void HierSetSort(int packed) {
 
 // --- Asset Browser Details view (API v26, Phase 5 item 4) --------------------------------
 int  AbGetViewMode()                { return g_Editor ? g_Editor->GetAssetViewMode() : 0; }
+const EditorMotionHooks* GetHostMotionHooks() { return &Glass::HostMotionHooks(); }
 
 // Built field-by-field, by name (#172 follow-up): the old positional aggregate initializer
 // compiled cleanly with any two same-signature entries swapped (e.g. GetShowGrid <->
@@ -617,6 +619,7 @@ EditorModuleHostAPI MakeHostAPI() {
     api.GetHierarchySort = &HierGetSort;
     api.SetHierarchySort = &HierSetSort;
     api.GetAssetViewMode = &AbGetViewMode;
+    api.GetMotionHooks = &GetHostMotionHooks;
     return api;
 }
 

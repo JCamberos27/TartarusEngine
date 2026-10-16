@@ -51,6 +51,7 @@
 #include "GameModuleAPI.h" // #170 smoke: QueryFilter / RaycastHit
 #include "Tests/UnitTests.h" // #173
 #include "Tests/EditorUiTests.h" // --editor-tests
+#include "Tests/MotionDemo.h"    // --editor-tests "motion demo": the 60 fps recorder
 #include "App/LaunchOptions.h"
 #include "App/CliTools.h"
 #include "App/PlaySession.h"
@@ -2172,6 +2173,7 @@ int main(int argc, char** argv) {
                 const int refreshHz = window.RefreshRate(); // cached in Window: re-read only when the window moves or monitors change
                 Time::SetRefreshPeriod(!headless && appliedVSyncMode == 1 && refreshHz >= 30 ? 1.0 / refreshHz : 0.0);
             }
+            MotionDemo::PinClock(); // the motion demo's virtual clock: exactly 1/60 s per frame
             Time::BeginFrame();
             const float dt = Time::UnscaledDeltaTime();
             // --weapon-test runs on a fixed step, so its timings don't depend on the machine.
@@ -4682,6 +4684,7 @@ int main(int argc, char** argv) {
             {
                 PROFILE_SCOPE("ImGui Render");
                 PROFILE_GPU_SCOPE("ImGui Render");
+                MotionDemo::DrawCursor(); // the motion demo's drawn pointer
                 editor.EndFrame(); // flushes the ImGui frame (empty when not in editor mode)
             }
             // Dear ImGui's OpenGL3 backend just made its own raw glUseProgram/glBindTexture
@@ -4746,6 +4749,11 @@ int main(int argc, char** argv) {
                 glClear(GL_COLOR_BUFFER_BIT);
                 glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
                 GLStateCache::Invalidate();
+            }
+            if (MotionDemo::Recording()) {
+                int w = 0, h = 0;
+                glfwGetFramebufferSize(window.Handle(), &w, &h);
+                MotionDemo::CaptureFrame(w, h);
             }
             const double traceBeforeSwap = glfwGetTime();
             {
@@ -5092,6 +5100,7 @@ int main(int argc, char** argv) {
         if (opt.editorTestsMode) {
             // Like the smoke test: nothing from this run is saved back (the scene is in memory only).
             const int code = EditorUiTests::ExitCode();
+            MotionDemo::StopRecording(); // a demo cut short still leaves a playable file
             editor.Shutdown();
             editorModule.Shutdown();
             AudioEngine::Shutdown();

@@ -1,4 +1,5 @@
 #include "EditorModuleAPI.h"
+#include "EditorTheme.h"
 
 #include <imgui.h>
 
@@ -48,6 +49,8 @@ bool BindImGuiToHost(const EditorModuleHostAPI& host) {
     ImGuiContext* context = static_cast<ImGuiContext*>(host.GetImGuiContext());
     if (!context) return false;
     ImGui::SetCurrentContext(context);
+    // The host's motion runtime, for this binary's copy of the EditorTheme::Motion* helpers.
+    EditorTheme::SetMotionHooks(host.GetMotionHooks ? host.GetMotionHooks() : nullptr);
     return true;
 }
 

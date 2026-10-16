@@ -12,6 +12,7 @@
 #include "ProjectPaths.h"
 #include "SceneSerializer.h"
 #include "World.h"
+#include "Glass/GlassFeedbackMotion.h"
 #include "Glass/GlassMotion.h"
 #include "gl.h"
 
@@ -26,6 +27,7 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <cstdio>
 #include <string>
 #include <thread>
 #include <vector>
@@ -253,6 +255,12 @@ void GlassTheme(EditorLayer& editor, World& world, int frame) {
     } else if (frame == 20) {
         editor.GlassNotifySnap(); // the snap ring, drawn for the next ~25 frames
         Log::Warn("[SmokeTest] glass: a warning (not a compile error) must not raise a toast");
+        Glass::PlaySaveCheck();   // the save check's keyframe clip (~1 s)
+    } else if (frame == 21) {
+        // The very next frame: the clip runs ~1 s of wall clock, which 10 llvmpipe frames on CI outlast.
+        if (!Glass::Motion().ReduceMotion() && !Glass::SaveCheckPlaying())
+            Log::Error("[SmokeTest] glass: the save check's keyframe clip didn't play");
+        else std::cout << "[SmokeTest]   glass: save check clip playing" << std::endl;
     } else if (frame == 70) {
         if (!editor.GlassThemeActive()) {
             Log::Error("[SmokeTest] glass: the theme never switched on");
@@ -272,9 +280,16 @@ void GlassTheme(EditorLayer& editor, World& world, int frame) {
         editor.SetGlassThemeForTest(false);
     } else if (frame == 80) {
         if (editor.GlassThemeActive()) Log::Error("[SmokeTest] glass: the theme never switched back off");
-        else if (Glass::Motion().LiveCount() != 0 || Glass::Motion().HeldBytes() != 0)
+        else if (Glass::Motion().LiveCount() != 0 || Glass::Motion().HeldBytes() != 0) {
+            std::string live;
+            for (int i = 0; i < Glass::Motion().LiveCount() && i < 8; ++i) {
+                char b[40];
+                std::snprintf(b, sizeof(b), " %08X/%d", Glass::Motion().LiveId(i), Glass::Motion().LiveKind(i));
+                live += b;
+            }
             Log::Error("[SmokeTest] glass: animation state still holds " + std::to_string(Glass::Motion().HeldBytes()) +
-                       " bytes after the theme was switched off");
+                       " bytes after the theme was switched off; live (id/kind):" + live);
+        }
         else std::cout << "[SmokeTest]   glass: theme off, animation memory released" << std::endl;
     }
 }

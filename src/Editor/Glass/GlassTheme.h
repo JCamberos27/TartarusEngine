@@ -16,7 +16,7 @@ struct ImDrawList;
 void ConfigureMacEngineTheme(ImGuiStyle& style);
 
 // Black Glass as the editor uses it: turns a style that already carries the Tartarus metrics and
-// palette into glass. Surfaces you work on become translucent black over the ambient field
+// palette into glass. Surfaces you work on become translucent black over the canvas
 // (DrawWallpaper), fields and buttons become white washes, borders become faint white hairlines,
 // and floating windows get rounded corners (GlassCompositor lays the blur under those). Sizes,
 // spacing and fonts stay exactly Tartarus's. Call before ScaleAllSizes.
@@ -31,10 +31,9 @@ float Px(float designPx);
 float Scale();
 
 // --- Drawing ----------------------------------------------------------------------------------------
-// Paints the canvas behind everything (ImGui's background draw list for the main viewport): the
-// ambient field (`ambient`, the heavily blurred Scene image, stretched over the window and dimmed
-// by AmbientDim), or solid black when `ambient` is 0. Once per frame while the Glass theme is active.
-void DrawWallpaper(ImTextureID ambient = (ImTextureID)0);
+// Paints the canvas behind everything (ImGui's background draw list for the main viewport): solid
+// black. Once per frame while the Glass theme is active and the window isn't see-through.
+void DrawWallpaper();
 
 // A filled rounded rectangle whose corners are superellipse arcs (continuous curvature), the shape
 // macOS uses for windows and cards. `radius` is the nominal (circular-equivalent) radius.

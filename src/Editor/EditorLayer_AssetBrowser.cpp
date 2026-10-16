@@ -3,6 +3,7 @@
 
 #include "EditorLayer.h"
 #include "EditorTheme.h"
+#include "Glass/GlassDragMotion.h" // the drag ghost
 #include "EditorUIPrimitives.h"
 #include "EditorLayerInternal.h"
 #include "FileDialog.h"
@@ -2067,9 +2068,9 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
         }
 
         if (isFolder) {
-            if (ImGui::BeginDragDropSource()) {
+            if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip)) {
                 ImGui::SetDragDropPayload("ASSET_FOLDER_PATH", cell.key.c_str(), cell.key.size() + 1);
-                ImGui::TextUnformatted(cell.display.c_str());
+                Glass::DragGhostLabel(ICON_FA_FOLDER, cell.display.c_str());
                 ImGui::EndDragDropSource();
             }
             if (ImGui::BeginDragDropTarget()) {
@@ -2115,9 +2116,9 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 : cell.kind == Cell::Kind::Material ? "ASSET_MATERIAL_PATH"
                 : cell.kind == Cell::Kind::Prefab ? "ASSET_PREFAB_PATH"
                 : cell.kind == Cell::Kind::Sound ? "ASSET_SOUND_PATH" : "ASSET_FILE_PATH";
-            if (ImGui::BeginDragDropSource()) {
+            if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip)) {
                 ImGui::SetDragDropPayload(payloadType, cell.key.c_str(), cell.key.size() + 1);
-                ImGui::TextUnformatted(cell.display.c_str());
+                Glass::DragGhostLabel(ICON_FA_FILE, cell.display.c_str());
                 ImGui::EndDragDropSource();
             }
         }
