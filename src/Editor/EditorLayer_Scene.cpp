@@ -181,7 +181,10 @@ void EditorLayer::FinishGlobalUndo(const World& world,bool force) {
         }
         ClearRedoHistory();RefreshDirtyFromHistory();m_EditPushedThisFrame=true;
     }
-    if (m_GlobalUndoHasScene && !m_InPlayMode) m_CurrentUndoScene=std::move(current);
+    if (m_GlobalUndoHasScene && !m_InPlayMode) {
+        m_CurrentUndoScene=std::move(current);
+        m_OutfitLandedSeen=OutfitSystem::LandedGeneration(); // #15 - the new baseline has what landed during the edit
+    }
     m_FileJournal.Clear();m_GlobalUndoActive=false;m_GlobalUndoHasScene=false;m_GlobalUndoScene.clear();m_GlobalUndoSelection.clear();
 }
 // #15 - Undo restores whole-scene snapshots, and the top entry's "after" is m_CurrentUndoScene.

@@ -23,6 +23,7 @@
 #include "EditorSettings.h"
 #include "Log.h"
 #include "Model.h"
+#include "OutfitSystem.h"
 #include "ProjectPaths.h"
 #include "ProjectSettings.h"
 #include "ProjectWatcher.h"
@@ -132,7 +133,14 @@ void EditorLayer::SyncProjectChanges(World& world, AssetLibrary& assets) {
             case K::Modified: OnExternalModify(world, assets, c.Path); break;
         }
     }
-    if (external) m_CurrentUndoScene.clear(); // refresh after external library/reference mutations
+    if (!external) return;
+    ++m_ExternalSyncs;
+    // Refresh after external library/reference mutations - now, not at the next EnsureUndoScene:
+    // anything changing the scene in between (later this frame) would be folded into it (#15).
+    m_CurrentUndoScene.clear();
+    m_AssetsPtr = &assets;
+    EnsureUndoScene(world);
+    if (!m_CurrentUndoScene.empty()) m_OutfitLandedSeen = OutfitSystem::LandedGeneration();
 }
 
 void EditorLayer::OnExternalMove(World& world, AssetLibrary& assets, const std::string& oldPath, const std::string& newPath) {
