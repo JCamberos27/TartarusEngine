@@ -31,6 +31,7 @@
 #include "HotReloadEditorModule.h" // EditorModuleHost::ConsoleState()
 #include "GLDebug.h"
 #include "Input.h" // Input::SimulateKeyTap - main-loop keys (F1..F4) for the PlayMode suite
+#include "AtomicFile.h" // NoteSelfWrite - scratch files a suite writes are not external changes
 #include "Log.h"
 #include "gl.h"
 
@@ -160,6 +161,7 @@ struct EditorUiTestAccess {
     static std::string& ScenePath(EditorLayer& e) { return e.m_CurrentScenePath; }
     static void Deselect(EditorLayer& e) { e.ClearSelection(); e.ClearAssetSelection(); }
     static size_t UndoDepth(EditorLayer& e) { return e.m_UndoStack.size(); }
+    static std::string UndoTop(EditorLayer& e) { return e.m_UndoStack.empty() ? std::string("-") : e.m_UndoStack.back().Label; }
     static void PushUndo(EditorLayer& e, World& w, const char* label) { e.PushUndo(w, label); }
     static bool InPlay(EditorLayer& e) { return e.m_InPlayMode; }
     static void RequestPlayStop(EditorLayer& e) { e.m_PlayStopRequested = true; }
@@ -1109,6 +1111,23 @@ void RegisterTests() {
         ExpectTrue("Min Distance = 2", [](Ctx& c) { return c.W.Registry.get<AudioSourceComponent>(ByName(c.W, "Beta")).MinDistance == 2.0f; }),
     });
     // ------------------------------------------------------------------ 11. Inspector tabs
+    // A narrow Inspector (CI's ~1044px window) fits about one tab, and a tab scrolled out of the
+    // strip has no label (ImGui only reports a label for unclipped items). Wheel the strip right
+    // (plain wheel scrolls it) until the Nth "##tab" shows at least 8px; a no-op when it already
+    // does. Tabs further right than the visible one only, which is all the tests need.
+    auto TabIntoView = [](int nth) -> Step {
+        auto frame = std::make_shared<int>(0);
+        return {"scroll tab " + std::to_string(nth) + " into view", [nth, frame](Ctx&) {
+            auto shown = [](const UiItem* t) { ImRect r = t->Rect; r.ClipWithFull(t->Clip); return r.GetWidth(); };
+            if (const UiItem* it = Find(ByExact("##tab", kInspector, nth)); it && shown(it) >= 8.0f) return true;
+            const UiItem* any = Find(ByExact("##tab", kInspector));
+            if (any && (*frame)++ % 8 == 0) { // let the strip's eased scroll settle between notches
+                MouseTo(any->Clip.GetCenter());
+                ImGui::GetIO().AddMouseWheelEvent(0.0f, -1.0f);
+            }
+            return false;
+        }, 120};
+    };
     Add("tabs: drop a Hierarchy row on the Inspector; selecting returns to Selection", {
         FreshScene(), Wait(2),
         SelectByName("Alpha"), Wait(3),
@@ -1121,6 +1140,7 @@ void RegisterTests() {
         SelectByName("Alpha"), Wait(3),
         ExpectTrue("selecting returned to Selection", [](Ctx&) { return Enhancers::TabState::Get().Inspector.Active == -1; }),
         ExpectTrue("Selection shows Alpha (no Light)", [](Ctx&) { return Find(Header("Light")) == nullptr; }),
+        TabIntoView(1),
         Click(ByExact("##tab", kInspector, 1)), Wait(3),
         ExpectTrue("the Gamma tab is active again", [](Ctx&) { return Enhancers::TabState::Get().Inspector.Active == 0; }),
         Expect("selection still Alpha", [](Ctx& c) { return ExpectSelected(c, "Alpha"); }),
@@ -1158,11 +1178,18 @@ void RegisterTests() {
             return s.Tabs.size() == 2 && s.Tabs[0].Label == "Gamma" && s.Active == 0;
         }),
         // Middle-click a tab that is actually on screen: at the default layout width the strip only
-        // fits the active tab, and the others are scrolled out of view (their items still exist).
+        // fits the active tab, and the others are scrolled out of view (and, clipped, carry no label).
+        // In a narrow window even the active tab is partly clipped, so take the tab showing the
+        // most pixels: the active Gamma tab, which the strip keeps in view (rightmost on a tie, as
+        // the Selection tab, which middle-click never closes, comes first).
         Click([] {
             Query q = ByExact("##tab", kInspector);
             q.Pred = [](const UiItem& it) {
-                return it.Rect.Min.x >= it.Clip.Min.x && it.Rect.Max.x <= it.Clip.Max.x && it.Rect.GetWidth() > 8.0f;
+                auto shown = [](const UiItem& t) { ImRect r = t.Rect; r.ClipWithFull(t.Clip); return std::max(0.0f, r.GetWidth()); };
+                const UiItem* best = nullptr;
+                for (const UiItem* t : FindAll(ByExact("##tab", kInspector)))
+                    if (!best || shown(*t) >= shown(*best)) best = t;
+                return best && shown(*best) >= 8.0f && it.Id == best->Id;
             };
             return q;
         }(), 0, 2), Wait(3),
@@ -1248,14 +1275,23 @@ void RegisterTests() {
     });
     Add("favorites: the asset star is a favorite and undoes", {
         FreshScene(), Wait(2),
+        Do("note the undo depth", [](Ctx& c) { g_Number = (double)X::UndoDepth(c.E); }),
         Do("star an asset", [](Ctx& c) { c.E.SetAssetFavorites({"assets/AI/npc_soldier.controller"}, true); }), Wait(4),
         ExpectTrue("starred", [](Ctx& c) { return c.E.IsAssetFavorite("assets/AI/npc_soldier.controller"); }),
         ExpectTrue("on a page", [](Ctx&) {
             return Enhancers::FindFavorite(Enhancers::EnhancerUserState::Get().FavoritePages,
                                            Enhancers::EditorRef::MakeAsset("assets/AI/npc_soldier.controller")) >= 0;
         }),
+        Until("the star is an undo step", [](Ctx& c) { return (double)X::UndoDepth(c.E) > g_Number; }, 60),
+        Do("note the depth with it", [](Ctx& c) { g_Number = (double)X::UndoDepth(c.E); }),
         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(4),
-        ExpectTrue("undo un-stars it", [](Ctx& c) { return !c.E.IsAssetFavorite("assets/AI/npc_soldier.controller"); }),
+        Expect("undo un-stars it", [](Ctx& c) {
+            if (!c.E.IsAssetFavorite("assets/AI/npc_soldier.controller")) return std::string();
+            const ImGuiIO& io = ImGui::GetIO();
+            return "still starred; undo depth " + std::to_string((int)g_Number) + " -> " + std::to_string(X::UndoDepth(c.E)) +
+                   ", top '" + X::UndoTop(c.E) + "', wantText=" + std::to_string((int)io.WantTextInput) +
+                   " activeId=" + std::to_string(ImGui::GetActiveID());
+        }),
     });
 
     // ------------------------------------------------------------------ 14. Ruler
@@ -1368,6 +1404,10 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
     ctx->IO.ConfigErrorRecoveryEnableAssert = false; // reported by OnImGuiError and failed instead
     g_Reg.NextFrame();
     EditorTestInputHook() = &KeepOnlyHarnessInput;
+    // Another window opening (a second editor running its own tests) can take the OS focus; the
+    // focus-lost event PollEvents queued would release every key and button a step is holding.
+    for (int i = ctx->InputEventsQueue.Size - 1; i >= 0; --i)
+        if (ctx->InputEventsQueue[i].Type == ImGuiInputEventType_Focus) ctx->InputEventsQueue.erase(ctx->InputEventsQueue.Data + i);
     g_QueueEnd = ctx->InputEventsQueue.Size;
     struct QueueMark { ImGuiContext* c; ~QueueMark() { g_QueueEnd = c->InputEventsQueue.Size; } } mark{ctx};
 
