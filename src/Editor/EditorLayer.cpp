@@ -2588,7 +2588,15 @@ void EditorLayer::SyncViewportPrefs() {
     sync(p.GizmoPivotCenter, m_GizmoPivotCenter);
     sync(p.ActiveTool, (int)m_GizmoOp);
     sync(p.ShadingMode, (int)m_ShadingMode);
-    if (changed) EditorSettings::Save();
+    if (!changed) return;
+    // Picking a tool or toggling the grid is not an authored edit: write it outside the undo
+    // journal (like RememberLastScene), or each one became an "Edit editor_prefs.json" undo step
+    // that Ctrl+Z spent first and that cleared the redo stack.
+    EditorSettings::Save();
+    const bool wasApplying = m_GlobalUndoApplying;
+    m_GlobalUndoApplying = true; // the AtomicFile observer ignores writes while this is set
+    EditorSettings::Flush();
+    m_GlobalUndoApplying = wasApplying;
 }
 
 void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera, float dt) {

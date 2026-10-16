@@ -2821,13 +2821,10 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             ImGui::TextDisabled("%s", pi.SourcePath.c_str());
             if (!pi.Missing && m_AssetsPtr && !m_InPlayMode) { // #176
                 const std::string src = pi.SourcePath;
-                if (ActionButton(ICON_FA_PEN_TO_SQUARE " Open Prefab", "Edit the prefab itself in Prefab Mode; every instance picks up the changes")) {
-                    EnterPrefabMode(world, *m_AssetsPtr, src);
-                    ImGui::EndChild(); // the header card
-                    ImGui::PopStyleVar(2);
-                    ImGui::PopStyleColor(2);
-                    return; // the world was just replaced; this entity is gone
-                }
+                // Deferred to DrawPrefabModeBar, after every panel has drawn: entering here replaced
+                // the world mid-Inspector, and the early return left the ID / colour stacks unbalanced.
+                if (ActionButton(ICON_FA_PEN_TO_SQUARE " Open Prefab", "Edit the prefab itself in Prefab Mode; every instance picks up the changes"))
+                    m_InspectorRequestedPrefab = src;
             }
             ImGui::TextDisabled(isRoot
                 ? "Transform / name / tag are kept per-instance; other fields track the prefab unless overridden."
@@ -4052,6 +4049,31 @@ void EditorLayer::EndComponentSection() {
     ImGui::Dummy(ImVec2(0.0f, EditorTheme::Px(4.0f)));
 }
 
+namespace {
+// Apply to Prefab, then bring along every other instance of the same .prefab that wasn't
+// overriding the field: left alone, they kept the old value, which now differs from the file, so
+// the next scene save (or undo snapshot) stored it as an override and they never updated.
+void ApplyPrefabFieldToInstances(World& world, AssetLibrary* assets, entt::entity entity,
+                                 const char* component, const char* field) {
+    std::string source;
+    for (entt::entity cur = entity; cur != entt::null && world.Registry.valid(cur);) {
+        if (const auto* pi = world.Registry.try_get<PrefabInstanceComponent>(cur)) { source = pi->SourcePath; break; }
+        const auto* h = world.Registry.try_get<HierarchyComponent>(cur);
+        cur = h ? h->Parent : entt::null;
+    }
+    std::vector<entt::entity> followers;
+    if (assets && !source.empty())
+        for (auto [root, pi] : world.Registry.view<const PrefabInstanceComponent>().each())
+            if (pi.SourcePath == source)
+                for (entt::entity e : pi.InstanceEntities)
+                    if (e != entity && e != entt::null && world.Registry.valid(e) &&
+                        !SceneSerializer::IsPrefabFieldOverridden(world, e, component, field))
+                        followers.push_back(e);
+    if (!SceneSerializer::ApplyPrefabField(world, entity, component, field)) return;
+    for (entt::entity e : followers) SceneSerializer::RevertPrefabField(world, *assets, e, component, field);
+}
+} // namespace
+
 // #302 Part B — the body of the right-click override menu (caller has already Begun the popup).
 // Shared by the reflected-field labels, the Transform rows and the Name field.
 void EditorLayer::PrefabFieldMenu(World& world, entt::entity entity, const char* component,
@@ -4063,11 +4085,13 @@ void EditorLayer::PrefabFieldMenu(World& world, entt::entity entity, const char*
         if (m_AssetsPtr)
             SceneSerializer::RevertPrefabField(world, *m_AssetsPtr, entity, component, field);
     }
-    if (ImGui::MenuItem(ICON_FA_BOX_ARCHIVE "  Apply to Prefab"))
-        SceneSerializer::ApplyPrefabField(world, entity, component, field);
+    if (ImGui::MenuItem(ICON_FA_BOX_ARCHIVE "  Apply to Prefab")) {
+        PushUndo(world, "Apply to Prefab"); // one step with the .prefab write, which the file journal joins
+        ApplyPrefabFieldToInstances(world, m_AssetsPtr, entity, component, field);
+    }
     if (ImGui::IsItemHovered())
-        EditorUI::SetTooltip("Write this value into the .prefab file. Other instances\n"
-                             "pick it up on their next load. Changes the asset \xE2\x80\x94 not undoable.");
+        EditorUI::SetTooltip("Write this value into the .prefab file. Other instances that\n"
+                             "don't override it follow it. Undo puts the file back.");
 }
 
 // PropertyLabel plus the override affordance: when (component, field) on `entity` differs from
@@ -4113,14 +4137,15 @@ void EditorLayer::PrefabFieldMenuMulti(World& world, const std::vector<entt::ent
                 if (SceneSerializer::IsPrefabFieldOverridden(world, e, component, field))
                     SceneSerializer::RevertPrefabField(world, *m_AssetsPtr, e, component, field);
     }
-    if (ImGui::MenuItem(ICON_FA_BOX_ARCHIVE "  Apply to Prefab"))
+    if (ImGui::MenuItem(ICON_FA_BOX_ARCHIVE "  Apply to Prefab")) {
+        PushUndo(world, "Apply to Prefab");
         for (entt::entity e : sel)
             if (SceneSerializer::IsPrefabFieldOverridden(world, e, component, field))
-                SceneSerializer::ApplyPrefabField(world, e, component, field);
+                ApplyPrefabFieldToInstances(world, m_AssetsPtr, e, component, field);
+    }
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Write each selected instance's value into its .prefab file.\n"
-                             "Other instances pick it up on their next load. Changes the asset "
-                             "\xE2\x80\x94 not undoable.");
+                             "Other instances that don't override it follow it. Undo puts the file back.");
 }
 
 void EditorLayer::PrefabOverrideLabelMulti(World& world, const std::vector<entt::entity>& sel,
