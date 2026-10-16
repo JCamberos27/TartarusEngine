@@ -32,7 +32,27 @@ namespace Glass {
 
 namespace {
 constexpr float kSettleEps = 1e-3f;      // a tween this close to its target has landed
-constexpr ImGuiID kChannelValue = 0x474C5331u; // "GLS1": the one ImAnim channel each id uses
+constexpr ImGuiID kChannelValue = 0x474C5331u; // "GLS1": the float channel each id uses
+constexpr ImGuiID kChannelColor = 0x474C5332u; // "GLS2": colour tweens
+constexpr ImGuiID kChannelVec2  = 0x474C5333u; // "GLS3": 2D tweens
+
+// Clip definitions are tiny and few; reserve accordingly instead of ImAnim's default 256 clips /
+// 4096 instances, which would otherwise sit allocated for the life of the editor.
+constexpr int kClipCapacity     = 16;
+constexpr int kInstanceCapacity = 8;
+void EnsureClipSystem() {
+    static bool s_Init = false;
+    if (!s_Init) { iam_clip_init(kClipCapacity, kInstanceCapacity); s_Init = true; }
+}
+
+bool NearColor(const ImVec4& a, const ImVec4& b) {
+    return std::fabs(a.x - b.x) < kSettleEps && std::fabs(a.y - b.y) < kSettleEps &&
+           std::fabs(a.z - b.z) < kSettleEps && std::fabs(a.w - b.w) < kSettleEps;
+}
+bool NearVec2(const ImVec2& a, const ImVec2& b) {
+    // Screen space: a tenth of a pixel is landed.
+    return std::fabs(a.x - b.x) < 0.1f && std::fabs(a.y - b.y) < 0.1f;
+}
 
 iam_ease_desc ToDesc(const MotionSpec& s) {
     iam_ease_desc d = {s.ease, s.p0, s.p1, s.p2, s.p3};
@@ -137,6 +157,8 @@ ImAnimContext::Entry& ImAnimContext::Add(ImGuiID id, Kind kind) {
     e.id = id;
     e.kind = kind;
     e.from = 0.0f;
+    e.from4 = ImVec4(0, 0, 0, 0);
+    if (kind == Kind::Clip) ++m_LiveClips;
     e.aux = -1.0f;
     e.start = m_Time;
     e.duration = 0.0f;
@@ -152,6 +174,13 @@ void ImAnimContext::Remove(ImGuiID id) {
     const int slot = m_Index.GetInt(id, 0);
     if (slot <= 0) return;
     const int idx = slot - 1;
+    if (m_Entries[idx].kind == Kind::Clip) {
+        // Free the instance's values now; its slot is reclaimed by iam_clip_gc once no clip plays.
+        iam_instance inst = iam_get_instance(id);
+        if (inst.valid()) inst.destroy();
+        --m_LiveClips;
+        m_ClipSlotsDirty = true;
+    }
     const int last = m_Entries.Size - 1;
     if (idx != last) {
         m_Entries[idx] = m_Entries[last];
@@ -181,6 +210,10 @@ size_t ImAnimContext::HeldBytes() const {
 }
 
 void ImAnimContext::Reset() {
+    for (int i = m_Entries.Size - 1; i >= 0; --i)
+        if (m_Entries[i].kind == Kind::Clip) Remove(m_Entries[i].id);
+    ReclaimClipSlots();
+    m_LiveClips = 0;
     m_Entries.clear();
     m_Index.Clear();
     m_DeadKeys = 0;
@@ -215,6 +248,17 @@ void ImAnimContext::NewFrame() {
         if (m_Entries[i].touched < m_Frame - kStaleFrames) Remove(m_Entries[i].id);
 
     if (m_Frame % kImAnimGcInterval == 0) iam_gc((unsigned)(kImAnimGcInterval * 2));
+
+    // Clips advance only while one plays; a finished instance is forgotten (its final values read
+    // through ClipFloat's fallback from then on).
+    if (m_LiveClips > 0) {
+        iam_clip_update(io.DeltaTime);
+        for (int i = m_Entries.Size - 1; i >= 0; --i) {
+            if (m_Entries[i].kind != Kind::Clip) continue;
+            if (!iam_get_instance(m_Entries[i].id).is_playing()) Remove(m_Entries[i].id);
+        }
+    }
+    if (m_LiveClips == 0 && m_ClipSlotsDirty) ReclaimClipSlots();
 
     if (m_Entries.Size == 0) {
         if (++m_IdleFrames >= kIdleFramesBeforePoolRelease && !m_PoolsReleased) {
@@ -307,6 +351,176 @@ float ImAnimContext::Aux(ImGuiID id, float fallback) const {
 
 void ImAnimContext::SetAux(ImGuiID id, float value) {
     if (Entry* e = Find(id)) e->aux = value;
+}
+
+void ImAnimContext::ReclaimClipSlots() {
+    // iam_instance::destroy clears an instance's values but leaves its slot; iam_clip_gc drops
+    // slots not seen since the clip clock last ticked. Tick it once (nothing is playing, so this
+    // evaluates nothing) and sweep everything older than that.
+    iam_clip_update(0.0f);
+    iam_clip_gc(0);
+    m_ClipSlotsDirty = false;
+}
+
+ImVec4 ImAnimContext::AnimateColor(ImGuiID id, ImVec4 target, ImVec4 rest, const MotionSpec& in, const MotionSpec& out) {
+    const bool atRest = NearColor(target, rest);
+    Entry* e = Find(id);
+    if (!e) {
+        if (atRest || m_ReduceMotion) return target;
+        e = &Add(id, Kind::Color);
+        e->from4 = rest;
+        iam_tween_color(id, kChannelColor, rest, 0.0f, ToDesc(in), iam_policy_cut, iam_col_oklab, 0.0f, rest);
+    }
+    if (m_ReduceMotion) {
+        Remove(id);
+        return target;
+    }
+    e->touched = m_Frame;
+    const MotionSpec& spec = atRest ? out : in;
+    const ImVec4 v = iam_tween_color(id, kChannelColor, target, spec.durationMs * 0.001f, ToDesc(spec),
+                                     iam_policy_crossfade, iam_col_oklab, ImGui::GetIO().DeltaTime, e->from4);
+    if (atRest && NearColor(v, target)) {
+        Remove(id);
+        return target;
+    }
+    return v;
+}
+
+ImVec2 ImAnimContext::Animate2(ImGuiID id, ImVec2 target, ImVec2 rest, const MotionSpec& spec) {
+    const bool atRest = NearVec2(target, rest);
+    Entry* e = Find(id);
+    if (!e) {
+        if (atRest || m_ReduceMotion) return target;
+        e = &Add(id, Kind::Vec2);
+        e->from4 = ImVec4(rest.x, rest.y, 0, 0);
+        iam_tween_vec2(id, kChannelVec2, rest, 0.0f, ToDesc(spec), iam_policy_cut, 0.0f, rest);
+    }
+    if (m_ReduceMotion) {
+        Remove(id);
+        return target;
+    }
+    e->touched = m_Frame;
+    const ImVec2 v = iam_tween_vec2(id, kChannelVec2, target, spec.durationMs * 0.001f, ToDesc(spec),
+                                    iam_policy_crossfade, ImGui::GetIO().DeltaTime, ImVec2(e->from4.x, e->from4.y));
+    if (atRest && NearVec2(v, target)) {
+        Remove(id);
+        return target;
+    }
+    return v;
+}
+
+float ImAnimContext::Noise(ImGuiID seed, float speedHz, float amplitude) const {
+    if (m_ReduceMotion) return 0.0f;
+    iam_noise_opts opts;
+    opts.type = iam_noise_simplex;
+    opts.octaves = 2;
+    opts.persistence = 0.5f;
+    // Each seed walks its own row of the 2D field, so two indicators never move in lockstep.
+    const float row = (float)(seed % 1024u) * 7.31f;
+    return amplitude * iam_noise_2d((float)m_Time * speedHz, row, opts);
+}
+
+float ImAnimContext::Oscillate(float hz, float phase) const {
+    if (m_ReduceMotion) return 0.0f;
+    return std::sin(((float)m_Time * hz + phase) * 6.28318530718f);
+}
+
+void ImAnimContext::TriggerWiggle(ImGuiID id, const ShakeSpec& spec) {
+    Pulse(id, spec.durationMs * 0.001f);
+}
+
+float ImAnimContext::Wiggle(ImGuiID id, const ShakeSpec& spec) {
+    if (!PulseActive(id)) return 0.0f;
+    const float t = PulseElapsed(id, 0.0f);
+    if (PulseProgress(id) >= 1.0f) return 0.0f;
+    return SpringImpulse(t, spec.mass, spec.stiffness, spec.damping, spec.amplitudePx * Scale());
+}
+
+void ImAnimContext::DefineClip(ImGuiID clipId, const ClipKey* keys, int count) {
+    EnsureClipSystem();
+    if (iam_clip_exists(clipId)) return;
+    iam_clip clip = iam_clip::begin(clipId);
+    for (int i = 0; i < count; ++i)
+        clip.key_float(keys[i].channel, keys[i].timeMs * 0.001f, keys[i].value, keys[i].ease);
+    clip.end();
+}
+
+bool ImAnimContext::ClipDefined(ImGuiID clipId) { return iam_clip_exists(clipId); }
+float ImAnimContext::ClipSeconds(ImGuiID clipId) { return iam_clip_exists(clipId) ? iam_clip_duration(clipId) : 0.0f; }
+
+void ImAnimContext::PlayClip(ImGuiID id, ImGuiID clipId) {
+    if (m_ReduceMotion || !iam_clip_exists(clipId)) { Remove(id); return; }
+    Entry* e = Find(id);
+    if (e && e->kind != Kind::Clip) { Remove(id); e = nullptr; }
+    if (!e) e = &Add(id, Kind::Clip);
+    e->touched = m_Frame;
+    iam_play(clipId, id);
+}
+
+float ImAnimContext::ClipFloat(ImGuiID id, ImGuiID channel, float fallback) {
+    Entry* e = Find(id);
+    if (!e || e->kind != Kind::Clip) return fallback;
+    e->touched = m_Frame;
+    float v = fallback;
+    if (!iam_get_instance(id).get_float(channel, &v)) return fallback;
+    return v;
+}
+
+bool ImAnimContext::ClipPlaying(ImGuiID id) const {
+    const Entry* e = Find(id);
+    return e && e->kind == Kind::Clip;
+}
+
+void ImAnimContext::DefinePath(ImGuiID pathId, ImVec2 start, const PathSeg* segs, int count) {
+    if (iam_path_exists(pathId)) return;
+    iam_path p = iam_path::begin(pathId, start);
+    for (int i = 0; i < count; ++i) {
+        if (segs[i].kind == PathSeg::Cubic) p.cubic_to(segs[i].c1, segs[i].c2, segs[i].end);
+        else                                p.line_to(segs[i].end);
+    }
+    p.end();
+    iam_path_build_arc_lut(pathId, 48); // constant speed along the stroke: a tick draws evenly
+}
+
+bool ImAnimContext::PathDefined(ImGuiID pathId) { return iam_path_exists(pathId); }
+
+ImVec2 ImAnimContext::PathPoint(ImGuiID pathId, float t) {
+    t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+    return iam_path_evaluate_at_distance(pathId, t * iam_path_length(pathId));
+}
+
+ImVec2 ImAnimContext::PathMorph(ImGuiID pathA, ImGuiID pathB, float t, float blend) {
+    return iam_path_morph(pathA, pathB, t, blend);
+}
+
+void ImAnimContext::TextStagger(ImGuiID id, const char* text, ImVec2 pos, ImU32 col, float progress,
+                                float charDelayMs, float charMs, float risePx) {
+    iam_text_stagger_opts o;
+    o.pos = pos;
+    o.effect = iam_text_fx_slide_up;
+    o.char_delay = charDelayMs * 0.001f;
+    o.char_duration = charMs * 0.001f;
+    o.effect_intensity = risePx * Scale();
+    o.ease = iam_ease_preset(iam_ease_out_cubic);
+    o.color = col;
+    iam_text_stagger(id, text, m_ReduceMotion ? 1.0f : progress, o);
+}
+
+float ImAnimContext::TextStaggerSeconds(const char* text, float charDelayMs, float charMs) {
+    iam_text_stagger_opts o;
+    o.char_delay = charDelayMs * 0.001f;
+    o.char_duration = charMs * 0.001f;
+    return iam_text_stagger_duration(text, o);
+}
+
+void ImAnimContext::ScrollToY(float y, const MotionSpec& spec) {
+    if (m_ReduceMotion) { ImGui::SetScrollY(y); return; }
+    iam_scroll_to_y(y, spec.durationMs * 0.001f, ToDesc(spec));
+}
+
+void ImAnimContext::ScrollToBottom(const MotionSpec& spec) {
+    if (m_ReduceMotion) { ImGui::SetScrollY(ImGui::GetScrollMaxY()); return; }
+    iam_scroll_to_bottom(spec.durationMs * 0.001f, ToDesc(spec));
 }
 
 ImAnimContext& Motion() {
