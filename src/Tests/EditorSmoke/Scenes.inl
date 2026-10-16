@@ -65,6 +65,7 @@ Query Row(int nth) {
     Query q = ByTagPrefix("row:");
     q.Root = kHierarchy;
     q.Nth = nth;
+    q.AnchorX = 0.25f; // the name side, like ByTag("row:..."): a narrow row's centre is its icon strip
     return q;
 }
 int RowCount() {
