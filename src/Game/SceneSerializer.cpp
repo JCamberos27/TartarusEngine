@@ -1970,6 +1970,10 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root, bool fromUndo
                 if (add != "{}" && AssetDatabase::MergeMetaFields(path, add)) ++migrated;
                 continue;
             }
+            // Import settings the .meta never had (a texture's guessed normal-map import is kept
+            // in memory only) are restored to memory only, not written into the .meta.
+            bool metaHasImporter = false;
+            try { metaHasImporter = json::parse(AssetDatabase::ReadMetaFields(path)).contains("importer"); } catch (...) {}
 
             if (entry.contains("folder")) assets.SetAssetFolder(path, entry["folder"].get<std::string>());
             if (entry.contains("displayName")) assets.SetDisplayName(path, entry["displayName"].get<std::string>());
@@ -1994,7 +1998,7 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root, bool fromUndo
                 st.MaxTextureSize = t.value("maxTextureSize", 2048);
                 st.AnisoLevel = std::clamp(t.value("anisoLevel", 8), 1, 16);
                 st.CompressionMode = (TextureImportSettings::Compression)std::clamp(t.value("compression", 0), 0, 2);
-                assets.SetTextureSettings(path, st);
+                assets.SetTextureSettings(path, st, metaHasImporter);
             }
             if (entry.contains("modelImport")) {
                 const auto& m = entry["modelImport"];
@@ -2013,7 +2017,7 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root, bool fromUndo
                 if (m.contains("excludeNodes") && m["excludeNodes"].is_array())
                     for (const auto& n : m["excludeNodes"])
                         if (n.is_string()) sm.ExcludeNodes.push_back(n.get<std::string>());
-                assets.SetModelSettings(path, sm);
+                assets.SetModelSettings(path, sm, metaHasImporter);
             }
         }
         if (migrated > 0)
