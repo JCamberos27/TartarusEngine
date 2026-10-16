@@ -705,8 +705,9 @@ TextureImportSettings AssetLibrary::GetTextureSettings(const std::string& path) 
     return it != m_TextureSettings.end() ? it->second : TextureImportSettings{};
 }
 
-void AssetLibrary::SetTextureSettings(const std::string& path, const TextureImportSettings& settings) {
+void AssetLibrary::SetTextureSettings(const std::string& path, const TextureImportSettings& settings, bool writeMeta) {
     m_TextureSettings[path] = settings;
+    if (!writeMeta) return;
     json imp;
     imp["textureType"]    = (int)settings.TextureType;
     imp["generateMipmaps"]= settings.GenerateMipmaps;
@@ -724,8 +725,9 @@ ModelImportSettings AssetLibrary::GetModelSettings(const std::string& path) cons
     return it != m_ModelSettings.end() ? it->second : ModelImportSettings{};
 }
 
-void AssetLibrary::SetModelSettings(const std::string& path, const ModelImportSettings& settings) {
+void AssetLibrary::SetModelSettings(const std::string& path, const ModelImportSettings& settings, bool writeMeta) {
     m_ModelSettings[path] = settings;
+    if (!writeMeta) return;
     json imp;
     imp["globalScale"]       = settings.GlobalScale;
     imp["importNormals"]     = settings.ImportNormals;
