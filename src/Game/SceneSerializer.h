@@ -45,6 +45,12 @@ namespace SceneSerializer {
     // asset created or deleted after this snapshot was taken is correctly gone/restored on
     // load, not left merged with whatever's currently in the library.
     std::string SaveToString(const World& world, const AssetLibrary& assets);
+    // #15 - two of those snapshots hold the same scene (entities and scene settings), whatever
+    // their AssetLibrary state, which the Asset Browser re-lists on its own between undo steps.
+    bool SameSceneContent(const std::string& a, const std::string& b);
+    // `scene`'s scene with `library`'s AssetLibrary state (both SaveToString snapshots). Empty
+    // when either won't parse.
+    std::string WithLibraryState(const std::string& scene, const std::string& library);
     bool LoadFromString(World& world, AssetLibrary& assets, const std::string& data);
 
     // #148 — writes an entity-only snapshot (the play-mode one from SaveToString(world)) plus the

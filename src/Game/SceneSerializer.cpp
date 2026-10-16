@@ -1934,6 +1934,11 @@ void AppendAssetLibraryJson(json& root, const AssetLibrary& assets, bool include
         if (m.PivotOffset != glm::vec3(0.0f)) mi["pivotOffset"] = {m.PivotOffset.x, m.PivotOffset.y, m.PivotOffset.z};
         if (!m.ExcludeNodes.empty()) mi["excludeNodes"] = m.ExcludeNodes;
         if (m.SkinIgnoresMeshNode) mi["skinIgnoresMeshNode"] = true;
+        if (!m.ClipTrims.empty()) {
+            json trims = json::array();
+            for (const auto& t : m.ClipTrims) trims.push_back({{"clip", t.Clip}, {"start", t.StartSeconds}, {"end", t.EndSeconds}});
+            mi["clipTrims"] = trims;
+        }
     }
     root["assetMeta"] = meta;
 }
@@ -1970,6 +1975,10 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root, bool fromUndo
                 if (add != "{}" && AssetDatabase::MergeMetaFields(path, add)) ++migrated;
                 continue;
             }
+            // Import settings the .meta never had (a texture's guessed normal-map import is kept
+            // in memory only) are restored to memory only, not written into the .meta.
+            bool metaHasImporter = false;
+            try { metaHasImporter = json::parse(AssetDatabase::ReadMetaFields(path)).contains("importer"); } catch (...) {}
 
             if (entry.contains("folder")) assets.SetAssetFolder(path, entry["folder"].get<std::string>());
             if (entry.contains("displayName")) assets.SetDisplayName(path, entry["displayName"].get<std::string>());
@@ -1994,7 +2003,7 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root, bool fromUndo
                 st.MaxTextureSize = t.value("maxTextureSize", 2048);
                 st.AnisoLevel = std::clamp(t.value("anisoLevel", 8), 1, 16);
                 st.CompressionMode = (TextureImportSettings::Compression)std::clamp(t.value("compression", 0), 0, 2);
-                assets.SetTextureSettings(path, st);
+                assets.SetTextureSettings(path, st, metaHasImporter);
             }
             if (entry.contains("modelImport")) {
                 const auto& m = entry["modelImport"];
@@ -2013,7 +2022,11 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root, bool fromUndo
                 if (m.contains("excludeNodes") && m["excludeNodes"].is_array())
                     for (const auto& n : m["excludeNodes"])
                         if (n.is_string()) sm.ExcludeNodes.push_back(n.get<std::string>());
-                assets.SetModelSettings(path, sm);
+                if (m.contains("clipTrims") && m["clipTrims"].is_array())
+                    for (const auto& t : m["clipTrims"])
+                        if (t.is_object() && t.value("clip", std::string()).size())
+                            sm.ClipTrims.push_back({t.value("clip", std::string()), t.value("start", 0.0f), t.value("end", 0.0f)});
+                assets.SetModelSettings(path, sm, metaHasImporter);
             }
         }
         if (migrated > 0)
@@ -2323,6 +2336,38 @@ bool SceneSerializer::SaveSnapshotToFile(const std::string& entitySnapshot, cons
         return false;
     }
     return AtomicFile::WriteBytes(std::filesystem::path(path), text, /*binary=*/false);
+}
+
+namespace {
+// The keys SaveToString(world, assets) adds on top of the scene: its own marker and every key
+// AppendAssetLibraryJson writes.
+constexpr const char* kLibraryKeys[] = {"hasAssetLibrarySnapshot", "libraryModels", "libraryTextures", "libraryMaterials",
+                                        "librarySounds", "libraryPrefabs", "assetFolders", "assetMeta"};
+} // namespace
+
+bool SceneSerializer::SameSceneContent(const std::string& a, const std::string& b) {
+    if (a == b) return true;
+    try {
+        json ja = json::parse(a), jb = json::parse(b);
+        for (const char* k : kLibraryKeys) { ja.erase(k); jb.erase(k); }
+        return ja == jb;
+    } catch (const std::exception&) {
+        return false;
+    }
+}
+
+std::string SceneSerializer::WithLibraryState(const std::string& scene, const std::string& library) {
+    try {
+        json out = json::parse(scene);
+        const json lib = json::parse(library);
+        for (const char* k : kLibraryKeys) {
+            out.erase(k);
+            if (const auto it = lib.find(k); it != lib.end()) out[k] = *it;
+        }
+        return out.dump();
+    } catch (const std::exception&) {
+        return {};
+    }
 }
 
 std::string SceneSerializer::SaveToString(const World& world, const AssetLibrary& assets) {

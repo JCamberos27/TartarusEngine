@@ -1724,7 +1724,10 @@ void TextEditor::MoveTop(bool aSelect)
 void TextEditor::TextEditor::MoveBottom(bool aSelect)
 {
 	auto oldPos = GetCursorPosition();
-	auto newPos = Coordinates((int)mLines.size() - 1, 0);
+	// Tartarus: the end of the document, not the start of its last line (upstream went to
+	// column 0, so Ctrl+End then typing inserted before the last line's text).
+	const int lastLine = (int)mLines.size() - 1;
+	auto newPos = Coordinates(lastLine, GetLineMaxColumn(lastLine));
 	SetCursorPosition(newPos);
 	if (aSelect)
 	{

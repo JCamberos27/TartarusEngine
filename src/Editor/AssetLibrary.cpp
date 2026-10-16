@@ -15,6 +15,8 @@
 #include <map>
 #include <set>
 #include <json.hpp>
+#include <charconv>
+#include <cstdlib>
 
 using json = nlohmann::json;
 
@@ -464,6 +466,13 @@ void AssetLibrary::RemovePrefab(const std::string& path) {
 void AssetLibrary::SetAssetFolder(const std::string& assetKey, const std::string& folder) {
     if (folder.empty()) m_AssetFolder.erase(assetKey);
     else m_AssetFolder[assetKey] = folder;
+    // A folder adopted from disk (AdoptDiskFolder) was never in the .meta. Restoring it - every
+    // undo restores every asset's folder - must not pin it there, or the asset stops following
+    // its file when that moves on disk.
+    try {
+        const json j = json::parse(AssetDatabase::ReadMetaFields(assetKey));
+        if (!j.contains("folder") && folder == DiskFolderFor(assetKey)) return;
+    } catch (...) { WarnBadMeta(assetKey); }
     AssetDatabase::MergeMetaFields(assetKey, json{{"folder", folder}}.dump());
 }
 
@@ -546,7 +555,10 @@ void AssetLibrary::PruneToKeepSet(const std::set<std::string>& modelPaths, const
 // The constructor lives in AssetLibraryAsync.cpp, where AsyncLoader is a complete type.
 
 void AssetLibrary::PersistFolders() {
-    ProjectSettings::SetAssetFolders(m_Folders);
+    // Only the saved list: writing m_Folders put every folder found on disk into the tracked
+    // project/settings.json the first time any folder was made, renamed or deleted (#14).
+    if (m_SavedFolders == ProjectSettings::AssetFolders()) return;
+    ProjectSettings::SetAssetFolders(m_SavedFolders);
     ProjectSettings::Save();
 }
 
@@ -620,6 +632,7 @@ std::string AssetLibrary::AddFolderPath(const std::string& dir) {
 void AssetLibrary::CreateFolder(const std::string& folderPath) {
     if (std::find(m_Folders.begin(), m_Folders.end(), folderPath) == m_Folders.end()) {
         m_Folders.push_back(folderPath);
+        m_SavedFolders.push_back(folderPath);
         PersistFolders();
     }
 }
@@ -631,6 +644,7 @@ void AssetLibrary::RenameFolder(const std::string& oldPath, const std::string& n
         else if (path.rfind(oldPath + "/", 0) == 0) path = newPath + path.substr(oldPath.size());
     };
     for (auto& f : m_Folders) remap(f);
+    for (auto& f : m_SavedFolders) remap(f);
     for (auto& [assetKey, folder] : m_AssetFolder) remap(folder);
     PersistFolders();
     if (OnFolderPathChanged) OnFolderPathChanged(oldPath, newPath);
@@ -649,6 +663,7 @@ bool AssetLibrary::CanDeleteFolder(const std::string& folderPath) const {
 void AssetLibrary::DeleteFolder(const std::string& folderPath) {
     if (!CanDeleteFolder(folderPath)) return;
     m_Folders.erase(std::remove(m_Folders.begin(), m_Folders.end(), folderPath), m_Folders.end());
+    m_SavedFolders.erase(std::remove(m_SavedFolders.begin(), m_SavedFolders.end(), folderPath), m_SavedFolders.end());
     PersistFolders();
     if (OnFolderPathChanged) OnFolderPathChanged(folderPath, std::string());
 }
@@ -680,9 +695,9 @@ void AssetLibrary::DeleteFolderRecursive(const std::string& folderPath) {
     // Every asset that belonged under this folder is gone now, so every subfolder (and the
     // folder itself) is empty - just drop them from the folder list directly rather than going
     // through CanDeleteFolder/DeleteFolder's "must be empty" guard one at a time.
-    m_Folders.erase(std::remove_if(m_Folders.begin(), m_Folders.end(), [&](const std::string& f) {
-        return f == folderPath || f.rfind(folderPath + "/", 0) == 0;
-    }), m_Folders.end());
+    auto underFolder = [&](const std::string& f) { return f == folderPath || f.rfind(folderPath + "/", 0) == 0; };
+    m_Folders.erase(std::remove_if(m_Folders.begin(), m_Folders.end(), underFolder), m_Folders.end());
+    m_SavedFolders.erase(std::remove_if(m_SavedFolders.begin(), m_SavedFolders.end(), underFolder), m_SavedFolders.end());
     PersistFolders();
     if (OnFolderPathChanged) OnFolderPathChanged(folderPath, std::string());
 }
@@ -692,8 +707,16 @@ TextureImportSettings AssetLibrary::GetTextureSettings(const std::string& path) 
     return it != m_TextureSettings.end() ? it->second : TextureImportSettings{};
 }
 
-void AssetLibrary::SetTextureSettings(const std::string& path, const TextureImportSettings& settings) {
-    m_TextureSettings[path] = settings;
+namespace {
+// A float as the shortest decimal that reads back as it: -0.0055f is written "-0.0055", not the
+// double it widens to (-0.005499999970197678), which rewrote hand-written .meta values with noise.
+double ShortFloat(float v) {
+    char buf[32];
+    const auto r = std::to_chars(buf, buf + sizeof buf, v);
+    return r.ec == std::errc() ? std::strtod(std::string(buf, r.ptr).c_str(), nullptr) : (double)v;
+}
+
+json TextureImporterJson(const TextureImportSettings& settings) {
     json imp;
     imp["textureType"]    = (int)settings.TextureType;
     imp["generateMipmaps"]= settings.GenerateMipmaps;
@@ -703,6 +726,51 @@ void AssetLibrary::SetTextureSettings(const std::string& path, const TextureImpo
     imp["maxTextureSize"] = settings.MaxTextureSize;
     imp["anisoLevel"]     = settings.AnisoLevel;
     imp["compression"]    = (int)settings.CompressionMode;
+    return imp;
+}
+
+json ModelImporterJson(const ModelImportSettings& settings) {
+    json imp;
+    imp["globalScale"]       = ShortFloat(settings.GlobalScale);
+    imp["importNormals"]     = settings.ImportNormals;
+    imp["importAnimations"]  = settings.ImportAnimations;
+    imp["importSkeleton"]    = settings.ImportSkeleton;
+    imp["optimizeGraph"]     = settings.OptimizeGraph;
+    if (settings.SimplifyRatio < 1.0f) imp["simplify"] = ShortFloat(settings.SimplifyRatio);
+    imp["materialImportMode"]= (int)settings.MaterialImportMode;
+    if (settings.SourceUpAxis != ModelImportSettings::UpAxis::Y) imp["upAxis"] = Model::UpAxisName(settings.SourceUpAxis);
+    if (settings.PivotOffset != glm::vec3(0.0f))
+        imp["pivotOffset"] = {ShortFloat(settings.PivotOffset.x), ShortFloat(settings.PivotOffset.y), ShortFloat(settings.PivotOffset.z)};
+    if (!settings.ExcludeNodes.empty()) imp["excludeNodes"] = settings.ExcludeNodes;
+    if (settings.SkinIgnoresMeshNode) imp["skinIgnoresMeshNode"] = true;
+    if (!settings.ClipTrims.empty()) {
+        json trims = json::array();
+        for (const auto& t : settings.ClipTrims)
+            trims.push_back({{"clip", t.Clip}, {"start", ShortFloat(t.StartSeconds)}, {"end", ShortFloat(t.EndSeconds)}});
+        imp["clipTrims"] = trims;
+    }
+    return imp;
+}
+
+// The importer block `path`'s .meta holds now, read back into settings and written out the way
+// `toJson` writes them; null when there is none. An undo restores every asset's import settings
+// (see SceneSerializer's assetMeta), so a write whose settings are already there is skipped: it
+// rewrote untouched .meta files (dropped keys spelled differently, float noise) on every undo.
+template <class Settings, class Parse, class ToJson>
+json CurrentImporterJson(const std::string& path, Parse parse, ToJson toJson) {
+    try {
+        Settings cur;
+        if (parse(json::parse(AssetDatabase::ReadMetaFields(path)), cur)) return toJson(cur);
+    } catch (...) {}
+    return nullptr;
+}
+} // namespace
+
+void AssetLibrary::SetTextureSettings(const std::string& path, const TextureImportSettings& settings, bool writeMeta) {
+    m_TextureSettings[path] = settings;
+    if (!writeMeta) return;
+    const json imp = TextureImporterJson(settings);
+    if (CurrentImporterJson<TextureImportSettings>(path, ParseTextureImporter, TextureImporterJson) == imp) return;
     AssetDatabase::MergeMetaFields(path, json{{"importer", imp}}.dump());
 }
 
@@ -711,26 +779,11 @@ ModelImportSettings AssetLibrary::GetModelSettings(const std::string& path) cons
     return it != m_ModelSettings.end() ? it->second : ModelImportSettings{};
 }
 
-void AssetLibrary::SetModelSettings(const std::string& path, const ModelImportSettings& settings) {
+void AssetLibrary::SetModelSettings(const std::string& path, const ModelImportSettings& settings, bool writeMeta) {
     m_ModelSettings[path] = settings;
-    json imp;
-    imp["globalScale"]       = settings.GlobalScale;
-    imp["importNormals"]     = settings.ImportNormals;
-    imp["importAnimations"]  = settings.ImportAnimations;
-    imp["importSkeleton"]    = settings.ImportSkeleton;
-    imp["optimizeGraph"]     = settings.OptimizeGraph;
-    if (settings.SimplifyRatio < 1.0f) imp["simplify"] = settings.SimplifyRatio;
-    imp["materialImportMode"]= (int)settings.MaterialImportMode;
-    if (settings.SourceUpAxis != ModelImportSettings::UpAxis::Y) imp["upAxis"] = Model::UpAxisName(settings.SourceUpAxis);
-    if (settings.PivotOffset != glm::vec3(0.0f))
-        imp["pivotOffset"] = {settings.PivotOffset.x, settings.PivotOffset.y, settings.PivotOffset.z};
-    if (!settings.ExcludeNodes.empty()) imp["excludeNodes"] = settings.ExcludeNodes;
-    if (settings.SkinIgnoresMeshNode) imp["skinIgnoresMeshNode"] = true;
-    if (!settings.ClipTrims.empty()) {
-        json trims = json::array();
-        for (const auto& t : settings.ClipTrims) trims.push_back({{"clip", t.Clip}, {"start", t.StartSeconds}, {"end", t.EndSeconds}});
-        imp["clipTrims"] = trims;
-    }
+    if (!writeMeta) return;
+    const json imp = ModelImporterJson(settings);
+    if (CurrentImporterJson<ModelImportSettings>(path, ParseModelImporter, ModelImporterJson) == imp) return;
     AssetDatabase::MergeMetaFields(path, json{{"importer", imp}}.dump());
 }
 

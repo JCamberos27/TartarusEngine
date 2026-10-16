@@ -182,7 +182,7 @@ public:
     // Every rename/delete call site goes through these three functions, so one hook covers them.
     std::function<void(const std::string& oldPath, const std::string& newPath)> OnFolderPathChanged;
 
-    // Writes m_Folders back to project/settings.json (#121).
+    // Writes m_SavedFolders back to project/settings.json (#121).
     void PersistFolders();
 
     // An asset whose .meta never chose a folder (loaded by a scene or a weapon file rather than
@@ -208,9 +208,11 @@ public:
     // Import settings, keyed by asset path. Reading returns a default-constructed settings
     // struct for a path that's never been customized, so callers never need an existence check.
     TextureImportSettings GetTextureSettings(const std::string& path) const;
-    void SetTextureSettings(const std::string& path, const TextureImportSettings& settings);
+    // writeMeta=false keeps the settings in memory only (an undo restoring settings the .meta
+    // never had, such as a guessed normal-map import).
+    void SetTextureSettings(const std::string& path, const TextureImportSettings& settings, bool writeMeta = true);
     ModelImportSettings GetModelSettings(const std::string& path) const;
-    void SetModelSettings(const std::string& path, const ModelImportSettings& settings);
+    void SetModelSettings(const std::string& path, const ModelImportSettings& settings, bool writeMeta = true);
 
     // Re-imports the cached Texture/Model at `path` (if it's actually loaded) using whatever
     // settings are currently stored for it — call SetTexture/ModelSettings first, then this.
@@ -307,6 +309,9 @@ private:
     std::map<std::string, std::string> m_AssetFolder;  // asset key -> folder path ("" = root)
     std::map<std::string, std::string> m_DisplayNames; // asset key -> user-given display name
     std::vector<std::string> m_Folders;                // every known folder path, so empty ones persist too
+    // The folders project/settings.json keeps: the ones it listed plus the ones made in the browser.
+    // Folders found from where files sit on disk (AddFolderPath) are in m_Folders only (#14).
+    std::vector<std::string> m_SavedFolders;
 
     std::map<std::string, TextureImportSettings> m_TextureSettings;
     std::map<std::string, ModelImportSettings> m_ModelSettings;

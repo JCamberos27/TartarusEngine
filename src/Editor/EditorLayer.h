@@ -1389,6 +1389,7 @@ private:
     // Last committed authored state. Navigation must never serialize the scene; controls
     // that report a change after updating their value still need this pre-edit state.
     std::string m_CurrentUndoScene;
+    unsigned m_OutfitLandedSeen = 0; // OutfitSystem::LandedGeneration() as of the last baseline (#15)
     bool m_ViewportNavDrag = false; // a right/middle drag that began over the Scene view is held (UndoTrigger.h)
     bool m_RequestGlobalUndo = false, m_RequestGlobalRedo = false;
     std::string m_GlobalUndoScene, m_GlobalUndoLabel;
@@ -1397,7 +1398,19 @@ private:
     void EnsureUndoScene(const World& world);
     void BeginSceneUndo(const World& world, const std::string& label);
     void FinishGlobalUndo(const World& world, bool force = false);
+    // #15 - before Undo / Redo restore a snapshot: a scene change made with no undo step (the
+    // world no longer matches m_CurrentUndoScene) is pushed as a step of its own, so restoring
+    // never throws it away along with the step being undone. True when it pushed one.
+    bool JournalUnrecordedChange(const World& world, const std::string& currentJson);
+    // The same, serializing the scene itself (when there is a baseline to compare with). For the
+    // places that drop m_CurrentUndoScene after changing the world on purpose (external file
+    // changes) or set the history aside (Play, Prefab Mode): a change made before them would
+    // otherwise end up in the new baseline, and the next Ctrl+Z would revert it unseen.
+    void JournalUnrecordedChange(const World& world);
+    // Drops the baseline when an outfit change landed since it was taken (OutfitSystem::LandedGeneration).
+    void RebaseAfterOutfitChanges();
     void ReloadHistoryFiles(AssetLibrary& assets,const std::vector<EditorFileHistory::State>& files);
+    void RefreshAfterHistoryFiles(const std::vector<EditorFileHistory::State>& files);
 
     // Delta-chain plumbing. `entry`'s own full state is `newFullJson`: it becomes the stack's
     // new top (held in full in `baseJson`), and the outgoing top is re-encoded as a patch off it.
@@ -1409,6 +1422,7 @@ private:
                                 UndoEntry& outEntry, std::string& outFullJson);
     void ClearRedoHistory();  // redo stack + its base, kept in lockstep
     void ClearUndoHistory();  // both stacks and both bases - for New/Open/recovery-restore
+    void RememberLastScene(const std::string& path); // LastScenePath, written now and never journaled as an undo step
 
     // Set at the top of every Draw() call - PushUndo needs AssetLibrary to snapshot its state
     // (folders, display names, import settings) alongside the entity graph, but threading an
@@ -1690,6 +1704,10 @@ private:
     std::unordered_map<std::string, std::pair<unsigned int, std::list<std::string>::iterator>> m_ModelThumbnails;
     unsigned int m_ThumbnailBlitFbo = 0;
     int m_ThumbnailBudgetThisFrame = 0;
+    // Thumbnails dropped mid-frame (a Reimport from a tile's menu, an LRU eviction) may already be
+    // in this frame's draw lists, so their textures are deleted at the start of the next frame.
+    std::vector<unsigned int> m_RetiredThumbnailTextures;
+    void FreeRetiredThumbnailTextures();
     unsigned int ModelThumbnail(Model& model); // cached GL texture, or 0 while over this frame's budget
 
     // #107 - Asset Browser material thumbnails: the material on a sphere, from the same
@@ -2000,6 +2018,9 @@ private:
     std::string m_HierarchyFilter;   // plain substring, or "t:SomeTag" to filter by TagComponent
     entt::entity m_RenamingEntity = entt::null;
     bool m_EntityRenameJustStarted = false;
+    // Set when a blank name was refused: Enter already deactivated the field, so the next frame
+    // gives it keyboard focus back (keeping the typed text) instead of leaving it dead.
+    bool m_EntityRenameRefocus = false;
     char m_EntityRenameBuffer[128] = {};
     // Mirrors m_RenameRejectedFlash for the Asset Browser (#38 B12): seconds left to show the
     // "name can't be blank" inline error when a Hierarchy rename sanitizes down to nothing.

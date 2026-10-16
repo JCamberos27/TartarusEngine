@@ -470,19 +470,36 @@ bool AxisButton(const char* name, ImVec4 tint, ImVec2 size) {
     return clicked;
 }
 
+// Each X/Y/Z field's width, beside the row's label. A narrow Inspector (a 1024px-wide editor) left
+// the three numbers no width at all - only the X/Y/Z tabs drew, and a negative width means "fill
+// minus N" to ImGui. Below about three digits the triplet wraps onto its own full-width line under
+// the label. Shared by DrawVec3Row and MultiEditVec3Row, so every vector row wraps alike.
+float Vec3RowDragWidth(float buttonW, float innerSpacing) {
+    float dragW = (ImGui::GetContentRegionAvail().x - 3.0f * buttonW - 3.0f * innerSpacing) / 3.0f;
+    const float minDragW = ImGui::CalcTextSize("-0.00").x + EditorTheme::Px(8.0f);
+    if (dragW < minDragW) {
+        ImGui::NewLine();
+        dragW = std::max(1.0f, (ImGui::GetContentRegionAvail().x - 3.0f * buttonW - 3.0f * innerSpacing) / 3.0f);
+    }
+    return dragW;
+}
+
 // The display format for one axis of a vector row: three decimals when they fit the field, fewer
 // when the panel is narrow (the exact value is always in the tooltip and shown while editing).
 // `room` is the field's width inside its padding.
 const char* FitAxisFormat(float v, float room) {
-    if (std::fabs(v) < 5.0e-4f) return "0.000"; // never "-0.000" from float dust (#24 P13)
     if (std::fabs(v) >= 1.0e6f) return "%.4g";  // never a ~30-digit decimal (#44 P27)
+    // Zero is a literal, never "-0.000" from float dust (#24 P13), but it drops decimals at the
+    // same widths as any other value: a fixed "0.000" sat beside "0.10" and "7.20" in one row.
     static const char* kFormats[] = {"%.3f", "%.2f", "%.1f", "%.0f"};
-    for (const char* f : kFormats) {
+    static const char* kZeros[] = {"0.000", "0.00", "0.0", "0"};
+    const bool zero = std::fabs(v) < 5.0e-4f;
+    for (size_t i = 0; i < std::size(kFormats); ++i) {
         char buf[32];
-        std::snprintf(buf, sizeof(buf), f, v);
-        if (ImGui::CalcTextSize(buf).x <= room) return f;
+        std::snprintf(buf, sizeof(buf), kFormats[i], v);
+        if (ImGui::CalcTextSize(zero ? kZeros[i] : buf).x <= room) return zero ? kZeros[i] : kFormats[i];
     }
-    return "%.0f";
+    return zero ? "0" : "%.0f";
 }
 
 // Unity/Hazel-style vector row: a colored X/Y/Z button (click to zero that axis) glued to
@@ -516,8 +533,7 @@ bool DrawVec3Row(const char* label, glm::vec3& v, float speed, float minV, float
     float lineHeight = ImGui::GetFrameHeight();
     float buttonW = std::floor(lineHeight * 0.8f);
     float innerSpacing = ImGui::GetStyle().ItemInnerSpacing.x * 0.5f;
-    float fullWidth = ImGui::GetContentRegionAvail().x;
-    float dragW = (fullWidth - 3.0f * buttonW - 3.0f * innerSpacing) / 3.0f;
+    const float dragW = Vec3RowDragWidth(buttonW, innerSpacing);
 
     struct Axis { const char* name; float* value; ImVec4 tint; };
     Axis axes[3] = {
@@ -612,8 +628,7 @@ MultiEditResult MultiEditVec3Row(const char* label, glm::vec3& value, const bool
     float lineHeight = ImGui::GetFrameHeight();
     float buttonW = std::floor(lineHeight * 0.8f);
     float innerSpacing = ImGui::GetStyle().ItemInnerSpacing.x * 0.5f;
-    float fullWidth = ImGui::GetContentRegionAvail().x;
-    float dragW = (fullWidth - 3.0f * buttonW - 3.0f * innerSpacing) / 3.0f;
+    const float dragW = Vec3RowDragWidth(buttonW, innerSpacing);
 
     struct Axis { const char* name; float* v; ImVec4 tint; };
     Axis axes[3] = {
@@ -2812,13 +2827,10 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
             ImGui::TextDisabled("%s", pi.SourcePath.c_str());
             if (!pi.Missing && m_AssetsPtr && !m_InPlayMode) { // #176
                 const std::string src = pi.SourcePath;
-                if (ActionButton(ICON_FA_PEN_TO_SQUARE " Open Prefab", "Edit the prefab itself in Prefab Mode; every instance picks up the changes")) {
-                    EnterPrefabMode(world, *m_AssetsPtr, src);
-                    ImGui::EndChild(); // the header card
-                    ImGui::PopStyleVar(2);
-                    ImGui::PopStyleColor(2);
-                    return; // the world was just replaced; this entity is gone
-                }
+                // Deferred to DrawPrefabModeBar, after every panel has drawn: entering here replaced
+                // the world mid-Inspector, and the early return left the ID / colour stacks unbalanced.
+                if (ActionButton(ICON_FA_PEN_TO_SQUARE " Open Prefab", "Edit the prefab itself in Prefab Mode; every instance picks up the changes"))
+                    m_InspectorRequestedPrefab = src;
             }
             ImGui::TextDisabled(isRoot
                 ? "Transform / name / tag are kept per-instance; other fields track the prefab unless overridden."
@@ -4043,6 +4055,31 @@ void EditorLayer::EndComponentSection() {
     ImGui::Dummy(ImVec2(0.0f, EditorTheme::Px(4.0f)));
 }
 
+namespace {
+// Apply to Prefab, then bring along every other instance of the same .prefab that wasn't
+// overriding the field: left alone, they kept the old value, which now differs from the file, so
+// the next scene save (or undo snapshot) stored it as an override and they never updated.
+void ApplyPrefabFieldToInstances(World& world, AssetLibrary* assets, entt::entity entity,
+                                 const char* component, const char* field) {
+    std::string source;
+    for (entt::entity cur = entity; cur != entt::null && world.Registry.valid(cur);) {
+        if (const auto* pi = world.Registry.try_get<PrefabInstanceComponent>(cur)) { source = pi->SourcePath; break; }
+        const auto* h = world.Registry.try_get<HierarchyComponent>(cur);
+        cur = h ? h->Parent : entt::null;
+    }
+    std::vector<entt::entity> followers;
+    if (assets && !source.empty())
+        for (auto [root, pi] : world.Registry.view<const PrefabInstanceComponent>().each())
+            if (pi.SourcePath == source)
+                for (entt::entity e : pi.InstanceEntities)
+                    if (e != entity && e != entt::null && world.Registry.valid(e) &&
+                        !SceneSerializer::IsPrefabFieldOverridden(world, e, component, field))
+                        followers.push_back(e);
+    if (!SceneSerializer::ApplyPrefabField(world, entity, component, field)) return;
+    for (entt::entity e : followers) SceneSerializer::RevertPrefabField(world, *assets, e, component, field);
+}
+} // namespace
+
 // #302 Part B — the body of the right-click override menu (caller has already Begun the popup).
 // Shared by the reflected-field labels, the Transform rows and the Name field.
 void EditorLayer::PrefabFieldMenu(World& world, entt::entity entity, const char* component,
@@ -4054,11 +4091,13 @@ void EditorLayer::PrefabFieldMenu(World& world, entt::entity entity, const char*
         if (m_AssetsPtr)
             SceneSerializer::RevertPrefabField(world, *m_AssetsPtr, entity, component, field);
     }
-    if (ImGui::MenuItem(ICON_FA_BOX_ARCHIVE "  Apply to Prefab"))
-        SceneSerializer::ApplyPrefabField(world, entity, component, field);
+    if (ImGui::MenuItem(ICON_FA_BOX_ARCHIVE "  Apply to Prefab")) {
+        PushUndo(world, "Apply to Prefab"); // one step with the .prefab write, which the file journal joins
+        ApplyPrefabFieldToInstances(world, m_AssetsPtr, entity, component, field);
+    }
     if (ImGui::IsItemHovered())
-        EditorUI::SetTooltip("Write this value into the .prefab file. Other instances\n"
-                             "pick it up on their next load. Changes the asset \xE2\x80\x94 not undoable.");
+        EditorUI::SetTooltip("Write this value into the .prefab file. Other instances that\n"
+                             "don't override it follow it. Undo puts the file back.");
 }
 
 // PropertyLabel plus the override affordance: when (component, field) on `entity` differs from
@@ -4104,14 +4143,15 @@ void EditorLayer::PrefabFieldMenuMulti(World& world, const std::vector<entt::ent
                 if (SceneSerializer::IsPrefabFieldOverridden(world, e, component, field))
                     SceneSerializer::RevertPrefabField(world, *m_AssetsPtr, e, component, field);
     }
-    if (ImGui::MenuItem(ICON_FA_BOX_ARCHIVE "  Apply to Prefab"))
+    if (ImGui::MenuItem(ICON_FA_BOX_ARCHIVE "  Apply to Prefab")) {
+        PushUndo(world, "Apply to Prefab");
         for (entt::entity e : sel)
             if (SceneSerializer::IsPrefabFieldOverridden(world, e, component, field))
-                SceneSerializer::ApplyPrefabField(world, e, component, field);
+                ApplyPrefabFieldToInstances(world, m_AssetsPtr, e, component, field);
+    }
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Write each selected instance's value into its .prefab file.\n"
-                             "Other instances pick it up on their next load. Changes the asset "
-                             "\xE2\x80\x94 not undoable.");
+                             "Other instances that don't override it follow it. Undo puts the file back.");
 }
 
 void EditorLayer::PrefabOverrideLabelMulti(World& world, const std::vector<entt::entity>& sel,
@@ -4144,12 +4184,26 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
 
     if(std::strcmp(componentName,"Particle System")==0 && phase==ReflectExtraPhase::Bottom) {
         auto* ps=registry.try_get<ParticleSystemComponent>(entity);if(!ps)return;
+        // A narrow Inspector clipped "Clear" past the right edge: a button that doesn't fit after
+        // the previous one wraps onto the next line (as the X/Y/Z rows do).
+        auto nextButton=[](const char* label) {
+            ImGui::SameLine();
+            if(ImGui::GetContentRegionAvail().x<ButtonWidth(label))ImGui::NewLine();
+        };
         if(ImGui::Button("Restart"))RestartParticleSystem(*ps);
-        ImGui::SameLine();
+        nextButton("Emit Burst");
         if(ImGui::Button("Emit Burst"))EmitParticleBurst(world,entity,std::max(1,ps->BurstCount));
-        ImGui::SameLine();if(ImGui::Button("Clear"))ps->Live.clear();
+        nextButton("Clear");if(ImGui::Button("Clear"))ps->Live.clear();
         ImGui::TextDisabled("%zu / %d particles",ps->Live.size(),ps->MaxParticles);
-        if(ImGui::CollapsingHeader("Lifetime & Emission Curves")) {
+        // A narrow Inspector cut the header's title off mid-word at the right edge: when the full
+        // title doesn't fit beside the arrow, it shortens to "Curves" (same id, so the open state
+        // carries over) and the full title moves to the tooltip.
+        const char* curvesTitle="Lifetime & Emission Curves";
+        const float curvesNeed=ImGui::GetFontSize()+ImGui::GetStyle().FramePadding.x*4.0f+ImGui::CalcTextSize(curvesTitle).x;
+        const bool curvesFit=ImGui::GetContentRegionAvail().x>=curvesNeed;
+        const bool curvesOpen=ImGui::CollapsingHeader(curvesFit?"Lifetime & Emission Curves###ParticleCurves":"Curves###ParticleCurves");
+        if(!curvesFit && ImGui::IsItemHovered())EditorUI::SetTooltip("%s",curvesTitle);
+        if(curvesOpen) {
             if(ps->EditorCurveIdentity.empty()) {
                 PushUndo(world,"Initialize Particle Curves");ps->EditorCurveIdentity=AssetGuid::Generate().ToString();
             }
@@ -4603,8 +4657,15 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
                 const float kBtnX = contentRight - kBtnW;
                 const float eyedropX = kBtnX - lcStyle.ItemSpacing.x - eyedropW;
                 const float colorEditRight = eyedropX - 4.0f; // EyedropperButton's own SameLine gap
-                ImGui::SetNextItemWidth(colorEditRight - ImGui::GetCursorPosX());
-                EditorUI::ColorEditLinear("##LightColor", &light->Color.x, ImGuiColorEditFlags_DisplayHex);
+                const float colorEditW = colorEditRight - ImGui::GetCursorPosX();
+                // At the default Inspector width the swatch, eyedropper and K leave the hex text a
+                // ~28px sliver ("#I"). Below what "#RRGGBB" needs, show the swatch alone; its
+                // picker popup still takes hex.
+                const float hexNeedW = ImGui::CalcTextSize("#DDDDDD").x + lcStyle.FramePadding.x * 2.0f +
+                                       lcStyle.ItemInnerSpacing.x + ImGui::GetFrameHeight();
+                ImGui::SetNextItemWidth(colorEditW);
+                EditorUI::ColorEditLinear("##LightColor", &light->Color.x,
+                                          ImGuiColorEditFlags_DisplayHex | (colorEditW < hexNeedW ? ImGuiColorEditFlags_NoInputs : 0));
                 if (ImGui::IsItemActivated()) PushUndo(world, "Edit Light");
                 EyedropperButton(this, world, &light->Color);
                 ImGui::SameLine(kBtnX);

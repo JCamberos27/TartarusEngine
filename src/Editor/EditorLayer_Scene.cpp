@@ -20,6 +20,7 @@
 #include "Material.h"
 #include "AudioEngine.h"
 #include "SceneSerializer.h"
+#include "OutfitSystem.h"
 #include "AABB.h"
 #include "PhysicsWorld.h"
 #include "Log.h"
@@ -106,6 +107,11 @@ void EditorLayer::BeginSceneUndo(const World& world, const std::string& label) {
 }
 
 void EditorLayer::BeginGlobalUndoFrame(const World& world) {
+    // #15 - an outfit change landed since last frame (a scene just opened rebuilding a stale body,
+    // or the async half of an outfit edit already on the undo stack): part of the baseline, not
+    // an unrecorded change for the next Undo to journal. Not while an edit is open: its commit
+    // (FinishGlobalUndo) takes the baseline itself, and RebaseAfterOutfitChanges catches up after.
+    if (!m_GlobalUndoActive) RebaseAfterOutfitChanges();
     // Initialize once per scene/history context, before any controls mutate it. Mouse/key
     // activity alone is not an authored edit (camera fly, scrollbars, search, docking, etc.).
     EnsureUndoScene(world);
@@ -122,8 +128,13 @@ void EditorLayer::BeginGlobalUndoFrame(const World& world) {
             absolute==std::filesystem::path(Enhancers::UiStyles::Path());
         const bool preferences=enhancers || absolute==std::filesystem::path(EditorSettings::PrefsFilePath()) ||
             absolute==std::filesystem::path(UserPaths::Resolve("shortcuts.json")) || absolute==std::filesystem::path(UserPaths::Resolve("asset_favorites.json"));
-        if(ec || relative.empty() || (*relative.begin()==".." && !preferences)) return;
-        for(const auto& part:relative) if(part=="Library" || part=="bin" || part=="obj") return;
+        // Per-user files live in %LOCALAPPDATA%, which may be on another drive than the project
+        // (CI: C: vs D:), where there is no relative path at all - so they skip the project test.
+        if(ec) return;
+        if(!preferences) {
+            if(relative.empty() || *relative.begin()=="..") return;
+            for(const auto& part:relative) if(part=="Library" || part=="bin" || part=="obj") return;
+        }
         if(!m_GlobalUndoActive) {
             m_GlobalUndoHasScene=false;
             m_GlobalUndoScene.clear();
@@ -173,6 +184,55 @@ void EditorLayer::FinishGlobalUndo(const World& world,bool force) {
     if (m_GlobalUndoHasScene && !m_InPlayMode) m_CurrentUndoScene=std::move(current);
     m_FileJournal.Clear();m_GlobalUndoActive=false;m_GlobalUndoHasScene=false;m_GlobalUndoScene.clear();m_GlobalUndoSelection.clear();
 }
+// #15 - Undo restores whole-scene snapshots, and the top entry's "after" is m_CurrentUndoScene.
+// Anything that changed the scene since without an undo step would be reverted, unseen, by the
+// next Ctrl+Z together with the edit it meant to take back. Journal it first instead: the Ctrl+Z
+// that finds it takes back only it (Ctrl+Y brings it back), like any other edit. Like a new edit,
+// it ends the redo branch. The AssetLibrary half of the snapshot is left out of it: the Asset
+// Browser re-lists folders on its own (after an undo put files back, too), and that's no edit.
+// Costs a string compare per Undo / Redo (the scene was serialized anyway), two parses on a miss.
+void EditorLayer::RebaseAfterOutfitChanges() {
+    const unsigned landed = OutfitSystem::LandedGeneration();
+    if (landed == m_OutfitLandedSeen) return;
+    m_OutfitLandedSeen = landed;
+    m_CurrentUndoScene.clear();
+}
+
+bool EditorLayer::JournalUnrecordedChange(const World& world, const std::string& currentJson) {
+    // An outfit change landed since the baseline: it is the baseline's to take, not a step (see
+    // BeginGlobalUndoFrame). Checked here too, for one that landed after this frame's check.
+    if (OutfitSystem::LandedGeneration() != m_OutfitLandedSeen) {
+        m_OutfitLandedSeen = OutfitSystem::LandedGeneration();
+        if (!m_InPlayMode) m_CurrentUndoScene = currentJson;
+        return false;
+    }
+    if (m_InPlayMode || m_CurrentUndoScene.empty() || SceneSerializer::SameSceneContent(currentJson, m_CurrentUndoScene)) return false;
+    // The step takes back the scene change, not the library's own re-listing since.
+    std::string before = SceneSerializer::WithLibraryState(m_CurrentUndoScene, currentJson);
+    if (before.empty()) return false;
+    Log::Warn("The scene changed without an undo step; it is undone as its own step, \"Unrecorded Change\".");
+    UndoEntry entry;
+    entry.Hash = HashSceneJson(before);
+    entry.SelectedOrders = CaptureSelectedOrders(world);
+    entry.Label = "Unrecorded Change";
+    if (m_SavedUndoDepth >= 0 && !m_RedoStack.empty()) m_SavedUndoDepth = -1;
+    ++m_ContentDepth;
+    PushHistoryEntry(m_UndoStack, m_UndoBaseJson, std::move(entry), before);
+    if (m_UndoStack.size() > kMaxHistory) {
+        if (m_UndoStack.front().CountsAsSceneEdit()) {--m_ContentDepth;if(m_SavedUndoDepth>0)--m_SavedUndoDepth;}
+        m_UndoStack.erase(m_UndoStack.begin());
+    }
+    ClearRedoHistory();
+    RefreshDirtyFromHistory();
+    m_CurrentUndoScene = currentJson;
+    return true;
+}
+
+void EditorLayer::JournalUnrecordedChange(const World& world) {
+    if (m_InPlayMode || m_CurrentUndoScene.empty() || !m_AssetsPtr) return;
+    JournalUnrecordedChange(world, SceneSerializer::SaveToString(world, *m_AssetsPtr));
+}
+
 void EditorLayer::ReloadHistoryFiles(AssetLibrary& assets,const std::vector<EditorFileHistory::State>& files) {
     bool assetIdentity=false;
     for(const auto& file:files) {
@@ -218,6 +278,18 @@ void EditorLayer::ClearRedoHistory() {
     m_RedoStack.clear();
     m_RedoBaseJson.clear();
     m_RedoBaseJson.shrink_to_fit();
+}
+
+// Writes LastScenePath to the prefs now, outside the undo journal. Left to the frame's coalesced
+// Flush, the write landed after New/Open/Save As had cleared the history and was journaled as an
+// "Edit editor_prefs.json" step, so the first Ctrl+Z after opening a scene only rewrote the prefs.
+void EditorLayer::RememberLastScene(const std::string& path) {
+    EditorSettings::Get().LastScenePath = path;
+    EditorSettings::Save();
+    const bool wasApplying = m_GlobalUndoApplying;
+    m_GlobalUndoApplying = true; // the AtomicFile observer ignores writes while this is set
+    EditorSettings::Flush();
+    m_GlobalUndoApplying = wasApplying;
 }
 
 void EditorLayer::ClearUndoHistory() {
@@ -270,8 +342,7 @@ bool EditorLayer::DoSaveAs(World& world, AssetLibrary& assets) {
     ClearRecoverySnapshot();       // clears the snapshot for the PREVIOUS path (still current here)
     m_CurrentScenePath = path;
     m_LoadFailedScenePath.clear(); // #84
-    EditorSettings::Get().LastScenePath = path; // reopen this one next launch (#95)
-    EditorSettings::Save();
+    RememberLastScene(path); // reopen this one next launch (#95)
     m_Dirty = false;
     m_SavedUndoDepth = m_ContentDepth; // this history position now matches disk
     m_AutoSaveTimer = 0.0f;
@@ -659,7 +730,10 @@ void EditorLayer::PushUndo(const World& world, const std::string& label, bool se
     // match (Q6/Phase 6 item 6): a scene-identical push whose ONLY difference is a new selection
     // is exactly what RecordSelectionHistory's "Select" entries look like, and those must NOT be
     // deduped away — that's the whole point of unifying selection changes into this same stack.
-    if (!m_UndoStack.empty() && m_UndoStack.back().Hash == entry.Hash &&
+    // A selection entry is never compared at all: it holds the PRE-change selection and the top
+    // entry's hash, so the first pick after an edit (which left the selection alone) matched that
+    // edit's entry exactly and was dropped. RecordSelectionHistory only pushes real changes.
+    if (!selectionOnly && !m_UndoStack.empty() && m_UndoStack.back().Hash == entry.Hash &&
         m_UndoStack.back().SelectedOrders == entry.SelectedOrders) {
         ClearRedoHistory(); // still a fresh edit intent — a stale redo branch shouldn't survive it
         RefreshDirtyFromHistory();
@@ -799,6 +873,23 @@ void EditorLayer::CommitStagedUndo(const World& world, const std::string& label)
     m_EditPushedThisFrame = true; // Q6 — see PushUndo's matching line
 }
 
+// An undo / redo step that put files back (an asset created, renamed or edited, a label, a
+// .meta) - the Asset Browser re-lists the project and redraws those files' thumbnails. Quietly:
+// a full RefreshAssetBrowser() on every step dropped every thumbnail and flashed "refreshed".
+void EditorLayer::RefreshAfterHistoryFiles(const std::vector<EditorFileHistory::State>& files) {
+    if (files.empty()) return;
+    InvalidateScenesListing();
+    InvalidateShadersListing();
+    InvalidateAnimationListing();
+    InvalidateProjectAssetIndex();
+    for (const auto& file : files) {
+        const std::string path = file.Path.lexically_normal().string();
+        m_AssetThumbs.Invalidate(path);
+        InvalidateModelThumbnail(path);
+        InvalidateModelThumbnail(ProjectPaths::Relativize(path));
+    }
+}
+
 void EditorLayer::Undo(World& world, AssetLibrary& assets) {
     FinishGlobalUndo(world,true);
     CancelEyedropper(); // #93 — the registry is about to be rebuilt
@@ -811,6 +902,7 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
     if (m_InPlayMode && !m_UndoStack.back().AssetOnly && !m_UndoStack.back().SelectionOnly) { Log::Info("Scene undo requires stopping Play; asset undo remains available."); return; }
 
     const std::string currentJson = SceneSerializer::SaveToString(world, assets);
+    JournalUnrecordedChange(world, currentJson); // #15 - then this undo takes back only that
     UndoEntry redoEntry;
     redoEntry.Hash = HashSceneJson(currentJson);
     redoEntry.SelectedOrders = CaptureSelectedOrders(world);
@@ -832,7 +924,8 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
     if (!entry.AssetPath.empty()) RestoreMaterialFile(assets, entry.AssetPath, entry.AssetJson); // #107
     // An asset-only step leaves the scene as it is — skip the full registry rebuild. So does a
     // selection-only step (#138): its stored state is only a placeholder (see PushUndo).
-    if (!entry.SelectionOnly && !entry.AssetOnly && (entry.AssetPath.empty() || HashSceneJson(currentJson) != entry.Hash)) {
+    const bool sceneReloaded = !entry.SelectionOnly && !entry.AssetOnly && (entry.AssetPath.empty() || HashSceneJson(currentJson) != entry.Hash);
+    if (sceneReloaded) {
         if (!SceneSerializer::LoadFromString(world, assets, targetJson)) {
             // #83 — a snapshot that can't be applied must not leave a half-loaded world.
             Log::Error("Undo failed - the scene was left as it was.");
@@ -840,8 +933,8 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
         }
     }
     RestoreSelectionByOrder(world, entry.SelectedOrders);
-    InvalidateModelThumbnail(); // LoadFromString may rebuild the asset library
-    RefreshAssetBrowser();
+    if (sceneReloaded) InvalidateModelThumbnail(); // LoadFromString may rebuild the asset library
+    RefreshAfterHistoryFiles(entry.Files);
     RefreshDirtyFromHistory(); // "*" clears when history returns to the last-saved point (#22 P22)
     m_CurrentUndoScene.clear();EnsureUndoScene(world);
 }
@@ -854,6 +947,7 @@ void EditorLayer::Redo(World& world, AssetLibrary& assets) {
     if (m_InPlayMode && !m_RedoStack.back().AssetOnly && !m_RedoStack.back().SelectionOnly) { Log::Info("Scene redo requires stopping Play; asset redo remains available."); return; }
 
     const std::string currentJson = SceneSerializer::SaveToString(world, assets);
+    if (JournalUnrecordedChange(world, currentJson)) return; // #15 - a new step: nothing is left to redo
     UndoEntry undoEntry;
     undoEntry.Hash = HashSceneJson(currentJson);
     undoEntry.SelectedOrders = CaptureSelectedOrders(world);
@@ -872,21 +966,26 @@ void EditorLayer::Redo(World& world, AssetLibrary& assets) {
     std::string targetJson;
     if (!PopHistoryEntry(m_RedoStack, m_RedoBaseJson, entry, targetJson)) return;
     if (!entry.AssetPath.empty()) RestoreMaterialFile(assets, entry.AssetPath, entry.AssetJson); // #107
-    if (!entry.SelectionOnly && !entry.AssetOnly && (entry.AssetPath.empty() || HashSceneJson(currentJson) != entry.Hash)) { // #138
+    const bool sceneReloaded = !entry.SelectionOnly && !entry.AssetOnly && (entry.AssetPath.empty() || HashSceneJson(currentJson) != entry.Hash); // #138
+    if (sceneReloaded) {
         if (!SceneSerializer::LoadFromString(world, assets, targetJson)) {
             Log::Error("Redo failed - the scene was left as it was."); // #83
             SceneSerializer::LoadFromString(world, assets, currentJson);
         }
     }
     RestoreSelectionByOrder(world, entry.SelectedOrders);
-    InvalidateModelThumbnail(); // LoadFromString may rebuild the asset library
-    RefreshAssetBrowser();
+    if (sceneReloaded) InvalidateModelThumbnail(); // LoadFromString may rebuild the asset library
+    RefreshAfterHistoryFiles(entry.Files);
     RefreshDirtyFromHistory(); // "*" clears when history returns to the last-saved point (#22 P22)
     m_CurrentUndoScene.clear();EnsureUndoScene(world);
 }
 
 void EditorLayer::JumpToUndoEntry(World& world, AssetLibrary& assets, size_t undoStackIndex) {
     if (undoStackIndex >= m_UndoStack.size()) return;
+    // #15 - journal an unrecorded change up front, so the first Undo below isn't the one that
+    // pushes it (it would leave the depth as it was and end the loop); the jump takes it back too.
+    FinishGlobalUndo(world,true);
+    JournalUnrecordedChange(world);
     while (m_UndoStack.size() > undoStackIndex) {
         const auto before=m_UndoStack.size();
         Undo(world, assets);
@@ -902,6 +1001,7 @@ void EditorLayer::JumpToRedoEntry(World& world, AssetLibrary& assets, size_t red
 
 void EditorLayer::OnEnterPlayMode(const World& world) {
     FinishGlobalUndo(world,true);
+    JournalUnrecordedChange(world); // #15 - Stop drops the baseline; keep that change a step
     CancelEyedropper(); // #93
     m_InPlayMode = true;
     m_PlayModeSnapshot = SceneSerializer::SaveToString(world);
@@ -1090,8 +1190,7 @@ void EditorLayer::NewScene(World& world, AssetLibrary& assets) {
         m_LoadFailedScenePath.clear(); // #84
         m_Dirty = false;                       // matches disk
         m_SavedUndoDepth = m_ContentDepth;
-        EditorSettings::Get().LastScenePath = pathStr;
-        EditorSettings::Save();
+        RememberLastScene(pathStr);
         InvalidateScenesListing(); // (#175) wrote a new file under scenes/
     } else {
         // Couldn't write (read-only project dir, …) — fall back to untitled-in-memory: Save
@@ -1120,8 +1219,7 @@ void EditorLayer::OpenScene(World& world, AssetLibrary& assets, const std::strin
     InvalidateModelThumbnail();
     ClearRecoverySnapshot(); // drop the outgoing scene's snapshot before switching away from it
     m_CurrentScenePath = path;
-    EditorSettings::Get().LastScenePath = path; // reopen this one next launch (#95)
-    EditorSettings::Save();
+    RememberLastScene(path); // reopen this one next launch (#95)
     ClearSelection();
     m_SoloLights.clear();
     m_MutedLights.clear();
@@ -1331,6 +1429,7 @@ std::string EditorLayer::ImportDroppedFile(World& world, AssetLibrary& assets, C
         RequestOpenScene(world, assets, path);
         return "scene";
     } else if (ext == ".prefab") {
+        PushUndo(world, "Place Prefab Instance"); // #15 - it was the one drop that changed the scene unrecorded
         entt::entity e = SceneSerializer::InstantiatePrefab(world, assets, path);
         if (e != entt::null) {
             UniquifyName(world, e);
