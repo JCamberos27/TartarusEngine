@@ -518,6 +518,15 @@ bool DrawVec3Row(const char* label, glm::vec3& v, float speed, float minV, float
     float innerSpacing = ImGui::GetStyle().ItemInnerSpacing.x * 0.5f;
     float fullWidth = ImGui::GetContentRegionAvail().x;
     float dragW = (fullWidth - 3.0f * buttonW - 3.0f * innerSpacing) / 3.0f;
+    // A narrow Inspector (a 1024px-wide editor) left the three numbers no width at all - only the
+    // X/Y/Z tabs drew, and a negative width means "fill minus N" to ImGui. Below about three
+    // digits, wrap the triplet onto its own full-width line under the label.
+    const float minDragW = ImGui::CalcTextSize("-0.00").x + EditorTheme::Px(8.0f);
+    if (dragW < minDragW) {
+        ImGui::NewLine();
+        fullWidth = ImGui::GetContentRegionAvail().x;
+        dragW = std::max(1.0f, (fullWidth - 3.0f * buttonW - 3.0f * innerSpacing) / 3.0f);
+    }
 
     struct Axis { const char* name; float* value; ImVec4 tint; };
     Axis axes[3] = {
