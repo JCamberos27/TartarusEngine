@@ -256,7 +256,8 @@ void GlassTheme(EditorLayer& editor, World& world, int frame) {
         editor.GlassNotifySnap(); // the snap ring, drawn for the next ~25 frames
         Log::Warn("[SmokeTest] glass: a warning (not a compile error) must not raise a toast");
         Glass::PlaySaveCheck();   // the save check's keyframe clip (~1 s)
-    } else if (frame == 30) {
+    } else if (frame == 21) {
+        // The very next frame: the clip runs ~1 s of wall clock, which 10 llvmpipe frames on CI outlast.
         if (!Glass::Motion().ReduceMotion() && !Glass::SaveCheckPlaying())
             Log::Error("[SmokeTest] glass: the save check's keyframe clip didn't play");
         else std::cout << "[SmokeTest]   glass: save check clip playing" << std::endl;
