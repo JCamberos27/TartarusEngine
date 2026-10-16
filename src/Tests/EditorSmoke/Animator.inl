@@ -377,12 +377,10 @@ void RegisterAnimatorTests() {
          ExpectTrue("Delete removed Idle", [](Ctx& c) { return StateIndex(c, "Idle") < 0; }),
          Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(6),
          Until("Ctrl+Z brings Idle back", [](Ctx& c) { return StateIndex(c, "Idle") >= 0; }, 60),
-         Shot("final", {kAnimator}),
-
-         Do("close the Animator and delete the scratch controller", [](Ctx& c) {
-             AA::Show(c.E) = false;
-             std::error_code ec;
-             fs::remove_all(fs::u8path(ScratchDir()), ec);
-         }), Wait(2)},
-    }));
+         Shot("final", {kAnimator})},
+    }), [](Ctx& c) { // passed or failed: close the Animator, delete the scratch controller
+        AA::Show(c.E) = false;
+        std::error_code ec;
+        fs::remove_all(fs::u8path(ScratchDir()), ec);
+    });
 }
