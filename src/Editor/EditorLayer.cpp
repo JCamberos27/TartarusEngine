@@ -1144,7 +1144,15 @@ void EditorLayer::DrawLightingPanel(World& world) {
 void EditorLayer::DrawSettingsWindow(World& world) {
     if (!m_ShowPreferences) return;
 
-    ImGui::SetNextWindowSize(ImVec2(700.0f * m_UIScale, 460.0f * m_UIScale), ImGuiCond_FirstUseEver);
+    // Fit inside the editor window (opened at the default spot, 60 px in): at 1.5x UI scale a
+    // 700 px window is wider than a 1044 px editor, which put its close button off-screen.
+    {
+        const ImVec2 work = ImGui::GetMainViewport()->WorkSize;
+        const float margin = 120.0f;
+        ImGui::SetNextWindowSize(ImVec2(ImMin(700.0f * m_UIScale, ImMax(work.x - margin, 320.0f)),
+                                        ImMin(460.0f * m_UIScale, ImMax(work.y - margin, 240.0f))),
+                                 ImGuiCond_FirstUseEver);
+    }
     PushTabChromeText(); // no-op now (Windows XP removed, Phase 1 item 9) — see PanelChromeIsLight
     const bool settingsOpen = ImGui::Begin(EditorPanels::Settings, &m_ShowPreferences);
     PopTabChromeText();
