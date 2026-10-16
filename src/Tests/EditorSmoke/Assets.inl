@@ -381,6 +381,13 @@ void RegisterAssetsTests() {
              ExpectTrue("grid", [](Ctx& c) { return AX::ViewMode(c.E) == 0; }),
              Click(Icon(ICON_FA_LIST)), Wait(4),
              ExpectTrue("list view", [](Ctx& c) { return AX::ViewMode(c.E) == 1; }),
+             // At CI size the panel shows three rows and the image is the fourth: scroll it in first.
+             Step{"scroll the list to the image", [tries = std::make_shared<int>(0)](Ctx& c) {
+                 const int index = CellIndex(c, "Smoke Tex.png");
+                 if (index < 0) return false;
+                 const float frac = (float)index / (float)std::max<size_t>(1, AX::Cells(c.E).size());
+                 return RevealIn(ListWindow(), ByLabel("Smoke Tex", kAssets), frac, *tries);
+             }, 120},
              Until("list rows (the image by name)", [](Ctx&) { return Find(ByLabel("Smoke Tex", kAssets)) != nullptr; }, 30),
              Shot("list", {kAssets}),
              Click(Icon(ICON_FA_TABLE_LIST)), Wait(4),
