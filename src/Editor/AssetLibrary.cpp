@@ -546,7 +546,10 @@ void AssetLibrary::PruneToKeepSet(const std::set<std::string>& modelPaths, const
 // The constructor lives in AssetLibraryAsync.cpp, where AsyncLoader is a complete type.
 
 void AssetLibrary::PersistFolders() {
-    ProjectSettings::SetAssetFolders(m_Folders);
+    // Only the saved list: writing m_Folders put every folder found on disk into the tracked
+    // project/settings.json the first time any folder was made, renamed or deleted (#14).
+    if (m_SavedFolders == ProjectSettings::AssetFolders()) return;
+    ProjectSettings::SetAssetFolders(m_SavedFolders);
     ProjectSettings::Save();
 }
 
@@ -620,6 +623,7 @@ std::string AssetLibrary::AddFolderPath(const std::string& dir) {
 void AssetLibrary::CreateFolder(const std::string& folderPath) {
     if (std::find(m_Folders.begin(), m_Folders.end(), folderPath) == m_Folders.end()) {
         m_Folders.push_back(folderPath);
+        m_SavedFolders.push_back(folderPath);
         PersistFolders();
     }
 }
@@ -631,6 +635,7 @@ void AssetLibrary::RenameFolder(const std::string& oldPath, const std::string& n
         else if (path.rfind(oldPath + "/", 0) == 0) path = newPath + path.substr(oldPath.size());
     };
     for (auto& f : m_Folders) remap(f);
+    for (auto& f : m_SavedFolders) remap(f);
     for (auto& [assetKey, folder] : m_AssetFolder) remap(folder);
     PersistFolders();
     if (OnFolderPathChanged) OnFolderPathChanged(oldPath, newPath);
@@ -649,6 +654,7 @@ bool AssetLibrary::CanDeleteFolder(const std::string& folderPath) const {
 void AssetLibrary::DeleteFolder(const std::string& folderPath) {
     if (!CanDeleteFolder(folderPath)) return;
     m_Folders.erase(std::remove(m_Folders.begin(), m_Folders.end(), folderPath), m_Folders.end());
+    m_SavedFolders.erase(std::remove(m_SavedFolders.begin(), m_SavedFolders.end(), folderPath), m_SavedFolders.end());
     PersistFolders();
     if (OnFolderPathChanged) OnFolderPathChanged(folderPath, std::string());
 }
@@ -680,9 +686,9 @@ void AssetLibrary::DeleteFolderRecursive(const std::string& folderPath) {
     // Every asset that belonged under this folder is gone now, so every subfolder (and the
     // folder itself) is empty - just drop them from the folder list directly rather than going
     // through CanDeleteFolder/DeleteFolder's "must be empty" guard one at a time.
-    m_Folders.erase(std::remove_if(m_Folders.begin(), m_Folders.end(), [&](const std::string& f) {
-        return f == folderPath || f.rfind(folderPath + "/", 0) == 0;
-    }), m_Folders.end());
+    auto underFolder = [&](const std::string& f) { return f == folderPath || f.rfind(folderPath + "/", 0) == 0; };
+    m_Folders.erase(std::remove_if(m_Folders.begin(), m_Folders.end(), underFolder), m_Folders.end());
+    m_SavedFolders.erase(std::remove_if(m_SavedFolders.begin(), m_SavedFolders.end(), underFolder), m_SavedFolders.end());
     PersistFolders();
     if (OnFolderPathChanged) OnFolderPathChanged(folderPath, std::string());
 }
