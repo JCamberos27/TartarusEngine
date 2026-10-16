@@ -414,6 +414,17 @@ bool EditorLayer::ComputeSceneBounds(World& world, glm::vec3& outMin, glm::vec3&
         boundsMax = glm::max(boundsMax, bounds.Max);
         any = true;
     }
+    // No meshes (lights, empties, cameras only): Frame All used to do nothing at all, while Frame
+    // Selected framed the same objects fine. Fall back to where the objects are.
+    if (!any) {
+        for (auto entity : world.Registry.view<TransformComponent, NameComponent>()) {
+            const glm::vec3 p(world.ComposeWorldTransform(entity)[3]);
+            if (!std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.z)) continue;
+            boundsMin = glm::min(boundsMin, p - glm::vec3(0.5f));
+            boundsMax = glm::max(boundsMax, p + glm::vec3(0.5f));
+            any = true;
+        }
+    }
     if (!any) return false;
     outMin = boundsMin;
     outMax = boundsMax;
