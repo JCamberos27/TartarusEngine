@@ -708,7 +708,7 @@ public:
     // overlay (grid, gizmos, entity icons, light gizmos, HUDs, status bar) skips.
     void SetHideOverlaysThisFrame(bool v) { m_HideOverlaysThisFrame = v; }
     // The window was created see-through (Window::SeeThrough). While Black Glass is on, the frame
-    // then leaves the desktop showing behind the glass instead of the scene's ambient field.
+    // then leaves the desktop showing behind the glass instead of the black canvas.
     void SetWindowSeeThrough(bool v) { m_WindowSeeThrough = v; }
     bool DesktopShowsThrough() const { return m_WindowSeeThrough && GlassThemeActive(); }
     bool OverlaysHidden() const { return m_HideOverlaysThisFrame; }

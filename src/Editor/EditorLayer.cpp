@@ -405,10 +405,8 @@ void EditorLayer::ApplyThemeStyle() {
         ApplyGlassMaterials(style);
         static const auto logGlassWarn = [](const char* msg) { Log::Warn(std::string("[Glass theme] ") + msg); };
         using namespace EditorUIPrimitives;
-        // Floors against a panel over the brightest the ambient field can get.
-        const float worstField = Glass::AmbientCeiling * (1.0f - Glass::AmbientDim);
-        const ImVec4 field(worstField, worstField, worstField, 1.0f);
-        const ImVec4 panel = CompositeOver(style.Colors[ImGuiCol_WindowBg], field);
+        // Floors against a panel over the black canvas.
+        const ImVec4 panel = CompositeOver(style.Colors[ImGuiCol_WindowBg], Glass::Base);
         AssertContrastFloor("Text vs glass panel", style.Colors[ImGuiCol_Text], panel, 4.5f, logGlassWarn);
         // Grey text is lifted on glass by the compositor (Glass::LiftGreyText).
         const auto lifted = [](ImVec4 grey) {
@@ -537,7 +535,6 @@ void EditorLayer::FreeGpuResources() {
     if (m_ThumbnailBlitFbo) { glDeleteFramebuffers(1, &m_ThumbnailBlitFbo); m_ThumbnailBlitFbo = 0; }
     if (m_Glass) { // the Glass theme's frosted-HUD blur chain and its window compositor
         m_Glass->Backdrop.Release();
-        m_Glass->Ambient.Release();
         m_Glass->Compositor.Release();
     }
 }
