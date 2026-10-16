@@ -242,7 +242,7 @@ public:
     // Phase 6 item 11 — Help > Shortcuts jumps straight to the existing press-to-bind editor
     // (Preferences category 5) instead of leaving it something you only find by browsing.
     void OpenShortcutsReference() { m_ShowPreferences = true; m_SettingsGroupIsProject = false; m_PrefsCategory = 5; }
-    void OpenAbout() { m_ShowPreferences = true; m_SettingsGroupIsProject = false; m_PrefsCategory = 7; } // #184
+    void OpenAbout() { m_ShowPreferences = true; m_SettingsGroupIsProject = false; m_PrefsCategory = 8; } // #184
 
     // Thin forwarders so the non-member host glue (HotReloadEditorModule.cpp) can invoke these;
     // the real methods stay private with their existing call sites. World/Assets/Camera are the
@@ -265,6 +265,7 @@ public:
     void ShotOpenInspectorBookmarks() { m_ShotOpenBookmarks = true; }
     void ShotSetFavoritesLocked(bool on) { m_FavLocked = on; }
     void SetShowLighting(bool on) { m_ShowLighting = on; }
+    void SetShowSoundBoard(bool show) { m_ShowSoundBoard = show; }
     void SetShowAnimator(bool on) { m_ShowAnimator = on; }
     void CloseSettingsWindow() { m_ShowPreferences = false; }
     // Settings at a given category: `project` picks the THIS PROJECT group.
@@ -1203,6 +1204,8 @@ private:
     // section helpers are shared, so Preferences renders the same widgets.
     void DrawLightingPanel(World& world);
     void DrawAudioDebugPanel(World& world); // EditorLayer_AudioDebug.cpp
+    void DrawSoundBoardPanel();             // EditorLayer_SoundBoard.cpp
+    void DrawEditorSoundPreferences();      // EditorLayer_SoundBoard.cpp (Preferences > Editor Sounds)
     void DrawAssetLibraryPanel(World& world, AssetLibrary& assets); // EditorLayer_AssetLibraryPanel.cpp
     void DrawEnvironmentSettings(World& world, float itemWidth);
     void DrawPhysicalSkySettings(World& world, float itemWidth); // EditorLayer_Sky.cpp
@@ -1214,6 +1217,7 @@ private:
     void DrawLightsSection(World& world, float itemWidth);
     bool m_ShowLighting = false;
     bool m_ShowAudioDebug = false;
+    bool m_ShowSoundBoard = false;
     float m_AudioGrHold = 0.0f;      // the Audio panel's limiter gain-reduction readout (held, decaying)
     float m_AudioGlueHold = 0.0f;    // ... and the glue compressor's
     // The Audio panel's "Keep after Play": the live mix values written to the scene once Play stops (the scene is restored from its

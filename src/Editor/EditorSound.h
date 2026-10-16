@@ -111,6 +111,10 @@ void Init(const std::string& builtInDir, const std::string& overrideDir = {});
 void Shutdown();
 void Apply(const Settings& s);
 Settings FromEditorSettings();      // EditorSettings' saved values over the defaults
+void ToEditorSettings(const Settings& s); // back into EditorSettings (the caller saves)
+// The Sound Board: one variant of an event, now - no cooldown, focus or switch gets in the way (only the master volume).
+bool Audition(Event e, int variant);
+bool IsOverride(Event e);           // its files come from the Drive's premium set
 // Once a frame (host): plays the notification sounds for what was logged since the last call - errors, warnings, hot reloads
 // and imports - with nothing for what was logged before the first call plus a short start-up grace.
 void Update();

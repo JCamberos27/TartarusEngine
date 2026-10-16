@@ -1168,6 +1168,7 @@ void EditorLayer::DrawSettingsWindow(World& world) {
         ICON_FA_GAUGE_HIGH "  Performance",
         ICON_FA_KEYBOARD "  Shortcuts",
         ICON_FA_WAND_MAGIC_SPARKLES "  Editor Enhancers",
+        ICON_FA_VOLUME_HIGH "  Sounds",
         ICON_FA_CIRCLE_INFO "  About",
     };
     const int kEditorCatCount = (int)(sizeof(kEditorCats) / sizeof(kEditorCats[0]));
@@ -1199,6 +1200,8 @@ void EditorLayer::DrawSettingsWindow(World& world) {
         "keyboard hotkeys key bindings keybindings shortcuts rebind",
         "enhancers hover keys palette colours colors icons bookmarks hierarchy folders inspector tabs "
         "favorites ruler row style export import",
+        "sounds editor sounds ui sounds audio volume clicks sliders hover panels menus drag drop notifications "
+        "play mode sound board mute",
         "about version system report gpu driver opengl built with copy report",
     };
     static const char* kProjectCatKeywords[] = {
@@ -1908,7 +1911,11 @@ void EditorLayer::DrawSettingsWindow(World& world) {
         DrawEnhancerPreferences();
         break;
 
-    case 7: { // About
+    case 7: // Sounds (EditorLayer_SoundBoard.cpp)
+        DrawEditorSoundPreferences();
+        break;
+
+    case 8: { // About
         EditorUIPrimitives::SectionHeader("About");
         {
             // The name fades and rises in, letter by letter, each time the page opens.
@@ -2639,6 +2646,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     DrawSettingsWindow(world); // #4 item 3 — merged Preferences + Project Settings
     DrawLightingPanel(world); // #236 R2
     DrawAudioDebugPanel(world);
+    DrawSoundBoardPanel();
     DrawAssetLibraryPanel(world, assets);
     DrawAnimatorWindow(world); // Animator v2
     DrawPhysicsDebugWindow(world); // #185 debug tooling
