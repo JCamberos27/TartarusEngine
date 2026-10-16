@@ -143,6 +143,9 @@ Step RestoreProjectFiles() {
 nlohmann::json ProjectJson() { return ReadJson(SettingsPath()); }
 // The first .meta under project/assets written after `since`, or "" when none was.
 std::filesystem::file_time_type g_MetaSince;
+const char* const kGuessedTexture = "assets/Materials/Prototype/proto_grid_orange.png"; // its .meta has no importer
+Saved g_UndoMeta;
+ModelImportSettings g_UndoModel;
 std::string MetaWrittenSince(std::filesystem::file_time_type since) {
     namespace fs = std::filesystem;
     std::error_code ec;
@@ -280,6 +283,46 @@ void RegisterSettingsTests() {
          Wait(2),
          ExpectTrue("render height back", [](Ctx&) { return (float)EditorSettings::Get().RenderHeight == g_Vec.y; }),
          Until("editor_prefs.json renderHeight back", [](Ctx&) { return (float)Prefs().value("renderHeight", -1) == g_Vec.y; }),
+         CloseByX(EditorPanels::Settings), UntilGone(EditorPanels::Settings)},
+    }));
+
+    // An undo restores every asset's import settings too. A guessed normal-map import lives in
+    // memory only (it used to land in the texture's .meta), and a model's clip trims must survive
+    // (the undo snapshot used to drop them, deleting them from the .meta).
+    Add("settings: an undo keeps a guessed texture import in memory and a model's clip trims", Seq({
+        {Do("load a guessed normal map and a trimmed model", [](Ctx& c) {
+             g_Text = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
+             g_UndoMeta = Snapshot(g_Text + ".meta");
+             c.A.LoadTexture(ProjectPaths::Resolve(kGuessedTexture), AssetLibrary::TextureUse::Normal);
+             c.A.LoadModel(g_Text);
+             g_UndoModel = c.A.GetModelSettings(g_Text);
+             ModelImportSettings trimmed = g_UndoModel;
+             trimmed.ClipTrims.push_back({"SmokeTrim", 0.1f, 0.5f});
+             c.A.SetModelSettings(g_Text, trimmed);
+             g_MetaSince = std::filesystem::file_time_type::clock::now();
+         }),
+         FreshScene(), Wait(2)},
+        OpenCategory(false, 4),
+        {Do("note", [](Ctx& c) { g_Number = c.W.AutoExposure ? 1.0 : 0.0; }),
+         Click(ByExact("Auto exposure", "###Settings")), Wait(3),
+         ExpectTrue("auto exposure toggled", [](Ctx& c) { return c.W.AutoExposure != Noted(); }),
+         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
+         Until("undo restores it", [](Ctx& c) { return c.W.AutoExposure == Noted(); }),
+         Expect("the undo wrote no .meta", [](Ctx&) {
+             const std::string m = MetaWrittenSince(g_MetaSince);
+             return m.empty() ? std::string() : "wrote " + m;
+         }),
+         ExpectTrue("the guessed import is still in memory", [](Ctx& c) {
+             return !c.A.GetTextureSettings(ProjectPaths::Resolve(kGuessedTexture)).IsSRGB;
+         }),
+         ExpectTrue("the clip trim survived", [](Ctx& c) { return c.A.GetModelSettings(g_Text).ClipTrims.size() == g_UndoModel.ClipTrims.size() + 1; }),
+         Do("put the texture and the model back", [](Ctx& c) {
+             const std::string tex = ProjectPaths::Resolve(kGuessedTexture);
+             c.A.SetTextureSettings(tex, TextureImportSettings{}, /*writeMeta=*/false);
+             c.A.ReimportTexture(tex);
+             c.A.SetModelSettings(g_Text, g_UndoModel, /*writeMeta=*/false);
+             Restore(g_Text + ".meta", g_UndoMeta);
+         }),
          CloseByX(EditorPanels::Settings), UntilGone(EditorPanels::Settings)},
     }));
 
