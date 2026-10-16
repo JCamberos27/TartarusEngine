@@ -741,6 +741,7 @@ void Add(std::string name, std::vector<Step> steps) {
 #include "EditorSmoke/Panels.inl"
 #include "EditorSmoke/Hierarchy.inl"
 #include "EditorSmoke/Inspector.inl"
+#include "EditorSmoke/Scenes.inl" // before SaveLoad, which uses smoke_scenes::MissingExternalFiles
 #include "EditorSmoke/SceneTools.inl"
 #include "EditorSmoke/PlayMode.inl"
 #include "EditorSmoke/Prefabs.inl"
@@ -752,7 +753,6 @@ void Add(std::string name, std::vector<Step> steps) {
 #include "EditorSmoke/ScriptIDE.inl"
 #include "EditorSmoke/HotReload.inl"
 #include "EditorSmoke/Settings.inl"
-#include "EditorSmoke/Scenes.inl"
 
 void RegisterTests() {
     // ------------------------------------------------------------------ 1. Selection history
