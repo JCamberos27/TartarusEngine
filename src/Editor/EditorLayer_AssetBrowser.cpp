@@ -2504,6 +2504,7 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
                 AssetDatabase::EnsureGuid(target.u8string());
                 m_SelectedAssetKey=target.u8string(); m_SelectedAssetIsFolder=false;
                 InvalidateAnimationListing();
+                InvalidateProjectAssetIndex(); // listed in the folder without a manual refresh
             } else Log::Error("Could not create camera shake asset.");
         }
         if (ImGui::MenuItem(ICON_FA_BURST "  Create Recoil Profile")) {
@@ -2520,6 +2521,7 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
                 m_SelectedAssetKey = recoilPath.u8string();
                 m_SelectedAssetIsFolder = false;
                 InvalidateAnimationListing();
+                InvalidateProjectAssetIndex(); // listed in the folder without a manual refresh
             } else Log::Error("Could not create recoil profile.");
         }
         if (ImGui::MenuItem(ICON_FA_PERSON_WALKING "  Create Body Locomotion Controller")) {
@@ -2542,6 +2544,7 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
             });
             if (c.SaveFile(ProjectPaths::Resolve(rel))) {
                 InvalidateAnimationListing();
+                InvalidateProjectAssetIndex(); // listed in the folder without a manual refresh
                 OpenAnimatorWindow(rel);
                 Log::Info("Created " + rel + ": " + std::to_string(found) + " of " + std::to_string(total) +
                           " clip slots filled by name. Fill the rest in the Animator (Lint lists them).");
@@ -2566,6 +2569,7 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
             c.Layers[0].DefaultState = "Idle";
             if (c.SaveFile(ProjectPaths::Resolve(rel))) {
                 InvalidateAnimationListing();
+                InvalidateProjectAssetIndex(); // listed in the folder without a manual refresh
                 OpenAnimatorWindow(rel);
                 Log::Info("Created " + rel + ".");
             } else {
