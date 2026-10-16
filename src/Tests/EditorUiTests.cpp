@@ -295,6 +295,8 @@ std::chrono::steady_clock::time_point g_TestStart;
 // for 3 minutes, and aborts the run (CrashHandler writes a minidump with every thread's stack)
 // when frames have stopped for 4 minutes or the run passes TARTARUS_EDITOR_TEST_DEADLINE minutes.
 namespace watchdog {
+extern "C" __declspec(dllimport) void* __stdcall GetCurrentProcess();
+extern "C" __declspec(dllimport) int __stdcall TerminateProcess(void* process, unsigned int exitCode);
 std::atomic<uint64_t> g_Frames{0};
 std::mutex g_Mutex;
 std::string g_Where = "startup"; // "<test> / step '<step>'", under g_Mutex
@@ -323,10 +325,23 @@ void Start() {
         uint64_t lastFrames = 0;
         std::string lastWhere;
         bool slowNoted = false;
+        auto doneAt = clock::time_point{};
         for (;;) {
             std::this_thread::sleep_for(std::chrono::seconds(5));
-            if (g_Done) return;
             const auto now = clock::now();
+            if (g_Done) {
+                // The result is in. On CI the editor's teardown after it sometimes took 13 minutes or
+                // never finished (the step then timed out): give it a minute, then end the process
+                // with the tests' own exit code. TerminateProcess, not exit(): ExitProcess runs DLL
+                // detach, which can block on the same lock the teardown is stuck behind.
+                if (doneAt == clock::time_point{}) doneAt = now;
+                else if (now - doneAt >= std::chrono::seconds(60)) {
+                    std::printf("[EditorTest] WATCHDOG: the editor hasn't exited a minute after the summary - ending it\n");
+                    std::fflush(stdout);
+                    TerminateProcess(GetCurrentProcess(), g_Failed == 0 && g_Passed > 0 ? 0u : 1u);
+                }
+                continue;
+            }
             const uint64_t frames = g_Frames.load(std::memory_order_relaxed);
             if (frames != lastFrames) { lastFrames = frames; lastFrameAt = now; }
             std::string where;
