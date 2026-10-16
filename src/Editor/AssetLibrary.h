@@ -208,9 +208,11 @@ public:
     // Import settings, keyed by asset path. Reading returns a default-constructed settings
     // struct for a path that's never been customized, so callers never need an existence check.
     TextureImportSettings GetTextureSettings(const std::string& path) const;
-    void SetTextureSettings(const std::string& path, const TextureImportSettings& settings);
+    // writeMeta=false keeps the settings in memory only (an undo restoring settings the .meta
+    // never had, such as a guessed normal-map import).
+    void SetTextureSettings(const std::string& path, const TextureImportSettings& settings, bool writeMeta = true);
     ModelImportSettings GetModelSettings(const std::string& path) const;
-    void SetModelSettings(const std::string& path, const ModelImportSettings& settings);
+    void SetModelSettings(const std::string& path, const ModelImportSettings& settings, bool writeMeta = true);
 
     // Re-imports the cached Texture/Model at `path` (if it's actually loaded) using whatever
     // settings are currently stored for it — call SetTexture/ModelSettings first, then this.
