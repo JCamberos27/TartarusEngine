@@ -567,6 +567,12 @@ bool IsPending(const World& world, entt::entity root, int* done, int* total) {
     return any;
 }
 
+namespace {
+unsigned g_LandedGeneration = 0;
+} // namespace
+
+unsigned LandedGeneration() { return g_LandedGeneration; }
+
 void UpdatePending(World& world, AssetLibrary& assets) {
     auto& list = Waiting();
     for (size_t i = 0; i < list.size();) {
@@ -584,8 +590,9 @@ void UpdatePending(World& world, AssetLibrary& assets) {
         if (ready.HasRequest) {
             const Result r = Apply(world, assets, ready.Root, ready.Request);
             if (!r.Ok) { Log::Warn("Character Outfit: " + r.Error); continue; }
+            ++g_LandedGeneration;
         }
-        if (ready.After) ready.After(world, assets, ready.Root);
+        if (ready.After) { ready.After(world, assets, ready.Root); ++g_LandedGeneration; }
     }
     RefreshBodies(world, assets);
 }
@@ -624,6 +631,7 @@ void RefreshBodies(World& world, AssetLibrary& assets) {
     for (entt::entity root : stale) {
         Log::Info("Character Outfit: rebuilding an outfit whose body parts predate its wardrobe.");
         Submit(world, assets, root, CurrentRequest(world, root));
+        ++g_LandedGeneration; // when everything is loaded already, Submit applies it on the spot
     }
 }
 
