@@ -1415,10 +1415,11 @@ bool EditorLayer::DrawTabStrip(const char* id, Enhancers::TabStrip& strip, TabSt
     const float barW = std::max(rowW - leftInset - rightInset, h * 2.0f);
     const float plusW = h;
     const ImVec2 stripMin = barMin;
-    const ImVec2 stripMax(barMin.x + std::max(barW - plusW - EditorTheme::Px(4.0f), 1.0f), barMin.y + h);
+    // The strip's right end without the overflow controls; with them it ends sooner (below).
+    const float stripEndX = barMin.x + std::max(barW - plusW - EditorTheme::Px(4.0f), 1.0f);
     ImGui::PushID(id);
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    dl->AddLine(ImVec2(rowMin.x, stripMax.y - 0.5f), ImVec2(rowMin.x + rowW, stripMax.y - 0.5f), EditorTheme::U32(EditorTheme::Hairline));
+    dl->AddLine(ImVec2(rowMin.x, barMin.y + h - 0.5f), ImVec2(rowMin.x + rowW, barMin.y + h - 0.5f), EditorTheme::U32(EditorTheme::Hairline));
 
     // Layout: the live tab (index -1) then the strip's tabs.
     EditorTheme::PushSmall();
@@ -1437,6 +1438,15 @@ bool EditorLayer::DrawTabStrip(const char* id, Enhancers::TabStrip& strip, TabSt
         x += w + EditorTheme::Px(2.0f);
     }
     const float contentW = x;
+    // More tabs than fit: ImGui's own overflow controls, after the tabs - the list button opens
+    // every tab by name, so a tab scrolled out of view can always be reached from the strip, and
+    // < and > step to the previous / next tab when there is room for them as well as a tab.
+    const float arrowW = std::floor(h * 0.75f), listW = h;
+    const float roomW = stripEndX - stripMin.x;
+    const bool overflow = contentW - EditorTheme::Px(2.0f) > roomW + 0.5f;
+    const bool arrows = overflow && roomW - listW - arrowW * 2.0f - EditorTheme::Px(2.0f) >= EditorTheme::Px(90.0f);
+    const float controlsW = overflow ? listW + (arrows ? arrowW * 2.0f : 0.0f) + EditorTheme::Px(2.0f) : 0.0f;
+    const ImVec2 stripMax(std::max(stripEndX - controlsW, stripMin.x + 1.0f), barMin.y + h);
     const float visibleW = stripMax.x - stripMin.x;
     const float maxScroll = std::max(0.0f, contentW - visibleW);
 
@@ -1545,6 +1555,7 @@ bool EditorLayer::DrawTabStrip(const char* id, Enhancers::TabStrip& strip, TabSt
         const ImVec2 mx(mn.x + ws[k], stripMax.y);
         ImGui::SetCursorScreenPos(mn);
         const bool clicked = ImGui::InvisibleButton("##tab", ImVec2(ws[k], h));
+        if (EditorTestProbeActive()) EditorTestTag(("tab:" + std::string(i < 0 ? liveLabel : (item ? item->Label.c_str() : ""))).c_str());
         const bool hov = ImGui::IsItemHovered();
         const bool active = strip.Active == i;
         const ImGuiID grabId = ImGui::GetID("##grab");
@@ -1613,6 +1624,34 @@ bool EditorLayer::DrawTabStrip(const char* id, Enhancers::TabStrip& strip, TabSt
                                     0, EditorTheme::U32(EditorTheme::Panel), EditorTheme::U32(EditorTheme::Panel), 0);
     dl->ChannelsMerge();
     ImGui::PopClipRect();
+
+    if (overflow) {
+        const int lo = liveLabel ? -1 : 0;
+        ImGui::SetCursorScreenPos(ImVec2(stripMax.x + EditorTheme::Px(2.0f), barMin.y));
+        if (arrows) {
+            ImGui::PushItemFlag(ImGuiItemFlags_ButtonRepeat, true); // held, they keep stepping, like ImGui's
+            if (EditorUIPrimitives::ActionButton(ICON_FA_ANGLE_LEFT, "Previous tab", &Tip, false, ImVec2(arrowW, h)) && n > 0)
+                strip.Active = std::clamp(strip.Active - 1, lo, n - 1);
+            ImGui::SameLine(0.0f, 0.0f);
+            if (EditorUIPrimitives::ActionButton(ICON_FA_ANGLE_RIGHT, "Next tab", &Tip, false, ImVec2(arrowW, h)) && n > 0)
+                strip.Active = std::clamp(strip.Active + 1, lo, n - 1);
+            ImGui::PopItemFlag();
+            ImGui::SameLine(0.0f, 0.0f);
+        }
+        if (EditorUIPrimitives::ActionButton(ICON_FA_ANGLE_DOWN, "All open tabs", &Tip, false, ImVec2(listW, h)))
+            ImGui::OpenPopup("##tabList");
+        if (ImGui::BeginPopup("##tabList")) {
+            for (int i = first; i < n; ++i) {
+                const TabStripItem* item = i >= 0 && i < (int)items.size() ? &items[(size_t)i] : nullptr;
+                const char* icon = i < 0 ? liveIcon : (item && !item->Icon.empty() ? item->Icon.c_str() : nullptr);
+                const std::string text = std::string(icon ? icon : "") + (icon ? "  " : "") + (i < 0 ? liveLabel : (item ? item->Label.c_str() : ""));
+                ImGui::PushID(i);
+                if (ImGui::Selectable(text.c_str(), strip.Active == i)) strip.Active = i;
+                ImGui::PopID();
+            }
+            ImGui::EndPopup();
+        }
+    }
 
     // "+": the caller's menu (starred tabs and a fuzzy search).
     ImGui::SetCursorScreenPos(ImVec2(barMin.x + barW - plusW, barMin.y));

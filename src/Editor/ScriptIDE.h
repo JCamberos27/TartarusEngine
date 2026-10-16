@@ -15,6 +15,7 @@ public:
     bool OwnsKeyboard() const;
     bool SaveAll();
     void DiscardAll();
+    void CancelPrompts(); // drops a pending close / reload, so its "Unsaved script" prompt isn't reopened
     // Where the IDE keeps session.json (open tabs, unsaved buffers, theme, panel sizes): the
     // project's Library/IDE unless set before the IDE is created. --editor-tests points it at its
     // scratch user folder, so a test run never reads or overwrites the user's session.
