@@ -8,6 +8,7 @@
 #include "SceneSerializer.h"
 #include "Profiler.h"
 #include "ProjectPaths.h"
+#include "ProjectSettings.h"
 #include <filesystem>
 #include <fstream>
 #include "UndoTrigger.h"
@@ -390,6 +391,33 @@ void TestUndoTriggerSkipsNavigation() {
     Frame item; item.ItemActive=true; item.NavDragHeld=true; CHECK(OpensSnapshot(item));
     Frame side; side.OtherClicked=true; side.OverViewport=true; CHECK(OpensSnapshot(side));
 }
+
+// #14 - folders found from where files sit on disk stay in memory; only the folders settings.json
+// listed and the ones made in the browser are written back, and they load again.
+void TestAssetFoldersPersistOnlyUserFolders() {
+    const std::string path=ProjectPaths::Resolve("settings.json");
+    std::string original;
+    { std::ifstream in(path,std::ios::binary); original.assign(std::istreambuf_iterator<char>(in),{}); }
+    const std::vector<std::string> before=ProjectSettings::AssetFolders();
+    ProjectSettings::SetAssetFolders({"UserA"});
+    {
+        AssetLibrary assets;
+        assets.AddFolderPath("disk/found/here");
+        CHECK(std::find(assets.Folders().begin(),assets.Folders().end(),"disk/found")!=assets.Folders().end());
+        assets.CreateFolder("UserB");
+        CHECK((ProjectSettings::AssetFolders()==std::vector<std::string>{"UserA","UserB"}));
+        assets.RenameFolder("UserB","UserC");
+        CHECK((ProjectSettings::AssetFolders()==std::vector<std::string>{"UserA","UserC"}));
+        assets.DeleteFolder("disk/found/here"); // deleting a found folder still saves only the user's
+        CHECK((ProjectSettings::AssetFolders()==std::vector<std::string>{"UserA","UserC"}));
+        ProjectSettings::Load();
+        CHECK((ProjectSettings::AssetFolders()==std::vector<std::string>{"UserA","UserC"}));
+        AssetLibrary reloaded;
+        CHECK((reloaded.Folders()==std::vector<std::string>{"UserA","UserC"}));
+    }
+    { std::ofstream out(path,std::ios::binary|std::ios::trunc); out<<original; }
+    ProjectSettings::SetAssetFolders(before);
+}
 }
 
 // Unit tests for the editor UI. Add a function per test and list it below.
@@ -403,4 +431,5 @@ void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("ImCurveEditorInteractions",TestCurveEditorInteractions);
     tests.emplace_back("CurveWheelCapture",TestCurveWheelCapture);
     tests.emplace_back("UndoTriggerSkipsNavigation",TestUndoTriggerSkipsNavigation);
+    tests.emplace_back("Asset folders: only the user's are saved to project settings",TestAssetFoldersPersistOnlyUserFolders);
 }
