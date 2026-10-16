@@ -1124,6 +1124,14 @@ int main(int argc, char** argv) {
                 std::free(size);
                 glfwRestoreWindow(window.Handle());
                 glfwSetWindowSize(window.Handle(), testW, testH);
+                // GLFW adds the OS frame to reach that client size, but the custom frame makes the
+                // whole window client (Window.cpp, WM_NCCALCSIZE), so the editor came out a frame
+                // larger - by more on a high-DPI desktop (1066x844 for 1044x788 at 150%), which
+                // left the Inspector wider than CI's. Take the difference back off.
+                int gotW = 0, gotH = 0;
+                glfwGetFramebufferSize(window.Handle(), &gotW, &gotH);
+                if (gotW > 0 && gotH > 0 && (gotW != testW || gotH != testH))
+                    glfwSetWindowSize(window.Handle(), std::max(1, 2 * testW - gotW), std::max(1, 2 * testH - gotH));
             }
             // --editor-tests: hidden, so the desktop's real mouse and keyboard never reach it.
             // TARTARUS_EDITOR_TEST_SHOW=1 keeps it shown (CI, where nobody is at the desktop): the

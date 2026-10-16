@@ -470,6 +470,20 @@ bool AxisButton(const char* name, ImVec4 tint, ImVec2 size) {
     return clicked;
 }
 
+// Each X/Y/Z field's width, beside the row's label. A narrow Inspector (a 1024px-wide editor) left
+// the three numbers no width at all - only the X/Y/Z tabs drew, and a negative width means "fill
+// minus N" to ImGui. Below about three digits the triplet wraps onto its own full-width line under
+// the label. Shared by DrawVec3Row and MultiEditVec3Row, so every vector row wraps alike.
+float Vec3RowDragWidth(float buttonW, float innerSpacing) {
+    float dragW = (ImGui::GetContentRegionAvail().x - 3.0f * buttonW - 3.0f * innerSpacing) / 3.0f;
+    const float minDragW = ImGui::CalcTextSize("-0.00").x + EditorTheme::Px(8.0f);
+    if (dragW < minDragW) {
+        ImGui::NewLine();
+        dragW = std::max(1.0f, (ImGui::GetContentRegionAvail().x - 3.0f * buttonW - 3.0f * innerSpacing) / 3.0f);
+    }
+    return dragW;
+}
+
 // The display format for one axis of a vector row: three decimals when they fit the field, fewer
 // when the panel is narrow (the exact value is always in the tooltip and shown while editing).
 // `room` is the field's width inside its padding.
@@ -516,17 +530,7 @@ bool DrawVec3Row(const char* label, glm::vec3& v, float speed, float minV, float
     float lineHeight = ImGui::GetFrameHeight();
     float buttonW = std::floor(lineHeight * 0.8f);
     float innerSpacing = ImGui::GetStyle().ItemInnerSpacing.x * 0.5f;
-    float fullWidth = ImGui::GetContentRegionAvail().x;
-    float dragW = (fullWidth - 3.0f * buttonW - 3.0f * innerSpacing) / 3.0f;
-    // A narrow Inspector (a 1024px-wide editor) left the three numbers no width at all - only the
-    // X/Y/Z tabs drew, and a negative width means "fill minus N" to ImGui. Below about three
-    // digits, wrap the triplet onto its own full-width line under the label.
-    const float minDragW = ImGui::CalcTextSize("-0.00").x + EditorTheme::Px(8.0f);
-    if (dragW < minDragW) {
-        ImGui::NewLine();
-        fullWidth = ImGui::GetContentRegionAvail().x;
-        dragW = std::max(1.0f, (fullWidth - 3.0f * buttonW - 3.0f * innerSpacing) / 3.0f);
-    }
+    const float dragW = Vec3RowDragWidth(buttonW, innerSpacing);
 
     struct Axis { const char* name; float* value; ImVec4 tint; };
     Axis axes[3] = {
@@ -621,8 +625,7 @@ MultiEditResult MultiEditVec3Row(const char* label, glm::vec3& value, const bool
     float lineHeight = ImGui::GetFrameHeight();
     float buttonW = std::floor(lineHeight * 0.8f);
     float innerSpacing = ImGui::GetStyle().ItemInnerSpacing.x * 0.5f;
-    float fullWidth = ImGui::GetContentRegionAvail().x;
-    float dragW = (fullWidth - 3.0f * buttonW - 3.0f * innerSpacing) / 3.0f;
+    const float dragW = Vec3RowDragWidth(buttonW, innerSpacing);
 
     struct Axis { const char* name; float* v; ImVec4 tint; };
     Axis axes[3] = {
@@ -4178,10 +4181,16 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
 
     if(std::strcmp(componentName,"Particle System")==0 && phase==ReflectExtraPhase::Bottom) {
         auto* ps=registry.try_get<ParticleSystemComponent>(entity);if(!ps)return;
+        // A narrow Inspector clipped "Clear" past the right edge: a button that doesn't fit after
+        // the previous one wraps onto the next line (as the X/Y/Z rows do).
+        auto nextButton=[](const char* label) {
+            ImGui::SameLine();
+            if(ImGui::GetContentRegionAvail().x<ButtonWidth(label))ImGui::NewLine();
+        };
         if(ImGui::Button("Restart"))RestartParticleSystem(*ps);
-        ImGui::SameLine();
+        nextButton("Emit Burst");
         if(ImGui::Button("Emit Burst"))EmitParticleBurst(world,entity,std::max(1,ps->BurstCount));
-        ImGui::SameLine();if(ImGui::Button("Clear"))ps->Live.clear();
+        nextButton("Clear");if(ImGui::Button("Clear"))ps->Live.clear();
         ImGui::TextDisabled("%zu / %d particles",ps->Live.size(),ps->MaxParticles);
         if(ImGui::CollapsingHeader("Lifetime & Emission Curves")) {
             if(ps->EditorCurveIdentity.empty()) {
