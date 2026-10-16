@@ -130,7 +130,11 @@ uniform float uShadowSoftness;        // PCF kernel radius in shadow-map texels 
 // Per-light shadow multipliers (#140 phase 2). All default 1.0 -> identical to pre-phase-2.
 uniform float uSunShadowBias;        // x the sun's texel-proportional depth bias
 uniform float uSunShadowNormalBias;  // x the sun's normal-offset term
-uniform sampler2DArrayShadow uShadowMap;
+// The three shadow samplers carry their units (8, 9, 10) in the shader, like the IBL ones below:
+// left at the default unit 0 they would share it with the sampler2D material maps, and Mesa
+// rejects any draw whose program has two sampler types on one unit (GL_INVALID_OPERATION) - so
+// a renderer that never SetInts them (the Asset Browser's model thumbnails) failed every draw.
+layout(binding = 8) uniform sampler2DArrayShadow uShadowMap;
 // Resolution is already known CPU-side (CascadedShadowMap::Configure) — a uniform instead of a
 // per-fragment textureSize() call (#190).
 uniform float uShadowMapResolution;
@@ -149,7 +153,7 @@ uniform float uSpotShadowHalfTan[16]; // tan(half-FOV) of each spot's map — th
 uniform float uSpotShadowBias[16];       // per-light x depth bias   (#140 phase 2, default 1.0)
 uniform float uSpotShadowNormalBias[16]; // per-light x normal offset
 uniform float uSpotShadowSoftness[16];   // per-light x PCF tap spread
-uniform sampler2DArrayShadow uSpotShadowMap;
+layout(binding = 9) uniform sampler2DArrayShadow uSpotShadowMap;
 uniform float uSpotShadowMapResolution; // known CPU-side (SpotShadowMap::Configure) (#190)
 
 // Point-light cube shadow maps (#119): one depth cube per casting point light, indexed by the
@@ -159,7 +163,7 @@ uniform int   uPointShadowCount; // arrays below are sized to PointShadowMap::kM
 uniform float uPointShadowFar[8];
 uniform float uPointShadowBias[8];       // per-light x depth bias   (#140 phase 2, default 1.0)
 uniform float uPointShadowNormalBias[8]; // per-light x normal offset
-uniform samplerCubeArrayShadow uPointShadowMap;
+layout(binding = 10) uniform samplerCubeArrayShadow uPointShadowMap;
 uniform float uPointShadowMapResolution; // known CPU-side (PointShadowMap::Configure) (#190)
 
 // Image-based lighting probes baked from the procedural sky (#196, see IblProbe.h). Explicit
