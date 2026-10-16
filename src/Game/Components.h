@@ -1149,7 +1149,9 @@ struct AnimatorComponent {
 // runtime-scratch tail is deliberately excluded from the reflected field list, same as it was
 // excluded from the old hand-written serializer.
 struct TransformControllerComponent {
-    std::string ScriptPath = "scripts/TransformController.tescript";
+    // Informational only (the system never reads it): the .tescript this was dropped from. Empty
+    // when added from Add Component; no script ships, so a made-up default showed as missing.
+    std::string ScriptPath;
     bool Enabled = true;
     glm::vec3 RotationDegPerSec{0.0f};
     glm::vec3 TranslationUnitsPerSec{0.0f};

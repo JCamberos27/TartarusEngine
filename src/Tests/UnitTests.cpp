@@ -820,6 +820,17 @@ void TestComponentPreset() {
     CHECK(world.Registry.get<TransformControllerComponent>(dst).RotationDegPerSec.z == 1.0f);
     CHECK(world.Registry.get<TransformControllerComponent>(dst).ScalePulseFrequencyHz == 7.0f); // untouched
 
+    // #12: Script Path now defaults to empty (it named a script that never shipped). Files saved
+    // with the old default still read it back as written, and an empty path round-trips.
+    CHECK(TransformControllerComponent{}.ScriptPath.empty());
+    CHECK(SceneSerializer::ApplyComponentPresetJson(world, assets, dst,
+              R"({"preset":1,"component":"Transform Controller","fields":{"Script Path":"scripts/TransformController.tescript"}})"));
+    CHECK(world.Registry.get<TransformControllerComponent>(dst).ScriptPath == "scripts/TransformController.tescript");
+    world.Registry.get<TransformControllerComponent>(src).ScriptPath.clear();
+    CHECK(SceneSerializer::ApplyComponentPresetJson(world, assets, dst,
+              SceneSerializer::ComponentToPresetJson(world, src, "Transform Controller")));
+    CHECK(world.Registry.get<TransformControllerComponent>(dst).ScriptPath.empty());
+
     // Rejections: malformed, unknown component, missing fields block, and a component that has
     // no generic serialisation. None of these may half-write anything.
     CHECK(!SceneSerializer::ApplyComponentPresetJson(world, assets, dst, "not json"));
