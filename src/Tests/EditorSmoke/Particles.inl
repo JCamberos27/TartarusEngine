@@ -82,8 +82,15 @@ void RegisterParticlesTests() {
          Until("particles are emitted in the editor", [](Ctx& c) { return LiveCount(c) > 5; }, 600),
          HoverPanel(kScene), WaitSeconds(0.5),
          Shot("viewport", {kScene}),
-         InspReveal(SectionButton("Clear")), Click(SectionButton("Clear")), Wait(1),
-         ExpectTrue("Clear empties it", [](Ctx& c) { return LiveCount(c) < 5; }),
+         InspReveal(SectionButton("Clear")),
+         Do("note the live count", [](Ctx& c) { g_Number = LiveCount(c); }),
+         Click(SectionButton("Clear")), Wait(1),
+         // Still emitting at 150/s: a slow frame (llvmpipe) refills more than a handful after the
+         // Clear, so compare with the count before it.
+         Expect("Clear empties it", [](Ctx& c) {
+             const int n = LiveCount(c);
+             return n < 5 || n < g_Number / 4.0 ? std::string() : std::to_string(n) + " live after Clear, " + std::to_string((int)g_Number) + " before";
+         }),
          InspReveal(ByTag("field:Particle System/Emitting")), Click(ByTag("field:Particle System/Emitting")), Wait(3),
          ExpectTrue("Emitting off (stop)", [](Ctx& c) { return !System(c)->Emitting; }),
          InspReveal(SectionButton("Clear")), Click(SectionButton("Clear")), WaitSeconds(0.3),
