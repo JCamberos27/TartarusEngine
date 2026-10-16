@@ -1095,8 +1095,17 @@ int main(int argc, char** argv) {
                 glfwRestoreWindow(window.Handle());
                 glfwSetWindowSize(window.Handle(), opt.perfResW, opt.perfResH);
             } else if (!opt.editorShotDir.empty() || opt.editorTestsMode) {
+                // TARTARUS_EDITOR_TEST_SIZE=WxH sizes the test window alone (e.g. 1044x788, CI's runner).
+                int testW = opt.perfResW > 0 ? opt.perfResW : 1920, testH = opt.perfResW > 0 ? opt.perfResH : 1080;
+                char* size = nullptr;
+                size_t sizeLen = 0;
+                if (_dupenv_s(&size, &sizeLen, "TARTARUS_EDITOR_TEST_SIZE") == 0 && size) {
+                    int w = 0, h = 0;
+                    if (sscanf_s(size, "%dx%d", &w, &h) == 2 && w > 0 && h > 0) { testW = w; testH = h; }
+                }
+                std::free(size);
                 glfwRestoreWindow(window.Handle());
-                glfwSetWindowSize(window.Handle(), opt.perfResW > 0 ? opt.perfResW : 1920, opt.perfResW > 0 ? opt.perfResH : 1080);
+                glfwSetWindowSize(window.Handle(), testW, testH);
             }
             // --editor-tests: hidden, so the desktop's real mouse and keyboard never reach it.
             // TARTARUS_EDITOR_TEST_SHOW=1 keeps it shown (CI, where nobody is at the desktop): the
