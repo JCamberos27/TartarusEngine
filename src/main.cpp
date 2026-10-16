@@ -1699,7 +1699,7 @@ int main(int argc, char** argv) {
         const int kEditorShotFrames = 150;
         const std::vector<const char*> kEditorShots = opt.editorShotIDE ? std::vector<const char*>{"script-ide"} : opt.editorShotCurves ? std::vector<const char*>{"recoil-curves","recoil-targets","recoil-smoothing","recoil-layers","recoil-misc"} : std::vector<const char*>{"overview", "inspector", "enhancers", "bookmarks", "favorites", "console", "game", "settings", "settings-viewport",
                                                    "settings-performance", "project-settings", "project-tags", "project-build",
-                                                   "lighting", "animator"};
+                                                   "lighting", "animator", "settings-sounds", "sound-board"};
         int editorShotFrame = 0;
 
         // Monotonically increasing per-frame counter, used by Model::TickAnimationOnce() to
@@ -4242,6 +4242,8 @@ int main(int argc, char** argv) {
                             editor.SetShowLighting(false);
                             editor.OpenAnimatorWindow("assets/Animations/Controllers/fps_body_locomotion.controller");
                         }
+                        else if (view == "settings-sounds") { editor.SetShowAnimator(false); editor.OpenSettingsCategory(false, 7); }
+                        else if (view == "sound-board") { editor.CloseSettingsWindow(); editor.SetShowSoundBoard(true); focus("###SoundBoard"); }
                     }
                 }
                 if (!opt.editorShotDir.empty() && opt.editorShotGlass) {

@@ -670,7 +670,7 @@ void RegisterMenusTests() {
          ExpectTrue("on Shortcuts", [](Ctx& c) { return !A::SettingsIsProject(c.E) && A::PrefsCategory(c.E) == 5; }),
          Shot("shortcuts", {"###Settings"})},
         MenuClick("Help", "Shortcuts", "About Tartarus Engine"),
-        {Until("on About", [](Ctx& c) { return !A::SettingsIsProject(c.E) && A::PrefsCategory(c.E) == 7; }),
+        {Until("on About", [](Ctx& c) { return !A::SettingsIsProject(c.E) && A::PrefsCategory(c.E) == 8; }),
          Wait(2),
          Shot("about", {"###Settings"}),
          CloseByX(EditorPanels::Settings), UntilGone(EditorPanels::Settings)},
