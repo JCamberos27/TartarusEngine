@@ -739,7 +739,12 @@ void RegisterSceneToolsTests() {
              c.W.Registry.get<NameComponent>(ByName(c.W, "Alpha")).Name = "Alpha 2";
          }), Wait(3),
          Do("dim Gamma with no undo step", [](Ctx& c) { c.W.Registry.get<LightComponent>(ByName(c.W, "Gamma")).Intensity = 0.25f; }), Wait(3),
-         ExpectDepth("only the rename is a step so far", 1),
+         // The dimming is normally journaled by the Ctrl+Z below. A project-watcher event (the previous
+         // test's scratch files, delivered late on CI) journals it earlier, which is the same step.
+         Expect("only the rename is a step so far, plus at most the dimming", [](Ctx& c) {
+             const size_t d = X::UndoDepth(c.E);
+             return d == 1 || (d == 2 && ST::TopLabel(c.E) == "Unrecorded Change") ? std::string() : "history: " + ST::UndoLabels(c.E);
+         }),
          HoverPanel(kScene), Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
          Expect("Ctrl+Z takes back only the dimming", [](Ctx& c) {
              if (ByName(c.W, "Alpha 2") == entt::null) return "the rename was undone too; history: " + ST::UndoLabels(c.E);
