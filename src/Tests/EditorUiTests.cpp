@@ -234,6 +234,9 @@ struct Step {
 struct Test {
     std::string Name;
     std::vector<Step> Steps;
+    // Runs when the test ends, passed or failed: a failed test stops at its failing step, so
+    // cleanup written as its last step (deleting a scratch folder) never ran.
+    std::function<void(Ctx&)> Finally;
 };
 
 std::string g_Filter;
@@ -777,8 +780,8 @@ double g_Number = 0.0;
 std::string g_Text;
 glm::vec3 g_Vec{0.0f};
 
-void Add(std::string name, std::vector<Step> steps) {
-    g_Tests.push_back({std::move(name), std::move(steps)});
+void Add(std::string name, std::vector<Step> steps, std::function<void(Ctx&)> finally = {}) {
+    g_Tests.push_back({std::move(name), std::move(steps), std::move(finally)});
 }
 
 // =============================================================================================
@@ -1616,6 +1619,7 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
             ImGuiIO& io = ImGui::GetIO();
             for (int b = 0; b < 3; ++b) io.AddMouseButtonEvent(b, false);
             Mods(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiMod_Alt, false);
+            if (t.Finally) t.Finally(c);
             std::string dump;
             {
                 char* v = nullptr;

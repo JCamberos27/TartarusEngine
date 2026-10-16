@@ -109,7 +109,10 @@ void EditorLayer::SyncProjectChanges(World& world, AssetLibrary& assets) {
             if (SameFile(move.first,c.OldPath) && SameFile(move.second,c.Path)) return false;
         return true;
     });
-    if (external) FinishGlobalUndo(world,true);
+    if (external) {
+        FinishGlobalUndo(world,true);
+        JournalUnrecordedChange(world); // #15 - the rebase below would fold it into the baseline
+    }
     if (overflowed) {
         // Too many changes at once for the OS journal (a branch switch, a huge copy): rescan.
         Log::Info("Project watcher: many files changed at once - rescanning the project.");

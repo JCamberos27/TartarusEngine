@@ -2338,6 +2338,38 @@ bool SceneSerializer::SaveSnapshotToFile(const std::string& entitySnapshot, cons
     return AtomicFile::WriteBytes(std::filesystem::path(path), text, /*binary=*/false);
 }
 
+namespace {
+// The keys SaveToString(world, assets) adds on top of the scene: its own marker and every key
+// AppendAssetLibraryJson writes.
+constexpr const char* kLibraryKeys[] = {"hasAssetLibrarySnapshot", "libraryModels", "libraryTextures", "libraryMaterials",
+                                        "librarySounds", "libraryPrefabs", "assetFolders", "assetMeta"};
+} // namespace
+
+bool SceneSerializer::SameSceneContent(const std::string& a, const std::string& b) {
+    if (a == b) return true;
+    try {
+        json ja = json::parse(a), jb = json::parse(b);
+        for (const char* k : kLibraryKeys) { ja.erase(k); jb.erase(k); }
+        return ja == jb;
+    } catch (const std::exception&) {
+        return false;
+    }
+}
+
+std::string SceneSerializer::WithLibraryState(const std::string& scene, const std::string& library) {
+    try {
+        json out = json::parse(scene);
+        const json lib = json::parse(library);
+        for (const char* k : kLibraryKeys) {
+            out.erase(k);
+            if (const auto it = lib.find(k); it != lib.end()) out[k] = *it;
+        }
+        return out.dump();
+    } catch (const std::exception&) {
+        return {};
+    }
+}
+
 std::string SceneSerializer::SaveToString(const World& world, const AssetLibrary& assets) {
     json root = BuildSceneJson(world);
     // Marks this snapshot as carrying real AssetLibrary state, so LoadFromString below knows to
