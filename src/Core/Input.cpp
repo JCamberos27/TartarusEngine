@@ -12,6 +12,7 @@ double Input::s_ScrollAccumX = 0.0, Input::s_ScrollX = 0.0;
 bool Input::s_FirstMouse = true;
 bool Input::s_PrevKeys[512] = {};
 static bool s_CurKeys[512] = {};
+static bool s_SimKeys[512] = {}; // SimulateKeyTap: down for the next Update() only
 static constexpr int kMouseButtons = 8; // GLFW_MOUSE_BUTTON_1 .. GLFW_MOUSE_BUTTON_LAST
 static bool s_CurButtons[kMouseButtons] = {};
 static bool s_PrevButtons[kMouseButtons] = {};
@@ -100,7 +101,8 @@ void Input::Update() {
     // range are just never touched, since nothing in the engine maps a key there.
     for (int key = GLFW_KEY_SPACE; key <= GLFW_KEY_LAST; ++key) {
         s_PrevKeys[key] = s_CurKeys[key];
-        s_CurKeys[key] = focused && glfwGetKey(s_Window, key) == GLFW_PRESS;
+        s_CurKeys[key] = (focused && glfwGetKey(s_Window, key) == GLFW_PRESS) || s_SimKeys[key];
+        s_SimKeys[key] = false;
     }
     for (int b = 0; b < kMouseButtons; ++b) {
         s_PrevButtons[b] = s_CurButtons[b];
@@ -127,6 +129,10 @@ void Input::Update() {
 
 // #145 - reads the per-frame snapshot, like IsKeyPressed (it used to query live GLFW state, so
 // the two could disagree within a frame).
+void Input::SimulateKeyTap(int key) {
+    if (key >= GLFW_KEY_SPACE && key <= GLFW_KEY_LAST) s_SimKeys[key] = true;
+}
+
 bool Input::IsKeyDown(int key) {
     if (key < 0 || key >= 512) return false;
     return s_CurKeys[key];
