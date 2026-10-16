@@ -29,9 +29,11 @@
 #include <imgui_internal.h> // ImMax (kept for callers of this header that need glyph metrics)
 #include <IconsFontAwesome6.h>
 
+#include "EditorSoundEvents.h"
 #include "EditorTheme.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -55,6 +57,34 @@ inline ImVec4 InfoColor()    { return EditorTheme::Info; }
 // The hover / press wash every flat control shares.
 inline ImVec4 FlatHover()   { return ImVec4(1.0f, 1.0f, 1.0f, 0.07f); }
 inline ImVec4 FlatPressed() { return ImVec4(1.0f, 1.0f, 1.0f, 0.12f); }
+
+// --- Control sounds (EditorSound, through this binary's EditorSoundEvents slot) -------------------
+// The click of the item just submitted, panned towards where it sits across the window. Nothing while a
+// ScopedClickSilence is alive (a control whose action plays its own sound: Save, Undo, Pause...).
+inline void ClickSound(EditorSoundEvents::Event e) {
+    if (EditorSoundEvents::SuppressDepth() > 0 || !EditorSoundEvents::PlaySlot()) return;
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    float x = -1.0f;
+    if (vp && vp->Size.x > 0.0f)
+        x = std::clamp(((ImGui::GetItemRectMin().x + ImGui::GetItemRectMax().x) * 0.5f - vp->Pos.x) / vp->Size.x, 0.0f, 1.0f);
+    EditorSoundEvents::PlayViaSlot(e, x);
+}
+// A text button's meaning from its first word: Cancel / Close / Discard / No fall, Delete / Remove are destructive.
+inline EditorSoundEvents::Event LabelClickEvent(const char* label) {
+    using EditorSoundEvents::Event;
+    if (!label) return Event::Click;
+    auto first = [label](const char* w) {
+        size_t i = 0;
+        for (; w[i]; ++i)
+            if (std::tolower((unsigned char)label[i]) != w[i]) return false;
+        return !std::isalnum((unsigned char)label[i]); // the whole word: "No" but not "Normal"
+    };
+    for (const char* w : {"cancel", "close", "discard", "dismiss", "no", "don't"})
+        if (first(w)) return Event::ClickCancel;
+    for (const char* w : {"delete", "remove"})
+        if (first(w)) return Event::ClickDestructive;
+    return Event::Click;
+}
 
 // --- Control motion (Glass category 5, through EditorTheme::Motion*) -------------------------------
 // The press squash: while the last item is held its vertices (everything drawn since `vtxStart`)
@@ -137,6 +167,7 @@ inline bool ActionButton(const char* icon, const char* tooltip, TooltipFn toolti
     PressEnd(vtx);
     ImGui::PopStyleColor(4);
     if (tooltipFn && ImGui::IsItemHovered()) tooltipFn(tooltip);
+    if (clicked) ClickSound(active ? EditorSoundEvents::Event::ToggleOff : EditorSoundEvents::Event::Click);
     return clicked;
 }
 
@@ -165,6 +196,7 @@ inline bool DangerIconButton(const char* icon, const char* tooltip, TooltipFn to
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(4);
     if (tooltipFn && ImGui::IsItemHovered()) tooltipFn(tooltip);
+    if (clicked) ClickSound(EditorSoundEvents::Event::ClickDestructive);
     return clicked;
 }
 
@@ -196,6 +228,7 @@ inline bool Checkbox(const char* label, bool* v) {
     dl->AddRect(mn, ImVec2(mn.x + sz, mn.y + sz),
         EditorTheme::U32(EditorTheme::Mix(EditorTheme::Strong, EditorTheme::AccentDeep, t)), ImGui::GetStyle().FrameRounding, 0, 1.0f);
     PressEnd(vtx);
+    if (changed) ClickSound(*v ? EditorSoundEvents::Event::ToggleOn : EditorSoundEvents::Event::ToggleOff);
     return changed;
 }
 
@@ -209,6 +242,7 @@ inline bool SecondaryButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
     const bool clicked = ImGui::Button(label, size);
     PressEnd(vtx);
     ImGui::PopStyleColor(4);
+    if (clicked) ClickSound(LabelClickEvent(label));
     return clicked;
 }
 
@@ -224,6 +258,7 @@ inline bool PrimaryButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
     const bool clicked = ImGui::Button(label, size);
     PressEnd(vtx);
     ImGui::PopStyleColor(5);
+    if (clicked) ClickSound(EditorSoundEvents::Event::ClickConfirm);
     return clicked;
 }
 
@@ -273,7 +308,11 @@ inline bool Segmented(const char* id, int* current, const char* const* labels, i
         ImGui::PushStyleColor(ImGuiCol_Text,          on ? EditorTheme::AccentBright : EditorTheme::Secondary);
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
         ImGui::PushID(i);
-        if (ImGui::Button(labels[i], ImVec2(itemWidth, 0.0f)) && !on) { *current = i; changed = true; }
+        if (ImGui::Button(labels[i], ImVec2(itemWidth, 0.0f)) && !on) {
+            *current = i;
+            changed = true;
+            ClickSound(EditorSoundEvents::Event::TabSelect);
+        }
         ImGui::PopID();
         ImGui::PopStyleVar();
         ImGui::PopStyleColor(4);
@@ -692,6 +731,7 @@ inline bool Pill(const char* id, const char* icon, const char* label, bool selec
     if (icon) { dl->AddText(ImVec2(x, cy - is.y * 0.5f), EditorTheme::U32(tc), icon); x += is.x + iconGap; }
     TextEllipsis(dl, ImVec2(x, cy - ls.y * 0.5f), mx.x - padX * 0.6f, EditorTheme::U32(tc), label);
     EditorTheme::PopFont();
+    if (clicked) ClickSound(EditorSoundEvents::Event::Click);
     return clicked;
 }
 

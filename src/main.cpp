@@ -31,6 +31,7 @@
 #include "EditorModuleAPI.h" // EditorConsoleState (Clear on Play / Error Pause — #236 A5)
 #include "EditorLayer.h"
 #include "EditorSettings.h"
+#include "EditorSound.h"
 #include "EditorTheme.h"   // grid axis colours (GridColors)
 #include "Shortcuts.h" // play / window keys route through the Shortcuts Manager (#236 F)
 #include "Model.h"
@@ -1400,6 +1401,15 @@ int main(int argc, char** argv) {
             AudioEngine::SetMasterVolume(au.MasterVolume);
             for (int b = 0; b < AudioEngine::kBusCount; ++b) AudioEngine::SetBusVolume((AudioEngine::Bus)b, au.BusVolume[b]);
         }
+        // The editor's UI sounds: the built-in set next to the exe, event by event replaced by the Drive's premium set when it
+        // has been fetched into the project. Not in a built game or a headless run.
+        if (!playerMode && !headless) {
+            EditorSound::Init(EnginePaths::Resolve("assets/editor_sounds"), ProjectPaths::Resolve("assets/Audio/EditorUI"));
+            EditorSound::Apply(EditorSound::FromEditorSettings());
+            EditorSoundEvents::PlaySlot() = [](int event, float x) {
+                if (event >= 0 && event < EditorSoundEvents::kEventCount) EditorSound::Play((EditorSound::Event)event, x);
+            };
+        }
 
         // One-shot rig dump: OS, CPU, RAM, GPU, driver, display, build. Collected into a block
         // for Preferences > About — no longer spammed line-by-line to the Console (it lives in
@@ -1863,6 +1873,7 @@ int main(int argc, char** argv) {
 
         // #89 — see the matching catch after the loop. (Loop body deliberately not re-indented.)
         bool wasFocused = true; // #132 - reimport-on-focus edge detector
+        bool soundWasPaused = false; // the editor's Pause / Resume sounds, on the edges
         // #132 - watch the project folder for files added / removed / renamed / edited outside the
         // editor; SyncProjectChanges applies them once per frame. Not in a built game.
         struct ProjectWatcherGuard { ~ProjectWatcherGuard() { ProjectWatcher::Stop(); } } projectWatcherGuard;
@@ -1897,6 +1908,7 @@ int main(int argc, char** argv) {
                         Log::Info("Reimported " + std::to_string(n) + " texture(s) changed on disk.");
                 }
                 wasFocused = focused;
+                EditorSound::SetWindowFocused(focused); // in the background only notifications sound
             }
             if (!crashTestInEditor.empty() && frameIndex == 120) {
                 editor.MarkDirtyForCrashTest();
@@ -2439,6 +2451,11 @@ int main(int argc, char** argv) {
             // ma_sound objects and open file handles (#200).
             // #171 - game audio follows the editor's Pause / Error Pause (resumes mid-clip).
             AudioEngine::SetPaused(playing && paused);
+            if (playing && (playing && paused) != soundWasPaused)
+                EditorSound::Play((playing && paused) ? EditorSound::Event::Pause : EditorSound::Event::Resume);
+            soundWasPaused = playing && paused;
+            if (stepThisFrame) EditorSound::Play(EditorSound::Event::Step);
+            EditorSound::Update(); // the notification sounds for what was logged this frame
             AudioEngine::Update();
 
             // Whether gameplay actually advances this frame: playing and not paused, or a
@@ -5103,6 +5120,7 @@ int main(int argc, char** argv) {
             MotionDemo::StopRecording(); // a demo cut short still leaves a playable file
             editor.Shutdown();
             editorModule.Shutdown();
+            EditorSound::Shutdown();
             AudioEngine::Shutdown();
             PhysicsWorld::Shutdown();
             return code;
@@ -5130,6 +5148,7 @@ int main(int argc, char** argv) {
                       << (allPassed ? "ALL PASSED" : "FAILURES DETECTED") << std::endl;
             editor.Shutdown();
             editorModule.Shutdown();
+            EditorSound::Shutdown();
             AudioEngine::Shutdown();
             PhysicsWorld::Shutdown(); // #167 - the session-lifetime PhysX core
             return allPassed ? 0 : 1;
@@ -5161,6 +5180,7 @@ int main(int argc, char** argv) {
         }
         editor.Shutdown();
         editorModule.Shutdown();
+        EditorSound::Shutdown();
         AudioEngine::Shutdown();
         PhysicsWorld::Shutdown(); // #167 - the session-lifetime PhysX core
     } catch (const std::exception& e) {

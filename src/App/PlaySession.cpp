@@ -1,4 +1,5 @@
 #include "App/PlaySession.h"
+#include "EditorSound.h"
 
 #include "App/LaunchOptions.h"
 #include "AssetLibrary.h"
@@ -82,6 +83,7 @@ void PlaySession::Start() {
     if (m_Editor.InPrefabMode()) m_Editor.ExitPrefabMode(m_World, m_Assets); // #176 - Play runs the scene
     if (EditorModuleHost::ConsoleState().ClearOnPlay) Log::Clear(); // #236 A5
     m_Editor.OnEnterPlayMode(m_World);
+    EditorSound::Play(EditorSound::Event::PlayEnter);
     // Character Outfit's Randomize On Play: dressed afresh, after the snapshot so Stop brings the
     // edited outfit back. It loads in the background; FirstPersonBody takes the new pieces once
     // they're on (OutfitChanged). A body not built yet (untagged parts) is adopted first, or
@@ -303,6 +305,7 @@ void PlaySession::Stop() {
     m_ShellCasings.Clear(m_World);
     m_Editor.OnExitPlayMode(m_World, m_Assets);
     m_State.Playing = false;
+    EditorSound::Play(EditorSound::Event::PlayExit);
     m_State.Paused = false;
     m_State.Maximized = false;
     m_State.EditorUIVisible = true;

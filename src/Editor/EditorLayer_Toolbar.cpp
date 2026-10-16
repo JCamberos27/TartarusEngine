@@ -123,6 +123,8 @@ void EditorLayer::DrawPlayTransportButtons(bool playing, bool maximized, bool pa
         // Pause toggle + single-frame Step (#236). Pause reads as pressed-in while active; Step
         // is only meaningful (and only enabled) once paused.
         ImGui::SameLine();
+        { // Pause / Resume / Step sound when the state changes (main.cpp), not as clicks
+        EditorSoundEvents::ScopedClickSilence quiet;
         if (ActionButton(paused ? ICON_FA_PLAY "  Resume" : ICON_FA_PAUSE "  Pause",
                          paused ? "Resume simulation (F2)" : "Freeze simulation, keep rendering (F2)", paused)) {
             m_PauseToggleRequested = true;
@@ -132,6 +134,7 @@ void EditorLayer::DrawPlayTransportButtons(bool playing, bool maximized, bool pa
         ImGui::BeginDisabled(!paused);
         if (ActionButton(ICON_FA_FORWARD_STEP "  Step", "Advance exactly one frame (F3)")) m_StepRequested = true;
         ImGui::EndDisabled();
+        }
 
         ImGui::SameLine();
         const char* fsLabel = maximized ? ICON_FA_COMPRESS "  Restore" : ICON_FA_EXPAND "  Fullscreen";
@@ -245,11 +248,14 @@ void EditorLayer::DrawViewportActionBar(World& world, AssetLibrary& assets,
     };
 
     // --- Undo / Redo / Save ------------------------------------------------------------------
+    { // these sound when the action lands (EditorSound: Undo / Redo / Save), not as clicks
+    EditorSoundEvents::ScopedClickSilence quiet;
     if (ActionButton(EDITOR_ICON_UNDO, "Undo (Ctrl+Z)")) ToolbarUndo(world, assets);
     ImGui::SameLine();
     if (ActionButton(EDITOR_ICON_REDO, "Redo (Ctrl+Y)")) ToolbarRedo(world, assets);
     ImGui::SameLine();
     if (ActionButton(EDITOR_ICON_SAVE, "Save (Ctrl+S)")) SaveScene(world, assets);
+    }
 
     // --- Play / Stop / Pause / Step / Fullscreen ---------------------------------------------
     divider();
