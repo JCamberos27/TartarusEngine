@@ -681,6 +681,84 @@ void RegisterSceneToolsTests() {
         Tidy(),
     }));
 
+    // Bug #15: Undo restores the snapshot cached after the last undo step, so a scene change made
+    // without one went back with whatever edit Ctrl+Z took back. A .prefab dropped onto the editor
+    // (the OS drop, or the Asset Library's import) was such a change: instantiated with no undo step.
+    {
+        auto dropDir = [] { return ProjectPaths::Resolve("editor-smoke-scratch-undo"); };
+        auto dropPath = [dropDir] { return (std::filesystem::u8path(dropDir()) / "SmokeDrop.prefab").u8string(); };
+        Add("scenetools: a prefab dropped onto the editor is its own undo step; Ctrl+Z after an edit and a drop takes back only the drop", Seq({
+            {Do("write a scratch prefab (Dropped Crate)", [dropDir, dropPath](Ctx&) {
+                std::error_code ec;
+                std::filesystem::remove_all(std::filesystem::u8path(dropDir()), ec);
+                std::filesystem::create_directories(std::filesystem::u8path(dropDir()), ec);
+                World w;
+                const glm::vec3 zero(0.0f), one(1.0f);
+                const entt::entity root = w.CreateEmptyEntity(zero, zero, one, "Dropped Crate");
+                w.Registry.emplace<LightComponent>(root).Intensity = 3.0f;
+                if (!SceneSerializer::SavePrefab(w, root, dropPath())) Fail("SavePrefab failed");
+            })},
+            ToolScene(),
+            {Do("rename Alpha (an undo step)", [](Ctx& c) {
+                 X::PushUndo(c.E, c.W, "Rename Alpha");
+                 c.W.Registry.get<NameComponent>(ByName(c.W, "Alpha")).Name = "Alpha 2";
+             }), Wait(3),
+             Do("drop the prefab onto the editor", [dropPath](Ctx& c) { c.E.HandleDroppedFiles(c.W, c.A, c.Cam, true, {dropPath()}); }),
+             Until("its instance is in the scene", [](Ctx& c) { return ByName(c.W, "Dropped Crate") != entt::null; }, 240), Wait(3),
+             HoverPanel(kScene), Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
+             Expect("the first Ctrl+Z takes back only the drop", [](Ctx& c) {
+                 if (ByName(c.W, "Alpha 2") == entt::null) return "the rename was undone too; history: " + ST::UndoLabels(c.E);
+                 return ByName(c.W, "Dropped Crate") == entt::null ? std::string() : "the instance is still there; history: " + ST::UndoLabels(c.E);
+             }),
+             Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
+             ExpectTrue("the second undoes the rename", [](Ctx& c) { return ByName(c.W, "Alpha") != entt::null; }),
+             Key(ImGuiKey_Y, ImGuiMod_Ctrl), Wait(3), Key(ImGuiKey_Y, ImGuiMod_Ctrl), Wait(3),
+             Expect("Ctrl+Y twice redoes both", [](Ctx& c) {
+                 return ByName(c.W, "Alpha 2") != entt::null && ByName(c.W, "Dropped Crate") != entt::null
+                     ? std::string() : "history: " + ST::UndoLabels(c.E);
+             })},
+            Tidy(),
+        }), [dropDir, dropPath](Ctx& c) {
+            c.A.RemovePrefab(dropPath());
+            // The drop filed the prefab under an Asset Browser folder for its directory.
+            const auto& folders = c.A.Folders();
+            if (std::find(folders.begin(), folders.end(), "editor-smoke-scratch-undo") != folders.end())
+                c.A.DeleteFolderRecursive("editor-smoke-scratch-undo");
+            std::error_code ec;
+            std::filesystem::remove_all(std::filesystem::u8path(dropDir()), ec);
+        });
+    }
+
+    // Bug #15, for any path that still forgets its undo step: the change it made is not thrown
+    // away with the edit before it. Ctrl+Z takes back only that change, as a step of its own.
+    Add("scenetools: a scene change made without an undo step is its own step at the next Ctrl+Z, not lost with the edit before it", Seq({
+        ToolScene(),
+        {Do("note Gamma's intensity", [](Ctx& c) { g_Number = c.W.Registry.get<LightComponent>(ByName(c.W, "Gamma")).Intensity; }),
+         Do("rename Alpha (an undo step)", [](Ctx& c) {
+             X::PushUndo(c.E, c.W, "Rename Alpha");
+             c.W.Registry.get<NameComponent>(ByName(c.W, "Alpha")).Name = "Alpha 2";
+         }), Wait(3),
+         Do("dim Gamma with no undo step", [](Ctx& c) { c.W.Registry.get<LightComponent>(ByName(c.W, "Gamma")).Intensity = 0.25f; }), Wait(3),
+         ExpectDepth("only the rename is a step so far", 1),
+         HoverPanel(kScene), Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
+         Expect("Ctrl+Z takes back only the dimming", [](Ctx& c) {
+             if (ByName(c.W, "Alpha 2") == entt::null) return "the rename was undone too; history: " + ST::UndoLabels(c.E);
+             const float i = c.W.Registry.get<LightComponent>(ByName(c.W, "Gamma")).Intensity;
+             return i == (float)g_Number ? std::string() : "Gamma's intensity is " + std::to_string(i);
+         }),
+         Key(ImGuiKey_Y, ImGuiMod_Ctrl), Wait(3),
+         Expect("Ctrl+Y brings the dimming back", [](Ctx& c) {
+             const float i = c.W.Registry.get<LightComponent>(ByName(c.W, "Gamma")).Intensity;
+             return i == 0.25f && ByName(c.W, "Alpha 2") != entt::null ? std::string() : "history: " + ST::UndoLabels(c.E);
+         }),
+         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3), Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
+         Expect("two more undo the dimming, then the rename", [](Ctx& c) {
+             const float i = c.W.Registry.get<LightComponent>(ByName(c.W, "Gamma")).Intensity;
+             return i == (float)g_Number && ByName(c.W, "Alpha") != entt::null ? std::string() : "history: " + ST::UndoLabels(c.E);
+         })},
+        Tidy(),
+    }));
+
     Add("scenetools: F frames the selection; viewport click selects, Ctrl+click adds, empty space clears, a box drag selects", Seq({
         ToolScene(),
         {SelectByName("Gamma"), Wait(2),
