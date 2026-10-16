@@ -688,8 +688,14 @@ void RegisterSceneToolsTests() {
     {
         auto dropDir = [] { return ProjectPaths::Resolve("editor-smoke-scratch-undo"); };
         auto dropPath = [dropDir] { return (std::filesystem::u8path(dropDir()) / "SmokeDrop.prefab").u8string(); };
+        // The scratch folder made / deleted outside AtomicFile: noted as the editor's own, or the project
+        // watcher reports it, late, as an outside change in whichever test runs next.
+        auto noteDrop = [dropDir, dropPath] {
+            for (const std::string& p : {dropDir(), dropPath(), dropPath() + ".meta"}) AtomicFile::NoteSelfWrite(std::filesystem::u8path(p));
+        };
         Add("scenetools: a prefab dropped onto the editor is its own undo step; Ctrl+Z after an edit and a drop takes back only the drop", Seq({
-            {Do("write a scratch prefab (Dropped Crate)", [dropDir, dropPath](Ctx&) {
+            {Do("write a scratch prefab (Dropped Crate)", [dropDir, dropPath, noteDrop](Ctx&) {
+                noteDrop();
                 std::error_code ec;
                 std::filesystem::remove_all(std::filesystem::u8path(dropDir()), ec);
                 std::filesystem::create_directories(std::filesystem::u8path(dropDir()), ec);
@@ -719,12 +725,13 @@ void RegisterSceneToolsTests() {
                      ? std::string() : "history: " + ST::UndoLabels(c.E);
              })},
             Tidy(),
-        }), [dropDir, dropPath](Ctx& c) {
+        }), [dropDir, dropPath, noteDrop](Ctx& c) {
             c.A.RemovePrefab(dropPath());
             // The drop filed the prefab under an Asset Browser folder for its directory.
             const auto& folders = c.A.Folders();
             if (std::find(folders.begin(), folders.end(), "editor-smoke-scratch-undo") != folders.end())
                 c.A.DeleteFolderRecursive("editor-smoke-scratch-undo");
+            noteDrop();
             std::error_code ec;
             std::filesystem::remove_all(std::filesystem::u8path(dropDir()), ec);
         });
