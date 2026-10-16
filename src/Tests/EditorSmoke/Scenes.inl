@@ -114,10 +114,14 @@ void RegisterScenesTests() {
         if (label.size() > 5 && label.compare(label.size() - 5, 5, ".json") == 0) label.resize(label.size() - 5);
 
         Add("scenes: " + label + " opens, settles, inspects and plays", {
-            FreshScene(), Wait(2),
+            // Allowed first: the previous scene's async loads can still log while FreshScene runs.
             Do("allow errors naming the external files missing here", [](Ctx&) {
                 for (const std::string& name : MissingExternalFiles()) g_AllowLog.push_back(name);
+                // Logged without a file name when the soldier's (external) body meshes are missing.
+                if (!MissingExternalFiles().empty())
+                    g_AllowLog.push_back("Enemy AI: the soldier's body has no animated skeleton");
             }),
+            FreshScene(), Wait(2),
             Do("Scene tab in front", [](Ctx& c) { c.E.RequestSceneTabFocus(); }), Wait(2),
             Do("open " + label, [path](Ctx& c) { SA::Open(c.E, c.W, c.A, path); }),
             Expect("it is the open scene", [path](Ctx& c) {
