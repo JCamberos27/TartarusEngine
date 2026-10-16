@@ -30,9 +30,11 @@
 #include "EditorModuleAPI.h"       // EditorConsoleState
 #include "HotReloadEditorModule.h" // EditorModuleHost::ConsoleState()
 #include "GLDebug.h"
+#include "Input.h" // Input::SimulateKeyTap - main-loop keys (F1..F4) for the PlayMode suite
 #include "Log.h"
 #include "gl.h"
 
+#include <GLFW/glfw3.h>
 #include <stb_image_write.h>
 
 #include <imgui.h>
