@@ -84,6 +84,23 @@ struct GlassEditorState;    // the Glass theme's state (Glass/GlassEditorState.h
 class EditorLayer {
     friend struct EditorHistoryTestAccess;
     friend struct EditorUiTestAccess; // --editor-tests (src/Tests/EditorUiTests.cpp)
+    // --editor-tests smoke suites (src/Tests/EditorSmoke/*.inl), one accessor struct each.
+    friend struct EditorSmokeAccess_Menus;
+    friend struct EditorSmokeAccess_Panels;
+    friend struct EditorSmokeAccess_Hierarchy;
+    friend struct EditorSmokeAccess_Inspector;
+    friend struct EditorSmokeAccess_SceneTools;
+    friend struct EditorSmokeAccess_PlayMode;
+    friend struct EditorSmokeAccess_Prefabs;
+    friend struct EditorSmokeAccess_SaveLoad;
+    friend struct EditorSmokeAccess_Assets;
+    friend struct EditorSmokeAccess_Animator;
+    friend struct EditorSmokeAccess_Curves;
+    friend struct EditorSmokeAccess_Particles;
+    friend struct EditorSmokeAccess_ScriptIDE;
+    friend struct EditorSmokeAccess_HotReload;
+    friend struct EditorSmokeAccess_Settings;
+    friend struct EditorSmokeAccess_Scenes;
 public:
     // Declared (rather than left implicit) and defined in the .cpp — a stylistic match for the
     // other Init/Shutdown-style lifecycle methods below, not a forward-declaration requirement
