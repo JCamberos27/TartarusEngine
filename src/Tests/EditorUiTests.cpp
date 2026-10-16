@@ -31,6 +31,7 @@
 #include "HotReloadEditorModule.h" // EditorModuleHost::ConsoleState()
 #include "GLDebug.h"
 #include "Input.h" // Input::SimulateKeyTap - main-loop keys (F1..F4) for the PlayMode suite
+#include "AtomicFile.h" // NoteSelfWrite - scratch files a suite writes are not external changes
 #include "Log.h"
 #include "gl.h"
 
