@@ -1934,6 +1934,11 @@ void AppendAssetLibraryJson(json& root, const AssetLibrary& assets, bool include
         if (m.PivotOffset != glm::vec3(0.0f)) mi["pivotOffset"] = {m.PivotOffset.x, m.PivotOffset.y, m.PivotOffset.z};
         if (!m.ExcludeNodes.empty()) mi["excludeNodes"] = m.ExcludeNodes;
         if (m.SkinIgnoresMeshNode) mi["skinIgnoresMeshNode"] = true;
+        if (!m.ClipTrims.empty()) {
+            json trims = json::array();
+            for (const auto& t : m.ClipTrims) trims.push_back({{"clip", t.Clip}, {"start", t.StartSeconds}, {"end", t.EndSeconds}});
+            mi["clipTrims"] = trims;
+        }
     }
     root["assetMeta"] = meta;
 }
@@ -2017,6 +2022,10 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root, bool fromUndo
                 if (m.contains("excludeNodes") && m["excludeNodes"].is_array())
                     for (const auto& n : m["excludeNodes"])
                         if (n.is_string()) sm.ExcludeNodes.push_back(n.get<std::string>());
+                if (m.contains("clipTrims") && m["clipTrims"].is_array())
+                    for (const auto& t : m["clipTrims"])
+                        if (t.is_object() && t.value("clip", std::string()).size())
+                            sm.ClipTrims.push_back({t.value("clip", std::string()), t.value("start", 0.0f), t.value("end", 0.0f)});
                 assets.SetModelSettings(path, sm, metaHasImporter);
             }
         }
