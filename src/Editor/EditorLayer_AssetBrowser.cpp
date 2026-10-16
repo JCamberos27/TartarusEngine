@@ -2244,7 +2244,13 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             if (ImGui::MenuItem(ICON_FA_PEN "  Rename (F2)", nullptr, false, m_ExtraAssetSelection.empty())) {
                 BeginRenameAsset(cell.key, isFolder, cell.display);
             }
-            if (ImGui::MenuItem(ICON_FA_TAG "  Edit Labels...")) {
+            // The labels popup opens nested in this context menu, so the menu has to stay open
+            // for it (a MenuItem normally closes its popup, and the nested popup with it); Apply
+            // closes both.
+            ImGui::PushItemFlag(ImGuiItemFlags_AutoClosePopups, false);
+            const bool editLabels = ImGui::MenuItem(ICON_FA_TAG "  Edit Labels...");
+            ImGui::PopItemFlag();
+            if (editLabels) {
                 std::string joined;
                 for (const auto& lbl : assets.Labels(cell.key)) {
                     if (!joined.empty()) joined += ", ";
@@ -2253,6 +2259,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 snprintf(m_LabelsEditBuffer, sizeof(m_LabelsEditBuffer), "%s", joined.c_str());
                 ImGui::OpenPopup("##EditLabels");
             }
+            bool labelsApplied = false;
             if (ImGui::BeginPopup("##EditLabels")) {
                 ImGui::TextDisabled("Comma-separated labels - searchable as l:label");
                 ImGui::SetNextItemWidth(240.0f * m_UIScale); // #37
@@ -2271,9 +2278,11 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                     PushUndo(world, "Edit Labels");
                     assets.SetLabels(cell.key, labels);
                     ImGui::CloseCurrentPopup();
+                    labelsApplied = true;
                 }
                 ImGui::EndPopup();
             }
+            if (labelsApplied) ImGui::CloseCurrentPopup(); // the context menu too
             if (m_ExtraAssetSelection.empty() && ImGui::MenuItem(ICON_FA_COPY "  Copy Path")) {
                 ImGui::SetClipboardText(cell.key.c_str());
                 Log::Info("Copied path: " + cell.key);
