@@ -16,4 +16,8 @@ const EditorMotionHooks& HostMotionHooks();
 // to `t`, inside the square at `pos` of side `size`.
 void DrawCheckmark(ImDrawList* dl, ImVec2 pos, float size, float t, ImU32 col, float thickness);
 
+// The Play / Stop glyph: a play triangle at `stopT` 0 morphing into a stop square at 1
+// (iam_path_morph), filled, centred on `c` in a box of side `size`.
+void DrawTransportGlyph(ImDrawList* dl, ImVec2 c, float size, float stopT, ImU32 col);
+
 } // namespace Glass

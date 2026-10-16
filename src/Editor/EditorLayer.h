@@ -2362,6 +2362,9 @@ private:
     // --- Glass theme (EditorLayer_Glass.cpp) -------------------------------------------------
     // Created on first use while Glass is active, destroyed when it's switched off.
     std::unique_ptr<GlassEditorState> m_Glass;
+    unsigned int m_MotionDockspaceId = 0;      // the editor dock space, for Glass::DockFocusRim
+    bool m_MotionPlaying = false;              // last DrawViewportActionBar's play state, for
+    bool m_MotionPaused = false;               //   Glass::DrawPlayFrame
     int m_PendingThemeId = -1;                 // RequestEditorTheme, applied in BeginFrame
     void ApplyPendingTheme();                  // BeginFrame, before ImGui::NewFrame
     void GlassFrameBegin();                    // BeginFrame, after ImGui::NewFrame

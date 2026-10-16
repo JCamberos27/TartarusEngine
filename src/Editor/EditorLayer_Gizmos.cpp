@@ -7,6 +7,7 @@
 #include "EditorPanels.h"
 #include "EditorLayerInternal.h"
 #include "EditorTheme.h"
+#include "Glass/GlassMotion.h" // EaseProgress, CameraFrame
 #include "FileDialog.h"
 #include "AssetLibrary.h"
 #include "World.h"
@@ -540,10 +541,14 @@ void EditorLayer::UpdateViewTransition(Camera& editorCamera, float dt) {
         return;
     }
 
-    const float kDuration = 0.28f;
+    // The Glass "smooth" curve (Glass::CameraFrame), so the camera lands like the UI does. A longer
+    // trip takes a little longer, capped so framing never feels slow.
+    const float dist = glm::length(m_ViewTransition.ToPos - m_ViewTransition.FromPos);
+    const float kDuration = std::min(Glass::CameraFrameMaxMs,
+                                     Glass::CameraFrame.durationMs + Glass::CameraFramePerOctaveMs * std::log2(1.0f + dist)) * 0.001f;
     m_ViewTransition.T = std::min(1.0f, m_ViewTransition.T + dt / kDuration);
     float t = m_ViewTransition.T;
-    float eased = t * t * (3.0f - 2.0f * t); // smoothstep
+    float eased = Glass::EaseProgress(Glass::CameraFrame, t);
 
     auto lerpAngle = [](float from, float to, float f) {
         float delta = fmodf(to - from + 540.0f, 360.0f) - 180.0f; // shortest path, wrapped to [-180,180)

@@ -23,6 +23,8 @@
 #include "EditorUIHelpers.h"
 #include "EditorUIPrimitives.h"
 #include "EditorTheme.h"
+#include "Glass/GlassMotion.h"        // the Play/Stop morph
+#include "Glass/GlassMotionHooks.h"   // DrawTransportGlyph
 #include "PhysicsWorld.h"             // #185 — PDD_* debug-draw channel flags
 #include "EditorModuleAPI.h"          // EditorConsoleState — the Console panel lives in the module now
 #include "HotReloadEditorModule.h"    // EditorModuleHost::ConsoleState()
@@ -78,27 +80,38 @@ void EditorLayer::DrawPlayTransportButtons(bool playing, bool maximized, bool pa
     // buttons the same way EditorUIPrimitives::ActionButton does.
     ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
 
-    if (!playing) {
-        // The one control every other toolbar button treatment defers to — Unity's own Play
-        // button is the single green accent in an otherwise monochrome toolbar, and that's the
-        // whole point of the color: it has to read as "the important one" at a glance, not blend
-        // into the flat/grey buttons around it.
-        const ImVec4 green = EditorUIPrimitives::SuccessColor();
-        ImGui::PushStyleColor(ImGuiCol_Text,          green);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(green.x, green.y, green.z, 0.20f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(green.x, green.y, green.z, 0.32f));
-        if (ImGui::Button(ICON_FA_PLAY "  Play")) m_PlayStopRequested = true;
-        ImGui::PopStyleColor(3);
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Play the scene in the Game panel (F1)");
-    } else {
-        // Stop is the red counterpart of the green Play.
-        const ImVec4 red = EditorTheme::Danger;
-        ImGui::PushStyleColor(ImGuiCol_Text,          red);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(red.x, red.y, red.z, 0.20f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(red.x, red.y, red.z, 0.32f));
-        if (ImGui::Button(ICON_FA_STOP "  Stop")) m_PlayStopRequested = true;
-        ImGui::PopStyleColor(3);
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Stop and revert the scene (F1)");
+    // Play and Stop are one button whose glyph morphs, triangle into square (Glass category 7),
+    // while its colour crosses from the green Play to the red Stop in OKLAB. Play is the one
+    // control every other toolbar button treatment defers to — Unity's own Play button is the
+    // single green accent in an otherwise monochrome toolbar, so it reads as "the important one".
+    {
+        static bool s_WasPlaying = playing;
+        const ImGuiID morphId = ImGui::GetID("##transportMorph");
+        const float stopT = Glass::Motion().AnimateToggle(morphId, playing, s_WasPlaying,
+                                                          Glass::TransportMorph, Glass::TransportMorph);
+        s_WasPlaying = playing;
+        const ImVec4 col = Glass::MixOklab(EditorUIPrimitives::SuccessColor(), EditorTheme::Danger, stopT);
+        const char* text = playing ? "  Stop" : "  Play";
+        const ImVec2 pad = ImGui::GetStyle().FramePadding;
+        const float glyphW = ImGui::CalcTextSize(ICON_FA_PLAY).x;
+        const ImVec2 textSz = ImGui::CalcTextSize(text);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(col.x, col.y, col.z, 0.20f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(col.x, col.y, col.z, 0.32f));
+        const int vtx = EditorUIPrimitives::PressBegin();
+        if (ImGui::Button("##transport", ImVec2(glyphW + textSz.x + pad.x * 2.0f, ImGui::GetFrameHeight())))
+            m_PlayStopRequested = true;
+        const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        const float cy = (mn.y + mx.y) * 0.5f;
+        const float gs = ImGui::GetFontSize() * 0.78f;
+        Glass::DrawTransportGlyph(dl, ImVec2(mn.x + pad.x + glyphW * 0.5f, cy), gs, stopT, EditorTheme::U32(col));
+        dl->AddText(ImVec2(mn.x + pad.x + glyphW, cy - textSz.y * 0.5f), EditorTheme::U32(col), text);
+        EditorUIPrimitives::PressEnd(vtx);
+        ImGui::PopStyleColor(2);
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip(playing ? "Stop and revert the scene (F1)" : "Play the scene in the Game panel (F1)");
+    }
+    if (playing) {
 
         // Pause toggle + single-frame Step (#236). Pause reads as pressed-in while active; Step
         // is only meaningful (and only enabled) once paused.
@@ -136,6 +149,8 @@ void EditorLayer::DrawPlayTransportButtons(bool playing, bool maximized, bool pa
 // toolbar's Zone B instead. Now there's only one path, used unconditionally.
 void EditorLayer::DrawViewportActionBar(World& world, AssetLibrary& assets,
                                          bool playing, bool maximized, bool paused) {
+    m_MotionPlaying = playing; // the play-mode frame (Glass::DrawPlayFrame, EndFrame)
+    m_MotionPaused = paused;
     // Both modes own the same overlay position. Draw only one, after every panel
     // has had a chance to open a prefab, including the Inspector and Asset Browser.
     if (InPrefabMode() || !m_InspectorRequestedPrefab.empty()) {

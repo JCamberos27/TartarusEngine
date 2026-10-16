@@ -53,6 +53,7 @@
 #include "Framebuffer.h"
 #include "Glass/GlassEditorState.h" // m_Glass (complete type for ~EditorLayer)
 #include "Glass/GlassCompositor.h"   // LiftGreyText (grey text on glass)
+#include "Glass/GlassDockMotion.h"   // tab overline glide, focus rim
 #include "Glass/GlassTheme.h"       // ConfigureMacEngineTheme (the opt-in Glass theme)
 
 #include <imgui.h>
@@ -2235,6 +2236,8 @@ void EditorLayer::BeginFrame() {
 }
 
 void EditorLayer::EndFrame() {
+    if (m_MotionDockspaceId != 0) Glass::DockFocusRim(m_MotionDockspaceId); // after every panel
+    Glass::DrawPlayFrame(m_MotionPlaying, m_MotionPaused);
     ImGui::Render();
     ImDrawData* dd = ImGui::GetDrawData();
     // No GLStateShadow_Invalidate() per frame: the backend restores every shadowed state it
@@ -2816,7 +2819,11 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     // it only listed the tabs already visible right next to it, so it was pure clutter.
     // NoCloseButton drops the node-level x at the right end of every tab bar (each tab keeps its
     // own close box, which is the one that means "close this panel").
+    // The selected tab's overline glides between tabs (Glass/GlassDockMotion.h).
+    const float overline = Glass::BeginDockTabMotion();
     ImGui::DockSpace(dockspaceId, ImVec2(0, 0), ImGuiDockNodeFlags_NoWindowMenuButton | ImGuiDockNodeFlags_NoCloseButton);
+    Glass::EndDockTabMotion(dockspaceId, overline);
+    m_MotionDockspaceId = dockspaceId;
     ImGui::End();
 
     // Submit the IDE after its dockspace is alive so ImGui can attach it to the Scene node.

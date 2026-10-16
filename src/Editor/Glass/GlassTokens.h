@@ -285,6 +285,29 @@ constexpr float      RowFlashAlpha  = 0.10f;
 // An eased scroll jump (reveal a row, jump to the console's bottom).
 constexpr MotionSpec ScrollEase     = {GLASS_EASE_SMOOTH, 280.0f};
 
+// --- Category 6: the dock space (GlassDockMotion.cpp) -------------------------------------------
+// The selected tab's overline glides with SelectionGlide. A docked panel that takes focus: its edge
+// glints white and cools.
+constexpr MotionSpec DockRimGlint   = {EaseId::OutCubic, 0, 0, 0, 0, 600.0f};
+constexpr float      DockRimAlpha   = 0.22f;
+
+// --- Category 7: play mode and the viewport -----------------------------------------------------
+// Play <-> Stop: the transport glyph morphs triangle <-> square (iam_path_morph) and its colour
+// crosses green -> red in OKLAB.
+constexpr MotionSpec TransportMorph  = {GLASS_EASE_SMOOTH, 220.0f};
+// The play-mode frame: a 1 px white inner border on the Scene and Game views. Fades in on Play,
+// breathes very slightly while playing, dims while paused.
+constexpr MotionSpec PlayFrameIn     = {EaseId::OutCubic, 0, 0, 0, 0, 240.0f};
+constexpr MotionSpec PlayFrameOut    = {EaseId::OutCubic, 0, 0, 0, 0, 320.0f};
+constexpr float      PlayFrameAlpha  = 0.22f;
+constexpr float      PlayFrameBreath = 0.04f;  // +-
+constexpr float      PlayFrameHz     = 0.25f;  // one breath every 4 s
+constexpr float      PlayFramePaused = 0.12f;
+// Frame selection (F): the camera glides on the smooth curve, a little longer for a longer trip.
+constexpr MotionSpec CameraFrame          = {GLASS_EASE_SMOOTH, 340.0f};
+constexpr float      CameraFramePerOctaveMs = 40.0f; // + per doubling of distance (world units)
+constexpr float      CameraFrameMaxMs       = 560.0f;
+
 #undef GLASS_EASE_SMOOTH
 
 } // namespace Glass
