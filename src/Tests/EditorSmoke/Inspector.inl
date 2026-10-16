@@ -106,7 +106,9 @@ Step InspOpenMenu(std::string component, const char* item) {
             if (click->Fn(c)) *state = 1;
             return false;
         }
-        if (Find(MenuItem(item))) return true;
+        // A few frames more once it shows: on its first frame the popup is not yet moved back
+        // inside a narrow window, so the item's rect is still off to the side.
+        if (Find(MenuItem(item))) { *state = std::max(*state, 100); return ++*state >= 104; }
         if (++*state < 10) return false;
         if (++*tries >= 3) return true; // let the next step report it
         ImGui::ClosePopupsExceptModals();
