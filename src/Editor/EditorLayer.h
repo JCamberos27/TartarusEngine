@@ -752,6 +752,12 @@ public:
     // to the Asset Database, the library and the open scene. Call once per frame
     // (EditorLayer_ProjectSync.cpp).
     void SyncProjectChanges(World& world, AssetLibrary& assets);
+    // #15 - call right before OutfitSystem::UpdatePending when OutfitSystem::LandingDue: the landing makes
+    // the next frame take the whole scene as the undo baseline (RebaseAfterOutfitChanges), so a scene
+    // change made since the last baseline without an undo step is journaled first, as "Unrecorded
+    // Change". Only a change outside the outfits (SceneSerializer::SameSceneContentApartFromOutfits):
+    // their own pieces move on the frames after a landing (OutfitSystem::UpdateAttachments).
+    void JournalBeforeOutfitLanding(const World& world);
     const std::string& PrefabModePath() const { return m_PrefabModePath; }
     void EnterPrefabMode(World& world, AssetLibrary& assets, const std::string& path);
     void ExitPrefabMode(World& world, AssetLibrary& assets, bool save = true);
@@ -1437,6 +1443,9 @@ private:
     // changes) or set the history aside (Play, Prefab Mode): a change made before them would
     // otherwise end up in the new baseline, and the next Ctrl+Z would revert it unseen.
     void JournalUnrecordedChange(const World& world);
+    // Pushes the "Unrecorded Change" step from m_CurrentUndoScene to `currentJson` (both
+    // JournalUnrecordedChange and JournalBeforeOutfitLanding have found them to differ).
+    bool PushUnrecordedChange(const World& world, const std::string& currentJson);
     // Drops the baseline when an outfit change landed since it was taken (OutfitSystem::LandedGeneration).
     void RebaseAfterOutfitChanges();
     void ReloadHistoryFiles(AssetLibrary& assets,const std::vector<EditorFileHistory::State>& files);

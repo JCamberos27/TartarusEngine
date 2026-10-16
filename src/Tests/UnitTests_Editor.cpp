@@ -6,6 +6,8 @@
 #include "World.h"
 #include "AssetLibrary.h"
 #include "SceneSerializer.h"
+#include "OutfitSystem.h"
+#include "Components.h"
 #include "Profiler.h"
 #include "ProjectPaths.h"
 #include "ProjectSettings.h"
@@ -31,6 +33,7 @@ struct EditorHistoryTestAccess {
     static const std::string& Before(const EditorLayer& e) {return e.m_UndoBaseJson;}
     static const std::string& Current(const EditorLayer& e) {return e.m_CurrentUndoScene;}
     static void Clear(EditorLayer& e) {e.ClearUndoHistory();}
+    static std::string TopLabel(const EditorLayer& e) {return e.m_UndoStack.empty()?std::string():e.m_UndoStack.back().Label;}
     static void Undo(EditorLayer& e,World& w,AssetLibrary& a) {e.Undo(w,a);}
     static void Redo(EditorLayer& e,World& w,AssetLibrary& a) {e.Redo(w,a);}
     static void Select(EditorLayer& e,World& w,entt::entity entity) {
@@ -418,6 +421,69 @@ void TestAssetFoldersPersistOnlyUserFolders() {
     { std::ofstream out(path,std::ios::binary|std::ios::trunc); out<<original; }
     ProjectSettings::SetAssetFolders(before);
 }
+// #15 - an outfit landing (OutfitSystem::UpdatePending) makes the next frame's baseline the whole scene. Right
+// before one, a change made without an undo step is journaled - but not the outfits' own pieces moving or
+// coming and going (UpdateAttachments places rigid head wear on the frames after a landing), there or at Undo. The outfit
+// assets are on Drive only, so this drives the check itself, with hand-made pieces and no wardrobe.
+void TestOutfitLandingKeepsUnrecordedChange() {
+    auto* previous=ImGui::GetCurrentContext();auto* context=ImGui::CreateContext();
+    auto& io=ImGui::GetIO();io.DisplaySize={800,600};io.DeltaTime=1.0f/60;io.IniFilename=nullptr;
+    unsigned char* pixels;int width,height;io.Fonts->GetTexDataAsRGBA32(&pixels,&width,&height);
+    {
+        World world;AssetLibrary assets;EditorLayer editor;
+        const auto character=world.CreateEmptyEntity({0,0,0},{0,0,0},{1,1,1},"Character");
+        world.Registry.emplace<CharacterOutfitComponent>(character).Wardrobe="no-such.wardrobe"; // no catalog: nothing rebuilds
+        auto piece=[&](const char* slot) {
+            const auto e=world.CreateEmptyEntity({0,0,0},{0,0,0},{1,1,1},slot);
+            world.AttachChildRaw(e,character);
+            world.Registry.emplace<OutfitPieceComponent>(e,OutfitPieceComponent{slot,std::string("Hat.fbx"),OutfitPieceHeadAttached});
+            return e;
+        };
+        const auto hat=piece("Hat");
+        const auto feather=world.CreateEmptyEntity({0,0,0},{0,0,0},{1,1,1},"Feather");world.AttachChildRaw(feather,hat);
+        const auto glasses=piece("Glasses"); // written before the prop: its going renumbers the prop
+        const auto prop=world.CreateEmptyEntity({1,2,3},{0,0,0},{1,1,1},"Prop");
+        CHECK(OutfitSystem::LandingDue(world)); // a body not checked against its wardrobe yet
+        OutfitSystem::UpdatePending(world,assets);
+        CHECK(!OutfitSystem::LandingDue(world));
+
+        auto frame=[&] {ImGui::NewFrame();EditorHistoryTestAccess::Begin(editor,world,assets);EditorHistoryTestAccess::Finish(editor,world);ImGui::Render();};
+        frame();
+        const auto baseline=EditorHistoryTestAccess::Current(editor);
+        CHECK(!baseline.empty());
+
+        // Outfit-derived changes only: no step.
+        world.Registry.get<TransformComponent>(hat).Position={0,1.7f,0};world.Registry.get<TransformComponent>(feather).Position={0,0.2f,0};
+        world.Registry.get<CharacterOutfitComponent>(character).Race="Other";
+        world.DestroyEntityAndChildren(glasses);piece("Boots");
+        CHECK(!SceneSerializer::SameSceneContent(SceneSerializer::SaveToString(world,assets),baseline));
+        CHECK(SceneSerializer::SameSceneContentApartFromOutfits(SceneSerializer::SaveToString(world,assets),baseline));
+        editor.JournalBeforeOutfitLanding(world);
+        CHECK(EditorHistoryTestAccess::Count(editor)==0);CHECK(EditorHistoryTestAccess::Current(editor)==baseline);
+
+        // A change outside the outfit, among them: its own step, which Undo takes back alone.
+        world.Registry.get<TransformComponent>(prop).Position={4,5,6};
+        world.Registry.get<CharacterOutfitComponent>(character).Locks="Hair";
+        CHECK(!SceneSerializer::SameSceneContentApartFromOutfits(SceneSerializer::SaveToString(world,assets),baseline));
+        const auto changed=SceneSerializer::SaveToString(world,assets);
+        editor.JournalBeforeOutfitLanding(world);
+        CHECK(EditorHistoryTestAccess::Count(editor)==1);CHECK(EditorHistoryTestAccess::TopLabel(editor)=="Unrecorded Change");
+        CHECK(EditorHistoryTestAccess::Current(editor)==changed);
+        editor.JournalBeforeOutfitLanding(world); // nothing new since
+        CHECK(EditorHistoryTestAccess::Count(editor)==1);
+        // The hat placed again since (UpdateAttachments, every frame): Undo folds that into the baseline
+        // rather than journaling it, and takes back the step above.
+        world.Registry.get<TransformComponent>(hat).Position={0,1.8f,0};
+        EditorHistoryTestAccess::Undo(editor,world,assets);
+        CHECK(EditorHistoryTestAccess::Count(editor)==0);
+        CHECK(SceneSerializer::SaveToString(world,assets)==baseline);
+        EditorHistoryTestAccess::Redo(editor,world,assets);
+        CHECK(SceneSerializer::SameSceneContentApartFromOutfits(SceneSerializer::SaveToString(world,assets),changed)); // the hat where it was placed last
+        for(auto [e,name,t]:world.Registry.view<NameComponent,TransformComponent>().each())
+            if(name.Name=="Prop") CHECK(t.Position==glm::vec3(4,5,6)); // the registry was replaced: found by name
+    }
+    AtomicFile::SetChangeObserver({});ImGui::DestroyContext(context);ImGui::SetCurrentContext(previous);
+}
 }
 
 // Unit tests for the editor UI. Add a function per test and list it below.
@@ -432,4 +498,5 @@ void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("CurveWheelCapture",TestCurveWheelCapture);
     tests.emplace_back("UndoTriggerSkipsNavigation",TestUndoTriggerSkipsNavigation);
     tests.emplace_back("Asset folders: only the user's are saved to project settings",TestAssetFoldersPersistOnlyUserFolders);
+    tests.emplace_back("Outfit landing: an unrecorded change before it stays its own undo step",TestOutfitLandingKeepsUnrecordedChange);
 }

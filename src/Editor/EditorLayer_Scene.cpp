@@ -210,6 +210,17 @@ bool EditorLayer::JournalUnrecordedChange(const World& world, const std::string&
         return false;
     }
     if (m_InPlayMode || m_CurrentUndoScene.empty() || SceneSerializer::SameSceneContent(currentJson, m_CurrentUndoScene)) return false;
+    // Only the outfits' own pieces differ: rigid head wear placed on the head bone since the baseline
+    // (OutfitSystem::UpdateAttachments writes its fit into the piece's transform), in a scene opened
+    // with no landing after it to rebase. The baseline's too, like a landing, not a step.
+    if (SceneSerializer::SameSceneContentApartFromOutfits(currentJson, m_CurrentUndoScene)) {
+        m_CurrentUndoScene = currentJson;
+        return false;
+    }
+    return PushUnrecordedChange(world, currentJson);
+}
+
+bool EditorLayer::PushUnrecordedChange(const World& world, const std::string& currentJson) {
     // The step takes back the scene change, not the library's own re-listing since.
     std::string before = SceneSerializer::WithLibraryState(m_CurrentUndoScene, currentJson);
     if (before.empty()) return false;
@@ -229,6 +240,15 @@ bool EditorLayer::JournalUnrecordedChange(const World& world, const std::string&
     RefreshDirtyFromHistory();
     m_CurrentUndoScene = currentJson;
     return true;
+}
+
+void EditorLayer::JournalBeforeOutfitLanding(const World& world) {
+    // An open edit takes the landing into its own step when it commits (FinishGlobalUndo).
+    if (m_InPlayMode || m_GlobalUndoActive || m_GlobalUndoApplying || m_CurrentUndoScene.empty() || !m_AssetsPtr) return;
+    PROFILE_SCOPE("Undo Pre-Landing Check");
+    std::string current = SceneSerializer::SaveToString(world, *m_AssetsPtr);
+    if (SceneSerializer::SameSceneContentApartFromOutfits(current, m_CurrentUndoScene)) return;
+    PushUnrecordedChange(world, current);
 }
 
 void EditorLayer::JournalUnrecordedChange(const World& world) {
