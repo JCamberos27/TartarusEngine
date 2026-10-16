@@ -1424,6 +1424,8 @@ private:
     // changes) or set the history aside (Play, Prefab Mode): a change made before them would
     // otherwise end up in the new baseline, and the next Ctrl+Z would revert it unseen.
     void JournalUnrecordedChange(const World& world);
+    // Drops the baseline when an outfit change landed since it was taken (OutfitSystem::LandedGeneration).
+    void RebaseAfterOutfitChanges();
     void ReloadHistoryFiles(AssetLibrary& assets,const std::vector<EditorFileHistory::State>& files);
     void RefreshAfterHistoryFiles(const std::vector<EditorFileHistory::State>& files);
 

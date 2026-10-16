@@ -109,11 +109,9 @@ void EditorLayer::BeginSceneUndo(const World& world, const std::string& label) {
 void EditorLayer::BeginGlobalUndoFrame(const World& world) {
     // #15 - an outfit change landed since last frame (a scene just opened rebuilding a stale body,
     // or the async half of an outfit edit already on the undo stack): part of the baseline, not
-    // an unrecorded change for the next Undo to journal.
-    if (const unsigned landed = OutfitSystem::LandedGeneration(); landed != m_OutfitLandedSeen) {
-        m_OutfitLandedSeen = landed;
-        if (!m_GlobalUndoActive) m_CurrentUndoScene.clear();
-    }
+    // an unrecorded change for the next Undo to journal. Not while an edit is open: its commit
+    // (FinishGlobalUndo) takes the baseline itself, and RebaseAfterOutfitChanges catches up after.
+    if (!m_GlobalUndoActive) RebaseAfterOutfitChanges();
     // Initialize once per scene/history context, before any controls mutate it. Mouse/key
     // activity alone is not an authored edit (camera fly, scrollbars, search, docking, etc.).
     EnsureUndoScene(world);
@@ -193,7 +191,21 @@ void EditorLayer::FinishGlobalUndo(const World& world,bool force) {
 // it ends the redo branch. The AssetLibrary half of the snapshot is left out of it: the Asset
 // Browser re-lists folders on its own (after an undo put files back, too), and that's no edit.
 // Costs a string compare per Undo / Redo (the scene was serialized anyway), two parses on a miss.
+void EditorLayer::RebaseAfterOutfitChanges() {
+    const unsigned landed = OutfitSystem::LandedGeneration();
+    if (landed == m_OutfitLandedSeen) return;
+    m_OutfitLandedSeen = landed;
+    m_CurrentUndoScene.clear();
+}
+
 bool EditorLayer::JournalUnrecordedChange(const World& world, const std::string& currentJson) {
+    // An outfit change landed since the baseline: it is the baseline's to take, not a step (see
+    // BeginGlobalUndoFrame). Checked here too, for one that landed after this frame's check.
+    if (OutfitSystem::LandedGeneration() != m_OutfitLandedSeen) {
+        m_OutfitLandedSeen = OutfitSystem::LandedGeneration();
+        if (!m_InPlayMode) m_CurrentUndoScene = currentJson;
+        return false;
+    }
     if (m_InPlayMode || m_CurrentUndoScene.empty() || SceneSerializer::SameSceneContent(currentJson, m_CurrentUndoScene)) return false;
     // The step takes back the scene change, not the library's own re-listing since.
     std::string before = SceneSerializer::WithLibraryState(m_CurrentUndoScene, currentJson);
