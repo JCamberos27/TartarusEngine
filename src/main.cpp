@@ -106,6 +106,7 @@
 #include "PlayerConfig.h" // #174
 #include "BuildPipeline.h"
 #include "UserPaths.h"
+#include "ScriptIDE.h"
 #include "EnginePaths.h"
 #include "LayerRegistry.h"
 #include "ProjectSettings.h"
@@ -468,6 +469,9 @@ int main(int argc, char** argv) {
         }
         std::error_code ec;
         for (const auto& entry : fs::directory_iterator(scratch, ec)) fs::remove_all(entry.path(), ec);
+        // The Script IDE's session (open tabs, unsaved buffers) lives in the project; this run's goes
+        // in the scratch folder instead, so it starts with no tabs and leaves the user's alone.
+        ScriptIDE::SetSessionDirectory(UserPaths::Resolve("IDE"));
         EditorUiTests::Configure(opt.editorTestsFilter);
     }
     CrashHandler::SetInteractive(!headless && opt.editorShotDir.empty()); // #148: no crash dialog on an unattended run
