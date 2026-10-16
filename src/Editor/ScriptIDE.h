@@ -15,6 +15,7 @@ public:
     bool OwnsKeyboard() const;
     bool SaveAll();
     void DiscardAll();
+    void CancelPrompts(); // drops a pending close / reload, so its "Unsaved script" prompt isn't reopened
 private:
     struct Impl;
     std::unique_ptr<Impl> impl;

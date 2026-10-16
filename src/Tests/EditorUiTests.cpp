@@ -22,6 +22,7 @@
 #include "SceneSerializer.h"
 #include "ProjectPaths.h"
 #include "UserPaths.h"
+#include "ScriptIDE.h"      // CancelPrompts - a test left "Unsaved script" up
 #include "EditorTheme.h"
 #include "Enhancers/EnhancerCore.h"
 #include "Enhancers/EnhancerUserState.h"
@@ -153,6 +154,33 @@ struct EditorUiTestAccess {
         e.m_Dirty = false;
     }
     // Floating tool windows a failed test can leave up; in a narrow window they cover the panels.
+    // Every dialog a test can leave up. The editor's confirmations (BeginCenteredModal) reopen
+    // themselves each frame while their flag is set, so closing ImGui's popups alone brings them
+    // straight back: the flags and the requests waiting to open one go too.
+    static void CloseDialogs(EditorLayer& e) {
+        e.m_RecoveryPromptPending = false;              // Recover Unsaved Changes?
+        e.m_SceneVersionWarning.clear();                // Newer Scene Format
+        e.m_ExitPromptPending = false;                  // Save changes? (quit)
+        e.m_ExitDecision = EditorLayer::ExitDecision::None;
+        e.m_RevertPromptPending = false;                // Revert Scene?
+        e.m_ScenePromptPending = false;                 // Save changes? (New / Open Scene)
+        e.m_PendingSceneSwitch = EditorLayer::PendingSceneSwitch::None;
+        e.m_PendingScenePath.clear();
+        e.m_ShowSaveLayout = false;                     // Save Layout
+        e.m_ShowArrayDuplicate = false;                 // Duplicate Array
+        e.m_OpenDeleteConfirmRequested = false;         // Delete Asset?
+        e.m_PendingDelete.clear();
+        e.m_OpenDiskDeleteRequested = false;            // Delete from Disk?
+        e.m_PendingDiskDelete.clear();
+        e.m_PendingDiskDeleteRefs.clear();
+        e.m_OpenDeleteErrorRequested = false;           // Can't Delete
+        e.m_DeleteError.clear();
+        e.m_OpenWeaponWizard = false;                   // New First-Person Weapon
+        if (e.m_ScriptIDE) e.m_ScriptIDE->CancelPrompts(); // Unsaved script
+        // Then ImGui's popup stack, modals included (Remove parameter?, Custom Resolution and the
+        // rest open once and stay up only there).
+        if (ImGuiContext* g = ImGui::GetCurrentContext(); g && g->OpenPopupStack.Size > 0) ImGui::ClosePopupToLevel(0, false);
+    }
     static void CloseToolWindows(EditorLayer& e) {
         e.m_ShowAnimator = false;
         e.m_ShowAudioDebug = false;
@@ -224,6 +252,8 @@ bool g_Started = false, g_Done = false;
 // a mouse-up), then this frame's harness events; everything after (the OS cursor and keys the
 // backend still reports before ImGui::NewFrame) is dropped.
 int g_QueueEnd = 0;
+// The ids of the harness's own events still in the queue (ImGui trickles some to the next frame).
+std::vector<ImU32> g_HarnessEventIds;
 void KeepOnlyHarnessInput() {
     ImGuiContext* ctx = ImGui::GetCurrentContext();
     if (!ctx || !g_Enabled) return;
@@ -1162,11 +1192,14 @@ void RegisterTests() {
     // strip has no label (ImGui only reports a label for unclipped items). Wheel the strip right
     // (plain wheel scrolls it) until the Nth "##tab" shows at least 8px; a no-op when it already
     // does. Tabs further right than the visible one only, which is all the tests need.
-    auto TabIntoView = [](int nth) -> Step {
+    // An Inspector tab by its label (the strip tags each tab "tab:<label>").
+    auto InspTab = [](const std::string& label) { Query q = ByTag("tab:" + label); q.Root = kInspector; return q; };
+    // Wheels the strip right until the tab is on screen (a tab scrolled out of view isn't drawn).
+    auto TabIntoView = [InspTab](std::string label) -> Step {
         auto frame = std::make_shared<int>(0);
-        return {"scroll tab " + std::to_string(nth) + " into view", [nth, frame](Ctx&) {
+        return {"scroll the " + label + " tab into view", [label, frame, InspTab](Ctx&) {
             auto shown = [](const UiItem* t) { ImRect r = t->Rect; r.ClipWithFull(t->Clip); return r.GetWidth(); };
-            if (const UiItem* it = Find(ByExact("##tab", kInspector, nth)); it && shown(it) >= 8.0f) return true;
+            if (const UiItem* it = Find(InspTab(label)); it && shown(it) >= 8.0f) return true;
             const UiItem* any = Find(ByExact("##tab", kInspector));
             if (any && (*frame)++ % 8 == 0) { // let the strip's eased scroll settle between notches
                 MouseTo(any->Clip.GetCenter());
@@ -1187,8 +1220,8 @@ void RegisterTests() {
         SelectByName("Alpha"), Wait(3),
         ExpectTrue("selecting returned to Selection", [](Ctx&) { return Enhancers::TabState::Get().Inspector.Active == -1; }),
         ExpectTrue("Selection shows Alpha (no Light)", [](Ctx&) { return Find(Header("Light")) == nullptr; }),
-        TabIntoView(1),
-        Click(ByExact("##tab", kInspector, 1)), Wait(3),
+        TabIntoView("Gamma"),
+        Click(InspTab("Gamma")), Wait(3),
         ExpectTrue("the Gamma tab is active again", [](Ctx&) { return Enhancers::TabState::Get().Inspector.Active == 0; }),
         Expect("selection still Alpha", [](Ctx& c) { return ExpectSelected(c, "Alpha"); }),
         ExpectTrue("the tab shows Gamma (its Light section)", [](Ctx&) { return Find(Header("Light")) != nullptr; }),
@@ -1243,6 +1276,64 @@ void RegisterTests() {
         ExpectTrue("middle-click closed it", [](Ctx&) { return Enhancers::TabState::Get().Inspector.Tabs.size() == 1; }),
         ExpectTrue("no undo entries from tab use", [](Ctx& c) { return (double)X::UndoDepth(c.E) == g_Number; }),
     });
+    // More tabs than the strip fits (at the default layout even two don't): its overflow controls
+    // reach a tab scrolled out of view - the open-tabs list, then the < > arrows.
+    {
+        auto shownW = [](const UiItem& t) { ImRect r = t.Rect; r.ClipWithFull(t.Clip); return std::max(0.0f, r.GetWidth()); };
+        auto popupItem = [](const char* label) {
+            Query q = ByLabel(label);
+            q.Pred = [](const UiItem& it) { return Contains(it.Root, "##Popup"); };
+            return q;
+        };
+        // A step that runs only when the arrows were found (g_Number, set just before).
+        auto IfArrows = [](Step st) {
+            return Step{st.Name + " (if the arrows show)", [fn = st.Fn](Ctx& c) { return g_Number == 0.0 || fn(c); }, st.Timeout};
+        };
+        auto activeIs = [](int i) { return [i](Ctx&) { return Enhancers::TabState::Get().Inspector.Active == i; }; };
+        Add("tabs: an overflowing strip's list and < > arrows reach every tab", {
+            FreshScene(), Wait(2),
+            Do("open Alpha, Beta and Gamma tabs; Alpha active", [](Ctx& c) {
+                auto& s = Enhancers::TabState::Get().Inspector;
+                const std::string key = X::SceneKey(c.E);
+                for (const char* n : {"Alpha", "Beta", "Gamma"})
+                    s.Open(Enhancers::EditorRef::MakeEntity(key, c.W.Registry.get<OrderComponent>(ByName(c.W, n)).Value, n));
+                s.Active = 0;
+            }), Wait(30), // the strip's eased scroll settles
+            Until("the overflow controls", [](Ctx&) { return Find(ByExact(ICON_FA_ANGLE_DOWN, kInspector)) != nullptr; }, 60),
+            Expect("a tab is scrolled out of view", [shownW](Ctx&) {
+                // A tab scrolled wholly out of view is clipped away (not drawn, so not listed).
+                const auto tabs = FindAll(ByExact("##tab", kInspector));
+                if (tabs.size() < 4) return std::string();
+                for (const UiItem* t : tabs)
+                    if (shownW(*t) < t->Rect.GetWidth() - 1.0f) return std::string();
+                return std::string("every tab is in view - the strip doesn't overflow");
+            }),
+            Click(ByExact(ICON_FA_ANGLE_DOWN, kInspector)), Wait(3),
+            Until("the list names every tab", [popupItem](Ctx&) {
+                return Find(popupItem("Selection")) && Find(popupItem("Alpha")) && Find(popupItem("Beta")) && Find(popupItem("Gamma"));
+            }, 60),
+            Shot("tab-list", {kInspector}),
+            Click(popupItem("Gamma")), Wait(3),
+            Until("Gamma is active", activeIs(2), 30),
+            ExpectTrue("the Inspector shows Gamma (its Light section)", [](Ctx&) { return Find(Header("Light")) != nullptr; }),
+            Until("Gamma's tab scrolled into view", [shownW, InspTab](Ctx&) {
+                const UiItem* g = Find(InspTab("Gamma"));
+                return g && shownW(*g) >= std::min(g->Rect.GetWidth(), g->Clip.GetWidth()) - 1.0f;
+            }, 120),
+            Shot("gamma", {kInspector}),
+            // < and > show when the strip has room for them as well as a tab (not at CI's size).
+            Do("are the arrows shown?", [](Ctx&) { g_Number = Find(ByExact(ICON_FA_ANGLE_LEFT, kInspector)) ? 1.0 : 0.0; }),
+            IfArrows(Click(ByExact(ICON_FA_ANGLE_LEFT, kInspector))), Wait(3),
+            IfArrows(Until("< steps to Beta", activeIs(1), 30)),
+            IfArrows(Click(ByExact(ICON_FA_ANGLE_LEFT, kInspector))), Wait(3),
+            IfArrows(Click(ByExact(ICON_FA_ANGLE_LEFT, kInspector))), Wait(3),
+            IfArrows(Until("then Alpha, then Selection", activeIs(-1), 30)),
+            IfArrows(Click(ByExact(ICON_FA_ANGLE_LEFT, kInspector))), Wait(3),
+            IfArrows(ExpectTrue("< stops at the first tab", activeIs(-1))),
+            IfArrows(Click(ByExact(ICON_FA_ANGLE_RIGHT, kInspector))), Wait(3),
+            IfArrows(Until("> steps to Alpha", activeIs(0), 30)),
+        });
+    }
     Add("tabs: drag a component header onto the strip opens a component tab", {
         FreshScene(), Wait(2),
         SelectByName("Beta"), Wait(3),
@@ -1271,6 +1362,44 @@ void RegisterTests() {
         HoverPanel(kAssets), Wait(2),
         Key(ImGuiKey_W, ImGuiMod_Ctrl), Wait(3),
         ExpectTrue("Ctrl+W closed it", [](Ctx&) { return Enhancers::TabState::Get().Assets.Tabs.size() == 1; }),
+    });
+    // The Asset Browser's strip is wide enough for the < > arrows next to its list button.
+    Add("tabs: an overflowing Asset Browser strip steps with < > and opens from its list", {
+        FreshScene(), Wait(2),
+        Do("twelve folder tabs, the last active", [](Ctx& c) {
+            auto& s = Enhancers::TabState::Get().Assets;
+            s.Tabs.clear();
+            s.Open(Enhancers::EditorRef::MakeFolder("", "Assets"));
+            for (const std::string& f : c.A.Folders()) {
+                if (s.Tabs.size() >= 12) break;
+                const size_t slash = f.find_last_of('/');
+                s.Open(Enhancers::EditorRef::MakeFolder(f, slash == std::string::npos ? f : f.substr(slash + 1)));
+            }
+            if (s.Tabs.size() < 12) Fail("the project has fewer than 11 folders");
+            s.Active = (int)s.Tabs.size() - 1;
+            X::NavigateFolder(c.E, s.Tabs.back().Path);
+        }), Wait(30),
+        Until("the overflow controls, arrows too", [](Ctx&) {
+            return Find(ByExact(ICON_FA_ANGLE_DOWN, kAssets)) && Find(ByExact(ICON_FA_ANGLE_LEFT, kAssets)) && Find(ByExact(ICON_FA_ANGLE_RIGHT, kAssets));
+        }, 60),
+        Shot("asset-overflow", {kAssets}),
+        Click(ByExact(ICON_FA_ANGLE_LEFT, kAssets)), Wait(4),
+        Expect("< stepped to the previous tab and the browser followed", [](Ctx& c) {
+            const auto& s = Enhancers::TabState::Get().Assets;
+            if (s.Active != (int)s.Tabs.size() - 2) return "active " + std::to_string(s.Active);
+            return X::CurrentFolder(c.E) == s.Tabs[(size_t)s.Active].Path ? std::string() : "browsing '" + X::CurrentFolder(c.E) + "'";
+        }),
+        Click(ByExact(ICON_FA_ANGLE_RIGHT, kAssets)), Wait(4),
+        Click(ByExact(ICON_FA_ANGLE_RIGHT, kAssets)), Wait(4),
+        ExpectTrue("> back to the last tab, and no further", [](Ctx&) {
+            const auto& s = Enhancers::TabState::Get().Assets;
+            return s.Active == (int)s.Tabs.size() - 1;
+        }),
+        Click(ByExact(ICON_FA_ANGLE_DOWN, kAssets)), Wait(3),
+        Click([] { Query q = ByLabel("Assets"); q.Pred = [](const UiItem& it) { return Contains(it.Root, "##Popup"); }; return q; }()), Wait(4),
+        Until("the list opened the first tab (the root)", [](Ctx& c) {
+            return Enhancers::TabState::Get().Assets.Active == 0 && X::CurrentFolder(c.E).empty();
+        }, 60),
     });
 
     // ------------------------------------------------------------------ 13. Favorites
@@ -1451,12 +1580,23 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
     ctx->IO.ConfigErrorRecoveryEnableAssert = false; // reported by OnImGuiError and failed instead
     g_Reg.NextFrame();
     EditorTestInputHook() = &KeepOnlyHarnessInput;
-    // Another window opening (a second editor running its own tests) can take the OS focus; the
-    // focus-lost event PollEvents queued would release every key and button a step is holding.
+    // Only the harness's own events stay in the queue. What PollEvents queued since last frame is the
+    // OS reaching a window nobody is using: another window opening or closing (a second editor
+    // running its own tests) can take the OS focus, whose focus-lost event releases every key and
+    // button a step is holding, or send a cursor-leave, which the backend reports as the mouse
+    // position -FLT_MAX - a step's press then lands on no window and clears ImGui's focus.
     for (int i = ctx->InputEventsQueue.Size - 1; i >= 0; --i)
-        if (ctx->InputEventsQueue[i].Type == ImGuiInputEventType_Focus) ctx->InputEventsQueue.erase(ctx->InputEventsQueue.Data + i);
+        if (std::find(g_HarnessEventIds.begin(), g_HarnessEventIds.end(), ctx->InputEventsQueue[i].EventId) == g_HarnessEventIds.end())
+            ctx->InputEventsQueue.erase(ctx->InputEventsQueue.Data + i);
     g_QueueEnd = ctx->InputEventsQueue.Size;
-    struct QueueMark { ImGuiContext* c; ~QueueMark() { g_QueueEnd = c->InputEventsQueue.Size; } } mark{ctx};
+    struct QueueMark {
+        ImGuiContext* c;
+        ~QueueMark() {
+            g_QueueEnd = c->InputEventsQueue.Size;
+            g_HarnessEventIds.clear();
+            for (const ImGuiInputEvent& e : c->InputEventsQueue) g_HarnessEventIds.push_back(e.EventId);
+        }
+    } mark{ctx};
 
     if (!g_Started) {
         g_Started = true;
@@ -1553,6 +1693,10 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
             ++g_TestIndex;
         };
         if (g_Cur.Name != t.Name) {
+            // Whatever the last test left up (a failed one stops mid-dialog) goes before this one
+            // starts - a frame after the failure screenshot, which shows it. Otherwise a modal
+            // left open blocks every click of every later test.
+            X::CloseDialogs(editor);
             g_Cur = TestReport{};
             g_Cur.Name = t.Name;
             g_TestStart = std::chrono::steady_clock::now();
