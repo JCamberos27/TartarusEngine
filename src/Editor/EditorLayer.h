@@ -1415,6 +1415,7 @@ private:
     void BeginSceneUndo(const World& world, const std::string& label);
     void FinishGlobalUndo(const World& world, bool force = false);
     void ReloadHistoryFiles(AssetLibrary& assets,const std::vector<EditorFileHistory::State>& files);
+    void RefreshAfterHistoryFiles(const std::vector<EditorFileHistory::State>& files);
 
     // Delta-chain plumbing. `entry`'s own full state is `newFullJson`: it becomes the stack's
     // new top (held in full in `baseJson`), and the outgoing top is re-encoded as a patch off it.
