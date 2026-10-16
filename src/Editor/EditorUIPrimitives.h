@@ -323,7 +323,9 @@ inline void Chip(const char* text, ImVec4 tint) {
 }
 
 // What a panel shows when it has nothing to show: a large dim icon, a line of text and a hint,
-// centred in the remaining space.
+// centred in the remaining space. A space too short for all three (the Favorites overlay over a
+// 1080p Assets panel at 150%) drops the icon, then the hint, then the top margin, so the text
+// still shows instead of only the top of the icon.
 inline void EmptyState(const char* icon, const char* text, const char* hint = nullptr) {
     const ImVec2 avail = ImGui::GetContentRegionAvail();
     const ImVec2 origin = ImGui::GetCursorScreenPos();
@@ -337,13 +339,21 @@ inline void EmptyState(const char* icon, const char* text, const char* hint = nu
     EditorTheme::PushSmall();
     const ImVec2 hsz = hint ? ImGui::CalcTextSize(hint, nullptr, false, avail.x - EditorTheme::Px(24.0f)) : ImVec2(0, 0);
     EditorTheme::PopFont();
-    const float gap = EditorTheme::Px(10.0f);
-    const float total = isz.y + gap + tsz.y + (hint ? EditorTheme::Px(4.0f) + hsz.y : 0.0f);
-    float y = origin.y + std::max(EditorTheme::Px(12.0f), (avail.y - total) * 0.42f);
+    const float gap = EditorTheme::Px(10.0f), minTop = EditorTheme::Px(12.0f);
+    bool showIcon = true;
+    auto height = [&] { return (showIcon ? isz.y + gap : 0.0f) + tsz.y + (hint ? EditorTheme::Px(4.0f) + hsz.y : 0.0f); };
+    if (avail.y > 0.0f && minTop + height() > avail.y) showIcon = false;
+    if (avail.y > 0.0f && minTop + height() > avail.y) hint = nullptr;
+    const float total = height();
+    float top = std::max(minTop, (avail.y - total) * 0.42f);
+    if (avail.y > 0.0f && top + total > avail.y) top = std::max(0.0f, (avail.y - total) * 0.5f); // even the text is tight
+    float y = origin.y + top;
     const float cx = origin.x + avail.x * 0.5f;
-    dl->AddText(EditorTheme::UiFont(), EditorTheme::Px(28.0f), ImVec2(cx - isz.x * 0.5f, y),
-                EditorTheme::U32(EditorTheme::Strong), icon);
-    y += isz.y + gap;
+    if (showIcon) {
+        dl->AddText(EditorTheme::UiFont(), EditorTheme::Px(28.0f), ImVec2(cx - isz.x * 0.5f, y),
+                    EditorTheme::U32(EditorTheme::Strong), icon);
+        y += isz.y + gap;
+    }
     dl->AddText(EditorTheme::UiFont(), EditorTheme::BodySize(), ImVec2(cx - tsz.x * 0.5f, y),
                 EditorTheme::U32(EditorTheme::Secondary), text);
     y += tsz.y;
