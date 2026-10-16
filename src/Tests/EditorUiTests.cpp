@@ -1361,6 +1361,10 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
     ctx->IO.ConfigErrorRecoveryEnableAssert = false; // reported by OnImGuiError and failed instead
     g_Reg.NextFrame();
     EditorTestInputHook() = &KeepOnlyHarnessInput;
+    // Another window opening (a second editor running its own tests) can take the OS focus; the
+    // focus-lost event PollEvents queued would release every key and button a step is holding.
+    for (int i = ctx->InputEventsQueue.Size - 1; i >= 0; --i)
+        if (ctx->InputEventsQueue[i].Type == ImGuiInputEventType_Focus) ctx->InputEventsQueue.erase(ctx->InputEventsQueue.Data + i);
     g_QueueEnd = ctx->InputEventsQueue.Size;
     struct QueueMark { ImGuiContext* c; ~QueueMark() { g_QueueEnd = c->InputEventsQueue.Size; } } mark{ctx};
 
