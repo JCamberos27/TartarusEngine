@@ -305,6 +305,42 @@ void UiObserver::Step(const UiFrame& f, std::vector<UiSound>& out) {
     m_Prev = f;
 }
 
+void GizmoTracker::Step(bool usingNow, bool moved, bool snapped, float dx, float dy, float x01, std::vector<UiSound>& out) {
+    if (usingNow && !Using) {
+        TickAccum = Net = 0.0f;
+        out.push_back({Event::SliderGrab, x01});
+    } else if (!usingNow && Using) {
+        out.push_back({Event::SliderRelease, x01});
+    } else if (usingNow) {
+        Net += dx - dy;
+        const float pitch = 1.0f + std::clamp(Net / UiObserver::kPitchSpanPx, -1.0f, 1.0f) * UiObserver::kPitchSwing;
+        if (snapped) {
+            if (moved) out.push_back({Event::SliderTick, x01, pitch}); // landed on the next step
+        } else if (moved) {
+            TickAccum += std::fabs(dx) + std::fabs(dy);
+            if (TickAccum >= kFreeTickPx) {
+                TickAccum = std::fmod(TickAccum, kFreeTickPx);
+                out.push_back({Event::SliderTick, x01, pitch});
+            }
+        }
+    }
+    Using = usingNow;
+}
+
+void GizmoFrame(bool usingNow, bool moved, bool snapped) {
+    static GizmoTracker tracker;
+    static std::vector<UiSound> sounds;
+    if (!s.Ready || !ImGui::GetCurrentContext()) return;
+    const ImGuiIO& io = ImGui::GetIO();
+    float x = -1.0f;
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    if (vp && vp->Size.x > 0.0f && ImGui::IsMousePosValid()) x = std::clamp((io.MousePos.x - vp->Pos.x) / vp->Size.x, 0.0f, 1.0f);
+    const bool valid = ImGui::IsMousePosValid() && ImGui::IsMousePosValid(&io.MousePosPrev);
+    sounds.clear();
+    tracker.Step(usingNow, moved, snapped, valid ? io.MouseDelta.x : 0.0f, valid ? io.MouseDelta.y : 0.0f, x, sounds);
+    for (const UiSound& u : sounds) Play(u.E, u.X01, u.Pitch);
+}
+
 void ObserveImGui() {
     static UiObserver observer;
     static std::vector<UiSound> sounds;
