@@ -32,8 +32,6 @@ struct GlassEditorState {
     // blurred only under them, once they're drawn, and their UVs then set into that blurred rect.
     struct FrostedPlate { int First, End; ImVec2 Min, Max; };
     std::vector<FrostedPlate> FrostedPlates;
-    // The ambient field behind the docked panels: the Scene image blurred much further.
-    GlassBackdrop Ambient;
 
     // --- Glass under every floating window (EditorLayer::EndFrame renders through it) -----------
     Glass::GlassCompositor Compositor;

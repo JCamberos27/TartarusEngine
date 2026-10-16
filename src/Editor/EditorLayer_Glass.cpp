@@ -326,7 +326,6 @@ void EditorLayer::ApplyGizmoAccent() {
 void EditorLayer::ReleaseGlass() {
     if (m_Glass) {
         m_Glass->Backdrop.Release();
-        m_Glass->Ambient.Release();
         m_Glass->Compositor.Release();
         m_Glass.reset();
     }
@@ -381,20 +380,8 @@ void EditorLayer::GlassFrameBegin() {
     motion.NewFrame();
     if (!GlassThemeActive()) return;
     // A see-through window shows the blurred desktop behind every panel: nothing to paint.
-    // Otherwise the ambient field: the Scene image, blurred until only colour is left.
-    GlassEditorState& g = GlassState();
-    if (DesktopShowsThrough()) {
-        PollGlassNotifications();
-        return;
-    }
-    unsigned int ambient = 0;
-    if (EditorSettings::Get().GlassFrostedBlur && m_SceneColorTexture != 0) {
-        const int w = m_SceneTexW > 0 ? m_SceneTexW : (int)m_ViewportSize.x;
-        const int h = m_SceneTexH > 0 ? m_SceneTexH : (int)m_ViewportSize.y;
-        ambient = g.Ambient.Update(m_SceneColorTexture, w, h, Glass::AmbientBlurLevels, Glass::AmbientSaturation,
-                                   Glass::AmbientCeiling);
-    }
-    Glass::DrawWallpaper((ImTextureID)(intptr_t)ambient);
+    // Otherwise the panels sit over the plain black canvas.
+    if (!DesktopShowsThrough()) Glass::DrawWallpaper();
     PollGlassNotifications();
 }
 

@@ -103,15 +103,10 @@ void DrawFrostedPlate(ImDrawList* dl, ImVec2 min, ImVec2 max, float radius, ImTe
     DrawSquircleBorder(dl, min, max, U32(WithAlpha(GlassEdge, GlassEdge.w * alpha)), radius, 1.0f);
 }
 
-void DrawWallpaper(ImTextureID ambient) {
+void DrawWallpaper() {
     ImGuiViewport* vp = ImGui::GetMainViewport();
-    ImDrawList* bg = ImGui::GetBackgroundDrawList(vp);
     const ImVec2 mn = vp->Pos, mx(vp->Pos.x + vp->Size.x, vp->Pos.y + vp->Size.y);
-    bg->AddRectFilled(mn, mx, U32(Base));
-    if (ambient == (ImTextureID)0) return;
-    // The whole blurred Scene image over the whole window (v runs 1 -> 0: GL textures are bottom-up).
-    bg->AddImage(ImTextureRef(ambient), mn, mx, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
-    bg->AddRectFilled(mn, mx, U32(Rgb(0x00, 0x00, 0x00, AmbientDim)));
+    ImGui::GetBackgroundDrawList(vp)->AddRectFilled(mn, mx, U32(Base));
 }
 
 } // namespace Glass
@@ -124,7 +119,7 @@ void ApplyGlassMaterials(ImGuiStyle& style) {
     const ImVec4 chrome = Rgb(0x00, 0x00, 0x00, GlassChromeAlpha);
     auto white = [](float a) { return Rgb(0xFF, 0xFF, 0xFF, a); };
 
-    // Where you work: black glass over the ambient field.
+    // Where you work: black glass over the canvas.
     c[ImGuiCol_WindowBg]            = panel;
     c[ImGuiCol_ChildBg]             = clear;
     c[ImGuiCol_MenuBarBg]           = chrome;
