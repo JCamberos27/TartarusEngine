@@ -138,7 +138,10 @@ bool LogGetEntryFn(int index, int* outLevel, const char** outMessage, const char
 }
 
 int LogCountOfFn(int level) { return Log::CountOf((LogLevel)level); }
-void LogClearFn() { Log::Clear(); }
+void LogClearFn() {
+    Log::Clear();
+    EditorSound::Play(EditorSound::Event::ConsoleClear);
+}
 void LogInfoFn(const char* message) { Log::Info(message ? message : ""); }
 void LogErrorFn(const char* message) { Log::Error(message ? message : ""); }
 
@@ -354,7 +357,10 @@ bool  AbConsumeSearchFocus() { return g_Editor && g_Editor->ConsumeAssetSearchFo
 void  AbSetFocused(bool f) { if (g_Editor) g_Editor->SetAssetBrowserFocused(f); }
 bool  AbIsFolderExpanded(const char* p) { return g_Editor && p && g_Editor->IsAssetFolderExpanded(p); }
 void  AbSetFolderExpanded(const char* p, bool e, bool r) {
-    if (g_Editor && g_Assets && p) g_Editor->AssetBrowserSetFolderExpanded(*g_Assets, p, e, r);
+    if (!g_Editor || !g_Assets || !p) return;
+    if (g_Editor->IsAssetFolderExpanded(p) != e)
+        EditorSound::Play(e ? EditorSound::Event::TreeExpand : EditorSound::Event::TreeCollapse, EditorSound::LastItemScreenX());
+    g_Editor->AssetBrowserSetFolderExpanded(*g_Assets, p, e, r);
 }
 void  AbTreeFrameSetup(char* o, int n) {
     AbPutStr(o, n, (g_Editor && g_Assets) ? g_Editor->AssetBrowserTreeFrameSetup(*g_Assets) : std::string());

@@ -8,6 +8,7 @@
 #include "EditorUIHelpers.h"
 #include "EditorUIPrimitives.h"
 #include "AudioEngine.h"
+#include "AppAudioMuter.h"
 
 #include <imgui.h>
 #include <cstdio>
@@ -73,6 +74,29 @@ void EditorLayer::DrawEditorSoundPreferences() {
     SettingsLabel("##SoundBoard");
     if (SecondaryButton(ICON_FA_VOLUME_HIGH "  Open Sound Board")) m_ShowSoundBoard = true;
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Every editor sound, its files, and a button to hear each one.");
+
+    // Other apps quiet while the keys drive the view (AppAudioMuter, driven from main.cpp's frame loop).
+    SectionHeader("Other Apps");
+    EditorSettings& es = EditorSettings::Get();
+    if (SettingsCheckbox("Mute while moving", &es.MuteAppsWhileMoving)) EditorSettings::Save();
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("While you fly the Scene camera (right mouse held) or Play mode has the keyboard, these apps are "
+                             "muted in Windows' volume mixer, so a keyboard-sound app doesn't click under WASD. They come back "
+                             "as soon as you let go.");
+    if (!es.MuteAppsWhileMoving) ImGui::BeginDisabled();
+    SettingsLabel("Apps");
+    static char names[256] = {};
+    static bool editing = false;
+    if (!editing) std::snprintf(names, sizeof(names), "%s", AppAudioMuter::JoinNameList(es.MuteAppNames).c_str());
+    ImGui::SetNextItemWidth(ImMin(ImGui::GetContentRegionAvail().x, ImGui::GetFontSize() * 18.0f));
+    ImGui::InputTextWithHint("##MuteAppNames", "Mechvibes.exe", names, sizeof(names));
+    editing = ImGui::IsItemActive();
+    if (ImGui::IsItemDeactivatedAfterEdit()) {
+        es.MuteAppNames = AppAudioMuter::ParseNameList(names);
+        EditorSettings::Save();
+    }
+    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Exe names, comma separated (as Task Manager's Details tab shows them).");
+    if (!es.MuteAppsWhileMoving) ImGui::EndDisabled();
 }
 
 void EditorLayer::DrawSoundBoardPanel() {

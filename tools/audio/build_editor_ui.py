@@ -16,6 +16,8 @@ Output: 48 kHz, 16-bit, mono. Three level tiers:
   tick   (clicks, toggles, ticks, < 120 ms, transient at sample 0)  sample peak -20 dBFS (quieter for very frequent ones), but never
          louder than TICK_SHORT_CAP on the 100 ms K-weighted window: a pure-tone tick that rings for 80 ms is heard ~10 dB over
          a 13 ms key tick of the same peak, so the tonal ones come down to the cap
+         and at least TICK_SHORT_MIN on it: the shortest, brightest ticks (select, hover, tree) read far quieter than the rest
+         at the same peak, so they come up to the floor (peak-capped at PEAK_CEIL_DB)
   cue    (menus, play mode, undo / redo, save, drop)                 loudness-matched on the 100 ms window (CUE_SHORT): cues run
          105-640 ms, and the 400 ms momentary window would read the short ones by their length and push them up
   notify (info / success / warning / error)                          loudness-matched: LUFS-M max (400 ms momentary, BS.1770)
@@ -39,6 +41,7 @@ DEFAULT_SRC = r"G:\My Drive\Tartarus Assets\Raw\Audio\SFX"
 NOTIFY_LUFS = -28.0     # notifications: loudest 400 ms momentary window (LUFS-M max)
 CUE_SHORT = -27.0       # menus / play mode / undo / redo / save / drop: loudest 100 ms K-weighted window
 TICK_SHORT_CAP = -35.0  # ticks: at most this on the 100 ms window, whatever their peak
+TICK_SHORT_MIN = -38.0  # ...and at least this: the shortest, highest ticks (select, tree, hover) read too quiet at their peak
 PEAK_CEIL_DB = -6.0     # no loudness gain past this sample peak
 
 SETS = {
@@ -270,6 +273,52 @@ EVENTS = {
     "DropAccept": tone("cue", [L("Y:message-new-instant", len_ms=300, frac=0.01, fade_in_ms=0.5)], 300, 150, phase=2),
     "DropReject": tone("cue", [L("Y:dialog-question", len_ms=140, st=-3.0, frac=0.01, fade_in_ms=1.0)], 166, 60,
                        lp=1200.0, phase=2),
+
+    # ===== phase 5: actions. Objects: select = a light high tick, deselect the same a fifth lower; create = the whole of
+    # Yaru's device-added rise, delete = its device-removed fall a fourth down and darkened; duplicate = a double tap;
+    # copy / paste = two modifier ticks rising / one bell ping landing; rename = the volume tick up a fifth
+    "Select": tick([L(MOD, st=7.0, len_ms=40)], 45, 28, peak=-25.0, lp=4500.0, variants=V3, phase=5),
+    "Deselect": tick([L(MOD, len_ms=40)], 45, 28, peak=-27.0, lp=3500.0, phase=5),
+    "Create": tone("cue", [L("Y:device-added", len_ms=300, frac=0.01, fade_in_ms=0.5)], 300, 140, phase=5),
+    "Duplicate": tick([L(PRESS, st=3.0, len_ms=40), L(PRESS, st=8.0, len_ms=40, at_ms=50, db=-1.0)], 100, 35, phase=5),
+    "Delete": tone("cue", [L("Y:device-removed", len_ms=280, st=-5.0, frac=0.01, fade_in_ms=0.5)], 300, 140, lp=1600.0,
+                   phase=5),
+    "Copy": tick([L(MOD, st=3.0, len_ms=35), L(MOD, st=10.0, len_ms=35, at_ms=35, db=-1.5)], 80, 30, peak=-22.0, phase=5),
+    "Paste": tick([L(BELL, len_ms=100, st=2.0)], 95, 55, peak=-22.0, phase=5),
+    "Rename": tick([L(VOL, st=7.0, frac=0.2)], 55, 30, peak=-22.0, phase=5),
+    # components: add = Yaru's octave leap a fourth up, remove = Yaru's device-removed, both short. Prefabs: apply = KDE's
+    # A4 -> D5 rise a fourth down (rounder than redo); revert = KDE's device-removed a tone up; enter / exit = the Play mode
+    # arpeggios a fifth up and shorter, so editing a prefab sounds like a lighter cousin of Play
+    "ComponentAdd": tone("cue", [L("Y:message-new-instant", len_ms=220, st=5.0, frac=0.01, fade_in_ms=0.5)], 220, 110,
+                         phase=5),
+    "ComponentRemove": tone("cue", [L("Y:device-removed", len_ms=220, frac=0.01, fade_in_ms=0.5)], 220, 110, lp=2200.0,
+                            phase=5),
+    "PrefabApply": tone("cue", [L("K:completion-success", len_ms=300, st=-5.0, frac=0.01, fade_in_ms=2.0)], 300, 140,
+                        phase=5),
+    "PrefabRevert": tone("cue", [L("K:device-removed", len_ms=300, st=2.0, frac=0.01, fade_in_ms=2.0)], 300, 140, phase=5),
+    "PrefabEnter": tone("cue", [L("K:power-plug", len_ms=420, st=7.0, frac=0.01, fade_in_ms=2.0)], 420, 200, phase=5),
+    "PrefabExit": tone("cue", [L("K:power-unplug", len_ms=440, st=7.0, frac=0.01, fade_in_ms=2.0)], 440, 200, phase=5),
+    # tools & camera: tool switch = a high bell ping (the caller raises the pitch per tool: move, rotate, scale...);
+    # snap / space = the volume tick up a sixth / down a tone; frame = a longer bell a fifth up; view preset = a plain ping
+    "ToolSwitch": tick([L(BELL, len_ms=80, st=12.0)], 75, 45, peak=-25.0, phase=5),
+    "SnapToggle": tick([L(VOL, st=9.0, frac=0.2)], 55, 30, peak=-22.0, phase=5),
+    "SpaceToggle": tick([L(VOL, st=-2.0, frac=0.2)], 60, 30, peak=-22.0, phase=5),
+    "FrameSelected": tone("cue", [L(BELL, len_ms=220, st=7.0, frac=0.01, fade_in_ms=0.5)], 220, 120, phase=5),
+    "ViewPreset": tick([L(BELL, len_ms=100)], 95, 55, peak=-23.0, phase=5),
+    # panels & trees: a dock panel opens / closes with the menu pair a tone lower; a tree node expands / collapses with the
+    # modifier tick up a third / down a tone, quiet and dull (they come in runs). Scene open: KDE's service-login chime.
+    "PanelOpen": tone("cue", [L("Y:device-added", len_ms=140, st=3.0, frac=0.01, fade_in_ms=0.5)], 105, 50, phase=5),
+    "PanelClose": tone("cue", [L("Y:device-removed", len_ms=140, st=3.0, frac=0.01, fade_in_ms=0.5)], 105, 50, phase=5),
+    "TreeExpand": tick([L(MOD, st=4.0, len_ms=35)], 40, 25, peak=-27.0, lp=3500.0, variants=V2, phase=5),
+    "TreeCollapse": tick([L(MOD, st=-2.0, len_ms=35)], 40, 25, peak=-27.0, lp=3000.0, variants=V2, phase=5),
+    "SceneOpen": tone("cue", [L("K:service-login", len_ms=700, frac=0.01, fade_in_ms=2.0)], 700, 320, phase=5),
+    # builds & housekeeping: build start = KDE's message-sent whoosh-chime; success / failure = KDE's outcome pair (notify
+    # tier, they finish long jobs); console clear = Yaru's trash-empty; asset import = KDE's contact-in blip
+    "BuildStart": tone("cue", [L("K:message-sent-instant", len_ms=500, frac=0.01, fade_in_ms=2.0)], 500, 240, phase=5),
+    "BuildSuccess": tone("notify", [L("K:outcome-success", len_ms=1000, frac=0.01, fade_in_ms=2.0)], 1000, 450, phase=5),
+    "BuildFail": tone("notify", [L("K:outcome-failure", len_ms=1000, frac=0.01, fade_in_ms=2.0)], 1000, 450, phase=5),
+    "ConsoleClear": tone("cue", [L("Y:trash-empty", len_ms=500, frac=0.01, fade_in_ms=1.0)], 500, 240, phase=5),
+    "AssetImport": tone("cue", [L("K:message-contact-in", len_ms=420, frac=0.01, fade_in_ms=2.0)], 420, 200, phase=5),
 }
 
 
@@ -309,6 +358,10 @@ def level(y, ev):
         g_cap = TICK_SHORT_CAP - lufs_m_max(y, 0.1, 0.025)
         if g_cap < g:
             return y * 10 ** (g_cap / 20), f"{TICK_SHORT_CAP:.0f} LUFS on the 100 ms window (below its {ev['level']:.0f} dBFS peak target)"
+        g_min = TICK_SHORT_MIN - lufs_m_max(y, 0.1, 0.025)
+        if g_min > g:
+            g_min = min(g_min, PEAK_CEIL_DB - peak_db(y))
+            return y * 10 ** (g_min / 20), f"{TICK_SHORT_MIN:.0f} LUFS on the 100 ms window (above its {ev['level']:.0f} dBFS peak target)"
         return y * 10 ** (g / 20), f"sample peak {ev['level']:.0f} dBFS"
     if ev["tier"] == "notify":
         g, what = ev["level"] - lufs_m_max(y), f"LUFS-M max {ev['level']:.0f}"

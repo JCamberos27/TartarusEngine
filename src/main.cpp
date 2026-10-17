@@ -32,6 +32,7 @@
 #include "EditorLayer.h"
 #include "EditorSettings.h"
 #include "EditorSound.h"
+#include "AppAudioMuter.h"
 #include "EditorTheme.h"   // grid axis colours (GridColors)
 #include "Shortcuts.h" // play / window keys route through the Shortcuts Manager (#236 F)
 #include "Model.h"
@@ -1409,6 +1410,7 @@ int main(int argc, char** argv) {
             EditorSoundEvents::PlaySlot() = [](int event, float x) {
                 if (event >= 0 && event < EditorSoundEvents::kEventCount) EditorSound::Play((EditorSound::Event)event, x);
             };
+            AppAudioMuter::RecoverStale(); // a crash while muting left an app muted: give it its sound back
         }
 
         // One-shot rig dump: OS, CPU, RAM, GPU, driver, display, build. Collected into a block
@@ -2455,6 +2457,19 @@ int main(int argc, char** argv) {
                 EditorSound::Play((playing && paused) ? EditorSound::Event::Pause : EditorSound::Event::Resume);
             soundWasPaused = playing && paused;
             if (stepThisFrame) EditorSound::Play(EditorSound::Event::Step);
+            // A keyboard-sound app (Mechvibes) goes quiet while the keys drive the view: the Scene camera flying (right mouse
+            // held) or Play mode holding the input. It comes back a moment after, so a quick re-grab doesn't flicker it.
+            if (!playerMode && !headless) {
+                static double lastDrivenAt = -1e9;
+                const EditorSettings& es = EditorSettings::Get();
+                const bool rmbFly = camDragActive && Input::IsMouseButtonDown(GLFW_MOUSE_BUTTON_RIGHT) &&
+                                    !Input::IsKeyDown(GLFW_KEY_LEFT_ALT) && !Input::IsKeyDown(GLFW_KEY_RIGHT_ALT);
+                const bool focusedNow = glfwGetWindowAttrib(window.Handle(), GLFW_FOCUSED) != 0;
+                const double now = glfwGetTime();
+                if (focusedNow && (gameHasInput || rmbFly)) lastDrivenAt = now;
+                AppAudioMuter::Configure(es.MuteAppNames);
+                AppAudioMuter::SetMuted(es.MuteAppsWhileMoving && focusedNow && now - lastDrivenAt < 0.15);
+            }
             EditorSound::Update(); // the notification sounds for what was logged this frame
             AudioEngine::Update();
 
@@ -5125,6 +5140,7 @@ int main(int argc, char** argv) {
             MotionDemo::StopRecording(); // a demo cut short still leaves a playable file
             editor.Shutdown();
             editorModule.Shutdown();
+            AppAudioMuter::Shutdown();
             EditorSound::Shutdown();
             AudioEngine::Shutdown();
             PhysicsWorld::Shutdown();
@@ -5153,6 +5169,7 @@ int main(int argc, char** argv) {
                       << (allPassed ? "ALL PASSED" : "FAILURES DETECTED") << std::endl;
             editor.Shutdown();
             editorModule.Shutdown();
+            AppAudioMuter::Shutdown();
             EditorSound::Shutdown();
             AudioEngine::Shutdown();
             PhysicsWorld::Shutdown(); // #167 - the session-lifetime PhysX core
@@ -5185,6 +5202,7 @@ int main(int argc, char** argv) {
         }
         editor.Shutdown();
         editorModule.Shutdown();
+        AppAudioMuter::Shutdown();
         EditorSound::Shutdown();
         AudioEngine::Shutdown();
         PhysicsWorld::Shutdown(); // #167 - the session-lifetime PhysX core

@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <algorithm>
 #include <cmath>
+#include <cmath>
 
 using json = nlohmann::json;
 void EditorSettings::ReloadForUndo() {Get()=EditorSettings{};Load();}
@@ -135,9 +136,16 @@ void EditorSettings::Load() {
     s.AudioMuted = SafeValue(root, "audioMuted", s.AudioMuted);
     s.EditorSoundsEnabled = SafeValue(root, "editorSoundsEnabled", s.EditorSoundsEnabled);
     s.EditorSoundsVolume = SafeValue(root, "editorSoundsVolume", s.EditorSoundsVolume);
+    // The first default (0.35) was raised 25%: a file still holding it moves up too; a level the user set stays.
+    if (std::fabs(s.EditorSoundsVolume - 0.35f) < 0.001f) s.EditorSoundsVolume = 0.44f;
     s.EditorSoundsPremium = SafeValue(root, "editorSoundsPremium", s.EditorSoundsPremium);
     s.EditorSoundCategoryOn = SafeValue(root, "editorSoundCategoryOn", s.EditorSoundCategoryOn);
     s.EditorSoundCategoryVolume = SafeValue(root, "editorSoundCategoryVolume", s.EditorSoundCategoryVolume);
+    s.MuteAppsWhileMoving = SafeValue(root, "muteAppsWhileMoving", s.MuteAppsWhileMoving);
+    if (auto it = root.find("muteAppNames"); it != root.end() && it->is_array()) {
+        s.MuteAppNames.clear();
+        for (const auto& n : *it) if (n.is_string() && !n.get<std::string>().empty()) s.MuteAppNames.push_back(n.get<std::string>());
+    }
     s.AssetSearchGlobal = SafeValue(root, "assetSearchGlobal", s.AssetSearchGlobal);
     s.GameViewPresetLabel = SafeValue(root, "gameViewPresetLabel", s.GameViewPresetLabel);
     s.GameViewPresetWidth = SafeValue(root, "gameViewPresetWidth", s.GameViewPresetWidth);
@@ -329,6 +337,8 @@ void EditorSettings::Flush() {
     root["editorSoundsPremium"] = Get().EditorSoundsPremium;
     if (!Get().EditorSoundCategoryOn.empty()) root["editorSoundCategoryOn"] = Get().EditorSoundCategoryOn;
     if (!Get().EditorSoundCategoryVolume.empty()) root["editorSoundCategoryVolume"] = Get().EditorSoundCategoryVolume;
+    root["muteAppsWhileMoving"] = Get().MuteAppsWhileMoving;
+    root["muteAppNames"] = Get().MuteAppNames;
     root["assetSearchGlobal"] = Get().AssetSearchGlobal;
     root["gameViewPresetLabel"] = Get().GameViewPresetLabel;
     root["gameViewPresetWidth"] = Get().GameViewPresetWidth;

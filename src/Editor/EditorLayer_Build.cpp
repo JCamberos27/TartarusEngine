@@ -1,6 +1,7 @@
 // #174 - Project Settings > Build: Unity's Build Settings + Player settings in one page, and the
 // Build / Build and Run actions (also Ctrl+Shift+B to open this page, Ctrl+B to build and run).
 #include "EditorLayer.h"
+#include "EditorSound.h"
 #include "EditorTheme.h"
 #include "EditorLayerInternal.h"
 #include "EditorUIHelpers.h"
@@ -80,6 +81,7 @@ void EditorLayer::RunBuild(bool runAfter) {
     // The settings are copied: the Build page stays editable meanwhile.
     m_BuildProgress = std::make_shared<BuildPipeline::Progress>();
     m_BuildRunAfter = runAfter;
+    EditorSound::Play(EditorSound::Event::BuildStart);
     m_BuildFuture = std::async(std::launch::async,
         [settings = ProjectSettings::Build(), progress = m_BuildProgress]() {
             return BuildPipeline::Build(settings, progress.get());
@@ -89,6 +91,7 @@ void EditorLayer::RunBuild(bool runAfter) {
 void EditorLayer::PollBuild() {
     if (!IsBuilding() || m_BuildFuture.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return;
     m_LastBuildReport = std::make_shared<BuildPipeline::Report>(m_BuildFuture.get());
+    EditorSound::Play(m_LastBuildReport->Ok ? EditorSound::Event::BuildSuccess : EditorSound::Event::BuildFail);
     if (m_LastBuildReport->Ok && m_BuildRunAfter) BuildPipeline::Run(m_LastBuildReport->ExePath);
     m_BuildProgress.reset();
 }

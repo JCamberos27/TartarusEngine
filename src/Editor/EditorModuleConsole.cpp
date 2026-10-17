@@ -273,9 +273,12 @@ void Draw(const EditorModuleHostAPI& host) {
     const float iconW = ImGui::GetFrameHeight();
     const ImGuiStyle& st = ImGui::GetStyle();
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(EditorTheme::Px(2.0f), st.ItemSpacing.y));
-    if (EditorUIPrimitives::ActionButton(ICON_FA_TRASH_CAN, "Clear the console", host.SetTooltip, false, ImVec2(iconW, iconW))) {
-        if (host.LogClear) host.LogClear();
+    bool clear;
+    {
+        EditorSoundEvents::ScopedClickSilence quiet; // Clear plays its own sound
+        clear = EditorUIPrimitives::ActionButton(ICON_FA_TRASH_CAN, "Clear the console", host.SetTooltip, false, ImVec2(iconW, iconW));
     }
+    if (clear && host.LogClear) host.LogClear();
     ImGui::SameLine();
     if (EditorUIPrimitives::ActionButton(ICON_FA_FLOPPY_DISK, "Save the messages shown to a text file", host.SetTooltip, false,
                                          ImVec2(iconW, iconW))) {
