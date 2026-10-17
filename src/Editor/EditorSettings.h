@@ -108,6 +108,7 @@ struct EditorSettings {
     // Notifications, Play Mode) a switch and a volume; a short or missing list keeps the defaults for the rest.
     bool EditorSoundsEnabled = true;
     float EditorSoundsVolume = 0.35f;
+    bool EditorSoundsPremium = false; // the paid Drive set (assets/Audio/EditorUI) where it has the event
     std::vector<bool> EditorSoundCategoryOn;
     std::vector<float> EditorSoundCategoryVolume;
 
