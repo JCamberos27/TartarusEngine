@@ -16,7 +16,7 @@ namespace {
 using EditorSoundEvents::kCategoryCount;
 using EditorSoundEvents::kEventCount;
 
-//                         name                category                 dB    cooldown jitter centred
+//                         name                category                 dB    cooldown jitter centred unfocused
 const EventInfo kEvents[kEventCount] = {
     {"Click",            Category::Clicks,        0.0f,  35.0f, 0.03f, false},
     {"ClickConfirm",     Category::Clicks,        0.0f,  60.0f, 0.02f, false},
@@ -37,7 +37,7 @@ const EventInfo kEvents[kEventCount] = {
     {"Save",             Category::Notifications,-2.0f, 300.0f, 0.0f,  true},
     {"Undo",             Category::Clicks,       -2.0f,  60.0f, 0.02f, true},
     {"Redo",             Category::Clicks,       -2.0f,  60.0f, 0.02f, true},
-    {"Hover",            Category::Hover,         0.0f,  45.0f, 0.03f, false},
+    {"Hover",            Category::Hover,        -4.0f,  45.0f, 0.03f, false}, // levelled as a tick: sits under them
     {"SliderGrab",       Category::Sliders,       0.0f,  60.0f, 0.02f, false},
     {"SliderTick",       Category::Sliders,      -4.0f,  40.0f, 0.0f,  false},
     {"SliderRelease",    Category::Sliders,       0.0f,  60.0f, 0.02f, false},
@@ -67,17 +67,56 @@ const EventInfo kEvents[kEventCount] = {
     {"ViewPreset",       Category::Tools,         0.0f,  80.0f, 0.02f, true},
     {"PanelOpen",        Category::Panels,        0.0f,  80.0f, 0.02f, false},
     {"PanelClose",       Category::Panels,        0.0f,  80.0f, 0.02f, false},
-    {"TreeExpand",       Category::Panels,       -2.0f,  35.0f, 0.03f, false},
-    {"TreeCollapse",     Category::Panels,       -2.0f,  35.0f, 0.03f, false},
+    {"TreeExpand",       Category::Panels,       -3.0f,  35.0f, 0.03f, false},
+    {"TreeCollapse",     Category::Panels,       -3.0f,  35.0f, 0.03f, false},
     {"SceneOpen",        Category::Notifications, 0.0f, 500.0f, 0.0f,  true},
     {"BuildStart",       Category::Notifications, 0.0f, 500.0f, 0.0f,  true},
     {"BuildSuccess",     Category::Notifications, 0.0f, 500.0f, 0.0f,  true},
     {"BuildFail",        Category::Notifications, 0.0f, 500.0f, 0.0f,  true},
     {"ConsoleClear",     Category::Notifications,-2.0f, 300.0f, 0.0f,  true},
-    {"AssetImport",      Category::Notifications,-2.0f, 400.0f, 0.0f,  true},
+    {"AssetImport",      Category::System,       -2.0f, 400.0f, 0.0f,  true,  true},
+    {"FolderEnter",      Category::Assets,        0.0f,  50.0f, 0.02f, false},
+    {"FolderBack",       Category::Assets,        0.0f,  50.0f, 0.02f, false},
+    {"AssetOpen",        Category::Assets,        0.0f, 200.0f, 0.0f,  false},
+    {"AssetMove",        Category::Assets,        0.0f, 120.0f, 0.02f, false},
+    {"AssetReimport",    Category::Assets,        0.0f, 200.0f, 0.0f,  false},
+    {"SearchEmpty",      Category::Assets,       -2.0f, 400.0f, 0.0f,  false},
+    {"FavoriteOn",       Category::Assets,        0.0f,  60.0f, 0.02f, false},
+    {"FavoriteOff",      Category::Assets,        0.0f,  60.0f, 0.02f, false},
+    {"ResetDefault",     Category::Objects,       0.0f, 120.0f, 0.0f,  false},
+    {"Randomize",        Category::Objects,       0.0f,  90.0f, 0.03f, false},
+    {"Equip",            Category::Objects,       0.0f,  80.0f, 0.02f, false},
+    {"Unequip",          Category::Objects,       0.0f,  80.0f, 0.02f, false},
+    {"StateAdd",         Category::Animation,     0.0f, 100.0f, 0.02f, false},
+    {"StateDelete",      Category::Animation,     0.0f, 100.0f, 0.02f, false},
+    {"TransitionLink",   Category::Animation,     0.0f,  80.0f, 0.02f, false},
+    {"TransitionBreak",  Category::Animation,     0.0f,  80.0f, 0.02f, false},
+    {"DefaultState",     Category::Animation,     0.0f, 120.0f, 0.0f,  false},
+    {"LayerAdd",         Category::Animation,     0.0f, 100.0f, 0.02f, false},
+    {"LayerRemove",      Category::Animation,     0.0f, 100.0f, 0.02f, false},
+    {"ParamAdd",         Category::Animation,     0.0f, 100.0f, 0.02f, false},
+    {"ParamRemove",      Category::Animation,     0.0f, 100.0f, 0.02f, false},
+    {"LiveState",        Category::Animation,    -6.0f, 120.0f, 0.02f, false}, // can run continuously: well under the rest
+    {"KeyAdd",           Category::Animation,     0.0f,  60.0f, 0.02f, false},
+    {"KeyDelete",        Category::Animation,     0.0f,  60.0f, 0.02f, false},
+    {"TangentMode",      Category::Animation,     0.0f,  60.0f, 0.02f, false},
+    {"PresetApply",      Category::Animation,     0.0f, 150.0f, 0.0f,  false},
+    {"ShaderReload",     Category::System,       -2.0f, 600.0f, 0.0f,  true,  true},
+    {"SyncDone",         Category::System,       -2.0f, 600.0f, 0.0f,  true,  true},
+    {"ModuleReload",     Category::System,        0.0f, 600.0f, 0.0f,  true,  true},
+    {"Blocked",          Category::System,        0.0f, 250.0f, 0.0f,  false},
+    {"ShortcutInvalid",  Category::System,       -2.0f, 250.0f, 0.0f,  true},
+    {"GotoLine",         Category::System,        0.0f,  80.0f, 0.02f, false},
+    {"Screenshot",       Category::System,        0.0f, 250.0f, 0.0f,  true},
+    {"ResolutionChange", Category::System,        0.0f,  80.0f, 0.02f, false},
+    {"ViewMaximize",     Category::System,        0.0f, 150.0f, 0.0f,  true},
+    {"ViewRestore",      Category::System,        0.0f, 150.0f, 0.0f,  true},
+    {"CursorLock",       Category::System,       -2.0f, 150.0f, 0.0f,  true},
+    {"CursorRelease",    Category::System,       -2.0f, 150.0f, 0.0f,  true},
 };
 
-const char* kCategoryNames[kCategoryCount] = {"Clicks", "Sliders", "Hover", "Panels", "Drag & Drop", "Notifications", "Play Mode", "Objects", "Tools"};
+const char* kCategoryNames[kCategoryCount] = {"Clicks", "Sliders", "Hover",  "Panels",             "Drag & Drop", "Notifications",
+                                              "Play Mode", "Objects", "Tools", "Assets", "Animation & Curves", "System"};
 
 float DbToGain(float db) { return std::pow(10.0f, db / 20.0f); }
 
@@ -90,8 +129,8 @@ struct State {
     bool LogPrimed = false;
     unsigned long long LastLogSeq = 0;
     double QuietUntilMs = 0.0;
-    double LastAlertMs = -1e9;
-    int AlertStorm = 0;
+    double LastErrorMs = -1e9; // the last error logged, sounded or not: a burst re-arms only after kErrorQuietMs of none
+    int TailCount = 0;         // the newest entry's repeat count: an identical error again only bumps it, no new Seq
     std::array<std::vector<std::string>, kEventCount> Files;
     std::array<std::vector<std::string>, kEventCount> BuiltIn, Premium; // both sets, loaded; Files is the one in use
     std::array<bool, kEventCount> Override{};
@@ -132,7 +171,8 @@ bool Scheduler::Decide(Event e, double nowMs, float screenX01, bool windowFocuse
     const EventInfo& info = kEvents[i];
     const int cat = (int)info.Cat;
     if (!st.Enabled || st.Master <= 0.0f || !st.CategoryOn[cat] || st.CategoryVolume[cat] <= 0.0f) return false;
-    if (!windowFocused && info.Cat != Category::Notifications) return false; // in the background only notifications speak
+    // In the background only notifications and the "done" chimes speak.
+    if (!windowFocused && info.Cat != Category::Notifications && !info.Unfocused) return false;
     const int variants = m_Variants[i];
     if (variants <= 0) return false;
     const double since = m_Played[i] ? nowMs - m_LastMs[i] : 1e9;
@@ -269,33 +309,30 @@ void Update() {
         s.QuietUntilMs = NowMs() + 3000.0;
         return;
     }
-    if (newest <= s.LastLogSeq) return;
+    const int tailCount = entries.empty() ? 0 : entries.back().Count;
+    // The same error again (a per-frame failure) only bumps the newest entry's count: that is error activity too.
+    const bool repeatedError = !entries.empty() && newest == s.LastLogSeq && tailCount > s.TailCount &&
+                               entries.back().Level == LogLevel::Error;
+    s.TailCount = tailCount;
+    if (newest <= s.LastLogSeq && !repeatedError) return;
     size_t first = entries.size();
     while (first > 0 && entries[first - 1].Seq > s.LastLogSeq) --first;
     s.LastLogSeq = newest;
-    if (NowMs() < s.QuietUntilMs) return;
-    // One sound for the frame's most serious entry (the cooldowns spread a burst out).
-    bool error = false, warning = false, success = false, info = false;
+    bool error = repeatedError, reload = false;
     for (size_t i = first; i < entries.size(); ++i) {
         const LogEntry& e = entries[i];
         if (e.Level == LogLevel::Error) error = true;
-        else if (e.Level == LogLevel::Warning) warning = true;
-        else if (e.Message.rfind("Hot reload: TartarusGame module reloaded", 0) == 0) success = true;
-        else if (e.Message.rfind("Imported ", 0) == 0) info = true; // AssetImport
+        else if (e.Message.rfind("Hot reload: TartarusGame module reloaded", 0) == 0) reload = true;
     }
-    // A storm (something failing over and over) gets four alerts, then quiet until it has calmed down for ten seconds.
-    if (error || warning) {
-        const double now = NowMs();
-        s.AlertStorm = now - s.LastAlertMs < 10000.0 ? s.AlertStorm + 1 : 0;
-        s.LastAlertMs = now;
-        if (s.AlertStorm >= 4) return;
-    }
+    const double now = NowMs();
+    // An error burst sounds once: the next one only after kErrorQuietMs without any (Play mode scripts can error every frame).
+    const bool errorArmed = now - s.LastErrorMs >= kErrorQuietMs;
+    if (error) s.LastErrorMs = now;
+    if (now < s.QuietUntilMs) return;
     // A build that just sounded its own result already said it: its log lines (the errors, the reload) stay quiet.
-    if (NowMs() - s.LastBuildResultMs < 5000.0 && (error || success)) return;
-    if (error) Play(Event::NotifyError);
-    else if (warning) Play(Event::NotifyWarning);
-    else if (success) Play(Event::NotifySuccess);
-    else if (info) Play(Event::AssetImport);
+    if (now - s.LastBuildResultMs < 5000.0) return;
+    if (error && errorArmed) Play(Event::NotifyError);
+    else if (reload) Play(Event::ModuleReload);
 }
 
 void Apply(const Settings& v) {
@@ -411,6 +448,13 @@ Event UndoLabelEvent(const std::string& label) {
     if (starts("Paste ")) return Event::Paste; // component pastes ("Paste Rigidbody"...); the entity Paste plays its own
     if (starts("Apply to Prefab")) return Event::PrefabApply;
     if (starts("Revert to Prefab")) return Event::PrefabRevert;
+    if (starts("Delete ")) return Event::Delete;
+    if (starts("Duplicate ")) return Event::Duplicate;
+    if (starts("Rename ")) return Event::Rename;
+    if (starts("Move Asset") || starts("Move Folder")) return Event::AssetMove; // not "Move Vertex" and the like
+    if (starts("Reset ")) return Event::ResetDefault;
+    if (starts("Reimport ")) return Event::AssetReimport;
+    if (starts("Align ")) return Event::ViewPreset;
     return Event::Count;
 }
 

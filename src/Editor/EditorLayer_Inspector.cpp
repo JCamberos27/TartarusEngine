@@ -4,6 +4,7 @@
 
 #include "PhysicMaterialAsset.h" // #170
 #include "EditorUIPrimitives.h"
+#include "EditorSound.h"
 #include "EditorLayer.h"
 #include "EditorTestProbe.h" // --editor-tests widget names
 #include "EditorLayerInternal.h"
@@ -3582,11 +3583,13 @@ void EditorLayer::HandleInspectorHoverKeys(World& world) {
         PushUndo(world, "Toggle " + hs.Label);
         bool& on = *reinterpret_cast<bool*>(f->Address(rc->Get(world.Registry, hs.Entity)));
         on = !on;
+        EditorSound::Play(on ? EditorSound::Event::ToggleOn : EditorSound::Event::ToggleOff);
     } else if (Shortcuts::Triggered("inspector.hover.remove")) {
         if (!hs.Removable || m_RemovingSection != 0) return;
         m_RemovingSection = hs.HeaderId; // BeginComponentSection reports the removal once faded
         m_RemovingStart = ImGui::GetTime();
         m_RemovingSeenFrame = frame;
+        EditorSound::Play(EditorSound::Event::ComponentRemove); // now, not when the fade lands
     }
 }
 
@@ -3685,6 +3688,7 @@ bool EditorLayer::BeginComponentSection(const char* icon,
         m_RemovingSection = headerId;
         m_RemovingStart = now;
         m_RemovingSeenFrame = frame;
+        EditorSound::Play(EditorSound::Event::ComponentRemove, EditorSound::LastItemScreenX()); // now, not when the fade lands
     };
     // The section fades and slides right over the first 60%, while (from 35%) the header and body
     // fold away, so the sections below close the gap smoothly instead of jumping.
@@ -3693,7 +3697,7 @@ bool EditorLayer::BeginComponentSection(const char* icon,
     if (m_RemovingSection == headerId) {
         m_RemovingSeenFrame = frame;
         const float t = animate ? (float)((now - m_RemovingStart) / kSectionRemoveSecs) : 1.0f;
-        if (t >= 1.0f) { m_RemovingSection = 0; removedOut = true; }
+        if (t >= 1.0f) { m_RemovingSection = 0; removedOut = true; m_QuietRemoveSoundFrame = frame; } // sounded at the start
         else {
             removing = true;
             const float ft = EditorTheme::Ease::OutCubic(std::min(1.0f, t / 0.6f));
@@ -3904,8 +3908,9 @@ bool EditorLayer::BeginComponentSection(const char* icon,
         ImGui::SetCursorScreenPos(ImVec2(ImGui::GetCursorScreenPos().x, headerBtnY));
         ImGui::PushID(label);
         if (closeT < 1.0f) ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * closeT);
-        if (DangerIconButton(ICON_FA_XMARK, "Remove this component (X while hovered)", ImVec2(bw, 0.0f)))
-            requestRemove();
+        bool removeClicked;
+        { EditorSoundEvents::ScopedClickSilence quiet; removeClicked = DangerIconButton(ICON_FA_XMARK, "Remove this component (X while hovered)", ImVec2(bw, 0.0f)); }
+        if (removeClicked) requestRemove();
         if (closeT < 1.0f) ImGui::PopStyleVar();
         ImGui::PopID();
     }
@@ -3915,7 +3920,10 @@ bool EditorLayer::BeginComponentSection(const char* icon,
     // for its type).
     if (ImGui::BeginPopup(header.c_str())) {
         if (resetOut && ImGui::MenuItem(ICON_FA_ROTATE_LEFT "  Reset")) *resetOut = true;
-        if (copyOut && ImGui::MenuItem(ICON_FA_COPY "  Copy Component")) *copyOut = true;
+        if (copyOut && ImGui::MenuItem(ICON_FA_COPY "  Copy Component")) {
+            *copyOut = true;
+            EditorSound::Play(EditorSound::Event::Copy, EditorSound::LastItemScreenX());
+        }
         // vInspector multi-component clipboard: the Ctrl+click-picked headers, in registry order.
         if (pickable && !m_InspectorPickedComponents.empty()) {
             char buf[64];
@@ -3930,6 +3938,7 @@ bool EditorLayer::BeginComponentSection(const char* icon,
                 }
                 Log::Info("Copied " + std::to_string(m_ComponentClipboard.size()) +
                           " components - paste them from another object's actions menu.");
+                EditorSound::Play(EditorSound::Event::Copy, EditorSound::LastItemScreenX());
                 m_InspectorPickedComponents.clear();
             }
         }

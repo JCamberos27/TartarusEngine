@@ -795,6 +795,7 @@ bool HotReloadEditorModule::Reload(bool initialLoad) {
     m_LastFailedSourceWrite = {};
     Log::Info(initialLoad ? "Editor hot reload: TartarusEditor module loaded."
                           : "Editor hot reload: TartarusEditor module reloaded.");
+    if (!initialLoad) EditorSound::Play(EditorSound::Event::ModuleReload); // the "done" chime; failures log an error, which sounds
     return true;
 }
 

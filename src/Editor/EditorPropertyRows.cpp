@@ -3,6 +3,7 @@
 #include "EditorLayerInternal.h"
 #include "EditorUIHelpers.h"
 #include "EditorUIPrimitives.h"
+#include "EditorSound.h"
 #include "EditorTheme.h"
 
 #include <IconsFontAwesome6.h>
@@ -277,7 +278,10 @@ void PropertyRows::ResetButton(const char* what, const std::function<void()>& ap
     if (ImGui::BeginPopup("##reset")) {
         ImGui::Text("Reset all %s settings to the defaults?", what);
         ImGui::TextDisabled("Undo in the header brings them back.");
-        if (EditorInternal::PrimaryButton("Reset")) {
+        bool resetClicked;
+        { EditorSoundEvents::ScopedClickSilence quiet; resetClicked = EditorInternal::PrimaryButton("Reset"); }
+        if (resetClicked) {
+            EditorSound::Play(EditorSound::Event::ResetDefault, EditorSound::LastItemScreenX());
             apply();
             m_Changed = true;
             ImGui::CloseCurrentPopup();

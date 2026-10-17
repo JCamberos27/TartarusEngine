@@ -107,10 +107,14 @@ void TestEditorSoundSchedulerRules() {
     sch.SetVariantCount(Event::NotifyError, 1);
     CHECK(sch.Decide(Event::NotifyError, 0.0, 0.0f, true, st, v) && v.Pan == 0.0f && v.Variant == 0);
 
-    // In the background only notifications play.
+    // In the background only notifications and the "done" chimes play.
     sch.Reset();
     CHECK(!sch.Decide(Event::Click, 0.0, 0.5f, false, st, v));
     CHECK(sch.Decide(Event::NotifyError, 0.0, 0.5f, false, st, v));
+    sch.SetVariantCount(Event::ShaderReload, 1);
+    sch.SetVariantCount(Event::Blocked, 1);
+    CHECK(sch.Decide(Event::ShaderReload, 0.0, 0.5f, false, st, v));
+    CHECK(!sch.Decide(Event::Blocked, 0.0, 0.5f, false, st, v)); // the rest of System waits for focus
 
     // The switches: all off, a category off, a category at 0, master at 0.
     sch.Reset();
@@ -322,7 +326,7 @@ void TestEditorSoundBuiltInSetComplete() {
     namespace fs = std::filesystem;
     const std::string dir = (fs::u8path(TARTARUS_SOURCE_DIR) / "resources" / "EditorSounds").u8string();
     const float master = EditorSound::Settings{}.Master;
-    CHECK(std::fabs(master - 0.44f) < 1e-6f); // 25% over the first default (0.35)
+    CHECK(std::fabs(master - 0.70f) < 1e-6f); // the P6 remaster's default
     float worstDb = -1000.0f;
     for (int i = 0; i < EditorSoundEvents::kEventCount; ++i) {
         const auto files = EditorSound::FindVariants(dir, (Event)i);
@@ -349,7 +353,44 @@ void TestEditorSoundBuiltInSetComplete() {
             worstDb = std::max(worstDb, db);
         }
     }
-    CHECK(worstDb + 20.0f * std::log10(master) < -6.0f); // headroom even at full category volume
+    CHECK(worstDb + 20.0f * std::log10(master) < -3.0f); // headroom even at full category volume
+}
+
+// The P6 mastering rules, on the committed files: every one starts and ends at silence (a sound that starts or stops
+// mid-waveform clicks), and none is buried - each is within reach of the loudest of its kind (the first set had files 8 dB
+// under their neighbours).
+void TestEditorSoundBuiltInSetMastered() {
+    namespace fs = std::filesystem;
+    const std::string dir = (fs::u8path(TARTARUS_SOURCE_DIR) / "resources" / "EditorSounds").u8string();
+    float quietestRms = 0.0f, loudestRms = -1000.0f;
+    for (int i = 0; i < EditorSoundEvents::kEventCount; ++i) {
+        for (const std::string& f : EditorSound::FindVariants(dir, (Event)i)) {
+            std::ifstream in(fs::u8path(f), std::ios::binary);
+            std::vector<char> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+            std::vector<std::int16_t> pcm;
+            for (size_t p = 12; p + 8 <= bytes.size();) {
+                std::uint32_t len = 0;
+                std::memcpy(&len, &bytes[p + 4], 4);
+                if (std::memcmp(&bytes[p], "data", 4) == 0) {
+                    pcm.resize(std::min<size_t>(len, bytes.size() - p - 8) / 2);
+                    std::memcpy(pcm.data(), &bytes[p + 8], pcm.size() * 2);
+                    break;
+                }
+                p += 8 + len + (len & 1);
+            }
+            CHECK(pcm.size() > 100);
+            if (pcm.size() <= 100) continue;
+            CHECK(std::abs((int)pcm.front()) < 66); // 0.002 of full scale
+            CHECK(std::abs((int)pcm.back()) < 33);  // 0.001
+            double sum = 0.0;
+            for (std::int16_t s : pcm) sum += (double)s * s;
+            const float rmsDb = 10.0f * std::log10((float)(sum / (double)pcm.size()) / (32768.0f * 32768.0f));
+            quietestRms = std::min(quietestRms, rmsDb);
+            loudestRms = std::max(loudestRms, rmsDb);
+        }
+    }
+    CHECK(quietestRms > -30.0f);              // nothing buried (the first set went down to -37 dBFS RMS)
+    CHECK(loudestRms - quietestRms < 12.0f);  // ticks sit under notifications, but within reach
 }
 
 // The action sounds that ride on an undo step's label.
@@ -365,6 +406,15 @@ void TestEditorSoundUndoLabels() {
     CHECK(EditorSound::UndoLabelEvent("Rename") == Event::Count); // the Inspector pushes it when the field is clicked into
     CHECK(EditorSound::UndoLabelEvent("Move") == Event::Count);
     CHECK(EditorSound::UndoLabelEvent("Delete") == Event::Count);
+    CHECK(EditorSound::UndoLabelEvent("Delete Assets") == Event::Delete);
+    CHECK(EditorSound::UndoLabelEvent("Duplicate Asset") == Event::Duplicate);
+    CHECK(EditorSound::UndoLabelEvent("Rename Folder") == Event::Rename);
+    CHECK(EditorSound::UndoLabelEvent("Move Asset to Folder") == Event::AssetMove);
+    CHECK(EditorSound::UndoLabelEvent("Move Folder") == Event::AssetMove);
+    CHECK(EditorSound::UndoLabelEvent("Move Vertex") == Event::Count); // a mesh edit, not an asset move
+    CHECK(EditorSound::UndoLabelEvent("Reset Transform") == Event::ResetDefault);
+    CHECK(EditorSound::UndoLabelEvent("Reimport Texture") == Event::AssetReimport);
+    CHECK(EditorSound::UndoLabelEvent("Align Camera to View") == Event::ViewPreset);
 }
 
 // Which apps the muter matches, and the Preferences field's list.
@@ -393,6 +443,8 @@ void RegisterEditorSoundTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Editor sounds: the premium Drive set is opt-in, event by event", TestEditorSoundPremiumSet);
     tests.emplace_back("Editor sounds: every event has a built-in file, with headroom at the default level",
                        TestEditorSoundBuiltInSetComplete);
+    tests.emplace_back("Editor sounds: every built-in file starts and ends at silence, none buried",
+                       TestEditorSoundBuiltInSetMastered);
     tests.emplace_back("Editor sounds: Create, Add / Remove Component, Paste and prefab actions off undo labels",
                        TestEditorSoundUndoLabels);
     tests.emplace_back("App audio muter: exe-name matching and the name list", TestAppAudioMuterNames);

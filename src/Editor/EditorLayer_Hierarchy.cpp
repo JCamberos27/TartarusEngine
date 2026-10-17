@@ -171,6 +171,7 @@ void EditorLayer::PasteClipboard(World& world, AssetLibrary& assets) {
     std::vector<entt::entity> pasted;
     if (!SceneSerializer::AppendEntitiesFromString(world, assets, m_Clipboard, pasted) || pasted.empty()) {
         Log::Warn("Paste failed: clipboard content could not be rebuilt.");
+        EditorSound::Play(EditorSound::Event::Blocked);
         return;
     }
     // Offset so a paste is visibly distinct from the original instead of landing exactly on top
@@ -585,6 +586,7 @@ void EditorLayer::DuplicateSelection(World& world, AssetLibrary& assets, bool in
     std::unordered_map<int, entt::entity> sourceOrder;
     if (fragment.empty() || !SceneSerializer::AppendEntitiesFromString(world, assets, fragment, created, &sourceOrder) || created.empty()) {
         Log::Warn("Duplicate failed: selection could not be copied.");
+        EditorSound::Play(EditorSound::Event::Blocked);
         return;
     }
 
@@ -645,7 +647,11 @@ void EditorLayer::DuplicateSelectionArray(World& world, AssetLibrary& assets,
     for (entt::entity e : m_ExtraSelection) source.push_back(e);
 
     const std::string fragment = SceneSerializer::SaveEntitiesToString(world, source);
-    if (fragment.empty()) { Log::Warn("Duplicate Array failed: selection could not be copied."); return; }
+    if (fragment.empty()) {
+        Log::Warn("Duplicate Array failed: selection could not be copied.");
+        EditorSound::Play(EditorSound::Event::Blocked);
+        return;
+    }
 
     PushUndo(world, "Duplicate Array");
 
@@ -1593,6 +1599,7 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
                         if (anyFailed) {
                             Log::Warn("Can't parent that: level geometry has a collider that needs world-space "
                                       "coordinates, or the target is already a child of the dragged object.");
+                            EditorSound::Play(EditorSound::Event::Blocked);
                         }
                     } else {
                         ReorderHierarchySiblings(world, moving, entity, zone > 0);
@@ -2225,8 +2232,10 @@ void EditorLayer::ReorderHierarchySiblings(World& world, const std::vector<entt:
     }
 
     if (recordUndo) CommitStagedUndo(world, "Reorder");
-    if (anyFailed)
+    if (anyFailed) {
         Log::Warn("Some rows couldn't be moved there (an object can't become a child of its own descendant).");
+        EditorSound::Play(EditorSound::Event::Blocked);
+    }
 }
 
 entt::entity EditorLayer::InstantiateAssetDropInHierarchy(World& world, AssetLibrary& assets,

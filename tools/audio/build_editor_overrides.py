@@ -27,7 +27,8 @@ Level: each override is plain-gained to the measured loudness of the committed C
          window (and a hard-attack thump the other way round); the midpoint halves the worst mismatch on either measure.
 The SoundShelf "clicks" are sine-like tones with a 30-50 ms attack ramp, not transients, so matching their peak to the CC
 ticks' -20 dBFS would make them ~10 dB louder than the 13 ms CC key ticks; matching loudness keeps them at the CC level.
-No limiter, no compression; a gain that would push the sample peak past PEAK_CEIL_DB fails the build instead.
+No limiter, no compression; a gain that would push the true peak past PEAK_CEIL_DB fails the build instead. Edges follow
+the CC build (PRE_ROLL_MS pre-roll under a Hann fade-in, Hann fade-out), so an override never clicks either.
 
 Deterministic: same sources in, bit-identical wavs out.
 """
@@ -50,7 +51,7 @@ DEFAULT_SRC = B.DEFAULT_SRC
 DEFAULT_OUT = os.path.join(REPO, "project", "assets", "Audio", "EditorUI")
 DEFAULT_CC = os.path.join(REPO, "resources", "EditorSounds")
 DEFAULT_BLENDER = r"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe"
-PEAK_CEIL_DB = -6.0
+PEAK_CEIL_DB = B.PEAK_CEIL_DB   # the CC set's -1 dBTP master ceiling (true peak)
 
 SS = "SoundShelf Studio SFX"
 TSS = os.path.join("UX Desktop SFX", "Menu Sounds")
@@ -186,10 +187,11 @@ def to_mono(x):
 
 def render(x, sr, e, pct):
     on = B.onset(x, e["frac"])
-    a = max(0, on - int(0.0001 * sr))                        # 0.1 ms pre-roll
+    a = max(0, on - int(round(B.PRE_ROLL_MS / 1000 * sr)))   # the CC build's pre-roll: the fade-in runs over it
     st = 12 * math.log2(1 + pct / 100.0)
     need = int(math.ceil(e["length_ms"] / 1000 * sr * 2 ** (st / 12))) + 64
-    seg = B.fade(x[a:a + need], int(e["fade_in_ms"] / 1000 * sr), 0)
+    fade_in_ms = max(e["fade_in_ms"], B.MIN_FADE_IN_MS[e["tier"]])
+    seg = B.fade(x[a:a + need], (on - a) + int(round(fade_in_ms / 1000 * sr)), 0)
     y = B.resample(seg, sr, st)
     n = int(round(e["length_ms"] / 1000 * SR))
     y = np.concatenate([y, np.zeros(max(0, n - len(y)))])[:n]
@@ -232,12 +234,13 @@ def check(q, tier, fn):
     i16 = np.round(q * 32768.0)
     r = dict(ms=len(q) * 1000.0 / SR, peak=B.peak_db(q), lead=B.lead_ms(q), dc=float(np.mean(q)),
              clip=int(np.sum(np.abs(i16) >= 32767)), m=B.lufs_m_max(q), s=B.lufs_m_max(q, 0.1, 0.025), cen=B.centroid_hz(q),
-             first=float(abs(q[0])), tail=float(np.abs(q[-int(0.002 * SR):]).max()))
+             first=float(abs(q[0])), tail=float(np.abs(q[-int(0.002 * SR):]).max()), tp=B.true_peak_db(q))
     assert r["ms"] < MAX_MS[tier], f"{fn}: {r['ms']:.0f} ms over the {tier} limit"
-    assert r["lead"] < 1.0, f"{fn}: transient {r['lead']:.2f} ms in"
-    assert r["clip"] == 0 and r["peak"] <= PEAK_CEIL_DB, f"{fn}: peak {r['peak']:.1f} dBFS"
+    assert r["lead"] < B.PRE_ROLL_MS + 1.0, f"{fn}: transient {r['lead']:.2f} ms in"
+    assert r["first"] < B.EDGE_HEAD, f"{fn}: starts at {r['first']:.4f} (a click)"
+    assert r["clip"] == 0 and r["tp"] <= PEAK_CEIL_DB + 0.1, f"{fn}: true peak {r['tp']:.1f} dBTP"
     assert abs(r["dc"]) < 1e-4, f"{fn}: DC {r['dc']:.2e}"
-    assert r["tail"] < 10 ** (-60 / 20), f"{fn}: last 2 ms not faded ({B.peak_db(np.array([r['tail']])):.0f} dBFS)"
+    assert abs(float(q[-1])) < B.EDGE_TAIL and r["tail"] < 10 ** (-45 / 20), f"{fn}: last 2 ms not faded ({B.peak_db(np.array([r['tail']])):.0f} dBFS)"
     return r
 
 

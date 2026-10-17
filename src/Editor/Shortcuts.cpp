@@ -1,5 +1,7 @@
 #include "Shortcuts.h"
 
+#include "EditorPanels.h"
+#include "EditorSound.h"
 #include "Log.h"
 #include "ProjectPaths.h"
 #include "UserPaths.h"
@@ -8,6 +10,7 @@
 
 #include <json.hpp>
 #include <GLFW/glfw3.h>
+#include <imgui_internal.h> // GImGui->NavWindow: ShortcutInvalid only over the main panels
 
 #include <algorithm>
 #include <filesystem>
@@ -287,6 +290,8 @@ void BuildDefaultTable() {
     // #141 — were hard-coded in main.cpp, invisible to rebinding and conflict detection.
     Register("physics.overlay",   "Toggle Physics Debug Overlay", Ctx_App, K(ImGuiKey_F5));
     Register("physics.panel",     "Toggle Physics Debug Panel",   Ctx_App, K(ImGuiKey_F6));
+    // F12: the Game view to <project>/screenshots (main.cpp). App-level, so it works in Play with the game holding the keys.
+    Register("view.screenshot",   "Screenshot Game View",         Ctx_App, K(ImGuiKey_F12));
 }
 
 // --- key <-> name (small, covers everything the table + json can hold) --------------------
@@ -462,6 +467,44 @@ void Save() {
         Log::Warn(std::string("Shortcuts: could not write '") + Path() + "'");
 }
 
+namespace {
+// ShortcutInvalid: Ctrl or Alt (not both: that is AltGr on many layouts) + a letter or digit that no shortcut took this
+// frame. Deliberately narrow, since a wrong "nothing here" is worse than a missing one: only with a main panel focused
+// (the Script IDE, the Animator and floating windows have their own hard-wired keys), no mouse button or widget held, one
+// key down, and never a chord bound to anything in any context (Ctrl+R outside the Asset Browser is still "something").
+void PlayIfInvalidChord(const ImGuiIO& io) {
+    if (io.KeyCtrl == io.KeyAlt || io.KeySuper) return;
+    if (ImGui::IsAnyMouseDown() || ImGui::IsAnyItemActive()) return;
+    ImGuiWindow* nav = GImGui->NavWindow ? GImGui->NavWindow->RootWindow : nullptr;
+    if (nav) {
+        static const char* const kPanels[] = {EditorPanels::Scene, EditorPanels::Game, EditorPanels::Hierarchy,
+            EditorPanels::Inspector, EditorPanels::Assets, EditorPanels::Console, EditorPanels::GlassHierarchy,
+            EditorPanels::GlassInspector, EditorPanels::GlassAssets, "##DockHost", "##Toolbar"};
+        bool known = false;
+        for (const char* name : kPanels) known |= nav == ImGui::FindWindowByName(name);
+        if (!known) return;
+    }
+    ImGuiKey pressed = ImGuiKey_None;
+    auto scan = [&](int first, int last) {
+        for (int k = first; k <= last; ++k) {
+            if (!ImGui::IsKeyPressed((ImGuiKey)k, false)) continue;
+            if (pressed != ImGuiKey_None) return false; // two at once: a roll, not a chord
+            pressed = (ImGuiKey)k;
+        }
+        return true;
+    };
+    if (!scan(ImGuiKey_A, ImGuiKey_Z) || !scan(ImGuiKey_0, ImGuiKey_9) || pressed == ImGuiKey_None) return;
+    if (io.KeyCtrl && io.KeyShift && pressed == ImGuiKey_Z) return; // the hard-wired second Redo (EditorLayer)
+    if (io.KeyAlt && pressed >= ImGuiKey_0 && pressed <= ImGuiKey_9) return; // vFavorites' Alt overlay pages by digit
+    for (const auto& s : g_Table) {
+        const Chord& c = s.Current;
+        if ((c.Key == pressed || DigitSibling(c.Key) == pressed) && ModsMatch(io, c.Ctrl, c.Shift, c.Alt, c.Super)) return;
+        if (c.HasPrefix() && c.PrefixKey == pressed && ModsMatch(io, c.PrefixCtrl, c.PrefixShift, c.PrefixAlt, false)) return;
+    }
+    EditorSound::Play(EditorSound::Event::ShortcutInvalid);
+}
+} // namespace
+
 void BeginFrame(std::uint32_t contextMask) {
     ++g_Frame;
     g_ContextMask = contextMask;
@@ -507,6 +550,8 @@ void BeginFrame(std::uint32_t contextMask) {
             }
         }
     }
+    // contextMask != 0 here: the keyboard is the shortcuts' (no text field, no game input, no popup).
+    if (!anyFired && !g_PrefixActive) PlayIfInvalidChord(io);
 }
 
 bool Triggered(const char* id) {

@@ -298,14 +298,18 @@ public:
     // SelectionHistoryBack/Forward for object selection. NavigateAssetFolder is the one entry
     // point every real "go to this folder" action (tree click, breadcrumb segment, Up, double-
     // clicking a folder tile, the folder-navigation keyboard shortcuts) should call, so Back/
-    // Forward has a consistent trail to walk; a no-op when already there.
-    void NavigateAssetFolder(const std::string& folder) {
+    // Forward has a consistent trail to walk; a no-op when already there. `sound` false for
+    // housekeeping moves the user didn't make.
+    void NavigateAssetFolder(const std::string& folder, bool sound = true) {
         if (folder == m_CurrentAssetFolder) return;
         m_AssetFolderHistory.resize(m_AssetFolderHistoryPos + 1); // drop any stale forward branch
         m_AssetFolderHistory.push_back(folder);
         m_AssetFolderHistoryPos = (int)m_AssetFolderHistory.size() - 1;
         m_CurrentAssetFolder = folder;
+        if (sound) PlayAssetFolderSound(false);
     }
+    // FolderEnter, or FolderBack for a Back/Forward step (EditorLayer_AssetBrowser.cpp).
+    void PlayAssetFolderSound(bool history) const;
     // Phase 6 item 4 (API v27) — the Console's click-to-navigate. Same "jump the Asset Browser
     // to this reference" move as the Inspector's AssetRef ping button (EditorLayer_Inspector.cpp),
     // generalised to a path that isn't necessarily a registered AssetLibrary entry: also resolves
@@ -323,10 +327,12 @@ public:
     void AssetFolderHistoryBack() {
         if (!CanAssetFolderHistoryBack()) return;
         m_CurrentAssetFolder = m_AssetFolderHistory[--m_AssetFolderHistoryPos];
+        PlayAssetFolderSound(true);
     }
     void AssetFolderHistoryForward() {
         if (!CanAssetFolderHistoryForward()) return;
         m_CurrentAssetFolder = m_AssetFolderHistory[++m_AssetFolderHistoryPos];
+        PlayAssetFolderSound(true);
     }
     bool CanAssetFolderHistoryBack() const    { return m_AssetFolderHistoryPos > 0; }
     bool CanAssetFolderHistoryForward() const { return m_AssetFolderHistoryPos + 1 < (int)m_AssetFolderHistory.size(); }
@@ -1635,6 +1641,9 @@ private:
     // Starts with one entry (the initial "" root) so History[HistoryPos] is always valid.
     std::vector<std::string> m_AssetFolderHistory{std::string()};
     int m_AssetFolderHistoryPos = 0;
+    // SearchEmpty's edge (AssetGridFrameBegin): last frame's search text and whether it found anything.
+    std::string m_SearchSoundPrevFilter;
+    bool m_SearchSoundPrevHadResults = true;
 
     // Rebuilt once per frame by AssetGridFrameBegin; read by DrawAssetCell and the shift/ctrl
     // multi-select (m_AssetSelectionAnchorIndex indexes into this). Never mutated between
@@ -2317,6 +2326,8 @@ private:
     ImGuiID m_RemovingSection = 0;
     double m_RemovingStart = 0.0;
     int m_RemovingSeenFrame = -1;
+    // The frame a faded removal landed: its "Remove X" PushUndo stays quiet (the sound played when the fade began).
+    int m_QuietRemoveSoundFrame = -1;
     ImGuiID m_CurSectionId = 0;
     bool m_CurSectionMeasure = false;  // fully open and still: record its body height
     bool m_CurSectionAlpha = false;    // a fade alpha was pushed for the body

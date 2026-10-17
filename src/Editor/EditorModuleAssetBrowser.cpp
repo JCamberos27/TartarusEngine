@@ -631,13 +631,19 @@ void Draw(const EditorModuleHostAPI& host) {
         const bool canUp = !curFolder.empty();
 
         ImGui::BeginDisabled(!canBack);
-        if (ActionButton(host, ICON_FA_ARROW_LEFT, "Back") && host.AssetFolderHistoryBack)
-            host.AssetFolderHistoryBack();
+        { // the history step plays FolderBack itself
+            EditorSoundEvents::ScopedClickSilence quiet;
+            if (ActionButton(host, ICON_FA_ARROW_LEFT, "Back") && host.AssetFolderHistoryBack)
+                host.AssetFolderHistoryBack();
+        }
         ImGui::EndDisabled();
         ImGui::SameLine(0.0f, EditorTheme::Px(4.0f));
         ImGui::BeginDisabled(!canForward);
-        if (ActionButton(host, ICON_FA_ARROW_RIGHT, "Forward") && host.AssetFolderHistoryForward)
-            host.AssetFolderHistoryForward();
+        {
+            EditorSoundEvents::ScopedClickSilence quiet;
+            if (ActionButton(host, ICON_FA_ARROW_RIGHT, "Forward") && host.AssetFolderHistoryForward)
+                host.AssetFolderHistoryForward();
+        }
         ImGui::EndDisabled();
         ImGui::SameLine(0.0f, EditorTheme::Px(4.0f));
         ImGui::BeginDisabled(!canUp);

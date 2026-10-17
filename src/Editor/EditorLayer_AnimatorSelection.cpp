@@ -159,7 +159,14 @@ void DrawSelectionPanel(AnimCtx& cx) {
         }
         row("Default");
         if (si == L.DefaultStateIndex()) ImGui::TextDisabled(ICON_FA_STAR "  Layer default");
-        else if (ActionButton("Set as Default", "Make this the state the layer starts in")) { L.DefaultState = s.Name; changed = true; }
+        else {
+            EditorSoundEvents::ScopedClickSilence quiet; // DefaultState instead of the click
+            if (ActionButton("Set as Default", "Make this the state the layer starts in")) {
+                L.DefaultState = s.Name;
+                EditorSound::Play(EditorSound::Event::DefaultState, EditorSound::LastItemScreenX());
+                changed = true;
+            }
+        }
         row("Speed");
         ImGui::SetNextItemWidth(-FLT_MIN);
         ImGui::DragFloat("##sspeed", &s.Speed, 0.01f, 0.0f, 10.0f, "x%.2f");
@@ -680,6 +687,7 @@ void DrawSelectionPanel(AnimCtx& cx) {
             each([&](AC::State& st) { st.Tags.erase(std::remove(st.Tags.begin(), st.Tags.end(), std::string(s_tag)), st.Tags.end()); });
         ImGui::EndDisabled();
         ImGui::Spacing();
+        EditorSoundEvents::ScopedClickSilence quiet; // DeleteStates plays StateDelete
         if (ActionButton(ICON_FA_TRASH " Delete", "Delete the selected states and their transitions")) DeleteStates(cx, L, W.SelStates);
     } else if (W.SelTransition >= 0 && W.SelTransition < (int)L.Transitions.size()) {
         AC::Transition& t = L.Transitions[W.SelTransition];
@@ -868,8 +876,10 @@ void DrawSelectionPanel(AnimCtx& cx) {
             ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  %s",
                                "Never fires: add a condition or an exit time.");
         ImGui::Spacing();
+        EditorSoundEvents::ScopedClickSilence quiet; // TransitionBreak instead of the click
         if (ActionButton(ICON_FA_TRASH " Delete Transition", "Remove this transition")) {
             L.Transitions.erase(L.Transitions.begin() + W.SelTransition);
+            EditorSound::Play(EditorSound::Event::TransitionBreak, EditorSound::LastItemScreenX());
             W.ClearSelection();
             changed = true;
         }
@@ -884,7 +894,11 @@ void DrawSelectionPanel(AnimCtx& cx) {
                 ImGui::SetNextItemWidth(-FLT_MIN);
                 if (ImGui::BeginCombo("##edef", L.DefaultStateIndex() >= 0 ? L.States[L.DefaultStateIndex()].Name.c_str() : "(none)")) {
                     for (const auto& s : L.States)
-                        if (ImGui::Selectable(s.Name.c_str(), s.Name == L.DefaultState)) { L.DefaultState = s.Name; changed = true; }
+                        if (ImGui::Selectable(s.Name.c_str(), s.Name == L.DefaultState) && s.Name != L.DefaultState) {
+                            L.DefaultState = s.Name;
+                            EditorSound::Play(EditorSound::Event::DefaultState);
+                            changed = true;
+                        }
                     ImGui::EndCombo();
                 }
                 break;

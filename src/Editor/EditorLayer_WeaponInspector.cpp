@@ -13,6 +13,7 @@
 #include "EditorPropertyRows.h"
 #include "EditorUIHelpers.h"
 #include "EditorUIPrimitives.h"
+#include "EditorSound.h"
 #include "AnimatorController.h"
 #include "AssetLibrary.h"
 #include "CurveEditor.h"
@@ -620,7 +621,13 @@ void DrawSourceSway(PropertyRows& r, WeaponSwaySettings& w, const WeaponContext&
         if (ImGui::Combo("##space",&space,"Bone Space\0Parent Bone Space\0Component Space\0World Space\0")) {
             v.Space=static_cast<SwaySpace>(space); r.MarkChanged();
         }
-        if (ActionButton("Use Shooter Preset","Restore the exact preset from SwayModifierSettings.cs.")) {
+        bool usePreset;
+        {
+            EditorSoundEvents::ScopedClickSilence quiet; // PresetApply instead of the click
+            usePreset=ActionButton("Use Shooter Preset","Restore the exact preset from SwayModifierSettings.cs.");
+        }
+        if (usePreset) {
+            EditorSound::Play(EditorSound::Event::PresetApply,EditorSound::LastItemScreenX());
             v=aim?SwaySpringSettings::ShooterAimPreset():SwaySpringSettings::ShooterMovePreset(); r.MarkChanged();
         }
         ImGui::PopID(); ImGui::TreePop();
@@ -827,8 +834,14 @@ void DrawIK(PropertyRows& r, WeaponIKSettings& k, WeaponContext& ctx) {
     r.Vec3("Right Rotation", k.RightHandRotation, 0.1f, "%.2f", "Degrees (pitch, yaw, roll) the right hand turns on the gun.", "PYR");
     r.Vec3("Left Position", k.LeftHandPosition, 0.0005f, "%.4f", "Metres the left hand moves on the gun (x right, y up, z forward).");
     r.Vec3("Left Rotation", k.LeftHandRotation, 0.1f, "%.2f", "Degrees (pitch, yaw, roll) the left hand turns on the gun.", "PYR");
-    if (ActionButton(ICON_FA_ROTATE_LEFT "  Reset Hand Offsets", "Set both hands' position and rotation offsets back to zero (as authored)", false,
-                     ImVec2(-FLT_MIN, 0.0f))) {
+    bool resetHands;
+    {
+        EditorSoundEvents::ScopedClickSilence quiet; // ResetDefault instead of the click
+        resetHands = ActionButton(ICON_FA_ROTATE_LEFT "  Reset Hand Offsets", "Set both hands' position and rotation offsets back to zero (as authored)", false,
+                                  ImVec2(-FLT_MIN, 0.0f));
+    }
+    if (resetHands) {
+        EditorSound::Play(EditorSound::Event::ResetDefault);
         k.RightHandPosition = k.RightHandRotation = k.LeftHandPosition = k.LeftHandRotation = glm::vec3(0.0f);
         r.MarkChanged();
     }
@@ -993,15 +1006,21 @@ void EditorLayer::DrawRecoilAssetEditor(const std::string& path) {
     if (EditorUIPrimitives::SecondaryButton("Redo")) m_RequestGlobalRedo=true;
     ImGui::EndDisabled();
     ImGui::SameLine();
-    if (EditorUIPrimitives::SecondaryButton("Duplicate")) {
+    bool duplicate;
+    {
+        EditorSoundEvents::ScopedClickSilence quiet; // Duplicate / Blocked instead of the click
+        duplicate = EditorUIPrimitives::SecondaryButton("Duplicate");
+    }
+    if (duplicate) {
         const auto base = fs::u8path(path);
         auto target = base.parent_path() / (base.stem().u8string() + " Copy.recoil");
         for (int n = 1; fs::exists(target, ec); ++n)
             target = base.parent_path() / (base.stem().u8string() + " Copy " + std::to_string(n) + ".recoil");
         if (cache.Asset.SaveFile(target.u8string())) {
+            EditorSound::Play(EditorSound::Event::Duplicate);
             AssetDatabase::EnsureGuid(target.u8string());
             InvalidateAnimationListing();
-        } else Log::Error("Could not duplicate recoil profile.");
+        } else { EditorSound::Play(EditorSound::Event::Blocked); Log::Error("Could not duplicate recoil profile."); }
     }
     bool changed = false;
     PropertyRows rows(150.0f * m_UIScale, changed);
@@ -1039,11 +1058,14 @@ void EditorLayer::DrawCameraShakeAssetEditor(const std::string& path) {
     ImGui::BeginDisabled(m_UndoStack.empty()); if(EditorUIPrimitives::SecondaryButton("Undo")) m_RequestGlobalUndo=true; ImGui::EndDisabled();
     ImGui::SameLine(); ImGui::BeginDisabled(m_RedoStack.empty()); if(EditorUIPrimitives::SecondaryButton("Redo")) m_RequestGlobalRedo=true; ImGui::EndDisabled();
     ImGui::SameLine();
-    if(EditorUIPrimitives::SecondaryButton("Duplicate")) {
+    bool duplicate;
+    { EditorSoundEvents::ScopedClickSilence quiet; duplicate=EditorUIPrimitives::SecondaryButton("Duplicate"); } // Duplicate / Blocked instead
+    if(duplicate) {
         const auto base=fs::u8path(path);
         auto target=base.parent_path()/(base.stem().u8string()+" Copy.camerashake");
         for(int n=1;fs::exists(target,ec);++n) target=base.parent_path()/(base.stem().u8string()+" Copy "+std::to_string(n)+".camerashake");
-        if(cache.Asset.SaveFile(target.u8string())) { AssetDatabase::EnsureGuid(target.u8string()); InvalidateAnimationListing(); }
+        if(cache.Asset.SaveFile(target.u8string())) { EditorSound::Play(EditorSound::Event::Duplicate); AssetDatabase::EnsureGuid(target.u8string()); InvalidateAnimationListing(); }
+        else EditorSound::Play(EditorSound::Event::Blocked);
     }
     bool changed=false;
     PropertyRows r(150*m_UIScale,changed);
@@ -1484,14 +1506,22 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
                 changed = true;
             } else Log::Error(why);
         }
-        if (EditorUIPrimitives::SecondaryButton(s.RecoilProfile.empty() ? "Extract Recoil Asset" : "Duplicate Recoil Asset")) {
+        const bool extracting = s.RecoilProfile.empty();
+        bool makeRecoil;
+        {
+            EditorSoundEvents::ScopedClickSilence quiet; // Create / Duplicate / Blocked instead of the click
+            makeRecoil = EditorUIPrimitives::SecondaryButton(extracting ? "Extract Recoil Asset" : "Duplicate Recoil Asset");
+        }
+        if (makeRecoil) {
             const auto base = fs::u8path(path).parent_path() / (fs::u8path(path).stem().u8string() + ".recoil");
             auto target = base;
             for (int n = 1; fs::exists(target, ec); ++n)
                 target = base.parent_path() / (base.stem().u8string() + " " + std::to_string(n) + ".recoil");
             RecoilAsset asset;
             asset.Data = s.Procedural.Recoil;
-            if (asset.SaveFile(target.u8string())) {
+            const bool saved = asset.SaveFile(target.u8string());
+            EditorSound::Play(!saved ? EditorSound::Event::Blocked : extracting ? EditorSound::Event::Create : EditorSound::Event::Duplicate);
+            if (saved) {
                 AssetDatabase::EnsureGuid(target.u8string());
                 s.RecoilProfile = ProjectPaths::Relativize(target.u8string());
                 s.RecoilProfileGuid = AssetDatabase::RefGuid(s.RecoilProfile);
@@ -1556,11 +1586,15 @@ void EditorLayer::DrawWeaponDefinitionEditor(const std::string& path) {
                 s.CameraShake=loaded; changed=true;
             } else Log::Error(why);
         }
-        if(EditorUIPrimitives::SecondaryButton("Create Firing Shake")) {
+        bool createShake;
+        { EditorSoundEvents::ScopedClickSilence quiet; createShake=EditorUIPrimitives::SecondaryButton("Create Firing Shake"); } // Create / Blocked instead
+        if(createShake) {
             const auto base=fs::u8path(path).parent_path()/(fs::u8path(path).stem().u8string()+".camerashake");
             auto target=base;
             for(int n=1;fs::exists(target,ec);++n) target=base.parent_path()/(base.stem().u8string()+" "+std::to_string(n)+".camerashake");
-            if(CameraShakeAsset{}.SaveFile(target.u8string())) {
+            const bool saved=CameraShakeAsset{}.SaveFile(target.u8string());
+            EditorSound::Play(saved?EditorSound::Event::Create:EditorSound::Event::Blocked);
+            if(saved) {
                 AssetDatabase::EnsureGuid(target.u8string());
                 s.CameraShakeProfile=ProjectPaths::Relativize(target.u8string());
                 s.CameraShakeProfileGuid=AssetDatabase::RefGuid(s.CameraShakeProfile);
