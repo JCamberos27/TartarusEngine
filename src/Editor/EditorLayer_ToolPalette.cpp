@@ -73,7 +73,10 @@ void EditorLayer::DrawToolPalette(World& world, Camera& editorCamera) {
             railX = ImGui::GetItemRectMin().x;
         };
 
+        // Tools, space and snap play their own sound (EditorSound::ToolFrame) rather than a click.
+        int& quiet = EditorSoundEvents::SuppressDepth();
         const bool handTool = m_HandTool;
+        ++quiet;
         if (ActionButton(EDITOR_ICON_HAND_TOOL, "Hand — drag to pan the view (Q)", handTool, ImVec2(btn, btn)))
             SetHandToolActive(!handTool);
         noteActive(handTool);
@@ -97,6 +100,7 @@ void EditorLayer::DrawToolPalette(World& world, Camera& editorCamera) {
                 "Transform — move + rotate + scale in one gizmo (Y)",
                 !handTool && gizmoOp == 4, ImVec2(btn, btn)))
             SetGizmoOpIndex(4);
+        --quiet;
         noteActive(!handTool && gizmoOp == 4);
 
         if (activeY >= 0.0f) {
@@ -115,10 +119,12 @@ void EditorLayer::DrawToolPalette(World& world, Camera& editorCamera) {
         ImGui::Separator();
 
         const bool measureTool = MeasureToolActive();
+        ++quiet;
         if (ActionButton(EDITOR_ICON_MEASURE,
                 "Measure — click to chain measurement points; right-click clears (M)",
                 measureTool, ImVec2(btn, btn)))
             SetMeasureToolActive(!measureTool);
+        --quiet;
         if (ActionButton(EDITOR_ICON_DUPLICATE_ARRAY, "Duplicate Array — line/grid of copies of the selection (Ctrl+Shift+D)",
                 false, ImVec2(btn, btn)))
             RequestArrayDuplicateModal();
@@ -126,10 +132,12 @@ void EditorLayer::DrawToolPalette(World& world, Camera& editorCamera) {
         ImGui::Separator();
 
         const bool localSpace = GizmoLocalSpace();
+        ++quiet;
         if (ActionButton(localSpace ? EDITOR_ICON_LOCAL_SPACE : EDITOR_ICON_WORLD_SPACE,
                 localSpace ? "Local space (click for World)" : "World space (click for Local)",
                 false, ImVec2(btn, btn)))
             SetGizmoLocalSpace(!localSpace);
+        --quiet;
 
         const bool pivotCenter = GizmoPivotCenter();
         if (ActionButton(pivotCenter ? EDITOR_ICON_PIVOT_CENTER : EDITOR_ICON_PIVOT_ORIGIN,
@@ -160,9 +168,11 @@ void EditorLayer::DrawToolPalette(World& world, Camera& editorCamera) {
         }
 
         const bool gridSnap = m_GridSnapEnabled;
+        ++quiet;
         if (ActionButton(EDITOR_ICON_SNAP_TO_GRID,
                 "Toggle Snap to Grid (hold Ctrl to invert while dragging)", gridSnap, ImVec2(btn, btn)))
             m_GridSnapEnabled = !gridSnap;
+        --quiet;
 
         {
             const bool canSnap = CanSnapSelectionToGround(world);

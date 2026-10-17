@@ -2,13 +2,16 @@
 
 #include "../Audio/AudioEngine.h"
 #include "../Editor/EditorSound.h"
+#include "../Core/AppAudioMuter.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <set>
 #include <string>
 #include <vector>
@@ -314,6 +317,71 @@ void TestEditorSoundPremiumSet() {
     fs::remove_all(base, ec);
 }
 
+// Every event has a built-in file in git, and none can clip the editor's output at the default level (no limiter on it).
+void TestEditorSoundBuiltInSetComplete() {
+    namespace fs = std::filesystem;
+    const std::string dir = (fs::u8path(TARTARUS_SOURCE_DIR) / "resources" / "EditorSounds").u8string();
+    const float master = EditorSound::Settings{}.Master;
+    CHECK(std::fabs(master - 0.44f) < 1e-6f); // 25% over the first default (0.35)
+    float worstDb = -1000.0f;
+    for (int i = 0; i < EditorSoundEvents::kEventCount; ++i) {
+        const auto files = EditorSound::FindVariants(dir, (Event)i);
+        CHECK(!files.empty());
+        for (const std::string& f : files) {
+            std::ifstream in(fs::u8path(f), std::ios::binary);
+            std::vector<char> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+            int peak = 0;
+            for (size_t p = 12; p + 8 <= bytes.size();) { // walk the RIFF chunks to "data"
+                std::uint32_t len = 0;
+                std::memcpy(&len, &bytes[p + 4], 4);
+                if (std::memcmp(&bytes[p], "data", 4) == 0) {
+                    for (size_t s = p + 8; s + 1 < std::min(bytes.size(), p + 8 + len); s += 2) {
+                        std::int16_t v;
+                        std::memcpy(&v, &bytes[s], 2);
+                        peak = std::max(peak, std::abs((int)v));
+                    }
+                    break;
+                }
+                p += 8 + len + (len & 1);
+            }
+            CHECK(peak > 0);
+            const float db = 20.0f * std::log10(std::max(peak, 1) / 32768.0f) + EditorSound::Info((Event)i).GainDb;
+            worstDb = std::max(worstDb, db);
+        }
+    }
+    CHECK(worstDb + 20.0f * std::log10(master) < -6.0f); // headroom even at full category volume
+}
+
+// The action sounds that ride on an undo step's label.
+void TestEditorSoundUndoLabels() {
+    CHECK(EditorSound::UndoLabelEvent("Create Cube") == Event::Create);
+    CHECK(EditorSound::UndoLabelEvent("Place Prefab Instance") == Event::Create);
+    CHECK(EditorSound::UndoLabelEvent("Add Rigidbody") == Event::ComponentAdd);
+    CHECK(EditorSound::UndoLabelEvent("Remove Collider") == Event::ComponentRemove);
+    CHECK(EditorSound::UndoLabelEvent("Paste Component Values") == Event::Paste);
+    CHECK(EditorSound::UndoLabelEvent("Apply to Prefab") == Event::PrefabApply);
+    CHECK(EditorSound::UndoLabelEvent("Revert to Prefab") == Event::PrefabRevert);
+    CHECK(EditorSound::UndoLabelEvent("Paste") == Event::Count);  // the entity Paste plays its own, once it worked
+    CHECK(EditorSound::UndoLabelEvent("Rename") == Event::Count); // the Inspector pushes it when the field is clicked into
+    CHECK(EditorSound::UndoLabelEvent("Move") == Event::Count);
+    CHECK(EditorSound::UndoLabelEvent("Delete") == Event::Count);
+}
+
+// Which apps the muter matches, and the Preferences field's list.
+void TestAppAudioMuterNames() {
+    const std::vector<std::string> names{"Mechvibes.exe"};
+    CHECK(AppAudioMuter::NameMatches("C:\\Users\\x\\AppData\\Local\\Programs\\Mechvibes\\Mechvibes.exe", names));
+    CHECK(AppAudioMuter::NameMatches("D:/apps/MECHVIBES.EXE", names));
+    CHECK(!AppAudioMuter::NameMatches("C:\\Windows\\explorer.exe", names));
+    CHECK(!AppAudioMuter::NameMatches("C:\\x\\NotMechvibes.exe", names));
+    CHECK(!AppAudioMuter::NameMatches("", names));
+    CHECK(AppAudioMuter::NameMatches("C:\\x\\mechvibes.exe", {"Mechvibes"})); // .exe optional
+    const auto parsed = AppAudioMuter::ParseNameList(" Mechvibes.exe, klack.exe;;Mechvibes.exe , ");
+    CHECK(parsed.size() == 2 && parsed[0] == "Mechvibes.exe" && parsed[1] == "klack.exe");
+    CHECK(AppAudioMuter::JoinNameList(parsed) == "Mechvibes.exe, klack.exe");
+    CHECK(AppAudioMuter::ParseNameList("").empty());
+}
+
 } // namespace
 
 void RegisterEditorSoundTests(UnitTestSupport::TestList& tests) {
@@ -323,5 +391,10 @@ void RegisterEditorSoundTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Editor sounds: sliders, menus, hover and drag & drop read off ImGui's state", TestEditorSoundUiObserver);
     tests.emplace_back("Editor sounds: the transform gizmo's grab, snap ticks and release", TestEditorSoundGizmo);
     tests.emplace_back("Editor sounds: the premium Drive set is opt-in, event by event", TestEditorSoundPremiumSet);
+    tests.emplace_back("Editor sounds: every event has a built-in file, with headroom at the default level",
+                       TestEditorSoundBuiltInSetComplete);
+    tests.emplace_back("Editor sounds: Create, Add / Remove Component, Paste and prefab actions off undo labels",
+                       TestEditorSoundUndoLabels);
+    tests.emplace_back("App audio muter: exe-name matching and the name list", TestAppAudioMuterNames);
     tests.emplace_back("Editor sounds: their own output, outside the game's mix, Mute and pause", TestEditorSoundSeparateOutput);
 }

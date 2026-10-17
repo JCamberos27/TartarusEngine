@@ -731,6 +731,10 @@ void EditorLayer::PushUndo(const World& world, const std::string& label, bool se
                            const std::vector<int>* selectedOrdersOverride) {
     PROFILE_SCOPE("PushUndo");
     if(m_GlobalUndoActive && !m_GlobalUndoApplying && selectionOnly) return;
+    if (!selectionOnly && !m_GlobalUndoApplying) {
+        const EditorSound::Event sound = EditorSound::UndoLabelEvent(label);
+        if (sound != EditorSound::Event::Count) EditorSound::Play(sound);
+    }
     if(!selectionOnly && !m_GlobalUndoApplying && m_AssetsPtr) {
         BeginSceneUndo(world,label);return;
     }
@@ -1259,6 +1263,7 @@ void EditorLayer::OpenScene(World& world, AssetLibrary& assets, const std::strin
     m_Dirty = false;
     m_SavedUndoDepth = 0; // freshly loaded — empty history == on disk
     m_AutoSaveTimer = 0.0f;
+    EditorSound::Play(EditorSound::Event::SceneOpen);
     Log::Info("Opened scene '" + path + "'.");
     EnsureUndoScene(world);
 }
