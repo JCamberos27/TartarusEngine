@@ -22,16 +22,18 @@ struct EventInfo {
     float CooldownMs;     // a second trigger sooner than this is dropped
     float PitchJitter;    // +- fraction (0.03 = 3%)
     bool Centred;         // never panned (notifications, Play mode)
+    bool Unfocused = false; // also plays while the editor is in the background (the "done" chimes); Notifications always do
 };
 const EventInfo& Info(Event e);
 const char* CategoryName(Category c);
 
 struct Settings {
     bool Enabled = true;
-    float Master = 0.44f; // all on, low (the user's call; 25% up from the first 0.35)
+    float Master = 0.70f; // the P6 remaster: the files came up 10 dB and this from 0.44, so the defaults are clearly audible
     bool UsePremium = false; // the paid Drive set where an event has one (opt-in: audition it on the Sound Board first)
-    std::array<bool, EditorSoundEvents::kCategoryCount> CategoryOn{true, true, true, true, true, true, true, true, true};
-    std::array<float, EditorSoundEvents::kCategoryCount> CategoryVolume{1, 1, 1, 1, 1, 1, 1, 1, 1};
+    std::array<bool, EditorSoundEvents::kCategoryCount> CategoryOn{true, true, true, true, true, true,
+                                                                       true, true, true, true, true, true};
+    std::array<float, EditorSoundEvents::kCategoryCount> CategoryVolume{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 };
 
 // The decision half, no audio: whether a trigger plays and how. Deterministic for a given seed (unit-tested).
@@ -129,8 +131,10 @@ bool IsOverride(Event e);           // it plays the Drive's premium set now
 const std::vector<std::string>& BuiltInFiles(Event e);
 const std::vector<std::string>& PremiumFiles(Event e); // empty when the Drive set has none for it (or isn't fetched)
 int PremiumEventCount();
-// Once a frame (host): plays the notification sounds for what was logged since the last call - errors, warnings, hot reloads
-// and imports - with nothing for what was logged before the first call plus a short start-up grace.
+// Once a frame (host): plays the sounds for what was logged since the last call - an error burst (once, re-armed after
+// kErrorQuietMs without a new one; warnings stay silent, the actions that fail play Blocked themselves) and the game module's
+// hot reload - with nothing for what was logged before the first call plus a short start-up grace.
+constexpr double kErrorQuietMs = 2000.0;
 void Update();
 const Settings& Current();
 void SetWindowFocused(bool focused);

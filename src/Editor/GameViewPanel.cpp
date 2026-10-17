@@ -4,6 +4,7 @@
 #include "EditorUIHelpers.h"
 #include "EditorUIPrimitives.h"
 #include "EditorSettings.h"
+#include "EditorSound.h"
 #include <IconsFontAwesome6.h>
 #include <imgui_internal.h> // ImRect, FindWindowByName (the action bar's rect)
 #include <algorithm>
@@ -103,8 +104,12 @@ void GameViewPanel::DrawAspectControl() {
     ImGui::SetNextWindowSizeConstraints(ImVec2(itemW, 0.0f), ImVec2(itemW, 600.0f));
     if (ImGui::BeginPopup("##AspectPopup")) {
         auto row = [&](const ResolutionPreset& preset) {
-            if (ImGui::Selectable(preset.Label.c_str(), preset.Label == m_CurrentPreset.Label))
+            if (ImGui::Selectable(preset.Label.c_str(), preset.Label == m_CurrentPreset.Label)) {
+                // The user's pick only (not SetPreset itself: loading settings and the custom modal's Add go through it too).
+                if (preset.Label != m_CurrentPreset.Label)
+                    EditorSound::Play(EditorSound::Event::ResolutionChange, EditorSound::LastItemScreenX());
                 SetPreset(preset);
+            }
         };
         for (const auto& preset : ResolutionManager::BuiltInPresets()) row(preset);
         for (const auto& preset : m_CustomPresets) row(preset);

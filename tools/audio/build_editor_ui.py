@@ -12,7 +12,8 @@ Sources (the only ones this script reads; both are CC BY-SA, so every output is 
   <SFX>/Ubuntu Yaru Sound Theme/WAV/*.wav    WoodenBeaver / Touch-Remix by madsrh, via Ubuntu Yaru, CC BY-SA 3.0
 An output never mixes the two sets, so each file carries exactly one license.
 
-Output: 48 kHz, 16-bit, mono. Three level tiers:
+Output: 48 kHz, 16-bit, mono. Every file starts and ends at silence (pre-roll + Hann fade-in, Hann fade-out), peaks at most
+-1 dBTP, and is checked against its tier's loudness (check_master). Three level tiers (all LIFT_DB above the first build):
   tick   (clicks, toggles, ticks, < 120 ms, transient at sample 0)  sample peak -20 dBFS (quieter for very frequent ones), but never
          louder than TICK_SHORT_CAP on the 100 ms K-weighted window: a pure-tone tick that rings for 80 ms is heard ~10 dB over
          a 13 ms key tick of the same peak, so the tonal ones come down to the cap
@@ -38,11 +39,20 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.normpath(os.path.join(HERE, "..", "..", "resources", "EditorSounds"))
 DEFAULT_SRC = r"G:\My Drive\Tartarus Assets\Raw\Audio\SFX"
 
-NOTIFY_LUFS = -28.0     # notifications: loudest 400 ms momentary window (LUFS-M max)
-CUE_SHORT = -27.0       # menus / play mode / undo / redo / save / drop: loudest 100 ms K-weighted window
-TICK_SHORT_CAP = -35.0  # ticks: at most this on the 100 ms window, whatever their peak
-TICK_SHORT_MIN = -38.0  # ...and at least this: the shortest, highest ticks (select, tree, hover) read too quiet at their peak
-PEAK_CEIL_DB = -6.0     # no loudness gain past this sample peak
+# P6 remaster: the whole ladder came up 10 dB (it was mastered so low that Jacob had to max every slider to hear it). The
+# relative balance between the tiers - and each recipe's own `peak=` - is unchanged: LIFT_DB is added to all of them.
+LIFT_DB = 10.0
+NOTIFY_LUFS = -28.0 + LIFT_DB     # notifications: loudest 400 ms momentary window (LUFS-M max)
+CUE_SHORT = -27.0 + LIFT_DB       # menus / play mode / undo / redo / save / drop: loudest 100 ms K-weighted window
+TICK_SHORT_CAP = -35.0 + LIFT_DB  # ticks: at most this on the 100 ms window, whatever their peak
+TICK_SHORT_MIN = -36.0 + LIFT_DB  # ...and at least this (2 dB more lift: the ticks are what is heard most, and sat on this floor)
+PEAK_CEIL_DB = -1.0               # no loudness gain past this true peak (4x oversampled), the usual -1 dBTP master ceiling
+LOUDNESS_TOL_DB = 3.0             # every file lands within this of its tier's target, or the build fails
+
+PRE_ROLL_MS = 1.5                 # each layer starts this long before its onset...
+MIN_FADE_IN_MS = {"tick": 1.0, "cue": 2.0, "notify": 2.0}  # ...and fades in over the pre-roll plus at least this: no hard start
+EDGE_HEAD = 0.002                 # |first sample| must stay under this (about -54 dBFS)
+EDGE_TAIL = 0.001                 # ...and |last sample| under this, so nothing starts or stops with a click
 
 SETS = {
     "K": {"dir": os.path.join("KDE Ocean Sound Theme", "WAV"), "license": "CC BY-SA 4.0",
@@ -192,6 +202,17 @@ def peak_db(x):
     return 20 * math.log10(max(float(np.abs(x).max()), 1e-12))
 
 
+def true_peak_db(x, over=4):
+    """Inter-sample peak: the clip upsampled 4x (band-limited FFT, zero padded so nothing wraps), as BS.1770's dBTP."""
+    pad = 2048
+    xp = np.concatenate([np.zeros(pad), np.asarray(x, np.float64), np.zeros(pad)])
+    X = np.fft.rfft(xp)
+    Y = np.zeros(len(xp) * over // 2 + 1, complex)
+    Y[:len(X)] = X
+    y = np.fft.irfft(Y, len(xp) * over) * over
+    return 20 * math.log10(max(float(np.abs(y).max()), 1e-12))
+
+
 def centroid_hz(x):
     p = np.abs(np.fft.rfft(x * np.hanning(len(x)))) ** 2
     f = np.fft.rfftfreq(len(x), 1 / SR)
@@ -212,7 +233,7 @@ def L(src, start_ms=0.0, len_ms=60.0, st=0.0, at_ms=0.0, db=0.0, frac=0.03, fade
 
 
 def tick(layers, length_ms, fade_ms, peak=-20.0, hp=120.0, lp=None, variants=None, phase=1):
-    return dict(tier="tick", layers=layers, length_ms=length_ms, fade_ms=fade_ms, level=peak, hp=hp, lp=lp,
+    return dict(tier="tick", layers=layers, length_ms=length_ms, fade_ms=fade_ms, level=peak + LIFT_DB, hp=hp, lp=lp,
                 variants=variants, phase=phase)
 
 
@@ -318,7 +339,67 @@ EVENTS = {
     "BuildSuccess": tone("notify", [L("K:outcome-success", len_ms=1000, frac=0.01, fade_in_ms=2.0)], 1000, 450, phase=5),
     "BuildFail": tone("notify", [L("K:outcome-failure", len_ms=1000, frac=0.01, fade_in_ms=2.0)], 1000, 450, phase=5),
     "ConsoleClear": tone("cue", [L("Y:trash-empty", len_ms=500, frac=0.01, fade_in_ms=1.0)], 500, 240, phase=5),
-    "AssetImport": tone("cue", [L("K:message-contact-in", len_ms=420, frac=0.01, fade_in_ms=2.0)], 420, 200, phase=5),
+
+    # ===== phase 6
+    # "done" chimes: one family - KDE's outcome-success rise, cut short - tinted per long task so they read as related but
+    # tell apart: import = up a fourth, brighter; shader = up a fifth, short and dry; sync = as is, darkened; module reload =
+    # up an octave, the shortest
+    "AssetImport": tone("cue", [L("K:outcome-success", len_ms=560, st=5.0, frac=0.01)], 520, 240, phase=6),
+    "ShaderReload": tone("cue", [L("K:outcome-success", len_ms=480, st=7.0, frac=0.01)], 440, 160, phase=6),
+    "SyncDone": tone("cue", [L("K:outcome-success", len_ms=560, frac=0.01)], 520, 240, lp=2500.0, phase=6),
+    "ModuleReload": tone("cue", [L("K:outcome-success", len_ms=420, st=12.0, frac=0.01)], 400, 180, phase=6),
+    # assets: folder in = two modifier ticks rising a fourth, back = the mirror; open = KDE's highlight chime; move = KDE's
+    # contact-out glide; reimport = KDE's rotation whirl; an empty search = a low muffled bell; favourite = a high bell ping,
+    # unfavourite = the same a sixth lower and duller
+    "FolderEnter": tick([L(MOD, st=3.0, len_ms=35), L(MOD, st=8.0, len_ms=35, at_ms=28, db=-2.0)], 70, 30, phase=6),
+    "FolderBack": tick([L(MOD, st=8.0, len_ms=35), L(MOD, st=3.0, len_ms=35, at_ms=28, db=-2.0)], 70, 30, phase=6),
+    "AssetOpen": tone("cue", [L("K:message-highlight", len_ms=320, frac=0.01)], 300, 140, phase=6),
+    "AssetMove": tone("cue", [L("K:message-contact-out", len_ms=280, frac=0.2)], 260, 120, phase=6),   # past its soft swell
+    "AssetReimport": tone("cue", [L("K:completion-rotation", len_ms=420, frac=0.01)], 400, 180, phase=6),
+    "SearchEmpty": tone("cue", [L(BELL, len_ms=150, st=-12.0, frac=0.01)], 140, 70, lp=1500.0, phase=6),
+    "FavoriteOn": tick([L(BELL, len_ms=110, st=9.0)], 100, 55, phase=6),
+    "FavoriteOff": tick([L(BELL, len_ms=100, st=0.0)], 95, 50, lp=3000.0, phase=6),
+    # objects: reset = Yaru's trash-empty sweep up a minor third, dulled; randomize = three key ticks tumbling (D, A, F#); equip / unequip =
+    # the volume tick a third up / down
+    "ResetDefault": tone("cue", [L("Y:trash-empty", len_ms=280, st=3.0, frac=0.01)], 260, 120, lp=3000.0, phase=6),
+    "Randomize": tick([L(PRESS, st=2.0, len_ms=25), L(PRESS, st=9.0, len_ms=25, at_ms=28, db=-1.0),
+                       L(PRESS, st=6.0, len_ms=30, at_ms=56, db=-2.0)], 105, 35, variants=V2, phase=6),
+    "Equip": tick([L(VOL, st=4.0, frac=0.2)], 60, 30, phase=6),
+    "Unequip": tick([L(VOL, st=-4.0, frac=0.2)], 65, 30, lp=2500.0, phase=6),
+    # animator: states are the create / delete pair, lighter (shorter, a fifth up); transitions = two key ticks rising a fifth
+    # (link) / falling and dulled (break); default state = a bell a fifth up; layers = the panel pair higher; parameters = two
+    # modifier ticks rising / falling; the live state change = the quietest, highest bell tick
+    "StateAdd": tone("cue", [L("Y:device-added", len_ms=170, st=7.0, frac=0.01)], 160, 70, phase=6),
+    "StateDelete": tone("cue", [L("Y:device-removed", len_ms=170, st=2.0, frac=0.01)], 160, 70, lp=2000.0, phase=6),
+    "TransitionLink": tick([L(PRESS, len_ms=35), L(PRESS, st=7.0, len_ms=35, at_ms=35, db=-1.0)], 90, 35, phase=6),
+    "TransitionBreak": tick([L(PRESS, st=7.0, len_ms=35), L(PRESS, len_ms=35, at_ms=35, db=-1.0)], 90, 35, lp=1500.0,
+                            phase=6),
+    "DefaultState": tone("cue", [L(BELL, len_ms=200, st=7.0, frac=0.01)], 180, 90, phase=6),
+    "LayerAdd": tone("cue", [L("Y:device-added", len_ms=130, st=10.0, frac=0.01)], 120, 55, phase=6),
+    "LayerRemove": tone("cue", [L("Y:device-removed", len_ms=130, st=5.0, frac=0.01)], 120, 55, phase=6),
+    "ParamAdd": tick([L(MOD, st=9.0, len_ms=35), L(MOD, st=14.0, len_ms=35, at_ms=30, db=-2.0)], 75, 30, phase=6),
+    "ParamRemove": tick([L(MOD, st=14.0, len_ms=35), L(MOD, st=9.0, len_ms=35, at_ms=30, db=-2.0)], 75, 30, lp=3000.0,
+                        phase=6),
+    "LiveState": tick([L(BELL, len_ms=60, st=12.0)], 60, 35, lp=4000.0, phase=6),
+    # curves: a key added = the volume tick up a sixth, deleted = down a fifth and dull; tangent mode = one modifier tick;
+    # a preset = Yaru's message chime
+    "KeyAdd": tick([L(VOL, st=9.0, frac=0.2)], 55, 30, phase=6),
+    "KeyDelete": tick([L(VOL, st=-7.0, frac=0.2)], 65, 30, lp=2000.0, phase=6),
+    "TangentMode": tick([L(MOD, len_ms=35)], 45, 25, phase=6),
+    "PresetApply": tone("cue", [L("Y:message", len_ms=320, frac=0.01)], 300, 140, phase=6),
+    # system: blocked = drop-reject's "nuh-uh", shorter; a dead shortcut = one key tick a fifth down, muffled; go to line =
+    # the volume tick an octave up; screenshot = a shutter (a key tick a fifth down, then the modifier tick); resolution = the modifier
+    # tick down a fourth; maximise / restore = the panel pair a fourth lower; cursor lock / release = the volume tick down /
+    # up a fourth (the mouse is taken / given back)
+    "Blocked": tone("cue", [L("Y:dialog-question", len_ms=110, st=-3.0, frac=0.01)], 120, 50, lp=1200.0, phase=6),
+    "ShortcutInvalid": tick([L(PRESS, st=-7.0, len_ms=45)], 60, 30, lp=900.0, phase=6),
+    "GotoLine": tick([L(VOL, st=12.0, frac=0.2)], 55, 30, phase=6),
+    "Screenshot": tick([L(PRESS, st=-7.0, len_ms=30), L(MOD, len_ms=35, at_ms=40, db=-1.0)], 90, 35, phase=6),
+    "ResolutionChange": tick([L(MOD, st=-5.0, len_ms=40)], 50, 28, phase=6),
+    "ViewMaximize": tone("cue", [L("Y:device-added", len_ms=140, st=-2.0, frac=0.01)], 120, 55, phase=6),
+    "ViewRestore": tone("cue", [L("Y:device-removed", len_ms=140, st=-2.0, frac=0.01)], 120, 55, phase=6),
+    "CursorLock": tick([L(VOL, st=-5.0, frac=0.2)], 65, 30, phase=6),
+    "CursorRelease": tick([L(VOL, st=5.0, frac=0.2)], 55, 30, phase=6),
 }
 
 
@@ -333,9 +414,11 @@ def render(src_root, ev, pitch_pct=0.0):
         s = source(src_root, ly["src"])
         x, sr = s["x"], s["sr"]
         on = onset(x, ly["frac"])
-        a = max(0, on + int(round(ly["start_ms"] / 1000 * sr)) - int(0.0001 * sr))   # 0.1 ms pre-roll
-        b = min(len(x), a + int(round(ly["len_ms"] / 1000 * sr)))
-        seg = fade(x[a:b], int(ly["fade_in_ms"] / 1000 * sr), 0)
+        cut = on + int(round(ly["start_ms"] / 1000 * sr))
+        a = max(0, cut - int(round(PRE_ROLL_MS / 1000 * sr)))               # pre-roll: the fade-in runs over it
+        b = min(len(x), cut + int(round(ly["len_ms"] / 1000 * sr)))
+        fade_in_ms = max(ly["fade_in_ms"], MIN_FADE_IN_MS[ev["tier"]])
+        seg = fade(x[a:b], (cut - a) + int(round(fade_in_ms / 1000 * sr)), 0)
         st = ly["st"] + dpitch
         y = resample(seg, sr, st) * 10 ** (ly["db"] / 20)
         at = int(round(ly["at_ms"] / 1000 * SR))
@@ -360,16 +443,17 @@ def level(y, ev):
             return y * 10 ** (g_cap / 20), f"{TICK_SHORT_CAP:.0f} LUFS on the 100 ms window (below its {ev['level']:.0f} dBFS peak target)"
         g_min = TICK_SHORT_MIN - lufs_m_max(y, 0.1, 0.025)
         if g_min > g:
-            g_min = min(g_min, PEAK_CEIL_DB - peak_db(y))
+            g_min = min(g_min, PEAK_CEIL_DB - true_peak_db(y))
             return y * 10 ** (g_min / 20), f"{TICK_SHORT_MIN:.0f} LUFS on the 100 ms window (above its {ev['level']:.0f} dBFS peak target)"
+        g = min(g, PEAK_CEIL_DB - true_peak_db(y))
         return y * 10 ** (g / 20), f"sample peak {ev['level']:.0f} dBFS"
     if ev["tier"] == "notify":
         g, what = ev["level"] - lufs_m_max(y), f"LUFS-M max {ev['level']:.0f}"
     else:
         g, what = ev["level"] - lufs_m_max(y, 0.1, 0.025), f"{ev['level']:.0f} LUFS on the 100 ms window"
-    if peak_db(y) + g > PEAK_CEIL_DB:
-        g = PEAK_CEIL_DB - peak_db(y)
-        what += f" (peak-capped at {PEAK_CEIL_DB:.0f} dBFS)"
+    if true_peak_db(y) + g > PEAK_CEIL_DB:
+        g = PEAK_CEIL_DB - true_peak_db(y)
+        what += f" (true-peak-capped at {PEAK_CEIL_DB:.0f} dBTP)"
     return y * 10 ** (g / 20), what
 
 
@@ -419,14 +503,34 @@ def main():
             if pct:
                 row["edits"] = f"variant {pct:+g} % pitch; " + row["edits"]
             if ev["tier"] == "tick":
-                assert row["ms"] < 120 and row["lead"] < 1.0, f"{fn}: {row['ms']:.0f} ms, lead {row['lead']:.2f} ms"
+                assert row["ms"] < 120 and row["lead"] < PRE_ROLL_MS + 1.0, f"{fn}: {row['ms']:.0f} ms, lead {row['lead']:.2f} ms"
             else:
                 assert row["ms"] < 1200, fn
+            check_master(fn, q, ev, row)
             rows.append(row)
             print(f"{fn:24s} {row['tier']:6s} {row['set']} {row['ms']:5.0f} ms  peak {row['peak']:6.1f} dBFS  "
-                  f"LUFS-M {row['lufs_m']:6.1f}  100ms {row['short']:6.1f}  lead {row['lead']:.2f} ms  cen {row['cen']:5.0f} Hz")
+                  f"TP {row['tp']:5.1f}  LUFS-M {row['lufs_m']:6.1f}  100ms {row['short']:6.1f}  lead {row['lead']:.2f} ms  cen {row['cen']:5.0f} Hz")
     write_license(rows)
     print(f"{len(rows)} files -> {OUT_DIR}")
+
+
+def check_master(fn, q, ev, row):
+    """The mastering rules every written file must meet: click-free edges, -1 dBTP, and its tier's loudness."""
+    head, tail = abs(float(q[0])), abs(float(q[-1]))
+    assert head < EDGE_HEAD, f"{fn}: starts at {head:.4f} (a click)"
+    assert tail < EDGE_TAIL, f"{fn}: ends at {tail:.4f} (a click)"
+    tp = true_peak_db(q)
+    assert tp <= PEAK_CEIL_DB + 0.1, f"{fn}: true peak {tp:.2f} dBTP"
+    if ev["tier"] == "notify":
+        got, lo, hi = row["lufs_m"], ev["level"], ev["level"]
+    elif ev["tier"] == "cue":
+        got, lo, hi = row["short"], ev["level"], ev["level"]
+    else:
+        got, lo, hi = row["short"], TICK_SHORT_MIN, TICK_SHORT_CAP
+    off = lo - got if got < lo else (got - hi if got > hi else 0.0)
+    capped = tp >= PEAK_CEIL_DB - 0.2 and got < lo      # held down by the ceiling: as loud as it can go
+    assert off <= LOUDNESS_TOL_DB or capped, f"{fn}: {got:.1f} LUFS is {off:.1f} dB off its {ev['tier']} target"
+    row["tp"] = tp
 
 
 def write_license(rows):
