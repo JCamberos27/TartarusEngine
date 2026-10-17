@@ -1,5 +1,21 @@
 # Editor UI sounds: premium overrides (paid sets, Drive only)
 
+## Status (built)
+
+`tools/audio/build_editor_overrides.py` builds the premium set into `project/assets/Audio/EditorUI/` (gitignored; listed in
+`project/external_assets.csv`, so `tools/assets/fetch-assets.ps1` brings it from the Drive's `Used` folder). It is **opt-in**:
+Preferences > Sounds > Premium sounds. The Sound Board plays both sets side by side.
+
+Built (14 events): Click (3 variants), ClickConfirm, ClickDestructive, TabSelect, Hover (3), Pause, Resume, Save, MenuOpen,
+MenuClose, DropAccept, NotifyInfo, NotifySuccess, NotifyError.
+
+Dropped after analysis (the built-in sound stays): ClickCancel and Undo (they rise; a step back has to fall), Step (the same
+file as ToggleOn), ToggleOff / SliderGrab / DropReject (65-131 Hz, lost on laptop speakers), ToggleOn / Redo / PlayExit (their
+partner was dropped: one set per pair), DragStart (a fragment of a slow swell), PlayEnter (it falls), NotifyWarning (it buzzes),
+SliderTick / SliderRelease (nothing short enough). The reasons are in the script's DROPPED table.
+
+The table below is the original pick list the build started from.
+
 The `.wav` files in this folder are CC BY-SA and safe to commit (see `LICENSE.md`). The two paid sets below are licensed to the
 project owner only. **Never copy, convert or commit them into this public repository.** An override is a local swap: the editor
 loads the Drive file in place of the committed one when it is present on the machine.

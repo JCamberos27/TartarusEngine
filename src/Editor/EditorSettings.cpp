@@ -135,6 +135,7 @@ void EditorSettings::Load() {
     s.AudioMuted = SafeValue(root, "audioMuted", s.AudioMuted);
     s.EditorSoundsEnabled = SafeValue(root, "editorSoundsEnabled", s.EditorSoundsEnabled);
     s.EditorSoundsVolume = SafeValue(root, "editorSoundsVolume", s.EditorSoundsVolume);
+    s.EditorSoundsPremium = SafeValue(root, "editorSoundsPremium", s.EditorSoundsPremium);
     s.EditorSoundCategoryOn = SafeValue(root, "editorSoundCategoryOn", s.EditorSoundCategoryOn);
     s.EditorSoundCategoryVolume = SafeValue(root, "editorSoundCategoryVolume", s.EditorSoundCategoryVolume);
     s.AssetSearchGlobal = SafeValue(root, "assetSearchGlobal", s.AssetSearchGlobal);
@@ -325,6 +326,7 @@ void EditorSettings::Flush() {
     root["audioMuted"] = Get().AudioMuted;
     root["editorSoundsEnabled"] = Get().EditorSoundsEnabled;
     root["editorSoundsVolume"] = Get().EditorSoundsVolume;
+    root["editorSoundsPremium"] = Get().EditorSoundsPremium;
     if (!Get().EditorSoundCategoryOn.empty()) root["editorSoundCategoryOn"] = Get().EditorSoundCategoryOn;
     if (!Get().EditorSoundCategoryVolume.empty()) root["editorSoundCategoryVolume"] = Get().EditorSoundCategoryVolume;
     root["assetSearchGlobal"] = Get().AssetSearchGlobal;

@@ -29,6 +29,7 @@ const char* CategoryName(Category c);
 struct Settings {
     bool Enabled = true;
     float Master = 0.35f; // all on, low (the user's call)
+    bool UsePremium = false; // the paid Drive set where an event has one (opt-in: audition it on the Sound Board first)
     std::array<bool, EditorSoundEvents::kCategoryCount> CategoryOn{true, true, true, true, true, true, true};
     std::array<float, EditorSoundEvents::kCategoryCount> CategoryVolume{1, 1, 1, 1, 1, 1, 1};
 };
@@ -102,6 +103,16 @@ private:
 };
 void ObserveImGui(); // host, once a frame before ImGui::Render
 
+// The viewport's transform gizmo, which isn't an ImGui item: the slider sounds for its drag. A grab when it engages, a release when
+// it lets go, and between them a tick for each snap step it lands on (snapping) or per stretch of mouse travel (free).
+struct GizmoTracker {
+    static constexpr float kFreeTickPx = 14.0f; // free drags tick half as densely as a slider
+    bool Using = false;
+    float TickAccum = 0.0f, Net = 0.0f;
+    void Step(bool usingNow, bool moved, bool snapped, float mouseDx, float mouseDy, float x01, std::vector<UiSound>& out);
+};
+void GizmoFrame(bool usingNow, bool moved, bool snapped);
+
 // The files of `event` in `dir`: <Name>.wav, else <Name>_1.wav, <Name>_2.wav ... in order.
 std::vector<std::string> FindVariants(const std::string& dir, Event e);
 
@@ -113,8 +124,11 @@ void Apply(const Settings& s);
 Settings FromEditorSettings();      // EditorSettings' saved values over the defaults
 void ToEditorSettings(const Settings& s); // back into EditorSettings (the caller saves)
 // The Sound Board: one variant of an event, now - no cooldown, focus or switch gets in the way (only the master volume).
-bool Audition(Event e, int variant);
-bool IsOverride(Event e);           // its files come from the Drive's premium set
+bool Audition(Event e, int variant, bool premium = false);
+bool IsOverride(Event e);           // it plays the Drive's premium set now
+const std::vector<std::string>& BuiltInFiles(Event e);
+const std::vector<std::string>& PremiumFiles(Event e); // empty when the Drive set has none for it (or isn't fetched)
+int PremiumEventCount();
 // Once a frame (host): plays the notification sounds for what was logged since the last call - errors, warnings, hot reloads
 // and imports - with nothing for what was logged before the first call plus a short start-up grace.
 void Update();

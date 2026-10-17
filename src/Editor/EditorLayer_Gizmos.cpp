@@ -3,6 +3,7 @@
 // framing / look-through navigation they share. Split out of EditorLayer.cpp (#179).
 
 #include "EditorLayer.h"
+#include "EditorSound.h"
 #include "Enhancers/EnhancerCore.h"
 #include "EditorPanels.h"
 #include "EditorLayerInternal.h"
@@ -1953,10 +1954,12 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
                         nativeBoundsMax.x, nativeBoundsMax.y, nativeBoundsMax.z};
     const float* boundsPtr = (m_GizmoOp == GizmoOp::Rect) ? bounds : nullptr;
 
+    const glm::mat4 matrixBeforeDrag = matrix;
     ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(proj), op, gizmoMode,
         glm::value_ptr(matrix), nullptr, snapActive ? snapValues : nullptr, boundsPtr);
     m_GizmoEngaged = ImGuizmo::IsOver() || ImGuizmo::IsUsing();
     m_GizmoUsing = ImGuizmo::IsUsing();
+    EditorSound::GizmoFrame(m_GizmoUsing, matrix != matrixBeforeDrag, snapActive);
 
     bool isUsingNow = ImGuizmo::IsUsing();
     if (isUsingNow && !m_GizmoWasUsing) {
@@ -2704,6 +2707,7 @@ void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
         glm::value_ptr(m_GroupGizmoMatrix), nullptr, snapActive ? snapValues : nullptr);
     m_GizmoEngaged = ImGuizmo::IsOver() || ImGuizmo::IsUsing();
     m_GizmoUsing = ImGuizmo::IsUsing();
+    EditorSound::GizmoFrame(m_GizmoUsing, m_GroupGizmoMatrix != matrixBefore, snapActive);
 
     bool isUsingNow = ImGuizmo::IsUsing();
     if (isUsingNow && !m_GizmoWasUsing) {

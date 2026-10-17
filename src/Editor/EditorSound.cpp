@@ -64,6 +64,7 @@ struct State {
     double LastAlertMs = -1e9;
     int AlertStorm = 0;
     std::array<std::vector<std::string>, kEventCount> Files;
+    std::array<std::vector<std::string>, kEventCount> BuiltIn, Premium; // both sets, loaded; Files is the one in use
     std::array<bool, kEventCount> Override{};
 } s;
 
@@ -146,30 +147,42 @@ std::vector<std::string> FindVariants(const std::string& dir, Event e) {
     return files;
 }
 
+// Which set each event plays: the premium file where the user opted in and the Drive has one, else the built-in.
+void SelectSets() {
+    for (int i = 0; i < kEventCount; ++i) {
+        s.Override[i] = s.Values.UsePremium && !s.Premium[i].empty();
+        s.Files[i] = s.Override[i] ? s.Premium[i] : s.BuiltIn[i];
+        s.Sched.SetVariantCount((Event)i, (int)s.Files[i].size());
+    }
+}
+
 void Init(const std::string& builtInDir, const std::string& overrideDir) {
     s.Sched.Reset();
-    int found = 0, overridden = 0;
-    for (int i = 0; i < kEventCount; ++i) {
-        std::vector<std::string> files = FindVariants(overrideDir, (Event)i);
-        s.Override[i] = !files.empty();
-        if (!files.empty()) ++overridden;
-        else files = FindVariants(builtInDir, (Event)i);
+    auto load = [](std::vector<std::string> files) {
         files.erase(std::remove_if(files.begin(), files.end(), [](const std::string& f) { return !AudioEngine::Load(f); }), files.end());
-        if (!files.empty()) ++found;
-        s.Sched.SetVariantCount((Event)i, (int)files.size());
-        s.Files[i] = std::move(files);
+        return files;
+    };
+    int found = 0, premium = 0;
+    for (int i = 0; i < kEventCount; ++i) {
+        s.BuiltIn[i] = load(FindVariants(builtInDir, (Event)i));
+        s.Premium[i] = load(FindVariants(overrideDir, (Event)i));
+        if (!s.BuiltIn[i].empty() || !s.Premium[i].empty()) ++found;
+        if (!s.Premium[i].empty()) ++premium;
     }
+    SelectSets();
     s.Ready = true;
     ApplyOutputVolume();
     Log::Info("Editor sounds: " + std::to_string(found) + " of " + std::to_string(kEventCount) + " events" +
-              (overridden ? " (" + std::to_string(overridden) + " from the Drive set)" : std::string()) + ".");
+              (premium ? " (" + std::to_string(premium) + " with a premium Drive version)" : std::string()) + ".");
 }
 
 void Shutdown() {
-    for (auto& files : s.Files) {
-        for (const std::string& f : files) AudioEngine::Unload(f);
-        files.clear();
-    }
+    for (auto* set : {&s.BuiltIn, &s.Premium})
+        for (auto& files : *set) {
+            for (const std::string& f : files) AudioEngine::Unload(f);
+            files.clear();
+        }
+    for (auto& files : s.Files) files.clear();
     for (int i = 0; i < kEventCount; ++i) s.Sched.SetVariantCount((Event)i, 0);
     s.Ready = false;
 }
@@ -179,6 +192,7 @@ Settings FromEditorSettings() {
     Settings v;
     v.Enabled = e.EditorSoundsEnabled;
     v.Master = std::clamp(e.EditorSoundsVolume, 0.0f, 1.0f);
+    v.UsePremium = e.EditorSoundsPremium;
     for (int c = 0; c < kCategoryCount; ++c) {
         if (c < (int)e.EditorSoundCategoryOn.size()) v.CategoryOn[c] = e.EditorSoundCategoryOn[c];
         if (c < (int)e.EditorSoundCategoryVolume.size()) v.CategoryVolume[c] = std::clamp(e.EditorSoundCategoryVolume[c], 0.0f, 1.0f);
@@ -190,13 +204,15 @@ void ToEditorSettings(const Settings& v) {
     EditorSettings& e = EditorSettings::Get();
     e.EditorSoundsEnabled = v.Enabled;
     e.EditorSoundsVolume = std::clamp(v.Master, 0.0f, 1.0f);
+    e.EditorSoundsPremium = v.UsePremium;
     e.EditorSoundCategoryOn.assign(v.CategoryOn.begin(), v.CategoryOn.end());
     e.EditorSoundCategoryVolume.assign(v.CategoryVolume.begin(), v.CategoryVolume.end());
 }
 
-bool Audition(Event e, int variant) {
+bool Audition(Event e, int variant, bool premium) {
     if (!s.Ready) return false;
-    const auto& files = s.Files[std::clamp((int)e, 0, kEventCount - 1)];
+    const int i = std::clamp((int)e, 0, kEventCount - 1);
+    const auto& files = premium ? s.Premium[i] : s.BuiltIn[i];
     if (variant < 0 || variant >= (int)files.size()) return false;
     const bool ok = AudioEngine::PlayEditor(files[variant], DbToGain(Info(e).GainDb));
     if (ok) ++s.Played;
@@ -204,6 +220,13 @@ bool Audition(Event e, int variant) {
 }
 
 bool IsOverride(Event e) { return s.Override[std::clamp((int)e, 0, kEventCount - 1)]; }
+const std::vector<std::string>& BuiltInFiles(Event e) { return s.BuiltIn[std::clamp((int)e, 0, kEventCount - 1)]; }
+const std::vector<std::string>& PremiumFiles(Event e) { return s.Premium[std::clamp((int)e, 0, kEventCount - 1)]; }
+int PremiumEventCount() {
+    int n = 0;
+    for (const auto& f : s.Premium) n += f.empty() ? 0 : 1;
+    return n;
+}
 
 void Update() {
     if (!s.Ready) return;
@@ -243,8 +266,10 @@ void Update() {
 }
 
 void Apply(const Settings& v) {
+    const bool setChanged = v.UsePremium != s.Values.UsePremium;
     s.Values = v;
     ApplyOutputVolume();
+    if (setChanged && s.Ready) SelectSets();
 }
 const Settings& Current() { return s.Values; }
 void SetWindowFocused(bool focused) { s.Focused = focused; }
@@ -303,6 +328,42 @@ void UiObserver::Step(const UiFrame& f, std::vector<UiSound>& out) {
     else if (!f.DragActive && p.DragActive) out.push_back({p.DropTargetHovered ? Event::DropAccept : Event::DropReject, f.MouseX01});
 
     m_Prev = f;
+}
+
+void GizmoTracker::Step(bool usingNow, bool moved, bool snapped, float dx, float dy, float x01, std::vector<UiSound>& out) {
+    if (usingNow && !Using) {
+        TickAccum = Net = 0.0f;
+        out.push_back({Event::SliderGrab, x01});
+    } else if (!usingNow && Using) {
+        out.push_back({Event::SliderRelease, x01});
+    } else if (usingNow) {
+        Net += dx - dy;
+        const float pitch = 1.0f + std::clamp(Net / UiObserver::kPitchSpanPx, -1.0f, 1.0f) * UiObserver::kPitchSwing;
+        if (snapped) {
+            if (moved) out.push_back({Event::SliderTick, x01, pitch}); // landed on the next step
+        } else if (moved) {
+            TickAccum += std::fabs(dx) + std::fabs(dy);
+            if (TickAccum >= kFreeTickPx) {
+                TickAccum = std::fmod(TickAccum, kFreeTickPx);
+                out.push_back({Event::SliderTick, x01, pitch});
+            }
+        }
+    }
+    Using = usingNow;
+}
+
+void GizmoFrame(bool usingNow, bool moved, bool snapped) {
+    static GizmoTracker tracker;
+    static std::vector<UiSound> sounds;
+    if (!s.Ready || !ImGui::GetCurrentContext()) return;
+    const ImGuiIO& io = ImGui::GetIO();
+    float x = -1.0f;
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    if (vp && vp->Size.x > 0.0f && ImGui::IsMousePosValid()) x = std::clamp((io.MousePos.x - vp->Pos.x) / vp->Size.x, 0.0f, 1.0f);
+    const bool valid = ImGui::IsMousePosValid() && ImGui::IsMousePosValid(&io.MousePosPrev);
+    sounds.clear();
+    tracker.Step(usingNow, moved, snapped, valid ? io.MouseDelta.x : 0.0f, valid ? io.MouseDelta.y : 0.0f, x, sounds);
+    for (const UiSound& u : sounds) Play(u.E, u.X01, u.Pitch);
 }
 
 void ObserveImGui() {
