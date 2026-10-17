@@ -203,7 +203,11 @@ static bool UpdateEditorCamera(Camera& cam, float dt, bool allowLook, bool gizmo
     bool flySpeedChanged = false;
     auto trimFlySpeed = [&](double notches) {
         float& fs = EditorSettings::Get().SceneCameraFlySpeed;
+        const float prevFlySpeed = fs;
         fs = std::clamp(fs * std::pow(1.15f, (float)notches), 0.5f, 200.0f);
+        // Pitched by speed (0.85 at 0.5 up to 1.15 at 200); silent against the clamp, where nothing changed.
+        if (fs != prevFlySpeed)
+            EditorSound::Play(EditorSound::Event::FlySpeed, -1.0f, 0.85f + 0.3f * std::log(fs / 0.5f) / std::log(400.0f));
         s_FlySpeedDirtySince = glfwGetTime();
         flySpeedChanged = true;
     };
@@ -1640,7 +1644,9 @@ int main(int argc, char** argv) {
         // folder is currently open. `editorUIVisible` is captured by reference since GLFW invokes
         // this from inside PollEvents(), by which point the loop below may have flipped it.
         window.SetDropCallback([&](const std::vector<std::string>& paths) {
-            editor.HandleDroppedFiles(world, assets, editorCamera, editorUIVisible, paths);
+            // Here, not in HandleDroppedFiles (the Asset Library panel calls that too); a refusal plays Blocked there.
+            if (editor.HandleDroppedFiles(world, assets, editorCamera, editorUIVisible, paths) > 0)
+                EditorSound::Play(EditorSound::Event::FilesDropped);
         });
 
         // First-use stalls moved behind the load: the programs/volumes a scene is about to need are
@@ -1710,6 +1716,10 @@ int main(int argc, char** argv) {
         // the user has chosen Don't Save, or Save and the save succeeded, so the next close
         // request goes through.
         bool exitApproved = false;
+        // The EditorStart / EditorExit chimes: a person opening and closing the editor, not a test, a capture or a bench run.
+        const bool editorChimes = !playerMode && !headless && opt.editorShotDir.empty() && !opt.weaponTestMode && !opt.npcTestMode &&
+                                  !opt.perfBenchMode && !opt.stockProbeMode;
+        int startChimeFrames = 0; // counts down from the first presented frame
 
         // --editor-shot: each view gets kEditorShotFrames frames - set up halfway, captured at the end.
         const int kEditorShotFrames = 150;
@@ -1919,12 +1929,14 @@ int main(int argc, char** argv) {
             // textures that changed on disk, like Unity's reimport on focus.
             if (!headless) {
                 const bool focused = glfwGetWindowAttrib(window.Handle(), GLFW_FOCUSED) != 0;
-                if (focused && !wasFocused) {
+                const bool focusRegained = focused && !wasFocused;
+                if (focusRegained) {
                     if (const int n = assets.ReimportChangedOnDisk())
                         Log::Info("Reimported " + std::to_string(n) + " texture(s) changed on disk.");
                 }
                 wasFocused = focused;
                 EditorSound::SetWindowFocused(focused); // in the background only notifications sound
+                if (focusRegained) EditorSound::OnFocusRegained(); // the Digest of what finished while away (it delays itself)
             }
             if (!crashTestInEditor.empty() && frameIndex == 120) {
                 editor.MarkDirtyForCrashTest();
@@ -2246,7 +2258,25 @@ int main(int argc, char** argv) {
                 if (editor.InPrefabMode()) editor.ExitPrefabMode(world, assets); // #176 - saves the prefab, back to the scene
                 // #88 — prompt for ANY unsaved scene, titled or not (Save on an untitled one
                 // routes through Save As).
-                if (exitApproved || (!editor.IsDirty() && !editor.HasUnsavedScripts())) break;
+                if (exitApproved || (!editor.IsDirty() && !editor.HasUnsavedScripts())) {
+                    // The exit chime: the window goes at once, then ~0.5 s for the sound to ring out (miniaudio mixes on its
+                    // own thread). No wait at all when it can't be heard: sounds off, master 0, TARTARUS_MUTE, or not played.
+                    static const bool envMuted = [] {
+                        char* muteEnv = nullptr;
+                        size_t muteLen = 0;
+                        _dupenv_s(&muteEnv, &muteLen, "TARTARUS_MUTE");
+                        const bool on = muteEnv && *muteEnv && *muteEnv != '0';
+                        std::free(muteEnv);
+                        return on;
+                    }();
+                    if (editorChimes && !envMuted && EditorSound::Current().Enabled && EditorSound::Current().Master > 0.0f) {
+                        glfwHideWindow(window.Handle());
+                        const int playedBefore = EditorSound::PlayedCount();
+                        EditorSound::Play(EditorSound::Event::EditorExit);
+                        if (EditorSound::PlayedCount() > playedBefore) std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                    }
+                    break;
+                }
                 window.SetShouldClose(false);          // veto this close; ask first
                 if (!editor.ExitPromptActive()) editor.OpenExitPrompt();
                 // Closed from the taskbar while minimized: bring the window back so the prompt
@@ -2322,12 +2352,21 @@ int main(int argc, char** argv) {
                                                    PhysicsWorld::PDD_Raycasts |
                                                    PhysicsWorld::PDD_Velocity;
                 }
+                EditorSound::Play(es.PlayDebugOverlay ? EditorSound::Event::DebugOn : EditorSound::Event::DebugOff);
                 EditorSettings::Save();
             }
             // Play with an enemy squad: F7 the dev panel, F8 god mode, F9 the AI debug overlay (DevPanel.h).
             if (devKeys && playing && playUsesPlayer && npcDirector.Active()) {
-                const bool wasOpen=devPanel.Open;devPanel.Keys(playerVitals,npcDirector);
+                const bool wasOpen=devPanel.Open,wasGod=playerVitals.GodMode,wasAiOverlay=devPanel.AiOverlay;
+                devPanel.Keys(playerVitals,npcDirector);
                 if(!wasOpen && devPanel.Open && playMaximized)setPlayCursorLocked(false);
+                // Centred DebugOn / DebugOff, a step higher per key so F7 / F8 / F9 tell apart (only the keys: Reset clears the flags too).
+                auto devToggleSound = [](bool devWas, bool devNow, float devPitch) {
+                    if (devWas != devNow) EditorSound::Play(devNow ? EditorSound::Event::DebugOn : EditorSound::Event::DebugOff, -1.0f, devPitch);
+                };
+                devToggleSound(wasOpen, devPanel.Open, 1.06f);
+                devToggleSound(wasGod, playerVitals.GodMode, 1.12f);
+                devToggleSound(wasAiOverlay, devPanel.AiOverlay, 1.19f);
             }
 
             // #154: fullscreen style + display from Preferences, applied at the moment of switching.
@@ -4235,6 +4274,7 @@ int main(int argc, char** argv) {
                     const int step = editorShotFrame++ / kEditorShotFrames;
                     if (editorShotFrame % kEditorShotFrames == kEditorShotFrames / 2 && step < (int)std::size(kEditorShots)) {
                         const std::string view = kEditorShots[step];
+                        editor.QuietDockSounds(); // the forced tab selections below aren't a person docking or reordering
                         if(view=="script-ide")editor.OpenScriptIDE(GameModuleBuild::Available() ? (GameModuleBuild::SourceRoot()/"src/Game/LightFlickerSystem.cpp").u8string() : std::string());
                         auto focus = [](const char* title) {
                             for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
@@ -4286,11 +4326,13 @@ int main(int argc, char** argv) {
                     // above, and windows appearing, would otherwise leave Hierarchy / Inspector / Console on top).
                     const int glassStep = (editorShotFrame - 1) / kEditorShotFrames;
                     const char* glassView = glassStep >= 0 && glassStep < (int)std::size(kEditorShots) ? kEditorShots[glassStep] : "";
-                    if (std::strcmp(glassView, "overview") == 0 || std::strcmp(glassView, "inspector") == 0)
+                    if (std::strcmp(glassView, "overview") == 0 || std::strcmp(glassView, "inspector") == 0) {
+                        editor.QuietDockSounds();
                         for (const char* title : {"###GlassHierarchy", "###GlassInspector", "###GlassAssets"})
                             for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
                                 if (std::strstr(w->Name, title) && w->DockNode && w->DockNode->TabBar)
                                     w->DockNode->TabBar->NextSelectedTabId = w->TabId;
+                    }
                 }
                 if (editorUIVisible) editor.Draw(world, assets, editorCamera, dt);
                 else if (playing && devKeys) editor.DrawPlayModeOverlays(world); // #185 — physics panel + HUD over maximized play
@@ -4872,11 +4914,15 @@ int main(int argc, char** argv) {
                 fpsCap = fpsCap > 0 ? std::min(fpsCap, bgCap) : bgCap;
             Time::LimitFps(fpsCap);
 
+            // The startup chime, a few frames after the window shows - not over the recovery / scene-version prompt.
+            if (startChimeFrames > 0 && --startChimeFrames == 0 && !editor.IsStartupModalPending())
+                EditorSound::Play(EditorSound::Event::EditorStart);
             // The editor has now actually presented a frame, so revealing the window shows
             // finished content rather than an unpainted framebuffer. Ordered swap -> show ->
             // close so the splash never disappears before there's something to replace it.
             if (!firstFramePresented) {
                 firstFramePresented = true;
+                if (editorChimes) startChimeFrames = 3;
                 // TARTARUS_HIDDEN=1 (a headless run on a desktop someone is using): the window never shows or takes the
                 // focus; everything renders to its framebuffers the same.
                 static const bool keepHidden = [] {

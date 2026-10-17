@@ -115,6 +115,19 @@ void TestEditorSoundSchedulerRules() {
     sch.SetVariantCount(Event::Blocked, 1);
     CHECK(sch.Decide(Event::ShaderReload, 0.0, 0.5f, false, st, v));
     CHECK(!sch.Decide(Event::Blocked, 0.0, 0.5f, false, st, v)); // the rest of System waits for focus
+    // P7: a packaged build's result is a done chime too; its progress ticks, the digest and the field sounds wait for focus.
+    for (Event e : {Event::PackageSuccess, Event::PackageFail, Event::BuildProgress, Event::Digest, Event::FieldCommit})
+        sch.SetVariantCount(e, 1);
+    CHECK(sch.Decide(Event::PackageSuccess, 0.0, 0.5f, false, st, v));
+    CHECK(sch.Decide(Event::PackageFail, 0.0, 0.5f, false, st, v));
+    CHECK(!sch.Decide(Event::BuildProgress, 0.0, 0.5f, false, st, v));
+    CHECK(!sch.Decide(Event::Digest, 0.0, 0.5f, false, st, v));
+    CHECK(!sch.Decide(Event::FieldCommit, 0.0, 0.5f, false, st, v));
+    // The digest counts exactly the done chimes.
+    CHECK(EditorSound::IsDoneChime(Event::AssetImport) && EditorSound::IsDoneChime(Event::PackageFail) &&
+          EditorSound::IsDoneChime(Event::BuildSuccess) && EditorSound::IsDoneChime(Event::ShaderReload));
+    CHECK(!EditorSound::IsDoneChime(Event::NotifyError) && !EditorSound::IsDoneChime(Event::Digest) &&
+          !EditorSound::IsDoneChime(Event::BuildProgress) && !EditorSound::IsDoneChime(Event::Click));
 
     // The switches: all off, a category off, a category at 0, master at 0.
     sch.Reset();
@@ -265,6 +278,30 @@ void TestEditorSoundUiObserver() {
     f.DragActive = false; f.DropTargetHovered = false; step(f); CHECK(has(Event::DropAccept));
     f.DragActive = true; step(f);
     f.DragActive = false; step(f); CHECK(has(Event::DropReject));
+    f.MouseDx = 0.0f; f.HoveredId = 0;
+
+    // Text fields (P7): an edit confirmed with Enter commits, abandoned with Escape cancels; clicking away, Tab, and leaving
+    // without an edit stay silent. ImGui drops the active id on the Enter / Escape frame while the key still reads pressed.
+    auto typeInto = [&](unsigned id) {
+        f.ActiveId = id; f.TextActive = true; f.Edited = false; step(f); CHECK(out.empty());
+        f.Edited = true; step(f); CHECK(out.empty()); // typing: quiet (no mouse down, so not a slide either)
+        f.Edited = false; step(f); CHECK(out.empty());
+    };
+    auto leave = [&](bool enter, bool esc) {
+        f.ActiveId = 0; f.TextActive = false; f.EnterPressed = enter; f.EscPressed = esc; step(f);
+        f.EnterPressed = f.EscPressed = false;
+    };
+    typeInto(21); leave(true, false); CHECK(has(Event::FieldCommit) && out.size() == 1);
+    typeInto(22); leave(false, true); CHECK(has(Event::FieldCancel) && out.size() == 1);
+    typeInto(23); leave(false, false); CHECK(out.empty()); // clicked away / Tab
+    f.ActiveId = 24; f.TextActive = true; step(f); leave(true, false); CHECK(out.empty()); // Enter without an edit
+    // Tab straight into the next field: the first one ends silently and the second commits on its own Enter.
+    typeInto(25); f.ActiveId = 26; f.Edited = false; step(f); CHECK(out.empty());
+    f.Edited = true; step(f); f.Edited = false; leave(true, false); CHECK(has(Event::FieldCommit));
+    // A rename field in a popup: the Enter that commits it also closes the popup, which doesn't click on top.
+    f.PopupDepth = 1; step(f); CHECK(has(Event::MenuOpen));
+    f.HoverInPickMenu = true; f.HoveredId = 5;
+    typeInto(27); f.PopupDepth = 0; leave(true, false); CHECK(has(Event::FieldCommit) && !has(Event::Click) && !has(Event::MenuClose));
 }
 
 // The transform gizmo: grab, a tick per snap step landed (or per stretch of free travel), release.

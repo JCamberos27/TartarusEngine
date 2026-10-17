@@ -964,6 +964,7 @@ void DrawBarrel(PropertyRows& r, FirstPersonAnimationSet& s, const FirstPersonBa
         // deactivation: save once nothing is being dragged any more.
         static bool s_ColorPending = false;
         if (ImGui::ColorEdit3("##laser", &l.Color.x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_NoInputs)) s_ColorPending = true;
+        EditorUI::ColorPickerSound("##laser");
         if (s_ColorPending && !ImGui::IsAnyItemActive() && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
             s_ColorPending = false;
             r.MarkChanged();

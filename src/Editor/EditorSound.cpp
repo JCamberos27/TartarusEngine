@@ -113,10 +113,63 @@ const EventInfo kEvents[kEventCount] = {
     {"ViewRestore",      Category::System,        0.0f, 150.0f, 0.0f,  true},
     {"CursorLock",       Category::System,       -2.0f, 150.0f, 0.0f,  true},
     {"CursorRelease",    Category::System,       -2.0f, 150.0f, 0.0f,  true},
+    // P7. Busy ones (fly speed, marquee, build progress) sit about 4 dB under the clicks; whispers (dirty, autosave) 8.
+    {"BoxSelectStart",   Category::Tools,        -4.0f,  80.0f, 0.02f, false},
+    {"BoxSelectEnd",     Category::Tools,        -4.0f,  80.0f, 0.0f,  false},
+    {"HideOn",           Category::Objects,       0.0f,  50.0f, 0.02f, false},
+    {"HideOff",          Category::Objects,       0.0f,  50.0f, 0.02f, false},
+    {"LockOn",           Category::Objects,       0.0f,  50.0f, 0.02f, false},
+    {"LockOff",          Category::Objects,       0.0f,  50.0f, 0.02f, false},
+    {"FlySpeed",         Category::Tools,        -4.0f,  40.0f, 0.0f,  true},
+    {"SnapGround",       Category::Tools,         0.0f, 120.0f, 0.02f, false},
+    {"MeasurePoint",     Category::Tools,         0.0f,  60.0f, 0.02f, false},
+    {"MeasureClear",     Category::Tools,         0.0f, 120.0f, 0.0f,  false},
+    {"Reparent",         Category::Objects,       0.0f, 100.0f, 0.02f, false},
+    {"Reorder",          Category::Objects,       0.0f,  80.0f, 0.02f, false},
+    {"ExpandAllSweep",   Category::Panels,       -2.0f, 150.0f, 0.0f,  false},
+    {"CollapseAllSweep", Category::Panels,       -2.0f, 150.0f, 0.0f,  false},
+    {"Isolate",          Category::Panels,        0.0f, 200.0f, 0.0f,  false},
+    {"DockAttach",       Category::Workflow,      0.0f, 120.0f, 0.02f, false},
+    {"DockDetach",       Category::Workflow,      0.0f, 120.0f, 0.02f, false},
+    {"TabReorder",       Category::Workflow,     -3.0f,  80.0f, 0.02f, false},
+    {"LayoutApply",      Category::Workflow,      0.0f, 250.0f, 0.0f,  true},
+    {"LayoutSave",       Category::Workflow,      0.0f, 250.0f, 0.0f,  true},
+    {"ToastIn",          Category::Workflow,     -3.0f, 200.0f, 0.0f,  false},
+    {"ToastOut",         Category::Workflow,     -4.0f, 120.0f, 0.0f,  false},
+    {"DirtyCue",         Category::Workflow,     -8.0f, 500.0f, 0.0f,  true},
+    {"Autosave",         Category::Workflow,     -8.0f,2000.0f, 0.0f,  true},
+    {"RecoveryPrompt",   Category::Notifications, 0.0f, 500.0f, 0.0f,  true},
+    {"TimeSlower",       Category::PlayMode,      0.0f,  60.0f, 0.0f,  true},
+    {"TimeFaster",       Category::PlayMode,      0.0f,  60.0f, 0.0f,  true},
+    {"TimeReset",        Category::PlayMode,      0.0f, 120.0f, 0.0f,  true},
+    {"DebugOn",          Category::PlayMode,      0.0f,  80.0f, 0.0f,  true},
+    {"DebugOff",         Category::PlayMode,      0.0f,  80.0f, 0.0f,  true},
+    {"StatsOn",          Category::PlayMode,      0.0f,  80.0f, 0.0f,  true},
+    {"StatsOff",         Category::PlayMode,      0.0f,  80.0f, 0.0f,  true},
+    {"FieldCommit",      Category::Fields,       -3.0f,  60.0f, 0.02f, false},
+    {"FieldCancel",      Category::Fields,       -5.0f,  60.0f, 0.02f, false}, // very soft
+    {"PickerOpen",       Category::Fields,        0.0f,  80.0f, 0.02f, false},
+    {"PickerClose",      Category::Fields,        0.0f,  80.0f, 0.02f, false},
+    {"EyedropperArm",    Category::Fields,        0.0f,  80.0f, 0.02f, false},
+    {"EyedropperPick",   Category::Fields,        0.0f, 100.0f, 0.0f,  false},
+    {"SwatchPick",       Category::Fields,        0.0f,  50.0f, 0.03f, false},
+    {"BindListen",       Category::Fields,        0.0f, 100.0f, 0.0f,  false},
+    {"BindCaptured",     Category::Fields,        0.0f, 100.0f, 0.0f,  false},
+    {"BindConflict",     Category::Fields,        0.0f, 200.0f, 0.0f,  false},
+    {"SearchClear",      Category::Fields,        0.0f,  80.0f, 0.02f, false},
+    {"FilesDropped",     Category::Assets,        0.0f, 300.0f, 0.0f,  false},
+    {"MissingRefs",      Category::Notifications, 0.0f, 500.0f, 0.0f,  true},
+    {"EditorStart",      Category::Notifications, 0.0f,2000.0f, 0.0f,  true},
+    {"EditorExit",       Category::Notifications, 0.0f,2000.0f, 0.0f,  true},
+    {"PackageSuccess",   Category::Notifications, 0.0f, 500.0f, 0.0f,  true,  true},
+    {"PackageFail",      Category::Notifications, 0.0f, 500.0f, 0.0f,  true,  true},
+    {"BuildProgress",    Category::System,       -4.0f, 150.0f, 0.0f,  true}, // focused only: System, not Notifications
+    {"Digest",           Category::System,        0.0f,1000.0f, 0.0f,  true},
 };
 
 const char* kCategoryNames[kCategoryCount] = {"Clicks", "Sliders", "Hover",  "Panels",             "Drag & Drop", "Notifications",
-                                              "Play Mode", "Objects", "Tools", "Assets", "Animation & Curves", "System"};
+                                              "Play Mode", "Objects", "Tools", "Assets", "Animation & Curves", "System",
+                                              "Fields", "Workflow"};
 
 float DbToGain(float db) { return std::pow(10.0f, db / 20.0f); }
 
@@ -136,6 +189,10 @@ struct State {
     std::array<bool, kEventCount> Override{};
     double LastBuildResultMs = -1e9;
     unsigned Frame = 0, LastPlayFrame = ~0u; // ObserveImGui counts frames; Play notes the one it last sounded in
+    unsigned DropQuietFrame = ~0u - 8u;      // SuppressDropSound's frame
+    unsigned PickerFrame = ~0u;              // the frame a colour picker sounded its own open / close
+    int AwayDone = 0;                        // done chimes while unfocused
+    double DigestAtMs = -1.0;                // a Digest is due at this time (OnFocusRegained), < 0: none
 } s;
 
 double NowMs() {
@@ -301,6 +358,11 @@ int PremiumEventCount() {
 
 void Update() {
     if (!s.Ready) return;
+    if (s.DigestAtMs >= 0.0 && NowMs() >= s.DigestAtMs) { // after the focus edge's own reimport / log sounds settle
+        s.DigestAtMs = -1.0;
+        if (s.Focused && s.AwayDone > 0) Play(Event::Digest);
+        s.AwayDone = 0;
+    }
     const std::vector<LogEntry>& entries = Log::Entries();
     const unsigned long long newest = entries.empty() ? 0ull : entries.back().Seq;
     if (!s.LogPrimed) { // start-up's own errors and warnings aren't news
@@ -344,8 +406,22 @@ void Apply(const Settings& v) {
 const Settings& Current() { return s.Values; }
 void SetWindowFocused(bool focused) { s.Focused = focused; }
 
+bool IsDoneChime(Event e) {
+    switch (e) {
+    case Event::AssetImport: case Event::ShaderReload: case Event::SyncDone: case Event::ModuleReload:
+    case Event::BuildSuccess: case Event::BuildFail: case Event::PackageSuccess: case Event::PackageFail: return true;
+    default: return false;
+    }
+}
+void OnFocusRegained() {
+    if (s.AwayDone > 0) s.DigestAtMs = NowMs() + 300.0;
+}
+int AwayDoneCount() { return s.AwayDone; }
+void SuppressDropSound() { s.DropQuietFrame = s.Frame; }
+
 void Play(Event e, float screenX01, float pitchScale) {
     if (!s.Ready) return;
+    if (!s.Focused && IsDoneChime(e)) ++s.AwayDone;
     Voice v;
     if (!s.Sched.Decide(e, NowMs(), screenX01, s.Focused, s.Values, v)) return;
     v.Pitch *= pitchScale;
@@ -353,7 +429,9 @@ void Play(Event e, float screenX01, float pitchScale) {
     if (v.Variant < 0 || v.Variant >= (int)files.size()) return;
     if (AudioEngine::PlayEditor(files[v.Variant], v.Gain, v.Pitch, v.Pan)) ++s.Played;
     s.LastPlayFrame = s.Frame;
-    if (e == Event::BuildSuccess || e == Event::BuildFail) s.LastBuildResultMs = NowMs();
+    if (e == Event::PickerOpen || e == Event::PickerClose) s.PickerFrame = s.Frame;
+    if (e == Event::BuildSuccess || e == Event::BuildFail || e == Event::PackageSuccess || e == Event::PackageFail)
+        s.LastBuildResultMs = NowMs();
 }
 
 bool PlayedThisFrame() { return s.LastPlayFrame == s.Frame; }
@@ -387,9 +465,22 @@ void UiObserver::Step(const UiFrame& f, std::vector<UiSound>& out) {
         out.push_back({Event::SliderRelease, f.MouseX01});
     }
 
+    // Text / number fields: an edit confirmed with Enter, or abandoned with Escape. Clicking away and Tab stay silent (as does a
+    // field left without an edit). ImGui drops the active id inside the widget on Enter / Escape, while the key still reads pressed.
+    bool textSound = false;
+    if (p.TextActive && f.ActiveId == p.ActiveId) m_TextEdited = m_TextEdited || f.Edited;
+    else if (p.TextActive) { // the field let go this frame
+        if (m_TextEdited && (f.EnterPressed || f.EscPressed)) {
+            out.push_back({f.EnterPressed ? Event::FieldCommit : Event::FieldCancel, f.MouseX01});
+            textSound = true;
+        }
+        m_TextEdited = false;
+    }
+    if (f.TextActive && f.ActiveId != p.ActiveId) m_TextEdited = f.Edited; // a field newly typed into
+
     // Popups: one more is a menu opening; one fewer is a pick (released on / Enter in it) or a close.
     if (f.PopupDepth > p.PopupDepth) out.push_back({Event::MenuOpen, f.MouseX01});
-    else if (f.PopupDepth < p.PopupDepth)
+    else if (f.PopupDepth < p.PopupDepth && !textSound)
         out.push_back({(p.HoverInPickMenu && p.HoveredId != 0 && (f.MouseReleased || f.EnterPressed)) ? Event::Click : Event::MenuClose,
                        f.MouseX01});
 
@@ -532,12 +623,20 @@ void ObserveImGui() {
     f.PopupDepth = g.OpenPopupStack.Size;
     f.DragActive = g.DragDropActive && (g.DragDropSourceFlags & ImGuiDragDropFlags_SourceExtern) == 0;
     f.DropTargetHovered = f.DragActive && g.DragDropAcceptIdPrev != 0;
+    f.TextActive = g.ActiveId != 0 && (g.InputTextState.ID == g.ActiveId || g.TempInputId == g.ActiveId);
+    f.EscPressed = ImGui::IsKeyPressed(ImGuiKey_Escape, false);
     sounds.clear();
     observer.Step(f, sounds);
-    // A menu pick that ran an action with its own sound this frame (Create, Paste, Add Component...) doesn't click as well.
+    // A menu pick that ran an action with its own sound this frame (Create, Paste, Add Component...) doesn't click as well, nor does
+    // a field whose Enter ran one (Rename, a rejected name's Blocked).
     const bool acted = PlayedThisFrame();
-    for (const UiSound& u : sounds)
-        if (!(acted && u.E == Event::Click)) Play(u.E, u.X01, u.Pitch);
+    const bool dropQuiet = s.Frame - s.DropQuietFrame <= 1u;
+    for (const UiSound& u : sounds) {
+        if (acted && (u.E == Event::Click || u.E == Event::FieldCommit || u.E == Event::FieldCancel)) continue;
+        if (dropQuiet && (u.E == Event::DropAccept || u.E == Event::DropReject)) continue;
+        if (s.PickerFrame == s.Frame && (u.E == Event::MenuOpen || u.E == Event::MenuClose)) continue; // its popup, said already
+        Play(u.E, u.X01, u.Pitch);
+    }
 }
 
 float LastItemScreenX() {

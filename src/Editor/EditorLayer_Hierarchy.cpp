@@ -850,10 +850,20 @@ void EditorLayer::DrawAddEntityItems(World& world, AssetLibrary& assets, Camera&
         }
     }
 }
+// The cursor's screen x as Play's pan, for the drops (the last ImGui item isn't the drop row).
+static float MouseScreenX01() {
+    const ImGuiIO& io = ImGui::GetIO();
+    return io.DisplaySize.x > 0.0f ? std::clamp(io.MousePos.x / io.DisplaySize.x, 0.0f, 1.0f) : -1.0f;
+}
+
+// Set while Isolate runs its inner collapse, which plays Isolate instead (file-static: one EditorLayer).
+static bool s_QuietExpandAll = false;
+
 // Expand / collapse every root's whole subtree at once (audit #71) — the host half of the
 // module's Expand-all / Collapse-all buttons.
 void EditorLayer::HierarchyExpandAll(World& world, bool open) {
-    EditorSound::Play(open ? EditorSound::Event::TreeExpand : EditorSound::Event::TreeCollapse);
+    if (!s_QuietExpandAll)
+        EditorSound::Play(open ? EditorSound::Event::ExpandAllSweep : EditorSound::Event::CollapseAllSweep);
     for (auto e : world.Registry.view<const NameComponent>()) {
         const auto* h = world.Registry.try_get<HierarchyComponent>(e);
         if (!h || h->Parent == entt::null) SetHierarchyExpandedRecursive(world, e, open);
@@ -1138,6 +1148,8 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
                     if (world.Registry.valid(e)) { world.SetParent(e, entt::null); FlashHierarchyRow(e, false); }
                 }
                 CommitStagedUndo(world, "Reparent");
+                EditorSound::Play(EditorSound::Event::Reparent, MouseScreenX01());
+                EditorSound::SuppressDropSound(); // Reparent says it landed; no DropAccept on top
             }
         }
         // Model / prefab from the Asset Browser dropped below the tree -> instantiate at the root.
@@ -1291,6 +1303,7 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
                 rejected = true;
                 m_EntityRenameRejectedFlash = 1.6f;
                 m_EntityRenameRefocus = true; // Enter took focus off the field; give it back
+                EditorSound::Play(EditorSound::Event::Blocked, EditorSound::LastItemScreenX());
 
             } else {
                 PushUndo(world, "Rename");
@@ -1600,10 +1613,17 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
                             Log::Warn("Can't parent that: level geometry has a collider that needs world-space "
                                       "coordinates, or the target is already a child of the dragged object.");
                             EditorSound::Play(EditorSound::Event::Blocked);
+                        } else {
+                            EditorSound::Play(EditorSound::Event::Reparent, MouseScreenX01());
                         }
                     } else {
+                        // Here, not inside ReorderHierarchySiblings (duplicate / menu moves use it too);
+                        // a refused row still plays Blocked from in there.
+                        EditorSound::Play(EditorSound::Event::Reorder, MouseScreenX01());
                         ReorderHierarchySiblings(world, moving, entity, zone > 0);
                     }
+                    // Handled here, not via AcceptDragDropPayload: keep the observer's DropReject quiet.
+                    EditorSound::SuppressDropSound();
                     for (entt::entity e : moving) FlashHierarchyRow(e, /*reveal=*/false);
                     // This zone handles the release itself (no AcceptDragDropPayload), so tell
                     // the drag ghost it landed.
@@ -1824,6 +1844,9 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
                                        : "Hide in the Scene view with its children (still in the game, still collides,\n"
                                          "still saved). Alt+click: this object only.",
                            rowActive || sceneHidden)) {
+            // Played from the click, not from the tag (tags also change on load and undo).
+            EditorSound::Play(sceneHidden ? EditorSound::Event::HideOff : EditorSound::Event::HideOn,
+                              EditorSound::LastItemScreenX());
             PushUndo(world, "Toggle Scene Visibility");
             setOnSubtree((HiddenInSceneTag*)nullptr, !sceneHidden);
         }
@@ -1833,6 +1856,8 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
                                        : "Lock with its children: can't be clicked in the Scene view (Hierarchy select\n"
                                          "still works). Alt+click: this object only.",
                            rowActive || sceneLocked)) {
+            EditorSound::Play(sceneLocked ? EditorSound::Event::LockOff : EditorSound::Event::LockOn,
+                              EditorSound::LastItemScreenX());
             PushUndo(world, "Toggle Scene Lock");
             setOnSubtree((SceneLockedTag*)nullptr, !sceneLocked);
         }
@@ -2363,12 +2388,17 @@ void EditorLayer::HandleHierarchyHoverKeys(World& world) {
     if (Shortcuts::Triggered("hierarchy.hover.expand")) {
         // Every target follows the hovered row's new state, so a mixed selection converges.
         const bool open = st->GetInt(HierarchyNodeStateId(world, hov, m_HierChainScratch), 0) == 0;
+        bool any = false;
         for (entt::entity e : targets())
-            if (world.Registry.valid(e) && hasKids(e)) st->SetInt(HierarchyNodeStateId(world, e, m_HierChainScratch), open ? 1 : 0);
+            if (world.Registry.valid(e) && hasKids(e)) { st->SetInt(HierarchyNodeStateId(world, e, m_HierChainScratch), open ? 1 : 0); any = true; }
+        if (any) EditorSound::Play(open ? EditorSound::Event::TreeExpand : EditorSound::Event::TreeCollapse);
         m_HierarchyHoverKeyUsed = true;
     } else if (Shortcuts::Triggered("hierarchy.hover.isolate")) {
         // Collapse everything, then reopen just the path down to the hovered row (and the row).
+        s_QuietExpandAll = true;
         HierarchyExpandAll(world, false);
+        s_QuietExpandAll = false;
+        EditorSound::Play(EditorSound::Event::Isolate);
         for (entt::entity w = hov; w != entt::null && world.Registry.valid(w);) {
             if (w != hov || hasKids(w)) st->SetInt(HierarchyNodeStateId(world, w, m_HierChainScratch), 1);
             const auto* h = world.Registry.try_get<HierarchyComponent>(w);

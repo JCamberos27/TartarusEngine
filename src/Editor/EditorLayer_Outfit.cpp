@@ -235,6 +235,7 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
             ImGui::PushID(race.Name.c_str());
             const ImVec2 p = ImGui::GetCursorScreenPos();
             if (ImGui::InvisibleButton("##race", ImVec2(2.0f * r + 4.0f, 2.0f * r + 4.0f)) && race.Name != outfit->Race) {
+                ClickSound(EditorSoundEvents::Event::SwatchPick);
                 PushUndo(world, "Change Race");
                 report(OutfitSystem::SetRace(world, assets, root, race.Name));
             }
