@@ -2,6 +2,7 @@
 #include "CurveEditor.h"
 #include "ImCurveAdapter.h"
 #include "EditorUIHelpers.h"
+#include "EditorSound.h"
 #include "../../extern/imcurve/imcurve_editor.hpp"
 #include <map>
 #include <set>
@@ -26,6 +27,7 @@ struct Session {
     float TimeStep=.01f,ValueStep=.01f,Playhead=0,InsertTime=0,InsertValue=0;
     float TimeOffset=0,ValueOffset=0,TimeScale=1,ValueScale=1;
     std::string Error;
+    bool WasDragging=false;float DragTravel=0; // key drag sounds: grab, a tick per stretch of travel, release
 };
 std::map<std::pair<ImGuiContext*,ImGuiID>,Session> sessions;
 std::set<ImGuiContext*> contexts;
@@ -99,8 +101,9 @@ bool DrawCanvas(const char* id,Curve& curve,const ImVec2& requestedSize,const Op
         for (const auto& k:curve.Keys) if (std::abs(k.Value)>std::abs(amplitude)) amplitude=k.Value;
         if (std::abs(amplitude)<0.000001f) amplitude=o.PresetAmplitude;
         const float duration=s.Editor.TimeMax-o.TimeMin;
-        const auto preset=[&](const char* name,Curve c,bool normalized=false) {
+        const auto preset=[&](const char* name,Curve c,bool normalized=false,EditorSound::Event sound=EditorSound::Event::PresetApply) {
             if (!ImGui::MenuItem(name)) return;
+            EditorSound::Play(sound);
             if (normalized) for (auto& k:c.Keys) {
                 k.Time=o.TimeMin+k.Time*duration; k.Value*=amplitude;
                 k.InTangent*=amplitude/duration; k.OutTangent*=amplitude/duration;
@@ -117,8 +120,8 @@ bool DrawCanvas(const char* id,Curve& curve,const ImVec2& requestedSize,const Op
             sine.Keys.push_back({t,i==0||i==8?0:std::sin(pi2*t),slope,slope});
         }
         preset("Sine",sine,true);
-        if (ImGui::MenuItem("Smooth all tangents")) { curve.AutoTangents();for(auto& k:curve.Keys)k.Interpolation=CurveInterpolation::Cubic;committed=true; }
-        if (o.Default) { ImGui::Separator(); preset("Reset to default",*o.Default); }
+        if (ImGui::MenuItem("Smooth all tangents")) { EditorSound::Play(EditorSound::Event::PresetApply);curve.AutoTangents();for(auto& k:curve.Keys)k.Interpolation=CurveInterpolation::Cubic;committed=true; }
+        if (o.Default) { ImGui::Separator(); preset("Reset to default",*o.Default,false,EditorSound::Event::ResetDefault); }
         ImGui::EndPopup();
     }
     if (committed) { s.Editor.UpdateCurve(ToImCurve(curve),true); s.Editor.SelectKeys({});selected.clear();s.Editor.Fit(); }
@@ -128,9 +131,14 @@ bool DrawCanvas(const char* id,Curve& curve,const ImVec2& requestedSize,const Op
     };
     ImGui::BeginDisabled(selected.empty());
     if(EditorUIPrimitives::SecondaryButton("Copy")||(keyboard&&ctrl&&ImGui::IsKeyPressed(ImGuiKey_C)&&!selected.empty()))copy();
-    ImGui::SameLine();const bool cut=EditorUIPrimitives::SecondaryButton("Cut")||(keyboard&&ctrl&&ImGui::IsKeyPressed(ImGuiKey_X)&&!selected.empty());
-    ImGui::SameLine();const bool remove=EditorUIPrimitives::SecondaryButton("Delete Keys")||cut||(keyboard&&ImGui::IsKeyPressed(ImGuiKey_Delete)&&!selected.empty());
+    bool cut,remove;
+    {
+        EditorSoundEvents::ScopedClickSilence quiet; // KeyDelete instead of the click
+        ImGui::SameLine();cut=EditorUIPrimitives::SecondaryButton("Cut")||(keyboard&&ctrl&&ImGui::IsKeyPressed(ImGuiKey_X)&&!selected.empty());
+        ImGui::SameLine();remove=EditorUIPrimitives::SecondaryButton("Delete Keys")||cut||(keyboard&&ImGui::IsKeyPressed(ImGuiKey_Delete)&&!selected.empty());
+    }
     if(remove&&!selected.empty()) {
+        EditorSound::Play(EditorSound::Event::KeyDelete);
         if(cut)copy();Curve c=curve;for(auto it=selected.rbegin();it!=selected.rend();++it)c.Keys.erase(c.Keys.begin()+*it);
         apply(std::move(c));selected.clear();s.Editor.SelectKeys({});
     }
@@ -152,7 +160,13 @@ bool DrawCanvas(const char* id,Curve& curve,const ImVec2& requestedSize,const Op
     ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Add Key")){s.InsertTime=s.Playhead;s.InsertValue=curve.Evaluate(s.Playhead);ImGui::OpenPopup("addKey");}
     if(ImGui::BeginPopup("addKey")) {
         ImGui::InputFloat("Time",&s.InsertTime,0,0,"%.5f");ImGui::InputFloat("Value",&s.InsertValue,0,0,o.ValueFormat);
-        if(EditorUIPrimitives::SecondaryButton("Insert")&&std::isfinite(s.InsertTime)&&std::isfinite(s.InsertValue)) {
+        bool insert;
+        {
+            EditorSoundEvents::ScopedClickSilence quiet; // KeyAdd instead of the click
+            insert=EditorUIPrimitives::SecondaryButton("Insert");
+        }
+        if(insert&&std::isfinite(s.InsertTime)&&std::isfinite(s.InsertValue)) {
+            EditorSound::Play(EditorSound::Event::KeyAdd,EditorSound::LastItemScreenX());
             Curve c=curve;const float time=std::clamp(s.InsertTime,o.TimeMin,s.Editor.TimeMax);
             const auto existing=std::find_if(c.Keys.begin(),c.Keys.end(),[&](const CurveKey& k){return std::abs(k.Time-time)<.0001f;});
             const int i=existing==c.Keys.end()?c.AddKey(time):int(existing-c.Keys.begin());c.Keys[i].Value=s.InsertValue;
@@ -165,7 +179,13 @@ bool DrawCanvas(const char* id,Curve& curve,const ImVec2& requestedSize,const Op
     const char* modes[]={"Auto","Flat","Linear","Constant","Unify","Break"};
     for(int mode=0;mode<6;++mode) {
         if(mode)ImGui::SameLine();
-        if(EditorUIPrimitives::SecondaryButton(modes[mode])) {
+        bool pressed;
+        {
+            EditorSoundEvents::ScopedClickSilence quiet; // TangentMode instead of the click
+            pressed=EditorUIPrimitives::SecondaryButton(modes[mode]);
+        }
+        if(pressed) {
+            EditorSound::Play(EditorSound::Event::TangentMode,EditorSound::LastItemScreenX());
             Curve c=curve,smooth=curve;smooth.AutoTangents();
             for(int i:selected) {
                 auto& k=c.Keys[i];k.Interpolation=mode==2?CurveInterpolation::Linear:mode==3?CurveInterpolation::Constant:CurveInterpolation::Cubic;
@@ -205,14 +225,31 @@ bool DrawCanvas(const char* id,Curve& curve,const ImVec2& requestedSize,const Op
     if(!s.Error.empty())ImGui::TextWrapped("%s",s.Error.c_str());
     ImVec2 size(requestedSize.x>0?requestedSize.x:ImGui::GetContentRegionAvail().x,
                 std::max(140.0f,std::min(requestedSize.y,ImGui::GetContentRegionAvail().y-ImGui::GetFontSize()*(s.KeyList?11:4))));
+    const size_t keysBefore=curve.Keys.size(); // in-canvas inserts / deletes show up as a key count change
     s.Editor.Draw("##graph",size,{s.Playhead});
     const auto graphItem=ImGui::GetCurrentContext()->LastItemData;
+    const float graphX=EditorSound::LastItemScreenX();
     s.Min=ImGui::GetWindowPos();s.Max=s.Min+ImGui::GetWindowSize();
     s.RootWindow=ImGui::GetCurrentWindow()->RootWindow->ID;
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Double-click: add key   Ctrl-click: select multiple\nDrag empty space: select   Right-drag: pan   Wheel: zoom\nRight-click key: tangents   Delete: remove   Ctrl+Z / Ctrl+Y: undo / redo");
     const auto edited=s.Editor.GetCurve();
     if (edited!=incoming) s.Pending=true;
     curve=FromImCurve(edited);
+    // The canvas's own key edits (double-click insert, Delete), not its Ctrl+Z / Ctrl+Y history.
+    if (!ctrl && curve.Keys.size()>keysBefore) EditorSound::Play(EditorSound::Event::KeyAdd,graphX);
+    else if (!ctrl && curve.Keys.size()<keysBefore) EditorSound::Play(EditorSound::Event::KeyDelete,graphX);
+    // Dragging keys sounds like a slider: grab, a tick per stretch of mouse travel, release.
+    const bool dragging=s.Editor.IsDragging();
+    if (dragging && !s.WasDragging) { s.DragTravel=0; EditorSound::Play(EditorSound::Event::SliderGrab,graphX); }
+    else if (dragging) {
+        if (ImGui::IsMousePosValid() && ImGui::IsMousePosValid(&ImGui::GetIO().MousePosPrev))
+            s.DragTravel+=std::abs(ImGui::GetIO().MouseDelta.x)+std::abs(ImGui::GetIO().MouseDelta.y);
+        if (s.DragTravel>=EditorSound::UiObserver::kTickPx) {
+            s.DragTravel=std::fmod(s.DragTravel,EditorSound::UiObserver::kTickPx);
+            EditorSound::Play(EditorSound::Event::SliderTick,graphX);
+        }
+    } else if (s.WasDragging) EditorSound::Play(EditorSound::Event::SliderRelease,graphX);
+    s.WasDragging=dragging;
     if (s.Pending && !s.Editor.IsDragging()) { committed=true; s.Pending=false; }
     selected=s.Editor.SelectedKeys();
     if(s.KeyList&&ImGui::BeginTable("##keys",4,ImGuiTableFlags_RowBg|ImGuiTableFlags_Borders|ImGuiTableFlags_ScrollY,{0,ImGui::GetFontSize()*6})) {

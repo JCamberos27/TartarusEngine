@@ -3225,7 +3225,12 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
             CreateEmptyChild(world,
                 (m_Selected != entt::null && world.Registry.valid(m_Selected)) ? m_Selected : entt::null);
         }
-        if (Shortcuts::Triggered("gameobject.toggleActive")) ToggleSelectionActive(world);
+        if (Shortcuts::Triggered("gameobject.toggleActive") && HasAnySelection()) {
+            ToggleSelectionActive(world);
+            // No button to click on this path: the toggle sound by the state it landed on (the menu item's click covers its own).
+            const bool nowActive = world.Registry.valid(m_Selected) && !world.Registry.all_of<DeactivatedTag>(m_Selected);
+            EditorSound::Play(nowActive ? EditorSound::Event::ToggleOn : EditorSound::Event::ToggleOff);
+        }
         if (Shortcuts::Triggered("editor.preferences")) m_ShowPreferences = true;
         if (Shortcuts::Triggered("editor.openScene")) {
             RequestOpenScene(world, assets, FileDialog::OpenFile("Scene Files\0*.json\0All Files\0*.*\0", m_Window));
@@ -3294,7 +3299,10 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         // Ctx_Project shortcuts (rebindable in Preferences); folder navigation (Enter /
         // Backspace / arrows) stays hard-wired — it's traversal, not a named command.
         if (m_AssetBrowserFocused && m_RenamingAssetKey.empty()) {
-            if (Shortcuts::Triggered("project.focusSearch")) m_AssetSearchFocusRequested = true;
+            if (Shortcuts::Triggered("project.focusSearch")) {
+                m_AssetSearchFocusRequested = true;
+                EditorSound::Play(EditorSound::Event::TabSelect);
+            }
             if (Shortcuts::Triggered("project.refresh"))     RefreshAssetBrowser(); // #236 G
             if (Shortcuts::Triggered("project.frameSelected") && !m_SelectedAssetKey.empty() && !m_SelectedAssetIsFolder) {
                 // "Frame selected" — navigate the browser to the asset's containing folder.
@@ -3338,16 +3346,28 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
 
         // Phase 6 item 11 — the shortcut coverage pass: everything below was reachable only by
         // mouse before this (toolbar buttons, menu items, panel toggles).
+        // Space and snap sound through EditorSound::ToolFrame; pivot, grid and draw mode have no per-frame observer, so
+        // these shortcuts play their own.
         if (Shortcuts::Triggered("gizmo.toggleSpace")) SetGizmoLocalSpace(!GizmoLocalSpace());
-        if (Shortcuts::Triggered("gizmo.togglePivot")) SetGizmoPivotCenter(!GizmoPivotCenter());
-        if (Shortcuts::Triggered("grid.toggle"))       SetShowGrid(!ShowGrid());
+        if (Shortcuts::Triggered("gizmo.togglePivot")) {
+            SetGizmoPivotCenter(!GizmoPivotCenter());
+            EditorSound::Play(EditorSound::Event::SpaceToggle, -1.0f, GizmoPivotCenter() ? 1.06f : 1.0f);
+        }
+        if (Shortcuts::Triggered("grid.toggle")) {
+            SetShowGrid(!ShowGrid());
+            EditorSound::Play(EditorSound::Event::SnapToggle, -1.0f, ShowGrid() ? 1.0f : 0.89f);
+        }
         if (Shortcuts::Triggered("snap.toggleGrid"))   SetGridSnapEnabled(!GridSnapEnabled());
         if (Shortcuts::Triggered("tools.snapToGround") && CanSnapSelectionToGround(world))
             SnapSelectionToGround(world);
-        if (Shortcuts::Triggered("view.nextDrawMode"))
+        if (Shortcuts::Triggered("view.nextDrawMode")) {
             SetShadingModeIndex((ShadingModeIndex() + 1) % (int)ShadingMode::Count);
-        if (Shortcuts::Triggered("view.prevDrawMode"))
+            EditorSound::Play(EditorSound::Event::ViewPreset);
+        }
+        if (Shortcuts::Triggered("view.prevDrawMode")) {
             SetShadingModeIndex((ShadingModeIndex() + (int)ShadingMode::Count - 1) % (int)ShadingMode::Count);
+            EditorSound::Play(EditorSound::Event::ViewPreset);
+        }
 
         if (Shortcuts::Triggered("stats.toggle")) {
             auto& s = EditorSettings::Get();

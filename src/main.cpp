@@ -139,6 +139,7 @@
 #include <thread>
 #include <vector>
 #include <chrono>
+#include <ctime>
 #include <future>
 #pragma warning(disable: 4996) // stb_image_write.h's own sprintf() use, not this file's
 #include <json.hpp>         // --model-report reads each model's .meta
@@ -1677,19 +1678,32 @@ int main(int argc, char** argv) {
         auto startPlay = [&]() { playSession.Start(); };
         auto stopPlay = [&]() { playSession.Stop(); };
         auto togglePlay = [&]() { if (playing) stopPlay(); else startPlay(); };
+        // Play's own cursor capture (the Game view click, Esc, focus loss, the dev panel), with the
+        // CursorLock / CursorRelease sound when the lock really changes. Not the editor camera's drag lock, and not Play
+        // starting / stopping (PlaySession), which PlayEnter / PlayExit already cover.
+        auto setPlayCursorLocked = [&](bool lock) {
+            if (window.IsCursorLocked() != lock)
+                EditorSound::Play(lock ? EditorSound::Event::CursorLock : EditorSound::Event::CursorRelease);
+            window.SetCursorLocked(lock);
+        };
         // Fullscreen/Restore button next to Stop: maximize the Game view over the editor panels
         // (equivalent to the old whole-window Play look), or drop back to windowed in-panel play.
-        auto setMaximized = [&](bool maximize) {
+        // `userToggle`: the toolbar button / F4, which sound; the automatic ones (the built game, --perf-bench) don't.
+        auto setMaximized = [&](bool maximize, bool userToggle = false) {
             if (!playing) return;
+            if (userToggle && maximize != playMaximized)
+                EditorSound::Play(maximize ? EditorSound::Event::ViewMaximize : EditorSound::Event::ViewRestore);
             playMaximized = maximize;
             editorUIVisible = !maximize;
             gameInputEngaged = false;
             // Maximized play captures the cursor immediately and lets Esc toggle it, exactly
             // like Play used to; restoring goes back to click-to-focus in the panel and keeps
             // the Game tab up so you're still looking at what you were just watching.
-            window.SetCursorLocked(maximize);
+            window.SetCursorLocked(maximize); // quietly: ViewMaximize / ViewRestore already said it
             if (!maximize) editor.RequestGameTabFocus();
         };
+        // F12 (view.screenshot): set when pressed, taken at the end of the frame once everything has rendered.
+        bool screenshotPending = false;
 
         // On-exit "Save changes?" flow (audit #56). When the window-close request arrives with a
         // dirty scene, swallow it and let the editor raise a modal; `exitApproved` is set once
@@ -2204,8 +2218,11 @@ int main(int argc, char** argv) {
                 const std::vector<std::string> changedShaders =
                     ShaderLibrary::PollChangedFiles({ProjectPaths::Resolve("shaders")});
                 if (!changedShaders.empty()) {
+                    const int errorsBefore = Log::CountOf(LogLevel::Error);
                     const int n = ShaderLibrary::ReloadChanged(changedShaders) + assets.HotReloadShaders(changedShaders);
                     if (n > 0) GLStateCache::Invalidate(); // program names may be recycled
+                    // The "done" chime only for a clean recompile: a failed one logged an error, which sounds already.
+                    if (n > 0 && Log::CountOf(LogLevel::Error) <= errorsBefore) EditorSound::Play(EditorSound::Event::ShaderReload);
                 }
             }
             Profiler::BeginFrame();
@@ -2281,7 +2298,9 @@ int main(int argc, char** argv) {
                  (weaponLab && weaponLab->ConsumeStep()));
             // Mirrors the toolbar's Fullscreen/Restore button — maximize the Game view over
             // the editor panels (only meaningful while playing; setMaximized no-ops otherwise).
-            if (playing && !playerMode && !editor.ScriptIDEHasKeyboardFocus() && Shortcuts::TriggeredGlfw("play.maximize")) setMaximized(!playMaximized);
+            if (playing && !playerMode && !editor.ScriptIDEHasKeyboardFocus() && Shortcuts::TriggeredGlfw("play.maximize")) setMaximized(!playMaximized, true);
+            // F12: a screenshot of the Game view into <project>/screenshots (taken below, before SwapBuffers).
+            if (!playerMode && !headless && Shortcuts::TriggeredGlfw("view.screenshot")) screenshotPending = true;
 
             // F6 toggles the Physics debug panel from anywhere — the Window menu that also does it
             // is hidden during maximized play (#185).
@@ -2308,7 +2327,7 @@ int main(int argc, char** argv) {
             // Play with an enemy squad: F7 the dev panel, F8 god mode, F9 the AI debug overlay (DevPanel.h).
             if (devKeys && playing && playUsesPlayer && npcDirector.Active()) {
                 const bool wasOpen=devPanel.Open;devPanel.Keys(playerVitals,npcDirector);
-                if(!wasOpen && devPanel.Open && playMaximized)window.SetCursorLocked(false);
+                if(!wasOpen && devPanel.Open && playMaximized)setPlayCursorLocked(false);
             }
 
             // #154: fullscreen style + display from Preferences, applied at the moment of switching.
@@ -2323,11 +2342,11 @@ int main(int argc, char** argv) {
                 if (Input::IsKeyPressed(GLFW_KEY_ESCAPE)) {
                     if (playMaximized) {
                         // Maximized play: Esc toggles the cursor, same as the old Play mode.
-                        window.SetCursorLocked(!window.IsCursorLocked());
+                        setPlayCursorLocked(!window.IsCursorLocked());
                     } else if (gameInputEngaged) {
                         // In-panel play: Esc hands control back to the editor.
                         gameInputEngaged = false;
-                        window.SetCursorLocked(false);
+                        setPlayCursorLocked(false);
                     }
                 }
 
@@ -2336,7 +2355,7 @@ int main(int argc, char** argv) {
                 // back to a captured view with a hidden cursor and no obvious way out.
                 if (gameInputEngaged && !glfwGetWindowAttrib(window.Handle(), GLFW_FOCUSED)) {
                     gameInputEngaged = false;
-                    window.SetCursorLocked(false);
+                    setPlayCursorLocked(false);
                 }
             }
 
@@ -4379,7 +4398,7 @@ int main(int argc, char** argv) {
             // EditorModuleToolbar.cpp's file comment).
             if (!playerMode) editor.DrawViewportActionBar(world, assets, playing, playMaximized, paused);
             if (editor.ConsumePlayStopRequest()) togglePlay();
-            if (editor.ConsumeMaximizeToggleRequest()) setMaximized(!playMaximized);
+            if (editor.ConsumeMaximizeToggleRequest()) setMaximized(!playMaximized, true);
 
             // The Game View toolbar's Fullscreen button and "Maximize on Play" both just emit a
             // request (GameViewPanel deliberately doesn't touch Window/GLFW itself) — fulfill it
@@ -4657,7 +4676,7 @@ int main(int argc, char** argv) {
                     // the cursor for the player. Esc / Stop release it (handled above / in stopPlay).
                     if (playing && !playMaximized && gameView.ConsumeEngageClick()) {
                         gameInputEngaged = true;
-                        window.SetCursorLocked(true);
+                        setPlayCursorLocked(true);
                     }
                 } else {
                     gameView.NotifyClosed();
@@ -4753,6 +4772,30 @@ int main(int argc, char** argv) {
                     break;
             }
 
+            // F12's screenshot: the Game view's framebuffer when the tab is up in the editor (rendered this frame), else the
+            // whole window (maximized Play draws the game straight to it). Read back here, like --editor-shot below.
+            if (screenshotPending) {
+                screenshotPending = false;
+                Framebuffer& shotFb = gameView.GetFramebuffer();
+                const bool shotFromGame = editorUIVisible && gameView.IsWindowOpen() && gameView.IsVisible() && shotFb.IsValid() &&
+                                          shotFb.Width() > 0 && shotFb.Height() > 0;
+                int shotW = shotFb.Width(), shotH = shotFb.Height();
+                if (!shotFromGame) glfwGetFramebufferSize(window.Handle(), &shotW, &shotH);
+                if (shotW > 0 && shotH > 0) {
+                    std::vector<unsigned char> shotPx = GrabTopDown(shotFromGame ? shotFb.Handle() : 0u, shotW, shotH);
+                    for (size_t i = 3; i < shotPx.size(); i += 4) shotPx[i] = 255; // the see-through window's alpha isn't the picture's
+                    const std::string& shotScenePath = editor.CurrentScenePath();
+                    const std::string shotScene = shotScenePath.empty() ? std::string("Untitled")
+                                                                        : std::filesystem::path(shotScenePath).stem().string();
+                    char shotStamp[32] = {};
+                    const std::time_t shotTime = std::time(nullptr);
+                    std::strftime(shotStamp, sizeof(shotStamp), "%Y%m%d_%H%M%S", std::localtime(&shotTime));
+                    const std::string shotOut =
+                        WritePngTo(ProjectPaths::Resolve("screenshots"), shotScene + "_" + shotStamp, shotW, shotH, shotPx);
+                    Log::Info("Screenshot saved: " + ProjectPaths::Relativize(shotOut));
+                    EditorSound::Play(EditorSound::Event::Screenshot);
+                }
+            }
             {
                 // --editor-shot: the whole window, once each view has settled.
                 if (!opt.editorShotDir.empty() && editorShotFrame > 0 && editorShotFrame % kEditorShotFrames == 0) {

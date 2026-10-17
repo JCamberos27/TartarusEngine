@@ -3,6 +3,7 @@
 #include "EditorLayerInternal.h"
 #include "EditorUIHelpers.h"
 #include "EditorUIPrimitives.h"
+#include "EditorSound.h"
 #include "SkySettings.h"
 #include "TimeOfDay.h"
 #include "World.h"
@@ -69,6 +70,7 @@ void EditorLayer::DrawPhysicalSkySettings(World& world, float w) {
                 if (ImGui::Selectable(SkyPresetName((SkyPreset)i), preset == i)) {
                     PushUndo(world, std::string("Sky Preset: ") + SkyPresetName((SkyPreset)i));
                     ApplySkyPreset(s, (SkyPreset)i);
+                    EditorSound::Play(EditorSound::Event::PresetApply);
                     preset = i;
                 }
             }

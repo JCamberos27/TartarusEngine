@@ -733,7 +733,9 @@ void EditorLayer::PushUndo(const World& world, const std::string& label, bool se
     if(m_GlobalUndoActive && !m_GlobalUndoApplying && selectionOnly) return;
     if (!selectionOnly && !m_GlobalUndoApplying) {
         const EditorSound::Event sound = EditorSound::UndoLabelEvent(label);
-        if (sound != EditorSound::Event::Count) EditorSound::Play(sound);
+        const bool quietRemove = sound == EditorSound::Event::ComponentRemove && ImGui::GetCurrentContext() &&
+                                 ImGui::GetFrameCount() == m_QuietRemoveSoundFrame;
+        if (sound != EditorSound::Event::Count && !quietRemove) EditorSound::Play(sound);
     }
     if(!selectionOnly && !m_GlobalUndoApplying && m_AssetsPtr) {
         BeginSceneUndo(world,label);return;
@@ -861,7 +863,9 @@ void EditorLayer::StageUndo(const World& world) {
 }
 
 void EditorLayer::CommitStagedUndo(const World& world, const std::string& label) {
-    if(m_GlobalUndoActive) {m_GlobalUndoLabel=label;return;}
+    // A field's right-click Reset commits through here, not PushUndo; nothing else staged sounds.
+    const bool resetSound = label.rfind("Reset ", 0) == 0;
+    if(m_GlobalUndoActive) {m_GlobalUndoLabel=label; if (resetSound) EditorSound::Play(EditorSound::Event::ResetDefault); return;}
     if (!m_HasStagedUndo) return;
     m_HasStagedUndo = false;
 
@@ -878,6 +882,7 @@ void EditorLayer::CommitStagedUndo(const World& world, const std::string& label)
         m_StagedUndoSelectedOrders.clear();
         return;
     }
+    if (resetSound) EditorSound::Play(EditorSound::Event::ResetDefault);
 
     // The staged snapshot is the PRE-edit state, so that's the full state this entry stands for.
     const std::string stagedJson = std::move(m_StagedUndoJson);

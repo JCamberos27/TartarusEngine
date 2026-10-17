@@ -60,7 +60,13 @@ void DrawLayersAndParameters(AnimCtx& cx) {
                 if (ImGui::Selectable(label.c_str(), W.Layer == i)) { W.Layer = i; W.ClearSelection(); W.FramePending = true; }
                 ImGui::PopID();
             }
-            if (ActionButton(ICON_FA_PLUS " Layer", "Add a layer: a state machine blended over the ones above it")) {
+            bool addLayer;
+            {
+                EditorSoundEvents::ScopedClickSilence quiet; // LayerAdd instead of the click
+                addLayer = ActionButton(ICON_FA_PLUS " Layer", "Add a layer: a state machine blended over the ones above it");
+            }
+            if (addLayer) {
+                EditorSound::Play(EditorSound::Event::LayerAdd, EditorSound::LastItemScreenX());
                 std::vector<std::string> names;
                 for (const auto& Ly : D.Layers) names.push_back(Ly.Name);
                 AC::Layer Ly;
@@ -174,7 +180,9 @@ void DrawLayersAndParameters(AnimCtx& cx) {
                     changed = true;
                 }
                 ImGui::SameLine();
+                EditorSoundEvents::ScopedClickSilence quiet; // LayerRemove instead of the click
                 if (ActionButton(ICON_FA_TRASH " Delete Layer", "Remove this layer and its states")) {
+                    EditorSound::Play(EditorSound::Event::LayerRemove, EditorSound::LastItemScreenX());
                     D.Layers.erase(D.Layers.begin() + W.Layer);
                     W.Layer = std::max(0, W.Layer - 1);
                     W.ClearSelection();
@@ -198,7 +206,9 @@ void DrawLayersAndParameters(AnimCtx& cx) {
                 if (n > 0) {
                     ImGui::TextColored(EditorUIPrimitives::WarningColor(), ICON_FA_TRIANGLE_EXCLAMATION "  %d transition%s point%s at a state that no longer exists.",
                                        n, n == 1 ? "" : "s", n == 1 ? "s" : "");
+                    EditorSoundEvents::ScopedClickSilence quiet; // TransitionBreak instead of the click
                     if (ActionButton(ICON_FA_TRASH " Remove them", "They are not drawn in the graph and never fire.")) {
+                        EditorSound::Play(EditorSound::Event::TransitionBreak, EditorSound::LastItemScreenX());
                         cur.Transitions.erase(std::remove_if(cur.Transitions.begin(), cur.Transitions.end(), broken), cur.Transitions.end());
                         W.ClearSelection();
                         changed = true;
@@ -251,7 +261,10 @@ void DrawLayersAndParameters(AnimCtx& cx) {
             for (int i = 0; i < (int)D.Parameters.size(); ++i) {
                 auto& p = D.Parameters[i];
                 ImGui::PushID(i);
-                if (RemoveButton("Remove this parameter")) remove = i;
+                {
+                    EditorSoundEvents::ScopedClickSilence quiet; // ParamRemove (or the confirm modal) instead of the click
+                    if (RemoveButton("Remove this parameter")) remove = i;
+                }
                 ImGui::SameLine();
                 const std::string before = p.Name;
                 if (InputName("##pname", p.Name, ImGui::GetContentRegionAvail().x * 0.45f)) {
@@ -310,6 +323,7 @@ void DrawLayersAndParameters(AnimCtx& cx) {
                     }
                 }
                 D.Parameters.erase(D.Parameters.begin() + index);
+                EditorSound::Play(EditorSound::Event::ParamRemove);
                 changed = true;
             };
             static int s_pendingRemove = -1;
@@ -328,7 +342,12 @@ void DrawLayersAndParameters(AnimCtx& cx) {
                     if (sp) ImGui::BulletText("%d state speed parameter%s (cleared)", sp, sp == 1 ? "" : "s");
                     if (bl) ImGui::BulletText("%d blend-tree axis%s (cleared: the tree stops blending)", bl, bl == 1 ? "" : "es");
                     ImGui::Spacing();
-                    if (EditorUIPrimitives::PrimaryButton("Remove it and those uses")) { dropParam(s_pendingRemove); s_pendingRemove = -1; ImGui::CloseCurrentPopup(); }
+                    bool confirmed;
+                    {
+                        EditorSoundEvents::ScopedClickSilence quiet; // dropParam plays ParamRemove
+                        confirmed = EditorUIPrimitives::PrimaryButton("Remove it and those uses");
+                    }
+                    if (confirmed) { dropParam(s_pendingRemove); s_pendingRemove = -1; ImGui::CloseCurrentPopup(); }
                     ImGui::SameLine();
                     if (EditorUIPrimitives::SecondaryButton("Cancel")) { s_pendingRemove = -1; ImGui::CloseCurrentPopup(); }
                 } else {
@@ -337,7 +356,13 @@ void DrawLayersAndParameters(AnimCtx& cx) {
                 }
                 ImGui::EndPopup();
             }
-            if (ActionButton(ICON_FA_PLUS " Parameter", "Add a parameter game code can set (SetFloat / SetInt / SetBool / SetTrigger)")) {
+            bool addParam;
+            {
+                EditorSoundEvents::ScopedClickSilence quiet; // ParamAdd instead of the click
+                addParam = ActionButton(ICON_FA_PLUS " Parameter", "Add a parameter game code can set (SetFloat / SetInt / SetBool / SetTrigger)");
+            }
+            if (addParam) {
+                EditorSound::Play(EditorSound::Event::ParamAdd, EditorSound::LastItemScreenX());
                 std::vector<std::string> names;
                 for (const auto& p : D.Parameters) names.push_back(p.Name);
                 D.Parameters.push_back({UniqueName("Param", names), AC::ParamType::Float, 0.0f});

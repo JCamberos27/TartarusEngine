@@ -21,6 +21,7 @@
 #include "Enhancers/EnhancerUserState.h" // renamed assets keep their favorites / bookmarks
 #include "Components.h"
 #include "EditorSettings.h"
+#include "EditorSound.h"
 #include "Log.h"
 #include "Model.h"
 #include "OutfitSystem.h"
@@ -35,6 +36,10 @@
 namespace fs = std::filesystem;
 
 namespace {
+
+// External changes the handlers below actually applied (an import, a reload, a move) during the current
+// SyncProjectChanges: it plays the "done" chime once for the lot. A file-static so EditorLayer.h stays untouched.
+int s_SyncApplied = 0;
 
 std::string AbsoluteOf(const std::string& stored) {
     if (stored.empty() || fs::path(stored).is_absolute()) return stored;
@@ -104,6 +109,7 @@ void EditorLayer::SyncProjectChanges(World& world, AssetLibrary& assets) {
     if (!ProjectWatcher::IsRunning()) return;
     bool overflowed = false;
     const std::vector<ProjectWatcher::Change> changes = ProjectWatcher::Drain(300, overflowed);
+    s_SyncApplied = 0;
     const bool external=overflowed || std::any_of(changes.begin(),changes.end(),[this](const auto& c) {
         if (AtomicFile::WrittenBySelfRecently(c.Path)) return false;
         for (const auto& move:m_SelfMoves)
@@ -120,6 +126,7 @@ void EditorLayer::SyncProjectChanges(World& world, AssetLibrary& assets) {
         AssetDatabase::ScanProject();
         InvalidateScenesListing();
         InvalidateProjectAssetIndex();
+        ++s_SyncApplied;
     }
     for (const auto& c : changes) {
         using K = ProjectWatcher::Change::Kind;
@@ -135,6 +142,7 @@ void EditorLayer::SyncProjectChanges(World& world, AssetLibrary& assets) {
     }
     if (!external) return;
     ++m_ExternalSyncs;
+    if (s_SyncApplied > 0) EditorSound::Play(EditorSound::Event::SyncDone); // heard from the background too
     // Refresh after external library/reference mutations - now, not at the next EnsureUndoScene:
     // anything changing the scene in between (later this frame) would be folded into it (#15).
     m_CurrentUndoScene.clear();
@@ -166,6 +174,7 @@ void EditorLayer::OnExternalMove(World& world, AssetLibrary& assets, const std::
 
     bool listed = false;
     const int refs = ApplyAssetMove(world, assets, oldPath, newPath, listed);
+    ++s_SyncApplied;
     Log::Info("'" + ProjectPaths::Relativize(oldPath) + "' was moved to '" + ProjectPaths::Relativize(newPath) +
               "' outside the editor" + (listed || refs ? " - " + std::to_string(refs) + " reference(s) in the scene updated." : "."));
 }
@@ -273,8 +282,10 @@ void EditorLayer::OnExternalAdd(World& world, AssetLibrary& assets, const std::s
         const std::string rel = fs::path(ProjectPaths::Relativize(path)).parent_path().generic_string();
         if (!rel.empty() && !fs::path(rel).is_absolute()) assets.SetAssetFolder(path, assets.AddFolderPath(rel));
     }
-    if (imported || type == "scene")
+    if (imported || type == "scene") {
+        if (!AtomicFile::WrittenBySelfRecently(path)) ++s_SyncApplied; // a file the editor itself just created isn't news
         Log::Info("Imported '" + ProjectPaths::Relativize(path) + "' (added outside the editor).");
+    }
 }
 
 void EditorLayer::OnExternalRemove(World& /*world*/, AssetLibrary& assets, const std::string& path) {
@@ -300,6 +311,7 @@ void EditorLayer::OnExternalModify(World& world, AssetLibrary& assets, const std
     if (AtomicFile::WrittenBySelfRecently(path)) return; // our own save
     if (SameFile(path, ProjectPaths::Resolve("settings.json"))) {
         ProjectSettings::Load(); // the same reload an undo of a settings change does
+        ++s_SyncApplied;
         Log::Info("Reloaded Project Settings (settings.json changed outside the editor).");
         return;
     }
@@ -319,5 +331,8 @@ void EditorLayer::OnExternalModify(World& world, AssetLibrary& assets, const std
         if (SameFile(m_CurrentScenePath, path))
             Log::Warn("The open scene changed on disk outside the editor. File > Revert Scene loads that version.");
     }
-    if (reloaded) Log::Info("Reloaded '" + ProjectPaths::Relativize(path) + "' (changed outside the editor).");
+    if (reloaded) {
+        ++s_SyncApplied;
+        Log::Info("Reloaded '" + ProjectPaths::Relativize(path) + "' (changed outside the editor).");
+    }
 }

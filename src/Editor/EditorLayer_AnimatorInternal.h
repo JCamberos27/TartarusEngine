@@ -5,6 +5,7 @@
 #include "AnimatorController.h"
 #include "AssetLibrary.h"
 #include "Components.h"
+#include "EditorSound.h"
 #include "Log.h"
 #include "Model.h"
 #include "ProjectPaths.h"
@@ -71,6 +72,12 @@ struct AnimatorWindowState {
     NodeRef ContextNode;
     int ContextTransition = -1;
     glm::vec2 ContextWorld{0.0f};
+
+    // The live state last seen in Play (the LiveState sound): -1 until the first look at this rig / layer / controller.
+    int LiveSeen = -1;
+    entt::entity LiveSeenEntity = entt::null;
+    int LiveSeenLayer = -1;
+    std::string LiveSeenRel;
 
     std::vector<std::pair<std::string, std::string>> Clips;
     const void* ClipsSource = nullptr;

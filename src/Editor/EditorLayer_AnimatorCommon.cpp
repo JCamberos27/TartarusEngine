@@ -115,8 +115,10 @@ void LiveParamWidget(AnimatorParam& p, float width) {
 // Removes states (and every transition touching them) from `layer`.
 void DeleteStates(AnimCtx& c, AC::Layer& Ly, std::vector<int> which) {
     std::sort(which.rbegin(), which.rend());
+    bool removed = false;
     for (int s : which) {
         if (s < 0 || s >= (int)Ly.States.size()) continue;
+        removed = true;
         const std::string gone = Ly.States[s].Name;
         Ly.States.erase(Ly.States.begin() + s);
         Ly.Transitions.erase(std::remove_if(Ly.Transitions.begin(), Ly.Transitions.end(),
@@ -127,6 +129,7 @@ void DeleteStates(AnimCtx& c, AC::Layer& Ly, std::vector<int> which) {
         if (Ly.DefaultState == gone) Ly.DefaultState.clear();
         if (Ly.AdditiveReferenceState == gone) Ly.AdditiveReferenceState.clear();
     }
+    if (removed) EditorSound::Play(EditorSound::Event::StateDelete); // once, however many went
     c.W.ClearSelection();
     c.changed = true;
 }

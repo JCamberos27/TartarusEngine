@@ -6,6 +6,7 @@
 #include "EditorLayerInternal.h"
 #include "EditorUIHelpers.h"
 #include "EditorUIPrimitives.h"
+#include "EditorSound.h"
 #include "AssetLibrary.h"
 #include "Components.h"
 #include "Log.h"
@@ -119,6 +120,11 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
         if (!r.Ok) Log::Warn("Character Outfit: " + r.Error);
         ui.Notes = r.Notes;
     };
+    // The same, with the change's own sound (Blocked when it failed).
+    auto reportSound = [&](const OutfitSystem::Result& r, EditorSound::Event e) {
+        EditorSound::Play(r.Ok ? e : EditorSound::Event::Blocked);
+        report(r);
+    };
 
     auto pieces = OutfitSystem::Pieces(world, root);
     if (pieces.empty()) {
@@ -162,10 +168,16 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
         // Randomize and the menu on the right.
         const float right = ImGui::GetWindowContentRegionMax().x;
         ImGui::SameLine(right - 2.0f * ImGui::GetFrameHeight() - style.ItemSpacing.x);
-        if (EditorInternal::ActionButton(ICON_FA_DICE, "Randomize (locked slots stay)")) {
+        bool randomize;
+        {
+            EditorSoundEvents::ScopedClickSilence quiet; // Randomize instead of the click
+            randomize = EditorInternal::ActionButton(ICON_FA_DICE, "Randomize (locked slots stay)");
+        }
+        if (randomize) {
             PushUndo(world, "Randomize Outfit");
-            report(OutfitSystem::Randomize(world, assets, root,
-                                           (std::uint32_t)std::chrono::steady_clock::now().time_since_epoch().count()));
+            reportSound(OutfitSystem::Randomize(world, assets, root,
+                                                (std::uint32_t)std::chrono::steady_clock::now().time_since_epoch().count()),
+                        EditorSound::Event::Randomize);
         }
         ImGui::SameLine();
         if (EditorInternal::ActionButton(ICON_FA_ELLIPSIS_VERTICAL, "Presets and tools")) ImGui::OpenPopup("##outfitMenu");
@@ -174,12 +186,19 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
             ImGui::SetNextItemWidth(160.0f);
             ImGui::InputText("##presetName", ui.PresetName, sizeof(ui.PresetName));
             ImGui::SameLine();
-            if (EditorUIPrimitives::PrimaryButton("Save")) {
+            bool save;
+            {
+                EditorSoundEvents::ScopedClickSilence quiet; // Save / Blocked instead of the click
+                save = EditorUIPrimitives::PrimaryButton("Save");
+            }
+            if (save) {
                 const std::string path = "assets/Characters/Outfits/" + std::string(ui.PresetName) + ".outfit";
                 std::error_code ec;
                 std::filesystem::create_directories(ProjectPaths::Resolve("assets/Characters/Outfits"), ec);
                 std::string err;
-                ui.Notes = {OutfitSystem::SavePreset(world, assets, root, path, &err) ? "Saved " + path : err};
+                const bool saved = OutfitSystem::SavePreset(world, assets, root, path, &err);
+                EditorSound::Play(saved ? EditorSound::Event::Save : EditorSound::Event::Blocked);
+                ui.Notes = {saved ? "Saved " + path : err};
             }
             std::error_code ec;
             for (auto it = std::filesystem::recursive_directory_iterator(ProjectPaths::Resolve("assets"), ec);
@@ -188,7 +207,7 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
                 const std::string rel = ProjectPaths::Relativize(it->path().string());
                 if (ImGui::MenuItem((ICON_FA_PERSON_DRESS "  " + it->path().stem().string()).c_str())) {
                     PushUndo(world, "Load Outfit Preset");
-                    report(OutfitSystem::LoadPreset(world, assets, root, rel));
+                    reportSound(OutfitSystem::LoadPreset(world, assets, root, rel), EditorSound::Event::PresetApply);
                 }
             }
             ImGui::Separator();
@@ -200,7 +219,7 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
                 PushUndo(world, "Clear Outfit");
                 Wardrobe::Request req = OutfitSystem::CurrentRequest(world, root);
                 req.Items.clear();
-                report(OutfitSystem::Submit(world, assets, root, req));
+                reportSound(OutfitSystem::Submit(world, assets, root, req), EditorSound::Event::Unequip);
             }
             if (ImGui::MenuItem(ICON_FA_ROTATE "  Rescan wardrobe")) OutfitSystem::LoadCatalog(assets, outfit->Wardrobe, true);
             ImGui::MenuItem("Show fitted cuts", nullptr, &ui.ShowVariants);
@@ -300,7 +319,7 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
         if (ImGui::Button("Remove##outfitRemove")) {
             PushUndo(world, "Remove " + slot->Label);
-            report(OutfitSystem::Equip(world, assets, root, ui.Slot, std::string()));
+            reportSound(OutfitSystem::Equip(world, assets, root, ui.Slot, std::string()), EditorSound::Event::Unequip);
         }
         ImGui::PopStyleColor(4);
     }
@@ -333,7 +352,7 @@ void EditorLayer::DrawCharacterOutfitEditor(World& world, entt::entity root) {
         const bool selected = it == wornItem;
         if (ImGui::Selectable(it->Name.c_str(), selected, 0, ImVec2(0.0f, row - ImGui::GetStyle().ItemSpacing.y)) && !selected) {
             PushUndo(world, "Equip " + it->Name);
-            report(OutfitSystem::Equip(world, assets, root, ui.Slot, it->Path));
+            reportSound(OutfitSystem::Equip(world, assets, root, ui.Slot, it->Path), EditorSound::Event::Equip);
         }
         const bool hovered = ImGui::IsItemHovered();
         if (hovered) hoveredItem = it;
