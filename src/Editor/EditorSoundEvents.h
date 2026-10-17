@@ -38,11 +38,41 @@ enum class Event : uint8_t {
     DragStart,         // a drag & drop payload is picked up
     DropAccept,        // ...dropped on a target that takes it
     DropReject,        // ...let go anywhere else
+    // Actions: played by the editor operation itself (once per action, however many entities it touched)
+    Select,            // the selection changes to something (Hierarchy click, viewport pick, Select All...)
+    Deselect,          // ...to nothing
+    Create,            // a new entity
+    Duplicate,
+    Delete,            // entities deleted
+    Copy,
+    Paste,
+    Rename,
+    ComponentAdd,
+    ComponentRemove,
+    PrefabApply,       // instance overrides pushed to the prefab asset
+    PrefabRevert,      // ...thrown away
+    PrefabEnter,       // prefab editing mode opens
+    PrefabExit,
+    ToolSwitch,        // move / rotate / scale / ... (pitch rises with the tool)
+    SnapToggle,
+    SpaceToggle,       // local / world
+    FrameSelected,     // F: the camera frames the selection
+    ViewPreset,        // the camera snaps to a view (top, front, ...)
+    PanelOpen,         // a dock panel opened from the Window menu
+    PanelClose,
+    TreeExpand,        // a tree node (Hierarchy, Inspector header, folders) opens
+    TreeCollapse,
+    SceneOpen,
+    BuildStart,
+    BuildSuccess,
+    BuildFail,
+    ConsoleClear,
+    AssetImport,       // a file imported into the project
     Count
 };
 
 // Preferences groups: each has its own toggle and volume.
-enum class Category : uint8_t { Clicks = 0, Sliders, Hover, Panels, DragDrop, Notifications, PlayMode, Count };
+enum class Category : uint8_t { Clicks = 0, Sliders, Hover, Panels, DragDrop, Notifications, PlayMode, Objects, Tools, Count };
 
 constexpr int kEventCount = (int)Event::Count;
 constexpr int kCategoryCount = (int)Category::Count;

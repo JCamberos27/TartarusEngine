@@ -1307,6 +1307,8 @@ private:
     bool DoSaveAs(World& world, AssetLibrary& assets);
 
     GizmoOp m_GizmoOp = GizmoOp::Translate;
+    bool m_QuietPrefabSave = false;     // SavePrefabMode without its Save sound (ExitPrefabMode plays PrefabExit)
+    bool m_QuietFrameSelection = false; // FocusOnSelection without its sound (frame-on-select)
     bool m_GizmoLocalSpace = false; // false = world-aligned handles, true = aligned to the object's own rotation
     // Phase 3 item 6 (audit #5) — raised from 0.09, which read as cramped against the object;
     // still overridable via Preferences > Viewport's "Gizmo size" slider (0.05-0.40).

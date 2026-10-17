@@ -19,6 +19,7 @@
 #include "Material.h"
 #include "MaterialAsset.h"
 #include "AudioEngine.h"
+#include "EditorSound.h"
 #include "SceneSerializer.h"
 #include "AABB.h"
 #include "Log.h"
@@ -159,6 +160,7 @@ void EditorLayer::CopySelection(World& world) {
     auto selection = GetSelectedItems();
     if (selection.empty()) return;
     m_Clipboard = SceneSerializer::SaveEntitiesToString(world, selection);
+    EditorSound::Play(EditorSound::Event::Copy);
     Log::Info("Copied " + std::to_string(selection.size()) +
         (selection.size() == 1 ? " object." : " objects."));
 }
@@ -183,6 +185,7 @@ void EditorLayer::PasteClipboard(World& world, AssetLibrary& assets) {
     ClearSelection();
     for (entt::entity e : pasted) AddToSelectionIfAbsent(e);
     if (m_Selected == entt::null && !pasted.empty()) SelectItem(pasted.front(), false);
+    EditorSound::Play(EditorSound::Event::Paste);
 }
 
 void EditorLayer::ClearSelection() {
@@ -431,7 +434,10 @@ void EditorLayer::HandleHierarchyKeyboardNav(World& world) {
     // nested rows).
     auto nodeId = [&](entt::entity e) { return HierarchyNodeStateId(world, e, m_HierChainScratch); };
     auto nodeOpen    = [&](entt::entity e) { return ImGui::GetStateStorage()->GetInt(nodeId(e), 0) != 0; };
-    auto setNodeOpen = [&](entt::entity e, bool open) { ImGui::GetStateStorage()->SetInt(nodeId(e), open ? 1 : 0); };
+    auto setNodeOpen = [&](entt::entity e, bool open) {
+        ImGui::GetStateStorage()->SetInt(nodeId(e), open ? 1 : 0);
+        EditorSound::Play(open ? EditorSound::Event::TreeExpand : EditorSound::Event::TreeCollapse);
+    };
 
     int idx = -1;
     for (int i = 0; i < (int)vis.size(); ++i) if (vis[i] == m_Selected) { idx = i; break; }
@@ -555,6 +561,7 @@ void EditorLayer::DeleteSelection(World& world) {
     }
 
     ClearSelection();
+    EditorSound::Play(EditorSound::Event::Delete);
     Log::Info("Deleted " + std::to_string(count) + (count == 1 ? " object." : " objects."));
 }
 void EditorLayer::DuplicateSelection(World& world, AssetLibrary& assets, bool inPlace) {
@@ -611,6 +618,7 @@ void EditorLayer::DuplicateSelection(World& world, AssetLibrary& assets, bool in
         else m_ExtraSelection.push_back(created[i]);
         FlashHierarchyRow(created[i], /*reveal=*/i == 0);
     }
+    EditorSound::Play(EditorSound::Event::Duplicate);
     Log::Info("Duplicated " + std::to_string(created.size()) + (created.size() == 1 ? " object." : " objects."));
 }
 
@@ -839,6 +847,7 @@ void EditorLayer::DrawAddEntityItems(World& world, AssetLibrary& assets, Camera&
 // Expand / collapse every root's whole subtree at once (audit #71) — the host half of the
 // module's Expand-all / Collapse-all buttons.
 void EditorLayer::HierarchyExpandAll(World& world, bool open) {
+    EditorSound::Play(open ? EditorSound::Event::TreeExpand : EditorSound::Event::TreeCollapse);
     for (auto e : world.Registry.view<const NameComponent>()) {
         const auto* h = world.Registry.try_get<HierarchyComponent>(e);
         if (!h || h->Parent == entt::null) SetHierarchyExpandedRecursive(world, e, open);
@@ -1280,6 +1289,7 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
             } else {
                 PushUndo(world, "Rename");
                 name.Name = sanitized;
+                EditorSound::Play(EditorSound::Event::Rename);
                 m_RenamingEntity = entt::null;
                 m_EntityRenameRejectedFlash = 0.0f;
             }
@@ -1447,6 +1457,7 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
     if (ImGui::IsItemClicked() && clickOnArrow) {
         open = !open;
         ImGui::GetStateStorage()->SetInt(nodeStateId, open ? 1 : 0);
+        EditorSound::Play(open ? EditorSound::Event::TreeExpand : EditorSound::Event::TreeCollapse, EditorSound::LastItemScreenX());
         if (ImGui::GetIO().KeyAlt) {
             for (entt::entity child : hier->Children) SetHierarchyExpandedRecursive(world, child, open);
         }
