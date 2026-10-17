@@ -17,6 +17,7 @@
 #include "EditorLayerInternal.h"
 #include "EditorPanels.h"
 #include "EditorSettings.h"
+#include "EditorSound.h"
 #include "EditorTheme.h"
 #include "EditorUIHelpers.h"
 #include "EditorUIPrimitives.h"
@@ -387,9 +388,10 @@ void EditorLayer::GlassFrameBegin() {
 
 // --- Notifications ----------------------------------------------------------------------------------
 
-void EditorLayer::PushGlassToast(const std::string& title, const std::string& body, bool error) {
+void EditorLayer::PushGlassToast(const std::string& title, const std::string& body, bool error, bool chimed) {
     GlassEditorState& g = GlassState();
-    // At most four on screen: the oldest still showing leaves to make room.
+    if (!chimed && !EditorSound::PlayedThisFrame()) EditorSound::Play(EditorSound::Event::ToastIn);
+    // At most four on screen: the oldest still showing leaves to make room (silently).
     int showing = 0;
     for (const auto& t : g.Toasts) showing += t.Dismissed < 0.0 ? 1 : 0;
     if (showing >= 4) {
@@ -425,14 +427,15 @@ void EditorLayer::PollGlassNotifications() {
         const LogEntry& e = entries[i];
         // A hot reload that landed: a quiet success toast whose check draws on.
         if (e.Level == LogLevel::Info && e.Message.rfind("Hot reload: TartarusGame module reloaded", 0) == 0) {
-            PushGlassToast("Module reloaded", "Your code changes are live.", false);
+            PushGlassToast("Module reloaded", "Your code changes are live.", false, /*chimed=*/true); // ModuleReload
             continue;
         }
         if (e.Level != LogLevel::Error) continue;
         const bool module = e.Message.rfind("Module rebuild failed", 0) == 0;
         const bool shader = ContainsNoCase(e.Message, "failed to compile") || ContainsNoCase(e.Message, "compile error");
         if (!module && !shader) continue;
-        PushGlassToast(module ? "Module rebuild failed" : "Shader compile failed", e.Message, true);
+        // The error's own sound (the log watcher's NotifyError, BuildFail) already said it.
+        PushGlassToast(module ? "Module rebuild failed" : "Shader compile failed", e.Message, true, /*chimed=*/true);
     }
     g.LastLogSeq = newest;
 }
@@ -1389,7 +1392,10 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
             ImGui::SetCursorScreenPos(rest.Min);
             bool hov = false, held = false;
             ImGui::PushID((int)toast.Id);
-            if (Glass::MotionButton(ImGui::GetID("##toast"), rest, drawn, &hov, &held) && toast.Dismissed < 0.0) toast.Dismissed = now;
+            if (Glass::MotionButton(ImGui::GetID("##toast"), rest, drawn, &hov, &held) && toast.Dismissed < 0.0) {
+                toast.Dismissed = now;
+                EditorSound::Play(EditorSound::Event::ToastOut, EditorSound::LastItemScreenX()); // the timeout leaves silently
+            }
             ImGui::PopID();
             if (hov && toast.Dismissed < 0.0) {
                 if (age > popDur) toast.Born += (double)ImGui::GetIO().DeltaTime; // hovering holds it on screen

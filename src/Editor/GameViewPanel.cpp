@@ -128,6 +128,7 @@ void GameViewPanel::DrawAspectControl() {
                                                         : EditorTheme::U32(EditorTheme::Secondary));
         if (ImGui::Button(ICON_FA_CHART_SIMPLE "##gvstats", ImVec2(h, h))) {
             EditorSettings::Get().GameViewShowStats = !showStats;
+            EditorSound::Play(showStats ? EditorSound::Event::StatsOff : EditorSound::Event::StatsOn, EditorSound::LastItemScreenX());
             EditorSettings::Save();
         }
         ImGui::PopStyleColor(2);

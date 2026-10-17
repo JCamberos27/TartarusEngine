@@ -73,6 +73,7 @@ void OpenFolder(const std::string& dir) {
 void EditorLayer::RunBuild(bool runAfter) {
     if (IsBuilding()) {
         Log::Warn("Build: a build is already running.");
+        EditorSound::Play(EditorSound::Event::Blocked);
         return;
     }
     // Build what's on disk: an unsaved scene would otherwise ship without its latest edits.
@@ -81,6 +82,9 @@ void EditorLayer::RunBuild(bool runAfter) {
     // The settings are copied: the Build page stays editable meanwhile.
     m_BuildProgress = std::make_shared<BuildPipeline::Progress>();
     m_BuildRunAfter = runAfter;
+    m_BuildSoundStage = -1;
+    m_BuildSoundQuarter = 0;
+    m_BuildSoundTicks = 0;
     EditorSound::Play(EditorSound::Event::BuildStart);
     m_BuildFuture = std::async(std::launch::async,
         [settings = ProjectSettings::Build(), progress = m_BuildProgress]() {
@@ -89,9 +93,29 @@ void EditorLayer::RunBuild(bool runAfter) {
 }
 
 void EditorLayer::PollBuild() {
-    if (!IsBuilding() || m_BuildFuture.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return;
+    if (!IsBuilding()) return;
+    // Progress ticks, read here on the main thread (never from the worker): each stage edge, then each
+    // quarter of the copy, every tick a step higher. The first stage is heard as BuildStart itself.
+    if (m_BuildProgress && !m_BuildProgress->Cancel.load()) {
+        const int stage = m_BuildProgress->StageNow.load();
+        const int done = m_BuildProgress->Done.load(), total = m_BuildProgress->Total.load();
+        const int quarter = total > 0 ? std::clamp(done * 4 / total, 0, 3) : 0;
+        if ((m_BuildSoundStage >= 0 && stage != m_BuildSoundStage) || quarter > m_BuildSoundQuarter) {
+            EditorSound::Play(EditorSound::Event::BuildProgress, -1.0f,
+                              std::pow(1.06f, (float)std::min(m_BuildSoundTicks, 8)));
+            ++m_BuildSoundTicks;
+        }
+        m_BuildSoundStage = stage;
+        m_BuildSoundQuarter = std::max(m_BuildSoundQuarter, quarter);
+    }
+    if (m_BuildFuture.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return;
+    // Read before the progress is reset: a cancelled build ends on ClickCancel, not a failure.
+    const bool cancelled = m_BuildProgress && m_BuildProgress->Cancel.load();
     m_LastBuildReport = std::make_shared<BuildPipeline::Report>(m_BuildFuture.get());
-    EditorSound::Play(m_LastBuildReport->Ok ? EditorSound::Event::BuildSuccess : EditorSound::Event::BuildFail);
+    // PackageSuccess / PackageFail: BuildSuccess / BuildFail stay the game module build's.
+    EditorSound::Play(cancelled                ? EditorSound::Event::ClickCancel
+                      : m_LastBuildReport->Ok ? EditorSound::Event::PackageSuccess
+                                              : EditorSound::Event::PackageFail);
     if (m_LastBuildReport->Ok && m_BuildRunAfter) BuildPipeline::Run(m_LastBuildReport->ExePath);
     m_BuildProgress.reset();
 }

@@ -400,6 +400,89 @@ EVENTS = {
     "ViewRestore": tone("cue", [L("Y:device-removed", len_ms=140, st=-2.0, frac=0.01)], 120, 55, phase=6),
     "CursorLock": tick([L(VOL, st=-5.0, frac=0.2)], 65, 30, phase=6),
     "CursorRelease": tick([L(VOL, st=5.0, frac=0.2)], 55, 30, phase=6),
+
+    # ===== phase 7
+    # viewport: marquee start = a light modifier tick, its commit = a small high bell (the caller pitches it by the count);
+    # hide = two modifier ticks falling, dulled, show = the mirror; lock = a key tick then a lower modifier "latch", unlock the
+    # mirror; fly speed = the volume tick a fifth up (pitched by the speed); snap to ground = a low key thud (a fifth down) with a modifier
+    # tick landing on it; measure point = a very high bell ping, clear = a plain bell, dulled
+    "BoxSelectStart": tick([L(MOD, st=2.0, len_ms=35)], 45, 25, peak=-24.0, lp=4000.0, phase=7),
+    "BoxSelectEnd": tick([L(BELL, len_ms=70, st=9.0)], 65, 40, peak=-24.0, phase=7),
+    "HideOn": tick([L(MOD, st=5.0, len_ms=30), L(MOD, len_ms=30, at_ms=26, db=-2.0)], 65, 28, lp=3000.0, phase=7),
+    "HideOff": tick([L(MOD, len_ms=30), L(MOD, st=5.0, len_ms=30, at_ms=26, db=-2.0)], 65, 28, phase=7),
+    "LockOn": tick([L(PRESS, st=-2.0, len_ms=30), L(MOD, st=-5.0, len_ms=30, at_ms=22, db=-2.0)], 65, 28, lp=2500.0, phase=7),
+    "LockOff": tick([L(MOD, st=-5.0, len_ms=30), L(PRESS, st=2.0, len_ms=30, at_ms=22, db=-2.0)], 65, 28, phase=7),
+    "FlySpeed": tick([L(VOL, st=7.0, frac=0.2, len_ms=45)], 50, 28, peak=-24.0, phase=7),
+    "SnapGround": tick([L(PRESS, st=-7.0, len_ms=45), L(MOD, st=-2.0, len_ms=35, at_ms=30, db=-3.0)], 85, 35, lp=2000.0,
+                       phase=7),
+    "MeasurePoint": tick([L(BELL, len_ms=70, st=14.0)], 65, 40, peak=-23.0, phase=7),
+    "MeasureClear": tick([L(BELL, len_ms=80, st=2.0)], 70, 40, peak=-24.0, lp=2500.0, phase=7),
+    # hierarchy: reparent = a step down into the child (modifier tick a fifth, then the root); reorder = a light volume-tick
+    # slide; expand / collapse all = four modifier ticks sweeping up an octave / down; isolate = the head of KDE's question
+# chime a fourth up
+    "Reparent": tick([L(MOD, st=7.0, len_ms=30), L(MOD, len_ms=35, at_ms=30, db=-1.0)], 80, 30, phase=7),
+    "Reorder": tick([L(VOL, st=3.0, frac=0.2, len_ms=50)], 55, 28, peak=-23.0, phase=7),
+    "ExpandAllSweep": tick([L(MOD, len_ms=25), L(MOD, st=4.0, len_ms=25, at_ms=18, db=-1.0),
+                            L(MOD, st=7.0, len_ms=25, at_ms=36, db=-2.0), L(MOD, st=12.0, len_ms=25, at_ms=54, db=-3.0)],
+                           100, 30, peak=-24.0, lp=3500.0, phase=7),
+    "CollapseAllSweep": tick([L(MOD, st=12.0, len_ms=25), L(MOD, st=7.0, len_ms=25, at_ms=18, db=-1.0),
+                              L(MOD, st=4.0, len_ms=25, at_ms=36, db=-2.0), L(MOD, len_ms=25, at_ms=54, db=-3.0)],
+                             100, 30, peak=-24.0, lp=3000.0, phase=7),
+    "Isolate": tone("cue", [L("K:dialog-question", len_ms=280, st=5.0, frac=0.01)], 260, 120, phase=7),
+    # workflow: dock = a modifier tick locking onto a lower key tick; undock = Yaru's device-removed, high and short (a rip);
+    # a tab moved = the volume tick a tone down; a layout = the head of KDE's information chord a fourth up; saved = Save's octave bell, higher
+    # and shorter; toasts = a soft bell a fifth up in, the plain bell dulled out; dirty = a faint high modifier tick; autosave
+    # = a low muffled bell; the recovery prompt = KDE's warning chime
+    "DockAttach": tick([L(MOD, st=5.0, len_ms=30), L(PRESS, st=-3.0, len_ms=40, at_ms=28)], 80, 32, phase=7),
+    "DockDetach": tone("cue", [L("Y:device-removed", len_ms=120, st=8.0, frac=0.01)], 110, 50, phase=7),
+    "TabReorder": tick([L(VOL, st=-2.0, frac=0.2)], 55, 28, peak=-24.0, phase=7),
+    "LayoutApply": tone("cue", [L("K:dialog-information", len_ms=320, st=5.0, frac=0.01)], 300, 140, phase=7),
+    "LayoutSave": tone("cue", [L("K:bell-window-system", len_ms=320, st=7.0, frac=0.01)], 300, 150, phase=7),
+    "ToastIn": tick([L(BELL, len_ms=110, st=7.0)], 100, 60, peak=-26.0, phase=7),
+    "ToastOut": tick([L(BELL, len_ms=90)], 85, 50, peak=-27.0, lp=2500.0, phase=7),
+    "DirtyCue": tick([L(MOD, st=9.0, len_ms=30)], 40, 25, peak=-30.0, lp=3000.0, phase=7),
+    "Autosave": tick([L(BELL, len_ms=100, st=-5.0)], 95, 55, peak=-26.0, lp=2000.0, phase=7),
+    "RecoveryPrompt": tone("notify", [L("K:dialog-warning", len_ms=900, frac=0.01)], 900, 400, phase=7),
+    # play & debug: slower = two volume ticks falling a fourth, faster = rising; 1x = a bell a fourth up; a debug overlay =
+    # two key ticks rising (on) / falling and dulled (off); stats = two high modifier ticks rising / falling
+    "TimeSlower": tick([L(VOL, frac=0.2, len_ms=40), L(VOL, st=-5.0, frac=0.2, len_ms=45, at_ms=40, db=-1.0)], 100, 35, phase=7),
+    "TimeFaster": tick([L(VOL, st=-5.0, frac=0.2, len_ms=40), L(VOL, frac=0.2, len_ms=45, at_ms=40, db=-1.0)], 100, 35, phase=7),
+    "TimeReset": tick([L(BELL, len_ms=100, st=5.0)], 95, 55, peak=-22.0, phase=7),
+    "DebugOn": tick([L(PRESS, st=5.0, len_ms=30), L(PRESS, st=12.0, len_ms=35, at_ms=30, db=-1.0)], 80, 30, phase=7),
+    "DebugOff": tick([L(PRESS, st=12.0, len_ms=30), L(PRESS, st=5.0, len_ms=35, at_ms=30, db=-1.0)], 80, 30, lp=2500.0,
+                     phase=7),
+    "StatsOn": tick([L(MOD, st=12.0, len_ms=30), L(MOD, st=16.0, len_ms=30, at_ms=25, db=-2.0)], 70, 28, phase=7),
+    "StatsOff": tick([L(MOD, st=16.0, len_ms=30), L(MOD, st=12.0, len_ms=30, at_ms=25, db=-2.0)], 70, 28, lp=3000.0, phase=7),
+    # fields: commit = the volume tick up a minor seventh, cancel = a tone down and muffled; the colour picker = the menu pair
+    # an octave up; eyedropper armed = two modifier ticks a sixth apart, its pick = Yaru's octave leap a sixth up (a drip);
+    # a swatch = a high bell ping; a shortcut chip listening = a key double tap, captured = KDE's quick rise a fifth up,
+    # conflicting = Yaru's warning dyad a fourth up and dulled; search clear = a volume-tick swipe down
+    "FieldCommit": tick([L(VOL, st=10.0, frac=0.2, len_ms=45)], 50, 28, peak=-24.0, phase=7),
+    "FieldCancel": tick([L(VOL, st=-2.0, frac=0.2, len_ms=45)], 55, 28, peak=-28.0, lp=1800.0, phase=7),
+    "PickerOpen": tone("cue", [L("Y:device-added", len_ms=130, st=12.0, frac=0.01)], 110, 50, phase=7),
+    "PickerClose": tone("cue", [L("Y:device-removed", len_ms=130, st=12.0, frac=0.01)], 110, 50, phase=7),
+    "EyedropperArm": tick([L(MOD, st=-3.0, len_ms=30), L(MOD, st=9.0, len_ms=30, at_ms=30, db=-2.0)], 70, 28, phase=7),
+    "EyedropperPick": tone("cue", [L("Y:message-new-instant", len_ms=180, st=9.0, frac=0.01)], 170, 80, phase=7),
+    "SwatchPick": tick([L(BELL, len_ms=80, st=10.0)], 75, 45, peak=-23.0, phase=7),
+    "BindListen": tick([L(PRESS, len_ms=30), L(PRESS, len_ms=30, at_ms=45, db=-2.0)], 95, 30, phase=7),
+    "BindCaptured": tone("cue", [L("K:completion-success", len_ms=220, st=7.0, frac=0.01)], 200, 100, phase=7),
+    "BindConflict": tone("cue", [L("Y:dialog-warning", len_ms=220, st=5.0, frac=0.01)], 200, 100, lp=2500.0, phase=7),
+    "SearchClear": tick([L(VOL, st=4.0, frac=0.2, len_ms=40), L(VOL, st=-3.0, frac=0.2, len_ms=45, at_ms=30, db=-2.0)],
+                        90, 30, peak=-24.0, phase=7),
+    # deeper: files from Explorer = drop-accept's octave leap a fourth down; missing references = Scene open's chime a minor
+    # third down and muffled (it opened, but something is missing)
+    "FilesDropped": tone("cue", [L("Y:message-new-instant", len_ms=300, st=-5.0, frac=0.01)], 300, 150, phase=7),
+    "MissingRefs": tone("cue", [L("K:service-login", len_ms=700, st=-3.0, frac=0.01)], 700, 320, lp=1400.0, phase=7),
+    # moments, the signature sounds: start = KDE's desktop login, exit = the start of its logout (short: the editor waits for
+    # it); a packaged build = Yaru's system-ready fanfare / KDE's plain error tone a tone down and darkened (a different family
+    # from the module build's outcome pair); its progress = a high modifier tick (pitched up per stage); the digest = KDE's
+    # new-mail chime
+    "EditorStart": tone("notify", [L("K:desktop-login", len_ms=1150, frac=0.01)], 1150, 500, phase=7),
+    "EditorExit": tone("notify", [L("K:desktop-logout", len_ms=480, frac=0.01)], 480, 240, phase=7),
+    "PackageSuccess": tone("notify", [L("Y:system-ready", len_ms=1150, frac=0.01)], 1150, 450, phase=7),
+    "PackageFail": tone("notify", [L("K:dialog-error", len_ms=1100, st=-2.0, frac=0.01)], 1100, 450, lp=2500.0, phase=7),
+    "BuildProgress": tick([L(MOD, st=12.0, len_ms=30)], 40, 25, peak=-25.0, lp=4000.0, phase=7),
+    "Digest": tone("cue", [L("K:message-new-email", len_ms=600, frac=0.01)], 600, 280, phase=7),
 }
 
 

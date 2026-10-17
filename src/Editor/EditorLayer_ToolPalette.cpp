@@ -177,8 +177,10 @@ void EditorLayer::DrawToolPalette(World& world, Camera& editorCamera) {
         {
             const bool canSnap = CanSnapSelectionToGround(world);
             ImGui::BeginDisabled(!canSnap);
+            ++quiet; // SnapSelectionToGround plays SnapGround
             if (ActionButton(EDITOR_ICON_SNAP_TO_GROUND, "Snap selection to ground", false, ImVec2(btn, btn)))
                 SnapSelectionToGround(world);
+            --quiet;
             ImGui::EndDisabled();
         }
 

@@ -31,9 +31,9 @@ struct Settings {
     bool Enabled = true;
     float Master = 0.70f; // the P6 remaster: the files came up 10 dB and this from 0.44, so the defaults are clearly audible
     bool UsePremium = false; // the paid Drive set where an event has one (opt-in: audition it on the Sound Board first)
-    std::array<bool, EditorSoundEvents::kCategoryCount> CategoryOn{true, true, true, true, true, true,
-                                                                       true, true, true, true, true, true};
-    std::array<float, EditorSoundEvents::kCategoryCount> CategoryVolume{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+    std::array<bool, EditorSoundEvents::kCategoryCount> CategoryOn{true, true, true, true, true, true, true,
+                                                                       true, true, true, true, true, true, true};
+    std::array<float, EditorSoundEvents::kCategoryCount> CategoryVolume{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 };
 
 // The decision half, no audio: whether a trigger plays and how. Deterministic for a given seed (unit-tested).
@@ -82,6 +82,8 @@ struct UiFrame {
     int PopupDepth = 0;         // open popups (menus, dropdowns, context menus, modals)
     bool DragActive = false;    // an in-editor drag & drop payload is held
     bool DropTargetHovered = false; // ...over a target that would take it
+    bool TextActive = false;    // the active widget is a text / number field being typed into
+    bool EscPressed = false;
 };
 struct UiSound {
     Event E;
@@ -99,6 +101,7 @@ public:
 private:
     UiFrame m_Prev;
     bool m_Primed = false;
+    bool m_TextEdited = false;  // the text field being typed into changed since it was activated
     bool m_Sliding = false;
     unsigned m_SlideId = 0;
     float m_TickAccum = 0.0f, m_Net = 0.0f;
@@ -138,6 +141,14 @@ constexpr double kErrorQuietMs = 2000.0;
 void Update();
 const Settings& Current();
 void SetWindowFocused(bool focused);
+// The "done" chimes (imports, shader / module reloads, sync, builds): the ones counted while the editor is in the background.
+bool IsDoneChime(Event e);
+// The focus edge (host): if done chimes played while away, a Digest plays once shortly after (counted, then reset).
+void OnFocusRegained();
+int AwayDoneCount();
+// A drop the editor handled itself (a zone that isn't an ImGui drop target, e.g. Hierarchy rows): the observer's
+// DropAccept / DropReject for the drag ending stays quiet this frame and the next. The handler plays its own sound.
+void SuppressDropSound();
 void Play(Event e, float screenX01 = -1.0f, float pitchScale = 1.0f);
 // Something played this frame (an action's own sound): the selection change it caused stays quiet, so Delete, Paste or Undo
 // isn't followed by a Select / Deselect on top.

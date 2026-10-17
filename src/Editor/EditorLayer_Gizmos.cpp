@@ -381,11 +381,13 @@ void EditorLayer::SnapSelectionToGround(World& world) {
         }
         return false;
     };
+    int snapped = 0;
     for (entt::entity e : sel) {
         if (!world.Registry.valid(e) || !world.Registry.all_of<RenderableComponent>(e)) continue;
         if (HasSelectedAncestor(world, e, m_Selected, m_ExtraSelection) && e != m_Selected) continue;
         auto& renderable = world.Registry.get<RenderableComponent>(e);
         if (!renderable.ModelRef) continue;
+        ++snapped;
         // World matrix, not ComposeTransform(transform): the drop is computed in world space and
         // converted back to local on write (#224).
         const glm::mat4 m = world.ComposeWorldTransform(e);
@@ -400,6 +402,8 @@ void EditorLayer::SnapSelectionToGround(World& world) {
         const glm::vec3 worldOrigin = glm::vec3(m[3]);
         SetWorldPosition(world, e, {worldOrigin.x, worldOrigin.y + (groundY - lowestY), worldOrigin.z});
     }
+    // Nothing had a model to drop (e.g. a failed import): a refusal, not a landing.
+    EditorSound::Play(snapped > 0 ? EditorSound::Event::SnapGround : EditorSound::Event::Blocked);
 }
 
 bool EditorLayer::ComputeSceneBounds(World& world, glm::vec3& outMin, glm::vec3& outMax) const {
@@ -972,6 +976,9 @@ void EditorLayer::DrawViewportDropTarget(World& world, AssetLibrary& assets, Cam
     ImGui::PopStyleColor();
 }
 
+// The box-select drag edge (BoxSelectStart plays once per drag); file-static, there is one EditorLayer.
+static bool s_BoxSelectDragging = false;
+
 void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
     ImGuiIO& io = ImGui::GetIO();
     bool leftDown = ImGui::IsMouseDown(ImGuiMouseButton_Left);
@@ -990,6 +997,7 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
     if (EyedropperArmed() && !WantsCaptureMouse() && !m_ViewGizmoBlocking) {
         if (ImGui::IsMouseClicked(ImGuiMouseButton_Right) || ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
             CancelEyedropper();
+            EditorSound::Play(EditorSound::Event::ClickCancel);
             return;
         }
         if (leftPressed) {
@@ -1009,12 +1017,22 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
         if (leftPressed) m_RulerBounds = m_RulerBounds == m_RulerHitEntity ? entt::null : m_RulerHitEntity;
         return;
     }
+    // Screen x of the cursor, as Play's pan.
+    const float cursorX01 = io.DisplaySize.x > 0.0f ? io.MousePos.x / io.DisplaySize.x : -1.0f;
     if (m_MeasureTool && !WantsCaptureMouse() && !m_ViewGizmoBlocking && !m_GizmoEngaged) {
-        if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) { m_MeasurePoints.clear(); return; }
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+            if (!m_MeasurePoints.empty()) EditorSound::Play(EditorSound::Event::MeasureClear, cursorX01);
+            m_MeasurePoints.clear();
+            return;
+        }
         if (leftPressed) {
             glm::vec3 hit;
-            if (RaycastViewportSurface(world, editorCamera, {io.MousePos.x, io.MousePos.y}, hit))
+            if (RaycastViewportSurface(world, editorCamera, {io.MousePos.x, io.MousePos.y}, hit)) {
                 m_MeasurePoints.push_back(hit);
+                EditorSound::Play(EditorSound::Event::MeasurePoint, cursorX01);
+            } else {
+                EditorSound::Play(EditorSound::Event::Blocked, cursorX01); // nothing under the cursor to measure to
+            }
             return;
         }
         return; // tool active — never fall through to selection / box-select
@@ -1032,6 +1050,7 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
         m_BoxSelectActive = !WantsCaptureMouse() && !m_GizmoEngaged && !m_ViewGizmoBlocking &&
                             !m_LightHandleEngaged && !io.KeyAlt && !ImGui::IsAnyItemHovered();
         m_BoxSelectStart = {io.MousePos.x, io.MousePos.y};
+        s_BoxSelectDragging = false;
         return; // click vs. drag is only decided on release, below
     }
 
@@ -1041,6 +1060,8 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
 
     if (leftDown) {
         if (isDragging) {
+            if (!s_BoxSelectDragging) EditorSound::Play(EditorSound::Event::BoxSelectStart, cursorX01);
+            s_BoxSelectDragging = true;
             ImVec2 a(m_BoxSelectStart.x, m_BoxSelectStart.y), b(current.x, current.y);
             ImGui::GetForegroundDrawList()->AddRectFilled(a, b, EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Accent, 0.12f)));
             ImGui::GetForegroundDrawList()->AddRect(a, b, EditorTheme::U32(EditorTheme::Accent));
@@ -1050,6 +1071,7 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
 
     // Released this frame — commit.
     m_BoxSelectActive = false;
+    s_BoxSelectDragging = false;
     glm::mat4 view = editorCamera.ViewMatrix();
     glm::mat4 proj = editorCamera.ProjectionMatrix((float)w / (float)h);
 
@@ -1179,6 +1201,11 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
             AddToSelectionIfAbsent(entity);
         }
     }
+
+    // Same frame as the selection change, so SelectionFrame stays quiet; higher for a bigger catch.
+    const int boxCount = (int)GetSelectedItems().size();
+    EditorSound::Play(EditorSound::Event::BoxSelectEnd, cursorX01,
+                      boxCount > 0 ? 0.9f + 0.25f * (float)std::min(boxCount, 16) / 16.0f : 0.85f);
 }
 
 bool EditorLayer::FindVertexUnderCursor(World& world, Camera& editorCamera, glm::vec3& outLocalPos) const {
@@ -2266,7 +2293,14 @@ void EditorLayer::DrawMeasurement(Camera& cam) {
             EditorSettings::Save();
         }
         ImGui::SameLine();
-        if (ActionButton(ICON_FA_XMARK, "Clear (right-click in the viewport does the same)")) {
+        bool clearClicked = false;
+        {
+            EditorSoundEvents::ScopedClickSilence silence; // MeasureClear instead of the generic click
+            clearClicked = ActionButton(ICON_FA_XMARK, "Clear (right-click in the viewport does the same)");
+        }
+        if (clearClicked) {
+            EditorSound::Play(m_MeasurePoints.empty() ? EditorSound::Event::ClickCancel : EditorSound::Event::MeasureClear,
+                              EditorSound::LastItemScreenX());
             m_MeasurePoints.clear();
         }
 

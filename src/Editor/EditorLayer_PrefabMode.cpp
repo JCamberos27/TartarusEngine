@@ -52,6 +52,7 @@ entt::entity FindPrefabRoot(const World& world, int* rootCount) {
 void EditorLayer::EnterPrefabMode(World& world, AssetLibrary& assets, const std::string& path) {
     if (m_InPlayMode) {
         Log::Warn("Stop Play mode before opening a prefab.");
+        EditorSound::Play(EditorSound::Event::Blocked);
         return;
     }
     if (InPrefabMode()) {
