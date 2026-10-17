@@ -5,6 +5,7 @@
 #include "EditorTheme.h"
 #include "Glass/GlassDragMotion.h" // the drag ghost
 #include "EditorUIPrimitives.h"
+#include "EditorSound.h"
 #include "EditorLayerInternal.h"
 #include "FileDialog.h"
 #include "AssetLibrary.h"
@@ -269,6 +270,11 @@ void EditorLayer::MigrateAssetFavorites() {
     if (!m_Headless) us.Flush();
 }
 
+void EditorLayer::PlayAssetFolderSound(bool history) const {
+    if (ImGui::GetCurrentContext() && ImGui::GetFrameCount() < 30) return; // start-up restores (folder tabs) aren't the user's
+    EditorSound::Play(history ? EditorSound::Event::FolderBack : EditorSound::Event::FolderEnter);
+}
+
 void EditorLayer::ToggleAssetFavorite(const std::string& key) {
     if (key.empty()) return;
     SetAssetFavorites({key}, !IsAssetFavorite(key));
@@ -283,7 +289,9 @@ void EditorLayer::SetAssetFavorites(const std::vector<std::string>& keys, bool o
         if (on) { if (Enhancers::FindFavorite(us.FavoritePages, r) < 0) changed |= Enhancers::AddFavorite(us.FavoritePages, m_FavPage, r); }
         else changed |= Enhancers::RemoveFavorite(us.FavoritePages, r);
     }
-    if (changed) us.MarkDirty();
+    if (!changed) return;
+    us.MarkDirty();
+    EditorSound::Play(on ? EditorSound::Event::FavoriteOn : EditorSound::Event::FavoriteOff);
 }
 
 // Decoded once per sound path (#236 G). An empty vector means "not decodable / not audio" and
@@ -798,7 +806,9 @@ void EditorLayer::DrawDeleteConfirmPopup(World& world, AssetLibrary& assets) {
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
-        if (PrimaryButton("Delete", ImVec2(buttonWidth, 0.0f)) || keyConfirm) {
+        bool deleteClicked;
+        { EditorSoundEvents::ScopedClickSilence quiet; deleteClicked = PrimaryButton("Delete", ImVec2(buttonWidth, 0.0f)); } // PushUndo plays Delete
+        if (deleteClicked || keyConfirm) {
             m_DeleteError.clear();
             PushUndo(world, m_PendingDelete.size() == 1
                 ? (m_PendingDelete[0].IsFolder ? "Delete Folder" : "Delete Asset")
@@ -844,8 +854,11 @@ void EditorLayer::DrawDeleteConfirmPopup(World& world, AssetLibrary& assets) {
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
-        if (PrimaryButton("Delete", ImVec2(bw, 0.0f))) {
+        bool diskDeleteClicked;
+        { EditorSoundEvents::ScopedClickSilence quiet; diskDeleteClicked = PrimaryButton("Delete", ImVec2(bw, 0.0f)); }
+        if (diskDeleteClicked) {
             m_DeleteError.clear();
+            EditorSound::Play(EditorSound::Event::Delete); // no undo step here to play it
             for (const std::string& key : m_PendingDiskDelete) {
                 const std::string leaf = LeafNameOf(key);
                 if (!PerformAssetDelete(world, assets, key, false)) continue; // e.g. the open scene
@@ -1584,7 +1597,7 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
         if (std::find(folders.begin(), folders.end(), "Animation") != folders.end() &&
             assets.CanDeleteFolder("Animation")) {
             assets.DeleteFolder("Animation");
-            if (m_CurrentAssetFolder == "Animation") NavigateAssetFolder("assets/Weapons");
+            if (m_CurrentAssetFolder == "Animation") NavigateAssetFolder("assets/Weapons", /*sound=*/false);
         }
     }
 
@@ -1726,6 +1739,13 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
             return desc ? cmp > 0 : cmp < 0;
         });
     }
+
+    // SearchEmpty: once, when typing turns a search that found something into one that finds nothing.
+    if (searching && cells.empty() && m_SearchSoundPrevHadResults && !m_SearchSoundPrevFilter.empty() &&
+        m_AssetSearchFilter != m_SearchSoundPrevFilter)
+        EditorSound::Play(EditorSound::Event::SearchEmpty);
+    m_SearchSoundPrevFilter = m_AssetSearchFilter;
+    m_SearchSoundPrevHadResults = !cells.empty();
 
     // Ctrl+A - select every currently-visible item (respecting the active search/filter, same
     // as Unity's own "select all visible items in list"). Not while a text field (the search box,
@@ -2056,10 +2076,12 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
         }
         if (cell.kind == Cell::Kind::Animator && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
             OpenAnimatorWindow(ProjectPaths::Relativize(cell.key));
+            EditorSound::Play(EditorSound::Event::AssetOpen, EditorSound::LastItemScreenX());
         }
         if ((cell.kind == Cell::Kind::Shader || cell.kind == Cell::Kind::Script) &&
             ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
             OpenScriptIDE(cell.key);
+            EditorSound::Play(EditorSound::Event::AssetOpen, EditorSound::LastItemScreenX());
         }
         // #176 - double-click opens the prefab in Prefab Mode, like Unity (drag it into the scene,
         // or right-click > Place Instance, to place one).
@@ -2510,6 +2532,7 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
             if(CameraShakeAsset{}.SaveFile(target.u8string())) {
                 AssetDatabase::EnsureGuid(target.u8string());
                 m_SelectedAssetKey=target.u8string(); m_SelectedAssetIsFolder=false;
+                EditorSound::Play(EditorSound::Event::Create);
                 InvalidateAnimationListing();
                 InvalidateProjectAssetIndex(); // listed in the folder without a manual refresh
             } else Log::Error("Could not create camera shake asset.");
@@ -2527,6 +2550,7 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
                 AssetDatabase::EnsureGuid(recoilPath.u8string());
                 m_SelectedAssetKey = recoilPath.u8string();
                 m_SelectedAssetIsFolder = false;
+                EditorSound::Play(EditorSound::Event::Create);
                 InvalidateAnimationListing();
                 InvalidateProjectAssetIndex(); // listed in the folder without a manual refresh
             } else Log::Error("Could not create recoil profile.");
@@ -2553,6 +2577,7 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
                 InvalidateAnimationListing();
                 InvalidateProjectAssetIndex(); // listed in the folder without a manual refresh
                 OpenAnimatorWindow(rel);
+                EditorSound::Play(EditorSound::Event::Create);
                 Log::Info("Created " + rel + ": " + std::to_string(found) + " of " + std::to_string(total) +
                           " clip slots filled by name. Fill the rest in the Animator (Lint lists them).");
             } else {
@@ -2578,6 +2603,7 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
                 InvalidateAnimationListing();
                 InvalidateProjectAssetIndex(); // listed in the folder without a manual refresh
                 OpenAnimatorWindow(rel);
+                EditorSound::Play(EditorSound::Event::Create);
                 Log::Info("Created " + rel + ".");
             } else {
                 Log::Error("Create Animator Controller: couldn't write '" + rel + "'.");
@@ -2711,7 +2737,9 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
             ImGui::TextDisabled("%d of %d states have a clip. Missing ones play the bind pose / nothing (Idle and Fire matter most).", filled, (int)w.Picks.size());
             if (!w.Error.empty()) ImGui::TextColored(EditorUIPrimitives::DangerColor(), "%s", w.Error.c_str());
             ImGui::BeginDisabled(!ready);
-            if (EditorUIPrimitives::PrimaryButton("Create")) {
+            bool createClicked;
+            { EditorSoundEvents::ScopedClickSilence quiet; createClicked = EditorUIPrimitives::PrimaryButton("Create"); } // Create / Blocked below
+            if (createClicked) {
                 std::string safe = w.Name;
                 for (char& c : safe) if (!std::isalnum((unsigned char)c) && c != '_' && c != '-' && c != ' ') c = '_';
                 const std::string dirRel = "assets/Weapons/" + safe;
@@ -2721,8 +2749,10 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
                 FirstPersonAnimationSet set = FPWizard::Build(w.ArmsModel, w.WeaponModel, w.Picks);
                 if (std::filesystem::exists(std::filesystem::u8path(ProjectPaths::Resolve(setRel)), ec)) {
                     w.Error = "'" + setRel + "' already exists: pick another name.";
+                    EditorSound::Play(EditorSound::Event::Blocked);
                 } else if (!BuildFirstPersonController(set).SaveFile(ProjectPaths::Resolve(ctrlRel))) {
                     w.Error = "Couldn't write '" + ctrlRel + "'.";
+                    EditorSound::Play(EditorSound::Event::Blocked);
                 } else {
                     set.Controller = ctrlRel;
                     set.Clips.clear();
@@ -2738,9 +2768,11 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
                     if (profileSaved && set.SaveFile(ProjectPaths::Resolve(setRel))) {
                         InvalidateAnimationListing();
                         Log::Info("Created weapon " + setRel + " (controller " + ctrlRel + "). Select it in the Asset Browser to tune it.");
+                        EditorSound::Play(EditorSound::Event::Create);
                         ImGui::CloseCurrentPopup();
                     } else {
                         w.Error = "Couldn't write '" + setRel + "'.";
+                        EditorSound::Play(EditorSound::Event::Blocked);
                     }
                 }
             }

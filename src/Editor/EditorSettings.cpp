@@ -136,8 +136,13 @@ void EditorSettings::Load() {
     s.AudioMuted = SafeValue(root, "audioMuted", s.AudioMuted);
     s.EditorSoundsEnabled = SafeValue(root, "editorSoundsEnabled", s.EditorSoundsEnabled);
     s.EditorSoundsVolume = SafeValue(root, "editorSoundsVolume", s.EditorSoundsVolume);
-    // The first default (0.35) was raised 25%: a file still holding it moves up too; a level the user set stays.
-    if (std::fabs(s.EditorSoundsVolume - 0.35f) < 0.001f) s.EditorSoundsVolume = 0.44f;
+    // The P6 remaster made every file about 10 dB louder, so a volume set against the old files (most likely turned all the
+    // way up because they were too quiet) would now be far too loud: it starts again from the new default, once.
+    s.EditorSoundsMastering = SafeValue(root, "editorSoundsMastering", 1);
+    if (s.EditorSoundsMastering < 2) {
+        s.EditorSoundsVolume = 0.70f; // the default above
+        s.EditorSoundsMastering = 2;
+    }
     s.EditorSoundsPremium = SafeValue(root, "editorSoundsPremium", s.EditorSoundsPremium);
     s.EditorSoundCategoryOn = SafeValue(root, "editorSoundCategoryOn", s.EditorSoundCategoryOn);
     s.EditorSoundCategoryVolume = SafeValue(root, "editorSoundCategoryVolume", s.EditorSoundCategoryVolume);
@@ -334,6 +339,7 @@ void EditorSettings::Flush() {
     root["audioMuted"] = Get().AudioMuted;
     root["editorSoundsEnabled"] = Get().EditorSoundsEnabled;
     root["editorSoundsVolume"] = Get().EditorSoundsVolume;
+    root["editorSoundsMastering"] = Get().EditorSoundsMastering;
     root["editorSoundsPremium"] = Get().EditorSoundsPremium;
     if (!Get().EditorSoundCategoryOn.empty()) root["editorSoundCategoryOn"] = Get().EditorSoundCategoryOn;
     if (!Get().EditorSoundCategoryVolume.empty()) root["editorSoundCategoryVolume"] = Get().EditorSoundCategoryVolume;

@@ -67,12 +67,57 @@ enum class Event : uint8_t {
     BuildSuccess,
     BuildFail,
     ConsoleClear,
-    AssetImport,       // a file imported into the project
+    AssetImport,       // an import batch finished (one of the "done" chimes, System)
+    // P6. Assets
+    FolderEnter,       // the Asset Browser goes into a folder
+    FolderBack,        // ...back / forward through its history
+    AssetOpen,         // an asset opens in its editor (Animator, Script IDE)
+    AssetMove,         // assets / folders moved into another folder
+    AssetReimport,
+    SearchEmpty,       // a search that just stopped finding anything (Asset Browser, Script IDE)
+    FavoriteOn,
+    FavoriteOff,
+    // Objects: Inspector and the specialist editors
+    ResetDefault,      // a component, field or section back to its defaults
+    Randomize,         // the character outfit dice
+    Equip,             // an outfit item put on
+    Unequip,           // ...taken off
+    // Animation & Curves
+    StateAdd,          // Animator: a state added
+    StateDelete,
+    TransitionLink,    // ...a transition made
+    TransitionBreak,   // ...removed
+    DefaultState,      // ...the entry state changed
+    LayerAdd,
+    LayerRemove,
+    ParamAdd,
+    ParamRemove,
+    LiveState,         // ...in Play, the watched state machine moved to another state
+    KeyAdd,            // Curve editor: keys added
+    KeyDelete,
+    TangentMode,
+    PresetApply,       // a preset applied (curves, sky, outfit, weapon)
+    // System
+    ShaderReload,      // shaders recompiled after an edit ("done" chime)
+    SyncDone,          // changes made outside the editor picked up ("done" chime)
+    ModuleReload,      // a code module hot-reloaded ("done" chime)
+    Blocked,           // an action that can't be done (illegal parent, read-only file...)
+    ShortcutInvalid,   // Ctrl / Alt + a key that does nothing here
+    GotoLine,          // Script IDE
+    Screenshot,
+    ResolutionChange,  // Game view aspect / resolution preset
+    ViewMaximize,      // Game view maximised (or maximise on Play)
+    ViewRestore,
+    CursorLock,        // Play takes the mouse
+    CursorRelease,     // ...gives it back
     Count
 };
 
 // Preferences groups: each has its own toggle and volume.
-enum class Category : uint8_t { Clicks = 0, Sliders, Hover, Panels, DragDrop, Notifications, PlayMode, Objects, Tools, Count };
+// Appended only: saved settings are per category index.
+enum class Category : uint8_t {
+    Clicks = 0, Sliders, Hover, Panels, DragDrop, Notifications, PlayMode, Objects, Tools, Assets, Animation, System, Count
+};
 
 constexpr int kEventCount = (int)Event::Count;
 constexpr int kCategoryCount = (int)Category::Count;

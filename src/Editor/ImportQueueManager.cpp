@@ -1,5 +1,6 @@
 #include "ImportQueueManager.h"
 #include "EditorUIPrimitives.h"
+#include "EditorSound.h"
 #include "Log.h"
 #include <imgui.h>
 #include <filesystem>
@@ -76,6 +77,10 @@ void ImportQueueManager::FinishBatch(int cancelled) {
     m_Summary += ".";
     if (m_Failed || m_BatchErrors) Log::Warn(m_Summary);
     else Log::Info(m_Summary);
+    // The "done" chime (heard from the background too), or the warning one when something didn't make it. A batch cancelled
+    // before anything was processed stays quiet.
+    if (m_ProcessedInBatch > 0)
+        EditorSound::Play(m_Failed || m_BatchErrors ? EditorSound::Event::NotifyWarning : EditorSound::Event::AssetImport);
     m_SummaryShownAt = ImGui::GetCurrentContext() ? ImGui::GetTime() : 0.0;
     m_TotalInBatch = 0;
     m_ProcessedInBatch = 0;

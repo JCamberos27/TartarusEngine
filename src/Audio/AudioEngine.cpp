@@ -229,7 +229,9 @@ struct EditorVoice {
     std::unique_ptr<ma_sound> Sound;
     std::unique_ptr<ma_audio_buffer> Buffer;
     std::shared_ptr<const PreloadedClip> Clip;
+    bool Stolen = false; // fading out to make room: freed by Update once it has stopped
 };
+constexpr unsigned kEditorStealFadeMs = 8; // a voice cut mid-sound fades over this instead of stopping on a click
 ma_sound_group s_EditorGroup;
 bool s_EditorGroupReady = false;
 float s_EditorVolume = 1.0f;
@@ -1208,9 +1210,16 @@ bool AudioEngine::PlayEditor(const std::string& path, float volume, float pitch,
         FreeEditorVoice(v);
         return false;
     }
-    if ((int)s_EditorVoices.size() >= kEditorVoices) {
-        FreeEditorVoice(s_EditorVoices.front());
-        s_EditorVoices.erase(s_EditorVoices.begin());
+    // Full: the oldest voice still sounding fades out (it is freed once stopped, in Update) - never a hard stop mid-waveform.
+    int live = 0;
+    for (const EditorVoice& o : s_EditorVoices) live += o.Stolen ? 0 : 1;
+    if (live >= kEditorVoices) {
+        for (EditorVoice& o : s_EditorVoices) {
+            if (o.Stolen) continue;
+            ma_sound_stop_with_fade_in_milliseconds(o.Sound.get(), kEditorStealFadeMs);
+            o.Stolen = true;
+            break;
+        }
     }
     s_EditorVoices.push_back(std::move(v));
     return true;
@@ -1221,7 +1230,11 @@ void AudioEngine::SetEditorVolume(float volume) {
     if (s_EditorGroupReady) ma_sound_group_set_volume(&s_EditorGroup, s_EditorVolume);
 }
 
-int AudioEngine::EditorVoiceCount() { return (int)s_EditorVoices.size(); }
+int AudioEngine::EditorVoiceCount() {
+    int live = 0;
+    for (const EditorVoice& v : s_EditorVoices) live += v.Stolen ? 0 : 1;
+    return live;
+}
 
 void AudioEngine::StopPreview() {
     if (s_PreviewSound) {

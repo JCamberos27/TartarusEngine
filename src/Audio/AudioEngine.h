@@ -224,8 +224,8 @@ public:
     // Editor UI sounds (src/Editor/EditorSound): a separate output wired straight to the device. None of the game's mix reaches
     // it - not the buses, the ducking, the limiter, the meters or the capture - and neither do the master volume, View > Mute
     // Audio or SetPaused: it has its own volume. TARTARUS_MUTE still silences it. Fire-and-forget one-shots, decoded into
-    // memory on first use; pan -1..1 (left..right). At most kEditorVoices at once: a new one replaces the oldest.
-    static constexpr int kEditorVoices = 24;
+    // memory on first use; pan -1..1 (left..right). At most kEditorVoices at once: a new one fades the oldest out.
+    static constexpr int kEditorVoices = 32;
     static bool PlayEditor(const std::string& path, float volume, float pitch = 1.0f, float pan = 0.0f);
     static void SetEditorVolume(float volume); // 0..1
     static int EditorVoiceCount();

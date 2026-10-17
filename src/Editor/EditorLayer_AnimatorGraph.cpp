@@ -295,6 +295,20 @@ void DrawGraphCanvas(AnimCtx& cx) {
             liveProgress = loop ? ph - std::floor(ph) : std::min(ph, 1.0f);
         }
     }
+    // A soft cue when the watched machine moves to another state - only while the Animator is hovered or focused, and
+    // never for the first look at a rig / layer / controller (the tracker resets then, and whenever Play isn't live).
+    if (liveCurrent >= 0) {
+        const bool same = W.LiveSeen >= 0 && W.LiveSeenEntity == W.Entity && W.LiveSeenLayer == W.Layer && W.LiveSeenRel == W.Rel;
+        const bool watched = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows) ||
+                             ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+        if (same && liveCurrent != W.LiveSeen && watched) EditorSound::Play(EditorSound::Event::LiveState);
+        W.LiveSeen = liveCurrent;
+        W.LiveSeenEntity = W.Entity;
+        W.LiveSeenLayer = W.Layer;
+        if (!same) W.LiveSeenRel = W.Rel;
+    } else {
+        W.LiveSeen = -1;
+    }
 
     const float fontScale = std::clamp(W.Zoom, 0.5f, 1.4f);
     for (NodeRef n : nodes) {
@@ -393,6 +407,7 @@ void DrawGraphCanvas(AnimCtx& cx) {
         if (from.Kind == NodeKind::State && !Ly.States[from.Index].Loop) { t.HasExitTime = true; t.ExitTime = 1.0f; }
         if (from.Kind == NodeKind::Entry) t.Duration = 0.0f;
         Ly.Transitions.push_back(std::move(t));
+        EditorSound::Play(EditorSound::Event::TransitionLink);
         W.ClearSelection();
         W.SelTransition = (int)Ly.Transitions.size() - 1;
         changed = true;
@@ -433,6 +448,7 @@ void DrawGraphCanvas(AnimCtx& cx) {
                 Ly.Transitions.push_back(std::move(n));
             }
         }
+        if (!fresh.empty()) EditorSound::Play(EditorSound::Event::StateAdd);
         W.ClearSelection();
         W.SelStates = fresh;
         changed = true;
@@ -478,6 +494,7 @@ void DrawGraphCanvas(AnimCtx& cx) {
             t.To = renamedTo(t.To);
             Ly.Transitions.push_back(std::move(t));
         }
+        EditorSound::Play(EditorSound::Event::StateAdd);
         W.ClearSelection();
         W.SelStates = fresh;
         changed = true;
@@ -496,7 +513,8 @@ void DrawGraphCanvas(AnimCtx& cx) {
         }
         s.Position = at - glm::vec2(kStateW, kStateH) * 0.5f;
         Ly.States.push_back(std::move(s));
-        if (Ly.States.size() == 1) Ly.DefaultState = Ly.States[0].Name;
+        EditorSound::Play(EditorSound::Event::StateAdd);
+        if (Ly.States.size() == 1) Ly.DefaultState = Ly.States[0].Name; // implicit: no DefaultState sound
         W.ClearSelection();
         W.SelStates = {(int)Ly.States.size() - 1};
         changed = true;
@@ -597,6 +615,7 @@ void DrawGraphCanvas(AnimCtx& cx) {
             if (n.Kind == NodeKind::State) {
                 if (ImGui::MenuItem(ICON_FA_STAR "  Set as Layer Default State", nullptr, false, n.Index != defaultState)) {
                     Ly.DefaultState = Ly.States[n.Index].Name;
+                    EditorSound::Play(EditorSound::Event::DefaultState);
                     changed = true;
                 }
                 if (ImGui::MenuItem(ICON_FA_COPY "  Duplicate", "Ctrl+D")) duplicateStates(false);
@@ -607,6 +626,7 @@ void DrawGraphCanvas(AnimCtx& cx) {
         } else if (W.ContextTransition >= 0) {
             if (ImGui::MenuItem(ICON_FA_TRASH "  Delete Transition")) {
                 Ly.Transitions.erase(Ly.Transitions.begin() + W.ContextTransition);
+                EditorSound::Play(EditorSound::Event::TransitionBreak);
                 W.ClearSelection();
                 changed = true;
             }
@@ -627,6 +647,7 @@ void DrawGraphCanvas(AnimCtx& cx) {
             if (!W.SelStates.empty()) deleteStates(W.SelStates);
             else if (W.SelTransition >= 0 && W.SelTransition < (int)Ly.Transitions.size()) {
                 Ly.Transitions.erase(Ly.Transitions.begin() + W.SelTransition);
+                EditorSound::Play(EditorSound::Event::TransitionBreak);
                 W.ClearSelection();
                 changed = true;
             }

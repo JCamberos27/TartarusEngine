@@ -138,6 +138,7 @@ void EditorLayer::DrawPlayTransportButtons(bool playing, bool maximized, bool pa
 
         ImGui::SameLine();
         const char* fsLabel = maximized ? ICON_FA_COMPRESS "  Restore" : ICON_FA_EXPAND "  Fullscreen";
+        EditorSoundEvents::ScopedClickSilence quietMaximize; // ViewMaximize / ViewRestore play when it lands
         if (ActionButton(fsLabel, maximized ? "Back to windowed play (editor panels return) (F4)"
                                             : "Maximize the Game view over the editor panels (F4)")) {
             m_MaximizeToggleRequested = true;

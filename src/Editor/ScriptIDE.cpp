@@ -6,6 +6,7 @@
 #include "EditorTheme.h"
 #include "ScriptIDEThemes.h"
 #include "GameModuleBuild.h"
+#include "EditorSound.h"
 #include <imgui.h>
 #include <json.hpp>
 #include <filesystem>
@@ -115,7 +116,10 @@ struct ScriptIDE::Impl {
     std::vector<std::string> ProjectFiles;
     std::future<std::vector<std::string>> FileScan;
     Clock::time_point LastScan=Clock::now()-std::chrono::seconds(5);
+    bool Restoring=false; // reopening the last session's documents: silent
+    bool SavingAll=false; // Save All sounds once, not once per document
     Impl() {
+        Restoring=true;
         SessionPath=fs::u8path(ScriptIDE::SessionFile());std::error_code ec;fs::create_directories(SessionPath.parent_path(),ec);
         try {if(fs::exists(SessionPath)) {
             auto session=Json::parse(Read(SessionPath));const bool visible=session.value("visible",false);
@@ -130,6 +134,7 @@ struct ScriptIDE::Impl {
             const auto active=session.value("active",std::string());if(!active.empty() && fs::is_regular_file(fs::u8path(active)))Open(active);
             Visible=visible;Focus=visible;
         }} catch(const std::exception& e){Status=e.what();}
+        Restoring=false;
     }
     ~Impl() {Persist();}
     void Persist() {
@@ -147,8 +152,10 @@ struct ScriptIDE::Impl {
             auto doc=std::make_unique<Document>();doc->Path=absolute;doc->Type=kind;doc->DiskBytes=bytes;doc->CRLF=bytes.find("\r\n")!=std::string::npos;
             doc->Bom=bytes.compare(0,3,"\xEF\xBB\xBF")==0;if(doc->Bom)bytes.erase(0,3);Wide(bytes);
             doc->Editor.SetLanguageDefinition(Language(kind));doc->Editor.SetShowWhitespaces(false);doc->Editor.SetTabSize(4);doc->Editor.SetText(bytes);doc->Saved=doc->Editor.GetText();doc->Editor.SetReadOnly(!Authored(absolute));
-            Active=doc.get();Jump(*doc,line,column);Documents.push_back(std::move(doc));Activate=absolute;Visible=Focus=true;MarkProblems();Persist();return Active;
-        }catch(const std::exception& e){Status=e.what();return nullptr;}
+            Active=doc.get();Jump(*doc,line,column);Documents.push_back(std::move(doc));Activate=absolute;Visible=Focus=true;MarkProblems();Persist();
+            if(!Restoring)EditorSound::Play(EditorSound::Event::AssetOpen); // a new tab only, not re-activating an open one
+            return Active;
+        }catch(const std::exception& e){Status=e.what();if(!Restoring)EditorSound::Play(EditorSound::Event::Blocked);return nullptr;}
     }
     static void Jump(Document& doc,int line,int column) {
         if(line<=0)return;auto lines=doc.Editor.GetTextLines();if(lines.empty())return;int row=std::clamp(line-1,0,static_cast<int>(lines.size())-1);
@@ -173,7 +180,13 @@ struct ScriptIDE::Impl {
         } else if(doc.Type==Kind::Shader)Status="Saved "+file.filename().u8string()+"; shaders reload on their own.";
         else Status="Saved "+file.filename().u8string()+".";
     }
+    // Save, sounded: Save when it lands, Blocked when it can't (read-only, changed on disk, write failure).
     bool Save(Document& doc,bool overwrite=false) {
+        const bool ok=SaveFile(doc,overwrite);
+        if(!SavingAll)EditorSound::Play(ok?EditorSound::Event::Save:EditorSound::Event::Blocked);
+        return ok;
+    }
+    bool SaveFile(Document& doc,bool overwrite) {
         if(doc.Editor.IsReadOnly()){Status="This file is read-only here.";return false;}
         try {
             std::error_code ec;const bool exists=fs::is_regular_file(fs::u8path(doc.Path),ec);
@@ -182,7 +195,13 @@ struct ScriptIDE::Impl {
             doc.DiskBytes=bytes;doc.Saved=doc.Editor.GetText();doc.Conflict=false;AfterSave(doc);Persist();return true;
         }catch(const std::exception& e){Status=e.what();return false;}
     }
-    bool SaveAll() {bool okay=true;for(auto& d:Documents)if(d->Dirty())okay=Save(*d)&&okay;return okay;}
+    bool SaveAll() {
+        bool okay=true,any=false;SavingAll=true;
+        for(auto& d:Documents)if(d->Dirty()){any=true;okay=Save(*d)&&okay;}
+        SavingAll=false;
+        if(any)EditorSound::Play(okay?EditorSound::Event::Save:EditorSound::Event::Blocked);
+        return okay;
+    }
     void Close(const std::string& path) {
         auto found=std::find_if(Documents.begin(),Documents.end(),[&](const auto& d){return Same(d->Path,path);});
         if(found==Documents.end())return;
@@ -234,7 +253,7 @@ struct ScriptIDE::Impl {
     void FindNext(bool reverse=false) {
         if(!Active || Find.empty())return;auto text=Active->Editor.GetText();auto lines=Active->Editor.GetTextLines();auto c=Active->Editor.GetCursorPosition();size_t offset=Active->Editor.CursorByteIndex();for(int i=0;i<c.mLine;++i)offset+=lines[i].size()+1;
         size_t found=reverse?text.rfind(Find,offset>0?offset-1:0):text.find(Find,offset);if(found==std::string::npos)found=reverse?text.rfind(Find):text.find(Find);
-        if(found==std::string::npos){Status="No match.";return;}
+        if(found==std::string::npos){Status="No match.";EditorSound::Play(EditorSound::Event::SearchEmpty);return;}
         int row=static_cast<int>(std::count(text.begin(),text.begin()+found,'\n'));auto last=text.rfind('\n',found);size_t byte=found-(last==std::string::npos?0:last+1);
         int col=static_cast<int>(Wide(lines[row].substr(0,byte)).size())+1;Jump(*Active,row+1,col);auto begin=Active->Editor.GetCursorPosition();Jump(*Active,row+1,col+static_cast<int>(Wide(Find).size()));Active->Editor.SetSelection(begin,Active->Editor.GetCursorPosition());
     }
@@ -247,6 +266,7 @@ struct ScriptIDE::Impl {
                 size_t offset=0;while((offset=text.find(ProjectSearch,offset))!=std::string::npos && SearchResults.size()<500){int row=static_cast<int>(std::count(text.begin(),text.begin()+offset,'\n'))+1;auto start=text.rfind('\n',offset);start=start==std::string::npos?0:start+1;SearchResults.push_back({{"path",path},{"line",row},{"column",static_cast<int>(Wide(text.substr(start,offset-start)).size())+1}});offset+=ProjectSearch.size();}
             }catch(const std::exception&){}
         }
+        if(SearchResults.empty())EditorSound::Play(EditorSound::Event::SearchEmpty);
     }
     void Locations(const Json& places) {int id=0;for(const auto& place:places){ImGui::PushID(++id);auto path=place.at("path").get<std::string>();auto label=fs::u8path(path).filename().u8string()+":"+std::to_string(place["line"].get<int>());if(ImGui::Selectable(label.c_str()))Open(path,place["line"],place["column"]);ImGui::PopID();}}
     void Build() {if(!SaveAll())return;if(!GameModuleBuild::Available()){Status="Module rebuilds need the engine's source checkout and CMake build folder.";return;}GameModuleBuild::Request();}
@@ -333,7 +353,7 @@ void ScriptIDE::Impl::Draw() {
     ImGui::SameLine(0,0);ImGui::BeginChild("EditorArea",ImVec2(0,0));
     if(Active && Active->Conflict) {
         ImGui::TextColored(ImVec4(1,.7f,.2f,1),"File changed on disk. Your buffer has been kept.");
-        if(EditorUIPrimitives::SecondaryButton("Reload disk version"))ClosePath="reload:"+Active->Path;ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Overwrite disk with buffer"))Save(*Active,true);
+        if(EditorUIPrimitives::SecondaryButton("Reload disk version"))ClosePath="reload:"+Active->Path;ImGui::SameLine();bool overwrite;{EditorSoundEvents::ScopedClickSilence quiet;overwrite=EditorUIPrimitives::SecondaryButton("Overwrite disk with buffer");}if(overwrite)Save(*Active,true);
     }
     if(FindVisible) {
         // A narrow pane wraps the bar instead of clipping its buttons (Close find included).
@@ -399,7 +419,7 @@ void ScriptIDE::Impl::Draw() {
         for(const auto& name:Completions){if(!CompletionFilter.empty() && name.find(CompletionFilter)==std::string::npos)continue;ImGui::PushID(++id);if(ImGui::Selectable(name.c_str())){ApplyCompletion(name);CompletionFilter.clear();ImGui::CloseCurrentPopup();}ImGui::PopID();}ImGui::EndChild();ImGui::EndPopup();
     }
     if(GoTo){ImGui::OpenPopup("Go to line");GoTo=false;}
-    if(ImGui::BeginPopup("Go to line")){ImGui::InputInt("Line",&GoLine);if(EditorUIPrimitives::SecondaryButton("Go") && Active){Jump(*Active,GoLine,1);ImGui::CloseCurrentPopup();}ImGui::EndPopup();}
+    if(ImGui::BeginPopup("Go to line")){ImGui::InputInt("Line",&GoLine);bool go;{EditorSoundEvents::ScopedClickSilence quiet;go=EditorUIPrimitives::SecondaryButton("Go") && Active;}if(go){EditorSound::Play(EditorSound::Event::GotoLine,EditorSound::LastItemScreenX());Jump(*Active,GoLine,1);ImGui::CloseCurrentPopup();}ImGui::EndPopup();}
     if(ProjectFind){ImGui::OpenPopup("Find in project");ProjectFind=false;}
     if(ImGui::BeginPopup("Find in project")){Field("Text",ProjectSearch,300);ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Search"))SearchProject();ImGui::BeginChild("ProjectMatches",ImVec2(560,280));Locations(SearchResults);ImGui::EndChild();ImGui::EndPopup();}
     if(!ClosePath.empty()) {
@@ -408,7 +428,8 @@ void ScriptIDE::Impl::Draw() {
     }
     if(ImGui::BeginPopupModal("Unsaved script",nullptr,ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::TextWrapped("Save changes before closing or reloading this file?");
-        if(EditorUIPrimitives::SecondaryButton("Save")){auto path=ClosePath.rfind("reload:",0)==0?ClosePath.substr(7):ClosePath;for(auto& d:Documents)if(Same(d->Path,path) && Save(*d)){if(ClosePath.rfind("reload:",0)!=0)Close(path);ClosePath.clear();ImGui::CloseCurrentPopup();break;}}
+        bool save;{EditorSoundEvents::ScopedClickSilence quiet;save=EditorUIPrimitives::SecondaryButton("Save");} // Save / Blocked instead of the click
+        if(save){auto path=ClosePath.rfind("reload:",0)==0?ClosePath.substr(7):ClosePath;for(auto& d:Documents)if(Same(d->Path,path) && Save(*d)){if(ClosePath.rfind("reload:",0)!=0)Close(path);ClosePath.clear();ImGui::CloseCurrentPopup();break;}}
         ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Discard")){if(ClosePath.rfind("reload:",0)==0){auto path=ClosePath.substr(7);for(auto& d:Documents)if(Same(d->Path,path))Reload(*d);}else Close(ClosePath);ClosePath.clear();ImGui::CloseCurrentPopup();}
         ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Cancel")){ClosePath.clear();ImGui::CloseCurrentPopup();}ImGui::EndPopup();
     }
