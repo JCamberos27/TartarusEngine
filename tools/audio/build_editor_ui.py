@@ -16,6 +16,8 @@ Output: 48 kHz, 16-bit, mono. Three level tiers:
   tick   (clicks, toggles, ticks, < 120 ms, transient at sample 0)  sample peak -20 dBFS (quieter for very frequent ones), but never
          louder than TICK_SHORT_CAP on the 100 ms K-weighted window: a pure-tone tick that rings for 80 ms is heard ~10 dB over
          a 13 ms key tick of the same peak, so the tonal ones come down to the cap
+         and at least TICK_SHORT_MIN on it: the shortest, brightest ticks (select, hover, tree) read far quieter than the rest
+         at the same peak, so they come up to the floor (peak-capped at PEAK_CEIL_DB)
   cue    (menus, play mode, undo / redo, save, drop)                 loudness-matched on the 100 ms window (CUE_SHORT): cues run
          105-640 ms, and the 400 ms momentary window would read the short ones by their length and push them up
   notify (info / success / warning / error)                          loudness-matched: LUFS-M max (400 ms momentary, BS.1770)
@@ -39,6 +41,7 @@ DEFAULT_SRC = r"G:\My Drive\Tartarus Assets\Raw\Audio\SFX"
 NOTIFY_LUFS = -28.0     # notifications: loudest 400 ms momentary window (LUFS-M max)
 CUE_SHORT = -27.0       # menus / play mode / undo / redo / save / drop: loudest 100 ms K-weighted window
 TICK_SHORT_CAP = -35.0  # ticks: at most this on the 100 ms window, whatever their peak
+TICK_SHORT_MIN = -38.0  # ...and at least this: the shortest, highest ticks (select, tree, hover) read too quiet at their peak
 PEAK_CEIL_DB = -6.0     # no loudness gain past this sample peak
 
 SETS = {
@@ -355,6 +358,10 @@ def level(y, ev):
         g_cap = TICK_SHORT_CAP - lufs_m_max(y, 0.1, 0.025)
         if g_cap < g:
             return y * 10 ** (g_cap / 20), f"{TICK_SHORT_CAP:.0f} LUFS on the 100 ms window (below its {ev['level']:.0f} dBFS peak target)"
+        g_min = TICK_SHORT_MIN - lufs_m_max(y, 0.1, 0.025)
+        if g_min > g:
+            g_min = min(g_min, PEAK_CEIL_DB - peak_db(y))
+            return y * 10 ** (g_min / 20), f"{TICK_SHORT_MIN:.0f} LUFS on the 100 ms window (above its {ev['level']:.0f} dBFS peak target)"
         return y * 10 ** (g / 20), f"sample peak {ev['level']:.0f} dBFS"
     if ev["tier"] == "notify":
         g, what = ev["level"] - lufs_m_max(y), f"LUFS-M max {ev['level']:.0f}"

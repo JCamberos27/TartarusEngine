@@ -37,7 +37,7 @@ const EventInfo kEvents[kEventCount] = {
     {"Save",             Category::Notifications,-2.0f, 300.0f, 0.0f,  true},
     {"Undo",             Category::Clicks,       -2.0f,  60.0f, 0.02f, true},
     {"Redo",             Category::Clicks,       -2.0f,  60.0f, 0.02f, true},
-    {"Hover",            Category::Hover,         6.0f,  45.0f, 0.03f, false},
+    {"Hover",            Category::Hover,         0.0f,  45.0f, 0.03f, false},
     {"SliderGrab",       Category::Sliders,       0.0f,  60.0f, 0.02f, false},
     {"SliderTick",       Category::Sliders,      -4.0f,  40.0f, 0.0f,  false},
     {"SliderRelease",    Category::Sliders,       0.0f,  60.0f, 0.02f, false},
