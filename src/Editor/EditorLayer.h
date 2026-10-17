@@ -259,6 +259,12 @@ public:
     std::string SceneTitle() const;
     bool SceneDirty() const { return m_Dirty; }
     bool IsInPlayMode() const { return m_InPlayMode; }
+    // Dock sounds (DockFrame): re-prime the observer and stay quiet for `frames` frames, around a
+    // layout change made by code (main.cpp's forced tab selection), not by the user's drag.
+    void QuietDockSounds(int frames = 10);
+    // The startup modals: main.cpp's startup chime waits while either is up.
+    bool IsRecoveryPromptPending() const { return m_RecoveryPromptPending; }
+    bool IsStartupModalPending() const { return m_RecoveryPromptPending || !m_SceneVersionWarning.empty(); }
     // --editor-shot: draw every Inspector component open, so a capture shows their contents.
     void SetExpandAllComponents(bool on) { m_ExpandAllComponents = on; }
     // --editor-shot: open the Inspector's bookmarks list next frame; pin the favorites overlay.
@@ -861,7 +867,9 @@ public:
     // object, not a raw asset) and instantiates immediately, same as always. Unsupported
     // extensions and load failures are logged, never silently dropped or crashing. No-op while
     // the editor panels are hidden (maximized play) — nothing sensible to import into then.
-    void HandleDroppedFiles(World& world, AssetLibrary& assets, Camera& editorCamera,
+    // Returns how many files it accepted / queued (0: none). Refused while hidden, it plays Blocked
+    // itself; FilesDropped is the caller's (main.cpp), so AssetLibraryPanel's re-drops stay quiet.
+    int HandleDroppedFiles(World& world, AssetLibrary& assets, Camera& editorCamera,
         bool editorUIVisible, const std::vector<std::string>& paths);
 
 private:
@@ -1191,11 +1199,26 @@ private:
     // changes only on an explicit Save/Save As. On launch, a recovery file newer than the scene
     // file raises a Restore/Discard modal (m_RecoveryPromptPending, drawn by DrawRecoveryPrompt).
     static std::string RecoveryPathFor(const std::string& scenePath);
-    void WriteRecoverySnapshot(const World& world, const AssetLibrary& assets);
+    bool WriteRecoverySnapshot(const World& world, const AssetLibrary& assets); // true: written (the timer plays Autosave)
     void ClearRecoverySnapshot(); // deletes the recovery file for m_CurrentScenePath if present; silent
     void FreeGpuResources();       // GL teardown shared by Shutdown() and ~EditorLayer; idempotent
     void DrawRecoveryPrompt(World& world, AssetLibrary& assets);
     bool m_RecoveryPromptPending = false;
+    bool m_RecoveryPromptSounded = false; // RecoveryPrompt plays once, when the modal first shows
+
+    // Editor sounds observed once a frame in EndFrame (no single setter to hook).
+    // DirtyCue: the scene's clean -> dirty edge. Open / New / recovery restore set the quiet frames:
+    // the dirt they leave is theirs, not an edit's.
+    void DirtyCueFrame();
+    bool m_DirtyCueWasDirty = false;
+    bool m_DirtyCueWasExcluded = true; // Play / Prefab Mode last frame (their exits swap m_Dirty back); true primes frame 1
+    int m_QuietDirtyEdgeFrames = 0;
+    // Docking: per window, docked in the editor dockspace or not, and its tab slot.
+    void DockFrame();
+    struct DockSnap { bool Docked = false; ImGuiID Node = 0; int Tab = -1; int TabCount = 0; };
+    std::unordered_map<ImGuiID, DockSnap> m_DockSnaps;
+    int m_DockQuietFrames = 10;       // startup, layout loads and resets: re-prime, no sounds
+    bool m_DockReorderPending = false; // a tab moved while dragging; TabReorder on release
 
     void DrawExitPrompt();
     bool m_ExitPromptPending = false;
@@ -1275,6 +1298,10 @@ private:
     std::future<BuildPipeline::Report> m_BuildFuture;
     std::shared_ptr<BuildPipeline::Progress> m_BuildProgress;
     bool m_BuildRunAfter = false;
+    // BuildProgress ticks (main thread, PollBuild): the last stage and quarter heard, ticks so far (the pitch climbs).
+    int m_BuildSoundStage = -1;
+    int m_BuildSoundQuarter = 0;
+    int m_BuildSoundTicks = 0;
     bool IsBuilding() const { return m_BuildFuture.valid(); }
     void PollBuild();
     void CancelBuild();
@@ -2434,7 +2461,8 @@ private:
     void DrawGlassLibrary(World& world, AssetLibrary& assets);
     void DrawGlassViewportOverlays(World& world);                  // inside the Scene window
     void PollGlassNotifications();                                 // compile errors -> toasts
-    void PushGlassToast(const std::string& title, const std::string& body, bool error);
+    // `chimed`: the toast's own event already sounded (ModuleReload, NotifyError...), so no ToastIn on top.
+    void PushGlassToast(const std::string& title, const std::string& body, bool error, bool chimed = false);
     // True for the frame(s) the mouse is hovering or dragging the nav gizmo above — set inside
     // DrawViewGizmo() (called before HandleViewportPicking() in Draw()) so picking can skip
     // starting a box-select/pick from a click that's actually meant for the nav gizmo. The nav

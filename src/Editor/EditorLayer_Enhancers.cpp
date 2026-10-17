@@ -179,6 +179,7 @@ void EditorLayer::DrawEnhancerPreferences() {
                         r.Style.Color = ImGui::ColorConvertFloat4ToU32(ImVec4(c.x, c.y, c.z, 1.0f));
                         fs.MarkDirty();
                     }
+                    EditorUI::ColorPickerSound("##ruleColor");
                     if (r.Style.Color == 0 && ImGui::IsItemHovered()) Tip("No colour set - pick one, or leave it to keep the default");
                 }
                 ImGui::TableSetColumnIndex(3);
@@ -368,6 +369,7 @@ void EditorLayer::DrawEnhancerPreferences() {
                 pal.Colors[(std::size_t)i] = ImGui::ColorConvertFloat4ToU32(ImVec4(c.x, c.y, c.z, 1.0f));
                 Enhancers::Palette::MarkDirty();
             }
+            EditorUI::ColorPickerSound("##c");
             if (ImGui::BeginPopupContextItem("##ctx")) {
                 if (ImGui::MenuItem(ICON_FA_TRASH "  Remove") && pal.Colors.size() > 1) removeAt = i;
                 ImGui::EndPopup();

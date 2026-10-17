@@ -2,6 +2,7 @@
 
 #include "Camera.h"
 #include "Components.h"
+#include "EditorSound.h"
 #include "FirstPersonBody.h"
 #include "FirstPersonPresentation.h"
 #include "Model.h"
@@ -13,6 +14,14 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+
+namespace {
+// TimeFaster / TimeSlower by which way the lab's speed moved; nothing when it didn't (already at the end).
+void TimeStepSound(float from, float to, float screenX01 = -1.0f) {
+    if (std::abs(to - from) < 1e-3f) return;
+    EditorSound::Play(to > from ? EditorSound::Event::TimeFaster : EditorSound::Event::TimeSlower, screenX01);
+}
+}
 
 WeaponJankFrame WeaponJankFrameFor(const World& world, const FirstPersonBody& body, const FirstPersonPresentation& p, float dt,
                                    const std::string& label) {
@@ -151,8 +160,10 @@ void WeaponLab::HandleKeys(GLFWwindow* window) {
     static const float kScales[] = {0.1f, 0.25f, 0.5f, 1.0f};
     int at = 3;
     for (int k = 0; k < 4; ++k) if (std::abs(m_TimeScale - kScales[k]) < 1e-3f) at = k;
+    const float scaleWas = m_TimeScale;
     if (pressed(8, GLFW_KEY_KP_ADD)) m_TimeScale = kScales[std::min(at + 1, 3)];
     if (pressed(9, GLFW_KEY_KP_SUBTRACT)) m_TimeScale = kScales[std::max(at - 1, 0)];
+    TimeStepSound(scaleWas, m_TimeScale);
     if (pressed(10, GLFW_KEY_KP_ENTER)) m_PauseToggle = true;
     if (pressed(11, GLFW_KEY_KP_DECIMAL)) m_Step = true;
 }
@@ -185,7 +196,10 @@ void WeaponLab::DrawPanel(FirstPersonPresentation* p, bool playing) {
         if (s != 1.0f) ImGui::SameLine();
         const bool on = std::abs(m_TimeScale - s) < 1e-3f;
         if (on) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
-        if (ImGui::Button(label, ImVec2(56.0f, 0.0f))) m_TimeScale = s;
+        if (ImGui::Button(label, ImVec2(56.0f, 0.0f))) {
+            TimeStepSound(m_TimeScale, s, EditorSound::LastItemScreenX());
+            m_TimeScale = s;
+        }
         if (on) ImGui::PopStyleColor();
     }
     ImGui::SameLine();

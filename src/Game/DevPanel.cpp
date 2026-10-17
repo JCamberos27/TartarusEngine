@@ -2,6 +2,7 @@
 
 #include "AI/NpcDirector.h"
 #include "Combat/PlayerVitals.h"
+#include "EditorSound.h"
 #include "Input.h"
 #include "TimeService.h"
 #include "imgui.h"
@@ -83,7 +84,10 @@ void DevPanel::Draw(const Context& c) {
     float scale = Time::TimeScale();
     if (ImGui::SliderFloat("Time scale", &scale, 0.05f, 2.0f, "%.2f")) Time::SetTimeScale(scale);
     ImGui::SameLine();
-    if (ImGui::SmallButton("1x")) Time::SetTimeScale(1.0f);
+    if (ImGui::SmallButton("1x")) {
+        EditorSound::Play(EditorSound::Event::TimeReset, EditorSound::LastItemScreenX());
+        Time::SetTimeScale(1.0f);
+    }
     ImGui::Checkbox("AI debug overlay (F9)", &AiOverlay);
     if (c.BloodLab) ImGui::Checkbox("Blood Lab", c.BloodLab);
     ImGui::TextDisabled("F7 panel   F8 god mode   F9 AI overlay");

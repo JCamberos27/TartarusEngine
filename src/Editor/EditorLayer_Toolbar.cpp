@@ -3,6 +3,7 @@
 // History panels. Split out of EditorLayer.cpp for build time (#179).
 
 #include "EditorLayer.h"
+#include "EditorSound.h"
 #include "GameModuleBuild.h"
 #include "EditorPanels.h"
 #include "EditorLayerInternal.h"
@@ -268,9 +269,15 @@ void EditorLayer::DrawViewportActionBar(World& world, AssetLibrary& assets,
         // The stats drawn over the view itself (the Game view's readout, the Scene view's stats
         // pill). The Statistics panel is Window > Statistics.
         bool showStats = EditorSettings::Get().GameViewShowStats;
-        if (ActionButton(EDITOR_ICON_STATISTICS, "Show stats over the view", showStats)) {
+        bool statsClicked = false;
+        {
+            EditorSoundEvents::ScopedClickSilence quiet; // StatsOn / StatsOff instead
+            statsClicked = ActionButton(EDITOR_ICON_STATISTICS, "Show stats over the view", showStats);
+        }
+        if (statsClicked) {
             EditorSettings::Get().GameViewShowStats = !showStats;
             EditorSettings::Save();
+            EditorSound::Play(showStats ? EditorSound::Event::StatsOff : EditorSound::Event::StatsOn, EditorSound::LastItemScreenX());
         }
     }
     ImGui::SameLine();
@@ -862,21 +869,27 @@ void EditorLayer::DrawWindowMenuBody() {
             // a replacement. The engine mark lives in Preferences ▸ Viewport. Project Settings
             // moved to its own menu-bar item beside Preferences (it's a settings window, not a
             // dock panel).
+            // LayoutApply at the pick (this frame, so the menu's generic click drops); the re-dock it causes is quiet.
             if (ImGui::MenuItem(ICON_FA_WINDOW_RESTORE "  Reset Layout")) {
                 m_ResetLayoutRequested = true;
+                EditorSound::Play(EditorSound::Event::LayoutApply);
             }
 
             // Layout presets (#236 R2, extended Phase 6 item 10) — named ImGui-ini snapshots in
             // the user's layouts folder (#184), plus four shipped arrangements that need no file.
             if (ImGui::BeginMenu(ICON_FA_TABLE_COLUMNS "  Layout Presets")) {
                 if (ImGui::BeginMenu(ICON_FA_TABLE_CELLS "  Default Layouts")) {
-                    if (ImGui::MenuItem("Default")) RequestDefaultLayout(LayoutKind::Default);
+                    auto applyKind = [this](LayoutKind kind) {
+                        RequestDefaultLayout(kind);
+                        EditorSound::Play(EditorSound::Event::LayoutApply);
+                    };
+                    if (ImGui::MenuItem("Default")) applyKind(LayoutKind::Default);
                     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("The standard arrangement: Hierarchy / Scene / Inspector, Asset Browser + Console below.");
-                    if (ImGui::MenuItem("Wide")) RequestDefaultLayout(LayoutKind::Wide);
+                    if (ImGui::MenuItem("Wide")) applyKind(LayoutKind::Wide);
                     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Narrower side panels, more viewport width — for ultrawide monitors.");
-                    if (ImGui::MenuItem("Tall")) RequestDefaultLayout(LayoutKind::Tall);
+                    if (ImGui::MenuItem("Tall")) applyKind(LayoutKind::Tall);
                     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Taller Asset Browser / Console strip — for portrait or stacked monitors.");
-                    if (ImGui::MenuItem("Focus")) RequestDefaultLayout(LayoutKind::Focus);
+                    if (ImGui::MenuItem("Focus")) applyKind(LayoutKind::Focus);
                     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Hides Hierarchy and Inspector to maximize the Scene viewport.");
                     ImGui::EndMenu();
                 }
@@ -895,7 +908,12 @@ void EditorLayer::DrawWindowMenuBody() {
                             m_RenamingLayoutPreset.clear();
                         }
                         ImGui::SameLine();
-                        if (ActionButton(ICON_FA_CHECK, "Rename")) { RenameLayoutPreset(name, m_RenameLayoutBuf); m_RenamingLayoutPreset.clear(); }
+                        bool renameClicked = false;
+                        {
+                            EditorSoundEvents::ScopedClickSilence quiet; // RenameLayoutPreset sounds the outcome
+                            renameClicked = ActionButton(ICON_FA_CHECK, "Rename");
+                        }
+                        if (renameClicked) { RenameLayoutPreset(name, m_RenameLayoutBuf); m_RenamingLayoutPreset.clear(); }
                         ImGui::SameLine();
                         if (ActionButton(ICON_FA_XMARK, "Cancel")) m_RenamingLayoutPreset.clear();
                     } else {
@@ -905,7 +923,11 @@ void EditorLayer::DrawWindowMenuBody() {
                         // the click before it ever reaches the rename/duplicate/star/delete
                         // buttons drawn on top of it below (same fix as EditorLayer_Inspector.cpp).
                         ImGui::SetNextItemAllowOverlap();
-                        if (ImGui::MenuItem(label.c_str())) RequestLoadLayoutPreset(name);
+                        if (ImGui::MenuItem(label.c_str())) {
+                            RequestLoadLayoutPreset(name);
+                            // Queued (applied next frame) or not found.
+                            EditorSound::Play(m_PendingLayoutIni.empty() ? EditorSound::Event::Blocked : EditorSound::Event::LayoutApply);
+                        }
                         if (ImGui::IsItemHovered() && isDefault) EditorUI::SetTooltip("Startup default — Reset Layout rebuilds to this preset.");
                         ImGui::SameLine();
                         if (ActionButton(ICON_FA_PEN, "Rename this preset")) {
@@ -914,14 +936,25 @@ void EditorLayer::DrawWindowMenuBody() {
                         }
                         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Rename this preset");
                         ImGui::SameLine();
-                        if (ActionButton(ICON_FA_COPY, "Duplicate this preset")) DuplicateLayoutPreset(name);
+                        // Duplicate / star / delete sound their outcome, not a click.
+                        bool duplicateClicked = false, starClicked = false;
+                        {
+                            EditorSoundEvents::ScopedClickSilence quiet;
+                            duplicateClicked = ActionButton(ICON_FA_COPY, "Duplicate this preset");
+                        }
+                        if (duplicateClicked) DuplicateLayoutPreset(name);
                         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Duplicate this preset");
                         ImGui::SameLine();
-                        const bool starClicked = ActionButton(ICON_FA_STAR, isDefault ? "Unset as startup default"
-                                                                                      : "Set as startup default (Reset Layout rebuilds to this)", isDefault);
+                        {
+                            EditorSoundEvents::ScopedClickSilence quiet;
+                            starClicked = ActionButton(ICON_FA_STAR, isDefault ? "Unset as startup default"
+                                                                               : "Set as startup default (Reset Layout rebuilds to this)", isDefault);
+                        }
                         if (starClicked) {
                             EditorSettings::Get().DefaultLayoutPreset = isDefault ? std::string() : name;
                             EditorSettings::Save();
+                            EditorSound::Play(isDefault ? EditorSound::Event::ToggleOff : EditorSound::Event::ToggleOn,
+                                              EditorSound::LastItemScreenX());
                         }
                         if (ImGui::IsItemHovered()) EditorUI::SetTooltip(isDefault ? "Unset as startup default" : "Set as startup default (Reset Layout rebuilds to this)");
                         ImGui::SameLine();
@@ -931,7 +964,11 @@ void EditorLayer::DrawWindowMenuBody() {
                         if (ImGui::IsWindowAppearing()) m_ConfirmDeleteLayoutPreset.clear();
                         if (m_ConfirmDeleteLayoutPreset == name) {
                             ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
-                            const bool confirmed = DangerIconButton(ICON_FA_TRASH "  Delete?", "Click again to delete this preset");
+                            bool confirmed = false;
+                            {
+                                EditorSoundEvents::ScopedClickSilence quiet; // DeleteLayoutPreset plays Delete
+                                confirmed = DangerIconButton(ICON_FA_TRASH "  Delete?", "Click again to delete this preset");
+                            }
                             ImGui::PopStyleColor();
                             if (confirmed) {
                                 DeleteLayoutPreset(name);

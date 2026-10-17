@@ -62,6 +62,8 @@ void Draw(const EditorModuleHostAPI& host) {
             bool on = (typeMask & bit) != 0;
             if (ImGui::MenuItem(label, nullptr, &on)) {
                 typeMask ^= bit;
+                // At the pick, so the observer's generic menu Click drops.
+                EditorUIPrimitives::ClickSound(on ? EditorSoundEvents::Event::ToggleOn : EditorSoundEvents::Event::ToggleOff);
                 if (host.SetHierarchyTypeFilter) host.SetHierarchyTypeFilter(typeMask);
             }
         };
@@ -70,8 +72,10 @@ void Draw(const EditorModuleHostAPI& host) {
         kind(ICON_FA_VIDEO "  Cameras", kHierarchyFilterCamera);
         kind(ICON_FA_VECTOR_SQUARE "  Empties and other", kHierarchyFilterOther);
         ImGui::Separator();
-        if (ImGui::MenuItem("Show everything", nullptr, false, typeMask != 0) && host.SetHierarchyTypeFilter)
+        if (ImGui::MenuItem("Show everything", nullptr, false, typeMask != 0) && host.SetHierarchyTypeFilter) {
             host.SetHierarchyTypeFilter(0);
+            EditorUIPrimitives::ClickSound(EditorSoundEvents::Event::ClickCancel); // every filter off at once
+        }
         ImGui::EndPopup();
     }
 

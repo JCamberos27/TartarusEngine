@@ -311,7 +311,10 @@ void Draw(const EditorModuleHostAPI& host) {
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, EditorTheme::WithAlpha(col, 0.28f));
         ImGui::PushStyleColor(ImGuiCol_Text, on ? col : EditorTheme::Dim);
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
-        if (ImGui::Button(label)) on = !on;
+        if (ImGui::Button(label)) {
+            on = !on;
+            EditorUIPrimitives::ClickSound(on ? EditorSoundEvents::Event::ToggleOn : EditorSoundEvents::Event::ToggleOff);
+        }
         ImGui::PopStyleVar();
         ImGui::PopStyleColor(4);
         if (ImGui::IsItemHovered()) Tooltip(host, tip);

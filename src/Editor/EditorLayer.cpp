@@ -629,15 +629,21 @@ std::vector<std::string> EditorLayer::LayoutPresetNames() const {
 
 void EditorLayer::SaveLayoutPreset(const std::string& rawName) {
     const std::string name = SanitizeLayoutName(rawName);
-    if (name.empty()) { Log::Warn("Layout preset: name is empty after sanitising."); return; }
+    if (name.empty()) {
+        Log::Warn("Layout preset: name is empty after sanitising.");
+        EditorSound::Play(EditorSound::Event::Blocked);
+        return;
+    }
     std::error_code ec;
     std::filesystem::create_directories(LayoutsDir(), ec);
     const std::string path = LayoutsDir() + "/" + name + ".ini";
     // Atomic: a crash mid-write must not truncate a saved layout preset (audit CPP-206).
     if (!AtomicFile::WriteBytes(path, ImGui::SaveIniSettingsToMemory(nullptr), /*binary=*/true)) {
         Log::Error("Layout preset: couldn't write '" + path + "'.");
+        EditorSound::Play(EditorSound::Event::Blocked);
         return;
     }
+    EditorSound::Play(EditorSound::Event::LayoutSave);
     Log::Info("Saved layout preset: " + name);
 }
 
@@ -651,7 +657,8 @@ void EditorLayer::RequestLoadLayoutPreset(const std::string& name) {
 
 void EditorLayer::DeleteLayoutPreset(const std::string& name) {
     std::error_code ec;
-    std::filesystem::remove(LayoutsDir() + "/" + SanitizeLayoutName(name) + ".ini", ec);
+    const bool removed = std::filesystem::remove(LayoutsDir() + "/" + SanitizeLayoutName(name) + ".ini", ec);
+    EditorSound::Play(removed ? EditorSound::Event::Delete : EditorSound::Event::Blocked);
     if (EditorSettings::Get().DefaultLayoutPreset == name) {
         EditorSettings::Get().DefaultLayoutPreset.clear();
         EditorSettings::Save();
@@ -660,11 +667,17 @@ void EditorLayer::DeleteLayoutPreset(const std::string& name) {
 
 void EditorLayer::RenameLayoutPreset(const std::string& oldName, const std::string& rawNewName) {
     const std::string newName = SanitizeLayoutName(rawNewName);
-    if (newName.empty() || newName == oldName) return;
+    if (newName == oldName) return; // unchanged: nothing to say
+    if (newName.empty()) { EditorSound::Play(EditorSound::Event::Blocked); return; }
     std::error_code ec;
     std::filesystem::rename(LayoutsDir() + "/" + SanitizeLayoutName(oldName) + ".ini",
                              LayoutsDir() + "/" + newName + ".ini", ec);
-    if (ec) { Log::Error("Layout preset: couldn't rename '" + oldName + "' to '" + newName + "'."); return; }
+    if (ec) {
+        Log::Error("Layout preset: couldn't rename '" + oldName + "' to '" + newName + "'.");
+        EditorSound::Play(EditorSound::Event::Blocked);
+        return;
+    }
+    EditorSound::Play(EditorSound::Event::Rename);
     if (EditorSettings::Get().DefaultLayoutPreset == oldName) {
         EditorSettings::Get().DefaultLayoutPreset = newName;
         EditorSettings::Save();
@@ -680,7 +693,12 @@ void EditorLayer::DuplicateLayoutPreset(const std::string& name) {
     std::error_code ec;
     std::filesystem::copy_file(src, LayoutsDir() + "/" + SanitizeLayoutName(copyName) + ".ini",
                                 std::filesystem::copy_options::none, ec);
-    if (ec) { Log::Error("Layout preset: couldn't duplicate '" + name + "'."); return; }
+    if (ec) {
+        Log::Error("Layout preset: couldn't duplicate '" + name + "'.");
+        EditorSound::Play(EditorSound::Event::Blocked);
+        return;
+    }
+    EditorSound::Play(EditorSound::Event::Duplicate);
     Log::Info("Duplicated layout preset '" + name + "' as '" + copyName + "'.");
 }
 
@@ -1718,11 +1736,17 @@ void EditorLayer::DrawSettingsWindow(World& world) {
             if (ImGui::InputTextWithHint("##scfilter", ICON_FA_MAGNIFYING_GLASS "  Filter", buf, sizeof(buf)))
                 m_PrefsShortcutFilter = buf;
             ImGui::SameLine(0.0f, 4.0f * m_UIScale);
-            if (ActionButton(ICON_FA_ARROW_ROTATE_LEFT, "Restore every shortcut to its default", false, ImVec2(-1.0f, 0.0f))) {
+            bool restoreAll = false;
+            {
+                EditorSoundEvents::ScopedClickSilence quiet; // ResetDefault instead
+                restoreAll = ActionButton(ICON_FA_ARROW_ROTATE_LEFT, "Restore every shortcut to its default", false, ImVec2(-1.0f, 0.0f));
+            }
+            if (restoreAll) {
                 Shortcuts::ResetAllToDefault();
                 Shortcuts::Save();
                 m_PrefsCapturingId.clear();
                 m_PrefsCaptureStage = 0;
+                EditorSound::Play(EditorSound::Event::ResetDefault, EditorSound::LastItemScreenX());
             }
         }
 
@@ -1731,16 +1755,22 @@ void EditorLayer::DrawSettingsWindow(World& world) {
         //   stage 1 — one combo captured; confirm as-is (Enter / click) or press a second key
         //             to turn it into a two-key sequence (press G, then S).
         // Esc cancels; Backspace/Delete on an empty field unbinds.
+        // Sounds: an unbind is a (light) Delete; a binding is BindCaptured, or BindConflict when another command has it.
         auto commitCapture = [&](Shortcuts::Chord chord) {
+            const bool clash = chord.IsBound() && !Shortcuts::Conflicts(m_PrefsCapturingId.c_str(), chord).empty();
             Shortcuts::SetChord(m_PrefsCapturingId.c_str(), chord);
             Shortcuts::Save();
             m_PrefsCapturingId.clear();
             m_PrefsCaptureStage = 0;
+            EditorSound::Play(!chord.IsBound() ? EditorSound::Event::Delete
+                              : clash          ? EditorSound::Event::BindConflict
+                                               : EditorSound::Event::BindCaptured);
         };
         if (!m_PrefsCapturingId.empty() && !ImGui::GetIO().WantTextInput) {
             if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
                 m_PrefsCapturingId.clear();
                 m_PrefsCaptureStage = 0;
+                EditorSound::Play(EditorSound::Event::ClickCancel);
             } else if (m_PrefsCaptureStage == 0 &&
                        (ImGui::IsKeyPressed(ImGuiKey_Backspace, false) || ImGui::IsKeyPressed(ImGuiKey_Delete, false))) {
                 commitCapture(Shortcuts::Chord{}); // unbind
@@ -1756,8 +1786,11 @@ void EditorLayer::DrawSettingsWindow(World& world) {
                 const bool captured = Shortcuts::CaptureChord(got);
                 if (captured && appCtx) {
                     if (Shortcuts::GlfwCanTrigger(got)) commitCapture(got);
-                    else Log::Warn("Shortcuts: " + Shortcuts::ToString(got) +
-                                   " can't be used for a play-mode shortcut - pick another key.");
+                    else {
+                        Log::Warn("Shortcuts: " + Shortcuts::ToString(got) +
+                                  " can't be used for a play-mode shortcut - pick another key.");
+                        EditorSound::Play(EditorSound::Event::ShortcutInvalid);
+                    }
                 } else if (captured) {
                     if (m_PrefsCaptureStage == 0) {
                         m_PrefsCapturePrefix = got;   // provisional single-combo binding
@@ -1867,9 +1900,15 @@ void EditorLayer::DrawSettingsWindow(World& world) {
                     ImGui::SetCursorPosX(ImGui::GetCursorPosX() +
                         std::max(0.0f, ImGui::GetContentRegionAvail().x - pillW));
                     if (ImGui::Button((label + "###bind").c_str(), ImVec2(pillW, 0.0f))) {
+                        const float chipX = EditorSound::LastItemScreenX();
                         if (capturing && m_PrefsCaptureStage == 1) commitCapture(m_PrefsCapturePrefix);
-                        else if (capturing)                        { m_PrefsCapturingId.clear(); m_PrefsCaptureStage = 0; }
-                        else                                       { m_PrefsCapturingId = s.Id; m_PrefsCaptureStage = 0; }
+                        else if (capturing) {
+                            m_PrefsCapturingId.clear(); m_PrefsCaptureStage = 0;
+                            EditorSound::Play(EditorSound::Event::ClickCancel, chipX);
+                        } else {
+                            m_PrefsCapturingId = s.Id; m_PrefsCaptureStage = 0;
+                            EditorSound::Play(EditorSound::Event::BindListen, chipX);
+                        }
                     }
                     ImGui::PopStyleColor(5);
                     ImGui::PopStyleVar();
@@ -1881,12 +1920,17 @@ void EditorLayer::DrawSettingsWindow(World& world) {
                         ImGui::AlignTextToFramePadding();
                         const std::string resetTip = "Reset to " + Shortcuts::ToString(s.Default);
                         ImGui::PushID(s.Id.c_str());
-                        const bool resetClicked = ActionButton(ICON_FA_ARROW_ROTATE_LEFT, resetTip.c_str());
+                        bool resetClicked = false;
+                        {
+                            EditorSoundEvents::ScopedClickSilence quiet; // ResetDefault instead
+                            resetClicked = ActionButton(ICON_FA_ARROW_ROTATE_LEFT, resetTip.c_str());
+                        }
                         ImGui::PopID();
                         if (resetClicked) {
                             Shortcuts::ResetToDefault(s.Id.c_str());
                             Shortcuts::Save();
                             if (capturing) { m_PrefsCapturingId.clear(); m_PrefsCaptureStage = 0; }
+                            EditorSound::Play(EditorSound::Event::ResetDefault, EditorSound::LastItemScreenX());
                         }
                     }
 
@@ -2257,13 +2301,17 @@ void EditorLayer::EndFrame() {
                                 HasAnySelection() ? 1 + (int)m_ExtraSelection.size() : 0);
     {
         const bool panels[] = {m_ShowHierarchy, m_ShowInspector, m_ShowAssetBrowser, EditorModuleHost::ConsoleState().Visible,
-                               m_ShowHistory, m_ShowLighting, m_ShowAudioDebug, m_ShowSoundBoard, m_ShowPreferences, m_ShowAnimator};
+                               m_ShowHistory, m_ShowLighting, m_ShowAudioDebug, m_ShowSoundBoard, m_ShowPreferences, m_ShowAnimator,
+                               // set from F6 / Alt+Shift+T, their X, the Window menu and the module API alike
+                               EditorSettings::Get().ShowPhysicsPanel, EditorSettings::Get().SceneShowStats};
         uint32_t mask = 0;
         for (int i = 0; i < (int)(sizeof(panels) / sizeof(panels[0])); ++i) mask |= panels[i] ? 1u << i : 0u;
         EditorSound::PanelsFrame(mask);
     }
     EditorSound::ToolFrame(m_HandTool ? -1 : MeasureToolActive() ? 5 : (int)m_GizmoOp, m_GizmoLocalSpace, m_GridSnapEnabled);
+    DockFrame(); // before the observer, so a tab drag's release isn't also a generic click
     EditorSound::ObserveImGui(); // slider, hover, menu and drag & drop sounds, off this frame's ImGui state
+    DirtyCueFrame(); // last: a whisper under whatever the edit itself played
     ImGui::Render();
     ImDrawData* dd = ImGui::GetDrawData();
     // No GLStateShadow_Invalidate() per frame: the backend restores every shadowed state it
@@ -2321,6 +2369,74 @@ void EditorLayer::EndFrame() {
             GLStateCache::Invalidate();
         }
     }
+}
+
+void EditorLayer::QuietDockSounds(int frames) {
+    m_DockSnaps.clear(); // re-primed from the next DockFrame
+    m_DockReorderPending = false;
+    m_DockQuietFrames = std::max(m_DockQuietFrames, frames);
+}
+
+// DockAttach / DockDetach / TabReorder, off the windows' dock state frame to frame. Detach fires while the mouse
+// is still held (the "rip"); a tab reorder happens live during the drag, so it's heard once, on release.
+void EditorLayer::DockFrame() {
+    const bool quiet = m_DockQuietFrames > 0 || m_EditorDockspaceId == 0;
+    if (m_DockQuietFrames > 0) --m_DockQuietFrames;
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    bool detached = false, attached = false, reordered = false;
+    float detachX = -1.0f, attachX = -1.0f;
+    std::unordered_map<ImGuiID, DockSnap> snaps;
+    snaps.reserve(m_DockSnaps.size());
+    for (ImGuiWindow* w : GImGui->Windows) {
+        if (!w->Active || (w->Flags & (ImGuiWindowFlags_ChildWindow | ImGuiWindowFlags_Popup | ImGuiWindowFlags_Tooltip |
+                                       ImGuiWindowFlags_DockNodeHost)) ||
+            (w->Name[0] == '#' && w->Name[1] == '#'))
+            continue;
+        DockSnap s;
+        // DockNode, not DockId (kept after undocking); and docked means in the editor's dockspace, not a floating node.
+        s.Docked = w->DockNode && ImGui::DockNodeGetRootNode(w->DockNode)->ID == m_EditorDockspaceId;
+        if (s.Docked) {
+            s.Node = w->DockNode->ID;
+            if (const ImGuiTabBar* tabBar = w->DockNode->TabBar) {
+                s.TabCount = tabBar->Tabs.Size;
+                for (int i = 0; i < tabBar->Tabs.Size; ++i)
+                    if (tabBar->Tabs[i].Window == w) { s.Tab = i; break; }
+            }
+        }
+        const auto prev = m_DockSnaps.find(w->ID);
+        if (prev != m_DockSnaps.end()) {
+            const DockSnap& p = prev->second;
+            const float x = vp->Size.x > 0.0f ? std::clamp((w->Pos.x + w->Size.x * 0.5f - vp->Pos.x) / vp->Size.x, 0.0f, 1.0f) : -1.0f;
+            if (p.Docked && !s.Docked) { detached = true; detachX = x; }
+            else if (!p.Docked && s.Docked) { attached = true; attachX = x; }
+            else if (s.Docked && p.Node == s.Node && p.TabCount == s.TabCount && p.Tab >= 0 && s.Tab >= 0 && p.Tab != s.Tab)
+                reordered = true;
+        }
+        snaps.emplace(w->ID, s);
+    }
+    m_DockSnaps = std::move(snaps);
+    // Quiet while priming, and when an action already spoke this frame (a layout pick, a theme switch...).
+    if (quiet || EditorSound::PlayedThisFrame()) { m_DockReorderPending = false; return; }
+    if (detached) {
+        EditorSound::Play(EditorSound::Event::DockDetach, detachX);
+        m_DockReorderPending = false; // a tab ripped out of its bar isn't a reorder
+    }
+    if (attached) EditorSound::Play(EditorSound::Event::DockAttach, attachX);
+    if (reordered && !detached && !attached) m_DockReorderPending = true;
+    if (m_DockReorderPending && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+        EditorSound::Play(EditorSound::Event::TabReorder);
+        m_DockReorderPending = false;
+    }
+}
+
+// DirtyCue: the clean -> dirty edge, whatever set it (an edit, an undo past the save point, a paste...).
+void EditorLayer::DirtyCueFrame() {
+    const bool excluded = m_InPlayMode || InPrefabMode();
+    const bool quiet = excluded || m_DirtyCueWasExcluded || m_QuietDirtyEdgeFrames > 0;
+    if (m_QuietDirtyEdgeFrames > 0) --m_QuietDirtyEdgeFrames;
+    if (m_Dirty && !m_DirtyCueWasDirty && !quiet) EditorSound::Play(EditorSound::Event::DirtyCue);
+    m_DirtyCueWasDirty = m_Dirty;
+    m_DirtyCueWasExcluded = excluded;
 }
 // #185 / Phase 6 item 13 — a small physics visual debugger: sim stats, four viewport draw
 // channels, a slow-mo slider and a single-substep button. That's the general-use set; nothing
@@ -2402,7 +2518,15 @@ void EditorLayer::DrawPhysicsDebugWindow(World& world) {
                                      "faster/slower than real time this session.");
         }
         ImGui::SameLine();
-        if (EditorUIPrimitives::SecondaryButton("1x")) es.PhysicsSimTimeScale = 1.0f;
+        bool timeResetClicked = false;
+        {
+            EditorSoundEvents::ScopedClickSilence quiet; // TimeReset instead
+            timeResetClicked = EditorUIPrimitives::SecondaryButton("1x");
+        }
+        if (timeResetClicked) {
+            es.PhysicsSimTimeScale = 1.0f;
+            EditorSound::Play(EditorSound::Event::TimeReset, EditorSound::LastItemScreenX());
+        }
         // #38 — AllowWhenDisabled: without it, IsItemHovered() reports false for a disabled
         // item, so this tooltip (explaining WHY Step is greyed out) never fired outside Play,
         // exactly when a user hovering a disabled button most wants to know why.
@@ -2678,7 +2802,8 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
             m_AutoSaveTimer = 0.0f;
             // #90 — Draw() also runs during in-panel Play, when the world holds transient play
             // state; the recovery file must only ever hold edit-mode content.
-            if ((m_Dirty || m_PrefabModeSceneDirty) && !m_InPlayMode) WriteRecoverySnapshot(world, assets);
+            if ((m_Dirty || m_PrefabModeSceneDirty) && !m_InPlayMode && WriteRecoverySnapshot(world, assets))
+                EditorSound::Play(EditorSound::Event::Autosave); // the timer's write only, never the emergency ones
         }
     } else {
         m_AutoSaveTimer = 0.0f; // don't let it silently accumulate while disabled
@@ -2728,6 +2853,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         m_PendingLayoutIni = EditorPanels::MigrateIni(std::move(m_PendingLayoutIni));
         ImGui::LoadIniSettingsFromMemory(m_PendingLayoutIni.c_str(), m_PendingLayoutIni.size());
         m_PendingLayoutIni.clear();
+        QuietDockSounds(); // the preset re-docks every window: LayoutApply already played at the pick
         m_ShowHierarchy = m_ShowInspector = m_ShowAssetBrowser = true; // never leave a core panel hidden
     }
 
@@ -2770,6 +2896,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         // Tear down the existing tree (whatever the user dragged panels into) so the block
         // below rebuilds the original default split from scratch, same as a first launch.
         ImGui::DockBuilderRemoveNode(dockspaceId);
+        QuietDockSounds(); // Reset Layout (sounded at its pick) or the silent central-node migration
     }
     if (!ImGui::DockBuilderGetNode(dockspaceId)) {
         // Deliberately NOT ImGuiDockNodeFlags_DockSpace here: that flag makes the leftover
@@ -3212,11 +3339,15 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         // stay their own, separate selection-only back/forward (SelectionHistoryBack/Forward).
         // Q12 — Ctrl+S/Ctrl+Shift+S mirror the File menu's Play-mode gate (DrawFileMenuBody).
         if (Shortcuts::Triggered("editor.saveAs")) {
-            if (m_InPlayMode) Log::Info("Save is disabled while Playing - changes here revert on Stop anyway.");
-            else DoSaveAs(world, assets);
+            if (m_InPlayMode) {
+                Log::Info("Save is disabled while Playing - changes here revert on Stop anyway.");
+                EditorSound::Play(EditorSound::Event::Blocked);
+            } else DoSaveAs(world, assets);
         } else if (Shortcuts::Triggered("editor.save")) {
-            if (m_InPlayMode) Log::Info("Save is disabled while Playing - changes here revert on Stop anyway.");
-            else DoSave(world, assets); // prompts for a location if untitled
+            if (m_InPlayMode) {
+                Log::Info("Save is disabled while Playing - changes here revert on Stop anyway.");
+                EditorSound::Play(EditorSound::Event::Blocked);
+            } else DoSave(world, assets); // prompts for a location if untitled
         }
         if (Shortcuts::Triggered("editor.newScene")) RequestNewScene(world, assets);
         // GameObject-menu parity (#236): Ctrl+Shift+N = Create Empty Child (of the active
@@ -3358,8 +3489,11 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
             EditorSound::Play(EditorSound::Event::SnapToggle, -1.0f, ShowGrid() ? 1.0f : 0.89f);
         }
         if (Shortcuts::Triggered("snap.toggleGrid"))   SetGridSnapEnabled(!GridSnapEnabled());
-        if (Shortcuts::Triggered("tools.snapToGround") && CanSnapSelectionToGround(world))
-            SnapSelectionToGround(world);
+        if (Shortcuts::Triggered("tools.snapToGround")) {
+            // SnapSelectionToGround plays SnapGround itself; nothing to snap is a refusal.
+            if (CanSnapSelectionToGround(world)) SnapSelectionToGround(world);
+            else EditorSound::Play(EditorSound::Event::Blocked);
+        }
         if (Shortcuts::Triggered("view.nextDrawMode")) {
             SetShadingModeIndex((ShadingModeIndex() + 1) % (int)ShadingMode::Count);
             EditorSound::Play(EditorSound::Event::ViewPreset);
@@ -3550,7 +3684,12 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
             ImGui::Separator();
             const bool named = m_SaveLayoutName[0] != '\0';
             ImGui::BeginDisabled(!named);
-            if (PrimaryButton("Save", ImVec2(110.0f * m_UIScale, 0.0f)) || (enter && named)) { // #37
+            bool saveClicked = false;
+            {
+                EditorSoundEvents::ScopedClickSilence quiet; // LayoutSave / Blocked from SaveLayoutPreset
+                saveClicked = PrimaryButton("Save", ImVec2(110.0f * m_UIScale, 0.0f));
+            }
+            if (saveClicked || (enter && named)) { // #37
                 SaveLayoutPreset(m_SaveLayoutName);
                 m_ShowSaveLayout = false;
                 ImGui::CloseCurrentPopup();

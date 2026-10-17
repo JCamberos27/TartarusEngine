@@ -110,13 +110,72 @@ enum class Event : uint8_t {
     ViewRestore,
     CursorLock,        // Play takes the mouse
     CursorRelease,     // ...gives it back
+    // P7. Viewport
+    BoxSelectStart,    // a marquee drag starts in the viewport
+    BoxSelectEnd,      // ...and selects (pitch rises with the count)
+    HideOn,            // Hierarchy eye: an object hidden
+    HideOff,           // ...shown again
+    LockOn,            // Hierarchy lock: an object locked against picking
+    LockOff,
+    FlySpeed,          // the fly camera's speed stepped (wheel while flying; pitch follows the speed)
+    SnapGround,        // selection dropped onto the ground
+    MeasurePoint,      // measure tool: a point placed
+    MeasureClear,      // ...the points cleared
+    // Hierarchy
+    Reparent,          // dropped onto a row (or the empty space: back to the root)
+    Reorder,           // ...between rows
+    ExpandAllSweep,    // the whole tree opened at once
+    CollapseAllSweep,
+    Isolate,           // Shift+E: everything but the hovered branch collapsed
+    // Workflow
+    DockAttach,        // a panel docked
+    DockDetach,        // ...torn out of the dock
+    TabReorder,        // a dock tab dragged to another place in its strip
+    LayoutApply,       // a layout preset or Reset Layout
+    LayoutSave,        // ...a layout saved as a preset
+    ToastIn,           // a glass toast appears (when its own event didn't already chime)
+    ToastOut,          // ...is dismissed
+    DirtyCue,          // the scene just got unsaved changes (a whisper)
+    Autosave,          // the recovery snapshot written (a whisper)
+    RecoveryPrompt,    // the crash-recovery prompt shows
+    // Play & debug
+    TimeSlower,        // time scale stepped down
+    TimeFaster,        // ...up
+    TimeReset,         // ...back to 1x
+    DebugOn,           // a dev / debug overlay toggled (F5..F9)
+    DebugOff,
+    StatsOn,           // the stats overlay
+    StatsOff,
+    // Fields
+    FieldCommit,       // a text / number field confirmed with Enter after an edit
+    FieldCancel,       // ...abandoned with Escape
+    PickerOpen,        // a colour picker popup opens
+    PickerClose,
+    EyedropperArm,     // the eyedropper is armed
+    EyedropperPick,    // ...samples a colour
+    SwatchPick,        // a palette swatch picked
+    BindListen,        // Preferences: a shortcut chip waits for a key
+    BindCaptured,      // ...got one
+    BindConflict,      // ...got one that another command already uses
+    SearchClear,       // a search field's X
+    // Deeper
+    FilesDropped,      // files dragged in from Explorer and accepted
+    MissingRefs,       // a scene opened with missing prefabs / references (instead of SceneOpen)
+    // Moments
+    EditorStart,       // the editor's first frame is up
+    EditorExit,        // ...and it closes
+    PackageSuccess,    // a packaged game build finished (not the module build)
+    PackageFail,
+    BuildProgress,     // ...a packaged build stage / quarter passed (pitch climbs)
+    Digest,            // back to the editor after "done" chimes played while it was in the background
     Count
 };
 
 // Preferences groups: each has its own toggle and volume.
 // Appended only: saved settings are per category index.
 enum class Category : uint8_t {
-    Clicks = 0, Sliders, Hover, Panels, DragDrop, Notifications, PlayMode, Objects, Tools, Assets, Animation, System, Count
+    Clicks = 0, Sliders, Hover, Panels, DragDrop, Notifications, PlayMode, Objects, Tools, Assets, Animation, System, Fields,
+    Workflow, Count
 };
 
 constexpr int kEventCount = (int)Event::Count;
