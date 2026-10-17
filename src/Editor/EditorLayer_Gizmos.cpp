@@ -275,6 +275,7 @@ void EditorLayer::FrameSceneBounds(World& world, Camera& editorCamera) {
 void EditorLayer::FocusOnSelection(World& world, Camera& editorCamera) {
     glm::vec3 boundsMin, boundsMax;
     if (!ComputeSelectionBounds(world, boundsMin, boundsMax)) return;
+    if (!m_QuietFrameSelection) EditorSound::Play(EditorSound::Event::FrameSelected);
 
     glm::vec3 center = (boundsMin + boundsMax) * 0.5f;
     float radius = glm::length(boundsMax - boundsMin) * 0.5f;
@@ -460,6 +461,7 @@ void EditorLayer::ComputeViewPivot(World& world, Camera& editorCamera, glm::vec3
 }
 
 void EditorLayer::SnapToView(World& world, Camera& editorCamera, float yaw, float pitch, bool orthographic) {
+    EditorSound::Play(EditorSound::Event::ViewPreset);
     glm::vec3 pivot;
     float frameRadius = 0.0f;
     ComputeViewPivot(world, editorCamera, pivot, frameRadius);
@@ -2617,6 +2619,12 @@ void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
     }
 
     bool modified = ImViewGuizmo::Rotate(camPos, camRot, pivot, rotatePos);
+    { // an axis click starts the gizmo's snap tween: the view-preset sound, once
+        static bool wasAnimating = false;
+        const bool animating = ImViewGuizmo::GetContext().isAnimating;
+        if (animating && !wasAnimating) EditorSound::Play(EditorSound::Event::ViewPreset);
+        wasAnimating = animating;
+    }
     m_ViewGizmoBlocking = ImViewGuizmo::IsOver() || ImViewGuizmo::IsUsing();
 
     // Tooltips - the rotate ring gives no feedback on its own (it's manually hit-tested inside

@@ -37,7 +37,7 @@ const EventInfo kEvents[kEventCount] = {
     {"Save",             Category::Notifications,-2.0f, 300.0f, 0.0f,  true},
     {"Undo",             Category::Clicks,       -2.0f,  60.0f, 0.02f, true},
     {"Redo",             Category::Clicks,       -2.0f,  60.0f, 0.02f, true},
-    {"Hover",            Category::Hover,         6.0f,  45.0f, 0.03f, false},
+    {"Hover",            Category::Hover,         0.0f,  45.0f, 0.03f, false},
     {"SliderGrab",       Category::Sliders,       0.0f,  60.0f, 0.02f, false},
     {"SliderTick",       Category::Sliders,      -4.0f,  40.0f, 0.0f,  false},
     {"SliderRelease",    Category::Sliders,       0.0f,  60.0f, 0.02f, false},
@@ -46,9 +46,38 @@ const EventInfo kEvents[kEventCount] = {
     {"DragStart",        Category::DragDrop,      0.0f, 150.0f, 0.02f, false},
     {"DropAccept",       Category::DragDrop,      0.0f, 150.0f, 0.0f,  false},
     {"DropReject",       Category::DragDrop,      0.0f, 150.0f, 0.0f,  false},
+    {"Select",           Category::Objects,       0.0f,  60.0f, 0.03f, false},
+    {"Deselect",         Category::Objects,       0.0f,  80.0f, 0.02f, false},
+    {"Create",           Category::Objects,       0.0f, 120.0f, 0.02f, false},
+    {"Duplicate",        Category::Objects,       0.0f, 100.0f, 0.02f, false},
+    {"Delete",           Category::Objects,       0.0f, 120.0f, 0.02f, false},
+    {"Copy",             Category::Objects,       0.0f,  80.0f, 0.02f, false},
+    {"Paste",            Category::Objects,       0.0f,  80.0f, 0.02f, false},
+    {"Rename",           Category::Objects,       0.0f,  80.0f, 0.02f, false},
+    {"ComponentAdd",     Category::Objects,       0.0f, 100.0f, 0.02f, false},
+    {"ComponentRemove",  Category::Objects,       0.0f, 100.0f, 0.02f, false},
+    {"PrefabApply",      Category::Objects,       0.0f, 200.0f, 0.0f,  true},
+    {"PrefabRevert",     Category::Objects,       0.0f, 200.0f, 0.0f,  true},
+    {"PrefabEnter",      Category::Objects,       0.0f, 250.0f, 0.0f,  true},
+    {"PrefabExit",       Category::Objects,       0.0f, 250.0f, 0.0f,  true},
+    {"ToolSwitch",       Category::Tools,         0.0f,  60.0f, 0.0f,  false},
+    {"SnapToggle",       Category::Tools,         0.0f,  60.0f, 0.02f, false},
+    {"SpaceToggle",      Category::Tools,         0.0f,  60.0f, 0.02f, false},
+    {"FrameSelected",    Category::Tools,         0.0f, 150.0f, 0.02f, true},
+    {"ViewPreset",       Category::Tools,         0.0f,  80.0f, 0.02f, true},
+    {"PanelOpen",        Category::Panels,        0.0f,  80.0f, 0.02f, false},
+    {"PanelClose",       Category::Panels,        0.0f,  80.0f, 0.02f, false},
+    {"TreeExpand",       Category::Panels,       -2.0f,  35.0f, 0.03f, false},
+    {"TreeCollapse",     Category::Panels,       -2.0f,  35.0f, 0.03f, false},
+    {"SceneOpen",        Category::Notifications, 0.0f, 500.0f, 0.0f,  true},
+    {"BuildStart",       Category::Notifications, 0.0f, 500.0f, 0.0f,  true},
+    {"BuildSuccess",     Category::Notifications, 0.0f, 500.0f, 0.0f,  true},
+    {"BuildFail",        Category::Notifications, 0.0f, 500.0f, 0.0f,  true},
+    {"ConsoleClear",     Category::Notifications,-2.0f, 300.0f, 0.0f,  true},
+    {"AssetImport",      Category::Notifications,-2.0f, 400.0f, 0.0f,  true},
 };
 
-const char* kCategoryNames[kCategoryCount] = {"Clicks", "Sliders", "Hover", "Panels", "Drag & Drop", "Notifications", "Play Mode"};
+const char* kCategoryNames[kCategoryCount] = {"Clicks", "Sliders", "Hover", "Panels", "Drag & Drop", "Notifications", "Play Mode", "Objects", "Tools"};
 
 float DbToGain(float db) { return std::pow(10.0f, db / 20.0f); }
 
@@ -66,6 +95,8 @@ struct State {
     std::array<std::vector<std::string>, kEventCount> Files;
     std::array<std::vector<std::string>, kEventCount> BuiltIn, Premium; // both sets, loaded; Files is the one in use
     std::array<bool, kEventCount> Override{};
+    double LastBuildResultMs = -1e9;
+    unsigned Frame = 0, LastPlayFrame = ~0u; // ObserveImGui counts frames; Play notes the one it last sounded in
 } s;
 
 double NowMs() {
@@ -250,7 +281,7 @@ void Update() {
         if (e.Level == LogLevel::Error) error = true;
         else if (e.Level == LogLevel::Warning) warning = true;
         else if (e.Message.rfind("Hot reload: TartarusGame module reloaded", 0) == 0) success = true;
-        else if (e.Message.rfind("Imported ", 0) == 0) info = true;
+        else if (e.Message.rfind("Imported ", 0) == 0) info = true; // AssetImport
     }
     // A storm (something failing over and over) gets four alerts, then quiet until it has calmed down for ten seconds.
     if (error || warning) {
@@ -259,10 +290,12 @@ void Update() {
         s.LastAlertMs = now;
         if (s.AlertStorm >= 4) return;
     }
+    // A build that just sounded its own result already said it: its log lines (the errors, the reload) stay quiet.
+    if (NowMs() - s.LastBuildResultMs < 5000.0 && (error || success)) return;
     if (error) Play(Event::NotifyError);
     else if (warning) Play(Event::NotifyWarning);
     else if (success) Play(Event::NotifySuccess);
-    else if (info) Play(Event::NotifyInfo);
+    else if (info) Play(Event::AssetImport);
 }
 
 void Apply(const Settings& v) {
@@ -282,7 +315,11 @@ void Play(Event e, float screenX01, float pitchScale) {
     const auto& files = s.Files[(int)e];
     if (v.Variant < 0 || v.Variant >= (int)files.size()) return;
     if (AudioEngine::PlayEditor(files[v.Variant], v.Gain, v.Pitch, v.Pan)) ++s.Played;
+    s.LastPlayFrame = s.Frame;
+    if (e == Event::BuildSuccess || e == Event::BuildFail) s.LastBuildResultMs = NowMs();
 }
+
+bool PlayedThisFrame() { return s.LastPlayFrame == s.Frame; }
 
 void UiObserver::Step(const UiFrame& f, std::vector<UiSound>& out) {
     if (!m_Primed) { // the first frame only sets the baseline
@@ -366,7 +403,64 @@ void GizmoFrame(bool usingNow, bool moved, bool snapped) {
     for (const UiSound& u : sounds) Play(u.E, u.X01, u.Pitch);
 }
 
+Event UndoLabelEvent(const std::string& label) {
+    auto starts = [&](const char* p) { return label.rfind(p, 0) == 0; };
+    if (starts("Create ") || starts("Place ") || starts("New ")) return Event::Create;
+    if (starts("Add ")) return Event::ComponentAdd;
+    if (starts("Remove ")) return Event::ComponentRemove;
+    if (starts("Paste ")) return Event::Paste; // component pastes ("Paste Rigidbody"...); the entity Paste plays its own
+    if (starts("Apply to Prefab")) return Event::PrefabApply;
+    if (starts("Revert to Prefab")) return Event::PrefabRevert;
+    return Event::Count;
+}
+
+void SelectionFrame(uint32_t primary, int count) {
+    static bool primed = false;
+    static uint32_t prevPrimary = 0;
+    static int prevCount = 0;
+    const bool changed = primary != prevPrimary || count != prevCount;
+    if (changed && primed && !PlayedThisFrame()) {
+        float x01 = -1.0f;
+        if (ImGui::GetCurrentContext() && ImGui::GetIO().DisplaySize.x > 0.0f)
+            x01 = std::clamp(ImGui::GetIO().MousePos.x / ImGui::GetIO().DisplaySize.x, 0.0f, 1.0f);
+        Play(count > 0 ? Event::Select : Event::Deselect, x01);
+    }
+    primed = true;
+    prevPrimary = primary;
+    prevCount = count;
+}
+
+void PanelsFrame(uint32_t openMask) {
+    static bool primed = false;
+    static uint32_t prev = 0;
+    const uint32_t opened = openMask & ~prev, closed = prev & ~openMask;
+    // One panel at a time is a user's toggle; several at once is a layout being applied, which stays quiet. A toolbar toggle
+    // already clicked this frame.
+    auto single = [](uint32_t m) { return m != 0 && (m & (m - 1)) == 0; };
+    if (primed && !PlayedThisFrame() && (opened | closed) != 0 && single(opened | closed))
+        Play(opened ? Event::PanelOpen : Event::PanelClose);
+    primed = true;
+    prev = openMask;
+}
+
+void ToolFrame(int tool, bool localSpace, bool snap) {
+    static bool primed = false;
+    static int prevTool = 0;
+    static bool prevLocal = false, prevSnap = false;
+    if (primed) {
+        // Each tool its own step up (hand -1 ... measure 5), about a semitone apart, so the ear learns which is which.
+        if (tool != prevTool) Play(Event::ToolSwitch, -1.0f, std::pow(2.0f, (float)(std::clamp(tool, -1, 5) - 0) / 12.0f));
+        if (localSpace != prevLocal) Play(Event::SpaceToggle, -1.0f, localSpace ? 1.06f : 1.0f);
+        if (snap != prevSnap) Play(Event::SnapToggle, -1.0f, snap ? 1.0f : 0.89f);
+    }
+    primed = true;
+    prevTool = tool;
+    prevLocal = localSpace;
+    prevSnap = snap;
+}
+
 void ObserveImGui() {
+    struct NextFrame { ~NextFrame() { ++s.Frame; } } nextFrame; // the frame ends here, whatever returns early
     static UiObserver observer;
     static std::vector<UiSound> sounds;
     if (!s.Ready || !ImGui::GetCurrentContext()) return;
@@ -396,7 +490,10 @@ void ObserveImGui() {
     f.DropTargetHovered = f.DragActive && g.DragDropAcceptIdPrev != 0;
     sounds.clear();
     observer.Step(f, sounds);
-    for (const UiSound& u : sounds) Play(u.E, u.X01, u.Pitch);
+    // A menu pick that ran an action with its own sound this frame (Create, Paste, Add Component...) doesn't click as well.
+    const bool acted = PlayedThisFrame();
+    for (const UiSound& u : sounds)
+        if (!(acted && u.E == Event::Click)) Play(u.E, u.X01, u.Pitch);
 }
 
 float LastItemScreenX() {

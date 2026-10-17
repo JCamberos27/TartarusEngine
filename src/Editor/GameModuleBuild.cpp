@@ -1,4 +1,5 @@
 #include "GameModuleBuild.h"
+#include "EditorSound.h"
 #include "Log.h"
 
 #include <atomic>
@@ -95,6 +96,7 @@ bool Start() {
     if (g_Worker.joinable()) g_Worker.join();
     g_Queued = false; g_Finished = false; g_Running = true;
     Log::Info("Rebuilding the game and editor modules; they reload when the build finishes.");
+    EditorSound::Play(EditorSound::Event::BuildStart);
     g_Worker = std::thread(Run);
     return true;
 }
@@ -103,6 +105,7 @@ void Request() { if (!Start()) g_Queued = Available(); }
 void Poll() {
     if (g_Running && g_Finished) {
         g_Worker.join(); g_Running = false;
+        EditorSound::Play(LastSucceeded() ? EditorSound::Event::BuildSuccess : EditorSound::Event::BuildFail);
         if (LastSucceeded()) Log::Info("Module rebuild finished; hot reload picks the new code up.");
         else Log::Error("Module rebuild failed. See the Script IDE's Build output.");
     }

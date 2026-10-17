@@ -28,10 +28,10 @@ const char* CategoryName(Category c);
 
 struct Settings {
     bool Enabled = true;
-    float Master = 0.35f; // all on, low (the user's call)
+    float Master = 0.44f; // all on, low (the user's call; 25% up from the first 0.35)
     bool UsePremium = false; // the paid Drive set where an event has one (opt-in: audition it on the Sound Board first)
-    std::array<bool, EditorSoundEvents::kCategoryCount> CategoryOn{true, true, true, true, true, true, true};
-    std::array<float, EditorSoundEvents::kCategoryCount> CategoryVolume{1, 1, 1, 1, 1, 1, 1};
+    std::array<bool, EditorSoundEvents::kCategoryCount> CategoryOn{true, true, true, true, true, true, true, true, true};
+    std::array<float, EditorSoundEvents::kCategoryCount> CategoryVolume{1, 1, 1, 1, 1, 1, 1, 1, 1};
 };
 
 // The decision half, no audio: whether a trigger plays and how. Deterministic for a given seed (unit-tested).
@@ -135,6 +135,17 @@ void Update();
 const Settings& Current();
 void SetWindowFocused(bool focused);
 void Play(Event e, float screenX01 = -1.0f, float pitchScale = 1.0f);
+// Something played this frame (an action's own sound): the selection change it caused stays quiet, so Delete, Paste or Undo
+// isn't followed by a Select / Deselect on top.
+bool PlayedThisFrame();
+// The action sound for an undo step's label (PushUndo): "Create Cube" -> Create, "Add Rigidbody" -> ComponentAdd... Count: none.
+Event UndoLabelEvent(const std::string& label);
+// The selection sounds: once a frame (host, before ObserveImGui), from the selection's primary entity and count.
+void SelectionFrame(uint32_t primary, int count);
+// The tool sounds, the same way: the active tool (-1 hand, 0..4 the gizmo modes, 5 measure), gizmo space and grid snap.
+void ToolFrame(int tool, bool localSpace, bool snap);
+// ...and the panels: a bit per dock panel that is open.
+void PanelsFrame(uint32_t openMask);
 // Screen x of the last ImGui item, as Play's screenX01 (needs a current ImGui frame).
 float LastItemScreenX();
 // For tests and the (Phase 3) Sound Board.

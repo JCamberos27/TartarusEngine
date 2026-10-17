@@ -106,6 +106,7 @@ void EditorLayer::EnterPrefabMode(World& world, AssetLibrary& assets, const std:
     m_EditPushedThisFrame = true; // selecting the root is part of opening, not a "Select" undo step
     EnsureUndoScene(world);
     if (m_EditorCameraPtr) FrameSceneBounds(world, *m_EditorCameraPtr);
+    EditorSound::Play(EditorSound::Event::PrefabEnter);
     Log::Info("Opened prefab " + ProjectPaths::Relativize(path) + " - Back to Scene saves it.");
 }
 
@@ -135,7 +136,7 @@ bool EditorLayer::SavePrefabMode(World& world) {
     SceneSerializer::ClearPrefabPristineCache(); // instances diff their overrides against the new file
     m_Dirty = false;
     m_SavedUndoDepth = m_ContentDepth;
-    EditorSound::Play(EditorSound::Event::Save);
+    if (!m_QuietPrefabSave) EditorSound::Play(EditorSound::Event::Save);
     return true;
 }
 
@@ -158,7 +159,10 @@ void EditorLayer::RestorePrePrefabHistory() {
 void EditorLayer::ExitPrefabMode(World& world, AssetLibrary& assets, bool save) {
     if (!InPrefabMode()) return;
     CancelEyedropper();
-    if (save && !SavePrefabMode(world)) {
+    m_QuietPrefabSave = true; // leaving sounds as PrefabExit, not as a Save
+    const bool saved = !save || SavePrefabMode(world);
+    m_QuietPrefabSave = false;
+    if (!saved) {
         Log::Error("Prefab Mode: couldn't save the prefab. Your edits remain open.");
         return;
     }
@@ -174,6 +178,7 @@ void EditorLayer::ExitPrefabMode(World& world, AssetLibrary& assets, bool save) 
     EnsureUndoScene(world);
     const std::string was = m_PrefabModePath;
     m_PrefabModePath.clear();
+    EditorSound::Play(EditorSound::Event::PrefabExit);
     Log::Info("Back to the scene from prefab " + ProjectPaths::Relativize(was) + ".");
 }
 

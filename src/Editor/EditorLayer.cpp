@@ -1201,7 +1201,7 @@ void EditorLayer::DrawSettingsWindow(World& world) {
         "enhancers hover keys palette colours colors icons bookmarks hierarchy folders inspector tabs "
         "favorites ruler row style export import",
         "sounds editor sounds ui sounds audio volume clicks sliders hover panels menus drag drop notifications "
-        "play mode sound board mute",
+        "play mode sound board mute objects tools keyboard mechvibes other apps while moving",
         "about version system report gpu driver opengl built with copy report",
     };
     static const char* kProjectCatKeywords[] = {
@@ -2253,6 +2253,16 @@ void EditorLayer::EndFrame() {
     if (m_MotionDockspaceId != 0) Glass::DockFocusRim(m_MotionDockspaceId); // after every panel
     Glass::DrawPlayFrame(m_MotionPlaying, m_MotionPaused);
     Glass::DrawDragGhost();
+    EditorSound::SelectionFrame((uint32_t)entt::to_integral(m_Selected),
+                                HasAnySelection() ? 1 + (int)m_ExtraSelection.size() : 0);
+    {
+        const bool panels[] = {m_ShowHierarchy, m_ShowInspector, m_ShowAssetBrowser, EditorModuleHost::ConsoleState().Visible,
+                               m_ShowHistory, m_ShowLighting, m_ShowAudioDebug, m_ShowSoundBoard, m_ShowPreferences, m_ShowAnimator};
+        uint32_t mask = 0;
+        for (int i = 0; i < (int)(sizeof(panels) / sizeof(panels[0])); ++i) mask |= panels[i] ? 1u << i : 0u;
+        EditorSound::PanelsFrame(mask);
+    }
+    EditorSound::ToolFrame(m_HandTool ? -1 : MeasureToolActive() ? 5 : (int)m_GizmoOp, m_GizmoLocalSpace, m_GridSnapEnabled);
     EditorSound::ObserveImGui(); // slider, hover, menu and drag & drop sounds, off this frame's ImGui state
     ImGui::Render();
     ImDrawData* dd = ImGui::GetDrawData();
@@ -3414,7 +3424,9 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     // Frame-on-select (opt-in, #69): SelectItem set this when the selection changed.
     if (m_PendingFrameSelect) {
         m_PendingFrameSelect = false;
+        m_QuietFrameSelection = true; // frame-on-select follows the selection; its sound is the selection's
         if (HasAnySelection()) FocusOnSelection(world, editorCamera);
+        m_QuietFrameSelection = false;
     }
 
     // Off-screen selection indicator (#69): if the selected object is outside the viewport,
