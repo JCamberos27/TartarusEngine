@@ -332,16 +332,28 @@ std::string EditorLayer::RecoveryPathFor(const std::string& scenePath) {
     return p.string() + ".recovery.json";
 }
 
-void EditorLayer::WriteRecoverySnapshot(const World& world, const AssetLibrary& assets) {
-    if (m_CurrentScenePath.empty()) return; // untitled scene (New Scene) has no sidecar location
+// The landing sound for a scene just loaded: MissingRefs when prefab instances came up missing or the load
+// warned (`warnsBefore`: Log::CountOf(Warn) before it), else SceneOpen. An error that already sounded this
+// frame says it instead.
+static void PlaySceneLoadedSound(const World& world, int warnsBefore) {
+    int missing = Log::CountOf(LogLevel::Warning) - warnsBefore;
+    for (auto e : world.Registry.view<const PrefabInstanceComponent>())
+        missing += world.Registry.get<PrefabInstanceComponent>(e).Missing ? 1 : 0;
+    if (missing <= 0) EditorSound::Play(EditorSound::Event::SceneOpen);
+    else if (!EditorSound::PlayedThisFrame()) EditorSound::Play(EditorSound::Event::MissingRefs);
+}
+
+bool EditorLayer::WriteRecoverySnapshot(const World& world, const AssetLibrary& assets) {
+    if (m_CurrentScenePath.empty()) return false; // untitled scene (New Scene) has no sidecar location
     const std::string path = RecoveryPathFor(m_CurrentScenePath);
     if (InPrefabMode()) { // #176 - the world holds the prefab; the scene is the snapshot
-        if (m_PrefabModeSceneDirty) SceneSerializer::SaveSnapshotToFile(m_PrefabModeSceneSnapshot, assets, path);
-        return;
+        return m_PrefabModeSceneDirty && SceneSerializer::SaveSnapshotToFile(m_PrefabModeSceneSnapshot, assets, path);
     }
     if (SceneSerializer::Save(world, assets, path)) {
         Log::Info("Auto-save: wrote recovery snapshot (unsaved changes are safe if the editor closes unexpectedly).");
+        return true;
     }
+    return false;
 }
 
 void EditorLayer::ClearRecoverySnapshot() {
@@ -358,6 +370,7 @@ bool EditorLayer::DoSaveAs(World& world, AssetLibrary& assets) {
     }
     if (m_InPlayMode) {
         Log::Warn("Save is disabled while Playing - changes made in Play mode revert on Stop.");
+        EditorSound::Play(EditorSound::Event::Blocked);
         return false;
     }
     std::string path = FileDialog::SaveFile("Scene Files\0*.json\0All Files\0*.*\0", "json", m_Window);
@@ -381,6 +394,7 @@ bool EditorLayer::DoSave(World& world, AssetLibrary& assets) {
     // over the scene file. Guarding here covers every entry point.
     if (m_InPlayMode) {
         Log::Warn("Save is disabled while Playing - changes made in Play mode revert on Stop.");
+        EditorSound::Play(EditorSound::Event::Blocked);
         return false;
     }
     if (InPrefabMode()) return SavePrefabMode(world); // #176 - Ctrl+S / Save icon save the open prefab
@@ -449,34 +463,49 @@ void EditorLayer::DrawRecoveryPrompt(World& world, AssetLibrary& assets) {
     if (!m_RecoveryPromptPending) return;
 
     if (BeginCenteredModal("Recover Unsaved Changes?")) {
+        if (!m_RecoveryPromptSounded) {
+            m_RecoveryPromptSounded = true;
+            EditorSound::Play(EditorSound::Event::RecoveryPrompt);
+        }
         ImGui::TextUnformatted(
             "A recovery snapshot newer than the saved scene was found - the editor\n"
             "likely closed before these changes were saved.\n\n"
             "Restore the unsaved changes, or discard them and keep the saved scene?");
         ImGui::Separator();
 
-        if (PrimaryButton("Restore", ImVec2(120.0f * m_UIScale, 0.0f))) {
+        // Restore / Discard sound their outcome, not a click.
+        bool restore = false, discard = false;
+        {
+            EditorSoundEvents::ScopedClickSilence quiet;
+            restore = PrimaryButton("Restore", ImVec2(120.0f * m_UIScale, 0.0f));
+            ImGui::SameLine();
+            discard = PrimaryButton("Discard", ImVec2(120.0f * m_UIScale, 0.0f));
+        }
+        if (restore) {
             const std::string recoveryPath = RecoveryPathFor(m_CurrentScenePath);
+            const int warnsBefore = Log::CountOf(LogLevel::Warning);
             if (SceneSerializer::Load(world, assets, recoveryPath)) {
                 CheckSceneVersionWarning();
                 ClearSelection();
                 ClearUndoHistory();
                 EnsureUndoScene(world);
                 m_Dirty = true; // recovered content isn't in the real scene file yet
+                m_QuietDirtyEdgeFrames = 2; // ...which is the restore's, not an edit's
                 m_LoadFailedScenePath.clear(); // #84 — the user chose this content for the path
                 m_SavedUndoDepth = -1;
+                PlaySceneLoadedSound(world, warnsBefore); // SceneOpen, or MissingRefs
                 Log::Info("Restored unsaved changes from the recovery snapshot.");
             } else {
                 Log::Error("Recovery snapshot could not be read - kept the saved scene instead.");
+                EditorSound::Play(EditorSound::Event::Blocked);
             }
             ClearRecoverySnapshot();
             m_RecoveryPromptPending = false;
             ImGui::CloseCurrentPopup();
-        }
-        ImGui::SameLine();
-        if (PrimaryButton("Discard", ImVec2(120.0f * m_UIScale, 0.0f))) {
+        } else if (discard) {
             ClearRecoverySnapshot();
             m_RecoveryPromptPending = false;
+            EditorSound::Play(EditorSound::Event::ClickCancel);
             Log::Info("Discarded the recovery snapshot; opened the saved scene.");
             ImGui::CloseCurrentPopup();
         }
@@ -552,6 +581,7 @@ void EditorLayer::RequestNewScene(World& world, AssetLibrary& assets) {
     // scene's recycled entity ids), so the next save wrote scene A's content into B's file.
     if (m_InPlayMode) {
         Log::Warn("Stop Play mode before creating a new scene.");
+        EditorSound::Play(EditorSound::Event::Blocked);
         return;
     }
     if (m_Dirty) {
@@ -571,6 +601,7 @@ void EditorLayer::RequestOpenScene(World& world, AssetLibrary& assets, const std
     // scene's recycled entity ids), so the next save wrote scene A's content into B's file.
     if (m_InPlayMode) {
         Log::Warn("Stop Play mode before opening another scene.");
+        EditorSound::Play(EditorSound::Event::Blocked);
         return;
     }
     if (path.empty()) return; // dialog cancelled, or an empty drag payload
@@ -598,6 +629,7 @@ void EditorLayer::RequestRevertScene(World& world, AssetLibrary& assets) {
     // scene's recycled entity ids), so the next save wrote scene A's content into B's file.
     if (m_InPlayMode) {
         Log::Warn("Stop Play mode before reverting the scene.");
+        EditorSound::Play(EditorSound::Event::Blocked);
         return;
     }
     if (m_CurrentScenePath.empty()) return; // Untitled — nothing on disk to revert to
@@ -1193,8 +1225,10 @@ void EditorLayer::NewScene(World& world, AssetLibrary& assets) {
     // scene's recycled entity ids), so the next save wrote scene A's content into B's file.
     if (m_InPlayMode) {
         Log::Warn("Stop Play mode before creating a new scene.");
+        EditorSound::Play(EditorSound::Event::Blocked);
         return;
     }
+    m_QuietDirtyEdgeFrames = 2; // an unwritable fresh scene starts dirty: that isn't an edit
     world = World();
     InvalidateModelThumbnail();
     ClearSelection();
@@ -1249,9 +1283,12 @@ void EditorLayer::OpenScene(World& world, AssetLibrary& assets, const std::strin
     // scene's recycled entity ids), so the next save wrote scene A's content into B's file.
     if (m_InPlayMode) {
         Log::Warn("Stop Play mode before opening another scene.");
+        EditorSound::Play(EditorSound::Event::Blocked);
         return;
     }
+    const int warnsBefore = Log::CountOf(LogLevel::Warning);
     if (path.empty() || !SceneSerializer::Load(world, assets, path)) return;
+    m_QuietDirtyEdgeFrames = 2;
     m_LoadFailedScenePath.clear(); // #84 — a real scene is loaded now
     InvalidateModelThumbnail();
     ClearRecoverySnapshot(); // drop the outgoing scene's snapshot before switching away from it
@@ -1268,7 +1305,7 @@ void EditorLayer::OpenScene(World& world, AssetLibrary& assets, const std::strin
     m_Dirty = false;
     m_SavedUndoDepth = 0; // freshly loaded — empty history == on disk
     m_AutoSaveTimer = 0.0f;
-    EditorSound::Play(EditorSound::Event::SceneOpen);
+    PlaySceneLoadedSound(world, warnsBefore); // SceneOpen, or MissingRefs
     Log::Info("Opened scene '" + path + "'.");
     EnsureUndoScene(world);
 }
@@ -1493,12 +1530,13 @@ void EditorLayer::EnqueueImports(const std::vector<std::string>& paths, const st
     m_ImportQueue.Enqueue(paths);
 }
 
-void EditorLayer::HandleDroppedFiles(World& world, AssetLibrary& assets, Camera& editorCamera,
+int EditorLayer::HandleDroppedFiles(World& world, AssetLibrary& assets, Camera& editorCamera,
     bool editorUIVisible, const std::vector<std::string>& paths) {
     (void)world; (void)editorCamera; // only queued here; the actual import (ImportDroppedFile) uses them later
     if (!editorUIVisible) {
         Log::Warn("Ignored " + std::to_string(paths.size()) + " dropped file(s) - restore the editor panels to import assets.");
-        return;
+        EditorSound::Play(EditorSound::Event::Blocked);
+        return 0;
     }
 
     // Expanding a dropped folder's structure and resolving every file's target virtual folder
@@ -1586,4 +1624,5 @@ void EditorLayer::HandleDroppedFiles(World& world, AssetLibrary& assets, Camera&
     }
 
     m_ImportQueue.Enqueue(toEnqueue);
+    return (int)toEnqueue.size(); // the caller plays FilesDropped when > 0
 }

@@ -838,7 +838,12 @@ void EyedropperButton(EditorLayer* self, World& world, glm::vec3* target) {
     const bool armed = self->EyedropperArmed();
     ImGui::PushStyleColor(ImGuiCol_Text, armed ? ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab)
                                                : ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-    if (EditorUIPrimitives::ActionButton(ICON_FA_EYE_DROPPER, "Pick a colour from the Scene view", &EditorInternal::ForwardHostTooltip)) self->ArmEyedropper(&world, target);
+    bool arm = false;
+    { EditorSoundEvents::ScopedClickSilence quiet; arm = EditorUIPrimitives::ActionButton(ICON_FA_EYE_DROPPER, "Pick a colour from the Scene view", &EditorInternal::ForwardHostTooltip); } // EyedropperArm instead
+    if (arm) {
+        EditorSound::Play(EditorSound::Event::EyedropperArm, EditorSound::LastItemScreenX());
+        self->ArmEyedropper(&world, target);
+    }
     ImGui::PopStyleColor();
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Pick a color from the Scene viewport (Esc / right-click to cancel)"); // #19
@@ -1809,6 +1814,11 @@ void EditorLayer::ApplyEyedropperSample(const glm::vec3& rgb) {
     m_EyedropperTarget = nullptr;
     m_EyedropperWorld = nullptr;
     if (world) PushUndo(*world, "Eyedropper");
+    {
+        const ImGuiViewport* vp = ImGui::GetMainViewport();
+        const float x01 = vp && vp->Size.x > 0.0f ? std::clamp((m_EyedropperClickPos.x - vp->Pos.x) / vp->Size.x, 0.0f, 1.0f) : -1.0f;
+        EditorSound::Play(EditorSound::Event::EyedropperPick, x01); // panned to where it sampled
+    }
     // #93 — the sample is the displayed (gamma-encoded) pixel, but every colour field it can
     // target is linear (lighting math, ColorEdit storage), so decode sRGB -> linear. (It is still
     // the post-tonemap colour; an exact inverse of the tonemapper isn't attempted.)

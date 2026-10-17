@@ -1,6 +1,9 @@
 #pragma once
 #include <imgui.h>
+#include <algorithm>
 #include <cmath>
+
+#include "EditorSoundEvents.h"
 
 // Thin wrappers around ImGui's own tooltip calls that additionally respect
 // EditorSettings::Get().ShowTooltips — the single choke point every panel (Inspector,
@@ -34,6 +37,27 @@ namespace EditorUI {
         if (c <= 0.0f) return 0.0f;
         return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f);
     }
+    // A popup's open state changing since last frame, remembered per id in the window's storage: PickerOpen /
+    // PickerClose. Shared by host and modules, so it plays through the slot. `key` must be unique in the current ID scope.
+    inline void PopupEdgeSound(ImGuiID key, bool open, EditorSoundEvents::Event onOpen, EditorSoundEvents::Event onClose) {
+        ImGuiStorage* st = ImGui::GetStateStorage();
+        if (open == st->GetBool(key, false)) return;
+        st->SetBool(key, open);
+        const ImGuiViewport* vp = ImGui::GetMainViewport();
+        const float x = vp && vp->Size.x > 0.0f
+            ? std::clamp(((ImGui::GetItemRectMin().x + ImGui::GetItemRectMax().x) * 0.5f - vp->Pos.x) / vp->Size.x, 0.0f, 1.0f)
+            : -1.0f;
+        EditorSoundEvents::PlayViaSlot(open ? onOpen : onClose, x);
+    }
+    // Call right after ImGui::ColorEdit3/4(label, ...): its built-in picker popup (opened under the label's ID) opening or closing.
+    inline void ColorPickerSound(const char* label) {
+        ImGui::PushID(label);
+        const bool open = ImGui::IsPopupOpen("picker");
+        const ImGuiID key = ImGui::GetID("##pickerWasOpen");
+        ImGui::PopID();
+        PopupEdgeSound(key, open, EditorSoundEvents::Event::PickerOpen, EditorSoundEvents::Event::PickerClose);
+    }
+
     inline bool ColorEditLinear(const char* label, float linear[3],
                                 ImGuiColorEditFlags flags = ImGuiColorEditFlags_DisplayHex) {
         float srgb[3];
@@ -43,7 +67,9 @@ namespace EditorUI {
             hdr |= linear[i] > 1.0f;
         }
         if (hdr) flags |= ImGuiColorEditFlags_HDR | ImGuiColorEditFlags_Float;
-        if (!ImGui::ColorEdit3(label, srgb, flags)) return false;
+        const bool changed = ImGui::ColorEdit3(label, srgb, flags);
+        ColorPickerSound(label);
+        if (!changed) return false;
         for (int i = 0; i < 3; ++i) linear[i] = SrgbToLinearChannel(srgb[i]);
         return true;
     }

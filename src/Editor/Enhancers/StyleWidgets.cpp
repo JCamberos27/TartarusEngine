@@ -72,6 +72,7 @@ bool PaletteColorRow(const char* id, std::uint32_t& color) {
         first = false;
         ImGui::PushID(idx);
         const bool clicked = ImGui::InvisibleButton("##sw", ImVec2(sw, sw));
+        if (clicked) EditorUIPrimitives::ClickSound(EditorSoundEvents::Event::SwatchPick);
         const bool hov = ImGui::IsItemHovered();
         DrawSwatch(dl, ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), col, (color | 0xFF000000u) == (col | 0xFF000000u) && (col != 0) == (color != 0), hov);
         if (hov) Tip(tip);
@@ -90,6 +91,8 @@ bool PaletteColorRow(const char* id, std::uint32_t& color) {
     ImGui::SameLine(0.0f, gap);
     if (ImGui::GetCursorScreenPos().x + sw > rightEdge) ImGui::NewLine();
     if (ImGui::InvisibleButton("##custom", ImVec2(sw, sw))) ImGui::OpenPopup("##customColor");
+    EditorUI::PopupEdgeSound(ImGui::GetID("##customWasOpen"), ImGui::IsPopupOpen("##customColor"),
+                             EditorSoundEvents::Event::PickerOpen, EditorSoundEvents::Event::PickerClose);
     {
         const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
         dl->AddRectFilledMultiColor(mn, mx, IM_COL32(229, 72, 77, 255), IM_COL32(242, 201, 76, 255),

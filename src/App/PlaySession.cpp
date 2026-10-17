@@ -1,5 +1,6 @@
 #include "App/PlaySession.h"
 #include "EditorSound.h"
+#include "Editor/GameModuleBuild.h"
 
 #include "App/LaunchOptions.h"
 #include "AssetLibrary.h"
@@ -80,6 +81,14 @@ entt::entity FindActiveSceneCamera(const World& world) {
 
 void PlaySession::Start() {
     if (m_State.Playing) return;
+    // Not on a module that is mid-build or whose last build failed: Play would run stale code. A module loaded from disk
+    // with no build run yet counts as succeeded (GameModuleBuild starts true), so a fresh editor and the tests aren't held.
+    if (GameModuleBuild::Running() || !GameModuleBuild::LastSucceeded()) {
+        Log::Warn(GameModuleBuild::Running() ? "Play blocked: the game module is still building."
+                                             : "Play blocked: the game module failed to build. Fix the errors (Console) and rebuild.");
+        EditorSound::Play(EditorSound::Event::Blocked);
+        return;
+    }
     if (m_Editor.InPrefabMode()) m_Editor.ExitPrefabMode(m_World, m_Assets); // #176 - Play runs the scene
     if (EditorModuleHost::ConsoleState().ClearOnPlay) Log::Clear(); // #236 A5
     m_Editor.OnEnterPlayMode(m_World);

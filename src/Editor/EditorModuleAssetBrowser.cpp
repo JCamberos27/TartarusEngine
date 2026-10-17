@@ -768,9 +768,16 @@ void Draw(const EditorModuleHostAPI& host) {
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(clusterSpacing, ImGui::GetStyle().ItemSpacing.y));
     {
         bool favOnly = host.GetAssetFavoritesOnly && host.GetAssetFavoritesOnly();
-        if (ActionButton(host, ICON_FA_STAR, favOnly ? "Showing favorites only (click to show all)" // #19 — en-US
-                                                     : "Show favorites only", favOnly) && host.SetAssetFavoritesOnly)
+        bool favClicked = false;
+        {
+            EditorSoundEvents::ScopedClickSilence quiet; // FavoriteOn / Off instead
+            favClicked = ActionButton(host, ICON_FA_STAR, favOnly ? "Showing favorites only (click to show all)" // #19 — en-US
+                                                                  : "Show favorites only", favOnly);
+        }
+        if (favClicked && host.SetAssetFavoritesOnly) {
             host.SetAssetFavoritesOnly(!favOnly);
+            EditorUIPrimitives::ClickSound(favOnly ? EditorSoundEvents::Event::FavoriteOff : EditorSoundEvents::Event::FavoriteOn);
+        }
     }
 
     // Search scope toggle (#236 G): folder (+subfolders) vs whole project.
@@ -796,8 +803,12 @@ void Draw(const EditorModuleHostAPI& host) {
         };
         for (const auto& [label, token] : kTypes) {
             const std::string full = std::string("t:") + token;
-            if (ImGui::MenuItem(label, nullptr, SearchHasToken(search, full)))
+            const bool had = SearchHasToken(search, full);
+            if (ImGui::MenuItem(label, nullptr, had)) {
                 ToggleSearchToken(search, full);
+                // At the pick, so the observer's generic menu Click drops.
+                EditorUIPrimitives::ClickSound(had ? EditorSoundEvents::Event::ToggleOff : EditorSoundEvents::Event::ToggleOn);
+            }
         }
 
         EditorUIPrimitives::SectionHeader("LABEL");
@@ -815,14 +826,18 @@ void Draw(const EditorModuleHostAPI& host) {
             for (const auto& lbl : knownLabels) {
                 if (!MatchesFilter(labelMenuFilter, lbl)) continue;
                 const std::string full = "l:" + lbl;
-                if (ImGui::MenuItem(lbl.c_str(), nullptr, SearchHasToken(search, full)))
+                const bool had = SearchHasToken(search, full);
+                if (ImGui::MenuItem(lbl.c_str(), nullptr, had)) {
                     ToggleSearchToken(search, full);
+                    EditorUIPrimitives::ClickSound(had ? EditorSoundEvents::Event::ToggleOff : EditorSoundEvents::Event::ToggleOn);
+                }
             }
         }
 
         if (anyFilterActive) {
             ImGui::Separator();
             if (ImGui::MenuItem(ICON_FA_XMARK "  Clear all filters")) {
+                EditorUIPrimitives::ClickSound(EditorSoundEvents::Event::ClickCancel);
                 std::string kept, w;
                 for (size_t i = 0; i <= search.size(); ++i) {
                     if (i == search.size() || search[i] == ' ' || search[i] == '\t') {

@@ -424,6 +424,10 @@ inline bool SearchField(const char* id, char* buf, size_t bufSize, const char* h
             // that back into `buf` next frame: the x "cleared" a focused search and the text came
             // straight back. Drop the saved copy so the clear sticks.
             ImGui::GetCurrentContext()->InputTextDeactivatedState.ClearFreeMemory();
+            const ImGuiViewport* vp = ImGui::GetMainViewport();
+            const float sx = vp && vp->Size.x > 0.0f
+                ? std::clamp(((bmin.x + bmax.x) * 0.5f - vp->Pos.x) / vp->Size.x, 0.0f, 1.0f) : -1.0f;
+            EditorSoundEvents::PlayViaSlot(EditorSoundEvents::Event::SearchClear, sx);
         }
     }
     ImGui::PopID();
