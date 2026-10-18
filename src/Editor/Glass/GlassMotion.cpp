@@ -2,6 +2,7 @@
 
 #include "GlassLayout.h" // LayoutMotionNewFrame
 #include "GlassTheme.h"  // Scale
+#include "../EditorSound.h" // FlingRelease
 
 // Vendored: compiled at the default warning level like the rest of extern code, so its header
 // must not trip this TU's /W4 /WX.
@@ -744,6 +745,10 @@ void ImAnimContext::InertiaRelease(ImGuiID id) {
     e->duration = kInertiaCoasting;
     e->start = -1.0;
     e->touched = m_Frame;
+    // A soft whoosh, louder and a touch higher for a faster fling.
+    const float k = ImClamp(speed / (FlingMinPxPerSec * Scale() * 8.0f), 0.0f, 1.0f);
+    EditorSound::Play(EditorSound::Event::FlingRelease, ImGui::GetIO().MousePos.x / ImMax(1.0f, ImGui::GetIO().DisplaySize.x),
+                      0.94f + 0.12f * k, -6.0f + 6.0f * k);
 }
 
 void ImAnimContext::Fling(ImGuiID id, ImVec2 velocity) {
