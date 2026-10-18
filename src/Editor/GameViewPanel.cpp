@@ -5,12 +5,17 @@
 #include "EditorUIPrimitives.h"
 #include "EditorSettings.h"
 #include "EditorSound.h"
+#include "Glass/GlassMotion.h" // the play punch, rolling stats
+#include "Glass/GlassTheme.h"
+#include "Glass/GlassTokens.h"
 #include <IconsFontAwesome6.h>
 #include <imgui_internal.h> // ImRect, FindWindowByName (the action bar's rect)
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
 
 void GameViewPanel::SetPreset(const ResolutionPreset& preset) {
     m_CurrentPreset = preset;
@@ -263,12 +268,37 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
         m_ViewImagePos = imagePos;
         m_ViewImageSize = rect.Size;
         ImGui::SetCursorScreenPos(imagePos);
+        // Play starts: the frame punches in (1.00 -> 1.01 -> 1.00 on a spring) and its edge catches
+        // the light. Draw-only (a layer over the image's vertices); the item stays where it is.
+        constexpr ImGuiID kPunchId = 0x50554E43u; // "PUNC"
+        Glass::ImAnimContext& motion = Glass::Motion();
+        if (playing && !m_PunchWasPlaying && motion.CategoryOn(Glass::MotionCategory::ThemeTweens))
+            motion.Pulse(kPunchId, Glass::PlayPunch.durationMs * 0.001f);
+        m_PunchWasPlaying = playing;
+        const bool punching = motion.PulseActive(kPunchId);
+        const float punchP = punching ? motion.PulseProgress(kPunchId) : 1.0f;
+        const int punchVtx = punching ? Glass::ImAnimContext::BeginLayer(dl) : 0;
         // OpenGL textures are bottom-left origin and ImGui::Image expects top-left, so v runs 1 -> 0
         // down the image (the whole frame: uv0=(0,1), uv1=(1,0)).
         const ImVec2 uv0((visMin.x - fullMin.x) / shown.x, 1.0f - (visMin.y - fullMin.y) / shown.y);
         const ImVec2 uv1((visMax.x - fullMin.x) / shown.x, 1.0f - (visMax.y - fullMin.y) / shown.y);
         ImGui::Image((ImTextureID)(intptr_t)m_Framebuffer.ColorTexture(), rect.Size, uv0, uv1);
         m_ViewHovered = ImGui::IsItemHovered();
+        if (punching) {
+            // Up in the first 60 ms, then back down on the spring (its small overshoot reads as a settle).
+            const float secs = punchP * Glass::PlayPunch.durationMs * 0.001f;
+            const float rise = std::min(1.0f, secs / 0.06f);
+            const float back = 1.0f - Glass::EaseProgress(Glass::PlayPunch, punchP);
+            const float s = 1.0f + Glass::PlayPunchScale * rise * (3.0f - 2.0f * rise) * rise * back;
+            Glass::LayerTransform t;
+            t.pivot = ImVec2(imagePos.x + rect.Size.x * 0.5f, imagePos.y + rect.Size.y * 0.5f);
+            t.scale = ImVec2(s, s);
+            Glass::ImAnimContext::EndLayer(dl, punchVtx, t);
+            const float glint = Glass::RimGlintBoost * (1.0f - Glass::EaseProgress(Glass::RimGlint, secs / (Glass::RimGlint.durationMs * 0.001f)));
+            if (glint > 0.004f)
+                dl->AddRect(ImVec2(imagePos.x + 0.5f, imagePos.y + 0.5f), ImVec2(imagePos.x + rect.Size.x - 0.5f, imagePos.y + rect.Size.y - 0.5f),
+                            IM_COL32(255, 255, 255, (int)(glint * 255.0f)), 0.0f, 0, std::max(1.0f, Glass::Px(1.5f)));
+        }
 
         // Zoom with the wheel about the cursor, pan with the middle button - not while the game has input.
         if (!(playing && inputEngaged)) {
@@ -315,9 +345,18 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
         if (EditorSettings::Get().GameViewShowStats && stats) {
             ImVec2 statsPos(imagePos.x + 8.0f, imagePos.y + 8.0f);
             char buf[320];
-            snprintf(buf, sizeof(buf), "%d FPS (%.2f ms)\n%d draw calls\n%d tris / %d verts\n"
+            // The FPS rolls (Odometer) to a held value: it moves on a change of 2 or more, or after
+            // a second, so the readout doesn't churn on frame-to-frame jitter.
+            const double now = ImGui::GetTime();
+            if (m_ShownFps < 0 || std::abs(stats->FPS - m_ShownFps) >= 2 || (stats->FPS != m_ShownFps && now - m_ShownFpsAt > 1.0)) {
+                m_ShownFps = stats->FPS;
+                m_ShownFpsAt = now;
+            }
+            char fpsTail[48];
+            snprintf(fpsTail, sizeof(fpsTail), " FPS (%.2f ms)", stats->FrameMs);
+            snprintf(buf, sizeof(buf), "%d%s\n%d draw calls\n%d tris / %d verts\n"
                      "cam (%.2f, %.2f, %.2f)\nyaw %.1f  pitch %.1f",
-                stats->FPS, stats->FrameMs, stats->DrawCalls, stats->Triangles, stats->Vertices,
+                m_ShownFps, fpsTail, stats->DrawCalls, stats->Triangles, stats->Vertices,
                 stats->CamPos[0], stats->CamPos[1], stats->CamPos[2], stats->CamYaw, stats->CamPitch);
             ImVec2 textSize = ImGui::CalcTextSize(buf);
             // The floating action bar (EditorLayer::DrawViewportActionBar) is centred along the
@@ -331,7 +370,12 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
             }
             EditorUIPrimitives::DrawHudPlate(dl, statsPos,
                 ImVec2(statsPos.x + textSize.x + 12.0f, statsPos.y + textSize.y + 8.0f), 3.0f);
-            dl->AddText(ImVec2(statsPos.x + 6.0f, statsPos.y + 4.0f), EditorUIPrimitives::kHudTextColor, buf);
+            // First line: the rolling FPS, then the rest of the line; the lines below as text.
+            const ImVec2 at(statsPos.x + 6.0f, statsPos.y + 4.0f);
+            const float fw = motion.Odometer(ImGui::GetID("##gvFps"), dl, at, (double)m_ShownFps, 0, EditorUIPrimitives::kHudTextColor);
+            dl->AddText(ImVec2(at.x + fw, at.y), EditorUIPrimitives::kHudTextColor, fpsTail);
+            const char* rest = std::strchr(buf, '\n');
+            if (rest) dl->AddText(ImVec2(at.x, at.y + ImGui::GetTextLineHeight()), EditorUIPrimitives::kHudTextColor, rest + 1);
         }
 
         ImGui::SetCursorScreenPos(ImVec2(containerStart.x, containerStart.y + avail.y));

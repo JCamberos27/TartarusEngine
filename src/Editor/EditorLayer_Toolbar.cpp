@@ -68,6 +68,66 @@
 
 using namespace EditorInternal;
 
+namespace {
+
+// A run of action-bar buttons that folds away when it doesn't apply (Play mode) and comes back
+// after: its width and alpha ease together (Glass ToolbarFold), so the bar around it narrows and
+// re-centres instead of jumping. Draw-only clipping: the items keep their natural layout inside a
+// group, the part folded away is clipped (and so not clickable), and the layout advances only by
+// the visible width. At rest (fully shown or fully gone) it holds no motion entry.
+class ToolbarFoldRun {
+public:
+    // `shown` now; `wasShown` is last frame's, updated here.
+    ToolbarFoldRun(const char* strId, bool shown, bool& wasShown) {
+        const ImGuiID id = ImGui::GetID(strId);
+        Glass::ImAnimContext& m = Glass::Motion();
+        m_T = m.CategoryOn(Glass::MotionCategory::ThemeTweens)
+                  ? m.AnimateToggle(id, shown, wasShown, Glass::ToolbarFold, Glass::ToolbarFold)
+                  : (shown ? 1.0f : 0.0f);
+        wasShown = shown;
+        if (m_T <= 0.0f) return;
+        m_Ease = m_T >= 1.0f ? 1.0f : Glass::EaseProgress(Glass::ToolbarFold, m_T);
+        m_WidthKey = id ^ 0x464F4C44u; // "FOLD": its natural width last frame (window storage)
+        ImGuiWindow* w = ImGui::GetCurrentWindow();
+        m_Start = ImGui::GetCursorScreenPos();
+        m_SavedMax = w->DC.CursorMaxPos;
+        m_SavedIdeal = w->DC.IdealMaxPos;
+        if (m_Ease < 1.0f) {
+            const float natural = ImGui::GetStateStorage()->GetFloat(m_WidthKey, 0.0f);
+            ImGui::PushClipRect(ImVec2(m_Start.x, w->ClipRect.Min.y), ImVec2(m_Start.x + natural * m_Ease, w->ClipRect.Max.y), true);
+            ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * m_Ease);
+            m_Clipped = true;
+        }
+        ImGui::BeginGroup();
+    }
+    ~ToolbarFoldRun() {
+        if (m_T <= 0.0f) return;
+        ImGui::EndGroup();
+        const float natural = ImGui::GetItemRectSize().x;
+        ImGui::GetStateStorage()->SetFloat(m_WidthKey, natural);
+        if (!m_Clipped) return;
+        ImGui::PopStyleVar();
+        ImGui::PopClipRect();
+        // Advance the layout (and the auto-resizing bar) by the visible width only.
+        ImGuiWindow* w = ImGui::GetCurrentWindow();
+        const float right = m_Start.x + natural * m_Ease;
+        w->DC.CursorPosPrevLine.x = right;
+        w->DC.CursorMaxPos.x = ImMax(m_SavedMax.x, right);
+        w->DC.IdealMaxPos.x = ImMax(m_SavedIdeal.x, right);
+    }
+    ToolbarFoldRun(const ToolbarFoldRun&) = delete;
+    ToolbarFoldRun& operator=(const ToolbarFoldRun&) = delete;
+    bool Visible() const { return m_T > 0.0f; }
+    bool Settled() const { return m_T >= 1.0f; }
+private:
+    float   m_T = 0.0f, m_Ease = 1.0f;
+    ImGuiID m_WidthKey = 0;
+    ImVec2  m_Start, m_SavedMax, m_SavedIdeal;
+    bool    m_Clipped = false;
+};
+
+} // namespace
+
 
 // Called from DrawViewportActionBar, which pushes a fixed light ImGuiCol_Text for its dark HUD
 // plate before calling this — so this deliberately doesn't touch ImGuiCol_Text itself.
@@ -119,11 +179,17 @@ void EditorLayer::DrawPlayTransportButtons(bool playing, bool maximized, bool pa
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip(playing ? "Stop and revert the scene (F1)" : "Play the scene in the Game panel (F1)");
     }
-    if (playing) {
+    // Pause, Step and Fullscreen only mean something while playing: they unfold beside Stop on Play
+    // and fold away on Stop (disabled while they go).
+    static bool s_PlayControlsWas = playing;
+    ImGui::SameLine();
+    {
+    ToolbarFoldRun playControls("##foldPlayControls", playing, s_PlayControlsWas);
+    if (playControls.Visible()) {
+        if (!playing) ImGui::BeginDisabled();
 
         // Pause toggle + single-frame Step (#236). Pause reads as pressed-in while active; Step
         // is only meaningful (and only enabled) once paused.
-        ImGui::SameLine();
         { // Pause / Resume / Step sound when the state changes (main.cpp), not as clicks
         EditorSoundEvents::ScopedClickSilence quiet;
         if (ActionButton(paused ? ICON_FA_PLAY "  Resume" : ICON_FA_PAUSE "  Pause",
@@ -144,6 +210,8 @@ void EditorLayer::DrawPlayTransportButtons(bool playing, bool maximized, bool pa
                                             : "Maximize the Game view over the editor panels (F4)")) {
             m_MaximizeToggleRequested = true;
         }
+        if (!playing) ImGui::EndDisabled();
+    }
     }
 
     ImGui::PopStyleVar();
@@ -192,22 +260,8 @@ void EditorLayer::DrawViewportActionBar(World& world, AssetLibrary& assets,
         const ImVec2 imgPos  = overGame ? m_GameViewImgPos  : ImVec2(m_ViewportPos.x, m_ViewportPos.y);
         const ImVec2 imgSize = overGame ? m_GameViewImgSize : ImVec2(m_ViewportSize.x, m_ViewportSize.y);
 
-        // Play-mode tint: a thin accent frame just inside the viewport image (AccentDeep while paused),
-        // drawn on the Scene / Game window's own draw list so it sits with the image. Skipped for a
-        // clean capture like every other viewport overlay.
-        if (playing && !m_HideOverlaysThisFrame) {
-            ImGuiWindow* vp = ImGui::FindWindowByName(overGame ? EditorPanels::Game : EditorPanels::Scene);
-            // Only a window drawn this frame or last: in maximized Play the Game window isn't, and after a minute ImGui
-            // frees an inactive window's draw buffers (ConfigMemoryCompactTimer) - adding to it then wrote through null.
-            if (vp && !vp->Hidden && !vp->SkipItems && vp->LastFrameActive >= ImGui::GetFrameCount() - 1 &&
-                !vp->DrawList->CmdBuffer.empty()) {
-                const float t = EditorTheme::Px(2.0f);
-                vp->DrawList->AddRect(ImVec2(imgPos.x + t * 0.5f, imgPos.y + t * 0.5f),
-                                      ImVec2(imgPos.x + imgSize.x - t * 0.5f, imgPos.y + imgSize.y - t * 0.5f),
-                                      EditorTheme::U32(paused ? EditorTheme::AccentDeep : EditorTheme::Accent),
-                                      0.0f, ImDrawFlags_None, t);
-            }
-        }
+        // (The play-mode frame is the travelling rim round the Scene and Game views now:
+        // Glass::DrawPlayFrame, drawn after every panel.)
         const float cx = imgPos.x + imgSize.x * 0.5f;
         const float cy = imgPos.y + 8.0f * m_UIScale;
         ImGui::SetNextWindowPos(ImVec2(cx, cy), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
@@ -250,17 +304,29 @@ void EditorLayer::DrawViewportActionBar(World& world, AssetLibrary& assets,
     };
 
     // --- Undo / Redo / Save ------------------------------------------------------------------
-    { // these sound when the action lands (EditorSound: Undo / Redo / Save), not as clicks
-    EditorSoundEvents::ScopedClickSilence quiet;
-    if (ActionButton(EDITOR_ICON_UNDO, "Undo (Ctrl+Z)")) ToolbarUndo(world, assets);
-    ImGui::SameLine();
-    if (ActionButton(EDITOR_ICON_REDO, "Redo (Ctrl+Y)")) ToolbarRedo(world, assets);
-    ImGui::SameLine();
-    if (ActionButton(EDITOR_ICON_SAVE, "Save (Ctrl+S)")) SaveScene(world, assets);
+    // Edits to the scene don't apply while it plays: the cluster (and its divider) folds away on
+    // Play and returns on Stop.
+    static bool s_EditClusterWas = !playing;
+    bool editCluster = false;
+    {
+        ToolbarFoldRun fold("##foldEdit", !playing, s_EditClusterWas);
+        editCluster = fold.Visible();
+        if (editCluster) { // these sound when the action lands (EditorSound: Undo / Redo / Save), not as clicks
+            if (playing) ImGui::BeginDisabled();
+            EditorSoundEvents::ScopedClickSilence quiet;
+            if (ActionButton(EDITOR_ICON_UNDO, "Undo (Ctrl+Z)")) ToolbarUndo(world, assets);
+            ImGui::SameLine();
+            if (ActionButton(EDITOR_ICON_REDO, "Redo (Ctrl+Y)")) ToolbarRedo(world, assets);
+            ImGui::SameLine();
+            if (ActionButton(EDITOR_ICON_SAVE, "Save (Ctrl+S)")) SaveScene(world, assets);
+            divider();
+            ImGui::Dummy(ImVec2(0.0f, 0.0f)); // the divider ends on SameLine: close the group's line
+            if (playing) ImGui::EndDisabled();
+        }
     }
 
     // --- Play / Stop / Pause / Step / Fullscreen ---------------------------------------------
-    divider();
+    if (editCluster) ImGui::SameLine(0.0f, 0.0f);
     DrawPlayTransportButtons(playing, maximized, paused);
 
     // --- Panel toggles ------------------------------------------------------------------------
@@ -483,6 +549,8 @@ void EditorLayer::DrawStatusBar(World& world, Camera& editorCamera) {
     std::string buildLabel;
     const bool building = BuildProgressInfo(buildFrac, buildLabel);
     const bool rebuilding = !building && GameModuleBuild::Running();
+    // The busy sheen across the menu and status bars (Glass::DrawChromeSheen, at the frame's end).
+    m_ChromeBusy = building || GameModuleBuild::Running() || m_ImportQueue.IsActive();
     if (building || rebuilding || m_ImportQueue.IsActive()) {
         int total = m_ImportQueue.BatchTotal();
         int done = std::max(0, total - m_ImportQueue.PendingCount());
@@ -499,7 +567,9 @@ void EditorLayer::DrawStatusBar(World& world, Camera& editorCamera) {
         const float barW = EditorTheme::Px(90.0f);
         const float barH2 = EditorTheme::Px(3.0f);
         const float inner = EditorTheme::Px(8.0f);
-        const float x0 = leftLimit - gap * 1.5f - (labelW + inner + barW);
+        // A determinate bar reads its percentage beside it, as rolling digits.
+        const float pctW = total > 0 ? inner + Glass::ProgressPercentWidth() : 0.0f;
+        const float x0 = leftLimit - gap * 1.5f - (labelW + inner + barW + pctW);
         dl->AddText(ImVec2(x0, textY), EditorTheme::U32(EditorTheme::Secondary), label);
         const float bx = x0 + labelW + inner;
         const float by = wpos.y + std::floor((barH - barH2) * 0.5f);
@@ -512,6 +582,8 @@ void EditorLayer::DrawStatusBar(World& world, Camera& editorCamera) {
             s_LastFill = f;
             const float fg = std::clamp(Glass::Motion().Follow(ImGui::GetID("##progressFill"), f, prev, Glass::ProgressGlide), 0.0f, 1.0f);
             dl->AddRectFilled(ImVec2(bx, by), ImVec2(bx + barW * fg, by + barH2), EditorTheme::U32(EditorTheme::Accent));
+            Glass::DrawProgressPercent(ImGui::GetID("##progressPct"), dl, ImVec2(bx + barW + inner, textY), f,
+                                       EditorTheme::U32(EditorTheme::Secondary));
         } else {
             // Indeterminate: an accent segment easing across the track, its width and brightness
             // drifting on smooth noise so it reads as work, not a metronome (Glass::BusyShimmer).

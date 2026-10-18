@@ -4159,6 +4159,15 @@ int main(int argc, char** argv) {
                         outlineDilateShader.SetVec3("uTexel", glm::vec3(1.0f / (float)scW, 1.0f / (float)scH, 0.0f));
                         outlineDilateShader.SetVec3("uColor", kOutlineColor);
                         outlineDilateShader.SetInt("uRadius", kOutlinePixels);
+                        {   // Motion v2: the outline sweeps on around the selection's centre after it changes
+                            glm::vec3 c(0.0f);
+                            for (const glm::mat4& x : xforms) c += glm::vec3(x[3]);
+                            if (!xforms.empty()) c /= (float)xforms.size();
+                            const glm::vec4 clip = sceneProjMat * sceneViewMat * glm::vec4(c, 1.0f);
+                            const glm::vec2 uv = clip.w > 1e-4f ? glm::vec2(clip) / clip.w * 0.5f + 0.5f : glm::vec2(0.5f);
+                            outlineDilateShader.SetFloat("uSweepHide", 1.0f - editor.SelectionOutlineReveal());
+                            outlineDilateShader.SetVec2("uSweepCenter", uv);
+                        }
                         glBindVertexArray(fsQuadVao);
                         glDrawArrays(GL_TRIANGLES, 0, 6);
                         glBindVertexArray(0);

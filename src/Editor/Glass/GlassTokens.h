@@ -421,6 +421,15 @@ constexpr MotionSpec ViewCubeTurn     = {EaseId::Spring, 1.0f, 180.0f, 18.0f, 0.
 constexpr MotionSpec RadialOpen       = {EaseId::Spring, 1.0f, 240.0f, 17.0f, 0.0f, 360.0f};
 constexpr MotionSpec RadialItem       = {EaseId::OutCubic, 0, 0, 0, 0, 120.0f};
 constexpr float      RadialRadiusPx   = 92.0f;
+constexpr float      RadialStaggerMs  = 18.0f;  // each item blooms this long after the previous one
+constexpr float      RadialHoldMs     = 180.0f; // Space held this long opens the menu (a tap does nothing)
+// Snap ticks: every snap step a gizmo drag crosses pops a small ring and the snapped number at the
+// cursor (the SnapPop look, smaller); the tick sound is rate-capped so a fast drag doesn't buzz.
+constexpr float      SnapTickRingPx   = 10.0f;
+constexpr float      SnapTickMinMs    = 45.0f;
+// Ortho <-> perspective morph: the field of view narrows to this while the camera pulls back (a
+// dolly zoom that keeps the pivot's size), then the projection switches flat.
+constexpr float      ViewMorphMinFovDeg = 8.0f;
 // The startup sequence (signature): panels assemble in a wave from the centre, rims glint in
 // order, the headline staggers in. ~1.2 s in all; input is live and any click or key settles it.
 constexpr float      StartupSeconds      = 1.2f;
@@ -428,6 +437,32 @@ constexpr float      StartupPanelMs      = 520.0f; // each panel's own arrival
 constexpr float      StartupStepMs       = 70.0f;  // per step of distance from the centre
 constexpr float      StartupFromScale    = 0.94f;
 constexpr float      StartupDropPx       = 14.0f;
+// Shell and theme (GlassCompositor.cpp, GlassDockMotion.cpp, EditorLayer_Glass.cpp).
+// Each panel's own arrival curve; it fades in over the first StartupFadeShare of it. A panel's
+// delay is its distance from the screen centre (0 at the centre, 1 at a corner) times the steps
+// that fit in StartupSeconds after the last panel's own arrival.
+constexpr MotionSpec StartupPanelIn      = {GLASS_EASE_SMOOTH, StartupPanelMs};
+constexpr float      StartupFadeShare    = 0.6f;
+// As a panel lands its rim catches the light (extra white over a 1 px edge), one after another.
+constexpr float      StartupRimBoost     = 0.38f;
+constexpr float      StartupRimAtShare   = 0.45f;  // of its arrival, when the glint starts
+// The headline (the editor's name, the scene below it) staggers in over the viewport, holds,
+// and fades before the sequence ends.
+constexpr float      StartupHeadlineAt   = 0.10f;  // s
+constexpr float      StartupSublineAt    = 0.30f;  // s
+constexpr float      StartupHeadlineOutAt = 0.95f; // s
+constexpr float      StartupHeadlineOutS = 0.40f;
+constexpr float      StartupHeadlineSize = 30.0f;  // px at 1x
+// A first frame slower than this (shaders compiling, a scene loading) restarts the clock, so the
+// sequence plays once frames flow instead of finishing unseen.
+constexpr float      StartupHitchSeconds = 0.10f;
+// The play-mode rim's travelling segment while paused, relative to playing.
+constexpr float      RimTravelPausedScale = 0.45f;
+// A toast that leaves: the ones above restack on a spring (zeta = 19 / (2 sqrt(210)) = 0.66).
+constexpr MotionSpec ToastRestack        = {EaseId::Spring, 1.0f, 210.0f, 19.0f, 0.0f, 460.0f};
+// The rebuild toast's busy ring: one turn per this many seconds, an arc of this share of it.
+constexpr float      ToastBusyTurnSeconds = 0.9f;
+constexpr float      ToastBusyArc         = 0.28f;
 
 #undef GLASS_EASE_SMOOTH
 

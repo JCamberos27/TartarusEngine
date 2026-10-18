@@ -2330,8 +2330,7 @@ void EditorLayer::BeginFrame() {
 }
 
 void EditorLayer::EndFrame() {
-    if (m_MotionDockspaceId != 0) Glass::DockFocusRim(m_MotionDockspaceId); // after every panel
-    Glass::DrawPlayFrame(m_MotionPlaying, m_MotionPaused);
+    GlassChromeFrameEnd(); // after every panel: dock rims, the play rim, the busy sheen, the startup sequence
     Glass::DrawDragGhost();
     EditorSound::SelectionFrame((uint32_t)entt::to_integral(m_Selected),
                                 HasAnySelection() ? 1 + (int)m_ExtraSelection.size() : 0);
