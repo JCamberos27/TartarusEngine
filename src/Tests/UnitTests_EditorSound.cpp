@@ -155,10 +155,20 @@ void TestEditorSoundFindVariants() {
     WriteToneWav(dir / "Click_2.wav", 48000, 0.05f, 0.1f);
     WriteToneWav(dir / "Click_4.wav", 48000, 0.05f, 0.1f); // after a gap: not a variant
     WriteToneWav(dir / "Save.wav", 48000, 0.05f, 0.1f);
-    CHECK(EditorSound::FindVariants(dir.string(), Event::Click).size() == 2);
-    CHECK(EditorSound::FindVariants(dir.string(), Event::Save).size() == 1);
+    WriteToneWav(dir / "Redo.wav", 48000, 0.05f, 0.1f);   // a single file wins over numbered ones
+    WriteToneWav(dir / "Redo_1.wav", 48000, 0.05f, 0.1f);
+    WriteToneWav(dir / "pause.wav", 48000, 0.05f, 0.1f);  // the listing matches names the way the folder did: any case
+    fs::create_directories(dir / "Undo.wav", ec);          // a folder named like a file isn't one
+    const auto click = EditorSound::FindVariants(dir.string(), Event::Click);
+    CHECK(click.size() == 2);
+    CHECK(click.size() == 2 && fs::u8path(click[0]).filename() == "Click_1.wav" && fs::u8path(click[1]).filename() == "Click_2.wav");
+    const auto save = EditorSound::FindVariants(dir.string(), Event::Save);
+    CHECK(save.size() == 1 && fs::u8path(save[0]) == dir / "Save.wav");
+    CHECK(EditorSound::FindVariants(dir.string(), Event::Redo).size() == 1);
+    CHECK(EditorSound::FindVariants(dir.string(), Event::Pause).size() == 1);
     CHECK(EditorSound::FindVariants(dir.string(), Event::Undo).empty());
     CHECK(EditorSound::FindVariants("", Event::Click).empty());
+    CHECK(EditorSound::FindVariants((dir / "missing").string(), Event::Click).empty());
     fs::remove_all(dir, ec);
 }
 
@@ -272,10 +282,23 @@ void TestEditorSoundUiObserver() {
     f.PopupDepth = 0; step(f); CHECK(has(Event::MenuClose));
     f.HoveredId = 11; f.MouseDx = 3.0f; step(f); CHECK(!has(Event::Hover)); // a panel row: no hover sound
 
-    // Drag & drop: pick up, then dropped on a target that took it vs. let go elsewhere.
+    // Drag & drop (P8): it sounds on the release frame. Observed after ImGui::EndFrame, a delivered drop already reads let go
+    // there; one let go elsewhere still reads held until the next frame, which stays quiet.
     f.DragActive = true; step(f); CHECK(has(Event::DragStart));
+    f.DropTargetHovered = true; step(f); CHECK(out.empty());
+    f.MouseReleased = f.DragReleased = true; f.DragActive = false; f.DropTargetHovered = false; step(f);
+    CHECK(has(Event::DropAccept) && out.size() == 1);
+    f.MouseReleased = f.DragReleased = false; step(f); CHECK(out.empty());
+    f.DragActive = true; step(f); CHECK(has(Event::DragStart));
+    f.MouseReleased = f.DragReleased = true; step(f); CHECK(has(Event::DropReject) && out.size() == 1); // still held
+    f.MouseReleased = f.DragReleased = false; step(f); CHECK(out.empty());
+    f.DragActive = false; step(f); CHECK(out.empty()); // ImGui lets it go a frame later: said already
+    // Observed before EndFrame (Delivery still set) the delivered drop also reads held on its release frame.
+    f.DragActive = true; step(f);
     f.DropTargetHovered = true; step(f);
-    f.DragActive = false; f.DropTargetHovered = false; step(f); CHECK(has(Event::DropAccept));
+    f.MouseReleased = f.DragReleased = f.DropAccepted = true; step(f); CHECK(has(Event::DropAccept) && out.size() == 1);
+    f.MouseReleased = f.DragReleased = f.DropAccepted = false; f.DragActive = f.DropTargetHovered = false; step(f); CHECK(out.empty());
+    // A drag that ends without a release seen (the payload elapsed) still sounds, on the edge.
     f.DragActive = true; step(f);
     f.DragActive = false; step(f); CHECK(has(Event::DropReject));
     f.MouseDx = 0.0f; f.HoveredId = 0;
@@ -302,6 +325,104 @@ void TestEditorSoundUiObserver() {
     f.PopupDepth = 1; step(f); CHECK(has(Event::MenuOpen));
     f.HoverInPickMenu = true; f.HoveredId = 5;
     typeInto(27); f.PopupDepth = 0; leave(true, false); CHECK(has(Event::FieldCommit) && !has(Event::Click) && !has(Event::MenuClose));
+}
+
+// P8: the primitives sound on the press; a press dragged off and let go elsewhere takes it back with a soft, lower ClickCancel.
+void TestEditorSoundPressCancel() {
+    using EditorSound::UiFrame;
+    using EditorSound::UiObserver;
+    using EditorSound::UiSound;
+    UiObserver o;
+    std::vector<UiSound> out;
+    auto step = [&](const UiFrame& f) { out.clear(); o.Step(f, out); };
+    UiFrame f;
+    step(f); // baseline
+    auto press = [&](unsigned id, bool noted) {
+        f.ActiveId = id; f.MouseDown = true; f.PressId = noted ? id : 0; f.HoveredId = id; step(f); CHECK(out.empty());
+        f.PressId = 0; step(f); CHECK(out.empty()); // held
+    };
+    auto release = [&](bool overIt) {
+        f.ActiveId = 0; f.MouseDown = false; f.MouseReleased = true; f.ReleasedOnItem = overIt; f.HoveredId = overIt ? 7 : 0; step(f);
+        f.MouseReleased = f.ReleasedOnItem = false;
+    };
+    // Dragged off: one quiet, lower ClickCancel.
+    press(7, true); f.HoveredId = 0; step(f); release(false);
+    CHECK(out.size() == 1 && out[0].E == Event::ClickCancel);
+    CHECK(out.size() == 1 && std::fabs(out[0].Pitch - UiObserver::kCancelPitch) < 1e-6f && out[0].GainDb < -3.0f);
+    step(f); CHECK(out.empty()); // once
+    // Let go on it: it clicked, nothing to take back.
+    press(7, true); release(true); CHECK(out.empty());
+    // A press that didn't sound (a ScopedClickSilence, or not a primitive) has nothing to take back.
+    press(7, false); release(false); CHECK(out.empty());
+    // A keyboard activation: noted, let go without a mouse release.
+    f.ActiveId = 7; f.PressId = 7; step(f); f.PressId = 0;
+    f.ActiveId = 0; step(f); CHECK(out.empty());
+    // A press that became a drag & drop: its drop speaks, not a cancel.
+    press(7, true); f.DragActive = true; step(f); CHECK(std::none_of(out.begin(), out.end(), [](const UiSound& u) { return u.E == Event::ClickCancel; }));
+    f.ActiveId = 0; f.MouseDown = false; f.MouseReleased = f.DragReleased = true; step(f);
+    CHECK(std::none_of(out.begin(), out.end(), [](const UiSound& u) { return u.E == Event::ClickCancel; }));
+}
+
+// P8: a primitive's press in a menu already clicked: the pick that closes the menu doesn't click again (another item does).
+void TestEditorSoundPressInMenu() {
+    using EditorSound::UiFrame;
+    using EditorSound::UiObserver;
+    using EditorSound::UiSound;
+    UiObserver o;
+    std::vector<UiSound> out;
+    auto step = [&](const UiFrame& f) { out.clear(); o.Step(f, out); };
+    auto has = [&](Event e) { return std::any_of(out.begin(), out.end(), [e](const UiSound& u) { return u.E == e; }); };
+    UiFrame f;
+    step(f);
+    f.PopupDepth = 1; step(f); CHECK(has(Event::MenuOpen));
+    f.HoverInMenu = f.HoverInPickMenu = true; f.HoveredId = 3;
+    f.ActiveId = 3; f.MouseDown = true; f.PressId = 3; step(f); f.PressId = 0;
+    f.ActiveId = 0; f.MouseDown = false; f.MouseReleased = true; f.ReleasedOnItem = true; f.PopupDepth = 0; step(f);
+    CHECK(!has(Event::Click) && !has(Event::MenuClose) && !has(Event::ClickCancel));
+    f.MouseReleased = f.ReleasedOnItem = false;
+    f.PopupDepth = 1; step(f);
+    f.MouseReleased = true; f.PopupDepth = 0; step(f); CHECK(has(Event::Click)); // a plain menu item: the observer clicks
+}
+
+// P8: the gain table is the dB trims, exactly; the service is Active only when there is something to hear.
+void TestEditorSoundGainTableAndActive() {
+    for (int i = 0; i < EditorSoundEvents::kEventCount; ++i)
+        for (int r = 0; r < 8; ++r) {
+            const float db = EditorSound::Info((Event)i).GainDb + std::max(Scheduler::kRepeatStepDb * (float)r, Scheduler::kRepeatFloorDb);
+            const float want = std::pow(10.0f, db / 20.0f);
+            CHECK(std::fabs(EditorSound::EventGain((Event)i, r) - want) <= want * 1e-6f);
+        }
+    // Decide's gains come off it: a spaced-out Hover is its trim, the floor is the trim plus kRepeatFloorDb.
+    Scheduler sch(3u);
+    Voice v;
+    Settings st;
+    sch.SetVariantCount(Event::Hover, 1);
+    CHECK(sch.Decide(Event::Hover, 0.0, 0.5f, true, st, v) && std::fabs(v.Gain - EditorSound::EventGain(Event::Hover)) < 1e-7f);
+
+    // No files needed: Init with no folders still makes the service ready.
+    EditorSound::Shutdown();
+    CHECK(!EditorSound::Active());
+    Settings on;
+    EditorSound::Apply(on);
+    CHECK(!EditorSound::Active()); // not initialised
+    EditorSound::Init("", "");
+    CHECK(EditorSound::Active());
+    Settings off = on;
+    off.Enabled = false;
+    EditorSound::Apply(off);
+    CHECK(!EditorSound::Active());
+    off = on;
+    off.Master = 0.0f;
+    EditorSound::Apply(off);
+    CHECK(!EditorSound::Active());
+    EditorSound::Apply(on);
+    CHECK(EditorSound::Active());
+    const int played = EditorSound::PlayedCount();
+    EditorSound::Play(Event::Click); // no files: nothing plays, nothing breaks
+    CHECK(EditorSound::PlayedCount() == played);
+    EditorSound::Shutdown();
+    CHECK(!EditorSound::Active());
+    EditorSound::Apply(EditorSound::Settings{});
 }
 
 // The transform gizmo: grab, a tick per snap step landed (or per stretch of free travel), release.
@@ -343,7 +464,7 @@ void TestEditorSoundPremiumSet() {
     EditorSound::Settings st;
     EditorSound::Apply(st); // UsePremium off (the default)
     EditorSound::Init((base / "builtin").string(), (base / "premium").string());
-    CHECK(EditorSound::PremiumEventCount() == 1);
+    CHECK(EditorSound::PremiumEventCount() == 1); // found, though not decoded while the set is off
     CHECK(EditorSound::BuiltInFiles(Event::Click).size() == 2 && EditorSound::PremiumFiles(Event::Click).size() == 1);
     CHECK(!EditorSound::IsOverride(Event::Click) && EditorSound::VariantCount(Event::Click) == 2);
     st.UsePremium = true;
@@ -476,6 +597,9 @@ void RegisterEditorSoundTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Editor sounds: variants, cooldown, rapid repeats, pan, focus and switches", TestEditorSoundSchedulerRules);
     tests.emplace_back("Editor sounds: a single file or numbered variants", TestEditorSoundFindVariants);
     tests.emplace_back("Editor sounds: sliders, menus, hover and drag & drop read off ImGui's state", TestEditorSoundUiObserver);
+    tests.emplace_back("Editor sounds: a press dragged off a button is taken back softly", TestEditorSoundPressCancel);
+    tests.emplace_back("Editor sounds: a primitive's press in a menu doesn't click again on the pick", TestEditorSoundPressInMenu);
+    tests.emplace_back("Editor sounds: the gain table matches the dB trims; Active() gating", TestEditorSoundGainTableAndActive);
     tests.emplace_back("Editor sounds: the transform gizmo's grab, snap ticks and release", TestEditorSoundGizmo);
     tests.emplace_back("Editor sounds: the premium Drive set is opt-in, event by event", TestEditorSoundPremiumSet);
     tests.emplace_back("Editor sounds: every event has a built-in file, with headroom at the default level",

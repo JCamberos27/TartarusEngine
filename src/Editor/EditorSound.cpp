@@ -1,9 +1,12 @@
 #include "EditorSound.h"
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <unordered_set>
 #include <imgui.h>
 #include <imgui_internal.h>
 #include "../Audio/AudioEngine.h"
@@ -173,6 +176,20 @@ const char* kCategoryNames[kCategoryCount] = {"Clicks", "Sliders", "Hover",  "Pa
 
 float DbToGain(float db) { return std::pow(10.0f, db / 20.0f); }
 
+// Each event's trim as a linear gain, per rapid-repeat step: built once (kEvents is constant-initialised above), so Decide
+// does no pow. Step k is k rapid repeats; from the last step on the attenuation sits at the floor.
+constexpr int kRepeatSteps = 5;
+static_assert(Scheduler::kRepeatStepDb * (float)(kRepeatSteps - 1) <= Scheduler::kRepeatFloorDb,
+              "the last repeat step must reach the floor");
+using GainRow = std::array<float, kRepeatSteps>;
+const std::array<GainRow, kEventCount> kGains = [] {
+    std::array<GainRow, kEventCount> t{};
+    for (int i = 0; i < kEventCount; ++i)
+        for (int k = 0; k < kRepeatSteps; ++k)
+            t[i][k] = DbToGain(kEvents[i].GainDb + std::max(Scheduler::kRepeatStepDb * (float)k, Scheduler::kRepeatFloorDb));
+    return t;
+}();
+
 struct State {
     bool Ready = false;
     Settings Values;
@@ -185,7 +202,11 @@ struct State {
     double LastErrorMs = -1e9; // the last error logged, sounded or not: a burst re-arms only after kErrorQuietMs of none
     int TailCount = 0;         // the newest entry's repeat count: an identical error again only bumps it, no new Seq
     std::array<std::vector<std::string>, kEventCount> Files;
-    std::array<std::vector<std::string>, kEventCount> BuiltIn, Premium; // both sets, loaded; Files is the one in use
+    std::array<std::vector<std::string>, kEventCount> BuiltIn, Premium; // both sets' files; Files is the one in use
+    std::array<std::vector<AudioEngine::ClipId>, kEventCount> Clips;     // Files' decoded clips: what Play plays
+    // Per file of each set. The built-in set is decoded at Init (files that fail are dropped); a premium file's id stays -1
+    // while UsePremium is off (SelectSets decodes / frees them; an audition decodes one on demand).
+    std::array<std::vector<AudioEngine::ClipId>, kEventCount> BuiltInClips, PremiumClips;
     std::array<bool, kEventCount> Override{};
     double LastBuildResultMs = -1e9;
     unsigned Frame = 0, LastPlayFrame = ~0u; // ObserveImGui counts frames; Play notes the one it last sounded in
@@ -193,6 +214,8 @@ struct State {
     unsigned PickerFrame = ~0u;              // the frame a colour picker sounded its own open / close
     int AwayDone = 0;                        // done chimes while unfocused
     double DigestAtMs = -1.0;                // a Digest is due at this time (OnFocusRegained), < 0: none
+    unsigned PressId = 0;                    // NotePress's item this frame, for ObserveImGui
+    unsigned Rearm = 0;                      // bumped on the edge back to Active(): the per-frame statics re-prime
 } s;
 
 double NowMs() {
@@ -201,6 +224,55 @@ double NowMs() {
 }
 
 void ApplyOutputVolume() { AudioEngine::SetEditorVolume(s.Values.Enabled ? std::clamp(s.Values.Master, 0.0f, 1.0f) : 0.0f); }
+
+// A per-frame hook's statics: true once after each edge back to Active(), to drop what they remembered from before.
+bool Rearmed(unsigned& seen) {
+    if (seen == s.Rearm) return false;
+    seen = s.Rearm;
+    return true;
+}
+
+std::string Lower(std::string t) {
+    for (char& c : t) c = (char)std::tolower((unsigned char)c);
+    return t;
+}
+// One listing of `dir`: its files' names, lower-cased (the old per-file probe was case-insensitive on Windows).
+std::unordered_set<std::string> ListFiles(const std::string& dir) {
+    namespace fs = std::filesystem;
+    std::unordered_set<std::string> names;
+    if (dir.empty()) return names;
+    std::error_code ec;
+    for (fs::directory_iterator it(fs::u8path(dir), ec), end; !ec && it != end; it.increment(ec))
+        if (it->is_regular_file(ec)) names.insert(Lower(it->path().filename().u8string()));
+    return names;
+}
+// FindVariants against a listing, in memory.
+std::vector<std::string> ResolveVariants(const std::string& dir, const std::unordered_set<std::string>& names, Event e) {
+    namespace fs = std::filesystem;
+    std::vector<std::string> files;
+    if (dir.empty() || names.empty()) return files;
+    const std::string name = Info(e).Name;
+    if (names.count(Lower(name + ".wav"))) {
+        files.push_back((fs::u8path(dir) / (name + ".wav")).u8string());
+        return files;
+    }
+    for (int n = 1;; ++n) {
+        const std::string file = name + "_" + std::to_string(n) + ".wav";
+        if (!names.count(Lower(file))) break;
+        files.push_back((fs::u8path(dir) / file).u8string());
+    }
+    return files;
+}
+
+void UnloadClips() {
+    for (auto* set : {&s.BuiltInClips, &s.PremiumClips})
+        for (auto& clips : *set) {
+            for (AudioEngine::ClipId id : clips)
+                if (id >= 0) AudioEngine::UnloadClip(id);
+            clips.clear();
+        }
+    for (auto& clips : s.Clips) clips.clear();
+}
 
 } // namespace
 
@@ -235,9 +307,8 @@ bool Scheduler::Decide(Event e, double nowMs, float screenX01, bool windowFocuse
     const double since = m_Played[i] ? nowMs - m_LastMs[i] : 1e9;
     if (since < info.CooldownMs) return false;
 
-    // Rapid repeats get a little quieter each time, so mashing a button doesn't hammer.
-    m_Repeats[i] = since < kRepeatWindowMs ? m_Repeats[i] + 1 : 0;
-    const float repeatDb = std::max(kRepeatStepDb * (float)m_Repeats[i], kRepeatFloorDb);
+    // Rapid repeats get a little quieter each time (kGains' steps, the last one at the floor), so mashing a button doesn't hammer.
+    m_Repeats[i] = since < kRepeatWindowMs ? std::min(m_Repeats[i] + 1, kRepeatSteps - 1) : 0;
 
     // Round-robin with a random step that never lands on the previous take.
     int v = 0;
@@ -246,7 +317,7 @@ bool Scheduler::Decide(Event e, double nowMs, float screenX01, bool windowFocuse
         v = m_Played[i] ? (m_LastVariant[i] + step) % variants : (int)(NextUnit() * (float)variants) % variants;
     }
     out.Variant = v;
-    out.Gain = DbToGain(info.GainDb + repeatDb) * std::clamp(st.CategoryVolume[cat], 0.0f, 1.0f);
+    out.Gain = kGains[i][m_Repeats[i]] * std::clamp(st.CategoryVolume[cat], 0.0f, 1.0f);
     out.Pitch = 1.0f + info.PitchJitter * (NextUnit() * 2.0f - 1.0f);
     out.Pan = (info.Centred || screenX01 < 0.0f) ? 0.0f : (std::clamp(screenX01, 0.0f, 1.0f) * 2.0f - 1.0f) * kPanWidth;
 
@@ -256,62 +327,80 @@ bool Scheduler::Decide(Event e, double nowMs, float screenX01, bool windowFocuse
     return true;
 }
 
-std::vector<std::string> FindVariants(const std::string& dir, Event e) {
-    namespace fs = std::filesystem;
-    std::vector<std::string> files;
-    if (dir.empty()) return files;
-    const std::string name = Info(e).Name;
-    std::error_code ec;
-    const fs::path single = fs::u8path(dir) / (name + ".wav");
-    if (fs::is_regular_file(single, ec)) {
-        files.push_back(single.u8string());
-        return files;
-    }
-    for (int n = 1;; ++n) {
-        const fs::path p = fs::u8path(dir) / (name + "_" + std::to_string(n) + ".wav");
-        if (!fs::is_regular_file(p, ec)) break;
-        files.push_back(p.u8string());
-    }
-    return files;
-}
+std::vector<std::string> FindVariants(const std::string& dir, Event e) { return ResolveVariants(dir, ListFiles(dir), e); }
 
-// Which set each event plays: the premium file where the user opted in and the Drive has one, else the built-in.
+// Which set each event plays: the premium file where the user opted in and the Drive has one, else the built-in. The premium
+// set is decoded only while it is on, and freed when it goes off.
 void SelectSets() {
     for (int i = 0; i < kEventCount; ++i) {
-        s.Override[i] = s.Values.UsePremium && !s.Premium[i].empty();
-        s.Files[i] = s.Override[i] ? s.Premium[i] : s.BuiltIn[i];
-        s.Sched.SetVariantCount((Event)i, (int)s.Files[i].size());
+        auto& premium = s.PremiumClips[i];
+        for (size_t k = 0; k < premium.size(); ++k) {
+            if (s.Values.UsePremium && premium[k] < 0) {
+                premium[k] = AudioEngine::LoadClip(s.Premium[i][k]);
+            } else if (!s.Values.UsePremium && premium[k] >= 0) {
+                AudioEngine::UnloadClip(premium[k]);
+                premium[k] = -1;
+            }
+        }
+        s.Override[i] = s.Values.UsePremium && std::any_of(premium.begin(), premium.end(), [](AudioEngine::ClipId c) { return c >= 0; });
+        s.Files[i].clear();
+        s.Clips[i].clear();
+        if (s.Override[i]) {
+            for (size_t k = 0; k < premium.size(); ++k)
+                if (premium[k] >= 0) {
+                    s.Files[i].push_back(s.Premium[i][k]);
+                    s.Clips[i].push_back(premium[k]);
+                }
+        } else {
+            s.Files[i] = s.BuiltIn[i];
+            s.Clips[i] = s.BuiltInClips[i];
+        }
+        s.Sched.SetVariantCount((Event)i, (int)s.Clips[i].size());
     }
 }
 
 void Init(const std::string& builtInDir, const std::string& overrideDir) {
+    const double startMs = NowMs();
+    const bool wasActive = Active();
+    UnloadClips(); // a second Init starts over
     s.Sched.Reset();
-    auto load = [](std::vector<std::string> files) {
-        files.erase(std::remove_if(files.begin(), files.end(), [](const std::string& f) { return !AudioEngine::Load(f); }), files.end());
-        return files;
-    };
+    // Each folder listed once and every event resolved against the listing (it was a stat per candidate file, ~800 of them).
+    const std::unordered_set<std::string> builtInNames = ListFiles(builtInDir), premiumNames = ListFiles(overrideDir);
     int found = 0, premium = 0;
     for (int i = 0; i < kEventCount; ++i) {
-        s.BuiltIn[i] = load(FindVariants(builtInDir, (Event)i));
-        s.Premium[i] = load(FindVariants(overrideDir, (Event)i));
+        std::vector<std::string>& files = s.BuiltIn[i];
+        files = ResolveVariants(builtInDir, builtInNames, (Event)i);
+        size_t kept = 0;
+        for (size_t k = 0; k < files.size(); ++k) { // keep the ones that decode
+            const AudioEngine::ClipId id = AudioEngine::LoadClip(files[k]);
+            if (id < 0) continue;
+            files[kept++] = files[k];
+            s.BuiltInClips[i].push_back(id);
+        }
+        files.resize(kept);
+        s.Premium[i] = ResolveVariants(overrideDir, premiumNames, (Event)i);
+        s.PremiumClips[i].assign(s.Premium[i].size(), -1); // decoded by SelectSets while UsePremium is on
         if (!s.BuiltIn[i].empty() || !s.Premium[i].empty()) ++found;
         if (!s.Premium[i].empty()) ++premium;
     }
     SelectSets();
     s.Ready = true;
+    if (!wasActive && Active()) ++s.Rearm;
+    EditorSoundEvents::PressSlot() = &NotePress; // this binary's primitives; a module gets the host's through its API
     ApplyOutputVolume();
-    Log::Info("Editor sounds: " + std::to_string(found) + " of " + std::to_string(kEventCount) + " events" +
+    char ms[32];
+    std::snprintf(ms, sizeof(ms), "%.1f", NowMs() - startMs);
+    Log::Info("Editor sounds: " + std::to_string(found) + " of " + std::to_string(kEventCount) + " events in " + ms + " ms" +
               (premium ? " (" + std::to_string(premium) + " with a premium Drive version)" : std::string()) + ".");
 }
 
 void Shutdown() {
+    UnloadClips();
     for (auto* set : {&s.BuiltIn, &s.Premium})
-        for (auto& files : *set) {
-            for (const std::string& f : files) AudioEngine::Unload(f);
-            files.clear();
-        }
+        for (auto& files : *set) files.clear();
     for (auto& files : s.Files) files.clear();
     for (int i = 0; i < kEventCount; ++i) s.Sched.SetVariantCount((Event)i, 0);
+    if (EditorSoundEvents::PressSlot() == &NotePress) EditorSoundEvents::PressSlot() = nullptr;
     s.Ready = false;
 }
 
@@ -340,9 +429,12 @@ void ToEditorSettings(const Settings& v) {
 bool Audition(Event e, int variant, bool premium) {
     if (!s.Ready) return false;
     const int i = std::clamp((int)e, 0, kEventCount - 1);
-    const auto& files = premium ? s.Premium[i] : s.BuiltIn[i];
-    if (variant < 0 || variant >= (int)files.size()) return false;
-    const bool ok = AudioEngine::PlayEditor(files[variant], DbToGain(Info(e).GainDb));
+    auto& clips = premium ? s.PremiumClips[i] : s.BuiltInClips[i];
+    if (variant < 0 || variant >= (int)clips.size()) return false;
+    // A premium file auditioned while the set is off is decoded now (and freed with the set: SelectSets).
+    if (premium && clips[variant] < 0) clips[variant] = AudioEngine::LoadClip(s.Premium[i][variant]);
+    if (clips[variant] < 0) return false;
+    const bool ok = AudioEngine::PlayEditor(clips[variant], kGains[i][0]);
     if (ok) ++s.Played;
     return ok;
 }
@@ -399,11 +491,18 @@ void Update() {
 
 void Apply(const Settings& v) {
     const bool setChanged = v.UsePremium != s.Values.UsePremium;
+    const bool wasActive = Active();
     s.Values = v;
     ApplyOutputVolume();
     if (setChanged && s.Ready) SelectSets();
+    if (!wasActive && Active()) ++s.Rearm;
 }
 const Settings& Current() { return s.Values; }
+bool Active() { return s.Ready && s.Values.Enabled && s.Values.Master > 0.0f; }
+float EventGain(Event e, int repeats) {
+    return kGains[std::clamp((int)e, 0, kEventCount - 1)][std::clamp(repeats, 0, kRepeatSteps - 1)];
+}
+void NotePress(unsigned itemId) { s.PressId = itemId; }
 void SetWindowFocused(bool focused) { s.Focused = focused; }
 
 bool IsDoneChime(Event e) {
@@ -419,15 +518,16 @@ void OnFocusRegained() {
 int AwayDoneCount() { return s.AwayDone; }
 void SuppressDropSound() { s.DropQuietFrame = s.Frame; }
 
-void Play(Event e, float screenX01, float pitchScale) {
-    if (!s.Ready) return;
+void Play(Event e, float screenX01, float pitchScale, float gainDb) {
+    if (!Active()) return; // switched off (or the master at 0): not even the clock is read
     if (!s.Focused && IsDoneChime(e)) ++s.AwayDone;
     Voice v;
     if (!s.Sched.Decide(e, NowMs(), screenX01, s.Focused, s.Values, v)) return;
     v.Pitch *= pitchScale;
-    const auto& files = s.Files[(int)e];
-    if (v.Variant < 0 || v.Variant >= (int)files.size()) return;
-    if (AudioEngine::PlayEditor(files[v.Variant], v.Gain, v.Pitch, v.Pan)) ++s.Played;
+    if (gainDb != 0.0f) v.Gain *= DbToGain(gainDb);
+    const auto& clips = s.Clips[(int)e];
+    if (v.Variant < 0 || v.Variant >= (int)clips.size()) return;
+    if (AudioEngine::PlayEditor(clips[v.Variant], v.Gain, v.Pitch, v.Pan)) ++s.Played;
     s.LastPlayFrame = s.Frame;
     if (e == Event::PickerOpen || e == Event::PickerClose) s.PickerFrame = s.Frame;
     if (e == Event::BuildSuccess || e == Event::BuildFail || e == Event::PackageSuccess || e == Event::PackageFail)
@@ -443,6 +543,18 @@ void UiObserver::Step(const UiFrame& f, std::vector<UiSound>& out) {
         return;
     }
     const UiFrame& p = m_Prev;
+    // A shared primitive's press sounded on mouse-down. Held, dragged off and let go elsewhere (so it never clicked), it takes
+    // the sound back with a soft, lower ClickCancel. A keyboard activation lets go without a mouse release: nothing. Nor does a
+    // press that became a drag & drop (its drop speaks).
+    const unsigned pressed = m_PressId; // (for the popup pick below: a primitive in a menu already clicked on its press)
+    if (f.PressId != 0) {
+        m_PressId = f.PressId;
+    } else if (m_PressId != 0 && f.ActiveId != m_PressId) {
+        if (p.ActiveId == m_PressId && f.MouseReleased && !f.ReleasedOnItem && !f.DragActive && !p.DragActive)
+            out.push_back({Event::ClickCancel, f.MouseX01, kCancelPitch, kCancelGainDb});
+        m_PressId = 0;
+    }
+
     // Sliders, drag fields, colour pickers: a held widget whose value changes under a pressed mouse. Buttons and checkboxes
     // never edit while the mouse is down (they act on release), and typing has no mouse down, so neither reads as a slide.
     if (!m_Sliding && f.ActiveId != 0 && f.Edited && f.MouseDown) {
@@ -478,19 +590,34 @@ void UiObserver::Step(const UiFrame& f, std::vector<UiSound>& out) {
     }
     if (f.TextActive && f.ActiveId != p.ActiveId) m_TextEdited = f.Edited; // a field newly typed into
 
-    // Popups: one more is a menu opening; one fewer is a pick (released on / Enter in it) or a close.
-    if (f.PopupDepth > p.PopupDepth) out.push_back({Event::MenuOpen, f.MouseX01});
-    else if (f.PopupDepth < p.PopupDepth && !textSound)
-        out.push_back({(p.HoverInPickMenu && p.HoveredId != 0 && (f.MouseReleased || f.EnterPressed)) ? Event::Click : Event::MenuClose,
-                       f.MouseX01});
+    // Popups: one more is a menu opening; one fewer is a pick (released on / Enter in it) or a close. A pick on a shared
+    // primitive's button sounded on its press already.
+    if (f.PopupDepth > p.PopupDepth) {
+        out.push_back({Event::MenuOpen, f.MouseX01});
+    } else if (f.PopupDepth < p.PopupDepth && !textSound) {
+        const bool pick = p.HoverInPickMenu && p.HoveredId != 0 && (f.MouseReleased || f.EnterPressed);
+        if (!pick) out.push_back({Event::MenuClose, f.MouseX01});
+        else if (pressed == 0 || p.HoveredId != pressed) out.push_back({Event::Click, f.MouseX01});
+    }
 
     // Hover: a new item under a moving cursor, only in menus, dropdowns, the menu bar and the toolbar, never while a button is down.
     if (f.HoverInMenu && f.HoveredId != 0 && f.HoveredId != p.HoveredId && !f.MouseDown && (f.MouseDx != 0.0f || f.MouseDy != 0.0f))
         out.push_back({Event::Hover, f.MouseX01});
 
-    // Drag & drop: picked up; dropped where the last frame had a target that would take it, or not.
-    if (f.DragActive && !p.DragActive) out.push_back({Event::DragStart, f.MouseX01});
-    else if (!f.DragActive && p.DragActive) out.push_back({p.DropTargetHovered ? Event::DropAccept : Event::DropReject, f.MouseX01});
+    // Drag & drop: picked up; dropped on the release frame itself. Observed after ImGui::EndFrame, a delivered drop has already
+    // let go there (DragActive false: it landed on the target the last frame had), one let go elsewhere still reads held until
+    // the next frame, whose end-of-drag edge then stays quiet. A drag that ends without a release seen sounds on that edge.
+    if (f.DragActive && !p.DragActive) {
+        out.push_back({Event::DragStart, f.MouseX01});
+        m_DropSaid = false;
+    } else if (p.DragActive && f.DragReleased && !m_DropSaid) {
+        const bool accepted = f.DropAccepted || (!f.DragActive && p.DropTargetHovered);
+        out.push_back({accepted ? Event::DropAccept : Event::DropReject, f.MouseX01});
+        m_DropSaid = f.DragActive; // still held: its edge comes next frame
+    } else if (!f.DragActive && p.DragActive) {
+        if (!m_DropSaid) out.push_back({p.DropTargetHovered ? Event::DropAccept : Event::DropReject, f.MouseX01});
+        m_DropSaid = false;
+    }
 
     m_Prev = f;
 }
@@ -520,7 +647,9 @@ void GizmoTracker::Step(bool usingNow, bool moved, bool snapped, float dx, float
 void GizmoFrame(bool usingNow, bool moved, bool snapped) {
     static GizmoTracker tracker;
     static std::vector<UiSound> sounds;
-    if (!s.Ready || !ImGui::GetCurrentContext()) return;
+    static unsigned rearm = 0;
+    if (!Active() || !ImGui::GetCurrentContext()) return;
+    if (Rearmed(rearm)) tracker = GizmoTracker{}; // a drag that was under way when the sounds went off is forgotten
     const ImGuiIO& io = ImGui::GetIO();
     float x = -1.0f;
     const ImGuiViewport* vp = ImGui::GetMainViewport();
@@ -553,6 +682,9 @@ void SelectionFrame(uint32_t primary, int count) {
     static bool primed = false;
     static uint32_t prevPrimary = 0;
     static int prevCount = 0;
+    static unsigned rearm = 0;
+    if (!Active()) return;
+    if (Rearmed(rearm)) primed = false; // what changed while off isn't news
     const bool changed = primary != prevPrimary || count != prevCount;
     if (changed && primed && !PlayedThisFrame()) {
         float x01 = -1.0f;
@@ -568,6 +700,9 @@ void SelectionFrame(uint32_t primary, int count) {
 void PanelsFrame(uint32_t openMask) {
     static bool primed = false;
     static uint32_t prev = 0;
+    static unsigned rearm = 0;
+    if (!Active()) return;
+    if (Rearmed(rearm)) primed = false;
     const uint32_t opened = openMask & ~prev, closed = prev & ~openMask;
     // One panel at a time is a user's toggle; several at once is a layout being applied, which stays quiet. A toolbar toggle
     // already clicked this frame.
@@ -582,6 +717,9 @@ void ToolFrame(int tool, bool localSpace, bool snap) {
     static bool primed = false;
     static int prevTool = 0;
     static bool prevLocal = false, prevSnap = false;
+    static unsigned rearm = 0;
+    if (!Active()) return;
+    if (Rearmed(rearm)) primed = false;
     if (primed) {
         // Each tool its own step up (hand -1 ... measure 5), about a semitone apart, so the ear learns which is which.
         if (tool != prevTool) Play(Event::ToolSwitch, -1.0f, std::pow(2.0f, (float)(std::clamp(tool, -1, 5) - 0) / 12.0f));
@@ -598,7 +736,17 @@ void ObserveImGui() {
     struct NextFrame { ~NextFrame() { ++s.Frame; } } nextFrame; // the frame ends here, whatever returns early
     static UiObserver observer;
     static std::vector<UiSound> sounds;
-    if (!s.Ready || !ImGui::GetCurrentContext()) return;
+    static unsigned rearm = 0;
+    static const ImGuiWindow* hoverWindow = nullptr; // HoverInMenu / HoverInPickMenu, worked out once per hovered window
+    static bool hoverMenu = false, hoverPickMenu = false;
+    const unsigned pressId = s.PressId;
+    s.PressId = 0;
+    if (!Active() || !ImGui::GetCurrentContext()) return;
+    if (Rearmed(rearm)) { // back on: a fresh baseline, not a diff against the frame the sounds went off in
+        observer.Reset();
+        hoverWindow = nullptr;
+        hoverMenu = hoverPickMenu = false;
+    }
     const ImGuiContext& g = *GImGui;
     UiFrame f;
     f.ActiveId = g.ActiveId;
@@ -614,15 +762,28 @@ void ObserveImGui() {
         f.MouseDy = g.IO.MouseDelta.y;
     }
     f.HoveredId = g.HoveredId;
-    if (const ImGuiWindow* w = g.HoveredWindow) {
-        // Menus, dropdowns and context menus (not modals: their buttons click for themselves) are where an item is a pick.
-        f.HoverInPickMenu = (w->Flags & ImGuiWindowFlags_ChildMenu) != 0 ||
+    if (g.HoveredWindow != hoverWindow) {
+        hoverWindow = g.HoveredWindow;
+        hoverMenu = hoverPickMenu = false;
+        if (const ImGuiWindow* w = hoverWindow) {
+            // Menus, dropdowns and context menus (not modals: their buttons click for themselves) are where an item is a pick.
+            hoverPickMenu = (w->Flags & ImGuiWindowFlags_ChildMenu) != 0 ||
                             ((w->Flags & ImGuiWindowFlags_Popup) != 0 && (w->Flags & ImGuiWindowFlags_Modal) == 0);
-        f.HoverInMenu = f.HoverInPickMenu || std::strcmp(w->Name, "##MainMenuBar") == 0 || std::strstr(w->Name, "##Toolbar") != nullptr;
+            hoverMenu = hoverPickMenu || std::strcmp(w->Name, "##MainMenuBar") == 0 || std::strstr(w->Name, "##Toolbar") != nullptr;
+        }
     }
+    f.HoverInPickMenu = hoverPickMenu;
+    f.HoverInMenu = hoverMenu;
     f.PopupDepth = g.OpenPopupStack.Size;
     f.DragActive = g.DragDropActive && (g.DragDropSourceFlags & ImGuiDragDropFlags_SourceExtern) == 0;
-    f.DropTargetHovered = f.DragActive && g.DragDropAcceptIdPrev != 0;
+    // The target that took it this frame or the last (both still set unless EndFrame already let a delivered payload go).
+    f.DropTargetHovered = f.DragActive && (g.DragDropAcceptIdCurr != 0 || g.DragDropAcceptIdPrev != 0);
+    const int dropButton = g.DragDropMouseButton >= 0 && g.DragDropMouseButton < ImGuiMouseButton_COUNT ? g.DragDropMouseButton : 0;
+    f.DragReleased = g.IO.MouseReleased[dropButton];
+    f.DropAccepted = f.DragActive && g.DragDropPayload.Delivery; // observed before EndFrame (after it, a delivery reads cleared)
+    f.PressId = pressId;
+    // Released over the item held last frame: ImGui keeps that item hovered while it's held, so this is "let go on it".
+    f.ReleasedOnItem = f.MouseReleased && g.HoveredId != 0 && g.HoveredId == g.ActiveIdPreviousFrame;
     f.TextActive = g.ActiveId != 0 && (g.InputTextState.ID == g.ActiveId || g.TempInputId == g.ActiveId);
     f.EscPressed = ImGui::IsKeyPressed(ImGuiKey_Escape, false);
     sounds.clear();
@@ -635,7 +796,7 @@ void ObserveImGui() {
         if (acted && (u.E == Event::Click || u.E == Event::FieldCommit || u.E == Event::FieldCancel)) continue;
         if (dropQuiet && (u.E == Event::DropAccept || u.E == Event::DropReject)) continue;
         if (s.PickerFrame == s.Frame && (u.E == Event::MenuOpen || u.E == Event::MenuClose)) continue; // its popup, said already
-        Play(u.E, u.X01, u.Pitch);
+        Play(u.E, u.X01, u.Pitch, u.GainDb);
     }
 }
 

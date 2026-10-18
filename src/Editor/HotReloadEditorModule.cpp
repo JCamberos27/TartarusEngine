@@ -507,6 +507,7 @@ const EditorMotionHooks* GetHostMotionHooks() { return &Glass::HostMotionHooks()
 void HostPlayUISound(int event, float screenX01) {
     if (event >= 0 && event < EditorSoundEvents::kEventCount) EditorSound::Play((EditorSoundEvents::Event)event, screenX01);
 }
+void HostNoteUIPress(unsigned itemId) { EditorSound::NotePress(itemId); }
 
 // Built field-by-field, by name (#172 follow-up): the old positional aggregate initializer
 // compiled cleanly with any two same-signature entries swapped (e.g. GetShowGrid <->
@@ -631,6 +632,7 @@ EditorModuleHostAPI MakeHostAPI() {
     api.GetAssetViewMode = &AbGetViewMode;
     api.GetMotionHooks = &GetHostMotionHooks;
     api.PlayUISound = &HostPlayUISound;
+    api.NoteUIPress = &HostNoteUIPress;
     return api;
 }
 
