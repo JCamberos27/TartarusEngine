@@ -37,6 +37,54 @@ static SurfaceKind ClassifyTree(const ImGuiWindow* tree, const ImGuiViewport* vp
     return SurfaceKind::Window;
 }
 
+// --- The startup sequence ----------------------------------------------------------------------------
+
+bool StartupPosing() {
+    const ImAnimContext& m = Motion();
+    return m.StartupRunning() && m.CategoryOn(MotionCategory::Startup);
+}
+
+ImGuiWindow* StartupGroup(ImGuiWindow* w, const ImGuiViewport* vp) {
+    if (!w || w->Viewport != vp) return nullptr;
+    ImGuiWindow* tree = w->RootWindowDockTree ? w->RootWindowDockTree : w;
+    const SurfaceKind k = ClassifyTree(tree, vp);
+    if (k == SurfaceKind::Window) return tree;
+    if (k != SurfaceKind::None) return nullptr; // popups and tooltips arrive on their own
+    ImGuiWindow* root = w->RootWindow ? w->RootWindow : w;
+    return root->DockIsActive && root->Viewport == vp ? root : nullptr;
+}
+
+SurfacePose StartupPoseFor(const ImGuiWindow* group, const ImGuiViewport* vp) {
+    const ImVec2 dMin = vp->Pos, dMax(vp->Pos.x + vp->Size.x, vp->Pos.y + vp->Size.y);
+    const ImRect r = group->Rect();
+    return StartupPose(r, dMin, dMax, StartupLocal(Motion().StartupElapsed(), StartupDelay(r, dMin, dMax)));
+}
+
+void PoseStartupTabBars(const ImGuiViewport* vp) {
+    ImGuiContext& g = *GImGui;
+    for (int n = 0; n < g.DockContext.Nodes.Data.Size; ++n) {
+        ImGuiDockNode* node = (ImGuiDockNode*)g.DockContext.Nodes.Data[n].val_p;
+        if (!node || !node->TabBar || !node->HostWindow || !node->IsVisible || !node->VisibleWindow) continue;
+        if (node->IsHiddenTabBar() || node->IsNoTabBar() || node->HostWindow->Viewport != vp) continue;
+        // A floating node's host is a floating window, posed whole with everything in it.
+        if (StartupGroup(node->HostWindow, vp) != nullptr) continue;
+        ImGuiWindow* panel = node->VisibleWindow->RootWindow ? node->VisibleWindow->RootWindow : node->VisibleWindow;
+        const SurfacePose pose = StartupPoseFor(panel, vp);
+        if (!pose.Identity()) ApplyPoseInRect(node->HostWindow->DrawList, pose, node->TabBar->BarRect);
+    }
+}
+
+void ApplyStartupArrival() {
+    if (!StartupPosing()) return;
+    ImGuiContext& g = *GImGui;
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    for (ImGuiWindow* w : g.Windows) {
+        if (!w->Active || w->Hidden || !w->DrawList || w->DrawList->VtxBuffer.Size == 0) continue;
+        if (ImGuiWindow* group = StartupGroup(w, vp)) ApplyPose(w->DrawList, StartupPoseFor(group, vp));
+    }
+    PoseStartupTabBars(vp);
+}
+
 // --- The compositor ----------------------------------------------------------------------------------
 
 namespace {
@@ -210,6 +258,11 @@ void GlassCompositor::Render(ImDrawData* dd, bool blur) {
     const ImU32 border = ImGui::GetColorU32(ImGuiCol_Border);
 
     // --- 1. Classify, convert and pose every list (CPU only) ---------------------------------------
+    // The startup sequence: every docked panel and floating window assembles from its own pose (in
+    // place of its ordinary arrival), and each dock node's tab bar, drawn in the dock host's list,
+    // moves with its panel.
+    const bool startup = StartupPosing();
+    if (startup) PoseStartupTabBars(vp);
     m_Groups.clear();
     m_Info.assign((size_t)listCount, ListInfo{});
     m_Bounds.resize((size_t)listCount);
@@ -260,8 +313,18 @@ void GlassCompositor::Render(ImDrawData* dd, bool blur) {
             auto git = std::find_if(m_Groups.begin(), m_Groups.end(), [&](const Group& gr) { return gr.Window == li.Group; });
             if (git == m_Groups.end()) {
                 const bool appeared = m_Seen.find(li.Group->ID) == m_Seen.end();
-                Group gr{li.Group, SurfacePose{}, 0.0f};
+                Group gr{li.Group, SurfacePose{}, 0.0f, false};
                 gr.Pose = PoseFor(li.Group, li.Kind, appeared, &gr.Rim);
+                if (startup && (li.Kind == SurfaceKind::Panel || li.Kind == SurfaceKind::Window)) {
+                    gr.Pose = StartupPoseFor(li.Group, vp);
+                    gr.Startup = true;
+                    // A floating window's glass edge catches the light as it lands, like the panels' rims.
+                    const ImRect gr0 = li.Group->Rect();
+                    const float since = Motion().StartupElapsed() - StartupDelay(gr0, dispMin, dispMax) -
+                                        StartupPanelMs * 0.001f * StartupRimAtShare;
+                    if (since >= 0.0f)
+                        gr.Rim = ImMax(gr.Rim, StartupRimBoost * (1.0f - EaseProgress(RimGlint, since / Secs(RimGlint))));
+                }
                 m_Groups.push_back(gr);
                 git = m_Groups.end() - 1;
             }
@@ -290,7 +353,7 @@ void GlassCompositor::Render(ImDrawData* dd, bool blur) {
             const ImGuiWindow* root = w->RootWindow ? w->RootWindow : w;
             const bool scene = std::strstr(root->Name, "###Scene") != nullptr;
             const bool gameImage = std::strstr(root->Name, "###Game") != nullptr && w == root;
-            if (!scene && !gameImage) GlassifySolids(dl);
+            if (!scene && !gameImage) GlassifySolids(dl, m_MaterialBlend);
         }
         if (li.Plate) {
             li.PlateRect = pose.Apply(li.PlateRect);
@@ -298,7 +361,10 @@ void GlassCompositor::Render(ImDrawData* dd, bool blur) {
             li.Alpha = pose.alpha;
         }
         // A docked panel keeps its own background in place while its content arrives.
-        const ImU32 anchored = (li.Kind == SurfaceKind::Panel && li.Group == w) ? FindWindowBackground(dl, w->Rect()) : 0u;
+        // (Not while it assembles at startup: then the whole panel arrives, background and all.)
+        bool startupPosed = false;
+        for (const Group& gr : m_Groups) if (gr.Window == li.Group) { startupPosed = gr.Startup; break; }
+        const ImU32 anchored = (li.Kind == SurfaceKind::Panel && li.Group == w && !startupPosed) ? FindWindowBackground(dl, w->Rect()) : 0u;
         ApplyPose(dl, pose, anchored);
         m_Bounds[(size_t)i] = DrawListBounds(dl);
     }

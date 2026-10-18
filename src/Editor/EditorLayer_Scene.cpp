@@ -153,6 +153,7 @@ void EditorLayer::BeginGlobalUndoFrame(const World& world) {
 }
 void EditorLayer::FinishGlobalUndo(const World& world,bool force) {
     if(!m_GlobalUndoActive || (!force && (ImGui::IsAnyItemActive() || ImGui::IsMouseDown(ImGuiMouseButton_Left)))) return;
+    if(!force && m_InspectorValueCoasting) return; // a flung Inspector value: drag + coast are one undo step
     PROFILE_SCOPE("Undo Commit");
     EditorSettings::Flush();
     Enhancers::EnhancerUserState::Get().Flush();Enhancers::Palette::Flush();Enhancers::FolderStyles::Get().Flush();Enhancers::UiStyles::Get().Flush();

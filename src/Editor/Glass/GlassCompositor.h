@@ -65,8 +65,9 @@ int ConvertToGlass(ImDrawList* dl, const ImU32* clear, int clearCount, ImU32 bor
 // apart from the panel, hover (#15-#20) and pressed / hairlines (#21-#2C) white lifts. Grey text
 // and icons (GreyTextMin-GreyTextMax) are lifted by LiftGreyText so they read over a bright field.
 // Anything with hue, primary text and anything already translucent is left alone. Returns how
-// many vertices changed.
-int GlassifySolids(ImDrawList* dl);
+// many vertices changed. `amount` < 1 mixes each changed vertex only that far from its solid colour
+// to its glass one (a theme switch easing into Glass).
+int GlassifySolids(ImDrawList* dl, float amount = 1.0f);
 
 // Grey text on glass: Tartarus's Dim (#6A) and Secondary (#9C) sit on black, and over the lighter
 // glass they lose contrast. The compositor maps that band up into #A4-#C8, keeping its order.
@@ -93,9 +94,39 @@ struct SurfacePose {
 // and opaque, so only the content arrives.
 void ApplyPose(ImDrawList* dl, const SurfacePose& pose, ImU32 anchored = 0);
 
+// ApplyPose for the part of a draw list inside `region` only: vertices inside it move and fade,
+// and clip rects that lie within it move with them. A dock node's tab bar, which ImGui draws into
+// the dock host's list alongside every other node's.
+void ApplyPoseInRect(ImDrawList* dl, const SurfacePose& pose, const ImRect& region);
+
 // The screen area a draw list can touch: the union of its non-empty commands' clip rects (the
 // renderer scissors to them). Empty when it draws nothing.
 ImRect DrawListBounds(const ImDrawList* dl);
+
+// --- The startup sequence (GlassTokens.h, category 15) -----------------------------------------------
+// On launch the panels assemble in a wave from the centre of the screen outwards: each docked panel
+// and floating window grows from StartupFromScale, drifts out from StartupDropPx nearer the centre
+// and fades in, starting later the further it sits from the centre. Draw-only (input is live).
+
+// Seconds before a window at `rect` starts arriving: its centre's distance from the display's
+// (0 at the centre, 1 at a corner) times the steps that fit in StartupSeconds.
+float StartupDelay(const ImRect& rect, ImVec2 displayMin, ImVec2 displayMax);
+// 0..1 through that window's own arrival, `elapsed` seconds into the sequence.
+float StartupLocal(float elapsed, float delay);
+// The pose of a window at `rect`, `local` (0..1) through its arrival.
+SurfacePose StartupPose(const ImRect& rect, ImVec2 displayMin, ImVec2 displayMax, float local);
+// Startup on and the sequence running: windows are being posed this frame.
+bool StartupPosing();
+// The window `w` arrives with: its docked panel or its floating window. Null for the chrome (menu
+// and status bars), popups, tooltips and bare overlays, which are there from the first frame.
+ImGuiWindow* StartupGroup(ImGuiWindow* w, const ImGuiViewport* vp);
+// The pose of `group` this frame of the sequence (identity once it has landed).
+SurfacePose StartupPoseFor(const ImGuiWindow* group, const ImGuiViewport* vp);
+// Moves each dock node's tab bar (drawn in the dock host's list) with its visible panel.
+void PoseStartupTabBars(const ImGuiViewport* vp);
+// Every theme the compositor doesn't run in (Tartarus): poses the finished window draw lists in
+// place, before ImGui::Render. Call after everything has been drawn into the panels.
+void ApplyStartupArrival();
 
 // How a window takes part: glass (and which arrival), part of a glass surface, a docked panel, or
 // neither (the menu bar, the status bar, overlays with no background).
@@ -119,6 +150,11 @@ public:
     // off) paints GlassFallback under them instead and never touches the blur. Must run with the
     // ImGui context that produced `dd` current.
     void Render(ImDrawData* dd, bool blur);
+
+    // How far the panels' solid fills have turned to glass, 0..1 (GlassifySolids): eased up from 0
+    // over a theme switch into Glass, so the panels don't turn transparent on its first frame
+    // while the style is still easing. 1 at rest.
+    void SetMaterialBlend(float amount) { m_MaterialBlend = amount; }
 
     // Frees the GL objects (capture target and blur chain). The next Render recreates them.
     void Release();
@@ -154,7 +190,7 @@ private:
     std::vector<std::unique_ptr<ImDrawList>> m_Plates; // reused across frames
     std::unordered_set<ImGuiID> m_Seen, m_SeenNext;      // surfaces drawn last frame / this frame
     // Per-frame scratch, kept so a frame allocates nothing once the editor has settled.
-    struct Group { ImGuiWindow* Window; SurfacePose Pose; float Rim; };
+    struct Group { ImGuiWindow* Window; SurfacePose Pose; float Rim; bool Startup; };
     std::vector<std::pair<const ImDrawList*, ImGuiWindow*>> m_Owner; // sorted by list
     std::vector<Group> m_Groups;
     std::vector<ListInfo> m_Info;
@@ -165,6 +201,7 @@ private:
     std::vector<ImDrawList*> m_Pending;
     std::vector<ImRect> m_Dirty;
     int m_StatSurfaces = 0, m_StatCaptures = 0;
+    float m_MaterialBlend = 1.0f;
 };
 
 } // namespace Glass

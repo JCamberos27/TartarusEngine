@@ -9,6 +9,9 @@
 #include "EditorTestProbe.h" // --editor-tests widget names
 #include "EditorLayerInternal.h"
 #include "EditorTheme.h"
+#include "Glass/GlassMotion.h" // Motion v2: number-field scrub / coast / rolling digits, card flip and unfold
+#include "Glass/GlassTokens.h"
+#include "Glass/GlassLayout.h" // MarkLayoutInMotion while a card unfolds
 #include "Enhancers/EnhancerCore.h"  // FAIconGlyph (header icons)
 #include "Enhancers/StyleWidgets.h" // Header Style pickers
 #include "Enhancers/UiStyles.h"     // component header colours
@@ -503,6 +506,183 @@ const char* FitAxisFormat(float v, float room) {
     return zero ? "0" : "%.0f";
 }
 
+// --- Motion v2: number fields ----------------------------------------------------------------------
+// Every drag field in the Inspector goes through NumberDrag. While it's scrubbed, a white glow follows
+// the pointer across the field, stronger the faster the value moves (Gradients). A fast release lets
+// the value coast a little further and settle (Inertia), and the drag plus its coast commit as one
+// edit. A value changed while nobody is editing it (undo / redo, Reset, a script) rolls to its new
+// number with a brief flash (RollingNumbers); typing, dragging and coasting never roll. The state is
+// a few floats in the field's window storage (ImGui's memory) plus Glass entries that only live
+// while something moves.
+constexpr ImGuiID kNumSeenSalt  = 0x4E554D53u; // float: the value after last frame's widget
+constexpr ImGuiID kNumFrameSalt = 0x4E554D46u; // int: the frame it was last drawn
+constexpr ImGuiID kNumRollSalt  = 0x4E554D52u; // the rolling digits' id
+constexpr ImGuiID kNumUntilSalt = 0x4E554D55u; // float: when the roll's flash ends (ImGui time)
+constexpr ImGuiID kNumGlowSalt  = 0x4E554D47u; // float: the scrub glow, 0..1
+constexpr ImGuiID kNumCoastSalt = 0x4E554D43u; // the inertia id; as a storage key: 1 while coasting
+constexpr ImGuiID kNumExactSalt = 0x4E554D58u; // float: the coasting value before rounding to the format
+int s_NumberCoastFrame = -1; // the last frame any field was coasting (EditorLayer::m_InspectorValueCoasting)
+
+bool InspectorNumberCoasting() { return s_NumberCoastFrame == ImGui::GetFrameCount(); }
+
+// The digits after the point of a fixed "%.Nf" format, and what follows it ("%.2f deg" -> 2, " deg").
+// -1 for a format the rolling digits can't reproduce (%g, a prefix, a sign flag). FitAxisFormat's
+// literal zeros ("0.000") count as fixed.
+int FixedDecimals(const char* fmt, const char** suffixOut) {
+    *suffixOut = nullptr;
+    if (!fmt) return -1;
+    const char* pct = std::strchr(fmt, '%');
+    if (!pct) {
+        const char* dot = std::strchr(fmt, '.');
+        for (const char* p = fmt; *p; ++p) if (*p != '0' && *p != '.') return -1;
+        return dot ? (int)std::strlen(dot + 1) : 0;
+    }
+    if (pct != fmt) return -1; // text before the number
+    const char* p = pct + 1;
+    int decimals = 6;
+    if (*p == 'd') { *suffixOut = p + 1; return 0; }
+    if (*p == '.') {
+        ++p;
+        decimals = 0;
+        while (*p >= '0' && *p <= '9') decimals = decimals * 10 + (*p++ - '0');
+    }
+    if (*p != 'f') return -1;
+    *suffixOut = p + 1;
+    return std::min(decimals, 6);
+}
+
+struct NumberDragResult {
+    bool changed = false;   // the value moved this frame (a drag, a typed value, the coast)
+    bool activated = false; // an edit began
+    bool committed = false; // an edit finished: the release, or the end of its coast
+};
+
+// One DragFloat / DragInt with the motion above. `inertia` allows the coast (never for integer
+// fields, and skipped for a range so tight that a coast would surprise); `mixed` (the em dash of a
+// multi-selection) neither rolls nor glows. Report activated / committed instead of reading
+// IsItemActivated / IsItemDeactivatedAfterEdit after it: a coasting field commits frames later.
+NumberDragResult NumberDrag(const char* label, bool isInt, void* v, float speed, float minV, float maxV,
+                            const char* fmt, bool inertia, bool mixed) {
+    NumberDragResult r;
+    Glass::ImAnimContext& m = Glass::Motion();
+    ImGuiStorage* st = ImGui::GetStateStorage();
+    const ImGuiID id = ImGui::GetID(label);
+    const ImGuiID coastId = id ^ kNumCoastSalt, rollId = id ^ kNumRollSalt;
+    const int frame = ImGui::GetFrameCount();
+    const float now = (float)ImGui::GetTime();
+    auto read = [&]() -> double { return isInt ? (double)*static_cast<int*>(v) : (double)*static_cast<float*>(v); };
+    const double before = read();
+
+    const bool coastingIn = st->GetInt(coastId, 0) != 0;
+    const bool editing = ImGui::GetActiveID() == id || coastingIn;
+    const bool drawnLastFrame = st->GetInt(id ^ kNumFrameSalt, -10) >= frame - 1;
+    st->SetInt(id ^ kNumFrameSalt, frame);
+    const float seen = st->GetFloat(id ^ kNumSeenSalt, (float)before);
+
+    // Rolling digits: a change nobody here made, on a field that was on screen a frame ago.
+    const char* suffix = nullptr;
+    const int decimals = isInt ? (FixedDecimals(fmt, &suffix) == 0 ? 0 : -1) : FixedDecimals(fmt, &suffix);
+    const bool external = !editing && drawnLastFrame && (float)before != seen;
+    const bool canRoll = !mixed && decimals >= 0 && m.CategoryOn(Glass::MotionCategory::RollingNumbers);
+    if (external && canRoll) st->SetFloat(id ^ kNumUntilSalt, now + Glass::ValueFlash.durationMs * 0.001f);
+    const bool roll = canRoll && !editing && (external || m.Live(rollId) || now < st->GetFloat(id ^ kNumUntilSalt, 0.0f));
+    // A change the digits didn't see (off screen, or not rollable) still becomes their last value,
+    // so the next real roll departs from the right number.
+    if (!roll && !editing && (float)before != seen) { m.RollingValue(rollId, before); m.InertiaStop(rollId); }
+
+    const ImU32 textCol = ImGui::GetColorU32(ImGuiCol_Text);
+    if (roll) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0, 0, 0, 0)); // the digits draw over it
+    bool widgetChanged = isInt ? ImGui::DragInt(label, static_cast<int*>(v), speed, (int)minV, (int)maxV, fmt)
+                               : ImGui::DragFloat(label, static_cast<float*>(v), speed, minV, maxV, fmt);
+    if (roll) ImGui::PopStyleColor();
+    const bool active = ImGui::IsItemActive();
+    const bool typing = ImGui::TempInputIsActive(id);
+    const bool activated = ImGui::IsItemActivated();
+    const bool deactivated = ImGui::IsItemDeactivated();
+    const bool deactivatedAfterEdit = ImGui::IsItemDeactivatedAfterEdit();
+    const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    r.changed = widgetChanged;
+    r.activated = activated;
+
+    // Inertia: tracked in drag pixels (the value moved / the per-pixel speed, so Shift / Alt's slow
+    // and fast drags coast at their own rate).
+    const bool tightRange = minV < maxV && (maxV - minV) / std::max(speed, 1e-6f) < 400.0f;
+    const bool canCoast = inertia && !isInt && !tightRange && speed > 0.0f;
+    bool coasting = coastingIn;
+    if (activated && coasting) { m.InertiaStop(coastId); st->SetInt(coastId, 0); coasting = false; } // caught again
+    if (canCoast && active && !typing) m.InertiaTrack(coastId, ImVec2((float)((read() - before) / speed), 0.0f));
+    if (deactivated) {
+        if (canCoast && !typing) m.InertiaRelease(coastId);
+        else m.InertiaStop(coastId);
+        if (m.InertiaCoasting(coastId)) {
+            coasting = true;
+            st->SetInt(coastId, 1);
+            st->SetFloat(id ^ kNumExactSalt, (float)read());
+        }
+    }
+    if (deactivatedAfterEdit && !coasting) r.committed = true;
+    if (coasting && !active && !deactivated) {
+        const float d = m.InertiaDelta(coastId).x;
+        float exact = st->GetFloat(id ^ kNumExactSalt, (float)read()) + d * speed;
+        bool stop = !m.InertiaCoasting(coastId) || !std::isfinite(exact);
+        if (std::isfinite(exact)) {
+            if (minV < maxV && (exact <= minV || exact >= maxV)) { exact = std::clamp(exact, minV, maxV); stop = true; }
+            st->SetFloat(id ^ kNumExactSalt, exact);
+            float shown = exact;
+            if (decimals >= 0) { const float p = std::pow(10.0f, (float)decimals); shown = std::round(exact * p) / p; }
+            if (shown == 0.0f) shown = 0.0f; // never "-0.000"
+            if (shown != *static_cast<float*>(v)) { *static_cast<float*>(v) = shown; r.changed = true; }
+        }
+        if (stop) {
+            m.InertiaStop(coastId);
+            st->SetInt(coastId, 0);
+            coasting = false;
+            r.committed = true; // drag + coast: one edit
+        }
+    }
+    if (coasting) s_NumberCoastFrame = frame;
+    const double after = read();
+    // The edit is over: its final value is the digits' last value too (nothing rolls for it).
+    if (editing && !active && !coasting && after != (double)seen) { m.RollingValue(rollId, after); m.InertiaStop(rollId); }
+    st->SetFloat(id ^ kNumSeenSalt, (float)after);
+
+    if (roll && !active) {
+        const float lineH = ImGui::GetTextLineHeight();
+        const float w = Glass::ImAnimContext::OdometerWidth(after, decimals, suffix);
+        const ImVec2 pos(std::floor((mn.x + mx.x - w) * 0.5f), std::floor((mn.y + mx.y - lineH) * 0.5f));
+        dl->PushClipRect(mn, mx, true);
+        m.Odometer(rollId, dl, pos, after, decimals, textCol, suffix);
+        dl->PopClipRect();
+    }
+
+    // Scrub glow: eases toward the drag's pace while held, fades once let go.
+    if (m.CategoryOn(Glass::MotionCategory::Gradients) && !mixed) {
+        const ImGuiID glowKey = id ^ kNumGlowSalt;
+        float glow = st->GetFloat(glowKey, 0.0f);
+        const float dt = std::max(m.Dt(), 1e-4f);
+        if ((active && !typing) || coasting) {
+            const float pxPerSec = (float)std::fabs(after - before) / std::max(speed, 1e-6f) / dt;
+            const float target = std::clamp(pxPerSec / EditorTheme::Px(700.0f), coasting ? 0.0f : 0.25f, 1.0f);
+            glow += (target - glow) * (1.0f - std::exp(-dt * (target > glow ? 18.0f : 6.0f)));
+        } else if (glow > 0.0f) {
+            glow *= std::exp(-dt * 7.0f);
+            if (glow < 0.01f) glow = 0.0f;
+        }
+        if (glow > 0.0f || st->GetFloat(glowKey, 0.0f) != 0.0f) st->SetFloat(glowKey, glow);
+        if (glow > 0.0f) {
+            const ImVec2 mouse = ImGui::GetIO().MousePos;
+            const ImVec2 c(std::clamp(mouse.x, mn.x, mx.x), (mn.y + mx.y) * 0.5f);
+            const float rounding = ImGui::GetStyle().FrameRounding;
+            m.DrawCursorGlow(dl, mn, mx, c, glow * 2.2f, rounding);
+            dl->AddRect(mn, mx, IM_COL32(255, 255, 255, (int)(glow * 0.45f * 255.0f)), rounding, 0, 1.0f);
+        }
+    } else if (st->GetFloat(id ^ kNumGlowSalt, 0.0f) != 0.0f) {
+        st->SetFloat(id ^ kNumGlowSalt, 0.0f);
+    }
+    return r;
+}
+
 // Unity/Hazel-style vector row: a colored X/Y/Z button (click to zero that axis) glued to
 // each drag field, instead of ImGui's plain unlabeled DragFloat3. `activatedOut` is set when
 // any axis field starts being dragged this frame, for undo-snapshot timing at the call site.
@@ -561,12 +741,13 @@ bool DrawVec3Row(const char* label, glm::vec3& v, float speed, float minV, float
         const char* fmt = FitAxisFormat(before, dragW - EditorTheme::Px(4.0f) * 2.0f);
         // Tight horizontal padding: three numbers share the row beside their axis tabs.
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(EditorTheme::Px(4.0f), ImGui::GetStyle().FramePadding.y));
-        bool itemChanged = ImGui::DragFloat("##v", axes[i].value, speed, minV, maxV, fmt);
+        const NumberDragResult nd = NumberDrag("##v", false, axes[i].value, speed, minV, maxV, fmt, /*inertia=*/true, false);
+        bool itemChanged = nd.changed;
         ImGui::PopStyleVar();
         if (ImGui::IsItemHovered() && !ImGui::IsItemActive())
             EditorUI::SetTooltip("%.9g\nClick and drag to change; double-click to type a value", *axes[i].value);
-        if (ImGui::IsItemActivated()) activatedOut = true;
-        if (ImGui::IsItemDeactivatedAfterEdit()) committedOut = true;
+        if (nd.activated) activatedOut = true;
+        if (nd.committed) committedOut = true;
         if (itemChanged) {
             float& val = *axes[i].value;
             if (!std::isfinite(val)) {
@@ -654,10 +835,12 @@ MultiEditResult MultiEditVec3Row(const char* label, glm::vec3& value, const bool
                         : FitAxisFormat(*axes[i].v, dragW - EditorTheme::Px(4.0f) * 2.0f);
         float before = *axes[i].v;
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(EditorTheme::Px(4.0f), ImGui::GetStyle().FramePadding.y));
-        bool fieldChanged = ImGui::DragFloat("##v", axes[i].v, speed, minV, maxV, fmt);
+        const NumberDragResult nd = NumberDrag("##v", false, axes[i].v, speed, minV, maxV, fmt, /*inertia=*/true,
+                                               mixedAxis[i] && !editing);
+        bool fieldChanged = nd.changed;
         ImGui::PopStyleVar();
-        if (ImGui::IsItemActivated()) r.activated = true;
-        if (ImGui::IsItemDeactivatedAfterEdit()) r.committed = true;
+        if (nd.activated) r.activated = true;
+        if (nd.committed) r.committed = true;
         if (fieldChanged) {
             if (!std::isfinite(*axes[i].v)) { *axes[i].v = before; }
             else { axisTouched[i] = true; r.changed = true; }
@@ -704,9 +887,10 @@ MultiEditResult MultiEditFloatRow(const char* label, float& value, bool mixed, f
         if (slActivated) r.activated = true;
         if (slDeactivated) r.committed = true;
     } else {
-        fieldChanged = ImGui::DragFloat("##mf", &value, speed, minV, maxV, fmt);
-        if (ImGui::IsItemActivated()) r.activated = true;
-        if (ImGui::IsItemDeactivatedAfterEdit()) r.committed = true;
+        const NumberDragResult nd = NumberDrag("##mf", false, &value, speed, minV, maxV, fmt, /*inertia=*/true, mixed && !editing);
+        fieldChanged = nd.changed;
+        if (nd.activated) r.activated = true;
+        if (nd.committed) r.committed = true;
     }
     if (fieldChanged) {
         if (!std::isfinite(value)) value = before;
@@ -1940,10 +2124,12 @@ void EditorLayer::DrawReflectedField(World& world, AssetLibrary& assets, const R
             bool editing = ImGui::GetActiveID() == fieldId;
             const char* fmt = (mixed && !editing) ? "\xE2\x80\x94" : "%d";
             int edit = shared;
-            bool changed = ImGui::DragInt("##v", &edit, f.DragSpeed, (int)f.Min, (int)f.Max, fmt);
-            if (ImGui::IsItemActivated()) StageUndo(world);
-            if (changed) forEach([&](entt::entity e) { *reinterpret_cast<int*>(fieldPtr(e)) = edit; });
-            if (ImGui::IsItemDeactivatedAfterEdit()) CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
+            // Glows and rolls like every number field; an integer never coasts.
+            const NumberDragResult nd = NumberDrag("##v", true, &edit, f.DragSpeed, f.Min, f.Max, fmt, /*inertia=*/false,
+                                                   mixed && !editing);
+            if (nd.activated) StageUndo(world);
+            if (nd.changed) forEach([&](entt::entity e) { *reinterpret_cast<int*>(fieldPtr(e)) = edit; });
+            if (nd.committed) CommitStagedUndo(world, std::string("Edit ") + rc.Meta.Name);
             break;
         }
         case ReflectFieldType::Float: {
@@ -2198,6 +2384,9 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, EditorUIPrimitives::FlatHover());
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,  EditorUIPrimitives::FlatPressed());
     auto InspectorEnd = []() { ImGui::PopStyleColor(3); };
+    // Motion v2: whether a released number field is still coasting, decided after every field drew
+    // (past every early return) and read later this frame by FinishGlobalUndo.
+    struct CoastScope { bool& flag; ~CoastScope() { flag = InspectorNumberCoasting(); } } _coast{m_InspectorValueCoasting};
     m_InspectorWorld = &world;
     HandleInspectorHoverKeys(world); // vInspector: acts on last frame's hovered section
 
@@ -3498,6 +3687,11 @@ constexpr ImGuiID kSectionHoverSalt  = 0x40E5A17Bu; // float: header hover fade
 constexpr ImGuiID kSectionChevSalt   = 0xC4E7A0A1u; // float: chevron turn
 constexpr ImGuiID kSectionMenuSalt   = 0x3E2B0C11u; // float: "..." fade (minimal mode)
 constexpr ImGuiID kSectionCloseSalt  = 0x5C1053A7u; // float: x fade
+constexpr ImGuiID kSectionFlipSalt   = 0xF11B0001u; // int: the card shows its back (raw fields)
+constexpr ImGuiID kSectionFlipWasSalt = 0xF11B0002u; // int: that, last frame
+constexpr ImGuiID kSectionFlipAnimSalt = 0xF11B0003u; // the flip's 0..1 turn
+constexpr ImGuiID kSectionFlipBtnSalt = 0xF11B0004u; // float: the flip button's hover fade
+constexpr ImGuiID kSectionUnfoldSalt = 0x0F01D001u; // the Add Component unfold
 constexpr double  kSectionOpenSecs   = 0.16;
 constexpr double  kSectionRemoveSecs = 0.26;
 
@@ -3721,6 +3915,67 @@ bool EditorLayer::BeginComponentSection(const char* icon,
     const float hw = ImGui::GetContentRegionAvail().x;
     const float hhFull = ImGui::GetFrameHeight() + EditorTheme::Px(4.0f);
     const float hh = removing ? std::max(1.0f, std::floor(hhFull * fold)) : hhFull;
+
+    // --- Motion v2: the Add Component unfold and the card flip ------------------------------------
+    // Both draw the whole card (header and body) under one layer transform; input stays on the
+    // resting layout. The unfold also reveals the card's height on the Unfold spring, so the cards
+    // below slide down instead of jumping. Reduce Motion resolves both at once (a static swap).
+    Glass::ImAnimContext& gm = Glass::Motion();
+    SectionLayer& layer = m_SectionLayer;
+    layer = SectionLayer{};
+    if (animate && !removing && objectCtx && !m_UnfoldComponent.empty() && entity == m_UnfoldEntity &&
+        m_UnfoldComponent == label) {
+        const ImGuiID uid = headerId ^ kSectionUnfoldSalt;
+        const bool first = !m_UnfoldStarted;
+        if (first) { m_UnfoldStarted = true; open = true; storage->SetInt(headerId, 1); } // arrives open
+        const float t = gm.AnimateToggle(uid, true, !first, Glass::Unfold, Glass::Unfold);
+        if (!gm.Live(uid)) m_UnfoldComponent.clear();
+        else { layer.UnfoldId = uid; layer.UnfoldT = t; }
+    }
+    const bool flippable = objectCtx && (rc != nullptr || isTransform) && !removing;
+    const ImGuiID flipKey = headerId ^ kSectionFlipSalt;
+    const bool flipped = flippable && storage->GetInt(flipKey, 0) != 0;
+    const bool flipWas = storage->GetInt(headerId ^ kSectionFlipWasSalt, flipped ? 1 : 0) != 0;
+    storage->SetInt(headerId ^ kSectionFlipWasSalt, flipped ? 1 : 0);
+    const ImGuiID flipAnim = headerId ^ kSectionFlipAnimSalt;
+    const float flipT = flippable ? gm.AnimateToggle(flipAnim, flipped, flipWas, Glass::CardFlip, Glass::CardFlip) : 0.0f;
+    const bool flipping = flippable && gm.Live(flipAnim);
+    const bool showBack = flippable && (flipping ? flipT >= 0.5f : flipped);
+    auto toggleFlip = [&]() {
+        storage->SetInt(flipKey, flipped ? 0 : 1);
+        if (!open) setOpen(true); // the back face is a body: show it
+        EditorSound::Play(EditorSound::Event::CardFlip, EditorSound::LastItemScreenX());
+    };
+    if (layer.UnfoldId != 0 || flipping) {
+        layer.Active = true;
+        layer.Dl = ImGui::GetWindowDrawList();
+        layer.Vtx = Glass::ImAnimContext::BeginLayer(layer.Dl);
+        layer.Start = hp;
+        // Turned about the card's centre: scale-x through cos(angle), with a slight squash at the
+        // edge-on moment standing in for perspective.
+        const float bodyH = open ? fullH : 0.0f;
+        layer.Pivot = ImVec2(hp.x + hw * 0.5f, hp.y + (hhFull + bodyH) * 0.5f);
+        if (flipping) {
+            const float angle = flipT * 3.14159265f;
+            layer.Scale = ImVec2(std::max(std::fabs(std::cos(angle)), 0.02f), 1.0f - 0.06f * std::sin(angle));
+        }
+        if (layer.UnfoldId != 0) {
+            // Rises out of the Add Component button below it, growing in from 96% wide, fading up.
+            const float u = std::clamp(layer.UnfoldT, 0.0f, 1.0f);
+            const float rise = std::clamp(m_AddComponentButtonY - hp.y, 0.0f, EditorTheme::Px(36.0f));
+            layer.Pivot.y = hp.y;
+            layer.Translate = ImVec2(0.0f, rise * (1.0f - u));
+            layer.Scale.x *= 0.96f + 0.04f * u;
+            layer.Alpha = std::clamp(u * 1.4f, 0.0f, 1.0f);
+            ImGuiWindow* win = ImGui::GetCurrentWindow();
+            layer.SavedMaxPos = win->DC.CursorMaxPos;
+            const float natural = gm.Aux(layer.UnfoldId, -1.0f);
+            const float clipH = natural >= 0.0f ? natural * std::max(layer.UnfoldT, 0.0f) : 0.0f;
+            ImGui::PushClipRect(ImVec2(win->ClipRect.Min.x, hp.y), ImVec2(win->ClipRect.Max.x, hp.y + clipH), true);
+            Glass::MarkLayoutInMotion();
+        }
+    }
+
     ImGui::SetNextItemAllowOverlap();
     const bool headerClicked = ImGui::InvisibleButton(header.c_str(), ImVec2(hw, hh));
     const bool headerActive = ImGui::IsItemActive();
@@ -3829,7 +4084,7 @@ bool EditorLayer::BeginComponentSection(const char* icon,
         const char* visibleLabel = displayLabel ? displayLabel : label;
         const ImVec2 ls = ImGui::CalcTextSize(visibleLabel);
         const float lx = ix + std::max(is.x, ImGui::GetFontSize()) + T::Px(8.0f);
-        const float btnReserve = ImGui::GetFrameHeight() * ((removable ? 1.0f : 0.0f) + 1.0f) + T::Px(8.0f);
+        const float btnReserve = ImGui::GetFrameHeight() * ((removable ? 1.0f : 0.0f) + 1.0f + (flippable ? 1.0f : 0.0f)) + T::Px(8.0f);
         float lmax = hs.x + hw - btnReserve;
         // Status, right to left: KEEP (kept after Play), OFF (its Enabled field is off), and the
         // picked check.
@@ -3838,6 +4093,7 @@ bool EditorLayer::BeginComponentSection(const char* icon,
             lmax -= ps.x + T::Px(6.0f);
             EditorUIPrimitives::DrawStatusPill(dl, ImVec2(std::floor(lmax + T::Px(3.0f)), std::floor(cy - ps.y * 0.5f)), text, col, fade);
         };
+        if (showBack) pill("RAW", T::Accent); // the flipped card's back face
         if (kept) pill("KEEP", T::Accent);
         if (disabledComp) pill("OFF", T::Secondary);
         if (picked) {
@@ -3890,6 +4146,27 @@ bool EditorLayer::BeginComponentSection(const char* icon,
     // Minimal mode (vInspector): the "..." fades in while the bar is hovered or its menu is open.
     const float menuT = !es.InspectorMinimal ? 1.0f
         : EditorTheme::AnimT(headerId ^ kSectionMenuSalt, barHovered || ImGui::IsPopupOpen(header.c_str()));
+    // Motion v2: the flip control, left of the "..." - fades in with the bar's hover (always shown
+    // while the card is flipped, so the way back is never hidden). The menu offers it too.
+    const float flipBtnT = flippable ? EditorTheme::AnimT(headerId ^ kSectionFlipBtnSalt, barHovered || flipped) : 0.0f;
+    if (flipBtnT > 0.0f) {
+        const float bw = ImGui::GetFrameHeight();
+        const float reserve = (removable ? bw : 0.0f) + (hasMenu ? bw : 0.0f);
+        ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - reserve - bw - EditorTheme::Px(2.0f));
+        ImGui::SetCursorScreenPos(ImVec2(ImGui::GetCursorScreenPos().x, headerBtnY));
+        ImGui::PushID(label);
+        if (flipBtnT < 1.0f) ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * flipBtnT);
+        bool flipClicked;
+        {
+            EditorSoundEvents::ScopedClickSilence quiet; // the flip sounds its own CardFlip
+            flipClicked = ActionButton(flipped ? ICON_FA_ROTATE_LEFT : ICON_FA_CODE,
+                                       flipped ? "Flip back to the editor" : "Flip to the raw serialized fields",
+                                       flipped, ImVec2(bw, 0.0f));
+        }
+        if (flipBtnT < 1.0f) ImGui::PopStyleVar();
+        ImGui::PopID();
+        if (flipClicked) toggleFlip();
+    }
     if (hasMenu && !removing && menuT > 0.0f) {
         const float bw = ImGui::GetFrameHeight();
         const float removeReserve = removable ? bw : 0.0f;
@@ -3957,6 +4234,8 @@ bool EditorLayer::BeginComponentSection(const char* icon,
             if (ImGui::MenuItem(ICON_FA_PASTE "  Paste Component Values", nullptr, false, canPaste))
                 *pasteOut = true;
         }
+        if (flippable && ImGui::MenuItem(flipped ? ICON_FA_ROTATE_LEFT "  Flip Back" : ICON_FA_CODE "  Flip to Raw Fields"))
+            toggleFlip();
         if (pinnable && ImGui::MenuItem(ICON_FA_UP_RIGHT_FROM_SQUARE "  Open in Window"))
             OpenPinnedComponent(*world, entity, label);
         if (keepable && ImGui::MenuItem(ICON_FA_THUMBTACK "  Keep Changes After Play", nullptr, kept))
@@ -4050,13 +4329,30 @@ bool EditorLayer::BeginComponentSection(const char* icon,
         m_CurSectionId = headerId;
         m_CurSectionMeasure = open && !useFixed;
         m_ComponentSectionIsCard = true;
+        if (layer.Active) layer.BodyDl = ImGui::GetWindowDrawList(); // turned with the header
+        // The flipped card's back face replaces the caller's body: drawn and closed here.
+        if (showBack && world) {
+            DrawComponentBackFace(*world, entity, label);
+            EndComponentSection();
+            return false;
+        }
     } else {
         ImGui::Dummy(ImVec2(0.0f, EditorTheme::Px(1.0f)));
+        EndSectionLayer();
     }
     return showBody; // callers must call EndComponentSection() whenever this returns true
 }
 
 void EditorLayer::EndComponentSection() {
+    // The card body is its own child window, so its draw list turns separately (from its first
+    // vertex: the card surface and hairline are drawn by BeginChild).
+    if (m_SectionLayer.Active && m_SectionLayer.BodyDl) {
+        const SectionLayer& L = m_SectionLayer;
+        Glass::LayerTransform xf;
+        xf.pivot = L.Pivot; xf.scale = L.Scale; xf.translate = L.Translate; xf.alpha = L.Alpha;
+        Glass::ImAnimContext::EndLayer(L.BodyDl, 0, xf);
+        m_SectionLayer.BodyDl = nullptr;
+    }
     ImGui::EndChild();
     const ImVec2 bodyMax = ImGui::GetItemRectMax();
     if (m_CurSectionMeasure) {
@@ -4072,6 +4368,138 @@ void EditorLayer::EndComponentSection() {
     if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::IsMouseHoveringRect(m_CurSectionMin, bodyMax))
         m_HoverSectionNext = m_CurSection;
     ImGui::Dummy(ImVec2(0.0f, EditorTheme::Px(4.0f)));
+    EndSectionLayer();
+}
+
+// Closes the section's Motion v2 layer: transforms the header's vertices and, while the card is
+// unfolding, measures its natural height and lays it out at the animated height instead (the same
+// correction Glass::EndReveal makes), so the sections below follow it down.
+void EditorLayer::EndSectionLayer() {
+    SectionLayer& L = m_SectionLayer;
+    if (!L.Active) return;
+    L.Active = false;
+    Glass::LayerTransform xf;
+    xf.pivot = L.Pivot; xf.scale = L.Scale; xf.translate = L.Translate; xf.alpha = L.Alpha;
+    Glass::ImAnimContext::EndLayer(L.Dl, L.Vtx, xf);
+    if (L.UnfoldId == 0) return;
+    ImGui::PopClipRect();
+    ImGuiWindow* window = ImGui::GetCurrentWindow();
+    const float natural = window->DC.CursorPos.y - L.Start.y;
+    Glass::Motion().SetAux(L.UnfoldId, natural);
+    const float animH = natural * std::max(L.UnfoldT, 0.0f);
+    window->DC.CursorMaxPos = L.SavedMaxPos;
+    const float sy = ImGui::GetStyle().ItemSpacing.y;
+    window->DC.CursorPos = ImVec2(L.Start.x, L.Start.y + animH - sy);
+    window->DC.IsSameLine = false;
+    ImGui::ItemSize(ImVec2(0.0f, 0.0f));
+    L.UnfoldId = 0;
+}
+
+namespace {
+// A reflected field's raw value as text, for the card's back face.
+std::string RawFieldValue(const ReflectField& f, void* p) {
+    char buf[160];
+    switch (f.Type) {
+        case ReflectFieldType::Bool:  return *static_cast<bool*>(p) ? "true" : "false";
+        case ReflectFieldType::Int:   std::snprintf(buf, sizeof(buf), "%d", *static_cast<int*>(p)); return buf;
+        case ReflectFieldType::Enum: {
+            const int v = *static_cast<int*>(p);
+            std::snprintf(buf, sizeof(buf), "%d  %s", v, ReflectEnumLabel(f, v));
+            return buf;
+        }
+        case ReflectFieldType::Float: std::snprintf(buf, sizeof(buf), "%.9g", *static_cast<float*>(p)); return buf;
+        case ReflectFieldType::Vec3:
+        case ReflectFieldType::Color: {
+            const glm::vec3& v = *static_cast<glm::vec3*>(p);
+            std::snprintf(buf, sizeof(buf), "%.9g, %.9g, %.9g", v.x, v.y, v.z);
+            return buf;
+        }
+        case ReflectFieldType::String:
+        case ReflectFieldType::AssetRef: return "\"" + *static_cast<std::string*>(p) + "\"";
+    }
+    return {};
+}
+
+const char* RawFieldType(ReflectFieldType t) {
+    switch (t) {
+        case ReflectFieldType::Bool: return "bool";
+        case ReflectFieldType::Int: return "int";
+        case ReflectFieldType::Float: return "float";
+        case ReflectFieldType::Vec3: return "vec3";
+        case ReflectFieldType::String: return "string";
+        case ReflectFieldType::Color: return "color";
+        case ReflectFieldType::Enum: return "enum";
+        case ReflectFieldType::AssetRef: return "asset";
+    }
+    return "?";
+}
+} // namespace
+
+void EditorLayer::DrawComponentBackFace(World& world, entt::entity entity, const char* label) {
+    namespace T = EditorTheme;
+    if (!world.Registry.valid(entity)) return;
+    EditorUIPrimitives::SectionHeader("Raw fields");
+    T::PushMonoSmall();
+    auto row = [](const char* key, const char* type, const std::string& value, const char* flags) {
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::TextUnformatted(key);
+        if (flags && *flags) { ImGui::SameLine(); ImGui::TextColored(T::Dim, "%s", flags); }
+        ImGui::TableNextColumn();
+        ImGui::TextColored(T::Dim, "%s", type);
+        ImGui::TableNextColumn();
+        ImGui::PushTextWrapPos(0.0f);
+        ImGui::TextColored(T::Secondary, "%s", value.c_str());
+        ImGui::PopTextWrapPos();
+    };
+    const ImGuiTableFlags tf = ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerH;
+    const RegisteredComponent* rc = RegisteredByName(label);
+    if (rc && rc->Has(world.Registry, entity)) {
+        void* c = rc->Get(world.Registry, entity);
+        if (ImGui::BeginTable("##rawFields", 3, tf)) {
+            ImGui::TableSetupColumn("key", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("type", ImGuiTableColumnFlags_WidthFixed);
+            ImGui::TableSetupColumn("value", ImGuiTableColumnFlags_WidthStretch, 1.5f);
+            for (const ReflectField& f : rc->Meta.Fields) {
+                // Every field, the ones the Inspector hides included; their flags say why.
+                std::string flags;
+                if (f.EditorHidden) flags += " hidden";
+                if (f.ReadOnly) flags += " ro";
+                if (f.NonSerialized) flags += " transient";
+                row(ReflectFieldKey(f), RawFieldType(f.Type), f.Address ? RawFieldValue(f, f.Address(c)) : std::string("?"), flags.c_str());
+            }
+            ImGui::EndTable();
+        }
+        if (rc->Meta.GenericSerialize) {
+            std::string j = SceneSerializer::ComponentToPresetJson(world, entity, label);
+            const nlohmann::json parsed = nlohmann::json::parse(j, nullptr, false);
+            if (!parsed.is_discarded()) j = parsed.dump(2);
+            if (!j.empty()) {
+                ImGui::Spacing();
+                ImGui::TextColored(T::Dim, "serialized");
+                ImGui::PushTextWrapPos(0.0f);
+                ImGui::TextColored(T::Secondary, "%s", j.c_str());
+                ImGui::PopTextWrapPos();
+            }
+        }
+    } else if (const auto* tc = world.Registry.try_get<TransformComponent>(entity); tc && std::strcmp(label, "Transform") == 0) {
+        if (ImGui::BeginTable("##rawFields", 3, tf)) {
+            ImGui::TableSetupColumn("key", ImGuiTableColumnFlags_WidthStretch, 1.0f);
+            ImGui::TableSetupColumn("type", ImGuiTableColumnFlags_WidthFixed);
+            ImGui::TableSetupColumn("value", ImGuiTableColumnFlags_WidthStretch, 1.5f);
+            char buf[160];
+            std::snprintf(buf, sizeof(buf), "%.9g, %.9g, %.9g", tc->Position.x, tc->Position.y, tc->Position.z);
+            row("position", "vec3", buf, nullptr);
+            std::snprintf(buf, sizeof(buf), "w %.9g, x %.9g, y %.9g, z %.9g", tc->Rotation.w, tc->Rotation.x, tc->Rotation.y, tc->Rotation.z);
+            row("rotation", "quat", buf, nullptr);
+            std::snprintf(buf, sizeof(buf), "%.9g, %.9g, %.9g", tc->Scale.x, tc->Scale.y, tc->Scale.z);
+            row("scale", "vec3", buf, nullptr);
+            std::snprintf(buf, sizeof(buf), "%.9g, %.9g, %.9g", tc->EulerHint.x, tc->EulerHint.y, tc->EulerHint.z);
+            row("eulerHint", "vec3", buf, " transient");
+            ImGui::EndTable();
+        }
+    }
+    T::PopFont();
 }
 
 namespace {
@@ -4990,6 +5418,7 @@ void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt:
         m_AddComponentFilterFocus = true;
         ImGui::OpenPopup("##AddComponentPopup");
     }
+    m_AddComponentButtonY = ImGui::GetItemRectMin().y; // where a new card unfolds from (Motion v2)
     if (!ImGui::BeginPopup("##AddComponentPopup")) return;
 
     // Type-to-filter (#236). Focused on open; Esc clears it before it closes the popup.
@@ -5009,6 +5438,10 @@ void EditorLayer::DrawAddComponentMenu(World& world, AssetLibrary& assets, entt:
         if (ImGui::MenuItem(text.c_str(), nullptr, false, !alreadyHas)) {
             PushUndo(world, std::string("Add ") + label);
             add();
+            // Motion v2: its card unfolds out of the button next frame (BeginComponentSection).
+            m_UnfoldComponent = label;
+            m_UnfoldEntity = entity;
+            m_UnfoldStarted = false;
         }
     };
     // Category headings are noise once a filter narrows the list to a handful of rows.

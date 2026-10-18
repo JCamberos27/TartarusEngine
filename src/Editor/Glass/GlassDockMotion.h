@@ -6,7 +6,8 @@
 //     TabBarOverlineSize 0 around DockSpace()), and EndDockTabMotion redraws it at the glided
 //     position, with the exact colour and shape ImGui would have used. Tab bars inside panels
 //     (Script IDE, Inspector field tabs) keep ImGui's line.
-//   * A docked panel that takes focus catches the light: its edge glints and cools (RimGlint).
+//   * A docked panel that takes focus catches the light: its edge glints and cools (RimGlint), and
+//     while it has focus a faint white segment travels slowly round its edge (the selection rim).
 //
 // Both are Glass::Motion() entries that exist only while moving.
 
@@ -21,9 +22,14 @@ void  EndDockTabMotion(ImGuiID dockspaceId, float overlineSize);
 // Once a frame, after every panel has been submitted.
 void DockFocusRim(ImGuiID dockspaceId);
 
-// The play-mode frame (category 7): a 1 px white inner border on the Scene and Game views that
-// fades in on Play, breathes slightly while playing and dims while paused. Once a frame, after
+// The play-mode frame (category 7): fades in on Play and out on Stop around the Scene and Game
+// views. With Gradients on, a white gradient segment travels round each view over a faint steady
+// frame (dimmer while paused); off, a 1 px white border that breathes slightly. Once a frame, after
 // every panel has been submitted.
 void DrawPlayFrame(bool playing, bool paused);
+
+// The startup sequence: each docked panel's rim glints as it lands, one after another with the
+// wave (GlassCompositor.h). Once a frame, after every panel, before the panels are posed.
+void DrawStartupRims();
 
 } // namespace Glass
