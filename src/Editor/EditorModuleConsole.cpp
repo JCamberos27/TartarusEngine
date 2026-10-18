@@ -316,8 +316,9 @@ void Draw(const EditorModuleHostAPI& host) {
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, on ? EditorTheme::WithAlpha(col, 0.20f) : EditorUIPrimitives::FlatHover());
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, EditorTheme::WithAlpha(col, 0.28f));
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
-        ImGui::PushID(tip);
-        if (ImGui::Button("##level", size)) {
+        char label[64];
+        snprintf(label, sizeof(label), "##%s", tip); // the label tests and tooling find the toggle by
+        if (ImGui::Button(label, size)) {
             on = !on;
             EditorUIPrimitives::ClickSound(on ? EditorSoundEvents::Event::ToggleOn : EditorSoundEvents::Event::ToggleOff);
         }
@@ -326,9 +327,8 @@ void Draw(const EditorModuleHostAPI& host) {
             const ImU32 tc = EditorTheme::U32(on ? col : EditorTheme::Dim);
             ImDrawList* bdl = ImGui::GetWindowDrawList();
             bdl->AddText(ImVec2(p.x + pad.x, p.y + pad.y), tc, icon);
-            EditorTheme::MotionOdometer(ImGui::GetID("count"), bdl, ImVec2(p.x + pad.x + iconSz.x + gap, p.y + pad.y), (double)count, 0, tc);
+            EditorTheme::MotionOdometer(ImGui::GetItemID() ^ 0xC0047u, bdl, ImVec2(p.x + pad.x + iconSz.x + gap, p.y + pad.y), (double)count, 0, tc);
         }
-        ImGui::PopID();
         ImGui::PopStyleVar();
         ImGui::PopStyleColor(3);
         if (ImGui::IsItemHovered()) Tooltip(host, tip);
