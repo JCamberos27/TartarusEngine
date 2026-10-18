@@ -396,10 +396,12 @@ void EditorLayer::GlassFrameBegin() {
     const EditorSettings& prefs = EditorSettings::Get();
     motion.SetReduceMotion(prefs.ReduceMotion);
     motion.SetSpeed(prefs.MotionSpeed);
-    motion.SetCategoryEnabled(Glass::MotionCategory::ThemeTweens, prefs.MotionThemeTweens);
+    // Headless runs (smoke) switch themes instantly: their checks measure the switch, not the tween
+    // (the tween's own round trip is a unit test).
+    motion.SetCategoryEnabled(Glass::MotionCategory::ThemeTweens, prefs.MotionThemeTweens && !m_Headless);
     motion.SetCategoryEnabled(Glass::MotionCategory::Inertia, prefs.MotionInertia);
     motion.SetCategoryEnabled(Glass::MotionCategory::Gradients, prefs.MotionGradients);
-    motion.SetCategoryEnabled(Glass::MotionCategory::RollingNumbers, prefs.MotionRollingNumbers);
+    motion.SetCategoryEnabled(Glass::MotionCategory::RollingNumbers, prefs.MotionRollingNumbers && !m_Headless); // headless FPS jitters
     motion.SetCategoryEnabled(Glass::MotionCategory::Viewport, prefs.MotionViewport);
     motion.SetCategoryEnabled(Glass::MotionCategory::Startup, prefs.MotionStartup && !m_Headless);
     motion.NewFrame();
