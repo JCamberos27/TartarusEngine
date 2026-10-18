@@ -27,6 +27,7 @@
 #include <cmath>
 #include <cctype>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -514,8 +515,33 @@ void DrawAssetGrid(const EditorModuleHostAPI& host, float contentHeight) {
     ImGui::BeginChild("##AssetGridFooter", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);
     char summary[256] = {};
     if (host.GetAssetSelectionSummary) host.GetAssetSelectionSummary(summary, (int)sizeof(summary));
-    ImGui::AlignTextToFramePadding();
-    ImGui::TextColored(EditorTheme::Dim, "%s", summary);
+    // Motion v2: a count rolls as it changes - "N items selected", or with nothing selected the
+    // folder's (or search's) item count. A single selected name is plain text.
+    {
+        long count = -1;
+        const char* rest = nullptr;
+        ImGuiID countId = 0;
+        if (summary[0] == '\0') {
+            count = cellCount;
+            rest = cellCount == 1 ? " item" : " items";
+            countId = ImGui::GetID("##footItems");
+        } else if (std::isdigit((unsigned char)summary[0])) {
+            char* end = nullptr;
+            count = std::strtol(summary, &end, 10);
+            rest = end;
+            countId = ImGui::GetID("##footSelected");
+        }
+        ImGui::AlignTextToFramePadding();
+        if (count >= 0) {
+            const ImVec2 p = ImGui::GetCursorScreenPos();
+            const float w = EditorTheme::MotionOdometer(countId, ImGui::GetWindowDrawList(),
+                                                        ImVec2(p.x, p.y + ImGui::GetStyle().FramePadding.y),
+                                                        (double)count, 0, EditorTheme::U32(EditorTheme::Dim), rest);
+            ImGui::Dummy(ImVec2(w, ImGui::GetFrameHeight()));
+        } else {
+            ImGui::TextColored(EditorTheme::Dim, "%s", summary);
+        }
+    }
 
     // Phase 5 item 3/4: an explicit Grid/List/Details toggle beside the slider — the slider alone
     // (drag-to-minimum) was the only way to reach list view, which isn't discoverable, and Details

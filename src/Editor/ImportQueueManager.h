@@ -5,6 +5,8 @@
 #include <functional>
 #include <map>
 
+#include <imgui.h> // ImVec2 (the drop point)
+
 // Queues dropped/imported files and drains a few of them per frame, so a large batch drop shows
 // real, animated progress instead of one big synchronous stall.
 //
@@ -37,6 +39,17 @@ public:
     // Progress of the batch in flight (for the status bar): files still queued / files in the batch.
     int PendingCount() const { return (int)m_Pending.size(); }
     int BatchTotal() const { return m_TotalInBatch; }
+    // Bumps each time a new batch starts (an Enqueue onto an empty queue), so a view can notice it.
+    int BatchSerial() const { return m_BatchSerial; }
+    // Where the pointer was when the current batch was queued (a file drop lands under the pointer),
+    // in screen px; HasDropPos is false without an ImGui context.
+    bool HasDropPos() const { return m_HasDropPos; }
+    ImVec2 DropPos() const { return m_DropPos; }
+    // The Asset Browser's grid calls this each frame it's drawn. While it's watching, a new batch
+    // waits two frames before the first import, so the grid sees the folder as it was and can
+    // ripple the new tiles in (Motion v2). Without a watcher (tests, a hidden browser) no wait.
+    void NoteGridWatching(int frame) { m_GridWatchFrame = frame; }
+
     // Drops every not-yet-processed file without importing it; files already drained this
     // Update() are unaffected (there's no partial rollback of an import that already ran).
     void CancelRemaining();
@@ -64,4 +77,9 @@ private:
     int m_TotalInBatch = 0;
     int m_ProcessedInBatch = 0;
     std::string m_LastProcessed;
+    int m_BatchSerial = 0;
+    int m_BatchStartFrame = -100;
+    int m_GridWatchFrame = -100;
+    bool m_HasDropPos = false;
+    ImVec2 m_DropPos = ImVec2(0.0f, 0.0f);
 };

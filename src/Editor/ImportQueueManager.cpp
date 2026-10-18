@@ -2,10 +2,12 @@
 #include "EditorUIPrimitives.h"
 #include "EditorSound.h"
 #include "Log.h"
+#include "Glass/GlassMotion.h" // the rolling counts
 #include <imgui.h>
 #include <filesystem>
 #include <algorithm>
 #include <map>
+#include <cmath>
 
 namespace {
 
@@ -42,12 +44,21 @@ void ImportQueueManager::Enqueue(const std::vector<std::string>& paths) {
         m_WarningsAtStart = Log::CountOf(LogLevel::Warning);
         m_ErrorsAtStart = Log::CountOf(LogLevel::Error);
         m_SummaryShownAt = -1.0;
+        ++m_BatchSerial;
+        m_HasDropPos = ImGui::GetCurrentContext() != nullptr;
+        m_DropPos = m_HasDropPos ? ImGui::GetIO().MousePos : ImVec2(0.0f, 0.0f);
+        m_BatchStartFrame = m_HasDropPos ? ImGui::GetFrameCount() : -100;
     }
     m_TotalInBatch += (int)paths.size();
     m_Pending.insert(m_Pending.end(), paths.begin(), paths.end());
 }
 
 void ImportQueueManager::Update(const ImportFn& importOne, int perFrame) {
+    // A watching Asset Browser gets two frames to see the folder before the batch lands (see NoteGridWatching).
+    if (!m_Pending.empty() && m_ProcessedInBatch == 0 && ImGui::GetCurrentContext()) {
+        const int frame = ImGui::GetFrameCount();
+        if (frame - m_GridWatchFrame <= 1 && frame < m_BatchStartFrame + 2) return;
+    }
     for (int i = 0; i < perFrame && !m_Pending.empty(); ++i) {
         std::string path = m_Pending.front();
         m_Pending.pop_front();
@@ -131,10 +142,34 @@ void ImportQueueManager::DrawProgressUI(const std::function<void()>& openConsole
     if (ImGui::Begin("##ImportQueueProgress", nullptr, flags)) {
         int processed = m_TotalInBatch - (int)m_Pending.size();
         ImGui::Text("Importing Assets...");
-        ImGui::TextDisabled("Processing %s (%d/%d)", m_LastProcessed.c_str(), processed, m_TotalInBatch);
+        // "Processing file (X/N)": the counts roll as files land (Motion v2 odometers; plain text when
+        // Rolling Numbers is off).
+        Glass::ImAnimContext& motion = Glass::Motion();
+        ImGui::TextDisabled("Processing %s", m_LastProcessed.c_str());
+        ImGui::SameLine(0.0f, ImGui::CalcTextSize(" ").x);
+        {
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            const ImU32 dim = ImGui::GetColorU32(ImGuiCol_TextDisabled);
+            const ImVec2 p0 = ImGui::GetCursorScreenPos();
+            ImVec2 p = p0;
+            dl->AddText(p, dim, "(");
+            p.x += ImGui::CalcTextSize("(").x;
+            p.x += motion.Odometer(ImGui::GetID("##importDone"), dl, p, (double)processed, 0, dim, "/");
+            p.x += motion.Odometer(ImGui::GetID("##importTotal"), dl, p, (double)m_TotalInBatch, 0, dim, ")");
+            ImGui::Dummy(ImVec2(p.x - p0.x, ImGui::GetTextLineHeight()));
+        }
 
         float fraction = m_TotalInBatch > 0 ? (float)processed / (float)m_TotalInBatch : 0.0f;
-        ImGui::ProgressBar(fraction, ImVec2(-1.0f, 0.0f));
+        ImGui::ProgressBar(fraction, ImVec2(-1.0f, 0.0f), "");
+        {
+            // The percentage, rolling, centred on the bar.
+            const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+            const double pct = std::floor(fraction * 100.0f + 0.5f);
+            const float w = Glass::ImAnimContext::OdometerWidth(pct, 0, "%");
+            motion.Odometer(ImGui::GetID("##importPct"), ImGui::GetWindowDrawList(),
+                            ImVec2(std::floor((mn.x + mx.x - w) * 0.5f), std::floor((mn.y + mx.y - ImGui::GetTextLineHeight()) * 0.5f)),
+                            pct, 0, ImGui::GetColorU32(ImGuiCol_Text), "%");
+        }
 
         if (EditorUIPrimitives::SecondaryButton("Cancel Remaining", ImVec2(-1.0f, 0.0f))) {
             CancelRemaining();
