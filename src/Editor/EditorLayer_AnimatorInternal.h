@@ -79,6 +79,21 @@ struct AnimatorWindowState {
     int LiveSeenLayer = -1;
     std::string LiveSeenRel;
 
+    // Motion v2 (the graph's live wire flow, pops, glides and coasting pan). Nothing here holds animation state:
+    // the timing lives in Glass::Motion() entries that exist only while something moves; these are the keys
+    // and last-seen values that decide when one starts.
+    bool PanTracking = false;              // a middle-drag pan is feeding the inertia tracker
+    int TugTransition = -1;                // the transition just linked: its wire sags and springs straight
+    int FlowTransition = -1;               // the transition most recently taken in Play (pulses linger on it)
+    double FlowAt = -1.0e9;                // ...when, on the motion clock
+    float FlowLogTime = -1.0f;             // the newest History entry already seen for this layer
+    unsigned FlowKey = 0;                  // rig / layer / controller the flow tracker last looked at
+    bool GlideValid = false;               // the live-state highlight has a last target to glide from
+    glm::vec2 GlideTarget{0.0f};
+    unsigned GlideKey = 0;
+    struct Ghost { std::string Name; glm::vec2 Position{0.0f}; int Layer = 0; unsigned Id = 0; };
+    std::vector<Ghost> Ghosts;             // deleted states shrinking away; empty at rest
+
     std::vector<std::pair<std::string, std::string>> Clips;
     const void* ClipsSource = nullptr;
     int ClipsModelCount = -1;
@@ -148,8 +163,13 @@ std::vector<std::pair<std::string, std::string>> AllClipChoices(AssetLibrary& as
 std::string ClipLabel(const std::string& ref);
 // Live parameter widget (Inspector section and the Animator window's Parameters tab).
 void LiveParamWidget(AnimatorParam& p, float width);
-// Removes states (and every transition touching them) from a layer.
+// Removes states (and every transition touching them) from a layer; each leaves a ghost that shrinks away.
 void DeleteStates(AnimCtx& c, AC::Layer& Ly, std::vector<int> which);
+// The graph's per-controller, per-layer seed for motion ids (node pops, ghosts, wire morphs).
+unsigned GraphMotionSeed(const AnimatorWindowState& W);
+// A state's motion id in the graph (keyed by name, so it survives reordering).
+unsigned NodeMotionId(const AnimatorWindowState& W, const std::string& stateName);
+inline constexpr float kGhostSeconds = 0.22f; // a deleted state's shrink-away
 
 void DrawLayersAndParameters(AnimCtx& cx); // left
 void DrawGraphCanvas(AnimCtx& cx);         // middle

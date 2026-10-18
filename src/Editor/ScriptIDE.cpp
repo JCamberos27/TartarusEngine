@@ -7,12 +7,17 @@
 #include "ScriptIDEThemes.h"
 #include "GameModuleBuild.h"
 #include "EditorSound.h"
+#include "Glass/GlassMotion.h" // the caret glide, the eased jump scroll and the line sweep
+#include "Glass/GlassTokens.h"
 #include <imgui.h>
+#include <imgui_internal.h> // the code view's child window: its scroll, origin and draw list
 #include <json.hpp>
 #include <filesystem>
 #include <fstream>
 #include <algorithm>
 #include <cctype>
+#include <cmath>
+#include <cstring>
 #include <chrono>
 #include <future>
 #include <regex>
@@ -99,6 +104,9 @@ Json ParseProblems(const std::string& log) {
 struct ScriptIDE::Impl {
     struct Document {
         std::string Path,Saved,DiskBytes;TextEditor Editor;bool Bom=false,CRLF=false,Conflict=false;Kind Type=Kind::None;
+        // Motion v2: last frame's view (scroll, height) and caret, so a jump can ease from where it was. No animation state.
+        bool EaseJump=false,Scrolling=false;int SweepLine=-1,ScrollHold=0;float LastScrollY=0,ViewH=0,ScrollFrom=0,ScrollTo=0;
+        TextEditor::Coordinates CaretLast=TextEditor::Coordinates::Invalid();ImVec2 CaretPrev{0,0};double CaretMovedAt=0;
         bool Dirty() const {return Editor.GetText()!=Saved;}
         std::string Bytes() const {auto text=Editor.GetText();if(CRLF){std::string expanded;for(char c:text){if(c=='\n')expanded+='\r';expanded+=c;}text=std::move(expanded);}return (Bom?"\xEF\xBB\xBF":"")+text;}
     };
@@ -144,7 +152,7 @@ struct ScriptIDE::Impl {
     Document* Open(const std::string& path,int line=0,int column=1) {
         try {
             if(path.empty()){Visible=Focus=true;return Active;}
-            auto absolute=Canonical(path);for(auto& d:Documents)if(Same(d->Path,absolute)){Active=d.get();Activate=d->Path;Visible=Focus=true;Jump(*d,line,column);return d.get();}
+            auto absolute=Canonical(path);for(auto& d:Documents)if(Same(d->Path,absolute)){Active=d.get();Activate=d->Path;Visible=Focus=true;Jump(*d,line,column);Land(*d,line);return d.get();}
             const Kind kind=KindOf(fs::u8path(absolute));
             if(kind==Kind::None)throw std::runtime_error("The Script IDE opens C++ sources, shaders and .tescript files.");
             auto bytes=Read(fs::u8path(absolute));if(bytes.size()>8*1024*1024)throw std::runtime_error("Source file exceeds the 8 MB editor limit.");
@@ -152,7 +160,7 @@ struct ScriptIDE::Impl {
             auto doc=std::make_unique<Document>();doc->Path=absolute;doc->Type=kind;doc->DiskBytes=bytes;doc->CRLF=bytes.find("\r\n")!=std::string::npos;
             doc->Bom=bytes.compare(0,3,"\xEF\xBB\xBF")==0;if(doc->Bom)bytes.erase(0,3);Wide(bytes);
             doc->Editor.SetLanguageDefinition(Language(kind));doc->Editor.SetShowWhitespaces(false);doc->Editor.SetTabSize(4);doc->Editor.SetText(bytes);doc->Saved=doc->Editor.GetText();doc->Editor.SetReadOnly(!Authored(absolute));
-            Active=doc.get();Jump(*doc,line,column);Documents.push_back(std::move(doc));Activate=absolute;Visible=Focus=true;MarkProblems();Persist();
+            Active=doc.get();Jump(*doc,line,column);Land(*doc,line);Documents.push_back(std::move(doc));Activate=absolute;Visible=Focus=true;MarkProblems();Persist();
             if(!Restoring)EditorSound::Play(EditorSound::Event::AssetOpen); // a new tab only, not re-activating an open one
             return Active;
         }catch(const std::exception& e){Status=e.what();if(!Restoring)EditorSound::Play(EditorSound::Event::Blocked);return nullptr;}
@@ -163,6 +171,9 @@ struct ScriptIDE::Impl {
         for(size_t i=0;i<s.size() && chars<column-1;) {unsigned char c=s[i];size_t n=c<128?1:c<224?2:c<240?3:4;if(c=='\t')visual=(visual/4+1)*4;else ++visual;++chars;i+=n;}
         doc.Editor.SetCursorPosition({row,visual});doc.Editor.SetSelection({row,visual},{row,visual});
     }
+    // A jump to a line from outside (a Console / build error, Problems, Go to line): the view eases there and a white
+    // sweep crosses the line once, so the eye lands on it. Drawn by RenderMotion.
+    static void Land(Document& doc,int line) {if(line>0){doc.EaseJump=true;doc.SweepLine=line-1;}}
     // Compiler errors and warnings of the last module build, as editor line markers.
     void MarkProblems() {
         for(auto& d:Documents) {
@@ -269,6 +280,70 @@ struct ScriptIDE::Impl {
         if(SearchResults.empty())EditorSound::Play(EditorSound::Event::SearchEmpty);
     }
     void Locations(const Json& places) {int id=0;for(const auto& place:places){ImGui::PushID(++id);auto path=place.at("path").get<std::string>();auto label=fs::u8path(path).filename().u8string()+":"+std::to_string(place["line"].get<int>());if(ImGui::Selectable(label.c_str()))Open(path,place["line"],place["column"]);ImGui::PopID();}}
+    // --- Motion v2: the eased jump scroll, the landing sweep and the gliding caret ---
+    // The code view is TextEditor's own child window, so its scroll is steered with SetNextWindowScroll before Render
+    // (that also overrides the instant jump EnsureCursorVisible asks for) and the overlays go into its draw list after.
+    // Glass entries exist only while a scroll, sweep or glide is in flight; the mono font is pushed around both calls.
+    static ImGuiID MotionId(const Document& d,unsigned salt){return ImHashStr(d.Path.c_str())^salt;}
+    void BeforeRender(Document& d) {
+        auto& m=Glass::Motion();const float lineH=ImGui::GetFontSize();const ImGuiID scroll=MotionId(d,0x5C011E05u),sweep=MotionId(d,0x5EE9E11Eu);
+        if(d.EaseJump) {
+            d.EaseJump=false;const int lines=std::max(1,d.Editor.GetTotalLines());const float row=static_cast<float>(std::clamp(d.SweepLine,0,lines-1))*lineH;
+            const bool shown=row>=d.LastScrollY+lineH && row+lineH*5<=d.LastScrollY+d.ViewH; // EnsureCursorVisible wouldn't move either
+            float delay=0;
+            if(d.ViewH>0 && !shown){d.ScrollFrom=d.LastScrollY;d.ScrollTo=std::clamp(row-d.ViewH*.35f,0.0f,std::max(0.0f,lines*lineH-d.ViewH*.5f));d.Scrolling=true;d.ScrollHold=2;delay=Glass::ScrollEase.durationMs*.0005f;}
+            m.Pulse(sweep,Glass::LineSweep.durationMs*.001f,delay); // the sweep starts as the scroll is landing
+        }
+        if(d.Scrolling) {
+            // A wheel turn hands the view back to the user at once.
+            if(ImGui::GetIO().MouseWheel!=0 && ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows)){m.InertiaStop(scroll);d.Scrolling=false;return;}
+            const float y=m.Animate(scroll,d.ScrollTo,m.Live(scroll)?d.ScrollTo:d.ScrollFrom,Glass::ScrollEase);ImGui::SetNextWindowScroll(ImVec2(-1,y));
+            if(!m.Live(scroll) && --d.ScrollHold<=0)d.Scrolling=false; // held a frame past landing: EnsureCursorVisible's own jump is overridden too
+        }
+    }
+    void RenderMotion(Document& d,ImU32 caretColor,bool typed) {
+        ImGuiWindow* host=ImGui::GetCurrentWindow();ImGuiWindow* view=host->DC.ChildWindows.empty()?nullptr:host->DC.ChildWindows.back();
+        if(!view || !std::strstr(view->Name,"/Code_"))return;
+        auto& m=Glass::Motion();const float lineH=ImGui::GetFontSize(),space=ImGui::CalcTextSize(" ").x;
+        d.LastScrollY=view->Scroll.y;d.ViewH=view->Size.y;
+        // Where TextEditor lays out: content origin, then the line-number gutter (" N " plus its 10 px margin); mono columns.
+        char gutter[16];std::snprintf(gutter,sizeof gutter," %d ",d.Editor.GetTotalLines());const float textStart=ImGui::CalcTextSize(gutter).x+10.0f;
+        const ImVec2 origin=view->DC.CursorStartPos;ImDrawList* dl=view->DrawList;
+        dl->PushClipRect(view->InnerClipRect.Min,view->InnerClipRect.Max,false);
+        // The landing sweep: a soft white band crossing the line once, with a faint wash that fades behind it.
+        const ImGuiID sweep=MotionId(d,0x5EE9E11Eu);
+        if(d.SweepLine>=0 && m.PulseActive(sweep)) {
+            const float p=m.PulseProgress(sweep);
+            if(m.PulseElapsed(sweep,-1)>=0) {
+                const float e=Glass::EaseProgress(Glass::LineSweep,p),y0=origin.y+d.SweepLine*lineH,y1=y0+lineH;
+                const float x0=view->InnerClipRect.Min.x+textStart,x1=view->InnerClipRect.Max.x,band=(x1-x0)*.3f,cx=x0-band+(x1-x0+band*2)*e;
+                const ImU32 clear=IM_COL32(255,255,255,0),lit=IM_COL32(255,255,255,(int)(70*std::sin(p*3.14159265f)));
+                dl->AddRectFilled(ImVec2(x0,y0),ImVec2(x1,y1),IM_COL32(255,255,255,(int)(26*(1-e))));
+                dl->AddRectFilledMultiColor(ImVec2(cx-band,y0),ImVec2(cx,y1),clear,lit,lit,clear);
+                dl->AddRectFilledMultiColor(ImVec2(cx,y0),ImVec2(cx+band,y1),lit,clear,clear,lit);
+            }
+        } else if(d.SweepLine>=0 && !d.Scrolling)d.SweepLine=-1;
+        // The caret glides (CaretGlide) on a click, Page Up / Down or a jump of more than one character; typing, a
+        // single step and a drag-select stay instant. Kept in content space, so scrolling never makes it glide.
+        const auto cur=d.Editor.GetCursorPosition();const ImVec2 target(textStart+cur.mColumn*space,cur.mLine*lineH);const ImGuiID glide=MotionId(d,0xCA2E7611u);
+        const bool moved=cur!=d.CaretLast;bool jump=false;
+        if(moved || typed) {
+            const int dLine=std::abs(cur.mLine-d.CaretLast.mLine),dCol=std::abs(cur.mColumn-d.CaretLast.mColumn);
+            jump=d.CaretLast.mLine>=0 && !typed && !ImGui::IsMouseDragging(ImGuiMouseButton_Left) &&
+                (ImGui::IsMouseClicked(ImGuiMouseButton_Left) || ImGui::IsKeyPressed(ImGuiKey_PageUp) || ImGui::IsKeyPressed(ImGuiKey_PageDown) || dLine>1 || (dLine==0 && dCol>1));
+            if(!jump)m.InertiaStop(glide); // ends a glide in flight (any entry kind): the caret lands at once
+            d.CaretMovedAt=ImGui::GetTime();
+        }
+        const ImVec2 at=m.Follow2(glide,target,jump?d.CaretPrev:target,Glass::CaretGlide);
+        d.CaretPrev=target;d.CaretLast=cur;
+        // Drawn while the view has focus, blinking like TextEditor's (solid for a moment after it moves).
+        const double since=ImGui::GetTime()-d.CaretMovedAt;
+        if(GImGui->NavWindow==view && (m.Live(glide) || since<.5 || std::fmod(since-.5,1.0)<.5)) {
+            const float w=d.Editor.IsOverwrite()?space:std::max(1.0f,EditorTheme::Px(1.5f));
+            dl->AddRectFilled(ImVec2(origin.x+at.x,origin.y+at.y),ImVec2(origin.x+at.x+w,origin.y+at.y+lineH),caretColor);
+        }
+        dl->PopClipRect();
+    }
     void Build() {if(!SaveAll())return;if(!GameModuleBuild::Available()){Status="Module rebuilds need the engine's source checkout and CMake build folder.";return;}GameModuleBuild::Request();}
     void Draw();
 };
@@ -376,9 +451,12 @@ void ScriptIDE::Impl::Draw() {
                 Active=&d;if(Same(Activate,d.Path))Activate.clear();
                 auto cursor=d.Editor.GetCursorPosition();ImGui::TextDisabled("%s  |  Ln %d, Col %d%s",Label(d.Path).c_str(),cursor.mLine+1,cursor.mColumn+1,d.Editor.IsReadOnly()?"  |  read-only":"");
                 const auto before=d.Editor.GetText();
-                d.Editor.SetPalette(ScriptIDEThemes::Palette(Theme));
-                EditorTheme::PushMono();d.Editor.Render("Code",ImVec2(0,std::max(1.0f,ImGui::GetContentRegionAvail().y)));EditorTheme::PopFont();
-                if(d.Editor.GetText()!=before){CompletionOpen=false;Persist();}
+                auto palette=ScriptIDEThemes::Palette(Theme);const ImU32 caret=palette[(int)TextEditor::PaletteIndex::Cursor];
+                palette[(int)TextEditor::PaletteIndex::Cursor]=caret&~IM_COL32_A_MASK; // the editor's own caret is hidden: RenderMotion draws a gliding one
+                d.Editor.SetPalette(palette);
+                EditorTheme::PushMono();BeforeRender(d);d.Editor.Render("Code",ImVec2(0,std::max(1.0f,ImGui::GetContentRegionAvail().y)));
+                const bool typed=d.Editor.GetText()!=before;RenderMotion(d,caret,typed);EditorTheme::PopFont();
+                if(typed){CompletionOpen=false;Persist();}
                 ImGui::EndTabItem();
             }
             if(!open)ClosePath=d.Path;
@@ -419,7 +497,7 @@ void ScriptIDE::Impl::Draw() {
         for(const auto& name:Completions){if(!CompletionFilter.empty() && name.find(CompletionFilter)==std::string::npos)continue;ImGui::PushID(++id);if(ImGui::Selectable(name.c_str())){ApplyCompletion(name);CompletionFilter.clear();ImGui::CloseCurrentPopup();}ImGui::PopID();}ImGui::EndChild();ImGui::EndPopup();
     }
     if(GoTo){ImGui::OpenPopup("Go to line");GoTo=false;}
-    if(ImGui::BeginPopup("Go to line")){ImGui::InputInt("Line",&GoLine);bool go;{EditorSoundEvents::ScopedClickSilence quiet;go=EditorUIPrimitives::SecondaryButton("Go") && Active;}if(go){EditorSound::Play(EditorSound::Event::GotoLine,EditorSound::LastItemScreenX());Jump(*Active,GoLine,1);ImGui::CloseCurrentPopup();}ImGui::EndPopup();}
+    if(ImGui::BeginPopup("Go to line")){ImGui::InputInt("Line",&GoLine);bool go;{EditorSoundEvents::ScopedClickSilence quiet;go=EditorUIPrimitives::SecondaryButton("Go") && Active;}if(go){EditorSound::Play(EditorSound::Event::GotoLine,EditorSound::LastItemScreenX());Jump(*Active,GoLine,1);Land(*Active,GoLine);ImGui::CloseCurrentPopup();}ImGui::EndPopup();}
     if(ProjectFind){ImGui::OpenPopup("Find in project");ProjectFind=false;}
     if(ImGui::BeginPopup("Find in project")){Field("Text",ProjectSearch,300);ImGui::SameLine();if(EditorUIPrimitives::SecondaryButton("Search"))SearchProject();ImGui::BeginChild("ProjectMatches",ImVec2(560,280));Locations(SearchResults);ImGui::EndChild();ImGui::EndPopup();}
     if(!ClosePath.empty()) {
