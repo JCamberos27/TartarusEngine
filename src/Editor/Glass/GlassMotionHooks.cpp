@@ -22,6 +22,13 @@ SpecPair Specs(int token) {
         case EditorMotionToken::Glide:   return {&SelectionGlide, &SelectionGlide};
         case EditorMotionToken::Flash:   return {&RowFlash, &RowFlash};
         case EditorMotionToken::Scroll:  return {&ScrollEase, &ScrollEase};
+        case EditorMotionToken::Flip:    return {&CardFlip, &CardFlip};
+        case EditorMotionToken::Unfold:  return {&Unfold, &RevealClose};
+        case EditorMotionToken::Fly:     return {&ReparentFly, &ReparentFly};
+        case EditorMotionToken::Slide:   return {&LogSlide, &LogSlide};
+        case EditorMotionToken::Pop:     return {&NodePop, &HoverOut};
+        case EditorMotionToken::Sweep:   return {&LineSweep, &LineSweep};
+        case EditorMotionToken::Zoom:    return {&FolderZoom, &FolderZoom};
         default:                         return {&HoverIn, &HoverOut};
     }
 }
@@ -55,6 +62,39 @@ void HookScrollToBottom() { Motion().ScrollToBottom(ScrollEase); }
 bool HookReduceMotion() { return Motion().ReduceMotion(); }
 void HookStaggeredHeadline(unsigned id, const char* text, float x, float y, unsigned col) {
     StaggeredHeadline(id, text, ImVec2(x, y), col);
+}
+
+bool HookCategoryOn(int c) {
+    return c >= 0 && c < (int)MotionCategory::Count && Motion().CategoryOn((MotionCategory)c);
+}
+float HookOdometer(unsigned id, ImDrawList* dl, float x, float y, double value, int decimals, unsigned col, const char* suffix) {
+    return Motion().Odometer(id, dl, ImVec2(x, y), value, decimals, col, suffix);
+}
+void HookInertiaTrack(unsigned id, float dx, float dy) { Motion().InertiaTrack(id, ImVec2(dx, dy)); }
+void HookInertiaRelease(unsigned id) { Motion().InertiaRelease(id); }
+void HookInertiaDelta(unsigned id, float* dx, float* dy) {
+    const ImVec2 d = Motion().InertiaDelta(id);
+    if (dx) *dx = d.x;
+    if (dy) *dy = d.y;
+}
+void HookDrawSheen(ImDrawList* dl, float x0, float y0, float x1, float y1, unsigned seed, float strength) {
+    Motion().DrawSheen(dl, ImVec2(x0, y0), ImVec2(x1, y1), seed, strength);
+}
+void HookDrawCursorGlow(ImDrawList* dl, float x0, float y0, float x1, float y1, float cx, float cy, float strength) {
+    Motion().DrawCursorGlow(dl, ImVec2(x0, y0), ImVec2(x1, y1), ImVec2(cx, cy), strength, 0.0f);
+}
+float HookRippleDelay(int col, int row, int originCol, int originRow) {
+    return ImAnimContext::GridRippleDelay(col, row, 0, 0, originCol, originRow, RippleStepMs, RippleCap);
+}
+int HookBeginLayer(ImDrawList* dl) { return ImAnimContext::BeginLayer(dl); }
+void HookEndLayer(ImDrawList* dl, int start, float px, float py, float sx, float sy, float rot, float tx, float ty, float alpha) {
+    LayerTransform t;
+    t.pivot = ImVec2(px, py);
+    t.scale = ImVec2(sx, sy);
+    t.rotation = rot;
+    t.translate = ImVec2(tx, ty);
+    t.alpha = alpha;
+    ImAnimContext::EndLayer(dl, start, t);
 }
 
 void EnsureCheckPath() {
@@ -141,6 +181,16 @@ const EditorMotionHooks& HostMotionHooks() {
         h.ScrollToBottom = &HookScrollToBottom;
         h.ReduceMotion   = &HookReduceMotion;
         h.StaggeredHeadline = &HookStaggeredHeadline;
+        h.CategoryOn     = &HookCategoryOn;
+        h.Odometer       = &HookOdometer;
+        h.InertiaTrack   = &HookInertiaTrack;
+        h.InertiaRelease = &HookInertiaRelease;
+        h.InertiaDelta   = &HookInertiaDelta;
+        h.DrawSheen      = &HookDrawSheen;
+        h.DrawCursorGlow = &HookDrawCursorGlow;
+        h.RippleDelay    = &HookRippleDelay;
+        h.BeginLayer     = &HookBeginLayer;
+        h.EndLayer       = &HookEndLayer;
         return h;
     }();
     return s_Hooks;

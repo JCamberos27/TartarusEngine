@@ -164,6 +164,13 @@ void EditorSettings::Load() {
     s.HierarchySortDesc = SafeValue(root, "hierarchySortDesc", s.HierarchySortDesc);
     s.HierarchyTypeFilterMask = SafeValue(root, "hierarchyTypeFilterMask", s.HierarchyTypeFilterMask);
     s.ReduceMotion = SafeValue(root, "reduceMotion", s.ReduceMotion);
+    s.MotionSpeed = std::clamp(SafeValue(root, "motionSpeed", s.MotionSpeed), 0.5f, 2.0f);
+    s.MotionThemeTweens = SafeValue(root, "motionThemeTweens", s.MotionThemeTweens);
+    s.MotionInertia = SafeValue(root, "motionInertia", s.MotionInertia);
+    s.MotionGradients = SafeValue(root, "motionGradients", s.MotionGradients);
+    s.MotionRollingNumbers = SafeValue(root, "motionRollingNumbers", s.MotionRollingNumbers);
+    s.MotionViewport = SafeValue(root, "motionViewport", s.MotionViewport);
+    s.MotionStartup = SafeValue(root, "motionStartup", s.MotionStartup);
     // "glassTheme", not the retired "editorTheme": old prefs files still carry that key with
     // values from the removed theme picker, and must not switch Glass on by accident.
     s.EditorThemeId = std::clamp(SafeValue(root, "glassTheme", s.EditorThemeId), 0, 1);
@@ -358,6 +365,13 @@ void EditorSettings::Flush() {
     root["hierarchySortDesc"] = Get().HierarchySortDesc;
     root["hierarchyTypeFilterMask"] = Get().HierarchyTypeFilterMask;
     root["reduceMotion"] = Get().ReduceMotion;
+    root["motionSpeed"] = Get().MotionSpeed;
+    root["motionThemeTweens"] = Get().MotionThemeTweens;
+    root["motionInertia"] = Get().MotionInertia;
+    root["motionGradients"] = Get().MotionGradients;
+    root["motionRollingNumbers"] = Get().MotionRollingNumbers;
+    root["motionViewport"] = Get().MotionViewport;
+    root["motionStartup"] = Get().MotionStartup;
     root["glassTheme"] = g_SavedThemeId >= 0 ? g_SavedThemeId : Get().EditorThemeId;
     root["glassViewportHuds"] = Get().GlassViewportHuds;
     root["glassFrostedBlur"] = Get().GlassFrostedBlur;

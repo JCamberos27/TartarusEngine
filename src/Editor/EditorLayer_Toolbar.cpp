@@ -863,6 +863,9 @@ void EditorLayer::DrawWindowMenuBody() {
                 EditorSettings::Save();
             if (ImGui::IsItemHovered())
                 EditorUI::SetTooltip("Corner text overlay on the Scene viewport while playing.");
+            ImGui::MenuItem(ICON_FA_WAND_MAGIC_SPARKLES "  Motion Debugger", nullptr, &m_ShowMotionDebugger);
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Slow motion for every editor animation, the live motion entries, and ImAnim's inspector and profiler.");
             ImGui::Separator();
             // Console, Statistics, History and every panel above also keep their existing toolbar
             // toggle (#148) — the menu entry is a second, discoverable path to the same state, not

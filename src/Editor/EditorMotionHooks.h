@@ -23,6 +23,14 @@ enum class EditorMotionToken : int {
     Glide,       // SelectionGlide: a selection sliding between items
     Flash,       // RowFlash: a one-off wash that fades (a new row, a new error)
     Scroll,      // ScrollEase: an eased scroll jump
+    // Motion v2 (API v44)
+    Flip,        // CardFlip: a card turning over
+    Unfold,      // Unfold: a new card or row unfolding on a spring
+    Fly,         // ReparentFly: a row travelling to its new place
+    Slide,       // LogSlide: a line sliding and fading in
+    Pop,         // NodePop: something new popping in on a spring
+    Sweep,       // LineSweep: a highlight sweeping across a line
+    Zoom,        // FolderZoom: diving into / out of a folder
     Count
 };
 
@@ -54,4 +62,23 @@ struct EditorMotionHooks {
     // A headline whose characters fade and rise in when it first appears (static after that), in
     // the current font, into the current window's draw list at (x, y), top-left.
     void (*StaggeredHeadline)(unsigned id, const char* text, float x, float y, unsigned col) = nullptr;
+
+    // --- Motion v2 (API v44) ---
+    // Glass::MotionCategory, as an int: is that category on (and Reduce Motion off)?
+    bool (*CategoryOn)(int category) = nullptr;
+    // Rolling digits (Glass::ImAnimContext::Odometer). Returns the width drawn.
+    float (*Odometer)(unsigned id, ImDrawList* dl, float x, float y, double value, int decimals, unsigned col, const char* suffix) = nullptr;
+    // Inertia: track a drag (px this frame), release it, then read the coast's step each frame.
+    void (*InertiaTrack)(unsigned id, float dx, float dy) = nullptr;
+    void (*InertiaRelease)(unsigned id) = nullptr;
+    void (*InertiaDelta)(unsigned id, float* outDx, float* outDy) = nullptr;
+    // Living gradients: the busy sheen across a rect; the pointer-following glow inside one.
+    void (*DrawSheen)(ImDrawList* dl, float x0, float y0, float x1, float y1, unsigned seed, float strength) = nullptr;
+    void (*DrawCursorGlow)(ImDrawList* dl, float x0, float y0, float x1, float y1, float cx, float cy, float strength) = nullptr;
+    // Seconds before grid tile (col, row) starts a ripple from (originCol, originRow).
+    float (*RippleDelay)(int col, int row, int originCol, int originRow) = nullptr;
+    // A layer of draw commands: Begin returns the vertex start; End scales (sx, sy) and rotates
+    // (radians) about (px, py), translates by (tx, ty) and multiplies alpha.
+    int  (*BeginLayer)(ImDrawList* dl) = nullptr;
+    void (*EndLayer)(ImDrawList* dl, int vtxStart, float px, float py, float sx, float sy, float rot, float tx, float ty, float alpha) = nullptr;
 };
