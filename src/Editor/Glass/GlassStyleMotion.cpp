@@ -99,13 +99,17 @@ void StyleMotionFrame(bool playing, bool prefabMode, bool viewportFocused, bool 
     }
     ImAnimContext& motion = Motion();
     const bool tween = motion.CategoryOn(MotionCategory::ThemeTweens);
-    auto mood = [&](ImGuiID id, bool on, const MotionSpec& in) {
-        const float target = on ? 1.0f : 0.0f;
-        return tween ? motion.Animate(id, target, 0.0f, in, MoodOut) : target;
+    // A toggle, not a plain Animate: a mood that is held (a long Play session) is a rest state and
+    // holds no entry; only the flips animate.
+    static bool s_WasPlay = false, s_WasFocus = false, s_WasPrefab = false;
+    auto mood = [&](ImGuiID id, bool on, bool& was, const MotionSpec& in) {
+        const float v = tween ? motion.AnimateToggle(id, on, was, in, MoodOut) : (on ? 1.0f : 0.0f);
+        was = on;
+        return v;
     };
-    s_Now.play   = mood(kMoodPlay, playing, PlayMoodIn);
-    s_Now.focus  = mood(kMoodFocus, viewportFocused && !playing, MoodIn);
-    s_Now.prefab = mood(kMoodPrefab, prefabMode, MoodIn);
+    s_Now.play   = mood(kMoodPlay, playing, s_WasPlay, PlayMoodIn);
+    s_Now.focus  = mood(kMoodFocus, viewportFocused && !playing, s_WasFocus, MoodIn);
+    s_Now.prefab = mood(kMoodPrefab, prefabMode, s_WasPrefab, MoodIn);
 
     const bool themeMoving = motion.PulseActive(kThemePulse);
     if (!themeMoving && !s_Dirty && SameMoods(s_Now, s_Last)) return; // at rest: the style is already right
