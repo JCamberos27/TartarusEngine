@@ -60,7 +60,9 @@ inline ImVec4 FlatPressed() { return ImVec4(1.0f, 1.0f, 1.0f, 0.12f); }
 
 // --- Control sounds (EditorSound, through this binary's EditorSoundEvents slot) -------------------
 // The click of the item just submitted, panned towards where it sits across the window. Nothing while a
-// ScopedClickSilence is alive (a control whose action plays its own sound: Save, Undo, Pause...).
+// ScopedClickSilence is alive (a control whose action plays its own sound: Save, Undo, Pause...). The controls call
+// it on the press (ImGui::IsItemActivated: mouse-down or keyboard / gamepad activation), not on the release, so the
+// tick lands with the finger; the press is noted so a press dragged off and let go elsewhere is taken back softly.
 inline void ClickSound(EditorSoundEvents::Event e) {
     if (EditorSoundEvents::SuppressDepth() > 0 || !EditorSoundEvents::PlaySlot()) return;
     const ImGuiViewport* vp = ImGui::GetMainViewport();
@@ -68,6 +70,12 @@ inline void ClickSound(EditorSoundEvents::Event e) {
     if (vp && vp->Size.x > 0.0f)
         x = std::clamp(((ImGui::GetItemRectMin().x + ImGui::GetItemRectMax().x) * 0.5f - vp->Pos.x) / vp->Size.x, 0.0f, 1.0f);
     EditorSoundEvents::PlayViaSlot(e, x);
+    EditorSoundEvents::NotePress(ImGui::GetItemID());
+}
+// The toggle sound for a press: the state the control will switch to, read from the state before it (a keyboard
+// activation flips the value on the same frame, so the value after the widget call can already be the new one).
+inline EditorSoundEvents::Event TogglePressEvent(bool onBefore) {
+    return onBefore ? EditorSoundEvents::Event::ToggleOff : EditorSoundEvents::Event::ToggleOn;
 }
 // A text button's meaning from its first word: Cancel / Close / Discard / No fall, Delete / Remove are destructive.
 inline EditorSoundEvents::Event LabelClickEvent(const char* label) {
@@ -156,6 +164,7 @@ inline bool ActionButton(const char* icon, const char* tooltip, TooltipFn toolti
     ImGui::PushID(tooltip);
     const int vtx = PressBegin();
     const bool clicked = ImGui::Button(icon, size);
+    const bool pressed = ImGui::IsItemActivated();
     ImGui::PopID();
     ImGui::PopStyleVar();
     if (active) {
@@ -167,7 +176,7 @@ inline bool ActionButton(const char* icon, const char* tooltip, TooltipFn toolti
     PressEnd(vtx);
     ImGui::PopStyleColor(4);
     if (tooltipFn && ImGui::IsItemHovered()) tooltipFn(tooltip);
-    if (clicked) ClickSound(active ? EditorSoundEvents::Event::ToggleOff : EditorSoundEvents::Event::Click);
+    if (pressed) ClickSound(active ? EditorSoundEvents::Event::ToggleOff : EditorSoundEvents::Event::Click);
     return clicked;
 }
 
@@ -191,12 +200,13 @@ inline bool DangerIconButton(const char* icon, const char* tooltip, TooltipFn to
     ImGui::PushID(tooltip);
     const int vtx = PressBegin();
     const bool clicked = ImGui::Button(icon, size);
+    const bool pressed = ImGui::IsItemActivated();
     PressEnd(vtx);
     ImGui::PopID();
     ImGui::PopStyleVar();
     ImGui::PopStyleColor(4);
     if (tooltipFn && ImGui::IsItemHovered()) tooltipFn(tooltip);
-    if (clicked) ClickSound(EditorSoundEvents::Event::ClickDestructive);
+    if (pressed) ClickSound(EditorSoundEvents::Event::ClickDestructive);
     return clicked;
 }
 
@@ -210,7 +220,9 @@ inline bool Checkbox(const char* label, bool* v) {
     const ImVec4 tick = ImGui::GetStyleColorVec4(ImGuiCol_CheckMark);
     const int vtx = PressBegin();
     if (!mixed) ImGui::PushStyleColor(ImGuiCol_CheckMark, ImVec4(0, 0, 0, 0));
+    const bool before = *v;
     const bool changed = ImGui::Checkbox(label, v);
+    const bool pressed = ImGui::IsItemActivated();
     if (!mixed) ImGui::PopStyleColor();
     const ImVec2 mn = ImGui::GetItemRectMin();
     const float sz = ImGui::GetFrameHeight();
@@ -228,7 +240,7 @@ inline bool Checkbox(const char* label, bool* v) {
     dl->AddRect(mn, ImVec2(mn.x + sz, mn.y + sz),
         EditorTheme::U32(EditorTheme::Mix(EditorTheme::Strong, EditorTheme::AccentDeep, t)), ImGui::GetStyle().FrameRounding, 0, 1.0f);
     PressEnd(vtx);
-    if (changed) ClickSound(*v ? EditorSoundEvents::Event::ToggleOn : EditorSoundEvents::Event::ToggleOff);
+    if (pressed) ClickSound(TogglePressEvent(before));
     return changed;
 }
 
@@ -240,9 +252,10 @@ inline bool SecondaryButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
     ImGui::PushStyleColor(ImGuiCol_Border,        EditorTheme::Strong);
     const int vtx = PressBegin();
     const bool clicked = ImGui::Button(label, size);
+    const bool pressed = ImGui::IsItemActivated();
     PressEnd(vtx);
     ImGui::PopStyleColor(4);
-    if (clicked) ClickSound(LabelClickEvent(label));
+    if (pressed) ClickSound(LabelClickEvent(label));
     return clicked;
 }
 
@@ -256,9 +269,10 @@ inline bool PrimaryButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
     ImGui::PushStyleColor(ImGuiCol_Text,          EditorTheme::OnAccent);
     const int vtx = PressBegin();
     const bool clicked = ImGui::Button(label, size);
+    const bool pressed = ImGui::IsItemActivated();
     PressEnd(vtx);
     ImGui::PopStyleColor(5);
-    if (clicked) ClickSound(EditorSoundEvents::Event::ClickConfirm);
+    if (pressed) ClickSound(EditorSoundEvents::Event::ClickConfirm);
     return clicked;
 }
 
@@ -308,10 +322,11 @@ inline bool Segmented(const char* id, int* current, const char* const* labels, i
         ImGui::PushStyleColor(ImGuiCol_Text,          on ? EditorTheme::AccentBright : EditorTheme::Secondary);
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
         ImGui::PushID(i);
-        if (ImGui::Button(labels[i], ImVec2(itemWidth, 0.0f)) && !on) {
+        const bool clicked = ImGui::Button(labels[i], ImVec2(itemWidth, 0.0f));
+        if (ImGui::IsItemActivated() && !on) ClickSound(EditorSoundEvents::Event::TabSelect); // on the press
+        if (clicked && !on) {
             *current = i;
             changed = true;
-            ClickSound(EditorSoundEvents::Event::TabSelect);
         }
         ImGui::PopID();
         ImGui::PopStyleVar();
@@ -712,6 +727,7 @@ inline bool Pill(const char* id, const char* icon, const char* label, bool selec
     const ImVec2 mn(p.x, p.y + EditorTheme::Px(2.0f));
     ImGui::SetCursorScreenPos(mn);
     const bool clicked = ImGui::InvisibleButton(id, ImVec2(w, h));
+    const bool pressed = ImGui::IsItemActivated();
     const bool hov = ImGui::IsItemHovered();
     const bool held = ImGui::IsItemActive();
     if (hoveredOut) *hoveredOut = hov;
@@ -735,7 +751,7 @@ inline bool Pill(const char* id, const char* icon, const char* label, bool selec
     if (icon) { dl->AddText(ImVec2(x, cy - is.y * 0.5f), EditorTheme::U32(tc), icon); x += is.x + iconGap; }
     TextEllipsis(dl, ImVec2(x, cy - ls.y * 0.5f), mx.x - padX * 0.6f, EditorTheme::U32(tc), label);
     EditorTheme::PopFont();
-    if (clicked) ClickSound(EditorSoundEvents::Event::Click);
+    if (pressed) ClickSound(EditorSoundEvents::Event::Click);
     return clicked;
 }
 

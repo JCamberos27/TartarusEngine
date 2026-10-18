@@ -2310,6 +2310,10 @@ void EditorLayer::EndFrame() {
     }
     EditorSound::ToolFrame(m_HandTool ? -1 : MeasureToolActive() ? 5 : (int)m_GizmoOp, m_GizmoLocalSpace, m_GridSnapEnabled);
     DockFrame(); // before the observer, so a tab drag's release isn't also a generic click
+    // Nothing is drawn past here. ImGui's EndFrame closes the popups a click outside them dismissed (and clears a
+    // delivered drop), so ending the frame first lets the observer hear those on this frame, not the next one.
+    // Render() sees the frame already ended and skips its own EndFrame.
+    ImGui::EndFrame();
     EditorSound::ObserveImGui(); // slider, hover, menu and drag & drop sounds, off this frame's ImGui state
     DirtyCueFrame(); // last: a whisper under whatever the edit itself played
     ImGui::Render();
@@ -2382,17 +2386,37 @@ void EditorLayer::QuietDockSounds(int frames) {
 void EditorLayer::DockFrame() {
     const bool quiet = m_DockQuietFrames > 0 || m_EditorDockspaceId == 0;
     if (m_DockQuietFrames > 0) --m_DockQuietFrames;
+    const ImGuiContext& g = *GImGui;
+    const bool countsMoved = g.Windows.Size != m_DockWindowCount || g.WindowsActiveCount != m_DockActiveCount;
+    m_DockWindowCount = g.Windows.Size;
+    m_DockActiveCount = g.WindowsActiveCount;
+    // Sounds off: no walk, and nothing kept, so turning them back on re-primes instead of hearing stale diffs.
+    if (!EditorSound::Active()) {
+        m_DockSnaps.clear();
+        m_DockReorderPending = false;
+        return;
+    }
+    // Docking only changes under the mouse (a tab drag, a rip, a drop) or through a layout load / reset, which
+    // calls QuietDockSounds and re-primes. A panel shown or hidden from the keyboard moves the window counts. Any
+    // other frame keeps the last snapshot as it is: the next walk compares against a state that is still current.
+    const bool walk = m_DockSnaps.empty() || quiet || m_DockReorderPending || countsMoved ||
+                      ImGui::IsMouseDown(ImGuiMouseButton_Left) || ImGui::IsMouseReleased(ImGuiMouseButton_Left);
+    if (!walk) return;
     const ImGuiViewport* vp = ImGui::GetMainViewport();
     bool detached = false, attached = false, reordered = false;
     float detachX = -1.0f, attachX = -1.0f;
-    std::unordered_map<ImGuiID, DockSnap> snaps;
-    snaps.reserve(m_DockSnaps.size());
-    for (ImGuiWindow* w : GImGui->Windows) {
+    if (m_DockSnapsNext.capacity() == 0) {
+        m_DockSnaps.reserve(64);
+        m_DockSnapsNext.reserve(64);
+    }
+    m_DockSnapsNext.clear();
+    for (ImGuiWindow* w : g.Windows) {
         if (!w->Active || (w->Flags & (ImGuiWindowFlags_ChildWindow | ImGuiWindowFlags_Popup | ImGuiWindowFlags_Tooltip |
                                        ImGuiWindowFlags_DockNodeHost)) ||
             (w->Name[0] == '#' && w->Name[1] == '#'))
             continue;
         DockSnap s;
+        s.Window = w->ID;
         // DockNode, not DockId (kept after undocking); and docked means in the editor's dockspace, not a floating node.
         s.Docked = w->DockNode && ImGui::DockNodeGetRootNode(w->DockNode)->ID == m_EditorDockspaceId;
         if (s.Docked) {
@@ -2403,18 +2427,18 @@ void EditorLayer::DockFrame() {
                     if (tabBar->Tabs[i].Window == w) { s.Tab = i; break; }
             }
         }
-        const auto prev = m_DockSnaps.find(w->ID);
+        const auto prev = std::find_if(m_DockSnaps.begin(), m_DockSnaps.end(), [&](const DockSnap& d) { return d.Window == s.Window; });
         if (prev != m_DockSnaps.end()) {
-            const DockSnap& p = prev->second;
+            const DockSnap& p = *prev;
             const float x = vp->Size.x > 0.0f ? std::clamp((w->Pos.x + w->Size.x * 0.5f - vp->Pos.x) / vp->Size.x, 0.0f, 1.0f) : -1.0f;
             if (p.Docked && !s.Docked) { detached = true; detachX = x; }
             else if (!p.Docked && s.Docked) { attached = true; attachX = x; }
             else if (s.Docked && p.Node == s.Node && p.TabCount == s.TabCount && p.Tab >= 0 && s.Tab >= 0 && p.Tab != s.Tab)
                 reordered = true;
         }
-        snaps.emplace(w->ID, s);
+        m_DockSnapsNext.push_back(s);
     }
-    m_DockSnaps = std::move(snaps);
+    m_DockSnaps.swap(m_DockSnapsNext);
     // Quiet while priming, and when an action already spoke this frame (a layout pick, a theme switch...).
     if (quiet || EditorSound::PlayedThisFrame()) { m_DockReorderPending = false; return; }
     if (detached) {

@@ -54,6 +54,7 @@ bool BindImGuiToHost(const EditorModuleHostAPI& host) {
     EditorTheme::SetMotionHooks(host.GetMotionHooks ? host.GetMotionHooks() : nullptr);
     // And its sounds, for this binary's copy of the primitives' click sounds.
     EditorSoundEvents::PlaySlot() = host.PlayUISound;
+    EditorSoundEvents::PressSlot() = host.NoteUIPress;
     return true;
 }
 

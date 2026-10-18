@@ -226,6 +226,13 @@ public:
     // Audio or SetPaused: it has its own volume. TARTARUS_MUTE still silences it. Fire-and-forget one-shots, decoded into
     // memory on first use; pan -1..1 (left..right). At most kEditorVoices at once: a new one fades the oldest out.
     static constexpr int kEditorVoices = 32;
+    // Editor clips: decoded once at the file's own channel count (mono for the built-in set) into a store of their own, apart
+    // from Load()'s game clips, and played by id - no path hashing, no allocation per play. -1: none / failed.
+    using ClipId = int32_t;
+    static ClipId LoadClip(const std::string& path);
+    static void UnloadClip(ClipId id); // a voice still playing it keeps the PCM until it ends
+    static bool PlayEditor(ClipId id, float volume, float pitch = 1.0f, float pan = 0.0f);
+    // By path: LoadClip (cached by path) then the id overload. For the Sound Board and tests.
     static bool PlayEditor(const std::string& path, float volume, float pitch = 1.0f, float pan = 0.0f);
     static void SetEditorVolume(float volume); // 0..1
     static int EditorVoiceCount();

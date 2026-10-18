@@ -10,6 +10,7 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -224,27 +225,100 @@ bool s_Paused = false;
 std::unique_ptr<ma_sound> s_PreviewSound;
 std::string s_PreviewPath;
 
-// The editor's UI sounds: their own group on the endpoint, beside the limiter rather than through it.
-struct EditorVoice {
-    std::unique_ptr<ma_sound> Sound;
-    std::unique_ptr<ma_audio_buffer> Buffer;
-    std::shared_ptr<const PreloadedClip> Clip;
-    bool Stolen = false; // fading out to make room: freed by Update once it has stopped
+// The editor's UI sounds: their own group, through a clip guard to the endpoint, beside the limiter rather than through it.
+// Clips are a store of their own (apart from Load()'s game clips): decoded once at the file's own channel count, miniaudio's
+// buffer kept as is. Shared: a voice holds a reference, so UnloadClip never pulls PCM out from under a voice still playing it.
+struct EditorClip {
+    float* Pcm = nullptr; // from ma_decode_file; ma_free'd with the clip
+    ma_uint32 Channels = 0;
+    ma_uint32 SampleRate = 0;
+    ma_uint64 FrameCount = 0;
+    std::string Path;
+    EditorClip() = default;
+    EditorClip(const EditorClip&) = delete;
+    EditorClip& operator=(const EditorClip&) = delete;
+    ~EditorClip() { ma_free(Pcm, nullptr); }
 };
+std::vector<std::shared_ptr<const EditorClip>> s_EditorClips;          // by ClipId; null once unloaded (ids are never reused)
+std::unordered_map<std::string, AudioEngine::ClipId> s_EditorClipIds; // path -> id, for LoadClip only (no lookup per play)
+
+// Fixed slots, the ma_sound and its buffer in place: a play allocates no voice. Twice the voice cap, so a voice fading out
+// after being stolen (it keeps its slot until the fade ends) never blocks the play that stole it.
+struct EditorVoice {
+    ma_sound Sound;
+    ma_audio_buffer Buffer;
+    std::shared_ptr<const EditorClip> Clip; // null when the slot is free
+    uint64_t Order = 0;                     // when it started: the oldest is stolen first
+    bool Stolen = false;                    // fading out to make room: freed by the reap once it has stopped
+};
+constexpr int kEditorSlots = 2 * AudioEngine::kEditorVoices;
 constexpr unsigned kEditorStealFadeMs = 8; // a voice cut mid-sound fades over this instead of stopping on a click
 ma_sound_group s_EditorGroup;
 bool s_EditorGroupReady = false;
 float s_EditorVolume = 1.0f;
-std::vector<EditorVoice> s_EditorVoices; // oldest first
+EditorVoice s_EditorVoices[kEditorSlots];
+int s_EditorFree[kEditorSlots];   // free slot indices (a stack)
+int s_EditorFreeCount = 0;
+int s_EditorActive[kEditorSlots]; // slots in use, in no order (swap-and-pop)
+int s_EditorActiveCount = 0;
+int s_EditorLive = 0;             // in use and not stolen: what EditorVoiceCount reports
+uint64_t s_EditorOrder = 0;
+
+void ResetEditorSlots() {
+    for (int i = 0; i < kEditorSlots; ++i) s_EditorFree[i] = kEditorSlots - 1 - i;
+    s_EditorFreeCount = kEditorSlots;
+    s_EditorActiveCount = 0;
+    s_EditorLive = 0;
+}
 
 void FreeEditorVoice(EditorVoice& v) {
-    if (v.Sound) {
-        ma_sound_stop(v.Sound.get());
-        ma_sound_uninit(v.Sound.get());
-    }
-    if (v.Buffer) ma_audio_buffer_uninit(v.Buffer.get());
-    v = EditorVoice{};
+    ma_sound_stop(&v.Sound);
+    ma_sound_uninit(&v.Sound);
+    ma_audio_buffer_uninit(&v.Buffer);
+    v.Clip.reset();
+    v.Stolen = false;
 }
+
+// Frees every voice that has stopped (played out, or a stolen one whose fade has ended).
+void ReapEditorVoices() {
+    for (int i = 0; i < s_EditorActiveCount;) {
+        const int slot = s_EditorActive[i];
+        EditorVoice& v = s_EditorVoices[slot];
+        if (ma_sound_at_end(&v.Sound) || !ma_sound_is_playing(&v.Sound)) {
+            if (!v.Stolen) --s_EditorLive;
+            FreeEditorVoice(v);
+            s_EditorFree[s_EditorFreeCount++] = slot;
+            s_EditorActive[i] = s_EditorActive[--s_EditorActiveCount];
+        } else {
+            ++i;
+        }
+    }
+}
+
+// The editor output's clip guard: unity below -3 dBFS, above it a tanh knee (slope 1 where it starts, so no corner) that
+// approaches -0.3 dBFS and never passes it. Per sample, no state, no lookahead: it adds no latency, and a lone tick never
+// reaches it - only a pile-up of loud voices does.
+struct SoftClipNode {
+    ma_node_base Base;
+};
+SoftClipNode* s_EditorClipGuard = nullptr;
+constexpr float kClipKnee = 0.708f;    // -3 dBFS
+constexpr float kClipCeiling = 0.966f; // -0.3 dBFS
+
+void SoftClipProcess(ma_node*, const float** ppIn, ma_uint32* pFrameCountIn, float** ppOut, ma_uint32* pFrameCountOut) {
+    const ma_uint32 frames = std::min(*pFrameCountIn, *pFrameCountOut);
+    const float* in = ppIn[0];
+    float* out = ppOut[0];
+    constexpr float range = kClipCeiling - kClipKnee;
+    for (size_t i = 0; i < 2 * (size_t)frames; ++i) {
+        const float x = in[i];
+        const float a = std::fabs(x);
+        out[i] = a <= kClipKnee ? x : std::copysign(kClipKnee + range * std::tanh((a - kClipKnee) / range), x);
+    }
+    *pFrameCountIn = frames;
+    *pFrameCountOut = frames;
+}
+ma_node_vtable s_SoftClipVtable = {SoftClipProcess, nullptr, 1, 1, 0}; // (not continuous: no editor sound, no processing)
 
 // The game's mix ends in the limiter, so master and Mute go on its output: the editor's sounds beside it on the endpoint keep
 // their own level (and so does the Asset Browser preview, which plays at the master level by its own volume). Without a limiter
@@ -358,6 +432,10 @@ bool InitImpl(bool offline, int rate) {
         cfg.sampleRate = (ma_uint32)rate;
     } else if (!capture.empty()) {
         cfg.sampleRate = 48000; // a capture is a 48 kHz file
+    } else {
+        // A short period (5.3 ms at 48 kHz, the convolver's head block) instead of miniaudio's 10 ms default: a UI tick reaches
+        // the speaker that much sooner. The device may grant something else; the line below says what.
+        cfg.periodSizeInFrames = 256;
     }
     if (ma_engine_init(&cfg, &s_Engine) != MA_SUCCESS) {
         Log::Error("Audio: failed to initialize the audio engine.");
@@ -365,6 +443,19 @@ bool InitImpl(bool offline, int rate) {
     }
     s_Initialized = true;
     s_Offline = offline;
+    if (const ma_device* dev = offline ? nullptr : ma_engine_get_device(&s_Engine)) {
+        const ma_uint32 period = dev->playback.internalPeriodSizeInFrames, hz = dev->playback.internalSampleRate;
+        ma_uint32 buffer = period * dev->playback.internalPeriods;
+#ifdef MA_SUPPORT_WASAPI
+        // WASAPI's real buffer (the period alone undersells it): the queue a sound waits behind before it reaches the mixer.
+        if (dev->pContext->backend == ma_backend_wasapi && dev->wasapi.actualBufferSizeInFramesPlayback)
+            buffer = dev->wasapi.actualBufferSizeInFramesPlayback;
+#endif
+        char line[200];
+        std::snprintf(line, sizeof(line), "Audio: output period %u frames (%.1f ms at %u Hz), buffer %u frames (%.1f ms), %s.", period,
+                      hz ? 1000.0 * period / hz : 0.0, hz, buffer, hz ? 1000.0 * buffer / hz : 0.0, ma_get_backend_name(dev->pContext->backend));
+        Log::Info(line);
+    }
 #ifdef _WIN32
     {
         char* env = nullptr;
@@ -442,10 +533,29 @@ bool InitImpl(bool offline, int rate) {
         }
         UpdateReturnGains();
     }
-    // The editor's UI sounds: a group of their own straight on the endpoint (no parent group), beside the limiter.
-    s_EditorGroupReady = ma_sound_group_init(&s_Engine, 0, nullptr, &s_EditorGroup) == MA_SUCCESS;
-    if (s_EditorGroupReady) ma_sound_group_set_volume(&s_EditorGroup, s_EditorVolume);
-    else Log::Warn("Audio: could not create the editor sound group; editor UI sounds are off.");
+    // The editor's UI sounds: a group of their own (no parent group) -> the clip guard -> the endpoint, beside the limiter. Its volume
+    // glides over 256 frames, so a Volume slider dragged while ticks play doesn't zipper; no pitch (the group's resampler would run
+    // at 1.0 for nothing).
+    ma_sound_group_config gc = ma_sound_group_config_init_2(&s_Engine);
+    gc.flags = MA_SOUND_FLAG_NO_PITCH | MA_SOUND_FLAG_NO_SPATIALIZATION;
+    gc.volumeSmoothTimeInPCMFrames = 256;
+    s_EditorGroupReady = ma_sound_group_init_ex(&s_Engine, &gc, &s_EditorGroup) == MA_SUCCESS;
+    ResetEditorSlots();
+    if (s_EditorGroupReady) {
+        ma_sound_group_set_volume(&s_EditorGroup, s_EditorVolume); // (the first gain set is immediate, not a glide)
+        if (ma_engine_get_channels(&s_Engine) == 2) { // (a mono device: the group stays on the endpoint, unguarded)
+            auto* guard = new SoftClipNode();
+            if (InitNode(&s_SoftClipVtable, &guard->Base)) {
+                ma_node_attach_output_bus(&guard->Base, 0, ma_engine_get_endpoint(&s_Engine), 0);
+                ma_node_attach_output_bus((ma_node*)&s_EditorGroup, 0, &guard->Base, 0);
+                s_EditorClipGuard = guard;
+            } else {
+                delete guard;
+            }
+        }
+    } else {
+        Log::Warn("Audio: could not create the editor sound group; editor UI sounds are off.");
+    }
     ApplyMasterVolume(s_Engine); // again, now that the limiter it applies to exists
     if (!capture.empty()) AudioEngine::StartCapture(capture);
     return true;
@@ -479,10 +589,16 @@ void AudioEngine::Shutdown() {
     StopAll();
     s_Voices.clear();
     s_FreeSlots.clear();
-    for (EditorVoice& v : s_EditorVoices) FreeEditorVoice(v);
-    s_EditorVoices.clear();
+    for (int i = 0; i < s_EditorActiveCount; ++i) FreeEditorVoice(s_EditorVoices[s_EditorActive[i]]);
+    ResetEditorSlots();
     if (s_EditorGroupReady) ma_sound_group_uninit(&s_EditorGroup);
     s_EditorGroupReady = false;
+    if (s_EditorClipGuard) { // after the group: nothing feeds it any more
+        ma_node_uninit(&s_EditorClipGuard->Base, nullptr);
+        delete s_EditorClipGuard;
+        s_EditorClipGuard = nullptr;
+    }
+    // (The editor clips stay: plain PCM at their own rate, still playable by a later Init, and their ids stay meaningful.)
     UnloadAll();
     s_Paused = false;
     if (s_BusesReady) for (int b = 0; b < kBusCount; ++b) ma_sound_group_uninit(&s_Buses[b]);
@@ -542,15 +658,7 @@ void AudioEngine::Update() {
                            !ma_sound_is_playing(s_PreviewSound.get()))) {
         StopPreview();
     }
-    for (size_t i = 0; i < s_EditorVoices.size();) {
-        EditorVoice& v = s_EditorVoices[i];
-        if (ma_sound_at_end(v.Sound.get()) || !ma_sound_is_playing(v.Sound.get())) {
-            FreeEditorVoice(v);
-            s_EditorVoices.erase(s_EditorVoices.begin() + (std::ptrdiff_t)i);
-        } else {
-            ++i;
-        }
-    }
+    ReapEditorVoices();
     if (s_EncoderOpen && !s_TapsExternal) { // AUDIO_CAPTURE: keep the file fed
         std::vector<float> a, b, c;
         DrainTaps(a, b, c);
@@ -1188,53 +1296,104 @@ void AudioEngine::PlayPreview(const std::string& path) {
     ma_sound_start(s_PreviewSound.get());
 }
 
-bool AudioEngine::PlayEditor(const std::string& path, float volume, float pitch, float pan) {
-    if (!s_Initialized || !s_EditorGroupReady) return false;
-    if (s_Preloaded.find(path) == s_Preloaded.end() && !Load(path)) return false; // UI clips are tiny: decode once, keep
-    std::shared_ptr<const PreloadedClip> clip = s_Preloaded[path];
-    EditorVoice v;
-    v.Clip = clip;
-    v.Buffer = std::make_unique<ma_audio_buffer>();
-    ma_audio_buffer_config bc = ma_audio_buffer_config_init(clip->Format, clip->Channels, clip->FrameCount, clip->Data.data(), nullptr);
-    if (ma_audio_buffer_init(&bc, v.Buffer.get()) != MA_SUCCESS) return false;
-    v.Sound = std::make_unique<ma_sound>();
-    if (ma_sound_init_from_data_source(&s_Engine, (ma_data_source*)v.Buffer.get(), MA_SOUND_FLAG_NO_SPATIALIZATION, &s_EditorGroup,
-                                       v.Sound.get()) != MA_SUCCESS) {
-        ma_audio_buffer_uninit(v.Buffer.get());
+AudioEngine::ClipId AudioEngine::LoadClip(const std::string& path) {
+    const auto known = s_EditorClipIds.find(path);
+    if (known != s_EditorClipIds.end()) return known->second;
+    // The file's own channel count (0 = native: the built-in set is mono, half the memory of stereo) at the engine's rate, so
+    // a voice needs no resample; the engine node spreads a mono clip over both channels before it pans.
+    ma_decoder_config config = ma_decoder_config_init(ma_format_f32, 0, s_Initialized ? ma_engine_get_sample_rate(&s_Engine) : 48000);
+    ma_uint64 frames = 0;
+    void* pcm = nullptr;
+    if (ma_decode_file(path.c_str(), &config, &frames, &pcm) != MA_SUCCESS || !pcm || frames == 0 || config.channels == 0) {
+        ma_free(pcm, nullptr);
+        if (!AssetDatabase::IsUnfetchedExternal(path))
+            Log::Error("Audio: failed to load the editor sound '" + path + "'.", LogContext::Asset(path));
+        return -1;
+    }
+    // ma_decode_file grows its buffer by doubling: trim the slack (the decode keeps its own buffer, no copy).
+    const size_t bytes = (size_t)frames * config.channels * sizeof(float);
+    if (void* trimmed = ma_realloc(pcm, bytes, nullptr)) pcm = trimmed;
+    auto clip = std::make_shared<EditorClip>();
+    clip->Pcm = static_cast<float*>(pcm);
+    clip->Channels = config.channels;
+    clip->SampleRate = config.sampleRate;
+    clip->FrameCount = frames;
+    clip->Path = path;
+    const ClipId id = (ClipId)s_EditorClips.size();
+    s_EditorClips.push_back(std::move(clip));
+    s_EditorClipIds.emplace(path, id);
+    return id;
+}
+
+void AudioEngine::UnloadClip(ClipId id) {
+    if (id < 0 || (size_t)id >= s_EditorClips.size() || !s_EditorClips[(size_t)id]) return;
+    s_EditorClipIds.erase(s_EditorClips[(size_t)id]->Path);
+    s_EditorClips[(size_t)id].reset(); // (a voice playing it holds its own reference: freed when that ends)
+}
+
+bool AudioEngine::PlayEditor(ClipId id, float volume, float pitch, float pan) {
+    if (!s_Initialized || !s_EditorGroupReady || id < 0 || (size_t)id >= s_EditorClips.size()) return false;
+    const std::shared_ptr<const EditorClip>& clip = s_EditorClips[(size_t)id];
+    if (!clip) return false;
+    if (s_EditorFreeCount == 0) ReapEditorVoices(); // every slot busy (stolen voices still fading): free any that have ended
+    if (s_EditorFreeCount == 0) return false;
+    const int slot = s_EditorFree[--s_EditorFreeCount];
+    EditorVoice& v = s_EditorVoices[slot];
+    ma_audio_buffer_config bc = ma_audio_buffer_config_init(ma_format_f32, clip->Channels, clip->FrameCount, clip->Pcm, nullptr);
+    bc.sampleRate = clip->SampleRate; // (a clip loaded before Init at another rate than the device's still plays at its own speed)
+    if (ma_audio_buffer_init(&bc, &v.Buffer) != MA_SUCCESS) {
+        s_EditorFree[s_EditorFreeCount++] = slot;
         return false;
     }
-    ma_sound_set_volume(v.Sound.get(), std::max(volume, 0.0f));
-    ma_sound_set_pitch(v.Sound.get(), std::clamp(pitch, 0.25f, 4.0f));
-    ma_sound_set_pan(v.Sound.get(), std::clamp(pan, -1.0f, 1.0f));
-    if (ma_sound_start(v.Sound.get()) != MA_SUCCESS) {
+    // At pitch 1 no resampler at all (miniaudio would otherwise run one at 1.0, unfiltered); jittered and pitched cues keep it.
+    const bool unpitched = std::fabs(pitch - 1.0f) < 0.001f;
+    const ma_uint32 flags = MA_SOUND_FLAG_NO_SPATIALIZATION | (unpitched ? (ma_uint32)MA_SOUND_FLAG_NO_PITCH : 0u);
+    if (ma_sound_init_from_data_source(&s_Engine, (ma_data_source*)&v.Buffer, flags, &s_EditorGroup, &v.Sound) != MA_SUCCESS) {
+        ma_audio_buffer_uninit(&v.Buffer);
+        s_EditorFree[s_EditorFreeCount++] = slot;
+        return false;
+    }
+    ma_sound_set_volume(&v.Sound, std::max(volume, 0.0f));
+    if (!unpitched) ma_sound_set_pitch(&v.Sound, std::clamp(pitch, 0.25f, 4.0f));
+    ma_sound_set_pan(&v.Sound, std::clamp(pan, -1.0f, 1.0f));
+    if (ma_sound_start(&v.Sound) != MA_SUCCESS) {
         FreeEditorVoice(v);
+        s_EditorFree[s_EditorFreeCount++] = slot;
         return false;
     }
-    // Full: the oldest voice still sounding fades out (it is freed once stopped, in Update) - never a hard stop mid-waveform.
-    int live = 0;
-    for (const EditorVoice& o : s_EditorVoices) live += o.Stolen ? 0 : 1;
-    if (live >= kEditorVoices) {
-        for (EditorVoice& o : s_EditorVoices) {
-            if (o.Stolen) continue;
-            ma_sound_stop_with_fade_in_milliseconds(o.Sound.get(), kEditorStealFadeMs);
-            o.Stolen = true;
-            break;
+    // Full: the oldest voice still sounding fades out (its slot is freed once it has stopped) - never a hard stop mid-waveform.
+    if (s_EditorLive >= kEditorVoices) {
+        int oldest = -1;
+        for (int i = 0; i < s_EditorActiveCount; ++i) {
+            const int o = s_EditorActive[i];
+            if (!s_EditorVoices[o].Stolen && (oldest < 0 || s_EditorVoices[o].Order < s_EditorVoices[oldest].Order)) oldest = o;
+        }
+        if (oldest >= 0) {
+            ma_sound_stop_with_fade_in_milliseconds(&s_EditorVoices[oldest].Sound, kEditorStealFadeMs);
+            s_EditorVoices[oldest].Stolen = true;
+            --s_EditorLive;
         }
     }
-    s_EditorVoices.push_back(std::move(v));
+    v.Clip = clip;
+    v.Order = ++s_EditorOrder;
+    v.Stolen = false;
+    s_EditorActive[s_EditorActiveCount++] = slot;
+    ++s_EditorLive;
     return true;
+}
+
+bool AudioEngine::PlayEditor(const std::string& path, float volume, float pitch, float pan) {
+    if (!s_Initialized || !s_EditorGroupReady) return false;
+    const ClipId id = LoadClip(path); // UI clips are tiny: decoded once, kept (cached by path)
+    return id >= 0 && PlayEditor(id, volume, pitch, pan);
 }
 
 void AudioEngine::SetEditorVolume(float volume) {
     s_EditorVolume = std::clamp(volume, 0.0f, 1.0f);
-    if (s_EditorGroupReady) ma_sound_group_set_volume(&s_EditorGroup, s_EditorVolume);
+    if (s_EditorGroupReady) ma_sound_group_set_volume(&s_EditorGroup, s_EditorVolume); // (glides: the group smooths its volume)
 }
 
-int AudioEngine::EditorVoiceCount() {
-    int live = 0;
-    for (const EditorVoice& v : s_EditorVoices) live += v.Stolen ? 0 : 1;
-    return live;
-}
+int AudioEngine::EditorVoiceCount() { return s_EditorLive; }
 
 void AudioEngine::StopPreview() {
     if (s_PreviewSound) {
