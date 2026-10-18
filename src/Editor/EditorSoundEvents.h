@@ -192,6 +192,18 @@ inline void PlayViaSlot(Event e, float screenX01 = -1.0f) {
     if (PlayFn fn = PlaySlot()) fn((int)e, screenX01);
 }
 
+// The same way back for a press: the shared primitives sound on mouse-down and note the pressed item's ImGui id here, so the
+// host's observer can take the click back softly when the press is dragged off and let go elsewhere. The host installs
+// EditorSound::NotePress (EditorSound::Init); a module installs the host's EditorModuleHostAPI::NoteUIPress. Unset: no take-back.
+using PressFn = void (*)(unsigned itemId);
+inline PressFn& PressSlot() {
+    static PressFn fn = nullptr;
+    return fn;
+}
+inline void NotePress(unsigned itemId) {
+    if (PressFn fn = PressSlot()) fn(itemId);
+}
+
 // While one is alive the shared primitives' generic click sounds are held back: for a control whose action plays its own,
 // more meaningful sound (the toolbar's Save, Undo, Pause...), so it isn't heard twice.
 inline int& SuppressDepth() {

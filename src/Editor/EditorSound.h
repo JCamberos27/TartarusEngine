@@ -26,6 +26,9 @@ struct EventInfo {
 };
 const EventInfo& Info(Event e);
 const char* CategoryName(Category c);
+// The event's trim as a linear gain, with `repeats` rapid repeats' attenuation (Scheduler::kRepeatStepDb each, down to
+// kRepeatFloorDb) on top: a table built once, so a play does no pow.
+float EventGain(Event e, int repeats = 0);
 
 struct Settings {
     bool Enabled = true;
@@ -81,20 +84,30 @@ struct UiFrame {
     bool HoverInPickMenu = false; // ...in a menu / dropdown / context menu whose items are picks (not a modal)
     int PopupDepth = 0;         // open popups (menus, dropdowns, context menus, modals)
     bool DragActive = false;    // an in-editor drag & drop payload is held
-    bool DropTargetHovered = false; // ...over a target that would take it
+    bool DropTargetHovered = false; // ...over a target that takes it (accepted it this frame or the last)
     bool TextActive = false;    // the active widget is a text / number field being typed into
     bool EscPressed = false;
+    // P8: the shared primitives sound on the press, so the observer only has to take a press back that was dragged off.
+    unsigned PressId = 0;       // a primitive's control pressed (and sounded) this frame: its ImGui id (EditorSoundEvents::NotePress)
+    bool ReleasedOnItem = false; // the mouse let go over the item that was held last frame
+    // ...and drops sound on the release frame itself. Observed after ImGui::EndFrame, a delivered drop already reads DragActive
+    // false there (EndFrame lets it go), while one let go elsewhere still reads true until the next frame's EndFrame.
+    bool DragReleased = false;  // the payload's mouse button let go this frame
+    bool DropAccepted = false;  // ...and a target took it (Delivery: only seen when observed before EndFrame)
 };
 struct UiSound {
     Event E;
     float X01;
     float Pitch = 1.0f;
+    float GainDb = 0.0f;        // on top of the event's own level
 };
 class UiObserver {
 public:
     static constexpr float kTickPx = 7.0f;       // mouse travel per slider detent
     static constexpr float kPitchSpanPx = 500.0f; // net travel for the full pitch swing...
     static constexpr float kPitchSwing = 0.08f;   // ...of +-8%
+    static constexpr float kCancelPitch = 0.94f;  // a press dragged off: ClickCancel, a little lower...
+    static constexpr float kCancelGainDb = -6.0f; // ...and well under a click
     void Step(const UiFrame& f, std::vector<UiSound>& out);
     void Reset() { *this = UiObserver{}; }
 
@@ -105,8 +118,12 @@ private:
     bool m_Sliding = false;
     unsigned m_SlideId = 0;
     float m_TickAccum = 0.0f, m_Net = 0.0f;
+    unsigned m_PressId = 0;     // the press that sounded, until its item lets go
+    bool m_DropSaid = false;    // this drag's drop already sounded on its release frame
 };
 void ObserveImGui(); // host, once a frame before ImGui::Render
+// A shared primitive's press (EditorSoundEvents::PressSlot, installed by Init): read by the next ObserveImGui.
+void NotePress(unsigned itemId);
 
 // The viewport's transform gizmo, which isn't an ImGui item: the slider sounds for its drag. A grab when it engages, a release when
 // it lets go, and between them a tick for each snap step it lands on (snapping) or per stretch of mouse travel (free).
@@ -118,11 +135,13 @@ struct GizmoTracker {
 };
 void GizmoFrame(bool usingNow, bool moved, bool snapped);
 
-// The files of `event` in `dir`: <Name>.wav, else <Name>_1.wav, <Name>_2.wav ... in order.
+// The files of `event` in `dir`: <Name>.wav, else <Name>_1.wav, <Name>_2.wav ... in order. (Init lists each folder once and
+// resolves every event against that listing; this lists it for the one event.)
 std::vector<std::string> FindVariants(const std::string& dir, Event e);
 
-// The service. Init finds and preloads every event's files: the override folder's (premium sounds fetched from the Drive)
-// replace the built-in set's event by event. Missing files just mean that event is silent.
+// The service. Init finds every event's files and preloads the built-in set; the override folder's (premium sounds fetched from
+// the Drive) replace the built-in set's event by event, decoded only while UsePremium is on (Apply loads / frees them).
+// Missing files just mean that event is silent.
 void Init(const std::string& builtInDir, const std::string& overrideDir = {});
 void Shutdown();
 void Apply(const Settings& s);
@@ -140,6 +159,9 @@ int PremiumEventCount();
 constexpr double kErrorQuietMs = 2000.0;
 void Update();
 const Settings& Current();
+// Anything to hear: initialised, switched on and the master above 0. Play, the observers and the per-frame hooks idle
+// otherwise, and re-prime on the edge back on (so what changed while off doesn't sound then).
+bool Active();
 void SetWindowFocused(bool focused);
 // The "done" chimes (imports, shader / module reloads, sync, builds): the ones counted while the editor is in the background.
 bool IsDoneChime(Event e);
@@ -149,7 +171,7 @@ int AwayDoneCount();
 // A drop the editor handled itself (a zone that isn't an ImGui drop target, e.g. Hierarchy rows): the observer's
 // DropAccept / DropReject for the drag ending stays quiet this frame and the next. The handler plays its own sound.
 void SuppressDropSound();
-void Play(Event e, float screenX01 = -1.0f, float pitchScale = 1.0f);
+void Play(Event e, float screenX01 = -1.0f, float pitchScale = 1.0f, float gainDb = 0.0f);
 // Something played this frame (an action's own sound): the selection change it caused stays quiet, so Delete, Paste or Undo
 // isn't followed by a Select / Deselect on top.
 bool PlayedThisFrame();

@@ -1215,8 +1215,11 @@ private:
     int m_QuietDirtyEdgeFrames = 0;
     // Docking: per window, docked in the editor dockspace or not, and its tab slot.
     void DockFrame();
-    struct DockSnap { bool Docked = false; ImGuiID Node = 0; int Tab = -1; int TabCount = 0; };
-    std::unordered_map<ImGuiID, DockSnap> m_DockSnaps;
+    struct DockSnap { ImGuiID Window = 0; bool Docked = false; ImGuiID Node = 0; int Tab = -1; int TabCount = 0; };
+    std::vector<DockSnap> m_DockSnaps;     // the last walk's (~20 windows: a linear lookup beats hashing); empty = re-prime
+    std::vector<DockSnap> m_DockSnapsNext; // this walk's, swapped in after it, so neither buffer reallocates frame to frame
+    int m_DockWindowCount = -1;            // ImGui's window counts last frame (all, plus submitted): a walk when they move
+    int m_DockActiveCount = -1;
     int m_DockQuietFrames = 10;       // startup, layout loads and resets: re-prime, no sounds
     bool m_DockReorderPending = false; // a tab moved while dragging; TabReorder on release
 

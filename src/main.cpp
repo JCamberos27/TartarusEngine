@@ -2259,8 +2259,9 @@ int main(int argc, char** argv) {
                 // #88 — prompt for ANY unsaved scene, titled or not (Save on an untitled one
                 // routes through Save As).
                 if (exitApproved || (!editor.IsDirty() && !editor.HasUnsavedScripts())) {
-                    // The exit chime: the window goes at once, then ~0.5 s for the sound to ring out (miniaudio mixes on its
-                    // own thread). No wait at all when it can't be heard: sounds off, master 0, TARTARUS_MUTE, or not played.
+                    // The exit chime: the window goes at once, then the sound rings out (miniaudio mixes on its own thread):
+                    // until no editor voice is left, polled every 10 ms, at most 520 ms (the clip is 480). No wait at all
+                    // when it can't be heard: sounds off, master 0, TARTARUS_MUTE, or not played.
                     static const bool envMuted = [] {
                         char* muteEnv = nullptr;
                         size_t muteLen = 0;
@@ -2273,7 +2274,13 @@ int main(int argc, char** argv) {
                         glfwHideWindow(window.Handle());
                         const int playedBefore = EditorSound::PlayedCount();
                         EditorSound::Play(EditorSound::Event::EditorExit);
-                        if (EditorSound::PlayedCount() > playedBefore) std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                        if (EditorSound::PlayedCount() > playedBefore) {
+                            const auto ringOutEnd = std::chrono::steady_clock::now() + std::chrono::milliseconds(520);
+                            do {
+                                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                                AudioEngine::Update(); // reaps the voices that played out: the frame loop that would has stopped
+                            } while (AudioEngine::EditorVoiceCount() > 0 && std::chrono::steady_clock::now() < ringOutEnd);
+                        }
                     }
                     break;
                 }
