@@ -168,6 +168,17 @@ enum class Event : uint8_t {
     PackageFail,
     BuildProgress,     // ...a packaged build stage / quarter passed (pitch climbs)
     Digest,            // back to the editor after "done" chimes played while it was in the background
+    // Motion v2 (paired with the moments in docs/EDITOR_DESIGN_SYSTEM.md §3, categories 10-15)
+    ThemeSwitch,       // the editor theme eases to another one
+    FlingRelease,      // a fling let go hard enough to coast (a soft whoosh, louder for faster flings)
+    MotionSnapTick,    // a gizmo drag crossed a snap step (rate-capped tick)
+    FolderZoomIn,      // the Asset Browser dives into a folder
+    FolderZoomOut,     // ...back out to its parent
+    RadialOpen,        // the viewport's hold-Space radial menu opens
+    RadialPick,        // ...an item is picked on release
+    RadialClose,       // ...released over nothing
+    CardFlip,          // an Inspector component card turns to its raw-fields side (or back)
+    NodePop,           // a new Animator node pops in
     Count
 };
 

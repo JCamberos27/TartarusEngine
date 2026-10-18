@@ -1256,6 +1256,8 @@ private:
     bool m_ShowLighting = false;
     bool m_ShowAudioDebug = false;
     bool m_ShowSoundBoard = false;
+    bool m_ShowMotionDebugger = false; // Window > Motion Debugger (Glass::ImAnimContext::DrawDebugger)
+    bool m_ThemeSwitchTween = false;   // ApplyPendingTheme -> ApplyThemeStyle: ease to the new theme
     float m_AudioGrHold = 0.0f;      // the Audio panel's limiter gain-reduction readout (held, decaying)
     float m_AudioGlueHold = 0.0f;    // ... and the glue compressor's
     // The Audio panel's "Keep after Play": the live mix values written to the scene once Play stops (the scene is restored from its

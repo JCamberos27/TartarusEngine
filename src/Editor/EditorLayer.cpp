@@ -58,6 +58,7 @@
 #include "Glass/GlassDragMotion.h"   // the drag ghost
 #include "Glass/GlassFeedbackMotion.h" // the About title's staggered headline
 #include "Glass/GlassTheme.h"       // ConfigureMacEngineTheme (the opt-in Glass theme)
+#include "Glass/GlassStyleMotion.h" // theme tweens and the play / prefab / focus moods
 
 #include <imgui.h>
 #include <imgui_internal.h> // DockBuilder* — only used once, to lay out the default dock tree on first run
@@ -398,6 +399,13 @@ void EditorLayer::ApplyThemeStyle() {
     }
 
     ImGuiStyle& style = ImGui::GetStyle();
+    // Hand the old and new styles to the style motion on the way out (either return below): a
+    // theme switch eases between them, anything else just becomes the new base for the moods.
+    struct ThemeHandoff {
+        ImGuiStyle before;
+        bool animate;
+        ~ThemeHandoff() { Glass::StyleMotionThemeChanged(before, animate); }
+    } handoff{style, m_ThemeSwitchTween};
     if (GlassThemeActive()) {
         // The opt-in Black Glass theme (Preferences > General > Editor theme): Tartarus's own
         // sizes, spacing and palette, with glass materials over them (GlassTheme.h).
@@ -1493,6 +1501,34 @@ void EditorLayer::DrawSettingsWindow(World& world) {
         if (SettingsCheckbox("Reduce motion", &prefs.ReduceMotion)) EditorSettings::Save();
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Makes the nav-gizmo view-preset camera snap instantly instead of easing, and parks the editor's animations.");
+        if (prefs.ReduceMotion) ImGui::BeginDisabled();
+        SettingsLabel("Motion speed");
+        {
+            bool committed = false;
+            EditorUI::SliderFloat("##Motion speed", &prefs.MotionSpeed, 0.5f, 2.0f, "%.2fx", 0, nullptr, &committed);
+            if (committed) EditorSettings::Save();
+        }
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Plays every editor animation faster or slower. 1x is the designed timing.");
+        if (SettingsCheckbox("Theme and mood transitions", &prefs.MotionThemeTweens)) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("The theme switch eases instead of snapping; panels recede in Play, dim while the viewport has focus, and the chrome lifts in Prefab mode.");
+        if (SettingsCheckbox("Inertia", &prefs.MotionInertia)) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Lists, the Animator graph, timelines and dragged values coast after you let go, like a trackpad.");
+        if (SettingsCheckbox("Living gradients", &prefs.MotionGradients)) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("The busy sheen on the menu and status bars, travelling rims, and the glow that follows the pointer.");
+        if (SettingsCheckbox("Rolling numbers", &prefs.MotionRollingNumbers)) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Counters and readouts roll to new values like an odometer.");
+        if (SettingsCheckbox("Viewport motion", &prefs.MotionViewport)) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Gizmo springs, the selection outline sweep, view-change transitions and the radial menu's motion.");
+        if (SettingsCheckbox("Startup sequence", &prefs.MotionStartup)) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Panels assemble when the editor opens (about a second; any click or key skips it).");
+        if (prefs.ReduceMotion) ImGui::EndDisabled();
         break;
 
     case 2: // Grid & Snapping

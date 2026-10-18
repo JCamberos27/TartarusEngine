@@ -147,7 +147,9 @@ struct EditorMotionHooks; // EditorMotionHooks.h
 //        through the host's EditorSound (EditorSoundEvents::Event values).
 //   43 - Editor UI sounds P8: NoteUIPress, the shared primitives' press (they sound on mouse-down), so the host can take a
 //        press back with a soft cancel when it is dragged off.
-constexpr std::uint32_t kEditorModuleAPIVersion = 43;
+//   44 - Glass Motion v2: EditorMotionHooks grows CategoryOn, Odometer, Inertia*, DrawSheen,
+//        DrawCursorGlow, RippleDelay, BeginLayer / EndLayer and seven new motion tokens.
+constexpr std::uint32_t kEditorModuleAPIVersion = 44;
 
 // Editor Enhancers / vFolders (API v40): how one Asset Browser folder looks. POD - crosses the
 // module boundary. Glyphs are UTF-8 Font Awesome characters (at most 4 bytes + NUL).

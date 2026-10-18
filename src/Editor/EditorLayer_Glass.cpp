@@ -37,6 +37,7 @@
 #include "Glass/GlassMotion.h"
 #include "Glass/GlassMotionHooks.h"
 #include "Glass/GlassDragMotion.h"
+#include "Glass/GlassStyleMotion.h"
 #include "Glass/GlassTheme.h"
 #include "Glass/GlassTokens.h"
 
@@ -341,7 +342,9 @@ void EditorLayer::ApplyPendingTheme() {
     if (prefs.EditorThemeId == themeId) return;
     prefs.EditorThemeId = themeId;
     if (!m_Headless) EditorSettings::Save(); // a headless run (smoke test) never writes prefs
+    m_ThemeSwitchTween = true; // ease from the old theme to the new one (GlassStyleMotion.h)
     ApplyThemeStyle();
+    m_ThemeSwitchTween = false;
     ApplyGizmoAccent();
     if (themeId == 0) ReleaseGlass();
 }
@@ -377,8 +380,27 @@ void EditorLayer::GlassFrameBegin() {
     // through it (EditorMotionHooks.h) whether or not Glass is on. At rest it costs nothing.
     EditorTheme::SetMotionHooks(&Glass::HostMotionHooks());
     Glass::ImAnimContext& motion = Glass::Motion();
-    motion.SetReduceMotion(EditorSettings::Get().ReduceMotion);
+    const EditorSettings& prefs = EditorSettings::Get();
+    motion.SetReduceMotion(prefs.ReduceMotion);
+    motion.SetSpeed(prefs.MotionSpeed);
+    motion.SetCategoryEnabled(Glass::MotionCategory::ThemeTweens, prefs.MotionThemeTweens);
+    motion.SetCategoryEnabled(Glass::MotionCategory::Inertia, prefs.MotionInertia);
+    motion.SetCategoryEnabled(Glass::MotionCategory::Gradients, prefs.MotionGradients);
+    motion.SetCategoryEnabled(Glass::MotionCategory::RollingNumbers, prefs.MotionRollingNumbers);
+    motion.SetCategoryEnabled(Glass::MotionCategory::Viewport, prefs.MotionViewport);
+    motion.SetCategoryEnabled(Glass::MotionCategory::Startup, prefs.MotionStartup && !m_Headless);
     motion.NewFrame();
+    // The startup sequence plays once, on the first frame the editor draws.
+    static bool s_StartupBegun = false;
+    if (!s_StartupBegun) { s_StartupBegun = true; motion.BeginStartup(); }
+    // Theme tweens and the play / prefab / viewport-focus moods (every theme).
+    bool viewportFocused = false;
+    if (ImGuiWindow* nav = ImGui::GetCurrentContext()->NavWindow) {
+        const char* name = nav->RootWindow ? nav->RootWindow->Name : nav->Name;
+        viewportFocused = std::strstr(name, "###Scene") != nullptr || std::strstr(name, "###Game") != nullptr;
+    }
+    Glass::StyleMotionFrame(m_InPlayMode, InPrefabMode(), viewportFocused, GlassThemeActive());
+    motion.DrawDebugger(&m_ShowMotionDebugger);
     if (!GlassThemeActive()) return;
     // A see-through window shows the blurred desktop behind every panel: nothing to paint.
     // Otherwise the panels sit over the plain black canvas.
