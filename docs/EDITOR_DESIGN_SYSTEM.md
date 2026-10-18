@@ -25,7 +25,8 @@ The setting is stored as `glassTheme` in the editor preferences.
 | `src/Editor/Glass/GlassTokens.h` | Every number in this document: palette, glass material, spacing, radii, type, motion. |
 | `src/Editor/Glass/GlassTheme.{h,cpp}` | `ConfigureMacEngineTheme`, the canvas, squircles, glass HUD plates. |
 | `src/Editor/Glass/GlassCompositor.{h,cpp}`, `GlassSurfaces.cpp` | Glass under every floating window, and the arrival motion. |
-| `src/Editor/Glass/GlassMotion.{h,cpp}` | `ImAnimContext`: the zero-at-rest animation map in front of ImAnim. |
+| `src/Editor/Glass/GlassMotion.{h,cpp}` | `ImAnimContext`: the zero-at-rest animation map in front of ImAnim, plus the Motion v2 helpers (odometer, inertia, gradients, layers, startup, debugger). |
+| `src/Editor/Glass/GlassStyleMotion.{h,cpp}` | Category 10: the theme tween and the play / focus / prefab moods. |
 | `src/Editor/EditorMotionHooks.h`, `src/Editor/Glass/GlassMotionHooks.{h,cpp}` | The motion bridge: `Glass::Motion()` for the shared widgets and the editor module (API v41). |
 | `src/Editor/Glass/GlassDockMotion.{h,cpp}`, `GlassDragMotion.{h,cpp}`, `GlassFeedbackMotion.{h,cpp}` | Categories 6 to 9: the dock space and viewports, the drag ghost, feedback moments. |
 | `src/Editor/Glass/GlassLayout.{h,cpp}` | Clip guard, animated-height reveals, staggered rows, the input policy, `MotionButton`. |
@@ -221,6 +222,48 @@ pops and the shake.
 * *Toast limits.* At most 4 toasts show at once. Click a toast to dismiss it.
 * *Arrivals.* A surface arrives the first frame it is drawn after not being drawn: a menu opening,
   a tooltip appearing, a panel's tab being selected, every panel at launch.
+
+### 3.1 Motion v2: bolder, still a tool
+
+Motion v2 adds six categories on top of the table above. Each one has its own switch in
+**Preferences ▸ Viewport ▸ Motion**, alongside a **Motion speed** slider from 0.5x to 2x (ImAnim's
+global time scale plus the Glass motion clock). Reduce Motion turns all six off. A category that is
+off resolves instantly or draws its static look.
+
+**Monochrome rule.** Every gradient runs from white to transparent. The state "tints" change
+brightness and opacity, never hue.
+
+| Category | Interaction | Easing | Duration (ms) | Visual delta |
+| --- | --- | --- | --- | --- |
+| **10. Theme and moods** (`GlassStyleMotion`) | Theme switch | smooth bezier | 420 | The whole `ImGuiStyle` (colours in OKLAB, sizes, radii) eases from the old theme to the new one |
+| | Play: panels recede | smooth bezier | 520 in / 300 out | Glass panel black 0.15 → 0.38 (Tartarus: rgb × 0.55); text 30% toward disabled |
+| | Viewport focus | smooth bezier | 360 / 300 | The same at 0.24 / × 0.80 / 12%; while playing, the stronger mood wins |
+| | Prefab mode | smooth bezier | 360 / 300 | Menu bar, title, tabs and headers 7% toward white; borders +0.10 alpha |
+| | Play punch-in | spring 1 / 240 / 14 | 520 | The Game view scales 1.00 → 1.01 → 1.00 with a rim glint |
+| | Toolbar fold | smooth bezier | 260 | Buttons that don't apply in Play fold away (width and alpha) and return on Stop |
+| **11. Living gradients** | Busy sheen | linear sweep | 2400 per pass | A white band (22% of the bar, 10% alpha) crosses the menu and status bars while compiling, importing or building |
+| | Play frame | linear lap | 6000 per lap | A white gradient (28% of the perimeter) travels around the Scene and Game views |
+| | Selection rim | linear lap | 9000 per lap | A faint travelling rim (22%) on the focused panel |
+| | Cursor glow | n/a | n/a | A 56 px white radial glow follows the pointer across primary buttons |
+| **12. Rolling numbers** | Odometer | spring 1 / 200 / 22 | 480 | Each digit slides vertically like a mechanical counter; an 18% white flash fades over 520 ms |
+| **13. Inertia** | Wheel and fling coast | exponential decay e^(−4.2 t) | until < 12 px/s | A coast from v travels v / 4.2. Wheel notches within 140 ms accelerate up to 2.6x. A release under 220 px/s doesn't coast |
+| **14. Structure** | Card flip | smooth bezier | 380 | A component card turns over to its raw-fields side |
+| | Folder zoom | smooth bezier | 340 | The new grid grows from 86% about the clicked tile; a grid ripple spreads 26 ms per step (capped at 18) |
+| | Unfold / node pop | spring 1 / 200 / 20, 1 / 220 / 15 | 440 / 480 | A new card unfolds; a new graph node pops in |
+| | Reparent fly | smooth bezier | 360 | A moved Hierarchy row travels to its new place |
+| | Log slide, caret, line sweep | `OutCubic` / smooth | 220 / 70 / 700 | Console lines slide in 10 px; the IDE caret glides; a jumped-to line gets one white sweep |
+| **15. Viewport and startup** | Gizmo hover | spring 1 / 260 / 18 | 360 | Handles grow 18% and brighten; the dragged axis pulses at 2.2 Hz |
+| | Selection outline | smooth bezier | 300 | The outline sweeps on |
+| | View cube / radial menu | spring | 520 / 360 | The view cube turns; the hold-Space radial menu blooms, its labels following the ring |
+| | **Startup sequence** | per panel `OutCubic` | ≈ 1200 in all | Panels assemble in a wave from the centre (520 each, +70 per step); rims glint in order; the headline staggers in. Any click or key settles it |
+
+**Sounds.** Ten editor sound events go with these moments: `ThemeSwitch`, `FlingRelease` (pitch
+and gain follow the fling's speed), `MotionSnapTick`, `FolderZoomIn` / `FolderZoomOut`,
+`RadialOpen` / `RadialPick` / `RadialClose`, `CardFlip` and `NodePop`.
+
+**Motion Debugger** (Window ▸ Motion Debugger). Slow motion from 0.05x to 1x for the current session,
+the live entry count and held bytes, the pointer speed, each category's state, and ImAnim's own
+unified inspector. ImAnim's profiler runs only while the window is open.
 
 ---
 
@@ -433,6 +476,27 @@ bytes of authored shapes, not animation state, and `HeldBytes()` doesn't count t
 system is initialised with room for 16 clips and 8 instances instead of ImAnim's default 256 /
 4096.
 
+**Motion v2 helpers** (§3.1) follow the same rules:
+
+* `RollingValue` / `Odometer` animate a float *offset* on its own channel (`GLS4`). The previous
+  value lives in the window's ImGui storage, not in the map, so a readout at rest holds no entry.
+* Inertia is an entry kind of its own (kind 5). A tracked drag, a coast and a window's wheel glide
+  each exist only while moving and are erased the frame they slow below 12 px/s. ImAnim's
+  `iam_drag_*` isn't used: it has no coast, and it allocates a state block per id that is never
+  freed.
+* `DrawSheen`, `DrawTravellingRim` and `DrawCursorGlow` are stateless functions of the motion clock.
+  The rim samples a white `iam_gradient` in OKLAB.
+* `BeginLayer` / `EndLayer` transform the vertices drawn between them with an `iam_transform`
+  matrix. They hold nothing.
+* `GridRippleDelay` is plain Euclidean distance times a step, capped. ImAnim's
+  `iam_stagger_grid_delay` normalises by the farthest tile, which is an O(tiles) scan per call.
+* `TextOnPath` (`iam_text_path`) follows a defined path. `TextAlongCubic` places glyphs along a
+  wire's bezier without defining a path, so a graph that redraws every frame registers nothing.
+* The style motion registers two `ImGuiStyle` snapshots (`iam_style_register`), only when a theme
+  actually changes, and blends them with `iam_style_blend_to` under a pulse. `iam_style_tween`
+  isn't used: it re-registers its source and restarts every frame once it has finished. Like clip
+  definitions, the two snapshots are a fixed cost and aren't counted by `HeldBytes()`.
+
 **Every theme.** The motion clock ticks whether or not Glass is on (`EditorLayer::GlassFrameBegin`),
 because the shared widgets and the editor module animate through it.
 
@@ -440,7 +504,7 @@ because the shared widgets and the editor module animate through it.
 headers. They call `EditorTheme::Motion*` (`EditorTheme.h`), which goes through an
 `EditorMotionHooks` table of plain C function pointers. The host installs its table at the start of
 every frame. The module receives the same table through `EditorModuleHostAPI::GetMotionHooks`
-(API v41) and installs it on its side in `Draw`. A motion is named by an `EditorMotionToken`, and the host maps it
+(API v41; the Motion v2 slots and tokens arrived in v44) and installs it on its side in `Draw`. A motion is named by an `EditorMotionToken`, and the host maps it
 to its `MotionSpec`, so no Glass type crosses the boundary. With no table installed, every helper
 falls back to `EditorTheme::AnimT`.
 
