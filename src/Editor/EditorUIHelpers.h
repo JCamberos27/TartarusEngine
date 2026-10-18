@@ -37,12 +37,27 @@ namespace EditorUI {
         if (c <= 0.0f) return 0.0f;
         return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f);
     }
+    // Popups PopupEdgeSound has heard open and not yet closed, in this binary (a field and its popup are drawn by the same one).
+    inline int& PopupEdgeOpenCount() {
+        static int count = 0;
+        return count;
+    }
+    // Nothing for PopupEdgeSound to hear: no sound slot, or no popup open anywhere and none of ours left to close. The
+    // common frame, so a colour field costs no ID hashing or storage lookups. (A closing popup is already gone from
+    // ImGui's stack on its close frame, but the count still holds it, so the close edge is heard.)
+    inline bool PopupEdgeIdle() {
+        return EditorSoundEvents::PlaySlot() == nullptr ||
+               (PopupEdgeOpenCount() == 0 && !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup));
+    }
     // A popup's open state changing since last frame, remembered per id in the window's storage: PickerOpen /
     // PickerClose. Shared by host and modules, so it plays through the slot. `key` must be unique in the current ID scope.
     inline void PopupEdgeSound(ImGuiID key, bool open, EditorSoundEvents::Event onOpen, EditorSoundEvents::Event onClose) {
+        if (PopupEdgeIdle()) return;
         ImGuiStorage* st = ImGui::GetStateStorage();
         if (open == st->GetBool(key, false)) return;
         st->SetBool(key, open);
+        int& openCount = PopupEdgeOpenCount();
+        openCount = open ? openCount + 1 : std::max(openCount - 1, 0);
         const ImGuiViewport* vp = ImGui::GetMainViewport();
         const float x = vp && vp->Size.x > 0.0f
             ? std::clamp(((ImGui::GetItemRectMin().x + ImGui::GetItemRectMax().x) * 0.5f - vp->Pos.x) / vp->Size.x, 0.0f, 1.0f)
@@ -51,6 +66,7 @@ namespace EditorUI {
     }
     // Call right after ImGui::ColorEdit3/4(label, ...): its built-in picker popup (opened under the label's ID) opening or closing.
     inline void ColorPickerSound(const char* label) {
+        if (PopupEdgeIdle()) return;
         ImGui::PushID(label);
         const bool open = ImGui::IsPopupOpen("picker");
         const ImGuiID key = ImGui::GetID("##pickerWasOpen");

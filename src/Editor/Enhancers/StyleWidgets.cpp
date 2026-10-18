@@ -91,8 +91,9 @@ bool PaletteColorRow(const char* id, std::uint32_t& color) {
     ImGui::SameLine(0.0f, gap);
     if (ImGui::GetCursorScreenPos().x + sw > rightEdge) ImGui::NewLine();
     if (ImGui::InvisibleButton("##custom", ImVec2(sw, sw))) ImGui::OpenPopup("##customColor");
-    EditorUI::PopupEdgeSound(ImGui::GetID("##customWasOpen"), ImGui::IsPopupOpen("##customColor"),
-                             EditorSoundEvents::Event::PickerOpen, EditorSoundEvents::Event::PickerClose);
+    if (!EditorUI::PopupEdgeIdle()) // skips the id hashing in the common case: no popup open, none was
+        EditorUI::PopupEdgeSound(ImGui::GetID("##customWasOpen"), ImGui::IsPopupOpen("##customColor"),
+                                 EditorSoundEvents::Event::PickerOpen, EditorSoundEvents::Event::PickerClose);
     {
         const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
         dl->AddRectFilledMultiColor(mn, mx, IM_COL32(229, 72, 77, 255), IM_COL32(242, 201, 76, 255),
