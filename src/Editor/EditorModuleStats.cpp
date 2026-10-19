@@ -37,6 +37,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 
@@ -65,17 +66,28 @@ const char* FormatThousands(int value, char* buf, size_t bufSize) {
 
 // One row of a stats table: label left in the secondary colour, the value right-aligned in the
 // monospace face. `dim` greys both for a secondary reading (e.g. "Culled", "Inactive").
-void StatRow(const char* label, int value, bool dim = false) {
+// `rolls`: the value is drawn as rolling digits (Motion v2 RollingNumbers) instead of with
+// thousands separators, for the readouts that hold still at rest and change on an edit (counts).
+void StatRow(const char* label, int value, bool dim = false, bool rolls = false) {
     char buf[16];
     ImGui::TableNextRow();
     ImGui::TableNextColumn();
     ImGui::TextColored(dim ? EditorTheme::Dim : EditorTheme::Secondary, "%s", label);
     ImGui::TableNextColumn();
-    FormatThousands(value, buf, sizeof(buf));
     EditorTheme::PushMono();
     const float w = ImGui::GetContentRegionAvail().x;
-    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + w - ImGui::CalcTextSize(buf).x);
-    ImGui::TextColored(dim ? EditorTheme::Dim : EditorTheme::Text, "%s", buf);
+    const ImVec4 col = dim ? EditorTheme::Dim : EditorTheme::Text;
+    if (rolls && EditorTheme::MotionCategoryOn(EditorTheme::MotionCat::RollingNumbers)) {
+        // The mono face: every digit the same width, so the plain digits measure the readout.
+        std::snprintf(buf, sizeof(buf), "%d", value);
+        const ImVec2 p(ImGui::GetCursorScreenPos().x + w - ImGui::CalcTextSize(buf).x, ImGui::GetCursorScreenPos().y);
+        EditorTheme::MotionOdometer(ImGui::GetID(label), ImGui::GetWindowDrawList(), p, (double)value, 0, EditorTheme::U32(col));
+        ImGui::Dummy(ImVec2(w, ImGui::GetTextLineHeight()));
+    } else {
+        FormatThousands(value, buf, sizeof(buf));
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + w - ImGui::CalcTextSize(buf).x);
+        ImGui::TextColored(col, "%s", buf);
+    }
     EditorTheme::PopFont();
 }
 
@@ -189,10 +201,30 @@ void Draw(const EditorModuleHostAPI& host) {
         // The headline: frames per second large, the frame time beside it.
         {
             char fps[32], ms[32];
-            std::snprintf(fps, sizeof(fps), "%.0f", smoothedMs > 0.0001f ? 1000.0f / smoothedMs : 0.0f);
+            // The FPS rolls to a held value: it moves on a change of 2 or more, or after a second
+            // of a smaller one, so the digits don't churn on frame-to-frame jitter (and a steady
+            // frame rate holds no motion at all). Held in the window's own storage.
+            const int fpsNow = (int)std::lround(smoothedMs > 0.0001f ? 1000.0f / smoothedMs : 0.0f);
+            ImGuiStorage* st = ImGui::GetStateStorage();
+            const ImGuiID heldKey = ImGui::GetID("##fpsHeld"), atKey = ImGui::GetID("##fpsHeldAt");
+            int held = st->GetInt(heldKey, -1);
+            const float heldAt = st->GetFloat(atKey, 0.0f);
+            const float now = (float)ImGui::GetTime();
+            if (held < 0 || std::abs(fpsNow - held) >= 2 || (fpsNow != held && now - heldAt > 1.0f)) {
+                held = fpsNow;
+                st->SetInt(heldKey, held);
+                st->SetFloat(atKey, now);
+            }
+            std::snprintf(fps, sizeof(fps), "%d", held);
             std::snprintf(ms, sizeof(ms), "%.2f ms", smoothedMs);
             ImGui::PushFont(EditorTheme::MonoFont(), EditorTheme::Px(26.0f));
-            ImGui::TextColored(EditorTheme::Text, "%s", fps);
+            {
+                const ImVec2 p = ImGui::GetCursorScreenPos();
+                const ImVec2 sz = ImGui::CalcTextSize(fps);
+                EditorTheme::MotionOdometer(ImGui::GetID("##fpsRoll"), ImGui::GetWindowDrawList(), p, (double)held, 0,
+                                            EditorTheme::U32(EditorTheme::Text));
+                ImGui::Dummy(sz);
+            }
             ImGui::PopFont();
             ImGui::SameLine(0.0f, EditorTheme::Px(6.0f));
             EditorTheme::PushHeading();
@@ -211,19 +243,19 @@ void Draw(const EditorModuleHostAPI& host) {
 
         EditorUIPrimitives::SectionHeader("RENDERING");
         if (ImGui::BeginTable("##rendertbl", 2, ImGuiTableFlags_SizingStretchProp)) {
-            StatRow("Draw calls", rs.DrawCalls);
-            StatRow("Triangles", rs.Triangles);
-            StatRow("Vertices", rs.Vertices);
-            if (rs.Culled > 0) StatRow("Culled (outside view)", rs.Culled, true);
+            StatRow("Draw calls", rs.DrawCalls, false, true);
+            StatRow("Triangles", rs.Triangles, false, true);
+            StatRow("Vertices", rs.Vertices, false, true);
+            if (rs.Culled > 0) StatRow("Culled (outside view)", rs.Culled, true, true);
             ImGui::EndTable();
         }
         EditorUIPrimitives::SectionHeader("SCENE");
         if (ImGui::BeginTable("##entitytbl", 2, ImGuiTableFlags_SizingStretchProp)) {
-            StatRow("Entities", entityCount);
-            StatRow("Renderers", renderableCount);
-            StatRow("Colliders", colliderCount);
-            StatRow("Lights", lightCount);
-            if (inactiveCount > 0) StatRow("Inactive", inactiveCount, true);
+            StatRow("Entities", entityCount, false, true);
+            StatRow("Renderers", renderableCount, false, true);
+            StatRow("Colliders", colliderCount, false, true);
+            StatRow("Lights", lightCount, false, true);
+            if (inactiveCount > 0) StatRow("Inactive", inactiveCount, true, true);
             ImGui::EndTable();
         }
 

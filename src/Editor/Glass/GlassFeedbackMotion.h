@@ -26,4 +26,20 @@ void BusyShimmer(float timeSeconds, float& t, float& segFrac, float& bright);
 // Returns the text's size so the caller can lay out around it.
 ImVec2 StaggeredHeadline(ImGuiID id, const char* text, ImVec2 pos, ImU32 col);
 
+// --- Motion v2 (shell) ---
+// The busy sheen (category 11): a soft white band sweeping the menu bar ("##Toolbar") and the
+// status bar ("##StatusBar") while something works. `busy` eases a strength in and out; at rest
+// (idle and faded) nothing is drawn and nothing is held. Once a frame, after both bars are drawn.
+void DrawChromeSheen(bool busy);
+
+// A progress percentage as rolling digits (Odometer) at `pos`, top-left. Returns its width.
+// ProgressPercentWidth is the room it takes at most ("100%").
+float DrawProgressPercent(ImGuiID id, ImDrawList* dl, ImVec2 pos, float fraction, ImU32 col);
+float ProgressPercentWidth();
+
+// The startup sequence's headline: `title` large, `subtitle` below it, centred on `centre`. Each
+// staggers in (StaggeredHeadline), holds, and fades before the sequence ends; drawn in its own
+// click-through overlay window over the panels. Call once a frame while the sequence runs.
+void DrawStartupHeadline(const char* title, const char* subtitle, ImVec2 centre);
+
 } // namespace Glass

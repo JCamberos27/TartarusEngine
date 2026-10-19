@@ -32,6 +32,9 @@
 #include <map>
 #include <unordered_map>
 #include "EditorLayer_AnimatorInternal.h"
+#include "Glass/GlassMotion.h" // wire flow, node pops, the live-state glide, coasting pan
+#include "Glass/GlassTokens.h"
+#include <imgui_internal.h>    // ImHashStr
 
 using namespace EditorInternal;
 using namespace AnimatorUI;
@@ -65,6 +68,34 @@ void Arrowhead(ImDrawList* dl, ImVec2 at, ImVec2 dir, float size, ImU32 col) {
     const ImVec2 n(-dir.y, dir.x);
     dl->AddTriangleFilled(at + dir * size, at - dir * size * 0.6f + n * size * 0.7f,
                           at - dir * size * 0.6f - n * size * 0.7f, col);
+}
+
+ImVec2 CubicAt(ImVec2 p0, ImVec2 p1, ImVec2 p2, ImVec2 p3, float u) {
+    const float v = 1.0f - u;
+    return p0 * (v * v * v) + p1 * (3.0f * v * v * u) + p2 * (3.0f * v * u * u) + p3 * (u * u * u);
+}
+
+// A transition's conditions as one short line for its wire ("Speed > 0.50 & Grounded"); the first transition of
+// a bundle, with "+N" for the rest.
+std::string ConditionLabel(const AC::Layer& Ly, const std::vector<int>& transitions) {
+    if (transitions.empty() || transitions.front() < 0 || transitions.front() >= (int)Ly.Transitions.size()) return {};
+    const AC::Transition& t = Ly.Transitions[transitions.front()];
+    std::string out;
+    char buf[32];
+    for (const auto& c : t.Conditions) {
+        if (!out.empty()) out += " & ";
+        switch (c.Mode) {
+            case AC::Op::Greater:  std::snprintf(buf, sizeof buf, " > %.2f", c.Threshold); out += c.Param + buf; break;
+            case AC::Op::Less:     std::snprintf(buf, sizeof buf, " < %.2f", c.Threshold); out += c.Param + buf; break;
+            case AC::Op::Equals:   std::snprintf(buf, sizeof buf, " = %g", c.Threshold); out += c.Param + buf; break;
+            case AC::Op::NotEqual: std::snprintf(buf, sizeof buf, " != %g", c.Threshold); out += c.Param + buf; break;
+            case AC::Op::If:       out += c.Param; break;
+            case AC::Op::IfNot:    out += "!" + c.Param; break;
+        }
+    }
+    if (out.empty() && t.HasExitTime) { std::snprintf(buf, sizeof buf, "exit %.2f", t.ExitTime); out = buf; }
+    if (transitions.size() > 1) { std::snprintf(buf, sizeof buf, "  +%d", (int)transitions.size() - 1); out += buf; }
+    return out;
 }
 
 } // namespace
@@ -122,6 +153,7 @@ void DrawGraphCanvas(AnimCtx& cx) {
 
     if (W.FramePending && csz.x > 10.0f) {
         W.FramePending = false;
+        Glass::Motion().InertiaStop(GraphMotionSeed(W) ^ 0x9A11F11Bu); // a coasting pan stops for the framing
         glm::vec2 lo(1e9f), hi(-1e9f);
         for (NodeRef n : nodes) {
             const glm::vec2 p = nodeWorldPos(n);
@@ -139,6 +171,7 @@ void DrawGraphCanvas(AnimCtx& cx) {
     if (!W.CenterOn.empty()) {
         const int ci = Ly.FindState(W.CenterOn);
         W.CenterOn.clear();
+        Glass::Motion().InertiaStop(GraphMotionSeed(W) ^ 0x9A11F11Bu);
         if (ci >= 0 && csz.x > 10.0f) {
             const NodeRef cn{NodeKind::State, ci};
             const glm::vec2 p = nodeWorldPos(cn);
@@ -146,6 +179,19 @@ void DrawGraphCanvas(AnimCtx& cx) {
             W.Pan = csz * 0.5f - ImVec2(p.x + sz.x * 0.5f, p.y + sz.y * 0.5f) * W.Zoom;
         }
     }
+
+    // Motion v2. Every effect below is either a stateless function of the motion clock or a Glass entry that
+    // lives only while it moves; at rest the graph makes no entries.
+    Glass::ImAnimContext& M = Glass::Motion();
+    const double now = M.Now();
+    const unsigned seed = GraphMotionSeed(W);
+    auto nodeId = [&](NodeRef n) -> unsigned {
+        return n.Kind == NodeKind::State ? NodeMotionId(W, Ly.States[n.Index].Name) : seed + 0x51u * (unsigned)n.Kind;
+    };
+    // A middle-drag pan that was let go coasts on (Inertia); framing or centring on a state stops it.
+    const ImGuiID panId = seed ^ 0x9A11F11Bu;
+    // (FramePending and CenterOn above stop it.)
+    W.Pan = W.Pan + M.InertiaDelta(panId);
 
     // Grid
     dl->PushClipRect(c0, c1, true);
@@ -196,11 +242,30 @@ void DrawGraphCanvas(AnimCtx& cx) {
     // The default-state arrow from Entry is implicit (no transition), drawn in orange.
     const int defaultState = Ly.DefaultStateIndex();
 
+    // Wire morph: a node that jumped (undo, a typed position, a paste) has its wires ease to the new shape
+    // (WireMorph) instead of redrawing at once. Last frame's position is kept in the canvas window's storage
+    // (ImGui's memory); a direct mouse drag stays 1:1. The offset is screen px from the node's real centre.
+    std::map<NodeRef, ImVec2> wireOff;
+    {
+        ImGuiStorage* st = ImGui::GetStateStorage();
+        for (NodeRef n : nodes) {
+            const glm::vec2 p = nodeWorldPos(n);
+            const ImGuiID key = nodeId(n) ^ 0x3E0F7A11u;
+            const ImVec2 prev = W.MovingNodes ? ImVec2(p.x, p.y) : ImVec2(st->GetFloat(key, p.x), st->GetFloat(key ^ 1u, p.y));
+            st->SetFloat(key, p.x);
+            st->SetFloat(key ^ 1u, p.y);
+            const ImVec2 shown = M.Follow2(key, ImVec2(p.x, p.y), prev, Glass::WireMorph);
+            if (std::abs(shown.x - p.x) > 0.01f || std::abs(shown.y - p.y) > 0.01f) wireOff[n] = (shown - ImVec2(p.x, p.y)) * W.Zoom;
+        }
+    }
+    auto offOf = [&](NodeRef n) { auto it = wireOff.find(n); return it == wireOff.end() ? ImVec2(0, 0) : it->second; };
+    auto wireCenter = [&](NodeRef n) { return nodeCenter(n) + offOf(n); };
+
     int hoveredEdge = -1;
     float hoveredEdgeDist = 7.0f;
     for (int e = 0; e < (int)edges.size(); ++e) {
         Edge& E = edges[e];
-        ImVec2 a = nodeCenter(E.From), b = nodeCenter(E.To);
+        ImVec2 a = wireCenter(E.From), b = wireCenter(E.To);
         if (E.From == E.To) continue; // self-loop: drawn as an arc below
         // A two-way pair gets a small sideways offset so the arrows don't overlap.
         if (edgeIndex.count({E.To, E.From})) {
@@ -226,11 +291,33 @@ void DrawGraphCanvas(AnimCtx& cx) {
         return W.SelTransition >= 0 && std::find(E.Transitions.begin(), E.Transitions.end(), W.SelTransition) != E.Transitions.end();
     };
     const int liveTransition = live && W.Layer < (int)live->Layers.size() ? live->Layers[W.Layer].Transition : -1;
+    // Live wire flow: the transition crossfading now, or the one most recently taken (an instant transition is never
+    // "running", so the History tab's newest entry for this layer counts too), carries white pulses for a moment.
+    {
+        const unsigned flowKey = seed ^ (unsigned)(uintptr_t)live ^ ((unsigned)entt::to_integral(W.Entity) * 0x85EBCA6Bu);
+        if (!live) { W.FlowTransition = -1; W.FlowKey = 0; }
+        else {
+            const AnimatorTransitionLog* newest = nullptr;
+            for (auto it = live->History.rbegin(); it != live->History.rend(); ++it)
+                if (it->Layer == W.Layer) { newest = &*it; break; }
+            if (W.FlowKey != flowKey) { W.FlowKey = flowKey; W.FlowLogTime = newest ? newest->Time : -1.0f; W.FlowTransition = -1; }
+            else if (newest && newest->Time != W.FlowLogTime) { W.FlowLogTime = newest->Time; W.FlowTransition = newest->Transition; W.FlowAt = now; }
+            if (liveTransition >= 0) { W.FlowTransition = liveTransition; W.FlowAt = now; }
+        }
+    }
+    constexpr float kFlowLingerSeconds = 1.2f; // a taken transition's pulses fade out over this
+    const bool flowOn = live && M.CategoryOn(Glass::MotionCategory::Gradients);
+    // Wire tug: the wire just linked sags and springs straight (NodePop's spring, riding on a pulse).
+    const ImGuiID tugId = seed ^ 0x7E6A11C3u;
+    float tugSag = 0.0f;
+    if (W.TugTransition >= 0 && M.PulseProgress(tugId) < 1.0f)
+        tugSag = Glass::SpringImpulse(M.PulseElapsed(tugId, 1.0e3f), Glass::NodePop.p0, Glass::NodePop.p1, Glass::NodePop.p2, 14.0f * W.Zoom);
+    else W.TugTransition = -1;
     for (int e = 0; e < (int)edges.size(); ++e) {
         const Edge& E = edges[e];
+        auto has = [&](int t) { return t >= 0 && std::find(E.Transitions.begin(), E.Transitions.end(), t) != E.Transitions.end(); };
         const bool sel = edgeIsSelected(E);
-        const bool active = liveTransition >= 0 &&
-                            std::find(E.Transitions.begin(), E.Transitions.end(), liveTransition) != E.Transitions.end();
+        const bool active = has(liveTransition);
         const ImU32 col = active ? EditorTheme::U32(EditorTheme::Info)
                         : sel ? ImGui::GetColorU32(EditorUIPrimitives::ActiveAccentColor())
                         : e == hoveredEdge ? EditorTheme::U32(EditorTheme::Text) : EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Secondary, 0.8f));
@@ -238,7 +325,7 @@ void DrawGraphCanvas(AnimCtx& cx) {
         if (E.From == E.To) {
             ImVec2 a, b;
             nodeRect(E.From, a, b);
-            const ImVec2 top((a.x + b.x) * 0.5f, a.y);
+            const ImVec2 top = ImVec2((a.x + b.x) * 0.5f, a.y) + offOf(E.From);
             const float r = 16.0f * W.Zoom;
             dl->AddBezierCubic(top + ImVec2(-r, 0), top + ImVec2(-r * 1.5f, -r * 2.5f), top + ImVec2(r * 1.5f, -r * 2.5f),
                                top + ImVec2(r, 0), col, thick);
@@ -246,9 +333,15 @@ void DrawGraphCanvas(AnimCtx& cx) {
             if (canvasHovered && Len(mouse - (top + ImVec2(0, -r * 1.8f))) < r) hoveredEdge = e;
             continue;
         }
-        dl->AddLine(E.A, E.B, col, thick);
-        const ImVec2 mid = (E.A + E.B) * 0.5f, dir = E.B - E.A;
+        // The wire as a cubic (straight unless it's being tugged), so the pulses and the label can ride it.
+        const ImVec2 dir = E.B - E.A;
         const float l = std::max(Len(dir), 1e-3f);
+        const ImVec2 nrm(-dir.y / l, dir.x / l);
+        const float sag = has(W.TugTransition) ? tugSag : 0.0f;
+        const ImVec2 p1 = E.A + dir * (1.0f / 3.0f) + nrm * (sag / 0.75f), p2 = E.A + dir * (2.0f / 3.0f) + nrm * (sag / 0.75f);
+        if (sag != 0.0f) dl->AddBezierCubic(E.A, p1, p2, E.B, col, thick);
+        else dl->AddLine(E.A, E.B, col, thick);
+        const ImVec2 mid = (E.A + E.B) * 0.5f + nrm * sag;
         const float as = 7.0f * std::max(W.Zoom, 0.6f);
         if (E.Transitions.size() > 1) {
             // Several transitions between the same pair: three chevrons, like Unity.
@@ -256,15 +349,44 @@ void DrawGraphCanvas(AnimCtx& cx) {
         } else {
             Arrowhead(dl, mid, dir, as, col);
         }
+        // The condition label, along the wire (always on: it's information). Two-way pairs put theirs on the outside;
+        // TextAlongCubic skips a label that doesn't fit.
+        if (W.Zoom >= 0.55f) {
+            const std::string label = ConditionLabel(Ly, E.Transitions);
+            if (!label.empty()) {
+                EditorTheme::PushSmall();
+                const float lift = ImGui::GetTextLineHeight() * 0.5f + 3.0f * std::max(W.Zoom, 0.6f);
+                const bool pair = edgeIndex.count({E.To, E.From}) != 0;
+                const float side = pair ? (E.A.x <= E.B.x ? -1.0f : 1.0f) : 1.0f;
+                const ImU32 lc = sel || active || e == hoveredEdge ? col : EditorTheme::U32(EditorTheme::WithAlpha(EditorTheme::Secondary, 0.75f));
+                Glass::ImAnimContext::TextAlongCubic(dl, E.A, p1, p2, E.B, label.c_str(), lc, 0.5f, lift * side);
+                EditorTheme::PopFont();
+            }
+        }
+        // Flow pulses: emitted WireFlowSpeed times a second, each crossing the wire at a steady pace; a pure function
+        // of the motion clock, so nothing is stored. Gradients off: none.
+        float flow = active ? 1.0f : 0.0f;
+        if (!active && has(W.FlowTransition)) flow = std::max(0.0f, 1.0f - (float)(now - W.FlowAt) / kFlowLingerSeconds);
+        if (flowOn && flow > 0.0f) {
+            const float travel = std::clamp(l / (240.0f * std::max(W.Zoom, 0.3f)), 0.45f, 1.6f); // seconds per crossing
+            const float spacing = 1.0f / (Glass::WireFlowSpeed * travel);                      // in arc fraction
+            const float head = (float)std::fmod(now / travel + (double)(e * 0.37f), 1.0);
+            for (float u = std::fmod(head, spacing); u < 1.0f; u += spacing) {
+                const ImVec2 p = CubicAt(E.A, p1, p2, E.B, u);
+                const float a = flow * std::sin(u * 3.14159265f); // fade in and out at the ends
+                dl->AddCircleFilled(p, 5.0f * std::max(W.Zoom, 0.6f), IM_COL32(255, 255, 255, (int)(40.0f * a)), 12);
+                dl->AddCircleFilled(p, 2.4f * std::max(W.Zoom, 0.6f), IM_COL32(255, 255, 255, (int)(235.0f * a)), 10);
+            }
+        }
     }
     if (defaultState >= 0) {
         const NodeRef entry{NodeKind::Entry, -1}, def{NodeKind::State, defaultState};
         if (!edgeIndex.count({entry, def})) {
             ImVec2 ra, rb;
             nodeRect(entry, ra, rb);
-            const ImVec2 a0 = (ra + rb) * 0.5f, hA = (rb - ra) * 0.5f;
+            const ImVec2 a0 = (ra + rb) * 0.5f + offOf(entry), hA = (rb - ra) * 0.5f;
             nodeRect(def, ra, rb);
-            const ImVec2 b0 = (ra + rb) * 0.5f, hB = (rb - ra) * 0.5f;
+            const ImVec2 b0 = (ra + rb) * 0.5f + offOf(def), hB = (rb - ra) * 0.5f;
             const ImVec2 a = RectExit(a0, hA, b0), b = RectExit(b0, hB, a0);
             const ImU32 col = EditorTheme::U32(EditorTheme::Accent);
             dl->AddLine(a, b, col, 2.0f * std::max(W.Zoom, 0.6f));
@@ -316,6 +438,11 @@ void DrawGraphCanvas(AnimCtx& cx) {
         nodeRect(n, a, b);
         const float round = 6.0f * W.Zoom;
         ImU32 fill = EditorTheme::U32(EditorTheme::Pressed);
+        // A new state pops in on the NodePop spring (from 85%, fading up): draw-only, through a layer.
+        const ImGuiID popId = n.Kind == NodeKind::State ? nodeId(n) ^ 0x90F0B0B1u : 0;
+        const float pop = popId ? M.AnimateToggle(popId, true, true, Glass::NodePop, Glass::NodePop) : 1.0f;
+        const bool popping = popId && M.Live(popId);
+        const int popVtx = popping ? Glass::ImAnimContext::BeginLayer(dl) : 0;
         std::string label;
         bool selected = false;
         switch (n.Kind) {
@@ -373,6 +500,58 @@ void DrawGraphCanvas(AnimCtx& cx) {
             dl->AddText(font, tfs, ImVec2((a.x + b.x - tts.x) * 0.5f, tp.y + ts.y), EditorTheme::U32(EditorTheme::Secondary), tagLine.c_str());
         }
         dl->PopClipRect();
+        if (popping) {
+            Glass::LayerTransform t;
+            t.pivot = (a + b) * 0.5f;
+            const float s = 0.85f + 0.15f * pop;
+            t.scale = ImVec2(s, s);
+            t.alpha = std::clamp(pop, 0.0f, 1.0f);
+            Glass::ImAnimContext::EndLayer(dl, popVtx, t);
+        }
+    }
+
+    // Deleted states shrink away where they stood, then their ghosts are dropped.
+    for (size_t g = 0; g < W.Ghosts.size();) {
+        const auto& gh = W.Ghosts[g];
+        const float p = M.PulseProgress(gh.Id);
+        if (p >= 1.0f) { W.Ghosts.erase(W.Ghosts.begin() + (std::ptrdiff_t)g); continue; }
+        if (gh.Layer == W.Layer) {
+            const ImVec2 a = toScreen(gh.Position), b = a + ImVec2(kStateW, kStateH) * W.Zoom;
+            const float k = EditorTheme::Ease::OutCubic(p), round = 6.0f * W.Zoom;
+            const int v0 = Glass::ImAnimContext::BeginLayer(dl);
+            dl->AddRectFilled(a, b, EditorTheme::U32(EditorTheme::Pressed), round);
+            dl->AddRect(a, b, EditorTheme::U32(EditorTheme::Hairline), round);
+            const ImVec2 ts = ImGui::CalcTextSize(gh.Name.c_str());
+            dl->PushClipRect(a, b, true);
+            dl->AddText((a + b - ts) * 0.5f, EditorTheme::U32(EditorTheme::Text), gh.Name.c_str());
+            dl->PopClipRect();
+            Glass::LayerTransform t;
+            t.pivot = (a + b) * 0.5f;
+            t.scale = ImVec2(1.0f - 0.35f * k, 1.0f - 0.35f * k);
+            t.alpha = 1.0f - k;
+            Glass::ImAnimContext::EndLayer(dl, v0, t);
+        }
+        ++g;
+    }
+
+    // The live state's highlight glides from node to node (SelectionGlide) when the machine moves on, so the eye
+    // follows the change. Tracked in world space: panning and zooming don't make it glide.
+    if (liveCurrent >= 0 && liveCurrent < (int)Ly.States.size()) {
+        const glm::vec2 target = Ly.States[liveCurrent].Position;
+        const unsigned glideKey = seed ^ ((unsigned)entt::to_integral(W.Entity) * 0x27D4EB2Fu);
+        const ImGuiID glideId = seed ^ 0x611DE5E1u;
+        const bool from = W.GlideValid && W.GlideKey == glideKey && !W.MovingNodes;
+        const ImVec2 prev = from ? ImVec2(W.GlideTarget.x, W.GlideTarget.y) : ImVec2(target.x, target.y);
+        const ImVec2 at = M.Follow2(glideId, ImVec2(target.x, target.y), prev, Glass::SelectionGlide);
+        W.GlideTarget = target;
+        W.GlideValid = true;
+        W.GlideKey = glideKey;
+        const ImVec2 a = toScreen(glm::vec2(at.x, at.y)), b = a + ImVec2(kStateW, kStateH) * W.Zoom;
+        const float round = 6.0f * W.Zoom, grow = 3.0f * std::max(W.Zoom, 0.6f);
+        dl->AddRect(a - ImVec2(grow, grow), b + ImVec2(grow, grow), IM_COL32(255, 255, 255, 40), round + grow, 0, 4.0f * std::max(W.Zoom, 0.6f));
+        dl->AddRect(a, b, IM_COL32(255, 255, 255, 220), round, 0, 2.0f * std::max(W.Zoom, 0.6f));
+    } else {
+        W.GlideValid = false;
     }
 
     // Link preview
@@ -394,6 +573,20 @@ void DrawGraphCanvas(AnimCtx& cx) {
     dl->PopClipRect();
 
     // --- interaction -------------------------------------------------------------------------
+    // New states pop in (NodePop): the spring starts here and the node loop draws it. One NodePop cue per batch,
+    // panned to where the first one lands.
+    auto popIn = [&](const std::vector<int>& fresh) {
+        bool cue = false;
+        for (int i : fresh) {
+            if (i < 0 || i >= (int)Ly.States.size()) continue;
+            M.AnimateToggle(NodeMotionId(W, Ly.States[i].Name) ^ 0x90F0B0B1u, true, false, Glass::NodePop, Glass::NodePop);
+            if (cue) continue;
+            cue = true;
+            const ImGuiViewport* vp = ImGui::GetMainViewport();
+            const ImVec2 at = toScreen(Ly.States[i].Position + glm::vec2(kStateW, kStateH) * 0.5f);
+            EditorSound::Play(EditorSound::Event::NodePop, std::clamp((at.x - vp->Pos.x) / std::max(1.0f, vp->Size.x), 0.0f, 1.0f));
+        }
+    };
     auto makeTransition = [&](NodeRef from, NodeRef to) {
         if (to.Kind == NodeKind::Entry || to.Kind == NodeKind::Any) return;
         if (from.Kind == NodeKind::Exit) return;
@@ -408,6 +601,8 @@ void DrawGraphCanvas(AnimCtx& cx) {
         if (from.Kind == NodeKind::Entry) t.Duration = 0.0f;
         Ly.Transitions.push_back(std::move(t));
         EditorSound::Play(EditorSound::Event::TransitionLink);
+        W.TugTransition = (int)Ly.Transitions.size() - 1; // the new wire sags and springs straight
+        M.Pulse(tugId, 0.6f);
         W.ClearSelection();
         W.SelTransition = (int)Ly.Transitions.size() - 1;
         changed = true;
@@ -449,6 +644,7 @@ void DrawGraphCanvas(AnimCtx& cx) {
             }
         }
         if (!fresh.empty()) EditorSound::Play(EditorSound::Event::StateAdd);
+        popIn(fresh);
         W.ClearSelection();
         W.SelStates = fresh;
         changed = true;
@@ -495,6 +691,7 @@ void DrawGraphCanvas(AnimCtx& cx) {
             Ly.Transitions.push_back(std::move(t));
         }
         EditorSound::Play(EditorSound::Event::StateAdd);
+        popIn(fresh);
         W.ClearSelection();
         W.SelStates = fresh;
         changed = true;
@@ -514,6 +711,7 @@ void DrawGraphCanvas(AnimCtx& cx) {
         s.Position = at - glm::vec2(kStateW, kStateH) * 0.5f;
         Ly.States.push_back(std::move(s));
         EditorSound::Play(EditorSound::Event::StateAdd);
+        popIn({(int)Ly.States.size() - 1});
         if (Ly.States.size() == 1) Ly.DefaultState = Ly.States[0].Name; // implicit: no DefaultState sound
         W.ClearSelection();
         W.SelStates = {(int)Ly.States.size() - 1};
@@ -579,8 +777,17 @@ void DrawGraphCanvas(AnimCtx& cx) {
             }
         }
     }
-    if (ImGui::IsMouseDragging(ImGuiMouseButton_Middle) && ImGui::IsItemActive())
-        W.Pan = W.Pan + io.MouseDelta;
+    // Middle-drag pans 1:1 while tracking its velocity; let go and it flings and coasts (Inertia). A new press
+    // catches a coast.
+    if (canvasHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Middle)) M.InertiaStop(panId);
+    if (ImGui::IsMouseDown(ImGuiMouseButton_Middle) && ImGui::IsItemActive()) {
+        if (ImGui::IsMouseDragging(ImGuiMouseButton_Middle)) W.Pan = W.Pan + io.MouseDelta;
+        M.InertiaTrack(panId, io.MouseDelta); // a still pointer still samples, so holding before letting go doesn't fling
+        W.PanTracking = true;
+    } else if (W.PanTracking) {
+        W.PanTracking = false;
+        M.InertiaRelease(panId);
+    }
     if (W.MovingNodes) {
         if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
             const glm::vec2 d(io.MouseDelta.x / W.Zoom, io.MouseDelta.y / W.Zoom);

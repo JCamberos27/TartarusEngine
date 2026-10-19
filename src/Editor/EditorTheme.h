@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 
 namespace EditorTheme {
@@ -312,6 +313,59 @@ inline void MotionScrollToY(float y) {
 inline void MotionScrollToBottom() {
     const EditorMotionHooks* h = MotionHooks();
     if (h && h->ScrollToBottom) h->ScrollToBottom(); else ImGui::SetScrollY(ImGui::GetScrollMaxY());
+}
+
+// --- Motion v2 (API v44): each falls back to the static look when the bridge is missing ----------
+// Categories mirror Glass::MotionCategory.
+enum class MotionCat : int { ThemeTweens = 0, Inertia, Gradients, RollingNumbers, Viewport, Startup };
+inline bool MotionCategoryOn(MotionCat c) {
+    const EditorMotionHooks* h = MotionHooks();
+    return h && h->CategoryOn && h->CategoryOn((int)c);
+}
+// Rolling digits at (x, y) top-left; plain text without the bridge. Returns the width drawn.
+inline float MotionOdometer(ImGuiID id, ImDrawList* dl, ImVec2 pos, double value, int decimals, ImU32 col, const char* suffix = nullptr) {
+    const EditorMotionHooks* h = MotionHooks();
+    if (h && h->Odometer) return h->Odometer(id, dl, pos.x, pos.y, value, decimals, col, suffix);
+    char buf[64];
+    std::snprintf(buf, sizeof(buf), "%.*f%s", decimals, value, suffix ? suffix : "");
+    dl->AddText(pos, col, buf);
+    return ImGui::CalcTextSize(buf).x;
+}
+inline void MotionInertiaTrack(ImGuiID id, ImVec2 delta) {
+    const EditorMotionHooks* h = MotionHooks();
+    if (h && h->InertiaTrack) h->InertiaTrack(id, delta.x, delta.y);
+}
+inline void MotionInertiaRelease(ImGuiID id) {
+    const EditorMotionHooks* h = MotionHooks();
+    if (h && h->InertiaRelease) h->InertiaRelease(id);
+}
+inline ImVec2 MotionInertiaDelta(ImGuiID id) {
+    const EditorMotionHooks* h = MotionHooks();
+    ImVec2 d(0, 0);
+    if (h && h->InertiaDelta) h->InertiaDelta(id, &d.x, &d.y);
+    return d;
+}
+inline void MotionSheen(ImDrawList* dl, ImVec2 mn, ImVec2 mx, ImGuiID seed, float strength) {
+    const EditorMotionHooks* h = MotionHooks();
+    if (h && h->DrawSheen) h->DrawSheen(dl, mn.x, mn.y, mx.x, mx.y, seed, strength);
+}
+inline void MotionCursorGlow(ImDrawList* dl, ImVec2 mn, ImVec2 mx, ImVec2 cursor, float strength) {
+    const EditorMotionHooks* h = MotionHooks();
+    if (h && h->DrawCursorGlow) h->DrawCursorGlow(dl, mn.x, mn.y, mx.x, mx.y, cursor.x, cursor.y, strength);
+}
+inline float MotionRippleDelay(int col, int row, int originCol, int originRow) {
+    const EditorMotionHooks* h = MotionHooks();
+    return (h && h->RippleDelay) ? h->RippleDelay(col, row, originCol, originRow) : 0.0f;
+}
+inline int MotionBeginLayer(ImDrawList* dl) {
+    const EditorMotionHooks* h = MotionHooks();
+    return (h && h->BeginLayer) ? h->BeginLayer(dl) : dl->VtxBuffer.Size;
+}
+// Scale `scale` and rotate `rot` about `pivot`, translate by `translate`, multiply alpha.
+inline void MotionEndLayer(ImDrawList* dl, int vtxStart, ImVec2 pivot, ImVec2 scale, float rot = 0.0f,
+                           ImVec2 translate = ImVec2(0, 0), float alpha = 1.0f) {
+    const EditorMotionHooks* h = MotionHooks();
+    if (h && h->EndLayer) h->EndLayer(dl, vtxStart, pivot.x, pivot.y, scale.x, scale.y, rot, translate.x, translate.y, alpha);
 }
 
 // --- User colours (row styles, folder colours, tab and favourite tints) ---------------------------

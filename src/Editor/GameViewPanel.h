@@ -148,6 +148,11 @@ private:
     ImVec2 m_Pan{0.0f, 0.0f};    // the image centre's offset from the panel's, in screen pixels
     float m_FitScale = 1.0f;     // the fit scale as of the last draw (the slider's floor)
     bool m_Panning = false;
+    // Play starts: the view punches in 1.00 -> 1.01 -> 1.00 with a rim glint (Glass PlayPunch).
+    bool m_PunchWasPlaying = false;
+    // The stats overlay's FPS, held so it rolls only on a real change (not the frame-to-frame jitter).
+    int    m_ShownFps = -1;
+    double m_ShownFpsAt = 0.0;
 
     void DrawAspectControl();
     void DrawScaleControl();

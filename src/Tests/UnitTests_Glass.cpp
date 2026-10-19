@@ -10,6 +10,7 @@
 #include "Glass/GlassLayout.h"
 #include "Glass/GlassMotion.h"
 #include "Glass/GlassMotionHooks.h"
+#include "Glass/GlassStyleMotion.h"
 #include "Glass/GlassTheme.h"
 #include "Glass/GlassTokens.h"
 
@@ -656,9 +657,277 @@ void TestGlassBridgeWidgetsSettle() {
     EditorTheme::SetMotionHooks(nullptr);
 }
 
+// --- Motion v2 ---------------------------------------------------------------------------------------
+
+// Restores the v2 knobs a test changed (the context is a process-wide singleton).
+struct MotionV2Defaults {
+    ~MotionV2Defaults() {
+        Glass::ImAnimContext& m = Glass::Motion();
+        m.SetSpeed(1.0f);
+        m.SetDebugTimeScale(1.0f);
+        for (int c = 0; c < (int)Glass::MotionCategory::Count; ++c) m.SetCategoryEnabled((Glass::MotionCategory)c, true);
+        m.SetReduceMotion(false);
+    }
+};
+
+// Frames until the context is empty again (capped); returns how many it took.
+int FramesToSettle(HeadlessImGui& gui, const std::function<void()>& body, int cap = 400) {
+    for (int f = 1; f <= cap; ++f) {
+        gui.Frame(body);
+        if (Glass::Motion().LiveCount() == 0) return f;
+    }
+    return cap + 1;
+}
+
+void TestGlassV2RollingNumbers() {
+    HeadlessImGui gui;
+    MotionV2Defaults restore;
+    Glass::ImAnimContext& m = Glass::Motion();
+    double value = 10.0;
+    double shown = 0.0;
+    auto body = [&] {
+        shown = m.RollingValue(7u, value);
+        m.Odometer(8u, ImGui::GetWindowDrawList(), ImGui::GetCursorScreenPos(), value, 1, IM_COL32_WHITE, " ms");
+    };
+    gui.Frame(body);
+    CHECK(shown == 10.0 && m.LiveCount() == 0 && m.HeldBytes() == 0); // first sight: no roll
+    value = 20.0;
+    gui.Frame(body);
+    CHECK(m.LiveCount() > 0);                    // both readouts roll (and flash)
+    gui.Frame(body);
+    CHECK(shown > 10.0 && shown < 20.5);         // on its way, a spring may nudge past
+    const int normal = FramesToSettle(gui, body);
+    CHECK(normal < 120 && shown == 20.0 && m.HeldBytes() == 0);
+    // Twice the speed settles in about half the frames; half the speed in about twice.
+    m.SetSpeed(2.0f);
+    value = 30.0;
+    const int fast = FramesToSettle(gui, body);
+    m.SetSpeed(0.5f);
+    value = 40.0;
+    const int slow = FramesToSettle(gui, body);
+    m.SetSpeed(1.0f);
+    CHECK(fast < normal && slow > normal && m.LiveCount() == 0);
+    // Category off: the number just changes.
+    m.SetCategoryEnabled(Glass::MotionCategory::RollingNumbers, false);
+    value = 50.0;
+    gui.Frame(body);
+    CHECK(shown == 50.0 && m.LiveCount() == 0);
+    // Width: the static readout matches OdometerWidth.
+    m.SetCategoryEnabled(Glass::MotionCategory::RollingNumbers, true);
+    float drawn = 0.0f;
+    gui.Frame([&] { drawn = m.Odometer(9u, ImGui::GetWindowDrawList(), ImVec2(0, 0), 1234.5, 1, IM_COL32_WHITE, " ms"); });
+    float expect = 0.0f;
+    gui.Frame([&] { expect = Glass::ImAnimContext::OdometerWidth(1234.5, 1, " ms"); });
+    CHECK(Near(drawn, expect, 0.5f) && m.LiveCount() == 0);
+}
+
+void TestGlassV2Inertia() {
+    HeadlessImGui gui;
+    MotionV2Defaults restore;
+    Glass::ImAnimContext& m = Glass::Motion();
+    constexpr ImGuiID kId = 0x494E4552u;
+    // A fast drag (20 px a frame = 1200 px/s) released: it coasts, slows, and is forgotten.
+    for (int f = 0; f < 6; ++f) gui.Frame([&] { m.InertiaTrack(kId, ImVec2(0.0f, 20.0f)); });
+    CHECK(m.LiveCount() == 1 && !m.InertiaCoasting(kId));
+    gui.Frame([&] { m.InertiaRelease(kId); });
+    CHECK(m.InertiaCoasting(kId));
+    float travelled = 0.0f, first = 0.0f, last = 0.0f;
+    gui.Frame([&] { first = m.InertiaDelta(kId).y; travelled += first; });
+    const int frames = FramesToSettle(gui, [&] { last = m.InertiaDelta(kId).y; travelled += last; });
+    CHECK(first > 0.0f && last < first && frames < 200);
+    CHECK(travelled > 100.0f);                  // a real coast, roughly v / friction
+    CHECK(m.LiveCount() == 0 && m.HeldBytes() == 0);
+    // Reading twice in one frame doesn't double the step.
+    gui.Frame([&] { m.Fling(kId, ImVec2(600.0f, 0.0f)); });
+    gui.Frame([&] { const float a = m.InertiaDelta(kId).x, b = m.InertiaDelta(kId).x; CHECK(a == b && a > 0.0f); });
+    FramesToSettle(gui, [&] { m.InertiaDelta(kId); });
+    // A slow release doesn't coast; Inertia off doesn't even track.
+    for (int f = 0; f < 6; ++f) gui.Frame([&] { m.InertiaTrack(kId, ImVec2(0.0f, 1.0f)); });
+    gui.Frame([&] { m.InertiaRelease(kId); });
+    CHECK(m.LiveCount() == 0);
+    m.SetCategoryEnabled(Glass::MotionCategory::Inertia, false);
+    gui.Frame([&] { m.InertiaTrack(kId, ImVec2(0.0f, 40.0f)); m.Fling(kId, ImVec2(0.0f, 900.0f)); });
+    CHECK(m.LiveCount() == 0);
+}
+
+void TestGlassV2ScrollInertia() {
+    HeadlessImGui gui;
+    MotionV2Defaults restore;
+    Glass::ImAnimContext& m = Glass::Motion();
+    float scroll = 0.0f;
+    auto body = [&] {
+        ImGui::Dummy(ImVec2(10.0f, 4000.0f));
+        scroll = ImGui::GetScrollY();
+    };
+    ImGuiIO& io = ImGui::GetIO();
+    io.AddMousePosEvent(200.0f, 200.0f);
+    gui.Frame(body);
+    gui.Frame(body);
+    io.AddMouseWheelEvent(0.0f, -1.0f); // one notch down
+    gui.Frame(body);
+    CHECK(m.LiveCount() == 1);          // the notch became a glide
+    float prev = scroll, maxStep = 0.0f;
+    const int frames = FramesToSettle(gui, [&] { body(); maxStep = std::max(maxStep, scroll - prev); prev = scroll; });
+    CHECK(scroll > 20.0f && frames > 4 && frames < 200 && m.HeldBytes() == 0);
+    // Inertia off: ImGui's own instant notch, no entry.
+    m.SetCategoryEnabled(Glass::MotionCategory::Inertia, false);
+    const float before = scroll;
+    io.AddMouseWheelEvent(0.0f, -1.0f);
+    gui.Frame(body);
+    gui.Frame(body);
+    CHECK(scroll > before && m.LiveCount() == 0);
+}
+
+void TestGlassV2LayersRippleText() {
+    HeadlessImGui gui;
+    // A 10 px square scaled 2x about its centre, moved 5 px right and faded to half.
+    ImGui::NewFrame();
+    ImGui::Render();
+    ImDrawList dl(ImGui::GetDrawListSharedData());
+    dl._ResetForNewFrame();
+    dl.PushTexture(ImGui::GetIO().Fonts->TexRef);
+    dl.PushClipRect(ImVec2(0.0f, 0.0f), ImVec2(100.0f, 100.0f));
+    const int start = Glass::ImAnimContext::BeginLayer(&dl);
+    dl.AddRectFilled(ImVec2(10, 10), ImVec2(20, 20), IM_COL32(255, 255, 255, 200));
+    Glass::LayerTransform t;
+    t.pivot = ImVec2(15, 15);
+    t.scale = ImVec2(2, 2);
+    t.translate = ImVec2(5, 0);
+    t.alpha = 0.5f;
+    Glass::ImAnimContext::EndLayer(&dl, start, t);
+    float minX = 1e9f, maxX = -1e9f;
+    for (int i = start; i < dl.VtxBuffer.Size; ++i) {
+        minX = std::min(minX, dl.VtxBuffer[i].pos.x);
+        maxX = std::max(maxX, dl.VtxBuffer[i].pos.x);
+        CHECK(((dl.VtxBuffer[i].col >> IM_COL32_A_SHIFT) & 0xFF) == 100u);
+    }
+    CHECK(Near(minX, 10.0f, 0.6f) && Near(maxX, 30.0f, 0.6f));
+    // The ripple is round, starts at the origin and stops growing at its cap.
+    CHECK(Glass::ImAnimContext::GridRippleDelay(3, 3, 8, 8, 3, 3, 26.0f, 18) == 0.0f);
+    CHECK(Near(Glass::ImAnimContext::GridRippleDelay(6, 3, 8, 8, 3, 3, 26.0f, 18),
+               Glass::ImAnimContext::GridRippleDelay(3, 0, 8, 8, 3, 3, 26.0f, 18), 1e-6f));
+    CHECK(Near(Glass::ImAnimContext::GridRippleDelay(99, 0, 100, 1, 0, 0, 26.0f, 18), 18.0f * 0.026f, 1e-5f));
+    // Text along a wire draws glyphs and holds nothing.
+    gui.Frame([&] {
+        ImDrawList* w = ImGui::GetWindowDrawList();
+        const int before = w->VtxBuffer.Size;
+        Glass::ImAnimContext::TextAlongCubic(w, ImVec2(20, 100), ImVec2(120, 40), ImVec2(220, 160), ImVec2(320, 100), "speed > 2",
+                                             IM_COL32_WHITE, 0.5f, 6.0f);
+        CHECK(w->VtxBuffer.Size > before);
+    });
+    CHECK(Glass::Motion().LiveCount() == 0);
+}
+
+void TestGlassV2StyleMoods() {
+    HeadlessImGui gui;
+    MotionV2Defaults restore;
+    ImGuiStyle base;
+    ConfigureMacEngineTheme(base);
+    base.Colors[ImGuiCol_WindowBg] = ImVec4(0, 0, 0, Glass::GlassPanelAlpha); // a Glass panel
+    // Play: panels recede, text drops toward disabled, and it all stays grey.
+    ImGuiStyle play = base;
+    Glass::StyleMoods moods;
+    moods.play = 1.0f;
+    Glass::ApplyStyleMoods(play, moods, true);
+    CHECK(Near(play.Colors[ImGuiCol_WindowBg].w, Glass::PlayRecedeBgAlpha, 1e-4f));
+    CHECK(play.Colors[ImGuiCol_Text].x < base.Colors[ImGuiCol_Text].x);
+    // Focus while playing doesn't double the dim: the stronger mood wins.
+    ImGuiStyle both = base;
+    moods.focus = 1.0f;
+    Glass::ApplyStyleMoods(both, moods, true);
+    CHECK(Near(both.Colors[ImGuiCol_WindowBg].w, play.Colors[ImGuiCol_WindowBg].w, 1e-4f));
+    // Prefab lifts the chrome toward white, without hue.
+    ImGuiStyle prefab = base;
+    Glass::StyleMoods p;
+    p.prefab = 1.0f;
+    Glass::ApplyStyleMoods(prefab, p, true);
+    const ImVec4 bar = prefab.Colors[ImGuiCol_MenuBarBg];
+    CHECK(bar.x > base.Colors[ImGuiCol_MenuBarBg].x && Near(bar.x, bar.y, 0.03f) && Near(bar.y, bar.z, 0.03f));
+    // No mood: untouched.
+    ImGuiStyle none = base;
+    Glass::ApplyStyleMoods(none, Glass::StyleMoods(), true);
+    CHECK(std::memcmp(none.Colors, base.Colors, sizeof(base.Colors)) == 0);
+
+    // A theme switch eases from the old style to the new one, then nothing is held.
+    ImGuiStyle from = base, to = base;
+    from.Colors[ImGuiCol_Text] = ImVec4(1, 1, 1, 1);
+    to.Colors[ImGuiCol_Text] = ImVec4(0.2f, 0.2f, 0.2f, 1);
+    ImGui::GetStyle() = to;
+    Glass::StyleMotionThemeChanged(from, true);
+    CHECK(ImGui::GetStyle().Colors[ImGuiCol_Text].x == 1.0f); // the first frame still shows the old look
+    gui.Frame([&] { Glass::StyleMotionFrame(false, false, false, true); });
+    for (int f = 0; f < 6; ++f) gui.Frame([&] { Glass::StyleMotionFrame(false, false, false, true); });
+    const float mid = ImGui::GetStyle().Colors[ImGuiCol_Text].x;
+    CHECK(mid < 1.0f && mid > 0.2f);
+    for (int f = 0; f < 60; ++f) gui.Frame([&] { Glass::StyleMotionFrame(false, false, false, true); });
+    CHECK(Near(ImGui::GetStyle().Colors[ImGuiCol_Text].x, 0.2f, 1e-3f));
+    CHECK(Glass::Motion().LiveCount() == 0 && !Glass::StyleMotionActive());
+    // Play eases in, holds with nothing live, and eases back out.
+    for (int f = 0; f < 60; ++f) gui.Frame([&] { Glass::StyleMotionFrame(true, false, false, true); });
+    CHECK(Near(Glass::CurrentStyleMoods().play, 1.0f, 1e-3f) && Glass::Motion().LiveCount() == 0);
+    for (int f = 0; f < 60; ++f) gui.Frame([&] { Glass::StyleMotionFrame(false, false, false, true); });
+    CHECK(Glass::CurrentStyleMoods().play == 0.0f && Glass::Motion().LiveCount() == 0 && Glass::Motion().HeldBytes() == 0);
+    CHECK(Near(ImGui::GetStyle().Colors[ImGuiCol_WindowBg].w, Glass::GlassPanelAlpha, 1e-4f));
+    // Theme tweens off: the switch lands at once.
+    Glass::Motion().SetCategoryEnabled(Glass::MotionCategory::ThemeTweens, false);
+    ImGui::GetStyle() = from;
+    Glass::StyleMotionThemeChanged(to, true);
+    gui.Frame([&] { Glass::StyleMotionFrame(false, false, false, true); });
+    CHECK(ImGui::GetStyle().Colors[ImGuiCol_Text].x == 1.0f && Glass::Motion().LiveCount() == 0);
+}
+
+void TestGlassV2TokensAndStartup() {
+    HeadlessImGui gui;
+    MotionV2Defaults restore;
+    // Every v2 curve starts at 0 and lands on 1; every v2 spring settles inside its duration.
+    for (const Glass::MotionSpec* s : {&Glass::ThemeTween, &Glass::MoodIn, &Glass::MoodOut, &Glass::PlayMoodIn, &Glass::PlayPunch,
+                                       &Glass::ToolbarFold, &Glass::OdometerRoll, &Glass::ValueFlash, &Glass::CardFlip,
+                                       &Glass::FolderZoom, &Glass::Unfold, &Glass::ReparentFly, &Glass::NodePop, &Glass::WireMorph,
+                                       &Glass::LogSlide, &Glass::CaretGlide, &Glass::LineSweep, &Glass::GizmoHover,
+                                       &Glass::OutlineSweep, &Glass::ViewCubeTurn, &Glass::RadialOpen, &Glass::RadialItem}) {
+        CHECK(Near(Glass::EaseProgress(*s, 0.0f), 0.0f, 1e-4f));
+        CHECK(Near(Glass::EaseProgress(*s, 1.0f), 1.0f, 0.01f));
+        if (s->ease == Glass::EaseId::Spring) CHECK(Glass::DampingRatio(s->p0, s->p1, s->p2) * std::sqrt(s->p1 / s->p0) >= 5.0f);
+    }
+    // Startup: runs from Begin, settles on its own, holds nothing.
+    Glass::ImAnimContext& m = Glass::Motion();
+    gui.Frame([&] { m.BeginStartup(); });
+    CHECK(m.StartupRunning() && m.StartupElapsed() < 0.1f && m.LiveCount() == 0);
+    for (int f = 0; f < 120 && m.StartupRunning(); ++f) gui.Frame([] {});
+    CHECK(!m.StartupRunning() && m.StartupElapsed() > 100.0f);
+    // A key settles it at once; Startup off never starts it.
+    gui.Frame([&] { m.BeginStartup(); });
+    ImGui::GetIO().AddKeyEvent(ImGuiKey_Escape, true);
+    gui.Frame([] {});
+    ImGui::GetIO().AddKeyEvent(ImGuiKey_Escape, false);
+    CHECK(!m.StartupRunning());
+    m.SetCategoryEnabled(Glass::MotionCategory::Startup, false);
+    gui.Frame([&] { m.BeginStartup(); });
+    CHECK(!m.StartupRunning());
+    // Gradients draw nothing when off and hold nothing when on.
+    gui.Frame([&] {
+        ImDrawList* w = ImGui::GetWindowDrawList();
+        const int before = w->VtxBuffer.Size;
+        m.DrawSheen(w, ImVec2(0, 0), ImVec2(300, 20), 1u, 1.0f);
+        m.DrawTravellingRim(w, ImVec2(0, 0), ImVec2(300, 200), 6.0f, 0.3f, 0.5f, 1.0f, 2u);
+        CHECK(w->VtxBuffer.Size > before);
+        m.SetCategoryEnabled(Glass::MotionCategory::Gradients, false);
+        const int off = w->VtxBuffer.Size;
+        m.DrawSheen(w, ImVec2(0, 0), ImVec2(300, 20), 1u, 1.0f);
+        CHECK(w->VtxBuffer.Size == off);
+    });
+    CHECK(m.LiveCount() == 0 && m.HeldBytes() == 0);
+}
+
 } // namespace
 
 void RegisterGlassTests(UnitTestSupport::TestList& tests) {
+    tests.emplace_back("Glass motion v2: rolling numbers roll, settle, follow the speed and hold nothing", TestGlassV2RollingNumbers);
+    tests.emplace_back("Glass motion v2: inertia tracks, coasts and is forgotten", TestGlassV2Inertia);
+    tests.emplace_back("Glass motion v2: wheel scroll glides and then holds nothing", TestGlassV2ScrollInertia);
+    tests.emplace_back("Glass motion v2: layers, grid ripple and text along a wire", TestGlassV2LayersRippleText);
+    tests.emplace_back("Glass motion v2: theme tween and play / focus / prefab moods", TestGlassV2StyleMoods);
+    tests.emplace_back("Glass motion v2: curves, springs, startup and gradients", TestGlassV2TokensAndStartup);
     tests.emplace_back("Glass motion: colour / 2D tweens and procedural helpers hold nothing at rest", TestGlassMotionRound2ZeroAtRest);
     tests.emplace_back("Glass motion: keyframe clips and paths", TestGlassClipsAndPaths);
     tests.emplace_back("Glass motion: round 2 tokens", TestGlassRound2Tokens);

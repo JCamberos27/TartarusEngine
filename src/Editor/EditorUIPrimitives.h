@@ -261,15 +261,33 @@ inline bool SecondaryButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
 
 // The one filled treatment: a white body with black text, for a dialog's confirming action (Save,
 // Create, Apply, Restore...). Rare by design, so it always reads as "the" action.
+// Motion v2 (Gradients): under the cursor its body settles a shade down and a white glow follows the
+// pointer across it, the light pooling where you're about to click. The label is drawn after the
+// glow so it stays crisp black.
 inline bool PrimaryButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
+    const bool glow = EditorTheme::MotionCategoryOn(EditorTheme::MotionCat::Gradients);
     ImGui::PushStyleColor(ImGuiCol_Button,        EditorTheme::Accent);
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, EditorTheme::AccentBright);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, glow ? EditorTheme::Mix(EditorTheme::Accent, EditorTheme::AccentDeep, 0.35f)
+                                                       : EditorTheme::AccentBright);
     ImGui::PushStyleColor(ImGuiCol_ButtonActive,  EditorTheme::AccentDeep);
     ImGui::PushStyleColor(ImGuiCol_Border,        EditorTheme::AccentDeep);
-    ImGui::PushStyleColor(ImGuiCol_Text,          EditorTheme::OnAccent);
+    ImGui::PushStyleColor(ImGuiCol_Text,          glow ? ImVec4(0, 0, 0, 0) : EditorTheme::OnAccent);
     const int vtx = PressBegin();
     const bool clicked = ImGui::Button(label, size);
     const bool pressed = ImGui::IsItemActivated();
+    if (glow) {
+        const ImGuiID id = ImGui::GetItemID();
+        const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+        const float t = EditorTheme::MotionHover(id ^ 0x6C0E61A5u, ImGui::IsItemHovered() && !ImGui::IsItemActive());
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        if (t > 0.0f) EditorTheme::MotionCursorGlow(dl, mn, mx, ImGui::GetIO().MousePos, 3.0f * t);
+        const ImVec2 pad = ImGui::GetStyle().FramePadding;
+        const ImVec2 ts = ImGui::CalcTextSize(label, nullptr, true);
+        ImGui::PushStyleColor(ImGuiCol_Text, EditorTheme::OnAccent);
+        ImGui::RenderTextClipped(ImVec2(mn.x + pad.x, mn.y + pad.y), ImVec2(mx.x - pad.x, mx.y - pad.y), label, nullptr,
+                                 &ts, ImGui::GetStyle().ButtonTextAlign, nullptr);
+        ImGui::PopStyleColor();
+    }
     PressEnd(vtx);
     ImGui::PopStyleColor(5);
     if (pressed) ClickSound(EditorSoundEvents::Event::ClickConfirm);

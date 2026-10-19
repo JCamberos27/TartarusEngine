@@ -31,12 +31,17 @@
 #include "AudioEngine.h"
 #include "ProjectPaths.h"
 #include "Log.h"
+#include "GameModuleBuild.h"
 
 #include "Glass/GlassEditorState.h"
 #include "Glass/GlassLayout.h"
 #include "Glass/GlassMotion.h"
 #include "Glass/GlassMotionHooks.h"
 #include "Glass/GlassDragMotion.h"
+#include "Glass/GlassCompositor.h"     // the startup sequence (Tartarus: posed before Render)
+#include "Glass/GlassDockMotion.h"
+#include "Glass/GlassFeedbackMotion.h"
+#include "Glass/GlassStyleMotion.h"
 #include "Glass/GlassTheme.h"
 #include "Glass/GlassTokens.h"
 
@@ -51,6 +56,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <functional>
 #include <string>
 #include <vector>
@@ -308,6 +314,7 @@ bool SectionHeader(const char* strId, const char* icon, const char* title, float
 
 constexpr ImGuiID kSelectionGlideSalt = 0x53454C47u; // "SELG"
 constexpr ImGuiID kSnapPulseId = 0x534E4150u;        // "SNAP": the snap ring's timer
+constexpr ImGuiID kMaterialPulse = 0x4D41544Cu;      // "MATL": a theme switch into Glass, its panels clearing
 
 } // namespace
 
@@ -341,9 +348,18 @@ void EditorLayer::ApplyPendingTheme() {
     if (prefs.EditorThemeId == themeId) return;
     prefs.EditorThemeId = themeId;
     if (!m_Headless) EditorSettings::Save(); // a headless run (smoke test) never writes prefs
-    ApplyThemeStyle();
-    ApplyGizmoAccent();
+    // Leaving Glass frees its state first: ReleaseGlass resets the motion runtime, which done after
+    // ApplyThemeStyle also dropped the theme tween it had just started, so Glass -> Tartarus snapped.
     if (themeId == 0) ReleaseGlass();
+    m_ThemeSwitchTween = true; // ease from the old theme to the new one (GlassStyleMotion.h)
+    ApplyThemeStyle();
+    m_ThemeSwitchTween = false;
+    ApplyGizmoAccent();
+    // Into Glass: the compositor turns the panels' solid fills to glass from this frame on; it eases
+    // that in over the same time as the style (GlassChromeFrameEnd), so they don't clear in one frame.
+    if (themeId == 1 && Glass::Motion().CategoryOn(Glass::MotionCategory::ThemeTweens))
+        Glass::Motion().Pulse(kMaterialPulse, Glass::ThemeTween.durationMs * 0.001f);
+    if (!m_Headless) EditorSound::Play(EditorSound::Event::ThemeSwitch);
 }
 
 void EditorLayer::SetGlassThemeForTest(bool on) {
@@ -377,13 +393,73 @@ void EditorLayer::GlassFrameBegin() {
     // through it (EditorMotionHooks.h) whether or not Glass is on. At rest it costs nothing.
     EditorTheme::SetMotionHooks(&Glass::HostMotionHooks());
     Glass::ImAnimContext& motion = Glass::Motion();
-    motion.SetReduceMotion(EditorSettings::Get().ReduceMotion);
+    const EditorSettings& prefs = EditorSettings::Get();
+    motion.SetReduceMotion(prefs.ReduceMotion);
+    motion.SetSpeed(prefs.MotionSpeed);
+    // Headless runs (smoke) switch themes instantly: their checks measure the switch, not the tween
+    // (the tween's own round trip is a unit test).
+    motion.SetCategoryEnabled(Glass::MotionCategory::ThemeTweens, prefs.MotionThemeTweens && !m_Headless);
+    motion.SetCategoryEnabled(Glass::MotionCategory::Inertia, prefs.MotionInertia);
+    motion.SetCategoryEnabled(Glass::MotionCategory::Gradients, prefs.MotionGradients);
+    motion.SetCategoryEnabled(Glass::MotionCategory::RollingNumbers, prefs.MotionRollingNumbers && !m_Headless); // headless FPS jitters
+    motion.SetCategoryEnabled(Glass::MotionCategory::Viewport, prefs.MotionViewport);
+    motion.SetCategoryEnabled(Glass::MotionCategory::Startup, prefs.MotionStartup && !m_Headless);
     motion.NewFrame();
+    // The startup sequence plays once, on the first frame the editor draws.
+    static bool s_StartupBegun = false;
+    static int s_StartupFrames = 0;
+    if (!s_StartupBegun) { s_StartupBegun = true; motion.BeginStartup(); }
+    // A launch hitch (the first frames compiling shaders, a scene still streaming in) would run
+    // the clock out unseen: while frames are still slow, the sequence starts over, so it plays once
+    // they flow. Bounded to the first frames; any click or key has already settled it.
+    if (motion.StartupRunning() && ++s_StartupFrames < 90 && ImGui::GetIO().DeltaTime > Glass::StartupHitchSeconds)
+        motion.BeginStartup();
+    // Theme tweens and the play / prefab / viewport-focus moods (every theme).
+    bool viewportFocused = false;
+    if (ImGuiWindow* nav = ImGui::GetCurrentContext()->NavWindow) {
+        const char* name = nav->RootWindow ? nav->RootWindow->Name : nav->Name;
+        viewportFocused = std::strstr(name, "###Scene") != nullptr || std::strstr(name, "###Game") != nullptr;
+    }
+    Glass::StyleMotionFrame(m_InPlayMode, InPrefabMode(), viewportFocused, GlassThemeActive());
+    motion.DrawDebugger(&m_ShowMotionDebugger);
     if (!GlassThemeActive()) return;
     // A see-through window shows the blurred desktop behind every panel: nothing to paint.
     // Otherwise the panels sit over the plain black canvas.
     if (!DesktopShowsThrough()) Glass::DrawWallpaper();
     PollGlassNotifications();
+}
+
+// --- Shell motion (Motion v2) -----------------------------------------------------------------------
+
+void EditorLayer::GlassChromeFrameEnd() {
+    if (m_MotionDockspaceId != 0) Glass::DockFocusRim(m_MotionDockspaceId); // after every panel
+    Glass::DrawPlayFrame(m_MotionPlaying, m_MotionPaused);
+    // Both bars are drawn by now (the menu bar by the editor module, after Draw).
+    Glass::DrawChromeSheen(m_ChromeBusy);
+    if (Glass::StartupPosing()) {
+        Glass::DrawStartupRims();
+        DrawStartupHeadline();
+        // Without the compositor (Tartarus) the panels are posed here, before Render; the
+        // compositor poses them itself, after its glass conversion has read their first vertices.
+        if (!GlassThemeActive()) Glass::ApplyStartupArrival();
+    }
+    if (GlassThemeActive() && m_Glass) {
+        // A switch into Glass: the panels' fills clear as the style eases (no entry at rest).
+        Glass::ImAnimContext& m = Glass::Motion();
+        const float blend = m.PulseActive(kMaterialPulse) ? Glass::EaseProgress(Glass::ThemeTween, m.PulseProgress(kMaterialPulse)) : 1.0f;
+        m_Glass->Compositor.SetMaterialBlend(blend);
+    }
+}
+
+void EditorLayer::DrawStartupHeadline() {
+    // Over the Scene view (the centre of the wave), or the window's middle before it has a rect.
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    ImVec2 c(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + vp->Size.y * 0.5f);
+    if (m_ViewportSize.x > 64.0f && m_ViewportSize.y > 64.0f)
+        c = ImVec2(m_ViewportPos.x + m_ViewportSize.x * 0.5f, m_ViewportPos.y + m_ViewportSize.y * 0.5f);
+    static std::string s_Scene;
+    s_Scene = m_CurrentScenePath.empty() ? std::string("Untitled") : std::filesystem::path(m_CurrentScenePath).stem().string();
+    Glass::DrawStartupHeadline("Tartarus Engine", s_Scene.c_str(), c);
 }
 
 // --- Notifications ----------------------------------------------------------------------------------
@@ -410,8 +486,42 @@ void EditorLayer::PushGlassToast(const std::string& title, const std::string& bo
     g.Toasts.push_back(std::move(t));
 }
 
+void EditorLayer::PollRebuildToast() {
+    GlassEditorState& g = GlassState();
+    const bool running = GameModuleBuild::Running();
+    auto showing = [&]() -> GlassEditorState::Toast* {
+        for (auto& t : g.Toasts)
+            if (t.Id == m_RebuildToastId && t.Dismissed < 0.0) return &t;
+        return nullptr;
+    };
+    if (running && !m_ModuleRebuildWas) {
+        // A build started: the toast still up from the last one turns busy again, or a new one
+        // arrives (silently: the result has its own sound).
+        if (GlassEditorState::Toast* t = showing()) {
+            t->Title = "Rebuilding modules";
+            t->Body = "Compiling your code changes...";
+            t->Error = false;
+        } else {
+            PushGlassToast("Rebuilding modules", "Compiling your code changes...", false, /*chimed=*/true);
+            m_RebuildToastId = g.Toasts.back().Id;
+        }
+        m_RebuildToastResolvedAt = -1.0;
+    } else if (!running && m_ModuleRebuildWas && m_RebuildToastResolvedAt < 0.0) {
+        // Finished: the result morphs in place. The log's reload / failure lines refine its words.
+        if (GlassEditorState::Toast* t = showing()) {
+            const bool ok = GameModuleBuild::LastSucceeded();
+            t->Error = !ok;
+            t->Title = ok ? "Modules rebuilt" : "Module rebuild failed";
+            t->Body = ok ? "Reloading your code changes..." : "The compiler output is in the Console.";
+        }
+        m_RebuildToastResolvedAt = Glass::Motion().Now();
+    }
+    m_ModuleRebuildWas = running;
+}
+
 void EditorLayer::PollGlassNotifications() {
     GlassEditorState& g = GlassState();
+    PollRebuildToast();
     const std::vector<LogEntry>& entries = Log::Entries();
     const unsigned long long newest = entries.empty() ? 0ull : entries.back().Seq;
     if (!g.LogPrimed) {
@@ -426,7 +536,17 @@ void EditorLayer::PollGlassNotifications() {
     for (size_t i = first; i < entries.size(); ++i) {
         const LogEntry& e = entries[i];
         // A hot reload that landed: a quiet success toast whose check draws on.
+        GlassEditorState::Toast* rebuildToast = nullptr;
+        for (auto& t : g.Toasts)
+            if (m_RebuildToastId != 0 && t.Id == m_RebuildToastId && t.Dismissed < 0.0) rebuildToast = &t;
         if (e.Level == LogLevel::Info && e.Message.rfind("Hot reload: TartarusGame module reloaded", 0) == 0) {
+            if (rebuildToast) { // the rebuild toast says it instead of a second toast
+                rebuildToast->Title = "Module reloaded";
+                rebuildToast->Body = "Your code changes are live.";
+                rebuildToast->Error = false;
+                if (m_RebuildToastResolvedAt < 0.0) m_RebuildToastResolvedAt = Glass::Motion().Now();
+                continue;
+            }
             PushGlassToast("Module reloaded", "Your code changes are live.", false, /*chimed=*/true); // ModuleReload
             continue;
         }
@@ -434,6 +554,13 @@ void EditorLayer::PollGlassNotifications() {
         const bool module = e.Message.rfind("Module rebuild failed", 0) == 0;
         const bool shader = ContainsNoCase(e.Message, "failed to compile") || ContainsNoCase(e.Message, "compile error");
         if (!module && !shader) continue;
+        if (module && rebuildToast) {
+            rebuildToast->Title = "Module rebuild failed";
+            rebuildToast->Body = e.Message.size() > 220 ? e.Message.substr(0, 217) + "..." : e.Message;
+            rebuildToast->Error = true;
+            if (m_RebuildToastResolvedAt < 0.0) m_RebuildToastResolvedAt = Glass::Motion().Now();
+            continue;
+        }
         // The error's own sound (the log watcher's NotifyError, BuildFail) already said it.
         PushGlassToast(module ? "Module rebuild failed" : "Shader compile failed", e.Message, true, /*chimed=*/true);
     }
@@ -1342,14 +1469,21 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
         const int objects = (int)reg.view<const NameComponent>().size();
         const float ms = std::max(0.01f, m_SmoothedFrameMs);
         std::snprintf(stats, sizeof(stats), "%d objects   %.0f fps   %.1f ms", objects, 1000.0f / ms, ms);
-        const ImVec2 ts = ImGui::CalcTextSize(stats);
+        // The object count rolls (it changes on an edit, then holds still: no motion at rest); the
+        // frame figures change every frame, so they stay plain text.
+        char frame[48];
+        std::snprintf(frame, sizeof(frame), "   %.0f fps   %.1f ms", 1000.0f / ms, ms);
+        const ImVec2 ts(Glass::ImAnimContext::OdometerWidth((double)objects, 0, " objects") + ImGui::CalcTextSize(frame).x, lineH);
         const float h = lineH + Glass::Px(Glass::Space1) * 2.0f - Glass::Px(Glass::SpaceHalf);
         const ImRect r(ImVec2(right - ts.x - pad * 2.0f, stackBottom - h), ImVec2(right, stackBottom));
         ImGui::SetCursorScreenPos(r.Min);
         bool hov = false, held = false;
         Glass::MotionButton(ImGui::GetID("##hudStats"), r, r, &hov, &held);
         frosted(dl, r.Min, r.Max, r.GetHeight() * 0.5f, 1.0f);
-        dl->AddText(ImVec2(r.Min.x + pad, r.GetCenter().y - lineH * 0.5f), Col(Glass::TextSecondary), stats);
+        const ImVec2 at(r.Min.x + pad, r.GetCenter().y - lineH * 0.5f);
+        const float ow = motion.Odometer(ImGui::GetID("##hudObjects"), dl, at, (double)objects, 0, Col(Glass::TextSecondary), " objects");
+        dl->AddText(ImVec2(at.x + ow, at.y), Col(Glass::TextSecondary), frame);
+        (void)stats;
     }
 
     // --- Toasts, bottom-centre, newest at the bottom -----------------------------------------------
@@ -1365,15 +1499,22 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
         for (int i = (int)g.Toasts.size() - 1; i >= 0; --i) {
             GlassEditorState::Toast& toast = g.Toasts[(size_t)i];
             const float age = (float)(now - toast.Born);
-            if (toast.Dismissed < 0.0 && age >= lifetime) toast.Dismissed = now;
+            // The module-rebuild toast: busy (a turning ring, a shimmering bar) while the build runs,
+            // then it morphs into its result where it stands. It times out from its result, not its birth.
+            const bool rebuild = toast.Id == m_RebuildToastId;
+            const bool busy = rebuild && m_RebuildToastResolvedAt < 0.0;
+            const float sinceResult = rebuild && !busy ? (float)(now - m_RebuildToastResolvedAt) : age;
+            if (toast.Dismissed < 0.0 && !busy && sinceResult >= lifetime) toast.Dismissed = now;
             const float exit = toast.Dismissed < 0.0 ? 0.0f : std::min(1.0f, (float)(now - toast.Dismissed) / exitDur);
             const ImVec2 bodySize = ImGui::CalcTextSize(toast.Body.c_str(), nullptr, false, wrap);
             const float h = pad * 2.0f + lineH + Glass::Px(Glass::SpaceHalf) + bodySize.y;
 
-            // Restack smoothly when a toast above or below leaves.
-            const float targetY = bottom - h;
+            // Restack on a spring when a toast leaves: one that's leaving gives up its slot at once
+            // (it fades where it is), so the ones above start settling into the gap straight away.
+            const bool leaving = toast.Dismissed >= 0.0;
+            const float targetY = leaving && toast.Y >= 0.0f ? toast.Y : bottom - h;
             const float prevY = toast.Y < 0.0f ? targetY : toast.Y;
-            const float y = motion.Follow(ImGui::GetID((int)toast.Id), targetY, prevY, Glass::SelectionGlide);
+            const float y = motion.Follow(ImGui::GetID((int)toast.Id), targetY, prevY, Glass::ToastRestack);
             toast.Y = targetY;
 
             // Pop: an under-damped spring overshoots past full size and settles.
@@ -1382,8 +1523,10 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
             const float scale = (Glass::ToastPopFromScale + (1.0f - Glass::ToastPopFromScale) * pop) * (1.0f - 0.04f * exitE);
             const float alpha = std::min(1.0f, age / 0.12f) * (1.0f - exitE);
             float shake = 0.0f;
-            if (toast.Error && !motion.ReduceMotion() && age * 1000.0f < Glass::ErrorShake.durationMs)
-                shake = Glass::SpringImpulse(age, Glass::ErrorShake.mass, Glass::ErrorShake.stiffness, Glass::ErrorShake.damping,
+            // An error shakes as it arrives; the rebuild toast shakes when it turns into one.
+            const float shakeAge = rebuild ? sinceResult : age;
+            if (toast.Error && !busy && !motion.ReduceMotion() && shakeAge * 1000.0f < Glass::ErrorShake.durationMs)
+                shake = Glass::SpringImpulse(shakeAge, Glass::ErrorShake.mass, Glass::ErrorShake.stiffness, Glass::ErrorShake.damping,
                                              Glass::Px(Glass::ErrorShake.amplitudePx));
             const ImRect rest(ImVec2(vMin.x + (m_ViewportSize.x - w) * 0.5f, y), ImVec2(vMin.x + (m_ViewportSize.x + w) * 0.5f, y + h));
             const ImRect drawn = Scaled(rest, scale, ImVec2(shake, Glass::Px(Glass::ToastPopRisePx) * (1.0f - pop)));
@@ -1399,6 +1542,7 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
             ImGui::PopID();
             if (hov && toast.Dismissed < 0.0) {
                 if (age > popDur) toast.Born += (double)ImGui::GetIO().DeltaTime; // hovering holds it on screen
+                if (rebuild && !busy) m_RebuildToastResolvedAt += (double)ImGui::GetIO().DeltaTime;
                 EditorUI::SetTooltip("Click to dismiss. The full message is in the Console.");
             }
             if (alpha > 0.0f) {
@@ -1409,25 +1553,58 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
                                   Col(status, alpha), barW * 0.5f);
                 const float tx = drawn.Min.x + pad + Glass::Px(Glass::Space1);
                 float ty = drawn.Min.y + pad;
-                if (toast.Error) {
-                    dl->AddText(ImVec2(tx, ty), Col(status, alpha), ICON_FA_CIRCLE_EXCLAMATION);
-                } else {
-                    // A success: its check draws on just after the pop lands.
-                    const float fs = ImGui::GetFontSize();
-                    const float draw = motion.ReduceMotion() ? 1.0f
-                        : Glass::EaseProgress(Glass::ToastCheckDraw, (age - popDur * 0.35f) / (Glass::ToastCheckDraw.durationMs * 0.001f));
-                    Glass::DrawCheckmark(dl, ImVec2(tx, ty + fs * 0.05f), fs * 0.95f, draw, Col(status, alpha), std::max(1.0f, fs * 0.12f));
+                const float fs = ImGui::GetFontSize();
+                // The result's mark: from the result for the rebuild toast, just after the pop otherwise.
+                const float markAge = rebuild ? sinceResult : age - popDur * 0.35f;
+                const float draw = motion.ReduceMotion() ? 1.0f
+                    : Glass::EaseProgress(Glass::ToastCheckDraw, markAge / (Glass::ToastCheckDraw.durationMs * 0.001f));
+                if (rebuild && (busy || draw < 1.0f)) {
+                    // The busy ring: an arc turning round where the mark will be. On a success it
+                    // closes into a full circle and fades as the check draws on inside it; on an
+                    // error it just fades under the exclamation.
+                    const ImVec2 c(tx + fs * 0.5f, ty + fs * 0.55f);
+                    const float spin = (float)(now / Glass::ToastBusyTurnSeconds) * IM_PI * 2.0f;
+                    const float closing = busy ? 0.0f : (toast.Error ? 0.0f : draw);
+                    const float arc = (Glass::ToastBusyArc + (1.0f - Glass::ToastBusyArc) * closing) * IM_PI * 2.0f;
+                    const float ringA = alpha * (busy ? 1.0f : 1.0f - draw);
+                    dl->PathArcTo(c, fs * 0.42f, spin, spin + arc, 24);
+                    dl->PathStroke(Col(Glass::TextSecondary, ringA), ImDrawFlags_None, std::max(1.0f, fs * 0.11f));
+                }
+                if (!busy) {
+                    const float markA = rebuild ? alpha * draw : alpha;
+                    if (toast.Error)
+                        dl->AddText(ImVec2(tx, ty), Col(status, markA), ICON_FA_CIRCLE_EXCLAMATION);
+                    else // a success: its check draws on
+                        Glass::DrawCheckmark(dl, ImVec2(tx, ty + fs * 0.05f), fs * 0.95f, draw, Col(status, alpha), std::max(1.0f, fs * 0.12f));
                 }
                 dl->AddText(ImVec2(tx + ImGui::GetFontSize() * 1.5f, ty), Col(Glass::TextPrimary, alpha), toast.Title.c_str());
                 ty += lineH + Glass::Px(Glass::SpaceHalf);
                 dl->AddText(nullptr, 0.0f, ImVec2(tx, ty), Col(Glass::TextSecondary, alpha), toast.Body.c_str(), nullptr, wrap);
+                if (rebuild && (busy || draw < 1.0f)) {
+                    // A hairline progress track under the text: a shimmering segment while it works,
+                    // filling the track and fading once the result is in.
+                    const float x0 = tx, x1 = drawn.Max.x - pad, by = drawn.Max.y - pad * 0.5f;
+                    const float th = std::max(1.0f, Glass::Px(2.0f));
+                    float t01 = 0.0f, segFrac = 0.3f, bright = 1.0f;
+                    Glass::BusyShimmer((float)now, t01, segFrac, bright);
+                    const float fill = busy ? 0.0f : draw;
+                    const float segW = (x1 - x0) * (segFrac + (1.0f - segFrac) * fill);
+                    const float sx = busy ? x0 - segW + ((x1 - x0) + segW) * t01 : x0 + ((x1 - x0) - segW) * 0.5f * (1.0f - fill);
+                    const float trackA = alpha * (busy ? 1.0f : 1.0f - draw);
+                    dl->PushClipRect(ImVec2(x0, by - th), ImVec2(x1, by + th), true);
+                    dl->AddRectFilled(ImVec2(x0, by - th * 0.5f), ImVec2(x1, by + th * 0.5f), Col(Glass::Hairline, trackA));
+                    dl->AddRectFilled(ImVec2(sx, by - th * 0.5f), ImVec2(sx + segW, by + th * 0.5f), Col(status, trackA * bright), th * 0.5f);
+                    dl->PopClipRect();
+                }
             }
-            if (exit < 1.0f) bottom = y - Glass::Px(Glass::Space1) * (1.0f - exitE);
+            if (!leaving) bottom = y - Glass::Px(Glass::Space1);
         }
         g.Toasts.erase(std::remove_if(g.Toasts.begin(), g.Toasts.end(), [&](const GlassEditorState::Toast& t) {
             return t.Dismissed >= 0.0 && (float)(now - t.Dismissed) >= exitDur;
         }), g.Toasts.end());
         if (g.Toasts.empty()) g.Toasts.shrink_to_fit(); // nothing showing, nothing held
+        if (m_RebuildToastId != 0 && std::none_of(g.Toasts.begin(), g.Toasts.end(), [&](const GlassEditorState::Toast& t) { return t.Id == m_RebuildToastId; }))
+            m_RebuildToastId = 0;
         (void)anyMoving;
     }
 

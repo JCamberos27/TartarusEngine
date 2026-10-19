@@ -278,9 +278,17 @@ void GlassTheme(EditorLayer& editor, World& world, int frame) {
                       << Glass::Motion().LiveCount() << " animation(s) live" << std::endl;
         }
         editor.SetGlassThemeForTest(false);
-    } else if (frame == 80) {
+    } else if (frame >= 80 && frame <= 99) {
+        // Motion v2: a few moments (a mood, a toolbar fold, the focus rim) are still landing when the
+        // theme goes off. Pass the first frame everything is released; fail if it never is.
+        static bool s_Reported = false;
+        if (frame == 80) s_Reported = false;
+        if (s_Reported) return;
+        const bool released = Glass::Motion().LiveCount() == 0 && Glass::Motion().HeldBytes() == 0;
+        if (!released && frame < 99 && !editor.GlassThemeActive()) return;
+        s_Reported = true;
         if (editor.GlassThemeActive()) Log::Error("[SmokeTest] glass: the theme never switched back off");
-        else if (Glass::Motion().LiveCount() != 0 || Glass::Motion().HeldBytes() != 0) {
+        else if (!released) {
             std::string live;
             for (int i = 0; i < Glass::Motion().LiveCount() && i < 8; ++i) {
                 char b[40];
@@ -290,7 +298,7 @@ void GlassTheme(EditorLayer& editor, World& world, int frame) {
             Log::Error("[SmokeTest] glass: animation state still holds " + std::to_string(Glass::Motion().HeldBytes()) +
                        " bytes after the theme was switched off; live (id/kind):" + live);
         }
-        else std::cout << "[SmokeTest]   glass: theme off, animation memory released" << std::endl;
+        else std::cout << "[SmokeTest]   glass: theme off, animation memory released by frame " << frame << std::endl;
     }
 }
 

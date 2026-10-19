@@ -4,6 +4,7 @@
 #include "EditorLayer.h"
 #include "EditorTheme.h"
 #include "Glass/GlassDragMotion.h" // the drag ghost
+#include "Glass/GlassMotion.h"     // Motion v2: folder zoom, grid ripples, drag-fling
 #include "EditorUIPrimitives.h"
 #include "EditorSound.h"
 #include "EditorLayerInternal.h"
@@ -1474,6 +1475,176 @@ bool IsUnder(const std::string& path, const std::string& dir) {
     auto rel = std::filesystem::relative(path, dir, ec);
     return !ec && rel.string().rfind("..", 0) != 0;
 }
+
+// --- Glass Motion v2: folder zoom, grid ripple, import ripple, drag-fling ---------------------------
+// All of it is draw-only: tiles are submitted at their rest layout (hit-testing, drag-and-drop and the
+// clipper see the real grid) and their vertices are moved afterwards (Glass layers). The timers are
+// Glass pulses, so an idle browser holds no animation state; what's kept here is a few strings and
+// numbers, plus - only while an import batch is in flight - the keys the folder showed when it began.
+struct AssetGridMotionState {
+    bool        Primed = false;
+    std::string Folder;           // the folder the grid showed last frame
+    bool        Filtering = false;
+    // Last frame's grid geometry (screen px): where tile 0 sits, the stride between tiles, one tile,
+    // the columns, and the visible list rect.
+    ImVec2 Origin, Stride, CellSize, ViewMin, ViewMax;
+    int    Cols = 1;
+    int    GeomFrame = -1;        // the frame the geometry was taken (its first drawn cell)
+    // The folder tile under the pointer (else the selected one), so a dive knows where it came from.
+    std::string TileKey;
+    ImVec2 TileCentre;
+    int    TileIndex = -1, TileFrame = -100;
+    bool   TileHovered = false;
+    // The folder zoom in flight, and its layer (begun on the first drawn cell, ended after the last).
+    bool        ZoomOut = false;
+    ImVec2      ZoomPivot;
+    ImDrawList* LayerDl = nullptr;
+    int         LayerVtx = 0;
+    int         RippleCol = 0, RippleRow = 0; // the folder ripple's origin tile
+    // The import ripple.
+    int    ImportSerial = 0;
+    bool   ImportArmed = false;
+    std::string ImportSig;
+    std::unordered_set<std::string> ImportKnown;
+    int    ImportCol = 0, ImportRow = 0;
+    double ImportStart = 0.0, ImportIdleSince = -1.0;
+};
+AssetGridMotionState& GridMotion() { static AssetGridMotionState s; return s; }
+
+constexpr ImGuiID kGridZoomId     = 0xA55E7201u;
+constexpr ImGuiID kGridRippleId   = 0xA55E7202u;
+constexpr ImGuiID kImportTileSalt = 0x1A7E0C11u;
+constexpr ImGuiID kGridFlingSalt  = 0x5F11A6D3u;
+constexpr float   kZoomOutFrom    = 1.12f; // going up: the parent grid shrinks from this
+constexpr float   kTileFromScale  = 0.94f; // a rippling tile grows from this
+constexpr double  kImportSettleSeconds = 1.5; // after a batch, how long freshly listed tiles still ripple
+
+ImGuiID ImportTileId(const std::string& key) { return ImHashStr(key.c_str()) ^ kImportTileSalt; }
+float RippleSeconds() {
+    return (float)Glass::RippleCap * Glass::RippleStepMs * 0.001f + Glass::GridWaveFadeMs * 0.001f;
+}
+// The module draws the Asset Browser's grid in a child named "##AssetList"; the Glass Library also
+// rebuilds the cell list (AssetGridFrameBegin) from its own window, and must not drive this.
+bool InAssetListWindow() {
+    const ImGuiWindow* w = ImGui::GetCurrentWindow();
+    return w && std::strstr(w->Name, "##AssetList") != nullptr;
+}
+
+// Per frame, from AssetGridFrameBegin inside ##AssetList: notice a folder change (zoom + ripple), a
+// search starting or ending (ripple from the top-left) and new tiles while an import runs.
+void GridMotionFrameBegin(const std::vector<AssetGridCell>& cells, const std::string& folder,
+                          const std::string& filter, bool favoritesOnly, ImportQueueManager& queue) {
+    AssetGridMotionState& gm = GridMotion();
+    Glass::ImAnimContext& motion = Glass::Motion();
+    const int frame = ImGui::GetFrameCount();
+    ImGuiWindow* win = ImGui::GetCurrentWindow();
+    gm.LayerDl = nullptr;
+    gm.ViewMin = win->InnerRect.Min;
+    gm.ViewMax = win->InnerRect.Max;
+    // Details rows sit in the table's own window; their first cell sets Origin instead.
+    if (!EditorSettings::Get().AssetDetailsMode) gm.Origin = ImGui::GetCursorScreenPos();
+    queue.NoteGridWatching(frame);
+
+    const int cols = std::max(1, gm.Cols);
+    const int rows = cells.empty() ? 0 : ((int)cells.size() + cols - 1) / cols;
+    auto centreOf = [&](int idx) {
+        return ImVec2(gm.Origin.x + (float)(idx % cols) * gm.Stride.x + gm.CellSize.x * 0.5f,
+                      gm.Origin.y + (float)(idx / cols) * gm.Stride.y + gm.CellSize.y * 0.5f);
+    };
+    auto inView = [&](ImVec2 p) {
+        return p.x >= gm.ViewMin.x && p.x <= gm.ViewMax.x && p.y >= gm.ViewMin.y && p.y <= gm.ViewMax.y;
+    };
+    const ImVec2 viewCentre((gm.ViewMin.x + gm.ViewMax.x) * 0.5f, (gm.ViewMin.y + gm.ViewMax.y) * 0.5f);
+    const bool filtering = !filter.empty() || favoritesOnly;
+
+    if (!gm.Primed) {
+        // First open: the tiles ripple in from the top-left.
+        gm.Primed = true;
+        gm.Folder = folder;
+        gm.RippleCol = gm.RippleRow = 0;
+        motion.Pulse(kGridRippleId, RippleSeconds());
+    } else if (folder != gm.Folder) {
+        const std::string old = std::move(gm.Folder);
+        gm.Folder = folder;
+        // Up (Up, Back, a breadcrumb or tree click on an ancestor): zoom back out about the folder tile
+        // we came from. Anything else is a dive: zoom in about the tile that was opened, if we saw it.
+        const bool out = !old.empty() && (folder.empty() || old.rfind(folder + "/", 0) == 0);
+        int idx = -1;
+        if (out) {
+            std::string child = old;
+            while (!child.empty() && ParentFolderOf(child) != folder) child = ParentFolderOf(child);
+            for (size_t i = 0; i < cells.size() && idx < 0; ++i)
+                if (cells[i].kind == AssetGridCell::Kind::Folder && cells[i].key == child) idx = (int)i;
+            gm.ZoomPivot = (idx >= 0 && inView(centreOf(idx))) ? centreOf(idx) : viewCentre;
+        } else if (gm.TileFrame >= frame - 3 && gm.TileKey == folder && gm.TileIndex >= 0) {
+            idx = gm.TileIndex;
+            gm.ZoomPivot = gm.TileCentre;
+        } else {
+            gm.ZoomPivot = viewCentre;
+        }
+        gm.RippleCol = idx >= 0 ? idx % cols : 0;
+        gm.RippleRow = idx >= 0 ? idx / cols : 0;
+        gm.ZoomOut = out;
+        motion.Pulse(kGridZoomId, Glass::FolderZoom.durationMs * 0.001f);
+        motion.Pulse(kGridRippleId, RippleSeconds());
+        // Reduce Motion: no pulse was made, nothing moves, and there's nothing to hear.
+        if (frame >= 30 && motion.PulseActive(kGridZoomId))
+            EditorSound::Play(out ? EditorSound::Event::FolderZoomOut : EditorSound::Event::FolderZoomIn,
+                              gm.ZoomPivot.x / std::max(1.0f, ImGui::GetIO().DisplaySize.x));
+    } else if (filtering != gm.Filtering) {
+        // A search (or the favourites view) started or ended: no origin, so from the top-left.
+        gm.RippleCol = gm.RippleRow = 0;
+        motion.Pulse(kGridRippleId, RippleSeconds());
+    }
+    gm.Filtering = filtering;
+    motion.PulseProgress(kGridRippleId); // retires it the frame it ends
+
+    // Import ripple: a new batch snapshots what the folder holds; tiles that appear after that ripple
+    // in from where the files were dropped (the nearest tile to the drop point), or the top-left.
+    const int serial = queue.BatchSerial();
+    if (serial != gm.ImportSerial) {
+        gm.ImportSerial = serial;
+        if (!gm.ImportArmed) {
+            gm.ImportArmed = true;
+            gm.ImportKnown.clear();
+            for (const auto& c : cells) gm.ImportKnown.insert(c.key);
+            gm.ImportSig = folder + '\x1f' + filter + (favoritesOnly ? "\x1f*" : "");
+        }
+        gm.ImportCol = gm.ImportRow = 0;
+        const ImVec2 drop = queue.DropPos();
+        if (queue.HasDropPos() && inView(drop) && gm.Stride.y > 0.0f) {
+            gm.ImportCol = gm.Stride.x > 0.0f ? std::clamp((int)std::floor((drop.x - gm.Origin.x) / gm.Stride.x), 0, cols - 1) : 0;
+            gm.ImportRow = std::max(0, (int)std::floor((drop.y - gm.Origin.y) / gm.Stride.y));
+        }
+        gm.ImportStart = motion.Now();
+        gm.ImportIdleSince = -1.0;
+    }
+    if (gm.ImportArmed) {
+        // A different folder or search while armed: what it shows isn't new, just re-snapshot.
+        const std::string sig = folder + '\x1f' + filter + (favoritesOnly ? "\x1f*" : "");
+        const bool resnap = sig != gm.ImportSig;
+        if (resnap) gm.ImportSig = sig;
+        for (size_t i = 0; i < cells.size(); ++i) {
+            if (!gm.ImportKnown.insert(cells[i].key).second || resnap) continue;
+            // The front spreads from the drop at the ripple's speed; a tile that lands after the front
+            // has passed simply starts now.
+            const int c = (int)i % cols, r = (int)i / cols;
+            const float at = Glass::ImAnimContext::GridRippleDelay(c, r, cols, rows, gm.ImportCol, gm.ImportRow,
+                                                                   Glass::RippleStepMs, Glass::RippleCap);
+            const float wait = std::max(0.0f, (float)(gm.ImportStart + at - motion.Now()));
+            motion.Pulse(ImportTileId(cells[i].key), Glass::GridWaveFadeMs * 0.001f, wait);
+        }
+        if (queue.IsActive()) {
+            gm.ImportIdleSince = -1.0;
+        } else if (gm.ImportIdleSince < 0.0) {
+            gm.ImportIdleSince = motion.Now();
+        } else if (motion.Now() - gm.ImportIdleSince > kImportSettleSeconds) {
+            gm.ImportArmed = false;
+            std::unordered_set<std::string>().swap(gm.ImportKnown);
+            std::string().swap(gm.ImportSig);
+        }
+    }
+}
 } // namespace
 
 // Phase 6 item 4 — Console click-to-navigate's asset half (see the header comment). Unlike the
@@ -1765,6 +1936,9 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
     // #219: the wrapping grid clips by ROW (see the module's clipper loop). The cell-size math and
     // cellsPerRow live module-side now, derived from GetAssetGridMetrics(); DrawAssetCell just
     // takes the rect it was told to fill. List mode is a grid with one cell per row.
+
+    // Motion v2: folder zoom / ripples (the Asset Browser's grid only, not the Glass Library's rebuild).
+    if (InAssetListWindow()) GridMotionFrameBegin(cells, m_CurrentAssetFolder, m_AssetSearchFilter, m_AssetFavoritesOnly, m_ImportQueue);
 }
 
 // One tile at the module's current cursor. `gridMode` false = the compact icon+name list row.
@@ -1786,6 +1960,55 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             (ImGui::IsMouseClicked(ImGuiMouseButton_Left) || ImGui::IsMouseClicked(ImGuiMouseButton_Right)))
             LoadUnloadedAsset(assets, cells[cellIndex]);
     }
+    // --- Motion v2 -------------------------------------------------------------------------------
+    // The first drawn cell of the frame takes the grid's geometry (the clipper starts every step at a
+    // row start, so the content width here is the module's) and opens the folder-zoom layer.
+    AssetGridMotionState& gm = GridMotion();
+    Glass::ImAnimContext& motion = Glass::Motion();
+    {
+        const int frame = ImGui::GetFrameCount();
+        if (gm.GeomFrame != frame) {
+            gm.GeomFrame = frame;
+            const ImGuiStyle& st = ImGui::GetStyle();
+            const float availW = ImGui::GetContentRegionAvail().x;
+            if (gridMode) {
+                gm.Cols = std::max(1, (int)((availW + st.ItemSpacing.x) / (cellW + st.ItemSpacing.x)));
+                gm.Stride = ImVec2(cellW + st.ItemSpacing.x, cellH + st.ItemSpacing.y);
+                gm.CellSize = ImVec2(cellW, cellH);
+            } else {
+                gm.Cols = 1;
+                gm.Stride = ImVec2(0.0f, ImGui::GetTextLineHeightWithSpacing());
+                gm.CellSize = ImVec2(availW, ImGui::GetTextLineHeight());
+            }
+            const ImVec2 here = ImGui::GetCursorScreenPos();
+            gm.Origin = ImVec2(here.x, here.y - (float)(index / gm.Cols) * gm.Stride.y);
+            if (motion.PulseActive(kGridZoomId) && !gm.LayerDl) {
+                gm.LayerDl = ImGui::GetWindowDrawList();
+                gm.LayerVtx = Glass::ImAnimContext::BeginLayer(gm.LayerDl);
+            }
+        }
+    }
+    // How far this tile has rippled in: the folder ripple spreads from its origin tile, an imported
+    // tile has its own pulse. The look is the old diagonal wave's (fade, rise, OutCubic over 260 ms).
+    float reveal = 1.0f;
+    {
+        const int col = index % gm.Cols, row = index / gm.Cols;
+        const float el = motion.PulseElapsed(kGridRippleId, FLT_MAX);
+        if (el != FLT_MAX) {
+            const int rows = ((int)cells.size() + gm.Cols - 1) / gm.Cols;
+            const float delay = Glass::ImAnimContext::GridRippleDelay(col, row, gm.Cols, rows, gm.RippleCol, gm.RippleRow,
+                                                                      Glass::RippleStepMs, Glass::RippleCap);
+            reveal = Glass::EaseProgress(Glass::HoverIn, (el - delay) / (Glass::GridWaveFadeMs * 0.001f));
+        }
+        if (gm.ImportArmed) {
+            const ImGuiID tid = ImportTileId(cells[cellIndex].key);
+            if (motion.PulseActive(tid)) reveal = std::min(reveal, Glass::EaseProgress(Glass::HoverIn, motion.PulseProgress(tid)));
+        }
+    }
+    ImDrawList* tileDl = ImGui::GetWindowDrawList();
+    const ImVec2 restMin = ImGui::GetCursorScreenPos();
+    const ImVec2 restSize = gridMode ? ImVec2(cellW, cellH) : ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetTextLineHeight());
+    const int tileVtx = reveal < 1.0f ? Glass::ImAnimContext::BeginLayer(tileDl) : -1;
     {
         const auto& cell = cells[cellIndex];
         ImGui::PushID(cell.key.c_str());
@@ -2068,6 +2291,20 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             if (cell.kind == Cell::Kind::Sound && !assetIO.KeyShift && !assetIO.KeyCtrl) {
                 if (playing) AudioEngine::StopPreview();
                 else AudioEngine::PlayPreview(cell.key);
+            }
+        }
+        // Motion v2: remember the folder tile under the pointer (else the selected one), so opening
+        // it (double-click, Enter) zooms in about it and the new grid ripples out from there.
+        if (isFolder) {
+            const int frame = ImGui::GetFrameCount();
+            const bool hov = ImGui::IsItemHovered();
+            if (hov || (isSelected && !(gm.TileFrame == frame && gm.TileHovered))) {
+                if (gm.TileKey != cell.key) gm.TileKey = cell.key;
+                const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+                gm.TileCentre = ImVec2((mn.x + mx.x) * 0.5f, (mn.y + mx.y) * 0.5f);
+                gm.TileIndex = index;
+                gm.TileFrame = frame;
+                gm.TileHovered = hov;
             }
         }
         if (isFolder && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
@@ -2473,6 +2710,17 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
 
         ImGui::PopID();
     }
+
+    // Motion v2: the ripple's fade, rise and scale, applied to everything the tile just drew.
+    if (tileVtx >= 0) {
+        Glass::LayerTransform t;
+        t.pivot = ImVec2(restMin.x + restSize.x * 0.5f, restMin.y + restSize.y * 0.5f);
+        const float s = gridMode ? kTileFromScale + (1.0f - kTileFromScale) * reveal : 1.0f;
+        t.scale = ImVec2(s, s);
+        t.translate = ImVec2(0.0f, EditorTheme::Px(Glass::GridWaveRisePx) * (1.0f - reveal));
+        t.alpha = reveal;
+        Glass::ImAnimContext::EndLayer(tileDl, tileVtx, t);
+    }
 }
 
 // The empty-space click-to-clear + right-click "New Folder" popup, drawn by the module right
@@ -2497,6 +2745,71 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
         if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) ClearAssetSelection();
         if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) ImGui::OpenPopup("##BrowserBgContext");
     }
+
+    // --- Motion v2 ---------------------------------------------------------------------------------
+    AssetGridMotionState& gm = GridMotion();
+    Glass::ImAnimContext& motion = Glass::Motion();
+    // Folder zoom: diving in, the new grid grows from FolderZoomFrom about the opened tile while it
+    // fades in; going up, the parent shrinks from 1.12 about the folder we came from.
+    if (gm.LayerDl) {
+        const float e = Glass::EaseProgress(Glass::FolderZoom, motion.PulseProgress(kGridZoomId));
+        const float from = gm.ZoomOut ? kZoomOutFrom : Glass::FolderZoomFrom;
+        const float s = from + (1.0f - from) * e;
+        Glass::LayerTransform t;
+        t.pivot = gm.ZoomPivot;
+        t.scale = ImVec2(s, s);
+        t.alpha = std::min(1.0f, e / 0.6f);
+        Glass::ImAnimContext::EndLayer(gm.LayerDl, gm.LayerVtx, t);
+        gm.LayerDl = nullptr;
+    } else {
+        motion.PulseProgress(kGridZoomId); // nothing drawn (an empty folder): let it run out
+    }
+
+    // Drag the grid to scroll it; let go to fling (Inertia). Left-drag on empty grid space (the grid
+    // has no box-select, so empty space is free) or middle-drag anywhere over it. A tile's own
+    // left-drag stays drag-and-drop: a press on a tile never starts this. Claiming the active id also
+    // keeps a floating Asset Browser from being dragged around by its background.
+    {
+        ImGuiWindow* list = ImGui::GetCurrentWindow();
+        ImGuiWindow* target = list; // Details view scrolls its table's inner window
+        if (EditorSettings::Get().AssetDetailsMode)
+            if (ImGuiTable* table = ImGui::TableFindByID(ImGui::GetID("##AssetDetails")))
+                if (table->InnerWindow) target = table->InnerWindow;
+        const ImGuiID dragId = ImGui::GetID("##gridFling");
+        const ImGuiID flingKey = target->ID ^ kGridFlingSalt;
+        static int s_DragButton = -1;
+        if (ImGui::GetActiveID() == 0 && ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows)) {
+            int button = -1;
+            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGui::IsAnyItemHovered()) button = ImGuiMouseButton_Left;
+            else if (ImGui::IsMouseClicked(ImGuiMouseButton_Middle)) button = ImGuiMouseButton_Middle;
+            if (button >= 0) {
+                ImGui::SetActiveID(dragId, list);
+                ImGui::FocusWindow(list); // what the click would have done (the active id stops ImGui doing it)
+                s_DragButton = button;
+                motion.InertiaStop(flingKey);
+            }
+        }
+        auto scrollBy = [&](float dy) {
+            const float y = std::clamp(target->Scroll.y + dy, 0.0f, target->ScrollMax.y);
+            ImGui::SetScrollY(target, y);
+            return y != target->Scroll.y + dy; // hit an end
+        };
+        if (ImGui::GetActiveID() == dragId) {
+            if (s_DragButton >= 0 && ImGui::IsMouseDown(s_DragButton)) {
+                const float dy = -ImGui::GetIO().MouseDelta.y;
+                if (dy != 0.0f) scrollBy(dy);
+                motion.InertiaTrack(flingKey, ImVec2(0.0f, dy));
+                if (ImGui::IsMouseDragging(s_DragButton)) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+            } else {
+                motion.InertiaRelease(flingKey);
+                ImGui::ClearActiveID();
+                s_DragButton = -1;
+            }
+        }
+        const ImVec2 coast = motion.InertiaDelta(flingKey);
+        if (coast.y != 0.0f && scrollBy(coast.y)) motion.InertiaStop(flingKey);
+    }
+
     if (ImGui::BeginPopup("##BrowserBgContext")) {
         if (ImGui::MenuItem(ICON_FA_FOLDER_PLUS "  New Folder")) makeNewFolder();
         ImGui::Separator();

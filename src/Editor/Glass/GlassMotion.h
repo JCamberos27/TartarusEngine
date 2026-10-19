@@ -61,6 +61,28 @@ struct PathSeg {
     ImVec2 c1, c2, end;
 };
 
+// Motion v2 categories, each switchable in Preferences > Viewport > Motion. Reduce Motion turns all
+// of them off. A category that's off resolves its motion instantly (or draws it static).
+enum class MotionCategory : int {
+    ThemeTweens = 0, // theme switch, play / prefab / focus moods
+    Inertia,         // coasting scroll, flings, value scrubbing
+    Gradients,       // busy sheen, travelling rims, cursor glow
+    RollingNumbers,  // odometer readouts
+    Viewport,        // gizmo springs, outline sweep, radial menu, view cube
+    Startup,         // the startup sequence
+    Count
+};
+
+// A 2D affine transform for a layer of draw commands (BeginLayer / EndLayer): scale and rotate
+// about `pivot`, then translate, then fade. Composed with ImAnim's iam_transform.
+struct LayerTransform {
+    ImVec2 pivot     = ImVec2(0, 0);
+    ImVec2 scale     = ImVec2(1, 1);
+    float  rotation  = 0.0f;           // radians
+    ImVec2 translate = ImVec2(0, 0);
+    float  alpha     = 1.0f;
+};
+
 class ImAnimContext {
 public:
     // Call once per frame, after ImGui::NewFrame (EditorLayer::BeginFrame). Advances ImAnim's
@@ -163,11 +185,83 @@ public:
     void SetReduceMotion(bool on) { m_ReduceMotion = on; }
     bool ReduceMotion() const { return m_ReduceMotion; }
 
+    // --- Motion v2 -----------------------------------------------------------------------------
+    // Preferences: one switch per category, and a speed multiplier (0.5..2) on the motion clock and
+    // ImAnim's global time scale. A debug override (the motion debugger's slow-mo) multiplies on top.
+    void SetCategoryEnabled(MotionCategory c, bool on) { m_CategoryOn[(int)c] = on; }
+    // On, and Reduce Motion is off.
+    bool CategoryOn(MotionCategory c) const { return !m_ReduceMotion && m_CategoryOn[(int)c]; }
+    void  SetSpeed(float s) { m_Speed = s < 0.1f ? 0.1f : (s > 4.0f ? 4.0f : s); }
+    float Speed() const { return m_Speed; }
+    void  SetDebugTimeScale(float s) { m_DebugScale = s < 0.05f ? 0.05f : (s > 4.0f ? 4.0f : s); }
+    float DebugTimeScale() const { return m_DebugScale; }
+    float TimeScale() const { return m_Speed * m_DebugScale; }
+    // This frame's step on the motion clock (DeltaTime * TimeScale).
+    float Dt() const { return m_Dt; }
+
+    // Rolling numbers: draws `value` at `pos` (top-left, current font) with each digit sliding
+    // vertically like a mechanical counter while the value changes, and a brief white flash.
+    // Remembers last frame's value in the current window's storage (ImGui's memory, not this map).
+    // `decimals` fixed digits after the point; `suffix` drawn after (unrolled). Returns the width
+    // drawn. RollingNumbers off: plain text.
+    float Odometer(ImGuiID id, ImDrawList* dl, ImVec2 pos, double value, int decimals, ImU32 col, const char* suffix = nullptr);
+    // The width Odometer would take for `value`.
+    static float OdometerWidth(double value, int decimals, const char* suffix = nullptr);
+    // The value as it reads right now (a rolling readout that isn't drawn as digits).
+    double RollingValue(ImGuiID id, double value);
+
+    // Inertia: track a drag's motion, release it into a coast that decays like a trackpad fling.
+    // While dragging call InertiaTrack with the frame's delta (px); on release InertiaRelease. Each
+    // frame after that, InertiaDelta returns how far the coast moved (0 once it has stopped, and
+    // the entry is gone). Inertia off: release stops at once.
+    void   InertiaTrack(ImGuiID id, ImVec2 delta);
+    void   InertiaRelease(ImGuiID id);
+    ImVec2 InertiaDelta(ImGuiID id);
+    void   InertiaStop(ImGuiID id) { Remove(id); }
+    bool   InertiaCoasting(ImGuiID id) const;
+    // Start a coast directly with a velocity (px/s), e.g. a wheel notch.
+    void   Fling(ImGuiID id, ImVec2 velocity);
+
+    // Living gradients (stateless; pure functions of the motion clock; Gradients off: nothing drawn).
+    // A soft white band sweeping across [min, max] (busy sheen). `strength` 0..1 fades it.
+    void DrawSheen(ImDrawList* dl, ImVec2 min, ImVec2 max, ImGuiID seed, float strength) const;
+    // A white gradient segment travelling around the rectangle's perimeter.
+    void DrawTravellingRim(ImDrawList* dl, ImVec2 min, ImVec2 max, float lapSeconds, float arc, float alpha,
+                           float thickness, ImGuiID seed) const;
+    // A radial white glow centred on `cursor`, clipped to [min, max] (accent hover).
+    void DrawCursorGlow(ImDrawList* dl, ImVec2 min, ImVec2 max, ImVec2 cursor, float strength, float rounding) const;
+
+    // Layers: everything drawn into `dl` between BeginLayer and EndLayer is transformed (card flips,
+    // folder zoom, punch-ins). Returns the vertex index to pass to EndLayer.
+    static int  BeginLayer(ImDrawList* dl);
+    static void EndLayer(ImDrawList* dl, int vtxStart, const LayerTransform& t);
+
+    // Grid ripple: seconds before tile (col, row) starts, spreading from (originCol, originRow)
+    // (iam_stagger_grid_delay), capped at `capSteps` steps.
+    static float GridRippleDelay(int col, int row, int cols, int rows, int originCol, int originRow, float stepMs, int capSteps);
+
+    // Text on paths. TextOnPath follows a path made with DefinePath (in pixels, offset by
+    // `origin`), via iam_text_path. TextAlongCubic places glyphs along a cubic bezier (a node-graph
+    // wire) centred at arc fraction `centerT`, with no path definition (stateless).
+    static void TextOnPath(ImGuiID pathId, const char* text, ImVec2 origin, ImU32 col, float offsetPx, bool centred);
+    static void TextAlongCubic(ImDrawList* dl, ImVec2 p0, ImVec2 p1, ImVec2 p2, ImVec2 p3, const char* text,
+                               ImU32 col, float centerT, float liftPx);
+
+    // The startup sequence: Begin at launch; Progress 0..1 (1 when done, skipped or Startup off).
+    // Any click or key settles it (NewFrame watches for one).
+    void  BeginStartup();
+    float StartupElapsed() const; // seconds; large when not running
+    bool  StartupRunning() const { return m_StartupRunning; }
+
+    // The motion debugger: ImAnim's unified inspector and profiler, plus the slow-mo override and
+    // this map's live readout. The profiler only runs while the window is open.
+    void DrawDebugger(bool* open);
+
     // Diagnostics: live entries, and the bytes this map holds (0 when idle).
     int    LiveCount() const { return m_Entries.Size; }
     size_t HeldBytes() const;
-    // The i-th live entry's id and kind (0 tween, 1 pulse, 2 colour, 3 vec2, 4 clip), for a smoke
-    // check's failure message.
+    // The i-th live entry's id and kind (0 tween, 1 pulse, 2 colour, 3 vec2, 4 clip, 5 inertia),
+    // for a smoke check's failure message.
     ImGuiID LiveId(int i) const { return m_Entries[i].id; }
     int     LiveKind(int i) const { return (int)m_Entries[i].kind; }
     double Now() const { return m_Time; }
@@ -180,7 +274,7 @@ public:
     static constexpr int kImAnimGcInterval = 30;             // frames between iam_gc() sweeps
 
 private:
-    enum class Kind : unsigned char { Tween, Pulse, Color, Vec2, Clip };
+    enum class Kind : unsigned char { Tween, Pulse, Color, Vec2, Clip, Inertia };
     struct Entry {
         ImGuiID id;
         Kind    kind;
@@ -206,9 +300,17 @@ private:
     double          m_Time = 0.0;
     float           m_PointerSpeed = 0.0f;
     bool            m_ReduceMotion = false;
+    bool            m_CategoryOn[(int)MotionCategory::Count] = {true, true, true, true, true, true};
+    float           m_Speed = 1.0f;
+    float           m_DebugScale = 1.0f;
+    float           m_Dt = 0.0f;
+    double          m_StartupBegan = -1.0e9;
+    bool            m_StartupRunning = false;
+    bool            m_DebuggerOpenLastFrame = false;
     int             m_LiveClips = 0; // Clip entries: iam_clip_update only runs while one plays
     bool            m_ClipSlotsDirty = false; // a destroyed instance still holds its ImAnim slot
     void            ReclaimClipSlots();
+    void            ScrollInertiaFrame();
 };
 
 ImAnimContext& Motion();

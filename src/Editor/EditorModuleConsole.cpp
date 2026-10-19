@@ -303,20 +303,34 @@ void Draw(const EditorModuleHostAPI& host) {
     const int infoCount  = host.LogCountOf ? host.LogCountOf(EditorModuleLogLevel_Info) : 0;
     const int warnCount  = host.LogCountOf ? host.LogCountOf(EditorModuleLogLevel_Warning) : 0;
     const int errorCount = host.LogCountOf ? host.LogCountOf(EditorModuleLogLevel_Error) : 0;
+    // The count rolls like an odometer when it changes (Motion v2, RollingNumbers): the button is sized for the
+    // icon and the number, and both are painted over it.
     auto levelToggle = [&](const char* icon, int count, bool& on, ImVec4 col, const char* tip) {
-        char label[48];
-        snprintf(label, sizeof(label), "%s %d##%s", icon, count, tip);
+        char num[16];
+        snprintf(num, sizeof(num), "%d", count);
+        const ImVec2 pad = ImGui::GetStyle().FramePadding;
+        const float gap = ImGui::CalcTextSize(" ").x;
+        const ImVec2 iconSz = ImGui::CalcTextSize(icon);
+        const ImVec2 size(pad.x * 2.0f + iconSz.x + gap + ImGui::CalcTextSize(num).x, ImGui::GetFrameHeight());
         ImGui::PushStyleColor(ImGuiCol_Button, on ? EditorTheme::WithAlpha(col, 0.12f) : ImVec4(0, 0, 0, 0));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, on ? EditorTheme::WithAlpha(col, 0.20f) : EditorUIPrimitives::FlatHover());
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, EditorTheme::WithAlpha(col, 0.28f));
-        ImGui::PushStyleColor(ImGuiCol_Text, on ? col : EditorTheme::Dim);
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
-        if (ImGui::Button(label)) {
+        char label[64];
+        snprintf(label, sizeof(label), "##%s", tip); // the label tests and tooling find the toggle by
+        if (ImGui::Button(label, size)) {
             on = !on;
             EditorUIPrimitives::ClickSound(on ? EditorSoundEvents::Event::ToggleOn : EditorSoundEvents::Event::ToggleOff);
         }
+        {
+            const ImVec2 p = ImGui::GetItemRectMin();
+            const ImU32 tc = EditorTheme::U32(on ? col : EditorTheme::Dim);
+            ImDrawList* bdl = ImGui::GetWindowDrawList();
+            bdl->AddText(ImVec2(p.x + pad.x, p.y + pad.y), tc, icon);
+            EditorTheme::MotionOdometer(ImGui::GetItemID() ^ 0xC0047u, bdl, ImVec2(p.x + pad.x + iconSz.x + gap, p.y + pad.y), (double)count, 0, tc);
+        }
         ImGui::PopStyleVar();
-        ImGui::PopStyleColor(4);
+        ImGui::PopStyleColor(3);
         if (ImGui::IsItemHovered()) Tooltip(host, tip);
     };
     levelToggle(ICON_FA_CIRCLE_INFO, infoCount, state.ShowInfo, EditorTheme::Secondary, "Show / hide messages");
@@ -450,6 +464,16 @@ void Draw(const EditorModuleHostAPI& host) {
                                              ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowWidth(), rowTop.y + rowHeight),
                                              EditorTheme::U32(EditorTheme::WithAlpha(EditorUIPrimitives::DangerColor(), 0.16f * k * k * k)));
                     }
+                    // A line that arrived while the panel was showing slides in from the left and fades up (LogSlide).
+                    // Never the backlog (unprimed at first draw), and only the newest kSlideCap of a burst, so a log
+                    // storm doesn't animate thousands of rows.
+                    constexpr int kSlideCap = 32;
+                    const ImGuiID slideId = (ImGuiID)entryIndex * 2246822519u ^ 0x5110E1A7u;
+                    if (g_FlashPrimed && entryIndex > g_FlashSeenIndex && entryIndex > g_FilteredIndices.back() - kSlideCap)
+                        EditorTheme::MotionPulse(slideId, EditorMotionToken::Slide);
+                    const float sp = EditorTheme::MotionPulseProgress(slideId);
+                    const float slide = sp < 1.0f ? EditorTheme::Ease::OutCubic(sp) : 1.0f;
+                    const int slideVtx = sp < 1.0f ? EditorTheme::MotionBeginLayer(rowDl) : -1;
                     rowDl->AddRectFilled(rowTop, ImVec2(rowTop.x + EditorTheme::Px(2.0f), rowTop.y + rowHeight - 1.0f),
                                          EditorTheme::U32(EditorTheme::WithAlpha(color, entry.Level == EditorModuleLogLevel_Info ? 0.35f : 1.0f)));
                     float x = rowTop.x + gapS;
@@ -468,8 +492,13 @@ void Draw(const EditorModuleHostAPI& host) {
                         const ImVec2 cs = ImGui::CalcTextSize(cnt);
                         rowDl->AddRectFilled(ImVec2(x, y + 1.0f), ImVec2(x + cs.x + pad * 2.0f, y + cs.y - 1.0f),
                                              EditorTheme::U32(EditorTheme::Raised), cs.y * 0.5f);
-                        rowDl->AddText(ImVec2(x + pad, y), EditorTheme::U32(EditorTheme::Secondary), cnt);
+                        // A repeat bumps the count on the odometer (RollingNumbers); plain digits when that's off.
+                        EditorTheme::MotionOdometer(ImGui::GetID("count"), rowDl, ImVec2(x + pad, y), (double)rowCount, 0,
+                                                    EditorTheme::U32(EditorTheme::Secondary));
                     }
+                    if (slideVtx >= 0)
+                        EditorTheme::MotionEndLayer(rowDl, slideVtx, rowTop, ImVec2(1.0f, 1.0f), 0.0f,
+                                                    ImVec2(-EditorTheme::Px(10.0f) * (1.0f - slide), 0.0f), slide); // Glass::LogSlidePx
                 }
                 ImGui::PopFont();
 

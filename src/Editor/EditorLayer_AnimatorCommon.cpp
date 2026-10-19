@@ -18,6 +18,7 @@
 #include "World.h"
 
 #include <imgui.h>
+#include <imgui_internal.h> // ImHashStr
 #include <IconsFontAwesome6.h>
 
 #include <algorithm>
@@ -31,6 +32,7 @@
 #include <map>
 #include <unordered_map>
 #include "EditorLayer_AnimatorInternal.h"
+#include "Glass/GlassMotion.h" // the deleted states' shrink-away
 
 using namespace EditorInternal;
 using namespace AnimatorUI;
@@ -113,6 +115,13 @@ void LiveParamWidget(AnimatorParam& p, float width) {
 }
 
 // Removes states (and every transition touching them) from `layer`.
+unsigned GraphMotionSeed(const AnimatorWindowState& W) {
+    return ImHashStr(W.Rel.c_str(), 0, ImHashStr("AnimatorGraphMotion")) ^ ((unsigned)W.Layer * 0x9E3779B1u);
+}
+unsigned NodeMotionId(const AnimatorWindowState& W, const std::string& stateName) {
+    return ImHashStr(stateName.c_str(), 0, GraphMotionSeed(W));
+}
+
 void DeleteStates(AnimCtx& c, AC::Layer& Ly, std::vector<int> which) {
     std::sort(which.rbegin(), which.rend());
     bool removed = false;
@@ -120,6 +129,11 @@ void DeleteStates(AnimCtx& c, AC::Layer& Ly, std::vector<int> which) {
         if (s < 0 || s >= (int)Ly.States.size()) continue;
         removed = true;
         const std::string gone = Ly.States[s].Name;
+        // A ghost of the state shrinks away where it stood (the graph draws it, then drops it). The pulse is its
+        // only timing; under Reduce Motion it never starts and the ghost goes on the next draw.
+        const unsigned ghostId = NodeMotionId(c.W, gone) ^ 0x6A057A1Eu;
+        c.W.Ghosts.push_back({gone, Ly.States[s].Position, c.W.Layer, ghostId});
+        Glass::Motion().Pulse(ghostId, kGhostSeconds);
         Ly.States.erase(Ly.States.begin() + s);
         Ly.Transitions.erase(std::remove_if(Ly.Transitions.begin(), Ly.Transitions.end(),
                                             [&](const AC::Transition& t) {

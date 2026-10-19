@@ -32,6 +32,7 @@
 #include <map>
 #include <unordered_map>
 #include "EditorLayer_AnimatorInternal.h"
+#include "Glass/GlassMotion.h" // the preview scrub coasts after a flick
 
 using namespace EditorInternal;
 using namespace AnimatorUI;
@@ -261,7 +262,7 @@ void DrawSelectionPanel(AnimCtx& cx) {
                 // Preview (Edit mode): pose the rig in this state's motion and scrub or play it. A blend tree is
                 // shown at the parameter values below (their defaults to start with).
                 if (!live) {
-                    struct Preview { bool On = false, Play = false; float T = 0.0f; std::string Key; std::map<std::string, float> Params; };
+                    struct Preview { bool On = false, Play = false, Scrubbing = false; float T = 0.0f; std::string Key; std::map<std::string, float> Params; };
                     static Preview pv;
                     const std::string key = W.Rel + "|" + s.Name + "|" + std::to_string(D.TrackIndex(rigAc ? rigAc->Track : std::string()));
                     if (pv.Key != key) { pv.Key = key; pv.Params.clear(); pv.T = 0.0f; }
@@ -277,6 +278,20 @@ void DrawSelectionPanel(AnimCtx& cx) {
                         ImGui::SameLine();
                         ImGui::SetNextItemWidth(-FLT_MIN);
                         ImGui::SliderFloat("##pvt", &pv.T, 0.0f, 1.0f, "%.2f of the state");
+                        // A flick of the scrub coasts on and settles (Inertia), wrapping like the loop it previews. The
+                        // track is the slider's px; the coast is read back the same way. Play or a new grab stops it.
+                        {
+                            Glass::ImAnimContext& M = Glass::Motion();
+                            const ImGuiID scrubId = ImGui::GetItemID() ^ 0x5C2B0B1Au;
+                            const float trackW = std::max(1.0f, ImGui::GetItemRectSize().x);
+                            if (ImGui::IsItemActivated() || pv.Play) M.InertiaStop(scrubId);
+                            if (ImGui::IsItemActive()) { M.InertiaTrack(scrubId, ImVec2(ImGui::GetIO().MouseDelta.x, 0.0f)); pv.Scrubbing = true; }
+                            else if (pv.Scrubbing) { pv.Scrubbing = false; M.InertiaRelease(scrubId); }
+                            else if (const float dx = M.InertiaDelta(scrubId).x; dx != 0.0f) {
+                                pv.T += dx / trackW;
+                                pv.T -= std::floor(pv.T);
+                            }
+                        }
                         // Blend-tree parameters.
                         auto paramOf = [&](const std::string& name) {
                             auto it = pv.Params.find(name);
