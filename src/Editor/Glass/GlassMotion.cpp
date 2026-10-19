@@ -2,6 +2,7 @@
 
 #include "GlassLayout.h" // LayoutMotionNewFrame
 #include "GlassTheme.h"  // Scale
+#include "../EditorSound.h" // FlingRelease
 
 // Vendored: compiled at the default warning level like the rest of extern code, so its header
 // must not trip this TU's /W4 /WX.
@@ -19,7 +20,15 @@
 #pragma GCC diagnostic pop
 #endif
 
+#include <imgui_internal.h> // scroll inertia: the wheeling window's ScrollTarget
+
+#include <algorithm>
+#include <cfloat>
 #include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <utility>
 
 // GlassTokens.h mirrors these ids so it doesn't need im_anim.h; keep them honest.
 static_assert(Glass::EaseId::InCubic == iam_ease_in_cubic, "GlassTokens.h EaseId drifted from im_anim.h");
@@ -35,6 +44,48 @@ constexpr float kSettleEps = 1e-3f;      // a tween this close to its target has
 constexpr ImGuiID kChannelValue = 0x474C5331u; // "GLS1": the float channel each id uses
 constexpr ImGuiID kChannelColor = 0x474C5332u; // "GLS2": colour tweens
 constexpr ImGuiID kChannelVec2  = 0x474C5333u; // "GLS3": 2D tweens
+constexpr ImGuiID kChannelRoll  = 0x474C5334u; // "GLS4": odometer offsets
+constexpr ImGuiID kScrollSalt   = 0x5C011E7Au; // window id ^ this = its scroll coast's entry id
+constexpr ImGuiID kRollPrevSalt = 0x0D0E7E21u; // odometer: last frame's value in window storage
+constexpr ImGuiID kRollFlashSalt = 0xF1A5F1A5u;
+
+// Inertia entries reuse Entry fields: from4.xy velocity (px/s), duration the phase.
+constexpr float kInertiaTracking = 0.0f;
+constexpr float kInertiaCoasting = 1.0f;
+constexpr float kInertiaScroll   = 2.0f; // a window's wheel coast, advanced by NewFrame itself
+
+// A double in ImGuiStorage (void* slot, 64-bit): the odometer's last value, exact.
+double LoadDouble(ImGuiStorage* st, ImGuiID key, double fallback) {
+    static_assert(sizeof(void*) >= sizeof(double), "64-bit only");
+    void* raw = st->GetVoidPtr(key);
+    if (!raw) return fallback;
+    double d;
+    std::memcpy(&d, &raw, sizeof(d));
+    return d;
+}
+void StoreDouble(ImGuiStorage* st, ImGuiID key, double d) {
+    void* raw = nullptr;
+    std::memcpy(&raw, &d, sizeof(d));
+    if (!raw) raw = (void*)(uintptr_t)1; // +0.0 is all zero bits: keep it distinguishable from "absent"
+    st->SetVoidPtr(key, raw);
+}
+
+// A point at distance `s` around the rectangle's perimeter, clockwise from the top-left.
+ImVec2 PerimeterPoint(ImVec2 mn, ImVec2 mx, float s) {
+    const float w = mx.x - mn.x, h = mx.y - mn.y;
+    const float p = 2.0f * (w + h);
+    s = std::fmod(s, p);
+    if (s < 0.0f) s += p;
+    if (s < w) return ImVec2(mn.x + s, mn.y);
+    s -= w;
+    if (s < h) return ImVec2(mx.x, mn.y + s);
+    s -= h;
+    if (s < w) return ImVec2(mx.x - s, mx.y);
+    s -= w;
+    return ImVec2(mn.x, mx.y - s);
+}
+
+float Fract(float x) { return x - std::floor(x); }
 
 // Clip definitions are tiny and few; reserve accordingly instead of ImAnim's default 256 clips /
 // 4096 instances, which would otherwise sit allocated for the life of the editor.
@@ -229,8 +280,12 @@ bool ImAnimContext::SweepGateClosed() const {
 void ImAnimContext::NewFrame() {
     ImGuiIO& io = ImGui::GetIO();
     ++m_Frame;
-    m_Time += (double)io.DeltaTime;
+    // The speed preference (and the debugger's slow-mo) scale the motion clock and ImAnim's own.
+    m_Dt = io.DeltaTime * TimeScale();
+    m_Time += (double)m_Dt;
+    iam_set_global_time_scale(TimeScale());
     iam_update_begin_frame();
+    if (m_DebuggerOpenLastFrame) iam_profiler_begin_frame();
     LayoutMotionNewFrame();
 
     // Pointer velocity (px/s), smoothed so a single jittery frame can't open or close the gate.
@@ -259,6 +314,19 @@ void ImAnimContext::NewFrame() {
         }
     }
     if (m_LiveClips == 0 && m_ClipSlotsDirty) ReclaimClipSlots();
+
+    ScrollInertiaFrame();
+
+    // The startup sequence settles at its end, or at once on any click or key.
+    if (m_StartupRunning) {
+        bool input = ImGui::IsAnyMouseDown() || io.InputQueueCharacters.Size > 0;
+        for (int k = ImGuiKey_NamedKey_BEGIN; !input && k < ImGuiKey_NamedKey_END; ++k) {
+            if (k >= ImGuiKey_MouseLeft && k <= ImGuiKey_MouseWheelY) continue;
+            if (ImGui::IsKeyPressed((ImGuiKey)k, false)) input = true;
+        }
+        if (input || !CategoryOn(MotionCategory::Startup) || StartupElapsed() > StartupSeconds + 0.4f)
+            m_StartupRunning = false;
+    }
 
     if (m_Entries.Size == 0) {
         if (++m_IdleFrames >= kIdleFramesBeforePoolRelease && !m_PoolsReleased) {
@@ -521,6 +589,459 @@ void ImAnimContext::ScrollToY(float y, const MotionSpec& spec) {
 void ImAnimContext::ScrollToBottom(const MotionSpec& spec) {
     if (m_ReduceMotion) { ImGui::SetScrollY(ImGui::GetScrollMaxY()); return; }
     iam_scroll_to_bottom(spec.durationMs * 0.001f, ToDesc(spec));
+}
+
+// --- Motion v2: rolling numbers ----------------------------------------------------------------------
+double ImAnimContext::RollingValue(ImGuiID id, double value) {
+    ImGuiStorage* st = ImGui::GetStateStorage();
+    const ImGuiID prevKey = id ^ kRollPrevSalt;
+    const double prev = LoadDouble(st, prevKey, value);
+    StoreDouble(st, prevKey, value);
+    Entry* e = Find(id);
+    if (!CategoryOn(MotionCategory::RollingNumbers)) {
+        if (e) Remove(id);
+        return value;
+    }
+    if (prev != value) {
+        // Depart from what is on screen now: the old value plus whatever offset was still rolling.
+        const double shown = prev + (e ? (double)e->aux : 0.0);
+        const float start = (float)(shown - value);
+        if (e) Remove(id);
+        e = &Add(id, Kind::Tween);
+        e->from = start;
+        e->aux = start;
+        iam_tween_float(id, kChannelRoll, start, 0.0f, ToDesc(OdometerRoll), iam_policy_cut, 0.0f, start);
+        Pulse(id ^ kRollFlashSalt, ValueFlash.durationMs * 0.001f);
+    }
+    if (!e) return value;
+    e->touched = m_Frame;
+    const float v = iam_tween_float(id, kChannelRoll, 0.0f, OdometerRoll.durationMs * 0.001f, ToDesc(OdometerRoll),
+                                    iam_policy_crossfade, ImGui::GetIO().DeltaTime, e->from);
+    e->aux = v;
+    if (std::fabs(v) < 1e-4f) {
+        Remove(id);
+        return value;
+    }
+    return value + (double)v;
+}
+
+namespace {
+// Scaled-integer digits of |v| at `decimals` places, at least decimals + 1 of them.
+int DigitCount(double scaledAbs, int decimals) {
+    int n = 1;
+    double p = 10.0;
+    while (scaledAbs >= p - 0.5 && n < 18) { ++n; p *= 10.0; }
+    return n < decimals + 1 ? decimals + 1 : n;
+}
+double Pow10(int k) { double p = 1.0; while (k-- > 0) p *= 10.0; return p; }
+} // namespace
+
+float ImAnimContext::OdometerWidth(double value, int decimals, const char* suffix) {
+    decimals = decimals < 0 ? 0 : (decimals > 6 ? 6 : decimals);
+    const float w0 = ImGui::CalcTextSize("0").x;
+    const double scaled = std::fabs(value) * Pow10(decimals);
+    float w = (float)DigitCount(std::floor(scaled + 0.5), decimals) * w0;
+    if (decimals > 0) w += ImGui::CalcTextSize(".").x;
+    if (value < 0.0) w += ImGui::CalcTextSize("-").x;
+    if (suffix && *suffix) w += ImGui::CalcTextSize(suffix).x;
+    return w;
+}
+
+float ImAnimContext::Odometer(ImGuiID id, ImDrawList* dl, ImVec2 pos, double value, int decimals, ImU32 col, const char* suffix) {
+    decimals = decimals < 0 ? 0 : (decimals > 6 ? 6 : decimals);
+    const double shown = RollingValue(id, value);
+    const bool rolling = Live(id);
+    const float lineH = ImGui::GetTextLineHeight();
+    const float w0 = ImGui::CalcTextSize("0").x;
+    const float dotW = ImGui::CalcTextSize(".").x;
+    const double unit = Pow10(decimals);
+
+    // Flash: a brief white wash behind a value that just changed.
+    const ImGuiID flashId = id ^ kRollFlashSalt;
+    if (PulseActive(flashId)) {
+        const float p = PulseProgress(flashId);
+        const float a = (1.0f - EaseProgress(ValueFlash, p)) * ValueFlashAlpha;
+        if (a > 0.0f) {
+            const float w = OdometerWidth(value, decimals, suffix);
+            dl->AddRectFilled(ImVec2(pos.x - 2.0f, pos.y), ImVec2(pos.x + w + 2.0f, pos.y + lineH),
+                              IM_COL32(255, 255, 255, (int)(a * 255.0f)), 3.0f);
+        }
+    }
+
+    // Digits sit in fixed-width slots so the readout doesn't jitter as they roll.
+    float x = pos.x;
+    const bool neg = (rolling ? shown : value) < 0.0;
+    if (neg) {
+        dl->AddText(ImVec2(x, pos.y), col, "-");
+        x += ImGui::CalcTextSize("-").x;
+    }
+    const double absShown = std::fabs(rolling ? shown : value);
+    const double scaled = absShown * unit;
+    const double scaledTarget = std::floor(std::fabs(value) * unit + 0.5);
+    const int n = std::max(DigitCount(rolling ? scaled : scaledTarget, decimals), DigitCount(scaledTarget, decimals));
+    if (rolling) dl->PushClipRect(ImVec2(pos.x, pos.y), ImVec2(pos.x + 4096.0f, pos.y + lineH), true);
+    for (int k = n - 1; k >= 0; --k) {
+        int digit;
+        float frac = 0.0f;
+        if (rolling) {
+            const double pk = scaled / Pow10(k);
+            digit = (int)std::fmod(std::floor(pk), 10.0);
+            if (k == 0) {
+                frac = (float)(pk - std::floor(pk));
+            } else {
+                // A mechanical counter: digit k only turns while everything below it rolls 9 -> 0.
+                const double r = std::fmod(scaled, Pow10(k)) / Pow10(k - 1);
+                frac = r > 9.0 ? (float)(r - 9.0) : 0.0f;
+            }
+            // Leading zeros that aren't turning take no space.
+            if (k > decimals && std::floor(pk) < 1.0 && frac <= 0.0f && k >= DigitCount(scaledTarget, decimals)) continue;
+        } else {
+            digit = (int)std::fmod(std::floor(scaledTarget / Pow10(k)), 10.0);
+        }
+        char a[2] = {(char)('0' + digit), 0};
+        const float gx = x + (w0 - ImGui::CalcTextSize(a).x) * 0.5f;
+        dl->AddText(ImVec2(gx, pos.y - frac * lineH), col, a);
+        if (frac > 0.0f) {
+            char b[2] = {(char)('0' + (digit + 1) % 10), 0};
+            const float bx = x + (w0 - ImGui::CalcTextSize(b).x) * 0.5f;
+            dl->AddText(ImVec2(bx, pos.y + (1.0f - frac) * lineH), col, b);
+        }
+        x += w0;
+        if (k == decimals && decimals > 0) {
+            dl->AddText(ImVec2(x, pos.y), col, ".");
+            x += dotW;
+        }
+    }
+    if (rolling) dl->PopClipRect();
+    if (suffix && *suffix) {
+        dl->AddText(ImVec2(x, pos.y), col, suffix);
+        x += ImGui::CalcTextSize(suffix).x;
+    }
+    return x - pos.x;
+}
+
+// --- Motion v2: inertia -------------------------------------------------------------------------------
+void ImAnimContext::InertiaTrack(ImGuiID id, ImVec2 delta) {
+    const float dt = ImGui::GetIO().DeltaTime;
+    if (dt <= 0.0f) return;
+    Entry* e = Find(id);
+    if (e && e->kind != Kind::Inertia) { Remove(id); e = nullptr; }
+    if (!e) {
+        if (!CategoryOn(MotionCategory::Inertia)) return;
+        e = &Add(id, Kind::Inertia);
+    }
+    e->duration = kInertiaTracking;
+    e->touched = m_Frame;
+    const ImVec2 sample(delta.x / dt, delta.y / dt);
+    e->from4.x += (sample.x - e->from4.x) * VelocitySmoothing;
+    e->from4.y += (sample.y - e->from4.y) * VelocitySmoothing;
+}
+
+void ImAnimContext::InertiaRelease(ImGuiID id) {
+    Entry* e = Find(id);
+    if (!e || e->kind != Kind::Inertia) return;
+    const float speed = std::sqrt(e->from4.x * e->from4.x + e->from4.y * e->from4.y);
+    if (!CategoryOn(MotionCategory::Inertia) || speed < FlingMinPxPerSec * Scale()) { Remove(id); return; }
+    e->duration = kInertiaCoasting;
+    e->start = -1.0;
+    e->touched = m_Frame;
+    // A soft whoosh, louder and a touch higher for a faster fling.
+    const float k = ImClamp(speed / (FlingMinPxPerSec * Scale() * 8.0f), 0.0f, 1.0f);
+    EditorSound::Play(EditorSound::Event::FlingRelease, ImGui::GetIO().MousePos.x / ImMax(1.0f, ImGui::GetIO().DisplaySize.x),
+                      0.94f + 0.12f * k, -6.0f + 6.0f * k);
+}
+
+void ImAnimContext::Fling(ImGuiID id, ImVec2 velocity) {
+    if (!CategoryOn(MotionCategory::Inertia)) return;
+    Entry* e = Find(id);
+    if (e && e->kind != Kind::Inertia) { Remove(id); e = nullptr; }
+    if (!e) e = &Add(id, Kind::Inertia);
+    if (e->duration != kInertiaCoasting) e->from4 = ImVec4(0, 0, 0, 0);
+    e->from4.x += velocity.x;
+    e->from4.y += velocity.y;
+    e->duration = kInertiaCoasting;
+    e->start = -1.0;
+    e->touched = m_Frame;
+}
+
+bool ImAnimContext::InertiaCoasting(ImGuiID id) const {
+    const Entry* e = Find(id);
+    return e && e->kind == Kind::Inertia && e->duration == kInertiaCoasting;
+}
+
+ImVec2 ImAnimContext::InertiaDelta(ImGuiID id) {
+    Entry* e = Find(id);
+    if (!e || e->kind != Kind::Inertia || e->duration != kInertiaCoasting) return ImVec2(0, 0);
+    e->touched = m_Frame;
+    // Once per frame: a second read in the same frame returns the same step, not a second one.
+    if (e->start == (double)m_Frame) return ImVec2(e->from, e->aux);
+    if (!CategoryOn(MotionCategory::Inertia)) { Remove(id); return ImVec2(0, 0); }
+    const float decay = std::exp(-InertiaFriction * m_Dt);
+    e->from4.x *= decay;
+    e->from4.y *= decay;
+    const ImVec2 d(e->from4.x * m_Dt, e->from4.y * m_Dt);
+    const float speed = std::sqrt(e->from4.x * e->from4.x + e->from4.y * e->from4.y);
+    if (speed < InertiaStopPxPerSec * Scale()) { Remove(id); return d; }
+    e->start = (double)m_Frame;
+    e->from = d.x;
+    e->aux = d.y;
+    return d;
+}
+
+void ImAnimContext::ScrollInertiaFrame() {
+    ImGuiContext& g = *GImGui;
+    // A wheel notch this frame: ImGui has set the wheeling window's scroll target. Take it back and
+    // turn it into velocity, so the list glides there (and a little past, for a fast run of notches).
+    if (CategoryOn(MotionCategory::Inertia) && g.WheelingWindow && g.WheelingWindowScrolledFrame == g.FrameCount &&
+        g.WheelingWindow->ScrollTarget.y != FLT_MAX && g.WheelingWindow->ScrollTargetCenterRatio.y == 0.0f) {
+        ImGuiWindow* w = g.WheelingWindow;
+        const float delta = w->ScrollTarget.y - w->Scroll.y;
+        w->ScrollTarget.y = FLT_MAX;
+        const ImGuiID key = w->ID ^ kScrollSalt;
+        Entry* e = Find(key);
+        if (e && e->kind != Kind::Inertia) { Remove(key); e = nullptr; }
+        float boost = 1.0f;
+        if (e && e->duration == kInertiaScroll && (e->from4.y > 0.0f) == (delta > 0.0f)) {
+            // Notches close together accelerate, like a trackpad's momentum.
+            const float sinceMs = (float)(m_Time - (double)e->aux) * 1000.0f / (TimeScale() > 0.0f ? TimeScale() : 1.0f);
+            if (sinceMs < WheelBoostWindowMs) boost = std::min(WheelBoostMax, 1.0f + (WheelBoostWindowMs - sinceMs) / WheelBoostWindowMs * (WheelBoostMax - 1.0f));
+        } else if (e) {
+            e->from4.y = 0.0f; // reversing: stop the old glide first
+        }
+        if (!e) e = &Add(key, Kind::Inertia);
+        e->duration = kInertiaScroll;
+        // A coast from v travels v / friction: a notch's velocity is its distance times friction.
+        e->from4.y += delta * InertiaFriction * boost;
+        e->aux = (float)m_Time;
+        e->touched = m_Frame;
+    }
+    for (int i = m_Entries.Size - 1; i >= 0; --i) {
+        Entry& e = m_Entries[i];
+        if (e.kind != Kind::Inertia || e.duration != kInertiaScroll) continue;
+        const ImGuiID key = e.id;
+        ImGuiWindow* w = ImGui::FindWindowByID(key ^ kScrollSalt);
+        if (!w || !w->WasActive || !CategoryOn(MotionCategory::Inertia)) { Remove(key); continue; }
+        e.touched = m_Frame;
+        e.from4.y *= std::exp(-InertiaFriction * m_Dt);
+        float y = w->Scroll.y + e.from4.y * m_Dt;
+        bool edge = false;
+        if (y <= 0.0f) { y = 0.0f; edge = true; }
+        if (y >= w->ScrollMax.y) { y = w->ScrollMax.y; edge = true; }
+        ImGui::SetScrollY(w, y);
+        if (edge || std::fabs(e.from4.y) < InertiaStopPxPerSec * Scale()) Remove(key);
+    }
+}
+
+// --- Motion v2: living gradients ------------------------------------------------------------------
+void ImAnimContext::DrawSheen(ImDrawList* dl, ImVec2 mn, ImVec2 mx, ImGuiID seed, float strength) const {
+    if (!dl || strength <= 0.0f || !CategoryOn(MotionCategory::Gradients)) return;
+    const float w = mx.x - mn.x;
+    if (w <= 1.0f) return;
+    const float band = w * SheenBandFraction;
+    const float phase = Fract((float)m_Time / SheenSweepSeconds + (float)(seed % 997u) / 997.0f);
+    const float cx = mn.x - band + phase * (w + 2.0f * band);
+    // The band breathes a little on smooth noise so two bars never pulse in step.
+    const float a = SheenAlpha * strength * (0.85f + 0.15f * Noise(seed, 0.6f, 1.0f));
+    const ImU32 clear = IM_COL32(255, 255, 255, 0);
+    const ImU32 lit = IM_COL32(255, 255, 255, (int)(ImClamp(a, 0.0f, 1.0f) * 255.0f));
+    dl->PushClipRect(mn, mx, true);
+    dl->AddRectFilledMultiColor(ImVec2(cx - band, mn.y), ImVec2(cx, mx.y), clear, lit, lit, clear);
+    dl->AddRectFilledMultiColor(ImVec2(cx, mn.y), ImVec2(cx + band, mx.y), lit, clear, clear, lit);
+    dl->PopClipRect();
+}
+
+void ImAnimContext::DrawTravellingRim(ImDrawList* dl, ImVec2 mn, ImVec2 mx, float lapSeconds, float arc, float alpha,
+                                      float thickness, ImGuiID seed) const {
+    if (!dl || alpha <= 0.0f || !CategoryOn(MotionCategory::Gradients)) return;
+    const float w = mx.x - mn.x, h = mx.y - mn.y;
+    if (w <= 2.0f || h <= 2.0f) return;
+    const float perim = 2.0f * (w + h);
+    const float head = Fract((float)m_Time / (lapSeconds > 0.1f ? lapSeconds : 0.1f) + (float)(seed % 991u) / 991.0f) * perim;
+    const float len = perim * arc;
+    // White in the middle of the segment, clear at both ends, blended in OKLAB (ImAnim's gradient).
+    static const iam_gradient s_Grad = iam_gradient()
+        .add(0.0f, ImVec4(1, 1, 1, 0))
+        .add(0.5f, ImVec4(1, 1, 1, 1))
+        .add(1.0f, ImVec4(1, 1, 1, 0));
+    constexpr int kSteps = 40;
+    ImVec2 prev = PerimeterPoint(mn, mx, head - len);
+    for (int i = 1; i <= kSteps; ++i) {
+        const float u = (float)i / (float)kSteps;
+        const ImVec2 p = PerimeterPoint(mn, mx, head - len + u * len);
+        ImVec4 c = s_Grad.sample(u - 0.5f / kSteps, iam_col_oklab);
+        c.w *= alpha;
+        dl->AddLine(prev, p, ImGui::ColorConvertFloat4ToU32(c), thickness);
+        prev = p;
+    }
+}
+
+void ImAnimContext::DrawCursorGlow(ImDrawList* dl, ImVec2 mn, ImVec2 mx, ImVec2 cursor, float strength, float rounding) const {
+    (void)rounding;
+    if (!dl || strength <= 0.0f || !CategoryOn(MotionCategory::Gradients)) return;
+    const float r = CursorGlowRadiusPx * Scale();
+    dl->PushClipRect(mn, mx, true);
+    // Concentric discs, each a touch more transparent: a soft radial falloff without a texture.
+    constexpr int kRings = 6;
+    for (int i = kRings; i >= 1; --i) {
+        const float t = (float)i / (float)kRings;
+        const float a = CursorGlowAlpha * strength * (1.0f - t * t) / (float)kRings * 2.4f;
+        dl->AddCircleFilled(cursor, r * t, IM_COL32(255, 255, 255, (int)(ImClamp(a, 0.0f, 1.0f) * 255.0f)), 24);
+    }
+    dl->PopClipRect();
+}
+
+// --- Motion v2: layers ------------------------------------------------------------------------------
+int ImAnimContext::BeginLayer(ImDrawList* dl) { return dl ? dl->VtxBuffer.Size : 0; }
+
+void ImAnimContext::EndLayer(ImDrawList* dl, int vtxStart, const LayerTransform& t) {
+    if (!dl || vtxStart >= dl->VtxBuffer.Size) return;
+    const bool identity = t.scale.x == 1.0f && t.scale.y == 1.0f && t.rotation == 0.0f &&
+                          t.translate.x == 0.0f && t.translate.y == 0.0f;
+    if (!identity) {
+        // pivot + translate, after rotate * scale about the pivot (ImAnim's iam_transform, row-major).
+        iam_transform xf(ImVec2(t.pivot.x + t.translate.x, t.pivot.y + t.translate.y), t.rotation, t.scale);
+        float m[6];
+        iam_transform_to_matrix(xf, m);
+        for (int i = vtxStart; i < dl->VtxBuffer.Size; ++i) {
+            ImDrawVert& v = dl->VtxBuffer[i];
+            const float x = v.pos.x - t.pivot.x, y = v.pos.y - t.pivot.y;
+            v.pos = ImVec2(m[0] * x + m[1] * y + m[2], m[3] * x + m[4] * y + m[5]);
+        }
+    }
+    if (t.alpha < 1.0f) {
+        const float a = t.alpha < 0.0f ? 0.0f : t.alpha;
+        for (int i = vtxStart; i < dl->VtxBuffer.Size; ++i) {
+            ImU32& c = dl->VtxBuffer[i].col;
+            const ImU32 ca = (ImU32)((float)((c >> IM_COL32_A_SHIFT) & 0xFF) * a + 0.5f);
+            c = (c & ~IM_COL32_A_MASK) | (ca << IM_COL32_A_SHIFT);
+        }
+    }
+}
+
+float ImAnimContext::GridRippleDelay(int col, int row, int cols, int rows, int originCol, int originRow, float stepMs, int capSteps) {
+    // Euclidean distance from the origin tile, so the wave is round. (ImAnim's iam_stagger_grid_delay
+    // normalises by the farthest tile, an O(tiles) scan per call; a ripple wants a fixed speed.)
+    (void)cols; (void)rows;
+    const float dx = (float)(col - originCol), dy = (float)(row - originRow);
+    float d = std::sqrt(dx * dx + dy * dy);
+    if (d > (float)capSteps) d = (float)capSteps;
+    return d * stepMs * 0.001f;
+}
+
+// --- Motion v2: text on paths ---------------------------------------------------------------------
+void ImAnimContext::TextOnPath(ImGuiID pathId, const char* text, ImVec2 origin, ImU32 col, float offsetPx, bool centred) {
+    if (!text || !*text || !iam_path_exists(pathId)) return;
+    iam_text_path_opts o;
+    o.origin = origin;
+    o.offset = offsetPx;
+    o.align = centred ? iam_text_align_center : iam_text_align_start;
+    o.color = col;
+    iam_text_path(pathId, text, o);
+}
+
+void ImAnimContext::TextAlongCubic(ImDrawList* dl, ImVec2 p0, ImVec2 p1, ImVec2 p2, ImVec2 p3, const char* text,
+                                   ImU32 col, float centerT, float liftPx) {
+    if (!dl || !text || !*text) return;
+    // Read left to right: walk the curve from whichever end is further left.
+    if (p3.x < p0.x) { std::swap(p0, p3); std::swap(p1, p2); centerT = 1.0f - centerT; }
+    auto at = [&](float u) {
+        const float v = 1.0f - u;
+        return ImVec2(v * v * v * p0.x + 3 * v * v * u * p1.x + 3 * v * u * u * p2.x + u * u * u * p3.x,
+                      v * v * v * p0.y + 3 * v * v * u * p1.y + 3 * v * u * u * p2.y + u * u * u * p3.y);
+    };
+    constexpr int kLut = 32;
+    float lut[kLut + 1];
+    lut[0] = 0.0f;
+    ImVec2 prev = p0;
+    for (int i = 1; i <= kLut; ++i) {
+        const ImVec2 p = at((float)i / kLut);
+        lut[i] = lut[i - 1] + std::sqrt((p.x - prev.x) * (p.x - prev.x) + (p.y - prev.y) * (p.y - prev.y));
+        prev = p;
+    }
+    const float total = lut[kLut];
+    auto uAt = [&](float s) {
+        if (s <= 0.0f) return 0.0f;
+        if (s >= total) return 1.0f;
+        int i = 1;
+        while (i < kLut && lut[i] < s) ++i;
+        const float seg = lut[i] - lut[i - 1];
+        return ((float)(i - 1) + (seg > 0.0f ? (s - lut[i - 1]) / seg : 0.0f)) / kLut;
+    };
+    const float textW = ImGui::CalcTextSize(text).x;
+    if (textW > total * 0.9f) return; // doesn't fit: no label rather than a squashed one
+    const float lineH = ImGui::GetTextLineHeight();
+    float s = centerT * total - textW * 0.5f;
+    for (const char* c = text; *c;) {
+        unsigned int cp = 0;
+        const int bytes = ImTextCharFromUtf8(&cp, c, nullptr);
+        if (bytes <= 0) break;
+        char glyph[8] = {};
+        std::memcpy(glyph, c, (size_t)ImMin(bytes, 7));
+        const float adv = ImGui::CalcTextSize(glyph).x;
+        const float u = uAt(s + adv * 0.5f);
+        const ImVec2 p = at(u);
+        const ImVec2 q = at(ImMin(1.0f, u + 0.01f)), r = at(ImMax(0.0f, u - 0.01f));
+        const float ang = std::atan2(q.y - r.y, q.x - r.x);
+        const ImVec2 n(std::sin(ang), -std::cos(ang)); // left normal: above the wire
+        const ImVec2 centre(p.x + n.x * liftPx, p.y + n.y * liftPx);
+        const int v0 = BeginLayer(dl);
+        dl->AddText(ImVec2(centre.x - adv * 0.5f, centre.y - lineH * 0.5f), col, glyph);
+        LayerTransform t;
+        t.pivot = centre;
+        t.rotation = ang;
+        EndLayer(dl, v0, t);
+        s += adv;
+        c += bytes;
+    }
+}
+
+// --- Motion v2: the startup sequence ---------------------------------------------------------------
+void ImAnimContext::BeginStartup() {
+    if (!CategoryOn(MotionCategory::Startup)) return;
+    m_StartupBegan = m_Time;
+    m_StartupRunning = true;
+}
+
+float ImAnimContext::StartupElapsed() const {
+    return m_StartupRunning ? (float)(m_Time - m_StartupBegan) : 1.0e6f;
+}
+
+// --- Motion v2: the debugger -----------------------------------------------------------------------
+void ImAnimContext::DrawDebugger(bool* open) {
+    const bool isOpen = open && *open;
+    if (isOpen != m_DebuggerOpenLastFrame) {
+        iam_profiler_enable(isOpen); // the profiler only runs while someone is looking at it
+        m_DebuggerOpenLastFrame = isOpen;
+        if (!isOpen) m_DebugScale = 1.0f;
+    }
+    if (!isOpen) return;
+    iam_profiler_end_frame();
+    ImGui::SetNextWindowSize(ImVec2(360.0f * Scale(), 0.0f), ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("Motion Debugger", open)) {
+        ImGui::TextUnformatted("Slow motion (this session only)");
+        float s = m_DebugScale;
+        if (ImGui::SliderFloat("##slowmo", &s, 0.05f, 1.0f, "%.2fx")) SetDebugTimeScale(s);
+        ImGui::SameLine();
+        if (ImGui::SmallButton("1x")) m_DebugScale = 1.0f;
+        ImGui::Separator();
+        ImGui::Text("Live entries   %d", LiveCount());
+        ImGui::Text("Held bytes     %u", (unsigned)HeldBytes());
+        ImGui::Text("Pointer speed  %.0f px/s%s", PointerSpeed(), SweepGateClosed() ? "  (gate closed)" : "");
+        ImGui::Text("Time scale     %.2fx (speed %.2fx)", TimeScale(), m_Speed);
+        ImGui::Text("Startup        %s", m_StartupRunning ? "running" : "idle");
+        static const char* kNames[] = {"Theme tweens", "Inertia", "Gradients", "Rolling numbers", "Viewport", "Startup"};
+        for (int c = 0; c < (int)MotionCategory::Count; ++c)
+            ImGui::Text("%-15s %s", kNames[c], CategoryOn((MotionCategory)c) ? "on" : "off");
+        if (ImGui::CollapsingHeader("Live entries")) {
+            static const char* kKinds[] = {"tween", "pulse", "colour", "vec2", "clip", "inertia"};
+            for (int i = 0; i < m_Entries.Size && i < 64; ++i)
+                ImGui::Text("%08X  %s", m_Entries[i].id, kKinds[(int)m_Entries[i].kind]);
+        }
+        static bool s_Inspector = false;
+        ImGui::Checkbox("ImAnim inspector", &s_Inspector);
+        if (s_Inspector) iam_show_unified_inspector(&s_Inspector);
+    }
+    ImGui::End();
 }
 
 ImAnimContext& Motion() {

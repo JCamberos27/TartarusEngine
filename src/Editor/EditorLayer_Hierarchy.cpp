@@ -629,6 +629,18 @@ constexpr ImGuiID kRowFlashSalt = 0xF1A5B0A7u;
 ImGuiID RowFlashId(entt::entity e) { return (ImGuiID)entt::to_integral(e) * 2654435761u ^ kRowFlashSalt; }
 } // namespace
 
+// Motion v2: the rows a drop just moved fly from where the drag found them (m_HierFlyFrom) to
+// wherever they land; the row loop runs the glide.
+void EditorLayer::BeginHierarchyFly(const std::vector<entt::entity>& moved) {
+    const double now = ImGui::GetTime();
+    for (entt::entity e : moved) {
+        m_HierFly.erase(std::remove_if(m_HierFly.begin(), m_HierFly.end(),
+                                       [e](const HierarchyFly& f) { return f.Entity == e; }), m_HierFly.end());
+        for (const auto& [fe, fy] : m_HierFlyFrom)
+            if (fe == e) { m_HierFly.push_back(HierarchyFly{e, fy, now, false}); break; }
+    }
+}
+
 void EditorLayer::FlashHierarchyRow(entt::entity e, bool reveal) {
     if (e == entt::null) return;
     Glass::Motion().Pulse(RowFlashId(e), Glass::RowFlash.durationMs * 0.001f);
@@ -967,6 +979,17 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
     m_HierarchyVisibleBuild.reserve(flatRows.size());
     for (const HierarchyFlatRow& row : flatRows) m_HierarchyVisibleBuild.push_back(row.Entity);
 
+    // Motion v2, reparent travel: while a row drag is in flight, remember where the dragged rows sit
+    // (content space), so the drop can fly them from there. Nothing is kept once the drag is over.
+    const ImGuiPayload* flyDrag = ImGui::GetDragDropPayload();
+    const bool rowDragging = flyDrag && flyDrag->IsDataType("HIERARCHY_ENTITY");
+    const entt::entity flyDragged = rowDragging ? *(const entt::entity*)flyDrag->Data : entt::null;
+    if (!rowDragging && !m_HierFlyFrom.empty()) { m_HierFlyFrom.clear(); m_HierFlyFrom.shrink_to_fit(); }
+    Glass::ImAnimContext& flyMotion = Glass::Motion();
+    const double flyNow = ImGui::GetTime();
+    // The flying row whose descendants are being drawn right below it (they cascade in behind it).
+    struct FlyCascade { int Depth = -1; float Offset = 0.0f; float Elapsed = 0.0f; int Child = 0; } cascade;
+
     const float rowPitch = ImGui::GetFrameHeight() + ImGui::GetStyle().ItemSpacing.y;
     ImGuiListClipper clipper;
     clipper.Begin((int)flatRows.size(), rowPitch);
@@ -1012,6 +1035,43 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
             if (es.HierarchyZebra && i % 2 == 1)
                 rowDl->AddRectFilled(ImVec2(wp.x, rp.y), ImVec2(wp.x + ImGui::GetWindowWidth(), rp.y + rowH),
                                      EditorTheme::U32(EditorTheme::Stripe));
+
+            // Motion v2, reparent travel. A row a drop just moved is drawn gliding from its old
+            // place to its new one (ReparentFly, a Follow on its y); the rows under it follow it
+            // and fade in one after another (the reveal stagger). Draw-only: the row's layout and
+            // hit rect are where it landed.
+            const float contentY = rp.y - wp.y + ImGui::GetScrollY();
+            if (rowDragging && (row.Entity == flyDragged || IsSelected(row.Entity))) {
+                bool found = false;
+                for (auto& [fe, fy] : m_HierFlyFrom) if (fe == row.Entity) { fy = contentY; found = true; break; }
+                if (!found) m_HierFlyFrom.emplace_back(row.Entity, contentY);
+            }
+            float flyOffset = 0.0f, flyAlpha = 1.0f;
+            if (cascade.Depth >= 0 && row.Depth > cascade.Depth) {
+                const float delay = Glass::StaggerDelay(cascade.Child++, Glass::RevealStaggerMs, Glass::RevealStaggerCap);
+                const float p = flyMotion.ReduceMotion() ? 1.0f
+                    : Glass::EaseProgress(Glass::HoverIn, (cascade.Elapsed - delay) / (Glass::RevealRowFadeMs * 0.001f));
+                flyOffset = cascade.Offset + (p < 1.0f ? EditorTheme::Px(Glass::RevealRowShiftPx) * (1.0f - p) : 0.0f);
+                flyAlpha = p;
+            } else {
+                cascade.Depth = -1;
+            }
+            for (HierarchyFly& fly : m_HierFly) {
+                if (fly.Entity != row.Entity) continue;
+                // It starts the first frame the row is drawn somewhere new (the drop's own frame
+                // still lays the list out the old way).
+                if (!fly.Begun && std::fabs(contentY - fly.FromY) < 0.5f) break;
+                const ImGuiID flyId = RowFlashId(row.Entity) ^ 0xF17E0001u;
+                const float y = flyMotion.Follow(flyId, contentY, fly.Begun ? contentY : fly.FromY, Glass::ReparentFly);
+                if (!fly.Begun) fly.Start = flyNow; // the cascade times from the take-off
+                fly.Begun = true;
+                flyOffset = y - contentY;
+                flyAlpha = 1.0f;
+                cascade = FlyCascade{row.Depth, flyOffset, (float)(flyNow - fly.Start), 0};
+                break;
+            }
+            const bool flyLayer = flyOffset != 0.0f || flyAlpha < 1.0f;
+            const int flyVtx = flyLayer ? Glass::ImAnimContext::BeginLayer(rowDl) : 0;
 
             // The row's background, full width: the vHierarchy colour as a stripe at the row's indent
             // plus a faint wash, then hover and selection over it (DrawStyledRowBackground), so a
@@ -1062,6 +1122,12 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
             if (row.Depth > 0) ImGui::Indent(row.Depth * indentW);
             DrawHierarchyRowBody(world, assets, row.Entity, /*isFirstRow=*/i == 0);
             if (row.Depth > 0) ImGui::Unindent(row.Depth * indentW);
+            if (flyLayer) {
+                Glass::LayerTransform xf;
+                xf.translate = ImVec2(0.0f, flyOffset);
+                xf.alpha = flyAlpha;
+                Glass::ImAnimContext::EndLayer(rowDl, flyVtx, xf);
+            }
 
             for (size_t p = 0; p < pushed; ++p) ImGui::PopID();
         }
@@ -1069,6 +1135,20 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
     ImGui::PopStyleVar(); // ItemSpacing
     ImGui::PopStyleVar(); // FramePadding
     ImGui::PopStyleVar(); // IndentSpacing
+
+    // Reparent travel: a flight is over once its glide has landed and its children's cascade has
+    // run, or after a couple of seconds if its row never showed (dropped into a closed parent,
+    // scrolled away).
+    if (!m_HierFly.empty()) {
+        const float cascadeSecs = Glass::StaggerDelay(Glass::RevealStaggerCap, Glass::RevealStaggerMs, Glass::RevealStaggerCap) +
+                                  Glass::RevealRowFadeMs * 0.001f;
+        m_HierFly.erase(std::remove_if(m_HierFly.begin(), m_HierFly.end(), [&](const HierarchyFly& f) {
+            const double age = flyNow - f.Start;
+            if (age > 2.0) return true;
+            return f.Begun && !flyMotion.Live(RowFlashId(f.Entity) ^ 0xF17E0001u) && age > cascadeSecs;
+        }), m_HierFly.end());
+        if (m_HierFly.empty()) m_HierFly.shrink_to_fit();
+    }
 
     // Defect #51 — a genuinely empty scene rendered nothing at all: no icon, no message, no
     // action. Give it something to say, distinct from "the search matched nothing" (also blank
@@ -1148,6 +1228,7 @@ void EditorLayer::DrawHierarchyTreeBody(World& world, AssetLibrary& assets) {
                     if (world.Registry.valid(e)) { world.SetParent(e, entt::null); FlashHierarchyRow(e, false); }
                 }
                 CommitStagedUndo(world, "Reparent");
+                BeginHierarchyFly(toUnparent); // Motion v2: they travel to where they landed
                 EditorSound::Play(EditorSound::Event::Reparent, MouseScreenX01());
                 EditorSound::SuppressDropSound(); // Reparent says it landed; no DropAccept on top
             }
@@ -1625,6 +1706,7 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
                     // Handled here, not via AcceptDragDropPayload: keep the observer's DropReject quiet.
                     EditorSound::SuppressDropSound();
                     for (entt::entity e : moving) FlashHierarchyRow(e, /*reveal=*/false);
+                    BeginHierarchyFly(moving); // Motion v2: they travel to where they landed
                     // This zone handles the release itself (no AcceptDragDropPayload), so tell
                     // the drag ghost it landed.
                     Glass::DragGhostDelivered(ImVec2((rowMin.x + rowMax.x) * 0.5f, (y0 + y1) * 0.5f));

@@ -1256,6 +1256,8 @@ private:
     bool m_ShowLighting = false;
     bool m_ShowAudioDebug = false;
     bool m_ShowSoundBoard = false;
+    bool m_ShowMotionDebugger = false; // Window > Motion Debugger (Glass::ImAnimContext::DrawDebugger)
+    bool m_ThemeSwitchTween = false;   // ApplyPendingTheme -> ApplyThemeStyle: ease to the new theme
     float m_AudioGrHold = 0.0f;      // the Audio panel's limiter gain-reduction readout (held, decaying)
     float m_AudioGlueHold = 0.0f;    // ... and the glue compressor's
     // The Audio panel's "Keep after Play": the live mix values written to the scene once Play stops (the scene is restored from its
@@ -2383,6 +2385,46 @@ private:
     // indent — so EndComponentSection closes the matching child/style stack.
     bool m_ComponentSectionIsCard = false;
 
+    // Motion v2 (C inspector/hierarchy) ------------------------------------------------------------
+    // Add Component flourish (EditorLayer_Inspector.cpp): the component just added unfolds from the
+    // Add Component button the next time its section draws, and the cards below slide down with it.
+    std::string m_UnfoldComponent;           // its section label; empty = nothing pending
+    entt::entity m_UnfoldEntity = entt::null;
+    bool m_UnfoldStarted = false;            // its reveal has begun
+    float m_AddComponentButtonY = 0.0f;      // the button's top (screen y), last frame
+    // A section drawn under a transform this frame (the unfold, a card flip). Sections never nest,
+    // so one slot: BeginComponentSection opens it, EndComponentSection (or the bodiless path) closes it.
+    struct SectionLayer {
+        bool Active = false;
+        ImDrawList* Dl = nullptr;      // the Inspector's own list (the header)
+        int Vtx = 0;
+        ImDrawList* BodyDl = nullptr;  // the card body's child window list
+        ImVec2 Pivot{0.0f, 0.0f}, Scale{1.0f, 1.0f}, Translate{0.0f, 0.0f};
+        float Alpha = 1.0f;
+        ImGuiID UnfoldId = 0;          // non-zero: the unfold's height reveal is running
+        float UnfoldT = 1.0f;
+        ImVec2 Start{0.0f, 0.0f};      // the header's top-left
+        ImVec2 SavedMaxPos{0.0f, 0.0f};
+    } m_SectionLayer;
+    void EndSectionLayer();
+    // The card flip's back face: every reflected field (hidden ones too) with its raw value, and the
+    // component as it serializes. Read-only.
+    void DrawComponentBackFace(World& world, entt::entity entity, const char* label);
+    // Value inertia: true while a released number field is still coasting, so the global undo
+    // transaction (FinishGlobalUndo) can stay open and the drag + its coast land as one entry.
+    bool m_InspectorValueCoasting = false;
+    // Reparent travel (EditorLayer_Hierarchy.cpp): rows a drop just moved fly from where they were
+    // to where they landed, their children cascading in behind them.
+    struct HierarchyFly {
+        entt::entity Entity = entt::null;
+        float FromY = 0.0f;   // content-space y before the drop
+        double Start = 0.0;   // ImGui time of the drop
+        bool Begun = false;   // the glide has been asked for once
+    };
+    std::vector<std::pair<entt::entity, float>> m_HierFlyFrom; // the dragged rows' content y, during a row drag
+    std::vector<HierarchyFly> m_HierFly;
+    void BeginHierarchyFly(const std::vector<entt::entity>& moved);
+
     ShadingMode m_ShadingMode = ShadingMode::Shaded;
     // Unity's Pivot/Center toggle: false = gizmo sits on the object's own origin, true = on the
     // center of its bounding box (or of the whole group, for a multi-selection).
@@ -2466,6 +2508,14 @@ private:
     void PollGlassNotifications();                                 // compile errors -> toasts
     // `chimed`: the toast's own event already sounded (ModuleReload, NotifyError...), so no ToastIn on top.
     void PushGlassToast(const std::string& title, const std::string& body, bool error, bool chimed = false);
+    // Motion v2 (A: shell and theme)
+    void GlassChromeFrameEnd();                // EndFrame, after every panel: dock rims, play rim, busy sheen, startup
+    void DrawStartupHeadline();                // the startup sequence's headline, centred over the viewport
+    void PollRebuildToast();                   // the module-rebuild toast: busy while it builds, then check or error
+    bool   m_ChromeBusy = false;               // a build, module rebuild or import in flight (DrawStatusBar)
+    bool   m_ModuleRebuildWas = false;         // GameModuleBuild::Running() last frame
+    unsigned int m_RebuildToastId = 0;         // the busy toast that morphs into its result (0 = none)
+    double m_RebuildToastResolvedAt = -1.0;    // Glass::Motion().Now() when it turned into a check / error
     // True for the frame(s) the mouse is hovering or dragging the nav gizmo above — set inside
     // DrawViewGizmo() (called before HandleViewportPicking() in Draw()) so picking can skip
     // starting a box-select/pick from a click that's actually meant for the nav gizmo. The nav
@@ -2574,4 +2624,59 @@ private:
     // of fighting it to completion — the same feel as interrupting the nav gizmo's axis-snap
     // animation by moving the mouse.
     void UpdateViewTransition(Camera& editorCamera, float dt);
+
+    // Motion v2 (B viewport) -------------------------------------------------------------------
+    // EditorLayer_ViewportMotion.cpp: the selection outline sweep, snap ticks and the hold-Space
+    // radial menu. EditorLayer_Gizmos.cpp: the orbiting view transitions and the ortho morph.
+public:
+    // How much of the selection outline is drawn, 0..1: after a selection change the ring sweeps on
+    // clockwise from the top (OutlineSweep), then holds at 1. Starts the sweep itself when it sees
+    // the selection change (checked once a frame), so any caller can read it. Viewport motion off: 1.
+    float SelectionOutlineReveal();
+    bool  RadialMenuOpen() const { return m_Radial.Open; }
+private:
+    uint64_t m_OutlineSweepSig = 0;    // primary entity + selection count, last seen
+    int      m_OutlineSweepFrame = -1; // frame the signature was last checked
+    // A view transition that orbits a pivot (the position follows the eased angles at an eased
+    // distance, instead of cutting a chord), optionally morphing the projection. Valid only for
+    // the transition it was set up with (Stamp == m_ViewTransition.FromPos), so a transition
+    // started elsewhere simply ignores it.
+    struct ViewOrbit {
+        bool      On = false;
+        glm::vec3 Stamp{0.0f};
+        glm::vec3 Pivot{0.0f};
+        float     FromDist = 0.0f, ToDist = 0.0f;
+        int       Morph = 0;                     // +1 perspective -> ortho, -1 ortho -> perspective
+        float     FromHalfH = 0.0f, ToHalfH = 0.0f; // apparent half-height at the pivot
+        float     Fov = 60.0f;                   // the camera's own fov, restored when a morph lands
+        bool      Spring = false;                // a nav-gizmo click: the angles ride ViewCubeTurn
+    } m_ViewOrbit;
+    bool ViewOrbitLive() const;
+    void ApplyViewTransition(Camera& editorCamera, float easedAngles, float easedLinear);
+    // Ends an in-flight ortho morph at once with a sane projection (manual input, a retarget).
+    void SettleViewMorph(Camera& editorCamera);
+    // Snap ticks: a small ring and the snapped number where a gizmo drag crossed a snap step.
+    struct SnapTick { float X = 0.0f, Y = 0.0f; char Text[24] = {}; };
+    static constexpr int kSnapTickSlots = 4;
+    SnapTick  m_SnapTicks[kSnapTickSlots];
+    int       m_SnapTickNext = 0;
+    glm::vec3 m_SnapTickLast{0.0f};    // the drag readout's value at the last step
+    double    m_SnapTickSoundAt = -1.0e9;
+    glm::vec3 m_GroupSnapStartPos{0.0f};
+    // `value` is the drag's readout (delta position, delta angle or scale); call every frame of a
+    // snapped drag, with `started` on its first frame.
+    void NoteGizmoSnapStep(const glm::vec3& value, bool started, int decimals, const char* suffix);
+    void DrawSnapTicks();
+    // The hold-Space radial menu (edit mode, Scene viewport).
+    struct RadialMenu {
+        bool   Armed = false;   // Space went down over the viewport; opens once held RadialHoldMs
+        bool   Open = false;
+        bool   WasOpen = false; // last frame, for the bloom toggle
+        double ArmedAt = 0.0;
+        ImVec2 Center{0.0f, 0.0f};
+        int    Hovered = -1;
+        int    Picked = -1;     // flashes while the menu fades out
+    } m_Radial;
+    void UpdateRadialMenu(World& world, Camera& editorCamera, bool sceneHovered);
+    void RunRadialItem(World& world, Camera& editorCamera, int item);
 };

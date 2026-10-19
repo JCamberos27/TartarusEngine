@@ -168,6 +168,16 @@ const EventInfo kEvents[kEventCount] = {
     {"PackageFail",      Category::Notifications, 0.0f, 500.0f, 0.0f,  true,  true},
     {"BuildProgress",    Category::System,       -4.0f, 150.0f, 0.0f,  true}, // focused only: System, not Notifications
     {"Digest",           Category::System,        0.0f,1000.0f, 0.0f,  true},
+    {"ThemeSwitch",      Category::Workflow,      0.0f, 400.0f, 0.0f,  true},
+    {"FlingRelease",     Category::Panels,       -6.0f, 120.0f, 0.04f, false},
+    {"MotionSnapTick",   Category::Tools,        -6.0f,  60.0f, 0.03f, false},
+    {"FolderZoomIn",     Category::Assets,       -2.0f,  90.0f, 0.02f, false},
+    {"FolderZoomOut",    Category::Assets,       -2.0f,  90.0f, 0.02f, false},
+    {"RadialOpen",       Category::Tools,        -2.0f, 120.0f, 0.0f,  false},
+    {"RadialPick",       Category::Tools,         0.0f,  80.0f, 0.02f, false},
+    {"RadialClose",      Category::Tools,        -4.0f,  80.0f, 0.0f,  false},
+    {"CardFlip",         Category::Objects,      -2.0f, 120.0f, 0.02f, false},
+    {"NodePop",          Category::Animation,    -2.0f,  60.0f, 0.03f, false},
 };
 
 const char* kCategoryNames[kCategoryCount] = {"Clicks", "Sliders", "Hover",  "Panels",             "Drag & Drop", "Notifications",

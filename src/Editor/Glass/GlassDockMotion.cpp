@@ -1,10 +1,14 @@
 #include "GlassDockMotion.h"
 
+#include "GlassCompositor.h" // the startup sequence's per-panel timing
 #include "GlassMotion.h"
+#include "GlassTheme.h"      // Px
 #include "GlassTokens.h"
 #include "../EditorPanels.h"
 
 #include <imgui_internal.h>
+
+#include <cstring>
 
 namespace Glass {
 
@@ -19,8 +23,13 @@ ImGuiStorage& LastOverline() {
     return s_Store;
 }
 
+bool    s_PlayRimOn    = false; // the play rim is showing (DrawPlayFrame, last frame)
 ImGuiID s_FocusedPanel = 0; // the docked panel that had focus last frame
 ImGuiID s_RimPanel     = 0; // the one glinting
+
+bool IsViewport(const ImGuiWindow* w) {
+    return std::strstr(w->Name, "###Scene") != nullptr || std::strstr(w->Name, "###Game") != nullptr;
+}
 } // namespace
 
 float BeginDockTabMotion() {
@@ -97,6 +106,20 @@ void DockFocusRim(ImGuiID dockspaceId) {
     }
     if (id != 0) s_FocusedPanel = id;
 
+    // The selection rim: a faint white segment slowly travelling the focused panel's edge, so the
+    // panel you're working in reads at a glance. Stateless (a function of the motion clock). Not on
+    // the Scene and Game views while playing: their own play rim is there then.
+    if (docked && !focused->Hidden && !focused->SkipItems && !(s_PlayRimOn && IsViewport(focused))) {
+        const ImRect r = focused->Rect();
+        if (r.GetWidth() > 24.0f && r.GetHeight() > 24.0f) {
+            ImDrawList* dl = focused->DrawList;
+            dl->PushClipRect(r.Min, r.Max, false);
+            Motion().DrawTravellingRim(dl, r.Min + ImVec2(0.5f, 0.5f), r.Max - ImVec2(0.5f, 0.5f), SelectionRimSeconds,
+                                       RimTravelArc, SelectionRimAlpha, 1.0f, focused->ID);
+            dl->PopClipRect();
+        }
+    }
+
     if (!Motion().PulseActive(kRimPulse)) return;
     const float p = Motion().PulseProgress(kRimPulse);
     ImGuiWindow* w = ImGui::FindWindowByID(s_RimPanel);
@@ -117,10 +140,18 @@ void DrawPlayFrame(bool playing, bool paused) {
     const float pausedT = m.AnimateToggle(0x504C4650u /* "PLFP" */, playing && paused, s_WasPaused, PlayFrameIn, PlayFrameIn);
     s_WasPlaying = playing;
     s_WasPaused = playing && paused;
-    if (env <= 0.004f) return;
+    s_PlayRimOn = env > 0.004f;
+    if (!s_PlayRimOn) return;
+    // Gradients on: a white gradient segment travelling round each view, dimmer while paused, over
+    // a faint steady frame so the edge never goes dark between passes. Off: the flat frame that
+    // breathes (the static look).
+    const bool travel = m.CategoryOn(MotionCategory::Gradients);
     const float breathing = PlayFrameAlpha + PlayFrameBreath * m.Oscillate(PlayFrameHz);
-    const float a = env * (breathing + (PlayFramePaused - breathing) * pausedT);
-    const ImU32 col = IM_COL32(255, 255, 255, (int)(a * 255.0f));
+    const float flat = env * (travel ? PlayFramePaused * (1.0f - 0.5f * pausedT)
+                                     : breathing + (PlayFramePaused - breathing) * pausedT);
+    const float travelA = env * RimTravelAlpha * (1.0f + (RimTravelPausedScale - 1.0f) * pausedT);
+    const ImU32 col = IM_COL32(255, 255, 255, (int)(flat * 255.0f));
+    const float thick = ImMax(1.0f, Px(1.5f));
     for (const char* name : {EditorPanels::Scene, EditorPanels::Game}) {
         ImGuiWindow* w = ImGui::FindWindowByName(name);
         if (!w || !w->WasActive || w->Hidden || w->SkipItems) continue;
@@ -128,6 +159,35 @@ void DrawPlayFrame(bool playing, bool paused) {
         if (r.GetWidth() < 8.0f || r.GetHeight() < 8.0f) continue;
         w->DrawList->PushClipRect(r.Min, r.Max, false);
         w->DrawList->AddRect(r.Min + ImVec2(0.5f, 0.5f), r.Max - ImVec2(0.5f, 0.5f), col, 0.0f, 0, 1.0f);
+        // Inset by half the stroke so the whole line sits inside the view. The two views share one
+        // phase seed, so with both on screen the light runs round them in step.
+        if (travel)
+            m.DrawTravellingRim(w->DrawList, r.Min + ImVec2(thick * 0.5f, thick * 0.5f), r.Max - ImVec2(thick * 0.5f, thick * 0.5f),
+                                RimTravelSeconds, RimTravelArc, travelA, thick, 0x504C5249u /* "PLRI" */);
+        w->DrawList->PopClipRect();
+    }
+}
+
+void DrawStartupRims() {
+    if (!StartupPosing()) return;
+    ImGuiContext& g = *ImGui::GetCurrentContext();
+    const ImGuiViewport* vp = ImGui::GetMainViewport();
+    const ImVec2 dMin = vp->Pos, dMax(vp->Pos.x + vp->Size.x, vp->Pos.y + vp->Size.y);
+    const float elapsed = Motion().StartupElapsed();
+    for (ImGuiWindow* w : g.Windows) {
+        // Docked panels only: a floating window's glass edge glints in the compositor.
+        if (!w->Active || w->Hidden || w->SkipItems || w != w->RootWindow || !w->DockIsActive || w->Viewport != vp) continue;
+        const ImRect r = w->Rect();
+        if (r.GetWidth() < 8.0f || r.GetHeight() < 8.0f) continue;
+        // The glint starts partway through the panel's own arrival, so they catch the light one
+        // after another as the wave spreads out.
+        const float since = elapsed - StartupDelay(r, dMin, dMax) - StartupPanelMs * 0.001f * StartupRimAtShare;
+        if (since < 0.0f) continue;
+        const float a = StartupRimBoost * (1.0f - EaseProgress(RimGlint, since / (RimGlint.durationMs * 0.001f)));
+        if (a <= 0.004f) continue;
+        w->DrawList->PushClipRect(r.Min, r.Max, false);
+        w->DrawList->AddRect(r.Min + ImVec2(0.5f, 0.5f), r.Max - ImVec2(0.5f, 0.5f), IM_COL32(255, 255, 255, (int)(a * 255.0f)),
+                             0.0f, 0, 1.0f);
         w->DrawList->PopClipRect();
     }
 }

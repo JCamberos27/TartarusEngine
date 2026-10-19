@@ -185,6 +185,60 @@ const char* GizmoOpUndoLabel(GizmoOp op) {
     }
 }
 
+// Motion v2 — gizmo hover springs. ImGuizmo draws the hovered / dragged handle in its SELECTION
+// colour and every handle with the style's stroke sizes, so both are eased here for one Manipulate
+// call and put back right after (the base values belong to the theme). The hovered handle comes
+// from last frame's Manipulate, which is a frame late and invisible at a spring's pace. While the
+// pointer is on the gizmo its strokes grow (GizmoHoverGrow), the handle under it crosses from its
+// axis colour toward white, and the axis being dragged breathes slightly brighter at GizmoActiveHz.
+// Nothing hovered and settled: no state and the style untouched.
+int GizmoHandleAxis(ImGuizmo::MOVETYPE t) {
+    switch (t) {
+        case ImGuizmo::MT_MOVE_X: case ImGuizmo::MT_ROTATE_X: case ImGuizmo::MT_SCALE_X: return 0;
+        case ImGuizmo::MT_MOVE_Y: case ImGuizmo::MT_ROTATE_Y: case ImGuizmo::MT_SCALE_Y: return 1;
+        case ImGuizmo::MT_MOVE_Z: case ImGuizmo::MT_ROTATE_Z: case ImGuizmo::MT_SCALE_Z: return 2;
+        default: return -1; // planes, screen-space rotate, uniform scale
+    }
+}
+
+ImGuizmo::Style PushGizmoMotionStyle() {
+    ImGuizmo::Style& st = ImGuizmo::GetStyle();
+    const ImGuizmo::Style saved = st;
+    Glass::ImAnimContext& motion = Glass::Motion();
+    if (!motion.CategoryOn(Glass::MotionCategory::Viewport)) return saved;
+    const ImGuizmo::MOVETYPE active = ImGuizmo::IsUsing() ? ImGuizmo::GetActiveHandleType() : ImGuizmo::MT_NONE;
+    const ImGuizmo::MOVETYPE hot = active != ImGuizmo::MT_NONE ? active : ImGuizmo::GetHoveredHandleType();
+
+    static const ImGuiID kGrowId = ImHashStr("##gizmoHoverGrow");
+    const float grow = motion.Animate(kGrowId, hot != ImGuizmo::MT_NONE ? 1.0f : 0.0f, 0.0f, Glass::GizmoHover);
+    if (grow != 0.0f) {
+        const float k = 1.0f + Glass::GizmoHoverGrow * grow;
+        st.TranslationLineThickness *= k;
+        st.TranslationLineArrowSize *= k;
+        st.ScaleLineThickness *= k;
+        st.ScaleLineCircleSize *= k;
+        st.CenterCircleSize *= k;
+        st.RotationLineThickness *= k;
+        st.RotationOuterLineThickness *= k;
+    }
+    if (hot != ImGuizmo::MT_NONE) {
+        // One channel per handle, so sliding from one handle onto the next lights the new one from
+        // its own colour instead of it arriving already white.
+        static const ImGuiID kLitId = ImHashStr("##gizmoHandleLit");
+        const float lit = ImClamp(motion.Animate(kLitId + (ImGuiID)hot, 1.0f, 0.0f, Glass::GizmoHover), 0.0f, 1.0f);
+        const int axis = GizmoHandleAxis(hot);
+        const ImVec4 base = axis >= 0 ? saved.Colors[ImGuizmo::DIRECTION_X + axis] : saved.Colors[ImGuizmo::SELECTION];
+        float toWhite = 0.55f * lit;
+        if (active != ImGuizmo::MT_NONE) toWhite += 0.14f * (0.5f + 0.5f * motion.Oscillate(Glass::GizmoActiveHz));
+        ImVec4 c = Glass::MixOklab(base, ImVec4(1.0f, 1.0f, 1.0f, 1.0f), ImClamp(toWhite, 0.0f, 1.0f));
+        c.w = 1.0f;
+        st.Colors[ImGuizmo::SELECTION] = c;
+    }
+    return saved;
+}
+
+void PopGizmoMotionStyle(const ImGuizmo::Style& saved) { ImGuizmo::GetStyle() = saved; }
+
 } // namespace
 
 
@@ -258,6 +312,7 @@ void EditorLayer::FrameSceneBounds(World& world, Camera& editorCamera) {
     if (!std::isfinite(targetPos.x) || !std::isfinite(targetPos.y) || !std::isfinite(targetPos.z)) return;
 
     // Glide there rather than teleport — same eased transition FocusOnSelection uses.
+    SettleViewMorph(editorCamera); // Motion v2: never inherit a half-finished ortho morph
     m_ViewTransition.Active = true;
     m_ViewTransition.T = 0.0f;
     m_ViewTransition.FromPos = editorCamera.Position;
@@ -289,6 +344,7 @@ void EditorLayer::FocusOnSelection(World& world, Camera& editorCamera) {
     if (!std::isfinite(targetPos.x) || !std::isfinite(targetPos.y) || !std::isfinite(targetPos.z)) return;
 
     // Glide there rather than teleport — same eased transition SnapToView uses (audit follow-up).
+    SettleViewMorph(editorCamera); // Motion v2: never inherit a half-finished ortho morph
     m_ViewTransition.Active = true;
     m_ViewTransition.T = 0.0f;
     m_ViewTransition.FromPos = editorCamera.Position;
@@ -466,6 +522,7 @@ void EditorLayer::ComputeViewPivot(World& world, Camera& editorCamera, glm::vec3
 
 void EditorLayer::SnapToView(World& world, Camera& editorCamera, float yaw, float pitch, bool orthographic) {
     EditorSound::Play(EditorSound::Event::ViewPreset);
+    SettleViewMorph(editorCamera); // a retarget mid-morph starts from a real projection
     glm::vec3 pivot;
     float frameRadius = 0.0f;
     ComputeViewPivot(world, editorCamera, pivot, frameRadius);
@@ -495,6 +552,7 @@ void EditorLayer::SnapToView(World& world, Camera& editorCamera, float yaw, floa
     newFront.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
     newFront = glm::normalize(newFront);
 
+    SettleViewMorph(editorCamera); // Motion v2: never inherit a half-finished ortho morph
     m_ViewTransition.Active = true;
     m_ViewTransition.T = 0.0f;
     m_ViewTransition.FromPos = editorCamera.Position;
@@ -509,7 +567,92 @@ void EditorLayer::SnapToView(World& world, Camera& editorCamera, float yaw, floa
     // jump in how big everything suddenly looks.
     m_ViewTransition.ToOrthoHalfHeight = orthographic ? (distance * halfFovTan) : editorCamera.OrthoHalfHeight;
 
+    // Motion v2: orbit the pivot rather than cutting a chord through it, and morph the projection
+    // instead of popping it: toward ortho the field of view narrows while the camera pulls back
+    // (the pivot keeps its size) and the projection goes flat on landing; from ortho it starts
+    // nearly flat, far back, and widens in. Viewport motion off: the projection switches at once.
+    m_ViewOrbit = ViewOrbit{};
+    if (Glass::Motion().CategoryOn(Glass::MotionCategory::Viewport)) {
+        m_ViewOrbit.On = true;
+        m_ViewOrbit.Stamp = m_ViewTransition.FromPos;
+        m_ViewOrbit.Pivot = pivot;
+        m_ViewOrbit.FromDist = editorCamera.Orthographic ? editorCamera.OrthoHalfHeight / halfFovTan
+                                                         : glm::length(editorCamera.Position - pivot);
+        m_ViewOrbit.ToDist = distance;
+        m_ViewOrbit.Fov = editorCamera.Fov;
+        if (orthographic != editorCamera.Orthographic) {
+            m_ViewOrbit.Morph = orthographic ? 1 : -1;
+            m_ViewOrbit.FromHalfH = m_ViewOrbit.FromDist * halfFovTan;
+            m_ViewOrbit.ToHalfH = distance * halfFovTan;
+            if (!orthographic) {
+                editorCamera.Orthographic = false; // perspective now, but nearly flat (see Apply)
+                ApplyViewTransition(editorCamera, 0.0f, 0.0f);
+            }
+            return; // toward ortho, the projection flips when the morph lands
+        }
+    }
     editorCamera.Orthographic = orthographic; // switches immediately; only angle/position/size animate
+}
+
+bool EditorLayer::ViewOrbitLive() const {
+    return m_ViewOrbit.On && m_ViewTransition.Active && m_ViewOrbit.Stamp == m_ViewTransition.FromPos;
+}
+
+// The tangent of half the morph's field of view at morph progress `u` (0 the camera's own fov, 1
+// nearly flat), log-spaced so the flattening reads evenly. Capped so the pulled-back camera stays
+// well inside the far plane.
+static float MorphTanHalf(const Camera& cam, float halfH, float fovDeg, float u) {
+    const float base = std::tan(glm::radians(fovDeg) * 0.5f);
+    float flat = std::tan(glm::radians(Glass::ViewMorphMinFovDeg) * 0.5f);
+    flat = std::max(flat, halfH / std::max(1.0f, cam.FarPlane * 0.35f));
+    flat = std::min(flat, base);
+    return base * std::pow(flat / base, glm::clamp(u, 0.0f, 1.0f));
+}
+
+void EditorLayer::ApplyViewTransition(Camera& editorCamera, float eased, float easedLinear) {
+    auto lerpAngle = [](float from, float to, float f) {
+        float delta = fmodf(to - from + 540.0f, 360.0f) - 180.0f; // shortest path, wrapped to [-180,180)
+        return from + delta * f;
+    };
+    editorCamera.Yaw = lerpAngle(m_ViewTransition.FromYaw, m_ViewTransition.ToYaw, eased);
+    editorCamera.Pitch = m_ViewTransition.FromPitch + (m_ViewTransition.ToPitch - m_ViewTransition.FromPitch) * eased;
+
+    if (!ViewOrbitLive()) {
+        editorCamera.Position = glm::mix(m_ViewTransition.FromPos, m_ViewTransition.ToPos, eased);
+        editorCamera.OrthoHalfHeight = m_ViewTransition.FromOrthoHalfHeight +
+            (m_ViewTransition.ToOrthoHalfHeight - m_ViewTransition.FromOrthoHalfHeight) * eased;
+        editorCamera.Fov = m_ViewTransition.FromFov + (m_ViewTransition.ToFov - m_ViewTransition.FromFov) * eased;
+        return;
+    }
+    editorCamera.Pitch = glm::clamp(editorCamera.Pitch, -89.0f, 89.0f); // a spring's overshoot past a pole
+    const glm::vec3 front = editorCamera.Front();
+    if (m_ViewOrbit.Morph == 0) {
+        const float dist = m_ViewOrbit.FromDist + (m_ViewOrbit.ToDist - m_ViewOrbit.FromDist) * easedLinear;
+        editorCamera.Position = m_ViewOrbit.Pivot - front * dist;
+        editorCamera.OrthoHalfHeight = m_ViewTransition.FromOrthoHalfHeight +
+            (m_ViewTransition.ToOrthoHalfHeight - m_ViewTransition.FromOrthoHalfHeight) * easedLinear;
+        return;
+    }
+    const float halfH = m_ViewOrbit.FromHalfH + (m_ViewOrbit.ToHalfH - m_ViewOrbit.FromHalfH) * easedLinear;
+    const float u = m_ViewOrbit.Morph > 0 ? easedLinear : 1.0f - easedLinear;
+    const float tanHalf = MorphTanHalf(editorCamera, halfH, m_ViewOrbit.Fov, u);
+    editorCamera.Fov = glm::degrees(2.0f * std::atan(tanHalf));
+    editorCamera.Position = m_ViewOrbit.Pivot - front * (halfH / tanHalf);
+    editorCamera.OrthoHalfHeight = halfH;
+}
+
+void EditorLayer::SettleViewMorph(Camera& editorCamera) {
+    // Whatever follows (a new transition, manual control) owns the camera: the orbit is done.
+    if (!ViewOrbitLive() || m_ViewOrbit.Morph == 0) { m_ViewOrbit.On = false; return; }
+    const float tanBase = std::tan(glm::radians(m_ViewOrbit.Fov) * 0.5f);
+    const float halfH = editorCamera.OrthoHalfHeight; // ApplyViewTransition keeps it current
+    editorCamera.Fov = m_ViewOrbit.Fov;
+    if (m_ViewOrbit.Morph > 0) {
+        editorCamera.Orthographic = true;
+    } else {
+        editorCamera.Position = m_ViewOrbit.Pivot - editorCamera.Front() * (halfH / tanBase);
+    }
+    m_ViewOrbit.On = false;
 }
 
 void EditorLayer::ToggleOrthographic(World& world, Camera& editorCamera) {
@@ -532,45 +675,48 @@ void EditorLayer::UpdateViewTransition(Camera& editorCamera, float dt) {
             ImGui::IsKeyDown(ImGuiKey_S) || ImGui::IsKeyDown(ImGuiKey_D) ||
             ImGui::IsKeyDown(ImGuiKey_Q) || ImGui::IsKeyDown(ImGuiKey_E)));
     if (manualInput) {
+        SettleViewMorph(editorCamera); // never leave the camera mid-morph (a narrow fov)
         m_ViewTransition.Active = false;
         return;
     }
 
-    // Phase 6 item 12 — Reduce Motion snaps straight to the target instead of easing over
-    // kDuration below.
-    if (EditorSettings::Get().ReduceMotion) {
+    // Lands the transition exactly on its target, finishing a projection morph.
+    auto land = [&]() {
+        const bool orbit = ViewOrbitLive();
+        const int morph = orbit ? m_ViewOrbit.Morph : 0;
         editorCamera.Yaw = m_ViewTransition.ToYaw;
         editorCamera.Pitch = m_ViewTransition.ToPitch;
         editorCamera.Position = m_ViewTransition.ToPos;
-        editorCamera.OrthoHalfHeight = m_ViewTransition.ToOrthoHalfHeight;
-        editorCamera.Fov = m_ViewTransition.ToFov;
+        editorCamera.OrthoHalfHeight = morph < 0 ? m_ViewOrbit.ToHalfH : m_ViewTransition.ToOrthoHalfHeight;
+        editorCamera.Fov = morph != 0 ? m_ViewOrbit.Fov : m_ViewTransition.ToFov;
+        if (morph > 0) editorCamera.Orthographic = true;
+        m_ViewOrbit.On = false;
         m_ViewTransition.Active = false;
+    };
+
+    // Phase 6 item 12 — Reduce Motion snaps straight to the target instead of easing over
+    // kDuration below.
+    if (EditorSettings::Get().ReduceMotion || Glass::Motion().ReduceMotion()) {
+        land();
         return;
     }
 
     // The Glass "smooth" curve (Glass::CameraFrame), so the camera lands like the UI does. A longer
-    // trip takes a little longer, capped so framing never feels slow.
+    // trip takes a little longer, capped so framing never feels slow. A nav-gizmo click turns the
+    // view on the ViewCubeTurn spring instead (the cube visibly swings into place and settles).
+    // Stepped on the motion clock (Glass::Motion().Dt()), so the speed preference applies.
+    (void)dt;
+    const bool spring = ViewOrbitLive() && m_ViewOrbit.Spring;
     const float dist = glm::length(m_ViewTransition.ToPos - m_ViewTransition.FromPos);
-    const float kDuration = std::min(Glass::CameraFrameMaxMs,
-                                     Glass::CameraFrame.durationMs + Glass::CameraFramePerOctaveMs * std::log2(1.0f + dist)) * 0.001f;
-    m_ViewTransition.T = std::min(1.0f, m_ViewTransition.T + dt / kDuration);
-    float t = m_ViewTransition.T;
-    float eased = Glass::EaseProgress(Glass::CameraFrame, t);
-
-    auto lerpAngle = [](float from, float to, float f) {
-        float delta = fmodf(to - from + 540.0f, 360.0f) - 180.0f; // shortest path, wrapped to [-180,180)
-        return from + delta * f;
-    };
-
-    editorCamera.Yaw = lerpAngle(m_ViewTransition.FromYaw, m_ViewTransition.ToYaw, eased);
-    editorCamera.Pitch = m_ViewTransition.FromPitch + (m_ViewTransition.ToPitch - m_ViewTransition.FromPitch) * eased;
-    editorCamera.Position = glm::mix(m_ViewTransition.FromPos, m_ViewTransition.ToPos, eased);
-    editorCamera.OrthoHalfHeight = m_ViewTransition.FromOrthoHalfHeight +
-        (m_ViewTransition.ToOrthoHalfHeight - m_ViewTransition.FromOrthoHalfHeight) * eased;
-    editorCamera.Fov = m_ViewTransition.FromFov +
-        (m_ViewTransition.ToFov - m_ViewTransition.FromFov) * eased;
-
-    if (m_ViewTransition.T >= 1.0f) m_ViewTransition.Active = false;
+    const float kDuration = spring ? Glass::ViewCubeTurn.durationMs * 0.001f
+        : std::min(Glass::CameraFrameMaxMs,
+                   Glass::CameraFrame.durationMs + Glass::CameraFramePerOctaveMs * std::log2(1.0f + dist)) * 0.001f;
+    m_ViewTransition.T = std::min(1.0f, m_ViewTransition.T + Glass::Motion().Dt() / kDuration);
+    const float t = m_ViewTransition.T;
+    const float linear = Glass::EaseProgress(Glass::CameraFrame, t);
+    const float eased = spring ? Glass::EaseProgress(Glass::ViewCubeTurn, t) : linear;
+    if (t >= 1.0f) { land(); return; }
+    ApplyViewTransition(editorCamera, eased, linear);
 }
 
 // --- Look through light (#140 phase 4) -------------------------------------------------------
@@ -607,6 +753,7 @@ void EditorLayer::LookThroughLight(World& world, Camera& editorCamera, entt::ent
                 : lc.Kind == LightComponent::Type::Point ? 90.0f
                 : editorCamera.Fov;
 
+    SettleViewMorph(editorCamera); // Motion v2: never inherit a half-finished ortho morph
     m_ViewTransition.Active = true;
     m_ViewTransition.T = 0.0f;
     m_ViewTransition.FromPos = editorCamera.Position;
@@ -631,6 +778,7 @@ void EditorLayer::LookThroughLight(World& world, Camera& editorCamera, entt::ent
 void EditorLayer::ExitLookThrough(Camera& editorCamera) {
     if (!m_LookThroughActive) return;
     const CameraPose& r = m_LookThroughRestore;
+    SettleViewMorph(editorCamera); // Motion v2: never inherit a half-finished ortho morph
     m_ViewTransition.Active = true;
     m_ViewTransition.T = 0.0f;
     m_ViewTransition.FromPos = editorCamera.Position;
@@ -1411,8 +1559,17 @@ void EditorLayer::DrawEntityIcons(World& world, Camera& editorCamera) {
         draw->AddText(font, iconPx, ImVec2(screen.x - gs.x * 0.5f, screen.y - gs.y * 0.5f), color, glyph);
 
         // Selected state = a subtle ring, not extra geometry inside the marker.
-        if (selected)
-            draw->AddCircle(screen, iconPx * 0.72f, EditorTheme::U32(EditorTheme::Accent), 0, 1.5f * m_UIScale);
+        // Motion v2: it sweeps on clockwise from the top like the mesh outline does.
+        if (selected) {
+            const float reveal = SelectionOutlineReveal();
+            if (reveal >= 1.0f) {
+                draw->AddCircle(screen, iconPx * 0.72f, EditorTheme::U32(EditorTheme::Accent), 0, 1.5f * m_UIScale);
+            } else if (reveal > 0.0f) {
+                const float a0 = -IM_PI * 0.5f;
+                draw->PathArcTo(screen, iconPx * 0.72f, a0, a0 + reveal * 2.0f * IM_PI, 32);
+                draw->PathStroke(EditorTheme::U32(EditorTheme::Accent), ImDrawFlags_None, 1.5f * m_UIScale);
+            }
+        }
     }
 
     draw->PopClipRect();
@@ -1918,6 +2075,13 @@ void EditorLayer::EndGizmoOverlay() {
 }
 
 void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
+    // Motion v2: the radial menu is up (it's about to change the tool anyway); the handles step
+    // aside so they neither cover it nor grab its click.
+    if (m_Radial.Open) {
+        m_GizmoEngaged = false;
+        m_GizmoUsing = false;
+        return;
+    }
     if (HasGroupSelection()) {
         DrawGroupGizmo(world, editorCamera);
         return;
@@ -1984,13 +2148,16 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
     const float* boundsPtr = (m_GizmoOp == GizmoOp::Rect) ? bounds : nullptr;
 
     const glm::mat4 matrixBeforeDrag = matrix;
+    const ImGuizmo::Style gizmoStyle = PushGizmoMotionStyle(); // Motion v2: hover springs
     ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(proj), op, gizmoMode,
         glm::value_ptr(matrix), nullptr, snapActive ? snapValues : nullptr, boundsPtr);
+    PopGizmoMotionStyle(gizmoStyle);
     m_GizmoEngaged = ImGuizmo::IsOver() || ImGuizmo::IsUsing();
     m_GizmoUsing = ImGuizmo::IsUsing();
     EditorSound::GizmoFrame(m_GizmoUsing, matrix != matrixBeforeDrag, snapActive);
 
     bool isUsingNow = ImGuizmo::IsUsing();
+    const bool dragStarted = isUsingNow && !m_GizmoWasUsing;
     if (isUsingNow && !m_GizmoWasUsing) {
         // Drag just started this frame: snapshot the still-unmodified transform (pos/rot/scale
         // below haven't been written yet) so undo restores to exactly where the drag began, and
@@ -2046,7 +2213,14 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
         }
         DrawGizmoDragReadout(transform.Position, transform.EulerDegrees(), transform.Scale);
         PushGizmoEditToPhysics(m_Selected, parentWorld * ComposeTransform(transform)); // #185
+        if (snapActive) {
+            // Motion v2: a tick for each snap step crossed, measured on the readout's own value.
+            if (m_GizmoOp == GizmoOp::Rotate)     NoteGizmoSnapStep(transform.EulerDegrees() - m_GizmoDragStartRot, dragStarted, 0, "\xC2\xB0");
+            else if (m_GizmoOp == GizmoOp::Scale) NoteGizmoSnapStep(transform.Scale, dragStarted, 2, nullptr);
+            else                                  NoteGizmoSnapStep(transform.Position - m_GizmoDragStartPos, dragStarted, 2, nullptr);
+        }
     }
+    DrawSnapTicks();
 
     EndGizmoOverlay();
 }
@@ -2064,34 +2238,46 @@ void EditorLayer::PushGizmoEditToPhysics(entt::entity e, const glm::mat4& worldM
 
 
 // #236 E — a small readout near the cursor while a gizmo is dragging: the delta from where the
-// drag started, in the units that match the active tool.
+// drag started, in the units that match the active tool. Motion v2: each number rolls like a
+// mechanical counter as it changes (Glass Odometer, category RollingNumbers; off = plain digits).
 void EditorLayer::DrawGizmoDragReadout(const glm::vec3& pos, const glm::vec3& rot, const glm::vec3& scale) {
-    char buf[96];
+    const char* tag = "T";
+    glm::vec3 v = pos - m_GizmoDragStartPos;
+    int decimals = 2;
+    const char* suffix = nullptr;
+    bool showLength = true;
     switch (m_GizmoOp) {
-        case GizmoOp::Rotate: {
-            glm::vec3 d = rot - m_GizmoDragStartRot;
-            std::snprintf(buf, sizeof(buf), "R  %+.1f  %+.1f  %+.1f deg", d.x, d.y, d.z);
-            break;
-        }
-        case GizmoOp::Scale: {
-            std::snprintf(buf, sizeof(buf), "S  %.3f  %.3f  %.3f", scale.x, scale.y, scale.z);
-            break;
-        }
-        default: { // Translate / Rect / Universal
-            glm::vec3 d = pos - m_GizmoDragStartPos;
-            std::snprintf(buf, sizeof(buf), "T  %+.2f  %+.2f  %+.2f  (|%.2f|)",
-                          d.x, d.y, d.z, glm::length(d));
-            break;
-        }
+        case GizmoOp::Rotate: tag = "R"; v = rot - m_GizmoDragStartRot; decimals = 1; suffix = " deg"; showLength = false; break;
+        case GizmoOp::Scale:  tag = "S"; v = scale; decimals = 3; showLength = false; break;
+        default: break; // Translate / Rect / Universal
     }
+    Glass::ImAnimContext& motion = Glass::Motion();
+    const float gap = ImGui::CalcTextSize("  ").x;
+    const float lenW = showLength ? ImGui::CalcTextSize("  (||)").x + Glass::ImAnimContext::OdometerWidth(glm::length(v), decimals) : 0.0f;
+    float w = ImGui::CalcTextSize(tag).x + lenW;
+    for (int a = 0; a < 3; ++a) w += gap + Glass::ImAnimContext::OdometerWidth(v[a], decimals, a == 2 ? suffix : nullptr);
+
     const ImVec2 mp = ImGui::GetIO().MousePos;
     const ImVec2 at(mp.x + 18.0f, mp.y + 18.0f);
     ImDrawList* dl = ImGui::GetForegroundDrawList();
-    const ImVec2 ts = ImGui::CalcTextSize(buf);
-    dl->AddRectFilled(ImVec2(at.x - 5.0f, at.y - 3.0f),
-                      ImVec2(at.x + ts.x + 5.0f, at.y + ts.y + 3.0f),
+    const float lineH = ImGui::GetTextLineHeight();
+    dl->AddRectFilled(ImVec2(at.x - 5.0f, at.y - 3.0f), ImVec2(at.x + w + 5.0f, at.y + lineH + 3.0f),
                       EditorUIPrimitives::kHudPlateColor, 3.0f * m_UIScale);
-    dl->AddText(at, EditorUIPrimitives::kHudTextColor, buf);
+    const ImU32 col = EditorUIPrimitives::kHudTextColor;
+    float x = at.x;
+    dl->AddText(ImVec2(x, at.y), col, tag);
+    x += ImGui::CalcTextSize(tag).x;
+    static const ImGuiID kIds[4] = {ImHashStr("##gzReadX"), ImHashStr("##gzReadY"), ImHashStr("##gzReadZ"), ImHashStr("##gzReadL")};
+    for (int a = 0; a < 3; ++a) {
+        x += gap;
+        x += motion.Odometer(kIds[a], dl, ImVec2(x, at.y), v[a], decimals, col, a == 2 ? suffix : nullptr);
+    }
+    if (showLength) {
+        dl->AddText(ImVec2(x, at.y), col, "  (|");
+        x += ImGui::CalcTextSize("  (|").x;
+        x += motion.Odometer(kIds[3], dl, ImVec2(x, at.y), glm::length(v), decimals, col);
+        dl->AddText(ImVec2(x, at.y), col, "|)");
+    }
 }
 
 // Ray from a screen pixel into the scene; returns the nearest renderable-AABB hit, or a point
@@ -2635,6 +2821,7 @@ void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
     if (!ImGui::Begin(EditorPanels::Scene)) {
         m_ViewGizmoBlocking = false;
         ImGui::End();
+        UpdateRadialMenu(world, editorCamera, false); // hidden Scene: the menu closes
         return;
     }
     glm::vec3 camPos = editorCamera.Position;
@@ -2652,12 +2839,43 @@ void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
         pivot = camPos + editorCamera.Front() * 6.0f;
     }
 
+    // Motion v2: an axis click no longer runs the library's own snap tween (a fixed 0.5 s ease-out
+    // quad on wall-clock time). The library snaps instantly, and that target becomes an orbiting
+    // view transition on the ViewCubeTurn spring, so the cube swings into place and settles, the
+    // speed preference applies, and Reduce Motion lands it at once.
+    style.animateSnap = false;
+    const bool wasOrbitDrag = ImViewGuizmo::GetContext().activeTool == ImViewGuizmo::TOOL_GIZMO;
     bool modified = ImViewGuizmo::Rotate(camPos, camRot, pivot, rotatePos);
-    { // an axis click starts the gizmo's snap tween: the view-preset sound, once
-        static bool wasAnimating = false;
-        const bool animating = ImViewGuizmo::GetContext().isAnimating;
-        if (animating && !wasAnimating) EditorSound::Play(EditorSound::Event::ViewPreset);
-        wasAnimating = animating;
+    if (modified && !wasOrbitDrag && ImViewGuizmo::GetContext().activeTool == ImViewGuizmo::TOOL_NONE) {
+        const glm::vec3 forward = glm::normalize(camRot * glm::vec3(0.0f, 0.0f, -1.0f));
+        SettleViewMorph(editorCamera);
+        m_ViewTransition.Active = true;
+        m_ViewTransition.T = 0.0f;
+        m_ViewTransition.FromPos = editorCamera.Position;
+        m_ViewTransition.FromYaw = editorCamera.Yaw;
+        m_ViewTransition.FromPitch = editorCamera.Pitch;
+        m_ViewTransition.FromOrthoHalfHeight = m_ViewTransition.ToOrthoHalfHeight = editorCamera.OrthoHalfHeight;
+        m_ViewTransition.FromFov = m_ViewTransition.ToFov = editorCamera.Fov;
+        m_ViewTransition.ToPos = camPos;
+        m_ViewTransition.ToPitch = glm::clamp(glm::degrees(asinf(glm::clamp(forward.y, -1.0f, 1.0f))), -89.0f, 89.0f);
+        // Straight up / down has no heading of its own: keep the current one rather than spinning
+        // to whatever the degenerate atan2 gives.
+        m_ViewTransition.ToYaw = std::fabs(forward.y) > 0.999f ? editorCamera.Yaw : glm::degrees(atan2f(forward.z, forward.x));
+        m_ViewOrbit = ViewOrbit{};
+        if (Glass::Motion().CategoryOn(Glass::MotionCategory::Viewport)) {
+            m_ViewOrbit.On = true;
+            m_ViewOrbit.Stamp = m_ViewTransition.FromPos;
+            m_ViewOrbit.Pivot = pivot;
+            m_ViewOrbit.FromDist = glm::length(editorCamera.Position - pivot);
+            m_ViewOrbit.ToDist = glm::length(camPos - pivot);
+            m_ViewOrbit.Fov = editorCamera.Fov;
+            m_ViewOrbit.Spring = true;
+        }
+        EditorSound::Play(EditorSound::Event::ViewPreset);
+        modified = false; // the transition moves the camera from here
+    } else if (modified && m_ViewTransition.Active) {
+        SettleViewMorph(editorCamera); // dragging the ring takes the camera back
+        m_ViewTransition.Active = false;
     }
     m_ViewGizmoBlocking = ImViewGuizmo::IsOver() || ImViewGuizmo::IsUsing();
 
@@ -2689,7 +2907,17 @@ void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
         editorCamera.Position = camPos;
     }
 
+    // Motion v2: the hold-Space radial menu needs the Scene window hovered (child windows too, so
+    // the tool rail counts) and the pointer over the 3D view itself.
+    const ImVec2 mp = ImGui::GetIO().MousePos;
+    const bool sceneHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) &&
+        mp.x >= m_ViewportPos.x && mp.y >= m_ViewportPos.y &&
+        mp.x < m_ViewportPos.x + m_ViewportSize.x && mp.y < m_ViewportPos.y + m_ViewportSize.y;
     ImGui::End();
+    const bool radialWasOpen = m_Radial.Open;
+    UpdateRadialMenu(world, editorCamera, sceneHovered);
+    // Its clicks pick an item, not the scene (including the click that closes it).
+    if (radialWasOpen || m_Radial.Open) m_ViewGizmoBlocking = true;
 }
 
 void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
@@ -2745,15 +2973,28 @@ void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
     if (m_GizmoOp == GizmoOp::Rotate) snapValues[0] = snapValues[1] = snapValues[2] = m_SnapRotationDeg;
     else if (m_GizmoOp == GizmoOp::Scale) snapValues[0] = snapValues[1] = snapValues[2] = m_SnapScale;
 
+    const ImGuizmo::Style gizmoStyle = PushGizmoMotionStyle(); // Motion v2: hover springs
     ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(proj), op, gizmoMode,
         glm::value_ptr(m_GroupGizmoMatrix), nullptr, snapActive ? snapValues : nullptr);
+    PopGizmoMotionStyle(gizmoStyle);
     m_GizmoEngaged = ImGuizmo::IsOver() || ImGuizmo::IsUsing();
     m_GizmoUsing = ImGuizmo::IsUsing();
     EditorSound::GizmoFrame(m_GizmoUsing, m_GroupGizmoMatrix != matrixBefore, snapActive);
 
     bool isUsingNow = ImGuizmo::IsUsing();
+    const bool dragStarted = isUsingNow && !m_GizmoWasUsing;
     if (isUsingNow && !m_GizmoWasUsing) {
         PushUndo(world, GizmoOpUndoLabel(m_GizmoOp));
+        m_GroupSnapStartPos = glm::vec3(matrixBefore[3]);
+    }
+    if (isUsingNow && snapActive) {
+        // Motion v2: snap ticks. The pivot frame starts as a pure translation, so its decomposed
+        // rotation and scale are the drag's own delta angle and scale.
+        float nt[3], nr[3], ns[3];
+        ImGuizmo::DecomposeMatrixToComponents(glm::value_ptr(m_GroupGizmoMatrix), nt, nr, ns);
+        if (m_GizmoOp == GizmoOp::Rotate)     NoteGizmoSnapStep(glm::vec3(nr[0], nr[1], nr[2]), dragStarted, 0, "\xC2\xB0");
+        else if (m_GizmoOp == GizmoOp::Scale) NoteGizmoSnapStep(glm::vec3(ns[0], ns[1], ns[2]), dragStarted, 2, nullptr);
+        else NoteGizmoSnapStep(glm::vec3(nt[0], nt[1], nt[2]) - m_GroupSnapStartPos, dragStarted, 2, nullptr);
     }
 
     if (isUsingNow) {
@@ -2779,6 +3020,7 @@ void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
     }
     if (!isUsingNow && m_GizmoWasUsing && snapActive) GlassNotifySnap(); // Glass theme: the snap ring
     m_GizmoWasUsing = isUsingNow;
+    DrawSnapTicks();
 
     EndGizmoOverlay();
 }

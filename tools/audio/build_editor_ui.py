@@ -11,6 +11,8 @@ Sources (the only ones this script reads; both are CC BY-SA, so every output is 
   <SFX>/KDE Ocean Sound Theme/WAV/*.wav      Ocean Sound Theme, Guilherme Marcal Silva (KDE), CC BY-SA 4.0
   <SFX>/Ubuntu Yaru Sound Theme/WAV/*.wav    WoodenBeaver / Touch-Remix by madsrh, via Ubuntu Yaru, CC BY-SA 3.0
 An output never mixes the two sets, so each file carries exactly one license.
+Processing is cut / resample-pitch / reverse / glide (varispeed) / layer / high- and low-pass / fade / gain only: nothing
+is synthesised.
 
 Output: 48 kHz, 16-bit, mono. Every file starts and ends at silence (pre-roll + Hann fade-in, Hann fade-out), peaks at most
 -1 dBTP, and is checked against its tier's loudness (check_master). Three level tiers (all LIFT_DB above the first build):
@@ -156,6 +158,25 @@ def resample(x, sr_in, semitones=0.0):
     return y[a:a + int(round(len(x) * ratio))]
 
 
+def varispeed(x, semitones):
+    """Glide: read `x` (48 kHz) at a playback rate that slides from 1 to 2^(semitones/12) across it, so pitch and speed move
+    together (a tape-speed bend, the time-varying form of `resample`). The clip is upsampled 4x band-limited first (as
+    true_peak_db), so the linear read between those samples stays clean; nothing in these sources reaches the band edge."""
+    over, pad = 4, 2048
+    xp = np.concatenate([np.zeros(pad), np.asarray(x, np.float64), np.zeros(pad)])
+    X = np.fft.rfft(xp)
+    Y = np.zeros(len(xp) * over // 2 + 1, complex)
+    Y[:len(X)] = X
+    up = np.fft.irfft(Y, len(xp) * over) * over
+    n = len(x)
+    pos, p = [], 0.0
+    while p < n - 1:
+        pos.append(p)
+        p += 2.0 ** (semitones * (p / n) / 12.0)
+    q = (np.asarray(pos) + pad) * over
+    return np.interp(q, np.arange(len(up)), up)
+
+
 def biquad(x, b, a):
     """Direct-form-I biquad (causal, so nothing rings before a transient)."""
     b0, b1, b2 = (v / a[0] for v in b)
@@ -226,10 +247,13 @@ def lead_ms(x, below_db=-40.0):
 
 
 # ------------------------------------------------------------------------------------------------------------------ recipe
-def L(src, start_ms=0.0, len_ms=60.0, st=0.0, at_ms=0.0, db=0.0, frac=0.03, fade_in_ms=0.2):
+def L(src, start_ms=0.0, len_ms=60.0, st=0.0, at_ms=0.0, db=0.0, frac=0.03, fade_in_ms=0.2, rev=False, glide=0.0):
     """One layer: cut `len_ms` of `src` from `start_ms` after its onset (the first sample at `frac` of the file's peak),
-    resampled to 48 kHz at `st` semitones, placed at `at_ms` in the output with `db` gain."""
-    return dict(src=src, start_ms=start_ms, len_ms=len_ms, st=st, at_ms=at_ms, db=db, frac=frac, fade_in_ms=fade_in_ms)
+    resampled to 48 kHz at `st` semitones, placed at `at_ms` in the output with `db` gain.
+    rev: the cut is played backwards (its decay swells up into its attack); it fades in over `fade_in_ms` at its new head.
+    glide: the playback rate slides linearly by this many semitones over the cut (varispeed: a rising / falling swoosh)."""
+    return dict(src=src, start_ms=start_ms, len_ms=len_ms, st=st, at_ms=at_ms, db=db, frac=frac, fade_in_ms=fade_in_ms,
+                rev=rev, glide=glide)
 
 
 def tick(layers, length_ms, fade_ms, peak=-20.0, hp=120.0, lp=None, variants=None, phase=1):
@@ -245,6 +269,13 @@ def tone(tier, layers, length_ms, fade_ms, hp=70.0, lp=None, phase=1):
 PRESS, MOD = "K:button-pressed", "K:button-pressed-modifier"     # KDE key ticks: a ~13 ms rounded "tock" at 527 / 785 Hz
 VOL = "Y:audio-volume-change"                                    # Yaru volume tick: 300 Hz body + 1.1 kHz click, ~58 ms
 BELL = "Y:bell"                                                  # Yaru bell: one pure D5 (587 Hz) ping, exponential decay
+# phase 8 sources. The theme folders hold byte-identical copies under other names (KDE bell = bell-window-system, KDE
+# device-added is unique, Yaru desktop-logoff / trash-empty are unique): these are the names already in use, or unique files
+LOGOFF = "Y:desktop-logoff"      # Yaru logoff: a ~0.8 s airy high shimmer (partials 4.6-5.7 kHz) swelling into a low hit
+TRASH_Y = "Y:trash-empty"        # Yaru trash: a run of paper crackles
+KBELL = "K:bell-window-system"   # KDE octave bell (B3 B4 B5) with a soft ~40 ms swell into it (Save's source)
+KVOL = "K:audio-volume-change"   # KDE volume pop: a round 556 Hz blip falling to 371 Hz, ~150 ms, fast attack
+KADD = "K:device-added"          # KDE device-added: B3 swelling in over ~100 ms, then E4
 V3 = (0.0, 3.0, -3.0)          # variant pitch offsets, percent
 V2 = (-2.0, 2.0)
 
@@ -483,6 +514,36 @@ EVENTS = {
     "PackageFail": tone("notify", [L("K:dialog-error", len_ms=1100, st=-2.0, frac=0.01)], 1100, 450, lp=2500.0, phase=7),
     "BuildProgress": tick([L(MOD, st=12.0, len_ms=30)], 40, 25, peak=-25.0, lp=4000.0, phase=7),
     "Digest": tone("cue", [L("K:message-new-email", len_ms=600, frac=0.01)], 600, 280, phase=7),
+
+    # ===== phase 8: Glass Motion v2. Theme switch = the airy high shimmer that swells under Yaru's logoff (before its low
+    # hit), a minor third down, with a soft bell an octave up settling into it; a fling = an earlier, quieter stretch of the
+    # same shimmer, a tenth down and sliding down a further fourth (a soft passing air), doubled slightly detuned so it blurs.
+    # Folder zoom = KDE's octave bell (Save's source) reversed and gliding up a fifth into its attack (diving in) / played
+    # forwards from a fifth up and gliding back down (out). Motion snap = KDE's volume pop two octaves and a tone up, tiny;
+    # a node popping in = the same pop a fourth up, chirping up a fifth (a bubble). Radial menu: open = the swelling head of
+    # KDE's device-added a fifth up (a bloom), close = that head reversed a fourth up and dulled (the two notes fall), pick =
+    # a crisp Yaru click up a fifth with a bell ping two octaves up on it. Card flip = one paper crackle out of Yaru's
+    # trash-empty, high-passed, with a faint high bell glint
+    "ThemeSwitch": tone("cue", [L(LOGOFF, start_ms=330.0, len_ms=380, st=-3.0, frac=0.003, fade_in_ms=110.0),
+                                L(BELL, len_ms=520, st=12.0, at_ms=170, db=-28.0, frac=0.01, fade_in_ms=4.0)],
+                        420, 200, hp=400.0, lp=8000.0, phase=8),
+    "FlingRelease": tone("cue", [L(LOGOFF, start_ms=200.0, len_ms=110, st=-15.0, glide=-5.0, frac=0.003, fade_in_ms=55.0),
+                                 L(LOGOFF, start_ms=200.0, len_ms=110, st=-14.7, glide=-5.0, frac=0.003, fade_in_ms=55.0,
+                                   db=-3.0)],
+                         180, 115, hp=250.0, lp=5000.0, phase=8),
+    "FolderZoomIn": tone("cue", [L(KBELL, len_ms=260, st=0.0, glide=7.0, frac=0.01, fade_in_ms=30.0, rev=True)],
+                         220, 45, hp=200.0, phase=8),
+    "FolderZoomOut": tone("cue", [L(KBELL, len_ms=300, st=7.0, glide=-7.0, frac=0.01, fade_in_ms=2.0)],
+                          220, 120, hp=200.0, lp=3500.0, phase=8),
+    "MotionSnapTick": tick([L(KVOL, st=14.0, len_ms=85, frac=0.03)], 35, 22, peak=-27.0, lp=6000.0, phase=8),
+    "NodePop": tick([L(KVOL, st=5.0, len_ms=110, glide=7.0, frac=0.03)], 60, 30, peak=-23.0, lp=4500.0, phase=8),
+    "RadialOpen": tone("cue", [L(KADD, len_ms=420, st=7.0, frac=0.01, fade_in_ms=2.0)], 260, 130, hp=150.0, phase=8),
+    "RadialClose": tone("cue", [L(KADD, len_ms=240, st=5.0, frac=0.01, fade_in_ms=25.0, rev=True)], 190, 80, hp=150.0,
+                        lp=2500.0, phase=8),
+    "RadialPick": tick([L(VOL, st=7.0, frac=0.2, len_ms=60), L(BELL, len_ms=320, st=24.0, at_ms=18, db=-6.0)], 95, 50,
+                       peak=-22.0, phase=8),
+    "CardFlip": tick([L(TRASH_Y, len_ms=70, frac=0.5), L(BELL, len_ms=190, st=19.0, db=-14.0)], 60, 30, peak=-24.0,
+                     hp=1200.0, lp=8000.0, phase=8),
 }
 
 
@@ -502,13 +563,18 @@ def render(src_root, ev, pitch_pct=0.0):
         b = min(len(x), cut + int(round(ly["len_ms"] / 1000 * sr)))
         fade_in_ms = max(ly["fade_in_ms"], MIN_FADE_IN_MS[ev["tier"]])
         seg = fade(x[a:b], (cut - a) + int(round(fade_in_ms / 1000 * sr)), 0)
+        if ly["rev"]:                                                       # the faded-in head becomes the tail...
+            seg = fade(seg[::-1], int(round(fade_in_ms / 1000 * sr)), 0)    # ...and the cut end fades in as the new head
         st = ly["st"] + dpitch
-        y = resample(seg, sr, st) * 10 ** (ly["db"] / 20)
+        y = resample(seg, sr, st)
+        if ly["glide"]:
+            y = varispeed(y, ly["glide"])
+        y = y * 10 ** (ly["db"] / 20)
         at = int(round(ly["at_ms"] / 1000 * SR))
         e = min(len(out), at + len(y))
         out[at:e] += y[:e - at]
         uses.append(dict(file=s["rel"], set=s["set"], start=a / sr, end=b / sr, st=st, at_ms=ly["at_ms"], db=ly["db"],
-                         downmix=s["downmix"], sr=sr))
+                         downmix=s["downmix"], sr=sr, rev=ly["rev"], glide=ly["glide"]))
     y = out[:n]
     y = biquad(y, *rbj("hp", ev["hp"]))                    # DC / sub rumble (KDE files carry some near 0 Hz)
     if ev["lp"]:
@@ -546,8 +612,12 @@ def edits_text(uses, ev, lvl_note):
         who = f"`{os.path.basename(u['file'])}` " if len(uses) > 1 else ""
         p = [f"{who}cut {u['start']:.4f}-{u['end']:.4f} s (lead-in silence dropped)", u["downmix"],
              f"resampled {u['sr'] / 1000:g} -> 48 kHz"]
+        if u["rev"]:
+            p.append("reversed")
         if abs(u["st"]) > 1e-6:
             p.append(f"pitch {u['st']:+.2f} st by playback rate")
+        if u["glide"]:
+            p.append(f"gliding {u['glide']:+g} st across the cut (varispeed)")
         if u["at_ms"]:
             p.append(f"placed at +{u['at_ms']:g} ms")
         if u["db"]:

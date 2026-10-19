@@ -53,7 +53,7 @@ JetBrains Mono Project Authors. Upstream: <https://github.com/JetBrains/JetBrain
 
 ### Editor UI sounds
 
-`resources/EditorSounds/*.wav` (copied next to the exe as `assets/editor_sounds/`) are adaptations, cut, pitched,
+`resources/EditorSounds/*.wav` (copied next to the exe as `assets/editor_sounds/`) are adaptations, cut, pitched, reversed,
 filtered and levelled by `tools/audio/build_editor_ui.py`, of two desktop sound themes. Each file keeps its source's
 license. The per-file sources and changes are in `resources/EditorSounds/LICENSE.md`.
 

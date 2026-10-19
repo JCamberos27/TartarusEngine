@@ -151,6 +151,16 @@ struct EditorSettings {
     // m_ViewTransition) snap instantly instead of easing over its usual 0.28s, and parks the
     // editor's animations, for anyone sensitive to on-screen motion.
     bool ReduceMotion = false;
+    // Motion v2 (Preferences > Viewport > Motion): a speed multiplier on every editor animation
+    // (0.5x to 2x, ImAnim's global time scale) and one switch per category. Reduce Motion wins
+    // over all of them.
+    float MotionSpeed          = 1.0f;
+    bool  MotionThemeTweens    = true; // theme switch, play / prefab / focus moods
+    bool  MotionInertia        = true; // coasting scroll, flings, value scrubbing
+    bool  MotionGradients      = true; // busy sheen, travelling rims, cursor glow
+    bool  MotionRollingNumbers = true; // odometer readouts
+    bool  MotionViewport       = true; // gizmo springs, outline sweep, radial menu, view cube
+    bool  MotionStartup        = true; // the startup sequence
 
     // The editor's look (Preferences > General > Editor theme). 0 = Tartarus, the phosphor terminal
     // look (EditorTheme.h) and the default; 1 = Glass, the opt-in macOS-style theme

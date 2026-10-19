@@ -6,6 +6,11 @@ uniform vec3 uTexel;     // xy = 1.0 / SCENE size: a fetch at a scene pixel cent
                          // four mask texels, so linear filtering returns 16-sample coverage (0..1)
 uniform vec3 uColor;
 uniform int uRadius;     // outline width, in scene pixels
+// Motion v2 (EditorLayer::SelectionOutlineReveal): after a selection change the ring sweeps on
+// clockwise from the top around uSweepCenter (UV). uSweepHide is the part still to draw, so the
+// default 0 (an unset uniform) is the whole ring.
+uniform float uSweepHide;
+uniform vec2 uSweepCenter;
 void main() {
     // Anti-aliased ring. The mask is sampled on circles at sub-pixel offsets rather than on the
     // pixel grid, and its coverage is continuous, so the ring's value varies smoothly with how
@@ -23,6 +28,16 @@ void main() {
         }
     }
     float alpha = ring * (1.0 - here);       // an edge pixel the mesh partly covers blends in
+    vec3 color = uColor;
+    if (uSweepHide > 0.0) {
+        vec2 d = (vUV - uSweepCenter) / uTexel.xy;              // scene pixels, y up
+        float a = fract(atan(d.x, d.y) / 6.28318530718 + 1.0);  // 0 at the top, clockwise
+        float reveal = 1.0 - uSweepHide;
+        alpha *= 1.0 - smoothstep(reveal - 0.02, reveal, a);
+        // The leading edge glints toward white as it travels.
+        float head = 1.0 - smoothstep(0.0, 0.10, reveal - a);
+        color = mix(uColor, vec3(1.0), head * step(a, reveal) * 0.75);
+    }
     if (alpha < 0.004) discard;
-    FragColor = vec4(uColor, alpha);
+    FragColor = vec4(color, alpha);
 }

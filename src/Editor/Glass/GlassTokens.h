@@ -336,6 +336,134 @@ constexpr float      HeadlineRisePx     = 4.0f;
 // A module rebuild that succeeded: a quiet toast with a check drawn on.
 constexpr MotionSpec ToastCheckDraw    = {GLASS_EASE_SMOOTH, 320.0f};
 
+// =================================================================================================
+// 4. Motion v2: bolder, still a tool (docs/EDITOR_DESIGN_SYSTEM.md §3, categories 10 to 15)
+// =================================================================================================
+// Everything here stays monochrome: gradients run white to transparent, and the state "tints"
+// (play, prefab, viewport focus) are brightness and opacity, never hue.
+
+// --- Category 10: theme and state moods (GlassStyleMotion.cpp) -----------------------------------
+// Switching the editor theme eases the whole ImGuiStyle (iam_style_blend_to) instead of snapping.
+constexpr MotionSpec ThemeTween       = {GLASS_EASE_SMOOTH, 420.0f};
+// The moods ease in and out on the same curve; play is a little slower so it reads as an event.
+constexpr MotionSpec MoodIn           = {GLASS_EASE_SMOOTH, 360.0f};
+constexpr MotionSpec MoodOut          = {GLASS_EASE_SMOOTH, 300.0f};
+constexpr MotionSpec PlayMoodIn       = {GLASS_EASE_SMOOTH, 520.0f};
+// Play: panels recede (their black deepens, text drops toward secondary).
+constexpr float      PlayRecedeBgAlpha   = 0.38f; // Glass panel black 0.15 -> this
+constexpr float      PlayRecedeDarken    = 0.55f; // Tartarus panel rgb *= this
+constexpr float      PlayRecedeText      = 0.30f; // text mixes this far toward disabled
+// Viewport focus: the same, gentler, so the scene pops.
+constexpr float      FocusDimBgAlpha     = 0.24f;
+constexpr float      FocusDimDarken      = 0.80f;
+constexpr float      FocusDimText        = 0.12f;
+// Prefab mode: the chrome lifts (menu bar, tabs, headers +white, borders brighter).
+constexpr float      PrefabLift          = 0.07f;
+constexpr float      PrefabBorderLift    = 0.10f;
+// The Game view's punch-in when play starts: 1.00 -> 1.01 -> 1.00 on a spring, with a rim glint.
+constexpr MotionSpec PlayPunch        = {EaseId::Spring, 1.0f, 240.0f, 14.0f, 0.0f, 520.0f};
+constexpr float      PlayPunchScale   = 0.010f;
+// Toolbar buttons that don't apply in play mode fold away (width and alpha) and return on Stop.
+constexpr MotionSpec ToolbarFold      = {GLASS_EASE_SMOOTH, 260.0f};
+
+// --- Category 11: living gradients (stateless; GlassMotion.cpp) ----------------------------------
+// Busy sheen: a soft white band sweeping the menu and status bars while something is working.
+constexpr float      SheenSweepSeconds  = 2.4f;
+constexpr float      SheenBandFraction  = 0.22f;  // of the bar's width
+constexpr float      SheenAlpha         = 0.10f;
+// A gradient segment travelling around a rectangle (play-mode frame, selection rim).
+constexpr float      RimTravelSeconds   = 6.0f;   // play frame: one lap
+constexpr float      RimTravelArc       = 0.28f;  // of the perimeter
+constexpr float      RimTravelAlpha     = 0.55f;
+constexpr float      SelectionRimSeconds = 9.0f;
+constexpr float      SelectionRimAlpha   = 0.22f;
+// Hover gradient that follows the pointer across a primary button.
+constexpr float      CursorGlowRadiusPx = 56.0f;
+constexpr float      CursorGlowAlpha    = 0.16f;
+
+// --- Category 12: rolling numbers (Odometer) ------------------------------------------------------
+constexpr MotionSpec OdometerRoll     = {EaseId::Spring, 1.0f, 200.0f, 22.0f, 0.0f, 480.0f};
+constexpr MotionSpec ValueFlash       = {EaseId::OutCubic, 0, 0, 0, 0, 520.0f};
+constexpr float      ValueFlashAlpha  = 0.18f;
+
+// --- Category 13: inertia (macOS trackpad feel) ---------------------------------------------------
+// Velocity decays as e^(-friction t): a coast from v0 travels v0 / friction. 4.2/s is a long, soft
+// glide; a hard flick travels several screens.
+constexpr float      InertiaFriction     = 4.2f;
+constexpr float      InertiaStopPxPerSec = 12.0f;  // below this the coast ends (and its entry)
+constexpr float      WheelBoostWindowMs  = 140.0f; // notches closer than this accelerate
+constexpr float      WheelBoostMax       = 2.6f;
+constexpr float      FlingMinPxPerSec    = 220.0f; // a release slower than this doesn't coast
+constexpr float      VelocitySmoothing   = 0.45f;  // EMA weight of the newest drag sample
+
+// --- Category 14: structure (transforms, ripples, flips) ------------------------------------------
+constexpr MotionSpec CardFlip         = {GLASS_EASE_SMOOTH, 380.0f};
+constexpr MotionSpec FolderZoom       = {GLASS_EASE_SMOOTH, 340.0f};
+constexpr float      FolderZoomFrom   = 0.86f;  // diving in: the new grid grows from this
+constexpr MotionSpec Unfold           = {EaseId::Spring, 1.0f, 200.0f, 20.0f, 0.0f, 440.0f};
+constexpr float      RippleStepMs     = 26.0f;  // grid ripple: per step of distance from the origin
+constexpr int        RippleCap        = 18;
+constexpr MotionSpec ReparentFly      = {GLASS_EASE_SMOOTH, 360.0f};
+constexpr MotionSpec NodePop          = {EaseId::Spring, 1.0f, 220.0f, 15.0f, 0.0f, 480.0f};
+constexpr MotionSpec WireMorph        = {EaseId::OutCubic, 0, 0, 0, 0, 180.0f};
+constexpr float      WireFlowSpeed    = 1.4f;   // pulses per second along an active transition
+constexpr MotionSpec LogSlide         = {EaseId::OutCubic, 0, 0, 0, 0, 220.0f};
+constexpr float      LogSlidePx       = 10.0f;
+constexpr MotionSpec CaretGlide       = {EaseId::OutCubic, 0, 0, 0, 0, 70.0f};
+constexpr MotionSpec LineSweep        = {GLASS_EASE_SMOOTH, 700.0f};
+
+// --- Category 15: viewport and the startup sequence ----------------------------------------------
+constexpr MotionSpec GizmoHover       = {EaseId::Spring, 1.0f, 260.0f, 18.0f, 0.0f, 360.0f};
+constexpr float      GizmoHoverGrow   = 0.18f;
+constexpr float      GizmoActiveHz    = 2.2f;
+constexpr MotionSpec OutlineSweep     = {GLASS_EASE_SMOOTH, 300.0f};
+constexpr MotionSpec ViewCubeTurn     = {EaseId::Spring, 1.0f, 180.0f, 18.0f, 0.0f, 520.0f};
+constexpr MotionSpec RadialOpen       = {EaseId::Spring, 1.0f, 240.0f, 17.0f, 0.0f, 360.0f};
+constexpr MotionSpec RadialItem       = {EaseId::OutCubic, 0, 0, 0, 0, 120.0f};
+constexpr float      RadialRadiusPx   = 92.0f;
+constexpr float      RadialStaggerMs  = 18.0f;  // each item blooms this long after the previous one
+constexpr float      RadialHoldMs     = 180.0f; // Space held this long opens the menu (a tap does nothing)
+// Snap ticks: every snap step a gizmo drag crosses pops a small ring and the snapped number at the
+// cursor (the SnapPop look, smaller); the tick sound is rate-capped so a fast drag doesn't buzz.
+constexpr float      SnapTickRingPx   = 10.0f;
+constexpr float      SnapTickMinMs    = 45.0f;
+// Ortho <-> perspective morph: the field of view narrows to this while the camera pulls back (a
+// dolly zoom that keeps the pivot's size), then the projection switches flat.
+constexpr float      ViewMorphMinFovDeg = 8.0f;
+// The startup sequence (signature): panels assemble in a wave from the centre, rims glint in
+// order, the headline staggers in. ~1.2 s in all; input is live and any click or key settles it.
+constexpr float      StartupSeconds      = 1.2f;
+constexpr float      StartupPanelMs      = 520.0f; // each panel's own arrival
+constexpr float      StartupStepMs       = 70.0f;  // per step of distance from the centre
+constexpr float      StartupFromScale    = 0.94f;
+constexpr float      StartupDropPx       = 14.0f;
+// Shell and theme (GlassCompositor.cpp, GlassDockMotion.cpp, EditorLayer_Glass.cpp).
+// Each panel's own arrival curve; it fades in over the first StartupFadeShare of it. A panel's
+// delay is its distance from the screen centre (0 at the centre, 1 at a corner) times the steps
+// that fit in StartupSeconds after the last panel's own arrival.
+constexpr MotionSpec StartupPanelIn      = {GLASS_EASE_SMOOTH, StartupPanelMs};
+constexpr float      StartupFadeShare    = 0.6f;
+// As a panel lands its rim catches the light (extra white over a 1 px edge), one after another.
+constexpr float      StartupRimBoost     = 0.38f;
+constexpr float      StartupRimAtShare   = 0.45f;  // of its arrival, when the glint starts
+// The headline (the editor's name, the scene below it) staggers in over the viewport, holds,
+// and fades before the sequence ends.
+constexpr float      StartupHeadlineAt   = 0.10f;  // s
+constexpr float      StartupSublineAt    = 0.30f;  // s
+constexpr float      StartupHeadlineOutAt = 0.95f; // s
+constexpr float      StartupHeadlineOutS = 0.40f;
+constexpr float      StartupHeadlineSize = 30.0f;  // px at 1x
+// A first frame slower than this (shaders compiling, a scene loading) restarts the clock, so the
+// sequence plays once frames flow instead of finishing unseen.
+constexpr float      StartupHitchSeconds = 0.10f;
+// The play-mode rim's travelling segment while paused, relative to playing.
+constexpr float      RimTravelPausedScale = 0.45f;
+// A toast that leaves: the ones above restack on a spring (zeta = 19 / (2 sqrt(210)) = 0.66).
+constexpr MotionSpec ToastRestack        = {EaseId::Spring, 1.0f, 210.0f, 19.0f, 0.0f, 460.0f};
+// The rebuild toast's busy ring: one turn per this many seconds, an arc of this share of it.
+constexpr float      ToastBusyTurnSeconds = 0.9f;
+constexpr float      ToastBusyArc         = 0.28f;
+
 #undef GLASS_EASE_SMOOTH
 
 } // namespace Glass
