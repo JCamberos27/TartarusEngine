@@ -477,8 +477,13 @@ void AssetLibrary::SetAssetFolder(const std::string& assetKey, const std::string
 }
 
 std::string AssetLibrary::AssetFolder(const std::string& assetKey) const {
+    return AssetFolderRef(assetKey);
+}
+
+const std::string& AssetLibrary::AssetFolderRef(const std::string& assetKey) const {
+    static const std::string kRoot;
     auto it = m_AssetFolder.find(assetKey);
-    return it != m_AssetFolder.end() ? it->second : std::string();
+    return it != m_AssetFolder.end() ? it->second : kRoot;
 }
 
 void AssetLibrary::SetDisplayName(const std::string& assetKey, const std::string& name) {

@@ -3501,6 +3501,8 @@ int main(int argc, char** argv) {
                 std::uint32_t id;
                 bool bounded, twoSided, animated;
                 bool moving; // moved within the last kMovingFrames (a rolling ball, a door)
+                bool settling; // stopped moving / animating within the last kSettleFrames (see dynamicFor)
+                std::uint64_t settleStart; // the frame it stopped counting as moving / animated
                 bool player; // the player's own body and gun (world copies): no shadow in their own flashlight
             };
             // Per caster, its transform and when it last changed; drives LocalCaster::moving.
@@ -3509,6 +3511,11 @@ int main(int argc, char** argv) {
             struct CasterMotion { glm::mat4 xform; std::uint64_t moved; std::uint64_t pose = 0, posed = 0; };
             static std::unordered_map<std::uint32_t, CasterMotion> s_CasterMotion;
             constexpr std::uint64_t kMovingFrames = 30;
+            // Smoothness: when casters stop together (everything settling 30 frames after Play), every light that sees
+            // them used to rebuild its whole static cache in the same frame. A caster that just stopped stays "settling"
+            // this many frames, and each light takes it into its static depth on its own turn of them (dynamicFor);
+            // until then that light draws it with the moving casters, over a cache without it - never a missing shadow.
+            constexpr std::uint64_t kSettleFrames = 4;
             static std::vector<LocalCaster> localCasters;
             localCasters.clear();
             if (world.ShadowsEnabled && (spotShadowCount > 0 || pointShadowCount > 0)) {
@@ -3533,7 +3540,7 @@ int main(int argc, char** argv) {
                     // and outfit piece) animates too, and its shadow must follow.
                     // First seen counts as settled (unsigned wrap keeps that true on early frames).
                     const std::uint64_t now = (std::uint64_t)frameIndex;
-                    auto [motion, first] = s_CasterMotion.try_emplace(lc.id, CasterMotion{lc.xform, now - kMovingFrames, 0, now});
+                    auto [motion, first] = s_CasterMotion.try_emplace(lc.id, CasterMotion{lc.xform, now - kMovingFrames - kSettleFrames, 0, now});
                     if (motion->second.xform != lc.xform) { motion->second.xform = lc.xform; motion->second.moved = now; }
                     lc.moving = now - motion->second.moved < kMovingFrames;
                     if (lc.model->HasBones() && motion->second.pose != lc.model->PoseVersion()) {
@@ -3541,6 +3548,8 @@ int main(int argc, char** argv) {
                         motion->second.posed = now;
                     }
                     lc.animated = lc.model->HasBones() && now - motion->second.posed < kMovingFrames;
+                    lc.settleStart = std::max(motion->second.moved, lc.model->HasBones() ? motion->second.posed : 0) + kMovingFrames;
+                    lc.settling = !lc.moving && !lc.animated && now - lc.settleStart < kSettleFrames;
                     lc.bounded = v.Bounded; // as posed, like the main pass
                     lc.bounds = AABB{v.WorldMin, v.WorldMax};
                 }
@@ -3570,6 +3579,19 @@ int main(int argc, char** argv) {
             static std::uint64_t s_PointShadowSig[PointShadowMap::kMaxPoints] = {}; // the static casters'
             // Per point light and cube face: moving casters were drawn into the live face last frame.
             static bool s_PointFaceHadDynamic[PointShadowMap::kMaxPoints][6] = {};
+            // Drawn with the moving casters for this light, this frame: animated, moving, or settling before the light's
+            // turn (kSettleFrames). `turnSlot` spreads the lights over the turns (point lights offset from spots).
+            // A settling caster stays with the moving ones until the light's first turn since it settled, and is static
+            // from then on (so the light's static signature changes once, on its turn).
+            const auto dynamicFor = [&](const LocalCaster& c, int turnSlot) {
+                if (c.animated || c.moving) return true;
+                if (!c.settling) return false;
+                const std::uint64_t k = kSettleFrames;
+                const std::uint64_t turn = c.settleStart + ((std::uint64_t)turnSlot % k + k - c.settleStart % k) % k;
+                return (std::uint64_t)frameIndex < turn;
+            };
+            // Per spot, the static signature its live layer was drawn with when the light moved (a full draw, no cache).
+            static std::uint64_t s_SpotLiveSig[SpotShadowMap::kMaxSpots] = {};
             if (world.ShadowsEnabled && spotShadowCount > 0) {
                 PROFILE_SCOPE("Spot Shadow Pass");
                 PROFILE_GPU_SCOPE("Spot Shadow Pass");
@@ -3619,11 +3641,17 @@ int main(int argc, char** argv) {
                         visible.push_back(&c);
                         // Animated or recently moved casters are drawn over the cached static depth
                         // every frame; the rest are the static signature.
-                        const bool dynamic = c.animated || c.moving;
+                        const bool dynamic = dynamicFor(c, s);
                         animated = animated || dynamic;
                         if (!dynamic) sig = hashCaster(sig, c);
                     }
                     const bool staticChanged = sig != s_SpotShadowSig[s];
+                    // Drawn whole when the light last moved, nothing has changed or moved in it since, and it isn't this
+                    // light's turn: that layer is still right. Its cache is built on its turn, not all at once the
+                    // frame after a batch of lights is reassigned.
+                    const bool spotTurn = (std::uint64_t)frameIndex % kSettleFrames == (std::uint64_t)s % kSettleFrames;
+                    if (!lightMoved && s_SpotShadowSig[s] == 0 && sig == s_SpotLiveSig[s] && !animated && !s_SpotHadAnimated[s] && !spotTurn)
+                        continue;
                     // Unchanged, and no animated caster in it now or last frame: keep the layer.
                     if (!staticChanged && !animated && !s_SpotHadAnimated[s]) continue;
                     s_SpotHadAnimated[s] = animated;
@@ -3636,7 +3664,7 @@ int main(int argc, char** argv) {
                     const int mapRes = spotShadowMap.Resolution();
                     glm::ivec4 dynRect(mapRes, mapRes, 0, 0); // empty
                     for (const LocalCaster* c : visible) {
-                        if (!c->animated && !c->moving) continue;
+                        if (!dynamicFor(*c, s)) continue;
                         bool whole = !c->bounded;
                         for (int k = 0; k < 8 && !whole; ++k) {
                             const glm::vec3 corner((k & 1) ? c->bounds.Max.x : c->bounds.Min.x, (k & 2) ? c->bounds.Max.y : c->bounds.Min.y,
@@ -3651,7 +3679,7 @@ int main(int argc, char** argv) {
                     }
                     auto drawCasters = [&](bool animatedOnes) {
                         for (const LocalCaster* c : visible) {
-                            if ((c->animated || c->moving) != animatedOnes) continue;
+                            if (dynamicFor(*c, s) != animatedOnes) continue;
                             localShadowShader.SetMat4(localModelLoc, c->xform);
                             if (c->twoSided) glDisable(GL_CULL_FACE);
                             c->model->DrawDepthOnly(localShadowShader, *c->materials, 1, c->visible);
@@ -3662,7 +3690,8 @@ int main(int argc, char** argv) {
                         spotShadowMap.Begin(s);
                         drawCasters(false);
                         drawCasters(true);
-                        s_SpotShadowSig[s] = 0; // no cache: the next still frame builds it
+                        s_SpotShadowSig[s] = 0; // no cache: built on a later still frame (see spotTurn)
+                        s_SpotLiveSig[s] = sig;
                         s_SpotDynamicRect[s] = glm::ivec4(0, 0, mapRes, mapRes);
                         continue;
                     }
@@ -3747,7 +3776,7 @@ int main(int argc, char** argv) {
                     for (const LocalCaster& c : localCasters) {
                         if (c.bounded && !range.Intersects(c.bounds)) continue;
                         inRange.push_back(&c);
-                        if (!(c.animated || c.moving)) sig = hashCaster(sig, c);
+                        if (!dynamicFor(c, s + 2)) sig = hashCaster(sig, c);
                     }
                     const bool staticChanged = sig != s_PointShadowSig[s];
                     s_PointShadowSig[s] = sig;
@@ -3759,13 +3788,13 @@ int main(int argc, char** argv) {
                         Frustum lf = Frustum::FromViewProj(vp);
                         bool dynamicHere = false;
                         for (const LocalCaster* c : inRange)
-                            if ((c->animated || c->moving) && (!c->bounded || lf.Intersects(c->bounds))) { dynamicHere = true; break; }
+                            if (dynamicFor(*c, s + 2) && (!c->bounded || lf.Intersects(c->bounds))) { dynamicHere = true; break; }
                         if (!staticChanged && !dynamicHere && !s_PointFaceHadDynamic[s][f]) continue; // keep the face
                         s_PointFaceHadDynamic[s][f] = dynamicHere;
                         localShadowShader.SetMat4(cubeLightViewProjLoc, vp);
                         const auto drawCasters = [&](bool dynamicOnes) {
                             for (const LocalCaster* c : inRange) {
-                                if ((c->animated || c->moving) != dynamicOnes) continue;
+                                if (dynamicFor(*c, s + 2) != dynamicOnes) continue;
                                 if (c->bounded && !lf.Intersects(c->bounds)) continue;
                                 localShadowShader.SetMat4(cubeModelLoc, c->xform);
                                 if (c->twoSided) glDisable(GL_CULL_FACE);

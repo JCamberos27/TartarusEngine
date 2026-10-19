@@ -30,6 +30,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace EditorModuleAssetBrowser {
@@ -169,19 +170,32 @@ struct FolderRowGeom { float MidY = 0.0f; float LeftX = 0.0f; };
 // faint wash, hover and selection over it - EditorUIPrimitives::DrawStyledRowBackground) on a
 // draw-list channel underneath, then a Font Awesome chevron, the icon in the folder's colour, the
 // name and the content minimap, all on the row's midline.
-FolderRowGeom DrawFolderNode(const EditorModuleHostAPI& host, const std::vector<std::string>& folders,
+// Each folder's children, A-Z ignoring case like the grid. Built once per frame from the folder
+// snapshot: every drawn row used to scan the whole list and sort its own children.
+using FolderChildren = std::unordered_map<std::string, std::vector<std::string>>;
+FolderChildren BuildFolderChildren(const std::vector<std::string>& folders) {
+    FolderChildren tree;
+    for (const auto& f : folders) tree[ParentFolderOf(f)].push_back(f);
+    for (auto& [parent, kids] : tree) {
+        (void)parent;
+        std::sort(kids.begin(), kids.end(), [](const std::string& a, const std::string& b) {
+            const size_t sa = a.find_last_of('/'), sb = b.find_last_of('/');
+            const char* la = a.c_str() + (sa == std::string::npos ? 0 : sa + 1);
+            const char* lb = b.c_str() + (sb == std::string::npos ? 0 : sb + 1);
+            return std::lexicographical_compare(la, a.c_str() + a.size(), lb, b.c_str() + b.size(), [](char x, char y) {
+                return std::tolower((unsigned char)x) < std::tolower((unsigned char)y); });
+        });
+    }
+    return tree;
+}
+
+FolderRowGeom DrawFolderNode(const EditorModuleHostAPI& host, const FolderChildren& tree,
                              const std::string& folderPath, bool isRoot,
                              const std::string& curFolder, const std::string& reveal,
                              unsigned flags, int& rowIndex) {
-    std::vector<std::string> children;
-    for (const auto& f : folders)
-        if (ParentFolderOf(f) == folderPath) children.push_back(f);
-    std::sort(children.begin(), children.end(),
-              [](const std::string& a, const std::string& b) { // A-Z ignoring case, like the grid
-                  const std::string la = LeafNameOf(a), lb = LeafNameOf(b);
-                  return std::lexicographical_compare(la.begin(), la.end(), lb.begin(), lb.end(), [](char x, char y) {
-                      return std::tolower((unsigned char)x) < std::tolower((unsigned char)y); });
-              });
+    static const std::vector<std::string> kNoChildren;
+    const auto childrenIt = tree.find(folderPath);
+    const std::vector<std::string>& children = childrenIt != tree.end() ? childrenIt->second : kNoChildren;
 
     const bool hasChildren = !children.empty();
     const bool wasExpanded = isRoot ||
@@ -346,7 +360,7 @@ FolderRowGeom DrawFolderNode(const EditorModuleHostAPI& host, const std::vector<
         std::vector<FolderRowGeom> kids;
         kids.reserve(children.size());
         for (const auto& child : children)
-            kids.push_back(DrawFolderNode(host, folders, child, false, curFolder, reveal, flags, rowIndex));
+            kids.push_back(DrawFolderNode(host, tree, child, false, curFolder, reveal, flags, rowIndex));
         // Tree lines: one vertical from under this row's arrow down to its last child, and a stub
         // into each child. The root's children start at the left edge, so it draws none.
         // Solid pixel-aligned rects in the Hierarchy's line colour, so each elbow meets cleanly.
@@ -920,7 +934,14 @@ void Draw(const EditorModuleHostAPI& host) {
         // The Hierarchy's row metrics: one frame tall (3px vertical padding) with a 2px gap.
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(ImGui::GetStyle().FramePadding.x, EditorTheme::Px(3.0f)));
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(ImGui::GetStyle().ItemSpacing.x, EditorTheme::Px(2.0f)));
-        DrawFolderNode(host, folders, "", true, curFolder, reveal, treeFlags, rowIndex);
+        // Rebuilt only when the folder list changes (comparing it is cheap; rebuilding copies and sorts every folder).
+        static std::vector<std::string> s_TreeFolders;
+        static FolderChildren s_Tree;
+        if (folders != s_TreeFolders) {
+            s_TreeFolders = folders;
+            s_Tree = BuildFolderChildren(folders);
+        }
+        DrawFolderNode(host, s_Tree, "", true, curFolder, reveal, treeFlags, rowIndex);
         ImGui::PopStyleVar(2);
     }
     ImGui::EndChild();
