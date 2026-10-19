@@ -126,6 +126,8 @@ public:
     // "Props/Guns". An asset with no assignment lives at the root (folder == "").
     void SetAssetFolder(const std::string& assetKey, const std::string& folder);
     std::string AssetFolder(const std::string& assetKey) const;
+    // AssetFolder without the copy, for per-frame loops; valid until the next folder change.
+    const std::string& AssetFolderRef(const std::string& assetKey) const;
 
     // Display name shown in the browser instead of the bare filename — renaming here never
     // touches the real file, it's a per-asset label override (empty clears it, falling back
