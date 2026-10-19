@@ -492,6 +492,7 @@ private:
         const void* Palette = nullptr;
         int Count = 0;
         int Base = 0;
+        std::uint64_t Layout = 0; // the skinned buffer's layout its vertices were last written in (Model::PreSkin)
     };
     mutable PreSkinRange m_PreSkin;
     // The palette this pose skins with (null when there is none to upload) and its bone count.

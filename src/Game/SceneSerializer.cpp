@@ -217,18 +217,42 @@ bool IsSyntheticRef(const std::string& p) {
     return false;
 }
 
-std::string AssetPathForWrite(const std::string& path) {
-    if (path.empty() || IsSyntheticRef(path)) return path;
+std::string AssetPathForWriteUncached(const std::string& path, const std::filesystem::path& root) {
     namespace fs = std::filesystem;
     std::error_code ec;
-    fs::path root = fs::weakly_canonical(fs::path(ProjectPaths::Root()), ec);
-    if (ec) return path;
     fs::path abs = fs::weakly_canonical(fs::path(path), ec);
     if (ec) abs = fs::path(path);
     fs::path rel = abs.lexically_relative(root);
     if (rel.empty() || rel.begin() == rel.end()) return path;
     if (rel.begin()->string() == "..") return path; // outside the project tree
     return rel.generic_string();
+}
+
+// weakly_canonical opens each path on disk (CreateFile + GetFinalPathNameByHandle), and every undo
+// snapshot writes every asset reference in the scene: in a big scene that was most of the time of
+// each edit's commit. The answers are memoized per project root; a path string's answer only moves
+// if a folder on it is renamed by case alone, and a renamed asset gets a new path string anyway.
+std::string AssetPathForWrite(const std::string& path) {
+    if (path.empty() || IsSyntheticRef(path)) return path;
+    namespace fs = std::filesystem;
+    static std::mutex mutex;
+    static std::string cachedRootKey;
+    static fs::path cachedRoot;
+    static bool cachedRootOk = false;
+    static std::unordered_map<std::string, std::string> cache;
+    std::lock_guard<std::mutex> lock(mutex);
+    const std::string& rootKey = ProjectPaths::Root();
+    if (rootKey != cachedRootKey || cachedRootKey.empty()) {
+        std::error_code ec;
+        cachedRootKey = rootKey;
+        cachedRoot = fs::weakly_canonical(fs::path(rootKey), ec);
+        cachedRootOk = !ec;
+        cache.clear();
+    }
+    if (!cachedRootOk) return path;
+    if (auto it = cache.find(path); it != cache.end()) return it->second;
+    if (cache.size() > 65536) cache.clear();
+    return cache.emplace(path, AssetPathForWriteUncached(path, cachedRoot)).first->second;
 }
 
 std::string AssetPathForRead(const std::string& path) {

@@ -2013,6 +2013,10 @@ unsigned int g_SkinnedBuffer = 0;
 GLsizeiptr g_SkinnedBytes = 0;
 bool g_SkinnedBound = false;
 std::uint64_t g_SkinFrame = 1; // PreSkinRange::Frame of the skinning the buffer holds now
+// Which model sits where in the buffer. Bumped when a call lays models out differently from the call before it (or the
+// buffer is reallocated); while it holds, a model whose pose hasn't changed still has its vertices in place, so it isn't
+// dispatched again: an idle body, a corpse, a character whose animation is paused costs nothing on the GPU.
+std::uint64_t g_SkinLayout = 1;
 
 // The vertex shaders declare the block whether or not they read it: keep binding 26 on a real buffer.
 void EnsureSkinnedBinding() {
@@ -2191,26 +2195,43 @@ void Model::PreSkin(const std::vector<Model*>& models) {
         glNamedBufferStorage(g_SkinnedBuffer, bytes, nullptr, 0); // written and read by the GPU only
         g_SkinnedBytes = bytes;
         g_SkinnedBound = false;
+        ++g_SkinLayout; // a new buffer holds nothing yet
     }
     EnsureSkinnedBinding();
 
+    // The same models at the same offsets as the last call: the buffer still holds their vertices from then.
+    struct LayoutEntry { const Model* model; const void* data; int base; bool operator!=(const LayoutEntry& o) const { return model != o.model || data != o.data || base != o.base; } };
+    static std::vector<LayoutEntry> lastLayout, layout;
+    layout.clear();
+    for (const auto& item : work) layout.push_back({item.first, item.first->m_D.get(), item.first->m_PreSkin.Base});
+    if (layout.size() != lastLayout.size() || !std::equal(layout.begin(), layout.end(), lastLayout.begin(),
+                                                           [](const LayoutEntry& a, const LayoutEntry& b) { return !(a != b); }))
+        ++g_SkinLayout;
+    std::swap(layout, lastLayout);
+
+    bool dispatched = false;
     for (size_t w = 0; w < work.size(); ++w) {
         Model& m = *work[w].first;
         const std::vector<glm::mat4>& palette = *work[w].second;
-        m.BindBonePalette(palette, counts[w]);
-        unsigned first = (unsigned)m.m_PreSkin.Base;
-        for (const auto& mesh : m.m_D->Meshes) {
-            const unsigned n = mesh->VertexCount();
-            if (n) DispatchPreSkin(*cs, mesh->VertexBuffer(), n, first);
-            first += n;
-        }
         PreSkinRange& p = m.m_PreSkin;
+        const bool unchanged = p.Layout == g_SkinLayout && p.Version == m.m_PoseVersion && p.Palette == palette.data() && p.Count == counts[w];
+        if (!unchanged) {
+            m.BindBonePalette(palette, counts[w]);
+            unsigned first = (unsigned)p.Base;
+            for (const auto& mesh : m.m_D->Meshes) {
+                const unsigned n = mesh->VertexCount();
+                if (n) DispatchPreSkin(*cs, mesh->VertexBuffer(), n, first);
+                first += n;
+            }
+            dispatched = true;
+        }
         p.Version = m.m_PoseVersion;
         p.Palette = palette.data();
         p.Count = counts[w];
+        p.Layout = g_SkinLayout;
     }
     // Every pass after this reads the vertices in its vertex shader.
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    if (dispatched) glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
 bool Model::PreSkinSelfTest(std::string& why) {
