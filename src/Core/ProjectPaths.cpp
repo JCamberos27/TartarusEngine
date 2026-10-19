@@ -2,6 +2,8 @@
 #include "EnginePaths.h"
 
 #include <filesystem>
+#include <mutex>
+#include <unordered_map>
 
 namespace ProjectPaths {
 namespace {
@@ -57,7 +59,8 @@ std::string Resolve(const std::string& name) {
     return (std::filesystem::path(Root()) / name).lexically_normal().string();
 }
 
-std::string Relativize(const std::string& absolutePath) {
+namespace {
+std::string RelativizeUncached(const std::string& absolutePath) {
     std::error_code ec;
     const std::filesystem::path rel =
         std::filesystem::relative(absolutePath, Root(), ec);
@@ -66,6 +69,26 @@ std::string Relativize(const std::string& absolutePath) {
     // fall back to the original string rather than showing a confusing "../../.." chain.
     if (ec || relStr.empty() || relStr.rfind("..", 0) == 0) return absolutePath;
     return relStr;
+}
+} // namespace
+
+// relative() canonicalizes both paths against the disk (a CreateFile per path, two per call), and the
+// Asset Browser asks for every file in the project each time its index lands. Root() never changes
+// during a run, so an absolute path's answer is memoized. A relative one depends on the working
+// directory and isn't.
+std::string Relativize(const std::string& absolutePath) {
+    if (!std::filesystem::path(absolutePath).is_absolute()) return RelativizeUncached(absolutePath);
+    static std::mutex mutex;
+    static std::unordered_map<std::string, std::string> cache;
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (auto it = cache.find(absolutePath); it != cache.end()) return it->second;
+    }
+    std::string rel = RelativizeUncached(absolutePath); // outside the lock: other threads keep going
+    std::lock_guard<std::mutex> lock(mutex);
+    if (cache.size() > 65536) cache.clear();
+    cache.emplace(absolutePath, rel);
+    return rel;
 }
 
 } // namespace ProjectPaths

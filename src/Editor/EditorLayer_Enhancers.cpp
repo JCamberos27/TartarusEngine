@@ -2672,14 +2672,14 @@ void EditorLayer::RebuildFolderSummariesIfNeeded(AssetLibrary& assets) {
     m_FolderSummaryAge = 0.0f;
     m_FolderSummaries.clear();
     using F = Enhancers::FolderKind;
-    for (const auto& m : assets.Models())    m_FolderSummaries[assets.AssetFolder(m->Path())].Add(F::Model);
-    for (const auto& t : assets.Textures())  m_FolderSummaries[assets.AssetFolder(t->Path())].Add(F::Texture);
-    for (const auto& m : assets.Materials()) m_FolderSummaries[assets.AssetFolder(m->Path)].Add(F::Material);
-    for (const auto& s : assets.Sounds())    m_FolderSummaries[assets.AssetFolder(s)].Add(F::Sound);
-    for (const auto& p : assets.Prefabs())   m_FolderSummaries[assets.AssetFolder(p)].Add(F::Prefab);
+    for (const auto& m : assets.Models())    m_FolderSummaries[assets.AssetFolderRef(m->Path())].Add(F::Model);
+    for (const auto& t : assets.Textures())  m_FolderSummaries[assets.AssetFolderRef(t->Path())].Add(F::Texture);
+    for (const auto& m : assets.Materials()) m_FolderSummaries[assets.AssetFolderRef(m->Path)].Add(F::Material);
+    for (const auto& s : assets.Sounds())    m_FolderSummaries[assets.AssetFolderRef(s)].Add(F::Sound);
+    for (const auto& p : assets.Prefabs())   m_FolderSummaries[assets.AssetFolderRef(p)].Add(F::Prefab);
     for (const auto& f : m_ProjectAssetIndex.files) {
         if (m_ListedAssetKeys.count(f.Key)) continue;
-        const std::string moved = assets.AssetFolder(f.Path);
+        const std::string& moved = assets.AssetFolderRef(f.Path);
         m_FolderSummaries[moved.empty() ? f.Folder : moved].Add(FolderKindOf(f.Kind));
     }
 }

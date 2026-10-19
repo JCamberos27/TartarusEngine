@@ -97,13 +97,18 @@ inline void MakeDirectionalLight(World& world, entt::entity e) {
 // order via the entity-handle tiebreak.
 template <typename View>
 std::vector<entt::entity> ViewInCreationOrder(const entt::registry& reg, View view) {
-    std::vector<entt::entity> entities(view.begin(), view.end());
-    std::sort(entities.begin(), entities.end(), [&](entt::entity a, entt::entity b) {
-        const auto* oa = reg.try_get<OrderComponent>(a);
-        const auto* ob = reg.try_get<OrderComponent>(b);
-        int va = oa ? oa->Value : 0, vb = ob ? ob->Value : 0;
-        return va != vb ? va < vb : a < b;
-    });
+    // Each entity's order read once, then sorted as plain pairs: the comparator used to look up
+    // OrderComponent twice per comparison, every frame.
+    thread_local std::vector<std::pair<int, entt::entity>> keyed;
+    keyed.clear();
+    for (const entt::entity e : view) {
+        const auto* o = reg.try_get<OrderComponent>(e);
+        keyed.emplace_back(o ? o->Value : 0, e);
+    }
+    std::sort(keyed.begin(), keyed.end());
+    std::vector<entt::entity> entities;
+    entities.reserve(keyed.size());
+    for (const auto& k : keyed) entities.push_back(k.second);
     return entities;
 }
 

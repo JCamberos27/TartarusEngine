@@ -616,6 +616,26 @@ std::shared_ptr<Texture> Model::LoadCachedTexture(const std::string& fullPath, T
     auto it = m_D->TextureCache.find(key);
     if (it != m_D->TextureCache.end()) return it->second;
 
+    // Shared between models while any of them holds it: a weapon's animation files each carry its whole mesh and
+    // material, so every clip file decoded and uploaded the same 4096^2 maps again (5-10 ms of GL upload per map on
+    // the main thread, and ~85 MB of VRAM per copy). Keyed on the file's write time too, so a changed file is
+    // read anew. A hit is returned as is: another thread may be uploading it, so its state isn't looked at.
+    static std::mutex sharedMutex;
+    static std::unordered_map<std::string, std::weak_ptr<Texture>> shared;
+    std::error_code ec;
+    const auto stamp = std::filesystem::last_write_time(std::filesystem::u8path(fullPath), ec);
+    const std::string sharedKey = AssetDatabase::PathKey(fullPath) + key.substr(fullPath.size()) + "|" +
+                                  (ec ? std::string("?") : std::to_string(stamp.time_since_epoch().count()));
+    {
+        std::lock_guard<std::mutex> lock(sharedMutex);
+        if (auto sit = shared.find(sharedKey); sit != shared.end()) {
+            if (std::shared_ptr<Texture> existing = sit->second.lock()) {
+                m_D->TextureCache[key] = existing;
+                return existing;
+            }
+        }
+    }
+
     TextureImportSettings settings;
     settings.IsSRGB = role == TextureRole::Color;
     if (role == TextureRole::Normal) settings.TextureType = TextureImportSettings::Type::NormalMap;
@@ -624,6 +644,14 @@ std::shared_ptr<Texture> Model::LoadCachedTexture(const std::string& fullPath, T
                           : std::make_shared<Texture>(fullPath, settings);
     if (!tex || (!tex->IsValid() && !tex->IsPendingUpload())) return nullptr;
     m_D->TextureCache[key] = tex;
+    if (!ec) {
+        std::lock_guard<std::mutex> lock(sharedMutex);
+        std::weak_ptr<Texture>& slot = shared[sharedKey];
+        if (std::shared_ptr<Texture> raced = slot.lock()) return m_D->TextureCache[key] = raced; // another model got here first
+        slot = tex;
+        if (shared.size() > 4096)
+            for (auto s = shared.begin(); s != shared.end();) s = s->second.expired() ? shared.erase(s) : std::next(s);
+    }
     return tex;
 }
 
@@ -2013,6 +2041,10 @@ unsigned int g_SkinnedBuffer = 0;
 GLsizeiptr g_SkinnedBytes = 0;
 bool g_SkinnedBound = false;
 std::uint64_t g_SkinFrame = 1; // PreSkinRange::Frame of the skinning the buffer holds now
+// Which model sits where in the buffer. Bumped when a call lays models out differently from the call before it (or the
+// buffer is reallocated); while it holds, a model whose pose hasn't changed still has its vertices in place, so it isn't
+// dispatched again: an idle body, a corpse, a character whose animation is paused costs nothing on the GPU.
+std::uint64_t g_SkinLayout = 1;
 
 // The vertex shaders declare the block whether or not they read it: keep binding 26 on a real buffer.
 void EnsureSkinnedBinding() {
@@ -2191,26 +2223,43 @@ void Model::PreSkin(const std::vector<Model*>& models) {
         glNamedBufferStorage(g_SkinnedBuffer, bytes, nullptr, 0); // written and read by the GPU only
         g_SkinnedBytes = bytes;
         g_SkinnedBound = false;
+        ++g_SkinLayout; // a new buffer holds nothing yet
     }
     EnsureSkinnedBinding();
 
+    // The same models at the same offsets as the last call: the buffer still holds their vertices from then.
+    struct LayoutEntry { const Model* model; const void* data; int base; bool operator!=(const LayoutEntry& o) const { return model != o.model || data != o.data || base != o.base; } };
+    static std::vector<LayoutEntry> lastLayout, layout;
+    layout.clear();
+    for (const auto& item : work) layout.push_back({item.first, item.first->m_D.get(), item.first->m_PreSkin.Base});
+    if (layout.size() != lastLayout.size() || !std::equal(layout.begin(), layout.end(), lastLayout.begin(),
+                                                           [](const LayoutEntry& a, const LayoutEntry& b) { return !(a != b); }))
+        ++g_SkinLayout;
+    std::swap(layout, lastLayout);
+
+    bool dispatched = false;
     for (size_t w = 0; w < work.size(); ++w) {
         Model& m = *work[w].first;
         const std::vector<glm::mat4>& palette = *work[w].second;
-        m.BindBonePalette(palette, counts[w]);
-        unsigned first = (unsigned)m.m_PreSkin.Base;
-        for (const auto& mesh : m.m_D->Meshes) {
-            const unsigned n = mesh->VertexCount();
-            if (n) DispatchPreSkin(*cs, mesh->VertexBuffer(), n, first);
-            first += n;
-        }
         PreSkinRange& p = m.m_PreSkin;
+        const bool unchanged = p.Layout == g_SkinLayout && p.Version == m.m_PoseVersion && p.Palette == palette.data() && p.Count == counts[w];
+        if (!unchanged) {
+            m.BindBonePalette(palette, counts[w]);
+            unsigned first = (unsigned)p.Base;
+            for (const auto& mesh : m.m_D->Meshes) {
+                const unsigned n = mesh->VertexCount();
+                if (n) DispatchPreSkin(*cs, mesh->VertexBuffer(), n, first);
+                first += n;
+            }
+            dispatched = true;
+        }
         p.Version = m.m_PoseVersion;
         p.Palette = palette.data();
         p.Count = counts[w];
+        p.Layout = g_SkinLayout;
     }
     // Every pass after this reads the vertices in its vertex shader.
-    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+    if (dispatched) glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
 bool Model::PreSkinSelfTest(std::string& why) {
