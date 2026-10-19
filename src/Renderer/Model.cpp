@@ -616,6 +616,26 @@ std::shared_ptr<Texture> Model::LoadCachedTexture(const std::string& fullPath, T
     auto it = m_D->TextureCache.find(key);
     if (it != m_D->TextureCache.end()) return it->second;
 
+    // Shared between models while any of them holds it: a weapon's animation files each carry its whole mesh and
+    // material, so every clip file decoded and uploaded the same 4096^2 maps again (5-10 ms of GL upload per map on
+    // the main thread, and ~85 MB of VRAM per copy). Keyed on the file's write time too, so a changed file is
+    // read anew. A hit is returned as is: another thread may be uploading it, so its state isn't looked at.
+    static std::mutex sharedMutex;
+    static std::unordered_map<std::string, std::weak_ptr<Texture>> shared;
+    std::error_code ec;
+    const auto stamp = std::filesystem::last_write_time(std::filesystem::u8path(fullPath), ec);
+    const std::string sharedKey = AssetDatabase::PathKey(fullPath) + key.substr(fullPath.size()) + "|" +
+                                  (ec ? std::string("?") : std::to_string(stamp.time_since_epoch().count()));
+    {
+        std::lock_guard<std::mutex> lock(sharedMutex);
+        if (auto sit = shared.find(sharedKey); sit != shared.end()) {
+            if (std::shared_ptr<Texture> existing = sit->second.lock()) {
+                m_D->TextureCache[key] = existing;
+                return existing;
+            }
+        }
+    }
+
     TextureImportSettings settings;
     settings.IsSRGB = role == TextureRole::Color;
     if (role == TextureRole::Normal) settings.TextureType = TextureImportSettings::Type::NormalMap;
@@ -624,6 +644,14 @@ std::shared_ptr<Texture> Model::LoadCachedTexture(const std::string& fullPath, T
                           : std::make_shared<Texture>(fullPath, settings);
     if (!tex || (!tex->IsValid() && !tex->IsPendingUpload())) return nullptr;
     m_D->TextureCache[key] = tex;
+    if (!ec) {
+        std::lock_guard<std::mutex> lock(sharedMutex);
+        std::weak_ptr<Texture>& slot = shared[sharedKey];
+        if (std::shared_ptr<Texture> raced = slot.lock()) return m_D->TextureCache[key] = raced; // another model got here first
+        slot = tex;
+        if (shared.size() > 4096)
+            for (auto s = shared.begin(); s != shared.end();) s = s->second.expired() ? shared.erase(s) : std::next(s);
+    }
     return tex;
 }
 
