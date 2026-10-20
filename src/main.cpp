@@ -74,6 +74,7 @@
 #include "Ssao.h"                  // PR15: depth pre-pass + screen-space ambient occlusion
 #include "RenderFrameContext.h"    // audit #359 — per-viewport scene-draw inputs
 #include "SceneRenderer.h"         // audit #359 pass 2 — host-owned scene-draw pass
+#include "InstanceBatch.h"         // GPU instancing of the depth-only passes
 #include "Bloom.h"                 // PR16: threshold + blur bloom post-process
 #include "GLStateCache.h"
 #include "Profiler.h"
@@ -634,6 +635,7 @@ int main(int argc, char** argv) {
         // time — see Shader.h (audit GL-102 / #367).
         Shader modelShader(ShaderLibrary::ReadFileRequired("ModelVertex.glsl"),
                            ShaderLibrary::ReadFileRequired("ModelFragment.glsl"), "modelShader");
+        modelShader.SetInstancing(true); // per-instance transforms (InstanceBatch.h); its fragment stage never reads uModel
         Shader outlineModelShader(ShaderLibrary::ReadFileRequired("OutlineModel.vert.glsl"),
                                   ShaderLibrary::ReadFileRequired("Outline.frag.glsl"), "outlineModelShader");
         Shader outlineDilateShader(ShaderLibrary::ReadFileRequired("OutlineDilate.vert.glsl"),
@@ -3382,10 +3384,8 @@ int main(int argc, char** argv) {
                 glPolygonOffset(1.0f, 2.0f);
 
                 shadowShader.Bind();
-                // #194: resolve these two hot uniform locations once, outside the cascade x
-                // caster loop below, instead of hashing "uLightViewProj"/"uModel" every call.
+                // #194: resolve this hot uniform location once, outside the cascade loop below.
                 int shadowLightViewProjLoc = shadowShader.Loc("uLightViewProj");
-                int shadowModelLoc = shadowShader.Loc("uModel");
                 const int cascadeCount = shadowMap.Count();
                 // A caster goes into a cascade only if its shadow can land where that cascade is read
                 // (CascadedShadowMap::CasterReachesSlice), with the PCF kernel SunShadow uses.
@@ -3410,25 +3410,24 @@ int main(int argc, char** argv) {
                     shadowShader.SetMat4Array("uCascadeViewProj[0]", cascadeCount, cascadeVP);
                     shadowShader.SetInt("uCascadeLayered", 1);
                     const int firstLoc = shadowShader.Loc("uCascadeFirst");
-                    int boundFirst = -1;
+                    static std::vector<DepthCaster> sunDraws;
+                    sunDraws.clear();
                     for (const SunCaster& sc : sunCasters) {
                         unsigned mask = 0;
                         for (int c = 0; c < cascadeCount; ++c)
                             if (castsInto(sc, c, cascadeFrustums[c])) mask |= 1u << c;
                         if (!mask) continue;
-                        shadowShader.SetMat4(shadowModelLoc, sc.xform);
-                        if (sc.twoSided) glDisable(GL_CULL_FACE);
-                        // One instanced draw per run of consecutive cascades (almost always one run).
+                        // One draw per run of consecutive cascades (almost always one run), instanced over them; the
+                        // copies of a model with the same run draw together (GPU instancing).
                         for (int c = 0; c < cascadeCount;) {
                             if (!(mask & (1u << c))) { ++c; continue; }
                             int end = c;
                             while (end + 1 < cascadeCount && (mask & (1u << (end + 1)))) ++end;
-                            if (c != boundFirst) { shadowShader.SetInt(firstLoc, c); boundFirst = c; }
-                            sc.model->DrawDepthOnly(shadowShader, *sc.materials, end - c + 1, sc.visible);
+                            sunDraws.push_back({sc.model, sc.materials, sc.visible, &sc.xform, sc.twoSided, c, end - c + 1});
                             c = end + 1;
                         }
-                        if (sc.twoSided) glEnable(GL_CULL_FACE);
                     }
+                    DrawDepthCasters(shadowShader, sunDraws, firstLoc);
                     // The SSAO depth pre-pass reuses this program with uLightViewProj.
                     shadowShader.SetInt("uCascadeLayered", 0);
                 }
@@ -3440,15 +3439,11 @@ int main(int argc, char** argv) {
                     // Animated casters cull on their padded bounds too; they used to be drawn
                     // into every cascade regardless.
                     const Frustum cascadeFrustum = Frustum::FromViewProj(shadowMap.LightViewProj(c));
-                    for (const SunCaster& sc : sunCasters) {
-                        if (!castsInto(sc, c, cascadeFrustum)) continue;
-                        shadowShader.SetMat4(shadowModelLoc, sc.xform);
-                        // Cull is on for the whole pass (DrawDepthOnly's per-mesh overrides put
-                        // it back), so Two Sided just turns it off around its own draw.
-                        if (sc.twoSided) glDisable(GL_CULL_FACE);
-                        sc.model->DrawDepthOnly(shadowShader, *sc.materials, 1, sc.visible);
-                        if (sc.twoSided) glEnable(GL_CULL_FACE);
-                    }
+                    static std::vector<DepthCaster> sunDraws;
+                    sunDraws.clear();
+                    for (const SunCaster& sc : sunCasters)
+                        if (castsInto(sc, c, cascadeFrustum)) sunDraws.push_back({sc.model, sc.materials, sc.visible, &sc.xform, sc.twoSided});
+                    DrawDepthCasters(shadowShader, sunDraws);
                 }
 
                 glDisable(GL_POLYGON_OFFSET_FILL);
@@ -3614,7 +3609,6 @@ int main(int argc, char** argv) {
                 int localLightViewProjLoc = localShadowShader.Loc("uLightViewProj");
                 int localLightPosLoc = localShadowShader.Loc("uShadowLightPos");
                 int localFarLoc = localShadowShader.Loc("uShadowFar");
-                int localModelLoc = localShadowShader.Loc("uModel");
                 static std::vector<const LocalCaster*> visible;
                 // Per spot slot, last frame's view-projection: a light that moves (the flashlight) draws straight into its
                 // live layer - caching static depth it would throw away next frame was a whole extra draw and layer copy.
@@ -3678,13 +3672,11 @@ int main(int argc, char** argv) {
                         if (whole) { dynRect = glm::ivec4(0, 0, mapRes, mapRes); break; }
                     }
                     auto drawCasters = [&](bool animatedOnes) {
-                        for (const LocalCaster* c : visible) {
-                            if (dynamicFor(*c, s) != animatedOnes) continue;
-                            localShadowShader.SetMat4(localModelLoc, c->xform);
-                            if (c->twoSided) glDisable(GL_CULL_FACE);
-                            c->model->DrawDepthOnly(localShadowShader, *c->materials, 1, c->visible);
-                            if (c->twoSided) glEnable(GL_CULL_FACE);
-                        }
+                        static std::vector<DepthCaster> draws;
+                        draws.clear();
+                        for (const LocalCaster* c : visible)
+                            if (dynamicFor(*c, s) == animatedOnes) draws.push_back({c->model, c->materials, c->visible, &c->xform, c->twoSided});
+                        DrawDepthCasters(localShadowShader, draws);
                     };
                     if (lightMoved) {
                         spotShadowMap.Begin(s);
@@ -3752,7 +3744,6 @@ int main(int argc, char** argv) {
                 int cubeLightPosLoc = localShadowShader.Loc("uShadowLightPos");
                 int cubeFarLoc = localShadowShader.Loc("uShadowFar");
                 int cubeLightViewProjLoc = localShadowShader.Loc("uLightViewProj");
-                int cubeModelLoc = localShadowShader.Loc("uModel");
                 static std::vector<const LocalCaster*> inRange;
                 for (int s = 0; s < pointShadowCount; ++s) {
                     if (!pointSlotLive[s]) continue;
@@ -3793,14 +3784,14 @@ int main(int argc, char** argv) {
                         s_PointFaceHadDynamic[s][f] = dynamicHere;
                         localShadowShader.SetMat4(cubeLightViewProjLoc, vp);
                         const auto drawCasters = [&](bool dynamicOnes) {
+                            static std::vector<DepthCaster> draws;
+                            draws.clear();
                             for (const LocalCaster* c : inRange) {
                                 if (dynamicFor(*c, s + 2) != dynamicOnes) continue;
                                 if (c->bounded && !lf.Intersects(c->bounds)) continue;
-                                localShadowShader.SetMat4(cubeModelLoc, c->xform);
-                                if (c->twoSided) glDisable(GL_CULL_FACE);
-                                c->model->DrawDepthOnly(localShadowShader, *c->materials, 1, c->visible);
-                                if (c->twoSided) glEnable(GL_CULL_FACE);
+                                draws.push_back({c->model, c->materials, c->visible, &c->xform, c->twoSided});
                             }
+                            DrawDepthCasters(localShadowShader, draws);
                         };
                         if (staticChanged) {
                             pointShadowMap.BeginStaticFace(s, f);
@@ -3998,7 +3989,6 @@ int main(int argc, char** argv) {
                 shadowShader.Bind();
                 shadowShader.SetMat4("uLightViewProj", proj * view);
                 shadowShader.SetInt("uUseSkinning", 0);
-                const int modelLoc = shadowShader.Loc("uModel");
                 const Frustum frustum = Frustum::FromViewProj(proj * view);
                 // What the view sees (each view's own copy of a split pose - the player's camera the first-person
                 // one), opaque, in the frustum as posed like the main pass; no view-model geometry (see note above).
@@ -4022,12 +4012,14 @@ int main(int argc, char** argv) {
                 }
                 static std::vector<VisibleRenderable> visible;
                 GatherVisible(world, seen, visible);
+                static std::vector<DepthCaster> draws;
+                draws.clear();
                 for (const VisibleRenderable& v : visible) {
                     auto& rc = *v.Renderable;
-                    shadowShader.SetMat4(modelLoc, v.Xform);
                     const auto* hide = world.Registry.try_get<OutfitHideTag>(v.Entity);
-                    rc.ModelRef->DrawDepthOnly(shadowShader, rc.Materials, 1, hide ? hide->Visible.get() : nullptr);
+                    draws.push_back({rc.ModelRef.get(), &rc.Materials, hide ? hide->Visible.get() : nullptr, &v.Xform});
                 }
+                DrawDepthCasters(shadowShader, draws);
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 GLStateCache::Invalidate();
 

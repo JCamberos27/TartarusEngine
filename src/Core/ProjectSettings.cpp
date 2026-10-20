@@ -153,6 +153,7 @@ void Load() {
         if (f != it->end() && f->is_number())
             g_Quality.SmallObjectCullHeight = std::clamp(f->get<float>(), 0.0f, 0.1f);
         g_Quality.DepthPrepass = it->value("depthPrepass", true);
+        g_Quality.GpuInstancing = it->value("gpuInstancing", true);
     }
 
     if (const auto it = root.find("audio"); it != root.end() && it->is_object()) { // #171
@@ -259,7 +260,8 @@ void Save() {
         {"maximumDeltaTime", g_Time.MaximumDeltaTime},
         {"timeScale", g_Time.TimeScale},
     };
-    root["quality"] = {{"smallObjectCullHeight", g_Quality.SmallObjectCullHeight}, {"depthPrepass", g_Quality.DepthPrepass}};
+    root["quality"] = {{"smallObjectCullHeight", g_Quality.SmallObjectCullHeight}, {"depthPrepass", g_Quality.DepthPrepass},
+                       {"gpuInstancing", g_Quality.GpuInstancing}};
     root["input"] = InputMap::ToJson(InputMap::Actions()); // #145
     root["audio"] = {
         {"masterVolume", g_Audio.MasterVolume},

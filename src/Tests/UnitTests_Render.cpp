@@ -1,6 +1,8 @@
 #include "UnitTestSupport.h"
 #include "../Renderer/SceneRenderer.h"
 #include "../Renderer/Model.h"
+#include "../Renderer/InstanceBatch.h"
+#include "../Renderer/MaterialAsset.h"
 #include "../Game/World.h"
 #include "../Game/Components.h"
 #include "../Physics/Frustum.h"
@@ -113,10 +115,78 @@ void MergeByMaterial() {
     std::sort(names.begin(), names.end());
     CHECK(std::adjacent_find(names.begin(), names.end()) == names.end());
 }
+// GroupInstances: equal keys share a group, in the order of their first item; kNoBatch items stand alone.
+void InstanceGrouping() {
+    const std::vector<std::uint64_t> keys{7, 3, 7, 9, 7, 3, kNoBatch, kNoBatch};
+    InstanceGroups g;
+    GroupInstances(keys.size(), [&](std::uint32_t i) { return keys[i]; },
+                   [&](std::uint32_t a, std::uint32_t b) { return keys[a] == keys[b]; }, g);
+    CHECK(g.Groups.size() == 5);
+    CHECK(g.Order.size() == keys.size());
+    auto members = [&](std::size_t n) {
+        return std::vector<std::uint32_t>(g.Order.begin() + g.Groups[n].First, g.Order.begin() + g.Groups[n].First + g.Groups[n].Count);
+    };
+    CHECK((members(0) == std::vector<std::uint32_t>{0, 2, 4}));
+    CHECK((members(1) == std::vector<std::uint32_t>{1, 5}));
+    CHECK((members(2) == std::vector<std::uint32_t>{3}));
+    CHECK((members(3) == std::vector<std::uint32_t>{6}));
+    CHECK((members(4) == std::vector<std::uint32_t>{7}));
+    // A hash collision with a different key: `same` keeps them apart.
+    const std::vector<int> kinds{1, 2, 1};
+    GroupInstances(kinds.size(), [](std::uint32_t) { return std::uint64_t(42); },
+                   [&](std::uint32_t a, std::uint32_t b) { return kinds[a] == kinds[b]; }, g);
+    CHECK(g.Groups.size() == 2 && g.Groups[0].Count == 2 && g.Groups[1].Count == 1);
+    GroupInstances(0, [](std::uint32_t) { return std::uint64_t(1); }, [](std::uint32_t, std::uint32_t) { return true; }, g);
+    CHECK(g.Groups.empty() && g.Order.empty());
+}
+
+// Material slots batch when they draw alike: the same asset, or separate copies with the same values; a different
+// colour, queue or slot count keeps them apart, and the hash agrees with the comparison.
+void InstanceSlots() {
+    Material::NextHashFrame();
+    auto mat = [](glm::vec3 colour) {
+        auto m = std::make_shared<MaterialAsset>();
+        m->Mat.BaseColor = colour;
+        return m;
+    };
+    using Slots = std::vector<std::shared_ptr<MaterialAsset>>;
+    const auto red = mat(glm::vec3(1, 0, 0));
+    const Slots a{red}, sameAsset{red}, copy{mat(glm::vec3(1, 0, 0))}, blue{mat(glm::vec3(0, 0, 1))};
+    CHECK(SameSlots(a, sameAsset));
+    CHECK(SameSlots(a, copy));
+    CHECK(HashSlots(a, 5) == HashSlots(copy, 5));
+    CHECK(!SameSlots(a, blue));
+    CHECK(HashSlots(a, 5) != HashSlots(blue, 5));
+    CHECK(!SameSlots(a, Slots{red, red}));
+    CHECK(SameSlots(Slots{}, Slots{}));
+    CHECK(!SameSlots(Slots{nullptr}, a));
+    Slots transparent{mat(glm::vec3(1, 0, 0))};
+    transparent[0]->RenderQueue = MaterialAsset::Queue::Transparent;
+    CHECK(!SameSlots(a, transparent));
+}
+
+// Placed copies of one import share its data (what the batches group by); separate imports don't.
+void InstanceImportId() {
+    const std::string path = ProjectPaths::Resolve("assets/Test/UVTransform/uv_transform_quad.gltf");
+    if (!std::filesystem::exists(path)) {
+        Log::Info("InstanceImportId: no test model - skipped.");
+        return;
+    }
+    const auto model = Model::ImportDeferred(path, ModelImportSettings{});
+    CHECK(model != nullptr);
+    if (!model) return;
+    const auto copy = model->CreateInstance();
+    CHECK(copy->ImportId() == model->ImportId());
+    const auto other = Model::ImportDeferred(path, ModelImportSettings{});
+    CHECK(other && other->ImportId() != model->ImportId());
+}
 } // namespace
 
 void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Small-object cull: projected bounding-sphere height", SmallObjectCull});
     tests.push_back({"GatherVisible: per-frame candidates, per-query filters, invalidation", GatherCache});
     tests.push_back({"Model import: mergeByMaterial keeps geometry, one mesh per material", MergeByMaterial});
+    tests.push_back({"GPU instancing: grouping keeps first-appearance order, kNoBatch stands alone", InstanceGrouping});
+    tests.push_back({"GPU instancing: material slots batch by asset or identical values", InstanceSlots});
+    tests.push_back({"GPU instancing: placed copies share one import id", InstanceImportId});
 }
