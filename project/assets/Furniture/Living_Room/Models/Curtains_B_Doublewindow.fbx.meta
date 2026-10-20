@@ -7,10 +7,11 @@
     "importNormals": true,
     "importSkeleton": false,
     "materialImportMode": 1,
+    "mergeByMaterial": true,
     "optimizeGraph": true,
     "pivotOffset": [
       0.5099999904632568,
-      2.2360000610351563,
+      2.2360000610351562,
       -1.3674999475479126
     ],
     "upAxis": "-Z"

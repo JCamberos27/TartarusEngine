@@ -77,6 +77,7 @@ bool ParseModelImporter(const json& j, ModelImportSettings& s) {
                 s.MoveNodes.push_back({n.value("node", std::string()),
                                        {n["by"][0].get<float>(), n["by"][1].get<float>(), n["by"][2].get<float>()}});
     s.SkinIgnoresMeshNode = imp.value("skinIgnoresMeshNode", false);
+    s.MergeByMaterial = imp.value("mergeByMaterial", false);
     s.ClipTrims.clear();
     if (imp.contains("clipTrims") && imp["clipTrims"].is_array())
         for (const auto& t : imp["clipTrims"])
@@ -760,6 +761,7 @@ json ModelImporterJson(const ModelImportSettings& settings) {
         imp["moveNodes"] = moves;
     }
     if (settings.SkinIgnoresMeshNode) imp["skinIgnoresMeshNode"] = true;
+    if (settings.MergeByMaterial) imp["mergeByMaterial"] = true;
     if (!settings.ClipTrims.empty()) {
         json trims = json::array();
         for (const auto& t : settings.ClipTrims)
