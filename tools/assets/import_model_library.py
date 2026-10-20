@@ -12,6 +12,7 @@
 #   python tools/assets/import_model_library.py <repo> --gallery-only [--exe ...]   (the gallery from project/assets)
 import argparse
 import json
+import math
 import os
 import re
 import secrets
@@ -131,6 +132,8 @@ FLAT_MATERIALS = {
 # and drops its metal / roughness maps for polished metal. 'maps' = the source maps kept.
 DERIVED = {'Door_Hardware_Brass': {'from': 'Door_Hardware_White', 'maps': ['albedo', 'normal', 'ao'],
                                    'base': [0.85, 0.64, 0.3], 'metal': 1.0, 'rough': 0.3}}
+# Texture sets on single-sided cloth: drawn from both sides (a curtain seen from the room is its back).
+DOUBLE_SIDED = {'Curtains_Ab', 'Curtains_Cd'}
 # Texture sets that are see-through glass: drawn in the Transparent queue.
 GLASS_SETS = {'Coffeemaker_Glass': 0.3, 'Shower_Glass': 0.25}
 # Emissive sets: the lit parts of lamps and clock faces.
@@ -144,7 +147,10 @@ SCALE = {'Door_Op_1': 0.1, 'Door_Op_2': 0.1, 'Knife': 0.01}
 # one house number.
 DOOR_EXCLUDE = ([f'Lock_{i}' for i in range(2, 15) if i != 11] + [f'Strike_plate_{i}' for i in range(2, 15) if i != 11]
                 + ['Chain_closed'] + [f'Number_{i}' for i in range(10) if i != 7])
-EXCLUDE = {'Door_Op_1': DOOR_EXCLUDE, 'Door_Op_2': DOOR_EXCLUDE}
+# Files that ship their second LOD in place over the first (both drew, z-fighting): LOD00 kept.
+LOD_EXCLUDE = {'Couch': ['Couch_LOD01'], 'Bed': ['Bed_king_main_LOD01'], 'Book_Pile_A': ['Book_pile_A_LOD01'],
+               'Book_Single_A': ['Book_single_A_LOD01'], 'Book_Single_B': ['Book_single_B_LOD01']}
+EXCLUDE = {'Door_Op_1': DOOR_EXCLUDE, 'Door_Op_2': DOOR_EXCLUDE, **LOD_EXCLUDE}
 # Extra copies of a file, each leaving out more nodes: the door kit's leaf (to hinge) and frame (to fix in the wall).
 # They share the whole door's pivot, so both dropped at one spot make the closed door.
 # Interior: no peephole, house number, chain or deadbolt.
@@ -165,7 +171,10 @@ PART_WORDS = {'Door', 'Drawer', 'Lid', 'Extension', 'Glass', 'Pillow'}
 # Names that read as a part but are a piece of their own (a wall module with a doorway), and parts whose body the
 # name doesn't give.
 NOT_PARTS = {'Wall_3m_Door'}
-PART_OF = {'Electricbox_Door': 'Electricbox_Main'}
+PART_OF = {'Electricbox_Door': 'Electricbox_Main', 'Vase_B_Sticks': 'Vase_B',
+           # the crown moulding's returns at either end of a run of wall cabinets
+           'Kitchen_Cabinet_End_L': 'Kitchen_Cabinet_A', 'Kitchen_Cabinet_End_R': 'Kitchen_Cabinet_A',
+           'Papers_Box_Lid_A': 'Papers_Box_Open_A', 'Papers_Box_Lid_B': 'Papers_Box_Open_B'}
 # Children exported with a stray quarter turn against their parent (importer unrotateNodes): every glass door's pane
 # lay flat across its frame, the fan's blades stood on edge, the stove's hatch and the wall clock's glass and hands
 # stuck out of their faces. Dropping the child's own rotation puts each where it belongs.
@@ -177,13 +186,17 @@ UNROTATE = {
     'Dresser_Large_A_Extension_Door_L': ['Dresser_large_A_extension_door_L_glass'],
     'Dresser_Large_A_Extension_Door_R': ['Dresser_large_A_extension_door_R_glass'],
     'Stove': ['Stove_hatch'], 'Clock_Wall_Analog': ['Clock_wall_glass', 'Clock_pointer_minute', 'Clock_pointer_hour'],
-    'Lamp_Ceilingfan': ['Lamp_ceilingfan_blades'],
+    'Lamp_Ceilingfan': ['Lamp_ceilingfan_blades'], 'Lamp_Wall': ['Lamp_wall_shade'],
 }
 # Children exported out of place (importer moveNodes, meters in the file's space): the right glass door's pane sits a
 # door's width to its left (moved to mirror the left door's, 5.3 cm in from the outer edge); the oven door, once
-# upright, stands 35 cm inside the stove (moved flush with its front).
+# upright, stands 35 cm inside the stove (moved flush with its front); the wall lamp's shade sits behind the wall
+# (moved over the bulb socket, 17.75 cm out, wide end down, sunk over it like the table lamps' in assemble_kits.py).
 MOVE = {'Kitchen_Cabinet_B_Door_B_R': [{'node': 'Kitchen_cabinet_B_door_glass', 'by': [1.003, 0.0, 0.0]}],
-        'Stove': [{'node': 'Stove_hatch', 'by': [0.0, 0.0, 0.35]}]}
+        'Stove': [{'node': 'Stove_hatch', 'by': [0.0, 0.0, 0.35]}],
+        'Lamp_Wall': [{'node': 'Lamp_wall_shade', 'by': [0.001, -0.195, 0.225]}],
+        # assemble_kits.py stood the fridge door in front of the body, its shelf bins showing through a 9 cm gap
+        'Fridge_Assembled': [{'node': 'Fridge_door', 'by': [0.0, 0.0, -0.088]}]}
 
 # --- gallery --------------------------------------------------------------------------------------------------
 # Where each loose part sits on its body (everything not listed sits as authored, which for most kits is in place).
@@ -191,7 +204,9 @@ MOVE = {'Kitchen_Cabinet_B_Door_B_R': [{'node': 'Kitchen_cabinet_B_door_glass', 
 #   'row'         the parts on one body move together along X until they're centred on it
 #   'centre'      centred on the body in X
 #   'lid'         centred on the body in X and Z, resting on its top
+#   'in'          centred on the body in X and Z, at the height as authored (sticks in a vase, a lid already at height)
 #   ('span', x0, x1)  centred in X on that span of the body (its own space, meters)
+#   ('place', x, z, yaw)  turned `yaw` degrees about Y, its centre at (x, z) of the body (height as authored)
 #   ('on', stem)  the rule after it, against another part (already seated) instead of the body
 #   ('as', stem)  an alternative to that part (glass doors for wooden ones): shown on a second copy of the body, in its place
 SEATS = {
@@ -201,12 +216,21 @@ SEATS = {
     'Dresser_Large_A_Extension_Door_L': ('on', 'Dresser_Large_A_Extension', 'row'),
     'Dresser_Large_A_Extension_Door_R': ('on', 'Dresser_Large_A_Extension', 'row'),
     'Bathroom_Box_A_Lid': 'lid', 'Cardboard_Box_A_Lid': 'lid', 'Toy_Box_A_Lid': 'lid',
+    'Vase_B_Sticks': 'in', 'Papers_Box_Lid_A': 'in', 'Papers_Box_Lid_B': 'in',
     'Kitchen_Cabinet_A_Door_B_L': ('as', 'Kitchen_Cabinet_A_Door_A_L'), 'Kitchen_Cabinet_A_Door_B_R': ('as', 'Kitchen_Cabinet_A_Door_A_R'),
     'Kitchen_Cabinet_B_Door_B_L': ('as', 'Kitchen_Cabinet_B_Door_A_L'), 'Kitchen_Cabinet_B_Door_B_R': ('as', 'Kitchen_Cabinet_B_Door_A_R'),
     'Kitchen_Cabinet_Corner_Door_B': ('as', 'Kitchen_Cabinet_Corner_Door_A'),
-    # the L-shaped corner unit's door closes the back face of the notch at its front left (at the door's own depth)
-    'Kitchen_Cabinet_Corner_Door_A': ('span', -0.451, 0.049),
+    # the corner unit's top is a pentagon: its door closes the 45-degree face across the notch at its front left,
+    # running from (-0.451, -0.049) to (0.049, 0.451) in the body's space and facing front left
+    'Kitchen_Cabinet_Corner_Door_A': ('place', -0.218, 0.218, -45.0),
 }
+# Other files' parts that also close a body, each where the shared layout puts it plus an offset (meters): the sink
+# doors are laid out on the vanity's left bay; a second pair closes its right bay.
+# The crown moulding's end returns are laid out on Kitchen_Cabinet_A; every wall cabinet shares its top and depth.
+EXTRA = {'Bathroom_Sink_Body': [('Bathroom_Sink_Door_L', [0.0, 0.0, 0.0]), ('Bathroom_Sink_Door_R', [0.0, 0.0, 0.0]),
+                                ('Bathroom_Sink_Door_L', [0.919, 0.0, 0.0]), ('Bathroom_Sink_Door_R', [0.919, 0.0, 0.0])],
+         'Kitchen_Cabinet_B': [('Kitchen_Cabinet_End_L', [1.2, 0.0, 0.0]), ('Kitchen_Cabinet_End_R', [1.2, 0.0, 0.0])],
+         'Kitchen_Cabinet_Corner': [('Kitchen_Cabinet_End_L', [3.0, 0.0, 0.0])]}
 
 
 def body_stem(stem, stems):
@@ -448,6 +472,7 @@ def main():
             p['_Metallic'] = 1.0
         if 'roughness' in kinds:
             p['_Roughness'] = 1.0
+        p['_DoubleSided'] = name in DOUBLE_SIDED
         if name in EMISSIVE and 'emissive' in kinds:
             p['_EmissiveColor'], p['_EmissiveStrength'] = EMISSIVE[name]
         if name in GLASS_SETS:
@@ -549,7 +574,7 @@ def project_models(repo, exe):
 
 
 def update_metas(repo, exe):
-    """Brings the imported models' metas up to date with UNROTATE, MOVE and NOT_PARTS (a piece that took a body's pivot
+    """Brings the imported models' metas up to date with UNROTATE, MOVE, LOD_EXCLUDE and NOT_PARTS (a piece that took a body's pivot
     gets its own back), without the Raw folder."""
     changed = 0
     for pack, ms in project_models(repo, exe).items():
@@ -573,8 +598,10 @@ def update_metas(repo, exe):
                 imp = dict(imp, pivotOffset=[round(v, 4) for v in own_pivot(pack, stem, r['min'], r['max'])])
             if base in UNROTATE:
                 imp['unrotateNodes'] = UNROTATE[base]
-            if base in MOVE:
-                imp['moveNodes'] = MOVE[base]
+            if stem in MOVE:
+                imp['moveNodes'] = MOVE[stem]
+            if base in LOD_EXCLUDE and not stem.endswith('_Assembled'):
+                imp['excludeNodes'] = LOD_EXCLUDE[base]
             if stem in NOT_PARTS:
                 # the bounds already have the old pivot applied: the fix adds to it
                 fix = own_pivot(pack, stem, m['lo'], m['hi'])
@@ -583,7 +610,15 @@ def update_metas(repo, exe):
                 meta['importer'] = imp
                 write_json(m['file'] + '.meta', meta)
                 changed += 1
-    print(f'import_model_library: {changed} model metas updated')
+    for name in sorted(DOUBLE_SIDED):
+        for path in glob_raw(os.path.join(repo, 'project', 'assets'), f'*/*/Materials/M_{name}.mat'):
+            with open(path, encoding='utf-8') as f:
+                mat = json.load(f)
+            if not mat['properties'].get('_DoubleSided'):
+                mat['properties']['_DoubleSided'] = True
+                write_json(path, mat)
+                changed += 1
+    print(f'import_model_library: {changed} model metas and materials updated')
 
 
 def write_gallery(repo, exe):
@@ -623,9 +658,21 @@ def write_gallery(repo, exe):
             sun.update({'id': next(ids), 'order': next(order), 'parentId': lighting})
             empties.append(sun)
 
+    yaws = {}  # stem -> degrees about Y, for parts seated turned ('place')
+
+    def turn(v, deg):
+        """(x, z) of v turned `deg` about Y (right-handed: +90 takes +Z to +X)."""
+        r = math.radians(deg)
+        return v[0] * math.cos(r) + v[2] * math.sin(r), -v[0] * math.sin(r) + v[2] * math.cos(r)
+
     def moved(m, off):
-        """A model's bounds with its entity at `off` from the body's."""
-        return [a + o for a, o in zip(m['lo'], off)], [a + o for a, o in zip(m['hi'], off)]
+        """A model's bounds with its entity at `off` from the body's (and turned, if it is)."""
+        lo, hi = m['lo'], m['hi']
+        if yaws.get(m['stem']):
+            xz = [turn((x, 0.0, z), yaws[m['stem']]) for x in (lo[0], hi[0]) for z in (lo[2], hi[2])]
+            lo = [min(p[0] for p in xz), lo[1], min(p[1] for p in xz)]
+            hi = [max(p[0] for p in xz), hi[1], max(p[1] for p in xz)]
+        return [a + o for a, o in zip(lo, off)], [a + o for a, o in zip(hi, off)]
 
     def family(body, parts):
         """[(model, its entity's offset from the body's)] with every part seated (SEATS), and their bounds."""
@@ -652,6 +699,14 @@ def write_gallery(repo, exe):
                 d[0] = (tlo[0] + thi[0]) / 2 - (lo[0] + hi[0]) / 2
             elif isinstance(rule, tuple) and rule[0] == 'span':
                 d[0] = (rule[1] + rule[2]) / 2 - (lo[0] + hi[0]) / 2
+            elif isinstance(rule, tuple) and rule[0] == 'place':
+                # its own centre (height as authored) turned about its entity's origin, then put at (x, z)
+                yaws[p['stem']] = rule[3]
+                c = [(a + b) / 2 for a, b in zip(p['lo'], p['hi'])]
+                cx, cz = turn(c, rule[3])
+                off = [rule[1] - cx, off[1], rule[2] - cz]
+            elif rule == 'in':
+                d = [(tlo[0] + thi[0]) / 2 - (lo[0] + hi[0]) / 2, 0.0, (tlo[2] + thi[2]) / 2 - (lo[2] + hi[2]) / 2]
             elif rule == 'lid':
                 d = [(tlo[0] + thi[0]) / 2 - (lo[0] + hi[0]) / 2, thi[1] - 0.25 * (hi[1] - lo[1]) - lo[1],
                      (tlo[2] + thi[2]) / 2 - (lo[2] + hi[2]) / 2]
@@ -701,7 +756,9 @@ def write_gallery(repo, exe):
             body = ms[stem]
             parts = [ms[p] for p in groups[stem] if p not in hidden]
             alts = [p for p in parts if isinstance(SEATS.get(p['stem']), tuple) and SEATS[p['stem']][0] == 'as']
-            members = family(body, [p for p in parts if p not in alts])
+            extras = [(ms[e], [b - q + d for b, q, d in zip(body['pivot'], ms[e]['pivot'], off)])
+                      for e, off in EXTRA.get(stem, [])]
+            members = family(body, [p for p in parts if p not in alts]) + extras
             slots = []
             if stem in assembled:
                 # The assembled file in the body's place. Its pivot was set for the whole piece, so it lines up by
@@ -719,9 +776,16 @@ def write_gallery(repo, exe):
                 instead = {SEATS[p['stem']][1]: p for p in alts}
                 whole = family(body, [ms[p] for p in groups[stem] if ms[p] not in alts])  # with the assembled parts
                 seated = dict((m['stem'], o) for m, o in whole)
-                mem = [(m, o) for m, o in whole if m['stem'] not in instead]
+                mem = [(m, o) for m, o in whole if m['stem'] not in instead] + extras
                 for r, p in instead.items():
                     rlo, rhi = moved(ms[r], seated[r])
+                    if yaws.get(r):
+                        # turned the same way, its centre on the other's (bottoms level)
+                        yaws[p['stem']] = yaws[r]
+                        c = [(a + b) / 2 for a, b in zip(p['lo'], p['hi'])]
+                        cx, cz = turn(c, yaws[r])
+                        mem.append((p, [(rlo[0] + rhi[0]) / 2 - cx, rlo[1] - p['lo'][1], (rlo[2] + rhi[2]) / 2 - cz]))
+                        continue
                     # its corner at the other's: left, bottom, front
                     mem.append((p, [rlo[0] - p['lo'][0], rlo[1] - p['lo'][1], rhi[2] - p['hi'][2]]))
                 slots.append(mem)
@@ -734,10 +798,12 @@ def write_gallery(repo, exe):
                 lift = max(0.0, -lo[1])  # hanging pieces (pivot at the top) stand on the floor here
                 for i, (m, o) in enumerate(mem):
                     name = m['stem'] + (' (alternative parts)' if n and not i else '')
+                    half = math.radians(yaws.get(m['stem'], 0.0)) / 2
+                    rot = [0.0, round(math.sin(half), 6), 0.0, round(math.cos(half), 6)] if half else ident
                     ents.append({'id': next(ids), 'name': name, 'order': next(order), 'parentId': parent,
                                  'path': m['path'], 'pathGuid': m['guid'],
                                  'position': [round(sx + o[0], 4), round(lift + o[1], 4), round(o[2], 4)],
-                                 'rotation': ident, 'scale': [1.0, 1.0, 1.0]})
+                                 'rotation': rot, 'scale': [1.0, 1.0, 1.0]})
         rows.append((pack, row_z, x, depth, height))
         row_z -= max(depth, 1.0) + 6.0
     # Floor: prototype grid box under everything.

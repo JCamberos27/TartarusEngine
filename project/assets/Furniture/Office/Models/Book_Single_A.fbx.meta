@@ -2,6 +2,9 @@
   "folder": "assets/Furniture/Office/Models",
   "guid": "89b97b4363c67cfd",
   "importer": {
+    "excludeNodes": [
+      "Book_single_A_LOD01"
+    ],
     "globalScale": 1.0,
     "importAnimations": false,
     "importNormals": true,

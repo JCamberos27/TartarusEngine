@@ -7,6 +7,16 @@
     "importNormals": true,
     "importSkeleton": false,
     "materialImportMode": 1,
+    "moveNodes": [
+      {
+        "by": [
+          0.0,
+          0.0,
+          -0.088
+        ],
+        "node": "Fridge_door"
+      }
+    ],
     "optimizeGraph": true,
     "pivotOffset": [
       0.0010000000474974513,
