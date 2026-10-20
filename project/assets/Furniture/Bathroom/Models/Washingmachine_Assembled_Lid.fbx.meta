@@ -1,0 +1,23 @@
+{
+  "folder": "assets/Furniture/Bathroom/Models",
+  "guid": "055fca63ba06a517",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.0335,
+      -0.002,
+      -0.1675
+    ]
+  },
+  "materialRemap": {
+    "Washingmachine": "assets/Furniture/Garage/Materials/M_Washingmachine.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}
