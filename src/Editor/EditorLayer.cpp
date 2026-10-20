@@ -1521,7 +1521,7 @@ void EditorLayer::DrawSettingsWindow(World& world) {
             EditorUI::SetTooltip("The busy sheen on the menu and status bars, travelling rims, and the glow that follows the pointer.");
         if (SettingsCheckbox("Rolling numbers", &prefs.MotionRollingNumbers)) EditorSettings::Save();
         if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("Counters and readouts roll to new values like an odometer.");
+            EditorUI::SetTooltip("When a counter or readout changes, the digits that changed slide to their new value.");
         if (SettingsCheckbox("Viewport motion", &prefs.MotionViewport)) EditorSettings::Save();
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Gizmo springs, the selection outline sweep, view-change transitions and the radial menu's motion.");

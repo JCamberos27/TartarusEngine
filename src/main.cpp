@@ -82,6 +82,7 @@
 #include "Frustum.h"
 #include "PhysicsWorld.h" // #185 — PhysX world stepped during Play
 #include "GravityGun.h" // the player's always-on grab/throw ability
+#include "Openable.h"   // doors, drawers and lids the player opens with Interact
 #include "Flashlight.h" // F: the player's torch
 #include "TrajectoryRibbon.h" // the gravity gun's predicted throw arc
 #include "CrosshairOverlay.h"
@@ -2552,6 +2553,10 @@ int main(int argc, char** argv) {
                 if (gameHasInput && playUsesPlayer && gravityGunLive() && !playerVitals.IsDead()) {
                     gravityGun.Update(gameDt, player);
                 }
+                // Doors, drawers and lids (Openable): Interact opens the one under the crosshair; all of them move.
+                Openable::Update(world, player.Cam.Position, player.Cam.Front(),
+                                 gameHasInput && playUsesPlayer && !playerVitals.IsDead() && InputMap::GetButtonDown("Interact"),
+                                 gameDt);
                 // G = explosion shockwave at the player. A separate physics *debug/test* tool
                 // (not part of the gravity gun above) — stays behind Gizmos > Physics debug input.
                 if (gameHasInput && playUsesPlayer && EditorSettings::Get().PhysicsDebugInput) {
@@ -5082,6 +5087,9 @@ int main(int argc, char** argv) {
                         smokeFramesRendered = std::max(smokeFramesRendered, kSmokeTestFrames - 1); // all taken
                     }
                 } else if (!opt.smokeShotsDir.empty() && !opt.perfBenchMode && !shotCameras.empty()) {
+                    // TARTARUS_OPEN_ALL=1: every door, drawer and lid shown open, to check each one's hinge.
+                    static const bool openAll = std::getenv("TARTARUS_OPEN_ALL") != nullptr;
+                    if (openAll && smokeFramesRendered == 1) Openable::SetAll(world, 1.0f);
                     const int shot = (smokeFramesRendered - kShotCameraStart) / kShotCameraSettle;
                     if (smokeFramesRendered >= kShotCameraStart && (smokeFramesRendered - kShotCameraStart) % kShotCameraSettle == 0 &&
                         shot < (int)shotCameras.size() && sceneFramebuffer.IsValid()) {
