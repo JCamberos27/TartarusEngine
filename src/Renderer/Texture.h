@@ -48,11 +48,12 @@ struct TextureLoadStats {
     int Count = 0;
     double DecodeMs = 0.0;
     double UploadMs = 0.0;
+    double GpuBytes = 0.0; // what the uploads take on the GPU, mips included
 
     static TextureLoadStats& Get();
     static void Reset() { Get() = TextureLoadStats{}; }
     static void AddDecode(double ms);
-    static void AddUpload(double ms); // also counts the texture
+    static void AddUpload(double ms, size_t gpuBytes); // also counts the texture
 };
 
 // A texture decoded on the CPU and ready for upload: everything Texture's GL half needs and

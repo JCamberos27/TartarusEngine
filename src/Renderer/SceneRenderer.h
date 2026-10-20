@@ -34,8 +34,8 @@ struct VisibilityQuery {
     bool SkipTransparent = false;    // a transparent first material slot left out
     const Frustum* Cull = nullptr;   // when set, anything with bounds outside it is left out
     // Small-object culling: when SizeCullEye is set, anything whose bounding sphere, seen from there, is shorter than
-    // MinScreenHeight of the viewport is left out. Shadow passes pass the camera's eye, not the light's: a prop too
-    // small to see casts a shadow too small to see.
+    // MinScreenHeight of the viewport is left out. Only camera views set it (the main view and the SSAO pre-pass);
+    // the shadow passes leave it unset, so a culled prop still casts.
     const glm::vec3* SizeCullEye = nullptr;
     float SizeCullProjScale = 0.0f;  // the camera projection's [1][1] (1 / tan(fovY / 2))
     float MinScreenHeight = 0.0f;

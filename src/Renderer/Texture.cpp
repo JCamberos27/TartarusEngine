@@ -32,10 +32,11 @@ void TextureLoadStats::AddDecode(double ms) {
     Get().DecodeMs += ms;
 }
 
-void TextureLoadStats::AddUpload(double ms) {
+void TextureLoadStats::AddUpload(double ms, size_t gpuBytes) {
     std::lock_guard<std::mutex> lk(StatsMutex());
     Get().Count += 1;
     Get().UploadMs += ms;
+    Get().GpuBytes += (double)gpuBytes;
 }
 
 namespace {
@@ -631,7 +632,7 @@ void Texture::Upload(const TextureCpuData& data) {
     }
 
     m_Settings = data.Settings;
-    TextureLoadStats::AddUpload(MsSince(uploadStart));
+    TextureLoadStats::AddUpload(MsSince(uploadStart), m_GpuBytes);
 }
 
 bool Texture::Reimport(const TextureImportSettings& settings) {
