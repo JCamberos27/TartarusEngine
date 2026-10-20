@@ -382,9 +382,10 @@ constexpr float      CursorGlowRadiusPx = 56.0f;
 constexpr float      CursorGlowAlpha    = 0.16f;
 
 // --- Category 12: rolling numbers (Odometer) ------------------------------------------------------
-constexpr MotionSpec OdometerRoll     = {EaseId::Spring, 1.0f, 200.0f, 22.0f, 0.0f, 480.0f};
-constexpr MotionSpec ValueFlash       = {EaseId::OutCubic, 0, 0, 0, 0, 520.0f};
-constexpr float      ValueFlashAlpha  = 0.18f;
+// Only the digits that changed move: the old one slides out and fades as the new one slides in, one
+// step, never counting through the values between. No overshoot, no flash.
+constexpr MotionSpec DigitSlide       = {EaseId::OutCubic, 0, 0, 0, 0, 160.0f};
+constexpr float      DigitSlideTravel = 0.6f; // of the line height
 
 // --- Category 13: inertia (macOS trackpad feel) ---------------------------------------------------
 // Velocity decays as e^(-friction t): a coast from v0 travels v0 / friction. 4.2/s is a long, soft
