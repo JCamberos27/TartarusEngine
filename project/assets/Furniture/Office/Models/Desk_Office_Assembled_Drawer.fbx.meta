@@ -1,0 +1,23 @@
+{
+  "folder": "assets/Furniture/Office/Models",
+  "guid": "63026b547584869c",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.0,
+      0.001,
+      0.688
+    ]
+  },
+  "materialRemap": {
+    "Desk_office": "assets/Furniture/Office/Materials/M_Desk_Office.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

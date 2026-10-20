@@ -17,6 +17,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import scene_kit as k  # noqa: E402
+from openables import component, kit_parts  # noqa: E402  (tools/assets, on the path scene_kit set)
 
 H = 2.6          # ceiling height (the imported wall modules' height)
 T = 0.12         # wall thickness
@@ -469,8 +470,13 @@ class Builder:
         wstem, wyaw = self.hand(stem), self.turn(yaw)
         wx, wz = self.at(x, z)
         X0, X1, _, _, Z0, Z1 = self.wbox(wstem, wyaw, scale, **tip)
-        self.s.model(self.idx, wstem, parent, (wx - (X0 + X1) / 2, py, wz - (Z0 + Z1) / 2), wyaw, name=name or wstem,
-                     scale=scale, **extra)
+        body = self.s.model(self.idx, wstem, parent, (wx - (X0 + X1) / 2, py, wz - (Z0 + Z1) / 2), wyaw,
+                            name=name or wstem, scale=scale, **extra)
+        # its doors, drawers and lids (an assembled kit's parts): children at its origin, each opening in Play
+        for part in kit_parts(wstem):
+            shadows = {'castShadows': extra['castShadows']} if 'castShadows' in extra else {}
+            self.s.model(self.idx, part['stem'], body['id'], (0.0, 0.0, 0.0), 0.0, name=part['stem'][len(wstem) + 1:],
+                         Openable=component(part['motion']), **shadows)
         box = {'x0': px + x0, 'x1': px + x1, 'y0': y, 'y1': py + y1, 'z0': pz + z0, 'z1': pz + z1,
                'x': x, 'z': z, 'yaw': yaw, 'stem': stem, 'unit': self.unit, 'tipped': bool(tip['pitch'] or tip['roll'])}
         self.placed.append({'room': room, 'collide': collide,

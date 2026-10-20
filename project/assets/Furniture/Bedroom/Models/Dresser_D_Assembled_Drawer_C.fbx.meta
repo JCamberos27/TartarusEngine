@@ -1,0 +1,23 @@
+{
+  "folder": "assets/Furniture/Bedroom/Models",
+  "guid": "2298a1cb5432899b",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -1.7555,
+      0.001,
+      -0.235
+    ]
+  },
+  "materialRemap": {
+    "Dressers_B": "assets/Furniture/Bedroom/Materials/M_Dressers_B.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

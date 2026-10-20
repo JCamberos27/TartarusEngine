@@ -1,0 +1,23 @@
+{
+  "folder": "assets/Furniture/Decor/Models",
+  "guid": "22f72ef34aadd7d5",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.0,
+      -0.001,
+      0.041
+    ]
+  },
+  "materialRemap": {
+    "Cabinets": "assets/Furniture/Decor/Materials/M_Cabinets.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

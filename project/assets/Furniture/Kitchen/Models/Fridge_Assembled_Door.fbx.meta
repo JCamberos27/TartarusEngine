@@ -1,0 +1,23 @@
+{
+  "folder": "assets/Furniture/Kitchen/Models",
+  "guid": "637e1ff9c570f2cb",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      0.001,
+      0.0,
+      -0.3425
+    ]
+  },
+  "materialRemap": {
+    "Fridge": "assets/Furniture/Kitchen/Materials/M_Fridge.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

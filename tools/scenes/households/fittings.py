@@ -15,7 +15,7 @@ def kitchen(b):
         return b.wall(r, 'N', x + w / 2, stem, **kw)
     f = {'fridge': run_n('Fridge_Assembled', x0 + 0.02, collide=True)}
     f['c1'] = run_n('Kitchen_Counter_A_Assembled', f['fridge']['x1'] + 0.02, collide=True)
-    f['stove'] = run_n('Stove', f['c1']['x1'], collide=True)
+    f['stove'] = run_n('Stove_Assembled', f['c1']['x1'], collide=True)
     f['c2'] = run_n('Kitchen_Counter_A_Assembled', f['stove']['x1'], collide=True)
     st = f['stove']
     f['hood'] = b.wall(r, 'N', (st['x0'] + st['x1']) / 2, 'Stove_Cooker_Hood', y=1.72)
