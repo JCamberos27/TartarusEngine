@@ -2084,6 +2084,21 @@ void EditorLayer::DrawProjectSettingsBody(World& /*world*/) {
             EditorUI::SetTooltip("Game speed when Play starts (Unity's Time.timeScale). The game module can change\n"
                                  "it while playing; the Physics panel's Slow-mo multiplies on top for testing.");
 
+        EditorUIPrimitives::SectionHeader("Quality");
+        ProjectSettings::QualitySettings& q = ProjectSettings::MutableQuality();
+        SettingsLabel("Small object cull");
+        ImGui::DragFloat("##Small object cull", &q.SmallObjectCullHeight, 0.0005f, 0.0f, 0.1f, "%.4f");
+        if (ImGui::IsItemDeactivatedAfterEdit()) ProjectSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Camera views skip a model whose bounds are shorter on screen than this share\n"
+                                 "of the view's height (0 = off; 0.004 is about 4 pixels at 1080p). Shadows still draw it.");
+        SettingsLabel("Depth pre-pass");
+        if (EditorUIPrimitives::Checkbox("##Depth pre-pass", &q.DepthPrepass)) ProjectSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Lays down the static world's depth before shading it, so each pixel runs the\n"
+                                 "lighting once instead of once per surface drawn over it. Cheaper on the GPU for\n"
+                                 "crowded interiors; costs a second (depth-only) draw of the static scene.");
+
         // #171 - Unity's Audio Mixer: master + one volume per bus (Audio Source > Output).
         EditorUIPrimitives::SectionHeader("Audio");
         {
