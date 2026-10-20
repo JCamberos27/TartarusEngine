@@ -65,6 +65,19 @@ struct TimeSettings {
 const TimeSettings& Time();
 TimeSettings&       MutableTime();
 
+// Rendering quality knobs that belong to the content.
+struct QualitySettings {
+    // Camera views leave out a model whose bounding sphere is shorter than this share of the viewport height (0 =
+    // off): a can across the corridor is a few pixels the GPU still shades and the CPU still submits. 0.004 is about
+    // 4 pixels at 1080p. Shadow passes are not culled by it.
+    float SmallObjectCullHeight = 0.004f;
+    // The opaque pass first lays down the depth of the static world, so each pixel is shaded once, by the surface
+    // that ends up in front, instead of by everything drawn there before it.
+    bool DepthPrepass = true;
+};
+const QualitySettings& Quality();
+QualitySettings&       MutableQuality();
+
 // #171 - Unity's Audio Mixer, as a fixed set of buses (AudioEngine::Bus order: SFX, Music,
 // Ambient, UI, Voice) plus a master volume. Pushed into AudioEngine by ApplyAudio().
 struct AudioSettings {

@@ -251,6 +251,8 @@ void World::SyncActiveInHierarchy() {
 }
 
 void World::RebuildWorldTransformCache() {
+    static uint64_t s_Stamps = 0; // shared by every World, so two worlds never hand out the same stamp
+    m_TransformCacheStamp = ++s_Stamps;
     SyncActiveInHierarchy();
     auto view = Registry.view<TransformComponent>();
     size_t slots = 0;

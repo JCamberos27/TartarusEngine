@@ -5780,6 +5780,7 @@ int RunUnitTests(const char* filter) {
     RegisterEnhancerTests(tests);
     RegisterRecoilPortTests(tests);
     RegisterSwayPortTests(tests);
+    { void RegisterRenderTests(UnitTestSupport::TestList&); RegisterRenderTests(tests); } // UnitTests_Render.cpp
     RegisterEngineTests(tests);
     { void RegisterGameplayTests(UnitTestSupport::TestList&); RegisterGameplayTests(tests); }
     RegisterBloodTests(tests);

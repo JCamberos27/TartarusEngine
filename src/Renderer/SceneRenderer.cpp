@@ -26,6 +26,7 @@
 #include "ShaderVariant.h"
 #include "DefaultTextures.h"
 #include "Frustum.h"
+#include "ProjectSettings.h"
 #include "Camera.h"    // MakePerspective — the view-model sub-pass's one projection switch
 #include "ParticleRenderer.h"
 #include "BloodRenderer.h"
@@ -96,47 +97,121 @@ FrameState SceneRenderer::GatherFrameState(World& world, const RenderFrameContex
     return fs;
 }
 
-// The editor Scene view only: hidden by the entity's own toggle (HiddenInSceneTag, #236 B) or by its layer's
-// visibility (#236 A1).
-static bool HiddenInEditorView(const World& world, entt::entity entity, unsigned layerVisibleMask) {
-    if (world.Registry.all_of<HiddenInSceneTag>(entity)) return true;
-    const auto* lc = world.Registry.try_get<LayerComponent>(entity);
-    const int layer = lc ? lc->Layer : 0;
-    return layer >= 0 && layer < 32 && !((layerVisibleMask >> layer) & 1u);
+namespace {
+// What GatherVisible needs of each renderable, read from the registry once per frame instead of once per view and
+// per shadow light (each read is a sparse-set lookup, and with a few thousand props they were a fifth of the CPU
+// frame). Good while the world's transform cache stamp and its renderables stay the same: tags, transforms and
+// static bounds only change between frames. LodCulledTag (set per view) and posed bounds (an animated model) are
+// still read live.
+enum CandidateFlag : std::uint16_t {
+    kCandInactive = 1 << 0, kCandPoseSource = 1 << 1, kCandOwnerViewOnly = 1 << 2, kCandHiddenFromOwner = 1 << 3,
+    kCandViewModel = 1 << 4, kCandPlayerBody = 1 << 5, kCandHiddenInScene = 1 << 6, kCandPosed = 1 << 7,
+};
+struct Candidate {
+    entt::entity Entity;
+    RenderableComponent* Renderable;
+    const Model* ModelAtBuild; // a renderable whose model changes since gets its bounds read live
+    std::uint16_t Flags;
+    int Layer;
+    VisibleRenderable V;       // transform, bounds and world bounds as of the build
+};
+struct CandidateCache {
+    const World* Owner = nullptr;
+    std::uint64_t Stamp = 0;
+    size_t Renderables = 0;
+    entt::entity First = entt::null, Last = entt::null;
+    std::vector<Candidate> List;
+};
+
+void FillBounds(VisibleRenderable& v, const RenderableComponent& r) {
+    r.ModelRef->PosedBounds(v.LocalMin, v.LocalMax);
+    v.Bounded = v.LocalMin.x <= v.LocalMax.x && v.LocalMin.y <= v.LocalMax.y && v.LocalMin.z <= v.LocalMax.z;
+    if (v.Bounded) {
+        const AABB wb = AABB{v.LocalMin, v.LocalMax}.Transformed(v.Xform);
+        v.WorldMin = wb.Min;
+        v.WorldMax = wb.Max;
+    } else {
+        v.WorldMin = v.WorldMax = glm::vec3(0.0f);
+    }
+}
+
+const std::vector<Candidate>& Candidates(World& world) {
+    static CandidateCache cache;
+    // Its entities (the storage's own iterators yield components): the first and last as a cheap check that the set
+    // didn't change under an unchanged size.
+    const entt::sparse_set& storage = world.Registry.storage<RenderableComponent>();
+    const entt::entity first = storage.empty() ? entt::null : storage.data()[0];
+    const entt::entity last = storage.empty() ? entt::null : storage.data()[storage.size() - 1];
+    if (cache.Owner == &world && cache.Stamp == world.TransformCacheStamp() && world.TransformCacheStamp() != 0 &&
+        cache.Renderables == storage.size() && cache.First == first && cache.Last == last)
+        return cache.List;
+    cache = {&world, world.TransformCacheStamp(), storage.size(), first, last, std::move(cache.List)};
+    cache.List.clear();
+    auto& reg = world.Registry;
+    for (auto entity : reg.view<TransformComponent, RenderableComponent>()) {
+        auto& r = reg.get<RenderableComponent>(entity);
+        if (!r.ModelRef) continue; // its model failed to load (or isn't assigned yet): nothing to draw
+        Candidate c{entity, &r, r.ModelRef.get(), 0, 0, {}};
+        if (reg.all_of<InactiveTag>(entity)) c.Flags |= kCandInactive;
+        if (reg.all_of<PoseSourceTag>(entity)) c.Flags |= kCandPoseSource;
+        if (reg.all_of<OwnerViewOnlyTag>(entity)) c.Flags |= kCandOwnerViewOnly;
+        if (reg.all_of<HiddenFromOwnerTag>(entity)) c.Flags |= kCandHiddenFromOwner;
+        if (reg.all_of<ViewModelTag>(entity)) c.Flags |= kCandViewModel;
+        if (reg.all_of<PlayerBodyTag>(entity)) c.Flags |= kCandPlayerBody;
+        if (reg.all_of<HiddenInSceneTag>(entity)) c.Flags |= kCandHiddenInScene;
+        if (r.ModelRef->HasBones()) c.Flags |= kCandPosed;
+        const auto* lc = reg.try_get<LayerComponent>(entity);
+        c.Layer = lc ? lc->Layer : 0;
+        c.V.Entity = entity;
+        c.V.Renderable = &r;
+        c.V.Xform = world.GetCachedWorldTransform(entity);
+        FillBounds(c.V, r);
+        cache.List.push_back(c);
+    }
+    return cache.List;
+}
+} // namespace
+
+bool TooSmallOnScreen(const glm::vec3& worldMin, const glm::vec3& worldMax, const glm::vec3& eye, float projScaleY,
+                      float minScreenHeight) {
+    if (minScreenHeight <= 0.0f || projScaleY <= 0.0f) return false;
+    const glm::vec3 centre = (worldMin + worldMax) * 0.5f;
+    const float radius = glm::length(worldMax - worldMin) * 0.5f;
+    const float dist = glm::length(centre - eye);
+    if (dist <= radius) return false; // the eye is inside or touching it
+    // The bounding sphere's height as a share of the viewport height (projScaleY = proj[1][1] = 1 / tan(fovY / 2)).
+    return radius * projScaleY / dist < minScreenHeight;
 }
 
 void GatherVisible(World& world, const VisibilityQuery& q, std::vector<VisibleRenderable>& out) {
     out.clear();
-    for (auto entity : world.Registry.view<TransformComponent, RenderableComponent>()) {
+    const bool anyLod = !world.Registry.storage<LodCulledTag>().empty();
+    for (const Candidate& c : Candidates(world)) {
         // GameObject active / LOD level (#163); PoseSourceTag is animated only (the first-person arms rig).
-        if (world.Registry.any_of<InactiveTag, LodCulledTag, PoseSourceTag>(entity)) continue;
+        if (c.Flags & (kCandInactive | kCandPoseSource)) continue;
+        if (anyLod && world.Registry.all_of<LodCulledTag>(c.Entity)) continue;
         // Split poses: the first-person copy only in the player's own camera, the world copy everywhere else (and
         // the world copy is the one that casts).
-        if ((q.ShadowCasters || !q.OwnerView) ? world.Registry.all_of<OwnerViewOnlyTag>(entity)
-                                            : world.Registry.all_of<HiddenFromOwnerTag>(entity)) continue;
-        if (q.SkipViewModels && world.Registry.all_of<ViewModelTag>(entity)) continue;
-        if (q.SkipPlayerBody && world.Registry.all_of<PlayerBodyTag>(entity)) continue;
-        if (q.EditorView && HiddenInEditorView(world, entity, q.LayerVisibleMask)) continue;
-        auto& r = world.Registry.get<RenderableComponent>(entity);
-        if (!r.ModelRef) continue; // its model failed to load (or isn't assigned yet): nothing to draw
+        if (c.Flags & ((q.ShadowCasters || !q.OwnerView) ? kCandOwnerViewOnly : kCandHiddenFromOwner)) continue;
+        if (q.SkipViewModels && (c.Flags & kCandViewModel)) continue;
+        if (q.SkipPlayerBody && (c.Flags & kCandPlayerBody)) continue;
+        // The editor Scene view: hidden by the entity's own toggle (HiddenInSceneTag, #236 B) or by its layer (#236 A1).
+        if (q.EditorView && ((c.Flags & kCandHiddenInScene) ||
+                             (c.Layer >= 0 && c.Layer < 32 && !((q.LayerVisibleMask >> c.Layer) & 1u)))) continue;
+        const RenderableComponent& r = *c.Renderable;
+        if (!r.ModelRef) continue;
         // #163 - Cast Shadows: Off never casts; Shadows Only is drawn by the shadow passes, never in a camera view.
         if (q.ShadowCasters ? r.CastShadows == RenderableComponent::ShadowCasting::Off
                             : r.CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) continue;
         if (q.SkipTransparent && !r.Materials.empty() && r.Materials[0] &&
             r.Materials[0]->RenderQueue == MaterialAsset::Queue::Transparent) continue;
-        VisibleRenderable v;
-        v.Entity = entity;
-        v.Renderable = &r;
-        v.Xform = world.GetCachedWorldTransform(entity);
-        r.ModelRef->PosedBounds(v.LocalMin, v.LocalMax);
-        v.Bounded = v.LocalMin.x <= v.LocalMax.x && v.LocalMin.y <= v.LocalMax.y && v.LocalMin.z <= v.LocalMax.z;
+        VisibleRenderable v = c.V;
+        // An animated model's bounds move with its pose, and a swapped model brings its own: read those live.
+        if ((c.Flags & kCandPosed) || r.ModelRef.get() != c.ModelAtBuild) FillBounds(v, r);
         if (v.Bounded) {
-            const AABB wb = AABB{v.LocalMin, v.LocalMax}.Transformed(v.Xform);
-            if (q.Cull && !q.Cull->Intersects(wb)) continue;
-            v.WorldMin = wb.Min;
-            v.WorldMax = wb.Max;
-        } else {
-            v.WorldMin = v.WorldMax = glm::vec3(0.0f);
+            if (q.Cull && !q.Cull->Intersects(AABB{v.WorldMin, v.WorldMax})) continue;
+            if (q.SizeCullEye && TooSmallOnScreen(v.WorldMin, v.WorldMax, *q.SizeCullEye, q.SizeCullProjScale,
+                                                  q.MinScreenHeight)) continue;
         }
         out.push_back(v);
     }
@@ -487,6 +562,13 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     inView.OwnerView = ctx.OwnerView;
     inView.EditorView = ctx.EditorView;
     inView.LayerVisibleMask = in.layerVisibleMask;
+    // Too small to see from here (Project Settings > Quality); perspective views only. The SSAO depth pre-pass culls
+    // with the same test, so the two agree on what stands in front.
+    if (std::abs(ctx.Proj[3][3]) < 0.5f) {
+        inView.SizeCullEye = &ctx.ViewPos;
+        inView.SizeCullProjScale = ctx.Proj[1][1];
+        inView.MinScreenHeight = ProjectSettings::Quality().SmallObjectCullHeight;
+    }
     static std::vector<VisibleRenderable> visible;
     GatherVisible(world, inView, visible);
     for (const VisibleRenderable& vis : visible) {
@@ -770,6 +852,36 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         }
     };
     BloodRenderer::Get().BindSplatResources();
+
+    // Depth pre-pass (Project Settings > Quality): the static world's depth first, colour off, so the opaque pass
+    // below shades each pixel once - the drawList's order is by program and material, front to back only within
+    // one, and a room's floor, walls and props otherwise each ran the full lighting where the next one covered
+    // them. The depth program's positions round a hair differently from the model program's, so this pass is
+    // pushed back by a polygon offset: under the opaque pass's GL_LEQUAL the surface itself still passes, anything
+    // behind it doesn't. Only what draws whole is in it: nothing skinned or moving (Dynamic), and none of the
+    // player body's or outfits' hidden parts, which the model program discards.
+    if (in.depthShader && ProjectSettings::Quality().DepthPrepass) {
+        Shader& depth = *in.depthShader;
+        depth.Bind();
+        depth.SetMat4("uLightViewProj", ctx.Proj * ctx.View);
+        depth.SetInt("uUseSkinning", 0);
+        depth.SetInt("uCascadeLayered", 0);
+        const int modelLoc = depth.Loc("uModel");
+        glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+        glEnable(GL_POLYGON_OFFSET_FILL);
+        glPolygonOffset(1.0f, 4.0f);
+        for (const DrawItem& it : drawList) {
+            if (it.Dynamic || it.NearHide > 0.0f || it.HideBones || it.HideVerts || it.CollarVerts ||
+                it.BoneMaskMode || it.LayerPull != 0.0f || it.Ref->HasBones()) continue;
+            depth.SetMat4(modelLoc, it.Xform);
+            it.Ref->DrawDepthOnly(depth, *it.Slots, 1, it.Visible);
+        }
+        glPolygonOffset(0.0f, 0.0f);
+        glDisable(GL_POLYGON_OFFSET_FILL);
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        GLStateCache::Invalidate();
+        modelShader.Bind();
+    }
 
     passAlphaBlend = 0;
     modelShader.SetInt("uAlphaBlend", 0); // explicit: ensure opaque pass outputs alpha=1

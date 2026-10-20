@@ -177,6 +177,9 @@ public:
     // is thrown away and rebuilt each time, so creation, destruction and re-parenting can never
     // leave a stale or dangling entry.
     void RebuildWorldTransformCache();
+    // Changes every time RebuildWorldTransformCache runs, never repeating across worlds: what is derived from the
+    // cached transforms (GatherVisible's per-frame candidates) is good for as long as this stays the same.
+    uint64_t TransformCacheStamp() const { return m_TransformCacheStamp; }
 
     // #163 - picks each LOD Group's level for a view (eye position + projection) and tags the
     // renderers of every other level with LodCulledTag. Call before each view's draw and shadow
@@ -253,6 +256,7 @@ private:
     // since recycled by a newer entity) means "not cached" and falls back to composing.
     std::vector<glm::mat4> m_WorldTransformCache;
     std::vector<entt::entity> m_WorldTransformKeys;
+    uint64_t m_TransformCacheStamp = 0;
     bool IsWorldTransformCached(entt::entity e) const {
         const auto i = (size_t)entt::to_entity(e);
         return i < m_WorldTransformKeys.size() && m_WorldTransformKeys[i] == e;

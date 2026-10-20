@@ -3907,6 +3907,7 @@ int main(int argc, char** argv) {
             sceneInputs.sky                = &sky;
             sceneInputs.skyAtmosphere      = physicalSky ? &skyAtmosphere : nullptr;
             sceneInputs.modelShader        = &modelShader;
+            sceneInputs.depthShader        = &shadowShader;
             sceneInputs.clusterBuildShader = &clusterBuildShader;
             sceneInputs.clusterCullShader  = &clusterCullShader;
             sceneInputs.sunShadow          = &shadowMap;
@@ -3983,6 +3984,13 @@ int main(int argc, char** argv) {
                 seen.SkipPlayerBody = !editorView;
                 seen.SkipTransparent = true;
                 seen.Cull = &frustum;
+                // Same small-object cull as the main pass (SceneRenderer), so the two agree on what stands in front.
+                const glm::vec3 seenEye = glm::vec3(glm::inverse(view)[3]);
+                if (std::abs(proj[3][3]) < 0.5f) {
+                    seen.SizeCullEye = &seenEye;
+                    seen.SizeCullProjScale = proj[1][1];
+                    seen.MinScreenHeight = ProjectSettings::Quality().SmallObjectCullHeight;
+                }
                 static std::vector<VisibleRenderable> visible;
                 GatherVisible(world, seen, visible);
                 for (const VisibleRenderable& v : visible) {
