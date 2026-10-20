@@ -42,12 +42,12 @@ struct EditorSettings {
     //   needs EXT_swap_control_tear; drivers without it fall back to plain vsync).
     //   FpsLimit: 0 = no software cap; otherwise the loop sleeps each frame to hold this rate.
     //   The cap is applied whatever VSyncMode is, but it's really meant for VSyncMode 0.
-    int VSyncMode = 1;
-    int FpsLimit = 240;
+    int VSyncMode = 0;
+    int FpsLimit = 0;
     // #143: cap while the editor window is in the background and not in Play mode, so an idle
     // editor behind other apps doesn't render at full rate (Unity's "Interaction Mode"). 0 = no
     // extra cap. A minimized window doesn't render at all, whatever this is.
-    int UnfocusedFpsLimit = 30;
+    int UnfocusedFpsLimit = 0;
 
     // Render resolution: the Game view / play window renders its 3D frame this many pixels tall
     // (same aspect) and Upscaler scales it to the display, so a 4K monitor costs what a 1080p
