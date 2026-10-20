@@ -1,0 +1,23 @@
+{
+  "folder": "assets/Furniture/Office/Models",
+  "guid": "3a12c98e7ebaf71f",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.0,
+      -0.0,
+      -0.031
+    ]
+  },
+  "materialRemap": {
+    "Workdesk": "assets/Furniture/Office/Materials/M_Workdesk.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}
