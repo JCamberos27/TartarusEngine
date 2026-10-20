@@ -494,6 +494,11 @@ void ShaderAsset::CompileVariant(ShaderVariantKey key) {
             m_Variants[key] = std::make_unique<Shader>(vertSrc);      // compute
         else
             m_Variants[key] = std::make_unique<Shader>(vertSrc, fragSrc);
+        // A material shader on ModelVertex.glsl reads its transforms per instance; one whose fragment stage reads
+        // uModel itself (RedDot's projection) would see only the batch's first copy, so it draws one by one.
+        if (m_Variants[key] && !fragSrc.empty())
+            m_Variants[key]->SetInstancing(vertSrc.find("uInstanced") != std::string::npos &&
+                                           fragSrc.find("uModel") == std::string::npos);
     } catch (const std::exception& e) {
         std::string keywords;
         for (int i = 0; i < (int)m_Keywords.size(); ++i)
