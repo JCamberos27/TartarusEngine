@@ -12,6 +12,9 @@
       -1.7000000476837158,
       -1.6829999685287476,
       -0.20749999582767487
+    ],
+    "unrotateNodes": [
+      "Kitchen_cabinet_B_door_glass"
     ]
   },
   "materialRemap": {

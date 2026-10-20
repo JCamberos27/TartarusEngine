@@ -2,6 +2,9 @@
   "folder": "assets/Furniture/Bedroom/Models",
   "guid": "286027d64d9c509b",
   "importer": {
+    "excludeNodes": [
+      "Bed_king_main_LOD01"
+    ],
     "globalScale": 1.0,
     "importAnimations": false,
     "importNormals": true,

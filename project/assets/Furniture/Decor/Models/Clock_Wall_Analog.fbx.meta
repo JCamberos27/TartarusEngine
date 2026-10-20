@@ -12,6 +12,11 @@
       -0.3125,
       0.06700000166893005,
       0.0005000000237487257
+    ],
+    "unrotateNodes": [
+      "Clock_wall_glass",
+      "Clock_pointer_minute",
+      "Clock_pointer_hour"
     ]
   },
   "materialRemap": {

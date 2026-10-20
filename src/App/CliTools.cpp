@@ -68,6 +68,14 @@ int ModelReport(int argc, char** argv, int i) {
                 if (imp.contains("excludeNodes") && imp["excludeNodes"].is_array())
                     for (const auto& n : imp["excludeNodes"])
                         if (n.is_string()) s.ExcludeNodes.push_back(n.get<std::string>());
+                if (imp.contains("unrotateNodes") && imp["unrotateNodes"].is_array())
+                    for (const auto& n : imp["unrotateNodes"])
+                        if (n.is_string()) s.UnrotateNodes.push_back(n.get<std::string>());
+                if (imp.contains("moveNodes") && imp["moveNodes"].is_array())
+                    for (const auto& n : imp["moveNodes"])
+                        if (n.is_object() && n.contains("by") && n["by"].is_array() && n["by"].size() == 3)
+                            s.MoveNodes.push_back({n.value("node", std::string()),
+                                                   {n["by"][0].get<float>(), n["by"][1].get<float>(), n["by"][2].get<float>()}});
             }
         }
         const auto model = Model::ImportDeferred(f.string(), s);

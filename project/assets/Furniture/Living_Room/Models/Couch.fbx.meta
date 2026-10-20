@@ -2,6 +2,9 @@
   "folder": "assets/Furniture/Living_Room/Models",
   "guid": "757dc0256bf521c4",
   "importer": {
+    "excludeNodes": [
+      "Couch_LOD01"
+    ],
     "globalScale": 1.0,
     "importAnimations": false,
     "importNormals": true,

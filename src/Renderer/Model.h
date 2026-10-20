@@ -65,6 +65,17 @@ struct ModelImportSettings {
     // Nodes left out of the import, with everything under them: kit files that ship every variant
     // stacked in one place (a door with ten handles, ten lock sets and every house number).
     std::vector<std::string> ExcludeNodes;
+    // Nodes whose own rotation is dropped (their position and scale kept), with everything under them following:
+    // kit files where a child was exported with a stray quarter turn against its parent (the model library's glass
+    // panes lie flat across their door frames, the ceiling fan's blades stand on edge).
+    std::vector<std::string> UnrotateNodes;
+    // Nodes moved (meters, the file's model space, before up axis and pivot), everything under them following: a
+    // child exported out of its place (the right glass door's pane sits a door's width to the left of it).
+    struct NodeMove {
+        std::string Node;
+        glm::vec3 By{0.0f};
+    };
+    std::vector<NodeMove> MoveNodes;
     // Skinned meshes skip their own node's transform: for an export whose skin already binds the vertices where
     // they belong while the mesh node still carries an offset (the modular Quantum arms and hands: they sat
     // 19 cm ahead of the wrists). Off = the node's frame is baked in, as Assimp hands it over.
