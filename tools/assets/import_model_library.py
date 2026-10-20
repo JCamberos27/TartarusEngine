@@ -528,7 +528,7 @@ def main():
         if not os.path.exists(dst) or os.path.getsize(dst) != os.path.getsize(m['src']):
             shutil.copy2(m['src'], dst)
         importer = {'globalScale': m['scale'], 'importAnimations': False, 'importNormals': True, 'importSkeleton': False,
-                    'materialImportMode': 1, 'optimizeGraph': True}
+                    'materialImportMode': 1, 'mergeByMaterial': True, 'optimizeGraph': True}
         if any(abs(v) > 1e-4 for v in m['offset']):
             importer['pivotOffset'] = m['offset']
         if m['up'] != 'Y':
@@ -544,6 +544,7 @@ def main():
         m['path'] = rel(dst)
 
     print(f'import_model_library: {len(models)} models, {len(sets)} texture sets, {len(mat_paths)} materials')
+    update_metas(repo, exe)  # texture sizes by use, and the fixes for the _Assembled files
 
     if args.gallery:
         write_gallery(repo, exe)
@@ -573,16 +574,69 @@ def project_models(repo, exe):
     return out
 
 
+# Gallery pieces smaller than this (meters, largest side) cast no shadow, as apartment_kit.py's loose props.
+TINY_PROP = 0.15
+# Texture size by what it covers: the largest model (meters, largest side) that uses each map decides.
+TEXTURE_TIERS = [(0.3, 512), (1.0, 1024), (float('inf'), 2048)]
+IMAGE_PATH = re.compile(r'assets/[^"]+\.(?:png|jpe?g|tga)', re.I)
+
+
+def size_textures(repo, library):
+    """Each library texture's maxTextureSize from the largest model that uses it (TEXTURE_TIERS): a pen's maps
+    needn't be the size of a sofa's. Maps no library model uses, and any a scene puts on a box (walls, floors), are
+    left as they are. Returns how many metas changed."""
+    project = os.path.join(repo, 'project')
+    need = {}  # texture path -> size
+    mats = {}
+    for ms in library.values():
+        for m in ms.values():
+            with open(m['file'] + '.meta', encoding='utf-8') as f:
+                remap = json.load(f).get('materialRemap', {})
+            side = max(h - l for l, h in zip(m['lo'], m['hi']))
+            tier = next(s for limit, s in TEXTURE_TIERS if side <= limit)
+            for mat in remap.values():
+                if mat not in mats:
+                    with open(os.path.join(project, mat), encoding='utf-8') as f:
+                        mats[mat] = IMAGE_PATH.findall(f.read())
+                for tex in mats[mat]:
+                    need[tex] = max(need.get(tex, 0), tier)
+    scenes = os.path.join(project, 'scenes')
+    for name in os.listdir(scenes):
+        if name.endswith('.json'):
+            with open(os.path.join(scenes, name), encoding='utf-8') as f:
+                for box in json.load(f).get('boxes', []):
+                    for tex in IMAGE_PATH.findall(json.dumps(box.get('materials', []))):
+                        need.pop(tex, None)
+    changed = 0
+    for tex, size in sorted(need.items()):
+        path = os.path.join(project, tex) + '.meta'
+        if not os.path.exists(path):
+            continue
+        with open(path, encoding='utf-8') as f:
+            meta = json.load(f)
+        if meta.get('importer', {}).get('maxTextureSize') != size:
+            meta['importer']['maxTextureSize'] = size
+            write_json(path, meta)
+            changed += 1
+    sizes = {}
+    for size in need.values():
+        sizes[size] = sizes.get(size, 0) + 1
+    print('import_model_library: library textures by max size', dict(sorted(sizes.items())))
+    return changed
+
+
 def update_metas(repo, exe):
     """Brings the imported models' metas up to date with UNROTATE, MOVE, LOD_EXCLUDE and NOT_PARTS (a piece that took a body's pivot
     gets its own back), without the Raw folder."""
     changed = 0
-    for pack, ms in project_models(repo, exe).items():
+    library = project_models(repo, exe)
+    for pack, ms in library.items():
         for stem, m in ms.items():
             base = stem[:-len('_Assembled')] if stem.endswith('_Assembled') else stem
             with open(m['file'] + '.meta', encoding='utf-8') as f:
                 meta = json.load(f)
             imp = dict(meta['importer'])
+            imp['mergeByMaterial'] = True
             up = next((a for rx, a in UP_AXIS if rx.match(base)), 'Y')
             if up != imp.get('upAxis', 'Y') and not stem.endswith('_Assembled'):
                 # a new up axis: the pivot is found again from the bounds under it
@@ -610,6 +664,7 @@ def update_metas(repo, exe):
                 meta['importer'] = imp
                 write_json(m['file'] + '.meta', meta)
                 changed += 1
+    changed += size_textures(repo, library)
     for name in sorted(DOUBLE_SIDED):
         for path in glob_raw(os.path.join(repo, 'project', 'assets'), f'*/*/Materials/M_{name}.mat'):
             with open(path, encoding='utf-8') as f:
@@ -800,10 +855,13 @@ def write_gallery(repo, exe):
                     name = m['stem'] + (' (alternative parts)' if n and not i else '')
                     half = math.radians(yaws.get(m['stem'], 0.0)) / 2
                     rot = [0.0, round(math.sin(half), 6), 0.0, round(math.cos(half), 6)] if half else ident
-                    ents.append({'id': next(ids), 'name': name, 'order': next(order), 'parentId': parent,
-                                 'path': m['path'], 'pathGuid': m['guid'],
-                                 'position': [round(sx + o[0], 4), round(lift + o[1], 4), round(o[2], 4)],
-                                 'rotation': rot, 'scale': [1.0, 1.0, 1.0]})
+                    ent = {'id': next(ids), 'name': name, 'order': next(order), 'parentId': parent,
+                           'path': m['path'], 'pathGuid': m['guid'],
+                           'position': [round(sx + o[0], 4), round(lift + o[1], 4), round(o[2], 4)],
+                           'rotation': rot, 'scale': [1.0, 1.0, 1.0]}
+                    if max(h - l for l, h in zip(m['lo'], m['hi'])) < TINY_PROP:
+                        ent['castShadows'] = 0  # nothing to see in its shadow, and every shadow map draws it
+                    ents.append(ent)
         rows.append((pack, row_z, x, depth, height))
         row_z -= max(depth, 1.0) + 6.0
     # Floor: prototype grid box under everything.

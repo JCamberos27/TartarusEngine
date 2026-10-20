@@ -230,8 +230,11 @@ void Model::ImportFromFile(const ModelImportSettings& settings) {
     m_ImportNodeGlobals.clear();
     CollectNodeGlobals(scene->mRootNode, glm::mat4(1.0f));
 
-    if (!settings.AnimationOnly) ProcessNode(scene->mRootNode, scene, glm::mat4(1.0f));
-    else m_D->BoundsMin = m_D->BoundsMax = glm::vec3(0.0f);
+    if (!settings.AnimationOnly) {
+        m_MergeBuckets.clear();
+        ProcessNode(scene->mRootNode, scene, glm::mat4(1.0f));
+        FlushMergeBuckets(scene);
+    } else m_D->BoundsMin = m_D->BoundsMax = glm::vec3(0.0f);
     ReadHierarchy(scene->mRootNode, -1);
     if (settings.ImportAnimations) ReadAnimations(scene);
     m_ImportNodeGlobals.clear();
@@ -404,7 +407,7 @@ void Model::ProcessNode(aiNode* node, const aiScene* scene, const glm::mat4& par
 
     for (unsigned int i = 0; i < node->mNumMeshes; ++i) {
         aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-        m_D->Meshes.push_back(ProcessMesh(mesh, scene, nodeTransform, node));
+        if (auto m = ProcessMesh(mesh, scene, nodeTransform, node)) m_D->Meshes.push_back(std::move(m));
     }
     for (unsigned int i = 0; i < node->mNumChildren; ++i) {
         ProcessNode(node->mChildren[i], scene, nodeTransform);
@@ -609,28 +612,57 @@ std::unique_ptr<ModelMesh> Model::ProcessMesh(aiMesh* mesh, const aiScene* scene
             m_D->BoundsMax = glm::max(m_D->BoundsMax, p);
         }
     }
+    // MergeByMaterial: a static mesh joins its material's bucket (in file order), made into one mesh after the walk.
+    if (m_D->Settings.MergeByMaterial && !skinned) {
+        auto it = std::find_if(m_MergeBuckets.begin(), m_MergeBuckets.end(),
+                               [&](const MergeBucket& b) { return b.MaterialIndex == mesh->mMaterialIndex; });
+        if (it == m_MergeBuckets.end()) {
+            m_MergeBuckets.push_back({mesh->mMaterialIndex, false, {}, {}});
+            it = m_MergeBuckets.end() - 1;
+        }
+        const unsigned int base = (unsigned int)it->Vertices.size();
+        it->VertexColors = it->VertexColors || mesh->HasVertexColors(0);
+        it->Vertices.insert(it->Vertices.end(), vertices.begin(), vertices.end());
+        it->Indices.reserve(it->Indices.size() + indices.size());
+        for (unsigned int i : indices) it->Indices.push_back(base + i);
+        return nullptr;
+    }
     // Deferred (ImportDeferred on a worker): keep the vertices for FinishGpuUpload, no GL here.
     auto gpuMesh = m_DeferGpu ? std::make_unique<ModelMesh>(std::move(vertices), indices, true)
                               : std::make_unique<ModelMesh>(vertices, indices);
     if (skinned) gpuMesh->SetLocalPositions(std::move(posed));
+    AssignImportedMaterial(*gpuMesh, scene, mesh->mMaterialIndex, mesh->HasVertexColors(0));
+    return gpuMesh;
+}
+
+void Model::FlushMergeBuckets(const aiScene* scene) {
+    for (MergeBucket& b : m_MergeBuckets) {
+        auto gpuMesh = m_DeferGpu ? std::make_unique<ModelMesh>(std::move(b.Vertices), b.Indices, true)
+                                  : std::make_unique<ModelMesh>(b.Vertices, b.Indices);
+        AssignImportedMaterial(*gpuMesh, scene, b.MaterialIndex, b.VertexColors);
+        m_D->Meshes.push_back(std::move(gpuMesh));
+    }
+    m_MergeBuckets.clear();
+}
+
+void Model::AssignImportedMaterial(ModelMesh& gpuMesh, const aiScene* scene, unsigned int materialIndex, bool vertexColors) {
     if (m_D->Settings.MaterialImportMode == ModelImportSettings::MaterialMode::ImportEmbedded) {
-        if (mesh->mMaterialIndex < scene->mNumMaterials) {
-            gpuMesh->Mat = ExtractMaterial(scene, mesh->mMaterialIndex);
+        if (materialIndex < scene->mNumMaterials) {
+            gpuMesh.Mat = ExtractMaterial(scene, materialIndex);
             // #113 — a mesh that ships vertex colours gets them (glTF COLOR_0 always tints).
-            if (mesh->HasVertexColors(0)) gpuMesh->Mat.UseVertexColor = true;
+            if (vertexColors) gpuMesh.Mat.UseVertexColor = true;
         }
     } else if (m_D->Settings.MaterialImportMode == ModelImportSettings::MaterialMode::CreateSynthetic) {
         // Ignore the file's own materials/textures entirely - same neutral look CreatePrimitive
         // assigns, left for the Inspector's PBR Material section to author from scratch.
-        gpuMesh->Mat.BaseColor = glm::vec3(0.75f);
+        gpuMesh.Mat.BaseColor = glm::vec3(0.75f);
     }
-    // MaterialMode::None: leave gpuMesh->Mat at Material{}'s bare defaults, untouched.
+    // MaterialMode::None: leave gpuMesh.Mat at Material{}'s bare defaults, untouched.
     // Every mode keeps the file's material name: the model's materialRemap matches on it, so a model whose .mat files
     // replace its own materials can skip loading the file's textures.
     if (m_D->Settings.MaterialImportMode != ModelImportSettings::MaterialMode::ImportEmbedded &&
-        mesh->mMaterialIndex < scene->mNumMaterials)
-        gpuMesh->Mat.Name = scene->mMaterials[mesh->mMaterialIndex]->GetName().C_Str();
-    return gpuMesh;
+        materialIndex < scene->mNumMaterials)
+        gpuMesh.Mat.Name = scene->mMaterials[materialIndex]->GetName().C_Str();
 }
 
 std::shared_ptr<Texture> Model::LoadCachedTexture(const std::string& fullPath, TextureRole role) {

@@ -62,6 +62,7 @@ int ModelReport(int argc, char** argv, int i) {
                 s.GlobalScale = imp.value("globalScale", 1.0f);
                 s.ImportSkeleton = imp.value("importSkeleton", true);
                 s.SkinIgnoresMeshNode = imp.value("skinIgnoresMeshNode", false);
+                s.MergeByMaterial = imp.value("mergeByMaterial", false);
                 s.SourceUpAxis = Model::ParseUpAxis(imp.value("upAxis", std::string("Y")));
                 if (imp.contains("pivotOffset") && imp["pivotOffset"].is_array() && imp["pivotOffset"].size() == 3)
                     s.PivotOffset = {imp["pivotOffset"][0].get<float>(), imp["pivotOffset"][1].get<float>(), imp["pivotOffset"][2].get<float>()};
