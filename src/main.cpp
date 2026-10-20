@@ -5165,6 +5165,9 @@ int main(int argc, char** argv) {
                                     !playing ? "edit" : playMaximized ? "play-max" : "play", perfFrame.N, perfFrame.N ? perfFrame.Sum / perfFrame.N : 0.0,
                                     perfFrame.Sum > 0.0 ? 1000.0 * perfFrame.N / perfFrame.Sum : 0.0,
                                     perfFrame.Max, editor.GetRenderStats().DrawCalls, editor.GetRenderStats().Triangles, window.GetWidth(), window.GetHeight());
+                        // Every texture this process has uploaded so far (the editor's own icons included), mips included.
+                        std::printf("[PerfBench]   textures=%d  %.1f MiB on the GPU\n", TextureLoadStats::Get().Count,
+                                    TextureLoadStats::Get().GpuBytes / (1024.0 * 1024.0));
                         for (auto* v : {&perfCpu, &perfGpu}) {
                             std::sort(v->begin(), v->end(), [](const auto& a, const auto& b) { return a.second.Sum > b.second.Sum; });
                             for (const auto& [name, acc] : *v)
