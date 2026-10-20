@@ -68,6 +68,8 @@ project/assets/**/*.[bB][lL][eE][nN][dD]
 !project/assets/Test/**
 !project/assets/Characters/Quantum/Textures/Eyes/T_Brows_Lashes.png
 !project/assets/Characters/Quantum/Textures/Eyes/T_F_Brows_Lashes.png
+# ...and CC0 sounds, which anyone may redistribute: the interior door foley (credits in its CREDITS.md).
+!project/assets/Audio/Foley/door/**
 
 # Hat textures from the Quantum zip: the hats were removed from the project, so the editor
 # must not re-create .meta files for local copies of them.
