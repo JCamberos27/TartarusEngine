@@ -76,6 +76,9 @@ struct ModelImportSettings {
         glm::vec3 By{0.0f};
     };
     std::vector<NodeMove> MoveNodes;
+    // Static meshes sharing a material become one mesh (transforms baked in), so a kit of many parts draws once per
+    // material instead of once per part. Skinned meshes are never merged.
+    bool MergeByMaterial = false;
     // Skinned meshes skip their own node's transform: for an export whose skin already binds the vertices where
     // they belong while the mesh node still carries an offset (the modular Quantum arms and hands: they sat
     // 19 cm ahead of the wrists). Off = the node's frame is baked in, as Assimp hands it over.
@@ -560,11 +563,23 @@ private:
 
     // Import-time only: each node's model-space bind transform, for the bind-pose palette (#98).
     std::map<std::string, glm::mat4> m_ImportNodeGlobals;
+    // Import-time only (MergeByMaterial): the static meshes of each material, gathered for one ModelMesh apiece.
+    struct MergeBucket {
+        unsigned int MaterialIndex = 0;
+        bool VertexColors = false;
+        std::vector<ModelVertex> Vertices;
+        std::vector<unsigned int> Indices;
+    };
+    std::vector<MergeBucket> m_MergeBuckets;
 
     void ImportFromFile(const ModelImportSettings& settings);
     void ProcessNode(aiNode* node, const aiScene* scene, const glm::mat4& parentTransform);
+    // Null when the mesh went into a MergeBucket instead (FlushMergeBuckets makes it later).
     std::unique_ptr<ModelMesh> ProcessMesh(aiMesh* mesh, const aiScene* scene, const glm::mat4& nodeTransform,
                                            const aiNode* node);
+    void FlushMergeBuckets(const aiScene* scene);
+    // The mesh's material as the import settings ask (the file's, synthetic or none), keeping the file's name.
+    void AssignImportedMaterial(ModelMesh& mesh, const aiScene* scene, unsigned int materialIndex, bool vertexColors);
     Material ExtractMaterial(const aiScene* scene, unsigned int materialIndex);
     // #95 — what a material slot's texture holds, which decides its colour space.
     enum class TextureRole { Color, Normal, Data };

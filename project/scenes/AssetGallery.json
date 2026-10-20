@@ -787,6 +787,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 14,
       "name": "Door_Number_0",
       "order": 13,
@@ -811,6 +812,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 15,
       "name": "Door_Number_1",
       "order": 14,
@@ -835,6 +837,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 16,
       "name": "Door_Number_2",
       "order": 15,
@@ -859,6 +862,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 17,
       "name": "Door_Number_3",
       "order": 16,
@@ -883,6 +887,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 18,
       "name": "Door_Number_4",
       "order": 17,
@@ -907,6 +912,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 19,
       "name": "Door_Number_5",
       "order": 18,
@@ -931,6 +937,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 20,
       "name": "Door_Number_6",
       "order": 19,
@@ -955,6 +962,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 21,
       "name": "Door_Number_7",
       "order": 20,
@@ -979,6 +987,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 22,
       "name": "Door_Number_8",
       "order": 21,
@@ -1003,6 +1012,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 23,
       "name": "Door_Number_9",
       "order": 22,
@@ -1771,6 +1781,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 56,
       "name": "Toiletpaper_Single",
       "order": 55,
@@ -3451,6 +3462,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 129,
       "name": "Electricbox_Fuse",
       "order": 128,
@@ -3475,6 +3487,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 130,
       "name": "Electricbox_Fuse_Holder",
       "order": 129,
@@ -5179,6 +5192,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 202,
       "name": "Jar_Kid",
       "order": 201,
@@ -5299,6 +5313,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 207,
       "name": "Pen_Holder_Kid",
       "order": 206,
@@ -5323,6 +5338,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 208,
       "name": "Pen_Marker_A_Kid",
       "order": 207,
@@ -5347,6 +5363,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 209,
       "name": "Pen_Marker_B_Kid",
       "order": 208,
@@ -5371,6 +5388,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 210,
       "name": "Pen_Marker_C_Kid",
       "order": 209,
@@ -5395,6 +5413,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 211,
       "name": "Pen_Set_A_Kid",
       "order": 210,
@@ -5659,6 +5678,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 222,
       "name": "Toy_Block_A",
       "order": 221,
@@ -5683,6 +5703,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 223,
       "name": "Toy_Block_B",
       "order": 222,
@@ -5707,6 +5728,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 224,
       "name": "Toy_Block_C",
       "order": 223,
@@ -5731,6 +5753,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 225,
       "name": "Toy_Block_D",
       "order": 224,
@@ -5875,6 +5898,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 231,
       "name": "Toy_Car_A",
       "order": 230,
@@ -5899,6 +5923,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 232,
       "name": "Toy_Car_B",
       "order": 231,
@@ -5923,6 +5948,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 233,
       "name": "Toy_Car_C",
       "order": 232,
@@ -6211,6 +6237,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 246,
       "name": "Can",
       "order": 245,
@@ -6259,6 +6286,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 248,
       "name": "Coffee_Mug",
       "order": 247,
@@ -6451,6 +6479,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 256,
       "name": "Glass_Drinking",
       "order": 255,
@@ -6571,6 +6600,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 261,
       "name": "Jar_C",
       "order": 260,
@@ -9163,6 +9193,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 372,
       "name": "Pen_Marker_A",
       "order": 371,
@@ -9187,6 +9218,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 373,
       "name": "Pencil_A",
       "order": 372,
@@ -9211,6 +9243,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 374,
       "name": "Pencil_B",
       "order": 373,
@@ -9499,6 +9532,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 389,
       "name": "Light_Switches_Single",
       "order": 388,
@@ -9523,6 +9557,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 390,
       "name": "Outlet_Electrical",
       "order": 389,
@@ -9547,6 +9582,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 391,
       "name": "Outlet_Gfi",
       "order": 390,
@@ -9619,6 +9655,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 397,
       "name": "Syringe_Variation_01",
       "order": 396,
@@ -9643,6 +9680,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 398,
       "name": "Syringe_Variation_02",
       "order": 397,
@@ -9667,6 +9705,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 399,
       "name": "Vial_Anti_Venom_03",
       "order": 398,
@@ -9691,6 +9730,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 400,
       "name": "Vial_Insulin_01",
       "order": 399,
@@ -9715,6 +9755,7 @@
       ]
     },
     {
+      "castShadows": 0,
       "id": 401,
       "name": "Vial_Pain_Killer_02",
       "order": 400,

@@ -195,6 +195,9 @@ void AssetImporterInspector::DrawModelSettings(ModelImportSettings& settings, bo
     Row("Skin Ignores Mesh Node", "For an export whose skinned mesh shows up offset from its skeleton: the skin\nalready places the vertices, but the mesh node still carries a transform, applied\non top. On skips that node transform for skinned meshes. Apply to reimport.");
     isDirty |= EditorUIPrimitives::Checkbox("##SkinIgnoresMeshNode", &settings.SkinIgnoresMeshNode);
 
+    Row("Merge By Material", "Static meshes that share a material become one mesh, so a kit of many\nparts draws once per material instead of once per part. Leave off\nif you need the parts' own nodes. Apply to reimport.");
+    isDirty |= EditorUIPrimitives::Checkbox("##MergeByMaterial", &settings.MergeByMaterial);
+
     // Clip trims: cut a clip to a range of its take.
     Row("Clip Trims", "Cut a clip to a range (seconds) of the source take: only that range plays, and it is the\nclip's length everywhere (loops, blend trees, root motion, the Animator's analysis).\nEnd 0 = to the end of the take. Apply to reimport.");
     {

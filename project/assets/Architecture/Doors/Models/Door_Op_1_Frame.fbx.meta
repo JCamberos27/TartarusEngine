@@ -44,6 +44,7 @@
     "importNormals": true,
     "importSkeleton": false,
     "materialImportMode": 1,
+    "mergeByMaterial": true,
     "optimizeGraph": true,
     "pivotOffset": [
       -0.0,
