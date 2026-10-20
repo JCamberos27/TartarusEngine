@@ -1635,6 +1635,10 @@ struct FoleyAudioComponent {
     float NpcStepVolume = 1.0f;
     float NpcStepMaxDistance = 28.0f;
     float NpcStepMinDistance = 2.5f;
+    // Which step takes play: 0 boots (Foley/step_<surface>), 1 barefoot (Foley/barefoot_<surface>, the boots' where a
+    // barefoot take is missing). The player's own, and the soldiers'.
+    int Footwear = 0;
+    int NpcFootwear = 0;
     std::string DefaultSurface = "concrete";
     std::string SurfaceTable = "wood=wood,plank,floor,parquet;metal=metal,steel,iron,grate;glass=glass;carpet=carpet,rug;water=water,puddle;concrete=concrete,asphalt,tile,stone,gravel,dirt,soil,sand,grass";
 };

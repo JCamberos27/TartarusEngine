@@ -80,6 +80,8 @@ public:
     // --- pure rules (unit-tested) ---
     // The first surface in `table` ("wood=wood,plank;metal=metal") with a word in `name` (case-insensitive), else `fallback`.
     static std::string SurfaceFromName(const std::string& table, const std::string& name, const std::string& fallback);
+    // The foley category of a footstep on `surface`: step_<surface> in boots (footwear 0), barefoot_<surface> barefoot (1).
+    static std::string StepCategory(const std::string& surface, int footwear) { return (footwear == 1 ? "barefoot_" : "step_") + surface; }
     // Metres between footfalls: half the (walk .. sprint) stride, scaled.
     static float StepDistance(const FoleyAudioComponent& t, const FoleyPlayerInput& in);
     static float LandGain(const FoleyAudioComponent& t, float fallSpeed); // 0 below LandMinSpeed

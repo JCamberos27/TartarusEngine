@@ -176,6 +176,126 @@
    "mix_db": -19.23
   },
   {
+   "file": "Ambience/night_open_1.wav",
+   "key": "snd.amb.night_open",
+   "layer": "ambience",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -30.55,
+   "lufs_m_max": -30.0,
+   "true_peak_dbtp": -20.3,
+   "length_s": 16.0,
+   "peak_ms": 15783.5,
+   "sources": [
+    {
+     "file": "amb/AMBGras_FIELD-Night Ambience Field Loop 01_Ocular_The Provence.wav",
+     "start": 46.0,
+     "end": 65.0,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "amb/distant_city_M.wav",
+     "start": 136.0,
+     "end": 155.0,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 1.7,
+   "variant": 1,
+   "loop": true,
+   "class": "night_open",
+   "source": "AMBGras_FIELD-Night Ambience Field Loop 01_Ocular_The Provence.wav@46.0s + distant_city_M.wav@136.0s",
+   "license": "Sonniss GDC bundle (royalty free) / Ocular The Provence (own library)",
+   "mix_db": -17.23
+  },
+  {
+   "file": "Ambience/night_open_2.wav",
+   "key": "snd.amb.night_open",
+   "layer": "ambience",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -30.49,
+   "lufs_m_max": -30.0,
+   "true_peak_dbtp": -20.79,
+   "length_s": 16.0,
+   "peak_ms": 14262.2,
+   "sources": [
+    {
+     "file": "amb/AMBGras_FIELD-Night Ambience Field Loop 01_Ocular_The Provence.wav",
+     "start": 102.0,
+     "end": 121.0,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "amb/distant_city_M.wav",
+     "start": 42.0,
+     "end": 61.0,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 1.1,
+   "variant": 2,
+   "loop": true,
+   "class": "night_open",
+   "source": "AMBGras_FIELD-Night Ambience Field Loop 01_Ocular_The Provence.wav@102.0s + distant_city_M.wav@42.0s",
+   "license": "Sonniss GDC bundle (royalty free) / Ocular The Provence (own library)",
+   "mix_db": -17.23
+  },
+  {
+   "file": "Ambience/night_wind_1.wav",
+   "key": "snd.amb.night_wind",
+   "layer": "ambience",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -39.28,
+   "lufs_m_max": -30.85,
+   "true_peak_dbtp": -22.22,
+   "length_s": 16.0,
+   "peak_ms": 10515.9,
+   "sources": [
+    {
+     "file": "amb/urban_alley_wind.wav",
+     "start": 43.0,
+     "end": 62.0,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 1761.4,
+   "variant": 1,
+   "loop": true,
+   "class": "night_wind",
+   "source": "urban_alley_wind.wav@43.0s",
+   "license": "Sonniss GDC bundle (royalty free) / Ocular The Provence (own library)",
+   "mix_db": -14.38
+  },
+  {
+   "file": "Ambience/night_wind_2.wav",
+   "key": "snd.amb.night_wind",
+   "layer": "ambience",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -38.3,
+   "lufs_m_max": -31.92,
+   "true_peak_dbtp": -22.46,
+   "length_s": 16.0,
+   "peak_ms": 9190.7,
+   "sources": [
+    {
+     "file": "amb/urban_alley_wind.wav",
+     "start": 0.0,
+     "end": 19.0,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5954.0,
+   "variant": 2,
+   "loop": true,
+   "class": "night_wind",
+   "source": "urban_alley_wind.wav@0.0s",
+   "license": "Sonniss GDC bundle (royalty free) / Ocular The Provence (own library)",
+   "mix_db": -13.31
+  },
+  {
    "file": "Ambience/outdoor_open_1.wav",
    "key": "snd.amb.outdoor_open",
    "layer": "ambience",
@@ -294,6 +414,33 @@
    "source": "distant_city_M.wav@115.0s + urban_alley_wind.wav@30.0s",
    "license": "Sonniss GDC bundle (royalty free) / Ocular The Provence (own library)",
    "mix_db": -17.23
+  },
+  {
+   "file": "Ambience/worklight_hum_1.wav",
+   "key": "snd.amb.worklight_hum",
+   "layer": "ambience",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -30.97,
+   "lufs_m_max": -30.32,
+   "true_peak_dbtp": -19.81,
+   "length_s": 16.0,
+   "peak_ms": 13096.0,
+   "sources": [
+    {
+     "file": "amb/server_room.wav",
+     "start": 52.0,
+     "end": 71.0,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 22.6,
+   "variant": 1,
+   "loop": true,
+   "class": "worklight_hum",
+   "source": "server_room.wav@52.0s",
+   "license": "Sonniss GDC bundle (royalty free) / Ocular The Provence (own library)",
+   "mix_db": -24.91
   },
   {
    "file": "Body/body_fall_1.wav",
@@ -2778,6 +2925,3870 @@
    "proxy": true,
    "source": "Bullet_Drop_Wood_04.wav {\"pitch\": -1.0, \"eq\": [[\"peak\", 450, 3.0, 0.9]]}",
    "mix_db": -13.45
+  },
+  {
+   "file": "Foley/barefoot_carpet/run_1.wav",
+   "key": "snd.foley.barefoot_carpet.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -5.16,
+   "length_s": 0.28,
+   "peak_ms": 9.9,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Carpet/FEETHmn_BARE-Barefoot or Socks Run Carpet Sequence_Ocular_Stride.wav",
+     "start": 4.331,
+     "end": 4.611,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 6.4,
+   "element": "run",
+   "category": "barefoot_carpet",
+   "variant": 1,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Carpet Sequence_Ocular_Stride.wav@4.35s",
+   "surface": "carpet",
+   "footwear": "barefoot",
+   "mix_db": -19.23
+  },
+  {
+   "file": "Foley/barefoot_carpet/run_10.wav",
+   "key": "snd.foley.barefoot_carpet.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -5.11,
+   "length_s": 0.28,
+   "peak_ms": 9.9,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Carpet/FEETHmn_BARE-Barefoot or Socks Run Carpet Sequence_Ocular_Stride.wav",
+     "start": 27.737,
+     "end": 28.017,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 6.4,
+   "element": "run",
+   "category": "barefoot_carpet",
+   "variant": 10,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Carpet Sequence_Ocular_Stride.wav@27.75s",
+   "surface": "carpet",
+   "footwear": "barefoot",
+   "mix_db": -19.23
+  },
+  {
+   "file": "Foley/barefoot_carpet/run_2.wav",
+   "key": "snd.foley.barefoot_carpet.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -5.11,
+   "length_s": 0.28,
+   "peak_ms": 9.5,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Carpet/FEETHmn_BARE-Barefoot or Socks Run Carpet Sequence_Ocular_Stride.wav",
+     "start": 4.893,
+     "end": 5.173,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 6.1,
+   "element": "run",
+   "category": "barefoot_carpet",
+   "variant": 2,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Carpet Sequence_Ocular_Stride.wav@4.91s",
+   "surface": "carpet",
+   "footwear": "barefoot",
+   "mix_db": -19.22
+  },
+  {
+   "file": "Foley/barefoot_carpet/run_3.wav",
+   "key": "snd.foley.barefoot_carpet.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -5.05,
+   "length_s": 0.28,
+   "peak_ms": 9.6,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Carpet/FEETHmn_BARE-Barefoot or Socks Run Carpet Sequence_Ocular_Stride.wav",
+     "start": 5.738,
+     "end": 6.018,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 6.1,
+   "element": "run",
+   "category": "barefoot_carpet",
+   "variant": 3,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Carpet Sequence_Ocular_Stride.wav@5.75s",
+   "surface": "carpet",
+   "footwear": "barefoot",
+   "mix_db": -19.23
+  },
+  {
+   "file": "Foley/barefoot_carpet/run_4.wav",
+   "key": "snd.foley.barefoot_carpet.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -4.83,
+   "length_s": 0.28,
+   "peak_ms": 13.3,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Carpet/FEETHmn_BARE-Barefoot or Socks Run Carpet Sequence_Ocular_Stride.wav",
+     "start": 15.726,
+     "end": 16.006,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.2,
+   "element": "run",
+   "category": "barefoot_carpet",
+   "variant": 4,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Carpet Sequence_Ocular_Stride.wav@15.74s",
+   "surface": "carpet",
+   "footwear": "barefoot",
+   "mix_db": -19.23
+  },
+  {
+   "file": "Foley/barefoot_carpet/run_5.wav",
+   "key": "snd.foley.barefoot_carpet.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -4.77,
+   "length_s": 0.28,
+   "peak_ms": 12.6,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Carpet/FEETHmn_BARE-Barefoot or Socks Run Carpet Sequence_Ocular_Stride.wav",
+     "start": 16.898,
+     "end": 17.178,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.9,
+   "element": "run",
+   "category": "barefoot_carpet",
+   "variant": 5,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Carpet Sequence_Ocular_Stride.wav@16.91s",
+   "surface": "carpet",
+   "footwear": "barefoot",
+   "mix_db": -19.23
+  },
+  {
+   "file": "Foley/barefoot_carpet/run_6.wav",
+   "key": "snd.foley.barefoot_carpet.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -4.79,
+   "length_s": 0.28,
+   "peak_ms": 13.2,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Carpet/FEETHmn_BARE-Barefoot or Socks Run Carpet Sequence_Ocular_Stride.wav",
+     "start": 24.037,
+     "end": 24.317,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.6,
+   "element": "run",
+   "category": "barefoot_carpet",
+   "variant": 6,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Carpet Sequence_Ocular_Stride.wav@24.05s",
+   "surface": "carpet",
+   "footwear": "barefoot",
+   "mix_db": -19.23
+  },
+  {
+   "file": "Foley/barefoot_carpet/run_7.wav",
+   "key": "snd.foley.barefoot_carpet.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -5.06,
+   "length_s": 0.28,
+   "peak_ms": 9.5,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Carpet/FEETHmn_BARE-Barefoot or Socks Run Carpet Sequence_Ocular_Stride.wav",
+     "start": 24.643,
+     "end": 24.924,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 6.1,
+   "element": "run",
+   "category": "barefoot_carpet",
+   "variant": 7,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Carpet Sequence_Ocular_Stride.wav@24.66s",
+   "surface": "carpet",
+   "footwear": "barefoot",
+   "mix_db": -19.23
+  },
+  {
+   "file": "Foley/barefoot_carpet/run_8.wav",
+   "key": "snd.foley.barefoot_carpet.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -4.42,
+   "length_s": 0.28,
+   "peak_ms": 13.3,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Carpet/FEETHmn_BARE-Barefoot or Socks Run Carpet Sequence_Ocular_Stride.wav",
+     "start": 24.898,
+     "end": 25.178,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.2,
+   "element": "run",
+   "category": "barefoot_carpet",
+   "variant": 8,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Carpet Sequence_Ocular_Stride.wav@24.91s",
+   "surface": "carpet",
+   "footwear": "barefoot",
+   "mix_db": -19.23
+  },
+  {
+   "file": "Foley/barefoot_carpet/run_9.wav",
+   "key": "snd.foley.barefoot_carpet.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -4.88,
+   "length_s": 0.28,
+   "peak_ms": 12.5,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Carpet/FEETHmn_BARE-Barefoot or Socks Run Carpet Sequence_Ocular_Stride.wav",
+     "start": 27.148,
+     "end": 27.427,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.9,
+   "element": "run",
+   "category": "barefoot_carpet",
+   "variant": 9,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Carpet Sequence_Ocular_Stride.wav@27.16s",
+   "surface": "carpet",
+   "footwear": "barefoot",
+   "mix_db": -19.23
+  },
+  {
+   "file": "Foley/barefoot_carpet/walk_1.wav",
+   "key": "snd.foley.barefoot_carpet.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -5.63,
+   "length_s": 0.34,
+   "peak_ms": 9.2,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Carpet/FEETHmn_BARE-Barefoot or Socks Walk Carpet Sequence_Ocular_Stride.wav",
+     "start": 0.654,
+     "end": 0.994,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.6,
+   "element": "walk",
+   "category": "barefoot_carpet",
+   "variant": 1,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Carpet Sequence_Ocular_Stride.wav@0.67s",
+   "surface": "carpet",
+   "footwear": "barefoot",
+   "mix_db": -21.24
+  },
+  {
+   "file": "Foley/barefoot_carpet/walk_10.wav",
+   "key": "snd.foley.barefoot_carpet.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -6.01,
+   "length_s": 0.34,
+   "peak_ms": 9.3,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Carpet/FEETHmn_BARE-Barefoot or Socks Carpet Single Step 02_Ocular_Stride.wav",
+     "start": 0.033,
+     "end": 0.373,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 6.4,
+   "element": "walk",
+   "category": "barefoot_carpet",
+   "variant": 10,
+   "source": "FEETHmn_BARE-Barefoot or Socks Carpet Single Step 02_Ocular_Stride.wav",
+   "surface": "carpet",
+   "footwear": "barefoot",
+   "mix_db": -21.22
+  },
+  {
+   "file": "Foley/barefoot_carpet/walk_11.wav",
+   "key": "snd.foley.barefoot_carpet.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -7.82,
+   "length_s": 0.34,
+   "peak_ms": 10.5,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Carpet/FEETHmn_BARE-Barefoot or Socks Carpet Single Step 03_Ocular_Stride.wav",
+     "start": 0.03,
+     "end": 0.37,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.9,
+   "element": "walk",
+   "category": "barefoot_carpet",
+   "variant": 11,
+   "source": "FEETHmn_BARE-Barefoot or Socks Carpet Single Step 03_Ocular_Stride.wav",
+   "surface": "carpet",
+   "footwear": "barefoot",
+   "mix_db": -21.21
+  },
+  {
+   "file": "Foley/barefoot_carpet/walk_2.wav",
+   "key": "snd.foley.barefoot_carpet.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -5.42,
+   "length_s": 0.34,
+   "peak_ms": 10.6,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Carpet/FEETHmn_BARE-Barefoot or Socks Walk Carpet Sequence_Ocular_Stride.wav",
+     "start": 2.714,
+     "end": 3.054,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.4,
+   "element": "walk",
+   "category": "barefoot_carpet",
+   "variant": 2,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Carpet Sequence_Ocular_Stride.wav@2.73s",
+   "surface": "carpet",
+   "footwear": "barefoot",
+   "mix_db": -21.24
+  },
+  {
+   "file": "Foley/barefoot_carpet/walk_3.wav",
+   "key": "snd.foley.barefoot_carpet.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -6.21,
+   "length_s": 0.34,
+   "peak_ms": 9.3,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Carpet/FEETHmn_BARE-Barefoot or Socks Walk Carpet Sequence_Ocular_Stride.wav",
+     "start": 11.332,
+     "end": 11.672,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.0,
+   "element": "walk",
+   "category": "barefoot_carpet",
+   "variant": 3,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Carpet Sequence_Ocular_Stride.wav@11.34s",
+   "surface": "carpet",
+   "footwear": "barefoot",
+   "mix_db": -21.24
+  },
+  {
+   "file": "Foley/barefoot_carpet/walk_4.wav",
+   "key": "snd.foley.barefoot_carpet.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -6.17,
+   "length_s": 0.34,
+   "peak_ms": 9.3,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Carpet/FEETHmn_BARE-Barefoot or Socks Walk Carpet Sequence_Ocular_Stride.wav",
+     "start": 13.333,
+     "end": 13.673,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.1,
+   "element": "walk",
+   "category": "barefoot_carpet",
+   "variant": 4,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Carpet Sequence_Ocular_Stride.wav@13.35s",
+   "surface": "carpet",
+   "footwear": "barefoot",
+   "mix_db": -20.91
+  },
+  {
+   "file": "Foley/barefoot_carpet/walk_5.wav",
+   "key": "snd.foley.barefoot_carpet.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -5.61,
+   "length_s": 0.34,
+   "peak_ms": 12.4,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Carpet/FEETHmn_BARE-Barefoot or Socks Walk Carpet Sequence_Ocular_Stride.wav",
+     "start": 18.704,
+     "end": 19.044,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 7.0,
+   "element": "walk",
+   "category": "barefoot_carpet",
+   "variant": 5,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Carpet Sequence_Ocular_Stride.wav@18.72s",
+   "surface": "carpet",
+   "footwear": "barefoot",
+   "mix_db": -21.25
+  },
+  {
+   "file": "Foley/barefoot_carpet/walk_6.wav",
+   "key": "snd.foley.barefoot_carpet.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -5.7,
+   "length_s": 0.34,
+   "peak_ms": 12.4,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Carpet/FEETHmn_BARE-Barefoot or Socks Walk Carpet Sequence_Ocular_Stride.wav",
+     "start": 20.013,
+     "end": 20.353,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 7.0,
+   "element": "walk",
+   "category": "barefoot_carpet",
+   "variant": 6,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Carpet Sequence_Ocular_Stride.wav@20.03s",
+   "surface": "carpet",
+   "footwear": "barefoot",
+   "mix_db": -21.25
+  },
+  {
+   "file": "Foley/barefoot_carpet/walk_7.wav",
+   "key": "snd.foley.barefoot_carpet.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -6.02,
+   "length_s": 0.34,
+   "peak_ms": 9.4,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Carpet/FEETHmn_BARE-Barefoot or Socks Walk Carpet Sequence_Ocular_Stride.wav",
+     "start": 25.333,
+     "end": 25.673,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.3,
+   "element": "walk",
+   "category": "barefoot_carpet",
+   "variant": 7,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Carpet Sequence_Ocular_Stride.wav@25.35s",
+   "surface": "carpet",
+   "footwear": "barefoot",
+   "mix_db": -21.03
+  },
+  {
+   "file": "Foley/barefoot_carpet/walk_8.wav",
+   "key": "snd.foley.barefoot_carpet.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -6.58,
+   "length_s": 0.34,
+   "peak_ms": 16.2,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Carpet/FEETHmn_BARE-Barefoot or Socks Walk Carpet Sequence_Ocular_Stride.wav",
+     "start": 26.016,
+     "end": 26.356,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 7.3,
+   "element": "walk",
+   "category": "barefoot_carpet",
+   "variant": 8,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Carpet Sequence_Ocular_Stride.wav@26.04s",
+   "surface": "carpet",
+   "footwear": "barefoot",
+   "mix_db": -21.23
+  },
+  {
+   "file": "Foley/barefoot_carpet/walk_9.wav",
+   "key": "snd.foley.barefoot_carpet.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -10.63,
+   "length_s": 0.34,
+   "peak_ms": 24.2,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Carpet/FEETHmn_BARE-Barefoot or Socks Carpet Single Step 01_Ocular_Stride.wav",
+     "start": 0.027,
+     "end": 0.367,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 6.5,
+   "element": "walk",
+   "category": "barefoot_carpet",
+   "variant": 9,
+   "source": "FEETHmn_BARE-Barefoot or Socks Carpet Single Step 01_Ocular_Stride.wav",
+   "surface": "carpet",
+   "footwear": "barefoot",
+   "mix_db": -21.09
+  },
+  {
+   "file": "Foley/barefoot_concrete/land_1.wav",
+   "key": "snd.foley.barefoot_concrete.land",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -2.41,
+   "length_s": 0.303,
+   "peak_ms": 5.6,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Concrete/FEETHmn_BARE-Barefoot or Socks Concrete Stomp 01_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.304,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.0,
+   "element": "land",
+   "category": "barefoot_concrete",
+   "variant": 1,
+   "source": "FEETHmn_BARE-Barefoot or Socks Concrete Stomp 01_Ocular_Stride.wav",
+   "surface": "concrete",
+   "footwear": "barefoot",
+   "mix_db": -13.2
+  },
+  {
+   "file": "Foley/barefoot_concrete/land_2.wav",
+   "key": "snd.foley.barefoot_concrete.land",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.03,
+   "lufs_m_max": -20.99,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.287,
+   "peak_ms": 7.9,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Concrete/FEETHmn_BARE-Barefoot or Socks Concrete Stomp 02_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.287,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 7.9,
+   "element": "land",
+   "category": "barefoot_concrete",
+   "variant": 2,
+   "source": "FEETHmn_BARE-Barefoot or Socks Concrete Stomp 02_Ocular_Stride.wav",
+   "surface": "concrete",
+   "footwear": "barefoot",
+   "mix_db": -13.24
+  },
+  {
+   "file": "Foley/barefoot_concrete/land_3.wav",
+   "key": "snd.foley.barefoot_concrete.land",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.31,
+   "lufs_m_max": -22.27,
+   "true_peak_dbtp": -1.32,
+   "length_s": 0.291,
+   "peak_ms": 6.2,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Concrete/FEETHmn_BARE-Barefoot or Socks Concrete Stomp 03_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.291,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.2,
+   "element": "land",
+   "category": "barefoot_concrete",
+   "variant": 3,
+   "source": "FEETHmn_BARE-Barefoot or Socks Concrete Stomp 03_Ocular_Stride.wav",
+   "surface": "concrete",
+   "footwear": "barefoot",
+   "mix_db": -11.95
+  },
+  {
+   "file": "Foley/barefoot_concrete/land_4.wav",
+   "key": "snd.foley.barefoot_concrete.land",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -20.44,
+   "lufs_m_max": -20.4,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.324,
+   "peak_ms": 3.5,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Concrete/FEETHmn_BARE-Barefoot or Socks Concrete Stomp 04_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.324,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 3.0,
+   "element": "land",
+   "category": "barefoot_concrete",
+   "variant": 4,
+   "source": "FEETHmn_BARE-Barefoot or Socks Concrete Stomp 04_Ocular_Stride.wav",
+   "surface": "concrete",
+   "footwear": "barefoot",
+   "mix_db": -13.83
+  },
+  {
+   "file": "Foley/barefoot_concrete/land_5.wav",
+   "key": "snd.foley.barefoot_concrete.land",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -20.87,
+   "lufs_m_max": -20.83,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.223,
+   "peak_ms": 4.4,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Concrete/FEETHmn_BARE-Barefoot or Socks Concrete Stomp 05_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.223,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 3.0,
+   "element": "land",
+   "category": "barefoot_concrete",
+   "variant": 5,
+   "source": "FEETHmn_BARE-Barefoot or Socks Concrete Stomp 05_Ocular_Stride.wav",
+   "surface": "concrete",
+   "footwear": "barefoot",
+   "mix_db": -13.4
+  },
+  {
+   "file": "Foley/barefoot_concrete/run_1.wav",
+   "key": "snd.foley.barefoot_concrete.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -1.19,
+   "length_s": 0.28,
+   "peak_ms": 14.6,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Concrete/FEETHmn_BARE-Barefoot or Socks Run Concrete Sequence_Ocular_Stride.wav",
+     "start": 2.889,
+     "end": 3.169,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 6.4,
+   "element": "run",
+   "category": "barefoot_concrete",
+   "variant": 1,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Concrete Sequence_Ocular_Stride.wav@2.91s",
+   "surface": "concrete",
+   "footwear": "barefoot",
+   "mix_db": -14.23
+  },
+  {
+   "file": "Foley/barefoot_concrete/run_10.wav",
+   "key": "snd.foley.barefoot_concrete.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -2.18,
+   "length_s": 0.28,
+   "peak_ms": 20.5,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Concrete/FEETHmn_BARE-Barefoot or Socks Run Concrete Sequence_Ocular_Stride.wav",
+     "start": 28.894,
+     "end": 29.174,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 16.9,
+   "element": "run",
+   "category": "barefoot_concrete",
+   "variant": 10,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Concrete Sequence_Ocular_Stride.wav@28.92s",
+   "surface": "concrete",
+   "footwear": "barefoot",
+   "mix_db": -14.23
+  },
+  {
+   "file": "Foley/barefoot_concrete/run_2.wav",
+   "key": "snd.foley.barefoot_concrete.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -2.23,
+   "length_s": 0.28,
+   "peak_ms": 15.7,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Concrete/FEETHmn_BARE-Barefoot or Socks Run Concrete Sequence_Ocular_Stride.wav",
+     "start": 5.727,
+     "end": 6.007,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 12.0,
+   "element": "run",
+   "category": "barefoot_concrete",
+   "variant": 2,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Concrete Sequence_Ocular_Stride.wav@5.74s",
+   "surface": "concrete",
+   "footwear": "barefoot",
+   "mix_db": -14.23
+  },
+  {
+   "file": "Foley/barefoot_concrete/run_3.wav",
+   "key": "snd.foley.barefoot_concrete.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -2.82,
+   "length_s": 0.28,
+   "peak_ms": 19.8,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Concrete/FEETHmn_BARE-Barefoot or Socks Run Concrete Sequence_Ocular_Stride.wav",
+     "start": 6.316,
+     "end": 6.596,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 11.6,
+   "element": "run",
+   "category": "barefoot_concrete",
+   "variant": 3,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Concrete Sequence_Ocular_Stride.wav@6.33s",
+   "surface": "concrete",
+   "footwear": "barefoot",
+   "mix_db": -14.23
+  },
+  {
+   "file": "Foley/barefoot_concrete/run_4.wav",
+   "key": "snd.foley.barefoot_concrete.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -3.22,
+   "length_s": 0.28,
+   "peak_ms": 19.0,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Concrete/FEETHmn_BARE-Barefoot or Socks Run Concrete Sequence_Ocular_Stride.wav",
+     "start": 12.343,
+     "end": 12.623,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 16.8,
+   "element": "run",
+   "category": "barefoot_concrete",
+   "variant": 4,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Concrete Sequence_Ocular_Stride.wav@12.37s",
+   "surface": "concrete",
+   "footwear": "barefoot",
+   "mix_db": -14.23
+  },
+  {
+   "file": "Foley/barefoot_concrete/run_5.wav",
+   "key": "snd.foley.barefoot_concrete.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -5.63,
+   "length_s": 0.28,
+   "peak_ms": 11.2,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Concrete/FEETHmn_BARE-Barefoot or Socks Run Concrete Sequence_Ocular_Stride.wav",
+     "start": 14.321,
+     "end": 14.601,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 11.5,
+   "element": "run",
+   "category": "barefoot_concrete",
+   "variant": 5,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Concrete Sequence_Ocular_Stride.wav@14.34s",
+   "surface": "concrete",
+   "footwear": "barefoot",
+   "mix_db": -14.23
+  },
+  {
+   "file": "Foley/barefoot_concrete/run_6.wav",
+   "key": "snd.foley.barefoot_concrete.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -3.69,
+   "length_s": 0.28,
+   "peak_ms": 35.5,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Concrete/FEETHmn_BARE-Barefoot or Socks Run Concrete Sequence_Ocular_Stride.wav",
+     "start": 15.41,
+     "end": 15.69,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 34.4,
+   "element": "run",
+   "category": "barefoot_concrete",
+   "variant": 6,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Concrete Sequence_Ocular_Stride.wav@15.46s",
+   "surface": "concrete",
+   "footwear": "barefoot",
+   "mix_db": -14.23
+  },
+  {
+   "file": "Foley/barefoot_concrete/run_7.wav",
+   "key": "snd.foley.barefoot_concrete.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -1.74,
+   "length_s": 0.28,
+   "peak_ms": 19.7,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Concrete/FEETHmn_BARE-Barefoot or Socks Run Concrete Sequence_Ocular_Stride.wav",
+     "start": 20.879,
+     "end": 21.159,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 12.0,
+   "element": "run",
+   "category": "barefoot_concrete",
+   "variant": 7,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Concrete Sequence_Ocular_Stride.wav@20.89s",
+   "surface": "concrete",
+   "footwear": "barefoot",
+   "mix_db": -14.23
+  },
+  {
+   "file": "Foley/barefoot_concrete/run_8.wav",
+   "key": "snd.foley.barefoot_concrete.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -1.57,
+   "length_s": 0.28,
+   "peak_ms": 12.2,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Concrete/FEETHmn_BARE-Barefoot or Socks Run Concrete Sequence_Ocular_Stride.wav",
+     "start": 21.157,
+     "end": 21.437,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 11.9,
+   "element": "run",
+   "category": "barefoot_concrete",
+   "variant": 8,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Concrete Sequence_Ocular_Stride.wav@21.17s",
+   "surface": "concrete",
+   "footwear": "barefoot",
+   "mix_db": -14.23
+  },
+  {
+   "file": "Foley/barefoot_concrete/run_9.wav",
+   "key": "snd.foley.barefoot_concrete.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -1.23,
+   "length_s": 0.28,
+   "peak_ms": 14.4,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Concrete/FEETHmn_BARE-Barefoot or Socks Run Concrete Sequence_Ocular_Stride.wav",
+     "start": 27.437,
+     "end": 27.717,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 8.6,
+   "element": "run",
+   "category": "barefoot_concrete",
+   "variant": 9,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Concrete Sequence_Ocular_Stride.wav@27.46s",
+   "surface": "concrete",
+   "footwear": "barefoot",
+   "mix_db": -14.23
+  },
+  {
+   "file": "Foley/barefoot_concrete/walk_1.wav",
+   "key": "snd.foley.barefoot_concrete.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -8.68,
+   "length_s": 0.34,
+   "peak_ms": 10.6,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Concrete/FEETHmn_BARE-Barefoot or Socks Walk Concrete Sequence_Ocular_Stride.wav",
+     "start": 18.106,
+     "end": 18.446,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.6,
+   "element": "walk",
+   "category": "barefoot_concrete",
+   "variant": 1,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Concrete Sequence_Ocular_Stride.wav@18.12s",
+   "surface": "concrete",
+   "footwear": "barefoot",
+   "mix_db": -16.23
+  },
+  {
+   "file": "Foley/barefoot_concrete/walk_2.wav",
+   "key": "snd.foley.barefoot_concrete.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -6.34,
+   "length_s": 0.34,
+   "peak_ms": 9.7,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Concrete/FEETHmn_BARE-Barefoot or Socks Walk Concrete Sequence_Ocular_Stride.wav",
+     "start": 18.794,
+     "end": 19.134,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.6,
+   "element": "walk",
+   "category": "barefoot_concrete",
+   "variant": 2,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Concrete Sequence_Ocular_Stride.wav@18.81s",
+   "surface": "concrete",
+   "footwear": "barefoot",
+   "mix_db": -16.24
+  },
+  {
+   "file": "Foley/barefoot_concrete/walk_3.wav",
+   "key": "snd.foley.barefoot_concrete.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -7.31,
+   "length_s": 0.251,
+   "peak_ms": 57.6,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Concrete/FEETHmn_BARE-Barefoot or Socks Concrete Single Step 01_Ocular_Stride.wav",
+     "start": 0.002,
+     "end": 0.254,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 81.7,
+   "element": "walk",
+   "category": "barefoot_concrete",
+   "variant": 3,
+   "source": "FEETHmn_BARE-Barefoot or Socks Concrete Single Step 01_Ocular_Stride.wav",
+   "surface": "concrete",
+   "footwear": "barefoot",
+   "mix_db": -15.9
+  },
+  {
+   "file": "Foley/barefoot_concrete/walk_4.wav",
+   "key": "snd.foley.barefoot_concrete.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -8.12,
+   "length_s": 0.247,
+   "peak_ms": 20.6,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Concrete/FEETHmn_BARE-Barefoot or Socks Concrete Single Step 02_Ocular_Stride.wav",
+     "start": 0.012,
+     "end": 0.259,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 10.4,
+   "element": "walk",
+   "category": "barefoot_concrete",
+   "variant": 4,
+   "source": "FEETHmn_BARE-Barefoot or Socks Concrete Single Step 02_Ocular_Stride.wav",
+   "surface": "concrete",
+   "footwear": "barefoot",
+   "mix_db": -16.24
+  },
+  {
+   "file": "Foley/barefoot_concrete/walk_5.wav",
+   "key": "snd.foley.barefoot_concrete.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -8.9,
+   "length_s": 0.257,
+   "peak_ms": 26.6,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Concrete/FEETHmn_BARE-Barefoot or Socks Concrete Single Step 03_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.257,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 86.2,
+   "element": "walk",
+   "category": "barefoot_concrete",
+   "variant": 5,
+   "source": "FEETHmn_BARE-Barefoot or Socks Concrete Single Step 03_Ocular_Stride.wav",
+   "surface": "concrete",
+   "footwear": "barefoot",
+   "mix_db": -15.51
+  },
+  {
+   "file": "Foley/barefoot_glass/land_1.wav",
+   "key": "snd.foley.barefoot_glass.land",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -1.8,
+   "length_s": 0.45,
+   "peak_ms": 5.5,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Glass/FEETHmn_BARE-Barefoot or Socks Glass Stomp 01_Ocular_Stride.wav",
+     "start": 0.036,
+     "end": 0.486,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.1,
+   "element": "land",
+   "category": "barefoot_glass",
+   "variant": 1,
+   "source": "FEETHmn_BARE-Barefoot or Socks Glass Stomp 01_Ocular_Stride.wav",
+   "surface": "glass",
+   "footwear": "barefoot",
+   "mix_db": -12.23
+  },
+  {
+   "file": "Foley/barefoot_glass/land_2.wav",
+   "key": "snd.foley.barefoot_glass.land",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -1.41,
+   "length_s": 0.45,
+   "peak_ms": 9.2,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Glass/FEETHmn_BARE-Barefoot or Socks Glass Stomp 02_Ocular_Stride.wav",
+     "start": 0.008,
+     "end": 0.458,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 9.0,
+   "element": "land",
+   "category": "barefoot_glass",
+   "variant": 2,
+   "source": "FEETHmn_BARE-Barefoot or Socks Glass Stomp 02_Ocular_Stride.wav",
+   "surface": "glass",
+   "footwear": "barefoot",
+   "mix_db": -11.54
+  },
+  {
+   "file": "Foley/barefoot_glass/land_3.wav",
+   "key": "snd.foley.barefoot_glass.land",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -5.37,
+   "length_s": 0.45,
+   "peak_ms": 6.5,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Glass/FEETHmn_BARE-Barefoot or Socks Glass Stomp 03_Ocular_Stride.wav",
+     "start": 0.015,
+     "end": 0.465,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.4,
+   "element": "land",
+   "category": "barefoot_glass",
+   "variant": 3,
+   "source": "FEETHmn_BARE-Barefoot or Socks Glass Stomp 03_Ocular_Stride.wav",
+   "surface": "glass",
+   "footwear": "barefoot",
+   "mix_db": -11.67
+  },
+  {
+   "file": "Foley/barefoot_glass/land_4.wav",
+   "key": "snd.foley.barefoot_glass.land",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -20.5,
+   "lufs_m_max": -20.46,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.45,
+   "peak_ms": 4.5,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Glass/FEETHmn_BARE-Barefoot or Socks Glass Stomp 04_Ocular_Stride.wav",
+     "start": 0.03,
+     "end": 0.48,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.1,
+   "element": "land",
+   "category": "barefoot_glass",
+   "variant": 4,
+   "source": "FEETHmn_BARE-Barefoot or Socks Glass Stomp 04_Ocular_Stride.wav",
+   "surface": "glass",
+   "footwear": "barefoot",
+   "mix_db": -12.78
+  },
+  {
+   "file": "Foley/barefoot_glass/land_5.wav",
+   "key": "snd.foley.barefoot_glass.land",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.99,
+   "lufs_m_max": -21.94,
+   "true_peak_dbtp": -1.2,
+   "length_s": 0.45,
+   "peak_ms": 6.4,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Glass/FEETHmn_BARE-Barefoot or Socks Glass Stomp 05_Ocular_Stride.wav",
+     "start": 0.023,
+     "end": 0.473,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.3,
+   "element": "land",
+   "category": "barefoot_glass",
+   "variant": 5,
+   "source": "FEETHmn_BARE-Barefoot or Socks Glass Stomp 05_Ocular_Stride.wav",
+   "surface": "glass",
+   "footwear": "barefoot",
+   "mix_db": -11.36
+  },
+  {
+   "file": "Foley/barefoot_glass/run_1.wav",
+   "key": "snd.foley.barefoot_glass.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -3.52,
+   "length_s": 0.28,
+   "peak_ms": 25.0,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Glass/FEETHmn_BARE-Barefoot or Socks Run Glass Sequence_Ocular_Stride.wav",
+     "start": 0.608,
+     "end": 0.888,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 24.8,
+   "element": "run",
+   "category": "barefoot_glass",
+   "variant": 1,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Glass Sequence_Ocular_Stride.wav@0.64s",
+   "surface": "glass",
+   "footwear": "barefoot",
+   "mix_db": -13.23
+  },
+  {
+   "file": "Foley/barefoot_glass/run_10.wav",
+   "key": "snd.foley.barefoot_glass.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -3.59,
+   "length_s": 0.28,
+   "peak_ms": 18.9,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Glass/FEETHmn_BARE-Barefoot or Socks Run Glass Sequence_Ocular_Stride.wav",
+     "start": 29.155,
+     "end": 29.435,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.3,
+   "element": "run",
+   "category": "barefoot_glass",
+   "variant": 10,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Glass Sequence_Ocular_Stride.wav@29.18s",
+   "surface": "glass",
+   "footwear": "barefoot",
+   "mix_db": -13.23
+  },
+  {
+   "file": "Foley/barefoot_glass/run_2.wav",
+   "key": "snd.foley.barefoot_glass.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -3.74,
+   "length_s": 0.28,
+   "peak_ms": 16.8,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Glass/FEETHmn_BARE-Barefoot or Socks Run Glass Sequence_Ocular_Stride.wav",
+     "start": 6.014,
+     "end": 6.294,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 7.4,
+   "element": "run",
+   "category": "barefoot_glass",
+   "variant": 2,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Glass Sequence_Ocular_Stride.wav@6.04s",
+   "surface": "glass",
+   "footwear": "barefoot",
+   "mix_db": -13.21
+  },
+  {
+   "file": "Foley/barefoot_glass/run_3.wav",
+   "key": "snd.foley.barefoot_glass.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -2.45,
+   "length_s": 0.28,
+   "peak_ms": 25.2,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Glass/FEETHmn_BARE-Barefoot or Socks Run Glass Sequence_Ocular_Stride.wav",
+     "start": 10.03,
+     "end": 10.31,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 24.8,
+   "element": "run",
+   "category": "barefoot_glass",
+   "variant": 3,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Glass Sequence_Ocular_Stride.wav@10.06s",
+   "surface": "glass",
+   "footwear": "barefoot",
+   "mix_db": -13.23
+  },
+  {
+   "file": "Foley/barefoot_glass/run_4.wav",
+   "key": "snd.foley.barefoot_glass.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -1.05,
+   "length_s": 0.28,
+   "peak_ms": 14.0,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Glass/FEETHmn_BARE-Barefoot or Socks Run Glass Sequence_Ocular_Stride.wav",
+     "start": 17.752,
+     "end": 18.032,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.6,
+   "element": "run",
+   "category": "barefoot_glass",
+   "variant": 4,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Glass Sequence_Ocular_Stride.wav@17.77s",
+   "surface": "glass",
+   "footwear": "barefoot",
+   "mix_db": -13.22
+  },
+  {
+   "file": "Foley/barefoot_glass/run_5.wav",
+   "key": "snd.foley.barefoot_glass.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -4.68,
+   "length_s": 0.28,
+   "peak_ms": 23.2,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Glass/FEETHmn_BARE-Barefoot or Socks Run Glass Sequence_Ocular_Stride.wav",
+     "start": 18.327,
+     "end": 18.607,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 7.4,
+   "element": "run",
+   "category": "barefoot_glass",
+   "variant": 5,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Glass Sequence_Ocular_Stride.wav@18.34s",
+   "surface": "glass",
+   "footwear": "barefoot",
+   "mix_db": -13.22
+  },
+  {
+   "file": "Foley/barefoot_glass/run_6.wav",
+   "key": "snd.foley.barefoot_glass.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.88,
+   "lufs_m_max": -21.84,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.28,
+   "peak_ms": 5.8,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Glass/FEETHmn_BARE-Barefoot or Socks Run Glass Sequence_Ocular_Stride.wav",
+     "start": 24.345,
+     "end": 24.625,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.4,
+   "element": "run",
+   "category": "barefoot_glass",
+   "variant": 6,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Glass Sequence_Ocular_Stride.wav@24.36s",
+   "surface": "glass",
+   "footwear": "barefoot",
+   "mix_db": -13.39
+  },
+  {
+   "file": "Foley/barefoot_glass/run_7.wav",
+   "key": "snd.foley.barefoot_glass.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -1.17,
+   "length_s": 0.28,
+   "peak_ms": 14.8,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Glass/FEETHmn_BARE-Barefoot or Socks Run Glass Sequence_Ocular_Stride.wav",
+     "start": 25.165,
+     "end": 25.445,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.2,
+   "element": "run",
+   "category": "barefoot_glass",
+   "variant": 7,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Glass Sequence_Ocular_Stride.wav@25.18s",
+   "surface": "glass",
+   "footwear": "barefoot",
+   "mix_db": -13.23
+  },
+  {
+   "file": "Foley/barefoot_glass/run_8.wav",
+   "key": "snd.foley.barefoot_glass.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -1.41,
+   "length_s": 0.28,
+   "peak_ms": 13.7,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Glass/FEETHmn_BARE-Barefoot or Socks Run Glass Sequence_Ocular_Stride.wav",
+     "start": 25.752,
+     "end": 26.032,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 6.9,
+   "element": "run",
+   "category": "barefoot_glass",
+   "variant": 8,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Glass Sequence_Ocular_Stride.wav@25.77s",
+   "surface": "glass",
+   "footwear": "barefoot",
+   "mix_db": -13.23
+  },
+  {
+   "file": "Foley/barefoot_glass/run_9.wav",
+   "key": "snd.foley.barefoot_glass.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -4.48,
+   "length_s": 0.28,
+   "peak_ms": 26.1,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Glass/FEETHmn_BARE-Barefoot or Socks Run Glass Sequence_Ocular_Stride.wav",
+     "start": 26.607,
+     "end": 26.887,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 26.0,
+   "element": "run",
+   "category": "barefoot_glass",
+   "variant": 9,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Glass Sequence_Ocular_Stride.wav@26.64s",
+   "surface": "glass",
+   "footwear": "barefoot",
+   "mix_db": -13.23
+  },
+  {
+   "file": "Foley/barefoot_glass/walk_1.wav",
+   "key": "snd.foley.barefoot_glass.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -7.81,
+   "length_s": 0.34,
+   "peak_ms": 45.7,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Glass/FEETHmn_BARE-Barefoot or Socks Walk Glass Sequence_Ocular_Stride.wav",
+     "start": 0.714,
+     "end": 1.054,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 6.3,
+   "element": "walk",
+   "category": "barefoot_glass",
+   "variant": 1,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Glass Sequence_Ocular_Stride.wav@0.77s",
+   "surface": "glass",
+   "footwear": "barefoot",
+   "mix_db": -15.27
+  },
+  {
+   "file": "Foley/barefoot_glass/walk_10.wav",
+   "key": "snd.foley.barefoot_glass.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -7.65,
+   "length_s": 0.34,
+   "peak_ms": 61.5,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Glass/FEETHmn_BARE-Barefoot or Socks Glass Single Step 02_Ocular_Stride.wav",
+     "start": 0.024,
+     "end": 0.364,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.1,
+   "element": "walk",
+   "category": "barefoot_glass",
+   "variant": 10,
+   "source": "FEETHmn_BARE-Barefoot or Socks Glass Single Step 02_Ocular_Stride.wav",
+   "surface": "glass",
+   "footwear": "barefoot",
+   "mix_db": -14.97
+  },
+  {
+   "file": "Foley/barefoot_glass/walk_11.wav",
+   "key": "snd.foley.barefoot_glass.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -8.99,
+   "length_s": 0.34,
+   "peak_ms": 65.8,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Glass/FEETHmn_BARE-Barefoot or Socks Glass Single Step 03_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.34,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.5,
+   "element": "walk",
+   "category": "barefoot_glass",
+   "variant": 11,
+   "source": "FEETHmn_BARE-Barefoot or Socks Glass Single Step 03_Ocular_Stride.wav",
+   "surface": "glass",
+   "footwear": "barefoot",
+   "mix_db": -14.76
+  },
+  {
+   "file": "Foley/barefoot_glass/walk_2.wav",
+   "key": "snd.foley.barefoot_glass.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -7.59,
+   "length_s": 0.34,
+   "peak_ms": 52.0,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Glass/FEETHmn_BARE-Barefoot or Socks Walk Glass Sequence_Ocular_Stride.wav",
+     "start": 2.13,
+     "end": 2.47,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 29.2,
+   "element": "walk",
+   "category": "barefoot_glass",
+   "variant": 2,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Glass Sequence_Ocular_Stride.wav@2.19s",
+   "surface": "glass",
+   "footwear": "barefoot",
+   "mix_db": -15.32
+  },
+  {
+   "file": "Foley/barefoot_glass/walk_3.wav",
+   "key": "snd.foley.barefoot_glass.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -10.64,
+   "length_s": 0.34,
+   "peak_ms": 25.5,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Glass/FEETHmn_BARE-Barefoot or Socks Walk Glass Sequence_Ocular_Stride.wav",
+     "start": 8.714,
+     "end": 9.054,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.4,
+   "element": "walk",
+   "category": "barefoot_glass",
+   "variant": 3,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Glass Sequence_Ocular_Stride.wav@8.73s",
+   "surface": "glass",
+   "footwear": "barefoot",
+   "mix_db": -15.13
+  },
+  {
+   "file": "Foley/barefoot_glass/walk_4.wav",
+   "key": "snd.foley.barefoot_glass.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -2.3,
+   "length_s": 0.34,
+   "peak_ms": 42.5,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Glass/FEETHmn_BARE-Barefoot or Socks Walk Glass Sequence_Ocular_Stride.wav",
+     "start": 11.404,
+     "end": 11.744,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 42.4,
+   "element": "walk",
+   "category": "barefoot_glass",
+   "variant": 4,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Glass Sequence_Ocular_Stride.wav@11.45s",
+   "surface": "glass",
+   "footwear": "barefoot",
+   "mix_db": -15.3
+  },
+  {
+   "file": "Foley/barefoot_glass/walk_5.wav",
+   "key": "snd.foley.barefoot_glass.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -3.39,
+   "length_s": 0.34,
+   "peak_ms": 42.5,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Glass/FEETHmn_BARE-Barefoot or Socks Walk Glass Sequence_Ocular_Stride.wav",
+     "start": 18.092,
+     "end": 18.432,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 42.4,
+   "element": "walk",
+   "category": "barefoot_glass",
+   "variant": 5,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Glass Sequence_Ocular_Stride.wav@18.14s",
+   "surface": "glass",
+   "footwear": "barefoot",
+   "mix_db": -15.3
+  },
+  {
+   "file": "Foley/barefoot_glass/walk_6.wav",
+   "key": "snd.foley.barefoot_glass.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -5.06,
+   "length_s": 0.34,
+   "peak_ms": 5.6,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Glass/FEETHmn_BARE-Barefoot or Socks Walk Glass Sequence_Ocular_Stride.wav",
+     "start": 19.468,
+     "end": 19.808,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.6,
+   "element": "walk",
+   "category": "barefoot_glass",
+   "variant": 6,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Glass Sequence_Ocular_Stride.wav@19.48s",
+   "surface": "glass",
+   "footwear": "barefoot",
+   "mix_db": -15.23
+  },
+  {
+   "file": "Foley/barefoot_glass/walk_7.wav",
+   "key": "snd.foley.barefoot_glass.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -4.57,
+   "length_s": 0.34,
+   "peak_ms": 5.6,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Glass/FEETHmn_BARE-Barefoot or Socks Walk Glass Sequence_Ocular_Stride.wav",
+     "start": 24.121,
+     "end": 24.461,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.0,
+   "element": "walk",
+   "category": "barefoot_glass",
+   "variant": 7,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Glass Sequence_Ocular_Stride.wav@24.13s",
+   "surface": "glass",
+   "footwear": "barefoot",
+   "mix_db": -15.04
+  },
+  {
+   "file": "Foley/barefoot_glass/walk_8.wav",
+   "key": "snd.foley.barefoot_glass.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -6.07,
+   "length_s": 0.34,
+   "peak_ms": 6.5,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Glass/FEETHmn_BARE-Barefoot or Socks Walk Glass Sequence_Ocular_Stride.wav",
+     "start": 28.742,
+     "end": 29.082,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.2,
+   "element": "walk",
+   "category": "barefoot_glass",
+   "variant": 8,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Glass Sequence_Ocular_Stride.wav@28.75s",
+   "surface": "glass",
+   "footwear": "barefoot",
+   "mix_db": -15.36
+  },
+  {
+   "file": "Foley/barefoot_glass/walk_9.wav",
+   "key": "snd.foley.barefoot_glass.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -4.41,
+   "length_s": 0.34,
+   "peak_ms": 47.3,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Glass/FEETHmn_BARE-Barefoot or Socks Glass Single Step 01_Ocular_Stride.wav",
+     "start": 0.039,
+     "end": 0.379,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 46.9,
+   "element": "walk",
+   "category": "barefoot_glass",
+   "variant": 9,
+   "source": "FEETHmn_BARE-Barefoot or Socks Glass Single Step 01_Ocular_Stride.wav",
+   "surface": "glass",
+   "footwear": "barefoot",
+   "mix_db": -14.89
+  },
+  {
+   "file": "Foley/barefoot_metal/land_1.wav",
+   "key": "snd.foley.barefoot_metal.land",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -20.89,
+   "lufs_m_max": -20.85,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.232,
+   "peak_ms": 3.6,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Metal/FEETHmn_BARE-Barefoot or Socks Metal Stomp 01_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.232,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 3.4,
+   "element": "land",
+   "category": "barefoot_metal",
+   "variant": 1,
+   "source": "FEETHmn_BARE-Barefoot or Socks Metal Stomp 01_Ocular_Stride.wav",
+   "surface": "metal",
+   "footwear": "barefoot",
+   "mix_db": -11.34
+  },
+  {
+   "file": "Foley/barefoot_metal/land_2.wav",
+   "key": "snd.foley.barefoot_metal.land",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.21,
+   "lufs_m_max": -22.17,
+   "true_peak_dbtp": -1.2,
+   "length_s": 0.206,
+   "peak_ms": 5.9,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Metal/FEETHmn_BARE-Barefoot or Socks Metal Stomp 02_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.206,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 3.9,
+   "element": "land",
+   "category": "barefoot_metal",
+   "variant": 2,
+   "source": "FEETHmn_BARE-Barefoot or Socks Metal Stomp 02_Ocular_Stride.wav",
+   "surface": "metal",
+   "footwear": "barefoot",
+   "mix_db": -10.07
+  },
+  {
+   "file": "Foley/barefoot_metal/land_3.wav",
+   "key": "snd.foley.barefoot_metal.land",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.78,
+   "lufs_m_max": -21.74,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.329,
+   "peak_ms": 3.5,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Metal/FEETHmn_BARE-Barefoot or Socks Metal Stomp 03_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.329,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 3.2,
+   "element": "land",
+   "category": "barefoot_metal",
+   "variant": 3,
+   "source": "FEETHmn_BARE-Barefoot or Socks Metal Stomp 03_Ocular_Stride.wav",
+   "surface": "metal",
+   "footwear": "barefoot",
+   "mix_db": -10.28
+  },
+  {
+   "file": "Foley/barefoot_metal/land_4.wav",
+   "key": "snd.foley.barefoot_metal.land",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.58,
+   "lufs_m_max": -22.54,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.196,
+   "peak_ms": 4.4,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Metal/FEETHmn_BARE-Barefoot or Socks Metal Stomp 04_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.196,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 3.4,
+   "element": "land",
+   "category": "barefoot_metal",
+   "variant": 4,
+   "source": "FEETHmn_BARE-Barefoot or Socks Metal Stomp 04_Ocular_Stride.wav",
+   "surface": "metal",
+   "footwear": "barefoot",
+   "mix_db": -9.71
+  },
+  {
+   "file": "Foley/barefoot_metal/land_5.wav",
+   "key": "snd.foley.barefoot_metal.land",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.32,
+   "lufs_m_max": -21.28,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.218,
+   "peak_ms": 5.0,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Metal/FEETHmn_BARE-Barefoot or Socks Metal Stomp 05_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.218,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.7,
+   "element": "land",
+   "category": "barefoot_metal",
+   "variant": 5,
+   "source": "FEETHmn_BARE-Barefoot or Socks Metal Stomp 05_Ocular_Stride.wav",
+   "surface": "metal",
+   "footwear": "barefoot",
+   "mix_db": -10.95
+  },
+  {
+   "file": "Foley/barefoot_metal/run_1.wav",
+   "key": "snd.foley.barefoot_metal.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -3.54,
+   "length_s": 0.28,
+   "peak_ms": 11.0,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Metal/FEETHmn_BARE-Barefoot or Socks Run Metal Sequence_Ocular_Stride.wav",
+     "start": 3.417,
+     "end": 3.697,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 9.4,
+   "element": "run",
+   "category": "barefoot_metal",
+   "variant": 1,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Metal Sequence_Ocular_Stride.wav@3.43s",
+   "surface": "metal",
+   "footwear": "barefoot",
+   "mix_db": -12.23
+  },
+  {
+   "file": "Foley/barefoot_metal/run_10.wav",
+   "key": "snd.foley.barefoot_metal.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -3.7,
+   "length_s": 0.28,
+   "peak_ms": 16.0,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Metal/FEETHmn_BARE-Barefoot or Socks Run Metal Sequence_Ocular_Stride.wav",
+     "start": 27.418,
+     "end": 27.698,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.6,
+   "element": "run",
+   "category": "barefoot_metal",
+   "variant": 10,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Metal Sequence_Ocular_Stride.wav@27.44s",
+   "surface": "metal",
+   "footwear": "barefoot",
+   "mix_db": -12.23
+  },
+  {
+   "file": "Foley/barefoot_metal/run_2.wav",
+   "key": "snd.foley.barefoot_metal.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -5.79,
+   "length_s": 0.28,
+   "peak_ms": 15.1,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Metal/FEETHmn_BARE-Barefoot or Socks Run Metal Sequence_Ocular_Stride.wav",
+     "start": 3.716,
+     "end": 3.996,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 7.5,
+   "element": "run",
+   "category": "barefoot_metal",
+   "variant": 2,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Metal Sequence_Ocular_Stride.wav@3.73s",
+   "surface": "metal",
+   "footwear": "barefoot",
+   "mix_db": -12.23
+  },
+  {
+   "file": "Foley/barefoot_metal/run_3.wav",
+   "key": "snd.foley.barefoot_metal.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -5.03,
+   "length_s": 0.28,
+   "peak_ms": 25.7,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Metal/FEETHmn_BARE-Barefoot or Socks Run Metal Sequence_Ocular_Stride.wav",
+     "start": 6.857,
+     "end": 7.137,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 15.6,
+   "element": "run",
+   "category": "barefoot_metal",
+   "variant": 3,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Metal Sequence_Ocular_Stride.wav@6.89s",
+   "surface": "metal",
+   "footwear": "barefoot",
+   "mix_db": -11.7
+  },
+  {
+   "file": "Foley/barefoot_metal/run_4.wav",
+   "key": "snd.foley.barefoot_metal.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -3.59,
+   "length_s": 0.28,
+   "peak_ms": 17.9,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Metal/FEETHmn_BARE-Barefoot or Socks Run Metal Sequence_Ocular_Stride.wav",
+     "start": 11.734,
+     "end": 12.014,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 6.7,
+   "element": "run",
+   "category": "barefoot_metal",
+   "variant": 4,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Metal Sequence_Ocular_Stride.wav@11.76s",
+   "surface": "metal",
+   "footwear": "barefoot",
+   "mix_db": -12.23
+  },
+  {
+   "file": "Foley/barefoot_metal/run_5.wav",
+   "key": "snd.foley.barefoot_metal.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -3.99,
+   "length_s": 0.28,
+   "peak_ms": 20.7,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Metal/FEETHmn_BARE-Barefoot or Socks Run Metal Sequence_Ocular_Stride.wav",
+     "start": 15.136,
+     "end": 15.416,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 9.2,
+   "element": "run",
+   "category": "barefoot_metal",
+   "variant": 5,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Metal Sequence_Ocular_Stride.wav@15.15s",
+   "surface": "metal",
+   "footwear": "barefoot",
+   "mix_db": -12.23
+  },
+  {
+   "file": "Foley/barefoot_metal/run_6.wav",
+   "key": "snd.foley.barefoot_metal.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -3.6,
+   "length_s": 0.28,
+   "peak_ms": 17.4,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Metal/FEETHmn_BARE-Barefoot or Socks Run Metal Sequence_Ocular_Stride.wav",
+     "start": 16.616,
+     "end": 16.896,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 11.9,
+   "element": "run",
+   "category": "barefoot_metal",
+   "variant": 6,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Metal Sequence_Ocular_Stride.wav@16.64s",
+   "surface": "metal",
+   "footwear": "barefoot",
+   "mix_db": -12.2
+  },
+  {
+   "file": "Foley/barefoot_metal/run_7.wav",
+   "key": "snd.foley.barefoot_metal.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -3.67,
+   "length_s": 0.28,
+   "peak_ms": 10.9,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Metal/FEETHmn_BARE-Barefoot or Socks Run Metal Sequence_Ocular_Stride.wav",
+     "start": 17.741,
+     "end": 18.021,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.2,
+   "element": "run",
+   "category": "barefoot_metal",
+   "variant": 7,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Metal Sequence_Ocular_Stride.wav@17.75s",
+   "surface": "metal",
+   "footwear": "barefoot",
+   "mix_db": -12.23
+  },
+  {
+   "file": "Foley/barefoot_metal/run_8.wav",
+   "key": "snd.foley.barefoot_metal.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -4.01,
+   "length_s": 0.28,
+   "peak_ms": 11.4,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Metal/FEETHmn_BARE-Barefoot or Socks Run Metal Sequence_Ocular_Stride.wav",
+     "start": 21.714,
+     "end": 21.994,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.5,
+   "element": "run",
+   "category": "barefoot_metal",
+   "variant": 8,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Metal Sequence_Ocular_Stride.wav@21.73s",
+   "surface": "metal",
+   "footwear": "barefoot",
+   "mix_db": -12.23
+  },
+  {
+   "file": "Foley/barefoot_metal/run_9.wav",
+   "key": "snd.foley.barefoot_metal.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -2.48,
+   "length_s": 0.28,
+   "peak_ms": 11.3,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Metal/FEETHmn_BARE-Barefoot or Socks Run Metal Sequence_Ocular_Stride.wav",
+     "start": 26.011,
+     "end": 26.291,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 11.8,
+   "element": "run",
+   "category": "barefoot_metal",
+   "variant": 9,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Metal Sequence_Ocular_Stride.wav@26.03s",
+   "surface": "metal",
+   "footwear": "barefoot",
+   "mix_db": -12.23
+  },
+  {
+   "file": "Foley/barefoot_metal/walk_1.wav",
+   "key": "snd.foley.barefoot_metal.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -5.22,
+   "length_s": 0.34,
+   "peak_ms": 12.1,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Metal/FEETHmn_BARE-Barefoot or Socks Walk Metal Sequence_Ocular_Stride.wav",
+     "start": 5.299,
+     "end": 5.639,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 11.2,
+   "element": "walk",
+   "category": "barefoot_metal",
+   "variant": 1,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Metal Sequence_Ocular_Stride.wav@5.32s",
+   "surface": "metal",
+   "footwear": "barefoot",
+   "mix_db": -14.23
+  },
+  {
+   "file": "Foley/barefoot_metal/walk_2.wav",
+   "key": "snd.foley.barefoot_metal.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -6.29,
+   "length_s": 0.34,
+   "peak_ms": 9.3,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Metal/FEETHmn_BARE-Barefoot or Socks Walk Metal Sequence_Ocular_Stride.wav",
+     "start": 10.693,
+     "end": 11.033,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.2,
+   "element": "walk",
+   "category": "barefoot_metal",
+   "variant": 2,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Metal Sequence_Ocular_Stride.wav@10.71s",
+   "surface": "metal",
+   "footwear": "barefoot",
+   "mix_db": -14.24
+  },
+  {
+   "file": "Foley/barefoot_metal/walk_3.wav",
+   "key": "snd.foley.barefoot_metal.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -6.08,
+   "length_s": 0.34,
+   "peak_ms": 16.2,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Metal/FEETHmn_BARE-Barefoot or Socks Walk Metal Sequence_Ocular_Stride.wav",
+     "start": 18.673,
+     "end": 19.013,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 6.4,
+   "element": "walk",
+   "category": "barefoot_metal",
+   "variant": 3,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Metal Sequence_Ocular_Stride.wav@18.69s",
+   "surface": "metal",
+   "footwear": "barefoot",
+   "mix_db": -14.23
+  },
+  {
+   "file": "Foley/barefoot_metal/walk_4.wav",
+   "key": "snd.foley.barefoot_metal.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -5.87,
+   "length_s": 0.34,
+   "peak_ms": 16.0,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Metal/FEETHmn_BARE-Barefoot or Socks Walk Metal Sequence_Ocular_Stride.wav",
+     "start": 19.994,
+     "end": 20.334,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.0,
+   "element": "walk",
+   "category": "barefoot_metal",
+   "variant": 4,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Metal Sequence_Ocular_Stride.wav@20.01s",
+   "surface": "metal",
+   "footwear": "barefoot",
+   "mix_db": -14.23
+  },
+  {
+   "file": "Foley/barefoot_metal/walk_5.wav",
+   "key": "snd.foley.barefoot_metal.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -6.43,
+   "length_s": 0.34,
+   "peak_ms": 9.3,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Metal/FEETHmn_BARE-Barefoot or Socks Walk Metal Sequence_Ocular_Stride.wav",
+     "start": 24.627,
+     "end": 24.967,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.2,
+   "element": "walk",
+   "category": "barefoot_metal",
+   "variant": 5,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Metal Sequence_Ocular_Stride.wav@24.64s",
+   "surface": "metal",
+   "footwear": "barefoot",
+   "mix_db": -14.24
+  },
+  {
+   "file": "Foley/barefoot_metal/walk_6.wav",
+   "key": "snd.foley.barefoot_metal.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -5.79,
+   "length_s": 0.34,
+   "peak_ms": 8.7,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Metal/FEETHmn_BARE-Barefoot or Socks Walk Metal Sequence_Ocular_Stride.wav",
+     "start": 25.998,
+     "end": 26.338,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 6.0,
+   "element": "walk",
+   "category": "barefoot_metal",
+   "variant": 6,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Metal Sequence_Ocular_Stride.wav@26.01s",
+   "surface": "metal",
+   "footwear": "barefoot",
+   "mix_db": -14.22
+  },
+  {
+   "file": "Foley/barefoot_metal/walk_7.wav",
+   "key": "snd.foley.barefoot_metal.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -7.21,
+   "length_s": 0.296,
+   "peak_ms": 63.2,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Metal/FEETHmn_BARE-Barefoot or Socks Metal Single Step 01_Ocular_Stride.wav",
+     "start": 0.011,
+     "end": 0.307,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.3,
+   "element": "walk",
+   "category": "barefoot_metal",
+   "variant": 7,
+   "source": "FEETHmn_BARE-Barefoot or Socks Metal Single Step 01_Ocular_Stride.wav",
+   "surface": "metal",
+   "footwear": "barefoot",
+   "mix_db": -14.18
+  },
+  {
+   "file": "Foley/barefoot_metal/walk_8.wav",
+   "key": "snd.foley.barefoot_metal.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -5.48,
+   "length_s": 0.292,
+   "peak_ms": 16.9,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Metal/FEETHmn_BARE-Barefoot or Socks Metal Single Step 02_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.292,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 10.1,
+   "element": "walk",
+   "category": "barefoot_metal",
+   "variant": 8,
+   "source": "FEETHmn_BARE-Barefoot or Socks Metal Single Step 02_Ocular_Stride.wav",
+   "surface": "metal",
+   "footwear": "barefoot",
+   "mix_db": -14.22
+  },
+  {
+   "file": "Foley/barefoot_metal/walk_9.wav",
+   "key": "snd.foley.barefoot_metal.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -4.19,
+   "length_s": 0.242,
+   "peak_ms": 9.2,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Metal/FEETHmn_BARE-Barefoot or Socks Metal Single Step 03_Ocular_Stride.wav",
+     "start": 0.065,
+     "end": 0.307,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 8.2,
+   "element": "walk",
+   "category": "barefoot_metal",
+   "variant": 9,
+   "source": "FEETHmn_BARE-Barefoot or Socks Metal Single Step 03_Ocular_Stride.wav",
+   "surface": "metal",
+   "footwear": "barefoot",
+   "mix_db": -14.21
+  },
+  {
+   "file": "Foley/barefoot_water/land_1.wav",
+   "key": "snd.foley.barefoot_water.land",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -1.35,
+   "length_s": 0.45,
+   "peak_ms": 5.7,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Water/FEETHmn_BARE-Barefoot or Socks Water Stomp 01_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.45,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.2,
+   "element": "land",
+   "category": "barefoot_water",
+   "variant": 1,
+   "source": "FEETHmn_BARE-Barefoot or Socks Water Stomp 01_Ocular_Stride.wav",
+   "surface": "water",
+   "footwear": "barefoot",
+   "mix_db": -14.23
+  },
+  {
+   "file": "Foley/barefoot_water/land_2.wav",
+   "key": "snd.foley.barefoot_water.land",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.58,
+   "lufs_m_max": -22.54,
+   "true_peak_dbtp": -2.45,
+   "length_s": 0.45,
+   "peak_ms": 8.2,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Water/FEETHmn_BARE-Barefoot or Socks Water Stomp 02_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.45,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 8.0,
+   "element": "land",
+   "category": "barefoot_water",
+   "variant": 2,
+   "source": "FEETHmn_BARE-Barefoot or Socks Water Stomp 02_Ocular_Stride.wav",
+   "surface": "water",
+   "footwear": "barefoot",
+   "mix_db": -12.21
+  },
+  {
+   "file": "Foley/barefoot_water/land_3.wav",
+   "key": "snd.foley.barefoot_water.land",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.03,
+   "lufs_m_max": -23.99,
+   "true_peak_dbtp": -3.41,
+   "length_s": 0.45,
+   "peak_ms": 6.2,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Water/FEETHmn_BARE-Barefoot or Socks Water Stomp 03_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.45,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 3.5,
+   "element": "land",
+   "category": "barefoot_water",
+   "variant": 3,
+   "source": "FEETHmn_BARE-Barefoot or Socks Water Stomp 03_Ocular_Stride.wav",
+   "surface": "water",
+   "footwear": "barefoot",
+   "mix_db": -10.4
+  },
+  {
+   "file": "Foley/barefoot_water/land_4.wav",
+   "key": "snd.foley.barefoot_water.land",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.69,
+   "lufs_m_max": -22.65,
+   "true_peak_dbtp": -1.35,
+   "length_s": 0.45,
+   "peak_ms": 6.0,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Water/FEETHmn_BARE-Barefoot or Socks Water Stomp 04_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.45,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 3.4,
+   "element": "land",
+   "category": "barefoot_water",
+   "variant": 4,
+   "source": "FEETHmn_BARE-Barefoot or Socks Water Stomp 04_Ocular_Stride.wav",
+   "surface": "water",
+   "footwear": "barefoot",
+   "mix_db": -12.63
+  },
+  {
+   "file": "Foley/barefoot_water/land_5.wav",
+   "key": "snd.foley.barefoot_water.land",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.18,
+   "lufs_m_max": -22.14,
+   "true_peak_dbtp": -1.42,
+   "length_s": 0.45,
+   "peak_ms": 5.1,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Water/FEETHmn_BARE-Barefoot or Socks Water Stomp 05_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.45,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 3.0,
+   "element": "land",
+   "category": "barefoot_water",
+   "variant": 5,
+   "source": "FEETHmn_BARE-Barefoot or Socks Water Stomp 05_Ocular_Stride.wav",
+   "surface": "water",
+   "footwear": "barefoot",
+   "mix_db": -13.35
+  },
+  {
+   "file": "Foley/barefoot_water/run_1.wav",
+   "key": "snd.foley.barefoot_water.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.94,
+   "lufs_m_max": -21.9,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.28,
+   "peak_ms": 4.1,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Water/FEETHmn_BARE-Barefoot or Socks Run Water Sequence_Ocular_Stride.wav",
+     "start": 3.696,
+     "end": 3.976,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.1,
+   "element": "run",
+   "category": "barefoot_water",
+   "variant": 1,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Water Sequence_Ocular_Stride.wav@3.71s",
+   "surface": "water",
+   "footwear": "barefoot",
+   "mix_db": -15.33
+  },
+  {
+   "file": "Foley/barefoot_water/run_10.wav",
+   "key": "snd.foley.barefoot_water.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -6.88,
+   "length_s": 0.28,
+   "peak_ms": 9.9,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Water/FEETHmn_BARE-Barefoot or Socks Run Water Sequence_Ocular_Stride.wav",
+     "start": 27.1,
+     "end": 27.38,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.0,
+   "element": "run",
+   "category": "barefoot_water",
+   "variant": 10,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Water Sequence_Ocular_Stride.wav@27.11s",
+   "surface": "water",
+   "footwear": "barefoot",
+   "mix_db": -15.23
+  },
+  {
+   "file": "Foley/barefoot_water/run_2.wav",
+   "key": "snd.foley.barefoot_water.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.87,
+   "lufs_m_max": -21.83,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.28,
+   "peak_ms": 10.0,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Water/FEETHmn_BARE-Barefoot or Socks Run Water Sequence_Ocular_Stride.wav",
+     "start": 10.306,
+     "end": 10.586,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.1,
+   "element": "run",
+   "category": "barefoot_water",
+   "variant": 2,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Water Sequence_Ocular_Stride.wav@10.32s",
+   "surface": "water",
+   "footwear": "barefoot",
+   "mix_db": -15.4
+  },
+  {
+   "file": "Foley/barefoot_water/run_3.wav",
+   "key": "snd.foley.barefoot_water.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.88,
+   "lufs_m_max": -21.84,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.28,
+   "peak_ms": 4.1,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Water/FEETHmn_BARE-Barefoot or Socks Run Water Sequence_Ocular_Stride.wav",
+     "start": 13.134,
+     "end": 13.414,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.1,
+   "element": "run",
+   "category": "barefoot_water",
+   "variant": 3,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Water Sequence_Ocular_Stride.wav@13.15s",
+   "surface": "water",
+   "footwear": "barefoot",
+   "mix_db": -15.39
+  },
+  {
+   "file": "Foley/barefoot_water/run_4.wav",
+   "key": "snd.foley.barefoot_water.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -4.24,
+   "length_s": 0.28,
+   "peak_ms": 35.9,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Water/FEETHmn_BARE-Barefoot or Socks Run Water Sequence_Ocular_Stride.wav",
+     "start": 13.397,
+     "end": 13.677,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 9.1,
+   "element": "run",
+   "category": "barefoot_water",
+   "variant": 4,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Water Sequence_Ocular_Stride.wav@13.44s",
+   "surface": "water",
+   "footwear": "barefoot",
+   "mix_db": -15.23
+  },
+  {
+   "file": "Foley/barefoot_water/run_5.wav",
+   "key": "snd.foley.barefoot_water.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.92,
+   "lufs_m_max": -21.88,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.28,
+   "peak_ms": 4.4,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Water/FEETHmn_BARE-Barefoot or Socks Run Water Sequence_Ocular_Stride.wav",
+     "start": 15.118,
+     "end": 15.398,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.2,
+   "element": "run",
+   "category": "barefoot_water",
+   "variant": 5,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Water Sequence_Ocular_Stride.wav@15.13s",
+   "surface": "water",
+   "footwear": "barefoot",
+   "mix_db": -15.35
+  },
+  {
+   "file": "Foley/barefoot_water/run_6.wav",
+   "key": "snd.foley.barefoot_water.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.08,
+   "lufs_m_max": -24.04,
+   "true_peak_dbtp": -2.0,
+   "length_s": 0.28,
+   "peak_ms": 32.8,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Water/FEETHmn_BARE-Barefoot or Socks Run Water Sequence_Ocular_Stride.wav",
+     "start": 16.851,
+     "end": 17.131,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 30.4,
+   "element": "run",
+   "category": "barefoot_water",
+   "variant": 6,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Water Sequence_Ocular_Stride.wav@16.89s",
+   "surface": "water",
+   "footwear": "barefoot",
+   "mix_db": -13.19
+  },
+  {
+   "file": "Foley/barefoot_water/run_7.wav",
+   "key": "snd.foley.barefoot_water.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -23.02,
+   "lufs_m_max": -22.98,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.28,
+   "peak_ms": 4.0,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Water/FEETHmn_BARE-Barefoot or Socks Run Water Sequence_Ocular_Stride.wav",
+     "start": 21.696,
+     "end": 21.976,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.0,
+   "element": "run",
+   "category": "barefoot_water",
+   "variant": 7,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Water Sequence_Ocular_Stride.wav@21.70s",
+   "surface": "water",
+   "footwear": "barefoot",
+   "mix_db": -14.25
+  },
+  {
+   "file": "Foley/barefoot_water/run_8.wav",
+   "key": "snd.foley.barefoot_water.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -5.88,
+   "length_s": 0.28,
+   "peak_ms": 9.7,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Water/FEETHmn_BARE-Barefoot or Socks Run Water Sequence_Ocular_Stride.wav",
+     "start": 22.569,
+     "end": 22.849,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.8,
+   "element": "run",
+   "category": "barefoot_water",
+   "variant": 8,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Water Sequence_Ocular_Stride.wav@22.58s",
+   "surface": "water",
+   "footwear": "barefoot",
+   "mix_db": -15.23
+  },
+  {
+   "file": "Foley/barefoot_water/run_9.wav",
+   "key": "snd.foley.barefoot_water.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -4.66,
+   "length_s": 0.28,
+   "peak_ms": 4.5,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Water/FEETHmn_BARE-Barefoot or Socks Run Water Sequence_Ocular_Stride.wav",
+     "start": 25.983,
+     "end": 26.263,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.0,
+   "element": "run",
+   "category": "barefoot_water",
+   "variant": 9,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Water Sequence_Ocular_Stride.wav@26.02s",
+   "surface": "water",
+   "footwear": "barefoot",
+   "mix_db": -15.23
+  },
+  {
+   "file": "Foley/barefoot_water/walk_1.wav",
+   "key": "snd.foley.barefoot_water.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -7.67,
+   "length_s": 0.34,
+   "peak_ms": 33.5,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Water/FEETHmn_BARE-Barefoot or Socks Walk Water Sequence_Ocular_Stride.wav",
+     "start": 17.936,
+     "end": 18.276,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 6.6,
+   "element": "walk",
+   "category": "barefoot_water",
+   "variant": 1,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Water Sequence_Ocular_Stride.wav@17.95s",
+   "surface": "water",
+   "footwear": "barefoot",
+   "mix_db": -17.22
+  },
+  {
+   "file": "Foley/barefoot_water/walk_2.wav",
+   "key": "snd.foley.barefoot_water.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -10.92,
+   "length_s": 0.34,
+   "peak_ms": 20.5,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Water/FEETHmn_BARE-Barefoot or Socks Walk Water Sequence_Ocular_Stride.wav",
+     "start": 19.932,
+     "end": 20.272,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 6.1,
+   "element": "walk",
+   "category": "barefoot_water",
+   "variant": 2,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Water Sequence_Ocular_Stride.wav@19.94s",
+   "surface": "water",
+   "footwear": "barefoot",
+   "mix_db": -17.3
+  },
+  {
+   "file": "Foley/barefoot_water/walk_3.wav",
+   "key": "snd.foley.barefoot_water.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -7.59,
+   "length_s": 0.34,
+   "peak_ms": 98.7,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Water/FEETHmn_BARE-Barefoot or Socks Walk Water Sequence_Ocular_Stride.wav",
+     "start": 25.248,
+     "end": 25.588,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 7.3,
+   "element": "walk",
+   "category": "barefoot_water",
+   "variant": 3,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Water Sequence_Ocular_Stride.wav@25.26s",
+   "surface": "water",
+   "footwear": "barefoot",
+   "mix_db": -17.0
+  },
+  {
+   "file": "Foley/barefoot_water/walk_4.wav",
+   "key": "snd.foley.barefoot_water.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -5.59,
+   "length_s": 0.34,
+   "peak_ms": 3.4,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Water/FEETHmn_BARE-Barefoot or Socks Water Single Step 01_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.34,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 3.4,
+   "element": "walk",
+   "category": "barefoot_water",
+   "variant": 4,
+   "source": "FEETHmn_BARE-Barefoot or Socks Water Single Step 01_Ocular_Stride.wav",
+   "surface": "water",
+   "footwear": "barefoot",
+   "mix_db": -17.34
+  },
+  {
+   "file": "Foley/barefoot_water/walk_5.wav",
+   "key": "snd.foley.barefoot_water.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -7.05,
+   "length_s": 0.34,
+   "peak_ms": 12.9,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Water/FEETHmn_BARE-Barefoot or Socks Water Single Step 02_Ocular_Stride.wav",
+     "start": 0.007,
+     "end": 0.347,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.0,
+   "element": "walk",
+   "category": "barefoot_water",
+   "variant": 5,
+   "source": "FEETHmn_BARE-Barefoot or Socks Water Single Step 02_Ocular_Stride.wav",
+   "surface": "water",
+   "footwear": "barefoot",
+   "mix_db": -16.36
+  },
+  {
+   "file": "Foley/barefoot_water/walk_6.wav",
+   "key": "snd.foley.barefoot_water.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -4.96,
+   "length_s": 0.34,
+   "peak_ms": 12.0,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Water/FEETHmn_BARE-Barefoot or Socks Water Single Step 03_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.34,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 11.9,
+   "element": "walk",
+   "category": "barefoot_water",
+   "variant": 6,
+   "source": "FEETHmn_BARE-Barefoot or Socks Water Single Step 03_Ocular_Stride.wav",
+   "surface": "water",
+   "footwear": "barefoot",
+   "mix_db": -17.24
+  },
+  {
+   "file": "Foley/barefoot_wood/land_1.wav",
+   "key": "snd.foley.barefoot_wood.land",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -2.25,
+   "length_s": 0.357,
+   "peak_ms": 30.2,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Wood/FEETHmn_BARE-Barefoot or Socks Wood Stomp 01_Ocular_Stride.wav",
+     "start": 0.001,
+     "end": 0.359,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 15.5,
+   "element": "land",
+   "category": "barefoot_wood",
+   "variant": 1,
+   "source": "FEETHmn_BARE-Barefoot or Socks Wood Stomp 01_Ocular_Stride.wav",
+   "surface": "wood",
+   "footwear": "barefoot",
+   "mix_db": -13.2
+  },
+  {
+   "file": "Foley/barefoot_wood/land_2.wav",
+   "key": "snd.foley.barefoot_wood.land",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -4.25,
+   "length_s": 0.335,
+   "peak_ms": 10.0,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Wood/FEETHmn_BARE-Barefoot or Socks Wood Stomp 02_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.335,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 6.8,
+   "element": "land",
+   "category": "barefoot_wood",
+   "variant": 2,
+   "source": "FEETHmn_BARE-Barefoot or Socks Wood Stomp 02_Ocular_Stride.wav",
+   "surface": "wood",
+   "footwear": "barefoot",
+   "mix_db": -13.23
+  },
+  {
+   "file": "Foley/barefoot_wood/land_3.wav",
+   "key": "snd.foley.barefoot_wood.land",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.32,
+   "lufs_m_max": -22.28,
+   "true_peak_dbtp": -1.07,
+   "length_s": 0.25,
+   "peak_ms": 9.1,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Wood/FEETHmn_BARE-Barefoot or Socks Wood Stomp 03_Ocular_Stride.wav",
+     "start": 0.004,
+     "end": 0.254,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 6.0,
+   "element": "land",
+   "category": "barefoot_wood",
+   "variant": 3,
+   "source": "FEETHmn_BARE-Barefoot or Socks Wood Stomp 03_Ocular_Stride.wav",
+   "surface": "wood",
+   "footwear": "barefoot",
+   "mix_db": -11.95
+  },
+  {
+   "file": "Foley/barefoot_wood/land_4.wav",
+   "key": "snd.foley.barefoot_wood.land",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -2.19,
+   "length_s": 0.277,
+   "peak_ms": 9.8,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Wood/FEETHmn_BARE-Barefoot or Socks Wood Stomp 04_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.277,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 6.3,
+   "element": "land",
+   "category": "barefoot_wood",
+   "variant": 4,
+   "source": "FEETHmn_BARE-Barefoot or Socks Wood Stomp 04_Ocular_Stride.wav",
+   "surface": "wood",
+   "footwear": "barefoot",
+   "mix_db": -13.24
+  },
+  {
+   "file": "Foley/barefoot_wood/land_5.wav",
+   "key": "snd.foley.barefoot_wood.land",
+   "layer": "foley",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -21.04,
+   "lufs_m_max": -21.0,
+   "true_peak_dbtp": -3.41,
+   "length_s": 0.317,
+   "peak_ms": 12.8,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Wood/FEETHmn_BARE-Barefoot or Socks Wood Stomp 05_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.317,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 3.6,
+   "element": "land",
+   "category": "barefoot_wood",
+   "variant": 5,
+   "source": "FEETHmn_BARE-Barefoot or Socks Wood Stomp 05_Ocular_Stride.wav",
+   "surface": "wood",
+   "footwear": "barefoot",
+   "mix_db": -13.2
+  },
+  {
+   "file": "Foley/barefoot_wood/run_1.wav",
+   "key": "snd.foley.barefoot_wood.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -5.22,
+   "length_s": 0.28,
+   "peak_ms": 12.4,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Wood/FEETHmn_BARE-Barefoot or Socks Run Wood Sequence_Ocular_Stride.wav",
+     "start": 1.708,
+     "end": 1.988,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.4,
+   "element": "run",
+   "category": "barefoot_wood",
+   "variant": 1,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Wood Sequence_Ocular_Stride.wav@1.73s",
+   "surface": "wood",
+   "footwear": "barefoot",
+   "mix_db": -14.23
+  },
+  {
+   "file": "Foley/barefoot_wood/run_10.wav",
+   "key": "snd.foley.barefoot_wood.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -6.14,
+   "length_s": 0.28,
+   "peak_ms": 24.3,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Wood/FEETHmn_BARE-Barefoot or Socks Run Wood Sequence_Ocular_Stride.wav",
+     "start": 26.873,
+     "end": 27.153,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 6.7,
+   "element": "run",
+   "category": "barefoot_wood",
+   "variant": 10,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Wood Sequence_Ocular_Stride.wav@26.89s",
+   "surface": "wood",
+   "footwear": "barefoot",
+   "mix_db": -14.23
+  },
+  {
+   "file": "Foley/barefoot_wood/run_2.wav",
+   "key": "snd.foley.barefoot_wood.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -6.54,
+   "length_s": 0.28,
+   "peak_ms": 12.3,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Wood/FEETHmn_BARE-Barefoot or Socks Run Wood Sequence_Ocular_Stride.wav",
+     "start": 3.706,
+     "end": 3.986,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.9,
+   "element": "run",
+   "category": "barefoot_wood",
+   "variant": 2,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Wood Sequence_Ocular_Stride.wav@3.73s",
+   "surface": "wood",
+   "footwear": "barefoot",
+   "mix_db": -14.23
+  },
+  {
+   "file": "Foley/barefoot_wood/run_3.wav",
+   "key": "snd.foley.barefoot_wood.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -6.72,
+   "length_s": 0.28,
+   "peak_ms": 9.5,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Wood/FEETHmn_BARE-Barefoot or Socks Run Wood Sequence_Ocular_Stride.wav",
+     "start": 8.328,
+     "end": 8.608,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 10.1,
+   "element": "run",
+   "category": "barefoot_wood",
+   "variant": 3,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Wood Sequence_Ocular_Stride.wav@8.36s",
+   "surface": "wood",
+   "footwear": "barefoot",
+   "mix_db": -14.23
+  },
+  {
+   "file": "Foley/barefoot_wood/run_4.wav",
+   "key": "snd.foley.barefoot_wood.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -5.05,
+   "length_s": 0.28,
+   "peak_ms": 16.1,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Wood/FEETHmn_BARE-Barefoot or Socks Run Wood Sequence_Ocular_Stride.wav",
+     "start": 11.427,
+     "end": 11.707,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.6,
+   "element": "run",
+   "category": "barefoot_wood",
+   "variant": 4,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Wood Sequence_Ocular_Stride.wav@11.45s",
+   "surface": "wood",
+   "footwear": "barefoot",
+   "mix_db": -14.22
+  },
+  {
+   "file": "Foley/barefoot_wood/run_5.wav",
+   "key": "snd.foley.barefoot_wood.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -4.68,
+   "length_s": 0.28,
+   "peak_ms": 9.4,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Wood/FEETHmn_BARE-Barefoot or Socks Run Wood Sequence_Ocular_Stride.wav",
+     "start": 15.421,
+     "end": 15.701,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.7,
+   "element": "run",
+   "category": "barefoot_wood",
+   "variant": 5,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Wood Sequence_Ocular_Stride.wav@15.43s",
+   "surface": "wood",
+   "footwear": "barefoot",
+   "mix_db": -14.23
+  },
+  {
+   "file": "Foley/barefoot_wood/run_6.wav",
+   "key": "snd.foley.barefoot_wood.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -4.1,
+   "length_s": 0.28,
+   "peak_ms": 10.7,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Wood/FEETHmn_BARE-Barefoot or Socks Run Wood Sequence_Ocular_Stride.wav",
+     "start": 18.595,
+     "end": 18.875,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.0,
+   "element": "run",
+   "category": "barefoot_wood",
+   "variant": 6,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Wood Sequence_Ocular_Stride.wav@18.61s",
+   "surface": "wood",
+   "footwear": "barefoot",
+   "mix_db": -14.23
+  },
+  {
+   "file": "Foley/barefoot_wood/run_7.wav",
+   "key": "snd.foley.barefoot_wood.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -4.72,
+   "length_s": 0.28,
+   "peak_ms": 21.4,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Wood/FEETHmn_BARE-Barefoot or Socks Run Wood Sequence_Ocular_Stride.wav",
+     "start": 19.425,
+     "end": 19.706,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 7.6,
+   "element": "run",
+   "category": "barefoot_wood",
+   "variant": 7,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Wood Sequence_Ocular_Stride.wav@19.45s",
+   "surface": "wood",
+   "footwear": "barefoot",
+   "mix_db": -14.23
+  },
+  {
+   "file": "Foley/barefoot_wood/run_8.wav",
+   "key": "snd.foley.barefoot_wood.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -6.46,
+   "length_s": 0.28,
+   "peak_ms": 24.6,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Wood/FEETHmn_BARE-Barefoot or Socks Run Wood Sequence_Ocular_Stride.wav",
+     "start": 19.716,
+     "end": 19.996,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 6.9,
+   "element": "run",
+   "category": "barefoot_wood",
+   "variant": 8,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Wood Sequence_Ocular_Stride.wav@19.73s",
+   "surface": "wood",
+   "footwear": "barefoot",
+   "mix_db": -14.23
+  },
+  {
+   "file": "Foley/barefoot_wood/run_9.wav",
+   "key": "snd.foley.barefoot_wood.run",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -22.04,
+   "lufs_m_max": -22.0,
+   "true_peak_dbtp": -6.03,
+   "length_s": 0.28,
+   "peak_ms": 21.3,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Wood/FEETHmn_BARE-Barefoot or Socks Run Wood Sequence_Ocular_Stride.wav",
+     "start": 20.867,
+     "end": 21.147,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.5,
+   "element": "run",
+   "category": "barefoot_wood",
+   "variant": 9,
+   "source": "FEETHmn_BARE-Barefoot or Socks Run Wood Sequence_Ocular_Stride.wav@20.88s",
+   "surface": "wood",
+   "footwear": "barefoot",
+   "mix_db": -14.23
+  },
+  {
+   "file": "Foley/barefoot_wood/walk_1.wav",
+   "key": "snd.foley.barefoot_wood.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -7.57,
+   "length_s": 0.34,
+   "peak_ms": 13.1,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Wood/FEETHmn_BARE-Barefoot or Socks Walk Wood Sequence_Ocular_Stride.wav",
+     "start": 4.024,
+     "end": 4.364,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 30.0,
+   "element": "walk",
+   "category": "barefoot_wood",
+   "variant": 1,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Wood Sequence_Ocular_Stride.wav@4.04s",
+   "surface": "wood",
+   "footwear": "barefoot",
+   "mix_db": -16.23
+  },
+  {
+   "file": "Foley/barefoot_wood/walk_10.wav",
+   "key": "snd.foley.barefoot_wood.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -5.74,
+   "length_s": 0.227,
+   "peak_ms": 12.9,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Wood/FEETHmn_BARE-Barefoot or Socks Wood Single Step 02_Ocular_Stride.wav",
+     "start": 0.011,
+     "end": 0.238,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.2,
+   "element": "walk",
+   "category": "barefoot_wood",
+   "variant": 10,
+   "source": "FEETHmn_BARE-Barefoot or Socks Wood Single Step 02_Ocular_Stride.wav",
+   "surface": "wood",
+   "footwear": "barefoot",
+   "mix_db": -16.22
+  },
+  {
+   "file": "Foley/barefoot_wood/walk_11.wav",
+   "key": "snd.foley.barefoot_wood.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -6.19,
+   "length_s": 0.163,
+   "peak_ms": 11.9,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Wood/FEETHmn_BARE-Barefoot or Socks Wood Single Step 03_Ocular_Stride.wav",
+     "start": 0.01,
+     "end": 0.173,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.5,
+   "element": "walk",
+   "category": "barefoot_wood",
+   "variant": 11,
+   "source": "FEETHmn_BARE-Barefoot or Socks Wood Single Step 03_Ocular_Stride.wav",
+   "surface": "wood",
+   "footwear": "barefoot",
+   "mix_db": -16.23
+  },
+  {
+   "file": "Foley/barefoot_wood/walk_2.wav",
+   "key": "snd.foley.barefoot_wood.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -6.39,
+   "length_s": 0.34,
+   "peak_ms": 40.7,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Wood/FEETHmn_BARE-Barefoot or Socks Walk Wood Sequence_Ocular_Stride.wav",
+     "start": 5.302,
+     "end": 5.642,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.5,
+   "element": "walk",
+   "category": "barefoot_wood",
+   "variant": 2,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Wood Sequence_Ocular_Stride.wav@5.35s",
+   "surface": "wood",
+   "footwear": "barefoot",
+   "mix_db": -16.14
+  },
+  {
+   "file": "Foley/barefoot_wood/walk_3.wav",
+   "key": "snd.foley.barefoot_wood.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -6.43,
+   "length_s": 0.34,
+   "peak_ms": 40.7,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Wood/FEETHmn_BARE-Barefoot or Socks Walk Wood Sequence_Ocular_Stride.wav",
+     "start": 11.302,
+     "end": 11.642,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.5,
+   "element": "walk",
+   "category": "barefoot_wood",
+   "variant": 3,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Wood Sequence_Ocular_Stride.wav@11.35s",
+   "surface": "wood",
+   "footwear": "barefoot",
+   "mix_db": -16.14
+  },
+  {
+   "file": "Foley/barefoot_wood/walk_4.wav",
+   "key": "snd.foley.barefoot_wood.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -6.58,
+   "length_s": 0.34,
+   "peak_ms": 5.6,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Wood/FEETHmn_BARE-Barefoot or Socks Walk Wood Sequence_Ocular_Stride.wav",
+     "start": 14.033,
+     "end": 14.373,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.5,
+   "element": "walk",
+   "category": "barefoot_wood",
+   "variant": 4,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Wood Sequence_Ocular_Stride.wav@14.04s",
+   "surface": "wood",
+   "footwear": "barefoot",
+   "mix_db": -16.23
+  },
+  {
+   "file": "Foley/barefoot_wood/walk_5.wav",
+   "key": "snd.foley.barefoot_wood.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -6.63,
+   "length_s": 0.34,
+   "peak_ms": 32.9,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Wood/FEETHmn_BARE-Barefoot or Socks Walk Wood Sequence_Ocular_Stride.wav",
+     "start": 18.677,
+     "end": 19.017,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.9,
+   "element": "walk",
+   "category": "barefoot_wood",
+   "variant": 5,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Wood Sequence_Ocular_Stride.wav@18.71s",
+   "surface": "wood",
+   "footwear": "barefoot",
+   "mix_db": -16.22
+  },
+  {
+   "file": "Foley/barefoot_wood/walk_6.wav",
+   "key": "snd.foley.barefoot_wood.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -7.56,
+   "length_s": 0.34,
+   "peak_ms": 27.1,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Wood/FEETHmn_BARE-Barefoot or Socks Walk Wood Sequence_Ocular_Stride.wav",
+     "start": 20.642,
+     "end": 20.982,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 18.5,
+   "element": "walk",
+   "category": "barefoot_wood",
+   "variant": 6,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Wood Sequence_Ocular_Stride.wav@20.67s",
+   "surface": "wood",
+   "footwear": "barefoot",
+   "mix_db": -16.23
+  },
+  {
+   "file": "Foley/barefoot_wood/walk_7.wav",
+   "key": "snd.foley.barefoot_wood.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -7.13,
+   "length_s": 0.34,
+   "peak_ms": 46.9,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Wood/FEETHmn_BARE-Barefoot or Socks Walk Wood Sequence_Ocular_Stride.wav",
+     "start": 23.302,
+     "end": 23.642,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.2,
+   "element": "walk",
+   "category": "barefoot_wood",
+   "variant": 7,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Wood Sequence_Ocular_Stride.wav@23.35s",
+   "surface": "wood",
+   "footwear": "barefoot",
+   "mix_db": -15.86
+  },
+  {
+   "file": "Foley/barefoot_wood/walk_8.wav",
+   "key": "snd.foley.barefoot_wood.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -4.38,
+   "length_s": 0.34,
+   "peak_ms": 12.4,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Wood/FEETHmn_BARE-Barefoot or Socks Walk Wood Sequence_Ocular_Stride.wav",
+     "start": 28.669,
+     "end": 29.009,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 12.9,
+   "element": "walk",
+   "category": "barefoot_wood",
+   "variant": 8,
+   "source": "FEETHmn_BARE-Barefoot or Socks Walk Wood Sequence_Ocular_Stride.wav@28.68s",
+   "surface": "wood",
+   "footwear": "barefoot",
+   "mix_db": -16.23
+  },
+  {
+   "file": "Foley/barefoot_wood/walk_9.wav",
+   "key": "snd.foley.barefoot_wood.walk",
+   "layer": "step",
+   "channels": 2,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -7.32,
+   "length_s": 0.154,
+   "peak_ms": 18.2,
+   "sources": [
+    {
+     "file": "barefoot/Barefoot and Socks/Wood/FEETHmn_BARE-Barefoot or Socks Wood Single Step 01_Ocular_Stride.wav",
+     "start": 0.005,
+     "end": 0.16,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 6.8,
+   "element": "walk",
+   "category": "barefoot_wood",
+   "variant": 9,
+   "source": "FEETHmn_BARE-Barefoot or Socks Wood Single Step 01_Ocular_Stride.wav",
+   "surface": "wood",
+   "footwear": "barefoot",
+   "mix_db": -16.23
   },
   {
    "file": "Foley/move/jump_1.wav",

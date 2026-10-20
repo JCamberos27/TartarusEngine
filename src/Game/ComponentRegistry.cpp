@@ -2407,17 +2407,21 @@ void RegisterEngineComponents() {
             { "NPC Step Volume", T::Float, TARTARUS_REFLECT_FIELD(Fo, NpcStepVolume), 0.01f, "Gain of soldiers' footsteps.", 0.0f, 2.0f },
             { "NPC Step Min Distance", T::Float, TARTARUS_REFLECT_FIELD(Fo, NpcStepMinDistance), 0.1f, "Metres inside which a soldier's step is full volume.", 0.1f, 50.0f },
             { "NPC Step Max Distance", T::Float, TARTARUS_REFLECT_FIELD(Fo, NpcStepMaxDistance), 0.5f, "Metres a soldier's step carries.", 1.0f, 200.0f },
+            { "Footwear", T::Enum, TARTARUS_REFLECT_FIELD(Fo, Footwear), 0.0f, "The player's footsteps: Boots, or Barefoot (Foley/barefoot_<surface>; the boots' take where there is no barefoot one)." },
+            { "NPC Footwear", T::Enum, TARTARUS_REFLECT_FIELD(Fo, NpcFootwear), 0.0f, "The soldiers' footsteps: Boots or Barefoot." },
             { "Default Surface", T::String, TARTARUS_REFLECT_FIELD(Fo, DefaultSurface), 0.0f, "Surface when the ground matches nothing in the table." },
             { "Surface Table", T::String, TARTARUS_REFLECT_FIELD(Fo, SurfaceTable), 0.0f, "surface=word,word;surface=word. The first surface with a word in the ground's physics material, tag or name. Surfaces are foley categories (Audio/Foley/<surface>/)." },
         };
+        for (ReflectField& f : m.Fields)
+            if (std::strcmp(f.Name, "Footwear") == 0 || std::strcmp(f.Name, "NPC Footwear") == 0) { f.EnumLabels = "Boots\0Barefoot\0"; f.EnumCount = 2; }
         const std::pair<const char*, const char*> groups[] = {
-            {"Walk Volume", "Footsteps"}, {"Run Volume", "Footsteps"}, {"Crouch Volume", "Footsteps"}, {"Volume Jitter dB", "Footsteps"},
+            {"Footwear", "Footsteps"}, {"Walk Volume", "Footsteps"}, {"Run Volume", "Footsteps"}, {"Crouch Volume", "Footsteps"}, {"Volume Jitter dB", "Footsteps"},
             {"Pitch Min", "Footsteps"}, {"Pitch Max", "Footsteps"}, {"Step Stride Scale", "Footsteps"}, {"Crouch Stride Scale", "Footsteps"},
             {"Min Step Speed", "Footsteps"}, {"Run Speed", "Footsteps"}, {"Steps From Feet", "Footsteps"}, {"Foot Lift Height", "Footsteps"}, {"Foot Lift Moving", "Footsteps"},
             {"Foot Contact Height", "Footsteps"},
             {"Jump Volume", "Jump / Land"}, {"Land Volume", "Jump / Land"}, {"Land Min Speed", "Jump / Land"}, {"Land Heavy Speed", "Jump / Land"}, {"Land Full Speed", "Jump / Land"},
             
-            {"NPC Step Volume", "NPC Footsteps"}, {"NPC Step Min Distance", "NPC Footsteps"}, {"NPC Step Max Distance", "NPC Footsteps"}};
+            {"NPC Footwear", "NPC Footsteps"}, {"NPC Step Volume", "NPC Footsteps"}, {"NPC Step Min Distance", "NPC Footsteps"}, {"NPC Step Max Distance", "NPC Footsteps"}};
         for (ReflectField& f : m.Fields) {
             for (const auto& [n, g] : groups)
                 if (std::strcmp(f.Name, n) == 0) f.Group = g;
