@@ -21,6 +21,12 @@ layout(std430, binding = 1) readonly buffer BoneBlock { mat4 uBones[]; }; // sha
 // uUseSkinning 2: skinned once this frame already (Model::PreSkin, SkinnedVertex.glsl); only the position is read.
 layout(std430, binding = 26) readonly buffer SkinnedBlock { uint uSkinned[]; };
 uniform int uSkinBase;
+// Instanced draws (InstanceBatch.h): uInstanceLayers instances per caster (its cascades, 1 elsewhere), each caster's
+// transform at entry (uInstanceBase + gl_InstanceID / uInstanceLayers) * 2 of the per-frame buffer.
+uniform int uInstanced;
+uniform int uInstanceBase;
+uniform int uInstanceLayers;
+layout(std430, binding = 27) readonly buffer InstanceBlock { mat4 uInstances[]; };
 out vec2 vUV;
 out vec3 vWorldPos; // used by the local-light (spot/point) depth FS; the sun FS ignores it
 void main() {
@@ -40,11 +46,18 @@ void main() {
         localPos = skinMat * localPos;
     }
     vUV = aUV;
-    vec4 worldPos = uModel * localPos;
+    mat4 model = uModel;
+    int layerOffset = gl_InstanceID;
+    if (uInstanced == 1) {
+        int layers = max(uInstanceLayers, 1);
+        model = uInstances[(uInstanceBase + gl_InstanceID / layers) * 2];
+        layerOffset = gl_InstanceID % layers;
+    }
+    vec4 worldPos = model * localPos;
     vWorldPos = worldPos.xyz;
 #if defined(GL_ARB_shader_viewport_layer_array) || defined(GL_AMD_vertex_shader_layer)
     if (uCascadeLayered == 1) {
-        int layer = uCascadeFirst + gl_InstanceID;
+        int layer = uCascadeFirst + layerOffset;
         gl_Layer = layer;
         gl_Position = uCascadeViewProj[layer] * worldPos;
         return;

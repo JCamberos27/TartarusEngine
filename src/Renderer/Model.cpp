@@ -2657,7 +2657,7 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
                          const std::vector<std::shared_ptr<MaterialAsset>>& slots,
                          const ProgramSelector& selectProgram, float opacity,
                          const std::function<void(Shader&)>& onProgramBound, MeshPass pass, bool forceDoubleSided,
-                         const VisibleIndexBuffer* visible) {
+                         const VisibleIndexBuffer* visible, int instances) {
     const glm::mat4 nrm = glm::mat4(glm::transpose(glm::inverse(glm::mat3(xform))));
 
     Shader*             lastProg = nullptr;
@@ -2712,9 +2712,9 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
         prog->SetInt("uDoubleSided", forceDoubleSided || mat.DoubleSided ? 1 : 0);
         prog->SetInt("uClothInterior", forceDoubleSided && !mat.DoubleSided ? 1 : 0); // not hair cards: both sides are hair
         if (useVisible)
-            m_D->Meshes[i]->DrawIndices(visible->Id(), visible->MeshRange(i).Offset, visible->MeshRange(i).Count);
+            m_D->Meshes[i]->DrawIndices(visible->Id(), visible->MeshRange(i).Offset, visible->MeshRange(i).Count, instances);
         else
-            m_D->Meshes[i]->Draw();
+            m_D->Meshes[i]->Draw(instances);
     }
 }
 

@@ -31,6 +31,10 @@ public:
     // The raw GL program name. Used as half the key for the material-bind dedup (#192) — a
     // cached "this material is already bound" is only valid while the same program is current.
     unsigned int Program() const { return m_Program; }
+    // Whether the instanced draw path may use this program: its vertex stage reads the per-instance transforms
+    // (uInstanced, InstanceBatch.h) and nothing else reads uModel. Set by whoever builds it; off by default.
+    bool Instancing() const { return m_Instancing; }
+    void SetInstancing(bool on) { m_Instancing = on; }
 
     // Dispatches this (compute) program over an x*y*z grid of work groups.
     void DispatchCompute(unsigned int groupsX, unsigned int groupsY, unsigned int groupsZ) const;
@@ -76,6 +80,7 @@ public:
 
 private:
     unsigned int m_Program = 0;
+    bool m_Instancing = false;
     unsigned int Compile(unsigned int type, const std::string& src);
     // glGetUniformLocation hashes the name string in the driver on every call — cheap in
     // isolation, but adds up when called every frame for every uniform of every draw (and
