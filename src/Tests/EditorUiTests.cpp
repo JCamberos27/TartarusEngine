@@ -16,6 +16,7 @@
 #include "EditorTestProbe.h"
 #include "Shortcuts.h"
 #include "World.h"
+#include "VolumetricFog.h"
 #include "AssetLibrary.h"
 #include "Camera.h"
 #include "Log.h"

@@ -1232,6 +1232,14 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
         root["fogEnd"] = world.FogEnd;
         root["fogHeightFalloff"] = world.FogHeightFalloff;
         root["fogBaseHeight"] = world.FogBaseHeight;
+        root["volumetricEnabled"] = world.VolumetricEnabled; // VolumetricFog
+        root["volDensity"] = world.VolumetricDensity;
+        root["volAnisotropy"] = world.VolumetricAnisotropy;
+        root["volHeightFalloff"] = world.VolumetricHeightFalloff;
+        root["volBaseHeight"] = world.VolumetricBaseHeight;
+        root["volAlbedo"] = {world.VolumetricAlbedo.r, world.VolumetricAlbedo.g, world.VolumetricAlbedo.b};
+        root["volDistance"] = world.VolumetricDistance;
+        root["volQuality"] = world.VolumetricQuality;
         root["shadowsEnabled"] = world.ShadowsEnabled;
         root["shadowResolution"] = world.ShadowResolution;
         root["shadowCascades"] = world.ShadowCascades;
@@ -1598,6 +1606,19 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
     world.ChromaticAberration = std::clamp(root.value("chromaticAberration", 0.0f), 0.0f, 1.0f);
     world.FilmGrain          = std::clamp(root.value("filmGrain", 0.0f), 0.0f, 1.0f);
     world.FilmGrainResponse  = std::clamp(root.value("filmGrainResponse", 0.8f), 0.0f, 1.0f);
+    // Volumetric fog: absent in older scenes, which load with it off.
+    world.VolumetricEnabled       = root.value("volumetricEnabled", false);
+    world.VolumetricDensity       = std::clamp(root.value("volDensity", 0.02f), 0.0f, 10.0f);
+    world.VolumetricAnisotropy    = std::clamp(root.value("volAnisotropy", 0.6f), -0.95f, 0.95f);
+    world.VolumetricHeightFalloff = std::clamp(root.value("volHeightFalloff", 0.0f), 0.0f, 10.0f);
+    world.VolumetricBaseHeight    = root.value("volBaseHeight", 0.0f);
+    world.VolumetricAlbedo        = glm::vec3(0.9f);
+    if (root.contains("volAlbedo") && root["volAlbedo"].is_array() && root["volAlbedo"].size() == 3)
+        for (int i = 0; i < 3; ++i)
+            if (root["volAlbedo"][i].is_number())
+                world.VolumetricAlbedo[i] = std::clamp(root["volAlbedo"][i].get<float>(), 0.0f, 1.0f);
+    world.VolumetricDistance      = std::clamp(root.value("volDistance", 64.0f), 4.0f, 1000.0f);
+    world.VolumetricQuality       = std::clamp(root.value("volQuality", 1), 0, 2);
     world.DepthOfField  = root.value("depthOfField", false);
     world.FocusDistance = std::clamp(root.value("focusDistance", 10.0f), 0.0f, 10000.0f);
     world.MotionBlur          = root.value("motionBlur", false); // #162

@@ -88,7 +88,7 @@ void main() {
     vec3 V = normalize(uViewPos - vWorld);
     if (mode == 2) {
         vec3 glow = s.Color.rgb * tex.rgb * alpha;
-        float keep = (ApplyFog(vec3(1.0)) - ApplyFog(vec3(0.0))).r;
+        float keep = (ApplyFog(vec3(1.0)) - ApplyFog(vec3(0.0))).r * VolumetricFogAt(vWorldPos).a;
         FragColor = vec4(glow * keep, 0.0);
         return;
     }
@@ -150,6 +150,6 @@ void main() {
         }
         lit += albedo * (uIBLEnabled == 1 ? texture(uIrradianceMap, vec3(0.0, 1.0, 0.0)).rgb * uIBLIntensity : vec3(0.05));
     }
-    vec3 c = ApplyAerialPerspective(ApplyFog(lit));
+    vec3 c = ApplyVolumetricFog(ApplyAerialPerspective(ApplyFog(lit)));
     FragColor = vec4(c * alpha, alpha);
 }

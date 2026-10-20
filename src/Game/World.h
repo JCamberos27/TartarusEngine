@@ -126,6 +126,18 @@ public:
     float FogHeightFalloff{0.0f};   // Exponential modes: 0 = uniform, higher = hugs the ground
     float FogBaseHeight{0.0f};      // world Y where height fog is at full density
 
+    // Froxel volumetric fog (VolumetricFog.h): light shafts through the air from the directional
+    // light and every point / spot light, shadowed by their shadow maps. Each light's share is
+    // LightComponent::VolumetricIntensity. Off by default (older scenes load without it).
+    bool  VolumetricEnabled{false};
+    float VolumetricDensity{0.02f};        // extinction per metre at the base height (0.02 = light haze)
+    float VolumetricAnisotropy{0.6f};      // Henyey-Greenstein g: 0 even, > 0 bright looking toward a light
+    float VolumetricHeightFalloff{0.0f};   // 0 = same everywhere; higher = thins out above the base height
+    float VolumetricBaseHeight{0.0f};      // world Y below which the density is full
+    glm::vec3 VolumetricAlbedo{0.9f};      // how much of what it absorbs it scatters, per channel
+    float VolumetricDistance{64.0f};       // metres from the camera the froxel grid reaches
+    int   VolumetricQuality{1};            // 0 Low (128x72x48), 1 Medium (160x90x64), 2 High (240x135x96)
+
     bool  ShadowsEnabled{true};
     int   ShadowResolution{4096};
     int   ShadowCascades{4};

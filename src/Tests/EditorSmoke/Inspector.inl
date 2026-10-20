@@ -248,6 +248,16 @@ void RegisterInspectorTests() {
          Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
          ExpectTrue("undo -> SFX", [](Ctx& c) { return c.W.Registry.get<AudioSourceComponent>(ByName(c.W, "Beta")).Output == 0; })},
     }));
+    Add("inspector: Light's Volumetric Intensity (typed); undo", InspCat({
+        {FreshScene(), Wait(2), SelectByName("Beta"), Wait(3), InspOpen("Light"), InspUntilOpen("Light"), Wait(3),
+         ExpectTrue("defaults to 1", [](Ctx& c) { return c.W.Registry.get<LightComponent>(ByName(c.W, "Beta")).VolumetricIntensity == 1.0f; })},
+        InspTypeInto(ByTag("field:Light/Volumetric Intensity"), "2.5"),
+        {ExpectTrue("Volumetric Intensity = 2.5", [](Ctx& c) {
+             return InspNear(c.W.Registry.get<LightComponent>(ByName(c.W, "Beta")).VolumetricIntensity, 2.5f);
+         }),
+         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
+         ExpectTrue("undo -> 1", [](Ctx& c) { return c.W.Registry.get<LightComponent>(ByName(c.W, "Beta")).VolumetricIntensity == 1.0f; })},
+    }));
     Add("inspector: Transform Controller vec3 (typed Z) and string field; undo each", InspCat({
         {FreshScene(),
          Do("add a Transform Controller", [](Ctx& c) {
