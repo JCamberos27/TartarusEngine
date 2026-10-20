@@ -1017,6 +1017,45 @@ void EditorLayer::DrawPostProcessSettings(World& world, float w) {
                            "World height where the fog is at its full Density.");
         }
     }
+
+    EditorUIPrimitives::SectionHeader("Volumetric Fog");
+    if (EditorUIPrimitives::Checkbox("Volumetric fog", &world.VolumetricEnabled)) PushUndo(world, "Toggle Volumetric Fog");
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Light scattering in the air: shafts from the sun or moon through windows, glow around\n"
+                             "lamps and cones under spotlights, cut by each light's shadows (turn Cast Shadows on).\n"
+                             "Each light's share is its Volumetric Intensity (Light component).");
+    if (world.VolumetricEnabled) {
+        postSlider("Density", &world.VolumetricDensity, 0.0f, 0.5f, "%.4f", "Edit Volumetric Fog",
+                   "How thick the air is (extinction per metre). 0.01-0.05 is a light haze,\n"
+                   "0.1 and up a smoky room.");
+        postSlider("Anisotropy", &world.VolumetricAnisotropy, -0.95f, 0.95f, "%.2f", "Edit Volumetric Fog",
+                   "Which way the air scatters light. 0 = evenly in every direction; higher = mostly onward,\n"
+                   "so shafts glow brightest looking toward the light (0.6 is typical of dusty air).");
+        EditorUI::ColorEditLinear("Albedo", &world.VolumetricAlbedo.x, ImGuiColorEditFlags_DisplayHex);
+        if (ImGui::IsItemActivated()) PushUndo(world, "Edit Volumetric Fog");
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("How much of the light the air takes it scatters (the rest it absorbs), per channel.\n"
+                                 "White = bright fog; darker = smoky. Tint it for coloured haze.");
+        postSlider("Height falloff", &world.VolumetricHeightFalloff, 0.0f, 2.0f, "%.3f", "Edit Volumetric Fog",
+                   "0 = the same density at every height. Higher = the fog settles below the base height\n"
+                   "and thins out above it.");
+        if (world.VolumetricHeightFalloff > 0.0f)
+            postSlider("Base height", &world.VolumetricBaseHeight, -100.0f, 100.0f, "%.1f m", "Edit Volumetric Fog",
+                       "World height below which the fog has its full Density.");
+        postSlider("Distance", &world.VolumetricDistance, 4.0f, 256.0f, "%.0f m", "Edit Volumetric Fog",
+                   "How far from the camera the volume reaches. Shorter = finer detail up close;\n"
+                   "anything farther gets the fog of this distance.");
+        static const char* kVolQuality[] = {"Low", "Medium", "High"};
+        int quality = std::clamp(world.VolumetricQuality, 0, 2);
+        ImGui::SetNextItemWidth(w);
+        if (ImGui::Combo("Quality", &quality, kVolQuality, IM_ARRAYSIZE(kVolQuality))) {
+            PushUndo(world, "Change Volumetric Quality");
+            world.VolumetricQuality = quality;
+        }
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Froxel grid resolution. Low 128x72x48, Medium 160x90x64 (under a millisecond at 1440p),\n"
+                                 "High 240x135x96 for close-ups.");
+    }
 }
 
 void EditorLayer::DrawShadowSettings(World& world, float w) {

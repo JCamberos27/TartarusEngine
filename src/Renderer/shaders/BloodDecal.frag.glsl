@@ -183,7 +183,7 @@ void main() {
     // Haze between the eye and the surface: the film fades into it the way the surface does.
     float fogKeep = (ApplyFog(vec3(1.0)) - ApplyFog(vec3(0.0))).r;
     vec3 apKeep = ApplyAerialPerspective(vec3(1.0)) - ApplyAerialPerspective(vec3(0.0));
-    float keep = fogKeep * apKeep.g;
+    float keep = fogKeep * apKeep.g * VolumetricFogAt(vWorldPos).a;
     oAdd = vec4(add * keep, 0.0);
     oMul = vec4(mix(vec3(1.0), mul, keep), 1.0);
 }
