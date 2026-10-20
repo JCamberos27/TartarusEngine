@@ -25,8 +25,8 @@ imgui.ini
 # Local scratch folder: probe output, logs, re-exported FBX copies. Nothing here is tracked.
 work/
 
-# HDRI skies (Poly Haven, CC0) used by the Sandbox scene - too big for git; download into
-# project/assets/sky/ (see project/scenes/Sandbox.json skyHdriPath).
+# HDRI skies (Poly Haven, CC0) for scenes that use one - too big for git; download into
+# project/assets/sky/ (a scene names its file in skyHdriPath).
 project/assets/sky/
 
 # Editor screenshots (#153): captures land in project/screenshots/ so the Asset Browser's
