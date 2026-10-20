@@ -83,6 +83,13 @@
       "land_light": -18.0,
       "land_heavy": -14.0
     },
+    "door": {
+      "_doc": "interior doors (OpenableComponent), world tier: a close thuds like a heavy landing, the open / latch / rattle sit with your run",
+      "open": -20.0,
+      "close": -15.0,
+      "latch": -19.0,
+      "rattle": -20.0
+    },
     "casing": -26.0,
     "ui": {
       "hitmarker": -14.0,
