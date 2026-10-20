@@ -44,10 +44,9 @@ constexpr float kSettleEps = 1e-3f;      // a tween this close to its target has
 constexpr ImGuiID kChannelValue = 0x474C5331u; // "GLS1": the float channel each id uses
 constexpr ImGuiID kChannelColor = 0x474C5332u; // "GLS2": colour tweens
 constexpr ImGuiID kChannelVec2  = 0x474C5333u; // "GLS3": 2D tweens
-constexpr ImGuiID kChannelRoll  = 0x474C5334u; // "GLS4": odometer offsets
 constexpr ImGuiID kScrollSalt   = 0x5C011E7Au; // window id ^ this = its scroll coast's entry id
 constexpr ImGuiID kRollPrevSalt = 0x0D0E7E21u; // odometer: last frame's value in window storage
-constexpr ImGuiID kRollFlashSalt = 0xF1A5F1A5u;
+constexpr ImGuiID kRollFromSalt = 0xF1A5F1A5u; // odometer: the value a slide departs from
 
 // Inertia entries reuse Entry fields: from4.xy velocity (px/s), duration the phase.
 constexpr float kInertiaTracking = 0.0f;
@@ -592,37 +591,23 @@ void ImAnimContext::ScrollToBottom(const MotionSpec& spec) {
 }
 
 // --- Motion v2: rolling numbers ----------------------------------------------------------------------
+// A change starts a short slide (a Pulse on `id`) and remembers the number it left in window storage;
+// the readout itself is always the new value. Only the digits that differ move, one step each.
 double ImAnimContext::RollingValue(ImGuiID id, double value) {
     ImGuiStorage* st = ImGui::GetStateStorage();
     const ImGuiID prevKey = id ^ kRollPrevSalt;
     const double prev = LoadDouble(st, prevKey, value);
     StoreDouble(st, prevKey, value);
-    Entry* e = Find(id);
     if (!CategoryOn(MotionCategory::RollingNumbers)) {
-        if (e) Remove(id);
-        return value;
-    }
-    if (prev != value) {
-        // Depart from what is on screen now: the old value plus whatever offset was still rolling.
-        const double shown = prev + (e ? (double)e->aux : 0.0);
-        const float start = (float)(shown - value);
-        if (e) Remove(id);
-        e = &Add(id, Kind::Tween);
-        e->from = start;
-        e->aux = start;
-        iam_tween_float(id, kChannelRoll, start, 0.0f, ToDesc(OdometerRoll), iam_policy_cut, 0.0f, start);
-        Pulse(id ^ kRollFlashSalt, ValueFlash.durationMs * 0.001f);
-    }
-    if (!e) return value;
-    e->touched = m_Frame;
-    const float v = iam_tween_float(id, kChannelRoll, 0.0f, OdometerRoll.durationMs * 0.001f, ToDesc(OdometerRoll),
-                                    iam_policy_crossfade, ImGui::GetIO().DeltaTime, e->from);
-    e->aux = v;
-    if (std::fabs(v) < 1e-4f) {
         Remove(id);
         return value;
     }
-    return value + (double)v;
+    if (prev != value) {
+        // A change mid-slide departs from the last value, not the half-moved digits: it stays one step.
+        StoreDouble(st, id ^ kRollFromSalt, prev);
+        Pulse(id, DigitSlide.durationMs * 0.001f);
+    }
+    return value;
 }
 
 namespace {
@@ -634,6 +619,7 @@ int DigitCount(double scaledAbs, int decimals) {
     return n < decimals + 1 ? decimals + 1 : n;
 }
 double Pow10(int k) { double p = 1.0; while (k-- > 0) p *= 10.0; return p; }
+int DigitAt(double scaled, int k) { return (int)std::fmod(std::floor(scaled / Pow10(k)), 10.0); }
 } // namespace
 
 float ImAnimContext::OdometerWidth(double value, int decimals, const char* suffix) {
@@ -649,62 +635,44 @@ float ImAnimContext::OdometerWidth(double value, int decimals, const char* suffi
 
 float ImAnimContext::Odometer(ImGuiID id, ImDrawList* dl, ImVec2 pos, double value, int decimals, ImU32 col, const char* suffix) {
     decimals = decimals < 0 ? 0 : (decimals > 6 ? 6 : decimals);
-    const double shown = RollingValue(id, value);
-    const bool rolling = Live(id);
+    RollingValue(id, value);
+    const bool sliding = PulseActive(id);
+    const float p = sliding ? EaseProgress(DigitSlide, PulseProgress(id)) : 1.0f;
     const float lineH = ImGui::GetTextLineHeight();
     const float w0 = ImGui::CalcTextSize("0").x;
     const float dotW = ImGui::CalcTextSize(".").x;
     const double unit = Pow10(decimals);
+    const double scaledTo = std::floor(std::fabs(value) * unit + 0.5);
+    const double from = sliding ? LoadDouble(ImGui::GetStateStorage(), id ^ kRollFromSalt, value) : value;
+    const double scaledFrom = std::floor(std::fabs(from) * unit + 0.5);
+    const int nFrom = DigitCount(scaledFrom, decimals);
+    // Up when the number grows (the new digit rises in from below), down when it shrinks.
+    const float dir = value >= from ? 1.0f : -1.0f;
+    const float travel = lineH * DigitSlideTravel;
+    const int alpha = (int)((col >> IM_COL32_A_SHIFT) & 0xFF);
+    auto withAlpha = [&](float a) { return (col & ~IM_COL32_A_MASK) | ((ImU32)(alpha * a + 0.5f) << IM_COL32_A_SHIFT); };
 
-    // Flash: a brief white wash behind a value that just changed.
-    const ImGuiID flashId = id ^ kRollFlashSalt;
-    if (PulseActive(flashId)) {
-        const float p = PulseProgress(flashId);
-        const float a = (1.0f - EaseProgress(ValueFlash, p)) * ValueFlashAlpha;
-        if (a > 0.0f) {
-            const float w = OdometerWidth(value, decimals, suffix);
-            dl->AddRectFilled(ImVec2(pos.x - 2.0f, pos.y), ImVec2(pos.x + w + 2.0f, pos.y + lineH),
-                              IM_COL32(255, 255, 255, (int)(a * 255.0f)), 3.0f);
-        }
-    }
-
-    // Digits sit in fixed-width slots so the readout doesn't jitter as they roll.
+    // Digits sit in fixed-width slots so the readout doesn't jitter, laid out for the new value.
     float x = pos.x;
-    const bool neg = (rolling ? shown : value) < 0.0;
-    if (neg) {
+    if (value < 0.0) {
         dl->AddText(ImVec2(x, pos.y), col, "-");
         x += ImGui::CalcTextSize("-").x;
     }
-    const double absShown = std::fabs(rolling ? shown : value);
-    const double scaled = absShown * unit;
-    const double scaledTarget = std::floor(std::fabs(value) * unit + 0.5);
-    const int n = std::max(DigitCount(rolling ? scaled : scaledTarget, decimals), DigitCount(scaledTarget, decimals));
-    if (rolling) dl->PushClipRect(ImVec2(pos.x, pos.y), ImVec2(pos.x + 4096.0f, pos.y + lineH), true);
-    for (int k = n - 1; k >= 0; --k) {
-        int digit;
-        float frac = 0.0f;
-        if (rolling) {
-            const double pk = scaled / Pow10(k);
-            digit = (int)std::fmod(std::floor(pk), 10.0);
-            if (k == 0) {
-                frac = (float)(pk - std::floor(pk));
-            } else {
-                // A mechanical counter: digit k only turns while everything below it rolls 9 -> 0.
-                const double r = std::fmod(scaled, Pow10(k)) / Pow10(k - 1);
-                frac = r > 9.0 ? (float)(r - 9.0) : 0.0f;
-            }
-            // Leading zeros that aren't turning take no space.
-            if (k > decimals && std::floor(pk) < 1.0 && frac <= 0.0f && k >= DigitCount(scaledTarget, decimals)) continue;
+    if (sliding) dl->PushClipRect(ImVec2(pos.x, pos.y), ImVec2(pos.x + 4096.0f, pos.y + lineH), true);
+    for (int k = DigitCount(scaledTo, decimals) - 1; k >= 0; --k) {
+        const int to = DigitAt(scaledTo, k);
+        const int was = k < nFrom ? DigitAt(scaledFrom, k) : -1; // -1: the old number had no digit here
+        char a[2] = {(char)('0' + to), 0};
+        const float ax = x + (w0 - ImGui::CalcTextSize(a).x) * 0.5f;
+        if (!sliding || was == to) {
+            dl->AddText(ImVec2(ax, pos.y), col, a);
         } else {
-            digit = (int)std::fmod(std::floor(scaledTarget / Pow10(k)), 10.0);
-        }
-        char a[2] = {(char)('0' + digit), 0};
-        const float gx = x + (w0 - ImGui::CalcTextSize(a).x) * 0.5f;
-        dl->AddText(ImVec2(gx, pos.y - frac * lineH), col, a);
-        if (frac > 0.0f) {
-            char b[2] = {(char)('0' + (digit + 1) % 10), 0};
-            const float bx = x + (w0 - ImGui::CalcTextSize(b).x) * 0.5f;
-            dl->AddText(ImVec2(bx, pos.y + (1.0f - frac) * lineH), col, b);
+            if (was >= 0) {
+                char b[2] = {(char)('0' + was), 0};
+                const float bx = x + (w0 - ImGui::CalcTextSize(b).x) * 0.5f;
+                dl->AddText(ImVec2(bx, pos.y - dir * p * travel), withAlpha(1.0f - p), b);
+            }
+            dl->AddText(ImVec2(ax, pos.y + dir * (1.0f - p) * travel), withAlpha(p), a);
         }
         x += w0;
         if (k == decimals && decimals > 0) {
@@ -712,7 +680,7 @@ float ImAnimContext::Odometer(ImGuiID id, ImDrawList* dl, ImVec2 pos, double val
             x += dotW;
         }
     }
-    if (rolling) dl->PopClipRect();
+    if (sliding) dl->PopClipRect();
     if (suffix && *suffix) {
         dl->AddText(ImVec2(x, pos.y), col, suffix);
         x += ImGui::CalcTextSize(suffix).x;

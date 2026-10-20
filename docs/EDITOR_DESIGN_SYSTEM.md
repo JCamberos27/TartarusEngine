@@ -245,7 +245,7 @@ brightness and opacity, never hue.
 | | Play frame | linear lap | 6000 per lap | A white gradient (28% of the perimeter) travels around the Scene and Game views |
 | | Selection rim | linear lap | 9000 per lap | A faint travelling rim (22%) on the focused panel |
 | | Cursor glow | n/a | n/a | A 56 px white radial glow follows the pointer across primary buttons |
-| **12. Rolling numbers** | Odometer | spring 1 / 200 / 22 | 480 | Each digit slides vertically like a mechanical counter; an 18% white flash fades over 520 ms |
+| **12. Rolling numbers** | Digit slide | out-cubic | 160 | Only the digits that changed slide one step (up when the number grows, down when it shrinks) and crossfade; no counting through in-between values, no flash |
 | **13. Inertia** | Wheel and fling coast | exponential decay e^(−4.2 t) | until < 12 px/s | A coast from v travels v / 4.2. Wheel notches within 140 ms accelerate up to 2.6x. A release under 220 px/s doesn't coast |
 | **14. Structure** | Card flip | smooth bezier | 380 | A component card turns over to its raw-fields side |
 | | Folder zoom | smooth bezier | 340 | The new grid grows from 86% about the clicked tile; a grid ripple spreads 26 ms per step (capped at 18) |
@@ -478,8 +478,9 @@ system is initialised with room for 16 clips and 8 instances instead of ImAnim's
 
 **Motion v2 helpers** (§3.1) follow the same rules:
 
-* `RollingValue` / `Odometer` animate a float *offset* on its own channel (`GLS4`). The previous
-  value lives in the window's ImGui storage, not in the map, so a readout at rest holds no entry.
+* `RollingValue` / `Odometer` run a slide as a Pulse entry that exists only while digits move. The
+  previous value and the one a slide departs from live in the window's ImGui storage, not in the
+  map, so a readout at rest holds no entry.
 * Inertia is an entry kind of its own (kind 5). A tracked drag, a coast and a window's wheel glide
   each exist only while moving and are erased the frame they slow below 12 px/s. ImAnim's
   `iam_drag_*` isn't used: it has no coast, and it allocates a state block per id that is never

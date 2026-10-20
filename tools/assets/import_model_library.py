@@ -194,9 +194,7 @@ UNROTATE = {
 # (moved over the bulb socket, 17.75 cm out, wide end down, sunk over it like the table lamps' in assemble_kits.py).
 MOVE = {'Kitchen_Cabinet_B_Door_B_R': [{'node': 'Kitchen_cabinet_B_door_glass', 'by': [1.003, 0.0, 0.0]}],
         'Stove': [{'node': 'Stove_hatch', 'by': [0.0, 0.0, 0.35]}],
-        'Lamp_Wall': [{'node': 'Lamp_wall_shade', 'by': [0.001, -0.195, 0.225]}],
-        # assemble_kits.py stood the fridge door in front of the body, its shelf bins showing through a 9 cm gap
-        'Fridge_Assembled': [{'node': 'Fridge_door', 'by': [0.0, 0.0, -0.088]}]}
+        'Lamp_Wall': [{'node': 'Lamp_wall_shade', 'by': [0.001, -0.195, 0.225]}]}
 
 # --- gallery --------------------------------------------------------------------------------------------------
 # Where each loose part sits on its body (everything not listed sits as authored, which for most kits is in place).
@@ -650,10 +648,12 @@ def update_metas(repo, exe):
                 write_json(m['file'] + '.meta', meta)
                 r = model_report(exe, [m['file']])[os.path.normcase(os.path.normpath(m['file']))]
                 imp = dict(imp, pivotOffset=[round(v, 4) for v in own_pivot(pack, stem, r['min'], r['max'])])
-            if base in UNROTATE:
+            if base in UNROTATE and '_Assembled' not in stem:  # assemble_kits.py fixed its pieces already
                 imp['unrotateNodes'] = UNROTATE[base]
             if stem in MOVE:
                 imp['moveNodes'] = MOVE[stem]
+            elif '_Assembled' in stem:
+                imp.pop('moveNodes', None)
             if base in LOD_EXCLUDE and not stem.endswith('_Assembled'):
                 imp['excludeNodes'] = LOD_EXCLUDE[base]
             if stem in NOT_PARTS:
@@ -683,6 +683,7 @@ def write_gallery(repo, exe):
     (SEATS), alternative parts on a second copy of it."""
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     from assemble_kits import FITS, KITS
+    from openables import component, kit_parts, loose_motion
     # body stem -> the part files its _Assembled file already holds
     absorbed = {os.path.splitext(os.path.basename(rel))[0]: parts for rel, parts in FITS.items()}
     absorbed.update({os.path.splitext(os.path.basename(rel))[0]: ([] if callable(fix) else fix[1])
@@ -792,7 +793,7 @@ def write_gallery(repo, exe):
         ms = library.get(pack, {})
         if not ms:
             continue
-        stems = {s for s in ms if not s.endswith('_Assembled')}
+        stems = {s for s in ms if '_Assembled' not in s}  # an assembled body and its part files: in place of the kit
         assembled = {s for s in stems if s + '_Assembled' in ms and s in absorbed}
         hidden = {p for s in assembled for p in absorbed[s]}
         groups = {}  # body stem -> its parts
@@ -861,7 +862,19 @@ def write_gallery(repo, exe):
                            'rotation': rot, 'scale': [1.0, 1.0, 1.0]}
                     if max(h - l for l, h in zip(m['lo'], m['hi'])) < TINY_PROP:
                         ent['castShadows'] = 0  # nothing to see in its shadow, and every shadow map draws it
+                    if i and loose_motion(m['stem']):
+                        ent['Openable'] = component(loose_motion(m['stem']))
                     ents.append(ent)
+                    # an assembled body's doors, drawers and lids: its children, closing it at its origin
+                    for part in kit_parts(m['stem']):
+                        pm = ms[part['stem']]
+                        child = {'id': next(ids), 'name': part['stem'][len(m['stem']) + 1:], 'order': next(order),
+                                 'parentId': ent['id'], 'path': pm['path'], 'pathGuid': pm['guid'],
+                                 'position': [0.0, 0.0, 0.0], 'rotation': ident, 'scale': [1.0, 1.0, 1.0],
+                                 'Openable': component(part['motion'])}
+                        if max(h - l for l, h in zip(pm['lo'], pm['hi'])) < TINY_PROP:
+                            child['castShadows'] = 0
+                        ents.append(child)
         rows.append((pack, row_z, x, depth, height))
         row_z -= max(depth, 1.0) + 6.0
     # Floor: prototype grid box under everything.

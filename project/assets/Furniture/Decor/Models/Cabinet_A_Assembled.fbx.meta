@@ -11,8 +11,8 @@
     "optimizeGraph": true,
     "pivotOffset": [
       -0.0,
-      -0.0010000000474974513,
-      0.04100000113248825
+      -0.001,
+      0.041
     ]
   },
   "materialRemap": {
