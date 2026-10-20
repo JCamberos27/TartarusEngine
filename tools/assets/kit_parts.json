@@ -1,0 +1,259 @@
+{
+  "Bathroom_Sink_Cabinet_Assembled": [
+    {
+      "stem": "Bathroom_Sink_Cabinet_Assembled_Door_L",
+      "motion": "Hinge Left"
+    },
+    {
+      "stem": "Bathroom_Sink_Cabinet_Assembled_Door_L_2",
+      "motion": "Hinge Left"
+    },
+    {
+      "stem": "Bathroom_Sink_Cabinet_Assembled_Door_R",
+      "motion": "Hinge Right"
+    },
+    {
+      "stem": "Bathroom_Sink_Cabinet_Assembled_Door_R_2",
+      "motion": "Hinge Right"
+    }
+  ],
+  "Bed_Bunk_Assembled": [],
+  "Cabinet_A_Assembled": [
+    {
+      "stem": "Cabinet_A_Assembled_Door_A_L",
+      "motion": "Hinge Left"
+    },
+    {
+      "stem": "Cabinet_A_Assembled_Door_A_R",
+      "motion": "Hinge Right"
+    }
+  ],
+  "Desk_Office_Assembled": [
+    {
+      "stem": "Desk_Office_Assembled_Drawer",
+      "motion": "Slide Out"
+    }
+  ],
+  "Dresser_B_Assembled": [
+    {
+      "stem": "Dresser_B_Assembled_Drawer_A",
+      "motion": "Slide Out"
+    },
+    {
+      "stem": "Dresser_B_Assembled_Drawer_A_2",
+      "motion": "Slide Out"
+    },
+    {
+      "stem": "Dresser_B_Assembled_Drawer_A_3",
+      "motion": "Slide Out"
+    }
+  ],
+  "Dresser_C_Assembled": [
+    {
+      "stem": "Dresser_C_Assembled_Drawer_B",
+      "motion": "Slide Out"
+    },
+    {
+      "stem": "Dresser_C_Assembled_Drawer_B_2",
+      "motion": "Slide Out"
+    },
+    {
+      "stem": "Dresser_C_Assembled_Drawer_B_3",
+      "motion": "Slide Out"
+    },
+    {
+      "stem": "Dresser_C_Assembled_Drawer_B_4",
+      "motion": "Slide Out"
+    },
+    {
+      "stem": "Dresser_C_Assembled_Drawer_B_5",
+      "motion": "Slide Out"
+    },
+    {
+      "stem": "Dresser_C_Assembled_Drawer_B_6",
+      "motion": "Slide Out"
+    }
+  ],
+  "Dresser_D_Assembled": [
+    {
+      "stem": "Dresser_D_Assembled_Drawer_A",
+      "motion": "Slide Out"
+    },
+    {
+      "stem": "Dresser_D_Assembled_Drawer_A_2",
+      "motion": "Slide Out"
+    },
+    {
+      "stem": "Dresser_D_Assembled_Drawer_C",
+      "motion": "Slide Out"
+    },
+    {
+      "stem": "Dresser_D_Assembled_Drawer_C_2",
+      "motion": "Slide Out"
+    },
+    {
+      "stem": "Dresser_D_Assembled_Drawer_C_3",
+      "motion": "Slide Out"
+    },
+    {
+      "stem": "Dresser_D_Assembled_Drawer_C_4",
+      "motion": "Slide Out"
+    },
+    {
+      "stem": "Dresser_D_Assembled_Drawer_C_5",
+      "motion": "Slide Out"
+    }
+  ],
+  "Fridge_Assembled": [
+    {
+      "stem": "Fridge_Assembled_Door",
+      "motion": "Hinge Right"
+    }
+  ],
+  "Kitchen_Cabinet_B_Assembled": [
+    {
+      "stem": "Kitchen_Cabinet_B_Assembled_Door_A_L",
+      "motion": "Hinge Left"
+    },
+    {
+      "stem": "Kitchen_Cabinet_B_Assembled_Door_A_R",
+      "motion": "Hinge Right"
+    }
+  ],
+  "Kitchen_Cabinet_Large_Assembled": [
+    {
+      "stem": "Kitchen_Cabinet_Large_Assembled_Door_A",
+      "motion": "Hinge Left"
+    },
+    {
+      "stem": "Kitchen_Cabinet_Large_Assembled_Door_A_2",
+      "motion": "Hinge Left"
+    },
+    {
+      "stem": "Kitchen_Cabinet_Large_Assembled_Door_B",
+      "motion": "Hinge Left"
+    },
+    {
+      "stem": "Kitchen_Cabinet_Large_Assembled_Door_C",
+      "motion": "Hinge Right"
+    }
+  ],
+  "Kitchen_Counter_A_Assembled": [
+    {
+      "stem": "Kitchen_Counter_A_Assembled_Door_L",
+      "motion": "Hinge Left"
+    },
+    {
+      "stem": "Kitchen_Counter_A_Assembled_Drawer",
+      "motion": "Slide Out"
+    },
+    {
+      "stem": "Kitchen_Counter_A_Assembled_Door_R",
+      "motion": "Hinge Right"
+    },
+    {
+      "stem": "Kitchen_Counter_A_Assembled_Drawer_2",
+      "motion": "Slide Out"
+    }
+  ],
+  "Kitchen_Counter_Sink_Assembled": [
+    {
+      "stem": "Kitchen_Counter_Sink_Assembled_Door_L",
+      "motion": "Hinge Left"
+    },
+    {
+      "stem": "Kitchen_Counter_Sink_Assembled_Door_R",
+      "motion": "Hinge Right"
+    }
+  ],
+  "Lamp_Chandelier_A_Assembled": [],
+  "Lamp_Chandelier_B_Assembled": [],
+  "Lamp_Floor_A_Assembled": [],
+  "Lamp_Table_A_Assembled": [],
+  "Lamp_Table_B_Assembled": [],
+  "Lamp_Table_Rocket_Assembled": [],
+  "Nightstand_B_Assembled": [
+    {
+      "stem": "Nightstand_B_Assembled_Drawer_A",
+      "motion": "Slide Out"
+    },
+    {
+      "stem": "Nightstand_B_Assembled_Drawer_A_2",
+      "motion": "Slide Out"
+    },
+    {
+      "stem": "Nightstand_B_Assembled_Drawer_A_3",
+      "motion": "Slide Out"
+    }
+  ],
+  "Shower_Stall_190cm_L_Assembled": [
+    {
+      "stem": "Shower_Stall_190cm_L_Assembled_Door",
+      "motion": "Slide Right"
+    }
+  ],
+  "Shower_Stall_190cm_R_Assembled": [
+    {
+      "stem": "Shower_Stall_190cm_R_Assembled_Door",
+      "motion": "Slide Left"
+    }
+  ],
+  "Stove_Assembled": [
+    {
+      "stem": "Stove_Assembled_Hatch",
+      "motion": "Flap Down"
+    }
+  ],
+  "Toilet_Assembled": [
+    {
+      "stem": "Toilet_Assembled_Seat",
+      "motion": "Lid"
+    },
+    {
+      "stem": "Toilet_Assembled_Lid",
+      "motion": "Lid"
+    }
+  ],
+  "Tv_Stand_Assembled": [
+    {
+      "stem": "Tv_Stand_Assembled_Door_L",
+      "motion": "Hinge Left"
+    },
+    {
+      "stem": "Tv_Stand_Assembled_Door_R",
+      "motion": "Hinge Right"
+    }
+  ],
+  "Washingmachine_Assembled": [
+    {
+      "stem": "Washingmachine_Assembled_Lid",
+      "motion": "Lid"
+    }
+  ],
+  "Workdesk_Assembled": [
+    {
+      "stem": "Workdesk_Assembled_Drawer_A",
+      "motion": "Slide Out"
+    },
+    {
+      "stem": "Workdesk_Assembled_Drawer_A_2",
+      "motion": "Slide Out"
+    },
+    {
+      "stem": "Workdesk_Assembled_Drawer_A_3",
+      "motion": "Slide Out"
+    },
+    {
+      "stem": "Workdesk_Assembled_Drawer_A_4",
+      "motion": "Slide Out"
+    },
+    {
+      "stem": "Workdesk_Assembled_Drawer_A_5",
+      "motion": "Slide Out"
+    },
+    {
+      "stem": "Workdesk_Assembled_Drawer_A_6",
+      "motion": "Slide Out"
+    }
+  ]
+}
