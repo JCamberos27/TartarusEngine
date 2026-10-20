@@ -6,7 +6,7 @@
 #
 #   python tools/scenes/build_master_scene.py [<repo>]
 #
-# Writes project/scenes/Master Scene.json (+ .meta, its guid kept across rebuilds). Render settings and the player's
+# Writes project/scenes/Master Scene.json (no longer committed: the Apartment Hallway is the startup scene) (+ .meta, its guid kept across rebuilds). Render settings and the player's
 # rig come from scenes/Arena.json; the grid textures from tools/assets/gen_proto_grid.py.
 #
 # Layout (X east, -Z north, metres; the player spawns at the hub facing north):

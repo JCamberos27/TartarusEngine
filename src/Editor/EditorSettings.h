@@ -74,7 +74,7 @@ struct EditorSettings {
 
     // Absolute path of the scene open when the editor last closed / last Open'd / Saved As.
     // Loaded on startup when the file still exists; empty (or missing file) falls back to the
-    // built-in default (project/scenes/Master Scene.json). Written by OpenScene / DoSaveAs. (#95)
+    // built-in default (project/settings.json startupScene: scenes/Apartment Hallway.json). Written by OpenScene / DoSaveAs. (#95)
     std::string LastScenePath;
     // File > Open Recent, newest first. Save() moves LastScenePath to the front, so every place
     // that records the last scene also records it here.
