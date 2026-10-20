@@ -833,7 +833,7 @@ const char* DistanceNameForKey(const std::string& key) {
     if (key == "snd.body_fall") return "body_fall";
     if (key == "snd.flyby") return "flyby";
     if (key.rfind("snd.casing.", 0) == 0) return "casing";
-    if (key.rfind("snd.foley.step_", 0) == 0) return "npc_step";
+    if (key.rfind("snd.foley.step_", 0) == 0 || key.rfind("snd.foley.barefoot_", 0) == 0) return "npc_step";
     if (key.rfind("snd.foley.", 0) == 0) return "npc_gear";
     if (key.rfind("snd.amb.", 0) == 0 || key.rfind("snd.ui.", 0) == 0) return nullptr;
     const size_t dot = key.find('.', 4);
@@ -1184,7 +1184,7 @@ float WeaponAudio::SendFor(const std::string& key) const {
         const std::string rest = key.substr(10);
         const size_t dot = rest.find('.');
         const std::string cat = rest.substr(0, dot), el = dot == std::string::npos ? std::string() : rest.substr(dot + 1);
-        const bool step = cat.rfind("step_", 0) == 0 || el == "walk" || el == "run" || el == "crouch";
+        const bool step = cat.rfind("step_", 0) == 0 || cat.rfind("barefoot_", 0) == 0 || el == "walk" || el == "run" || el == "crouch";
         return ClampSend(step ? b.SendFootsteps : b.SendFoley);
     }
     if (key.rfind("snd.casing.", 0) == 0) return ClampSend(b.SendCasings);

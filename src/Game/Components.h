@@ -236,6 +236,25 @@ struct AudioListenerComponent {
     bool Enabled = true;
 };
 
+// A text label in the world (WorldText.h draws it): signage, measurements on a prototype course. Crisp at any
+// distance (a signed-distance font atlas), white and faintly glowing by default, faded out between Fade Start
+// and Cull Distance and not drawn past it. Fixed text lies in the entity's local XY plane, read from +Z; scale
+// the entity to stretch it.
+struct WorldTextComponent {
+    enum Facing : int { Fixed = 0, Billboard = 1, Upright = 2 }; // Upright: turns about world up only
+    enum AlignMode : int { Left = 0, Center = 1, Right = 2 };
+    std::string Text = "Text";
+    float     Size = 0.25f;                // line height, metres
+    glm::vec3 Color{1.0f};
+    float     Brightness = 1.5f;           // on-screen brightness at the scene's fixed exposure; > 1 glows (bloom)
+    int       Face = Fixed;
+    int       Align = Center;
+    float     Outline = 0.0f;              // dark rim, 0..0.4 of the glyph edge band
+    float     FadeStart = 25.0f;           // metres from the camera
+    float     CullDistance = 35.0f;
+    bool      OnTop = false;               // drawn through geometry (no depth test)
+};
+
 // Tag only: which Hierarchy section an entity lists under ("Level Geometry" vs "Models") and
 // which JSON array (SceneSerializer's "boxes" vs "models") it round-trips through. Carries no
 // data of its own â€” an entity's actual shape/material comes from its RenderableComponent same
@@ -1664,6 +1683,10 @@ struct FoleyAudioComponent {
     float NpcStepVolume = 1.0f;
     float NpcStepMaxDistance = 28.0f;
     float NpcStepMinDistance = 2.5f;
+    // Which step takes play: 0 boots (Foley/step_<surface>), 1 barefoot (Foley/barefoot_<surface>, the boots' where a
+    // barefoot take is missing). The player's own, and the soldiers'.
+    int Footwear = 0;
+    int NpcFootwear = 0;
     std::string DefaultSurface = "concrete";
     std::string SurfaceTable = "wood=wood,plank,floor,parquet;metal=metal,steel,iron,grate;glass=glass;carpet=carpet,rug;water=water,puddle;concrete=concrete,asphalt,tile,stone,gravel,dirt,soil,sand,grass";
 };

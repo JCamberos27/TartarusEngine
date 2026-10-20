@@ -810,9 +810,9 @@ class Builder:
         return out
 
     def from_sandbox(self, name):
-        """A copy of the Sandbox entity `name` and everything under it, with fresh ids (a root of this scene)."""
+        """A copy of the old Sandbox's entity `name` (sandbox_template.json) and everything under it, with fresh ids (a root of this scene)."""
         if not hasattr(self, '_sandbox'):
-            self._sandbox = json.load(open(os.path.join(self.repo, 'project', 'scenes', 'Sandbox.json'), encoding='utf-8'))
+            self._sandbox = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sandbox_template.json'), encoding='utf-8'))
         lists = {key: self._sandbox.get(key, []) for key in ('empties', 'models', 'boxes')}
 
         def copy(src, key, parent):

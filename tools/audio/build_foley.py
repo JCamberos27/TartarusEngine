@@ -4,8 +4,11 @@
 
 Writes project/assets/Audio/Foley/<category>/<element>_<n>.wav, key snd.foley.<category>.<element>.
 Categories: weapon (ads_in ads_out equip unequip firemode), move (jump land_light land_heavy),
-step_<surface> (walk run land).
+step_<surface> (walk run land) in boots, barefoot_<surface> (walk run land) barefoot.
+
+  --only barefoot   rebuilds just the barefoot steps (Foley/barefoot_*), leaving every other file as it is.
 """
+import sys
 import glob
 import json
 import os
@@ -96,19 +99,27 @@ def pick_steps(x, n, dur, isolated_gap, seed, lo_db=-4.5):
     return out
 
 
-def surf_files(surface, kind):
-    return sorted(glob.glob(os.path.join(adsp.BOOTS, surface, f"*Boots {kind}*")))
+# Footwear -> (library folder, the word before the take's name in its file names, foley category prefix).
+FOOTWEAR = {"boots": (lambda: adsp.BOOTS, "Boots", "step_"), "barefoot": (lambda: adsp.BAREFOOT, "Socks", "barefoot_")}
 
 
-def build_steps(cfg, entries):
-    st = cfg["steps"]
+def surf_files(surface, kind, footwear="boots"):
+    root, word, _ = FOOTWEAR[footwear]
+    return sorted(glob.glob(os.path.join(root(), surface, f"*{word} {kind}*")))
+
+
+def build_steps(cfg, entries, footwear="boots"):
+    st = dict(cfg["steps"])
+    if footwear != "boots":
+        st.update(cfg.get(f"{footwear}_steps", {}))       # its own surfaces / counts / loudness where they differ
+    prefix = FOOTWEAR[footwear][2]
     for surface in st["surfaces"]:
-        cat = f"step_{surface.lower()}"
+        cat = f"{prefix}{surface.lower()}"
         base = f"Foley/{cat}"
-        seqW = surf_files(surface, f"Walk {surface} Sequence")
-        seqR = surf_files(surface, f"Run {surface} Sequence")
-        singles = surf_files(surface, f"{surface} Single Step")
-        stomps = surf_files(surface, f"{surface} Stomp")
+        seqW = surf_files(surface, f"Walk {surface} Sequence", footwear)
+        seqR = surf_files(surface, f"Run {surface} Sequence", footwear)
+        singles = surf_files(surface, f"{surface} Single Step", footwear)
+        stomps = surf_files(surface, f"{surface} Stomp", footwear)
         jobs = {"walk": [], "run": [], "land": []}
         if seqW:
             x = adsp.load(seqW[0])
@@ -131,7 +142,7 @@ def build_steps(cfg, entries):
             a0 = max(0, on - int(0.004 * SR))
             s = adsp.fade(adsp.cut(x, a0, a0 + int(st["land"]["dur"] * SR)), int(0.001 * SR), int(0.18 * SR))
             jobs["land"].append((s, os.path.basename(f), adsp.take_uses()))
-        if surface == "Concrete":                          # the Tactical pack's own concrete steps as extra variants
+        if surface == "Concrete" and footwear == "boots":  # the Tactical pack's own concrete steps as extra variants
             for kind in ("walk", "run"):
                 for p in st["general_concrete"][kind]:
                     x = adsp.load(p)
@@ -144,7 +155,8 @@ def build_steps(cfg, entries):
             for n, (s, note, uses) in enumerate(lst, 1):
                 y = abuild.finish(s, "step" if kind != "land" else "foley", target=tgt)
                 e = abuild.emit(f"{base}/{kind}_{n}.wav", y, f"snd.foley.{cat}.{kind}", "step" if kind != "land" else "foley",
-                                {"element": kind, "category": cat, "variant": n, "source": note, "surface": surface.lower()}, sources=uses)
+                                {"element": kind, "category": cat, "variant": n, "source": note, "surface": surface.lower(),
+                                 "footwear": footwear}, sources=uses)
                 entries.append(e)
                 print(f"{e['file']:42s} LUFS-M {e['lufs_m_max']:6.1f}  TP {e['true_peak_dbtp']:5.1f}  {e['length_s']:.2f}s")
 
@@ -163,6 +175,10 @@ def land_heavy(v):
 def main():
     cfg = json.load(open(os.path.join(abuild.HERE, "recipes", "foley.json")))
     entries = []
+    if "--only" in sys.argv and sys.argv[sys.argv.index("--only") + 1] == "barefoot":
+        build_steps(cfg, entries, "barefoot")
+        print("manifest files:", abuild.update_manifest(entries, ["Foley/barefoot_"]))
+        return
     for cat, elems in cfg["one_shots"].items():
         for elem, variants in elems.items():
             for n, v in enumerate(variants, 1):
@@ -180,6 +196,7 @@ def main():
                 entries.append(e)
                 print(f"{e['file']:42s} LUFS-M {e['lufs_m_max']:6.1f}  TP {e['true_peak_dbtp']:5.1f}  {e['length_s']:.2f}s")
     build_steps(cfg, entries)
+    build_steps(cfg, entries, "barefoot")
     print("manifest files:", abuild.update_manifest(entries, ["Foley/"]))
 
 
