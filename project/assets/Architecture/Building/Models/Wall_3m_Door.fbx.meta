@@ -9,9 +9,9 @@
     "materialImportMode": 1,
     "optimizeGraph": true,
     "pivotOffset": [
-      1.5,
+      8.0,
       0.0,
-      -0.10000000149011612
+      -0.0
     ]
   },
   "materialRemap": {
