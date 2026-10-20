@@ -2,6 +2,9 @@
 # floor next to its stand, the fridge door flat behind the fridge, the toilet seat and lid at its feet). This puts each
 # part where it belongs and exports <Stem>_Assembled.fbx next to the original, with a .meta copied from the original's
 # (same materials, scale and pivot, new guid). The originals stay for anyone who wants the loose parts.
+# The parts that open (doors, drawers, lids, the oven door) go into files of their own, <Stem>_Assembled_<Part>.fbx,
+# with the same pivot as the body: dropped at the body's spot (a child at its origin) each closes it, and the engine's
+# Openable component moves it. kit_parts.json lists each body's parts and how each opens (tools/assets/openables.py).
 #
 #   python tools/assets/assemble_kits.py <repo> [--blender <blender.exe>] [--exe <TartarusEngine.exe>]
 # runs itself inside Blender to build the files, then re-centres each one's pivot (bottom centre) from the engine's
@@ -83,7 +86,8 @@ def fridge(objs):
                          @ Matrix.Translation(Vector((0, 0, -lo.z))) @ door.matrix_world)
     bpy.context.view_layer.update()
     lo, hi = bounds(door)
-    move(door, Vector(((blo.x + bhi.x) / 2 - (lo.x + hi.x) / 2, blo.y - hi.y + 0.005, blo.z + 0.005 - lo.z)))
+    # shut against the front: its shelf bins sit inside the cabinet (8.8 cm back from touching it)
+    move(door, Vector(((blo.x + bhi.x) / 2 - (lo.x + hi.x) / 2, blo.y - hi.y + 0.093, blo.z + 0.005 - lo.z)))
 
 
 def washer(objs):
@@ -111,6 +115,16 @@ def toilet(objs):
         move(part, Vector(((blo.x + bhi.x) / 2 - (lo.x + hi.x) / 2, blo.y + 0.015 - lo.y, z - lo.z)))
         z += hi.z - lo.z
 
+
+
+def stove(objs):
+    """The oven door is exported with a stray quarter turn against the stove and 35 cm inside it: drop the turn and
+    bring it out to the front (what import_model_library's UNROTATE / MOVE did for the stove at import)."""
+    hatch = objs['Stove_hatch']
+    loc, _, scale = hatch.matrix_local.decompose()
+    hatch.matrix_local = Matrix.LocRotScale(loc, None, scale)
+    bpy.context.view_layer.update()
+    move(hatch, Vector((0.0, -0.35, 0.0)))
 
 
 def front_openings(body, step=0.01, recess=0.08):
@@ -296,7 +310,47 @@ KITS = {
     'Furniture/Lighting/Models/Lamp_Chandelier_B.fbx': chandelier,
     'Furniture/Bathroom/Models/Shower_Stall_190cm_L.fbx': (lambda o: shower(o, True), ['Shower_Stall_Door', 'Shower_Stall_Glass']),
     'Furniture/Bathroom/Models/Shower_Stall_190cm_R.fbx': (lambda o: shower(o, False), ['Shower_Stall_Door', 'Shower_Stall_Glass']),
+    'Furniture/Kitchen/Models/Stove.fbx': stove,
 }
+# The KITS pieces that open (by object name), each exported to a file of its own. Every part a FITS body takes opens.
+OPENS = {
+    'Furniture/Kitchen/Models/Fridge.fbx': ['Fridge_door'],
+    'Furniture/Bathroom/Models/Washingmachine.fbx': ['Washingmachine_lid'],
+    'Furniture/Bathroom/Models/Toilet.fbx': ['Toilet_seat', 'Toilet_lid'],
+    'Furniture/Bathroom/Models/Shower_Stall_190cm_L.fbx': ['Shower_stall_door'],
+    'Furniture/Bathroom/Models/Shower_Stall_190cm_R.fbx': ['Shower_stall_door'],
+    'Furniture/Kitchen/Models/Stove.fbx': ['Stove_hatch'],
+}
+PART_WORDS = ('Door', 'Drawer', 'Lid', 'Seat', 'Hatch')
+MANIFEST = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'kit_parts.json')
+
+
+def part_suffix(name):
+    """'Kitchen_Counter_Door_L' -> 'Door_L', 'Toilet_seat' -> 'Seat': the name from its first part word on."""
+    tokens = [t[:1].upper() + t[1:] for t in name.split('.')[0].split('_')]
+    at = next((i for i, t in enumerate(tokens) if t in PART_WORDS), len(tokens) - 1)
+    return '_'.join(tokens[at:])
+
+
+def motion_of(suffix, part, body, rel):
+    """How a part opens (the engine's Openable Motion), from its name and where it sits on the body."""
+    words = suffix.split('_')
+    if 'Drawer' in words:
+        return 'Slide Out'
+    if 'Lid' in words or 'Seat' in words:
+        return 'Lid'
+    if 'Hatch' in words:
+        return 'Flap Down'
+    lo, hi = bounds(part)
+    blo, bhi = bounds(body)
+    left = (lo.x + hi.x) / 2 <= (blo.x + bhi.x) / 2
+    if 'Shower' in rel:  # slides along the front, toward the glass panel at the other end
+        return 'Slide Right' if left else 'Slide Left'
+    if 'L' in words:
+        return 'Hinge Left'
+    if 'R' in words:
+        return 'Hinge Right'
+    return 'Hinge Left' if left else 'Hinge Right'  # hinged on the body's nearer side
 
 
 def build():
@@ -305,6 +359,10 @@ def build():
     assets = os.path.join(repo, 'project', 'assets')
     jobs = [(rel, fix if callable(fix) else fix[0], [] if callable(fix) else fix[1]) for rel, fix in KITS.items()]
     jobs += [(rel, None, parts) for rel, parts in FITS.items()]
+    manifest = {}
+    if os.path.exists(MANIFEST):
+        with open(MANIFEST, encoding='utf-8') as f:
+            manifest = json.load(f)
     for rel, fix, parts in jobs:
         if only and not any(o in rel for o in only):
             continue
@@ -329,26 +387,65 @@ def build():
                 base = slot.material.name.rsplit('.', 1)[0] if slot.material else None
                 if base and base != slot.material.name and base in bpy.data.materials:
                     slot.material = bpy.data.materials[base]
+        loose_names = {o.name for o in loose}  # a fitted copy is named '<original>.001'
         if fix:
             fix({o.name: o for o in bpy.context.scene.objects})
+            opening = [bpy.context.scene.objects[n] for n in OPENS.get(rel, [])]
         else:
             n = fit_parts(body, loose)
             print('assemble_kits: fitted', os.path.basename(rel), n, 'openings')
-        bpy.ops.export_scene.fbx(filepath=dst, use_selection=False, object_types={'MESH', 'EMPTY'},
-                                 apply_scale_options='FBX_SCALE_UNITS', bake_space_transform=False,
-                                 path_mode='STRIP', embed_textures=False, add_leaf_bones=False, bake_anim=False)
+            opening = [o for o in bpy.context.scene.objects
+                       if o.type == 'MESH' and o.name.split('.')[0] in {n.split('.')[0] for n in loose_names}]
+        # Each part that opens into a file of its own (with whatever hangs off it), the rest into the body's.
+        for o in opening:
+            world = o.matrix_world.copy()
+            o.parent = None
+            o.matrix_world = world
+        bpy.context.view_layer.update()
+        for old in glob.glob(src[:-4] + '_Assembled_*.fbx'):  # last run's parts: their names may have changed
+            os.remove(old)  # (their metas stay until the end, so a part made again keeps its guid)
+        groups, taken = [], {}
+        for o in sorted(opening, key=lambda o: (bounds(o)[0].x, -bounds(o)[1].z)):  # left to right, top down
+            suffix = part_suffix(o.name)
+            taken[suffix] = taken.get(suffix, 0) + 1
+            if taken[suffix] > 1:
+                suffix += f'_{taken[suffix]}'
+            groups.append((suffix, [o] + list(o.children_recursive)))
+        moving = {m for _, g in groups for m in g}
+        files = [(dst, [o for o in bpy.context.scene.objects if o not in moving], None)]
+        files += [(src[:-4] + f'_Assembled_{suffix}.fbx', g, motion_of(suffix, g[0], body, rel)) for suffix, g in groups]
         with open(src + '.meta', encoding='utf-8') as f:
             meta = json.load(f)
-        old = None
-        if os.path.exists(dst + '.meta'):
-            with open(dst + '.meta', encoding='utf-8') as f:
-                old = json.load(f).get('guid')
-        meta['guid'] = old or secrets.token_hex(8)
+        # the stray turns and offsets the importer fixed in the original are fixed here already
+        meta['importer'].pop('unrotateNodes', None)
+        meta['importer'].pop('moveNodes', None)
         meta['materialRemap'] = {**remap, **meta.get('materialRemap', {})}
-        with open(dst + '.meta', 'w', encoding='utf-8', newline='\n') as f:
-            json.dump(meta, f, indent=2, sort_keys=True)
-            f.write('\n')
+        parts_out = []
+        for path, objs, motion in files:
+            bpy.ops.object.select_all(action='DESELECT')
+            for o in objs:
+                o.select_set(True)
+            bpy.ops.export_scene.fbx(filepath=path, use_selection=True, object_types={'MESH', 'EMPTY'},
+                                     apply_scale_options='FBX_SCALE_UNITS', bake_space_transform=False,
+                                     path_mode='STRIP', embed_textures=False, add_leaf_bones=False, bake_anim=False)
+            old = None
+            if os.path.exists(path + '.meta'):
+                with open(path + '.meta', encoding='utf-8') as f:
+                    old = json.load(f).get('guid')
+            with open(path + '.meta', 'w', encoding='utf-8', newline='\n') as f:
+                json.dump(dict(meta, guid=old or secrets.token_hex(8)), f, indent=2, sort_keys=True)
+                f.write('\n')
+            if motion:
+                parts_out.append({'stem': os.path.splitext(os.path.basename(path))[0], 'motion': motion})
+                print('assemble_kits: part', os.path.relpath(path, repo))
+        manifest[os.path.splitext(os.path.basename(dst))[0]] = parts_out
+        for meta_path in glob.glob(src[:-4] + '_Assembled_*.fbx.meta'):
+            if not os.path.exists(meta_path[:-5]):
+                os.remove(meta_path)
         print('assemble_kits:', os.path.relpath(dst, repo))
+    with open(MANIFEST, 'w', encoding='utf-8', newline='\n') as f:
+        json.dump(dict(sorted(manifest.items())), f, indent=2)
+        f.write('\n')
 
 
 def main():
@@ -364,25 +461,36 @@ def main():
     repo = os.path.abspath(args.repo)
     out = subprocess.run([args.blender, '-b', '--factory-startup', '--python', os.path.abspath(__file__), '--', repo,
                           *args.only], capture_output=True, text=True, encoding='utf-8', errors='replace')
-    made = [line.split(': ', 1)[1].strip() for line in out.stdout.splitlines() if line.startswith('assemble_kits: ') and 'fitted' not in line]
-    if out.returncode or not made:
+    # each body, then its parts: 'assemble_kits: part <rel>' lines come before their body's 'assemble_kits: <rel>'
+    kits, parts = [], []
+    for line in out.stdout.splitlines():
+        if line.startswith('assemble_kits: part '):
+            parts.append(line.split(' ', 2)[2].strip())
+        elif line.startswith('assemble_kits: ') and 'fitted' not in line:
+            kits.append((line.split(': ', 1)[1].strip(), parts))
+            parts = []
+    if out.returncode or not kits:
         sys.exit('assemble_kits: Blender failed:\n' + out.stdout[-3000:] + out.stderr[-3000:])
-    # Pivot: bottom centre of the assembled piece (the original's pivot was for its loose layout).
+    # Pivot: bottom centre of the assembled piece, its parts included (the original's pivot was for its loose layout);
+    # the parts take the body's, so each lines up at its origin.
     exe = args.exe or os.path.join(repo, 'build', 'Release', 'TartarusEngine.exe')
     os.chdir(repo)
-    report = model_report(exe, made)
-    for rel in made:
-        r = report[os.path.normcase(os.path.normpath(rel))]
-        with open(rel + '.meta', encoding='utf-8') as f:
-            meta = json.load(f)
-        old = meta['importer'].get('pivotOffset', [0.0, 0.0, 0.0])
-        lo, hi = r['min'], r['max']
+    report = model_report(exe, [f for body, ps in kits for f in [body] + ps])
+    for body, ps in kits:
+        rs = [report[os.path.normcase(os.path.normpath(f))] for f in [body] + ps]
+        lo = [min(r['min'][i] for r in rs) for i in range(3)]
+        hi = [max(r['max'][i] for r in rs) for i in range(3)]
+        with open(body + '.meta', encoding='utf-8') as f:
+            old = json.load(f)['importer'].get('pivotOffset', [0.0, 0.0, 0.0])
         # hanging fixtures hang from their top; everything else stands on its bottom centre
-        meta['importer']['pivotOffset'] = [round(old[0] - (lo[0] + hi[0]) / 2, 4),
-                                           round(old[1] - (hi[1] if 'Chandelier' in rel else lo[1]), 4),
-                                           round(old[2] - (lo[2] + hi[2]) / 2, 4)]
-        write_json(rel + '.meta', meta)
-        print('assemble_kits:', rel)
+        pivot = [round(old[0] - (lo[0] + hi[0]) / 2, 4), round(old[1] - (hi[1] if 'Chandelier' in body else lo[1]), 4),
+                 round(old[2] - (lo[2] + hi[2]) / 2, 4)]
+        for f in [body] + ps:
+            with open(f + '.meta', encoding='utf-8') as fh:
+                meta = json.load(fh)
+            meta['importer']['pivotOffset'] = pivot
+            write_json(f + '.meta', meta)
+        print('assemble_kits:', body, f'(+{len(ps)} parts)' if ps else '')
 
 
 if bpy:
