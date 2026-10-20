@@ -3,7 +3,7 @@
 # middle storey so a floor above and one below are in reach of every pass (shadows, lights). The source floor's NPCs
 # are left out: the bench measures rendering, not AI. Deterministic: same input, same file.
 #
-# Neither scene is committed any more (the Master Scene replaced the content scenes); build them on demand:
+# Neither scene is committed any more (the Apartment Hallway replaced the content scenes); build them on demand:
 #   python tools/scenes/build_apartment.py <repo> --floor      (writes Apartment_Floor3.json, this script's source)
 #   python tools/scenes/build_asset_perf.py <repo>
 #   TartarusEngine.exe --perf-bench project/scenes/AssetPerf.json --perf-res 1920x1080

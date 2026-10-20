@@ -356,9 +356,9 @@ void RegisterEngineComponents() {
             { "Open Sound", T::String, TARTARUS_REFLECT_FIELD(OpenableComponent, OpenSound), 0.0f,
               "Audio assets played as it starts to open; ';'-separated variants, one picked per play. Empty = silent." },
             { "Close Sound", T::String, TARTARUS_REFLECT_FIELD(OpenableComponent, CloseSound), 0.0f,
-              "Audio assets played as it starts to shut; ';'-separated variants." },
+              "Audio assets played when it lands shut; ';'-separated variants." },
             { "Latch Sound", T::String, TARTARUS_REFLECT_FIELD(OpenableComponent, LatchSound), 0.0f,
-              "Audio assets played when it lands shut (the latch); ';'-separated variants." },
+              "Audio assets layered on the Close Sound when it lands shut (the latch snapping home); ';'-separated variants." },
         };
         m.Fields[0].EnumLabels = "Hinge Left\0Hinge Right\0Lid\0Flap Down\0Flap Up\0Slide Out\0Slide Left\0Slide Right\0";
         m.Fields[0].EnumCount = 8;

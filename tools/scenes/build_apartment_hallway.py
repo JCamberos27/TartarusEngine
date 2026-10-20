@@ -70,7 +70,7 @@ ZOUT = HALL + D       # outside wall lines z = +-ZOUT
 HALL_WINDOWS = [('v', 0.0, 0.0), ('v', L, 0.0)]   # an end window each end of the corridor (world axis/line/centre)
 
 TUBE_K, BULB_K = 4000.0, 2700.0
-NORTH_TARGET = (0.62, 0.42, 0.66)   # where the moon should hang (direction to it): east-south-east, 25 deg up
+NORTH_TARGET = (0.74, 0.42, 0.52)   # where the moon should hang (direction to it): 35 deg south of east, 25 deg up
 
 
 def ref(repo, path):
@@ -108,7 +108,7 @@ class Hallway(k.Scene):
     def __init__(self, base, repo):
         super().__init__(base)
         self.repo = repo
-        self.idx = k.model_index(repo)
+        self.idx = k.model_index(repo, os.environ.get('TARTARUS_EXE'))  # default: build/Release
         self.plane = ref(repo, PLANE)
         self.mats = self._materials()
         self.rooms = {}        # 'Apartment 301/Bedroom' -> world rect (x0, z0, x1, z1)
@@ -146,19 +146,15 @@ class Hallway(k.Scene):
                                   roughness=0.95, triplanar_scale=0.33),
             'trim': k.textured(r, base=(0.86, 0.85, 0.82), roughness=0.4),
             'hidden': k.textured(r, base=(0.5, 0.5, 0.5), roughness=1.0),
-            'brass': k.textured(r, base=(0.78, 0.6, 0.3), roughness=0.3, metallic=1.0),
-            'glass': {**k.from_mat(r, 'assets/Architecture/Building/Materials/M_Window_Light.mat'),
+                        'glass': {**k.from_mat(r, 'assets/Architecture/Building/Materials/M_Window_Light.mat'),
                       'baseColor': [0.92, 0.95, 0.97], 'emissiveColor': [0.0, 0.0, 0.0], 'emissiveStrength': 0.0,
                       'emissiveMap': '', 'metallic': 0.0, 'roughness': 0.03, 'transmission': 0.92, 'ior': 1.5,
                       'renderQueue': 2, 'opacity': 0.12},
         }
 
     def _door_sounds(self):
-        """The door takes in Foley/door (open_*, close_*, latch_*), ';'-joined per kind; empty until they exist."""
-        folder = os.path.join(self.repo, 'project', *DOOR_AUDIO.split('/'))
-        files = sorted(os.listdir(folder)) if os.path.isdir(folder) else []
-        return {kind: ';'.join(f'{DOOR_AUDIO}/{f}' for f in files if f.startswith(kind + '_') and f.endswith('.wav'))
-                for kind in ('open', 'close', 'latch')}
+        """The door takes (Foley/door, CC0, in git): ';'-joined per kind."""
+        return {kind: ';'.join(f'{DOOR_AUDIO}/{kind}_{i}.wav' for i in range(1, 5)) for kind in ('open', 'close', 'latch')}
 
     # --- primitives --------------------------------------------------------------------------------------------
     def face(self, name, parent, center, normal, w, h, mat):
@@ -352,7 +348,7 @@ class Hallway(k.Scene):
                 self.number_plate(parent, number, axis, line, along, -sign)
 
     def number_plate(self, parent, number, axis, line, along, toward):
-        """The unit number in brass on the corridor wall beside the latch side, at 1.55 m."""
+        """The unit number on the corridor wall beside the latch side, at 1.55 m."""
         face = line + toward * T / 2
         digits = str(number)
         step = 0.062
@@ -363,8 +359,7 @@ class Hallway(k.Scene):
                 yaw, pos = (0.0 if toward > 0 else 180.0), (along + (off if toward > 0 else -off), 1.5, face + toward * 0.004)
             else:
                 yaw, pos = (90.0 if toward > 0 else -90.0), (face + toward * 0.004, 1.5, along + (-off if toward > 0 else off))
-            self.model(self.idx, f'Door_Number_{ch}', parent, pos, yaw, name=f'Number {ch}', static=True, castShadows=0,
-                       materials=[{'embedded': self.mats['brass']}])
+            self.model(self.idx, f'Door_Number_{ch}', parent, pos, yaw, name=f'Number {ch}', static=True, castShadows=0)
 
     def windows(self, root):
         grp = self.empty('Windows', root)
@@ -407,8 +402,12 @@ class Hallway(k.Scene):
         if not intensity:
             return
         extra = k.light_flicker(**flicker) if flicker else {}
+        # a ceiling fitting lights the room below it: a wide spot aimed straight down (one shadow view, not a cube's six)
         self.light(f'{stem} Light', parent, (x, H - drop - 0.06, z), intensity, rng, shadows=True, kelvin=kelvin,
-                   softness=1.6, **extra)
+                   spot=72.0, softness=1.6, **extra)
+        # a tube throws light sideways too: a small shadowless glow lights the ceiling round the fitting
+        if stem.startswith('Lamp_Fluorescent'):
+            self.light(f'{stem} Ceiling Glow', parent, (x, H - drop - 0.15, z), intensity * 0.3, 2.4, kelvin=kelvin, **extra)
         if fill_room:
             x0, z0, x1, z1 = fill_room
             fx, fz = (x + (x0 + x1) / 2) / 2, (z + (z0 + z1) / 2) / 2
@@ -424,8 +423,16 @@ class Hallway(k.Scene):
             dead = i == 4
             flicker = {1: dict(Mode=0, MinInterval=3.0, MaxInterval=9.0, Depth=1.0, Seed=11),
                        3: dict(Mode=0, MinInterval=0.6, MaxInterval=4.0, Depth=0.7, Seed=23)}.get(i)
-            self.fixture(grp, 'Lamp_Fluorescent_A', (x, 0.0), 90.0, TUBE_K, 0.0 if dead else 1.1, 5.5, 0.9,
-                         flicker, fill_room=(max(0.0, x - 2.0), -HALL, min(L, x + 2.0), HALL))
+            self.fixture(grp, 'Lamp_Fluorescent_A', (x, 0.0), 90.0, TUBE_K, 0.0 if dead else 0.9, 5.5, 0.9, flicker)
+        # moonlight bouncing off the floors: a faint, cool, shadowless fill in every room but the corridor
+        # (only where the moon doesn't reach: the north rooms; the south ones get it straight through the glass), its
+        # reach kept inside the room - shadowless, it would light the next room through the wall
+        for key, (x0, z0, x1, z1) in self.rooms.items():
+            if key == 'Corridor' or z0 > 0.0:
+                continue
+            reach = math.dist((x0, z0), (x1, z1)) / 2
+            self.light(f'Moon Bounce - {key}', grp, ((x0 + x1) / 2, 1.4, (z0 + z1) / 2), 0.07, round(reach, 3),
+                       color=(0.55, 0.66, 0.95))
         # a bulb in every entry; 305's is on its last legs
         for number, *_ in PLACEMENT:
             x0, z0, x1, z1 = self.rooms[f'Apartment {number}/Entry']
@@ -472,7 +479,7 @@ class Hallway(k.Scene):
         fpc = ctrl['First Person Controller']
         fpc['Primary Weapon Prefab'] = 'assets/Weapons/AKS74U/AKS74U.prefab'
         fpc['Secondary Weapon Prefab'] = 'assets/Weapons/Remington870/Remington870.prefab'
-        sid = self.empty('Player Spawn', -1, (1.0, 0.0, 0.0), yaw=-90.0, **ctrl)  # facing +X
+        sid = self.empty('Player Spawn', -1, (1.0 - L / 2, 0.0, 0.0), yaw=-90.0, **ctrl)  # facing +X
         bid = self.empty('Player Body', sid, tuple(body['position']), **{kk: v for kk, v in body.items() if kk[0].isupper()})
         for p in pieces:
             e = self._common(p['name'], bid, tuple(p['position']), 0.0)
@@ -510,26 +517,27 @@ def build(repo):
     hours, north = aim_moon(day, lat, phase_offset)
     d['skySource'] = 2
     d['sky'].update({'timeOfDay': True, 'timeOfDayHours': round(hours, 3), 'dayOfYear': day, 'latitude': lat,
-                     'northOffset': north, 'moon': True, 'moonDiscScale': 20.0, 'moonBrightness': 0.012,
-                     'moonPhaseOffset': round(phase_offset, 4), 'starsBrightness': 1.6, 'nightGlow': 0.02,
+                     'northOffset': north, 'moon': True, 'moonDiscScale': 20.0, 'moonBrightness': 0.09,
+                     'moonPhaseOffset': round(phase_offset, 4), 'starsBrightness': 2.5, 'nightGlow': 0.02, 'skyIntensity': 0.15, 'groundAlbedo': [0.04, 0.04, 0.045],
                      'nightBrightness': 5.0, 'clouds': False, 'cloudShadows': False, 'cirrusCoverage': 0.0,
                      'animateInEditor': False, 'dayLengthMinutes': 0.0})
-    d.update({'exposureEV': 1.6, 'autoExposure': False, 'tonemapOperator': 1, 'skyAmbientIntensity': 0.08,
+    d.update({'exposureEV': 1.8, 'autoExposure': False, 'tonemapOperator': 1, 'skyAmbientIntensity': 0.08,
               'bloomEnabled': True, 'bloomThreshold': 1.0, 'bloomKnee': 0.5, 'bloomIntensity': 0.12,
               'fogEnabled': False, 'ssaoEnabled': True, 'ssaoIntensity': 1.25, 'ssaoRadius': 0.45,
               'shadowsEnabled': True, 'shadowResolution': 2048, 'shadowCascades': 2, 'shadowDistance': 40.0,
-              'maxSpotShadows': 4, 'maxPointShadows': 6, 'vignetteIntensity': 0.3, 'vignetteSmoothness': 0.55,
-              'filmGrain': 0.05, 'motionBlur': False, 'depthOfField': False, 'chromaticAberration': 0.0,
+              'maxSpotShadows': 6, 'maxPointShadows': 0, 'vignetteIntensity': 0.3, 'vignetteSmoothness': 0.55,
+              'filmGrain': 0.0, 'motionBlur': False, 'depthOfField': False, 'chromaticAberration': 0.0,
               'gradeContrast': 6.0, 'gradeSaturation': -6.0, 'gradeTemperature': 0.0})
     d['skyHdriPath'] = ''
     d.pop('skyHdriGuid', None)
-    s.empty('Moon', -1, (L / 2, 30, 0), pitch=-25.0, yaw=-120.0, Light={
+    s.empty('Moon', -1, (0, 30, 0), pitch=-25.0, yaw=-120.0, Light={
         'Type': 'Directional', 'Color': [0.78, 0.86, 1.0], 'Intensity': 0.8, 'Range': 200.0, 'Spot Angle': 35.0,
         'Angular Size': 0.53, 'Cast Shadows': True, 'Shadow Bias': 1.0, 'Shadow Normal Bias': 1.0,
         'Shadow Softness': 0.6, 'Shadow Resolution': 'Follow global', 'Shadow Update Mode': 'Dynamic', 'ColorTempK': 0.0,
         'Culling Mask': -1})
     s.plan()
-    root = s.empty('Third Floor', -1)
+    # centred on the origin (the editor's default and smoke-test cameras orbit it); the plan stays in corridor coordinates
+    root = s.empty('Third Floor', -1, (-L / 2, 0.0, 0.0))
     s.shell(root)
     s.doors(root)
     s.windows(root)

@@ -539,8 +539,8 @@
     "playerPushStrength": 2.0,
     "solverIterations": 8
   },
-  "startupScene": "scenes/Master Scene.json",
-  "startupSceneGuid": "942caa09aa4da40b",
+  "startupScene": "scenes/Apartment Hallway.json",
+  "startupSceneGuid": "e2062f48889aceec",
   "tags": [],
   "time": {
     "maximumDeltaTime": 0.10000000149011612,

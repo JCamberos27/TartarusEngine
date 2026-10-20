@@ -174,7 +174,7 @@ void Update(World& world, const glm::vec3& eye, const glm::vec3& forward, bool i
             if (!blocked) {
                 auto& o = view.get<OpenableComponent>(best);
                 o.Target = o.Target > 0.5f ? 0.0f : 1.0f;
-                PlaySound(o.Target > 0.5f ? o.OpenSound : o.CloseSound, glm::vec3(world.GetCachedWorldTransform(best)[3]));
+                if (o.Target > 0.5f) PlaySound(o.OpenSound, glm::vec3(world.GetCachedWorldTransform(best)[3]));
             }
         }
     }
@@ -185,7 +185,11 @@ void Update(World& world, const glm::vec3& eye, const glm::vec3& forward, bool i
         const float step = dt / std::max(o.OpenTime, 0.01f);
         o.Progress = o.Target > o.Progress ? std::min(o.Target, o.Progress + step) : std::max(o.Target, o.Progress - step);
         Apply(o, view.get<TransformComponent>(e), *r.ModelRef);
-        if (o.Progress == 0.0f) PlaySound(o.LatchSound, glm::vec3(world.GetCachedWorldTransform(e)[3]));
+        if (o.Progress == 0.0f) { // landed shut
+            const glm::vec3 at(world.GetCachedWorldTransform(e)[3]);
+            PlaySound(o.CloseSound, at);
+            PlaySound(o.LatchSound, at);
+        }
     }
 }
 
