@@ -2098,6 +2098,12 @@ void EditorLayer::DrawProjectSettingsBody(World& /*world*/) {
             EditorUI::SetTooltip("Lays down the static world's depth before shading it, so each pixel runs the\n"
                                  "lighting once instead of once per surface drawn over it. Cheaper on the GPU for\n"
                                  "crowded interiors; costs a second (depth-only) draw of the static scene.");
+        SettingsLabel("GPU instancing");
+        if (EditorUIPrimitives::Checkbox("##GPU instancing", &q.GpuInstancing)) ProjectSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Copies of the same static model with the same materials draw together, one draw\n"
+                                 "call per pass instead of one per copy (camera, depth pre-passes and shadows).\n"
+                                 "Skinned, moving, transparent and partly hidden models still draw one by one.");
 
         // #171 - Unity's Audio Mixer: master + one volume per bus (Audio Source > Output).
         EditorUIPrimitives::SectionHeader("Audio");

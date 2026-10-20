@@ -120,6 +120,9 @@ public:
     // state. Imported mesh materials are shared too; per-object looks go through MaterialAsset
     // slots on the RenderableComponent.
     std::shared_ptr<Model> CreateInstance() const;
+    // What the instances of one import share (meshes, GPU buffers, materials): two unskinned models with the same
+    // value draw the same geometry, so GPU instancing groups placed copies by it (InstanceBatch.h).
+    const void* ImportId() const { return m_D.get(); }
 
     // Async import (AsyncAssetLoader): the whole Assimp import and every texture decode, with no
     // GL at all, so it can run on a worker thread. The result has its meshes and textures
@@ -373,13 +376,15 @@ public:
     // inside is a single-sided shell you'd otherwise see straight through).
     // #112 — which submeshes a DrawSelected call draws: the render queue is per material slot,
     // so a model can have opaque and transparent parts that belong in different passes.
+    // `instances` > 1: each mesh draws that many copies, whose transforms the program reads from the instance buffer
+    // (InstanceBatch.h; the caller sets uInstanced / uInstanceBase from `onProgramBound`).
     enum class MeshPass { All, Opaque, Transparent };
     void DrawSelected(Shader& fallback, const glm::mat4& xform,
                       const std::vector<std::shared_ptr<MaterialAsset>>& slots,
                       const ProgramSelector& selectProgram, float opacity = 1.0f,
                       const std::function<void(Shader&)>& onProgramBound = {},
                       MeshPass pass = MeshPass::All, bool forceDoubleSided = false,
-                      const VisibleIndexBuffer* visible = nullptr);
+                      const VisibleIndexBuffer* visible = nullptr, int instances = 1);
     int MeshCount() const { return (int)m_D->Meshes.size(); }
     // Sub-mesh `index`'s triangle indices, local to it (ModelMesh::LocalIndices).
     const std::vector<unsigned int>& MeshLocalIndices(int index) const { return m_D->Meshes[index]->LocalIndices(); }

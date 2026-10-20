@@ -22,6 +22,7 @@
 #include "Ssao.h"
 #include "SkinHideBuffer.h"
 #include "Model.h"
+#include "InstanceBatch.h"
 #include "MaterialAsset.h"
 #include "ShaderVariant.h"
 #include "DefaultTextures.h"
@@ -817,7 +818,10 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     // level looking down, so the chest below the eye isn't swept into it. The view matrix's first row.
     glm::vec3 nearHideRight(ctx.View[0][0], 0.0f, ctx.View[2][0]);
     nearHideRight = glm::dot(nearHideRight, nearHideRight) > 1e-8f ? glm::normalize(nearHideRight) : glm::vec3(1.0f, 0.0f, 0.0f);
+    int instanceBase = -1; // the opaque pass's current group in the instance buffer, -1 = drawn with uModel
     const std::function<void(Shader&)> perDraw = [&](Shader& prog) {
+        prog.SetInt("uInstanced", instanceBase >= 0 ? 1 : 0);
+        if (instanceBase >= 0) prog.SetInt("uInstanceBase", instanceBase);
         if (anyProbes) in.probeArray->Bind(prog, probeItem->Centre);
         prog.SetInt("uNoReceiveShadows", probeItem->ReceiveShadows ? 0 : 1);
         prog.SetInt("uObjectLayerBit", probeItem->LayerBit); // #203
@@ -866,16 +870,17 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         depth.SetMat4("uLightViewProj", ctx.Proj * ctx.View);
         depth.SetInt("uUseSkinning", 0);
         depth.SetInt("uCascadeLayered", 0);
-        const int modelLoc = depth.Loc("uModel");
         glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
         glEnable(GL_POLYGON_OFFSET_FILL);
         glPolygonOffset(1.0f, 4.0f);
+        static std::vector<DepthCaster> prepass;
+        prepass.clear();
         for (const DrawItem& it : drawList) {
             if (it.Dynamic || it.NearHide > 0.0f || it.HideBones || it.HideVerts || it.CollarVerts ||
                 it.BoneMaskMode || it.LayerPull != 0.0f || it.Ref->HasBones()) continue;
-            depth.SetMat4(modelLoc, it.Xform);
-            it.Ref->DrawDepthOnly(depth, *it.Slots, 1, it.Visible);
+            prepass.push_back({it.Ref, it.Slots, it.Visible, &it.Xform});
         }
+        DrawDepthCasters(depth, prepass);
         glPolygonOffset(0.0f, 0.0f);
         glDisable(GL_POLYGON_OFFSET_FILL);
         glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
@@ -897,15 +902,86 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // The model program's state is unchanged, but GL's blend / cull / depth state was restored to the
         // pass baseline and the material-bind cache invalidated.
     };
-    for (const DrawItem& it : drawList) {
+    // GPU instancing (Project Settings > Quality): copies of a static model that draw exactly alike - the same
+    // materials and programs, sidedness, shadow receiving, lighting layer and SSAO - go out as one instanced draw at the
+    // first copy's place in the sorted list. Per-object reflection probes and blood splats, and anything skinned, moving
+    // or partly hidden, still draw one by one. The groups keep the list's order: the static world (all the batches)
+    // first, so the blood decals still land between it and the moving things.
+    const bool instancing = ProjectSettings::Quality().GpuInstancing && !anyProbes;
+    const auto batchable = [&](const DrawItem& it) {
+        if (!instancing || it.Dynamic || it.Ref->HasBones() || it.Visible || it.NearHide > 0.0f || it.HideBones ||
+            it.HideVerts || it.CollarVerts || it.BoneMaskMode || it.LayerPull != 0.0f)
+            return false;
+        int bloodFirst = 0, bloodCount = 0;
+        BloodRenderer::Get().SplatRange(it.Entity, bloodFirst, bloodCount);
+        if (bloodCount > 0) return false;
+        // Every program its meshes draw through must read the per-instance transforms.
+        std::uint32_t key = 0;
+        for (int i = 0; i < it.Ref->MeshCount(); ++i) {
+            const MaterialAsset* ma = i < (int)it.Slots->size() ? (*it.Slots)[i].get() : nullptr;
+            if (!programFor(ma, key)->Instancing()) return false;
+        }
+        return true;
+    };
+    static InstanceGroups opaqueGroups;
+    GroupInstances(
+        drawList.size(),
+        [&](std::uint32_t i) -> std::uint64_t {
+            const DrawItem& it = drawList[i];
+            if (!batchable(it)) return kNoBatch;
+            std::uint64_t seed = (std::uint64_t)(std::uintptr_t)it.Ref->ImportId() * 0x9E3779B97F4A7C15ull;
+            seed ^= (std::uint64_t)it.Pass | ((std::uint64_t)it.DoubleSided << 4) | ((std::uint64_t)it.ReceiveShadows << 5) |
+                    ((std::uint64_t)it.NoSsao << 6) | ((std::uint64_t)(std::uint32_t)it.LayerBit << 8);
+            return HashSlots(*it.Slots, seed);
+        },
+        [&](std::uint32_t a, std::uint32_t b) {
+            const DrawItem& x = drawList[a];
+            const DrawItem& y = drawList[b];
+            return x.Ref->ImportId() == y.Ref->ImportId() && x.Pass == y.Pass && x.DoubleSided == y.DoubleSided && x.ReceiveShadows == y.ReceiveShadows &&
+                   x.NoSsao == y.NoSsao && x.LayerBit == y.LayerBit && SameSlots(*x.Slots, *y.Slots);
+        },
+        opaqueGroups);
+    static std::vector<int> groupBase;
+    groupBase.assign(opaqueGroups.Groups.size(), -1);
+    {
+        std::vector<glm::mat4>& staging = InstanceBuffer::Staging();
+        staging.clear();
+        for (std::size_t g = 0; g < opaqueGroups.Groups.size(); ++g) {
+            const auto& grp = opaqueGroups.Groups[g];
+            if (grp.Count < 2) continue;
+            groupBase[g] = (int)(staging.size() / 2);
+            for (std::uint32_t k = 0; k < grp.Count; ++k) {
+                const glm::mat4& x = drawList[opaqueGroups.Order[grp.First + k]].Xform;
+                staging.push_back(x);
+                staging.push_back(glm::mat4(glm::transpose(glm::inverse(glm::mat3(x)))));
+            }
+        }
+        InstanceBuffer::Upload();
+    }
+    for (std::size_t g = 0; g < opaqueGroups.Groups.size(); ++g) {
+        const auto& grp = opaqueGroups.Groups[g];
+        const DrawItem& it = drawList[opaqueGroups.Order[grp.First]];
         if (it.Dynamic && !decalsDone) drawBloodDecals();
         probeItem = &it;
-        it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, 1.0f, perDraw, it.Pass, it.DoubleSided, it.Visible);
+        instanceBase = groupBase[g];
+        it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, 1.0f, perDraw, it.Pass, it.DoubleSided, it.Visible,
+                             instanceBase >= 0 ? (int)grp.Count : 1);
 
         localStats.DrawCalls += it.Meshes;
-        localStats.Triangles += it.Tris;
-        localStats.Vertices += it.Verts;
+        for (std::uint32_t k = 0; k < grp.Count; ++k) {
+            const DrawItem& member = drawList[opaqueGroups.Order[grp.First + k]];
+            localStats.Triangles += member.Tris;
+            localStats.Vertices += member.Verts;
+        }
     }
+    instanceBase = -1;
+    // Nothing after this pass draws instanced: leave every program it used reading uModel again (the previews share
+    // the material shaders' programs).
+    for (Shader* p : appliedPrograms) {
+        p->Bind();
+        p->SetInt("uInstanced", 0);
+    }
+    modelShader.Bind();
     if (!decalsDone) drawBloodDecals();
 
     // Volumetric blood in the air: opaque fluid, so before the sky and with the
