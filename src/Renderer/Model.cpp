@@ -55,6 +55,30 @@ glm::mat4 AiToGlm(const aiMatrix4x4& from) {
     return to;
 }
 
+// ModelImportSettings::UnrotateNodes: each named node keeps its position and scale and loses its own rotation.
+void UnrotateNodes(aiNode* node, const std::vector<std::string>& names) {
+    if (std::find(names.begin(), names.end(), node->mName.C_Str()) != names.end()) {
+        aiVector3D scale, position;
+        aiQuaternion rotation;
+        node->mTransformation.Decompose(scale, rotation, position);
+        node->mTransformation = aiMatrix4x4(scale, aiQuaternion(), position);
+    }
+    for (unsigned int i = 0; i < node->mNumChildren; ++i) UnrotateNodes(node->mChildren[i], names);
+}
+
+// ModelImportSettings::MoveNodes: each named node shifted in model space, through its parents' frames.
+void MoveNodes(aiNode* root, const std::vector<ModelImportSettings::NodeMove>& moves) {
+    for (const auto& m : moves) {
+        aiNode* node = root->FindNode(m.Node.c_str());
+        if (!node) continue;
+        aiMatrix4x4 parent;
+        for (const aiNode* p = node->mParent; p; p = p->mParent) parent = p->mTransformation * parent;
+        aiMatrix4x4 by;
+        aiMatrix4x4::Translation(aiVector3D(m.By.x, m.By.y, m.By.z), by);
+        node->mTransformation = aiMatrix4x4(parent).Inverse() * by * parent * node->mTransformation;
+    }
+}
+
 // Element-wise, relative to the matrices' size (translations can be in centimetres).
 bool NearlyEqual(const glm::mat4& a, const glm::mat4& b) {
     float scale = 1.0f;
@@ -157,9 +181,11 @@ void Model::ImportFromFile(const ModelImportSettings& settings) {
 
     const aiScene* scene = importer.ReadFile(m_Path, flags);
 
-    // Up axis and pivot: folded into the root node, so static meshes bake them into their vertices. A clip source is
-    // left alone so its keys stay exactly the full import's.
+    // Up axis and pivot: folded into the root node, so static meshes bake them into their vertices (and UnrotateNodes /
+    // MoveNodes into their own nodes). A clip source is left alone so its keys stay exactly the full import's.
     if (scene && scene->mRootNode && !settings.AnimationOnly) {
+        if (!settings.UnrotateNodes.empty()) UnrotateNodes(scene->mRootNode, settings.UnrotateNodes);
+        if (!settings.MoveNodes.empty()) MoveNodes(scene->mRootNode, settings.MoveNodes);
         glm::mat4 fix = glm::translate(glm::mat4(1.0f), settings.PivotOffset);
         if (settings.SourceUpAxis == ModelImportSettings::UpAxis::Z) fix = fix * AxisCorrection(2, 1, 1, -1);
         else if (settings.SourceUpAxis == ModelImportSettings::UpAxis::NegZ) fix = fix * AxisCorrection(2, -1, 1, 1);

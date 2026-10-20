@@ -12,6 +12,9 @@
       -1.5360000133514404,
       -0.0010000000474974513,
       0.02199999988079071
+    ],
+    "unrotateNodes": [
+      "Dresser_large_A_extension_door_L_glass"
     ]
   },
   "materialRemap": {

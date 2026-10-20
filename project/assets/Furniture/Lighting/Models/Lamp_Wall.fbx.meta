@@ -7,11 +7,24 @@
     "importNormals": true,
     "importSkeleton": false,
     "materialImportMode": 1,
+    "moveNodes": [
+      {
+        "by": [
+          0.001,
+          -0.195,
+          0.225
+        ],
+        "node": "Lamp_wall_shade"
+      }
+    ],
     "optimizeGraph": true,
     "pivotOffset": [
       0.0010000000474974513,
       0.1850000023841858,
       -0.024000000208616257
+    ],
+    "unrotateNodes": [
+      "Lamp_wall_shade"
     ]
   },
   "materialRemap": {

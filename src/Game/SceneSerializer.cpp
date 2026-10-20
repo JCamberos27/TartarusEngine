@@ -1957,6 +1957,12 @@ void AppendAssetLibraryJson(json& root, const AssetLibrary& assets, bool include
         if (m.SimplifyRatio < 1.0f) mi["simplify"] = m.SimplifyRatio;
         if (m.PivotOffset != glm::vec3(0.0f)) mi["pivotOffset"] = {m.PivotOffset.x, m.PivotOffset.y, m.PivotOffset.z};
         if (!m.ExcludeNodes.empty()) mi["excludeNodes"] = m.ExcludeNodes;
+        if (!m.UnrotateNodes.empty()) mi["unrotateNodes"] = m.UnrotateNodes;
+        if (!m.MoveNodes.empty()) {
+            json moves = json::array();
+            for (const auto& n : m.MoveNodes) moves.push_back({{"node", n.Node}, {"by", {n.By.x, n.By.y, n.By.z}}});
+            mi["moveNodes"] = moves;
+        }
         if (m.SkinIgnoresMeshNode) mi["skinIgnoresMeshNode"] = true;
         if (!m.ClipTrims.empty()) {
             json trims = json::array();
@@ -2046,6 +2052,14 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root, bool fromUndo
                 if (m.contains("excludeNodes") && m["excludeNodes"].is_array())
                     for (const auto& n : m["excludeNodes"])
                         if (n.is_string()) sm.ExcludeNodes.push_back(n.get<std::string>());
+                if (m.contains("unrotateNodes") && m["unrotateNodes"].is_array())
+                    for (const auto& n : m["unrotateNodes"])
+                        if (n.is_string()) sm.UnrotateNodes.push_back(n.get<std::string>());
+                if (m.contains("moveNodes") && m["moveNodes"].is_array())
+                    for (const auto& n : m["moveNodes"])
+                        if (n.is_object() && n.contains("by") && n["by"].is_array() && n["by"].size() == 3)
+                            sm.MoveNodes.push_back({n.value("node", std::string()),
+                                                    {n["by"][0].get<float>(), n["by"][1].get<float>(), n["by"][2].get<float>()}});
                 if (m.contains("clipTrims") && m["clipTrims"].is_array())
                     for (const auto& t : m["clipTrims"])
                         if (t.is_object() && t.value("clip", std::string()).size())
