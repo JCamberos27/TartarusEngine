@@ -4,14 +4,37 @@
 #include "Model.h"
 #include "PhysicsWorld.h"
 #include "GameModuleAPI.h" // RaycastHit
+#include "Audio/WeaponAudio.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 #include <cmath>
+#include <sstream>
 
 namespace Openable {
 namespace {
 using Kind = OpenableComponent::MotionKind;
+
+// One of `files` (';'-separated audio assets) at `pos`, pitch jittered a little so repeats don't sound stamped.
+void PlaySound(const std::string& files, const glm::vec3& pos) {
+    if (files.empty()) return;
+    WeaponAudio& wa = WeaponAudio::Get();
+    if (!wa.Active()) return;
+    SoundSet set;
+    set.Key = "openable." + files;
+    set.FilesExplicit = true;
+    std::istringstream in(files);
+    for (std::string f; std::getline(in, f, ';');)
+        if (!f.empty()) set.Files.push_back(f);
+    set.PitchMin = 0.96f;
+    set.PitchMax = 1.04f;
+    set.VolumeJitterDb = 1.0f;
+    set.MinDistance = 1.0f;
+    set.MaxDistance = 25.0f;
+    SoundPlayer::Request r;
+    r.Position = pos;
+    wa.Player().Play(set, r);
+}
 
 float Ease(float t) {
     t = std::clamp(t, 0.0f, 1.0f);
@@ -151,6 +174,7 @@ void Update(World& world, const glm::vec3& eye, const glm::vec3& forward, bool i
             if (!blocked) {
                 auto& o = view.get<OpenableComponent>(best);
                 o.Target = o.Target > 0.5f ? 0.0f : 1.0f;
+                PlaySound(o.Target > 0.5f ? o.OpenSound : o.CloseSound, glm::vec3(world.GetCachedWorldTransform(best)[3]));
             }
         }
     }
@@ -161,6 +185,7 @@ void Update(World& world, const glm::vec3& eye, const glm::vec3& forward, bool i
         const float step = dt / std::max(o.OpenTime, 0.01f);
         o.Progress = o.Target > o.Progress ? std::min(o.Target, o.Progress + step) : std::max(o.Target, o.Progress - step);
         Apply(o, view.get<TransformComponent>(e), *r.ModelRef);
+        if (o.Progress == 0.0f) PlaySound(o.LatchSound, glm::vec3(world.GetCachedWorldTransform(e)[3]));
     }
 }
 

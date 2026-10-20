@@ -66,6 +66,8 @@ project/assets/**/*.[bB][lL][eE][nN][dD]
 !project/assets/Materials/Prototype/**
 !project/assets/Environments/Apartment/Models/**
 !project/assets/Test/**
+# the 1 m quad the generated interiors build their see-through walls from (tools/scenes/build_apartment_hallway.py)
+!project/assets/Architecture/Building/Models/Plane_1m.obj
 !project/assets/Characters/Quantum/Textures/Eyes/T_Brows_Lashes.png
 !project/assets/Characters/Quantum/Textures/Eyes/T_F_Brows_Lashes.png
 
