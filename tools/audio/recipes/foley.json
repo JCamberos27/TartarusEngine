@@ -1,5 +1,5 @@
 {
- "_doc": "Player foley. one_shots: category -> element -> variants (same variant syntax as elements.json; src relative to the Tactical Shooter Pack). steps: Boots library -> per-surface walk/run (individual steps cut out of the 30 s sequences by envelope peak picking), single steps and stomps. Round 4: no synthesis -- land_heavy adds a real low thud. (The sprint gear loop was removed 2026-10-03: gun-handling rattle on every stride; metal handling sounds come only from gun actions.)",
+ "_doc": "Player foley. one_shots: category -> element -> variants (same variant syntax as elements.json; src relative to the Tactical Shooter Pack). steps: Boots library -> per-surface walk/run (individual steps cut out of the 30 s sequences by envelope peak picking), single steps and stomps. Round 4: no synthesis -- land_heavy adds a real low thud. (The sprint gear loop was removed 2026-10-03: gun-handling rattle on every stride; metal handling sounds come only from gun actions.) barefoot_steps: the same Ocular Stride library barefoot (src audio-src\\barefoot\\Barefoot and Socks) -> Foley/barefoot_<surface>, keys snd.foley.barefoot_<surface>.<walk|run|land>; anything not given falls back to steps. Carpet has no barefoot stomps: its landing falls back to the boots' in the engine.",
  "one_shots": {
   "weapon": {
    "ads_in": [
@@ -305,5 +305,15 @@
     "General/Run/S_Run_Concrete_4.WAV"
    ]
   }
+ },
+ "barefoot_steps": {
+  "surfaces": [
+   "Carpet",
+   "Concrete",
+   "Glass",
+   "Metal",
+   "Water",
+   "Wood"
+  ]
  }
 }
