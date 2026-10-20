@@ -539,8 +539,8 @@
     "playerPushStrength": 2.0,
     "solverIterations": 8
   },
-  "startupScene": "scenes/Sandbox.json",
-  "startupSceneGuid": "52ed5cade6cc1e55",
+  "startupScene": "scenes/Master Scene.json",
+  "startupSceneGuid": "942caa09aa4da40b",
   "tags": [],
   "time": {
     "maximumDeltaTime": 0.10000000149011612,

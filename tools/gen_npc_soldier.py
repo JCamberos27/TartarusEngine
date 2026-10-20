@@ -12,7 +12,7 @@ import sys
 
 root = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), '..')
 proj = os.path.join(root, 'project')
-sandbox = json.load(open(os.path.join(proj, 'scenes', 'Sandbox.json'), encoding='utf-8'))
+sandbox = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'scenes', 'sandbox_template.json'), encoding='utf-8'))
 out_dir = os.path.join(proj, 'assets', 'AI')
 os.makedirs(out_dir, exist_ok=True)
 
@@ -73,7 +73,7 @@ for kind in ('boxes', 'empties', 'models'):
     for e in sandbox[kind]:
         src[e['id']] = (kind, e)
 body_ids = [i for i, (_, e) in src.items() if e['name'] == 'Player Body']
-if len(body_ids) != 1: fail('expected one Player Body in Sandbox.json')
+if len(body_ids) != 1: fail('expected one Player Body in sandbox_template.json')
 body_id = body_ids[0]
 _, body = src[body_id]
 if 'Character Outfit' not in body: fail('Player Body has no Character Outfit')

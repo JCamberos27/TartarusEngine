@@ -21,19 +21,17 @@ Your own settings (preferences, shortcuts, panel layout, logs) do NOT live here.
 build, and your setup carries over.
 
 
-THE SAMPLE PROJECT IS MISSING ITS SKY
--------------------------------------
-The Sandbox scene opens on first run, and one kind of asset it uses cannot be redistributed
-in this download:
+SKY HDRIS ARE NOT INCLUDED
+--------------------------
+The Master Scene opens on first run. It uses the engine's physical sky, so it needs nothing
+that isn't in this download. One kind of asset other scenes may use cannot be redistributed:
 
   * Sky HDRIs (project/assets/sky/)
-    CC0 from Poly Haven, but too large to ship here. The scene names the file it wants
-    (see "skyHdriPath" in project/scenes/Sandbox.json); download it from polyhaven.com
-    into project/assets/sky/.
+    CC0 from Poly Haven, but too large to ship here. A scene that uses one names the file
+    it wants in its "skyHdriPath"; download it from polyhaven.com into project/assets/sky/.
 
-The scene loads without it. The Console will warn about the missing file and the sky falls
-back to a procedural gradient. Everything else - the arena, physics, the gravity gun, lighting
-and post-processing - works as shipped.
+A scene missing its HDRI still loads: the Console warns about the file and the sky falls back
+to a procedural gradient. Everything else works as shipped.
 
 
 IF IT WILL NOT START
