@@ -693,9 +693,9 @@ void TestGlassV2RollingNumbers() {
     CHECK(shown == 10.0 && m.LiveCount() == 0 && m.HeldBytes() == 0); // first sight: no roll
     value = 20.0;
     gui.Frame(body);
-    CHECK(m.LiveCount() > 0);                    // both readouts roll (and flash)
+    CHECK(m.LiveCount() > 0 && shown == 20.0);   // both readouts slide; the value is already the new one
     gui.Frame(body);
-    CHECK(shown > 10.0 && shown < 20.5);         // on its way, a spring may nudge past
+    CHECK(m.LiveCount() > 0 && shown == 20.0);   // still sliding, never an in-between number
     const int normal = FramesToSettle(gui, body);
     CHECK(normal < 120 && shown == 20.0 && m.HeldBytes() == 0);
     // Twice the speed settles in about half the frames; half the speed in about twice.
@@ -881,7 +881,7 @@ void TestGlassV2TokensAndStartup() {
     MotionV2Defaults restore;
     // Every v2 curve starts at 0 and lands on 1; every v2 spring settles inside its duration.
     for (const Glass::MotionSpec* s : {&Glass::ThemeTween, &Glass::MoodIn, &Glass::MoodOut, &Glass::PlayMoodIn, &Glass::PlayPunch,
-                                       &Glass::ToolbarFold, &Glass::OdometerRoll, &Glass::ValueFlash, &Glass::CardFlip,
+                                       &Glass::ToolbarFold, &Glass::DigitSlide, &Glass::CardFlip,
                                        &Glass::FolderZoom, &Glass::Unfold, &Glass::ReparentFly, &Glass::NodePop, &Glass::WireMorph,
                                        &Glass::LogSlide, &Glass::CaretGlide, &Glass::LineSweep, &Glass::GizmoHover,
                                        &Glass::OutlineSweep, &Glass::ViewCubeTurn, &Glass::RadialOpen, &Glass::RadialItem}) {
@@ -922,7 +922,7 @@ void TestGlassV2TokensAndStartup() {
 } // namespace
 
 void RegisterGlassTests(UnitTestSupport::TestList& tests) {
-    tests.emplace_back("Glass motion v2: rolling numbers roll, settle, follow the speed and hold nothing", TestGlassV2RollingNumbers);
+    tests.emplace_back("Glass motion v2: rolling numbers slide, settle, follow the speed and hold nothing", TestGlassV2RollingNumbers);
     tests.emplace_back("Glass motion v2: inertia tracks, coasts and is forgotten", TestGlassV2Inertia);
     tests.emplace_back("Glass motion v2: wheel scroll glides and then holds nothing", TestGlassV2ScrollInertia);
     tests.emplace_back("Glass motion v2: layers, grid ripple and text along a wire", TestGlassV2LayersRippleText);

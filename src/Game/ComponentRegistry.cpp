@@ -336,6 +336,29 @@ void RegisterEngineComponents() {
         Register<LightFlickerComponent>(std::move(m));
     }
 
+    {
+        ReflectComponent m;
+        m.Name = "Openable"; m.Icon = ICON_FA_DOOR_OPEN; m.Category = "Gameplay";
+        m.Tooltip = "A door, drawer or lid the player opens and shuts with Interact (E) while playing. The hinge or slide "
+                    "comes from the model's bounds, front facing local +Z; put it on the part, as a child of its body.";
+        m.Fields = {
+            { "Motion", T::Enum, TARTARUS_REFLECT_FIELD(OpenableComponent, Motion), 0.0f,
+              "Hinge Left / Right: a door hinged on that edge (seen from the front), swinging out. Lid: hinged along its "
+              "back edge, lifting. Flap Down: hinged along its bottom edge, dropping forward (an oven door). Flap Up: "
+              "hinged along its top edge. Slide Out: a drawer. Slide Left / Right: a sliding door." },
+            { "Amount", T::Float, TARTARUS_REFLECT_FIELD(OpenableComponent, Amount), 1.0f,
+              "How far it opens: degrees for a hinge, metres for a slide. 0 = the usual amount (100 degrees for a door, "
+              "95 for a lid; a drawer most of its body's depth).", 0.0f, 360.0f },
+            { "Open Time", T::Float, TARTARUS_REFLECT_FIELD(OpenableComponent, OpenTime), 0.05f,
+              "Seconds from shut to open.", 0.05f, 10.0f },
+            { "Start Open", T::Bool, TARTARUS_REFLECT_FIELD(OpenableComponent, StartOpen), 0.0f,
+              "Open when Play starts." },
+        };
+        m.Fields[0].EnumLabels = "Hinge Left\0Hinge Right\0Lid\0Flap Down\0Flap Up\0Slide Out\0Slide Left\0Slide Right\0";
+        m.Fields[0].EnumCount = 8;
+        Register<OpenableComponent>(std::move(m));
+    }
+
     // Migrated from hand-coded serialization/Inspector code onto reflection (#184) — the third
     // such migration. Unlike Camera/Audio/Collider (all ruled out: they carry multi-select
     // and/or custom widgets the generic path doesn't support), Animator was plain fields only,

@@ -199,15 +199,16 @@ public:
     // This frame's step on the motion clock (DeltaTime * TimeScale).
     float Dt() const { return m_Dt; }
 
-    // Rolling numbers: draws `value` at `pos` (top-left, current font) with each digit sliding
-    // vertically like a mechanical counter while the value changes, and a brief white flash.
+    // Rolling numbers: draws `value` at `pos` (top-left, current font). When it changes, the digits
+    // that differ slide one step (up for a bigger number, down for a smaller one) and crossfade.
     // Remembers last frame's value in the current window's storage (ImGui's memory, not this map).
     // `decimals` fixed digits after the point; `suffix` drawn after (unrolled). Returns the width
     // drawn. RollingNumbers off: plain text.
     float Odometer(ImGuiID id, ImDrawList* dl, ImVec2 pos, double value, int decimals, ImU32 col, const char* suffix = nullptr);
     // The width Odometer would take for `value`.
     static float OdometerWidth(double value, int decimals, const char* suffix = nullptr);
-    // The value as it reads right now (a rolling readout that isn't drawn as digits).
+    // Notes `value` as the readout's latest number (starting a slide if it changed) and returns it.
+    // Call it to move the readout to a value without drawing it, so the next slide departs from there.
     double RollingValue(ImGuiID id, double value);
 
     // Inertia: track a drag's motion, release it into a coast that decays like a trackpad fling.

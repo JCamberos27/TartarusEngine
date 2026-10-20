@@ -1166,6 +1166,35 @@ struct TransformControllerComponent {
     float Elapsed = 0.0f;
 };
 
+// A door, drawer or lid the player opens and closes with Interact (E) while playing (Game/Openable.h). The motion is
+// worked out from the model's own bounds, with its front facing local +Z: a hinge runs along the matching edge, a
+// drawer slides out along +Z by most of its parent's depth. Moves this entity's own transform, so a part sits as a
+// child of its body. Play -> Stop reloads the authored scene, so everything comes back shut.
+struct OpenableComponent {
+    enum class MotionKind : int {
+        HingeLeft = 0,  // a door hinged on its left edge (seen from the front), swinging out
+        HingeRight = 1, // ... on its right edge
+        Lid = 2,        // hinged along its back edge, lifting (a box or toilet lid, a washer's top)
+        FlapDown = 3,   // hinged along its bottom edge, dropping forward (an oven door)
+        FlapUp = 4,     // hinged along its top edge, lifting outward (a wall cabinet's flap)
+        SlideOut = 5,   // a drawer
+        SlideLeft = 6,  // a sliding door, toward local -X
+        SlideRight = 7, // ... toward local +X
+    };
+    int Motion = 0;          // MotionKind
+    float Amount = 0.0f;     // degrees for a hinge, metres for a slide; 0 = the motion's usual amount
+    float OpenTime = 0.5f;   // seconds from shut to open
+    bool StartOpen = false;
+
+    // Runtime, never serialized.
+    bool Started = false;
+    glm::vec3 BasePosition{0.0f};
+    glm::quat BaseRotation{1.0f, 0.0f, 0.0f, 0.0f};
+    float Progress = 0.0f; // 0 shut .. 1 open
+    float Target = 0.0f;
+    float ResolvedAmount = 0.0f; // Amount, or the motion's usual amount for this model
+};
+
 // Drives the Light on its entity: a fluorescent tube that stutters now and then, a TV screen's
 // restless glow, or a candle's fast shimmer. Works around the light's authored intensity and colour
 // while playing; Play -> Stop reloads the authored scene, so they come back untouched.
