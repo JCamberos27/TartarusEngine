@@ -511,13 +511,13 @@ const char* FitAxisFormat(float v, float room) {
 // the pointer across the field, stronger the faster the value moves (Gradients). A fast release lets
 // the value coast a little further and settle (Inertia), and the drag plus its coast commit as one
 // edit. A value changed while nobody is editing it (undo / redo, Reset, a script) rolls to its new
-// number with a brief flash (RollingNumbers); typing, dragging and coasting never roll. The state is
+// number, its changed digits sliding (RollingNumbers); typing, dragging and coasting never roll. The state is
 // a few floats in the field's window storage (ImGui's memory) plus Glass entries that only live
 // while something moves.
 constexpr ImGuiID kNumSeenSalt  = 0x4E554D53u; // float: the value after last frame's widget
 constexpr ImGuiID kNumFrameSalt = 0x4E554D46u; // int: the frame it was last drawn
 constexpr ImGuiID kNumRollSalt  = 0x4E554D52u; // the rolling digits' id
-constexpr ImGuiID kNumUntilSalt = 0x4E554D55u; // float: when the roll's flash ends (ImGui time)
+constexpr ImGuiID kNumUntilSalt = 0x4E554D55u; // float: when the digit slide ends (ImGui time)
 constexpr ImGuiID kNumGlowSalt  = 0x4E554D47u; // float: the scrub glow, 0..1
 constexpr ImGuiID kNumCoastSalt = 0x4E554D43u; // the inertia id; as a storage key: 1 while coasting
 constexpr ImGuiID kNumExactSalt = 0x4E554D58u; // float: the coasting value before rounding to the format
@@ -584,7 +584,7 @@ NumberDragResult NumberDrag(const char* label, bool isInt, void* v, float speed,
     const int decimals = isInt ? (FixedDecimals(fmt, &suffix) == 0 ? 0 : -1) : FixedDecimals(fmt, &suffix);
     const bool external = !editing && drawnLastFrame && (float)before != seen;
     const bool canRoll = !mixed && decimals >= 0 && m.CategoryOn(Glass::MotionCategory::RollingNumbers);
-    if (external && canRoll) st->SetFloat(id ^ kNumUntilSalt, now + Glass::ValueFlash.durationMs * 0.001f);
+    if (external && canRoll) st->SetFloat(id ^ kNumUntilSalt, now + Glass::DigitSlide.durationMs * 0.001f);
     const bool roll = canRoll && !editing && (external || m.Live(rollId) || now < st->GetFloat(id ^ kNumUntilSalt, 0.0f));
     // A change the digits didn't see (off screen, or not rollable) still becomes their last value,
     // so the next real roll departs from the right number.
