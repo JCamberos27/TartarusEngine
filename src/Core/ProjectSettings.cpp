@@ -19,6 +19,7 @@ namespace {
 
 PhysicsSettings g_Physics;
 TimeSettings g_Time;
+QualitySettings g_Quality;
 AudioSettings g_Audio; // #171
 BuildSettings g_Build; // #174
 std::string g_StartupScene;
@@ -54,6 +55,8 @@ const PhysicsSettings& Physics()       { return g_Physics; }
 PhysicsSettings&       MutablePhysics() { return g_Physics; }
 const TimeSettings&    Time()           { return g_Time; }
 TimeSettings&          MutableTime()    { return g_Time; }
+const QualitySettings& Quality()        { return g_Quality; }
+QualitySettings&       MutableQuality() { return g_Quality; }
 const AudioSettings&   Audio()          { return g_Audio; }
 AudioSettings&         MutableAudio()   { return g_Audio; }
 const BuildSettings&   Build()          { return g_Build; }
@@ -143,6 +146,13 @@ void Load() {
         };
         g_Time.MaximumDeltaTime = std::clamp(num("maximumDeltaTime", g_Time.MaximumDeltaTime), 0.01f, 1.0f);
         g_Time.TimeScale        = std::clamp(num("timeScale", g_Time.TimeScale), 0.0f, 100.0f);
+    }
+
+    if (const auto it = root.find("quality"); it != root.end() && it->is_object()) {
+        const auto f = it->find("smallObjectCullHeight");
+        if (f != it->end() && f->is_number())
+            g_Quality.SmallObjectCullHeight = std::clamp(f->get<float>(), 0.0f, 0.1f);
+        g_Quality.DepthPrepass = it->value("depthPrepass", true);
     }
 
     if (const auto it = root.find("audio"); it != root.end() && it->is_object()) { // #171
@@ -249,6 +259,7 @@ void Save() {
         {"maximumDeltaTime", g_Time.MaximumDeltaTime},
         {"timeScale", g_Time.TimeScale},
     };
+    root["quality"] = {{"smallObjectCullHeight", g_Quality.SmallObjectCullHeight}, {"depthPrepass", g_Quality.DepthPrepass}};
     root["input"] = InputMap::ToJson(InputMap::Actions()); // #145
     root["audio"] = {
         {"masterVolume", g_Audio.MasterVolume},
