@@ -8,21 +8,11 @@
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "moveNodes": [
-      {
-        "by": [
-          0.0,
-          0.0,
-          -0.088
-        ],
-        "node": "Fridge_door"
-      }
-    ],
     "optimizeGraph": true,
     "pivotOffset": [
-      0.0010000000474974513,
+      0.001,
       0.0,
-      -0.3865000009536743
+      -0.3425
     ]
   },
   "materialRemap": {
