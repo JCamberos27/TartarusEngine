@@ -10,9 +10,9 @@
     "mergeByMaterial": true,
     "optimizeGraph": true,
     "pivotOffset": [
-      1.8079999685287476,
-      -0.0010000000474974513,
-      0.04100000113248825
+      1.808,
+      -0.001,
+      0.041
     ]
   },
   "materialRemap": {
