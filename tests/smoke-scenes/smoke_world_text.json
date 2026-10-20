@@ -1,0 +1,288 @@
+{
+  "formatVersion": 4,
+  "_comment": "Engine-owned smoke scene for World Text: fixed floor and wall labels, a billboard, an upright sign, an on-top label, a two-line label, measurement signs and one past its cull distance. Engine primitives only.",
+  "exposureEV": 0.0,
+  "tonemapOperator": 1,
+  "msaaSamples": 4,
+  "ssaoEnabled": false,
+  "bloomEnabled": true,
+  "bloomThreshold": 1.0,
+  "bloomKnee": 0.5,
+  "bloomIntensity": 0.2,
+  "shadowsEnabled": true,
+  "shadowResolution": 2048,
+  "shadowCascades": 2,
+  "shadowDistance": 60.0,
+  "skySource": 0,
+  "skyHorizonColor": [
+    0.05,
+    0.06,
+    0.08
+  ],
+  "skyZenithColor": [
+    0.01,
+    0.012,
+    0.02
+  ],
+  "skyAmbientIntensity": 0.6,
+  "boxes": [
+    {
+      "name": "Ground",
+      "id": 0,
+      "parentId": -1,
+      "order": 0,
+      "position": [
+        0,
+        -0.1,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": [
+        40,
+        0.2,
+        40
+      ],
+      "color": [
+        0.04,
+        0.04,
+        0.045
+      ]
+    },
+    {
+      "name": "Wall",
+      "id": 1,
+      "parentId": -1,
+      "order": 1,
+      "position": [
+        0,
+        1.5,
+        -4
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": [
+        6,
+        3,
+        0.2
+      ],
+      "color": [
+        0.05,
+        0.05,
+        0.055
+      ]
+    }
+  ],
+  "empties": [
+    {
+      "name": "Sun",
+      "id": 2,
+      "parentId": -1,
+      "order": 2,
+      "position": [
+        0,
+        20,
+        0
+      ],
+      "rotation": [
+        -0.387,
+        -0.275,
+        -0.122,
+        0.872
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "Light": {
+        "Type": "Directional",
+        "Color": [
+          0.7,
+          0.8,
+          1.0
+        ],
+        "Intensity": 0.6,
+        "Cast Shadows": true
+      }
+    },
+    {
+      "name": "Floor Label",
+      "id": 3,
+      "parentId": -1,
+      "order": 3,
+      "position": [
+        0,
+        0.002,
+        0
+      ],
+      "rotation": [
+        -0.7071068,
+        0,
+        0,
+        0.7071068
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "World Text": {
+        "Text": "1.00 m",
+        "Size": 0.4,
+        "Facing": "Fixed",
+        "Align": "Center",
+        "Outline": 0.12
+      }
+    },
+    {
+      "name": "Wall Label",
+      "id": 4,
+      "parentId": -1,
+      "order": 4,
+      "position": [
+        0,
+        2.2,
+        -3.89
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "World Text": {
+        "Text": "RAMP 30°\n± 0.5 × 2 m²",
+        "Size": 0.3,
+        "Facing": "Fixed",
+        "Align": "Left",
+        "Brightness": 2.5
+      }
+    },
+    {
+      "name": "Billboard",
+      "id": 5,
+      "parentId": -1,
+      "order": 5,
+      "position": [
+        3,
+        1.6,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "World Text": {
+        "Text": "BILLBOARD",
+        "Size": 0.25,
+        "Facing": "Billboard"
+      }
+    },
+    {
+      "name": "Upright",
+      "id": 6,
+      "parentId": -1,
+      "order": 6,
+      "position": [
+        -3,
+        1.6,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "World Text": {
+        "Text": "UPRIGHT",
+        "Size": 0.25,
+        "Facing": "Upright",
+        "Align": "Right"
+      }
+    },
+    {
+      "name": "Behind Wall",
+      "id": 7,
+      "parentId": -1,
+      "order": 7,
+      "position": [
+        0,
+        1.5,
+        -6
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "World Text": {
+        "Text": "ON TOP",
+        "Size": 0.3,
+        "Facing": "Billboard",
+        "On Top": true
+      }
+    },
+    {
+      "name": "Far Away",
+      "id": 8,
+      "parentId": -1,
+      "order": 8,
+      "position": [
+        0,
+        1,
+        18
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "World Text": {
+        "Text": "CULLED",
+        "Size": 1.0,
+        "Facing": "Billboard",
+        "Fade Start": 5.0,
+        "Cull Distance": 10.0
+      }
+    }
+  ]
+}

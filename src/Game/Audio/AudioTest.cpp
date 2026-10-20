@@ -118,6 +118,12 @@ bool SpecLevel(const json& spec, const std::string& key, float& level, std::stri
             level += surface(p[1].substr(5));
             return true;
         }
+        if (p[1].rfind("barefoot_", 0) == 0 && L.contains("step") && Num(L["step"], p[2].c_str(), level)) {
+            level += surface(p[1].substr(9));
+            float bare = 0.0f;
+            if (spec.contains("footwear_db") && Num(spec["footwear_db"], "barefoot", bare)) level += bare;
+            return true;
+        }
         return false;
     }
     if (p[0] == "casing" && p.size() == 3 && Num(L, "casing", level)) {

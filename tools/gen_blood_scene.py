@@ -12,7 +12,7 @@ import sys
 
 root = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), '..')
 scenes = os.path.join(root, 'project', 'scenes')
-sandbox = json.load(open(os.path.join(scenes, 'Sandbox.json'), encoding='utf-8'))
+sandbox = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'scenes', 'sandbox_template.json'), encoding='utf-8'))
 
 SKIP_KEYS = {'boxes', 'empties', 'models', 'libraryMaterials', 'libraryModels', 'libraryPrefabs',
              'librarySounds', 'libraryTextures'}
@@ -35,7 +35,7 @@ for kind in ('boxes', 'empties', 'models'):
 
 def find(name):
     hits = [i for i, (_, e) in src.items() if e['name'] == name]
-    if len(hits) != 1: fail(f'expected one "{name}" in Sandbox.json, found {len(hits)}')
+    if len(hits) != 1: fail(f'expected one "{name}" in sandbox_template.json, found {len(hits)}')
     return hits[0]
 
 def subtree(top):

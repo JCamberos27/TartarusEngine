@@ -1,5 +1,5 @@
 {
-  "_doc": "Seamless ambience beds (build_ambience.py), all REAL field / room recordings. Each variant is one or more layers; a layer is the steadiest `loop_s` + `xfade_s` stretch of its source (picked automatically: the stretch whose 0.5 s block loudness varies least, no events), high-passed at 20 Hz, made seamless with an equal-power crossfade of its tail into its head (the loop point is the crossfade), then set to the ambience layer's loudness. `pick` = which of the steadiest non-overlapping stretches a variant takes (0 = steadiest). src is relative to C:\\tb\\audio-src\\amb. Sources: TS Sound Savannah GA (server room), ShapingWaves Piping Systems (sewage plant hall), Detunized Distant City + Hzandbits Urban Winds (all Sonniss GDC 2016, royalty free), Ocular The Provence field loops (own library).",
+  "_doc": "Seamless ambience beds (build_ambience.py), all REAL field / room recordings. Each variant is one or more layers; a layer is the steadiest `loop_s` + `xfade_s` stretch of its source (picked automatically: the stretch whose 0.5 s block loudness varies least, no events), high-passed at 20 Hz, made seamless with an equal-power crossfade of its tail into its head (the loop point is the crossfade), then set to the ambience layer's loudness. `pick` = which of the steadiest non-overlapping stretches a variant takes (0 = steadiest). src is relative to C:\\tb\\audio-src\\amb. Sources: TS Sound Savannah GA (server room), ShapingWaves Piping Systems (sewage plant hall), Detunized Distant City + Hzandbits Urban Winds (all Sonniss GDC 2016, royalty free), Ocular The Provence field loops (own library). Night (Master Scene): Ocular The Provence night field loop (crickets) over the distant city; the alley wind's gustiest stretches as mono emitter loops; the server room's electrical hum, band-limited, as a mono work-light hum.",
   "loop_s": 16.0,
   "xfade_s": 3.0,
   "classes": {
@@ -18,6 +18,17 @@
     "outdoor_open": {"variants": [
       {"layers": [{"src": "AMBGras_FIELD-Day Ambience Field Loop 01_Ocular_The Provence.wav", "pick": 0}]},
       {"layers": [{"src": "AMBGras_FIELD-Day Ambience Field Loop 03_Ocular_The Provence.wav", "pick": 0}]}
+    ]},
+    "night_open": {"variants": [
+      {"layers": [{"src": "AMBGras_FIELD-Night Ambience Field Loop 01_Ocular_The Provence.wav", "pick": 0}, {"src": "distant_city_M.wav", "pick": 2, "gain_db": -14, "lp_hz": 5000}]},
+      {"layers": [{"src": "AMBGras_FIELD-Night Ambience Field Loop 01_Ocular_The Provence.wav", "pick": 1}, {"src": "distant_city_M.wav", "pick": 3, "gain_db": -14, "lp_hz": 5000}]}
+    ]},
+    "night_wind": {"mono": true, "select": "liveliest", "variants": [
+      {"layers": [{"src": "urban_alley_wind.wav", "pick": 0, "hp_hz": 70, "lp_hz": 4500}]},
+      {"layers": [{"src": "urban_alley_wind.wav", "pick": 1, "hp_hz": 70, "lp_hz": 4500}]}
+    ]},
+    "worklight_hum": {"mono": true, "variants": [
+      {"layers": [{"src": "server_room.wav", "pick": 2, "hp_hz": 90, "lp_hz": 2500}]}
     ]}
   }
 }

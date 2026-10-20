@@ -691,7 +691,7 @@ def write_gallery(repo, exe):
     library = project_models(repo, exe)
 
     scenes = os.path.join(repo, 'project', 'scenes')
-    sandbox = json.load(open(os.path.join(scenes, 'Sandbox.json'), encoding='utf-8'))
+    sandbox = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'scenes', 'sandbox_template.json'), encoding='utf-8'))
     skip = {'boxes', 'empties', 'models', 'libraryMaterials', 'libraryModels', 'libraryPrefabs', 'librarySounds',
             'libraryTextures'}
     scene = {k: v for k, v in sandbox.items() if k not in skip}

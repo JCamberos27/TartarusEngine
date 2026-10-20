@@ -1439,6 +1439,46 @@ void RegisterEngineComponents() {
         },
     });
 
+    // A text label in the world - signage and measurements (WorldText.h).
+    {
+        ReflectComponent m{
+            "World Text", ICON_FA_FONT,
+            "A label drawn in the world: crisp at any distance, faintly glowing, faded out with distance.\n"
+            "Fixed text lies in this object's XY plane, read from its +Z side.",
+            "Rendering",
+            {
+                { "Text", T::String, TARTARUS_REFLECT_FIELD(WorldTextComponent, Text), 0.0f,
+                  "What it says. A line break starts a new line; UTF-8, with the degree, times and plus-minus signs." },
+                { "Size", T::Float, TARTARUS_REFLECT_FIELD(WorldTextComponent, Size), 0.005f,
+                  "Line height in metres (before this object's scale).", 0.001f, 100.0f },
+                { "Color", T::Color, TARTARUS_REFLECT_FIELD(WorldTextComponent, Color), 0.0f, "" },
+                { "Brightness", T::Float, TARTARUS_REFLECT_FIELD(WorldTextComponent, Brightness), 0.01f,
+                  "How bright it reads on screen at the scene's exposure: 1 = plain white,\n"
+                  "above 1 glows where bloom is on.", 0.0f, 20.0f },
+                { "Facing", T::Enum, TARTARUS_REFLECT_FIELD(WorldTextComponent, Face), 0.0f,
+                  "Fixed: lies in this object's plane (a floor marking, a wall sign).\n"
+                  "Billboard: always faces the camera. Upright: faces it but stays level." },
+                { "Align", T::Enum, TARTARUS_REFLECT_FIELD(WorldTextComponent, Align), 0.0f,
+                  "Which end of each line sits on this object's position." },
+                { "Outline", T::Float, TARTARUS_REFLECT_FIELD(WorldTextComponent, Outline), 0.005f,
+                  "A dark rim so the text reads over bright lines and surfaces.", 0.0f, 0.4f },
+                { "Fade Start", T::Float, TARTARUS_REFLECT_FIELD(WorldTextComponent, FadeStart), 0.1f,
+                  "Begins to fade this far from the camera (metres).", 0.0f, 10000.0f },
+                { "Cull Distance", T::Float, TARTARUS_REFLECT_FIELD(WorldTextComponent, CullDistance), 0.1f,
+                  "Gone, and not drawn at all, past this distance.", 0.0f, 10000.0f },
+                { "On Top", T::Bool, TARTARUS_REFLECT_FIELD(WorldTextComponent, OnTop), 0.0f,
+                  "Drawn through walls and objects." },
+            },
+        };
+        m.Fields[4].EnumLabels = "Fixed\0Billboard\0Upright\0";
+        m.Fields[4].EnumCount = 3;
+        m.Fields[5].EnumLabels = "Left\0Center\0Right\0";
+        m.Fields[5].EnumCount = 3;
+        m.Fields[3].Slider = true; m.Fields[3].Format = "%.2f";
+        m.Fields[6].Slider = true; m.Fields[6].Format = "%.2f";
+        Register<WorldTextComponent>(std::move(m));
+    }
+
     // #185 PR 4 — Rigidbody. Plain reflected fields; the shape comes from the sibling
     // ColliderComponent (hand-written, PR 2) and PhysicsWorld reads both on Play-enter.
     {
@@ -2430,17 +2470,21 @@ void RegisterEngineComponents() {
             { "NPC Step Volume", T::Float, TARTARUS_REFLECT_FIELD(Fo, NpcStepVolume), 0.01f, "Gain of soldiers' footsteps.", 0.0f, 2.0f },
             { "NPC Step Min Distance", T::Float, TARTARUS_REFLECT_FIELD(Fo, NpcStepMinDistance), 0.1f, "Metres inside which a soldier's step is full volume.", 0.1f, 50.0f },
             { "NPC Step Max Distance", T::Float, TARTARUS_REFLECT_FIELD(Fo, NpcStepMaxDistance), 0.5f, "Metres a soldier's step carries.", 1.0f, 200.0f },
+            { "Footwear", T::Enum, TARTARUS_REFLECT_FIELD(Fo, Footwear), 0.0f, "The player's footsteps: Boots, or Barefoot (Foley/barefoot_<surface>; the boots' take where there is no barefoot one)." },
+            { "NPC Footwear", T::Enum, TARTARUS_REFLECT_FIELD(Fo, NpcFootwear), 0.0f, "The soldiers' footsteps: Boots or Barefoot." },
             { "Default Surface", T::String, TARTARUS_REFLECT_FIELD(Fo, DefaultSurface), 0.0f, "Surface when the ground matches nothing in the table." },
             { "Surface Table", T::String, TARTARUS_REFLECT_FIELD(Fo, SurfaceTable), 0.0f, "surface=word,word;surface=word. The first surface with a word in the ground's physics material, tag or name. Surfaces are foley categories (Audio/Foley/<surface>/)." },
         };
+        for (ReflectField& f : m.Fields)
+            if (std::strcmp(f.Name, "Footwear") == 0 || std::strcmp(f.Name, "NPC Footwear") == 0) { f.EnumLabels = "Boots\0Barefoot\0"; f.EnumCount = 2; }
         const std::pair<const char*, const char*> groups[] = {
-            {"Walk Volume", "Footsteps"}, {"Run Volume", "Footsteps"}, {"Crouch Volume", "Footsteps"}, {"Volume Jitter dB", "Footsteps"},
+            {"Footwear", "Footsteps"}, {"Walk Volume", "Footsteps"}, {"Run Volume", "Footsteps"}, {"Crouch Volume", "Footsteps"}, {"Volume Jitter dB", "Footsteps"},
             {"Pitch Min", "Footsteps"}, {"Pitch Max", "Footsteps"}, {"Step Stride Scale", "Footsteps"}, {"Crouch Stride Scale", "Footsteps"},
             {"Min Step Speed", "Footsteps"}, {"Run Speed", "Footsteps"}, {"Steps From Feet", "Footsteps"}, {"Foot Lift Height", "Footsteps"}, {"Foot Lift Moving", "Footsteps"},
             {"Foot Contact Height", "Footsteps"},
             {"Jump Volume", "Jump / Land"}, {"Land Volume", "Jump / Land"}, {"Land Min Speed", "Jump / Land"}, {"Land Heavy Speed", "Jump / Land"}, {"Land Full Speed", "Jump / Land"},
             
-            {"NPC Step Volume", "NPC Footsteps"}, {"NPC Step Min Distance", "NPC Footsteps"}, {"NPC Step Max Distance", "NPC Footsteps"}};
+            {"NPC Footwear", "NPC Footsteps"}, {"NPC Step Volume", "NPC Footsteps"}, {"NPC Step Min Distance", "NPC Footsteps"}, {"NPC Step Max Distance", "NPC Footsteps"}};
         for (ReflectField& f : m.Fields) {
             for (const auto& [n, g] : groups)
                 if (std::strcmp(f.Name, n) == 0) f.Group = g;

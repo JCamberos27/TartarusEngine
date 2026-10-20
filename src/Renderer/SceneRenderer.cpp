@@ -33,6 +33,7 @@
 #include "BloodRenderer.h"
 #include "BloodPalette.h"
 #include "FxSpriteRenderer.h"
+#include "WorldText.h"
 #include "GLStateCache.h"
 #include "gl.h"
 #include "Core/Profiler.h"
@@ -375,6 +376,7 @@ void SceneRenderer::WarmEffects() {
     Particles()->WarmUp();
     FxSpriteRenderer::Get().WarmUp();
     BloodRenderer::Get().WarmUp();
+    WorldTextRenderer::Get().WarmUp();
 }
 
 namespace {
@@ -1055,6 +1057,8 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     // The Knife flipbook particles: blood mist, impact dust and debris, muzzle smoke.
     localStats.DrawCalls += FxSpriteRenderer::Get().Draw(ctx.View, ctx.Proj, fs.vp, ctx.TxHdr, false,
                                                          [&](Shader& p) { ApplyFrameState(p, fs); });
+    // Labels in the world (World Text): unlit, depth-tested against everything above.
+    localStats.DrawCalls += WorldTextRenderer::Get().Draw(world, ctx.View, ctx.Proj, ctx.ViewPos, ctx.EditorView);
     if (ctx.WorldOverlay) {
         ctx.WorldOverlay();
         GLStateCache::Invalidate();

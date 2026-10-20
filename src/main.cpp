@@ -1880,9 +1880,9 @@ int main(int argc, char** argv) {
                     smokeScenePaths.push_back(entry.path().string());
             }
             std::sort(smokeScenePaths.begin(), smokeScenePaths.end());
-            if (opt.weaponTestMode) smokeScenePaths.assign(1, ProjectPaths::Resolve("scenes/Sandbox.json"));
+            if (opt.weaponTestMode) smokeScenePaths.assign(1, ProjectPaths::Resolve("scenes/Master Scene.json"));
             if (opt.npcTestMode && opt.smokeScenesDirArg.empty())
-                smokeScenePaths.assign(1, ProjectPaths::Resolve(opt.npcTestScenario == "sandbox" ? "scenes/Sandbox.json"
+                smokeScenePaths.assign(1, ProjectPaths::Resolve(opt.npcTestScenario == "sandbox" ? "scenes/Master Scene.json"
                                                               : opt.npcTestScenario == "blood" ? "scenes/BloodTest.json"
                                                               : opt.npcTestScenario == "ragdoll" ? "scenes/RagdollTest.json"
                                                                                            : "scenes/Arena.json"));

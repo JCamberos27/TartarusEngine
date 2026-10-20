@@ -668,6 +668,10 @@ void TestFoleyRules() {
     CHECK(FoleyAudio::SurfaceFromName(t.SurfaceTable, "Assets/Materials/WoodPlank.physicmaterial", "concrete") == "wood");
     CHECK(FoleyAudio::SurfaceFromName(t.SurfaceTable, "Metal Grate 02", "concrete") == "metal");
     CHECK(FoleyAudio::SurfaceFromName(t.SurfaceTable, "Red CARPET", "concrete") == "carpet");
+    // Footwear picks the step takes' category: boots step_<surface>, barefoot barefoot_<surface> (the boots' where one is missing).
+    CHECK(FoleyAudio::StepCategory("wood", 0) == "step_wood");
+    CHECK(FoleyAudio::StepCategory("wood", 1) == "barefoot_wood");
+    CHECK(t.Footwear == 0 && t.NpcFootwear == 0); // boots unless a scene says otherwise
     CHECK(FoleyAudio::SurfaceFromName(t.SurfaceTable, "Cube (12)", "concrete") == "concrete");
     CHECK(FoleyAudio::SurfaceFromName(t.SurfaceTable, "Cube (12)", "dirt") == "dirt");
     CHECK(FoleyAudio::SurfaceFromName("a=x;b=y,z", "ZZ", "q") == "b" && FoleyAudio::SurfaceFromName("", "x", "q") == "q");

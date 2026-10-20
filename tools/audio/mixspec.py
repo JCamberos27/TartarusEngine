@@ -58,9 +58,10 @@ def classify(e):
     m = re.fullmatch(r"snd\.casing\.(rifle|shell)\.(\w+)", key)
     if m:
         return "casing", L["casing"] + S.get(m.group(2), 0.0), "played"
-    m = re.fullmatch(r"snd\.foley\.step_(\w+)\.(walk|run|land)", key)
+    m = re.fullmatch(r"snd\.foley\.(step|barefoot)_(\w+)\.(walk|run|land)", key)
     if m:
-        return "step", L["step"][m.group(2)] + S.get(m.group(1), 0.0), "played"
+        bare = SPEC.get("footwear_db", {}).get("barefoot", 0.0) if m.group(1) == "barefoot" else 0.0
+        return "step", L["step"][m.group(3)] + S.get(m.group(2), 0.0) + bare, "played"
     m = re.fullmatch(r"snd\.foley\.move\.(\w+)", key)
     if m and m.group(1) in L["move"]:
         return "move", L["move"][m.group(1)], "played"

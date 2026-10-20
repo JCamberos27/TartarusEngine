@@ -93,9 +93,16 @@
       "indoor_small": -34.0,
       "indoor_large": -34.0,
       "outdoor_urban": -32.0,
-      "outdoor_open": -32.0
+      "outdoor_open": -32.0,
+      "night_open": -32.0,
+      "night_wind": -30.0,
+      "worklight_hum": -40.0
     },
     "ir": 0.0
+  },
+  "footwear_db": {
+    "_doc": "Added to footsteps (walk / run / land) by footwear: bare feet are softer than boots (no heel strike, no sole slap).",
+    "barefoot": -3.0
   },
   "surface_db": {
     "_doc": "Added to footsteps (walk / run / land), casings and impacts of that surface / material. Flesh and everything not on a surface has none.",
