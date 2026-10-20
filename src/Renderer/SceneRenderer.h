@@ -33,6 +33,12 @@ struct VisibilityQuery {
     bool SkipPlayerBody = false;     // PlayerBodyTag pieces left out
     bool SkipTransparent = false;    // a transparent first material slot left out
     const Frustum* Cull = nullptr;   // when set, anything with bounds outside it is left out
+    // Small-object culling: when SizeCullEye is set, anything whose bounding sphere, seen from there, is shorter than
+    // MinScreenHeight of the viewport is left out. Shadow passes pass the camera's eye, not the light's: a prop too
+    // small to see casts a shadow too small to see.
+    const glm::vec3* SizeCullEye = nullptr;
+    float SizeCullProjScale = 0.0f;  // the camera projection's [1][1] (1 / tan(fovY / 2))
+    float MinScreenHeight = 0.0f;
 };
 struct VisibleRenderable {
     entt::entity Entity;
@@ -46,6 +52,10 @@ struct VisibleRenderable {
 };
 // Clears `out` and fills it with what passes `q`.
 void GatherVisible(World& world, const VisibilityQuery& q, std::vector<VisibleRenderable>& out);
+// VisibilityQuery's small-object test: the box's bounding sphere seen from `eye` is shorter than `minScreenHeight`
+// (a share of the viewport height). Never true from inside the sphere, or with the test off (a value <= 0).
+bool TooSmallOnScreen(const glm::vec3& worldMin, const glm::vec3& worldMax, const glm::vec3& eye, float projScaleY,
+                      float minScreenHeight);
 
 class Sky;
 class SkyAtmosphere;
@@ -72,6 +82,8 @@ struct SceneRenderInputs {
     Sky*                 sky            = nullptr;
     SkyAtmosphere*       skyAtmosphere  = nullptr; // non-null => the physical sky draws and lights this frame
     Shader*              modelShader    = nullptr;
+    // ShadowDepth: the opaque pass's depth pre-pass (Project Settings > Quality > Depth pre-pass); null skips it.
+    Shader*              depthShader    = nullptr;
     Shader*              clusterBuildShader = nullptr;
     Shader*              clusterCullShader  = nullptr;
     CascadedShadowMap*   sunShadow      = nullptr;
