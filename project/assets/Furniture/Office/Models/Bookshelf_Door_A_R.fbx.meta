@@ -12,6 +12,9 @@
       -3.734999895095825,
       -0.0010000000474974513,
       0.04149999842047691
+    ],
+    "unrotateNodes": [
+      "Bookshelf_door_A_R_glass"
     ]
   },
   "materialRemap": {

@@ -9,11 +9,13 @@
     "materialImportMode": 1,
     "optimizeGraph": true,
     "pivotOffset": [
-      1.065999984741211,
-      -0.13300000131130219,
-      0.18250000476837158
+      1.066,
+      -0.128,
+      -0.129
     ],
-    "upAxis": "Z"
+    "unrotateNodes": [
+      "Lamp_ceilingfan_blades"
+    ]
   },
   "materialRemap": {
     "Lamps_C_on": "assets/Furniture/Lighting/Materials/M_Lamps_C.mat"

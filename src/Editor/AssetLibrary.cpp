@@ -66,6 +66,16 @@ bool ParseModelImporter(const json& j, ModelImportSettings& s) {
     if (imp.contains("excludeNodes") && imp["excludeNodes"].is_array())
         for (const auto& n : imp["excludeNodes"])
             if (n.is_string() && !n.get<std::string>().empty()) s.ExcludeNodes.push_back(n.get<std::string>());
+    s.UnrotateNodes.clear();
+    if (imp.contains("unrotateNodes") && imp["unrotateNodes"].is_array())
+        for (const auto& n : imp["unrotateNodes"])
+            if (n.is_string() && !n.get<std::string>().empty()) s.UnrotateNodes.push_back(n.get<std::string>());
+    s.MoveNodes.clear();
+    if (imp.contains("moveNodes") && imp["moveNodes"].is_array())
+        for (const auto& n : imp["moveNodes"])
+            if (n.is_object() && n.value("node", std::string()).size() && n.contains("by") && n["by"].is_array() && n["by"].size() == 3)
+                s.MoveNodes.push_back({n.value("node", std::string()),
+                                       {n["by"][0].get<float>(), n["by"][1].get<float>(), n["by"][2].get<float>()}});
     s.SkinIgnoresMeshNode = imp.value("skinIgnoresMeshNode", false);
     s.ClipTrims.clear();
     if (imp.contains("clipTrims") && imp["clipTrims"].is_array())
@@ -742,6 +752,13 @@ json ModelImporterJson(const ModelImportSettings& settings) {
     if (settings.PivotOffset != glm::vec3(0.0f))
         imp["pivotOffset"] = {ShortFloat(settings.PivotOffset.x), ShortFloat(settings.PivotOffset.y), ShortFloat(settings.PivotOffset.z)};
     if (!settings.ExcludeNodes.empty()) imp["excludeNodes"] = settings.ExcludeNodes;
+    if (!settings.UnrotateNodes.empty()) imp["unrotateNodes"] = settings.UnrotateNodes;
+    if (!settings.MoveNodes.empty()) {
+        json moves = json::array();
+        for (const auto& n : settings.MoveNodes)
+            moves.push_back({{"node", n.Node}, {"by", {ShortFloat(n.By.x), ShortFloat(n.By.y), ShortFloat(n.By.z)}}});
+        imp["moveNodes"] = moves;
+    }
     if (settings.SkinIgnoresMeshNode) imp["skinIgnoresMeshNode"] = true;
     if (!settings.ClipTrims.empty()) {
         json trims = json::array();

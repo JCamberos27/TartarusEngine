@@ -7,11 +7,24 @@
     "importNormals": true,
     "importSkeleton": false,
     "materialImportMode": 1,
+    "moveNodes": [
+      {
+        "by": [
+          0.0,
+          0.0,
+          0.35
+        ],
+        "node": "Stove_hatch"
+      }
+    ],
     "optimizeGraph": true,
     "pivotOffset": [
       -0.004000000189989805,
       -0.0,
       -0.10100000351667404
+    ],
+    "unrotateNodes": [
+      "Stove_hatch"
     ]
   },
   "materialRemap": {

@@ -140,19 +140,19 @@ void AssetImporterInspector::DrawModelSettings(ModelImportSettings& settings, bo
     Row("Pivot Offset", "Moves the whole model (meters, after scale and up axis) so its pivot\nsits where it is useful. Packs exported from a level often keep each\nprop's position in that level.");
     isDirty |= ImGui::DragFloat3("##PivotOffset", &settings.PivotOffset.x, 0.01f, -1000.0f, 1000.0f, "%.3f");
 
-    Row("Exclude Nodes", "Nodes left out of the import (one name per line), with everything\nunder them - for kit files that stack every variant in one place.\nApply to reimport.");
-    {
+    // One node name per line.
+    const auto nodeList = [&](const char* id, std::vector<std::string>& names, float lines) {
         std::string text;
-        for (const auto& n : settings.ExcludeNodes) text += n + "\n";
+        for (const auto& n : names) text += n + "\n";
         char buf[4096];
         std::snprintf(buf, sizeof buf, "%s", text.c_str());
-        if (ImGui::InputTextMultiline("##ExcludeNodes", buf, sizeof buf, ImVec2(-1.0f, ImGui::GetTextLineHeight() * 6.0f))) {
-            settings.ExcludeNodes.clear();
+        if (ImGui::InputTextMultiline(id, buf, sizeof buf, ImVec2(-1.0f, ImGui::GetTextLineHeight() * lines))) {
+            names.clear();
             std::string line;
             for (const char* c = buf;; ++c) {
                 if (*c == '\n' || *c == '\0') {
                     while (!line.empty() && (line.back() == ' ' || line.back() == '\r')) line.pop_back();
-                    if (!line.empty()) settings.ExcludeNodes.push_back(line);
+                    if (!line.empty()) names.push_back(line);
                     line.clear();
                     if (*c == '\0') break;
                 } else {
@@ -161,7 +161,11 @@ void AssetImporterInspector::DrawModelSettings(ModelImportSettings& settings, bo
             }
             isDirty = true;
         }
-    }
+    };
+    Row("Exclude Nodes", "Nodes left out of the import (one name per line), with everything\nunder them - for kit files that stack every variant in one place.\nApply to reimport.");
+    nodeList("##ExcludeNodes", settings.ExcludeNodes, 6.0f);
+    Row("Unrotate Nodes", "Nodes whose own rotation is dropped (one name per line), keeping\ntheir position and scale - for a part exported with a stray quarter\nturn against its parent (a glass pane lying across its door frame).\nApply to reimport.");
+    nodeList("##UnrotateNodes", settings.UnrotateNodes, 3.0f);
 
     Row("Generate Normals/Tangents", "Computes smooth normals and tangent-space basis\nvectors for normal mapping. Leave on unless the source file already\nauthors its own normals you specifically want preserved as-is.");
     isDirty |= EditorUIPrimitives::Checkbox("##Normals", &settings.ImportNormals);
