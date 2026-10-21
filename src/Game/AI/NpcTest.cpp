@@ -1050,6 +1050,7 @@ void NpcTest::Escape(World& world, NpcDirector& npcs, float now) {
         for (const auto& s : m_EStates) stops += s.first == "ProneCrawlStop" ? 1 : 0;
         std::printf("[NpcTest] escape: the crawl stopped %d times on the way\n", stops);
         Check(stops <= 2, "escape: the crawl doesn't stop-start against the walls and doorframes (" + std::to_string(stops) + " stops)");
+        m_Done = true;
     }
 }
 
@@ -1464,10 +1465,11 @@ void NpcTest::AptFight(World& world, NpcDirector& npcs, const PlayerVitals& vita
     }
     if (!m_AStaggered.empty())
         if (const Npc* s = findNpc(m_AStaggered); s && !s->Dead && now > s->StaggerUntil) m_AStaggerShotsAfter = s->ShotsFired;
-    // A thigh: down on his belly, crawling off, while the other one fights on. (Landed on his back he lies where he fell - by
-    // design: the next soldier up is shot instead, while there's time left to watch a crawl.)
+    // A thigh: down on his belly, crawling off, while the other one fights on. (Landed on his back he rolls himself over - a few
+    // heaves, Wound Roll Tries 1.8 s apart: given up on only once those are spent, and then the next soldier up is shot instead,
+    // while there's time left to watch a crawl.)
     if (!m_ACrawler.empty() && now < kAptLegUntil)
-        if (const Npc* c = findNpc(m_ACrawler); c && !c->Dead && c->DownAt >= 0.0f && !c->CanCrawl) {
+        if (const Npc* c = findNpc(m_ACrawler); c && !c->Dead && c->DownAt >= 0.0f && !c->CanCrawl && now - c->DownAt > 6.5f) {
             ++m_ACrawlsOnBack;
             std::printf("[NpcTest] aptfight %5.1f: %s landed on his back: he lies there; the next one is shot in the thigh\n", now, c->Name.c_str());
             m_ACrawler.clear();
