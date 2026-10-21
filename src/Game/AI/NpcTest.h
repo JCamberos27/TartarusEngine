@@ -21,7 +21,8 @@ class World;
 //   die     the player stands in the open and can be killed: death and respawn
 //   deaths  hitboxes, hit reactions and deaths: the soldiers stand still while rays are cast at every bone, then are shot
 //           dead through the head, chest, thigh and forearm (limp, stagger, ragdoll, no pose pop), a corpse is shot, and
-//           two are wounded (crawl, "Unit down", dies on the next hit / bleeds out)
+//           two are wounded - one by the leg (drops the gun, collapses, crawls on its belly dragging the leg), one by the chest
+//           (on a knee) - ("Unit down", dies on the next hit / bleeds out)
 //   tactics the player pins a soldier behind low cover with bursts over its head (blind fire), the squad bounds under
 //           covering fire, then the player steps up to a soldier and is struck with its rifle butt
 //   reload  the reloads and the regrip: an AK and a Remington soldier aimed, at the hip, empty, and idle; the butt
@@ -133,7 +134,7 @@ private:
     int m_DDeaths = 0, m_DRagdolls = 0;
     glm::vec3 m_DCorpseBefore[11]{};
     glm::vec3 m_DBoneBefore[4]{};
-    bool m_DCorpseAsleep = false, m_DKneelChecked = false;
+    bool m_DCorpseAsleep = false, m_DKneelChecked = false, m_DProneChecked = false, m_DDropShot = false;
     std::string m_Scenario;
     float m_Time = 0.0f;
     float m_Duration = 45.0f;

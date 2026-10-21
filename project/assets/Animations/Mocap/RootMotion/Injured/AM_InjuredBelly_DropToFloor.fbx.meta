@@ -1,0 +1,15 @@
+{
+  "folder": "assets/Animations/Mocap/RootMotion/Injured",
+  "guid": "aaf07fc6ddf6653b",
+  "importer": {
+    "clipTrims": [
+      {
+        "clip": "Unreal Take",
+        "start": 1.3,
+        "end": 4.6
+      }
+    ]
+  },
+  "metaVersion": 1,
+  "type": "model"
+}
