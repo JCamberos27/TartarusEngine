@@ -70,8 +70,6 @@ ZOUT = HALL + D       # outside wall lines z = +-ZOUT
 HALL_WINDOWS = [('v', 0.0, 0.0), ('v', L, 0.0)]   # an end window each end of the corridor (world axis/line/centre)
 
 TUBE_K, BULB_K = 4000.0, 2700.0
-SPOT_SHAFTS = 1.0    # the ceiling spots' share of the volumetric fog (the moon's is MOON_SHAFTS)
-MOON_SHAFTS = 5.0
 NORTH_TARGET = (0.74, 0.42, 0.52)   # where the moon should hang (direction to it): 35 deg south of east, 25 deg up
 
 
@@ -407,14 +405,6 @@ class Hallway(k.Scene):
             over['emissiveColor'] = [0.0, 0.0, 0.0]
         return [{'embedded': k.from_mat(self.repo, mat, **over)}] * self.idx[stem]['meshes']
 
-    def light(self, *a, **kw):
-        """kit light, but only the shadowed fixtures scatter into the fog: a shadowless fill or glow would light it
-        through the walls."""
-        eid = super().light(*a, **kw)
-        lit = self.empties[-1]['Light']
-        lit['Volumetric Intensity'] = SPOT_SHAFTS if lit['Cast Shadows'] else 0.0
-        return eid
-
     def fixture(self, parent, stem, pos, yaw, kelvin, intensity, rng, glow, flicker=None, fill_room=None):
         """A ceiling fixture and, unless it's dead (intensity 0), its bulb just under it plus a faint shadowless fill
         lower down standing in for the bounce light this renderer doesn't compute."""
@@ -550,17 +540,14 @@ def build(repo):
               'shadowsEnabled': True, 'shadowResolution': 4096, 'shadowCascades': 3, 'shadowDistance': 60.0,
               'maxSpotShadows': 12, 'maxPointShadows': 0, 'vignetteIntensity': 0.3, 'vignetteSmoothness': 0.55,
               'filmGrain': 0.0, 'motionBlur': False, 'depthOfField': False, 'chromaticAberration': 0.0,
-              'gradeContrast': 6.0, 'gradeSaturation': -6.0, 'gradeTemperature': 0.0,
-              # a little dust in the air: the moon throws shafts through the south windows
-              'volumetricEnabled': True, 'volDensity': 0.08, 'volAnisotropy': 0.7, 'volHeightFalloff': 0.0,
-              'volDistance': 30.0, 'volQuality': 1})
+              'gradeContrast': 6.0, 'gradeSaturation': -6.0, 'gradeTemperature': 0.0})
     d['skyHdriPath'] = ''
     d.pop('skyHdriGuid', None)
     s.empty('Moon', -1, (0, 30, 0), pitch=-25.0, yaw=-120.0, Light={
         'Type': 'Directional', 'Color': [0.78, 0.86, 1.0], 'Intensity': 0.8, 'Range': 200.0, 'Spot Angle': 35.0,
         'Angular Size': 0.53, 'Cast Shadows': True, 'Shadow Bias': 1.0, 'Shadow Normal Bias': 1.0,
         'Shadow Softness': 0.15, 'Shadow Resolution': 'Follow global', 'Shadow Update Mode': 'Dynamic', 'ColorTempK': 0.0,
-        'Culling Mask': -1, 'Volumetric Intensity': MOON_SHAFTS})
+        'Culling Mask': -1})
     s.plan()
     # centred on the origin (the editor's default and smoke-test cameras orbit it); the plan stays in corridor coordinates
     root = s.empty('Third Floor', -1, (-L / 2, 0.0, 0.0))
