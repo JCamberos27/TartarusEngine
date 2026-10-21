@@ -37,13 +37,13 @@ void OpenablePoses() {
     CHECK(Near(pos, base) && Near(glm::vec3(glm::eulerAngles(rot)), glm::vec3(0.0f)));
 
     pose(Kind::HingeLeft, 90.0f, 1.0f);
-    CHECK(Near(Place(pos, rot, one, {lo.x, 0.35f, lo.z}), Place(base, id, one, {lo.x, 0.35f, lo.z})));
-    const glm::vec3 freeL = Place(pos, rot, one, {hi.x, 0.35f, lo.z});
+    CHECK(Near(Place(pos, rot, one, {lo.x, 0.35f, hi.z}), Place(base, id, one, {lo.x, 0.35f, hi.z})));
+    const glm::vec3 freeL = Place(pos, rot, one, {hi.x, 0.35f, hi.z});
     CHECK(freeL.z > base.z + 0.45f && std::abs(freeL.x - (base.x + lo.x)) < 1e-3f); // straight out the front
 
     pose(Kind::HingeRight, 90.0f, 1.0f);
-    CHECK(Near(Place(pos, rot, one, {hi.x, 0.35f, lo.z}), Place(base, id, one, {hi.x, 0.35f, lo.z})));
-    CHECK(Place(pos, rot, one, {lo.x, 0.35f, lo.z}).z > base.z + 0.45f);
+    CHECK(Near(Place(pos, rot, one, {hi.x, 0.35f, hi.z}), Place(base, id, one, {hi.x, 0.35f, hi.z})));
+    CHECK(Place(pos, rot, one, {lo.x, 0.35f, hi.z}).z > base.z + 0.45f);
 
     pose(Kind::Lid, 90.0f, 1.0f); // hinged at the back, its front edge goes up
     CHECK(Near(Place(pos, rot, one, {0.0f, lo.y, lo.z}), Place(base, id, one, {0.0f, lo.y, lo.z})));
@@ -67,8 +67,8 @@ void OpenablePoses() {
     // Turned to face +X, the door opens toward +X; scaled up, the hinge line still stays put.
     const glm::quat yaw = glm::angleAxis(glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
     pose(Kind::HingeLeft, 90.0f, 1.0f, yaw, glm::vec3(2.0f));
-    CHECK(Near(Place(pos, rot, glm::vec3(2.0f), {lo.x, 0.35f, lo.z}), Place(base, yaw, glm::vec3(2.0f), {lo.x, 0.35f, lo.z})));
-    CHECK(Place(pos, rot, glm::vec3(2.0f), {hi.x, 0.35f, lo.z}).x > base.x + 0.9f);
+    CHECK(Near(Place(pos, rot, glm::vec3(2.0f), {lo.x, 0.35f, hi.z}), Place(base, yaw, glm::vec3(2.0f), {lo.x, 0.35f, hi.z})));
+    CHECK(Place(pos, rot, glm::vec3(2.0f), {hi.x, 0.35f, hi.z}).x > base.x + 0.9f);
 
     // The usual amounts.
     CHECK(Openable::DefaultAmount((int)Kind::HingeLeft, lo, hi, 0.0f) == 100.0f);
