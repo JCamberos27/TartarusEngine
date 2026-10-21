@@ -56,6 +56,15 @@ void CascadedShadowMap::Configure(int resolution, int count) {
                    std::to_string(resolution) + "x" + std::to_string(count) + ")");
 }
 
+void CascadedShadowMap::SetSplitLambda(float lambda) {
+    m_SplitLambda = std::isfinite(lambda) ? std::clamp(lambda, 0.0f, 0.98f) : 0.75f;
+}
+
+float CascadedShadowMap::SunKernelTexels(float angularDeg, float softness) {
+    if (!(softness > 0.0f)) return 0.0f;
+    return std::clamp(angularDeg * 3.0f, 1.0f, 14.0f) * softness;
+}
+
 void CascadedShadowMap::Update(const glm::mat4& camView, const glm::mat4& camProj,
                                const glm::vec3& lightDir, float shadowDistance,
                                const glm::vec3* casterMin, const glm::vec3* casterMax) {
@@ -76,10 +85,13 @@ void CascadedShadowMap::Update(const glm::mat4& camView, const glm::mat4& camPro
     float camNear = -(camView * glm::vec4(nearC[0], 1.0f)).z;
     float camFar  = -(camView * glm::vec4(farC[0],  1.0f)).z;
     camNear = std::max(camNear, 0.01f);
+    // The corners below run the whole frustum, near plane to the camera's own far plane: a split distance is a
+    // fraction of that, not of the shadow distance (which made every cascade 10-50x too big).
+    const float frustumFar = std::max(camFar, camNear + 1e-3f);
     camFar  = std::min(camFar, camNear + std::max(shadowDistance, 1.0f));
 
     // Practical split scheme (blend of logarithmic and uniform).
-    const float lambda = 0.75f;
+    const float lambda = m_SplitLambda;
     for (int i = 0; i < m_Count; ++i) {
         float p = float(i + 1) / float(m_Count);
         float logSplit = camNear * std::pow(camFar / camNear, p);
@@ -89,8 +101,8 @@ void CascadedShadowMap::Update(const glm::mat4& camView, const glm::mat4& camPro
 
     float prevFar = camNear;
     for (int c = 0; c < m_Count; ++c) {
-        float t0 = (prevFar - camNear) / (camFar - camNear);
-        float t1 = (m_SplitFar[c] - camNear) / (camFar - camNear);
+        float t0 = (prevFar - camNear) / (frustumFar - camNear);
+        float t1 = (m_SplitFar[c] - camNear) / (frustumFar - camNear);
 
         // 8 corners of this cascade's sub-frustum.
         glm::vec3 corners[8];
@@ -206,7 +218,9 @@ bool CascadedShadowMap::CasterReachesSlice(int c, const glm::vec3& boundsMin, co
         lo = glm::min(lo, xy);
         hi = glm::max(hi, xy);
     }
-    const float texels = std::max(kernelTexels, 0.5f) * (1.0f + 0.35f * (float)c) * 1.25f + std::max(normalBias, 0.0f) + 3.0f;
+    // A hard kernel (0) still reaches the 2x2 compare's neighbour; the 3-texel slack covers it.
+    const float texels = (kernelTexels > 0.0f ? std::max(kernelTexels, 0.5f) * (1.0f + 0.35f * (float)c) * 1.25f : 0.0f) +
+                         std::max(normalBias, 0.0f) + 3.0f;
     const float margin = texels * 2.0f / (float)std::max(m_Resolution, 1);
     lo -= glm::vec2(margin);
     hi += glm::vec2(margin);

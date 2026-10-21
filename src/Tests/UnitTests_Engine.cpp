@@ -483,12 +483,50 @@ static void Test_BoneAnimChannel_FinalizeMatchesSearch() {
     CHECK(worst < 1e-5f);
 }
 
+// Softness 0 is the hard sun edge (one 2x2 compare); every positive softness keeps the kernel it always had, so
+// saved scenes look the same. The split default reproduces the old fixed lambda, and a higher one tightens cascade 0.
+static void Test_CascadedShadowMap_HardKernelAndSplit() {
+    CHECK(CascadedShadowMap::SunKernelTexels(0.53f, 0.0f) == 0.0f);
+    CHECK(CascadedShadowMap::SunKernelTexels(0.53f, -1.0f) == 0.0f);
+    for (float ang : {0.1f, 0.53f, 2.0f, 9.0f})
+        for (float soft : {0.02f, 0.15f, 0.6f, 1.0f, 4.0f})
+            CHECK(CascadedShadowMap::SunKernelTexels(ang, soft) == std::clamp(ang * 3.0f, 1.0f, 14.0f) * soft);
+
+    const glm::mat4 view = glm::lookAt(glm::vec3(-10.3f, 1.6f, 4.9f), glm::vec3(-6.0f, 1.2f, 8.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    const glm::mat4 proj = glm::perspective(glm::radians(60.0f), 16.0f / 9.0f, 0.1f, 500.0f);
+    const glm::vec3 sun = glm::normalize(glm::vec3(0.3f, -0.5f, 0.8f));
+    CascadedShadowMap def, tight;
+    CHECK(def.SplitLambda() == 0.75f);
+    def.Update(view, proj, sun, 60.0f);
+    tight.SetSplitLambda(0.92f);
+    tight.Update(view, proj, sun, 60.0f);
+    // The old inline split: lambda 0.75 blend of uniform and logarithmic over [near, near + distance].
+    const float n = 0.1f, f = n + 60.0f;
+    for (int i = 0; i < def.Count(); ++i) {
+        const float p = float(i + 1) / float(def.Count());
+        const float want = glm::mix(n + (f - n) * p, n * std::pow(f / n, p), 0.75f);
+        CHECK(std::abs(def.SplitDepthsVec4()[i] - want) < 1e-3f * want);
+    }
+    CHECK(tight.SplitDepthsVec4().x < def.SplitDepthsVec4().x * 0.6f);
+    CHECK(tight.TexelWorldSizesVec4().x < def.TexelWorldSizesVec4().x * 0.7f);
+    tight.SetSplitLambda(5.0f);
+    CHECK(tight.SplitLambda() <= 0.98f);
+
+    World w;
+    AssetLibrary assets;
+    w.ShadowCascadeSplit = 0.9f;
+    World back;
+    CHECK(SceneSerializer::LoadFromString(back, assets, SceneSerializer::SaveToString(w, assets)));
+    CHECK(std::abs(back.ShadowCascadeSplit - 0.9f) < 1e-6f);
+}
+
 void RegisterEngineTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"BoneAnimChannel::FinalizeMatchesSearch", Test_BoneAnimChannel_FinalizeMatchesSearch});
     tests.push_back({"Material::HashCachePerFrame", Test_Material_HashCachePerFrame});
     tests.push_back({"Material::ExtraPropsHashPerFrame", Test_Material_ExtraPropsHashPerFrame});
     tests.push_back({"Texture::NormalMapBC5Renormalized", Test_Texture_NormalMapBC5Renormalized});
     tests.push_back({"CascadedShadowMap::SliceTestMatchesAllPairs", Test_CascadedShadowMap_SliceTestMatchesAllPairs});
+    tests.push_back({"CascadedShadowMap::HardKernelAndSplit", Test_CascadedShadowMap_HardKernelAndSplit});
     tests.push_back({"World::RaycastToleratesRenderableWithoutModel", Test_World_RaycastToleratesRenderableWithoutModel});
     tests.push_back({"PrefabInstance::HandWrittenComponentsDiffByJsonKey", Test_PrefabInstance_HandWrittenComponentsDiffByJsonKey});
     tests.push_back({"FirstPersonController::NewFieldsRoundTrip", Test_FirstPersonController_NewFieldsRoundTrip});

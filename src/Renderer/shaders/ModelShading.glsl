@@ -161,7 +161,7 @@ uniform int  uShadowCascadeCount;
 uniform vec4 uCascadeSplits;          // per-cascade far distance, view space (positive)
 uniform mat4 uShadowMatrices[4];
 uniform vec4  uShadowTexelWorld;      // world units per shadow texel, per cascade (#117)
-uniform float uShadowSoftness;        // PCF kernel radius in shadow-map texels (from the sun's angular size)
+uniform float uShadowSoftness;        // PCF kernel radius in shadow-map texels (from the sun's angular size); 0 = hard
 // Per-light shadow multipliers (#140 phase 2). All default 1.0 -> identical to pre-phase-2.
 uniform float uSunShadowBias;        // x the sun's texel-proportional depth bias
 uniform float uSunShadowNormalBias;  // x the sun's normal-offset term
@@ -558,9 +558,16 @@ float SunShadow(vec3 worldPos, vec3 N, vec3 L) {
         }
         float bias = (texel * (1.0 + 2.0 * (1.0 - ndl)) * uSunShadowBias) / (texel * uShadowMapResolution + 50.0);
         // Farther cascades cover more world per texel, so widen the kernel a little to keep the
-        // apparent penumbra roughly constant across the seam.
-        float radius = max(uShadowSoftness, 0.5) * (1.0 + 0.35 * float(cc));
-        float v = SampleCascade(cc, proj.xy, proj.z - bias, radius, rot);
+        // apparent penumbra roughly constant across the seam. Softness 0 is the hard edge: one
+        // hardware 2x2 compare, no Poisson disk and no widening - the 0.5-texel floor + disk
+        // spread an edge over ~2.5x as many pixels.
+        float v;
+        if (uShadowSoftness > 0.0) {
+            float radius = max(uShadowSoftness, 0.5) * (1.0 + 0.35 * float(cc));
+            v = SampleCascade(cc, proj.xy, proj.z - bias, radius, rot);
+        } else {
+            v = texture(uShadowMap, vec4(proj.xy, float(cc), proj.z - bias));
+        }
         vis = k == 0 ? v : mix(vis, v, fade);
     }
     return vis;
