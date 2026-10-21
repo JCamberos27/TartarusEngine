@@ -13,7 +13,7 @@ struct LaunchOptions {
     // a nonzero draw count before moving to the next scene. Exits 0 if every scene passed, or a
     // nonzero code if any failed.
     bool smokeTestMode = false;
-    // --weapon-test: the smoke harness on the Master Scene only, with the weapons played through by
+    // --weapon-test: the smoke harness on the Arena only, with the weapons played through by
     // script in Play (FirstPersonWeaponTest) on a fixed 60 Hz step. Exit code 0 = every check passed.
     bool weaponTestMode = false;
     // --stock-probe [remington|ak]: the same harness with the stock probe script (FirstPersonWeaponTest):

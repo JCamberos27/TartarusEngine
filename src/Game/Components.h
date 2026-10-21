@@ -1204,6 +1204,10 @@ struct OpenableComponent {
     float Amount = 0.0f;     // degrees for a hinge, metres for a slide; 0 = the motion's usual amount
     float OpenTime = 0.5f;   // seconds from shut to open
     bool StartOpen = false;
+    // Audio assets, ';'-separated variants (one picked per play), played at the part. Empty = silent.
+    std::string OpenSound;  // as it starts to open (the knob turning, the hinge)
+    std::string CloseSound; // when it lands shut (the thud)
+    std::string LatchSound; // with it, the latch snapping home
 
     // Runtime, never serialized.
     bool Started = false;
