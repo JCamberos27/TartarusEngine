@@ -190,6 +190,7 @@ struct EditorUiTestAccess {
     static void CloseToolWindows(EditorLayer& e) {
         e.m_ShowAnimator = false;
         e.m_ShowAudioDebug = false;
+        e.m_ShowLighting = false; // a Lighting test that failed midway left it over the Hierarchy
         EditorSettings::Get().ShowAssetLibrary = false;
     }
     static std::string& ScenePath(EditorLayer& e) { return e.m_CurrentScenePath; }
