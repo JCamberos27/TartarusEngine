@@ -508,6 +508,11 @@ int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
     if (spawnIndex < 0 || spawnIndex >= (int)m_Spawns.size() || m_SoldierJson.empty()) return -1;
     SpawnPoint sp = m_Spawns[(size_t)spawnIndex];
     sp.Pos += SpawnShift;
+    if (TestDummies) {
+        sp.Brain = 1;
+        sp.Weapon = spawnIndex == 1 ? 3 : 0;
+        sp.Bare = spawnIndex != 1;
+    }
     PROFILE_SCOPE("AI Spawn");
     const auto spawnT0 = std::chrono::steady_clock::now();
     auto since = [&]() { return std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - spawnT0).count(); };

@@ -475,19 +475,19 @@ class Hallway(k.Scene):
                      fill_room=(x0, z0, x1, z1))
 
     def test_npcs(self, root, arena):
-        """Two training dummies in TEST_ROOM for trying the wounded animations: they never shoot, and a leg or body
-        round that would drop one under 20% puts it down (crawling or staggering). One naked with an AK (to see the
-        gun fall), one dressed and unarmed. They come back 3 s after dying."""
+        """Two soldiers in TEST_ROOM who fight: they move, take cover and shoot, and a leg or body round that would
+        drop one under 20% puts it down (crawling or staggering). They come back 3 s after dying. (The wounded tests
+        turn them back into training dummies: NpcDirector::TestDummies.)"""
         x0, z0, x1, z1 = self.rooms[TEST_ROOM]
         squad = next(e['Squad Settings'] for e in arena['empties'] if 'Squad Settings' in e)
         self.empty('Test Squad Settings', root, ((x0 + x1) / 2, 0.0, z0 + 0.5), **{'Squad Settings': {
             **squad, 'Squad Size': 2, 'Respawn': True, 'Respawn Delay': 3.0}})
         # standing in the room's far half, side by side, facing the archway the player walks in through
-        for name, u, spawn in (('Test NPC - Naked', 0.3, {'Weapon': 'AKS-74U', 'Bare': True}),
-                               ('Test NPC - Unarmed', 0.7, {'Weapon': 'None', 'Bare': False})):
+        for name, u, spawn in (('Soldier Spawn A', 0.3, {'Weapon': 'AKS-74U', 'Bare': False, 'Outfit Seed': 1}),
+                               ('Soldier Spawn B', 0.7, {'Weapon': 'AKS-74U', 'Bare': False, 'Outfit Seed': 2})):
             pos = (x0 + (x1 - x0) * u, 0.0, z0 + (z1 - z0) * 0.62)
             self.empty(name, root, pos, yaw=180.0 if z0 > 0 else 0.0, **{'NPC Spawn': {
-                'Brain': 'Training Dummy', 'Outfit Seed': 1, 'Skill': 0.5, 'Squad': 0, **spawn}})
+                'Brain': 'Squad AI', 'Skill': 0.5, 'Squad': 0, **spawn}})
 
     # --- audio ----------------------------------------------------------------------------------------------------------
     def audio(self, root):
