@@ -278,14 +278,30 @@ float NpcRagdollMotor::PartStrength(const RagdollSettingsComponent& cfg, int par
     float hold = legs ? std::max(cfg.StaggerTime, 0.0f) : 0.0f;
     // The lead leg gives out sooner (the other holds a little longer).
     if (legs && fall) hold *= std::clamp(1.0f - cfg.BuckleLead * LegLead(*fall, part), 0.1f, 2.0f);
+    // Shot down by a leg, alive: that whole leg (hip, knee and ankle) gives at once, as a struck joint does; the other holds its beat.
+    const bool weakLeg = legs && fall && fall->WeakLeg >= 0 && (kRagDefs[part].Left ? 0 : 1) == fall->WeakLeg;
+    if (weakLeg) hold = 0.0f;
     float decay = std::max(GroupTime(cfg, g), 1e-3f);
     if (headKill && !legs) decay = std::max(decay * cfg.HeadKillLimp, 1e-3f); // lights out: the arms and neck let go at once
+    if (fall && fall->Prone) {
+        // Killed lying on the floor: nothing to hold up and no fall to brace for - the round's flinch (a little tone, briefly),
+        // then slack: the arms and head drop to the floor under their own weight, the legs lie as they are.
+        const float residual = std::clamp(cfg.ToneResidual, 0.0f, 1.0f);
+        const float x = std::clamp(t / std::max(0.35f * decay, 0.05f), 0.0f, 1.0f);
+        const float struck = part == hitPart ? cfg.HitWeakness : 1.0f;
+        const float s = residual + (1.0f - residual) * 0.45f * struck * (1.0f - x) * (1.0f - x);
+        // The legs and spine hold the lying tone while the flat pose forms (then let go): left slack, the crawl's bent knee
+        // under him props the hips up and he ends with his backside in the air.
+        if (g != Group::Legs && g != Group::Spine) return s;
+        const float lie = std::clamp(cfg.RelaxTone, 0.0f, 1.0f) * Smooth((t - 0.1f) / 0.2f) * (1.0f - Smooth((t - 1.8f) / 0.6f));
+        return std::max(s, lie);
+    }
     const float x = std::clamp((t - hold) / decay, 0.0f, 1.0f);
     const float curve = (1.0f - x) * (1.0f - x);
     float scale = legs ? cfg.StaggerLegStrength : 1.0f;
     // The struck joint takes the round instead of holding against it: the part's own (a hit pelvis: both hips; a hit head: the neck too).
     const bool struck = part == hitPart || (hitPart == 0 && (part == 7 || part == 9)) || (hitPart == 2 && part == NpcRagdoll::kNeck);
-    if (struck) scale *= cfg.HitWeakness;
+    if (struck || weakLeg) scale *= cfg.HitWeakness;
     const float residual = std::clamp(cfg.ToneResidual, 0.0f, 1.0f);
     const float s = residual + (1.0f - residual) * curve * std::clamp(scale, 0.0f, 1.0f);
     // The lying pose is held by the legs while it forms (the arms and spine only follow it, loosely: held stiff, hanging arms would prop a prone body up).
@@ -320,18 +336,18 @@ glm::quat NpcRagdollMotor::TargetAt(const RagdollSettingsComponent& cfg, int par
     part = std::clamp(part, 0, NpcRagdoll::kRagParts - 1);
     const Region r = kRagDefs[part].R;
     const float x = std::clamp(t / std::max(cfg.CollapseBlendTime, 1e-3f), 0.0f, 1.0f);
-    const float blend = x * x * (3.0f - 2.0f * x) * cfg.CollapseAmount;
+    const float blend = fall.Prone ? 0.0f : x * x * (3.0f - 2.0f * x) * cfg.CollapseAmount; // (already down: nothing to collapse)
     // The joint frame's +Z is the flexion axis (X, the bone, turns toward +Y, the flexion direction); a swing about +Y leans the limb toward the body's left.
     const glm::vec3 axisY(0.0f, 1.0f, 0.0f), axisZ(0.0f, 0.0f, 1.0f);
     const float armSide = kRagDefs[part].Left ? 1.0f : -1.0f;
     glm::quat q = glm::angleAxis(glm::radians(CollapseFlexion(cfg, part, fall) * blend), axisZ);
-    if (r == Region::UpperArm && !fall.Head) {
+    if (r == Region::UpperArm && !fall.Head && !fall.Prone) {
         // Reaching sideways: both arms swing toward a sideways fall, the one on that side further.
         const float reach = std::clamp(cfg.BraceWeight, 0.0f, 1.0f) * cfg.BraceLateral * fall.Lat * (armSide * fall.Lat > 0.0f ? 1.0f : 0.4f);
         q = glm::angleAxis(glm::radians(reach * blend), axisY) * q;
     }
     // On to the lying pose: straight limbs (back to the neutral each joint's frame holds) with a little bend, the spine mostly upright.
-    const float relax = RelaxAmount(cfg, t);
+    const float relax = fall.Prone ? Smooth(t / 0.4f) : RelaxAmount(cfg, t); // already down: lying flat straight away
     if (relax > 0.0f) {
         float flex = 0.0f, share = 0.0f;
         switch (r) {
@@ -367,7 +383,7 @@ glm::quat NpcRagdollMotor::TargetAt(const RagdollSettingsComponent& cfg, int par
 }
 
 void NpcRagdollMotor::Begin(int id, const PhysicsWorld::RagdollPart* parts, const glm::mat4& root, const glm::vec3& fallDir, int hitPart,
-                            const RagdollSettingsComponent& cfg, const glm::vec3& point, const glm::vec3& shot) {
+                            const RagdollSettingsComponent& cfg, const glm::vec3& point, const glm::vec3& shot, int weakLeg) {
     m_Id = id;
     m_HitPart = hitPart;
     m_Cfg = std::make_shared<RagdollSettingsComponent>(cfg);
@@ -395,6 +411,7 @@ void NpcRagdollMotor::Begin(int id, const PhysicsWorld::RagdollPart* parts, cons
     }
     m_Fall.Bias = (float)(((unsigned)id * 2654435761u >> 12) & 1023u) / 511.5f - 1.0f; // this body's own lean, always the same for the same body
     m_Fall.Head = IsHeadHit(hitPart);
+    m_Fall.WeakLeg = weakLeg >= 0 && weakLeg <= 1 ? weakLeg : -1;
     // A torso hit: the hand on the struck side goes to the wound (a round that entered the front reaches to the front).
     if ((hitPart == 0 || hitPart == 1) && !m_Fall.Head && glm::dot(shot, shot) > 1e-8f) {
         const float side = glm::dot(point - glm::vec3(root[3]), left);
@@ -413,6 +430,11 @@ void NpcRagdollMotor::Begin(int id, const PhysicsWorld::RagdollPart* parts, cons
     m_Fall.HaveNeutral = m_Frames;
     m_Strongest = 1.0f;
     Update(0.0f);
+}
+
+void NpcRagdollMotor::SetSettings(const RagdollSettingsComponent& cfg) {
+    m_Cfg = std::make_shared<RagdollSettingsComponent>(cfg);
+    m_AppliedSettle = -1.0f; // the damping, friction and drives go out again under the new settings
 }
 
 void NpcRagdollMotor::Update(float dt) {
@@ -686,7 +708,8 @@ void NpcRagdoll::Stop() {
 }
 
 int NpcRagdoll::Launch(int id, const PhysicsWorld::RagdollPart* parts, const glm::mat4* partWorld, const glm::mat4& root, const glm::vec3& velocity,
-                       const glm::vec3& impulse, const glm::vec3& point, int hitPart, const RagdollSettingsComponent& cfg, NpcRagdollMotor* motor) {
+                       const glm::vec3& impulse, const glm::vec3& point, int hitPart, const RagdollSettingsComponent& cfg, NpcRagdollMotor* motor,
+                       const Wound* wound) {
     // The round's shove, on the part it struck (else the one nearest where it did).
     int target = hitPart;
     if (target < 0 || target >= kRagParts) {
@@ -721,7 +744,9 @@ int NpcRagdoll::Launch(int id, const PhysicsWorld::RagdollPart* parts, const glm
         const glm::vec3 a = dir * onPart, rest = dir * std::min(total - onPart, PartMass(&cfg, 1) * cfg.ChestImpulseSpeed);
         const float ja[3] = {a.x, a.y, a.z}, at[3] = {point.x, point.y, point.z};
         PhysicsWorld::RagdollImpulse(id, target, ja, at);
-        if (glm::dot(rest, rest) > 1e-8f && target != 1) {
+        // (Not for a wound fall: a leg round knocks the leg, not the man. Its overflow into the chest shoved the chest back along
+        // the round - shot from the front, every leg-shot soldier went down on his back and could never crawl.)
+        if (glm::dot(rest, rest) > 1e-8f && target != 1 && !wound) {
             const float jr[3] = {rest.x, rest.y, rest.z}, centre[3] = {partWorld[1][3][0], partWorld[1][3][1], partWorld[1][3][2]};
             PhysicsWorld::RagdollImpulse(id, 1, jr, centre);
         }
@@ -731,13 +756,28 @@ int NpcRagdoll::Launch(int id, const PhysicsWorld::RagdollPart* parts, const glm
         // the body's momentum plus the round's.
         float mass = 0.0f;
         for (int i = 0; i < kRagParts; ++i) mass += PartMass(&cfg, i);
-        motor->Begin(id, parts, root, velocity * mass + impulse * scale, target, cfg, point, impulse);
+        // (Shot down alive: the way the wound fall goes - forward, over the leg that gave - not where the round pushed.)
+        const bool woundDir = wound && glm::dot(wound->FallDir, wound->FallDir) > 1e-8f;
+        motor->Begin(id, parts, root, woundDir ? wound->FallDir : velocity * mass + impulse * scale, target, cfg, point, impulse, wound ? wound->Leg : -1);
+    }
+    // The wound fall's topple: the chest, neck and head pushed along the fall (the hips stay over the feet a moment, so the body
+    // pitches over rather than sliding), as a body goes down over a leg that gave.
+    if (wound && wound->Push > 0.0f) {
+        glm::vec3 d(wound->FallDir.x, 0.0f, wound->FallDir.z);
+        if (glm::dot(d, d) > 1e-8f) {
+            d = glm::normalize(d) * wound->Push;
+            for (int part : {1, 2, kNeck}) {
+                const glm::vec3 j = d * PartMass(&cfg, part);
+                const float ji[3] = {j.x, j.y, j.z}, at[3] = {partWorld[part][3][0], partWorld[part][3][1], partWorld[part][3][2]};
+                PhysicsWorld::RagdollImpulse(id, part, ji, at);
+            }
+        }
     }
     return target;
 }
 
 bool NpcRagdoll::Start(NpcBody& body, const glm::vec3& velocity, const glm::vec3& impulse, const glm::vec3& point, int hitPart,
-                       const RagdollSettingsComponent* cfgIn, const BoneSnapshot* prev, float prevDt) {
+                       const RagdollSettingsComponent* cfgIn, const BoneSnapshot* prev, float prevDt, const Wound* wound) {
     Stop();
     const RagdollSettingsComponent defaults;
     const RagdollSettingsComponent& cfg = cfgIn ? *cfgIn : defaults;
@@ -831,7 +871,8 @@ bool NpcRagdoll::Start(NpcBody& body, const glm::vec3& velocity, const glm::vec3
         }
         if (any) m_Pieces.push_back(std::move(pb));
     }
-    Launch(m_Id, parts, partWorld, root, velocity, impulse, point, hitPart, cfg, m_Powered ? &m_Motor : nullptr);
+    Launch(m_Id, parts, partWorld, root, velocity, impulse, point, hitPart, cfg, m_Powered ? &m_Motor : nullptr, wound);
+    if (ProneDeath && m_Powered) m_Motor.SetProne(); // (after Begin, in Launch, which starts the fall afresh)
     m_Drive = m_Powered ? m_Motor.Strength() : m_Drive;
     return true;
 }
@@ -920,6 +961,17 @@ float NpcRagdoll::HitCorpse(int part, const glm::vec3& dir, float damage, const 
     Shove(part, d * (PartMass(&cfg, part) * speed), point); // a point impulse on the struck part: it, and what hangs off it, move first
     if (m_Powered) m_Motor.Poke(cfg.CorpseWakeTime);        // loose a moment (no settling), then it settles and sleeps again
     return speed;
+}
+
+void NpcRagdoll::Die(int part, const glm::vec3& dir, float damage, const glm::vec3& point, const RagdollSettingsComponent& cfg) {
+    if (m_Id < 0) return;
+    if (m_Powered) m_Motor.SetSettings(cfg); // the living tone goes (to the death's residual), the death's settle and sleep take over
+    HitCorpse(part, dir, damage, point, cfg);
+}
+
+bool NpcRagdoll::Motion(float& linear, float& angular) const {
+    linear = angular = 0.0f;
+    return m_Id >= 0 && PhysicsWorld::RagdollMotion(m_Id, &linear, &angular);
 }
 
 glm::vec3 NpcRagdoll::PartPosition(int part) const {

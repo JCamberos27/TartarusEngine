@@ -1767,7 +1767,7 @@ void Model::EvaluatePose() {
         const glm::mat4 parent = nodes[node].Parent >= 0 ? m_NodeGlobals[nodes[node].Parent] : glm::mat4(1.0f);
         const glm::mat4 toModel = m_D->GlobalInverseTransform * parent;
         const glm::mat4 x = toModel * sampled.ToMatrix();
-        const glm::mat4 x0 = SampleNodeModelSpace(s.Clip, 0.0f, AnimationWrapMode::ClampForever, node);
+        const glm::mat4 x0 = InPlaceStart(s.Clip, node);
         const glm::mat4 local = glm::inverse(toModel) * RootMotionInPlace(x, x0, m_RootMotionSettings);
         LocalTRS out = sampled;
         glm::vec3 skew, scale; glm::vec4 persp;
@@ -1968,11 +1968,44 @@ void Model::SetPoseNodeModelSpace(std::vector<LocalTRS>& pose, int node, const g
     pose[node].R = glm::normalize(r);
 }
 
-void Model::StripRootMotion(std::vector<LocalTRS>& pose, int clip, int node, const RootMotionSettings& s) const {
+void Model::StripRootMotion(std::vector<LocalTRS>& pose, int clip, int node, const RootMotionSettings& s, float loopTime) const {
     if (node < 0 || node >= NodeCount() || pose.size() != (size_t)NodeCount()) return;
-    const glm::mat4 x = PoseNodeModelSpace(pose, node);
-    const glm::mat4 x0 = SampleNodeModelSpace(clip, 0.0f, AnimationWrapMode::ClampForever, node);
-    SetPoseNodeModelSpace(pose, node, RootMotionInPlace(x, x0, s));
+    const glm::mat4 x0 = InPlaceStart(clip, node);
+    glm::mat4 inPlace = RootMotionInPlace(PoseNodeModelSpace(pose, node), x0, s);
+    const AnimationClip* c = nullptr;
+    if (loopTime >= 0.0f && clip >= 0) {
+        const std::vector<int>* map = nullptr;
+        c = ClipAt(clip, &map);
+    }
+    const float len = c ? c->LengthSeconds() : 0.0f;
+    if (c && c->StartTicks > 0.0f && len > 1e-3f) {
+        // The hips: the root's child that the body hangs from.
+        const auto& nodes = m_D->Nodes;
+        int hips = -1;
+        for (int i = 0; i < (int)nodes.size() && hips < 0; ++i)
+            if (nodes[i].Parent == node) hips = i;
+        if (hips >= 0) {
+            // Where the in-place hips are at the loop's two ends, over the ground (the root's own motion taken out).
+            auto hipsAt = [&](float t) {
+                const glm::mat4 r = SampleNodeModelSpace(clip, t, AnimationWrapMode::ClampForever, node);
+                const glm::mat4 h = SampleNodeModelSpace(clip, t, AnimationWrapMode::ClampForever, hips);
+                return glm::vec3(RootMotionInPlace(r, x0, s) * glm::inverse(r) * h[3]);
+            };
+            glm::vec3 drift = hipsAt(len) - hipsAt(0.0f);
+            drift.y = 0.0f;
+            const float p = std::clamp(std::fmod(loopTime, len) / len, 0.0f, 1.0f);
+            inPlace = glm::translate(glm::mat4(1.0f), -drift * p) * inPlace;
+        }
+    }
+    SetPoseNodeModelSpace(pose, node, inPlace);
+}
+
+glm::mat4 Model::InPlaceStart(int clip, int node) const {
+    glm::mat4 x0 = SampleNodeModelSpace(clip, 0.0f, AnimationWrapMode::ClampForever, node);
+    const std::vector<int>* map = nullptr;
+    const AnimationClip* c = clip >= 0 ? ClipAt(clip, &map) : nullptr;
+    if (c && c->StartTicks > 0.0f) x0[3] = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+    return x0;
 }
 
 RootMotionDelta Model::ClipRootMotion(int clip, float t0, float t1, AnimationWrapMode wrap, int node,

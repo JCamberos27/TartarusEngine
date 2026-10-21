@@ -54,7 +54,7 @@ float ParentDepth(World& world, entt::entity e) {
 void Apply(OpenableComponent& o, TransformComponent& t) {
     glm::vec3 pos;
     glm::quat rot;
-    Pose(o.Motion, o.ResolvedAmount, o.PoseMin, o.PoseMax, t.Scale, o.BasePosition, o.BaseRotation, o.Progress, pos, rot);
+    Pose(o.Motion, o.ResolvedAmount, o.PoseMin, o.PoseMax, t.Scale, o.BasePosition, o.BaseRotation, o.Progress, pos, rot, o.SwingBack);
     t.Position = pos;
     t.Rotation = rot;
 }
@@ -101,7 +101,7 @@ float DefaultAmount(int motion, const glm::vec3& lo, const glm::vec3& hi, float 
 }
 
 void Pose(int motion, float amount, const glm::vec3& lo, const glm::vec3& hi, const glm::vec3& scale,
-          const glm::vec3& basePos, const glm::quat& baseRot, float t, glm::vec3& outPos, glm::quat& outRot) {
+          const glm::vec3& basePos, const glm::quat& baseRot, float t, glm::vec3& outPos, glm::quat& outRot, bool back) {
     outPos = basePos;
     outRot = baseRot;
     const float s = Ease(t);
@@ -124,6 +124,11 @@ void Pose(int motion, float amount, const glm::vec3& lo, const glm::vec3& hi, co
         case Kind::FlapDown: pivot = {c.x, lo.y, hi.z}; axis = {1.0f, 0.0f, 0.0f}; sign = 1.0f; break;
         case Kind::FlapUp: pivot = {c.x, hi.y, hi.z}; axis = {1.0f, 0.0f, 0.0f}; sign = -1.0f; break;
         default: return;
+    }
+    // Swing Back: the mirror image through the door's plane - the pin on the back face, the free edge out toward -Z.
+    if (back && (Kind)motion != Kind::Lid) {
+        pivot.z = lo.z;
+        sign = -sign;
     }
     const glm::quat q = glm::angleAxis(glm::radians(sign * amount * s), axis);
     // Turned about the hinge in the entity's scaled space: the hinge line itself stays put.

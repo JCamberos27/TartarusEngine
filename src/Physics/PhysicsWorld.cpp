@@ -100,6 +100,14 @@ struct SimEventCallback : PxSimulationEventCallback {
 // (#185 PR 7), kills pairs the layer matrix disables (#185 PR 8; word1 of each shape's filter
 // data is its layer 0-31, constantBlock is ProjectSettings' 32-word mask, #150), and asks for CCD
 // contact detection so a body with the eENABLE_CCD flag actually sweeps (#185 PR 9).
+// word1 above the layer (its low five bits): a character's shape that passes through ragdolls (SetNpcPassesRagdolls).
+constexpr PxU32 kPassRagdolls = 1u << 30;
+// word1 of a ragdoll's parts: it started in or on another body, and passes the other ragdolls (not its own parts, not the world)
+// until it is clear of them (UpdateBodyPasses).
+constexpr PxU32 kPassBodies = 1u << 29;
+// A ragdoll's own part (word2: its id + 1, the part 0..15 above), not an object told to ignore one (slot 16).
+inline bool IsRagdollPart(const PxFilterData& f) { return (f.word2 & 0xFFFFu) != 0u && ((f.word2 >> 16) & 31u) < 16u; }
+
 PxFilterFlags EngineFilterShader(
     PxFilterObjectAttributes attributes0, PxFilterData filterData0,
     PxFilterObjectAttributes attributes1, PxFilterData filterData1,
@@ -109,11 +117,16 @@ PxFilterFlags EngineFilterShader(
         const PxU32 la = filterData0.word1 & 31u, lb = filterData1.word1 & 31u;
         if (((mask[la] >> lb) & 1u) == 0u) return PxFilterFlag::eKILL;
     }
+    // A character passing through the dead (word1's kPassRagdolls bit: SetNpcPassesRagdolls) against a ragdoll's part.
+    if (((filterData0.word1 & kPassRagdolls) && IsRagdollPart(filterData1)) || ((filterData1.word1 & kPassRagdolls) && IsRagdollPart(filterData0)))
+        return PxFilterFlag::eKILL;
     // The parts of one ragdoll (word2: its id + 1 in the low half, the part in the high half) collide with each other unless
     // either one's word3 has the other's bit: parent and child, a pair that overlapped when the body was built (until it
     // separates), a gun with the hand that held it.
     {
         const PxU32 r0 = filterData0.word2 & 0xFFFFu, r1 = filterData1.word2 & 0xFFFFu;
+        if (r0 != r1 && ((filterData0.word1 | filterData1.word1) & kPassBodies) && IsRagdollPart(filterData0) && IsRagdollPart(filterData1))
+            return PxFilterFlag::eKILL;
         if (r0 != 0u && r0 == r1) {
             const PxU32 p0 = (filterData0.word2 >> 16) & 31u, p1 = (filterData1.word2 >> 16) & 31u;
             if (((filterData0.word3 >> p1) & 1u) || ((filterData1.word3 >> p0) & 1u)) return PxFilterFlag::eKILL;
@@ -186,7 +199,7 @@ struct PhysicsState {
     PxController*         controller    = nullptr; // the Play-mode Player's capsule (lazy)
     // NPC capsules, indexed by CharacterId (a released slot stays null). npcActors: their actors,
     // for the query filters that skip characters.
-    struct NpcCharacter { PxController* ctrl = nullptr; std::uint32_t entity = 0xFFFFFFFFu; };
+    struct NpcCharacter { PxController* ctrl = nullptr; std::uint32_t entity = 0xFFFFFFFFu; bool passRagdolls = false; };
     std::vector<NpcCharacter>               npcs;
     std::unordered_set<const PxRigidActor*> npcActors;
     // #185 PR 4 — RigidbodyComponent entities. Force-driven bodies get their pose written back
@@ -247,6 +260,7 @@ struct PhysicsState {
         // which spread to whatever it touched and slowed every later step to hundreds of milliseconds.
         PxArticulationCache* Good = nullptr;
         bool Blown = false; // (logged once)
+        bool PassBodies = false; // its parts carry kPassBodies: it began in or on another body, and passes them till clear
         // A corpse at rest is frozen: its articulation taken out of the scene and its capsules left as one static actor where
         // they lay (same filters, materials and part tags). A body falling onto a pile used to wake every corpse in it and
         // solve them all at the ragdolls' 32 iterations - tens to hundreds of milliseconds a step as the bodies piled up.
@@ -2119,6 +2133,52 @@ void ApplyPartFilter(PhysicsState& s, PhysicsState::Ragdoll& rd, int part) {
     if (link->getScene()) s.scene->resetFiltering(*link);
 }
 
+// Whether any of `rd`'s capsules is in (or within `margin` of) another ragdoll's - moving or frozen.
+bool TouchesOtherBody(const PhysicsState& s, const PhysicsState::Ragdoll& rd, float margin) {
+    auto capsule = [](const PxShape* sh, const PxTransform& actor, PxTransform& pose, PxCapsuleGeometry& g) {
+        if (!sh || sh->getGeometry().getType() != PxGeometryType::eCAPSULE) return false;
+        g = static_cast<const PxCapsuleGeometry&>(sh->getGeometry());
+        pose = actor * sh->getLocalPose();
+        return true;
+    };
+    for (PxArticulationLink* a : rd.Bodies) {
+        PxTransform pa;
+        PxCapsuleGeometry ga;
+        if (!a || !capsule(LinkShape(a), a->getGlobalPose(), pa, ga)) continue;
+        for (const PhysicsState::Ragdoll& o : s.ragdolls) {
+            if (&o == &rd || !o.Art) continue;
+            PxTransform pb;
+            PxCapsuleGeometry gb;
+            if (o.Frozen) {
+                PxShape* shapes[32];
+                const PxU32 n = o.Frozen->getShapes(shapes, 32);
+                for (PxU32 k = 0; k < n; ++k)
+                    if (capsule(shapes[k], o.Frozen->getGlobalPose(), pb, gb) && CapsuleGap(pa, ga.halfHeight, ga.radius, pb, gb.halfHeight, gb.radius) < margin)
+                        return true;
+            } else {
+                for (PxArticulationLink* b : o.Bodies)
+                    if (b && capsule(LinkShape(b), b->getGlobalPose(), pb, gb) && CapsuleGap(pa, ga.halfHeight, ga.radius, pb, gb.halfHeight, gb.radius) < margin)
+                        return true;
+            }
+        }
+    }
+    return false;
+}
+
+// Every part of `rd` passing the other bodies, or colliding with them again.
+void SetPassBodies(PhysicsState& s, PhysicsState::Ragdoll& rd, bool on) {
+    if (rd.PassBodies == on) return;
+    rd.PassBodies = on;
+    for (PxArticulationLink* link : rd.Bodies) {
+        PxShape* sh = LinkShape(link);
+        if (!sh) continue;
+        PxFilterData f = sh->getSimulationFilterData();
+        f.word1 = on ? (f.word1 | kPassBodies) : (f.word1 & ~kPassBodies);
+        sh->setSimulationFilterData(f);
+        if (link->getScene()) s.scene->resetFiltering(*link);
+    }
+}
+
 // The articulation back in the scene, asleep where it lay (a hit wakes it); the static copy gone.
 void ThawRagdoll(PhysicsState& s, PhysicsState::Ragdoll& rd) {
     rd.Rest = 0.0f;
@@ -2174,6 +2234,8 @@ void FreezeRestingRagdolls(PhysicsState& s, float dt) {
     constexpr float kFreezeAfter = 1.0f;
     for (auto& rd : s.ragdolls) {
         if (!rd.Art || rd.Frozen) continue;
+        // Passing the bodies it began in: clear of them (a hand's breadth), it collides with them again.
+        if (rd.PassBodies && !TouchesOtherBody(s, rd, 0.05f)) SetPassBodies(s, rd, false);
         bool held = false; // a gun still in its hand: that joint needs the link in the scene
         for (PxJoint* j : rd.Attach) held = held || j;
         if (held || !rd.Art->isSleeping()) { rd.Rest = 0.0f; continue; }
@@ -2557,6 +2619,10 @@ int CreateRagdoll(unsigned entity, const RagdollPart* parts, int count, const Ra
             j->setJointVelocity(kSphericalAxes[k], v);
         }
     }
+    // Begun in or on another body (a soldier's capsule passes the dead: he died standing in one), it passes the bodies till it is
+    // clear of them. Pushed out of a frozen corpse - as immovable as a wall - it went the only way left, down through the floor; out
+    // of a moving one the pair's solve blew up, and the last sane pose it went back to was already through it.
+    if (TouchesOtherBody(s, rd, 0.0f)) SetPassBodies(s, rd, true);
     rd.Good = art->createCache();
     if (rd.Good) art->copyInternalStateToCache(*rd.Good, PxArticulationCacheFlag::ePOSITION | PxArticulationCacheFlag::eROOT_TRANSFORM);
     return id;
@@ -3094,16 +3160,50 @@ void DestroyNpcCharacter(CharacterId id) {
     g_State->npcs[(size_t)id] = {};
 }
 
+bool IgnoreRagdollForNpc(CharacterId id, int ragdoll) {
+    PxCapsuleController* c = NpcController(id);
+    PxRigidActor* a = c ? c->getActor() : nullptr;
+    if (!a) return false;
+    const bool on = ValidRagdoll(ragdoll);
+    std::vector<PxShape*> shapes(a->getNbShapes());
+    a->getShapes(shapes.data(), (PxU32)shapes.size());
+    for (PxShape* sh : shapes) {
+        PxFilterData f = sh->getSimulationFilterData();
+        // As IgnoreRagdollParts: slot 16 of the ragdoll's own numbering, every part's bit in the mask.
+        f.word2 = on ? (((PxU32)ragdoll + 1u) | (16u << 16)) : 0u;
+        f.word3 = on ? 0xFFFFu : 0u;
+        sh->setSimulationFilterData(f);
+    }
+    if (a->getScene()) g_State->scene->resetFiltering(*a);
+    return true;
+}
+
+void SetNpcPassesRagdolls(CharacterId id, bool on) {
+    PxCapsuleController* c = NpcController(id);
+    PxRigidActor* a = c ? c->getActor() : nullptr;
+    if (!a || g_State->npcs[(size_t)id].passRagdolls == on) return;
+    g_State->npcs[(size_t)id].passRagdolls = on;
+    std::vector<PxShape*> shapes(a->getNbShapes());
+    a->getShapes(shapes.data(), (PxU32)shapes.size());
+    for (PxShape* sh : shapes) {
+        PxFilterData f = sh->getSimulationFilterData();
+        f.word1 = on ? (f.word1 | kPassRagdolls) : (f.word1 & ~kPassRagdolls);
+        sh->setSimulationFilterData(f);
+    }
+    if (a->getScene()) g_State->scene->resetFiltering(*a);
+}
+
 unsigned MoveNpcCharacter(CharacterId id, const float disp[3], float dt) {
     PxCapsuleController* c = NpcController(id);
     if (!c || dt <= 0.0f) return 0;
     // Same collision-matrix row as a Default-layer body; ignore the NPC's own hitboxes.
     struct LayerFilter : PxQueryFilterCallback {
-        PxU32 Mask = 0xFFFFFFFFu; std::uint32_t Self = 0xFFFFFFFFu;
+        PxU32 Mask = 0xFFFFFFFFu; std::uint32_t Self = 0xFFFFFFFFu; bool PassRagdolls = false;
         PxQueryHitType::Enum preFilter(const PxFilterData&, const PxShape* shape, const PxRigidActor* actor,
                                        PxHitFlags&) override {
             if (actor && UserDataToEntity(actor->userData) == Self) return PxQueryHitType::eNONE;
             if (shape->getFlags() & PxShapeFlag::eTRIGGER_SHAPE) return PxQueryHitType::eNONE;
+            if (PassRagdolls && IsRagdollPart(shape->getSimulationFilterData())) return PxQueryHitType::eNONE;
             const PxU32 layer = shape->getSimulationFilterData().word1 & 31u;
             return ((Mask >> layer) & 1u) ? PxQueryHitType::eBLOCK : PxQueryHitType::eNONE;
         }
@@ -3114,6 +3214,7 @@ unsigned MoveNpcCharacter(CharacterId id, const float disp[3], float dt) {
     } layerFilter;
     layerFilter.Mask = ProjectSettings::Physics().LayerCollisionMask[0];
     layerFilter.Self = g_State->npcs[(size_t)id].entity;
+    layerFilter.PassRagdolls = g_State->npcs[(size_t)id].passRagdolls;
     PxControllerFilters filters(nullptr, &layerFilter, nullptr);
     const PxControllerCollisionFlags f = c->move(PxVec3(disp[0], disp[1], disp[2]), 0.001f, dt, filters);
     unsigned out = 0;
