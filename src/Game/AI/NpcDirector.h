@@ -187,6 +187,8 @@ public:
     // 3 None) instead of its NPC Spawn's (-1: the spawn's own) - the dummies' room in Apartment Hallway made a fight.
     int ForceBrain = -1, ForceWeapon = -1;
     glm::vec3 SpawnShift{0.0f};          // tests: every spawn point moved by this (a test run in another room)
+    bool TestDummies = false;            // tests: training dummies, as the wounded tests want them - spawn 0 bare with an AK, spawn 1
+                                         // dressed and unarmed (the scene's spawns are fighters)
 
     struct SpawnPoint {
         glm::vec3 Pos{0.0f};

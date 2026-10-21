@@ -196,11 +196,18 @@ void CombatHud::Draw(const CombatHudInput& in, NpcDirector& npcs) {
     const float now = npcs.Now();
     const float s = m_Text.Scale();
     if (in.AiOverlay) DrawDebug(in, npcs);
-    if (!in.PlayerDead) {
-        if (in.Armed && in.Magazine > 0) DrawAmmo(in);
-        DrawAwareness(in, npcs);
-        if (in.God) m_Text.Text(40.0f * s, (float)in.Height - 50.0f * s - 34.0f * s, "GOD MODE", 24.0f, glm::vec4(1.0f, 0.82f, 0.25f, 0.95f));
+    // (The player's half is off until the HUD is redesigned: only the AI debug overlay above draws.)
+    constexpr bool kPlayerHud = false;
+    if constexpr (kPlayerHud) {
+        if (!in.PlayerDead) {
+            if (in.Armed && in.Magazine > 0) DrawAmmo(in);
+            DrawAwareness(in, npcs);
+            if (in.God) m_Text.Text(40.0f * s, (float)in.Height - 50.0f * s - 34.0f * s, "GOD MODE", 24.0f, glm::vec4(1.0f, 0.82f, 0.25f, 0.95f));
+        }
+        DrawFeed(in, now);
+    } else {
+        (void)now;
+        (void)s;
     }
-    DrawFeed(in, now);
     m_Text.Flush(in.Fbo);
 }

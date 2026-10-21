@@ -27332,15 +27332,15 @@
     },
     {
       "NPC Spawn": {
-        "Bare": true,
-        "Brain": "Training Dummy",
+        "Bare": false,
+        "Brain": "Squad AI",
         "Outfit Seed": 1,
         "Skill": 0.5,
         "Squad": 0,
         "Weapon": "AKS-74U"
       },
       "id": 965,
-      "name": "Test NPC - Naked",
+      "name": "Soldier Spawn A",
       "order": 965,
       "parentId": 2,
       "position": [
@@ -27363,14 +27363,14 @@
     {
       "NPC Spawn": {
         "Bare": false,
-        "Brain": "Training Dummy",
-        "Outfit Seed": 1,
+        "Brain": "Squad AI",
+        "Outfit Seed": 2,
         "Skill": 0.5,
         "Squad": 0,
-        "Weapon": "None"
+        "Weapon": "AKS-74U"
       },
       "id": 966,
-      "name": "Test NPC - Unarmed",
+      "name": "Soldier Spawn B",
       "order": 966,
       "parentId": 2,
       "position": [

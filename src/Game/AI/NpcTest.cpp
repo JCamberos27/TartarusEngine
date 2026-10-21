@@ -129,6 +129,7 @@ void NpcTest::Drive(Player& player, FirstPersonPresentation& weapon, NpcDirector
     if (m_Scenario == "aptwounds") {
         // In 301's living room by the arch (or the test room), looking down the room at the two dummies.
         npcs.SpawnShift = m_RoomShift;
+        npcs.TestDummies = true; // (before the director's first spawns: Drive runs before its first Think)
         const glm::vec3 at = glm::vec3(-8.0f, 0.0f, -4.4f) + m_RoomShift;
         glm::vec3 feet;
         PhysicsWorld::GetCharacterFootPosition(&feet.x);
@@ -140,6 +141,7 @@ void NpcTest::Drive(Player& player, FirstPersonPresentation& weapon, NpcDirector
         wantPitch = -15.0f;
     }
     if (m_Scenario == "escape" || m_Scenario == "escapeshut") {
+        npcs.TestDummies = true; // (the unarmed dummy is the one that's shot)
         // By 301's arch (the way out behind him), then - kEMoveAt s after the shot - off at the window end.
         const bool moved = m_EShotAt >= 0.0f && m_Time - m_EShotAt > kEMoveAt;
         const glm::vec3 at = moved ? glm::vec3(-9.6f, 0.0f, -9.2f) : glm::vec3(-6.9f, 0.0f, -4.6f);
