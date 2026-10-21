@@ -506,6 +506,9 @@ class Hallway(k.Scene):
         fpc = ctrl['First Person Controller']
         fpc['Primary Weapon Prefab'] = 'assets/Weapons/AKS74U/AKS74U.prefab'
         fpc['Secondary Weapon Prefab'] = 'assets/Weapons/Remington870/Remington870.prefab'
+        # Arena's 0.3 m capsule (0.7 m wide with PhysX's contact offset) scrapes the 0.87 m a door leaves open; 0.22
+        # is a person's shoulders seen from above
+        fpc['Capsule Radius'] = 0.22
         sid = self.empty('Player Spawn', -1, (1.0 - L / 2, 0.0, 0.0), yaw=-90.0, **ctrl)  # facing +X
         bid = self.empty('Player Body', sid, tuple(body['position']), **{kk: v for kk, v in body.items() if kk[0].isupper()})
         for p in pieces:
@@ -560,7 +563,7 @@ def build(repo):
     s.empty('Moon', -1, (0, 30, 0), pitch=-25.0, yaw=-120.0, Light={
         'Type': 'Directional', 'Color': [0.78, 0.86, 1.0], 'Intensity': 0.8, 'Range': 200.0, 'Spot Angle': 35.0,
         'Angular Size': 0.53, 'Cast Shadows': True, 'Shadow Bias': 1.0, 'Shadow Normal Bias': 1.0,
-        'Shadow Softness': 0.15, 'Shadow Resolution': 'Follow global', 'Shadow Update Mode': 'Dynamic', 'ColorTempK': 0.0,
+        'Shadow Softness': 0.05, 'Shadow Resolution': 'Follow global', 'Shadow Update Mode': 'Dynamic', 'ColorTempK': 0.0,
         'Culling Mask': -1})
     s.plan()
     # centred on the origin (the editor's default and smoke-test cameras orbit it); the plan stays in corridor coordinates

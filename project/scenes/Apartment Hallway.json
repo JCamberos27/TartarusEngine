@@ -25072,7 +25072,7 @@
         "Shadow Bias": 1.0,
         "Shadow Normal Bias": 1.0,
         "Shadow Resolution": "Follow global",
-        "Shadow Softness": 0.15,
+        "Shadow Softness": 0.05,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 35.0,
         "Type": "Directional"
@@ -27733,7 +27733,7 @@
         "Assist Range": 30.0,
         "Camera Bone": "head",
         "Capsule Height": 1.850000023841858,
-        "Capsule Radius": 0.30000001192092896,
+        "Capsule Radius": 0.22,
         "Coyote Time": 0.10000000149011612,
         "Eye Height": 1.7000000476837158,
         "Eye Radius": 0.11999999731779099,
