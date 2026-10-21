@@ -372,7 +372,7 @@ jobs:
             "PhysX.dll", "PhysXCommon.dll", "PhysXFoundation.dll", "PhysXCooking.dll",
             "LICENSE", "THIRD-PARTY-NOTICES.md", "README-FIRST-RUN.txt",
             "assets\shaders\ModelFragment.glsl", "assets\fonts\fa-solid-900.ttf",
-            "project\scenes\Master Scene.json"
+            "project\scenes\Apartment Hallway.json"
           )
           $missing = $required | Where-Object { -not (Test-Path (Join-Path $root $_)) }
           if ($missing) { throw "package is missing: $($missing -join ', ')" }
