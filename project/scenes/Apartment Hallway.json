@@ -23495,8 +23495,7 @@
         "Shadow Softness": 0.15,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 35.0,
-        "Type": "Directional",
-        "Volumetric Intensity": 5.0
+        "Type": "Directional"
       },
       "id": 1,
       "name": "Moon",
@@ -24133,8 +24132,7 @@
         "Shadow Softness": 1.1,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 72.0,
-        "Type": "Spot",
-        "Volumetric Intensity": 1.0
+        "Type": "Spot"
       },
       "id": 892,
       "name": "Lamp_Fluorescent_A Light",
@@ -24177,8 +24175,7 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 30.0,
-        "Type": "Point",
-        "Volumetric Intensity": 0.0
+        "Type": "Point"
       },
       "id": 893,
       "name": "Lamp_Fluorescent_A Ceiling Glow",
@@ -24221,8 +24218,7 @@
         "Shadow Softness": 1.1,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 72.0,
-        "Type": "Spot",
-        "Volumetric Intensity": 1.0
+        "Type": "Spot"
       },
       "Light Flicker": {
         "Depth": 1.0,
@@ -24272,8 +24268,7 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 30.0,
-        "Type": "Point",
-        "Volumetric Intensity": 0.0
+        "Type": "Point"
       },
       "Light Flicker": {
         "Depth": 1.0,
@@ -24323,8 +24318,7 @@
         "Shadow Softness": 1.1,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 72.0,
-        "Type": "Spot",
-        "Volumetric Intensity": 1.0
+        "Type": "Spot"
       },
       "id": 898,
       "name": "Lamp_Fluorescent_A Light",
@@ -24367,8 +24361,7 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 30.0,
-        "Type": "Point",
-        "Volumetric Intensity": 0.0
+        "Type": "Point"
       },
       "id": 899,
       "name": "Lamp_Fluorescent_A Ceiling Glow",
@@ -24411,8 +24404,7 @@
         "Shadow Softness": 1.1,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 72.0,
-        "Type": "Spot",
-        "Volumetric Intensity": 1.0
+        "Type": "Spot"
       },
       "Light Flicker": {
         "Depth": 0.7,
@@ -24462,8 +24454,7 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 30.0,
-        "Type": "Point",
-        "Volumetric Intensity": 0.0
+        "Type": "Point"
       },
       "Light Flicker": {
         "Depth": 0.7,
@@ -24513,8 +24504,7 @@
         "Shadow Softness": 1.1,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 72.0,
-        "Type": "Spot",
-        "Volumetric Intensity": 1.0
+        "Type": "Spot"
       },
       "id": 905,
       "name": "Lamp_Fluorescent_A Light",
@@ -24557,8 +24547,7 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 30.0,
-        "Type": "Point",
-        "Volumetric Intensity": 0.0
+        "Type": "Point"
       },
       "id": 906,
       "name": "Lamp_Fluorescent_A Ceiling Glow",
@@ -24601,8 +24590,7 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 30.0,
-        "Type": "Point",
-        "Volumetric Intensity": 0.0
+        "Type": "Point"
       },
       "id": 907,
       "name": "Moon Bounce - Apartment 301/Bathroom",
@@ -24645,8 +24633,7 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 30.0,
-        "Type": "Point",
-        "Volumetric Intensity": 0.0
+        "Type": "Point"
       },
       "id": 908,
       "name": "Moon Bounce - Apartment 301/Entry",
@@ -24689,8 +24676,7 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 30.0,
-        "Type": "Point",
-        "Volumetric Intensity": 0.0
+        "Type": "Point"
       },
       "id": 909,
       "name": "Moon Bounce - Apartment 301/Living Room",
@@ -24733,8 +24719,7 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 30.0,
-        "Type": "Point",
-        "Volumetric Intensity": 0.0
+        "Type": "Point"
       },
       "id": 910,
       "name": "Moon Bounce - Apartment 302/Bathroom",
@@ -24777,8 +24762,7 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 30.0,
-        "Type": "Point",
-        "Volumetric Intensity": 0.0
+        "Type": "Point"
       },
       "id": 911,
       "name": "Moon Bounce - Apartment 302/Entry",
@@ -24821,8 +24805,7 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 30.0,
-        "Type": "Point",
-        "Volumetric Intensity": 0.0
+        "Type": "Point"
       },
       "id": 912,
       "name": "Moon Bounce - Apartment 302/Bedroom",
@@ -24865,8 +24848,7 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 30.0,
-        "Type": "Point",
-        "Volumetric Intensity": 0.0
+        "Type": "Point"
       },
       "id": 913,
       "name": "Moon Bounce - Apartment 302/Living Room",
@@ -24909,8 +24891,7 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 30.0,
-        "Type": "Point",
-        "Volumetric Intensity": 0.0
+        "Type": "Point"
       },
       "id": 914,
       "name": "Moon Bounce - Apartment 303/Bathroom",
@@ -24953,8 +24934,7 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 30.0,
-        "Type": "Point",
-        "Volumetric Intensity": 0.0
+        "Type": "Point"
       },
       "id": 915,
       "name": "Moon Bounce - Apartment 303/Bedroom 1",
@@ -24997,8 +24977,7 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 30.0,
-        "Type": "Point",
-        "Volumetric Intensity": 0.0
+        "Type": "Point"
       },
       "id": 916,
       "name": "Moon Bounce - Apartment 303/Entry",
@@ -25041,8 +25020,7 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 30.0,
-        "Type": "Point",
-        "Volumetric Intensity": 0.0
+        "Type": "Point"
       },
       "id": 917,
       "name": "Moon Bounce - Apartment 303/Bedroom 2",
@@ -25085,8 +25063,7 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 30.0,
-        "Type": "Point",
-        "Volumetric Intensity": 0.0
+        "Type": "Point"
       },
       "id": 918,
       "name": "Moon Bounce - Apartment 303/Living Room",
@@ -25129,8 +25106,7 @@
         "Shadow Softness": 1.1,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 72.0,
-        "Type": "Spot",
-        "Volumetric Intensity": 1.0
+        "Type": "Spot"
       },
       "id": 920,
       "name": "Lamp_Ceiling_A Light",
@@ -25173,8 +25149,7 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 30.0,
-        "Type": "Point",
-        "Volumetric Intensity": 0.0
+        "Type": "Point"
       },
       "id": 921,
       "name": "Lamp_Ceiling_A Bounce",
@@ -25217,8 +25192,7 @@
         "Shadow Softness": 1.1,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 72.0,
-        "Type": "Spot",
-        "Volumetric Intensity": 1.0
+        "Type": "Spot"
       },
       "id": 923,
       "name": "Lamp_Ceiling_A Light",
@@ -25261,8 +25235,7 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 30.0,
-        "Type": "Point",
-        "Volumetric Intensity": 0.0
+        "Type": "Point"
       },
       "id": 924,
       "name": "Lamp_Ceiling_A Bounce",
@@ -25305,8 +25278,7 @@
         "Shadow Softness": 1.1,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 72.0,
-        "Type": "Spot",
-        "Volumetric Intensity": 1.0
+        "Type": "Spot"
       },
       "id": 926,
       "name": "Lamp_Ceiling_A Light",
@@ -25349,8 +25321,7 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 30.0,
-        "Type": "Point",
-        "Volumetric Intensity": 0.0
+        "Type": "Point"
       },
       "id": 927,
       "name": "Lamp_Ceiling_A Bounce",
@@ -25393,8 +25364,7 @@
         "Shadow Softness": 1.1,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 72.0,
-        "Type": "Spot",
-        "Volumetric Intensity": 1.0
+        "Type": "Spot"
       },
       "id": 929,
       "name": "Lamp_Ceiling_A Light",
@@ -25437,8 +25407,7 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 30.0,
-        "Type": "Point",
-        "Volumetric Intensity": 0.0
+        "Type": "Point"
       },
       "id": 930,
       "name": "Lamp_Ceiling_A Bounce",
@@ -25481,8 +25450,7 @@
         "Shadow Softness": 1.1,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 72.0,
-        "Type": "Spot",
-        "Volumetric Intensity": 1.0
+        "Type": "Spot"
       },
       "Light Flicker": {
         "Depth": 0.55,
@@ -25532,8 +25500,7 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 30.0,
-        "Type": "Point",
-        "Volumetric Intensity": 0.0
+        "Type": "Point"
       },
       "Light Flicker": {
         "Depth": 0.55,
@@ -25583,8 +25550,7 @@
         "Shadow Softness": 1.1,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 72.0,
-        "Type": "Spot",
-        "Volumetric Intensity": 1.0
+        "Type": "Spot"
       },
       "id": 935,
       "name": "Lamp_Ceiling_A Light",
@@ -25627,8 +25593,7 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 30.0,
-        "Type": "Point",
-        "Volumetric Intensity": 0.0
+        "Type": "Point"
       },
       "id": 936,
       "name": "Lamp_Ceiling_A Bounce",
@@ -55134,11 +55099,5 @@
   "ssaoRadius": 0.45,
   "tonemapOperator": 1,
   "vignetteIntensity": 0.3,
-  "vignetteSmoothness": 0.55,
-  "volAnisotropy": 0.7,
-  "volDensity": 0.08,
-  "volDistance": 30.0,
-  "volHeightFalloff": 0.0,
-  "volQuality": 1,
-  "volumetricEnabled": true
+  "vignetteSmoothness": 0.55
 }
