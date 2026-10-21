@@ -233,12 +233,16 @@ void RegisterPanelsTests() {
         Do("note the froxel passes run so far", [](Ctx&) { g_Number = (double)VolumetricFog::RenderCount(); }),
         Click(ByLabel("Volumetric fog", "###Lighting")), Wait(3),
         ExpectTrue("on", [](Ctx& c) { return c.W.VolumetricEnabled; }),
-        Until("its controls", [](Ctx&) {
-            return Find(ByLabel("Anisotropy", "###Lighting")) && Find(ByLabel("Height falloff", "###Lighting"));
-        }),
         Wait(8),
         ExpectTrue("the Scene view ran the froxel passes", [](Ctx&) { return (double)VolumetricFog::RenderCount() > g_Number; }),
         Shot("volumetric fog", {"###Scene", "###Lighting"}),
+        // Its last control, below the fold of the panel (a clipped widget isn't registered until it's scrolled to).
+        InspReveal(ByExact("Quality", "###Lighting")),
+        Click(ByExact("Quality", "###Lighting")), Wait(2),
+        Click(ByLabel("High", "##Combo")), Wait(4),
+        ExpectTrue("Quality = High", [](Ctx& c) { return c.W.VolumetricQuality == 2; }),
+        Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
+        ExpectTrue("undo -> Medium", [](Ctx& c) { return c.W.VolumetricQuality == 1 && c.W.VolumetricEnabled; }),
         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
         ExpectTrue("undo -> off", [](Ctx& c) { return !c.W.VolumetricEnabled; }),
         CloseByX(EditorPanels::Lighting),
