@@ -1162,6 +1162,13 @@ void NpcDirector::Move(World& world, Npc& n, float dt) {
     in.Lean = n.Intent.Lean;
     in.Cower = n.Intent.Cower;
     in.FootIK = FootIKEverywhere || (n.PlayerDist < m_Cfg.FootIKRange && n.OnScreen); // feet on slopes and steps where they can be seen
+    if (n.Prone) { // on its belly: no stance to lean or duck, no feet to stand on
+        in.Prone = true;
+        in.HurtLeg = n.HurtLeg;
+        in.FootIK = false;
+        in.Lean = in.Cower = 0.0f;
+        in.Aiming = false;
+    }
     n.Body.Tick(world, in, dt);
 }
 
@@ -1331,6 +1338,7 @@ void NpcDirector::LateUpdate(World& world, float dt, const PlayerSnapshot& p) {
             }
             continue;
         }
+        if (n.Dropped) n.Dropped->Update(world, dt); // shot down by a leg, it let its gun fall
         n.LateDt += dt;
         if (!n.Animate) {
             // Held this frame (animation LOD): the pose stays, the hitboxes ride the body, the gun's queued reports go out.
@@ -1719,17 +1727,36 @@ void NpcDirector::ApplyDamage(World& world, Npc& n, float amount, HitZone zone, 
         if (glm::dot(flat, flat) > 1e-6f) n.PushVel += glm::normalize(flat) * 1.8f;
         if (glm::length(n.PushVel) > 2.5f) n.PushVel = glm::normalize(n.PushVel) * 2.5f;
     }
-    // Close to death from a leg or the body: it may go down wounded instead of fighting on (once a life).
+    // Close to death from a leg or the body: it may go down wounded instead of fighting on (once a life). Shot down by a
+    // leg, it goes down on its belly (more likely), else on a knee.
     if (attacker < 0 && !n.Dummy && !n.WoundRolled && n.Health < 0.2f * n.MaxHealth && (region == HitRegion::Leg || region == HitRegion::Torso)) {
         n.WoundRolled = true;
-        if (std::uniform_real_distribution<float>(0.0f, 1.0f)(m_Rng) < m_WoundChance) BecomeWounded(n);
+        const bool leg = region == HitRegion::Leg;
+        if (std::uniform_real_distribution<float>(0.0f, 1.0f)(m_Rng) < (leg ? m_LegDownChance : m_WoundChance)) {
+            int side = -1;
+            if (leg) {
+                // The hitbox's leg (7, 8 left; 9, 10 right), else the side of the body the round struck (model +X is its left).
+                if (part >= 7 && part <= 10) side = part <= 8 ? 0 : 1;
+                else side = glm::dot(point - n.Feet, glm::vec3(std::cos(n.Body.Yaw()), 0.0f, -std::sin(n.Body.Yaw()))) >= 0.0f ? 0 : 1;
+            }
+            BecomeWounded(world, n, side);
+        }
     }
     if (n.Health < 0.35f * n.MaxHealth && !n.Wounded) Callout(n, CallKind::Wounded);
 }
 
-void NpcDirector::BecomeWounded(Npc& n) {
+void NpcDirector::BecomeWounded(World& world, Npc& n, int hurtLeg) {
     n.Wounded = true;
     n.WoundedAt = m_Now;
+    if (hurtLeg >= 0) {
+        // Down on its belly: the gun falls from its hands (the hands go to the wound, then the floor), and it crawls.
+        n.Prone = true;
+        n.HurtLeg = hurtLeg;
+        n.TriggerHeld = false;
+        if (n.Weapon && n.Weapon->IsActive()) n.Dropped = NpcDroppedWeapon::Drop(world, n.Body, n.Weapon->WeaponEntity(), glm::vec3(0.0f, -1.0f, 0.0f));
+        if (n.Weapon) n.Weapon->Stop(world);
+        n.Weapon.reset();
+    }
     n.Doing = Behaviour::Wounded;
     n.DoingSince = m_Now;
     n.Phase = 0;
@@ -1789,7 +1816,9 @@ void NpcDirector::FinishDeath(World& world, Npc& n) {
     PROFILE_SCOPE("AI Death");
     n.DeathPending = false;
     // The gun leaves his hands (copied before the weapon presentation goes) and the arm solve lets go.
-    if (n.Weapon && n.Weapon->IsActive()) n.Dropped = NpcDroppedWeapon::Drop(world, n.Body, n.Weapon->WeaponEntity(), n.DeathDir * n.DeathShove);
+    // (Shot down by a leg, it dropped its gun already: that one lies where it fell.)
+    const bool dropsGun = n.Weapon && n.Weapon->IsActive();
+    if (dropsGun) n.Dropped = NpcDroppedWeapon::Drop(world, n.Body, n.Weapon->WeaponEntity(), n.DeathDir * n.DeathShove);
     if (n.Weapon) n.Weapon->Stop(world);
     n.Weapon.reset();
     // Down: the animators stop and the physics takes the body, shoved along the round's line on the bone it struck.
@@ -1812,7 +1841,7 @@ void NpcDirector::FinishDeath(World& world, Npc& n) {
     m_DeathBones.erase(n.Index);
     n.Ragdoll->Update(0.0f); // the pieces take the parts' first pose now
     // The gun stays in the hand nearest its grip for a moment, then the fingers let go.
-    if (n.Dropped) {
+    if (n.Dropped && dropsGun) {
         const glm::vec3 at = n.Dropped->Position(world);
         const int hand = glm::length(n.Ragdoll->PartPosition(NpcRagdoll::kHandR) - at) <= glm::length(n.Ragdoll->PartPosition(NpcRagdoll::kHandL) - at)
                              ? NpcRagdoll::kHandR : NpcRagdoll::kHandL;
@@ -1823,7 +1852,12 @@ void NpcDirector::FinishDeath(World& world, Npc& n) {
         float pop = 0.0f;
         for (int k = 0; k < 3; ++k) {
             glm::vec3 b;
-            if (n.Body.BoneWorld(kBones[k], b)) pop = std::max(pop, glm::length(b - n.LastBones[k]));
+            if (!n.Body.BoneWorld(kBones[k], b)) continue;
+            const float d = glm::length(b - n.LastBones[k]);
+            pop = std::max(pop, d);
+            if (d > 0.15f) // which bone, for the test's log
+                std::printf("[NpcTest] %s death pop: %s %.0f cm (last animated (%.2f %.2f %.2f), ragdoll (%.2f %.2f %.2f))%s\n", n.Name.c_str(),
+                            kBones[k], d * 100.0f, n.LastBones[k].x, n.LastBones[k].y, n.LastBones[k].z, b.x, b.y, b.z, n.Prone ? ", prone" : "");
         }
         n.DeathPop = pop;
     }

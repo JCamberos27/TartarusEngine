@@ -157,6 +157,8 @@ public:
     void Kill(World& world, Npc& npc, const glm::vec3& dir, const glm::vec3& point, float shove = 40.0f, int part = -1);
     // Tests: the chance a soldier left under 20% health by a leg or torso hit goes down wounded (default 0.35).
     void SetWoundChance(float chance) { m_WoundChance = chance; }
+    // ... and the chance when it was a leg hit, which puts it on its belly, crawling (default 0.6).
+    void SetLegDownChance(float chance) { m_LegDownChance = chance; }
     bool TrackDeathPop = false;        // record the bones' last animated pose so the ragdoll's first frame can be compared
     bool NoLod = false;                // every soldier animates every frame (tests)
 
@@ -214,7 +216,8 @@ private:
     // `part`: the hitbox part struck (NpcRagdoll's order), -1 when unknown (the capsule: only the zone is known).
     void ApplyDamage(World& world, Npc& n, float amount, HitZone zone, const glm::vec3& point, const glm::vec3& dir, int attacker,
                      int part = -1);
-    void BecomeWounded(Npc& n);
+    // `hurtLeg` (0 left, 1 right): shot down by that leg - the gun drops and it goes prone, dragging the leg. -1: on a knee.
+    void BecomeWounded(World& world, Npc& n, int hurtLeg = -1);
     void FinishDeath(World& world, Npc& n);
     void LatePose(World& world, Npc& n, float dt, const PlayerSnapshot& p, bool alive);
     void UpdateHitboxes(Npc& n, const PlayerSnapshot& p, bool posed);
@@ -276,6 +279,7 @@ private:
     float m_ThinkMs = 0.0f, m_LateMs = 0.0f;
     int m_NextName = 1;
     float m_WoundChance = 0.35f;
+    float m_LegDownChance = 0.6f;
     int m_LookCursor = 0;
     // One cover search (raycasts + paths, the AI's priciest call) per frame across the squad: a second
     // soldier wanting one waits a frame, so a volley that sends everyone to cover is no spike.

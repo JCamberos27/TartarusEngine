@@ -205,6 +205,11 @@
       "name": "HitY",
       "type": "float",
       "default": -1.0
+    },
+    {
+      "name": "GoProne",
+      "type": "trigger",
+      "default": 0.0
     }
   ],
   "tracks": [
@@ -1537,6 +1542,52 @@
                 {
                   "clip": "assets/Animations/Mocap/RootMotion/Crouch/AM_Crouch_Idle_07_Look_Around.fbx",
                   "threshold": 5.0,
+                  "speed": 1.0
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "ProneDrop",
+          "loop": false,
+          "speed": 1.0,
+          "position": [
+            0.0,
+            600.0
+          ],
+          "tags": [
+            "Prone"
+          ],
+          "motions": {
+            "main": {
+              "clip": "assets/Animations/Mocap/RootMotion/Injured/AM_InjuredBelly_DropToFloor.fbx"
+            }
+          }
+        },
+        {
+          "name": "ProneCrawl",
+          "loop": true,
+          "speed": 1.0,
+          "position": [
+            260.0,
+            600.0
+          ],
+          "tags": [
+            "Prone"
+          ],
+          "motions": {
+            "main": {
+              "blendParam": "Speed",
+              "children": [
+                {
+                  "clip": "assets/Animations/Mocap/RootMotion/ProneCrawl/AM_Stand_Trans_ProneCrawl.fbx",
+                  "threshold": 0.0,
+                  "speed": 1.0
+                },
+                {
+                  "clip": "assets/Animations/Mocap/RootMotion/ProneCrawl/AM_ProneCrawl_CrawlStartStop_Fwd.fbx",
+                  "threshold": 0.6,
                   "speed": 1.0
                 }
               ]
@@ -4572,6 +4623,30 @@
           "conditions": [],
           "hasExitTime": true,
           "exitTime": 0.9
+        },
+        {
+          "from": "Any",
+          "to": "ProneDrop",
+          "duration": 0.3,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "GoProne",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "canTransitionToSelf": false,
+          "interruptible": false
+        },
+        {
+          "from": "ProneDrop",
+          "to": "ProneCrawl",
+          "duration": 0.5,
+          "conditions": [],
+          "hasExitTime": true,
+          "exitTime": 0.92
         }
       ]
     },
