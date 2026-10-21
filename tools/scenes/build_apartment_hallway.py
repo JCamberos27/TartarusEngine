@@ -371,6 +371,19 @@ class Hallway(k.Scene):
                 yaw, pos = (90.0 if line < 1e-3 else -90.0), (line, WIN_SILL, along)
             self.model(self.idx, WIN_STEM, grp, pos, yaw, name='Window', scale=WIN_SCALE, castShadows=0, static=True,
                        materials=[{'embedded': self.mats['glass']}, None])
+            # The glass keeps the whole window out of the shadow passes, so its bars cast through invisible stand-ins:
+            # the centre mullion and the two transoms (thirds of the pane), on the wall's centre line.
+            ow, bot, top = WIN_W - 2 * WIN_FRAME, WIN_SILL + WIN_FRAME, WIN_SILL + WIN_H - WIN_FRAME
+            bar = 0.035
+            for name, a, y, w, h in (('Mullion', along, (bot + top) / 2, bar, top - bot),
+                                     ('Transom', along, bot + (top - bot) / 3, ow, bar),
+                                     ('Transom', along, bot + 2 * (top - bot) / 3, ow, bar)):
+                if axis == 'x':
+                    self.box(f'Window {name} (shadow)', grp, (a, y, line), (w, h, 0.03), self.mats['hidden'], collider=False,
+                             castShadows=3, static=True)
+                else:
+                    self.box(f'Window {name} (shadow)', grp, (line, y, a), (0.03, h, w), self.mats['hidden'], collider=False,
+                             castShadows=3, static=True)
             # an interior sill board, 3.5 cm proud
             inward = 1 if (axis == 'x' and line < 0) or (axis == 'z' and line < 1e-3) else -1
             t = self.thick(axis, line)
@@ -404,7 +417,7 @@ class Hallway(k.Scene):
         extra = k.light_flicker(**flicker) if flicker else {}
         # a ceiling fitting lights the room below it: a wide spot aimed straight down (one shadow view, not a cube's six)
         self.light(f'{stem} Light', parent, (x, H - drop - 0.06, z), intensity, rng, shadows=True, kelvin=kelvin,
-                   spot=72.0, softness=1.6, **extra)
+                   spot=72.0, softness=1.1, **extra)
         # a tube throws light sideways too: a small shadowless glow lights the ceiling round the fitting
         if stem.startswith('Lamp_Fluorescent'):
             self.light(f'{stem} Ceiling Glow', parent, (x, H - drop - 0.15, z), intensity * 0.3, 2.4, kelvin=kelvin, **extra)
@@ -524,8 +537,8 @@ def build(repo):
     d.update({'exposureEV': 1.8, 'autoExposure': False, 'tonemapOperator': 1, 'skyAmbientIntensity': 0.08,
               'bloomEnabled': True, 'bloomThreshold': 1.0, 'bloomKnee': 0.5, 'bloomIntensity': 0.12,
               'fogEnabled': False, 'ssaoEnabled': True, 'ssaoIntensity': 1.25, 'ssaoRadius': 0.45,
-              'shadowsEnabled': True, 'shadowResolution': 2048, 'shadowCascades': 2, 'shadowDistance': 40.0,
-              'maxSpotShadows': 6, 'maxPointShadows': 0, 'vignetteIntensity': 0.3, 'vignetteSmoothness': 0.55,
+              'shadowsEnabled': True, 'shadowResolution': 4096, 'shadowCascades': 3, 'shadowDistance': 60.0,
+              'maxSpotShadows': 12, 'maxPointShadows': 0, 'vignetteIntensity': 0.3, 'vignetteSmoothness': 0.55,
               'filmGrain': 0.0, 'motionBlur': False, 'depthOfField': False, 'chromaticAberration': 0.0,
               'gradeContrast': 6.0, 'gradeSaturation': -6.0, 'gradeTemperature': 0.0})
     d['skyHdriPath'] = ''
@@ -533,7 +546,7 @@ def build(repo):
     s.empty('Moon', -1, (0, 30, 0), pitch=-25.0, yaw=-120.0, Light={
         'Type': 'Directional', 'Color': [0.78, 0.86, 1.0], 'Intensity': 0.8, 'Range': 200.0, 'Spot Angle': 35.0,
         'Angular Size': 0.53, 'Cast Shadows': True, 'Shadow Bias': 1.0, 'Shadow Normal Bias': 1.0,
-        'Shadow Softness': 0.6, 'Shadow Resolution': 'Follow global', 'Shadow Update Mode': 'Dynamic', 'ColorTempK': 0.0,
+        'Shadow Softness': 0.15, 'Shadow Resolution': 'Follow global', 'Shadow Update Mode': 'Dynamic', 'ColorTempK': 0.0,
         'Culling Mask': -1})
     s.plan()
     # centred on the origin (the editor's default and smoke-test cameras orbit it); the plan stays in corridor coordinates

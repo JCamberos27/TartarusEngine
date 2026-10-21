@@ -18852,12 +18852,186 @@
       "static": true
     },
     {
+      "castShadows": 3,
       "color": [
         1.0,
         1.0,
         1.0
       ],
       "id": 791,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Mullion (shadow)",
+      "order": 791,
+      "parentId": 789,
+      "position": [
+        1.55,
+        1.5855,
+        -9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.035,
+        1.6675,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 792,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 792,
+      "parentId": 789,
+      "position": [
+        1.55,
+        1.3076,
+        -9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.897,
+        0.035,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 793,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 793,
+      "parentId": 789,
+      "position": [
+        1.55,
+        1.8634,
+        -9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.897,
+        0.035,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 794,
       "materials": [
         {
           "embedded": {
@@ -18888,7 +19062,7 @@
         }
       ],
       "name": "Sill",
-      "order": 791,
+      "order": 794,
       "parentId": 789,
       "position": [
         1.55,
@@ -18909,21 +19083,22 @@
       "static": true
     },
     {
+      "castShadows": 3,
       "color": [
         1.0,
         1.0,
         1.0
       ],
-      "id": 793,
+      "id": 796,
       "materials": [
         {
           "embedded": {
             "albedoMap": "",
             "aoMap": "",
             "baseColor": [
-              0.86,
-              0.85,
-              0.82
+              0.5,
+              0.5,
+              0.5
             ],
             "emissiveColor": [
               0.0,
@@ -18937,20 +19112,20 @@
             "metallicMap": "",
             "metallicRoughnessMap": "",
             "normalMap": "",
-            "roughness": 0.4,
+            "roughness": 1.0,
             "roughnessMap": "",
             "triplanar": false,
             "triplanarScale": 1.0
           }
         }
       ],
-      "name": "Sill",
-      "order": 793,
+      "name": "Window Mullion (shadow)",
+      "order": 796,
       "parentId": 789,
       "position": [
         3.45,
-        0.7392,
-        -9.5825
+        1.5855,
+        -9.675
       ],
       "rotation": [
         0.0,
@@ -18959,70 +19134,14 @@
         1.0
       ],
       "scale": [
-        1.017,
-        0.025,
-        0.185
+        0.035,
+        1.6675,
+        0.03
       ],
       "static": true
     },
     {
-      "color": [
-        1.0,
-        1.0,
-        1.0
-      ],
-      "id": 795,
-      "materials": [
-        {
-          "embedded": {
-            "albedoMap": "",
-            "aoMap": "",
-            "baseColor": [
-              0.86,
-              0.85,
-              0.82
-            ],
-            "emissiveColor": [
-              0.0,
-              0.0,
-              0.0
-            ],
-            "emissiveMap": "",
-            "emissiveStrength": 0.0,
-            "factorsScaleMaps": true,
-            "metallic": 0.0,
-            "metallicMap": "",
-            "metallicRoughnessMap": "",
-            "normalMap": "",
-            "roughness": 0.4,
-            "roughnessMap": "",
-            "triplanar": false,
-            "triplanarScale": 1.0
-          }
-        }
-      ],
-      "name": "Sill",
-      "order": 795,
-      "parentId": 789,
-      "position": [
-        6.7,
-        0.7392,
-        -9.5825
-      ],
-      "rotation": [
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      ],
-      "scale": [
-        1.017,
-        0.025,
-        0.185
-      ],
-      "static": true
-    },
-    {
+      "castShadows": 3,
       "color": [
         1.0,
         1.0,
@@ -19035,9 +19154,9 @@
             "albedoMap": "",
             "aoMap": "",
             "baseColor": [
-              0.86,
-              0.85,
-              0.82
+              0.5,
+              0.5,
+              0.5
             ],
             "emissiveColor": [
               0.0,
@@ -19051,20 +19170,20 @@
             "metallicMap": "",
             "metallicRoughnessMap": "",
             "normalMap": "",
-            "roughness": 0.4,
+            "roughness": 1.0,
             "roughnessMap": "",
             "triplanar": false,
             "triplanarScale": 1.0
           }
         }
       ],
-      "name": "Sill",
+      "name": "Window Transom (shadow)",
       "order": 797,
       "parentId": 789,
       "position": [
-        9.3,
-        0.7392,
-        -9.5825
+        3.45,
+        1.3076,
+        -9.675
       ],
       "rotation": [
         0.0,
@@ -19073,9 +19192,67 @@
         1.0
       ],
       "scale": [
-        1.017,
-        0.025,
-        0.185
+        0.897,
+        0.035,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 798,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 798,
+      "parentId": 789,
+      "position": [
+        3.45,
+        1.8634,
+        -9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.897,
+        0.035,
+        0.03
       ],
       "static": true
     },
@@ -19119,7 +19296,7 @@
       "order": 799,
       "parentId": 789,
       "position": [
-        10.9,
+        3.45,
         0.7392,
         -9.5825
       ],
@@ -19137,6 +19314,7 @@
       "static": true
     },
     {
+      "castShadows": 3,
       "color": [
         1.0,
         1.0,
@@ -19149,9 +19327,9 @@
             "albedoMap": "",
             "aoMap": "",
             "baseColor": [
-              0.86,
-              0.85,
-              0.82
+              0.5,
+              0.5,
+              0.5
             ],
             "emissiveColor": [
               0.0,
@@ -19165,20 +19343,20 @@
             "metallicMap": "",
             "metallicRoughnessMap": "",
             "normalMap": "",
-            "roughness": 0.4,
+            "roughness": 1.0,
             "roughnessMap": "",
             "triplanar": false,
             "triplanarScale": 1.0
           }
         }
       ],
-      "name": "Sill",
+      "name": "Window Mullion (shadow)",
       "order": 801,
       "parentId": 789,
       "position": [
-        13.6,
-        0.7392,
-        -9.5825
+        6.7,
+        1.5855,
+        -9.675
       ],
       "rotation": [
         0.0,
@@ -19187,13 +19365,72 @@
         1.0
       ],
       "scale": [
-        1.017,
-        0.025,
-        0.185
+        0.035,
+        1.6675,
+        0.03
       ],
       "static": true
     },
     {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 802,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 802,
+      "parentId": 789,
+      "position": [
+        6.7,
+        1.3076,
+        -9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.897,
+        0.035,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
       "color": [
         1.0,
         1.0,
@@ -19206,9 +19443,9 @@
             "albedoMap": "",
             "aoMap": "",
             "baseColor": [
-              0.86,
-              0.85,
-              0.82
+              0.5,
+              0.5,
+              0.5
             ],
             "emissiveColor": [
               0.0,
@@ -19222,20 +19459,20 @@
             "metallicMap": "",
             "metallicRoughnessMap": "",
             "normalMap": "",
-            "roughness": 0.4,
+            "roughness": 1.0,
             "roughnessMap": "",
             "triplanar": false,
             "triplanarScale": 1.0
           }
         }
       ],
-      "name": "Sill",
+      "name": "Window Transom (shadow)",
       "order": 803,
       "parentId": 789,
       "position": [
-        17.4,
-        0.7392,
-        -9.5825
+        6.7,
+        1.8634,
+        -9.675
       ],
       "rotation": [
         0.0,
@@ -19244,9 +19481,9 @@
         1.0
       ],
       "scale": [
-        1.017,
-        0.025,
-        0.185
+        0.897,
+        0.035,
+        0.03
       ],
       "static": true
     },
@@ -19256,7 +19493,7 @@
         1.0,
         1.0
       ],
-      "id": 805,
+      "id": 804,
       "materials": [
         {
           "embedded": {
@@ -19287,10 +19524,10 @@
         }
       ],
       "name": "Sill",
-      "order": 805,
+      "order": 804,
       "parentId": 789,
       "position": [
-        19.6,
+        6.7,
         0.7392,
         -9.5825
       ],
@@ -19308,6 +19545,65 @@
       "static": true
     },
     {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 806,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Mullion (shadow)",
+      "order": 806,
+      "parentId": 789,
+      "position": [
+        9.3,
+        1.5855,
+        -9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.035,
+        1.6675,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
       "color": [
         1.0,
         1.0,
@@ -19320,9 +19616,9 @@
             "albedoMap": "",
             "aoMap": "",
             "baseColor": [
-              0.86,
-              0.85,
-              0.82
+              0.5,
+              0.5,
+              0.5
             ],
             "emissiveColor": [
               0.0,
@@ -19336,20 +19632,20 @@
             "metallicMap": "",
             "metallicRoughnessMap": "",
             "normalMap": "",
-            "roughness": 0.4,
+            "roughness": 1.0,
             "roughnessMap": "",
             "triplanar": false,
             "triplanarScale": 1.0
           }
         }
       ],
-      "name": "Sill",
+      "name": "Window Transom (shadow)",
       "order": 807,
       "parentId": 789,
       "position": [
-        21.1075,
-        0.7392,
-        -2.875
+        9.3,
+        1.3076,
+        -9.675
       ],
       "rotation": [
         0.0,
@@ -19358,9 +19654,67 @@
         1.0
       ],
       "scale": [
-        0.185,
-        0.025,
-        1.017
+        0.897,
+        0.035,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 808,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 808,
+      "parentId": 789,
+      "position": [
+        9.3,
+        1.8634,
+        -9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.897,
+        0.035,
+        0.03
       ],
       "static": true
     },
@@ -19404,9 +19758,9 @@
       "order": 809,
       "parentId": 789,
       "position": [
-        7.6,
+        9.3,
         0.7392,
-        9.5825
+        -9.5825
       ],
       "rotation": [
         0.0,
@@ -19422,6 +19776,7 @@
       "static": true
     },
     {
+      "castShadows": 3,
       "color": [
         1.0,
         1.0,
@@ -19434,9 +19789,9 @@
             "albedoMap": "",
             "aoMap": "",
             "baseColor": [
-              0.86,
-              0.85,
-              0.82
+              0.5,
+              0.5,
+              0.5
             ],
             "emissiveColor": [
               0.0,
@@ -19450,20 +19805,20 @@
             "metallicMap": "",
             "metallicRoughnessMap": "",
             "normalMap": "",
-            "roughness": 0.4,
+            "roughness": 1.0,
             "roughnessMap": "",
             "triplanar": false,
             "triplanarScale": 1.0
           }
         }
       ],
-      "name": "Sill",
+      "name": "Window Mullion (shadow)",
       "order": 811,
       "parentId": 789,
       "position": [
-        3.8,
-        0.7392,
-        9.5825
+        10.9,
+        1.5855,
+        -9.675
       ],
       "rotation": [
         0.0,
@@ -19472,13 +19827,72 @@
         1.0
       ],
       "scale": [
-        1.017,
-        0.025,
-        0.185
+        0.035,
+        1.6675,
+        0.03
       ],
       "static": true
     },
     {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 812,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 812,
+      "parentId": 789,
+      "position": [
+        10.9,
+        1.3076,
+        -9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.897,
+        0.035,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
       "color": [
         1.0,
         1.0,
@@ -19491,9 +19905,9 @@
             "albedoMap": "",
             "aoMap": "",
             "baseColor": [
-              0.86,
-              0.85,
-              0.82
+              0.5,
+              0.5,
+              0.5
             ],
             "emissiveColor": [
               0.0,
@@ -19507,20 +19921,20 @@
             "metallicMap": "",
             "metallicRoughnessMap": "",
             "normalMap": "",
-            "roughness": 0.4,
+            "roughness": 1.0,
             "roughnessMap": "",
             "triplanar": false,
             "triplanarScale": 1.0
           }
         }
       ],
-      "name": "Sill",
+      "name": "Window Transom (shadow)",
       "order": 813,
       "parentId": 789,
       "position": [
-        1.6,
-        0.7392,
-        9.5825
+        10.9,
+        1.8634,
+        -9.675
       ],
       "rotation": [
         0.0,
@@ -19529,9 +19943,9 @@
         1.0
       ],
       "scale": [
-        1.017,
-        0.025,
-        0.185
+        0.897,
+        0.035,
+        0.03
       ],
       "static": true
     },
@@ -19541,7 +19955,7 @@
         1.0,
         1.0
       ],
-      "id": 815,
+      "id": 814,
       "materials": [
         {
           "embedded": {
@@ -19572,12 +19986,12 @@
         }
       ],
       "name": "Sill",
-      "order": 815,
+      "order": 814,
       "parentId": 789,
       "position": [
-        0.0925,
+        10.9,
         0.7392,
-        2.875
+        -9.5825
       ],
       "rotation": [
         0.0,
@@ -19586,13 +20000,72 @@
         1.0
       ],
       "scale": [
-        0.185,
+        1.017,
         0.025,
-        1.017
+        0.185
       ],
       "static": true
     },
     {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 816,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Mullion (shadow)",
+      "order": 816,
+      "parentId": 789,
+      "position": [
+        13.6,
+        1.5855,
+        -9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.035,
+        1.6675,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
       "color": [
         1.0,
         1.0,
@@ -19605,9 +20078,9 @@
             "albedoMap": "",
             "aoMap": "",
             "baseColor": [
-              0.86,
-              0.85,
-              0.82
+              0.5,
+              0.5,
+              0.5
             ],
             "emissiveColor": [
               0.0,
@@ -19621,20 +20094,20 @@
             "metallicMap": "",
             "metallicRoughnessMap": "",
             "normalMap": "",
-            "roughness": 0.4,
+            "roughness": 1.0,
             "roughnessMap": "",
             "triplanar": false,
             "triplanarScale": 1.0
           }
         }
       ],
-      "name": "Sill",
+      "name": "Window Transom (shadow)",
       "order": 817,
       "parentId": 789,
       "position": [
-        11.1,
-        0.7392,
-        9.5825
+        13.6,
+        1.3076,
+        -9.675
       ],
       "rotation": [
         0.0,
@@ -19643,9 +20116,67 @@
         1.0
       ],
       "scale": [
-        1.017,
-        0.025,
-        0.185
+        0.897,
+        0.035,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 818,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 818,
+      "parentId": 789,
+      "position": [
+        13.6,
+        1.8634,
+        -9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.897,
+        0.035,
+        0.03
       ],
       "static": true
     },
@@ -19689,9 +20220,9 @@
       "order": 819,
       "parentId": 789,
       "position": [
-        13.7,
+        13.6,
         0.7392,
-        9.5825
+        -9.5825
       ],
       "rotation": [
         0.0,
@@ -19707,6 +20238,7 @@
       "static": true
     },
     {
+      "castShadows": 3,
       "color": [
         1.0,
         1.0,
@@ -19719,9 +20251,9 @@
             "albedoMap": "",
             "aoMap": "",
             "baseColor": [
-              0.86,
-              0.85,
-              0.82
+              0.5,
+              0.5,
+              0.5
             ],
             "emissiveColor": [
               0.0,
@@ -19735,20 +20267,20 @@
             "metallicMap": "",
             "metallicRoughnessMap": "",
             "normalMap": "",
-            "roughness": 0.4,
+            "roughness": 1.0,
             "roughnessMap": "",
             "triplanar": false,
             "triplanarScale": 1.0
           }
         }
       ],
-      "name": "Sill",
+      "name": "Window Mullion (shadow)",
       "order": 821,
       "parentId": 789,
       "position": [
-        15.3,
-        0.7392,
-        9.5825
+        17.4,
+        1.5855,
+        -9.675
       ],
       "rotation": [
         0.0,
@@ -19757,13 +20289,72 @@
         1.0
       ],
       "scale": [
-        1.017,
-        0.025,
-        0.185
+        0.035,
+        1.6675,
+        0.03
       ],
       "static": true
     },
     {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 822,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 822,
+      "parentId": 789,
+      "position": [
+        17.4,
+        1.3076,
+        -9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.897,
+        0.035,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
       "color": [
         1.0,
         1.0,
@@ -19776,9 +20367,9 @@
             "albedoMap": "",
             "aoMap": "",
             "baseColor": [
-              0.86,
-              0.85,
-              0.82
+              0.5,
+              0.5,
+              0.5
             ],
             "emissiveColor": [
               0.0,
@@ -19792,20 +20383,20 @@
             "metallicMap": "",
             "metallicRoughnessMap": "",
             "normalMap": "",
-            "roughness": 0.4,
+            "roughness": 1.0,
             "roughnessMap": "",
             "triplanar": false,
             "triplanarScale": 1.0
           }
         }
       ],
-      "name": "Sill",
+      "name": "Window Transom (shadow)",
       "order": 823,
       "parentId": 789,
       "position": [
-        17.75,
-        0.7392,
-        9.5825
+        17.4,
+        1.8634,
+        -9.675
       ],
       "rotation": [
         0.0,
@@ -19814,9 +20405,9 @@
         1.0
       ],
       "scale": [
-        1.017,
-        0.025,
-        0.185
+        0.897,
+        0.035,
+        0.03
       ],
       "static": true
     },
@@ -19826,7 +20417,7 @@
         1.0,
         1.0
       ],
-      "id": 825,
+      "id": 824,
       "materials": [
         {
           "embedded": {
@@ -19857,12 +20448,12 @@
         }
       ],
       "name": "Sill",
-      "order": 825,
+      "order": 824,
       "parentId": 789,
       "position": [
-        19.65,
+        17.4,
         0.7392,
-        9.5825
+        -9.5825
       ],
       "rotation": [
         0.0,
@@ -19878,6 +20469,65 @@
       "static": true
     },
     {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 826,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Mullion (shadow)",
+      "order": 826,
+      "parentId": 789,
+      "position": [
+        19.6,
+        1.5855,
+        -9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.035,
+        1.6675,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
       "color": [
         1.0,
         1.0,
@@ -19890,9 +20540,9 @@
             "albedoMap": "",
             "aoMap": "",
             "baseColor": [
-              0.86,
-              0.85,
-              0.82
+              0.5,
+              0.5,
+              0.5
             ],
             "emissiveColor": [
               0.0,
@@ -19906,20 +20556,20 @@
             "metallicMap": "",
             "metallicRoughnessMap": "",
             "normalMap": "",
-            "roughness": 0.4,
+            "roughness": 1.0,
             "roughnessMap": "",
             "triplanar": false,
             "triplanarScale": 1.0
           }
         }
       ],
-      "name": "Sill",
+      "name": "Window Transom (shadow)",
       "order": 827,
       "parentId": 789,
       "position": [
-        0.0925,
-        0.7392,
-        0.0
+        19.6,
+        1.3076,
+        -9.675
       ],
       "rotation": [
         0.0,
@@ -19928,9 +20578,67 @@
         1.0
       ],
       "scale": [
-        0.185,
-        0.025,
-        1.017
+        0.897,
+        0.035,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 828,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 828,
+      "parentId": 789,
+      "position": [
+        19.6,
+        1.8634,
+        -9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.897,
+        0.035,
+        0.03
       ],
       "static": true
     },
@@ -19974,6 +20682,2778 @@
       "order": 829,
       "parentId": 789,
       "position": [
+        19.6,
+        0.7392,
+        -9.5825
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.017,
+        0.025,
+        0.185
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 831,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Mullion (shadow)",
+      "order": 831,
+      "parentId": 789,
+      "position": [
+        21.2,
+        1.5855,
+        -2.875
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.03,
+        1.6675,
+        0.035
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 832,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 832,
+      "parentId": 789,
+      "position": [
+        21.2,
+        1.3076,
+        -2.875
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.03,
+        0.035,
+        0.897
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 833,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 833,
+      "parentId": 789,
+      "position": [
+        21.2,
+        1.8634,
+        -2.875
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.03,
+        0.035,
+        0.897
+      ],
+      "static": true
+    },
+    {
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 834,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.86,
+              0.85,
+              0.82
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.4,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Sill",
+      "order": 834,
+      "parentId": 789,
+      "position": [
+        21.1075,
+        0.7392,
+        -2.875
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.185,
+        0.025,
+        1.017
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 836,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Mullion (shadow)",
+      "order": 836,
+      "parentId": 789,
+      "position": [
+        7.6,
+        1.5855,
+        9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.035,
+        1.6675,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 837,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 837,
+      "parentId": 789,
+      "position": [
+        7.6,
+        1.3076,
+        9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.897,
+        0.035,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 838,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 838,
+      "parentId": 789,
+      "position": [
+        7.6,
+        1.8634,
+        9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.897,
+        0.035,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 839,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.86,
+              0.85,
+              0.82
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.4,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Sill",
+      "order": 839,
+      "parentId": 789,
+      "position": [
+        7.6,
+        0.7392,
+        9.5825
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.017,
+        0.025,
+        0.185
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 841,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Mullion (shadow)",
+      "order": 841,
+      "parentId": 789,
+      "position": [
+        3.8,
+        1.5855,
+        9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.035,
+        1.6675,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 842,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 842,
+      "parentId": 789,
+      "position": [
+        3.8,
+        1.3076,
+        9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.897,
+        0.035,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 843,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 843,
+      "parentId": 789,
+      "position": [
+        3.8,
+        1.8634,
+        9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.897,
+        0.035,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 844,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.86,
+              0.85,
+              0.82
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.4,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Sill",
+      "order": 844,
+      "parentId": 789,
+      "position": [
+        3.8,
+        0.7392,
+        9.5825
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.017,
+        0.025,
+        0.185
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 846,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Mullion (shadow)",
+      "order": 846,
+      "parentId": 789,
+      "position": [
+        1.6,
+        1.5855,
+        9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.035,
+        1.6675,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 847,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 847,
+      "parentId": 789,
+      "position": [
+        1.6,
+        1.3076,
+        9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.897,
+        0.035,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 848,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 848,
+      "parentId": 789,
+      "position": [
+        1.6,
+        1.8634,
+        9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.897,
+        0.035,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 849,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.86,
+              0.85,
+              0.82
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.4,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Sill",
+      "order": 849,
+      "parentId": 789,
+      "position": [
+        1.6,
+        0.7392,
+        9.5825
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.017,
+        0.025,
+        0.185
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 851,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Mullion (shadow)",
+      "order": 851,
+      "parentId": 789,
+      "position": [
+        0.0,
+        1.5855,
+        2.875
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.03,
+        1.6675,
+        0.035
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 852,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 852,
+      "parentId": 789,
+      "position": [
+        0.0,
+        1.3076,
+        2.875
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.03,
+        0.035,
+        0.897
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 853,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 853,
+      "parentId": 789,
+      "position": [
+        0.0,
+        1.8634,
+        2.875
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.03,
+        0.035,
+        0.897
+      ],
+      "static": true
+    },
+    {
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 854,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.86,
+              0.85,
+              0.82
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.4,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Sill",
+      "order": 854,
+      "parentId": 789,
+      "position": [
+        0.0925,
+        0.7392,
+        2.875
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.185,
+        0.025,
+        1.017
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 856,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Mullion (shadow)",
+      "order": 856,
+      "parentId": 789,
+      "position": [
+        11.1,
+        1.5855,
+        9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.035,
+        1.6675,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 857,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 857,
+      "parentId": 789,
+      "position": [
+        11.1,
+        1.3076,
+        9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.897,
+        0.035,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 858,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 858,
+      "parentId": 789,
+      "position": [
+        11.1,
+        1.8634,
+        9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.897,
+        0.035,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 859,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.86,
+              0.85,
+              0.82
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.4,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Sill",
+      "order": 859,
+      "parentId": 789,
+      "position": [
+        11.1,
+        0.7392,
+        9.5825
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.017,
+        0.025,
+        0.185
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 861,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Mullion (shadow)",
+      "order": 861,
+      "parentId": 789,
+      "position": [
+        13.7,
+        1.5855,
+        9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.035,
+        1.6675,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 862,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 862,
+      "parentId": 789,
+      "position": [
+        13.7,
+        1.3076,
+        9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.897,
+        0.035,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 863,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 863,
+      "parentId": 789,
+      "position": [
+        13.7,
+        1.8634,
+        9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.897,
+        0.035,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 864,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.86,
+              0.85,
+              0.82
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.4,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Sill",
+      "order": 864,
+      "parentId": 789,
+      "position": [
+        13.7,
+        0.7392,
+        9.5825
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.017,
+        0.025,
+        0.185
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 866,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Mullion (shadow)",
+      "order": 866,
+      "parentId": 789,
+      "position": [
+        15.3,
+        1.5855,
+        9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.035,
+        1.6675,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 867,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 867,
+      "parentId": 789,
+      "position": [
+        15.3,
+        1.3076,
+        9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.897,
+        0.035,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 868,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 868,
+      "parentId": 789,
+      "position": [
+        15.3,
+        1.8634,
+        9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.897,
+        0.035,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 869,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.86,
+              0.85,
+              0.82
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.4,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Sill",
+      "order": 869,
+      "parentId": 789,
+      "position": [
+        15.3,
+        0.7392,
+        9.5825
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.017,
+        0.025,
+        0.185
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 871,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Mullion (shadow)",
+      "order": 871,
+      "parentId": 789,
+      "position": [
+        17.75,
+        1.5855,
+        9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.035,
+        1.6675,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 872,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 872,
+      "parentId": 789,
+      "position": [
+        17.75,
+        1.3076,
+        9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.897,
+        0.035,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 873,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 873,
+      "parentId": 789,
+      "position": [
+        17.75,
+        1.8634,
+        9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.897,
+        0.035,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 874,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.86,
+              0.85,
+              0.82
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.4,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Sill",
+      "order": 874,
+      "parentId": 789,
+      "position": [
+        17.75,
+        0.7392,
+        9.5825
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.017,
+        0.025,
+        0.185
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 876,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Mullion (shadow)",
+      "order": 876,
+      "parentId": 789,
+      "position": [
+        19.65,
+        1.5855,
+        9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.035,
+        1.6675,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 877,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 877,
+      "parentId": 789,
+      "position": [
+        19.65,
+        1.3076,
+        9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.897,
+        0.035,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 878,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 878,
+      "parentId": 789,
+      "position": [
+        19.65,
+        1.8634,
+        9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.897,
+        0.035,
+        0.03
+      ],
+      "static": true
+    },
+    {
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 879,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.86,
+              0.85,
+              0.82
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.4,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Sill",
+      "order": 879,
+      "parentId": 789,
+      "position": [
+        19.65,
+        0.7392,
+        9.5825
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.017,
+        0.025,
+        0.185
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 881,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Mullion (shadow)",
+      "order": 881,
+      "parentId": 789,
+      "position": [
+        0.0,
+        1.5855,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.03,
+        1.6675,
+        0.035
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 882,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 882,
+      "parentId": 789,
+      "position": [
+        0.0,
+        1.3076,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.03,
+        0.035,
+        0.897
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 883,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 883,
+      "parentId": 789,
+      "position": [
+        0.0,
+        1.8634,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.03,
+        0.035,
+        0.897
+      ],
+      "static": true
+    },
+    {
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 884,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.86,
+              0.85,
+              0.82
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.4,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Sill",
+      "order": 884,
+      "parentId": 789,
+      "position": [
+        0.0925,
+        0.7392,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.185,
+        0.025,
+        1.017
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 886,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Mullion (shadow)",
+      "order": 886,
+      "parentId": 789,
+      "position": [
+        21.2,
+        1.5855,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.03,
+        1.6675,
+        0.035
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 887,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 887,
+      "parentId": 789,
+      "position": [
+        21.2,
+        1.3076,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.03,
+        0.035,
+        0.897
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 3,
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 888,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.5,
+              0.5,
+              0.5
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 1.0,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Window Transom (shadow)",
+      "order": 888,
+      "parentId": 789,
+      "position": [
+        21.2,
+        1.8634,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        0.03,
+        0.035,
+        0.897
+      ],
+      "static": true
+    },
+    {
+      "color": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "id": 889,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.86,
+              0.85,
+              0.82
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "roughness": 0.4,
+            "roughnessMap": "",
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Sill",
+      "order": 889,
+      "parentId": 789,
+      "position": [
         21.1075,
         0.7392,
         0.0
@@ -20012,7 +23492,7 @@
         "Shadow Bias": 1.0,
         "Shadow Normal Bias": 1.0,
         "Shadow Resolution": "Follow global",
-        "Shadow Softness": 0.6,
+        "Shadow Softness": 0.15,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 35.0,
         "Type": "Directional"
@@ -20611,9 +24091,9 @@
       ]
     },
     {
-      "id": 830,
+      "id": 890,
       "name": "Lighting",
-      "order": 830,
+      "order": 890,
       "parentId": 2,
       "position": [
         0,
@@ -20649,15 +24129,15 @@
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
         "Shadow Resolution": "Follow global",
-        "Shadow Softness": 1.6,
+        "Shadow Softness": 1.1,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 72.0,
         "Type": "Spot"
       },
-      "id": 832,
+      "id": 892,
       "name": "Lamp_Fluorescent_A Light",
-      "order": 832,
-      "parentId": 830,
+      "order": 892,
+      "parentId": 890,
       "position": [
         1.7667,
         2.59,
@@ -20697,10 +24177,10 @@
         "Spot Angle": 30.0,
         "Type": "Point"
       },
-      "id": 833,
+      "id": 893,
       "name": "Lamp_Fluorescent_A Ceiling Glow",
-      "order": 833,
-      "parentId": 830,
+      "order": 893,
+      "parentId": 890,
       "position": [
         1.7667,
         2.5,
@@ -20735,7 +24215,7 @@
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
         "Shadow Resolution": "Follow global",
-        "Shadow Softness": 1.6,
+        "Shadow Softness": 1.1,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 72.0,
         "Type": "Spot"
@@ -20747,10 +24227,10 @@
         "Mode": "Fluorescent",
         "Seed": 11
       },
-      "id": 835,
+      "id": 895,
       "name": "Lamp_Fluorescent_A Light",
-      "order": 835,
-      "parentId": 830,
+      "order": 895,
+      "parentId": 890,
       "position": [
         5.3,
         2.59,
@@ -20797,10 +24277,10 @@
         "Mode": "Fluorescent",
         "Seed": 11
       },
-      "id": 836,
+      "id": 896,
       "name": "Lamp_Fluorescent_A Ceiling Glow",
-      "order": 836,
-      "parentId": 830,
+      "order": 896,
+      "parentId": 890,
       "position": [
         5.3,
         2.5,
@@ -20835,15 +24315,15 @@
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
         "Shadow Resolution": "Follow global",
-        "Shadow Softness": 1.6,
+        "Shadow Softness": 1.1,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 72.0,
         "Type": "Spot"
       },
-      "id": 838,
+      "id": 898,
       "name": "Lamp_Fluorescent_A Light",
-      "order": 838,
-      "parentId": 830,
+      "order": 898,
+      "parentId": 890,
       "position": [
         8.8333,
         2.59,
@@ -20883,10 +24363,10 @@
         "Spot Angle": 30.0,
         "Type": "Point"
       },
-      "id": 839,
+      "id": 899,
       "name": "Lamp_Fluorescent_A Ceiling Glow",
-      "order": 839,
-      "parentId": 830,
+      "order": 899,
+      "parentId": 890,
       "position": [
         8.8333,
         2.5,
@@ -20921,7 +24401,7 @@
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
         "Shadow Resolution": "Follow global",
-        "Shadow Softness": 1.6,
+        "Shadow Softness": 1.1,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 72.0,
         "Type": "Spot"
@@ -20933,10 +24413,10 @@
         "Mode": "Fluorescent",
         "Seed": 23
       },
-      "id": 841,
+      "id": 901,
       "name": "Lamp_Fluorescent_A Light",
-      "order": 841,
-      "parentId": 830,
+      "order": 901,
+      "parentId": 890,
       "position": [
         12.3667,
         2.59,
@@ -20983,10 +24463,10 @@
         "Mode": "Fluorescent",
         "Seed": 23
       },
-      "id": 842,
+      "id": 902,
       "name": "Lamp_Fluorescent_A Ceiling Glow",
-      "order": 842,
-      "parentId": 830,
+      "order": 902,
+      "parentId": 890,
       "position": [
         12.3667,
         2.5,
@@ -21021,15 +24501,15 @@
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
         "Shadow Resolution": "Follow global",
-        "Shadow Softness": 1.6,
+        "Shadow Softness": 1.1,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 72.0,
         "Type": "Spot"
       },
-      "id": 845,
+      "id": 905,
       "name": "Lamp_Fluorescent_A Light",
-      "order": 845,
-      "parentId": 830,
+      "order": 905,
+      "parentId": 890,
       "position": [
         19.4333,
         2.59,
@@ -21069,10 +24549,10 @@
         "Spot Angle": 30.0,
         "Type": "Point"
       },
-      "id": 846,
+      "id": 906,
       "name": "Lamp_Fluorescent_A Ceiling Glow",
-      "order": 846,
-      "parentId": 830,
+      "order": 906,
+      "parentId": 890,
       "position": [
         19.4333,
         2.5,
@@ -21112,10 +24592,10 @@
         "Spot Angle": 30.0,
         "Type": "Point"
       },
-      "id": 847,
+      "id": 907,
       "name": "Moon Bounce - Apartment 301/Bathroom",
-      "order": 847,
-      "parentId": 830,
+      "order": 907,
+      "parentId": 890,
       "position": [
         1.2,
         1.4,
@@ -21155,10 +24635,10 @@
         "Spot Angle": 30.0,
         "Type": "Point"
       },
-      "id": 848,
+      "id": 908,
       "name": "Moon Bounce - Apartment 301/Entry",
-      "order": 848,
-      "parentId": 830,
+      "order": 908,
+      "parentId": 890,
       "position": [
         3.7,
         1.4,
@@ -21198,10 +24678,10 @@
         "Spot Angle": 30.0,
         "Type": "Point"
       },
-      "id": 849,
+      "id": 909,
       "name": "Moon Bounce - Apartment 301/Living Room",
-      "order": 849,
-      "parentId": 830,
+      "order": 909,
+      "parentId": 890,
       "position": [
         2.5,
         1.4,
@@ -21241,10 +24721,10 @@
         "Spot Angle": 30.0,
         "Type": "Point"
       },
-      "id": 850,
+      "id": 910,
       "name": "Moon Bounce - Apartment 302/Bathroom",
-      "order": 850,
-      "parentId": 830,
+      "order": 910,
+      "parentId": 890,
       "position": [
         6.25,
         1.4,
@@ -21284,10 +24764,10 @@
         "Spot Angle": 30.0,
         "Type": "Point"
       },
-      "id": 851,
+      "id": 911,
       "name": "Moon Bounce - Apartment 302/Entry",
-      "order": 851,
-      "parentId": 830,
+      "order": 911,
+      "parentId": 890,
       "position": [
         9.65,
         1.4,
@@ -21327,10 +24807,10 @@
         "Spot Angle": 30.0,
         "Type": "Point"
       },
-      "id": 852,
+      "id": 912,
       "name": "Moon Bounce - Apartment 302/Bedroom",
-      "order": 852,
-      "parentId": 830,
+      "order": 912,
+      "parentId": 890,
       "position": [
         6.7,
         1.4,
@@ -21370,10 +24850,10 @@
         "Spot Angle": 30.0,
         "Type": "Point"
       },
-      "id": 853,
+      "id": 913,
       "name": "Moon Bounce - Apartment 302/Living Room",
-      "order": 853,
-      "parentId": 830,
+      "order": 913,
+      "parentId": 890,
       "position": [
         10.1,
         1.4,
@@ -21413,10 +24893,10 @@
         "Spot Angle": 30.0,
         "Type": "Point"
       },
-      "id": 854,
+      "id": 914,
       "name": "Moon Bounce - Apartment 303/Bathroom",
-      "order": 854,
-      "parentId": 830,
+      "order": 914,
+      "parentId": 890,
       "position": [
         13.6,
         1.4,
@@ -21456,10 +24936,10 @@
         "Spot Angle": 30.0,
         "Type": "Point"
       },
-      "id": 855,
+      "id": 915,
       "name": "Moon Bounce - Apartment 303/Bedroom 1",
-      "order": 855,
-      "parentId": 830,
+      "order": 915,
+      "parentId": 890,
       "position": [
         13.6,
         1.4,
@@ -21499,10 +24979,10 @@
         "Spot Angle": 30.0,
         "Type": "Point"
       },
-      "id": 856,
+      "id": 916,
       "name": "Moon Bounce - Apartment 303/Entry",
-      "order": 856,
-      "parentId": 830,
+      "order": 916,
+      "parentId": 890,
       "position": [
         16.5,
         1.4,
@@ -21542,10 +25022,10 @@
         "Spot Angle": 30.0,
         "Type": "Point"
       },
-      "id": 857,
+      "id": 917,
       "name": "Moon Bounce - Apartment 303/Bedroom 2",
-      "order": 857,
-      "parentId": 830,
+      "order": 917,
+      "parentId": 890,
       "position": [
         19.4,
         1.4,
@@ -21585,10 +25065,10 @@
         "Spot Angle": 30.0,
         "Type": "Point"
       },
-      "id": 858,
+      "id": 918,
       "name": "Moon Bounce - Apartment 303/Living Room",
-      "order": 858,
-      "parentId": 830,
+      "order": 918,
+      "parentId": 890,
       "position": [
         18.3,
         1.4,
@@ -21623,15 +25103,15 @@
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
         "Shadow Resolution": "Follow global",
-        "Shadow Softness": 1.6,
+        "Shadow Softness": 1.1,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 72.0,
         "Type": "Spot"
       },
-      "id": 860,
+      "id": 920,
       "name": "Lamp_Ceiling_A Light",
-      "order": 860,
-      "parentId": 830,
+      "order": 920,
+      "parentId": 890,
       "position": [
         3.7,
         2.492,
@@ -21671,10 +25151,10 @@
         "Spot Angle": 30.0,
         "Type": "Point"
       },
-      "id": 861,
+      "id": 921,
       "name": "Lamp_Ceiling_A Bounce",
-      "order": 861,
-      "parentId": 830,
+      "order": 921,
+      "parentId": 890,
       "position": [
         3.7,
         1.3,
@@ -21709,15 +25189,15 @@
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
         "Shadow Resolution": "Follow global",
-        "Shadow Softness": 1.6,
+        "Shadow Softness": 1.1,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 72.0,
         "Type": "Spot"
       },
-      "id": 863,
+      "id": 923,
       "name": "Lamp_Ceiling_A Light",
-      "order": 863,
-      "parentId": 830,
+      "order": 923,
+      "parentId": 890,
       "position": [
         9.65,
         2.492,
@@ -21757,10 +25237,10 @@
         "Spot Angle": 30.0,
         "Type": "Point"
       },
-      "id": 864,
+      "id": 924,
       "name": "Lamp_Ceiling_A Bounce",
-      "order": 864,
-      "parentId": 830,
+      "order": 924,
+      "parentId": 890,
       "position": [
         9.65,
         1.3,
@@ -21795,15 +25275,15 @@
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
         "Shadow Resolution": "Follow global",
-        "Shadow Softness": 1.6,
+        "Shadow Softness": 1.1,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 72.0,
         "Type": "Spot"
       },
-      "id": 866,
+      "id": 926,
       "name": "Lamp_Ceiling_A Light",
-      "order": 866,
-      "parentId": 830,
+      "order": 926,
+      "parentId": 890,
       "position": [
         16.5,
         2.492,
@@ -21843,10 +25323,10 @@
         "Spot Angle": 30.0,
         "Type": "Point"
       },
-      "id": 867,
+      "id": 927,
       "name": "Lamp_Ceiling_A Bounce",
-      "order": 867,
-      "parentId": 830,
+      "order": 927,
+      "parentId": 890,
       "position": [
         16.5,
         1.3,
@@ -21881,15 +25361,15 @@
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
         "Shadow Resolution": "Follow global",
-        "Shadow Softness": 1.6,
+        "Shadow Softness": 1.1,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 72.0,
         "Type": "Spot"
       },
-      "id": 869,
+      "id": 929,
       "name": "Lamp_Ceiling_A Light",
-      "order": 869,
-      "parentId": 830,
+      "order": 929,
+      "parentId": 890,
       "position": [
         4.7,
         2.492,
@@ -21929,10 +25409,10 @@
         "Spot Angle": 30.0,
         "Type": "Point"
       },
-      "id": 870,
+      "id": 930,
       "name": "Lamp_Ceiling_A Bounce",
-      "order": 870,
-      "parentId": 830,
+      "order": 930,
+      "parentId": 890,
       "position": [
         4.7,
         1.3,
@@ -21967,7 +25447,7 @@
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
         "Shadow Resolution": "Follow global",
-        "Shadow Softness": 1.6,
+        "Shadow Softness": 1.1,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 72.0,
         "Type": "Spot"
@@ -21979,10 +25459,10 @@
         "Mode": "Candle",
         "Seed": 305
       },
-      "id": 872,
+      "id": 932,
       "name": "Lamp_Ceiling_A Light",
-      "order": 872,
-      "parentId": 830,
+      "order": 932,
+      "parentId": 890,
       "position": [
         14.05,
         2.492,
@@ -22029,10 +25509,10 @@
         "Mode": "Candle",
         "Seed": 305
       },
-      "id": 873,
+      "id": 933,
       "name": "Lamp_Ceiling_A Bounce",
-      "order": 873,
-      "parentId": 830,
+      "order": 933,
+      "parentId": 890,
       "position": [
         14.05,
         1.3,
@@ -22067,15 +25547,15 @@
         "Shadow Near Plane": 0.05,
         "Shadow Normal Bias": 1.0,
         "Shadow Resolution": "Follow global",
-        "Shadow Softness": 1.6,
+        "Shadow Softness": 1.1,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 72.0,
         "Type": "Spot"
       },
-      "id": 875,
+      "id": 935,
       "name": "Lamp_Ceiling_A Light",
-      "order": 875,
-      "parentId": 830,
+      "order": 935,
+      "parentId": 890,
       "position": [
         19.9,
         2.492,
@@ -22115,10 +25595,10 @@
         "Spot Angle": 30.0,
         "Type": "Point"
       },
-      "id": 876,
+      "id": 936,
       "name": "Lamp_Ceiling_A Bounce",
-      "order": 876,
-      "parentId": 830,
+      "order": 936,
+      "parentId": 890,
       "position": [
         19.9,
         1.3,
@@ -22137,9 +25617,9 @@
       ]
     },
     {
-      "id": 877,
+      "id": 937,
       "name": "Audio",
-      "order": 877,
+      "order": 937,
       "parentId": 2,
       "position": [
         0,
@@ -22181,10 +25661,10 @@
         "Tail Gain": 0.4,
         "Wet dB": -6.0
       },
-      "id": 878,
+      "id": 938,
       "name": "Corridor Reverb",
-      "order": 878,
-      "parentId": 877,
+      "order": 938,
+      "parentId": 937,
       "position": [
         10.6,
         1.35,
@@ -22225,10 +25705,10 @@
         "Tail Gain": 0.4,
         "Wet dB": -6.0
       },
-      "id": 879,
+      "id": 939,
       "name": "Apartment 301 Reverb",
-      "order": 879,
-      "parentId": 877,
+      "order": 939,
+      "parentId": 937,
       "position": [
         2.5,
         1.35,
@@ -22269,10 +25749,10 @@
         "Tail Gain": 0.4,
         "Wet dB": -6.0
       },
-      "id": 880,
+      "id": 940,
       "name": "Apartment 302 Reverb",
-      "order": 880,
-      "parentId": 877,
+      "order": 940,
+      "parentId": 937,
       "position": [
         8.4,
         1.35,
@@ -22313,10 +25793,10 @@
         "Tail Gain": 0.4,
         "Wet dB": -6.0
       },
-      "id": 881,
+      "id": 941,
       "name": "Apartment 303 Reverb",
-      "order": 881,
-      "parentId": 877,
+      "order": 941,
+      "parentId": 937,
       "position": [
         16.5,
         1.35,
@@ -22357,10 +25837,10 @@
         "Tail Gain": 0.4,
         "Wet dB": -6.0
       },
-      "id": 882,
+      "id": 942,
       "name": "Apartment 304 Reverb",
-      "order": 882,
-      "parentId": 877,
+      "order": 942,
+      "parentId": 937,
       "position": [
         4.7,
         1.35,
@@ -22401,10 +25881,10 @@
         "Tail Gain": 0.4,
         "Wet dB": -6.0
       },
-      "id": 883,
+      "id": 943,
       "name": "Apartment 305 Reverb",
-      "order": 883,
-      "parentId": 877,
+      "order": 943,
+      "parentId": 937,
       "position": [
         12.8,
         1.35,
@@ -22445,10 +25925,10 @@
         "Tail Gain": 0.4,
         "Wet dB": -6.0
       },
-      "id": 884,
+      "id": 944,
       "name": "Apartment 306 Reverb",
-      "order": 884,
-      "parentId": 877,
+      "order": 944,
+      "parentId": 937,
       "position": [
         18.7,
         1.35,
@@ -22479,10 +25959,10 @@
         "Volume": 0.12,
         "Volume Rolloff": "Linear"
       },
-      "id": 885,
+      "id": 945,
       "name": "Tube Hum 1",
-      "order": 885,
-      "parentId": 877,
+      "order": 945,
+      "parentId": 937,
       "position": [
         1.7667,
         2.6,
@@ -22513,10 +25993,10 @@
         "Volume": 0.12,
         "Volume Rolloff": "Linear"
       },
-      "id": 886,
+      "id": 946,
       "name": "Tube Hum 2",
-      "order": 886,
-      "parentId": 877,
+      "order": 946,
+      "parentId": 937,
       "position": [
         5.3,
         2.6,
@@ -22547,10 +26027,10 @@
         "Volume": 0.12,
         "Volume Rolloff": "Linear"
       },
-      "id": 887,
+      "id": 947,
       "name": "Tube Hum 3",
-      "order": 887,
-      "parentId": 877,
+      "order": 947,
+      "parentId": 937,
       "position": [
         8.8333,
         2.6,
@@ -22581,10 +26061,10 @@
         "Volume": 0.12,
         "Volume Rolloff": "Linear"
       },
-      "id": 888,
+      "id": 948,
       "name": "Tube Hum 4",
-      "order": 888,
-      "parentId": 877,
+      "order": 948,
+      "parentId": 937,
       "position": [
         12.3667,
         2.6,
@@ -22615,10 +26095,10 @@
         "Volume": 0.12,
         "Volume Rolloff": "Linear"
       },
-      "id": 889,
+      "id": 949,
       "name": "Tube Hum 6",
-      "order": 889,
-      "parentId": 877,
+      "order": 949,
+      "parentId": 937,
       "position": [
         19.4333,
         2.6,
@@ -22641,10 +26121,10 @@
         "Footwear": "Boots",
         "NPC Footwear": "Boots"
       },
-      "id": 890,
+      "id": 950,
       "name": "Foley",
-      "order": 890,
-      "parentId": 877,
+      "order": 950,
+      "parentId": 937,
       "position": [
         0,
         0,
@@ -22720,9 +26200,9 @@
         ],
         "View Model Scale": 1.0
       },
-      "id": 891,
+      "id": 951,
       "name": "Player Spawn",
-      "order": 891,
+      "order": 951,
       "parentId": -1,
       "position": [
         -9.6,
@@ -22878,10 +26358,10 @@
         "Turn Timeout": 4.0,
         "Weapon Arms": true
       },
-      "id": 892,
+      "id": 952,
       "name": "Player Body",
-      "order": 892,
-      "parentId": 891,
+      "order": 952,
+      "parentId": 951,
       "position": [
         0.0,
         0.0,
@@ -22929,7 +26409,7 @@
   "gradeTemperature": 0.0,
   "gradeTint": 0.0,
   "maxPointShadows": 0,
-  "maxSpotShadows": 6,
+  "maxSpotShadows": 12,
   "models": [
     {
       "castShadows": 0,
@@ -49082,7 +52562,7 @@
     },
     {
       "castShadows": 0,
-      "id": 792,
+      "id": 795,
       "materials": [
         {
           "embedded": {
@@ -49118,192 +52598,12 @@
         null
       ],
       "name": "Window",
-      "order": 792,
+      "order": 795,
       "parentId": 789,
       "path": "assets/Architecture/Building/Models/Window_Tall_Fake.fbx",
       "pathGuid": "9be2e083c7adad76",
       "position": [
         3.45,
-        0.7,
-        -9.675
-      ],
-      "rotation": [
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      ],
-      "scale": [
-        1.15,
-        1.15,
-        1.15
-      ],
-      "static": true
-    },
-    {
-      "castShadows": 0,
-      "id": 794,
-      "materials": [
-        {
-          "embedded": {
-            "albedoMap": "",
-            "aoMap": "",
-            "baseColor": [
-              0.92,
-              0.95,
-              0.97
-            ],
-            "emissiveColor": [
-              0.0,
-              0.0,
-              0.0
-            ],
-            "emissiveMap": "",
-            "emissiveStrength": 0.0,
-            "factorsScaleMaps": true,
-            "ior": 1.5,
-            "metallic": 0.0,
-            "metallicMap": "",
-            "metallicRoughnessMap": "",
-            "normalMap": "",
-            "opacity": 0.12,
-            "renderQueue": 2,
-            "roughness": 0.03,
-            "roughnessMap": "",
-            "transmission": 0.92,
-            "triplanar": false,
-            "triplanarScale": 1.0
-          }
-        },
-        null
-      ],
-      "name": "Window",
-      "order": 794,
-      "parentId": 789,
-      "path": "assets/Architecture/Building/Models/Window_Tall_Fake.fbx",
-      "pathGuid": "9be2e083c7adad76",
-      "position": [
-        6.7,
-        0.7,
-        -9.675
-      ],
-      "rotation": [
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      ],
-      "scale": [
-        1.15,
-        1.15,
-        1.15
-      ],
-      "static": true
-    },
-    {
-      "castShadows": 0,
-      "id": 796,
-      "materials": [
-        {
-          "embedded": {
-            "albedoMap": "",
-            "aoMap": "",
-            "baseColor": [
-              0.92,
-              0.95,
-              0.97
-            ],
-            "emissiveColor": [
-              0.0,
-              0.0,
-              0.0
-            ],
-            "emissiveMap": "",
-            "emissiveStrength": 0.0,
-            "factorsScaleMaps": true,
-            "ior": 1.5,
-            "metallic": 0.0,
-            "metallicMap": "",
-            "metallicRoughnessMap": "",
-            "normalMap": "",
-            "opacity": 0.12,
-            "renderQueue": 2,
-            "roughness": 0.03,
-            "roughnessMap": "",
-            "transmission": 0.92,
-            "triplanar": false,
-            "triplanarScale": 1.0
-          }
-        },
-        null
-      ],
-      "name": "Window",
-      "order": 796,
-      "parentId": 789,
-      "path": "assets/Architecture/Building/Models/Window_Tall_Fake.fbx",
-      "pathGuid": "9be2e083c7adad76",
-      "position": [
-        9.3,
-        0.7,
-        -9.675
-      ],
-      "rotation": [
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      ],
-      "scale": [
-        1.15,
-        1.15,
-        1.15
-      ],
-      "static": true
-    },
-    {
-      "castShadows": 0,
-      "id": 798,
-      "materials": [
-        {
-          "embedded": {
-            "albedoMap": "",
-            "aoMap": "",
-            "baseColor": [
-              0.92,
-              0.95,
-              0.97
-            ],
-            "emissiveColor": [
-              0.0,
-              0.0,
-              0.0
-            ],
-            "emissiveMap": "",
-            "emissiveStrength": 0.0,
-            "factorsScaleMaps": true,
-            "ior": 1.5,
-            "metallic": 0.0,
-            "metallicMap": "",
-            "metallicRoughnessMap": "",
-            "normalMap": "",
-            "opacity": 0.12,
-            "renderQueue": 2,
-            "roughness": 0.03,
-            "roughnessMap": "",
-            "transmission": 0.92,
-            "triplanar": false,
-            "triplanarScale": 1.0
-          }
-        },
-        null
-      ],
-      "name": "Window",
-      "order": 798,
-      "parentId": 789,
-      "path": "assets/Architecture/Building/Models/Window_Tall_Fake.fbx",
-      "pathGuid": "9be2e083c7adad76",
-      "position": [
-        10.9,
         0.7,
         -9.675
       ],
@@ -49363,7 +52663,7 @@
       "path": "assets/Architecture/Building/Models/Window_Tall_Fake.fbx",
       "pathGuid": "9be2e083c7adad76",
       "position": [
-        13.6,
+        6.7,
         0.7,
         -9.675
       ],
@@ -49382,7 +52682,7 @@
     },
     {
       "castShadows": 0,
-      "id": 802,
+      "id": 805,
       "materials": [
         {
           "embedded": {
@@ -49418,12 +52718,12 @@
         null
       ],
       "name": "Window",
-      "order": 802,
+      "order": 805,
       "parentId": 789,
       "path": "assets/Architecture/Building/Models/Window_Tall_Fake.fbx",
       "pathGuid": "9be2e083c7adad76",
       "position": [
-        17.4,
+        9.3,
         0.7,
         -9.675
       ],
@@ -49432,186 +52732,6 @@
         0.0,
         0.0,
         1.0
-      ],
-      "scale": [
-        1.15,
-        1.15,
-        1.15
-      ],
-      "static": true
-    },
-    {
-      "castShadows": 0,
-      "id": 804,
-      "materials": [
-        {
-          "embedded": {
-            "albedoMap": "",
-            "aoMap": "",
-            "baseColor": [
-              0.92,
-              0.95,
-              0.97
-            ],
-            "emissiveColor": [
-              0.0,
-              0.0,
-              0.0
-            ],
-            "emissiveMap": "",
-            "emissiveStrength": 0.0,
-            "factorsScaleMaps": true,
-            "ior": 1.5,
-            "metallic": 0.0,
-            "metallicMap": "",
-            "metallicRoughnessMap": "",
-            "normalMap": "",
-            "opacity": 0.12,
-            "renderQueue": 2,
-            "roughness": 0.03,
-            "roughnessMap": "",
-            "transmission": 0.92,
-            "triplanar": false,
-            "triplanarScale": 1.0
-          }
-        },
-        null
-      ],
-      "name": "Window",
-      "order": 804,
-      "parentId": 789,
-      "path": "assets/Architecture/Building/Models/Window_Tall_Fake.fbx",
-      "pathGuid": "9be2e083c7adad76",
-      "position": [
-        19.6,
-        0.7,
-        -9.675
-      ],
-      "rotation": [
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      ],
-      "scale": [
-        1.15,
-        1.15,
-        1.15
-      ],
-      "static": true
-    },
-    {
-      "castShadows": 0,
-      "id": 806,
-      "materials": [
-        {
-          "embedded": {
-            "albedoMap": "",
-            "aoMap": "",
-            "baseColor": [
-              0.92,
-              0.95,
-              0.97
-            ],
-            "emissiveColor": [
-              0.0,
-              0.0,
-              0.0
-            ],
-            "emissiveMap": "",
-            "emissiveStrength": 0.0,
-            "factorsScaleMaps": true,
-            "ior": 1.5,
-            "metallic": 0.0,
-            "metallicMap": "",
-            "metallicRoughnessMap": "",
-            "normalMap": "",
-            "opacity": 0.12,
-            "renderQueue": 2,
-            "roughness": 0.03,
-            "roughnessMap": "",
-            "transmission": 0.92,
-            "triplanar": false,
-            "triplanarScale": 1.0
-          }
-        },
-        null
-      ],
-      "name": "Window",
-      "order": 806,
-      "parentId": 789,
-      "path": "assets/Architecture/Building/Models/Window_Tall_Fake.fbx",
-      "pathGuid": "9be2e083c7adad76",
-      "position": [
-        21.2,
-        0.7,
-        -2.875
-      ],
-      "rotation": [
-        0.0,
-        -0.707107,
-        0.0,
-        0.707107
-      ],
-      "scale": [
-        1.15,
-        1.15,
-        1.15
-      ],
-      "static": true
-    },
-    {
-      "castShadows": 0,
-      "id": 808,
-      "materials": [
-        {
-          "embedded": {
-            "albedoMap": "",
-            "aoMap": "",
-            "baseColor": [
-              0.92,
-              0.95,
-              0.97
-            ],
-            "emissiveColor": [
-              0.0,
-              0.0,
-              0.0
-            ],
-            "emissiveMap": "",
-            "emissiveStrength": 0.0,
-            "factorsScaleMaps": true,
-            "ior": 1.5,
-            "metallic": 0.0,
-            "metallicMap": "",
-            "metallicRoughnessMap": "",
-            "normalMap": "",
-            "opacity": 0.12,
-            "renderQueue": 2,
-            "roughness": 0.03,
-            "roughnessMap": "",
-            "transmission": 0.92,
-            "triplanar": false,
-            "triplanarScale": 1.0
-          }
-        },
-        null
-      ],
-      "name": "Window",
-      "order": 808,
-      "parentId": 789,
-      "path": "assets/Architecture/Building/Models/Window_Tall_Fake.fbx",
-      "pathGuid": "9be2e083c7adad76",
-      "position": [
-        7.6,
-        0.7,
-        9.675
-      ],
-      "rotation": [
-        0.0,
-        1.0,
-        0.0,
-        0.0
       ],
       "scale": [
         1.15,
@@ -49663,15 +52783,15 @@
       "path": "assets/Architecture/Building/Models/Window_Tall_Fake.fbx",
       "pathGuid": "9be2e083c7adad76",
       "position": [
-        3.8,
+        10.9,
         0.7,
-        9.675
+        -9.675
       ],
       "rotation": [
         0.0,
-        1.0,
         0.0,
-        0.0
+        0.0,
+        1.0
       ],
       "scale": [
         1.15,
@@ -49682,7 +52802,7 @@
     },
     {
       "castShadows": 0,
-      "id": 812,
+      "id": 815,
       "materials": [
         {
           "embedded": {
@@ -49718,200 +52838,20 @@
         null
       ],
       "name": "Window",
-      "order": 812,
+      "order": 815,
       "parentId": 789,
       "path": "assets/Architecture/Building/Models/Window_Tall_Fake.fbx",
       "pathGuid": "9be2e083c7adad76",
       "position": [
-        1.6,
+        13.6,
         0.7,
-        9.675
+        -9.675
       ],
       "rotation": [
         0.0,
-        1.0,
         0.0,
-        0.0
-      ],
-      "scale": [
-        1.15,
-        1.15,
-        1.15
-      ],
-      "static": true
-    },
-    {
-      "castShadows": 0,
-      "id": 814,
-      "materials": [
-        {
-          "embedded": {
-            "albedoMap": "",
-            "aoMap": "",
-            "baseColor": [
-              0.92,
-              0.95,
-              0.97
-            ],
-            "emissiveColor": [
-              0.0,
-              0.0,
-              0.0
-            ],
-            "emissiveMap": "",
-            "emissiveStrength": 0.0,
-            "factorsScaleMaps": true,
-            "ior": 1.5,
-            "metallic": 0.0,
-            "metallicMap": "",
-            "metallicRoughnessMap": "",
-            "normalMap": "",
-            "opacity": 0.12,
-            "renderQueue": 2,
-            "roughness": 0.03,
-            "roughnessMap": "",
-            "transmission": 0.92,
-            "triplanar": false,
-            "triplanarScale": 1.0
-          }
-        },
-        null
-      ],
-      "name": "Window",
-      "order": 814,
-      "parentId": 789,
-      "path": "assets/Architecture/Building/Models/Window_Tall_Fake.fbx",
-      "pathGuid": "9be2e083c7adad76",
-      "position": [
         0.0,
-        0.7,
-        2.875
-      ],
-      "rotation": [
-        0.0,
-        0.707107,
-        0.0,
-        0.707107
-      ],
-      "scale": [
-        1.15,
-        1.15,
-        1.15
-      ],
-      "static": true
-    },
-    {
-      "castShadows": 0,
-      "id": 816,
-      "materials": [
-        {
-          "embedded": {
-            "albedoMap": "",
-            "aoMap": "",
-            "baseColor": [
-              0.92,
-              0.95,
-              0.97
-            ],
-            "emissiveColor": [
-              0.0,
-              0.0,
-              0.0
-            ],
-            "emissiveMap": "",
-            "emissiveStrength": 0.0,
-            "factorsScaleMaps": true,
-            "ior": 1.5,
-            "metallic": 0.0,
-            "metallicMap": "",
-            "metallicRoughnessMap": "",
-            "normalMap": "",
-            "opacity": 0.12,
-            "renderQueue": 2,
-            "roughness": 0.03,
-            "roughnessMap": "",
-            "transmission": 0.92,
-            "triplanar": false,
-            "triplanarScale": 1.0
-          }
-        },
-        null
-      ],
-      "name": "Window",
-      "order": 816,
-      "parentId": 789,
-      "path": "assets/Architecture/Building/Models/Window_Tall_Fake.fbx",
-      "pathGuid": "9be2e083c7adad76",
-      "position": [
-        11.1,
-        0.7,
-        9.675
-      ],
-      "rotation": [
-        0.0,
-        1.0,
-        0.0,
-        0.0
-      ],
-      "scale": [
-        1.15,
-        1.15,
-        1.15
-      ],
-      "static": true
-    },
-    {
-      "castShadows": 0,
-      "id": 818,
-      "materials": [
-        {
-          "embedded": {
-            "albedoMap": "",
-            "aoMap": "",
-            "baseColor": [
-              0.92,
-              0.95,
-              0.97
-            ],
-            "emissiveColor": [
-              0.0,
-              0.0,
-              0.0
-            ],
-            "emissiveMap": "",
-            "emissiveStrength": 0.0,
-            "factorsScaleMaps": true,
-            "ior": 1.5,
-            "metallic": 0.0,
-            "metallicMap": "",
-            "metallicRoughnessMap": "",
-            "normalMap": "",
-            "opacity": 0.12,
-            "renderQueue": 2,
-            "roughness": 0.03,
-            "roughnessMap": "",
-            "transmission": 0.92,
-            "triplanar": false,
-            "triplanarScale": 1.0
-          }
-        },
-        null
-      ],
-      "name": "Window",
-      "order": 818,
-      "parentId": 789,
-      "path": "assets/Architecture/Building/Models/Window_Tall_Fake.fbx",
-      "pathGuid": "9be2e083c7adad76",
-      "position": [
-        13.7,
-        0.7,
-        9.675
-      ],
-      "rotation": [
-        0.0,
-        1.0,
-        0.0,
-        0.0
+        1.0
       ],
       "scale": [
         1.15,
@@ -49963,15 +52903,15 @@
       "path": "assets/Architecture/Building/Models/Window_Tall_Fake.fbx",
       "pathGuid": "9be2e083c7adad76",
       "position": [
-        15.3,
+        17.4,
         0.7,
-        9.675
+        -9.675
       ],
       "rotation": [
         0.0,
-        1.0,
         0.0,
-        0.0
+        0.0,
+        1.0
       ],
       "scale": [
         1.15,
@@ -49982,7 +52922,7 @@
     },
     {
       "castShadows": 0,
-      "id": 822,
+      "id": 825,
       "materials": [
         {
           "embedded": {
@@ -50018,7 +52958,547 @@
         null
       ],
       "name": "Window",
-      "order": 822,
+      "order": 825,
+      "parentId": 789,
+      "path": "assets/Architecture/Building/Models/Window_Tall_Fake.fbx",
+      "pathGuid": "9be2e083c7adad76",
+      "position": [
+        19.6,
+        0.7,
+        -9.675
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.15,
+        1.15,
+        1.15
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 0,
+      "id": 830,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.92,
+              0.95,
+              0.97
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "ior": 1.5,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "opacity": 0.12,
+            "renderQueue": 2,
+            "roughness": 0.03,
+            "roughnessMap": "",
+            "transmission": 0.92,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        },
+        null
+      ],
+      "name": "Window",
+      "order": 830,
+      "parentId": 789,
+      "path": "assets/Architecture/Building/Models/Window_Tall_Fake.fbx",
+      "pathGuid": "9be2e083c7adad76",
+      "position": [
+        21.2,
+        0.7,
+        -2.875
+      ],
+      "rotation": [
+        0.0,
+        -0.707107,
+        0.0,
+        0.707107
+      ],
+      "scale": [
+        1.15,
+        1.15,
+        1.15
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 0,
+      "id": 835,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.92,
+              0.95,
+              0.97
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "ior": 1.5,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "opacity": 0.12,
+            "renderQueue": 2,
+            "roughness": 0.03,
+            "roughnessMap": "",
+            "transmission": 0.92,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        },
+        null
+      ],
+      "name": "Window",
+      "order": 835,
+      "parentId": 789,
+      "path": "assets/Architecture/Building/Models/Window_Tall_Fake.fbx",
+      "pathGuid": "9be2e083c7adad76",
+      "position": [
+        7.6,
+        0.7,
+        9.675
+      ],
+      "rotation": [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.15,
+        1.15,
+        1.15
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 0,
+      "id": 840,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.92,
+              0.95,
+              0.97
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "ior": 1.5,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "opacity": 0.12,
+            "renderQueue": 2,
+            "roughness": 0.03,
+            "roughnessMap": "",
+            "transmission": 0.92,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        },
+        null
+      ],
+      "name": "Window",
+      "order": 840,
+      "parentId": 789,
+      "path": "assets/Architecture/Building/Models/Window_Tall_Fake.fbx",
+      "pathGuid": "9be2e083c7adad76",
+      "position": [
+        3.8,
+        0.7,
+        9.675
+      ],
+      "rotation": [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.15,
+        1.15,
+        1.15
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 0,
+      "id": 845,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.92,
+              0.95,
+              0.97
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "ior": 1.5,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "opacity": 0.12,
+            "renderQueue": 2,
+            "roughness": 0.03,
+            "roughnessMap": "",
+            "transmission": 0.92,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        },
+        null
+      ],
+      "name": "Window",
+      "order": 845,
+      "parentId": 789,
+      "path": "assets/Architecture/Building/Models/Window_Tall_Fake.fbx",
+      "pathGuid": "9be2e083c7adad76",
+      "position": [
+        1.6,
+        0.7,
+        9.675
+      ],
+      "rotation": [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.15,
+        1.15,
+        1.15
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 0,
+      "id": 850,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.92,
+              0.95,
+              0.97
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "ior": 1.5,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "opacity": 0.12,
+            "renderQueue": 2,
+            "roughness": 0.03,
+            "roughnessMap": "",
+            "transmission": 0.92,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        },
+        null
+      ],
+      "name": "Window",
+      "order": 850,
+      "parentId": 789,
+      "path": "assets/Architecture/Building/Models/Window_Tall_Fake.fbx",
+      "pathGuid": "9be2e083c7adad76",
+      "position": [
+        0.0,
+        0.7,
+        2.875
+      ],
+      "rotation": [
+        0.0,
+        0.707107,
+        0.0,
+        0.707107
+      ],
+      "scale": [
+        1.15,
+        1.15,
+        1.15
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 0,
+      "id": 855,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.92,
+              0.95,
+              0.97
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "ior": 1.5,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "opacity": 0.12,
+            "renderQueue": 2,
+            "roughness": 0.03,
+            "roughnessMap": "",
+            "transmission": 0.92,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        },
+        null
+      ],
+      "name": "Window",
+      "order": 855,
+      "parentId": 789,
+      "path": "assets/Architecture/Building/Models/Window_Tall_Fake.fbx",
+      "pathGuid": "9be2e083c7adad76",
+      "position": [
+        11.1,
+        0.7,
+        9.675
+      ],
+      "rotation": [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.15,
+        1.15,
+        1.15
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 0,
+      "id": 860,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.92,
+              0.95,
+              0.97
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "ior": 1.5,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "opacity": 0.12,
+            "renderQueue": 2,
+            "roughness": 0.03,
+            "roughnessMap": "",
+            "transmission": 0.92,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        },
+        null
+      ],
+      "name": "Window",
+      "order": 860,
+      "parentId": 789,
+      "path": "assets/Architecture/Building/Models/Window_Tall_Fake.fbx",
+      "pathGuid": "9be2e083c7adad76",
+      "position": [
+        13.7,
+        0.7,
+        9.675
+      ],
+      "rotation": [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.15,
+        1.15,
+        1.15
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 0,
+      "id": 865,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.92,
+              0.95,
+              0.97
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "ior": 1.5,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "opacity": 0.12,
+            "renderQueue": 2,
+            "roughness": 0.03,
+            "roughnessMap": "",
+            "transmission": 0.92,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        },
+        null
+      ],
+      "name": "Window",
+      "order": 865,
+      "parentId": 789,
+      "path": "assets/Architecture/Building/Models/Window_Tall_Fake.fbx",
+      "pathGuid": "9be2e083c7adad76",
+      "position": [
+        15.3,
+        0.7,
+        9.675
+      ],
+      "rotation": [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.15,
+        1.15,
+        1.15
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 0,
+      "id": 870,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": "",
+            "aoMap": "",
+            "baseColor": [
+              0.92,
+              0.95,
+              0.97
+            ],
+            "emissiveColor": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "emissiveMap": "",
+            "emissiveStrength": 0.0,
+            "factorsScaleMaps": true,
+            "ior": 1.5,
+            "metallic": 0.0,
+            "metallicMap": "",
+            "metallicRoughnessMap": "",
+            "normalMap": "",
+            "opacity": 0.12,
+            "renderQueue": 2,
+            "roughness": 0.03,
+            "roughnessMap": "",
+            "transmission": 0.92,
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        },
+        null
+      ],
+      "name": "Window",
+      "order": 870,
       "parentId": 789,
       "path": "assets/Architecture/Building/Models/Window_Tall_Fake.fbx",
       "pathGuid": "9be2e083c7adad76",
@@ -50042,7 +53522,7 @@
     },
     {
       "castShadows": 0,
-      "id": 824,
+      "id": 875,
       "materials": [
         {
           "embedded": {
@@ -50078,7 +53558,7 @@
         null
       ],
       "name": "Window",
-      "order": 824,
+      "order": 875,
       "parentId": 789,
       "path": "assets/Architecture/Building/Models/Window_Tall_Fake.fbx",
       "pathGuid": "9be2e083c7adad76",
@@ -50102,7 +53582,7 @@
     },
     {
       "castShadows": 0,
-      "id": 826,
+      "id": 880,
       "materials": [
         {
           "embedded": {
@@ -50138,7 +53618,7 @@
         null
       ],
       "name": "Window",
-      "order": 826,
+      "order": 880,
       "parentId": 789,
       "path": "assets/Architecture/Building/Models/Window_Tall_Fake.fbx",
       "pathGuid": "9be2e083c7adad76",
@@ -50162,7 +53642,7 @@
     },
     {
       "castShadows": 0,
-      "id": 828,
+      "id": 885,
       "materials": [
         {
           "embedded": {
@@ -50198,7 +53678,7 @@
         null
       ],
       "name": "Window",
-      "order": 828,
+      "order": 885,
       "parentId": 789,
       "path": "assets/Architecture/Building/Models/Window_Tall_Fake.fbx",
       "pathGuid": "9be2e083c7adad76",
@@ -50222,7 +53702,7 @@
     },
     {
       "castShadows": 0,
-      "id": 831,
+      "id": 891,
       "materials": [
         {
           "embedded": {
@@ -50271,8 +53751,8 @@
         }
       ],
       "name": "Lamp_Fluorescent_A",
-      "order": 831,
-      "parentId": 830,
+      "order": 891,
+      "parentId": 890,
       "path": "assets/Furniture/Lighting/Models/Lamp_Fluorescent_A.fbx",
       "pathGuid": "531a461150b6ba41",
       "position": [
@@ -50295,7 +53775,7 @@
     },
     {
       "castShadows": 0,
-      "id": 834,
+      "id": 894,
       "materials": [
         {
           "embedded": {
@@ -50344,8 +53824,8 @@
         }
       ],
       "name": "Lamp_Fluorescent_A",
-      "order": 834,
-      "parentId": 830,
+      "order": 894,
+      "parentId": 890,
       "path": "assets/Furniture/Lighting/Models/Lamp_Fluorescent_A.fbx",
       "pathGuid": "531a461150b6ba41",
       "position": [
@@ -50368,7 +53848,7 @@
     },
     {
       "castShadows": 0,
-      "id": 837,
+      "id": 897,
       "materials": [
         {
           "embedded": {
@@ -50417,8 +53897,8 @@
         }
       ],
       "name": "Lamp_Fluorescent_A",
-      "order": 837,
-      "parentId": 830,
+      "order": 897,
+      "parentId": 890,
       "path": "assets/Furniture/Lighting/Models/Lamp_Fluorescent_A.fbx",
       "pathGuid": "531a461150b6ba41",
       "position": [
@@ -50441,7 +53921,7 @@
     },
     {
       "castShadows": 0,
-      "id": 840,
+      "id": 900,
       "materials": [
         {
           "embedded": {
@@ -50490,8 +53970,8 @@
         }
       ],
       "name": "Lamp_Fluorescent_A",
-      "order": 840,
-      "parentId": 830,
+      "order": 900,
+      "parentId": 890,
       "path": "assets/Furniture/Lighting/Models/Lamp_Fluorescent_A.fbx",
       "pathGuid": "531a461150b6ba41",
       "position": [
@@ -50514,7 +53994,7 @@
     },
     {
       "castShadows": 0,
-      "id": 843,
+      "id": 903,
       "materials": [
         {
           "embedded": {
@@ -50563,8 +54043,8 @@
         }
       ],
       "name": "Lamp_Fluorescent_A",
-      "order": 843,
-      "parentId": 830,
+      "order": 903,
+      "parentId": 890,
       "path": "assets/Furniture/Lighting/Models/Lamp_Fluorescent_A.fbx",
       "pathGuid": "531a461150b6ba41",
       "position": [
@@ -50587,7 +54067,7 @@
     },
     {
       "castShadows": 0,
-      "id": 844,
+      "id": 904,
       "materials": [
         {
           "embedded": {
@@ -50636,8 +54116,8 @@
         }
       ],
       "name": "Lamp_Fluorescent_A",
-      "order": 844,
-      "parentId": 830,
+      "order": 904,
+      "parentId": 890,
       "path": "assets/Furniture/Lighting/Models/Lamp_Fluorescent_A.fbx",
       "pathGuid": "531a461150b6ba41",
       "position": [
@@ -50660,7 +54140,7 @@
     },
     {
       "castShadows": 0,
-      "id": 859,
+      "id": 919,
       "materials": [
         {
           "embedded": {
@@ -50709,8 +54189,8 @@
         }
       ],
       "name": "Lamp_Ceiling_A",
-      "order": 859,
-      "parentId": 830,
+      "order": 919,
+      "parentId": 890,
       "path": "assets/Furniture/Lighting/Models/Lamp_Ceiling_A.fbx",
       "pathGuid": "dbafb75fbe889dec",
       "position": [
@@ -50733,7 +54213,7 @@
     },
     {
       "castShadows": 0,
-      "id": 862,
+      "id": 922,
       "materials": [
         {
           "embedded": {
@@ -50782,8 +54262,8 @@
         }
       ],
       "name": "Lamp_Ceiling_A",
-      "order": 862,
-      "parentId": 830,
+      "order": 922,
+      "parentId": 890,
       "path": "assets/Furniture/Lighting/Models/Lamp_Ceiling_A.fbx",
       "pathGuid": "dbafb75fbe889dec",
       "position": [
@@ -50806,7 +54286,7 @@
     },
     {
       "castShadows": 0,
-      "id": 865,
+      "id": 925,
       "materials": [
         {
           "embedded": {
@@ -50855,8 +54335,8 @@
         }
       ],
       "name": "Lamp_Ceiling_A",
-      "order": 865,
-      "parentId": 830,
+      "order": 925,
+      "parentId": 890,
       "path": "assets/Furniture/Lighting/Models/Lamp_Ceiling_A.fbx",
       "pathGuid": "dbafb75fbe889dec",
       "position": [
@@ -50879,7 +54359,7 @@
     },
     {
       "castShadows": 0,
-      "id": 868,
+      "id": 928,
       "materials": [
         {
           "embedded": {
@@ -50928,8 +54408,8 @@
         }
       ],
       "name": "Lamp_Ceiling_A",
-      "order": 868,
-      "parentId": 830,
+      "order": 928,
+      "parentId": 890,
       "path": "assets/Furniture/Lighting/Models/Lamp_Ceiling_A.fbx",
       "pathGuid": "dbafb75fbe889dec",
       "position": [
@@ -50952,7 +54432,7 @@
     },
     {
       "castShadows": 0,
-      "id": 871,
+      "id": 931,
       "materials": [
         {
           "embedded": {
@@ -51001,8 +54481,8 @@
         }
       ],
       "name": "Lamp_Ceiling_A",
-      "order": 871,
-      "parentId": 830,
+      "order": 931,
+      "parentId": 890,
       "path": "assets/Furniture/Lighting/Models/Lamp_Ceiling_A.fbx",
       "pathGuid": "dbafb75fbe889dec",
       "position": [
@@ -51025,7 +54505,7 @@
     },
     {
       "castShadows": 0,
-      "id": 874,
+      "id": 934,
       "materials": [
         {
           "embedded": {
@@ -51074,8 +54554,8 @@
         }
       ],
       "name": "Lamp_Ceiling_A",
-      "order": 874,
-      "parentId": 830,
+      "order": 934,
+      "parentId": 890,
       "path": "assets/Furniture/Lighting/Models/Lamp_Ceiling_A.fbx",
       "pathGuid": "dbafb75fbe889dec",
       "position": [
@@ -51117,7 +54597,7 @@
         },
         "Slot": "Torso"
       },
-      "id": 893,
+      "id": 953,
       "materials": [
         {
           "guid": "00f2f285376c0e56",
@@ -51133,8 +54613,8 @@
         }
       ],
       "name": "Torso",
-      "order": 893,
-      "parentId": 892,
+      "order": 953,
+      "parentId": 952,
       "path": "assets/Characters/Quantum/Models/European/Quantum_Torso.fbx",
       "pathGuid": "34f0109f85dae259",
       "position": [
@@ -51175,7 +54655,7 @@
         },
         "Slot": "Head"
       },
-      "id": 894,
+      "id": 954,
       "materials": [
         {
           "guid": "d71fa7c7cd81f033",
@@ -51215,8 +54695,8 @@
         }
       ],
       "name": "Head",
-      "order": 894,
-      "parentId": 892,
+      "order": 954,
+      "parentId": 952,
       "path": "assets/Characters/Quantum/Models/Young/Quantum_Young_Head.fbx",
       "pathGuid": "0ccde7cf189bfaba",
       "position": [
@@ -51257,7 +54737,7 @@
         },
         "Slot": "Arms"
       },
-      "id": 895,
+      "id": 955,
       "materials": [
         {
           "guid": "bdf55b314edda1f4",
@@ -51265,8 +54745,8 @@
         }
       ],
       "name": "Arms",
-      "order": 895,
-      "parentId": 892,
+      "order": 955,
+      "parentId": 952,
       "path": "assets/Characters/Quantum/FirstPerson/Quantum_Arms_FP.fbx",
       "pathGuid": "19bbef7e387a5ef4",
       "position": [
@@ -51307,7 +54787,7 @@
         },
         "Slot": "Legs"
       },
-      "id": 896,
+      "id": 956,
       "materials": [
         {
           "guid": "ff2aca4c25ba4f89",
@@ -51315,8 +54795,8 @@
         }
       ],
       "name": "Legs",
-      "order": 896,
-      "parentId": 892,
+      "order": 956,
+      "parentId": 952,
       "path": "assets/Characters/Quantum/Models/European/Quantum_Legs.fbx",
       "pathGuid": "c36e291cf458911c",
       "position": [
@@ -51357,7 +54837,7 @@
         },
         "Slot": "Feet"
       },
-      "id": 897,
+      "id": 957,
       "materials": [
         {
           "guid": "ff2aca4c25ba4f89",
@@ -51365,8 +54845,8 @@
         }
       ],
       "name": "Feet",
-      "order": 897,
-      "parentId": 892,
+      "order": 957,
+      "parentId": 952,
       "path": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/Quantum_Feet_Shoes.fbx",
       "pathGuid": "9223ed446c94346d",
       "position": [
@@ -51407,7 +54887,7 @@
         },
         "Slot": "Pants"
       },
-      "id": 898,
+      "id": 958,
       "materials": [
         {
           "guid": "e099b1038572ced1",
@@ -51415,8 +54895,8 @@
         }
       ],
       "name": "Pants",
-      "order": 898,
-      "parentId": 892,
+      "order": 958,
+      "parentId": 952,
       "path": "assets/Characters/Quantum/Models/Clothing/Male/Pants/SKM_Pants_Classic.fbx",
       "pathGuid": "599cbc13ca312f56",
       "position": [
@@ -51457,7 +54937,7 @@
         },
         "Slot": "Shoes"
       },
-      "id": 899,
+      "id": 959,
       "materials": [
         {
           "guid": "e099b1038572ced1",
@@ -51465,8 +54945,8 @@
         }
       ],
       "name": "Shoes",
-      "order": 899,
-      "parentId": 892,
+      "order": 959,
+      "parentId": 952,
       "path": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/SKM_Shoes_Classic.fbx",
       "pathGuid": "1f7752e3e611def9",
       "position": [
@@ -51495,7 +54975,7 @@
         },
         "Slot": "Balaclava"
       },
-      "id": 900,
+      "id": 960,
       "materials": [
         {
           "guid": "58907c2c546715f2",
@@ -51503,8 +54983,8 @@
         }
       ],
       "name": "Balaclava",
-      "order": 900,
-      "parentId": 892,
+      "order": 960,
+      "parentId": 952,
       "path": "assets/Characters/Quantum/Models/Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx",
       "pathGuid": "18fe3d21a3cde1a0",
       "position": [
@@ -51529,9 +55009,9 @@
   "motionBlurIntensity": 0.5,
   "motionBlurSamples": 12,
   "msaaSamples": 4,
-  "shadowCascades": 2,
-  "shadowDistance": 40.0,
-  "shadowResolution": 2048,
+  "shadowCascades": 3,
+  "shadowDistance": 60.0,
+  "shadowResolution": 4096,
   "shadowsEnabled": true,
   "sky": {
     "aerialPerspectiveScale": 6.0,
