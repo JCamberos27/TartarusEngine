@@ -1174,6 +1174,7 @@ const char* AssetKindLabel(Cell::Kind k) {
         case Cell::Kind::Weapon:     return "Weapon Definition";
         case Cell::Kind::Recoil:     return "Recoil Profile";
         case Cell::Kind::CameraShake:return "Camera Shake";
+        case Cell::Kind::Decal:      return "Decal";
         case Cell::Kind::Hdri:       return "HDRI";
         case Cell::Kind::Script:     return "Script";
     }
@@ -1319,6 +1320,7 @@ std::vector<EditorLayer::ProjectAssetFile> EditorLayer::ScanProjectAssetFiles(co
         else if (type == "camerashake") f.Kind = Cell::Kind::CameraShake;
         else if (type == "hdri") f.Kind = Cell::Kind::Hdri;
         else if (type == "script") f.Kind = Cell::Kind::Script;
+        else if (type == "decal") f.Kind = Cell::Kind::Decal;
         else continue;
         f.Key = AssetDatabase::PathKey(f.Path);
         f.Name = it->path().filename().string();
@@ -1399,6 +1401,7 @@ std::vector<std::string> EditorLayer::AssetRefChoices(AssetLibrary& assets, Refl
             cellKind = Cell::Kind::Model;
             break;
         case ReflectAssetKind::Script:   cellKind = Cell::Kind::Script; break;
+        case ReflectAssetKind::Decal:    cellKind = Cell::Kind::Decal; break;
         default: return out;
     }
     std::unordered_set<std::string> have;
@@ -1834,12 +1837,14 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
         if (m_ListedAssetKeys.count(f.Key)) continue;
         const bool fileOnly = f.Kind == Cell::Kind::Animator || f.Kind == Cell::Kind::Weapon ||
                               f.Kind == Cell::Kind::Recoil || f.Kind == Cell::Kind::CameraShake ||
-                              f.Kind == Cell::Kind::Hdri || f.Kind == Cell::Kind::Script;
+                              f.Kind == Cell::Kind::Hdri || f.Kind == Cell::Kind::Script ||
+                              f.Kind == Cell::Kind::Decal;
         const char* kindName = f.Kind == Cell::Kind::Model ? "model" : f.Kind == Cell::Kind::Texture ? "texture"
                              : f.Kind == Cell::Kind::Material ? "material" : f.Kind == Cell::Kind::Sound ? "sound"
                              : f.Kind == Cell::Kind::Animator ? "animator" : f.Kind == Cell::Kind::Weapon ? "weapon"
                              : f.Kind == Cell::Kind::Recoil ? "recoil"
                              : f.Kind == Cell::Kind::CameraShake ? "camerashake"
+                             : f.Kind == Cell::Kind::Decal ? "decal"
                              : f.Kind == Cell::Kind::Script ? "script" : f.Kind == Cell::Kind::Hdri ? "hdri" : "prefab";
         // An HDRI is an image: both t:Hdri and t:Texture find it (like a screenshot).
         if (!MatchesAssetSearch(parsedSearch, f.Name, kindName, {}) &&
@@ -1870,6 +1875,7 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
                 case Cell::Kind::Model:      return 3;
                 case Cell::Kind::Texture:    return 4;
                 case Cell::Kind::Material:   return 5;
+                case Cell::Kind::Decal:      return 5;
                 case Cell::Kind::Sound:      return 6;
                 case Cell::Kind::Shader:     return 8;
                 case Cell::Kind::Animator:   return 9;
@@ -2030,6 +2036,9 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             cell.kind == Cell::Kind::Hdri) // never loaded here: a small tone-mapped decode (stb; .exr keeps the glyph)
             unloadedThumb = m_AssetThumbs.Get(cell.key, cell.kind == Cell::Kind::Texture || cell.kind == Cell::Kind::Hdri
                 ? AssetThumbnailLoader::Source::Image : AssetThumbnailLoader::Source::Cached);
+        else if (cell.kind == Cell::Kind::Decal) // its albedo's image thumbnail (the glyph until there is one)
+            if (const std::string& albedo = DecalThumbnailSource(cell.key); !albedo.empty())
+                unloadedThumb = m_AssetThumbs.Get(albedo, AssetThumbnailLoader::Source::Image);
         const ImVec2 thumbUv0(0.0f, unloadedThumb.FlipV ? 1.0f : 0.0f), thumbUv1(1.0f, unloadedThumb.FlipV ? 0.0f : 1.0f);
 
         bool isFolder = cell.kind == Cell::Kind::Folder;
@@ -2046,6 +2055,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             : cell.kind == Cell::Kind::Weapon ? ICON_FA_CROSSHAIRS
             : cell.kind == Cell::Kind::Recoil ? ICON_FA_BURST
             : cell.kind == Cell::Kind::CameraShake ? ICON_FA_VIDEO
+            : cell.kind == Cell::Kind::Decal ? ICON_FA_STAMP
             : cell.kind == Cell::Kind::Hdri ? ICON_FA_SUN
             : cell.kind == Cell::Kind::Script ? ICON_FA_SCROLL
             : (playing ? ICON_FA_STOP : ICON_FA_MUSIC);
@@ -2065,7 +2075,8 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 case Cell::Kind::Model:      return EditorTheme::KindMesh;
                 case Cell::Kind::Texture:    return EditorTheme::KindTexture;
                 case Cell::Kind::Hdri:       return EditorTheme::KindLight;
-                case Cell::Kind::Material:   return EditorTheme::KindMaterial;
+                case Cell::Kind::Material:
+                case Cell::Kind::Decal:      return EditorTheme::KindMaterial;
                 case Cell::Kind::Sound:      return EditorTheme::KindAudio;
                 case Cell::Kind::Scene:      return EditorTheme::KindScene;
                 case Cell::Kind::Prefab:     return EditorTheme::KindPrefab;
@@ -2367,11 +2378,12 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                     PushUndo(world, "Move Asset to Folder");
                     assets.SetAssetFolder((const char*)p->Data, cell.key);
                 }
-                // Controllers, weapon definitions and scripts: files, filed the same way.
-                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_FILE_PATH")) {
-                    PushUndo(world, "Move Asset to Folder");
-                    assets.SetAssetFolder((const char*)p->Data, cell.key);
-                }
+                // Controllers, weapon definitions, scripts and decals: files, filed the same way.
+                for (const char* fileType : {"ASSET_FILE_PATH", "ASSET_DECAL_PATH"})
+                    if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(fileType)) {
+                        PushUndo(world, "Move Asset to Folder");
+                        assets.SetAssetFolder((const char*)p->Data, cell.key);
+                    }
                 if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_FOLDER_PATH")) {
                     std::string src((const char*)p->Data);
                     if (src != cell.key && cell.key.rfind(src + "/", 0) != 0) {
@@ -2387,7 +2399,8 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 : cell.kind == Cell::Kind::Texture || cell.kind == Cell::Kind::Hdri ? "ASSET_TEXTURE_PATH" // the sky's HDRI field takes .hdr
                 : cell.kind == Cell::Kind::Material ? "ASSET_MATERIAL_PATH"
                 : cell.kind == Cell::Kind::Prefab ? "ASSET_PREFAB_PATH"
-                : cell.kind == Cell::Kind::Sound ? "ASSET_SOUND_PATH" : "ASSET_FILE_PATH";
+                : cell.kind == Cell::Kind::Sound ? "ASSET_SOUND_PATH"
+                : cell.kind == Cell::Kind::Decal ? "ASSET_DECAL_PATH" : "ASSET_FILE_PATH";
             if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip)) {
                 ImGui::SetDragDropPayload(payloadType, cell.key.c_str(), cell.key.size() + 1);
                 Glass::DragGhostLabel(ICON_FA_FILE, cell.display.c_str());
@@ -2423,6 +2436,10 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 EditorUI::SetTooltip("%s\n\nDouble-click to open in the Animator.", cell.display.c_str());
             } else if (cell.kind == Cell::Kind::Weapon || cell.kind == Cell::Kind::Recoil || cell.kind==Cell::Kind::CameraShake) {
                 EditorUI::SetTooltip("%s\n\nSelect to edit in the Inspector.", cell.display.c_str());
+            } else if (cell.kind == Cell::Kind::Decal) {
+                EditorUI::SetTooltip("%s\n\nDrag onto a surface in the viewport to place it,\n"
+                                     "or onto a placed decal to swap its look.\nSelect to edit in the Inspector.",
+                                     cell.display.c_str());
             } else if (cell.kind == Cell::Kind::Hdri) {
                 EditorUI::SetTooltip("%s\n\nDrag onto the sky's HDRI field (Environment) to light the scene with it.",
                     cell.display.c_str());
@@ -2656,6 +2673,11 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 if (cell.kind == Cell::Kind::Model && ImGui::IsItemHovered())
                     EditorUI::SetTooltip("Write one editable .mat per material this model uses (into the\n"
                                          "asset's Materials folder) and use them on its placed objects.");
+                if (cell.kind == Cell::Kind::Texture && ImGui::MenuItem(ICON_FA_STAMP "  Create Decal"))
+                    CreateDecalAsset(world, assets, std::filesystem::u8path(cell.key).parent_path().u8string(), cell.key);
+                if (cell.kind == Cell::Kind::Texture && ImGui::IsItemHovered())
+                    EditorUI::SetTooltip("Write a .decal next to this texture, using it as the albedo. A texture\n"
+                                         "with no real alpha is read as a white-on-black mask (luma).");
             }
 
             // Everything currently selected, whenever the right-clicked item is part of a
@@ -2692,7 +2714,8 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 // Files that are never library entries have nothing to remove from it.
                 const bool fileOnly = cell.kind == Cell::Kind::Animator || cell.kind == Cell::Kind::Weapon ||
                                       cell.kind == Cell::Kind::Recoil || cell.kind==Cell::Kind::CameraShake ||
-                                      cell.kind == Cell::Kind::Hdri || cell.kind == Cell::Kind::Script;
+                                      cell.kind == Cell::Kind::Hdri || cell.kind == Cell::Kind::Script ||
+                                      cell.kind == Cell::Kind::Decal;
                 ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
                 if (!fileOnly && ImGui::MenuItem(removeLabel)) {
                     RequestDeleteAssets(world, assets, selectionForAction, /*skipDialog=*/false);
@@ -2848,6 +2871,10 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
                 Log::Error("Create Material: couldn't write '" + candidate + "'.");
             }
         }
+        if (ImGui::MenuItem(ICON_FA_STAMP "  Create Decal"))
+            CreateDecalAsset(world, assets, ProjectPaths::Resolve(NewAssetFolder("assets/Decals")), std::string());
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("A new .decal in this folder. Right-click a texture > Create Decal to start from an image.");
         if (ImGui::MenuItem(ICON_FA_GUN "  Create First-Person Weapon...")) m_OpenWeaponWizard = true;
         if (ImGui::MenuItem(ICON_FA_VIDEO "  Create Camera Shake")) {
             const auto base=std::filesystem::u8path(ProjectPaths::Resolve(NewAssetFolder("assets/CameraShake")+"/New Camera Shake.camerashake"));

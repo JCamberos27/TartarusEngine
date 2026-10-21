@@ -1340,6 +1340,38 @@ struct ReflectionProbeComponent {
     float Importance{1.0f};            // higher wins 2-probe selection tie-breaks
 };
 
+// Clustered PBR decal (docs/DECALS.md). Projects a .decal asset along the entity's local -Z
+// (into the surface) through a box of Size metres. Per-instance values multiply / override the
+// asset's defaults; Seed drives rotation, scale and flip jitter plus the atlas frame when
+// Frame is -1, so the same seed always gives the same look.
+struct DecalComponent {
+    std::string AssetPath;              // project-relative .decal
+    glm::vec3 Size{1.0f, 1.0f, 0.25f};  // width, height, projection depth (metres)
+    glm::vec3 Tint{1.0f};
+    float Opacity = 1.0f;               // multiplies every channel
+    // Per-channel opacity multipliers on top of the asset's channel defaults.
+    float AlbedoOp = 1.0f, NormalOp = 1.0f, RoughnessOp = 1.0f, MetalOp = 1.0f, AOOp = 1.0f,
+          EmissiveOp = 1.0f;
+    int SortOrder = 0;                  // higher draws on top
+    int LayerMask = -1;                 // receiver object layers (bit per layer)
+    bool AffectStatic = true;
+    bool AffectDynamic = true;
+    int Seed = 0;
+    int Frame = -1;                     // atlas frame; -1 = from Seed
+    float RotationJitter = 0.0f;        // degrees, +/-
+    float ScaleJitter = 0.0f;           // fraction, +/-
+    bool RandomFlip = false;
+    // Weathering, added to the asset's values and the scene's Decal Grading.
+    float Fade = 0.0f, Bleach = 0.0f, Peel = 0.0f, Buff = 0.0f;
+};
+
+// Scene-level "how abandoned is this place" grade for every decal (first one in the scene wins).
+// Age fades and sun-bleaches; Wear peels, buffs and chips. Read every frame by DecalSystem.
+struct DecalGradingComponent {
+    float Age = 0.0f;  // 0..1
+    float Wear = 0.0f; // 0..1
+};
+
 // ---- lane P ----
 // Scene-level visual effects and HUD settings (Lane P quality pass).
 // Add one to the scene to tune muzzle flash, laser beam and HUD display parameters.

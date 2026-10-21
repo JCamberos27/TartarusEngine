@@ -62,7 +62,7 @@ enum class ReflectAssetKind; // ComponentReflection.h
 struct ReflectField;        // ComponentReflection.h
 
 struct AssetGridCell {
-    enum class Kind { Folder, Model, Texture, Material, Sound, Scene, Prefab, Shader, Animator, Weapon, Hdri, Script, Recoil, CameraShake } kind;
+    enum class Kind { Folder, Model, Texture, Material, Sound, Scene, Prefab, Shader, Animator, Weapon, Hdri, Script, Recoil, CameraShake, Decal } kind;
     std::string key;
     std::string display;
     std::shared_ptr<Model> model;
@@ -2266,6 +2266,28 @@ private:
     std::shared_ptr<AnimatorWindowState> m_AnimatorWin; // shared_ptr: the type is only complete in EditorLayer_Animator.cpp
     void DrawReflectedComponentExtra(const char* componentName, World& world, entt::entity entity,
                                      ReflectExtraPhase phase);
+    // Decals (docs/DECALS.md). EditorLayer_Decals.cpp: the .decal asset editor, the Decal
+    // component's extras (preview + atlas-frame picker, channel matrix, fade curves, Fit to
+    // Surface), Create Decal (writes a DA_*.decal) and the albedo an Asset Browser tile shows.
+    // `embedded`: drawn inside the component's section (no file header / Duplicate row).
+    void DrawDecalAssetEditor(World& world, const std::string& path, bool embedded = false);
+    void DrawDecalComponentExtra(World& world, entt::entity entity, ReflectExtraPhase phase);
+    // `folder` is absolute; `texture` (optional) becomes the albedo and names the file.
+    void CreateDecalAsset(World& world, AssetLibrary& assets, const std::string& folder, const std::string& texture);
+    std::string DecalThumbnailSource(const std::string& decalPath); // absolute albedo path, "" = none
+    // EditorLayer_Gizmos.cpp: what a dragged .decal is over, placing one, and Fit to Surface.
+    struct DecalSpot {
+        entt::entity Decal = entt::null; // a placed decal whose box the cursor ray enters first
+        bool OnSurface = false;          // the ray hit a mesh at Point, facing Normal
+        glm::vec3 Point{0.0f};
+        glm::vec3 Normal{0.0f, 0.0f, 1.0f};
+    };
+    DecalSpot DecalSpotUnderMouse(World& world, Camera& editorCamera) const;
+    entt::entity PlaceDecal(World& world, const std::string& path, const glm::vec3& point, const glm::vec3& normal,
+                            const glm::vec3& viewRight);
+    // Moves the decal onto the surface its box projects at (along -Z) and turns +Z out of it,
+    // keeping its spin. One undo step; false (nothing changed) when no surface is in reach.
+    bool FitDecalToSurface(World& world, entt::entity entity);
     // The Character Outfit component's editor (EditorLayer_Outfit.cpp).
     void DrawCharacterOutfitEditor(World& world, entt::entity root);
     // Multi-select counterpart: `sel` is every selected entity that has this component.

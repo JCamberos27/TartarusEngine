@@ -98,7 +98,8 @@ bool ChangesAssetIndex(const std::string& path) {
     if (rel == "library" || rel.rfind("library/", 0) == 0) return false;
     const std::string type = AssetDatabase::AssetType(path);
     if (type == "model" || type == "texture" || type == "material" || type == "audio" || type == "prefab" ||
-        type == "animatorcontroller" || type == "firstpersonanimationset" || type == "recoil" || type == "camerashake" || type == "hdri" || type == "script")
+        type == "animatorcontroller" || type == "firstpersonanimationset" || type == "recoil" || type == "camerashake" || type == "hdri" || type == "script" ||
+        type == "decal")
         return true;
     return type.empty() && fs::path(path).extension().empty();
 }

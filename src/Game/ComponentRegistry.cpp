@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstring>
 #include <iterator>
+#include <random>
 
 // ---------------------------------------------------------------------------------------------
 // House rule: ship components and controls fully wired, or not visible (#215)
@@ -1559,6 +1560,106 @@ void RegisterEngineComponents() {
               "Blend weight priority. Higher wins 2-probe selection when many probes overlap.", 0.0f, 10.0f },
         },
     });
+
+    // Clustered decals (docs/DECALS.md). The .decal asset holds the look; these are per-placement
+    // overrides. The Inspector's extras (EditorLayer_Decals.cpp) add the preview, atlas-frame grid,
+    // Edit Asset and Fit to Surface; the box gizmo edits Size, never the Transform's scale.
+    {
+        ReflectComponent m;
+        m.Name = "Decal"; m.Icon = ICON_FA_STAMP; m.Category = "Rendering";
+        m.Tooltip = "Projects a .decal (graffiti, grime, stains, signage, paint) onto whatever surfaces its box\n"
+                    "touches, along the object's -Z. Blue +Z points out of the surface. Drag a .decal from the\n"
+                    "Asset Browser onto a surface to place one.";
+        m.Fields = {
+            { "Asset", T::AssetRef, TARTARUS_REFLECT_FIELD(DecalComponent, AssetPath), 0.0f,
+              "The .decal to project: textures, which channels it writes, fades and paint response.\n"
+              "Edit it by selecting it in the Asset Browser (or Edit Asset below)." },
+            { "Size", T::Vec3, TARTARUS_REFLECT_FIELD(DecalComponent, Size), 0.01f,
+              "Projection box in metres: width, height and depth along -Z. Depth is how far the\n"
+              "decal reaches into and out of the surface; keep it shallow so it doesn't bleed onto\n"
+              "nearby walls. The Scale gizmo edits this.", 0.001f, 100.0f },
+            { "Tint", T::Color, TARTARUS_REFLECT_FIELD(DecalComponent, Tint), 0.0f,
+              "Multiplies the asset's colour. White keeps it as authored." },
+            { "Opacity", T::Float, TARTARUS_REFLECT_FIELD(DecalComponent, Opacity), 0.01f,
+              "Overall strength, multiplying every channel.", 0.0f, 1.0f },
+            { "Albedo", T::Float, TARTARUS_REFLECT_FIELD(DecalComponent, AlbedoOp), 0.01f,
+              "Colour strength, on top of the asset's own albedo opacity.", 0.0f, 1.0f },
+            { "Normal", T::Float, TARTARUS_REFLECT_FIELD(DecalComponent, NormalOp), 0.01f,
+              "Surface-relief strength, on top of the asset's normal opacity.", 0.0f, 1.0f },
+            { "Roughness", T::Float, TARTARUS_REFLECT_FIELD(DecalComponent, RoughnessOp), 0.01f,
+              "How much the decal replaces the surface's roughness (wet stains, glossy paint).", 0.0f, 1.0f },
+            { "Metal", T::Float, TARTARUS_REFLECT_FIELD(DecalComponent, MetalOp), 0.01f,
+              "How much the decal replaces the surface's metalness (chipped paint showing bare steel).", 0.0f, 1.0f },
+            { "AO", T::Float, TARTARUS_REFLECT_FIELD(DecalComponent, AOOp), 0.01f,
+              "How much the decal darkens ambient light in its cavities.", 0.0f, 1.0f },
+            { "Emissive", T::Float, TARTARUS_REFLECT_FIELD(DecalComponent, EmissiveOp), 0.01f,
+              "Glow strength (neon paint, screens). With the asset's UV Paint on it glows only under UV light.", 0.0f, 1.0f },
+            { "Sort Order", T::Int, TARTARUS_REFLECT_FIELD(DecalComponent, SortOrder), 0.1f,
+              "Overlapping decals draw lowest first; higher sits on top. Ties keep a stable order.", -1000.0f, 1000.0f },
+            { "Layer Mask", T::Int, TARTARUS_REFLECT_FIELD(DecalComponent, LayerMask), 0.0f,
+              "Which object layers receive it, one bit per layer. -1 = every layer." },
+            { "Affect Static", T::Bool, TARTARUS_REFLECT_FIELD(DecalComponent, AffectStatic), 0.0f,
+              "Project onto static scenery (walls, floors, props that never move)." },
+            { "Affect Dynamic", T::Bool, TARTARUS_REFLECT_FIELD(DecalComponent, AffectDynamic), 0.0f,
+              "Project onto moving objects and characters that pass through the box." },
+            { "Seed", T::Int, TARTARUS_REFLECT_FIELD(DecalComponent, Seed), 1.0f,
+              "Drives the jitter below and, with Frame at -1, which atlas frame shows. The same seed\n"
+              "always gives the same look." },
+            { "Frame", T::Int, TARTARUS_REFLECT_FIELD(DecalComponent, Frame), 0.1f,
+              "Atlas frame to show (left to right, top to bottom). -1 picks one from Seed.", -1.0f, 4095.0f },
+            { "Rotation Jitter", T::Float, TARTARUS_REFLECT_FIELD(DecalComponent, RotationJitter), 0.5f,
+              "Random spin about the projection axis, up to this many degrees either way.", 0.0f, 180.0f },
+            { "Scale Jitter", T::Float, TARTARUS_REFLECT_FIELD(DecalComponent, ScaleJitter), 0.01f,
+              "Random size change, up to this fraction either way (0.2 = 80% to 120%).", 0.0f, 0.9f },
+            { "Random Flip", T::Bool, TARTARUS_REFLECT_FIELD(DecalComponent, RandomFlip), 0.0f,
+              "Mirror horizontally on half of the seeds. Leave off for text and signage." },
+            { "Fade", T::Float, TARTARUS_REFLECT_FIELD(DecalComponent, Fade), 0.01f,
+              "Washes the colour out toward the surface, added to the asset's and the scene's Decal Grading.", 0.0f, 1.0f },
+            { "Bleach", T::Float, TARTARUS_REFLECT_FIELD(DecalComponent, Bleach), 0.01f,
+              "Sun bleaching: desaturates and lightens.", 0.0f, 1.0f },
+            { "Peel", T::Float, TARTARUS_REFLECT_FIELD(DecalComponent, Peel), 0.01f,
+              "Paint flaking off in patches, showing the surface underneath.", 0.0f, 1.0f },
+            { "Buff", T::Float, TARTARUS_REFLECT_FIELD(DecalComponent, Buff), 0.01f,
+              "Scrubbed-off look: a smeared ghost of the mark that someone tried to clean.", 0.0f, 1.0f },
+        };
+        auto F = [&](const char* name) -> ReflectField& {
+            for (auto& f : m.Fields) if (std::strcmp(f.Name, name) == 0) return f;
+            return m.Fields[0];
+        };
+        F("Asset").AssetKind = ReflectAssetKind::Decal;
+        for (const char* s : {"Opacity", "Albedo", "Normal", "Roughness", "Metal", "AO", "Emissive",
+                              "Scale Jitter", "Fade", "Bleach", "Peel", "Buff"})
+            F(s).Slider = true;
+        F("Rotation Jitter").Slider = true;
+        F("Rotation Jitter").Format = "%.0f deg";
+        for (const char* s : {"Albedo", "Normal", "Roughness", "Metal", "AO", "Emissive"}) F(s).Group = "Channels";
+        for (const char* s : {"Sort Order", "Layer Mask", "Affect Static", "Affect Dynamic"}) F(s).Group = "Receivers";
+        for (const char* s : {"Seed", "Frame", "Rotation Jitter", "Scale Jitter", "Random Flip"}) F(s).Group = "Variation";
+        for (const char* s : {"Fade", "Bleach", "Peel", "Buff"}) F(s).Group = "Weathering";
+        m.Buttons.push_back({"Randomize Seed", ICON_FA_DICE,
+                             "A new random seed: a different rotation, scale, flip and atlas frame within the jitter set above.",
+                             0, [](World&, entt::entity, void* c, int) {
+                                 static std::mt19937 rng{std::random_device{}()};
+                                 static_cast<DecalComponent*>(c)->Seed = (int)(rng() & 0x7FFFFFFF);
+                             }});
+        Register<DecalComponent>(std::move(m));
+    }
+
+    // Scene-wide decal grade: one slider ages every decal in the level at once.
+    {
+        ReflectComponent m;
+        m.Name = "Decal Grading"; m.Icon = ICON_FA_HOURGLASS_HALF; m.Category = "Rendering";
+        m.Tooltip = "How abandoned this place looks: ages and wears every decal in the scene on top of each\n"
+                    "decal's own weathering. Add one to any object; the first in the scene is used.";
+        m.Fields = {
+            { "Age", T::Float, TARTARUS_REFLECT_FIELD(DecalGradingComponent, Age), 0.01f,
+              "0 = fresh. Higher fades colours and sun-bleaches them.", 0.0f, 1.0f },
+            { "Wear", T::Float, TARTARUS_REFLECT_FIELD(DecalGradingComponent, Wear), 0.01f,
+              "0 = intact. Higher peels, scrubs and chips paint and graffiti.", 0.0f, 1.0f },
+        };
+        for (ReflectField& f : m.Fields) f.Slider = true;
+        Register<DecalGradingComponent>(std::move(m));
+    }
 
     // Phase 4 (#6) item 1 — Collider. Registered for the generic Inspector/Add-Component path
     // only: GenericSerialize stays false because a dedicated hand-written pass in

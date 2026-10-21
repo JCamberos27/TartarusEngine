@@ -69,6 +69,7 @@ class IblProbe;
 class ReflectionProbeArray;
 class LightBuffer;
 class ClusterGrid;
+class DecalSystem;
 struct RenderFrameContext;
 class VolumetricFog;
 
@@ -95,6 +96,10 @@ struct SceneRenderInputs {
     ReflectionProbeArray* probeArray    = nullptr;
     LightBuffer*         lightBuffer    = nullptr;
     ClusterGrid*         clusterGrid    = nullptr;
+    // Clustered decals (docs/DECALS.md): gathered per view in RenderScene and binned by the cluster
+    // cull. Either null = no decals.
+    DecalSystem*         decals          = nullptr;
+    Shader*              decalCullShader = nullptr;
 
     // --- this frame's environment / light state ---
     const Cubemap* hdriCube = nullptr; // non-null => draw the HDRI sky instead of the gradient
@@ -148,6 +153,7 @@ struct FrameState {
     int  spotCountForView = 0, pointCountForView = 0;
     float clusterNearZ = 0.0f, clusterFarZ = 0.0f;
     int  vp[4] = {0, 0, 0, 0};
+    int  decalCount = 0; // decals visible in this view (uDecalCount); 0 without clustering
 };
 
 // Host-owned scene-draw pass, extracted from main.cpp's `drawScene` lambda (audit #359, pass 2).
