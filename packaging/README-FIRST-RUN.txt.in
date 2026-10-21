@@ -23,7 +23,7 @@ build, and your setup carries over.
 
 SKY HDRIS ARE NOT INCLUDED
 --------------------------
-The Master Scene opens on first run. It uses the engine's physical sky, so it needs nothing
+The Apartment Hallway opens on first run. It uses the engine's physical sky, so it needs nothing
 that isn't in this download. One kind of asset other scenes may use cannot be redistributed:
 
   * Sky HDRIs (project/assets/sky/)

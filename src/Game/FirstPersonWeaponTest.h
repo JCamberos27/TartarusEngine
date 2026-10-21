@@ -15,7 +15,7 @@ class FirstPersonPresentation;
 class ShellCasings;
 class World;
 
-// `--weapon-test`: the Master Scene's weapons played through by script, in the real Play loop (the
+// `--weapon-test`: the Arena's weapons played through by script, in the real Play loop (the
 // smoke-test harness: real scene, rigs, controllers, IK and physics raycasts) on a fixed step.
 // Each frame Drive() stands in for the player's weapon input - trigger, aim, R, weapon keys - and
 // checks what the weapon did: states, ammo, the pump, pellets, reloads, the sights, slot swaps.
