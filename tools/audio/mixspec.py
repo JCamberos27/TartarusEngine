@@ -65,6 +65,9 @@ def classify(e):
     m = re.fullmatch(r"snd\.foley\.move\.(\w+)", key)
     if m and m.group(1) in L["move"]:
         return "move", L["move"][m.group(1)], "played"
+    m = re.fullmatch(r"snd\.foley\.door\.(\w+)", key)
+    if m and m.group(1) in L["door"]:
+        return "door", L["door"][m.group(1)], "played"
     m = re.fullmatch(r"snd\.foley\.weapon\.(\w+)", key)
     if m and m.group(1) in L["gear"]:
         return "gear", L["gear"][m.group(1)], "played"
