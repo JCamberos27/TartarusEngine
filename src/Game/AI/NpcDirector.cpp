@@ -1491,9 +1491,13 @@ void NpcDirector::LateUpdate(World& world, float dt, const PlayerSnapshot& p) {
                 n.LateDt += dt;
                 if (n.Animate) { // (a held frame has no fresh pose to solve on: the ragdoll takes the one it has)
                     LatePose(world, n, n.LateDt, p, /*alive=*/false);
+                    // The flinch of the rounds that killed him stays on that pose (dropped first, the hand it had kicked snapped
+                    // back 20 cm in the frame he died), and the ragdoll takes it from there.
+                    if (const auto it = m_Flinch.find(n.Index); it != m_Flinch.end() && it->second.Active(m_Now)) it->second.Apply(n.Body, m_Now);
                     m_DeathBones[n.Index].Dt = n.LateDt;
                     n.LateDt = 0.0f;
                 }
+                m_Flinch.erase(n.Index);
                 FinishDeath(world, n);
             }
             if (n.Ragdoll) {
@@ -1612,8 +1616,9 @@ void NpcDirector::LatePose(World& world, Npc& n, float dt, const PlayerSnapshot&
         n.WeaponCam.Position += FrontOf(n.AimYaw, n.AimPitch) * reach;
         n.WeaponCam.Roll = 28.0f * std::sin(3.14159265f * mt);
     }
-    // Up off a wall: if the gun as it would be held - out along the camera's line, and down along the hold's own (the camera's
-    // front with last frame's muzzle drop, while untucked) - would meet something solid within its reach and a hand past, it comes up
+    // Up off a wall: if the gun as it would be held - out along the camera's line, and along the hold's own (the camera's front
+    // with last frame's muzzle drop and its swing off to the side, while untucked: at a doorjamb or the arch's edge the camera's line
+    // went clear through the opening while the gun, angled across the body, went into the jamb) - would meet something solid within its reach and a hand past, it comes up
     // toward high ready and in, by how far it would go in (turning in cover, the gun swept through the wall beside him). Measured
     // on the untucked lines, so the tuck can't clear its own check and drop the gun back in.
     {
@@ -1621,11 +1626,15 @@ void NpcDirector::LatePose(World& world, Npc& n, float dt, const PlayerSnapshot&
         glm::vec3 fp, muzzle, bore;
         if (alive && n.Weapon->MuzzleFrames(fp, muzzle, bore)) {
             const glm::vec3 front = FrontOf(n.WeaponCam.Yaw, n.WeaponCam.Pitch);
+            const glm::vec3 side = glm::cross(front, glm::vec3(0.0f, 1.0f, 0.0f));
+            const glm::vec3 right = glm::dot(side, side) > 1e-6f ? glm::normalize(side) : glm::vec3(0.0f);
             if (n.GunTuck < 0.05f && glm::length(muzzle - n.Eye) > 0.1f) {
+                const glm::vec3 line = glm::normalize(muzzle - n.Eye);
                 n.GunReach = std::clamp(glm::length(muzzle - n.Eye), 0.5f, 1.1f);
-                n.GunDrop = glm::normalize(muzzle - n.Eye).y - front.y;
+                n.GunDrop = line.y - front.y;
+                n.GunSide = glm::dot(line, right);
             }
-            const glm::vec3 held = glm::normalize(front + glm::vec3(0.0f, n.GunDrop, 0.0f));
+            const glm::vec3 held = glm::normalize(front + glm::vec3(0.0f, n.GunDrop, 0.0f) + right * n.GunSide);
             const float reach = n.GunReach + 0.15f;
             QueryFilter f;
             f.HitTriggers = 0;
@@ -2063,7 +2072,7 @@ void NpcDirector::Kill(World& world, Npc& n, const glm::vec3& dir, const glm::ve
     n.TriggerHeld = false;
     m_Cover.Release(n.Index, m_Now);
     n.Hitboxes.reset(); // the ragdoll's parts take over the rounds
-    m_Flinch.erase(n.Index);
+    n.DiedFlinching = FlinchActive(n.Index); // (tests: the death pop's log; the flinch goes with the last animated frame, LateUpdate)
     if (n.Cct != PhysicsWorld::kNoCharacter) PhysicsWorld::DestroyNpcCharacter(n.Cct);
     n.Cct = PhysicsWorld::kNoCharacter;
     if (n.Agent >= 0) m_Crowd.Remove(n.Agent);
@@ -2159,8 +2168,9 @@ void NpcDirector::FinishDeath(World& world, Npc& n) {
             const float d = glm::length(b - n.LastBones[k]);
             pop = std::max(pop, d);
             if (d > 0.15f) // which bone, for the test's log
-                std::printf("[NpcTest] %s death pop: %s %.0f cm (last animated (%.2f %.2f %.2f), ragdoll (%.2f %.2f %.2f))%s\n", n.Name.c_str(),
-                            kBones[k], d * 100.0f, n.LastBones[k].x, n.LastBones[k].y, n.LastBones[k].z, b.x, b.y, b.z, n.Prone ? ", prone" : "");
+                std::printf("[NpcTest] %s death pop: %s %.0f cm (last animated (%.2f %.2f %.2f), ragdoll (%.2f %.2f %.2f))%s%s\n", n.Name.c_str(),
+                            kBones[k], d * 100.0f, n.LastBones[k].x, n.LastBones[k].y, n.LastBones[k].z, b.x, b.y, b.z, n.Prone ? ", prone" : "",
+                            n.DiedFlinching ? ", mid-flinch" : "");
         }
         n.DeathPop = pop;
     }
@@ -2333,7 +2343,7 @@ void NpcDirector::RollOver(Npc& n, float dt) {
         }
         const glm::vec3 up(0.0f, 1.0f, 0.0f), side = n.RollSide; // side: the way he rolls (that side goes down)
         const float j = c.WoundRollImpulse * (1.0f + (float)(n.RollTries - 1) / 3.0f) * dt / kHeaveTime;
-        const bool ontoLeft = n.HurtLeg != 0;                                   // (onto the good leg's side) ...
+        const bool ontoLeft = n.RollOntoLeft;                                   // (onto the side he chose) ...
         const int farArm = ontoLeft ? 5 : 3, farThigh = ontoLeft ? 9 : 7;      // ... the other comes up and over
         auto twist = [&](int part, float share) {
             const glm::vec3 at = n.Ragdoll->PartPosition(part);
@@ -2366,10 +2376,29 @@ void NpcDirector::RollOver(Npc& n, float dt) {
     if (n.RollTries >= (int)c.WoundRollTries || m_Now < n.NextRollAt || m_Now - n.DownAt < 0.6f || lin > c.WoundRecoverSpeed) return;
     ++n.RollTries;
     n.NextRollAt = m_Now + 1.8f;
-    // Over onto the good leg's side (the hurt one ends on top): his right with the left leg hurt, else his left. The body loosens
+    // Over onto the good leg's side (the hurt one ends on top): his right with the left leg hurt, else his left - unless he lies
+    // along a wall on that side (a man down beside one rolls away from it: every heave into it came to nothing). The body loosens
     // first (settled, its damping and friction would swallow the effort), then the heave runs (above).
-    const float toward = n.HurtLeg == 0 ? -1.0f : 1.0f;
-    n.RollSide = glm::length(across) > 1e-5f ? glm::normalize(glm::vec3(across.x, 0.0f, across.z)) * toward : glm::vec3(0.0f);
+    n.RollOntoLeft = n.HurtLeg != 0;
+    const glm::vec3 left = glm::length(glm::vec2(across.x, across.z)) > 1e-5f ? glm::normalize(glm::vec3(across.x, 0.0f, across.z)) : glm::vec3(0.0f);
+    if (glm::dot(left, left) > 0.0f) {
+        // The room each side of his chest and hips, at a body's height off the floor (a roll travels about a body's width).
+        constexpr float kRollReach = 1.0f, kRollNeeds = 0.7f;
+        auto room = [&](const glm::vec3& dir) {
+            float r = kRollReach;
+            for (int part : {0, 1}) {
+                const glm::vec3 at = n.Ragdoll->PartPosition(part);
+                r = std::min(r, FloorRoom(glm::vec3(at.x, at.y - 0.15f, at.z), dir, kRollReach));
+            }
+            return r;
+        };
+        const float good = room(n.RollOntoLeft ? left : -left), bad = room(n.RollOntoLeft ? -left : left);
+        if (good < kRollNeeds && bad > good + 0.1f) n.RollOntoLeft = !n.RollOntoLeft;
+        if (TrackDeathPop)
+            std::printf("[NpcTest] %s rolls toward his %s (room %.2f m on the good leg's side, %.2f m on the other)\n", n.Name.c_str(),
+                        n.RollOntoLeft ? "left" : "right", good, bad);
+    }
+    n.RollSide = left * (n.RollOntoLeft ? 1.0f : -1.0f);
     n.RollHeaveUntil = m_Now + 0.8f; // (at most: it stops once he's over)
     n.Ragdoll->Loosen(1.8f);
     if (TrackDeathPop)
