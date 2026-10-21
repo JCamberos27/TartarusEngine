@@ -16,6 +16,7 @@
 #include "EditorTestProbe.h"
 #include "Shortcuts.h"
 #include "World.h"
+#include "VolumetricFog.h"
 #include "AssetLibrary.h"
 #include "Camera.h"
 #include "Log.h"
@@ -189,6 +190,7 @@ struct EditorUiTestAccess {
     static void CloseToolWindows(EditorLayer& e) {
         e.m_ShowAnimator = false;
         e.m_ShowAudioDebug = false;
+        e.m_ShowLighting = false; // a Lighting test that failed midway left it over the Hierarchy
         EditorSettings::Get().ShowAssetLibrary = false;
     }
     static std::string& ScenePath(EditorLayer& e) { return e.m_CurrentScenePath; }

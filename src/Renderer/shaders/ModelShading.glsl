@@ -70,6 +70,41 @@ vec3 ApplyAerialPerspective(vec3 c) {
     return c * ap.a + ap.rgb;
 }
 
+// Froxel volumetric fog (VolumetricFog.h): the integrated volume of this view - texel k holds the
+// light scattered toward the eye and the transmittance from the eye to slice k's far boundary,
+// slices spaced exponentially in view depth. Projected with the view the volume was built for
+// (uVolViewProj), not uProj, so the view-model sub-pass's own FOV still finds the right froxel.
+// Off (uVolOn 0, a neutral texture on unit 27) for every renderer that doesn't build one.
+uniform int  uVolOn;
+uniform mat4 uVolViewProj;
+uniform vec4 uVolParams; // x = near, y = 1 / ln(far / near), z = slices, w = pixels per froxel column
+layout(binding = 27) uniform sampler3D uVolumeFog;
+
+// (in-scatter, transmittance) between the eye and `worldPos`.
+vec4 VolumetricFogAt(vec3 worldPos) {
+    if (uVolOn == 0) return vec4(0.0, 0.0, 0.0, 1.0);
+    vec4 clip = uVolViewProj * vec4(worldPos, 1.0);
+    if (clip.w <= 1e-4) return vec4(0.0, 0.0, 0.0, 1.0);
+    vec2 uv = clip.xy / clip.w * 0.5 + 0.5;
+    // The slice coordinate: s = k + 1 at slice k's far boundary, where its texel's value holds.
+    // Read one slice in front of the surface: the slice the surface sits in also holds samples from
+    // behind it, and behind a wall is often the moonlit outside - read there, a thin wall glowed with
+    // the light beyond it. The slice it skips is ~9% of the distance on Medium. A surface seen at a
+    // grazing angle crosses several slices within one froxel column, so the filtered read also takes
+    // in the neighbouring columns' slices behind it: step back by that spread too (up to 4 slices).
+    float s = log(clip.w / uVolParams.x) * uVolParams.y * uVolParams.z;
+    float spread = max(abs(dFdx(s)), abs(dFdy(s))) * uVolParams.w;
+    s -= 1.0 + min(spread, 4.0);
+    vec4 v = texture(uVolumeFog, vec3(uv, (s - 0.5) / uVolParams.z));
+    // In front of the first slice's boundary, fade in from "no fog".
+    return mix(vec4(0.0, 0.0, 0.0, 1.0), v, clamp(s, 0.0, 1.0));
+}
+
+vec3 ApplyVolumetricFog(vec3 c) {
+    vec4 v = VolumetricFogAt(vWorldPos);
+    return c * v.a + v.rgb;
+}
+
 // How much of the sun (or moon) gets through the clouds to this point: project it along the
 // light onto sea level, where the shadow map was traced from.
 float CloudShadow(vec3 p) {

@@ -2,6 +2,7 @@
 
 #include <glm/glm.hpp>
 #include <cstdint>
+#include <memory>
 #include <unordered_map>
 #include <vector>
 #include <entt/entity/fwd.hpp>
@@ -69,6 +70,7 @@ class ReflectionProbeArray;
 class LightBuffer;
 class ClusterGrid;
 struct RenderFrameContext;
+class VolumetricFog;
 
 // Engine resources + this frame's light/shadow state that the scene-draw pass needs, gathered
 // into one explicit value instead of the ~25 `[&]`-captures the old main.cpp lambda relied on
@@ -141,6 +143,7 @@ struct FrameState {
 
     bool shadowsOn = false, sunShadowsOn = false;
     bool iblOn = false, ssaoOn = false, clusterOn = false;
+    bool volOn = false; // this view builds and applies the volumetric fog (VolumetricFog::WantedFor)
     float ssaoIntensity = 1.0f; // #160
     int  spotCountForView = 0, pointCountForView = 0;
     float clusterNearZ = 0.0f, clusterFarZ = 0.0f;
@@ -152,6 +155,14 @@ struct FrameState {
 // shadow/IBL/cluster prerequisite passes, framebuffer binding, and the viewport.
 class SceneRenderer {
 public:
+    SceneRenderer();
+    ~SceneRenderer();
+    SceneRenderer(const SceneRenderer&) = delete;
+    SceneRenderer& operator=(const SceneRenderer&) = delete;
+
+    // Compiles the volumetric fog programs and builds its noise now (load-time warm-up).
+    void WarmUpVolumetrics();
+
     // Compiles, at load, every shader-variant program the world's materials will draw through
     // (otherwise each compiles on the first frame that draws it). Returns how many programs it touched.
     static int WarmShaderVariants(World& world);
@@ -179,4 +190,7 @@ private:
     // (camera, cascaded/spot/point shadows, IBL, reflection probes, SSAO, clustered lighting,
     // unlit/tonemap flags). Safe to call once per distinct program used in a frame.
     void ApplyFrameState(Shader& program, const FrameState& fs) const;
+
+    // Froxel volumetric fog: per-view volumes, built in RenderScene before the opaque pass.
+    std::unique_ptr<VolumetricFog> m_Volumetrics;
 };
