@@ -85,6 +85,9 @@ void CascadedShadowMap::Update(const glm::mat4& camView, const glm::mat4& camPro
     float camNear = -(camView * glm::vec4(nearC[0], 1.0f)).z;
     float camFar  = -(camView * glm::vec4(farC[0],  1.0f)).z;
     camNear = std::max(camNear, 0.01f);
+    // The corners below run the whole frustum, near plane to the camera's own far plane: a split distance is a
+    // fraction of that, not of the shadow distance (which made every cascade 10-50x too big).
+    const float frustumFar = std::max(camFar, camNear + 1e-3f);
     camFar  = std::min(camFar, camNear + std::max(shadowDistance, 1.0f));
 
     // Practical split scheme (blend of logarithmic and uniform).
@@ -98,8 +101,8 @@ void CascadedShadowMap::Update(const glm::mat4& camView, const glm::mat4& camPro
 
     float prevFar = camNear;
     for (int c = 0; c < m_Count; ++c) {
-        float t0 = (prevFar - camNear) / (camFar - camNear);
-        float t1 = (m_SplitFar[c] - camNear) / (camFar - camNear);
+        float t0 = (prevFar - camNear) / (frustumFar - camNear);
+        float t1 = (m_SplitFar[c] - camNear) / (frustumFar - camNear);
 
         // 8 corners of this cascade's sub-frustum.
         glm::vec3 corners[8];
