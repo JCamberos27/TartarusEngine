@@ -40,6 +40,9 @@ vec3 UnpackNormal(vec3 s) {
     return n;
 }
 
+// Clustered decals and the material's Grunge map (ApplyDecals, ApplyGrunge).
+#include "ModelDecals.glsl"
+
 vec3 BloodSplatCover() {
     vec3 acc = vec3(0.0);
     vec3 bn = normalize(vBindNormal);
@@ -181,6 +184,11 @@ void main() {
     } else if (backFace) {
         N = -N;
     }
+    // Material -> Grunge -> decals -> blood -> lighting (docs/DECALS.md).
+    vec3 geoN = backFace ? -normalize(vNormal) : normalize(vNormal);
+    ApplyGrunge(albedo, roughness, ao, geoN);
+    vec3 decalEmissive = vec3(0.0);
+    ApplyDecals(albedo, N, roughness, metallic, ao, decalEmissive, geoN);
     if (uBloodSplatCount > 0) {
         // Soaked in: fabric and skin take the blood's colour, darker where it pooled, glossy while wet.
         vec3 blood = BloodSplatCover();
@@ -219,6 +227,7 @@ void main() {
     // nothing once a map was assigned.
     vec3 emissiveEarly = uHasEmissiveMap == 1 ? (tri ? SampleTriplanar(uEmissiveMap, vWorldPos, triW, uTriplanarScale)
                                                       : texture(uEmissiveMap, uv)).rgb * uEmissiveColor : uEmissiveColor;
+    emissiveEarly += decalEmissive;
     if (uUnlit == 1) {
         vec3 flatColor = albedo + emissiveEarly;
         FragColor = vec4(uApplyTonemap == 1 ? pow(flatColor, vec3(1.0 / 2.2)) : flatColor, 1.0);

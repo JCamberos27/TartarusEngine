@@ -801,6 +801,38 @@ void EditorLayer::DrawEnvironmentSettings(World& world, float w) {
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip(
         "Strength of the image-based ambient light and reflections baked from the sky colors " // #19
         "above. 1.0 is physically consistent; 0 disables environment lighting entirely.");
+
+    // Decal Grading (docs/DECALS.md): the scene's first Decal Grading component ages every decal
+    // at once. A scene without one gets a "Decal Grading" object the first time a slider moves.
+    {
+        DecalGradingComponent* grading = nullptr;
+        for (auto e : world.Registry.view<DecalGradingComponent>(entt::exclude<InactiveTag>)) {
+            grading = &world.Registry.get<DecalGradingComponent>(e);
+            break;
+        }
+        DecalGradingComponent value = grading ? *grading : DecalGradingComponent{};
+        auto gradeSlider = [&](const char* label, float* v, const char* tip) {
+            ImGui::SetNextItemWidth(w);
+            bool activated = false;
+            const bool changed = EditorUI::SliderFloat(label, v, 0.0f, 1.0f, "%.2f", 0, &activated);
+            if (activated) {
+                PushUndo(world, "Edit Decal Grading");
+                if (!grading) {
+                    const entt::entity e = world.CreateEmptyEntity(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f),
+                                                                   UniqueNameFor(world, "Decal Grading"));
+                    grading = &world.Registry.emplace<DecalGradingComponent>(e);
+                }
+            }
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tip);
+            return changed;
+        };
+        const bool ageChanged = gradeSlider("Decal age", &value.Age,
+            "How old every decal in the scene looks: fades and sun-bleaches graffiti, signage and grime,\n"
+            "on top of each decal's own weathering. Saved on the scene's Decal Grading object.");
+        const bool wearChanged = gradeSlider("Decal wear", &value.Wear,
+            "How worn every decal looks: peels, scrubs and chips paint, on top of each decal's own weathering.");
+        if ((ageChanged || wearChanged) && grading) *grading = value;
+    }
 }
 
 void EditorLayer::DrawPostProcessSettings(World& world, float w) {

@@ -64,6 +64,7 @@
 #include "SkinHideBuffer.h"             // --outfit-audit
 #include "LightBuffer.h"
 #include "ClusterGrid.h"
+#include "DecalSystem.h"
 #include "CascadedShadowMap.h"
 #include "SpotShadowMap.h"
 #include "PointShadowMap.h"
@@ -647,6 +648,7 @@ int main(int argc, char** argv) {
                                  ShaderLibrary::ReadFileRequired("ShadowDepthLocal.frag.glsl"), "localShadowShader"); // spot/point: linear depth
         Shader clusterBuildShader(ShaderLibrary::ReadFileRequired("ClusterBuild.comp.glsl"), "clusterBuildShader"); // #120: per-view froxel AABBs
         Shader clusterCullShader(ShaderLibrary::ReadFileRequired("ClusterCull.comp.glsl"), "clusterCullShader");   // #120: point/spot lights -> froxel lists
+        Shader clusterDecalCullShader(ShaderLibrary::ReadFileRequired("ClusterDecalCull.comp.glsl"), "clusterDecalCullShader"); // decals -> froxel lists (docs/DECALS.md)
         unsigned int fsQuadVao = 0;
         glGenVertexArrays(1, &fsQuadVao); // attribute-less: positions come from gl_VertexID
         TintOverlayRenderer tintOverlay;
@@ -1611,6 +1613,7 @@ int main(int argc, char** argv) {
         Framebuffer gameLdr;
         LightBuffer lightBuffer; // scene lights -> std430 SSBO the model shader reads at binding 0
         ClusterGrid clusterGrid; // #120: froxel light lists, rebuilt per rendered view each frame
+        DecalSystem decalSystem; // clustered decals: gathered per view, binned by clusterGrid (docs/DECALS.md)
         CascadedShadowMap shadowMap; // directional-sun CSM; depth array sampled by the model shader
         SpotShadowMap spotShadowMap; // perspective depth per shadow-casting spot light (#119)
         PointShadowMap pointShadowMap; // depth cube per shadow-casting point light (#119)
@@ -1662,6 +1665,7 @@ int main(int argc, char** argv) {
             tonemapper.WarmUp();
             lightBuffer.WarmUp();
             clusterGrid.WarmUp();
+            decalSystem.BindForShading(); // valid (placeholder) arrays on units 22-25 before any preview draws
             if (world.VolumetricEnabled) sceneRenderer.WarmUpVolumetrics();
             SceneRenderer::WarmShaderVariants(world);
             SceneRenderer::WarmEffects();
@@ -2093,6 +2097,19 @@ int main(int argc, char** argv) {
                 // A smoke_glass* scene: the opt-in Glass editor theme on, drawn, then off (Tests/SmokeChecks.cpp).
                 if (smokeSceneActive && smokeScenePaths[smokeSceneIndex].find("smoke_glass") != std::string::npos)
                     SmokeChecks::GlassTheme(editor, world, smokeFramesRendered);
+
+                // A smoke_decals* scene (docs/DECALS.md): by frame 80 the textures are resident and the delayed
+                // overflow readback has landed. 574 decals in view; the 270-decal stack must trip the per-cluster
+                // cap (bit 1) and nothing may fill the index list (bit 2).
+                if (smokeSceneActive && smokeFramesRendered == 80 &&
+                    smokeScenePaths[smokeSceneIndex].find("smoke_decals") != std::string::npos) {
+                    const int visible = decalSystem.VisibleCount();
+                    const unsigned overflow = clusterGrid.DecalOverflow();
+                    if (visible < 570) Log::Error("[SmokeTest] decals: expected >= 570 visible, got " + std::to_string(visible));
+                    else if ((overflow & 1u) == 0u) Log::Error("[SmokeTest] decals: the over-cap cluster was not flagged");
+                    else if (overflow & 2u) Log::Error("[SmokeTest] decals: the decal index list overflowed");
+                    else std::cout << "[SmokeTest]   decals OK (" << visible << " visible, overflow " << overflow << ")" << std::endl;
+                }
 
                 // #176 - a smoke_prefab* scene: a Prefab Mode round trip (Tests/SmokeChecks.cpp).
                 if (smokeSceneActive && smokeFramesRendered == 15 &&
@@ -3945,6 +3962,8 @@ int main(int argc, char** argv) {
             sceneInputs.probeArray         = &probeArray;
             sceneInputs.lightBuffer        = &lightBuffer;
             sceneInputs.clusterGrid        = &clusterGrid;
+            sceneInputs.decals             = &decalSystem;
+            sceneInputs.decalCullShader    = &clusterDecalCullShader;
             sceneInputs.hdriCube           = hdriCube.get();
             sceneInputs.sunShadowsReady    = false; // set per view in drawScene (#109)
             sceneInputs.frameLightCount    = frameLightCount;

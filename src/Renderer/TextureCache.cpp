@@ -122,6 +122,8 @@ uint64_t HashSettings(const TextureImportSettings& s) {
     // whether there's a mip chain at all both change what's stored.
     mix((uint64_t)s.CompressionMode + 17);
     if (s.CompressionMode != TextureImportSettings::Compression::None) mix(s.GenerateMipmaps ? 3u : 5u);
+    // Mixed only when set, so every existing entry (None) keeps the hash it was stored under.
+    if (s.ForceFormat != TextureImportSettings::ForcedFormat::None) mix((uint64_t)s.ForceFormat + 101);
     return h;
 }
 

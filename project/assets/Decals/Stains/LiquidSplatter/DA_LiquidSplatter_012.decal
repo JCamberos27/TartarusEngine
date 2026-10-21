@@ -1,0 +1,67 @@
+{
+  "decalVersion": 1,
+  "textures": {
+    "albedo": "assets/Decals/Stains/LiquidSplatter/T_Decal_LiquidSplatter_012.png",
+    "normal": "",
+    "surface": "",
+    "aux": ""
+  },
+  "lumaMask": false,
+  "invertMask": false,
+  "tier": 2048,
+  "atlas": {
+    "cols": 1,
+    "rows": 1
+  },
+  "defaultSize": [
+    1.5,
+    1.5,
+    0.25
+  ],
+  "channels": {
+    "albedo": 1.0,
+    "normal": 0.0,
+    "roughness": 1.0,
+    "metal": 0.0,
+    "ao": 0.0,
+    "emissive": 0.0
+  },
+  "baseColor": [
+    0.85,
+    0.85,
+    0.85
+  ],
+  "roughness": 0.5,
+  "metal": 0.0,
+  "emissive": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "angleFade": [
+    0.25,
+    0.05
+  ],
+  "edgeFade": 0.08,
+  "heightBlend": 0.5,
+  "heightContrast": 4.0,
+  "paint": {
+    "enabled": false,
+    "roughness": 0.35,
+    "metal": 0.0,
+    "relief": 0.3,
+    "uv": false
+  },
+  "weathering": {
+    "fade": 0.0,
+    "bleach": 0.0,
+    "peel": 0.0,
+    "buff": 0.0
+  },
+  "category": "Stains/LiquidSplatter",
+  "tags": [
+    "stains",
+    "liquid",
+    "splatter"
+  ]
+}

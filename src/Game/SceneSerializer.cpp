@@ -368,6 +368,11 @@ json MaterialSlotsToJson(const std::vector<std::shared_ptr<MaterialAsset>>& matS
             if (smat.DetailAlbedoMap)              em["detailAlbedoMap"] = PathRef(PathOrEmpty(smat.DetailAlbedoMap));
             if (smat.DetailNormalMap)              em["detailNormalMap"] = PathRef(PathOrEmpty(smat.DetailNormalMap));
             if (smat.DetailTiling != glm::vec2(4.0f)) em["detailTiling"] = {smat.DetailTiling.x, smat.DetailTiling.y};
+            // Grunge and Receive Decals (docs/DECALS.md), as a .mat writes them.
+            if (smat.GrungeMap)                    em["grungeMap"] = PathRef(PathOrEmpty(smat.GrungeMap));
+            if (smat.GrungeStrength != 0.0f)       em["grungeStrength"] = smat.GrungeStrength;
+            if (smat.GrungeScale != 0.5f)          em["grungeScale"] = smat.GrungeScale;
+            if (!smat.ReceiveDecals)               em["receiveDecals"] = false;
             if (smat.AlphaCutoff != 0.5f)          em["alphaCutoff"] = smat.AlphaCutoff;
             if (slot->RenderQueue != MaterialAsset::Queue::Opaque) em["renderQueue"] = (int)slot->RenderQueue;
             if (slot->Opacity != 1.0f)             em["opacity"] = slot->Opacity;
@@ -423,6 +428,11 @@ std::shared_ptr<MaterialAsset> ReadEmbeddedMat(AssetLibrary& assets, const json&
         ma->Mat.HeightMap       = LoadIfPresent(assets, mj, "heightMap");
         ma->Mat.DetailAlbedoMap = LoadIfPresent(assets, mj, "detailAlbedoMap");
         ma->Mat.DetailNormalMap = LoadIfPresent(assets, mj, "detailNormalMap");
+        // Grunge and Receive Decals (docs/DECALS.md). The grime map is colour, as MaterialAsset loads it.
+        ma->Mat.GrungeMap       = LoadIfPresent(assets, mj, "grungeMap");
+        ma->Mat.GrungeStrength  = mj.value("grungeStrength", 0.0f);
+        ma->Mat.GrungeScale     = mj.value("grungeScale", 0.5f);
+        ma->Mat.ReceiveDecals   = mj.value("receiveDecals", true);
     }
     ma->Mat.AlphaCutoff          = mj.value("alphaCutoff", 0.5f);
     ma->RenderQueue              = (MaterialAsset::Queue)std::clamp(mj.value("renderQueue", 0), 0, 2);
@@ -2746,6 +2756,22 @@ bool SceneSerializer::ApplyComponentPresetJson(World& world, AssetLibrary& asset
 
 // #121 - see the header. Parse failures on either side yield "{}": a scene or sidecar we cannot
 // read is never a reason to write a guess into the sidecar.
+std::string SceneSerializer::EmbeddedMaterialToJson(const MaterialAsset& material) {
+    auto copy = std::make_shared<MaterialAsset>(material);
+    copy->Path.clear(); // an embedded slot, not a reference to its .mat
+    const json slots = MaterialSlotsToJson({copy});
+    return slots.at(0).at("embedded").dump();
+}
+
+std::shared_ptr<MaterialAsset> SceneSerializer::EmbeddedMaterialFromJson(AssetLibrary& assets, const std::string& embeddedJson) {
+    try {
+        const json mj = json::parse(embeddedJson);
+        return mj.is_object() ? ReadEmbeddedMat(assets, mj) : nullptr;
+    } catch (const std::exception&) {
+        return nullptr;
+    }
+}
+
 std::string SceneSerializer::MigrateAssetMetaFields(const std::string& entryJson,
                                                     const std::string& existingMetaJson) {
     json entry, existing;

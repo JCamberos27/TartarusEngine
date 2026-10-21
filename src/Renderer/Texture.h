@@ -37,6 +37,14 @@ struct TextureImportSettings {
     // it isn't part of TextureCache's pixel hash.
     int AnisoLevel = 8;
     Compression CompressionMode = Compression::None;
+    // One BCn format whatever the source holds, for callers that pack many textures into one
+    // array of a fixed format (the decal arrays, DecalTextureArrays.h). BC3 keeps the alpha block
+    // even for an opaque source (no BC1), BC4 keeps red (grey for 1/2-channel sources), BC5 is the
+    // normal-map encode. The result is resampled to exactly MaxTextureSize square, since the
+    // arrays' slots are square powers of two. Needs CompressionMode != None. Not exposed in the
+    // importer: None for every project texture, which keeps their cache keys unchanged.
+    enum class ForcedFormat { None, BC3, BC4, BC5 };
+    ForcedFormat ForceFormat = ForcedFormat::None;
 };
 
 // Cumulative timing across every texture this process has loaded (audit ARCH-201 / #375).
