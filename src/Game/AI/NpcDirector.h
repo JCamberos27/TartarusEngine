@@ -186,6 +186,7 @@ public:
     // Tests: every spawn from now on takes this brain (0 Soldier, 1 Training Dummy) and weapon (0 AK, 1 Remington, 2 either,
     // 3 None) instead of its NPC Spawn's (-1: the spawn's own) - the dummies' room in Apartment Hallway made a fight.
     int ForceBrain = -1, ForceWeapon = -1;
+    glm::vec3 SpawnShift{0.0f};          // tests: every spawn point moved by this (a test run in another room)
 
     struct SpawnPoint {
         glm::vec3 Pos{0.0f};
@@ -243,7 +244,7 @@ private:
                      int part = -1);
     // `hurtLeg` (0 left, 1 right): shot down by that leg - the gun drops and it goes prone, dragging the leg. -1: on a knee.
     void BecomeWounded(World& world, Npc& n, int hurtLeg = -1);
-    void RollOver(Npc& n, float dt); // down on his back from the wound fall: he rolls onto his belly (then the recovery takes him)
+    void RollOver(World& world, Npc& n, float dt); // down on his back from the wound fall: he rolls onto his belly (then the recovery takes him)
     void FinishDeath(World& world, Npc& n);
     // The wound fall (shot down by a leg): after the hit frame's late pose the body goes down as a powered ragdoll, alive
     // (StartWoundFall); while it falls the capsule keeps under the pelvis (FollowFall, instead of Move) and the hitboxes ride the
@@ -251,7 +252,7 @@ private:
     void StartWoundFall(World& world, Npc& n);
     void FollowFall(Npc& n, float dt);
     void UpdateWoundFall(World& world, Npc& n, float dt, const PlayerSnapshot& p);
-    void RecoverFromFall(World& world, Npc& n);
+    void RecoverFromFall(World& world, Npc& n, bool turnOver = false); // (turnOver: on his back, blended over onto his belly)
     // Tests: the tracked bones' largest move since last frame (and they are recorded for the next), -1 the first time.
     float TrackJump(const World& world, Npc& n);
     void LatePose(World& world, Npc& n, float dt, const PlayerSnapshot& p, bool alive);

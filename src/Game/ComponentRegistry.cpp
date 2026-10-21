@@ -2134,7 +2134,8 @@ void RegisterEngineComponents() {
                 { "Wound Fall", "Wound Blend Speed", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundBlendSpeed), 0.05f, "The fastest (m/s) a hand, foot or the head moves blending in: a limb the fall left further from the prone pose than that allows takes longer (up to 2.5x Wound Blend Time), drawn in rather than whipped.", 0.5f, 10.0f },
                 { "Wound Fall", "Wound Face Up", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundFaceUp), 0.02f, "Landed with his chest and pelvis facing up past this (the up share of their front): on his back - he rolls himself over onto his belly (Wound Roll Impulse) before he crawls.", -1.0f, 1.0f },
                 { "Wound Fall", "Wound Roll Impulse", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundRollImpulse), 1.0f, "On his back after the fall, the heave (N s) under his far shoulder and hip that rolls him onto his belly, over the good leg. 0 = he lies on his back where he fell.", 0.0f, 200.0f },
-                { "Wound Fall", "Wound Roll Tries", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundRollTries), 1.0f, "How many heaves he makes (each a third harder) before he gives up and lies on his back.", 0.0f, 10.0f },
+                { "Wound Fall", "Wound Roll Tries", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundRollTries), 1.0f, "How many heaves he makes (each a third harder) before the animated pose turns him over instead (Wound Roll Blend Time).", 0.0f, 10.0f },
+                { "Wound Fall", "Wound Roll Blend Time", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundRollBlendTime), 0.05f, "Every heave spent and still on his back: seconds the animated pose takes to turn him from how he lies onto his belly, into the crawl. 0 = he lies on his back where he fell.", 0.0f, 3.0f },
             };
             for (const R2& r : rows2) {
                 m.Fields.push_back({ r.Label, T::Float, r.Ptr, r.Step, r.Tip, r.Lo, r.Hi });

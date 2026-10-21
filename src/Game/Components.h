@@ -1604,7 +1604,8 @@ struct RagdollSettingsComponent {
     float WoundBlendSpeed = 1.8f;      // ... or longer (up to 2.5x) for a limb with further to go: m/s its hand or foot moves at most
     float WoundFaceUp = 0.3f;          // the chest's and pelvis's front facing up past this (the up share of the normal): on his back ...
     float WoundRollImpulse = 120.0f;   // ... he rolls himself over onto his belly: N s of twist across his chest and hips (0: he lies there)
-    float WoundRollTries = 3.0f;       // ... at most this many heaves (each a third harder), then he lies where he is
+    float WoundRollTries = 2.0f;       // ... at most this many heaves (each a third harder) ...
+    float WoundRollBlendTime = 1.0f;   // ... then, still on his back, the animated pose turns him over onto his belly in this long
 };
 // ---- end lane R ----
 // ---- lane R-gear ----

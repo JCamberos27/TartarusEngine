@@ -998,6 +998,9 @@ void PlayerHitReport::onShapeHit(const PxControllerShapeHit& hit) {
 
     if (kin) {
         PxRigidDynamic* platform = hit.actor->is<PxRigidDynamic>();
+        // (Not a soldier's hitbox: they are the rounds' to find, not ground - stood over a crawler, the Player rode his hitboxes,
+        // and they were released under him when he died.)
+        if (platform && owner->hitboxActors.count(platform)) platform = nullptr;
         if (platform && n.y > 0.4f) { // standing on top of a moving platform
             if (owner->playerGround != platform) {
                 owner->playerGround = platform;
@@ -3156,6 +3159,9 @@ void DestroyNpcCharacter(CharacterId id) {
     PxCapsuleController* c = NpcController(id);
     if (!c) return;
     g_State->npcActors.erase(c->getActor());
+    // The Player standing on this soldier's capsule (a kinematic: his ground, MoveCharacter carries him with it) lets go of it
+    // first - released, the next move read the freed actor.
+    if (g_State->playerGround == c->getActor()) g_State->playerGround = nullptr;
     c->release();
     g_State->npcs[(size_t)id] = {};
 }
@@ -3335,7 +3341,11 @@ void DestroyNpcHitboxes(int id) {
     auto& h = g_State->hitboxes[(size_t)id];
     ShadowCapsule(h, false);
     for (PxRigidDynamic* b : h.Bodies)
-        if (b) { g_State->hitboxActors.erase(b); b->release(); }
+        if (b) {
+            if (g_State->playerGround == b) g_State->playerGround = nullptr;
+            g_State->hitboxActors.erase(b);
+            b->release();
+        }
     h.Bodies.clear();
     h.Capsule = nullptr;
     h.Active = false;

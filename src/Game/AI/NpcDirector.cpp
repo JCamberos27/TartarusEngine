@@ -506,7 +506,8 @@ std::shared_ptr<NpcDirector::SoldierBody> NpcDirector::BuildBody(World& world, A
 
 int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
     if (spawnIndex < 0 || spawnIndex >= (int)m_Spawns.size() || m_SoldierJson.empty()) return -1;
-    const SpawnPoint& sp = m_Spawns[(size_t)spawnIndex];
+    SpawnPoint sp = m_Spawns[(size_t)spawnIndex];
+    sp.Pos += SpawnShift;
     PROFILE_SCOPE("AI Spawn");
     const auto spawnT0 = std::chrono::steady_clock::now();
     auto since = [&]() { return std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - spawnT0).count(); };
@@ -553,8 +554,10 @@ int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
 
     // Feet on the walkable mesh, a little apart from anyone already standing there - and off the dead: a living capsule meets a
     // corpse's parts, and one put down in the pile on the spawn was thrown up onto it and out at up to 19 m/s. Stepped aside only
-    // to somewhere walkable from the spawn (not through the wall into the next room); with nowhere clear, the spawn itself.
+    // to somewhere walkable from the spawn (not through the wall into the next room); with nowhere clear, the spawn itself. Not on
+    // the player either: in a small room the step aside put a soldier 0.3 m from him, inside his capsule (and under him).
     auto crowdedAt = [&](const glm::vec3& at) {
+        if (m_Player.Valid && glm::length(glm::vec2(m_Player.Feet.x - at.x, m_Player.Feet.z - at.z)) < 1.2f) return true;
         for (auto& o : m_Npcs) {
             if (!o) continue;
             if (!o->Dead && glm::length(o->Feet - at) < 1.0f) return true;
@@ -2188,6 +2191,7 @@ void NpcDirector::StartWoundFall(World& world, Npc& n) {
     n.RollTries = 0;
     n.NextRollAt = 0.0f;
     n.RollHeaveUntil = -1.0f;
+    n.TurnedOver = false;
     // The death's ragdoll settings, for a living body: the good leg's hold, the tone it keeps on the floor; always powered (the
     // drives are what make it fall like a man, and the motor knows when he is down).
     RagdollSettingsComponent cfg = m_RagdollCfg;
@@ -2276,7 +2280,7 @@ void NpcDirector::UpdateWoundFall(World& world, Npc& n, float dt, const PlayerSn
     if (glm::vec3 head; n.Body.BoneWorld("head", head)) n.Eye = head;
     UpdateHitboxes(n, p, /*posed=*/true);
     if (n.DownAt >= 0.0f) { // on his back: he rolls himself over, and crawls from his belly
-        RollOver(n, dt);
+        RollOver(world, n, dt);
         return;
     }
     TrackJump(world, n); // (the last ragdoll frame, for the handover's jump)
@@ -2295,7 +2299,7 @@ void NpcDirector::UpdateWoundFall(World& world, Npc& n, float dt, const PlayerSn
 // morph into a belly crawl: he stays as he fell (the ragdoll keeps him) and bleeds out there. On his belly the root goes under the
 // pelvis (where the capsule followed it), facing along his body (pelvis to head, the crawl clips' axis), and every bone blends from
 // where it lies into the prone idle (NpcBody::BeginRecover).
-void NpcDirector::RecoverFromFall(World& world, Npc& n) {
+void NpcDirector::RecoverFromFall(World& world, Npc& n, bool turnOver) {
     const RagdollSettingsComponent& c = m_RagdollCfg;
     const glm::vec3 pelvis = n.Ragdoll->PartPosition(0), head = n.Ragdoll->PartPosition(2);
     const glm::vec3 spine = head - pelvis;
@@ -2308,23 +2312,26 @@ void NpcDirector::RecoverFromFall(World& world, Npc& n) {
     n.FallFrontUp = 0.5f * (front("upperarm_l", "upperarm_r") + front("thigh_l", "thigh_r"));
     n.DownAt = m_Now;
     n.FallTime = m_Now - n.FallStartedAt;
-    n.CanCrawl = n.FallFrontUp <= c.WoundFaceUp;
+    n.CanCrawl = turnOver || n.FallFrontUp <= c.WoundFaceUp;
+    n.TurnedOver = turnOver;
     n.Recovered = !n.CanCrawl; // (on his back that is all there is to it; on his belly, once the blend below is done)
     n.NextThink = m_Now;
     if (TrackDeathPop)
         std::printf("[NpcTest] %s down %.2f s after the hit, on his %s (front %.2f up), pelvis %.0f cm up\n", n.Name.c_str(), n.FallTime,
-                    n.CanCrawl ? "belly" : "back", n.FallFrontUp, (pelvis.y - n.Feet.y) * 100.0f);
+                    n.CanCrawl && !turnOver ? "belly" : "back", n.FallFrontUp, (pelvis.y - n.Feet.y) * 100.0f);
+    if (TrackDeathPop && turnOver) std::printf("[NpcTest] %s: the heaves came to nothing - turned over onto his belly by the blend\n", n.Name.c_str());
     if (!n.CanCrawl) return;
     if (n.Cct != PhysicsWorld::kNoCharacter) PhysicsWorld::IgnoreRagdollForNpc(n.Cct, -1);
     if (n.Dropped) n.Dropped->ForgetOwner();
-    n.Body.BeginRecover(world, n.Feet, NpcYawOf(spine, n.Body.Yaw()), c.WoundBlendTime, c.WoundBlendSpeed, "ProneIdle");
+    // (Turned over, slower: from his back, every bone has half a turn to make round his spine - a roll, not a snap.)
+    n.Body.BeginRecover(world, n.Feet, NpcYawOf(spine, n.Body.Yaw()), turnOver ? c.WoundRollBlendTime : c.WoundBlendTime, c.WoundBlendSpeed, "ProneIdle");
     n.Ragdoll.reset();
 }
 
 // Down on his back from the wound fall: he rolls himself over onto his belly - a heave up under the shoulder and the hip on one side,
 // over toward the other (the good leg's: the hurt one ends on top), the chest and pelvis going with it - a few tries at most. Once
 // he lies face down and still, the recovery takes him as it does a fall that landed so (UpdateWoundFall: RecoverFromFall).
-void NpcDirector::RollOver(Npc& n, float dt) {
+void NpcDirector::RollOver(World& world, Npc& n, float dt) {
     const RagdollSettingsComponent& c = m_RagdollCfg;
     if (!n.Ragdoll || c.WoundRollImpulse <= 0.0f) return;
     // The heave under way, for a third of a second: a twist about his spine - the chest and the pelvis each turned by a pair of
@@ -2373,7 +2380,14 @@ void NpcDirector::RollOver(Npc& n, float dt) {
     if (TrackDeathPop && (int)(m_Now * 2.0f) != (int)((m_Now - 1.0f / 60.0f) * 2.0f))
         std::printf("[NpcTest] %s on his back: front %.2f up, parts %.2f m/s, %.1f s down, tries %d (impulse %.0f, tries %.0f)\n", n.Name.c_str(),
                     frontUp, lin, m_Now - n.DownAt, n.RollTries, c.WoundRollImpulse, c.WoundRollTries);
-    if (n.RollTries >= (int)c.WoundRollTries || m_Now < n.NextRollAt || m_Now - n.DownAt < 0.6f || lin > c.WoundRecoverSpeed) return;
+    if (m_Now < n.NextRollAt || m_Now - n.DownAt < 0.6f || lin > c.WoundRecoverSpeed) return;
+    // Every heave spent (the last one settled) and still on his back - wedged, or the floor wouldn't give: he turns himself over
+    // anyway, the animated pose taking him from how he lies onto his belly (forgiving, not physical: a man on his back for good
+    // looked broken, not hurt).
+    if (n.RollTries >= (int)c.WoundRollTries) {
+        if (c.WoundRollBlendTime > 0.0f) RecoverFromFall(world, n, /*turnOver=*/true);
+        return;
+    }
     ++n.RollTries;
     n.NextRollAt = m_Now + 1.8f;
     // Over onto the good leg's side (the hurt one ends on top): his right with the left leg hurt, else his left - unless he lies

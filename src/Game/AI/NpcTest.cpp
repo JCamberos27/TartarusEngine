@@ -20,6 +20,11 @@
 #include <iostream>
 
 namespace {
+// The unit an aptwounds run in another room is in (NPC_TEST_ROOM), for its wall check: none while x1 < x0.
+struct AptBox { float x0, z0, x1, z1; };
+AptBox g_AptExtraRoom{0.0f, 0.0f, -1.0f, -1.0f};
+void SetAptExtraRoom(float x0, float z0, float x1, float z1) { g_AptExtraRoom = {x0, z0, x1, z1}; }
+
 int PosePhaseCount(); // the pose scenario's phases (the table is with Pose below)
 constexpr float kPosePhaseTime = 2.4f;
 constexpr float kTacticsCloseAt = 45.0f; // tactics: the player steps up to a soldier for its rifle butt
@@ -74,6 +79,24 @@ NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "w
     if (m_Scenario == "ragdoll") m_Duration = 240.0f;
     if (const char* t = EnvVar("NPC_TEST_SECONDS")) m_Duration = std::max(5.0f, (float)std::atof(t));
     if (const char* r = EnvVar("NPC_TEST_RECORD")) m_RecordDir = r;
+    // aptwounds in another room of Apartment Hallway's north row: the same layout (the dummies side by side, the player 1.6 m off
+    // toward the corridor) moved into it - a cramped bedroom, a big living room, a small bedroom with the outside wall close behind
+    // the dummies. Each unit is one box for the wall check (its outer walls; not the ones inside it).
+    if (const char* room = EnvVar("NPC_TEST_ROOM")) {
+        struct Room { const char* Name; float Dx, Dz, X0, Z0, X1, Z1; };
+        static const Room kRooms[] = {
+            {"302bed", 4.2f, 0.0f, -5.6f, -9.675f, 1.2f, -1.075f},
+            {"303living", 15.8f, -1.0f, 1.2f, -9.675f, 10.6f, -1.075f},
+            {"303bed2", 16.9f, 2.145f, 1.2f, -9.675f, 10.6f, -1.075f},
+        };
+        for (const Room& r : kRooms)
+            if (m_Room != r.Name && std::string(room) == r.Name) {
+                m_Room = r.Name;
+                m_RoomShift = glm::vec3(r.Dx, 0.0f, r.Dz);
+                SetAptExtraRoom(r.X0, r.Z0, r.X1, r.Z1);
+            }
+        std::cout << "[NpcTest] room '" << m_Room << "' (shift " << m_RoomShift.x << ", " << m_RoomShift.z << ")" << std::endl;
+    }
     std::cout << "[NpcTest] scenario '" << m_Scenario << "', " << m_Duration << " s" << std::endl;
 }
 
@@ -104,8 +127,9 @@ void NpcTest::Drive(Player& player, FirstPersonPresentation& weapon, NpcDirector
     float wantYaw = m_Scenario == "sandbox" ? 180.0f : -90.0f, wantPitch = -3.0f; // sandbox: west, toward the squad
     if (m_Scenario == "ragdoll") { wantYaw = m_RViewYaw; wantPitch = -10.0f; } // over the bodies (then away from them)
     if (m_Scenario == "aptwounds") {
-        // In 301's living room by the arch, looking down the room at the two dummies.
-        const glm::vec3 at(-8.0f, 0.0f, -4.4f);
+        // In 301's living room by the arch (or the test room), looking down the room at the two dummies.
+        npcs.SpawnShift = m_RoomShift;
+        const glm::vec3 at = glm::vec3(-8.0f, 0.0f, -4.4f) + m_RoomShift;
         glm::vec3 feet;
         PhysicsWorld::GetCharacterFootPosition(&feet.x);
         if (glm::length(glm::vec2(feet.x - at.x, feet.z - at.z)) > 0.3f) {
@@ -713,7 +737,7 @@ namespace {
 // How far `p` is inside a wall of Apartment Hallway's 301 and the corridor: 0 inside any of its rooms (the floor plan's rects,
 // scene coordinates), else the distance to the nearest (the wall's thickness is all solid).
 float AptWallDepth(const glm::vec3& p) {
-    struct R { float x0, z0, x1, z1; };
+    using R = AptBox;
     static const R rooms[] = {
         {-10.6f, -9.67f, -5.6f, -3.78f}, // 301 living room
         {-8.2f, -3.78f, -5.6f, -1.07f},  // 301 entry
@@ -723,6 +747,10 @@ float AptWallDepth(const glm::vec3& p) {
     };
     float best = 1e9f;
     for (const R& r : rooms) {
+        const float dx = std::max({r.x0 - p.x, 0.0f, p.x - r.x1}), dz = std::max({r.z0 - p.z, 0.0f, p.z - r.z1});
+        best = std::min(best, std::sqrt(dx * dx + dz * dz));
+    }
+    if (const R& r = g_AptExtraRoom; r.x1 >= r.x0) {
         const float dx = std::max({r.x0 - p.x, 0.0f, p.x - r.x1}), dz = std::max({r.z0 - p.z, 0.0f, p.z - r.z1});
         best = std::min(best, std::sqrt(dx * dx + dz * dz));
     }
@@ -741,7 +769,7 @@ void NpcTest::AptWounds(World& world, NpcDirector& npcs, float now) {
     w.FalloffStart = 1000.0f;
     w.FalloffEnd = 2000.0f;
     w.FalloffMin = 1.0f;
-    const glm::vec3 eye(-8.0f, 1.6f, -4.4f);
+    const glm::vec3 eye = glm::vec3(-8.0f, 1.6f, -4.4f) + m_RoomShift;
     auto find = [&](const std::string& name) -> Npc* {
         for (const auto& up : npcs.Npcs())
             if (up && up->Name == name) return up.get();
@@ -795,7 +823,7 @@ void NpcTest::AptWounds(World& world, NpcDirector& npcs, float now) {
         a = find(m_WA);
         b = find(m_WB);
         if (!a || !b) {
-            if (now > 8.0f) { Check(false, "aptwounds: both dummies stand in 301's living room"); m_Done = true; }
+            if (now > 8.0f) { Check(false, "aptwounds: both dummies stand in the test room (" + m_Room + ")"); m_Done = true; }
             return;
         }
         std::printf("[NpcTest] aptwounds: %s (AK) at (%.2f, %.2f), %s (unarmed) at (%.2f, %.2f)\n", a->Name.c_str(), a->Feet.x, a->Feet.z,
@@ -840,7 +868,9 @@ void NpcTest::AptWounds(World& world, NpcDirector& npcs, float now) {
               std::to_string((pelvis.y - a->Feet.y) * 100.0f) + " cm)");
         shoot(*a, 1, 30.0f);
         Check(a->Dead, "aptwounds: one more round finishes him");
-        // The leg shot.
+        // The leg shot - from in front of him or behind, as he stands (after the fall his facing is the way he lies, and a fall
+        // that ended draped over the furniture lies any way).
+        m_WLegFromFront = std::sin(b->Body.Yaw()) * (eye.x - b->Feet.x) + std::cos(b->Body.Yaw()) * (eye.z - b->Feet.z) > 0.0f;
         shoot(*b, 7, 20.0f);
         Check(b->Wounded && b->Prone && !b->Dead, "aptwounds: a round in the thigh puts the other down crawling");
         m_WStates.clear();
@@ -859,9 +889,8 @@ void NpcTest::AptWounds(World& world, NpcDirector& npcs, float now) {
         noteState(*b);
         if (b->DownAt >= 0.0f && m_WLift == 0.0f) {
             m_WLift = -1.0f; // (once: the first landing)
-            const float y = std::sin(b->Body.Yaw()) * (-8.0f - b->Feet.x) + std::cos(b->Body.Yaw()) * (-4.4f - b->Feet.z);
-            std::printf("[NpcTest] aptwounds: the leg shot came from %s; he landed front %.2f up\n", y > 0.0f ? "in front" : "behind", b->FallFrontUp);
-            Check(y > 0.0f && b->FallFrontUp <= npcs.RagdollSettings().WoundFaceUp,
+            std::printf("[NpcTest] aptwounds: the leg shot came from %s; he landed front %.2f up\n", m_WLegFromFront ? "in front" : "behind", b->FallFrontUp);
+            Check(m_WLegFromFront && b->FallFrontUp <= npcs.RagdollSettings().WoundFaceUp,
                   "aptwounds: shot in the leg from the front, he falls forward onto his belly (front " + std::to_string(b->FallFrontUp) + " up)");
         }
         const glm::vec3 mv = b->Feet - m_WPrevFeet;
@@ -881,11 +910,23 @@ void NpcTest::AptWounds(World& world, NpcDirector& npcs, float now) {
     case 4: // the crawler finished off: flat, nothing held up, nothing in a wall
         if (m_WLift < 0.0f) m_WLift = 0.0f;
         walls(*b, "crawler corpse");
+        // Each part's height over what is under it - the floor, a bed, the other corpse - not over the floor at his feet: a body
+        // that dies on a bed lies flat on it; a limb held up in the air is what this looks for.
         if (t > 2.0f && t < 3.5f && b->Ragdoll && b->Ragdoll->Active())
-            for (int part : {0, 2, 4, 6, NpcRagdoll::kHandL, NpcRagdoll::kHandR})
-                m_WLift = std::max(m_WLift, b->Ragdoll->PartPosition(part).y - b->Feet.y);
+            for (int part : {0, 2, 4, 6, NpcRagdoll::kHandL, NpcRagdoll::kHandR}) {
+                const glm::vec3 p = b->Ragdoll->PartPosition(part);
+                float lift = p.y - b->Feet.y;
+                RaycastHit hits[8];
+                const float o[3] = {p.x, p.y + 0.05f, p.z}, down[3] = {0.0f, -1.0f, 0.0f};
+                QueryFilter f;
+                f.HitTriggers = 0;
+                const int k = std::min(8, PhysicsWorld::RaycastAll(o, down, 2.0f, f, hits, 8));
+                for (int i = 0; i < k; ++i)
+                    if (hits[i].Entity != RootId(*b)) { lift = p.y - hits[i].Point[1]; break; }
+                m_WLift = std::max(m_WLift, lift);
+            }
         if (t < 3.5f) return;
-        Check(m_WLift < 0.3f, "aptwounds: the finished-off crawler lies flat (highest part " + std::to_string(m_WLift * 100.0f) + " cm)");
+        Check(m_WLift < 0.3f, "aptwounds: the finished-off crawler lies flat (highest part " + std::to_string(m_WLift * 100.0f) + " cm over what's under it)");
         step(5);
         return;
     case 5: { // both back
@@ -919,8 +960,8 @@ void NpcTest::AptWounds(World& world, NpcDirector& npcs, float now) {
         if (b) walls(*b, "rolled crawler");
         if (b && !b->Dead && !(b->Recovered && b->CanCrawl && b->Body.StateName(world).rfind("ProneCrawl", 0) == 0) && t < 15.0f) return;
         const bool crawls = b && !b->Dead && b->Recovered && b->CanCrawl;
-        std::printf("[NpcTest] aptwounds: knocked onto his back: %s after %.1f s (roll tries %d, lay %.2f up)\n", crawls ? "crawling" : "still down",
-                    t, b ? b->RollTries : -1, b ? b->FallFrontUp : 0.0f);
+        std::printf("[NpcTest] aptwounds: knocked onto his back: %s after %.1f s (roll tries %d, %s, lay %.2f up)\n", crawls ? "crawling" : "still down",
+                    t, b ? b->RollTries : -1, b && b->TurnedOver ? "turned over by the blend" : "rolled himself", b ? b->FallFrontUp : 0.0f);
         Check(b && b->RollTries > 0, "aptwounds: on his back, he heaves himself over (" + std::to_string(b ? b->RollTries : 0) + " tries)");
         Check(crawls, "aptwounds: ... onto his belly, and crawls (" + std::to_string(t) + " s after landing)");
         m_Done = true;
@@ -1466,8 +1507,8 @@ void NpcTest::AptFight(World& world, NpcDirector& npcs, const PlayerVitals& vita
     if (!m_AStaggered.empty())
         if (const Npc* s = findNpc(m_AStaggered); s && !s->Dead && now > s->StaggerUntil) m_AStaggerShotsAfter = s->ShotsFired;
     // A thigh: down on his belly, crawling off, while the other one fights on. (Landed on his back he rolls himself over - a few
-    // heaves, Wound Roll Tries 1.8 s apart: given up on only once those are spent, and then the next soldier up is shot instead,
-    // while there's time left to watch a crawl.)
+    // heaves, Wound Roll Tries 1.8 s apart, then the blend turns him over: still on his back well after those, he's given up on and
+    // the next soldier up is shot instead, while there's time left to watch a crawl.)
     if (!m_ACrawler.empty() && now < kAptLegUntil)
         if (const Npc* c = findNpc(m_ACrawler); c && !c->Dead && c->DownAt >= 0.0f && !c->CanCrawl && now - c->DownAt > 6.5f) {
             ++m_ACrawlsOnBack;
