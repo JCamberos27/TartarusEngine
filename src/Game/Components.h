@@ -1220,6 +1220,7 @@ struct OpenableComponent {
     float Progress = 0.0f; // 0 shut .. 1 open
     float Target = 0.0f;
     float ResolvedAmount = 0.0f; // Amount, or the motion's usual amount for this model
+    glm::vec3 PoseMin{0.0f}, PoseMax{0.0f}; // the box it turns about: its box collider, else the model's bounds
 };
 
 // Drives the Light on its entity: a fluorescent tube that stutters now and then, a TV screen's
