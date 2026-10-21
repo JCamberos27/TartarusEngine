@@ -43,6 +43,33 @@ bumps = [('AM_Stand_React_Bump_Light_Front', 0.0, -1.0), ('AM_Stand_React_Bump_L
 for name, _, _ in bumps:
     if not os.path.exists(os.path.join(proj, MOCAP, 'React_Bump', name + '.fbx')):
         fail(f'missing clip React_Bump/{name}.fbx')
+# Shot down by a leg (NpcDirector::BecomeWounded): GoProne collapses the body clutching its belly onto the floor
+# (ProneDrop), then it crawls on its belly (ProneCrawl: still at Speed 0, the crawl at the director's Crawl Speed). It
+# never gets up. The clips are cut by their .meta Clip Trims (MC Sample pack, Raw\Animations\Mc_Sample): the collapse
+# without its first standing second or the roll onto the side at its end, one crawl cycle (frames 84-139) out of a
+# start-to-stop take, and the prone pose the stand-to-prone clip settles in.
+param('GoProne', 'trigger')
+prone = {'drop': 'Injured/AM_InjuredBelly_DropToFloor', 'crawl': 'ProneCrawl/AM_ProneCrawl_CrawlStartStop_Fwd',
+         'still': 'ProneCrawl/AM_Stand_Trans_ProneCrawl'}
+for name in prone.values():
+    if not os.path.exists(os.path.join(proj, MOCAP, name + '.fbx')):
+        fail(f'missing clip {name}.fbx')
+base = ctrl['layers'][0]
+base['states'] = [s for s in base['states'] if s['name'] not in ('ProneDrop', 'ProneCrawl')]
+base['transitions'] = [t for t in base['transitions'] if 'ProneDrop' not in (t.get('from'), t.get('to'))]
+base['states'] += [
+    {'name': 'ProneDrop', 'loop': False, 'speed': 1.0, 'position': [0.0, 600.0], 'tags': ['Prone'],
+     'motions': {'main': {'clip': MOCAP + prone['drop'] + '.fbx'}}},
+    {'name': 'ProneCrawl', 'loop': True, 'speed': 1.0, 'position': [260.0, 600.0], 'tags': ['Prone'],
+     'motions': {'main': {'blendParam': 'Speed', 'children': [
+         {'clip': MOCAP + prone['still'] + '.fbx', 'threshold': 0.0, 'speed': 1.0},
+         {'clip': MOCAP + prone['crawl'] + '.fbx', 'threshold': 0.6, 'speed': 1.0}]}}},
+]
+base['transitions'] += [
+    {'from': 'Any', 'to': 'ProneDrop', 'duration': 0.3, 'conditions': [{'mode': 'if', 'param': 'GoProne', 'threshold': 0.0}],
+     'hasExitTime': False, 'exitTime': 1.0, 'canTransitionToSelf': False, 'interruptible': False},
+    {'from': 'ProneDrop', 'to': 'ProneCrawl', 'duration': 0.5, 'conditions': [], 'hasExitTime': True, 'exitTime': 0.92},
+]
 ctrl['layers'] = [l for l in ctrl['layers'] if l.get('name') != 'Hit React']
 ctrl['layers'].append({
     'name': 'Hit React',

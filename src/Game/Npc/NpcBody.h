@@ -96,6 +96,8 @@ struct NpcBodyInput {
     float Lean = 0.0f;             // -1 (left) .. 1 (right), a peek round cover
     float Cower = 0.0f;            // 0..1: ducking from rounds cracking past (hunched, head down)
     bool FootIK = false;           // feet onto uneven ground (near the player: two rays and a leg solve a frame)
+    bool Prone = false;            // shot down: collapses (ProneDrop), then crawls on its belly (ProneCrawl); never gets up
+    int HurtLeg = -1;              // prone: the leg that was hit (0 left, 1 right) is dragged straight behind; -1 none
 };
 
 class NpcBody {
@@ -227,6 +229,16 @@ private:
     void OffsetSpine(const std::function<glm::quat(float)>& stepFor); // m_Pose / m_Globals already hold the driver's pose and its globals
     // Feet onto uneven ground (LateUpdate, first): the pelvis drops to the lower foot's ground, the legs reach theirs.
     void FootPass(float dt);
+    // Prone with a hurt leg (LateUpdate): that leg eased toward the bind pose's (straight, behind the prone body) and
+    // swung down onto the floor, the crawl clip's own bend in the other.
+    void DragLegPass(const World& world, float dt);
+    float m_Drag = 0.0f;         // 0..1, eased in once the crawl starts
+    bool m_WasProne = false;
+    // The gun let go of while alive (shot down by a leg): the arms ease from the pose that held it to the clips' over a
+    // moment (LateUpdate) instead of snapping off it.
+    std::vector<LocalTRS> m_ReleasePose;
+    std::vector<int> m_ArmNodes; // the driver's clavicles and everything under them
+    float m_ReleaseBlend = 0.0f;
     void SyncLower(); // the driver's pelvis and legs onto every other piece
     std::vector<std::vector<std::pair<int, int>>> m_LowerMap; // per piece: (piece node, driver node), pelvis and legs
     int m_DriverPelvis = -1, m_DriverLeg[2][3] = {{-1, -1, -1}, {-1, -1, -1}}; // thigh, calf, foot

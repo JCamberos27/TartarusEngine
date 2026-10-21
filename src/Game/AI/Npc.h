@@ -36,7 +36,8 @@ enum class Behaviour : unsigned char {
     Search,      // lost the player: hunting for them
     Retreat,     // hurt: falling back to cover further off
     Dead,
-    Wounded,     // down on a knee, crawling for cover and shooting poorly until it bleeds out (after Dead so the indices hold)
+    Wounded,     // down on a knee, crawling for cover and shooting poorly until it bleeds out (after Dead so the indices hold);
+                 // shot down by a leg, on its belly instead, unarmed, dragging the leg
 };
 constexpr int kBehaviourCount = 11;
 const char* BehaviourName(Behaviour b);
@@ -104,6 +105,8 @@ struct Npc {
     glm::vec3 PushVel{0.0f};        // a stagger's shove (m/s, decays)
     bool Wounded = false;           // down, crawling (Behaviour::Wounded)
     float WoundedAt = 0.0f;
+    bool Prone = false;             // ... shot down by a leg: the gun dropped, on its belly, dragging HurtLeg (else on a knee)
+    int HurtLeg = -1;               // 0 left, 1 right
     bool WoundRolled = false;       // the 35% chance has been taken this life
     // Animation level of detail (NpcDirector::Think): the pose passes run one frame in every Lod.
     int Lod = 1;
