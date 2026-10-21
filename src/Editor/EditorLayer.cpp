@@ -806,10 +806,8 @@ void EditorLayer::DrawEnvironmentSettings(World& world, float w) {
     // at once. A scene without one gets a "Decal Grading" object the first time a slider moves.
     {
         DecalGradingComponent* grading = nullptr;
-        for (auto e : world.Registry.view<DecalGradingComponent>(entt::exclude<InactiveTag>)) {
-            grading = &world.Registry.get<DecalGradingComponent>(e);
-            break;
-        }
+        auto gradings = world.Registry.view<DecalGradingComponent>(entt::exclude<InactiveTag>);
+        if (auto it = gradings.begin(); it != gradings.end()) grading = &gradings.get<DecalGradingComponent>(*it);
         DecalGradingComponent value = grading ? *grading : DecalGradingComponent{};
         auto gradeSlider = [&](const char* label, float* v, const char* tip) {
             ImGui::SetNextItemWidth(w);
