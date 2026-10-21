@@ -182,6 +182,7 @@ private:
     std::string m_WWorstWallAt;      // ... which, when
     float m_WCorpseNear = 1e9f;      // the crawler's pelvis nearest the gut-shot corpse's (m)
     float m_WCrawlPath = 0.0f, m_WLift = 0.0f, m_WGrounded = -1.0f;
+    bool m_WLegFromFront = false; // the leg shot came from in front of him, as he stood
     glm::vec3 m_WPrevFeet{0.0f};
     std::vector<std::pair<std::string, float>> m_WStates;
     // aptfight: per soldier (by name) what the last frame saw, and the run's findings
@@ -273,6 +274,8 @@ private:
     std::vector<std::string> m_Dead;
     std::string m_LastKill;
     std::string m_RecordDir;
+    std::string m_Room = "301";      // aptwounds: the room it runs in (NPC_TEST_ROOM) ...
+    glm::vec3 m_RoomShift{0.0f};      // ... as the offset from 301's living room (the dummies, the player and his shots)
     float m_LastKillAt = -1e9f;
     int m_KillShots = 0;
     bool m_Firing = false;

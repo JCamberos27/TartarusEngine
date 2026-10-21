@@ -137,6 +137,7 @@ struct Npc {
     float RollHeaveUntil = -1.0f;   // ... the one under way pushes until then (an effort, not a kick) ...
     glm::vec3 RollSide{0.0f};       // ... over toward this side (world, flat) ...
     bool RollOntoLeft = false;      // ... his left (else his right): the good leg's side, unless a wall is there
+    bool TurnedOver = false;        // the heaves came to nothing: the animated pose turned him over instead (Wound Roll Blend Time)
     float FallFrontUp = 0.0f;       // how far the chest's and pelvis's front faced up when he came to rest (-1 face down .. 1 face up)
     bool DiedFlinching = false;     // (tests) a hit flinch was still on the pose when he was killed
     // The drawn bones' jumps over the fall's handover (tests): the largest one-frame move of the tracked bones in the frame the

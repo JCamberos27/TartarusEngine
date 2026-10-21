@@ -744,7 +744,9 @@ int NpcRagdoll::Launch(int id, const PhysicsWorld::RagdollPart* parts, const glm
         const glm::vec3 a = dir * onPart, rest = dir * std::min(total - onPart, PartMass(&cfg, 1) * cfg.ChestImpulseSpeed);
         const float ja[3] = {a.x, a.y, a.z}, at[3] = {point.x, point.y, point.z};
         PhysicsWorld::RagdollImpulse(id, target, ja, at);
-        if (glm::dot(rest, rest) > 1e-8f && target != 1) {
+        // (Not for a wound fall: a leg round knocks the leg, not the man. Its overflow into the chest shoved the chest back along
+        // the round - shot from the front, every leg-shot soldier went down on his back and could never crawl.)
+        if (glm::dot(rest, rest) > 1e-8f && target != 1 && !wound) {
             const float jr[3] = {rest.x, rest.y, rest.z}, centre[3] = {partWorld[1][3][0], partWorld[1][3][1], partWorld[1][3][2]};
             PhysicsWorld::RagdollImpulse(id, 1, jr, centre);
         }
