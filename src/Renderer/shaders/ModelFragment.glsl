@@ -83,9 +83,8 @@ void main() {
     }
     if (vHidden > 0.5) discard;
     // Triplanar mode skips the mesh's own UVs entirely (they're what's stretching), sampling
-    // every map from world position/normal instead. Normal maps are the one exception - proper
-    // triplanar normal blending needs a whiteout-blend reconstruction per plane, which no
-    // material here currently needs, so uHasNormalMap still just uses the mesh UVs.
+    // every map from world position/normal instead, normal maps included (whiteout-blended per
+    // plane below).
     bool tri = uTriplanar == 1;
     vec3 triW = tri ? TriplanarWeights(normalize(vNormal)) : vec3(0.0);
     // #102 — per-material UV tiling / offset, then parallax offset from a height map.
@@ -149,7 +148,23 @@ void main() {
     if (backFace && uClothInterior == 1) { albedo *= 0.3; ao *= 0.4; }
 
     vec3 N = normalize(vNormal);
-    if (uHasNormalMap == 1 || uHasDetailNormalMap == 1) {
+    if (tri && uHasNormalMap == 1) {
+        // Triplanar: each axis plane's tangent normal, sampled at the same world UVs as
+        // SampleTriplanar, whiteout-blended onto the surface normal swizzled into that plane,
+        // then swizzled back to world space (Golus, "Normal Mapping for a Triplanar Shader").
+        // The mesh UVs and TBN would stretch it over a scaled plane, out of step with the albedo.
+        vec3 n0 = backFace ? -N : N;
+        float strength = uNormalStrength > 0.0 ? uNormalStrength : 1.0;
+        vec3 tx = UnpackNormal(texture(uNormalMap, vWorldPos.zy * uTriplanarScale).rgb);
+        vec3 ty = UnpackNormal(texture(uNormalMap, vWorldPos.xz * uTriplanarScale).rgb);
+        vec3 tz = UnpackNormal(texture(uNormalMap, vWorldPos.xy * uTriplanarScale).rgb);
+        if (uNormalFlipY == 1) { tx.y = -tx.y; ty.y = -ty.y; tz.y = -tz.y; }
+        tx.xy *= strength; ty.xy *= strength; tz.xy *= strength;
+        tx = vec3(tx.xy + n0.zy, abs(tx.z) * n0.x);
+        ty = vec3(ty.xy + n0.xz, abs(ty.z) * n0.y);
+        tz = vec3(tz.xy + n0.xy, abs(tz.z) * n0.z);
+        N = normalize(tx.zyx * triW.x + ty.xzy * triW.y + tz.xyz * triW.z);
+    } else if (uHasNormalMap == 1 || uHasDetailNormalMap == 1) {
         // #102 — strength (scales the tangent-space slope), DirectX green flip, and a detail
         // normal map combined with whiteout blending.
         vec3 tn = uHasNormalMap == 1 ? UnpackNormal(texture(uNormalMap, uv).rgb) : vec3(0.0, 0.0, 1.0);
