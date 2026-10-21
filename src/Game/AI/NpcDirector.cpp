@@ -31,6 +31,7 @@ namespace {
 constexpr float kRadius = 0.3f;
 constexpr float kStandCyl = 0.6f;    // capsule 1.8 m standing
 constexpr float kCrouchCyl = 0.33f;  // 1.26 m crouched
+constexpr float kDownedGrace = 0.25f; // seconds after going down wounded that body rounds don't finish it
 
 unsigned Id(entt::entity e) { return (unsigned)entt::to_integral(e); }
 
@@ -1685,12 +1686,32 @@ void NpcDirector::ApplyDamage(World& world, Npc& n, float amount, HitZone zone, 
         n.MaxHealth = health->Max;
     }
     const bool wasWounded = n.Wounded;
+    // Just gone down: the rest of the burst that dropped it doesn't finish it before it has even fallen (a head shot does).
+    if (wasWounded && attacker < 0 && zone != HitZone::Head && m_Now - n.WoundedAt < kDownedGrace) return;
     // The finer region: from the bone when the hitboxes answered, else from the zone (the capsule's lower half is legs).
     const HitRegion region = part >= 0 ? RegionFromPart(part)
                              : zone == HitZone::Head ? HitRegion::Head
                              : zone == HitZone::Limb ? HitRegion::Leg
                                                      : HitRegion::Torso;
     n.Health -= amount;
+    // A leg or body hit that would leave it under 20% - or kill it - may put it down wounded instead (once a life): by a
+    // leg on its belly, crawling (Leg Down chance), by the body on a knee (Wound chance), left with a tenth of its health.
+    // A player's round does 25-35 a hit, so "under 20% but alive" alone almost never came up.
+    int downed = -2; // -2 not downed; else BecomeWounded's hurtLeg (-1 a knee, 0 / 1 that leg)
+    if (attacker < 0 && !n.Dummy && !n.WoundRolled && !wasWounded && n.Health < 0.2f * n.MaxHealth && amount < n.MaxHealth &&
+        (region == HitRegion::Leg || region == HitRegion::Torso)) {
+        n.WoundRolled = true;
+        const bool leg = region == HitRegion::Leg;
+        if (std::uniform_real_distribution<float>(0.0f, 1.0f)(m_Rng) < (leg ? m_LegDownChance : m_WoundChance)) {
+            downed = -1;
+            if (leg) {
+                // The hitbox's leg (7, 8 left; 9, 10 right), else the side of the body the round struck (model +X is its left).
+                if (part >= 7 && part <= 10) downed = part <= 8 ? 0 : 1;
+                else downed = glm::dot(point - n.Feet, glm::vec3(std::cos(n.Body.Yaw()), 0.0f, -std::sin(n.Body.Yaw()))) >= 0.0f ? 0 : 1;
+            }
+            n.Health = std::max(n.Health, 0.1f * n.MaxHealth);
+        }
+    }
     n.LastHurt = m_Now;
     n.LastHurtFrom = -dir;
     ++n.Hits;
@@ -1727,21 +1748,7 @@ void NpcDirector::ApplyDamage(World& world, Npc& n, float amount, HitZone zone, 
         if (glm::dot(flat, flat) > 1e-6f) n.PushVel += glm::normalize(flat) * 1.8f;
         if (glm::length(n.PushVel) > 2.5f) n.PushVel = glm::normalize(n.PushVel) * 2.5f;
     }
-    // Close to death from a leg or the body: it may go down wounded instead of fighting on (once a life). Shot down by a
-    // leg, it goes down on its belly (more likely), else on a knee.
-    if (attacker < 0 && !n.Dummy && !n.WoundRolled && n.Health < 0.2f * n.MaxHealth && (region == HitRegion::Leg || region == HitRegion::Torso)) {
-        n.WoundRolled = true;
-        const bool leg = region == HitRegion::Leg;
-        if (std::uniform_real_distribution<float>(0.0f, 1.0f)(m_Rng) < (leg ? m_LegDownChance : m_WoundChance)) {
-            int side = -1;
-            if (leg) {
-                // The hitbox's leg (7, 8 left; 9, 10 right), else the side of the body the round struck (model +X is its left).
-                if (part >= 7 && part <= 10) side = part <= 8 ? 0 : 1;
-                else side = glm::dot(point - n.Feet, glm::vec3(std::cos(n.Body.Yaw()), 0.0f, -std::sin(n.Body.Yaw()))) >= 0.0f ? 0 : 1;
-            }
-            BecomeWounded(world, n, side);
-        }
-    }
+    if (downed > -2) BecomeWounded(world, n, downed);
     if (n.Health < 0.35f * n.MaxHealth && !n.Wounded) Callout(n, CallKind::Wounded);
 }
 
