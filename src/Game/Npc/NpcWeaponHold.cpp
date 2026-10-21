@@ -247,7 +247,11 @@ glm::vec3 NpcBody::WeaponEye(const World& world, entt::entity armsRig, const std
 
 glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity weapon, const FirstPersonWorldGunInput* gun, const Camera& cam,
                               float dt, bool meshChecks, const Model* thirdPersonRig, const std::string& gunSocket) {
-    if (!IsActive() || m_PoseExternal || m_WeaponReleased) return glm::vec3(0.0f);
+    if (!IsActive() || m_PoseExternal) return glm::vec3(0.0f);
+    if (m_WeaponReleased) { // alive without its gun (shot down by a leg): the late passes still reach the drawn pieces
+        if (m_PiecesStale) SyncPieces();
+        return glm::vec3(0.0f);
+    }
     auto& reg = world.Registry;
     if (weapon != entt::null && reg.valid(weapon)) TrackGun(world.WorldSpaceTransform(weapon).Position, dt);
     const bool haveRig = gun && armsRig != entt::null && reg.valid(armsRig) && reg.all_of<RenderableComponent>(armsRig) &&
@@ -711,6 +715,10 @@ void NpcBody::TrackGun(const glm::vec3& position, float dt) {
 
 void NpcBody::ReleaseWeaponHold() {
     m_WeaponReleased = true;
+    if (!m_PoseExternal && m_DriverModel && (int)m_DriverModel->AppliedLocalPose().size() == m_DriverModel->NodeCount()) {
+        m_ReleasePose = m_DriverModel->AppliedLocalPose(); // the arms as they held the gun, eased out of in LateUpdate
+        m_ReleaseBlend = 1.0f;
+    }
     m_ArmsWeight = 0.0f;
     m_GunShift = glm::vec3(0.0f);
     m_HaveElbowAim[0] = m_HaveElbowAim[1] = false;

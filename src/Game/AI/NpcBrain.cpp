@@ -10,6 +10,7 @@ namespace {
 
 constexpr int kBehaviours = kBehaviourCount;
 constexpr float kInertia = 0.12f;
+constexpr float kProneDropTime = 3.2f; // seconds: the collapse onto its belly (npc_soldier.controller's ProneDrop) before it crawls
 
 float Flat(const glm::vec3& a, const glm::vec3& b) { return glm::length(glm::vec2(a.x - b.x, a.z - b.z)); }
 
@@ -701,6 +702,16 @@ void NpcBrain::Run(NpcDirector& d, World& world, Npc& n, const PlayerSnapshot& p
         break;
     }
     case Behaviour::Wounded: {
+        if (n.Prone) {
+            // On its belly, unarmed: it lies through the collapse, then drags itself to the cover it picked, looking back
+            // at the threat.
+            it.Crouch = true;
+            if (n.Cover >= 0 && now - n.WoundedAt > kProneDropTime) {
+                const CoverPoint& c = d.m_Cover.Points()[(size_t)n.Cover];
+                if (Flat(n.Feet, c.Pos) > 0.5f) moveTo(c.Pos, Gait::Walk);
+            }
+            break;
+        }
         // On a knee, crawling for cover (the director holds its speed to a crawl), shooting when it has the player.
         it.Crouch = true;
         it.Aim = m.Known;

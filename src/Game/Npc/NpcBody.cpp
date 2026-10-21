@@ -1,5 +1,6 @@
 #include "NpcBody.h"
 
+#include "AnimatorController.h"      // AnimatorCrossfadeWeight
 #include "Camera.h"
 #include "Components.h"
 #include "FirstPersonBody.h"         // FirstPersonBodyLocalMove / WrapAngle
@@ -11,6 +12,10 @@
 #include "World.h"
 
 #include <glm/gtc/matrix_transform.hpp>
+#ifndef GLM_ENABLE_EXPERIMENTAL
+#define GLM_ENABLE_EXPERIMENTAL
+#endif
+#include <glm/gtx/quaternion.hpp> // glm::rotation (the dragged leg)
 
 #include <algorithm>
 #include <cctype>
@@ -31,6 +36,11 @@ void Spring(float& x, float& rate, float target, float omega, float zeta, float 
 }
 
 glm::quat YawRotation(float yaw) { return glm::angleAxis(yaw, glm::vec3(0.0f, 1.0f, 0.0f)); }
+
+// npc_soldier.controller's prone states (tools/gen_npc_soldier.py).
+constexpr const char* kGoProne = "GoProne";          // Trigger: Any -> ProneDrop
+constexpr const char* kStateProneDrop = "ProneDrop"; // the collapse
+constexpr const char* kStateProneCrawl = "ProneCrawl";
 
 // NPC body tuning is now in NpcHoldSettings (copied from FirstPersonBodyComponent in NpcDirector::Start).
 // Replaced: kTurnThreshold → m_Set.TurnThreshold, kMaxTwist → m_Set.MaxTwist, kMoveEase → m_Set.MoveEase,
@@ -131,6 +141,14 @@ bool NpcBody::Start(World& world, entt::entity root) {
         if (m_DriverPelvis >= 0) lower[(size_t)m_DriverPelvis] = 1;
         for (int i = 0; i < d.NodeCount(); ++i)
             if (!lower[(size_t)i] && !upper[(size_t)i] && d.NodeParent(i) >= 0 && lower[(size_t)d.NodeParent(i)]) lower[(size_t)i] = 1;
+        std::vector<char> arm((size_t)d.NodeCount(), 0);
+        for (int s = 0; s < 2; ++s)
+            if (const int c = d.NodeIndex(FPBody::kBoneClavicle[s]); c >= 0) arm[(size_t)c] = 1;
+        m_ArmNodes.clear();
+        for (int i = 0; i < d.NodeCount(); ++i) {
+            if (!arm[(size_t)i] && d.NodeParent(i) >= 0 && arm[(size_t)d.NodeParent(i)]) arm[(size_t)i] = 1;
+            if (arm[(size_t)i]) m_ArmNodes.push_back(i);
+        }
         m_LowerMap.assign(m_Models.size(), {});
         for (size_t k = 0; k < m_Models.size(); ++k) {
             if ((int)k == m_DriverIndex) continue;
@@ -193,6 +211,24 @@ void NpcBody::Tick(World& world, const NpcBodyInput& in, float dt) {
     const float speed = glm::length(flat);
     const bool moving = speed > 0.25f;
     if (!m_HaveYaw) { m_Yaw = in.FacingYaw; m_HaveYaw = true; }
+    if (in.Prone) {
+        // Down: the collapse plays once, then the crawl (npc_soldier.controller's ProneDrop / ProneCrawl). No turns on the
+        // spot or starts and stops: a body on its belly swings slowly round to where it crawls, and lies still otherwise.
+        if (!m_WasProne) ac.SetTrigger(kGoProne);
+        m_WasProne = true;
+        m_Turning = false;
+        if (moving && !ac.InState(kStateProneDrop))
+            m_Yaw = FirstPersonBodyWrapAngle(m_Yaw + FirstPersonBodyWrapAngle(NpcYawOf(flat, m_Yaw) - m_Yaw) * Follow(dt, 0.6f));
+        world.SetWorldPose(m_Root, m_Feet, YawRotation(m_Yaw));
+        m_Move += (FirstPersonBodyLocalMove(flat, m_Yaw) - m_Move) * Follow(dt, m_Set.MoveEase);
+        ac.SetFloat(FPBody::kMoveX, m_Move.x);
+        ac.SetFloat(FPBody::kMoveY, m_Move.y);
+        ac.SetFloat(FPBody::kSpeed, glm::length(m_Move));
+        ac.SetBool(FPBody::kMoving, moving);
+        ac.SetBool(FPBody::kSprint, false);
+        ac.SetBool(FPBody::kTurning, false);
+        return;
+    }
     const float want = in.HoldFacing || !moving ? in.FacingYaw : NpcYawOf(flat, m_Yaw);
     float offset = FirstPersonBodyWrapAngle(want - m_Yaw);
 
@@ -399,6 +435,38 @@ void NpcBody::FootPass(float dt) {
     SyncLower();
 }
 
+void NpcBody::DragLegPass(const World& world, float dt) {
+    const int s = m_In.HurtLeg;
+    const auto* ac = world.Registry.try_get<AnimatorControllerComponent>(m_Driver);
+    // In once the crawl is under way (the collapse keeps its own legs).
+    const bool crawling = m_In.Prone && s >= 0 && s < 2 && ac && ac->InState(kStateProneCrawl);
+    m_Drag += ((crawling ? 0.85f : 0.0f) - m_Drag) * Follow(dt, 0.35f);
+    if (m_Drag < 1e-3f || s < 0 || s > 1) return;
+    const int thigh = m_DriverLeg[s][0], calf = m_DriverLeg[s][1], foot = m_DriverLeg[s][2];
+    if (thigh < 0 || calf < 0 || foot < 0) return;
+    Model& m = *m_DriverModel;
+    IK::Pose& pose = m_Pose;
+    pose = m.AppliedLocalPose();
+    m.BindLocalPose(m_BindScratch);
+    if ((int)pose.size() != m.NodeCount() || m_BindScratch.size() != pose.size()) return;
+    // Straight: the bind pose's hip and knee (a standing leg, which under a body on its belly trails behind it), the
+    // ankle half way (a limp foot, toes down) ...
+    pose[(size_t)thigh].R = glm::slerp(pose[(size_t)thigh].R, m_BindScratch[(size_t)thigh].R, m_Drag);
+    pose[(size_t)calf].R = glm::slerp(pose[(size_t)calf].R, m_BindScratch[(size_t)calf].R, m_Drag);
+    pose[(size_t)foot].R = glm::slerp(pose[(size_t)foot].R, m_BindScratch[(size_t)foot].R, 0.5f * m_Drag);
+    // ... then swung down about the hip until the ankle drags on the floor (the model stands on y = 0).
+    IK::ComputeGlobals(pose, m_DriverParents, m_Globals);
+    const glm::vec3 hip = IK::Position(m_Globals[(size_t)thigh]);
+    const glm::vec3 ankle = IK::Position(m_Globals[(size_t)foot]);
+    const glm::vec3 from = ankle - hip, to = glm::vec3(ankle.x, 0.08f, ankle.z) - hip;
+    if (glm::dot(from, from) > 1e-6f && glm::dot(to, to) > 1e-6f) {
+        const glm::quat swing = glm::rotation(glm::normalize(from), glm::normalize(to));
+        IK::OffsetBone(pose, m_DriverParents, m_Globals, thigh, glm::vec3(0.0f), glm::slerp(glm::quat(1.0f, 0.0f, 0.0f, 0.0f), swing, m_Drag), hip);
+    }
+    m.ApplyLocalPose(pose);
+    SyncLower();
+}
+
 void NpcBody::SyncLower() {
     const auto& src = m_DriverModel->AppliedLocalPose();
     if ((int)src.size() != m_DriverModel->NodeCount()) return;
@@ -417,9 +485,23 @@ void NpcBody::SyncLower() {
     }
 }
 
-void NpcBody::LateUpdate(World& /*world*/, float dt, const Camera* weaponCam) {
+void NpcBody::LateUpdate(World& world, float dt, const Camera* weaponCam) {
     if (!IsActive() || m_PoseExternal || !m_DriverModel) return;
     FootPass(dt);
+    DragLegPass(world, dt);
+    // A gun let go of while alive: the arms ease off the hold onto the clips' (ReleaseWeaponHold).
+    if (m_ReleaseBlend > 0.0f) {
+        Model& m = *m_DriverModel;
+        IK::Pose& pose = m_Pose;
+        pose = m.AppliedLocalPose();
+        if (pose.size() == m_ReleasePose.size()) {
+            const float w = AnimatorCrossfadeWeight(m_ReleaseBlend);
+            for (int i : m_ArmNodes) pose[(size_t)i].R = glm::slerp(pose[(size_t)i].R, m_ReleasePose[(size_t)i].R, w);
+            m.ApplyLocalPose(pose);
+            m_PiecesStale = true;
+        }
+        m_ReleaseBlend = std::max(0.0f, m_ReleaseBlend - dt / 0.3f);
+    }
     const glm::mat4 rootW = RootWorld();
     {
         glm::mat4 l(1.0f), r(1.0f);
@@ -442,7 +524,7 @@ void NpcBody::LateUpdate(World& /*world*/, float dt, const Camera* weaponCam) {
         // the shoulders on the weapon's camera, takes the rest.
         wantPitch *= std::clamp(wantPitch < 0.0f ? m_Set.SpineAimDown : m_Set.SpineAim, 0.0f, 1.0f);
         wantTwist = NpcSpineTwist(NpcYawOf(d, m_Yaw) - m_Yaw, m_Set.MaxTwist);
-    } else if (!m_Turning) {
+    } else if (!m_Turning && !m_In.Prone) { // (on its belly the spine's yaw would bend it sideways: the head looks alone)
         // Looking about while not aiming: the twist only (a soldier scanning, not bending over).
         const glm::vec3 d = m_In.LookPoint - chestW;
         wantTwist = NpcSpineTwist(NpcYawOf(d, m_Yaw) - m_Yaw, 0.6f);
@@ -458,7 +540,7 @@ void NpcBody::LateUpdate(World& /*world*/, float dt, const Camera* weaponCam) {
     {
         glm::mat4 pelvis(1.0f), neck(1.0f);
         float straighten = 0.0f;
-        if (m_DriverModel->NodeTransform(FPBody::kBonePelvis, pelvis) && m_DriverModel->NodeTransform("neck_01", neck)) {
+        if (!m_In.Prone && m_DriverModel->NodeTransform(FPBody::kBonePelvis, pelvis) && m_DriverModel->NodeTransform("neck_01", neck)) {
             const glm::vec3 up = glm::vec3(neck[3]) - glm::vec3(pelvis[3]);
             const float leanNow = std::atan2(up.z, std::max(up.y, 1e-3f)); // + = forward
             // Crouched with a gun but not aiming (a low ready, moving between cover) the hunch is eased too, to a

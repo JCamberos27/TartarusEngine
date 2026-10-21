@@ -529,6 +529,7 @@ void NpcTest::Deaths(World& world, NpcDirector& npcs, float now) {
     npcs.NoLod = true;
     npcs.TrackDeathPop = true;
     npcs.SetWoundChance(1.0f);
+    npcs.SetLegDownChance(1.0f);
     npcs.Frozen = m_DStep < 4; // still for the rays and the kills; the brain runs for the wounded
     m_Shot.clear();
     FirstPersonWeaponGameplay w;
@@ -569,6 +570,10 @@ void NpcTest::Deaths(World& world, NpcDirector& npcs, float now) {
         return killed;
     };
     auto step = [&](int to) { m_DStep = to; m_DAt = now; };
+    auto setHealth = [&](Npc& n, float hp) {
+        n.Health = hp;
+        if (auto* h = world.Registry.try_get<HealthComponent>(n.Root)) h->Current = hp;
+    };
 
     // The Scene view watches the soldier being shot (for NPC_TEST_RECORD): placed off his side when he
     // becomes the target, then it only turns to keep his pelvis in frame as he falls.
@@ -736,7 +741,7 @@ void NpcTest::Deaths(World& world, NpcDirector& npcs, float now) {
         }
         break;
     }
-    case 4: { // two soldiers go down wounded
+    case 4: { // two soldiers go down wounded: one shot in the leg (on its belly), one in the chest (on a knee)
         Npc* a = fresh();
         Npc* b = nullptr;
         for (const auto& up : npcs.Npcs())
@@ -744,16 +749,20 @@ void NpcTest::Deaths(World& world, NpcDirector& npcs, float now) {
                 up->Cct != PhysicsWorld::kNoCharacter)
                 b = up.get();
         if (!a || !b) { if (now - m_DAt > 25.0f) { Check(false, "two soldiers to wound"); step(7); } break; }
-        for (Npc* n : {a, b}) {
-            m_DUsed.push_back(n->Name);
-            n->Health = 30.0f;
-            w.Damage = 12.0f;
-            shoot(*n, 1, 12.0f); // the chest: 18 left, under 20%
-        }
+        m_DUsed.push_back(a->Name);
+        m_DUsed.push_back(b->Name);
+        // (Damage reads the soldier's Health component: set it, not only the copy.)
+        setHealth(*a, 25.0f);
+        shoot(*a, 7, 12.0f); // the left thigh: 9 at the limb multiplier, 16 left
+        setHealth(*b, 30.0f);
+        shoot(*b, 1, 12.0f); // the chest: 18 left, under 20%
         m_DNpc[0] = a->Name;
         m_DNpc[1] = b->Name;
-        Check(a->Wounded && b->Wounded, "a body hit under 20% health can leave a soldier wounded (the chance forced to 1)");
+        Check(a->Wounded && b->Wounded, "a leg or body hit under 20% health can leave a soldier wounded (the chances forced to 1)");
         Check(a->Doing == Behaviour::Wounded, "it is in the Wounded behaviour");
+        Check(a->Prone && a->HurtLeg == 0, "the leg-shot soldier goes down on its belly, dragging the left leg");
+        Check(!a->Weapon && a->Dropped, "... and drops its gun");
+        Check(!b->Prone && b->Weapon, "the chest-shot one goes down on a knee, still armed");
         m_DWoundSpeed = 0.0f;
         step(5);
         break;
@@ -764,14 +773,45 @@ void NpcTest::Deaths(World& world, NpcDirector& npcs, float now) {
         if (!a || !b) { step(7); break; }
         const float t = now - m_DAt;
         if (!a->Dead && t > 0.5f) m_DWoundSpeed = std::max(m_DWoundSpeed, glm::length(a->Velocity));
+        if (!b->Dead && t > 0.5f) m_DWoundSpeed = std::max(m_DWoundSpeed, glm::length(b->Velocity));
         if (!m_DKneelChecked && t > 0.5f) {
             m_DKneelChecked = true;
-            Check(a->Intent.Crouch && a->Crouched, "a wounded soldier is down on a knee (crouched)");
+            Check(b->Intent.Crouch && b->Crouched, "a wounded soldier is down on a knee (crouched)");
+            Check(a->Body.StateName(world) == "ProneDrop", "the leg-shot one collapses (" + a->Body.StateName(world) + ")");
+            Check(glm::length(a->Velocity) < 0.1f, "... lying where it fell while it does");
         }
-        if (t > 4.0f && !a->Dead && a->Wounded) {
+        if (!m_DDropShot && t > 1.8f && !a->Dead) {
+            m_DDropShot = true;
+            m_Shot = "wounded_prone_drop";
+        }
+        if (!m_DProneChecked && t > 5.5f && !a->Dead) {
+            m_DProneChecked = true;
+            glm::vec3 head(0.0f), pelvis(0.0f), leg[2][3]{};
+            a->Body.BoneWorld("head", head);
+            a->Body.BoneWorld("pelvis", pelvis);
+            static const char* kLeg[2][3] = {{"thigh_l", "calf_l", "foot_l"}, {"thigh_r", "calf_r", "foot_r"}};
+            float straight[2];
+            for (int s = 0; s < 2; ++s) {
+                for (int j = 0; j < 3; ++j) a->Body.BoneWorld(kLeg[s][j], leg[s][j]);
+                // 1 = a straight knee: hip to ankle over the thigh and shin's lengths.
+                straight[s] = glm::length(leg[s][2] - leg[s][0]) /
+                              std::max(glm::length(leg[s][1] - leg[s][0]) + glm::length(leg[s][2] - leg[s][1]), 1e-3f);
+            }
+            const float footDrop = leg[0][2].y - a->Feet.y;
+            std::printf("[NpcTest] prone: %s, head %.0f cm, pelvis %.0f cm off the floor; dragged foot %.0f cm up, its knee %.2f "
+                        "straight (the other %.2f)\n", a->Body.StateName(world).c_str(), (head.y - a->Feet.y) * 100.0f,
+                        (pelvis.y - a->Feet.y) * 100.0f, footDrop * 100.0f, straight[0], straight[1]);
+            m_Shot = "wounded_prone_crawl";
+            Check(a->Body.StateName(world) == "ProneCrawl", "then it crawls (" + a->Body.StateName(world) + ")");
+            Check(head.y - a->Feet.y < 0.5f && pelvis.y - a->Feet.y < 0.45f, "on its belly (head and pelvis low)");
+            Check(footDrop < 0.2f, "the dragged foot is on the floor (" + std::to_string(footDrop * 100.0f) + " cm)");
+            Check(straight[0] > 0.97f && straight[0] > straight[1], "the dragged leg is straight, the crawling one bent (" +
+                  std::to_string(straight[0]) + " / " + std::to_string(straight[1]) + ")");
+        }
+        if (t > 6.0f && !a->Dead && a->Wounded) {
             std::printf("[NpcTest] wounded: top speed %.2f m/s\n", m_DWoundSpeed);
             Check(m_DWoundSpeed <= 0.75f, "a wounded soldier crawls (top speed " + std::to_string(m_DWoundSpeed) + " m/s)");
-            Check(!b->Dead && b->Wounded, "an unhit wounded soldier is still alive after 4 s");
+            Check(!b->Dead && b->Wounded, "an unhit wounded soldier is still alive after 6 s");
             shoot(*a, 8, 20.0f); // any hit
             Check(a->Dead, "a wounded soldier dies on the next hit");
         }
