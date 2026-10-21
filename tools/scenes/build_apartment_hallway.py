@@ -265,7 +265,21 @@ class Hallway(k.Scene):
                         self.solid('Wall', solids, (line, c[1], c[0]), (t, y1 - y0, p1 - p0))
         # the floor slab and the roof slab over everything
         self.solid('Roof Slab', solids, (L / 2, H + 0.15, 0.0), (L + 2 * TX, 0.3, 2 * ZOUT + TX))
-        self.solid('Floor Slab', solids, (L / 2, -0.25, 0.0), (L + 2 * TX, 0.3, 2 * ZOUT + TX))
+        # The slab is what you walk on: one box, its top just under the floors, so there's no seam to catch on at a
+        # doorway (the floors themselves don't collide).
+        self.solid('Floor Slab', solids, (L / 2, -0.155, 0.0), (L + 2 * TX, 0.3, 2 * ZOUT + TX))
+        # the floor through each door and arch, across the wall's thickness (the rooms' floors stop at the wall faces);
+        # a door's in the floor of the room it swings into
+        door_floor = {(wa, round(wl, 4), round(c, 4)): self.room_mat[f'Apartment {n}/{room}'][1]
+                      for n, room, wa, wl, c, _, _ in self.door_specs}
+        for (axis, line), ops in self.openings.items():
+            t = self.thick(axis, line)
+            for oc, ow, top, bot, kind in ops:
+                if bot > 0.0:
+                    continue
+                mat = self.mats[door_floor.get((axis, line, round(oc, 4)), 'planks')]
+                c, size = ((oc, -0.05, line), (ow, 0.1, t)) if axis == 'x' else ((line, -0.05, oc), (t, 0.1, ow))
+                self.box('Floor - Threshold', floors, c, size, mat, collider=False, static=True, castShadows=0)
         # each room's own faces: floor, ceiling and four walls, half a wall in from the centre lines
         for key, (x0, z0, x1, z1) in self.rooms.items():
             wall_mat, floor_mat = (self.mats[m] for m in self.room_mat[key])
@@ -273,7 +287,7 @@ class Hallway(k.Scene):
             iz0, iz1 = z0 + self.thick('x', z0) / 2, z1 - self.thick('x', z1) / 2
             label = key.replace('/', ' - ')
             self.box(f'Floor - {label}', floors, ((ix0 + ix1) / 2, -0.05, (iz0 + iz1) / 2), (ix1 - ix0, 0.1, iz1 - iz0),
-                     self.mats[self.room_mat[key][1]], static=True, castShadows=0)
+                     self.mats[self.room_mat[key][1]], collider=False, static=True, castShadows=0)
             self.face(f'Ceiling - {label}', ceilings, ((ix0 + ix1) / 2, H, (iz0 + iz1) / 2), (0, -1, 0), ix1 - ix0,
                       iz1 - iz0, self.mats['ceiling'])
             for axis, line, a, b, inward, normal in (
@@ -492,6 +506,9 @@ class Hallway(k.Scene):
         fpc = ctrl['First Person Controller']
         fpc['Primary Weapon Prefab'] = 'assets/Weapons/AKS74U/AKS74U.prefab'
         fpc['Secondary Weapon Prefab'] = 'assets/Weapons/Remington870/Remington870.prefab'
+        # Arena's 0.3 m capsule (0.7 m wide with PhysX's contact offset) scrapes the 0.87 m a door leaves open; 0.22
+        # is a person's shoulders seen from above
+        fpc['Capsule Radius'] = 0.22
         sid = self.empty('Player Spawn', -1, (1.0 - L / 2, 0.0, 0.0), yaw=-90.0, **ctrl)  # facing +X
         bid = self.empty('Player Body', sid, tuple(body['position']), **{kk: v for kk, v in body.items() if kk[0].isupper()})
         for p in pieces:
@@ -546,7 +563,7 @@ def build(repo):
     s.empty('Moon', -1, (0, 30, 0), pitch=-25.0, yaw=-120.0, Light={
         'Type': 'Directional', 'Color': [0.78, 0.86, 1.0], 'Intensity': 0.8, 'Range': 200.0, 'Spot Angle': 35.0,
         'Angular Size': 0.53, 'Cast Shadows': True, 'Shadow Bias': 1.0, 'Shadow Normal Bias': 1.0,
-        'Shadow Softness': 0.15, 'Shadow Resolution': 'Follow global', 'Shadow Update Mode': 'Dynamic', 'ColorTempK': 0.0,
+        'Shadow Softness': 0.05, 'Shadow Resolution': 'Follow global', 'Shadow Update Mode': 'Dynamic', 'ColorTempK': 0.0,
         'Culling Mask': -1})
     s.plan()
     # centred on the origin (the editor's default and smoke-test cameras orbit it); the plan stays in corridor coordinates

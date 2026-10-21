@@ -51,11 +51,10 @@ float ParentDepth(World& world, entt::entity e) {
     return (r->ModelRef->BoundsMax().z - r->ModelRef->BoundsMin().z) * (t ? std::abs(t->Scale.z) : 1.0f);
 }
 
-void Apply(OpenableComponent& o, TransformComponent& t, const Model& m) {
+void Apply(OpenableComponent& o, TransformComponent& t) {
     glm::vec3 pos;
     glm::quat rot;
-    Pose(o.Motion, o.ResolvedAmount, m.BoundsMin(), m.BoundsMax(), t.Scale, o.BasePosition, o.BaseRotation, o.Progress,
-         pos, rot);
+    Pose(o.Motion, o.ResolvedAmount, o.PoseMin, o.PoseMax, t.Scale, o.BasePosition, o.BaseRotation, o.Progress, pos, rot);
     t.Position = pos;
     t.Rotation = rot;
 }
@@ -64,6 +63,15 @@ void Start(World& world, entt::entity e, OpenableComponent& o, const TransformCo
     o.Started = true;
     o.BasePosition = t.Position;
     o.BaseRotation = t.Rotation;
+    // The part's own box collider, when it has one, is the solid panel; the model's bounds also take in the handles
+    // sticking out either face, which would put a hinge out in the air beside the door.
+    o.PoseMin = m.BoundsMin();
+    o.PoseMax = m.BoundsMax();
+    const auto* c = world.Registry.try_get<ColliderComponent>(e);
+    if (c && c->Kind == ColliderComponent::Shape::Box && glm::all(glm::greaterThan(c->HalfExtents, glm::vec3(0.0f)))) {
+        o.PoseMin = c->Center - c->HalfExtents;
+        o.PoseMax = c->Center + c->HalfExtents;
+    }
     o.ResolvedAmount = o.Amount > 0.0f ? o.Amount : DefaultAmount(o.Motion, m.BoundsMin(), m.BoundsMax(), ParentDepth(world, e));
     o.Progress = o.Target = o.StartOpen ? 1.0f : 0.0f;
 }
@@ -104,13 +112,14 @@ void Pose(int motion, float amount, const glm::vec3& lo, const glm::vec3& hi, co
         case Kind::SlideRight: outPos = basePos + baseRot * glm::vec3(amount * s, 0.0f, 0.0f); return;
         default: break;
     }
-    // The hinge line and which way round it opens, so the free edge always comes out toward local +Z.
+    // The hinge line and which way round it opens, so the free edge always comes out toward local +Z. A side hinge's
+    // pin is on the front face, the side it swings to, so the open door stands in the doorway clear of the jamb.
     const glm::vec3 c = (lo + hi) * 0.5f;
     glm::vec3 pivot, axis;
     float sign;
     switch ((Kind)motion) {
-        case Kind::HingeLeft: pivot = {lo.x, c.y, lo.z}; axis = {0.0f, 1.0f, 0.0f}; sign = -1.0f; break;
-        case Kind::HingeRight: pivot = {hi.x, c.y, lo.z}; axis = {0.0f, 1.0f, 0.0f}; sign = 1.0f; break;
+        case Kind::HingeLeft: pivot = {lo.x, c.y, hi.z}; axis = {0.0f, 1.0f, 0.0f}; sign = -1.0f; break;
+        case Kind::HingeRight: pivot = {hi.x, c.y, hi.z}; axis = {0.0f, 1.0f, 0.0f}; sign = 1.0f; break;
         case Kind::Lid: pivot = {c.x, lo.y, lo.z}; axis = {1.0f, 0.0f, 0.0f}; sign = -1.0f; break;
         case Kind::FlapDown: pivot = {c.x, lo.y, hi.z}; axis = {1.0f, 0.0f, 0.0f}; sign = 1.0f; break;
         case Kind::FlapUp: pivot = {c.x, hi.y, hi.z}; axis = {1.0f, 0.0f, 0.0f}; sign = -1.0f; break;
@@ -184,7 +193,7 @@ void Update(World& world, const glm::vec3& eye, const glm::vec3& forward, bool i
         if (!o.Started || !r.ModelRef || o.Progress == o.Target) continue;
         const float step = dt / std::max(o.OpenTime, 0.01f);
         o.Progress = o.Target > o.Progress ? std::min(o.Target, o.Progress + step) : std::max(o.Target, o.Progress - step);
-        Apply(o, view.get<TransformComponent>(e), *r.ModelRef);
+        Apply(o, view.get<TransformComponent>(e));
         if (o.Progress == 0.0f) { // landed shut
             const glm::vec3 at(world.GetCachedWorldTransform(e)[3]);
             PlaySound(o.CloseSound, at);
@@ -201,7 +210,7 @@ void SetAll(World& world, float t) {
         if (!r.ModelRef) continue;
         if (!o.Started) Start(world, e, o, view.get<TransformComponent>(e), *r.ModelRef);
         o.Progress = o.Target = std::clamp(t, 0.0f, 1.0f);
-        Apply(o, view.get<TransformComponent>(e), *r.ModelRef);
+        Apply(o, view.get<TransformComponent>(e));
     }
 }
 
