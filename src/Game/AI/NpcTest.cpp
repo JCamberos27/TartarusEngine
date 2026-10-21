@@ -528,8 +528,9 @@ void NpcTest::Deaths(World& world, NpcDirector& npcs, float now) {
     npcs.HoldFire = true;
     npcs.NoLod = true;
     npcs.TrackDeathPop = true;
-    npcs.SetWoundChance(1.0f);
-    npcs.SetLegDownChance(1.0f);
+    // The kills die outright; the wound steps (4 on) always go down.
+    npcs.SetWoundChance(m_DStep >= 4 ? 1.0f : 0.0f);
+    npcs.SetLegDownChance(m_DStep >= 4 ? 1.0f : 0.0f);
     npcs.Frozen = m_DStep < 4; // still for the rays and the kills; the brain runs for the wounded
     m_Shot.clear();
     FirstPersonWeaponGameplay w;
@@ -752,13 +753,18 @@ void NpcTest::Deaths(World& world, NpcDirector& npcs, float now) {
         m_DUsed.push_back(a->Name);
         m_DUsed.push_back(b->Name);
         // (Damage reads the soldier's Health component: set it, not only the copy.)
-        setHealth(*a, 25.0f);
-        shoot(*a, 7, 12.0f); // the left thigh: 9 at the limb multiplier, 16 left
+        // A player's round (34; 25.5 on a leg) that would kill: it goes down instead, on a tenth of its health.
+        setHealth(*a, 20.0f);
+        shoot(*a, 7, 34.0f); // the left thigh
         setHealth(*b, 30.0f);
-        shoot(*b, 1, 12.0f); // the chest: 18 left, under 20%
+        shoot(*b, 1, 34.0f); // the chest
         m_DNpc[0] = a->Name;
         m_DNpc[1] = b->Name;
-        Check(a->Wounded && b->Wounded, "a leg or body hit under 20% health can leave a soldier wounded (the chances forced to 1)");
+        Check(a->Wounded && b->Wounded && !a->Dead && !b->Dead,
+              "a leg or body round that would kill can leave a soldier wounded instead (the chances forced to 1)");
+        Check(std::abs(a->Health - 0.1f * a->MaxHealth) < 0.5f, "... on a tenth of its health (" + std::to_string(a->Health) + ")");
+        shoot(*a, 1, 34.0f); // the rest of the burst, the same frame
+        Check(!a->Dead, "the rest of the burst that dropped it doesn't finish it before it has fallen");
         Check(a->Doing == Behaviour::Wounded, "it is in the Wounded behaviour");
         Check(a->Prone && a->HurtLeg == 0, "the leg-shot soldier goes down on its belly, dragging the left leg");
         Check(!a->Weapon && a->Dropped, "... and drops its gun");
