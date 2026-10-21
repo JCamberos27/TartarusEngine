@@ -6791,6 +6791,446 @@
    "mix_db": -16.23
   },
   {
+   "file": "Foley/door/close_1.wav",
+   "key": "snd.foley.door.close",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -26.42,
+   "lufs_m_max": -24.37,
+   "true_peak_dbtp": -9.03,
+   "length_s": 0.515,
+   "peak_ms": 96.9,
+   "sources": [
+    {
+     "file": "doors/537737__steeltowngaming__closet-door-close-01.wav",
+     "start": 0.423,
+     "end": 1.423,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 80.2,
+   "element": "close",
+   "category": "door",
+   "variant": 1,
+   "source": "537737@0.30",
+   "mix_db": -5.85
+  },
+  {
+   "file": "Foley/door/close_2.wav",
+   "key": "snd.foley.door.close",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -26.12,
+   "lufs_m_max": -24.36,
+   "true_peak_dbtp": -7.59,
+   "length_s": 0.555,
+   "peak_ms": 84.3,
+   "sources": [
+    {
+     "file": "doors/537736__steeltowngaming__closet-door-close-02.wav",
+     "start": 0.462,
+     "end": 1.462,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 80.2,
+   "element": "close",
+   "category": "door",
+   "variant": 2,
+   "source": "537736@0.36",
+   "mix_db": -5.88
+  },
+  {
+   "file": "Foley/door/close_3.wav",
+   "key": "snd.foley.door.close",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -26.88,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -7.98,
+   "length_s": 1.215,
+   "peak_ms": 126.7,
+   "sources": [
+    {
+     "file": "doors/453960__kyles__door-heavy-office-wood-with-metal-handle-close-3-times-thud-with-rattle.flac",
+     "start": 0.374,
+     "end": 1.674,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 103.6,
+   "element": "close",
+   "category": "door",
+   "variant": 3,
+   "source": "453960@0.34",
+   "mix_db": -6.23
+  },
+  {
+   "file": "Foley/door/close_4.wav",
+   "key": "snd.foley.door.close",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -26.82,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -10.51,
+   "length_s": 1.275,
+   "peak_ms": 126.2,
+   "sources": [
+    {
+     "file": "doors/453960__kyles__door-heavy-office-wood-with-metal-handle-close-3-times-thud-with-rattle.flac",
+     "start": 6.502,
+     "end": 7.802,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 85.8,
+   "element": "close",
+   "category": "door",
+   "variant": 4,
+   "source": "453960@6.47",
+   "mix_db": -6.23
+  },
+  {
+   "file": "Foley/door/latch_1.wav",
+   "key": "snd.foley.door.latch",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -25.53,
+   "lufs_m_max": -25.48,
+   "true_peak_dbtp": -1.48,
+   "length_s": 0.325,
+   "peak_ms": 5.5,
+   "sources": [
+    {
+     "file": "doors/218324__splicesound__julians-door-turn-doorknob-without-latch.wav",
+     "start": 1.97,
+     "end": 2.32,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.5,
+   "element": "latch",
+   "category": "door",
+   "variant": 1,
+   "source": "218324@1.89",
+   "mix_db": -8.75
+  },
+  {
+   "file": "Foley/door/latch_2.wav",
+   "key": "snd.foley.door.latch",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -24.04,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -1.7,
+   "length_s": 0.295,
+   "peak_ms": 15.1,
+   "sources": [
+    {
+     "file": "doors/218324__splicesound__julians-door-turn-doorknob-without-latch.wav",
+     "start": 5.808,
+     "end": 6.158,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 15.0,
+   "element": "latch",
+   "category": "door",
+   "variant": 2,
+   "source": "218324@5.75",
+   "mix_db": -10.22
+  },
+  {
+   "file": "Foley/door/latch_3.wav",
+   "key": "snd.foley.door.latch",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -25.87,
+   "lufs_m_max": -25.83,
+   "true_peak_dbtp": -2.31,
+   "length_s": 0.295,
+   "peak_ms": 8.2,
+   "sources": [
+    {
+     "file": "doors/218324__splicesound__julians-door-turn-doorknob-without-latch.wav",
+     "start": 9.827,
+     "end": 10.127,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 5.4,
+   "element": "latch",
+   "category": "door",
+   "variant": 3,
+   "source": "218324@9.80",
+   "mix_db": -8.41
+  },
+  {
+   "file": "Foley/door/latch_4.wav",
+   "key": "snd.foley.door.latch",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -23.97,
+   "lufs_m_max": -23.92,
+   "true_peak_dbtp": -1.0,
+   "length_s": 0.3,
+   "peak_ms": 46.8,
+   "sources": [
+    {
+     "file": "doors/218324__splicesound__julians-door-turn-doorknob-without-latch.wav",
+     "start": 13.368,
+     "end": 13.668,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 46.7,
+   "element": "latch",
+   "category": "door",
+   "variant": 4,
+   "source": "218324@13.37",
+   "mix_db": -10.27
+  },
+  {
+   "file": "Foley/door/open_1.wav",
+   "key": "snd.foley.door.open",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -24.44,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -9.94,
+   "length_s": 0.62,
+   "peak_ms": 205.5,
+   "sources": [
+    {
+     "file": "doors/218324__splicesound__julians-door-turn-doorknob-without-latch.wav",
+     "start": 0.247,
+     "end": 0.607,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "doors/393800__howardv__short-creaks-creek-creaky-door-open-close.wav",
+     "start": 0.042,
+     "end": 0.462,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 48.1,
+   "element": "open",
+   "category": "door",
+   "variant": 1,
+   "source": "218324@0.22 + 393800@0.02",
+   "mix_db": -10.92
+  },
+  {
+   "file": "Foley/door/open_2.wav",
+   "key": "snd.foley.door.open",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -25.14,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -7.16,
+   "length_s": 0.645,
+   "peak_ms": 185.3,
+   "sources": [
+    {
+     "file": "doors/218324__splicesound__julians-door-turn-doorknob-without-latch.wav",
+     "start": 4.006,
+     "end": 4.326,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "doors/393800__howardv__short-creaks-creek-creaky-door-open-close.wav",
+     "start": 1.183,
+     "end": 1.743,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 55.9,
+   "element": "open",
+   "category": "door",
+   "variant": 2,
+   "source": "218324@3.98 + 393800@1.10",
+   "mix_db": -11.06
+  },
+  {
+   "file": "Foley/door/open_3.wav",
+   "key": "snd.foley.door.open",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -24.78,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -9.33,
+   "length_s": 0.82,
+   "peak_ms": 707.2,
+   "sources": [
+    {
+     "file": "doors/218324__splicesound__julians-door-turn-doorknob-without-latch.wav",
+     "start": 8.198,
+     "end": 8.498,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "doors/393800__howardv__short-creaks-creek-creaky-door-open-close.wav",
+     "start": 3.338,
+     "end": 3.958,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 67.2,
+   "element": "open",
+   "category": "door",
+   "variant": 3,
+   "source": "218324@8.17 + 393800@3.32",
+   "mix_db": -11.4
+  },
+  {
+   "file": "Foley/door/open_4.wav",
+   "key": "snd.foley.door.open",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -25.01,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -8.2,
+   "length_s": 0.66,
+   "peak_ms": 10.5,
+   "sources": [
+    {
+     "file": "doors/218324__splicesound__julians-door-turn-doorknob-without-latch.wav",
+     "start": 12.692,
+     "end": 12.942,
+     "pitch_st": 0.0
+    },
+    {
+     "file": "doors/345311__epicwizard__cottage-wooden-doors-assorted-squeaks-and-creaks.wav",
+     "start": 1.332,
+     "end": 1.832,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 10.3,
+   "element": "open",
+   "category": "door",
+   "variant": 4,
+   "source": "218324@12.66 + 345311@1.30",
+   "mix_db": -12.18
+  },
+  {
+   "file": "Foley/door/rattle_1.wav",
+   "key": "snd.foley.door.rattle",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -25.79,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -5.29,
+   "length_s": 1.4,
+   "peak_ms": 5.1,
+   "sources": [
+    {
+     "file": "doors/345312__epicwizard__cottage-door-handles-assorted-opening-rattling-and-closing.wav",
+     "start": 6.488,
+     "end": 7.888,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 4.2,
+   "element": "rattle",
+   "category": "door",
+   "variant": 1,
+   "source": "345312@6.45",
+   "mix_db": -11.23
+  },
+  {
+   "file": "Foley/door/rattle_2.wav",
+   "key": "snd.foley.door.rattle",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -27.34,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -4.78,
+   "length_s": 1.345,
+   "peak_ms": 335.2,
+   "sources": [
+    {
+     "file": "doors/345312__epicwizard__cottage-door-handles-assorted-opening-rattling-and-closing.wav",
+     "start": 8.24,
+     "end": 9.64,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 335.1,
+   "element": "rattle",
+   "category": "door",
+   "variant": 2,
+   "source": "345312@8.00",
+   "mix_db": -11.23
+  },
+  {
+   "file": "Foley/door/rattle_3.wav",
+   "key": "snd.foley.door.rattle",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -25.36,
+   "lufs_m_max": -24.65,
+   "true_peak_dbtp": -10.66,
+   "length_s": 1.4,
+   "peak_ms": 380.6,
+   "sources": [
+    {
+     "file": "doors/577273__trp__door-rattles-wood-2011.wav",
+     "start": 2.166,
+     "end": 3.566,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 230.3,
+   "element": "rattle",
+   "category": "door",
+   "variant": 3,
+   "source": "577273@2.15",
+   "mix_db": -10.58
+  },
+  {
+   "file": "Foley/door/rattle_4.wav",
+   "key": "snd.foley.door.rattle",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -26.64,
+   "lufs_m_max": -24.0,
+   "true_peak_dbtp": -7.18,
+   "length_s": 1.4,
+   "peak_ms": 826.0,
+   "sources": [
+    {
+     "file": "doors/330829__marcusgraham325__door-handle-rattling.wav",
+     "start": 0.809,
+     "end": 2.209,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 6.0,
+   "element": "rattle",
+   "category": "door",
+   "variant": 4,
+   "source": "330829@0.70",
+   "mix_db": -11.23
+  },
+  {
    "file": "Foley/move/jump_1.wav",
    "key": "snd.foley.move.jump",
    "layer": "foley",

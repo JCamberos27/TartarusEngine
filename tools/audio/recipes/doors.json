@@ -1,0 +1,37 @@
+{
+ "_doc": "Interior wooden apartment doors (OpenableComponent). element -> variants; a variant is a list of layers cut from the Freesound CC0 recordings in audio-src\\doors (file names as downloaded, see project/assets/Audio/Foley/door/CREDITS.md). Layer: src, t (cut start s, snapped back to the onset), dur (s), at (placement in the output, s, default 0), db (default 0), hp_hz (default hp_hz below). Variant: fade_out_ms (default: finish()'s). Outputs Foley/door/<element>_<n>.wav, mono 48 kHz, key snd.foley.door.<element>, levelled to the step_wood takes (target_lufs_m). open = knob turn + a slight hinge creak; close = the slab thud; latch = the knob / latch snap; rattle = a locked handle shaken.",
+ "target_lufs_m": -24.0,
+ "hp_hz": 60.0,
+ "tail_floor_db": -48.0,
+ "elements": {
+  "open": [
+   [{"src": "218324__splicesound__julians-door-turn-doorknob-without-latch.wav", "t": 0.22, "dur": 0.36},
+    {"src": "393800__howardv__short-creaks-creek-creaky-door-open-close.wav", "t": 0.02, "dur": 0.42, "at": 0.2, "db": -3.0}],
+   [{"src": "218324__splicesound__julians-door-turn-doorknob-without-latch.wav", "t": 3.98, "dur": 0.32},
+    {"src": "393800__howardv__short-creaks-creek-creaky-door-open-close.wav", "t": 1.1, "dur": 0.56, "at": 0.18, "db": -3.0}],
+   [{"src": "218324__splicesound__julians-door-turn-doorknob-without-latch.wav", "t": 8.17, "dur": 0.3},
+    {"src": "393800__howardv__short-creaks-creek-creaky-door-open-close.wav", "t": 3.32, "dur": 0.62, "at": 0.2, "db": -6.0}],
+   [{"src": "218324__splicesound__julians-door-turn-doorknob-without-latch.wav", "t": 12.66, "dur": 0.25},
+    {"src": "345311__epicwizard__cottage-wooden-doors-assorted-squeaks-and-creaks.wav", "t": 1.3, "dur": 0.5, "at": 0.16, "db": -6.0}]
+  ],
+  "close": [
+   [{"src": "537737__steeltowngaming__closet-door-close-01.wav", "t": 0.3, "dur": 1.0}],
+   [{"src": "537736__steeltowngaming__closet-door-close-02.wav", "t": 0.36, "dur": 1.0}],
+   [{"src": "453960__kyles__door-heavy-office-wood-with-metal-handle-close-3-times-thud-with-rattle.flac", "t": 0.34, "dur": 1.3}],
+   [{"src": "453960__kyles__door-heavy-office-wood-with-metal-handle-close-3-times-thud-with-rattle.flac", "t": 6.47, "dur": 1.3}]
+  ],
+  "latch": [
+   [{"src": "218324__splicesound__julians-door-turn-doorknob-without-latch.wav", "t": 1.89, "dur": 0.35}],
+   [{"src": "218324__splicesound__julians-door-turn-doorknob-without-latch.wav", "t": 5.75, "dur": 0.35}],
+   [{"src": "218324__splicesound__julians-door-turn-doorknob-without-latch.wav", "t": 9.8, "dur": 0.3}],
+   [{"src": "218324__splicesound__julians-door-turn-doorknob-without-latch.wav", "t": 13.37, "dur": 0.3}]
+  ],
+  "rattle": [
+   [{"src": "345312__epicwizard__cottage-door-handles-assorted-opening-rattling-and-closing.wav", "t": 6.45, "dur": 1.4}],
+   [{"src": "345312__epicwizard__cottage-door-handles-assorted-opening-rattling-and-closing.wav", "t": 8.0, "dur": 1.4}],
+   [{"src": "577273__trp__door-rattles-wood-2011.wav", "t": 2.15, "dur": 1.4, "hp_hz": 120.0}],
+   [{"src": "330829__marcusgraham325__door-handle-rattling.wav", "t": 0.7, "dur": 1.4}]
+  ]
+ },
+ "fade_out_ms": {"rattle": 180.0, "open": 90.0}
+}
