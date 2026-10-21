@@ -422,6 +422,10 @@ struct LightComponent {
     // light. -1 (all bits) = everything, the default. Shadows are unaffected.
     int CullingMask = -1;
 
+    // Multiplier on how much this light scatters into the scene's volumetric fog (World::
+    // VolumetricEnabled): 1 = physically matched to its Intensity, 0 = no shafts or glow from it.
+    float VolumetricIntensity = 1.0f;
+
     // Per-light shadow tuning. Always present (not a separate ECS component) so every light can be
     // authored with shadow settings recorded even when it isn't currently casting. `Enabled`
     // replaces the old `CastShadows` bool; the legacy `"castShadows"` scene key still loads into

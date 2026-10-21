@@ -218,6 +218,37 @@ void RegisterPanelsTests() {
         Do("no solo / mute", [](Ctx& c) { A::ClearSoloMute(c.E); }),
     });
 
+    // The Volumetric Fog section: its checkbox switches the froxel passes on for the Scene view (Beta's and Gamma's
+    // lights scatter into it), its controls show, and undo switches it off again.
+    Add("panels: Lighting > Volumetric Fog: the checkbox runs the froxel fog in the Scene view; undo", {
+        FreshScene(), Wait(2),
+        Do("a floor under the lights", [](Ctx& c) {
+            c.W.CreateBox(glm::vec3(0.0f, -0.5f, 0.0f), glm::vec3(20.0f, 1.0f, 20.0f), glm::vec3(0.5f), glm::vec3(0.0f), "Floor");
+        }),
+        Key(ImGuiKey_L, ImGuiMod_Ctrl | ImGuiMod_Shift),
+        Until("Lighting open", [](Ctx& c) { return A::ShowLighting(c.E) && Open(EditorPanels::Lighting); }),
+        BringToFront(EditorPanels::Lighting), UntilShown(EditorPanels::Lighting), Wait(3),
+        ExpectTrue("off in a new scene", [](Ctx& c) { return !c.W.VolumetricEnabled; }),
+        InspReveal(ByLabel("Volumetric fog", "###Lighting")),
+        Do("note the froxel passes run so far", [](Ctx&) { g_Number = (double)VolumetricFog::RenderCount(); }),
+        Click(ByLabel("Volumetric fog", "###Lighting")), Wait(3),
+        ExpectTrue("on", [](Ctx& c) { return c.W.VolumetricEnabled; }),
+        Wait(8),
+        ExpectTrue("the Scene view ran the froxel passes", [](Ctx&) { return (double)VolumetricFog::RenderCount() > g_Number; }),
+        Shot("volumetric fog", {"###Scene", "###Lighting"}),
+        // Its last control, below the fold of the panel (a clipped widget isn't registered until it's scrolled to).
+        InspReveal(ByExact("Quality", "###Lighting")),
+        Click(ByExact("Quality", "###Lighting")), Wait(2),
+        Click(ByLabel("High", "##Combo")), Wait(4),
+        ExpectTrue("Quality = High", [](Ctx& c) { return c.W.VolumetricQuality == 2; }),
+        Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
+        ExpectTrue("undo -> Medium", [](Ctx& c) { return c.W.VolumetricQuality == 1 && c.W.VolumetricEnabled; }),
+        Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
+        ExpectTrue("undo -> off", [](Ctx& c) { return !c.W.VolumetricEnabled; }),
+        CloseByX(EditorPanels::Lighting),
+        Until("closed", [](Ctx& c) { return !A::ShowLighting(c.E) && Gone(EditorPanels::Lighting); }),
+    });
+
     // ---------------------------------------------------------------------------------- Physics Debug
     Add("panels: Physics Debug: draw channels and collider toggles persist; its x", Seq({
         {FreshScene(), Wait(2),

@@ -3,6 +3,9 @@
 #include "../Renderer/Model.h"
 #include "../Renderer/InstanceBatch.h"
 #include "../Renderer/MaterialAsset.h"
+#include "../Renderer/VolumetricFog.h"
+#include "../Game/SceneSerializer.h"
+#include "AssetLibrary.h"
 #include "../Game/World.h"
 #include "../Game/Components.h"
 #include "../Physics/Frustum.h"
@@ -10,6 +13,7 @@
 #include "../Core/Log.h"
 #include <algorithm>
 #include <filesystem>
+#include <json.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace {
@@ -180,6 +184,80 @@ void InstanceImportId() {
     const auto other = Model::ImportDeferred(path, ModelImportSettings{});
     CHECK(other && other->ImportId() != model->ImportId());
 }
+// The froxel jitter's blue noise: every one of the 1024 ranks exactly once, and an even scatter -
+// the first eighth of the ranks never has two points as neighbours (a white-noise pick of 128 out
+// of 1024 cells almost surely would).
+void VolumetricBlueNoise() {
+    unsigned short ranks[32 * 32];
+    VolumetricFog::BuildBlueNoise(ranks);
+    std::vector<int> seen(32 * 32, 0);
+    for (unsigned short r : ranks) if (r < 32 * 32) ++seen[r];
+    CHECK(std::all_of(seen.begin(), seen.end(), [](int n) { return n == 1; }));
+    int adjacent = 0;
+    for (int y = 0; y < 32; ++y)
+        for (int x = 0; x < 32; ++x) {
+            if (ranks[y * 32 + x] >= 128) continue;
+            if (ranks[y * 32 + (x + 1) % 32] < 128) ++adjacent;
+            if (ranks[((y + 1) % 32) * 32 + x] < 128) ++adjacent;
+        }
+    CHECK(adjacent == 0);
+}
+
+// Volumetric fog settings and a light's Volumetric Intensity save and load; a scene saved before
+// they existed loads with the fog off and every light at 1.
+void VolumetricSettingsRoundTrip() {
+    AssetLibrary assets;
+    World world;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    const entt::entity lamp = world.CreateEmptyEntity(zero, zero, one, "Lamp");
+    world.Registry.emplace<LightComponent>(lamp).VolumetricIntensity = 3.5f;
+    world.VolumetricEnabled = true;
+    world.VolumetricDensity = 0.07f;
+    world.VolumetricAnisotropy = -0.3f;
+    world.VolumetricHeightFalloff = 0.25f;
+    world.VolumetricBaseHeight = 2.0f;
+    world.VolumetricAlbedo = glm::vec3(0.5f, 0.6f, 0.7f);
+    world.VolumetricDistance = 40.0f;
+    world.VolumetricQuality = 2;
+    const std::string saved = SceneSerializer::SaveToString(world);
+    {
+        World reloaded;
+        CHECK(SceneSerializer::LoadFromString(reloaded, assets, saved));
+        CHECK(reloaded.VolumetricEnabled && reloaded.VolumetricQuality == 2);
+        CHECK(reloaded.VolumetricDensity == 0.07f && reloaded.VolumetricAnisotropy == -0.3f);
+        CHECK(reloaded.VolumetricHeightFalloff == 0.25f && reloaded.VolumetricBaseHeight == 2.0f);
+        CHECK(reloaded.VolumetricAlbedo == glm::vec3(0.5f, 0.6f, 0.7f) && reloaded.VolumetricDistance == 40.0f);
+        float intensity = -1.0f;
+        for (auto [e, l] : reloaded.Registry.view<const LightComponent>().each()) intensity = l.VolumetricIntensity;
+        CHECK(intensity == 3.5f);
+    }
+    // The same scene without any of the new keys: an older file.
+    nlohmann::json j = nlohmann::json::parse(saved);
+    for (const char* k : {"volumetricEnabled", "volDensity", "volAnisotropy", "volHeightFalloff", "volBaseHeight",
+                          "volAlbedo", "volDistance", "volQuality"})
+        j.erase(k);
+    bool stripped = false;
+    for (const char* list : {"boxes", "models", "empties"})
+        if (j.contains(list) && j[list].is_array())
+            for (auto& e : j[list])
+                if (e.is_object() && e.contains("Light") && e["Light"].is_object())
+                    stripped |= e["Light"].erase("Volumetric Intensity") > 0;
+    CHECK(stripped);
+    {
+        World old;
+        CHECK(SceneSerializer::LoadFromString(old, assets, j.dump()));
+        const World defaults;
+        CHECK(!old.VolumetricEnabled && old.VolumetricDensity == defaults.VolumetricDensity &&
+              old.VolumetricAnisotropy == defaults.VolumetricAnisotropy && old.VolumetricQuality == 1);
+        bool sawLight = false;
+        for (auto [e, l] : old.Registry.view<const LightComponent>().each()) {
+            sawLight = true;
+            CHECK(l.VolumetricIntensity == 1.0f);
+        }
+        CHECK(sawLight);
+    }
+}
+
 } // namespace
 
 void RegisterRenderTests(UnitTestSupport::TestList& tests) {
@@ -189,4 +267,6 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"GPU instancing: grouping keeps first-appearance order, kNoBatch stands alone", InstanceGrouping});
     tests.push_back({"GPU instancing: material slots batch by asset or identical values", InstanceSlots});
     tests.push_back({"GPU instancing: placed copies share one import id", InstanceImportId});
+    tests.push_back({"Volumetric fog: blue-noise jitter ranks are a permutation, evenly spread", VolumetricBlueNoise});
+    tests.push_back({"Volumetric fog: settings and Volumetric Intensity round-trip; old scenes default off / 1", VolumetricSettingsRoundTrip});
 }

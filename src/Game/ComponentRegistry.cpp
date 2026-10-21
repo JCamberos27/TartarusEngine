@@ -1280,6 +1280,9 @@ void RegisterEngineComponents() {
               "Per-light shadow-map size (applies after per-light shadow maps)." },
             { "Shadow Update Mode", T::Enum, TARTARUS_REFLECT_FIELD(LightComponent, Shadow.UpdateMode), 0.0f,
               "Dynamic re-renders every frame; Static bakes once (applies after per-light shadow maps)." },
+            { "Volumetric Intensity", T::Float, TARTARUS_REFLECT_FIELD(LightComponent, VolumetricIntensity), 0.02f,
+              "How much this light scatters into the volumetric fog (Lighting > Volumetric Fog):\n"
+              "its shafts and the glow around it. 1 = matched to Intensity, 0 = none.", 0.0f, 16.0f },
             // #203 - drawn as a layer checklist by DrawReflectedComponentExtra("Light").
             { "Culling Mask", T::Int, TARTARUS_REFLECT_FIELD(LightComponent, CullingMask), 0.0f,
               "Which layers this light illuminates." },
@@ -1301,6 +1304,7 @@ void RegisterEngineComponents() {
         F("Spot Angle").VisibleIfField = "Type"; F("Spot Angle").VisibleIfValue = 1;
         F("Angular Size").Slider = true; F("Angular Size").Format = "%.2f deg";
         F("Angular Size").VisibleIfField = "Type"; F("Angular Size").VisibleIfValue = 2;
+        F("Volumetric Intensity").Slider = true; F("Volumetric Intensity").Format = "%.2f";
         for (const char* g : { "Cast Shadows", "Shadow Bias", "Shadow Normal Bias", "Shadow Softness",
                                "Shadow Near Plane", "Shadow Resolution", "Shadow Update Mode" })
             F(g).Group = kMoonShadows;

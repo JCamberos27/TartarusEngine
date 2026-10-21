@@ -335,6 +335,7 @@ unsigned int MaterialPreviewRenderer::Render(const std::shared_ptr<MaterialAsset
         p.SetInt("uClusterEnabled", 0);
         p.SetInt("uSSAOEnabled", 0);
         p.SetInt("uFogMode", 0);
+        p.SetInt("uVolOn", 0); // the material programs are shared with the scene, which may have left it on
         p.SetInt("uProbeCount", 0);
         p.SetInt("uShadowMap", 8);
         p.SetInt("uSpotShadowMap", 9);

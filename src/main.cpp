@@ -1662,6 +1662,7 @@ int main(int argc, char** argv) {
             tonemapper.WarmUp();
             lightBuffer.WarmUp();
             clusterGrid.WarmUp();
+            if (world.VolumetricEnabled) sceneRenderer.WarmUpVolumetrics();
             SceneRenderer::WarmShaderVariants(world);
             SceneRenderer::WarmEffects();
             glUseProgram(0);
@@ -3229,7 +3230,7 @@ int main(int argc, char** argv) {
                     }
                     // Only the first lit directional drives the cascade pass (below) - it alone samples it.
                     lightBuffer.AddDirectional(aim, dirColor, dirIntensity, !frameHaveDirectional && lc.Intensity > 0.0f,
-                                               ~(std::uint32_t)lc.CullingMask); // #203
+                                               ~(std::uint32_t)lc.CullingMask, lc.VolumetricIntensity); // #203
                     // A zero-intensity sun contributes no light, so it must not drive the
                     // cascaded shadow pass either — it's the way a scene opts out of having a
                     // directional at all while still suppressing SceneSerializer's synthesised
@@ -3268,7 +3269,7 @@ int main(int argc, char** argv) {
                                              glm::lookAt(pos, pos + aim, up);
                     }
                     lightBuffer.AddSpot(pos, aim, lc.Color, lc.Intensity, lc.Range, cosOuter, cosInner, slot,
-                                        ~(std::uint32_t)lc.CullingMask); // #203
+                                        ~(std::uint32_t)lc.CullingMask, lc.VolumetricIntensity); // #203
                 } else {
                     int slot = -1;
                     if (const auto it = pointSlotOf.find(e); it != pointSlotOf.end()) {
@@ -3281,7 +3282,8 @@ int main(int argc, char** argv) {
                         pointShadowBias[slot] = lc.Shadow.Bias;
                         pointShadowNormalBias[slot] = lc.Shadow.NormalBias;
                     }
-                    lightBuffer.AddPoint(pos, lc.Color, lc.Intensity, lc.Range, slot, ~(std::uint32_t)lc.CullingMask); // #203
+                    lightBuffer.AddPoint(pos, lc.Color, lc.Intensity, lc.Range, slot, ~(std::uint32_t)lc.CullingMask,
+                                        lc.VolumetricIntensity); // #203
                 }
             }
             // Prefab Mode has a render-only sun when the prefab owns no directional light.

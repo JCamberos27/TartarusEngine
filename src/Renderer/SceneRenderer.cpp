@@ -8,6 +8,7 @@
 #include "Components.h"
 #include "Sky.h"
 #include "SkyAtmosphere.h"
+#include "VolumetricFog.h"
 #include "Shader.h"
 #include "Cubemap.h"
 #include "CascadedShadowMap.h"
@@ -96,8 +97,14 @@ FrameState SceneRenderer::GatherFrameState(World& world, const RenderFrameContex
         fs.clusterNearZ = std::abs(ctx.Proj[3][2] / (ctx.Proj[2][2] - 1.0f));
         fs.clusterFarZ  = std::abs(ctx.Proj[3][2] / (ctx.Proj[2][2] + 1.0f));
     }
+    fs.volOn = VolumetricFog::WantedFor(world, ctx, fs.vp);
     return fs;
 }
+
+SceneRenderer::SceneRenderer() : m_Volumetrics(std::make_unique<VolumetricFog>()) {}
+SceneRenderer::~SceneRenderer() = default;
+
+void SceneRenderer::WarmUpVolumetrics() { m_Volumetrics->WarmUp(); }
 
 namespace {
 // What GatherVisible needs of each renderable, read from the registry once per frame instead of once per view and
@@ -322,6 +329,8 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
         in.skyAtmosphere->ApplyToProgram(program, ctx.TxHdr, fs.vp);
     else
         SkyAtmosphere::ApplyDisabled(program);
+    // Froxel volumetric fog (unit 27): this view's volume, built in RenderScene, or off.
+    m_Volumetrics->ApplyToProgram(program, ctx.TxHdr, fs.volOn);
 
     // #162 - fog.
     program.SetInt("uFogMode", fs.world && fs.world->FogEnabled ? std::clamp(fs.world->FogMode, 1, 3) : 0);
@@ -442,6 +451,14 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         PROFILE_GPU_SCOPE("Cluster Cull");
         clusterGrid.Cull(*in.clusterBuildShader, *in.clusterCullShader, ctx.View, ctx.Proj,
                          fs.clusterNearZ, fs.clusterFarZ, fs.vp[2], fs.vp[3]);
+    }
+
+    // Froxel volumetric fog: inject + light this view's froxels (reading the cluster lists just
+    // culled and this frame's shadow maps), then integrate them, before any program samples it.
+    if (fs.volOn) {
+        PROFILE_GPU_SCOPE("Volumetric Fog");
+        m_Volumetrics->Render(fs);
+        GLStateCache::Invalidate(); // it rebinds material units 6 and 7
     }
 
     // Bind the default program and push the common per-frame state onto it. Meshes with a linked
@@ -1002,6 +1019,12 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         sky.DrawHdri(in.hdriCube->Texture(), rotRad, ctx.View, ctx.Proj);
     } else {
         sky.Draw(ctx.View, ctx.Proj, world.SkyHorizonColor, world.SkyZenithColor);
+    }
+    // The volumetric fog over the sky's pixels (every surface applied it in its own shading).
+    if (fs.volOn) {
+        m_Volumetrics->DrawSky(ctx.TxHdr, fs.vp);
+        GLStateCache::Invalidate();
+        modelShader.Bind();
     }
 
     // --- Transparent pass: back-to-front sorted, blended, no depth write -----------

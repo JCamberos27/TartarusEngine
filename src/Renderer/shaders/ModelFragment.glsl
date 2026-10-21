@@ -405,6 +405,7 @@ void main() {
 #endif
     color = ApplyFog(color); // #162
     color = ApplyAerialPerspective(color);
+    color = ApplyVolumetricFog(color); // the air nearest the eye goes on last
 
     if (uApplyTonemap == 1) {
         color = color / (color + vec3(1.0)); // Reinhard tonemap
