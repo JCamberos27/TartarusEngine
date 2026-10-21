@@ -97,7 +97,12 @@ struct NpcBodyInput {
     float Cower = 0.0f;            // 0..1: ducking from rounds cracking past (hunched, head down)
     bool FootIK = false;           // feet onto uneven ground (near the player: two rays and a leg solve a frame)
     bool Prone = false;            // shot down: collapses (ProneDrop), then crawls on its belly (ProneCrawl); never gets up
-    int HurtLeg = -1;              // prone: the leg that was hit (0 left, 1 right) is dragged straight behind; -1 none
+    int HurtLeg = -1;              // prone: the leg that was hit (0 left, 1 right) is dragged behind; -1 none
+    bool Dying = false;            // gut-shot, unarmed: clutches the wound (InjuredIdle), staggers forward (InjuredWalk) ...
+    bool Collapse = false;         // ... and, once this is set, goes down (InjuredDrop) to lie there (InjuredLying)
+    bool Pivot = false;            // prone, his hands at a wall: he hauls himself round on the spot, quicker than a crawl turns
+    glm::vec3 Steer{0.0f};         // prone: where the crawl wants to head (world, flat; zero: no turn). The capsule goes where the
+                                   // body points, so the body turns toward this rather than after the travel
 };
 
 class NpcBody {
@@ -138,6 +143,9 @@ public:
     // the driver has no foot bones.
     bool FootHeights(float (&out)[2]) const;
     bool Sprinting() const { return m_In.Sprint; } // this frame's gait (NpcBodyInput::Sprint)
+    // Wounded and going down (ProneDrop / InjuredDrop): how far the collapse's clip carried him last frame (world, m), which the
+    // capsule takes so he falls forward as captured rather than straight down on the spot.
+    glm::vec3 FallTravel() const { return m_FallTravel; }
 
     // A hit: the upper body flinches away along `dirWorld` (the round's travel).
     // `point` / `part` (a hitbox part, see NpcRagdoll) steer it by where the round struck; both optional.
@@ -165,8 +173,20 @@ public:
     entt::entity Driver() const { return m_Driver; }
     // The driver's current state name and the animator's root speed, for the debug overlay.
     std::string StateName(const World& world) const;
+    std::string AnimDebug(const World& world) const; // (tests) the base layer's crossfade stack and its last transition
     // The pose is the ragdoll's from now on: Tick / LateUpdate stop touching the pose.
     void SetPoseOwnedElsewhere(bool owned) { m_PoseExternal = owned; }
+    bool PoseOwnedElsewhere() const { return m_PoseExternal; }
+    // Shot down by a leg and going down as a ragdoll (the wound fall): the collapse clip (ProneDrop) is not to play - his first
+    // prone Tick must not fire GoProne. False gives it back (the ragdoll could not start: the clip it is).
+    void SkipCollapseClip(bool skip) { m_WasProne = skip; }
+    // The wound fall is over and he lies on his belly: the body takes its pose back from the ragdoll. The root goes to `feet` facing
+    // `yaw` (radians), every piece's pose as the ragdoll left it is kept (re-rooted there), the animator starts in `state` (the
+    // prone idle), and every bone blends from the kept pose to the animated one (LateUpdate, last): over `blendTime` seconds, or
+    // longer for a limb that has further to go than it could at `limbSpeed` (m/s, its fastest; an arm flung out by the fall is drawn
+    // back in, it doesn't whip). Call with the pose still the ragdoll's (before it stops); takes the pose back (SetPoseOwnedElsewhere(false)).
+    bool BeginRecover(World& world, const glm::vec3& feet, float yaw, float blendTime, float limbSpeed, const char* state);
+    bool Recovering() const { return m_RecoverAge >= 0.0f; }
     // The weapon leaves the hands (NpcDroppedWeapon): the hold's solve stops for good - the arms are the ragdoll's.
     void ReleaseWeaponHold();
     bool WeaponReleased() const { return m_WeaponReleased; }
@@ -233,12 +253,32 @@ private:
     // swung down onto the floor, the crawl clip's own bend in the other.
     void DragLegPass(const World& world, float dt);
     float m_Drag = 0.0f;         // 0..1, eased in once the crawl starts
-    bool m_WasProne = false;
+    float m_DragLag = 0.0f, m_DragLagRate = 0.0f; // the dragged leg trailing the body's turns (radians, sprung)
+    float m_DragPrevYaw = 0.0f;
+    bool m_WasProne = false, m_WasDying = false, m_WasCollapse = false;
+    // Wounded on the ground (prone or dying): the scripted states' own Tick (no turn clips, starts or stops of the standing
+    // locomotion; the clips' speed matched to the capsule's).
+    void TickWounded(AnimatorControllerComponent& ac, const NpcBodyInput& in, const glm::vec3& flat, float speed, float dt);
+    float m_Breath = 0.0f;       // seconds wounded (the breathing slows)
+    glm::vec3 m_FallTravel{0.0f}; // FallTravel()
+    float m_MoveHold = 0.0f;      // wounded: seconds the Moving flag stays on after the body last moved (no start-stop flicker)
+    float m_BreathPhase = 0.0f, m_BreathWeight = 0.0f; // lying gut-shot: the breathing (LateUpdate)
     // The gun let go of while alive (shot down by a leg): the arms ease from the pose that held it to the clips' over a
     // moment (LateUpdate) instead of snapping off it.
     std::vector<LocalTRS> m_ReleasePose;
     std::vector<int> m_ArmNodes; // the driver's clavicles and everything under them
     float m_ReleaseBlend = 0.0f;
+    // Up off the ragdoll (BeginRecover): every piece's pose as the fall left it (in the new root's frame), blended out of on top of
+    // everything LateUpdate does - each region (the trunk and head, each arm from its collarbone, each leg from its hip) on its own
+    // time, timed on the first animated frame by how far its ends (head and pelvis, hand, foot) have to go.
+    enum { kRecoverTrunk, kRecoverArmL, kRecoverArmR, kRecoverLegL, kRecoverLegR, kRecoverGroups };
+    std::vector<std::vector<LocalTRS>> m_RecoverPose;
+    std::vector<std::vector<unsigned char>> m_RecoverGroup; // per piece, per node: its region
+    float m_RecoverAge = -1.0f;                             // seconds since BeginRecover (< 0: not recovering)
+    float m_RecoverTime = 0.5f, m_RecoverSpeed = 1.8f;
+    float m_RecoverGroupTime[kRecoverGroups] = {};
+    bool m_RecoverTimed = false;
+    void RecoverPass(float dt);
     void SyncLower(); // the driver's pelvis and legs onto every other piece
     std::vector<std::vector<std::pair<int, int>>> m_LowerMap; // per piece: (piece node, driver node), pelvis and legs
     int m_DriverPelvis = -1, m_DriverLeg[2][3] = {{-1, -1, -1}, {-1, -1, -1}}; // thigh, calf, foot

@@ -1,16 +1,21 @@
 #include "NpcBrain.h"
 
 #include "FirstPersonPresentation.h"
+#include "GameModuleAPI.h" // RaycastHit, QueryFilter
 #include "NpcDirector.h"
+#include "PhysicsWorld.h"
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 
 namespace {
 
 constexpr int kBehaviours = kBehaviourCount;
 constexpr float kInertia = 0.12f;
-constexpr float kProneDropTime = 3.2f; // seconds: the collapse onto its belly (npc_soldier.controller's ProneDrop) before it crawls
+constexpr float kDyingHold = 1.5f;     // gut-shot: seconds doubled over where he was hit ...
+constexpr float kDyingWalk = 3.0f;     // ... metres he staggers ...
+constexpr float kDyingWalkTime = 6.0f; // ... in at most this long, then he goes down
 
 float Flat(const glm::vec3& a, const glm::vec3& b) { return glm::length(glm::vec2(a.x - b.x, a.z - b.z)); }
 
@@ -60,9 +65,17 @@ int NpcBrain::FindCover(NpcDirector& d, Npc& n, CoverGoal goal, const glm::vec3&
     static thread_local std::vector<Cand> cands;
     cands.clear();
     const bool shotgun = n.Class == WeaponClass::Shotgun;
+    int why[8] = {}; // (LogCover) claimed, crowded, facing away, too close, the goal's own, not hidden, no shot, no path
+    auto report = [&](int picked) {
+        if (!d.LogCover) return;
+        static const char* kGoal[4] = {"fight", "flank", "push", "retreat"};
+        std::printf("[Cover] %.1f %s at (%.2f, %.2f), %s from threat (%.2f, %.2f): %zu near, out: claimed %d crowded %d facing %d close %d goal %d "
+                    "| hidden %d shot %d path %d -> %d\n", d.m_Now, n.Name.c_str(), n.Feet.x, n.Feet.z, kGoal[(int)goal], threat.x, threat.z,
+                    near.size(), why[0], why[1], why[2], why[3], why[4], why[5], why[6], why[7], picked);
+    };
     for (int i : near) {
         const CoverPoint& c = cover.Points()[(size_t)i];
-        if (c.ClaimedBy >= 0 && c.ClaimedBy != n.Index) continue;
+        if (c.ClaimedBy >= 0 && c.ClaimedBy != n.Index) { ++why[0]; continue; }
         // Not on top of a squadmate (or their cover).
         bool crowded = false;
         for (const auto& o : d.m_Npcs) {
@@ -70,16 +83,19 @@ int NpcBrain::FindCover(NpcDirector& d, Npc& n, CoverGoal goal, const glm::vec3&
             if (Flat(o->Feet, c.Pos) < 2.2f) { crowded = true; break; }
             if (o->Cover >= 0 && Flat(cover.Points()[(size_t)o->Cover].Pos, c.Pos) < 3.0f) { crowded = true; break; }
         }
-        if (crowded) continue;
+        if (crowded) { ++why[1]; continue; }
         const glm::vec3 toThreat = FlatDir(c.Pos, threat);
         const float facing = glm::dot(c.Normal, toThreat);
-        if (facing < 0.35f) continue; // the cover isn't between it and the threat
+        if (facing < 0.35f) { ++why[2]; continue; } // the cover isn't between it and the threat
         const float dist = Flat(c.Pos, threat);
-        if (dist < 4.0f) continue;
+        if (dist < 4.0f) { ++why[3]; continue; }
         const float travel = Flat(n.Feet, c.Pos);
         float s[5];
-        // Fighting range: a rifle wants 14-30 m, a shotgun 6-12 m.
-        const float pref = shotgun ? 9.0f : 21.0f, width = shotgun ? 5.0f : 11.0f;
+        // Fighting range: a rifle wants 14-30 m, a shotgun 6-12 m - or, closer in than that (indoors: the next room, down a
+        // hallway), about the range it is fighting at now. A fixed 21 m put the best-scored spots in the flats down the hall, through
+        // walls with no shot at the threat: the few the expensive checks look at all failed, and a soldier in a room never took cover.
+        const float pref = shotgun ? std::clamp(current, 5.0f, 9.0f) : std::clamp(current, 8.0f, 21.0f);
+        const float width = shotgun ? 5.0f : std::max(5.0f, 11.0f * pref / 21.0f);
         const float rd = (dist - pref) / width;
         s[0] = std::exp(-rd * rd) * 0.8f + 0.2f;
         s[1] = std::clamp(1.0f - travel / 32.0f, 0.05f, 1.0f);
@@ -93,17 +109,17 @@ int NpcBrain::FindCover(NpcDirector& d, Npc& n, CoverGoal goal, const glm::vec3&
         case CoverGoal::Flank: {
             // Well round the side from where the squad presses.
             const float angle = glm::degrees(std::acos(std::clamp(glm::dot(FlatDir(threat, c.Pos), squadDir), -1.0f, 1.0f)));
-            if (angle < 45.0f || dist > current + 4.0f) continue;
+            if (angle < 45.0f || dist > current + 4.0f) { ++why[4]; continue; }
             score *= 0.4f + 0.6f * std::clamp((angle - 45.0f) / 45.0f, 0.0f, 1.0f);
-            if (pincer && glm::degrees(std::acos(std::clamp(glm::dot(FlatDir(threat, c.Pos), otherFlank), -1.0f, 1.0f))) < 80.0f) continue;
+            if (pincer && glm::degrees(std::acos(std::clamp(glm::dot(FlatDir(threat, c.Pos), otherFlank), -1.0f, 1.0f))) < 80.0f) { ++why[4]; continue; }
             break;
         }
         case CoverGoal::Push:
-            if (dist > current - 3.5f) continue;
+            if (dist > current - 3.5f) { ++why[4]; continue; }
             score *= 0.6f + 0.4f * std::clamp((current - dist) / 10.0f, 0.0f, 1.0f);
             break;
         case CoverGoal::Retreat:
-            if (dist < current + 3.0f) continue;
+            if (dist < current + 3.0f) { ++why[4]; continue; }
             score *= s[1];
             break;
         }
@@ -118,24 +134,29 @@ int NpcBrain::FindCover(NpcDirector& d, Npc& n, CoverGoal goal, const glm::vec3&
     for (const Cand& cd : cands) {
         if (++tested > maxTests) break;
         const CoverPoint& c = cover.Points()[(size_t)cd.Index];
+        if (d.LogCover)
+            std::printf("[Cover]    try %d at (%.2f, %.2f) %s peeks %d%d, %.1f m from the threat, score %.3f\n", cd.Index, c.Pos.x, c.Pos.z,
+                        c.High ? "high" : "low", (int)c.Peek[0], (int)c.Peek[1], Flat(c.Pos, threat), cd.Score);
         const float hideHeight = c.High ? 1.55f : 0.95f;
-        if (!CoverSystem::Shielded(c.Pos, hideHeight, threatEye)) continue;
+        if (!CoverSystem::Shielded(c.Pos, hideHeight, threatEye)) { ++why[5]; continue; }
         if (goal != CoverGoal::Retreat) {
             bool canShoot = false;
             if (!c.High) canShoot = !CoverSystem::Shielded(c.Pos, 1.55f, threatEye);
             else
                 for (int s = 0; s < 2 && !canShoot; ++s)
                     canShoot = c.Peek[s] && !CoverSystem::Shielded(c.PeekPos[s], 1.55f, threatEye);
-            if (!canShoot) continue;
+            if (!canShoot) { ++why[6]; continue; }
         }
         const float path = d.m_Nav.PathLength(n.Feet, c.Pos);
-        if (path < 0.0f || path > Flat(n.Feet, c.Pos) * 1.8f + 5.0f) continue;
+        if (path < 0.0f || path > Flat(n.Feet, c.Pos) * 1.8f + 5.0f) { ++why[7]; continue; }
         cover.Claim(cd.Index, n.Index, d.m_Now);
         n.Cover = cd.Index;
         n.CoverGood = true;
         n.CoverCheckAt = d.m_Now;
+        report(cd.Index);
         return cd.Index;
     }
+    report(-1);
     return -1;
 }
 
@@ -189,7 +210,10 @@ void NpcBrain::Choose(NpcDirector& d, Npc& n, const PlayerSnapshot& p) {
         }
         if (inCover) at(Behaviour::CoverFight) = n.CoverGood ? 0.72f : 0.12f;
         const float ownSince = now - n.LastOwnSight;
-        if (m.Visible || ownSince < 1.0f) {
+        // (Out of its sight for up to 3 s it keeps the gun on where they went - the Search below takes over from 3 s; with no cover
+        // to go to, the 1-3 s between them scored nothing at all, and a soldier who had just seen the player lowered his gun and
+        // wandered off on an Idle patrol round his post.)
+        if (m.Visible || ownSince < 3.0f) {
             float e = 0.35f;
             if (shotgun && dist < 11.0f) e += 0.4f;
             if (now < n.NoCoverUntil) e += 0.25f;
@@ -206,6 +230,8 @@ void NpcBrain::Choose(NpcDirector& d, Npc& n, const PlayerSnapshot& p) {
         if (n.HasPushToken) at(Behaviour::Push) = 0.82f;
         else if (shotgun && dist > 13.0f && health > 0.5f && since < 12.0f) at(Behaviour::Push) = 0.6f;
         if (health < 0.35f && underFire && !n.Retreated) at(Behaviour::Retreat) = 0.88f;
+        // A known threat is never an Idle patrol: whatever else scored nothing, it goes looking.
+        at(Behaviour::Search) = std::max(at(Behaviour::Search), 0.1f);
     }
     // A bad leg: no running round the side, no pushing up.
     if (now < n.LimpUntil) { at(Behaviour::Flank) = 0.0f; at(Behaviour::Push) = 0.0f; }
@@ -315,32 +341,148 @@ void NpcBrain::Enter(NpcDirector& d, Npc& n, int behaviour, const PlayerSnapshot
         n.IdleUntil = now + 1.0f + 3.0f * Rand01(d);
         break;
     case Behaviour::Wounded: {
-        // The nearest cover that stands between it and the threat, near enough to crawl to.
         d.m_Cover.Release(n.Index, now);
         n.Cover = -1;
-        static thread_local std::vector<int> near;
-        d.m_Cover.Query(n.Feet, 14.0f, near);
-        float best = 1e9f;
-        int pick = -1;
-        // Cover that faces the threat first; failing that, any, the nearest.
-        for (int pass = 0; pass < 2 && pick < 0; ++pass)
-            for (int i : near) {
-                const CoverPoint& c = d.m_Cover.Points()[(size_t)i];
-                if (c.ClaimedBy >= 0 && c.ClaimedBy != n.Index) continue;
-                if (pass == 0 && glm::dot(c.Normal, FlatDir(c.Pos, threat)) < 0.2f) continue;
-                const float dist = Flat(n.Feet, c.Pos);
-                if (dist > 1.0f && dist < best) { best = dist; pick = i; }
-            }
-        if (pick >= 0) {
-            d.m_Cover.Claim(pick, n.Index, now);
-            n.Cover = pick;
-            n.CoverGood = true;
+        const glm::vec3 ahead(std::sin(n.Body.Yaw()), 0.0f, std::cos(n.Body.Yaw()));
+        if (n.Dying) {
+            // Gut-shot: a few staggering steps, forward-ish (he can only walk forward, doubled over) and away from the threat,
+            // where the floor runs straight; then he goes down.
+            // He goes down forward where he stops, and lies two metres long there: the floor ahead of the goal has to be clear
+            // (a wall in a hallway puts him down short of it, or where he stands).
+            float best = -1e9f;
+            for (float len : {kDyingWalk, 0.6f * kDyingWalk, 0.3f * kDyingWalk})
+                for (float turn : {0.0f, 0.6f, -0.6f, 1.1f, -1.1f, 1.8f, -1.8f, 3.14f}) {
+                    const glm::vec3 dir = glm::angleAxis(turn, glm::vec3(0.0f, 1.0f, 0.0f)) * ahead;
+                    const glm::vec3 goal = n.Feet + dir * len;
+                    if (d.m_Nav.Valid() && !d.m_Nav.Walkable(n.Feet, goal)) continue;
+                    // Not at the player (the crowd steers round him, and a body that only walks forward ends up going backwards),
+                    // and nobody standing in the way: the crowd would take him round them, the long way, and he'd stagger nowhere.
+                    if (p.Valid && !p.Dead && Flat(goal, p.Feet) < 2.0f) continue;
+                    bool blocked = false;
+                    if (p.Valid && !p.Dead) {
+                        const glm::vec3 to = p.Feet - n.Feet;
+                        const float along = glm::dot(glm::vec3(to.x, 0.0f, to.z), dir);
+                        blocked = along > 0.0f && along < len + 0.6f && glm::length(glm::vec3(to.x, 0.0f, to.z) - dir * along) < 1.2f;
+                    }
+                    for (const auto& o : d.m_Npcs) {
+                        if (!o || o.get() == &n || o->Dead || o->Prone || o->Collapsed) continue;
+                        const glm::vec3 to = o->Feet - n.Feet;
+                        const float along = glm::dot(glm::vec3(to.x, 0.0f, to.z), dir);
+                        if (along > 0.0f && along < len + 0.6f && glm::length(glm::vec3(to.x, 0.0f, to.z) - dir * along) < 0.8f) blocked = true;
+                    }
+                    if (blocked) continue;
+                    if (d.FloorRoom(n.Feet, dir, len + NpcDirector::kLyingLength) < len + NpcDirector::kLyingLength) continue;
+                    // ... and to either side of where he goes down: the collapse rolls him onto his side, his legs swinging out.
+                    const glm::vec3 side(dir.z, 0.0f, -dir.x);
+                    if (d.FloorRoom(goal, side, NpcDirector::kLyingSide) < NpcDirector::kLyingSide ||
+                        d.FloorRoom(goal, -side, NpcDirector::kLyingSide) < NpcDirector::kLyingSide) continue;
+                    const float score = Flat(goal, threat) - 1.5f * std::abs(turn) + len;
+                    if (score > best) { best = score; n.StaggerTo = goal; }
+                }
+            n.HasStaggerTo = best > -1e9f; // none: he goes down where he stands
+            if (d.TrackDeathPop)
+                std::printf("[NpcTest] %s gut-shot at (%.2f, %.2f) yaw %.0f: staggers %s (%.2f, %.2f)\n", n.Name.c_str(), n.Feet.x, n.Feet.z,
+                            glm::degrees(n.Body.Yaw()), n.HasStaggerTo ? "to" : "nowhere, down where he stands", n.StaggerTo.x, n.StaggerTo.z);
+            break;
         }
+        // On his belly: where he crawls is picked once he's down (PickCrawlGoal), facing the way the fall left him.
+        n.HasCrawlTo = false;
+        n.CrawlRestUntil = 0.0f;
         break;
     }
     default:
         break;
     }
+}
+
+// Where a crawl away from the threat heads: one destination on the navmesh, followed by its route (doorways and all) -
+// the place the threat would have the longest way round to reach (out of the room it was shot in, into the hallway),
+// out of its sight best of all, not past it, and not so far round that he'd crawl for ever to get there. Kept against
+// a new pick unless that one is clearly better (no dithering between two). None (no navmesh, or nowhere): n.HasCrawlTo
+// stays false.
+void NpcBrain::PickCrawlGoal(NpcDirector& d, Npc& n, const glm::vec3& threat) {
+    const float now = d.m_Now;
+    if (!d.m_Nav.Valid()) {
+        n.HasCrawlTo = false;
+        return;
+    }
+    const glm::vec3 ahead(std::sin(n.Body.Yaw()), 0.0f, std::cos(n.Body.Yaw()));
+    const glm::vec3 toThreat = FlatDir(n.Feet, threat);
+    const glm::vec3 eye = threat + glm::vec3(0.0f, 1.5f, 0.0f);
+    auto hidden = [&](const glm::vec3& g) {
+        const glm::vec3 to = g + glm::vec3(0.0f, 0.3f, 0.0f) - eye;
+        const float len = glm::length(to);
+        if (len < 1e-3f) return false;
+        const glm::vec3 dir = to / len;
+        const float o[3] = {eye.x, eye.y, eye.z}, v[3] = {dir.x, dir.y, dir.z};
+        QueryFilter f;
+        f.HitTriggers = 0;
+        RaycastHit hit;
+        return PhysicsWorld::RaycastSolid(o, v, len - 0.1f, f, hit) && hit.Hit;
+    };
+    static thread_local std::vector<glm::vec3> route;
+    auto score = [&](const glm::vec3& g) {
+        const float mine = d.m_Nav.PathLength(n.Feet, g);
+        if (mine < 2.5f) return -1e9f;
+        float theirs = d.m_Nav.PathLength(threat, g);
+        if (theirs < 0.0f) theirs = Flat(threat, g);
+        // The way out: the route's first leg (a crawl doesn't go past the one who shot him, or start with a U-turn).
+        glm::vec3 first = g;
+        route.clear();
+        if (d.m_Nav.FindPath(n.Feet, g, route) && route.size() > 1) first = route[1];
+        const glm::vec3 dir = FlatDir(n.Feet, first);
+        float s = theirs - 0.3f * mine;                               // the threat's long way round, for not too long a crawl
+        s -= 4.0f * std::max(0.0f, glm::dot(dir, toThreat));          // not toward it ...
+        // ... nor past it: a route that runs within 2.5 m of it (the exit behind the threat: deeper in instead).
+        float closest = 1e9f;
+        for (size_t i = 1; i < route.size(); ++i) {
+            const glm::vec2 a(route[i - 1].x, route[i - 1].z), b(route[i].x, route[i].z), q(threat.x, threat.z);
+            const glm::vec2 ab = b - a;
+            const float k = glm::dot(ab, ab) > 1e-6f ? std::clamp(glm::dot(q - a, ab) / glm::dot(ab, ab), 0.0f, 1.0f) : 0.0f;
+            closest = std::min(closest, glm::length(a + ab * k - q));
+        }
+        if (closest < 2.5f) s -= 8.0f;
+        // Nothing solid across the way at a crawl's height: the navmesh runs through doors whether they're open or shut, and
+        // he can't open one from the floor - a shut door is no way out.
+        for (size_t i = 1; i < route.size(); ++i) {
+            const glm::vec3 a = route[i - 1] + glm::vec3(0.0f, 0.3f, 0.0f), b = route[i] + glm::vec3(0.0f, 0.3f, 0.0f);
+            const float len = glm::length(b - a);
+            if (len < 1e-3f) continue;
+            const glm::vec3 way = (b - a) / len;
+            const float o[3] = {a.x, a.y, a.z}, v[3] = {way.x, way.y, way.z};
+            QueryFilter f;
+            f.HitTriggers = 0;
+            RaycastHit hit;
+            if (PhysicsWorld::RaycastSolid(o, v, len, f, hit) && hit.Hit) return -1e9f;
+        }
+        s -= 0.8f * (1.0f - glm::dot(dir, ahead));                    // the turn to set off
+        s -= 1.0f * (float)d.BodiesAcross(n.Feet, dir, Flat(n.Feet, first)); // round the dead if he can
+        if (hidden(g)) s += 3.0f;                                     // out of its sight
+        return s;
+    };
+    float best = -1e9f;
+    glm::vec3 pick(0.0f);
+    for (int i = 0; i < 24; ++i) {
+        glm::vec3 g;
+        if (!d.m_Nav.RandomPointNear(n.Feet, 25.0f, Rand01(d), Rand01(d), g)) continue;
+        const float s = score(g) + 0.5f * Rand01(d);
+        if (s > best) { best = s; pick = g; }
+    }
+    static thread_local std::vector<int> near;
+    d.m_Cover.Query(n.Feet, 20.0f, near);
+    for (int i : near) {
+        const CoverPoint& c = d.m_Cover.Points()[(size_t)i];
+        if (c.ClaimedBy >= 0 && c.ClaimedBy != n.Index) continue;
+        const float s = score(c.Pos) + 1.0f;
+        if (s > best) { best = s; pick = c.Pos; }
+    }
+    // The one he's crawling for stays unless the new one is clearly better.
+    if (n.HasCrawlTo && Flat(n.Feet, n.CrawlTo) > 2.0f && score(n.CrawlTo) + 3.0f >= best) return;
+    n.HasCrawlTo = best > -1e8f;
+    if (n.HasCrawlTo) n.CrawlTo = pick;
+    if (d.LogCrawl)
+        std::printf("[Crawl] %.1f %s at (%.2f, %.2f) yaw %.0f, threat (%.2f, %.2f): %s (%.2f, %.2f) score %.1f\n", now, n.Name.c_str(), n.Feet.x,
+                    n.Feet.z, glm::degrees(n.Body.Yaw()), threat.x, threat.z, n.HasCrawlTo ? "to" : "nowhere", pick.x, pick.z, best);
 }
 
 void NpcBrain::Run(NpcDirector& d, World& world, Npc& n, const PlayerSnapshot& p, float dt) {
@@ -478,11 +620,23 @@ void NpcBrain::Run(NpcDirector& d, World& world, Npc& n, const PlayerSnapshot& p
             n.Phase = 2;
             n.PhaseUntil = now + 0.8f;
         } else if (n.Phase == 0 || now > n.PhaseUntil) {
-            // A strafe step: 2-4 m across, alternating sides, or a crouch on the spot at range.
-            const glm::vec3 across = glm::normalize(glm::cross(FlatDir(n.Feet, threat), glm::vec3(0, 1, 0)));
+            // A strafe step: 2-4 m across, alternating sides, or a crouch on the spot at range. Indoors the full step mostly runs
+            // into a wall: then a shorter one, the other side, or back and across - out of a doorway, never into one. (With only the
+            // full step he stood on in an arch, the fatal funnel, shooting and reloading there for as long as the fight lasted.)
+            const glm::vec3 toward = FlatDir(n.Feet, threat);
+            const glm::vec3 across = glm::normalize(glm::cross(toward, glm::vec3(0, 1, 0)));
             const float side = (n.SearchStep++ % 2 == 0) ? 1.0f : -1.0f;
-            glm::vec3 pt = n.Feet + across * side * (2.0f + 2.0f * Rand01(d));
-            n.Goal = d.m_Nav.Closest(pt, snapped) && d.m_Nav.Walkable(n.Feet, snapped) ? snapped : n.Feet;
+            const float len = 2.0f + 2.0f * Rand01(d);
+            const glm::vec3 steps[7] = {across * side * len, across * side * (0.5f * len), -across * side * len, -across * side * (0.5f * len),
+                                        (across * side - toward) * 1.3f, (-across * side - toward) * 1.3f, -toward * 1.6f};
+            // A doorway, an arch, a gap: under 1.7 m from side to side at knee height.
+            auto narrow = [&](const glm::vec3& at) { return d.FloorRoom(at, across, 1.0f) + d.FloorRoom(at, -across, 1.0f) < 1.7f; };
+            n.Goal = n.Feet;
+            for (const glm::vec3& step : steps)
+                if (d.m_Nav.Closest(n.Feet + step, snapped) && Flat(snapped, n.Feet) > 0.6f && d.m_Nav.Walkable(n.Feet, snapped) && !narrow(snapped)) {
+                    n.Goal = snapped;
+                    break;
+                }
             n.Phase = 1;
             n.PhaseUntil = now + 1.4f + 1.2f * Rand01(d);
         }
@@ -563,6 +717,16 @@ void NpcBrain::Run(NpcDirector& d, World& world, Npc& n, const PlayerSnapshot& p
             it.Crouch = !c.High;
             it.Aim = false;
             it.LookPoint = threatChest;
+            // Behind high cover, not at the threat through it: along the wall, toward the edge he'll lean out past (the nearer one
+            // to the threat; else back the way he faces off it). Looking through the wall a pace off it, his gun went through it.
+            if (c.High) {
+                int side = -1;
+                for (int s = 0; s < 2; ++s)
+                    if (c.Peek[s] && (side < 0 || Flat(c.PeekPos[s], threat) < Flat(c.PeekPos[side], threat))) side = s;
+                const glm::vec3 along = side >= 0 && Flat(c.PeekPos[side], c.Pos) > 0.05f ? FlatDir(c.Pos, c.PeekPos[side])
+                                                                                         : glm::vec3(-c.Normal.x, 0.0f, -c.Normal.z);
+                it.LookPoint = glm::vec3(n.Feet.x, threatChest.y, n.Feet.z) + along * 6.0f;
+            }
             it.Reload = ammo01 < 0.5f;
             if (n.Suppression > 0.6f) n.PhaseUntil = std::max(n.PhaseUntil, now + 0.2f);
             // Told to cover a squadmate's bound: up now.
@@ -651,9 +815,14 @@ void NpcBrain::Run(NpcDirector& d, World& world, Npc& n, const PlayerSnapshot& p
             }
         } else if (n.Phase == 3) {
             // Blind fire: down behind the cover, head tucked, the gun held out over or round it toward where the player was.
-            moveTo(c.Pos, Gait::Walk);
-            if (Flat(n.Feet, c.Pos) < 0.3f) it.Move = false;
-            it.Crouch = !c.High; // behind high cover it stands, the gun out round the edge
+            // Behind high cover it stands at the edge, leaning the gun out round it (from the middle of the wall it faced the threat
+            // through the wall, the gun in it); low cover, the gun up over it from where it hides.
+            const bool edge = c.High && n.PeekSide >= 0;
+            const glm::vec3 from = edge ? c.PeekPos[n.PeekSide] : c.Pos;
+            moveTo(from, Gait::Walk);
+            if (Flat(n.Feet, from) < (edge ? 0.25f : 0.3f)) it.Move = false;
+            if (edge) it.Lean = n.PeekSide == 0 ? -0.6f : 0.6f;
+            it.Crouch = !c.High;
             it.Aim = true;
             it.AimPoint = threatChest;
             it.FaceAim = true;
@@ -703,25 +872,34 @@ void NpcBrain::Run(NpcDirector& d, World& world, Npc& n, const PlayerSnapshot& p
     }
     case Behaviour::Wounded: {
         if (n.Prone) {
-            // On its belly, unarmed: it lies through the collapse, then drags itself to the cover it picked, looking back
-            // at the threat.
+            // On its belly, unarmed: it lies through the collapse, then drags itself away - out of the room, down the hall -
+            // without a rest, the next place picked before he reaches the last so the crawl never stops, until he is
+            // finished off. The way is looked at again every few seconds (the threat moves).
             it.Crouch = true;
-            if (n.Cover >= 0 && now - n.WoundedAt > kProneDropTime) {
-                const CoverPoint& c = d.m_Cover.Points()[(size_t)n.Cover];
-                if (Flat(n.Feet, c.Pos) > 0.5f) moveTo(c.Pos, Gait::Walk);
+            // (Down from the wound fall first - the ragdoll has him until then - and on his belly: on his back he can't crawl.)
+            if (n.Recovered && n.CanCrawl) {
+                // Nearly there (the next place picked now, so he doesn't slow into the end of this one), or stuck: a new one.
+                if (n.HasCrawlTo && (Flat(n.Feet, n.CrawlTo) < 2.0f || n.BlockedTime > 2.5f)) n.HasCrawlTo = false;
+                if (!n.HasCrawlTo || now >= n.CrawlRestUntil) {
+                    n.BlockedTime = 0.0f;
+                    // He knows who shot him and hears him coming: away from where the player is, not where he last saw him
+                    // (crawling off, he has his back to him).
+                    PickCrawlGoal(d, n, p.Valid && !p.Dead ? p.Feet : threat);
+                    n.CrawlRestUntil = now + (n.HasCrawlTo ? 5.0f : 0.5f);
+                }
+                if (n.HasCrawlTo) moveTo(n.CrawlTo, Gait::Walk);
             }
             break;
         }
-        // On a knee, crawling for cover (the director holds its speed to a crawl), shooting when it has the player.
-        it.Crouch = true;
-        it.Aim = m.Known;
-        it.FaceAim = true;
-        it.Fire = m.Visible || now - n.LastOwnSight < 1.5f;
-        it.Reload = ammo01 <= 0.0f;
-        if (n.Cover >= 0) {
-            const CoverPoint& c = d.m_Cover.Points()[(size_t)n.Cover];
-            if (Flat(n.Feet, c.Pos) > 0.5f) moveTo(c.Pos, Gait::Walk);
+        // Gut-shot, unarmed: doubled over clutching the wound a moment, a few staggering steps (the goal Enter picked), then
+        // down - where he lies until he bleeds out. The head still turns to the threat.
+        const float t = now - n.WoundedAt;
+        if (!n.Collapsed && t > kDyingHold) {
+            const bool there = !n.HasStaggerTo || Flat(n.Feet, n.StaggerTo) < 0.5f;
+            if (there || t > kDyingHold + kDyingWalkTime) n.Collapsed = true;
+            else moveTo(n.StaggerTo, Gait::Walk);
         }
+        it.Crouch = n.Collapsed && t > kDyingHold + 1.0f; // (the capsule down with him once he's on the floor)
         break;
     }
     case Behaviour::Dead:

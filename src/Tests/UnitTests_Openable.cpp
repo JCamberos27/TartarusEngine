@@ -41,6 +41,11 @@ void OpenablePoses() {
     const glm::vec3 freeL = Place(pos, rot, one, {hi.x, 0.35f, hi.z});
     CHECK(freeL.z > base.z + 0.45f && std::abs(freeL.x - (base.x + lo.x)) < 1e-3f); // straight out the front
 
+    // Swing Back: the mirror image, the pin on the back face and the free edge out the back.
+    Openable::Pose((int)Kind::HingeLeft, 90.0f, lo, hi, one, base, id, 1.0f, pos, rot, /*back=*/true);
+    CHECK(Near(Place(pos, rot, one, {lo.x, 0.35f, lo.z}), Place(base, id, one, {lo.x, 0.35f, lo.z})));
+    CHECK(Place(pos, rot, one, {hi.x, 0.35f, lo.z}).z < base.z - 0.45f);
+
     pose(Kind::HingeRight, 90.0f, 1.0f);
     CHECK(Near(Place(pos, rot, one, {hi.x, 0.35f, hi.z}), Place(base, id, one, {hi.x, 0.35f, hi.z})));
     CHECK(Place(pos, rot, one, {lo.x, 0.35f, hi.z}).z > base.z + 0.45f);

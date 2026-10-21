@@ -210,6 +210,16 @@
       "name": "GoProne",
       "type": "trigger",
       "default": 0.0
+    },
+    {
+      "name": "GoDying",
+      "type": "trigger",
+      "default": 0.0
+    },
+    {
+      "name": "Collapse",
+      "type": "trigger",
+      "default": 0.0
     }
   ],
   "tracks": [
@@ -1566,8 +1576,8 @@
           }
         },
         {
-          "name": "ProneCrawl",
-          "loop": true,
+          "name": "ProneIdle",
+          "loop": false,
           "speed": 1.0,
           "position": [
             260.0,
@@ -1578,19 +1588,170 @@
           ],
           "motions": {
             "main": {
-              "blendParam": "Speed",
-              "children": [
-                {
-                  "clip": "assets/Animations/Mocap/RootMotion/ProneCrawl/AM_Stand_Trans_ProneCrawl.fbx",
-                  "threshold": 0.0,
-                  "speed": 1.0
-                },
-                {
-                  "clip": "assets/Animations/Mocap/RootMotion/ProneCrawl/AM_ProneCrawl_CrawlStartStop_Fwd.fbx",
-                  "threshold": 0.6,
-                  "speed": 1.0
-                }
-              ]
+              "clip": "assets/Animations/Mocap/RootMotion/ProneCrawl/AM_Stand_Trans_ProneCrawl.fbx"
+            }
+          }
+        },
+        {
+          "name": "ProneCrawlStart",
+          "loop": false,
+          "speed": 1.0,
+          "position": [
+            520.0,
+            520.0
+          ],
+          "tags": [
+            "Prone"
+          ],
+          "motions": {
+            "main": {
+              "clip": "assets/Animations/Mocap/RootMotion/ProneCrawl/AM_ProneCrawl_Start.fbx"
+            }
+          },
+          "distanceParam": "StartDistance",
+          "distanceMode": "traveled"
+        },
+        {
+          "name": "ProneCrawl",
+          "loop": true,
+          "speed": 1.0,
+          "position": [
+            780.0,
+            600.0
+          ],
+          "tags": [
+            "Prone"
+          ],
+          "motions": {
+            "main": {
+              "clip": "assets/Animations/Mocap/RootMotion/ProneCrawl/AM_ProneCrawl_CrawlStartStop_Fwd.fbx"
+            }
+          },
+          "speedParam": "PlayRate"
+        },
+        {
+          "name": "ProneCrawlStop",
+          "loop": false,
+          "speed": 1.0,
+          "position": [
+            520.0,
+            680.0
+          ],
+          "tags": [
+            "Prone"
+          ],
+          "motions": {
+            "main": {
+              "clip": "assets/Animations/Mocap/RootMotion/ProneCrawl/AM_ProneCrawl_Stop.fbx"
+            }
+          },
+          "distanceParam": "StopDistance",
+          "distanceMode": "remaining"
+        },
+        {
+          "name": "InjuredIdle",
+          "loop": true,
+          "speed": 1.0,
+          "position": [
+            260.0,
+            840.0
+          ],
+          "tags": [
+            "Dying"
+          ],
+          "motions": {
+            "main": {
+              "clip": "assets/Animations/Mocap/RootMotion/Injured/AM_InjuredBelly_Idle_01.fbx"
+            }
+          }
+        },
+        {
+          "name": "InjuredWalkStart",
+          "loop": false,
+          "speed": 1.0,
+          "position": [
+            520.0,
+            760.0
+          ],
+          "tags": [
+            "Dying"
+          ],
+          "motions": {
+            "main": {
+              "clip": "assets/Animations/Mocap/RootMotion/Injured/AM_InjuredBelly_Loco_Walk_Fwd_Start.fbx"
+            }
+          },
+          "distanceParam": "StartDistance",
+          "distanceMode": "traveled"
+        },
+        {
+          "name": "InjuredWalk",
+          "loop": true,
+          "speed": 1.0,
+          "position": [
+            780.0,
+            840.0
+          ],
+          "tags": [
+            "Dying"
+          ],
+          "motions": {
+            "main": {
+              "clip": "assets/Animations/Mocap/RootMotion/Injured/AM_InjuredBelly_Loco_Walk_Fwd.fbx"
+            }
+          },
+          "speedParam": "PlayRate"
+        },
+        {
+          "name": "InjuredWalkStop",
+          "loop": false,
+          "speed": 1.0,
+          "position": [
+            520.0,
+            920.0
+          ],
+          "tags": [
+            "Dying"
+          ],
+          "motions": {
+            "main": {
+              "clip": "assets/Animations/Mocap/RootMotion/Injured/AM_InjuredBelly_Loco_Walk_Fwd_Stop.fbx"
+            }
+          },
+          "distanceParam": "StopDistance",
+          "distanceMode": "remaining"
+        },
+        {
+          "name": "InjuredDrop",
+          "loop": false,
+          "speed": 1.0,
+          "position": [
+            1040.0,
+            840.0
+          ],
+          "tags": [
+            "Dying"
+          ],
+          "motions": {
+            "main": {
+              "clip": "assets/Animations/Mocap/RootMotion/Injured/AM_InjuredBelly_DropToFloor_Lie.fbx"
+            }
+          }
+        },
+        {
+          "name": "InjuredLying",
+          "loop": true,
+          "speed": 1.0,
+          "position": [
+            1300.0,
+            840.0
+          ],
+          "tags": [
+            "Dying"
+          ],
+          "motions": {
+            "main": {
+              "clip": "assets/Animations/Mocap/RootMotion/Injured/AM_InjuredBelly_DropToFloor_Loop.fbx"
             }
           }
         }
@@ -3144,7 +3305,7 @@
         {
           "from": "StartWalk",
           "to": "Locomotion",
-          "duration": 0.15,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "ifNot",
@@ -3279,7 +3440,7 @@
         {
           "from": "Start",
           "to": "Locomotion",
-          "duration": 0.15,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "ifNot",
@@ -3414,7 +3575,7 @@
         {
           "from": "StartRun",
           "to": "Locomotion",
-          "duration": 0.15,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "ifNot",
@@ -3549,7 +3710,7 @@
         {
           "from": "StartTurnL",
           "to": "Locomotion",
-          "duration": 0.15,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "ifNot",
@@ -3684,7 +3845,7 @@
         {
           "from": "StartTurnR",
           "to": "Locomotion",
-          "duration": 0.15,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "ifNot",
@@ -4359,7 +4520,7 @@
         {
           "from": "CrouchStart",
           "to": "CrouchLoco",
-          "duration": 0.15,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "ifNot",
@@ -4409,7 +4570,7 @@
         {
           "from": "CrouchStartTurnL",
           "to": "CrouchLoco",
-          "duration": 0.15,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "ifNot",
@@ -4459,7 +4620,7 @@
         {
           "from": "CrouchStartTurnR",
           "to": "CrouchLoco",
-          "duration": 0.15,
+          "duration": 0.3,
           "conditions": [
             {
               "mode": "ifNot",
@@ -4642,11 +4803,195 @@
         },
         {
           "from": "ProneDrop",
-          "to": "ProneCrawl",
+          "to": "ProneIdle",
           "duration": 0.5,
           "conditions": [],
           "hasExitTime": true,
           "exitTime": 0.92
+        },
+        {
+          "from": "ProneIdle",
+          "to": "ProneCrawlStart",
+          "duration": 0.3,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Moving",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "ProneCrawlStart",
+          "to": "ProneCrawlStop",
+          "duration": 0.3,
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Moving",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "ProneCrawlStart",
+          "to": "ProneCrawl",
+          "duration": 0.2,
+          "conditions": [],
+          "hasExitTime": true,
+          "exitTime": 0.97
+        },
+        {
+          "from": "ProneCrawl",
+          "to": "ProneCrawlStop",
+          "duration": 0.3,
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Moving",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "ProneCrawlStop",
+          "to": "ProneCrawlStart",
+          "duration": 0.3,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Moving",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "ProneCrawlStop",
+          "to": "ProneIdle",
+          "duration": 0.3,
+          "conditions": [],
+          "hasExitTime": true,
+          "exitTime": 0.95
+        },
+        {
+          "from": "Any",
+          "to": "InjuredIdle",
+          "duration": 0.35,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "GoDying",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "canTransitionToSelf": false,
+          "interruptible": false
+        },
+        {
+          "from": "Any",
+          "to": "InjuredDrop",
+          "duration": 0.3,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Collapse",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0,
+          "canTransitionToSelf": false,
+          "interruptible": false
+        },
+        {
+          "from": "InjuredIdle",
+          "to": "InjuredWalkStart",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Moving",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "InjuredWalkStart",
+          "to": "InjuredWalkStop",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Moving",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "InjuredWalkStart",
+          "to": "InjuredWalk",
+          "duration": 0.15,
+          "conditions": [],
+          "hasExitTime": true,
+          "exitTime": 0.97
+        },
+        {
+          "from": "InjuredWalk",
+          "to": "InjuredWalkStop",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "ifNot",
+              "param": "Moving",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "InjuredWalkStop",
+          "to": "InjuredWalkStart",
+          "duration": 0.25,
+          "conditions": [
+            {
+              "mode": "if",
+              "param": "Moving",
+              "threshold": 0.0
+            }
+          ],
+          "hasExitTime": false,
+          "exitTime": 1.0
+        },
+        {
+          "from": "InjuredWalkStop",
+          "to": "InjuredIdle",
+          "duration": 0.25,
+          "conditions": [],
+          "hasExitTime": true,
+          "exitTime": 0.95
+        },
+        {
+          "from": "InjuredDrop",
+          "to": "InjuredLying",
+          "duration": 0.4,
+          "conditions": [],
+          "hasExitTime": true,
+          "exitTime": 0.96
         }
       ]
     },

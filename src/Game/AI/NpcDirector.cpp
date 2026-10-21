@@ -32,6 +32,7 @@ constexpr float kRadius = 0.3f;
 constexpr float kStandCyl = 0.6f;    // capsule 1.8 m standing
 constexpr float kCrouchCyl = 0.33f;  // 1.26 m crouched
 constexpr float kDownedGrace = 0.25f; // seconds after going down wounded that body rounds don't finish it
+constexpr float kDyingWalkSpeed = 0.68f; // m/s: the gut-shot stagger (InjuredBelly_Loco_Walk_Fwd's own pace)
 
 unsigned Id(entt::entity e) { return (unsigned)entt::to_integral(e); }
 
@@ -295,7 +296,7 @@ bool NpcDirector::Start(World& world, AssetLibrary& assets, const FirstPersonCon
         SpawnPoint s;
         s.Pos = glm::vec3(w[3]);
         s.Yaw = NpcYawOf(glm::vec3(w[2]), 0.0f);
-        s.Weapon = std::clamp(c.Weapon, 0, 2);
+        s.Weapon = std::clamp(c.Weapon, 0, 3);
         s.Squad = std::clamp(c.Squad, 0, 16);
         s.Skill = std::clamp(c.Skill, 0.0f, 1.0f);
         s.Brain = std::clamp(c.Brain, 0, 1);
@@ -547,21 +548,31 @@ int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
     if (auto* name = reg.try_get<NameComponent>(root)) name->Name = "[Runtime] " + n->Name;
     n->SpawnIndex = spawnIndex;
     n->Squad = sp.Squad;
-    n->Dummy = sp.Brain == 1;
+    n->Dummy = (ForceBrain >= 0 ? ForceBrain : sp.Brain) == 1;
     n->Skill = sp.Skill;
 
-    // Feet on the walkable mesh, a little apart from anyone already standing there.
+    // Feet on the walkable mesh, a little apart from anyone already standing there - and off the dead: a living capsule meets a
+    // corpse's parts, and one put down in the pile on the spawn was thrown up onto it and out at up to 19 m/s. Stepped aside only
+    // to somewhere walkable from the spawn (not through the wall into the next room); with nowhere clear, the spawn itself.
+    auto crowdedAt = [&](const glm::vec3& at) {
+        for (auto& o : m_Npcs) {
+            if (!o) continue;
+            if (!o->Dead && glm::length(o->Feet - at) < 1.0f) return true;
+            if (o->Ragdoll)
+                for (int i = 0; i < NpcRagdoll::kRagParts; ++i) {
+                    const glm::vec3 d = o->Ragdoll->PartPosition(i) - at;
+                    if (d.x * d.x + d.z * d.z < 0.55f * 0.55f && d.y < 1.0f) return true;
+                }
+        }
+        return false;
+    };
     glm::vec3 feet = sp.Pos;
-    for (int tries = 0; tries < 8; ++tries) {
-        bool crowded = false;
-        for (auto& o : m_Npcs)
-            if (o && !o->Dead && glm::length(o->Feet - feet) < 1.0f) { crowded = true; break; }
-        if (!crowded) break;
+    for (int tries = 0; tries < 12 && crowdedAt(feet); ++tries) {
         const float a = (float)tries * 2.4f;
-        feet = sp.Pos + glm::vec3(std::cos(a), 0.0f, std::sin(a)) * (1.2f + 0.3f * (float)tries);
+        const glm::vec3 next = sp.Pos + glm::vec3(std::cos(a), 0.0f, std::sin(a)) * (0.9f + 0.25f * (float)tries);
+        glm::vec3 on;
+        if (m_Nav.Closest(next, on, glm::vec3(0.5f, 2.0f, 0.5f)) && m_Nav.Walkable(sp.Pos, on) && !crowdedAt(on)) { feet = on; break; }
     }
-    // Stepped aside from a squadmate on the spawn: only to somewhere walkable from it (not through the wall into the next room).
-    if (feet != sp.Pos && !m_Nav.Walkable(sp.Pos, feet)) feet = sp.Pos;
     glm::vec3 snapped;
     if (m_Nav.Closest(feet, snapped, glm::vec3(2.0f, 3.0f, 2.0f))) feet = snapped;
     n->Feet = feet;
@@ -585,7 +596,7 @@ int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
     n->Health = n->MaxHealth = health.Max;
 
     // The weapon: the player's own, on a camera at the soldier's eyes.
-    int weapon = sp.Weapon;
+    int weapon = ForceWeapon >= 0 ? std::clamp(ForceWeapon, 0, 3) : sp.Weapon;
     if (weapon == 2) weapon = (int)(m_Rng() % 2u);
     FirstPersonControllerComponent cfg = *m_ViewConfig;
     cfg.AnimationSet = weapon == 1 ? m_Cfg.ShotgunAnimationSet : m_Cfg.RifleAnimationSet;
@@ -593,17 +604,19 @@ int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
     cfg.PrimaryWeaponPrefab = weapon == 1 ? m_Cfg.ShotgunPrefab : m_Cfg.RiflePrefab;
     cfg.SecondaryWeaponPrefab.clear();
     n->Class = weapon == 1 ? WeaponClass::Shotgun : WeaponClass::Rifle;
-    n->Weapon = std::make_unique<FirstPersonPresentation>();
     FirstPersonPresentation::Options opt;
     opt.OwnerView = false;
     opt.HotReload = false;
     opt.CornerPeek = false;
     const float weaponT0 = since();
-    if (!n->Weapon->Start(world, assets, cfg, opt) || !n->Weapon->IsActive()) {
-        Log::Warn("Enemy AI: " + n->Name + " has no weapon (" + n->Weapon->LastError() + ").");
-    } else {
-        n->Gun = n->Weapon->Set().Gameplay;
-        n->Weapon->SetLocomotionSpeeds(3.2f, 4.7f);
+    if (weapon != 3) { // 3: None - unarmed, the arms keep the clips' pose
+        n->Weapon = std::make_unique<FirstPersonPresentation>();
+        if (!n->Weapon->Start(world, assets, cfg, opt) || !n->Weapon->IsActive()) {
+            Log::Warn("Enemy AI: " + n->Name + " has no weapon (" + n->Weapon->LastError() + ").");
+        } else {
+            n->Gun = n->Weapon->Set().Gameplay;
+            n->Weapon->SetLocomotionSpeeds(3.2f, 4.7f);
+        }
     }
     const float weaponMs = since() - weaponT0;
     if (!reused) SceneRenderer::WarmShaderVariants(world, built->Root); // a new body's variants, before its first draw
@@ -721,14 +734,20 @@ void NpcDirector::Think(World& world, AssetLibrary& assets, float dt, const Play
     for (auto& up : m_Npcs) {
         if (!up || up->Dead) continue;
         Npc& n = *up;
-        // Down and not helped: it bleeds out.
-        if (n.Wounded && m_Now - n.WoundedAt > m_Cfg.BleedOutTime) {
+        // Down and not helped: it bleeds out - gut-shot; on its belly it drags itself on until it is finished off.
+        if (n.Wounded && !n.Prone && m_Now - n.WoundedAt > m_Cfg.BleedOutTime) {
             Kill(world, n, FrontOf(n.AimYaw, 0.0f) * -1.0f, n.Feet + glm::vec3(0.0f, 0.8f, 0.0f), 6.0f);
             continue;
         }
-        if (!Frozen && !n.Dummy) { // a dummy keeps the intent it spawned with: stand, facing the way it was placed
+        // A dummy keeps the intent it spawned with (stand, facing the way it was placed) until it goes down wounded.
+        if (!Frozen && (!n.Dummy || n.Wounded)) {
             SubTimer timer(*this, SubBrain);
             NpcBrain::Think(*this, world, n, p, dt);
+        }
+        if (const auto it = m_Scripted.find(n.Index); it != m_Scripted.end()) { // a test's order
+            n.Intent.Move = true;
+            n.Intent.MoveTarget = it->second.first;
+            n.Intent.Pace = it->second.second;
         }
         // Movement goal -> the crowd.
         if (n.Agent >= 0) {
@@ -744,7 +763,8 @@ void NpcDirector::Think(World& world, AssetLibrary& assets, float dt, const Play
                     }
                 }
                 float speed = SpeedFor(n.Intent.Pace, crouchMove);
-                if (n.Wounded) speed = m_Cfg.CrawlSpeed;                    // a crawl
+                if (n.Prone) speed = m_Cfg.CrawlSpeed;                      // a crawl
+                else if (n.Dying) speed = kDyingWalkSpeed;                   // a stagger, doubled over
                 else if (m_Now < n.LimpUntil) speed *= m_Cfg.LimpSpeedScale; // a bad leg
                 if (m_Now < n.StaggerUntil) speed *= 0.2f;              // reeling from a heavy hit
                 m_Crowd.SetMaxSpeed(n.Agent, speed);
@@ -764,7 +784,8 @@ void NpcDirector::Think(World& world, AssetLibrary& assets, float dt, const Play
         if (n.Dead) continue; // (a corpse lies until UpdatePersistence lets it go)
         {
             SubTimer timer(*this, SubMove);
-            Move(world, n, dt);
+            if (n.Ragdoll) FollowFall(n, dt); // going down as a ragdoll: the capsule keeps under him
+            else Move(world, n, dt);
         }
         {
             SubTimer timer(*this, SubAimFire);
@@ -1112,13 +1133,155 @@ void NpcDirector::UpdateMelee(Npc& n, const PlayerSnapshot& p) {
     Callout(n, CallKind::Melee);
 }
 
+float NpcDirector::FloorRoom(const glm::vec3& feet, const glm::vec3& dir, float maxDist) const {
+    const glm::vec3 d = glm::vec3(dir.x, 0.0f, dir.z) / std::max(1e-4f, glm::length(glm::vec2(dir.x, dir.z)));
+    // A shoulder, at the height of a body on the floor (clear of the skirting and rugs); the room is to the sphere's far edge.
+    constexpr float kShoulder = 0.18f, kHeight = 0.3f;
+    const float o[3] = {feet.x, feet.y + kHeight, feet.z}, v[3] = {d.x, d.y, d.z};
+    QueryFilter f;
+    f.HitTriggers = 0;
+    RaycastHit hit;
+    const float sweep = std::max(0.01f, maxDist - kShoulder);
+    return PhysicsWorld::SphereCastSolid(o, v, kShoulder, sweep, f, hit) && hit.Hit ? hit.Distance + kShoulder : maxDist;
+}
+
+int NpcDirector::BodiesAcross(const glm::vec3& feet, const glm::vec3& dir, float maxDist) const {
+    const glm::vec3 d = glm::vec3(dir.x, 0.0f, dir.z) / std::max(1e-4f, glm::length(glm::vec2(dir.x, dir.z)));
+    constexpr float kLane = 0.45f; // half the width of a body on the floor
+    int bodies = 0;
+    for (const auto& o : m_Npcs) {
+        if (!o || !o->Dead || !o->Ragdoll || !o->Ragdoll->Active()) continue;
+        for (int part : {0, 1, 2, 7, 8, 9, 10}) { // the pelvis, chest, head and legs: what lies across a crawl
+            const glm::vec3 at = o->Ragdoll->PartPosition(part) - feet;
+            const float along = at.x * d.x + at.z * d.z;
+            if (at.y < 0.7f && along > 0.3f && along < maxDist && std::abs(at.x * d.z - at.z * d.x) < kLane) {
+                ++bodies;
+                break;
+            }
+        }
+    }
+    return bodies;
+}
+
 void NpcDirector::Move(World& world, Npc& n, float dt) {
     if (n.Cct == PhysicsWorld::kNoCharacter) return;
     glm::vec3 want(0.0f);
     if (n.Intent.Move && n.Agent >= 0) want = m_Crowd.Velocity(n.Agent);
     want.y = 0.0f;
+    // Gut-shot, doubled over, he only walks forward: the crowd's avoidance never backs him away from where he's going.
+    if (n.Dying && glm::dot(want, want) > 1e-6f) {
+        glm::vec3 way = m_Crowd.NextCorner(n.Agent) - n.Feet;
+        way.y = 0.0f;
+        if (glm::length(way) > 0.05f) {
+            way = glm::normalize(way);
+            want = way * std::max(0.0f, glm::dot(want, way));
+        }
+    }
+    // On his belly he is a two-metre body, not the upright capsule: he goes where his head points (no sideways slide; the
+    // body steers toward the path, arcing round at a turn), and he stops short of a wall with his hands, not his pelvis. A
+    // turn that would swing his head or the dragged foot into something he doesn't make.
+    glm::vec3 steer(0.0f);
+    bool headBlocked = false;
+    if (n.Prone) {
+        // He heads for the route's next corner at the crawl's pace - not the crowd's velocity, which is how the agent really
+        // moved: his hands at a wall, it falls to nothing, and with it the turn that would get him off the wall.
+        const float yaw = n.Body.Yaw();
+        const glm::vec3 fwd(std::sin(yaw), 0.0f, std::cos(yaw));
+        glm::vec3 toCorner(0.0f);
+        if (n.Intent.Move && n.Agent >= 0) {
+            toCorner = m_Crowd.NextCorner(n.Agent) - n.Feet;
+            toCorner.y = 0.0f;
+        }
+        // (Pressed against a doorjamb, the crowd's agent can lose its corridor - its next corner is where it stands: he heads for
+        // the goal itself then, and the stuck swing below gets him off the jamb.)
+        if (n.Intent.Move && glm::length(toCorner) < 0.1f) {
+            toCorner = n.Intent.MoveTarget - n.Feet;
+            toCorner.y = 0.0f;
+        }
+        const float cornerDist = glm::length(toCorner);
+        const float speed = cornerDist > 0.1f ? m_Cfg.CrawlSpeed : 0.0f;
+        if (speed > 0.05f) {
+            steer = toCorner / cornerDist;
+            // Whiskers: the room ahead to either side at the hands' reach (and wider). A wall near one side turns him off it,
+            // and in a doorway the two frames balance and he goes through the middle - the route only keeps a standing
+            // body's width off a corner, not a two-metre one's.
+            {
+                const glm::vec3 turnPlus(std::cos(yaw), 0.0f, -std::sin(yaw)); // the way a larger yaw turns him
+                constexpr float kReach = kProneHead + 0.4f;
+                float lean = 0.0f;
+                for (float a : {0.45f, 0.9f}) {
+                    const glm::vec3 plus(std::sin(yaw + a), 0.0f, std::cos(yaw + a)), minus(std::sin(yaw - a), 0.0f, std::cos(yaw - a));
+                    lean += (a < 0.6f ? 1.0f : 0.6f) * (FloorRoom(n.Feet, plus, kReach) - FloorRoom(n.Feet, minus, kReach));
+                }
+                // (Never past the way to the corner: the whiskers only bend it.)
+                const glm::vec3 bent = steer + turnPlus * std::clamp(0.9f * lean, -0.8f, 0.8f);
+                if (glm::dot(bent, steer) > 0.2f) steer = glm::normalize(bent);
+            }
+            // Stuck - his hands at a doorjamb or a corner, the route's corner straight on past it: he swings off toward the open
+            // side, crawls clear on the angle, and the route takes him again (a few of these and he's through the middle).
+            if (n.CrawlStuck > 0.3f) {
+                constexpr float kSwing = 0.6f, kLook = kProneHead + 0.3f;
+                // The side, once: the roomier (a doorway's two jambs alike, the route's side), then kept till he's clear - picked
+                // afresh every frame it dithers between the two and he never turns.
+                if (n.CrawlSwing == 0.0f) {
+                    const glm::vec3 plus(std::sin(yaw + kSwing), 0.0f, std::cos(yaw + kSwing)), minus(std::sin(yaw - kSwing), 0.0f, std::cos(yaw - kSwing));
+                    const float room = FloorRoom(n.Feet, plus, kLook) - FloorRoom(n.Feet, minus, kLook);
+                    const float route = std::atan2(fwd.x * steer.z - fwd.z * steer.x, glm::dot(fwd, steer)); // (negative: at a larger yaw)
+                    n.CrawlSwing = std::abs(room) > 0.1f ? (room > 0.0f ? 1.0f : -1.0f) : (route <= 0.0f ? 1.0f : -1.0f);
+                    // A jamb (or a corner's edge) under one shoulder: straight ahead off each shoulder, the blocked side's lane
+                    // tells him which way the open doorway is - away from it, whatever the wider room says.
+                    const glm::vec3 turnPlus(std::cos(yaw), 0.0f, -std::sin(yaw));
+                    const bool plusBlocked = FloorRoom(n.Feet + turnPlus * 0.25f, fwd, kProneHead + 0.1f) < kProneHead + 0.05f;
+                    const bool minusBlocked = FloorRoom(n.Feet - turnPlus * 0.25f, fwd, kProneHead + 0.1f) < kProneHead + 0.05f;
+                    if (plusBlocked != minusBlocked) n.CrawlSwing = plusBlocked ? -1.0f : 1.0f;
+                    n.CrawlSwingYaw = yaw + n.CrawlSwing * 0.7f; // (40 degrees off: enough to clear a jamb, not to turn back)
+                }
+                // Round that far and still at the wall (a corner): another step the same way.
+                if (std::abs(FirstPersonBodyWrapAngle(n.CrawlSwingYaw - yaw)) < glm::radians(3.0f)) n.CrawlSwingYaw = yaw + n.CrawlSwing * 0.7f;
+                steer = glm::vec3(std::sin(n.CrawlSwingYaw), 0.0f, std::cos(n.CrawlSwingYaw));
+            } else if (n.CrawlStuck <= 0.0f) {
+                n.CrawlSwing = 0.0f;
+            }
+            const float off = std::atan2(fwd.x * steer.z - fwd.z * steer.x, glm::dot(fwd, steer)); // negative: the path is at a larger yaw
+            if (std::abs(off) > 0.05f) {
+                const float to = yaw - (off > 0.0f ? 0.2f : -0.2f); // a little way round
+                const glm::vec3 next(std::sin(to), 0.0f, std::cos(to));
+                const float headNow = FloorRoom(n.Feet, fwd, kProneHead), feetNow = FloorRoom(n.Feet, -fwd, kProneFeet);
+                const float headNext = FloorRoom(n.Feet, next, kProneHead), feetNext = FloorRoom(n.Feet, -next, kProneFeet);
+                // (Unless he is stuck - his hands at a wall a moment: in a corner every turn brushes something, and lying
+                // there for good is worse than a foot through the skirting.)
+                if (n.CrawlStuck < 0.3f &&
+                    ((headNext < kProneHead && headNext < headNow - 0.01f) || (feetNext < kProneFeet && feetNext < feetNow - 0.01f)))
+                    steer = fwd;
+            }
+            want = fwd * speed * std::max(0.7f, glm::dot(fwd, steer)); // (a hard turn eases off a little, no more)
+            headBlocked = FloorRoom(n.Feet, fwd, kProneHead + 0.1f) < kProneHead + 0.05f;
+            if (headBlocked) want = glm::vec3(0.0f);
+        }
+        n.CrawlStuck = headBlocked ? n.CrawlStuck + dt : std::max(0.0f, n.CrawlStuck - 2.0f * dt);
+        // Over the dead: his capsule passes through them (it would snag, climb or bulldoze them), and the body on the floor
+        // shoves aside the limbs it drags across - a part under his length is pushed out to the side it lies on, and on.
+        PhysicsWorld::SetNpcPassesRagdolls(n.Cct, n.Recovered);
+        if (n.Recovered && glm::length(n.Velocity) > 0.1f) {
+            const glm::vec3 side(fwd.z, 0.0f, -fwd.x);
+            for (auto& o : m_Npcs) {
+                if (!o || !o->Dead || !o->Ragdoll || !o->Ragdoll->Active()) continue;
+                for (int part = 0; part < NpcRagdoll::kParts; ++part) {
+                    const glm::vec3 p = o->Ragdoll->PartPosition(part);
+                    const glm::vec3 at = p - n.Feet;
+                    const float along = glm::dot(at, fwd), across = glm::dot(at, side);
+                    if (at.y > 0.6f || along < -kProneFeet || along > kProneHead || std::abs(across) > 0.4f) continue;
+                    const glm::vec3 push = glm::normalize(side * (across >= 0.0f ? 1.0f : -1.0f) + fwd * 0.5f);
+                    // (Never into a wall: a limb shoved against one goes through it, a thin wall for good.)
+                    if (FloorRoom(glm::vec3(p.x, n.Feet.y, p.z), push, 0.45f) < 0.45f) continue;
+                    o->Ragdoll->Shove(part, push * (6.0f * dt), p); // N s: about half a metre a second on a limb, eased
+                }
+            }
+        }
+    }
     n.FallSpeed -= m_Cfg.FallGravity * dt;
-    const glm::vec3 disp = (want + n.PushVel) * dt + glm::vec3(0.0f, n.FallSpeed * dt, 0.0f);
+    glm::vec3 disp = (want + n.PushVel) * dt + glm::vec3(0.0f, n.FallSpeed * dt, 0.0f);
+    if (n.Prone || n.Dying) disp += n.Body.FallTravel(); // a collapse carries him forward
     n.PushVel *= std::exp(-7.0f * dt); // a stagger's shove dies away
     const float d[3] = {disp.x, disp.y, disp.z};
     const unsigned hit = PhysicsWorld::MoveNpcCharacter(n.Cct, d, dt);
@@ -1132,7 +1295,7 @@ void NpcDirector::Move(World& world, Npc& n, float dt) {
     }
     if (n.Agent >= 0) m_Crowd.Sync(n.Agent, n.Feet);
     // Getting stuck: asked to move, barely moving.
-    if (n.Intent.Move && glm::length(want) > 0.5f && glm::length(n.Velocity) < 0.25f) n.BlockedTime += dt;
+    if ((n.Intent.Move && glm::length(want) > 0.5f && glm::length(n.Velocity) < 0.25f) || headBlocked) n.BlockedTime += dt;
     else n.BlockedTime = std::max(0.0f, n.BlockedTime - dt * 2.0f);
     // Stance: crouching shrinks the capsule; standing waits for headroom.
     const bool wantCrouch = n.Intent.Crouch && n.Intent.Pace != Gait::Run;
@@ -1163,10 +1326,15 @@ void NpcDirector::Move(World& world, Npc& n, float dt) {
     in.Lean = n.Intent.Lean;
     in.Cower = n.Intent.Cower;
     in.FootIK = FootIKEverywhere || (n.PlayerDist < m_Cfg.FootIKRange && n.OnScreen); // feet on slopes and steps where they can be seen
-    if (n.Prone) { // on its belly: no stance to lean or duck, no feet to stand on
-        in.Prone = true;
+    if (n.Prone || n.Dying) { // wounded: no stance to lean or duck from, no gun to aim; on the floor, no feet to stand on
+        in.Prone = n.Prone;
         in.HurtLeg = n.HurtLeg;
-        in.FootIK = false;
+        in.Dying = n.Dying;
+        in.Collapse = n.Collapsed;
+        in.Steer = steer;
+        n.CrawlSteer = steer;
+        in.Pivot = n.CrawlStuck > 0.3f;
+        if (n.Prone || n.Collapsed) in.FootIK = false;
         in.Lean = in.Cower = 0.0f;
         in.Aiming = false;
     }
@@ -1340,6 +1508,21 @@ void NpcDirector::LateUpdate(World& world, float dt, const PlayerSnapshot& p) {
             continue;
         }
         if (n.Dropped) n.Dropped->Update(world, dt); // shot down by a leg, it let its gun fall
+        if (n.FallPending) {
+            // Shot down by a leg this frame: one last animated frame (its late pose), then the ragdoll takes him down from it.
+            n.LateDt += dt;
+            if (n.Animate) {
+                LatePose(world, n, n.LateDt, p, /*alive=*/true);
+                m_DeathBones[n.Index].Dt = n.LateDt;
+                n.LateDt = 0.0f;
+            }
+            if (TrackDeathPop) TrackJump(world, n);
+            StartWoundFall(world, n);
+        }
+        if (n.Ragdoll) {
+            UpdateWoundFall(world, n, dt, p);
+            continue;
+        }
         n.LateDt += dt;
         if (!n.Animate) {
             // Held this frame (animation LOD): the pose stays, the hitboxes ride the body, the gun's queued reports go out.
@@ -1364,6 +1547,19 @@ void NpcDirector::LateUpdate(World& world, float dt, const PlayerSnapshot& p) {
             static const char* kBones[3] = {"head", "hand_l", "foot_l"};
             n.HaveLastBones = true;
             for (int k = 0; k < 3; ++k) n.Body.BoneWorld(kBones[k], n.LastBones[k]);
+        }
+        // Up off the wound fall, blending into the animated pose: the bones' jumps over the handover and the blend (tests). Blended
+        // in, the body is his own again - the brain's crawl waits for that (a body crawling off while it still blends whips its limbs).
+        if (!n.Recovered && n.CanCrawl && n.DownAt >= 0.0f) {
+            const float jump = TrackJump(world, n);
+            if (jump >= 0.0f) {
+                if (n.HandoverJump < 0.0f) n.HandoverJump = jump;
+                n.BlendJump = std::max(n.BlendJump, jump);
+            }
+            if (!n.Body.Recovering()) {
+                n.Recovered = true;
+                n.NextThink = m_Now;
+            }
         }
     }
     m_LateMs = std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - t0).count();
@@ -1415,6 +1611,54 @@ void NpcDirector::LatePose(World& world, Npc& n, float dt, const PlayerSnapshot&
         else reach = 0.4f * (1.0f - Smoothstep01((mt - 0.42f) / 0.58f));
         n.WeaponCam.Position += FrontOf(n.AimYaw, n.AimPitch) * reach;
         n.WeaponCam.Roll = 28.0f * std::sin(3.14159265f * mt);
+    }
+    // Up off a wall: if the gun as it would be held - out along the camera's line, and down along the hold's own (the camera's
+    // front with last frame's muzzle drop, while untucked) - would meet something solid within its reach and a hand past, it comes up
+    // toward high ready and in, by how far it would go in (turning in cover, the gun swept through the wall beside him). Measured
+    // on the untucked lines, so the tuck can't clear its own check and drop the gun back in.
+    {
+        float want = 0.0f;
+        glm::vec3 fp, muzzle, bore;
+        if (alive && n.Weapon->MuzzleFrames(fp, muzzle, bore)) {
+            const glm::vec3 front = FrontOf(n.WeaponCam.Yaw, n.WeaponCam.Pitch);
+            if (n.GunTuck < 0.05f && glm::length(muzzle - n.Eye) > 0.1f) {
+                n.GunReach = std::clamp(glm::length(muzzle - n.Eye), 0.5f, 1.1f);
+                n.GunDrop = glm::normalize(muzzle - n.Eye).y - front.y;
+            }
+            const glm::vec3 held = glm::normalize(front + glm::vec3(0.0f, n.GunDrop, 0.0f));
+            const float reach = n.GunReach + 0.15f;
+            QueryFilter f;
+            f.HitTriggers = 0;
+            const float o[3] = {n.Eye.x, n.Eye.y, n.Eye.z};
+            for (const glm::vec3& d : {front, held}) {
+                const float v[3] = {d.x, d.y, d.z};
+                RaycastHit hit;
+                if (!PhysicsWorld::RaycastSolid(o, v, reach, f, hit) || !hit.Hit) continue;
+                const float w = std::clamp((reach - hit.Distance) / 0.45f, 0.0f, 1.0f);
+                if (w <= want) continue;
+                want = w;
+                // Along the wall it would go into, the way the gun already leans (square on to it: either way, the same one each time).
+                const glm::vec3 wall(hit.Normal[0], 0.0f, hit.Normal[2]);
+                if (glm::dot(wall, wall) > 1e-4f) {
+                    const glm::vec3 nrm = glm::normalize(wall), flat(front.x, 0.0f, front.z);
+                    glm::vec3 along = flat - nrm * glm::dot(flat, nrm);
+                    if (glm::dot(along, along) < 0.04f) along = glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), nrm);
+                    // Tucked, it stays on the side it went to: square on to the wall the nearer side flips frame to frame, and the
+                    // gun swung across with the hand on it, 60 cm in a frame.
+                    if (n.GunTuck > 0.05f && glm::dot(along, FrontOf(n.TuckYaw, 0.0f)) < 0.0f) along = -along;
+                    // (And in a corner, one wall to the next, it turns at a hand's pace.)
+                    const float to = glm::degrees(std::atan2(along.z, along.x)), most = 360.0f * dt;
+                    n.TuckYaw = n.GunTuck > 0.05f ? WrapDeg(n.TuckYaw + std::clamp(WrapDeg(to - n.TuckYaw), -most, most)) : to;
+                }
+            }
+        }
+        // (Quick in, slower back out: it doesn't flutter at the wall's edge.) In: swung along the wall, up a little, drawn back.
+        n.GunTuck += (want - n.GunTuck) * AiFollow(dt, want > n.GunTuck ? 0.06f : 0.25f);
+        if (n.GunTuck > 1e-3f) {
+            n.WeaponCam.Yaw = WrapDeg(n.WeaponCam.Yaw + WrapDeg(n.TuckYaw - n.WeaponCam.Yaw) * n.GunTuck);
+            n.WeaponCam.Pitch = glm::mix(n.WeaponCam.Pitch, 35.0f, n.GunTuck);
+            n.WeaponCam.Position -= FrontOf(n.AimYaw, 0.0f) * (0.12f * n.GunTuck);
+        }
     }
     // Where this frame's rounds go: on the player (the point it sees best, or the chest) when
     // the roll hits, else a near miss the player hears go by. Suppressing: about where they were.
@@ -1500,6 +1744,8 @@ void NpcDirector::UpdateLod(World& world, Npc& n, const PlayerSnapshot& p) {
     n.OnScreen = onScreen;
     const bool busy = n.TriggerHeld || m_Now - n.LastShot < 0.4f || m_Now - n.LastHurt < 0.5f || m_Now - n.SpawnedAt < 0.5f;
     n.Animate = busy || lod == 1 || ((m_Frame + n.Index) % lod) == 0;
+    // Going down as a ragdoll (the wound fall): the animators are held where they were until the body takes its pose back.
+    if (n.Ragdoll) n.Animate = false;
     auto hold = [&](entt::entity e) {
         if (e == entt::null || !world.Registry.valid(e)) return;
         if (auto* ac = world.Registry.try_get<AnimatorControllerComponent>(e)) ac->SkipUpdate = !n.Animate;
@@ -1634,6 +1880,12 @@ bool NpcDirector::OnPlayerHit(World& world, unsigned entity, const glm::vec3& po
             }
             return true;
         }
+        // Alive and going down as a ragdoll, the round may name one of its own parts past the hitboxes' eleven: the neck counts as
+        // the chest, a hand as its forearm, a foot as its calf.
+        if (part >= NpcRagdoll::kParts) {
+            static const int kAs[NpcRagdoll::kRagParts - NpcRagdoll::kParts] = {1, 4, 6, 8, 10};
+            part = kAs[std::min(part - NpcRagdoll::kParts, NpcRagdoll::kRagParts - NpcRagdoll::kParts - 1)];
+        }
         const HitZone zone = part >= 0 ? ZoneOfRegion(RegionFromPart(part)) : ZoneFromCapsuleHeight(point.y, n.Feet.y, n.Crouched ? 1.26f : 1.8f);
         const float dmg = DamageForHit(weapon, zone, dist);
         if (Fx) Fx->Play(CombatFx::Cue::FleshHit, point, false, 0.7f);
@@ -1694,12 +1946,13 @@ void NpcDirector::ApplyDamage(World& world, Npc& n, float amount, HitZone zone, 
                              : zone == HitZone::Limb ? HitRegion::Leg
                                                      : HitRegion::Torso;
     n.Health -= amount;
-    // A leg or body hit that would leave it under 20% - or kill it - may put it down wounded instead (once a life): by a
-    // leg on its belly, crawling (Leg Down chance), by the body on a knee (Wound chance), left with a tenth of its health.
-    // A player's round does 25-35 a hit, so "under 20% but alive" alone almost never came up.
+    // The player's round in a leg puts it down on its belly, crawling (Leg Down chance: always, but for the tests), whatever
+    // its health; one in the body that would leave it under 20% - or kill it - may put it down dying instead (Wound chance).
+    // Once a life, left with at least a tenth of its health. (A player's round does 25-35 a hit, so "under 20% but alive"
+    // alone almost never came up.)
     int downed = -2; // -2 not downed; else BecomeWounded's hurtLeg (-1 a knee, 0 / 1 that leg)
-    if (attacker < 0 && !n.Dummy && !n.WoundRolled && !wasWounded && n.Health < 0.2f * n.MaxHealth && amount < n.MaxHealth &&
-        (region == HitRegion::Leg || region == HitRegion::Torso)) {
+    if (attacker < 0 && !n.WoundRolled && !wasWounded && amount < n.MaxHealth &&
+        (region == HitRegion::Leg || (region == HitRegion::Torso && n.Health < 0.2f * n.MaxHealth))) {
         n.WoundRolled = true;
         const bool leg = region == HitRegion::Leg;
         if (std::uniform_real_distribution<float>(0.0f, 1.0f)(m_Rng) < (leg ? m_LegDownChance : m_WoundChance)) {
@@ -1748,25 +2001,48 @@ void NpcDirector::ApplyDamage(World& world, Npc& n, float amount, HitZone zone, 
         if (glm::dot(flat, flat) > 1e-6f) n.PushVel += glm::normalize(flat) * 1.8f;
         if (glm::length(n.PushVel) > 2.5f) n.PushVel = glm::normalize(n.PushVel) * 2.5f;
     }
-    if (downed > -2) BecomeWounded(world, n, downed);
+    if (downed > -2) {
+        // The round that put it down, for the wound fall's ragdoll (a leg: StartWoundFall).
+        n.FallHitDir = glm::length(dir) > 1e-4f ? glm::normalize(dir) : glm::vec3(0.0f, 0.0f, 1.0f);
+        n.FallHitPoint = point;
+        n.FallHitShove = 30.0f + 0.4f * amount;
+        n.FallHitPart = part;
+        BecomeWounded(world, n, downed);
+    }
     if (n.Health < 0.35f * n.MaxHealth && !n.Wounded) Callout(n, CallKind::Wounded);
 }
 
 void NpcDirector::BecomeWounded(World& world, Npc& n, int hurtLeg) {
     n.Wounded = true;
     n.WoundedAt = m_Now;
-    if (hurtLeg >= 0) {
-        // Down on its belly: the gun falls from its hands (the hands go to the wound, then the floor), and it crawls.
-        n.Prone = true;
-        n.HurtLeg = hurtLeg;
-        n.TriggerHeld = false;
-        if (n.Weapon && n.Weapon->IsActive()) n.Dropped = NpcDroppedWeapon::Drop(world, n.Body, n.Weapon->WeaponEntity(), glm::vec3(0.0f, -1.0f, 0.0f));
-        if (n.Weapon) n.Weapon->Stop(world);
-        n.Weapon.reset();
+    // Shot down by a leg, on its belly and crawling; else gut-shot, doubled over, a few steps, then down. Either way the gun
+    // falls from its hands (they go to the wound), and it goes down where it stands: no shove or old goal slides it about.
+    n.Prone = hurtLeg >= 0;
+    n.Dying = !n.Prone;
+    n.HurtLeg = hurtLeg;
+    n.TriggerHeld = false;
+    // On its belly by way of the floor: the leg gives and he goes down as a powered ragdoll (after this frame's late pose, so it
+    // starts from the pose he was seen in), not the collapse clip; the bones' pose now, for the limbs' velocity.
+    if (n.Prone) {
+        n.FallPending = true;
+        n.Recovered = n.CanCrawl = false;
+        n.DownAt = n.FallTime = -1.0f;
+        n.HandoverJump = n.BlendJump = -1.0f;
+        n.Body.SkipCollapseClip(true);
+        NpcRagdoll::Capture(n.Body, m_DeathBones[n.Index].Bones);
+        m_DeathBones[n.Index].Dt = 0.0f;
     }
+    if (n.Weapon && n.Weapon->IsActive()) n.Dropped = NpcDroppedWeapon::Drop(world, n.Body, n.Weapon->WeaponEntity(), glm::vec3(0.0f, -1.0f, 0.0f));
+    if (n.Weapon) n.Weapon->Stop(world);
+    n.Weapon.reset();
+    n.PushVel = glm::vec3(0.0f);
+    n.StaggerUntil = 0.0f;
+    n.Intent.Move = false;
+    if (n.Agent >= 0) m_Crowd.Stop(n.Agent);
+    n.HasGoal = false;
     n.Doing = Behaviour::Wounded;
     n.DoingSince = m_Now;
-    n.Phase = 0;
+    n.Phase = -1; // the brain enters it next think: the stagger's goal, the cover to crawl to (NpcBrain::Enter)
     n.NextThink = m_Now;
     n.Role = NpcRole::Anchor;
     n.HasFlankToken = n.HasPushToken = false;
@@ -1778,6 +2054,8 @@ void NpcDirector::Kill(World& world, Npc& n, const glm::vec3& dir, const glm::ve
     if (n.Dead) return;
     n.Dead = true;
     n.Wounded = false;
+    n.FallPending = false; // (killed in the frame it went down: the death's ragdoll, from the same pose)
+    m_Scripted.erase(n.Index);
     if (auto* h = world.Registry.try_get<HealthComponent>(n.Root)) h->Current = 0.0f;
     n.Health = 0.0f;
     n.DiedAt = m_Now;
@@ -1828,12 +2106,30 @@ void NpcDirector::FinishDeath(World& world, Npc& n) {
     if (dropsGun) n.Dropped = NpcDroppedWeapon::Drop(world, n.Body, n.Weapon->WeaponEntity(), n.DeathDir * n.DeathShove);
     if (n.Weapon) n.Weapon->Stop(world);
     n.Weapon.reset();
+    // Killed while going down (or lying where he fell) as a ragdoll: the same ragdoll dies - the death's settings from now on and
+    // the round's shove on the part it struck - so not a bone moves at the handover.
+    if (n.Ragdoll && n.Ragdoll->Active()) {
+        for (entt::entity e : n.Body.Pieces())
+            if (world.Registry.valid(e)) world.Registry.remove<AnimatorControllerComponent>(e);
+        n.Body.SetPoseOwnedElsewhere(true);
+        m_DeathBones.erase(n.Index);
+        int part = n.DeathPart;
+        if (part < 0 || part >= NpcRagdoll::kRagParts) {
+            float best = 1e9f;
+            for (int i = 0; i < NpcRagdoll::kRagParts; ++i)
+                if (const float d = glm::length(n.Ragdoll->PartPosition(i) - n.DeathPoint); d < best) { best = d; part = i; }
+        }
+        n.Ragdoll->Die(part, n.DeathDir, std::max(0.0f, (n.DeathShove - 30.0f) / 0.4f), n.DeathPoint, m_RagdollCfg);
+        n.DeathPop = 0.0f;
+        return;
+    }
     // Down: the animators stop and the physics takes the body, shoved along the round's line on the bone it struck.
     for (entt::entity e : n.Body.Pieces())
         if (world.Registry.valid(e)) world.Registry.remove<AnimatorControllerComponent>(e);
     n.Body.SetPoseOwnedElsewhere(true);
     n.FallSoundAt = m_Now + 0.45f;
     n.Ragdoll = std::make_unique<NpcRagdoll>();
+    n.Ragdoll->ProneDeath = n.Prone; // finished off on the floor: a flinch, then slack (no fall to make)
     // The bones' velocity: the pose they had when the soldier was hit (last frame's, before the animators moved on) against the
     // dying frame's, over the real time between (a held frame has no new pose: no relative motion, just the body's).
     if (!n.Ragdoll->Start(n.Body, n.Velocity, n.DeathDir * n.DeathShove, n.DeathPoint, n.DeathPart, &m_RagdollCfg, &m_DeathBones[n.Index].Bones, m_DeathBones[n.Index].Dt)) {
@@ -1868,6 +2164,233 @@ void NpcDirector::FinishDeath(World& world, Npc& n) {
         }
         n.DeathPop = pop;
     }
+}
+
+// Shot down by a leg: the leg gives and he goes down with the physics - a powered ragdoll of the living body, from the pose he
+// was seen in, along the way he was going and the round's shove, biased forward and over the leg that gave (a man whose leg is
+// shot out pitches over it; he isn't blown back like a corpse). The hurt leg is weak at once, the other holds a beat (Wound Fall
+// Leg Hold) and gives, the arms brace toward the fall, and the walls and furniture he meets are the ragdoll's own contacts: each
+// fall comes out its own. The capsule stays (it follows the pelvis, FollowFall) but never pushes him; the hitboxes ride his pose.
+void NpcDirector::StartWoundFall(World& world, Npc& n) {
+    PROFILE_SCOPE("AI Wound Fall");
+    (void)world;
+    n.FallPending = false;
+    n.RollTries = 0;
+    n.NextRollAt = 0.0f;
+    n.RollHeaveUntil = -1.0f;
+    // The death's ragdoll settings, for a living body: the good leg's hold, the tone it keeps on the floor; always powered (the
+    // drives are what make it fall like a man, and the motor knows when he is down).
+    RagdollSettingsComponent cfg = m_RagdollCfg;
+    cfg.PoweredRagdoll = true;
+    cfg.StaggerLegStrength = cfg.WoundFallLegStrength;
+    cfg.StaggerTime = cfg.WoundFallLegHold;
+    cfg.ToneResidual = std::max(cfg.ToneResidual, cfg.WoundFallTone);
+    const float yaw = n.Body.Yaw();
+    const glm::vec3 fwd(std::sin(yaw), 0.0f, std::cos(yaw)), left(std::cos(yaw), 0.0f, -std::sin(yaw)); // (model +X is its left)
+    const glm::vec3 shot(n.FallHitDir.x, 0.0f, n.FallHitDir.z);
+    NpcRagdoll::Wound wound;
+    // (The round's own line counts only across him or from behind: one from the front would tip him onto his back - he goes down
+    // over the leg that gave, the way he faces, whichever way it came.)
+    const float along = glm::dot(shot, fwd);
+    const glm::vec3 fall = fwd + 0.6f * (n.HurtLeg == 0 ? left : -left) + 0.35f * (along < 0.0f ? shot - fwd * along : shot) + 0.15f * n.Velocity;
+    wound.FallDir = glm::dot(fall, fall) > 1e-6f ? glm::normalize(fall) : fwd;
+    wound.Leg = n.HurtLeg;
+    wound.Push = std::max(cfg.WoundFallPush, 0.0f);
+    if (TestFallBackwards) { // (a test's: over backwards, hard, so he lands on his back)
+        TestFallBackwards = false;
+        wound.FallDir = -fwd;
+        wound.Push = 2.5f * std::max(cfg.WoundFallPush, 1.0f);
+    }
+    // The leg's part the round struck (else the hurt leg's thigh); half a killing round's shove: a leg round knocks the leg, not the man.
+    const int part = n.FallHitPart >= 7 && n.FallHitPart <= 10 ? n.FallHitPart : (n.HurtLeg == 1 ? 9 : 7);
+    const glm::vec3 impulse = n.FallHitDir * (0.5f * n.FallHitShove);
+    n.Ragdoll = std::make_unique<NpcRagdoll>();
+    const auto bones = m_DeathBones.find(n.Index);
+    const bool started = n.Ragdoll->Start(n.Body, n.Velocity, impulse, n.FallHitPoint, part, &cfg, bones != m_DeathBones.end() ? &bones->second.Bones : nullptr,
+                                          bones != m_DeathBones.end() ? bones->second.Dt : 0.0f, &wound);
+    m_DeathBones.erase(n.Index);
+    if (!started) {
+        // (No ragdoll to be had: the collapse clip it is, and the brain's wait for it.)
+        n.Ragdoll.reset();
+        n.Body.SkipCollapseClip(false);
+        n.Recovered = n.CanCrawl = true;
+        n.DownAt = m_Now;
+        return;
+    }
+    n.Body.SetPoseOwnedElsewhere(true);
+    n.Ragdoll->Update(0.0f); // the pieces take the parts' first pose now
+    if (n.Cct != PhysicsWorld::kNoCharacter) PhysicsWorld::IgnoreRagdollForNpc(n.Cct, n.Ragdoll->Id());
+    // The gun he let go of passes through the hands it was in (and whatever of him it starts inside) until it is clear.
+    if (n.Dropped) n.Dropped->SetOwner(n.Ragdoll->Id(), -1);
+    m_Flinch.erase(n.Index); // (the flinch's kick is the animated pose's; the physics has the round now)
+    n.FallStartedAt = m_Now;
+    n.FallSoundAt = m_Now + 0.5f;
+}
+
+// The capsule under the falling body: toward the pelvis over the floor (at most 4 m/s), as low as a crouch; the walls stop it where
+// they stop him. Where it stands when he is down is where his root goes (RecoverFromFall).
+void NpcDirector::FollowFall(Npc& n, float dt) {
+    if (n.Cct == PhysicsWorld::kNoCharacter || !n.Ragdoll || dt <= 0.0f) return;
+    const glm::vec3 pelvis = n.Ragdoll->Root();
+    glm::vec3 to(pelvis.x - n.Feet.x, 0.0f, pelvis.z - n.Feet.z);
+    if (const float l = glm::length(to), most = 4.0f * dt; l > most) to *= most / l;
+    if (!n.Crouched) {
+        PhysicsWorld::ResizeNpcCharacter(n.Cct, kCrouchCyl);
+        n.Crouched = true;
+    }
+    n.FallSpeed -= m_Cfg.FallGravity * dt;
+    const glm::vec3 disp = to + glm::vec3(0.0f, n.FallSpeed * dt, 0.0f);
+    const float d[3] = {disp.x, disp.y, disp.z};
+    if (PhysicsWorld::MoveNpcCharacter(n.Cct, d, dt) & PhysicsWorld::CC_DOWN) n.FallSpeed = -1.0f;
+    float feet[3];
+    if (PhysicsWorld::GetNpcCapsule(n.Cct, feet, nullptr, nullptr)) {
+        const glm::vec3 f(feet[0], feet[1], feet[2]);
+        n.Velocity = glm::vec3(f.x - n.Feet.x, 0.0f, f.z - n.Feet.z) / dt;
+        n.Feet = f;
+    }
+    if (n.Agent >= 0) m_Crowd.Sync(n.Agent, n.Feet);
+    n.BlockedTime = 0.0f;
+}
+
+void NpcDirector::UpdateWoundFall(World& world, Npc& n, float dt, const PlayerSnapshot& p) {
+    {
+        SubTimer timer(*this, SubRagdoll);
+        n.Ragdoll->Update(dt);
+    }
+    n.LateDt = 0.0f;
+    if (n.FallSoundAt > 0.0f && m_Now >= n.FallSoundAt) {
+        n.FallSoundAt = -1.0f;
+        if (Fx) Fx->Play(CombatFx::Cue::BodyFall, n.Ragdoll->Root());
+    }
+    // He sees from his head as it lies; the rounds find him on the ragdoll's pose (the hitboxes posed from it, its parts too).
+    if (glm::vec3 head; n.Body.BoneWorld("head", head)) n.Eye = head;
+    UpdateHitboxes(n, p, /*posed=*/true);
+    if (n.DownAt >= 0.0f) { // on his back: he rolls himself over, and crawls from his belly
+        RollOver(n, dt);
+        return;
+    }
+    TrackJump(world, n); // (the last ragdoll frame, for the handover's jump)
+    // Down - the pelvis or chest on the ground - and every part slow: the animated pose takes him back. Never before the limbs have
+    // had a moment to slump, and never later than Wound Recover Max Time (draped over something, still sliding).
+    const RagdollSettingsComponent& c = m_RagdollCfg;
+    const float t = m_Now - n.FallStartedAt;
+    float lin = 0.0f, ang = 0.0f;
+    n.Ragdoll->Motion(lin, ang);
+    const bool down = n.Ragdoll->Motor().GroundedAt() >= 0.0f;
+    if ((t >= c.WoundRecoverMinTime && down && lin < c.WoundRecoverSpeed) || t >= c.WoundRecoverMaxTime) RecoverFromFall(world, n);
+}
+
+// Down from the wound fall. Which way up he lies: the front of his chest (across the shoulders, up the spine) and of his pelvis
+// (across the hips) - facing the floor, he is on his belly and crawls on; facing up, he is on his back, and a body on its back can't
+// morph into a belly crawl: he stays as he fell (the ragdoll keeps him) and bleeds out there. On his belly the root goes under the
+// pelvis (where the capsule followed it), facing along his body (pelvis to head, the crawl clips' axis), and every bone blends from
+// where it lies into the prone idle (NpcBody::BeginRecover).
+void NpcDirector::RecoverFromFall(World& world, Npc& n) {
+    const RagdollSettingsComponent& c = m_RagdollCfg;
+    const glm::vec3 pelvis = n.Ragdoll->PartPosition(0), head = n.Ragdoll->PartPosition(2);
+    const glm::vec3 spine = head - pelvis;
+    auto front = [&](const char* l, const char* r) {
+        glm::vec3 a(0.0f), b(0.0f);
+        if (!n.Body.BoneWorld(l, a) || !n.Body.BoneWorld(r, b)) return 0.0f;
+        const glm::vec3 f = glm::cross(a - b, spine); // its left across its up: its front
+        return glm::length(f) > 1e-5f ? glm::normalize(f).y : 0.0f;
+    };
+    n.FallFrontUp = 0.5f * (front("upperarm_l", "upperarm_r") + front("thigh_l", "thigh_r"));
+    n.DownAt = m_Now;
+    n.FallTime = m_Now - n.FallStartedAt;
+    n.CanCrawl = n.FallFrontUp <= c.WoundFaceUp;
+    n.Recovered = !n.CanCrawl; // (on his back that is all there is to it; on his belly, once the blend below is done)
+    n.NextThink = m_Now;
+    if (TrackDeathPop)
+        std::printf("[NpcTest] %s down %.2f s after the hit, on his %s (front %.2f up), pelvis %.0f cm up\n", n.Name.c_str(), n.FallTime,
+                    n.CanCrawl ? "belly" : "back", n.FallFrontUp, (pelvis.y - n.Feet.y) * 100.0f);
+    if (!n.CanCrawl) return;
+    if (n.Cct != PhysicsWorld::kNoCharacter) PhysicsWorld::IgnoreRagdollForNpc(n.Cct, -1);
+    if (n.Dropped) n.Dropped->ForgetOwner();
+    n.Body.BeginRecover(world, n.Feet, NpcYawOf(spine, n.Body.Yaw()), c.WoundBlendTime, c.WoundBlendSpeed, "ProneIdle");
+    n.Ragdoll.reset();
+}
+
+// Down on his back from the wound fall: he rolls himself over onto his belly - a heave up under the shoulder and the hip on one side,
+// over toward the other (the good leg's: the hurt one ends on top), the chest and pelvis going with it - a few tries at most. Once
+// he lies face down and still, the recovery takes him as it does a fall that landed so (UpdateWoundFall: RecoverFromFall).
+void NpcDirector::RollOver(Npc& n, float dt) {
+    const RagdollSettingsComponent& c = m_RagdollCfg;
+    if (!n.Ragdoll || c.WoundRollImpulse <= 0.0f) return;
+    // The heave under way, for a third of a second: a twist about his spine - the chest and the pelvis each turned by a pair of
+    // equal and opposite pushes across them, the far side up and the near side down (a roll turns him, it doesn't lift him: a lift
+    // has his whole weight to fight) - and the far arm and leg thrown over with it.
+    constexpr float kHeaveTime = 0.35f;
+    if (m_Now < n.RollHeaveUntil && dt > 0.0f) {
+        // He pushes until he's over - his front well down - not for a set time: stopped short, he rocks back onto his back.
+        glm::vec3 hl(0.0f), hr(0.0f);
+        if (n.Body.BoneWorld("upperarm_l", hl) && n.Body.BoneWorld("upperarm_r", hr)) {
+            const glm::vec3 fr = glm::cross(hl - hr, n.Ragdoll->PartPosition(2) - n.Ragdoll->PartPosition(0));
+            if (glm::length(fr) > 1e-5f && glm::normalize(fr).y < -0.4f) {
+                n.RollHeaveUntil = m_Now;
+                return;
+            }
+        }
+        const glm::vec3 up(0.0f, 1.0f, 0.0f), side = n.RollSide; // side: the way he rolls (that side goes down)
+        const float j = c.WoundRollImpulse * (1.0f + (float)(n.RollTries - 1) / 3.0f) * dt / kHeaveTime;
+        const bool ontoLeft = n.HurtLeg != 0;                                   // (onto the good leg's side) ...
+        const int farArm = ontoLeft ? 5 : 3, farThigh = ontoLeft ? 9 : 7;      // ... the other comes up and over
+        auto twist = [&](int part, float share) {
+            const glm::vec3 at = n.Ragdoll->PartPosition(part);
+            n.Ragdoll->Shove(part, up * (share * j), at - side * 0.15f); // the far side up ...
+            n.Ragdoll->Shove(part, -up * (share * j), at + side * 0.15f); // ... the near side down
+        };
+        twist(1, 0.55f);
+        twist(0, 0.35f);
+        n.Ragdoll->Shove(farArm, (up * 0.15f + side * 0.25f) * j, n.Ragdoll->PartPosition(farArm));
+        n.Ragdoll->Shove(farThigh, (up * 0.1f + side * 0.2f) * j, n.Ragdoll->PartPosition(farThigh));
+        return;
+    }
+    const glm::vec3 pelvis = n.Ragdoll->PartPosition(0), head = n.Ragdoll->PartPosition(2);
+    glm::vec3 la(0.0f), ra(0.0f);
+    if (!n.Body.BoneWorld("upperarm_l", la) || !n.Body.BoneWorld("upperarm_r", ra)) return;
+    const glm::vec3 spine = head - pelvis, across = la - ra; // up his spine; toward his left
+    const glm::vec3 f = glm::cross(across, spine);
+    const float frontUp = glm::length(f) > 1e-5f ? glm::normalize(f).y : 1.0f;
+    float lin = 0.0f, ang = 0.0f;
+    n.Ragdoll->Motion(lin, ang);
+    // Face down and settling: over to the recovery (it measures again, and takes him into the crawl).
+    if (frontUp <= c.WoundFaceUp - 0.1f && lin < 2.0f * c.WoundRecoverSpeed) {
+        n.DownAt = -1.0f;
+        n.FallStartedAt = m_Now - c.WoundRecoverMinTime;
+        return;
+    }
+    if (TrackDeathPop && (int)(m_Now * 2.0f) != (int)((m_Now - 1.0f / 60.0f) * 2.0f))
+        std::printf("[NpcTest] %s on his back: front %.2f up, parts %.2f m/s, %.1f s down, tries %d (impulse %.0f, tries %.0f)\n", n.Name.c_str(),
+                    frontUp, lin, m_Now - n.DownAt, n.RollTries, c.WoundRollImpulse, c.WoundRollTries);
+    if (n.RollTries >= (int)c.WoundRollTries || m_Now < n.NextRollAt || m_Now - n.DownAt < 0.6f || lin > c.WoundRecoverSpeed) return;
+    ++n.RollTries;
+    n.NextRollAt = m_Now + 1.8f;
+    // Over onto the good leg's side (the hurt one ends on top): his right with the left leg hurt, else his left. The body loosens
+    // first (settled, its damping and friction would swallow the effort), then the heave runs (above).
+    const float toward = n.HurtLeg == 0 ? -1.0f : 1.0f;
+    n.RollSide = glm::length(across) > 1e-5f ? glm::normalize(glm::vec3(across.x, 0.0f, across.z)) * toward : glm::vec3(0.0f);
+    n.RollHeaveUntil = m_Now + 0.8f; // (at most: it stops once he's over)
+    n.Ragdoll->Loosen(1.8f);
+    if (TrackDeathPop)
+        std::printf("[NpcTest] %s rolls over (try %d, front %.2f up)\n", n.Name.c_str(), n.RollTries, frontUp);
+}
+
+float NpcDirector::TrackJump(const World& world, Npc& n) {
+    static const char* kBones[6] = {"pelvis", "head", "hand_l", "hand_r", "foot_l", "foot_r"};
+    float jump = n.HaveJumpBones ? 0.0f : -1.0f;
+    int worst = -1;
+    for (int k = 0; k < 6; ++k) {
+        glm::vec3 b;
+        if (!n.Body.BoneWorld(kBones[k], b)) continue;
+        if (n.HaveJumpBones && glm::length(b - n.JumpBones[k]) > jump) { jump = glm::length(b - n.JumpBones[k]); worst = k; }
+        n.JumpBones[k] = b;
+    }
+    n.HaveJumpBones = true;
+    if (TrackDeathPop && n.DownAt >= 0.0f && jump > 0.05f && worst >= 0) // which bone, for the test's log
+        std::printf("[NpcTest] %s jump: %s %.1f cm (%.2f s after down, blend %s, %s)\n", n.Name.c_str(), kBones[worst], jump * 100.0f,
+                    n.DownAt >= 0.0f ? m_Now - n.DownAt : -1.0f, n.Body.Recovering() ? "on" : "off", n.Body.StateName(world).c_str());
+    return jump;
 }
 
 bool NpcDirector::PlayerSees(const PlayerSnapshot& p, const glm::vec3& point) {

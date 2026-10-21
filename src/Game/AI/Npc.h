@@ -36,8 +36,8 @@ enum class Behaviour : unsigned char {
     Search,      // lost the player: hunting for them
     Retreat,     // hurt: falling back to cover further off
     Dead,
-    Wounded,     // down on a knee, crawling for cover and shooting poorly until it bleeds out (after Dead so the indices hold);
-                 // shot down by a leg, on its belly instead, unarmed, dragging the leg
+    Wounded,     // out of the fight until it bleeds out or is finished (after Dead so the indices hold): shot down by a leg, on
+                 // its belly crawling for cover, dragging the leg; gut-shot, a few staggering steps, then down
 };
 constexpr int kBehaviourCount = 11;
 const char* BehaviourName(Behaviour b);
@@ -74,7 +74,7 @@ struct Npc {
     std::string Name;
 
     NpcBody Body;
-    std::unique_ptr<NpcRagdoll> Ragdoll; // once dead
+    std::unique_ptr<NpcRagdoll> Ragdoll; // once dead (or alive and going down: the wound fall, see FallPending)
     std::unique_ptr<NpcDroppedWeapon> Dropped; // the gun he dropped (handed to the director's loose guns if it outlasts the corpse)
     std::unique_ptr<NpcHitboxes> Hitboxes; // while alive and near the player: the bones the player's rounds hit
     int HitboxTries = 0;
@@ -105,9 +105,43 @@ struct Npc {
     glm::vec3 PushVel{0.0f};        // a stagger's shove (m/s, decays)
     bool Wounded = false;           // down, crawling (Behaviour::Wounded)
     float WoundedAt = 0.0f;
-    bool Prone = false;             // ... shot down by a leg: the gun dropped, on its belly, dragging HurtLeg (else on a knee)
+    bool Prone = false;             // ... shot down by a leg: the gun dropped, on its belly, dragging HurtLeg
     int HurtLeg = -1;               // 0 left, 1 right
+    glm::vec3 CrawlTo{0.0f};        // ... where he is dragging himself now, away from the threat (NpcBrain::PickCrawlGoal) ...
+    bool HasCrawlTo = false;
+    float CrawlRestUntil = 0.0f;    // ... looked at again then
+    glm::vec3 CrawlSteer{0.0f};     // ... (the way the crawl steered last frame: tests)
+    float CrawlStuck = 0.0f;        // ... seconds his hands have been at a wall (he turns where he has to, then) ...
+    float CrawlSwing = 0.0f;        // ... the way he swings off it (+1 / -1 yaw; 0 none), kept till he's clear (it would dither) ...
+    float CrawlSwingYaw = 0.0f;     // ... to this heading (a set turn from where he stuck, not a spin)
+    bool Dying = false;             // ... gut-shot: the gun dropped, doubled over, a few staggering steps, then down
+    bool Collapsed = false;         // ... and down now, lying there
+    glm::vec3 StaggerTo{0.0f};      // where he staggers to (picked once, entering Wounded)
+    bool HasStaggerTo = false;
     bool WoundRolled = false;       // the 35% chance has been taken this life
+    // Shot down by a leg, he goes down as a powered ragdoll (NpcDirector::StartWoundFall, after this frame's late pose) while alive:
+    // Ragdoll is set and he is not Dead. Once down and slow he takes the animated prone pose back (RecoverFromFall) - or, landed on
+    // his back, lies there as he fell.
+    bool FallPending = false;
+    glm::vec3 FallHitDir{0.0f}, FallHitPoint{0.0f};
+    float FallHitShove = 0.0f;
+    int FallHitPart = -1;
+    float FallStartedAt = -1.0f;
+    float DownAt = -1.0f;           // down: the fall came to rest then (-1: not yet) ...
+    bool Recovered = false;         // ... and the body has blended back into the animated prone pose (on his back: as soon as he is
+                                    // down) - the brain waits for this before it crawls
+    bool CanCrawl = false;          // ... on his belly, and able to crawl (false: on his back, he lies where he fell)
+    float FallTime = -1.0f;         // seconds from the hit to down (tests)
+    int RollTries = 0;              // on his back after the fall: the heaves made to roll onto his belly ...
+    float NextRollAt = 0.0f;        // ... and when the next may come
+    float RollHeaveUntil = -1.0f;   // ... the one under way pushes until then (an effort, not a kick) ...
+    glm::vec3 RollSide{0.0f};       // ... over toward this side (world, flat)
+    float FallFrontUp = 0.0f;       // how far the chest's and pelvis's front faced up when he came to rest (-1 face down .. 1 face up)
+    // The drawn bones' jumps over the fall's handover (tests): the largest one-frame move of the tracked bones in the frame the
+    // animated pose takes over and over the blend after it, and those bones last frame.
+    float HandoverJump = -1.0f, BlendJump = -1.0f;
+    glm::vec3 JumpBones[6]{};
+    bool HaveJumpBones = false;
     // Animation level of detail (NpcDirector::Think): the pose passes run one frame in every Lod.
     int Lod = 1;
     bool Animate = true;            // this frame runs the animators and the late pose
@@ -196,6 +230,10 @@ struct Npc {
     float CoverFireOrder = -1e9f;   // told to give a bounding squadmate covering fire until then
     float PinnedSince = -1.0f;      // heavy suppression since then (< 0: not pinned)
     float LastBlindFire = -1e9f;
+    float GunTuck = 0.0f;           // 0..1: the gun drawn up and in off a wall it would go through (eased) ...
+    float GunReach = 0.8f;          // ... the eye to the muzzle, untucked (m) ...
+    float GunDrop = 0.0f;           // ... and how far the hold points the muzzle below the camera's line (the unit vectors' y) ...
+    float TuckYaw = 0.0f;           // ... the facing (degrees) along the wall the tuck swings it to
     float BlindLift = 0.0f;         // 0..1: how far the gun is out for blind fire (eased) ...
     glm::vec3 BlindOffset{0.0f};    // ... and where to: up over low cover, out past the edge of high cover
     float MeleeAt = -1e9f;          // a rifle-butt strike started then (the gun thrusts, the blow lands kMeleeHitTime in)

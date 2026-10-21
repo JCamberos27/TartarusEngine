@@ -104,6 +104,12 @@ void     SetNpcFootPosition(CharacterId id, const float footPos[3]);
 bool     GetNpcCapsule(CharacterId id, float outFootPos[3], float* outRadius, float* outCylHalfHeight);
 bool     ResizeNpcCharacter(CharacterId id, float cylinderHalfHeight);
 bool     NpcFitsAt(CharacterId id, float cylinderHalfHeight);
+// The character's capsule stops pushing ragdoll `ragdoll`'s parts about (its own body down as a ragdoll while alive: the capsule stays
+// with it, inside it); -1 (or a gone ragdoll) undoes it. (Its moves already pass through bodies of its own entity.)
+bool     IgnoreRagdollForNpc(CharacterId id, int ragdoll);
+// The character's capsule passes through every ragdoll's parts, in its moves and in the simulation (a soldier crawling over
+// the dead: the body on the floor shoves them itself). Off again with `on` false.
+void     SetNpcPassesRagdolls(CharacterId id, bool on);
 // The NPC character owned by `entity`, or kNoCharacter.
 CharacterId NpcCharacterOf(unsigned entity);
 
