@@ -255,9 +255,9 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
     // cascade 0 and too little for cascade 3 (#117).
     program.SetVec4("uShadowTexelWorld", shadowMap.TexelWorldSizesVec4());
     // Penumbra width in shadow-map texels, from the sun's apparent size. 0.53 deg (real sun) ->
-    // a tight ~2 texel edge; crank the light's Angular Size for softer.
-    program.SetFloat("uShadowSoftness",
-        std::clamp(in.sunAngularDeg * 3.0f, 1.0f, 14.0f) * in.sunShadowSoftness);
+    // a tight ~2 texel edge; crank the light's Angular Size for softer. Softness 0 sends 0 = a
+    // hard single-tap edge.
+    program.SetFloat("uShadowSoftness", CascadedShadowMap::SunKernelTexels(in.sunAngularDeg, in.sunShadowSoftness));
     // Per-light sun shadow multipliers (#140 phase 2); 1.0 == pre-phase-2 output.
     program.SetFloat("uSunShadowBias", in.sunShadowBias);
     program.SetFloat("uSunShadowNormalBias", in.sunShadowNormalBias);

@@ -1244,6 +1244,7 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
         root["shadowResolution"] = world.ShadowResolution;
         root["shadowCascades"] = world.ShadowCascades;
         root["shadowDistance"] = world.ShadowDistance;
+        root["shadowCascadeSplit"] = world.ShadowCascadeSplit;
         root["maxSpotShadows"] = world.MaxSpotShadows;
         root["maxPointShadows"] = world.MaxPointShadows;
     }
@@ -1642,6 +1643,7 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
             world.ShadowResolution = root.value("shadowResolution", 4096);
             world.ShadowCascades   = root.value("shadowCascades", 4);
             world.ShadowDistance   = root.value("shadowDistance", 500.0f);
+            world.ShadowCascadeSplit = std::clamp(root.value("shadowCascadeSplit", 0.75f), 0.0f, 0.98f);
         } else {
             MigratePostProcessSettingsFromPrefs(world);
         }
