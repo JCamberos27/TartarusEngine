@@ -56,6 +56,15 @@ void CascadedShadowMap::Configure(int resolution, int count) {
                    std::to_string(resolution) + "x" + std::to_string(count) + ")");
 }
 
+void CascadedShadowMap::SetSplitLambda(float lambda) {
+    m_SplitLambda = std::isfinite(lambda) ? std::clamp(lambda, 0.0f, 0.98f) : 0.75f;
+}
+
+float CascadedShadowMap::SunKernelTexels(float angularDeg, float softness) {
+    if (!(softness > 0.0f)) return 0.0f;
+    return std::clamp(angularDeg * 3.0f, 1.0f, 14.0f) * softness;
+}
+
 void CascadedShadowMap::Update(const glm::mat4& camView, const glm::mat4& camProj,
                                const glm::vec3& lightDir, float shadowDistance,
                                const glm::vec3* casterMin, const glm::vec3* casterMax) {
@@ -79,7 +88,7 @@ void CascadedShadowMap::Update(const glm::mat4& camView, const glm::mat4& camPro
     camFar  = std::min(camFar, camNear + std::max(shadowDistance, 1.0f));
 
     // Practical split scheme (blend of logarithmic and uniform).
-    const float lambda = 0.75f;
+    const float lambda = m_SplitLambda;
     for (int i = 0; i < m_Count; ++i) {
         float p = float(i + 1) / float(m_Count);
         float logSplit = camNear * std::pow(camFar / camNear, p);
@@ -206,7 +215,9 @@ bool CascadedShadowMap::CasterReachesSlice(int c, const glm::vec3& boundsMin, co
         lo = glm::min(lo, xy);
         hi = glm::max(hi, xy);
     }
-    const float texels = std::max(kernelTexels, 0.5f) * (1.0f + 0.35f * (float)c) * 1.25f + std::max(normalBias, 0.0f) + 3.0f;
+    // A hard kernel (0) still reaches the 2x2 compare's neighbour; the 3-texel slack covers it.
+    const float texels = (kernelTexels > 0.0f ? std::max(kernelTexels, 0.5f) * (1.0f + 0.35f * (float)c) * 1.25f : 0.0f) +
+                         std::max(normalBias, 0.0f) + 3.0f;
     const float margin = texels * 2.0f / (float)std::max(m_Resolution, 1);
     lo -= glm::vec2(margin);
     hi += glm::vec2(margin);

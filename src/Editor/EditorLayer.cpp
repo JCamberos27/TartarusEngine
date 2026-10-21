@@ -1065,10 +1065,10 @@ void EditorLayer::DrawShadowSettings(World& world, float w) {
         EditorUI::SetTooltip("Master switch for all real-time shadows: the Directional light's cascades and\n"
                              "spot / point light shadow maps. Individual lights still need Shadows enabled.");
 
-    static const char* kShadowResLabels[] = { "1024", "2048", "4096" };
-    static const int   kShadowResValues[] = { 1024, 2048, 4096 };
+    static const char* kShadowResLabels[] = { "1024", "2048", "4096", "8192" };
+    static const int   kShadowResValues[] = { 1024, 2048, 4096, 8192 };
     int srIdx = 1;
-    for (int i = 0; i < 3; ++i) if (kShadowResValues[i] == world.ShadowResolution) { srIdx = i; break; }
+    for (int i = 0; i < IM_ARRAYSIZE(kShadowResValues); ++i) if (kShadowResValues[i] == world.ShadowResolution) { srIdx = i; break; }
     if (!world.ShadowsEnabled) ImGui::BeginDisabled();
     ImGui::SetNextItemWidth(w);
     if (ImGui::Combo("Shadow resolution", &srIdx, kShadowResLabels, IM_ARRAYSIZE(kShadowResLabels))) {
@@ -1076,7 +1076,8 @@ void EditorLayer::DrawShadowSettings(World& world, float w) {
         world.ShadowResolution = kShadowResValues[srIdx];
     }
     if (ImGui::IsItemHovered())
-        EditorUI::SetTooltip("Per-cascade shadow map size. 4x memory + fill from 2048 to 4096.");
+        EditorUI::SetTooltip("Per-cascade shadow map size; spot lights use it too, up to 4096.\n"
+                             "Each step is 4x the memory: one 4096 cascade is 64 MiB, one 8192 cascade 256 MiB.");
 
     static const char* kCascadeLabels[] = { "2", "3", "4" };
     int ccIdx = std::clamp(world.ShadowCascades - 2, 0, 2);
@@ -1097,6 +1098,18 @@ void EditorLayer::DrawShadowSettings(World& world, float w) {
     }
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("How far from the camera the cascades cover. Shorter = crisper shadows.");
+
+    ImGui::SetNextItemWidth(w);
+    {
+        bool activated = false;
+        EditorUI::SliderFloat("Cascade split", &world.ShadowCascadeSplit, 0.5f, 0.98f, "%.2f",
+                              ImGuiSliderFlags_AlwaysClamp, &activated);
+        if (activated) PushUndo(world, "Edit Cascade Split");
+    }
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("How the cascades share the shadow distance. Higher packs the first cascades\n"
+                             "tighter around the camera: sharper shadows up close, coarser far away.\n"
+                             "0.75 is the default; Shadow distance barely moves the near cascades, this does.");
 
     // #110 - local-light shadow budgets. The most important shadowed lights (nearest/brightest
     // from the camera) take the slots; the rest light without a shadow and say so in the Inspector.

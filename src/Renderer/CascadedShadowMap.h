@@ -25,6 +25,17 @@ public:
     // [1, kMaxCascades].
     void Configure(int resolution, int count);
 
+    // Practical split blend: 0 = uniform splits, 1 = fully logarithmic. Higher packs the first
+    // cascades tighter around the camera (sharper near shadows, coarser far ones). Clamped to
+    // [0, 0.98]; 0.75 is the long-standing default. Takes effect on the next Update().
+    void SetSplitLambda(float lambda);
+    float SplitLambda() const { return m_SplitLambda; }
+
+    // Sun PCF kernel radius in shadow-map texels, before SunShadow's per-cascade widening: the
+    // light's apparent size sets it, the light's Shadow Softness scales it. Softness <= 0 returns
+    // 0, which the shader reads as "hard": one hardware 2x2 compare, no Poisson disk.
+    static float SunKernelTexels(float angularDeg, float softness);
+
     // Recomputes cascade splits + light matrices for this frame. `lightDir` is the direction the
     // sunlight travels (normalized inside). `camView`/`camProj` are the matrices of whichever
     // view is about to be rendered; `shadowDistance` caps how far cascades reach (world units).
@@ -84,6 +95,7 @@ private:
     unsigned int m_LayeredFbo = 0; // every layer attached, for BeginLayered()
     int m_Resolution = 2048;
     int m_Count = 4;
+    float m_SplitLambda = 0.75f;
 
     std::array<glm::mat4, kMaxCascades> m_LightViewProj{};
     std::array<float, kMaxCascades> m_SplitFar{};

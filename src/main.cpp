@@ -3375,6 +3375,7 @@ int main(int argc, char** argv) {
                 // which the state cache then skips rebinding.
                 std::sort(sunCasters.begin(), sunCasters.end(),
                           [](const SunCaster& a, const SunCaster& b) { return a.model < b.model; });
+                shadowMap.SetSplitLambda(world.ShadowCascadeSplit);
                 shadowMap.Update(fitView, fitProj, frameSunDir, world.ShadowDistance, &casterMin, &casterMax);
 
                 glEnable(GL_DEPTH_TEST);
@@ -3396,7 +3397,7 @@ int main(int argc, char** argv) {
                 const int cascadeCount = shadowMap.Count();
                 // A caster goes into a cascade only if its shadow can land where that cascade is read
                 // (CascadedShadowMap::CasterReachesSlice), with the PCF kernel SunShadow uses.
-                const float sunKernelTexels = std::clamp(frameSunAngularDeg * 3.0f, 1.0f, 14.0f) * frameSunShadowSoftness;
+                const float sunKernelTexels = CascadedShadowMap::SunKernelTexels(frameSunAngularDeg, frameSunShadowSoftness);
                 auto castsInto = [&](const SunCaster& sc, int c, const Frustum& cascadeFrustum) {
                     if (!sc.bounded) return true;
                     return cascadeFrustum.Intersects(sc.bounds) &&
@@ -3467,7 +3468,7 @@ int main(int argc, char** argv) {
             // Layers are allocated for the budget, not the hard ceiling (#110); a zero budget
             // still keeps one layer so sampler unit 9 is never unbound.
             if (world.ShadowsEnabled) {
-                spotShadowMap.Configure(std::min(world.ShadowResolution, 2048), std::max(spotShadowBudget, 1));
+                spotShadowMap.Configure(std::min(world.ShadowResolution, 4096), std::max(spotShadowBudget, 1));
             }
             // #163 - spot/point shadows render once per frame, so they use the LOD levels of the
             // camera the user is mainly looking through (each view's draw re-applies its own).

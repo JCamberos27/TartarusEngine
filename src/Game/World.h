@@ -142,6 +142,9 @@ public:
     int   ShadowResolution{4096};
     int   ShadowCascades{4};
     float ShadowDistance{500.0f};
+    // Cascade split blend (CascadedShadowMap::SetSplitLambda): higher = tighter, sharper near
+    // cascades. 0.75 matches every scene saved before the setting existed.
+    float ShadowCascadeSplit{0.75f};
     // #110 - shadow budgets for local lights: how many shadowed spot / point lights get a map
     // each frame (the most important ones, scored in main.cpp). Clamped to 0..SpotShadowMap::
     // kMaxSpots / PointShadowMap::kMaxPoints on load and in the UI.
