@@ -121,6 +121,7 @@ int BulletHoleList::Emit(const World& world, std::vector<RuntimeDecal>& out, con
 }
 
 int BulletHoleList::Submit(const World& world) {
+    DecalPerf::SubmitScope perf;
     DecalSystem* ds = DecalSystem::Current();
     if (!ds || m_Holes.empty()) return 0;
     static std::vector<RuntimeDecal> decals;

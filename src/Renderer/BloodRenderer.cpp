@@ -154,6 +154,7 @@ constexpr unsigned kSplatBinding = 6;
 } // namespace
 
 void BloodRenderer::SetSplats(const std::vector<Splat>& splats, const std::vector<std::pair<unsigned, glm::ivec2>>& ranges) {
+    DecalPerf::SubmitScope perf;
     m_SplatRanges.clear();
     m_SplatCount = 0;
     DecalSystem* ds = DecalSystem::Current();
@@ -493,6 +494,7 @@ int BloodRenderer::ToRuntime(const Decal& d, RuntimeDecal out[2]) {
 }
 
 int BloodRenderer::AddDecal(const Decal& d) {
+    DecalPerf::SubmitScope perf;
     DecalSystem* ds = DecalSystem::Current();
     if (!ds) return 0;
     RuntimeDecal r[2];

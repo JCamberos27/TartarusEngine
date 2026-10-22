@@ -7,13 +7,16 @@
 #include "ProjectPaths.h"
 #include "ProjectSettings.h"
 #include "Log.h"
+#include "TimeService.h"
 #include "gl.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/packing.hpp>
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 
@@ -143,12 +146,80 @@ void PackDecal(const DecalAsset& a, const DecalComponent& dc, const DecalTexture
 
 } // namespace
 
+namespace DecalPerf {
+namespace {
+struct State {
+    std::uint64_t Frame = ~0ull;
+    double FramePrepare = 0.0, FrameSubmit = 0.0;
+    std::vector<float> Totals; // per frame: prepare + submit (ms)
+    double SumPrepare = 0.0, SumSubmit = 0.0, MaxTotal = 0.0;
+    std::uint64_t MaxFrame = 0, Calls = 0, Dropouts = 0;
+};
+State& S() {
+    static State s;
+    return s;
+}
+long long NowNs() {
+    return (long long)std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+void Close() {
+    State& s = S();
+    if (s.Frame == ~0ull) return;
+    const double total = s.FramePrepare + s.FrameSubmit;
+    s.Totals.push_back((float)total);
+    s.SumPrepare += s.FramePrepare;
+    s.SumSubmit += s.FrameSubmit;
+    if (total > s.MaxTotal) {
+        s.MaxTotal = total;
+        s.MaxFrame = s.Frame;
+    }
+    s.FramePrepare = s.FrameSubmit = 0.0;
+}
+void Roll() {
+    State& s = S();
+    const std::uint64_t f = Time::FrameCount();
+    if (f == s.Frame) return;
+    Close();
+    s.Frame = f;
+    if (!s.Totals.empty() && s.Totals.size() % 600 == 0) Report();
+}
+} // namespace
+
+void AddPrepare(double ms) {
+    Roll();
+    S().FramePrepare += ms;
+    ++S().Calls;
+}
+void AddSubmit(double ms) {
+    Roll();
+    S().FrameSubmit += ms;
+}
+void AddDropout() { ++S().Dropouts; }
+void Report() {
+    const State& s = S();
+    if (s.Totals.empty()) return;
+    std::vector<float> t = s.Totals;
+    std::sort(t.begin(), t.end());
+    const double n = (double)t.size();
+    std::printf("[DecalPerf] frames %zu, prepares %llu: prepare %.4f ms/frame, submit %.4f ms/frame, median %.4f, p99 %.4f, "
+                "max %.3f ms (frame %llu), frames over 1 ms %d, over 4 ms %d, dropouts %llu\n",
+                t.size(), (unsigned long long)s.Calls, s.SumPrepare / n, s.SumSubmit / n, t[t.size() / 2],
+                t[std::min(t.size() - 1, (size_t)(n * 0.99))], s.MaxTotal, (unsigned long long)s.MaxFrame,
+                (int)(t.end() - std::upper_bound(t.begin(), t.end(), 1.0f)),
+                (int)(t.end() - std::upper_bound(t.begin(), t.end(), 4.0f)), (unsigned long long)s.Dropouts);
+    std::fflush(stdout);
+}
+SubmitScope::SubmitScope() : Start(NowNs()) {}
+SubmitScope::~SubmitScope() { AddSubmit((double)(NowNs() - Start) * 1e-6); }
+} // namespace DecalPerf
+
 DecalSystem::DecalSystem() : m_Textures(std::make_unique<DecalTextureArrays>()) { s_Active = this; }
 
 DecalSystem* DecalSystem::Current() { return s_Active; }
 
 DecalSystem::~DecalSystem() {
     if (s_Active == this) s_Active = nullptr;
+    DecalPerf::Report();
     if (m_DecalBuf) glDeleteBuffers(1, &m_DecalBuf);
     if (m_BoundsBuf) glDeleteBuffers(1, &m_BoundsBuf);
     if (m_SubBuf) glDeleteBuffers(1, &m_SubBuf);
@@ -411,6 +482,15 @@ void DecalSystem::BinCluster(const std::vector<Decals::GpuDecalBounds>& bounds, 
 
 int DecalSystem::Prepare(World& world, const glm::mat4& viewProj, const glm::vec3& cameraPos, float maxDistance,
                          const DecalGrading& grading, bool includeGhost) {
+    struct Timer {
+        std::chrono::steady_clock::time_point T0 = std::chrono::steady_clock::now();
+        ~Timer() { DecalPerf::AddPrepare(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - T0).count()); }
+    } timer;
+    ++m_PrepareNo;
+    auto dropout = [&](uint32_t entityKey) {
+        const auto it = m_DrawnAt.find(entityKey);
+        if (it != m_DrawnAt.end() && m_PrepareNo - it->second <= 2) DecalPerf::AddDropout();
+    };
     m_Grading = grading;
     m_Textures->SetBudgetMB(ProjectSettings::Quality().DecalTextureBudgetMB);
     // Hot reload: an edited .decal is re-read (and its textures re-decoded) within about a second.
@@ -475,12 +555,12 @@ int DecalSystem::Prepare(World& world, const glm::mat4& viewProj, const glm::vec
         const auto reveal = m_Reveals.find(entityKey);
         if (reveal != m_Reveals.end()) src.Aux = reveal->second.Aux;
         const DecalTextureArrays::Slot* slot = m_Textures->Request(src);
-        if (!slot) return;
+        if (!slot) { dropout(entityKey); return; }
         const float fade = d > fadeStart ? 1.0f - (d - fadeStart) / std::max(maxDistance - fadeStart, 1e-3f) : 1.0f;
         const int frame = dc.Frame >= 0 ? dc.Frame : FrameFor(dc.Seed, asset->AtlasCols * asset->AtlasRows);
         PackDecal(*asset, dc, *slot, m_Grading, fade, frame, inst.Gpu);
         if (reveal != m_Reveals.end()) {
-            if (!(slot->TexFlags & Decals::FLAG_HAS_AUX_TEX)) return; // the order didn't decode: nothing shows yet
+            if (!(slot->TexFlags & Decals::FLAG_HAS_AUX_TEX)) { dropout(entityKey); return; } // the order didn't decode: nothing shows yet
             inst.Gpu.Ids.x &= ~((uint32_t)Decals::CH_EMISSIVE << 16); // the aux is the order now, not the glow mask
             inst.Gpu.Ids.z |= Decals::FLAG_REVEAL;
             inst.Gpu.H2.w = Half2(std::max(reveal->second.Threshold, 0.0f), std::max(reveal->second.Band, 1e-3f));
@@ -500,6 +580,7 @@ int DecalSystem::Prepare(World& world, const glm::mat4& viewProj, const glm::vec
         inst.SortKey = PackSortKey(dc.SortOrder, entityKey, dc.Seed);
         m_Frame.push_back(inst);
         dist.push_back(d);
+        m_DrawnAt[entityKey] = m_PrepareNo;
     };
 
     for (auto [entity, dc] : reg.view<const DecalComponent>().each()) {
