@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 
 namespace {
 
@@ -352,6 +353,16 @@ void EditorLayer::UpdateRadialMenu(World& world, Camera& editorCamera, bool scen
 
         // The label follows the ring (TextOnPath), centred on the wedge.
         const bool lower = u.y > 0.05f;
+        // Never wider than the wedge's arc, so neighbours can't collide: cut with a dot.
+        const float arcW = 2.0f * IM_PI * rLabel / (float)count - Glass::Px(6.0f);
+        char fitted[32];
+        std::snprintf(fitted, sizeof(fitted), "%s", label);
+        for (size_t n = std::strlen(fitted); n > 2 && ImGui::CalcTextSize(fitted).x > arcW; ) {
+            --n;
+            fitted[n - 1] = '.';
+            fitted[n] = 0;
+        }
+        label = fitted;
         const float tw = ImGui::CalcTextSize(label).x;
         const float s = lower ? Wrap2Pi(IM_PI - ang) * (lenCCW / (2.0f * IM_PI)) : Wrap2Pi(ang - IM_PI) * (lenCW / (2.0f * IM_PI));
         Glass::ImAnimContext::TextOnPath(lower ? pathCCW : pathCW, label, c, Tone(tone, pa * (enabled ? 1.0f : 0.7f)),

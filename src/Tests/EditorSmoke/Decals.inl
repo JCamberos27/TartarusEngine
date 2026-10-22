@@ -16,6 +16,7 @@ struct EditorSmokeAccess_Decals {
     static void SetTool(EditorLayer& e, int m) { e.SetDecalTool((EditorLayer::DecalToolMode)m); }
     static void Grime(EditorLayer& e, World& w) { e.RunAutoGrime(w); }
     static void Select(EditorLayer& e, entt::entity en) { e.SelectItem(en, false); }
+    static void Gizmos(EditorLayer& e, bool on) { e.m_GizmosMasterVisible = on; e.m_ShowEntityIcons = on; e.m_ShowGrid = on; }
     static void Deselect(EditorLayer& e) { e.ClearSelection(); }
     static int RadialBuild(EditorLayer& e) { return e.DecalRadialBuild(); }
     static void RadialRun(EditorLayer& e, int i) { e.RunDecalRadialItem(i); }
@@ -93,7 +94,7 @@ void RegisterDecalsTests() {
         Do("open the Apartment Hallway", [](Ctx& c) {
             EditorSmokeAccess_Scenes::Open(c.E, c.W, c.A, ProjectPaths::Resolve("scenes/Apartment Hallway.json"));
         }),
-        Wait(120), Aim(), Wait(5),
+        Wait(120), Aim(), Do("gizmos, icons and grid off for the shots", [](Ctx& c) { SA::Gizmos(c.E, false); }), Wait(5),
         // --- Library
         Do("open the Decal Library", [](Ctx& c) { SA::Library(c.E, true); }), Wait(4),
         Until("the packs are indexed", [](Ctx& c) { return SA::Ed(c.E).ScanDone; }, 2400),
@@ -155,10 +156,46 @@ void RegisterDecalsTests() {
             return n == g_Saved && n > 0 ? std::string() : "decal count " + std::to_string(n) + " vs saved " + std::to_string(g_Saved);
         }),
         Shot("reloaded"),
+        Do("gizmos back", [](Ctx& c) { SA::Gizmos(c.E, true); }),
     }, [](Ctx& c) {
         SA::SetTool(c.E, 0);
         SA::Library(c.E, false);
         std::error_code ec;
         if (!g_File.empty()) fs::remove(g_File, ec);
+    });
+}
+
+void RegisterDecalsLitTests() {
+    using namespace smoke_decals;
+    Add("decals: a lit render of an auto-grimed room", {
+        Do("allow errors naming the external files missing here", [](Ctx&) {
+            for (const std::string& name : smoke_scenes::MissingExternalFiles()) g_AllowLog.push_back(name);
+            if (!smoke_scenes::MissingExternalFiles().empty())
+                g_AllowLog.push_back("Enemy AI: the soldier's body has no animated skeleton");
+        }),
+        FreshScene(), Wait(2),
+        Do("open the Apartment Hallway", [](Ctx& c) {
+            EditorSmokeAccess_Scenes::Open(c.E, c.W, c.A, ProjectPaths::Resolve("scenes/Apartment Hallway.json"));
+        }),
+        Wait(120),
+        Do("open the library to index", [](Ctx& c) { SA::Library(c.E, true); }),
+        Until("indexed", [](Ctx& c) { return SA::Ed(c.E).ScanDone; }, 2400),
+        Do("close it", [](Ctx& c) { SA::Library(c.E, false); }),
+        Pick("Squat"), SelectRoom(),
+        Do("auto-grime", [](Ctx& c) { SA::Grime(c.E, c.W); }), Wait(10),
+        Do("clean view", [](Ctx& c) {
+            // The room is night-dark (the Apartment's own lamps are off in the editor): one soft work light so the grime can be judged.
+            const entt::entity lamp = c.W.CreateEmptyEntity(glm::vec3(-2.5f, 2.1f, -7.1f), glm::vec3(0.0f), glm::vec3(1.0f), "Review light");
+            LightComponent& lc = c.W.Registry.emplace<LightComponent>(lamp);
+            lc.Intensity = 6.0f;
+            lc.Range = 9.0f;
+            lc.Color = glm::vec3(1.0f, 0.93f, 0.8f);
+            SA::Deselect(c.E);
+            SA::Gizmos(c.E, false);
+            c.Cam.Position = glm::vec3(-2.5f, 1.5f, -5.0f);
+            c.Cam.Yaw = -90.0f;
+            c.Cam.Pitch = -3.0f;
+        }), Wait(60), Shot("grime-lit"),
+        Do("gizmos back", [](Ctx& c) { SA::Gizmos(c.E, true); }),
     });
 }
