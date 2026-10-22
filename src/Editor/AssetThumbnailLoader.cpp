@@ -41,6 +41,19 @@ bool MakeImageThumb(const std::string& path, std::vector<unsigned char>& out) {
     stbi_image_free(src);
     return true;
 }
+
+// Mask thumbnails are cached in the entries and queues under the file path plus this tag.
+constexpr char kMaskTag = '';
+std::string MaskKey(const std::string& path, bool inverted) { return path + kMaskTag + (inverted ? 'i' : 'm'); }
+
+// The thumbnail's pixels turned into white paint whose opacity is the luminance (1 - it, inverted).
+void LumaToAlpha(std::vector<unsigned char>& px, bool inverted) {
+    for (size_t i = 0; i + 3 < px.size(); i += 4) {
+        const float l = (0.2126f * px[i] + 0.7152f * px[i + 1] + 0.0722f * px[i + 2]) * (px[i + 3] / 255.0f) / 255.0f;
+        px[i] = px[i + 1] = px[i + 2] = 255;
+        px[i + 3] = (unsigned char)std::lround((inverted ? px[i + 3] / 255.0f - l : l) * 255.0f);
+    }
+}
 } // namespace
 
 AssetThumbnailLoader::AssetThumbnailLoader() {
@@ -71,17 +84,23 @@ void AssetThumbnailLoader::Worker() {
         if (job.From == Source::Cached) {
             ThumbnailCache::LoadAnyVersion(job.Path, kSize, r.Pixels);
         } else {
+            // A mask thumbnail's key is the file plus a tag; it is made from the file's image thumbnail.
+            const bool mask = job.From == Source::Mask || job.From == Source::MaskInverted;
+            const std::string file = mask ? job.Path.substr(0, job.Path.find(kMaskTag)) : job.Path;
             // Keyed by the image's mtime and .meta, so an edited file is decoded again.
-            const std::uint64_t key = ThumbnailCache::DependencyKey(job.Path, {});
-            if (!ThumbnailCache::Load(job.Path, kSize, key, r.Pixels) && MakeImageThumb(job.Path, r.Pixels))
-                ThumbnailCache::Save(job.Path, kSize, key, r.Pixels.data());
+            const std::uint64_t key = ThumbnailCache::DependencyKey(file, {});
+            if (!ThumbnailCache::Load(file, kSize, key, r.Pixels) && MakeImageThumb(file, r.Pixels))
+                ThumbnailCache::Save(file, kSize, key, r.Pixels.data());
+            if (mask && !r.Pixels.empty()) LumaToAlpha(r.Pixels, job.From == Source::MaskInverted);
         }
         std::lock_guard<std::mutex> lk(m_Mutex);
         m_Done.push_back(std::move(r));
     }
 }
 
-AssetThumbnailLoader::Thumb AssetThumbnailLoader::Get(const std::string& path, Source source) {
+AssetThumbnailLoader::Thumb AssetThumbnailLoader::Get(const std::string& pathIn, Source source) {
+    const bool mask = source == Source::Mask || source == Source::MaskInverted;
+    const std::string path = mask ? MaskKey(pathIn, source == Source::MaskInverted) : pathIn;
     auto it = m_Entries.find(path);
     if (it != m_Entries.end()) {
         m_Lru.splice(m_Lru.begin(), m_Lru, it->second.Lru);
@@ -145,6 +164,8 @@ void AssetThumbnailLoader::Remove(std::unordered_map<std::string, Entry>::iterat
 
 void AssetThumbnailLoader::Invalidate(const std::string& path) {
     Remove(m_Entries.find(path));
+    Remove(m_Entries.find(MaskKey(path, false)));
+    Remove(m_Entries.find(MaskKey(path, true)));
 }
 
 void AssetThumbnailLoader::Clear() {
