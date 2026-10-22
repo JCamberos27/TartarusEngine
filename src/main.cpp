@@ -1914,6 +1914,7 @@ int main(int argc, char** argv) {
                 smokeScenePaths.assign(1, ProjectPaths::Resolve(opt.npcTestScenario == "sandbox" ? "scenes/Arena.json"
                                                               : opt.npcTestScenario == "blood" ? "scenes/BloodTest.json"
                                                               : opt.npcTestScenario == "ragdoll" ? "scenes/RagdollTest.json"
+                                                              : opt.npcTestScenario == "escape" || opt.npcTestScenario == "escapeshut" || opt.npcTestScenario == "aptwounds" || opt.npcTestScenario == "aptfight" ? "scenes/Apartment Hallway.json"
                                                               : opt.npcTestScenario == "decals" ? "scenes/Apartment Hallway.json"
                                                                                            : "scenes/Arena.json"));
             std::cout << "[SmokeTest] Found " << smokeScenePaths.size() << " scene(s) under "
@@ -4624,16 +4625,21 @@ int main(int argc, char** argv) {
                     PROFILE_GPU_SCOPE("Upscale");
                     upscaler.Apply(gameLdr.ColorTexture(), rw, rh, outFbo, 0, 0, outW, outH, EditorSettings::Get().RenderSharpness);
                 }
-                if (playing && playUsesPlayer)
-                    crosshair.Draw(outFbo, outW, outH,
-                                   gravityGunLive() && gravityGun.IsHolding(),
-                                   gravityGunLive() && gravityGun.IsCharging() ? gravityGun.Charge() : -1.0f,
-                                   crosshairDot(view, proj, outW, outH));
-                if (playing && playUsesPlayer && npcDirector.Active()) {
-                    playerHud.Draw(outFbo, outW, outH,
-                                   MakePlayerHudState(playerVitals, player.Cam.Position, player.Cam.Yaw), (float)glfwGetTime());
-                    drawCombatHud(outFbo, outW, outH, view, proj);
+                // No HUD until it's redesigned: the crosshair (and the gravity gun's hold / charge rings), the vitals HUD and the
+                // combat HUD's player half (ammo, kill feed, radio subtitles, awareness chevrons) are all off. The combat HUD
+                // still draws the AI debug overlay (F9, a dev tool) when it's on.
+                constexpr bool kShowHud = false;
+                if constexpr (kShowHud) {
+                    if (playing && playUsesPlayer)
+                        crosshair.Draw(outFbo, outW, outH,
+                                       gravityGunLive() && gravityGun.IsHolding(),
+                                       gravityGunLive() && gravityGun.IsCharging() ? gravityGun.Charge() : -1.0f,
+                                       crosshairDot(view, proj, outW, outH));
+                    if (playing && playUsesPlayer && npcDirector.Active())
+                        playerHud.Draw(outFbo, outW, outH,
+                                       MakePlayerHudState(playerVitals, player.Cam.Position, player.Cam.Yaw), (float)glfwGetTime());
                 }
+                if (playing && playUsesPlayer && npcDirector.Active()) drawCombatHud(outFbo, outW, outH, view, proj);
             };
 
             // --- Game View offscreen pass -----------------------------------------------------

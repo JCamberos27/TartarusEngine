@@ -203,7 +203,7 @@ void RegisterEngineComponents() {
                     "from these spawns (see Squad Settings); replacements come back at the one farthest\n"
                     "out of the player's sight.";
         m.Fields = {
-            { "Weapon", T::Enum, TARTARUS_REFLECT_FIELD(NpcSpawnComponent, Weapon), 0.0f, "What the soldier carries." },
+            { "Weapon", T::Enum, TARTARUS_REFLECT_FIELD(NpcSpawnComponent, Weapon), 0.0f, "What the soldier carries (None: unarmed)." },
             { "Squad", T::Int, TARTARUS_REFLECT_FIELD(NpcSpawnComponent, Squad), 1.0f,
               "Soldiers with the same Squad share what they know and fight together.", 0.0f, 16.0f },
             { "Skill", T::Float, TARTARUS_REFLECT_FIELD(NpcSpawnComponent, Skill), 0.01f,
@@ -211,11 +211,11 @@ void RegisterEngineComponents() {
             { "Outfit Seed", T::Int, TARTARUS_REFLECT_FIELD(NpcSpawnComponent, OutfitSeed), 1.0f,
               "Which random outfit. 0 = a different one every Play.", 0.0f, 100000.0f },
             { "Brain", T::Enum, TARTARUS_REFLECT_FIELD(NpcSpawnComponent, Brain), 0.0f,
-              "Squad AI, or a Training Dummy that just stands there and takes hits." },
+              "Squad AI, or a Training Dummy that just stands there and takes hits (it can still go down wounded)." },
             { "Bare", T::Bool, TARTARUS_REFLECT_FIELD(NpcSpawnComponent, Bare), 0.0f,
               "No outfit: the soldier spawns as the bare body." },
         };
-        m.Fields[0].EnumLabels = "AKS-74U\0Remington 870\0Random\0"; m.Fields[0].EnumCount = 3;
+        m.Fields[0].EnumLabels = "AKS-74U\0Remington 870\0Random\0None\0"; m.Fields[0].EnumCount = 4;
         m.Fields[2].Slider = true; m.Fields[2].Format = "%.2f";
         m.Fields[4].EnumLabels = "Squad AI\0Training Dummy\0"; m.Fields[4].EnumCount = 2;
         Register<NpcSpawnComponent>(std::move(m));
@@ -240,7 +240,7 @@ void RegisterEngineComponents() {
             { "Stagger Time", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, StaggerTime), 0.01f,
               "Seconds an enemy's aim is paused after a heavy hit.", 0.0f, 5.0f },
             { "Bleed-Out Time", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, BleedOutTime), 0.5f,
-              "A wounded (downed) enemy dies this many seconds after going down.", 0.0f, 300.0f },
+              "A gut-shot (dying) enemy dies this many seconds after going down. One crawling on its belly crawls on until it is finished off.", 0.0f, 300.0f },
             { "Crawl Speed", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, CrawlSpeed), 0.01f,
               "A wounded enemy crawls at this speed (m/s).", 0.0f, 5.0f },
             { "Limp Speed Scale", T::Float, TARTARUS_REFLECT_FIELD(SquadSettingsComponent, LimpSpeedScale), 0.01f,
@@ -354,6 +354,9 @@ void RegisterEngineComponents() {
               "Seconds from shut to open.", 0.05f, 10.0f },
             { "Start Open", T::Bool, TARTARUS_REFLECT_FIELD(OpenableComponent, StartOpen), 0.0f,
               "Open when Play starts." },
+            { "Swing Back", T::Bool, TARTARUS_REFLECT_FIELD(OpenableComponent, SwingBack), 0.0f,
+              "A hinge or flap opens toward local -Z (the back face) instead of the front, its pin on the back face: an "
+              "apartment door modelled with its chain and thumb-turn on the back, swinging into the room." },
             { "Open Sound", T::String, TARTARUS_REFLECT_FIELD(OpenableComponent, OpenSound), 0.0f,
               "Audio assets played as it starts to open; ';'-separated variants, one picked per play. Empty = silent." },
             { "Close Sound", T::String, TARTARUS_REFLECT_FIELD(OpenableComponent, CloseSound), 0.0f,
@@ -2296,6 +2299,19 @@ void RegisterEngineComponents() {
                 { "Reactions", "Head Kill Limp", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, HeadKillLimp), 0.02f, "A head kill: the arms' and neck's muscle times (Tone Time) are scaled by this, so the body goes limp at once. 1 = no different from a body kill.", 0.05f, 1.0f },
                 { "Corpse Hits", "Corpse Wake Time", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, CorpseWakeTime), 0.02f, "Seconds a body at rest stays loose (no settling, joint friction low) after a round hits it, so the limb the round struck visibly reacts before the body settles and sleeps again.", 0.0f, 3.0f },
                 { "Corpse Hits", "Corpse Shot Max Speed", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, CorpseShotMaxSpeed), 0.1f, "The most speed (m/s) a round adds to the part it struck on a body at rest, however heavy the round.", 0.5f, 20.0f },
+                { "Wound Fall", "Wound Fall Leg Strength", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundFallLegStrength), 0.02f, "A soldier shot down by a leg falls as a powered ragdoll: the hurt leg gives at once (Hit Weakness), the other holds at this strength fraction for Wound Fall Leg Hold, then gives too.", 0.0f, 1.0f },
+                { "Wound Fall", "Wound Fall Leg Hold", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundFallLegHold), 0.01f, "Seconds the good leg holds before it gives.", 0.0f, 2.0f },
+                { "Wound Fall", "Wound Fall Push", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundFallPush), 0.05f, "m/s of topple on the chest, forward and toward the hurt leg: he goes down over the leg that gave (the round's own shove is added).", 0.0f, 5.0f },
+                { "Wound Fall", "Wound Fall Tone", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundFallTone), 0.005f, "Strength fraction a living body keeps while it is down (a dead one keeps the Tone Residual).", 0.0f, 0.5f },
+                { "Wound Fall", "Wound Recover Speed", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundRecoverSpeed), 0.01f, "Down (pelvis or chest on the ground) and every part slower than this (m/s): the body blends back into the animated prone pose.", 0.05f, 3.0f },
+                { "Wound Fall", "Wound Recover Min Time", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundRecoverMinTime), 0.05f, "Seconds after the hit before the body may take the animated pose back (the limbs slump first).", 0.2f, 5.0f },
+                { "Wound Fall", "Wound Recover Max Time", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundRecoverMaxTime), 0.05f, "The longest the fall may take: still moving after this (draped over something), it takes the pose back anyway.", 0.5f, 10.0f },
+                { "Wound Fall", "Wound Blend Time", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundBlendTime), 0.02f, "Seconds every bone blends from where the fall left it to the animated prone pose.", 0.05f, 2.0f },
+                { "Wound Fall", "Wound Blend Speed", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundBlendSpeed), 0.05f, "The fastest (m/s) a hand, foot or the head moves blending in: a limb the fall left further from the prone pose than that allows takes longer (up to 2.5x Wound Blend Time), drawn in rather than whipped.", 0.5f, 10.0f },
+                { "Wound Fall", "Wound Face Up", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundFaceUp), 0.02f, "Landed with his chest and pelvis facing up past this (the up share of their front): on his back - he rolls himself over onto his belly (Wound Roll Impulse) before he crawls.", -1.0f, 1.0f },
+                { "Wound Fall", "Wound Roll Impulse", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundRollImpulse), 1.0f, "On his back after the fall, the heave (N s) under his far shoulder and hip that rolls him onto his belly, over the good leg. 0 = he lies on his back where he fell.", 0.0f, 200.0f },
+                { "Wound Fall", "Wound Roll Tries", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundRollTries), 1.0f, "How many heaves he makes (each a third harder) before the animated pose turns him over instead (Wound Roll Blend Time).", 0.0f, 10.0f },
+                { "Wound Fall", "Wound Roll Blend Time", TARTARUS_REFLECT_FIELD(RagdollSettingsComponent, WoundRollBlendTime), 0.05f, "Every heave spent and still on his back: seconds the animated pose takes to turn him from how he lies onto his belly, into the crawl. 0 = he lies on his back where he fell.", 0.0f, 3.0f },
             };
             for (const R2& r : rows2) {
                 m.Fields.push_back({ r.Label, T::Float, r.Ptr, r.Step, r.Tip, r.Lo, r.Hi });

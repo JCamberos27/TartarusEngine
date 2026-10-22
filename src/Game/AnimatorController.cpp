@@ -928,7 +928,7 @@ bool AnimatorSampleMotion(Model& M, AssetLibrary& assets, const AnimatorControll
         // Real time, not stretched: tracks of different lengths each play at their own rate
         // and a shorter one holds (or loops) - how the paired arms/weapon clips were authored.
         M.SampleLocalPose(c, phase * stateLen, wrap, out);
-        if (strip) M.StripRootMotion(out, c, rootNode, rm);
+        if (strip) M.StripRootMotion(out, c, rootNode, rm, loop ? phase * stateLen : -1.0f);
         if (longestClip) *longestClip = M.AnimationLength(c);
         return true;
     }
@@ -942,7 +942,7 @@ bool AnimatorSampleMotion(Model& M, AssetLibrary& assets, const AnimatorControll
         const float len = M.AnimationLength(c);
         std::vector<LocalTRS>& dst = any ? scratch : out;
         M.SampleLocalPose(c, phase * len, wrap, dst);
-        if (strip) M.StripRootMotion(dst, c, rootNode, rm);
+        if (strip) M.StripRootMotion(dst, c, rootNode, rm, loop ? phase * len : -1.0f);
         if (any) {
             const float w = weights[i] / (acc + weights[i]);
             for (size_t b = 0; b < out.size() && b < scratch.size(); ++b) out[b] = LocalTRS::Blend(out[b], scratch[b], w);

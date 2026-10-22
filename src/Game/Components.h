@@ -1208,6 +1208,7 @@ struct OpenableComponent {
     float Amount = 0.0f;     // degrees for a hinge, metres for a slide; 0 = the motion's usual amount
     float OpenTime = 0.5f;   // seconds from shut to open
     bool StartOpen = false;
+    bool SwingBack = false;  // a hinge or flap opens toward local -Z (its back face) instead: a front door whose inside is its back
     // Audio assets, ';'-separated variants (one picked per play), played at the part. Empty = silent.
     std::string OpenSound;  // as it starts to open (the knob turning, the hinge)
     std::string CloseSound; // when it lands shut (the thud)
@@ -1273,7 +1274,7 @@ struct SquadSettingsComponent {
     float HeavyHitDamage = 40.0f;
     float StaggerTime = 0.4f;
     float BleedOutTime = 20.0f;
-    float CrawlSpeed = 0.6f;
+    float CrawlSpeed = 0.85f;    // m/s: a desperate crawl, the loop (its own pace ~0.55) played up to 1.6x by its PlayRate trim
     float LimpSpeedScale = 0.6f;
     float LimpTime = 6.0f;
     float CorpseTime = 180.0f;
@@ -1646,6 +1647,21 @@ struct RagdollSettingsComponent {
     // Corpse hits: a round into a body at rest.
     float CorpseWakeTime = 0.45f;      // seconds the body stays loose (no settling) after a round, so the limb the round struck visibly reacts
     float CorpseShotMaxSpeed = 4.0f;   // m/s: the most a round adds to the struck part, whatever the damage
+    // Wound fall: a soldier shot down by a leg (alive) goes down as a powered ragdoll - the hurt leg gives at once, the other holds a
+    // beat, the arms brace - and once down and slow his body blends from where it lies into the animated prone pose (NpcDirector).
+    float WoundFallLegStrength = 0.6f; // the good leg's strength fraction while it holds (the hurt one takes Hit Weakness at once)
+    float WoundFallLegHold = 0.22f;    // seconds the good leg holds before it gives too
+    float WoundFallPush = 1.3f;        // m/s: the topple forward and toward the hurt leg, on the chest (a body going down over a leg that gave)
+    float WoundFallTone = 0.08f;       // the strength fraction a living body keeps while down (a dead one keeps Tone Residual)
+    float WoundRecoverSpeed = 0.45f;   // m/s: down and every part slower than this, he takes the pose back
+    float WoundRecoverMinTime = 0.9f;  // seconds after the hit before he may (the limbs slump first) ...
+    float WoundRecoverMaxTime = 2.5f;  // ... and the longest the fall may take (draped over something, he takes it back anyway)
+    float WoundBlendTime = 0.5f;       // seconds every bone blends from where the fall left it to the animated prone pose ...
+    float WoundBlendSpeed = 1.8f;      // ... or longer (up to 2.5x) for a limb with further to go: m/s its hand or foot moves at most
+    float WoundFaceUp = 0.3f;          // the chest's and pelvis's front facing up past this (the up share of the normal): on his back ...
+    float WoundRollImpulse = 120.0f;   // ... he rolls himself over onto his belly: N s of twist across his chest and hips (0: he lies there)
+    float WoundRollTries = 2.0f;       // ... at most this many heaves (each a third harder) ...
+    float WoundRollBlendTime = 1.0f;   // ... then, still on his back, the animated pose turns him over onto his belly in this long
 };
 // ---- end lane R ----
 // ---- lane R-gear ----

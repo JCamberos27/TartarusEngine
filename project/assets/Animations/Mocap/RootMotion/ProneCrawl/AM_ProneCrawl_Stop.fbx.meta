@@ -1,0 +1,15 @@
+{
+  "folder": "assets/Animations/Mocap/RootMotion/ProneCrawl",
+  "guid": "a32f457b6f7103c1",
+  "metaVersion": 1,
+  "type": "model",
+  "importer": {
+    "clipTrims": [
+      {
+        "clip": "Unreal Take",
+        "start": 3.7333,
+        "end": 6.0333
+      }
+    ]
+  }
+}
