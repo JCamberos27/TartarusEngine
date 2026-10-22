@@ -2524,7 +2524,7 @@ int main(int argc, char** argv) {
                     window.SetCursorLocked(false);
                 }
 
-                if (editor.RulerHeld()) Input::ConsumeScroll(); // vRuler: the wheel picks the measured object
+                if (editor.RulerHeld() || editor.DecalToolOwnsWheel()) Input::ConsumeScroll(); // vRuler: the wheel picks the measured object; a decal tool: it turns / sizes the ghost or brush
                 if (UpdateEditorCamera(editorCamera, dt, allowLook || camDragActive, gizmoDragging,
                         hasSelection ? &selectionCenter : nullptr, editor.ViewportSize().y))
                     editor.FlashFlySpeedHud(); // #236 R2 — show the transient "Fly speed: N" readout
@@ -3963,6 +3963,13 @@ int main(int argc, char** argv) {
             sceneInputs.lightBuffer        = &lightBuffer;
             sceneInputs.clusterGrid        = &clusterGrid;
             sceneInputs.decals             = &decalSystem;
+            {
+                // The Place Decal / Decal Brush ghost: the real decal, drawn in the editor's own views.
+                const DecalComponent* ghostComp = nullptr;
+                glm::mat4 ghostWorld(1.0f);
+                if (!playing && editor.DecalGhostPreview(ghostComp, ghostWorld)) decalSystem.SetGhost(*ghostComp, ghostWorld);
+                else decalSystem.ClearGhost();
+            }
             sceneInputs.decalCullShader    = &clusterDecalCullShader;
             sceneInputs.hdriCube           = hdriCube.get();
             sceneInputs.sunShadowsReady    = false; // set per view in drawScene (#109)

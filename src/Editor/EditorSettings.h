@@ -105,7 +105,7 @@ struct EditorSettings {
 
     // Editor UI sounds (EditorSound): their own output, so AudioMuted above doesn't silence them - this does. All on at a low
     // level by default. Per category (EditorSoundEvents::Category order: Clicks, Sliders, Hover, Panels, Drag & Drop,
-    // Notifications, Play Mode, Objects, Tools, Assets, Animation & Curves, System) a switch and a volume; a short or missing
+    // Notifications, Play Mode, Objects, Tools, Assets, Animation & Curves, System, Fields, Workflow, Decals & Graffiti) a switch and a volume; a short or missing
     // list keeps the defaults for the rest.
     bool EditorSoundsEnabled = true;
     float EditorSoundsVolume = 0.70f; // the P6 remaster's default (was 0.44): a volume saved before it loads as this, see Load
@@ -208,6 +208,19 @@ struct EditorSettings {
     // replacing those buttons' old home in the top toolbar strip. Collapsed to a thin strip
     // (just the chevron) when true; expanded (the default) otherwise.
     bool  ToolPaletteCollapsed   = false;
+
+    // Decal editor tools (EditorLayer_DecalLibrary.cpp, docs/DECALS.md "Editor tools").
+    // Decals and palettes are project-relative paths with forward slashes.
+    std::vector<std::string> DecalFavorites;   // Decal Library hearts
+    std::vector<std::string> DecalRecent;      // placed or painted, newest first (the radial's "recent")
+    std::string DecalPalette;                  // the active .decalpalette ("" = none)
+    std::string DecalSourceCategory;           // the brush's category when no palette is active ("" = all)
+    float DecalLibraryTile = 84.0f;            // px, 1x
+    float DecalBrushRadius = 0.40f, DecalBrushSpacing = 0.50f, DecalBrushDensity = 1.0f, DecalBrushSize = 1.0f,
+          DecalBrushSizeJitter = 0.30f, DecalBrushRotationJitter = 180.0f, DecalBrushOpacity = 1.0f;
+    bool DecalBrushAlign = true, DecalBrushFollowStroke = false;
+    float DecalGrimeSpacing = 0.8f, DecalGrimeDensity = 1.0f;
+    int DecalGrimeMax = 160;
 
     // #185 — Debug physics harness while playing: G sets off a shockwave at the Player,
     // left-click raycasts from the eye and shoves whatever it hits. A dev/testing aid for the

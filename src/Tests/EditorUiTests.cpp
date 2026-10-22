@@ -1091,6 +1091,7 @@ void RegisterMotionDemo() {
 #include "EditorSmoke/ScriptIDE.inl"
 #include "EditorSmoke/HotReload.inl"
 #include "EditorSmoke/Settings.inl"
+#include "EditorSmoke/Decals.inl"
 
 void RegisterTests() {
     if (MotionDemo::Active()) { RegisterMotionDemo(); return; } // a demo run is only the demo
@@ -1782,6 +1783,7 @@ void RegisterTests() {
     RegisterHotReloadTests();
     RegisterSettingsTests();
     RegisterScenesTests();
+    RegisterDecalsTests();
 }
 } // namespace
 

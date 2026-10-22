@@ -40,9 +40,14 @@ public:
 
     // Per frame. Walks DecalComponents (+ any PushRuntime() decals), frustum/distance culls,
     // sorts and uploads. Returns the visible count (also uDecalCount).
+    // includeGhost: also gather the editor's placement ghost (SetGhost), for the editor's own views.
     int Prepare(World& world, const glm::mat4& viewProj, const glm::vec3& cameraPos,
-                float maxDistance, const DecalGrading& grading);
+                float maxDistance, const DecalGrading& grading, bool includeGhost = false);
     void PushRuntime(const DecalInstance& d); // cleared by every Prepare()
+    // The editor's Place Decal / Decal Brush ghost: one decal, built like a component's, that stays
+    // until ClearGhost(). `boxWorld` is the entity's world transform (the box's Size is applied on top).
+    void SetGhost(const DecalComponent& d, const glm::mat4& boxWorld);
+    void ClearGhost() { m_GhostActive = false; }
 
     // Bind SSBOs 11 (decals), 12 (bounds) and the texture arrays on units 22-25.
     void BindForCull() const;
@@ -68,6 +73,9 @@ private:
     std::unique_ptr<DecalTextureArrays> m_Textures;
     std::unordered_map<std::string, std::shared_ptr<DecalAsset>> m_Assets;
     std::vector<DecalInstance> m_Runtime, m_Frame;
+    std::unique_ptr<DecalComponent> m_Ghost;
+    glm::mat4 m_GhostWorld{1.0f};
+    bool m_GhostActive = false;
     unsigned int m_DecalBuf = 0, m_BoundsBuf = 0;
     int m_Visible = 0;
     DecalGrading m_Grading;
