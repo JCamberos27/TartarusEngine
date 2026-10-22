@@ -67,6 +67,8 @@ public:
     // Resident: its textures are in and it draws (the Designer keeps its live overlay until then).
     void Refresh(const std::string& path);
     bool Resident(const std::string& path);
+    // The same for one entity's decal, with its reveal order in place of the aux map while it has one (SetReveal).
+    bool Resident(const std::string& path, uint32_t entity);
     // The one the renderer uses (main.cpp owns it): the editor reaches it for Refresh / Resident.
     // Null before it exists or after it's gone.
     static DecalSystem* Current();

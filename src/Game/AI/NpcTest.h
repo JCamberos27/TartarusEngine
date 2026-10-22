@@ -103,6 +103,9 @@ public:
     };
     std::function<bool(const std::string& piece, const glm::vec3& from, const glm::vec3& dir, const std::string& painter, float seconds)> Spray;
     std::function<void(SprayView& out, bool roundTrip)> SprayState;
+    // An NPC's can: a character stood at `feet` facing `yawDeg` (0 = +Z) sprays `piece` through
+    // SprayCanAction::ForCharacter (from its hand, along its facing).
+    std::function<bool(const std::string& piece, const glm::vec3& feet, float yawDeg, float seconds)> SprayNpc;
 
 private:
     void Check(bool ok, const std::string& what);

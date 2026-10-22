@@ -37,6 +37,11 @@ struct SprayCanAction {
     float Scale = 1.0f;                 // x the piece's size on the wall
     std::string Painter = "Player";
     static constexpr float kMinSeconds = 4.0f, kMaxSeconds = 40.0f;
+
+    // An NPC's can: from its hand (~`handHeight` up from the entity's origin, at its feet) along the way it
+    // faces (+Z of its world transform, as NpcBody turns the soldiers), level; Painter is the entity's name.
+    static SprayCanAction ForCharacter(const World& world, entt::entity character, const std::string& piece,
+                                       float handHeight = 1.35f);
 };
 
 class SprayCanSystem {
@@ -99,6 +104,7 @@ private:
         bool Started = false, Finished = false;
     };
     PieceData* Data(const std::string& piece);
+    static void SetRevealKey(PieceData& d);
     void PlayAt(const char* file, const glm::vec3& at, float gain, bool loop, AudioEngine::SoundHandle* handle);
 
     RayFn m_Ray;

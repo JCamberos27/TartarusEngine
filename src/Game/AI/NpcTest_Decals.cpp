@@ -118,8 +118,9 @@ void NpcTest::Decals(World& world, NpcDirector& npcs, float) {
         m_KStep = 2;
         const bool player = Spray && Spray("assets/Decals/Graffiti/Pieces/GP_Crown.graffiti", glm::vec3(-8.4f, 1.3f, 0.2f),
                                            glm::vec3(0.0f, 0.0f, -1.0f), "Player", kSpraySeconds);
-        const bool npc = Spray && Spray("assets/Decals/Graffiti/Pieces/GP_Rats.graffiti", glm::vec3(-9.75f, 1.55f, 0.1f),
-                                        glm::vec3(0.0f, -0.1f, -1.0f), "NPC", kSpraySeconds);
+        // A tenant stood a step off the south wall, facing it (yaw 180 = -Z), sprays from its hand.
+        const bool npc = SprayNpc && SprayNpc("assets/Decals/Graffiti/Pieces/GP_Rats.graffiti", glm::vec3(-9.75f, 0.0f, -0.35f),
+                                              180.0f, kSpraySeconds);
         Check(player, "the player's spray can found the south wall");
         Check(npc, "an NPC's spray can found the south wall");
     }

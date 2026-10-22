@@ -295,6 +295,16 @@ bool DecalSystem::Resident(const std::string& path) {
     return a && !a->Missing && m_Textures->Resident(SourceFor(*a));
 }
 
+bool DecalSystem::Resident(const std::string& path, uint32_t entity) {
+    const auto reveal = m_Reveals.find(entity);
+    if (reveal == m_Reveals.end()) return Resident(path);
+    const std::shared_ptr<DecalAsset> a = GetAsset(path);
+    if (!a || a->Missing || reveal->second.Aux.empty()) return false;
+    DecalTextureArrays::Source src = SourceFor(*a);
+    src.Aux = reveal->second.Aux; // as Prepare asks for it while the piece goes on
+    return m_Textures->Resident(src);
+}
+
 void DecalSystem::PushRuntime(const DecalInstance& d) { m_Runtime.push_back(d); }
 
 void DecalSystem::BeginRuntimeFrame() {

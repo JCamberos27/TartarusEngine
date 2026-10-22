@@ -803,6 +803,12 @@ int main(int argc, char** argv) {
                 a.Piece = piece; a.From = from; a.Direction = dir; a.Painter = painter; a.Seconds = seconds;
                 return sprayCans.Start(world, a) != entt::null;
             };
+            npcTest->SprayNpc = [&](const std::string& piece, const glm::vec3& feet, float yawDeg, float seconds) {
+                const entt::entity npc = world.CreateEmptyEntity(feet, glm::vec3(0.0f, yawDeg, 0.0f), glm::vec3(1.0f), "Tenant (painter)");
+                SprayCanAction a = SprayCanAction::ForCharacter(world, npc, piece);
+                a.Seconds = seconds;
+                return sprayCans.Start(world, a) != entt::null;
+            };
         }
         BloodLab bloodLab;          // F7 -> Blood Lab: fire any blood / impact effect at the crosshair, tune it live
         // What the crosshair is on: a soldier's part (entity, part) or the world (entity, normal). False: nothing in reach.
@@ -1908,6 +1914,7 @@ int main(int argc, char** argv) {
                 smokeScenePaths.assign(1, ProjectPaths::Resolve(opt.npcTestScenario == "sandbox" ? "scenes/Arena.json"
                                                               : opt.npcTestScenario == "blood" ? "scenes/BloodTest.json"
                                                               : opt.npcTestScenario == "ragdoll" ? "scenes/RagdollTest.json"
+                                                              : opt.npcTestScenario == "decals" ? "scenes/Apartment Hallway.json"
                                                                                            : "scenes/Arena.json"));
             std::cout << "[SmokeTest] Found " << smokeScenePaths.size() << " scene(s) under "
                       << scenesDir << std::endl;
