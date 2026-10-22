@@ -149,8 +149,8 @@ SprayCanSystem::PieceData* SprayCanSystem::Data(const std::string& piece) {
         Graffiti::BakeImages img;
         m_Comp->StartBake(*d->Piece, *d->Program);
         if (m_Comp->PollBake(img, /*wait=*/true)) {
-            auto piece = d->Piece;
-            d->Bake = std::async(std::launch::async, [piece, img]() { return Graffiti::WriteBake(*piece, Graffiti::EncodePngs(img)); });
+            auto recipe = d->Piece;
+            d->Bake = std::async(std::launch::async, [recipe, img]() { return Graffiti::WriteBake(*recipe, Graffiti::EncodePngs(img)); });
         } else {
             d->BakeFailed = true;
         }

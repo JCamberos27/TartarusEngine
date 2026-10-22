@@ -35,8 +35,8 @@ struct Settings {
     bool Enabled = true;
     float Master = 0.70f; // the P6 remaster: the files came up 10 dB and this from 0.44, so the defaults are clearly audible
     bool UsePremium = false; // the paid Drive set where an event has one (opt-in: audition it on the Sound Board first)
-    std::array<bool, EditorSoundEvents::kCategoryCount> CategoryOn{true, true, true, true, true, true, true,
-                                                                       true, true, true, true, true, true, true, true};
+    std::array<bool, EditorSoundEvents::kCategoryCount> CategoryOn{true, true, true, true, true, true, true, true,
+                                                                       true, true, true, true, true, true, true};
     std::array<float, EditorSoundEvents::kCategoryCount> CategoryVolume{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 };
 

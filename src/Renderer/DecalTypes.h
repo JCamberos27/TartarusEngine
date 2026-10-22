@@ -17,6 +17,12 @@ constexpr int BIND_DECALS = 11;  // GpuDecal[]
 constexpr int BIND_BOUNDS = 12;  // GpuDecalBounds[] (cull only)
 constexpr int BIND_RANGES = 13;  // per-cluster {offset, count}
 constexpr int BIND_INDICES = 14; // uint[2] header {cursor, overflow} + uint[INDEX_CAPACITY]
+constexpr int BIND_SUBSTRATES = 16; // GpuSubstrate[] (ModelDecals.glsl)
+
+// Substrates (Substrate.h) live in a small table; a decal names one as index + 1 in Ids.x's top
+// byte (0 = none), a material through the uMaterialSubstrate uniform (same encoding).
+constexpr int MAX_SUBSTRATES = 255;
+constexpr uint32_t SUBSTRATE_SHIFT = 24;
 
 // Texture units reserved for the decal arrays. Materials are clamped to units < 22.
 constexpr int UNIT_ALBEDO = 22;  // sampler2DArray, sRGB BC3: rgb colour, a opacity
@@ -49,10 +55,11 @@ enum Flag : uint32_t {
     FLAG_HAS_AUX_TEX = 1u << 5,
     FLAG_LUMA_MASK = 1u << 6,      // opacity comes from albedo luminance (white-on-black alphas)
     FLAG_INVERT_MASK = 1u << 7,    // opacity inverted (DecalAsset::InvertMask: dark marks on light)
+    FLAG_SUBSTRATE_AUTO = 1u << 8, // the receiver material's substrate wins over the decal's own
     // The aux map is a reveal order (runtime decals: blood spreading, a hole's rim, a spray-can piece
     // going on stroke by stroke): H2.w then holds (threshold, band) instead of (peel, buff), and a
     // texel shows where aux >= threshold, fully from threshold + band. The emissive channel is off.
-    FLAG_REVEAL = 1u << 8,
+    FLAG_REVEAL = 1u << 9,
 };
 // GpuDecal::Ids.z also carries the height-blend amount (DecalAsset::HeightBlend) as unorm8 in its
 // top byte: every half in H0-H2 is taken, and CH_HEIGHT_BLEND alone can't say how much.
@@ -63,13 +70,24 @@ constexpr uint32_t HEIGHT_BLEND_SHIFT = 24;
 struct GpuDecal {
     glm::vec4 WorldToBox[3];
     glm::vec4 Rect;     // xy = slot UV offset in the layer, zw = slot UV size (atlas frame folded in)
-    glm::uvec4 Ids;     // x: layer | maxLod << 8 | channelMask << 16; y: receiver layer mask;
+    glm::uvec4 Ids;     // x: layer | maxLod << 8 | channelMask << 16 | (substrate + 1) << 24; y: receiver layer mask;
                         // z: Flag bits | heightBlend << HEIGHT_BLEND_SHIFT; w: sort key
     glm::uvec4 H0;      // packHalf2x16: (tint.r, tint.g) (tint.b, albedoOp) (normalOp, roughOp) (metalOp, aoOp)
     glm::uvec4 H1;      // (emissive.r, emissive.g) (emissive.b, emissiveOp) (angleCosStart, angleCosEnd) (edgeFade, heightContrast)
     glm::uvec4 H2;      // (paintRough, paintMetal) (relief, wear) (fade, bleach) (peel, buff)
 };
 static_assert(sizeof(GpuDecal) == 128, "GpuDecal must stay 128 bytes (std430)");
+
+// One substrate's maps and values, 80 bytes std430 (SSBO 16). Its maps share one slot of the
+// decal arrays: albedo, normal, surface (r roughness, b AO).
+struct GpuSubstrate {
+    glm::vec4 Rect;         // slot uv offset + size in the layer
+    glm::vec4 Crop;         // the image rect that repeats (x0, y0, x1, y1, v down), 0..1 of the slot
+    glm::vec4 TintStrength; // rgb tint, a strength
+    glm::vec4 Params;       // x metres per repeat, y/z roughness min/max, w 1 = mirrored repeat
+    glm::uvec4 Ids;         // x layer, y maxLod, z FLAG_HAS_*_TEX, w unused
+};
+static_assert(sizeof(GpuSubstrate) == 80, "GpuSubstrate must stay 80 bytes (std430)");
 
 // World-space oriented box for the cull compute: centre + three half-extent axes.
 struct GpuDecalBounds {

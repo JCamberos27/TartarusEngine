@@ -1621,6 +1621,41 @@ void RegisterEngineComponents() {
               "Paint flaking off in patches, showing the surface underneath.", 0.0f, 1.0f },
             { "Buff", T::Float, TARTARUS_REFLECT_FIELD(DecalComponent, Buff), 0.01f,
               "Scrubbed-off look: a smeared ghost of the mark that someone tried to clean.", 0.0f, 1.0f },
+            { "Substrate", T::Enum, TARTARUS_REFLECT_FIELD(DecalComponent, SubstrateMode), 0.0f,
+              "The material that shows where the paint is gone (concrete under peeling paint).\n"
+              "Auto: the receiving surface's substrate, else the asset's. Asset: always the asset's.\n"
+              "Custom: the maps below. Off: none, just the decal's own colour and relief.\n"
+              "Preset: a .substrate file (assets/Decals/Substrates)." },
+            { "Substrate Preset", T::String, TARTARUS_REFLECT_FIELD(DecalComponent, SubPreset), 0.0f,
+              "The .substrate preset to show (Preset): SB_Wall_Concrete, SB_Floor_Concrete, SB_Dark_Wooden_Planks." },
+            { "Substrate Albedo", T::AssetRef, TARTARUS_REFLECT_FIELD(DecalComponent, SubAlbedo), 0.0f,
+              "Colour map of the exposed material. Its maps take one slot of the decal texture budget." },
+            { "Substrate Normal", T::AssetRef, TARTARUS_REFLECT_FIELD(DecalComponent, SubNormal), 0.0f,
+              "Optional normal map (OpenGL, green up)." },
+            { "Substrate Roughness", T::AssetRef, TARTARUS_REFLECT_FIELD(DecalComponent, SubRoughness), 0.0f,
+              "Optional greyscale roughness map, remapped to Rough Min..Max. Empty = Rough Max everywhere." },
+            { "Substrate AO", T::AssetRef, TARTARUS_REFLECT_FIELD(DecalComponent, SubAO), 0.0f,
+              "Optional greyscale ambient-occlusion map." },
+            { "Substrate Tiling", T::Float, TARTARUS_REFLECT_FIELD(DecalComponent, SubTiling), 0.01f,
+              "Metres per repeat, laid out in world space so neighbouring decals line up.", 0.05f, 50.0f },
+            { "Substrate Tint", T::Color, TARTARUS_REFLECT_FIELD(DecalComponent, SubTint), 0.0f,
+              "Multiplies the substrate's colour." },
+            { "Substrate Strength", T::Float, TARTARUS_REFLECT_FIELD(DecalComponent, SubStrength), 0.01f,
+              "How fully the substrate replaces the paint's own look where it shows.", 0.0f, 1.0f },
+            { "Substrate Rough Min", T::Float, TARTARUS_REFLECT_FIELD(DecalComponent, SubRoughMin), 0.01f,
+              "Roughness where the roughness map is black.", 0.0f, 1.0f },
+            { "Substrate Rough Max", T::Float, TARTARUS_REFLECT_FIELD(DecalComponent, SubRoughMax), 0.01f,
+              "Roughness where the roughness map is white (everywhere, without a map).", 0.0f, 1.0f },
+            { "Substrate Mirror", T::Bool, TARTARUS_REFLECT_FIELD(DecalComponent, SubMirror), 0.0f,
+              "Mirror every other repeat: hides the seams of a sheet that doesn't tile by itself." },
+            { "Substrate Crop X0", T::Float, TARTARUS_REFLECT_FIELD(DecalComponent, SubCropX0), 0.005f,
+              "The part of the image that repeats, left edge (0..1).", 0.0f, 1.0f },
+            { "Substrate Crop Y0", T::Float, TARTARUS_REFLECT_FIELD(DecalComponent, SubCropY0), 0.005f,
+              "Top edge (0..1, down the image).", 0.0f, 1.0f },
+            { "Substrate Crop X1", T::Float, TARTARUS_REFLECT_FIELD(DecalComponent, SubCropX1), 0.005f,
+              "Right edge.", 0.0f, 1.0f },
+            { "Substrate Crop Y1", T::Float, TARTARUS_REFLECT_FIELD(DecalComponent, SubCropY1), 0.005f,
+              "Bottom edge.", 0.0f, 1.0f },
         };
         auto F = [&](const char* name) -> ReflectField& {
             for (auto& f : m.Fields) if (std::strcmp(f.Name, name) == 0) return f;
@@ -1636,6 +1671,26 @@ void RegisterEngineComponents() {
         for (const char* s : {"Sort Order", "Layer Mask", "Affect Static", "Affect Dynamic"}) F(s).Group = "Receivers";
         for (const char* s : {"Seed", "Frame", "Rotation Jitter", "Scale Jitter", "Random Flip"}) F(s).Group = "Variation";
         for (const char* s : {"Fade", "Bleach", "Peel", "Buff"}) F(s).Group = "Weathering";
+        F("Substrate").EnumLabels = "Auto\0Asset\0Custom\0Off\0Preset\0";
+        F("Substrate").EnumCount = 5;
+        for (const char* s : {"Substrate Albedo", "Substrate Normal", "Substrate Roughness", "Substrate AO"})
+            F(s).AssetKind = ReflectAssetKind::Texture;
+        for (const char* s : {"Substrate Strength", "Substrate Rough Min", "Substrate Rough Max", "Substrate Crop X0",
+                              "Substrate Crop Y0", "Substrate Crop X1", "Substrate Crop Y1"})
+            F(s).Slider = true;
+        for (const char* s : {"Substrate", "Substrate Albedo", "Substrate Normal", "Substrate Roughness", "Substrate AO",
+                              "Substrate Tiling", "Substrate Tint", "Substrate Strength", "Substrate Rough Min",
+                              "Substrate Rough Max", "Substrate Mirror", "Substrate Crop X0", "Substrate Crop Y0",
+                              "Substrate Crop X1", "Substrate Crop Y1"}) {
+            F(s).Group = "Substrate";
+            if (std::strcmp(s, "Substrate") != 0) {
+                F(s).VisibleIfField = "Substrate";
+                F(s).VisibleIfValue = 2; // Custom
+            }
+        }
+        F("Substrate Preset").Group = "Substrate";
+        F("Substrate Preset").VisibleIfField = "Substrate";
+        F("Substrate Preset").VisibleIfValue = 4; // Preset
         m.Buttons.push_back({"Randomize Seed", ICON_FA_DICE,
                              "A new random seed: a different rotation, scale, flip and atlas frame within the jitter set above.",
                              0, [](World&, entt::entity, void* c, int) {
@@ -1666,8 +1721,7 @@ void RegisterEngineComponents() {
     {
         ReflectComponent m;
         m.Name = "Spray Paint"; m.Icon = ICON_FA_SPRAY_CAN; m.Category = "Rendering";
-        m.Tooltip = "A graffiti piece going on to the wall stroke by stroke, as a spray can puts it there. The
-"
+        m.Tooltip = "A graffiti piece going on to the wall stroke by stroke, as a spray can puts it there. The\n"
                     "Decal on this object shows the piece; this says how far the spraying has got.";
         m.Fields = {
             { "Piece", T::String, TARTARUS_REFLECT_FIELD(SprayPaintComponent, PiecePath), 0.0f,

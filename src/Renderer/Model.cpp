@@ -1,4 +1,5 @@
 #include "Model.h"
+#include "DecalSystem.h"
 #include "AnimRetarget.h"
 #include "SkinHideBuffer.h"
 #include "MaterialAsset.h"
@@ -2428,6 +2429,8 @@ void SetSurfaceOptions(Shader& shader, const Material& mat) {
     shader.SetFloat("uGrungeStrength", mat.GrungeStrength);
     shader.SetFloat("uGrungeScale", mat.GrungeScale);
     shader.SetInt("uReceiveDecals", mat.ReceiveDecals ? 1 : 0);
+    // Its substrate's row in the decal system's table (index + 1, 0 = none / still decoding).
+    shader.SetInt("uMaterialSubstrate", mat.Substrate.Enabled() ? DecalSystem::MaterialSubstrate(mat.Substrate) : 0);
 }
 
 void BindMaterial(Shader& shader, const Material& mat, const MaterialLocs& locs) {
