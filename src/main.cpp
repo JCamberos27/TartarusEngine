@@ -791,6 +791,10 @@ int main(int argc, char** argv) {
                 worldImpact(h.Entity, p, n, dir, 0.0027f); // a 5.45 mm round
                 return true;
             };
+        if (npcTest) // --npc-test decals: stains at fixed spots
+            npcTest->SpawnBlood = [&](int kind, const glm::vec3& at, const glm::vec3& n, float size) {
+                kind == 0 ? bloodFx.SpatterWallAt(at, n, size) : bloodFx.SpawnPoolAt(at, n, size);
+            };
         BloodLab bloodLab;          // F7 -> Blood Lab: fire any blood / impact effect at the crosshair, tune it live
         // What the crosshair is on: a soldier's part (entity, part) or the world (entity, normal). False: nothing in reach.
         auto aimAt = [&](glm::vec3& point, glm::vec3& normal, unsigned& entity, int& part, bool& body) {
@@ -2884,6 +2888,8 @@ int main(int argc, char** argv) {
                         }
                     }
                     if (npcTest) npcTest->After(world, npcDirector, playerVitals, player);
+                } else if (npcTest && npcTest->RunsWithoutSquad()) {
+                    npcTest->After(world, npcDirector, playerVitals, player);
                 }
                 combatFx.SetListener(player.Cam.Position, player.Cam.Front());
                 {
