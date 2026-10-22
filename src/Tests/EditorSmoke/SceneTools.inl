@@ -35,7 +35,7 @@ struct EditorSmokeAccess_SceneTools {
     static bool Snap(EditorLayer& e) { return e.m_GridSnapEnabled; }
     static float SnapStep(EditorLayer& e) { return e.m_SnapTranslation; }
     static bool Gizmos(EditorLayer& e) { return e.m_GizmosMasterVisible; }
-    static bool IconsThroughWalls(EditorLayer&) { return EditorSettings::Get().EntityIconsThroughWalls; }
+    static bool TransformGizmo(EditorLayer& e) { return e.m_ShowGizmos; }
     static int Shading(EditorLayer& e) { return (int)e.m_ShadingMode; }
     static bool Gliding(EditorLayer& e) { return e.m_ViewTransition.Active; }
     static bool GizmoEngaged(EditorLayer& e) { return e.m_GizmoEngaged; }
@@ -569,14 +569,14 @@ void RegisterSceneToolsTests() {
          ExpectTrue("and on", [](Ctx& c) { return ST::Grid(c.E); }),
          ChromeUi::CloseMenus(), Wait(2),
          RightClick(Rail(EDITOR_ICON_TOGGLE_GIZMOS)),
-         Until("the gizmos popover", [](Ctx&) { return Find(PopupItem("Through walls")) != nullptr; }),
-         Click(PopupItem("Through walls")), Wait(2),
-         ExpectTrue("icons through walls on", [](Ctx& c) { return ST::IconsThroughWalls(c.E); }),
+         Until("the gizmos popover", [](Ctx&) { return Find(PopupItem("Show transform gizmo")) != nullptr; }),
+         Click(PopupItem("Show transform gizmo")), Wait(2),
+         ExpectTrue("the transform gizmo off", [](Ctx& c) { return !ST::TransformGizmo(c.E); }),
          Shot("gizmos-popover", {kScene}),
-         Click(PopupItem("Through walls")), Wait(2),
-         ExpectTrue("and off again", [](Ctx& c) { return !ST::IconsThroughWalls(c.E); }),
+         Click(PopupItem("Show transform gizmo")), Wait(2),
+         ExpectTrue("and on again", [](Ctx& c) { return ST::TransformGizmo(c.E); }),
          Key(ImGuiKey_Escape), Wait(2),
-         ExpectTrue("Escape closes the popover", [](Ctx&) { return Find(PopupItem("Through walls")) == nullptr; }),
+         ExpectTrue("Escape closes the popover", [](Ctx&) { return Find(PopupItem("Show transform gizmo")) == nullptr; }),
          ExpectDepth("toggles pushed no undo step", 1)},
         Tidy(),
     }));
