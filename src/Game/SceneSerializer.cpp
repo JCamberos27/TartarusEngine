@@ -9,6 +9,7 @@
 #include "Texture.h"
 #include "Material.h"
 #include "MaterialAsset.h"
+#include "SubstrateJson.h"
 #include "AssetDatabase.h"
 #include "AssetGuid.h"
 #include "ProjectPaths.h"
@@ -373,6 +374,8 @@ json MaterialSlotsToJson(const std::vector<std::shared_ptr<MaterialAsset>>& matS
             if (smat.GrungeStrength != 0.0f)       em["grungeStrength"] = smat.GrungeStrength;
             if (smat.GrungeScale != 0.5f)          em["grungeScale"] = smat.GrungeScale;
             if (!smat.ReceiveDecals)               em["receiveDecals"] = false;
+            if (!smat.Substrate.Albedo.empty())
+                em["substrate"] = SubstrateJson::Write<json>(smat.Substrate, [](const std::string& p) { return PathRef(ProjectPaths::Resolve(p)); });
             if (smat.AlphaCutoff != 0.5f)          em["alphaCutoff"] = smat.AlphaCutoff;
             if (slot->RenderQueue != MaterialAsset::Queue::Opaque) em["renderQueue"] = (int)slot->RenderQueue;
             if (slot->Opacity != 1.0f)             em["opacity"] = slot->Opacity;
@@ -433,6 +436,12 @@ std::shared_ptr<MaterialAsset> ReadEmbeddedMat(AssetLibrary& assets, const json&
         ma->Mat.GrungeStrength  = mj.value("grungeStrength", 0.0f);
         ma->Mat.GrungeScale     = mj.value("grungeScale", 0.5f);
         ma->Mat.ReceiveDecals   = mj.value("receiveDecals", true);
+        // Substrate (Substrate.h): {path, pathGuid} refs, kept project-relative in memory like a .decal's.
+        if (auto sub = mj.find("substrate"); sub != mj.end())
+            SubstrateJson::Read(*sub, ma->Mat.Substrate, [](const json& v) {
+                const std::string p = ResolveAssetRef(v);
+                return p.empty() ? p : ProjectPaths::Relativize(p);
+            });
     }
     ma->Mat.AlphaCutoff          = mj.value("alphaCutoff", 0.5f);
     ma->RenderQueue              = (MaterialAsset::Queue)std::clamp(mj.value("renderQueue", 0), 0, 2);
