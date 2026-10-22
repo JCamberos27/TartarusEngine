@@ -1,5 +1,7 @@
 #pragma once
 #include <glm/glm.hpp>
+#include <cstdint>
+#include <vector>
 
 class Shader;
 
@@ -35,6 +37,17 @@ public:
     // smaller than the old fixed-stride buffer (65536 * 4 bytes = 256 KB vs. 1.38 MB). Must
     // match kCullLightsCompute's GLOBAL_CAPACITY.
     static constexpr int GLOBAL_INDEX_CAPACITY = 65536;
+    // The decal index list (binding 14): every cluster owns a fixed Decals::MAX_PER_CLUSTER block
+    // (3.5 MB in all), so it can't fill and a cluster's list sits at the same place every frame. The
+    // shared 131072-entry list it replaces ran out in a dense view, and the clusters that reserved
+    // last - a different set every frame - went blank.
+    static constexpr int kDecalIndexCapacity = CLUSTERS * 256;
+    // The decal cull's scratch SSBO: the visible decals in view space, one ViewBox (5 vec4) each.
+    static constexpr int kBindDecalViewBoxes = 19;
+    // And its finished-group counter and the readback ring it writes the header into (bound as SSBOs).
+    static constexpr int kBindDecalCullState = 18;
+    static constexpr int kBindDecalReadback = 17;
+    static constexpr int kDecalViewBoxVec4s = 5;
 
     ~ClusterGrid();
 
@@ -54,10 +67,14 @@ public:
     // the decal range (13) and index (14) ones.
     void BindForShading() const;
 
-    // The decal cull's overflow bits from a recent Cull() (1: a cluster kept only its top-most
-    // Decals::MAX_PER_CLUSTER, 2: the shared index list was full), late by a cull or two like
-    // Saturated().
-    unsigned DecalOverflow() const { return m_LastDecalOverflow; }
+    // The decal cull's overflow bits (1: a cluster kept only its top-most Decals::MAX_PER_CLUSTER;
+    // 2, the index list full, can no longer happen), from the most recent
+    // culls whose tagged readback has landed (a frame or two late), ORed over the projections in use
+    // (the world view and the view model's).
+    unsigned DecalOverflow() const;
+    // How many clusters were clamped to Decals::MAX_PER_CLUSTER, the most of any projection in use;
+    // `buildSlot` >= 0 asks for one projection's (DecalSnapshot::BuildSlot).
+    unsigned DecalOverflowClusters(int buildSlot = -1) const;
 
     // True if the global index list (binding 4) would have overflowed its GLOBAL_INDEX_CAPACITY
     // during a recent Cull() — i.e. at least one cluster's reserved block was truncated and some
@@ -75,8 +92,23 @@ public:
     // Allocates the cluster buffers and builds the cull programs now (load-time warm-up).
     void WarmUp() { EnsureCreated(); }
 
+    // Tests only (smoke_decals_stress): the last decal cull's inputs and outputs, read back synchronously.
+    struct DecalSnapshot {
+        int DecalCount = 0;
+        int BuildSlot = -1;
+        std::vector<glm::vec4> Clusters;  // CLUSTERS * 2: view-space min, max
+        std::vector<glm::vec4> ViewBoxes; // DecalCount * kDecalViewBoxVec4s
+        std::vector<uint32_t> Ranges;     // CLUSTERS * 2: offset, count
+        std::vector<uint32_t> Indices;    // the {entries in use, overflow} header, then the whole list
+    };
+    bool ReadDecalSnapshot(DecalSnapshot& out) const;
+    // The cull's overlap test on one ViewBox (ClusterDecalCull.comp.glsl's Overlaps), CPU side. `slack`
+    // widens (> 0) or narrows (< 0) every separating-axis test by that much, to bracket rounding.
+    static bool DecalBoxOverlaps(const glm::vec4* box, const glm::vec3& mn, const glm::vec3& mx, float slack);
+
 private:
     void EnsureCreated();
+    void ReadDecalOverflow() const;
     // binding 2. #160: one AABB set per recently-used projection. With a single set, the Scene and
     // Game views (different projections) invalidated each other and the build pass ran twice
     // every frame; two slots cover both views, reused least-recently-used.
@@ -99,12 +131,33 @@ private:
     const volatile unsigned int* m_OverflowMapped = nullptr;
 
     // Decals: binding 13 per-cluster {offset, count}, binding 14 {cursor, overflow} + the index list,
-    // and the same deferred readback of the overflow word.
+    // and the view-space boxes the cull's first pass writes (kBindDecalViewBoxes).
     unsigned int m_DecalRanges = 0;
     unsigned int m_DecalIndices = 0;
-    unsigned int m_DecalOverflowCopy = 0;
-    const volatile unsigned int* m_DecalOverflowMapped = nullptr;
-    unsigned m_LastDecalOverflow = 0;
+    unsigned int m_DecalViewBoxes = 0;
+    // The overflow word's readback: a ring of persistently mapped slots. The cull's last workgroup to
+    // finish writes {entries, overflow, serial} straight into this cull's slot (bound as an SSBO), the
+    // serial last. A slot is taken only once it shows its cull's serial, so the value is complete and
+    // belongs to a known cull and projection, and the view model's cull can't hand over one that hasn't
+    // landed. Not fenced: a glFenceSync per cull flushed NVIDIA's queue mid-frame and left the GPU idle
+    // until the CPU caught up (3.5 ms charged to "Cluster Cull" in the editor), and polling one drains a
+    // threaded driver's worker (PERF-203). Not copied: a buffer copy into client memory stalled the GPU
+    // for milliseconds in a dense view. A full ring drops its oldest sample.
+    static constexpr int kDecalReadbackSlots = 4;
+    unsigned int m_DecalCullState = 0;
+    unsigned int m_DecalReadback = 0;
+    const volatile unsigned int* m_DecalReadbackMapped = nullptr; // kDecalReadbackSlots * {entries, overflow, serial, -}
+    unsigned int m_DecalSerial = 0;
+    struct DecalReadback {
+        unsigned int Serial = 0;
+        int BuildSlot = 0;
+    };
+    mutable DecalReadback m_DecalPending[kDecalReadbackSlots];
+    mutable int m_DecalReadbackHead = 0;  // oldest pending
+    mutable int m_DecalReadbackCount = 0; // pending
+    mutable unsigned m_DecalOverflowBySlot[kBuildSlots] = {};
+    int m_LastDecalSlot = -1;
+    int m_LastDecalCount = 0;
 
     // Cached projection state for build-pass optimization (#205), one per AABB slot (#160)
     struct BuildKey {

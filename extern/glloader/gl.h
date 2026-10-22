@@ -583,6 +583,13 @@ extern PFNGLFENCESYNCPROC glFenceSync;
 extern PFNGLCLIENTWAITSYNCPROC glClientWaitSync;
 extern PFNGLDELETESYNCPROC glDeleteSync;
 
+// GPU-side buffer clear (GL 4.5): zeroing a header that an earlier dispatch may still be reading,
+// without an upload (ClusterGrid).
+#define GL_R32UI 0x8236
+#define GL_RED_INTEGER 0x8D94
+typedef void (__stdcall* PFNGLCLEARNAMEDBUFFERSUBDATAPROC)(GLuint, GLenum, GLintptr, GLsizeiptr, GLenum, GLenum, const void*);
+extern PFNGLCLEARNAMEDBUFFERSUBDATAPROC glClearNamedBufferSubData;
+
 // Texture-to-texture copy (GL 4.3) - growing the decal texture arrays keeps the resident pages
 // without re-decoding them (DecalTextureArrays).
 typedef void (__stdcall* PFNGLCOPYIMAGESUBDATAPROC)(GLuint, GLenum, GLint, GLint, GLint, GLint, GLuint, GLenum, GLint, GLint,

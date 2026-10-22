@@ -4,7 +4,9 @@
 #include "AssetGuid.h"
 #include "AssetLibrary.h"
 #include "AtomicFile.h"
+#include "ClusterGrid.h"
 #include "Components.h"
+#include "DecalTypes.h"
 #include "EditorLayer.h"
 #include "Log.h"
 #include "MaterialAsset.h"
@@ -300,6 +302,105 @@ void GlassTheme(EditorLayer& editor, World& world, int frame) {
         }
         else std::cout << "[SmokeTest]   glass: theme off, animation memory released by frame " << frame << std::endl;
     }
+}
+
+// smoke_decals_stress: 4096 decals piled on one wall, far past the 256-per-cluster cap in hundreds of
+// clusters. Two consecutive frames (a still camera) must bin identically - the old shared list ran out
+// and blanked a different set of clusters every frame - and each cluster must hold what the CPU's copy
+// of the cull's test gives it (its top-most 256 where more touch it), in sort order, with the clamped
+// clusters counted in the overflow word.
+void DecalStress(const ClusterGrid& grid, int visible, int frame) {
+    static ClusterGrid::DecalSnapshot first;
+    static int firstFrame = -1;
+    ClusterGrid::DecalSnapshot snap;
+    if (!grid.ReadDecalSnapshot(snap)) {
+        Log::Error("[SmokeTest] decal stress: no decal cull to read back");
+        return;
+    }
+    if (firstFrame < 0 || frame != firstFrame + 1) {
+        first = std::move(snap);
+        firstFrame = frame;
+        return;
+    }
+    std::string why;
+    if (visible != Decals::MAX_VISIBLE || snap.DecalCount != Decals::MAX_VISIBLE)
+        why = "expected " + std::to_string(Decals::MAX_VISIBLE) + " decals binned, got " + std::to_string(snap.DecalCount) +
+              " (" + std::to_string(visible) + " visible)";
+    // Each cluster's list (the blocks' unused tails hold whatever an earlier cull left).
+    for (int c = 0; c < ClusterGrid::CLUSTERS && why.empty(); ++c) {
+        const uint32_t count = snap.Ranges[c * 2 + 1], offset = snap.Ranges[c * 2], offset0 = first.Ranges[c * 2];
+        bool same = count == first.Ranges[c * 2 + 1];
+        for (uint32_t k = 0; same && k < count; ++k) same = snap.Indices[2 + offset + k] == first.Indices[2 + offset0 + k];
+        if (!same) why = "cluster " + std::to_string(c) + "'s list changed between two frames of a still view";
+    }
+    if (why.empty() && (snap.Indices[1] & 2u)) why = "the index list overflowed";
+    // Each cluster against the CPU test, bracketed by a millimetre either way for rounding.
+    const uint32_t cap = (uint32_t)Decals::MAX_PER_CLUSTER;
+    unsigned clampedLo = 0, clampedHi = 0, blank = 0, full = 0;
+    uint64_t total = 0;
+    for (int c = 0; c < ClusterGrid::CLUSTERS && why.empty(); ++c) {
+        const glm::vec3 mn(snap.Clusters[c * 2]), mx(snap.Clusters[c * 2 + 1]);
+        uint32_t lo = 0, hi = 0;
+        for (int i = 0; i < snap.DecalCount; ++i) {
+            const glm::vec4* box = &snap.ViewBoxes[(size_t)i * ClusterGrid::kDecalViewBoxVec4s];
+            if (!ClusterGrid::DecalBoxOverlaps(box, mn, mx, 1e-3f)) continue; // the narrow test can't pass either
+            ++hi;
+            lo += ClusterGrid::DecalBoxOverlaps(box, mn, mx, -1e-3f);
+        }
+        const uint32_t offset = snap.Ranges[c * 2], count = snap.Ranges[c * 2 + 1];
+        total += count;
+        clampedLo += lo > cap;
+        clampedHi += hi > cap;
+        blank += lo > 0 && count == 0;
+        full += count == cap;
+        if (count < std::min(lo, cap) || count > std::min(hi, cap)) {
+            why = "cluster " + std::to_string(c) + " holds " + std::to_string(count) + " decals, the CPU test gives " +
+                  std::to_string(lo) + ".." + std::to_string(hi);
+            break;
+        }
+        if ((size_t)offset + count + 2 > snap.Indices.size()) {
+            why = "cluster " + std::to_string(c) + "'s range runs past the list";
+            break;
+        }
+        for (uint32_t k = 0; k < count; ++k) {
+            const uint32_t idx = snap.Indices[2 + offset + k];
+            const bool ordered = k == 0 || idx > snap.Indices[2 + offset + k - 1];
+            if (idx >= (uint32_t)snap.DecalCount || !ordered ||
+                !ClusterGrid::DecalBoxOverlaps(&snap.ViewBoxes[(size_t)idx * ClusterGrid::kDecalViewBoxVec4s], mn, mx, 1e-3f)) {
+                why = "cluster " + std::to_string(c) + " lists decal " + std::to_string(idx) + " out of order or off it";
+                break;
+            }
+        }
+        // Clamped: the top of the stack is kept, so its last entry is the highest-sorted decal touching it.
+        if (why.empty() && lo > cap && hi == lo && count > 0) {
+            uint32_t top = 0;
+            for (int i = snap.DecalCount - 1; i >= 0; --i)
+                if (ClusterGrid::DecalBoxOverlaps(&snap.ViewBoxes[(size_t)i * ClusterGrid::kDecalViewBoxVec4s], mn, mx, 0.0f)) {
+                    top = (uint32_t)i;
+                    break;
+                }
+            if (snap.Indices[2 + offset + count - 1] != top)
+                why = "clamped cluster " + std::to_string(c) + " dropped its top-most decal";
+        }
+    }
+    if (why.empty() && total != snap.Indices[0]) why = "the header's entry count doesn't match the clusters' counts";
+    const unsigned counted = snap.Indices[1] >> 8;
+    if (why.empty() && (counted < clampedLo || counted > clampedHi))
+        why = "the overflow word counts " + std::to_string(counted) + " clamped clusters, the CPU test " +
+              std::to_string(clampedLo) + ".." + std::to_string(clampedHi);
+    const unsigned landed = grid.DecalOverflowClusters(snap.BuildSlot);
+    if (why.empty() && landed != counted)
+        why = "the fenced readback reports " + std::to_string(landed) + " clamped clusters, this frame's cull " +
+              std::to_string(counted);
+    // More entries than the old shared list held (131072), with hundreds of clusters at the cap.
+    if (why.empty() && (clampedLo < 300 || total <= 131072u))
+        why = "only " + std::to_string(clampedLo) + " clusters over the cap, " + std::to_string(total) + " entries: not a stress";
+    if (!why.empty()) {
+        Log::Error("[SmokeTest] decal stress: " + why);
+        return;
+    }
+    std::cout << "[SmokeTest]   decal stress OK (" << snap.DecalCount << " decals, " << counted << " clusters clamped, " << full
+              << " full, " << blank << " blank, " << total << " list entries)" << std::endl;
 }
 
 } // namespace SmokeChecks
