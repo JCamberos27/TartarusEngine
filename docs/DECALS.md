@@ -318,14 +318,18 @@ python -I tools/scenes/dress_corridor.py
 python -I tools/scenes/dress_apartments.py
 ```
 
-The walls (and the window / arch `Reveal` pieces inside a unit) stay white: they keep their `baseColor`, normal and
-roughness maps and gain only the `PH_Beige_Wall` AO map and the `_036` grunge (0.3); ceilings get `_085` (0.4) and the
-apartments' baseboards `_085` (0.45). Decals sit under `Apartment Wear`, one `30x Wear` group per unit: two seeded units
-are trashed (~60 decals), the rest moderate (~30-40), built from door-frame cracks and flakes, a skirting band, hero
-patches (two or three sharp flakes each, for paint chipping) and ceiling clusters. Bathrooms are dressed like the hall:
-one ceiling cluster, chipped lower walls and one dark `DA_LiquidSplatter_*` splash on the floor at 0.3 opacity. Placement is read from the scene (wall planes, which side faces into
-the room, doors, windows, ceiling footprints) and a built-in self-check fails if a decal is off its wall, faces out of
-the room or covers an opening. Limits asserted: at most 330 decals, and across corridor + apartments at most 30 unique
-2K maps and one 4K map (the apartments add eight flake and crack maps to the corridor's pool, `APT_POOL`). 301 is the hand-edited NPC room: it only gains
-materials and decals.
+The walls (and the window / arch `Reveal` pieces inside a unit) stay white - never beige: they keep their `baseColor`,
+normal and roughness maps and gain only the `PH_Beige_Wall` AO map, roughness 0.85 and the `_036` grunge (0.34);
+ceilings (0.3) and the apartments' baseboards (0.32) get `_036` too, since the corridor's `_085` opens camo-like sheets
+on white paint. Decals sit under `Apartment Wear`, one `30x Wear` group per unit: two seeded units are trashed (~120
+decals), the rest moderate (~70-80), built from door-frame cracks and flakes, skirting bands, hero patches (over a grey
+grime halo, two or three sharp flakes each), grime bands along the skirting, water runs from the ceiling line, grime up
+the wall ends and ceiling clusters over a water mark. Bathrooms always get water damage: ceiling clusters, chipped lower
+walls, water runs, a grime band and one dark `DA_LiquidSplatter_*` splash on the floor at 0.3 opacity. The grime and
+water marks are "stains": blotch maps with the component's Substrate set to Off and a neutral grey tint, so they never
+open the wall or warm the paint. Placement is read from the scene (wall planes, which side faces into the room, doors,
+windows, ceiling footprints) and a built-in self-check fails if a decal is off its wall, faces out of the room or covers
+an opening. Limits asserted: at most 600 decals, and across corridor + apartments at most 30 unique 2K maps and one 4K
+map (the apartments add eight flake and crack maps to the corridor's pool, `APT_POOL`; the stains reuse the blotch
+maps, so the extra decals cost no texture memory). 301 is the hand-edited NPC room: it only gains materials and decals.
 
