@@ -105,6 +105,7 @@ struct GrimeSite {
     glm::vec3 Along{1, 0, 0}; // a horizontal direction along the surface
     uint32_t Kind = 0;        // one DecalSites bit
     float Height = 0.0f;      // metres above the floor
+    float Scale = 1.0f;       // times the palette entry's size: a patch's big centre, its small satellites
 };
 
 struct GrimeSummary {

@@ -3049,7 +3049,8 @@ void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
     // speed preference applies, and Reduce Motion lands it at once.
     style.animateSnap = false;
     const bool wasOrbitDrag = ImViewGuizmo::GetContext().activeTool == ImViewGuizmo::TOOL_GIZMO;
-    bool modified = ImViewGuizmo::Rotate(camPos, camRot, pivot, rotatePos);
+    // Smoke-test screenshots leave the nav gizmo out (the radial below still runs).
+    bool modified = !m_CleanShots && ImViewGuizmo::Rotate(camPos, camRot, pivot, rotatePos);
     if (modified && !wasOrbitDrag && ImViewGuizmo::GetContext().activeTool == ImViewGuizmo::TOOL_NONE) {
         const glm::vec3 forward = glm::normalize(camRot * glm::vec3(0.0f, 0.0f, -1.0f));
         SettleViewMorph(editorCamera);
@@ -3081,7 +3082,7 @@ void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
         SettleViewMorph(editorCamera); // dragging the ring takes the camera back
         m_ViewTransition.Active = false;
     }
-    m_ViewGizmoBlocking = ImViewGuizmo::IsOver() || ImViewGuizmo::IsUsing();
+    m_ViewGizmoBlocking = !m_CleanShots && (ImViewGuizmo::IsOver() || ImViewGuizmo::IsUsing());
 
     // Tooltips - the rotate ring gives no feedback on its own (it's manually hit-tested inside
     // the vendored gizmo library, not a real ImGui widget, so ImGui::IsItemHovered() can't see
@@ -3090,7 +3091,8 @@ void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
     // palette's own draw-mode/ortho controls and the editor's existing zoom/pan camera input) —
     // only the axis-handle and orbit tooltips are left to read.
     const auto& gizmoCtx = ImViewGuizmo::GetContext();
-    if (gizmoCtx.hoveredAxisID == 6) {
+    if (m_CleanShots) {
+    } else if (gizmoCtx.hoveredAxisID == 6) {
         EditorUI::SetTooltip("Drag to orbit the view");
     } else if (gizmoCtx.hoveredAxisID >= 0 && gizmoCtx.hoveredAxisID <= 5) {
         static const char* kAxisTooltips[6] = {

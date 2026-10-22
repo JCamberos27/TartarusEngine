@@ -147,7 +147,13 @@ GrimeSummary PlanGrime(const GrimeProbe& probe, const glm::vec3& boundsMin, cons
             const glm::vec3 p(centre.x + kX[i] * half.x, centre.y, centre.z + kZ[i] * half.z);
             GrimeHit h;
             if (cast(p, glm::vec3(0, -1, 0), half.y + 0.5f, h) && h.Normal.y > 0.7f) lo = std::min(lo, h.Point.y);
-            if (cast(p, glm::vec3(0, 1, 0), half.y + 0.5f, h) && h.Normal.y < -0.7f) hi = std::max(hi, h.Point.y);
+        }
+        // Up from just above the floor, far enough for a whole storey: a selected floor slab alone
+        // has bounds too thin to reach its ceiling.
+        for (int i = 0; i < 5; ++i) {
+            const glm::vec3 p(centre.x + kX[i] * half.x, lo < 1e29f ? lo + 0.5f : centre.y, centre.z + kZ[i] * half.z);
+            GrimeHit h;
+            if (cast(p, glm::vec3(0, 1, 0), std::max(half.y + 0.5f, 4.5f), h) && h.Normal.y < -0.7f) hi = std::max(hi, h.Point.y);
         }
         if (lo < 1e29f) floorY = lo;
         if (hi > -1e29f) ceilY = hi;
@@ -157,13 +163,14 @@ GrimeSummary PlanGrime(const GrimeProbe& probe, const glm::vec3& boundsMin, cons
     sum.CeilingY = ceilY;
     const float height = ceilY - floorY;
 
-    auto add = [&](uint32_t kind, glm::vec3 p, const glm::vec3& n, const glm::vec3& along) {
+    auto add = [&](uint32_t kind, glm::vec3 p, const glm::vec3& n, const glm::vec3& along, float scale = 1.0f) {
         GrimeSite s;
         s.Point = p;
         s.Normal = n;
         s.Along = along;
         s.Kind = kind;
         s.Height = p.y - floorY;
+        s.Scale = scale;
         out.push_back(s);
     };
 
@@ -256,22 +263,70 @@ GrimeSummary PlanGrime(const GrimeProbe& probe, const glm::vec3& boundsMin, cons
             return p;
         };
 
+        // Which side of this wall's doors the handle is on (hand grime gathers there).
+        const bool handleHigh = (Mix(seed, 0xD00Du + (uint32_t)w) & 1u) != 0u;
+        const float dens = std::min(density, 1.0f) + 0.25f * std::max(density - 1.0f, 0.0f); // frames: more, not 2x
         for (int i = 0; i < cols; ++i) {
             const Column& c = cl[i];
-            const bool nextToDoor = (i > 0 && cl[i - 1].Door) || (i + 1 < cols && cl[i + 1].Door);
+            const bool doorBefore = i > 0 && cl[i - 1].Door, doorAfter = i + 1 < cols && cl[i + 1].Door;
+            const int winNb = (i > 0 && cl[i - 1].Window) ? i - 1 : (i + 1 < cols && cl[i + 1].Window) ? i + 1 : -1;
             if (!c.Door) {
                 if (rng.Unit() < 0.85f * density) add(DecalSites::Base, wallPoint(i, rng.Range(0.05f, 0.30f)), n, along);
-                if (rng.Unit() < 0.30f * density) add(DecalSites::Wall, wallPoint(i, rng.Range(0.6f, height - 0.5f)), n, along);
-                if (rng.Unit() < 0.35f * density) add(DecalSites::Ceiling, wallPoint(i, height - rng.Range(0.10f, 0.35f)), n, along);
+                // Water creeping down from the ceiling line: sparse, the ceiling isn't a blanket.
+                if (rng.Unit() < 0.12f * density) add(DecalSites::Ceiling, wallPoint(i, height - rng.Range(0.10f, 0.35f)), n, along);
             }
-            if (c.Window && !c.Door && c.SillH > 0.5f && rng.Unit() < 0.9f * density)
-                add(DecalSites::Window, wallPoint(i, std::max(0.25f, c.SillH - rng.Range(0.15f, 0.30f))), n, along);
+            // Under a sill: two or three drips, spread along it and run down the wall.
+            if (c.Window && !c.Door && c.SillH > 0.5f) {
+                const int drips = rng.Unit() < 0.5f * dens ? 3 : 2;
+                for (int j = 0; j < drips; ++j) {
+                    const float h = std::max(0.25f, c.SillH - rng.Range(0.10f, 0.65f));
+                    add(DecalSites::Window, wallPoint(i, h) + lat * rng.Range(-0.4f, 0.4f), n, along, rng.Range(0.5f, 0.95f));
+                }
+            }
+            // Beside a window: grime up the jamb.
+            if (!c.Window && !c.Door && winNb >= 0 && cl[winNb].SillH > 0.5f && rng.Unit() < 0.8f * dens)
+                add(DecalSites::Window, wallPoint(i, cl[winNb].SillH + rng.Range(0.0f, 0.8f)) + lat * ((float)(winNb - i) * cell * 0.3f),
+                    n, along, rng.Range(0.45f, 0.75f));
             if (c.Door && c.DoorTopH + 0.4f < height && rng.Unit() < 0.7f * density)
                 add(DecalSites::Door, wallPoint(i, c.DoorTopH + rng.Range(0.20f, 0.35f)), n, along);
-            if (!c.Door && nextToDoor && rng.Unit() < 0.9f * density)
-                add(DecalSites::Door, wallPoint(i, rng.Range(0.3f, std::min(2.0f, height - 0.5f))), n, along);
+            if (!c.Door && (doorBefore || doorAfter)) {
+                const glm::vec3 toDoor = lat * ((doorAfter ? 1.0f : -1.0f) * cell * 0.3f); // hug the frame
+                if (doorAfter == handleHigh) {
+                    // The handle side: hand-dirt at grabbing height, and a kick scuff low down.
+                    add(DecalSites::Door, wallPoint(i, rng.Range(0.85f, 1.0f)) + toDoor, n, along, rng.Range(0.45f, 0.7f));
+                    add(DecalSites::Door, wallPoint(i, rng.Range(1.18f, 1.4f)) + toDoor * 0.6f, n, along, rng.Range(0.4f, 0.6f));
+                    if (rng.Unit() < 0.8f * dens)
+                        add(DecalSites::Door, wallPoint(i, rng.Range(0.12f, 0.35f)) + toDoor, n, along, rng.Range(0.55f, 0.85f));
+                } else if (rng.Unit() < 0.8f * dens) {
+                    add(DecalSites::Door, wallPoint(i, rng.Range(0.4f, std::min(1.9f, height - 0.5f))) + toDoor, n, along,
+                        rng.Range(0.5f, 0.8f));
+                }
+            }
             if (c.Pipe && rng.Unit() < 0.9f * density)
                 add(DecalSites::Pipe, wallPoint(i, std::max(0.2f, c.PipeH - rng.Range(0.30f, 0.45f))), n, along);
+        }
+
+        // Open wall: a few irregular patches (a big one with small satellites round it), clean wall between.
+        {
+            const int patches = (int)std::floor(2.0f * halfLat * density / 8.0f + rng.Unit());
+            for (int pIdx = 0; pIdx < patches; ++pIdx) {
+                int ci = -1;
+                for (int tries = 0; tries < 8 && ci < 0; ++tries) {
+                    const int t = (int)(rng.Next() % (uint32_t)cols);
+                    if (!cl[t].Door && !cl[t].Window) ci = t;
+                }
+                if (ci < 0) break;
+                const float h = rng.Range(0.8f, std::max(0.9f, height - 0.6f));
+                add(DecalSites::Wall, wallPoint(ci, h), n, along, rng.Range(1.25f, 1.8f));
+                const int sats = 1 + (int)(rng.Next() % 3u);
+                for (int j = 0; j < sats; ++j) {
+                    const float off = rng.Signed() * rng.Range(0.6f, 1.5f);
+                    const int sj = ci + (int)std::lround(off / cell);
+                    if (sj < 0 || sj >= cols || cl[sj].Door || cl[sj].Window) continue;
+                    const float sh = std::clamp(h + rng.Signed() * 0.7f, 0.4f, height - 0.3f);
+                    add(DecalSites::Wall, wallPoint(sj, sh) + lat * (off - (float)(sj - ci) * cell), n, along, rng.Range(0.3f, 0.65f));
+                }
+            }
         }
 
         // Corners: from the wall's two ends, along the wall at a base, a middle and a ceiling height.
@@ -301,7 +356,9 @@ GrimeSummary PlanGrime(const GrimeProbe& probe, const glm::vec3& boundsMin, cons
             for (int gx = 0; gx < nx; ++gx) {
                 const float x = boundsMin.x + (gx + 0.5f) * (2.0f * half.x / nx), z = boundsMin.z + (gz + 0.5f) * (2.0f * half.z / nz);
                 GrimeHit h;
-                if (rng.Unit() < 0.35f * density && cast(glm::vec3(x, floorY + 1.0f, z), up, height + 0.5f, h) &&
+                // Ceiling stains only near the walls and corners, where the water comes in.
+                const float edge = std::min(std::min(x - boundsMin.x, boundsMax.x - x), std::min(z - boundsMin.z, boundsMax.z - z));
+                if (edge < 1.1f && rng.Unit() < 0.25f * density && cast(glm::vec3(x, floorY + 1.0f, z), up, height + 0.5f, h) &&
                     h.Normal.y < -0.7f && h.Point.y > ceilY - 0.5f)
                     add(DecalSites::Ceiling, h.Point, h.Normal, TangentOf(h.Normal));
                 if (rng.Unit() < 0.25f * density && cast(glm::vec3(x, ceilY - 0.3f, z), -up, height + 0.5f, h) &&
@@ -316,9 +373,12 @@ GrimeSummary PlanGrime(const GrimeProbe& probe, const glm::vec3& boundsMin, cons
     kept.reserve(out.size());
     for (const GrimeSite& s : out) {
         bool crowded = false;
-        for (const GrimeSite& k : kept)
-            if (k.Kind == s.Kind && glm::dot(k.Point - s.Point, k.Point - s.Point) < 0.30f * 0.30f &&
+        for (const GrimeSite& k : kept) {
+            // Small decals (a satellite, a hand smudge) may sit closer together than full-size ones.
+            const float r = 0.30f * std::clamp(std::min(k.Scale, s.Scale), 0.5f, 1.0f);
+            if (k.Kind == s.Kind && glm::dot(k.Point - s.Point, k.Point - s.Point) < r * r &&
                 glm::dot(k.Normal, s.Normal) > 0.9f) { crowded = true; break; }
+        }
         if (!crowded) kept.push_back(s);
     }
     if ((int)kept.size() > settings.MaxSites && settings.MaxSites >= 0) {

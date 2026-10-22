@@ -745,6 +745,8 @@ public:
     void SetWindowSeeThrough(bool v) { m_WindowSeeThrough = v; }
     bool DesktopShowsThrough() const { return m_WindowSeeThrough && GlassThemeActive(); }
     bool OverlaysHidden() const { return m_HideOverlaysThisFrame; }
+    // Smoke-test screenshots: hides the nav gizmo, collider wires and selection outlines until cleared.
+    bool CleanShots() const { return m_CleanShots; }
 
     // The Scene window's own content-region size as of the LAST frame it was drawn (zero before
     // the first draw) — one-frame-stale for the same reason GameViewPanel's equivalent is: this
@@ -896,6 +898,7 @@ private:
     GLFWwindow* m_Window = nullptr;
 
     bool m_HideOverlaysThisFrame = false;
+    bool m_CleanShots = false; // set by the editor smoke tests while they take screenshots
 
     // Frosted backdrop behind modal dialogs — created lazily the first time a modal opens (see
     // EndFrame): the whole framebuffer is blurred and the dialog window redrawn crisp on top.

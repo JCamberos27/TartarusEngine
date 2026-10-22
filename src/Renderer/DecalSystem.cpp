@@ -102,7 +102,11 @@ void PackDecal(const DecalAsset& a, const DecalComponent& dc, const DecalTexture
     // The scene's Decal Grading on top of the asset's and the instance's weathering: Age fades and
     // bleaches, Wear peels, buffs and chips.
     const float fadeW = Unit(a.Fade + dc.Fade + g.Age * 0.5f);
-    const float bleach = Unit(a.Bleach + dc.Bleach + g.Age * 0.6f);
+    // Age sun-bleaches paint, not dirt: the bleach lifts a colour toward a pale grey, which turned
+    // a dark grime stain into a pale puddle on a dark floor. Dark tints (grime, stains) take less of it.
+    const float tintLuma = glm::dot(tint, glm::vec3(0.2126f, 0.7152f, 0.0722f));
+    const float ageBleach = g.Age * 0.6f * glm::smoothstep(0.05f, 0.4f, tintLuma);
+    const float bleach = Unit(a.Bleach + dc.Bleach + ageBleach);
     const float peel = Unit(a.Peel + dc.Peel + g.Wear * 0.5f);
     const float buff = Unit(a.Buff + dc.Buff + g.Wear * 0.3f);
     const float wear = Unit(g.Wear);

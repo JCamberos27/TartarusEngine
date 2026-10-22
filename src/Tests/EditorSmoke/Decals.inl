@@ -16,7 +16,7 @@ struct EditorSmokeAccess_Decals {
     static void SetTool(EditorLayer& e, int m) { e.SetDecalTool((EditorLayer::DecalToolMode)m); }
     static void Grime(EditorLayer& e, World& w) { e.RunAutoGrime(w); }
     static void Select(EditorLayer& e, entt::entity en) { e.SelectItem(en, false); }
-    static void Gizmos(EditorLayer& e, bool on) { e.m_GizmosMasterVisible = on; e.m_ShowEntityIcons = on; e.m_ShowGrid = on; }
+    static void Gizmos(EditorLayer& e, bool on) { e.m_GizmosMasterVisible = on; e.m_ShowEntityIcons = on; e.m_ShowGrid = on; e.m_CleanShots = !on; }
     static void Deselect(EditorLayer& e) { e.ClearSelection(); }
     static int RadialBuild(EditorLayer& e) { return e.DecalRadialBuild(); }
     static void RadialRun(EditorLayer& e, int i) { e.RunDecalRadialItem(i); }
