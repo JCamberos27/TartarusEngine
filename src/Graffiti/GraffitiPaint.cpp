@@ -372,6 +372,98 @@ Program Build(const Piece& piece, const MetricsFn& metrics) {
     return p;
 }
 
+namespace {
+void KeyString(uint64_t& h, const std::string& s) {
+    h = Fnv(h, s.data(), s.size());
+    h = FnvValue(h, (uint8_t)0);
+}
+// Everything BuildLayer reads for this layer (see BuildCache).
+uint64_t LayerBuildKey(const Piece& piece, const Layer& l, uint32_t epoch) {
+    uint64_t h = 1469598103934665603ull;
+    h = FnvValue(h, epoch);
+    h = FnvValue(h, piece.Width);
+    h = FnvValue(h, piece.Height);
+    h = FnvValue(h, piece.Seed);
+    h = FnvValue(h, piece.Metres);
+    h = FnvValue(h, (uint8_t)piece.Drips);
+    h = FnvValue(h, (uint8_t)l.Type);
+    if (l.Type == LayerType::Stamp || l.Type == LayerType::Text) {
+        h = FnvValue(h, l.Color);
+        h = FnvValue(h, l.OutlineColor);
+        h = FnvValue(h, (uint8_t)l.Outline);
+        h = FnvValue(h, l.OutlineWidth);
+        h = FnvValue(h, l.Position);
+        h = FnvValue(h, l.Size);
+        h = FnvValue(h, l.Rotation);
+        KeyString(h, l.Texture);
+        h = FnvValue(h, (uint8_t)l.Luma);
+        h = FnvValue(h, (uint8_t)l.TextureColor);
+        h = FnvValue(h, l.Aspect);
+        KeyString(h, l.Text);
+        KeyString(h, l.Alphabet);
+        h = FnvValue(h, l.Kerning);
+        h = FnvValue(h, l.Jitter);
+        h = FnvValue(h, (uint8_t)l.WarpMode);
+        h = FnvValue(h, l.WarpAmount);
+        for (const LetterStyle& s : l.Letters) {
+            h = FnvValue(h, s.Index);
+            h = FnvValue(h, (uint8_t)s.HasFill);
+            h = FnvValue(h, (uint8_t)s.HasOutline);
+            h = FnvValue(h, s.Fill);
+            h = FnvValue(h, s.Outline);
+        }
+    } else if (l.Type == LayerType::Spray) {
+        for (const Stroke& st : l.Strokes) {
+            h = FnvValue(h, (uint8_t)st.Tip);
+            h = FnvValue(h, st.Color);
+            h = FnvValue(h, (uint8_t)st.Erase);
+            h = FnvValue(h, st.Flow);
+            h = FnvValue(h, st.Angle);
+            h = FnvValue(h, (uint64_t)st.Samples.size());
+            for (const SpraySample& s : st.Samples) {
+                h = FnvValue(h, s.X);
+                h = FnvValue(h, s.Y);
+                h = FnvValue(h, s.Pressure);
+                h = FnvValue(h, s.DistanceMm);
+                h = FnvValue(h, s.TimeMs);
+            }
+        }
+    }
+    return h;
+}
+} // namespace
+
+Program Build(const Piece& piece, const MetricsFn& metrics, BuildCache& cache, uint32_t epoch) {
+    Program p;
+    p.Width = piece.Width;
+    p.Height = piece.Height;
+    ++cache.Generation;
+    cache.Built = cache.Reused = 0;
+    for (int i = 0; i < (int)piece.Layers.size(); ++i) {
+        const Layer& l = piece.Layers[(size_t)i];
+        if (!l.Visible) continue;
+        const uint64_t key = LayerBuildKey(piece, l, epoch);
+        auto it = cache.Layers.find(key);
+        if (it == cache.Layers.end()) {
+            BuildCache::Entry e;
+            e.Layer = BuildLayer(piece, i, metrics, e.Textures);
+            it = cache.Layers.emplace(key, std::move(e)).first;
+            ++cache.Built;
+        } else {
+            ++cache.Reused;
+        }
+        it->second.Used = cache.Generation;
+        LayerProgram lp = it->second.Layer;
+        lp.Layer = i;
+        for (Quad& q : lp.Quads)
+            if (q.Texture >= 0 && (size_t)q.Texture < it->second.Textures.size()) q.Texture = TextureIndex(p.Textures, it->second.Textures[(size_t)q.Texture]);
+        p.Layers.push_back(std::move(lp));
+    }
+    for (auto it = cache.Layers.begin(); it != cache.Layers.end();)
+        it = it->second.Used != cache.Generation ? cache.Layers.erase(it) : std::next(it);
+    return p;
+}
+
 uint64_t Program::Hash() const {
     uint64_t h = 1469598103934665603ull;
     h = FnvValue(h, Width);

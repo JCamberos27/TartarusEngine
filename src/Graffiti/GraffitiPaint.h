@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 // The Graffiti Designer's paint program (docs/GRAFFITI_DESIGNER.md): a piece's layers expanded
@@ -153,6 +154,24 @@ Program Build(const Piece& piece, const MetricsFn& metrics);
 LayerProgram BuildLayer(const Piece& piece, int layerIndex, const MetricsFn& metrics, std::vector<std::string>& textures);
 // Sorts a stroke's splats by (time, emission order) and appends them to `layer` as runs.
 void AppendStroke(LayerProgram& layer, std::vector<Splat>& strokeSplats, bool erase);
+
+// Each layer's built output, kept between builds and looked up by a hash of everything the layer's
+// build reads (the layer's type-specific fields and strokes, the piece's canvas, seed, metres and
+// drips, and `epoch`: the image metrics' epoch). Opacity, blend, clip, gradient, shadow, metal, glow,
+// names and visibility are applied at draw time, so changing them never rebuilds a layer; editing
+// one layer rebuilds that layer only. Texture indices are stored per layer and remapped into the
+// program's shared table on assembly, so a cached build is byte-identical to a fresh one.
+struct BuildCache {
+    struct Entry {
+        LayerProgram Layer;                 // Quad::Texture indexes Textures below
+        std::vector<std::string> Textures;
+        uint32_t Used = 0;
+    };
+    std::unordered_map<uint64_t, Entry> Layers;
+    uint32_t Generation = 0;
+    int Built = 0, Reused = 0; // the last Build's counts (tests, Statistics)
+};
+Program Build(const Piece& piece, const MetricsFn& metrics, BuildCache& cache, uint32_t epoch);
 
 inline glm::vec3 SrgbToLinear(const glm::vec3& c) {
     return glm::mix(c / 12.92f, glm::pow((c + 0.055f) / 1.055f, glm::vec3(2.4f)), glm::step(glm::vec3(0.04045f), c));
