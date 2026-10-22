@@ -140,7 +140,9 @@ GeneratedDecalMaps::Images BloodSet(const uint8_t* norm, const uint8_t* mask, in
         const float core = Clamp01(reveal * 5.0f) * coverage * thick;
         const uint8_t shade = LinearToSrgb8(Mix(1.0f, 0.6f, core));
         im.Albedo[i * 4 + 0] = im.Albedo[i * 4 + 1] = im.Albedo[i * 4 + 2] = shade;
-        im.Albedo[i * 4 + 3] = U8(coverage);
+        // The pack's own alpha, not the coverage: the x2 gain is applied after filtering (RuntimeDecal::CoverGain),
+        // as the old pass did, or thin streaks thin out further at every mip.
+        im.Albedo[i * 4 + 3] = norm[i * 4 + 3];
         PutNormal(im.Normal, i, norm[i * 4 + 0], norm[i * 4 + 1]);
         im.Aux[i] = mask[i * 4 + 0];
     }
@@ -183,7 +185,7 @@ GeneratedDecalMaps::Images KnifeLayer(const uint8_t* rgba, const uint8_t* rg, in
                 }
                 const uint8_t s = LinearToSrgb8(shade);
                 im.Albedo[i * 4 + 0] = im.Albedo[i * 4 + 1] = im.Albedo[i * 4 + 2] = s;
-                im.Albedo[i * 4 + 3] = U8(alpha);
+                im.Albedo[i * 4 + 3] = rgba[i * 4 + 3]; // the raw alpha: its x6 gain comes after filtering (CoverGain)
                 // The cutout eats the thin, outer coverage first: reveal = a - cutout (0.6 + 0.6 r) > 0.
                 im.Aux[i] = U8(a / (0.6f + 0.6f * r));
             }

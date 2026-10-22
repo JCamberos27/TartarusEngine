@@ -66,7 +66,7 @@ vec3 BloodSplatCover() {
         vec3 tc3 = vec3(tc, s.Params.w);
         vec4 col = textureLod(uDecalAlbedo, tc3, lod);       // shade (the pooled core darker), coverage
         float reveal = textureLod(uDecalAux, tc3, lod).r;    // the reveal order
-        float coverage = col.a;
+        float coverage = min(col.a * 2.0, 1.0); // the set keeps its raw alpha (DecalBake::BloodSet): its gain
         float a = clamp((reveal - s.Params.x) * 20.0, 0.0, 1.0) * coverage * facing * s.Params.z;
         float core = clamp((1.0 - col.r) / 0.4, 0.0, 1.0) * clamp((reveal - s.Params.x) * 5.0, 0.0, 1.0);
         if (a > acc.x) acc.z = s.Params.y;
