@@ -518,7 +518,7 @@ void TestEditorSoundBuiltInSetComplete() {
 
 // The P6 mastering rules, on the committed files: every one starts and ends at silence (a sound that starts or stops
 // mid-waveform clicks), and none is buried - each is within reach of the loudest of its kind (the first set had files 8 dB
-// under their neighbours).
+// under their neighbours). A held loop (SprayLoop) is checked for a click-free wrap instead of silent edges.
 void TestEditorSoundBuiltInSetMastered() {
     namespace fs = std::filesystem;
     const std::string dir = (fs::u8path(TARTARUS_SOURCE_DIR) / "resources" / "EditorSounds").u8string();
@@ -540,8 +540,12 @@ void TestEditorSoundBuiltInSetMastered() {
             }
             CHECK(pcm.size() > 100);
             if (pcm.size() <= 100) continue;
-            CHECK(std::abs((int)pcm.front()) < 66); // 0.002 of full scale
-            CHECK(std::abs((int)pcm.back()) < 33);  // 0.001
+            if ((Event)i == Event::SprayLoop) { // a held loop: no silence at its edges, but the wrap must not click
+                CHECK(std::abs((int)pcm.back() - (int)pcm.front()) < 3277); // 0.1 of full scale, one sample of hiss
+            } else {
+                CHECK(std::abs((int)pcm.front()) < 66); // 0.002 of full scale
+                CHECK(std::abs((int)pcm.back()) < 33);  // 0.001
+            }
             double sum = 0.0;
             for (std::int16_t s : pcm) sum += (double)s * s;
             const float rmsDb = 10.0f * std::log10((float)(sum / (double)pcm.size()) / (32768.0f * 32768.0f));
