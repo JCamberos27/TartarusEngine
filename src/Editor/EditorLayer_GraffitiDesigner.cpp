@@ -5,7 +5,8 @@
 //
 // Undo: every recipe write goes through AtomicFile, so the editor's file journal makes each edit (a
 // stroke, a drag, a typing session) one undo step; undo rewrites the file, and the Designer notices
-// the new write time, reloads, and re-bakes a piece that's on a wall.
+// the new write time, reloads, and re-bakes a piece that's on a wall. A bake's worker writes the maps
+// off-thread (outside the journal), so the Designer hands the pre-images over when it finishes.
 #include "EditorLayer.h"
 #include "EditorGraffitiDesigner.h"
 #include "EditorLayerInternal.h"
@@ -20,6 +21,7 @@
 #include "AssetThumbnailLoader.h"
 #include "EditorTestProbe.h"
 #include "Camera.h"
+#include "PenInput.h"
 #include "Components.h"
 #include "DecalAsset.h"
 #include "DecalSystem.h"
@@ -166,12 +168,16 @@ bool BakeNow(GraffitiDesigner& g) {
     return true;
 }
 
-void StartBake(GraffitiDesigner& g) {
+// `undoable`: the Bake button's bake is an undo step of its own; the automatic ones (after a stroke, an
+// undo) are just the recipe's picture catching up and ride its steps.
+void StartBake(GraffitiDesigner& g, bool undoable = false) {
     if (!g.Piece) return;
     if (g.BakeStage != 0 || g.Stroking) {
         g.BakeAgain = true;
+        g.BakeAgainUndoable = g.BakeAgainUndoable || undoable;
         return;
     }
+    g.BakeUndoable = undoable;
     if (g.Dirty) SaveNow(g);
     const Graffiti::Program prog = Graffiti::Build(*g.Piece, g.Comp.MetricsCallback());
     g.Comp.StartBake(*g.Piece, prog);
@@ -246,6 +252,13 @@ void DrainDue(GraffitiDesigner& g, double until, bool all) {
     }
 }
 
+// A pen's pressure scales the Pressure slider (the slider is the heaviest the can goes); with no pen
+// the slider's value stands and the pointer-speed easing applies.
+float PenPressure(const GraffitiDesigner& g) {
+    const float pen = PenInput::Pressure();
+    return pen >= 0.0f ? g.Pressure * std::max(pen, 0.05f) : -1.0f;
+}
+
 void BeginStroke(GraffitiDesigner& g, glm::vec2 uv, bool erase, bool inViewport) {
     if (!g.Piece) return;
     const int layer = EnsureSprayLayer(g);
@@ -264,11 +277,13 @@ void BeginStroke(GraffitiDesigner& g, glm::vec2 uv, bool erase, bool inViewport)
     g.LastSampleAt = -1.0;
     g.LastUv = uv;
     g.LastMouse = ImGui::GetIO().MousePos;
-    g.LivePressure = g.Pressure;
+    const float pen0 = PenPressure(g);
+    const float start = pen0 >= 0.0f ? pen0 : g.Pressure;
+    g.LivePressure = start;
     g.Pending.clear();
     g.PendingSeq.clear();
     g.NextSeq = 0;
-    g.Live.Samples.push_back(Graffiti::SpraySample::Make(uv, g.Pressure, g.DistanceCm * 0.01f, 0.0f));
+    g.Live.Samples.push_back(Graffiti::SpraySample::Make(uv, start, g.DistanceCm * 0.01f, 0.0f));
     const Graffiti::Piece& p = *g.Piece;
     const uint32_t index = (uint32_t)p.Layers[(size_t)layer].Strokes.size();
     g.Builder.Begin(g.Live, p.Width, p.Height, (float)p.Width / std::max(p.Metres.x, 1e-3f),
@@ -277,7 +292,7 @@ void BeginStroke(GraffitiDesigner& g, glm::vec2 uv, bool erase, bool inViewport)
     g.Builder.Add(g.Live.Samples.back(), none);
     g.Comp.BeginLive(p, g.Program, std::max(ProgramIndex(g, layer), 0));
     EditorSound::Play(EditorSound::Event::SprayStart);
-    g.Hiss = EditorSound::StartLoop(EditorSound::Event::SprayLoop, 0.4f + 0.6f * g.Pressure, 0.9f + 0.2f * g.Pressure);
+    g.Hiss = EditorSound::StartLoop(EditorSound::Event::SprayLoop, 0.4f + 0.6f * start, 0.9f + 0.2f * start);
     PushRecent(g, g.Color);
 }
 
@@ -293,7 +308,8 @@ void StrokeSample(GraffitiDesigner& g, glm::vec2 uv) {
     const float speed = std::sqrt((m.x - g.LastMouse.x) * (m.x - g.LastMouse.x) + (m.y - g.LastMouse.y) * (m.y - g.LastMouse.y)) /
                         (float)std::max(dt, 1e-3);
     g.LastMouse = m;
-    const float target = g.VelocityPressure ? g.Pressure * std::clamp(1.15f - speed / 2200.0f, 0.35f, 1.0f) : g.Pressure;
+    const float pen = PenPressure(g);
+    const float target = pen >= 0.0f ? pen : g.VelocityPressure ? g.Pressure * std::clamp(1.15f - speed / 2200.0f, 0.35f, 1.0f) : g.Pressure;
     g.LivePressure += (target - g.LivePressure) * 0.35f;
     g.Live.Samples.push_back(Graffiti::SpraySample::Make(uv, g.LivePressure, g.DistanceCm * 0.01f, (float)t));
     const size_t before = g.Pending.size();
@@ -558,6 +574,13 @@ void EditorLayer::GraffitiFrame(World& world) {
         Graffiti::BakeImages img;
         if (g.Comp.PollBake(img)) {
             auto piece = std::make_shared<Graffiti::Piece>(*g.Piece);
+            // The worker writes the files after this edit window closes, so the pre-images are taken
+            // here and the bake becomes its undo step when the worker is done (below).
+            g.BakeBefore.clear();
+            if (g.BakeUndoable)
+                for (const char* map : {"Albedo", "Normal", "Surface", "Aux"})
+                g.BakeBefore.push_back(EditorFileHistory::Capture(fs::u8path(piece->MapPath(map))));
+                g.BakeBefore.push_back(EditorFileHistory::Capture(fs::u8path(piece->DecalPath())));
             g.Encoding = std::async(std::launch::async, [piece, img = std::move(img)]() -> uint64_t {
                 const Graffiti::BakeFiles files = Graffiti::EncodePngs(img);
                 return Graffiti::WriteBake(*piece, files) ? HashFiles(files) : 0ull;
@@ -574,6 +597,8 @@ void EditorLayer::GraffitiFrame(World& world) {
             ++g.Bakes;
             g.BakeDoneAt = Now();
             g.Status = "Baked " + fs::u8path(g.Piece->DecalPath()).filename().u8string();
+            if (g.BakeUndoable) JournalFilesBefore(world, g.BakeBefore, "Bake Graffiti Piece");
+            g.BakeBefore.clear();
             if (DecalSystem* ds = DecalSystem::Current()) ds->Refresh(g.Piece->DecalPath());
             EditorSound::Play(EditorSound::Event::GraffitiBakeDone);
         } else {
@@ -581,7 +606,9 @@ void EditorLayer::GraffitiFrame(World& world) {
         }
         if (g.BakeAgain && !g.Stroking) {
             g.BakeAgain = false;
-            StartBake(g);
+            const bool again = g.BakeAgainUndoable;
+            g.BakeAgainUndoable = false;
+            StartBake(g, again);
         }
     }
     if (!g.Piece) return;
@@ -701,7 +728,10 @@ void EditorLayer::DrawGraffitiViewportOverlay(World& world, Camera& editorCamera
         show = !resident;
         if (resident) g.OverlayUntil = -1.0;
     }
-    if (!show || !g.Comp.OverlayTexture() || m_ViewportSize.x <= 0.0f) return;
+    if (!show || !g.Comp.OverlayTexture() || m_ViewportSize.x <= 0.0f) {
+        g.OccVisible.clear(); // the next time it shows, the cells are worked out afresh
+        return;
+    }
     const auto& d = world.Registry.get<DecalComponent>(g.Target);
     const glm::mat4 box = world.ComposeWorldTransform(g.Target) * glm::scale(glm::mat4(1.0f), d.Size);
     const glm::mat4 vp = editorCamera.ProjectionMatrix(m_ViewportSize.x / m_ViewportSize.y) * editorCamera.ViewMatrix();
@@ -715,10 +745,32 @@ void EditorLayer::DrawGraffitiViewportOverlay(World& world, Camera& editorCamera
     ImDrawList* dl = ImGui::GetForegroundDrawList();
     dl->PushClipRect(ImVec2(m_ViewportPos.x, m_ViewportPos.y),
                      ImVec2(m_ViewportPos.x + m_ViewportSize.x, m_ViewportPos.y + m_ViewportSize.y), true);
+    // A grid, so the affine quads stay close to the true perspective - and so geometry standing in
+    // front of the wall can hide the cells behind it, as the bake's depth test does: each cell's
+    // centre is ray-cast from the eye; a surface nearer than the wall point means the cell is covered.
+    // The result is cached while the camera, the decal and (for 0.3 s) the scene hold still.
+    constexpr int kGrid = 24;
+    const glm::mat4 key = vp * box;
+    if (g.OccVisible.size() != (size_t)(kGrid * kGrid) || std::memcmp(&key, &g.OccKey, sizeof(key)) != 0 || Now() - g.OccAt > 0.3) {
+        g.OccKey = key;
+        g.OccAt = Now();
+        g.OccVisible.assign((size_t)(kGrid * kGrid), 1);
+        const glm::vec3 eye = editorCamera.Position;
+        for (int y = 0; y < kGrid; ++y)
+            for (int x = 0; x < kGrid; ++x) {
+                const float u = ((float)x + 0.5f) / kGrid, v = ((float)y + 0.5f) / kGrid;
+                const glm::vec3 wall(box * glm::vec4(u - 0.5f, 0.5f - v, 0.0f, 1.0f));
+                const float dist = glm::length(wall - eye);
+                if (dist < 0.05f) continue;
+                glm::vec3 hitPoint, hitNormal;
+                if (CastDecalRay(world, eye, (wall - eye) / dist, dist - 0.05f, hitPoint, hitNormal))
+                    g.OccVisible[(size_t)(y * kGrid + x)] = 0;
+            }
+    }
     const ImTextureID tex = (ImTextureID)(intptr_t)g.Comp.OverlayTexture();
-    constexpr int kGrid = 6; // a grid, so the affine quads stay close to the true perspective
     for (int y = 0; y < kGrid; ++y)
         for (int x = 0; x < kGrid; ++x) {
+            if (!g.OccVisible[(size_t)(y * kGrid + x)]) continue;
             const float u0 = (float)x / kGrid, u1 = (float)(x + 1) / kGrid, v0 = (float)y / kGrid, v1 = (float)(y + 1) / kGrid;
             ImVec2 p[4];
             if (!project(u0, v0, p[0]) || !project(u1, v0, p[1]) || !project(u1, v1, p[2]) || !project(u0, v1, p[3])) continue;
@@ -779,7 +831,7 @@ void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
     ImGui::BeginDisabled(!g.Piece);
     if (EditorUIPrimitives::SecondaryButton(ICON_FA_FLOPPY_DISK "  Save")) SaveNow(g);
     ImGui::SameLine();
-    if (EditorUIPrimitives::PrimaryButton(ICON_FA_FIRE "  Bake")) StartBake(g);
+    if (EditorUIPrimitives::PrimaryButton(ICON_FA_FIRE "  Bake")) StartBake(g, true);
     if (ImGui::IsItemHovered())
         EditorUI::SetTooltip("Bake the layers into %s (albedo, normal, surface and glow maps) and its .decal.",
                              g.Piece ? ("DA_Piece_" + g.Piece->Name + ".decal").c_str() : "the piece's decal");
@@ -875,7 +927,12 @@ void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
             ImGui::SliderFloat("##nib", &g.NibAngle, -90.0f, 90.0f, "Nib angle %.0f deg");
         }
         ImGui::Checkbox("Pressure from pointer speed", &g.VelocityPressure);
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("A fast pass sprays lighter, a slow one heavier (no pen pressure is read).");
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("A fast pass sprays lighter, a slow one heavier. A pen's own pressure replaces this.");
+        {
+            const float pen = PenInput::Pressure();
+            if (pen >= 0.0f) ImGui::TextDisabled("Pen pressure: %.0f%%", pen * 100.0f);
+            else ImGui::TextDisabled("Pen pressure: none (mouse)");
+        }
     }
 
     if (ImGui::CollapsingHeader("Colour", ImGuiTreeNodeFlags_DefaultOpen)) {

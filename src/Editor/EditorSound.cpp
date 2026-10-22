@@ -186,9 +186,9 @@ const EventInfo kEvents[kEventCount] = {
     {"AutoGrimeStart",   Category::DecalsGraffiti, 0.0f, 300.0f, 0.0f,  false},
     {"AutoGrimeDone",    Category::DecalsGraffiti, 0.0f, 300.0f, 0.0f,  false},
     {"LibraryFavourite", Category::DecalsGraffiti, 0.0f,  60.0f, 0.02f, false},
-    // Graffiti Designer (decals Phase 3, docs/GRAFFITI_DESIGNER.md). Start / Loop / End are cut from a CC0 aerosol recording
+    // Graffiti Designer (decals Phase 3, docs/GRAFFITI_DESIGNER.md). Start / Loop / End / Drip are cut from a CC0 aerosol recording
     // (tools/audio/build_spray.py); a placeholder (the last column) plays only if that event's file is missing, and SprayLoop
-    // without its file falls back to a synthesised hiss (SynthesiseSprayLoop). SprayDrip has no recording yet.
+    // without its file falls back to a synthesised hiss (SynthesiseSprayLoop). (SprayDrip's NodePop is only the fallback.)
     {"SprayStart",           Category::DecalsGraffiti,-3.0f, 120.0f, 0.03f, false, false, "Randomize"},
     {"SprayLoop",            Category::DecalsGraffiti,-6.0f,   0.0f, 0.0f,  false}, // held: its level and pitch follow pressure
     {"SprayEnd",             Category::DecalsGraffiti,-3.0f,  80.0f, 0.02f, false, false, "ToggleOff"},
