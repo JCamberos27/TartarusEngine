@@ -38,6 +38,9 @@ class World;
 //           high three-quarter, ground level), and checked every frame: no part of a body inside another (self-collision),
 //           none inside the ground, no joint past its range, the gun out of the hand and lying on the floor clear of the body,
 //           the body asleep in time; then the corpses and guns stay while looked at and go once the view turns away
+//   decals  (scenes/Apartment Hallway.json) rounds and blood put on a corridor wall and floor at fixed spots, shot from
+//           fixed Scene-view cameras: the before/after of bullet holes and blood moving to the clustered decals
+//           (NpcTest_Decals.cpp, docs/DECALS.md)
 //   pose    the weapon hold, close up: an AK and a Remington soldier, the AI frozen, put through aim level /
 //           up / down / to the side, at the hip, crouched, strafing, reloading and sprinting; four views of each
 //           and the gun's / elbows' / hands' clearances (NpcBody::MeasureHold) logged and checked
@@ -64,7 +67,8 @@ public:
     bool Aiming() const { return !m_Target.empty(); }   // sights up (rounds go where the view looks)
     bool WantsReload() const { return m_Reload; }
     bool WantsAiOverlay() const { return m_Scenario == "sandbox"; } // the AI overlay in the sandbox shots
-    bool WantsCleanViews() const { return m_Scenario == "blood" || m_Scenario == "ragdoll"; } // no collider / physics-debug overlays
+    bool RunsWithoutSquad() const { return m_Scenario == "decals"; } // After() even in a scene with no squad
+    bool WantsCleanViews() const { return m_Scenario == "blood" || m_Scenario == "ragdoll" || m_Scenario == "decals"; } // no collider / physics-debug overlays
     // Time stands still this frame (the host steps the game by zero): the ragdoll scenario's multi-angle shots of one moment.
     bool Frozen() const { return m_RFreeze; }
     // The blood scenario's view of the blood, filled by the host each frame.
@@ -82,6 +86,8 @@ public:
     // Fires a round into the world from `from` along `dir` (the host's world-impact path: burst + hole). False: a miss.
     std::function<bool(const glm::vec3& from, const glm::vec3& dir)> ShootWorld;
     const BloodView* BloodStats = nullptr;
+    // --npc-test decals: blood the host's BloodFx puts on a surface (kind 0 a wall spatter, 1 a pool).
+    std::function<void(int kind, const glm::vec3& at, const glm::vec3& normal, float size)> SpawnBlood;
 
 private:
     void Check(bool ok, const std::string& what);
@@ -92,6 +98,12 @@ private:
     void Reload(World& world, NpcDirector& npcs, float now);
     void Blood(World& world, NpcDirector& npcs, float now);
     void Ragdoll(World& world, NpcDirector& npcs, const Player& player);
+    void Decals(World& world, NpcDirector& npcs, float now); // NpcTest_Decals.cpp
+    void DecalsDrive(Player& player, float& wantYaw, float& wantPitch);
+    // decals
+    int m_KStep = 0, m_KShot = 0;
+    float m_KAt = 0.0f, m_KClock = 0.0f;
+    bool m_KPlaced = false;
     // ragdoll
     int m_RCase = -1, m_RStage = 0, m_RMoment = 0, m_RFrame = 0, m_RFrames = 0;
     float m_RAt = 0.0f, m_RKilledAt = 0.0f, m_RLastDeath = 0.0f, m_RYaw = 0.0f;
