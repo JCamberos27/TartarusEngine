@@ -95,6 +95,7 @@ void ReadMaterialMaps(AsyncJob& job) {
         {&ma->EmissiveMapPath, Use::Color},         {&ma->ClearCoatMapPath, Use::Data},
         {&ma->ThicknessMapPath, Use::Data},         {&ma->HeightMapPath, Use::Data},
         {&ma->DetailAlbedoMapPath, Use::Color},     {&ma->DetailNormalMapPath, Use::Normal},
+        {&ma->GrungeMapPath, Use::Color},
     };
     for (const auto& [p, use] : maps) {
         if (p->empty()) continue;

@@ -321,7 +321,8 @@ FolderRowGeom DrawFolderNode(const EditorModuleHostAPI& host, const FolderChildr
         for (const char* type : {"ASSET_MODEL_PATH", "ASSET_TEXTURE_PATH",
                                  "ASSET_SOUND_PATH", "ASSET_PREFAB_PATH",
                                  "ASSET_MATERIAL_PATH", // #184 - materials were missing
-                                 "ASSET_FILE_PATH"}) {  // controllers, weapon definitions, scripts
+                                 "ASSET_FILE_PATH",     // controllers, weapon definitions, scripts
+                                 "ASSET_DECAL_PATH"}) {
             if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type)) {
                 if (host.MoveAssetToFolderUndoable)
                     host.MoveAssetToFolderUndoable((const char*)p->Data, folderPath.c_str());

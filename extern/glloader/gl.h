@@ -583,6 +583,12 @@ extern PFNGLFENCESYNCPROC glFenceSync;
 extern PFNGLCLIENTWAITSYNCPROC glClientWaitSync;
 extern PFNGLDELETESYNCPROC glDeleteSync;
 
+// Texture-to-texture copy (GL 4.3) - growing the decal texture arrays keeps the resident pages
+// without re-decoding them (DecalTextureArrays).
+typedef void (__stdcall* PFNGLCOPYIMAGESUBDATAPROC)(GLuint, GLenum, GLint, GLint, GLint, GLint, GLuint, GLenum, GLint, GLint,
+                                                    GLint, GLint, GLsizei, GLsizei, GLsizei);
+extern PFNGLCOPYIMAGESUBDATAPROC glCopyImageSubData;
+
 // Call once after a GL context is current (e.g. right after glfwMakeContextCurrent).
 bool GLLoader_Init();
 

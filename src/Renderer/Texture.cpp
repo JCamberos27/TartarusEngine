@@ -147,9 +147,10 @@ const char* FormatName(GLenum f) {
 // 3 RGB, 4 RGBA) to BCn, with a CPU-built mip chain when `mips` is set: glGenerateMipmap can't
 // run on a compressed texture, so each level is box-filtered from the one above (linear-space
 // for sRGB, alpha-weighted) and then encoded. Returns false, leaving `out` untouched, when the
-// format needs S3TC and the driver lacks it.
+// format needs S3TC and the driver lacks it. `keepAlpha`: BC3 even for an opaque image (the
+// decal arrays are one format throughout, TextureImportSettings::ForceFormat).
 bool EncodeBlockCompressed(const unsigned char* px, int w, int h, int channels, bool srgb, bool mips,
-                           bool highQuality, TextureCache::Image& out) {
+                           bool highQuality, TextureCache::Image& out, bool keepAlpha = false) {
     // Working layout per format: 4 = RGBA for BC1/BC3, 1 = R for BC4, 2 = RG for BC5. A colour
     // (sRGB) grey image has no 1/2-channel sRGB BC format, so it's expanded to RGBA like the
     // uncompressed path does.
@@ -177,7 +178,7 @@ bool EncodeBlockCompressed(const unsigned char* px, int w, int h, int channels, 
     if (!dxt) {
         format = wc == 1 ? GL_COMPRESSED_RED_RGTC1 : GL_COMPRESSED_RG_RGTC2;
         blockBytes = wc == 1 ? 8 : 16;
-    } else if (opaque) {
+    } else if (opaque && !keepAlpha) {
         format = srgb ? GL_COMPRESSED_SRGB_S3TC_DXT1_EXT : GL_COMPRESSED_RGB_S3TC_DXT1_EXT;
         blockBytes = 8;
     } else {
@@ -280,6 +281,61 @@ void EncodeNormalBC5(const unsigned char* px, int w, int h, int channels, bool m
         level = std::move(next);
         lw = nw; lh = nh;
     }
+}
+
+// TextureImportSettings::ForceFormat: `src` (stb layout, w x h) resampled to MaxTextureSize
+// square and encoded to exactly the requested format, whatever its channels would otherwise pick,
+// so every texture packed into one fixed-format array matches it. Fills `entry`'s size and blocks.
+bool EncodeForced(const unsigned char* src, int w, int h, int c, const TextureImportSettings& s, bool srgb,
+                  TextureCache::Image& entry) {
+    using F = TextureImportSettings::ForcedFormat;
+    const int size = s.MaxTextureSize;
+    if (size <= 0 || s.CompressionMode == TextureImportSettings::Compression::None) return false;
+    std::vector<unsigned char> square;
+    const unsigned char* px = src;
+    if (w != size || h != size) {
+        square = ResizeBox(src, w, h, c, size, size, srgb);
+        px = square.data();
+    }
+    const size_t texels = (size_t)size * size;
+    const bool mips = s.GenerateMipmaps;
+    TextureCache::Image encoded;
+    if (s.ForceFormat == F::BC5) {
+        if (c >= 3) {
+            EncodeNormalBC5(px, size, size, c, mips, encoded);
+        } else { // a grey map handed in as a normal map: x = y = grey, z up, still a valid BC5
+            std::vector<unsigned char> rgb(texels * 3);
+            for (size_t i = 0; i < texels; ++i) {
+                rgb[i * 3 + 0] = rgb[i * 3 + 1] = px[i * c];
+                rgb[i * 3 + 2] = 255;
+            }
+            EncodeNormalBC5(rgb.data(), size, size, 3, mips, encoded);
+        }
+    } else if (s.ForceFormat == F::BC4) {
+        std::vector<unsigned char> red(texels);
+        for (size_t i = 0; i < texels; ++i) red[i] = px[i * c];
+        if (!EncodeBlockCompressed(red.data(), size, size, 1, false, mips, false, encoded)) return false;
+    } else {
+        // BC3: RGBA in, and the alpha block kept even where the source is opaque.
+        std::vector<unsigned char> rgba(texels * 4);
+        for (size_t i = 0; i < texels; ++i) {
+            const unsigned char* p = px + i * c;
+            const bool grey = c <= 2;
+            rgba[i * 4 + 0] = p[0];
+            rgba[i * 4 + 1] = grey ? p[0] : p[1];
+            rgba[i * 4 + 2] = grey ? p[0] : p[2];
+            rgba[i * 4 + 3] = c == 4 ? p[3] : c == 2 ? p[1] : 255;
+        }
+        if (!EncodeBlockCompressed(rgba.data(), size, size, 4, srgb, mips,
+                                   s.CompressionMode == TextureImportSettings::Compression::HighQuality, encoded,
+                                   /*keepAlpha=*/true))
+            return false;
+    }
+    entry.Width = entry.Height = size;
+    entry.GLFormat = encoded.GLFormat;
+    entry.LevelSizes = std::move(encoded.LevelSizes);
+    entry.Pixels = std::move(encoded.Pixels);
+    return true;
 }
 
 } // namespace
@@ -421,6 +477,21 @@ TextureCpuData Decode(const std::string& path, std::vector<unsigned char> memory
     entry.SourceWidth = entry.Width = w;
     entry.SourceHeight = entry.Height = h;
     entry.Channels = c;
+    if (settings.ForceFormat != TextureImportSettings::ForcedFormat::None) {
+        const bool encodedOk = EncodeForced(src, w, h, c, settings, effective.IsSRGB, entry);
+        if (data) stbi_image_free(data);
+        if (!encodedOk) {
+            Log::Error("Texture: '" + path + "' can't be block-compressed to its forced format (no S3TC, or no size).",
+                       LogContext::Asset(path));
+            out.Memory = std::move(memory);
+            return out;
+        }
+        if (!fromMemory) TextureCache::Store(path, settings, entry);
+        CopyEntry(entry, out);
+        out.Memory = std::move(memory);
+        TextureLoadStats::AddDecode(MsSince(start));
+        return out;
+    }
     std::vector<unsigned char> resized;
     const unsigned char* pixels = src;
     if (settings.MaxTextureSize > 0 && (w > settings.MaxTextureSize || h > settings.MaxTextureSize)) {

@@ -5789,6 +5789,8 @@ int RunUnitTests(const char* filter) {
     RegisterGlassTests(tests);
     { void RegisterEditorSoundTests(UnitTestSupport::TestList&); RegisterEditorSoundTests(tests); } // UnitTests_EditorSound.cpp
     { void RegisterAudioTests(UnitTestSupport::TestList&); RegisterAudioTests(tests); } // UnitTests_Audio.cpp
+    { void RegisterDecalRenderTests(UnitTestSupport::TestList&); RegisterDecalRenderTests(tests); } // UnitTests_DecalRender.cpp
+    { void RegisterDecalAssetTests(UnitTestSupport::TestList&); RegisterDecalAssetTests(tests); } // UnitTests_DecalAssets.cpp
     for (const auto& [name, fn] : tests) {
         if(filter && std::string(name).find(filter)==std::string::npos) continue;
         g_CurrentTest = name;

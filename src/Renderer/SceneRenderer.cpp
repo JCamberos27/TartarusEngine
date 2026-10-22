@@ -18,6 +18,7 @@
 #include "ReflectionProbeArray.h"
 #include "LightBuffer.h"
 #include "ClusterGrid.h"
+#include "DecalSystem.h"
 #include "HdrTarget.h"
 #include "OpaqueColorCopy.h"
 #include "Ssao.h"
@@ -375,6 +376,12 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
     }
     program.SetInt("uClusterEnabled", fs.clusterOn ? 1 : 0);
 
+    // Clustered decals: the list (SSBO 11) and the texture arrays on units 22-25. The blood decals
+    // and FX sprites bind their own arrays over 22-24 mid-frame, so RenderScene rebinds these after
+    // them too (rebindDecals).
+    program.SetInt("uDecalCount", fs.decalCount);
+    if (in.decals) in.decals->BindForShading();
+
     program.SetInt("uUnlit", ctx.Unlit ? 1 : 0);
     // Real scene path: emit linear HDR; the shared Tonemapper pass maps it after MSAA resolve.
     // (Offscreen model thumbnails set this to 1 to self-tonemap.)
@@ -440,7 +447,24 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     // after the opaque pass (below), only where no geometry landed.
     if (in.skyAtmosphere) in.skyAtmosphere->RenderView(ctx.TxHdr, ctx.View, ctx.Proj, ctx.ViewPos);
 
-    const FrameState fs = GatherFrameState(world, ctx, in);
+    FrameState gathered = GatherFrameState(world, ctx, in);
+    // Clustered decals (docs/DECALS.md): this view's visible set, uploaded before the cluster cull
+    // bins it. They need the froxel lists, so nothing without clustering (the previews) gets any.
+    if (in.decals && in.decalCullShader && gathered.clusterOn) {
+        PROFILE_SCOPE("Decal Prepare");
+        DecalGrading grading;
+        for (auto [e, g] : world.Registry.view<const DecalGradingComponent>().each()) {
+            if (world.Registry.all_of<InactiveTag>(e)) continue;
+            grading.Age = std::clamp(g.Age, 0.0f, 1.0f);
+            grading.Wear = std::clamp(g.Wear, 0.0f, 1.0f);
+            break; // the first one in the scene wins
+        }
+        gathered.decalCount = in.decals->Prepare(world, ctx.Proj * ctx.View, ctx.ViewPos,
+                                                 ProjectSettings::Quality().DecalMaxDistance, grading);
+        in.decals->BindForCull();
+    }
+    const FrameState fs = gathered;
+    const auto rebindDecals = [&] { if (in.decals) in.decals->BindForShading(); };
     // Which frame state the program selector pushes. The view-model sub-pass swaps this for its
     // own (see below) — that swap is the only reason it isn't a plain const FrameState.
     const FrameState* activeFs = &fs;
@@ -450,7 +474,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     if (fs.clusterOn) {
         PROFILE_GPU_SCOPE("Cluster Cull");
         clusterGrid.Cull(*in.clusterBuildShader, *in.clusterCullShader, ctx.View, ctx.Proj,
-                         fs.clusterNearZ, fs.clusterFarZ, fs.vp[2], fs.vp[3]);
+                         fs.clusterNearZ, fs.clusterFarZ, fs.vp[2], fs.vp[3], in.decalCullShader, fs.decalCount);
     }
 
     // Froxel volumetric fog: inject + light this view's froxels (reading the cluster lists just
@@ -564,6 +588,8 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // the static world - a character walking through a pool or a crate on a stain covers it instead.
         bool Dynamic = false;
         unsigned Entity = 0xFFFFFFFFu; // for the blood splats on it (BloodRenderer::SplatRange)
+        // Which decals take to it (Affect Static / Dynamic): StaticTag, or nothing skinned or simulated.
+        bool StaticReceiver = true;
     };
     static std::vector<DrawItem> drawList;
     static std::vector<DrawItem> transparentList;
@@ -632,6 +658,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         const bool clothing = outfitPiece && !(outfitPiece->Flags & OutfitPieceBodyPart);
         glm::mat4 model = vis.Xform;
         const bool dynamicItem = renderable.ModelRef->HasBones() || world.Registry.all_of<RigidbodyComponent>(entity);
+        const bool staticReceiver = world.Registry.all_of<StaticTag>(entity) || !dynamicItem;
 
         // Frustum culling: skip the draw call entirely for anything outside the camera's view.
         // Bounds are the model's as posed (Model::PosedBounds: the bind bounds for anything unskinned or
@@ -696,6 +723,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                 m->MeshCount(), (int)m->TriangleCount(), (int)m->VertexCount(),
                 MaterialAsset::Queue::Transparent, qi, viewDepth, centre, Model::MeshPass::Transparent,
                 renderable.ReceiveShadows, layerBit, nearHide, hideBones, noSsao, hideVerts, nearHideWidth, collarVerts };
+            item.StaticReceiver = staticReceiver;
             item.DoubleSided = clothing;
             item.LayerPull = layerPull;
             if (outfitHide && outfitHide->Visible) {
@@ -728,6 +756,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             item.DoubleSided = clothing;
             item.LayerPull = layerPull;
             item.Dynamic = dynamicItem;
+            item.StaticReceiver = staticReceiver;
             item.Entity = (unsigned)entt::to_integral(entity);
             if (outfitHide && outfitHide->Visible) {
                 item.Visible = outfitHide->Visible.get();
@@ -844,6 +873,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         if (anyProbes) in.probeArray->Bind(prog, probeItem->Centre);
         prog.SetInt("uNoReceiveShadows", probeItem->ReceiveShadows ? 0 : 1);
         prog.SetInt("uObjectLayerBit", probeItem->LayerBit); // #203
+        prog.SetInt("uDecalStatic", probeItem->StaticReceiver ? 1 : 0);
         prog.SetFloat("uNearHide", probeItem->NearHide);
         prog.SetFloat("uNearHideWidth", probeItem->NearHideWidth);
         prog.SetVec3("uNearHideRight", nearHideRight);
@@ -917,6 +947,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         if (!ctx.TxHdr || !ctx.TxHdr->IsValid() || BloodRenderer::Get().QueuedDecals() == 0) return;
         localStats.DrawCalls += BloodRenderer::Get().DrawDecals(ctx.View, ctx.Proj, fs.vp, *ctx.TxHdr,
                                                                 [&](Shader& p) { ApplyFrameState(p, fs); });
+        rebindDecals(); // the blood decals' arrays sat on units 22-24
         modelShader.Bind();
         // The model program's state is unchanged, but GL's blend / cull / depth state was restored to the
         // pass baseline and the material-bind cache invalidated.
@@ -1117,9 +1148,13 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // sampling it here stamps whatever stands behind the gun (a character, a wall) onto it as
         // occlusion - the weapon read as see-through. The view model gets no screen-space AO.
         vmFs.ssaoOn = false;
+        // The world view's decals, re-binned into these froxels too (their bounds are still uploaded).
+        vmFs.decalCount = vmFs.clusterOn ? fs.decalCount : 0;
         if (vmFs.clusterOn) {
+            if (vmFs.decalCount > 0) in.decals->BindForCull();
             clusterGrid.Cull(*in.clusterBuildShader, *in.clusterCullShader, vmCtx.View, vmCtx.Proj,
-                             vmFs.clusterNearZ, vmFs.clusterFarZ, vmFs.vp[2], vmFs.vp[3]);
+                             vmFs.clusterNearZ, vmFs.clusterFarZ, vmFs.vp[2], vmFs.vp[3], in.decalCullShader,
+                             vmFs.decalCount);
         }
 
         // Everything below runs against the view model's frame state — uProj above all, which is
