@@ -6,6 +6,7 @@
 #include "../Graffiti/GraffitiPaint.h"
 #include "../Graffiti/GraffitiPiece.h"
 #include "EditorSound.h"
+#include "EditorFileHistory.h"
 
 #include <entt/entt.hpp>
 #include <imgui.h>
@@ -89,8 +90,10 @@ struct GraffitiDesigner {
     // Bake: GPU render + PBO readback (stage 1), then PNG encode and the .decal on a worker (stage 2).
     int BakeStage = 0;
     bool BakeAgain = false;
+    bool BakeUndoable = false, BakeAgainUndoable = false; // the Bake button's bake is an undo step of its own
     std::future<uint64_t> Encoding; // the four PNGs' FNV-1a hash; 0 when writing failed
     uint64_t LastBakeHash = 0;
+    std::vector<EditorFileHistory::State> BakeBefore; // the maps and .decal as they were, for the bake's undo step
     int Bakes = 0;
     double BakeDoneAt = -10.0;
 
@@ -101,6 +104,9 @@ struct GraffitiDesigner {
     // Scene-view spraying.
     bool ViewportSpray = false;
     entt::entity Target = entt::null; // the decal entity showing this piece
+    std::vector<uint8_t> OccVisible;  // the live overlay's cells not hidden by geometry in front of the wall
+    glm::mat4 OccKey{0.0f};           // view * projection * box the cells were worked out for
+    double OccAt = -10.0;
     double OverlayUntil = -1.0;       // keep the live overlay until the re-baked decal is resident (or this time)
 
     // Text: letters cascade in as they're typed.
