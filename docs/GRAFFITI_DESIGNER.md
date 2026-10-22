@@ -33,6 +33,14 @@ they are gitignored, and the recipe and `.decal` are what get committed.
     paint below it, for example a gradient inside letters.
   - **Stamp**: an image (any of the cooked `T_Decal_Graffiti*` PNGs) with position, size,
     rotation and stretch. Coverage comes from alpha, or from brightness for white-on-black images.
+    To pick one, press the image button beside the layer's *Image* field (or paste a path, or drag a
+    texture from the Asset Browser onto the field). The **stamp picker** opens: folder tabs across the
+    top (one per folder under `Decals/Graffiti` that holds PNGs, found by scanning, plus *Recent* with
+    this session's last 12 picks), a filename search box, and a scrolling grid of thumbnails on a dark
+    checker so white-on-transparent shapes read. Hover a cell for its name, click to pick it, Esc to
+    close. The pick sets the layer's image and the Stamp tool's next stamp; the current image is
+    outlined. Thumbnails load lazily (only the visible cells, a few per frame, through the Asset
+    Browser's thumbnail cache) and are freed when the Designer closes.
   - **Text**: a string set from one of the four alphabets (Tag, Brush, Bubble, Block), with
     kerning, baseline and spin jitter, arc or wave warp, and per-letter fill and outline colours.
   - **Spray**: the recorded strokes. Each sample stores position, pressure, the can's distance
@@ -96,6 +104,8 @@ read back from disk bake to the same bytes.
 **Tools**
 - Move: drag the selected stamp or text layer.
 - Stamp and Text: click to place a new layer.
+  With the Stamp tool active, a thumbnail of the current stamp shows under the tool row; click it
+  to open the stamp picker and choose the image the next click places.
 - Spray.
 - Eyedropper: picks a colour from the canvas.
 - Erase: a spray stroke that removes paint from its own layer.

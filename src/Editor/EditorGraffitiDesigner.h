@@ -18,6 +18,23 @@
 #include <unordered_map>
 #include <vector>
 
+// The stamp picker popup (thumbnail grid by folder, recents, search). Folders are scanned from disk
+// each time it opens; thumbnails come from the editor's shared AssetThumbnailLoader and are dropped
+// again when the Designer closes.
+struct StampPicker {
+    struct Folder {
+        std::string Name;
+        std::vector<std::string> Files; // project-relative, sorted
+    };
+    bool WantOpen = false;
+    int Target = -1;                    // layer index the pick goes to, or -1: only the Stamp tool's next stamp
+    int Tab = 1;                        // 0 = Recent, i + 1 = Folders[i]
+    char Search[64] = "";
+    std::vector<Folder> Folders;
+    std::vector<std::string> Recent;    // newest first, this session
+    std::vector<std::string> Requested; // absolute paths asked of the thumbnail loader
+};
+
 struct GraffitiDesigner {
     enum class Tool : int { Move = 0, Stamp, Text, Spray, Eyedropper, Erase, Count };
 
@@ -42,6 +59,7 @@ struct GraffitiDesigner {
     bool VelocityPressure = true;
     std::vector<glm::vec3> Recent;       // recently used colours, newest first
     std::string StampTexture = "assets/Decals/Graffiti/Shapes/T_Decal_GraffitiShape_001.png";
+    StampPicker Picker;
 
     // Canvas view.
     float Zoom = 1.0f;
