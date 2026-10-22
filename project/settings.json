@@ -545,7 +545,7 @@
   "startupSceneGuid": "e2062f48889aceec",
   "tags": [],
   "quality": {
-    "decalTextureBudgetMB": 512
+    "decalTextureBudgetMB": 1024
   },
   "time": {
     "maximumDeltaTime": 0.10000000149011612,
