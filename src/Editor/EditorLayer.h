@@ -45,6 +45,7 @@ class Camera;
 class AssetLibrary;
 class ScreenBlur;
 class Framebuffer;
+class GameViewPanel;
 
 // Rect = Unity's "Rect Tool" adapted to 3D: translate handles plus bounding-box corner/edge
 // handles for non-uniform scaling, in one combined gizmo (ImGuizmo's TRANSLATE | BOUNDS).
@@ -611,8 +612,30 @@ public:
     // (they stay grouped/tabbed — this only changes which is selected). Scene defaults to
     // already-requested so the first frame starts there; main.cpp requests Scene on Stop and
     // Game on Play, so the viewport you're shown always matches what you just did.
-    void RequestSceneTabFocus() { m_FocusSceneTabRequested = true; }
-    void RequestGameTabFocus() { m_FocusGameTabRequested = true; }
+    // Show the scene / the game. In the unified viewport (Game not popped out) these switch the
+    // Scene panel's mode, with the glide-and-dissolve on Play / Stop (EditorLayer_ViewportMode.cpp);
+    // with Game popped out into its own window they bring that tab forward as before.
+    void RequestSceneTabFocus();
+    void RequestGameTabFocus();
+
+    // --- Unified viewport (EditorLayer_ViewportMode.cpp) -----------------------------------------
+    // One panel shows the scene or the game in the same rect: a Scene | Game switch in its header,
+    // Play switches to Game (the editor camera glides to the player's view while the game image
+    // dissolves in), Stop comes back. Window > Game pops the Game view out into its own window.
+    enum class ViewportMode { Scene, Game };
+    void SetGameViewPanel(GameViewPanel* panel) { m_GameView = panel; }
+    ViewportMode GetViewportMode() const { return m_ViewportMode; }
+    // `glide`: the camera move (Play / Stop); without it, just the dissolve.
+    void SetViewportMode(ViewportMode mode, bool glide = false);
+    bool GameViewPoppedOut() const;
+    // main.cpp: render the scene / the embedded game this frame (both while dissolving).
+    bool SceneImageWanted() const;
+    bool GameImageWanted() const;
+    // main.cpp, every frame before the Scene render: advances the dissolve and moves the editor
+    // camera along the glide (restored to where it was when the move ends). `gameCam` is the
+    // camera the game renders through; `playing` whether Play is on.
+    void UpdateViewFade(Camera& editorCamera, const Camera& gameCam, bool playing);
+    bool ViewFadeActive() const { return m_ViewFade.Active; }
     // Applies a pending Request*TabFocus() (no-op otherwise) — main.cpp calls this once per
     // editor-UI frame, AFTER both Scene's and Game's Begin() calls have run. The request stays
     // pending until it actually lands on a live dock node. Deliberately doesn't go through
@@ -773,7 +796,7 @@ public:
     // then leaves the desktop showing behind the glass instead of the black canvas.
     void SetWindowSeeThrough(bool v) { m_WindowSeeThrough = v; }
     bool DesktopShowsThrough() const { return m_WindowSeeThrough && GlassThemeActive(); }
-    bool OverlaysHidden() const { return m_HideOverlaysThisFrame; }
+    bool OverlaysHidden() const { return m_HideOverlaysThisFrame || m_ViewFade.Active; }
     // Smoke-test screenshots: hides the nav gizmo, collider wires and selection outlines until cleared.
     bool CleanShots() const { return m_CleanShots; }
 
@@ -992,6 +1015,18 @@ private:
     // Defaults to a plausible full-window size so nothing divides by zero if anything reads
     // these before the first Draw() has run; overwritten every editor-mode frame after that.
     bool m_FocusSceneTabRequested = true;
+    GameViewPanel* m_GameView = nullptr;
+    ViewportMode m_ViewportMode = ViewportMode::Scene;
+    struct ViewFade {
+        bool Active = false, ToGame = true, Glide = false;
+        double Start = 0.0;
+        float Duration = 0.5f, Alpha = 0.0f; // Alpha: the game image's opacity this frame
+    } m_ViewFade;
+    struct ViewPose { glm::vec3 Position{0.0f}; float Yaw = 0.0f, Pitch = 0.0f, Fov = 75.0f; bool Valid = false; };
+    ViewPose m_ScenePose;    // the editor camera when the view left the scene (restored on the way back)
+    ViewPose m_LastGamePose; // the game camera's last pose while Game was showing (the Stop glide's start)
+    void FinishViewFade(Camera* editorCamera);
+    void DrawViewportModeSwitch(float btnH);
     bool m_FocusGameTabRequested = false;
     // Seed the bottom dock node showing the Asset Browser tab (not Console) whenever the default
     // layout is (re)built. Retried each frame until its dock node exists — same pattern as the

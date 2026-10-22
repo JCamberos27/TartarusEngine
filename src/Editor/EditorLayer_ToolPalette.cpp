@@ -19,6 +19,7 @@
 #include "EditorUIHelpers.h"
 #include "EditorUIPrimitives.h"
 #include "EditorTheme.h"
+#include "GameViewPanel.h"
 
 #include <imgui.h>
 #include <imgui_internal.h> // ImMax, used by EditorUIPrimitives
@@ -77,6 +78,24 @@ void EditorLayer::DrawViewportHeader(World& world, Camera& editorCamera) {
     ImGui::SetCursorScreenPos(ImVec2(origin.x + padX, rowY));
 
     int& quiet = EditorSoundEvents::SuppressDepth(); // tools, space and snap play EditorSound::ToolFrame
+
+    // Scene | Game first: the rest of the strip belongs to whichever is showing.
+    DrawViewportModeSwitch(btn);
+    if (m_ViewportMode == ViewportMode::Game && !GameViewPoppedOut() && m_GameView) {
+        // Game: its aspect / resolution on the left, pop-out on the right. The scene tools wait.
+        HeaderDivider(frameH);
+        m_GameView->DrawAspectControl();
+        ImGui::SetCursorScreenPos(ImVec2(std::floor(origin.x + stripW - padX - btn), rowY));
+        if (ActionButton(ICON_FA_UP_RIGHT_FROM_SQUARE "##popout", "Pop the Game view out into its own window (Window > Game)",
+                         false, ImVec2(btn, btn))) {
+            m_GameView->SetWindowOpen(true);
+            SetViewportMode(ViewportMode::Scene);
+        }
+        ImGui::PopStyleVar(2);
+        ImGui::SetCursorScreenPos(ImVec2(origin.x, origin.y + stripH));
+        return;
+    }
+    HeaderDivider(frameH);
 
     // --- Left: the exclusive tools, with one underline that glides to the active one ------------
     float activeX = -1.0f, activeW = 0.0f;

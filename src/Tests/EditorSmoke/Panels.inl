@@ -64,16 +64,22 @@ void RegisterPanelsTests() {
         Add("panels: Hierarchy, Inspector and Assets close with their x and come back", s);
     }
 
-    Add("panels: the Game tab shows the game view; the Scene tab comes back", {
+    Add("panels: the viewport's Game switch shows the game view in the same rect; Scene comes back", {
         FreshScene(), Wait(2),
-        Click(TabOf(EditorPanels::Game)),
-        UntilShown(EditorPanels::Game),
+        Do("note the viewport size", [](Ctx& c) { g_Number = c.E.ViewportSize().x; }),
+        Click(ByLabel("Game", "###Scene")),
+        Until("the game is showing", [](Ctx& c) {
+            return c.E.GetViewportMode() == EditorLayer::ViewportMode::Game && !c.E.ViewFadeActive();
+        }),
         Wait(5),
-        Shot("game", {"###Game"}),
+        Shot("game", {"###Scene"}),
+        ExpectTrue("no separate Game window", [](Ctx&) { return !Shown(EditorPanels::Game); }),
         ExpectTrue("Play stays in the title bar over the Game view", [kBar](Ctx&) { return Find(ByLabel("Play", kBar)) != nullptr; }),
-        Click(TabOf(EditorPanels::Scene)),
-        UntilShown(EditorPanels::Scene),
-        ExpectTrue("Game hidden behind it", [](Ctx&) { return !Shown(EditorPanels::Game); }),
+        Click(ByLabel("Scene", "###Scene")),
+        Until("the scene is back, the same size", [](Ctx& c) {
+            return c.E.GetViewportMode() == EditorLayer::ViewportMode::Scene && !c.E.ViewFadeActive() &&
+                   std::abs(c.E.ViewportSize().x - (float)g_Number) < 1.0f;
+        }),
     });
 
     // ---------------------------------------------------------------------------------- Console

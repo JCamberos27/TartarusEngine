@@ -1613,6 +1613,7 @@ int main(int argc, char** argv) {
 
         GameViewPanel gameView;
         gameView.LoadSettings();
+        editor.SetGameViewPanel(&gameView); // the unified viewport draws it in Game mode
         // --perf-bench: the Game view renders at the benchmarked size, not whatever the saved preset
         // is (a saved "1920x1080 FHD" rendered every --perf-res at 1080p): --perf-res exactly, else
         // the whole window.
@@ -4109,7 +4110,10 @@ int main(int argc, char** argv) {
             // skip this render entirely when the Scene tab isn't the one showing (#172). Halves
             // per-frame render cost in the common case (editing in one tab or the other).
             // (The combat bench measures the game alone: no Scene view beside it.)
-            if ((editorUIVisible && editor.IsSceneViewportVisible() && !(opt.perfBenchMode && npcTest)) ||
+            // The unified viewport's Scene <-> Game move: advance the dissolve and glide the editor
+            // camera before it renders (EditorLayer_ViewportMode.cpp).
+            editor.UpdateViewFade(editorCamera, *gameCam, playing);
+            if ((editorUIVisible && editor.SceneImageWanted() && !(opt.perfBenchMode && npcTest)) ||
                 ((npcTest || opt.stockProbeMode) && playing && !(opt.perfBenchMode && npcTest && opt.smokeShotsDir.empty()))) {
                 PROFILE_SCOPE("Scene View Render");
                 PROFILE_GPU_SCOPE("Scene View Render");
@@ -4736,7 +4740,7 @@ int main(int argc, char** argv) {
                                 /*postSlot=*/0, /*overlayInPlayOnly=*/true, gvRenderStats);
                 // With the Scene view hidden (the Game tab in front), the Game view is the frame on
                 // screen: the Statistics panel reports it, so it agrees with the Game view's overlay.
-                if (!editor.IsSceneViewportVisible()) editor.SetRenderStats(gvRenderStats);
+                if (!editor.SceneImageWanted()) editor.SetRenderStats(gvRenderStats);
                 // --weapon-test --smoke-shots <dir>: the Game view through the reloads.
                 const std::string harnessShot = weaponTest ? weaponTest->ShotName() : npcTest ? npcTest->ShotName() : std::string();
                 if ((weaponTest || npcTest) && !opt.smokeShotsDir.empty() && !harnessShot.empty()) {
@@ -4839,10 +4843,9 @@ int main(int argc, char** argv) {
                     // window (observed after a maximize/restore cycle). ImGuiCond_Appearing makes
                     // this a no-op once Game is being submitted continuously, so it never fights a
                     // manual re-dock the user did.
-                    ImGuiID sceneGameDockId = editor.GetSceneGameDockNodeId();
-                    if (sceneGameDockId != 0) {
-                        ImGui::SetNextWindowDockID(sceneGameDockId, ImGuiCond_Appearing);
-                    }
+                    // Popped out (Window > Game): its own floating window, first shown at a useful
+                    // size; dock it anywhere from there.
+                    ImGui::SetNextWindowSize(ImVec2(960.0f, 600.0f), ImGuiCond_FirstUseEver);
                     gameView.RenderUI(&gameViewStats, window.IsFullscreen(), playing, gameInputEngaged,
                                       /*noSceneCamera=*/!playing && FindActiveSceneCamera(world) == entt::null);
                     if (weaponLab) weaponLab->DrawPanel(&firstPersonPresentation, playing);
@@ -4855,15 +4858,24 @@ int main(int argc, char** argv) {
                                                gvfb.ColorTexture(), gvfb.Width(), gvfb.Height());
                     }
 
-                    // Click inside the running Game view (while it doesn't yet own input) captures
-                    // the cursor for the player. Esc / Stop release it (handled above / in stopPlay).
-                    if (playing && !playMaximized && gameView.ConsumeEngageClick()) {
-                        gameInputEngaged = true;
-                        setPlayCursorLocked(true);
-                    }
-                } else {
+                } else if (!editor.GameImageWanted()) {
                     gameView.NotifyClosed();
                     editor.SetGameViewRect(ImVec2(0.0f, 0.0f), ImVec2(0.0f, 0.0f), 0, 0, 0);
+                } else {
+                    // In the unified viewport: the rect it was drawn into this frame (editor.Draw).
+                    Framebuffer& gvfb = gameView.GetFramebuffer();
+                    editor.SetGameViewRect(gameView.GetViewImagePos(), gameView.GetViewImageSize(),
+                                           gvfb.ColorTexture(), gvfb.Width(), gvfb.Height());
+                }
+                // What the embedded view draws next frame (it runs inside editor.Draw, before this
+                // frame's game render).
+                gameView.SetFrameState(gameViewStats, playing, gameInputEngaged,
+                                       /*noSceneCamera=*/!playing && FindActiveSceneCamera(world) == entt::null);
+                // Click inside the running Game view (while it doesn't yet own input) captures
+                // the cursor for the player. Esc / Stop release it (handled above / in stopPlay).
+                if (playing && !playMaximized && gameView.ConsumeEngageClick()) {
+                    gameInputEngaged = true;
+                    setPlayCursorLocked(true);
                 }
 
                 // Called here, after BOTH Scene's and Game's Begin() calls have run this frame,
@@ -4960,7 +4972,7 @@ int main(int argc, char** argv) {
             if (screenshotPending) {
                 screenshotPending = false;
                 Framebuffer& shotFb = gameView.GetFramebuffer();
-                const bool shotFromGame = editorUIVisible && gameView.IsWindowOpen() && gameView.IsVisible() && shotFb.IsValid() &&
+                const bool shotFromGame = editorUIVisible && gameView.IsVisible() && shotFb.IsValid() &&
                                           shotFb.Width() > 0 && shotFb.Height() > 0;
                 int shotW = shotFb.Width(), shotH = shotFb.Height();
                 if (!shotFromGame) glfwGetFramebufferSize(window.Handle(), &shotW, &shotH);

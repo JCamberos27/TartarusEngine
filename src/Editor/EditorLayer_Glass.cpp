@@ -1365,7 +1365,7 @@ void EditorLayer::DrawGlassLibrary(World& world, AssetLibrary& assets) {
 // --- Viewport HUDs ------------------------------------------------------------------------------
 
 void EditorLayer::DrawGlassViewportOverlays(World& world) {
-    if (!GlassThemeActive() || m_HideOverlaysThisFrame) return;
+    if (!GlassThemeActive() || OverlaysHidden()) return;
     const EditorSettings& prefs = EditorSettings::Get();
     if (!prefs.GlassViewportHuds) return;
     GlassEditorState& g = GlassState();

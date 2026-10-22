@@ -128,6 +128,7 @@ void EditorSettings::Load() {
     if (auto it = root.find("recentScenes"); it != root.end() && it->is_array())
         for (const auto& p : *it) if (p.is_string() && !p.get<std::string>().empty()) s.RecentScenes.push_back(p.get<std::string>());
     s.GameViewMaximizeOnPlay = SafeValue(root, "gameViewMaximizeOnPlay", s.GameViewMaximizeOnPlay);
+    s.PlayTransitionGlide = SafeValue(root, "playTransitionGlide", s.PlayTransitionGlide);
     s.GameViewShowStats = SafeValue(root, "gameViewShowStats", s.GameViewShowStats);
     s.SceneShowStats = SafeValue(root, "sceneShowStats", s.SceneShowStats);
     s.SceneCameraFov = SafeValue(root, "sceneCameraFov", s.SceneCameraFov);
@@ -453,6 +454,7 @@ void EditorSettings::Flush() {
     root["gameViewMaximizeOnPlay"] = Get().GameViewMaximizeOnPlay;
     root["gameViewShowStats"] = Get().GameViewShowStats;
     root["sceneShowStats"] = Get().SceneShowStats;
+    root["playTransitionGlide"] = Get().PlayTransitionGlide;
     root["sceneCameraFov"] = Get().SceneCameraFov;
     root["sceneCameraFlySpeed"] = Get().SceneCameraFlySpeed;
     root["sceneCameraNear"] = Get().SceneCameraNear;

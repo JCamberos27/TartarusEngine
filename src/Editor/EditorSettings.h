@@ -85,6 +85,9 @@ struct EditorSettings {
     // other editor preference already goes through. GameViewPresetWidth/Height are only
     // meaningful (nonzero) when the saved preset was a custom fixed resolution, not a built-in.
     bool GameViewMaximizeOnPlay = false;
+    // Play / Stop in the unified viewport: the editor camera glides to the player's view (and back)
+    // under the dissolve. Off: just the dissolve. (Reduce Motion / Motion > Viewport turn both off.)
+    bool PlayTransitionGlide = true;
     bool GameViewShowStats = true;
 
     // Scene viewport's Statistics overlay (FPS / frame ms / draw calls / triangles / vertices /
