@@ -5120,8 +5120,24 @@ int main(int argc, char** argv) {
                     static const bool openAll = std::getenv("TARTARUS_OPEN_ALL") != nullptr;
                     if (openAll && smokeFramesRendered == 1) Openable::SetAll(world, 1.0f);
                     const int shot = (smokeFramesRendered - kShotCameraStart) / kShotCameraSettle;
-                    if (smokeFramesRendered >= kShotCameraStart && (smokeFramesRendered - kShotCameraStart) % kShotCameraSettle == 0 &&
-                        shot < (int)shotCameras.size() && sceneFramebuffer.IsValid()) {
+                    const bool captureFrame = smokeFramesRendered >= kShotCameraStart &&
+                                              (smokeFramesRendered - kShotCameraStart) % kShotCameraSettle == 0 &&
+                                              shot < (int)shotCameras.size() && sceneFramebuffer.IsValid();
+                    // Decal maps and substrates decode in the background: a fixed frame count caught the hallway's
+                    // peeling paint with or without its concrete depending on how the decodes raced. Each capture
+                    // waits (on the same pose) until they're in, up to kShotStreamHold frames per scene.
+                    static int shotHold = 0;
+                    if (smokeFramesRendered == 1) shotHold = 0;
+                    constexpr int kShotStreamHold = 900;
+                    const bool hold = captureFrame && decalSystem.Streaming() && shotHold < kShotStreamHold;
+                    if (hold) {
+                        ++shotHold;
+                        --smokeFramesRendered; // this frame again next time round
+                    } else if (captureFrame && shotHold >= kShotStreamHold && decalSystem.Streaming()) {
+                        Log::Warn("Smoke shots: decal textures still streaming after " + std::to_string(kShotStreamHold) +
+                                  " held frames - captured anyway.");
+                    }
+                    if (captureFrame && !hold) {
                         const int w = sceneFramebuffer.Width(), h = sceneFramebuffer.Height();
                         const std::string stem = std::filesystem::path(smokeScenePaths[smokeSceneIndex]).stem().string();
                         WritePngTo(opt.smokeShotsDir, stem + "_" + shotCameras[shot].Name, w, h, GrabTopDown(sceneFramebuffer.Handle(), w, h));
