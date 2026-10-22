@@ -1,0 +1,13 @@
+{
+  "albedo": "assets/Architecture/Building/Textures/Wall_Concrete/Wall_Concrete_Base_Color.png",
+  "normal": "assets/Architecture/Building/Textures/Wall_Concrete/Wall_Concrete_Normal.png",
+  "roughness": "",
+  "ao": "assets/Architecture/Building/Textures/Wall_Concrete/Wall_Concrete_AO.png",
+  "tiling": 1.5,
+  "tint": [1.6, 1.6, 1.6],
+  "strength": 1.0,
+  "roughnessRange": [0.9, 0.9],
+  "mirror": true,
+  "crop": [0.0, 0.21, 1.0, 0.93],
+  "detail": 1.0
+}
