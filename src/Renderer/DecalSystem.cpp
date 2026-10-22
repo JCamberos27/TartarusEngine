@@ -176,6 +176,7 @@ uint32_t DecalSystem::SubstrateIndex(const SubstrateDesc& desc) {
         e.Src.Normal = norm.Normal;
         e.Src.Rough = norm.Roughness;
         e.Src.AO = norm.AO;
+        e.Src.Detail = norm.Detail;
         e.Src.Tier = 2048;
         e.Gpu.Crop = desc.Crop;
         e.Gpu.TintStrength = glm::vec4(desc.Tint, Unit(desc.Strength));
@@ -323,6 +324,7 @@ int DecalSystem::Prepare(World& world, const glm::mat4& viewProj, const glm::vec
         if (changed) {
             m_Textures->Clear();
             ClearSubstrates();
+            SubstratePresets::ClearCache();
         }
     }
     m_Textures->BeginFrame();
@@ -374,6 +376,8 @@ int DecalSystem::Prepare(World& world, const glm::mat4& viewProj, const glm::vec
         uint32_t sub = 0;
         if (dc.SubstrateMode == 2) {
             sub = SubstrateIndex(CustomSubstrate(dc));
+        } else if (dc.SubstrateMode == 4) {
+            if (!dc.SubPreset.empty()) sub = SubstrateIndex(SubstratePresets::Get(dc.SubPreset));
         } else if (dc.SubstrateMode != 3 && asset->Substrate.Enabled()) {
             sub = SubstrateIndex(asset->Substrate);
             if (dc.SubstrateMode == 0) inst.Gpu.Ids.z |= Decals::FLAG_SUBSTRATE_AUTO;

@@ -8,7 +8,7 @@
 #  * materials: the apartment walls (+ the window / arch Reveal pieces that sit in a unit) keep their white baseColor,
 #    normal and roughness maps and only gain the PH_Beige_Wall AO map (the shader reads its red channel, so it can't
 #    tint) and the T_Grunge_PeelingPaint_036 grunge (0.3, scale 0.25); ceilings and the apartments' baseboards get _085
-#    (0.4 and 0.45). They also gain the corridor's "substrate" blocks (dc.SUBSTRATES): Wall_Concrete on walls and
+#    (0.4 and 0.45). They also gain the corridor's "substrate" preset references (dc.SUBSTRATES): Wall_Concrete on walls and
 #    reveals, Floor_Concrete on ceilings, PH_Dark_Wooden_Planks on baseboards. 301 is the hand-edited NPC test room: nothing there is touched except these materials and the
 #    added decals;
 #  * decals go under an "Apartment Wear" root, one "30x Wear" group per unit. Two seeded units are trashed (~60 decals),
@@ -16,7 +16,7 @@
 #    patches (larger and lit rooms), and ceiling clusters under the lamp and in the corners. Bathrooms always get water
 #    damage kept light, like the hall: one ceiling cluster, chipped lower walls, one dark DA_LiquidSplatter_* splash.
 #    The corridor's DA_PeelingPaint_* pool plus eight flake / crack maps (APT_POOL), for variety and chipping.
-#    Ceiling decals get a Custom Floor_Concrete substrate override; the rest stay on Auto (the receiver's substrate);
+#    Ceiling decals get a Preset Floor_Concrete substrate override; the rest stay on Auto (the receiver's substrate);
 #  * every decal is placed from geometry read off the scene (wall planes and which side faces into the room, door and
 #    window openings, ceiling footprints) and a self-check at the end fails loudly if one is off its wall, faces out of
 #    the room, sits outside the room's footprint or covers an opening. Asserted limits: <= MAX_DECALS decals,

@@ -1365,8 +1365,10 @@ struct DecalComponent {
     float Fade = 0.0f, Bleach = 0.0f, Peel = 0.0f, Buff = 0.0f;
     // Substrate (Substrate.h): what shows where the decal's mask says the paint is gone.
     // 0 Auto: the receiving material's substrate, else the asset's (only for an asset that has one);
-    // 1 Asset: always the asset's; 2 Custom: the maps and values below; 3 Off: none.
+    // 1 Asset: always the asset's; 2 Custom: the maps and values below; 3 Off: none;
+    // 4 Preset: the .substrate named by SubPreset.
     int SubstrateMode = 0;
+    std::string SubPreset;              // project-relative .substrate (Preset)
     std::string SubAlbedo, SubNormal, SubRoughness, SubAO; // project-relative textures (Custom)
     float SubTiling = 1.5f;             // metres per repeat
     glm::vec3 SubTint{1.0f};
