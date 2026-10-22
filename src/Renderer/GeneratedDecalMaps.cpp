@@ -89,6 +89,11 @@ const DecalTextureArrays::Source* GeneratedDecalMaps::Find(const std::string& ke
             Log::Warn("Decals: could not make the runtime decal maps '" + key + "' in " + Dir());
         }
     }
+    // Sealed (its slot key hashed) once ready, and again only if a caller asks for another tier.
+    if (e.Ready && (e.Src.Tier != tier || e.Src.Key == 0)) {
+        e.Src.Tier = tier;
+        e.Src.Seal();
+    }
     e.Src.Tier = tier;
     return e.Ready ? &e.Src : nullptr;
 }

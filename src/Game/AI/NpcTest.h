@@ -157,6 +157,7 @@ private:
     void DecalsDrive(Player& player, float& wantYaw, float& wantPitch);
     // decals
     int m_KStep = 0, m_KShot = 0;
+    int m_KStressFrame = 0; // TARTARUS_DECAL_STRESS: frames of rounds and blood fired so far
     float m_KAt = 0.0f, m_KClock = 0.0f;
     bool m_KMidChecked = false;
     int m_KPlacedStage = 0;

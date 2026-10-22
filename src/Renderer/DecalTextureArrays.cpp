@@ -4,10 +4,15 @@
 #include "gl.h"
 
 #include <algorithm>
+#include <cassert>
 #include <chrono>
 #include <cmath>
+#include <condition_variable>
+#include <deque>
 #include <fstream>
 #include <iterator>
+#include <mutex>
+#include <thread>
 
 // ---- DecalPageAllocator ---------------------------------------------------------------------
 
@@ -278,20 +283,91 @@ struct DecalTextureArrays::Decoded {
     bool Has[kKinds] = {};
 };
 
+// The decode workers: kMaxInFlight threads kept for the arrays' lifetime (a thread per decode cost a
+// thread start each time). Request never has more than kMaxInFlight decodes out, so none waits long.
+class DecalTextureArrays::Workers {
+public:
+    using Task = std::packaged_task<std::shared_ptr<Decoded>()>;
+    explicit Workers(int n) {
+        for (int i = 0; i < n; ++i) m_Threads.emplace_back([this] { Run(); });
+    }
+    ~Workers() {
+        {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            m_Stop = true;
+        }
+        m_Wake.notify_all();
+        for (std::thread& t : m_Threads) t.join(); // the decodes running finish; queued ones are dropped
+    }
+    std::future<std::shared_ptr<Decoded>> Submit(Task task) {
+        std::future<std::shared_ptr<Decoded>> f = task.get_future();
+        {
+            std::lock_guard<std::mutex> lock(m_Mutex);
+            m_Queue.push_back(std::move(task));
+        }
+        m_Wake.notify_one();
+        return f;
+    }
+
+private:
+    void Run() {
+        for (;;) {
+            Task task;
+            {
+                std::unique_lock<std::mutex> lock(m_Mutex);
+                m_Wake.wait(lock, [this] { return m_Stop || !m_Queue.empty(); });
+                if (m_Stop) return;
+                task = std::move(m_Queue.front());
+                m_Queue.pop_front();
+            }
+            task(); // a throw lands in the future (a failed decode)
+        }
+    }
+    std::mutex m_Mutex;
+    std::condition_variable m_Wake;
+    std::deque<Task> m_Queue;
+    std::vector<std::thread> m_Threads;
+    bool m_Stop = false;
+};
+
 DecalTextureArrays::DecalTextureArrays() { UpdateMaxLayers(); }
 
 DecalTextureArrays::~DecalTextureArrays() {
-    m_Slots.clear(); // waits out any decode still running (std::async futures block on destruction)
+    for (auto& [key, e] : m_Slots)
+        if (e->Pending.valid()) e->Pending.wait(); // let a decode in flight finish before its workers go
+    m_Slots.clear();
+    m_Workers.reset();
     for (unsigned int& t : m_Tex)
         if (t) glDeleteTextures(1, &t);
     if (m_Placeholder) glDeleteTextures(1, &m_Placeholder);
 }
 
-std::string DecalTextureArrays::KeyFor(const Source& s) {
-    return std::to_string(DecalPageAllocator::SlotSizeFor(s.Tier)) + "|" + s.Albedo + "|" + s.Normal + "|" + s.Surface +
-           "|" + s.Aux +
-           (s.Rough.empty() && s.AO.empty() && s.Detail <= 0.0f ? std::string()
-                                                              : "|pack|" + s.Rough + "|" + s.AO + "|" + std::to_string(s.Detail));
+std::uint64_t DecalTextureArrays::KeyOf(const Source& s) {
+    // FNV-1a over what the old string key held: the slot size, the four paths, and the packed surface's inputs.
+    std::uint64_t h = 1469598103934665603ull;
+    auto bytes = [&h](const void* p, std::size_t n) {
+        const unsigned char* c = static_cast<const unsigned char*>(p);
+        for (std::size_t i = 0; i < n; ++i) h = (h ^ c[i]) * 1099511628211ull;
+    };
+    auto str = [&](const std::string& v) {
+        bytes(v.data(), v.size());
+        h = (h ^ 0x7Cu) * 1099511628211ull; // '|' between fields
+    };
+    const int size = DecalPageAllocator::SlotSizeFor(s.Tier);
+    bytes(&size, sizeof size);
+    str(s.Albedo);
+    str(s.Normal);
+    str(s.Surface);
+    str(s.Aux);
+    if (!(s.Rough.empty() && s.AO.empty() && s.Detail <= 0.0f)) {
+        str(s.Rough);
+        str(s.AO);
+        bytes(&s.Detail, sizeof s.Detail);
+    }
+    h ^= h >> 33;
+    h *= 0xff51afd7ed558ccdull;
+    h ^= h >> 33;
+    return h ? h : 1; // 0 means "not sealed"
 }
 
 std::size_t DecalTextureArrays::PerLayerBytes(const bool active[kKinds]) const {
@@ -305,7 +381,7 @@ std::size_t DecalTextureArrays::PerLayerBytes(const bool active[kKinds]) const {
 
 void DecalTextureArrays::UpdateMaxLayers() {
     const std::size_t perLayer = PerLayerBytes(m_Active);
-    const int layers = (int)std::max<std::size_t>(1, m_BudgetBytes / std::max<std::size_t>(perLayer, 1));
+    const int layers = (int)std::clamp<std::size_t>(m_BudgetBytes / std::max<std::size_t>(perLayer, 1), 1, kMaxLayers);
     m_Alloc.SetMaxLayers(layers);
     if (m_Alloc.LayerCount() * perLayer > m_BudgetBytes && !m_WarnedBudget) {
         m_WarnedBudget = true;
@@ -341,12 +417,14 @@ void DecalTextureArrays::Clear() {
         m_Alloc.Free(e->S.Alloc);
     }
     m_Slots.clear();
+    m_Pending.clear();
     m_InFlight = 0;
     m_Deferred = false;
 }
 
 void DecalTextureArrays::Drop(const Source& src) {
-    const auto it = m_Slots.find(KeyFor(src));
+    const std::uint64_t key = KeyOf(src);
+    const auto it = m_Slots.find(key);
     if (it == m_Slots.end()) return;
     Entry& e = *it->second;
     if (e.Pending.valid()) { // its decode is of the old files: let it land, then throw it away
@@ -355,29 +433,28 @@ void DecalTextureArrays::Drop(const Source& src) {
     }
     if (e.S.Alloc.Valid()) m_Alloc.Free(e.S.Alloc);
     m_Slots.erase(it);
+    m_Pending.erase(std::remove(m_Pending.begin(), m_Pending.end(), key), m_Pending.end());
 }
 
 bool DecalTextureArrays::Resident(const Source& src) const {
-    const auto it = m_Slots.find(KeyFor(src));
+    const auto it = m_Slots.find(src.Key ? src.Key : KeyOf(src));
     return it != m_Slots.end() && it->second->S.Ready;
 }
 
 bool DecalTextureArrays::AllocateWithEviction(int size, DecalPageAllocator::Alloc& out) {
-    for (;;) {
-        out = m_Alloc.Allocate(size);
-        if (out.Valid()) return true;
-        // The least recently used resident slot nobody asked for this frame. Pending ones keep
-        // their space: their decode will land in it.
-        auto victim = m_Slots.end();
-        for (auto it = m_Slots.begin(); it != m_Slots.end(); ++it) {
-            const Slot& s = it->second->S;
-            if (!s.Ready || s.Refs > 0) continue;
-            if (victim == m_Slots.end() || s.LastUsed < victim->second->S.LastUsed) victim = it;
-        }
-        if (victim == m_Slots.end()) return false;
+    out = m_Alloc.Allocate(size);
+    if (out.Valid()) return true;
+    // The least recently used resident slots nobody asked for this frame, oldest first: one pass over the
+    // slots and a sort (ties keep the map's order), then evicted in turn until the size fits. Pending
+    // ones keep their space: their decode will land in it.
+    m_Victims.clear();
+    for (auto& [key, e] : m_Slots)
+        if (e->S.Ready && e->S.LastUsed != m_Frame) m_Victims.push_back(e.get());
+    std::stable_sort(m_Victims.begin(), m_Victims.end(), [](const Entry* a, const Entry* b) { return a->S.LastUsed < b->S.LastUsed; });
+    for (Entry* victim : m_Victims) {
         // A slot asked for last frame too: what's in view doesn't fit the budget, and the decals take
         // each other's space in turn (some missing each frame) for as long as the view holds.
-        if (victim->second->S.LastUsed + 1 >= m_Frame) {
+        if (victim->S.LastUsed + 1 >= m_Frame) {
             m_LastThrash = m_Frame;
             if (!m_WarnedThrash) {
                 m_WarnedThrash = true;
@@ -386,13 +463,21 @@ bool DecalTextureArrays::AllocateWithEviction(int size, DecalPageAllocator::Allo
                           " MB, Project Settings > Quality), so some drop out in turn; raise it or use fewer different decals.");
             }
         }
-        m_Alloc.Free(victim->second->S.Alloc);
-        m_Slots.erase(victim);
+        m_Alloc.Free(victim->S.Alloc);
+        m_Slots.erase(victim->Key);
+        out = m_Alloc.Allocate(size);
+        if (out.Valid()) return true;
     }
+    return false;
 }
 
 void DecalTextureArrays::EnsureGpu(int layers, const bool want[kKinds]) {
+    // Grow by doubling, within the budget's layer count: each growth re-creates and copies every array,
+    // so it happens a handful of times rather than once per layer. Never past the 8-bit layer field.
+    if (layers > m_GpuLayers && m_GpuLayers > 0) layers = std::max(layers, std::min(m_GpuLayers * 2, m_Alloc.MaxLayers()));
     layers = std::max(layers, m_GpuLayers);
+    assert(layers <= kMaxLayers);
+    layers = std::min(layers, kMaxLayers);
     for (int k = 0; k < kKinds; ++k) {
         if (!(want[k] || m_Active[k] || k == kAlbedo)) continue;
         const bool fresh = m_Tex[k] == 0;
@@ -434,6 +519,7 @@ void DecalTextureArrays::UploadSlot(Entry& e, Decoded& d) {
     EnsureGpu(m_Alloc.LayerCount(), d.Has);
     if (before[1] != m_Active[1] || before[2] != m_Active[2] || before[3] != m_Active[3]) UpdateMaxLayers();
     const int size = s.Alloc.Size;
+    assert(s.Alloc.Layer >= 0 && s.Alloc.Layer < kMaxLayers && s.Alloc.Layer < m_GpuLayers);
     for (int k = 0; k < kKinds; ++k) {
         if (!d.Has[k]) continue;
         const TextureCpuData& t = d.Data[k];
@@ -452,30 +538,43 @@ void DecalTextureArrays::UploadSlot(Entry& e, Decoded& d) {
 void DecalTextureArrays::BeginFrame() {
     ++m_Frame;
     m_Deferred = false;
-    for (auto& [key, e] : m_Slots) {
-        e->S.Refs = 0;
-        if (!e->Pending.valid()) continue;
-        if (e->Pending.wait_for(std::chrono::seconds(0)) != std::future_status::ready) continue;
+    // The decodes that have landed, oldest request first, at most kMaxUploadsPerFrame of them: each is a few
+    // MB of BCn mips into the arrays (and maybe a growth), so a burst of new decals spreads over frames.
+    // A big slot (a 2K decal's four maps, ~18 MB with mips) goes up on its own.
+    int uploads = 0;
+    std::size_t bytes = 0;
+    for (size_t i = 0; i < m_Pending.size() && uploads < kMaxUploadsPerFrame && bytes < kUploadBytesPerFrame;) {
+        const auto it = m_Slots.find(m_Pending[i]);
+        if (it == m_Slots.end() || !it->second->Pending.valid()) {
+            m_Pending.erase(m_Pending.begin() + (std::ptrdiff_t)i);
+            continue;
+        }
+        Entry& e = *it->second;
+        if (e.Pending.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+            ++i;
+            continue;
+        }
         std::shared_ptr<Decoded> d;
-        try { d = e->Pending.get(); } catch (...) {} // a worker that threw (out of memory) counts as failed
+        try { d = e.Pending.get(); } catch (...) {} // a worker that threw (out of memory) counts as failed
         --m_InFlight;
+        m_Pending.erase(m_Pending.begin() + (std::ptrdiff_t)i);
         if (d) {
-            UploadSlot(*e, *d);
+            UploadSlot(e, *d);
+            ++uploads;
+            for (int k = 0; k < kKinds; ++k) bytes += d->Has[k] ? d->Data[k].Pixels.size() : 0;
         } else {
-            e->S.Failed = true;
-            m_Alloc.Free(e->S.Alloc);
-            e->S.Alloc = {};
+            e.S.Failed = true;
+            m_Alloc.Free(e.S.Alloc);
+            e.S.Alloc = {};
         }
     }
 }
 
-const DecalTextureArrays::Slot* DecalTextureArrays::Request(const Source& src) {
+const DecalTextureArrays::Slot* DecalTextureArrays::Request(std::uint64_t key, const Source& src) {
     if (src.Albedo.empty()) return nullptr;
-    const std::string key = KeyFor(src);
     if (auto it = m_Slots.find(key); it != m_Slots.end()) {
         Slot& s = it->second->S;
-        s.LastUsed = m_Frame;
-        ++s.Refs;
+        s.LastUsed = m_Frame; // pinned for this frame
         return s.Ready ? &s : nullptr;
     }
     if (m_InFlight >= kMaxInFlight) {
@@ -498,10 +597,10 @@ const DecalTextureArrays::Slot* DecalTextureArrays::Request(const Source& src) {
     if (!placed) return nullptr; // every slot is pinned by this frame's decals: try again next frame
 
     auto e = std::make_unique<Entry>();
+    e->Key = key;
     Slot& s = e->S;
     s.Alloc = alloc;
     s.LastUsed = m_Frame;
-    s.Refs = 1;
     s.MaxLod = 0;
     while ((size >> (s.MaxLod + 1)) >= 4 && s.MaxLod + 1 < kArrayLevels) ++s.MaxLod;
     const float inv = 1.0f / (float)Decals::PAGE_SIZE;
@@ -511,8 +610,9 @@ const DecalTextureArrays::Slot* DecalTextureArrays::Request(const Source& src) {
     const std::string paths[kKinds] = {src.Albedo, src.Normal, src.Surface, src.Aux};
     const float detail = src.Detail;
     const bool pack = src.Surface.empty() && (!src.Rough.empty() || !src.AO.empty() || detail > 0.0f);
-    e->Pending = std::async(std::launch::async, [p0 = paths[0], p1 = paths[1], p2 = paths[2], p3 = paths[3], size, pack,
-                                                 rough = src.Rough, ao = src.AO, detail]() {
+    if (!m_Workers) m_Workers = std::make_unique<Workers>(kMaxInFlight);
+    e->Pending = m_Workers->Submit(Workers::Task([p0 = paths[0], p1 = paths[1], p2 = paths[2], p3 = paths[3], size, pack,
+                                                  rough = src.Rough, ao = src.AO, detail]() {
         auto d = std::make_shared<Decoded>();
         const std::string* ps[kKinds] = {&p0, &p1, &p2, &p3};
         const std::vector<float> h = detail > 0.0f ? DetailHeight(p0, size) : std::vector<float>();
@@ -528,8 +628,9 @@ const DecalTextureArrays::Slot* DecalTextureArrays::Request(const Source& src) {
             if (!d->Has[k]) d->Data[k] = TextureCpuData{};
         }
         return d;
-    });
+    }));
     ++m_InFlight;
+    m_Pending.push_back(key);
     m_Slots.emplace(key, std::move(e));
     return nullptr;
 }

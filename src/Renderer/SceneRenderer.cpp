@@ -53,6 +53,10 @@
 namespace {
 std::unordered_map<std::uint32_t, std::uint64_t> g_variantDrawCounts;
 
+// How far from the eye the view model (arms, weapon, the player body's sleeves) can reach, metres: decals
+// farther than this can't touch it, so its pass skips the decal cull (DecalSystem::NearestDynamicReceiverDecal).
+constexpr float kViewModelDecalReach = 3.0f;
+
 // #177 - deliberately leaked: a function-local static would run its GL deletes at exit, after the
 // context is gone. The OS reclaims the handful of GL objects with the process.
 ParticleRenderer* Particles() {
@@ -1135,8 +1139,23 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // sampling it here stamps whatever stands behind the gun (a character, a wall) onto it as
         // occlusion - the weapon read as see-through. The view model gets no screen-space AO.
         vmFs.ssaoOn = false;
-        // The world view's decals, re-binned into these froxels too (their bounds are still uploaded).
-        vmFs.decalCount = vmFs.clusterOn ? fs.decalCount : 0;
+        // The world view's decals, re-binned into these froxels too (their bounds are still uploaded) - when
+        // any could land on the view model: one that takes dynamic receivers within the arms' reach of the eye,
+        // and a view-model material that receives decals. Otherwise the second decal cull is skipped (its lists
+        // would come out empty for every view-model pixel anyway).
+        bool vmDecals = vmFs.clusterOn && fs.decalCount > 0 && in.decals &&
+                        in.decals->NearestDynamicReceiverDecal() < kViewModelDecalReach;
+        if (vmDecals) {
+            bool receives = false;
+            for (const DrawItem& it : viewModelList) {
+                if (!it.Slots || it.Slots->empty()) { receives = true; break; } // the model's own materials
+                for (const auto& m : *it.Slots)
+                    if (!m || m->Mat.ReceiveDecals) { receives = true; break; }
+                if (receives) break;
+            }
+            vmDecals = receives;
+        }
+        vmFs.decalCount = vmDecals ? fs.decalCount : 0;
         if (vmFs.clusterOn) {
             if (vmFs.decalCount > 0) in.decals->BindForCull();
             clusterGrid.Cull(*in.clusterBuildShader, *in.clusterCullShader, vmCtx.View, vmCtx.Proj,
