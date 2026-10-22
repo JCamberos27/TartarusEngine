@@ -186,7 +186,7 @@ void main() {
     }
     // Material -> Grunge -> decals -> blood -> lighting (docs/DECALS.md).
     vec3 geoN = backFace ? -normalize(vNormal) : normalize(vNormal);
-    ApplyGrunge(albedo, roughness, ao, geoN);
+    ApplyGrunge(albedo, N, roughness, metallic, ao, geoN);
     vec3 decalEmissive = vec3(0.0);
     ApplyDecals(albedo, N, roughness, metallic, ao, decalEmissive, geoN);
     if (uBloodSplatCount > 0) {
