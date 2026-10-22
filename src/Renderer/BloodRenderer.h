@@ -8,17 +8,22 @@
 #include <glm/glm.hpp>
 
 #include "../Assets/BloodFxImport.h"
+#include "DecalTextureArrays.h"
+#include "GeneratedDecalMaps.h"
 
 class Shader;
-class HdrTarget;
+struct RuntimeDecal;
 
 // Volumetric blood rendering. Owns the GPU side of the imported sims and draws
 // what the game side (Game/Combat/BloodFx) queues each frame:
 //   - sprays: the airborne fluid, a vertex-animation-texture sim per spray, one instanced draw per
 //     sim, depth-written and lit through ModelFragment.glsl in the opaque pass.
-//   - decals: blood on the static world (floors, walls, ceilings, level props), box-projected onto
-//     the depth of the static geometry before the moving things draw over it - one instanced draw.
-// Queue with Add* after BeginFrame; SceneRenderer draws the queue at the right points of the pass.
+//   - decals: blood on the static world (floors, walls, ceilings, level props). Since Decals P4 these are
+//     clustered decals: AddDecal turns each into a RuntimeDecal (the DA_Blood / DA_BulletHole response,
+//     maps made once into Library/DecalMaps by GeneratedDecalMaps) and hands it to the DecalSystem, which
+//     draws it in the model shader with every other decal (docs/DECALS.md, "Runtime decals").
+//   - splats: blood on a mesh, in its bind-pose space, read from the same decal arrays.
+// Queue with Add* after BeginFrame (which also starts the DecalSystem's runtime frame).
 class BloodRenderer {
 public:
     static BloodRenderer& Get(); // deliberately leaked (GL objects outlive static destruction otherwise)
@@ -87,12 +92,22 @@ public:
         bool Mirror = false;       // the image flipped across (the same stain, another shape)
         float Rim = 0.0f;          // a bullet hole's chipped rim fades out by here (cell half-widths; 0 = not cut)
     };
-    void AddDecal(const Decal& d);
-    int QueuedDecals() const { return (int)m_Decals.size(); }
-    // Draws the queued decals onto what the bound HDR target holds so far (resolving its depth first).
-    // `viewport` is x, y, w, h. Returns draw calls.
-    int DrawDecals(const glm::mat4& view, const glm::mat4& proj, const int viewport[4], const HdrTarget& target,
-                   const std::function<void(Shader&)>& applyFrameState);
+    // Submits the decal to the DecalSystem (a stain the first time its maps are asked for shows a moment later,
+    // once they are made and decoded). Returns the runtime decals it became (0..2: a flipbook between cells is two).
+    int AddDecal(const Decal& d);
+    int QueuedDecals() const { return m_QueuedDecals; }
+    // A Decal as the runtime decal(s) it becomes: false while its maps are being made. Pure but for the maps.
+    int ToRuntime(const Decal& d, RuntimeDecal out[2]);
+    // The unit box of a Decal (+Y out of the surface, image top at -Z) as a decal box (+Z out, image top at +Y).
+    static glm::mat4 DecalBox(const glm::mat4& model, bool mirror);
+    // A bullet hole's maps and response: a Knife hole (`knife` >= 0) or the procedural one. False while the maps are made.
+    bool HoleLook(int knife, RuntimeDecal& r);
+    // The maps of a blood set / a Knife entry in a mode (null while they're made, or unknown).
+    const DecalTextureArrays::Source* SetMaps(int set);
+    const DecalTextureArrays::Source* KnifeMaps(int knife, DecalBake::KnifeMode mode);
+    // Where the response comes from (project-relative .decal).
+    static constexpr const char* kBloodDecal = "assets/Decals/Runtime/DA_Blood.decal";
+    static constexpr const char* kHoleDecal = "assets/Decals/Runtime/DA_BulletHole.decal";
     // --- splats: blood on a mesh, pinned in its bind-pose space (ModelFragment.glsl's BloodSplatCover) ---
     struct Splat {
         glm::vec3 Center{0.0f};      // bind space
@@ -107,7 +122,7 @@ public:
     void SetSplats(const std::vector<Splat>& splats, const std::vector<std::pair<unsigned, glm::ivec2>>& ranges);
     bool SplatRange(unsigned entity, int& first, int& count) const;
     int SplatCount() const { return m_SplatCount; }
-    // Binds the splat list and the decal atlas for the model shader (once per scene draw).
+    // Binds the splat list for the model shader (once per scene draw); the maps are the decal arrays (units 22-25).
     void BindSplatResources() const;
 
     // The stains' albedo, fresh (matching the drops) and dried dark red-brown (BloodPalette).
@@ -130,14 +145,10 @@ private:
     std::vector<Spray> m_Sprays;
     int m_CulledSprays = 0;
 
-    bool BuildAtlas();
-    unsigned int m_AtlasNorm = 0, m_AtlasMask = 0, m_Lookup = 0;
+    bool ListSets();
     std::vector<std::string> m_SetNames;
-    std::vector<glm::vec4> m_RectNorm, m_RectMask;
-    std::vector<Decal> m_Decals;
-    unsigned int m_DecalBuffer = 0;
-    size_t m_DecalCapacity = 0;
-    std::unique_ptr<Shader> m_DecalProgram;
+    std::string m_SetDir;
+    int m_QueuedDecals = 0;
     unsigned int m_SplatBuffer = 0;
     size_t m_SplatCapacity = 0;
     int m_SplatCount = 0;
