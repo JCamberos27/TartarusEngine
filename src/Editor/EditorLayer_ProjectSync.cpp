@@ -99,7 +99,7 @@ bool ChangesAssetIndex(const std::string& path) {
     const std::string type = AssetDatabase::AssetType(path);
     if (type == "model" || type == "texture" || type == "material" || type == "audio" || type == "prefab" ||
         type == "animatorcontroller" || type == "firstpersonanimationset" || type == "recoil" || type == "camerashake" || type == "hdri" || type == "script" ||
-        type == "decal" || type == "decalpalette")
+        type == "decal" || type == "decalpalette" || type == "graffiti")
         return true;
     return type.empty() && fs::path(path).extension().empty();
 }

@@ -916,6 +916,9 @@ void EditorLayer::DrawWindowMenuBody() {
             ImGui::MenuItem(ICON_FA_STAMP "  Decal Library", nullptr, &m_ShowDecalLibrary);
             if (ImGui::IsItemHovered())
                 EditorUI::SetTooltip("Browse every decal by category, search, favourite, preview on a wall, and drag one onto a surface.");
+            ImGui::MenuItem(ICON_FA_SPRAY_CAN "  Graffiti Designer", nullptr, &m_ShowGraffitiDesigner);
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Build graffiti pieces from layers (spray, letters, stamps, fills), bake them into decals, and spray straight onto walls.");
             ImGui::MenuItem(ICON_FA_MUSIC "  Sound Board", nullptr, &m_ShowSoundBoard);
             if (ImGui::IsItemHovered())
                 EditorUI::SetTooltip("The editor's own UI sounds: every event, its files, and a button to hear each one.");

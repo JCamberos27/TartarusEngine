@@ -187,6 +187,16 @@ enum class Event : uint8_t {
     AutoGrimeStart,    // the auto-grime pass begins
     AutoGrimeDone,     // ...and has placed its decals
     LibraryFavourite,  // a Decal Library heart
+    // Graffiti Designer (decals Phase 3, docs/GRAFFITI_DESIGNER.md)
+    SprayStart,        // a stroke starts (can rattle)
+    SprayLoop,         // the held hiss while spraying (a held loop, EditorSound::StartLoop: level and pitch follow pressure)
+    SprayEnd,          // the cap lets go
+    SprayDrip,         // a drip starts running
+    GraffitiLayerAdd,
+    GraffitiLayerRemove,
+    GraffitiLayerReorder,
+    GraffitiBakeStart, // the layers start baking into the decal
+    GraffitiBakeDone,  // ...done (a "done" chime)
     Count
 };
 

@@ -103,6 +103,7 @@ void AssetRoundTrip() {
     a.HeightBlend = 0.6f; a.HeightContrast = 8.0f;
     a.Paint = true; a.UVPaint = true; a.PaintRoughness = 0.15f; a.PaintMetal = 0.7f; a.Relief = 0.45f;
     a.Fade = 0.1f; a.Bleach = 0.2f; a.Peel = 0.3f; a.Buff = 0.4f;
+    a.SceneGrading = false;
     a.Category = "Graffiti/Tags";
     a.Tags = "graffiti, tag ,crown";
     CHECK(a.Save());
@@ -129,6 +130,7 @@ void AssetRoundTrip() {
     CHECK(Near(b->HeightBlend, 0.6f) && Near(b->HeightContrast, 8.0f));
     CHECK(b->Paint && b->UVPaint && Near(b->PaintRoughness, 0.15f) && Near(b->PaintMetal, 0.7f) && Near(b->Relief, 0.45f));
     CHECK(Near(b->Fade, 0.1f) && Near(b->Bleach, 0.2f) && Near(b->Peel, 0.3f) && Near(b->Buff, 0.4f));
+    CHECK(!b->SceneGrading);
     CHECK(b->Category == "Graffiti/Tags" && b->Tags == "graffiti, tag, crown");
 
     CHECK(b->Save());

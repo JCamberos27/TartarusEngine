@@ -55,7 +55,8 @@ blood -> lighting. The fragment walks its froxel's list bottom to top:
   metal (the decal's values, or paint's, times the surface map), AO (multiplied), emissive (masked
   by aux, UV paint only under `uDecalBlacklight`, 0 until a UV light exists).
 - **Grading.** The scene's Decal Grading folds in on the CPU: Age adds to fade and bleach, Wear to
-  peel, buff and chipping.
+  peel, buff and chipping, unless the asset turns `weathering.sceneGrading` off (Graffiti Designer
+  pieces do, so a baked piece shows what was designed).
 
 `GpuDecal` (`DecalTypes.h`) is mirrored in `ModelDecals.glsl` and `GpuDecalBounds` in
 `ClusterDecalCull.comp.glsl`; change all three together.

@@ -236,6 +236,18 @@ public:
     static bool PlayEditor(const std::string& path, float volume, float pitch = 1.0f, float pan = 0.0f);
     static void SetEditorVolume(float volume); // 0..1
     static int EditorVoiceCount();
+    // Held, looping editor voices (the Graffiti Designer's spray hiss): a few slots of their own, never stolen by the
+    // one-shots above. A loop plays until StopEditorLoop; volume and pitch can follow a control every frame (glided, so a
+    // per-frame change never zippers). LoopId -1: none. A stale id (its loop since stopped and the slot reused) is ignored.
+    static constexpr int kEditorLoops = 4;
+    using LoopId = int32_t;
+    static LoopId StartEditorLoop(ClipId id, float volume, float pitch = 1.0f, float pan = 0.0f, unsigned fadeInMs = 30);
+    static void SetEditorLoop(LoopId loop, float volume, float pitch, float pan = 0.0f);
+    static void StopEditorLoop(LoopId loop, unsigned fadeOutMs = 80);
+    static bool EditorLoopPlaying(LoopId loop);
+    // An editor clip from PCM already in memory (interleaved f32 at `sampleRate`), e.g. a synthesised placeholder. `name`
+    // keys it like a path for LoadClip's cache. -1 on bad input.
+    static ClipId CreateClip(const std::string& name, const float* pcm, uint64_t frames, uint32_t channels, uint32_t sampleRate);
 
     static bool IsInitialized();
 

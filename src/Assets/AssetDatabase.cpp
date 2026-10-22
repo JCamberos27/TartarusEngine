@@ -104,6 +104,7 @@ const std::unordered_map<std::string, std::string>& KnownExtensions() {
         {".preset", "preset"},                 // #178 - saved component settings
         {".decal", "decal"},                   // DecalComponent assets (docs/DECALS.md)
         {".decalpalette", "decalpalette"},     // weighted decal sets for the brush and auto-grime
+        {".graffiti", "graffiti"},             // Graffiti Designer recipes (docs/GRAFFITI_DESIGNER.md)
     };
     return kExts;
 }
