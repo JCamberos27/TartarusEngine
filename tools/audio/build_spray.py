@@ -1,4 +1,4 @@
-"""Cut the Graffiti Designer's spray sounds (resources/EditorSounds/Spray{Start,Loop,End}.wav) from one CC0 recording.
+"""Cut the Graffiti Designer's spray sounds (resources/EditorSounds/Spray{Start,Loop,End,Drip}.wav) from one CC0 recording.
 
 Source: "Aerosol spray.wav" by C-V, https://freesound.org/s/516815/ (CC0 1.0), 48 kHz 24-bit stereo, three bursts.
 Usage: python tools/audio/build_spray.py <path to 516815__c-v__aerosol-spray.wav>
@@ -40,8 +40,19 @@ def main(src):
     F = int(0.03 * R)
     for i in range(F):
         end[-1 - i] *= i / F
+    # Drip: a short wet tick for a paint run - the loudest 110 ms of the first burst's attack, 4 ms fade-in, 70 ms fade-out.
+    a, b = int(0.60 * R), int(0.95 * R)
+    W = int(0.110 * R)
+    peak = max(range(a, b - W), key=lambda i: sum(abs(x) for x in m[i:i + W:8]))
+    drip = m[peak:peak + W]
+    F = int(0.004 * R)
+    for i in range(F):
+        drip[i] *= i / F
+    F = int(0.070 * R)
+    for i in range(F):
+        drip[-1 - i] *= i / F
     g = 10 ** (-3 / 20) / max(abs(x) for x in loop)
-    for name, d in (("SprayLoop.wav", loop), ("SprayStart.wav", start), ("SprayEnd.wav", end)):
+    for name, d in (("SprayLoop.wav", loop), ("SprayStart.wav", start), ("SprayEnd.wav", end), ("SprayDrip.wav", drip)):
         o = wave.open(str(OUT / name), "wb")
         o.setnchannels(1); o.setsampwidth(2); o.setframerate(R)
         o.writeframes(b"".join(struct.pack("<h", max(-32767, min(32767, int(x * g * 32767)))) for x in d))

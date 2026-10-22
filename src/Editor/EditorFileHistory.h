@@ -52,6 +52,11 @@ public:
         const auto key=std::filesystem::absolute(path).lexically_normal();
         if (!before.count(key)) before.emplace(key,Capture(key));
     }
+    // A pre-image captured earlier (a bake's worker writes the files after the edit window closed).
+    void Record(const State& state) {
+        const auto key=std::filesystem::absolute(state.Path).lexically_normal();
+        if (!before.count(key)) before.emplace(key,State{key,state.Bytes});
+    }
     bool Empty() const { return before.empty(); }
     void Clear() { before.clear(); }
     std::vector<State> Changes() const {

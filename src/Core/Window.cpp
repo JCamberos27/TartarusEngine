@@ -2,6 +2,7 @@
 #include "gl.h"
 #include "Log.h"
 #include "GLDebug.h"
+#include "PenInput.h"
 #include <GLFW/glfw3.h>
 #include "stb_image.h" // #174 - decoding a product icon PNG for glfwSetWindowIcon
 #include <stdexcept>
@@ -92,6 +93,14 @@ int FrameBorderPx() {
 
 LRESULT CALLBACK TartarusWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
+    case WM_POINTERDOWN:
+    case WM_POINTERUPDATE:
+    case WM_POINTERUP:
+    case WM_POINTERLEAVE:
+    case WM_POINTERCAPTURECHANGED:
+        // Pen pressure for the Graffiti Designer; the message still goes on, so GLFW keeps its mouse.
+        PenInput::OnPointerMessage(msg, wParam);
+        break;
     case WM_NCCALCSIZE: {
         if (wParam != TRUE) break;
         // Returning 0 makes the client area cover the whole window (no caption, no frame).

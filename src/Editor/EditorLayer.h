@@ -1500,6 +1500,8 @@ private:
     std::string m_GlobalUndoScene, m_GlobalUndoLabel;
     std::vector<int> m_GlobalUndoSelection;
     void BeginGlobalUndoFrame(const World& world);
+    // Open (or join) a file-only undo step whose pre-images were captured earlier (a Graffiti bake).
+    void JournalFilesBefore(const World& world, const std::vector<EditorFileHistory::State>& before, const std::string& label);
     void EnsureUndoScene(const World& world);
     void BeginSceneUndo(const World& world, const std::string& label);
     void FinishGlobalUndo(const World& world, bool force = false);
@@ -2762,9 +2764,25 @@ private:
         ImVec2 Center{0.0f, 0.0f};
         int    Hovered = -1;
         int    Picked = -1;     // flashes while the menu fades out
+        bool   GraffitiRing = false; // the Graffiti Designer's viewport-spray menu (tools, colours, sizes)
         bool   Decals = false;  // the decal brush's menu (categories, palettes, recents) instead of the tools'
         int    Count = 10;      // items in this menu
     } m_Radial;
     void UpdateRadialMenu(World& world, Camera& editorCamera, bool sceneHovered);
     void RunRadialItem(World& world, Camera& editorCamera, int item);
+    // The radial's Graffiti mode (EditorLayer_GraffitiRadial.cpp): with Spray in Scene view on, the ring is
+    // the Designer's tools, its recent colours and three can distances.
+    struct GraffitiRadialSlot {
+        enum Kind : int { Tool, Colour, Size } What = Tool;
+        int Index = 0;         // tool / recent-colour index, or the size's distance in cm
+        std::string Label;     // short, for the wedge
+        std::string FullName;  // for the ring's centre while hovered
+        const char* Icon = "";
+        ImU32 Dot = 0;         // colour slots: the swatch drawn instead of an icon
+    };
+    std::vector<GraffitiRadialSlot> m_GraffitiRadial;
+    int  GraffitiRadialBuild();
+    bool GraffitiRadialItem(int i, const char*& icon, const char*& label, ImU32& dot) const; // returns "is current"
+    const char* GraffitiRadialFullName(int i) const;
+    void RunGraffitiRadialItem(int i);
 };

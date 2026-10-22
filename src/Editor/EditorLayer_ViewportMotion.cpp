@@ -199,8 +199,10 @@ void EditorLayer::UpdateRadialMenu(World& world, Camera& editorCamera, bool scen
             m_Radial.Hovered = -1;
             m_Radial.Picked = -1;
             // With the Decal Brush active the ring is its sources instead: palettes, categories, recents.
-            m_Radial.Decals = m_DecalTool == DecalToolMode::Brush && (m_Radial.Count = DecalRadialBuild()) >= 2;
-            if (!m_Radial.Decals) m_Radial.Count = RCount;
+            // With Spray in Scene view on, the Graffiti Designer's tools, colours and sizes.
+            m_Radial.GraffitiRing = GraffitiViewportSprayActive() && (m_Radial.Count = GraffitiRadialBuild()) >= 2;
+            m_Radial.Decals = !m_Radial.GraffitiRing && m_DecalTool == DecalToolMode::Brush && (m_Radial.Count = DecalRadialBuild()) >= 2;
+            if (!m_Radial.Decals && !m_Radial.GraffitiRing) m_Radial.Count = RCount;
             // Centred on the pointer, nudged in so the ring fits the view when it can.
             const float fit = rOut + Glass::Px(Glass::Space1);
             ImVec2 c = io.MousePos;
@@ -219,7 +221,8 @@ void EditorLayer::UpdateRadialMenu(World& world, Camera& editorCamera, bool scen
     // The ring's size is fixed while it is open (its decal slots are built when it opens).
     const int count = m_Radial.Count;
     const float step = 2.0f * IM_PI / (float)count;
-    const bool decalRing = m_Radial.Decals;
+    const bool graffitiRing = m_Radial.GraffitiRing;
+    const bool decalRing = m_Radial.Decals || graffitiRing; // a ring of dynamic slots, not the tools
     auto itemEnabled = [&](int i) { return decalRing || i != RFrame || HasAnySelection(); };
 
     if (m_Radial.Open) {
@@ -240,7 +243,8 @@ void EditorLayer::UpdateRadialMenu(World& world, Camera& editorCamera, bool scen
             if (pick >= 0 && itemEnabled(pick)) {
                 m_Radial.Picked = pick;
                 EditorSound::Play(EditorSound::Event::RadialPick, x01);
-                if (decalRing) RunDecalRadialItem(pick);
+                if (graffitiRing) RunGraffitiRadialItem(pick);
+                else if (decalRing) RunDecalRadialItem(pick);
                 else RunRadialItem(world, editorCamera, pick);
             } else {
                 m_Radial.Picked = -1;
@@ -287,7 +291,8 @@ void EditorLayer::UpdateRadialMenu(World& world, Camera& editorCamera, bool scen
     // The hub: an X, lit while the pointer rests there (letting go there cancels).
     {
         const bool hubHot = open && m_Radial.Hovered < 0;
-        const char* full = decalRing && open && m_Radial.Hovered >= 0 ? DecalRadialFullName(m_Radial.Hovered) : "";
+        const char* full = decalRing && open && m_Radial.Hovered >= 0
+            ? (graffitiRing ? GraffitiRadialFullName(m_Radial.Hovered) : DecalRadialFullName(m_Radial.Hovered)) : "";
         if (full[0]) {
             // The hovered slot's whole name in the hub, shrunk to fit and cut only as a last resort.
             const float maxW = rIn * 2.0f - Glass::Px(8.0f);
@@ -315,7 +320,9 @@ void EditorLayer::UpdateRadialMenu(World& world, Camera& editorCamera, bool scen
         const char* icon = "";
         const char* label = "";
         bool on = false;
-        if (decalRing) on = DecalRadialItem(i, icon, label);
+        ImU32 dot = 0;
+        if (graffitiRing) on = GraffitiRadialItem(i, icon, label, dot);
+        else if (decalRing) on = DecalRadialItem(i, icon, label);
         else switch (i) {
             case RMove:   icon = EDITOR_ICON_TRANSLATE; label = "Move";   on = !m_HandTool && gizmoOp == 0; break;
             case RRotate: icon = EDITOR_ICON_ROTATE;    label = "Rotate"; on = !m_HandTool && gizmoOp == 1; break;
@@ -358,7 +365,13 @@ void EditorLayer::UpdateRadialMenu(World& world, Camera& editorCamera, bool scen
         ImVec4 tone = !enabled ? Glass::TextTertiary : Glass::MixOklab(on ? Glass::TextPrimary : Glass::TextSecondary, Glass::AccentBright, wash);
         const float ri = rIcon * (0.55f + 0.45f * p);
         const ImVec2 is = ImGui::CalcTextSize(icon);
-        dl->AddText(ImVec2(c.x + u.x * ri - is.x * 0.5f, c.y + u.y * ri - is.y * 0.5f), Tone(tone, pa), icon);
+        if (dot) { // a colour slot: its swatch where the icon would be
+            const ImVec2 sp(c.x + u.x * ri, c.y + u.y * ri);
+            dl->AddCircleFilled(sp, Glass::Px(8.0f), (dot & 0x00FFFFFFu) | ((ImU32)(255.0f * pa) << 24), 20);
+            dl->AddCircle(sp, Glass::Px(8.0f), Tone(tone, pa), 20, 1.5f);
+        } else {
+            dl->AddText(ImVec2(c.x + u.x * ri - is.x * 0.5f, c.y + u.y * ri - is.y * 0.5f), Tone(tone, pa), icon);
+        }
         if (on) {
             const float rd = rIn + Glass::Px(7.0f);
             dl->AddCircleFilled(ImVec2(c.x + u.x * rd, c.y + u.y * rd), Glass::Px(2.0f), Tone(Glass::AccentBright, pa));
