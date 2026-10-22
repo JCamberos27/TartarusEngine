@@ -1466,8 +1466,8 @@ void EditorLayer::DrawGlassViewportOverlays(World& world) {
         }
     }
 
-    // --- Scene stats pill, above the selection card (the action bar's stats toggle) ---------------
-    if (EditorSettings::Get().GameViewShowStats) {
+    // --- Scene stats pill, above the selection card (Gizmos popup > Stats pill; off by default) ----
+    if (prefs.GlassStatsPill) {
         char stats[96];
         const int objects = (int)reg.view<const NameComponent>().size();
         const float ms = std::max(0.01f, m_SmoothedFrameMs);

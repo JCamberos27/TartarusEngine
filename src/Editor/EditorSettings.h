@@ -162,16 +162,19 @@ struct EditorSettings {
     bool  MotionViewport       = true; // gizmo springs, outline sweep, radial menu, view cube
     bool  MotionStartup        = true; // the startup sequence
 
-    // The editor's look (Preferences > General > Editor theme). 0 = Tartarus, the phosphor terminal
-    // look (EditorTheme.h) and the default; 1 = Glass, the opt-in macOS-style theme
-    // (docs/EDITOR_DESIGN_SYSTEM.md, src/Editor/Glass/). Glass also unlocks the Glass Workspace
-    // panels (Window > Glass Workspace) and the frosted viewport HUDs below. Applied live.
-    int  EditorThemeId = 0;
+    // The editor's look (Preferences > General > Editor theme). 1 = Black Glass, the default
+    // (docs/EDITOR_DESIGN_SYSTEM.md, src/Editor/Glass/); 0 = Tartarus, the phosphor terminal look
+    // (EditorTheme.h). Glass also unlocks the Glass Workspace panels (Window > Glass Workspace)
+    // and the frosted viewport HUDs below. Applied live.
+    int  EditorThemeId = 1;
     // Glass only: the frosted HUD cards over the Scene viewport (selection, scene stats, compile /
     // snap notifications), and whether they blur the scene behind them (a compute pass, see
     // GlassBackdrop.h) or just tint it.
     bool GlassViewportHuds = true;
     bool GlassFrostedBlur = true;
+    // Glass only: the "objects / fps / ms" pill above the selection card. Off by default: the
+    // status bar already carries the frame figures, and a clean viewport shows only the scene.
+    bool GlassStatsPill = false;
     // Black Glass: the editor window itself is see-through, with the desktop blurred behind it
     // (like Explorer with a transparency theme). Read when the window is created: next launch.
     bool GlassSeeThroughWindow = true;
@@ -196,11 +199,38 @@ struct EditorSettings {
     float LightGizmoOpacity      = 0.5f;
     float LightGizmoScale        = 1.0f;
 
-    // --- Collider gizmos (#185): wireframe of every ColliderComponent's shape in the Scene
+    // --- Collider gizmos (#185): wireframe of each ColliderComponent's shape in the Scene
     // viewport, both edit and Play mode — solid colliders green, triggers yellow (orange while
-    // occupied, #185 PR 5). On by default now that the physics system is real; toggled from the
-    // toolbar Gizmos popup.
-    bool  ShowColliders          = true;
+    // occupied, #185 PR 5). Off by default, so a first launch shows the scene and not 400
+    // wireframes; when on, CollidersSelectedOnly limits them to the selection (and its children)
+    // the way LightGizmoSelectedOnly does. Toggled from the toolbar Gizmos popup.
+    bool  ShowColliders          = false;
+    bool  CollidersSelectedOnly  = true;
+
+    // --- Volume gizmos: the boxes drawn for decal projectors, reflection probes and post-process
+    // volumes. Each type has its own switch; VolumeGizmosSelectedOnly (default: on) draws a box
+    // only for the selection and its children, so a decal-dressed corridor isn't a wall of boxes.
+    bool  ShowDecalGizmos          = true;
+    bool  ShowProbeGizmos          = true;
+    bool  ShowVolumeGizmos         = true;
+    bool  VolumeGizmosSelectedOnly = true;
+
+    // --- Entity icons: the billboard glyphs for entities without a mesh. 0 = every such entity,
+    // 1 = lights and cameras only (the default), 2 = none. Icons fade with distance and hide
+    // behind geometry unless EntityIconsThroughWalls is on (then they dim instead).
+    int   EntityIconsMode          = 1;
+    bool  EntityIconsThroughWalls  = false;
+
+    // The Scene camera per scene: restored when that scene opens again, like Unity and Unreal.
+    // Newest first, capped at kMaxSceneCameras; a scene with no entry is framed on its Player Spawn.
+    struct SceneCameraPose {
+        std::string ScenePath;
+        float X = 0.0f, Y = 0.0f, Z = 0.0f, Yaw = -90.0f, Pitch = 0.0f, FlySpeed = 8.0f;
+    };
+    static constexpr int kMaxSceneCameras = 32;
+    std::vector<SceneCameraPose> SceneCameras;
+    const SceneCameraPose* FindSceneCamera(const std::string& scenePath) const;
+    void RememberSceneCamera(const SceneCameraPose& pose); // moves/inserts it at the front, trims to the cap
     bool  ShowBodyDebug          = false; // the Gizmos > Player body overlay (foot IK rays, headings, eye anchor)
 
     // --- Tool palette (Phase 3 item 3): the vertical Hand/Translate/Rotate/Scale/Rect/Universal
@@ -360,6 +390,21 @@ struct EditorSettings {
 
     // This run's editor theme (--perf-glass), not written back: Flush keeps the saved one.
     static void SetThemeForRun(int themeId);
+
+    // The prefs schema. v2 (clean first launch): Glass theme, colliders off, no stats panel, the
+    // selected-only gizmo defaults. Load() moves an older file forward once (MigratePrefs) and
+    // flags the dock layout for a rebuild (TakeLayoutResetRequest).
+    static constexpr int kPrefsVersion = 2;
+    int PrefsVersion = kPrefsVersion;
+    // Puts the viewport/overlay/theme preferences back to the clean defaults (Gizmos popup >
+    // Restore clean view, Preferences). Everything else - paths, recent scenes, tools - is kept.
+    void ResetViewDefaults();
+    // Moves a prefs struct read from an older file (version `from`) to kPrefsVersion. Pure (no
+    // file I/O) so the unit tests can drive it; returns true when the dock layout should reset.
+    static bool MigratePrefs(EditorSettings& s, int from);
+    // True once after Load() migrated an older prefs file: the caller drops imgui.ini so the
+    // clean default dock layout is rebuilt. Clears the flag.
+    static bool TakeLayoutResetRequest();
 
     // Absolute path to editor_prefs.json (per-user storage, see UserPaths.h). Exposed so
     // SceneSerializer's format-version migration (#9, Phase M item 1) can read a pre-v3 scene's

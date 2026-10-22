@@ -229,7 +229,11 @@ void EditorLayer::Init(GLFWwindow* window) {
     {
         static const std::string iniPath = UserPaths::Resolve("imgui.ini");
         std::error_code ec;
-        if (!std::filesystem::exists(iniPath, ec) && std::filesystem::exists("imgui.ini", ec))
+        // Prefs just moved to a new schema (EditorSettings::MigratePrefs): start from the clean
+        // default dock once, rather than the old layout with its Statistics tab in front.
+        const bool resetLayout = EditorSettings::TakeLayoutResetRequest();
+        if (resetLayout) std::filesystem::remove(iniPath, ec);
+        else if (!std::filesystem::exists(iniPath, ec) && std::filesystem::exists("imgui.ini", ec))
             std::filesystem::copy_file("imgui.ini", iniPath, ec);
         io.IniFilename = iniPath.c_str();
         // Load it here rather than letting ImGui read it on the first frame, so a layout saved
