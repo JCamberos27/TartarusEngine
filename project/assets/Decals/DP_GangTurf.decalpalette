@@ -1,0 +1,709 @@
+{
+  "paletteVersion": 1,
+  "name": "Gang Turf",
+  "description": "Tags, throw-ups and territory marks sprayed over everything.",
+  "entries": [
+    {
+      "decal": "assets/Decals/Graffiti/Alphabets/Tag/DA_AlphaTag_A.decal",
+      "weight": 2,
+      "scale": [
+        0.8,
+        1.3
+      ],
+      "opacity": [
+        0.85,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall",
+        "door"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Alphabets/Tag/DA_AlphaTag_C.decal",
+      "weight": 2,
+      "scale": [
+        0.8,
+        1.3
+      ],
+      "opacity": [
+        0.85,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall",
+        "door"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Alphabets/Tag/DA_AlphaTag_E.decal",
+      "weight": 2,
+      "scale": [
+        0.8,
+        1.3
+      ],
+      "opacity": [
+        0.85,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall",
+        "door"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Alphabets/Tag/DA_AlphaTag_G.decal",
+      "weight": 2,
+      "scale": [
+        0.8,
+        1.3
+      ],
+      "opacity": [
+        0.85,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall",
+        "door"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Alphabets/Tag/DA_AlphaTag_I.decal",
+      "weight": 2,
+      "scale": [
+        0.8,
+        1.3
+      ],
+      "opacity": [
+        0.85,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall",
+        "door"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Alphabets/Tag/DA_AlphaTag_K.decal",
+      "weight": 2,
+      "scale": [
+        0.8,
+        1.3
+      ],
+      "opacity": [
+        0.85,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall",
+        "door"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Alphabets/Tag/DA_AlphaTag_M.decal",
+      "weight": 2,
+      "scale": [
+        0.8,
+        1.3
+      ],
+      "opacity": [
+        0.85,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall",
+        "door"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Alphabets/Tag/DA_AlphaTag_O.decal",
+      "weight": 2,
+      "scale": [
+        0.8,
+        1.3
+      ],
+      "opacity": [
+        0.85,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall",
+        "door"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Alphabets/Tag/DA_AlphaTag_Q.decal",
+      "weight": 2,
+      "scale": [
+        0.8,
+        1.3
+      ],
+      "opacity": [
+        0.85,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall",
+        "door"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Alphabets/Tag/DA_AlphaTag_S.decal",
+      "weight": 2,
+      "scale": [
+        0.8,
+        1.3
+      ],
+      "opacity": [
+        0.85,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall",
+        "door"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Alphabets/Block/DA_AlphaBlock_0.decal",
+      "weight": 1.5,
+      "scale": [
+        0.8,
+        1.4
+      ],
+      "opacity": [
+        0.85,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Alphabets/Block/DA_AlphaBlock_7.decal",
+      "weight": 1.5,
+      "scale": [
+        0.8,
+        1.4
+      ],
+      "opacity": [
+        0.85,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Alphabets/Block/DA_AlphaBlock_Colon.decal",
+      "weight": 1.5,
+      "scale": [
+        0.8,
+        1.4
+      ],
+      "opacity": [
+        0.85,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Alphabets/Block/DA_AlphaBlock_H.decal",
+      "weight": 1.5,
+      "scale": [
+        0.8,
+        1.4
+      ],
+      "opacity": [
+        0.85,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Alphabets/Block/DA_AlphaBlock_Minus.decal",
+      "weight": 1.5,
+      "scale": [
+        0.8,
+        1.4
+      ],
+      "opacity": [
+        0.85,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Alphabets/Block/DA_AlphaBlock_Q.decal",
+      "weight": 1.5,
+      "scale": [
+        0.8,
+        1.4
+      ],
+      "opacity": [
+        0.85,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Alphabets/Bubble/DA_AlphaBubble_A.decal",
+      "weight": 1.2,
+      "scale": [
+        0.9,
+        1.5
+      ],
+      "opacity": [
+        0.85,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Alphabets/Bubble/DA_AlphaBubble_E.decal",
+      "weight": 1.2,
+      "scale": [
+        0.9,
+        1.5
+      ],
+      "opacity": [
+        0.85,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Alphabets/Bubble/DA_AlphaBubble_I.decal",
+      "weight": 1.2,
+      "scale": [
+        0.9,
+        1.5
+      ],
+      "opacity": [
+        0.85,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Alphabets/Bubble/DA_AlphaBubble_M.decal",
+      "weight": 1.2,
+      "scale": [
+        0.9,
+        1.5
+      ],
+      "opacity": [
+        0.85,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Alphabets/Bubble/DA_AlphaBubble_Q.decal",
+      "weight": 1.2,
+      "scale": [
+        0.9,
+        1.5
+      ],
+      "opacity": [
+        0.85,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Alphabets/Bubble/DA_AlphaBubble_U.decal",
+      "weight": 1.2,
+      "scale": [
+        0.9,
+        1.5
+      ],
+      "opacity": [
+        0.85,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Shapes/DA_GraffitiShape_001.decal",
+      "weight": 1,
+      "scale": [
+        0.7,
+        1.2
+      ],
+      "opacity": [
+        0.8,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall",
+        "base"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Shapes/DA_GraffitiShape_036.decal",
+      "weight": 1,
+      "scale": [
+        0.7,
+        1.2
+      ],
+      "opacity": [
+        0.8,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall",
+        "base"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Shapes/DA_GraffitiShape_071.decal",
+      "weight": 1,
+      "scale": [
+        0.7,
+        1.2
+      ],
+      "opacity": [
+        0.8,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall",
+        "base"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Shapes/DA_GraffitiShape_106.decal",
+      "weight": 1,
+      "scale": [
+        0.7,
+        1.2
+      ],
+      "opacity": [
+        0.8,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall",
+        "base"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Shapes/DA_GraffitiShape_141.decal",
+      "weight": 1,
+      "scale": [
+        0.7,
+        1.2
+      ],
+      "opacity": [
+        0.8,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall",
+        "base"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Shapes/DA_GraffitiShape_176.decal",
+      "weight": 1,
+      "scale": [
+        0.7,
+        1.2
+      ],
+      "opacity": [
+        0.8,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall",
+        "base"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Spray/DA_GraffitiSpray_001.decal",
+      "weight": 1,
+      "scale": [
+        0.8,
+        1.5
+      ],
+      "opacity": [
+        0.7,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall",
+        "door"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Spray/DA_GraffitiSpray_015.decal",
+      "weight": 1,
+      "scale": [
+        0.8,
+        1.5
+      ],
+      "opacity": [
+        0.7,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall",
+        "door"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Spray/DA_GraffitiSpray_029.decal",
+      "weight": 1,
+      "scale": [
+        0.8,
+        1.5
+      ],
+      "opacity": [
+        0.7,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall",
+        "door"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Spray/DA_GraffitiSpray_043.decal",
+      "weight": 1,
+      "scale": [
+        0.8,
+        1.5
+      ],
+      "opacity": [
+        0.7,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall",
+        "door"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Spray/DA_GraffitiSpray_057.decal",
+      "weight": 1,
+      "scale": [
+        0.8,
+        1.5
+      ],
+      "opacity": [
+        0.7,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall",
+        "door"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Graffiti/Spray/DA_GraffitiSpray_071.decal",
+      "weight": 1,
+      "scale": [
+        0.8,
+        1.5
+      ],
+      "opacity": [
+        0.7,
+        1.0
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "wall",
+        "door"
+      ]
+    }
+  ]
+}

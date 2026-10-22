@@ -2524,7 +2524,7 @@ int main(int argc, char** argv) {
                     window.SetCursorLocked(false);
                 }
 
-                if (editor.RulerHeld()) Input::ConsumeScroll(); // vRuler: the wheel picks the measured object
+                if (editor.RulerHeld() || editor.DecalToolOwnsWheel()) Input::ConsumeScroll(); // vRuler: the wheel picks the measured object; a decal tool: it turns / sizes the ghost or brush
                 if (UpdateEditorCamera(editorCamera, dt, allowLook || camDragActive, gizmoDragging,
                         hasSelection ? &selectionCenter : nullptr, editor.ViewportSize().y))
                     editor.FlashFlySpeedHud(); // #236 R2 — show the transient "Fly speed: N" readout
@@ -3963,6 +3963,13 @@ int main(int argc, char** argv) {
             sceneInputs.lightBuffer        = &lightBuffer;
             sceneInputs.clusterGrid        = &clusterGrid;
             sceneInputs.decals             = &decalSystem;
+            {
+                // The Place Decal / Decal Brush ghost: the real decal, drawn in the editor's own views.
+                const DecalComponent* ghostComp = nullptr;
+                glm::mat4 ghostWorld(1.0f);
+                if (!playing && editor.DecalGhostPreview(ghostComp, ghostWorld)) decalSystem.SetGhost(*ghostComp, ghostWorld);
+                else decalSystem.ClearGhost();
+            }
             sceneInputs.decalCullShader    = &clusterDecalCullShader;
             sceneInputs.hdriCube           = hdriCube.get();
             sceneInputs.sunShadowsReady    = false; // set per view in drawScene (#109)
@@ -4148,7 +4155,7 @@ int main(int argc, char** argv) {
                 // that couldn't widen a flat mesh's silhouette were what turned a selected
                 // flat/thin object into a solid orange blob (audit #51).
                 auto selection = editor.GetSelectedItems();
-                if (!selection.empty() && !editor.OverlaysHidden()) {
+                if (!selection.empty() && !editor.OverlaysHidden() && !editor.CleanShots()) {
                     const glm::vec3 kOutlineColor(1.0f, 0.55f, 0.1f);
                     const int kOutlinePixels = 1; // a thin ring, like Unity's (3 read as a thick band)
 
@@ -4313,7 +4320,7 @@ int main(int argc, char** argv) {
                 {
                     const bool showShapes = EditorSettings::Get().ShowColliders;
                     const bool showDebug  = EditorSettings::Get().PhysicsDebugDrawFlags != 0u || BodyDebug::Enabled();
-                    if ((showShapes || showDebug) && !editor.OverlaysHidden() && !(npcTest && npcTest->WantsCleanViews())) {
+                    if ((showShapes || showDebug) && !editor.OverlaysHidden() && !editor.CleanShots() && !(npcTest && npcTest->WantsCleanViews())) {
                         glEnable(GL_DEPTH_TEST);
                         glDepthMask(GL_FALSE);
                         colliderGizmo.Draw(sceneViewMat, sceneProjMat, world, showShapes);

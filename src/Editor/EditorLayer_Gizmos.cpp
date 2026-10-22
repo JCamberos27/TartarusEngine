@@ -1242,6 +1242,15 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
         return; // tool active — never fall through to selection / box-select
     }
 
+    // Place Decal / Decal Brush: clicks place and paint instead of selecting. The update also runs with
+    // the cursor off the viewport, to close a stroke whose button came up out there.
+    if (m_DecalTool != DecalToolMode::None && !m_Radial.Open) {
+        const bool free = !WantsCaptureMouse() && !m_ViewGizmoBlocking && !m_GizmoEngaged && !io.KeyAlt &&
+                          !ImGui::IsAnyItemHovered();
+        UpdateDecalTool(world, editorCamera, free, leftPressed, leftDown);
+        if (free) return; // never fall through to selection / box-select
+    }
+
     const float kDragThreshold = 6.0f; // pixels of movement before a press-drag-release counts as a box select rather than a click
 
     if (leftPressed) {
@@ -2915,6 +2924,7 @@ EditorLayer::DecalSpot EditorLayer::DecalSpotUnderMouse(World& world, Camera& ed
     const SurfaceHit h = RaycastRenderables(world, origin, dir, [](entt::entity) { return false; }, 5000.0f);
     if (h.Entity != entt::null) {
         spot.OnSurface = true;
+        spot.Receiver = h.Entity;
         spot.Point = origin + dir * h.T;
         spot.Normal = glm::dot(h.Normal, dir) > 0.0f ? -h.Normal : h.Normal; // the side facing the camera
     }
@@ -2973,6 +2983,22 @@ bool EditorLayer::FitDecalToSurface(World& world, entt::entity entity) {
     return true;
 }
 
+bool EditorLayer::CastDecalRay(World& world, const glm::vec3& origin, const glm::vec3& dir, float maxT, glm::vec3& point,
+                               glm::vec3& normal, entt::entity* entity) const {
+    const SurfaceHit h = RaycastRenderables(world, origin, dir, [](entt::entity) { return false; }, maxT);
+    if (h.Entity == entt::null) return false;
+    point = origin + dir * h.T;
+    normal = glm::dot(h.Normal, dir) > 0.0f ? -h.Normal : h.Normal; // the side facing the ray
+    if (entity) *entity = h.Entity;
+    return true;
+}
+
+bool EditorLayer::IsDynamicDecalReceiver(World& world, entt::entity entity) const {
+    if (entity == entt::null || !world.Registry.valid(entity) || world.Registry.all_of<StaticTag>(entity)) return false;
+    const auto* r = world.Registry.try_get<RenderableComponent>(entity);
+    return (r && r->ModelRef && r->ModelRef->HasBones()) || world.Registry.all_of<RigidbodyComponent>(entity);
+}
+
 void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
     m_ViewGizmoBlocking = false;
     if (m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) return;
@@ -3023,7 +3049,8 @@ void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
     // speed preference applies, and Reduce Motion lands it at once.
     style.animateSnap = false;
     const bool wasOrbitDrag = ImViewGuizmo::GetContext().activeTool == ImViewGuizmo::TOOL_GIZMO;
-    bool modified = ImViewGuizmo::Rotate(camPos, camRot, pivot, rotatePos);
+    // Smoke-test screenshots leave the nav gizmo out (the radial below still runs).
+    bool modified = !m_CleanShots && ImViewGuizmo::Rotate(camPos, camRot, pivot, rotatePos);
     if (modified && !wasOrbitDrag && ImViewGuizmo::GetContext().activeTool == ImViewGuizmo::TOOL_NONE) {
         const glm::vec3 forward = glm::normalize(camRot * glm::vec3(0.0f, 0.0f, -1.0f));
         SettleViewMorph(editorCamera);
@@ -3055,7 +3082,7 @@ void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
         SettleViewMorph(editorCamera); // dragging the ring takes the camera back
         m_ViewTransition.Active = false;
     }
-    m_ViewGizmoBlocking = ImViewGuizmo::IsOver() || ImViewGuizmo::IsUsing();
+    m_ViewGizmoBlocking = !m_CleanShots && (ImViewGuizmo::IsOver() || ImViewGuizmo::IsUsing());
 
     // Tooltips - the rotate ring gives no feedback on its own (it's manually hit-tested inside
     // the vendored gizmo library, not a real ImGui widget, so ImGui::IsItemHovered() can't see
@@ -3064,7 +3091,8 @@ void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
     // palette's own draw-mode/ortho controls and the editor's existing zoom/pan camera input) —
     // only the axis-handle and orbit tooltips are left to read.
     const auto& gizmoCtx = ImViewGuizmo::GetContext();
-    if (gizmoCtx.hoveredAxisID == 6) {
+    if (m_CleanShots) {
+    } else if (gizmoCtx.hoveredAxisID == 6) {
         EditorUI::SetTooltip("Drag to orbit the view");
     } else if (gizmoCtx.hoveredAxisID >= 0 && gizmoCtx.hoveredAxisID <= 5) {
         static const char* kAxisTooltips[6] = {

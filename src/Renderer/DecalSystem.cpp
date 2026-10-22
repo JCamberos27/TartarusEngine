@@ -128,7 +128,11 @@ void PackDecal(const DecalAsset& a, const DecalComponent& dc, const DecalTexture
     // The scene's Decal Grading on top of the asset's and the instance's weathering: Age fades and
     // bleaches, Wear peels, buffs and chips.
     const float fadeW = Unit(a.Fade + dc.Fade + g.Age * 0.5f);
-    const float bleach = Unit(a.Bleach + dc.Bleach + g.Age * 0.6f);
+    // Age sun-bleaches paint, not dirt: the bleach lifts a colour toward a pale grey, which turned
+    // a dark grime stain into a pale puddle on a dark floor. Dark tints (grime, stains) take less of it.
+    const float tintLuma = glm::dot(tint, glm::vec3(0.2126f, 0.7152f, 0.0722f));
+    const float ageBleach = g.Age * 0.6f * glm::smoothstep(0.05f, 0.4f, tintLuma);
+    const float bleach = Unit(a.Bleach + dc.Bleach + ageBleach);
     const float peel = Unit(a.Peel + dc.Peel + g.Wear * 0.5f);
     const float buff = Unit(a.Buff + dc.Buff + g.Wear * 0.3f);
     const float wear = Unit(g.Wear);
@@ -255,6 +259,13 @@ std::shared_ptr<DecalAsset> DecalSystem::GetAsset(const std::string& projectRelP
 
 void DecalSystem::PushRuntime(const DecalInstance& d) { m_Runtime.push_back(d); }
 
+void DecalSystem::SetGhost(const DecalComponent& d, const glm::mat4& boxWorld) {
+    if (!m_Ghost) m_Ghost = std::make_unique<DecalComponent>();
+    *m_Ghost = d;
+    m_GhostWorld = boxWorld;
+    m_GhostActive = true;
+}
+
 Decals::GpuDecalBounds DecalSystem::BoundsFor(const glm::mat4& boxToWorld) {
     Decals::GpuDecalBounds b;
     b.Centre = glm::vec4(glm::vec3(boxToWorld[3]), 0.0f);
@@ -306,7 +317,7 @@ void DecalSystem::BinCluster(const std::vector<Decals::GpuDecalBounds>& bounds, 
 }
 
 int DecalSystem::Prepare(World& world, const glm::mat4& viewProj, const glm::vec3& cameraPos, float maxDistance,
-                         const DecalGrading& grading) {
+                         const DecalGrading& grading, bool includeGhost) {
     m_Grading = grading;
     m_Textures->SetBudgetMB(ProjectSettings::Quality().DecalTextureBudgetMB);
     // Hot reload: an edited .decal is re-read (and its textures re-decoded) within about a second.
@@ -347,18 +358,16 @@ int DecalSystem::Prepare(World& world, const glm::mat4& viewProj, const glm::vec
         return std::max(0.0f, glm::length(c - cameraPos) - glm::length(ext));
     };
 
-    auto& reg = world.Registry;
-    for (auto [entity, dc] : reg.view<const DecalComponent>().each()) {
-        if (dc.AssetPath.empty() || reg.all_of<InactiveTag>(entity)) continue;
-        if (dc.Opacity <= 0.0f || (!dc.AffectStatic && !dc.AffectDynamic)) continue;
+    // One component's decal -> m_Frame (shared by the scene's components and the editor's ghost).
+    auto gatherComponent = [&](uint32_t entityKey, const DecalComponent& dc, const glm::mat4& boxWorld) {
+        if (dc.AssetPath.empty() || dc.Opacity <= 0.0f || (!dc.AffectStatic && !dc.AffectDynamic)) return;
         const std::shared_ptr<DecalAsset> asset = GetAsset(dc.AssetPath);
-        if (!asset || asset->Missing || asset->AlbedoPath.empty()) continue;
+        if (!asset || asset->Missing || asset->AlbedoPath.empty()) return;
         DecalInstance inst;
-        inst.BoxToWorld = world.GetCachedWorldTransform(entity) *
-                          VariationFor(dc.Seed, dc.RotationJitter, dc.ScaleJitter, dc.RandomFlip) *
+        inst.BoxToWorld = boxWorld * VariationFor(dc.Seed, dc.RotationJitter, dc.ScaleJitter, dc.RandomFlip) *
                           glm::scale(glm::mat4(1.0f), glm::max(dc.Size, glm::vec3(0.001f)));
         const float d = consider(inst);
-        if (d < 0.0f || d > maxDistance) continue;
+        if (d < 0.0f || d > maxDistance) return;
         // Only resident textures draw; the rest decode in the background and show up a frame or so later.
         DecalTextureArrays::Source src;
         src.Albedo = Resolve(asset->AlbedoPath);
@@ -367,7 +376,7 @@ int DecalSystem::Prepare(World& world, const glm::mat4& viewProj, const glm::vec
         src.Aux = Resolve(asset->AuxPath);
         src.Tier = asset->Tier;
         const DecalTextureArrays::Slot* slot = m_Textures->Request(src);
-        if (!slot) continue;
+        if (!slot) return;
         const float fade = d > fadeStart ? 1.0f - (d - fadeStart) / std::max(maxDistance - fadeStart, 1e-3f) : 1.0f;
         const int frame = dc.Frame >= 0 ? dc.Frame : FrameFor(dc.Seed, asset->AtlasCols * asset->AtlasRows);
         PackDecal(*asset, dc, *slot, m_Grading, fade, frame, inst.Gpu);
@@ -383,10 +392,18 @@ int DecalSystem::Prepare(World& world, const glm::mat4& viewProj, const glm::vec
             if (dc.SubstrateMode == 0) inst.Gpu.Ids.z |= Decals::FLAG_SUBSTRATE_AUTO;
         }
         inst.Gpu.Ids.x |= sub << Decals::SUBSTRATE_SHIFT;
-        inst.SortKey = PackSortKey(dc.SortOrder, (uint32_t)entt::to_integral(entity), dc.Seed);
+        inst.SortKey = PackSortKey(dc.SortOrder, entityKey, dc.Seed);
         m_Frame.push_back(inst);
         dist.push_back(d);
+    };
+
+    auto& reg = world.Registry;
+    for (auto [entity, dc] : reg.view<const DecalComponent>().each()) {
+        if (reg.all_of<InactiveTag>(entity)) continue;
+        gatherComponent((uint32_t)entt::to_integral(entity), dc, world.GetCachedWorldTransform(entity));
     }
+    // The editor's placement ghost: the real decal, drawn on top, in the editor's own views only.
+    if (includeGhost && m_GhostActive && m_Ghost) gatherComponent(0xFFFFFFFFu, *m_Ghost, m_GhostWorld);
     for (const DecalInstance& r : m_Runtime) {
         const float d = consider(r);
         if (d < 0.0f || d > maxDistance) continue;
