@@ -1,0 +1,13 @@
+{
+  "albedo": "assets/Architecture/Building/Textures/Floor_Concrete/Floor_Concrete_Base_Color.png",
+  "normal": "assets/Architecture/Building/Textures/Floor_Concrete/Floor_Concrete_Normal.png",
+  "roughness": "",
+  "ao": "assets/Architecture/Building/Textures/Floor_Concrete/Floor_Concrete_AO.png",
+  "tiling": 2.0,
+  "tint": [1.35, 1.35, 1.35],
+  "strength": 1.0,
+  "roughnessRange": [0.92, 0.92],
+  "mirror": false,
+  "crop": [0.0, 0.0, 1.0, 1.0],
+  "detail": 0.6
+}
