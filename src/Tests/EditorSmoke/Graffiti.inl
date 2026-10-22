@@ -21,6 +21,12 @@ struct EditorSmokeAccess_Graffiti {
         return e.RaycastViewportSurface(w, cam, px, hit);
     }
     static void FocusScene(EditorLayer& e) { e.RequestSceneTabFocus(); }
+    static void Gizmos(EditorLayer& e, bool on) { e.m_GizmosMasterVisible = on; e.m_ShowEntityIcons = on; e.m_ShowGrid = on; e.m_CleanShots = !on; }
+    static bool RadialOpen(EditorLayer& e) { return e.m_Radial.Open; }
+    static bool RadialGraffiti(EditorLayer& e) { return e.m_Radial.GraffitiRing; }
+    static int RadialCount(EditorLayer& e) { return e.m_Radial.Count; }
+    static ImVec2 RadialCentre(EditorLayer& e) { return e.m_Radial.Center; }
+    static const char* RadialName(EditorLayer& e, int i) { return e.GraffitiRadialFullName(i); }
 };
 namespace {
 namespace smoke_graffiti {
@@ -72,10 +78,95 @@ bool BakeIdle(Ctx& c) {
     GraffitiDesigner* g = GA::G(c.E);
     return g && g->BakeStage == 0 && !g->BakeAgain;
 }
+// The mean pressure of one recorded stroke.
+float MeanPressure(const Graffiti::Stroke& st) {
+    if (st.Samples.empty()) return 0.0f;
+    float sum = 0.0f;
+    for (const auto& sm : st.Samples) sum += sm.Pressure01();
+    return sum / (float)st.Samples.size();
+}
+std::string g_RadialPiece;
+// A drag across the Designer's canvas at height ROW (0..1), left to right, as a run of steps.
+#define CANVAS_STROKE(ROW)     Move("to the canvas", [](Ctx& c) {         GraffitiDesigner* g = GA::G(c.E);         return ImVec2(g->CanvasMin.x + (g->CanvasMax.x - g->CanvasMin.x) * 0.15f, g->CanvasMin.y + (g->CanvasMax.y - g->CanvasMin.y) * (ROW));     }),     Wait(2), MouseButton(0, true), Wait(2),     Glide(AtPoint([](Ctx& c) {         GraffitiDesigner* g = GA::G(c.E);         return ImVec2(g->CanvasMin.x + (g->CanvasMax.x - g->CanvasMin.x) * 0.85f, g->CanvasMin.y + (g->CanvasMax.y - g->CanvasMin.y) * (ROW));     }), 30),     Wait(3), MouseButton(0, false), Wait(3)
 } // namespace smoke_graffiti
 
 void RegisterGraffitiTests() {
     using namespace smoke_graffiti;
+    Add("graffiti: pen pressure drives the stroke, and the viewport radial picks a tool", {
+        FreshScene(), Wait(2),
+        Do("Scene tab in front", [](Ctx& c) { GA::FocusScene(c.E); }), Wait(2),
+        Do("show the Graffiti Designer", [](Ctx& c) {
+            GA::Shown(c.E) = true;
+            ImGui::SetWindowPos(EditorPanels::GraffitiDesigner, ImVec2(40, 60));
+            ImGui::SetWindowSize(EditorPanels::GraffitiDesigner, ImVec2(1150, 720));
+        }),
+        Wait(3),
+        Click(ByLabel("New", kDesigner)),
+        Until("the new piece is open", [](Ctx& c) { GraffitiDesigner* g = GA::G(c.E); return g && g->Piece; }),
+        Do("remember the piece, spray tool", [](Ctx& c) {
+            GraffitiDesigner* g = GA::G(c.E);
+            g_RadialPiece = g->Piece->Path;
+            g->Active = GraffitiDesigner::Tool::Spray;
+            g->Selected = 0;
+            g->VelocityPressure = true;
+        }),
+        Wait(2),
+        // A synthetic pen: a light stroke, then a hard one. (No tablet needed.)
+        Do("inject light pen pressure", [](Ctx&) { PenInput::SetSynthetic(0.3f); }), Wait(2),
+        ExpectTrue("the readout sees the pen", [](Ctx&) { return PenInput::Active(); }),
+        CANVAS_STROKE(0.3f),
+        Do("inject hard pen pressure", [](Ctx&) { PenInput::SetSynthetic(1.0f); }), Wait(2),
+        CANVAS_STROKE(0.7f),
+        Do("remove the synthetic pen", [](Ctx&) { PenInput::SetSynthetic(-1.0f); }),
+        Expect("the hard stroke recorded more pressure than the light one", [](Ctx& c) {
+            const auto& strokes = GA::G(c.E)->Piece->Layers[0].Strokes;
+            if (strokes.size() != 2) return "spray layer has " + std::to_string(strokes.size()) + " strokes";
+            const float light = MeanPressure(strokes[0]), hard = MeanPressure(strokes[1]);
+            std::printf("    [graffiti] mean pen pressure recorded: light %.2f, hard %.2f\n", light, hard);
+            return hard > light + 0.25f && light < 0.5f ? std::string() : "light " + std::to_string(light) + " vs hard " + std::to_string(hard);
+        }),
+        // The viewport radial: Spray in Scene view on, hold Space, aim at the Text wedge, let go.
+        Do("viewport spray on, Designer tucked away, Spray tool", [](Ctx& c) {
+            GraffitiDesigner* g = GA::G(c.E);
+            g->ViewportSpray = true;
+            g->Active = GraffitiDesigner::Tool::Spray;
+            ImGui::SetWindowCollapsed(EditorPanels::GraffitiDesigner, true);
+        }),
+        Wait(3),
+        Move("to the viewport's centre", [](Ctx& c) { return ViewportCentre(c.E); }), Wait(3),
+        KeyDown(ImGuiKey_Space), WaitSeconds(0.6), Wait(10),
+        Move("onto the Text wedge", [](Ctx& c) {
+            const int n = std::max(GA::RadialCount(c.E), 2);
+            const float ang = -1.5707963f + 1.0f * 6.2831853f / (float)n; // wedge 1 (Text), clockwise from the top
+            const ImVec2 m = GA::RadialCentre(c.E);
+            return ImVec2(m.x + std::cos(ang) * 110.0f, m.y + std::sin(ang) * 110.0f);
+        }),
+        Wait(12),
+        ExpectTrue("the radial is open in its Graffiti mode", [](Ctx& c) { return GA::RadialOpen(c.E) && GA::RadialGraffiti(c.E) && GA::RadialCount(c.E) >= 9; }),
+        Do("gizmos off for the shot", [](Ctx& c) { GA::Gizmos(c.E, false); }), Wait(3),
+        Shot("graffiti radial"), // not CleanShot: hiding overlays closes the radial (it treats the Scene as hidden)
+        Do("gizmos back on", [](Ctx& c) { GA::Gizmos(c.E, true); }),
+        KeyUp(ImGuiKey_Space), Wait(30),
+        Expect("picking the Text wedge changed the tool", [](Ctx& c) {
+            GraffitiDesigner* g = GA::G(c.E);
+            return g->Active == GraffitiDesigner::Tool::Text ? std::string() : "tool is " + std::to_string((int)g->Active);
+        }),
+        ExpectTrue("the radial closed", [](Ctx& c) { return !GA::RadialOpen(c.E); }),
+    }, [](Ctx& c) {
+        PenInput::SetSynthetic(-1.0f);
+        ImGui::SetWindowCollapsed(EditorPanels::GraffitiDesigner, false); // the next test clicks into it
+        if (GraffitiDesigner* g = GA::G(c.E)) {
+            g->ViewportSpray = false;
+            if (g->Piece && g->Piece->Path == g_RadialPiece) {
+                std::error_code ec;
+                const std::string piece = g->Piece->Path, decal = g->Piece->DecalPath(), dir = g->Piece->BakeDir();
+                g->Piece.reset();
+                for (const std::string& f : {piece, piece + ".meta", decal, decal + ".meta"}) fs::remove(fs::u8path(f), ec);
+                fs::remove_all(fs::u8path(dir), ec);
+            }
+        }
+        GA::Shown(c.E) = false;
+    });
     Add("graffiti: design a piece, spray it onto a hallway wall, bake it twice identically, see the decal", {
         Do("reset the test's state", [](Ctx&) { g_State = std::make_shared<State>(); }),
         FreshScene(), Wait(2),

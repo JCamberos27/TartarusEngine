@@ -6,6 +6,7 @@
 #include "UnitTestSupport.h"
 #include "../Graffiti/GraffitiPaint.h"
 #include "../Graffiti/GraffitiPiece.h"
+#include "../Core/PenInput.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -434,6 +435,46 @@ void Glyphs() {
     CHECK(GlyphPath("Brush", '!').empty() && GlyphPath("Block", '@').empty());
 }
 
+// Pen pressure (docs: Windows Pointer Input -> PenInput): no pen reads as "none", an injected value is
+// clamped and wins, and a stroke at light pressure is narrower and lays down less paint than a hard one.
+void PenPressureModel() {
+    PenInput::SetSynthetic(-1.0f);
+    PenInput::Report(-1.0f);
+    CHECK(PenInput::Pressure() < 0.0f && !PenInput::Active()); // a mouse: fall back to the slider
+    PenInput::SetSynthetic(0.4f);
+    CHECK(PenInput::Active() && Near(PenInput::Pressure(), 0.4f));
+    PenInput::SetSynthetic(7.0f);
+    CHECK(Near(PenInput::Pressure(), 1.0f));
+    PenInput::SetSynthetic(-1.0f);
+    PenInput::Report(0.6f);
+    CHECK(Near(PenInput::Pressure(), 0.6f));
+    PenInput::Report(-1.0f);
+    CHECK(!PenInput::Active());
+
+    auto strokeAt = [&](float pressure) {
+        Stroke st;
+        st.Tip = Cap::Fat;
+        st.Color = Quantise(glm::vec3(0.9f, 0.2f, 0.1f));
+        for (int i = 0; i <= 120; ++i) {
+            const float f = (float)i / 120.0f;
+            st.Samples.push_back(SpraySample::Make(glm::mix(glm::vec2(0.2f, 0.5f), glm::vec2(0.8f, 0.5f), f), pressure, 0.15f, f));
+        }
+        StrokeBuilder b;
+        std::vector<Splat> out;
+        b.Begin(st, 1024, 1024, 1024.0f, 7u, false);
+        for (const SpraySample& sm : st.Samples) b.Add(sm, out);
+        double radius = 0.0, paint = 0.0;
+        for (const Splat& sp : out) {
+            radius += sp.Shape.z / (double)out.size();
+            paint += sp.Params.y;
+        }
+        return std::pair<double, double>(radius, paint);
+    };
+    const auto light = strokeAt(0.2f), hard = strokeAt(1.0f);
+    CHECK(light.first > 0.0 && hard.first > light.first);   // wider
+    CHECK(light.second > 0.0 && hard.second > light.second * 1.5); // and more paint
+}
+
 } // namespace
 
 void RegisterGraffitiTests(UnitTestSupport::TestList& tests) {
@@ -446,4 +487,5 @@ void RegisterGraffitiTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Graffiti spray model", SprayModel});
     tests.push_back({"Graffiti text layout", TextLayout});
     tests.push_back({"Graffiti glyph table", Glyphs});
+    tests.push_back({"Graffiti pen pressure", PenPressureModel});
 }
