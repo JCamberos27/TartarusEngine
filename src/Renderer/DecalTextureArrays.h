@@ -110,6 +110,11 @@ public:
     void SetBudgetMB(int mb);
     std::size_t GpuBytes() const;
     int ResidentCount() const;
+    // Decodes in flight, or a Request() since BeginFrame() turned away by the kMaxInFlight limit.
+    bool Busy() const { return m_InFlight > 0 || m_Deferred; }
+    // Resident slots still in use were evicted in the last second or so: more maps in view than the
+    // budget holds, so Busy() won't clear while the view stays.
+    bool Thrashing() const { return m_LastThrash != 0 && m_Frame - m_LastThrash < 60; }
     int LayerCount() const { return m_GpuLayers; }
     // Drops every slot (hot reload of a decal or its textures); arrays keep their storage.
     void Clear();
@@ -140,6 +145,9 @@ private:
     std::size_t m_BudgetBytes = std::size_t(256) << 20;
     std::uint64_t m_Frame = 0;
     int m_InFlight = 0;
+    bool m_Deferred = false; // a Request() this frame waited on the decode limit
+    std::uint64_t m_LastThrash = 0;
+    bool m_WarnedThrash = false;
     mutable unsigned int m_Placeholder = 0;
     bool m_WarnedBudget = false;
 };

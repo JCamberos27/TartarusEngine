@@ -342,6 +342,7 @@ void DecalTextureArrays::Clear() {
     }
     m_Slots.clear();
     m_InFlight = 0;
+    m_Deferred = false;
 }
 
 bool DecalTextureArrays::AllocateWithEviction(int size, DecalPageAllocator::Alloc& out) {
@@ -357,6 +358,17 @@ bool DecalTextureArrays::AllocateWithEviction(int size, DecalPageAllocator::Allo
             if (victim == m_Slots.end() || s.LastUsed < victim->second->S.LastUsed) victim = it;
         }
         if (victim == m_Slots.end()) return false;
+        // A slot asked for last frame too: what's in view doesn't fit the budget, and the decals take
+        // each other's space in turn (some missing each frame) for as long as the view holds.
+        if (victim->second->S.LastUsed + 1 >= m_Frame) {
+            m_LastThrash = m_Frame;
+            if (!m_WarnedThrash) {
+                m_WarnedThrash = true;
+                Log::Warn("Decals: the decals in view need more texture memory than the budget (" +
+                          std::to_string(m_BudgetBytes >> 20) +
+                          " MB, Project Settings > Quality), so some drop out in turn; raise it or use fewer different decals.");
+            }
+        }
         m_Alloc.Free(victim->second->S.Alloc);
         m_Slots.erase(victim);
     }
@@ -422,6 +434,7 @@ void DecalTextureArrays::UploadSlot(Entry& e, Decoded& d) {
 
 void DecalTextureArrays::BeginFrame() {
     ++m_Frame;
+    m_Deferred = false;
     for (auto& [key, e] : m_Slots) {
         e->S.Refs = 0;
         if (!e->Pending.valid()) continue;
@@ -448,7 +461,10 @@ const DecalTextureArrays::Slot* DecalTextureArrays::Request(const Source& src) {
         ++s.Refs;
         return s.Ready ? &s : nullptr;
     }
-    if (m_InFlight >= kMaxInFlight) return nullptr; // asked again next frame
+    if (m_InFlight >= kMaxInFlight) {
+        m_Deferred = true;
+        return nullptr; // asked again next frame
+    }
 
     const int size = DecalPageAllocator::SlotSizeFor(src.Tier);
     // Budget as if this decal's extra maps were already in: the layer count is what they'd cost.
