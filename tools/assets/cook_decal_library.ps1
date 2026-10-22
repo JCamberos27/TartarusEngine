@@ -45,9 +45,9 @@
 #             Both linear (.meta isSRGB false; the normal's textureType 1, NormalMap).
 #
 # substrate: peel decals (Grime/PeelingPaint) carry a "substrate" block, the PBR material that shows
-#   where the paint is missing; it defaults to Wall_Concrete (tiling 1.5 m, crop [0, 0.21, 1, 0.93]
-#   to skip the sheet's trim bands, mirrored repeat). Its roughness map is empty: the
-#   Wall_Concrete_Roughness.png in the pack is solid black, so roughnessRange [0.9, 0.9] stands in.
+#   where the paint is missing: {"preset": "assets/Decals/Substrates/SB_Wall_Concrete.substrate"}
+#   (tiling 1.5 m, crop [0, 0.21, 1, 0.93] to skip the sheet's trim bands, mirrored repeat, no roughness
+#   map - the pack's is solid black - and detail derived from the albedo; see the preset).
 #
 # .meta: the engine's texture meta (metaVersion 1, "type": "texture", importer block as AssetLibrary
 # writes it): sRGB, compression 1 (Normal: BC3 for RGBA), mips, trilinear, aniso 8, maxTextureSize =
@@ -563,20 +563,8 @@ function Get-DecalJson($r) {
         tags           = (Get-Tags $cat)
     }
     if ($cat -match '^Grime/PeelingPaint$') {
-        # Wall_Concrete substrate; the pack's roughness PNG is solid black, so none (roughnessRange stands in).
-        $sub = 'assets/Architecture/Building/Textures/Wall_Concrete/Wall_Concrete_'
-        $j.Insert(($j.Keys.Count - 2), 'substrate', [ordered]@{
-            albedo         = $sub + 'Base_Color.png'
-            normal         = $sub + 'Normal.png'
-            roughness      = ''
-            ao             = $sub + 'AO.png'
-            tiling         = 1.5
-            tint           = @(1.0, 1.0, 1.0)
-            strength       = 1.0
-            roughnessRange = @(0.9, 0.9)
-            mirror         = $true
-            crop           = @(0.0, 0.21, 1.0, 0.93)
-        })
+        # The Wall_Concrete substrate preset (assets/Decals/Substrates/SB_Wall_Concrete.substrate).
+        $j.Insert(($j.Keys.Count - 2), 'substrate', [ordered]@{ preset = 'assets/Decals/Substrates/SB_Wall_Concrete.substrate' })
     }
     (To-Json $j) + "`n"
 }

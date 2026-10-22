@@ -76,6 +76,8 @@ public:
         // Substrates (Substrate.h): with Surface empty, a surface map packed from these two separate
         // greyscale maps instead - r roughness, b AO (white where one is missing), g 0, a 1.
         std::string Rough, AO;
+        // > 0: normal and AO detail derived from the albedo's luminance (SubstrateDesc::Detail).
+        float Detail = 0.0f;
         int Tier = 2048;
     };
     struct Slot {

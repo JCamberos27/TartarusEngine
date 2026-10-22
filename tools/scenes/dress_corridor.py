@@ -7,11 +7,11 @@
 #  * the embedded materials of the corridor walls / ceiling / baseboards get the beige plaster's albedo + AO and a
 #    peeling-paint grunge map (the same values build_apartment_hallway.py's corridor_* materials use), and a
 #    "substrate" block (the PBR material that shows where paint is missing): Wall_Concrete on the walls,
-#    Floor_Concrete on the ceiling, PH_Dark_Wooden_Planks on the baseboards (SUBSTRATES below);
+#    Floor_Concrete on the ceiling, PH_Dark_Wooden_Planks on the baseboards (presets, SUBSTRATES below);
 #  * a seeded, layered set of decals goes under a "Corridor Wear" root: per patch a big soft base, a peel layer, then
 #    small sharp flakes and a crack on top. Only the DA_PeelingPaint_* sets (the tile / board-grid ones are skipped) and
 #    a few DA_LiquidSplatter_* floor splashes. Asserted limits: <= 80 decals, <= 22 unique 2K .decal maps, <= 1 4K.
-#    Ceiling decals carry a Custom substrate override (Floor_Concrete); wall / skirting decals stay on Auto, so they
+#    Ceiling decals carry a Preset substrate override (Floor_Concrete); wall / skirting decals stay on Auto, so they
 #    show the substrate of whatever they land on (concrete on the wall, wood on the baseboard);
 #  * a "Decal Grading" entity (Age 0.35, Wear 0.4) under that root.
 #
@@ -46,21 +46,12 @@ WALL_DIR = 'assets/Architecture/Building/Textures/PH_Beige_Wall/beige_wall_001_'
 GRUNGE_WALL = D + 'Grime/PeelingPaint/T_Grunge_PeelingPaint_036.png'
 GRUNGE_WORN = D + 'Grime/PeelingPaint/T_Grunge_PeelingPaint_085.png'
 
-# Substrate sets (what shows where paint is missing). Paths are relative to TEX; '' = no map (the Wall / Ceiling
-# roughness PNGs in the packs are solid black, so roughnessRange stands in). crop is image space, v down.
-TEX = 'assets/Architecture/Building/Textures/'
+# Substrate presets (what shows where paint is missing): .substrate files under assets/Decals/Substrates, which
+# materials and decals reference by path instead of embedding the maps and values.
 SUBSTRATES = {
-    'wall': dict(albedo='Wall_Concrete/Wall_Concrete_Base_Color.png', normal='Wall_Concrete/Wall_Concrete_Normal.png',
-                 roughness='', ao='Wall_Concrete/Wall_Concrete_AO.png', tiling=1.5, tint=[1.0, 1.0, 1.0],
-                 strength=1.0, rough=(0.9, 0.9), mirror=True, crop=(0.0, 0.21, 1.0, 0.93)),
-    'ceil': dict(albedo='Floor_Concrete/Floor_Concrete_Base_Color.png', normal='Floor_Concrete/Floor_Concrete_Normal.png',
-                 roughness='', ao='Floor_Concrete/Floor_Concrete_AO.png', tiling=2.0, tint=[1.0, 1.0, 1.0],
-                 strength=1.0, rough=(0.92, 0.92), mirror=False, crop=(0.0, 0.0, 1.0, 1.0)),
-    'trim': dict(albedo='PH_Dark_Wooden_Planks/dark_wooden_planks_Diffuse_2k.jpg',
-                 normal='PH_Dark_Wooden_Planks/dark_wooden_planks_nor_gl_2k.jpg',
-                 roughness='PH_Dark_Wooden_Planks/dark_wooden_planks_Rough_2k.jpg',
-                 ao='PH_Dark_Wooden_Planks/dark_wooden_planks_AO_2k.jpg', tiling=1.0, tint=[1.0, 1.0, 1.0],
-                 strength=1.0, rough=(0.0, 1.0), mirror=False, crop=(0.0, 0.0, 1.0, 1.0)),
+    'wall': 'assets/Decals/Substrates/SB_Wall_Concrete.substrate',
+    'ceil': 'assets/Decals/Substrates/SB_Floor_Concrete.substrate',
+    'trim': 'assets/Decals/Substrates/SB_Dark_Wooden_Planks.substrate',
 }
 
 
@@ -115,26 +106,14 @@ def ref(repo, path):
 
 
 def substrate_block(repo, key):
-    """The material "substrate" block for SUBSTRATES[key]: texture refs ({path, pathGuid}), '' for none."""
-    s = SUBSTRATES[key]
-    return {'albedo': ref(repo, TEX + s['albedo']), 'normal': ref(repo, TEX + s['normal']),
-            'roughness': ref(repo, TEX + s['roughness']) if s['roughness'] else '',
-            'ao': ref(repo, TEX + s['ao']), 'tiling': s['tiling'], 'tint': list(s['tint']), 'strength': s['strength'],
-            'roughnessRange': list(s['rough']), 'mirror': s['mirror'], 'crop': list(s['crop'])}
+    """The material "substrate" block for SUBSTRATES[key]: a reference to its preset."""
+    assert os.path.isfile(os.path.join(repo, 'project', SUBSTRATES[key])), SUBSTRATES[key]
+    return {'preset': SUBSTRATES[key]}
 
 
 def substrate_override(key):
-    """The decal component keys for a Custom substrate override with SUBSTRATES[key] (plain path strings)."""
-    s = SUBSTRATES[key]
-
-    def p(f):
-        return TEX + f if f else ''
-    return {'Substrate': 'Custom', 'Substrate Albedo': p(s['albedo']), 'Substrate Normal': p(s['normal']),
-            'Substrate Roughness': p(s['roughness']), 'Substrate AO': p(s['ao']), 'Substrate Tiling': s['tiling'],
-            'Substrate Tint': list(s['tint']), 'Substrate Strength': s['strength'],
-            'Substrate Rough Min': s['rough'][0], 'Substrate Rough Max': s['rough'][1],
-            'Substrate Mirror': s['mirror'], 'Substrate Crop X0': s['crop'][0], 'Substrate Crop Y0': s['crop'][1],
-            'Substrate Crop X1': s['crop'][2], 'Substrate Crop Y1': s['crop'][3]}
+    """The decal component keys for a Preset substrate override with SUBSTRATES[key]."""
+    return {'Substrate': 'Preset', 'Substrate Preset': SUBSTRATES[key]}
 
 
 def corridor_trims(d, by_id):

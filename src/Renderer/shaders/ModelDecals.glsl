@@ -116,10 +116,16 @@ vec3 SubstrateNormal(vec3 N, SubstrateSample ss, float w) {
     return normalize(mix(N, normalize(ss.U * wb.x + ss.V * wb.y + ss.W * wb.z), w));
 }
 
+// The substrate's colour with its AO (pores, pits) baked in: AO alone only dims the ambient light,
+// and the walls here are mostly lit by lamps.
+vec3 SubstrateBaked(SubstrateSample ss) {
+    return ss.albedo * mix(1.0, ss.ao, 0.7);
+}
+
 // The substrate's colour with a little of the mask photo's grain left in (grime in its pores).
 vec3 SubstrateColour(SubstrateSample ss, vec3 photo) {
     float l = clamp(dot(photo, vec3(0.2126, 0.7152, 0.0722)) * 2.2, 0.45, 1.1);
-    return ss.albedo * mix(1.0, l, 0.55);
+    return SubstrateBaked(ss) * mix(1.0, l, 0.55);
 }
 
 float DecalHash(vec2 p) {
@@ -226,9 +232,23 @@ void ApplyDecals(inout vec3 albedo, inout vec3 N, inout float roughness, inout f
             }
             sw = ss.strength;
         }
+        vec4 surf = (flags & DECAL_HAS_SURFACE) != 0u ? textureGrad(uDecalSurface, tc3, gx, gy) : vec4(1.0);
+        // The bare substrate sits below the paint: where it's lower than its ~2 cm neighbourhood (the
+        // height three mips down) it's in the paint's shadow, and the decal's own cavity AO darkens it as
+        // well - both baked into its colour, since lamps (not ambient) light these walls.
+        float recess = 1.0;
+        if (sw > 0.0 && (flags & DECAL_HAS_SURFACE) != 0u) {
+            float hb = textureLod(uDecalSurface, tc3, min(lod + 3.0, maxLod)).a;
+            recess = clamp(1.0 - max(hb - surf.a, 0.0) * 5.0, 0.3, 1.0) * mix(1.0, surf.b, 0.85);
+        }
+        if (sw > 0.0) {
+            // The substrate's normal first, so the decal's relief (the paint's step and curled lips) lands
+            // on top of it at full strength.
+            N = SubstrateNormal(N, ss, a * sw);
+        }
         if ((ch & DECAL_CH_ALBEDO) != 0u) {
             vec3 c = col.rgb * vec3(h00, h01.x);
-            if (sw > 0.0) c = mix(c, SubstrateColour(ss, col.rgb), sw);
+            if (sw > 0.0) c = mix(c, SubstrateColour(ss, col.rgb) * recess, sw);
             c = mix(c, mix(vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))), vec3(1.0), 0.35), fb.y);
             albedo = mix(albedo, c, a * h01.y);
         }
@@ -242,16 +262,14 @@ void ApplyDecals(inout vec3 albedo, inout vec3 N, inout float roughness, inout f
                 N = normalize(mix(N, normalize(T * wb.x + B * wb.y + Z * wb.z), a * h02.x));
             }
         }
-        vec4 surf = (flags & DECAL_HAS_SURFACE) != 0u ? textureGrad(uDecalSurface, tc3, gx, gy) : vec4(1.0);
         vec2 rm = unpackHalf2x16(d.H2.x);
         if ((ch & DECAL_CH_ROUGH) != 0u) roughness = mix(roughness, rm.x * surf.r, a * h02.y);
         if ((ch & DECAL_CH_METAL) != 0u) metallic = mix(metallic, rm.y * surf.g, a * h03.x);
         if ((ch & DECAL_CH_AO) != 0u) ao = mix(ao, ao * surf.b, a * h03.y);
         if (sw > 0.0) {
-            // On top of the decal's own relief (the paint's curled lips, its cracks' AO): the substrate's
-            // normal, roughness and AO under its coverage. Bare material isn't metal.
+            // The substrate's roughness and AO under its coverage (the decal's own AO stays on top). Bare
+            // material isn't metal.
             float w = a * sw;
-            N = SubstrateNormal(N, ss, w);
             roughness = mix(roughness, ss.rough, w);
             metallic = mix(metallic, 0.0, w);
             ao *= mix(1.0, ss.ao, w);
@@ -282,27 +300,39 @@ void ApplyGrunge(inout vec3 albedo, inout vec3 N, inout float roughness, inout f
     vec4 g4 = SampleTriplanar(uGrungeMap, vWorldPos, TriplanarWeights(geoN), max(uGrungeScale, 1e-4));
     vec3 g = g4.rgb;
     float dirt = 1.0 - dot(g, vec3(0.2126, 0.7152, 0.0722));
-    float reveal = 0.0;
+    float reveal = 0.0, lip = 0.0, shadow = 0.0;
     SubstrateSample ss;
     if (uSubstrateOn != 0 && uMaterialSubstrate > 0) {
         ss = SampleSubstrate(uint(uMaterialSubstrate - 1), geoN, dFdx(vWorldPos), dFdy(vWorldPos));
-        // The mask a few mips down (~6 mm at the default tiling): hairline cracks stay dirt, only the
-        // flaked-off patches open up. Strength 0.35 reveals where that passes ~0.65: the peels' cores.
-        vec3 tw = TriplanarWeights(geoN);
+        // Read on the dominant plane only (the triplanar's axes): the mask a few mips down (~6 mm at
+        // the default tiling) so hairline cracks stay dirt and only flaked-off patches open up, and
+        // much further down (~5 cm) as the local density of damage, so isolated specks on clean wall
+        // stay shut and only clusters open. Strength 0.35 reveals where the mask passes ~0.65.
+        vec3 an = abs(geoN);
+        bool px = an.x >= an.y && an.x >= an.z, py = !px && an.y >= an.z;
         float sc = max(uGrungeScale, 1e-4);
-        float m = texture(uGrungeMap, vWorldPos.zy * sc, 2.5).a * tw.x + texture(uGrungeMap, vWorldPos.xz * sc, 2.5).a * tw.y +
-                  texture(uGrungeMap, vWorldPos.xy * sc, 2.5).a * tw.z;
+        vec2 uv = (px ? vWorldPos.zy : py ? vWorldPos.xz : vWorldPos.xy) * sc;
+        float m = texture(uGrungeMap, uv, 2.5).a;
+        float cluster = texture(uGrungeMap, uv, 5.5).a;
         float t = 1.0 - uGrungeStrength;
-        reveal = smoothstep(t - 0.1, t + 0.1, m) * ss.strength;
+        float gate = smoothstep(0.28, 0.42, cluster);
+        reveal = smoothstep(t - 0.08, t + 0.08, m) * gate * ss.strength;
+        // Chipped paint, not a stain: a thin lighter rim of paint around the hole (its broken edge
+        // catching light) and, on a wall, a hairline shadow just inside its upper edge, under the lip.
+        lip = smoothstep(t - 0.2, t - 0.08, m) * (1.0 - smoothstep(t - 0.08, t + 0.02, m)) * gate;
+        if (!py) {
+            float above = texture(uGrungeMap, uv + vec2(0.0, 0.004 * sc), 2.5).a; // 4 mm up the wall
+            shadow = reveal * (1.0 - smoothstep(t - 0.08, t + 0.08, above) * gate);
+        }
     }
     float keep = 1.0 - reveal;
     albedo *= mix(vec3(1.0), g, uGrungeStrength * keep);
     roughness = mix(roughness, min(roughness + 0.35, 1.0), dirt * uGrungeStrength * keep);
     ao *= mix(1.0, 1.0 - dirt * 0.5, uGrungeStrength * keep);
+    albedo *= 1.0 + 0.18 * lip;
     if (reveal > 0.0) {
-        // Not darkened by the mask photo here: its cores are near black, and on a white wall the bare
-        // substrate already reads dark (a grey concrete is a third of white paint).
-        albedo = mix(albedo, ss.albedo, reveal);
+        // Not darkened by the mask photo here: its cores are near black and would read as holes.
+        albedo = mix(albedo, SubstrateBaked(ss) * (1.0 - 0.55 * shadow), reveal);
         N = SubstrateNormal(N, ss, reveal);
         roughness = mix(roughness, ss.rough, reveal);
         metallic = mix(metallic, 0.0, reveal);

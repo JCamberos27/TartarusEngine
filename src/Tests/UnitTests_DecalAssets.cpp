@@ -3,6 +3,7 @@
 // round trip.
 #include "UnitTestSupport.h"
 #include "../Renderer/DecalAsset.h"
+#include "../Renderer/SubstrateJson.h"
 #include "../Renderer/MaterialAsset.h"
 #include "../Renderer/Texture.h"
 #include "../Game/World.h"
@@ -378,6 +379,50 @@ void SubstrateRoundTrip() {
     }
     MaterialAsset plain;
     CHECK(!json::parse(SceneSerializer::EmbeddedMaterialToJson(plain)).contains("substrate"));
+
+    // Presets: a block naming a .substrate loads its values, a key beside it overrides one, and it is
+    // written back as the reference plus only that override.
+    const fs::path preset = DecalTempDir() / "SB_Test.substrate";
+    WriteFile(preset, R"({"albedo": ")" + kAlb + R"(", "tiling": 2.5, "tint": [1.3, 1.3, 1.3], "detail": 1})");
+    SubstratePresets::ClearCache();
+    const std::string presetPath = preset.generic_u8string();
+    SubstrateDesc viaPreset;
+    CHECK(SubstrateJson::Read(json{{"preset", presetPath}, {"strength", 0.5}}, viaPreset, SubstrateJson::PlainPath));
+    CHECK(viaPreset.Preset == presetPath && viaPreset.Albedo == kAlb && Near(viaPreset.Tiling, 2.5f) &&
+          Near(viaPreset.Tint.r, 1.3f) && Near(viaPreset.Detail, 1.0f) && Near(viaPreset.Strength, 0.5f));
+    const json back2 = SubstrateJson::Write<json>(viaPreset, [](const std::string& p) { return p; });
+    CHECK(back2.size() == 2 && back2.value("preset", std::string()) == presetPath && Near(back2.value("strength", 0.0f), 0.5f));
+    SubstrateDesc viaString;
+    CHECK(SubstrateJson::Read(json(presetPath), viaString, SubstrateJson::PlainPath) && viaString.Albedo == kAlb &&
+          Near(viaString.Strength, 1.0f));
+    // An embedded material keeps just the reference.
+    MaterialAsset pm;
+    pm.Mat.Substrate = viaString;
+    const json pem = json::parse(SceneSerializer::EmbeddedMaterialToJson(pm));
+    CHECK(pem.contains("substrate") && pem["substrate"].size() == 1 && pem["substrate"].contains("preset"));
+    const auto pmb = SceneSerializer::EmbeddedMaterialFromJson(assets, pem.dump());
+    CHECK(pmb && pmb->Mat.Substrate.Albedo == kAlb && Near(pmb->Mat.Substrate.Tiling, 2.5f));
+    // The component's Preset mode round-trips by label.
+    {
+        World pw;
+        const entt::entity pe = pw.CreateEmptyEntity(glm::vec3(0), glm::vec3(0), glm::vec3(1), "PresetPeel");
+        auto& pd = pw.Registry.emplace<DecalComponent>(pe);
+        pd.AssetPath = (DecalTempDir() / "DA_Substrate.decal").u8string();
+        pd.SubstrateMode = 4;
+        pd.SubPreset = "assets/Decals/Substrates/SB_Floor_Concrete.substrate";
+        const std::string ps = SceneSerializer::SaveToString(pw, assets);
+        CHECK(ps.find("\"Preset\"") != std::string::npos);
+        World pback;
+        AssetLibrary assets3;
+        CHECK(SceneSerializer::LoadFromString(pback, assets3, ps));
+        const auto pv = pback.Registry.view<DecalComponent>();
+        CHECK(pv.size() == 1);
+        if (!pv.empty()) {
+            const DecalComponent& r = pback.Registry.get<DecalComponent>(*pv.begin());
+            CHECK(r.SubstrateMode == 4 && r.SubPreset == pd.SubPreset);
+        }
+    }
+    SubstratePresets::ClearCache();
 }
 } // namespace
 

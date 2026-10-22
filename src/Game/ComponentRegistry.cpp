@@ -1624,7 +1624,10 @@ void RegisterEngineComponents() {
             { "Substrate", T::Enum, TARTARUS_REFLECT_FIELD(DecalComponent, SubstrateMode), 0.0f,
               "The material that shows where the paint is gone (concrete under peeling paint).\n"
               "Auto: the receiving surface's substrate, else the asset's. Asset: always the asset's.\n"
-              "Custom: the maps below. Off: none, just the decal's own colour and relief." },
+              "Custom: the maps below. Off: none, just the decal's own colour and relief.\n"
+              "Preset: a .substrate file (assets/Decals/Substrates)." },
+            { "Substrate Preset", T::String, TARTARUS_REFLECT_FIELD(DecalComponent, SubPreset), 0.0f,
+              "The .substrate preset to show (Preset): SB_Wall_Concrete, SB_Floor_Concrete, SB_Dark_Wooden_Planks." },
             { "Substrate Albedo", T::AssetRef, TARTARUS_REFLECT_FIELD(DecalComponent, SubAlbedo), 0.0f,
               "Colour map of the exposed material. Its maps take one slot of the decal texture budget." },
             { "Substrate Normal", T::AssetRef, TARTARUS_REFLECT_FIELD(DecalComponent, SubNormal), 0.0f,
@@ -1668,8 +1671,8 @@ void RegisterEngineComponents() {
         for (const char* s : {"Sort Order", "Layer Mask", "Affect Static", "Affect Dynamic"}) F(s).Group = "Receivers";
         for (const char* s : {"Seed", "Frame", "Rotation Jitter", "Scale Jitter", "Random Flip"}) F(s).Group = "Variation";
         for (const char* s : {"Fade", "Bleach", "Peel", "Buff"}) F(s).Group = "Weathering";
-        F("Substrate").EnumLabels = "Auto\0Asset\0Custom\0Off\0";
-        F("Substrate").EnumCount = 4;
+        F("Substrate").EnumLabels = "Auto\0Asset\0Custom\0Off\0Preset\0";
+        F("Substrate").EnumCount = 5;
         for (const char* s : {"Substrate Albedo", "Substrate Normal", "Substrate Roughness", "Substrate AO"})
             F(s).AssetKind = ReflectAssetKind::Texture;
         for (const char* s : {"Substrate Strength", "Substrate Rough Min", "Substrate Rough Max", "Substrate Crop X0",
@@ -1685,6 +1688,9 @@ void RegisterEngineComponents() {
                 F(s).VisibleIfValue = 2; // Custom
             }
         }
+        F("Substrate Preset").Group = "Substrate";
+        F("Substrate Preset").VisibleIfField = "Substrate";
+        F("Substrate Preset").VisibleIfValue = 4; // Preset
         m.Buttons.push_back({"Randomize Seed", ICON_FA_DICE,
                              "A new random seed: a different rotation, scale, flip and atlas frame within the jitter set above.",
                              0, [](World&, entt::entity, void* c, int) {
