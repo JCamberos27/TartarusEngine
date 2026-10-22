@@ -178,11 +178,22 @@ const EventInfo kEvents[kEventCount] = {
     {"RadialClose",      Category::Tools,        -4.0f,  80.0f, 0.0f,  false},
     {"CardFlip",         Category::Objects,      -2.0f, 120.0f, 0.02f, false},
     {"NodePop",          Category::Animation,    -2.0f,  60.0f, 0.03f, false},
+    // Graffiti Designer (decals Phase 3, docs/GRAFFITI_DESIGNER.md). Placeholders (the last column) stand in until the spray
+    // recordings are sourced; SprayLoop has nothing to borrow and plays a synthesised hiss (SynthesiseSprayLoop).
+    {"SprayStart",           Category::DecalsGraffiti,-3.0f, 120.0f, 0.03f, false, false, "Randomize"},
+    {"SprayLoop",            Category::DecalsGraffiti,-6.0f,   0.0f, 0.0f,  false}, // held: its level and pitch follow pressure
+    {"SprayEnd",             Category::DecalsGraffiti,-3.0f,  80.0f, 0.02f, false, false, "ToggleOff"},
+    {"SprayDrip",            Category::DecalsGraffiti,-4.0f,  90.0f, 0.04f, false, false, "NodePop"}, // rate-capped: drips can run in a stream
+    {"GraffitiLayerAdd",     Category::DecalsGraffiti, 0.0f, 100.0f, 0.02f, false, false, "LayerAdd"},
+    {"GraffitiLayerRemove",  Category::DecalsGraffiti, 0.0f, 100.0f, 0.02f, false, false, "LayerRemove"},
+    {"GraffitiLayerReorder", Category::DecalsGraffiti, 0.0f,  80.0f, 0.02f, false, false, "Reorder"},
+    {"GraffitiBakeStart",    Category::DecalsGraffiti, 0.0f, 500.0f, 0.0f,  true,  false, "AssetReimport"},
+    {"GraffitiBakeDone",     Category::DecalsGraffiti,-2.0f, 600.0f, 0.0f,  true,  true,  "SyncDone"},
 };
 
 const char* kCategoryNames[kCategoryCount] = {"Clicks", "Sliders", "Hover",  "Panels",             "Drag & Drop", "Notifications",
                                               "Play Mode", "Objects", "Tools", "Assets", "Animation & Curves", "System",
-                                              "Fields", "Workflow"};
+                                              "Fields", "Workflow", "Decals & Graffiti"};
 
 float DbToGain(float db) { return std::pow(10.0f, db / 20.0f); }
 
@@ -226,6 +237,13 @@ struct State {
     double DigestAtMs = -1.0;                // a Digest is due at this time (OnFocusRegained), < 0: none
     unsigned PressId = 0;                    // NotePress's item this frame, for ObserveImGui
     unsigned Rearm = 0;                      // bumped on the edge back to Active(): the per-frame statics re-prime
+    std::array<std::string, kEventCount> Note; // BuiltIn files that are a placeholder's: what the Sound Board shows (empty: its own)
+    // Held loops (StartLoop): a few, so Apply / SetWindowFocused / Shutdown can stop the ones that may no longer sound.
+    struct Loop {
+        AudioEngine::LoopId Id = -1;
+        Event E = Event::Click;
+    };
+    std::array<Loop, AudioEngine::kEditorLoops> Loops;
 } s;
 
 double NowMs() {
@@ -272,6 +290,77 @@ std::vector<std::string> ResolveVariants(const std::string& dir, const std::unor
         files.push_back((fs::u8path(dir) / file).u8string());
     }
     return files;
+}
+
+// A SYNTHESISED PLACEHOLDER, not a recording: SprayLoop's stand-in until a real aerosol hiss is sourced. ~1.5 s of mono noise
+// from a fixed-seed xorshift (the same samples every run), high-passed at ~2 kHz with a gentle emphasis around 6-9 kHz, at about
+// -18 dBFS RMS. The tail is crossfaded (equal power) into the head, so the loop has no seam. Built once at Init.
+AudioEngine::ClipId SynthesiseSprayLoop() {
+    constexpr uint32_t kRate = 48000;
+    constexpr size_t kFrames = kRate * 3 / 2, kFade = kRate / 10;
+    constexpr float kPi = 3.14159265f;
+    std::vector<float> raw(kFrames + kFade);
+    uint32_t rng = 0x5a17c0deu;
+    // One-pole high-pass at 2 kHz, plus an RBJ band-pass (7.5 kHz, Q 0.7) added for the sibilant air.
+    const float hp = std::exp(-2.0f * kPi * 2000.0f / (float)kRate);
+    const float w0 = 2.0f * kPi * 7500.0f / (float)kRate, alpha = std::sin(w0) / (2.0f * 0.7f);
+    const float b0 = alpha / (1.0f + alpha), b2 = -b0, a1 = -2.0f * std::cos(w0) / (1.0f + alpha), a2 = (1.0f - alpha) / (1.0f + alpha);
+    float hpY = 0.0f, hpX = 0.0f, z1 = 0.0f, z2 = 0.0f;
+    for (float& out : raw) {
+        rng ^= rng << 13;
+        rng ^= rng >> 17;
+        rng ^= rng << 5;
+        const float x = (float)(rng >> 8) / (float)(1u << 23) - 1.0f;
+        hpY = hp * (hpY + x - hpX);
+        hpX = x;
+        const float bp = b0 * x + z1; // transposed direct form II
+        z1 = z2 - a1 * bp;
+        z2 = b2 * x - a2 * bp;
+        out = hpY + 0.8f * bp;
+    }
+    std::vector<float> pcm(kFrames);
+    for (size_t i = 0; i < kFrames; ++i) {
+        if (i < kFade) {
+            const float w = (float)i / (float)kFade;
+            pcm[i] = raw[i] * std::sin(w * 0.5f * kPi) + raw[kFrames + i] * std::cos(w * 0.5f * kPi);
+        } else {
+            pcm[i] = raw[i];
+        }
+    }
+    double sum = 0.0;
+    for (float v : pcm) sum += (double)v * v;
+    const float gain = 0.1259f / std::max((float)std::sqrt(sum / (double)kFrames), 1e-6f); // -18 dBFS RMS
+    for (float& v : pcm) v *= gain;
+    return AudioEngine::CreateClip("synth:SprayLoop", pcm.data(), kFrames, 1, kRate);
+}
+
+int EventByName(const char* name) {
+    for (int i = 0; i < kEventCount; ++i)
+        if (std::strcmp(kEvents[i].Name, name) == 0) return i;
+    return -1;
+}
+
+// Whether `e` may sound a held loop right now: the same gates as Scheduler::Decide (no cooldown).
+bool LoopAllowed(Event e) {
+    if (!Active()) return false;
+    const EventInfo& info = kEvents[(int)e];
+    const int cat = (int)info.Cat;
+    if (!s.Values.CategoryOn[cat] || s.Values.CategoryVolume[cat] <= 0.0f) return false;
+    return s.Focused || info.Cat == Category::Notifications || info.Unfocused;
+}
+
+// The loop's level: the event's trim x the category volume x the caller's control.
+float LoopGain(Event e, float gain01) {
+    return kGains[(int)e][0] * std::clamp(s.Values.CategoryVolume[(int)kEvents[(int)e].Cat], 0.0f, 1.0f) * std::max(gain01, 0.0f);
+}
+
+// Stops the loops that may no longer sound (a category switched off, the window in the background, the service off).
+void StopDisallowedLoops() {
+    for (State::Loop& l : s.Loops)
+        if (l.Id >= 0 && !LoopAllowed(l.E)) {
+            AudioEngine::StopEditorLoop(l.Id);
+            l.Id = -1;
+        }
 }
 
 void UnloadClips() {
@@ -393,6 +482,28 @@ void Init(const std::string& builtInDir, const std::string& overrideDir) {
         if (!s.BuiltIn[i].empty() || !s.Premium[i].empty()) ++found;
         if (!s.Premium[i].empty()) ++premium;
     }
+    // An event with no file of its own plays its Placeholder's files (the built-in set only: premium sounds never stand in), or
+    // for SprayLoop the synthesised hiss. The placeholder's clips are shared ids (LoadClip caches by path).
+    for (int i = 0; i < kEventCount; ++i) {
+        s.Note[i].clear();
+        if (!s.BuiltIn[i].empty()) continue;
+        if (const char* from = kEvents[i].Placeholder) {
+            const int src = EventByName(from);
+            if (src < 0 || s.BuiltIn[src].empty()) continue;
+            s.BuiltIn[i] = s.BuiltIn[src];
+            s.BuiltInClips[i] = s.BuiltInClips[src];
+            s.Note[i] = std::string("placeholder: ") + from;
+        } else if ((Event)i == Event::SprayLoop) {
+            const AudioEngine::ClipId id = SynthesiseSprayLoop();
+            if (id < 0) continue;
+            s.BuiltIn[i].push_back("synth:SprayLoop");
+            s.BuiltInClips[i].push_back(id);
+            s.Note[i] = "synthesised placeholder";
+        } else {
+            continue;
+        }
+        if (s.Premium[i].empty()) ++found;
+    }
     SelectSets();
     s.Ready = true;
     if (!wasActive && Active()) ++s.Rearm;
@@ -405,10 +516,16 @@ void Init(const std::string& builtInDir, const std::string& overrideDir) {
 }
 
 void Shutdown() {
+    for (State::Loop& l : s.Loops)
+        if (l.Id >= 0) {
+            AudioEngine::StopEditorLoop(l.Id);
+            l.Id = -1;
+        }
     UnloadClips();
     for (auto* set : {&s.BuiltIn, &s.Premium})
         for (auto& files : *set) files.clear();
     for (auto& files : s.Files) files.clear();
+    for (auto& note : s.Note) note.clear();
     for (int i = 0; i < kEventCount; ++i) s.Sched.SetVariantCount((Event)i, 0);
     if (EditorSoundEvents::PressSlot() == &NotePress) EditorSoundEvents::PressSlot() = nullptr;
     s.Ready = false;
@@ -451,6 +568,10 @@ bool Audition(Event e, int variant, bool premium) {
 
 bool IsOverride(Event e) { return s.Override[std::clamp((int)e, 0, kEventCount - 1)]; }
 const std::vector<std::string>& BuiltInFiles(Event e) { return s.BuiltIn[std::clamp((int)e, 0, kEventCount - 1)]; }
+const char* PlaceholderNote(Event e) {
+    const std::string& note = s.Note[std::clamp((int)e, 0, kEventCount - 1)];
+    return note.empty() ? nullptr : note.c_str();
+}
 const std::vector<std::string>& PremiumFiles(Event e) { return s.Premium[std::clamp((int)e, 0, kEventCount - 1)]; }
 int PremiumEventCount() {
     int n = 0;
@@ -506,6 +627,7 @@ void Apply(const Settings& v) {
     ApplyOutputVolume();
     if (setChanged && s.Ready) SelectSets();
     if (!wasActive && Active()) ++s.Rearm;
+    StopDisallowedLoops();
 }
 const Settings& Current() { return s.Values; }
 bool Active() { return s.Ready && s.Values.Enabled && s.Values.Master > 0.0f; }
@@ -513,12 +635,16 @@ float EventGain(Event e, int repeats) {
     return kGains[std::clamp((int)e, 0, kEventCount - 1)][std::clamp(repeats, 0, kRepeatSteps - 1)];
 }
 void NotePress(unsigned itemId) { s.PressId = itemId; }
-void SetWindowFocused(bool focused) { s.Focused = focused; }
+void SetWindowFocused(bool focused) {
+    s.Focused = focused;
+    if (!focused) StopDisallowedLoops();
+}
 
 bool IsDoneChime(Event e) {
     switch (e) {
     case Event::AssetImport: case Event::ShaderReload: case Event::SyncDone: case Event::ModuleReload:
-    case Event::BuildSuccess: case Event::BuildFail: case Event::PackageSuccess: case Event::PackageFail: return true;
+    case Event::BuildSuccess: case Event::BuildFail: case Event::PackageSuccess: case Event::PackageFail:
+    case Event::GraffitiBakeDone: return true;
     default: return false;
     }
 }
@@ -542,6 +668,37 @@ void Play(Event e, float screenX01, float pitchScale, float gainDb) {
     if (e == Event::PickerOpen || e == Event::PickerClose) s.PickerFrame = s.Frame;
     if (e == Event::BuildSuccess || e == Event::BuildFail || e == Event::PackageSuccess || e == Event::PackageFail)
         s.LastBuildResultMs = NowMs();
+}
+
+LoopHandle StartLoop(Event e, float gain01, float pitch) {
+    const int i = (int)e;
+    if (i < 0 || i >= kEventCount || !LoopAllowed(e) || s.Clips[i].empty()) return -1;
+    for (State::Loop& l : s.Loops)
+        if (l.Id < 0) {
+            l.Id = AudioEngine::StartEditorLoop(s.Clips[i][0], LoopGain(e, gain01), pitch);
+            l.E = e;
+            return l.Id;
+        }
+    return -1;
+}
+
+void SetLoop(LoopHandle h, float gain01, float pitch) {
+    if (h < 0) return;
+    for (const State::Loop& l : s.Loops)
+        if (l.Id == h) {
+            AudioEngine::SetEditorLoop(h, LoopGain(l.E, gain01), pitch);
+            return;
+        }
+}
+
+void StopLoop(LoopHandle h) {
+    if (h < 0) return;
+    for (State::Loop& l : s.Loops)
+        if (l.Id == h) {
+            AudioEngine::StopEditorLoop(h);
+            l.Id = -1;
+            return;
+        }
 }
 
 bool PlayedThisFrame() { return s.LastPlayFrame == s.Frame; }

@@ -904,6 +904,9 @@ void EditorLayer::DrawWindowMenuBody() {
             ImGui::MenuItem(ICON_FA_VOLUME_HIGH "  Audio", nullptr, &m_ShowAudioDebug);
             if (ImGui::IsItemHovered())
                 EditorUI::SetTooltip("Live audio: loudness / peak meters per bus, the master limiter, the reverb's rooms and impulse responses, ambience beds, voices.");
+            ImGui::MenuItem(ICON_FA_SPRAY_CAN "  Graffiti Designer", nullptr, &m_ShowGraffitiDesigner);
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Build graffiti pieces from layers (spray, letters, stamps, fills), bake them into decals, and spray straight onto walls.");
             ImGui::MenuItem(ICON_FA_MUSIC "  Sound Board", nullptr, &m_ShowSoundBoard);
             if (ImGui::IsItemHovered())
                 EditorUI::SetTooltip("The editor's own UI sounds: every event, its files, and a button to hear each one.");

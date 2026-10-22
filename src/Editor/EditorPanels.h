@@ -25,6 +25,7 @@ inline constexpr const char* Settings     = ICON_FA_GEAR "  Settings###Settings"
 inline constexpr const char* PhysicsDebug = ICON_FA_CUBES "  Physics Debug###PhysicsDebug";
 inline constexpr const char* Animator     = ICON_FA_DIAGRAM_PROJECT "  Animator###Animator";
 inline constexpr const char* AssetLibrary = ICON_FA_BOX_ARCHIVE "  Asset Library###AssetLibrary";
+inline constexpr const char* GraffitiDesigner = ICON_FA_SPRAY_CAN "  Graffiti Designer###GraffitiDesigner";
 // The Glass Workspace (opt-in Glass theme, EditorLayer_Glass.cpp).
 inline constexpr const char* GlassHierarchy = ICON_FA_LIST "  Objects###GlassHierarchy";
 inline constexpr const char* GlassInspector = ICON_FA_SLIDERS "  Properties###GlassInspector";
