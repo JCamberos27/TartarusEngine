@@ -8,6 +8,7 @@
 #include "NpcDirector.h"
 #include "PhysicsWorld.h"
 #include "Player.h"
+#include "TimeService.h"
 #include "World.h"
 
 #include <algorithm>
@@ -102,7 +103,8 @@ void NpcTest::Decals(World& world, NpcDirector& npcs, float) {
             else SpawnBlood(1, glm::vec3(-10.2f + 0.16f * (float)(k % 24), 0.0f, -0.8f + 0.09f * (float)((k / 24) % 18)),
                             glm::vec3(0.0f, 1.0f, 0.0f), 0.3f);
         }
-        std::printf("[NpcTest] decal stress frame %d: %d of 32 rounds struck\n", f, hits);
+        std::printf("[NpcTest] decal stress frame %d (engine frame %llu): %d of 32 rounds struck\n", f,
+                    (unsigned long long)Time::FrameCount(), hits);
     }
     if (m_KStep == 0 && now >= kFireAt) {
         // A loose group of rounds into the wall at chest height, square on, and three into the floor at a slant.

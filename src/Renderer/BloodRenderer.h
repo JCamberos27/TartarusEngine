@@ -10,6 +10,9 @@
 #include "../Assets/BloodFxImport.h"
 #include "DecalTextureArrays.h"
 #include "GeneratedDecalMaps.h"
+#include <cstdint>
+
+struct DecalAsset;
 
 class Shader;
 struct RuntimeDecal;
@@ -148,6 +151,16 @@ private:
     bool ListSets();
     std::vector<std::string> m_SetNames;
     std::string m_SetDir;
+    // The maps once they're made (GeneratedDecalMaps keeps them for good): looked up by set / (entry, mode)
+    // instead of building a key string and a job per stain per frame.
+    std::vector<const DecalTextureArrays::Source*> m_SetSrc;
+    std::unordered_map<int, const DecalTextureArrays::Source*> m_KnifeSrc;
+    const DecalTextureArrays::Source* m_ProceduralHoleSrc = nullptr;
+    // DA_Blood / DA_BulletHole, re-fetched when the DecalSystem re-reads a .decal (AssetGeneration).
+    std::shared_ptr<DecalAsset> m_BloodAsset, m_HoleAsset;
+    std::uint32_t m_AssetGen = 0;
+    const void* m_AssetSystem = nullptr;
+    void FetchAssets();
     int m_QueuedDecals = 0;
     unsigned int m_SplatBuffer = 0;
     size_t m_SplatCapacity = 0;

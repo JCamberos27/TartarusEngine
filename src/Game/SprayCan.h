@@ -1,4 +1,5 @@
 #pragma once
+#include "DecalTextureArrays.h"
 #include <entt/entt.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -96,6 +97,7 @@ private:
         std::shared_ptr<Graffiti::Program> Program;
         std::shared_ptr<Graffiti::Timeline> Timeline;
         std::string RevealKey;
+        const DecalTextureArrays::Source* Reveal = nullptr; // the reveal order's maps once made (GeneratedDecalMaps keeps them)
         std::future<bool> Bake; // the first bake's PNG encode + write, on a worker
         bool Baked = false, BakeFailed = false;
     };

@@ -184,6 +184,7 @@ void SprayCanSystem::SetRevealKey(PieceData& d) {
     std::snprintf(hex, sizeof(hex), "%016llx",
                   (unsigned long long)(Fnv(d.Piece->ToString()) ^ (size * 1099511628211ull) ^ (uint64_t)time));
     d.RevealKey = "spray_" + d.Piece->Name + "_" + hex;
+    d.Reveal = nullptr;
 }
 
 bool SprayCanSystem::PieceReady(const std::string& piece) {
@@ -262,15 +263,23 @@ void SprayCanSystem::Update(World& world, float dt, const glm::vec3& listener) {
     }
     auto& reg = world.Registry;
     for (auto [e, sp, dc] : reg.view<SprayPaintComponent, const DecalComponent>().each()) {
-        PieceData* d = Data(sp.PiecePath);
-        Active& act = m_Active[e];
+        const uint32_t id = (uint32_t)entt::to_integral(e);
         const float before = Progress(sp);
-        if (before >= 1.0f && !act.Started) { // finished before this session (a loaded game): just the piece
-            if (ds) ds->ClearReveal((uint32_t)entt::to_integral(e));
-            act.Finished = true;
+        const auto found = m_Active.find(e);
+        if (before >= 1.0f && (found == m_Active.end() || !found->second.Started || found->second.Finished)) {
+            // Done (finished before this session - a loaded game - or earlier in it): just the piece, nothing
+            // per frame. A piece that just finished keeps its whole reveal until its own maps are resident
+            // (they're asked for while it goes on), so it never blinks out between the two.
+            if (ds && ds->HasReveal(id) && !ds->Resident(dc.AssetPath)) continue;
+            if (ds) ds->ClearReveal(id);
+            if (found != m_Active.end()) {
+                if (found->second.Hiss != AudioEngine::InvalidHandle) m_Sound.Backend().Stop(found->second.Hiss);
+                m_Active.erase(found);
+            }
             continue;
         }
-        if (act.Finished) continue;
+        PieceData* d = Data(sp.PiecePath);
+        Active& act = found != m_Active.end() ? found->second : m_Active[e];
         if (!d || !d->Baked) {
             // Not baked yet: nothing goes on, nothing shows (an empty reveal hides the decal until it's ready).
             continue;
@@ -280,28 +289,29 @@ void SprayCanSystem::Update(World& world, float dt, const glm::vec3& listener) {
         const Graffiti::Timeline& tl = *d->Timeline;
         const int rw = prog.Width >= prog.Height ? kRevealSize : std::max(1, kRevealSize * prog.Width / std::max(prog.Height, 1));
         const int rh = prog.Width >= prog.Height ? std::max(1, kRevealSize * prog.Height / std::max(prog.Width, 1)) : kRevealSize;
-        const std::shared_ptr<const Graffiti::Program> progPtr = d->Program; // the job may outlive this system
-        const std::shared_ptr<const Graffiti::Timeline> tlPtr = d->Timeline;
-        const DecalTextureArrays::Source* reveal = GeneratedDecalMaps::Get().Find(d->RevealKey, 512, [progPtr, tlPtr, rw, rh]() -> GeneratedDecalMaps::Job {
-            return [progPtr, tlPtr, rw, rh]() {
-                GeneratedDecalMaps::Images im;
-                im.Width = rw;
-                im.Height = rh;
-                im.Aux = Graffiti::RevealMap(*progPtr, *tlPtr, rw, rh);
-                return im;
-            };
-        });
+        if (!d->Reveal) {
+            const std::shared_ptr<const Graffiti::Program> progPtr = d->Program; // the job may outlive this system
+            const std::shared_ptr<const Graffiti::Timeline> tlPtr = d->Timeline;
+            d->Reveal = GeneratedDecalMaps::Get().Find(d->RevealKey, 512, [progPtr, tlPtr, rw, rh]() -> GeneratedDecalMaps::Job {
+                return [progPtr, tlPtr, rw, rh]() {
+                    GeneratedDecalMaps::Images im;
+                    im.Width = rw;
+                    im.Height = rh;
+                    im.Aux = Graffiti::RevealMap(*progPtr, *tlPtr, rw, rh);
+                    return im;
+                };
+            });
+        }
+        const DecalTextureArrays::Source* reveal = d->Reveal;
         const glm::vec3 at = glm::vec3(world.GetCachedWorldTransform(e)[3]);
         if (!reveal) { // still being made: hold the piece hidden (a threshold over every texel)
-            if (ds) ds->SetReveal((uint32_t)entt::to_integral(e), {"", 1.0f, kRevealBand});
+            if (ds) ds->SetReveal(id, std::string(), 1.0f, kRevealBand);
             continue;
         }
         sp.Elapsed = std::min(sp.Elapsed + dt, sp.Seconds);
         const float p = Progress(sp);
-        if (ds) {
-            if (p < 1.0f) ds->SetReveal((uint32_t)entt::to_integral(e), {reveal->Aux, Graffiti::RevealThreshold(p, kRevealBand), kRevealBand});
-            else ds->ClearReveal((uint32_t)entt::to_integral(e));
-        }
+        // Done: the whole piece through its order; the done branch above swaps to its own maps once they're in.
+        if (ds) ds->SetReveal(id, reveal->Aux, Graffiti::RevealThreshold(std::min(p, 1.0f), kRevealBand), kRevealBand);
         // Where the can is now, on the wall: the sound comes from there.
         glm::vec2 uv(0.5f);
         const bool spraying = p < 1.0f && tl.SprayingAt(prog, p * tl.Duration, &uv);
