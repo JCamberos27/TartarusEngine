@@ -549,6 +549,7 @@ target_include_directories(TartarusEngine PRIVATE
   ${CMAKE_SOURCE_DIR}/src/Audio
   ${CMAKE_SOURCE_DIR}/src/Editor
   ${CMAKE_SOURCE_DIR}/src/Assets
+  ${CMAKE_SOURCE_DIR}/src/Graffiti # the Graffiti Designer's model, paint program and compositor
   ${CMAKE_SOURCE_DIR}/extern/glloader
   ${CMAKE_SOURCE_DIR}/extern
   ${imgui_SOURCE_DIR}

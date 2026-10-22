@@ -37,6 +37,14 @@ public:
     // project-relative or absolute path; cached by the absolute path, case- and slash-insensitive.
     std::shared_ptr<DecalAsset> GetAsset(const std::string& projectRelPath);
     DecalTextureArrays& Textures() { return *m_Textures; }
+    // A .decal whose maps were just rewritten (a graffiti bake): re-reads it and re-decodes only its
+    // textures now, instead of the hot-reload poll's clear of every decal a second later.
+    // Resident: its textures are in and it draws (the Designer keeps its live overlay until then).
+    void Refresh(const std::string& path);
+    bool Resident(const std::string& path);
+    // The one the renderer uses (main.cpp owns it): the editor reaches it for Refresh / Resident.
+    // Null before it exists or after it's gone.
+    static DecalSystem* Current();
 
     // Per frame. Walks DecalComponents (+ any PushRuntime() decals), frustum/distance culls,
     // sorts and uploads. Returns the visible count (also uDecalCount).

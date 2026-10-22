@@ -62,7 +62,7 @@ enum class ReflectAssetKind; // ComponentReflection.h
 struct ReflectField;        // ComponentReflection.h
 
 struct AssetGridCell {
-    enum class Kind { Folder, Model, Texture, Material, Sound, Scene, Prefab, Shader, Animator, Weapon, Hdri, Script, Recoil, CameraShake, Decal } kind;
+    enum class Kind { Folder, Model, Texture, Material, Sound, Scene, Prefab, Shader, Animator, Weapon, Hdri, Script, Recoil, CameraShake, Decal, Graffiti } kind;
     std::string key;
     std::string display;
     std::shared_ptr<Model> model;
@@ -101,6 +101,7 @@ class EditorLayer {
     friend struct EditorSmokeAccess_HotReload;
     friend struct EditorSmokeAccess_Settings;
     friend struct EditorSmokeAccess_Scenes;
+    friend struct EditorSmokeAccess_Graffiti;
 public:
     // Declared (rather than left implicit) and defined in the .cpp — a stylistic match for the
     // other Init/Shutdown-style lifecycle methods below, not a forward-declaration requirement
@@ -2288,6 +2289,22 @@ private:
     // Moves the decal onto the surface its box projects at (along -Z) and turns +Z out of it,
     // keeping its spin. One undo step; false (nothing changed) when no surface is in reach.
     bool FitDecalToSurface(World& world, entt::entity entity);
+    // The Graffiti Designer (decals Phase 3, docs/GRAFFITI_DESIGNER.md; EditorLayer_GraffitiDesigner.cpp):
+    // the panel editing one .graffiti recipe (layers, canvas, tools, bake), and spraying straight onto
+    // a wall in the Scene view. The state lives in GraffitiDesigner (defined in that file).
+public:
+    void OpenGraffitiPiece(const std::string& path); // absolute or project-relative; shows the panel
+    // A blank piece (one Spray layer) in `folder` (absolute), GP_<stem>[_n].graffiti; its absolute path.
+    std::string CreateGraffitiPiece(const std::string& folder, const std::string& stem = "Piece");
+    bool GraffitiViewportSprayActive() const;
+private:
+    void DrawGraffitiDesignerPanel(World& world);
+    // Called from HandleViewportPicking while viewport spraying is on: true when it took the input.
+    bool HandleGraffitiViewportSpray(World& world, Camera& editorCamera, bool leftPressed, bool leftDown);
+    void DrawGraffitiViewportOverlay(World& world, Camera& editorCamera);
+    void GraffitiFrame(World& world); // once a frame: bakes landing, recipe reloads after undo
+    std::shared_ptr<struct GraffitiDesigner> m_Graffiti;
+    bool m_ShowGraffitiDesigner = false;
     // The Character Outfit component's editor (EditorLayer_Outfit.cpp).
     void DrawCharacterOutfitEditor(World& world, entt::entity root);
     // Multi-select counterpart: `sel` is every selected entity that has this component.

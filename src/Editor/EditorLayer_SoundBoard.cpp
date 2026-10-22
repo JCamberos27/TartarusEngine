@@ -158,6 +158,10 @@ void EditorLayer::DrawSoundBoardPanel() {
                             EditorUI::SetTooltip("%s%s", std::filesystem::u8path(files[v]).filename().u8string().c_str(),
                                                  active ? "  (playing now)" : "");
                     }
+                    if (!premium && EditorSound::PlaceholderNote(e)) { // no recording of its own yet: say what stands in
+                        ImGui::SameLine();
+                        ImGui::TextDisabled("(%s)", EditorSound::PlaceholderNote(e));
+                    }
                     if (!active) ImGui::PopStyleVar();
                 }
                 ImGui::PopID();

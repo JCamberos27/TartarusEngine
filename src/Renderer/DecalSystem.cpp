@@ -112,9 +112,16 @@ void PackDecal(const DecalAsset& a, const DecalComponent& dc, const DecalTexture
 
 } // namespace
 
-DecalSystem::DecalSystem() : m_Textures(std::make_unique<DecalTextureArrays>()) {}
+namespace {
+DecalSystem* s_Current = nullptr;
+}
+
+DecalSystem::DecalSystem() : m_Textures(std::make_unique<DecalTextureArrays>()) { s_Current = this; }
+
+DecalSystem* DecalSystem::Current() { return s_Current; }
 
 DecalSystem::~DecalSystem() {
+    if (s_Current == this) s_Current = nullptr;
     if (m_DecalBuf) glDeleteBuffers(1, &m_DecalBuf);
     if (m_BoundsBuf) glDeleteBuffers(1, &m_BoundsBuf);
 }
@@ -130,6 +137,34 @@ std::shared_ptr<DecalAsset> DecalSystem::GetAsset(const std::string& projectRelP
     m_Assets[key] = asset;
     m_AssetTimes[key] = WriteTime(abs);
     return asset;
+}
+
+namespace {
+DecalTextureArrays::Source SourceFor(const DecalAsset& a) {
+    DecalTextureArrays::Source src;
+    src.Albedo = Resolve(a.AlbedoPath);
+    src.Normal = Resolve(a.NormalPath);
+    src.Surface = Resolve(a.SurfacePath);
+    src.Aux = Resolve(a.AuxPath);
+    src.Tier = a.Tier;
+    return src;
+}
+} // namespace
+
+void DecalSystem::Refresh(const std::string& path) {
+    const std::shared_ptr<DecalAsset> old = GetAsset(path);
+    if (old && !old->Missing) m_Textures->Drop(SourceFor(*old));
+    const std::string abs = Resolve(path);
+    std::string key = abs;
+    for (char& c : key) c = c == '\\' ? '/' : (char)std::tolower((unsigned char)c); // GetAsset's key
+    m_Assets[key] = DecalAsset::Load(abs);
+    m_AssetTimes[key] = WriteTime(abs);
+    if (!m_Assets[key]->Missing) m_Textures->Drop(SourceFor(*m_Assets[key]));
+}
+
+bool DecalSystem::Resident(const std::string& path) {
+    const std::shared_ptr<DecalAsset> a = GetAsset(path);
+    return a && !a->Missing && m_Textures->Resident(SourceFor(*a));
 }
 
 void DecalSystem::PushRuntime(const DecalInstance& d) { m_Runtime.push_back(d); }
