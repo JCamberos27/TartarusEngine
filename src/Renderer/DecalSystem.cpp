@@ -53,7 +53,7 @@ uint64_t PackSortKey(int sortOrder, uint32_t entity, int seed) {
 
 // The asset's texture set + this instance's values, packed. `fade` is the distance fade.
 void PackDecal(const DecalAsset& a, const DecalComponent& dc, const DecalTextureArrays::Slot& slot,
-               const DecalGrading& g, float fade, int frame, Decals::GpuDecal& out) {
+               const DecalGrading& grading, float fade, int frame, Decals::GpuDecal& out) {
     using namespace Decals;
     // Atlas frame inside the slot; its mips stop where a frame is still 4 texels across.
     const int cols = std::max(1, a.AtlasCols), rows = std::max(1, a.AtlasRows);
@@ -101,6 +101,7 @@ void PackDecal(const DecalAsset& a, const DecalComponent& dc, const DecalTexture
                         Half2(a.AngleFadeStart, a.AngleFadeEnd), Half2(a.EdgeFade, a.HeightContrast));
     // The scene's Decal Grading on top of the asset's and the instance's weathering: Age fades and
     // bleaches, Wear peels, buffs and chips.
+    const DecalGrading g = a.SceneGrading ? grading : DecalGrading{};
     const float fadeW = Unit(a.Fade + dc.Fade + g.Age * 0.5f);
     const float bleach = Unit(a.Bleach + dc.Bleach + g.Age * 0.6f);
     const float peel = Unit(a.Peel + dc.Peel + g.Wear * 0.5f);
