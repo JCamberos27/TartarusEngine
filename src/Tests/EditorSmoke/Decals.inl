@@ -55,8 +55,8 @@ Step SelectRoom() {
         const entt::entity f = EntByName(c.W, "Floor - Apartment 303 - Living Room");
         if (f == entt::null) Fail("no room floor");
         else SA::Select(c.E, f);
-        c.Cam.Position = glm::vec3(-4.2f, 1.5f, -7.1f); // in the room, looking along it
-        c.Cam.Yaw = 0.0f;
+        c.Cam.Position = glm::vec3(5.3f, 1.5f, -4.9f); // in the room, looking along it
+        c.Cam.Yaw = -50.0f;
         c.Cam.Pitch = -5.0f;
     });
 }
@@ -128,7 +128,7 @@ void RegisterDecalsTests() {
         ExpectTrue("the Ctrl stroke erased decals", [](Ctx& c) { return CountDecals(c.W) < g_Saved; }),
         // --- Radial
         MoveOver(0, 0), Wait(3),
-        KeyDown(ImGuiKey_Space), WaitSeconds(0.6), Wait(10), Shot("radial"),
+        KeyDown(ImGuiKey_Space), WaitSeconds(0.6), Wait(10), MoveOver(30, -85), Wait(12), Shot("radial"),
         ExpectTrue("the radial shows the brush's sources", [](Ctx& c) { return SA::RadialOpen(c.E) && SA::RadialDecals(c.E); }),
         KeyUp(ImGuiKey_Space), Wait(30),
         ExpectTrue("the decal radial has slots", [](Ctx& c) { return SA::RadialBuild(c.E) >= 2; }),
@@ -181,21 +181,27 @@ void RegisterDecalsLitTests() {
         Do("open the library to index", [](Ctx& c) { SA::Library(c.E, true); }),
         Until("indexed", [](Ctx& c) { return SA::Ed(c.E).ScanDone; }, 2400),
         Do("close it", [](Ctx& c) { SA::Library(c.E, false); }),
-        Pick("Squat"), SelectRoom(),
-        Do("auto-grime", [](Ctx& c) { SA::Grime(c.E, c.W); }), Wait(10),
-        Do("clean view", [](Ctx& c) {
+        Pick("Squat"),
+        Do("work light, clean view", [](Ctx& c) {
             // The room is night-dark (the Apartment's own lamps are off in the editor): one soft work light so the grime can be judged.
-            const entt::entity lamp = c.W.CreateEmptyEntity(glm::vec3(-2.5f, 2.1f, -7.1f), glm::vec3(0.0f), glm::vec3(1.0f), "Review light");
+            const entt::entity lamp = c.W.CreateEmptyEntity(glm::vec3(7.6f, 2.1f, -7.1f), glm::vec3(0.0f), glm::vec3(1.0f), "Review light");
             LightComponent& lc = c.W.Registry.emplace<LightComponent>(lamp);
             lc.Intensity = 6.0f;
             lc.Range = 9.0f;
             lc.Color = glm::vec3(1.0f, 0.93f, 0.8f);
-            SA::Deselect(c.E);
             SA::Gizmos(c.E, false);
-            c.Cam.Position = glm::vec3(-2.5f, 1.5f, -5.0f);
-            c.Cam.Yaw = -90.0f;
+            c.Cam.Position = glm::vec3(5.3f, 1.5f, -4.9f);
+            c.Cam.Yaw = -50.0f;
             c.Cam.Pitch = -3.0f;
-        }), Wait(60), Shot("grime-lit"),
+        }), Wait(60), Shot("grime-before"),
+        SelectRoom(),
+        Do("auto-grime", [](Ctx& c) { SA::Grime(c.E, c.W); }), Wait(10),
+        Do("deselect, same camera", [](Ctx& c) {
+            SA::Deselect(c.E);
+            c.Cam.Position = glm::vec3(5.3f, 1.5f, -4.9f);
+            c.Cam.Yaw = -50.0f;
+            c.Cam.Pitch = -3.0f;
+        }), Wait(120), Shot("grime-lit"),
         Do("gizmos back", [](Ctx& c) { SA::Gizmos(c.E, true); }),
     });
 }

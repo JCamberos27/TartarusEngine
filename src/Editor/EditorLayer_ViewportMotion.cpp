@@ -287,8 +287,21 @@ void EditorLayer::UpdateRadialMenu(World& world, Camera& editorCamera, bool scen
     // The hub: an X, lit while the pointer rests there (letting go there cancels).
     {
         const bool hubHot = open && m_Radial.Hovered < 0;
-        const ImVec2 xs = ImGui::CalcTextSize(ICON_FA_XMARK);
-        dl->AddText(ImVec2(c.x - xs.x * 0.5f, c.y - xs.y * 0.5f), Tone(hubHot ? Glass::TextPrimary : Glass::TextTertiary, 1.0f), ICON_FA_XMARK);
+        const char* full = decalRing && open && m_Radial.Hovered >= 0 ? DecalRadialFullName(m_Radial.Hovered) : "";
+        if (full[0]) {
+            // The hovered slot's whole name in the hub, shrunk to fit and cut only as a last resort.
+            const float maxW = rIn * 2.0f - Glass::Px(8.0f);
+            std::string name = full;
+            float scale = 1.0f;
+            while (scale > 0.62f && ImGui::CalcTextSize(name.c_str()).x * scale > maxW) scale -= 0.04f;
+            while (name.size() > 3 && ImGui::CalcTextSize(name.c_str()).x * scale > maxW) { name.pop_back(); name.back() = '.'; }
+            const ImVec2 ts = ImGui::CalcTextSize(name.c_str());
+            dl->AddText(ImGui::GetFont(), ImGui::GetFontSize() * scale, ImVec2(c.x - ts.x * scale * 0.5f, c.y - ts.y * scale * 0.5f),
+                        Tone(Glass::TextPrimary, 1.0f), name.c_str());
+        } else {
+            const ImVec2 xs = ImGui::CalcTextSize(ICON_FA_XMARK);
+            dl->AddText(ImVec2(c.x - xs.x * 0.5f, c.y - xs.y * 0.5f), Tone(hubHot ? Glass::TextPrimary : Glass::TextTertiary, 1.0f), ICON_FA_XMARK);
+        }
     }
 
     const float staggerElapsed = animate ? motion.PulseElapsed(kStaggerId, 1.0e3f) : 1.0e3f;

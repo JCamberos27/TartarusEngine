@@ -121,7 +121,8 @@ struct DecalEditorState {
     struct RadialSlot {
         enum Kind : int { Palette, Category, Recent } What = Recent;
         int Index = 0;            // palette / category / entry index
-        std::string Label;
+        std::string Label;     // short, for the wedge
+        std::string FullName;  // for the ring's centre while hovered
         const char* Icon = "";
         bool On = false;
     };

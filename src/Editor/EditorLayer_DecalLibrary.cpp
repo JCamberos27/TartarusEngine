@@ -556,6 +556,7 @@ int EditorLayer::DecalRadialBuild() {
         slot.What = DecalEditorState::RadialSlot::Palette;
         slot.Index = i;
         slot.Label = trimmed(ed.Palettes[i]->Name, 10);
+        slot.FullName = ed.Palettes[i]->Name;
         slot.Icon = ICON_FA_PALETTE;
         slot.On = ed.ActivePalette == i;
         ed.Radial.push_back(std::move(slot));
@@ -567,6 +568,7 @@ int EditorLayer::DecalRadialBuild() {
         slot.What = DecalEditorState::RadialSlot::Category;
         slot.Index = i;
         slot.Label = trimmed(ed.Cats[i].Name, 10);
+        slot.FullName = ed.Cats[i].Name;
         slot.Icon = ICON_FA_FOLDER_TREE;
         slot.On = SourceKind(ed) == 1 && s.DecalSourceCategory.rfind(ed.Cats[i].Path, 0) == 0;
         ed.Radial.push_back(std::move(slot));
@@ -582,6 +584,7 @@ int EditorLayer::DecalRadialBuild() {
         slot.What = DecalEditorState::RadialSlot::Recent;
         slot.Index = it->second;
         slot.Label = trimmed(ed.Entries[it->second].Name, 10);
+        slot.FullName = ed.Entries[it->second].Name;
         slot.Icon = ICON_FA_CLOCK_ROTATE_LEFT;
         slot.On = SourceKind(ed) == 0 && ed.PlacePath == ed.Entries[it->second].Path;
         ed.Radial.push_back(std::move(slot));
@@ -595,6 +598,11 @@ bool EditorLayer::DecalRadialItem(int i, const char*& icon, const char*& label) 
     icon = slot.Icon;
     label = slot.Label.c_str();
     return slot.On;
+}
+
+const char* EditorLayer::DecalRadialFullName(int i) const {
+    if (!m_DecalEd || i < 0 || i >= (int)m_DecalEd->Radial.size()) return "";
+    return m_DecalEd->Radial[i].FullName.c_str();
 }
 
 void EditorLayer::RunDecalRadialItem(int i) {

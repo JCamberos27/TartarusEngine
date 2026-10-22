@@ -104,7 +104,7 @@ entt::entity SpawnDecal(World& world, DecalEditorState& ed, const std::string& p
     const entt::entity e = world.CreateEmptyEntity(point, glm::vec3(0.0f), glm::vec3(1.0f), DisplayName(path));
     world.Registry.get<TransformComponent>(e).SetRotationQuaternion(glm::quat_cast(SurfaceBasis(glm::normalize(normal), right, spin)));
     DecalComponent dc;
-    dc.AssetPath = path;
+    dc.AssetPath = ProjectPaths::Relativize(path); // project-relative, like every scene asset reference
     dc.Size = (info.Ok ? info.Size : dc.Size) * scale;
     dc.Tint = tint;
     dc.Opacity = opacity;
@@ -523,6 +523,7 @@ void EditorLayer::RunAutoGrime(World& world) {
     probe.User = const_cast<CastContext*>(&ctx);
     DecalTools::GrimeSettings gs = ed.Grime;
     gs.Kinds = ed.GrimeKinds;
+    gs.Density *= palette->Density; // a heavy palette (Squat) asks for more sites
     const DecalTools::GrimeSummary sum = DecalTools::PlanGrime(probe, mn, mx, gs, (uint32_t)ed.GrimeSeed, ed.GrimeSites);
 
     const entt::entity group = world.CreateEmptyEntity(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Grime (auto)");
