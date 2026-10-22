@@ -12,7 +12,7 @@ constexpr int MAX_VISIBLE = 4096;
 constexpr int MAX_PER_CLUSTER = 256;
 constexpr int INDEX_CAPACITY = 131072; // global compacted decal-index list, shared by all clusters
 
-// SSBO bindings (11-14 were free; 0-10, 15, 20, 21, 25-27 are taken).
+// SSBO bindings (11-14 were free; 0-8, 10, 15, 20, 21, 25-27 are taken; 9 was the old blood decal pass's, free since P4).
 constexpr int BIND_DECALS = 11;  // GpuDecal[]
 constexpr int BIND_BOUNDS = 12;  // GpuDecalBounds[] (cull only)
 constexpr int BIND_RANGES = 13;  // per-cluster {offset, count}
@@ -56,6 +56,13 @@ enum Flag : uint32_t {
     FLAG_LUMA_MASK = 1u << 6,      // opacity comes from albedo luminance (white-on-black alphas)
     FLAG_INVERT_MASK = 1u << 7,    // opacity inverted (DecalAsset::InvertMask: dark marks on light)
     FLAG_SUBSTRATE_AUTO = 1u << 8, // the receiver material's substrate wins over the decal's own
+    // The aux map is a reveal order (runtime decals: blood spreading, a hole's rim, a spray-can piece
+    // going on stroke by stroke): H2.w then holds (threshold, band) instead of (peel, buff), and a
+    // texel shows where aux >= threshold, fully from threshold + band. The emissive channel is off.
+    FLAG_REVEAL = 1u << 9,
+    // A liquid film (blood): where it covers it fills the receiver's own relief - its normal replaces the
+    // surface's (bent by the decal's own map) instead of being whiteout-blended over it.
+    FLAG_LIQUID = 1u << 10,
 };
 // GpuDecal::Ids.z also carries the height-blend amount (DecalAsset::HeightBlend) as unorm8 in its
 // top byte: every half in H0-H2 is taken, and CH_HEIGHT_BLEND alone can't say how much.

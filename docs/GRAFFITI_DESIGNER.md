@@ -158,6 +158,49 @@ All motion runs through `Glass::Motion()`, so it respects Reduce Motion and cost
 5. Each stroke is one undo step and triggers a bake. Placing a new piece's decal goes into the
    same undo step as its first stroke.
 
+## Spray can (gameplay)
+
+In Play, the player and NPCs can spray a stored piece onto a wall (`src/Game/SprayCan.*`).
+
+**Starting a piece**
+- A `SprayCanAction` names the piece, the can's ray and an optional duration.
+- An NPC's action comes from `SprayCanAction::ForCharacter`. The ray starts at its hand and runs along
+  the way it faces.
+- The player presses **F6** (a dev key, no HUD) to spray the next piece from
+  `assets/Decals/Graffiti/Pieces` at the crosshair.
+- `SprayCanSystem::Start` casts for a wall within reach. It then creates an ordinary entity with a
+  **Decal** (the piece's baked `DA_Piece_*.decal`) and a **Spray Paint** component.
+- A piece that was never baked is baked first.
+
+**Going on stroke by stroke**
+- `Graffiti::BuildTimeline` paces the piece:
+  - spray layers follow their recorded splat times, with a short gap between strokes;
+  - letters and stamps go on one after another;
+  - fills sweep down.
+- `Graffiti::RevealMap` turns the timeline into a reveal order. Each texel stores when paint first
+  lands there. It is made once per recipe and bake, in `Library/DecalMaps`.
+- While the piece goes on, `DecalSystem::SetReveal` swaps that order in for the decal's aux map, with a
+  falling threshold. The threshold comes from `Spray Paint`'s Elapsed / Seconds.
+
+**Saving**
+- The entity saves with the game state like any other.
+- A half-sprayed piece carries on from where it was after a load.
+
+**Sound**
+- The can uses the same SprayStart / SprayLoop / SprayEnd wavs as the Designer. They are 3D, through
+  a `SoundPlayer`: the rattle at the wall, the hiss held while paint leaves the can, and the cap's release.
+- The hiss voice follows the can's current spot on the wall.
+- All sounds stop when Play ends.
+
+**Test**
+- `--npc-test decals` has the player and a tenant spray `GP_Crown` and `GP_Rats` onto the hallway's
+  south wall over 8 s.
+- It checks the following half-way and at the end:
+  - progress;
+  - residency;
+  - the sounds, and the held hiss;
+  - a save-and-load round trip.
+
 ## Sounds
 
 The *Decals & Graffiti* category is in Preferences > Editor Sounds and on the Sound Board:

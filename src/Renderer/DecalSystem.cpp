@@ -295,7 +295,62 @@ bool DecalSystem::Resident(const std::string& path) {
     return a && !a->Missing && m_Textures->Resident(SourceFor(*a));
 }
 
+bool DecalSystem::Resident(const std::string& path, uint32_t entity) {
+    const auto reveal = m_Reveals.find(entity);
+    if (reveal == m_Reveals.end()) return Resident(path);
+    const std::shared_ptr<DecalAsset> a = GetAsset(path);
+    if (!a || a->Missing || reveal->second.Aux.empty()) return false;
+    DecalTextureArrays::Source src = SourceFor(*a);
+    src.Aux = reveal->second.Aux; // as Prepare asks for it while the piece goes on
+    return m_Textures->Resident(src);
+}
+
 void DecalSystem::PushRuntime(const DecalInstance& d) { m_Runtime.push_back(d); }
+
+void DecalSystem::BeginRuntimeFrame() {
+    m_Runtime.clear();
+    m_RuntimeDecals.clear();
+}
+
+void DecalSystem::SubmitRuntime(const RuntimeDecal& d) {
+    if (!d.Maps.Albedo.empty()) m_RuntimeDecals.push_back(d);
+}
+
+uint64_t DecalSystem::SortKeyFor(int sortOrder, uint32_t entity, int seed) { return PackSortKey(sortOrder, entity, seed); }
+
+void DecalSystem::PackRuntime(const RuntimeDecal& r, const DecalTextureArrays::Slot& slot, Decals::GpuDecal& out) {
+    using namespace Decals;
+    const int cols = std::max(1, r.Cols), rows = std::max(1, r.Rows);
+    const int f = ((r.Frame % (cols * rows)) + cols * rows) % (cols * rows);
+    const float fw = slot.Rect.z / (float)cols, fh = slot.Rect.w / (float)rows;
+    out.Rect = glm::vec4(slot.Rect.x + (float)(f % cols) * fw, slot.Rect.y + (float)(f / cols) * fh, fw, fh);
+    int maxLod = slot.MaxLod;
+    const int frameTexels = slot.Alloc.Size / std::max(cols, rows);
+    while (maxLod > 0 && (frameTexels >> maxLod) < 4) --maxLod;
+
+    const float albedoOp = Unit(r.AlbedoOp);
+    const float normalOp = (slot.TexFlags & FLAG_HAS_NORMAL_TEX) ? Unit(r.NormalOp) : 0.0f;
+    const float roughOp = Unit(r.RoughnessOp), metalOp = Unit(r.MetalOp), aoOp = Unit(r.AOOp);
+    uint32_t ch = 0;
+    if (albedoOp > 0.0f) ch |= CH_ALBEDO;
+    if (normalOp > 0.0f) ch |= CH_NORMAL;
+    if (roughOp > 0.0f) ch |= CH_ROUGHNESS;
+    if (metalOp > 0.0f) ch |= CH_METAL;
+    if (aoOp > 0.0f) ch |= CH_AO;
+    uint32_t flags = slot.TexFlags;
+    if (r.AffectStatic) flags |= FLAG_STATIC_RECEIVERS;
+    if (r.AffectDynamic) flags |= FLAG_DYNAMIC_RECEIVERS;
+    const bool reveal = r.Reveal && (slot.TexFlags & FLAG_HAS_AUX_TEX);
+    if (reveal) flags |= FLAG_REVEAL;
+    if (r.Liquid) flags |= FLAG_LIQUID;
+    out.Ids = glm::uvec4((uint32_t)slot.Alloc.Layer | (uint32_t)maxLod << 8 | ch << 16, 0xFFFFFFFFu, flags, 0u);
+    out.H0 = glm::uvec4(Half2(r.Tint.r, r.Tint.g), Half2(r.Tint.b, albedoOp), Half2(normalOp, roughOp), Half2(metalOp, aoOp));
+    // A liquid's cover gain sits where the glow colour would (runtime decals never glow).
+    out.H1 = glm::uvec4(Half2(r.Liquid ? std::max(r.CoverGain, 0.0f) : 0.0f, 0.0f), Half2(0.0f, 0.0f),
+                        Half2(r.AngleFadeStart, r.AngleFadeEnd), Half2(r.EdgeFade, 4.0f));
+    out.H2 = glm::uvec4(Half2(r.Roughness, r.Metal), Half2(0.0f, Unit(r.Wear)), Half2(Unit(r.Fade), 0.0f),
+                        reveal ? Half2(std::max(r.RevealThreshold, 0.0f), std::max(r.RevealBand, 1e-3f)) : Half2(0.0f, 0.0f));
+}
 
 void DecalSystem::SetGhost(const DecalComponent& d, const glm::mat4& boxWorld) {
     if (!m_Ghost) m_Ghost = std::make_unique<DecalComponent>();
@@ -396,6 +451,9 @@ int DecalSystem::Prepare(World& world, const glm::mat4& viewProj, const glm::vec
         return std::max(0.0f, glm::length(c - cameraPos) - glm::length(ext));
     };
 
+    auto& reg = world.Registry;
+    for (auto it = m_Reveals.begin(); it != m_Reveals.end();) // a reveal whose entity is gone (Play stopped)
+        it = reg.valid((entt::entity)it->first) ? std::next(it) : m_Reveals.erase(it);
     // One component's decal -> m_Frame (shared by the scene's components and the editor's ghost).
     auto gatherComponent = [&](uint32_t entityKey, const DecalComponent& dc, const glm::mat4& boxWorld) {
         if (dc.AssetPath.empty() || dc.Opacity <= 0.0f || (!dc.AffectStatic && !dc.AffectDynamic)) return;
@@ -413,11 +471,20 @@ int DecalSystem::Prepare(World& world, const glm::mat4& viewProj, const glm::vec
         src.Surface = Resolve(asset->SurfacePath);
         src.Aux = Resolve(asset->AuxPath);
         src.Tier = asset->Tier;
+        // A piece going on (SetReveal): its reveal order in place of the aux map.
+        const auto reveal = m_Reveals.find(entityKey);
+        if (reveal != m_Reveals.end()) src.Aux = reveal->second.Aux;
         const DecalTextureArrays::Slot* slot = m_Textures->Request(src);
         if (!slot) return;
         const float fade = d > fadeStart ? 1.0f - (d - fadeStart) / std::max(maxDistance - fadeStart, 1e-3f) : 1.0f;
         const int frame = dc.Frame >= 0 ? dc.Frame : FrameFor(dc.Seed, asset->AtlasCols * asset->AtlasRows);
         PackDecal(*asset, dc, *slot, m_Grading, fade, frame, inst.Gpu);
+        if (reveal != m_Reveals.end()) {
+            if (!(slot->TexFlags & Decals::FLAG_HAS_AUX_TEX)) return; // the order didn't decode: nothing shows yet
+            inst.Gpu.Ids.x &= ~((uint32_t)Decals::CH_EMISSIVE << 16); // the aux is the order now, not the glow mask
+            inst.Gpu.Ids.z |= Decals::FLAG_REVEAL;
+            inst.Gpu.H2.w = Half2(std::max(reveal->second.Threshold, 0.0f), std::max(reveal->second.Band, 1e-3f));
+        }
         // Substrate: Auto (the receiver material's when it has one, else the asset's - only for an asset
         // that has one, so graffiti never reveals the wall), Asset, Custom (this decal's own) or Off.
         uint32_t sub = 0;
@@ -435,7 +502,6 @@ int DecalSystem::Prepare(World& world, const glm::mat4& viewProj, const glm::vec
         dist.push_back(d);
     };
 
-    auto& reg = world.Registry;
     for (auto [entity, dc] : reg.view<const DecalComponent>().each()) {
         if (reg.all_of<InactiveTag>(entity)) continue;
         gatherComponent((uint32_t)entt::to_integral(entity), dc, world.GetCachedWorldTransform(entity));
@@ -448,7 +514,23 @@ int DecalSystem::Prepare(World& world, const glm::mat4& viewProj, const glm::vec
         m_Frame.push_back(r);
         dist.push_back(d);
     }
-    m_Runtime.clear();
+    for (size_t i = 0; i < m_RuntimeDecals.size(); ++i) {
+        const RuntimeDecal& r = m_RuntimeDecals[i];
+        DecalInstance inst;
+        inst.BoxToWorld = r.BoxToWorld;
+        const float d = consider(inst);
+        if (d < 0.0f || d > maxDistance) continue;
+        const DecalTextureArrays::Slot* slot = m_Textures->Request(r.Maps);
+        if (!slot) continue;
+        PackRuntime(r, *slot, inst.Gpu);
+        if (d > fadeStart) { // the distance fade, on the albedo opacity as PackDecal folds it
+            const glm::vec2 h = glm::unpackHalf2x16(inst.Gpu.H0.y);
+            inst.Gpu.H0.y = Half2(h.x, h.y * (1.0f - (d - fadeStart) / std::max(maxDistance - fadeStart, 1e-3f)));
+        }
+        inst.SortKey = PackSortKey(r.SortOrder, 0xFFFFFFFFu, (int)(r.Id ? r.Id : (uint32_t)i));
+        m_Frame.push_back(inst);
+        dist.push_back(d);
+    }
 
     // Over budget: the nearest MAX_VISIBLE stay.
     if ((int)m_Frame.size() > Decals::MAX_VISIBLE) {

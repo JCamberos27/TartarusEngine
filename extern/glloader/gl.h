@@ -588,6 +588,11 @@ extern PFNGLDELETESYNCPROC glDeleteSync;
 typedef void (__stdcall* PFNGLCOPYIMAGESUBDATAPROC)(GLuint, GLenum, GLint, GLint, GLint, GLint, GLuint, GLenum, GLint, GLint,
                                                     GLint, GLint, GLsizei, GLsizei, GLsizei);
 extern PFNGLCOPYIMAGESUBDATAPROC glCopyImageSubData;
+// GL 4.5: a region of a texture read back (decompressed when asked for an uncompressed format) - the runtime decals'
+// maps re-packed from the Knife libraries (BloodRenderer::KnifeMaps).
+typedef void (__stdcall* PFNGLGETTEXTURESUBIMAGEPROC)(GLuint, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLsizei, GLenum, GLenum,
+                                                      GLsizei, void*);
+extern PFNGLGETTEXTURESUBIMAGEPROC glGetTextureSubImage;
 // The Graffiti Designer's compositor (src/Graffiti/GraffitiCompositor.cpp): immutable 2D storage,
 // per-attachment blending and clears, instanced splats, and PBO readback of the bake.
 #ifndef GL_TRIANGLE_STRIP

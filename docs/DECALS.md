@@ -286,6 +286,39 @@ dependencies, unit-testable), `DecalEditorState.h` (per-editor state), `Renderer
 - **Test.** `--editor-tests "decals:"` opens the Apartment Hallway and drives all of the above, then
   saves and reloads.
 
+## Runtime decals (blood, bullet holes)
+
+Since Phase 4, blood stains and bullet holes are clustered decals like any other. The old BloodDecal
+pass (a depth-reconstructing box draw with its own atlases on units 28/29 and SSBO 9) is gone.
+
+- **Per game frame.** `BloodRenderer::BeginFrame` calls `DecalSystem::BeginRuntimeFrame`, then each
+  system hands in `RuntimeDecal`s with `SubmitRuntime`: `BloodRenderer::AddDecal` (via
+  `BloodFx::Submit`) for the stains and `BulletHoleList::Submit` for the holes. Every view's `Prepare`
+  draws that list until the next game frame, so leaving Play clears it.
+- **Maps.** `GeneratedDecalMaps` makes them once per machine into `project/Library/DecalMaps`
+  (git-ignored), and from there they go through the normal decal texture path. It makes:
+  - the KriptoFX blood sets, from `_norm` / `_mask`;
+  - the Knife library entries (read back from their GL arrays);
+  - the procedural bullet hole.
+
+  The pure image makers are in `DecalBake`. Bump `kMapsVersion` in `BloodRenderer.cpp` when they change.
+- **Response.** It comes from `assets/Decals/Runtime/DA_Blood.decal` and `DA_BulletHole.decal`
+  (channels, fades, roughness):
+  - Blood's **Cutout** is the aux reveal order cut by a threshold (`FLAG_REVEAL`, the peel term's
+    generalisation).
+  - **Dry** mixes the wet roughness (the palette's film / pool value) to the dried one and adds Wear chips.
+  - Blood is `FLAG_LIQUID`: the film fills the receiver's relief, and its coverage gain (x2 sets, x6
+    Knife) is applied after filtering (`CoverGain` in `H1.x`, which runtime decals never use for glow).
+  - Stains take the static world only; holes take anything.
+- **Holes.** `BulletHoleList` keeps each hole in the struck entity's space and emits its box from the
+  entity's world transform every frame, so a hole in a crate goes with the crate. A Knife hole's rim cut
+  is a reveal on its distance-from-centre aux.
+- **Mesh splats.** Blood on characters stays in bind space (`BloodSplatCover` in `ModelFragment.glsl`).
+  It reads the same blood-set maps from the shared decal arrays by slot and layer, outside the clustered list.
+- **Tests.** Unit tests: `--unit-tests "Decal runtime"`. The before/after harness:
+  `--npc-test decals --smoke-shots <dir>`, which runs in the Apartment Hallway and shoots fixed cameras
+  of the rounds and the stains, then the spray can (`docs/GRAFFITI_DESIGNER.md`).
+
 ## Corridor wear
 
 The Apartment Hallway corridor is dressed as a derelict squat by `tools/scenes/dress_corridor.py`. It patches
