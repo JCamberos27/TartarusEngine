@@ -1,7 +1,9 @@
 #pragma once
 #include "DecalTypes.h"
 #include "DecalTextureArrays.h"
+#include "Substrate.h"
 #include <glm/glm.hpp>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -71,8 +73,9 @@ public:
 
     // Per frame. Walks DecalComponents (+ any PushRuntime() decals), frustum/distance culls,
     // sorts and uploads. Returns the visible count (also uDecalCount).
+    // includeGhost: also gather the editor's placement ghost (SetGhost), for the editor's own views.
     int Prepare(World& world, const glm::mat4& viewProj, const glm::vec3& cameraPos,
-                float maxDistance, const DecalGrading& grading);
+                float maxDistance, const DecalGrading& grading, bool includeGhost = false);
     // Runtime decals, by game frame: BeginRuntimeFrame drops the last frame's (BloodRenderer::BeginFrame
     // calls it, so leaving Play clears them too), then each system submits what it has. Every view's
     // Prepare draws the same list until the next BeginRuntimeFrame.
@@ -89,8 +92,26 @@ public:
     void SetReveal(uint32_t entity, const RevealOverride& r) { m_Reveals[entity] = r; }
     void ClearReveal(uint32_t entity) { m_Reveals.erase(entity); }
     bool HasReveal(uint32_t entity) const { return m_Reveals.count(entity) != 0; }
+    // The editor's Place Decal / Decal Brush ghost: one decal, built like a component's, that stays
+    // until ClearGhost(). `boxWorld` is the entity's world transform (the box's Size is applied on top).
+    void SetGhost(const DecalComponent& d, const glm::mat4& boxWorld);
+    void ClearGhost() { m_GhostActive = false; }
 
-    // Bind SSBOs 11 (decals), 12 (bounds) and the texture arrays on units 22-25.
+    // Substrates (Substrate.h): the table index + 1 for these maps and values (0 = none, the table is
+    // full, or its maps are still decoding), pinning its slot for this frame. Entries are kept until the
+    // textures are cleared, so an index is stable from frame to frame. Callable while drawing: a change
+    // is uploaded to SSBO 16 at once.
+    uint32_t SubstrateIndex(const SubstrateDesc& desc);
+    // The same for a material's substrate, through the DecalSystem alive (main.cpp owns one); 0 when
+    // there's none or the material has no substrate. Model.cpp sets it as uMaterialSubstrate.
+    static int MaterialSubstrate(const SubstrateDesc& desc);
+    int SubstrateCount() const { return (int)m_Subs.size(); }
+    // Textures still on their way in for what this frame asked for - a substrate not ready yet, or decal
+    // maps decoding / turned away for now by the decode limit (unless the view is over the texture
+    // budget, where they never settle): a frame now would show them missing.
+    bool Streaming() const;
+
+    // Bind SSBOs 11 (decals), 12 (bounds) and the texture arrays on units 22-25 (+ SSBO 16, substrates).
     void BindForCull() const;
     void BindForShading() const;
     int VisibleCount() const { return m_Visible; }
@@ -120,6 +141,9 @@ private:
     std::vector<DecalInstance> m_Runtime, m_Frame;
     std::vector<RuntimeDecal> m_RuntimeDecals;
     std::unordered_map<uint32_t, RevealOverride> m_Reveals;
+    std::unique_ptr<DecalComponent> m_Ghost;
+    glm::mat4 m_GhostWorld{1.0f};
+    bool m_GhostActive = false;
     unsigned int m_DecalBuf = 0, m_BoundsBuf = 0;
     int m_Visible = 0;
     DecalGrading m_Grading;
@@ -128,4 +152,23 @@ private:
     int m_ReloadTick = 0;
     std::vector<Decals::GpuDecal> m_UploadDecals;
     std::vector<Decals::GpuDecalBounds> m_UploadBounds;
+
+    struct SubstrateEntry {
+        std::string Key;
+        DecalTextureArrays::Source Src;
+        Decals::GpuSubstrate Gpu{};
+        std::uint64_t Frame = 0; // the Prepare() it was last requested in
+        std::uint64_t Used = 0;  // ...and last asked for by a decal or a material
+        bool Ready = false;
+        bool Logged = false;
+    };
+    std::vector<SubstrateEntry> m_Subs;
+    std::unordered_map<std::string, uint32_t> m_SubIndex;
+    unsigned int m_SubBuf = 0;
+    bool m_SubDirty = false;
+    std::uint64_t m_FrameNo = 1;
+    bool m_InPrepare = false;
+    void RefreshSubstrate(uint32_t idx);
+    void FlushSubstrates();
+    void ClearSubstrates();
 };

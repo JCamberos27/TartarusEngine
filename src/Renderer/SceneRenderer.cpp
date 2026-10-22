@@ -380,6 +380,9 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
     // bullet holes among them, and the blood splats' maps). The FX sprites bind their own arrays over
     // 22-24 after the opaque and transparent passes; every program that draws after them comes through here.
     program.SetInt("uDecalCount", fs.decalCount);
+    // Substrates (the table on SSBO 16, maps in the same arrays): the Grunge reveal and peeling-paint
+    // decals read them, in the views that prepared decals this frame.
+    program.SetInt("uSubstrateOn", in.decals && in.decals->SubstrateCount() > 0 && fs.clusterOn ? 1 : 0);
     if (in.decals) in.decals->BindForShading();
 
     program.SetInt("uUnlit", ctx.Unlit ? 1 : 0);
@@ -460,7 +463,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             break; // the first one in the scene wins
         }
         gathered.decalCount = in.decals->Prepare(world, ctx.Proj * ctx.View, ctx.ViewPos,
-                                                 ProjectSettings::Quality().DecalMaxDistance, grading);
+                                                 ProjectSettings::Quality().DecalMaxDistance, grading, ctx.EditorView);
         in.decals->BindForCull();
     }
     const FrameState fs = gathered;

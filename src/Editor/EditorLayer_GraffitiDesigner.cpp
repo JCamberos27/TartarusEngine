@@ -17,6 +17,8 @@
 #include "Glass/GlassMotion.h"
 #include "Glass/GlassTokens.h"
 #include "AssetDatabase.h"
+#include "AssetThumbnailLoader.h"
+#include "EditorTestProbe.h"
 #include "Camera.h"
 #include "Components.h"
 #include "DecalAsset.h"
@@ -349,6 +351,171 @@ void LoadInto(GraffitiDesigner& g, const std::string& path) {
 // Canvas-uv (y down) <-> the decal box: x right, y up, +-0.5 across the box.
 glm::vec2 BoxToUv(const glm::vec3& local) { return {local.x + 0.5f, 0.5f - local.y}; }
 
+// --- The stamp picker -------------------------------------------------------------------------------
+
+constexpr const char* kStampRoot = "assets/Decals/Graffiti";
+constexpr size_t kMaxRecent = 12;
+
+std::string LowerAscii(std::string s) {
+    for (char& c : s) c = (char)std::tolower((unsigned char)c);
+    return s;
+}
+std::string BaseName(const std::string& rel) {
+    const size_t at = rel.find_last_of('/');
+    return at == std::string::npos ? rel : rel.substr(at + 1);
+}
+// "T_Decal_GraffitiShape_001.png" -> "Shape_001"
+std::string ShortStampName(const std::string& rel) {
+    std::string n = BaseName(rel);
+    if (const size_t dot = n.rfind('.'); dot != std::string::npos) n.erase(dot);
+    for (const char* prefix : {"T_Decal_Graffiti", "T_Decal_"})
+        if (n.rfind(prefix, 0) == 0) { n.erase(0, std::strlen(prefix)); break; }
+    return n;
+}
+
+// Every subfolder of Decals/Graffiti that holds at least one PNG.
+void ScanStamps(StampPicker& pk) {
+    pk.Folders.clear();
+    std::error_code ec;
+    const fs::path root = fs::u8path(ProjectPaths::Resolve(kStampRoot));
+    for (const auto& d : fs::directory_iterator(root, ec)) {
+        if (!d.is_directory(ec)) continue;
+        StampPicker::Folder f;
+        f.Name = d.path().filename().u8string();
+        for (const auto& e : fs::directory_iterator(d.path(), ec)) {
+            if (!e.is_regular_file(ec) || LowerAscii(e.path().extension().u8string()) != ".png") continue;
+            f.Files.push_back(std::string(kStampRoot) + "/" + f.Name + "/" + e.path().filename().u8string());
+        }
+        if (f.Files.empty()) continue;
+        std::sort(f.Files.begin(), f.Files.end());
+        pk.Folders.push_back(std::move(f));
+    }
+    std::sort(pk.Folders.begin(), pk.Folders.end(), [](const auto& a, const auto& b) { return a.Name < b.Name; });
+}
+
+// A square on a dark checker holding the stamp's thumbnail (or a placeholder while it loads).
+void DrawStampThumb(GraffitiDesigner& g, AssetThumbnailLoader& thumbs, const std::string& rel, ImVec2 p0, float side, float scale) {
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const ImVec2 p1(p0.x + side, p0.y + side);
+    dl->AddRectFilled(p0, p1, IM_COL32(26, 26, 26, 255), 3.0f * scale);
+    const float sq = std::max(4.0f, std::floor(side / 9.0f));
+    const ImU32 light = IM_COL32(44, 44, 44, 255);
+    dl->PushClipRect(p0, p1, true);
+    for (int y = 0; y * sq < side; ++y)
+        for (int x = (y & 1); x * sq < side; x += 2)
+            dl->AddRectFilled(ImVec2(p0.x + x * sq, p0.y + y * sq), ImVec2(p0.x + (x + 1) * sq, p0.y + (y + 1) * sq), light);
+    dl->PopClipRect();
+    const std::string abs = Abs(rel);
+    const AssetThumbnailLoader::Thumb t = thumbs.Get(abs, AssetThumbnailLoader::Source::Image);
+    if (std::find(g.Picker.Requested.begin(), g.Picker.Requested.end(), abs) == g.Picker.Requested.end())
+        g.Picker.Requested.push_back(abs);
+    if (t.Tex) {
+        dl->AddImage((ImTextureID)(intptr_t)t.Tex, p0, p1, ImVec2(0.0f, t.FlipV ? 1.0f : 0.0f), ImVec2(1.0f, t.FlipV ? 0.0f : 1.0f));
+    } else {
+        const char* dots = "...";
+        const ImVec2 ts = ImGui::CalcTextSize(dots);
+        dl->AddText(ImVec2(p0.x + (side - ts.x) * 0.5f, p0.y + (side - ts.y) * 0.5f), EditorTheme::U32(EditorTheme::Dim), dots);
+    }
+}
+
+// The popup. Returns the picked project-relative path, or "" when nothing was picked this frame.
+std::string DrawStampPickerPopup(GraffitiDesigner& g, AssetThumbnailLoader& thumbs, float scale, const std::string& current) {
+    StampPicker& pk = g.Picker;
+    std::string picked;
+    if (pk.WantOpen) {
+        pk.WantOpen = false;
+        ScanStamps(pk);
+        pk.Search[0] = 0;
+        pk.Tab = pk.Recent.empty() ? 1 : 0;
+        if (pk.Tab == 1 && pk.Folders.empty()) pk.Tab = 0;
+        ImGui::OpenPopup("##stampPicker");
+    }
+    ImGui::SetNextWindowSize(ImVec2(560.0f * scale, 460.0f * scale), ImGuiCond_Appearing);
+    if (!ImGui::BeginPopup("##stampPicker")) return picked;
+
+    // Folder tabs: Recent, then one per non-empty folder.
+    std::vector<std::string> names{"Recent"};
+    for (const auto& f : pk.Folders) names.push_back(f.Name);
+    std::vector<const char*> labels;
+    for (const auto& n : names) labels.push_back(n.c_str());
+    pk.Tab = std::clamp(pk.Tab, 0, (int)labels.size() - 1);
+    EditorUIPrimitives::Segmented("##stampTabs", &pk.Tab, labels.data(), (int)labels.size());
+
+    ImGui::SetNextItemWidth(-1);
+    ImGui::InputTextWithHint("##stampSearch", "Search by filename", pk.Search, sizeof(pk.Search));
+
+    // The files for this tab, filtered by the search text.
+    const std::vector<std::string>& src = pk.Tab == 0 ? pk.Recent : pk.Folders[(size_t)pk.Tab - 1].Files;
+    const std::string needle = LowerAscii(pk.Search);
+    std::vector<const std::string*> shown;
+    for (const std::string& f : src)
+        if (needle.empty() || LowerAscii(BaseName(f)).find(needle) != std::string::npos) shown.push_back(&f);
+
+    const float cell = 72.0f * scale, gap = 6.0f * scale;
+    ImGui::BeginChild("##stampGrid", ImVec2(0, -ImGui::GetTextLineHeightWithSpacing()), ImGuiChildFlags_None);
+    const float width = ImGui::GetContentRegionAvail().x;
+    const int cols = std::max(1, (int)((width + gap) / (cell + gap)));
+    const int rows = ((int)shown.size() + cols - 1) / cols;
+    if (shown.empty()) ImGui::TextDisabled("%s", pk.Tab == 0 && needle.empty() ? "Nothing picked yet this session." : "No images match.");
+    ImGuiListClipper clip;
+    clip.Begin(rows, cell + gap);
+    while (clip.Step()) {
+        for (int r = clip.DisplayStart; r < clip.DisplayEnd; ++r) {
+            const ImVec2 rowTop = ImGui::GetCursorScreenPos();
+            for (int c = 0; c < cols; ++c) {
+                const int i = r * cols + c;
+                if (i >= (int)shown.size()) break;
+                const std::string& rel = *shown[(size_t)i];
+                const ImVec2 p0(rowTop.x + c * (cell + gap), rowTop.y);
+                ImGui::SetCursorScreenPos(p0);
+                ImGui::PushID(i);
+                ImGui::InvisibleButton("##cell", ImVec2(cell, cell));
+                EditorTestTag(("stamp:" + BaseName(rel)).c_str());
+                const bool hovered = ImGui::IsItemHovered();
+                const bool clicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
+                ImGui::PopID();
+                DrawStampThumb(g, thumbs, rel, p0, cell, scale);
+                ImDrawList* dl = ImGui::GetWindowDrawList();
+                const ImVec2 p1(p0.x + cell, p0.y + cell);
+                if (AssetDatabase::PathKey(rel) == AssetDatabase::PathKey(current))
+                    dl->AddRect(p0, p1, EditorTheme::U32(EditorTheme::Accent), 3.0f * scale, 0, 2.0f);
+                else
+                    dl->AddRect(p0, p1, EditorTheme::U32(hovered ? EditorTheme::Strong : EditorTheme::Hairline), 3.0f * scale);
+                if (hovered) EditorUI::SetTooltip("%s", ShortStampName(rel).c_str());
+                if (clicked) picked = rel;
+            }
+            ImGui::SetCursorScreenPos(ImVec2(rowTop.x, rowTop.y + cell + gap));
+            ImGui::Dummy(ImVec2(0, 0));
+        }
+    }
+    ImGui::EndChild();
+    ImGui::TextDisabled("%d image%s   Esc closes", (int)shown.size(), shown.size() == 1 ? "" : "s");
+
+    if (!picked.empty()) {
+        auto& R = pk.Recent;
+        R.erase(std::remove(R.begin(), R.end(), picked), R.end());
+        R.insert(R.begin(), picked);
+        if (R.size() > kMaxRecent) R.resize(kMaxRecent);
+        ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndPopup();
+    return picked;
+}
+
+// A thumbnail button for the current stamp (the Stamp tool's options); true when pressed.
+bool StampThumbButton(GraffitiDesigner& g, AssetThumbnailLoader& thumbs, const std::string& rel, float side, float scale) {
+    const ImVec2 p0 = ImGui::GetCursorScreenPos();
+    ImGui::InvisibleButton("##stampThumb", ImVec2(side, side));
+    EditorTestTag("stamp-tool-thumb");
+    const bool hovered = ImGui::IsItemHovered();
+    const bool clicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
+    DrawStampThumb(g, thumbs, rel, p0, side, scale);
+    ImGui::GetWindowDrawList()->AddRect(p0, ImVec2(p0.x + side, p0.y + side),
+                                        EditorTheme::U32(hovered ? EditorTheme::Accent : EditorTheme::Strong), 3.0f * scale);
+    if (hovered) EditorUI::SetTooltip("Stamp: %s\nClick to choose another", ShortStampName(rel).c_str());
+    return clicked;
+}
+
 } // namespace
 
 // =====================================================================================================
@@ -567,6 +734,10 @@ void EditorLayer::DrawGraffitiViewportOverlay(World& world, Camera& editorCamera
 void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
     if (!m_ShowGraffitiDesigner) {
         if (m_Graffiti && m_Graffiti->Stroking) EndStroke(*m_Graffiti);
+        if (m_Graffiti) { // free the stamp picker's thumbnails
+            for (const std::string& p : m_Graffiti->Picker.Requested) m_AssetThumbs.Invalidate(p);
+            m_Graffiti->Picker.Requested.clear();
+        }
         return;
     }
     if (!m_Graffiti) m_Graffiti = std::make_shared<GraffitiDesigner>();
@@ -660,6 +831,18 @@ void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
                                              ImVec2(36.0f * m_UIScale, 0)))
             g.Active = (GTool)t;
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", ToolName((GTool)t));
+    }
+
+    if (g.Active == GTool::Stamp) {
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextDisabled("Stamp");
+        ImGui::SameLine();
+        if (StampThumbButton(g, m_AssetThumbs, g.StampTexture, 40.0f * m_UIScale, m_UIScale)) {
+            g.Picker.WantOpen = true;
+            g.Picker.Target = -1;
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled("%s", ShortStampName(g.StampTexture).c_str());
     }
 
     if (ImGui::CollapsingHeader("Brush", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -874,7 +1057,8 @@ void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
         if (l.Type == Graffiti::LayerType::Stamp) {
             char tex[260];
             std::snprintf(tex, sizeof(tex), "%s", l.Texture.c_str());
-            if (ImGui::InputText("Image", tex, sizeof(tex))) { l.Texture = tex; ch = true; }
+            ImGui::SetNextItemWidth(ImGui::CalcItemWidth() - 36.0f * m_UIScale);
+            if (ImGui::InputText("##Image", tex, sizeof(tex))) { l.Texture = tex; ch = true; }
             if (ImGui::BeginDragDropTarget()) { // an image from the Asset Browser
                 for (const char* type : {"ASSET_TEXTURE_PATH", "ASSET_FILE_PATH"})
                     if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload(type)) {
@@ -884,6 +1068,14 @@ void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
                     }
                 ImGui::EndDragDropTarget();
             }
+            ImGui::SameLine();
+            if (EditorUIPrimitives::SecondaryButton(ICON_FA_IMAGE "##pickStamp", ImVec2(30.0f * m_UIScale, 0))) {
+                g.Picker.WantOpen = true;
+                g.Picker.Target = g.Selected;
+            }
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Choose from the graffiti image library");
+            ImGui::SameLine();
+            ImGui::TextUnformatted("Image");
             ch |= ImGui::Checkbox("Opacity from brightness", &l.Luma);
             ch |= ImGui::Checkbox("Image's own colours", &l.TextureColor);
             ch |= ImGui::SliderFloat("Stretch", &l.Aspect, 0.25f, 4.0f);
@@ -1140,5 +1332,17 @@ void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
                         ToolName(g.Active), g.Piece->Width, g.Piece->Height, g.Piece->Metres.x, g.Piece->Metres.y, (int)L.size(),
                         g.Zoom * 100.0f);
     ImGui::EndChild();
+
+    {
+        const std::string cur = g.Picker.Target >= 0 && g.Picker.Target < (int)L.size() ? L[(size_t)g.Picker.Target].Texture : g.StampTexture;
+        const std::string pick = DrawStampPickerPopup(g, m_AssetThumbs, m_UIScale, cur);
+        if (!pick.empty()) {
+            g.StampTexture = pick;
+            if (g.Picker.Target >= 0 && g.Picker.Target < (int)L.size() && L[(size_t)g.Picker.Target].Type == Graffiti::LayerType::Stamp) {
+                L[(size_t)g.Picker.Target].Texture = pick;
+                Edited(g);
+            }
+        }
+    }
     ImGui::End();
 }

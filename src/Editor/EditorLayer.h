@@ -81,6 +81,8 @@ struct AssetGridCell {
 struct AnimatorWindowState; // the Animator window's state (EditorLayer_Animator*.cpp)
 struct GlassEditorState;    // the Glass theme's state (Glass/GlassEditorState.h)
 
+struct DecalEditorState; // EditorLayer_DecalLibrary.cpp
+
 class EditorLayer {
     friend struct EditorHistoryTestAccess;
     friend struct EditorUiTestAccess; // --editor-tests (src/Tests/EditorUiTests.cpp)
@@ -88,6 +90,7 @@ class EditorLayer {
     friend struct EditorSmokeAccess_Menus;
     friend struct EditorSmokeAccess_Panels;
     friend struct EditorSmokeAccess_Hierarchy;
+    friend struct EditorSmokeAccess_Decals;
     friend struct EditorSmokeAccess_Inspector;
     friend struct EditorSmokeAccess_SceneTools;
     friend struct EditorSmokeAccess_PlayMode;
@@ -186,12 +189,12 @@ public:
     void SetTitleBarDragHovered(bool hovered) { m_TitleBarDragHovered = hovered; }
 
     int  GizmoOpIndex() const { return (int)m_GizmoOp; }
-    void SetGizmoOpIndex(int op) { m_GizmoOp = (GizmoOp)op; m_HandTool = false; } // picking a gizmo tool exits the Hand tool
+    void SetGizmoOpIndex(int op) { m_GizmoOp = (GizmoOp)op; m_HandTool = false; m_DecalTool = DecalToolMode::None; } // picking a gizmo tool exits the Hand and decal tools
     // Viewport tools (#236 E) — Hand tool (Q) and Lock View to Selected (Shift+F).
-    void SetHandToolActive(bool on) { m_HandTool = on; }
+    void SetHandToolActive(bool on) { m_HandTool = on; if (on) m_DecalTool = DecalToolMode::None; }
     bool MeasureToolActive() const { return m_MeasureTool; }
     bool RulerHeld() const { return m_RulerHeld; } // vRuler owns the mouse wheel while held
-    void SetMeasureToolActive(bool on) { m_MeasureTool = on; m_MeasurePoints.clear(); if (on) m_HandTool = false; }
+    void SetMeasureToolActive(bool on) { m_MeasureTool = on; m_MeasurePoints.clear(); if (on) { m_HandTool = false; m_DecalTool = DecalToolMode::None; } }
     // main.cpp pokes this whenever the fly speed changes via scroll (RMB-drag or Ctrl+scroll);
     // Draw() fades out the transient "Fly speed: N" viewport readout (#236 R2).
     void FlashFlySpeedHud() { m_FlySpeedHudTimer = 1.4f; }
@@ -743,6 +746,8 @@ public:
     void SetWindowSeeThrough(bool v) { m_WindowSeeThrough = v; }
     bool DesktopShowsThrough() const { return m_WindowSeeThrough && GlassThemeActive(); }
     bool OverlaysHidden() const { return m_HideOverlaysThisFrame; }
+    // Smoke-test screenshots: hides the nav gizmo, collider wires and selection outlines until cleared.
+    bool CleanShots() const { return m_CleanShots; }
 
     // The Scene window's own content-region size as of the LAST frame it was drawn (zero before
     // the first draw) — one-frame-stale for the same reason GameViewPanel's equivalent is: this
@@ -894,6 +899,7 @@ private:
     GLFWwindow* m_Window = nullptr;
 
     bool m_HideOverlaysThisFrame = false;
+    bool m_CleanShots = false; // set by the editor smoke tests while they take screenshots
 
     // Frosted backdrop behind modal dialogs — created lazily the first time a modal opens (see
     // EndFrame): the whole framebuffer is blurred and the dialog window redrawn crisp on top.
@@ -1127,6 +1133,24 @@ private:
     // (Units: EditorSettings::MeasureFeet, persisted and shared with vRuler.)
     bool RaycastViewportSurface(World& world, Camera& cam, const glm::vec2& screenPx, glm::vec3& outHit) const;
     void DrawMeasurement(Camera& cam);
+    enum class DecalToolMode : int { None = 0, Place, Brush };
+    // Decal tools (EditorLayer_DecalTools.cpp). One mode at a time, exclusive with Hand and Measure.
+    DecalToolMode m_DecalTool = DecalToolMode::None;
+    bool m_ShowDecalLibrary = false;
+    std::shared_ptr<DecalEditorState> m_DecalEd; // made on first use
+    DecalEditorState& DecalEd();
+    // Called from HandleViewportPicking while a decal tool is active. `free`: the cursor is over the
+    // viewport and nothing else owns the click.
+    void UpdateDecalTool(World& world, Camera& cam, bool free, bool leftPressed, bool leftDown);
+    void EndDecalStroke(World& world);
+    void DrawDecalToolOverlay(World& world, Camera& cam); // the cursor ring, ghost frame, stamp rings, hint plate
+    void RunAutoGrime(World& world);
+    void ClearAutoGrime(World& world);
+    // The radial menu's decal mode (hold Space with the brush active): categories, palettes, recents.
+    int  DecalRadialBuild();
+    bool DecalRadialItem(int i, const char*& icon, const char*& label) const;
+    const char* DecalRadialFullName(int i) const; // "" when i is not a decal slot
+    void RunDecalRadialItem(int i);
     // Editor Enhancers / vRuler (EditorLayer_Gizmos.cpp): hold Shift+R over the Scene view.
     bool ViewportRay(Camera& cam, const glm::vec2& screenPx, glm::vec3& origin, glm::vec3& dir) const;
     bool RulerHeldNow() const;
@@ -2280,6 +2304,7 @@ private:
     struct DecalSpot {
         entt::entity Decal = entt::null; // a placed decal whose box the cursor ray enters first
         bool OnSurface = false;          // the ray hit a mesh at Point, facing Normal
+        entt::entity Receiver = entt::null; // the entity whose mesh it hit
         glm::vec3 Point{0.0f};
         glm::vec3 Normal{0.0f, 0.0f, 1.0f};
     };
@@ -2289,6 +2314,28 @@ private:
     // Moves the decal onto the surface its box projects at (along -Z) and turns +Z out of it,
     // keeping its spin. One undo step; false (nothing changed) when no surface is in reach.
     bool FitDecalToSurface(World& world, entt::entity entity);
+public:
+    // The ray cast the decal tools share (RaycastRenderables): the nearest surface along the ray,
+    // its normal turned to face the ray, and the entity that owns it.
+    bool CastDecalRay(World& world, const glm::vec3& origin, const glm::vec3& dir, float maxT, glm::vec3& point,
+                      glm::vec3& normal, entt::entity* entity = nullptr) const;
+    // True when `entity` moves or deforms (skinned, or a rigidbody that isn't static): a decal on it
+    // is parented so it goes with it.
+    bool IsDynamicDecalReceiver(World& world, entt::entity entity) const;
+
+    // EditorLayer_DecalLibrary.cpp / EditorLayer_DecalTools.cpp: the Decal Library panel, the Place
+    // Decal and Decal Brush tools, the auto-grime pass and the motion and sounds that go with them
+    // (docs/DECALS.md, "Editor tools").
+    DecalToolMode DecalTool() const { return m_DecalTool; }
+    void SetDecalTool(DecalToolMode mode); // leaves the Hand and Measure tools; same mode again = off
+    void SetShowDecalLibrary(bool show) { m_ShowDecalLibrary = show; }
+    // main.cpp: while a decal tool owns the mouse wheel (it turns / scales the ghost, or sizes the brush)
+    // the camera does not zoom with it.
+    bool DecalToolOwnsWheel() const;
+    // The placement ghost for DecalSystem::SetGhost; false when there is none this frame.
+    bool DecalGhostPreview(const DecalComponent*& comp, glm::mat4& world) const;
+    void DrawDecalLibraryPanel(World& world);
+private:
     // The Graffiti Designer (decals Phase 3, docs/GRAFFITI_DESIGNER.md; EditorLayer_GraffitiDesigner.cpp):
     // the panel editing one .graffiti recipe (layers, canvas, tools, bake), and spraying straight onto
     // a wall in the Scene view. The state lives in GraffitiDesigner (defined in that file).
@@ -2715,6 +2762,8 @@ private:
         ImVec2 Center{0.0f, 0.0f};
         int    Hovered = -1;
         int    Picked = -1;     // flashes while the menu fades out
+        bool   Decals = false;  // the decal brush's menu (categories, palettes, recents) instead of the tools'
+        int    Count = 10;      // items in this menu
     } m_Radial;
     void UpdateRadialMenu(World& world, Camera& editorCamera, bool sceneHovered);
     void RunRadialItem(World& world, Camera& editorCamera, int item);

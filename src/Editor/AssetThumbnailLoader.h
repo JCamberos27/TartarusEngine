@@ -16,6 +16,9 @@
 //   Image  decoded on a worker thread, box-filtered into a kSize square (aspect kept, transparent
 //          border), cached in Library/thumbnails (ThumbnailCache) so the next launch skips the
 //          decode. Only the 128px result is uploaded, on the main thread (GL), a few per frame.
+//   Mask / MaskInverted  the Image thumbnail with its opacity taken from the luminance (white on black
+//          alpha packs, or dark on light for inverted): white paint with an alpha, so a decal can be drawn
+//          over a wall swatch. Made from the cached Image thumbnail when there is one.
 //   Cached the last thumbnail ThumbnailCache holds for a model or material, whatever its key: a
 //          possibly stale preview until the asset loads and renders a current one. Nothing to
 //          decode when there's none - the tile keeps its type glyph.
@@ -26,7 +29,7 @@
 class AssetThumbnailLoader {
 public:
     static constexpr int kSize = 128;
-    enum class Source { Image, Cached };
+    enum class Source { Image, Cached, Mask, MaskInverted };
 
     struct Thumb {
         unsigned int Tex = 0; // GL texture, 0 while pending or when there's no thumbnail
@@ -36,6 +39,7 @@ public:
     AssetThumbnailLoader();
     ~AssetThumbnailLoader(); // joins the workers; GL textures must already be freed (Clear)
 
+    // The same file as Image and as a mask is two thumbnails, kept apart.
     Thumb Get(const std::string& path, Source source);
     // Main thread, once a frame: uploads at most `maxUploads` finished thumbnails.
     void Pump(int maxUploads);

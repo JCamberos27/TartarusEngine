@@ -57,6 +57,16 @@ Step UntilSecs(std::string name, std::function<bool(Ctx&)> pred, double seconds)
         return false;
     }, 100000000};
 }
+// The stamp picker's steps browse the Drive's graffiti Numbers set: on a clone without the fetched
+// assets (CI) there is no such folder to pick from, so they pass straight through.
+bool HasNumberStamps() {
+    std::error_code ec;
+    return fs::exists(fs::u8path(ProjectPaths::Resolve("assets/Decals/Graffiti/Numbers/T_Decal_GraffitiNumber_007.png")), ec);
+}
+Step WithNumberStamps(Step s) {
+    s.Fn = [inner = s.Fn](Ctx& c) { return !HasNumberStamps() || inner(c); };
+    return s;
+}
 bool BakeIdle(Ctx& c) {
     GraffitiDesigner* g = GA::G(c.E);
     return g && g->BakeStage == 0 && !g->BakeAgain;
@@ -152,6 +162,47 @@ void RegisterGraffitiTests() {
             g->Dirty = g->NeedsBuild = true;
         }),
         Wait(5),
+        // The stamp picker: from the stamp layer's image button, a tab, a search, a pick.
+        Do("select the stamp layer", [](Ctx& c) { GA::G(c.E)->Selected = 3; }),
+        Wait(3),
+        Do("scroll the side column so the Layer settings show", [](Ctx&) {
+            for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+                if (std::strstr(w->Name, "##gside")) ImGui::SetScrollY(w, 100000.0f);
+        }),
+        Wait(3),
+        WithNumberStamps(Click(ByExact(ICON_FA_IMAGE "##pickStamp", kDesigner))), Wait(4),
+        WithNumberStamps(Click(ByLabel("Numbers", "##Popup"))), Wait(3),
+        WithNumberStamps(Click(ByExact("##stampSearch", "##Popup"))), Wait(2), WithNumberStamps(TypeText("number_00")), Wait(3),
+        WaitSeconds(2.0), // thumbnails decode off-thread and upload a few per frame
+        WithNumberStamps(CleanShot("stamp-picker")),
+        WithNumberStamps(Click(ByTag("stamp:T_Decal_GraffitiNumber_007.png"))), Wait(4),
+        Expect("the stamp layer's image changed to the picked number", [](Ctx& c) {
+            if (!HasNumberStamps()) return std::string();
+            GraffitiDesigner* g = GA::G(c.E);
+            const std::string want = "assets/Decals/Graffiti/Numbers/T_Decal_GraffitiNumber_007.png";
+            if (g->Piece->Layers[3].Texture != want) return "layer texture is '" + g->Piece->Layers[3].Texture + "'";
+            return g->StampTexture == want ? std::string() : std::string("the Stamp tool's image did not follow");
+        }),
+        Do("pick the stamp tool, scroll the side column back up", [](Ctx& c) {
+            GA::G(c.E)->Active = GraffitiDesigner::Tool::Stamp;
+            for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
+                if (std::strstr(w->Name, "##gside")) ImGui::SetScrollY(w, 0.0f);
+        }),
+        Wait(3),
+        Click(ByTag("stamp-tool-thumb")), Wait(4),
+        Click(ByLabel("Recent", "##Popup")), Wait(3),
+        ExpectTrue("the pick is under Recent", [](Ctx& c) {
+            if (!HasNumberStamps()) return true; // nothing was picked without the Numbers set (CI)
+            const auto& r = GA::G(c.E)->Picker.Recent;
+            return !r.empty() && r[0].find("Number_007") != std::string::npos;
+        }),
+        Key(ImGuiKey_Escape), Wait(3),
+        Do("back to the spray tool, spray into the bottom layer", [](Ctx& c) {
+            GraffitiDesigner* g = GA::G(c.E);
+            g->Active = GraffitiDesigner::Tool::Spray;
+            g->Selected = 0;
+        }),
+        Wait(2),
         // A stroke on the canvas, across the letters.
         Move("to the canvas", [](Ctx& c) {
             GraffitiDesigner* g = GA::G(c.E);

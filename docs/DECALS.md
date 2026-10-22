@@ -100,6 +100,54 @@ and `StandardAdvanced.shader` (`Material::GrungeMap` etc., saved in the `.mat`).
 in world space with `SampleTriplanar`, so it ignores the mesh UVs: the map multiplies the albedo,
 and where it's dark it roughens the surface and darkens its AO.
 
+### Substrate
+
+What shows where paint is missing (`Substrate.h`): albedo, normal, roughness and AO maps, metres
+per repeat, tint, strength, a roughness range (the map, or white without one, remapped to it), a
+mirrored-repeat switch, a crop rect (the part of the image that repeats) and `detail` (0..2: pits
+and pores derived at load from the albedo's fine luminance - its high-pass as a height - whiteout-added
+to the normal map and multiplied into the AO, for sets whose own normal / AO are flat).
+
+Presets: `.substrate` files (that same JSON) under `assets/Decals/Substrates` - `SB_Wall_Concrete`
+(1.5 m, crop `[0, 0.21, 1, 0.93]` to skip the sheet's trim bands, mirrored, tint 1.6, detail 1; its
+roughness PNG is solid black, so roughness 0.9 from the range), `SB_Floor_Concrete` (2 m, tint 1.35,
+detail 0.6) and `SB_Dark_Wooden_Planks`. A block names one as `{"preset": "<path>"}` (or the path as a
+string); keys beside it override the preset's values, and it is written back as the reference plus
+only the values that differ. Inline blocks (no preset) still load. Three places carry one:
+
+- a `.decal`'s `"substrate"` block. Every `DA_PeelingPaint_*` references `SB_Wall_Concrete`;
+- a material's `"substrate"` block (top level in a `.mat`, `{path, pathGuid}` refs in a scene's
+  embedded material). The dress scripts give walls `SB_Wall_Concrete`, ceilings `SB_Floor_Concrete`
+  and trim `SB_Dark_Wooden_Planks`, as preset references only;
+- the Decal component's **Substrate** mode: **Auto** (the receiving material's substrate, else the
+  asset's - only for an asset that has one, so graffiti never reveals the wall), **Asset**,
+  **Custom** (the component's own `Substrate *` fields), **Off** or **Preset** (`Substrate Preset`,
+  a `.substrate` path; the dress scripts put the ceiling decals on `SB_Floor_Concrete` this way).
+
+`DecalSystem` keeps a table of the substrates in use (SSBO 16, 80-byte `GpuSubstrate`, up to 255),
+keyed by the resolved files plus the values, so a material's and a decal's copy of the same set share
+one entry. Each entry's maps take one 2048 slot of the decal texture arrays - albedo, normal, and a
+surface map packed on load from the separate roughness (r) and AO (b) files - so they count against
+the decal texture budget. Substrates used in the last ~600 Prepare()s stay pinned. A decal names one
+as index + 1 in `Ids.x`'s top byte (`FLAG_SUBSTRATE_AUTO` lets the receiver's win), a material
+through `uMaterialSubstrate` (set in `SetSurfaceOptions`, same encoding); `uSubstrateOn` gates both
+to the views that prepared decals.
+
+Shading (`ModelDecals.glsl`): sampled in world space on the receiver's dominant axis (so overlapping
+decals and the Grunge reveal show one continuous wall), with explicit gradients and the same maxLod /
+half-texel clamp as the decals. Its AO is baked into its colour (lamps, not ambient, light these
+walls). Under a decal it replaces the decal's colour (keeping a little of the mask photo's grain) by
+its strength, recessed: darkened where the decal's height is below its ~2 cm neighbourhood (three
+mips down) and by the decal's cavity AO. Its normal goes on first and the decal's relief (the paint's
+step and lips) on top at full strength; its roughness and AO follow under the coverage. In the Grunge
+slot the map's alpha - the peel coverage of the cooked `T_Grunge_*` maps - reveals the material's
+substrate past `1 - Grunge Strength`, read on the dominant plane 2.5 mips down (hairline cracks stay
+dirt) and gated by the coverage 5.5 mips down (isolated specks on clean wall stay shut, clusters
+open), with a thin lighter paint rim around each chip and, on walls, a hairline shadow inside its
+upper edge.
+
+`TARTARUS_NO_SUBSTRATE=1` turns every substrate off (before / after comparisons).
+
 ### Tests
 
 `src/Tests/UnitTests_DecalRender.cpp` (`--unit-tests "Decal render"`): the 6-axis test against an
@@ -197,6 +245,46 @@ surface; the decal projects along -Z.
 registration, the `.decal` round trip (every field, byte-stable), the forgiving load (wrong
 types, clamps, tier snapping, broken and missing files), and the Decal / Decal Grading scene
 round trip.
+
+## Editor tools
+
+Phase 2. Code: `EditorLayer_DecalLibrary.cpp` (panel, scan, radial slots), `EditorLayer_DecalTools.cpp`
+(Place, Brush, overlay, auto-grime), `DecalTools.*` (brush stroke and grime planner, no editor
+dependencies, unit-testable), `DecalEditorState.h` (per-editor state), `Renderer/DecalPalette.*`.
+
+- **Decal Library** (Window menu, or opens itself when a tool has nothing to paint with). Indexes
+  every `.decal` under `assets/Decals` a slice per frame. Category tree, search (name, category,
+  tags), Favourites and Recent, a wall-tone swatch (dark, mid, light) behind the previews, and a hover
+  card with a live preview. Tiles cascade in with the library's motion spec and lift on hover;
+  hearts pop. Dragging a tile into the viewport carries an `ASSET_DECAL_PATH` payload (the Asset
+  Browser's decal cells use the same one).
+- **Place Decal** (`P`, tool rail). A ghost follows the cursor on the surface under it: +Z points out
+  of the surface, a decal on a skinned or non-static rigidbody receiver is parented to it. Scroll
+  turns the ghost, Shift+scroll sizes it, click stamps (scale-in pop plus a ring flash). One undo
+  step per stamp.
+- **Decal Brush** (`B`). Source is one decal, a category, or a palette. Settings: radius, spacing,
+  density, size and size jitter, rotation jitter, opacity, align to surface, follow stroke. Scroll
+  sizes the radius, Shift+scroll the decals. Ctrl-drag erases decals whose centre is under the brush.
+  A stroke is one undo step ("Paint Decals (n)" / "Erase Decals (n)"). New decals go under a
+  `Decal Paint` group.
+- **Auto-grime.** Select a room (a floor or wall group works), pick a palette, press Auto-grime.
+  Rays from the room centre find floor and ceiling, then for each wall a depth profile per column:
+  open to the floor is a door, open higher up a window (grime goes under the sill), a shallow bump a
+  pipe (a drip below it). Wall bases, open wall, ceiling edge, corners and floor patches follow.
+  Sites go to the palette entries that list that site kind. Everything lands under one
+  `Grime (auto)` group, replaced on the next run (or the Clear button). The same seed gives the same
+  result. It is meant for one room: a whole floor's bounds is a poor input.
+- **Palettes** (`DP_*.decalpalette`, JSON, `paletteVersion` 1): weighted entries with scale and
+  opacity ranges, a tint, and the sites an entry suits (`wall`, `base`, `corner`, `window`, `door`,
+  `pipe`, `ceiling`, `floor`; none means anywhere). Shipped: `DP_Squat`, `DP_WaterDamage`,
+  `DP_GangTurf`. Load / save is forgiving and byte-stable.
+- **Radial.** With the Brush active, holding Space opens the decal ring: palettes, top-level
+  categories, recent decals. Labels are cut to fit their wedge.
+- **Sounds.** Preferences group "Decals & Graffiti": DecalPlace, DecalBrushTick (rate-capped),
+  DecalErase, PaletteSwap, AutoGrimeStart, AutoGrimeDone, LibraryFavourite. The shipped wavs are
+  synthesised placeholders, to be replaced by cuts from real recordings.
+- **Test.** `--editor-tests "decals:"` opens the Apartment Hallway and drives all of the above, then
+  saves and reloads.
 
 ## Corridor wear
 

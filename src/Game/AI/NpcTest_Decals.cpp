@@ -127,8 +127,7 @@ void NpcTest::Decals(World& world, NpcDirector& npcs, float) {
         m_KMidChecked = true;
         SprayView v;
         SprayState(v, true);
-        std::printf("[NpcTest] spray half-way: %d pieces, progress %.2f..%.2f, %d sounds, hiss %d, resident %d, saved %d (elapsed %.2f)
-",
+        std::printf("[NpcTest] spray half-way: %d pieces, progress %.2f..%.2f, %d sounds, hiss %d, resident %d, saved %d (elapsed %.2f)\n",
                     v.Pieces, v.MinProgress, v.MaxProgress, v.Sounds, v.Hissing ? 1 : 0, v.Resident ? 1 : 0, v.Saved, v.SavedElapsed);
         Check(v.Pieces == 2, "two pieces going on");
         Check(v.MinProgress > 0.2f && v.MaxProgress < 0.8f, "half-way through, not done");
@@ -140,8 +139,7 @@ void NpcTest::Decals(World& world, NpcDirector& npcs, float) {
         if (SprayState) {
             SprayView v;
             SprayState(v, true);
-            std::printf("[NpcTest] spray done: %d pieces, progress %.2f..%.2f, %d sounds, hiss %d, saved %d, %d runtime decals
-", v.Pieces,
+            std::printf("[NpcTest] spray done: %d pieces, progress %.2f..%.2f, %d sounds, hiss %d, saved %d, %d runtime decals\n", v.Pieces,
                         v.MinProgress, v.MaxProgress, v.Sounds, v.Hissing ? 1 : 0, v.Saved, v.RuntimeDecals);
             Check(v.Pieces == 2 && v.MinProgress >= 1.0f, "both pieces finished");
             Check(!v.Hissing && v.Sounds >= 6, "the hiss stopped and the caps were released");

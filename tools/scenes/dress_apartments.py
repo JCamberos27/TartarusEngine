@@ -7,14 +7,16 @@
 #
 #  * materials: the apartment walls (+ the window / arch Reveal pieces that sit in a unit) keep their white baseColor,
 #    normal and roughness maps and only gain the PH_Beige_Wall AO map (the shader reads its red channel, so it can't
-#    tint) and the T_Grunge_PeelingPaint_036 grunge (0.3, scale 0.25); ceilings and the apartments' baseboards get _085
-#    (0.4 and 0.45). 301 is the hand-edited NPC test room: nothing there is touched except these materials and the
+#    tint) and the T_Grunge_PeelingPaint_036 grunge (0.3, scale 0.25); ceilings get _085 (0.4) and
+#    the apartments' baseboards _036 (0.4). They also gain the corridor's "substrate" preset references (dc.SUBSTRATES): Wall_Concrete on walls and
+#    reveals, Floor_Concrete on ceilings, PH_Dark_Wooden_Planks on baseboards. 301 is the hand-edited NPC test room: nothing there is touched except these materials and the
 #    added decals;
 #  * decals go under an "Apartment Wear" root, one "30x Wear" group per unit. Two seeded units are trashed (~60 decals),
 #    the rest moderate (~30-40). Per room, as budget allows: door-frame cracks and flakes, a skirting band, mid-wall hero
 #    patches (larger and lit rooms), and ceiling clusters under the lamp and in the corners. Bathrooms always get water
 #    damage kept light, like the hall: one ceiling cluster, chipped lower walls, one dark DA_LiquidSplatter_* splash.
-#    The corridor's DA_PeelingPaint_* pool plus eight flake / crack maps (APT_POOL), for variety and chipping;
+#    The corridor's DA_PeelingPaint_* pool plus eight flake / crack maps (APT_POOL), for variety and chipping.
+#    Ceiling decals get a Preset Floor_Concrete substrate override; the rest stay on Auto (the receiver's substrate);
 #  * every decal is placed from geometry read off the scene (wall planes and which side faces into the room, door and
 #    window openings, ceiling footprints) and a self-check at the end fails loudly if one is off its wall, faces out of
 #    the room, sits outside the room's footprint or covers an opening. Asserted limits: <= MAX_DECALS decals,
@@ -40,7 +42,7 @@ SEED = 4242
 WALL_H, CEIL_Y = 2.7, 2.7
 EYE_Y = 1.5
 
-GRUNGE = {'walls': (0.3, 0.25), 'ceilings': (0.4, 0.25), 'trim': (0.45, None)}     # strength, scale (None = default)
+GRUNGE = {'walls': (0.3, 0.25), 'ceilings': (0.4, 0.25), 'trim': (0.4, None)}      # strength, scale (None = default)
 AO_MAP = dc.WALL_DIR + 'AO_2k.jpg'
 SPLAT_TINT = [0.1, 0.09, 0.08]
 TOL = 5e-3
@@ -204,15 +206,18 @@ def patch_materials(d, repo, by_id, rooms):
         m['aoMap'] = ao
         m['grungeMap'] = grunge_wall
         m['grungeStrength'], m['grungeScale'] = GRUNGE['walls']
+        m['substrate'] = dc.substrate_block(repo, 'wall')
     for e in ceils:
         m = e['materials'][0]['embedded']
         m['grungeMap'] = grunge_worn
         m['grungeStrength'], m['grungeScale'] = GRUNGE['ceilings']
+        m['substrate'] = dc.substrate_block(repo, 'ceil')
     for e in trims:
         m = e['materials'][0]['embedded']
-        m['grungeMap'] = grunge_worn
+        m['grungeMap'] = grunge_wall               # as the corridor's: _085 opened black blobs at any strength
         m['grungeStrength'] = GRUNGE['trim'][0]
         m.pop('grungeScale', None)
+        m['substrate'] = dc.substrate_block(repo, 'trim')
     return len(walls), len(reveals), len(ceils), len(trims)
 
 
@@ -272,14 +277,14 @@ def f_skirt(S, room, seed, trash):
     for line in shuffled(r, room.lines):
         w = 1.3 + r.random() * 0.9
         hw = max(w / 2 + 0.2, 1.05)           # the extra hole sits 0.6 off centre and is 0.8 wide
-        u = find_u(line, r, hw, 0.34, 0.38)
+        u = find_u(line, r, hw, dc.SKIRT_Y, 0.38)
         if u is None:
             continue
         S.cur = ('wall', room, line, 'skirt', None)
-        S.patch(line, u, 0.34, w, 0.75, seed, flakes=1, crack=False, skirt=True)
-        pos, rot = S.spot(line, u + (0.6 if r.random() < 0.5 else -0.6), 0.22)
+        S.patch(line, u, dc.SKIRT_Y, w, 0.75, seed, flakes=1, crack=False, skirt=True)
+        pos, rot = S.spot(line, u + (0.6 if r.random() < 0.5 else -0.6), dc.SKIRT_HOLE_Y)
         S.decal(S.pick(r, 'hole'), pos, (0.8, 0.55, 0.25), rot, seed + 5, 3, 0.9, jitter=(180.0, 0.15))
-        line.taken.append((u - hw, u + hw, 0.0, 0.72))
+        line.taken.append((u - hw, u + hw, 0.0, dc.SKIRT_Y + 0.38))
         return True
     return False
 
@@ -342,7 +347,8 @@ def ceil_decals(S, room, cx, cz, w, h, seed, tags):
         dw, dh = w * scale, h * scale
         x = min(max(cx + ox, room.x0 + dw / 2 + 0.03), room.x1 - dw / 2 - 0.03)
         z = min(max(cz + oz, room.z0 + dh / 2 + 0.03), room.z1 - dh / 2 - 0.03)
-        S.decal(S.pick(r, tag), (x, CEIL_Y, z), (dw, dh, 0.25), dc.CEIL_Q, seed + i, i, op, jitter=(180.0, 0.12))
+        S.decal(S.pick(r, tag), (x, CEIL_Y, z), (dw, dh, 0.25), dc.CEIL_Q, seed + i, i, op, jitter=(180.0, 0.12),
+                substrate='ceil')
     return True
 
 
@@ -550,7 +556,7 @@ def main():
         f.write('\n')
     print(f'{path}: removed {removed} old entities; patched materials (walls, reveals, ceilings, baseboards) {mats}')
     print(f'{total} decals (' + ', '.join(f'{u}: {n}{" trashed" if u in trashed else ""}' for u, n in per_unit.items())
-          + f'); corridor + apartments use {len(two_k)} unique 2K maps, {len(four_k)} 4K')
+          + f'); corridor + apartments use {len(two_k)} unique 2K maps, {len(four_k)} 4K, + {len(dc.SUBSTRATES)} substrate sets (a 2K slot each)')
     print(f'self-check OK: {checked["wall"]} wall, {checked["ceil"]} ceiling, {checked["floor"]} floor decals')
     print('camera poses:')
     for p in camera_poses(S, rooms):

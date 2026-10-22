@@ -835,9 +835,18 @@ void EditorLayer::DrawViewMenuBody(World& world, Camera& editorCamera) {
             if (ImGui::MenuItem(ICON_FA_RULER "  Measure Tool", "M", m_MeasureTool)) {
                 m_MeasureTool = !m_MeasureTool;
                 m_MeasurePoints.clear();
+                if (m_MeasureTool) m_DecalTool = DecalToolMode::None;
             }
             if (ImGui::IsItemHovered())
                 EditorUI::SetTooltip("Click to chain measurement points; right-click clears.");
+            if (ImGui::MenuItem(ICON_FA_STAMP "  Place Decal Tool", "P", m_DecalTool == DecalToolMode::Place))
+                SetDecalTool(DecalToolMode::Place);
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Click a surface to stamp the Decal Library's selected decal. Scroll turns it, Shift+Scroll sizes it.");
+            if (ImGui::MenuItem(ICON_FA_SPRAY_CAN "  Decal Brush", "B", m_DecalTool == DecalToolMode::Brush))
+                SetDecalTool(DecalToolMode::Brush);
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Paint decals from a palette or category along a stroke. Ctrl erases; hold Space to pick what to paint.");
             ImGui::MenuItem(ICON_FA_CROSSHAIRS "  Frame on Select", nullptr, &m_FrameOnSelect);
             if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Move the camera to frame each object as you select it.");
 
@@ -904,6 +913,9 @@ void EditorLayer::DrawWindowMenuBody() {
             ImGui::MenuItem(ICON_FA_VOLUME_HIGH "  Audio", nullptr, &m_ShowAudioDebug);
             if (ImGui::IsItemHovered())
                 EditorUI::SetTooltip("Live audio: loudness / peak meters per bus, the master limiter, the reverb's rooms and impulse responses, ambience beds, voices.");
+            ImGui::MenuItem(ICON_FA_STAMP "  Decal Library", nullptr, &m_ShowDecalLibrary);
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Browse every decal by category, search, favourite, preview on a wall, and drag one onto a surface.");
             ImGui::MenuItem(ICON_FA_SPRAY_CAN "  Graffiti Designer", nullptr, &m_ShowGraffitiDesigner);
             if (ImGui::IsItemHovered())
                 EditorUI::SetTooltip("Build graffiti pieces from layers (spray, letters, stamps, fills), bake them into decals, and spray straight onto walls.");

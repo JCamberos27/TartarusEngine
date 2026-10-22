@@ -803,13 +803,6 @@ int main(int argc, char** argv) {
                 a.Piece = piece; a.From = from; a.Direction = dir; a.Painter = painter; a.Seconds = seconds;
                 return sprayCans.Start(world, a) != entt::null;
             };
-            npcTest->SprayState = [&](NpcTest::SprayView& v, bool roundTrip) {
-                const SprayCanSystem::Report r = sprayCans.Inspect(world, roundTrip ? &assets : nullptr);
-                v.Pieces = r.Pieces; v.MinProgress = r.MinProgress; v.MaxProgress = r.MaxProgress; v.Resident = r.Resident;
-                v.Saved = r.Saved; v.SavedElapsed = r.SavedElapsed;
-                v.Sounds = sprayCans.SoundsPlayed(); v.Hissing = sprayCans.Hissing();
-                v.RuntimeDecals = DecalSystem::Current() ? DecalSystem::Current()->RuntimeCount() : 0;
-            };
         }
         BloodLab bloodLab;          // F7 -> Blood Lab: fire any blood / impact effect at the crosshair, tune it live
         // What the crosshair is on: a soldier's part (entity, part) or the world (entity, normal). False: nothing in reach.
@@ -1194,6 +1187,15 @@ int main(int argc, char** argv) {
             if (opt.weaponLabMode) scenePath = ProjectPaths::Resolve("scenes/WeaponLab.json");
         }
         AssetLibrary assets;
+        if (npcTest) { // --npc-test decals: the spray can's state, the game state saved and read back
+            npcTest->SprayState = [&](NpcTest::SprayView& v, bool roundTrip) {
+                const SprayCanSystem::Report r = sprayCans.Inspect(world, roundTrip ? &assets : nullptr);
+                v.Pieces = r.Pieces; v.MinProgress = r.MinProgress; v.MaxProgress = r.MaxProgress; v.Resident = r.Resident;
+                v.Saved = r.Saved; v.SavedElapsed = r.SavedElapsed;
+                v.Sounds = sprayCans.SoundsPlayed(); v.Hissing = sprayCans.Hissing();
+                v.RuntimeDecals = DecalSystem::Current() ? DecalSystem::Current()->RuntimeCount() : 0;
+            };
+        }
 
         if (resaveMode) {
             // false: --resave's whole point is choosing where the migrated scene lands
@@ -2541,7 +2543,7 @@ int main(int argc, char** argv) {
                     window.SetCursorLocked(false);
                 }
 
-                if (editor.RulerHeld()) Input::ConsumeScroll(); // vRuler: the wheel picks the measured object
+                if (editor.RulerHeld() || editor.DecalToolOwnsWheel()) Input::ConsumeScroll(); // vRuler: the wheel picks the measured object; a decal tool: it turns / sizes the ghost or brush
                 if (UpdateEditorCamera(editorCamera, dt, allowLook || camDragActive, gizmoDragging,
                         hasSelection ? &selectionCenter : nullptr, editor.ViewportSize().y))
                     editor.FlashFlySpeedHud(); // #236 R2 — show the transient "Fly speed: N" readout
@@ -3967,6 +3969,13 @@ int main(int argc, char** argv) {
             sceneInputs.lightBuffer        = &lightBuffer;
             sceneInputs.clusterGrid        = &clusterGrid;
             sceneInputs.decals             = &decalSystem;
+            {
+                // The Place Decal / Decal Brush ghost: the real decal, drawn in the editor's own views.
+                const DecalComponent* ghostComp = nullptr;
+                glm::mat4 ghostWorld(1.0f);
+                if (!playing && editor.DecalGhostPreview(ghostComp, ghostWorld)) decalSystem.SetGhost(*ghostComp, ghostWorld);
+                else decalSystem.ClearGhost();
+            }
             sceneInputs.decalCullShader    = &clusterDecalCullShader;
             sceneInputs.hdriCube           = hdriCube.get();
             sceneInputs.sunShadowsReady    = false; // set per view in drawScene (#109)
@@ -4152,7 +4161,7 @@ int main(int argc, char** argv) {
                 // that couldn't widen a flat mesh's silhouette were what turned a selected
                 // flat/thin object into a solid orange blob (audit #51).
                 auto selection = editor.GetSelectedItems();
-                if (!selection.empty() && !editor.OverlaysHidden()) {
+                if (!selection.empty() && !editor.OverlaysHidden() && !editor.CleanShots()) {
                     const glm::vec3 kOutlineColor(1.0f, 0.55f, 0.1f);
                     const int kOutlinePixels = 1; // a thin ring, like Unity's (3 read as a thick band)
 
@@ -4317,7 +4326,7 @@ int main(int argc, char** argv) {
                 {
                     const bool showShapes = EditorSettings::Get().ShowColliders;
                     const bool showDebug  = EditorSettings::Get().PhysicsDebugDrawFlags != 0u || BodyDebug::Enabled();
-                    if ((showShapes || showDebug) && !editor.OverlaysHidden() && !(npcTest && npcTest->WantsCleanViews())) {
+                    if ((showShapes || showDebug) && !editor.OverlaysHidden() && !editor.CleanShots() && !(npcTest && npcTest->WantsCleanViews())) {
                         glEnable(GL_DEPTH_TEST);
                         glDepthMask(GL_FALSE);
                         colliderGizmo.Draw(sceneViewMat, sceneProjMat, world, showShapes);
@@ -5117,8 +5126,24 @@ int main(int argc, char** argv) {
                     static const bool openAll = std::getenv("TARTARUS_OPEN_ALL") != nullptr;
                     if (openAll && smokeFramesRendered == 1) Openable::SetAll(world, 1.0f);
                     const int shot = (smokeFramesRendered - kShotCameraStart) / kShotCameraSettle;
-                    if (smokeFramesRendered >= kShotCameraStart && (smokeFramesRendered - kShotCameraStart) % kShotCameraSettle == 0 &&
-                        shot < (int)shotCameras.size() && sceneFramebuffer.IsValid()) {
+                    const bool captureFrame = smokeFramesRendered >= kShotCameraStart &&
+                                              (smokeFramesRendered - kShotCameraStart) % kShotCameraSettle == 0 &&
+                                              shot < (int)shotCameras.size() && sceneFramebuffer.IsValid();
+                    // Decal maps and substrates decode in the background: a fixed frame count caught the hallway's
+                    // peeling paint with or without its concrete depending on how the decodes raced. Each capture
+                    // waits (on the same pose) until they're in, up to kShotStreamHold frames per scene.
+                    static int shotHold = 0;
+                    if (smokeFramesRendered == 1) shotHold = 0;
+                    constexpr int kShotStreamHold = 900;
+                    const bool hold = captureFrame && decalSystem.Streaming() && shotHold < kShotStreamHold;
+                    if (hold) {
+                        ++shotHold;
+                        --smokeFramesRendered; // this frame again next time round
+                    } else if (captureFrame && shotHold >= kShotStreamHold && decalSystem.Streaming()) {
+                        Log::Warn("Smoke shots: decal textures still streaming after " + std::to_string(kShotStreamHold) +
+                                  " held frames - captured anyway.");
+                    }
+                    if (captureFrame && !hold) {
                         const int w = sceneFramebuffer.Width(), h = sceneFramebuffer.Height();
                         const std::string stem = std::filesystem::path(smokeScenePaths[smokeSceneIndex]).stem().string();
                         WritePngTo(opt.smokeShotsDir, stem + "_" + shotCameras[shot].Name, w, h, GrabTopDown(sceneFramebuffer.Handle(), w, h));

@@ -7,6 +7,7 @@
 #include "AtomicFile.h"
 #include "ProjectPaths.h"
 #include "AssetDatabase.h" // #208 - shaderGuid
+#include "SubstrateJson.h"
 
 #include <json.hpp>
 #include <algorithm>
@@ -237,6 +238,9 @@ std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::st
                 m.ShaderKeywords.push_back(k.get<std::string>());
     }
 
+    // Substrate (Substrate.h): a top-level block in both formats, plain project-relative paths.
+    if (auto sub = j.find("substrate"); sub != j.end()) SubstrateJson::Read(*sub, m.Substrate, SubstrateJson::PlainPath);
+
     // Queue / surface fields — both formats (#105: v1 used to drop them, so a transparent or
     // cutout v1 material reverted to opaque on reload). Opaque by default.
     ma->RenderQueue = (Queue)std::clamp(top.Int("renderQueue", (int)Queue::Opaque), 0, 2);
@@ -420,6 +424,8 @@ bool MaterialAsset::Save() const {
     const auto& m = Mat;
     json j;
     j["factorsScaleMaps"] = true; // #102 — see UpgradeLegacyMapFactors
+    if (!m.Substrate.Albedo.empty())
+        j["substrate"] = SubstrateJson::Write<json>(m.Substrate, [](const std::string& p) { return ProjectPaths::Relativize(p); });
 
     if (!ShaderPath.empty()) {
         // v2 format: shader reference + properties map
