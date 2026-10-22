@@ -11,6 +11,7 @@
 #include "AssetImport.h"
 #include "AssetDatabase.h"
 #include "EditorLayer.h"
+#include "DecalSystem.h"
 #include "EditorLayerInternal.h"
 #include "FileDialog.h"
 #include "AssetLibrary.h"
@@ -105,6 +106,19 @@ void EditorLayer::BeginSceneUndo(const World& world, const std::string& label) {
     }
     m_GlobalUndoLabel=label;
     m_GlobalUndoActive=true;
+}
+
+void EditorLayer::JournalFilesBefore(const World& world, const std::vector<EditorFileHistory::State>& before, const std::string& label) {
+    if (m_GlobalUndoApplying) return;
+    EnsureUndoScene(world);
+    if (!m_GlobalUndoActive) {
+        m_GlobalUndoHasScene = false;
+        m_GlobalUndoScene.clear();
+        m_GlobalUndoSelection = CaptureSelectedOrders(world);
+        m_GlobalUndoLabel = label;
+        m_GlobalUndoActive = true;
+    }
+    for (const auto& s : before) m_FileJournal.Record(s);
 }
 
 void EditorLayer::BeginGlobalUndoFrame(const World& world) {
@@ -263,6 +277,7 @@ void EditorLayer::ReloadHistoryFiles(AssetLibrary& assets,const std::vector<Edit
     for(const auto& file:files) {
         if(file.Bytes && file.Path.extension()==".mat")assets.ReloadMaterial(file.Path.string());
         if(file.Path.extension()==".meta")assetIdentity=true;
+        if(file.Path.extension()==".decal") {if(DecalSystem* decals=DecalSystem::Current())decals->Refresh(file.Path.string());}
         if(file.Path==std::filesystem::path(ProjectPaths::Resolve("settings.json")))ProjectSettings::Load();
         if(file.Path==std::filesystem::path(EditorSettings::PrefsFilePath())) {
             EditorSettings::ReloadForUndo();const auto& prefs=EditorSettings::Get();

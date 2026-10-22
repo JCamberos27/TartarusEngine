@@ -33,6 +33,7 @@ struct State {
     std::string Bake[4];                // the four PNGs' bytes after the first button bake
     uint64_t Hash = 0;
     int BakesBefore = 0;
+    std::string AlbedoBefore, AlbedoAfter, TextBefore; // the undo test's bake and text edit
 };
 std::shared_ptr<State> g_State;
 
@@ -284,6 +285,36 @@ void RegisterGraffitiTests() {
         WaitSeconds(0.5),
         ExpectTrue("decals are drawn", [](Ctx&) { return DecalSystem::Current() && DecalSystem::Current()->VisibleCount() > 0; }),
         CleanShot("decal on the wall", {"###Scene"}),
+        // The live preview respects occluders: a cube between the eye and the wall's right half hides the
+        // overlay cells behind it, while a stroke is held on the left half.
+        Do("a cube stands between the eye and the wall, right of the piece's centre", [](Ctx& c) {
+            GraffitiDesigner* g = GA::G(c.E);
+            const glm::mat4 m = c.W.ComposeWorldTransform(g->Target);
+            const glm::vec3 centre(m[3]);
+            glm::vec3 n = glm::normalize(glm::vec3(m[2]));
+            if (glm::dot(n, c.Cam.Position - centre) < 0.0f) n = -n; // the wall's side the eye is on
+            const glm::vec3 along = glm::normalize(glm::vec3(m[0]));
+            const glm::vec3 at = centre + n * 0.4f - along * 0.3f; // a cube standing off the wall, left of its centre
+            c.W.CreateModelEntity(c.A.CreatePrimitive("cube"), at, glm::vec3(0), glm::vec3(0.4f), "Graffiti Occluder");
+            GA::Shown(c.E) = true;
+            ImGui::SetWindowCollapsed(EditorPanels::GraffitiDesigner, true);
+            g->ViewportSpray = true;
+        }),
+        Wait(4),
+        Move("left of the viewport's centre", [](Ctx& c) { const ImVec2 m = ViewportCentre(c.E); return ImVec2(m.x - 170.0f, m.y); }),
+        Wait(3), MouseButton(0, true), Wait(6),
+        ExpectTrue("a stroke is live", [](Ctx& c) { return GA::G(c.E)->Stroking; }),
+        Expect("some overlay cells are hidden behind the cube, others still show", [](Ctx& c) {
+            const auto& v = GA::G(c.E)->OccVisible;
+            size_t shown = 0;
+            for (uint8_t x : v) shown += x;
+            std::printf("    [graffiti] overlay cells shown: %zu of %zu\n", shown, v.size());
+            if (v.empty()) return std::string("the overlay computed no visibility");
+            return shown > 0 && shown < v.size() ? std::string() : std::string("occlusion hid " + std::to_string(v.size() - shown) + " cells");
+        }),
+        CleanShot("preview behind an occluder", {"###Scene"}),
+        MouseButton(0, false), Wait(3),
+        UntilSecs("the last stroke's bake lands", [](Ctx& c) { return BakeIdle(c); }, 60),
     }, [](Ctx& c) {
         // Leave nothing behind: the piece, its bake and their metas.
         if (GraffitiDesigner* g = GA::G(c.E)) {
@@ -297,5 +328,139 @@ void RegisterGraffitiTests() {
             }
         }
         GA::Shown(c.E) = false;
+        ImGui::SetWindowCollapsed(EditorPanels::GraffitiDesigner, false);
+    });
+
+    // Undo / redo: the Designer's edits ride the editor's file journal (a recipe write is a step; a
+    // bake hands its maps' pre-images over when its worker is done).
+    Add("graffiti: undo and redo strokes, layers, property edits and a bake", {
+        Do("reset the test's state", [](Ctx&) { g_State = std::make_shared<State>(); }),
+        FreshScene(), Wait(2),
+        Do("show the Graffiti Designer", [](Ctx& c) {
+            GA::Shown(c.E) = true;
+            ImGui::SetWindowPos(EditorPanels::GraffitiDesigner, ImVec2(40, 60));
+            ImGui::SetWindowSize(EditorPanels::GraffitiDesigner, ImVec2(1150, 720));
+        }),
+        Wait(3),
+        Click(ByLabel("New", kDesigner)),
+        Until("the new piece is open", [](Ctx& c) { GraffitiDesigner* g = GA::G(c.E); return g && g->Piece; }),
+        Do("remember the piece", [](Ctx& c) { g_State->PiecePath = GA::G(c.E)->Piece->Path; }),
+        Wait(4),
+        UntilSecs("no bake in flight", [](Ctx& c) { return BakeIdle(c); }, 60),
+        // A stroke on the canvas.
+        Do("spray tool, bottom layer", [](Ctx& c) { GA::G(c.E)->Active = GraffitiDesigner::Tool::Spray; GA::G(c.E)->Selected = 0; }),
+        Move("to the canvas", [](Ctx& c) {
+            GraffitiDesigner* g = GA::G(c.E);
+            return ImVec2(g->CanvasMin.x + (g->CanvasMax.x - g->CanvasMin.x) * 0.2f, g->CanvasMin.y + (g->CanvasMax.y - g->CanvasMin.y) * 0.7f);
+        }),
+        Wait(2), MouseButton(0, true), Wait(2),
+        Glide(AtPoint([](Ctx& c) {
+            GraffitiDesigner* g = GA::G(c.E);
+            return ImVec2(g->CanvasMin.x + (g->CanvasMax.x - g->CanvasMin.x) * 0.8f, g->CanvasMin.y + (g->CanvasMax.y - g->CanvasMin.y) * 0.3f);
+        }), 30),
+        Wait(3), MouseButton(0, false), Wait(4),
+        ExpectTrue("one stroke", [](Ctx& c) { return GA::G(c.E)->Piece->Layers[0].Strokes.size() == 1; }),
+        Key(ImGuiKey_Z, ImGuiMod_Ctrl),
+        UntilSecs("undo takes the stroke back", [](Ctx& c) { return GA::G(c.E)->Piece->Layers[0].Strokes.empty(); }, 10),
+        Expect("the file agrees", [](Ctx& c) {
+            auto f = Graffiti::Piece::Load(GA::G(c.E)->Piece->Path);
+            return f && f->Layers[0].Strokes.empty() ? std::string() : std::string("the file still has the stroke");
+        }),
+        Wait(2), Key(ImGuiKey_Y, ImGuiMod_Ctrl),
+        UntilSecs("redo puts the stroke back", [](Ctx& c) { return GA::G(c.E)->Piece->Layers[0].Strokes.size() == 1; }, 10),
+        Wait(3),
+        // A layer added from the menu.
+        Click(ByLabel("Add", kDesigner)), Click(MenuItem("Text")), Wait(4),
+        ExpectTrue("two layers", [](Ctx& c) { return GA::G(c.E)->Piece->Layers.size() == 2; }),
+        Key(ImGuiKey_Z, ImGuiMod_Ctrl),
+        UntilSecs("undo takes the layer back", [](Ctx& c) { return GA::G(c.E)->Piece->Layers.size() == 1; }, 10),
+        ExpectTrue("the stroke survived", [](Ctx& c) { return GA::G(c.E)->Piece->Layers[0].Strokes.size() == 1; }),
+        Wait(2), Key(ImGuiKey_Y, ImGuiMod_Ctrl),
+        UntilSecs("redo brings the layer back", [](Ctx& c) {
+            const auto& L = GA::G(c.E)->Piece->Layers;
+            return L.size() == 2 && L[1].Type == Graffiti::LayerType::Text;
+        }, 10),
+        Wait(3),
+        // A property edit.
+        Do("edit the text", [](Ctx& c) {
+            GraffitiDesigner* g = GA::G(c.E);
+            g_State->TextBefore = g->Piece->Layers[1].Text;
+            g->Piece->Layers[1].Text = "UNDO";
+            g->Dirty = g->NeedsBuild = true;
+        }),
+        Wait(4),
+        Key(ImGuiKey_Z, ImGuiMod_Ctrl),
+        UntilSecs("undo takes the text back", [](Ctx& c) {
+            const auto& L = GA::G(c.E)->Piece->Layers;
+            return L.size() == 2 && L[1].Text == g_State->TextBefore;
+        }, 10),
+        Wait(2), Key(ImGuiKey_Y, ImGuiMod_Ctrl),
+        UntilSecs("redo puts the text back", [](Ctx& c) { return GA::G(c.E)->Piece->Layers[1].Text == "UNDO"; }, 10),
+        Wait(3),
+        // Reordered layers.
+        Do("move the text layer to the bottom", [](Ctx& c) {
+            GraffitiDesigner* g = GA::G(c.E);
+            auto& L = g->Piece->Layers;
+            std::swap(L[0], L[1]);
+            std::swap(g->LayerIds[0], g->LayerIds[1]);
+            g->Dirty = g->NeedsBuild = true;
+        }),
+        Wait(4),
+        ExpectTrue("text is first", [](Ctx& c) { return GA::G(c.E)->Piece->Layers[0].Type == Graffiti::LayerType::Text; }),
+        Key(ImGuiKey_Z, ImGuiMod_Ctrl),
+        UntilSecs("undo restores the order", [](Ctx& c) { return GA::G(c.E)->Piece->Layers[0].Type == Graffiti::LayerType::Spray; }, 10),
+        Wait(2), Key(ImGuiKey_Y, ImGuiMod_Ctrl),
+        UntilSecs("redo reorders again", [](Ctx& c) { return GA::G(c.E)->Piece->Layers[0].Type == Graffiti::LayerType::Text; }, 10),
+        Wait(3),
+        // A removed layer, from the trash button.
+        Do("select the text layer", [](Ctx& c) { GA::G(c.E)->Selected = 0; }), Wait(2),
+        Click(ByLabel(ICON_FA_TRASH, kDesigner)), Wait(4),
+        ExpectTrue("one layer left (the spray)", [](Ctx& c) {
+            const auto& L = GA::G(c.E)->Piece->Layers;
+            return L.size() == 1 && L[0].Type == Graffiti::LayerType::Spray;
+        }),
+        Key(ImGuiKey_Z, ImGuiMod_Ctrl),
+        UntilSecs("undo brings the layer back", [](Ctx& c) { return GA::G(c.E)->Piece->Layers.size() == 2; }, 10),
+        Wait(2), Key(ImGuiKey_Y, ImGuiMod_Ctrl),
+        UntilSecs("redo removes it again", [](Ctx& c) { return GA::G(c.E)->Piece->Layers.size() == 1; }, 10),
+        Wait(3),
+        // A bake.
+        Do("note the bake count and the albedo", [](Ctx& c) {
+            GraffitiDesigner* g = GA::G(c.E);
+            g_State->BakesBefore = g->Bakes;
+            g_State->AlbedoBefore = ReadAll(g->Piece->MapPath("Albedo"));
+        }),
+        Click(ByLabel("Bake", kDesigner)),
+        UntilSecs("the bake lands", [](Ctx& c) { return BakeIdle(c) && GA::G(c.E)->Bakes == g_State->BakesBefore + 1; }, 60),
+        Wait(4),
+        Expect("the bake changed the albedo", [](Ctx& c) {
+            g_State->AlbedoAfter = ReadAll(GA::G(c.E)->Piece->MapPath("Albedo"));
+            return g_State->AlbedoAfter != g_State->AlbedoBefore && g_State->AlbedoAfter.size() > 100 ? std::string()
+                                                                                                         : std::string("albedo unchanged by the bake");
+        }),
+        Key(ImGuiKey_Z, ImGuiMod_Ctrl),
+        UntilSecs("undo puts the old albedo back", [](Ctx& c) {
+            return ReadAll(GA::G(c.E)->Piece->MapPath("Albedo")) == g_State->AlbedoBefore;
+        }, 10),
+        ExpectTrue("the recipe is untouched by the bake's undo", [](Ctx& c) {
+            const auto& L = GA::G(c.E)->Piece->Layers;
+            return L.size() == 1 && L[0].Strokes.size() == 1;
+        }),
+        Wait(2), Key(ImGuiKey_Y, ImGuiMod_Ctrl),
+        UntilSecs("redo puts the bake back", [](Ctx& c) {
+            return ReadAll(GA::G(c.E)->Piece->MapPath("Albedo")) == g_State->AlbedoAfter;
+        }, 10),
+    }, [](Ctx& c) {
+        if (GraffitiDesigner* g = GA::G(c.E)) {
+            if (g->Piece && g->Piece->Path == (g_State ? g_State->PiecePath : std::string())) {
+                std::error_code ec;
+                const std::string piece = g->Piece->Path, decal = g->Piece->DecalPath(), dir = g->Piece->BakeDir();
+                g->Piece.reset();
+                for (const std::string& f : {piece, piece + ".meta", decal, decal + ".meta"}) fs::remove(fs::u8path(f), ec);
+                fs::remove_all(fs::u8path(dir), ec);
+            }
+        }
+        GA::Shown(c.E) = false;
+        ImGui::SetWindowCollapsed(EditorPanels::GraffitiDesigner, false);
     });
 }
