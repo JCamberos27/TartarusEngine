@@ -72,4 +72,32 @@ bool WriteBake(const Piece& piece, const BakeFiles& files) {
     return true;
 }
 
+std::shared_ptr<Piece> SnapshotForBake(const Piece& piece) {
+    auto s = std::make_shared<Piece>();
+    s->Path = piece.Path;
+    s->Name = piece.Name;
+    s->Width = piece.Width;
+    s->Height = piece.Height;
+    s->Metres = piece.Metres;
+    s->Seed = piece.Seed;
+    s->Roughness = piece.Roughness;
+    s->Relief = piece.Relief;
+    s->ShowThrough = piece.ShowThrough;
+    s->Drips = piece.Drips;
+    s->GlowColor = piece.GlowColor;
+    s->GlowStrength = piece.GlowStrength;
+    s->UV = piece.UV;
+    s->Fade = piece.Fade;
+    s->Bleach = piece.Bleach;
+    s->Peel = piece.Peel;
+    s->Buff = piece.Buff;
+    if (std::any_of(piece.Layers.begin(), piece.Layers.end(), [](const Layer& l) { return l.Visible && l.Metal > 0.0f; })) {
+        Layer metal;
+        metal.Visible = true;
+        metal.Metal = 1.0f;
+        s->Layers.push_back(metal);
+    }
+    return s;
+}
+
 } // namespace Graffiti

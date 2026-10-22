@@ -17,6 +17,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 // The stamp picker popup (thumbnail grid by folder, recents, search). Folders are scanned from disk
@@ -26,6 +27,7 @@ struct StampPicker {
     struct Folder {
         std::string Name;
         std::vector<std::string> Files; // project-relative, sorted
+        std::vector<std::string> Lower; // LowerAscii(BaseName(Files[i])), for the search
     };
     bool WantOpen = false;
     int Target = -1;                    // layer index the pick goes to, or -1: only the Stamp tool's next stamp
@@ -34,6 +36,9 @@ struct StampPicker {
     std::vector<Folder> Folders;
     std::vector<std::string> Recent;    // newest first, this session
     std::vector<std::string> Requested; // absolute paths asked of the thumbnail loader
+    std::unordered_set<std::string> RequestedSet; // the same, for the membership test
+    struct Names { std::string Abs, Key; };
+    std::unordered_map<std::string, Names> NameCache; // rel path -> absolute path and PathKey, resolved once
 };
 
 struct GraffitiDesigner {
@@ -43,6 +48,8 @@ struct GraffitiDesigner {
     Graffiti::Compositor Comp;
     Graffiti::Program Program;      // what the canvas shows (the text cascade's reveals folded in)
     bool NeedsBuild = true;         // the recipe changed: rebuild the program and re-render
+    bool PreviewOnly = false;       // only the preview shader's inputs changed (relief, show-through): re-preview
+    Graffiti::BuildCache Cache;     // each layer's built output, rebuilt only where its inputs changed
     bool Dirty = false;             // unsaved recipe edits: saved once no widget is held
     int Selected = -1;              // layer index
     std::vector<uint32_t> LayerIds; // a stable id per layer (the reorder glide), parallel to Piece->Layers
@@ -94,6 +101,9 @@ struct GraffitiDesigner {
     std::future<uint64_t> Encoding; // the four PNGs' FNV-1a hash; 0 when writing failed
     uint64_t LastBakeHash = 0;
     std::vector<EditorFileHistory::State> BakeBefore; // the maps and .decal as they were, for the bake's undo step
+    std::vector<EditorFileHistory::State> PendingJournal; // a finished bake's pre-images, journaled next frame
+    std::vector<std::string> BakedPaths;                  // .decal paths written since the library last looked
+    std::shared_ptr<Graffiti::Piece> BakePiece; // what the bake in flight writes: paths and settings taken when it started
     int Bakes = 0;
     double BakeDoneAt = -10.0;
 
@@ -106,6 +116,8 @@ struct GraffitiDesigner {
     entt::entity Target = entt::null; // the decal entity showing this piece
     std::vector<uint8_t> OccVisible;  // the live overlay's cells not hidden by geometry in front of the wall
     glm::mat4 OccKey{0.0f};           // view * projection * box the cells were worked out for
+    const void* OccPiece = nullptr;   // ...and for which piece and target entity
+    entt::entity OccTarget = entt::null;
     double OccAt = -10.0;
     double OverlayUntil = -1.0;       // keep the live overlay until the re-baked decal is resident (or this time)
 
