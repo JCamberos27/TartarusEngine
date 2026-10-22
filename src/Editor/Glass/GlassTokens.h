@@ -421,7 +421,7 @@ constexpr MotionSpec OutlineSweep     = {GLASS_EASE_SMOOTH, 300.0f};
 constexpr MotionSpec ViewCubeTurn     = {EaseId::Spring, 1.0f, 180.0f, 18.0f, 0.0f, 520.0f};
 constexpr MotionSpec RadialOpen       = {EaseId::Spring, 1.0f, 240.0f, 17.0f, 0.0f, 360.0f};
 constexpr MotionSpec RadialItem       = {EaseId::OutCubic, 0, 0, 0, 0, 120.0f};
-constexpr float      RadialRadiusPx   = 92.0f;
+constexpr float      RadialRadiusPx   = 100.0f;
 constexpr float      RadialStaggerMs  = 18.0f;  // each item blooms this long after the previous one
 constexpr float      RadialHoldMs     = 180.0f; // Space held this long opens the menu (a tap does nothing)
 // Snap ticks: every snap step a gizmo drag crosses pops a small ring and the snapped number at the
