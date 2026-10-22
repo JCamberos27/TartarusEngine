@@ -220,6 +220,13 @@ void DecalSystem::RefreshSubstrate(uint32_t idx) {
     }
 }
 
+bool DecalSystem::Streaming() const {
+    for (const SubstrateEntry& e : m_Subs)
+        if (e.Used == m_FrameNo && !e.Ready) return true;
+    // Over budget, the decals in view swap in and out for as long as it holds: nothing to wait for.
+    return m_Textures->Busy() && !m_Textures->Thrashing();
+}
+
 int DecalSystem::MaterialSubstrate(const SubstrateDesc& desc) {
     return s_Active && desc.Enabled() ? (int)s_Active->SubstrateIndex(desc) : 0;
 }
