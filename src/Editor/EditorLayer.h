@@ -1500,6 +1500,8 @@ private:
     std::string m_GlobalUndoScene, m_GlobalUndoLabel;
     std::vector<int> m_GlobalUndoSelection;
     void BeginGlobalUndoFrame(const World& world);
+    // Open (or join) a file-only undo step whose pre-images were captured earlier (a Graffiti bake).
+    void JournalFilesBefore(const World& world, const std::vector<EditorFileHistory::State>& before, const std::string& label);
     void EnsureUndoScene(const World& world);
     void BeginSceneUndo(const World& world, const std::string& label);
     void FinishGlobalUndo(const World& world, bool force = false);
