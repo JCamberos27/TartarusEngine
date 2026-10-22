@@ -2352,6 +2352,9 @@ private:
     bool HandleGraffitiViewportSpray(World& world, Camera& editorCamera, bool leftPressed, bool leftDown);
     void DrawGraffitiViewportOverlay(World& world, Camera& editorCamera);
     void GraffitiFrame(World& world); // once a frame: bakes landing, recipe reloads after undo
+    // Editor smoke test hooks (EditorSmokeAccess_Graffiti): the bake paths that need two calls in one frame.
+    bool GraffitiTestBakeDuringBake();
+    bool GraffitiTestOpenOtherDuringBake(const std::string& otherPath);
     std::shared_ptr<struct GraffitiDesigner> m_Graffiti;
     bool m_ShowGraffitiDesigner = false;
     // The Character Outfit component's editor (EditorLayer_Outfit.cpp).

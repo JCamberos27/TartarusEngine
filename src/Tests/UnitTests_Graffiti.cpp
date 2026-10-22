@@ -4,6 +4,7 @@
 // the bake's, the spray model (cone, distance, pressure, drips), seeds that survive a layer reorder,
 // and the text layout.
 #include "UnitTestSupport.h"
+#include "../Graffiti/GraffitiCompositor.h"
 #include "../Graffiti/GraffitiPaint.h"
 #include "../Graffiti/GraffitiPiece.h"
 #include "../Core/PenInput.h"
@@ -475,6 +476,66 @@ void PenPressureModel() {
     CHECK(light.second > 0.0 && hard.second > light.second * 1.5); // and more paint
 }
 
+// A cached build is the build: same hash, and only the layers whose inputs changed are built again.
+void BuildCacheMatches() {
+    Piece p = RichPiece();
+    BuildCache cache;
+    const Program fresh = Build(p, FakeMetrics);
+    const Program first = Build(p, FakeMetrics, cache, 0);
+    CHECK(first.Hash() == fresh.Hash());
+    CHECK(cache.Built == 4 && cache.Reused == 0);
+    // Nothing changed: nothing is built, the program is the same.
+    CHECK(Build(p, FakeMetrics, cache, 0).Hash() == fresh.Hash());
+    CHECK(cache.Built == 0 && cache.Reused == 4);
+    // Opacity, blend, clip, shadow, metal and glow are drawn, not built.
+    p.Layers[1].Opacity = 0.4f;
+    p.Layers[1].Mode = Blend::Multiply;
+    p.Layers[1].Clip = true;
+    p.Layers[2].Shadow = true;
+    p.Layers[2].Metal = 0.5f;
+    p.Layers[3].Glow = 0.5f;
+    CHECK(Build(p, FakeMetrics, cache, 0).Hash() == Build(p, FakeMetrics).Hash());
+    CHECK(cache.Built == 0);
+    // Editing one layer rebuilds that layer only.
+    for (size_t i = 0; i < p.Layers.size(); ++i)
+        if (p.Layers[i].Type == LayerType::Text) {
+            p.Layers[i].Text += "X";
+            break;
+        }
+    const Program edited = Build(p, FakeMetrics, cache, 0);
+    CHECK(cache.Built == 1 && cache.Reused == 3);
+    CHECK(edited.Hash() == Build(p, FakeMetrics).Hash());
+    // Reordering reuses every layer; hiding one drops it from the program.
+    std::swap(p.Layers[2], p.Layers[3]);
+    CHECK(Build(p, FakeMetrics, cache, 0).Hash() == Build(p, FakeMetrics).Hash());
+    CHECK(cache.Built == 0);
+    p.Layers[1].Visible = false;
+    CHECK(Build(p, FakeMetrics, cache, 0).Hash() == Build(p, FakeMetrics).Hash());
+    // New image metrics (a failed read that succeeded): everything is built again.
+    p.Layers[1].Visible = true;
+    CHECK(Build(p, FakeMetrics, cache, 1).Hash() == Build(p, FakeMetrics).Hash());
+    CHECK(cache.Built >= 1);
+    // The piece's seed reaches every layer's key.
+    p.Seed += 1;
+    CHECK(Build(p, FakeMetrics, cache, 1).Hash() == Build(p, FakeMetrics).Hash());
+    CHECK(cache.Built == 4);
+}
+
+// What a bake writes is taken when it starts: the paths and settings, with no strokes.
+void BakeSnapshot() {
+    Piece p = RichPiece();
+    const auto snap = SnapshotForBake(p);
+    CHECK(snap->DecalPath() == p.DecalPath() && snap->MapPath("Albedo") == p.MapPath("Albedo"));
+    CHECK(snap->Width == p.Width && snap->Height == p.Height && snap->Seed == p.Seed && snap->Relief == p.Relief);
+    CHECK(snap->Layers.size() <= 1);
+    for (const Layer& l : snap->Layers) CHECK(l.Strokes.empty());
+    // The piece the Designer opens next doesn't reach the snapshot.
+    Piece other = p;
+    other.Path = (TempDir() / "GP_Other.graffiti").u8string();
+    other.Name = "Other";
+    CHECK(snap->DecalPath() != other.DecalPath());
+}
+
 } // namespace
 
 void RegisterGraffitiTests(UnitTestSupport::TestList& tests) {
@@ -483,6 +544,8 @@ void RegisterGraffitiTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Graffiti round trip", RoundTrip});
     tests.push_back({"Graffiti forgiving load", ForgivingLoad});
     tests.push_back({"Graffiti program determinism", ProgramDeterminism});
+    tests.push_back({"Graffiti build cache matches a fresh build", BuildCacheMatches});
+    tests.push_back({"Graffiti bake snapshot", BakeSnapshot});
     tests.push_back({"Graffiti live stream equals bake", LiveEqualsBake});
     tests.push_back({"Graffiti spray model", SprayModel});
     tests.push_back({"Graffiti text layout", TextLayout});
