@@ -7,20 +7,26 @@
 #
 #  * materials: the apartment walls (+ the window / arch Reveal pieces that sit in a unit) keep their white baseColor,
 #    normal and roughness maps and only gain the PH_Beige_Wall AO map (the shader reads its red channel, so it can't
-#    tint) and the T_Grunge_PeelingPaint_036 grunge (0.3, scale 0.25); ceilings get _085 (0.4) and
-#    the apartments' baseboards _036 (0.4). They also gain the corridor's "substrate" preset references (dc.SUBSTRATES): Wall_Concrete on walls and
-#    reveals, Floor_Concrete on ceilings, PH_Dark_Wooden_Planks on baseboards. 301 is the hand-edited NPC test room: nothing there is touched except these materials and the
-#    added decals;
-#  * decals go under an "Apartment Wear" root, one "30x Wear" group per unit. Two seeded units are trashed (~60 decals),
-#    the rest moderate (~30-40). Per room, as budget allows: door-frame cracks and flakes, a skirting band, mid-wall hero
-#    patches (larger and lit rooms), and ceiling clusters under the lamp and in the corners. Bathrooms always get water
-#    damage kept light, like the hall: one ceiling cluster, chipped lower walls, one dark DA_LiquidSplatter_* splash.
+#    tint), roughness 0.85 (old matte emulsion) and the T_Grunge_PeelingPaint_036 grunge (0.34, scale 0.25); ceilings
+#    and the apartments' baseboards get _036 too (0.3 and 0.4: the corridor's _085 opens camo-like sheets on white).
+#    They also gain the corridor's "substrate" preset references (dc.SUBSTRATES): Wall_Concrete on walls and reveals,
+#    Floor_Concrete on ceilings, PH_Dark_Wooden_Planks on baseboards. 301 is the hand-edited NPC test room: nothing
+#    there is touched except these materials and the added decals;
+#  * decals go under an "Apartment Wear" root, one "30x Wear" group per unit. Two seeded units are trashed (~115-125
+#    decals), the rest moderate (~70-80). Per room, as budget allows: door-frame cracks and flakes, skirting bands,
+#    mid-wall hero patches (larger and lit rooms; each over a grey grime halo, its peel layer smaller and turned so it
+#    doesn't read as a square stamp), grime bands along the skirting, water runs from the ceiling line, grime up the
+#    wall ends, and ceiling clusters (a water mark under the peel) under the lamp and in the corners. Bathrooms always
+#    get water damage: ceiling clusters, chipped lower walls, water runs, a grime band and one dark
+#    DA_LiquidSplatter_* splash. "Stains" are blotch maps with their substrate Off and a neutral grey tint
+#    (STAIN_TINT): grime and water marks that never open the wall and never warm the white paint.
 #    The corridor's DA_PeelingPaint_* pool plus eight flake / crack maps (APT_POOL), for variety and chipping.
-#    Ceiling decals get a Preset Floor_Concrete substrate override; the rest stay on Auto (the receiver's substrate);
+#    Ceiling peel decals get a Preset Floor_Concrete substrate override; the rest stay on Auto (the receiver's);
 #  * every decal is placed from geometry read off the scene (wall planes and which side faces into the room, door and
 #    window openings, ceiling footprints) and a self-check at the end fails loudly if one is off its wall, faces out of
 #    the room, sits outside the room's footprint or covers an opening. Asserted limits: <= MAX_DECALS decals,
-#    <= 30 unique 2K maps and <= 1 4K map across the corridor AND the apartments.
+#    <= 30 unique 2K maps and <= 1 4K map across the corridor AND the apartments (the stains reuse the blotch maps,
+#    so the denser dressing adds no texture memory; MAX_DECALS only bounds the per-cluster shading work).
 #
 # Idempotent: it removes "Apartment Wear" and re-adds it, so a second run leaves the file byte-identical.
 import json
@@ -34,7 +40,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))     # python -I d
 import dress_corridor as dc                                          # noqa: E402
 
 ROOTS = ('Apartment Wear',)
-MAX_DECALS, MAX_2K, MAX_4K = 330, 30, 1
+MAX_DECALS, MAX_2K, MAX_4K = 600, 30, 1
 # The corridor's pool plus eight more flake / crack maps: more variety, and the chipping the corridor shows.
 APT_POOL = {k: v + {'flake': [21, 25, 29, 36], 'crack': [30, 37, 40, 69]}.get(k, []) for k, v in dc.POOL.items()}
 UNITS = (301, 302, 303, 304, 305, 306)
@@ -42,7 +48,12 @@ SEED = 4242
 WALL_H, CEIL_Y = 2.7, 2.7
 EYE_Y = 1.5
 
-GRUNGE = {'walls': (0.3, 0.25), 'ceilings': (0.4, 0.25), 'trim': (0.4, None)}      # strength, scale (None = default)
+GRUNGE = {'walls': (0.34, 0.25), 'ceilings': (0.3, 0.25), 'trim': (0.4, None)}      # strength, scale (None = default)
+WALL_ROUGHNESS = 0.85    # old flat emulsion: matte, so the white walls don't read freshly painted
+# Stains: a peel map with its substrate Off, so it only lays down its own (grey) colour and relief - grime, soot and
+# water marks without opening the wall. The tints are neutral greys: the walls stay white, never beige.
+STAIN_TINT = [0.5, 0.5, 0.5]
+CEIL_STAIN_TINT = [0.45, 0.45, 0.44]
 AO_MAP = dc.WALL_DIR + 'AO_2k.jpg'
 SPLAT_TINT = [0.1, 0.09, 0.08]
 TOL = 5e-3
@@ -189,7 +200,7 @@ def reveal_unit(rooms, x, z):
 def patch_materials(d, repo, by_id, rooms):
     """Returns (walls, reveals, ceilings, baseboards) patched."""
     ao = dc.ref(repo, AO_MAP)
-    grunge_wall, grunge_worn = dc.ref(repo, dc.GRUNGE_WALL), dc.ref(repo, dc.GRUNGE_WORN)
+    grunge_wall = dc.ref(repo, dc.GRUNGE_WALL)
     walls = [e for e in d['models'] if re.fullmatch(r'Wall - Apartment \d+ - .+', e['name'])]
     reveals = []
     for e in d['models']:
@@ -206,15 +217,16 @@ def patch_materials(d, repo, by_id, rooms):
         m['aoMap'] = ao
         m['grungeMap'] = grunge_wall
         m['grungeStrength'], m['grungeScale'] = GRUNGE['walls']
+        m['roughness'] = WALL_ROUGHNESS
         m['substrate'] = dc.substrate_block(repo, 'wall')
-    for e in ceils:
+    for e in ceils:        # _036, not the corridor's _085: its wide coverage opens camo-like sheets on white paint
         m = e['materials'][0]['embedded']
-        m['grungeMap'] = grunge_worn
+        m['grungeMap'] = grunge_wall
         m['grungeStrength'], m['grungeScale'] = GRUNGE['ceilings']
         m['substrate'] = dc.substrate_block(repo, 'ceil')
     for e in trims:
         m = e['materials'][0]['embedded']
-        m['grungeMap'] = grunge_wall               # as the corridor's: _085 opened black blobs at any strength
+        m['grungeMap'] = grunge_wall
         m['grungeStrength'] = GRUNGE['trim'][0]
         m.pop('grungeScale', None)
         m['substrate'] = dc.substrate_block(repo, 'trim')
@@ -236,6 +248,7 @@ class AptWear(dc.Wear):
         self.pending, self.cur = [], None
         self.meta = {}                  # entity id -> (kind, room, line, tag, info)
         self.heroes = []                # (room, line, u, y, w, h)
+        self.grimed = []                # walls that have their skirting grime band
 
     def start_unit(self, unit):
         self.root = self.empty(f'{unit} Wear', self.apt_root, (0.0, 0.0, 0.0))
@@ -247,9 +260,40 @@ class AptWear(dc.Wear):
     def decal(self, *a, **k):
         self.pending.append((a, k, self.cur))
 
+    def stain(self, r, pos, size, rot, seed, sort, opacity, tint=STAIN_TINT, spin=8.0):
+        """A grey grime / water mark: a blotch map with no substrate (see STAIN_TINT)."""
+        self.decal(self.pick(r, 'blotch'), pos, size, rot, seed, sort, opacity, tint=tint, jitter=(spin, 0.1),
+                   stain=True)
+
+    def patch(self, line, u, y, w, h, seed, hero=False, flakes=2, crack=True, skirt=False):
+        """dc.Wear.patch for white plaster: mid-wall, a grey grime halo under it and a smaller, more turned peel
+        layer, so the patch reads as damage spreading out rather than a square stamp."""
+        if skirt:
+            return dc.Wear.patch(self, line, u, y, w, h, seed, hero, flakes, crack, skirt)
+        r = random.Random(seed)
+        pos, rot = self.spot(line, u, y)
+        self.stain(r, pos, (w * 1.3, h * 1.25, 0.25), rot, seed + 50, -1, 0.3 + r.random() * 0.12, spin=20.0)
+        base = dc.PEEL.format(dc.HERO_4K, '_4K') if hero else self.pick(r, 'blotch')
+        self.decal(base, pos, (w, h, 0.25), rot, seed, 0, 0.55, jitter=(25.0, 0.15))
+        s = 0.5 + r.random() * 0.2
+        pos, rot = self.spot(line, u + (r.random() - 0.5) * 0.3 * w, y + (r.random() - 0.5) * 0.2 * h)
+        self.decal(self.pick(r, 'hole'), pos, (w * s, h * s, 0.25), rot, seed + 1, 1, 0.85, jitter=(35.0, 0.15))
+        for i in range(flakes):
+            f = 0.3 + r.random() * 0.3
+            pos, rot = self.spot(line, u + (r.random() - 0.5) * 0.8 * w, y + (r.random() - 0.5) * 0.8 * h)
+            self.decal(self.pick(r, 'flake'), pos, (f, f, 0.25), rot, seed + 2 + i, 2 + i, 0.9, jitter=(180.0, 0.15))
+        if crack:
+            c = 0.45 + r.random() * 0.3
+            pos, rot = self.spot(line, u + (r.random() - 0.5) * 0.4 * w, y + (r.random() - 0.5) * 0.4 * h)
+            self.decal(self.pick(r, 'crack'), pos, (c, c, 0.25), rot, seed + 9, 6, 0.8, jitter=(180.0, 0.15))
+
     def commit(self, items):
         for a, k, cur in items:
+            k = dict(k)
+            stain = k.pop('stain', False)
             dc.Wear.decal(self, *a, **k)
+            if stain:
+                self.d['empties'][-1]['Decal']['Substrate'] = 'Off'
             self.meta[self.next - 1] = cur
             if cur[3] == 'hero':
                 self.heroes.append((cur[1],) + cur[4])
@@ -344,9 +388,12 @@ def ceil_decals(S, room, cx, cz, w, h, seed, tags):
     S.cur = ('ceil', room, None, 'ceil', None)
     for i, (tag, scale, op) in enumerate(tags):
         ox, oz = (r.random() - 0.5) * 0.4 * w, (r.random() - 0.5) * 0.4 * h
-        dw, dh = w * scale, h * scale
+        dw, dh = min(w * scale, w), min(h * scale, h)
         x = min(max(cx + ox, room.x0 + dw / 2 + 0.03), room.x1 - dw / 2 - 0.03)
         z = min(max(cz + oz, room.z0 + dh / 2 + 0.03), room.z1 - dh / 2 - 0.03)
+        if tag == 'stain':      # the water mark the damage sits in
+            S.stain(r, (x, CEIL_Y, z), (dw, dh, 0.25), dc.CEIL_Q, seed + i, i, op, tint=CEIL_STAIN_TINT, spin=180.0)
+            continue
         S.decal(S.pick(r, tag), (x, CEIL_Y, z), (dw, dh, 0.25), dc.CEIL_Q, seed + i, i, op, jitter=(180.0, 0.12),
                 substrate='ceil')
     return True
@@ -357,10 +404,11 @@ def f_ceil(S, room, seed, trash):
     r = random.Random(seed)
     cx, cz = room.lamps[0] if room.lamps else ((room.x0 + room.x1) / 2, (room.z0 + room.z1) / 2)
     cx, cz = cx + (r.random() - 0.5) * 0.8, cz + (r.random() - 0.5) * 0.8
-    tags = [('blotch', 1.0, 0.6), ('strip', 0.8, 0.8), (r.choice(('flake', 'crack')), 0.4, 0.85)]
+    tags = [('stain', 1.35, 0.5), ('blotch', 0.85, 0.5), ('strip', 0.6, 0.8),
+            (r.choice(('flake', 'crack')), 0.35, 0.85)]
     if trash:
-        tags += [('hole', 0.35, 0.8)]
-    return ceil_decals(S, room, cx, cz, 1.3 + r.random() * 0.5, 1.3 + r.random() * 0.5, seed, tags)
+        tags += [('hole', 0.35, 0.8), ('flake', 0.25, 0.9)]
+    return ceil_decals(S, room, cx, cz, 1.4 + r.random() * 0.6, 1.4 + r.random() * 0.6, seed, tags)
 
 
 def f_corner(S, room, seed, trash):
@@ -368,9 +416,9 @@ def f_corner(S, room, seed, trash):
     w = 1.2 + r.random() * 0.4
     cx = room.x0 + w / 2 if r.random() < 0.5 else room.x1 - w / 2
     cz = room.z0 + w / 2 if r.random() < 0.5 else room.z1 - w / 2
-    tags = [('blotch', 1.0, 0.55), (r.choice(('crack', 'flake')), 0.5, 0.8)]
+    tags = [('stain', 1.0, 0.45), ('blotch', 0.7, 0.5), (r.choice(('crack', 'flake')), 0.45, 0.8)]
     if trash:
-        tags.append(('strip', 0.7, 0.75))
+        tags.append(('strip', 0.6, 0.75))
     return ceil_decals(S, room, cx, cz, w, w, seed, tags)
 
 
@@ -382,7 +430,7 @@ def f_bath(S, room, seed, trash):
         cx = room.x0 + 0.6 + r.random() * (room.x1 - room.x0 - 1.2)
         cz = room.z0 + 0.6 + r.random() * (room.z1 - room.z0 - 1.2)
         ceil_decals(S, room, cx, cz, 1.6 + r.random() * 0.4, 1.6 + r.random() * 0.4, seed + 20 * k + 100,
-                    [('blotch', 1.0, 0.55), (r.choice(('flake', 'crack')), 0.4, 0.9)])
+                    [('stain', 1.3, 0.55), ('blotch', 0.8, 0.5), (r.choice(('flake', 'crack')), 0.4, 0.9)])
     for line in shuffled(r, room.lines):
         if n >= (3 if trash else 2):
             break
@@ -394,6 +442,9 @@ def f_bath(S, room, seed, trash):
         S.patch(line, u, 0.55, w, h, seed + 40 * n + 7, flakes=2, crack=True)
         line.taken.append((u - w / 2 - 0.3, u + w / 2 + 0.3, 0.0, 0.55 + h / 2 + 0.3))
         n += 1
+    for _ in range(3 if trash else 2):          # water running down from the ceiling
+        f_streak(S, room, r.randint(0, 10 ** 6), trash)
+    f_grime(S, room, r.randint(0, 10 ** 6), trash)
     placed = 0
     for k in range(1):
         for _ in range(60):
@@ -409,6 +460,80 @@ def f_bath(S, room, seed, trash):
     return n >= 1 and placed >= 1
 
 
+def find_u_under(line, r, hw, y, hh, tries=40):
+    """Like find_u, but stains may lie under earlier patches (they're the bottom layer): only the openings count."""
+    lo, hi = line.span
+    if hi - lo < 2 * hw:
+        return None
+    for _ in range(tries):
+        u = lo + hw + r.random() * (hi - lo - 2 * hw)
+        if line.covers(u, y, hw, hh):
+            return u
+    return None
+
+
+def f_grime(S, room, seed, trash):
+    """Dirt gathered along the skirting: a wide low stain band, darker at the floor. One per wall."""
+    r = random.Random(seed)
+    for line in shuffled(r, room.lines):
+        if line in S.grimed:
+            continue
+        for w in (2.6 + r.random() * 1.2, 1.8, 1.2):
+            u = find_u_under(line, r, w / 2, 0.3, 0.3)
+            if u is None:
+                continue
+            S.cur = ('wall', room, line, 'grime', None)
+            S.grimed.append(line)
+            pos, rot = S.spot(line, u, 0.32)
+            S.stain(r, pos, (w, 0.6 + r.random() * 0.25, 0.25), rot, seed, -2, 0.4 + r.random() * 0.15, spin=0.0)
+            pos, rot = S.spot(line, u + (r.random() - 0.5) * 0.3 * w, 0.14)
+            S.stain(r, pos, (w * 0.8, 0.3, 0.25), rot, seed + 1, -1, 0.45 + (0.15 if trash else 0.0), spin=0.0)
+            return True
+    return False
+
+
+def f_streak(S, room, seed, trash):
+    """A water run: a tall narrow stain hanging from the ceiling line, with a crack where it starts."""
+    r = random.Random(seed)
+    for line in shuffled(r, room.lines):
+        w, h = 0.5 + r.random() * 0.5, 1.1 + r.random() * 0.8
+        y = WALL_H - h / 2 - 0.02
+        u = find_u_under(line, r, w / 2 + 0.1, y, h / 2)
+        if u is None:
+            continue
+        S.cur = ('wall', room, line, 'streak', None)
+        pos, rot = S.spot(line, u, y)
+        S.stain(r, pos, (w, h, 0.25), rot, seed, -2, 0.3 + r.random() * 0.15, spin=4.0)
+        if line.covers(u, WALL_H - 0.25, 0.25, 0.2):
+            pos, rot = S.spot(line, u + (r.random() - 0.5) * 0.2, WALL_H - 0.25)
+            S.decal(S.pick(r, 'crack'), pos, (0.5, 0.4, 0.25), rot, seed + 1, 4, 0.8, jitter=(20.0, 0.1))
+        return True
+    return False
+
+
+def f_wcorner(S, room, seed, trash):
+    """Grime up a wall's end, where two walls meet (and a flake when trashed)."""
+    r = random.Random(seed)
+    for line in shuffled(r, room.lines):
+        lo, hi = line.span
+        w, h = 0.45 + r.random() * 0.25, 1.6 + r.random() * 0.8
+        u = lo + w / 2 + 0.03 if r.random() < 0.5 else hi - w / 2 - 0.03
+        y = h / 2 if r.random() < 0.6 else WALL_H - h / 2
+        if not line.covers(u, y, w / 2, h / 2):
+            continue
+        S.cur = ('wall', room, line, 'wcorner', None)
+        pos, rot = S.spot(line, u, y)
+        S.stain(r, pos, (w, h, 0.25), rot, seed, -2, 0.35 + r.random() * 0.15, spin=0.0)
+        if trash:
+            yf = y + (r.random() - 0.5) * h * 0.5
+            uf = u + (0.1 if u < (lo + hi) / 2 else -0.1)
+            if line.covers(uf, yf, 0.2, 0.2) and line.free(uf, yf, 0.2, 0.2):
+                pos, rot = S.spot(line, uf, yf)
+                S.decal(S.pick(r, 'flake'), pos, (0.4, 0.4, 0.25), rot, seed + 1, 5, 0.9, jitter=(180.0, 0.15))
+        return True
+    return False
+
+
 def room_queue(room, trash):
     """The features a room can take, in priority order: (kind, arg)."""
     q = []
@@ -422,16 +547,17 @@ def room_queue(room, trash):
             q += [('skirt', None), ('ceil', None)]
     if not doors:
         q += [('skirt', None), ('ceil', None)]
-    q += [('skirt', None), ('corner', None), ('skirt', None)]
+    q += [('grime', None), ('skirt', None), ('streak', None), ('corner', None), ('skirt', None), ('wcorner', None)]
     if hero_ok and room.area >= 18:
         q.append(('hero', None))
-    q += [('skirt', None), ('hero', None), ('corner', None), ('skirt', None), ('hero', None)]
+    q += [('grime', None), ('skirt', None), ('hero', None), ('wcorner', None), ('streak', None), ('corner', None),
+          ('skirt', None), ('grime', None), ('hero', None), ('wcorner', None), ('skirt', None), ('hero', None)]
     return q
 
 
 def dress_unit(S, unit, rooms, trash, use_4k):
     r = random.Random(SEED + unit)
-    target = r.randint(56, 64) if trash else r.randint(30, 40)
+    target = r.randint(112, 124) if trash else r.randint(68, 78)
     mine = sorted((rm for rm in rooms.values() if rm.unit == unit), key=lambda rm: rm.name)
     S.start_unit(unit)
     counter = [0]
@@ -476,7 +602,8 @@ def dress_unit(S, unit, rooms, trash, use_4k):
             elif kind == 'door':
                 accept(*attempt(f_door, rm, arg[0], arg[1]), target + 3)
             else:
-                accept(*attempt({'skirt': f_skirt, 'ceil': f_ceil, 'corner': f_corner}[kind], rm), target + 3)
+                accept(*attempt({'skirt': f_skirt, 'ceil': f_ceil, 'corner': f_corner, 'grime': f_grime,
+                                 'streak': f_streak, 'wcorner': f_wcorner}[kind], rm), target + 3)
     return S.count_cum, target
 
 
