@@ -99,6 +99,41 @@ and `StandardAdvanced.shader` (`Material::GrungeMap` etc., saved in the `.mat`).
 in world space with `SampleTriplanar`, so it ignores the mesh UVs: the map multiplies the albedo,
 and where it's dark it roughens the surface and darkens its AO.
 
+### Substrate
+
+What shows where paint is missing (`Substrate.h`): albedo, normal, roughness and AO maps, metres
+per repeat, tint, strength, a roughness range (the map, or white without one, remapped to it), a
+mirrored-repeat switch and a crop rect (the part of the image that repeats). Three places carry one:
+
+- a `.decal`'s `"substrate"` block. Every `DA_PeelingPaint_*` defaults to `Wall_Concrete` (1.5 m,
+  crop `[0, 0.21, 1, 0.93]` to skip the sheet's trim bands, mirrored; its roughness PNG is solid
+  black, so roughness 0.9 from the range);
+- a material's `"substrate"` block (top level in a `.mat`, `{path, pathGuid}` refs in a scene's
+  embedded material). The dress scripts give walls `Wall_Concrete`, ceilings `Floor_Concrete` and
+  trim `PH_Dark_Wooden_Planks`;
+- the Decal component's **Substrate** mode: **Auto** (the receiving material's substrate, else the
+  asset's - only for an asset that has one, so graffiti never reveals the wall), **Asset**,
+  **Custom** (the component's own `Substrate *` fields) or **Off**.
+
+`DecalSystem` keeps a table of the substrates in use (SSBO 16, 80-byte `GpuSubstrate`, up to 255),
+keyed by the resolved files plus the values, so a material's and a decal's copy of the same set share
+one entry. Each entry's maps take one 2048 slot of the decal texture arrays - albedo, normal, and a
+surface map packed on load from the separate roughness (r) and AO (b) files - so they count against
+the decal texture budget. Substrates used in the last ~600 Prepare()s stay pinned. A decal names one
+as index + 1 in `Ids.x`'s top byte (`FLAG_SUBSTRATE_AUTO` lets the receiver's win), a material
+through `uMaterialSubstrate` (set in `SetSurfaceOptions`, same encoding); `uSubstrateOn` gates both
+to the views that prepared decals.
+
+Shading (`ModelDecals.glsl`): sampled in world space on the receiver's dominant axis (so overlapping
+decals and the Grunge reveal show one continuous wall), with explicit gradients and the same maxLod /
+half-texel clamp as the decals. Under a decal it replaces the decal's colour (keeping a little of the
+mask photo's grain) by its strength, and adds its normal, roughness and AO under the coverage, on top
+of the decal's own relief. In the Grunge slot the map's alpha - the peel coverage of the cooked
+`T_Grunge_*` maps, read 2.5 mips down so hairline cracks stay dirt - reveals the material's substrate
+past a threshold of `1 - Grunge Strength`.
+
+`TARTARUS_NO_SUBSTRATE=1` turns every substrate off (before / after comparisons).
+
 ### Tests
 
 `src/Tests/UnitTests_DecalRender.cpp` (`--unit-tests "Decal render"`): the 6-axis test against an

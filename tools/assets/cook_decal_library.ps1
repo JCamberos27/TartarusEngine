@@ -3,9 +3,10 @@
 # .meta and each decal's DA_<name>.decal next to it.
 #
 #   powershell -ExecutionPolicy Bypass -File tools\assets\cook_decal_library.ps1 `
-#       -SourceRoot C:\...\decal_src -ProjectRoot <repo> [-DriveRoot "G:\My Drive\Tartarus Assets"] [-Force]
+#       -SourceRoot C:\...\decal_src -ProjectRoot <repo> [-DriveRoot "G:\My Drive\Tartarus Assets"] [-Force] [-DecalsOnly]
 #
-#   -SourceRoot  the packs as extracted (the folder the map's source_rel_path is relative to)
+#   -SourceRoot  the packs as extracted (the folder the map's source_rel_path is relative to);
+#                not needed with -DecalsOnly
 #   -ProjectRoot the repo root; output goes to <ProjectRoot>\project\assets\Decals
 #   -DriveRoot   optional: afterwards mirror the cooked PNGs to <DriveRoot>\Used\project\assets\Decals
 #                (robocopy, PNGs only: .meta and .decal files live in git)
@@ -15,6 +16,8 @@
 #   -Stats       print luminance percentiles of the listed sources instead of cooking (threshold tuning)
 #   -Sheets      write a contact sheet per category into this folder (up to 48 per category, drawn
 #                over a blue-grey checker so alpha is visible), after cooking
+#   -DecalsOnly  only (re)write the DA_*.decal files of the rows that pass -Only: no texture cooking,
+#                .meta writing, contact sheets or Drive mirror (a decal whose PNG is missing is skipped)
 #   -Relief      also cook each peel decal's normal and surface maps (<stem>_N.png, <stem>_S.png,
 #                both tiers; -Only and -Force apply). A decal whose _N/_S exist references them.
 #
@@ -41,13 +44,18 @@
 #                 below its 2.5 mm neighbourhood and cracks, 0.5 .. 1), a height (-0.6 .. +0.8 mm).
 #             Both linear (.meta isSRGB false; the normal's textureType 1, NormalMap).
 #
+# substrate: peel decals (Grime/PeelingPaint) carry a "substrate" block, the PBR material that shows
+#   where the paint is missing; it defaults to Wall_Concrete (tiling 1.5 m, crop [0, 0.21, 1, 0.93]
+#   to skip the sheet's trim bands, mirrored repeat). Its roughness map is empty: the
+#   Wall_Concrete_Roughness.png in the pack is solid black, so roughnessRange [0.9, 0.9] stands in.
+#
 # .meta: the engine's texture meta (metaVersion 1, "type": "texture", importer block as AssetLibrary
 # writes it): sRGB, compression 1 (Normal: BC3 for RGBA), mips, trilinear, aniso 8, maxTextureSize =
 # tier, clamp for decals / repeat for grunge. GUIDs are minted the way AssetGuid::Generate does (a
 # random non-zero 64-bit value, 16 hex digits) and an existing .meta keeps its GUID. .decal files get
 # no .meta: the engine's AssetDatabase only gives known extensions one (".decal" isn't one).
 param(
-    [Parameter(Mandatory)][string]$SourceRoot,
+    [string]$SourceRoot,
     [Parameter(Mandatory)][string]$ProjectRoot,
     [string]$DriveRoot,
     [string]$MapPath,
@@ -56,9 +64,11 @@ param(
     [int]$Threads = 0,
     [switch]$Stats,
     [string]$Sheets,
-    [switch]$Relief
+    [switch]$Relief,
+    [switch]$DecalsOnly
 )
 $ErrorActionPreference = 'Stop'
+if (-not $SourceRoot -and -not $DecalsOnly) { throw '-SourceRoot is required (except with -DecalsOnly)' }
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 if (-not $MapPath) { $MapPath = Join-Path $here 'decal_name_map.csv' }
 if ($Threads -le 0) { $Threads = [Math]::Max(1, [Math]::Min(12, [int]([Environment]::ProcessorCount / 2))) }
@@ -398,8 +408,10 @@ if ($Stats) {
 }
 
 $sw = [Diagnostics.Stopwatch]::StartNew()
+$texTime = $sw.Elapsed
 
 # ---- Textures -------------------------------------------------------------------------------------
+if (-not $DecalsOnly) {
 $todo = [ordered]@{}
 $skipped = 0
 foreach ($r in $rows) {
@@ -444,6 +456,7 @@ if ($todo.Count) {
     if ($failed) { throw "$($failed.Count) source(s) failed" }
 }
 $texTime = $sw.Elapsed
+}
 
 # ---- .meta and .decal -----------------------------------------------------------------------------
 $utf8 = New-Object Text.UTF8Encoding $false
@@ -549,6 +562,22 @@ function Get-DecalJson($r) {
         category       = $cat
         tags           = (Get-Tags $cat)
     }
+    if ($cat -match '^Grime/PeelingPaint$') {
+        # Wall_Concrete substrate; the pack's roughness PNG is solid black, so none (roughnessRange stands in).
+        $sub = 'assets/Architecture/Building/Textures/Wall_Concrete/Wall_Concrete_'
+        $j.Insert(($j.Keys.Count - 2), 'substrate', [ordered]@{
+            albedo         = $sub + 'Base_Color.png'
+            normal         = $sub + 'Normal.png'
+            roughness      = ''
+            ao             = $sub + 'AO.png'
+            tiling         = 1.5
+            tint           = @(1.0, 1.0, 1.0)
+            strength       = 1.0
+            roughnessRange = @(0.9, 0.9)
+            mirror         = $true
+            crop           = @(0.0, 0.21, 1.0, 0.93)
+        })
+    }
     (To-Json $j) + "`n"
 }
 
@@ -580,10 +609,10 @@ foreach ($r in $allRows) {
         metaVersion = 1
         type        = 'texture'
     }
-    [void](Write-IfChanged $meta (To-Json $metaJson))
+    if (-not $DecalsOnly) { [void](Write-IfChanged $meta (To-Json $metaJson)) }
 
     # Relief maps: linear metas (normal map type for _N), GUIDs kept.
-    if ($r.kind -eq 'peel') {
+    if ($r.kind -eq 'peel' -and -not $DecalsOnly) {
         foreach ($suf in '_N', '_S') {
             $rp = ($png -replace '\.png$', '') + $suf + '.png'
             if (-not (Test-Path -LiteralPath $rp)) { continue }
@@ -618,7 +647,7 @@ foreach ($r in $allRows) {
 "Textures took $([Math]::Round($texTime.TotalSeconds, 1)) s; total $([Math]::Round($sw.Elapsed.TotalSeconds, 1)) s."
 
 # ---- Contact sheets -------------------------------------------------------------------------------
-if ($Sheets) {
+if ($Sheets -and -not $DecalsOnly) {
     New-Item -ItemType Directory -Force $Sheets | Out-Null
     $byCat = $allRows | Group-Object { if ($_.kind -eq 'grunge') { "$($_.category) (grunge)" } elseif ($_.tier -eq '4096') { "$($_.category) (4K)" } else { $_.category } }
     foreach ($g in $byCat) {
@@ -637,7 +666,7 @@ if ($Sheets) {
 }
 
 # ---- Drive ----------------------------------------------------------------------------------------
-if ($DriveRoot) {
+if ($DriveRoot -and -not $DecalsOnly) {
     $dst = Join-Path $DriveRoot 'Used\project\assets\Decals'
     robocopy $decalsRoot $dst *.png /E /MT:16 /R:3 /W:5 /NP /NDL /NFL /XF *.tmp | Select-Object -Last 12
     if ($LASTEXITCODE -ge 8) { throw "robocopy to $dst failed ($LASTEXITCODE)" }

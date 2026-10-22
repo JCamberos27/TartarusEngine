@@ -8,13 +8,15 @@
 #  * materials: the apartment walls (+ the window / arch Reveal pieces that sit in a unit) keep their white baseColor,
 #    normal and roughness maps and only gain the PH_Beige_Wall AO map (the shader reads its red channel, so it can't
 #    tint) and the T_Grunge_PeelingPaint_036 grunge (0.3, scale 0.25); ceilings and the apartments' baseboards get _085
-#    (0.4 and 0.45). 301 is the hand-edited NPC test room: nothing there is touched except these materials and the
+#    (0.4 and 0.45). They also gain the corridor's "substrate" blocks (dc.SUBSTRATES): Wall_Concrete on walls and
+#    reveals, Floor_Concrete on ceilings, PH_Dark_Wooden_Planks on baseboards. 301 is the hand-edited NPC test room: nothing there is touched except these materials and the
 #    added decals;
 #  * decals go under an "Apartment Wear" root, one "30x Wear" group per unit. Two seeded units are trashed (~60 decals),
 #    the rest moderate (~30-40). Per room, as budget allows: door-frame cracks and flakes, a skirting band, mid-wall hero
 #    patches (larger and lit rooms), and ceiling clusters under the lamp and in the corners. Bathrooms always get water
 #    damage kept light, like the hall: one ceiling cluster, chipped lower walls, one dark DA_LiquidSplatter_* splash.
-#    The corridor's DA_PeelingPaint_* pool plus eight flake / crack maps (APT_POOL), for variety and chipping;
+#    The corridor's DA_PeelingPaint_* pool plus eight flake / crack maps (APT_POOL), for variety and chipping.
+#    Ceiling decals get a Custom Floor_Concrete substrate override; the rest stay on Auto (the receiver's substrate);
 #  * every decal is placed from geometry read off the scene (wall planes and which side faces into the room, door and
 #    window openings, ceiling footprints) and a self-check at the end fails loudly if one is off its wall, faces out of
 #    the room, sits outside the room's footprint or covers an opening. Asserted limits: <= MAX_DECALS decals,
@@ -204,15 +206,18 @@ def patch_materials(d, repo, by_id, rooms):
         m['aoMap'] = ao
         m['grungeMap'] = grunge_wall
         m['grungeStrength'], m['grungeScale'] = GRUNGE['walls']
+        m['substrate'] = dc.substrate_block(repo, 'wall')
     for e in ceils:
         m = e['materials'][0]['embedded']
         m['grungeMap'] = grunge_worn
         m['grungeStrength'], m['grungeScale'] = GRUNGE['ceilings']
+        m['substrate'] = dc.substrate_block(repo, 'ceil')
     for e in trims:
         m = e['materials'][0]['embedded']
         m['grungeMap'] = grunge_worn
         m['grungeStrength'] = GRUNGE['trim'][0]
         m.pop('grungeScale', None)
+        m['substrate'] = dc.substrate_block(repo, 'trim')
     return len(walls), len(reveals), len(ceils), len(trims)
 
 
@@ -342,7 +347,8 @@ def ceil_decals(S, room, cx, cz, w, h, seed, tags):
         dw, dh = w * scale, h * scale
         x = min(max(cx + ox, room.x0 + dw / 2 + 0.03), room.x1 - dw / 2 - 0.03)
         z = min(max(cz + oz, room.z0 + dh / 2 + 0.03), room.z1 - dh / 2 - 0.03)
-        S.decal(S.pick(r, tag), (x, CEIL_Y, z), (dw, dh, 0.25), dc.CEIL_Q, seed + i, i, op, jitter=(180.0, 0.12))
+        S.decal(S.pick(r, tag), (x, CEIL_Y, z), (dw, dh, 0.25), dc.CEIL_Q, seed + i, i, op, jitter=(180.0, 0.12),
+                substrate='ceil')
     return True
 
 
@@ -550,7 +556,7 @@ def main():
         f.write('\n')
     print(f'{path}: removed {removed} old entities; patched materials (walls, reveals, ceilings, baseboards) {mats}')
     print(f'{total} decals (' + ', '.join(f'{u}: {n}{" trashed" if u in trashed else ""}' for u, n in per_unit.items())
-          + f'); corridor + apartments use {len(two_k)} unique 2K maps, {len(four_k)} 4K')
+          + f'); corridor + apartments use {len(two_k)} unique 2K maps, {len(four_k)} 4K, + {len(dc.SUBSTRATES)} substrate sets (a 2K slot each)')
     print(f'self-check OK: {checked["wall"]} wall, {checked["ceil"]} ceiling, {checked["floor"]} floor decals')
     print('camera poses:')
     for p in camera_poses(S, rooms):

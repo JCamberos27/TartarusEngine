@@ -1363,6 +1363,17 @@ struct DecalComponent {
     bool RandomFlip = false;
     // Weathering, added to the asset's values and the scene's Decal Grading.
     float Fade = 0.0f, Bleach = 0.0f, Peel = 0.0f, Buff = 0.0f;
+    // Substrate (Substrate.h): what shows where the decal's mask says the paint is gone.
+    // 0 Auto: the receiving material's substrate, else the asset's (only for an asset that has one);
+    // 1 Asset: always the asset's; 2 Custom: the maps and values below; 3 Off: none.
+    int SubstrateMode = 0;
+    std::string SubAlbedo, SubNormal, SubRoughness, SubAO; // project-relative textures (Custom)
+    float SubTiling = 1.5f;             // metres per repeat
+    glm::vec3 SubTint{1.0f};
+    float SubStrength = 1.0f;
+    float SubRoughMin = 0.0f, SubRoughMax = 1.0f;
+    bool SubMirror = false;
+    float SubCropX0 = 0.0f, SubCropY0 = 0.0f, SubCropX1 = 1.0f, SubCropY1 = 1.0f;
 };
 
 // Scene-level "how abandoned is this place" grade for every decal (first one in the scene wins).

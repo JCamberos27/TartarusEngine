@@ -8,6 +8,7 @@
 #include <vector>
 #include <glm/glm.hpp>
 #include "ShaderPropType.h"
+#include "Substrate.h"
 
 class Texture;
 
@@ -107,6 +108,10 @@ struct Material {
     float GrungeStrength = 0.0f;          // 0 = off
     float GrungeScale    = 0.5f;          // tiles per metre
     bool  ReceiveDecals  = true;          // clustered decals project onto this surface
+    // Substrate (Substrate.h): the material under the paint. Where the Grunge map's peel mask says the
+    // paint is gone it shows instead (colour, normal, roughness, AO), and peeling-paint decals on Auto
+    // reveal it too. Its maps live in the decal texture arrays (uMaterialSubstrate), not on units.
+    SubstrateDesc Substrate;
 
     // Values of a linked shader's custom (non-built-in) properties, keyed by property name
     // ("_Foo"), pushed as `u<Foo>` uniforms by BindMaterialDataDriven. Lives here rather than on
@@ -217,6 +222,7 @@ struct Material {
         for (; i < n; ++i) { lane[0] = (lane[0] ^ words[i]) * 1099511628211ull; lane[0] ^= lane[0] >> 32; }
         std::uint64_t h = lane[0];
         for (int k = 1; k < 4; ++k) { h = (h ^ lane[k]) * 1099511628211ull; h ^= h >> 29; }
+        if (Substrate.Enabled()) { h = (h ^ (std::uint64_t)std::hash<std::string>{}(Substrate.Key())) * 1099511628211ull; h ^= h >> 29; }
         return h;
     }
 
