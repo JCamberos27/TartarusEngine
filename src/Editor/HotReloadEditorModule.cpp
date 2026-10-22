@@ -267,6 +267,9 @@ void TbWindowToggleMaximize() {
     if (glfwGetWindowAttrib(g_ParentWindow, GLFW_MAXIMIZED)) glfwRestoreWindow(g_ParentWindow);
     else                                                     glfwMaximizeWindow(g_ParentWindow);
 }
+void TbDrawTitleBarControls(float spanMinX, float spanMaxX, float toolbarH) {
+    if (g_Editor) g_Editor->DrawTitleBarControls(spanMinX, spanMaxX, toolbarH);
+}
 void TbWindowClose() { if (g_ParentWindow) glfwSetWindowShouldClose(g_ParentWindow, GLFW_TRUE); }
 bool TbWindowIsMaximized() { return g_ParentWindow && glfwGetWindowAttrib(g_ParentWindow, GLFW_MAXIMIZED) != 0; }
 
@@ -545,6 +548,7 @@ EditorModuleHostAPI MakeHostAPI() {
     api.WindowMinimize = &TbWindowMinimize;
     api.WindowToggleMaximize = &TbWindowToggleMaximize;
     api.WindowClose = &TbWindowClose;
+    api.DrawTitleBarControls = &TbDrawTitleBarControls;
     api.WindowIsMaximized = &TbWindowIsMaximized;
     api.GetShowHistory = &TbGetShowHistory;
     api.SetShowHistory = &TbSetShowHistory;

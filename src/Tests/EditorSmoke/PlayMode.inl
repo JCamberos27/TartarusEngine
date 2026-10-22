@@ -23,7 +23,8 @@ struct EditorSmokeAccess_PlayMode {
 namespace {
 namespace smoke_play {
 using PA = EditorSmokeAccess_PlayMode;
-const char* kBar = "##ViewportActionBar";
+const char* kBar = "##Toolbar";               // the title bar's transport
+const char* kMaxBar = "##ViewportActionBar";  // the slim transport over maximized play
 
 Step Tap(int glfwKey, const char* what) {
     return Do(std::string("press ") + what, [glfwKey](Ctx&) { Input::SimulateKeyTap(glfwKey); });
@@ -160,7 +161,7 @@ void RegisterPlayModeTests() {
         Tap(GLFW_KEY_F1, "F1"),
         Until("in play", [](Ctx& c) { return X::InPlay(c.E); }, 300), Wait(5),
         Tap(GLFW_KEY_F4, "F4"),
-        Until("maximized (Restore shown)", [](Ctx&) { return Find(ByLabel("Restore", kBar)) != nullptr; }), Wait(10),
+        Until("maximized (Restore shown)", [](Ctx&) { return Find(ByLabel("Restore", kMaxBar)) != nullptr; }), Wait(10),
         ExpectTrue("the editor panels are hidden", [](Ctx&) {
             ImGuiWindow* w = ImGui::FindWindowByName(kHierarchy);
             return !w || !w->WasActive || w->Hidden;
