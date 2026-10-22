@@ -48,6 +48,11 @@ GRUNGE_WORN = D + 'Grime/PeelingPaint/T_Grunge_PeelingPaint_085.png'
 
 # Substrate presets (what shows where paint is missing): .substrate files under assets/Decals/Substrates, which
 # materials and decals reference by path instead of embedding the maps and values.
+# The skirting band sits just above the 9 cm baseboards, lapping only their top ~3 cm: run down over them, its
+# dark peel read as a black-and-white camo strip. The baseboards' own chipping is their material Grunge.
+SKIRT_Y = 0.43          # the band's centre (0.75 tall, bottom at 0.055)
+SKIRT_HOLE_Y = 0.33     # the extra hole beside it (0.55 tall)
+
 SUBSTRATES = {
     'wall': 'assets/Decals/Substrates/SB_Wall_Concrete.substrate',
     'ceil': 'assets/Decals/Substrates/SB_Floor_Concrete.substrate',
@@ -151,8 +156,8 @@ def patch_materials(d, repo):
         m['substrate'] = substrate_block(repo, 'ceil')
     for e in trims:
         m = e['materials'][0]['embedded']
-        m['grungeMap'] = ref(repo, GRUNGE_WORN)
-        m['grungeStrength'] = 0.5
+        m['grungeMap'] = ref(repo, GRUNGE_WALL)    # _085's peel mask is near binary: any strength opened the same
+        m['grungeStrength'] = 0.4                   # black blobs; _036 grades, so this is light chipping
         m.pop('grungeScale', None)    # default 0.5
         m['substrate'] = substrate_block(repo, 'trim')
     return len(walls), len(ceils), len(trims)
@@ -227,8 +232,8 @@ def build(d):
     # skirting band: heavy peeling low on the wall between the doors
     for n, (wall, u) in enumerate([('N', -8.9), ('N', -4.0), ('N', 2.4), ('N', 8.3), ('S', -8.4), ('S', -1.2),
                                    ('S', 6.3)]):
-        s.patch(wall, u, 0.34, 2.2, 0.75, 1000 + 20 * n, flakes=0, crack=False, skirt=True)
-        pos, rot = s.spot(wall, u + (0.6 if n % 2 else -0.6), 0.22)
+        s.patch(wall, u, SKIRT_Y, 2.2, 0.75, 1000 + 20 * n, flakes=0, crack=False, skirt=True)
+        pos, rot = s.spot(wall, u + (0.6 if n % 2 else -0.6), SKIRT_HOLE_Y)
         r = random.Random(1000 + 20 * n + 5)
         s.decal(s.pick(r, 'hole'), pos, (0.8, 0.55, 0.25), rot, 1000 + 20 * n + 5, 3, 0.9, jitter=(180.0, 0.15))
     # door surrounds: a crack along the header and flaking beside the jamb
