@@ -56,6 +56,10 @@ public:
     // there's none or the material has no substrate. Model.cpp sets it as uMaterialSubstrate.
     static int MaterialSubstrate(const SubstrateDesc& desc);
     int SubstrateCount() const { return (int)m_Subs.size(); }
+    // Textures still on their way in for what this frame asked for - a substrate not ready yet, or decal
+    // maps decoding / turned away for now by the decode limit (unless the view is over the texture
+    // budget, where they never settle): a frame now would show them missing.
+    bool Streaming() const;
 
     // Bind SSBOs 11 (decals), 12 (bounds) and the texture arrays on units 22-25 (+ SSBO 16, substrates).
     void BindForCull() const;
