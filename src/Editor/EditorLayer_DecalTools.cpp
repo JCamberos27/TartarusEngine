@@ -539,7 +539,7 @@ void EditorLayer::RunAutoGrime(World& world) {
         // Floor, ceiling and open wall spin freely; a base, drip or frame keeps near upright.
         const bool free = site.Kind & (DecalSites::Floor | DecalSites::Ceiling | DecalSites::Wall);
         const float spin = rng.Signed() * (free ? IM_PI : site.Kind == DecalSites::Corner ? 0.5f : 0.26f);
-        SpawnDecal(world, ed, path, site.Point, site.Normal, site.Along, spin, rng.Range(entry.Scale.x, entry.Scale.y),
+        SpawnDecal(world, ed, path, site.Point, site.Normal, site.Along, spin, rng.Range(entry.Scale.x, entry.Scale.y) * site.Scale,
                    rng.Range(entry.Opacity.x, entry.Opacity.y), entry.Tint, (int)(rng.Next() & 0x7FFFFFFF), group);
         ++placed;
         for (int k = 0; k < 8; ++k) byKind[k] += site.Kind == (1u << k);

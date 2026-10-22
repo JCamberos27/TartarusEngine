@@ -546,18 +546,42 @@ int EditorLayer::DecalRadialBuild() {
     BeginScan(ed);
     ed.Radial.clear();
     const EditorSettings& s = EditorSettings::Get();
-    auto trimmed = [](std::string name, size_t maxLen) {
+    // A wedge has room for about six characters, so each slot gets a one-word label; the hub shows
+    // the hovered slot's full name.
+    auto shortLabel = [](std::string name) {
         if (name.rfind("DP_", 0) == 0) name = name.substr(3);
-        if (name.size() > maxLen) name = name.substr(0, maxLen - 1) + ".";
+        static const std::pair<const char*, const char*> kShort[] = {
+            {"Water Damage", "Water"}, {"Gang Turf", "Turf"}, {"WarPaint", "War"}, {"Graffiti", "Graffiti"}};
+        for (const auto& [full, label] : kShort)
+            if (name == full) return std::string(label);
+        // A trailing number names a decal best ("Stain_591" -> "#591").
+        size_t digits = name.size();
+        while (digits > 0 && std::isdigit((unsigned char)name[digits - 1])) --digits;
+        if (digits < name.size() && name.size() - digits <= 4 && digits > 0) return "#" + name.substr(digits);
+        // Else the first word, at most seven letters.
+        size_t cut = name.find_first_of(" _-");
+        for (size_t k = 1; k < name.size() && k < cut; ++k)
+            if (std::isupper((unsigned char)name[k]) && std::islower((unsigned char)name[k - 1])) { cut = k; break; }
+        name = name.substr(0, std::min<size_t>(cut, 7));
         return name;
+    };
+    // A distinct glyph per palette / top-level category, by name; a generic one for anything new.
+    auto iconFor = [](const std::string& name, const char* fallback) -> const char* {
+        static const std::pair<const char*, const char*> kIcons[] = {
+            {"Squat", ICON_FA_HOUSE_CRACK}, {"Water Damage", ICON_FA_FAUCET_DRIP}, {"Gang Turf", ICON_FA_CROWN},
+            {"Graffiti", ICON_FA_SPRAY_CAN}, {"Grime", ICON_FA_BIOHAZARD}, {"Signs", ICON_FA_SIGN_HANGING},
+            {"Stains", ICON_FA_DROPLET}, {"Stamps", ICON_FA_STAMP}, {"WarPaint", ICON_FA_SKULL}};
+        for (const auto& [n, icon] : kIcons)
+            if (name == n) return icon;
+        return fallback;
     };
     for (int i = 0; i < (int)ed.Palettes.size() && i < kRadialPalettes; ++i) {
         DecalEditorState::RadialSlot slot;
         slot.What = DecalEditorState::RadialSlot::Palette;
         slot.Index = i;
-        slot.Label = trimmed(ed.Palettes[i]->Name, 10);
+        slot.Label = shortLabel(ed.Palettes[i]->Name);
         slot.FullName = ed.Palettes[i]->Name;
-        slot.Icon = ICON_FA_PALETTE;
+        slot.Icon = iconFor(ed.Palettes[i]->Name, ICON_FA_PALETTE);
         slot.On = ed.ActivePalette == i;
         ed.Radial.push_back(std::move(slot));
     }
@@ -567,9 +591,9 @@ int EditorLayer::DecalRadialBuild() {
         DecalEditorState::RadialSlot slot;
         slot.What = DecalEditorState::RadialSlot::Category;
         slot.Index = i;
-        slot.Label = trimmed(ed.Cats[i].Name, 10);
+        slot.Label = shortLabel(ed.Cats[i].Name);
         slot.FullName = ed.Cats[i].Name;
-        slot.Icon = ICON_FA_FOLDER_TREE;
+        slot.Icon = iconFor(ed.Cats[i].Name, ICON_FA_FOLDER_TREE);
         slot.On = SourceKind(ed) == 1 && s.DecalSourceCategory.rfind(ed.Cats[i].Path, 0) == 0;
         ed.Radial.push_back(std::move(slot));
         ++cats;
@@ -583,7 +607,7 @@ int EditorLayer::DecalRadialBuild() {
         DecalEditorState::RadialSlot slot;
         slot.What = DecalEditorState::RadialSlot::Recent;
         slot.Index = it->second;
-        slot.Label = trimmed(ed.Entries[it->second].Name, 10);
+        slot.Label = shortLabel(ed.Entries[it->second].Name);
         slot.FullName = ed.Entries[it->second].Name;
         slot.Icon = ICON_FA_CLOCK_ROTATE_LEFT;
         slot.On = SourceKind(ed) == 0 && ed.PlacePath == ed.Entries[it->second].Path;
