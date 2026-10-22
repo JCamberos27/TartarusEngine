@@ -52,6 +52,21 @@ float SecondsFor(const SprayCanAction& a, float duration) {
 }
 } // namespace
 
+SprayCanAction SprayCanAction::ForCharacter(const World& world, entt::entity character, const std::string& piece,
+                                            float handHeight) {
+    SprayCanAction a;
+    a.Piece = piece;
+    if (!world.Registry.valid(character)) return a;
+    const glm::mat4 m = world.GetCachedWorldTransform(character);
+    glm::vec3 fwd = glm::vec3(m[2]);
+    fwd.y = 0.0f;
+    a.Direction = glm::length(fwd) > 1e-4f ? glm::normalize(fwd) : glm::vec3(0.0f, 0.0f, 1.0f);
+    a.From = glm::vec3(m[3]) + glm::vec3(0.0f, handHeight, 0.0f);
+    if (const auto* n = world.Registry.try_get<NameComponent>(character)) a.Painter = n->Name;
+    else a.Painter = "NPC";
+    return a;
+}
+
 SprayCanSystem::SprayCanSystem() {
     m_Ray = [](const glm::vec3& from, const glm::vec3& dir, float reach, glm::vec3& point, glm::vec3& normal) {
         const float o[3] = {from.x, from.y, from.z}, d[3] = {dir.x, dir.y, dir.z};
@@ -109,7 +124,7 @@ SprayCanSystem::Report SprayCanSystem::Inspect(World& world, AssetLibrary* asset
         const float p = Progress(sp);
         r.MinProgress = std::min(r.MinProgress, p);
         r.MaxProgress = std::max(r.MaxProgress, p);
-        r.Resident = r.Resident && ds->Resident(dc.AssetPath);
+        r.Resident = r.Resident && ds->Resident(dc.AssetPath, (uint32_t)entt::to_integral(e));
     }
     if (r.Pieces == 0) r.Resident = false;
     if (assets) r.Saved = RoundTrip(world, *assets, &r.SavedElapsed);
@@ -139,12 +154,10 @@ SprayCanSystem::PieceData* SprayCanSystem::Data(const std::string& piece) {
     if (!m_Comp) m_Comp = std::make_unique<Graffiti::Compositor>();
     d->Program = std::make_shared<Graffiti::Program>(Graffiti::Build(*d->Piece, m_Comp->MetricsCallback()));
     d->Timeline = std::make_shared<Graffiti::Timeline>(Graffiti::BuildTimeline(*d->Program));
-    char hex[17];
-    std::snprintf(hex, sizeof(hex), "%016llx", (unsigned long long)Fnv(d->Piece->ToString()));
-    d->RevealKey = "spray_" + d->Piece->Name + "_" + hex;
     // Baked already (the Designer, or an earlier spray)? Else bake it now: the GPU part here, the PNGs on a worker.
     std::error_code ec;
     d->Baked = fs::exists(fs::u8path(d->Piece->DecalPath()), ec) && fs::exists(fs::u8path(d->Piece->MapPath("Albedo")), ec);
+    if (d->Baked) SetRevealKey(*d);
     if (!d->Baked) {
         Graffiti::BakeImages img;
         m_Comp->StartBake(*d->Piece, *d->Program);
@@ -158,6 +171,19 @@ SprayCanSystem::PieceData* SprayCanSystem::Data(const std::string& piece) {
     PieceData* raw = d.get();
     m_Pieces.emplace(key, std::move(d));
     return raw;
+}
+
+// The reveal order's key: the recipe and the bake it reveals (its albedo's size and time). A piece re-baked
+// (say its glyph or stamp images arrived from the Drive since, so the program's strokes moved) gets a new one.
+void SprayCanSystem::SetRevealKey(PieceData& d) {
+    std::error_code ec;
+    const fs::path albedo = fs::u8path(d.Piece->MapPath("Albedo"));
+    const uint64_t size = (uint64_t)fs::file_size(albedo, ec);
+    const auto time = fs::last_write_time(albedo, ec).time_since_epoch().count();
+    char hex[17];
+    std::snprintf(hex, sizeof(hex), "%016llx",
+                  (unsigned long long)(Fnv(d.Piece->ToString()) ^ (size * 1099511628211ull) ^ (uint64_t)time));
+    d.RevealKey = "spray_" + d.Piece->Name + "_" + hex;
 }
 
 bool SprayCanSystem::PieceReady(const std::string& piece) {
@@ -231,6 +257,7 @@ void SprayCanSystem::Update(World& world, float dt, const glm::vec3& listener) {
         if (!d || !d->Bake.valid() || d->Bake.wait_for(std::chrono::seconds(0)) != std::future_status::ready) continue;
         d->Baked = d->Bake.get();
         d->BakeFailed = !d->Baked;
+        if (d->Baked) SetRevealKey(*d);
         if (d->Baked && ds) ds->Refresh(d->Piece->DecalPath());
     }
     auto& reg = world.Registry;

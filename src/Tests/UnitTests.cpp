@@ -5790,6 +5790,7 @@ int RunUnitTests(const char* filter) {
     { void RegisterEditorSoundTests(UnitTestSupport::TestList&); RegisterEditorSoundTests(tests); } // UnitTests_EditorSound.cpp
     { void RegisterAudioTests(UnitTestSupport::TestList&); RegisterAudioTests(tests); } // UnitTests_Audio.cpp
     { void RegisterDecalRenderTests(UnitTestSupport::TestList&); RegisterDecalRenderTests(tests); } // UnitTests_DecalRender.cpp
+    { void RegisterDecalRuntimeTests(UnitTestSupport::TestList&); RegisterDecalRuntimeTests(tests); } // UnitTests_DecalRuntime.cpp
     { void RegisterDecalAssetTests(UnitTestSupport::TestList&); RegisterDecalAssetTests(tests); } // UnitTests_DecalAssets.cpp
     { void RegisterGraffitiTests(UnitTestSupport::TestList&); RegisterGraffitiTests(tests); } // UnitTests_Graffiti.cpp
     for (const auto& [name, fn] : tests) {
