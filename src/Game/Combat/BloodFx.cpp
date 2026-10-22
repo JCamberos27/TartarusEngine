@@ -344,32 +344,39 @@ void BloodFx::MakeRoom(bool print) {
     int count = 0;
     for (const Decal& d : m_Decals) count += !d.Print;
     const int cap = std::max(1, Config.MaxDecals);
-    for (; count >= cap; --count) {
-        // Out of view first: the small marks (drops, specks) before the stains, the farthest first. Failing that (it's
-        // all in view), the oldest small mark, then the oldest stain - never a pool or a print while anything else can go.
-        auto size = [](const Decal& d) { return std::max(glm::length(glm::vec3(d.Model[0])), glm::length(glm::vec3(d.Model[2]))); };
-        int pick = -1, oldSmall = -1, oldStain = -1;
-        float best = -1.0f;
-        for (int i = 0; i < (int)m_Decals.size(); ++i) {
-            const Decal& d = m_Decals[(size_t)i];
-            if (d.Print) continue;
-            const bool small = size(d) < 0.2f;
-            if (!InView(d)) {
-                const float score = glm::length(glm::vec3(d.Model[3]) - m_Eye) + (small ? 1000.0f : 0.0f);
-                if (score > best) { best = score; pick = i; }
-                continue;
-            }
-            if (small && oldSmall < 0) oldSmall = i;
-            if (!d.Spread && oldStain < 0) oldStain = i;
-        }
-        if (pick < 0) pick = oldSmall >= 0 ? oldSmall : oldStain;
-        if (pick < 0) {
-            for (int i = 0; i < (int)m_Decals.size() && pick < 0; ++i)
-                if (!m_Decals[(size_t)i].Print) pick = i;
-        }
-        if (pick < 0) return;
-        m_Decals.erase(m_Decals.begin() + pick);
+    if (count < cap) return;
+    // Out of view first: the small marks (drops, specks) before the stains, the farthest first. Failing that (it's
+    // all in view), the oldest small mark, then the oldest stain - never a pool or a print while anything else can go.
+    // Ranked in one pass and the `count - cap + 1` first ones dropped together (one at a time was a scan each).
+    auto size = [](const Decal& d) { return std::max(glm::length(glm::vec3(d.Model[0])), glm::length(glm::vec3(d.Model[2]))); };
+    struct Candidate {
+        int Index, Tier; // 0 out of view, 1 a small mark in view, 2 a stain in view, 3 anything else (pools)
+        float Score;     // out of view: farther (and small) goes first
+    };
+    static std::vector<Candidate> order;
+    order.clear();
+    for (int i = 0; i < (int)m_Decals.size(); ++i) {
+        const Decal& d = m_Decals[(size_t)i];
+        if (d.Print) continue;
+        const bool small = size(d) < 0.2f;
+        if (!InView(d)) order.push_back({i, 0, glm::length(glm::vec3(d.Model[3]) - m_Eye) + (small ? 1000.0f : 0.0f)});
+        else order.push_back({i, small ? 1 : !d.Spread ? 2 : 3, 0.0f});
     }
+    std::stable_sort(order.begin(), order.end(), [](const Candidate& a, const Candidate& b) {
+        return a.Tier != b.Tier ? a.Tier < b.Tier : a.Score > b.Score;
+    });
+    const size_t drop = std::min(order.size(), (size_t)(count - cap + 1));
+    if (drop == 0) return;
+    static std::vector<unsigned char> gone;
+    gone.assign(m_Decals.size(), 0);
+    for (size_t i = 0; i < drop; ++i) gone[(size_t)order[i].Index] = 1;
+    size_t w = 0;
+    for (size_t i = 0; i < m_Decals.size(); ++i)
+        if (!gone[i]) {
+            if (w != i) m_Decals[w] = std::move(m_Decals[i]);
+            ++w;
+        }
+    m_Decals.resize(w);
 }
 
 void BloodFx::SpawnPoolAt(const glm::vec3& at, const glm::vec3& normal, float size) {
@@ -1053,15 +1060,19 @@ void BloodFx::SpatterGear(int drops, float sizeScale, float delay) {
 void BloodFx::Update(float dt) {
     m_Now += dt;
     for (Spray& s : m_Sprays) s.Age += dt;
-    for (Decal& d : m_Decals) {
+    // One InView test per stain: it decides the drying and, past its lifetime (when one is set), whether a stain
+    // goes - it waits until it's out of view: nothing vanishes in front of you. Faded-out prints go too.
+    size_t w = 0;
+    for (size_t i = 0; i < m_Decals.size(); ++i) {
+        Decal& d = m_Decals[i];
         d.Age += dt;
-        if (d.Age > 0.0f && !InView(d)) d.DryAge += dt; // nothing dries while you look at it
+        const bool seen = InView(d);
+        if (d.Age > 0.0f && !seen) d.DryAge += dt; // nothing dries while you look at it
+        if ((d.Print && d.Age >= d.FadeAt + d.FadeLen) || (d.Age >= d.Life && !seen)) continue;
+        if (w != i) m_Decals[w] = std::move(d);
+        ++w;
     }
-    m_Decals.erase(std::remove_if(m_Decals.begin(), m_Decals.end(), [](const Decal& d) { return d.Print && d.Age >= d.FadeAt + d.FadeLen; }),
-                   m_Decals.end());
-    // Past its lifetime (when one is set) a stain still waits until it's out of view: nothing vanishes in front of you.
-    m_Decals.erase(std::remove_if(m_Decals.begin(), m_Decals.end(), [&](const Decal& d) { return d.Age >= d.Life && !InView(d); }),
-                   m_Decals.end());
+    m_Decals.resize(w);
     // Bodies that have come to rest: the one pool, from under the middle of the body.
     for (size_t i = 0; i < m_Pools.size();) {
         PendingPool& q = m_Pools[i];

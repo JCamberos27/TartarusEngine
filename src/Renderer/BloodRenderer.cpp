@@ -154,6 +154,7 @@ constexpr unsigned kSplatBinding = 6;
 } // namespace
 
 void BloodRenderer::SetSplats(const std::vector<Splat>& splats, const std::vector<std::pair<unsigned, glm::ivec2>>& ranges) {
+    DecalPerf::SubmitScope perf;
     m_SplatRanges.clear();
     m_SplatCount = 0;
     DecalSystem* ds = DecalSystem::Current();
@@ -334,9 +335,11 @@ int BloodRenderer::DecalSet(const std::string& name) const {
 
 const DecalTextureArrays::Source* BloodRenderer::SetMaps(int set) {
     if (set < 0 || set >= (int)m_SetNames.size()) return nullptr;
+    if (m_SetSrc.size() != m_SetNames.size()) m_SetSrc.assign(m_SetNames.size(), nullptr);
+    if (m_SetSrc[(size_t)set]) return m_SetSrc[(size_t)set];
     const std::string name = m_SetNames[set];
     const std::string dir = m_SetDir;
-    return GeneratedDecalMaps::Get().Find("blood_" + name + "_" + kMapsVersion, kSetTier, [name, dir]() -> GeneratedDecalMaps::Job {
+    return m_SetSrc[(size_t)set] = GeneratedDecalMaps::Get().Find("blood_" + name + "_" + kMapsVersion, kSetTier, [name, dir]() -> GeneratedDecalMaps::Job {
         return [name, dir]() {
             namespace fs = std::filesystem;
             int nw = 0, nh = 0, nc = 0, mw = 0, mh = 0, mc = 0;
@@ -360,8 +363,10 @@ const DecalTextureArrays::Source* BloodRenderer::KnifeMaps(int knife, DecalBake:
     const int size = KnifeFxImport::LibraryLayerSize(k->Lib);
     if (size <= 0 || !glGetTextureSubImage) return nullptr;
     const int tier = std::min(size, 2048);
+    const int cacheKey = knife * 4 + (int)mode;
+    if (const auto it = m_KnifeSrc.find(cacheKey); it != m_KnifeSrc.end() && it->second) return it->second;
     const std::string key = "knife_" + k->Name + "_" + ModeName(mode) + "_" + kMapsVersion;
-    return GeneratedDecalMaps::Get().Find(key, tier, [&, k, color, normal, size, mode]() -> GeneratedDecalMaps::Job {
+    return m_KnifeSrc[cacheKey] = GeneratedDecalMaps::Get().Find(key, tier, [&, k, color, normal, size, mode]() -> GeneratedDecalMaps::Job {
         // Read the entry's layers back on this (the GL) thread; the worker re-packs them.
         auto rgba = std::make_shared<std::vector<uint8_t>>((size_t)size * size * 4);
         glPixelStorei(GL_PACK_ALIGNMENT, 1);
@@ -389,10 +394,20 @@ glm::mat4 BloodRenderer::DecalBox(const glm::mat4& model, bool mirror) {
     return m;
 }
 
+void BloodRenderer::FetchAssets() {
+    DecalSystem* ds = DecalSystem::Current();
+    if (!ds || (ds == m_AssetSystem && ds->AssetGeneration() == m_AssetGen && m_BloodAsset && m_HoleAsset)) return;
+    m_AssetSystem = ds;
+    m_AssetGen = ds->AssetGeneration();
+    m_BloodAsset = ds->GetAsset(kBloodDecal);
+    m_HoleAsset = ds->GetAsset(kHoleDecal);
+}
+
 bool BloodRenderer::HoleLook(int knife, RuntimeDecal& r) {
     DecalSystem* ds = DecalSystem::Current();
     if (!ds) return false;
-    const std::shared_ptr<DecalAsset> a = ds->GetAsset(kHoleDecal);
+    FetchAssets();
+    const std::shared_ptr<DecalAsset>& a = m_HoleAsset;
     const KnifeFxLibrary::Entry* k = KnifeFxLibrary::Get().At(knife);
     const DecalTextureArrays::Source* src = nullptr;
     if (k) {
@@ -401,14 +416,16 @@ bool BloodRenderer::HoleLook(int knife, RuntimeDecal& r) {
         r.Rows = k->Rows;
         r.Roughness = 1.0f - k->Smoothness;
     } else {
-        src = GeneratedDecalMaps::Get().Find(std::string("hole_procedural_") + kMapsVersion, 512, []() -> GeneratedDecalMaps::Job {
-            return [] { return DecalBake::ProceduralHole(256); };
-        });
+        if (!m_ProceduralHoleSrc)
+            m_ProceduralHoleSrc = GeneratedDecalMaps::Get().Find(std::string("hole_procedural_") + kMapsVersion, 512, []() -> GeneratedDecalMaps::Job {
+                return [] { return DecalBake::ProceduralHole(256); };
+            });
+        src = m_ProceduralHoleSrc;
         r.Cols = r.Rows = 2;
         r.Roughness = a && !a->Missing ? a->Roughness : 0.9f;
     }
     if (!src) return false;
-    r.Maps = *src;
+    r.Maps = src;
     r.Tint = glm::vec3(1.0f);
     const bool asset = a && !a->Missing;
     r.AlbedoOp = asset ? a->AlbedoOp : 1.0f;
@@ -456,10 +473,11 @@ int BloodRenderer::ToRuntime(const Decal& d, RuntimeDecal out[2]) {
             src = SetMaps(d.Set);
         }
         if (!src) return 0;
-        const std::shared_ptr<DecalAsset> a = ds->GetAsset(kBloodDecal);
+        FetchAssets();
+        const std::shared_ptr<DecalAsset>& a = m_BloodAsset;
         const bool asset = a && !a->Missing;
         const float dry = std::clamp(d.Dry, 0.0f, 1.0f);
-        r.Maps = *src;
+        r.Maps = src;
         r.Tint = glm::mix(FilmFresh, FilmDried, dry);
         r.AlbedoOp = (asset ? a->AlbedoOp : 1.0f) * d.Opacity;
         r.NormalOp = (asset ? a->NormalOp : 1.0f) * d.NormalStrength / 0.6f; // the asset's normal is the default strength's
@@ -493,6 +511,7 @@ int BloodRenderer::ToRuntime(const Decal& d, RuntimeDecal out[2]) {
 }
 
 int BloodRenderer::AddDecal(const Decal& d) {
+    DecalPerf::SubmitScope perf;
     DecalSystem* ds = DecalSystem::Current();
     if (!ds) return 0;
     RuntimeDecal r[2];

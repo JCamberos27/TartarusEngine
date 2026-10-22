@@ -25,6 +25,7 @@ public:
         int Decal = -1;     // a textured hole (KnifeFxLibrary id, ImpactFx) instead of the procedural one
         float Size = 0.1f;  // its decal's size across, metres
         float Rim = 0.0f;   // how far out the decal's chipped rim shows (cell half-widths; 0 = all of it)
+        unsigned Id = 0;    // its number among every hole ever added (from 1): the newer draws on top
     };
 
     // `entity` is what the round hit (entt::null or an invalid one: the hole stays in world space). `decal` >= 0: draw
@@ -55,8 +56,16 @@ private:
         int Decal = -1;
         float Size = 0.1f;
         float Rim = 0.0f;
+        unsigned Id = 0;
     };
     std::vector<Hole> m_Holes;
+    // Resolve's per-call cache of the entities' transforms (many holes share one wall).
+    struct EntityXform {
+        entt::entity Entity;
+        glm::mat4 M;
+        glm::mat3 NormalM;
+    };
+    std::vector<EntityXform> m_Xforms;
     std::size_t m_Next = 0; // the slot the next hole overwrites once full
     unsigned m_Count = 0;   // holes ever added: the seed sequence
 };
