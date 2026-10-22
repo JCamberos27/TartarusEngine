@@ -26,6 +26,7 @@
 #include <sstream>
 #include <iostream>
 #include <unordered_map>
+#include <unordered_set>
 #include <set>
 #include <mutex>
 #include <functional>
@@ -1672,6 +1673,17 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
     // BuildSceneJson — both entries are created first (order-independent), then parents are
     // applied in a second pass so a parentId can point forward or backward in the file.
     std::unordered_map<int, entt::entity> idToEntity;
+    // Two entities sharing a saved id makes parent links ambiguous (the later one wins, and children of the
+    // earlier one attach to the wrong entity), so say so once per id instead of silently mislinking.
+    std::unordered_set<int> warnedDuplicateIds;
+    auto mapId = [&](int id, entt::entity e) {
+        if (id < 0) return;
+        const auto [it, inserted] = idToEntity.emplace(id, e);
+        if (inserted) return;
+        if (warnedDuplicateIds.insert(id).second)
+            Log::Warn("Scene: more than one entity has the id " + std::to_string(id) + "; children of it may attach to the wrong one. Renumber the duplicates.");
+        it->second = e;
+    };
     std::vector<std::pair<entt::entity, int>> pendingParents;
 
     // OrderComponent (see Components.h): a full load restores it verbatim so save->load->save is
@@ -1727,7 +1739,7 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
             created(e);
 
             int id = b.value("id", -1);
-            if (id >= 0) idToEntity[id] = e;
+            mapId(id, e);
             int parentId = b.value("parentId", -1);
             if (parentId >= 0) pendingParents.emplace_back(e, parentId);
         }
@@ -1759,7 +1771,7 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
             created(e);
 
             int id = m.value("id", -1);
-            if (id >= 0) idToEntity[id] = e;
+            mapId(id, e);
             int parentId = m.value("parentId", -1);
             if (parentId >= 0) pendingParents.emplace_back(e, parentId);
         }
@@ -1777,7 +1789,7 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
             created(e);
 
             int id = en.value("id", -1);
-            if (id >= 0) idToEntity[id] = e;
+            mapId(id, e);
             int parentId = en.value("parentId", -1);
             if (parentId >= 0) pendingParents.emplace_back(e, parentId);
         }
@@ -1864,7 +1876,7 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
             for (entt::entity e : instCreated) created(e);
 
             const int id = s.value("id", -1);
-            if (id >= 0) idToEntity[id] = rootE;
+            mapId(id, rootE);
             const int parentId = s.value("parentId", -1);
             if (parentId >= 0) pendingParents.emplace_back(rootE, parentId);
         }
