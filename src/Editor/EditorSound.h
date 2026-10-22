@@ -23,6 +23,7 @@ struct EventInfo {
     float PitchJitter;    // +- fraction (0.03 = 3%)
     bool Centred;         // never panned (notifications, Play mode)
     bool Unfocused = false; // also plays while the editor is in the background (the "done" chimes); Notifications always do
+    const char* Placeholder = nullptr; // until its own recording exists: this event's files stand in
 };
 const EventInfo& Info(Event e);
 const char* CategoryName(Category c);
@@ -141,7 +142,8 @@ std::vector<std::string> FindVariants(const std::string& dir, Event e);
 
 // The service. Init finds every event's files and preloads the built-in set; the override folder's (premium sounds fetched from
 // the Drive) replace the built-in set's event by event, decoded only while UsePremium is on (Apply loads / frees them).
-// Missing files just mean that event is silent.
+// Missing files just mean that event is silent - except an event with a Placeholder, which plays that event's files (SprayLoop,
+// which has none to borrow, plays a synthesised hiss) until its own recording exists.
 void Init(const std::string& builtInDir, const std::string& overrideDir = {});
 void Shutdown();
 void Apply(const Settings& s);
@@ -151,6 +153,8 @@ void ToEditorSettings(const Settings& s); // back into EditorSettings (the calle
 bool Audition(Event e, int variant, bool premium = false);
 bool IsOverride(Event e);           // it plays the Drive's premium set now
 const std::vector<std::string>& BuiltInFiles(Event e);
+// "placeholder: Randomize" / "synthesised placeholder" while the built-in set has no file of the event's own; null otherwise.
+const char* PlaceholderNote(Event e);
 const std::vector<std::string>& PremiumFiles(Event e); // empty when the Drive set has none for it (or isn't fetched)
 int PremiumEventCount();
 // Once a frame (host): plays the sounds for what was logged since the last call - an error burst (once, re-armed after
@@ -172,6 +176,13 @@ int AwayDoneCount();
 // DropAccept / DropReject for the drag ending stays quiet this frame and the next. The handler plays its own sound.
 void SuppressDropSound();
 void Play(Event e, float screenX01 = -1.0f, float pitchScale = 1.0f, float gainDb = 0.0f);
+// A held loop for an event (SprayLoop): gated like Play (enabled, master, the category's switch, window focus), its level the
+// event's trim x the category volume x `gain01`. Returns -1 when it may not sound. SetLoop follows a control each frame;
+// StopLoop fades it out. A loop also stops when its category is switched off or the editor loses focus.
+using LoopHandle = int32_t;
+LoopHandle StartLoop(Event e, float gain01 = 1.0f, float pitch = 1.0f);
+void SetLoop(LoopHandle h, float gain01, float pitch);
+void StopLoop(LoopHandle h);
 // Something played this frame (an action's own sound): the selection change it caused stays quiet, so Delete, Paste or Undo
 // isn't followed by a Select / Deselect on top.
 bool PlayedThisFrame();

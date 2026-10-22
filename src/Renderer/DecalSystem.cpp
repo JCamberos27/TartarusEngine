@@ -79,7 +79,7 @@ uint64_t PackSortKey(int sortOrder, uint32_t entity, int seed) {
 
 // The asset's texture set + this instance's values, packed. `fade` is the distance fade.
 void PackDecal(const DecalAsset& a, const DecalComponent& dc, const DecalTextureArrays::Slot& slot,
-               const DecalGrading& g, float fade, int frame, Decals::GpuDecal& out) {
+               const DecalGrading& grading, float fade, int frame, Decals::GpuDecal& out) {
     using namespace Decals;
     // Atlas frame inside the slot; its mips stop where a frame is still 4 texels across.
     const int cols = std::max(1, a.AtlasCols), rows = std::max(1, a.AtlasRows);
@@ -127,6 +127,7 @@ void PackDecal(const DecalAsset& a, const DecalComponent& dc, const DecalTexture
                         Half2(a.AngleFadeStart, a.AngleFadeEnd), Half2(a.EdgeFade, a.HeightContrast));
     // The scene's Decal Grading on top of the asset's and the instance's weathering: Age fades and
     // bleaches, Wear peels, buffs and chips.
+    const DecalGrading g = a.SceneGrading ? grading : DecalGrading{};
     const float fadeW = Unit(a.Fade + dc.Fade + g.Age * 0.5f);
     // Age sun-bleaches paint, not dirt: the bleach lifts a colour toward a pale grey, which turned
     // a dark grime stain into a pale puddle on a dark floor. Dark tints (grime, stains) take less of it.
@@ -143,6 +144,8 @@ void PackDecal(const DecalAsset& a, const DecalComponent& dc, const DecalTexture
 } // namespace
 
 DecalSystem::DecalSystem() : m_Textures(std::make_unique<DecalTextureArrays>()) { s_Active = this; }
+
+DecalSystem* DecalSystem::Current() { return s_Active; }
 
 DecalSystem::~DecalSystem() {
     if (s_Active == this) s_Active = nullptr;
@@ -262,6 +265,34 @@ std::shared_ptr<DecalAsset> DecalSystem::GetAsset(const std::string& projectRelP
     m_Assets[key] = asset;
     m_AssetTimes[key] = WriteTime(abs);
     return asset;
+}
+
+namespace {
+DecalTextureArrays::Source SourceFor(const DecalAsset& a) {
+    DecalTextureArrays::Source src;
+    src.Albedo = Resolve(a.AlbedoPath);
+    src.Normal = Resolve(a.NormalPath);
+    src.Surface = Resolve(a.SurfacePath);
+    src.Aux = Resolve(a.AuxPath);
+    src.Tier = a.Tier;
+    return src;
+}
+} // namespace
+
+void DecalSystem::Refresh(const std::string& path) {
+    const std::shared_ptr<DecalAsset> old = GetAsset(path);
+    if (old && !old->Missing) m_Textures->Drop(SourceFor(*old));
+    const std::string abs = Resolve(path);
+    std::string key = abs;
+    for (char& c : key) c = c == '\\' ? '/' : (char)std::tolower((unsigned char)c); // GetAsset's key
+    m_Assets[key] = DecalAsset::Load(abs);
+    m_AssetTimes[key] = WriteTime(abs);
+    if (!m_Assets[key]->Missing) m_Textures->Drop(SourceFor(*m_Assets[key]));
+}
+
+bool DecalSystem::Resident(const std::string& path) {
+    const std::shared_ptr<DecalAsset> a = GetAsset(path);
+    return a && !a->Missing && m_Textures->Resident(SourceFor(*a));
 }
 
 void DecalSystem::PushRuntime(const DecalInstance& d) { m_Runtime.push_back(d); }

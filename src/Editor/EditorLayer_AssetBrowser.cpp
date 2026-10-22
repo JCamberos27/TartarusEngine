@@ -1175,6 +1175,7 @@ const char* AssetKindLabel(Cell::Kind k) {
         case Cell::Kind::Recoil:     return "Recoil Profile";
         case Cell::Kind::CameraShake:return "Camera Shake";
         case Cell::Kind::Decal:      return "Decal";
+        case Cell::Kind::Graffiti:   return "Graffiti Piece";
         case Cell::Kind::Hdri:       return "HDRI";
         case Cell::Kind::Script:     return "Script";
     }
@@ -1321,6 +1322,7 @@ std::vector<EditorLayer::ProjectAssetFile> EditorLayer::ScanProjectAssetFiles(co
         else if (type == "hdri") f.Kind = Cell::Kind::Hdri;
         else if (type == "script") f.Kind = Cell::Kind::Script;
         else if (type == "decal") f.Kind = Cell::Kind::Decal;
+        else if (type == "graffiti") f.Kind = Cell::Kind::Graffiti;
         else continue;
         f.Key = AssetDatabase::PathKey(f.Path);
         f.Name = it->path().filename().string();
@@ -1838,13 +1840,14 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
         const bool fileOnly = f.Kind == Cell::Kind::Animator || f.Kind == Cell::Kind::Weapon ||
                               f.Kind == Cell::Kind::Recoil || f.Kind == Cell::Kind::CameraShake ||
                               f.Kind == Cell::Kind::Hdri || f.Kind == Cell::Kind::Script ||
-                              f.Kind == Cell::Kind::Decal;
+                              f.Kind == Cell::Kind::Decal || f.Kind == Cell::Kind::Graffiti;
         const char* kindName = f.Kind == Cell::Kind::Model ? "model" : f.Kind == Cell::Kind::Texture ? "texture"
                              : f.Kind == Cell::Kind::Material ? "material" : f.Kind == Cell::Kind::Sound ? "sound"
                              : f.Kind == Cell::Kind::Animator ? "animator" : f.Kind == Cell::Kind::Weapon ? "weapon"
                              : f.Kind == Cell::Kind::Recoil ? "recoil"
                              : f.Kind == Cell::Kind::CameraShake ? "camerashake"
                              : f.Kind == Cell::Kind::Decal ? "decal"
+                             : f.Kind == Cell::Kind::Graffiti ? "graffiti"
                              : f.Kind == Cell::Kind::Script ? "script" : f.Kind == Cell::Kind::Hdri ? "hdri" : "prefab";
         // An HDRI is an image: both t:Hdri and t:Texture find it (like a screenshot).
         if (!MatchesAssetSearch(parsedSearch, f.Name, kindName, {}) &&
@@ -1876,6 +1879,7 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
                 case Cell::Kind::Texture:    return 4;
                 case Cell::Kind::Material:   return 5;
                 case Cell::Kind::Decal:      return 5;
+                case Cell::Kind::Graffiti:   return 5;
                 case Cell::Kind::Sound:      return 6;
                 case Cell::Kind::Shader:     return 8;
                 case Cell::Kind::Animator:   return 9;
@@ -2056,6 +2060,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             : cell.kind == Cell::Kind::Recoil ? ICON_FA_BURST
             : cell.kind == Cell::Kind::CameraShake ? ICON_FA_VIDEO
             : cell.kind == Cell::Kind::Decal ? ICON_FA_STAMP
+            : cell.kind == Cell::Kind::Graffiti ? ICON_FA_SPRAY_CAN
             : cell.kind == Cell::Kind::Hdri ? ICON_FA_SUN
             : cell.kind == Cell::Kind::Script ? ICON_FA_SCROLL
             : (playing ? ICON_FA_STOP : ICON_FA_MUSIC);
@@ -2076,7 +2081,8 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 case Cell::Kind::Texture:    return EditorTheme::KindTexture;
                 case Cell::Kind::Hdri:       return EditorTheme::KindLight;
                 case Cell::Kind::Material:
-                case Cell::Kind::Decal:      return EditorTheme::KindMaterial;
+                case Cell::Kind::Decal:
+                case Cell::Kind::Graffiti:   return EditorTheme::KindMaterial;
                 case Cell::Kind::Sound:      return EditorTheme::KindAudio;
                 case Cell::Kind::Scene:      return EditorTheme::KindScene;
                 case Cell::Kind::Prefab:     return EditorTheme::KindPrefab;
@@ -2335,6 +2341,8 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
         if (cell.kind == Cell::Kind::Scene && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
             RequestOpenScene(world, assets, cell.key);
         }
+        if (cell.kind == Cell::Kind::Graffiti && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+            OpenGraffitiPiece(cell.key); // the Graffiti Designer
         if (cell.kind == Cell::Kind::Animator && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
             OpenAnimatorWindow(ProjectPaths::Relativize(cell.key));
             EditorSound::Play(EditorSound::Event::AssetOpen, EditorSound::LastItemScreenX());
@@ -2715,7 +2723,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 const bool fileOnly = cell.kind == Cell::Kind::Animator || cell.kind == Cell::Kind::Weapon ||
                                       cell.kind == Cell::Kind::Recoil || cell.kind==Cell::Kind::CameraShake ||
                                       cell.kind == Cell::Kind::Hdri || cell.kind == Cell::Kind::Script ||
-                                      cell.kind == Cell::Kind::Decal;
+                                      cell.kind == Cell::Kind::Decal || cell.kind == Cell::Kind::Graffiti;
                 ImGui::PushStyleColor(ImGuiCol_Text, EditorUIPrimitives::DangerColor());
                 if (!fileOnly && ImGui::MenuItem(removeLabel)) {
                     RequestDeleteAssets(world, assets, selectionForAction, /*skipDialog=*/false);
@@ -2875,6 +2883,12 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
             CreateDecalAsset(world, assets, ProjectPaths::Resolve(NewAssetFolder("assets/Decals")), std::string());
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("A new .decal in this folder. Right-click a texture > Create Decal to start from an image.");
+        if (ImGui::MenuItem(ICON_FA_SPRAY_CAN "  Create Graffiti Piece")) {
+            const std::string piece = CreateGraffitiPiece(ProjectPaths::Resolve(NewAssetFolder("assets/Decals/Graffiti/Pieces")));
+            if (!piece.empty()) OpenGraffitiPiece(piece);
+        }
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("A new GP_*.graffiti recipe, opened in the Graffiti Designer.");
         if (ImGui::MenuItem(ICON_FA_GUN "  Create First-Person Weapon...")) m_OpenWeaponWizard = true;
         if (ImGui::MenuItem(ICON_FA_VIDEO "  Create Camera Shake")) {
             const auto base=std::filesystem::u8path(ProjectPaths::Resolve(NewAssetFolder("assets/CameraShake")+"/New Camera Shake.camerashake"));

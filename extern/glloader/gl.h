@@ -588,6 +588,39 @@ extern PFNGLDELETESYNCPROC glDeleteSync;
 typedef void (__stdcall* PFNGLCOPYIMAGESUBDATAPROC)(GLuint, GLenum, GLint, GLint, GLint, GLint, GLuint, GLenum, GLint, GLint,
                                                     GLint, GLint, GLsizei, GLsizei, GLsizei);
 extern PFNGLCOPYIMAGESUBDATAPROC glCopyImageSubData;
+// The Graffiti Designer's compositor (src/Graffiti/GraffitiCompositor.cpp): immutable 2D storage,
+// per-attachment blending and clears, instanced splats, and PBO readback of the bake.
+#ifndef GL_TRIANGLE_STRIP
+#define GL_TRIANGLE_STRIP 0x0005
+#endif
+#ifndef GL_PACK_ALIGNMENT
+#define GL_PACK_ALIGNMENT 0x0D05
+#endif
+#ifndef GL_COLOR
+#define GL_COLOR 0x1800
+#endif
+extern "C" {
+void __stdcall glTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void* pixels);
+void __stdcall glTexParameterfv(GLenum target, GLenum pname, const GLfloat* params);
+void __stdcall glReadBuffer(GLenum mode);
+void __stdcall glFlush(void);
+}
+typedef void (__stdcall* PFNGLTEXSTORAGE2DPROC)(GLenum, GLsizei, GLenum, GLsizei, GLsizei);
+typedef void (__stdcall* PFNGLCLEARBUFFERFVPROC)(GLenum, GLint, const GLfloat*);
+typedef void (__stdcall* PFNGLVERTEXATTRIBDIVISORPROC)(GLuint, GLuint);
+typedef void (__stdcall* PFNGLBLENDFUNCIPROC)(GLuint, GLenum, GLenum);
+typedef void (__stdcall* PFNGLDRAWARRAYSINSTANCEDPROC)(GLenum, GLint, GLsizei, GLsizei);
+typedef void* (__stdcall* PFNGLMAPBUFFERRANGEPROC)(GLenum, GLintptr, GLsizeiptr, GLbitfield);
+typedef GLboolean (__stdcall* PFNGLUNMAPBUFFERPROC)(GLenum);
+typedef void (__stdcall* PFNGLUNIFORM1UIPROC)(GLint, GLuint);
+extern PFNGLTEXSTORAGE2DPROC glTexStorage2D;
+extern PFNGLCLEARBUFFERFVPROC glClearBufferfv;
+extern PFNGLVERTEXATTRIBDIVISORPROC glVertexAttribDivisor;
+extern PFNGLBLENDFUNCIPROC glBlendFunci; // behind the render-state shadow's back: GLStateShadow_Invalidate() after
+extern PFNGLDRAWARRAYSINSTANCEDPROC glDrawArraysInstanced;
+extern PFNGLMAPBUFFERRANGEPROC glMapBufferRange;
+extern PFNGLUNMAPBUFFERPROC glUnmapBuffer;
+extern PFNGLUNIFORM1UIPROC glUniform1ui;
 
 // Call once after a GL context is current (e.g. right after glfwMakeContextCurrent).
 bool GLLoader_Init();

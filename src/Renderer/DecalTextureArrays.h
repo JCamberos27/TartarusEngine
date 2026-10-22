@@ -118,6 +118,10 @@ public:
     int LayerCount() const { return m_GpuLayers; }
     // Drops every slot (hot reload of a decal or its textures); arrays keep their storage.
     void Clear();
+    // Drops the one slot for these maps (a graffiti piece re-baked its files): the next Request
+    // decodes them again, and every other decal stays resident. Resident: it would draw now.
+    void Drop(const Source& src);
+    bool Resident(const Source& src) const;
 
     static constexpr int kArrayLevels = 11; // 4096 down to 4x4 (one BC block)
     static constexpr int kMaxInFlight = 3;  // decodes at once

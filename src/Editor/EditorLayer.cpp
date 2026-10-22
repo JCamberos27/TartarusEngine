@@ -2946,6 +2946,8 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     DrawAudioDebugPanel(world);
     DrawSoundBoardPanel();
     DrawDecalLibraryPanel(world);
+    GraffitiFrame(world);              // bakes landing, recipe reloads after undo (EditorLayer_GraffitiDesigner.cpp)
+    DrawGraffitiDesignerPanel(world);
     DrawAssetLibraryPanel(world, assets);
     DrawAnimatorWindow(world); // Animator v2
     DrawPhysicsDebugWindow(world); // #185 debug tooling
@@ -3372,6 +3374,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     UpdateLockViewToSelection(world, editorCamera); // Shift+F — camera follows the selection centroid (#236 E)
     if (m_MeasureTool || !m_MeasurePoints.empty()) DrawMeasurement(editorCamera); // #236 R2 ruler
     DrawDecalToolOverlay(world, editorCamera); // Place Decal / Decal Brush: cursor ring, stamp rings, hint plate
+    DrawGraffitiViewportOverlay(world, editorCamera); // a live spray stroke on its wall (Graffiti Designer)
     DrawRuler(world, editorCamera); // Editor Enhancers / vRuler: hold Shift+R
     if (EyedropperArmed()) {
         const ImVec2 mp = ImGui::GetIO().MousePos;

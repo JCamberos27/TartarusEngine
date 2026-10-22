@@ -345,6 +345,23 @@ void DecalTextureArrays::Clear() {
     m_Deferred = false;
 }
 
+void DecalTextureArrays::Drop(const Source& src) {
+    const auto it = m_Slots.find(KeyFor(src));
+    if (it == m_Slots.end()) return;
+    Entry& e = *it->second;
+    if (e.Pending.valid()) { // its decode is of the old files: let it land, then throw it away
+        e.Pending.wait();
+        --m_InFlight;
+    }
+    if (e.S.Alloc.Valid()) m_Alloc.Free(e.S.Alloc);
+    m_Slots.erase(it);
+}
+
+bool DecalTextureArrays::Resident(const Source& src) const {
+    const auto it = m_Slots.find(KeyFor(src));
+    return it != m_Slots.end() && it->second->S.Ready;
+}
+
 bool DecalTextureArrays::AllocateWithEviction(int size, DecalPageAllocator::Alloc& out) {
     for (;;) {
         out = m_Alloc.Allocate(size);

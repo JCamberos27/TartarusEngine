@@ -12,6 +12,9 @@
 
 #include "EditorLayer.h"
 #include "EditorPanels.h"
+#include "EditorGraffitiDesigner.h" // the Graffiti suite
+#include "AssetDatabase.h"
+#include "DecalSystem.h"
 #include "EditorSettings.h"
 #include "EditorTestProbe.h"
 #include "Shortcuts.h"
@@ -567,6 +570,23 @@ Step Shot(std::string name, std::vector<std::string> nonBlank = {}) {
         return g_ShotDone;
     }, 30};
 }
+// A Shot of the result with the editor's viewport overlays off for its frames (gizmos, decal boxes,
+// light / camera icons, the grid, the selection outline, colliders, the tool palette), so what was
+// made is what the picture shows. Jacob's rule for shots of the Scene view.
+Step CleanShot(std::string name, std::vector<std::string> nonBlank = {}) {
+    Step inner = Shot(name, std::move(nonBlank));
+    auto frames = std::make_shared<int>(0);
+    inner.Name = "clean " + inner.Name;
+    inner.Fn = [fn = inner.Fn, frames](Ctx& c) {
+        c.E.SetHideOverlaysThisFrame(true);
+        if (++*frames <= 3) return false; // a couple of frames drawn clean before the capture
+        const bool done = fn(c);
+        if (done) c.E.SetHideOverlaysThisFrame(false);
+        return done;
+    };
+    inner.Timeout += 3;
+    return inner;
+}
 Step Wait(int frames) {
     auto n = std::make_shared<int>(0);
     return {"wait " + std::to_string(frames), [n, frames](Ctx&) { return ++*n >= frames; }, frames + 5};
@@ -1092,6 +1112,7 @@ void RegisterMotionDemo() {
 #include "EditorSmoke/HotReload.inl"
 #include "EditorSmoke/Settings.inl"
 #include "EditorSmoke/Decals.inl"
+#include "EditorSmoke/Graffiti.inl"
 
 void RegisterTests() {
     if (MotionDemo::Active()) { RegisterMotionDemo(); return; } // a demo run is only the demo
@@ -1785,6 +1806,7 @@ void RegisterTests() {
     RegisterScenesTests();
     RegisterDecalsTests();
     RegisterDecalsLitTests();
+    RegisterGraffitiTests();
 }
 } // namespace
 

@@ -1212,6 +1212,12 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
         return; // armed — swallow every viewport click
     }
 
+    // Graffiti Designer: Spray in Scene view owns the left button (a stroke that started here keeps
+    // it even while the cursor crosses a panel, so its release always ends the stroke).
+    if (GraffitiViewportSprayActive() &&
+        HandleGraffitiViewportSpray(world, editorCamera, leftPressed && !WantsCaptureMouse() && !m_ViewGizmoBlocking, leftDown))
+        return;
+
     // Measure / ruler tool (#236 R2, Phase 3 item 7): clicks drop endpoints instead of
     // selecting — never falls through to picking / box-select below. Each left-click APPENDS a
     // point, chaining segments end to end (used to reset back to a single fresh segment after
