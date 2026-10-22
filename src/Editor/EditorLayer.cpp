@@ -1583,6 +1583,30 @@ void EditorLayer::DrawSettingsWindow(World& world) {
             EditorUI::SetTooltip("Screen size of the parts that aren't tied to a world measurement (the directional arrow, the sun disc).");
         if (!prefs.ShowLightGizmos) ImGui::EndDisabled();
 
+        EditorUIPrimitives::SectionHeader("Scene view icons and shapes");
+        {
+            static const char* kIconModes[] = {"All", "Lights & cameras", "None"};
+            SettingsLabel("Entity icons");
+            int mode = std::clamp(prefs.EntityIconsMode, 0, 2);
+            if (ImGui::Combo("##Entity icons", &mode, kIconModes, IM_ARRAYSIZE(kIconModes))) {
+                prefs.EntityIconsMode = mode;
+                EditorSettings::Save();
+            }
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Which billboard markers the Scene view shows. A selected object always keeps its icon.");
+        }
+        if (SettingsCheckbox("Icons through walls", &prefs.EntityIconsThroughWalls)) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Icons behind geometry stay visible, dimmed. Off hides them.");
+        if (SettingsCheckbox("Colliders", &prefs.ShowColliders)) EditorSettings::Save();
+        if (prefs.ShowColliders && SettingsCheckbox("Only for the selected collider", &prefs.CollidersSelectedOnly)) EditorSettings::Save();
+        if (SettingsCheckbox("Decal boxes", &prefs.ShowDecalGizmos)) EditorSettings::Save();
+        if (SettingsCheckbox("Reflection probe boxes", &prefs.ShowProbeGizmos)) EditorSettings::Save();
+        if (SettingsCheckbox("Post-process volume boxes", &prefs.ShowVolumeGizmos)) EditorSettings::Save();
+        if (SettingsCheckbox("Only for the selected volume", &prefs.VolumeGizmosSelectedOnly)) EditorSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Decal, probe and volume boxes draw only for the selected object and its children.");
+
         EditorUIPrimitives::SectionHeader("Motion");
         if (SettingsCheckbox("Reduce motion", &prefs.ReduceMotion)) EditorSettings::Save();
         if (ImGui::IsItemHovered())
@@ -2875,6 +2899,9 @@ void EditorLayer::ApplyPendingViewportTabFocus() {
     // one-shot poke loses). After the counter runs out the user is free to switch tabs.
     if (m_SelectAssetBrowserTabFrames > 0) {
         --m_SelectAssetBrowserTabFrames;
+        // The right node holds Inspector with Statistics and History docked behind it: keep the
+        // Inspector in front through the same grace window (a tab-bar poke only - no focus steal).
+        SelectDockedTab(EditorPanels::Inspector);
         // DockNodeUpdateTabBar() snaps the node's selected tab back to whatever holds nav focus
         // every frame, so poking the tab bar alone (SelectDockedTab) loses to the Console window.
         // Focus the Asset Browser window itself — the tab selection follows — and stop as soon as
@@ -3125,7 +3152,8 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         ImGui::DockBuilderDockWindow("Script IDE", center);
         ImGui::DockBuilderFinish(dockspaceId);
         m_SceneGameDockNodeId = center;
-        m_SelectAssetBrowserTabFrames = 90;  // land on Asset Browser, not Console
+        m_SelectAssetBrowserTabFrames = 90;  // land on Asset Browser, not Console - and Inspector, not Statistics
+        m_FocusSceneTabRequested = true;     // and the Scene view, not the last-docked Script IDE
     }
     if (m_SplitSceneGameRequested) {
         m_SplitSceneGameRequested = false;
@@ -3665,6 +3693,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
             EditorSound::Play(EditorSound::Event::SnapToggle, -1.0f, ShowGrid() ? 1.0f : 0.89f);
         }
         if (Shortcuts::Triggered("snap.toggleGrid"))   SetGridSnapEnabled(!GridSnapEnabled());
+        if (Shortcuts::Triggered("view.toggleGizmos")) m_GizmosMasterVisible = !m_GizmosMasterVisible;
         if (Shortcuts::Triggered("tools.snapToGround")) {
             // SnapSelectionToGround plays SnapGround itself; nothing to snap is a refusal.
             if (CanSnapSelectionToGround(world)) SnapSelectionToGround(world);
