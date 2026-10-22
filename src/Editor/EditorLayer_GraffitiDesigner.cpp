@@ -20,6 +20,7 @@
 #include "AssetThumbnailLoader.h"
 #include "EditorTestProbe.h"
 #include "Camera.h"
+#include "PenInput.h"
 #include "Components.h"
 #include "DecalAsset.h"
 #include "DecalSystem.h"
@@ -246,6 +247,13 @@ void DrainDue(GraffitiDesigner& g, double until, bool all) {
     }
 }
 
+// A pen's pressure scales the Pressure slider (the slider is the heaviest the can goes); with no pen
+// the slider's value stands and the pointer-speed easing applies.
+float PenPressure(const GraffitiDesigner& g) {
+    const float pen = PenInput::Pressure();
+    return pen >= 0.0f ? g.Pressure * std::max(pen, 0.05f) : -1.0f;
+}
+
 void BeginStroke(GraffitiDesigner& g, glm::vec2 uv, bool erase, bool inViewport) {
     if (!g.Piece) return;
     const int layer = EnsureSprayLayer(g);
@@ -264,11 +272,13 @@ void BeginStroke(GraffitiDesigner& g, glm::vec2 uv, bool erase, bool inViewport)
     g.LastSampleAt = -1.0;
     g.LastUv = uv;
     g.LastMouse = ImGui::GetIO().MousePos;
-    g.LivePressure = g.Pressure;
+    const float pen0 = PenPressure(g);
+    const float start = pen0 >= 0.0f ? pen0 : g.Pressure;
+    g.LivePressure = start;
     g.Pending.clear();
     g.PendingSeq.clear();
     g.NextSeq = 0;
-    g.Live.Samples.push_back(Graffiti::SpraySample::Make(uv, g.Pressure, g.DistanceCm * 0.01f, 0.0f));
+    g.Live.Samples.push_back(Graffiti::SpraySample::Make(uv, start, g.DistanceCm * 0.01f, 0.0f));
     const Graffiti::Piece& p = *g.Piece;
     const uint32_t index = (uint32_t)p.Layers[(size_t)layer].Strokes.size();
     g.Builder.Begin(g.Live, p.Width, p.Height, (float)p.Width / std::max(p.Metres.x, 1e-3f),
@@ -277,7 +287,7 @@ void BeginStroke(GraffitiDesigner& g, glm::vec2 uv, bool erase, bool inViewport)
     g.Builder.Add(g.Live.Samples.back(), none);
     g.Comp.BeginLive(p, g.Program, std::max(ProgramIndex(g, layer), 0));
     EditorSound::Play(EditorSound::Event::SprayStart);
-    g.Hiss = EditorSound::StartLoop(EditorSound::Event::SprayLoop, 0.4f + 0.6f * g.Pressure, 0.9f + 0.2f * g.Pressure);
+    g.Hiss = EditorSound::StartLoop(EditorSound::Event::SprayLoop, 0.4f + 0.6f * start, 0.9f + 0.2f * start);
     PushRecent(g, g.Color);
 }
 
@@ -293,7 +303,8 @@ void StrokeSample(GraffitiDesigner& g, glm::vec2 uv) {
     const float speed = std::sqrt((m.x - g.LastMouse.x) * (m.x - g.LastMouse.x) + (m.y - g.LastMouse.y) * (m.y - g.LastMouse.y)) /
                         (float)std::max(dt, 1e-3);
     g.LastMouse = m;
-    const float target = g.VelocityPressure ? g.Pressure * std::clamp(1.15f - speed / 2200.0f, 0.35f, 1.0f) : g.Pressure;
+    const float pen = PenPressure(g);
+    const float target = pen >= 0.0f ? pen : g.VelocityPressure ? g.Pressure * std::clamp(1.15f - speed / 2200.0f, 0.35f, 1.0f) : g.Pressure;
     g.LivePressure += (target - g.LivePressure) * 0.35f;
     g.Live.Samples.push_back(Graffiti::SpraySample::Make(uv, g.LivePressure, g.DistanceCm * 0.01f, (float)t));
     const size_t before = g.Pending.size();
@@ -875,7 +886,12 @@ void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
             ImGui::SliderFloat("##nib", &g.NibAngle, -90.0f, 90.0f, "Nib angle %.0f deg");
         }
         ImGui::Checkbox("Pressure from pointer speed", &g.VelocityPressure);
-        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("A fast pass sprays lighter, a slow one heavier (no pen pressure is read).");
+        if (ImGui::IsItemHovered()) EditorUI::SetTooltip("A fast pass sprays lighter, a slow one heavier. A pen's own pressure replaces this.");
+        {
+            const float pen = PenInput::Pressure();
+            if (pen >= 0.0f) ImGui::TextDisabled("Pen pressure: %.0f%%", pen * 100.0f);
+            else ImGui::TextDisabled("Pen pressure: none (mouse)");
+        }
     }
 
     if (ImGui::CollapsingHeader("Colour", ImGuiTreeNodeFlags_DefaultOpen)) {

@@ -13,6 +13,7 @@
 #include "EditorLayer.h"
 #include "EditorPanels.h"
 #include "EditorGraffitiDesigner.h" // the Graffiti suite
+#include "PenInput.h"
 #include "AssetDatabase.h"
 #include "DecalSystem.h"
 #include "EditorSettings.h"
