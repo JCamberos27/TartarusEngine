@@ -6,6 +6,7 @@
 #include "Frustum.h"
 #include "ProjectPaths.h"
 #include "ProjectSettings.h"
+#include "Log.h"
 #include "gl.h"
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -13,6 +14,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdlib>
 #include <filesystem>
 
 namespace {
@@ -43,6 +45,30 @@ long long WriteTime(const std::string& path) {
 std::string Resolve(const std::string& p) {
     if (p.empty() || std::filesystem::u8path(p).is_absolute()) return p;
     return ProjectPaths::Resolve(p);
+}
+
+// An absolute path as a cache key: forward slashes, lower case (Windows paths are case-insensitive).
+std::string NormalPath(std::string p) {
+    for (char& c : p) c = c == '\\' ? '/' : (char)std::tolower((unsigned char)c);
+    return p;
+}
+
+DecalSystem* s_Active = nullptr; // MaterialSubstrate()'s system: the one main.cpp owns
+
+// A placed decal's Custom substrate (DecalComponent::Sub*).
+SubstrateDesc CustomSubstrate(const DecalComponent& dc) {
+    SubstrateDesc s;
+    s.Albedo = dc.SubAlbedo;
+    s.Normal = dc.SubNormal;
+    s.Roughness = dc.SubRoughness;
+    s.AO = dc.SubAO;
+    s.Tiling = std::max(dc.SubTiling, 0.01f);
+    s.Tint = dc.SubTint;
+    s.Strength = Unit(dc.SubStrength);
+    s.RoughRange = glm::vec2(Unit(dc.SubRoughMin), Unit(dc.SubRoughMax));
+    s.Mirror = dc.SubMirror;
+    s.Crop = glm::clamp(glm::vec4(dc.SubCropX0, dc.SubCropY0, dc.SubCropX1, dc.SubCropY1), glm::vec4(0.0f), glm::vec4(1.0f));
+    return s;
 }
 
 // (SortOrder, entity, seed) -> one key, ascending = drawn first (underneath).
@@ -113,18 +139,108 @@ void PackDecal(const DecalAsset& a, const DecalComponent& dc, const DecalTexture
 
 } // namespace
 
-namespace {
-DecalSystem* s_Current = nullptr;
-}
+DecalSystem::DecalSystem() : m_Textures(std::make_unique<DecalTextureArrays>()) { s_Active = this; }
 
-DecalSystem::DecalSystem() : m_Textures(std::make_unique<DecalTextureArrays>()) { s_Current = this; }
-
-DecalSystem* DecalSystem::Current() { return s_Current; }
+DecalSystem* DecalSystem::Current() { return s_Active; }
 
 DecalSystem::~DecalSystem() {
-    if (s_Current == this) s_Current = nullptr;
+    if (s_Active == this) s_Active = nullptr;
     if (m_DecalBuf) glDeleteBuffers(1, &m_DecalBuf);
     if (m_BoundsBuf) glDeleteBuffers(1, &m_BoundsBuf);
+    if (m_SubBuf) glDeleteBuffers(1, &m_SubBuf);
+}
+
+uint32_t DecalSystem::SubstrateIndex(const SubstrateDesc& desc) {
+    // TARTARUS_NO_SUBSTRATE=1: every substrate off (before / after comparisons).
+    static const bool kOff = [] {
+#pragma warning(suppress : 4996)
+        const char* v = std::getenv("TARTARUS_NO_SUBSTRATE");
+        return v && *v && *v != '0';
+    }();
+    if (kOff || !desc.Enabled()) return 0;
+    // Looked up by the key as given, then by the resolved files: a material's absolute paths and a
+    // .decal's project-relative ones name the same maps, and share one entry (and one slot).
+    const std::string key = desc.Key();
+    uint32_t idx;
+    if (auto it = m_SubIndex.find(key); it != m_SubIndex.end()) {
+        idx = it->second;
+    } else {
+        SubstrateDesc norm = desc;
+        for (std::string* p : {&norm.Albedo, &norm.Normal, &norm.Roughness, &norm.AO}) *p = NormalPath(Resolve(*p));
+        const std::string normKey = norm.Key();
+        if (auto nt = m_SubIndex.find(normKey); nt != m_SubIndex.end()) {
+            m_SubIndex.emplace(key, nt->second);
+            return SubstrateIndex(desc);
+        }
+        if ((int)m_Subs.size() >= Decals::MAX_SUBSTRATES) return 0;
+        SubstrateEntry e;
+        e.Key = normKey;
+        e.Src.Albedo = norm.Albedo;
+        e.Src.Normal = norm.Normal;
+        e.Src.Rough = norm.Roughness;
+        e.Src.AO = norm.AO;
+        e.Src.Detail = norm.Detail;
+        e.Src.Tier = 2048;
+        e.Gpu.Crop = desc.Crop;
+        e.Gpu.TintStrength = glm::vec4(desc.Tint, Unit(desc.Strength));
+        e.Gpu.Params = glm::vec4(std::max(desc.Tiling, 0.01f), desc.RoughRange.x, desc.RoughRange.y, desc.Mirror ? 1.0f : 0.0f);
+        idx = (uint32_t)m_Subs.size();
+        m_Subs.push_back(std::move(e));
+        m_SubIndex.emplace(key, idx);
+        m_SubIndex.emplace(normKey, idx);
+    }
+    m_Subs[idx].Used = m_FrameNo;
+    RefreshSubstrate(idx);
+    return m_Subs[idx].Ready ? idx + 1 : 0;
+}
+
+void DecalSystem::RefreshSubstrate(uint32_t idx) {
+    SubstrateEntry& e = m_Subs[idx];
+    if (e.Frame != m_FrameNo) {
+        // Once per Prepare(): pin the slot (it may have moved since an eviction) and refresh the record.
+        e.Frame = m_FrameNo;
+        const DecalTextureArrays::Slot* slot = m_Textures->Request(e.Src);
+        if (slot && !e.Logged) {
+            e.Logged = true;
+            Log::Info("Decals: substrate " + std::to_string(idx + 1) + " ready (" + ProjectPaths::Relativize(e.Src.Albedo) +
+                      ", layer " + std::to_string(slot->Alloc.Layer) + ", " + std::to_string(slot->Alloc.Size) + " px, map flags " +
+                      std::to_string(slot->TexFlags) + ", tiling " + std::to_string(e.Gpu.Params.x) + ")");
+        }
+        e.Ready = slot != nullptr;
+        if (slot) {
+            const glm::uvec4 ids((uint32_t)slot->Alloc.Layer, (uint32_t)slot->MaxLod, slot->TexFlags, 0u);
+            if (e.Gpu.Rect != slot->Rect || e.Gpu.Ids != ids) {
+                e.Gpu.Rect = slot->Rect;
+                e.Gpu.Ids = ids;
+                m_SubDirty = true;
+                if (!m_InPrepare) FlushSubstrates(); // a material bind mid-frame: its draw reads it next
+            }
+        }
+    }
+}
+
+int DecalSystem::MaterialSubstrate(const SubstrateDesc& desc) {
+    return s_Active && desc.Enabled() ? (int)s_Active->SubstrateIndex(desc) : 0;
+}
+
+void DecalSystem::FlushSubstrates() {
+    if (!m_SubBuf) {
+        glCreateBuffers(1, &m_SubBuf);
+        glNamedBufferStorage(m_SubBuf, (GLsizeiptr)Decals::MAX_SUBSTRATES * (GLsizeiptr)sizeof(Decals::GpuSubstrate), nullptr,
+                             GL_DYNAMIC_STORAGE_BIT);
+        m_SubDirty = !m_Subs.empty();
+    }
+    if (!m_SubDirty || m_Subs.empty()) return;
+    m_SubDirty = false;
+    std::vector<Decals::GpuSubstrate> up(m_Subs.size());
+    for (size_t i = 0; i < m_Subs.size(); ++i) up[i] = m_Subs[i].Gpu;
+    glNamedBufferSubData(m_SubBuf, 0, (GLsizeiptr)(up.size() * sizeof(Decals::GpuSubstrate)), up.data());
+}
+
+void DecalSystem::ClearSubstrates() {
+    m_Subs.clear();
+    m_SubIndex.clear();
+    m_SubDirty = false;
 }
 
 std::shared_ptr<DecalAsset> DecalSystem::GetAsset(const std::string& projectRelPath) {
@@ -236,9 +352,19 @@ int DecalSystem::Prepare(World& world, const glm::mat4& viewProj, const glm::vec
             m_Assets[key] = DecalAsset::Load(path);
             changed = true;
         }
-        if (changed) m_Textures->Clear();
+        if (changed) {
+            m_Textures->Clear();
+            ClearSubstrates();
+            SubstratePresets::ClearCache();
+        }
     }
     m_Textures->BeginFrame();
+    ++m_FrameNo;
+    m_InPrepare = true;
+    // Substrates used in the last ~10 s stay pinned: a few slots shared by whole walls, which would
+    // otherwise pop off and back on as the view turns away and the decals' textures make room.
+    for (uint32_t i = 0; i < (uint32_t)m_Subs.size(); ++i)
+        if (m_FrameNo - m_Subs[i].Used < 600) RefreshSubstrate(i);
 
     const Frustum frustum = Frustum::FromViewProj(viewProj);
     const float fadeStart = maxDistance * 0.8f;
@@ -276,6 +402,18 @@ int DecalSystem::Prepare(World& world, const glm::mat4& viewProj, const glm::vec
         const float fade = d > fadeStart ? 1.0f - (d - fadeStart) / std::max(maxDistance - fadeStart, 1e-3f) : 1.0f;
         const int frame = dc.Frame >= 0 ? dc.Frame : FrameFor(dc.Seed, asset->AtlasCols * asset->AtlasRows);
         PackDecal(*asset, dc, *slot, m_Grading, fade, frame, inst.Gpu);
+        // Substrate: Auto (the receiver material's when it has one, else the asset's - only for an asset
+        // that has one, so graffiti never reveals the wall), Asset, Custom (this decal's own) or Off.
+        uint32_t sub = 0;
+        if (dc.SubstrateMode == 2) {
+            sub = SubstrateIndex(CustomSubstrate(dc));
+        } else if (dc.SubstrateMode == 4) {
+            if (!dc.SubPreset.empty()) sub = SubstrateIndex(SubstratePresets::Get(dc.SubPreset));
+        } else if (dc.SubstrateMode != 3 && asset->Substrate.Enabled()) {
+            sub = SubstrateIndex(asset->Substrate);
+            if (dc.SubstrateMode == 0) inst.Gpu.Ids.z |= Decals::FLAG_SUBSTRATE_AUTO;
+        }
+        inst.Gpu.Ids.x |= sub << Decals::SUBSTRATE_SHIFT;
         inst.SortKey = PackSortKey(dc.SortOrder, (uint32_t)entt::to_integral(entity), dc.Seed);
         m_Frame.push_back(inst);
         dist.push_back(d);
@@ -322,6 +460,8 @@ int DecalSystem::Prepare(World& world, const glm::mat4& viewProj, const glm::vec
         glNamedBufferStorage(m_BoundsBuf, (GLsizeiptr)Decals::MAX_VISIBLE * (GLsizeiptr)sizeof(Decals::GpuDecalBounds),
                              nullptr, GL_DYNAMIC_STORAGE_BIT);
     }
+    m_InPrepare = false;
+    FlushSubstrates();
     if (m_Visible > 0) {
         glNamedBufferSubData(m_DecalBuf, 0, (GLsizeiptr)(m_Visible * sizeof(Decals::GpuDecal)), m_UploadDecals.data());
         glNamedBufferSubData(m_BoundsBuf, 0, (GLsizeiptr)(m_Visible * sizeof(Decals::GpuDecalBounds)), m_UploadBounds.data());
@@ -336,5 +476,6 @@ void DecalSystem::BindForCull() const {
 
 void DecalSystem::BindForShading() const {
     if (m_DecalBuf) glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Decals::BIND_DECALS, m_DecalBuf);
+    if (m_SubBuf) glBindBufferBase(GL_SHADER_STORAGE_BUFFER, Decals::BIND_SUBSTRATES, m_SubBuf);
     m_Textures->Bind();
 }
