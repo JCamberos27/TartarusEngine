@@ -27,6 +27,11 @@ struct EditorSmokeAccess_Graffiti {
     static int RadialCount(EditorLayer& e) { return e.m_Radial.Count; }
     static ImVec2 RadialCentre(EditorLayer& e) { return e.m_Radial.Center; }
     static const char* RadialName(EditorLayer& e, int i) { return e.GraffitiRadialFullName(i); }
+    static bool BakeDuringBake(EditorLayer& e) { return e.GraffitiTestBakeDuringBake(); }
+    static bool OpenOtherDuringBake(EditorLayer& e, const std::string& other) { return e.GraffitiTestOpenOtherDuringBake(other); }
+    static std::string CreatePiece(EditorLayer& e, const std::string& stem) {
+        return e.CreateGraffitiPiece(ProjectPaths::Resolve("assets/Decals/Graffiti/Pieces"), stem);
+    }
 };
 namespace {
 namespace smoke_graffiti {
@@ -40,6 +45,9 @@ struct State {
     uint64_t Hash = 0;
     int BakesBefore = 0;
     std::string AlbedoBefore, AlbedoAfter, TextBefore; // the undo test's bake and text edit
+    std::string OtherPath, FirstDecal, FirstAlbedo;     // the bake-while-opening test's two pieces
+    bool Ok = false;
+    int BakesBefore2 = 0;
 };
 std::shared_ptr<State> g_State;
 
@@ -549,6 +557,126 @@ void RegisterGraffitiTests() {
                 g->Piece.reset();
                 for (const std::string& f : {piece, piece + ".meta", decal, decal + ".meta"}) fs::remove(fs::u8path(f), ec);
                 fs::remove_all(fs::u8path(dir), ec);
+            }
+        }
+        GA::Shown(c.E) = false;
+        ImGui::SetWindowCollapsed(EditorPanels::GraffitiDesigner, false);
+    });
+
+    // A blocking bake started while an async one is in flight used to delete its fence: the async bake
+    // never landed, the stage stuck at 1 and the canvas stopped redrawing.
+    Add("graffiti: a bake started during a bake finishes both and leaves the Designer working", {
+        Do("reset the test's state", [](Ctx&) { g_State = std::make_shared<State>(); }),
+        FreshScene(), Wait(2),
+        Do("show the Graffiti Designer", [](Ctx& c) {
+            GA::Shown(c.E) = true;
+            ImGui::SetWindowPos(EditorPanels::GraffitiDesigner, ImVec2(40, 60));
+            ImGui::SetWindowSize(EditorPanels::GraffitiDesigner, ImVec2(1150, 720));
+        }),
+        Wait(3),
+        Click(ByLabel("New", kDesigner)),
+        Until("the new piece is open", [](Ctx& c) { GraffitiDesigner* g = GA::G(c.E); return g && g->Piece; }),
+        Do("remember the piece, spray tool", [](Ctx& c) {
+            GraffitiDesigner* g = GA::G(c.E);
+            g_State->PiecePath = g->Piece->Path;
+            g->Active = GraffitiDesigner::Tool::Spray;
+            g->Selected = 0;
+        }),
+        Wait(4),
+        CANVAS_STROKE(0.5f),
+        UntilSecs("no bake in flight", [](Ctx& c) { return BakeIdle(c); }, 60),
+        Do("an async bake, then a blocking one in the same call", [](Ctx& c) {
+            g_State->BakesBefore = GA::G(c.E)->Bakes;
+            g_State->Ok = GA::BakeDuringBake(c.E);
+        }),
+        Expect("both bakes ran, nothing is left in flight", [](Ctx& c) {
+            GraffitiDesigner* g = GA::G(c.E);
+            if (!g_State->Ok) return std::string("the second bake failed");
+            if (g->BakeStage != 0 || g->Comp.BakeInFlight()) return "a bake is still in flight (stage " + std::to_string(g->BakeStage) + ")";
+            if (g->Bakes < g_State->BakesBefore + 2) return "only " + std::to_string(g->Bakes - g_State->BakesBefore) + " bake(s) landed";
+            return ReadAll(g->Piece->MapPath("Albedo")).empty() ? std::string("no albedo on disk") : std::string();
+        }),
+        // The Bake button still works afterwards, and the canvas still redraws.
+        Do("note the bake count", [](Ctx& c) { g_State->BakesBefore = GA::G(c.E)->Bakes; }),
+        Click(ByLabel("Bake", kDesigner)),
+        UntilSecs("the button's bake lands", [](Ctx& c) { return GA::G(c.E)->Bakes > g_State->BakesBefore && BakeIdle(c); }, 60),
+        CANVAS_STROKE(0.7f),
+        Wait(10),
+        Expect("the canvas redrew after the stroke", [](Ctx& c) {
+            GraffitiDesigner* g = GA::G(c.E);
+            return !g->NeedsBuild && g->Piece->Layers[0].Strokes.size() == 2 ? std::string() : std::string("the canvas is stuck (NeedsBuild or no second stroke)");
+        }),
+    }, [](Ctx& c) {
+        if (GraffitiDesigner* g = GA::G(c.E)) {
+            if (g->Piece && g->Piece->Path == (g_State ? g_State->PiecePath : std::string())) {
+                std::error_code ec;
+                const std::string piece = g->Piece->Path, decal = g->Piece->DecalPath(), dir = g->Piece->BakeDir();
+                g->Piece.reset();
+                for (const std::string& f : {piece, piece + ".meta", decal, decal + ".meta"}) fs::remove(fs::u8path(f), ec);
+                fs::remove_all(fs::u8path(dir), ec);
+            }
+        }
+        GA::Shown(c.E) = false;
+        ImGui::SetWindowCollapsed(EditorPanels::GraffitiDesigner, false);
+    });
+
+    // Opening another piece while a bake is in flight used to write the first piece's pixels to the
+    // second piece's files (the bake read the open piece when it finished).
+    Add("graffiti: opening another piece during a bake writes the first piece's files only", {
+        Do("reset the test's state", [](Ctx&) { g_State = std::make_shared<State>(); }),
+        FreshScene(), Wait(2),
+        Do("show the Graffiti Designer", [](Ctx& c) {
+            GA::Shown(c.E) = true;
+            ImGui::SetWindowPos(EditorPanels::GraffitiDesigner, ImVec2(40, 60));
+            ImGui::SetWindowSize(EditorPanels::GraffitiDesigner, ImVec2(1150, 720));
+        }),
+        Wait(3),
+        Click(ByLabel("New", kDesigner)),
+        Until("the new piece is open", [](Ctx& c) { GraffitiDesigner* g = GA::G(c.E); return g && g->Piece; }),
+        Do("remember the piece, spray tool", [](Ctx& c) {
+            GraffitiDesigner* g = GA::G(c.E);
+            g_State->PiecePath = g->Piece->Path;
+            g_State->FirstDecal = g->Piece->DecalPath();
+            g_State->FirstAlbedo = g->Piece->MapPath("Albedo");
+            g->Active = GraffitiDesigner::Tool::Spray;
+            g->Selected = 0;
+        }),
+        Wait(4),
+        CANVAS_STROKE(0.5f),
+        UntilSecs("no bake in flight", [](Ctx& c) { return BakeIdle(c); }, 60),
+        Do("start a bake, then open a second piece", [](Ctx& c) {
+            g_State->OtherPath = GA::CreatePiece(c.E, "BakeOther");
+            g_State->Ok = !g_State->OtherPath.empty() && GA::OpenOtherDuringBake(c.E, g_State->OtherPath);
+        }),
+        Expect("the second piece is open and the bake was in flight", [](Ctx& c) {
+            GraffitiDesigner* g = GA::G(c.E);
+            if (!g_State->Ok) return std::string("couldn't start the bake or open the other piece");
+            return g->Piece && g->Piece->Path == g_State->OtherPath ? std::string() : std::string("the other piece isn't open");
+        }),
+        UntilSecs("the bake lands", [](Ctx& c) { return BakeIdle(c); }, 60),
+        Expect("the first piece got its files, the second none", [](Ctx& c) {
+            GraffitiDesigner* g = GA::G(c.E);
+            if (ReadAll(g_State->FirstAlbedo).empty()) return std::string("the first piece's albedo was not written");
+            if (!fs::exists(fs::u8path(g_State->FirstDecal))) return std::string("the first piece's .decal was not written");
+            if (fs::exists(fs::u8path(g->Piece->DecalPath()))) return std::string("the second piece got a .decal it never baked");
+            if (fs::exists(fs::u8path(g->Piece->MapPath("Albedo")))) return std::string("the second piece got the first piece's albedo");
+            return std::string();
+        }),
+    }, [](Ctx& c) {
+        if (GraffitiDesigner* g = GA::G(c.E)) {
+            std::error_code ec;
+            if (g->Piece) g->Piece.reset();
+            if (g_State) {
+                for (const std::string& piece : {g_State->PiecePath, g_State->OtherPath}) {
+                    if (piece.empty()) continue;
+                    Graffiti::Piece tmp;
+                    tmp.Path = piece;
+                    std::string stem = fs::u8path(piece).stem().u8string();
+                    tmp.Name = stem.rfind("GP_", 0) == 0 ? stem.substr(3) : stem;
+                    const std::string decal = tmp.DecalPath(), dir = tmp.BakeDir();
+                    for (const std::string& f : {piece, piece + ".meta", decal, decal + ".meta"}) fs::remove(fs::u8path(f), ec);
+                    fs::remove_all(fs::u8path(dir), ec);
+                }
             }
         }
         GA::Shown(c.E) = false;

@@ -248,6 +248,31 @@ int CategoryFor(DecalEditorState& ed, const std::string& path, std::unordered_ma
     return idx;
 }
 
+bool EntryBefore(const DecalEditorState::Entry& a, const DecalEditorState::Entry& b) {
+    return a.Category != b.Category ? a.Category < b.Category : NaturalLess(a.Name, b.Name);
+}
+
+void RebuildByPath(DecalEditorState& ed) {
+    ed.ByPath.clear();
+    ed.ByPath.reserve(ed.Entries.size());
+    for (int i = 0; i < (int)ed.Entries.size(); ++i) ed.ByPath[ed.Entries[i].Path] = i;
+}
+
+// The library's entries and categories were re-sorted or one was inserted: everything that holds an
+// entry or category index moves with them (the radial's slots hold paths instead).
+template <class FE, class FC> void RemapIndices(DecalEditorState& ed, FE entry, FC cat) {
+    auto e = [&](int& i) {
+        if (i >= 0) i = entry(i);
+    };
+    e(ed.HoverEntry);
+    e(ed.PreviewEntry);
+    for (int& h : ed.HeartPops) e(h);
+    if (ed.SelectedCategory >= 0) ed.SelectedCategory = cat(ed.SelectedCategory);
+    ed.CategoryPool.clear(); // rebuilt (from the category's path) at the brush's next dab
+    ed.PoolEntries = -1;
+    ed.Dirty = true;
+}
+
 // After the last file: depth-first sorted categories, entries in (category, name) order, counts.
 void FinishScan(DecalEditorState& ed, std::unordered_map<std::string, int>& byPath) {
     const int n = (int)ed.Cats.size();
@@ -280,9 +305,19 @@ void FinishScan(DecalEditorState& ed, std::unordered_map<std::string, int>& byPa
         if (sorted[i].Parent >= 0) sorted[sorted[i].Parent].End = std::max(sorted[sorted[i].Parent].End, sorted[i].End);
     ed.Cats.swap(sorted);
     for (auto& e : ed.Entries) e.Category = remap[e.Category];
-    std::stable_sort(ed.Entries.begin(), ed.Entries.end(), [](const auto& a, const auto& b) {
-        return a.Category != b.Category ? a.Category < b.Category : NaturalLess(a.Name, b.Name);
-    });
+    std::vector<int> perm(ed.Entries.size()), newPos(ed.Entries.size());
+    for (size_t i = 0; i < perm.size(); ++i) perm[i] = (int)i;
+    std::stable_sort(perm.begin(), perm.end(), [&](int a, int b) { return EntryBefore(ed.Entries[(size_t)a], ed.Entries[(size_t)b]); });
+    std::vector<DecalEditorState::Entry> sortedEntries;
+    sortedEntries.reserve(perm.size());
+    for (size_t i = 0; i < perm.size(); ++i) {
+        newPos[(size_t)perm[i]] = (int)i;
+        sortedEntries.push_back(std::move(ed.Entries[(size_t)perm[i]]));
+    }
+    ed.Entries.swap(sortedEntries);
+    RemapIndices(ed, [&](int i) { return i < (int)newPos.size() ? newPos[(size_t)i] : -1; },
+                 [&](int c) { return c < (int)remap.size() ? remap[(size_t)c] : -1; });
+    RebuildByPath(ed);
     for (const auto& e : ed.Entries)
         for (int c = e.Category; c >= 0; c = ed.Cats[c].Parent) ++ed.Cats[c].Count;
     // The first category opens, so the tree isn't a wall of folders at first sight.
@@ -295,6 +330,33 @@ void FinishScan(DecalEditorState& ed, std::unordered_map<std::string, int>& byPa
     ed.Dirty = true;
 }
 
+// One .decal's library entry (Category is left for the caller) and its category's path; false when unreadable.
+bool BuildEntry(const std::string& abs, DecalEditorState::Entry& e, std::string& category) {
+    const auto asset = DecalAsset::Load(abs);
+    if (!asset || asset->Missing) return false;
+    const fs::path file = fs::u8path(abs);
+    e.Path = abs;
+    e.Rel = RelativePath(abs);
+    e.Name = file.stem().u8string();
+    if (e.Name.rfind("DA_", 0) == 0 && e.Name.size() > 3) e.Name = e.Name.substr(3);
+    category = asset->Category;
+    if (category.empty()) { // the folder under assets/Decals
+        category = fs::relative(file.parent_path(), fs::u8path(ProjectPaths::Resolve(kDecalRoot))).generic_u8string();
+        if (category == ".") category = "Other";
+    }
+    e.Tags = asset->Tags;
+    e.Search = LowerCopy(e.Name + " " + category + " " + asset->Tags);
+    if (!asset->AlbedoPath.empty()) e.Albedo = ProjectPaths::Resolve(asset->AlbedoPath);
+    e.Mask = asset->LumaMask;
+    e.Invert = asset->InvertMask;
+    e.Base = asset->BaseColor;
+    e.Size = asset->DefaultSize;
+    e.Tier = asset->Tier;
+    e.Channels = (uint8_t)((asset->AlbedoOp > 0) | (asset->NormalOp > 0) << 1 | (asset->RoughnessOp > 0) << 2 |
+                           (asset->MetalOp > 0) << 3 | (asset->AOOp > 0) << 4 | (asset->EmissiveOp > 0) << 5);
+    return true;
+}
+
 void ScanStep(DecalEditorState& ed) {
     static std::unordered_map<std::string, int> byPath;
     if (!ed.ScanStarted || ed.ScanDone) return;
@@ -303,29 +365,10 @@ void ScanStep(DecalEditorState& ed) {
     while (ed.ScanAt < ed.ScanQueue.size() && budget-- > 0) {
         const fs::path& file = ed.ScanQueue[ed.ScanAt++];
         const std::string abs = GenericPath(file);
-        const auto asset = DecalAsset::Load(abs);
-        if (!asset || asset->Missing) continue;
         DecalEditorState::Entry e;
-        e.Path = abs;
-        e.Rel = RelativePath(abs);
-        e.Name = file.stem().u8string();
-        if (e.Name.rfind("DA_", 0) == 0 && e.Name.size() > 3) e.Name = e.Name.substr(3);
-        std::string category = asset->Category;
-        if (category.empty()) { // the folder under assets/Decals
-            category = fs::relative(file.parent_path(), fs::u8path(ProjectPaths::Resolve(kDecalRoot))).generic_u8string();
-            if (category == ".") category = "Other";
-        }
+        std::string category;
+        if (!BuildEntry(abs, e, category)) continue;
         e.Category = CategoryFor(ed, category, byPath);
-        e.Tags = asset->Tags;
-        e.Search = LowerCopy(e.Name + " " + category + " " + asset->Tags);
-        if (!asset->AlbedoPath.empty()) e.Albedo = ProjectPaths::Resolve(asset->AlbedoPath);
-        e.Mask = asset->LumaMask;
-        e.Invert = asset->InvertMask;
-        e.Base = asset->BaseColor;
-        e.Size = asset->DefaultSize;
-        e.Tier = asset->Tier;
-        e.Channels = (uint8_t)((asset->AlbedoOp > 0) | (asset->NormalOp > 0) << 1 | (asset->RoughnessOp > 0) << 2 |
-                               (asset->MetalOp > 0) << 3 | (asset->AOOp > 0) << 4 | (asset->EmissiveOp > 0) << 5);
         ed.Entries.push_back(std::move(e));
         ed.Dirty = true;
     }
@@ -378,9 +421,68 @@ void RebuildVisible(DecalEditorState& ed) {
 }
 
 int FindEntry(const DecalEditorState& ed, const std::string& absPath) {
+    if (ed.ByPath.size() == ed.Entries.size()) { // (the map is built when the scan finishes)
+        const auto it = ed.ByPath.find(absPath);
+        return it == ed.ByPath.end() ? -1 : it->second;
+    }
     for (int i = 0; i < (int)ed.Entries.size(); ++i)
         if (ed.Entries[i].Path == absPath) return i;
     return -1;
+}
+
+// Starts the index over (a decal appeared in a category the tree doesn't have yet).
+void RestartScan(DecalEditorState& ed) {
+    ed.Entries.clear();
+    ed.ByPath.clear();
+    ed.Cats.clear();
+    ed.ScanQueue.clear();
+    ed.ScanAt = 0;
+    ed.ScanStarted = ed.ScanDone = false;
+    ed.Palettes.clear(); // BeginScan reads them again
+    ed.ActivePalette = -1;
+    ed.Visible.clear();
+    ed.HoverEntry = ed.PreviewEntry = -1;
+    for (int& h : ed.HeartPops) h = -1;
+    ed.CategoryPool.clear();
+    ed.PoolEntries = -1;
+    if (ed.SelectedCategory >= 0) ed.SelectedCategory = DecalEditorState::kAllCategories;
+    ed.Dirty = true;
+}
+
+void AssetChanged(DecalEditorState& ed, const std::string& absPath) {
+    const std::string abs = GenericPath(fs::u8path(absPath));
+    ed.Assets.erase(abs); // the tools re-read its size
+    ed.Assets.erase(absPath);
+    if (!ed.ScanDone) return; // still indexing: the scan reads the file itself
+    DecalEditorState::Entry e;
+    std::string category;
+    if (!BuildEntry(abs, e, category)) return;
+    int cat = -1;
+    for (int i = 0; i < (int)ed.Cats.size(); ++i)
+        if (ed.Cats[i].Path == category) { cat = i; break; }
+    if (cat < 0) { // a category the tree doesn't have: index again (rare)
+        RestartScan(ed);
+        return;
+    }
+    e.Category = cat;
+    const int at = FindEntry(ed, abs);
+    if (at >= 0) {
+        if (ed.Entries[at].Category != cat) { // moved between categories
+            RestartScan(ed);
+            return;
+        }
+        e.Favorite = ed.Entries[at].Favorite;
+        ed.Entries[at] = std::move(e);
+        ed.Dirty = true;
+        return;
+    }
+    const auto& favs = EditorSettings::Get().DecalFavorites;
+    e.Favorite = std::find(favs.begin(), favs.end(), e.Rel) != favs.end();
+    const int pos = (int)(std::upper_bound(ed.Entries.begin(), ed.Entries.end(), e, EntryBefore) - ed.Entries.begin());
+    ed.Entries.insert(ed.Entries.begin() + pos, std::move(e));
+    for (int c = cat; c >= 0; c = ed.Cats[c].Parent) ++ed.Cats[c].Count;
+    RemapIndices(ed, [&](int i) { return i >= pos ? i + 1 : i; }, [](int c) { return c; });
+    RebuildByPath(ed);
 }
 
 // The entries the brush draws from when its source is a category (rebuilt when the category or the index changes).
@@ -591,6 +693,7 @@ int EditorLayer::DecalRadialBuild() {
         DecalEditorState::RadialSlot slot;
         slot.What = DecalEditorState::RadialSlot::Category;
         slot.Index = i;
+        slot.Path = ed.Cats[i].Path;
         slot.Label = shortLabel(ed.Cats[i].Name);
         slot.FullName = ed.Cats[i].Name;
         slot.Icon = iconFor(ed.Cats[i].Name, ICON_FA_FOLDER_TREE);
@@ -607,6 +710,7 @@ int EditorLayer::DecalRadialBuild() {
         DecalEditorState::RadialSlot slot;
         slot.What = DecalEditorState::RadialSlot::Recent;
         slot.Index = it->second;
+        slot.Path = ed.Entries[it->second].Path;
         slot.Label = shortLabel(ed.Entries[it->second].Name);
         slot.FullName = ed.Entries[it->second].Name;
         slot.Icon = ICON_FA_CLOCK_ROTATE_LEFT;
@@ -638,15 +742,20 @@ void EditorLayer::RunDecalRadialItem(int i) {
         case DecalEditorState::RadialSlot::Palette:
             SetPalette(ed, slot.Index);
             break;
-        case DecalEditorState::RadialSlot::Category:
+        case DecalEditorState::RadialSlot::Category: { // (by path: the indices shift when the scan finishes)
+            bool found = false;
+            for (const auto& c : ed.Cats) found |= c.Path == slot.Path;
+            if (!found) break;
             SetPalette(ed, -1);
-            s.DecalSourceCategory = ed.Cats[slot.Index].Path;
+            s.DecalSourceCategory = slot.Path;
             EditorSettings::Save();
             break;
+        }
         case DecalEditorState::RadialSlot::Recent:
+            if (FindEntry(ed, slot.Path) < 0) break;
             SetPalette(ed, -1);
             s.DecalSourceCategory.clear();
-            ed.PlacePath = ed.Entries[slot.Index].Path;
+            ed.PlacePath = slot.Path;
             EditorSettings::Save();
             break;
     }
@@ -890,7 +999,6 @@ void EditorLayer::DrawDecalLibraryPanel(World& world) {
     // The palette's entries as a strip of previews.
     if (SourceKind(ed) == 2 && ed.ActivePalette >= 0) {
         const DecalPalette& pal = *ed.Palettes[ed.ActivePalette];
-        std::unordered_map<std::string, int> byPath;
         const float cell = 26.0f * m_UIScale;
         ImDrawList* dl = ImGui::GetWindowDrawList();
         const float limit = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x;

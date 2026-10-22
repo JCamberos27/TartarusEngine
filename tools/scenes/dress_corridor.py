@@ -168,7 +168,10 @@ class Wear:
 
     def __init__(self, d, root='Corridor Wear'):
         self.d = d
-        self.next = 1 + max(e['id'] for k in ('boxes', 'models', 'empties') for e in d[k])
+        # Every entity list counts (boxes, models, empties, and any list added later): a new id must be free in all of
+        # them, or two entities share one and the loader links the wrong parent.
+        self.next = 1 + max((e['id'] for v in d.values() if isinstance(v, list) for e in v
+                             if isinstance(e, dict) and isinstance(e.get('id'), int)), default=0)
         self.root = self.empty(root, -1, (0.0, 0.0, 0.0))
         self.decals = []
 

@@ -10,6 +10,7 @@
 #include "stb_image_write.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstring>
@@ -188,10 +189,8 @@ void Compositor::EnsureTargets(int w, int h) {
 }
 
 void Compositor::FreeTargets() {
-    if (m_Fence) {
-        glDeleteSync((GLsync)m_Fence);
-        m_Fence = nullptr;
-    }
+    FinishInFlight(); // the PBOs go with the targets: a bake still reading must land first, not be lost
+    m_Composited = false;
     for (Target* t : {&m_Layer, &m_LiveT, &m_Below, &m_C[0], &m_C[1]}) {
         if (t->Fbo) glDeleteFramebuffers(1, &t->Fbo);
         const unsigned int tex[2] = {t->Color, t->Extra};
@@ -222,6 +221,7 @@ void Compositor::FreeTargets() {
 }
 
 void Compositor::ForgetImages() {
+    ++m_ImageEpoch;
     for (auto& [path, img] : m_Images)
         if (img.Tex) glDeleteTextures(1, &img.Tex);
     m_Images.clear();
@@ -259,12 +259,20 @@ size_t Compositor::GpuBytes() const {
 // --- Images ----------------------------------------------------------------------------------------
 
 const Compositor::Image& Compositor::LoadImage(const std::string& path) {
+    const double now = std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    bool retry = false;
     auto it = m_Images.find(path);
-    if (it != m_Images.end()) return it->second;
+    if (it != m_Images.end()) {
+        // A failed read is tried again after a short while (the file may have appeared or been fixed).
+        if (it->second.Tex || it->second.M.Valid || it->second.FailedAt < 0.0 || now - it->second.FailedAt < 2.0) return it->second;
+        m_Images.erase(it);
+        retry = true;
+    }
     Image& img = m_Images[path];
     int w = 0, h = 0, comp = 0;
     unsigned char* px = stbi_load(path.c_str(), &w, &h, &comp, 4);
     if (!px) {
+        img.FailedAt = now;
         Log::Warn("Graffiti: couldn't read the image '" + path + "'.", LogContext::Asset(path));
         return img;
     }
@@ -322,7 +330,15 @@ const Compositor::Image& Compositor::LoadImage(const std::string& path) {
     glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, kClear);
     glBindTexture(GL_TEXTURE_2D, 0);
     GLStateCache::Invalidate();
+    if (retry) ++m_ImageEpoch; // it failed before and reads now: programs built on its absence are stale
     return img;
+}
+
+void Compositor::RetryFailedImages() {
+    std::vector<std::string> due;
+    for (const auto& [path, img] : m_Images)
+        if (!img.Tex && !img.M.Valid && img.FailedAt >= 0.0) due.push_back(path);
+    for (const std::string& path : due) LoadImage(path); // (only re-reads those past the delay)
 }
 
 ImageMetrics Compositor::Metrics(const std::string& absolutePath) { return LoadImage(absolutePath).M; }
@@ -535,7 +551,15 @@ void Compositor::Render(const Piece& piece, const Program& program) {
     m_TextureNames = program.Textures;
     for (const std::string& t : program.Textures) LoadImage(t);
     m_Final = ComposeFrom(piece, program, 0, (int)program.Layers.size(), nullptr);
+    m_Composited = true;
     DrawPreview(piece, m_C[m_Final]);
+}
+
+bool Compositor::Repreview(const Piece& piece) {
+    if (!m_Composited || !m_PreviewFbo || m_LiveLayer >= 0) return false;
+    StateGuard guard;
+    DrawPreview(piece, m_C[m_Final]);
+    return true;
 }
 
 void Compositor::BeginLive(const Piece& piece, const Program& program, int programLayer) {
@@ -573,6 +597,7 @@ void Compositor::LiveComposite(const Piece& piece, const Program& program) {
     const LayerProgram& live = program.Layers[(size_t)m_LiveLayer];
     Composite(piece, piece.Layers[(size_t)live.Layer], m_Below, m_LiveT, m_C[0]);
     m_Final = 0;
+    m_Composited = true;
     // The layers above: re-drawn and stacked on (usually none: you spray on the top layer).
     for (int i = m_LiveLayer + 1; i < (int)program.Layers.size(); ++i) {
         const LayerProgram& lp = program.Layers[(size_t)i];
@@ -586,9 +611,9 @@ void Compositor::LiveComposite(const Piece& piece, const Program& program) {
 // --- Bake ------------------------------------------------------------------------------------------
 
 void Compositor::StartBake(const Piece& piece, const Program& program) {
+    FinishInFlight(); // (a Render that resizes the targets does the same)
     Render(piece, program);
     StateGuard guard;
-    if (m_Fence) glDeleteSync((GLsync)m_Fence);
     const Target& c = m_C[m_Final];
     glBindTexture(GL_TEXTURE_2D, c.Color);
     glGenerateMipmap(GL_TEXTURE_2D);
@@ -619,12 +644,35 @@ void Compositor::StartBake(const Piece& piece, const Program& program) {
     glFlush();
 }
 
+void Compositor::FinishInFlight() {
+    if (!m_Fence) return;
+    const GLenum r = glClientWaitSync((GLsync)m_Fence, GL_SYNC_FLUSH_COMMANDS_BIT, 5000000000ull);
+    glDeleteSync((GLsync)m_Fence);
+    m_Fence = nullptr;
+    if (r == GL_TIMEOUT_EXPIRED || r == GL_WAIT_FAILED) return;
+    BakeImages images;
+    if (ReadBack(images)) {
+        m_Stash = std::move(images);
+        m_HasStash = true;
+    }
+}
+
 bool Compositor::PollBake(BakeImages& out, bool wait) {
+    if (m_HasStash) {
+        out = std::move(m_Stash);
+        m_Stash = BakeImages{};
+        m_HasStash = false;
+        return true;
+    }
     if (!m_Fence) return false;
     const GLenum r = glClientWaitSync((GLsync)m_Fence, GL_SYNC_FLUSH_COMMANDS_BIT, wait ? 5000000000ull : 0ull);
     if (r == GL_TIMEOUT_EXPIRED || r == GL_WAIT_FAILED) return false;
     glDeleteSync((GLsync)m_Fence);
     m_Fence = nullptr;
+    return ReadBack(out);
+}
+
+bool Compositor::ReadBack(BakeImages& out) {
     out.Width = m_W;
     out.Height = m_H;
     const size_t px = (size_t)m_W * m_H;
