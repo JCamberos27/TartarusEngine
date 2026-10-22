@@ -18,6 +18,7 @@
 #include "Components.h"
 #include "DecalAsset.h"
 #include "DecalSystem.h"
+#include "DecalEditorState.h"
 #include "Log.h"
 #include "ProjectPaths.h"
 #include "World.h"
@@ -382,6 +383,7 @@ void EditorLayer::CreateDecalAsset(World& world, AssetLibrary& assets, const std
         return;
     }
     AssetDatabase::EnsureGuid(d.Path);
+    if (m_DecalEd) DecalEdit::AssetChanged(*m_DecalEd, d.Path); // into the library without a rescan
     m_SelectedAssetKey = AssetDatabase::PathKey(d.Path);
     m_SelectedAssetIsFolder = false;
     EditorSound::Play(EditorSound::Event::Create);
@@ -394,13 +396,22 @@ void EditorLayer::DrawDecalAssetEditor(World& world, const std::string& path, bo
     struct Cache {
         std::string Path;
         fs::file_time_type Stamp{};
+        double CheckedAt = -10.0; // when the file's time was last looked at
         DecalAsset Asset;
     };
     static Cache cache;
     const std::string abs = AbsoluteAssetPath(path);
     std::error_code ec;
-    const auto stamp = fs::last_write_time(fs::u8path(abs), ec);
-    if (abs != cache.Path || stamp != cache.Stamp) {
+    // The file's time is looked at once a second (a stat per frame is wasted: edits made here update
+    // the cache themselves, and another editor's change can wait a moment).
+    const double now = ImGui::GetTime();
+    fs::file_time_type stamp = cache.Stamp;
+    const bool other = abs != cache.Path;
+    if (other || now - cache.CheckedAt >= 1.0 || now < cache.CheckedAt) {
+        stamp = fs::last_write_time(fs::u8path(abs), ec);
+        cache.CheckedAt = now;
+    }
+    if (other || stamp != cache.Stamp) {
         cache.Path = abs;
         cache.Stamp = stamp;
         const auto loaded = DecalAsset::Load(abs);
@@ -437,6 +448,7 @@ void EditorLayer::DrawDecalAssetEditor(World& world, const std::string& path, bo
             if (copy.Save()) {
                 EditorSound::Play(EditorSound::Event::Duplicate);
                 AssetDatabase::EnsureGuid(copy.Path);
+                if (m_DecalEd) DecalEdit::AssetChanged(*m_DecalEd, copy.Path);
                 InvalidateProjectAssetIndex();
             } else {
                 EditorSound::Play(EditorSound::Event::Blocked);
@@ -467,6 +479,7 @@ void EditorLayer::DrawDecalAssetEditor(World& world, const std::string& path, bo
             PushAssetUndo(world, abs, std::move(before), "Edit Decal", /*assetOnly=*/true);
             cache.Stamp = fs::last_write_time(fs::u8path(abs), ec);
             CachedDecal(abs, /*force=*/true); // tiles and the component extras see it now
+            if (m_DecalEd) DecalEdit::AssetChanged(*m_DecalEd, abs); // the library's tile and the tools' cached size
         } else {
             EditorSound::Play(EditorSound::Event::Blocked);
             Log::Error("Couldn't save '" + ProjectPaths::Relativize(abs) + "' (read-only?).");

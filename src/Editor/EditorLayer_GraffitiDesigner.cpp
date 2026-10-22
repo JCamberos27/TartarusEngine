@@ -24,6 +24,7 @@
 #include "PenInput.h"
 #include "Components.h"
 #include "DecalAsset.h"
+#include "DecalEditorState.h"
 #include "DecalSystem.h"
 #include "Log.h"
 #include "ProjectPaths.h"
@@ -120,7 +121,9 @@ int ProgramIndex(const GraffitiDesigner& g, int layer) {
 // moment) scales its new letters in; a bake always builds its own program without it.
 void Rebuild(GraffitiDesigner& g) {
     if (!g.Piece) return;
-    g.Program = Graffiti::Build(*g.Piece, g.Comp.MetricsCallback());
+    g.PreviewOnly = false;
+    g.Comp.RetryFailedImages();
+    g.Program = Graffiti::Build(*g.Piece, g.Comp.MetricsCallback(), g.Cache, g.Comp.ImageEpoch());
     bool cascading = false;
     if (g.CascadeLayer >= 0 && !Glass::Motion().ReduceMotion()) {
         const float t = (float)(Now() - g.CascadeStart);
@@ -151,20 +154,93 @@ void Edited(GraffitiDesigner& g) {
     g.NeedsBuild = true;
 }
 
+// An edit that only changes the preview shader's inputs (relief, show-through): the layers are not
+// rebuilt or redrawn, the canvas is just re-previewed from the last composite.
+void EditedPreview(GraffitiDesigner& g) {
+    g.Dirty = true;
+    if (!g.NeedsBuild) g.PreviewOnly = true;
+}
+
+// Stage 1 -> 2: the maps have arrived from the GPU; the PNG encode and the files go to a worker. The
+// worker writes the files after this edit window closes, so the pre-images are taken here and the
+// bake becomes its undo step when the worker is done.
+void BeginEncode(GraffitiDesigner& g, Graffiti::BakeImages&& img) {
+    const std::shared_ptr<Graffiti::Piece> piece = g.BakePiece; // the piece the bake started on
+    g.BakeBefore.clear();
+    if (g.BakeUndoable) {
+        try {
+            for (const char* map : {"Albedo", "Normal", "Surface", "Aux"})
+                g.BakeBefore.push_back(EditorFileHistory::Capture(fs::u8path(piece->MapPath(map))));
+            g.BakeBefore.push_back(EditorFileHistory::Capture(fs::u8path(piece->DecalPath())));
+        } catch (const std::exception& e) { // a file that can't be read back can't be undone to
+            Log::Warn(std::string("Graffiti: the bake won't be undoable: ") + e.what(), LogContext::Asset(piece->Path));
+            g.BakeBefore.clear();
+            g.BakeUndoable = false;
+        }
+    }
+    g.Encoding = std::async(std::launch::async, [piece, img = std::move(img)]() -> uint64_t {
+        const Graffiti::BakeFiles files = Graffiti::EncodePngs(img);
+        return Graffiti::WriteBake(*piece, files) ? HashFiles(files) : 0ull;
+    });
+    g.BakeStage = 2;
+}
+
+// Stage 2 done (the worker has finished): the result lands, and the bake's undo step is queued for the
+// next frame's GraffitiFrame (it needs the World).
+void FinishEncode(GraffitiDesigner& g) {
+    const uint64_t h = g.Encoding.get();
+    g.BakeStage = 0;
+    const std::shared_ptr<Graffiti::Piece> piece = std::move(g.BakePiece);
+    g.BakePiece.reset();
+    if (h && piece) {
+        g.LastBakeHash = h;
+        ++g.Bakes;
+        g.BakeDoneAt = Now();
+        g.Status = "Baked " + fs::u8path(piece->DecalPath()).filename().u8string();
+        if (g.BakeUndoable) g.PendingJournal = std::move(g.BakeBefore);
+        g.BakeBefore.clear();
+        if (DecalSystem* ds = DecalSystem::Current()) ds->Refresh(piece->DecalPath());
+        EditorSound::Play(EditorSound::Event::GraffitiBakeDone);
+        g.BakedPaths.push_back(piece->DecalPath()); // (the library picks up a new DA_Piece_* from these)
+    } else {
+        g.BakeBefore.clear();
+        g.Status = "Bake failed (see the Console)";
+    }
+}
+
+// Brings any bake in flight to its end now (waiting on the GPU and the worker), so a new one can start
+// on the compositor's targets: a bake is finished or handed over, never abandoned half way.
+void DrainBake(GraffitiDesigner& g) {
+    if (g.BakeStage == 1) {
+        Graffiti::BakeImages img;
+        if (g.Comp.PollBake(img, /*wait=*/true)) BeginEncode(g, std::move(img));
+        else { g.BakeStage = 0; g.BakePiece.reset(); }
+    }
+    if (g.BakeStage == 2) {
+        if (g.Encoding.valid()) g.Encoding.wait();
+        if (g.Encoding.valid()) FinishEncode(g);
+        else g.BakeStage = 0;
+    }
+}
+
 // Bakes right now, waiting for the GPU (a new piece needs its .decal before a decal can show it).
 bool BakeNow(GraffitiDesigner& g) {
     if (!g.Piece) return false;
-    const Graffiti::Program prog = Graffiti::Build(*g.Piece, g.Comp.MetricsCallback());
+    DrainBake(g); // an async bake in flight comes first: its fence is not ours to delete
+    g.Comp.RetryFailedImages();
+    const Graffiti::Program prog = Graffiti::Build(*g.Piece, g.Comp.MetricsCallback(), g.Cache, g.Comp.ImageEpoch());
+    const std::shared_ptr<Graffiti::Piece> snap = Graffiti::SnapshotForBake(*g.Piece);
     g.Comp.StartBake(*g.Piece, prog);
     Graffiti::BakeImages img;
     if (!g.Comp.PollBake(img, /*wait=*/true)) return false;
     const Graffiti::BakeFiles files = Graffiti::EncodePngs(img);
-    if (!Graffiti::WriteBake(*g.Piece, files)) return false;
+    if (!Graffiti::WriteBake(*snap, files)) return false;
     g.LastBakeHash = HashFiles(files);
     ++g.Bakes;
     g.BakeDoneAt = Now();
     g.NeedsBuild = true; // the bake rendered without the cascade: show the canvas again
-    if (DecalSystem* ds = DecalSystem::Current()) ds->Refresh(g.Piece->DecalPath());
+    g.BakedPaths.push_back(snap->DecalPath());
+    if (DecalSystem* ds = DecalSystem::Current()) ds->Refresh(snap->DecalPath());
     return true;
 }
 
@@ -179,7 +255,9 @@ void StartBake(GraffitiDesigner& g, bool undoable = false) {
     }
     g.BakeUndoable = undoable;
     if (g.Dirty) SaveNow(g);
-    const Graffiti::Program prog = Graffiti::Build(*g.Piece, g.Comp.MetricsCallback());
+    g.Comp.RetryFailedImages();
+    const Graffiti::Program prog = Graffiti::Build(*g.Piece, g.Comp.MetricsCallback(), g.Cache, g.Comp.ImageEpoch());
+    g.BakePiece = Graffiti::SnapshotForBake(*g.Piece);
     g.Comp.StartBake(*g.Piece, prog);
     g.BakeStage = 1;
     g.Status = "Baking...";
@@ -405,9 +483,17 @@ void ScanStamps(StampPicker& pk) {
         }
         if (f.Files.empty()) continue;
         std::sort(f.Files.begin(), f.Files.end());
+        for (const std::string& rel : f.Files) f.Lower.push_back(LowerAscii(BaseName(rel)));
         pk.Folders.push_back(std::move(f));
     }
     std::sort(pk.Folders.begin(), pk.Folders.end(), [](const auto& a, const auto& b) { return a.Name < b.Name; });
+}
+
+// The absolute path and PathKey of a picker image, resolved once.
+const StampPicker::Names& PickerNames(StampPicker& pk, const std::string& rel) {
+    auto it = pk.NameCache.find(rel);
+    if (it == pk.NameCache.end()) it = pk.NameCache.emplace(rel, StampPicker::Names{Abs(rel), AssetDatabase::PathKey(rel)}).first;
+    return it->second;
 }
 
 // A square on a dark checker holding the stamp's thumbnail (or a placeholder while it loads).
@@ -422,10 +508,9 @@ void DrawStampThumb(GraffitiDesigner& g, AssetThumbnailLoader& thumbs, const std
         for (int x = (y & 1); x * sq < side; x += 2)
             dl->AddRectFilled(ImVec2(p0.x + x * sq, p0.y + y * sq), ImVec2(p0.x + (x + 1) * sq, p0.y + (y + 1) * sq), light);
     dl->PopClipRect();
-    const std::string abs = Abs(rel);
+    const std::string& abs = PickerNames(g.Picker, rel).Abs;
     const AssetThumbnailLoader::Thumb t = thumbs.Get(abs, AssetThumbnailLoader::Source::Image);
-    if (std::find(g.Picker.Requested.begin(), g.Picker.Requested.end(), abs) == g.Picker.Requested.end())
-        g.Picker.Requested.push_back(abs);
+    if (g.Picker.RequestedSet.insert(abs).second) g.Picker.Requested.push_back(abs);
     if (t.Tex) {
         dl->AddImage((ImTextureID)(intptr_t)t.Tex, p0, p1, ImVec2(0.0f, t.FlipV ? 1.0f : 0.0f), ImVec2(1.0f, t.FlipV ? 0.0f : 1.0f));
     } else {
@@ -442,6 +527,7 @@ std::string DrawStampPickerPopup(GraffitiDesigner& g, AssetThumbnailLoader& thum
     if (pk.WantOpen) {
         pk.WantOpen = false;
         ScanStamps(pk);
+        pk.NameCache.clear();
         pk.Search[0] = 0;
         pk.Tab = pk.Recent.empty() ? 1 : 0;
         if (pk.Tab == 1 && pk.Folders.empty()) pk.Tab = 0;
@@ -465,8 +551,12 @@ std::string DrawStampPickerPopup(GraffitiDesigner& g, AssetThumbnailLoader& thum
     const std::vector<std::string>& src = pk.Tab == 0 ? pk.Recent : pk.Folders[(size_t)pk.Tab - 1].Files;
     const std::string needle = LowerAscii(pk.Search);
     std::vector<const std::string*> shown;
-    for (const std::string& f : src)
-        if (needle.empty() || LowerAscii(BaseName(f)).find(needle) != std::string::npos) shown.push_back(&f);
+    for (size_t i = 0; i < src.size(); ++i) {
+        // (a folder's lower-cased names are made once when it's scanned; Recent is a dozen at most)
+        const bool match = needle.empty() || (pk.Tab == 0 ? LowerAscii(BaseName(src[i])) : pk.Folders[(size_t)pk.Tab - 1].Lower[i]).find(needle) != std::string::npos;
+        if (match) shown.push_back(&src[i]);
+    }
+    const std::string currentKey = AssetDatabase::PathKey(current);
 
     const float cell = 72.0f * scale, gap = 6.0f * scale;
     ImGui::BeginChild("##stampGrid", ImVec2(0, -ImGui::GetTextLineHeightWithSpacing()), ImGuiChildFlags_None);
@@ -494,7 +584,7 @@ std::string DrawStampPickerPopup(GraffitiDesigner& g, AssetThumbnailLoader& thum
                 DrawStampThumb(g, thumbs, rel, p0, cell, scale);
                 ImDrawList* dl = ImGui::GetWindowDrawList();
                 const ImVec2 p1(p0.x + cell, p0.y + cell);
-                if (AssetDatabase::PathKey(rel) == AssetDatabase::PathKey(current))
+                if (PickerNames(pk, rel).Key == currentKey)
                     dl->AddRect(p0, p1, EditorTheme::U32(EditorTheme::Accent), 3.0f * scale, 0, 2.0f);
                 else
                     dl->AddRect(p0, p1, EditorTheme::U32(hovered ? EditorTheme::Strong : EditorTheme::Hairline), 3.0f * scale);
@@ -563,6 +653,22 @@ std::string EditorLayer::CreateGraffitiPiece(const std::string& folder, const st
     return target.u8string();
 }
 
+bool EditorLayer::GraffitiTestBakeDuringBake() {
+    if (!m_Graffiti || !m_Graffiti->Piece) return false;
+    GraffitiDesigner& g = *m_Graffiti;
+    StartBake(g, /*undoable=*/false); // an async bake goes out...
+    const bool started = g.BakeStage == 1;
+    return started && BakeNow(g); // ...and a blocking one right behind it
+}
+
+bool EditorLayer::GraffitiTestOpenOtherDuringBake(const std::string& otherPath) {
+    if (!m_Graffiti || !m_Graffiti->Piece) return false;
+    StartBake(*m_Graffiti, /*undoable=*/false);
+    if (m_Graffiti->BakeStage != 1) return false;
+    OpenGraffitiPiece(otherPath); // the open piece changes while the bake is still in flight
+    return true;
+}
+
 bool EditorLayer::GraffitiViewportSprayActive() const {
     return m_Graffiti && m_ShowGraffitiDesigner && m_Graffiti->ViewportSpray;
 }
@@ -570,51 +676,44 @@ bool EditorLayer::GraffitiViewportSprayActive() const {
 void EditorLayer::GraffitiFrame(World& world) {
     if (!m_Graffiti) return;
     GraffitiDesigner& g = *m_Graffiti;
+    if (!g.PendingJournal.empty()) { // a bake finished outside the frame loop (a drained one)
+        JournalFilesBefore(world, g.PendingJournal, "Bake Graffiti Piece");
+        g.PendingJournal.clear();
+    }
     // A bake's maps arriving from the GPU, then its files from the worker.
     if (g.BakeStage == 1) {
         Graffiti::BakeImages img;
         if (g.Comp.PollBake(img)) {
-            auto piece = std::make_shared<Graffiti::Piece>(*g.Piece);
-            // The worker writes the files after this edit window closes, so the pre-images are taken
-            // here and the bake becomes its undo step when the worker is done (below).
-            g.BakeBefore.clear();
-            if (g.BakeUndoable)
-                for (const char* map : {"Albedo", "Normal", "Surface", "Aux"})
-                g.BakeBefore.push_back(EditorFileHistory::Capture(fs::u8path(piece->MapPath(map))));
-                g.BakeBefore.push_back(EditorFileHistory::Capture(fs::u8path(piece->DecalPath())));
-            g.Encoding = std::async(std::launch::async, [piece, img = std::move(img)]() -> uint64_t {
-                const Graffiti::BakeFiles files = Graffiti::EncodePngs(img);
-                return Graffiti::WriteBake(*piece, files) ? HashFiles(files) : 0ull;
-            });
-            g.BakeStage = 2;
+            BeginEncode(g, std::move(img));
             g.NeedsBuild = true; // the bake render replaced the canvas; show the live program again
+        } else if (!g.Comp.BakeInFlight()) { // nothing left to wait for: don't wait forever
+            g.BakeStage = 0;
+            g.BakePiece.reset();
+            g.Status = "Bake failed (see the Console)";
         }
     } else if (g.BakeStage == 2 && g.Encoding.valid() &&
                g.Encoding.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
-        const uint64_t h = g.Encoding.get();
-        g.BakeStage = 0;
-        if (h) {
-            g.LastBakeHash = h;
-            ++g.Bakes;
-            g.BakeDoneAt = Now();
-            g.Status = "Baked " + fs::u8path(g.Piece->DecalPath()).filename().u8string();
-            if (g.BakeUndoable) JournalFilesBefore(world, g.BakeBefore, "Bake Graffiti Piece");
-            g.BakeBefore.clear();
-            if (DecalSystem* ds = DecalSystem::Current()) ds->Refresh(g.Piece->DecalPath());
-            EditorSound::Play(EditorSound::Event::GraffitiBakeDone);
-        } else {
-            g.Status = "Bake failed (see the Console)";
-        }
-        if (g.BakeAgain && !g.Stroking) {
-            g.BakeAgain = false;
-            const bool again = g.BakeAgainUndoable;
-            g.BakeAgainUndoable = false;
-            StartBake(g, again);
+        FinishEncode(g);
+        if (!g.PendingJournal.empty()) {
+            JournalFilesBefore(world, g.PendingJournal, "Bake Graffiti Piece");
+            g.PendingJournal.clear();
         }
     }
+    if (!g.BakedPaths.empty()) { // new or re-baked DA_Piece_*.decal files: into the Decal Library, and the tools' caches
+        for (const std::string& p : g.BakedPaths)
+            if (m_DecalEd) DecalEdit::AssetChanged(*m_DecalEd, p);
+        g.BakedPaths.clear();
+    }
+    if (g.BakeStage == 0 && g.BakeAgain && !g.Stroking) {
+        g.BakeAgain = false;
+        const bool again = g.BakeAgainUndoable;
+        g.BakeAgainUndoable = false;
+        StartBake(g, again);
+    }
     if (!g.Piece) return;
-    // Undo / redo (or anything else) rewrote the recipe: reload it, and re-bake a piece on a wall.
-    if (!g.Stroking && Now() - g.LastStampCheck > 0.25) {
+    // Undo / redo (or anything else) rewrote the recipe: reload it, and re-bake a piece on a wall. Not
+    // while there are unsaved edits, a drag, or a text field in use: the reload would throw them away.
+    if (!g.Stroking && !g.Dirty && !g.Moving && !ImGui::GetIO().WantTextInput && Now() - g.LastStampCheck > 0.25) {
         g.LastStampCheck = Now();
         const long long stamp = FileStamp(g.Piece->Path);
         if (stamp != g.Stamp && stamp != 0) {
@@ -749,11 +848,15 @@ void EditorLayer::DrawGraffitiViewportOverlay(World& world, Camera& editorCamera
     // A grid, so the affine quads stay close to the true perspective - and so geometry standing in
     // front of the wall can hide the cells behind it, as the bake's depth test does: each cell's
     // centre is ray-cast from the eye; a surface nearer than the wall point means the cell is covered.
-    // The result is cached while the camera, the decal and (for 0.3 s) the scene hold still.
+    // The result is cached until the camera, the decal or the piece moves.
     constexpr int kGrid = 24;
     const glm::mat4 key = vp * box;
-    if (g.OccVisible.size() != (size_t)(kGrid * kGrid) || std::memcmp(&key, &g.OccKey, sizeof(key)) != 0 || Now() - g.OccAt > 0.3) {
+    const void* pieceKey = g.Piece.get();
+    if (g.OccVisible.size() != (size_t)(kGrid * kGrid) || std::memcmp(&key, &g.OccKey, sizeof(key)) != 0 || pieceKey != g.OccPiece ||
+        g.Target != g.OccTarget) {
         g.OccKey = key;
+        g.OccPiece = pieceKey;
+        g.OccTarget = g.Target;
         g.OccAt = Now();
         g.OccVisible.assign((size_t)(kGrid * kGrid), 1);
         const glm::vec3 eye = editorCamera.Position;
@@ -790,6 +893,7 @@ void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
         if (m_Graffiti) { // free the stamp picker's thumbnails
             for (const std::string& p : m_Graffiti->Picker.Requested) m_AssetThumbs.Invalidate(p);
             m_Graffiti->Picker.Requested.clear();
+            m_Graffiti->Picker.RequestedSet.clear();
         }
         return;
     }
@@ -1183,7 +1287,9 @@ void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
 
     if (ImGui::CollapsingHeader("Piece")) {
         Graffiti::Piece& p = *g.Piece;
-        bool ch = false;
+        bool ch = false;      // changes what the layers draw: a full render
+        bool pv = false;      // changes the preview shader's inputs only (relief, show-through)
+        bool plain = false;   // changes nothing the canvas shows (the bake's settings)
         static const int sides[] = {512, 1024, 2048};
         static const char* sideNames[] = {"512", "1024", "2048"};
         int wi = p.Width == 512 ? 0 : p.Width == 1024 ? 1 : 2, hi = p.Height == 512 ? 0 : p.Height == 1024 ? 1 : 2;
@@ -1197,21 +1303,23 @@ void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
         ch |= ImGui::DragFloat2("Size (m)", &p.Metres.x, 0.01f, 0.1f, 10.0f, "%.2f");
         int seed = (int)p.Seed;
         if (ImGui::InputInt("Seed", &seed)) { p.Seed = (uint32_t)std::max(seed, 0); ch = true; }
-        ch |= ImGui::SliderFloat("Roughness", &p.Roughness, 0.0f, 1.0f);
-        ch |= ImGui::SliderFloat("Relief", &p.Relief, 0.0f, 1.0f);
-        ch |= ImGui::SliderFloat("Wall show-through", &p.ShowThrough, 0.0f, 1.0f);
+        plain |= ImGui::SliderFloat("Roughness", &p.Roughness, 0.0f, 1.0f);
+        pv |= ImGui::SliderFloat("Relief", &p.Relief, 0.0f, 1.0f);
+        pv |= ImGui::SliderFloat("Wall show-through", &p.ShowThrough, 0.0f, 1.0f);
         ch |= ImGui::Checkbox("Drips", &p.Drips);
-        ch |= ImGui::ColorEdit3("Glow colour", &p.GlowColor.x, ImGuiColorEditFlags_NoInputs);
-        ch |= ImGui::SliderFloat("Glow strength", &p.GlowStrength, 0.0f, 8.0f);
-        ch |= ImGui::Checkbox("UV paint (glows under UV light only)", &p.UV);
+        plain |= ImGui::ColorEdit3("Glow colour", &p.GlowColor.x, ImGuiColorEditFlags_NoInputs);
+        plain |= ImGui::SliderFloat("Glow strength", &p.GlowStrength, 0.0f, 8.0f);
+        plain |= ImGui::Checkbox("UV paint (glows under UV light only)", &p.UV);
         ImGui::TextDisabled("Weathering the decal starts with");
-        ch |= ImGui::SliderFloat("Fade", &p.Fade, 0.0f, 1.0f);
-        ch |= ImGui::SliderFloat("Bleach", &p.Bleach, 0.0f, 1.0f);
-        ch |= ImGui::SliderFloat("Peel", &p.Peel, 0.0f, 1.0f);
-        ch |= ImGui::SliderFloat("Buff", &p.Buff, 0.0f, 1.0f);
-        if (ch) {
+        plain |= ImGui::SliderFloat("Fade", &p.Fade, 0.0f, 1.0f);
+        plain |= ImGui::SliderFloat("Bleach", &p.Bleach, 0.0f, 1.0f);
+        plain |= ImGui::SliderFloat("Peel", &p.Peel, 0.0f, 1.0f);
+        plain |= ImGui::SliderFloat("Buff", &p.Buff, 0.0f, 1.0f);
+        if (ch || pv || plain) {
             p.GlowColor = Graffiti::Quantise(p.GlowColor);
-            Edited(g);
+            if (ch) Edited(g);
+            else if (pv) EditedPreview(g);
+            else g.Dirty = true; // saved with the recipe; the canvas shows nothing of it
         }
     }
     ImGui::EndChild();
@@ -1220,6 +1328,10 @@ void EditorLayer::DrawGraffitiDesignerPanel(World& world) {
     ImGui::SameLine();
     ImGui::BeginChild("##gcanvas", ImVec2(0, 0), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     if (g.NeedsBuild && !g.Stroking && g.BakeStage != 1) Rebuild(g);
+    else if (g.PreviewOnly && !g.Stroking && g.BakeStage != 1) {
+        g.PreviewOnly = false;
+        if (!g.Piece || !g.Comp.Repreview(*g.Piece)) Rebuild(g);
+    }
     const ImVec2 avail = ImGui::GetContentRegionAvail();
     const ImVec2 origin = ImGui::GetCursorScreenPos();
     ImGui::InvisibleButton("##canvasHit", ImVec2(std::max(avail.x, 8.0f), std::max(avail.y, 8.0f)),

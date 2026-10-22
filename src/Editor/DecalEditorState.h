@@ -43,6 +43,7 @@ struct DecalEditorState {
         bool Open = false;
     };
     std::vector<Entry> Entries;
+    std::unordered_map<std::string, int> ByPath; // Entry::Path -> index into Entries (kept with Entries once the scan is done)
     std::vector<Category> Cats;
     std::vector<std::filesystem::path> ScanQueue; // .decal files not read yet
     size_t ScanAt = 0;
@@ -72,7 +73,8 @@ struct DecalEditorState {
     float PlaceSpin = 0.0f;       // radians, scroll turns it
     float PlaceScale = 1.0f;      // Shift+scroll
     struct AssetInfo { glm::vec3 Size{1.0f, 1.0f, 0.25f}; bool Ok = false; };
-    std::unordered_map<std::string, AssetInfo> Assets; // by absolute path; read once
+    std::unordered_map<std::string, AssetInfo> Assets; // by absolute path; read once (DecalEdit::AssetChanged drops one)
+    std::unordered_map<std::string, std::string> Resolved; // palette entry path -> ProjectPaths::Resolve of it
 
     DecalTools::BrushSettings Brush;
     DecalTools::BrushStroke Stroke;
@@ -121,6 +123,7 @@ struct DecalEditorState {
     struct RadialSlot {
         enum Kind : int { Palette, Category, Recent } What = Recent;
         int Index = 0;            // palette / category / entry index
+        std::string Path;      // Category / Recent: the category's or the decal's path (the indices shift when the library re-sorts)
         std::string Label;     // short, for the wedge
         std::string FullName;  // for the ring's centre while hovered
         const char* Icon = "";
@@ -147,4 +150,7 @@ void NoteRecent(DecalEditorState& ed, const std::string& absPath);     // most r
 void SetPalette(DecalEditorState& ed, int index);                      // -1 none
 void RefreshPool(DecalEditorState& ed);                                // CategoryPool for the brush's category
 void SaveToolSettings(const DecalEditorState& ed);                     // brush + grime values -> preferences
+// A .decal was written or created (a save, a duplicate, a Graffiti bake): drops what was cached about it
+// and brings the library's entry for it up to date (adding it, in order, when it is new).
+void AssetChanged(DecalEditorState& ed, const std::string& absPath);
 } // namespace DecalEdit
