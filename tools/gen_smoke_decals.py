@@ -1,6 +1,9 @@
-# Writes tests/smoke-scenes/smoke_decals.json, the clustered-decal smoke scene (docs/DECALS.md).
+# Writes tests/smoke-scenes/smoke_decals.json, the clustered-decal smoke scene (docs/DECALS.md), or with
+# --stress smoke_decals_stress.json: the full 4096-decal budget piled on the wall (SmokeChecks::DecalStress).
 #   python tools/gen_smoke_decals.py tests/smoke-scenes/smoke_decals.json
-import json, sys
+#   python tools/gen_smoke_decals.py tests/smoke-scenes/smoke_decals_stress.json --stress
+import json, random, sys
+STRESS = "--stress" in sys.argv[2:]
 A = "assets/Test/Decals/DA_Test_Grid.decal"
 def decal(i, name, pos, rot=(0,0,0), size=(0.5,0.5,0.25), seed=0, sort=0, static=True, dynamic=True, jit=0.0):
     return {"name": name, "id": i, "parentId": -1, "order": i, "position": list(pos), "rotation": list(rot), "scale": [1,1,1],
@@ -38,6 +41,29 @@ scene = {
      "materials": [{"path": "assets/Materials/Test/mat_transmission.mat"}]},
   ],
 }
+if STRESS:
+    scene["_comment"] = ("Engine-owned clustered-decal stress scene (docs/DECALS.md): the whole 4096-decal visible budget "
+                         "piled on one wall, so hundreds of clusters go past the 256-per-cluster cap. Two frames of the still "
+                         "view must bin identically, every cluster must match the CPU copy of the cull's test (its top-most "
+                         "256), and the clamped clusters must be counted. Regenerate with "
+                         "tools/gen_smoke_decals.py <out> --stress; checked by SmokeChecks::DecalStress.")
+    scene["empties"] = [e for e in scene["empties"] if e["name"] == "Sun"]
+    scene["models"] = []
+    scene["boxes"] = scene["boxes"][:2]
+    rng = random.Random(4096)
+    for k in range(4096):
+        x = round(rng.uniform(-2.5, 2.5), 3); y = round(rng.uniform(1.5, 4.5), 3)
+        w = round(rng.uniform(3.0, 6.0), 3)
+        e = {"name": f"S{k}", "id": 10 + k, "parentId": -1, "order": 10 + k, "position": [x, y, -2.9],
+             "rotation": [0, 0, round(rng.uniform(0, 360), 1)], "scale": [1, 1, 1],
+             "Decal": {"Asset": A, "Size": [w, w, 8.0], "Seed": k, "Sort Order": k % 8}}
+        scene["empties"].append(e)
+    with open(sys.argv[1], "w", newline="\n") as f:
+        json.dump(scene, f, separators=(",", ":"))
+        f.write("\n")
+    print(4096, "decals")
+    sys.exit(0)
+
 nid = 10
 # 300 overlapping decals tiling the wall's front face (z = -2.9): 20 x 15, 0.45 m apart, 0.6 m wide.
 for r in range(15):

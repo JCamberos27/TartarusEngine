@@ -128,42 +128,56 @@ vec3 SubstrateColour(SubstrateSample ss, vec3 photo) {
     return SubstrateBaked(ss) * mix(1.0, l, 0.55);
 }
 
-float DecalHash(vec2 p) {
-    p = fract(p * vec2(123.34, 456.21));
-    p += dot(p, p + 45.32);
-    return fract(p.x * p.y);
+// The lattice hash is fract(q.x * q.y), q = r + dot(r, r + 45.32), r = fract(p * (123.34, 456.21)). Its
+// first step is per axis, so a cell's four corners share it: DecalNoise takes r for both columns and both
+// rows once and finishes each corner here - the same arithmetic as hashing every corner from scratch.
+float DecalHashTail(vec2 r) {
+    r += dot(r, r + 45.32);
+    return fract(r.x * r.y);
 }
 // Value noise in [0, 1] for the weathering masks, in the decal's own box space so it sticks to it.
 float DecalNoise(vec2 p) {
     vec2 i = floor(p), f = fract(p);
     vec2 u = f * f * (3.0 - 2.0 * f);
-    return mix(mix(DecalHash(i), DecalHash(i + vec2(1, 0)), u.x),
-               mix(DecalHash(i + vec2(0, 1)), DecalHash(i + vec2(1, 1)), u.x), u.y);
+    vec2 r0 = fract(i * vec2(123.34, 456.21)), r1 = fract((i + vec2(1.0)) * vec2(123.34, 456.21));
+    return mix(mix(DecalHashTail(r0), DecalHashTail(vec2(r1.x, r0.y)), u.x),
+               mix(DecalHashTail(vec2(r0.x, r1.y)), DecalHashTail(r1), u.x), u.y);
 }
 
 // `geoN` is the geometric normal (facing the viewer on a back face), N the shading normal so far.
+// `cluster`: this fragment's froxel (clusterIndex(), shared with the light loop). `grungeSub` / `grungeSS`:
+// the material substrate ApplyGrunge already sampled (index + 1, 0 = none), so an Auto decal reuses it.
 void ApplyDecals(inout vec3 albedo, inout vec3 N, inout float roughness, inout float metallic, inout float ao,
-                 inout vec3 emissive, vec3 geoN) {
+                 inout vec3 emissive, vec3 geoN, uint cluster, uint grungeSub, SubstrateSample grungeSS) {
     if (uDecalCount == 0 || uReceiveDecals == 0 || uClusterEnabled == 0) return;
     // The loop skips decals per fragment, so implicit derivatives are undefined inside it: every
     // decal's uv gradient comes from these, the surface's own footprint, taken out here.
     vec3 dpx = dFdx(vWorldPos), dpy = dFdy(vWorldPos);
-    DecalClusterRange range = uDecalRange[clusterIndex()];
+    DecalClusterRange range = uDecalRange[cluster];
     vec4 wp = vec4(vWorldPos, 1.0);
-    // The last substrate sampled: layered peels on one wall share it, so it's read once.
-    uint cachedSub = 0u;
-    SubstrateSample ss;
+    // The last substrate sampled: layered peels on one wall share it, so it's read once (Grunge's included).
+    uint cachedSub = grungeSub;
+    SubstrateSample ss = grungeSS;
+    uint receiver = uDecalStatic == 1 ? DECAL_STATIC : DECAL_DYNAMIC;
     for (uint i = 0u; i < range.count; ++i) {
-        GpuDecal d = uDecals[uDecalIndex[range.offset + i]];
-        // Receivers: the object's lighting layer, and static world vs moving things.
-        if (uObjectLayerBit != 0 && (d.Ids.y & uint(uObjectLayerBit)) == 0u) continue;
-        uint flags = d.Ids.z;
-        if ((flags & (uDecalStatic == 1 ? DECAL_STATIC : DECAL_DYNAMIC)) == 0u) continue;
-        vec3 l = vec3(dot(d.WorldToBox[0], wp), dot(d.WorldToBox[1], wp), dot(d.WorldToBox[2], wp));
+        uint di = uDecalIndex[range.offset + i];
+        // The box test first, on the three rows alone (48 of the record's 128 bytes): most of a froxel's
+        // decals miss most of its fragments, and the rest of the record is read only for the ones that hit.
+        vec4 r0 = uDecals[di].WorldToBox[0], r1 = uDecals[di].WorldToBox[1], r2 = uDecals[di].WorldToBox[2];
+        vec3 l = vec3(dot(r0, wp), dot(r1, wp), dot(r2, wp));
         if (any(greaterThan(abs(l), vec3(0.5)))) continue;
+        // The rest of the record, in one load.
+        GpuDecal d = uDecals[di];
+        vec4 rect = d.Rect;
+        uvec4 ids = d.Ids, h1 = d.H1, h2 = d.H2, h0 = d.H0;
+        // Receivers: the object's lighting layer, and static world vs moving things.
+        if (uObjectLayerBit != 0 && (ids.y & uint(uObjectLayerBit)) == 0u) continue;
+        uint flags = ids.z;
+        if ((flags & receiver) == 0u) continue;
 
-        vec3 T = normalize(d.WorldToBox[0].xyz), B = normalize(d.WorldToBox[1].xyz), Z = normalize(d.WorldToBox[2].xyz);
-        vec2 angle = unpackHalf2x16(d.H1.z), edge = unpackHalf2x16(d.H1.w);
+        // Only the projection axis for the angle fade; T and B are normalised where a normal blend needs them.
+        vec3 Z = normalize(r2.xyz);
+        vec2 angle = unpackHalf2x16(h1.z), edge = unpackHalf2x16(h1.w);
         float a = smoothstep(angle.y, angle.x, dot(geoN, Z));
         if (a <= 0.0) continue;
         if (edge.x > 0.0) {
@@ -173,11 +187,11 @@ void ApplyDecals(inout vec3 albedo, inout vec3 N, inout float roughness, inout f
 
         // Box uv (+Y is the image's top) into the slot, with the gradient chain-ruled through the box.
         vec2 boxUV = vec2(l.x + 0.5, 0.5 - l.y);
-        vec2 gx = vec2(dot(d.WorldToBox[0].xyz, dpx), -dot(d.WorldToBox[1].xyz, dpx)) * d.Rect.zw;
-        vec2 gy = vec2(dot(d.WorldToBox[0].xyz, dpy), -dot(d.WorldToBox[1].xyz, dpy)) * d.Rect.zw;
+        vec2 gx = vec2(dot(r0.xyz, dpx), -dot(r1.xyz, dpx)) * rect.zw;
+        vec2 gy = vec2(dot(r0.xyz, dpy), -dot(r1.xyz, dpy)) * rect.zw;
         // Mips past the slot's maxLod would read its neighbours: the gradients shrink to stay at it,
         // and the uv is held half a texel (at that mip) inside the rect.
-        float maxLod = float((d.Ids.x >> 8) & 0xFFu);
+        float maxLod = float((ids.x >> 8) & 0xFFu);
         float lod = 0.5 * log2(max(max(dot(gx, gx), dot(gy, gy)) * DECAL_PAGE * DECAL_PAGE, 1e-12));
         if (lod > maxLod) {
             float s = exp2(maxLod - lod);
@@ -186,23 +200,29 @@ void ApplyDecals(inout vec3 albedo, inout vec3 N, inout float roughness, inout f
             lod = maxLod;
         }
         float inset = 0.5 * exp2(max(lod, 0.0)) / DECAL_PAGE;
-        vec2 tc = clamp(d.Rect.xy + boxUV * d.Rect.zw, d.Rect.xy + inset, d.Rect.xy + d.Rect.zw - inset);
-        vec3 tc3 = vec3(tc, float(d.Ids.x & 0xFFu));
-        uint ch = d.Ids.x >> 16;
+        vec2 tc = clamp(rect.xy + boxUV * rect.zw, rect.xy + inset, rect.xy + rect.zw - inset);
+        vec3 tc3 = vec3(tc, float(ids.x & 0xFFu));
+        uint ch = ids.x >> 16;
 
         vec4 col = textureGrad(uDecalAlbedo, tc3, gx, gy);
         float cover = (flags & DECAL_LUMA) != 0u ? dot(col.rgb, vec3(0.2126, 0.7152, 0.0722)) : col.a;
         if ((flags & DECAL_LUMA) != 0u) col.rgb = vec3(1.0); // a white-on-black alpha: the tint is the colour
         if ((flags & DECAL_INVERT) != 0u) cover = 1.0 - cover;
-        if ((flags & DECAL_LIQUID) != 0u) cover = min(cover * unpackHalf2x16(d.H1.x).x, 1.0); // its gain, after filtering
+        if ((flags & DECAL_LIQUID) != 0u) cover = min(cover * unpackHalf2x16(h1.x).x, 1.0); // its gain, after filtering
         a *= cover;
         if (a <= 0.001) continue;
 
-        float aux = (flags & DECAL_HAS_AUX) != 0u ? textureGrad(uDecalAux, tc3, gx, gy).r : -1.0;
         // Weathering: fade, sun-bleach, peel (the aux mask, or noise), buff (scrubbed patches), wear (chips).
-        vec2 relief = unpackHalf2x16(d.H2.y), fb = unpackHalf2x16(d.H2.z), pb = unpackHalf2x16(d.H2.w);
-        vec2 seed = vec2(d.WorldToBox[0].w, d.WorldToBox[1].w) * 0.173;
+        vec2 relief = unpackHalf2x16(h2.y), fb = unpackHalf2x16(h2.z), pb = unpackHalf2x16(h2.w);
         a *= 1.0 - fb.x;
+        // Faded out: nothing below brings it back (the height blend only re-weights a cover above 0).
+        if (a <= 0.0) continue;
+        // The aux map is read only where something uses it: a reveal order or the peel mask (each only
+        // with a threshold / peel set), or the emissive mask.
+        float aux = -1.0;
+        if ((flags & DECAL_HAS_AUX) != 0u && (pb.x > 0.0 || (ch & DECAL_CH_EMISSIVE) != 0u))
+            aux = textureGrad(uDecalAux, tc3, gx, gy).r;
+        vec2 seed = vec2(r0.w, r1.w) * 0.173;
         if ((flags & DECAL_REVEAL) != 0u) {
             // A reveal order in aux (FLAG_REVEAL): (threshold, band) in place of (peel, buff).
             if (pb.x > 0.0) a *= aux >= 0.0 ? clamp((aux - pb.x) / max(pb.y, 1e-3), 0.0, 1.0) : 0.0;
@@ -224,11 +244,11 @@ void ApplyDecals(inout vec3 albedo, inout vec3 N, inout float roughness, inout f
         }
         if (a <= 0.001) continue;
 
-        vec2 h00 = unpackHalf2x16(d.H0.x), h01 = unpackHalf2x16(d.H0.y), h02 = unpackHalf2x16(d.H0.z),
-             h03 = unpackHalf2x16(d.H0.w);
+        vec2 h00 = unpackHalf2x16(h0.x), h01 = unpackHalf2x16(h0.y), h02 = unpackHalf2x16(h0.z),
+             h03 = unpackHalf2x16(h0.w);
         // Substrate: where this decal covers, the paint is gone and the material under it shows - the
         // receiver's own on Auto when it has one, else the decal's. sw = how much it replaces the decal.
-        uint sub = uSubstrateOn != 0 ? d.Ids.x >> 24 : 0u;
+        uint sub = uSubstrateOn != 0 ? ids.x >> 24 : 0u;
         if (uSubstrateOn != 0 && (flags & DECAL_SUB_AUTO) != 0u && uMaterialSubstrate > 0) sub = uint(uMaterialSubstrate);
         float sw = 0.0;
         if (sub != 0u) {
@@ -238,12 +258,17 @@ void ApplyDecals(inout vec3 albedo, inout vec3 N, inout float roughness, inout f
             }
             sw = ss.strength;
         }
-        vec4 surf = (flags & DECAL_HAS_SURFACE) != 0u ? textureGrad(uDecalSurface, tc3, gx, gy) : vec4(1.0);
+        // The surface map feeds the roughness / metal / AO channels and the substrate's recess (which only
+        // the albedo channel shows); a decal using neither never reads it.
+        bool recessed = sw > 0.0 && (ch & DECAL_CH_ALBEDO) != 0u && (flags & DECAL_HAS_SURFACE) != 0u;
+        vec4 surf = vec4(1.0);
+        if ((flags & DECAL_HAS_SURFACE) != 0u && ((ch & (DECAL_CH_ROUGH | DECAL_CH_METAL | DECAL_CH_AO)) != 0u || recessed))
+            surf = textureGrad(uDecalSurface, tc3, gx, gy);
         // The bare substrate sits below the paint: where it's lower than its ~2 cm neighbourhood (the
         // height three mips down) it's in the paint's shadow, and the decal's own cavity AO darkens it as
         // well - both baked into its colour, since lamps (not ambient) light these walls.
         float recess = 1.0;
-        if (sw > 0.0 && (flags & DECAL_HAS_SURFACE) != 0u) {
+        if (recessed) {
             float hb = textureLod(uDecalSurface, tc3, min(lod + 3.0, maxLod)).a;
             recess = clamp(1.0 - max(hb - surf.a, 0.0) * 5.0, 0.3, 1.0) * mix(1.0, surf.b, 0.85);
         }
@@ -263,6 +288,7 @@ void ApplyDecals(inout vec3 albedo, inout vec3 N, inout float roughness, inout f
             vec3 tn = (ch & DECAL_CH_NORMAL) != 0u && (flags & DECAL_HAS_NORMAL) != 0u
                           ? UnpackNormal(vec3(textureGrad(uDecalNormal, tc3, gx, gy).rg, 0.0)) : vec3(0.0, 0.0, 1.0);
             tn.xy *= h02.x;
+            vec3 T = normalize(r0.xyz), B = normalize(r1.xyz);
             vec3 g = dot(geoN, Z) > 0.0 ? geoN : Z;
             vec3 Tg = normalize(T - g * dot(T, g)), Bg = cross(g, Tg) * sign(dot(cross(g, Tg), B));
             N = normalize(mix(N, normalize(Tg * tn.x + Bg * tn.y + g * max(tn.z, 0.2)), a));
@@ -270,13 +296,14 @@ void ApplyDecals(inout vec3 albedo, inout vec3 N, inout float roughness, inout f
             // Whiteout blend in the box's own frame (x along u, y up the image, z out of the surface).
             vec3 tn = UnpackNormal(vec3(textureGrad(uDecalNormal, tc3, gx, gy).rg, 0.0));
             if ((ch & DECAL_CH_PAINT) != 0u) tn.xy *= 1.0 + relief.x * 2.0;
+            vec3 T = normalize(r0.xyz), B = normalize(r1.xyz);
             vec3 nb = vec3(dot(N, T), dot(N, B), dot(N, Z));
             if (nb.z > 0.0) {
                 vec3 wb = normalize(vec3(nb.xy + tn.xy, nb.z * tn.z));
                 N = normalize(mix(N, normalize(T * wb.x + B * wb.y + Z * wb.z), a * h02.x));
             }
         }
-        vec2 rm = unpackHalf2x16(d.H2.x);
+        vec2 rm = unpackHalf2x16(h2.x);
         if ((ch & DECAL_CH_ROUGH) != 0u) roughness = mix(roughness, rm.x * surf.r, a * h02.y);
         if ((ch & DECAL_CH_METAL) != 0u) metallic = mix(metallic, rm.y * surf.g, a * h03.x);
         if ((ch & DECAL_CH_AO) != 0u) ao = mix(ao, ao * surf.b, a * h03.y);
@@ -289,7 +316,7 @@ void ApplyDecals(inout vec3 albedo, inout vec3 N, inout float roughness, inout f
             ao *= mix(1.0, ss.ao, w);
         }
         if ((ch & DECAL_CH_EMISSIVE) != 0u) {
-            vec2 e0 = unpackHalf2x16(d.H1.x), e1 = unpackHalf2x16(d.H1.y);
+            vec2 e0 = unpackHalf2x16(h1.x), e1 = unpackHalf2x16(h1.y);
             float glow = (flags & DECAL_UV_PAINT) != 0u ? uDecalBlacklight : 1.0;
             float mask = aux >= 0.0 ? aux * a : a;
             emissive += vec3(e0, e1.x) * (e1.y * mask * glow);
@@ -308,16 +335,18 @@ uniform float uGrungeScale; // tiles per metre
 // With a material Substrate the map's alpha - a peel mask: the cooked T_Grunge_* maps carry the
 // exposed coverage there - reveals it: past a threshold Grunge Strength sets, the paint is gone and
 // the substrate's colour, normal, roughness and AO show; the dirt only tints the paint that's left.
+// `sub` / `ss` hand the material substrate's sample on to ApplyDecals (index + 1; 0 = not sampled).
 void ApplyGrunge(inout vec3 albedo, inout vec3 N, inout float roughness, inout float metallic, inout float ao,
-                 vec3 geoN) {
+                 vec3 geoN, out uint sub, out SubstrateSample ss) {
+    sub = 0u;
     if (uHasGrungeMap == 0 || uGrungeStrength <= 0.0) return;
     vec4 g4 = SampleTriplanar(uGrungeMap, vWorldPos, TriplanarWeights(geoN), max(uGrungeScale, 1e-4));
     vec3 g = g4.rgb;
     float dirt = 1.0 - dot(g, vec3(0.2126, 0.7152, 0.0722));
     float reveal = 0.0, lip = 0.0, shadow = 0.0;
-    SubstrateSample ss;
     if (uSubstrateOn != 0 && uMaterialSubstrate > 0) {
         ss = SampleSubstrate(uint(uMaterialSubstrate - 1), geoN, dFdx(vWorldPos), dFdy(vWorldPos));
+        sub = uint(uMaterialSubstrate);
         // Read on the dominant plane only (the triplanar's axes): the mask a few mips down (~6 mm at
         // the default tiling) so hairline cracks stay dirt and only flaked-off patches open up, and
         // much further down (~5 cm) as the local density of damage, so isolated specks on clean wall
