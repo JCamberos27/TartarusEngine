@@ -1145,6 +1145,7 @@ private:
     // The radial menu's decal mode (hold Space with the brush active): categories, palettes, recents.
     int  DecalRadialBuild();
     bool DecalRadialItem(int i, const char*& icon, const char*& label) const;
+    const char* DecalRadialFullName(int i) const; // "" when i is not a decal slot
     void RunDecalRadialItem(int i);
     // Editor Enhancers / vRuler (EditorLayer_Gizmos.cpp): hold Shift+R over the Scene view.
     bool ViewportRay(Camera& cam, const glm::vec2& screenPx, glm::vec3& origin, glm::vec3& dir) const;

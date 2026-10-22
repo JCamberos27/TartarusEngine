@@ -13,6 +13,7 @@
 //   "paletteVersion": 1,
 //   "name": "Squat",
 //   "description": "Peeling plaster, flaking paint and the odd tag.",
+//   "density": 1.0,                   // optional: auto-grime density multiplier (default 1)
 //   "entries": [
 //     { "decal": "assets/Decals/Grime/PeelingPaint/DA_PeelingPaint_007.decal",
 //       "weight": 3,                 // relative odds of being picked
@@ -52,6 +53,7 @@ struct DecalPalette {
     std::string Path; // absolute path to the .decalpalette file
     std::string Name; // display name (the file's "name", else its stem)
     std::string Description;
+    float Density = 1.0f; // auto-grime: scales how many sites it places (0.25..2); 1 = the default look
     bool Missing = false;
     std::vector<DecalPaletteEntry> Entries;
 

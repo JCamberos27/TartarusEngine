@@ -110,6 +110,8 @@ std::shared_ptr<DecalPalette> DecalPalette::Load(const std::string& path) {
         p->Name = it->get<std::string>();
     if (auto it = j.find("description"); it != j.end() && it->is_string()) p->Description = it->get<std::string>();
 
+    p->Density = std::clamp(Num(j, "density", 1.0f, path), 0.25f, 2.0f);
+
     auto entries = j.find("entries");
     if (entries == j.end() || !entries->is_array()) {
         if (entries != j.end() && !entries->is_null()) Warn(path, "entries", "an array");
@@ -153,6 +155,7 @@ bool DecalPalette::Save() const {
     j["paletteVersion"] = 1;
     j["name"] = Name;
     j["description"] = Description;
+    if (Density != 1.0f) j["density"] = Density;
     ojson entries = ojson::array();
     for (const DecalPaletteEntry& e : Entries) {
         ojson o;
