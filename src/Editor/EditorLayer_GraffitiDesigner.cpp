@@ -342,7 +342,8 @@ void EndStroke(GraffitiDesigner& g) {
     }
 }
 
-void LoadInto(GraffitiDesigner& g, const std::string& path) {
+// `path` by value: the reload passes g.Piece->Path, which dies with the old piece when g.Piece is replaced.
+void LoadInto(GraffitiDesigner& g, const std::string path) {
     auto p = Graffiti::Piece::Load(path);
     if (!p || p->Missing) {
         g.Status = "Couldn't open " + fs::u8path(path).filename().u8string();
