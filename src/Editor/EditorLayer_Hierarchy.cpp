@@ -1730,9 +1730,10 @@ void EditorLayer::DrawHierarchyRowBody(World& world, AssetLibrary& assets, entt:
                 pfb ? (const char*)pfb->Data : nullptr, entity);
         }
         // A material (slot 0), a texture (slot 0's albedo), a sound, an Animator Controller, a
-        // weapon definition or a script onto the row's object - the viewport's drop, minus the
-        // slot under the cursor (EditorLayer_AssetDrop.cpp).
-        for (const char* type : {"ASSET_MATERIAL_PATH", "ASSET_TEXTURE_PATH", "ASSET_SOUND_PATH", "ASSET_FILE_PATH"}) {
+        // weapon definition, a script or a decal (swapping a Decal's asset) onto the row's object -
+        // the viewport's drop, minus the slot under the cursor (EditorLayer_AssetDrop.cpp).
+        for (const char* type : {"ASSET_MATERIAL_PATH", "ASSET_TEXTURE_PATH", "ASSET_SOUND_PATH", "ASSET_FILE_PATH",
+                                 "ASSET_DECAL_PATH"}) {
             if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(type))
                 ApplyAssetDrop(world, assets, entity, type, (const char*)payload->Data, 0, glm::vec3(0.0f));
         }

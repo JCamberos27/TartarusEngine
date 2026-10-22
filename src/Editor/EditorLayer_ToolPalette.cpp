@@ -125,6 +125,17 @@ void EditorLayer::DrawToolPalette(World& world, Camera& editorCamera) {
                 measureTool, ImVec2(btn, btn)))
             SetMeasureToolActive(!measureTool);
         --quiet;
+        const DecalToolMode decalTool = DecalTool();
+        ++quiet;
+        if (ActionButton(EDITOR_ICON_PLACE_DECAL,
+                "Place Decal — click to stamp the Decal Library's selected decal; scroll turns it, Shift+scroll sizes it (P)",
+                decalTool == DecalToolMode::Place, ImVec2(btn, btn)))
+            SetDecalTool(DecalToolMode::Place);
+        if (ActionButton(EDITOR_ICON_DECAL_BRUSH,
+                "Decal Brush — paint decals along a stroke; Ctrl erases, hold Space to pick the source (B)",
+                decalTool == DecalToolMode::Brush, ImVec2(btn, btn)))
+            SetDecalTool(DecalToolMode::Brush);
+        --quiet;
         if (ActionButton(EDITOR_ICON_DUPLICATE_ARRAY, "Duplicate Array — line/grid of copies of the selection (Ctrl+Shift+D)",
                 false, ImVec2(btn, btn)))
             RequestArrayDuplicateModal();

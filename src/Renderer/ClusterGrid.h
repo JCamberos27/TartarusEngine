@@ -43,11 +43,21 @@ public:
     // nearZ / farZ are positive view-space distances (camera near/far planes).
     // The build pass is cached and skipped if proj/screenW/screenH/nearZ/farZ are unchanged;
     // the cull pass always runs since lights move.
+    // Decals (docs/DECALS.md): with `decalCullShader` and decalCount > 0, the same froxels also bin
+    // the visible decals (ClusterDecalCull.comp.glsl) into ranges / indices on SSBOs 13 / 14. Their
+    // bounds must already be bound at binding 12 (DecalSystem::BindForCull).
     void Cull(Shader& buildShader, Shader& cullShader, const glm::mat4& view, const glm::mat4& proj,
-              float nearZ, float farZ, int screenW, int screenH);
+              float nearZ, float farZ, int screenW, int screenH, Shader* decalCullShader = nullptr,
+              int decalCount = 0);
 
-    // Bind the range (3) and index (4) SSBOs for the model fragment shader's per-cluster loop.
+    // Bind the range (3) and index (4) SSBOs for the model fragment shader's per-cluster loop, and
+    // the decal range (13) and index (14) ones.
     void BindForShading() const;
+
+    // The decal cull's overflow bits from a recent Cull() (1: a cluster kept only its top-most
+    // Decals::MAX_PER_CLUSTER, 2: the shared index list was full), late by a cull or two like
+    // Saturated().
+    unsigned DecalOverflow() const { return m_LastDecalOverflow; }
 
     // True if the global index list (binding 4) would have overflowed its GLOBAL_INDEX_CAPACITY
     // during a recent Cull() — i.e. at least one cluster's reserved block was truncated and some
@@ -87,6 +97,14 @@ private:
     // threaded driver's worker; the flag is a cull or more stale, fine for the Stats-panel warning.
     unsigned int m_OverflowCopy = 0;
     const volatile unsigned int* m_OverflowMapped = nullptr;
+
+    // Decals: binding 13 per-cluster {offset, count}, binding 14 {cursor, overflow} + the index list,
+    // and the same deferred readback of the overflow word.
+    unsigned int m_DecalRanges = 0;
+    unsigned int m_DecalIndices = 0;
+    unsigned int m_DecalOverflowCopy = 0;
+    const volatile unsigned int* m_DecalOverflowMapped = nullptr;
+    unsigned m_LastDecalOverflow = 0;
 
     // Cached projection state for build-pass optimization (#205), one per AABB slot (#160)
     struct BuildKey {

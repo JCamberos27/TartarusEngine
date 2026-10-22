@@ -186,6 +186,8 @@ void BuildDefaultTable() {
     // Phase 3 item 7 (audit #5) — "it currently ships unbound" was the audit's exact complaint;
     // M was free (not used by any other viewport/global shortcut).
     Register("tools.measure",           "Tool: Measure / Ruler",     Ctx_Viewport, K(ImGuiKey_M));
+    Register("tools.decalPlace",        "Tool: Place Decal",         Ctx_Viewport, K(ImGuiKey_P));
+    Register("tools.decalBrush",        "Tool: Decal Brush",         Ctx_Viewport, K(ImGuiKey_B));
     // View presets. The number row and the numpad are interchangeable (see DigitSibling); Ctrl
     // picks the opposite face. In Unity those opposite faces are their own rebindable
     // shortcuts, so they get their own rows rather than a hard-coded Ctrl read.

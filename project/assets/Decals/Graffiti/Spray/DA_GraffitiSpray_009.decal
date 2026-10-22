@@ -1,0 +1,66 @@
+{
+  "decalVersion": 1,
+  "textures": {
+    "albedo": "assets/Decals/Graffiti/Spray/T_Decal_GraffitiSpray_009.png",
+    "normal": "",
+    "surface": "",
+    "aux": ""
+  },
+  "lumaMask": false,
+  "invertMask": false,
+  "tier": 2048,
+  "atlas": {
+    "cols": 1,
+    "rows": 1
+  },
+  "defaultSize": [
+    1.0,
+    1.0,
+    0.25
+  ],
+  "channels": {
+    "albedo": 1.0,
+    "normal": 0.0,
+    "roughness": 1.0,
+    "metal": 0.0,
+    "ao": 0.0,
+    "emissive": 0.0
+  },
+  "baseColor": [
+    1.0,
+    1.0,
+    1.0
+  ],
+  "roughness": 0.6,
+  "metal": 0.0,
+  "emissive": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "angleFade": [
+    0.25,
+    0.05
+  ],
+  "edgeFade": 0.08,
+  "heightBlend": 0.35,
+  "heightContrast": 4.0,
+  "paint": {
+    "enabled": true,
+    "roughness": 0.45,
+    "metal": 0.0,
+    "relief": 0.15,
+    "uv": false
+  },
+  "weathering": {
+    "fade": 0.0,
+    "bleach": 0.0,
+    "peel": 0.0,
+    "buff": 0.0
+  },
+  "category": "Graffiti/Spray",
+  "tags": [
+    "graffiti",
+    "spray"
+  ]
+}

@@ -143,6 +143,7 @@ const char* AssetGlyph(const AssetGridCell& cell) {
         case K::Script:      return ICON_FA_SCROLL;
         case K::Recoil:      return ICON_FA_BURST;
         case K::CameraShake: return ICON_FA_VIDEO;
+        case K::Decal:       return ICON_FA_STAMP;
     }
     return ICON_FA_FILE;
 }
@@ -159,6 +160,7 @@ const char* AssetPayloadType(AssetGridCell::Kind k) {
         case K::Material: return "ASSET_MATERIAL_PATH";
         case K::Prefab:   return "ASSET_PREFAB_PATH";
         case K::Sound:    return "ASSET_SOUND_PATH";
+        case K::Decal:    return "ASSET_DECAL_PATH";
         case K::Scene:
         case K::Shader:   return nullptr; // not placeable
         default:          return "ASSET_FILE_PATH";
@@ -1263,7 +1265,8 @@ void EditorLayer::DrawGlassLibrary(World& world, AssetLibrary& assets) {
                         }
                         if (isFolder && ImGui::BeginDragDropTarget()) {
                             static const char* kFileable[] = {"ASSET_MODEL_PATH", "ASSET_TEXTURE_PATH", "ASSET_SOUND_PATH",
-                                                              "ASSET_PREFAB_PATH", "ASSET_MATERIAL_PATH", "ASSET_FILE_PATH"};
+                                                              "ASSET_PREFAB_PATH", "ASSET_MATERIAL_PATH", "ASSET_FILE_PATH",
+                                                              "ASSET_DECAL_PATH"};
                             for (const char* type : kFileable) {
                                 if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload(type)) {
                                     PushUndo(world, "Move Asset to Folder");

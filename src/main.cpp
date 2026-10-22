@@ -64,6 +64,7 @@
 #include "SkinHideBuffer.h"             // --outfit-audit
 #include "LightBuffer.h"
 #include "ClusterGrid.h"
+#include "DecalSystem.h"
 #include "CascadedShadowMap.h"
 #include "SpotShadowMap.h"
 #include "PointShadowMap.h"
@@ -88,6 +89,7 @@
 #include "CrosshairOverlay.h"
 #include "WeaponFxRenderer.h" // the weapon's laser and bullet holes
 #include "BulletHoles.h"
+#include "SprayCan.h"           // Decals P4: the gameplay spray can (F6 in Play)
 #include "Audio/AudioTest.h" // --audio-test
 #include "ShellCasings.h"
 #include "AI/NpcDirector.h"     // the enemy squad
@@ -647,6 +649,7 @@ int main(int argc, char** argv) {
                                  ShaderLibrary::ReadFileRequired("ShadowDepthLocal.frag.glsl"), "localShadowShader"); // spot/point: linear depth
         Shader clusterBuildShader(ShaderLibrary::ReadFileRequired("ClusterBuild.comp.glsl"), "clusterBuildShader"); // #120: per-view froxel AABBs
         Shader clusterCullShader(ShaderLibrary::ReadFileRequired("ClusterCull.comp.glsl"), "clusterCullShader");   // #120: point/spot lights -> froxel lists
+        Shader clusterDecalCullShader(ShaderLibrary::ReadFileRequired("ClusterDecalCull.comp.glsl"), "clusterDecalCullShader"); // decals -> froxel lists (docs/DECALS.md)
         unsigned int fsQuadVao = 0;
         glGenVertexArrays(1, &fsQuadVao); // attribute-less: positions come from gl_VertexID
         TintOverlayRenderer tintOverlay;
@@ -761,6 +764,7 @@ int main(int argc, char** argv) {
         NpcDirector npcDirector;    // the enemy squad, in scenes with NPC Spawns
         CombatFx combatFx;          // its (and the player's) gunfire, flashes, tracers and hits
         BloodFx bloodFx;            // the volumetric blood out of every body a round goes into (docs/BLOOD_FX.md)
+        SprayCanSystem sprayCans;   // graffiti sprayed on in Play, by the player (F6) or an NPC (docs/GRAFFITI_DESIGNER.md)
         FxSprites fxSprites;        // the Knife flipbook particles: blood mist, impact dust and debris, muzzle smoke
         bloodFx.SetSprites(&fxSprites);
         ImpactFx impactFx;          // rounds into the world: per-surface holes and bursts (docs/BLOOD_FX.md)
@@ -789,6 +793,23 @@ int main(int argc, char** argv) {
                 worldImpact(h.Entity, p, n, dir, 0.0027f); // a 5.45 mm round
                 return true;
             };
+        if (npcTest) // --npc-test decals: stains at fixed spots
+            npcTest->SpawnBlood = [&](int kind, const glm::vec3& at, const glm::vec3& n, float size) {
+                kind == 0 ? bloodFx.SpatterWallAt(at, n, size) : bloodFx.SpawnPoolAt(at, n, size);
+            };
+        if (npcTest) { // --npc-test decals: the spray can
+            npcTest->Spray = [&](const std::string& piece, const glm::vec3& from, const glm::vec3& dir, const std::string& painter, float seconds) {
+                SprayCanAction a;
+                a.Piece = piece; a.From = from; a.Direction = dir; a.Painter = painter; a.Seconds = seconds;
+                return sprayCans.Start(world, a) != entt::null;
+            };
+            npcTest->SprayNpc = [&](const std::string& piece, const glm::vec3& feet, float yawDeg, float seconds) {
+                const entt::entity npc = world.CreateEmptyEntity(feet, glm::vec3(0.0f, yawDeg, 0.0f), glm::vec3(1.0f), "Tenant (painter)");
+                SprayCanAction a = SprayCanAction::ForCharacter(world, npc, piece);
+                a.Seconds = seconds;
+                return sprayCans.Start(world, a) != entt::null;
+            };
+        }
         BloodLab bloodLab;          // F7 -> Blood Lab: fire any blood / impact effect at the crosshair, tune it live
         // What the crosshair is on: a soldier's part (entity, part) or the world (entity, normal). False: nothing in reach.
         auto aimAt = [&](glm::vec3& point, glm::vec3& normal, unsigned& entity, int& part, bool& body) {
@@ -1020,7 +1041,6 @@ int main(int argc, char** argv) {
         int playerAmmoSeen = -1, playerSlotSeen = -1; // for "the player fired this frame"
         PlayerSnapshot playerSnap;
         ShellCasings shellCasings;  // the spent cases on the ground
-        std::vector<BulletHoleList::Placed> placedHoles;
         // The predicted flight in linear HDR red (a touch of bloom): the arc to the first contact
         // bright, each bounce after it fainter, a ring at every contact the size of the body.
         auto drawThrowArc = [&](const glm::mat4& v, const glm::mat4& p, const glm::vec3& eye) {
@@ -1074,15 +1094,12 @@ int main(int argc, char** argv) {
             combatHud.Draw(in, npcDirector);
         };
         // The weapon's world effects for one view, drawn inside the scene pass (after the world,
-        // before the arms and gun, so they cover the beam where it leaves the muzzle): this Play's
-        // bullet holes and the laser. Empty (nothing drawn) outside first-person Play.
+        // before the arms and gun, so they cover the beam where it leaves the muzzle): the laser
+        // (this Play's bullet holes are clustered decals, BulletHoleList::Submit). Empty (nothing drawn) outside first-person Play.
         auto weaponOverlay = [&](bool on, const glm::mat4& v, const glm::mat4& p, const glm::vec3& eye,
                                  int h) -> std::function<void()> {
             if (!on) return {};
             return [&, v, p, eye, h] {
-                bulletHoles.Resolve(world, placedHoles);
-                for (const BulletHoleList::Placed& hole : placedHoles)
-                    if (hole.Decal < 0) weaponFx.AddHole(hole.Position, hole.Normal, hole.Tangent, hole.Radius, hole.Seed);
                 FirstPersonPresentation::Laser laser;
                 if (firstPersonPresentation.IsActive() && firstPersonPresentation.LaserBeam(laser)) {
                     // Already from the barrel as seen (FirstPersonPresentation aims from the view
@@ -1176,6 +1193,15 @@ int main(int argc, char** argv) {
             if (opt.weaponLabMode) scenePath = ProjectPaths::Resolve("scenes/WeaponLab.json");
         }
         AssetLibrary assets;
+        if (npcTest) { // --npc-test decals: the spray can's state, the game state saved and read back
+            npcTest->SprayState = [&](NpcTest::SprayView& v, bool roundTrip) {
+                const SprayCanSystem::Report r = sprayCans.Inspect(world, roundTrip ? &assets : nullptr);
+                v.Pieces = r.Pieces; v.MinProgress = r.MinProgress; v.MaxProgress = r.MaxProgress; v.Resident = r.Resident;
+                v.Saved = r.Saved; v.SavedElapsed = r.SavedElapsed;
+                v.Sounds = sprayCans.SoundsPlayed(); v.Hissing = sprayCans.Hissing();
+                v.RuntimeDecals = DecalSystem::Current() ? DecalSystem::Current()->RuntimeCount() : 0;
+            };
+        }
 
         if (resaveMode) {
             // false: --resave's whole point is choosing where the migrated scene lands
@@ -1611,6 +1637,7 @@ int main(int argc, char** argv) {
         Framebuffer gameLdr;
         LightBuffer lightBuffer; // scene lights -> std430 SSBO the model shader reads at binding 0
         ClusterGrid clusterGrid; // #120: froxel light lists, rebuilt per rendered view each frame
+        DecalSystem decalSystem; // clustered decals: gathered per view, binned by clusterGrid (docs/DECALS.md)
         CascadedShadowMap shadowMap; // directional-sun CSM; depth array sampled by the model shader
         SpotShadowMap spotShadowMap; // perspective depth per shadow-casting spot light (#119)
         PointShadowMap pointShadowMap; // depth cube per shadow-casting point light (#119)
@@ -1662,6 +1689,7 @@ int main(int argc, char** argv) {
             tonemapper.WarmUp();
             lightBuffer.WarmUp();
             clusterGrid.WarmUp();
+            decalSystem.BindForShading(); // valid (placeholder) arrays on units 22-25 before any preview draws
             if (world.VolumetricEnabled) sceneRenderer.WarmUpVolumetrics();
             SceneRenderer::WarmShaderVariants(world);
             SceneRenderer::WarmEffects();
@@ -1887,6 +1915,7 @@ int main(int argc, char** argv) {
                                                               : opt.npcTestScenario == "blood" ? "scenes/BloodTest.json"
                                                               : opt.npcTestScenario == "ragdoll" ? "scenes/RagdollTest.json"
                                                               : opt.npcTestScenario == "escape" || opt.npcTestScenario == "escapeshut" || opt.npcTestScenario == "aptwounds" || opt.npcTestScenario == "aptfight" ? "scenes/Apartment Hallway.json"
+                                                              : opt.npcTestScenario == "decals" ? "scenes/Apartment Hallway.json"
                                                                                            : "scenes/Arena.json"));
             std::cout << "[SmokeTest] Found " << smokeScenePaths.size() << " scene(s) under "
                       << scenesDir << std::endl;
@@ -2095,6 +2124,19 @@ int main(int argc, char** argv) {
                 if (smokeSceneActive && smokeScenePaths[smokeSceneIndex].find("smoke_glass") != std::string::npos)
                     SmokeChecks::GlassTheme(editor, world, smokeFramesRendered);
 
+                // A smoke_decals* scene (docs/DECALS.md): by frame 80 the textures are resident and the delayed
+                // overflow readback has landed. 574 decals in view; the 270-decal stack must trip the per-cluster
+                // cap (bit 1) and nothing may fill the index list (bit 2).
+                if (smokeSceneActive && smokeFramesRendered == 80 &&
+                    smokeScenePaths[smokeSceneIndex].find("smoke_decals") != std::string::npos) {
+                    const int visible = decalSystem.VisibleCount();
+                    const unsigned overflow = clusterGrid.DecalOverflow();
+                    if (visible < 570) Log::Error("[SmokeTest] decals: expected >= 570 visible, got " + std::to_string(visible));
+                    else if ((overflow & 1u) == 0u) Log::Error("[SmokeTest] decals: the over-cap cluster was not flagged");
+                    else if (overflow & 2u) Log::Error("[SmokeTest] decals: the decal index list overflowed");
+                    else std::cout << "[SmokeTest]   decals OK (" << visible << " visible, overflow " << overflow << ")" << std::endl;
+                }
+
                 // #176 - a smoke_prefab* scene: a Prefab Mode round trip (Tests/SmokeChecks.cpp).
                 if (smokeSceneActive && smokeFramesRendered == 15 &&
                     smokeScenePaths[smokeSceneIndex].find("smoke_prefab") != std::string::npos) {
@@ -2224,6 +2266,7 @@ int main(int argc, char** argv) {
             // --weapon-test runs on a fixed step, so its timings don't depend on the machine.
             // (--npc-test ragdoll stops time for a few frames to shoot one moment from four sides.)
             const float gameDt = opt.weaponTestMode || opt.npcTestMode ? (playing && !(npcTest && npcTest->Frozen()) ? 1.0f / 60.0f : 0.0f) : Time::DeltaTime();
+            if (!playing && sprayCans.Spraying() > 0) sprayCans.Stop(); // Play ended mid-spray: the hiss stops
 
             // #158 — shader hot reload (editor and development builds; the scan itself runs at 1 Hz). Engine
             // programs and material shaders recompile when any file they were built from changes;
@@ -2508,7 +2551,7 @@ int main(int argc, char** argv) {
                     window.SetCursorLocked(false);
                 }
 
-                if (editor.RulerHeld()) Input::ConsumeScroll(); // vRuler: the wheel picks the measured object
+                if (editor.RulerHeld() || editor.DecalToolOwnsWheel()) Input::ConsumeScroll(); // vRuler: the wheel picks the measured object; a decal tool: it turns / sizes the ghost or brush
                 if (UpdateEditorCamera(editorCamera, dt, allowLook || camDragActive, gizmoDragging,
                         hasSelection ? &selectionCenter : nullptr, editor.ViewportSize().y))
                     editor.FlashFlySpeedHud(); // #236 R2 — show the transient "Fly speed: N" readout
@@ -2868,6 +2911,8 @@ int main(int argc, char** argv) {
                         }
                     }
                     if (npcTest) npcTest->After(world, npcDirector, playerVitals, player);
+                } else if (npcTest && npcTest->RunsWithoutSquad()) {
+                    npcTest->After(world, npcDirector, playerVitals, player);
                 }
                 combatFx.SetListener(player.Cam.Position, player.Cam.Front());
                 {
@@ -2900,24 +2945,9 @@ int main(int argc, char** argv) {
                     fxSprites.Update(gameDt);
                     BloodRenderer::Get().BeginFrame();
                     bloodFx.Submit(BloodRenderer::Get());
-                    {   // The textured bullet holes go in with the blood's decals (the static world, before the moving things).
-                        static std::vector<BulletHoleList::Placed> holes;
-                        bulletHoles.Resolve(world, holes);
-                        for (const BulletHoleList::Placed& hole : holes) {
-                            if (hole.Decal < 0) continue;
-                            const glm::vec3 y = hole.Normal, x = hole.Tangent, z = glm::cross(x, y);
-                            BloodRenderer::Decal d;
-                            d.Model = glm::mat4(glm::vec4(x * hole.Size, 0.0f), glm::vec4(y * 0.06f, 0.0f), glm::vec4(z * hole.Size, 0.0f),
-                                                glm::vec4(hole.Position, 1.0f));
-                            d.Knife = hole.Decal;
-                            d.Cell = (int)(hole.Seed * 4.0f) & 3;
-                            d.NextCell = d.Cell;
-                            d.NormalStrength = 1.0f;
-                            d.Blood = false; // the surface's own broken material
-                            d.Rim = hole.Rim;
-                            BloodRenderer::Get().AddDecal(d);
-                        }
-                    }
+                    bulletHoles.Submit(world); // every hole a clustered decal, following what it's in (after the blood's BeginFrame)
+                    if (playUsesPlayer && gameHasInput) sprayCans.PlayerKeys(world, player.Cam.Position, player.Cam.Front());
+                    sprayCans.Update(world, gameDt, player.Cam.Position);
                     FxSpriteRenderer::Get().BeginFrame();
                     fxSprites.Submit(FxSpriteRenderer::Get());
                     if (npcTest) {
@@ -3946,6 +3976,15 @@ int main(int argc, char** argv) {
             sceneInputs.probeArray         = &probeArray;
             sceneInputs.lightBuffer        = &lightBuffer;
             sceneInputs.clusterGrid        = &clusterGrid;
+            sceneInputs.decals             = &decalSystem;
+            {
+                // The Place Decal / Decal Brush ghost: the real decal, drawn in the editor's own views.
+                const DecalComponent* ghostComp = nullptr;
+                glm::mat4 ghostWorld(1.0f);
+                if (!playing && editor.DecalGhostPreview(ghostComp, ghostWorld)) decalSystem.SetGhost(*ghostComp, ghostWorld);
+                else decalSystem.ClearGhost();
+            }
+            sceneInputs.decalCullShader    = &clusterDecalCullShader;
             sceneInputs.hdriCube           = hdriCube.get();
             sceneInputs.sunShadowsReady    = false; // set per view in drawScene (#109)
             sceneInputs.frameLightCount    = frameLightCount;
@@ -4130,7 +4169,7 @@ int main(int argc, char** argv) {
                 // that couldn't widen a flat mesh's silhouette were what turned a selected
                 // flat/thin object into a solid orange blob (audit #51).
                 auto selection = editor.GetSelectedItems();
-                if (!selection.empty() && !editor.OverlaysHidden()) {
+                if (!selection.empty() && !editor.OverlaysHidden() && !editor.CleanShots()) {
                     const glm::vec3 kOutlineColor(1.0f, 0.55f, 0.1f);
                     const int kOutlinePixels = 1; // a thin ring, like Unity's (3 read as a thick band)
 
@@ -4295,7 +4334,7 @@ int main(int argc, char** argv) {
                 {
                     const bool showShapes = EditorSettings::Get().ShowColliders;
                     const bool showDebug  = EditorSettings::Get().PhysicsDebugDrawFlags != 0u || BodyDebug::Enabled();
-                    if ((showShapes || showDebug) && !editor.OverlaysHidden() && !(npcTest && npcTest->WantsCleanViews())) {
+                    if ((showShapes || showDebug) && !editor.OverlaysHidden() && !editor.CleanShots() && !(npcTest && npcTest->WantsCleanViews())) {
                         glEnable(GL_DEPTH_TEST);
                         glDepthMask(GL_FALSE);
                         colliderGizmo.Draw(sceneViewMat, sceneProjMat, world, showShapes);
@@ -5100,8 +5139,24 @@ int main(int argc, char** argv) {
                     static const bool openAll = std::getenv("TARTARUS_OPEN_ALL") != nullptr;
                     if (openAll && smokeFramesRendered == 1) Openable::SetAll(world, 1.0f);
                     const int shot = (smokeFramesRendered - kShotCameraStart) / kShotCameraSettle;
-                    if (smokeFramesRendered >= kShotCameraStart && (smokeFramesRendered - kShotCameraStart) % kShotCameraSettle == 0 &&
-                        shot < (int)shotCameras.size() && sceneFramebuffer.IsValid()) {
+                    const bool captureFrame = smokeFramesRendered >= kShotCameraStart &&
+                                              (smokeFramesRendered - kShotCameraStart) % kShotCameraSettle == 0 &&
+                                              shot < (int)shotCameras.size() && sceneFramebuffer.IsValid();
+                    // Decal maps and substrates decode in the background: a fixed frame count caught the hallway's
+                    // peeling paint with or without its concrete depending on how the decodes raced. Each capture
+                    // waits (on the same pose) until they're in, up to kShotStreamHold frames per scene.
+                    static int shotHold = 0;
+                    if (smokeFramesRendered == 1) shotHold = 0;
+                    constexpr int kShotStreamHold = 900;
+                    const bool hold = captureFrame && decalSystem.Streaming() && shotHold < kShotStreamHold;
+                    if (hold) {
+                        ++shotHold;
+                        --smokeFramesRendered; // this frame again next time round
+                    } else if (captureFrame && shotHold >= kShotStreamHold && decalSystem.Streaming()) {
+                        Log::Warn("Smoke shots: decal textures still streaming after " + std::to_string(kShotStreamHold) +
+                                  " held frames - captured anyway.");
+                    }
+                    if (captureFrame && !hold) {
                         const int w = sceneFramebuffer.Width(), h = sceneFramebuffer.Height();
                         const std::string stem = std::filesystem::path(smokeScenePaths[smokeSceneIndex]).stem().string();
                         WritePngTo(opt.smokeShotsDir, stem + "_" + shotCameras[shot].Name, w, h, GrabTopDown(sceneFramebuffer.Handle(), w, h));

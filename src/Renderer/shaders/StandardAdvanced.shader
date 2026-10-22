@@ -24,11 +24,15 @@ Properties {
     [Header(Secondary Maps)] [Tooltip(x2 detail: 50% grey leaves the colour unchanged, lighter brightens, darker darkens.)] _DetailAlbedoMap ("Detail Albedo x2", Texture2D) = "white"
     [Normal] [Tooltip(Fine detail blended on top of the Normal Map.)] _DetailNormalMap ("Detail Normal Map", Texture2D) = "normal"
     [Tooltip(How many times the detail maps repeat across the mesh UVs.)] _DetailTiling ("Detail Tiling", Vec2) = (4, 4)
+    [Header(Grunge)] [Tooltip(Grime laid over the whole surface in world space, ignoring the UVs: white leaves it clean, dark dirties and roughens it.)] _GrungeMap ("Grunge Map", Texture2D) = "white"
+    [Tooltip(How much of the Grunge Map shows. 0 = off.)] _GrungeStrength ("Grunge Strength", Range(0, 1)) = 0
+    [Tooltip(Grunge Map repeats per metre.)] _GrungeScale ("Grunge Tiling", Float) = 0.5
     [Header(Advanced Options)] [Tooltip(Draw and light both sides: foliage, cloth, thin planes.)] _DoubleSided ("Double Sided", Bool) = 0
     [Tooltip(Multiply the colour and alpha by the mesh's vertex colours.)] _VertexColors ("Vertex Colors", Bool) = 0
     [Tooltip(For normal maps authored for DirectX, where green points down, e.g. from Unreal or Substance DX presets.)] _NormalFlipY ("Normal Map Is DirectX", Bool) = 0
     [Header(Forward Rendering Options)] [Tooltip(The shiny highlight lights leave on the surface. Off = fully matte under lights.)] _SpecularHighlights ("Specular Highlights", Bool) = 1
     [Tooltip(Reflections of the sky and reflection probes. Off = no reflections, whatever the Smoothness.)] _GlossyReflections ("Reflections", Bool) = 1
+    [Tooltip(Decals project onto this surface. Off for glass, screens and anything decals should skip.)] _ReceiveDecals ("Receive Decals", Bool) = 1
     [Header(Clear Coat)] [Tooltip(A thin glossy varnish layer over the base: car paint, lacquered wood. 0 = none.)] _ClearCoat ("Clear Coat", Range(0, 1)) = 0
     [Tooltip(Roughness of the varnish layer: 0 = mirror, 1 = matte.)] _ClearCoatRoughness ("Clear Coat Roughness", Range(0, 1)) = 0.5
     [Tooltip(Masks Clear Coat by its red channel.)] _ClearCoatMap ("Clear Coat Map", Texture2D) = "white"

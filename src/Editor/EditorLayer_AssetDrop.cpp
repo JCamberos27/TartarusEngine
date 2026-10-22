@@ -1,8 +1,8 @@
 // Dropping an Asset Browser item onto an object (the Scene viewport or a Hierarchy row), like
 // Unity: a material onto the part under the cursor, a texture as that part's albedo, a sound as
 // the object's Audio Source, an Animator Controller / weapon definition / script onto the matching
-// component, an .hdr anywhere as the sky. Models and prefabs are placed by the drop targets
-// themselves (DrawViewportDropTarget / InstantiateAssetDropInHierarchy).
+// component, a .decal onto a placed decal, an .hdr anywhere as the sky. Models, prefabs and new
+// decals are placed by the drop targets themselves (DrawViewportDropTarget / InstantiateAssetDropInHierarchy).
 #include "EditorLayer.h"
 #include "EditorLayerInternal.h"
 #include "AssetLibrary.h"
@@ -81,6 +81,9 @@ std::string EditorLayer::AssetDropHint(World& world, entt::entity target, const 
                                                                                 : std::string();
         if (ext == ".tescript" && IsTransformControllerScript(path)) return "Add a Transform Controller to " + name;
     }
+    if (payloadType == "ASSET_DECAL_PATH")
+        return onObject && world.Registry.all_of<DecalComponent>(target) ? "Swap " + name + " to " + file
+                                                                         : "Place " + file + " here";
     return {};
 }
 
@@ -175,6 +178,16 @@ bool EditorLayer::ApplyAssetDrop(World& world, AssetLibrary& assets, entt::entit
             world.Registry.get_or_emplace<TransformControllerComponent>(target).ScriptPath = rel;
             return true;
         }
+    }
+
+    // Onto a placed decal: swap its look, keeping its placement and overrides. Placing a new one
+    // on a surface is the viewport's (DrawViewportDropTarget).
+    if (payloadType == "ASSET_DECAL_PATH" && onObject) {
+        auto* decal = world.Registry.try_get<DecalComponent>(target);
+        if (!decal) return false;
+        PushUndo(world, "Swap Decal");
+        decal->AssetPath = path;
+        return true;
     }
     return false;
 }

@@ -544,6 +544,9 @@
   "startupScene": "scenes/Apartment Hallway.json",
   "startupSceneGuid": "e2062f48889aceec",
   "tags": [],
+  "quality": {
+    "decalTextureBudgetMB": 1024
+  },
   "time": {
     "maximumDeltaTime": 0.10000000149011612,
     "timeScale": 1.0
