@@ -10,6 +10,7 @@
 #include "EditorLayer.h"
 #include "EditorIcons.h"
 #include "EditorSound.h"
+#include "RadialLayout.h"
 #include "World.h"
 #include "Camera.h"
 #include "Glass/GlassMotion.h"
@@ -24,6 +25,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <string>
 
 namespace {
 
@@ -35,32 +37,6 @@ ImU32 Tone(ImVec4 c, float a) { c.w *= ImClamp(a, 0.0f, 1.0f); return ImGui::Col
 // The radial menu's items, clockwise from the top: the tools across the top, the toggles down the
 // right, the view down the left.
 enum RadialItem : int { RMove, RRotate, RScale, RRect, RSnap, RSpace, RFrame, RProjection, RShading, RHand, RCount };
-
-// A full circle of radius `r` about the origin, starting at the left and running clockwise on
-// screen (`cw`) or counter-clockwise, defined once per radius (in pixels: a UI-scale or font
-// change asks for a new radius and gets a new path). Labels on the top half ride the clockwise
-// ring and labels on the bottom half the counter-clockwise one, so both read left to right.
-ImGuiID RingPath(float r, bool cw) {
-    const ImGuiID id = ImHashStr(cw ? "##radialRingCW" : "##radialRingCCW") + (ImGuiID)std::lround(r * 4.0f);
-    if (!Glass::ImAnimContext::PathDefined(id)) {
-        const float k = 0.5522847f * r; // quarter-circle cubic handles
-        using S = Glass::PathSeg;
-        const S cwSegs[4] = {
-            {S::Cubic, ImVec2(-r, -k), ImVec2(-k, -r), ImVec2(0, -r)},
-            {S::Cubic, ImVec2(k, -r),  ImVec2(r, -k),  ImVec2(r, 0)},
-            {S::Cubic, ImVec2(r, k),   ImVec2(k, r),   ImVec2(0, r)},
-            {S::Cubic, ImVec2(-k, r),  ImVec2(-r, k),  ImVec2(-r, 0)},
-        };
-        const S ccwSegs[4] = {
-            {S::Cubic, ImVec2(-r, k),  ImVec2(-k, r),  ImVec2(0, r)},
-            {S::Cubic, ImVec2(k, r),   ImVec2(r, k),   ImVec2(r, 0)},
-            {S::Cubic, ImVec2(r, -k),  ImVec2(k, -r),  ImVec2(0, -r)},
-            {S::Cubic, ImVec2(-k, -r), ImVec2(-r, -k), ImVec2(-r, 0)},
-        };
-        Glass::ImAnimContext::DefinePath(id, ImVec2(-r, 0), cw ? cwSegs : ccwSegs, 4);
-    }
-    return id;
-}
 
 float Wrap2Pi(float a) {
     a = std::fmod(a, 2.0f * IM_PI);
@@ -179,8 +155,7 @@ void EditorLayer::UpdateRadialMenu(World& world, Camera& editorCamera, bool scen
     const float R = Glass::Px(Glass::RadialRadiusPx);
     const float rIn = R * 0.38f;                 // inside this: cancel
     const float rOut = R + Glass::Px(20.0f);
-    const float rIcon = R - Glass::Px(16.0f);
-    const float rLabel = R + Glass::Px(4.0f);
+    const float rBlock = R * 0.78f;              // the icon + label block centre, mid-ring
     const double now = ImGui::GetTime();
     const bool spaceDown = ImGui::IsKeyDown(ImGuiKey_Space);
     const bool eligible = !m_InPlayMode && !io.WantTextInput && !io.KeyCtrl && !io.KeyAlt && !io.KeySuper &&
@@ -208,7 +183,7 @@ void EditorLayer::UpdateRadialMenu(World& world, Camera& editorCamera, bool scen
             ImVec2 c = io.MousePos;
             if (m_ViewportSize.x > fit * 2.0f) c.x = ImClamp(c.x, m_ViewportPos.x + fit, m_ViewportPos.x + m_ViewportSize.x - fit);
             if (m_ViewportSize.y > fit * 2.0f) c.y = ImClamp(c.y, m_ViewportPos.y + fit, m_ViewportPos.y + m_ViewportSize.y - fit);
-            m_Radial.Center = c;
+            m_Radial.Center = RadialLayout::Snap(c); // whole pixels, so every glyph lands on the grid
             const float x01 = c.x / ImMax(1.0f, io.DisplaySize.x);
             EditorSound::Play(EditorSound::Event::RadialOpen, x01);
             if (animate) {
@@ -272,127 +247,127 @@ void EditorLayer::UpdateRadialMenu(World& world, Camera& editorCamera, bool scen
         ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoDocking);
     ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    const int layer = Glass::ImAnimContext::BeginLayer(dl);
+
+    const float staggerElapsed = animate ? motion.PulseElapsed(kStaggerId, 1.0e3f) : 1.0e3f;
+    const int gizmoOp = (int)m_GizmoOp;
+    const bool showLabels = RadialLayout::ShowLabels(count);
+    // Arcs get a segment per few pixels of their length, so a big radius or UI scale stays round.
+    auto arcSegs = [&](float r) { return ImMax(12, (int)std::ceil(r * step / Glass::Px(5.0f))); };
+
+    // One slot's icon, label, lit state and swatch.
+    struct Slot { const char* icon = ""; const char* label = ""; bool on = false; ImU32 dot = 0; };
+    auto slotAt = [&](int i) {
+        Slot sl;
+        if (graffitiRing) sl.on = GraffitiRadialItem(i, sl.icon, sl.label, sl.dot);
+        else if (decalRing) sl.on = DecalRadialItem(i, sl.icon, sl.label);
+        else switch (i) {
+            case RMove:   sl.icon = EDITOR_ICON_TRANSLATE; sl.label = "Move";   sl.on = !m_HandTool && gizmoOp == 0; break;
+            case RRotate: sl.icon = EDITOR_ICON_ROTATE;    sl.label = "Rotate"; sl.on = !m_HandTool && gizmoOp == 1; break;
+            case RScale:  sl.icon = EDITOR_ICON_SCALE;     sl.label = "Scale";  sl.on = !m_HandTool && gizmoOp == 2; break;
+            case RRect:   sl.icon = EDITOR_ICON_RECT_TOOL; sl.label = "Rect";   sl.on = !m_HandTool && gizmoOp == 3; break;
+            case RSnap:   sl.icon = EDITOR_ICON_SNAP_TO_GRID; sl.label = "Snap"; sl.on = m_GridSnapEnabled; break;
+            case RSpace:  sl.icon = m_GizmoLocalSpace ? EDITOR_ICON_LOCAL_SPACE : EDITOR_ICON_WORLD_SPACE;
+                          sl.label = m_GizmoLocalSpace ? "Local" : "World"; break;
+            case RFrame:  sl.icon = ICON_FA_CROSSHAIRS; sl.label = "Frame"; break;
+            case RProjection: sl.icon = editorCamera.Orthographic ? EDITOR_ICON_ORTHOGRAPHIC : EDITOR_ICON_PERSPECTIVE;
+                              sl.label = editorCamera.Orthographic ? "Ortho" : "Persp"; sl.on = editorCamera.Orthographic; break;
+            case RShading: sl.icon = EDITOR_ICON_WIREFRAME_MODE; sl.label = "Wire"; sl.on = ShadingModeIndex() == 1; break;
+            case RHand:   sl.icon = EDITOR_ICON_HAND_TOOL; sl.label = "Hand"; sl.on = m_HandTool; break;
+            default: break;
+        }
+        return sl;
+    };
+    // Items bloom out one after another (a radial slide + fade).
+    auto itemProgress = [&](int i) {
+        float p = 1.0f;
+        if (staggerElapsed < 1.0e2f) {
+            const float delay = Glass::StaggerDelay(i, Glass::RadialStaggerMs, count);
+            p = Glass::EaseProgress(Glass::RadialOpen, (staggerElapsed - delay) / (Glass::RadialOpen.durationMs * 0.001f));
+        }
+        return p;
+    };
+    // The hovered wedge: a white wash easing in (RadialItem); the picked one holds it as the menu fades.
+    auto itemWash = [&](int i) {
+        const bool hot = (open && m_Radial.Hovered == i && itemEnabled(i)) || (!open && m_Radial.Picked == i);
+        return animate ? motion.Animate(kWashId + (ImGuiID)i, hot ? 1.0f : 0.0f, 0.0f, Glass::RadialItem) : (hot ? 1.0f : 0.0f);
+    };
+    // A glyph's ink box (what is actually drawn, not its advance box), with its offset from the pen.
+    auto inkOf = [&](const char* text, ImVec2& off) {
+        off = ImVec2(0.0f, 0.0f);
+        ImVec2 size = ImGui::CalcTextSize(text);
+        unsigned int ch = 0;
+        ImTextCharFromUtf8(&ch, text, nullptr);
+        if (const ImFontGlyph* g = ch ? ImGui::GetFontBaked()->FindGlyph((ImWchar)ch) : nullptr) {
+            off = ImVec2(g->X0, g->Y0);
+            size = ImVec2(g->X1 - g->X0, g->Y1 - g->Y0);
+        }
+        return size;
+    };
+    // `text` cut with an ellipsis to fit `maxW` at the font's native size.
+    auto fitText = [&](const char* text, float maxW) {
+        std::string s = text;
+        if (ImGui::CalcTextSize(s.c_str()).x <= maxW) return s;
+        while (!s.empty()) {
+            do s.pop_back(); while (!s.empty() && ((unsigned char)s.back() & 0xC0) == 0x80);
+            if (ImGui::CalcTextSize((s + "\xE2\x80\xA6").c_str()).x <= maxW) break;
+        }
+        return s + "\xE2\x80\xA6";
+    };
+    const float gap = Glass::Px(3.0f);
+    const float lineH = ImGui::GetFontSize();
+    const float swatchPx = Glass::Px(16.0f);
+    const float blockH = swatchPx + (showLabels ? gap + lineH : 0.0f);
+    const float maxLabelW = RadialLayout::MaxLabelWidth(rBlock, blockH, count, Glass::Px(6.0f));
+
+    // Pass 1, the geometry: it blooms (scale + alpha) on the spring. The text is drawn after, unscaled.
+    const int geoLayer = Glass::ImAnimContext::BeginLayer(dl);
 
     // The plate: glass in the HUDs' opaque fallback (the frosted blur belongs to the Glass HUD pass),
     // a soft shadow, the 15% white rim and a hairline round the cancel hub.
+    const int plateSegs = ImMax(64, arcSegs(rOut) * count);
     for (int i = 3; i >= 1; --i)
         dl->AddCircleFilled(ImVec2(c.x, c.y + Glass::Px(2.0f)), rOut + Glass::Px(3.0f) * (float)i,
-                            Tone(Glass::Shadow, 0.10f * (float)(4 - i)), 64);
-    dl->AddCircleFilled(c, rOut, Tone(Glass::GlassFallback, 0.94f), 64);
-    dl->AddCircle(c, rOut, Tone(Glass::GlassEdge, 1.0f), 64, 1.0f);
-    dl->AddCircle(c, rIn, Tone(Glass::Separator, 1.0f), 48, 1.0f);
+                            Tone(Glass::Shadow, 0.10f * (float)(4 - i)), plateSegs);
+    dl->AddCircleFilled(c, rOut, Tone(Glass::GlassFallback, 0.94f), plateSegs);
+    dl->AddCircle(c, rOut, Tone(Glass::GlassEdge, 1.0f), plateSegs, 1.0f);
+    dl->AddCircle(c, rIn, Tone(Glass::Separator, 1.0f), ImMax(48, plateSegs * 3 / 4), 1.0f);
     for (int i = 0; i < count; ++i) { // wedge dividers
         const float a = -IM_PI * 0.5f + ((float)i + 0.5f) * step;
         const ImVec2 u(std::cos(a), std::sin(a));
         dl->AddLine(ImVec2(c.x + u.x * (rIn + Glass::Px(4.0f)), c.y + u.y * (rIn + Glass::Px(4.0f))),
                     ImVec2(c.x + u.x * (rOut - Glass::Px(4.0f)), c.y + u.y * (rOut - Glass::Px(4.0f))), White(0.05f), 1.0f);
     }
-    // The hub: an X, lit while the pointer rests there (letting go there cancels).
-    {
-        const bool hubHot = open && m_Radial.Hovered < 0;
-        const char* full = decalRing && open && m_Radial.Hovered >= 0
-            ? (graffitiRing ? GraffitiRadialFullName(m_Radial.Hovered) : DecalRadialFullName(m_Radial.Hovered)) : "";
-        if (full[0]) {
-            // The hovered slot's whole name in the hub, shrunk to fit and cut only as a last resort.
-            const float maxW = rIn * 2.0f - Glass::Px(8.0f);
-            std::string name = full;
-            float scale = 1.0f;
-            while (scale > 0.62f && ImGui::CalcTextSize(name.c_str()).x * scale > maxW) scale -= 0.04f;
-            while (name.size() > 3 && ImGui::CalcTextSize(name.c_str()).x * scale > maxW) { name.pop_back(); name.back() = '.'; }
-            const ImVec2 ts = ImGui::CalcTextSize(name.c_str());
-            dl->AddText(ImGui::GetFont(), ImGui::GetFontSize() * scale, ImVec2(c.x - ts.x * scale * 0.5f, c.y - ts.y * scale * 0.5f),
-                        Tone(Glass::TextPrimary, 1.0f), name.c_str());
-        } else {
-            const ImVec2 xs = ImGui::CalcTextSize(ICON_FA_XMARK);
-            dl->AddText(ImVec2(c.x - xs.x * 0.5f, c.y - xs.y * 0.5f), Tone(hubHot ? Glass::TextPrimary : Glass::TextTertiary, 1.0f), ICON_FA_XMARK);
-        }
-    }
-
-    const float staggerElapsed = animate ? motion.PulseElapsed(kStaggerId, 1.0e3f) : 1.0e3f;
-    const float fs = ImGui::GetFontSize();
-    const ImGuiID pathCW = RingPath(rLabel - fs * 0.3f, true);
-    const ImGuiID pathCCW = RingPath(rLabel + fs * 0.3f, false);
-    const float lenCW = 2.0f * IM_PI * (rLabel - fs * 0.3f), lenCCW = 2.0f * IM_PI * (rLabel + fs * 0.3f);
-    const int gizmoOp = (int)m_GizmoOp;
 
     for (int i = 0; i < count; ++i) {
-        const char* icon = "";
-        const char* label = "";
-        bool on = false;
-        ImU32 dot = 0;
-        if (graffitiRing) on = GraffitiRadialItem(i, icon, label, dot);
-        else if (decalRing) on = DecalRadialItem(i, icon, label);
-        else switch (i) {
-            case RMove:   icon = EDITOR_ICON_TRANSLATE; label = "Move";   on = !m_HandTool && gizmoOp == 0; break;
-            case RRotate: icon = EDITOR_ICON_ROTATE;    label = "Rotate"; on = !m_HandTool && gizmoOp == 1; break;
-            case RScale:  icon = EDITOR_ICON_SCALE;     label = "Scale";  on = !m_HandTool && gizmoOp == 2; break;
-            case RRect:   icon = EDITOR_ICON_RECT_TOOL; label = "Rect";   on = !m_HandTool && gizmoOp == 3; break;
-            case RSnap:   icon = EDITOR_ICON_SNAP_TO_GRID; label = "Snap"; on = m_GridSnapEnabled; break;
-            case RSpace:  icon = m_GizmoLocalSpace ? EDITOR_ICON_LOCAL_SPACE : EDITOR_ICON_WORLD_SPACE;
-                          label = m_GizmoLocalSpace ? "Local" : "World"; break;
-            case RFrame:  icon = ICON_FA_CROSSHAIRS; label = "Frame"; break;
-            case RProjection: icon = editorCamera.Orthographic ? EDITOR_ICON_ORTHOGRAPHIC : EDITOR_ICON_PERSPECTIVE;
-                              label = editorCamera.Orthographic ? "Ortho" : "Persp"; on = editorCamera.Orthographic; break;
-            case RShading: icon = EDITOR_ICON_WIREFRAME_MODE; label = "Wire"; on = ShadingModeIndex() == 1; break;
-            case RHand:   icon = EDITOR_ICON_HAND_TOOL; label = "Hand"; on = m_HandTool; break;
-            default: break;
-        }
+        const Slot sl = slotAt(i);
         const bool enabled = itemEnabled(i);
-        const float ang = -IM_PI * 0.5f + (float)i * step;
+        const float ang = RadialLayout::WedgeAngle(i, count);
         const ImVec2 u(std::cos(ang), std::sin(ang));
-
-        // Items bloom out one after another (scale out from the hub + fade).
-        float p = 1.0f;
-        if (staggerElapsed < 1.0e2f) {
-            const float delay = Glass::StaggerDelay(i, Glass::RadialStaggerMs, count);
-            p = Glass::EaseProgress(Glass::RadialOpen, (staggerElapsed - delay) / (Glass::RadialOpen.durationMs * 0.001f));
-        }
-        const float pa = ImClamp(p, 0.0f, 1.0f);
-
-        // The hovered wedge: a white wash easing in (RadialItem); the picked one holds it as the
-        // menu fades.
-        const bool hot = (open && m_Radial.Hovered == i && enabled) || (!open && m_Radial.Picked == i);
-        const float wash = animate ? motion.Animate(kWashId + (ImGuiID)i, hot ? 1.0f : 0.0f, 0.0f, Glass::RadialItem) : (hot ? 1.0f : 0.0f);
+        const float pa = ImClamp(itemProgress(i), 0.0f, 1.0f);
+        const float wash = itemWash(i);
         if (wash > 0.0f) {
-            const float gap = Glass::Px(2.0f) / rOut;
-            dl->PathArcTo(c, (rIn + rOut) * 0.5f, ang - step * 0.5f + gap, ang + step * 0.5f - gap, 16);
+            const float g = Glass::Px(2.0f) / rOut;
+            dl->PathArcTo(c, (rIn + rOut) * 0.5f, ang - step * 0.5f + g, ang + step * 0.5f - g, arcSegs((rIn + rOut) * 0.5f));
             dl->PathStroke(White(0.13f * wash), ImDrawFlags_None, rOut - rIn - Glass::Px(4.0f));
-            dl->PathArcTo(c, rOut - Glass::Px(2.0f), ang - step * 0.5f + gap * 2.0f, ang + step * 0.5f - gap * 2.0f, 16);
+            dl->PathArcTo(c, rOut - Glass::Px(2.0f), ang - step * 0.5f + g * 2.0f, ang + step * 0.5f - g * 2.0f, arcSegs(rOut));
             dl->PathStroke(White(0.55f * wash), ImDrawFlags_None, Glass::Px(1.5f));
         }
-
-        ImVec4 tone = !enabled ? Glass::TextTertiary : Glass::MixOklab(on ? Glass::TextPrimary : Glass::TextSecondary, Glass::AccentBright, wash);
-        const float ri = rIcon * (0.55f + 0.45f * p);
-        const ImVec2 is = ImGui::CalcTextSize(icon);
-        if (dot) { // a colour slot: its swatch where the icon would be
-            const ImVec2 sp(c.x + u.x * ri, c.y + u.y * ri);
-            dl->AddCircleFilled(sp, Glass::Px(8.0f), (dot & 0x00FFFFFFu) | ((ImU32)(255.0f * pa) << 24), 20);
-            dl->AddCircle(sp, Glass::Px(8.0f), Tone(tone, pa), 20, 1.5f);
-        } else {
-            dl->AddText(ImVec2(c.x + u.x * ri - is.x * 0.5f, c.y + u.y * ri - is.y * 0.5f), Tone(tone, pa), icon);
+        const float rb = rBlock * (0.55f + 0.45f * pa);
+        ImVec2 off;
+        const ImVec2 ink = sl.dot ? ImVec2(swatchPx, swatchPx) : inkOf(sl.icon, off);
+        const RadialLayout::Block b = RadialLayout::Place(c, ang, rb, ink, ImVec2(0.0f, lineH), gap, showLabels && sl.label[0]);
+        const ImVec2 ic(b.iconPos.x + ink.x * 0.5f, b.iconPos.y + ink.y * 0.5f);
+        const ImVec4 tone = !enabled ? Glass::TextTertiary : Glass::MixOklab(sl.on ? Glass::TextPrimary : Glass::TextSecondary, Glass::AccentBright, wash);
+        if (sl.dot) { // a colour slot: its swatch where the icon would be
+            dl->AddCircleFilled(ic, Glass::Px(8.0f), (sl.dot & 0x00FFFFFFu) | ((ImU32)(255.0f * pa) << 24), 20);
+            dl->AddCircle(ic, Glass::Px(8.0f), Tone(tone, pa), 20, 1.5f);
+        } else if (wash > 0.0f) { // a soft ring round the lit icon
+            dl->AddCircle(ic, ImMax(ink.x, ink.y) * 0.5f + Glass::Px(7.0f), White(0.32f * wash * pa), 24, 1.0f);
         }
-        if (on) {
+        if (sl.on) {
             const float rd = rIn + Glass::Px(7.0f);
             dl->AddCircleFilled(ImVec2(c.x + u.x * rd, c.y + u.y * rd), Glass::Px(2.0f), Tone(Glass::AccentBright, pa));
         }
-
-        // The label follows the ring (TextOnPath), centred on the wedge.
-        const bool lower = u.y > 0.05f;
-        // Never wider than the wedge's arc, so neighbours can't collide: cut with a dot.
-        const float arcW = 2.0f * IM_PI * rLabel / (float)count - Glass::Px(6.0f);
-        char fitted[32];
-        std::snprintf(fitted, sizeof(fitted), "%s", label);
-        for (size_t n = std::strlen(fitted); n > 2 && ImGui::CalcTextSize(fitted).x > arcW; ) {
-            --n;
-            fitted[n - 1] = '.';
-            fitted[n] = 0;
-        }
-        label = fitted;
-        const float tw = ImGui::CalcTextSize(label).x;
-        const float s = lower ? Wrap2Pi(IM_PI - ang) * (lenCCW / (2.0f * IM_PI)) : Wrap2Pi(ang - IM_PI) * (lenCW / (2.0f * IM_PI));
-        Glass::ImAnimContext::TextOnPath(lower ? pathCCW : pathCW, label, c, Tone(tone, pa * (enabled ? 1.0f : 0.7f)),
-                                         ImMax(0.0f, s - tw * 0.5f), false);
     }
 
     Glass::LayerTransform xf;
@@ -400,7 +375,56 @@ void EditorLayer::UpdateRadialMenu(World& world, Camera& editorCamera, bool scen
     const float sc = 0.82f + 0.18f * t; // the spring's overshoot reads as a bloom
     xf.scale = ImVec2(sc, sc);
     xf.alpha = ImClamp(t, 0.0f, 1.0f);
-    Glass::ImAnimContext::EndLayer(dl, layer, xf);
+    Glass::ImAnimContext::EndLayer(dl, geoLayer, xf);
+
+    // Pass 2, the text: it only fades (never scaled, so glyphs stay on whole pixels), each block
+    // sliding out from the hub in whole-pixel steps.
+    const int textLayer = Glass::ImAnimContext::BeginLayer(dl);
+    for (int i = 0; i < count; ++i) {
+        const Slot sl = slotAt(i);
+        const bool enabled = itemEnabled(i);
+        const float ang = RadialLayout::WedgeAngle(i, count);
+        const float pa = ImClamp(itemProgress(i), 0.0f, 1.0f);
+        const float wash = itemWash(i);
+        const ImVec4 tone = !enabled ? Glass::TextTertiary : Glass::MixOklab(sl.on ? Glass::TextPrimary : Glass::TextSecondary, Glass::AccentBright, wash);
+        const float rb = rBlock * (0.88f + 0.12f * pa);
+        const bool hasLabel = showLabels && sl.label[0];
+        const std::string label = hasLabel ? fitText(sl.label, maxLabelW) : std::string();
+        ImVec2 off;
+        const ImVec2 ink = sl.dot ? ImVec2(swatchPx, swatchPx) : inkOf(sl.icon, off);
+        const ImVec2 ls = hasLabel ? ImGui::CalcTextSize(label.c_str()) : ImVec2(0.0f, 0.0f);
+        const RadialLayout::Block b = RadialLayout::Place(c, ang, rb, ink, ls, gap, hasLabel);
+        if (!sl.dot)
+            dl->AddText(RadialLayout::Snap(ImVec2(b.iconPos.x - off.x, b.iconPos.y - off.y)), Tone(tone, pa), sl.icon);
+        if (hasLabel) { // hovered: the label comes up to full white
+            const ImVec4 lt = enabled ? Glass::MixOklab(sl.on ? Glass::TextPrimary : Glass::TextSecondary, Glass::TextPrimary, wash) : Glass::TextTertiary;
+            dl->AddText(b.labelPos, Tone(lt, pa * (enabled ? 1.0f : 0.7f)), label.c_str());
+        }
+    }
+    // The hub: an X, lit while the pointer rests there (letting go there cancels). Past 8 wedges
+    // there is no room for labels, so the hovered slot's whole name is shown here instead.
+    {
+        const bool hubHot = open && m_Radial.Hovered < 0;
+        const int hv = m_Radial.Hovered;
+        const char* full = "";
+        if (open && hv >= 0) {
+            if (decalRing) full = graffitiRing ? GraffitiRadialFullName(hv) : DecalRadialFullName(hv);
+            else if (!showLabels) full = slotAt(hv).label;
+        }
+        if (full[0]) {
+            const std::string name = fitText(full, rIn * 2.0f - Glass::Px(8.0f));
+            const ImVec2 ts = ImGui::CalcTextSize(name.c_str());
+            dl->AddText(RadialLayout::Snap(ImVec2(c.x - ts.x * 0.5f, c.y - ts.y * 0.5f)), Tone(Glass::TextPrimary, 1.0f), name.c_str());
+        } else {
+            ImVec2 off;
+            const ImVec2 ink = inkOf(ICON_FA_XMARK, off);
+            dl->AddText(RadialLayout::Snap(ImVec2(c.x - ink.x * 0.5f - off.x, c.y - ink.y * 0.5f - off.y)),
+                        Tone(hubHot ? Glass::TextPrimary : Glass::TextTertiary, 1.0f), ICON_FA_XMARK);
+        }
+    }
+    Glass::LayerTransform tx;
+    tx.alpha = ImClamp(t, 0.0f, 1.0f);
+    Glass::ImAnimContext::EndLayer(dl, textLayer, tx);
     ImGui::End();
     ImGui::PopStyleVar(2);
 }
