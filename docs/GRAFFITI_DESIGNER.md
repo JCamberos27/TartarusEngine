@@ -161,9 +161,9 @@ The *Decals & Graffiti* category is in Preferences > Editor Sounds and on the So
 | GraffitiLayerAdd / Remove / Reorder | layer changes |
 | GraffitiBakeStart / BakeDone | a bake starts and finishes |
 
-No spray recordings exist yet. Until CC0 recordings are approved and cut:
-- the one-shots borrow other events' files (the Sound Board shows *placeholder: ...*);
-- SprayLoop plays a **synthesised** hiss: fixed-seed filtered noise with a seamless loop.
+SprayStart, SprayLoop and SprayEnd are cut from one CC0 aerosol recording (C-V, Freesound 516815) by
+`tools/audio/build_spray.py`; see `resources/EditorSounds/SPRAY_CREDITS.md`. SprayDrip still borrows NodePop (the Sound
+Board shows *placeholder: NodePop*). If `SprayLoop.wav` is missing, SprayLoop falls back to a **synthesised** hiss.
 
 ## Tests
 

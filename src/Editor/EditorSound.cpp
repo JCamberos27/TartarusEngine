@@ -178,8 +178,9 @@ const EventInfo kEvents[kEventCount] = {
     {"RadialClose",      Category::Tools,        -4.0f,  80.0f, 0.0f,  false},
     {"CardFlip",         Category::Objects,      -2.0f, 120.0f, 0.02f, false},
     {"NodePop",          Category::Animation,    -2.0f,  60.0f, 0.03f, false},
-    // Graffiti Designer (decals Phase 3, docs/GRAFFITI_DESIGNER.md). Placeholders (the last column) stand in until the spray
-    // recordings are sourced; SprayLoop has nothing to borrow and plays a synthesised hiss (SynthesiseSprayLoop).
+    // Graffiti Designer (decals Phase 3, docs/GRAFFITI_DESIGNER.md). Start / Loop / End are cut from a CC0 aerosol recording
+    // (tools/audio/build_spray.py); a placeholder (the last column) plays only if that event's file is missing, and SprayLoop
+    // without its file falls back to a synthesised hiss (SynthesiseSprayLoop). SprayDrip has no recording yet.
     {"SprayStart",           Category::DecalsGraffiti,-3.0f, 120.0f, 0.03f, false, false, "Randomize"},
     {"SprayLoop",            Category::DecalsGraffiti,-6.0f,   0.0f, 0.0f,  false}, // held: its level and pitch follow pressure
     {"SprayEnd",             Category::DecalsGraffiti,-3.0f,  80.0f, 0.02f, false, false, "ToggleOff"},
@@ -292,7 +293,7 @@ std::vector<std::string> ResolveVariants(const std::string& dir, const std::unor
     return files;
 }
 
-// A SYNTHESISED PLACEHOLDER, not a recording: SprayLoop's stand-in until a real aerosol hiss is sourced. ~1.5 s of mono noise
+// A SYNTHESISED FALLBACK, not a recording: SprayLoop's stand-in when SprayLoop.wav is missing. ~1.5 s of mono noise
 // from a fixed-seed xorshift (the same samples every run), high-passed at ~2 kHz with a gentle emphasis around 6-9 kHz, at about
 // -18 dBFS RMS. The tail is crossfaded (equal power) into the head, so the loop has no seam. Built once at Init.
 AudioEngine::ClipId SynthesiseSprayLoop() {
