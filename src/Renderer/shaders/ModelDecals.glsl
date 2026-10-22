@@ -31,7 +31,7 @@ uniform float uDecalBlacklight; // how much UV-paint glows (no UV light exists y
 const uint DECAL_CH_ALBEDO = 1u, DECAL_CH_NORMAL = 2u, DECAL_CH_ROUGH = 4u, DECAL_CH_METAL = 8u, DECAL_CH_AO = 16u,
            DECAL_CH_EMISSIVE = 32u, DECAL_CH_HEIGHT = 64u, DECAL_CH_PAINT = 128u;
 const uint DECAL_STATIC = 1u, DECAL_DYNAMIC = 2u, DECAL_UV_PAINT = 4u, DECAL_HAS_NORMAL = 8u, DECAL_HAS_SURFACE = 16u,
-           DECAL_HAS_AUX = 32u, DECAL_LUMA = 64u, DECAL_INVERT = 128u;
+           DECAL_HAS_AUX = 32u, DECAL_LUMA = 64u, DECAL_INVERT = 128u, DECAL_REVEAL = 256u;
 const float DECAL_PAGE = 4096.0; // Decals::PAGE_SIZE
 
 float DecalHash(vec2 p) {
@@ -105,6 +105,11 @@ void ApplyDecals(inout vec3 albedo, inout vec3 N, inout float roughness, inout f
         vec2 relief = unpackHalf2x16(d.H2.y), fb = unpackHalf2x16(d.H2.z), pb = unpackHalf2x16(d.H2.w);
         vec2 seed = vec2(d.WorldToBox[0].w, d.WorldToBox[1].w) * 0.173;
         a *= 1.0 - fb.x;
+        if ((flags & DECAL_REVEAL) != 0u) {
+            // A reveal order in aux (FLAG_REVEAL): (threshold, band) in place of (peel, buff).
+            if (pb.x > 0.0) a *= aux >= 0.0 ? clamp((aux - pb.x) / max(pb.y, 1e-3), 0.0, 1.0) : 0.0;
+            pb = vec2(0.0);
+        }
         if (pb.x > 0.0) {
             float m = (aux >= 0.0 && (ch & DECAL_CH_EMISSIVE) == 0u) ? aux
                     : DecalNoise(boxUV * 6.0 + seed) * 0.65 + DecalNoise(boxUV * 19.0 + seed) * 0.35;

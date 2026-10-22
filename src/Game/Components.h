@@ -1372,6 +1372,17 @@ struct DecalGradingComponent {
     float Wear = 0.0f; // 0..1
 };
 
+// A graffiti piece going on to a wall with a spray can (Decals P4, Game/SprayCan.h): on the entity whose
+// DecalComponent shows the piece's baked decal. It goes on stroke by stroke over Seconds; Elapsed is how far
+// it has got. Saved with the scene like every component, so a piece half-sprayed when the game state is saved
+// carries on from there when it's loaded.
+struct SprayPaintComponent {
+    std::string PiecePath;  // project-relative .graffiti
+    float Seconds = 10.0f;  // how long the whole piece takes to spray
+    float Elapsed = 0.0f;   // seconds sprayed so far
+    std::string Painter;    // who is spraying it ("Player", an NPC's name): for the AI and the log
+};
+
 // ---- lane P ----
 // Scene-level visual effects and HUD settings (Lane P quality pass).
 // Add one to the scene to tune muzzle flash, laser beam and HUD display parameters.

@@ -1661,6 +1661,27 @@ void RegisterEngineComponents() {
         Register<DecalGradingComponent>(std::move(m));
     }
 
+    // Decals P4: a graffiti piece being sprayed on (SprayCanAction, Game/SprayCan.h). Runtime-made, but an
+    // ordinary component so it saves with the game state.
+    {
+        ReflectComponent m;
+        m.Name = "Spray Paint"; m.Icon = ICON_FA_SPRAY_CAN; m.Category = "Rendering";
+        m.Tooltip = "A graffiti piece going on to the wall stroke by stroke, as a spray can puts it there. The
+"
+                    "Decal on this object shows the piece; this says how far the spraying has got.";
+        m.Fields = {
+            { "Piece", T::String, TARTARUS_REFLECT_FIELD(SprayPaintComponent, PiecePath), 0.0f,
+              "The .graffiti piece (project-relative) being sprayed." },
+            { "Seconds", T::Float, TARTARUS_REFLECT_FIELD(SprayPaintComponent, Seconds), 0.1f,
+              "How long the whole piece takes to spray.", 0.5f, 600.0f },
+            { "Elapsed", T::Float, TARTARUS_REFLECT_FIELD(SprayPaintComponent, Elapsed), 0.1f,
+              "Seconds sprayed so far; at Seconds the piece is finished.", 0.0f, 600.0f },
+            { "Painter", T::String, TARTARUS_REFLECT_FIELD(SprayPaintComponent, Painter), 0.0f,
+              "Who is spraying it (the player or an NPC's name)." },
+        };
+        Register<SprayPaintComponent>(std::move(m));
+    }
+
     // Phase 4 (#6) item 1 — Collider. Registered for the generic Inspector/Add-Component path
     // only: GenericSerialize stays false because a dedicated hand-written pass in
     // SceneSerializer.cpp already reads/writes it under a "collider" JSON key predating this

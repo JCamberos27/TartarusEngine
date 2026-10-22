@@ -88,6 +88,21 @@ public:
     const BloodView* BloodStats = nullptr;
     // --npc-test decals: blood the host's BloodFx puts on a surface (kind 0 a wall spatter, 1 a pool).
     std::function<void(int kind, const glm::vec3& at, const glm::vec3& normal, float size)> SpawnBlood;
+    // --npc-test decals: the spray can (Decals P4). Spray starts a SprayCanAction of `piece` over `seconds` from
+    // `from` along `dir` for `painter`; SprayState reports on every piece going on (saving and reading the game
+    // state back when `roundTrip`).
+    struct SprayView {
+        int Pieces = 0;          // Spray Paint components in the world
+        float MinProgress = 1.0f, MaxProgress = 0.0f;
+        int Sounds = 0;          // spray-can sounds started
+        bool Hissing = false;    // a held hiss live now
+        bool Resident = false;   // every piece's decal maps are in the decal arrays
+        int Saved = -1;          // pieces back from a save + load (-1: not asked)
+        float SavedElapsed = 0.0f;
+        int RuntimeDecals = 0;   // the DecalSystem's runtime list (the stains and holes)
+    };
+    std::function<bool(const std::string& piece, const glm::vec3& from, const glm::vec3& dir, const std::string& painter, float seconds)> Spray;
+    std::function<void(SprayView& out, bool roundTrip)> SprayState;
 
 private:
     void Check(bool ok, const std::string& what);
@@ -103,7 +118,8 @@ private:
     // decals
     int m_KStep = 0, m_KShot = 0;
     float m_KAt = 0.0f, m_KClock = 0.0f;
-    bool m_KPlaced = false;
+    bool m_KMidChecked = false;
+    int m_KPlacedStage = 0;
     // ragdoll
     int m_RCase = -1, m_RStage = 0, m_RMoment = 0, m_RFrame = 0, m_RFrames = 0;
     float m_RAt = 0.0f, m_RKilledAt = 0.0f, m_RLastDeath = 0.0f, m_RYaw = 0.0f;
