@@ -3,6 +3,7 @@
 // round trip.
 #include "UnitTestSupport.h"
 #include "../Renderer/DecalAsset.h"
+#include "../Renderer/SubstrateJson.h"
 #include "../Renderer/MaterialAsset.h"
 #include "../Renderer/Texture.h"
 #include "../Game/World.h"
@@ -294,6 +295,137 @@ void EmbeddedMaterialGrunge() {
     if (!old) return;
     CHECK(!old->Mat.GrungeMap && old->Mat.GrungeStrength == 0.0f && old->Mat.GrungeScale == 0.5f && old->Mat.ReceiveDecals);
 }
+
+// Substrates (Substrate.h): a .decal's block, a placed decal's Custom override and an embedded
+// material's block all round-trip; a wrong type falls back to the defaults.
+void SubstrateRoundTrip() {
+    const std::string kAlb = "assets/Architecture/Building/Textures/Wall_Concrete/Wall_Concrete_Base_Color.png";
+    const std::string kAO = "assets/Architecture/Building/Textures/Wall_Concrete/Wall_Concrete_AO.png";
+    // .decal
+    DecalAsset a;
+    a.Path = (DecalTempDir() / "DA_Substrate.decal").u8string();
+    a.AlbedoPath = "assets/Decals/T_Test.png";
+    a.Substrate.Albedo = kAlb;
+    a.Substrate.AO = kAO;
+    a.Substrate.Tiling = 1.5f;
+    a.Substrate.Tint = glm::vec3(0.9f, 0.8f, 0.7f);
+    a.Substrate.Strength = 0.75f;
+    a.Substrate.RoughRange = glm::vec2(0.85f, 0.95f);
+    a.Substrate.Mirror = true;
+    a.Substrate.Crop = glm::vec4(0.0f, 0.21f, 1.0f, 0.93f);
+    CHECK(a.Save());
+    const auto b = DecalAsset::Load(a.Path);
+    CHECK(b && !b->Missing && b->Substrate == a.Substrate && b->Substrate.Enabled());
+    if (b) {
+        CHECK(b->Save());
+        CHECK(ReadFile(a.Path).find("\"substrate\"") != std::string::npos);
+    }
+    // No albedo: nothing written, nothing enabled.
+    DecalAsset none;
+    none.Path = (DecalTempDir() / "DA_NoSubstrate.decal").u8string();
+    none.AlbedoPath = "assets/Decals/T_Test.png";
+    CHECK(none.Save());
+    CHECK(ReadFile(none.Path).find("substrate") == std::string::npos);
+    const auto nb = DecalAsset::Load(none.Path);
+    CHECK(nb && !nb->Substrate.Enabled());
+    // Wrong types keep the defaults; out-of-range values clamp.
+    WriteFile(none.Path, R"({"textures": {"albedo": "x.png"}, "substrate": {"albedo": "c.png", "tiling": "big",
+        "strength": 4, "mirror": 1, "crop": [0, 0, 1], "roughnessRange": [-1, 2]}})");
+    const auto bad = DecalAsset::Load(none.Path);
+    CHECK(bad && bad->Substrate.Albedo == "c.png" && Near(bad->Substrate.Tiling, 1.5f) &&
+          Near(bad->Substrate.Strength, 1.0f) && bad->Substrate.Mirror && bad->Substrate.Crop == glm::vec4(0, 0, 1, 1) &&
+          bad->Substrate.RoughRange == glm::vec2(0.0f, 1.0f));
+
+    // Component: Custom and its maps through the scene file, by the keys the dress scripts write.
+    if (ComponentRegistry::All().empty()) ComponentRegistry::RegisterEngineComponents();
+    World w;
+    AssetLibrary assets;
+    const entt::entity e = w.CreateEmptyEntity(glm::vec3(0), glm::vec3(0), glm::vec3(1), "Peel");
+    auto& d = w.Registry.emplace<DecalComponent>(e);
+    CHECK(d.SubstrateMode == 0); // Auto
+    d.AssetPath = (DecalTempDir() / "DA_Substrate.decal").u8string();
+    d.SubstrateMode = 2;
+    d.SubAlbedo = kAlb;
+    d.SubTiling = 2.0f;
+    d.SubRoughMin = 0.3f;
+    d.SubRoughMax = 0.92f;
+    d.SubMirror = true;
+    d.SubCropY1 = 0.5f;
+    const std::string saved = SceneSerializer::SaveToString(w, assets);
+    CHECK(saved.find("\"Custom\"") != std::string::npos); // the Enum saves its label
+    CHECK(saved.find("\"Substrate Rough Max\"") != std::string::npos);
+    World back;
+    AssetLibrary assets2;
+    CHECK(SceneSerializer::LoadFromString(back, assets2, saved));
+    const auto view = back.Registry.view<DecalComponent>();
+    CHECK(view.size() == 1);
+    if (!view.empty()) {
+        const DecalComponent& r = back.Registry.get<DecalComponent>(*view.begin());
+        CHECK(r.SubstrateMode == 2 && r.SubAlbedo.find("Wall_Concrete_Base_Color.png") != std::string::npos);
+        CHECK(Near(r.SubTiling, 2.0f) && Near(r.SubRoughMin, 0.3f) && Near(r.SubRoughMax, 0.92f) && r.SubMirror &&
+              Near(r.SubCropY1, 0.5f) && Near(r.SubCropX1, 1.0f));
+    }
+
+    // Embedded material.
+    MaterialAsset ma;
+    ma.Mat.Substrate = a.Substrate;
+    const json em = json::parse(SceneSerializer::EmbeddedMaterialToJson(ma));
+    CHECK(em.contains("substrate") && em["substrate"].is_object());
+    const auto mb = SceneSerializer::EmbeddedMaterialFromJson(assets, em.dump());
+    CHECK(mb != nullptr);
+    if (mb) {
+        CHECK(mb->Mat.Substrate.Albedo.find("Wall_Concrete_Base_Color.png") != std::string::npos);
+        CHECK(Near(mb->Mat.Substrate.Strength, 0.75f) && mb->Mat.Substrate.Mirror && mb->Mat.Substrate.Normal.empty() &&
+              Near(mb->Mat.Substrate.Crop.w, 0.93f));
+        CHECK(mb->Mat.ComputeHash() != MaterialAsset().Mat.ComputeHash());
+    }
+    MaterialAsset plain;
+    CHECK(!json::parse(SceneSerializer::EmbeddedMaterialToJson(plain)).contains("substrate"));
+
+    // Presets: a block naming a .substrate loads its values, a key beside it overrides one, and it is
+    // written back as the reference plus only that override.
+    const fs::path preset = DecalTempDir() / "SB_Test.substrate";
+    WriteFile(preset, R"({"albedo": ")" + kAlb + R"(", "tiling": 2.5, "tint": [1.3, 1.3, 1.3], "detail": 1})");
+    SubstratePresets::ClearCache();
+    const std::string presetPath = preset.generic_u8string();
+    SubstrateDesc viaPreset;
+    CHECK(SubstrateJson::Read(json{{"preset", presetPath}, {"strength", 0.5}}, viaPreset, SubstrateJson::PlainPath));
+    CHECK(viaPreset.Preset == presetPath && viaPreset.Albedo == kAlb && Near(viaPreset.Tiling, 2.5f) &&
+          Near(viaPreset.Tint.r, 1.3f) && Near(viaPreset.Detail, 1.0f) && Near(viaPreset.Strength, 0.5f));
+    const json back2 = SubstrateJson::Write<json>(viaPreset, [](const std::string& p) { return p; });
+    CHECK(back2.size() == 2 && back2.value("preset", std::string()) == presetPath && Near(back2.value("strength", 0.0f), 0.5f));
+    SubstrateDesc viaString;
+    CHECK(SubstrateJson::Read(json(presetPath), viaString, SubstrateJson::PlainPath) && viaString.Albedo == kAlb &&
+          Near(viaString.Strength, 1.0f));
+    // An embedded material keeps just the reference.
+    MaterialAsset pm;
+    pm.Mat.Substrate = viaString;
+    const json pem = json::parse(SceneSerializer::EmbeddedMaterialToJson(pm));
+    CHECK(pem.contains("substrate") && pem["substrate"].size() == 1 && pem["substrate"].contains("preset"));
+    const auto pmb = SceneSerializer::EmbeddedMaterialFromJson(assets, pem.dump());
+    CHECK(pmb && pmb->Mat.Substrate.Albedo == kAlb && Near(pmb->Mat.Substrate.Tiling, 2.5f));
+    // The component's Preset mode round-trips by label.
+    {
+        World pw;
+        const entt::entity pe = pw.CreateEmptyEntity(glm::vec3(0), glm::vec3(0), glm::vec3(1), "PresetPeel");
+        auto& pd = pw.Registry.emplace<DecalComponent>(pe);
+        pd.AssetPath = (DecalTempDir() / "DA_Substrate.decal").u8string();
+        pd.SubstrateMode = 4;
+        pd.SubPreset = "assets/Decals/Substrates/SB_Floor_Concrete.substrate";
+        const std::string ps = SceneSerializer::SaveToString(pw, assets);
+        CHECK(ps.find("\"Preset\"") != std::string::npos);
+        World pback;
+        AssetLibrary assets3;
+        CHECK(SceneSerializer::LoadFromString(pback, assets3, ps));
+        const auto pv = pback.Registry.view<DecalComponent>();
+        CHECK(pv.size() == 1);
+        if (!pv.empty()) {
+            const DecalComponent& r = pback.Registry.get<DecalComponent>(*pv.begin());
+            CHECK(r.SubstrateMode == 4 && r.SubPreset == pd.SubPreset);
+        }
+    }
+    SubstratePresets::ClearCache();
+}
 } // namespace
 
 void RegisterDecalAssetTests(UnitTestSupport::TestList& tests) {
@@ -302,4 +434,5 @@ void RegisterDecalAssetTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Decals: a hand-edited .decal loads with defaults and clamps", AssetForgivingLoad});
     tests.push_back({"Decals: Decal and Decal Grading round-trip through the scene file", ComponentRoundTrip});
     tests.push_back({"Decals: an embedded material saves and loads grunge and Receive Decals", EmbeddedMaterialGrunge});
+    tests.push_back({"Decals: substrate blocks round-trip (.decal, Custom override, material)", SubstrateRoundTrip});
 }

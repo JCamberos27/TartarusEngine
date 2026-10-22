@@ -58,6 +58,9 @@
     "peel": 0.0,
     "buff": 0.0
   },
+  "substrate": {
+    "preset": "assets/Decals/Substrates/SB_Wall_Concrete.substrate"
+  },
   "category": "Grime/PeelingPaint",
   "tags": [
     "grime",

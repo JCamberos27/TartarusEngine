@@ -5,10 +5,14 @@
 #   python -I tools/scenes/dress_corridor.py [<repo>]
 #
 #  * the embedded materials of the corridor walls / ceiling / baseboards get the beige plaster's albedo + AO and a
-#    peeling-paint grunge map (the same values build_apartment_hallway.py's corridor_* materials use);
+#    peeling-paint grunge map (the same values build_apartment_hallway.py's corridor_* materials use), and a
+#    "substrate" block (the PBR material that shows where paint is missing): Wall_Concrete on the walls,
+#    Floor_Concrete on the ceiling, PH_Dark_Wooden_Planks on the baseboards (presets, SUBSTRATES below);
 #  * a seeded, layered set of decals goes under a "Corridor Wear" root: per patch a big soft base, a peel layer, then
 #    small sharp flakes and a crack on top. Only the DA_PeelingPaint_* sets (the tile / board-grid ones are skipped) and
-#    a few DA_LiquidSplatter_* floor splashes. Asserted limits: <= 80 decals, <= 22 unique 2K .decal maps, <= 1 4K;
+#    a few DA_LiquidSplatter_* floor splashes. Asserted limits: <= 80 decals, <= 22 unique 2K .decal maps, <= 1 4K.
+#    Ceiling decals carry a Preset substrate override (Floor_Concrete); wall / skirting decals stay on Auto, so they
+#    show the substrate of whatever they land on (concrete on the wall, wood on the baseboard);
 #  * a "Decal Grading" entity (Age 0.35, Wear 0.4) under that root.
 #
 # Idempotent: it first removes the "Decal Lab" (the old demo), "Corridor Wear" and "Apartment Wear" subtrees (run
@@ -41,6 +45,14 @@ HERO_4K = 7     # the one 4K map: a blotch
 WALL_DIR = 'assets/Architecture/Building/Textures/PH_Beige_Wall/beige_wall_001_'
 GRUNGE_WALL = D + 'Grime/PeelingPaint/T_Grunge_PeelingPaint_036.png'
 GRUNGE_WORN = D + 'Grime/PeelingPaint/T_Grunge_PeelingPaint_085.png'
+
+# Substrate presets (what shows where paint is missing): .substrate files under assets/Decals/Substrates, which
+# materials and decals reference by path instead of embedding the maps and values.
+SUBSTRATES = {
+    'wall': 'assets/Decals/Substrates/SB_Wall_Concrete.substrate',
+    'ceil': 'assets/Decals/Substrates/SB_Floor_Concrete.substrate',
+    'trim': 'assets/Decals/Substrates/SB_Dark_Wooden_Planks.substrate',
+}
 
 
 def quat(yaw=0.0, pitch=0.0):
@@ -93,6 +105,17 @@ def ref(repo, path):
         return {'path': path, 'pathGuid': json.load(f)['guid']}
 
 
+def substrate_block(repo, key):
+    """The material "substrate" block for SUBSTRATES[key]: a reference to its preset."""
+    assert os.path.isfile(os.path.join(repo, 'project', SUBSTRATES[key])), SUBSTRATES[key]
+    return {'preset': SUBSTRATES[key]}
+
+
+def substrate_override(key):
+    """The decal component keys for a Preset substrate override with SUBSTRATES[key]."""
+    return {'Substrate': 'Preset', 'Substrate Preset': SUBSTRATES[key]}
+
+
 def corridor_trims(d, by_id):
     """The baseboards along the corridor (the apartments' are every other 'Baseboard')."""
     trims = []
@@ -119,16 +142,19 @@ def patch_materials(d, repo):
         m['grungeMap'] = ref(repo, GRUNGE_WALL)
         m['grungeStrength'] = 0.35
         m['grungeScale'] = 0.25
+        m['substrate'] = substrate_block(repo, 'wall')
     for e in ceils:
         m = e['materials'][0]['embedded']
         m['grungeMap'] = ref(repo, GRUNGE_WORN)
         m['grungeStrength'] = 0.45
         m['grungeScale'] = 0.25
+        m['substrate'] = substrate_block(repo, 'ceil')
     for e in trims:
         m = e['materials'][0]['embedded']
         m['grungeMap'] = ref(repo, GRUNGE_WORN)
         m['grungeStrength'] = 0.5
         m.pop('grungeScale', None)    # default 0.5
+        m['substrate'] = substrate_block(repo, 'trim')
     return len(walls), len(ceils), len(trims)
 
 
@@ -150,12 +176,15 @@ class Wear:
         self.d['empties'].append(e)
         return i
 
-    def decal(self, asset, pos, size, rot, seed, sort, opacity=1.0, tint=None, jitter=(0.0, 0.0), flip=True):
+    def decal(self, asset, pos, size, rot, seed, sort, opacity=1.0, tint=None, jitter=(0.0, 0.0), flip=True,
+              substrate=None):
         dc = {'Asset': asset, 'Size': [round(v, 3) for v in size], 'Seed': seed, 'Sort Order': sort,
               'Opacity': round(opacity, 3), 'Affect Static': True, 'Affect Dynamic': True,
               'Rotation Jitter': jitter[0], 'Scale Jitter': jitter[1], 'Random Flip': flip}
         if tint:
             dc['Tint'] = list(tint)
+        if substrate:
+            dc.update(substrate_override(substrate))     # 'wall' / 'ceil' / 'trim'; omitted = Auto (the receiver's)
         self.empty(f'Wear {len(self.decals) + 1:02d}', self.root, pos, rot, Decal=dc)
         self.decals.append(asset)
 
@@ -190,7 +219,7 @@ class Wear:
         for i, (tag, scale, op) in enumerate(tags):
             ox, oz = (r.random() - 0.5) * 0.4 * w, (r.random() - 0.5) * 0.4 * h
             self.decal(self.pick(r, tag), (x + ox, 2.7, z + oz), (w * scale, h * scale, 0.25), CEIL_Q, seed + i, i, op,
-                       jitter=(180.0, 0.12))
+                       jitter=(180.0, 0.12), substrate='ceil')
 
 
 def build(d):
@@ -253,7 +282,7 @@ def main():
         json.dump(d, f, indent=2, sort_keys=True)
         f.write('\n')
     print(f'{path}: removed {removed} old entities; patched materials (walls, ceilings, baseboards) {mats}; '
-          f'{n} decals, {two_k} unique 2K maps, {four_k} 4K')
+          f'{n} decals, {two_k} unique 2K maps, {four_k} 4K, + {len(SUBSTRATES)} substrate sets (a 2K slot each)')
 
 
 if __name__ == '__main__':
