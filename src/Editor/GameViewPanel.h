@@ -47,6 +47,20 @@ public:
     void RenderUI(const GameViewStats* stats, bool isOsFullscreen, bool playing, bool inputEngaged,
                   bool noSceneCamera = false);
 
+    // The unified viewport (EditorLayer's Scene panel in Game mode): the same letterboxed view,
+    // stats and click-to-engage, drawn into the CURRENT window at [pos, pos + size] instead of
+    // this panel's own window, at `alpha` (the Scene -> Game dissolve). Uses the play state handed
+    // over by SetFrameState. Counts as the Game view being visible for IsVisible() and sizes the
+    // next framebuffer render to `size`.
+    void RenderEmbedded(ImVec2 pos, ImVec2 size, float alpha);
+    // main.cpp, once per frame after the game render: what RenderEmbedded draws next (it runs
+    // inside the editor's own Draw, before this frame's game render).
+    void SetFrameState(const GameViewStats& stats, bool playing, bool inputEngaged, bool noSceneCamera) {
+        m_FrameStats = stats; m_FramePlaying = playing; m_FrameInputEngaged = inputEngaged; m_FrameNoSceneCamera = noSceneCamera;
+    }
+    // The aspect / resolution control (the Game panel's toolbar; the viewport header in Game mode).
+    void DrawAspectControl();
+
     // True exactly once, the frame the user left-clicked inside the running Game view while
     // it wasn't yet controlling input — main.cpp turns that into "capture mouse/keyboard".
     bool ConsumeEngageClick() { bool v = m_EngageClickPending; m_EngageClickPending = false; return v; }
@@ -127,7 +141,7 @@ private:
     ImVec2 m_ViewImageSize{0.0f, 0.0f};
     bool m_Visible = true; // see IsVisible()
 
-    bool m_WindowOpen = true;
+    bool m_WindowOpen = false; // popped out into its own window (Window > Game); otherwise it lives in the viewport
     bool m_EngageClickPending = false;
     bool m_ViewHovered = false;
 
@@ -150,11 +164,18 @@ private:
     bool m_Panning = false;
     // Play starts: the view punches in 1.00 -> 1.01 -> 1.00 with a rim glint (Glass PlayPunch).
     bool m_PunchWasPlaying = false;
+    // The play state RenderEmbedded draws with (SetFrameState).
+    GameViewStats m_FrameStats{};
+    bool m_FramePlaying = false, m_FrameInputEngaged = false, m_FrameNoSceneCamera = false;
+    // The image, letterbox, zoom / pan, play punch, engage click and stats overlay, laid out in
+    // [containerStart, containerStart + avail] of the current window (RenderUI and RenderEmbedded).
+    void DrawView(ImVec2 containerStart, ImVec2 avail, float alpha, const GameViewStats* stats, bool playing,
+                  bool inputEngaged, bool noSceneCamera);
     // The stats overlay's FPS, held so it rolls only on a real change (not the frame-to-frame jitter).
     int    m_ShownFps = -1;
     double m_ShownFpsAt = 0.0;
 
-    void DrawAspectControl();
+
     void DrawScaleControl();
     void DrawCustomResolutionModal();
 };

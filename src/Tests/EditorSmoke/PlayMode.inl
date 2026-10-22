@@ -55,9 +55,9 @@ float CrateY(Ctx& c) {
     return e == entt::null ? NAN : c.W.Registry.get<TransformComponent>(e).Position.y;
 }
 bool Paused() { return Find(ByLabel("Resume", kBar)) != nullptr; }
-bool GameShown() {
-    ImGuiWindow* w = ImGui::FindWindowByName(EditorPanels::Game);
-    return w && w->WasActive && !w->Hidden;
+// The unified viewport showing the game (the Play dissolve finished).
+bool GameShown(Ctx& c) {
+    return c.E.GetViewportMode() == EditorLayer::ViewportMode::Game && !c.E.ViewFadeActive() && ChromeUi::Shown(EditorPanels::Scene);
 }
 std::string g_Before;     // the scene dump taken before Play
 size_t g_UndoBefore = 0;  // undo depth before Play
@@ -71,7 +71,7 @@ void RegisterPlayModeTests() {
         FreshScene(), CrateScene(), Wait(3),
         Tap(GLFW_KEY_F1, "F1"),
         Until("in play", [](Ctx& c) { return X::InPlay(c.E); }, 300),
-        Until("the Game view is shown", [](Ctx&) { return GameShown(); }),
+        Until("the Game view is shown", [](Ctx& c) { return GameShown(c); }),
         Until("the crate falls", [](Ctx& c) { return CrateY(c) < 9.5f; }, 300),
         Shot("game", {"###Game"}),
         Tap(GLFW_KEY_F2, "F2"),
@@ -200,7 +200,7 @@ void RegisterPlayModeTests() {
         Tap(GLFW_KEY_F1, "F1"),
         Until("in play", [](Ctx& c) { return X::InPlay(c.E); }, 300),
         WaitSeconds(2.0),
-        Until("the Game view is shown", [](Ctx&) { return GameShown(); }),
+        Until("the Game view is shown", [](Ctx& c) { return GameShown(c); }),
         Expect("the player stands on the floor", [](Ctx& c) {
             const entt::entity p = ByName(c.W, "Player Spawn");
             if (p == entt::null) return std::string("the Player Spawn is gone in Play");

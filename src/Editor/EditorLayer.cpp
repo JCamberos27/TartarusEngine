@@ -36,6 +36,7 @@
 #include <GLFW/glfw3.h>
 #include "BuildPipeline.h" // #174 - m_LastBuildReport
 #include "Shortcuts.h"
+#include "GameViewPanel.h"
 #include "Enhancers/EnhancerUserState.h"
 #include "Enhancers/Palette.h"
 #include "Enhancers/UiStyles.h"
@@ -3144,11 +3145,11 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         // window the first time either is toggled on.
         ImGui::DockBuilderDockWindow(EditorPanels::Statistics, wantRight ? right : bottom);
         ImGui::DockBuilderDockWindow(EditorPanels::History, wantRight ? right : bottom);
-        // Scene and Game are Unity's own pair of tabs sharing one dock node — Scene is the
-        // editor's 3D viewport, Game is the locked-aspect Play Mode preview; only whichever tab
-        // is active actually shows/renders (see m_SceneViewportVisible below).
+        // Scene is the unified viewport: the scene or the game in one rect (Scene | Game in its
+        // header, EditorLayer_ViewportMode.cpp).
         ImGui::DockBuilderDockWindow(EditorPanels::Scene, center);
-        ImGui::DockBuilderDockWindow(EditorPanels::Game, center);
+        // (Game lives inside the Scene panel - the unified viewport - unless popped out with
+        // Window > Game, when it opens as its own floating window.)
         ImGui::DockBuilderDockWindow("Script IDE", center);
         ImGui::DockBuilderFinish(dockspaceId);
         m_SceneGameDockNodeId = center;
@@ -3235,11 +3236,23 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         if (!m_HideOverlaysThisFrame) DrawViewportHeader(world, editorCamera);
         const ImVec2 imageMin = ImGui::GetCursorScreenPos();
         ImVec2 contentSize = ImGui::GetContentRegionAvail();
-        m_ViewportPos = {imageMin.x, imageMin.y};
-        m_ViewportSize = {contentSize.x, contentSize.y};
-        m_LastSceneContentRegion = m_ViewportSize;
+        if (Shortcuts::Triggered("view.sceneGame") && !GameViewPoppedOut())
+            SetViewportMode(m_ViewportMode == ViewportMode::Game ? ViewportMode::Scene : ViewportMode::Game);
+        // The unified viewport: the scene, the game, or (mid-dissolve) the game over the scene, all
+        // in this one rect. The scene keeps its render size while Game shows so the way back is
+        // ready; its tools, picking and gizmos only exist while the scene is what's on screen.
+        const bool sceneShown = SceneImageWanted();
+        const bool gameShown = GameImageWanted();
+        m_LastSceneContentRegion = {contentSize.x, contentSize.y};
+        if (sceneShown) {
+            m_ViewportPos = {imageMin.x, imageMin.y};
+            m_ViewportSize = {contentSize.x, contentSize.y};
+        } else {
+            m_ViewportPos = {0.0f, 0.0f};
+            m_ViewportSize = {0.0f, 0.0f};
+        }
 
-        if (m_SceneColorTexture != 0 && contentSize.x > 0.0f && contentSize.y > 0.0f) {
+        if (sceneShown && m_SceneColorTexture != 0 && contentSize.x > 0.0f && contentSize.y > 0.0f) {
             // uv0=(0,1)/uv1=(1,0): OpenGL textures are bottom-left origin, ImGui::Image expects
             // top-left, so this flips the framebuffer's color attachment right-side up. Filled
             // exactly (no letterboxing) since the offscreen render is sized to match this exact
@@ -3248,7 +3261,10 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
             ImGui::Image((ImTextureID)(intptr_t)m_SceneColorTexture, contentSize, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
         }
 
-        DrawGlassViewportOverlays(world); // Glass theme only: the frosted HUDs (skips clean captures itself)
+        if (gameShown && m_GameView && contentSize.x > 1.0f && contentSize.y > 1.0f)
+            m_GameView->RenderEmbedded(imageMin, contentSize, m_ViewFade.Active ? m_ViewFade.Alpha : 1.0f);
+
+        if (sceneShown) DrawGlassViewportOverlays(world); // Glass theme only: the frosted HUDs (skips clean captures itself)
     } else {
         m_ViewportPos = {0.0f, 0.0f};
         m_ViewportSize = {0.0f, 0.0f};
@@ -3361,7 +3377,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         UpdateVertexDrag(world, editorCamera);
     }
 
-    if (!m_HideOverlaysThisFrame && m_GizmosMasterVisible) {
+    if (!OverlaysHidden() && m_GizmosMasterVisible) {
         if (m_ShowEntityIcons) DrawEntityIcons(world, editorCamera); // DrawLightGizmos self-gates on EditorSettings::ShowLightGizmos
         DrawLightGizmos(world, editorCamera);
         DrawReflectionProbeGizmos(world, editorCamera); // PR14: probe box overlays
@@ -3373,7 +3389,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     // occlude it and block its mouse input. Draw mode and
     // ortho/persp used to get their own chip row here too (DrawViewStateChips) — moved into the
     // left tool palette (DrawToolPalette, called elsewhere) instead.
-    if (!m_HideOverlaysThisFrame) DrawViewGizmo(world, editorCamera);
+    if (!OverlaysHidden() && m_ViewportSize.x > 0.0f) DrawViewGizmo(world, editorCamera);
 
     // Self-heal a leaked ImGuizmo drag (audit #80). ImGuizmo::IsUsing() claiming a drag is still
     // in progress requires the left mouse button to still be physically held — if it isn't, that
@@ -3397,7 +3413,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         } else {
             UpdateLightHandles(world, editorCamera);
             HandleViewportPicking(world, editorCamera);
-            if (m_ShowGizmos && m_GizmosMasterVisible && !m_HideOverlaysThisFrame) DrawGizmo(world, editorCamera);
+            if (m_ShowGizmos && m_GizmosMasterVisible && !OverlaysHidden()) DrawGizmo(world, editorCamera);
         }
     }
     UpdateLockViewToSelection(world, editorCamera); // Shift+F — camera follows the selection centroid (#236 E)
