@@ -63,6 +63,13 @@ glm::mat3 SurfaceBasis(const glm::vec3& n, const glm::vec3& right, float spin) {
     return glm::mat3(x2, glm::cross(n, x2), n);
 }
 
+// ProjectPaths::Resolve of a palette entry's project-relative path, once.
+const std::string& ResolvedPath(DecalEditorState& ed, const std::string& rel) {
+    auto it = ed.Resolved.find(rel);
+    if (it == ed.Resolved.end()) it = ed.Resolved.emplace(rel, ProjectPaths::Resolve(rel)).first;
+    return it->second;
+}
+
 const DecalEditorState::AssetInfo& InfoFor(DecalEditorState& ed, const std::string& absPath) {
     auto it = ed.Assets.find(absPath);
     if (it != ed.Assets.end()) return it->second;
@@ -201,8 +208,10 @@ void EditorLayer::UpdateDecalTool(World& world, Camera& cam, bool free, bool lef
             alpha = ImLerp(1.0f, alpha, ImClamp(Glass::EaseProgress(Glass::DecalRingFlash, p), 0.0f, 1.0f));
         }
         DecalComponent& g = ed.GhostView.Comp;
+        std::string keepPath = std::move(g.AssetPath); // (the ghost is rebuilt each frame; its path buffer is kept)
         g = DecalComponent();
-        g.AssetPath = ed.PlacePath;
+        g.AssetPath = std::move(keepPath);
+        if (g.AssetPath != ed.PlacePath) g.AssetPath = ed.PlacePath;
         g.Size = info.Size * scale;
         g.Seed = ed.PlaceSeed;
         g.Opacity = ImClamp(alpha, 0.0f, 1.0f);
@@ -287,7 +296,7 @@ void EditorLayer::UpdateDecalTool(World& world, Camera& cam, bool free, bool lef
             const int pick = palette->Pick(dab.PickRoll);
             if (pick < 0) continue;
             const DecalPaletteEntry& e = palette->Entries[pick];
-            path = ProjectPaths::Resolve(e.DecalPath);
+            path = ResolvedPath(ed, e.DecalPath);
             scale *= rng.Range(e.Scale.x, e.Scale.y);
             opacity *= rng.Range(e.Opacity.x, e.Opacity.y);
             tint = e.Tint;

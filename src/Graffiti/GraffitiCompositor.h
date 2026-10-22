@@ -45,9 +45,19 @@ public:
     ImageMetrics Metrics(const std::string& absolutePath);
     MetricsFn MetricsCallback();
     void ForgetImages(); // re-read every image next time (one changed on disk)
+    // Bumps whenever what an image's metrics say may have changed (forgotten, or a failed read that
+    // later succeeded): cached paint programs built from the old metrics are stale past it.
+    uint32_t ImageEpoch() const { return m_ImageEpoch; }
+    // Retries images that failed to read a while ago (bumping the epoch when one loads): call before
+    // reading ImageEpoch() for a build.
+    void RetryFailedImages();
 
     // The whole piece, from scratch.
     void Render(const Piece& piece, const Program& program);
+    // Redraws only the canvas (preview and overlay) from the last composite, for edits that change
+    // nothing but the preview shader's inputs (relief, show-through, the wall swatch). False when
+    // there is no valid composite to redraw from: the caller then does a full Render.
+    bool Repreview(const Piece& piece);
 
     // A live stroke on program layer `programLayer` (an index into program.Layers).
     void BeginLive(const Piece& piece, const Program& program, int programLayer);
@@ -57,10 +67,12 @@ public:
     bool Live() const { return m_LiveLayer >= 0; }
 
     // Renders the piece and starts reading the four maps back. PollBake fills `out` once they have
-    // arrived (true), or with `wait` blocks until they do.
+    // arrived (true), or with `wait` blocks until they do. A bake already in flight is finished first
+    // and kept (it is still handed out by the next PollBake), never dropped: a second StartBake
+    // before the first was polled replaces it, so callers poll one bake before starting the next.
     void StartBake(const Piece& piece, const Program& program);
     bool PollBake(BakeImages& out, bool wait = false);
-    bool BakeInFlight() const { return m_Fence != nullptr; }
+    bool BakeInFlight() const { return m_Fence != nullptr || m_HasStash; }
 
     // The canvas for display: sRGB RGBA8, opaque over a wall swatch. GL rows run bottom up, so the
     // image's top is at v = 1 (draw it with uv0 (0, 1), uv1 (1, 0)).
@@ -84,12 +96,15 @@ private:
         unsigned int Tex = 0;
         int Width = 0, Height = 0;
         ImageMetrics M;
+        double FailedAt = -1.0; // steady-clock seconds of a failed read (retried after a short while)
     };
     struct Target { unsigned int Fbo = 0, Color = 0, Extra = 0; }; // colour + thickness / aux
 
     void EnsureGl();
     void EnsureTargets(int w, int h);
     void FreeTargets();
+    bool ReadBack(BakeImages& out); // the PBOs into rows top first (the fence has been passed)
+    void FinishInFlight();          // waits for a bake in flight and keeps its images in m_Stash
     const Image& LoadImage(const std::string& path);
     void DrawLayer(const Piece& piece, const LayerProgram& lp, const Target& into);
     void DrawSplats(const Splat* splats, size_t count, bool erase);
@@ -110,6 +125,10 @@ private:
     unsigned int m_OutFbo = 0, m_Out[4] = {};
     unsigned int m_Pbo[4] = {};
     void* m_Fence = nullptr; // GLsync
+    BakeImages m_Stash;      // a bake finished early because its targets were about to go
+    bool m_HasStash = false;
+    bool m_Composited = false; // m_C[m_Final] holds a valid composite (Repreview)
+    uint32_t m_ImageEpoch = 0;
     int m_Final = 0;         // m_C index holding the last composite
 
     int m_LiveLayer = -1;
@@ -130,5 +149,10 @@ BakeFiles EncodePngs(const BakeImages& images);
 // to it since (size, fades, category, weathering). Atomic writes; safe on a worker, where nothing
 // enters the editor's undo history (the recipe is the undo state: undoing re-bakes it).
 bool WriteBake(const Piece& piece, const BakeFiles& files);
+// What WriteBake reads of `piece`, and nothing more: the paths (Path, Name), the canvas and paint
+// settings and the weathering, with the layers (and their strokes) reduced to one stand-in layer when
+// any visible one is metal. Taken when a bake starts, so a bake in flight keeps writing to the piece
+// it was started on however the Designer's open piece changes meanwhile.
+std::shared_ptr<Piece> SnapshotForBake(const Piece& piece);
 
 } // namespace Graffiti
