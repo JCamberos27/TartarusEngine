@@ -164,6 +164,7 @@ std::shared_ptr<DecalAsset> DecalAsset::Load(const std::string& path) {
     d->Bleach = Unit(wx.Num("bleach", d->Bleach));
     d->Peel = Unit(wx.Num("peel", d->Peel));
     d->Buff = Unit(wx.Num("buff", d->Buff));
+    d->SceneGrading = wx.Bool("sceneGrading", d->SceneGrading);
 
     d->Category = r.Str("category");
     if (const json* tags = r.Find("tags")) {
@@ -208,7 +209,7 @@ bool DecalAsset::Save() const {
     j["heightContrast"] = HeightContrast;
     j["paint"] = {{"enabled", Paint}, {"roughness", PaintRoughness}, {"metal", PaintMetal},
                   {"relief", Relief},  {"uv", UVPaint}};
-    j["weathering"] = {{"fade", Fade}, {"bleach", Bleach}, {"peel", Peel}, {"buff", Buff}};
+    j["weathering"] = {{"fade", Fade}, {"bleach", Bleach}, {"peel", Peel}, {"buff", Buff}, {"sceneGrading", SceneGrading}};
     j["category"] = Category;
     ojson tags = ojson::array();
     size_t start = 0;

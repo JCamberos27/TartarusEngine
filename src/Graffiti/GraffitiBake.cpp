@@ -31,11 +31,14 @@ bool WriteBake(const Piece& piece, const BakeFiles& files) {
         d.Path = decalPath;
         d.DefaultSize = glm::vec3(piece.Metres, 0.25f);
         d.EdgeFade = 0.04f;
-        d.HeightBlend = 0.35f;
+        // The piece's own height already thins its overspray (ShowThrough); a height blend on top
+        // would take the soft edges away again, so the paint lies on the wall as designed.
+        d.HeightBlend = 0.0f;
         d.Fade = piece.Fade;
         d.Bleach = piece.Bleach;
         d.Peel = piece.Peel;
         d.Buff = piece.Buff;
+        d.SceneGrading = false; // the scene's Age / Wear would peel and chip a fresh piece apart
         d.Category = "Graffiti/Pieces";
         d.Tags = "graffiti, piece";
     }

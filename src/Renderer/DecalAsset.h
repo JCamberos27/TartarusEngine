@@ -20,7 +20,7 @@
 //   "angleFade": [0.25, 0.05],     // cos start, cos end
 //   "edgeFade": 0.08, "heightBlend": 0, "heightContrast": 4,
 //   "paint": { "enabled": false, "roughness": 0.35, "metal": 0, "relief": 0.3, "uv": false },
-//   "weathering": { "fade": 0, "bleach": 0, "peel": 0, "buff": 0 },
+//   "weathering": { "fade": 0, "bleach": 0, "peel": 0, "buff": 0, "sceneGrading": true },
 //   "category": "Graffiti/Letters", "tags": ["graffiti", "letter"]
 // }
 struct DecalAsset {
@@ -49,6 +49,9 @@ struct DecalAsset {
     bool Paint = false, UVPaint = false;
     float PaintRoughness = 0.35f, PaintMetal = 0.0f, Relief = 0.3f;
     float Fade = 0.0f, Bleach = 0.0f, Peel = 0.0f, Buff = 0.0f;
+    // Whether the scene's Decal Grading (Age, Wear) ages this decal too. A Graffiti Designer piece
+    // turns it off: it shows what was designed, weathered only by its own settings above.
+    bool SceneGrading = true;
 
     std::string Category;
     std::string Tags; // comma separated

@@ -302,6 +302,7 @@ void DecalAssetFields(PropertyRows& r, DecalAsset& d, GLFWwindow* owner) {
         r.Float("Bleach", d.Bleach, 0.01f, 0.0f, 1.0f, "%.2f", "Sun bleaching: desaturates and lightens.");
         r.Float("Peel", d.Peel, 0.01f, 0.0f, 1.0f, "%.2f", "Flakes off in patches (uses the Aux map when there is one).");
         r.Float("Buff", d.Buff, 0.01f, 0.0f, 1.0f, "%.2f", "A smeared ghost, as if someone tried to scrub it off.");
+        r.Check("Scene Grading", d.SceneGrading, "The scene's Decal Grading (Age, Wear) ages it too. Off for Graffiti Designer pieces.");
     }
     if (r.Section(ICON_FA_TAGS, "Library", d.Category.empty() ? nullptr : d.Category.c_str(), false)) {
         r.Text("Category", d.Category, "Where the Decal Library files it, '/'-separated (Graffiti/Letters).");

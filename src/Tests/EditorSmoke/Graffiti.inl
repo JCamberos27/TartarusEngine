@@ -171,7 +171,7 @@ void RegisterGraffitiTests() {
             return again && again->Layers.size() == 4 && again->Layers[0].Strokes.size() == 1 ? std::string()
                                                                                                 : std::string("not saved to the file");
         }),
-        Shot("designer", {kDesigner}),
+        CleanShot("designer", {kDesigner}),
         // Spray in Scene view: the piece goes on the wall at the viewport's centre, and the stroke into it.
         Click(ByLabel("Spray in Scene view", kDesigner)), Wait(2),
         ExpectTrue("viewport spraying is on", [](Ctx& c) { return GA::G(c.E)->ViewportSpray; }),
