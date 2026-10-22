@@ -52,6 +52,23 @@ struct RuntimeDecal {
     uint32_t Id = 0;                  // ties in the sort: a stable per-instance number (submission order otherwise)
 };
 
+// CPU cost counters for the decal path (the before / after of the optimisation pass): Prepare's time and the
+// runtime systems' submit time (blood, bullet holes), summed per frame, and dropouts - a component decal drawn
+// in one of the last two Prepares that is in view again but has no resident slot (it would flash off).
+// "[DecalPerf]" lines go to stdout every 600 frames and when the DecalSystem goes.
+namespace DecalPerf {
+void AddPrepare(double ms);
+void AddSubmit(double ms);
+void AddDropout();
+void Report();
+// Times its scope into AddSubmit.
+struct SubmitScope {
+    SubmitScope();
+    ~SubmitScope();
+    long long Start;
+};
+} // namespace DecalPerf
+
 // Gathers decals each frame, culls them against the view frustum, sorts deterministically and
 // uploads SSBOs 11/12. ClusterGrid::Cull then bins them into clusters (13/14) and the model
 // fragment shader applies them before lighting (ModelDecals.glsl).
@@ -172,6 +189,8 @@ private:
     bool m_SubDirty = false;
     std::uint64_t m_FrameNo = 1;
     bool m_InPrepare = false;
+    std::uint64_t m_PrepareNo = 0;
+    std::unordered_map<uint32_t, std::uint64_t> m_DrawnAt; // DecalPerf dropouts: the Prepare each entity last drew in
     void RefreshSubstrate(uint32_t idx);
     void FlushSubstrates();
     void ClearSubstrates();

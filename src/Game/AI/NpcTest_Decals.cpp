@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 
 namespace {
 // The corridor's north wall face (z = +1, solid from x -10.45 to -6.36) and the floor in front of it.
@@ -42,6 +43,14 @@ const DecalShot kShots[] = {
 };
 constexpr int kShotCount = (int)(sizeof(kShots) / sizeof(kShots[0]));
 constexpr float kSettle = 0.5f; // the camera goes in place this long before its shot (temporal effects settle)
+
+// TARTARUS_DECAL_STRESS=1: a stress run for the decal path's CPU cost ([DecalPerf] lines) - 512 rounds into the north
+// wall (32 a frame) and 400 blood spatters and pools (25 a frame, past the 1024-stain cap) from kFireAt on.
+bool Stress() {
+#pragma warning(suppress : 4996)
+    static const bool on = [] { const char* v = std::getenv("TARTARUS_DECAL_STRESS"); return v && *v && *v != '0'; }();
+    return on;
+}
 
 void YawPitch(const glm::vec3& from, const glm::vec3& to, float& yaw, float& pitch) {
     const glm::vec3 d = glm::normalize(to - from);
@@ -78,6 +87,23 @@ void NpcTest::Decals(World& world, NpcDirector& npcs, float) {
     npcs.HoldFire = true;
     npcs.Frozen = true;
     m_Shot.clear();
+    if (Stress() && now >= kFireAt && m_KStressFrame < 16) {
+        const int f = m_KStressFrame++;
+        int hits = 0;
+        for (int i = 0; i < 32; ++i) {
+            const glm::vec3 at(-10.3f + 0.12f * (float)i, 0.3f + 0.13f * (float)f, kWallZ);
+            const glm::vec3 dir(0.0f, 0.0f, 1.0f);
+            hits += ShootWorld && ShootWorld(at - dir * 1.2f, dir) ? 1 : 0;
+        }
+        for (int i = 0; i < 25 && SpawnBlood; ++i) {
+            const int k = f * 25 + i;
+            if (k % 2 == 0) SpawnBlood(0, glm::vec3(-10.2f + 0.16f * (float)(k % 24), 0.4f + 0.11f * (float)((k / 24) % 18), kWallZ),
+                                       glm::vec3(0.0f, 0.0f, -1.0f), 0.3f);
+            else SpawnBlood(1, glm::vec3(-10.2f + 0.16f * (float)(k % 24), 0.0f, -0.8f + 0.09f * (float)((k / 24) % 18)),
+                            glm::vec3(0.0f, 1.0f, 0.0f), 0.3f);
+        }
+        std::printf("[NpcTest] decal stress frame %d: %d of 32 rounds struck\n", f, hits);
+    }
     if (m_KStep == 0 && now >= kFireAt) {
         // A loose group of rounds into the wall at chest height, square on, and three into the floor at a slant.
         int hits = 0;
@@ -96,7 +122,7 @@ void NpcTest::Decals(World& world, NpcDirector& npcs, float) {
             SpawnBlood(1, glm::vec3(-8.45f, 0.0f, 0.45f), glm::vec3(0.0f, 1.0f, 0.0f), 0.5f);
         }
         std::printf("[NpcTest] decals: %d of 15 rounds struck\n", hits);
-        Check(hits == 15, "every round struck the wall or the floor (" + std::to_string(hits) + " of 15)");
+        if (!Stress()) Check(hits == 15, "every round struck the wall or the floor (" + std::to_string(hits) + " of 15)");
         m_KStep = 1;
         m_KAt = now;
     }
