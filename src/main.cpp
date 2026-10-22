@@ -2137,6 +2137,16 @@ int main(int argc, char** argv) {
                     else std::cout << "[SmokeTest]   decals OK (" << visible << " visible, overflow " << overflow << ")" << std::endl;
                 }
 
+                // smoke_decals_stress*: the Scene view held square on the wall, then frames 90 and 91 of the still view
+                // read back and compared (Tests/SmokeChecks.cpp).
+                if (smokeSceneActive && smokeScenePaths[smokeSceneIndex].find("smoke_decals_stress") != std::string::npos) {
+                    editorCamera.Position = glm::vec3(0.0f, 3.0f, 2.5f);
+                    editorCamera.Yaw = -90.0f;
+                    editorCamera.Pitch = 0.0f;
+                    if (smokeFramesRendered == 90 || smokeFramesRendered == 91)
+                        SmokeChecks::DecalStress(clusterGrid, decalSystem.VisibleCount(), smokeFramesRendered);
+                }
+
                 // #176 - a smoke_prefab* scene: a Prefab Mode round trip (Tests/SmokeChecks.cpp).
                 if (smokeSceneActive && smokeFramesRendered == 15 &&
                     smokeScenePaths[smokeSceneIndex].find("smoke_prefab") != std::string::npos) {
