@@ -31,6 +31,7 @@ void BulletHoleList::Add(const World& world, entt::entity entity, const glm::vec
     const glm::vec3 n = SafeNormalize(normal, glm::vec3(0.0f, 1.0f, 0.0f));
     // Each hole turned its own way (a golden-ratio walk), so their ragged edges don't line up.
     ++m_Count;
+    h.Id = m_Count;
     h.Seed = std::fmod((float)m_Count * 0.6180340f, 1.0f);
     const glm::vec3 t0 = SurfaceTangent(n), b0 = glm::cross(n, t0);
     const float spin = h.Seed * 6.2831853f;
@@ -58,6 +59,7 @@ void BulletHoleList::Add(const World& world, entt::entity entity, const glm::vec
 void BulletHoleList::Resolve(const World& world, std::vector<Placed>& out) {
     out.clear();
     out.reserve(m_Holes.size());
+    m_Xforms.clear();
     bool dropped = false;
     for (Hole& h : m_Holes) {
         Placed p;
@@ -66,6 +68,7 @@ void BulletHoleList::Resolve(const World& world, std::vector<Placed>& out) {
         p.Decal = h.Decal;
         p.Size = h.Size;
         p.Rim = h.Rim;
+        p.Id = h.Id;
         if (h.Entity == entt::null) {
             p.Position = h.Position;
             p.Normal = h.Normal;
@@ -74,10 +77,20 @@ void BulletHoleList::Resolve(const World& world, std::vector<Placed>& out) {
             dropped = true;
             continue;
         } else {
-            const glm::mat4 M = world.ComposeWorldTransform(h.Entity);
+            // The entity's transform once per call however many holes it has (composed, not the cached one:
+            // the cache is rebuilt after this runs, and a hole would trail a moving prop by a frame).
+            const EntityXform* x = nullptr;
+            for (const EntityXform& e : m_Xforms)
+                if (e.Entity == h.Entity) { x = &e; break; }
+            if (!x) {
+                const glm::mat4 M = world.ComposeWorldTransform(h.Entity);
+                m_Xforms.push_back({h.Entity, M, glm::transpose(glm::inverse(glm::mat3(M)))});
+                x = &m_Xforms.back();
+            }
+            const glm::mat4& M = x->M;
             const glm::mat3 R(M);
             p.Position = glm::vec3(M * glm::vec4(h.Position, 1.0f));
-            p.Normal = SafeNormalize(glm::transpose(glm::inverse(R)) * h.Normal, glm::vec3(0.0f, 1.0f, 0.0f));
+            p.Normal = SafeNormalize(x->NormalM * h.Normal, glm::vec3(0.0f, 1.0f, 0.0f));
             glm::vec3 t = R * h.Tangent;
             t -= p.Normal * glm::dot(t, p.Normal);
             p.Tangent = SafeNormalize(t, SurfaceTangent(p.Normal));
@@ -113,7 +126,7 @@ int BulletHoleList::Emit(const World& world, std::vector<RuntimeDecal>& out, con
             r.RevealThreshold = DecalBake::HoleRimThreshold(h.Rim);
             r.RevealBand = DecalBake::HoleRimBand(h.Rim);
         }
-        r.Id = (uint32_t)(n + 1);
+        r.Id = h.Id; // monotonic: the ring's position would invert the layering once it wraps
         out.push_back(r);
         ++n;
     }

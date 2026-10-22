@@ -63,11 +63,13 @@ private:
 
 // The four decal texture arrays (units 22-25: albedo sRGB BC3, normal BC5, surface BC3, aux BC4),
 // PAGE_SIZE^2 layers sub-allocated by DecalPageAllocator, with slots kept resident by LRU under the
-// Project Settings budget. Maps are decoded and BCn-encoded on worker threads through the regular
-// Texture decode + TextureCache (TextureImportSettings::ForceFormat), then uploaded here on the main
-// thread. A slot is pinned (its refcount) by every Request() in the current frame and only an
-// unpinned, least-recently-used slot is ever evicted. The normal / surface / aux arrays only exist
-// once a resident decal has that map, so albedo-only libraries spend their budget on albedo.
+// Project Settings budget. Maps are decoded and BCn-encoded on a few persistent worker threads through
+// the regular Texture decode + TextureCache (TextureImportSettings::ForceFormat), then uploaded here on
+// the main thread, at most kMaxUploadsPerFrame slots a frame. A slot is pinned by every Request() in
+// the current frame (BeginFrame starts the next) and only an unpinned, least-recently-used slot is ever
+// evicted. The normal / surface / aux arrays only exist once a resident decal has that map, so
+// albedo-only libraries spend their budget on albedo. The arrays grow by doubling (within the budget),
+// and never past kMaxLayers: the shader reads the layer from 8 bits.
 class DecalTextureArrays {
 public:
     // Absolute paths; empty = no such map. Tier is the slot size request (DecalAsset::Tier).
@@ -79,6 +81,10 @@ public:
         // > 0: normal and AO detail derived from the albedo's luminance (SubstrateDesc::Detail).
         float Detail = 0.0f;
         int Tier = 2048;
+        // KeyOf(*this), filled in by whoever keeps a Source around (Seal()); 0 = Request hashes it each
+        // time. Re-Seal() after changing a field (or zero it): a stale key names another slot.
+        std::uint64_t Key = 0;
+        void Seal() { Key = KeyOf(*this); }
     };
     struct Slot {
         DecalPageAllocator::Alloc Alloc;
@@ -87,8 +93,7 @@ public:
         std::uint32_t TexFlags = 0; // Decals::FLAG_HAS_*_TEX for the maps that decoded
         bool Ready = false;
         bool Failed = false;   // the albedo didn't decode: never retried until Clear()
-        std::uint64_t LastUsed = 0;
-        int Refs = 0;          // Request()s this frame
+        std::uint64_t LastUsed = 0; // the BeginFrame() count it was last asked for in: asked for this frame = pinned
     };
 
     DecalTextureArrays();
@@ -100,8 +105,12 @@ public:
     // that have finished.
     void BeginFrame();
     // The resident slot for these maps, pinned for this frame; null while it decodes (or failed, or
-    // the budget is full of pinned slots). Starts the decode the first time it's asked for.
-    const Slot* Request(const Source& src);
+    // the budget is full of pinned slots). Starts the decode the first time it's asked for. The pointer
+    // stays valid until the slot is evicted, dropped or cleared.
+    const Slot* Request(const Source& src) { return Request(src.Key ? src.Key : KeyOf(src), src); }
+    const Slot* Request(std::uint64_t key, const Source& src);
+    // A slot's identity: a 64-bit hash of the slot size and the paths (what Request looks the slot up by).
+    static std::uint64_t KeyOf(const Source& s);
 
     // Units 22-25. Arrays that don't exist yet get a 1x1 placeholder array.
     void Bind() const;
@@ -124,17 +133,21 @@ public:
     bool Resident(const Source& src) const;
 
     static constexpr int kArrayLevels = 11; // 4096 down to 4x4 (one BC block)
-    static constexpr int kMaxInFlight = 3;  // decodes at once
+    static constexpr int kMaxInFlight = 3;  // decodes at once (one worker thread each)
+    static constexpr int kMaxUploadsPerFrame = 2; // finished decodes uploaded per BeginFrame (the rest wait)...
+    static constexpr std::size_t kUploadBytesPerFrame = std::size_t(4) << 20; // ...the second only after a small first
+    static constexpr int kMaxLayers = 256;  // GpuDecal / GpuSubstrate carry the layer in 8 bits
 
 private:
     struct Decoded;
+    class Workers;
     struct Entry {
+        std::uint64_t Key = 0;
         Slot S;
         std::future<std::shared_ptr<Decoded>> Pending;
     };
     enum Kind { kAlbedo = 0, kNormal, kSurface, kAux, kKinds };
 
-    static std::string KeyFor(const Source& s);
     bool AllocateWithEviction(int size, DecalPageAllocator::Alloc& out);
     void EnsureGpu(int layers, const bool want[kKinds]);
     void UploadSlot(Entry& e, Decoded& d);
@@ -142,7 +155,10 @@ private:
     void UpdateMaxLayers();
 
     DecalPageAllocator m_Alloc;
-    std::unordered_map<std::string, std::unique_ptr<Entry>> m_Slots;
+    std::unordered_map<std::uint64_t, std::unique_ptr<Entry>> m_Slots;
+    std::vector<std::uint64_t> m_Pending; // keys of the slots whose decode hasn't been uploaded yet
+    std::vector<Entry*> m_Victims;        // AllocateWithEviction's scratch
+    std::unique_ptr<Workers> m_Workers;
     unsigned int m_Tex[kKinds] = {};
     bool m_Active[kKinds] = {};
     int m_GpuLayers = 0;

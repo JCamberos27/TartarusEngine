@@ -1,5 +1,7 @@
 #pragma once
 #include <glm/glm.hpp>
+#include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <string>
 
@@ -36,8 +38,30 @@ struct SubstrateDesc {
                       RoughRange.x, RoughRange.y, Mirror ? 1 : 0, Crop.x, Crop.y, Crop.z, Crop.w, Detail);
         return Albedo + "|" + Normal + "|" + Roughness + "|" + AO + buf;
     }
-    bool operator==(const SubstrateDesc& o) const { return Key() == o.Key(); }
-    bool operator!=(const SubstrateDesc& o) const { return !(*this == o); }
+    // The same identity without building a string (the per-frame lookups): a 64-bit hash of the maps and the
+    // values (Preset left out, as in Key()), and a field-by-field comparison.
+    std::uint64_t Hash() const {
+        std::uint64_t h = 1469598103934665603ull;
+        auto bytes = [&h](const void* p, std::size_t n) {
+            const unsigned char* c = static_cast<const unsigned char*>(p);
+            for (std::size_t i = 0; i < n; ++i) h = (h ^ c[i]) * 1099511628211ull;
+        };
+        for (const std::string* s : {&Albedo, &Normal, &Roughness, &AO}) {
+            bytes(s->data(), s->size());
+            h = (h ^ 0x7Cu) * 1099511628211ull; // '|'
+        }
+        const float v[13] = {Tiling, Tint.r, Tint.g, Tint.b, Strength, RoughRange.x, RoughRange.y, Crop.x, Crop.y, Crop.z, Crop.w,
+                             Detail, Mirror ? 1.0f : 0.0f};
+        bytes(v, sizeof v);
+        return h ^ (h >> 29);
+    }
+    bool SameAs(const SubstrateDesc& o) const {
+        return Tiling == o.Tiling && Tint == o.Tint && Strength == o.Strength && RoughRange == o.RoughRange && Mirror == o.Mirror &&
+               Crop == o.Crop && Detail == o.Detail && Albedo == o.Albedo && Normal == o.Normal && Roughness == o.Roughness &&
+               AO == o.AO;
+    }
+    bool operator==(const SubstrateDesc& o) const { return SameAs(o); }
+    bool operator!=(const SubstrateDesc& o) const { return !SameAs(o); }
 };
 
 namespace SubstratePresets {

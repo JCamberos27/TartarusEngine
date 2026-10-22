@@ -222,7 +222,7 @@ struct Material {
         for (; i < n; ++i) { lane[0] = (lane[0] ^ words[i]) * 1099511628211ull; lane[0] ^= lane[0] >> 32; }
         std::uint64_t h = lane[0];
         for (int k = 1; k < 4; ++k) { h = (h ^ lane[k]) * 1099511628211ull; h ^= h >> 29; }
-        if (Substrate.Enabled()) { h = (h ^ (std::uint64_t)std::hash<std::string>{}(Substrate.Key())) * 1099511628211ull; h ^= h >> 29; }
+        if (Substrate.Enabled()) { h = (h ^ Substrate.Hash()) * 1099511628211ull; h ^= h >> 29; }
         return h;
     }
 
