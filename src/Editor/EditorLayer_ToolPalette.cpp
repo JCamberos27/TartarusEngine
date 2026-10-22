@@ -199,7 +199,7 @@ void EditorLayer::DrawToolPalette(World& world, Camera& editorCamera) {
 
         const bool gizmosOn = m_GizmosMasterVisible;
         if (ActionButton(EDITOR_ICON_TOGGLE_GIZMOS,
-                "Toggle Gizmos (right-click: per-type visibility)", gizmosOn, ImVec2(btn, btn)))
+                "Toggle Gizmos (Shift+G; right-click: per-type visibility)", gizmosOn, ImVec2(btn, btn)))
             m_GizmosMasterVisible = !gizmosOn;
         if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) ImGui::OpenPopup("##PaletteGizmosPopup");
         if (ImGui::BeginPopup("##PaletteGizmosPopup")) {

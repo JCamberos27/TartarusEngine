@@ -579,7 +579,11 @@ int main(int argc, char** argv) {
         }
         // A benchmark measures native resolution unless it asks for a render height, so its
         // numbers stay comparable from run to run and machine to machine.
-        if (opt.perfBenchMode && opt.perfGlass) EditorSettings::SetThemeForRun(1);
+        // Glass is the default theme now, but the smoke tests and benchmarks keep the lighter
+        // Tartarus chrome unless they ask for Glass, so their timings and checks stay comparable
+        // with earlier runs (the smoke_glass scenes switch it on themselves).
+        if (opt.perfBenchMode) EditorSettings::SetThemeForRun(opt.perfGlass ? 1 : 0);
+        else if (opt.smokeTestMode || opt.editorTestsMode) EditorSettings::SetThemeForRun(0);
         if (opt.renderHeightArg >= 0) EditorSettings::Get().RenderHeight = opt.renderHeightArg;
         else if (opt.perfBenchMode) EditorSettings::Get().RenderHeight = 0;
         // The editor starts with no splash: the console shows the load log until the main window
@@ -1656,10 +1660,16 @@ int main(int argc, char** argv) {
         // A scene with a First Person Body opens looking at it from the front, a couple of metres off,
         // so its outfit is in view from the start. The interactive editor only: the smoke test goes on to
         // load its own scenes through this camera, and aimed at the startup scene's player it saw nothing.
-        if (!headless) EditorLayer::FrameFirstPersonBody(world, editorCamera);
         editorCamera.Fov = EditorSettings::Get().SceneCameraFov; // #236 R2 — persisted editor camera
         editorCamera.NearPlane = EditorSettings::Get().SceneCameraNear;
         editorCamera.FarPlane = EditorSettings::Get().SceneCameraFar;
+        // Where this scene was left, else framed on its Player Spawn / body / bounds - never the Sandbox
+        // pose above. Test and screenshot runs skip the saved pose so they stay deterministic.
+        const bool sceneCameraTestRun = opt.smokeTestMode || opt.editorTestsMode || opt.npcTestMode || opt.weaponTestMode ||
+            opt.weaponLabMode || opt.perfBenchMode || opt.outfitScenesMode || !opt.editorShotDir.empty() ||
+            !opt.smokeShotsDir.empty() || !opt.outfitShotsDir.empty();
+        editor.SetDeterministicSceneCamera(sceneCameraTestRun);
+        if (!headless) editor.PlaceSceneCamera(world, editorCamera, editor.CurrentScenePath());
         // Deliberately NOT calling editor.FrameSceneBounds() here (audit #87's original fix for
         // "staring at empty space") - for this scene it re-frames to an exterior overview of the
         // whole building, outside every room's floor. Since Play copies its spawn straight from
@@ -4179,92 +4189,112 @@ int main(int argc, char** argv) {
                 // that couldn't widen a flat mesh's silhouette were what turned a selected
                 // flat/thin object into a solid orange blob (audit #51).
                 auto selection = editor.GetSelectedItems();
-                if (!selection.empty() && !editor.OverlaysHidden() && !editor.CleanShots()) {
-                    const glm::vec3 kOutlineColor(1.0f, 0.55f, 0.1f);
-                    const int kOutlinePixels = 1; // a thin ring, like Unity's (3 read as a thick band)
+                const bool outlinesOn = !editor.OverlaysHidden() && !editor.CleanShots();
+                const glm::vec3 kOutlineColor = editor.SelectionOutlineColor(); // theme-driven: near-white on Glass
+                const int kOutlinePixels = 1; // a thin ring, like Unity's (3 read as a thick band)
 
+                // One outline: the models' silhouettes into the mask, then the ring around it. The
+                // selection draws it opaque (with the sweep-on); the hover pre-highlight is a second,
+                // separate mask draw at ~35% (uFade 0.65): one mask can't carry two entities at two
+                // strengths, and a hovered mesh is a single cheap draw.
+                auto drawOutline = [&](const std::vector<Model*>& models, const std::vector<glm::mat4>& xforms,
+                                       const glm::vec3& outlineColor, float outlineFade, bool outlineSweep) {
+                    // --- Silhouette mask pass: flat white where a selected mesh is, into its
+                    // own target. Depth test off so a partly-occluded selection is still fully
+                    // outlined (Unity's behaviour).
+                    // Drawn at 2x the scene size with 4x MSAA, then resolved: a linear fetch at a
+                    // scene pixel centre averages 2x2 texels of 4 samples, i.e. 16-sample edge
+                    // coverage for the anti-aliased ring (OutlineDilate.frag.glsl).
+                    const int maskW = scW * 2, maskH = scH * 2;
+                    selectionMaskFbo.Resize(maskW, maskH);
+                    static GLuint maskMsFbo = 0, maskMsColor = 0;
+                    static int maskMsW = 0, maskMsH = 0;
+                    if (maskMsW != maskW || maskMsH != maskH) {
+                        if (maskMsFbo) { glDeleteFramebuffers(1, &maskMsFbo); glDeleteTextures(1, &maskMsColor); }
+                        glCreateTextures(GL_TEXTURE_2D_MULTISAMPLE, 1, &maskMsColor);
+                        glTextureStorage2DMultisample(maskMsColor, 4, GL_RGB8, maskW, maskH, GL_TRUE);
+                        glCreateFramebuffers(1, &maskMsFbo);
+                        glNamedFramebufferTexture(maskMsFbo, GL_COLOR_ATTACHMENT0, maskMsColor, 0);
+                        maskMsW = maskW;
+                        maskMsH = maskH;
+                    }
+                    glBindFramebuffer(GL_FRAMEBUFFER, maskMsFbo);
+                    glViewport(0, 0, maskW, maskH);
+                    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+                    glClear(GL_COLOR_BUFFER_BIT);
+                    glDisable(GL_DEPTH_TEST);
+                    glDepthMask(GL_FALSE);
+                    outlineModelShader.Bind();
+                    outlineModelShader.SetMat4("uView", sceneViewMat);
+                    outlineModelShader.SetMat4("uProj", sceneProjMat);
+                    outlineModelShader.SetFloat("uThickness", 0.0f);
+                    outlineModelShader.SetVec3("uOutlineColor", glm::vec3(1.0f));
+                    if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL); // mask must be solid
+                    for (size_t i = 0; i < models.size(); ++i) {
+                        outlineModelShader.SetMat4("uModel", xforms[i]);
+                        models[i]->Draw(outlineModelShader);
+                    }
+                    if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+                    glBlitNamedFramebuffer(maskMsFbo, selectionMaskFbo.Handle(), 0, 0, maskW, maskH, 0, 0, maskW, maskH,
+                                           GL_COLOR_BUFFER_BIT, GL_NEAREST); // MSAA resolve (same RGB8 format as the Framebuffer)
+
+                    // --- Dilate pass: back to the scene target, paint the ring.
+                    sceneHdr.BindForRender();
+                    glEnable(GL_BLEND);
+                    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                    outlineDilateShader.Bind();
+                    glActiveTexture(GL_TEXTURE0);
+                    glBindTexture(GL_TEXTURE_2D, selectionMaskFbo.ColorTexture());
+                    outlineDilateShader.SetInt("uMask", 0);
+                    outlineDilateShader.SetVec3("uTexel", glm::vec3(1.0f / (float)scW, 1.0f / (float)scH, 0.0f));
+                    outlineDilateShader.SetVec3("uColor", outlineColor);
+                    outlineDilateShader.SetFloat("uFade", outlineFade);
+                    outlineDilateShader.SetInt("uRadius", kOutlinePixels);
+                    {   // Motion v2: the outline sweeps on around the selection's centre after it changes
+                        glm::vec3 c(0.0f);
+                        for (const glm::mat4& x : xforms) c += glm::vec3(x[3]);
+                        if (!xforms.empty()) c /= (float)xforms.size();
+                        const glm::vec4 clip = sceneProjMat * sceneViewMat * glm::vec4(c, 1.0f);
+                        const glm::vec2 uv = clip.w > 1e-4f ? glm::vec2(clip) / clip.w * 0.5f + 0.5f : glm::vec2(0.5f);
+                        outlineDilateShader.SetFloat("uSweepHide", outlineSweep ? 1.0f - editor.SelectionOutlineReveal() : 0.0f);
+                        outlineDilateShader.SetVec2("uSweepCenter", uv);
+                    }
+                    glBindVertexArray(fsQuadVao);
+                    glDrawArrays(GL_TRIANGLES, 0, 6);
+                    glBindVertexArray(0);
+
+                    // Restore.
+                    glDisable(GL_BLEND);
+                    glEnable(GL_DEPTH_TEST);
+                    glDepthMask(GL_TRUE);
+                    GLStateCache::Invalidate(); // raw shader/VAO/texture binds above bypass the cache
+                };
+
+                // Hover pre-highlight: the mesh under the cursor, unless it is already selected.
+                if (outlinesOn && !playing) {
+                    editor.UpdateHoverPick(world, editorCamera);
+                    const entt::entity hovered = editor.HoveredEntity();
+                    if (hovered != entt::null && world.Registry.valid(hovered) && std::find(selection.begin(), selection.end(), hovered) == selection.end()) {
+                        auto* hoverRend = world.Registry.try_get<RenderableComponent>(hovered);
+                        if (hoverRend && hoverRend->ModelRef) {
+                            drawOutline({hoverRend->ModelRef.get()}, {world.GetCachedWorldTransform(hovered)}, kOutlineColor, 0.65f, false);
+                        }
+                    }
+                }
+
+                if (!selection.empty() && outlinesOn) {
                     std::vector<glm::mat4> xforms;
                     std::vector<Model*> models;
                     for (entt::entity entity : selection) {
                         if (!world.Registry.valid(entity)) continue; // may have been deleted this same frame
-                        // Lights and empties have nothing to outline — they get a screen-space
+                        // Lights and empties have nothing to outline - they get a screen-space
                         // selection ring from EditorLayer::DrawEntityIcons instead.
                         auto* renderablePtr = world.Registry.try_get<RenderableComponent>(entity);
                         if (!renderablePtr) continue;
                         xforms.push_back(world.GetCachedWorldTransform(entity));
                         models.push_back(renderablePtr->ModelRef.get());
                     }
-
-                    if (!models.empty()) {
-                        // --- Silhouette mask pass: flat white where a selected mesh is, into its
-                        // own target. Depth test off so a partly-occluded selection is still fully
-                        // outlined (Unity's behaviour).
-                        // Drawn at 2x the scene size with 4x MSAA, then resolved: a linear fetch at a
-                        // scene pixel centre averages 2x2 texels of 4 samples, i.e. 16-sample edge
-                        // coverage for the anti-aliased ring (OutlineDilate.frag.glsl).
-                        const int maskW = scW * 2, maskH = scH * 2;
-                        selectionMaskFbo.Resize(maskW, maskH);
-                        static GLuint maskMsFbo = 0, maskMsColor = 0;
-                        static int maskMsW = 0, maskMsH = 0;
-                        if (maskMsW != maskW || maskMsH != maskH) {
-                            if (maskMsFbo) { glDeleteFramebuffers(1, &maskMsFbo); glDeleteTextures(1, &maskMsColor); }
-                            glCreateTextures(GL_TEXTURE_2D_MULTISAMPLE, 1, &maskMsColor);
-                            glTextureStorage2DMultisample(maskMsColor, 4, GL_RGB8, maskW, maskH, GL_TRUE);
-                            glCreateFramebuffers(1, &maskMsFbo);
-                            glNamedFramebufferTexture(maskMsFbo, GL_COLOR_ATTACHMENT0, maskMsColor, 0);
-                            maskMsW = maskW;
-                            maskMsH = maskH;
-                        }
-                        glBindFramebuffer(GL_FRAMEBUFFER, maskMsFbo);
-                        glViewport(0, 0, maskW, maskH);
-                        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-                        glClear(GL_COLOR_BUFFER_BIT);
-                        glDisable(GL_DEPTH_TEST);
-                        glDepthMask(GL_FALSE);
-                        outlineModelShader.Bind();
-                        outlineModelShader.SetMat4("uView", sceneViewMat);
-                        outlineModelShader.SetMat4("uProj", sceneProjMat);
-                        outlineModelShader.SetFloat("uThickness", 0.0f);
-                        outlineModelShader.SetVec3("uOutlineColor", glm::vec3(1.0f));
-                        if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL); // mask must be solid
-                        for (size_t i = 0; i < models.size(); ++i) {
-                            outlineModelShader.SetMat4("uModel", xforms[i]);
-                            models[i]->Draw(outlineModelShader);
-                        }
-                        if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-                        glBlitNamedFramebuffer(maskMsFbo, selectionMaskFbo.Handle(), 0, 0, maskW, maskH, 0, 0, maskW, maskH,
-                                               GL_COLOR_BUFFER_BIT, GL_NEAREST); // MSAA resolve (same RGB8 format as the Framebuffer)
-
-                        // --- Dilate pass: back to the scene target, paint the ring.
-                        sceneHdr.BindForRender();
-                        glEnable(GL_BLEND);
-                        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-                        outlineDilateShader.Bind();
-                        glActiveTexture(GL_TEXTURE0);
-                        glBindTexture(GL_TEXTURE_2D, selectionMaskFbo.ColorTexture());
-                        outlineDilateShader.SetInt("uMask", 0);
-                        outlineDilateShader.SetVec3("uTexel", glm::vec3(1.0f / (float)scW, 1.0f / (float)scH, 0.0f));
-                        outlineDilateShader.SetVec3("uColor", kOutlineColor);
-                        outlineDilateShader.SetInt("uRadius", kOutlinePixels);
-                        {   // Motion v2: the outline sweeps on around the selection's centre after it changes
-                            glm::vec3 c(0.0f);
-                            for (const glm::mat4& x : xforms) c += glm::vec3(x[3]);
-                            if (!xforms.empty()) c /= (float)xforms.size();
-                            const glm::vec4 clip = sceneProjMat * sceneViewMat * glm::vec4(c, 1.0f);
-                            const glm::vec2 uv = clip.w > 1e-4f ? glm::vec2(clip) / clip.w * 0.5f + 0.5f : glm::vec2(0.5f);
-                            outlineDilateShader.SetFloat("uSweepHide", 1.0f - editor.SelectionOutlineReveal());
-                            outlineDilateShader.SetVec2("uSweepCenter", uv);
-                        }
-                        glBindVertexArray(fsQuadVao);
-                        glDrawArrays(GL_TRIANGLES, 0, 6);
-                        glBindVertexArray(0);
-
-                        // Restore.
-                        glDisable(GL_BLEND);
-                        glEnable(GL_DEPTH_TEST);
-                        glDepthMask(GL_TRUE);
-                        GLStateCache::Invalidate(); // raw shader/VAO/texture binds above bypass the cache
-                    }
+                    if (!models.empty()) drawOutline(models, xforms, kOutlineColor, 0.0f, true);
                 }
 
                 if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
@@ -4347,7 +4377,10 @@ int main(int argc, char** argv) {
                     if ((showShapes || showDebug) && !editor.OverlaysHidden() && !editor.CleanShots() && !(npcTest && npcTest->WantsCleanViews())) {
                         glEnable(GL_DEPTH_TEST);
                         glDepthMask(GL_FALSE);
-                        colliderGizmo.Draw(sceneViewMat, sceneProjMat, world, showShapes);
+                        // Selected-only: just the selection's colliders and its descendants' (F3's Play overlay below shows all).
+                        const std::function<bool(entt::entity)> inSelection = [&](entt::entity e) { return editor.InSelectionTree(world, e); };
+                        colliderGizmo.Draw(sceneViewMat, sceneProjMat, world, showShapes,
+                                           EditorSettings::Get().CollidersSelectedOnly ? &inSelection : nullptr);
                         glDepthMask(GL_TRUE);
                     }
                 }
@@ -5404,6 +5437,7 @@ int main(int argc, char** argv) {
         // overwrite a scene that failed to load with the empty world that replaced it.
 
         FlushFlySpeedSave(/*force=*/true); // a fly-speed trim still inside its save debounce (#142)
+        if (!headless) editor.RememberCurrentSceneCamera(editorCamera); // reopen this scene where it was left
         {
             // #143: remember the window placement for next launch (editor.Shutdown() flushes).
             // Skipped while fullscreen - the windowed placement from last time stays.

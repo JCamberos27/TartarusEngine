@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <fstream>
 #include "UndoTrigger.h"
+#include "EditorSettings.h"
 #include "../../extern/ImGuiColorTextEdit/TextEditor.h"
 #include "../../extern/imcurve/imcurve_editor.hpp"
 #include <imgui_internal.h>
@@ -488,6 +489,56 @@ void TestOutfitLandingKeepsUnrecordedChange() {
 
 // Unit tests for the editor UI. Add a function per test and list it below.
 
+// Prefs v2 (the clean first launch): an older file's overlay/theme choices give way to the new
+// defaults once, its other preferences survive, and the per-scene camera list stays capped.
+void TestPrefsMigrationToCleanView() {
+    EditorSettings& s = EditorSettings::Get();
+    const EditorSettings saved = s;
+    s.EditorThemeId = 0;
+    s.ShowColliders = true;
+    s.SceneShowStats = true;
+    s.LightGizmoSelectedOnly = false;
+    s.SnapTranslation = 0.25f;
+    s.LastScenePath = "scenes/Keep.json";
+    s.PrefsVersion = 1;
+    CHECK(EditorSettings::MigratePrefs(s, 1)); // asks for the clean dock once
+    CHECK(s.PrefsVersion == EditorSettings::kPrefsVersion);
+    CHECK(s.EditorThemeId == 1);
+    CHECK(!s.ShowColliders && s.CollidersSelectedOnly);
+    CHECK(!s.SceneShowStats);
+    CHECK(s.LightGizmoSelectedOnly && s.VolumeGizmosSelectedOnly);
+    CHECK(s.EntityIconsMode == 1);
+    CHECK(s.SnapTranslation == 0.25f);              // not a view default: kept
+    CHECK(s.LastScenePath == "scenes/Keep.json");
+    // Already current: nothing changes and no layout reset.
+    s.ShowColliders = true;
+    CHECK(!EditorSettings::MigratePrefs(s, EditorSettings::kPrefsVersion));
+    CHECK(s.ShowColliders);
+    // Restore clean view resets the overlays but not the user's work settings.
+    s.EntityIconsMode = 0;
+    s.ResetViewDefaults();
+    CHECK(!s.ShowColliders && s.EntityIconsMode == 1 && s.SnapTranslation == 0.25f);
+    // Per-scene cameras: newest first, one entry per scene, capped.
+    s.SceneCameras.clear();
+    for (int i = 0; i < EditorSettings::kMaxSceneCameras + 5; ++i) {
+        EditorSettings::SceneCameraPose p;
+        p.ScenePath = "scenes/" + std::to_string(i) + ".json";
+        p.X = (float)i;
+        s.RememberSceneCamera(p);
+    }
+    CHECK((int)s.SceneCameras.size() == EditorSettings::kMaxSceneCameras);
+    CHECK(s.SceneCameras.front().X == (float)(EditorSettings::kMaxSceneCameras + 4));
+    EditorSettings::SceneCameraPose again;
+    again.ScenePath = "scenes/10.json";
+    again.X = 99.0f;
+    s.RememberSceneCamera(again);
+    CHECK((int)s.SceneCameras.size() == EditorSettings::kMaxSceneCameras);
+    CHECK(s.FindSceneCamera("scenes/10.json") && s.FindSceneCamera("scenes/10.json")->X == 99.0f);
+    CHECK(s.SceneCameras.front().ScenePath == "scenes/10.json");
+    CHECK(!s.FindSceneCamera("scenes/0.json")); // the oldest fell off
+    s = saved;
+}
+
 void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Editor navigation undo avoids scene snapshots and preserves transactions",TestEditorNavigationUndo);
     tests.emplace_back("Prefab toolbar replaces Play and returns from hidden Scene tab",TestPrefabToolbarReturn);
@@ -499,4 +550,5 @@ void RegisterEditorTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("UndoTriggerSkipsNavigation",TestUndoTriggerSkipsNavigation);
     tests.emplace_back("Asset folders: only the user's are saved to project settings",TestAssetFoldersPersistOnlyUserFolders);
     tests.emplace_back("Outfit landing: an unrecorded change before it stays its own undo step",TestOutfitLandingKeepsUnrecordedChange);
+    tests.emplace_back("Editor prefs v2: clean view migration, restore defaults, per-scene cameras",TestPrefsMigrationToCleanView);
 }

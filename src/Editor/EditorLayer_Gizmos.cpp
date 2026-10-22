@@ -21,6 +21,7 @@
 #include "AABB.h"
 #include "Log.h"
 #include "EditorSettings.h"
+#include "GizmoIconMath.h"
 #include "Shortcuts.h" // vRuler: Shift+R is a held binding
 #include "EditorUIHelpers.h"
 #include "PhysicsWorld.h"   // #185 — mirror gizmo edits into the live actor while playing
@@ -1560,7 +1561,13 @@ void EditorLayer::UpdateVertexDrag(World& world, Camera& editorCamera) {
     for (const auto& [entity, worldPos] : moves) SetWorldPosition(world, entity, worldPos);
 }
 
+bool EditorLayer::IsSelectedOrUnderSelected(const World& world, entt::entity entity) const {
+    return IsSelected(entity) || HasSelectedAncestor(world, entity, m_Selected, m_ExtraSelection);
+}
+
 void EditorLayer::DrawEntityIcons(World& world, Camera& editorCamera) {
+    const EditorSettings& prefs = EditorSettings::Get();
+    if (prefs.EntityIconsMode >= 2) return; // None
     if (m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) return;
 
     glm::mat4 viewProj = editorCamera.ProjectionMatrix(m_ViewportSize.x / m_ViewportSize.y) * editorCamera.ViewMatrix();
@@ -1576,10 +1583,22 @@ void EditorLayer::DrawEntityIcons(World& world, Camera& editorCamera) {
     const ImVec2 clipMax(m_ViewportPos.x + m_ViewportSize.x, m_ViewportPos.y + m_ViewportSize.y);
     draw->PushClipRect(clipMin, clipMax, true);
 
-    // Mesh-less entities would otherwise be invisible in the viewport — a light you can't see
-    // is a light you can't select or aim.
+    // Pass 1: every mesh-less entity that wants an icon — a light you can't see is a light you
+    // can't select or aim.
+    struct Item {
+        entt::entity Entity;
+        const char* Glyph;
+        ImVec2 Screen;
+        glm::vec3 Pos;
+        float Dist;
+        bool Selected, Inactive, IsLight, IsCamera;
+        glm::vec3 Light; // the light's own colour (IsLight only)
+    };
+    std::vector<Item> items;
+    const bool allKinds = prefs.EntityIconsMode == 0;
+    const glm::vec3 camPos = editorCamera.Position;
     auto view = world.Registry.view<const TransformComponent>(entt::exclude<RenderableComponent>);
-    const unsigned layerVisible = EditorSettings::Get().LayerVisibleMask;
+    const unsigned layerVisible = prefs.LayerVisibleMask;
     for (auto entity : view) {
         // #184 — an entity hidden in the Scene view (SceneVis, or its layer switched off) gets no
         // icon either; picking already skipped it, so the icon was unclickable.
@@ -1589,49 +1608,171 @@ void EditorLayer::DrawEntityIcons(World& world, Camera& editorCamera) {
             const int layer = lc ? lc->Layer : 0; // same rule as SceneRenderer's layer cull
             if (layer >= 0 && layer < 32 && !((layerVisible >> layer) & 1u)) continue;
         }
+        const bool selected = IsSelected(entity);
+        const auto* light = world.Registry.try_get<LightComponent>(entity);
+        const bool isCamera = world.Registry.all_of<CameraComponent>(entity);
+        // Lights & cameras mode: everything else only shows once it is selected.
+        if (!allKinds && !selected && !light && !isCamera) continue;
+
         glm::mat4 model = world.ComposeWorldTransform(entity);
-        glm::vec4 clip = viewProj * glm::vec4(glm::vec3(model[3]), 1.0f);
+        const glm::vec3 wp = glm::vec3(model[3]);
+        glm::vec4 clip = viewProj * glm::vec4(wp, 1.0f);
         if (clip.w <= 0.0001f) continue; // behind the camera
 
         glm::vec3 ndc = glm::vec3(clip) / clip.w;
         ImVec2 screen(m_ViewportPos.x + (ndc.x * 0.5f + 0.5f) * m_ViewportSize.x,
                       m_ViewportPos.y + (1.0f - (ndc.y * 0.5f + 0.5f)) * m_ViewportSize.y);
 
-        bool selected = IsSelected(entity);
-        bool inactive = world.Registry.all_of<InactiveTag>(entity);
-        const auto* light = world.Registry.try_get<LightComponent>(entity);
-        const bool isCamera = world.Registry.all_of<CameraComponent>(entity);
-
         // One glyph per kind (#159), and per light type so point / spot / sun read apart at a
-        // glance — matching the Add menu's glyphs.
+        // glance — matching the Add menu's glyphs. The rarer kinds only show in All mode.
         const char* glyph;
+        const auto* nameC = world.Registry.try_get<NameComponent>(entity);
+        const auto* colC = world.Registry.try_get<ColliderComponent>(entity);
         if (light) {
             glyph = light->Kind == LightComponent::Type::Spot        ? ICON_FA_BULLSEYE
                   : light->Kind == LightComponent::Type::Directional ? ICON_FA_SUN
                                                                      : ICON_FA_LIGHTBULB; // Point
+        } else if (isCamera) {
+            glyph = ICON_FA_VIDEO;
+        } else if (world.Registry.all_of<ReflectionProbeComponent>(entity)) {
+            glyph = ICON_FA_GLOBE;
+        } else if (world.Registry.all_of<DecalComponent>(entity)) {
+            glyph = ICON_FA_SPRAY_CAN;
+        } else if (world.Registry.all_of<PostProcessVolumeComponent>(entity)) {
+            glyph = ICON_FA_SLIDERS;
+        } else if (world.Registry.all_of<AudioSourceComponent>(entity)) {
+            glyph = ICON_FA_VOLUME_HIGH;
+        } else if (world.Registry.all_of<NpcSpawnComponent>(entity) ||
+                   (nameC && nameC->Name.find("Spawn") != std::string::npos)) {
+            glyph = ICON_FA_LOCATION_DOT;
+        } else if (colC && colC->IsTrigger) {
+            glyph = ICON_FA_VECTOR_SQUARE;
         } else {
-            glyph = isCamera ? ICON_FA_VIDEO : ICON_FA_DIAGRAM_PROJECT;
+            glyph = ICON_FA_DIAGRAM_PROJECT;
         }
 
-        ImU32 color;
-        if (inactive) {
-            color = IM_COL32(140, 140, 140, 170);
-        } else if (light) {
-            // Tinted with the light's own colour so the marker previews what it casts.
-            glm::vec3 c = glm::clamp(light->Color, 0.0f, 1.0f) * 255.0f;
-            color = IM_COL32((int)c.r, (int)c.g, (int)c.b, selected ? 255 : 235);
-        } else {
-            color = selected ? IM_COL32(230, 238, 245, 255) : IM_COL32(190, 200, 210, 220);
-        }
+        items.push_back({entity, glyph, screen, wp, glm::length(wp - camPos), selected,
+                         world.Registry.all_of<InactiveTag>(entity), light != nullptr, isCamera,
+                         light ? glm::clamp(light->Color, 0.0f, 1.0f) : glm::vec3(1.0f)});
+    }
 
-        ImFont* font = ImGui::GetFont();
-        const float iconPx = 16.0f * m_UIScale;
-        const ImVec2 gs = font->CalcTextSizeA(iconPx, FLT_MAX, 0.0f, glyph);
-        draw->AddText(font, iconPx, ImVec2(screen.x - gs.x * 0.5f, screen.y - gs.y * 0.5f), color, glyph);
+    // Pass 2: occlusion. One ray from the camera to each icon (the editor's triangle-exact
+    // RaycastRenderables, which also works outside Play), refreshed stalest-first within a
+    // per-frame budget; an icon never checked is treated as visible. Selected icons never hide.
+    ++m_IconOcclusionFrame;
+    {
+        constexpr size_t kRaysPerFrame = 24;
+        std::vector<std::pair<std::uint32_t, size_t>> stale; // (frame last checked, item index)
+        for (size_t i = 0; i < items.size(); ++i) {
+            if (items[i].Selected) continue;
+            auto it = m_IconOcclusion.find(items[i].Entity);
+            stale.emplace_back(it == m_IconOcclusion.end() ? 0u : it->second.FrameChecked, i);
+        }
+        const size_t n = std::min(stale.size(), kRaysPerFrame);
+        std::partial_sort(stale.begin(), stale.begin() + (std::ptrdiff_t)n, stale.end());
+        for (size_t k = 0; k < n; ++k) {
+            const Item& it = items[stale[k].second];
+            // The icon's own ancestors (a lamp fixture it hangs from) must not hide it.
+            std::vector<entt::entity> skipChain;
+            if (const auto* hier = world.Registry.try_get<HierarchyComponent>(it.Entity)) {
+                entt::entity walk = hier->Parent;
+                while (walk != entt::null && world.Registry.valid(walk) && skipChain.size() < 32) {
+                    skipChain.push_back(walk);
+                    const auto* ph = world.Registry.try_get<HierarchyComponent>(walk);
+                    walk = ph ? ph->Parent : entt::null;
+                }
+            }
+            const glm::vec3 toIcon = it.Pos - camPos;
+            const float dist = std::max(it.Dist, 1e-4f);
+            const SurfaceHit hit = RaycastRenderables(
+                world, camPos, toIcon / dist,
+                [&](entt::entity e) { return std::find(skipChain.begin(), skipChain.end(), e) != skipChain.end(); },
+                std::max(dist - 0.3f, 0.0f));
+            IconOcclusion& slot = m_IconOcclusion[it.Entity];
+            slot.Occluded = hit.Entity != entt::null;
+            slot.FrameChecked = m_IconOcclusionFrame;
+        }
+        // Forget entities that stopped being candidates (deleted, mode changed) every few seconds.
+        if ((m_IconOcclusionFrame & 511u) == 0u) {
+            for (auto it = m_IconOcclusion.begin(); it != m_IconOcclusion.end();) {
+                if (m_IconOcclusionFrame - it->second.FrameChecked > 600u) it = m_IconOcclusion.erase(it);
+                else ++it;
+            }
+        }
+    }
+
+    // Pass 3: fade, drop what hides behind geometry (dim it instead through walls), declutter.
+    const float baseIconPx = 16.0f * m_UIScale;
+    std::vector<GizmoIconMath::IconCandidate> cands;
+    std::vector<float> alphaMul(items.size(), 1.0f);
+    for (size_t i = 0; i < items.size(); ++i) {
+        const Item& it = items[i];
+        float a = GizmoIconMath::DistanceAlpha(it.Dist, it.Selected);
+        if (!it.Selected) {
+            auto o = m_IconOcclusion.find(it.Entity);
+            if (o != m_IconOcclusion.end() && o->second.Occluded) {
+                if (!prefs.EntityIconsThroughWalls) continue;
+                a *= 0.2f;
+            }
+        }
+        if (a <= 0.01f) continue;
+        alphaMul[i] = a;
+        GizmoIconMath::IconCandidate c;
+        c.Id = (int)i;
+        c.X = it.Screen.x;
+        c.Y = it.Screen.y;
+        c.Priority = it.Selected ? 0 : it.IsLight ? 1 : it.IsCamera ? 2 : 3;
+        c.Distance = it.Dist;
+        cands.push_back(c);
+    }
+    GizmoIconMath::Declutter(cands, 0.6f * baseIconPx);
+
+    // Pass 4: draw, far to near so a nearer icon overlaps a farther one.
+    ImFont* font = ImGui::GetFont();
+    const ImVec4 textCol = ImGui::GetStyleColorVec4(ImGuiCol_Text);
+    for (size_t k = cands.size(); k-- > 0;) {
+        if (!cands[k].Keep) continue;
+        const Item& it = items[(size_t)cands[k].Id];
+        const float iconPx = baseIconPx * GizmoIconMath::DistanceScale(it.Dist, it.Selected);
+
+        float rgb[3];
+        float alpha;
+        if (it.Inactive) {
+            rgb[0] = rgb[1] = rgb[2] = 140.0f / 255.0f;
+            alpha = 0.67f;
+        } else if (it.IsLight) {
+            // The light's own colour, pulled 40% toward grey so a rack of lights stays calm.
+            const float lum = 0.299f * it.Light.r + 0.587f * it.Light.g + 0.114f * it.Light.b;
+            for (int c = 0; c < 3; ++c) rgb[c] = it.Light[c] + (lum - it.Light[c]) * 0.4f;
+            alpha = it.Selected ? 1.0f : 0.7f;
+        } else {
+            rgb[0] = textCol.x; rgb[1] = textCol.y; rgb[2] = textCol.z;
+            alpha = it.Selected ? 1.0f : 0.8f;
+        }
+        const ImU32 color = IM_COL32((int)(rgb[0] * 255.0f), (int)(rgb[1] * 255.0f), (int)(rgb[2] * 255.0f),
+                                     (int)(std::clamp(alpha * alphaMul[(size_t)cands[k].Id], 0.0f, 1.0f) * 255.0f));
+
+        // Centre the glyph's ink (what you actually see), not its advance box, then snap to whole
+        // pixels so the marker doesn't shimmer as the camera moves.
+        ImVec2 ink;
+        {
+            unsigned cp = 0;
+            ImTextCharFromUtf8(&cp, it.Glyph, nullptr);
+            const ImFontGlyph* g = font->GetFontBaked(iconPx)->FindGlyph((ImWchar)cp);
+            if (g) {
+                ink = ImVec2((g->X0 + g->X1) * 0.5f, (g->Y0 + g->Y1) * 0.5f);
+            } else {
+                const ImVec2 gs = font->CalcTextSizeA(iconPx, FLT_MAX, 0.0f, it.Glyph);
+                ink = ImVec2(gs.x * 0.5f, gs.y * 0.5f);
+            }
+        }
+        const ImVec2 screen(std::floor(it.Screen.x + 0.5f), std::floor(it.Screen.y + 0.5f));
+        draw->AddText(font, iconPx, ImVec2(std::floor(screen.x - ink.x + 0.5f), std::floor(screen.y - ink.y + 0.5f)),
+                      color, it.Glyph);
 
         // Selected state = a subtle ring, not extra geometry inside the marker.
         // Motion v2: it sweeps on clockwise from the top like the mesh outline does.
-        if (selected) {
+        if (it.Selected) {
             const float reveal = SelectionOutlineReveal();
             if (reveal >= 1.0f) {
                 draw->AddCircle(screen, iconPx * 0.72f, EditorTheme::U32(EditorTheme::Accent), 0, 1.5f * m_UIScale);
@@ -1804,8 +1945,14 @@ void EditorLayer::DrawReflectionProbeGizmos(World& world, Camera& editorCamera) 
     const ImU32 kProbeSelected = EditorTheme::U32(EditorTheme::AccentBright);
     const float kThick = 1.5f;
 
+    // Probes, post-process volumes and decals each have their own switch; by default only the
+    // selected one (or the ones under it) draws, so a placed-out scene stays clean.
+    const EditorSettings& vprefs = EditorSettings::Get();
+    auto showVolume = [&](entt::entity e) { return !vprefs.VolumeGizmosSelectedOnly || IsSelectedOrUnderSelected(world, e); };
+
     auto probeView = world.Registry.view<const TransformComponent, const ReflectionProbeComponent>();
     for (auto [entity, tc, rp] : probeView.each()) {
+        if (!vprefs.ShowProbeGizmos || !showVolume(entity)) continue;
         glm::mat4 wt     = world.GetCachedWorldTransform(entity);
         glm::vec3 center = glm::vec3(wt[3]);
         glm::vec3 scale  = glm::vec3(glm::length(glm::vec3(wt[0])),
@@ -1837,6 +1984,7 @@ void EditorLayer::DrawReflectionProbeGizmos(World& world, Camera& editorCamera) 
     const ImU32 kVolumeColor = IM_COL32(120, 230, 150, 170);
     auto volumeView = world.Registry.view<const TransformComponent, const PostProcessVolumeComponent>();
     for (auto [entity, tc, vol] : volumeView.each()) {
+        if (!vprefs.ShowVolumeGizmos || !showVolume(entity)) continue;
         if (vol.Global || world.Registry.all_of<InactiveTag>(entity)) continue;
         const glm::mat4 wt = world.GetCachedWorldTransform(entity);
         const glm::vec3 h = glm::abs(vol.Size) * 0.5f;
@@ -1855,6 +2003,7 @@ void EditorLayer::DrawReflectionProbeGizmos(World& world, Camera& editorCamera) 
     const ImU32 kDecalColor = IM_COL32(230, 200, 150, 110);
     auto decalView = world.Registry.view<const TransformComponent, const DecalComponent>();
     for (auto [entity, tc, dc] : decalView.each()) {
+        if (!vprefs.ShowDecalGizmos || !showVolume(entity)) continue;
         if (world.Registry.all_of<InactiveTag>(entity)) continue;
         const bool selected = IsSelected(entity);
         const glm::mat4 box = world.GetCachedWorldTransform(entity) * glm::scale(glm::mat4(1.0f), dc.Size);
@@ -3235,4 +3384,40 @@ void EditorLayer::DrawGroupGizmo(World& world, Camera& editorCamera) {
     DrawSnapTicks();
 
     EndGizmoOverlay();
+}
+
+// Scene-view hover pre-highlight: which mesh entity the cursor is over, for the faint outline
+// main.cpp draws. Reuses the click pick's exact-triangle raycast; runs only when the cursor moved
+// (at most one raycast per frame) and stands down whenever the mouse belongs to something else.
+void EditorLayer::UpdateHoverPick(World& world, Camera& editorCamera) {
+    ImGuiIO& io = ImGui::GetIO();
+    const bool idle = !m_InPlayMode && !m_MeasureTool && m_DecalTool == DecalToolMode::None &&
+                      !m_GizmoEngaged && !m_ViewGizmoBlocking && !m_LightHandleEngaged &&
+                      !ImGuizmo::IsUsing() && !ImGuizmo::IsOver() &&
+                      !ImGui::IsMouseDown(ImGuiMouseButton_Left) && !ImGui::IsMouseDown(ImGuiMouseButton_Right) &&
+                      !ImGui::IsMouseDown(ImGuiMouseButton_Middle) && !io.KeyAlt &&
+                      !ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel) &&
+                      IsMouseOverSceneViewport() && !WantsCaptureMouse() && !ImGui::IsAnyItemHovered();
+    if (!idle) {
+        m_HoverEntity = entt::null;
+        m_HoverMouse = glm::vec2(-1.0f);
+        return;
+    }
+    if (m_HoverEntity != entt::null && !world.Registry.valid(m_HoverEntity)) m_HoverEntity = entt::null;
+    const glm::vec2 mouse(io.MousePos.x, io.MousePos.y);
+    if (mouse == m_HoverMouse) return; // not moved: keep what we had
+    m_HoverMouse = mouse;
+
+    const float w = m_ViewportSize.x, h = m_ViewportSize.y;
+    if (w <= 0.0f || h <= 0.0f) { m_HoverEntity = entt::null; return; }
+    const glm::mat4 invVP = glm::inverse(editorCamera.ProjectionMatrix(w / h) * editorCamera.ViewMatrix());
+    const float ndcX = (2.0f * (mouse.x - m_ViewportPos.x)) / w - 1.0f;
+    const float ndcY = 1.0f - (2.0f * (mouse.y - m_ViewportPos.y)) / h;
+    glm::vec4 nearP = invVP * glm::vec4(ndcX, ndcY, -1.0f, 1.0f);
+    glm::vec4 farP = invVP * glm::vec4(ndcX, ndcY, 1.0f, 1.0f);
+    nearP /= nearP.w;
+    farP /= farP.w;
+    const SurfaceHit hit = RaycastRenderables(world, glm::vec3(nearP), glm::normalize(glm::vec3(farP) - glm::vec3(nearP)),
+                                              [&](entt::entity entity) { return ViewportUnpickable(world, entity); });
+    m_HoverEntity = hit.Entity;
 }
