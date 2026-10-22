@@ -1784,6 +1784,7 @@ void RegisterTests() {
     RegisterSettingsTests();
     RegisterScenesTests();
     RegisterDecalsTests();
+    RegisterDecalsLitTests();
 }
 } // namespace
 
