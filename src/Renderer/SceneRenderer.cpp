@@ -380,6 +380,9 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
     // and FX sprites bind their own arrays over 22-24 mid-frame, so RenderScene rebinds these after
     // them too (rebindDecals).
     program.SetInt("uDecalCount", fs.decalCount);
+    // Substrates (the table on SSBO 16, maps in the same arrays): the Grunge reveal and peeling-paint
+    // decals read them, in the views that prepared decals this frame.
+    program.SetInt("uSubstrateOn", in.decals && in.decals->SubstrateCount() > 0 && fs.clusterOn ? 1 : 0);
     if (in.decals) in.decals->BindForShading();
 
     program.SetInt("uUnlit", ctx.Unlit ? 1 : 0);

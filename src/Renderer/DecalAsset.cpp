@@ -1,6 +1,7 @@
 #include "DecalAsset.h"
 #include "AtomicFile.h"
 #include "Log.h"
+#include "SubstrateJson.h"
 
 #include <json.hpp>
 #include <algorithm>
@@ -165,6 +166,10 @@ std::shared_ptr<DecalAsset> DecalAsset::Load(const std::string& path) {
     d->Peel = Unit(wx.Num("peel", d->Peel));
     d->Buff = Unit(wx.Num("buff", d->Buff));
 
+    if (const json* sub = r.Find("substrate")) {
+        if (!SubstrateJson::Read(*sub, d->Substrate, SubstrateJson::PlainPath)) r.Warn("substrate", "an object");
+    }
+
     d->Category = r.Str("category");
     if (const json* tags = r.Find("tags")) {
         if (tags->is_array()) {
@@ -209,6 +214,8 @@ bool DecalAsset::Save() const {
     j["paint"] = {{"enabled", Paint}, {"roughness", PaintRoughness}, {"metal", PaintMetal},
                   {"relief", Relief},  {"uv", UVPaint}};
     j["weathering"] = {{"fade", Fade}, {"bleach", Bleach}, {"peel", Peel}, {"buff", Buff}};
+    if (!Substrate.Albedo.empty())
+        j["substrate"] = SubstrateJson::Write<ojson>(Substrate, [](const std::string& p) { return p; });
     j["category"] = Category;
     ojson tags = ojson::array();
     size_t start = 0;

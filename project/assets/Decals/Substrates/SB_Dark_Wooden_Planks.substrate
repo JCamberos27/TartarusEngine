@@ -1,0 +1,13 @@
+{
+  "albedo": "assets/Architecture/Building/Textures/PH_Dark_Wooden_Planks/dark_wooden_planks_Diffuse_2k.jpg",
+  "normal": "assets/Architecture/Building/Textures/PH_Dark_Wooden_Planks/dark_wooden_planks_nor_gl_2k.jpg",
+  "roughness": "assets/Architecture/Building/Textures/PH_Dark_Wooden_Planks/dark_wooden_planks_Rough_2k.jpg",
+  "ao": "assets/Architecture/Building/Textures/PH_Dark_Wooden_Planks/dark_wooden_planks_AO_2k.jpg",
+  "tiling": 1.0,
+  "tint": [1.0, 1.0, 1.0],
+  "strength": 1.0,
+  "roughnessRange": [0.0, 1.0],
+  "mirror": false,
+  "crop": [0.0, 0.0, 1.0, 1.0],
+  "detail": 0.0
+}

@@ -303,6 +303,38 @@ void DecalAssetFields(PropertyRows& r, DecalAsset& d, GLFWwindow* owner) {
         r.Float("Peel", d.Peel, 0.01f, 0.0f, 1.0f, "%.2f", "Flakes off in patches (uses the Aux map when there is one).");
         r.Float("Buff", d.Buff, 0.01f, 0.0f, 1.0f, "%.2f", "A smeared ghost, as if someone tried to scrub it off.");
     }
+    if (r.Section(ICON_FA_LAYER_GROUP, "Substrate", d.Substrate.Albedo.empty() ? nullptr : "on", false)) {
+        SubstrateDesc& s = d.Substrate;
+        r.Note("The material under the paint: where this decal covers, it shows instead of the decal's own\n"
+               "colour (concrete under peeling paint). A placed decal on Auto uses its surface's substrate when\n"
+               "that has one. Its maps take one 2048 slot of the decal texture budget.");
+        AssetPathPickerOptions img;
+        img.Extensions = AssetExts::Images;
+        img.DragPayload = "ASSET_TEXTURE_PATH";
+        img.DialogFilter = "Images\0*.png;*.jpg;*.jpeg;*.tga;*.bmp\0All Files\0*.*\0";
+        img.Owner = owner;
+        r.Path("Substrate Albedo", s.Albedo, img, "Colour of the exposed material. Empty = no substrate.");
+        r.Path("Substrate Normal", s.Normal, img, "Optional normal map (OpenGL, green up).");
+        r.Path("Substrate Roughness", s.Roughness, img, "Optional greyscale roughness, remapped to Rough Min..Max.");
+        r.Path("Substrate AO", s.AO, img, "Optional greyscale ambient occlusion.");
+        r.Float("Tiling", s.Tiling, 0.01f, 0.05f, 50.0f, "%.2f m", "Metres per repeat, in world space.");
+        static bool s_TintPending = false;
+        r.Label("Tint", "Multiplies the substrate's colour.");
+        s_TintPending |= EditorUI::ColorEditLinear("##subTint", &s.Tint.x);
+        if (s_TintPending && !ImGui::IsMouseDown(ImGuiMouseButton_Left) && !ImGui::IsAnyItemActive()) {
+            s_TintPending = false;
+            r.MarkChanged();
+        }
+        r.Float("Strength", s.Strength, 0.01f, 0.0f, 1.0f, "%.2f", "How fully it replaces the decal's own look.");
+        r.Float("Rough Min", s.RoughRange.x, 0.01f, 0.0f, 1.0f, "%.2f", "Roughness where the roughness map is black.");
+        r.Float("Rough Max", s.RoughRange.y, 0.01f, 0.0f, 1.0f, "%.2f",
+                "Roughness where it's white (everywhere, without a map).");
+        r.Check("Mirror", s.Mirror, "Mirror every other repeat, for a sheet that doesn't tile by itself.");
+        r.Float("Crop Left", s.Crop.x, 0.005f, 0.0f, 1.0f, "%.3f", "The part of the image that repeats (0..1).");
+        r.Float("Crop Top", s.Crop.y, 0.005f, 0.0f, 1.0f, "%.3f", "Down from the image's top edge.");
+        r.Float("Crop Right", s.Crop.z, 0.005f, 0.0f, 1.0f, "%.3f", "");
+        r.Float("Crop Bottom", s.Crop.w, 0.005f, 0.0f, 1.0f, "%.3f", "");
+    }
     if (r.Section(ICON_FA_TAGS, "Library", d.Category.empty() ? nullptr : d.Category.c_str(), false)) {
         r.Text("Category", d.Category, "Where the Decal Library files it, '/'-separated (Graffiti/Letters).");
         r.Text("Tags", d.Tags, "Comma separated search words.");

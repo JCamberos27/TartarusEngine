@@ -1,6 +1,9 @@
 #pragma once
 #include "DecalTypes.h"
+#include "DecalTextureArrays.h"
+#include "Substrate.h"
 #include <glm/glm.hpp>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -49,7 +52,17 @@ public:
     void SetGhost(const DecalComponent& d, const glm::mat4& boxWorld);
     void ClearGhost() { m_GhostActive = false; }
 
-    // Bind SSBOs 11 (decals), 12 (bounds) and the texture arrays on units 22-25.
+    // Substrates (Substrate.h): the table index + 1 for these maps and values (0 = none, the table is
+    // full, or its maps are still decoding), pinning its slot for this frame. Entries are kept until the
+    // textures are cleared, so an index is stable from frame to frame. Callable while drawing: a change
+    // is uploaded to SSBO 16 at once.
+    uint32_t SubstrateIndex(const SubstrateDesc& desc);
+    // The same for a material's substrate, through the DecalSystem alive (main.cpp owns one); 0 when
+    // there's none or the material has no substrate. Model.cpp sets it as uMaterialSubstrate.
+    static int MaterialSubstrate(const SubstrateDesc& desc);
+    int SubstrateCount() const { return (int)m_Subs.size(); }
+
+    // Bind SSBOs 11 (decals), 12 (bounds) and the texture arrays on units 22-25 (+ SSBO 16, substrates).
     void BindForCull() const;
     void BindForShading() const;
     int VisibleCount() const { return m_Visible; }
@@ -84,4 +97,23 @@ private:
     int m_ReloadTick = 0;
     std::vector<Decals::GpuDecal> m_UploadDecals;
     std::vector<Decals::GpuDecalBounds> m_UploadBounds;
+
+    struct SubstrateEntry {
+        std::string Key;
+        DecalTextureArrays::Source Src;
+        Decals::GpuSubstrate Gpu{};
+        std::uint64_t Frame = 0; // the Prepare() it was last requested in
+        std::uint64_t Used = 0;  // ...and last asked for by a decal or a material
+        bool Ready = false;
+        bool Logged = false;
+    };
+    std::vector<SubstrateEntry> m_Subs;
+    std::unordered_map<std::string, uint32_t> m_SubIndex;
+    unsigned int m_SubBuf = 0;
+    bool m_SubDirty = false;
+    std::uint64_t m_FrameNo = 1;
+    bool m_InPrepare = false;
+    void RefreshSubstrate(uint32_t idx);
+    void FlushSubstrates();
+    void ClearSubstrates();
 };
