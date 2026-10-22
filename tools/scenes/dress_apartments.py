@@ -7,8 +7,8 @@
 #
 #  * materials: the apartment walls (+ the window / arch Reveal pieces that sit in a unit) keep their white baseColor,
 #    normal and roughness maps and only gain the PH_Beige_Wall AO map (the shader reads its red channel, so it can't
-#    tint) and the T_Grunge_PeelingPaint_036 grunge (0.3, scale 0.25); ceilings and the apartments' baseboards get _085
-#    (0.4 and 0.45). They also gain the corridor's "substrate" preset references (dc.SUBSTRATES): Wall_Concrete on walls and
+#    tint) and the T_Grunge_PeelingPaint_036 grunge (0.3, scale 0.25); ceilings get _085 (0.4) and
+#    the apartments' baseboards _036 (0.4). They also gain the corridor's "substrate" preset references (dc.SUBSTRATES): Wall_Concrete on walls and
 #    reveals, Floor_Concrete on ceilings, PH_Dark_Wooden_Planks on baseboards. 301 is the hand-edited NPC test room: nothing there is touched except these materials and the
 #    added decals;
 #  * decals go under an "Apartment Wear" root, one "30x Wear" group per unit. Two seeded units are trashed (~60 decals),
@@ -42,7 +42,7 @@ SEED = 4242
 WALL_H, CEIL_Y = 2.7, 2.7
 EYE_Y = 1.5
 
-GRUNGE = {'walls': (0.3, 0.25), 'ceilings': (0.4, 0.25), 'trim': (0.45, None)}     # strength, scale (None = default)
+GRUNGE = {'walls': (0.3, 0.25), 'ceilings': (0.4, 0.25), 'trim': (0.4, None)}      # strength, scale (None = default)
 AO_MAP = dc.WALL_DIR + 'AO_2k.jpg'
 SPLAT_TINT = [0.1, 0.09, 0.08]
 TOL = 5e-3
@@ -214,7 +214,7 @@ def patch_materials(d, repo, by_id, rooms):
         m['substrate'] = dc.substrate_block(repo, 'ceil')
     for e in trims:
         m = e['materials'][0]['embedded']
-        m['grungeMap'] = grunge_worn
+        m['grungeMap'] = grunge_wall               # as the corridor's: _085 opened black blobs at any strength
         m['grungeStrength'] = GRUNGE['trim'][0]
         m.pop('grungeScale', None)
         m['substrate'] = dc.substrate_block(repo, 'trim')
@@ -277,14 +277,14 @@ def f_skirt(S, room, seed, trash):
     for line in shuffled(r, room.lines):
         w = 1.3 + r.random() * 0.9
         hw = max(w / 2 + 0.2, 1.05)           # the extra hole sits 0.6 off centre and is 0.8 wide
-        u = find_u(line, r, hw, 0.34, 0.38)
+        u = find_u(line, r, hw, dc.SKIRT_Y, 0.38)
         if u is None:
             continue
         S.cur = ('wall', room, line, 'skirt', None)
-        S.patch(line, u, 0.34, w, 0.75, seed, flakes=1, crack=False, skirt=True)
-        pos, rot = S.spot(line, u + (0.6 if r.random() < 0.5 else -0.6), 0.22)
+        S.patch(line, u, dc.SKIRT_Y, w, 0.75, seed, flakes=1, crack=False, skirt=True)
+        pos, rot = S.spot(line, u + (0.6 if r.random() < 0.5 else -0.6), dc.SKIRT_HOLE_Y)
         S.decal(S.pick(r, 'hole'), pos, (0.8, 0.55, 0.25), rot, seed + 5, 3, 0.9, jitter=(180.0, 0.15))
-        line.taken.append((u - hw, u + hw, 0.0, 0.72))
+        line.taken.append((u - hw, u + hw, 0.0, dc.SKIRT_Y + 0.38))
         return True
     return False
 
