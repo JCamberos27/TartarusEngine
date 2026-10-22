@@ -189,9 +189,14 @@ void main() {
     }
     // Material -> Grunge -> decals -> blood -> lighting (docs/DECALS.md).
     vec3 geoN = backFace ? -normalize(vNormal) : normalize(vNormal);
-    ApplyGrunge(albedo, N, roughness, metallic, ao, geoN);
+    // This fragment's froxel, once: the decal list and the light loop below both read it.
+    bool clustered = uClusterEnabled == 1;
+    uint cluster = clustered ? clusterIndex() : 0u;
+    uint grungeSub;
+    SubstrateSample grungeSS;
+    ApplyGrunge(albedo, N, roughness, metallic, ao, geoN, grungeSub, grungeSS);
     vec3 decalEmissive = vec3(0.0);
-    ApplyDecals(albedo, N, roughness, metallic, ao, decalEmissive, geoN);
+    ApplyDecals(albedo, N, roughness, metallic, ao, decalEmissive, geoN, cluster, grungeSub, grungeSS);
     if (uBloodSplatCount > 0) {
         // Soaked in: fabric and skin take the blood's colour, darker where it pooled, glossy while wet.
         vec3 blood = BloodSplatCover();
@@ -297,13 +302,11 @@ void main() {
     // Point + spot lights: this fragment's froxel list when clustering is active (#120),
     // otherwise every light (offscreen preview path, no compute pass).
     // One loop for both: the light index comes from the froxel's list or straight from uLights.
-    bool clustered = uClusterEnabled == 1;
     uint lightOffset = 0u;
     uint lightCount = uLightCount;
     if (clustered) {
-        uint cl = clusterIndex();
-        lightOffset = uClusterRange[cl].offset;
-        lightCount = uClusterRange[cl].count;
+        lightOffset = uClusterRange[cluster].offset;
+        lightCount = uClusterRange[cluster].count;
     }
     for (uint j = 0u; j < lightCount; ++j) {
         uint li = clustered ? uClusterLightIndices[lightOffset + j] : j;

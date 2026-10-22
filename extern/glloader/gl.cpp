@@ -127,6 +127,7 @@ PFNGLGETTEXTURESUBIMAGEPROC glGetTextureSubImage = nullptr;
 PFNGLFENCESYNCPROC glFenceSync = nullptr;
 PFNGLCLIENTWAITSYNCPROC glClientWaitSync = nullptr;
 PFNGLDELETESYNCPROC glDeleteSync = nullptr;
+PFNGLCLEARNAMEDBUFFERSUBDATAPROC glClearNamedBufferSubData = nullptr;
 // The Graffiti compositor.
 PFNGLTEXSTORAGE2DPROC glTexStorage2D = nullptr;
 PFNGLCLEARBUFFERFVPROC glClearBufferfv = nullptr;
@@ -276,6 +277,7 @@ bool GLLoader_Init() {
     LOAD(PFNGLFENCESYNCPROC, glFenceSync)
     LOAD(PFNGLCLIENTWAITSYNCPROC, glClientWaitSync)
     LOAD(PFNGLDELETESYNCPROC, glDeleteSync)
+    LOAD(PFNGLCLEARNAMEDBUFFERSUBDATAPROC, glClearNamedBufferSubData)
 
     // Texture-to-texture copy - DecalTextureArrays growth.
     LOAD(PFNGLCOPYIMAGESUBDATAPROC, glCopyImageSubData)

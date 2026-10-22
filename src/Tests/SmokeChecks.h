@@ -1,6 +1,7 @@
 #pragma once
 
 class AssetLibrary;
+class ClusterGrid;
 class EditorLayer;
 class World;
 
@@ -18,5 +19,9 @@ void PrefabMode(EditorLayer& editor, World& world, AssetLibrary& assets);
 // frosted viewport HUDs and their compute blur, a toast and a snap ring), then off again, after
 // which its animation state must hold no memory. Called every frame of the scene; acts on a few.
 void GlassTheme(EditorLayer& editor, World& world, int frame);
+// smoke_decals_stress*: the full 4096-decal budget on one wall - two frames of a still view bin identically, every
+// cluster matches the CPU copy of the cull test (top-most 256 when clamped), and the clamped clusters are counted.
+// Called on two consecutive frames; checks on the second.
+void DecalStress(const ClusterGrid& grid, int visible, int frame);
 
 } // namespace SmokeChecks
