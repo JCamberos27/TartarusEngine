@@ -10,7 +10,6 @@
 #include <vector>
 
 class World;
-class DecalTextureArrays;
 struct DecalAsset;
 struct DecalComponent;
 
@@ -26,6 +25,31 @@ struct DecalInstance {
     glm::mat4 BoxToWorld{1.0f}; // unit box [-0.5,0.5]^3 -> world, +Z out of the surface
     Decals::GpuDecal Gpu{};     // filled except WorldToBox (derived from BoxToWorld)
     uint64_t SortKey = 0;       // (SortOrder, entity, seed) packed; ties broken by insertion
+};
+
+// A decal a runtime system hands in each game frame (DecalSystem::SubmitRuntime): blood stains
+// (BloodRenderer), bullet holes (BulletHoleList), anything not authored as a DecalComponent. Its maps
+// are files like any decal's (often generated ones, GeneratedDecalMaps); the response comes from the
+// caller, usually read from a .decal (DA_Blood, DA_BulletHole).
+struct RuntimeDecal {
+    glm::mat4 BoxToWorld{1.0f};       // unit box -> world: +X the image's right, +Y its top, +Z out of the surface
+    DecalTextureArrays::Source Maps;  // absolute paths; Albedo required
+    int Cols = 1, Rows = 1, Frame = 0; // atlas grid in the maps and the cell drawn
+    glm::vec3 Tint{1.0f};
+    float AlbedoOp = 1.0f, NormalOp = 0.0f, RoughnessOp = 0.0f, MetalOp = 0.0f, AOOp = 0.0f;
+    float Roughness = 0.5f, Metal = 0.0f;
+    float AngleFadeStart = 0.25f, AngleFadeEnd = 0.05f; // cosines
+    float EdgeFade = 0.05f;
+    float Fade = 0.0f;                // weathering fade (overall opacity loss)
+    float Wear = 0.0f;                // chips (dried blood flaking)
+    // Reveal (FLAG_REVEAL, needs Maps.Aux): shows where aux >= RevealThreshold, fully from + RevealBand.
+    bool Reveal = false;
+    float RevealThreshold = 0.0f, RevealBand = 0.05f;
+    bool Liquid = false;              // FLAG_LIQUID: a film (blood) that fills the receiver's relief
+    float CoverGain = 1.0f;           // liquids: opacity = albedo alpha x this, after filtering (H1.x; no glow)
+    bool AffectStatic = true, AffectDynamic = true;
+    int SortOrder = 0;
+    uint32_t Id = 0;                  // ties in the sort: a stable per-instance number (submission order otherwise)
 };
 
 // Gathers decals each frame, culls them against the view frustum, sorts deterministically and
@@ -45,6 +69,8 @@ public:
     // Resident: its textures are in and it draws (the Designer keeps its live overlay until then).
     void Refresh(const std::string& path);
     bool Resident(const std::string& path);
+    // The same for one entity's decal, with its reveal order in place of the aux map while it has one (SetReveal).
+    bool Resident(const std::string& path, uint32_t entity);
     // The one the renderer uses (main.cpp owns it): the editor reaches it for Refresh / Resident.
     // Null before it exists or after it's gone.
     static DecalSystem* Current();
@@ -54,7 +80,22 @@ public:
     // includeGhost: also gather the editor's placement ghost (SetGhost), for the editor's own views.
     int Prepare(World& world, const glm::mat4& viewProj, const glm::vec3& cameraPos,
                 float maxDistance, const DecalGrading& grading, bool includeGhost = false);
-    void PushRuntime(const DecalInstance& d); // cleared by every Prepare()
+    // Runtime decals, by game frame: BeginRuntimeFrame drops the last frame's (BloodRenderer::BeginFrame
+    // calls it, so leaving Play clears them too), then each system submits what it has. Every view's
+    // Prepare draws the same list until the next BeginRuntimeFrame.
+    void BeginRuntimeFrame();
+    void SubmitRuntime(const RuntimeDecal& d);
+    void PushRuntime(const DecalInstance& d); // a ready-packed one, same lifetime
+    int RuntimeCount() const { return (int)(m_RuntimeDecals.size() + m_Runtime.size()); }
+    // Per-entity reveal on a DecalComponent (a spray-can piece going on): the aux map replaced by `Aux`
+    // (a reveal order), FLAG_REVEAL with this threshold / band, glow off. Kept until cleared.
+    struct RevealOverride {
+        std::string Aux; // absolute
+        float Threshold = 0.0f, Band = 0.04f;
+    };
+    void SetReveal(uint32_t entity, const RevealOverride& r) { m_Reveals[entity] = r; }
+    void ClearReveal(uint32_t entity) { m_Reveals.erase(entity); }
+    bool HasReveal(uint32_t entity) const { return m_Reveals.count(entity) != 0; }
     // The editor's Place Decal / Decal Brush ghost: one decal, built like a component's, that stays
     // until ClearGhost(). `boxWorld` is the entity's world transform (the box's Size is applied on top).
     void SetGhost(const DecalComponent& d, const glm::mat4& boxWorld);
@@ -93,11 +134,17 @@ public:
                            const glm::vec3& mx, int cap, std::vector<uint32_t>& out);
     // The atlas frame a seed picks when DecalComponent::Frame is -1.
     static int FrameFor(int seed, int frames);
+    // A runtime decal packed against its resident slot (WorldToBox is left to Prepare).
+    static void PackRuntime(const RuntimeDecal& r, const DecalTextureArrays::Slot& slot, Decals::GpuDecal& out);
+    // (SortOrder, entity, seed) -> the sort key; runtime decals use entity 0xFFFFFFFF, seed = Id.
+    static uint64_t SortKeyFor(int sortOrder, uint32_t entity, int seed);
 
 private:
     std::unique_ptr<DecalTextureArrays> m_Textures;
     std::unordered_map<std::string, std::shared_ptr<DecalAsset>> m_Assets;
     std::vector<DecalInstance> m_Runtime, m_Frame;
+    std::vector<RuntimeDecal> m_RuntimeDecals;
+    std::unordered_map<uint32_t, RevealOverride> m_Reveals;
     std::unique_ptr<DecalComponent> m_Ghost;
     glm::mat4 m_GhostWorld{1.0f};
     bool m_GhostActive = false;

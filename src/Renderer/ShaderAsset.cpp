@@ -382,7 +382,7 @@ void ShaderAsset::BuildBindings() {
     if (s_MaxUnits == 0) {
         GLint n = 16;
         glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &n);
-        // 21: _GrungeMap; 22-25: the decal arrays; 27: volumetric fog; 28, 29: the blood splat atlas; 30, 31: the physical sky
+        // 21: _GrungeMap; 22-25: the decal arrays; 27: volumetric fog; 30, 31: the physical sky
         s_MaxUnits = std::clamp((int)n, 16, Decals::UNIT_GRUNGE);
     }
     int unit = 1;

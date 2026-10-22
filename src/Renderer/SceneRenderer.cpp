@@ -376,9 +376,9 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
     }
     program.SetInt("uClusterEnabled", fs.clusterOn ? 1 : 0);
 
-    // Clustered decals: the list (SSBO 11) and the texture arrays on units 22-25. The blood decals
-    // and FX sprites bind their own arrays over 22-24 mid-frame, so RenderScene rebinds these after
-    // them too (rebindDecals).
+    // Clustered decals: the list (SSBO 11) and the texture arrays on units 22-25 (the blood stains and
+    // bullet holes among them, and the blood splats' maps). The FX sprites bind their own arrays over
+    // 22-24 after the opaque and transparent passes; every program that draws after them comes through here.
     program.SetInt("uDecalCount", fs.decalCount);
     // Substrates (the table on SSBO 16, maps in the same arrays): the Grunge reveal and peeling-paint
     // decals read them, in the views that prepared decals this frame.
@@ -467,7 +467,6 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         in.decals->BindForCull();
     }
     const FrameState fs = gathered;
-    const auto rebindDecals = [&] { if (in.decals) in.decals->BindForShading(); };
     // Which frame state the program selector pushes. The view-model sub-pass swaps this for its
     // own (see below) — that swap is the only reason it isn't a plain const FrameState.
     const FrameState* activeFs = &fs;
@@ -587,8 +586,8 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // OutfitHideTag::Visible: the piece's triangles not covered entirely, drawn instead of its own.
         const VisibleIndexBuffer* Visible = nullptr;
         float LayerPull = 0.0f; // OutfitLayerTag: drawn this many metres nearer the camera (depth only)
-        // Skinned or a rigidbody: drawn after the blood decals, which project only onto
-        // the static world - a character walking through a pool or a crate on a stain covers it instead.
+        // Skinned or a rigidbody: drawn after the static world. Blood stains take only to the static world
+        // (Affect Dynamic off), so a character walking through a pool or a crate on a stain covers it.
         bool Dynamic = false;
         unsigned Entity = 0xFFFFFFFFu; // for the blood splats on it (BloodRenderer::SplatRange)
         // Which decals take to it (Affect Static / Dynamic): StaticTag, or nothing skinned or simulated.
@@ -815,7 +814,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         for (const SortKey& k : sortKeys) sortScratch.push_back(std::move(list[k.Index]));
         list.swap(sortScratch);
     };
-    // The static world first (the blood decals go between), then by program (the costliest switch), material,
+    // The static world first, then by program (the costliest switch), material,
     // and front to back. A user-space pointer leaves the top bit free for Dynamic.
     const auto sortOpaque = [&](std::vector<DrawItem>& list) {
         sortItems(list,
@@ -942,24 +941,11 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
 
     passAlphaBlend = 0;
     modelShader.SetInt("uAlphaBlend", 0); // explicit: ensure opaque pass outputs alpha=1
-    // The blood decals land on the static world drawn so far, then the moving things
-    // draw over them.
-    bool decalsDone = false;
-    auto drawBloodDecals = [&] {
-        decalsDone = true;
-        if (!ctx.TxHdr || !ctx.TxHdr->IsValid() || BloodRenderer::Get().QueuedDecals() == 0) return;
-        localStats.DrawCalls += BloodRenderer::Get().DrawDecals(ctx.View, ctx.Proj, fs.vp, *ctx.TxHdr,
-                                                                [&](Shader& p) { ApplyFrameState(p, fs); });
-        rebindDecals(); // the blood decals' arrays sat on units 22-24
-        modelShader.Bind();
-        // The model program's state is unchanged, but GL's blend / cull / depth state was restored to the
-        // pass baseline and the material-bind cache invalidated.
-    };
     // GPU instancing (Project Settings > Quality): copies of a static model that draw exactly alike - the same
     // materials and programs, sidedness, shadow receiving, lighting layer and SSAO - go out as one instanced draw at the
     // first copy's place in the sorted list. Per-object reflection probes and blood splats, and anything skinned, moving
     // or partly hidden, still draw one by one. The groups keep the list's order: the static world (all the batches)
-    // first, so the blood decals still land between it and the moving things.
+    // first, then the moving things.
     const bool instancing = ProjectSettings::Quality().GpuInstancing && !anyProbes;
     const auto batchable = [&](const DrawItem& it) {
         if (!instancing || it.Dynamic || it.Ref->HasBones() || it.Visible || it.NearHide > 0.0f || it.HideBones ||
@@ -1014,7 +1000,6 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     for (std::size_t g = 0; g < opaqueGroups.Groups.size(); ++g) {
         const auto& grp = opaqueGroups.Groups[g];
         const DrawItem& it = drawList[opaqueGroups.Order[grp.First]];
-        if (it.Dynamic && !decalsDone) drawBloodDecals();
         probeItem = &it;
         instanceBase = groupBase[g];
         it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, 1.0f, perDraw, it.Pass, it.DoubleSided, it.Visible,
@@ -1035,7 +1020,6 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         p->SetInt("uInstanced", 0);
     }
     modelShader.Bind();
-    if (!decalsDone) drawBloodDecals();
 
     // Volumetric blood in the air: opaque fluid, so before the sky and with the
     // opaque geometry it lands on already in depth.

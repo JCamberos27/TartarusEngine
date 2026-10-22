@@ -1,6 +1,9 @@
 #include "BulletHoles.h"
 
 #include "World.h"
+#include "BloodRenderer.h"
+#include "DecalSystem.h"
+#include "GeneratedDecalMaps.h"
 
 #include <cmath>
 
@@ -90,4 +93,39 @@ void BulletHoleList::Resolve(const World& world, std::vector<Placed>& out) {
         m_Holes.swap(kept);
         m_Next = 0;
     }
+}
+
+int BulletHoleList::Emit(const World& world, std::vector<RuntimeDecal>& out, const LookFn& look) {
+    static std::vector<Placed> placed;
+    Resolve(world, placed);
+    int n = 0;
+    for (const Placed& h : placed) {
+        RuntimeDecal r;
+        if (!look || !look(h.Decal, r)) continue;
+        const bool knife = h.Decal >= 0;
+        const float size = knife ? h.Size : h.Radius * DecalBake::kProceduralHoleSpan;
+        const glm::vec3 x = h.Tangent, y = glm::cross(h.Normal, h.Tangent);
+        r.BoxToWorld = glm::mat4(glm::vec4(x * size, 0.0f), glm::vec4(y * size, 0.0f),
+                                 glm::vec4(h.Normal * (knife ? kKnifeDepth : kProceduralDepth), 0.0f), glm::vec4(h.Position, 1.0f));
+        r.Frame = (int)(h.Seed * 4.0f) & 3;
+        if (knife && h.Rim > 0.0f) {
+            r.Reveal = true;
+            r.RevealThreshold = DecalBake::HoleRimThreshold(h.Rim);
+            r.RevealBand = DecalBake::HoleRimBand(h.Rim);
+        }
+        r.Id = (uint32_t)(n + 1);
+        out.push_back(r);
+        ++n;
+    }
+    return n;
+}
+
+int BulletHoleList::Submit(const World& world) {
+    DecalSystem* ds = DecalSystem::Current();
+    if (!ds || m_Holes.empty()) return 0;
+    static std::vector<RuntimeDecal> decals;
+    decals.clear();
+    const int n = Emit(world, decals, [](int decal, RuntimeDecal& r) { return BloodRenderer::Get().HoleLook(decal, r); });
+    for (const RuntimeDecal& r : decals) ds->SubmitRuntime(r);
+    return n;
 }

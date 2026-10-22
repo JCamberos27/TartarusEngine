@@ -89,6 +89,7 @@
 #include "CrosshairOverlay.h"
 #include "WeaponFxRenderer.h" // the weapon's laser and bullet holes
 #include "BulletHoles.h"
+#include "SprayCan.h"           // Decals P4: the gameplay spray can (F6 in Play)
 #include "Audio/AudioTest.h" // --audio-test
 #include "ShellCasings.h"
 #include "AI/NpcDirector.h"     // the enemy squad
@@ -763,6 +764,7 @@ int main(int argc, char** argv) {
         NpcDirector npcDirector;    // the enemy squad, in scenes with NPC Spawns
         CombatFx combatFx;          // its (and the player's) gunfire, flashes, tracers and hits
         BloodFx bloodFx;            // the volumetric blood out of every body a round goes into (docs/BLOOD_FX.md)
+        SprayCanSystem sprayCans;   // graffiti sprayed on in Play, by the player (F6) or an NPC (docs/GRAFFITI_DESIGNER.md)
         FxSprites fxSprites;        // the Knife flipbook particles: blood mist, impact dust and debris, muzzle smoke
         bloodFx.SetSprites(&fxSprites);
         ImpactFx impactFx;          // rounds into the world: per-surface holes and bursts (docs/BLOOD_FX.md)
@@ -791,6 +793,23 @@ int main(int argc, char** argv) {
                 worldImpact(h.Entity, p, n, dir, 0.0027f); // a 5.45 mm round
                 return true;
             };
+        if (npcTest) // --npc-test decals: stains at fixed spots
+            npcTest->SpawnBlood = [&](int kind, const glm::vec3& at, const glm::vec3& n, float size) {
+                kind == 0 ? bloodFx.SpatterWallAt(at, n, size) : bloodFx.SpawnPoolAt(at, n, size);
+            };
+        if (npcTest) { // --npc-test decals: the spray can
+            npcTest->Spray = [&](const std::string& piece, const glm::vec3& from, const glm::vec3& dir, const std::string& painter, float seconds) {
+                SprayCanAction a;
+                a.Piece = piece; a.From = from; a.Direction = dir; a.Painter = painter; a.Seconds = seconds;
+                return sprayCans.Start(world, a) != entt::null;
+            };
+            npcTest->SprayNpc = [&](const std::string& piece, const glm::vec3& feet, float yawDeg, float seconds) {
+                const entt::entity npc = world.CreateEmptyEntity(feet, glm::vec3(0.0f, yawDeg, 0.0f), glm::vec3(1.0f), "Tenant (painter)");
+                SprayCanAction a = SprayCanAction::ForCharacter(world, npc, piece);
+                a.Seconds = seconds;
+                return sprayCans.Start(world, a) != entt::null;
+            };
+        }
         BloodLab bloodLab;          // F7 -> Blood Lab: fire any blood / impact effect at the crosshair, tune it live
         // What the crosshair is on: a soldier's part (entity, part) or the world (entity, normal). False: nothing in reach.
         auto aimAt = [&](glm::vec3& point, glm::vec3& normal, unsigned& entity, int& part, bool& body) {
@@ -1022,7 +1041,6 @@ int main(int argc, char** argv) {
         int playerAmmoSeen = -1, playerSlotSeen = -1; // for "the player fired this frame"
         PlayerSnapshot playerSnap;
         ShellCasings shellCasings;  // the spent cases on the ground
-        std::vector<BulletHoleList::Placed> placedHoles;
         // The predicted flight in linear HDR red (a touch of bloom): the arc to the first contact
         // bright, each bounce after it fainter, a ring at every contact the size of the body.
         auto drawThrowArc = [&](const glm::mat4& v, const glm::mat4& p, const glm::vec3& eye) {
@@ -1076,15 +1094,12 @@ int main(int argc, char** argv) {
             combatHud.Draw(in, npcDirector);
         };
         // The weapon's world effects for one view, drawn inside the scene pass (after the world,
-        // before the arms and gun, so they cover the beam where it leaves the muzzle): this Play's
-        // bullet holes and the laser. Empty (nothing drawn) outside first-person Play.
+        // before the arms and gun, so they cover the beam where it leaves the muzzle): the laser
+        // (this Play's bullet holes are clustered decals, BulletHoleList::Submit). Empty (nothing drawn) outside first-person Play.
         auto weaponOverlay = [&](bool on, const glm::mat4& v, const glm::mat4& p, const glm::vec3& eye,
                                  int h) -> std::function<void()> {
             if (!on) return {};
             return [&, v, p, eye, h] {
-                bulletHoles.Resolve(world, placedHoles);
-                for (const BulletHoleList::Placed& hole : placedHoles)
-                    if (hole.Decal < 0) weaponFx.AddHole(hole.Position, hole.Normal, hole.Tangent, hole.Radius, hole.Seed);
                 FirstPersonPresentation::Laser laser;
                 if (firstPersonPresentation.IsActive() && firstPersonPresentation.LaserBeam(laser)) {
                     // Already from the barrel as seen (FirstPersonPresentation aims from the view
@@ -1178,6 +1193,15 @@ int main(int argc, char** argv) {
             if (opt.weaponLabMode) scenePath = ProjectPaths::Resolve("scenes/WeaponLab.json");
         }
         AssetLibrary assets;
+        if (npcTest) { // --npc-test decals: the spray can's state, the game state saved and read back
+            npcTest->SprayState = [&](NpcTest::SprayView& v, bool roundTrip) {
+                const SprayCanSystem::Report r = sprayCans.Inspect(world, roundTrip ? &assets : nullptr);
+                v.Pieces = r.Pieces; v.MinProgress = r.MinProgress; v.MaxProgress = r.MaxProgress; v.Resident = r.Resident;
+                v.Saved = r.Saved; v.SavedElapsed = r.SavedElapsed;
+                v.Sounds = sprayCans.SoundsPlayed(); v.Hissing = sprayCans.Hissing();
+                v.RuntimeDecals = DecalSystem::Current() ? DecalSystem::Current()->RuntimeCount() : 0;
+            };
+        }
 
         if (resaveMode) {
             // false: --resave's whole point is choosing where the migrated scene lands
@@ -1890,6 +1914,7 @@ int main(int argc, char** argv) {
                 smokeScenePaths.assign(1, ProjectPaths::Resolve(opt.npcTestScenario == "sandbox" ? "scenes/Arena.json"
                                                               : opt.npcTestScenario == "blood" ? "scenes/BloodTest.json"
                                                               : opt.npcTestScenario == "ragdoll" ? "scenes/RagdollTest.json"
+                                                              : opt.npcTestScenario == "decals" ? "scenes/Apartment Hallway.json"
                                                                                            : "scenes/Arena.json"));
             std::cout << "[SmokeTest] Found " << smokeScenePaths.size() << " scene(s) under "
                       << scenesDir << std::endl;
@@ -2240,6 +2265,7 @@ int main(int argc, char** argv) {
             // --weapon-test runs on a fixed step, so its timings don't depend on the machine.
             // (--npc-test ragdoll stops time for a few frames to shoot one moment from four sides.)
             const float gameDt = opt.weaponTestMode || opt.npcTestMode ? (playing && !(npcTest && npcTest->Frozen()) ? 1.0f / 60.0f : 0.0f) : Time::DeltaTime();
+            if (!playing && sprayCans.Spraying() > 0) sprayCans.Stop(); // Play ended mid-spray: the hiss stops
 
             // #158 — shader hot reload (editor and development builds; the scan itself runs at 1 Hz). Engine
             // programs and material shaders recompile when any file they were built from changes;
@@ -2884,6 +2910,8 @@ int main(int argc, char** argv) {
                         }
                     }
                     if (npcTest) npcTest->After(world, npcDirector, playerVitals, player);
+                } else if (npcTest && npcTest->RunsWithoutSquad()) {
+                    npcTest->After(world, npcDirector, playerVitals, player);
                 }
                 combatFx.SetListener(player.Cam.Position, player.Cam.Front());
                 {
@@ -2916,24 +2944,9 @@ int main(int argc, char** argv) {
                     fxSprites.Update(gameDt);
                     BloodRenderer::Get().BeginFrame();
                     bloodFx.Submit(BloodRenderer::Get());
-                    {   // The textured bullet holes go in with the blood's decals (the static world, before the moving things).
-                        static std::vector<BulletHoleList::Placed> holes;
-                        bulletHoles.Resolve(world, holes);
-                        for (const BulletHoleList::Placed& hole : holes) {
-                            if (hole.Decal < 0) continue;
-                            const glm::vec3 y = hole.Normal, x = hole.Tangent, z = glm::cross(x, y);
-                            BloodRenderer::Decal d;
-                            d.Model = glm::mat4(glm::vec4(x * hole.Size, 0.0f), glm::vec4(y * 0.06f, 0.0f), glm::vec4(z * hole.Size, 0.0f),
-                                                glm::vec4(hole.Position, 1.0f));
-                            d.Knife = hole.Decal;
-                            d.Cell = (int)(hole.Seed * 4.0f) & 3;
-                            d.NextCell = d.Cell;
-                            d.NormalStrength = 1.0f;
-                            d.Blood = false; // the surface's own broken material
-                            d.Rim = hole.Rim;
-                            BloodRenderer::Get().AddDecal(d);
-                        }
-                    }
+                    bulletHoles.Submit(world); // every hole a clustered decal, following what it's in (after the blood's BeginFrame)
+                    if (playUsesPlayer && gameHasInput) sprayCans.PlayerKeys(world, player.Cam.Position, player.Cam.Front());
+                    sprayCans.Update(world, gameDt, player.Cam.Position);
                     FxSpriteRenderer::Get().BeginFrame();
                     fxSprites.Submit(FxSpriteRenderer::Get());
                     if (npcTest) {
