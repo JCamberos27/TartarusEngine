@@ -245,6 +245,46 @@ registration, the `.decal` round trip (every field, byte-stable), the forgiving 
 types, clamps, tier snapping, broken and missing files), and the Decal / Decal Grading scene
 round trip.
 
+## Editor tools
+
+Phase 2. Code: `EditorLayer_DecalLibrary.cpp` (panel, scan, radial slots), `EditorLayer_DecalTools.cpp`
+(Place, Brush, overlay, auto-grime), `DecalTools.*` (brush stroke and grime planner, no editor
+dependencies, unit-testable), `DecalEditorState.h` (per-editor state), `Renderer/DecalPalette.*`.
+
+- **Decal Library** (Window menu, or opens itself when a tool has nothing to paint with). Indexes
+  every `.decal` under `assets/Decals` a slice per frame. Category tree, search (name, category,
+  tags), Favourites and Recent, a wall-tone swatch (dark, mid, light) behind the previews, and a hover
+  card with a live preview. Tiles cascade in with the library's motion spec and lift on hover;
+  hearts pop. Dragging a tile into the viewport carries an `ASSET_DECAL_PATH` payload (the Asset
+  Browser's decal cells use the same one).
+- **Place Decal** (`P`, tool rail). A ghost follows the cursor on the surface under it: +Z points out
+  of the surface, a decal on a skinned or non-static rigidbody receiver is parented to it. Scroll
+  turns the ghost, Shift+scroll sizes it, click stamps (scale-in pop plus a ring flash). One undo
+  step per stamp.
+- **Decal Brush** (`B`). Source is one decal, a category, or a palette. Settings: radius, spacing,
+  density, size and size jitter, rotation jitter, opacity, align to surface, follow stroke. Scroll
+  sizes the radius, Shift+scroll the decals. Ctrl-drag erases decals whose centre is under the brush.
+  A stroke is one undo step ("Paint Decals (n)" / "Erase Decals (n)"). New decals go under a
+  `Decal Paint` group.
+- **Auto-grime.** Select a room (a floor or wall group works), pick a palette, press Auto-grime.
+  Rays from the room centre find floor and ceiling, then for each wall a depth profile per column:
+  open to the floor is a door, open higher up a window (grime goes under the sill), a shallow bump a
+  pipe (a drip below it). Wall bases, open wall, ceiling edge, corners and floor patches follow.
+  Sites go to the palette entries that list that site kind. Everything lands under one
+  `Grime (auto)` group, replaced on the next run (or the Clear button). The same seed gives the same
+  result. It is meant for one room: a whole floor's bounds is a poor input.
+- **Palettes** (`DP_*.decalpalette`, JSON, `paletteVersion` 1): weighted entries with scale and
+  opacity ranges, a tint, and the sites an entry suits (`wall`, `base`, `corner`, `window`, `door`,
+  `pipe`, `ceiling`, `floor`; none means anywhere). Shipped: `DP_Squat`, `DP_WaterDamage`,
+  `DP_GangTurf`. Load / save is forgiving and byte-stable.
+- **Radial.** With the Brush active, holding Space opens the decal ring: palettes, top-level
+  categories, recent decals. Labels are cut to fit their wedge.
+- **Sounds.** Preferences group "Decals & Graffiti": DecalPlace, DecalBrushTick (rate-capped),
+  DecalErase, PaletteSwap, AutoGrimeStart, AutoGrimeDone, LibraryFavourite. The shipped wavs are
+  synthesised placeholders, to be replaced by cuts from real recordings.
+- **Test.** `--editor-tests "decals:"` opens the Apartment Hallway and drives all of the above, then
+  saves and reloads.
+
 ## Corridor wear
 
 The Apartment Hallway corridor is dressed as a derelict squat by `tools/scenes/dress_corridor.py`. It patches

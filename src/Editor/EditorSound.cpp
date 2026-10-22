@@ -178,11 +178,19 @@ const EventInfo kEvents[kEventCount] = {
     {"RadialClose",      Category::Tools,        -4.0f,  80.0f, 0.0f,  false},
     {"CardFlip",         Category::Objects,      -2.0f, 120.0f, 0.02f, false},
     {"NodePop",          Category::Animation,    -2.0f,  60.0f, 0.03f, false},
+    // Decals & Graffiti. The brush tick can fire every few dozen ms along a stroke: a whisper under the rest.
+    {"DecalPlace",       Category::DecalsGraffiti, 0.0f,  60.0f, 0.03f, false},
+    {"DecalBrushTick",   Category::DecalsGraffiti,-6.0f,  75.0f, 0.04f, false},
+    {"DecalErase",       Category::DecalsGraffiti,-2.0f,  90.0f, 0.03f, false},
+    {"PaletteSwap",      Category::DecalsGraffiti, 0.0f, 120.0f, 0.02f, false},
+    {"AutoGrimeStart",   Category::DecalsGraffiti, 0.0f, 300.0f, 0.0f,  false},
+    {"AutoGrimeDone",    Category::DecalsGraffiti, 0.0f, 300.0f, 0.0f,  false},
+    {"LibraryFavourite", Category::DecalsGraffiti, 0.0f,  60.0f, 0.02f, false},
 };
 
 const char* kCategoryNames[kCategoryCount] = {"Clicks", "Sliders", "Hover",  "Panels",             "Drag & Drop", "Notifications",
                                               "Play Mode", "Objects", "Tools", "Assets", "Animation & Curves", "System",
-                                              "Fields", "Workflow"};
+                                              "Fields", "Workflow", "Decals & Graffiti"};
 
 float DbToGain(float db) { return std::pow(10.0f, db / 20.0f); }
 
@@ -672,6 +680,8 @@ void GizmoFrame(bool usingNow, bool moved, bool snapped) {
 
 Event UndoLabelEvent(const std::string& label) {
     auto starts = [&](const char* p) { return label.rfind(p, 0) == 0; };
+    if (starts("Place Decal")) return Event::DecalPlace; // before "Place ": a decal has its own stamp
+    if (starts("Erase Decals")) return Event::DecalErase;
     if (starts("Create ") || starts("Place ") || starts("New ")) return Event::Create;
     if (starts("Add ")) return Event::ComponentAdd;
     if (starts("Remove ")) return Event::ComponentRemove;
@@ -731,8 +741,8 @@ void ToolFrame(int tool, bool localSpace, bool snap) {
     if (!Active()) return;
     if (Rearmed(rearm)) primed = false;
     if (primed) {
-        // Each tool its own step up (hand -1 ... measure 5), about a semitone apart, so the ear learns which is which.
-        if (tool != prevTool) Play(Event::ToolSwitch, -1.0f, std::pow(2.0f, (float)(std::clamp(tool, -1, 5) - 0) / 12.0f));
+        // Each tool its own step up (hand -1 ... measure 5, place decal 6, decal brush 7), about a semitone apart, so the ear learns which is which.
+        if (tool != prevTool) Play(Event::ToolSwitch, -1.0f, std::pow(2.0f, (float)(std::clamp(tool, -1, 7) - 0) / 12.0f));
         if (localSpace != prevLocal) Play(Event::SpaceToggle, -1.0f, localSpace ? 1.06f : 1.0f);
         if (snap != prevSnap) Play(Event::SnapToggle, -1.0f, snap ? 1.0f : 0.89f);
     }
