@@ -57,8 +57,9 @@ uint8_t LinearToSrgb8(float linear);
 float Srgb8ToLinear(uint8_t v);
 
 // A KriptoFX blood set (assets/Effects/Blood/decals/<set>_norm.png and _mask.png, RGBA8 w x h): albedo is the
-// stain's shading (the pooled core darker, as the old blood decal pass drew it) under the palette tint, the coverage
-// in alpha (the old pass's thin film also darkened what it covered by the blood's own colour, so it read as opaque); the normal its rg slope; aux the reveal order (mask red), which the cutout eats.
+// stain's shading (the pooled core darker, as the old blood decal pass drew it) under the palette tint, the pack's
+// raw alpha (x2 = coverage, applied after filtering: RuntimeDecal::CoverGain and the mesh splats); the normal its rg
+// slope; aux the reveal order (mask red), which the cutout eats. The Knife blood modes keep their raw alpha too (x6).
 GeneratedDecalMaps::Images BloodSet(const uint8_t* norm, const uint8_t* mask, int w, int h);
 
 // One Knife library layer (RGBA8 colour, RG8 normal, size x size, cols x rows cells) as a runtime decal's maps.

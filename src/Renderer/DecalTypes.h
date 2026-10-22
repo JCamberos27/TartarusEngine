@@ -60,6 +60,9 @@ enum Flag : uint32_t {
     // going on stroke by stroke): H2.w then holds (threshold, band) instead of (peel, buff), and a
     // texel shows where aux >= threshold, fully from threshold + band. The emissive channel is off.
     FLAG_REVEAL = 1u << 9,
+    // A liquid film (blood): where it covers it fills the receiver's own relief - its normal replaces the
+    // surface's (bent by the decal's own map) instead of being whiteout-blended over it.
+    FLAG_LIQUID = 1u << 10,
 };
 // GpuDecal::Ids.z also carries the height-blend amount (DecalAsset::HeightBlend) as unorm8 in its
 // top byte: every half in H0-H2 is taken, and CH_HEIGHT_BLEND alone can't say how much.

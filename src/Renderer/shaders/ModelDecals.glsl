@@ -32,7 +32,7 @@ const uint DECAL_CH_ALBEDO = 1u, DECAL_CH_NORMAL = 2u, DECAL_CH_ROUGH = 4u, DECA
            DECAL_CH_EMISSIVE = 32u, DECAL_CH_HEIGHT = 64u, DECAL_CH_PAINT = 128u;
 const uint DECAL_STATIC = 1u, DECAL_DYNAMIC = 2u, DECAL_UV_PAINT = 4u, DECAL_HAS_NORMAL = 8u, DECAL_HAS_SURFACE = 16u,
            DECAL_HAS_AUX = 32u, DECAL_LUMA = 64u, DECAL_INVERT = 128u;
-const uint DECAL_SUB_AUTO = 256u, DECAL_REVEAL = 512u;
+const uint DECAL_SUB_AUTO = 256u, DECAL_REVEAL = 512u, DECAL_LIQUID = 1024u;
 const float DECAL_PAGE = 4096.0; // Decals::PAGE_SIZE
 
 // ---- Substrates (Substrate.h): the PBR material under the paint -----------------------------------
@@ -194,6 +194,7 @@ void ApplyDecals(inout vec3 albedo, inout vec3 N, inout float roughness, inout f
         float cover = (flags & DECAL_LUMA) != 0u ? dot(col.rgb, vec3(0.2126, 0.7152, 0.0722)) : col.a;
         if ((flags & DECAL_LUMA) != 0u) col.rgb = vec3(1.0); // a white-on-black alpha: the tint is the colour
         if ((flags & DECAL_INVERT) != 0u) cover = 1.0 - cover;
+        if ((flags & DECAL_LIQUID) != 0u) cover = min(cover * unpackHalf2x16(d.H1.x).x, 1.0); // its gain, after filtering
         a *= cover;
         if (a <= 0.001) continue;
 
@@ -257,7 +258,15 @@ void ApplyDecals(inout vec3 albedo, inout vec3 N, inout float roughness, inout f
             c = mix(c, mix(vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))), vec3(1.0), 0.35), fb.y);
             albedo = mix(albedo, c, a * h01.y);
         }
-        if ((ch & DECAL_CH_NORMAL) != 0u && (flags & DECAL_HAS_NORMAL) != 0u) {
+        if ((flags & DECAL_LIQUID) != 0u) {
+            // A film fills the surface's relief: the geometric normal, bent by the film's own slope.
+            vec3 tn = (ch & DECAL_CH_NORMAL) != 0u && (flags & DECAL_HAS_NORMAL) != 0u
+                          ? UnpackNormal(vec3(textureGrad(uDecalNormal, tc3, gx, gy).rg, 0.0)) : vec3(0.0, 0.0, 1.0);
+            tn.xy *= h02.x;
+            vec3 g = dot(geoN, Z) > 0.0 ? geoN : Z;
+            vec3 Tg = normalize(T - g * dot(T, g)), Bg = cross(g, Tg) * sign(dot(cross(g, Tg), B));
+            N = normalize(mix(N, normalize(Tg * tn.x + Bg * tn.y + g * max(tn.z, 0.2)), a));
+        } else if ((ch & DECAL_CH_NORMAL) != 0u && (flags & DECAL_HAS_NORMAL) != 0u) {
             // Whiteout blend in the box's own frame (x along u, y up the image, z out of the surface).
             vec3 tn = UnpackNormal(vec3(textureGrad(uDecalNormal, tc3, gx, gy).rg, 0.0));
             if ((ch & DECAL_CH_PAINT) != 0u) tn.xy *= 1.0 + relief.x * 2.0;

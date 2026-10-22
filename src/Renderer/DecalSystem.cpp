@@ -342,9 +342,12 @@ void DecalSystem::PackRuntime(const RuntimeDecal& r, const DecalTextureArrays::S
     if (r.AffectDynamic) flags |= FLAG_DYNAMIC_RECEIVERS;
     const bool reveal = r.Reveal && (slot.TexFlags & FLAG_HAS_AUX_TEX);
     if (reveal) flags |= FLAG_REVEAL;
+    if (r.Liquid) flags |= FLAG_LIQUID;
     out.Ids = glm::uvec4((uint32_t)slot.Alloc.Layer | (uint32_t)maxLod << 8 | ch << 16, 0xFFFFFFFFu, flags, 0u);
     out.H0 = glm::uvec4(Half2(r.Tint.r, r.Tint.g), Half2(r.Tint.b, albedoOp), Half2(normalOp, roughOp), Half2(metalOp, aoOp));
-    out.H1 = glm::uvec4(Half2(0.0f, 0.0f), Half2(0.0f, 0.0f), Half2(r.AngleFadeStart, r.AngleFadeEnd), Half2(r.EdgeFade, 4.0f));
+    // A liquid's cover gain sits where the glow colour would (runtime decals never glow).
+    out.H1 = glm::uvec4(Half2(r.Liquid ? std::max(r.CoverGain, 0.0f) : 0.0f, 0.0f), Half2(0.0f, 0.0f),
+                        Half2(r.AngleFadeStart, r.AngleFadeEnd), Half2(r.EdgeFade, 4.0f));
     out.H2 = glm::uvec4(Half2(r.Roughness, r.Metal), Half2(0.0f, Unit(r.Wear)), Half2(Unit(r.Fade), 0.0f),
                         reveal ? Half2(std::max(r.RevealThreshold, 0.0f), std::max(r.RevealBand, 1e-3f)) : Half2(0.0f, 0.0f));
 }

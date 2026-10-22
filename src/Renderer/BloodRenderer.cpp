@@ -297,9 +297,9 @@ int BloodRenderer::DrawSprays(const glm::mat4& view, const glm::mat4& proj,
 namespace {
 constexpr int kSetTier = 512;
 // Bump when what makes the maps changes (the files under Library/DecalMaps are then made again).
-constexpr const char* kMapsVersion = "v2";
+constexpr const char* kMapsVersion = "v3";
 constexpr int kBloodSort = 100, kHoleSort = 101; // over the authored decals; holes over the blood
-constexpr float kDryWear = 0.3f;                 // a fully dried stain flakes this much (Wear chips)
+constexpr float kDryWear = 0.15f;                // a fully dried stain flakes this much (Wear chips; more reads as holes)
 
 const char* ModeName(DecalBake::KnifeMode m) {
     return m == DecalBake::KnifeMode::Hole ? "hole" : m == DecalBake::KnifeMode::BloodAlbedo ? "albedo" : "mask";
@@ -471,6 +471,8 @@ int BloodRenderer::ToRuntime(const Decal& d, RuntimeDecal out[2]) {
         r.AngleFadeStart = asset ? a->AngleFadeStart : 0.65f;
         r.AngleFadeEnd = asset ? a->AngleFadeEnd : 0.35f;
         r.EdgeFade = asset ? a->EdgeFade : 0.08f;
+        r.Liquid = true; // a film: it fills the surface's grain, as the old pass's flat film did
+        r.CoverGain = k ? 6.0f : 2.0f; // the maps keep the packs' raw alpha; the old pass's gain, after filtering
         r.Reveal = true; // the cutout eats the reveal order
         r.RevealThreshold = d.Cutout;
         r.RevealBand = band;

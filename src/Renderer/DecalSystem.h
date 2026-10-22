@@ -45,6 +45,8 @@ struct RuntimeDecal {
     // Reveal (FLAG_REVEAL, needs Maps.Aux): shows where aux >= RevealThreshold, fully from + RevealBand.
     bool Reveal = false;
     float RevealThreshold = 0.0f, RevealBand = 0.05f;
+    bool Liquid = false;              // FLAG_LIQUID: a film (blood) that fills the receiver's relief
+    float CoverGain = 1.0f;           // liquids: opacity = albedo alpha x this, after filtering (H1.x; no glow)
     bool AffectStatic = true, AffectDynamic = true;
     int SortOrder = 0;
     uint32_t Id = 0;                  // ties in the sort: a stable per-instance number (submission order otherwise)

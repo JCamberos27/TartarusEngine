@@ -25,7 +25,7 @@ void BloodSetMaps() {
     const uint8_t mask[8] = {255, 0, 255, 255, 0, 0, 0, 255};
     const GeneratedDecalMaps::Images im = DecalBake::BloodSet(norm, mask, 2, 1);
     CHECK(im.Width == 2 && im.Height == 1 && im.Albedo.size() == 8 && im.Aux.size() == 2 && im.Normal.size() == 8);
-    CHECK(im.Albedo[3] == 255 && im.Albedo[7] == 0); // coverage in alpha
+    CHECK(im.Albedo[3] == 153 && im.Albedo[7] == 0); // the raw alpha (its x2 gain comes after filtering)
     CHECK(im.Aux[0] == 255 && im.Aux[1] == 0);       // the reveal order is the mask's red
     CHECK(im.Albedo[0] < im.Albedo[4]);              // the pooled core is shaded darker
     CHECK(im.Normal[0] == 200 && im.Normal[1] == 60); // the slope carried over
@@ -68,8 +68,10 @@ void PackRuntimeDecal() {
     r.RevealThreshold = 0.4f;
     r.RevealBand = 0.1f;
     r.AffectDynamic = false;
+    r.Liquid = true;
     Decals::GpuDecal g{};
     DecalSystem::PackRuntime(r, slot, g);
+    CHECK((g.Ids.z & Decals::FLAG_LIQUID) != 0u);
     CHECK(Near(glm::vec3(g.Rect), glm::vec3(0.3125f, 0.5625f, 0.0625f))); // the bottom-right cell
     CHECK((g.Ids.x & 0xFFu) == 3u);
     const uint32_t ch = g.Ids.x >> 16 & 0xFFu, flags = g.Ids.z;
@@ -83,7 +85,8 @@ void PackRuntimeDecal() {
     DecalSystem::PackRuntime(r, slot, g);
     CHECK(!(g.Ids.z & Decals::FLAG_REVEAL) && !((g.Ids.x >> 16) & Decals::CH_NORMAL));
     // Bits never collide with the substrate flag merged in from P3.
-    CHECK(Decals::FLAG_REVEAL != Decals::FLAG_SUBSTRATE_AUTO && Decals::FLAG_REVEAL < (1u << Decals::HEIGHT_BLEND_SHIFT));
+    CHECK(Decals::FLAG_REVEAL != Decals::FLAG_SUBSTRATE_AUTO && Decals::FLAG_LIQUID != Decals::FLAG_REVEAL &&
+          Decals::FLAG_LIQUID < (1u << Decals::HEIGHT_BLEND_SHIFT));
 }
 
 void BoxesFromBloodAndHoles() {
