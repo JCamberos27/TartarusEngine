@@ -2440,13 +2440,15 @@ void EditorLayer::EndFrame() {
     {
         const bool panels[] = {m_ShowHierarchy, m_ShowInspector, m_ShowAssetBrowser, EditorModuleHost::ConsoleState().Visible,
                                m_ShowHistory, m_ShowLighting, m_ShowAudioDebug, m_ShowSoundBoard, m_ShowPreferences, m_ShowAnimator,
+                               m_ShowDecalLibrary,
                                // set from F6 / Alt+Shift+T, their X, the Window menu and the module API alike
                                EditorSettings::Get().ShowPhysicsPanel, EditorSettings::Get().SceneShowStats};
         uint32_t mask = 0;
         for (int i = 0; i < (int)(sizeof(panels) / sizeof(panels[0])); ++i) mask |= panels[i] ? 1u << i : 0u;
         EditorSound::PanelsFrame(mask);
     }
-    EditorSound::ToolFrame(m_HandTool ? -1 : MeasureToolActive() ? 5 : (int)m_GizmoOp, m_GizmoLocalSpace, m_GridSnapEnabled);
+    EditorSound::ToolFrame(m_HandTool ? -1 : m_DecalTool == DecalToolMode::Brush ? 7 : m_DecalTool == DecalToolMode::Place ? 6
+                                       : MeasureToolActive() ? 5 : (int)m_GizmoOp, m_GizmoLocalSpace, m_GridSnapEnabled);
     DockFrame(); // before the observer, so a tab drag's release isn't also a generic click
     // Nothing is drawn past here. ImGui's EndFrame closes the popups a click outside them dismissed (and clears a
     // delivered drop), so ending the frame first lets the observer hear those on this frame, not the next one.
@@ -2943,6 +2945,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     DrawLightingPanel(world); // #236 R2
     DrawAudioDebugPanel(world);
     DrawSoundBoardPanel();
+    DrawDecalLibraryPanel(world);
     GraffitiFrame(world);              // bakes landing, recipe reloads after undo (EditorLayer_GraffitiDesigner.cpp)
     DrawGraffitiDesignerPanel(world);
     DrawAssetLibraryPanel(world, assets);
@@ -3370,6 +3373,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     }
     UpdateLockViewToSelection(world, editorCamera); // Shift+F — camera follows the selection centroid (#236 E)
     if (m_MeasureTool || !m_MeasurePoints.empty()) DrawMeasurement(editorCamera); // #236 R2 ruler
+    DrawDecalToolOverlay(world, editorCamera); // Place Decal / Decal Brush: cursor ring, stamp rings, hint plate
     DrawGraffitiViewportOverlay(world, editorCamera); // a live spray stroke on its wall (Graffiti Designer)
     DrawRuler(world, editorCamera); // Editor Enhancers / vRuler: hold Shift+R
     if (EyedropperArmed()) {
@@ -3488,13 +3492,16 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         // Q/W/E/R/T/Y viewport tools (Unity's scheme, + Y for the combined gizmo, #236 E).
         // Ctx_Viewport, so the dispatcher already withholds them while a panel owns the
         // keyboard or Right-drag fly is active. Selecting any transform tool exits the Hand tool.
-        if (Shortcuts::Triggered("tools.hand"))      { m_HandTool = true; m_MeasureTool = false; }
-        if (Shortcuts::Triggered("tools.move"))      { m_GizmoOp = GizmoOp::Translate; m_HandTool = false; m_MeasureTool = false; }
-        if (Shortcuts::Triggered("tools.rotate"))    { m_GizmoOp = GizmoOp::Rotate;    m_HandTool = false; m_MeasureTool = false; }
-        if (Shortcuts::Triggered("tools.scale"))     { m_GizmoOp = GizmoOp::Scale;     m_HandTool = false; m_MeasureTool = false; }
-        if (Shortcuts::Triggered("tools.rect"))      { m_GizmoOp = GizmoOp::Rect;      m_HandTool = false; m_MeasureTool = false; }
-        if (Shortcuts::Triggered("tools.transform")) { m_GizmoOp = GizmoOp::Universal; m_HandTool = false; m_MeasureTool = false; }
-        if (Shortcuts::Triggered("tools.measure"))   { m_MeasureTool = !m_MeasureTool; m_MeasurePoints.clear(); m_HandTool = false; }
+        if (Shortcuts::Triggered("tools.hand"))      { m_HandTool = true; m_MeasureTool = false; m_DecalTool = DecalToolMode::None; }
+        if (Shortcuts::Triggered("tools.move"))      { m_GizmoOp = GizmoOp::Translate; m_HandTool = false; m_MeasureTool = false; m_DecalTool = DecalToolMode::None; }
+        if (Shortcuts::Triggered("tools.rotate"))    { m_GizmoOp = GizmoOp::Rotate;    m_HandTool = false; m_MeasureTool = false; m_DecalTool = DecalToolMode::None; }
+        if (Shortcuts::Triggered("tools.scale"))     { m_GizmoOp = GizmoOp::Scale;     m_HandTool = false; m_MeasureTool = false; m_DecalTool = DecalToolMode::None; }
+        if (Shortcuts::Triggered("tools.rect"))      { m_GizmoOp = GizmoOp::Rect;      m_HandTool = false; m_MeasureTool = false; m_DecalTool = DecalToolMode::None; }
+        if (Shortcuts::Triggered("tools.transform")) { m_GizmoOp = GizmoOp::Universal; m_HandTool = false; m_MeasureTool = false; m_DecalTool = DecalToolMode::None; }
+        if (Shortcuts::Triggered("tools.measure"))   { m_MeasureTool = !m_MeasureTool; m_MeasurePoints.clear(); m_HandTool = false; if (m_MeasureTool) m_DecalTool = DecalToolMode::None; }
+        if (Shortcuts::Triggered("tools.decalPlace")) SetDecalTool(DecalToolMode::Place);
+        if (Shortcuts::Triggered("tools.decalBrush")) SetDecalTool(DecalToolMode::Brush);
+        if (m_DecalTool != DecalToolMode::None && ImGui::IsKeyPressed(ImGuiKey_Escape, false) && !m_Radial.Open) SetDecalTool(DecalToolMode::None);
         if (m_MeasureTool && ImGui::IsKeyPressed(ImGuiKey_Escape, false)) { m_MeasureTool = false; m_MeasurePoints.clear(); }
         // Shift+A quick-add (Blender's binding) — opens the Add menu as a popup at the cursor.
         if (Shortcuts::Triggered("gameobject.quickAdd")) m_OpenQuickAdd = true;

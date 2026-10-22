@@ -179,6 +179,14 @@ enum class Event : uint8_t {
     RadialClose,       // ...released over nothing
     CardFlip,          // an Inspector component card turns to its raw-fields side (or back)
     NodePop,           // a new Animator node pops in
+    // Decals & Graffiti (docs/DECALS.md, "Editor tools")
+    DecalPlace,        // a decal stamped onto a surface (Place Decal tool, a dropped tile)
+    DecalBrushTick,    // the Decal Brush drops a decal (rate-capped, a whisper)
+    DecalErase,        // Ctrl-brush erases decals
+    PaletteSwap,       // the active palette or brush source changes
+    AutoGrimeStart,    // the auto-grime pass begins
+    AutoGrimeDone,     // ...and has placed its decals
+    LibraryFavourite,  // a Decal Library heart
     // Graffiti Designer (decals Phase 3, docs/GRAFFITI_DESIGNER.md)
     SprayStart,        // a stroke starts (can rattle)
     SprayLoop,         // the held hiss while spraying (a held loop, EditorSound::StartLoop: level and pitch follow pressure)
@@ -196,9 +204,7 @@ enum class Event : uint8_t {
 // Appended only: saved settings are per category index.
 enum class Category : uint8_t {
     Clicks = 0, Sliders, Hover, Panels, DragDrop, Notifications, PlayMode, Objects, Tools, Assets, Animation, System, Fields,
-    Workflow,
-    DecalsGraffiti, // shared with the decal tools (Graffiti Designer, decal placement)
-    Count
+    Workflow, DecalsGraffiti, Count
 };
 
 constexpr int kEventCount = (int)Event::Count;

@@ -68,7 +68,7 @@ enum class MotionCategory : int {
     Inertia,         // coasting scroll, flings, value scrubbing
     Gradients,       // busy sheen, travelling rims, cursor glow
     RollingNumbers,  // odometer readouts
-    Viewport,        // gizmo springs, outline sweep, radial menu, view cube
+    Viewport,        // gizmo springs, outline sweep, radial menu, view cube, decal tools
     Startup,         // the startup sequence
     Count
 };

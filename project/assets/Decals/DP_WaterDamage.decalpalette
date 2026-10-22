@@ -1,0 +1,468 @@
+{
+  "paletteVersion": 1,
+  "name": "Water Damage",
+  "description": "Streaks, tide marks and damp stains where the pipes gave up.",
+  "entries": [
+    {
+      "decal": "assets/Decals/Stains/LiquidSplatter/DA_LiquidSplatter_001.decal",
+      "weight": 3,
+      "scale": [
+        0.8,
+        1.6
+      ],
+      "opacity": [
+        0.5,
+        0.9
+      ],
+      "tint": [
+        0.75,
+        0.7,
+        0.6
+      ],
+      "sites": [
+        "wall",
+        "base",
+        "window",
+        "pipe",
+        "corner"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Stains/LiquidSplatter/DA_LiquidSplatter_009.decal",
+      "weight": 3,
+      "scale": [
+        0.8,
+        1.6
+      ],
+      "opacity": [
+        0.5,
+        0.9
+      ],
+      "tint": [
+        0.75,
+        0.7,
+        0.6
+      ],
+      "sites": [
+        "wall",
+        "base",
+        "window",
+        "pipe",
+        "corner"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Stains/LiquidSplatter/DA_LiquidSplatter_017.decal",
+      "weight": 3,
+      "scale": [
+        0.8,
+        1.6
+      ],
+      "opacity": [
+        0.5,
+        0.9
+      ],
+      "tint": [
+        0.75,
+        0.7,
+        0.6
+      ],
+      "sites": [
+        "wall",
+        "base",
+        "window",
+        "pipe",
+        "corner"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Stains/LiquidSplatter/DA_LiquidSplatter_025.decal",
+      "weight": 3,
+      "scale": [
+        0.8,
+        1.6
+      ],
+      "opacity": [
+        0.5,
+        0.9
+      ],
+      "tint": [
+        0.75,
+        0.7,
+        0.6
+      ],
+      "sites": [
+        "wall",
+        "base",
+        "window",
+        "pipe",
+        "corner"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Stains/LiquidSplatter/DA_LiquidSplatter_033.decal",
+      "weight": 3,
+      "scale": [
+        0.8,
+        1.6
+      ],
+      "opacity": [
+        0.5,
+        0.9
+      ],
+      "tint": [
+        0.75,
+        0.7,
+        0.6
+      ],
+      "sites": [
+        "wall",
+        "base",
+        "window",
+        "pipe",
+        "corner"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Stains/LiquidSplatter/DA_LiquidSplatter_041.decal",
+      "weight": 3,
+      "scale": [
+        0.8,
+        1.6
+      ],
+      "opacity": [
+        0.5,
+        0.9
+      ],
+      "tint": [
+        0.75,
+        0.7,
+        0.6
+      ],
+      "sites": [
+        "wall",
+        "base",
+        "window",
+        "pipe",
+        "corner"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Stains/LiquidSplatter/DA_LiquidSplatter_049.decal",
+      "weight": 3,
+      "scale": [
+        0.8,
+        1.6
+      ],
+      "opacity": [
+        0.5,
+        0.9
+      ],
+      "tint": [
+        0.75,
+        0.7,
+        0.6
+      ],
+      "sites": [
+        "wall",
+        "base",
+        "window",
+        "pipe",
+        "corner"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Stains/LiquidSplatter/DA_LiquidSplatter_057.decal",
+      "weight": 3,
+      "scale": [
+        0.8,
+        1.6
+      ],
+      "opacity": [
+        0.5,
+        0.9
+      ],
+      "tint": [
+        0.75,
+        0.7,
+        0.6
+      ],
+      "sites": [
+        "wall",
+        "base",
+        "window",
+        "pipe",
+        "corner"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Stains/LiquidSplatter/DA_LiquidSplatter_065.decal",
+      "weight": 3,
+      "scale": [
+        0.8,
+        1.6
+      ],
+      "opacity": [
+        0.5,
+        0.9
+      ],
+      "tint": [
+        0.75,
+        0.7,
+        0.6
+      ],
+      "sites": [
+        "wall",
+        "base",
+        "window",
+        "pipe",
+        "corner"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Stains/LiquidSplatter/DA_LiquidSplatter_073.decal",
+      "weight": 3,
+      "scale": [
+        0.8,
+        1.6
+      ],
+      "opacity": [
+        0.5,
+        0.9
+      ],
+      "tint": [
+        0.75,
+        0.7,
+        0.6
+      ],
+      "sites": [
+        "wall",
+        "base",
+        "window",
+        "pipe",
+        "corner"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Stains/LiquidSplatter/DA_LiquidSplatter_081.decal",
+      "weight": 3,
+      "scale": [
+        0.8,
+        1.6
+      ],
+      "opacity": [
+        0.5,
+        0.9
+      ],
+      "tint": [
+        0.75,
+        0.7,
+        0.6
+      ],
+      "sites": [
+        "wall",
+        "base",
+        "window",
+        "pipe",
+        "corner"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Stains/LiquidSplatter/DA_LiquidSplatter_089.decal",
+      "weight": 3,
+      "scale": [
+        0.8,
+        1.6
+      ],
+      "opacity": [
+        0.5,
+        0.9
+      ],
+      "tint": [
+        0.75,
+        0.7,
+        0.6
+      ],
+      "sites": [
+        "wall",
+        "base",
+        "window",
+        "pipe",
+        "corner"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Grime/PeelingPaint/DA_PeelingPaint_001.decal",
+      "weight": 1.5,
+      "scale": [
+        1.0,
+        1.6
+      ],
+      "opacity": [
+        0.6,
+        0.95
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "ceiling",
+        "corner",
+        "wall"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Grime/PeelingPaint/DA_PeelingPaint_021.decal",
+      "weight": 1.5,
+      "scale": [
+        1.0,
+        1.6
+      ],
+      "opacity": [
+        0.6,
+        0.95
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "ceiling",
+        "corner",
+        "wall"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Grime/PeelingPaint/DA_PeelingPaint_041.decal",
+      "weight": 1.5,
+      "scale": [
+        1.0,
+        1.6
+      ],
+      "opacity": [
+        0.6,
+        0.95
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "ceiling",
+        "corner",
+        "wall"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Grime/PeelingPaint/DA_PeelingPaint_061.decal",
+      "weight": 1.5,
+      "scale": [
+        1.0,
+        1.6
+      ],
+      "opacity": [
+        0.6,
+        0.95
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "ceiling",
+        "corner",
+        "wall"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Grime/PeelingPaint/DA_PeelingPaint_081.decal",
+      "weight": 1.5,
+      "scale": [
+        1.0,
+        1.6
+      ],
+      "opacity": [
+        0.6,
+        0.95
+      ],
+      "tint": [
+        1,
+        1,
+        1
+      ],
+      "sites": [
+        "ceiling",
+        "corner",
+        "wall"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Stains/Splatters/DA_Stain_591.decal",
+      "weight": 1,
+      "scale": [
+        0.8,
+        1.4
+      ],
+      "opacity": [
+        0.4,
+        0.8
+      ],
+      "tint": [
+        0.2,
+        0.17,
+        0.13
+      ],
+      "sites": [
+        "floor",
+        "base"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Stains/Splatters/DA_Stain_594.decal",
+      "weight": 1,
+      "scale": [
+        0.8,
+        1.4
+      ],
+      "opacity": [
+        0.4,
+        0.8
+      ],
+      "tint": [
+        0.2,
+        0.17,
+        0.13
+      ],
+      "sites": [
+        "floor",
+        "base"
+      ]
+    },
+    {
+      "decal": "assets/Decals/Stains/Splatters/DA_Stain_597.decal",
+      "weight": 1,
+      "scale": [
+        0.8,
+        1.4
+      ],
+      "opacity": [
+        0.4,
+        0.8
+      ],
+      "tint": [
+        0.2,
+        0.17,
+        0.13
+      ],
+      "sites": [
+        "floor",
+        "base"
+      ]
+    }
+  ]
+}

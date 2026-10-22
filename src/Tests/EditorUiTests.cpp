@@ -1111,6 +1111,7 @@ void RegisterMotionDemo() {
 #include "EditorSmoke/ScriptIDE.inl"
 #include "EditorSmoke/HotReload.inl"
 #include "EditorSmoke/Settings.inl"
+#include "EditorSmoke/Decals.inl"
 #include "EditorSmoke/Graffiti.inl"
 
 void RegisterTests() {
@@ -1803,6 +1804,8 @@ void RegisterTests() {
     RegisterHotReloadTests();
     RegisterSettingsTests();
     RegisterScenesTests();
+    RegisterDecalsTests();
+    RegisterDecalsLitTests();
     RegisterGraffitiTests();
 }
 } // namespace

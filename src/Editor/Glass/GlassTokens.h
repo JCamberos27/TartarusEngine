@@ -438,6 +438,27 @@ constexpr float      StartupPanelMs      = 520.0f; // each panel's own arrival
 constexpr float      StartupStepMs       = 70.0f;  // per step of distance from the centre
 constexpr float      StartupFromScale    = 0.94f;
 constexpr float      StartupDropPx       = 14.0f;
+// --- Decals & Graffiti (EditorLayer_DecalLibrary.cpp), the Viewport category ----------------------
+// The placement ghost breathes (opacity and a hair of scale), a placed decal stamps in (its box
+// settles from a little large, a ring flashes out from the hit and fades), library tiles cascade in
+// and lift on hover, and a favourite's heart pops. All monochrome white.
+constexpr MotionSpec DecalStampPop   = {EaseId::Spring, 1.0f, 260.0f, 14.0f, 0.0f, 460.0f}; // zeta*omega = 7
+constexpr float      DecalStampFromScale = 1.18f;  // the stamped decal's box settles from this
+constexpr MotionSpec DecalRingFlash  = {EaseId::OutCubic, 0, 0, 0, 0, 380.0f};
+constexpr float      DecalRingPx     = 34.0f;      // the flash ring's final radius at 1x
+constexpr MotionSpec DecalGhostFade  = {EaseId::OutCubic, 0, 0, 0, 0, 160.0f};
+constexpr float      DecalGhostAlpha = 0.62f;      // the ghost decal's opacity
+constexpr float      DecalGhostBreath = 0.14f;     // +- of that, slowly
+constexpr float      DecalGhostBreathHz = 0.7f;
+constexpr MotionSpec DecalTileIn     = {EaseId::OutCubic, 0, 0, 0, 0, 240.0f};
+constexpr float      DecalTileStaggerMs = 16.0f;   // per tile, spreading from the first
+constexpr int        DecalTileStaggerCap = 28;     // tiles past the 28th share the last delay
+constexpr float      DecalTileRisePx = 8.0f;
+constexpr MotionSpec DecalHeartPop   = {EaseId::Spring, 1.0f, 300.0f, 12.0f, 0.0f, 520.0f}; // zeta*omega = 6
+constexpr float      DecalHeartFromScale = 0.55f;
+constexpr MotionSpec DecalPreviewIn  = {EaseId::OutCubic, 0, 0, 0, 0, 180.0f};              // the hover card on its wall swatch
+constexpr float      DecalPreviewDelayMs = 280.0f;  // a tile must be hovered this long before its card opens
+
 // Shell and theme (GlassCompositor.cpp, GlassDockMotion.cpp, EditorLayer_Glass.cpp).
 // Each panel's own arrival curve; it fades in over the first StartupFadeShare of it. A panel's
 // delay is its distance from the screen centre (0 at the centre, 1 at a corner) times the steps
