@@ -5,6 +5,8 @@
 
 #include <algorithm>
 #include <chrono>
+#include <fstream>
+#include <iterator>
 
 // ---- DecalPageAllocator ---------------------------------------------------------------------
 
@@ -160,6 +162,41 @@ TextureImportSettings SettingsFor(int kind, int size) {
     s.ForceFormat = kind == 1 ? S::ForcedFormat::BC5 : kind == 3 ? S::ForcedFormat::BC4 : S::ForcedFormat::BC3;
     return s;
 }
+
+// A substrate's surface map (DecalTextureArrays::Source::Rough / AO): both greyscale maps decoded
+// raw at the slot size and packed r roughness, g 0, b AO, a 1, then BC3-encoded with mips like any
+// surface map. Raw decodes skip the texture cache (from memory); a map of another size is ignored.
+TextureCpuData PackSurface(const std::string& rough, const std::string& ao, int size) {
+    auto raw = [size](const std::string& path) {
+        TextureCpuData t;
+        if (path.empty()) return t;
+        std::ifstream f(path, std::ios::binary);
+        std::vector<unsigned char> bytes((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+        if (bytes.empty()) return t;
+        TextureImportSettings s;
+        s.GenerateMipmaps = false;
+        s.MaxTextureSize = size;
+        s.CompressionMode = TextureImportSettings::Compression::None;
+        s.IsSRGB = false;
+        t = Texture::DecodeMemory(path, std::move(bytes), 0, 0, s);
+        if (!t.Ok || t.GLFormat != 0 || t.Width != size || t.Height != size || t.Channels < 1 ||
+            t.Pixels.size() < (size_t)size * size * t.Channels) {
+            Log::Warn("Decals: substrate map '" + path + "' isn't " + std::to_string(size) + "^2 - left out.");
+            t = TextureCpuData{};
+        }
+        return t;
+    };
+    const TextureCpuData r = raw(rough), a = raw(ao);
+    if (r.Pixels.empty() && a.Pixels.empty()) return {};
+    std::vector<unsigned char> rgba((size_t)size * size * 4);
+    for (size_t i = 0, n = (size_t)size * size; i < n; ++i) {
+        rgba[i * 4 + 0] = r.Pixels.empty() ? 255 : r.Pixels[i * r.Channels];
+        rgba[i * 4 + 1] = 0;
+        rgba[i * 4 + 2] = a.Pixels.empty() ? 255 : a.Pixels[i * a.Channels];
+        rgba[i * 4 + 3] = 255;
+    }
+    return Texture::DecodeMemory(rough.empty() ? ao : rough, std::move(rgba), size, size, SettingsFor(2, size));
+}
 } // namespace
 
 struct DecalTextureArrays::Decoded {
@@ -178,7 +215,8 @@ DecalTextureArrays::~DecalTextureArrays() {
 
 std::string DecalTextureArrays::KeyFor(const Source& s) {
     return std::to_string(DecalPageAllocator::SlotSizeFor(s.Tier)) + "|" + s.Albedo + "|" + s.Normal + "|" + s.Surface +
-           "|" + s.Aux;
+           "|" + s.Aux +
+           (s.Rough.empty() && s.AO.empty() ? std::string() : "|pack|" + s.Rough + "|" + s.AO);
 }
 
 std::size_t DecalTextureArrays::PerLayerBytes(const bool active[kKinds]) const {
@@ -341,7 +379,7 @@ const DecalTextureArrays::Slot* DecalTextureArrays::Request(const Source& src) {
     // Budget as if this decal's extra maps were already in: the layer count is what they'd cost.
     const bool saved[kKinds] = {m_Active[0], m_Active[1], m_Active[2], m_Active[3]};
     m_Active[kNormal] |= !src.Normal.empty();
-    m_Active[kSurface] |= !src.Surface.empty();
+    m_Active[kSurface] |= !src.Surface.empty() || !src.Rough.empty() || !src.AO.empty();
     m_Active[kAux] |= !src.Aux.empty();
     UpdateMaxLayers();
     std::copy(std::begin(saved), std::end(saved), m_Active);
@@ -362,12 +400,15 @@ const DecalTextureArrays::Slot* DecalTextureArrays::Request(const Source& src) {
 
     Texture::InitGpuCaps(); // the BCn formats the worker encodes depend on the driver (main thread, idempotent)
     const std::string paths[kKinds] = {src.Albedo, src.Normal, src.Surface, src.Aux};
-    e->Pending = std::async(std::launch::async, [p0 = paths[0], p1 = paths[1], p2 = paths[2], p3 = paths[3], size]() {
+    const bool pack = src.Surface.empty() && (!src.Rough.empty() || !src.AO.empty());
+    e->Pending = std::async(std::launch::async, [p0 = paths[0], p1 = paths[1], p2 = paths[2], p3 = paths[3], size, pack,
+                                                 rough = src.Rough, ao = src.AO]() {
         auto d = std::make_shared<Decoded>();
         const std::string* ps[kKinds] = {&p0, &p1, &p2, &p3};
         for (int k = 0; k < kKinds; ++k) {
-            if (ps[k]->empty()) continue;
-            d->Data[k] = Texture::DecodeFile(*ps[k], SettingsFor(k, size));
+            const bool packed = k == kSurface && pack;
+            if (ps[k]->empty() && !packed) continue;
+            d->Data[k] = packed ? PackSurface(rough, ao, size) : Texture::DecodeFile(*ps[k], SettingsFor(k, size));
             const TextureCpuData& t = d->Data[k];
             d->Has[k] = t.Ok && t.GLFormat == kFormat[k] && t.Width == size && t.Height == size && !t.LevelSizes.empty();
             if (!d->Has[k]) d->Data[k] = TextureCpuData{};
