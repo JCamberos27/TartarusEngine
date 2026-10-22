@@ -80,7 +80,7 @@ struct QualitySettings {
     // Clustered decals (docs/DECALS.md): what their texture arrays may grow to, least-recently-used
     // decal textures making room past it, and how far away decals still draw (they fade out over the
     // last fifth).
-    int DecalTextureBudgetMB = 256;
+    int DecalTextureBudgetMB = 1024;
     float DecalMaxDistance = 60.0f;
 };
 const QualitySettings& Quality();

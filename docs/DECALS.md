@@ -84,7 +84,7 @@ pages, 11 mips (down to one BC block).
   exactly the array's BCn format, BC3 keeping its alpha block. The result is cached in
   `Library/Textures` like every other texture, so a decal decodes once per machine. Uploads happen
   on the main thread at the next `Prepare`; a decal draws from the frame after.
-- **Budget and eviction.** Project Settings > Quality `decalTextureBudgetMB` (256). The normal,
+- **Budget and eviction.** Project Settings > Quality `decalTextureBudgetMB` (1024). The normal,
   surface and aux arrays only exist once a resident decal has that map, so an albedo-only library
   gets about 12 layers and a fully mapped one 3. Every `Request` in a frame pins its slot (the
   refcount); when nothing fits, the least recently used unpinned slot is evicted. Growing a layer
