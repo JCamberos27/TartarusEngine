@@ -72,6 +72,7 @@ ZOUT = HALL + D       # outside wall lines z = +-ZOUT
 HALL_WINDOWS = [('v', 0.0, 0.0), ('v', L, 0.0)]   # an end window each end of the corridor (world axis/line/centre)
 
 TUBE_K, BULB_K = 4000.0, 2700.0
+TEST_ROOM = 'Apartment 301/Living Room'   # the wounded-animation test room (Hallway.test_npcs)
 NORTH_TARGET = (0.74, 0.42, 0.52)   # where the moon should hang (direction to it): 35 deg south of east, 25 deg up
 
 
@@ -354,11 +355,13 @@ class Hallway(k.Scene):
     def doors(self, root):
         grp = self.empty('Doors', root)
         for number, room, axis, line, along, sign, interior in self.door_specs:
-            # door-local +Z faces the room it swings into; the frame sits on the wall's centre line
+            # Door_Op_1 is modelled with its inside (the chain, the door catch, the hinge knuckles, the inner trim) on its
+            # back, local -Z: that faces the room it swings into, and it swings that way (Swing Back). The frame sits on
+            # the wall's centre line.
             if axis == 'x':
-                yaw, wall_pt = (0.0 if sign > 0 else 180.0), (along, line)
+                yaw, wall_pt = (180.0 if sign > 0 else 0.0), (along, line)
             else:
-                yaw, wall_pt = (90.0 if sign > 0 else -90.0), (line, along)
+                yaw, wall_pt = (-90.0 if sign > 0 else 90.0), (line, along)
             fz = (math.sin(math.radians(yaw)), math.cos(math.radians(yaw)))
             ox, oz = wall_pt[0] - fz[0] * DOOR_WALL_Z, wall_pt[1] - fz[1] * DOOR_WALL_Z
             suffix = '_Interior' if interior else ''
@@ -368,7 +371,7 @@ class Hallway(k.Scene):
                 'collider': {'isTrigger': False, 'halfExtents': [0.4, 0.995, 0.024], 'center': [-0.005, 1.004, 0.0],
                              'friction': 0.5},
                 'Rigidbody': {'Is Kinematic': True, 'Use Gravity': False, 'Mass': 18.0, 'Interpolate': 'Interpolate'},
-                'Openable': {'Motion': 'Hinge Left', 'Amount': 95.0, 'Open Time': 0.75, 'Start Open': False,
+                'Openable': {'Motion': 'Hinge Left', 'Amount': 95.0, 'Open Time': 0.75, 'Start Open': False, 'Swing Back': True,
                              'Open Sound': self.sounds['open'], 'Close Sound': self.sounds['close'],
                              'Latch Sound': self.sounds['latch']}})
             if not interior:
@@ -479,6 +482,25 @@ class Hallway(k.Scene):
             flicker = dict(Mode=2, MinInterval=0.2, MaxInterval=1.5, Depth=0.55, Seed=number) if number == 305 else None
             self.fixture(grp, 'Lamp_Ceiling_A', ((x0 + x1) / 2, (z0 + z1) / 2), 0.0, BULB_K, 0.7, 4.5, 0.7, flicker,
                          fill_room=(x0, z0, x1, z1))
+        # the test room (test_npcs): 301's living room, lit properly from a ceiling fitting's spot
+        x0, z0, x1, z1 = self.rooms[TEST_ROOM]
+        self.fixture(grp, 'Lamp_Ceiling_B', ((x0 + x1) / 2, (z0 + z1) / 2), 0.0, BULB_K, 2.2, 6.5, 1.0,
+                     fill_room=(x0, z0, x1, z1))
+
+    def test_npcs(self, root, arena):
+        """Two soldiers in TEST_ROOM who fight: they move, take cover and shoot, and a leg or body round that would
+        drop one under 20% puts it down (crawling or staggering). They come back 3 s after dying. (The wounded tests
+        turn them back into training dummies: NpcDirector::TestDummies.)"""
+        x0, z0, x1, z1 = self.rooms[TEST_ROOM]
+        squad = next(e['Squad Settings'] for e in arena['empties'] if 'Squad Settings' in e)
+        self.empty('Test Squad Settings', root, ((x0 + x1) / 2, 0.0, z0 + 0.5), **{'Squad Settings': {
+            **squad, 'Squad Size': 2, 'Respawn': True, 'Respawn Delay': 3.0}})
+        # standing in the room's far half, side by side, facing the archway the player walks in through
+        for name, u, spawn in (('Soldier Spawn A', 0.3, {'Weapon': 'AKS-74U', 'Bare': False, 'Outfit Seed': 1}),
+                               ('Soldier Spawn B', 0.7, {'Weapon': 'AKS-74U', 'Bare': False, 'Outfit Seed': 2})):
+            pos = (x0 + (x1 - x0) * u, 0.0, z0 + (z1 - z0) * 0.62)
+            self.empty(name, root, pos, yaw=180.0 if z0 > 0 else 0.0, **{'NPC Spawn': {
+                'Brain': 'Squad AI', 'Skill': 0.5, 'Squad': 0, **spawn}})
 
     # --- audio ----------------------------------------------------------------------------------------------------------
     def audio(self, root):
@@ -585,6 +607,7 @@ def build(repo):
     s.doors(root)
     s.windows(root)
     s.lighting(root)
+    s.test_npcs(root, arena)
     s.audio(root)
     s.player(arena)
     return s

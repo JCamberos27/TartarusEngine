@@ -593,6 +593,15 @@ float NavCrowd::RemainingDistance(int agent) const {
     return d;
 }
 
+int NavCrowd::TargetState(int agent, int* corners) const {
+    if (corners) *corners = 0;
+    if (!m_Crowd || agent < 0) return -1;
+    const dtCrowdAgent* ag = m_Crowd->getAgent(agent);
+    if (!ag || !ag->active) return -1;
+    if (corners) *corners = ag->ncorners;
+    return (int)ag->targetState;
+}
+
 glm::vec3 NavCrowd::NextCorner(int agent) const {
     if (!m_Crowd || agent < 0) return glm::vec3(0.0f);
     const dtCrowdAgent* ag = m_Crowd->getAgent(agent);

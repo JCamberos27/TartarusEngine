@@ -110,6 +110,7 @@ public:
     // Soldier `index` has hit-flinch kicks still settling (for tests).
     bool FlinchActive(int index) const { const auto it = m_Flinch.find(index); return it != m_Flinch.end() && it->second.Active(m_Now); }
     const NavMesh& Nav() const { return m_Nav; }
+    const NavCrowd& Crowd() const { return m_Crowd; }
     const CoverSystem& Cover() const { return m_Cover; }
     CombatFx* Fx = nullptr;    // gun reports, flashes, tracers, whizzes (optional; the host owns it)
     void SetDifficulty(float d) { m_Difficulty = std::clamp(d, 0.25f, 3.0f); }
@@ -157,10 +158,37 @@ public:
     void Kill(World& world, Npc& npc, const glm::vec3& dir, const glm::vec3& point, float shove = 40.0f, int part = -1);
     // Tests: the chance a soldier left under 20% health by a leg or torso hit goes down wounded (default 0.35).
     void SetWoundChance(float chance) { m_WoundChance = chance; }
-    // ... and the chance when it was a leg hit, which puts it on its belly, crawling (default 0.6).
+    // ... and the chance a leg hit (at any health) puts it on its belly, crawling (default 1: always).
     void SetLegDownChance(float chance) { m_LegDownChance = chance; }
+    // Tests: soldier `index` heads for `target` at `pace` whatever its brain wants (the brain still runs: stance, look, the
+    // body's states); EndScriptedMove hands the legs back. Cleared when it dies.
+    void ScriptedMove(int index, const glm::vec3& target, Gait pace = Gait::Walk) { m_Scripted[index] = {target, pace}; }
+    void EndScriptedMove(int index) { m_Scripted.erase(index); }
+    // A body on the floor is two metres long, not the capsule's 0.6: the room a body lying from `feet` along `dir` (flat) has
+    // before the solid world (walls, furniture; not characters or the dead), out to `maxDist` - a shoulder-wide sphere swept along the
+    // floor. Just the shoulder's width when it starts against something.
+    float FloorRoom(const glm::vec3& feet, const glm::vec3& dir, float maxDist) const;
+    // The dead lying across a crawl from `feet` along `dir` (flat) within `maxDist`: how many bodies. He goes round them when
+    // he can and over them when he can't (FloorRoom doesn't count them).
+    int BodiesAcross(const glm::vec3& feet, const glm::vec3& dir, float maxDist) const;
+    static constexpr float kProneHead = 1.15f;  // m: a crawling body's reach ahead of its pelvis (the hands at full stretch)
+    static constexpr float kProneFeet = 1.05f;  // ... and behind it (the dragged foot)
+    static constexpr float kLyingSide = 1.0f;   // m: ... and to either side of where he goes down (he rolls onto his side, legs swinging out)
+    static constexpr float kLyingLength = 1.7f; // m: what the gut-shot collapse (InjuredDrop) covers ahead of him, and the body lying there
     bool TrackDeathPop = false;        // record the bones' last animated pose so the ragdoll's first frame can be compared
     bool NoLod = false;                // every soldier animates every frame (tests)
+    // Tests: where the crowd has soldier `n`'s agent, and the corner it steers for.
+    glm::vec3 AgentPosition(const Npc& n) const { return n.Agent >= 0 ? m_Crowd.Position(n.Agent) : glm::vec3(0.0f); }
+    glm::vec3 AgentCorner(const Npc& n) const { return n.Agent >= 0 ? m_Crowd.NextCorner(n.Agent) : glm::vec3(0.0f); }
+    bool LogCrawl = false;             // print each crawl destination picked (tests)
+    bool TestFallBackwards = false;    // tests: the next leg-shot fall goes over backwards (he lands on his back: the roll-over)
+    bool LogCover = false;             // print each cover search's candidates and what ruled them out (tests)
+    // Tests: every spawn from now on takes this brain (0 Soldier, 1 Training Dummy) and weapon (0 AK, 1 Remington, 2 either,
+    // 3 None) instead of its NPC Spawn's (-1: the spawn's own) - the dummies' room in Apartment Hallway made a fight.
+    int ForceBrain = -1, ForceWeapon = -1;
+    glm::vec3 SpawnShift{0.0f};          // tests: every spawn point moved by this (a test run in another room)
+    bool TestDummies = false;            // tests: training dummies, as the wounded tests want them - spawn 0 bare with an AK, spawn 1
+                                         // dressed and unarmed (the scene's spawns are fighters)
 
     struct SpawnPoint {
         glm::vec3 Pos{0.0f};
@@ -218,7 +246,17 @@ private:
                      int part = -1);
     // `hurtLeg` (0 left, 1 right): shot down by that leg - the gun drops and it goes prone, dragging the leg. -1: on a knee.
     void BecomeWounded(World& world, Npc& n, int hurtLeg = -1);
+    void RollOver(World& world, Npc& n, float dt); // down on his back from the wound fall: he rolls onto his belly (then the recovery takes him)
     void FinishDeath(World& world, Npc& n);
+    // The wound fall (shot down by a leg): after the hit frame's late pose the body goes down as a powered ragdoll, alive
+    // (StartWoundFall); while it falls the capsule keeps under the pelvis (FollowFall, instead of Move) and the hitboxes ride the
+    // ragdoll's pose (UpdateWoundFall); down and slow, the animated prone pose takes it back (RecoverFromFall).
+    void StartWoundFall(World& world, Npc& n);
+    void FollowFall(Npc& n, float dt);
+    void UpdateWoundFall(World& world, Npc& n, float dt, const PlayerSnapshot& p);
+    void RecoverFromFall(World& world, Npc& n, bool turnOver = false); // (turnOver: on his back, blended over onto his belly)
+    // Tests: the tracked bones' largest move since last frame (and they are recorded for the next), -1 the first time.
+    float TrackJump(const World& world, Npc& n);
     void LatePose(World& world, Npc& n, float dt, const PlayerSnapshot& p, bool alive);
     void UpdateHitboxes(Npc& n, const PlayerSnapshot& p, bool posed);
     void UpdateLod(World& world, Npc& n, const PlayerSnapshot& p);
@@ -279,7 +317,8 @@ private:
     float m_ThinkMs = 0.0f, m_LateMs = 0.0f;
     int m_NextName = 1;
     float m_WoundChance = 0.35f;
-    float m_LegDownChance = 0.6f;
+    float m_LegDownChance = 1.0f;
+    std::unordered_map<int, std::pair<glm::vec3, Gait>> m_Scripted; // ScriptedMove, by soldier index
     int m_LookCursor = 0;
     // One cover search (raycasts + paths, the AI's priciest call) per frame across the squad: a second
     // soldier wanting one waits a frame, so a volley that sends everyone to cover is no spike.

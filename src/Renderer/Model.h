@@ -332,8 +332,16 @@ public:
     // that its model-space transform becomes `modelSpace` (its own scale is kept).
     glm::mat4 PoseNodeModelSpace(const std::vector<LocalTRS>& pose, int node) const;
     void SetPoseNodeModelSpace(std::vector<LocalTRS>& pose, int node, const glm::mat4& modelSpace) const;
-    // Takes `clip`'s root motion out of `pose` (a sample of that clip): see RootMotionInPlace.
-    void StripRootMotion(std::vector<LocalTRS>& pose, int clip, int node, const RootMotionSettings& s) const;
+    // Where `clip` holds its root in place (RootMotionInPlace's rootAtStart): the root at the clip's first frame - but a
+    // trimmed clip's first frame is somewhere in its take, carried away from the take's origin by everything before it,
+    // so a trim's root is held at the model's origin instead (its heading kept). Pieces cut from one take then line up,
+    // and the body stands on the object, not a metre or two ahead of it.
+    glm::mat4 InPlaceStart(int clip, int node) const;
+    // Takes `clip`'s root motion out of `pose` (a sample of that clip): see RootMotionInPlace. `loopTime` (seconds into the
+    // clip, >= 0 when it loops): a trimmed loop's body drifts against its root over the cycle (a mocap root is smoothed, the
+    // hips surge), and would snap back at every wrap; the drift is spread over the cycle instead (a loop pose), the hips
+    // meeting themselves at the seam.
+    void StripRootMotion(std::vector<LocalTRS>& pose, int clip, int node, const RootMotionSettings& s, float loopTime = -1.0f) const;
     // The root's motion in `clip` between playback times t0 and t1 (seconds, unwrapped).
     RootMotionDelta ClipRootMotion(int clip, float t0, float t1, AnimationWrapMode wrap, int node,
                                    const RootMotionSettings& s) const;

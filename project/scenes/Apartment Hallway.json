@@ -28381,9 +28381,203 @@
       ]
     },
     {
-      "id": 961,
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": true,
+        "Color": [
+          1.0,
+          0.86,
+          0.7
+        ],
+        "ColorTempK": 2700.0,
+        "Culling Mask": -1,
+        "Intensity": 2.2,
+        "Range": 6.5,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.1,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 72.0,
+        "Type": "Spot"
+      },
+      "id": 962,
+      "name": "Lamp_Ceiling_B Light",
+      "order": 962,
+      "parentId": 914,
+      "position": [
+        2.5,
+        2.606,
+        -6.725
+      ],
+      "rotation": [
+        -0.707107,
+        0.0,
+        0.0,
+        0.707107
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          1.0,
+          0.86,
+          0.7
+        ],
+        "ColorTempK": 2700.0,
+        "Culling Mask": -1,
+        "Intensity": 0.264,
+        "Range": 4.935,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 30.0,
+        "Type": "Point"
+      },
+      "id": 963,
+      "name": "Lamp_Ceiling_B Bounce",
+      "order": 963,
+      "parentId": 914,
+      "position": [
+        2.5,
+        1.3,
+        -6.725
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Squad Settings": {
+        "Bleed-Out Time": 20.0,
+        "Corpse Time": 14.0,
+        "Cover Peek Step": 0.800000011920929,
+        "Cover Reach": 0.8500000238418579,
+        "Cover Sample Spacing": 0.8999999761581421,
+        "Crawl Speed": 0.85,
+        "Difficulty": 1.0,
+        "Fall Gravity": 18.0,
+        "Foot IK Range": 25.0,
+        "Heavy Hit Damage": 40.0,
+        "High Cover Height": 1.5499999523162842,
+        "Hitbox Range": 60.0,
+        "Limp Speed Scale": 0.6000000238418579,
+        "Limp Time": 6.0,
+        "Low Cover Height": 0.8500000238418579,
+        "Melee Damage": 25.0,
+        "Melee Hit Time": 0.2199999988079071,
+        "Melee Time": 0.550000011920929,
+        "Mesh Check Range": 12.0,
+        "NPC Damage Scale": 0.44999998807907104,
+        "Respawn": true,
+        "Respawn Delay": 3.0,
+        "Squad Size": 2,
+        "Stagger Time": 0.4000000059604645
+      },
+      "id": 964,
+      "name": "Test Squad Settings",
+      "order": 964,
+      "parentId": 2,
+      "position": [
+        2.5,
+        0.0,
+        -9.175
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "NPC Spawn": {
+        "Bare": false,
+        "Brain": "Squad AI",
+        "Outfit Seed": 1,
+        "Skill": 0.5,
+        "Squad": 0,
+        "Weapon": "AKS-74U"
+      },
+      "id": 965,
+      "name": "Soldier Spawn A",
+      "order": 965,
+      "parentId": 2,
+      "position": [
+        1.5,
+        0.0,
+        -6.017
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "NPC Spawn": {
+        "Bare": false,
+        "Brain": "Squad AI",
+        "Outfit Seed": 2,
+        "Skill": 0.5,
+        "Squad": 0,
+        "Weapon": "AKS-74U"
+      },
+      "id": 966,
+      "name": "Soldier Spawn B",
+      "order": 966,
+      "parentId": 2,
+      "position": [
+        3.5,
+        0.0,
+        -6.017
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 967,
       "name": "Audio",
-      "order": 961,
+      "order": 967,
       "parentId": 2,
       "position": [
         0,
@@ -28425,10 +28619,10 @@
         "Tail Gain": 0.4,
         "Wet dB": -6.0
       },
-      "id": 962,
+      "id": 968,
       "name": "Corridor Reverb",
-      "order": 962,
-      "parentId": 961,
+      "order": 968,
+      "parentId": 967,
       "position": [
         10.6,
         1.35,
@@ -28469,10 +28663,10 @@
         "Tail Gain": 0.4,
         "Wet dB": -6.0
       },
-      "id": 963,
+      "id": 969,
       "name": "Apartment 301 Reverb",
-      "order": 963,
-      "parentId": 961,
+      "order": 969,
+      "parentId": 967,
       "position": [
         2.5,
         1.35,
@@ -28513,10 +28707,10 @@
         "Tail Gain": 0.4,
         "Wet dB": -6.0
       },
-      "id": 964,
+      "id": 970,
       "name": "Apartment 302 Reverb",
-      "order": 964,
-      "parentId": 961,
+      "order": 970,
+      "parentId": 967,
       "position": [
         8.4,
         1.35,
@@ -28557,10 +28751,10 @@
         "Tail Gain": 0.4,
         "Wet dB": -6.0
       },
-      "id": 965,
+      "id": 971,
       "name": "Apartment 303 Reverb",
-      "order": 965,
-      "parentId": 961,
+      "order": 971,
+      "parentId": 967,
       "position": [
         16.5,
         1.35,
@@ -28601,10 +28795,10 @@
         "Tail Gain": 0.4,
         "Wet dB": -6.0
       },
-      "id": 966,
+      "id": 972,
       "name": "Apartment 304 Reverb",
-      "order": 966,
-      "parentId": 961,
+      "order": 972,
+      "parentId": 967,
       "position": [
         4.7,
         1.35,
@@ -28645,10 +28839,10 @@
         "Tail Gain": 0.4,
         "Wet dB": -6.0
       },
-      "id": 967,
+      "id": 973,
       "name": "Apartment 305 Reverb",
-      "order": 967,
-      "parentId": 961,
+      "order": 973,
+      "parentId": 967,
       "position": [
         12.8,
         1.35,
@@ -28689,10 +28883,10 @@
         "Tail Gain": 0.4,
         "Wet dB": -6.0
       },
-      "id": 968,
+      "id": 974,
       "name": "Apartment 306 Reverb",
-      "order": 968,
-      "parentId": 961,
+      "order": 974,
+      "parentId": 967,
       "position": [
         18.7,
         1.35,
@@ -28723,10 +28917,10 @@
         "Volume": 0.12,
         "Volume Rolloff": "Linear"
       },
-      "id": 969,
+      "id": 975,
       "name": "Tube Hum 1",
-      "order": 969,
-      "parentId": 961,
+      "order": 975,
+      "parentId": 967,
       "position": [
         1.7667,
         2.6,
@@ -28757,10 +28951,10 @@
         "Volume": 0.12,
         "Volume Rolloff": "Linear"
       },
-      "id": 970,
+      "id": 976,
       "name": "Tube Hum 2",
-      "order": 970,
-      "parentId": 961,
+      "order": 976,
+      "parentId": 967,
       "position": [
         5.3,
         2.6,
@@ -28791,10 +28985,10 @@
         "Volume": 0.12,
         "Volume Rolloff": "Linear"
       },
-      "id": 971,
+      "id": 977,
       "name": "Tube Hum 3",
-      "order": 971,
-      "parentId": 961,
+      "order": 977,
+      "parentId": 967,
       "position": [
         8.8333,
         2.6,
@@ -28825,10 +29019,10 @@
         "Volume": 0.12,
         "Volume Rolloff": "Linear"
       },
-      "id": 972,
+      "id": 978,
       "name": "Tube Hum 4",
-      "order": 972,
-      "parentId": 961,
+      "order": 978,
+      "parentId": 967,
       "position": [
         12.3667,
         2.6,
@@ -28859,10 +29053,10 @@
         "Volume": 0.12,
         "Volume Rolloff": "Linear"
       },
-      "id": 973,
+      "id": 979,
       "name": "Tube Hum 6",
-      "order": 973,
-      "parentId": 961,
+      "order": 979,
+      "parentId": 967,
       "position": [
         19.4333,
         2.6,
@@ -28885,10 +29079,10 @@
         "Footwear": "Boots",
         "NPC Footwear": "Boots"
       },
-      "id": 974,
+      "id": 980,
       "name": "Foley",
-      "order": 974,
-      "parentId": 961,
+      "order": 980,
+      "parentId": 967,
       "position": [
         0,
         0,
@@ -28964,9 +29158,9 @@
         ],
         "View Model Scale": 1.0
       },
-      "id": 975,
+      "id": 981,
       "name": "Player Spawn",
-      "order": 975,
+      "order": 981,
       "parentId": -1,
       "position": [
         -9.6,
@@ -29122,10 +29316,10 @@
         "Turn Timeout": 4.0,
         "Weapon Arms": true
       },
-      "id": 976,
+      "id": 982,
       "name": "Player Body",
-      "order": 976,
-      "parentId": 975,
+      "order": 982,
+      "parentId": 981,
       "position": [
         0.0,
         0.0,
@@ -82079,13 +82273,13 @@
       "position": [
         3.7,
         0.0,
-        -1.043
+        -1.107
       ],
       "rotation": [
         0.0,
-        1.0,
         0.0,
-        0.0
+        0.0,
+        1.0
       ],
       "scale": [
         1.0,
@@ -82102,7 +82296,8 @@
         "Motion": "Hinge Left",
         "Open Sound": "assets/Audio/Foley/door/open_1.wav;assets/Audio/Foley/door/open_2.wav;assets/Audio/Foley/door/open_3.wav;assets/Audio/Foley/door/open_4.wav",
         "Open Time": 0.75,
-        "Start Open": false
+        "Start Open": false,
+        "Swing Back": true
       },
       "Rigidbody": {
         "Interpolate": "Interpolate",
@@ -82133,13 +82328,13 @@
       "position": [
         3.7,
         0.0,
-        -1.043
+        -1.107
       ],
       "rotation": [
         0.0,
-        1.0,
         0.0,
-        0.0
+        0.0,
+        1.0
       ],
       "scale": [
         1.0,
@@ -82233,13 +82428,13 @@
       "path": "assets/Architecture/Doors/Models/Door_Op_1_Frame_Interior.fbx",
       "pathGuid": "31f6e1aa04e83e08",
       "position": [
-        2.432,
+        2.368,
         0.0,
         -2.425
       ],
       "rotation": [
         0.0,
-        -0.707107,
+        0.707107,
         0.0,
         0.707107
       ],
@@ -82258,7 +82453,8 @@
         "Motion": "Hinge Left",
         "Open Sound": "assets/Audio/Foley/door/open_1.wav;assets/Audio/Foley/door/open_2.wav;assets/Audio/Foley/door/open_3.wav;assets/Audio/Foley/door/open_4.wav",
         "Open Time": 0.75,
-        "Start Open": false
+        "Start Open": false,
+        "Swing Back": true
       },
       "Rigidbody": {
         "Interpolate": "Interpolate",
@@ -82287,13 +82483,13 @@
       "path": "assets/Architecture/Doors/Models/Door_Op_1_Leaf_Interior.fbx",
       "pathGuid": "7d76fa5f11c839f6",
       "position": [
-        2.432,
+        2.368,
         0.0,
         -2.425
       ],
       "rotation": [
         0.0,
-        -0.707107,
+        0.707107,
         0.0,
         0.707107
       ],
@@ -82313,13 +82509,13 @@
       "position": [
         9.6,
         0.0,
-        -1.043
+        -1.107
       ],
       "rotation": [
         0.0,
-        1.0,
         0.0,
-        0.0
+        0.0,
+        1.0
       ],
       "scale": [
         1.0,
@@ -82336,7 +82532,8 @@
         "Motion": "Hinge Left",
         "Open Sound": "assets/Audio/Foley/door/open_1.wav;assets/Audio/Foley/door/open_2.wav;assets/Audio/Foley/door/open_3.wav;assets/Audio/Foley/door/open_4.wav",
         "Open Time": 0.75,
-        "Start Open": false
+        "Start Open": false,
+        "Swing Back": true
       },
       "Rigidbody": {
         "Interpolate": "Interpolate",
@@ -82367,13 +82564,13 @@
       "position": [
         9.6,
         0.0,
-        -1.043
+        -1.107
       ],
       "rotation": [
         0.0,
-        1.0,
         0.0,
-        0.0
+        0.0,
+        1.0
       ],
       "scale": [
         1.0,
@@ -82467,13 +82664,13 @@
       "path": "assets/Architecture/Doors/Models/Door_Op_1_Frame_Interior.fbx",
       "pathGuid": "31f6e1aa04e83e08",
       "position": [
-        7.532,
+        7.468,
         0.0,
         -2.475
       ],
       "rotation": [
         0.0,
-        -0.707107,
+        0.707107,
         0.0,
         0.707107
       ],
@@ -82492,7 +82689,8 @@
         "Motion": "Hinge Left",
         "Open Sound": "assets/Audio/Foley/door/open_1.wav;assets/Audio/Foley/door/open_2.wav;assets/Audio/Foley/door/open_3.wav;assets/Audio/Foley/door/open_4.wav",
         "Open Time": 0.75,
-        "Start Open": false
+        "Start Open": false,
+        "Swing Back": true
       },
       "Rigidbody": {
         "Interpolate": "Interpolate",
@@ -82521,13 +82719,13 @@
       "path": "assets/Architecture/Doors/Models/Door_Op_1_Leaf_Interior.fbx",
       "pathGuid": "7d76fa5f11c839f6",
       "position": [
-        7.532,
+        7.468,
         0.0,
         -2.475
       ],
       "rotation": [
         0.0,
-        -0.707107,
+        0.707107,
         0.0,
         0.707107
       ],
@@ -82545,13 +82743,13 @@
       "path": "assets/Architecture/Doors/Models/Door_Op_1_Frame_Interior.fbx",
       "pathGuid": "31f6e1aa04e83e08",
       "position": [
-        8.432,
+        8.368,
         0.0,
         -4.875
       ],
       "rotation": [
         0.0,
-        -0.707107,
+        0.707107,
         0.0,
         0.707107
       ],
@@ -82570,7 +82768,8 @@
         "Motion": "Hinge Left",
         "Open Sound": "assets/Audio/Foley/door/open_1.wav;assets/Audio/Foley/door/open_2.wav;assets/Audio/Foley/door/open_3.wav;assets/Audio/Foley/door/open_4.wav",
         "Open Time": 0.75,
-        "Start Open": false
+        "Start Open": false,
+        "Swing Back": true
       },
       "Rigidbody": {
         "Interpolate": "Interpolate",
@@ -82599,13 +82798,13 @@
       "path": "assets/Architecture/Doors/Models/Door_Op_1_Leaf_Interior.fbx",
       "pathGuid": "7d76fa5f11c839f6",
       "position": [
-        8.432,
+        8.368,
         0.0,
         -4.875
       ],
       "rotation": [
         0.0,
-        -0.707107,
+        0.707107,
         0.0,
         0.707107
       ],
@@ -82625,13 +82824,13 @@
       "position": [
         16.5,
         0.0,
-        -1.043
+        -1.107
       ],
       "rotation": [
         0.0,
-        1.0,
         0.0,
-        0.0
+        0.0,
+        1.0
       ],
       "scale": [
         1.0,
@@ -82648,7 +82847,8 @@
         "Motion": "Hinge Left",
         "Open Sound": "assets/Audio/Foley/door/open_1.wav;assets/Audio/Foley/door/open_2.wav;assets/Audio/Foley/door/open_3.wav;assets/Audio/Foley/door/open_4.wav",
         "Open Time": 0.75,
-        "Start Open": false
+        "Start Open": false,
+        "Swing Back": true
       },
       "Rigidbody": {
         "Interpolate": "Interpolate",
@@ -82679,13 +82879,13 @@
       "position": [
         16.5,
         0.0,
-        -1.043
+        -1.107
       ],
       "rotation": [
         0.0,
-        1.0,
         0.0,
-        0.0
+        0.0,
+        1.0
       ],
       "scale": [
         1.0,
@@ -82779,13 +82979,13 @@
       "path": "assets/Architecture/Doors/Models/Door_Op_1_Frame_Interior.fbx",
       "pathGuid": "31f6e1aa04e83e08",
       "position": [
-        15.432,
+        15.368,
         0.0,
         -2.575
       ],
       "rotation": [
         0.0,
-        -0.707107,
+        0.707107,
         0.0,
         0.707107
       ],
@@ -82804,7 +83004,8 @@
         "Motion": "Hinge Left",
         "Open Sound": "assets/Audio/Foley/door/open_1.wav;assets/Audio/Foley/door/open_2.wav;assets/Audio/Foley/door/open_3.wav;assets/Audio/Foley/door/open_4.wav",
         "Open Time": 0.75,
-        "Start Open": false
+        "Start Open": false,
+        "Swing Back": true
       },
       "Rigidbody": {
         "Interpolate": "Interpolate",
@@ -82833,13 +83034,13 @@
       "path": "assets/Architecture/Doors/Models/Door_Op_1_Leaf_Interior.fbx",
       "pathGuid": "7d76fa5f11c839f6",
       "position": [
-        15.432,
+        15.368,
         0.0,
         -2.575
       ],
       "rotation": [
         0.0,
-        -0.707107,
+        0.707107,
         0.0,
         0.707107
       ],
@@ -82857,13 +83058,13 @@
       "path": "assets/Architecture/Doors/Models/Door_Op_1_Frame_Interior.fbx",
       "pathGuid": "31f6e1aa04e83e08",
       "position": [
-        15.432,
+        15.368,
         0.0,
         -5.475
       ],
       "rotation": [
         0.0,
-        -0.707107,
+        0.707107,
         0.0,
         0.707107
       ],
@@ -82882,7 +83083,8 @@
         "Motion": "Hinge Left",
         "Open Sound": "assets/Audio/Foley/door/open_1.wav;assets/Audio/Foley/door/open_2.wav;assets/Audio/Foley/door/open_3.wav;assets/Audio/Foley/door/open_4.wav",
         "Open Time": 0.75,
-        "Start Open": false
+        "Start Open": false,
+        "Swing Back": true
       },
       "Rigidbody": {
         "Interpolate": "Interpolate",
@@ -82911,13 +83113,13 @@
       "path": "assets/Architecture/Doors/Models/Door_Op_1_Leaf_Interior.fbx",
       "pathGuid": "7d76fa5f11c839f6",
       "position": [
-        15.432,
+        15.368,
         0.0,
         -5.475
       ],
       "rotation": [
         0.0,
-        -0.707107,
+        0.707107,
         0.0,
         0.707107
       ],
@@ -82935,13 +83137,13 @@
       "path": "assets/Architecture/Doors/Models/Door_Op_1_Frame_Interior.fbx",
       "pathGuid": "31f6e1aa04e83e08",
       "position": [
-        17.568,
+        17.632,
         0.0,
         -3.475
       ],
       "rotation": [
         0.0,
-        0.707107,
+        -0.707107,
         0.0,
         0.707107
       ],
@@ -82960,7 +83162,8 @@
         "Motion": "Hinge Left",
         "Open Sound": "assets/Audio/Foley/door/open_1.wav;assets/Audio/Foley/door/open_2.wav;assets/Audio/Foley/door/open_3.wav;assets/Audio/Foley/door/open_4.wav",
         "Open Time": 0.75,
-        "Start Open": false
+        "Start Open": false,
+        "Swing Back": true
       },
       "Rigidbody": {
         "Interpolate": "Interpolate",
@@ -82989,13 +83192,13 @@
       "path": "assets/Architecture/Doors/Models/Door_Op_1_Leaf_Interior.fbx",
       "pathGuid": "7d76fa5f11c839f6",
       "position": [
-        17.568,
+        17.632,
         0.0,
         -3.475
       ],
       "rotation": [
         0.0,
-        0.707107,
+        -0.707107,
         0.0,
         0.707107
       ],
@@ -83015,13 +83218,13 @@
       "position": [
         4.7,
         0.0,
-        1.043
+        1.107
       ],
       "rotation": [
         0.0,
+        1.0,
         0.0,
-        0.0,
-        1.0
+        0.0
       ],
       "scale": [
         1.0,
@@ -83038,7 +83241,8 @@
         "Motion": "Hinge Left",
         "Open Sound": "assets/Audio/Foley/door/open_1.wav;assets/Audio/Foley/door/open_2.wav;assets/Audio/Foley/door/open_3.wav;assets/Audio/Foley/door/open_4.wav",
         "Open Time": 0.75,
-        "Start Open": false
+        "Start Open": false,
+        "Swing Back": true
       },
       "Rigidbody": {
         "Interpolate": "Interpolate",
@@ -83069,13 +83273,13 @@
       "position": [
         4.7,
         0.0,
-        1.043
+        1.107
       ],
       "rotation": [
         0.0,
+        1.0,
         0.0,
-        0.0,
-        1.0
+        0.0
       ],
       "scale": [
         1.0,
@@ -83169,13 +83373,13 @@
       "path": "assets/Architecture/Doors/Models/Door_Op_1_Frame_Interior.fbx",
       "pathGuid": "31f6e1aa04e83e08",
       "position": [
-        5.768,
+        5.832,
         0.0,
         2.575
       ],
       "rotation": [
         0.0,
-        0.707107,
+        -0.707107,
         0.0,
         0.707107
       ],
@@ -83194,7 +83398,8 @@
         "Motion": "Hinge Left",
         "Open Sound": "assets/Audio/Foley/door/open_1.wav;assets/Audio/Foley/door/open_2.wav;assets/Audio/Foley/door/open_3.wav;assets/Audio/Foley/door/open_4.wav",
         "Open Time": 0.75,
-        "Start Open": false
+        "Start Open": false,
+        "Swing Back": true
       },
       "Rigidbody": {
         "Interpolate": "Interpolate",
@@ -83223,13 +83428,13 @@
       "path": "assets/Architecture/Doors/Models/Door_Op_1_Leaf_Interior.fbx",
       "pathGuid": "7d76fa5f11c839f6",
       "position": [
-        5.768,
+        5.832,
         0.0,
         2.575
       ],
       "rotation": [
         0.0,
-        0.707107,
+        -0.707107,
         0.0,
         0.707107
       ],
@@ -83247,13 +83452,13 @@
       "path": "assets/Architecture/Doors/Models/Door_Op_1_Frame_Interior.fbx",
       "pathGuid": "31f6e1aa04e83e08",
       "position": [
-        5.768,
+        5.832,
         0.0,
         5.475
       ],
       "rotation": [
         0.0,
-        0.707107,
+        -0.707107,
         0.0,
         0.707107
       ],
@@ -83272,7 +83477,8 @@
         "Motion": "Hinge Left",
         "Open Sound": "assets/Audio/Foley/door/open_1.wav;assets/Audio/Foley/door/open_2.wav;assets/Audio/Foley/door/open_3.wav;assets/Audio/Foley/door/open_4.wav",
         "Open Time": 0.75,
-        "Start Open": false
+        "Start Open": false,
+        "Swing Back": true
       },
       "Rigidbody": {
         "Interpolate": "Interpolate",
@@ -83301,13 +83507,13 @@
       "path": "assets/Architecture/Doors/Models/Door_Op_1_Leaf_Interior.fbx",
       "pathGuid": "7d76fa5f11c839f6",
       "position": [
-        5.768,
+        5.832,
         0.0,
         5.475
       ],
       "rotation": [
         0.0,
-        0.707107,
+        -0.707107,
         0.0,
         0.707107
       ],
@@ -83325,13 +83531,13 @@
       "path": "assets/Architecture/Doors/Models/Door_Op_1_Frame_Interior.fbx",
       "pathGuid": "31f6e1aa04e83e08",
       "position": [
-        3.632,
+        3.568,
         0.0,
         3.475
       ],
       "rotation": [
         0.0,
-        -0.707107,
+        0.707107,
         0.0,
         0.707107
       ],
@@ -83350,7 +83556,8 @@
         "Motion": "Hinge Left",
         "Open Sound": "assets/Audio/Foley/door/open_1.wav;assets/Audio/Foley/door/open_2.wav;assets/Audio/Foley/door/open_3.wav;assets/Audio/Foley/door/open_4.wav",
         "Open Time": 0.75,
-        "Start Open": false
+        "Start Open": false,
+        "Swing Back": true
       },
       "Rigidbody": {
         "Interpolate": "Interpolate",
@@ -83379,13 +83586,13 @@
       "path": "assets/Architecture/Doors/Models/Door_Op_1_Leaf_Interior.fbx",
       "pathGuid": "7d76fa5f11c839f6",
       "position": [
-        3.632,
+        3.568,
         0.0,
         3.475
       ],
       "rotation": [
         0.0,
-        -0.707107,
+        0.707107,
         0.0,
         0.707107
       ],
@@ -83405,13 +83612,13 @@
       "position": [
         14.0,
         0.0,
-        1.043
+        1.107
       ],
       "rotation": [
         0.0,
+        1.0,
         0.0,
-        0.0,
-        1.0
+        0.0
       ],
       "scale": [
         1.0,
@@ -83428,7 +83635,8 @@
         "Motion": "Hinge Left",
         "Open Sound": "assets/Audio/Foley/door/open_1.wav;assets/Audio/Foley/door/open_2.wav;assets/Audio/Foley/door/open_3.wav;assets/Audio/Foley/door/open_4.wav",
         "Open Time": 0.75,
-        "Start Open": false
+        "Start Open": false,
+        "Swing Back": true
       },
       "Rigidbody": {
         "Interpolate": "Interpolate",
@@ -83459,13 +83667,13 @@
       "position": [
         14.0,
         0.0,
-        1.043
+        1.107
       ],
       "rotation": [
         0.0,
+        1.0,
         0.0,
-        0.0,
-        1.0
+        0.0
       ],
       "scale": [
         1.0,
@@ -83559,13 +83767,13 @@
       "path": "assets/Architecture/Doors/Models/Door_Op_1_Frame_Interior.fbx",
       "pathGuid": "31f6e1aa04e83e08",
       "position": [
-        11.932,
+        11.868,
         0.0,
         2.475
       ],
       "rotation": [
         0.0,
-        -0.707107,
+        0.707107,
         0.0,
         0.707107
       ],
@@ -83584,7 +83792,8 @@
         "Motion": "Hinge Left",
         "Open Sound": "assets/Audio/Foley/door/open_1.wav;assets/Audio/Foley/door/open_2.wav;assets/Audio/Foley/door/open_3.wav;assets/Audio/Foley/door/open_4.wav",
         "Open Time": 0.75,
-        "Start Open": false
+        "Start Open": false,
+        "Swing Back": true
       },
       "Rigidbody": {
         "Interpolate": "Interpolate",
@@ -83613,13 +83822,13 @@
       "path": "assets/Architecture/Doors/Models/Door_Op_1_Leaf_Interior.fbx",
       "pathGuid": "7d76fa5f11c839f6",
       "position": [
-        11.932,
+        11.868,
         0.0,
         2.475
       ],
       "rotation": [
         0.0,
-        -0.707107,
+        0.707107,
         0.0,
         0.707107
       ],
@@ -83637,13 +83846,13 @@
       "path": "assets/Architecture/Doors/Models/Door_Op_1_Frame_Interior.fbx",
       "pathGuid": "31f6e1aa04e83e08",
       "position": [
-        12.832,
+        12.768,
         0.0,
         4.875
       ],
       "rotation": [
         0.0,
-        -0.707107,
+        0.707107,
         0.0,
         0.707107
       ],
@@ -83662,7 +83871,8 @@
         "Motion": "Hinge Left",
         "Open Sound": "assets/Audio/Foley/door/open_1.wav;assets/Audio/Foley/door/open_2.wav;assets/Audio/Foley/door/open_3.wav;assets/Audio/Foley/door/open_4.wav",
         "Open Time": 0.75,
-        "Start Open": false
+        "Start Open": false,
+        "Swing Back": true
       },
       "Rigidbody": {
         "Interpolate": "Interpolate",
@@ -83691,13 +83901,13 @@
       "path": "assets/Architecture/Doors/Models/Door_Op_1_Leaf_Interior.fbx",
       "pathGuid": "7d76fa5f11c839f6",
       "position": [
-        12.832,
+        12.768,
         0.0,
         4.875
       ],
       "rotation": [
         0.0,
-        -0.707107,
+        0.707107,
         0.0,
         0.707107
       ],
@@ -83717,13 +83927,13 @@
       "position": [
         19.9,
         0.0,
-        1.043
+        1.107
       ],
       "rotation": [
         0.0,
+        1.0,
         0.0,
-        0.0,
-        1.0
+        0.0
       ],
       "scale": [
         1.0,
@@ -83740,7 +83950,8 @@
         "Motion": "Hinge Left",
         "Open Sound": "assets/Audio/Foley/door/open_1.wav;assets/Audio/Foley/door/open_2.wav;assets/Audio/Foley/door/open_3.wav;assets/Audio/Foley/door/open_4.wav",
         "Open Time": 0.75,
-        "Start Open": false
+        "Start Open": false,
+        "Swing Back": true
       },
       "Rigidbody": {
         "Interpolate": "Interpolate",
@@ -83771,13 +83982,13 @@
       "position": [
         19.9,
         0.0,
-        1.043
+        1.107
       ],
       "rotation": [
         0.0,
+        1.0,
         0.0,
-        0.0,
-        1.0
+        0.0
       ],
       "scale": [
         1.0,
@@ -83871,13 +84082,13 @@
       "path": "assets/Architecture/Doors/Models/Door_Op_1_Frame_Interior.fbx",
       "pathGuid": "31f6e1aa04e83e08",
       "position": [
-        18.632,
+        18.568,
         0.0,
         2.425
       ],
       "rotation": [
         0.0,
-        -0.707107,
+        0.707107,
         0.0,
         0.707107
       ],
@@ -83896,7 +84107,8 @@
         "Motion": "Hinge Left",
         "Open Sound": "assets/Audio/Foley/door/open_1.wav;assets/Audio/Foley/door/open_2.wav;assets/Audio/Foley/door/open_3.wav;assets/Audio/Foley/door/open_4.wav",
         "Open Time": 0.75,
-        "Start Open": false
+        "Start Open": false,
+        "Swing Back": true
       },
       "Rigidbody": {
         "Interpolate": "Interpolate",
@@ -83925,13 +84137,13 @@
       "path": "assets/Architecture/Doors/Models/Door_Op_1_Leaf_Interior.fbx",
       "pathGuid": "7d76fa5f11c839f6",
       "position": [
-        18.632,
+        18.568,
         0.0,
         2.425
       ],
       "rotation": [
         0.0,
-        -0.707107,
+        0.707107,
         0.0,
         0.707107
       ],
@@ -86018,6 +86230,79 @@
       "static": true
     },
     {
+      "castShadows": 0,
+      "id": 961,
+      "materials": [
+        {
+          "embedded": {
+            "albedoMap": {
+              "path": "assets/Furniture/Lighting/Textures/Lamps_C/Lamps_C_Base_Color.png",
+              "pathGuid": "676f5fd7453630a8"
+            },
+            "aoMap": {
+              "path": "assets/Furniture/Lighting/Textures/Lamps_C/Lamps_C_AO.png",
+              "pathGuid": "aaaa173fbb2cf0c9"
+            },
+            "baseColor": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "emissiveColor": [
+              1.0,
+              0.9,
+              0.75
+            ],
+            "emissiveMap": {
+              "path": "assets/Furniture/Lighting/Textures/Lamps_C/Lamps_C_Emissive.png",
+              "pathGuid": "0afb46317d0b5d6c"
+            },
+            "emissiveStrength": 1.0,
+            "factorsScaleMaps": true,
+            "metallic": 1.0,
+            "metallicMap": {
+              "path": "assets/Furniture/Lighting/Textures/Lamps_C/Lamps_C_Metallic.png",
+              "pathGuid": "8b434883b1166587"
+            },
+            "metallicRoughnessMap": "",
+            "normalMap": {
+              "path": "assets/Furniture/Lighting/Textures/Lamps_C/Lamps_C_Normal.png",
+              "pathGuid": "fa7bd74d15af533c"
+            },
+            "roughness": 1.0,
+            "roughnessMap": {
+              "path": "assets/Furniture/Lighting/Textures/Lamps_C/Lamps_C_Roughness.png",
+              "pathGuid": "1e3d207a9e92c71b"
+            },
+            "triplanar": false,
+            "triplanarScale": 1.0
+          }
+        }
+      ],
+      "name": "Lamp_Ceiling_B",
+      "order": 961,
+      "parentId": 914,
+      "path": "assets/Furniture/Lighting/Models/Lamp_Ceiling_B.fbx",
+      "pathGuid": "8e3514f80a8657d2",
+      "position": [
+        2.5,
+        2.7,
+        -6.725
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
       "Animator Controller": {
         "Controller": {
           "path": "assets/Animations/Controllers/fps_body_locomotion.controller",
@@ -86038,7 +86323,7 @@
         },
         "Slot": "Torso"
       },
-      "id": 977,
+      "id": 983,
       "materials": [
         {
           "guid": "00f2f285376c0e56",
@@ -86054,8 +86339,8 @@
         }
       ],
       "name": "Torso",
-      "order": 977,
-      "parentId": 976,
+      "order": 983,
+      "parentId": 982,
       "path": "assets/Characters/Quantum/Models/European/Quantum_Torso.fbx",
       "pathGuid": "34f0109f85dae259",
       "position": [
@@ -86096,7 +86381,7 @@
         },
         "Slot": "Head"
       },
-      "id": 978,
+      "id": 984,
       "materials": [
         {
           "guid": "d71fa7c7cd81f033",
@@ -86136,8 +86421,8 @@
         }
       ],
       "name": "Head",
-      "order": 978,
-      "parentId": 976,
+      "order": 984,
+      "parentId": 982,
       "path": "assets/Characters/Quantum/Models/Young/Quantum_Young_Head.fbx",
       "pathGuid": "0ccde7cf189bfaba",
       "position": [
@@ -86178,7 +86463,7 @@
         },
         "Slot": "Arms"
       },
-      "id": 979,
+      "id": 985,
       "materials": [
         {
           "guid": "bdf55b314edda1f4",
@@ -86186,8 +86471,8 @@
         }
       ],
       "name": "Arms",
-      "order": 979,
-      "parentId": 976,
+      "order": 985,
+      "parentId": 982,
       "path": "assets/Characters/Quantum/FirstPerson/Quantum_Arms_FP.fbx",
       "pathGuid": "19bbef7e387a5ef4",
       "position": [
@@ -86228,7 +86513,7 @@
         },
         "Slot": "Legs"
       },
-      "id": 980,
+      "id": 986,
       "materials": [
         {
           "guid": "ff2aca4c25ba4f89",
@@ -86236,8 +86521,8 @@
         }
       ],
       "name": "Legs",
-      "order": 980,
-      "parentId": 976,
+      "order": 986,
+      "parentId": 982,
       "path": "assets/Characters/Quantum/Models/European/Quantum_Legs.fbx",
       "pathGuid": "c36e291cf458911c",
       "position": [
@@ -86278,7 +86563,7 @@
         },
         "Slot": "Feet"
       },
-      "id": 981,
+      "id": 987,
       "materials": [
         {
           "guid": "ff2aca4c25ba4f89",
@@ -86286,8 +86571,8 @@
         }
       ],
       "name": "Feet",
-      "order": 981,
-      "parentId": 976,
+      "order": 987,
+      "parentId": 982,
       "path": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/Quantum_Feet_Shoes.fbx",
       "pathGuid": "9223ed446c94346d",
       "position": [
@@ -86328,7 +86613,7 @@
         },
         "Slot": "Pants"
       },
-      "id": 982,
+      "id": 988,
       "materials": [
         {
           "guid": "e099b1038572ced1",
@@ -86336,8 +86621,8 @@
         }
       ],
       "name": "Pants",
-      "order": 982,
-      "parentId": 976,
+      "order": 988,
+      "parentId": 982,
       "path": "assets/Characters/Quantum/Models/Clothing/Male/Pants/SKM_Pants_Classic.fbx",
       "pathGuid": "599cbc13ca312f56",
       "position": [
@@ -86378,7 +86663,7 @@
         },
         "Slot": "Shoes"
       },
-      "id": 983,
+      "id": 989,
       "materials": [
         {
           "guid": "e099b1038572ced1",
@@ -86386,8 +86671,8 @@
         }
       ],
       "name": "Shoes",
-      "order": 983,
-      "parentId": 976,
+      "order": 989,
+      "parentId": 982,
       "path": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/SKM_Shoes_Classic.fbx",
       "pathGuid": "1f7752e3e611def9",
       "position": [
@@ -86416,7 +86701,7 @@
         },
         "Slot": "Balaclava"
       },
-      "id": 984,
+      "id": 990,
       "materials": [
         {
           "guid": "58907c2c546715f2",
@@ -86424,8 +86709,8 @@
         }
       ],
       "name": "Balaclava",
-      "order": 984,
-      "parentId": 976,
+      "order": 990,
+      "parentId": 982,
       "path": "assets/Characters/Quantum/Models/Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx",
       "pathGuid": "18fe3d21a3cde1a0",
       "position": [

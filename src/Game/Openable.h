@@ -18,9 +18,10 @@ constexpr float kReach = 2.2f;
 float DefaultAmount(int motion, const glm::vec3& lo, const glm::vec3& hi, float parentDepth);
 
 // The local transform at `t` (0 shut .. 1 open, eased) from the shut pose (`basePos`, `baseRot`), for a model whose
-// bounds are lo..hi in its own space, drawn at `scale`.
+// bounds are lo..hi in its own space, drawn at `scale`. `back`: a hinge or flap swings toward local -Z (Swing Back).
 void Pose(int motion, float amount, const glm::vec3& lo, const glm::vec3& hi, const glm::vec3& scale,
-          const glm::vec3& basePos, const glm::quat& baseRot, float t, glm::vec3& outPos, glm::quat& outRot);
+          const glm::vec3& basePos, const glm::quat& baseRot, float t, glm::vec3& outPos, glm::quat& outRot,
+          bool back = false);
 
 // Distance along the ray (origin + d * dir, dir unit length) to the box lo..hi placed by `xform`; negative for a miss.
 float RayBox(const glm::mat4& xform, const glm::vec3& lo, const glm::vec3& hi, const glm::vec3& origin,

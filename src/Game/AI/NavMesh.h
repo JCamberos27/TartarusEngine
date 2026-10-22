@@ -118,6 +118,8 @@ public:
     float RemainingDistance(int agent) const;
     // The next corner the agent steers for (its position when none).
     glm::vec3 NextCorner(int agent) const;
+    // Debug: the agent's target state (dtCrowd's DT_CROWDAGENT_TARGET_*, -1 none) and corner count.
+    int TargetState(int agent, int* corners = nullptr) const;
 
 private:
     dtCrowd* m_Crowd = nullptr;
