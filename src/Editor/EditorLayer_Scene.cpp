@@ -660,7 +660,14 @@ static bool FrameSpawn(World& world, Camera& cam) {
 }
 
 bool EditorLayer::PlaceSceneCamera(World& world, Camera& cam, const std::string& path) {
-    if (!m_DeterministicSceneCamera && !path.empty()) {
+    // Test and screenshot runs keep the old, fixed behaviour (their fixtures place the camera
+    // themselves): only a player body is framed.
+    if (m_DeterministicSceneCamera) {
+        const bool framed = FrameFirstPersonBody(world, cam);
+        if (framed) m_ViewTransition.Active = false;
+        return framed;
+    }
+    if (!path.empty()) {
         if (const EditorSettings::SceneCameraPose* saved = EditorSettings::Get().FindSceneCamera(path)) {
             cam.Position = glm::vec3(saved->X, saved->Y, saved->Z);
             cam.Yaw = saved->Yaw;
