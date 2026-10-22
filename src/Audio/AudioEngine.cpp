@@ -295,6 +295,43 @@ void ReapEditorVoices() {
     }
 }
 
+// Held loops: a handful of slots of their own on the same group. A loop's level rides the sound's fader (a short glide per
+// change), so a control moved every frame never zippers; the sound's own volume stays 1.
+struct EditorLoop {
+    ma_sound Sound;
+    ma_audio_buffer Buffer;
+    std::shared_ptr<const EditorClip> Clip; // null when the slot is free
+    uint32_t Generation = 0;                // bumped per start: a stale LoopId no longer matches
+    bool Stopping = false;                  // fading out: freed by the reap once it has stopped
+};
+constexpr unsigned kEditorLoopGlideMs = 25;
+constexpr int kEditorLoopSlotBits = 8;
+EditorLoop s_EditorLoops[AudioEngine::kEditorLoops];
+
+void FreeEditorLoop(EditorLoop& l) {
+    ma_sound_stop(&l.Sound);
+    ma_sound_uninit(&l.Sound);
+    ma_audio_buffer_uninit(&l.Buffer);
+    l.Clip.reset();
+    l.Stopping = false;
+}
+
+// Frees every loop that has finished fading out.
+void ReapEditorLoops() {
+    for (EditorLoop& l : s_EditorLoops)
+        if (l.Clip && l.Stopping && !ma_sound_is_playing(&l.Sound)) FreeEditorLoop(l);
+}
+
+// The slot a LoopId names, or null for none / stale / already stopping.
+EditorLoop* LiveEditorLoop(AudioEngine::LoopId id) {
+    if (id < 0) return nullptr;
+    const int slot = id & ((1 << kEditorLoopSlotBits) - 1);
+    if (slot >= AudioEngine::kEditorLoops) return nullptr;
+    EditorLoop& l = s_EditorLoops[slot];
+    if (!l.Clip || l.Stopping || (uint32_t)(id >> kEditorLoopSlotBits) != (l.Generation & 0x7FFFFFu)) return nullptr;
+    return &l;
+}
+
 // The editor output's clip guard: unity below -3 dBFS, above it a tanh knee (slope 1 where it starts, so no corner) that
 // approaches -0.3 dBFS and never passes it. Per sample, no state, no lookahead: it adds no latency, and a lone tick never
 // reaches it - only a pile-up of loud voices does.
@@ -591,6 +628,8 @@ void AudioEngine::Shutdown() {
     s_FreeSlots.clear();
     for (int i = 0; i < s_EditorActiveCount; ++i) FreeEditorVoice(s_EditorVoices[s_EditorActive[i]]);
     ResetEditorSlots();
+    for (EditorLoop& l : s_EditorLoops)
+        if (l.Clip) FreeEditorLoop(l);
     if (s_EditorGroupReady) ma_sound_group_uninit(&s_EditorGroup);
     s_EditorGroupReady = false;
     if (s_EditorClipGuard) { // after the group: nothing feeds it any more
@@ -659,6 +698,7 @@ void AudioEngine::Update() {
         StopPreview();
     }
     ReapEditorVoices();
+    ReapEditorLoops();
     if (s_EncoderOpen && !s_TapsExternal) { // AUDIO_CAPTURE: keep the file fed
         std::vector<float> a, b, c;
         DrainTaps(a, b, c);
@@ -1394,6 +1434,81 @@ void AudioEngine::SetEditorVolume(float volume) {
 }
 
 int AudioEngine::EditorVoiceCount() { return s_EditorLive; }
+
+AudioEngine::LoopId AudioEngine::StartEditorLoop(ClipId id, float volume, float pitch, float pan, unsigned fadeInMs) {
+    if (!s_Initialized || !s_EditorGroupReady || id < 0 || (size_t)id >= s_EditorClips.size()) return -1;
+    const std::shared_ptr<const EditorClip>& clip = s_EditorClips[(size_t)id];
+    if (!clip) return -1;
+    int slot = -1;
+    for (int pass = 0; pass < 2 && slot < 0; ++pass) {
+        for (int i = 0; i < kEditorLoops; ++i)
+            if (!s_EditorLoops[i].Clip) { slot = i; break; }
+        if (slot < 0 && pass == 0) ReapEditorLoops(); // every slot busy (some still fading out): free any that have ended
+    }
+    if (slot < 0) return -1;
+    EditorLoop& l = s_EditorLoops[slot];
+    ma_audio_buffer_config bc = ma_audio_buffer_config_init(ma_format_f32, clip->Channels, clip->FrameCount, clip->Pcm, nullptr);
+    bc.sampleRate = clip->SampleRate;
+    if (ma_audio_buffer_init(&bc, &l.Buffer) != MA_SUCCESS) return -1;
+    // Pitch stays live (no NO_PITCH): the control moves it every frame.
+    if (ma_sound_init_from_data_source(&s_Engine, (ma_data_source*)&l.Buffer, MA_SOUND_FLAG_NO_SPATIALIZATION, &s_EditorGroup, &l.Sound) != MA_SUCCESS) {
+        ma_audio_buffer_uninit(&l.Buffer);
+        return -1;
+    }
+    ma_sound_set_looping(&l.Sound, MA_TRUE);
+    ma_sound_set_pitch(&l.Sound, std::clamp(pitch, 0.25f, 4.0f));
+    ma_sound_set_pan(&l.Sound, std::clamp(pan, -1.0f, 1.0f));
+    ma_sound_set_fade_in_milliseconds(&l.Sound, 0.0f, std::max(volume, 0.0f), fadeInMs);
+    if (ma_sound_start(&l.Sound) != MA_SUCCESS) {
+        ma_sound_uninit(&l.Sound);
+        ma_audio_buffer_uninit(&l.Buffer);
+        return -1;
+    }
+    l.Clip = clip;
+    l.Stopping = false;
+    l.Generation = (l.Generation + 1) & 0x7FFFFFu;
+    return (LoopId)(slot | (int32_t)(l.Generation << kEditorLoopSlotBits));
+}
+
+void AudioEngine::SetEditorLoop(LoopId loop, float volume, float pitch, float pan) {
+    EditorLoop* l = LiveEditorLoop(loop);
+    if (!l) return;
+    ma_sound_set_fade_in_milliseconds(&l->Sound, -1.0f, std::max(volume, 0.0f), kEditorLoopGlideMs); // (-1: from where it is now)
+    ma_sound_set_pitch(&l->Sound, std::clamp(pitch, 0.25f, 4.0f));
+    ma_sound_set_pan(&l->Sound, std::clamp(pan, -1.0f, 1.0f));
+}
+
+void AudioEngine::StopEditorLoop(LoopId loop, unsigned fadeOutMs) {
+    EditorLoop* l = LiveEditorLoop(loop);
+    if (!l) return;
+    ma_sound_stop_with_fade_in_milliseconds(&l->Sound, fadeOutMs);
+    l->Stopping = true; // freed by the reap once it has stopped
+}
+
+bool AudioEngine::EditorLoopPlaying(LoopId loop) {
+    EditorLoop* l = LiveEditorLoop(loop);
+    return l && ma_sound_is_playing(&l->Sound);
+}
+
+AudioEngine::ClipId AudioEngine::CreateClip(const std::string& name, const float* pcm, uint64_t frames, uint32_t channels, uint32_t sampleRate) {
+    if (!pcm || frames == 0 || channels == 0 || sampleRate == 0) return -1;
+    const auto known = s_EditorClipIds.find(name);
+    if (known != s_EditorClipIds.end()) return known->second;
+    const size_t bytes = (size_t)frames * channels * sizeof(float);
+    void* copy = ma_malloc(bytes, nullptr);
+    if (!copy) return -1;
+    std::memcpy(copy, pcm, bytes);
+    auto clip = std::make_shared<EditorClip>();
+    clip->Pcm = static_cast<float*>(copy);
+    clip->Channels = channels;
+    clip->SampleRate = sampleRate;
+    clip->FrameCount = frames;
+    clip->Path = name;
+    const ClipId id = (ClipId)s_EditorClips.size();
+    s_EditorClips.push_back(std::move(clip));
+    s_EditorClipIds.emplace(name, id);
+    return id;
+}
 
 void AudioEngine::StopPreview() {
     if (s_PreviewSound) {

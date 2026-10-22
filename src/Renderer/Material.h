@@ -8,6 +8,7 @@
 #include <vector>
 #include <glm/glm.hpp>
 #include "ShaderPropType.h"
+#include "Substrate.h"
 
 class Texture;
 
@@ -101,6 +102,16 @@ struct Material {
     std::shared_ptr<Texture> DetailAlbedoMap; // x2 detail: 50% grey leaves the colour unchanged
     std::shared_ptr<Texture> DetailNormalMap;
     glm::vec2 DetailTiling{4.0f};         // detail maps' UV tiling (on the mesh UVs)
+    // Grunge (docs/DECALS.md): a grime map laid over the whole surface triplanar in world space (so it
+    // ignores the UVs), multiplied into the albedo and roughening where it's dark. Unit 21.
+    std::shared_ptr<Texture> GrungeMap;
+    float GrungeStrength = 0.0f;          // 0 = off
+    float GrungeScale    = 0.5f;          // tiles per metre
+    bool  ReceiveDecals  = true;          // clustered decals project onto this surface
+    // Substrate (Substrate.h): the material under the paint. Where the Grunge map's peel mask says the
+    // paint is gone it shows instead (colour, normal, roughness, AO), and peeling-paint decals on Auto
+    // reveal it too. Its maps live in the decal texture arrays (uMaterialSubstrate), not on units.
+    SubstrateDesc Substrate;
 
     // Values of a linked shader's custom (non-built-in) properties, keyed by property name
     // ("_Foo"), pushed as `u<Foo>` uniforms by BindMaterialDataDriven. Lives here rather than on
@@ -179,7 +190,7 @@ struct Material {
             SubsurfaceColor.x, SubsurfaceColor.y, SubsurfaceColor.z, Thickness,
             TransmissionStrength, IOR, AlphaCutoff,
             UVTiling.x, UVTiling.y, UVOffset.x, UVOffset.y, NormalStrength, ParallaxScale,
-            DetailTiling.x, DetailTiling.y,
+            DetailTiling.x, DetailTiling.y, GrungeStrength, GrungeScale,
         };
         put(scalars, sizeof(scalars));
         const std::uint32_t flags = (Triplanar ? 1u : 0u)
@@ -190,13 +201,14 @@ struct Material {
                                   | (DoubleSided ? 32u : 0u)
                                   | (UseVertexColor ? 64u : 0u)
                                   | (SpecularHighlights ? 0u : 128u)
-                                  | (GlossyReflections ? 0u : 256u);
+                                  | (GlossyReflections ? 0u : 256u)
+                                  | (ReceiveDecals ? 0u : 512u);
         put(&flags, sizeof(flags));
         const Texture* const texs[] = {
             AlbedoMap.get(), NormalMap.get(), MetallicRoughnessMap.get(), MetallicMap.get(),
             RoughnessMap.get(), AOMap.get(), EmissiveMap.get(),
             ClearCoatMap.get(), ThicknessMap.get(),
-            HeightMap.get(), DetailAlbedoMap.get(), DetailNormalMap.get(),
+            HeightMap.get(), DetailAlbedoMap.get(), DetailNormalMap.get(), GrungeMap.get(),
         };
         static_assert(sizeof(scalars) + sizeof(flags) + sizeof(texs) <= sizeof(words), "Material::Hash words");
         put(texs, sizeof(texs));
@@ -210,6 +222,7 @@ struct Material {
         for (; i < n; ++i) { lane[0] = (lane[0] ^ words[i]) * 1099511628211ull; lane[0] ^= lane[0] >> 32; }
         std::uint64_t h = lane[0];
         for (int k = 1; k < 4; ++k) { h = (h ^ lane[k]) * 1099511628211ull; h ^= h >> 29; }
+        if (Substrate.Enabled()) { h = (h ^ (std::uint64_t)std::hash<std::string>{}(Substrate.Key())) * 1099511628211ull; h ^= h >> 29; }
         return h;
     }
 

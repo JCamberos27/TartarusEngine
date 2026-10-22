@@ -4,9 +4,11 @@
 #include <glm/glm.hpp>
 
 #include <cstddef>
+#include <functional>
 #include <vector>
 
 class World;
+struct RuntimeDecal;
 
 // The holes rounds leave where they strike: kept in the struck entity's own space, so a hole in
 // a crate goes with the crate when it's knocked over and one in a wall stays put. The oldest are
@@ -33,6 +35,16 @@ public:
     std::size_t Size() const { return m_Holes.size(); }
     // This frame's world-space holes, dropping any whose entity is gone.
     void Resolve(const World& world, std::vector<Placed>& out);
+
+    // This frame's holes as decals: the box placed from the hole (+Z out of the surface, its spin from the seed), the
+    // cell from the seed, the rim cut. `look` fills the maps and the response for a Knife hole (`decal` >= 0) or the
+    // procedural one (-1); false skips that hole this frame (its maps are still being made). Returns how many.
+    using LookFn = std::function<bool(int decal, RuntimeDecal& r)>;
+    int Emit(const World& world, std::vector<RuntimeDecal>& out, const LookFn& look);
+    // Emit through BloodRenderer::HoleLook into the current DecalSystem's runtime list (after BloodRenderer::BeginFrame).
+    int Submit(const World& world);
+    // A box's projection depth: a Knife hole's 6 cm (as the old blood decal pass drew it), the procedural one's 3 cm.
+    static constexpr float kKnifeDepth = 0.06f, kProceduralDepth = 0.03f;
 
 private:
     struct Hole {

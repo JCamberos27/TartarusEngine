@@ -1341,6 +1341,62 @@ struct ReflectionProbeComponent {
     float Importance{1.0f};            // higher wins 2-probe selection tie-breaks
 };
 
+// Clustered PBR decal (docs/DECALS.md). Projects a .decal asset along the entity's local -Z
+// (into the surface) through a box of Size metres. Per-instance values multiply / override the
+// asset's defaults; Seed drives rotation, scale and flip jitter plus the atlas frame when
+// Frame is -1, so the same seed always gives the same look.
+struct DecalComponent {
+    std::string AssetPath;              // project-relative .decal
+    glm::vec3 Size{1.0f, 1.0f, 0.25f};  // width, height, projection depth (metres)
+    glm::vec3 Tint{1.0f};
+    float Opacity = 1.0f;               // multiplies every channel
+    // Per-channel opacity multipliers on top of the asset's channel defaults.
+    float AlbedoOp = 1.0f, NormalOp = 1.0f, RoughnessOp = 1.0f, MetalOp = 1.0f, AOOp = 1.0f,
+          EmissiveOp = 1.0f;
+    int SortOrder = 0;                  // higher draws on top
+    int LayerMask = -1;                 // receiver object layers (bit per layer)
+    bool AffectStatic = true;
+    bool AffectDynamic = true;
+    int Seed = 0;
+    int Frame = -1;                     // atlas frame; -1 = from Seed
+    float RotationJitter = 0.0f;        // degrees, +/-
+    float ScaleJitter = 0.0f;           // fraction, +/-
+    bool RandomFlip = false;
+    // Weathering, added to the asset's values and the scene's Decal Grading.
+    float Fade = 0.0f, Bleach = 0.0f, Peel = 0.0f, Buff = 0.0f;
+    // Substrate (Substrate.h): what shows where the decal's mask says the paint is gone.
+    // 0 Auto: the receiving material's substrate, else the asset's (only for an asset that has one);
+    // 1 Asset: always the asset's; 2 Custom: the maps and values below; 3 Off: none;
+    // 4 Preset: the .substrate named by SubPreset.
+    int SubstrateMode = 0;
+    std::string SubPreset;              // project-relative .substrate (Preset)
+    std::string SubAlbedo, SubNormal, SubRoughness, SubAO; // project-relative textures (Custom)
+    float SubTiling = 1.5f;             // metres per repeat
+    glm::vec3 SubTint{1.0f};
+    float SubStrength = 1.0f;
+    float SubRoughMin = 0.0f, SubRoughMax = 1.0f;
+    bool SubMirror = false;
+    float SubCropX0 = 0.0f, SubCropY0 = 0.0f, SubCropX1 = 1.0f, SubCropY1 = 1.0f;
+};
+
+// Scene-level "how abandoned is this place" grade for every decal (first one in the scene wins).
+// Age fades and sun-bleaches; Wear peels, buffs and chips. Read every frame by DecalSystem.
+struct DecalGradingComponent {
+    float Age = 0.0f;  // 0..1
+    float Wear = 0.0f; // 0..1
+};
+
+// A graffiti piece going on to a wall with a spray can (Decals P4, Game/SprayCan.h): on the entity whose
+// DecalComponent shows the piece's baked decal. It goes on stroke by stroke over Seconds; Elapsed is how far
+// it has got. Saved with the scene like every component, so a piece half-sprayed when the game state is saved
+// carries on from there when it's loaded.
+struct SprayPaintComponent {
+    std::string PiecePath;  // project-relative .graffiti
+    float Seconds = 10.0f;  // how long the whole piece takes to spray
+    float Elapsed = 0.0f;   // seconds sprayed so far
+    std::string Painter;    // who is spraying it ("Player", an NPC's name): for the AI and the log
+};
+
 // ---- lane P ----
 // Scene-level visual effects and HUD settings (Lane P quality pass).
 // Add one to the scene to tune muzzle flash, laser beam and HUD display parameters.

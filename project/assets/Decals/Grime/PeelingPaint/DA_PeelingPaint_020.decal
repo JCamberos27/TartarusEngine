@@ -1,0 +1,70 @@
+{
+  "decalVersion": 1,
+  "textures": {
+    "albedo": "assets/Decals/Grime/PeelingPaint/T_Decal_PeelingPaint_020.png",
+    "normal": "assets/Decals/Grime/PeelingPaint/T_Decal_PeelingPaint_020_N.png",
+    "surface": "assets/Decals/Grime/PeelingPaint/T_Decal_PeelingPaint_020_S.png",
+    "aux": ""
+  },
+  "lumaMask": false,
+  "invertMask": false,
+  "tier": 2048,
+  "atlas": {
+    "cols": 1,
+    "rows": 1
+  },
+  "defaultSize": [
+    2.0,
+    2.0,
+    0.25
+  ],
+  "channels": {
+    "albedo": 1.0,
+    "normal": 1.0,
+    "roughness": 1.0,
+    "metal": 0.0,
+    "ao": 1.0,
+    "emissive": 0.0
+  },
+  "baseColor": [
+    1.0,
+    1.0,
+    1.0
+  ],
+  "roughness": 0.4,
+  "metal": 0.0,
+  "emissive": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "angleFade": [
+    0.25,
+    0.05
+  ],
+  "edgeFade": 0.15,
+  "heightBlend": 0.4,
+  "heightContrast": 4.0,
+  "paint": {
+    "enabled": false,
+    "roughness": 0.35,
+    "metal": 0.0,
+    "relief": 0.3,
+    "uv": false
+  },
+  "weathering": {
+    "fade": 0.0,
+    "bleach": 0.0,
+    "peel": 0.0,
+    "buff": 0.0
+  },
+  "substrate": {
+    "preset": "assets/Decals/Substrates/SB_Wall_Concrete.substrate"
+  },
+  "category": "Grime/PeelingPaint",
+  "tags": [
+    "grime",
+    "peeling",
+    "paint"
+  ]
+}

@@ -1,4 +1,5 @@
 #include "Model.h"
+#include "DecalSystem.h"
 #include "AnimRetarget.h"
 #include "SkinHideBuffer.h"
 #include "MaterialAsset.h"
@@ -2050,6 +2051,7 @@ struct MaterialLocs {
     int hasEmissive, emissiveMap;
     int alphaClip, alphaCutoff; // #101
     int hasHeight, heightMap, hasDetailAlbedo, detailAlbedoMap, hasDetailNormal, detailNormalMap; // #102
+    int hasGrunge, grungeMap; // docs/DECALS.md
     // UploadBoneMatrices and DrawDepthOnly (the shadow / depth pre-pass programs).
     int useSkinning, skinBase, uvTiling, uvOffset, depthAlbedo, alphaTest;
 };
@@ -2084,6 +2086,8 @@ MaterialLocs ResolveMaterialLocs(Shader& shader) {
     L.detailAlbedoMap = shader.Loc("uDetailAlbedoMap");
     L.hasDetailNormal = shader.Loc("uHasDetailNormalMap");
     L.detailNormalMap = shader.Loc("uDetailNormalMap");
+    L.hasGrunge = shader.Loc("uHasGrungeMap");
+    L.grungeMap = shader.Loc("uGrungeMap");
     L.useSkinning = shader.Loc("uUseSkinning");
     L.skinBase = shader.Loc("uSkinBase");
     L.uvTiling = shader.Loc("uUVTiling");
@@ -2454,6 +2458,12 @@ void SetSurfaceOptions(Shader& shader, const Material& mat) {
     shader.SetInt("uNoGlossyReflections", mat.GlossyReflections ? 0 : 1);
     shader.SetFloat("uParallaxScale", mat.ParallaxScale);
     shader.SetVec2("uDetailTiling", mat.DetailTiling);
+    // Grunge and decals (ModelDecals.glsl); the Standard shaders' properties set the same uniforms.
+    shader.SetFloat("uGrungeStrength", mat.GrungeStrength);
+    shader.SetFloat("uGrungeScale", mat.GrungeScale);
+    shader.SetInt("uReceiveDecals", mat.ReceiveDecals ? 1 : 0);
+    // Its substrate's row in the decal system's table (index + 1, 0 = none / still decoding).
+    shader.SetInt("uMaterialSubstrate", mat.Substrate.Enabled() ? DecalSystem::MaterialSubstrate(mat.Substrate) : 0);
 }
 
 void BindMaterial(Shader& shader, const Material& mat, const MaterialLocs& locs) {
@@ -2501,6 +2511,7 @@ void BindMaterial(Shader& shader, const Material& mat, const MaterialLocs& locs)
     bindSlot(16, mat.HeightMap, locs.hasHeight, locs.heightMap, DefaultTextures::White());
     bindSlot(17, mat.DetailAlbedoMap, locs.hasDetailAlbedo, locs.detailAlbedoMap, DefaultTextures::White());
     bindSlot(18, mat.DetailNormalMap, locs.hasDetailNormal, locs.detailNormalMap, DefaultTextures::FlatNormal());
+    bindSlot(21, mat.GrungeMap, locs.hasGrunge, locs.grungeMap, DefaultTextures::White()); // Decals::UNIT_GRUNGE
     SetSurfaceOptions(shader, mat);
 }
 // Data-driven BindMaterial using ShaderAsset::Bindings() + MaterialAsset property accessors.

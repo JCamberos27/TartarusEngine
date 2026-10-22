@@ -121,9 +121,9 @@ def light_flicker(Mode=0, MinInterval=4.0, MaxInterval=15.0, Depth=1.0, Seed=1):
                               'Max Interval': MaxInterval, 'Depth': Depth, 'Seed': Seed}}
 
 
-def from_mat(repo, mat_path, **overrides):
+def from_mat(repo, mat_path, grunge=None, grunge_strength=0.0, grunge_scale=0.5, receive_decals=True, **overrides):
     """An embedded material copied from a .mat asset's properties (e.g. a lamp shade's, with its glow switched
-    off: emissive_strength=0)."""
+    off: emissive_strength=0). grunge* / receive_decals: see _decal_keys."""
     with open(os.path.join(repo, 'project', mat_path), encoding='utf-8') as f:
         p = json.load(f)['properties']
 
@@ -138,20 +138,40 @@ def from_mat(repo, mat_path, **overrides):
          'metallicMap': ref(p.get('_MetallicMap')), 'metallicRoughnessMap': ref(p.get('_MetallicRoughnessMap')),
          'normalMap': ref(p.get('_NormalMap')), 'roughness': p.get('_Roughness', 0.6),
          'roughnessMap': ref(p.get('_RoughnessMap')), 'triplanar': False, 'triplanarScale': 1.0}
+    m.update(_decal_keys(ref, grunge, grunge_strength, grunge_scale, receive_decals))
     for key, value in overrides.items():
         m[{'emissive_strength': 'emissiveStrength'}.get(key, key)] = value
     return m
 
 
+def _decal_keys(ref, grunge, grunge_strength, grunge_scale, receive_decals):
+    """The embedded material's grunge map (a project-relative texture laid over the surface triplanar in world
+    space, docs/DECALS.md), its strength (0 = off) and tiles per metre, and whether clustered decals project onto
+    it. Only the non-default ones, as the engine writes them, so materials without them don't change."""
+    m = {}
+    if grunge:
+        m['grungeMap'] = ref(grunge)
+    if grunge_strength != 0.0:
+        m['grungeStrength'] = grunge_strength
+    if grunge_scale != 0.5:
+        m['grungeScale'] = grunge_scale
+    if not receive_decals:
+        m['receiveDecals'] = False
+    return m
+
+
 def textured(repo, albedo=None, normal=None, rough=None, ao=None, base=(1.0, 1.0, 1.0), roughness=0.8, metallic=0.0,
-             triplanar_scale=1.0, emissive=(0.0, 0.0, 0.0), strength=0.0):
+             triplanar_scale=1.0, emissive=(0.0, 0.0, 0.0), strength=0.0, grunge=None, grunge_strength=0.0,
+             grunge_scale=0.5, receive_decals=True):
     """An embedded box material over imported texture paths (project-relative), triplanar so boxes of any size tile."""
     def ref(p):
         if not p:
             return ''
         with open(os.path.join(repo, 'project', p + '.meta'), encoding='utf-8') as f:
             return {'path': p, 'pathGuid': json.load(f)['guid']}
-    return {'albedoMap': ref(albedo), 'aoMap': ref(ao), 'baseColor': list(base), 'emissiveColor': list(emissive),
-            'emissiveMap': '', 'emissiveStrength': strength, 'factorsScaleMaps': True, 'metallic': metallic,
-            'metallicMap': '', 'metallicRoughnessMap': '', 'normalMap': ref(normal), 'roughness': roughness,
-            'roughnessMap': ref(rough), 'triplanar': bool(albedo or normal), 'triplanarScale': triplanar_scale}
+    m = {'albedoMap': ref(albedo), 'aoMap': ref(ao), 'baseColor': list(base), 'emissiveColor': list(emissive),
+         'emissiveMap': '', 'emissiveStrength': strength, 'factorsScaleMaps': True, 'metallic': metallic,
+         'metallicMap': '', 'metallicRoughnessMap': '', 'normalMap': ref(normal), 'roughness': roughness,
+         'roughnessMap': ref(rough), 'triplanar': bool(albedo or normal), 'triplanarScale': triplanar_scale}
+    m.update(_decal_keys(ref, grunge, grunge_strength, grunge_scale, receive_decals))
+    return m

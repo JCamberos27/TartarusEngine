@@ -76,6 +76,7 @@ NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "w
     if (m_Scenario == "reload") m_Duration = 28.0f;
     if (m_Scenario == "flame") m_Duration = 14.0f;
     if (m_Scenario == "blood") m_Duration = 44.0f;
+    if (m_Scenario == "decals") m_Duration = 52.0f;
     if (m_Scenario == "ragdoll") m_Duration = 240.0f;
     if (const char* t = EnvVar("NPC_TEST_SECONDS")) m_Duration = std::max(5.0f, (float)std::atof(t));
     if (const char* r = EnvVar("NPC_TEST_RECORD")) m_RecordDir = r;
@@ -188,6 +189,7 @@ void NpcTest::Drive(Player& player, FirstPersonPresentation& weapon, NpcDirector
         }
         m_Reload = weapon.Ammo() == 0;
     }
+    if (m_Scenario == "decals") DecalsDrive(player, wantYaw, wantPitch);
     if (m_Scenario == "fight") {
         // Shoot whoever is in sight: the nearest soldier with a clear line to its chest.
         const Npc* target = nullptr;
@@ -341,6 +343,10 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
     }
     if (m_Scenario == "ragdoll") {
         Ragdoll(world, npcs, player);
+        return;
+    }
+    if (m_Scenario == "decals") {
+        Decals(world, npcs, now);
         return;
     }
     if (m_Scenario == "feet") {

@@ -10,22 +10,22 @@ in float vHidden; // ModelVertex: the share of the vertex moved by uHideBones
 in vec3 vBindPos;    // the surface in the mesh's bind-pose space (ModelVertex)
 in vec3 vBindNormal;
 
-// Every uniform and shading function (lights, shadows, IBL, fog): shared with the blood decals.
+// Every uniform and shading function (lights, shadows, IBL, fog): ModelShading.glsl.
 #include "ModelShading.glsl"
 
 // Blood splats on this mesh: the BloodRenderer's list for the entity, in the mesh's bind-pose
-// space. Each is a box like a world decal - projected along its normal, read from the decal atlas - that turns
-// what it covers into blood before the surface is lit. uBloodSplatCount 0 (every draw that has none) costs a branch.
+// space. Each is a box like a world decal - projected along its normal - that turns what it covers into blood
+// before the surface is lit. The images are the blood sets' maps in the shared decal arrays (ModelDecals.glsl's
+// units 22 and 25: albedo shading + coverage, the aux reveal order), sampled in bind space rather than through
+// the clustered list. uBloodSplatCount 0 (every draw that has none) costs a branch.
 struct BloodSplat {
     vec4 CenterRadius; // xyz centre, w the box's half-size (bind units)
     vec4 NormalDepth;  // xyz out of the surface, w the projection's half-depth
-    vec4 Tangent;      // xyz the decal's u axis, w unused
-    vec4 Rect;         // atlas rect (offset, size)
-    vec4 Params;       // x cutout, y dryness, z opacity, w unused
+    vec4 Tangent;      // xyz the decal's u axis, w the slot's deepest mip
+    vec4 Rect;         // the set's slot in its decal-array layer (uv offset, size)
+    vec4 Params;       // x cutout, y dryness, z opacity, w the layer
 };
 layout(std430, binding = 6) readonly buffer BloodSplats { BloodSplat uBloodSplats[]; };
-layout(binding = 28) uniform sampler2D uBloodNormAtlas; // 28, 29: reserved past the material units (ShaderAsset)
-layout(binding = 29) uniform sampler2D uBloodMaskAtlas;
 uniform int uBloodSplatFirst;
 uniform int uBloodSplatCount;
 uniform vec4 uBloodFresh; // BloodPalette: rgb fresh, a its roughness on cloth / skin
@@ -40,15 +40,18 @@ vec3 UnpackNormal(vec3 s) {
     return n;
 }
 
+// Clustered decals and the material's Grunge map (ApplyDecals, ApplyGrunge).
+#include "ModelDecals.glsl"
+
 vec3 BloodSplatCover() {
     vec3 acc = vec3(0.0);
     vec3 bn = normalize(vBindNormal);
-    // The atlas is read inside a loop that skips splats per fragment, where implicit derivatives are undefined:
+    // The maps are read inside a loop that skips splats per fragment, where implicit derivatives are undefined:
     // the mip comes from the surface's own footprint instead (bind units per pixel), taken out here.
     float footprint = max(length(fwidth(vBindPos)), 1e-7);
-    vec2 atlasSize = vec2(textureSize(uBloodNormAtlas, 0));
     for (int i = 0; i < uBloodSplatCount; ++i) {
         BloodSplat s = uBloodSplats[uBloodSplatFirst + i];
+        if (s.Params.z <= 0.0) continue;
         vec3 d = vBindPos - s.CenterRadius.xyz;
         float r = s.CenterRadius.w;
         if (dot(d, d) > 3.0 * r * r) continue;
@@ -57,12 +60,15 @@ vec3 BloodSplatCover() {
         if (any(greaterThan(abs(l), vec3(0.5)))) continue;
         float facing = smoothstep(-0.2, 0.35, dot(bn, n)); // wraps a little round the curve of a limb
         vec2 uv = vec2(l.x, -l.z) + 0.5;
-        vec2 tc = s.Rect.xy + vec2(uv.x, 1.0 - uv.y) * s.Rect.zw;
-        float lod = log2(max(footprint / (2.0 * r) * max(s.Rect.z * atlasSize.x, s.Rect.w * atlasSize.y), 1e-4));
-        float coverage = clamp(textureLod(uBloodNormAtlas, tc, lod).a * 2.0, 0.0, 1.0);
-        vec3 mask = textureLod(uBloodMaskAtlas, tc, lod).rgb;
-        float a = clamp((mask.r - s.Params.x) * 20.0, 0.0, 1.0) * coverage * facing * s.Params.z;
-        float core = clamp((mask.r - s.Params.x) * 5.0, 0.0, 1.0) * coverage * mask.b;
+        float lod = clamp(log2(max(footprint / (2.0 * r) * s.Rect.z * DECAL_PAGE, 1e-4)), 0.0, s.Tangent.w);
+        float inset = 0.5 * exp2(lod) / DECAL_PAGE;
+        vec2 tc = clamp(s.Rect.xy + vec2(uv.x, 1.0 - uv.y) * s.Rect.zw, s.Rect.xy + inset, s.Rect.xy + s.Rect.zw - inset);
+        vec3 tc3 = vec3(tc, s.Params.w);
+        vec4 col = textureLod(uDecalAlbedo, tc3, lod);       // shade (the pooled core darker), coverage
+        float reveal = textureLod(uDecalAux, tc3, lod).r;    // the reveal order
+        float coverage = min(col.a * 2.0, 1.0); // the set keeps its raw alpha (DecalBake::BloodSet): its gain
+        float a = clamp((reveal - s.Params.x) * 20.0, 0.0, 1.0) * coverage * facing * s.Params.z;
+        float core = clamp((1.0 - col.r) / 0.4, 0.0, 1.0) * clamp((reveal - s.Params.x) * 5.0, 0.0, 1.0);
         if (a > acc.x) acc.z = s.Params.y;
         acc.x = max(acc.x, a);
         acc.y = max(acc.y, core * facing);
@@ -181,6 +187,11 @@ void main() {
     } else if (backFace) {
         N = -N;
     }
+    // Material -> Grunge -> decals -> blood -> lighting (docs/DECALS.md).
+    vec3 geoN = backFace ? -normalize(vNormal) : normalize(vNormal);
+    ApplyGrunge(albedo, N, roughness, metallic, ao, geoN);
+    vec3 decalEmissive = vec3(0.0);
+    ApplyDecals(albedo, N, roughness, metallic, ao, decalEmissive, geoN);
     if (uBloodSplatCount > 0) {
         // Soaked in: fabric and skin take the blood's colour, darker where it pooled, glossy while wet.
         vec3 blood = BloodSplatCover();
@@ -219,6 +230,7 @@ void main() {
     // nothing once a map was assigned.
     vec3 emissiveEarly = uHasEmissiveMap == 1 ? (tri ? SampleTriplanar(uEmissiveMap, vWorldPos, triW, uTriplanarScale)
                                                       : texture(uEmissiveMap, uv)).rgb * uEmissiveColor : uEmissiveColor;
+    emissiveEarly += decalEmissive;
     if (uUnlit == 1) {
         vec3 flatColor = albedo + emissiveEarly;
         FragColor = vec4(uApplyTonemap == 1 ? pow(flatColor, vec3(1.0 / 2.2)) : flatColor, 1.0);

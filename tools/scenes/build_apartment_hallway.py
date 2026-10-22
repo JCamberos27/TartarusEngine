@@ -29,6 +29,8 @@ H = 2.7               # floor to ceiling
 T = 0.15              # partition thickness
 TX = 0.3              # outside walls
 HALL = 1.075          # corridor wall centre lines at z = +-HALL: 2.0 m clear
+GRUNGE_WALL = 'assets/Decals/Grime/PeelingPaint/T_Grunge_PeelingPaint_036.png'   # corridor walls
+GRUNGE_WORN = 'assets/Decals/Grime/PeelingPaint/T_Grunge_PeelingPaint_085.png'   # corridor ceiling + trim
 D = 8.6               # apartment depth, corridor wall to outside wall (centre lines)
 DOOR_W, DOOR_H = 0.92, 2.06      # opening for Door_Op_1's frame (the frame's own trim covers the gap)
 DOOR_WALL_Z = 0.032              # the frame's wall centre, door-local +Z of its origin
@@ -137,6 +139,16 @@ class Hallway(k.Scene):
             # atlases with a baseboard band in them, which smears when tiled)
             'plaster': k.textured(r, normal=plaster['normal'], rough=plaster['rough'], base=(0.84, 0.83, 0.8),
                                   roughness=0.9, triplanar_scale=0.5),
+            # the corridor's derelict-squat shell (tools/scenes/dress_corridor.py patches the saved scene to match): the
+            # beige plaster's own albedo + AO, and a peeling-paint grunge laid over it in world space
+            'corridor_plaster': k.textured(r, albedo=plaster['albedo'], normal=plaster['normal'], rough=plaster['rough'],
+                                           ao=plaster['ao'], base=(0.92, 0.9, 0.86), roughness=0.9, triplanar_scale=0.5,
+                                           grunge=GRUNGE_WALL, grunge_strength=0.35, grunge_scale=0.25),
+            'corridor_ceiling': k.textured(r, albedo=ceil + 'Base_Color.png', normal=ceil + 'Normal.png',
+                                           base=(0.95, 0.95, 0.95), roughness=0.95, triplanar_scale=0.33,
+                                           grunge=GRUNGE_WORN, grunge_strength=0.45, grunge_scale=0.25),
+            'corridor_trim': k.textured(r, base=(0.86, 0.85, 0.82), roughness=0.4, grunge=GRUNGE_WORN,
+                                        grunge_strength=0.5),
             'tile_wall': k.textured(r, normal=plaster['normal'], rough=plaster['rough'], base=(0.88, 0.89, 0.88),
                                     roughness=0.45, triplanar_scale=0.5),
             # ~9 boards a tile: 0.9 tiles a metre gives 12 cm boards
@@ -188,7 +200,7 @@ class Hallway(k.Scene):
     def plan(self):
         """Every room's world rectangle, wall line, door, arch and window."""
         self.rooms['Corridor'] = (0.0, -HALL, L, HALL)
-        self.room_mat['Corridor'] = ('plaster', 'planks')
+        self.room_mat['Corridor'] = ('corridor_plaster', 'planks')
         for number, plan, x0, sx, row in PLACEMENT:
             p = UNITS[plan]
 
@@ -290,7 +302,7 @@ class Hallway(k.Scene):
             self.box(f'Floor - {label}', floors, ((ix0 + ix1) / 2, -0.05, (iz0 + iz1) / 2), (ix1 - ix0, 0.1, iz1 - iz0),
                      self.mats[self.room_mat[key][1]], collider=False, static=True, castShadows=0)
             self.face(f'Ceiling - {label}', ceilings, ((ix0 + ix1) / 2, H, (iz0 + iz1) / 2), (0, -1, 0), ix1 - ix0,
-                      iz1 - iz0, self.mats['ceiling'])
+                      iz1 - iz0, self.mats['corridor_ceiling' if key == 'Corridor' else 'ceiling'])
             for axis, line, a, b, inward, normal in (
                     ('x', z0, ix0, ix1, iz0, (0, 0, 1)), ('x', z1, ix0, ix1, iz1, (0, 0, -1)),
                     ('z', x0, iz0, iz1, ix0, (1, 0, 0)), ('z', x1, iz0, iz1, ix1, (-1, 0, 0))):
@@ -299,7 +311,8 @@ class Hallway(k.Scene):
                     c = (mid[0], mid[1], inward) if axis == 'x' else (inward, mid[1], mid[0])
                     self.face(f'Wall - {label}', walls, c, normal, p1 - p0, y1 - y0, wall_mat)
                 self.reveals(walls, axis, line, a, b, inward, normal, wall_mat)
-                self.baseboard(trim, axis, line, a, b, inward, normal)
+                self.baseboard(trim, axis, line, a, b, inward, normal,
+                               self.mats['corridor_trim' if key == 'Corridor' else 'trim'])
 
     def reveals(self, parent, axis, line, a, b, inward, normal, mat):
         """The sides of each window and arch opening, from this room's face to the wall's centre line (the room on
@@ -321,7 +334,7 @@ class Hallway(k.Scene):
                 c = (oc, bot, mid_d) if axis == 'x' else (mid_d, bot, oc)
                 self.face('Reveal Sill', parent, c, (0, 1, 0), ow if axis == 'x' else depth, depth if axis == 'x' else ow, mat)
 
-    def baseboard(self, parent, axis, line, a, b, inward, normal):
+    def baseboard(self, parent, axis, line, a, b, inward, normal, mat):
         """A 9 cm baseboard, 1.2 cm proud, broken at the doors and arches."""
         spans, pos = [], a
         for oc, ow, top, bot, kind in sorted(self.openings.get((axis, round(line, 4)), [])):
@@ -336,7 +349,7 @@ class Hallway(k.Scene):
                 continue
             c = ((s0 + s1) / 2, 0.045, d) if axis == 'x' else (d, 0.045, (s0 + s1) / 2)
             size = (s1 - s0, 0.09, 0.012) if axis == 'x' else (0.012, 0.09, s1 - s0)
-            self.box('Baseboard', parent, c, size, self.mats['trim'], collider=False, static=True)
+            self.box('Baseboard', parent, c, size, mat, collider=False, static=True)
 
     # --- doors and windows ------------------------------------------------------------------------------------------
     def doors(self, root):

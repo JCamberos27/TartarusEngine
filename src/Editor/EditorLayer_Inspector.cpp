@@ -2233,6 +2233,7 @@ void EditorLayer::DrawReflectedField(World& world, AssetLibrary& assets, const R
                                      : f.AssetKind == ReflectAssetKind::Material ? "ASSET_MATERIAL_PATH"
                                      : f.AssetKind == ReflectAssetKind::Model   ? "ASSET_MODEL_PATH"
                                      : f.AssetKind == ReflectAssetKind::Script  ? "ASSET_FILE_PATH"
+                                     : f.AssetKind == ReflectAssetKind::Decal   ? "ASSET_DECAL_PATH"
                                      : nullptr;
             if (payloadType && ImGui::BeginDragDropTarget()) {
                 const ImGuiPayload* p = ImGui::AcceptDragDropPayload(payloadType);
@@ -2833,6 +2834,8 @@ void EditorLayer::DrawInspectorBody(World& world, AssetLibrary& assets) {
                 DrawRecoilAssetEditor(m_SelectedAssetKey);
             else if (LowerExt(m_SelectedAssetKey) == ".camerashake")
                 DrawCameraShakeAssetEditor(m_SelectedAssetKey);
+            else if (LowerExt(m_SelectedAssetKey) == ".decal")
+                DrawDecalAssetEditor(world, m_SelectedAssetKey);
             else if (LowerExt(m_SelectedAssetKey) == ".controller")
                 DrawControllerAssetInspector(m_SelectedAssetKey);
             else
@@ -4795,6 +4798,13 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
     // doing nothing. FPBody::Validate is the same table the docs (docs/BODY_SETUP.md) are written from.
     if (std::strcmp(componentName, "Character Outfit") == 0 && phase == ReflectExtraPhase::Bottom) {
         DrawCharacterOutfitEditor(world, entity);
+        return;
+    }
+
+    // Decals: asset status up top; preview + atlas-frame picker, channel matrix, fade curves,
+    // Fit to Surface and the shared asset's settings below (EditorLayer_Decals.cpp).
+    if (std::strcmp(componentName, "Decal") == 0) {
+        DrawDecalComponentExtra(world, entity, phase);
         return;
     }
 

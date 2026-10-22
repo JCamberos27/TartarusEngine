@@ -1,6 +1,7 @@
 #include "UnitTestSupport.h"
 
 #include "../Audio/AudioEngine.h"
+#include "../Editor/EditorSettings.h"
 #include "../Editor/EditorSound.h"
 #include "../Core/AppAudioMuter.h"
 
@@ -53,7 +54,7 @@ void TestEditorSoundEventTable() {
         const EditorSound::EventInfo& info = EditorSound::Info((Event)i);
         CHECK(info.Name && *info.Name);
         names.insert(info.Name);
-        CHECK(info.CooldownMs > 0.0f && info.PitchJitter >= 0.0f && info.PitchJitter < 0.1f);
+        CHECK(info.CooldownMs >= 0.0f && info.PitchJitter >= 0.0f && info.PitchJitter < 0.1f);
         // Notifications and Play mode carry meaning from no place on screen: never panned.
         if (info.Cat == EditorSound::Category::Notifications || info.Cat == EditorSound::Category::PlayMode) CHECK(info.Centred);
     }
@@ -488,7 +489,8 @@ void TestEditorSoundBuiltInSetComplete() {
     float worstDb = -1000.0f;
     for (int i = 0; i < EditorSoundEvents::kEventCount; ++i) {
         const auto files = EditorSound::FindVariants(dir, (Event)i);
-        CHECK(!files.empty());
+        // (a placeholder-backed event has no file of its own yet; SprayLoop plays a synthesised hiss)
+        CHECK(!files.empty() || EditorSound::Info((Event)i).Placeholder || (Event)i == Event::SprayLoop);
         for (const std::string& f : files) {
             std::ifstream in(fs::u8path(f), std::ios::binary);
             std::vector<char> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
@@ -516,7 +518,7 @@ void TestEditorSoundBuiltInSetComplete() {
 
 // The P6 mastering rules, on the committed files: every one starts and ends at silence (a sound that starts or stops
 // mid-waveform clicks), and none is buried - each is within reach of the loudest of its kind (the first set had files 8 dB
-// under their neighbours).
+// under their neighbours). A held loop (SprayLoop) is checked for a click-free wrap instead of silent edges.
 void TestEditorSoundBuiltInSetMastered() {
     namespace fs = std::filesystem;
     const std::string dir = (fs::u8path(TARTARUS_SOURCE_DIR) / "resources" / "EditorSounds").u8string();
@@ -538,8 +540,12 @@ void TestEditorSoundBuiltInSetMastered() {
             }
             CHECK(pcm.size() > 100);
             if (pcm.size() <= 100) continue;
-            CHECK(std::abs((int)pcm.front()) < 66); // 0.002 of full scale
-            CHECK(std::abs((int)pcm.back()) < 33);  // 0.001
+            if ((Event)i == Event::SprayLoop) { // a held loop: no silence at its edges, but the wrap must not click
+                CHECK(std::abs((int)pcm.back() - (int)pcm.front()) < 3277); // 0.1 of full scale, one sample of hiss
+            } else {
+                CHECK(std::abs((int)pcm.front()) < 66); // 0.002 of full scale
+                CHECK(std::abs((int)pcm.back()) < 33);  // 0.001
+            }
             double sum = 0.0;
             for (std::int16_t s : pcm) sum += (double)s * s;
             const float rmsDb = 10.0f * std::log10((float)(sum / (double)pcm.size()) / (32768.0f * 32768.0f));
@@ -592,6 +598,164 @@ void TestAppAudioMuterNames() {
 
 } // namespace
 
+// The Graffiti Designer's block: one shared category, "done" chime and placeholders that name real events.
+void TestEditorSoundGraffitiEvents() {
+    using EditorSound::Category;
+    const Event graffiti[] = {Event::SprayStart,        Event::SprayLoop,          Event::SprayEnd,
+                              Event::SprayDrip,         Event::GraffitiLayerAdd,   Event::GraffitiLayerRemove,
+                              Event::GraffitiLayerReorder, Event::GraffitiBakeStart, Event::GraffitiBakeDone};
+    CHECK((int)Category::DecalsGraffiti == EditorSoundEvents::kCategoryCount - 1); // appended: saved settings are per index
+    CHECK(std::string(EditorSound::CategoryName(Category::DecalsGraffiti)) == "Decals & Graffiti");
+    for (Event e : graffiti) {
+        CHECK(EditorSound::Info(e).Cat == Category::DecalsGraffiti);
+        if (const char* from = EditorSound::Info(e).Placeholder) { // a stand-in names another event that has its own files
+            bool found = false;
+            for (int i = 0; i < EditorSoundEvents::kEventCount; ++i)
+                if (std::string(EditorSound::Info((Event)i).Name) == from) found = !EditorSound::Info((Event)i).Placeholder;
+            CHECK(found);
+        }
+    }
+    CHECK(!EditorSound::Info(Event::SprayLoop).Placeholder && EditorSound::Info(Event::SprayLoop).CooldownMs == 0.0f);
+    CHECK(EditorSound::IsDoneChime(Event::GraffitiBakeDone) && EditorSound::Info(Event::GraffitiBakeDone).Unfocused);
+    CHECK(!EditorSound::IsDoneChime(Event::GraffitiBakeStart) && !EditorSound::IsDoneChime(Event::SprayEnd));
+    // A settings file saved before the category existed: the new one comes up on, at the default volume.
+    EditorSettings::Get().EditorSoundCategoryOn.assign(EditorSoundEvents::kCategoryCount - 1, false);
+    EditorSettings::Get().EditorSoundCategoryVolume.assign(EditorSoundEvents::kCategoryCount - 1, 0.5f);
+    const Settings old = EditorSound::FromEditorSettings();
+    CHECK(old.CategoryOn[(int)Category::DecalsGraffiti] && old.CategoryVolume[(int)Category::DecalsGraffiti] == 1.0f);
+    CHECK(!old.CategoryOn[0] && old.CategoryVolume[0] == 0.5f);
+    EditorSettings::Get().EditorSoundCategoryOn.clear();
+    EditorSettings::Get().EditorSoundCategoryVolume.clear();
+}
+
+// An event with no file of its own plays its placeholder's; its own file wins; SprayLoop plays the synthesised hiss.
+void TestEditorSoundPlaceholders() {
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::temp_directory_path() / "tartarus_editor_placeholder_ut";
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+    fs::create_directories(dir, ec);
+    WriteToneWav(dir / "LayerAdd.wav", 48000, 0.05f, 0.1f);
+    WriteToneWav(dir / "LayerRemove.wav", 48000, 0.05f, 0.1f);
+    WriteToneWav(dir / "GraffitiLayerRemove.wav", 48000, 0.05f, 0.1f); // its own file wins over LayerRemove
+    WriteToneWav(dir / "Randomize_1.wav", 48000, 0.05f, 0.1f);
+    WriteToneWav(dir / "Randomize_2.wav", 48000, 0.05f, 0.1f);        // a placeholder with variants brings them all
+    EditorSound::Apply(Settings{});
+    EditorSound::Init(dir.string());
+    CHECK(EditorSound::VariantCount(Event::GraffitiLayerAdd) == 1 && EditorSound::Files(Event::GraffitiLayerAdd) == EditorSound::Files(Event::LayerAdd));
+    CHECK(std::string(EditorSound::PlaceholderNote(Event::GraffitiLayerAdd)) == "placeholder: LayerAdd");
+    CHECK(EditorSound::VariantCount(Event::SprayStart) == 2);
+    CHECK(EditorSound::VariantCount(Event::GraffitiLayerRemove) == 1 && !EditorSound::PlaceholderNote(Event::GraffitiLayerRemove));
+    CHECK(fs::u8path(EditorSound::Files(Event::GraffitiLayerRemove)[0]).filename() == "GraffitiLayerRemove.wav");
+    CHECK(EditorSound::VariantCount(Event::SprayEnd) == 0 && !EditorSound::PlaceholderNote(Event::SprayEnd)); // ToggleOff has no file here
+    CHECK(EditorSound::VariantCount(Event::SprayLoop) == 1);
+    CHECK(std::string(EditorSound::PlaceholderNote(Event::SprayLoop)) == "synthesised placeholder");
+    CHECK(!EditorSound::PlaceholderNote(Event::Click));
+    EditorSound::Shutdown();
+    CHECK(!EditorSound::PlaceholderNote(Event::GraffitiLayerAdd));
+    EditorSound::Apply(Settings{});
+    fs::remove_all(dir, ec);
+}
+
+// Held editor loops: separate slots, never counted as voices, stale ids ignored; EditorSound's wrapper gates and stops them.
+void TestEditorSoundLoops() {
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::temp_directory_path() / "tartarus_editor_loops_ut";
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+    fs::create_directories(dir, ec);
+    WriteToneWav(dir / "tick.wav", 48000, 0.2f, 0.5f);
+    std::string envMute; // (an offline engine reaches no speaker: unmute it for the test, as the output test does)
+#ifdef _WIN32
+    char* m = nullptr;
+    size_t len = 0;
+    if (_dupenv_s(&m, &len, "TARTARUS_MUTE") == 0 && m) {
+        envMute = m;
+        std::free(m);
+    }
+#else
+    if (const char* m = std::getenv("TARTARUS_MUTE")) envMute = m;
+#endif
+    SetEnv("TARTARUS_MUTE", "0");
+    AudioEngine::InitOffline(48000);
+    SetEnv("TARTARUS_MUTE", envMute.c_str());
+    CHECK(AudioEngine::IsInitialized());
+    if (!AudioEngine::IsInitialized()) return;
+    AudioEngine::SetEditorVolume(1.0f);
+    auto settle = [] { for (int i = 0; i < 40; ++i) { AudioEngine::RenderOffline(nullptr, 480); AudioEngine::Update(); } };
+
+    const float pcm[4] = {0.1f, -0.1f, 0.1f, -0.1f};
+    const AudioEngine::ClipId made = AudioEngine::CreateClip("synth:test", pcm, 4, 1, 48000);
+    CHECK(made >= 0 && AudioEngine::CreateClip("synth:test", pcm, 4, 1, 48000) == made); // keyed by name
+    CHECK(AudioEngine::CreateClip("synth:bad", nullptr, 4, 1, 48000) == -1 && AudioEngine::CreateClip("synth:bad", pcm, 0, 1, 48000) == -1);
+
+    const AudioEngine::ClipId tick = AudioEngine::LoadClip((dir / "tick.wav").string());
+    CHECK(tick >= 0);
+    const AudioEngine::LoopId a = AudioEngine::StartEditorLoop(tick, 0.5f, 1.0f);
+    CHECK(a >= 0 && AudioEngine::EditorLoopPlaying(a));
+    CHECK(AudioEngine::EditorVoiceCount() == 0); // held loops are not voices
+    std::vector<float> out(2 * 480);
+    float peak = 0.0f;
+    for (int i = 0; i < 20; ++i) { // far longer than the 0.2 s clip: it loops
+        AudioEngine::RenderOffline(out.data(), 480);
+        AudioEngine::SetEditorLoop(a, 0.5f, 1.0f + 0.01f * (float)i);
+        if (i >= 10) for (float v : out) peak = std::max(peak, std::fabs(v));
+    }
+    AudioEngine::Update();
+    CHECK(AudioEngine::EditorLoopPlaying(a) && peak > 0.05f);
+    AudioEngine::StopEditorLoop(a);
+    CHECK(!AudioEngine::EditorLoopPlaying(a));
+    settle();
+    CHECK(!AudioEngine::EditorLoopPlaying(a));
+    const AudioEngine::LoopId b = AudioEngine::StartEditorLoop(tick, 0.5f); // reuses the slot: a new generation
+    CHECK(b >= 0 && b != a && AudioEngine::EditorLoopPlaying(b));
+    AudioEngine::StopEditorLoop(a);                 // the stale id changes nothing
+    AudioEngine::SetEditorLoop(a, 1.0f, 1.0f);
+    CHECK(!AudioEngine::EditorLoopPlaying(a) && AudioEngine::EditorLoopPlaying(b));
+    AudioEngine::LoopId all[AudioEngine::kEditorLoops];
+    all[0] = b;
+    for (int i = 1; i < AudioEngine::kEditorLoops; ++i) {
+        all[i] = AudioEngine::StartEditorLoop(tick, 0.1f);
+        CHECK(all[i] >= 0);
+    }
+    CHECK(AudioEngine::StartEditorLoop(tick, 0.1f) == -1); // every slot held
+    CHECK(AudioEngine::PlayEditor(tick, 0.1f));            // one-shots are unaffected
+    for (AudioEngine::LoopId l : all) AudioEngine::StopEditorLoop(l);
+    settle();
+    const AudioEngine::LoopId again = AudioEngine::StartEditorLoop(tick, 0.1f); // the slots came back
+    CHECK(AudioEngine::EditorLoopPlaying(again));
+    AudioEngine::StopEditorLoop(again, 0);
+    CHECK(AudioEngine::StartEditorLoop(-1, 1.0f) == -1 && !AudioEngine::EditorLoopPlaying(-1));
+
+    // EditorSound's wrapper: gated like Play, stopped when its category goes off or the window loses focus.
+    fs::create_directories(dir / "sounds", ec);
+    EditorSound::Apply(Settings{});
+    EditorSound::Init((dir / "sounds").string()); // (no files: SprayLoop still has its synthesised hiss)
+    CHECK(EditorSound::VariantCount(Event::SprayLoop) == 1);
+    EditorSound::LoopHandle h = EditorSound::StartLoop(Event::SprayLoop, 0.8f, 1.0f);
+    CHECK(h >= 0 && AudioEngine::EditorLoopPlaying(h));
+    EditorSound::SetLoop(h, 0.4f, 1.2f);
+    EditorSound::SetWindowFocused(false);
+    CHECK(!AudioEngine::EditorLoopPlaying(h) && EditorSound::StartLoop(Event::SprayLoop) == -1);
+    EditorSound::SetWindowFocused(true);
+    h = EditorSound::StartLoop(Event::SprayLoop);
+    CHECK(h >= 0 && AudioEngine::EditorLoopPlaying(h));
+    Settings off;
+    off.CategoryOn[(int)EditorSound::Category::DecalsGraffiti] = false;
+    EditorSound::Apply(off);
+    CHECK(!AudioEngine::EditorLoopPlaying(h) && EditorSound::StartLoop(Event::SprayLoop) == -1);
+    EditorSound::Apply(Settings{});
+    h = EditorSound::StartLoop(Event::SprayLoop);
+    CHECK(h >= 0);
+    EditorSound::StopLoop(h);
+    CHECK(!AudioEngine::EditorLoopPlaying(h));
+    EditorSound::StopLoop(h); // stale: ignored
+    EditorSound::Shutdown();
+    EditorSound::Apply(Settings{});
+    AudioEngine::Shutdown();
+    fs::remove_all(dir, ec);
+}
+
 void RegisterEditorSoundTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Editor sounds: every event named, notifications and Play mode centred", TestEditorSoundEventTable);
     tests.emplace_back("Editor sounds: variants, cooldown, rapid repeats, pan, focus and switches", TestEditorSoundSchedulerRules);
@@ -608,6 +772,9 @@ void RegisterEditorSoundTests(UnitTestSupport::TestList& tests) {
                        TestEditorSoundBuiltInSetMastered);
     tests.emplace_back("Editor sounds: Create, Add / Remove Component, Paste and prefab actions off undo labels",
                        TestEditorSoundUndoLabels);
+    tests.emplace_back("Editor sounds: the Graffiti Designer's events, category and done chime", TestEditorSoundGraffitiEvents);
+    tests.emplace_back("Editor sounds: an event without a file plays its placeholder's; its own file wins", TestEditorSoundPlaceholders);
+    tests.emplace_back("Editor sounds: held loops - slots, stale ids, gating, stopped on focus loss", TestEditorSoundLoops);
     tests.emplace_back("App audio muter: exe-name matching and the name list", TestAppAudioMuterNames);
     tests.emplace_back("Editor sounds: their own output, outside the game's mix, Mute and pause", TestEditorSoundSeparateOutput);
 }

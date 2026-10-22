@@ -122,9 +122,20 @@ PFNGLUNMAPNAMEDBUFFERPROC glUnmapNamedBuffer = nullptr;
 
 // Fence sync + buffer-to-buffer copy — deferred cluster-overflow readback (PERF-203).
 PFNGLCOPYNAMEDBUFFERSUBDATAPROC glCopyNamedBufferSubData = nullptr;
+PFNGLCOPYIMAGESUBDATAPROC glCopyImageSubData = nullptr;
+PFNGLGETTEXTURESUBIMAGEPROC glGetTextureSubImage = nullptr;
 PFNGLFENCESYNCPROC glFenceSync = nullptr;
 PFNGLCLIENTWAITSYNCPROC glClientWaitSync = nullptr;
 PFNGLDELETESYNCPROC glDeleteSync = nullptr;
+// The Graffiti compositor.
+PFNGLTEXSTORAGE2DPROC glTexStorage2D = nullptr;
+PFNGLCLEARBUFFERFVPROC glClearBufferfv = nullptr;
+PFNGLVERTEXATTRIBDIVISORPROC glVertexAttribDivisor = nullptr;
+PFNGLBLENDFUNCIPROC glBlendFunci = nullptr;
+PFNGLDRAWARRAYSINSTANCEDPROC glDrawArraysInstanced = nullptr;
+PFNGLMAPBUFFERRANGEPROC glMapBufferRange = nullptr;
+PFNGLUNMAPBUFFERPROC glUnmapBuffer = nullptr;
+PFNGLUNIFORM1UIPROC glUniform1ui = nullptr;
 
 namespace {
 void* LoadGLFunc(const char* name) {
@@ -265,6 +276,18 @@ bool GLLoader_Init() {
     LOAD(PFNGLFENCESYNCPROC, glFenceSync)
     LOAD(PFNGLCLIENTWAITSYNCPROC, glClientWaitSync)
     LOAD(PFNGLDELETESYNCPROC, glDeleteSync)
+
+    // Texture-to-texture copy - DecalTextureArrays growth.
+    LOAD(PFNGLCOPYIMAGESUBDATAPROC, glCopyImageSubData)
+    LOAD(PFNGLGETTEXTURESUBIMAGEPROC, glGetTextureSubImage)
+    LOAD(PFNGLTEXSTORAGE2DPROC, glTexStorage2D)
+    LOAD(PFNGLCLEARBUFFERFVPROC, glClearBufferfv)
+    LOAD(PFNGLVERTEXATTRIBDIVISORPROC, glVertexAttribDivisor)
+    LOAD(PFNGLBLENDFUNCIPROC, glBlendFunci)
+    LOAD(PFNGLDRAWARRAYSINSTANCEDPROC, glDrawArraysInstanced)
+    LOAD(PFNGLMAPBUFFERRANGEPROC, glMapBufferRange)
+    LOAD(PFNGLUNMAPBUFFERPROC, glUnmapBuffer)
+    LOAD(PFNGLUNIFORM1UIPROC, glUniform1ui)
 #undef LOAD
     return ok;
 }

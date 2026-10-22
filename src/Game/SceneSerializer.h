@@ -1,4 +1,5 @@
 #pragma once
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -6,6 +7,7 @@
 
 class World;
 class AssetLibrary;
+struct MaterialAsset;
 
 // Persists the placed level geometry, imported models, transforms, and any custom
 // PBR material overrides to a JSON file — and reloads them, re-importing each
@@ -145,4 +147,10 @@ namespace SceneSerializer {
     //
     // Pure string-in/string-out so the precedence rule is unit-testable without a project on disk.
     std::string MigrateAssetMetaFields(const std::string& entryJson, const std::string& existingMetaJson);
+
+    // One embedded material slot (a MaterialAsset with no .mat path) <-> the JSON object a scene
+    // stores under "embedded", by the same code the boxes and models use. For tests: a scene round
+    // trip needs a box or model, which needs GL.
+    std::string EmbeddedMaterialToJson(const MaterialAsset& material);
+    std::shared_ptr<MaterialAsset> EmbeddedMaterialFromJson(AssetLibrary& assets, const std::string& embeddedJson);
 }

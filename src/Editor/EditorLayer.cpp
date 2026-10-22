@@ -801,6 +801,36 @@ void EditorLayer::DrawEnvironmentSettings(World& world, float w) {
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip(
         "Strength of the image-based ambient light and reflections baked from the sky colors " // #19
         "above. 1.0 is physically consistent; 0 disables environment lighting entirely.");
+
+    // Decal Grading (docs/DECALS.md): the scene's first Decal Grading component ages every decal
+    // at once. A scene without one gets a "Decal Grading" object the first time a slider moves.
+    {
+        DecalGradingComponent* grading = nullptr;
+        auto gradings = world.Registry.view<DecalGradingComponent>(entt::exclude<InactiveTag>);
+        if (auto it = gradings.begin(); it != gradings.end()) grading = &gradings.get<DecalGradingComponent>(*it);
+        DecalGradingComponent value = grading ? *grading : DecalGradingComponent{};
+        auto gradeSlider = [&](const char* label, float* v, const char* tip) {
+            ImGui::SetNextItemWidth(w);
+            bool activated = false;
+            const bool changed = EditorUI::SliderFloat(label, v, 0.0f, 1.0f, "%.2f", 0, &activated);
+            if (activated) {
+                PushUndo(world, "Edit Decal Grading");
+                if (!grading) {
+                    const entt::entity e = world.CreateEmptyEntity(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f),
+                                                                   UniqueNameFor(world, "Decal Grading"));
+                    grading = &world.Registry.emplace<DecalGradingComponent>(e);
+                }
+            }
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tip);
+            return changed;
+        };
+        const bool ageChanged = gradeSlider("Decal age", &value.Age,
+            "How old every decal in the scene looks: fades and sun-bleaches graffiti, signage and grime,\n"
+            "on top of each decal's own weathering. Saved on the scene's Decal Grading object.");
+        const bool wearChanged = gradeSlider("Decal wear", &value.Wear,
+            "How worn every decal looks: peels, scrubs and chips paint, on top of each decal's own weathering.");
+        if ((ageChanged || wearChanged) && grading) *grading = value;
+    }
 }
 
 void EditorLayer::DrawPostProcessSettings(World& world, float w) {
@@ -2410,13 +2440,15 @@ void EditorLayer::EndFrame() {
     {
         const bool panels[] = {m_ShowHierarchy, m_ShowInspector, m_ShowAssetBrowser, EditorModuleHost::ConsoleState().Visible,
                                m_ShowHistory, m_ShowLighting, m_ShowAudioDebug, m_ShowSoundBoard, m_ShowPreferences, m_ShowAnimator,
+                               m_ShowDecalLibrary,
                                // set from F6 / Alt+Shift+T, their X, the Window menu and the module API alike
                                EditorSettings::Get().ShowPhysicsPanel, EditorSettings::Get().SceneShowStats};
         uint32_t mask = 0;
         for (int i = 0; i < (int)(sizeof(panels) / sizeof(panels[0])); ++i) mask |= panels[i] ? 1u << i : 0u;
         EditorSound::PanelsFrame(mask);
     }
-    EditorSound::ToolFrame(m_HandTool ? -1 : MeasureToolActive() ? 5 : (int)m_GizmoOp, m_GizmoLocalSpace, m_GridSnapEnabled);
+    EditorSound::ToolFrame(m_HandTool ? -1 : m_DecalTool == DecalToolMode::Brush ? 7 : m_DecalTool == DecalToolMode::Place ? 6
+                                       : MeasureToolActive() ? 5 : (int)m_GizmoOp, m_GizmoLocalSpace, m_GridSnapEnabled);
     DockFrame(); // before the observer, so a tab drag's release isn't also a generic click
     // Nothing is drawn past here. ImGui's EndFrame closes the popups a click outside them dismissed (and clears a
     // delivered drop), so ending the frame first lets the observer hear those on this frame, not the next one.
@@ -2913,6 +2945,9 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     DrawLightingPanel(world); // #236 R2
     DrawAudioDebugPanel(world);
     DrawSoundBoardPanel();
+    DrawDecalLibraryPanel(world);
+    GraffitiFrame(world);              // bakes landing, recipe reloads after undo (EditorLayer_GraffitiDesigner.cpp)
+    DrawGraffitiDesignerPanel(world);
     DrawAssetLibraryPanel(world, assets);
     DrawAnimatorWindow(world); // Animator v2
     DrawPhysicsDebugWindow(world); // #185 debug tooling
@@ -3338,6 +3373,8 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     }
     UpdateLockViewToSelection(world, editorCamera); // Shift+F — camera follows the selection centroid (#236 E)
     if (m_MeasureTool || !m_MeasurePoints.empty()) DrawMeasurement(editorCamera); // #236 R2 ruler
+    DrawDecalToolOverlay(world, editorCamera); // Place Decal / Decal Brush: cursor ring, stamp rings, hint plate
+    DrawGraffitiViewportOverlay(world, editorCamera); // a live spray stroke on its wall (Graffiti Designer)
     DrawRuler(world, editorCamera); // Editor Enhancers / vRuler: hold Shift+R
     if (EyedropperArmed()) {
         const ImVec2 mp = ImGui::GetIO().MousePos;
@@ -3455,13 +3492,16 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         // Q/W/E/R/T/Y viewport tools (Unity's scheme, + Y for the combined gizmo, #236 E).
         // Ctx_Viewport, so the dispatcher already withholds them while a panel owns the
         // keyboard or Right-drag fly is active. Selecting any transform tool exits the Hand tool.
-        if (Shortcuts::Triggered("tools.hand"))      { m_HandTool = true; m_MeasureTool = false; }
-        if (Shortcuts::Triggered("tools.move"))      { m_GizmoOp = GizmoOp::Translate; m_HandTool = false; m_MeasureTool = false; }
-        if (Shortcuts::Triggered("tools.rotate"))    { m_GizmoOp = GizmoOp::Rotate;    m_HandTool = false; m_MeasureTool = false; }
-        if (Shortcuts::Triggered("tools.scale"))     { m_GizmoOp = GizmoOp::Scale;     m_HandTool = false; m_MeasureTool = false; }
-        if (Shortcuts::Triggered("tools.rect"))      { m_GizmoOp = GizmoOp::Rect;      m_HandTool = false; m_MeasureTool = false; }
-        if (Shortcuts::Triggered("tools.transform")) { m_GizmoOp = GizmoOp::Universal; m_HandTool = false; m_MeasureTool = false; }
-        if (Shortcuts::Triggered("tools.measure"))   { m_MeasureTool = !m_MeasureTool; m_MeasurePoints.clear(); m_HandTool = false; }
+        if (Shortcuts::Triggered("tools.hand"))      { m_HandTool = true; m_MeasureTool = false; m_DecalTool = DecalToolMode::None; }
+        if (Shortcuts::Triggered("tools.move"))      { m_GizmoOp = GizmoOp::Translate; m_HandTool = false; m_MeasureTool = false; m_DecalTool = DecalToolMode::None; }
+        if (Shortcuts::Triggered("tools.rotate"))    { m_GizmoOp = GizmoOp::Rotate;    m_HandTool = false; m_MeasureTool = false; m_DecalTool = DecalToolMode::None; }
+        if (Shortcuts::Triggered("tools.scale"))     { m_GizmoOp = GizmoOp::Scale;     m_HandTool = false; m_MeasureTool = false; m_DecalTool = DecalToolMode::None; }
+        if (Shortcuts::Triggered("tools.rect"))      { m_GizmoOp = GizmoOp::Rect;      m_HandTool = false; m_MeasureTool = false; m_DecalTool = DecalToolMode::None; }
+        if (Shortcuts::Triggered("tools.transform")) { m_GizmoOp = GizmoOp::Universal; m_HandTool = false; m_MeasureTool = false; m_DecalTool = DecalToolMode::None; }
+        if (Shortcuts::Triggered("tools.measure"))   { m_MeasureTool = !m_MeasureTool; m_MeasurePoints.clear(); m_HandTool = false; if (m_MeasureTool) m_DecalTool = DecalToolMode::None; }
+        if (Shortcuts::Triggered("tools.decalPlace")) SetDecalTool(DecalToolMode::Place);
+        if (Shortcuts::Triggered("tools.decalBrush")) SetDecalTool(DecalToolMode::Brush);
+        if (m_DecalTool != DecalToolMode::None && ImGui::IsKeyPressed(ImGuiKey_Escape, false) && !m_Radial.Open) SetDecalTool(DecalToolMode::None);
         if (m_MeasureTool && ImGui::IsKeyPressed(ImGuiKey_Escape, false)) { m_MeasureTool = false; m_MeasurePoints.clear(); }
         // Shift+A quick-add (Blender's binding) — opens the Add menu as a popup at the cursor.
         if (Shortcuts::Triggered("gameobject.quickAdd")) m_OpenQuickAdd = true;

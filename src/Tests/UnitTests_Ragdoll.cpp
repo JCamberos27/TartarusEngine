@@ -557,7 +557,11 @@ void TestNavBoundaryEdgesMergeQuickly() {
     nav.BoundaryEdges(edges);
     const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
     CHECK(edges.size() >= 24 * 24 * 4);
+#ifdef NDEBUG
     CHECK(ms < 250.0); // the cubic merge needed seconds here
+#else
+    CHECK(ms < 1000.0); // unoptimised on a shared CI runner it can pass 250 ms; the cubic merge still needed seconds
+#endif
     int joinable = 0;
     for (size_t i = 0; i < edges.size(); ++i)
         for (size_t j = 0; j < edges.size(); ++j) {
