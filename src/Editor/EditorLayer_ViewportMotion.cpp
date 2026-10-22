@@ -153,11 +153,11 @@ void EditorLayer::DrawSnapTicks() {
 
 void EditorLayer::RunRadialItem(World& world, Camera& editorCamera, int item) {
     switch (item) {
-        case RMove:   m_GizmoOp = GizmoOp::Translate; m_HandTool = false; m_MeasureTool = false; break;
-        case RRotate: m_GizmoOp = GizmoOp::Rotate;    m_HandTool = false; m_MeasureTool = false; break;
-        case RScale:  m_GizmoOp = GizmoOp::Scale;     m_HandTool = false; m_MeasureTool = false; break;
-        case RRect:   m_GizmoOp = GizmoOp::Rect;      m_HandTool = false; m_MeasureTool = false; break;
-        case RHand:   m_HandTool = true; m_MeasureTool = false; break;
+        case RMove:   m_GizmoOp = GizmoOp::Translate; m_HandTool = false; m_MeasureTool = false; m_DecalTool = DecalToolMode::None; break;
+        case RRotate: m_GizmoOp = GizmoOp::Rotate;    m_HandTool = false; m_MeasureTool = false; m_DecalTool = DecalToolMode::None; break;
+        case RScale:  m_GizmoOp = GizmoOp::Scale;     m_HandTool = false; m_MeasureTool = false; m_DecalTool = DecalToolMode::None; break;
+        case RRect:   m_GizmoOp = GizmoOp::Rect;      m_HandTool = false; m_MeasureTool = false; m_DecalTool = DecalToolMode::None; break;
+        case RHand:   m_HandTool = true; m_MeasureTool = false; m_DecalTool = DecalToolMode::None; break;
         case RSnap:   m_GridSnapEnabled = !m_GridSnapEnabled; break;
         case RSpace:  SetGizmoLocalSpace(!GizmoLocalSpace()); break;
         case RFrame:  if (HasAnySelection()) FocusOnSelection(world, editorCamera); break;
@@ -180,8 +180,6 @@ void EditorLayer::UpdateRadialMenu(World& world, Camera& editorCamera, bool scen
     const float rOut = R + Glass::Px(20.0f);
     const float rIcon = R - Glass::Px(16.0f);
     const float rLabel = R + Glass::Px(4.0f);
-    const float step = 2.0f * IM_PI / (float)RCount;
-
     const double now = ImGui::GetTime();
     const bool spaceDown = ImGui::IsKeyDown(ImGuiKey_Space);
     const bool eligible = !m_InPlayMode && !io.WantTextInput && !io.KeyCtrl && !io.KeyAlt && !io.KeySuper &&
@@ -199,6 +197,9 @@ void EditorLayer::UpdateRadialMenu(World& world, Camera& editorCamera, bool scen
             m_Radial.Open = true;
             m_Radial.Hovered = -1;
             m_Radial.Picked = -1;
+            // With the Decal Brush active the ring is its sources instead: palettes, categories, recents.
+            m_Radial.Decals = m_DecalTool == DecalToolMode::Brush && (m_Radial.Count = DecalRadialBuild()) >= 2;
+            if (!m_Radial.Decals) m_Radial.Count = RCount;
             // Centred on the pointer, nudged in so the ring fits the view when it can.
             const float fit = rOut + Glass::Px(Glass::Space1);
             ImVec2 c = io.MousePos;
@@ -208,13 +209,17 @@ void EditorLayer::UpdateRadialMenu(World& world, Camera& editorCamera, bool scen
             const float x01 = c.x / ImMax(1.0f, io.DisplaySize.x);
             EditorSound::Play(EditorSound::Event::RadialOpen, x01);
             if (animate) {
-                const float total = Glass::StaggerDelay(RCount - 1, Glass::RadialStaggerMs, RCount) + Glass::RadialOpen.durationMs * 0.001f;
+                const float total = Glass::StaggerDelay(m_Radial.Count - 1, Glass::RadialStaggerMs, m_Radial.Count) + Glass::RadialOpen.durationMs * 0.001f;
                 motion.Pulse(kStaggerId, total);
             }
         }
     }
 
-    auto itemEnabled = [&](int i) { return i != RFrame || HasAnySelection(); };
+    // The ring's size is fixed while it is open (its decal slots are built when it opens).
+    const int count = m_Radial.Count;
+    const float step = 2.0f * IM_PI / (float)count;
+    const bool decalRing = m_Radial.Decals;
+    auto itemEnabled = [&](int i) { return decalRing || i != RFrame || HasAnySelection(); };
 
     if (m_Radial.Open) {
         const ImVec2 d(io.MousePos.x - m_Radial.Center.x, io.MousePos.y - m_Radial.Center.y);
@@ -222,7 +227,7 @@ void EditorLayer::UpdateRadialMenu(World& world, Camera& editorCamera, bool scen
         m_Radial.Hovered = -1;
         if (dist >= rIn) { // past the rim still counts: aim, don't steer
             const float rel = Wrap2Pi(std::atan2(d.y, d.x) + IM_PI * 0.5f + step * 0.5f);
-            m_Radial.Hovered = ImClamp((int)(rel / step), 0, RCount - 1);
+            m_Radial.Hovered = ImClamp((int)(rel / step), 0, count - 1);
         }
         const bool cancel = m_InPlayMode || ImGui::IsKeyPressed(ImGuiKey_Escape, false);
         const bool commit = !spaceDown || ImGui::IsMouseClicked(ImGuiMouseButton_Left);
@@ -234,7 +239,8 @@ void EditorLayer::UpdateRadialMenu(World& world, Camera& editorCamera, bool scen
             if (pick >= 0 && itemEnabled(pick)) {
                 m_Radial.Picked = pick;
                 EditorSound::Play(EditorSound::Event::RadialPick, x01);
-                RunRadialItem(world, editorCamera, pick);
+                if (decalRing) RunDecalRadialItem(pick);
+                else RunRadialItem(world, editorCamera, pick);
             } else {
                 m_Radial.Picked = -1;
                 EditorSound::Play(EditorSound::Event::RadialClose, x01);
@@ -271,7 +277,7 @@ void EditorLayer::UpdateRadialMenu(World& world, Camera& editorCamera, bool scen
     dl->AddCircleFilled(c, rOut, Tone(Glass::GlassFallback, 0.94f), 64);
     dl->AddCircle(c, rOut, Tone(Glass::GlassEdge, 1.0f), 64, 1.0f);
     dl->AddCircle(c, rIn, Tone(Glass::Separator, 1.0f), 48, 1.0f);
-    for (int i = 0; i < RCount; ++i) { // wedge dividers
+    for (int i = 0; i < count; ++i) { // wedge dividers
         const float a = -IM_PI * 0.5f + ((float)i + 0.5f) * step;
         const ImVec2 u(std::cos(a), std::sin(a));
         dl->AddLine(ImVec2(c.x + u.x * (rIn + Glass::Px(4.0f)), c.y + u.y * (rIn + Glass::Px(4.0f))),
@@ -291,11 +297,12 @@ void EditorLayer::UpdateRadialMenu(World& world, Camera& editorCamera, bool scen
     const float lenCW = 2.0f * IM_PI * (rLabel - fs * 0.3f), lenCCW = 2.0f * IM_PI * (rLabel + fs * 0.3f);
     const int gizmoOp = (int)m_GizmoOp;
 
-    for (int i = 0; i < RCount; ++i) {
+    for (int i = 0; i < count; ++i) {
         const char* icon = "";
         const char* label = "";
         bool on = false;
-        switch (i) {
+        if (decalRing) on = DecalRadialItem(i, icon, label);
+        else switch (i) {
             case RMove:   icon = EDITOR_ICON_TRANSLATE; label = "Move";   on = !m_HandTool && gizmoOp == 0; break;
             case RRotate: icon = EDITOR_ICON_ROTATE;    label = "Rotate"; on = !m_HandTool && gizmoOp == 1; break;
             case RScale:  icon = EDITOR_ICON_SCALE;     label = "Scale";  on = !m_HandTool && gizmoOp == 2; break;
@@ -317,7 +324,7 @@ void EditorLayer::UpdateRadialMenu(World& world, Camera& editorCamera, bool scen
         // Items bloom out one after another (scale out from the hub + fade).
         float p = 1.0f;
         if (staggerElapsed < 1.0e2f) {
-            const float delay = Glass::StaggerDelay(i, Glass::RadialStaggerMs, RCount);
+            const float delay = Glass::StaggerDelay(i, Glass::RadialStaggerMs, count);
             p = Glass::EaseProgress(Glass::RadialOpen, (staggerElapsed - delay) / (Glass::RadialOpen.durationMs * 0.001f));
         }
         const float pa = ImClamp(p, 0.0f, 1.0f);

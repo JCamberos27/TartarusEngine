@@ -884,7 +884,9 @@ void TestGlassV2TokensAndStartup() {
                                        &Glass::ToolbarFold, &Glass::DigitSlide, &Glass::CardFlip,
                                        &Glass::FolderZoom, &Glass::Unfold, &Glass::ReparentFly, &Glass::NodePop, &Glass::WireMorph,
                                        &Glass::LogSlide, &Glass::CaretGlide, &Glass::LineSweep, &Glass::GizmoHover,
-                                       &Glass::OutlineSweep, &Glass::ViewCubeTurn, &Glass::RadialOpen, &Glass::RadialItem}) {
+                                       &Glass::OutlineSweep, &Glass::ViewCubeTurn, &Glass::RadialOpen, &Glass::RadialItem,
+                                       &Glass::DecalStampPop, &Glass::DecalRingFlash, &Glass::DecalGhostFade, &Glass::DecalTileIn,
+                                       &Glass::DecalHeartPop, &Glass::DecalPreviewIn}) {
         CHECK(Near(Glass::EaseProgress(*s, 0.0f), 0.0f, 1e-4f));
         CHECK(Near(Glass::EaseProgress(*s, 1.0f), 1.0f, 0.01f));
         if (s->ease == Glass::EaseId::Spring) CHECK(Glass::DampingRatio(s->p0, s->p1, s->p2) * std::sqrt(s->p1 / s->p0) >= 5.0f);

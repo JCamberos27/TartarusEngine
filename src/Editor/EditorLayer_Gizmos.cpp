@@ -1242,6 +1242,15 @@ void EditorLayer::HandleViewportPicking(World& world, Camera& editorCamera) {
         return; // tool active — never fall through to selection / box-select
     }
 
+    // Place Decal / Decal Brush: clicks place and paint instead of selecting. The update also runs with
+    // the cursor off the viewport, to close a stroke whose button came up out there.
+    if (m_DecalTool != DecalToolMode::None && !m_Radial.Open) {
+        const bool free = !WantsCaptureMouse() && !m_ViewGizmoBlocking && !m_GizmoEngaged && !io.KeyAlt &&
+                          !ImGui::IsAnyItemHovered();
+        UpdateDecalTool(world, editorCamera, free, leftPressed, leftDown);
+        if (free) return; // never fall through to selection / box-select
+    }
+
     const float kDragThreshold = 6.0f; // pixels of movement before a press-drag-release counts as a box select rather than a click
 
     if (leftPressed) {
@@ -2915,6 +2924,7 @@ EditorLayer::DecalSpot EditorLayer::DecalSpotUnderMouse(World& world, Camera& ed
     const SurfaceHit h = RaycastRenderables(world, origin, dir, [](entt::entity) { return false; }, 5000.0f);
     if (h.Entity != entt::null) {
         spot.OnSurface = true;
+        spot.Receiver = h.Entity;
         spot.Point = origin + dir * h.T;
         spot.Normal = glm::dot(h.Normal, dir) > 0.0f ? -h.Normal : h.Normal; // the side facing the camera
     }
@@ -2971,6 +2981,22 @@ bool EditorLayer::FitDecalToSurface(World& world, entt::entity entity) {
     t.Position = glm::vec3(parentInv * glm::vec4(origin - z * h.T, 1.0f));
     t.SetRotationQuaternion(QuaternionFromMatrix(parentInv * glm::mat4(DecalSurfaceBasis(n, x))));
     return true;
+}
+
+bool EditorLayer::CastDecalRay(World& world, const glm::vec3& origin, const glm::vec3& dir, float maxT, glm::vec3& point,
+                               glm::vec3& normal, entt::entity* entity) const {
+    const SurfaceHit h = RaycastRenderables(world, origin, dir, [](entt::entity) { return false; }, maxT);
+    if (h.Entity == entt::null) return false;
+    point = origin + dir * h.T;
+    normal = glm::dot(h.Normal, dir) > 0.0f ? -h.Normal : h.Normal; // the side facing the ray
+    if (entity) *entity = h.Entity;
+    return true;
+}
+
+bool EditorLayer::IsDynamicDecalReceiver(World& world, entt::entity entity) const {
+    if (entity == entt::null || !world.Registry.valid(entity) || world.Registry.all_of<StaticTag>(entity)) return false;
+    const auto* r = world.Registry.try_get<RenderableComponent>(entity);
+    return (r && r->ModelRef && r->ModelRef->HasBones()) || world.Registry.all_of<RigidbodyComponent>(entity);
 }
 
 void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {

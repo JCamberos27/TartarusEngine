@@ -460,7 +460,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             break; // the first one in the scene wins
         }
         gathered.decalCount = in.decals->Prepare(world, ctx.Proj * ctx.View, ctx.ViewPos,
-                                                 ProjectSettings::Quality().DecalMaxDistance, grading);
+                                                 ProjectSettings::Quality().DecalMaxDistance, grading, ctx.EditorView);
         in.decals->BindForCull();
     }
     const FrameState fs = gathered;
