@@ -31,6 +31,7 @@
 #include "GLStateCache.h"
 #include "Framebuffer.h"
 #include "gl.h"
+#include "DecalAsset.h"
 
 #include <imgui.h>
 #include <imgui_internal.h> // ImMax/ImFloor, ImGuiWindow, and the item-flag helpers the panels use
@@ -67,6 +68,7 @@
 #include <cstring>
 #include <functional>
 #include <cfloat>
+#include <random>
 
 using namespace EditorInternal;
 
@@ -172,6 +174,40 @@ SurfaceHit RaycastRenderables(const World& world, const glm::vec3& origin, const
         }
     }
     return best;
+}
+
+// A decal's world rotation on a surface with normal `n`: +Z out of the surface, +X along `right`
+// (the view's right) flattened onto it, so a placed decal reads upright from where it was placed.
+glm::mat3 DecalSurfaceBasis(const glm::vec3& n, const glm::vec3& right) {
+    glm::vec3 x = right - n * glm::dot(right, n);
+    if (glm::dot(x, x) < 1e-6f) // looking straight down the normal: any in-plane axis will do
+        x = glm::cross(std::abs(n.y) > 0.99f ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0), n);
+    x = glm::normalize(x);
+    return glm::mat3(x, glm::cross(n, x), n);
+}
+
+// The decal's box (the unit cube under its Size) in world space.
+glm::mat4 DecalBoxToWorld(const World& world, entt::entity e, const DecalComponent& d) {
+    return world.ComposeWorldTransform(e) * glm::scale(glm::mat4(1.0f), d.Size);
+}
+
+// Ray parameter where the ray enters the decal's box (0 when it starts inside), or -1 for a miss.
+float RayDecalBox(const glm::mat4& boxToWorld, const glm::vec3& origin, const glm::vec3& dir) {
+    const glm::mat4 inv = glm::inverse(boxToWorld);
+    const glm::vec3 o(inv * glm::vec4(origin, 1.0f)), d(inv * glm::vec4(dir, 0.0f));
+    float t0 = 0.0f, t1 = 1e30f;
+    for (int a = 0; a < 3; ++a) {
+        if (std::abs(d[a]) < 1e-12f) {
+            if (o[a] < -0.5f || o[a] > 0.5f) return -1.0f;
+            continue;
+        }
+        float ta = (-0.5f - o[a]) / d[a], tb = (0.5f - o[a]) / d[a];
+        if (ta > tb) std::swap(ta, tb);
+        t0 = std::max(t0, ta);
+        t1 = std::min(t1, tb);
+        if (t0 > t1) return -1.0f;
+    }
+    return t0;
 }
 
 const char* GizmoOpUndoLabel(GizmoOp op) {
@@ -975,6 +1011,8 @@ void EditorLayer::DrawViewportDropTarget(World& world, AssetLibrary& assets, Cam
     const ImGuiPayload* peek = ImGui::GetDragDropPayload();
     bool isModelDrag = peek && peek->IsDataType("ASSET_MODEL_PATH");
     bool isPrefabDrag = peek && peek->IsDataType("ASSET_PREFAB_PATH");
+    // A .decal lands on the surface under the cursor, or swaps the look of a decal it's over.
+    const bool isDecalDrag = peek && peek->IsDataType("ASSET_DECAL_PATH");
     // Everything else the Asset Browser drags applies to what's under the cursor (or, for an
     // .hdr / a sound, to the scene) - see ApplyAssetDrop.
     const char* applyType = nullptr;
@@ -982,7 +1020,7 @@ void EditorLayer::DrawViewportDropTarget(World& world, AssetLibrary& assets, Cam
         if (peek && peek->IsDataType(t)) applyType = t;
     // Only active while an asset is actually being dragged, so this fullscreen overlay never
     // otherwise sits over the viewport intercepting camera input.
-    if ((!isModelDrag && !isPrefabDrag && !applyType) || m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) {
+    if ((!isModelDrag && !isPrefabDrag && !isDecalDrag && !applyType) || m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) {
         m_DragPreview.Active = false;
         RestoreMaterialDropPreview(world); // the drag ended somewhere else, or was cancelled
         return;
@@ -1036,6 +1074,26 @@ void EditorLayer::DrawViewportDropTarget(World& world, AssetLibrary& assets, Cam
         m_DragPreview.Active = false;
     }
 
+    // What the drop would do, on a plate beside the cursor.
+    auto drawDropHint = [&](const std::string& hint) {
+        if (hint.empty()) return;
+        const ImVec2 m = ImGui::GetMousePos();
+        const ImVec2 at(m.x + 18.0f * m_UIScale, m.y + 22.0f * m_UIScale);
+        const ImVec2 ts = ImGui::CalcTextSize(hint.c_str());
+        const ImVec2 pad(6.0f * m_UIScale, 3.0f * m_UIScale);
+        ImDrawList* fg = ImGui::GetForegroundDrawList();
+        fg->AddRectFilled(ImVec2(at.x - pad.x, at.y - pad.y), ImVec2(at.x + ts.x + pad.x, at.y + ts.y + pad.y),
+                          EditorUIPrimitives::kHudPlateColor, 4.0f * m_UIScale);
+        fg->AddText(at, EditorUIPrimitives::kHudTextColor, hint.c_str());
+    };
+
+    DecalSpot decalSpot;
+    if (isDecalDrag && hoveringViewport) {
+        decalSpot = DecalSpotUnderMouse(world, editorCamera);
+        if (decalSpot.Decal != entt::null || decalSpot.OnSurface)
+            drawDropHint(AssetDropHint(world, decalSpot.Decal, "ASSET_DECAL_PATH", (const char*)peek->Data, -1));
+    }
+
     // Material / texture / sound / controller / script / HDRI: find what's under the cursor, show
     // what the drop would do beside it, and preview a material on the hovered part (Unity does).
     entt::entity applyTarget = entt::null;
@@ -1063,21 +1121,19 @@ void EditorLayer::DrawViewportDropTarget(World& world, AssetLibrary& assets, Cam
             }
         }
 
-        if (!hint.empty()) {
-            const ImVec2 m = ImGui::GetMousePos();
-            const ImVec2 at(m.x + 18.0f * m_UIScale, m.y + 22.0f * m_UIScale);
-            const ImVec2 ts = ImGui::CalcTextSize(hint.c_str());
-            const ImVec2 pad(6.0f * m_UIScale, 3.0f * m_UIScale);
-            ImDrawList* fg = ImGui::GetForegroundDrawList();
-            fg->AddRectFilled(ImVec2(at.x - pad.x, at.y - pad.y), ImVec2(at.x + ts.x + pad.x, at.y + ts.y + pad.y),
-                              EditorUIPrimitives::kHudPlateColor, 4.0f * m_UIScale);
-            fg->AddText(at, EditorUIPrimitives::kHudTextColor, hint.c_str());
-        }
+        drawDropHint(hint);
     } else {
         RestoreMaterialDropPreview(world);
     }
 
     if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_DECAL_PATH")) {
+            const std::string path((const char*)p->Data);
+            if (decalSpot.Decal != entt::null)
+                ApplyAssetDrop(world, assets, decalSpot.Decal, "ASSET_DECAL_PATH", path, -1, decalSpot.Point);
+            else if (decalSpot.OnSurface)
+                PlaceDecal(world, path, decalSpot.Point, decalSpot.Normal, editorCamera.Right());
+        }
         if (applyType) {
             if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(applyType)) {
                 const std::string path((const char*)p->Data);
@@ -1777,6 +1833,36 @@ void EditorLayer::DrawReflectionProbeGizmos(World& world, Camera& editorCamera) 
         for (auto& e : edges) strokeEdge(c[e[0]], c[e[1]], col, kThick);
     }
 
+    // Decals: the projection box (its Size; the Scale gizmo edits it). The +Z face (out of the
+    // surface) is drawn solid and the far -Z face faint, with an arrow down the projection axis
+    // and a tick on the top edge, so which way it projects and which way is up both read at a
+    // glance. Unselected decals only get a faint outline.
+    const ImU32 kDecalColor = IM_COL32(230, 200, 150, 110);
+    auto decalView = world.Registry.view<const TransformComponent, const DecalComponent>();
+    for (auto [entity, tc, dc] : decalView.each()) {
+        if (world.Registry.all_of<InactiveTag>(entity)) continue;
+        const bool selected = IsSelected(entity);
+        const glm::mat4 box = world.GetCachedWorldTransform(entity) * glm::scale(glm::mat4(1.0f), dc.Size);
+        auto at = [&](float x, float y, float z) { return glm::vec3(box * glm::vec4(x, y, z, 1.0f)); };
+        glm::vec3 c[8];
+        for (int i = 0; i < 8; ++i) c[i] = at((i & 1) ? 0.5f : -0.5f, (i & 2) ? 0.5f : -0.5f, (i & 4) ? 0.5f : -0.5f);
+        const ImU32 col = selected ? kProbeSelected : kDecalColor;
+        const ImU32 faint = selected ? IM_COL32(255, 255, 255, 90) : IM_COL32(230, 200, 150, 45);
+        const int front[4][2] = {{4,5},{6,7},{4,6},{5,7}};   // z = +0.5
+        const int back[4][2]  = {{0,1},{2,3},{0,2},{1,3}};   // z = -0.5
+        const int sides[4][2] = {{0,4},{1,5},{2,6},{3,7}};
+        for (auto& e : front) strokeEdge(c[e[0]], c[e[1]], col, kThick);
+        for (auto& e : sides) strokeEdge(c[e[0]], c[e[1]], faint, 1.0f);
+        for (auto& e : back) strokeEdge(c[e[0]], c[e[1]], faint, 1.0f);
+        if (!selected) continue;
+        // Projection arrow: front-face centre to the far face, with a small head.
+        const glm::vec3 a0 = at(0, 0, 0.5f), a1 = at(0, 0, -0.5f);
+        strokeEdge(a0, a1, col, kThick);
+        strokeEdge(a1, at(0.08f, 0, -0.38f), col, kThick);
+        strokeEdge(a1, at(-0.08f, 0, -0.38f), col, kThick);
+        strokeEdge(at(0, 0.5f, 0.5f), at(0, 0.38f, 0.5f), col, kThick); // up tick
+    }
+
     draw->PopClipRect();
 }
 
@@ -2098,6 +2184,9 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
     // needs mesh extents (Rect-tool bounds, Center pivot) falls back to a small unit box.
     auto* renderablePtr = world.Registry.try_get<RenderableComponent>(m_Selected);
     bool registryHasRenderable = renderablePtr != nullptr;
+    // A decal's box is its Size, not the Transform's scale (kept at 1): the gizmo works on the box
+    // (Size folded into the matrix it manipulates) and a scale / bounds drag writes Size back.
+    DecalComponent* decalPtr = registryHasRenderable ? nullptr : world.Registry.try_get<DecalComponent>(m_Selected);
 
     // A parented entity's TransformComponent is local space, but ImGuizmo has to manipulate a
     // world-space matrix (it's drawn and dragged against the world-space view/proj below) — so
@@ -2123,6 +2212,7 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
     else if (m_GizmoOp == GizmoOp::Universal) op = ImGuizmo::UNIVERSAL; // #236 E — one gizmo, all three
 
     glm::mat4 matrix = parentWorld * ComposeTransform(transform);
+    if (decalPtr) matrix = matrix * glm::scale(glm::mat4(1.0f), decalPtr->Size);
 
     // Pivot/Center: in Center mode the gizmo is drawn at the bounding-box center instead of the
     // object's own origin. Only the gizmo's displayed frame shifts — the delta it produces is
@@ -2186,6 +2276,12 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
         // Store the manipulated orientation directly. Euler is only an Inspector/readout view,
         // so the gizmo never passes through a gimbal-locked decomposition (#123).
         const glm::quat newRotation = QuaternionFromMatrix(newLocal);
+        // The scale channel's owner: a decal's Size (the matrix carried it), else the Transform.
+        auto writeScale = [&]() {
+            if (!decalPtr) { transform.Scale = newScale; return; }
+            const glm::vec3 ts = glm::max(glm::abs(transform.Scale), glm::vec3(1e-4f));
+            decalPtr->Size = glm::max(glm::abs(newScale) / ts, glm::vec3(0.001f));
+        };
 
         // Write back only the channel this gizmo actually drives — ImGuizmo's decompose leaks
         // float noise into the other two, and a pure translate drag was nudging Rotation
@@ -2193,11 +2289,11 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
         switch (m_GizmoOp) {
             case GizmoOp::Translate: transform.Position = newPos;      break;
             case GizmoOp::Rotate:    transform.SetRotationQuaternion(newRotation); break;
-            case GizmoOp::Scale:     transform.Scale = newScale;        break;
+            case GizmoOp::Scale:     writeScale();                      break;
             default: // Rect / Universal / bounds edit — position and scale both move
                 transform.Position = newPos;
                 transform.SetRotationQuaternion(newRotation);
-                transform.Scale = newScale;
+                writeScale();
                 break;
         }
 
@@ -2211,12 +2307,13 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
                 IM_COL32(120, 220, 160, 255),
                 m_SurfaceSnapAlign ? "surface + align" : "surface");
         }
-        DrawGizmoDragReadout(transform.Position, transform.EulerDegrees(), transform.Scale);
+        const glm::vec3& shownScale = decalPtr ? decalPtr->Size : transform.Scale;
+        DrawGizmoDragReadout(transform.Position, transform.EulerDegrees(), shownScale);
         PushGizmoEditToPhysics(m_Selected, parentWorld * ComposeTransform(transform)); // #185
         if (snapActive) {
             // Motion v2: a tick for each snap step crossed, measured on the readout's own value.
             if (m_GizmoOp == GizmoOp::Rotate)     NoteGizmoSnapStep(transform.EulerDegrees() - m_GizmoDragStartRot, dragStarted, 0, "\xC2\xB0");
-            else if (m_GizmoOp == GizmoOp::Scale) NoteGizmoSnapStep(transform.Scale, dragStarted, 2, nullptr);
+            else if (m_GizmoOp == GizmoOp::Scale) NoteGizmoSnapStep(shownScale, dragStarted, 2, nullptr);
             else                                  NoteGizmoSnapStep(transform.Position - m_GizmoDragStartPos, dragStarted, 2, nullptr);
         }
     }
@@ -2783,16 +2880,97 @@ void EditorLayer::ApplySurfaceSnap(World& world, Camera& editorCamera, entt::ent
     transform.Position = glm::vec3(glm::inverse(parentWorld) * glm::vec4(dropWorld, 1.0f));
 
     if (m_SurfaceSnapAlign) {
-        const glm::vec3 up = n;
-        const glm::vec3 ref = (std::abs(up.y) > 0.99f) ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
-        const glm::vec3 fwd = glm::normalize(glm::cross(ref, up));
-        const glm::vec3 right = glm::cross(up, fwd);
         glm::mat4 rot(1.0f);
-        rot[0] = glm::vec4(right, 0.0f);
-        rot[1] = glm::vec4(up, 0.0f);
-        rot[2] = glm::vec4(fwd, 0.0f);
+        if (world.Registry.all_of<DecalComponent>(sel)) {
+            rot = glm::mat4(DecalSurfaceBasis(n, editorCamera.Right())); // a decal faces out of the surface (+Z)
+        } else {
+            const glm::vec3 up = n;
+            const glm::vec3 ref = (std::abs(up.y) > 0.99f) ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
+            const glm::vec3 fwd = glm::normalize(glm::cross(ref, up));
+            const glm::vec3 right = glm::cross(up, fwd);
+            rot[0] = glm::vec4(right, 0.0f);
+            rot[1] = glm::vec4(up, 0.0f);
+            rot[2] = glm::vec4(fwd, 0.0f);
+        }
         transform.SetRotationQuaternion(QuaternionFromMatrix(glm::inverse(parentWorld) * rot));
     }
+}
+
+// --- Decals (docs/DECALS.md) -------------------------------------------------------------------
+EditorLayer::DecalSpot EditorLayer::DecalSpotUnderMouse(World& world, Camera& editorCamera) const {
+    DecalSpot spot;
+    if (m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) return spot;
+    const glm::mat4 invVP = glm::inverse(editorCamera.ProjectionMatrix(m_ViewportSize.x / m_ViewportSize.y) *
+                                         editorCamera.ViewMatrix());
+    const ImVec2 mouse = ImGui::GetMousePos();
+    const float ndcX = (2.0f * (mouse.x - m_ViewportPos.x)) / m_ViewportSize.x - 1.0f;
+    const float ndcY = 1.0f - (2.0f * (mouse.y - m_ViewportPos.y)) / m_ViewportSize.y;
+    glm::vec4 nearP = invVP * glm::vec4(ndcX, ndcY, -1.0f, 1.0f);
+    glm::vec4 farP = invVP * glm::vec4(ndcX, ndcY, 1.0f, 1.0f);
+    nearP /= nearP.w;
+    farP /= farP.w;
+    const glm::vec3 origin(nearP);
+    const glm::vec3 dir = glm::normalize(glm::vec3(farP) - origin);
+
+    const SurfaceHit h = RaycastRenderables(world, origin, dir, [](entt::entity) { return false; }, 5000.0f);
+    if (h.Entity != entt::null) {
+        spot.OnSurface = true;
+        spot.Point = origin + dir * h.T;
+        spot.Normal = glm::dot(h.Normal, dir) > 0.0f ? -h.Normal : h.Normal; // the side facing the camera
+    }
+    // A placed decal's box straddles its surface, so the ray enters the box before the surface:
+    // the nearest box entered no later than the surface hit is the decal under the cursor.
+    float best = h.Entity != entt::null ? h.T : 1e30f;
+    for (auto [e, d] : world.Registry.view<const DecalComponent>(entt::exclude<InactiveTag>).each()) {
+        const float t = RayDecalBox(DecalBoxToWorld(world, e, d), origin, dir);
+        if (t >= 0.0f && t <= best) { best = t; spot.Decal = e; }
+    }
+    return spot;
+}
+
+entt::entity EditorLayer::PlaceDecal(World& world, const std::string& path, const glm::vec3& point,
+                                     const glm::vec3& normal, const glm::vec3& viewRight) {
+    PushUndo(world, "Place Decal");
+    // "DA_Tag_Crown" places as "Tag_Crown": the prefix names the file type, not the object.
+    std::string name = std::filesystem::u8path(path).stem().u8string();
+    if (name.rfind("DA_", 0) == 0 && name.size() > 3) name = name.substr(3);
+    const entt::entity e = world.CreateEmptyEntity(point, glm::vec3(0.0f), glm::vec3(1.0f),
+                                                   UniqueNameFor(world, name.empty() ? "Decal" : name));
+    world.Registry.get<TransformComponent>(e).SetRotationQuaternion(
+        QuaternionFromMatrix(glm::mat4(DecalSurfaceBasis(glm::normalize(normal), viewRight))));
+    DecalComponent dc;
+    dc.AssetPath = path;
+    if (const auto asset = DecalAsset::Load(path); asset && !asset->Missing) dc.Size = asset->DefaultSize;
+    // Every placement gets its own seed, so a run of the same decal doesn't repeat its jitter.
+    static std::mt19937 rng{std::random_device{}()};
+    dc.Seed = (int)(rng() & 0x7FFFFFFF);
+    world.Registry.emplace<DecalComponent>(e, dc);
+    SelectItem(e, false);
+    return e;
+}
+
+bool EditorLayer::FitDecalToSurface(World& world, entt::entity entity) {
+    auto* d = world.Registry.try_get<DecalComponent>(entity);
+    if (!d || !world.Registry.all_of<TransformComponent>(entity)) return false;
+    const glm::mat4 w = world.ComposeWorldTransform(entity);
+    const glm::vec3 centre(w[3]);
+    const glm::vec3 z = glm::normalize(glm::vec3(w[2])), x = glm::normalize(glm::vec3(w[0]));
+    // From in front of the box along -Z (the projection direction), far enough to find the
+    // surface whether the decal floats off it or has sunk through it.
+    const float reach = std::max(2.0f, d->Size.z * 4.0f);
+    const glm::vec3 origin = centre + z * (reach * 0.5f);
+    const SurfaceHit h = RaycastRenderables(world, origin, -z, [](entt::entity) { return false; }, reach);
+    if (h.Entity == entt::null) return false;
+    const glm::vec3 n = glm::dot(h.Normal, z) < 0.0f ? -h.Normal : h.Normal; // out of the surface, toward +Z
+
+    entt::entity parent = entt::null;
+    if (const auto* hier = world.Registry.try_get<HierarchyComponent>(entity)) parent = hier->Parent;
+    const glm::mat4 parentInv = glm::inverse(parent != entt::null ? world.ComposeWorldTransform(parent) : glm::mat4(1.0f));
+    PushUndo(world, "Fit Decal to Surface");
+    auto& t = world.Registry.get<TransformComponent>(entity);
+    t.Position = glm::vec3(parentInv * glm::vec4(origin - z * h.T, 1.0f));
+    t.SetRotationQuaternion(QuaternionFromMatrix(parentInv * glm::mat4(DecalSurfaceBasis(n, x))));
+    return true;
 }
 
 void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {

@@ -7,6 +7,7 @@
 #include "ShaderLibrary.h"
 #include "Log.h"
 #include "MaterialAsset.h"
+#include "DecalTypes.h"
 
 #include <fstream>
 #include <sstream>
@@ -374,12 +375,15 @@ void ShaderAsset::BuildBindings() {
     // Standard shader's clear-coat / thickness maps (#206) with nowhere to go; units from 16 up
     // to the driver's GL_MAX_TEXTURE_IMAGE_UNITS (capped at 32) are now used too. Anything past
     // that still gets no unit and a warning (#354). Units 30 and 31 are the physical sky's
-    // (SkyAtmosphere::kAerialUnit / kCloudShadowUnit), so materials stop at 29.
+    // (SkyAtmosphere::kAerialUnit / kCloudShadowUnit), so materials stop at 29. Decals (docs/DECALS.md)
+    // took 22-25 for their texture arrays and 21 for the Standard shaders' _GrungeMap, so every other
+    // material map now ends at 20 (Standard and StandardAdvanced use exactly 1-7 and 16-20).
     static int s_MaxUnits = 0;
     if (s_MaxUnits == 0) {
         GLint n = 16;
         glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &n);
-        s_MaxUnits = std::clamp((int)n, 16, 27); // 27: volumetric fog; 28, 29: the blood splat atlas; 30, 31: the physical sky
+        // 21: _GrungeMap; 22-25: the decal arrays; 27: volumetric fog; 28, 29: the blood splat atlas; 30, 31: the physical sky
+        s_MaxUnits = std::clamp((int)n, 16, Decals::UNIT_GRUNGE);
     }
     int unit = 1;
     for (int i = 0; i < (int)m_Props.size(); ++i) {
@@ -392,7 +396,9 @@ void ShaderAsset::BuildBindings() {
         b.HasUniform = "uHas" + stem;
         b.Builtin = MaterialAsset::IsBuiltinProp(m_Props[i].Name);
         if (b.Builtin) MaterialAsset::ResolveBuiltin(m_Props[i].Name, b.Type, b.GetTex, b.GetVal);
-        if (m_Props[i].Type == ShaderPropType::Texture2D) {
+        if (m_Props[i].Type == ShaderPropType::Texture2D && m_Props[i].Name == "_GrungeMap") {
+            b.TextureUnit = Decals::UNIT_GRUNGE; // ModelDecals.glsl's layout(binding = 21)
+        } else if (m_Props[i].Type == ShaderPropType::Texture2D) {
             if (unit == 8) unit = 16; // skip the engine's reserved 8..15
             if (unit >= s_MaxUnits) {
                 Log::Warn("ShaderAsset: '" + m_Path + "' texture property '" + m_Props[i].Name +

@@ -122,6 +122,7 @@ PFNGLUNMAPNAMEDBUFFERPROC glUnmapNamedBuffer = nullptr;
 
 // Fence sync + buffer-to-buffer copy — deferred cluster-overflow readback (PERF-203).
 PFNGLCOPYNAMEDBUFFERSUBDATAPROC glCopyNamedBufferSubData = nullptr;
+PFNGLCOPYIMAGESUBDATAPROC glCopyImageSubData = nullptr;
 PFNGLFENCESYNCPROC glFenceSync = nullptr;
 PFNGLCLIENTWAITSYNCPROC glClientWaitSync = nullptr;
 PFNGLDELETESYNCPROC glDeleteSync = nullptr;
@@ -265,6 +266,9 @@ bool GLLoader_Init() {
     LOAD(PFNGLFENCESYNCPROC, glFenceSync)
     LOAD(PFNGLCLIENTWAITSYNCPROC, glClientWaitSync)
     LOAD(PFNGLDELETESYNCPROC, glDeleteSync)
+
+    // Texture-to-texture copy - DecalTextureArrays growth.
+    LOAD(PFNGLCOPYIMAGESUBDATAPROC, glCopyImageSubData)
 #undef LOAD
     return ok;
 }

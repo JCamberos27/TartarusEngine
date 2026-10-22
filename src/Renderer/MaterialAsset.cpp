@@ -305,6 +305,10 @@ std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::st
     ma->HeightMapPath            = r.Str(key("_HeightMap", "heightMap"));
     ma->DetailAlbedoMapPath      = r.Str(key("_DetailAlbedoMap", "detailAlbedoMap"));
     ma->DetailNormalMapPath      = r.Str(key("_DetailNormalMap", "detailNormalMap"));
+    ma->GrungeMapPath            = r.Str(key("_GrungeMap", "grungeMap"));
+    m.GrungeStrength = r.Num(key("_GrungeStrength", "grungeStrength"), 0.0f);
+    m.GrungeScale    = r.Num(key("_GrungeScale", "grungeScale"), 0.5f);
+    m.ReceiveDecals  = r.Bool(key("_ReceiveDecals", "receiveDecals"), true);
     m.UVTiling     = r.Vec2(key("_UVTiling", "uvTiling"), {1, 1});
     m.UVOffset     = r.Vec2(key("_UVOffset", "uvOffset"), {0, 0});
     m.DetailTiling = r.Vec2(key("_DetailTiling", "detailTiling"), {4, 4});
@@ -338,6 +342,7 @@ std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::st
         m.HeightMap            = loadTex(ma->HeightMapPath);
         m.DetailAlbedoMap      = loadTex(ma->DetailAlbedoMapPath, Use::Color);
         m.DetailNormalMap      = loadTex(ma->DetailNormalMapPath, Use::Normal);
+        m.GrungeMap            = loadTex(ma->GrungeMapPath, Use::Color);
 
         // Resolve shader asset when path is set (AssetLibrary handles caching). A project-
         // relative "shader" value is resolved against the project root so a .mat works from any
@@ -471,6 +476,10 @@ bool MaterialAsset::Save() const {
         if (!DetailAlbedoMapPath.empty())           props["_DetailAlbedoMap"] = DetailAlbedoMapPath;
         if (!DetailNormalMapPath.empty())           props["_DetailNormalMap"] = DetailNormalMapPath;
         if (m.DetailTiling != glm::vec2(4.0f))      props["_DetailTiling"]   = {m.DetailTiling.x, m.DetailTiling.y};
+        if (!GrungeMapPath.empty())                 props["_GrungeMap"]      = GrungeMapPath;
+        if (m.GrungeStrength != 0.0f)               props["_GrungeStrength"] = m.GrungeStrength;
+        if (m.GrungeScale != 0.5f)                  props["_GrungeScale"]    = m.GrungeScale;
+        if (!m.ReceiveDecals)                       props["_ReceiveDecals"]  = false;
         if (m.TransmissionStrength != 0.0f)         props["_TransmissionStrength"]    = m.TransmissionStrength;
         if (m.IOR                  != 1.5f)         props["_IOR"]                     = m.IOR;
         if (m.SubsurfaceEnabled)                    props["_SubsurfaceEnabled"]      = true;
@@ -533,6 +542,10 @@ bool MaterialAsset::Save() const {
         if (!DetailAlbedoMapPath.empty())   j["detailAlbedoMap"]    = DetailAlbedoMapPath;
         if (!DetailNormalMapPath.empty())   j["detailNormalMap"]    = DetailNormalMapPath;
         if (m.DetailTiling != glm::vec2(4.0f)) j["detailTiling"]    = {m.DetailTiling.x, m.DetailTiling.y};
+        if (!GrungeMapPath.empty())         j["grungeMap"]          = GrungeMapPath;
+        if (m.GrungeStrength != 0.0f)       j["grungeStrength"]     = m.GrungeStrength;
+        if (m.GrungeScale != 0.5f)          j["grungeScale"]        = m.GrungeScale;
+        if (!m.ReceiveDecals)               j["receiveDecals"]      = false;
         if (m.TransmissionStrength != 0.0f) j["transmission"]      = m.TransmissionStrength;
         if (m.IOR                 != 1.5f) j["ior"]                = m.IOR;
         if (m.SubsurfaceEnabled)            j["subsurface"]         = true;
@@ -579,6 +592,7 @@ bool MaterialAsset::IsBuiltinProp(const std::string& n) {
         "_UVTiling", "_UVOffset", "_NormalStrength", "_NormalFlipY", "_DoubleSided", "_VertexColors",
         "_SpecularHighlights", "_GlossyReflections",
         "_HeightMap", "_ParallaxScale", "_DetailAlbedoMap", "_DetailNormalMap", "_DetailTiling",
+        "_GrungeMap", "_GrungeStrength", "_GrungeScale", "_ReceiveDecals",
     };
     return kBuiltin.count(n) != 0;
 }
@@ -597,6 +611,7 @@ const std::shared_ptr<Texture>& MaterialAsset::GetTexture(const Material& m, con
     if (n == "_HeightMap")            return m.HeightMap;
     if (n == "_DetailAlbedoMap")      return m.DetailAlbedoMap;
     if (n == "_DetailNormalMap")      return m.DetailNormalMap;
+    if (n == "_GrungeMap")            return m.GrungeMap;
     auto it = m.ExtraProps.find(n);
     return it != m.ExtraProps.end() ? it->second.Tex : sNull;
 }
@@ -655,6 +670,7 @@ void MaterialAsset::SyncTexturePathsFromMat() {
     HeightMapPath            = pathOf(Mat.HeightMap);
     DetailAlbedoMapPath      = pathOf(Mat.DetailAlbedoMap);
     DetailNormalMapPath      = pathOf(Mat.DetailNormalMap);
+    GrungeMapPath            = pathOf(Mat.GrungeMap);
     for (auto& [name, p] : Mat.ExtraProps)
         if (p.Type == ShaderPropType::Texture2D) p.TexPath = pathOf(p.Tex);
 }
@@ -674,6 +690,8 @@ float MaterialAsset::GetFloat(const Material& m, const std::string& n) {
     if (n == "_IOR")                     return m.IOR;
     if (n == "_NormalStrength")          return m.NormalStrength;
     if (n == "_ParallaxScale")           return m.ParallaxScale;
+    if (n == "_GrungeStrength")          return m.GrungeStrength;
+    if (n == "_GrungeScale")             return m.GrungeScale;
     auto it = m.ExtraProps.find(n);
     return it != m.ExtraProps.end() ? it->second.F : 0.0f;
 }
@@ -685,6 +703,7 @@ bool MaterialAsset::GetBool(const Material& m, const std::string& n) {
     if (n == "_VertexColors") return m.UseVertexColor;
     if (n == "_SpecularHighlights") return m.SpecularHighlights;
     if (n == "_GlossyReflections") return m.GlossyReflections;
+    if (n == "_ReceiveDecals") return m.ReceiveDecals;
     auto it = m.ExtraProps.find(n);
     return it != m.ExtraProps.end() && it->second.B;
 }
@@ -710,6 +729,7 @@ void MaterialAsset::ResolveBuiltin(const std::string& n, ShaderPropType type,
         {"_HeightMap",            [](const Material& m) -> const std::shared_ptr<Texture>& { return m.HeightMap; }},
         {"_DetailAlbedoMap",      [](const Material& m) -> const std::shared_ptr<Texture>& { return m.DetailAlbedoMap; }},
         {"_DetailNormalMap",      [](const Material& m) -> const std::shared_ptr<Texture>& { return m.DetailNormalMap; }},
+        {"_GrungeMap",            [](const Material& m) -> const std::shared_ptr<Texture>& { return m.GrungeMap; }},
     };
     static const ValEntry kColor[] = {
         {"_BaseColor",       [](const Material& m) { return glm::vec4(m.BaseColor, 0.0f); }},
@@ -737,6 +757,8 @@ void MaterialAsset::ResolveBuiltin(const std::string& n, ShaderPropType type,
         {"_IOR",                  [](const Material& m) { return glm::vec4(m.IOR, 0, 0, 0); }},
         {"_NormalStrength",       [](const Material& m) { return glm::vec4(m.NormalStrength, 0, 0, 0); }},
         {"_ParallaxScale",        [](const Material& m) { return glm::vec4(m.ParallaxScale, 0, 0, 0); }},
+        {"_GrungeStrength",       [](const Material& m) { return glm::vec4(m.GrungeStrength, 0, 0, 0); }},
+        {"_GrungeScale",          [](const Material& m) { return glm::vec4(m.GrungeScale, 0, 0, 0); }},
     };
     static const ValEntry kBool[] = {
         {"_Triplanar",          [](const Material& m) { return glm::vec4(m.Triplanar ? 1.0f : 0.0f, 0, 0, 0); }},
@@ -745,6 +767,7 @@ void MaterialAsset::ResolveBuiltin(const std::string& n, ShaderPropType type,
         {"_VertexColors",       [](const Material& m) { return glm::vec4(m.UseVertexColor ? 1.0f : 0.0f, 0, 0, 0); }},
         {"_SpecularHighlights", [](const Material& m) { return glm::vec4(m.SpecularHighlights ? 1.0f : 0.0f, 0, 0, 0); }},
         {"_GlossyReflections",  [](const Material& m) { return glm::vec4(m.GlossyReflections ? 1.0f : 0.0f, 0, 0, 0); }},
+        {"_ReceiveDecals",      [](const Material& m) { return glm::vec4(m.ReceiveDecals ? 1.0f : 0.0f, 0, 0, 0); }},
     };
     tex = nullptr;
     val = nullptr;
@@ -779,6 +802,7 @@ void MaterialAsset::SetTexture(Material& m, const std::string& n, const std::sha
     if (n == "_HeightMap")            { m.HeightMap = tex; return; }
     if (n == "_DetailAlbedoMap")      { m.DetailAlbedoMap = tex; return; }
     if (n == "_DetailNormalMap")      { m.DetailNormalMap = tex; return; }
+    if (n == "_GrungeMap")            { m.GrungeMap = tex; return; }
     auto it = m.ExtraProps.find(n);
     if (it != m.ExtraProps.end()) { it->second.Tex = tex; it->second.TexPath = tex ? tex->Path() : std::string(); }
 }
@@ -807,6 +831,8 @@ void MaterialAsset::SetFloat(Material& m, const std::string& n, float v) {
     if (n == "_IOR")                     { m.IOR = v; return; }
     if (n == "_NormalStrength")          { m.NormalStrength = v; return; }
     if (n == "_ParallaxScale")           { m.ParallaxScale = v; return; }
+    if (n == "_GrungeStrength")          { m.GrungeStrength = v; return; }
+    if (n == "_GrungeScale")             { m.GrungeScale = v; return; }
     auto it = m.ExtraProps.find(n);
     if (it != m.ExtraProps.end()) { it->second.F = v; it->second.I = (int)v; }
 }
@@ -818,6 +844,7 @@ void MaterialAsset::SetBool(Material& m, const std::string& n, bool v) {
     if (n == "_VertexColors") { m.UseVertexColor = v; return; }
     if (n == "_SpecularHighlights") { m.SpecularHighlights = v; return; }
     if (n == "_GlossyReflections") { m.GlossyReflections = v; return; }
+    if (n == "_ReceiveDecals") { m.ReceiveDecals = v; return; }
     auto it = m.ExtraProps.find(n);
     if (it != m.ExtraProps.end()) it->second.B = v;
 }

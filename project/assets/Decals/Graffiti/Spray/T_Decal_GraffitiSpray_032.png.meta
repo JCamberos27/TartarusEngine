@@ -1,0 +1,16 @@
+{
+  "folder": "assets/Decals/Graffiti/Spray",
+  "guid": "8adfe4dcdc2c232c",
+  "importer": {
+    "anisoLevel": 8,
+    "compression": 1,
+    "filterMode": 2,
+    "generateMipmaps": true,
+    "isSRGB": true,
+    "maxTextureSize": 2048,
+    "textureType": 0,
+    "wrapMode": 1
+  },
+  "metaVersion": 1,
+  "type": "texture"
+}

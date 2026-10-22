@@ -102,6 +102,7 @@ const std::unordered_map<std::string, std::string>& KnownExtensions() {
         {".tescript", "script"},
         {".physicmaterial", "physicmaterial"}, // #170
         {".preset", "preset"},                 // #178 - saved component settings
+        {".decal", "decal"},                   // DecalComponent assets (docs/DECALS.md)
     };
     return kExts;
 }

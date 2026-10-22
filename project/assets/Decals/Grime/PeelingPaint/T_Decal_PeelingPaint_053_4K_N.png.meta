@@ -1,0 +1,16 @@
+{
+  "folder": "assets/Decals/Grime/PeelingPaint",
+  "guid": "d3a5fb0d1ec7b03b",
+  "importer": {
+    "anisoLevel": 8,
+    "compression": 1,
+    "filterMode": 2,
+    "generateMipmaps": true,
+    "isSRGB": false,
+    "maxTextureSize": 4096,
+    "textureType": 1,
+    "wrapMode": 1
+  },
+  "metaVersion": 1,
+  "type": "texture"
+}
