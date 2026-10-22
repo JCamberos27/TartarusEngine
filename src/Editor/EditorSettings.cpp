@@ -43,6 +43,7 @@ void MigrateLegacyPrefsIfNeeded() {
 // call, Save() just raises this flag and Flush() (once per frame from the editor loop, and on
 // shutdown) does the one real write (audit CPP-206 / PERF-211).
 bool g_PrefsDirty = false;
+bool g_LayoutResetRequested = false; // Load() migrated an older file: rebuild the default dock once
 int g_SavedThemeId = -1; // >= 0: SetThemeForRun changed the theme for this run only; this is the one to keep
 
 // #126 — root.value(key, default) THROWS json::type_error when the key exists with the wrong
@@ -176,6 +177,7 @@ void EditorSettings::Load() {
     s.EditorThemeId = std::clamp(SafeValue(root, "glassTheme", s.EditorThemeId), 0, 1);
     s.GlassViewportHuds = SafeValue(root, "glassViewportHuds", s.GlassViewportHuds);
     s.GlassFrostedBlur = SafeValue(root, "glassFrostedBlur", s.GlassFrostedBlur);
+    s.GlassStatsPill = SafeValue(root, "glassStatsPill", s.GlassStatsPill);
     s.GlassSeeThroughWindow = SafeValue(root, "glassSeeThroughWindow", s.GlassSeeThroughWindow);
     s.ShowGlassHierarchy = SafeValue(root, "showGlassHierarchy", s.ShowGlassHierarchy);
     s.ShowGlassInspector = SafeValue(root, "showGlassInspector", s.ShowGlassInspector);
@@ -186,6 +188,29 @@ void EditorSettings::Load() {
     s.LightGizmoOpacity = SafeValue(root, "lightGizmoOpacity", s.LightGizmoOpacity);
     s.LightGizmoScale = SafeValue(root, "lightGizmoScale", s.LightGizmoScale);
     s.ShowColliders = SafeValue(root, "showColliders", s.ShowColliders);
+    s.CollidersSelectedOnly = SafeValue(root, "collidersSelectedOnly", s.CollidersSelectedOnly);
+    s.ShowDecalGizmos = SafeValue(root, "showDecalGizmos", s.ShowDecalGizmos);
+    s.ShowProbeGizmos = SafeValue(root, "showProbeGizmos", s.ShowProbeGizmos);
+    s.ShowVolumeGizmos = SafeValue(root, "showVolumeGizmos", s.ShowVolumeGizmos);
+    s.VolumeGizmosSelectedOnly = SafeValue(root, "volumeGizmosSelectedOnly", s.VolumeGizmosSelectedOnly);
+    s.EntityIconsMode = std::clamp(SafeValue(root, "entityIconsMode", s.EntityIconsMode), 0, 2);
+    s.EntityIconsThroughWalls = SafeValue(root, "entityIconsThroughWalls", s.EntityIconsThroughWalls);
+    s.SceneCameras.clear();
+    if (auto it = root.find("sceneCameras"); it != root.end() && it->is_array()) {
+        for (const auto& c : *it) {
+            if (!c.is_object()) continue;
+            SceneCameraPose pose;
+            pose.ScenePath = SafeValue(c, "scene", std::string());
+            if (pose.ScenePath.empty()) continue;
+            pose.X = SafeValue(c, "x", pose.X);
+            pose.Y = SafeValue(c, "y", pose.Y);
+            pose.Z = SafeValue(c, "z", pose.Z);
+            pose.Yaw = SafeValue(c, "yaw", pose.Yaw);
+            pose.Pitch = std::clamp(SafeValue(c, "pitch", pose.Pitch), -89.0f, 89.0f);
+            pose.FlySpeed = std::max(0.01f, SafeValue(c, "flySpeed", pose.FlySpeed));
+            if ((int)s.SceneCameras.size() < kMaxSceneCameras) s.SceneCameras.push_back(pose);
+        }
+    }
     s.ShowBodyDebug = SafeValue(root, "showBodyDebug", s.ShowBodyDebug);
     s.ToolPaletteCollapsed = SafeValue(root, "toolPaletteCollapsed", s.ToolPaletteCollapsed);
     s.DecalFavorites = SafeValue(root, "decalFavorites", s.DecalFavorites);
@@ -293,6 +318,15 @@ void EditorSettings::Load() {
     clampF(s.SnapScale, 0.001f, 10.0f, 0.1f);
     s.ActiveTool = std::clamp(s.ActiveTool, 0, 4);   // GizmoOp::Translate..Universal
     s.ShadingMode = std::clamp(s.ShadingMode, 0, 5); // EditorLayer::ShadingMode::Shaded..Mip
+
+    // A file from before kPrefsVersion (no "prefsVersion" key = v1): move it forward once and
+    // write it straight back, so the migration never runs twice.
+    const int fileVersion = SafeValue(root, "prefsVersion", 1);
+    if (fileVersion < kPrefsVersion) {
+        g_LayoutResetRequested = MigratePrefs(s, fileVersion);
+        Log::Info("EditorSettings: prefs moved to v" + std::to_string(kPrefsVersion) + " (clean view defaults).");
+        Save();
+    }
 }
 
 void EditorSettings::Save() {
@@ -300,6 +334,68 @@ void EditorSettings::Save() {
     // shutdown. Worst case a change made this frame is lost to a crash before the frame ends;
     // that beats dozens of non-atomic full rewrites during a slider drag / toggle spree.
     g_PrefsDirty = true;
+}
+
+void EditorSettings::ResetViewDefaults() {
+    const EditorSettings d;
+    EditorThemeId = d.EditorThemeId;
+    GlassViewportHuds = d.GlassViewportHuds;
+    GlassStatsPill = d.GlassStatsPill;
+    SceneShowStats = d.SceneShowStats;
+    ShowLightGizmos = d.ShowLightGizmos;
+    LightGizmoSelectedOnly = d.LightGizmoSelectedOnly;
+    LightGizmoOpacity = d.LightGizmoOpacity;
+    LightGizmoScale = d.LightGizmoScale;
+    ShowColliders = d.ShowColliders;
+    CollidersSelectedOnly = d.CollidersSelectedOnly;
+    ShowDecalGizmos = d.ShowDecalGizmos;
+    ShowProbeGizmos = d.ShowProbeGizmos;
+    ShowVolumeGizmos = d.ShowVolumeGizmos;
+    VolumeGizmosSelectedOnly = d.VolumeGizmosSelectedOnly;
+    EntityIconsMode = d.EntityIconsMode;
+    EntityIconsThroughWalls = d.EntityIconsThroughWalls;
+    ShowBodyDebug = d.ShowBodyDebug;
+    PhysicsDebugDrawFlags = d.PhysicsDebugDrawFlags;
+    PlayDebugOverlay = d.PlayDebugOverlay;
+    LayerVisibleMask = d.LayerVisibleMask;
+    ViewShowGrid = d.ViewShowGrid;
+    ViewShowGizmo = d.ViewShowGizmo;
+    GridOpacity = d.GridOpacity;
+    GridFadeDistance = d.GridFadeDistance;
+    GridShowAxisLines = d.GridShowAxisLines;
+}
+
+bool EditorSettings::MigratePrefs(EditorSettings& s, int from) {
+    bool resetLayout = false;
+    if (from < 2) {
+        // v2: the clean first launch. Every overlay/theme default changed, so the old file's
+        // choices for them (mostly never touched, just written back) give way to the new ones.
+        s.ResetViewDefaults();
+        resetLayout = true; // the old dock focused Statistics; rebuild the default arrangement
+    }
+    s.PrefsVersion = kPrefsVersion;
+    return resetLayout;
+}
+
+bool EditorSettings::TakeLayoutResetRequest() {
+    const bool r = g_LayoutResetRequested;
+    g_LayoutResetRequested = false;
+    return r;
+}
+
+const EditorSettings::SceneCameraPose* EditorSettings::FindSceneCamera(const std::string& scenePath) const {
+    for (const SceneCameraPose& p : SceneCameras)
+        if (p.ScenePath == scenePath) return &p;
+    return nullptr;
+}
+
+void EditorSettings::RememberSceneCamera(const SceneCameraPose& pose) {
+    if (pose.ScenePath.empty()) return;
+    SceneCameras.erase(std::remove_if(SceneCameras.begin(), SceneCameras.end(),
+                                      [&](const SceneCameraPose& p) { return p.ScenePath == pose.ScenePath; }),
+                       SceneCameras.end());
+    SceneCameras.insert(SceneCameras.begin(), pose);
+    if ((int)SceneCameras.size() > kMaxSceneCameras) SceneCameras.resize(kMaxSceneCameras);
 }
 
 void EditorSettings::SetThemeForRun(int themeId) {
@@ -312,6 +408,7 @@ void EditorSettings::Flush() {
     g_PrefsDirty = false;
 
     json root;
+    root["prefsVersion"] = kPrefsVersion;
     root["showTooltips"] = Get().ShowTooltips;
     root["uiScaleOverride"] = Get().UiScaleOverride;
     root["autoSaveEnabled"] = Get().AutoSaveEnabled;
@@ -391,6 +488,7 @@ void EditorSettings::Flush() {
     root["motionStartup"] = Get().MotionStartup;
     root["glassTheme"] = g_SavedThemeId >= 0 ? g_SavedThemeId : Get().EditorThemeId;
     root["glassViewportHuds"] = Get().GlassViewportHuds;
+    root["glassStatsPill"] = Get().GlassStatsPill;
     root["glassFrostedBlur"] = Get().GlassFrostedBlur;
     root["glassSeeThroughWindow"] = Get().GlassSeeThroughWindow;
     root["showGlassHierarchy"] = Get().ShowGlassHierarchy;
@@ -402,6 +500,20 @@ void EditorSettings::Flush() {
     root["lightGizmoOpacity"] = Get().LightGizmoOpacity;
     root["lightGizmoScale"] = Get().LightGizmoScale;
     root["showColliders"] = Get().ShowColliders;
+    root["collidersSelectedOnly"] = Get().CollidersSelectedOnly;
+    root["showDecalGizmos"] = Get().ShowDecalGizmos;
+    root["showProbeGizmos"] = Get().ShowProbeGizmos;
+    root["showVolumeGizmos"] = Get().ShowVolumeGizmos;
+    root["volumeGizmosSelectedOnly"] = Get().VolumeGizmosSelectedOnly;
+    root["entityIconsMode"] = Get().EntityIconsMode;
+    root["entityIconsThroughWalls"] = Get().EntityIconsThroughWalls;
+    {
+        json cams = json::array();
+        for (const SceneCameraPose& p : Get().SceneCameras)
+            cams.push_back({{"scene", p.ScenePath}, {"x", p.X}, {"y", p.Y}, {"z", p.Z},
+                            {"yaw", p.Yaw}, {"pitch", p.Pitch}, {"flySpeed", p.FlySpeed}});
+        root["sceneCameras"] = std::move(cams);
+    }
     root["showBodyDebug"] = Get().ShowBodyDebug;
     root["toolPaletteCollapsed"] = Get().ToolPaletteCollapsed;
     root["decalFavorites"] = Get().DecalFavorites;
