@@ -205,8 +205,13 @@ void Draw(const EditorModuleHostAPI& host) {
 
         // (No centred scene title: the window title in the taskbar still names the scene.)
 
-        // The traffic lights, at the right edge.
-        DrawTrafficLights(host, toolbarH);
+        // The traffic lights, at the right edge; the span between them and the menus holds the
+        // host's Play transport (centred) and panel toggles.
+        const float menusEnd = ImGui::GetCursorScreenPos().x;
+        const float lightsW = DrawTrafficLights(host, toolbarH);
+        if (host.DrawTitleBarControls)
+            host.DrawTitleBarControls(menusEnd, ImGui::GetWindowPos().x + ImGui::GetWindowWidth() - lightsW - EditorTheme::Px(12.0f),
+                                      toolbarH);
 
         ImGui::EndMenuBar();
     }

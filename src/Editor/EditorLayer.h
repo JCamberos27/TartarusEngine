@@ -196,6 +196,10 @@ public:
     // EditorModuleToolbar.cpp's file comment). main.cpp calls this every frame, unconditionally.
     // Clicks only raise request flags — main.cpp owns the play/maximize/cursor state itself.
     void DrawViewportActionBar(World& world, AssetLibrary& assets, bool playing, bool maximized, bool paused);
+    // The title bar's middle (called by the reloadable toolbar module, EditorModuleHostAPI v45):
+    // Play / Pause / Step centred, the play clock beside them, the Console / History / stats
+    // toggles at the span's right end. Reads the play state DrawViewportActionBar recorded.
+    void DrawTitleBarControls(float spanMinX, float spanMaxX, float toolbarH);
 
     // True when the cursor is over the toolbar's empty (draggable) area this frame; main.cpp
     // forwards it to Window so its WM_NCHITTEST can treat that region as the window's caption.
@@ -2601,13 +2605,12 @@ private:
     // quaternion, so this converts to/from a quaternion around the call into the library.
     void DrawViewGizmo(World& world, Camera& editorCamera);
 
-    // Phase 3 item 3 — the vertical tool palette docked to the Scene viewport's left edge
-    // (Blender's T-panel model, audit #5 Q7): Hand/Translate/Rotate/Scale/Rect/Universal,
-    // Measure, Duplicate Array, and the Local/World + Pivot/Center toggles that used to live in
-    // the top toolbar strip. Drawn inside Scene's own Begin/End (EditorLayer.cpp) as a child
-    // region with its own opaque plate, not a separate floating window — collapsible to a thin
-    // strip via EditorSettings::ToolPaletteCollapsed.
-    void DrawToolPalette(World& world, Camera& editorCamera);
+    // The Scene panel's header strip (EditorLayer_ToolPalette.cpp): the transform tools, space,
+    // snap and the Tools dropdown on the left, draw mode / projection / gizmos / grid / camera
+    // speed on the right. Drawn at the top of Scene's content, above the image, so nothing
+    // floats over the scene; the image fills what's left (and the scene render is sized to it).
+    void DrawViewportHeader(World& world, Camera& editorCamera);
+    float ViewportHeaderHeight() const;
 
     // --- Glass theme (EditorLayer_Glass.cpp) -------------------------------------------------
     // Created on first use while Glass is active, destroyed when it's switched off.
@@ -2615,6 +2618,9 @@ private:
     unsigned int m_MotionDockspaceId = 0;      // the editor dock space, for Glass::DockFocusRim
     bool m_MotionPlaying = false;              // last DrawViewportActionBar's play state, for
     bool m_MotionPaused = false;               //   Glass::DrawPlayFrame
+    bool m_TransportMaximized = false;         // ... and maximized play, for the title-bar transport
+    double m_PlayStartedAt = -1.0;             // ImGui time Play began (the title bar's play clock)
+    float m_TitleTransportW = 0.0f;            // last frame's transport width, to centre it
     int  m_ToolGlideLast = -2;                 // the tool rail's last active tool (-2 = none yet)
     int m_PendingThemeId = -1;                 // RequestEditorTheme, applied in BeginFrame
     void ApplyPendingTheme();                  // BeginFrame, before ImGui::NewFrame

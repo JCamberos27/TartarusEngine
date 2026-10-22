@@ -3230,10 +3230,12 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         if (sceneWindow->DockId != 0) m_SceneGameDockNodeId = sceneWindow->DockId;
     }
     if (m_SceneViewportVisible) {
-        ImVec2 contentMin = ImGui::GetWindowContentRegionMin();
-        ImVec2 windowPos = ImGui::GetWindowPos();
+        // The header strip first (skipped for a clean capture, which wants the image alone);
+        // the viewport is whatever is left below it.
+        if (!m_HideOverlaysThisFrame) DrawViewportHeader(world, editorCamera);
+        const ImVec2 imageMin = ImGui::GetCursorScreenPos();
         ImVec2 contentSize = ImGui::GetContentRegionAvail();
-        m_ViewportPos = {windowPos.x + contentMin.x, windowPos.y + contentMin.y};
+        m_ViewportPos = {imageMin.x, imageMin.y};
         m_ViewportSize = {contentSize.x, contentSize.y};
         m_LastSceneContentRegion = m_ViewportSize;
 
@@ -3246,11 +3248,6 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
             ImGui::Image((ImTextureID)(intptr_t)m_SceneColorTexture, contentSize, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
         }
 
-        // Phase 3 item 3 — drawn inside Scene's own Begin/End (painting on top of the Image()
-        // above, in this same window) rather than a separate floating window; see
-        // EditorLayer_ToolPalette.cpp for why. Skipped for a clean capture, same as every other
-        // viewport overlay.
-        if (!m_HideOverlaysThisFrame) DrawToolPalette(world, editorCamera);
         DrawGlassViewportOverlays(world); // Glass theme only: the frosted HUDs (skips clean captures itself)
     } else {
         m_ViewportPos = {0.0f, 0.0f};

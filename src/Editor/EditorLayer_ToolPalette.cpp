@@ -1,15 +1,14 @@
-// Phase 3 item 3 — the vertical tool palette docked to the Scene viewport's left edge, moved out
-// of the old 25-icon top toolbar strip (EditorModuleToolbar.cpp) per the audit's "nothing
-// important is a ghost overlay" exit criterion. Split into its own file rather than folded into
-// EditorLayer_Gizmos.cpp or EditorLayer_Toolbar.cpp since it's a new, self-contained concern
-// (#179's precedent for keeping EditorLayer.cpp's translation units topic-sized).
+// The Scene viewport's header strip: a solid row along the top of the Scene panel, above the
+// rendered image (Unreal's viewport toolbar), holding the tools and view options that used to
+// float over the scene in a vertical rail (Phase 3 item 3's T-panel). Nothing sits on the image
+// now - the rail and the floating action bar both left it - so the scene reads edge to edge.
 //
-// The view-state chips (draw mode + ortho/persp) used to live in their own floating row pinned to
-// the viewport's top-right, offset from the nav-gizmo cluster; they joined this rail instead
-// (icon-only, at the bottom, below Grid/Snap/Gizmos) so the top-right corner isn't a second
-// scattered cluster of viewport controls. The nav gizmo's own redundant Dolly/Pan tool buttons
-// and Persp/Iso label — the same ortho toggle duplicated a second time — were removed from
-// DrawViewGizmo (EditorLayer_Gizmos.cpp) at the same time.
+//   [Hand Move Rotate Scale Rect Transform | Local Pivot | Snap 1 m v  Ground | Tools v]
+//                                     ...   [Shaded v  Persp | Gizmos v  Grid | 8 m/s]
+//
+// The left group is the work (the transform tools always stay visible); the right group is how
+// the view looks. When the panel is too narrow for both, the right group's labels drop to icons,
+// then the group folds into a "..." menu.
 
 #include "EditorLayer.h"
 #include "EditorLayerInternal.h"
@@ -25,221 +24,275 @@
 #include <imgui_internal.h> // ImMax, used by EditorUIPrimitives
 #include <IconsFontAwesome6.h>
 
+#include <algorithm>
+#include <cmath>
+#include <cstdio>
+#include <string>
+
 using namespace EditorInternal;
 
-// The vertical rail (Blender's T-panel model, audit #5 Q7) — a child region drawn INSIDE Scene's
-// own Begin/End (see EditorLayer.cpp, right after the viewport Image()) rather than a separate
-// floating window, so it clips and reorders with the Scene panel automatically instead of
-// recreating the always-on-top-window problem the redesign is trying to solve. Its own opaque
-// plate (same kHudPlateColor every other viewport HUD uses since Defect #54) keeps it legible
-// over the rendered scene without needing to shrink the actual render target.
-void EditorLayer::DrawToolPalette(World& world, Camera& editorCamera) {
+namespace {
+// A thin vertical rule between groups (lighter than the icons, like the old rail's separators).
+void HeaderDivider(float frameH) {
+    ImGui::SameLine(0.0f, EditorTheme::Px(8.0f));
+    const ImVec2 p = ImGui::GetCursorScreenPos();
+    const float inset = frameH * 0.24f;
+    const float x = std::floor(p.x) + 0.5f;
+    ImGui::GetWindowDrawList()->AddLine(ImVec2(x, p.y + inset), ImVec2(x, p.y + frameH - inset),
+                                        EditorTheme::U32(EditorTheme::Strong));
+    ImGui::Dummy(ImVec2(1.0f, frameH));
+    ImGui::SameLine(0.0f, EditorTheme::Px(8.0f));
+}
+
+// "1 m", "0.25 m", "15 deg": a snap increment without trailing zeros.
+std::string SnapLabel(float v, const char* unit) {
+    char b[32];
+    std::snprintf(b, sizeof(b), "%g %s", v, unit);
+    return b;
+}
+} // namespace
+
+float EditorLayer::ViewportHeaderHeight() const {
+    return std::floor(30.0f * m_UIScale);
+}
+
+void EditorLayer::DrawViewportHeader(World& world, Camera& editorCamera) {
     auto& settings = EditorSettings::Get();
-    const float margin = 8.0f * m_UIScale;
-    const float btn = 26.0f * m_UIScale;
-    const float railW = btn + 12.0f * m_UIScale;
+    const float stripH = ViewportHeaderHeight();
+    const ImVec2 origin = ImGui::GetCursorScreenPos();
+    const float stripW = ImGui::GetContentRegionAvail().x;
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    // Solid, like every surface you work in (docs/EDITOR_DESIGN_SYSTEM.md): the panel's own base
+    // with a hairline under it, so the strip belongs to the panel and not to the scene.
+    dl->AddRectFilled(origin, ImVec2(origin.x + stripW, origin.y + stripH), EditorTheme::U32(EditorTheme::Base));
+    dl->AddLine(ImVec2(origin.x, origin.y + stripH - 0.5f), ImVec2(origin.x + stripW, origin.y + stripH - 0.5f),
+                EditorTheme::U32(EditorTheme::Hairline));
 
-    ImGui::SetCursorScreenPos(ImVec2(m_ViewportPos.x + margin, m_ViewportPos.y + margin));
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(EditorTheme::Px(6.0f), EditorTheme::Px(3.0f)));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(EditorTheme::Px(2.0f), 0.0f));
+    const float frameH = ImGui::GetFrameHeight();
+    const float btn = frameH;
+    const float rowY = origin.y + std::floor((stripH - frameH) * 0.5f);
+    const float padX = EditorTheme::Px(8.0f);
+    ImGui::SetCursorScreenPos(ImVec2(origin.x + padX, rowY));
 
-    // The HUD plate (EditorTheme::HudPlate) with a hairline edge, like every viewport overlay.
-    ImGui::PushStyleColor(ImGuiCol_ChildBg, EditorUIPrimitives::kHudPlateColor);
-    ImGui::PushStyleColor(ImGuiCol_Border, EditorTheme::Hairline);
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 4.0f * m_UIScale);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f * m_UIScale, 6.0f * m_UIScale));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, 4.0f * m_UIScale));
+    int& quiet = EditorSoundEvents::SuppressDepth(); // tools, space and snap play EditorSound::ToolFrame
 
-    ImGui::BeginChild("##ToolPalette", ImVec2(railW, 0.0f),
-        ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding | ImGuiChildFlags_Borders,
-        ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-
-    const bool collapsed = settings.ToolPaletteCollapsed;
-    if (ActionButton(collapsed ? ICON_FA_CHEVRON_RIGHT : ICON_FA_CHEVRON_LEFT,
-            collapsed ? "Expand the tool palette" : "Collapse the tool palette", false, ImVec2(btn, btn))) {
-        settings.ToolPaletteCollapsed = !collapsed;
-        EditorSettings::Save();
+    // --- Left: the exclusive tools, with one underline that glides to the active one ------------
+    float activeX = -1.0f, activeW = 0.0f;
+    auto noteActive = [&](bool on) {
+        if (!on) return;
+        activeX = ImGui::GetItemRectMin().x - ImGui::GetWindowPos().x;
+        activeW = ImGui::GetItemRectSize().x;
+    };
+    const bool handTool = m_HandTool;
+    const int gizmoOp = GizmoOpIndex(); // 0 Translate 1 Rotate 2 Scale 3 Rect 4 Universal
+    ++quiet;
+    if (ActionButton(EDITOR_ICON_HAND_TOOL, "Hand - drag to pan the view (Q)", handTool, ImVec2(btn, btn)))
+        SetHandToolActive(!handTool);
+    noteActive(handTool);
+    struct Tool { const char* Icon; const char* Tip; };
+    static const Tool kTools[] = {
+        {EDITOR_ICON_TRANSLATE, "Move (W)"},
+        {EDITOR_ICON_ROTATE, "Rotate (E)"},
+        {EDITOR_ICON_SCALE, "Scale (R)"},
+        {EDITOR_ICON_RECT_TOOL, "Rect - move + non-uniform scale via corner/edge handles (T)"},
+        {EDITOR_ICON_UNIVERSAL, "Transform - move + rotate + scale in one gizmo (Y)"},
+    };
+    for (int i = 0; i < IM_ARRAYSIZE(kTools); ++i) {
+        ImGui::SameLine();
+        const bool on = !handTool && gizmoOp == i;
+        if (ActionButton(kTools[i].Icon, kTools[i].Tip, on, ImVec2(btn, btn))) SetGizmoOpIndex(i);
+        noteActive(on);
+    }
+    --quiet;
+    if (activeX >= 0.0f) {
+        // Glide only when the tool changes; a resize just moves with it.
+        const int tool = handTool ? -1 : gizmoOp;
+        const bool switched = m_ToolGlideLast != -2 && m_ToolGlideLast != tool;
+        m_ToolGlideLast = tool;
+        const float x = EditorTheme::MotionFollow(ImGui::GetID("##toolGlide"), activeX, EditorMotionToken::Glide, !switched) +
+                        ImGui::GetWindowPos().x;
+        const float inset = EditorTheme::Px(6.0f), h = EditorTheme::Px(2.0f);
+        const float y = origin.y + stripH - h - EditorTheme::Px(1.0f);
+        dl->AddRectFilled(ImVec2(x + inset, y), ImVec2(x + activeW - inset, y + h), EditorTheme::U32(EditorTheme::Accent), h * 0.5f);
     }
 
-    if (!collapsed) {
-        ImGui::Separator();
+    HeaderDivider(frameH);
+    const bool localSpace = GizmoLocalSpace();
+    ++quiet;
+    if (ActionButton(localSpace ? EDITOR_ICON_LOCAL_SPACE : EDITOR_ICON_WORLD_SPACE,
+            localSpace ? "Local space (click for World) - Alt+X" : "World space (click for Local) - Alt+X", false, ImVec2(btn, btn)))
+        SetGizmoLocalSpace(!localSpace);
+    --quiet;
+    ImGui::SameLine();
+    const bool pivotCenter = GizmoPivotCenter();
+    if (ActionButton(pivotCenter ? EDITOR_ICON_PIVOT_CENTER : EDITOR_ICON_PIVOT_ORIGIN,
+            pivotCenter ? "Center - gizmo on the bounding-box center (click for Pivot) - Alt+Shift+X"
+                        : "Pivot - gizmo on the object's own origin (click for Center) - Alt+Shift+X",
+            false, ImVec2(btn, btn)))
+        SetGizmoPivotCenter(!pivotCenter);
 
-        // The exclusive tools (Hand + the five gizmo modes) share one 2 px accent bar at the rail's
-        // left edge that glides to whichever is active (Glass SelectionGlide).
-        float activeY = -1.0f, activeH = 0.0f, railX = 0.0f;
-        auto noteActive = [&](bool on) {
-            if (!on) return;
-            activeY = ImGui::GetItemRectMin().y - ImGui::GetWindowPos().y;
-            activeH = ImGui::GetItemRectSize().y;
-            railX = ImGui::GetItemRectMin().x;
-        };
-
-        // Tools, space and snap play their own sound (EditorSound::ToolFrame) rather than a click.
-        int& quiet = EditorSoundEvents::SuppressDepth();
-        const bool handTool = m_HandTool;
+    // Snap: one split control. The face toggles snapping and names the step; the caret opens the
+    // grid and snap increments.
+    HeaderDivider(frameH);
+    {
+        const bool gridSnap = m_GridSnapEnabled;
+        const std::string label = std::string(EDITOR_ICON_SNAP_TO_GRID "  ") +
+                                  (m_GizmoOp == GizmoOp::Rotate ? SnapLabel(m_SnapRotationDeg, "deg") : SnapLabel(m_SnapTranslation, "m")) +
+                                  "##snap";
         ++quiet;
-        if (ActionButton(EDITOR_ICON_HAND_TOOL, "Hand — drag to pan the view (Q)", handTool, ImVec2(btn, btn)))
-            SetHandToolActive(!handTool);
-        noteActive(handTool);
-
-        const int gizmoOp = GizmoOpIndex(); // 0 Translate 1 Rotate 2 Scale 3 Rect 4 Universal
-        if (ActionButton(EDITOR_ICON_TRANSLATE, "Translate (W)", !handTool && gizmoOp == 0, ImVec2(btn, btn)))
-            SetGizmoOpIndex(0);
-        noteActive(!handTool && gizmoOp == 0);
-        if (ActionButton(EDITOR_ICON_ROTATE, "Rotate (E)", !handTool && gizmoOp == 1, ImVec2(btn, btn)))
-            SetGizmoOpIndex(1);
-        noteActive(!handTool && gizmoOp == 1);
-        if (ActionButton(EDITOR_ICON_SCALE, "Scale (R)", !handTool && gizmoOp == 2, ImVec2(btn, btn)))
-            SetGizmoOpIndex(2);
-        noteActive(!handTool && gizmoOp == 2);
-        if (ActionButton(EDITOR_ICON_RECT_TOOL,
-                "Rect — move + non-uniform scale via corner/edge handles (T)",
-                !handTool && gizmoOp == 3, ImVec2(btn, btn)))
-            SetGizmoOpIndex(3);
-        noteActive(!handTool && gizmoOp == 3);
-        if (ActionButton(EDITOR_ICON_UNIVERSAL,
-                "Transform — move + rotate + scale in one gizmo (Y)",
-                !handTool && gizmoOp == 4, ImVec2(btn, btn)))
-            SetGizmoOpIndex(4);
+        if (ActionButton(label.c_str(), "Snap to grid (Alt+Shift+G; hold Ctrl to invert while dragging)", gridSnap, ImVec2(0.0f, btn)))
+            m_GridSnapEnabled = !gridSnap;
         --quiet;
-        noteActive(!handTool && gizmoOp == 4);
-
-        if (activeY >= 0.0f) {
-            // Glide only when the tool changes; a rescale or rail collapse just moves with it.
-            const int tool = handTool ? -1 : gizmoOp;
-            const bool switched = m_ToolGlideLast != -2 && m_ToolGlideLast != tool;
-            m_ToolGlideLast = tool;
-            const float y = EditorTheme::MotionFollow(ImGui::GetID("##toolGlide"), activeY, EditorMotionToken::Glide, !switched) +
-                            ImGui::GetWindowPos().y;
-            const float inset = 5.0f * m_UIScale, w = 2.0f * m_UIScale;
-            const float x = railX - 3.0f * m_UIScale; // in the padding, just inside the child's clip
-            ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(x, y + inset), ImVec2(x + w, y + activeH - inset),
-                                                      EditorTheme::U32(EditorTheme::Accent), w * 0.5f);
-        }
-
-        ImGui::Separator();
-
-        const bool measureTool = MeasureToolActive();
-        ++quiet;
-        if (ActionButton(EDITOR_ICON_MEASURE,
-                "Measure — click to chain measurement points; right-click clears (M)",
-                measureTool, ImVec2(btn, btn)))
-            SetMeasureToolActive(!measureTool);
-        --quiet;
-        const DecalToolMode decalTool = DecalTool();
-        ++quiet;
-        if (ActionButton(EDITOR_ICON_PLACE_DECAL,
-                "Place Decal — click to stamp the Decal Library's selected decal; scroll turns it, Shift+scroll sizes it (P)",
-                decalTool == DecalToolMode::Place, ImVec2(btn, btn)))
-            SetDecalTool(DecalToolMode::Place);
-        if (ActionButton(EDITOR_ICON_DECAL_BRUSH,
-                "Decal Brush — paint decals along a stroke; Ctrl erases, hold Space to pick the source (B)",
-                decalTool == DecalToolMode::Brush, ImVec2(btn, btn)))
-            SetDecalTool(DecalToolMode::Brush);
-        --quiet;
-        if (ActionButton(EDITOR_ICON_DUPLICATE_ARRAY, "Duplicate Array — line/grid of copies of the selection (Ctrl+Shift+D)",
-                false, ImVec2(btn, btn)))
-            RequestArrayDuplicateModal();
-
-        ImGui::Separator();
-
-        const bool localSpace = GizmoLocalSpace();
-        ++quiet;
-        if (ActionButton(localSpace ? EDITOR_ICON_LOCAL_SPACE : EDITOR_ICON_WORLD_SPACE,
-                localSpace ? "Local space (click for World)" : "World space (click for Local)",
-                false, ImVec2(btn, btn)))
-            SetGizmoLocalSpace(!localSpace);
-        --quiet;
-
-        const bool pivotCenter = GizmoPivotCenter();
-        if (ActionButton(pivotCenter ? EDITOR_ICON_PIVOT_CENTER : EDITOR_ICON_PIVOT_ORIGIN,
-                pivotCenter
-                    ? "Center - gizmo sits on the bounding-box center (click for Pivot)"
-                    : "Pivot - gizmo sits on the object's own origin (click for Center)",
-                false, ImVec2(btn, btn)))
-            SetGizmoPivotCenter(!pivotCenter);
-
-        // Grid / snap / gizmo-visibility joined this rail from the old top toolbar's icon row,
-        // which is gone now (moved into viewport clusters per request) — these are viewport
-        // display options in the same spirit as Hand/Translate/Rotate above, so they belong in
-        // the same strip rather than a separate cluster. No room for a second slim caret button
-        // per icon in a one-column rail, so the settings popovers (grid cell size / snap
-        // increments, per-type gizmo visibility) open on right-click instead of a dedicated caret
-        // — left-click still just toggles.
-        ImGui::Separator();
-
-        const bool showGrid = m_ShowGrid;
-        if (ActionButton(EDITOR_ICON_GRID, "Toggle Grid (right-click: grid & snap settings)",
-                showGrid, ImVec2(btn, btn)))
-            m_ShowGrid = !showGrid;
-        if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) ImGui::OpenPopup("##PaletteGridSnapPopup");
-        if (ImGui::BeginPopup("##PaletteGridSnapPopup")) {
+        ImGui::SameLine(0.0f, 0.0f);
+        if (ActionButton(ICON_FA_CARET_DOWN "##snapcaret", "Grid and snap increments", false, ImVec2(std::floor(btn * 0.6f), btn)))
+            ImGui::OpenPopup("##HeaderGridSnapPopup");
+        if (ImGui::BeginPopup("##HeaderGridSnapPopup")) {
             if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) ImGui::CloseCurrentPopup();
             DrawGridSnapPopupBody();
             ImGui::EndPopup();
         }
-
-        const bool gridSnap = m_GridSnapEnabled;
-        ++quiet;
-        if (ActionButton(EDITOR_ICON_SNAP_TO_GRID,
-                "Toggle Snap to Grid (hold Ctrl to invert while dragging)", gridSnap, ImVec2(btn, btn)))
-            m_GridSnapEnabled = !gridSnap;
+        ImGui::SameLine();
+        const bool canSnap = CanSnapSelectionToGround(world);
+        ImGui::BeginDisabled(!canSnap);
+        ++quiet; // SnapSelectionToGround plays SnapGround
+        if (ActionButton(EDITOR_ICON_SNAP_TO_GROUND, "Snap the selection to the ground (Alt+H)", false, ImVec2(btn, btn)))
+            SnapSelectionToGround(world);
         --quiet;
+        ImGui::EndDisabled();
+    }
 
-        {
-            const bool canSnap = CanSnapSelectionToGround(world);
-            ImGui::BeginDisabled(!canSnap);
-            ++quiet; // SnapSelectionToGround plays SnapGround
-            if (ActionButton(EDITOR_ICON_SNAP_TO_GROUND, "Snap selection to ground", false, ImVec2(btn, btn)))
-                SnapSelectionToGround(world);
+    // Tools: the less frequent ones, behind one dropdown that shows whichever is active.
+    HeaderDivider(frameH);
+    {
+        const bool measureTool = MeasureToolActive();
+        const DecalToolMode decalTool = DecalTool();
+        const char* icon = measureTool ? EDITOR_ICON_MEASURE
+                         : decalTool == DecalToolMode::Place ? EDITOR_ICON_PLACE_DECAL
+                         : decalTool == DecalToolMode::Brush ? EDITOR_ICON_DECAL_BRUSH : ICON_FA_TOOLBOX;
+        const bool anyOn = measureTool || decalTool != DecalToolMode::None;
+        const std::string label = std::string(icon) + "  Tools  " ICON_FA_CARET_DOWN "##tools";
+        if (ActionButton(label.c_str(), "Measure, decal tools, duplicate array", anyOn, ImVec2(0.0f, btn)))
+            ImGui::OpenPopup("##HeaderToolsPopup");
+        if (ImGui::BeginPopup("##HeaderToolsPopup")) {
+            ++quiet;
+            if (ImGui::MenuItem(EDITOR_ICON_MEASURE "  Measure", "M", measureTool)) SetMeasureToolActive(!measureTool);
+            if (ImGui::MenuItem(EDITOR_ICON_PLACE_DECAL "  Place Decal", "P", decalTool == DecalToolMode::Place))
+                SetDecalTool(DecalToolMode::Place);
+            if (ImGui::MenuItem(EDITOR_ICON_DECAL_BRUSH "  Decal Brush", "B", decalTool == DecalToolMode::Brush))
+                SetDecalTool(DecalToolMode::Brush);
             --quiet;
-            ImGui::EndDisabled();
+            ImGui::Separator();
+            if (ImGui::MenuItem(EDITOR_ICON_DUPLICATE_ARRAY "  Duplicate Array...", "Ctrl+Shift+D")) RequestArrayDuplicateModal();
+            ImGui::EndPopup();
         }
+    }
+    const float leftEnd = ImGui::GetItemRectMax().x;
 
-        ImGui::Separator();
+    // --- Right: how the view looks -------------------------------------------------------------
+    static const char* kDrawModes[] = {"Shaded", "Wireframe", "Unlit", "Normals", "Shadow Cascades", "Mip / Texel Density"};
+    static const char* kDrawModeIcons[] = {EDITOR_ICON_SHADED_MODE, EDITOR_ICON_WIREFRAME_MODE, EDITOR_ICON_UNLIT_MODE,
+                                           EDITOR_ICON_NORMALS_MODE, EDITOR_ICON_CASCADES_MODE, EDITOR_ICON_MIP_MODE};
+    int shading = ShadingModeIndex();
+    if (shading < 0 || shading >= IM_ARRAYSIZE(kDrawModes)) shading = 0;
+    const bool ortho = editorCamera.Orthographic;
+    char speed[32];
+    std::snprintf(speed, sizeof(speed), "%g m/s", std::round(settings.SceneCameraFlySpeed * 10.0f) / 10.0f);
 
+    // The right group's labels, full and compact. Measured first so the group can right-align and
+    // choose how much of itself fits beside the left group.
+    const std::string drawFull = std::string(kDrawModeIcons[shading]) + "  " + kDrawModes[shading] + "  " ICON_FA_CARET_DOWN "##draw";
+    const std::string drawIcon = std::string(kDrawModeIcons[shading]) + " " ICON_FA_CARET_DOWN "##draw";
+    const std::string projFull = std::string(ortho ? EDITOR_ICON_ORTHOGRAPHIC : EDITOR_ICON_PERSPECTIVE) + (ortho ? "  Ortho##proj" : "  Persp##proj");
+    const std::string projIcon = std::string(ortho ? EDITOR_ICON_ORTHOGRAPHIC : EDITOR_ICON_PERSPECTIVE) + "##proj";
+    const std::string speedFull = std::string(ICON_FA_GAUGE_HIGH "  ") + speed + "##speed";
+    const std::string speedShort = std::string(speed) + "##speed";
+    const float framePadX = ImGui::GetStyle().FramePadding.x;
+    auto textW = [&](const std::string& s) { return std::max(btn, ImGui::CalcTextSize(s.c_str(), nullptr, true).x + framePadX * 2.0f); };
+    const float gapW = EditorTheme::Px(2.0f), divW = EditorTheme::Px(17.0f), caretW = std::floor(btn * 0.6f);
+    const float fullW = textW(drawFull) + gapW + textW(projFull) + divW + btn + caretW + gapW + btn + divW + textW(speedFull);
+    const float compactW = textW(drawIcon) + gapW + btn + divW + btn + caretW + gapW + btn + divW + textW(speedShort);
+    const float room = origin.x + stripW - padX - (leftEnd + EditorTheme::Px(24.0f));
+    const int fit = room >= fullW ? 2 : room >= compactW ? 1 : 0; // 2 labels, 1 icons, 0 the overflow menu
+
+    auto drawModeMenu = [&]() {
+        for (int i = 0; i < IM_ARRAYSIZE(kDrawModes); ++i) {
+            const std::string item = std::string(kDrawModeIcons[i]) + "  " + kDrawModes[i];
+            if (ImGui::MenuItem(item.c_str(), nullptr, shading == i)) SetShadingModeIndex(i);
+        }
+    };
+    auto speedBody = [&]() {
+        ImGui::TextDisabled("Camera fly speed (or RMB + wheel)");
+        ImGui::SetNextItemWidth(EditorTheme::Px(180.0f));
+        float v = settings.SceneCameraFlySpeed;
+        if (ImGui::SliderFloat("##flySpeed", &v, 0.5f, 60.0f, "%.1f m/s", ImGuiSliderFlags_Logarithmic)) {
+            settings.SceneCameraFlySpeed = v;
+            EditorSettings::Save();
+        }
+    };
+
+    if (fit == 0) {
+        ImGui::SetCursorScreenPos(ImVec2(std::floor(origin.x + stripW - padX - btn), rowY));
+        if (ActionButton(ICON_FA_ELLIPSIS "##overflow", "View options", false, ImVec2(btn, btn))) ImGui::OpenPopup("##HeaderOverflow");
+        if (ImGui::BeginPopup("##HeaderOverflow")) {
+            if (ImGui::BeginMenu("Draw Mode")) { drawModeMenu(); ImGui::EndMenu(); }
+            if (ImGui::MenuItem(ortho ? "Perspective" : "Orthographic", "5")) ToolbarToggleOrthographic(world, editorCamera);
+            ImGui::Separator();
+            if (ImGui::MenuItem("Gizmos", "Shift+G", m_GizmosMasterVisible)) m_GizmosMasterVisible = !m_GizmosMasterVisible;
+            if (ImGui::BeginMenu("Gizmo Visibility")) { DrawGizmosPopupBody(); ImGui::EndMenu(); }
+            if (ImGui::MenuItem("Grid", "Alt+G", m_ShowGrid)) m_ShowGrid = !m_ShowGrid;
+            ImGui::Separator();
+            speedBody();
+            ImGui::EndPopup();
+        }
+    } else {
+        const bool labels = fit == 2;
+        ImGui::SetCursorScreenPos(ImVec2(std::floor(origin.x + stripW - padX - (labels ? fullW : compactW)), rowY));
+        if (ActionButton((labels ? drawFull : drawIcon).c_str(), "Draw mode (Alt+D cycles)", shading != 0, ImVec2(0.0f, btn)))
+            ImGui::OpenPopup("##HeaderDrawModePopup");
+        if (ImGui::BeginPopup("##HeaderDrawModePopup")) {
+            if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) ImGui::CloseCurrentPopup();
+            drawModeMenu();
+            ImGui::EndPopup();
+        }
+        ImGui::SameLine();
+        if (ActionButton((labels ? projFull : projIcon).c_str(),
+                ortho ? "Orthographic (click for Perspective) - 5" : "Perspective (click for Orthographic) - 5",
+                ortho, ImVec2(labels ? 0.0f : btn, btn)))
+            ToolbarToggleOrthographic(world, editorCamera);
+
+        HeaderDivider(frameH);
         const bool gizmosOn = m_GizmosMasterVisible;
-        if (ActionButton(EDITOR_ICON_TOGGLE_GIZMOS,
-                "Toggle Gizmos (Shift+G; right-click: per-type visibility)", gizmosOn, ImVec2(btn, btn)))
+        if (ActionButton(EDITOR_ICON_TOGGLE_GIZMOS, "Gizmos (Shift+G)", gizmosOn, ImVec2(btn, btn)))
             m_GizmosMasterVisible = !gizmosOn;
-        if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) ImGui::OpenPopup("##PaletteGizmosPopup");
-        if (ImGui::BeginPopup("##PaletteGizmosPopup")) {
+        ImGui::SameLine(0.0f, 0.0f);
+        if (ActionButton(ICON_FA_CARET_DOWN "##gizmocaret", "What the gizmos show", false, ImVec2(caretW, btn)))
+            ImGui::OpenPopup("##HeaderGizmosPopup");
+        if (ImGui::BeginPopup("##HeaderGizmosPopup")) {
             if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) ImGui::CloseCurrentPopup();
             DrawGizmosPopupBody();
             ImGui::EndPopup();
         }
+        ImGui::SameLine();
+        if (ActionButton(EDITOR_ICON_GRID, "Grid (Alt+G)", m_ShowGrid, ImVec2(btn, btn))) m_ShowGrid = !m_ShowGrid;
 
-        // Draw mode + ortho/persp joined the rail from the top-right view-state chip row (that
-        // row is gone — moving the nav-gizmo cluster's own redundant zoom/pan buttons and Persp
-        // label out at the same time, per request). Icon-only here (no room for the chip's text
-        // label in a one-column rail); the popup listing every draw mode still shows the mode
-        // names, and the tooltip on the ortho toggle names the current state.
-        ImGui::Separator();
-
-        static const char* kDrawModes[] = { "Shaded", "Wireframe", "Unlit",
-                                            "Normals", "Shadow Cascades", "Mip / Texel Density" };
-        static const char* kDrawModeIcons[] = { EDITOR_ICON_SHADED_MODE, EDITOR_ICON_WIREFRAME_MODE,
-                                                EDITOR_ICON_UNLIT_MODE, EDITOR_ICON_NORMALS_MODE,
-                                                EDITOR_ICON_CASCADES_MODE, EDITOR_ICON_MIP_MODE };
-        int shading = ShadingModeIndex();
-        if (shading < 0 || shading >= IM_ARRAYSIZE(kDrawModes)) shading = 0;
-        if (ActionButton(kDrawModeIcons[shading], "Draw mode (click to change)", shading != 0, ImVec2(btn, btn)))
-            ImGui::OpenPopup("##PaletteDrawModePopup");
-        if (ImGui::BeginPopup("##PaletteDrawModePopup")) {
-            if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) ImGui::CloseCurrentPopup();
-            for (int i = 0; i < IM_ARRAYSIZE(kDrawModes); ++i)
-                if (ImGui::MenuItem(kDrawModes[i], nullptr, shading == i)) SetShadingModeIndex(i);
-            ImGui::EndPopup();
+        HeaderDivider(frameH);
+        if (ActionButton((labels ? speedFull : speedShort).c_str(), "Camera fly speed - click to set, scroll over it to change",
+                false, ImVec2(0.0f, btn)))
+            ImGui::OpenPopup("##HeaderSpeedPopup");
+        if (ImGui::IsItemHovered() && ImGui::GetIO().MouseWheel != 0.0f) {
+            const float step = ImGui::GetIO().MouseWheel > 0.0f ? 1.2f : 1.0f / 1.2f;
+            settings.SceneCameraFlySpeed = std::clamp(settings.SceneCameraFlySpeed * step, 0.5f, 60.0f);
+            EditorSettings::Save();
         }
-
-        const bool ortho = editorCamera.Orthographic;
-        if (ActionButton(ortho ? EDITOR_ICON_ORTHOGRAPHIC : EDITOR_ICON_PERSPECTIVE,
-                ortho ? "Orthographic (click for Perspective) — 5" : "Perspective (click for Orthographic) — 5",
-                ortho, ImVec2(btn, btn))) {
-            ToolbarToggleOrthographic(world, editorCamera);
+        if (ImGui::BeginPopup("##HeaderSpeedPopup")) {
+            speedBody();
+            ImGui::EndPopup();
         }
     }
 
-    ImGui::EndChild();
-    ImGui::PopStyleVar(4);
-    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(2);
+    // Leave the layout cursor at the strip's bottom-left, where the image goes.
+    ImGui::SetCursorScreenPos(ImVec2(origin.x, origin.y + stripH));
 }
