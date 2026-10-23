@@ -7,7 +7,7 @@ class World;
 // The Play-mode player: movement, look, gravity, jump, crouch and the kill height.
 // The capsule is a PhysicsWorld service; the editor can inspect these values.
 //
-// Since #185 PR 3 the body is a PxCapsuleController living in PhysicsWorld's PhysX scene (built
+// Since #185 PR 3 the body is a kinematic capsule (moved by CharacterMover) living in PhysicsWorld's PhysX scene (built
 // from the scene's colliders). Player::Update turns input into a displacement, sweeps the
 // capsule through it, and reads the resolved foot position back into Cam. The old AABB
 // push-out (World::ResolveCollisions) is gone.
