@@ -25,12 +25,17 @@ float GridLine(vec2 coord, float scale) {
     return 1.0 - min(min(g.x, g.y), 1.0);
 }
 
-// A crisp, anti-aliased line ~`px` screen pixels wide, given the signed distance to the axis
-// (in world units) and its per-pixel world-space derivative.
-float AxisLine(float distToAxis, float deriv, float px) {
-    float hw = deriv * px * 0.5;
-    return 1.0 - smoothstep(hw, hw + deriv, abs(distToAxis));
+// A crisp, anti-aliased line `px` screen pixels wide (never thinner than one pixel, so it can't
+// break into dashes), given the distance to the axis in world units and the world size of one
+// screen pixel across it. Coverage is the line's overlap with the pixel: a hard 1 px ramp.
+float AxisLine(float distToAxis, float pixelWorld, float px) {
+    float distPx = abs(distToAxis) / max(pixelWorld, 1e-6);
+    return clamp(max(px, 1.0) * 0.5 + 0.5 - distPx, 0.0, 1.0);
 }
+
+// World size of one screen pixel along the gradient of `v`. True length, not fwidth's |dx|+|dy|,
+// which reads up to 1.4x too wide on diagonal lines and made them look uneven.
+float PixelWorld(float v) { return length(vec2(dFdx(v), dFdy(v))); }
 
 void main() {
     vec3 rd = normalize(vFarPoint - vNearPoint);
@@ -69,11 +74,13 @@ void main() {
         // axes without lasering over the scene. Cleared in a small patch at the origin (that's the gizmo's, #42) and
         // faded past a long radius so an empty Front view isn't lasered edge to edge (#86).
         if (uShowAxes == 1) {
-            float deriv = fwidth(worldPos.x);
+            // Each line's width comes from the derivative of its OWN distance coordinate, so it
+            // stays the same few screen pixels at any angle. (Using one shared fwidth(x) for both
+            // made the red line balloon when viewed along X.)
             float r = length(worldPos.xz);
             float envelope = smoothstep(0.10, 0.6, r) * (1.0 - smoothstep(40.0, 75.0, r)) * distFade;
-            float xLine = AxisLine(worldPos.z, deriv, uAxisThickness) * envelope; // X axis (red)
-            float zLine = AxisLine(worldPos.x, deriv, uAxisThickness) * envelope; // Z axis (blue)
+            float xLine = AxisLine(worldPos.z, PixelWorld(worldPos.z), uAxisThickness) * envelope; // X axis (red)
+            float zLine = AxisLine(worldPos.x, PixelWorld(worldPos.x), uAxisThickness) * envelope; // Z axis (blue)
             if (xLine >= zLine && xLine > 0.001) { axisColor = uAxisColorX; axisAlpha = xLine * uAxisAlpha; }
             else if (zLine > 0.001)              { axisColor = uAxisColorZ; axisAlpha = zLine * uAxisAlpha; }
         }
@@ -102,8 +109,8 @@ void main() {
                 vec3  pRay = vNearPoint + sc * rd;
                 float toAxis  = length(pRay - vec3(0.0, yc, 0.0));
                 float camDist = length(pRay - uCameraPos);
-                float hw = (camDist * 0.0016 + 0.004) * (uAxisThickness / 1.3); // px width, scaled to match X/Z
-                float core = 1.0 - smoothstep(hw, hw * 2.4, toAxis);
+                // The same constant screen-pixel width and 1 px anti-aliased edge as the X/Z lines.
+                float core = AxisLine(toAxis, PixelWorld(toAxis), uAxisThickness);
                 float originClear = smoothstep(0.05, 0.35, abs(yc));   // tiny gap at the exact origin
                 float heightFade = 1.0 - smoothstep(uFadeDistance * 0.3, uFadeDistance * 0.65, abs(yc));
                 float camFade = clamp(1.0 - camDist / uFadeDistance, 0.0, 1.0);

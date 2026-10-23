@@ -144,7 +144,8 @@ void EditorLayer::DrawPlayTransportButtons(bool playing, bool maximized, bool pa
     ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0f);
 
     // Play and Stop are one button whose glyph morphs, triangle into square (Glass category 7),
-    // while its colour crosses from the green Play to the red Stop in OKLAB. Play is the one
+    // while its colour crosses from the green Play to the red Stop in OKLAB (the traffic lights'
+    // green and red, EditorTheme::Signal*). Play is the one
     // control every other toolbar button treatment defers to — Unity's own Play button is the
     // single green accent in an otherwise monochrome toolbar, so it reads as "the important one".
     {
@@ -153,7 +154,7 @@ void EditorLayer::DrawPlayTransportButtons(bool playing, bool maximized, bool pa
         const float stopT = Glass::Motion().AnimateToggle(morphId, playing, s_WasPlaying,
                                                           Glass::TransportMorph, Glass::TransportMorph);
         s_WasPlaying = playing;
-        const ImVec4 col = Glass::MixOklab(EditorUIPrimitives::SuccessColor(), EditorTheme::Danger, stopT);
+        const ImVec4 col = Glass::MixOklab(EditorTheme::SignalGreen, EditorTheme::SignalRed, stopT);
         const char* text = playing ? "  Stop" : "  Play";
         const ImVec2 pad = ImGui::GetStyle().FramePadding;
         const float glyphW = ImGui::CalcTextSize(ICON_FA_PLAY).x;
