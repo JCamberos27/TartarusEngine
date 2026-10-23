@@ -128,6 +128,13 @@ Query ToolsButton() { return ByLabel("Tools", kMainBar); }
 Query SnapCaret() { return ByExact(ICON_FA_CARET_DOWN "##snapcaret", kMainBar); }
 // The header's Show menu: the grid and the gizmo popover's body.
 Query ShowButton() { return ByLabel("Show", kScene); }
+// The header's projection dropdown. Not Rail(EDITOR_ICON_PERSPECTIVE): that cube also starts the
+// viewport's tab and its Scene switch, which come first.
+Query ProjButton() {
+    Query q;
+    q.Pred = [](const UiItem& it) { return Contains(it.Label, "##proj") && Contains(it.Root, kScene); };
+    return q;
+}
 // Every test ends here: tools back to their defaults, the camera reset, panels as they were.
 Steps Tidy() {
     return {
@@ -635,12 +642,12 @@ void RegisterSceneToolsTests() {
     Add("scenetools: orthographic by click and 5; view presets 1 3 7 (Ctrl: opposite) and 0; the nav gizmo's axis", Seq({
         ToolScene(), RoomForRail(),
         {Do("nothing selected (views pivot on the scene)", [](Ctx& c) { X::Deselect(c.E); }), Wait(2),
-         Click(Rail(EDITOR_ICON_PERSPECTIVE)), Until("the projection menu", [](Ctx&) { return Find(MenuItem("Orthographic")) != nullptr; }),
+         Click(ProjButton()), Until("the projection menu", [](Ctx&) { return Find(MenuItem("Orthographic")) != nullptr; }),
          Click(MenuItem("Orthographic")), Wait(2),
          UntilLooks("the same way, orthographic", Look(-90.0f, -10.0f), 1),
          Until("the button shows Orthographic", [](Ctx&) { return Find(Rail(EDITOR_ICON_ORTHOGRAPHIC)) != nullptr; }),
          Shot("ortho", {kScene}),
-         Click(Rail(EDITOR_ICON_ORTHOGRAPHIC)), Until("the projection menu", [](Ctx&) { return Find(MenuItem("Perspective")) != nullptr; }),
+         Click(ProjButton()), Until("the projection menu", [](Ctx&) { return Find(MenuItem("Perspective")) != nullptr; }),
          Click(MenuItem("Perspective")), Wait(2),
          UntilLooks("the same way, perspective", Look(-90.0f, -10.0f), 0),
          HoverPanel(kScene), Key(ImGuiKey_5), Wait(2),

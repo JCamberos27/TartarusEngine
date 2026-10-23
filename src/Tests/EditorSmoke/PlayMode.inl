@@ -71,9 +71,10 @@ void RegisterPlayModeTests() {
         FreshScene(), CrateScene(), Wait(3),
         Tap(GLFW_KEY_F1, "F1"),
         Until("in play", [](Ctx& c) { return X::InPlay(c.E); }, 300),
+        WaitSeconds(1.0), // the Play glide and dissolve run in real time
         Until("the Game view is shown", [](Ctx& c) { return GameShown(c); }),
         Until("the crate falls", [](Ctx& c) { return CrateY(c) < 9.5f; }, 300),
-        Shot("game", {"###Game"}),
+        Shot("game", {"###Scene"}),
         Tap(GLFW_KEY_F2, "F2"),
         Until("paused", [](Ctx&) { return Paused(); }), Wait(3),
         Do("note the height", [](Ctx& c) { g_Y = CrateY(c); }), Wait(20),
@@ -207,7 +208,7 @@ void RegisterPlayModeTests() {
             const float y = c.W.Registry.get<TransformComponent>(p).Position.y;
             return y > -0.5f && y < 3.0f ? std::string() : "player at y=" + std::to_string(y) + " (fell through or flew off)";
         }),
-        Shot("game", {"###Game"}),
+        Shot("game", {"###Scene"}),
         Tap(GLFW_KEY_F1, "F1"),
         Until("stopped", [](Ctx& c) { return !X::InPlay(c.E); }, 300), Wait(3),
         ExpectTrue("scene restored", [](Ctx& c) { return SceneSerializer::SaveToString(c.W, c.A) == g_Before; }),
