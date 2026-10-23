@@ -214,7 +214,15 @@ struct PhysicsState {
     std::unique_ptr<CharacterBody> playerBody;
     // NPC capsules, indexed by CharacterId (a released slot stays null). npcActors: their actors,
     // for the query filters that skip characters.
-    struct NpcCharacter { PxController* ctrl = nullptr; std::uint32_t entity = 0xFFFFFFFFu; bool passRagdolls = false; };
+    // On the custom mover a soldier has `body` instead of `ctrl` (the setting is read when he's made).
+    struct NpcCharacter {
+        PxController* ctrl = nullptr;
+        std::uint32_t entity = 0xFFFFFFFFu;
+        bool passRagdolls = false;
+        std::unique_ptr<CharacterBody> body;
+        bool Used() const { return ctrl || body; }
+        PxRigidActor* Actor() const { return body ? static_cast<PxRigidActor*>(body->Actor) : ctrl ? ctrl->getActor() : nullptr; }
+    };
     std::vector<NpcCharacter>               npcs;
     std::unordered_set<const PxRigidActor*> npcActors;
     // #185 PR 4 — RigidbodyComponent entities. Force-driven bodies get their pose written back
@@ -1021,6 +1029,8 @@ void HandleCharacterHit(PhysicsState& s, PxRigidActor* actor, const PxShape* sha
         // (Not a soldier's hitbox: they are the rounds' to find, not ground - stood over a crawler, the Player rode his hitboxes,
         // and they were released under him when he died.)
         if (platform && s.hitboxActors.count(platform)) platform = nullptr;
+        // Nor a soldier's capsule: nobody stands on anybody's head (it rode him around the room).
+        if (platform && s.npcActors.count(platform)) platform = nullptr;
         if (platform && n.y > 0.4f) { // standing on top of a moving platform
             if (s.playerGround != platform) {
                 s.playerGround = platform;
@@ -1632,11 +1642,22 @@ std::unique_ptr<CharacterBody> MakeBody(PhysicsState& s, const MoverCapsule& cap
     return b;
 }
 
+// A new cylinder length (crouch / stand), the feet where they were; the shape's filter data carries over.
+void ResizeBody(PhysicsState& s, CharacterBody& b, float cylinderHalfHeight) {
+    const PxFilterData sim = b.Shape->getSimulationFilterData();
+    b.Actor->detachShape(*b.Shape);
+    b.Cap.HalfHeight = cylinderHalfHeight;
+    b.Shape = MakeBodyShape(s, *b.Actor, b.Cap, sim);
+}
+
 // The mover's view of the PhysX scene for one character: its collision-matrix row, never itself or a trigger.
 struct PhysxMoverWorld : IMoverWorld {
     PhysicsState& S;
     const PxRigidActor* Self = nullptr;
     PxU32 Mask = 0xFFFFFFFFu;
+    // A soldier's: everything of his own entity (his hitboxes), and the dead while he crawls over them.
+    std::uint32_t SelfEntity = 0xFFFFFFFFu;
+    bool PassRagdolls = false;
     PhysxMoverWorld(PhysicsState& s, const PxRigidActor* self, PxU32 mask) : S(s), Self(self), Mask(mask) {}
 
     struct Filter : PxQueryFilterCallback {
@@ -1645,6 +1666,8 @@ struct PhysxMoverWorld : IMoverWorld {
         bool Touch = false; // overlaps: every one; sweeps: the first
         PxQueryHitType::Enum preFilter(const PxFilterData&, const PxShape* shape, const PxRigidActor* actor, PxHitFlags&) override {
             if (actor == W->Self || (shape->getFlags() & PxShapeFlag::eTRIGGER_SHAPE)) return PxQueryHitType::eNONE;
+            if (W->SelfEntity != 0xFFFFFFFFu && actor && UserDataToEntity(actor->userData) == W->SelfEntity) return PxQueryHitType::eNONE;
+            if (W->PassRagdolls && IsRagdollPart(shape->getSimulationFilterData())) return PxQueryHitType::eNONE;
             const PxU32 layer = shape->getSimulationFilterData().word1 & 31u;
             if (!((W->Mask >> layer) & 1u)) return PxQueryHitType::eNONE;
             return Touch ? PxQueryHitType::eTOUCH : PxQueryHitType::eBLOCK;
@@ -2344,10 +2367,7 @@ int OverlapBox(const float center[3], const float halfExtents[3], const float ro
 bool ResizeCharacter(float cylinderHalfHeight) {
     if (!HasCharacter() || cylinderHalfHeight <= 0.0f) return false;
     if (CharacterBody* b = g_State->playerBody.get()) {
-        const PxFilterData sim = b->Shape->getSimulationFilterData();
-        b->Actor->detachShape(*b->Shape);
-        b->Cap.HalfHeight = cylinderHalfHeight;
-        b->Shape = MakeBodyShape(*g_State, *b->Actor, b->Cap, sim);
+        ResizeBody(*g_State, *b, cylinderHalfHeight);
         b->Actor->setGlobalPose(PxTransform(BodyCentre(*b))); // the feet stay put
         return true;
     }
@@ -3435,14 +3455,50 @@ ScopedQueryPolicy::~ScopedQueryPolicy() {
 }
 
 namespace {
-PxCapsuleController* NpcController(CharacterId id) {
+using NpcCharacter = PhysicsState::NpcCharacter;
+NpcCharacter* NpcSlot(CharacterId id) {
     if (!g_State || id < 0 || id >= (int)g_State->npcs.size()) return nullptr;
-    return static_cast<PxCapsuleController*>(g_State->npcs[(size_t)id].ctrl);
+    NpcCharacter& n = g_State->npcs[(size_t)id];
+    return n.Used() ? &n : nullptr;
+}
+PxCapsuleController* NpcController(CharacterId id) {
+    const NpcCharacter* n = NpcSlot(id);
+    return n ? static_cast<PxCapsuleController*>(n->ctrl) : nullptr;
+}
+CharacterBody* NpcBody(CharacterId id) {
+    const NpcCharacter* n = NpcSlot(id);
+    return n ? n->body.get() : nullptr;
+}
+PxRigidActor* NpcActor(CharacterId id) {
+    const NpcCharacter* n = NpcSlot(id);
+    return n ? n->Actor() : nullptr;
+}
+CharacterId AddNpcSlot(NpcCharacter&& n) {
+    for (size_t i = 0; i < g_State->npcs.size(); ++i)
+        if (!g_State->npcs[i].Used()) { g_State->npcs[i] = std::move(n); return (CharacterId)i; }
+    g_State->npcs.push_back(std::move(n));
+    return (CharacterId)g_State->npcs.size() - 1;
+}
+// Where a soldier's body is for everyone else's sweeps this same frame, as well as for the simulation: a kinematic target
+// only lands at the next simulate, and two soldiers in one doorway each met the other where he had been a frame before.
+void PlaceNpcBody(CharacterBody& b) {
+    const PxTransform t(BodyCentre(b));
+    b.Actor->setGlobalPose(t);
+    b.Actor->setKinematicTarget(t);
 }
 } // namespace
 
 CharacterId CreateNpcCharacter(unsigned entity, float radius, float cylinderHalfHeight, const float footPos[3]) {
-    if (!g_State || !g_State->controllerMgr || radius <= 0.0f || cylinderHalfHeight <= 0.0f) return kNoCharacter;
+    if (!g_State || radius <= 0.0f || cylinderHalfHeight <= 0.0f) return kNoCharacter;
+    if (UseCharacterMover()) {
+        NpcCharacter n;
+        n.entity = entity;
+        n.body = MakeBody(*g_State, MoverCapsule{radius, cylinderHalfHeight}, glm::vec3(footPos[0], footPos[1], footPos[2]), entity,
+                          PxFilterData(1u, 0u, 0u, 0u)); // the Default layer, as the controller's
+        g_State->npcActors.insert(n.body->Actor);
+        return AddNpcSlot(std::move(n));
+    }
+    if (!g_State->controllerMgr) return kNoCharacter;
     PxCapsuleControllerDesc desc = CapsuleControllerDesc(radius, cylinderHalfHeight);
     desc.position      = PxExtendedVec3(footPos[0], footPos[1] + radius + cylinderHalfHeight, footPos[2]);
     if (!desc.isValid()) return kNoCharacter;
@@ -3459,26 +3515,27 @@ CharacterId CreateNpcCharacter(unsigned entity, float radius, float cylinderHalf
         for (PxShape* sh : shapes) sh->setSimulationFilterData(PxFilterData(1u, 0u, 0u, 0u)); // Default layer
         g_State->npcActors.insert(a);
     }
-    for (size_t i = 0; i < g_State->npcs.size(); ++i)
-        if (!g_State->npcs[i].ctrl) { g_State->npcs[i] = {c, entity}; return (CharacterId)i; }
-    g_State->npcs.push_back({c, entity});
-    return (CharacterId)g_State->npcs.size() - 1;
+    NpcCharacter n;
+    n.ctrl = c;
+    n.entity = entity;
+    return AddNpcSlot(std::move(n));
 }
 
 void DestroyNpcCharacter(CharacterId id) {
-    PxCapsuleController* c = NpcController(id);
-    if (!c) return;
-    g_State->npcActors.erase(c->getActor());
+    NpcCharacter* n = NpcSlot(id);
+    if (!n) return;
+    PxRigidActor* a = n->Actor();
+    g_State->npcActors.erase(a);
     // The Player standing on this soldier's capsule (a kinematic: his ground, MoveCharacter carries him with it) lets go of it
     // first - released, the next move read the freed actor.
-    if (g_State->playerGround == c->getActor()) g_State->playerGround = nullptr;
-    c->release();
-    g_State->npcs[(size_t)id] = {};
+    if (a && g_State->playerGround == a) g_State->playerGround = nullptr;
+    if (n->body) n->body->Actor->release();
+    else n->ctrl->release();
+    *n = NpcCharacter{};
 }
 
 bool IgnoreRagdollForNpc(CharacterId id, int ragdoll) {
-    PxCapsuleController* c = NpcController(id);
-    PxRigidActor* a = c ? c->getActor() : nullptr;
+    PxRigidActor* a = NpcActor(id);
     if (!a) return false;
     const bool on = ValidRagdoll(ragdoll);
     std::vector<PxShape*> shapes(a->getNbShapes());
@@ -3495,8 +3552,7 @@ bool IgnoreRagdollForNpc(CharacterId id, int ragdoll) {
 }
 
 void SetNpcPassesRagdolls(CharacterId id, bool on) {
-    PxCapsuleController* c = NpcController(id);
-    PxRigidActor* a = c ? c->getActor() : nullptr;
+    PxRigidActor* a = NpcActor(id);
     if (!a || g_State->npcs[(size_t)id].passRagdolls == on) return;
     g_State->npcs[(size_t)id].passRagdolls = on;
     std::vector<PxShape*> shapes(a->getNbShapes());
@@ -3510,8 +3566,26 @@ void SetNpcPassesRagdolls(CharacterId id, bool on) {
 }
 
 unsigned MoveNpcCharacter(CharacterId id, const float disp[3], float dt) {
-    PxCapsuleController* c = NpcController(id);
-    if (!c || dt <= 0.0f) return 0;
+    NpcCharacter* n = NpcSlot(id);
+    if (!n || dt <= 0.0f) return 0;
+    if (CharacterBody* b = n->body.get()) {
+        // The same collision-matrix row, his own hitboxes and (crawling) the dead skipped, as the controller's filter below.
+        PhysxMoverWorld w(*g_State, b->Actor, ProjectSettings::Physics().LayerCollisionMask[0]);
+        w.SelfEntity = n->entity;
+        w.PassRagdolls = n->passRagdolls;
+        const glm::vec3 delta(disp[0], disp[1], disp[2]);
+        // Walking keeps to the floor down steps and slopes; anything going up is left to his own gravity.
+        const bool snap = b->Grounded && delta.y <= 0.0f;
+        const bool debug = (g_DebugDrawFlags & PDD_Movers) != 0u;
+        b->Last = CharacterMover::Move(w, b->Cap, b->Feet, delta / dt, delta, ProjectMoverSettings(), b->Grounded, snap,
+                                       debug ? &b->Debug : nullptr);
+        if (!debug) b->Debug.Clear();
+        b->Feet = b->Last.Feet;
+        b->Grounded = b->Last.Grounded;
+        PlaceNpcBody(*b);
+        return b->Last.Flags;
+    }
+    PxCapsuleController* c = static_cast<PxCapsuleController*>(n->ctrl);
     // Same collision-matrix row as a Default-layer body; ignore the NPC's own hitboxes.
     struct LayerFilter : PxQueryFilterCallback {
         PxU32 Mask = 0xFFFFFFFFu; std::uint32_t Self = 0xFFFFFFFFu; bool PassRagdolls = false;
@@ -3542,11 +3616,22 @@ unsigned MoveNpcCharacter(CharacterId id, const float disp[3], float dt) {
 }
 
 void SetNpcFootPosition(CharacterId id, const float footPos[3]) {
+    if (CharacterBody* b = NpcBody(id)) {
+        b->Feet = glm::vec3(footPos[0], footPos[1], footPos[2]);
+        PlaceNpcBody(*b);
+        return;
+    }
     if (PxCapsuleController* c = NpcController(id))
         c->setFootPosition(PxExtendedVec3(footPos[0], footPos[1], footPos[2]));
 }
 
 bool GetNpcCapsule(CharacterId id, float outFootPos[3], float* outRadius, float* outCylHalfHeight) {
+    if (const CharacterBody* b = NpcBody(id)) {
+        outFootPos[0] = b->Feet.x; outFootPos[1] = b->Feet.y; outFootPos[2] = b->Feet.z;
+        if (outRadius)        *outRadius = b->Cap.Radius;
+        if (outCylHalfHeight) *outCylHalfHeight = b->Cap.HalfHeight;
+        return true;
+    }
     PxCapsuleController* c = NpcController(id);
     if (!c) return false;
     const PxExtendedVec3 f = c->getFootPosition();
@@ -3557,8 +3642,14 @@ bool GetNpcCapsule(CharacterId id, float outFootPos[3], float* outRadius, float*
 }
 
 bool ResizeNpcCharacter(CharacterId id, float cylinderHalfHeight) {
+    if (cylinderHalfHeight <= 0.0f) return false;
+    if (CharacterBody* b = NpcBody(id)) {
+        ResizeBody(*g_State, *b, cylinderHalfHeight);
+        PlaceNpcBody(*b);
+        return true;
+    }
     PxCapsuleController* c = NpcController(id);
-    if (!c || cylinderHalfHeight <= 0.0f) return false;
+    if (!c) return false;
     const PxExtendedVec3 foot = c->getFootPosition();
     c->resize(2.0f * cylinderHalfHeight);
     c->setFootPosition(foot);
@@ -3566,11 +3657,11 @@ bool ResizeNpcCharacter(CharacterId id, float cylinderHalfHeight) {
 }
 
 bool NpcFitsAt(CharacterId id, float cylinderHalfHeight) {
-    PxCapsuleController* c = NpcController(id);
-    if (!c || cylinderHalfHeight <= 0.0f) return false;
-    const PxExtendedVec3 foot = c->getFootPosition();
-    const float radius = std::max(0.02f, c->getRadius() - 0.03f);
-    const PxVec3 centre((float)foot.x, (float)foot.y + 0.04f + cylinderHalfHeight + radius, (float)foot.z);
+    if (!NpcSlot(id) || cylinderHalfHeight <= 0.0f) return false;
+    float foot[3], capRadius = 0.0f;
+    GetNpcCapsule(id, foot, &capRadius, nullptr);
+    const float radius = std::max(0.02f, capRadius - 0.03f);
+    const PxVec3 centre(foot[0], foot[1] + 0.04f + cylinderHalfHeight + radius, foot[2]);
     const PxQuat lieAlongY(PxPi * 0.5f, PxVec3(0.0f, 0.0f, 1.0f));
     ScopedQueryPolicy self(g_State->npcs[(size_t)id].entity, /*hitPlayer=*/true);
     QueryFilter f;
@@ -3581,7 +3672,7 @@ bool NpcFitsAt(CharacterId id, float cylinderHalfHeight) {
 CharacterId NpcCharacterOf(unsigned entity) {
     if (!g_State) return kNoCharacter;
     for (size_t i = 0; i < g_State->npcs.size(); ++i)
-        if (g_State->npcs[i].ctrl && g_State->npcs[i].entity == entity) return (CharacterId)i;
+        if (g_State->npcs[i].Used() && g_State->npcs[i].entity == entity) return (CharacterId)i;
     return kNoCharacter;
 }
 
@@ -3599,15 +3690,15 @@ void ShadowCapsule(PhysicsState::Hitboxes& h, bool on) {
 } // namespace
 
 int CreateNpcHitboxes(CharacterId owner, const HitCapsule* parts, int count) {
-    PxCapsuleController* c = NpcController(owner);
-    if (!g_State || !g_State->scene || !c || !parts || count <= 0) return -1;
+    PxRigidActor* capsule = NpcActor(owner);
+    if (!g_State || !g_State->scene || !capsule || !parts || count <= 0) return -1;
     PhysicsState& s = *g_State;
     int id = -1;
     for (size_t i = 0; i < s.hitboxes.size(); ++i)
         if (s.hitboxes[i].Bodies.empty()) { id = (int)i; break; }
     if (id < 0) { id = (int)s.hitboxes.size(); s.hitboxes.emplace_back(); }
     PhysicsState::Hitboxes& h = s.hitboxes[(size_t)id];
-    h.Capsule = c->getActor();
+    h.Capsule = capsule;
     const std::uint32_t entity = s.npcs[(size_t)owner].entity;
     for (int i = 0; i < count; ++i) {
         PxRigidDynamic* b = s.physics->createRigidDynamic(HitboxPose(parts[i]));
@@ -3849,9 +3940,9 @@ int CopyDebugLines(float* out, int maxLines) {
         }
     }
 
-    // --- The custom character mover's last move (the Player's): what it slid along, the floor, the steps it tried.
-    if ((f & PDD_Movers) && g_State->playerBody) {
-        const MoverDebug& d = g_State->playerBody->Debug;
+    // --- The custom character mover's last move (the Player's and every soldier's): what it slid along, the floor, the
+    // steps it tried.
+    auto drawMove = [&](const MoverDebug& d) {
         for (const auto& pl : d.Planes) {
             const float r = pl.Kind == 2 ? 1.0f : 0.0f, g = pl.Kind == 1 ? 1.0f : 0.3f, b = pl.Kind == 0 ? 1.0f : 0.0f;
             const PxVec3 at = ToPx(pl.Point), nrm = ToPx(pl.Normal);
@@ -3872,6 +3963,11 @@ int CopyDebugLines(float* out, int maxLines) {
             ring(at, PxVec3(1, 0, 0), PxVec3(0, 0, 1), 0.06f, 10, r, g, 0.0f, 1.0f);
             L(at, ToPx(d.Feet), r, g, 0.0f, 0.6f);
         }
+    };
+    if (f & PDD_Movers) {
+        if (g_State->playerBody) drawMove(g_State->playerBody->Debug);
+        for (const auto& npc : g_State->npcs)
+            if (npc.body) drawMove(npc.body->Debug);
     }
     return n;
 }

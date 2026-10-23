@@ -290,6 +290,100 @@ void TestMoverCeiling() {
     CHECK(w.Feet().y < 0.3f + 0.01f);
 }
 
+constexpr float kNpcRadius = 0.28f, kNpcStandCyl = 0.6f, kNpcCrouchCyl = 0.33f; // NpcDirector's soldier
+constexpr unsigned kNpcEntity = 777u;
+
+glm::vec3 NpcFeet(PhysicsWorld::CharacterId id) {
+    glm::vec3 f(0.0f);
+    PhysicsWorld::GetNpcCapsule(id, &f.x, nullptr, nullptr);
+    return f;
+}
+
+// A soldier's capsule on the mover: made, walked into a wall (stopped by it, the wall's side kept), crouched and stood up
+// again (only where there's room), found by his entity, and released.
+void TestMoverNpcBody() {
+    MoverWorld w([](MoverWorld& m) {
+        m.Floor();
+        m.Box(glm::vec3(0.0f, 1.5f, 3.0f), glm::vec3(5.0f, 1.5f, 0.1f));            // a wall at z = 2.9
+        m.Box(glm::vec3(4.0f, 1.3f + 0.5f, 0.0f), glm::vec3(0.6f, 0.5f, 0.6f));     // a table top at 1.3 m, over x = 4
+    }, glm::vec3(-6.0f, 0.02f, 0.0f));
+    CHECK(w.Ok);
+    if (!w.Ok) return;
+    const glm::vec3 start(0.0f, 0.02f, 0.0f);
+    const PhysicsWorld::CharacterId id = PhysicsWorld::CreateNpcCharacter(kNpcEntity, kNpcRadius, kNpcStandCyl, &start.x);
+    CHECK(id != PhysicsWorld::kNoCharacter);
+    if (id == PhysicsWorld::kNoCharacter) return;
+    CHECK(PhysicsWorld::NpcCharacterOf(kNpcEntity) == id);
+    float feet[3], r = 0.0f, cyl = 0.0f;
+    CHECK(PhysicsWorld::GetNpcCapsule(id, feet, &r, &cyl) && std::fabs(r - kNpcRadius) < 1e-5f && std::fabs(cyl - kNpcStandCyl) < 1e-5f);
+
+    // Into the wall at 3.2 m/s (NpcDirector's gravity included): stopped a skin short of it, never inside.
+    float fall = -1.0f;
+    for (int i = 0; i < 90; ++i) {
+        fall -= 18.0f * kDt;
+        const glm::vec3 d = glm::vec3(0.0f, fall, 3.2f) * kDt;
+        if (PhysicsWorld::MoveNpcCharacter(id, &d.x, kDt) & PhysicsWorld::CC_DOWN) fall = -1.0f;
+    }
+    const glm::vec3 f = NpcFeet(id);
+    CHECK(f.z < 2.9f - kNpcRadius + 0.005f && f.z > 2.9f - kNpcRadius - 0.05f);
+    CHECK(std::fabs(f.y) < 0.03f);
+
+    // Crouch, then stand: room in the open; none under the table.
+    CHECK(PhysicsWorld::ResizeNpcCharacter(id, kNpcCrouchCyl));
+    CHECK(std::fabs(NpcFeet(id).y - f.y) < 1e-4f);
+    CHECK(PhysicsWorld::NpcFitsAt(id, kNpcStandCyl));
+    const glm::vec3 underTable(4.0f, 0.0f, 0.0f);
+    PhysicsWorld::SetNpcFootPosition(id, &underTable.x);
+    CHECK(!PhysicsWorld::NpcFitsAt(id, kNpcStandCyl));
+    CHECK(PhysicsWorld::NpcFitsAt(id, kNpcCrouchCyl));
+
+    PhysicsWorld::DestroyNpcCharacter(id);
+    CHECK(PhysicsWorld::NpcCharacterOf(kNpcEntity) == PhysicsWorld::kNoCharacter);
+    CHECK(!PhysicsWorld::GetNpcCapsule(id, feet, nullptr, nullptr));
+}
+
+// D8: nobody stands on anybody. Dropped onto a soldier's head (a little off his axis), the player slides off to the floor
+// and is never grounded up there.
+void TestMoverNoStandingOnCharacters() {
+    MoverWorld w([](MoverWorld& m) { m.Floor(); }, glm::vec3(0.12f, 2.2f, 0.0f));
+    CHECK(w.Ok);
+    if (!w.Ok) return;
+    const glm::vec3 at(0.0f, 0.0f, 0.0f);
+    const PhysicsWorld::CharacterId id = PhysicsWorld::CreateNpcCharacter(kNpcEntity, kNpcRadius, kNpcStandCyl, &at.x);
+    CHECK(id != PhysicsWorld::kNoCharacter);
+    if (id == PhysicsWorld::kNoCharacter) return;
+    bool groundedHigh = false;
+    glm::vec3 v(0.0f);
+    bool grounded = false;
+    for (int i = 0; i < 120; ++i) {
+        const MoverWorld::Frame f = w.Step(v, grounded);
+        v = glm::vec3(0.0f, f.Velocity.y, 0.0f);
+        grounded = f.Grounded;
+        if (grounded && w.Feet().y > 0.5f) groundedHigh = true;
+    }
+    CHECK(!groundedHigh);
+    CHECK(w.Feet().y < 0.05f);
+    const glm::vec3 p = w.Feet();
+    CHECK(glm::length(glm::vec2(p.x, p.z)) > kNpcRadius + kRadius - 0.03f); // beside him, not inside
+}
+
+// A soldier's move is where everybody else's sweeps find him that same frame (no simulate in between here): the player
+// walking into where he just stepped stops at his capsule.
+void TestMoverNpcSeenSameFrame() {
+    MoverWorld w([](MoverWorld& m) { m.Floor(); }, glm::vec3(0.0f, 0.02f, 0.0f));
+    CHECK(w.Ok);
+    if (!w.Ok) return;
+    const glm::vec3 aside(3.0f, 0.02f, 1.5f);
+    const PhysicsWorld::CharacterId id = PhysicsWorld::CreateNpcCharacter(kNpcEntity, kNpcRadius, kNpcStandCyl, &aside.x);
+    CHECK(id != PhysicsWorld::kNoCharacter);
+    if (id == PhysicsWorld::kNoCharacter) return;
+    const glm::vec3 step(-3.0f, -0.01f, 0.0f); // into the player's path in one move
+    PhysicsWorld::MoveNpcCharacter(id, &step.x, kDt);
+    CHECK(std::fabs(NpcFeet(id).x) < 0.01f);
+    w.Walk(glm::vec3(0.0f, 0.0f, 1.0f), 4.0f, 0.6f);
+    CHECK(w.Feet().z < 1.5f - kNpcRadius - kRadius + 0.01f);
+}
+
 } // namespace
 
 void RegisterCharacterMoverTests(UnitTestSupport::TestList& tests) {
@@ -302,4 +396,7 @@ void RegisterCharacterMoverTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"MoverLedge", TestMoverLedge});
     tests.push_back({"MoverDepenetrates", TestMoverDepenetrates});
     tests.push_back({"MoverCeiling", TestMoverCeiling});
+    tests.push_back({"MoverNpcBody", TestMoverNpcBody});
+    tests.push_back({"MoverNoStandingOnCharacters", TestMoverNoStandingOnCharacters});
+    tests.push_back({"MoverNpcSeenSameFrame", TestMoverNpcSeenSameFrame});
 }
