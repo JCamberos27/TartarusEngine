@@ -45,6 +45,7 @@ void NpcTest::DoorsSetUp(World& world) {
         d.Along = Flat(glm::vec3(m[0])); // toward the latch side (a left hinge's pin is at local -X)
         d.Centre = glm::vec3(m[3]) + d.Normal * kDoorWallZ;
         d.Centre.y = 0.0f;
+        d.Leaf = (std::uint32_t)entt::to_integral(e);
         m_DDoors.push_back(d);
     }
     std::sort(m_DDoors.begin(), m_DDoors.end(), [](const DoorSpot& a, const DoorSpot& b) { return a.Name < b.Name; });
@@ -93,6 +94,21 @@ void NpcTest::DoorsDrive(Player& player, float dt, float& wantYaw, float& wantPi
     wantPitch = -3.0f;
     wantYaw = player.Cam.Yaw;
     m_DDt = dt;
+    // The shut checks: stood still in the middle of the opening, looking at the door coming at him (back, toward the hinge:
+    // it swings shut from there), so a recording shows it stop and ease back.
+    if (m_DShut >= 0 && m_DShut < (int)m_DDoors.size()) {
+        const DoorSpot& d = m_DDoors[(size_t)m_DShut];
+        if (!m_DShutPlaced) {
+            const glm::vec3 feet = d.Centre + glm::vec3(0.0f, 0.02f, 0.0f);
+            PhysicsWorld::SetCharacterFootPosition(&feet.x);
+            player.Velocity = glm::vec3(0.0f);
+            player.Cam.Position = feet + glm::vec3(0.0f, player.EyeHeight, 0.0f);
+            m_DShutPlaced = true;
+        }
+        wantYaw = player.Cam.Yaw = YawOf(-d.Normal - d.Along);
+        wantPitch = -12.0f;
+        return;
+    }
     if (!m_DReady || m_DDone || m_DDoor >= (int)m_DDoors.size()) return;
     DoorRun& r = m_DRun;
     if (!r.Placed) {
@@ -130,6 +146,10 @@ void NpcTest::Doors(World& world, const Player& player) {
             return;
         }
         DoorsPassSetUp(player);
+        return;
+    }
+    if (m_DShut >= 0) {
+        DoorsShut(world);
         return;
     }
     if (m_DDone) return;
@@ -181,7 +201,7 @@ void NpcTest::Doors(World& world, const Player& player) {
                 Check(m_DFailedThrough.empty(), "doors: every pass gets through (" + std::to_string(m_DFailedThrough.size()) + " didn't)");
                 Check(m_DOk == m_DTotal, "doors: every pass keeps its speed, never stuck or inside a wall (" + std::to_string(m_DOk) + "/" +
                                              std::to_string(m_DTotal) + ")");
-                m_Done = true;
+                m_DShut = 0; // then a door shut on him, a few times
                 return;
             }
             DoorsPassSetUp(player);
@@ -190,4 +210,35 @@ void NpcTest::Doors(World& world, const Player& player) {
     }
     r.Prev = feet;
     r.HavePrev = true;
+}
+
+// A door shut on the player standing in its opening: it stops short of him (not latched) and never swings into him.
+void NpcTest::DoorsShut(World& world) {
+    constexpr int kShutDoors = 3;
+    constexpr float kShutWait = 1.5f; // two Open Times
+    if (!m_DShutPlaced) return;
+    const DoorSpot& d = m_DDoors[(size_t)m_DShut];
+    const auto leaf = static_cast<entt::entity>(d.Leaf);
+    auto* o = world.Registry.valid(leaf) ? world.Registry.try_get<OpenableComponent>(leaf) : nullptr;
+    if (!o) {
+        Check(false, "doors: " + d.Name + " has its leaf");
+        m_Done = true;
+        return;
+    }
+    if (m_DShutClock == 0.0f) o->Target = 0.0f;
+    m_DShutClock += m_DDt;
+    float pos[3], rad = 0.0f, cyl = 0.0f;
+    if (m_DShutClock > 0.1f && PhysicsWorld::GetCharacterCapsule(pos, &rad, &cyl) && !PhysicsWorld::CharacterFitsAt(cyl)) ++m_DShutPen;
+    if (m_DShutClock < kShutWait) return;
+    const bool stopped = o->Progress > 0.02f;
+    std::printf("[NpcTest] door %s shut on the player: %s at %.2f open\n", d.Name.c_str(), stopped ? "stopped" : "SHUT", o->Progress);
+    if (stopped) ++m_DShutOk;
+    o->Target = 1.0f;
+    m_DShutClock = 0.0f;
+    m_DShutPlaced = false;
+    if (++m_DShut < std::min(kShutDoors, (int)m_DDoors.size())) return;
+    Check(m_DShutOk == std::min(kShutDoors, (int)m_DDoors.size()),
+          "doors: a door shut on the player stops short of him (" + std::to_string(m_DShutOk) + "/" + std::to_string(kShutDoors) + ")");
+    Check(m_DShutPen == 0, "doors: ... and never swings into him (" + std::to_string(m_DShutPen) + " frames inside)");
+    m_Done = true;
 }

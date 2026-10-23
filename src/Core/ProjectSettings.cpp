@@ -122,7 +122,6 @@ void Load() {
         g_Physics.SolverIterations   = std::clamp(num("solverIterations", g_Physics.SolverIterations), 1, 64);
         g_Physics.PlayerPushStrength = std::clamp(num("playerPushStrength", g_Physics.PlayerPushStrength), 0.0f, 50.0f);
         g_Physics.PlayerLayer        = std::clamp(num("playerLayer", g_Physics.PlayerLayer), 0, LayerRegistry::kCount - 1);
-        if (const auto m = p.find("customCharacterMover"); m != p.end() && m->is_boolean()) g_Physics.UseCustomCharacterMover = m->get<bool>();
         g_Physics.CharacterSkinWidth        = std::clamp(num("characterSkinWidth", g_Physics.CharacterSkinWidth), 0.001f, 0.1f);
         g_Physics.CharacterStepHeight       = std::clamp(num("characterStepHeight", g_Physics.CharacterStepHeight), 0.0f, 1.0f);
         g_Physics.CharacterWalkableSlopeDeg = std::clamp(num("characterWalkableSlope", g_Physics.CharacterWalkableSlopeDeg), 0.0f, 89.0f);
@@ -262,7 +261,6 @@ void Save() {
         {"solverIterations", g_Physics.SolverIterations},
         {"playerPushStrength", g_Physics.PlayerPushStrength},
         {"playerLayer", g_Physics.PlayerLayer},
-        {"customCharacterMover", g_Physics.UseCustomCharacterMover},
         {"characterSkinWidth", g_Physics.CharacterSkinWidth},
         {"characterStepHeight", g_Physics.CharacterStepHeight},
         {"characterWalkableSlope", g_Physics.CharacterWalkableSlopeDeg},

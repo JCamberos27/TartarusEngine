@@ -585,6 +585,10 @@ struct FirstPersonControllerComponent {
     float GroundAccelTime = 0.0f;
     float GroundDecelTime = 0.0f;
     float AirAccelTime = 0.0f;
+    // Clipping a doorway's jamb while walking mostly into it eases the capsule sideways past it (0..1 of its radius;
+    // 0 = off), when the jamb is met within this many degrees of head on.
+    float DoorwayAssist = 0.5f;
+    float DoorwayAssistMaxAngle = 35.0f;
     float EyeHeight = 1.6f;
     float CapsuleRadius = 0.3f;
     float CapsuleHeight = 1.8f;

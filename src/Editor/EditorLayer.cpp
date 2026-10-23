@@ -2356,12 +2356,6 @@ void EditorLayer::DrawProjectSettingsBody(World& /*world*/) {
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Collision-matrix layer the Player capsule is on.");
 
         EditorUIPrimitives::SectionHeader("Character Mover");
-        SettingsLabel("Custom character mover");
-        if (EditorUIPrimitives::Checkbox("##Custom character mover", &p.UseCustomCharacterMover)) ProjectSettings::Save();
-        if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("The Player and the soldiers move by the engine's own collide-and-slide instead of PhysX's capsule controller:\n"
-                                 "creases followed, steps only as tall as the room above, ledges stood on only over the axis.\n"
-                                 "Applied at the next Play.");
         auto moverFloat = [&](const char* label, float* v, float speed, float lo, float hi, const char* fmt, const char* tip) {
             SettingsLabel(label);
             ImGui::DragFloat((std::string("##") + label).c_str(), v, speed, lo, hi, fmt);
