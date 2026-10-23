@@ -295,6 +295,8 @@ struct PhysicsState {
     PxVec3          playerGroundLastPos{0.0f};
     PxQuat          playerGroundLastRot{PxIdentity};
     bool            playerGroundHitThisMove = false;
+    // The walls (side touches) the move in progress ran into, for the Player to take the part of its velocity into them off.
+    std::vector<PxVec3> playerWallNormals;
     float           playerMoveDt = 0.0f;  // the step of the move in progress (MoveCharacter), for the push
     float           platformYawDeltaDeg = 0.0f; // this frame's platform spin, for Player yaw
     // #168 - each kinematic's pose as authored THIS frame (its kinematic target). The simulated
@@ -983,6 +985,7 @@ static PxTransform PlatformPose(const PhysicsState& s, const PxRigidDynamic* bod
 
 void PlayerHitReport::onShapeHit(const PxControllerShapeHit& hit) {
     if (!owner || !hit.actor) return;
+    if (std::abs(hit.worldNormal.y) < 0.7f && owner->playerWallNormals.size() < 8) owner->playerWallNormals.push_back(hit.worldNormal);
     // A corpse's part (an articulation link) is pushed like any other body.
     PxRigidBody* body = hit.actor->is<PxRigidDynamic>() ? static_cast<PxRigidBody*>(hit.actor->is<PxRigidDynamic>())
                                                          : static_cast<PxRigidBody*>(hit.actor->is<PxArticulationLink>());
@@ -1533,6 +1536,9 @@ bool HasCharacter() {
 }
 
 namespace {
+constexpr float kStepOffset = 0.3f;
+constexpr float kContactOffset = 0.05f;
+
 // The capsule controller every character uses, the player's and the NPCs' alike.
 // (The caller places it: `position` is the capsule centre.)
 PxCapsuleControllerDesc CapsuleControllerDesc(float radius, float cylinderHalfHeight) {
@@ -1540,9 +1546,9 @@ PxCapsuleControllerDesc CapsuleControllerDesc(float radius, float cylinderHalfHe
     desc.radius        = radius;
     desc.height        = 2.0f * cylinderHalfHeight; // cylinder segment (sphere-centre to sphere-centre)
     desc.upDirection   = PxVec3(0.0f, 1.0f, 0.0f);
-    desc.stepOffset    = 0.3f;                  // auto-climb ledges up to this tall
+    desc.stepOffset    = kStepOffset;           // auto-climb ledges up to this tall
     desc.slopeLimit    = std::cos(0.8726646f);  // walkable up to ~50 degrees
-    desc.contactOffset = 0.05f;
+    desc.contactOffset = kContactOffset;
     desc.material      = g_State->defaultMaterial;
     desc.climbingMode  = PxCapsuleClimbingMode::eCONSTRAINED; // don't let the sphere cap boost climbs
     return desc;
@@ -1604,6 +1610,56 @@ bool GetCharacterCapsule(float outFootPos[3], float* outRadius, float* outCylHal
     return true;
 }
 
+namespace {
+// PhysX lifts the capsule by its step offset before every sideways move (the CCT's up pass), and a door's header just
+// ahead caught the lifted capsule's top: characters stopped dead under every doorway. The lift is only as tall
+// as the room over the capsule where it's headed - its top swept up, where it is and a radius past this move.
+void FitStepToRoom(PxCapsuleController& cap, const PxVec3& d, PxU32 mask) {
+    struct RoomFilter : PxQueryFilterCallback {
+        const PxRigidActor* Self = nullptr;
+        PxU32 Mask = 0xFFFFFFFFu;
+        PxQueryHitType::Enum preFilter(const PxFilterData&, const PxShape* shape, const PxRigidActor* actor, PxHitFlags&) override {
+            if (actor == Self || (shape->getFlags() & PxShapeFlag::eTRIGGER_SHAPE)) return PxQueryHitType::eNONE;
+            if (g_State->npcActors.count(actor) || g_State->hitboxActors.count(actor)) return PxQueryHitType::eNONE; // not a ceiling
+            const PxU32 layer = shape->getSimulationFilterData().word1 & 31u;
+            return ((Mask >> layer) & 1u) ? PxQueryHitType::eBLOCK : PxQueryHitType::eNONE;
+        }
+        PxQueryHitType::Enum postFilter(const PxFilterData&, const PxQueryHit&, const PxShape*, const PxRigidActor*) override {
+            return PxQueryHitType::eBLOCK;
+        }
+    } room;
+    room.Self = cap.getActor();
+    room.Mask = mask;
+    const PxExtendedVec3 c = cap.getPosition();
+    const float r = cap.getRadius();
+    const PxVec3 top((float)c.x, (float)c.y + 0.5f * cap.getHeight(), (float)c.z); // the top sphere's centre
+    const float reach = kStepOffset + kContactOffset;
+    const PxQueryFilterData fd(PxQueryFlag::eSTATIC | PxQueryFlag::eDYNAMIC | PxQueryFlag::ePREFILTER);
+    auto roomAt = [&](const PxVec3& at) {
+        PxSweepBuffer buf;
+        if (!g_State->scene->sweep(PxSphereGeometry(r), PxTransform(at), PxVec3(0.0f, 1.0f, 0.0f), reach, buf,
+                                   PxHitFlag::eDEFAULT, fd, &room) || !buf.hasBlock)
+            return reach;
+        return std::max(0.0f, buf.block.distance);
+    };
+    float free = roomAt(top);
+    const PxVec3 across(d.x, 0.0f, d.z);
+    if (const float len = across.magnitude(); len > 1e-5f) free = std::min(free, roomAt(top + across * ((len + r) / len)));
+    cap.setStepOffset(std::clamp(free - kContactOffset - 0.01f, 0.0f, kStepOffset));
+}
+} // namespace
+
+int LastMoveWallNormals(float (*out)[3], int max) {
+    if (!g_State) return 0;
+    const int n = std::min(max, (int)g_State->playerWallNormals.size());
+    for (int i = 0; i < n; ++i) {
+        out[i][0] = g_State->playerWallNormals[(size_t)i].x;
+        out[i][1] = g_State->playerWallNormals[(size_t)i].y;
+        out[i][2] = g_State->playerWallNormals[(size_t)i].z;
+    }
+    return n;
+}
+
 unsigned MoveCharacter(const float disp[3], float dt) {
     if (!HasCharacter() || dt <= 0.0f) return 0;
 
@@ -1641,6 +1697,9 @@ unsigned MoveCharacter(const float disp[3], float dt) {
     const int playerLayer = std::clamp(ProjectSettings::Physics().PlayerLayer, 0, 31);
     layerFilter.Mask = ProjectSettings::Physics().LayerCollisionMask[playerLayer];
     PxControllerFilters filters(nullptr, &layerFilter, nullptr); // prefilter is on by default
+
+    FitStepToRoom(*static_cast<PxCapsuleController*>(g_State->controller), d, layerFilter.Mask);
+    g_State->playerWallNormals.clear();
     PxControllerCollisionFlags f =
         g_State->controller->move(d, /*minDist=*/0.001f, dt, filters); // onShapeHit fires in here
 
@@ -3222,6 +3281,7 @@ unsigned MoveNpcCharacter(CharacterId id, const float disp[3], float dt) {
     layerFilter.Self = g_State->npcs[(size_t)id].entity;
     layerFilter.PassRagdolls = g_State->npcs[(size_t)id].passRagdolls;
     PxControllerFilters filters(nullptr, &layerFilter, nullptr);
+    FitStepToRoom(*c, PxVec3(disp[0], disp[1], disp[2]), layerFilter.Mask);
     const PxControllerCollisionFlags f = c->move(PxVec3(disp[0], disp[1], disp[2]), 0.001f, dt, filters);
     unsigned out = 0;
     if (f & PxControllerCollisionFlag::eCOLLISION_SIDES) out |= CC_SIDES;
