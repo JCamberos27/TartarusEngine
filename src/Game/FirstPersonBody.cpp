@@ -318,6 +318,33 @@ glm::quat FirstPersonBodyRestOffset(const Model& m, const Model& rig, int node) 
     return glm::normalize(a->RigRestInv[(size_t)a->Rig[(size_t)node]] * a->CInv * a->BodyRest[(size_t)node]);
 }
 
+glm::vec3 FirstPersonBodyPalmDirection(const Model& rig, const glm::mat4& rigWorld, int side) {
+    const std::string sfx = side ? "_r" : "_l";
+    glm::mat4 h(1.0f), k(1.0f), t(1.0f);
+    if (!rig.NodeTransform("hand" + sfx, h) || !rig.NodeTransform("middle_01" + sfx, k) || !rig.NodeTransform("middle_03" + sfx, t)) return glm::vec3(0.0f);
+    const glm::vec3 hand = glm::vec3(rigWorld * h[3]), knuckle = glm::vec3(rigWorld * k[3]), tip = glm::vec3(rigWorld * t[3]);
+    const glm::vec3 along = knuckle - hand;
+    if (glm::length(along) < 1e-6f) return glm::vec3(0.0f);
+    const glm::vec3 a = glm::normalize(along);
+    glm::vec3 curl = tip - knuckle;
+    curl -= a * glm::dot(curl, a);
+    return glm::length(curl) > 1e-4f ? glm::normalize(curl) : glm::vec3(0.0f);
+}
+
+void FirstPersonBodyCurlFingers(const Model& m, std::vector<LocalTRS>& pose, float degrees) {
+    if (degrees <= 0.0f || (int)pose.size() != m.NodeCount()) return;
+    thread_local std::vector<LocalTRS> bind;
+    m.BindLocalPose(bind);
+    for (int i = 0; i < (int)pose.size(); ++i) {
+        const std::string& n = m.NodeName(i);
+        if (!(n.rfind("index_0", 0) == 0 || n.rfind("middle_0", 0) == 0 || n.rfind("ring_0", 0) == 0 || n.rfind("pinky_0", 0) == 0)) continue;
+        const glm::quat delta = glm::inverse(bind[(size_t)i].R) * pose[(size_t)i].R;
+        const float angle = glm::angle(delta);
+        if (angle < glm::radians(5.0f) || angle > glm::radians(175.0f)) continue; // no clear curl to follow
+        pose[(size_t)i].R = glm::normalize(bind[(size_t)i].R * glm::angleAxis(angle + glm::radians(degrees), glm::axis(delta)));
+    }
+}
+
 void FirstPersonBodyCopyArmShape(const Model& m, const Model& rig, float weight, std::vector<LocalTRS>& pose, const std::vector<int>& parents,
                                  float clavicleWeight) {
     static const std::map<std::string, std::string> kNoMap;
@@ -2327,6 +2354,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     // The rig's hands, exactly: the arms piece is drawn with the gun in the same projection.
     glm::vec3 handPos[2]{};
     glm::quat handRot[2]{};
+    glm::vec3 palmDir[2]{}; // world, Grip Inset's way
     bool haveHand[2] = {false, false};
     glm::vec3 rigShoulder[2]{}, rigElbow[2]{}; // world: the rig's upper arm and elbow (its bend plane)
     bool haveRigElbow[2] = {false, false};
@@ -2337,6 +2365,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
         handPos[s] = glm::vec3(w[3]);
         handRot[s] = IK::Rotation(w);
         haveHand[s] = true;
+        palmDir[s] = FirstPersonBodyPalmDirection(*rig, rigWorld, s);
         if (rig->NodeTransform(kSides[s].Upper, u) && rig->NodeTransform(kSides[s].Lower, l)) {
             rigShoulder[s] = glm::vec3(rigWorld * u[3]);
             rigElbow[s] = glm::vec3(rigWorld * l[3]);
@@ -2399,6 +2428,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
             // The rig's arm shapes first, so the elbows bend the way the animation has them; the solve
             // then only fixes the hands.
             CopyArmShapeCached(m, *shapeRig, m_ArmsWeight, pose, parents, cfg.ClavicleFollow);
+            FirstPersonBodyCurlFingers(m, pose, cfg.FingerCurlExtra * m_ArmsWeight);
 
             const glm::mat4 toModel = glm::inverse(pieceWorld);
             // The first piece in `order` works the shoulder moves out; the rest copy them. (What of the torso's
@@ -2432,7 +2462,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                 const int upper = m.NodeIndex(Bone(kSides[s].Upper)), lower = m.NodeIndex(Bone(kSides[s].Lower)),
                           hand = m.NodeIndex(Bone(kSides[s].Hand));
                 if (upper < 0 || lower < 0 || hand < 0) continue;
-                const glm::vec3 target = glm::vec3(toModel * glm::vec4(handPos[s], 1.0f));
+                const glm::vec3 target = glm::vec3(toModel * glm::vec4(handPos[s] + palmDir[s] * cfg.GripInset * m_ArmsWeight, 1.0f));
                 const glm::quat rot = glm::normalize(toModelRot * handRot[s] * FirstPersonBodyRestOffset(m, *rig, hand));
                 const int clav = m.NodeIndex(Bone(kSides[s].Clavicle));
                 if (isSource) {

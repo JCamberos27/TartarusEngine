@@ -51,6 +51,8 @@ struct NpcHoldSettings {
     float ShrugMax = 0.12f;          // ... by at most this (m)
     float ReachLeanMax = 15.0f;      // degrees the chest leans for a hand still out of reach
     float ElbowClearance = 0.06f;    // m: elbows swing out of the drawn torso by this
+    float GripInset = 0.0f;          // m: each hand toward its palm (a fleshless hand), FirstPersonBodyComponent's
+    float FingerCurlExtra = 0.0f;    // degrees more curl per finger joint, ditto
     float ReachSlack = 0.04f;        // m: the shoulders a little nearer the gun than the rig's
     float ShoulderLineMatch = 1.0f;  // the chest takes the rig's bladed stance
     float SpineAim = 0.6f, SpineAimDown = 0.9f; // the share of the aim's pitch the chest takes (up / down)
