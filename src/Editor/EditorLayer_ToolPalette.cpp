@@ -96,16 +96,13 @@ void EditorLayer::DrawMainToolbar(World& world, AssetLibrary& assets, bool playi
     ImDrawList* dl = ImGui::GetWindowDrawList();
     const ImVec2 wpos = ImGui::GetWindowPos();
     const float w = (float)ww;
-    // While playing, the row says so: a faint wash of the Play green and a rule along its bottom.
+    // While playing, the row says so with a faint wash of the Play green (no rule: just the tint).
     if (playing) {
         const ImVec4 g = paused ? EditorTheme::Warning : EditorUIPrimitives::SuccessColor();
         dl->AddRectFilled(wpos, ImVec2(wpos.x + w, wpos.y + rowH), EditorTheme::U32(EditorTheme::WithAlpha(g, 0.07f)));
-        dl->AddRectFilled(ImVec2(wpos.x, wpos.y + rowH - EditorTheme::Px(2.0f)), ImVec2(wpos.x + w, wpos.y + rowH),
-                          EditorTheme::U32(EditorTheme::WithAlpha(g, 0.85f)));
-    } else {
-        dl->AddLine(ImVec2(wpos.x, wpos.y + rowH - 0.5f), ImVec2(wpos.x + w, wpos.y + rowH - 0.5f),
-                    EditorTheme::U32(EditorTheme::Hairline));
     }
+    dl->AddLine(ImVec2(wpos.x, wpos.y + rowH - 0.5f), ImVec2(wpos.x + w, wpos.y + rowH - 0.5f),
+                EditorTheme::U32(EditorTheme::Hairline));
 
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(EditorTheme::Px(8.0f), EditorTheme::Px(6.0f)));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(EditorTheme::Px(2.0f), 0.0f));
