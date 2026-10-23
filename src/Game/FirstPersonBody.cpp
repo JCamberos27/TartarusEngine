@@ -2539,7 +2539,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                 if (gun->MeshClearance > 0.0f) {
                     SkinnedPoints(world, BodyRegion::Head, m_HeadPointBuffer);
                     body.HeadPoints = &m_HeadPointBuffer;
-                    if (gun->TorsoKeepOut > 1e-3f && twinPoint(driverTwin, "spine_05", chest)) {
+                    if (gun->TorsoKeepOut > 1e-3f && (twinPoint(driverTwin, "spine_05", chest) || twinPoint(driverTwin, "spine_03", chest))) { // UE4 bodies: spine_03
                         SkinnedPoints(world, BodyRegion::Torso, m_TorsoPointBuffer);
                         body.Chest = &chest;
                         body.TorsoPoints = &m_TorsoPointBuffer;

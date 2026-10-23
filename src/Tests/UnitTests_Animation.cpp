@@ -770,6 +770,12 @@ static void TestRetargetUe4ToUe5() {
     const std::vector<int> match = RetargetMatchNodes(src, tgt);
     CHECK(match[tChest] == sS3);
     CHECK(match[tgt[tChest].Parent] == -1); // spine_04 is filled in, not matched
+    // The reverse - UE5 clips on a UE4 body (the Realistic Skeleton): UE4 spine_03 takes UE5 spine_05, neck_02 drops out.
+    CHECK(RetargetIsUe5ToUe4(tgt, src));
+    CHECK(!RetargetIsUe4ToUe5(tgt, src));
+    const std::vector<int> back = RetargetMatchNodes(tgt, src);
+    CHECK(back[sS3] == tChest);
+    CHECK(std::find(back.begin(), back.end(), tNeck2) == back.end());
 
     // The clip: each source spine bone bends 10 degrees forward (+Z toward +X), 30 at the chest;
     // the pelvis lifts 10 cm.

@@ -311,7 +311,7 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
         if (BoneWorld(FPBody::kBoneUpperArm[0], body.UpperL) && BoneWorld(FPBody::kBoneUpperArm[1], body.UpperR) &&
             BoneWorld("neck_01", body.Neck) && BoneWorld("head", body.Head)) {
             glm::vec3 chest(0.0f);
-            if (BoneWorld("spine_05", chest)) body.Chest = &chest;
+            if (BoneWorld("spine_05", chest) || BoneWorld("spine_03", chest)) body.Chest = &chest; // a UE4 body tops out at spine_03
             if (meshNow && gun->MeshClearance > 0.0f) SkinnedRegion(world, Region::Head, m_HeadPoints);
             if (meshNow) body.HeadPoints = &m_HeadPoints;
             if (torsoPoints) body.TorsoPoints = &m_TorsoPoints;
