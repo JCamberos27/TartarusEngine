@@ -96,11 +96,6 @@ void EditorLayer::DrawMainToolbar(World& world, AssetLibrary& assets, bool playi
     ImDrawList* dl = ImGui::GetWindowDrawList();
     const ImVec2 wpos = ImGui::GetWindowPos();
     const float w = (float)ww;
-    // While playing, the row says so with a faint wash of the Play green (no rule: just the tint).
-    if (playing) {
-        const ImVec4 g = paused ? EditorTheme::Warning : EditorUIPrimitives::SuccessColor();
-        dl->AddRectFilled(wpos, ImVec2(wpos.x + w, wpos.y + rowH), EditorTheme::U32(EditorTheme::WithAlpha(g, 0.07f)));
-    }
     dl->AddLine(ImVec2(wpos.x, wpos.y + rowH - 0.5f), ImVec2(wpos.x + w, wpos.y + rowH - 0.5f),
                 EditorTheme::U32(EditorTheme::Hairline));
 
