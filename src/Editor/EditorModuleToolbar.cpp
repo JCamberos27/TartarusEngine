@@ -64,9 +64,9 @@ float DrawTrafficLights(const EditorModuleHostAPI& host, float toolbarH) {
     enum class Kind { Minimize, Zoom, Close };
     struct Light { const char* id; Kind kind; ImU32 fill; ImU32 glyph; const char* tip; };
     const Light lights[3] = {
-        {"win_min",   Kind::Minimize, IM_COL32(0xFE, 0xBC, 0x2E, 255), IM_COL32(0x99, 0x57, 0x00, 230), "Minimize"},
-        {"win_max",   Kind::Zoom,     IM_COL32(0x28, 0xC8, 0x40, 255), IM_COL32(0x00, 0x65, 0x00, 230), maxed ? "Restore" : "Maximize"},
-        {"win_close", Kind::Close,    IM_COL32(0xFF, 0x5F, 0x57, 255), IM_COL32(0x4D, 0x00, 0x00, 230), "Close"},
+        {"win_min",   Kind::Minimize, EditorTheme::U32(EditorTheme::SignalAmber), IM_COL32(0x99, 0x57, 0x00, 230), "Minimize"},
+        {"win_max",   Kind::Zoom,     EditorTheme::U32(EditorTheme::SignalGreen), IM_COL32(0x00, 0x65, 0x00, 230), maxed ? "Restore" : "Maximize"},
+        {"win_close", Kind::Close,    EditorTheme::U32(EditorTheme::SignalRed), IM_COL32(0x4D, 0x00, 0x00, 230), "Close"},
     };
     ImDrawList* dl = ImGui::GetWindowDrawList();
     const ImVec2 cursor = ImGui::GetCursorScreenPos();

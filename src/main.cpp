@@ -4342,15 +4342,50 @@ int main(int argc, char** argv) {
                     GLStateCache::Invalidate();
                 }
 
-                // Grid / axis lines and the collider wireframe overlay — drawn AFTER the bloom
-                // source snapshot above so neither ever contributes to bloom (a plain grey grid
-                // line already sits above the default threshold's soft-knee floor, and the green
-                // Y-axis line's luma is higher still, so without this ordering both would visibly
-                // glow). Bloom::Compute (when it ran) leaves FBO 0 bound, so the MSAA HDR target
-                // is rebound here; both overlays still depth-test correctly against the real
-                // scene geometry already in that target's depth buffer.
+                // The collider wireframe overlay — drawn AFTER the bloom source snapshot above so it
+                // never contributes to bloom. Bloom::Compute (when it ran) leaves FBO 0 bound, so the
+                // MSAA HDR target is rebound here; the overlay still depth-tests correctly against
+                // the real scene geometry already in that target's depth buffer.
                 sceneHdr.BindForRender();
+                // Collider wireframe overlay (#185 PR 2) — depth-tested so scene geometry
+                // occludes it, no depth write so it never blocks anything drawn after. Also
+                // carries the physics visual debug-draw channels (#185 A), which have their own
+                // toggle, so it runs when either is on.
+                {
+                    const bool showShapes = EditorSettings::Get().ShowColliders;
+                    const bool showDebug  = EditorSettings::Get().PhysicsDebugDrawFlags != 0u || BodyDebug::Enabled();
+                    if ((showShapes || showDebug) && !editor.OverlaysHidden() && !editor.CleanShots() && !(npcTest && npcTest->WantsCleanViews())) {
+                        glEnable(GL_DEPTH_TEST);
+                        glDepthMask(GL_FALSE);
+                        // Selected-only: just the selection's colliders and its descendants' (F3's Play overlay below shows all).
+                        const std::function<bool(entt::entity)> inSelection = [&](entt::entity e) { return editor.InSelectionTree(world, e); };
+                        colliderGizmo.Draw(sceneViewMat, sceneProjMat, world, showShapes,
+                                           EditorSettings::Get().CollidersSelectedOnly ? &inSelection : nullptr);
+                        glDepthMask(GL_TRUE);
+                    }
+                }
+
+                // Resolve again now that the collider overlay is drawn, so the Scene tab
+                // still shows them — only the earlier, overlay-free resolve above ever reached
+                // Bloom. Tonemap the linear-HDR scene into the LDR texture the Scene tab displays
+                // (exposure -> curve -> gamma, once, in Tonemapper).
+                sceneHdr.ResolveTo();
+                {
+                PROFILE_GPU_SCOPE("Tonemap");
+                tonemapper.Apply(sceneHdr.ResolvedColorTexture(), sceneFramebuffer.Handle(), scW, scH,
+                                 MakePostSettings(world, bloomGlowTex, bloomIntensity, dt, 0, editorCamera.Position));
+                }
+
+                // Grid / axis lines — drawn AFTER the tonemap, straight into the LDR image the Scene
+                // tab shows, so their colours are the editor's own sRGB values (EditorTheme::Axis*,
+                // the traffic lights' family) rather than linear light pushed through exposure, the
+                // tonemap curve, grading and gamma, which washed them out toward white. Also keeps
+                // them out of bloom, vignette and grain. The grid quad sits at a constant depth and
+                // never occluded against the scene, so no depth test is lost by drawing here.
+                sceneFramebuffer.Bind();
                 if (editor.ShowGrid() && !editor.OverlaysHidden()) {
+                    const GLboolean gridHadDepthTest = glIsEnabled(GL_DEPTH_TEST);
+                    glDisable(GL_DEPTH_TEST);
                     // The grid shader fades lines by literal world-space distance from the
                     // camera. That distance is meaningless in orthographic mode — scroll-zoom
                     // there resizes OrthoHalfHeight without moving the camera (see
@@ -4370,35 +4405,7 @@ int main(int argc, char** argv) {
                               gset.GridMinorSpacing, (float)gset.GridMajorEvery, gridFade,
                               gset.GridOpacity, gset.GridShowAxisLines, gset.GridAxisThickness,
                               gridColors);
-                }
-
-                // Collider wireframe overlay (#185 PR 2) — depth-tested so scene geometry
-                // occludes it, no depth write so it never blocks anything drawn after. Also
-                // carries the physics visual debug-draw channels (#185 A), which have their own
-                // toggle, so it runs when either is on.
-                {
-                    const bool showShapes = EditorSettings::Get().ShowColliders;
-                    const bool showDebug  = EditorSettings::Get().PhysicsDebugDrawFlags != 0u || BodyDebug::Enabled();
-                    if ((showShapes || showDebug) && !editor.OverlaysHidden() && !editor.CleanShots() && !(npcTest && npcTest->WantsCleanViews())) {
-                        glEnable(GL_DEPTH_TEST);
-                        glDepthMask(GL_FALSE);
-                        // Selected-only: just the selection's colliders and its descendants' (F3's Play overlay below shows all).
-                        const std::function<bool(entt::entity)> inSelection = [&](entt::entity e) { return editor.InSelectionTree(world, e); };
-                        colliderGizmo.Draw(sceneViewMat, sceneProjMat, world, showShapes,
-                                           EditorSettings::Get().CollidersSelectedOnly ? &inSelection : nullptr);
-                        glDepthMask(GL_TRUE);
-                    }
-                }
-
-                // Resolve again now that the grid/collider overlays are drawn, so the Scene tab
-                // still shows them — only the earlier, overlay-free resolve above ever reached
-                // Bloom. Tonemap the linear-HDR scene into the LDR texture the Scene tab displays
-                // (exposure -> curve -> gamma, once, in Tonemapper).
-                sceneHdr.ResolveTo();
-                {
-                PROFILE_GPU_SCOPE("Tonemap");
-                tonemapper.Apply(sceneHdr.ResolvedColorTexture(), sceneFramebuffer.Handle(), scW, scH,
-                                 MakePostSettings(world, bloomGlowTex, bloomIntensity, dt, 0, editorCamera.Position));
+                    if (gridHadDepthTest) glEnable(GL_DEPTH_TEST);
                 }
 
                 Framebuffer::BindDefault(window.GetWidth(), window.GetHeight());

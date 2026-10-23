@@ -488,6 +488,21 @@ float Vec3RowDragWidth(float buttonW, float innerSpacing) {
     return dragW;
 }
 
+// The label column of an X/Y/Z row. The shared PropertyLabelWidth() when the triplet fits beside
+// it; otherwise the column gives up width (down to about "Location"'s length) so the row stays on
+// one line, and only wraps (Vec3RowDragWidth) once even that can't fit. Depends only on the
+// panel's width, so every vector row in a component gets the same column and stays aligned.
+float Vec3RowLabelWidth() {
+    const float buttonW = std::floor(ImGui::GetFrameHeight() * 0.8f);
+    const float innerSpacing = ImGui::GetStyle().ItemInnerSpacing.x * 0.5f;
+    const float minDragW = ImGui::CalcTextSize("-0.00").x + EditorTheme::Px(8.0f);
+    const float tripletW = 3.0f * (buttonW + innerSpacing + minDragW);
+    const float avail = ImGui::GetContentRegionAvail().x;
+    const float col = EditorTheme::PropertyLabelWidth();
+    if (avail - col >= tripletW) return col;
+    return std::max(avail - tripletW, ImGui::GetFontSize() * 4.5f);
+}
+
 // The display format for one axis of a vector row: three decimals when they fit the field, fewer
 // when the panel is narrow (the exact value is always in the tooltip and shown while editing).
 // `room` is the field's width inside its padding.
@@ -698,7 +713,7 @@ bool DrawVec3Row(const char* label, glm::vec3& v, float speed, float minV, float
     // that follows needs the width back more than it needs to share that wider column. Putting
     // the label on the SAME line as its row (instead of on its own line above it, as before) is
     // what actually removes the wasted vertical gap between each Position/Rotation/Scale block.
-    const float vec3LabelColumnWidth = EditorTheme::PropertyLabelWidth(); // the one shared label column
+    const float vec3LabelColumnWidth = Vec3RowLabelWidth(); // the shared label column, narrowed before wrapping
     const bool pfOverridden = pf.self && pf.field &&
         SceneSerializer::IsPrefabFieldOverridden(*pf.world, pf.e, pf.comp, pf.field);
     AlignToColumn(label, vec3LabelColumnWidth, tooltip, pfOverridden);
@@ -794,7 +809,7 @@ MultiEditResult MultiEditVec3Row(const char* label, glm::vec3& value, const bool
     axisTouched[0] = axisTouched[1] = axisTouched[2] = false;
 
     ImGui::PushID(label);
-    const float col = EditorTheme::PropertyLabelWidth();
+    const float col = Vec3RowLabelWidth();
     const bool pfOv = pf.self && pf.field && pf.sel &&
         pf.self->AnyPrefabFieldOverridden(*pf.world, *pf.sel, pf.comp, pf.field);
     AlignToColumn(label, col, tooltip, pfOv);

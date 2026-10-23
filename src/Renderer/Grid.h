@@ -7,10 +7,11 @@ class Shader;
 // The grid's colours, passed in by the editor so the Renderer stays free of Editor headers. The
 // defaults are the Enhancers palette's red / green / blue (EditorTheme::AxisX/Y/Z) and a calm grey.
 struct GridColors {
-    glm::vec3 AxisX = glm::vec3(0xF5, 0x50, 0x4F) / 255.0f;
-    glm::vec3 AxisY = glm::vec3(0x5F, 0xE3, 0x5A) / 255.0f;
-    glm::vec3 AxisZ = glm::vec3(0x4D, 0x8B, 0xFF) / 255.0f;
-    glm::vec3 Lines = glm::vec3(0.42f);
+    // Display (sRGB) colours: the grid draws into the tonemapped LDR image, not the HDR scene.
+    glm::vec3 AxisX = glm::vec3(0xFF, 0x5F, 0x57) / 255.0f;
+    glm::vec3 AxisY = glm::vec3(0x28, 0xC8, 0x40) / 255.0f;
+    glm::vec3 AxisZ = glm::vec3(0x0A, 0x84, 0xFF) / 255.0f;
+    glm::vec3 Lines = glm::vec3(0.68f); // the old linear 0.42 as it reached the screen
     float AxisAlpha = 0.7f; // the axis lines' peak opacity, so they sit in the view rather than on it
 };
 
