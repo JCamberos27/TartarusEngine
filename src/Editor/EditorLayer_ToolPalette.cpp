@@ -23,6 +23,7 @@
 #include "EditorModuleAPI.h"          // EditorConsoleState
 #include "HotReloadEditorModule.h"    // EditorModuleHost::ConsoleState()
 #include "EditorSound.h"
+#include "GameViewPanel.h"
 
 #include <imgui.h>
 #include <imgui_internal.h> // ImMax, used by EditorUIPrimitives
