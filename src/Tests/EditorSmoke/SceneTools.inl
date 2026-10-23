@@ -97,13 +97,16 @@ using ST = EditorSmokeAccess_SceneTools;
 using ChromeUi::Steps;
 using ChromeUi::Seq;
 
-// A header button in the Scene window whose label starts with `icon` (icon-only buttons, and the
-// labelled ones - "<icon>  Shaded", "<icon>  1 m" - alike).
+// A toolbar button whose label starts with `icon` (icon-only buttons, and the labelled ones -
+// "<icon>  Shaded", "<icon>  1 m" - alike): in the main toolbar row (tools, space, snap) or the
+// Scene panel's header (Perspective, draw mode, Show).
+const char* kMainBar = "##MainToolbar";
 Query Rail(const char* icon) {
     Query q;
-    q.Root = kScene;
     const std::string glyph = icon;
-    q.Pred = [glyph](const UiItem& it) { return it.Label.rfind(glyph, 0) == 0; };
+    q.Pred = [glyph](const UiItem& it) {
+        return it.Label.rfind(glyph, 0) == 0 && (Contains(it.Root, kMainBar) || Contains(it.Root, kScene));
+    };
     return q;
 }
 bool FullyShown(const UiItem& it) {
@@ -121,9 +124,10 @@ Steps RoomForRail() {
     };
 }
 // The header's Tools dropdown, then one of its items.
-Query ToolsButton() { return ByLabel("Tools", kScene); }
-Query SnapCaret() { return ByExact(ICON_FA_CARET_DOWN "##snapcaret", kScene); }
-Query GizmoCaret() { return ByExact(ICON_FA_CARET_DOWN "##gizmocaret", kScene); }
+Query ToolsButton() { return ByLabel("Tools", kMainBar); }
+Query SnapCaret() { return ByExact(ICON_FA_CARET_DOWN "##snapcaret", kMainBar); }
+// The header's Show menu: the grid and the gizmo popover's body.
+Query ShowButton() { return ByLabel("Show", kScene); }
 // Every test ends here: tools back to their defaults, the camera reset, panels as they were.
 Steps Tidy() {
     return {
@@ -553,8 +557,10 @@ void RegisterSceneToolsTests() {
          Until("the button now shows Center", [](Ctx&) { return Find(Rail(EDITOR_ICON_PIVOT_CENTER)) != nullptr; }),
          HoverPanel(kScene), Key(ImGuiKey_X, ImGuiMod_Alt | ImGuiMod_Shift), Wait(2),
          ExpectTrue("Alt+Shift+X: Pivot again", [](Ctx& c) { return !ST::Center(c.E); }),
-         Click(Rail(EDITOR_ICON_GRID)), Wait(2),
+         Click(ShowButton()), Until("the Show menu", [](Ctx&) { return Find(MenuItem("Grid")) != nullptr; }),
+         Click(MenuItem("Grid")), Wait(2),
          ExpectTrue("grid off", [](Ctx& c) { return !ST::Grid(c.E); }),
+         ChromeUi::CloseMenus(), Wait(2),
          Shot("no-grid", {kScene}),
          HoverPanel(kScene), Key(ImGuiKey_G, ImGuiMod_Alt), Wait(2),
          ExpectTrue("Alt+G: grid on", [](Ctx& c) { return ST::Grid(c.E); }),
@@ -562,11 +568,11 @@ void RegisterSceneToolsTests() {
          ExpectTrue("snap off", [](Ctx& c) { return !ST::Snap(c.E); }),
          HoverPanel(kScene), Key(ImGuiKey_G, ImGuiMod_Alt | ImGuiMod_Shift), Wait(2),
          ExpectTrue("Alt+Shift+G: snap on", [](Ctx& c) { return ST::Snap(c.E); }),
-         Click(Rail(EDITOR_ICON_TOGGLE_GIZMOS)), Wait(2),
-         ExpectTrue("gizmos off", [](Ctx& c) { return !ST::Gizmos(c.E); }),
+         HoverPanel(kScene), Key(ImGuiKey_G, ImGuiMod_Shift), Wait(2),
+         ExpectTrue("Shift+G: gizmos off", [](Ctx& c) { return !ST::Gizmos(c.E); }),
          Shot("no-gizmos", {kScene}),
-         Click(Rail(EDITOR_ICON_TOGGLE_GIZMOS)), Wait(2),
-         ExpectTrue("gizmos on", [](Ctx& c) { return ST::Gizmos(c.E); }),
+         HoverPanel(kScene), Key(ImGuiKey_G, ImGuiMod_Shift), Wait(2),
+         ExpectTrue("Shift+G: gizmos on", [](Ctx& c) { return ST::Gizmos(c.E); }),
          // Right-click opens each button's settings popover.
          Click(SnapCaret()),
          Until("the grid & snap popover", [](Ctx&) { return Find(PopupItem("Show grid")) != nullptr; }),
@@ -576,7 +582,7 @@ void RegisterSceneToolsTests() {
          Click(PopupItem("Show grid")), Wait(2),
          ExpectTrue("and on", [](Ctx& c) { return ST::Grid(c.E); }),
          ChromeUi::CloseMenus(), Wait(2),
-         Click(GizmoCaret()),
+         Click(ShowButton()),
          Until("the gizmos popover", [](Ctx&) { return Find(PopupItem("Show transform gizmo")) != nullptr; }),
          Click(PopupItem("Show transform gizmo")), Wait(2),
          ExpectTrue("the transform gizmo off", [](Ctx& c) { return !ST::TransformGizmo(c.E); }),
@@ -629,11 +635,13 @@ void RegisterSceneToolsTests() {
     Add("scenetools: orthographic by click and 5; view presets 1 3 7 (Ctrl: opposite) and 0; the nav gizmo's axis", Seq({
         ToolScene(), RoomForRail(),
         {Do("nothing selected (views pivot on the scene)", [](Ctx& c) { X::Deselect(c.E); }), Wait(2),
-         Click(Rail(EDITOR_ICON_PERSPECTIVE)), Wait(2),
+         Click(Rail(EDITOR_ICON_PERSPECTIVE)), Until("the projection menu", [](Ctx&) { return Find(MenuItem("Orthographic")) != nullptr; }),
+         Click(MenuItem("Orthographic")), Wait(2),
          UntilLooks("the same way, orthographic", Look(-90.0f, -10.0f), 1),
          Until("the button shows Orthographic", [](Ctx&) { return Find(Rail(EDITOR_ICON_ORTHOGRAPHIC)) != nullptr; }),
          Shot("ortho", {kScene}),
-         Click(Rail(EDITOR_ICON_ORTHOGRAPHIC)), Wait(2),
+         Click(Rail(EDITOR_ICON_ORTHOGRAPHIC)), Until("the projection menu", [](Ctx&) { return Find(MenuItem("Perspective")) != nullptr; }),
+         Click(MenuItem("Perspective")), Wait(2),
          UntilLooks("the same way, perspective", Look(-90.0f, -10.0f), 0),
          HoverPanel(kScene), Key(ImGuiKey_5), Wait(2),
          UntilLooks("the same way after 5, orthographic", Look(-90.0f, -10.0f), 1),

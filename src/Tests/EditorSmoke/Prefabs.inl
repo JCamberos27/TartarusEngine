@@ -22,7 +22,7 @@ namespace fs = std::filesystem;
 using PF = EditorSmokeAccess_Prefabs;
 using PA = EditorSmokeAccess_PlayMode;
 const char* kModeBar = "##PrefabModeBar";
-const char* kActionBar = "##Toolbar";
+const char* kActionBar = "##MainToolbar";
 
 std::string ScratchDir() { return ProjectPaths::Resolve("editor-smoke-scratch"); }
 std::string PrefabPath() { return (fs::path(ScratchDir()) / "SmokeCrate.prefab").generic_string(); }
