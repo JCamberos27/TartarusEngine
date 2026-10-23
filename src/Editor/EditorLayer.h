@@ -638,6 +638,10 @@ public:
     // camera the game renders through; `playing` whether Play is on.
     void UpdateViewFade(Camera& editorCamera, const Camera& gameCam, bool playing);
     bool ViewFadeActive() const { return m_ViewFade.Active; }
+    // True once after the header's Game button was dragged out: main.cpp pops the Game view out
+    // under the cursor and starts dragging it, so it docks wherever it's dropped (the dock targets
+    // show as for any tab). Closing that tab puts Game back in the viewport.
+    bool ConsumeGameTearOff() { const bool v = m_GameTearOff; m_GameTearOff = false; return v; }
     // Applies a pending Request*TabFocus() (no-op otherwise) — main.cpp calls this once per
     // editor-UI frame, AFTER both Scene's and Game's Begin() calls have run. The request stays
     // pending until it actually lands on a live dock node. Deliberately doesn't go through
@@ -1018,6 +1022,7 @@ private:
     // these before the first Draw() has run; overwritten every editor-mode frame after that.
     bool m_FocusSceneTabRequested = true;
     GameViewPanel* m_GameView = nullptr;
+    bool m_GameTearOff = false;
     ViewportMode m_ViewportMode = ViewportMode::Scene;
     struct ViewFade {
         bool Active = false, ToGame = true, Glide = false;
