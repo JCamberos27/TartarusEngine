@@ -61,6 +61,8 @@ public:
     float GroundAccelTime = 0.0f;
     float GroundDecelTime = 0.0f;
     float AirAccelTime = 0.0f;
+    float DoorwayAssist = 0.5f;          // the custom mover's nudge past a clipped jamb (FirstPersonControllerComponent)
+    float DoorwayAssistMaxAngle = 35.0f;
     float m_SinceGrounded = 0.0f, m_JumpBuffer = 0.0f;
     float CrouchBlend = 0.0f; // 0 standing .. 1 crouched: eases the eye height
     float CrouchBlendRate = 0.0f; // ... its rate (per second): the ease is a spring, so the view starts and stops moving smoothly

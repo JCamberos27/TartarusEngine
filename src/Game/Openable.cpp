@@ -7,6 +7,7 @@
 #include "Audio/WeaponAudio.h"
 
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include <algorithm>
 #include <cmath>
 #include <sstream>
@@ -35,6 +36,8 @@ void PlaySound(const std::string& files, const glm::vec3& pos) {
     r.Position = pos;
     wa.Player().Play(set, r);
 }
+
+constexpr float kBounceBack = 0.15f; // of the full travel: how far a part that meets somebody eases back
 
 float Ease(float t) {
     t = std::clamp(t, 0.0f, 1.0f);
@@ -74,6 +77,49 @@ void Start(World& world, entt::entity e, OpenableComponent& o, const TransformCo
     }
     o.ResolvedAmount = o.Amount > 0.0f ? o.Amount : DefaultAmount(o.Motion, m.BoundsMin(), m.BoundsMax(), ParentDepth(world, e));
     o.Progress = o.Target = o.StartOpen ? 1.0f : 0.0f;
+}
+
+// The part's box collider in the world with the part posed at `progress` (false: it has no box collider).
+bool LeafBoxAt(World& world, entt::entity e, const OpenableComponent& o, const TransformComponent& t, float progress,
+               glm::vec3& centre, glm::vec3& half, glm::quat& rot) {
+    const auto* c = world.Registry.try_get<ColliderComponent>(e);
+    if (!c || c->Kind != ColliderComponent::Shape::Box) return false;
+    glm::vec3 pos;
+    glm::quat q;
+    Pose(o.Motion, o.ResolvedAmount, o.PoseMin, o.PoseMax, t.Scale, o.BasePosition, o.BaseRotation, progress, pos, q, o.SwingBack);
+    glm::mat4 parent(1.0f);
+    if (const auto* h = world.Registry.try_get<HierarchyComponent>(e); h && h->Parent != entt::null && world.Registry.valid(h->Parent))
+        parent = world.GetCachedWorldTransform(h->Parent);
+    const glm::mat4 m = parent * glm::translate(glm::mat4(1.0f), pos) * glm::mat4_cast(q) * glm::scale(glm::mat4(1.0f), t.Scale);
+    centre = glm::vec3(m * glm::vec4(c->Center, 1.0f));
+    glm::mat3 axes(1.0f);
+    for (int i = 0; i < 3; ++i) {
+        const float l = glm::length(glm::vec3(m[i]));
+        if (l > 1e-6f) axes[i] = glm::vec3(m[i]) / l;
+        half[i] = std::abs(c->HalfExtents[i]) * l;
+    }
+    rot = glm::quat_cast(axes);
+    return true;
+}
+
+// Whether the part, posed at `progress`, would be in a character (a hair smaller: only a real overlap, not a graze).
+bool InSomebody(World& world, entt::entity e, const OpenableComponent& o, const TransformComponent& t, float progress) {
+    glm::vec3 centre, half;
+    glm::quat rot;
+    if (!LeafBoxAt(world, e, o, t, progress, centre, half, rot)) return false;
+    half = glm::max(half - glm::vec3(0.005f), glm::vec3(0.001f));
+    const float q[4] = {rot.x, rot.y, rot.z, rot.w};
+    return PhysicsWorld::BoxOverlapsCharacters(&centre.x, &half.x, q) > 0;
+}
+
+// Whether moving the part from `from` to `to` would run it into a character on the way (a hinge checked every 10 degrees).
+bool SwingsIntoSomebody(World& world, entt::entity e, const OpenableComponent& o, const TransformComponent& t, float from, float to) {
+    const bool hinge = (Kind)o.Motion != Kind::SlideOut && (Kind)o.Motion != Kind::SlideLeft && (Kind)o.Motion != Kind::SlideRight;
+    const float degrees = hinge ? o.ResolvedAmount * std::abs(Ease(to) - Ease(from)) : 0.0f;
+    const int n = std::max(1, (int)std::ceil(degrees / 10.0f));
+    for (int i = 1; i <= n; ++i)
+        if (InSomebody(world, e, o, t, from + (to - from) * (float)i / (float)n)) return true;
+    return false;
 }
 
 bool IsSelfOrAncestor(World& world, entt::entity of, entt::entity candidate) {
@@ -197,8 +243,17 @@ void Update(World& world, const glm::vec3& eye, const glm::vec3& forward, bool i
         const auto& r = view.get<RenderableComponent>(e);
         if (!o.Started || !r.ModelRef || o.Progress == o.Target) continue;
         const float step = dt / std::max(o.OpenTime, 0.01f);
-        o.Progress = o.Target > o.Progress ? std::min(o.Target, o.Progress + step) : std::max(o.Target, o.Progress - step);
-        Apply(o, view.get<TransformComponent>(e));
+        const float next = o.Target > o.Progress ? std::min(o.Target, o.Progress + step) : std::max(o.Target, o.Progress - step);
+        auto& t = view.get<TransformComponent>(e);
+        // Swinging into somebody (the player, a soldier, either way it moves): it stops short, eases back a little the way it
+        // came, and stays there until it's used again. (Already in someone - spawned there - it carries on, not to trap them.)
+        if (SwingsIntoSomebody(world, e, o, t, o.Progress, next) && !InSomebody(world, e, o, t, o.Progress)) {
+            const float back = std::clamp(o.Progress + (next > o.Progress ? -kBounceBack : kBounceBack), 0.0f, 1.0f);
+            o.Target = SwingsIntoSomebody(world, e, o, t, o.Progress, back) ? o.Progress : back; // boxed in: just stops
+            continue;
+        }
+        o.Progress = next;
+        Apply(o, t);
         if (o.Progress == 0.0f) { // landed shut
             const glm::vec3 at(world.GetCachedWorldTransform(e)[3]);
             PlaySound(o.CloseSound, at);

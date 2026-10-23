@@ -76,6 +76,35 @@ bool TryStepUp(IMoverWorld& world, const MoverCapsule& cap, const MoverSettings&
     return true;
 }
 
+// The doorway assist: walking mostly into an obstacle (within DoorAssistMaxAngle of its face) but meeting it off to the
+// side of the capsule (a jamb's corner clipped, not a wall met head on), the capsule eases sideways away from the corner,
+// up to DoorAssist of its radius, where there's room and the way on is clear from there. `n` is the flattened normal.
+bool TryDoorwayNudge(IMoverWorld& world, const MoverCapsule& cap, const MoverSettings& s, const MoverHit& hit, const glm::vec3& n,
+                     glm::vec3& p, const glm::vec3& rem, MoverDebug* debug) {
+    glm::vec3 fwd(rem.x, 0.0f, rem.z);
+    const float len = glm::length(fwd);
+    if (len < 1e-5f) return false;
+    fwd /= len;
+    if (glm::dot(-n, fwd) < std::cos(glm::radians(s.DoorAssistMaxAngle))) return false; // sliding along it: no help needed
+    const glm::vec3 perp(-fwd.z, 0.0f, fwd.x);
+    const float lateral = glm::dot(glm::vec3(hit.Point.x - p.x, 0.0f, hit.Point.z - p.z), perp);
+    if (std::abs(lateral) <= 0.35f * cap.Radius) return false; // met in front: a wall, not a corner
+    const glm::vec3 side = perp * (lateral > 0.0f ? -1.0f : 1.0f);
+    const float want = s.DoorAssist * std::min(cap.Radius, 2.0f * len); // no faster sideways than the walk: a glide, not a jump
+    MoverHit h;
+    const float room = world.Sweep(cap, p, side, want + s.Skin, h) ? std::max(0.0f, h.Distance - s.Skin) : want;
+    const float by = std::min(want, room);
+    if (by < 1e-4f) return false;
+    const glm::vec3 to = p + side * by;
+    if (world.Sweep(cap, to, fwd, len + s.Skin, h) && h.Distance <= s.Skin + 1e-4f) return false; // a dead end either way
+    if (debug) {
+        debug->Nudges.push_back(p);
+        debug->Nudges.push_back(to);
+    }
+    p = to;
+    return true;
+}
+
 } // namespace
 
 glm::vec3 ClipToPlanes(const glm::vec3& v, const glm::vec3* normals, int count) {
@@ -137,6 +166,7 @@ MoverResult Move(IMoverWorld& world, const MoverCapsule& cap, const glm::vec3& f
     int planeCount = 0;
     const glm::vec3 across(delta.x, 0.0f, delta.z);
     glm::vec3 rem = across;
+    bool nudged = false; // the doorway assist: once a move
     for (int it = 0; it < s.MaxSlides; ++it) {
         const float len = glm::length(rem);
         if (len < 1e-6f) break;
@@ -169,6 +199,10 @@ MoverResult Move(IMoverWorld& world, const MoverCapsule& cap, const glm::vec3& f
         glm::vec3 n(hit.Normal.x, 0.0f, hit.Normal.z);
         const float nl = glm::length(n);
         n = nl > 1e-4f ? n / nl : -glm::vec3(dir.x, 0.0f, dir.z);
+        if (!nudged && s.DoorAssist > 0.0f && !hit.Character && TryDoorwayNudge(world, cap, s, hit, n, p, rem, debug)) {
+            nudged = true;
+            continue;
+        }
         if (debug) debug->Planes.push_back({hit.Point, n, hit.Character ? 2 : 0});
         if (planeCount < kMaxPlanes) planes[planeCount++] = n;
         res.Flags |= MoverSides;

@@ -99,6 +99,7 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
     const glm::vec3 feet = Cam.Position - glm::vec3(0.0f, eye, 0.0f);
     if (!PhysicsWorld::IsActive()) { Cam.Position += Velocity * dt; Grounded = false; return; }
     if (!hasCharacter) PhysicsWorld::CreateCharacter(radius, stand, &feet.x);
+    PhysicsWorld::SetCharacterDoorwayAssist(DoorwayAssist, DoorwayAssistMaxAngle);
     const unsigned flags = MoveCharacter(Velocity * dt, dt, wasGrounded && !Jumped && Velocity.y <= 0.0f);
     float moverVelocity[3], stepDelta = 0.0f;
     bool moverGrounded = false;
