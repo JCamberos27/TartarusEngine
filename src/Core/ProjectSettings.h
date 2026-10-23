@@ -35,8 +35,9 @@ struct PhysicsSettings {
     float PlayerPushStrength = 2.0f; // impulse the walking Player imparts to a dynamic body it hits
     int   PlayerLayer        = 0;    // collision-matrix layer the Player capsule is on (0-31)
 
-    // The characters' own collide-and-slide (CharacterMover) in place of PhysX's capsule controller. Off while it's new.
-    bool  UseCustomCharacterMover   = false;
+    // The characters' own collide-and-slide (CharacterMover) in place of PhysX's capsule controller, for the Player and
+    // the soldiers. PhysX's stays behind it until the mover has settled in.
+    bool  UseCustomCharacterMover   = true;
     float CharacterSkinWidth        = 0.02f; // kept between a character's capsule and what it touches
     float CharacterStepHeight       = 0.35f; // climbed without a jump (no higher than the room above allows)
     float CharacterWalkableSlopeDeg = 50.0f; // the steepest floor stood on

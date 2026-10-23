@@ -2314,7 +2314,17 @@ int main(int argc, char** argv) {
 
             // Frame-pacing preferences are live: changing VSync / FPS Limit in Preferences takes
             // effect on the very next frame. SetVSync only touches the driver on an actual change.
-            if (const int wantVSync = opt.perfBenchMode ? 0 : playerMode ? (playerCfg.VSync ? 1 : 0) : EditorSettings::Get().VSyncMode;
+            // A hidden run (TARTARUS_HIDDEN) has no display to wait for: with the screen asleep, a synced swap held each frame
+            // for half a second and an NPC test crawled at 2 fps. (Harness runs step a fixed 1/60 s, so only the speed changes.)
+            static const bool hiddenRun = [] {
+                char* e = nullptr;
+                size_t n = 0;
+                _dupenv_s(&e, &n, "TARTARUS_HIDDEN");
+                const bool on = e && *e && *e != '0';
+                std::free(e);
+                return on;
+            }();
+            if (const int wantVSync = opt.perfBenchMode || hiddenRun ? 0 : playerMode ? (playerCfg.VSync ? 1 : 0) : EditorSettings::Get().VSyncMode;
                 wantVSync != appliedVSyncMode) {
                 appliedVSyncMode = wantVSync;
                 window.SetVSync(appliedVSyncMode);
