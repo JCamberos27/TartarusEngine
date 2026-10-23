@@ -5,8 +5,8 @@
 // PhysX 5 simulation world — created when Play mode starts, destroyed when it ends (#185).
 //
 // PR 1 stood up an empty PxScene. PR 2 populated it with a static actor per ColliderComponent
-// and added Raycast() scene queries. PR 3 added the PxCapsuleController the Play-mode Player
-// sweeps through it. PR 4 added dynamic bodies (RigidbodyComponent -> PxRigidDynamic, with
+// and added Raycast() scene queries. PR 3 added the kinematic capsule (moved by CharacterMover) the
+// Play-mode Player sweeps through it. PR 4 added dynamic bodies (RigidbodyComponent -> PxRigidDynamic, with
 // pose write-back). PR 5 adds trigger dispatch: a collider with Is Trigger set reports
 // enter/stay/exit for anything overlapping it (Step() collects them from PhysX's onTrigger
 // plus a capsule overlap for the Player), surfaced through GameModuleHostAPI. Edit mode is
@@ -56,9 +56,9 @@ void Step(float dt, World& world, const std::function<void(float fixedDt)>& onFi
 // or when no world is active. Backs GameModuleHostAPI::Raycast.
 bool Raycast(const float origin[3], const float dir[3], float maxDistance, RaycastHit& outHit);
 
-// --- Character controller (#185 PR 3) ---------------------------------------------------
+// --- Player character (#185 PR 3) ---------------------------------------------------
 // One kinematic capsule for the Play-mode Player. The Player owns its dimensions and spawn,
-// so the controller is created lazily on the first CreateCharacter() call and released with
+// so the capsule is created lazily on the first CreateCharacter() call and released with
 // the world. All positions are FOOT positions (the bottom of the capsule), world space.
 
 // Bit flags returned by MoveCharacter — which side(s) the capsule touched something this move.
@@ -81,14 +81,15 @@ bool GetCharacterCapsule(float outFootPos[3], float* outRadius, float* outCylHal
 
 // Sweep-move the capsule by `disp` (world units, already scaled by dt at the call site).
 // Returns a mask of CharacterCollision bits; 0 when there is no character or world.
-// `snapToGround` (the custom mover only): walking, so the feet follow the floor down a step or a slope.
+// `snapToGround`: walking, so the feet follow the floor down a step or a slope.
 unsigned MoveCharacter(const float disp[3], float dt, bool snapToGround = false);
-// With the custom mover (ProjectSettings UseCustomCharacterMover): the last MoveCharacter's velocity less the part of it
+// The last MoveCharacter's velocity less the part of it
 // into anything hit, whether it ended on the floor, and how far a step up or down moved the feet (the eye eases over it).
-// False on the PhysX controller.
+// False when there is no character.
 bool LastMoverResult(float outVelocity[3], bool* outGrounded, float* outStepDelta);
-// The walls the last MoveCharacter ran into (its side touches): each one's normal, world space, up to `max`; how many.
-int LastMoveWallNormals(float (*out)[3], int max);
+// The Player's doorway assist (FirstPersonControllerComponent): 0..1 of the radius, and the widest
+// angle off head on it helps at. Kept until changed.
+void SetCharacterDoorwayAssist(float strength, float maxAngleDeg);
 
 // Change the capsule's cylinder half-height (crouching), keeping the feet where they are.
 // False when there is no character.
@@ -119,6 +120,9 @@ bool     IgnoreRagdollForNpc(CharacterId id, int ragdoll);
 void     SetNpcPassesRagdolls(CharacterId id, bool on);
 // The NPC character owned by `entity`, or kNoCharacter.
 CharacterId NpcCharacterOf(unsigned entity);
+// How many characters' capsules (the Player's, the NPCs') a box at `centre` (half extents, rotation x,y,z,w) overlaps:
+// a closing door's leaf about to swing into somebody.
+int BoxOverlapsCharacters(const float centre[3], const float halfExtents[3], const float rotation[4]);
 
 // --- Ragdolls ------------------------------------------------------------------------
 // A dead character's body as jointed capsules (Npc/NpcRagdoll.h), one PhysX reduced-coordinate articulation: each part is a
@@ -335,7 +339,7 @@ int  OverlapBox(const float center[3], const float halfExtents[3], const float r
                 unsigned* out, int maxEntities);
 
 // (#185 PR 10: pushing dynamic bodies and riding moving platforms is handled inside
-// MoveCharacter via the CCT hit report.) Yaw the ground platform turned through this frame,
+// MoveCharacter via the mover's hit handling.) Yaw the ground platform turned through this frame,
 // in degrees — Player::Update adds it to the camera so a spinning platform carries the view.
 // Zero when not standing on a rotating kinematic body.
 float PlatformYawDelta();
