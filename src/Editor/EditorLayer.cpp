@@ -3022,7 +3022,8 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     // every neighbor sharing that border reacts too, and ImGui persists the whole arrangement
     // to imgui.ini across launches — DockBuilder below only runs once, to seed that arrangement
     // the very first time there's no saved layout yet.
-    const float toolbarH = kToolbarHeight * m_UIScale;
+    // The menu strip, then (whenever the editor chrome shows) the main toolbar row under it.
+    const float toolbarH = kToolbarHeight * m_UIScale + MainToolbarHeightPx();
 
     // The full-width toolbar strip is drawn by the reloadable editor module now (issue #229):
     // EditorModuleToolbar::Draw(), invoked from main.cpp's editorModule.Draw() immediately after

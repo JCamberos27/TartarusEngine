@@ -197,10 +197,12 @@ public:
     // EditorModuleToolbar.cpp's file comment). main.cpp calls this every frame, unconditionally.
     // Clicks only raise request flags — main.cpp owns the play/maximize/cursor state itself.
     void DrawViewportActionBar(World& world, AssetLibrary& assets, bool playing, bool maximized, bool paused);
-    // The title bar's middle (called by the reloadable toolbar module, EditorModuleHostAPI v45):
-    // Play / Pause / Step centred, the play clock beside them, the Console / History / stats
-    // toggles at the span's right end. Reads the play state DrawViewportActionBar recorded.
-    void DrawTitleBarControls(float spanMinX, float spanMaxX, float toolbarH);
+    // The main toolbar row under the menus (EditorLayer_ToolPalette.cpp), Unreal-style: Save,
+    // the transform tools, space / pivot, snap and the Tools menu on the left; Play / Pause /
+    // Step centred; Stats / Console / History / Preferences on the right. `transport` false hides
+    // the Play cluster (prefab mode has its own bar).
+    void DrawMainToolbar(World& world, AssetLibrary& assets, bool playing, bool paused, bool transport);
+    float MainToolbarHeightPx() const; // the row's height; the dock space starts below it
 
     // True when the cursor is over the toolbar's empty (draggable) area this frame; main.cpp
     // forwards it to Window so its WM_NCHITTEST can treat that region as the window's caption.
