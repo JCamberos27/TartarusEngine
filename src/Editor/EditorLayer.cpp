@@ -2355,6 +2355,20 @@ void EditorLayer::DrawProjectSettingsBody(World& /*world*/) {
         }
         if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Collision-matrix layer the Player capsule is on.");
 
+        EditorUIPrimitives::SectionHeader("Character Mover");
+        auto moverFloat = [&](const char* label, float* v, float speed, float lo, float hi, const char* fmt, const char* tip) {
+            SettingsLabel(label);
+            ImGui::DragFloat((std::string("##") + label).c_str(), v, speed, lo, hi, fmt);
+            if (ImGui::IsItemDeactivatedAfterEdit()) ProjectSettings::Save();
+            if (ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tip);
+        };
+        moverFloat("Skin width", &p.CharacterSkinWidth, 0.001f, 0.001f, 0.1f, "%.3f m", "Kept between a character's capsule and whatever it touches.");
+        moverFloat("Step height", &p.CharacterStepHeight, 0.01f, 0.0f, 1.0f, "%.2f m", "Climbed without a jump - never higher than the room above allows.");
+        moverFloat("Walkable slope", &p.CharacterWalkableSlopeDeg, 0.5f, 0.0f, 89.0f, "%.0f deg", "The steepest floor stood on.");
+        moverFloat("Step down", &p.CharacterStepDownSnap, 0.01f, 0.0f, 1.0f, "%.2f m", "How far down the feet follow the floor while walking (steps, slopes).");
+        moverFloat("Ledge tolerance", &p.CharacterLedgeTolerance, 0.01f, 0.0f, 1.0f, "%.2f",
+                   "An edge holds the capsule up while touched within this fraction of its radius from the axis;\nfurther out it slides off.");
+
         // #185 PR 8 — layer collision matrix. Lower triangle: cell (row r, col c) toggles
         // whether layers r and c collide. Applied at the next Play.
         EditorUIPrimitives::SectionHeader("Collision Matrix");
@@ -2686,6 +2700,10 @@ void EditorLayer::DrawPhysicsDebugWindow(World& world) {
         chan("Velocities", PhysicsWorld::PDD_Velocity,
              "An arrow from each awake body's center of mass, length and color by speed."); // #19
         chan("Sleeping bodies", PhysicsWorld::PDD_Sleep, "A dim marker over bodies the solver has put to sleep.");
+        chan("Character mover", PhysicsWorld::PDD_Movers,
+             "The custom character mover's last move (Project Settings > Physics > Custom character mover):\n"
+             "walls hit (blue; characters red), slopes (green), the corner slid along (yellow), the floor\n"
+             "(green held, orange only the rim on an edge) and each step tried (green climbed, red not, its headroom).");
         bool logEvents = es.LogPhysicsEvents;
         if (EditorUIPrimitives::Checkbox("Log physics events", &logEvents)) { es.LogPhysicsEvents = logEvents; EditorSettings::Save(); }
         if (ImGui::IsItemHovered())

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "NpcConfig.h"
+
 #include <glm/glm.hpp>
 
 #include <cstdint>
@@ -20,7 +22,7 @@ struct NavBuildSettings {
     float CellSize = 0.1f;       // metres, horizontal voxel size
     float CellHeight = 0.1f;     // metres, vertical
     float AgentHeight = 1.85f;
-    float AgentRadius = 0.3f;    // the soldiers' capsule: any wider and a furnished room's gaps and doorways close
+    float AgentRadius = kNpcNavRadius; // a hair over the soldiers' capsule; any wider and a furnished room's gaps and doorways close
     float AgentClimb = 0.32f;    // a step the agent walks up (the capsule's step offset)
     float AgentMaxSlope = 48.0f; // degrees
     float RegionMinSize = 8.0f;  // cells^(1/2): smaller islands are dropped

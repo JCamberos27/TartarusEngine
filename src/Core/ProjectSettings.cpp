@@ -122,6 +122,11 @@ void Load() {
         g_Physics.SolverIterations   = std::clamp(num("solverIterations", g_Physics.SolverIterations), 1, 64);
         g_Physics.PlayerPushStrength = std::clamp(num("playerPushStrength", g_Physics.PlayerPushStrength), 0.0f, 50.0f);
         g_Physics.PlayerLayer        = std::clamp(num("playerLayer", g_Physics.PlayerLayer), 0, LayerRegistry::kCount - 1);
+        g_Physics.CharacterSkinWidth        = std::clamp(num("characterSkinWidth", g_Physics.CharacterSkinWidth), 0.001f, 0.1f);
+        g_Physics.CharacterStepHeight       = std::clamp(num("characterStepHeight", g_Physics.CharacterStepHeight), 0.0f, 1.0f);
+        g_Physics.CharacterWalkableSlopeDeg = std::clamp(num("characterWalkableSlope", g_Physics.CharacterWalkableSlopeDeg), 0.0f, 89.0f);
+        g_Physics.CharacterStepDownSnap     = std::clamp(num("characterStepDownSnap", g_Physics.CharacterStepDownSnap), 0.0f, 1.0f);
+        g_Physics.CharacterLedgeTolerance   = std::clamp(num("characterLedgeTolerance", g_Physics.CharacterLedgeTolerance), 0.0f, 1.0f);
         if (const auto m = p.find("layerCollision"); m != p.end() && m->is_array()) { // #185 PR 8
             // #150: a file from the 8-layer era stores 8-bit rows; the layers it never knew about
             // (8..31) collide with everything, as new layers do by default.
@@ -256,6 +261,11 @@ void Save() {
         {"solverIterations", g_Physics.SolverIterations},
         {"playerPushStrength", g_Physics.PlayerPushStrength},
         {"playerLayer", g_Physics.PlayerLayer},
+        {"characterSkinWidth", g_Physics.CharacterSkinWidth},
+        {"characterStepHeight", g_Physics.CharacterStepHeight},
+        {"characterWalkableSlope", g_Physics.CharacterWalkableSlopeDeg},
+        {"characterStepDownSnap", g_Physics.CharacterStepDownSnap},
+        {"characterLedgeTolerance", g_Physics.CharacterLedgeTolerance},
         {"layerCollision", std::vector<unsigned>(std::begin(g_Physics.LayerCollisionMask), std::end(g_Physics.LayerCollisionMask))},
     };
     root["time"] = {

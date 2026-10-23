@@ -191,7 +191,7 @@ if(NOT recastnavigation_POPULATED)
   FetchContent_Populate(recastnavigation)
 endif()
 
-# --- NVIDIA PhysX 5 (collision / rigid bodies / character controller — #185) --------------
+# --- NVIDIA PhysX 5 (collision / rigid bodies / character mover — #185) --------------
 # Built from source, pinned by git tag, nothing vendored — issue #185's "Path B", but via
 # ExternalProject rather than FetchContent_MakeAvailable. PhysX's public CMake cannot share
 # this tree: it FORCE-overwrites CMAKE_CONFIGURATION_TYPES to its own set
@@ -226,7 +226,6 @@ set(_physx_link_libs
   PhysXCooking                   # PxCreateConvexMesh / PxCreateTriangleMesh (#185 PR 6)
   PhysXExtensions_static        # PxDefaultCpuDispatcherCreate, PxDefaultPvdSocketTransportCreate
   PhysXPvdSDK_static            # PxCreatePvd (used only under TARTARUS_PHYSX_PVD, cheap to always link)
-  PhysXCharacterKinematic_static # PxCreateControllerManager + PxCapsuleController (#185 PR 3)
 )
 set(_physx_runtime_dlls PhysX PhysXCommon PhysXFoundation PhysXCooking)
 
