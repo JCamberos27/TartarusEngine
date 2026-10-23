@@ -94,7 +94,8 @@ void NpcTest::DoorsDrive(Player& player, float dt, float& wantYaw, float& wantPi
     wantPitch = -3.0f;
     wantYaw = player.Cam.Yaw;
     m_DDt = dt;
-    // The shut checks: stood still in the middle of the opening, facing through it.
+    // The shut checks: stood still in the middle of the opening, looking at the door coming at him (back, toward the hinge:
+    // it swings shut from there), so a recording shows it stop and ease back.
     if (m_DShut >= 0 && m_DShut < (int)m_DDoors.size()) {
         const DoorSpot& d = m_DDoors[(size_t)m_DShut];
         if (!m_DShutPlaced) {
@@ -104,7 +105,8 @@ void NpcTest::DoorsDrive(Player& player, float dt, float& wantYaw, float& wantPi
             player.Cam.Position = feet + glm::vec3(0.0f, player.EyeHeight, 0.0f);
             m_DShutPlaced = true;
         }
-        wantYaw = player.Cam.Yaw = YawOf(d.Normal);
+        wantYaw = player.Cam.Yaw = YawOf(-d.Normal - d.Along);
+        wantPitch = -12.0f;
         return;
     }
     if (!m_DReady || m_DDone || m_DDoor >= (int)m_DDoors.size()) return;
