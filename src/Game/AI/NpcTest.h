@@ -7,6 +7,7 @@
 #include <utility>
 #include <vector>
 
+class AssetLibrary;
 class FirstPersonPresentation;
 class NpcDirector;
 struct Npc;
@@ -63,6 +64,9 @@ public:
     void Drive(Player& player, FirstPersonPresentation& weapon, NpcDirector& npcs, PlayerVitals& vitals, float dt);
     // After everyone's late pose: checks and the log.
     void After(World& world, NpcDirector& npcs, const PlayerVitals& vitals, const Player& player);
+    // On Play, before the squad starts: the Apartment Hallway scenarios bring their own two soldiers (301's living
+    // room) and squad settings, which the scene itself no longer carries.
+    void AddSceneSquad(World& world, AssetLibrary& assets) const;
     bool Done() const { return m_Done; }
     int Checks() const { return m_Checks; }
     int Failures() const { return m_Failures; }

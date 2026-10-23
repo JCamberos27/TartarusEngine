@@ -91,9 +91,9 @@ Step ClickRowIfAny(int nth) {
     };
     return click;
 }
-bool GameShown() {
-    ImGuiWindow* w = ImGui::FindWindowByName(EditorPanels::Game);
-    return w && w->WasActive && !w->Hidden;
+// The unified viewport showing the game (the Play dissolve finished).
+bool GameShown(Ctx& c) {
+    return c.E.GetViewportMode() == EditorLayer::ViewportMode::Game && !c.E.ViewFadeActive() && ChromeUi::Shown(EditorPanels::Scene);
 }
 } // namespace smoke_scenes
 
@@ -154,8 +154,8 @@ void RegisterScenesTests() {
             Do("play", [](Ctx& c) { X::RequestPlayStop(c.E); }),
             UntilSeconds("in play", [](Ctx& c) { return X::InPlay(c.E); }, 60),
             WaitSeconds(2.0),
-            UntilSeconds("the Game view is shown", [](Ctx&) { return GameShown(); }, 10),
-            Shot("game", {"###Game"}),
+            UntilSeconds("the Game view is shown", [](Ctx& c) { return GameShown(c); }, 10),
+            Shot("game", {"###Scene"}),
             Do("stop", [](Ctx& c) { X::RequestPlayStop(c.E); }),
             UntilSeconds("stopped", [](Ctx& c) { return !X::InPlay(c.E); }, 60),
             Wait(3),

@@ -45,6 +45,7 @@ class Camera;
 class AssetLibrary;
 class ScreenBlur;
 class Framebuffer;
+class GameViewPanel;
 
 // Rect = Unity's "Rect Tool" adapted to 3D: translate handles plus bounding-box corner/edge
 // handles for non-uniform scaling, in one combined gizmo (ImGuizmo's TRANSLATE | BOUNDS).
@@ -196,6 +197,12 @@ public:
     // EditorModuleToolbar.cpp's file comment). main.cpp calls this every frame, unconditionally.
     // Clicks only raise request flags — main.cpp owns the play/maximize/cursor state itself.
     void DrawViewportActionBar(World& world, AssetLibrary& assets, bool playing, bool maximized, bool paused);
+    // The main toolbar row under the menus (EditorLayer_ToolPalette.cpp), Unreal-style: Save,
+    // the transform tools, space / pivot, snap and the Tools menu on the left; Play / Pause /
+    // Step centred; Stats / Console / History / Preferences on the right. `transport` false hides
+    // the Play cluster (prefab mode has its own bar).
+    void DrawMainToolbar(World& world, AssetLibrary& assets, bool playing, bool paused, bool transport);
+    float MainToolbarHeightPx() const; // the row's height; the dock space starts below it
 
     // True when the cursor is over the toolbar's empty (draggable) area this frame; main.cpp
     // forwards it to Window so its WM_NCHITTEST can treat that region as the window's caption.
@@ -607,8 +614,34 @@ public:
     // (they stay grouped/tabbed — this only changes which is selected). Scene defaults to
     // already-requested so the first frame starts there; main.cpp requests Scene on Stop and
     // Game on Play, so the viewport you're shown always matches what you just did.
-    void RequestSceneTabFocus() { m_FocusSceneTabRequested = true; }
-    void RequestGameTabFocus() { m_FocusGameTabRequested = true; }
+    // Show the scene / the game. In the unified viewport (Game not popped out) these switch the
+    // Scene panel's mode, with the glide-and-dissolve on Play / Stop (EditorLayer_ViewportMode.cpp);
+    // with Game popped out into its own window they bring that tab forward as before.
+    void RequestSceneTabFocus();
+    void RequestGameTabFocus();
+
+    // --- Unified viewport (EditorLayer_ViewportMode.cpp) -----------------------------------------
+    // One panel shows the scene or the game in the same rect: a Scene | Game switch in its header,
+    // Play switches to Game (the editor camera glides to the player's view while the game image
+    // dissolves in), Stop comes back. Window > Game pops the Game view out into its own window.
+    enum class ViewportMode { Scene, Game };
+    void SetGameViewPanel(GameViewPanel* panel) { m_GameView = panel; }
+    ViewportMode GetViewportMode() const { return m_ViewportMode; }
+    // `glide`: the camera move (Play / Stop); without it, just the dissolve.
+    void SetViewportMode(ViewportMode mode, bool glide = false);
+    bool GameViewPoppedOut() const;
+    // main.cpp: render the scene / the embedded game this frame (both while dissolving).
+    bool SceneImageWanted() const;
+    bool GameImageWanted() const;
+    // main.cpp, every frame before the Scene render: advances the dissolve and moves the editor
+    // camera along the glide (restored to where it was when the move ends). `gameCam` is the
+    // camera the game renders through; `playing` whether Play is on.
+    void UpdateViewFade(Camera& editorCamera, const Camera& gameCam, bool playing);
+    bool ViewFadeActive() const { return m_ViewFade.Active; }
+    // True once after the header's Game button was dragged out: main.cpp pops the Game view out
+    // under the cursor and starts dragging it, so it docks wherever it's dropped (the dock targets
+    // show as for any tab). Closing that tab puts Game back in the viewport.
+    bool ConsumeGameTearOff() { const bool v = m_GameTearOff; m_GameTearOff = false; return v; }
     // Applies a pending Request*TabFocus() (no-op otherwise) — main.cpp calls this once per
     // editor-UI frame, AFTER both Scene's and Game's Begin() calls have run. The request stays
     // pending until it actually lands on a live dock node. Deliberately doesn't go through
@@ -769,7 +802,7 @@ public:
     // then leaves the desktop showing behind the glass instead of the black canvas.
     void SetWindowSeeThrough(bool v) { m_WindowSeeThrough = v; }
     bool DesktopShowsThrough() const { return m_WindowSeeThrough && GlassThemeActive(); }
-    bool OverlaysHidden() const { return m_HideOverlaysThisFrame; }
+    bool OverlaysHidden() const { return m_HideOverlaysThisFrame || m_ViewFade.Active; }
     // Smoke-test screenshots: hides the nav gizmo, collider wires and selection outlines until cleared.
     bool CleanShots() const { return m_CleanShots; }
 
@@ -988,6 +1021,19 @@ private:
     // Defaults to a plausible full-window size so nothing divides by zero if anything reads
     // these before the first Draw() has run; overwritten every editor-mode frame after that.
     bool m_FocusSceneTabRequested = true;
+    GameViewPanel* m_GameView = nullptr;
+    bool m_GameTearOff = false;
+    ViewportMode m_ViewportMode = ViewportMode::Scene;
+    struct ViewFade {
+        bool Active = false, ToGame = true, Glide = false;
+        double Start = 0.0;
+        float Duration = 0.5f, Alpha = 0.0f; // Alpha: the game image's opacity this frame
+    } m_ViewFade;
+    struct ViewPose { glm::vec3 Position{0.0f}; float Yaw = 0.0f, Pitch = 0.0f, Fov = 75.0f; bool Valid = false; };
+    ViewPose m_ScenePose;    // the editor camera when the view left the scene (restored on the way back)
+    ViewPose m_LastGamePose; // the game camera's last pose while Game was showing (the Stop glide's start)
+    void FinishViewFade(Camera* editorCamera);
+    void DrawViewportModeSwitch(float btnH);
     bool m_FocusGameTabRequested = false;
     // Seed the bottom dock node showing the Asset Browser tab (not Console) whenever the default
     // layout is (re)built. Retried each frame until its dock node exists — same pattern as the
@@ -1399,7 +1445,7 @@ private:
     bool m_GizmoLocalSpace = false; // false = world-aligned handles, true = aligned to the object's own rotation
     // Phase 3 item 6 (audit #5) — raised from 0.09, which read as cramped against the object;
     // still overridable via Preferences > Viewport's "Gizmo size" slider (0.05-0.40).
-    float m_GizmoSize = 0.15f;
+    float m_GizmoSize = 0.10f;
     bool m_GizmoEngaged = false;
     bool m_GizmoUsing = false; // see GizmoUsing() above — narrower than m_GizmoEngaged
     bool m_GizmoWasUsing = false;
@@ -2601,13 +2647,12 @@ private:
     // quaternion, so this converts to/from a quaternion around the call into the library.
     void DrawViewGizmo(World& world, Camera& editorCamera);
 
-    // Phase 3 item 3 — the vertical tool palette docked to the Scene viewport's left edge
-    // (Blender's T-panel model, audit #5 Q7): Hand/Translate/Rotate/Scale/Rect/Universal,
-    // Measure, Duplicate Array, and the Local/World + Pivot/Center toggles that used to live in
-    // the top toolbar strip. Drawn inside Scene's own Begin/End (EditorLayer.cpp) as a child
-    // region with its own opaque plate, not a separate floating window — collapsible to a thin
-    // strip via EditorSettings::ToolPaletteCollapsed.
-    void DrawToolPalette(World& world, Camera& editorCamera);
+    // The Scene panel's header strip (EditorLayer_ToolPalette.cpp): the transform tools, space,
+    // snap and the Tools dropdown on the left, draw mode / projection / gizmos / grid / camera
+    // speed on the right. Drawn at the top of Scene's content, above the image, so nothing
+    // floats over the scene; the image fills what's left (and the scene render is sized to it).
+    void DrawViewportHeader(World& world, Camera& editorCamera);
+    float ViewportHeaderHeight() const;
 
     // --- Glass theme (EditorLayer_Glass.cpp) -------------------------------------------------
     // Created on first use while Glass is active, destroyed when it's switched off.
@@ -2615,6 +2660,9 @@ private:
     unsigned int m_MotionDockspaceId = 0;      // the editor dock space, for Glass::DockFocusRim
     bool m_MotionPlaying = false;              // last DrawViewportActionBar's play state, for
     bool m_MotionPaused = false;               //   Glass::DrawPlayFrame
+    bool m_TransportMaximized = false;         // ... and maximized play, for the title-bar transport
+    double m_PlayStartedAt = -1.0;             // ImGui time Play began (the title bar's play clock)
+    float m_TitleTransportW = 0.0f;            // last frame's transport width, to centre it
     int  m_ToolGlideLast = -2;                 // the tool rail's last active tool (-2 = none yet)
     int m_PendingThemeId = -1;                 // RequestEditorTheme, applied in BeginFrame
     void ApplyPendingTheme();                  // BeginFrame, before ImGui::NewFrame

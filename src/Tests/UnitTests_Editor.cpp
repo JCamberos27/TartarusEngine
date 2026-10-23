@@ -500,8 +500,10 @@ void TestPrefsMigrationToCleanView() {
     s.LightGizmoSelectedOnly = false;
     s.SnapTranslation = 0.25f;
     s.LastScenePath = "scenes/Keep.json";
+    s.GizmoSize = 0.15f; // the old default
     s.PrefsVersion = 1;
     CHECK(EditorSettings::MigratePrefs(s, 1)); // asks for the clean dock once
+    CHECK(s.GizmoSize == EditorSettings{}.GizmoSize);
     CHECK(s.PrefsVersion == EditorSettings::kPrefsVersion);
     CHECK(s.EditorThemeId == 1);
     CHECK(!s.ShowColliders && s.CollidersSelectedOnly);
@@ -510,6 +512,10 @@ void TestPrefsMigrationToCleanView() {
     CHECK(s.EntityIconsMode == 1);
     CHECK(s.SnapTranslation == 0.25f);              // not a view default: kept
     CHECK(s.LastScenePath == "scenes/Keep.json");
+    // v2 -> v3 only slims an untouched gizmo size; one you set stays.
+    s.GizmoSize = 0.22f;
+    CHECK(!EditorSettings::MigratePrefs(s, 2));
+    CHECK(s.GizmoSize == 0.22f);
     // Already current: nothing changes and no layout reset.
     s.ShowColliders = true;
     CHECK(!EditorSettings::MigratePrefs(s, EditorSettings::kPrefsVersion));

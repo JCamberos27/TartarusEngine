@@ -250,6 +250,7 @@ void PlaySession::Start() {
         m_PlayerVitals.Reset(vitals);
         // The enemy squad, when the scene has NPC Spawns - not under --weapon-test / --stock-probe, which put the
         // player's gun through its paces alone (a squad would shoot the player or step into the muzzle's line).
+        if (m_NpcTest) m_NpcTest->AddSceneSquad(m_World, m_Assets);
         const bool squadStarted = !m_WeaponTest && m_NpcDirector.Start(m_World, m_Assets, &fp);
         if (m_NpcTest) std::printf("[NpcTest] squad %s (%zu spawn points)\n", squadStarted ? "started" : "not started", m_NpcDirector.SpawnPoints().size());
         if (squadStarted) {
