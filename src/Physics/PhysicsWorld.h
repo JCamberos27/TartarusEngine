@@ -82,6 +82,8 @@ bool GetCharacterCapsule(float outFootPos[3], float* outRadius, float* outCylHal
 // Sweep-move the capsule by `disp` (world units, already scaled by dt at the call site).
 // Returns a mask of CharacterCollision bits; 0 when there is no character or world.
 unsigned MoveCharacter(const float disp[3], float dt);
+// The walls the last MoveCharacter ran into (its side touches): each one's normal, world space, up to `max`; how many.
+int LastMoveWallNormals(float (*out)[3], int max);
 
 // Change the capsule's cylinder half-height (crouching), keeping the feet where they are.
 // False when there is no character.

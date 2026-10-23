@@ -85,6 +85,9 @@ public:
     void Update(float dt, World& world, struct GLFWwindow* window, bool readInput = true);
 };
 
+// `v` without the part of it running into any of the walls (normals, horizontal): along one wall, along the corner of two.
+glm::vec3 PlayerClipVelocity(const glm::vec3& v, const glm::vec3* walls, int count);
+
 // The horizontal move one step closer to the target: an exponential approach with time constant
 // accelTime (speeding up) or decelTime (slowing down or turning away), so it is the same at any frame
 // rate. A time of 0 snaps to the target.

@@ -99,12 +99,17 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
     const glm::vec3 feet = Cam.Position - glm::vec3(0.0f, eye, 0.0f);
     if (!PhysicsWorld::IsActive()) { Cam.Position += Velocity * dt; Grounded = false; return; }
     if (!hasCharacter) PhysicsWorld::CreateCharacter(radius, stand, &feet.x);
-    const glm::vec3 from = CharacterFeet();
     const unsigned flags = MoveCharacter(Velocity * dt, dt);
-    // Blocked by a wall: carry on at the speed actually travelled, not the speed asked for.
+    // Blocked by a wall: the part of the velocity into it goes, the part along it stays. (Cutting it to the speed actually
+    // travelled took the slide along the wall too: a jamb grazed in a doorway left the player crawling until the
+    // acceleration caught up.)
     if ((GroundAccelTime > 0.0f || GroundDecelTime > 0.0f || AirAccelTime > 0.0f) && dt > 0.0f) {
-        glm::vec3 travelled = (CharacterFeet() - from) / dt; travelled.y = 0.0f;
-        if (glm::length(travelled) < glm::length(glm::vec2(Velocity.x, Velocity.z))) { Velocity.x = travelled.x; Velocity.z = travelled.z; }
+        float n[8][3];
+        glm::vec3 walls[8];
+        const int count = PhysicsWorld::LastMoveWallNormals(n, 8);
+        for (int i = 0; i < count; ++i) walls[i] = glm::vec3(n[i][0], 0.0f, n[i][2]);
+        const glm::vec3 v = PlayerClipVelocity(glm::vec3(Velocity.x, 0.0f, Velocity.z), walls, count);
+        Velocity.x = v.x; Velocity.z = v.z;
     }
     Grounded = (flags & PhysicsWorld::CC_DOWN) != 0;
     // Walking off a step down: stay on the ground rather than fall the last few centimetres.
@@ -121,6 +126,29 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
         Cam.Position = RespawnFeet + glm::vec3(0.0f, eye, 0.0f);
         Velocity = glm::vec3(0.0f);
     }
+}
+
+glm::vec3 PlayerClipVelocity(const glm::vec3& v, const glm::vec3* walls, int count) {
+    constexpr float kEps = 1e-5f;
+    glm::vec3 out = v;
+    for (int i = 0; i < count; ++i) {
+        const float li = glm::length(walls[i]);
+        if (li < 1e-4f) continue;
+        const glm::vec3 ni = walls[i] / li;
+        if (glm::dot(out, ni) >= -kEps) continue;
+        glm::vec3 slid = out - ni * glm::dot(out, ni);
+        for (int j = 0; j < count; ++j) {
+            const float lj = glm::length(walls[j]);
+            if (j == i || lj < 1e-4f || glm::dot(slid, walls[j] / lj) >= -kEps) continue;
+            // Into a second wall too: along the corner between them, or stopped where they meet head on.
+            glm::vec3 crease = glm::cross(ni, walls[j] / lj);
+            const float cl = glm::length(crease);
+            slid = cl < 1e-4f ? glm::vec3(0.0f) : crease / cl * glm::dot(out, crease / cl);
+            break;
+        }
+        out = slid;
+    }
+    return glm::dot(out, v) > 0.0f ? out : glm::vec3(0.0f);
 }
 
 glm::vec3 PlayerApproachVelocity(const glm::vec3& current, const glm::vec3& target, float dt, float accelTime, float decelTime) {
