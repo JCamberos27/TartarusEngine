@@ -2841,7 +2841,10 @@ bool EditorLayer::OtherWindowOwnsKeyboard() const {
     // The menu strip: closing a menu hands focus back to it, which blocked every global shortcut
     // (Ctrl+Shift+H after Create > Cube did nothing) until something else was clicked.
     if (nav == ImGui::FindWindowByName("##Toolbar")) return false;
-    return true;                                               // a real floating window has focus
+    // The main toolbar row under it: clicking Local / World or the snap step focuses it, and every
+    // shortcut after (Alt+X, 5, W) went nowhere until the viewport was clicked.
+    if (nav == ImGui::FindWindowByName("##MainToolbar")) return false;
+    return true;                                              // a real floating window has focus
 }
 
 void EditorLayer::KeepDockspaceAlive() {
