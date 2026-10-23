@@ -148,15 +148,6 @@ PxFilterFlags EngineFilterShader(
     return PxFilterFlag::eDEFAULT;
 }
 
-// The CCT hit report: push dynamic bodies the Player walks into, and remember a kinematic body
-// it's standing on so MoveCharacter can carry it along (#185 PR 10).
-struct PlayerHitReport : PxUserControllerHitReport {
-    PhysicsState* owner = nullptr;
-    void onShapeHit(const PxControllerShapeHit& hit) override;
-    void onControllerHit(const PxControllersHit&) override {}
-    void onObstacleHit(const PxControllerObstacleHit&) override {}
-};
-
 // #167 - everything that doesn't depend on the scene lives for the whole editor session: the
 // foundation, PxPhysics, the CPU dispatcher, materials and the cooked-mesh cache. Before, all of
 // it was torn down on every Stop and rebuilt on every Play, so each Play re-cooked every mesh
@@ -190,7 +181,6 @@ struct PhysicsState {
           defaultMaterial(core.defaultMaterial), materialCache(core.materialCache),
           convexCache(core.convexCache), triangleCache(core.triangleCache) {}
     SimEventCallback       simCb;
-    PlayerHitReport        hitReport;
     PxU32                  layerMask[32] = {}; // #185 PR 8 constant block; one row per layer (#150), filled at Create
     // Borrowed from PhysicsCore (#167) - never released here.
     PxFoundation*          foundation   = nullptr;
@@ -198,10 +188,7 @@ struct PhysicsState {
     PxDefaultCpuDispatcher* dispatcher  = nullptr;
     PxScene*              scene         = nullptr;
     PxMaterial*           defaultMaterial = nullptr;
-    PxControllerManager*  controllerMgr = nullptr; // #185 PR 3
-    PxController*         controller    = nullptr; // the Play-mode Player's capsule (lazy)
-    // The Player's capsule on the custom mover (ProjectSettings UseCustomCharacterMover) instead of `controller`: a
-    // kinematic capsule of our own, moved by CharacterMover's collide-and-slide.
+    // The Play-mode Player's capsule (lazy): a kinematic capsule of our own, moved by CharacterMover's collide-and-slide.
     struct CharacterBody {
         PxRigidDynamic* Actor = nullptr;
         PxShape* Shape = nullptr;
@@ -215,14 +202,12 @@ struct PhysicsState {
     float playerDoorAssist = 0.0f, playerDoorAssistMaxAngle = 35.0f; // SetCharacterDoorwayAssist
     // NPC capsules, indexed by CharacterId (a released slot stays null). npcActors: their actors,
     // for the query filters that skip characters.
-    // On the custom mover a soldier has `body` instead of `ctrl` (the setting is read when he's made).
     struct NpcCharacter {
-        PxController* ctrl = nullptr;
         std::uint32_t entity = 0xFFFFFFFFu;
         bool passRagdolls = false;
         std::unique_ptr<CharacterBody> body;
-        bool Used() const { return ctrl || body; }
-        PxRigidActor* Actor() const { return body ? static_cast<PxRigidActor*>(body->Actor) : ctrl ? ctrl->getActor() : nullptr; }
+        bool Used() const { return body != nullptr; }
+        PxRigidActor* Actor() const { return body ? static_cast<PxRigidActor*>(body->Actor) : nullptr; }
     };
     std::vector<NpcCharacter>               npcs;
     std::unordered_set<const PxRigidActor*> npcActors;
@@ -293,7 +278,7 @@ struct PhysicsState {
         float Rest = 0.0f; // seconds asleep (unfrozen)
     };
     std::vector<Ragdoll> ragdolls;
-    std::vector<int> thawRequests; // frozen ragdolls the Player walked into (the CCT's hit report): thawed before the next step
+    std::vector<int> thawRequests; // frozen ragdolls the Player walked into (the Player's character hit handling): thawed before the next step
     // Per-bone hitboxes of living NPCs (see CreateNpcHitboxes): their kinematic actors, the capsule each shadows while
     // active. hitboxActors: every hitbox actor, for the query filters; hitboxedCapsules: the capsules currently shadowed.
     struct Hitboxes { std::vector<PxRigidDynamic*> Bodies; const PxRigidActor* Capsule = nullptr; bool Active = false; };
@@ -319,8 +304,6 @@ struct PhysicsState {
     PxVec3          playerGroundLastPos{0.0f};
     PxQuat          playerGroundLastRot{PxIdentity};
     bool            playerGroundHitThisMove = false;
-    // The walls (side touches) the move in progress ran into, for the Player to take the part of its velocity into them off.
-    std::vector<PxVec3> playerWallNormals;
     float           playerMoveDt = 0.0f;  // the step of the move in progress (MoveCharacter), for the push
     float           platformYawDeltaDeg = 0.0f; // this frame's platform spin, for Player yaw
     // #168 - each kinematic's pose as authored THIS frame (its kinematic target). The simulated
@@ -1055,14 +1038,6 @@ void HandleCharacterHit(PhysicsState& s, PxRigidActor* actor, const PxShape* sha
     PxRigidBodyExt::addForceAtPos(*body, dir * (strength * mass), pos, PxForceMode::eIMPULSE, true);
 }
 
-void PlayerHitReport::onShapeHit(const PxControllerShapeHit& hit) {
-    if (!owner || !hit.actor) return;
-    if (std::abs(hit.worldNormal.y) < 0.7f && owner->playerWallNormals.size() < 8) owner->playerWallNormals.push_back(hit.worldNormal);
-    HandleCharacterHit(*owner, hit.actor, hit.shape, PxVec3(hit.worldNormal.x, hit.worldNormal.y, hit.worldNormal.z),
-                       PxVec3(hit.dir.x, hit.dir.y, hit.dir.z),
-                       PxVec3((float)hit.worldPos.x, (float)hit.worldPos.y, (float)hit.worldPos.z));
-}
-
 // #167 - stand up the session-lifetime half once; later Plays reuse it.
 bool EnsureCore() {
     if (g_Core) return true;
@@ -1150,7 +1125,6 @@ void Create(const World& world) {
 
     auto* s = new PhysicsState(*g_Core);
     s->simCb.owner = s;      // #185 PR 5
-    s->hitReport.owner = s;  // #185 PR 10
     // #185 PR 8 — snapshot the layer collision matrix; PhysX copies it as the filter constant block.
     static_assert(LayerRegistry::kCount == 32, "the filter shader's constant block is one PxU32 row per layer");
     for (int i = 0; i < 32; ++i) s->layerMask[i] = ProjectSettings::Physics().LayerCollisionMask[i];
@@ -1180,8 +1154,6 @@ void Create(const World& world) {
         return;
     }
 
-    s->controllerMgr = PxCreateControllerManager(*s->scene);
-
     g_State = s;
     ++g_SimulationGeneration;
     Log::Info("PhysX world created (" + std::to_string(g_Core->workers) + " worker threads).");
@@ -1200,9 +1172,6 @@ void Destroy() {
     // (physics, dispatcher, materials, cooked meshes) stays up for the next Play (#167).
     for (PxJoint* j : s->joints)               if (j) j->release(); // #185 PR 11 — before the scene
     for (auto& r : s->ragdolls) { if (r.Frozen && r.Art) { r.Art->release(); r.Art = nullptr; } if (r.Good) { r.Good->release(); r.Good = nullptr; } for (PxJoint* j : r.Attach) if (j) j->release(); if (r.Mat) { r.Mat->release(); r.Mat = nullptr; } if (r.SlickMat) { r.SlickMat->release(); r.SlickMat = nullptr; } } // (the articulations go with the scene)
-    if (s->controller)      s->controller->release();
-    for (auto& n : s->npcs) if (n.ctrl) n.ctrl->release();
-    if (s->controllerMgr)   s->controllerMgr->release();
     if (s->scene)           s->scene->release();
 
     delete s;
@@ -1242,18 +1211,10 @@ bool IsActive() {
 // Step — cheap for the handful of trigger shapes a scene has.
 void CollectPlayerTriggers(std::set<std::uint32_t>& out) {
     out.clear();
-    if (!g_State->controller && !g_State->playerBody) return;
-    PxCapsuleGeometry geom;
-    PxVec3 centre;
-    if (const auto* b = g_State->playerBody.get()) {
-        geom = PxCapsuleGeometry(b->Cap.Radius, b->Cap.HalfHeight);
-        centre = ToPx(b->Feet + glm::vec3(0.0f, b->Cap.Radius + b->Cap.HalfHeight, 0.0f));
-    } else {
-        auto* cap = static_cast<PxCapsuleController*>(g_State->controller);
-        const PxExtendedVec3 c = cap->getPosition();
-        geom = PxCapsuleGeometry(cap->getRadius(), 0.5f * cap->getHeight());
-        centre = PxVec3((float)c.x, (float)c.y, (float)c.z);
-    }
+    if (!g_State->playerBody) return;
+    const auto* b = g_State->playerBody.get();
+    const PxCapsuleGeometry geom(b->Cap.Radius, b->Cap.HalfHeight);
+    const PxVec3 centre = ToPx(b->Feet + glm::vec3(0.0f, b->Cap.Radius + b->Cap.HalfHeight, 0.0f));
     const PxTransform pose(centre, PxQuat(PxHalfPi, PxVec3(0, 0, 1))); // capsule axis X -> up
 
     // #191 — the touch buffer grows until PhysX reports every overlap (it used to be a fixed 16,
@@ -1532,8 +1493,7 @@ struct ExcludeActorFilter : PxQueryFilterCallback {
 };
 const PxRigidActor* PlayerActor() {
     if (!g_State) return nullptr;
-    if (g_State->playerBody) return g_State->playerBody->Actor;
-    return g_State->controller ? g_State->controller->getActor() : nullptr;
+    return g_State->playerBody ? g_State->playerBody->Actor : nullptr;
 }
 
 bool Raycast(const float origin[3], const float dir[3], float maxDistance, RaycastHit& outHit) {
@@ -1571,41 +1531,16 @@ bool Raycast(const float origin[3], const float dir[3], float maxDistance, Rayca
     return true;
 }
 
-// --- Character controller ---------------------------------------------------------------
+// --- Player character ---------------------------------------------------------------
 
 bool HasCharacter() {
-    return g_State && (g_State->controller || g_State->playerBody);
+    return g_State && g_State->playerBody;
 }
 
 namespace {
-constexpr float kStepOffset = 0.3f;
-constexpr float kContactOffset = 0.05f;
-
-// The capsule controller every character uses, the player's and the NPCs' alike.
-// (The caller places it: `position` is the capsule centre.)
-PxCapsuleControllerDesc CapsuleControllerDesc(float radius, float cylinderHalfHeight) {
-    PxCapsuleControllerDesc desc;
-    desc.radius        = radius;
-    desc.height        = 2.0f * cylinderHalfHeight; // cylinder segment (sphere-centre to sphere-centre)
-    desc.upDirection   = PxVec3(0.0f, 1.0f, 0.0f);
-    desc.stepOffset    = kStepOffset;           // auto-climb ledges up to this tall
-    desc.slopeLimit    = std::cos(0.8726646f);  // walkable up to ~50 degrees
-    desc.contactOffset = kContactOffset;
-    desc.material      = g_State->defaultMaterial;
-    desc.climbingMode  = PxCapsuleClimbingMode::eCONSTRAINED; // don't let the sphere cap boost climbs
-    return desc;
-}
-
-// --- The custom character mover (UseCustomCharacterMover) ---------------------------------
+// --- The custom character mover ------------------------------------------------------------
 using CharacterBody = PhysicsState::CharacterBody;
 const PxQuat kCapsuleUp(PxHalfPi, PxVec3(0.0f, 0.0f, 1.0f)); // PhysX capsules lie along X
-
-bool UseCharacterMover() {
-#pragma warning(suppress : 4996)
-    const char* env = std::getenv("TARTARUS_CHARACTER_MOVER"); // tests: 1 / 0 over the project setting
-    if (env && *env) return *env != '0';
-    return ProjectSettings::Physics().UseCustomCharacterMover;
-}
 
 MoverSettings ProjectMoverSettings() {
     const auto& p = ProjectSettings::Physics();
@@ -1682,7 +1617,7 @@ struct PhysxMoverWorld : IMoverWorld {
     };
     bool IsCharacter(const PxRigidActor* a) const {
         return a && (S.npcActors.count(a) || S.hitboxActors.count(a) ||
-                     (S.playerBody && a == S.playerBody->Actor) || (S.controller && a == S.controller->getActor()));
+                     (S.playerBody && a == S.playerBody->Actor));
     }
     static PxTransform Pose(const MoverCapsule& cap, const glm::vec3& feet) {
         return PxTransform(ToPx(feet + glm::vec3(0.0f, cap.Radius + cap.HalfHeight, 0.0f)), kCapsuleUp);
@@ -1755,40 +1690,9 @@ struct PhysxMoverWorld : IMoverWorld {
 void CreateCharacter(float radius, float cylinderHalfHeight, const float footPos[3]) {
     if (!g_State || HasCharacter()) return;
     if (radius <= 0.0f || cylinderHalfHeight <= 0.0f) return;
-    if (UseCharacterMover()) {
-        const PxU32 pl = (PxU32)std::clamp(ProjectSettings::Physics().PlayerLayer, 0, 31);
-        g_State->playerBody = MakeBody(*g_State, MoverCapsule{radius, cylinderHalfHeight}, glm::vec3(footPos[0], footPos[1], footPos[2]),
-                                       (std::uint32_t)kPlayerEntity, PxFilterData(1u << pl, pl, 0u, 0u));
-        return;
-    }
-    if (!g_State->controllerMgr) return;
-
-    const float halfCapsule = radius + cylinderHalfHeight; // foot -> centre distance
-
-    PxCapsuleControllerDesc desc = CapsuleControllerDesc(radius, cylinderHalfHeight);
-    desc.position     = PxExtendedVec3(footPos[0], footPos[1] + halfCapsule, footPos[2]);
-    desc.reportCallback = &g_State->hitReport;               // #185 PR 10 — push bodies / ride platforms
-
-    if (!desc.isValid()) {
-        Log::Error("PhysX: capsule controller desc invalid — Player will not collide this session.");
-        return;
-    }
-    g_State->controller = g_State->controllerMgr->createController(desc);
-    if (!g_State->controller) {
-        Log::Error("PhysX: createController failed — Player will not collide this session.");
-        return;
-    }
-    // Tag the CCT actor so anything that reads userData (trigger callback, a future raycast
-    // hit on the player) can tell it apart from a real entity (#185 PR 5). Put it on the
-    // project-configured Player layer so the collision matrix applies to it (#185 PR 8).
-    if (PxRigidActor* a = g_State->controller->getActor()) {
-        a->userData = reinterpret_cast<void*>(static_cast<std::uintptr_t>(kPlayerEntity));
-        const PxU32 pl = (PxU32)std::clamp(ProjectSettings::Physics().PlayerLayer, 0, 31);
-        const PxU32 nbShapes = a->getNbShapes();
-        std::vector<PxShape*> shapes(nbShapes);
-        a->getShapes(shapes.data(), nbShapes);
-        for (PxShape* sh : shapes) sh->setSimulationFilterData(PxFilterData(1u << pl, pl, 0u, 0u));
-    }
+    const PxU32 pl = (PxU32)std::clamp(ProjectSettings::Physics().PlayerLayer, 0, 31);
+    g_State->playerBody = MakeBody(*g_State, MoverCapsule{radius, cylinderHalfHeight}, glm::vec3(footPos[0], footPos[1], footPos[2]),
+                                   (std::uint32_t)kPlayerEntity, PxFilterData(1u << pl, pl, 0u, 0u));
 }
 
 void SetCharacterFootPosition(const float footPos[3]) {
@@ -1796,21 +1700,14 @@ void SetCharacterFootPosition(const float footPos[3]) {
     if (CharacterBody* b = g_State->playerBody.get()) {
         b->Feet = glm::vec3(footPos[0], footPos[1], footPos[2]);
         b->Actor->setGlobalPose(PxTransform(BodyCentre(*b)));
-        return;
     }
-    g_State->controller->setFootPosition(PxExtendedVec3(footPos[0], footPos[1], footPos[2]));
 }
 
 void GetCharacterFootPosition(float outFootPos[3]) {
     if (!HasCharacter()) return;
     if (const CharacterBody* b = g_State->playerBody.get()) {
         outFootPos[0] = b->Feet.x; outFootPos[1] = b->Feet.y; outFootPos[2] = b->Feet.z;
-        return;
     }
-    const PxExtendedVec3 f = g_State->controller->getFootPosition();
-    outFootPos[0] = (float)f.x;
-    outFootPos[1] = (float)f.y;
-    outFootPos[2] = (float)f.z;
 }
 
 bool GetCharacterCapsule(float outFootPos[3], float* outRadius, float* outCylHalfHeight) {
@@ -1821,62 +1718,7 @@ bool GetCharacterCapsule(float outFootPos[3], float* outRadius, float* outCylHal
         if (outCylHalfHeight) *outCylHalfHeight = b->Cap.HalfHeight;
         return true;
     }
-    auto* cap = static_cast<PxCapsuleController*>(g_State->controller);
-    const PxExtendedVec3 f = cap->getFootPosition();
-    outFootPos[0] = (float)f.x; outFootPos[1] = (float)f.y; outFootPos[2] = (float)f.z;
-    if (outRadius)         *outRadius = cap->getRadius();
-    if (outCylHalfHeight)  *outCylHalfHeight = 0.5f * cap->getHeight();
-    return true;
-}
-
-namespace {
-// PhysX lifts the capsule by its step offset before every sideways move (the CCT's up pass), and a door's header just
-// ahead caught the lifted capsule's top: characters stopped dead under every doorway. The lift is only as tall
-// as the room over the capsule where it's headed - its top swept up, where it is and a radius past this move.
-void FitStepToRoom(PxCapsuleController& cap, const PxVec3& d, PxU32 mask) {
-    struct RoomFilter : PxQueryFilterCallback {
-        const PxRigidActor* Self = nullptr;
-        PxU32 Mask = 0xFFFFFFFFu;
-        PxQueryHitType::Enum preFilter(const PxFilterData&, const PxShape* shape, const PxRigidActor* actor, PxHitFlags&) override {
-            if (actor == Self || (shape->getFlags() & PxShapeFlag::eTRIGGER_SHAPE)) return PxQueryHitType::eNONE;
-            if (g_State->npcActors.count(actor) || g_State->hitboxActors.count(actor)) return PxQueryHitType::eNONE; // not a ceiling
-            const PxU32 layer = shape->getSimulationFilterData().word1 & 31u;
-            return ((Mask >> layer) & 1u) ? PxQueryHitType::eBLOCK : PxQueryHitType::eNONE;
-        }
-        PxQueryHitType::Enum postFilter(const PxFilterData&, const PxQueryHit&, const PxShape*, const PxRigidActor*) override {
-            return PxQueryHitType::eBLOCK;
-        }
-    } room;
-    room.Self = cap.getActor();
-    room.Mask = mask;
-    const PxExtendedVec3 c = cap.getPosition();
-    const float r = cap.getRadius();
-    const PxVec3 top((float)c.x, (float)c.y + 0.5f * cap.getHeight(), (float)c.z); // the top sphere's centre
-    const float reach = kStepOffset + kContactOffset;
-    const PxQueryFilterData fd(PxQueryFlag::eSTATIC | PxQueryFlag::eDYNAMIC | PxQueryFlag::ePREFILTER);
-    auto roomAt = [&](const PxVec3& at) {
-        PxSweepBuffer buf;
-        if (!g_State->scene->sweep(PxSphereGeometry(r), PxTransform(at), PxVec3(0.0f, 1.0f, 0.0f), reach, buf,
-                                   PxHitFlag::eDEFAULT, fd, &room) || !buf.hasBlock)
-            return reach;
-        return std::max(0.0f, buf.block.distance);
-    };
-    float free = roomAt(top);
-    const PxVec3 across(d.x, 0.0f, d.z);
-    if (const float len = across.magnitude(); len > 1e-5f) free = std::min(free, roomAt(top + across * ((len + r) / len)));
-    cap.setStepOffset(std::clamp(free - kContactOffset - 0.01f, 0.0f, kStepOffset));
-}
-} // namespace
-
-int LastMoveWallNormals(float (*out)[3], int max) {
-    if (!g_State) return 0;
-    const int n = std::min(max, (int)g_State->playerWallNormals.size());
-    for (int i = 0; i < n; ++i) {
-        out[i][0] = g_State->playerWallNormals[(size_t)i].x;
-        out[i][1] = g_State->playerWallNormals[(size_t)i].y;
-        out[i][2] = g_State->playerWallNormals[(size_t)i].z;
-    }
-    return n;
+    return false;
 }
 
 bool LastMoverResult(float outVelocity[3], bool* outGrounded, float* outStepDelta) {
@@ -1914,25 +1756,12 @@ unsigned MoveCharacter(const float disp[3], float dt, bool snapToGround) {
         g_State->playerGroundLastRot = gp.q;
     }
 
-    // #169 - the collision matrix used to apply to simulation pairs only; the CCT's own sweep
-    // (default filters) still hit every layer, so the Player collided with layers set not to.
-    struct LayerFilter : PxQueryFilterCallback {
-        PxU32 Mask = 0xFFFFFFFFu;
-        PxQueryHitType::Enum preFilter(const PxFilterData&, const PxShape* shape, const PxRigidActor*,
-                                       PxHitFlags&) override {
-            const PxU32 layer = shape->getSimulationFilterData().word1 & 31u;
-            return ((Mask >> layer) & 1u) ? PxQueryHitType::eBLOCK : PxQueryHitType::eNONE;
-        }
-        PxQueryHitType::Enum postFilter(const PxFilterData&, const PxQueryHit&, const PxShape*,
-                                        const PxRigidActor*) override {
-            return PxQueryHitType::eBLOCK;
-        }
-    } layerFilter;
+    // #169 - the collision matrix row of the Player's layer filters what the mover sweeps against.
     const int playerLayer = std::clamp(ProjectSettings::Physics().PlayerLayer, 0, 31);
-    layerFilter.Mask = ProjectSettings::Physics().LayerCollisionMask[playerLayer];
+    const PxU32 layerMask = ProjectSettings::Physics().LayerCollisionMask[playerLayer];
 
     if (CharacterBody* b = g_State->playerBody.get()) {
-        PhysxMoverWorld w(*g_State, b->Actor, layerFilter.Mask);
+        PhysxMoverWorld w(*g_State, b->Actor, layerMask);
         const glm::vec3 delta(d.x, d.y, d.z), velocity = glm::vec3(disp[0], disp[1], disp[2]) / dt;
         const bool debug = (g_DebugDrawFlags & PDD_Movers) != 0u;
         MoverSettings ms = ProjectMoverSettings();
@@ -1963,23 +1792,7 @@ unsigned MoveCharacter(const float disp[3], float dt, bool snapToGround) {
         if (!g_State->playerGroundHitThisMove || !(out & CC_DOWN)) g_State->playerGround = nullptr;
         return out;
     }
-
-    PxControllerFilters filters(nullptr, &layerFilter, nullptr); // prefilter is on by default
-
-    FitStepToRoom(*static_cast<PxCapsuleController*>(g_State->controller), d, layerFilter.Mask);
-    g_State->playerWallNormals.clear();
-    PxControllerCollisionFlags f =
-        g_State->controller->move(d, /*minDist=*/0.001f, dt, filters); // onShapeHit fires in here
-
-    unsigned out = 0;
-    if (f & PxControllerCollisionFlag::eCOLLISION_SIDES) out |= CC_SIDES;
-    if (f & PxControllerCollisionFlag::eCOLLISION_UP)    out |= CC_UP;
-    if (f & PxControllerCollisionFlag::eCOLLISION_DOWN)  out |= CC_DOWN;
-
-    // Stepped off the platform (no downward hit on it this move) — stop carrying it.
-    if (!g_State->playerGroundHitThisMove || !(out & CC_DOWN))
-        g_State->playerGround = nullptr;
-    return out;
+    return 0;
 }
 
 int GetTriggerEvents(TriggerEvent* out, int maxEvents) {
@@ -2381,28 +2194,17 @@ bool ResizeCharacter(float cylinderHalfHeight) {
         b->Actor->setGlobalPose(PxTransform(BodyCentre(*b))); // the feet stay put
         return true;
     }
-    auto* cap = static_cast<PxCapsuleController*>(g_State->controller);
-    const PxExtendedVec3 foot = cap->getFootPosition();
-    cap->resize(2.0f * cylinderHalfHeight);
-    cap->setFootPosition(foot); // resize does not promise to keep the bottom where it was
-    return true;
+    return false;
 }
 
 bool CharacterFitsAt(float cylinderHalfHeight) {
     if (!HasCharacter() || cylinderHalfHeight <= 0.0f) return false;
-    PxExtendedVec3 foot;
-    float capRadius = 0.0f;
-    if (const CharacterBody* b = g_State->playerBody.get()) {
-        foot = PxExtendedVec3(b->Feet.x, b->Feet.y, b->Feet.z);
-        capRadius = b->Cap.Radius;
-    } else {
-        auto* cap = static_cast<PxCapsuleController*>(g_State->controller);
-        foot = cap->getFootPosition();
-        capRadius = cap->getRadius();
-    }
+    const CharacterBody* b = g_State->playerBody.get();
+    const glm::vec3 foot = b->Feet;
+    const float capRadius = b->Cap.Radius;
     // A hair smaller and lifted, so the floor under the feet and a wall alongside don't count.
     const float radius = std::max(0.02f, capRadius - 0.03f);
-    const PxVec3 centre((float)foot.x, (float)foot.y + 0.04f + cylinderHalfHeight + radius, (float)foot.z);
+    const PxVec3 centre(foot.x, foot.y + 0.04f + cylinderHalfHeight + radius, foot.z);
     const PxQuat lieAlongY(PxPi * 0.5f, PxVec3(0.0f, 0.0f, 1.0f)); // PhysX capsules lie along X
     QueryFilter f;
     f.HitTriggers = 0;
@@ -3471,10 +3273,6 @@ NpcCharacter* NpcSlot(CharacterId id) {
     NpcCharacter& n = g_State->npcs[(size_t)id];
     return n.Used() ? &n : nullptr;
 }
-PxCapsuleController* NpcController(CharacterId id) {
-    const NpcCharacter* n = NpcSlot(id);
-    return n ? static_cast<PxCapsuleController*>(n->ctrl) : nullptr;
-}
 CharacterBody* NpcBody(CharacterId id) {
     const NpcCharacter* n = NpcSlot(id);
     return n ? n->body.get() : nullptr;
@@ -3500,34 +3298,11 @@ void PlaceNpcBody(CharacterBody& b) {
 
 CharacterId CreateNpcCharacter(unsigned entity, float radius, float cylinderHalfHeight, const float footPos[3]) {
     if (!g_State || radius <= 0.0f || cylinderHalfHeight <= 0.0f) return kNoCharacter;
-    if (UseCharacterMover()) {
-        NpcCharacter n;
-        n.entity = entity;
-        n.body = MakeBody(*g_State, MoverCapsule{radius, cylinderHalfHeight}, glm::vec3(footPos[0], footPos[1], footPos[2]), entity,
-                          PxFilterData(1u, 0u, 0u, 0u)); // the Default layer, as the controller's
-        g_State->npcActors.insert(n.body->Actor);
-        return AddNpcSlot(std::move(n));
-    }
-    if (!g_State->controllerMgr) return kNoCharacter;
-    PxCapsuleControllerDesc desc = CapsuleControllerDesc(radius, cylinderHalfHeight);
-    desc.position      = PxExtendedVec3(footPos[0], footPos[1] + radius + cylinderHalfHeight, footPos[2]);
-    if (!desc.isValid()) return kNoCharacter;
-    PxController* c = g_State->controllerMgr->createController(desc);
-    if (!c) {
-        Log::Error("PhysX: createController failed for an NPC.");
-        return kNoCharacter;
-    }
-    if (PxRigidActor* a = c->getActor()) {
-        a->userData = reinterpret_cast<void*>(static_cast<std::uintptr_t>(entity));
-        const PxU32 nbShapes = a->getNbShapes();
-        std::vector<PxShape*> shapes(nbShapes);
-        a->getShapes(shapes.data(), nbShapes);
-        for (PxShape* sh : shapes) sh->setSimulationFilterData(PxFilterData(1u, 0u, 0u, 0u)); // Default layer
-        g_State->npcActors.insert(a);
-    }
     NpcCharacter n;
-    n.ctrl = c;
     n.entity = entity;
+    n.body = MakeBody(*g_State, MoverCapsule{radius, cylinderHalfHeight}, glm::vec3(footPos[0], footPos[1], footPos[2]), entity,
+                      PxFilterData(1u, 0u, 0u, 0u)); // the Default layer
+    g_State->npcActors.insert(n.body->Actor);
     return AddNpcSlot(std::move(n));
 }
 
@@ -3540,7 +3315,6 @@ void DestroyNpcCharacter(CharacterId id) {
     // first - released, the next move read the freed actor.
     if (a && g_State->playerGround == a) g_State->playerGround = nullptr;
     if (n->body) n->body->Actor->release();
-    else n->ctrl->release();
     *n = NpcCharacter{};
 }
 
@@ -3579,7 +3353,7 @@ unsigned MoveNpcCharacter(CharacterId id, const float disp[3], float dt) {
     NpcCharacter* n = NpcSlot(id);
     if (!n || dt <= 0.0f) return 0;
     if (CharacterBody* b = n->body.get()) {
-        // The same collision-matrix row, his own hitboxes and (crawling) the dead skipped, as the controller's filter below.
+        // The same collision-matrix row, his own hitboxes and (crawling) the dead skipped, as the Default layer's body.
         PhysxMoverWorld w(*g_State, b->Actor, ProjectSettings::Physics().LayerCollisionMask[0]);
         w.SelfEntity = n->entity;
         w.PassRagdolls = n->passRagdolls;
@@ -3595,44 +3369,14 @@ unsigned MoveNpcCharacter(CharacterId id, const float disp[3], float dt) {
         PlaceNpcBody(*b);
         return b->Last.Flags;
     }
-    PxCapsuleController* c = static_cast<PxCapsuleController*>(n->ctrl);
-    // Same collision-matrix row as a Default-layer body; ignore the NPC's own hitboxes.
-    struct LayerFilter : PxQueryFilterCallback {
-        PxU32 Mask = 0xFFFFFFFFu; std::uint32_t Self = 0xFFFFFFFFu; bool PassRagdolls = false;
-        PxQueryHitType::Enum preFilter(const PxFilterData&, const PxShape* shape, const PxRigidActor* actor,
-                                       PxHitFlags&) override {
-            if (actor && UserDataToEntity(actor->userData) == Self) return PxQueryHitType::eNONE;
-            if (shape->getFlags() & PxShapeFlag::eTRIGGER_SHAPE) return PxQueryHitType::eNONE;
-            if (PassRagdolls && IsRagdollPart(shape->getSimulationFilterData())) return PxQueryHitType::eNONE;
-            const PxU32 layer = shape->getSimulationFilterData().word1 & 31u;
-            return ((Mask >> layer) & 1u) ? PxQueryHitType::eBLOCK : PxQueryHitType::eNONE;
-        }
-        PxQueryHitType::Enum postFilter(const PxFilterData&, const PxQueryHit&, const PxShape*,
-                                        const PxRigidActor*) override {
-            return PxQueryHitType::eBLOCK;
-        }
-    } layerFilter;
-    layerFilter.Mask = ProjectSettings::Physics().LayerCollisionMask[0];
-    layerFilter.Self = g_State->npcs[(size_t)id].entity;
-    layerFilter.PassRagdolls = g_State->npcs[(size_t)id].passRagdolls;
-    PxControllerFilters filters(nullptr, &layerFilter, nullptr);
-    FitStepToRoom(*c, PxVec3(disp[0], disp[1], disp[2]), layerFilter.Mask);
-    const PxControllerCollisionFlags f = c->move(PxVec3(disp[0], disp[1], disp[2]), 0.001f, dt, filters);
-    unsigned out = 0;
-    if (f & PxControllerCollisionFlag::eCOLLISION_SIDES) out |= CC_SIDES;
-    if (f & PxControllerCollisionFlag::eCOLLISION_UP)    out |= CC_UP;
-    if (f & PxControllerCollisionFlag::eCOLLISION_DOWN)  out |= CC_DOWN;
-    return out;
+    return 0;
 }
 
 void SetNpcFootPosition(CharacterId id, const float footPos[3]) {
     if (CharacterBody* b = NpcBody(id)) {
         b->Feet = glm::vec3(footPos[0], footPos[1], footPos[2]);
         PlaceNpcBody(*b);
-        return;
     }
-    if (PxCapsuleController* c = NpcController(id))
-        c->setFootPosition(PxExtendedVec3(footPos[0], footPos[1], footPos[2]));
 }
 
 bool GetNpcCapsule(CharacterId id, float outFootPos[3], float* outRadius, float* outCylHalfHeight) {
@@ -3642,13 +3386,7 @@ bool GetNpcCapsule(CharacterId id, float outFootPos[3], float* outRadius, float*
         if (outCylHalfHeight) *outCylHalfHeight = b->Cap.HalfHeight;
         return true;
     }
-    PxCapsuleController* c = NpcController(id);
-    if (!c) return false;
-    const PxExtendedVec3 f = c->getFootPosition();
-    outFootPos[0] = (float)f.x; outFootPos[1] = (float)f.y; outFootPos[2] = (float)f.z;
-    if (outRadius)        *outRadius = c->getRadius();
-    if (outCylHalfHeight) *outCylHalfHeight = 0.5f * c->getHeight();
-    return true;
+    return false;
 }
 
 bool ResizeNpcCharacter(CharacterId id, float cylinderHalfHeight) {
@@ -3658,12 +3396,7 @@ bool ResizeNpcCharacter(CharacterId id, float cylinderHalfHeight) {
         PlaceNpcBody(*b);
         return true;
     }
-    PxCapsuleController* c = NpcController(id);
-    if (!c) return false;
-    const PxExtendedVec3 foot = c->getFootPosition();
-    c->resize(2.0f * cylinderHalfHeight);
-    c->setFootPosition(foot);
-    return true;
+    return false;
 }
 
 bool NpcFitsAt(CharacterId id, float cylinderHalfHeight) {
@@ -3697,8 +3430,7 @@ int BoxOverlapsCharacters(const float centre[3], const float halfExtents[3], con
             return PxQueryHitType::eTOUCH;
         }
     } f;
-    f.Player = g_State->playerBody ? static_cast<const PxRigidActor*>(g_State->playerBody->Actor)
-                                   : g_State->controller ? g_State->controller->getActor() : nullptr;
+    f.Player = g_State->playerBody ? static_cast<const PxRigidActor*>(g_State->playerBody->Actor) : nullptr;
     const PxVec3 he(std::max(halfExtents[0], 1e-4f), std::max(halfExtents[1], 1e-4f), std::max(halfExtents[2], 1e-4f));
     PxOverlapHit hits[8];
     PxOverlapBuffer buf(hits, 8);

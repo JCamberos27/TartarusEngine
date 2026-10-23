@@ -85,7 +85,7 @@ entt::entity World::CreateEmptyEntity(const glm::vec3& position, const glm::vec3
 }
 
 // World::ResolveCollisions (the AABB push-out that moved the Play-mode Player) was removed in
-// #185 PR 3 — the Player now sweeps a PxCapsuleController through PhysicsWorld's scene. The
+// #185 PR 3 — the Player now sweeps the mover's kinematic capsule through PhysicsWorld's scene. The
 // AABB Raycast below stays: the editor still uses it for drop-to-surface / snap queries.
 entt::entity World::Raycast(const glm::vec3& origin, const glm::vec3& dir, float maxDist, float& outDist) const {
     entt::entity best = entt::null;

@@ -103,30 +103,10 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
     const unsigned flags = MoveCharacter(Velocity * dt, dt, wasGrounded && !Jumped && Velocity.y <= 0.0f);
     float moverVelocity[3], stepDelta = 0.0f;
     bool moverGrounded = false;
+    // The mover slid the velocity along what it hit and followed the floor down itself.
     const bool mover = PhysicsWorld::LastMoverResult(moverVelocity, &moverGrounded, &stepDelta);
-    if (mover) {
-        // The custom mover: it slid the velocity along what it hit and followed the floor down itself.
-        if (GroundAccelTime > 0.0f || GroundDecelTime > 0.0f || AirAccelTime > 0.0f) { Velocity.x = moverVelocity[0]; Velocity.z = moverVelocity[2]; }
-        Grounded = moverGrounded;
-    }
-    // Blocked by a wall: the part of the velocity into it goes, the part along it stays. (Cutting it to the speed actually
-    // travelled took the slide along the wall too: a jamb grazed in a doorway left the player crawling until the
-    // acceleration caught up.)
-    else if ((GroundAccelTime > 0.0f || GroundDecelTime > 0.0f || AirAccelTime > 0.0f) && dt > 0.0f) {
-        float n[8][3];
-        glm::vec3 walls[8];
-        const int count = PhysicsWorld::LastMoveWallNormals(n, 8);
-        for (int i = 0; i < count; ++i) walls[i] = glm::vec3(n[i][0], 0.0f, n[i][2]);
-        const glm::vec3 v = PlayerClipVelocity(glm::vec3(Velocity.x, 0.0f, Velocity.z), walls, count);
-        Velocity.x = v.x; Velocity.z = v.z;
-    }
-    if (!mover) Grounded = (flags & PhysicsWorld::CC_DOWN) != 0;
-    // Walking off a step down: stay on the ground rather than fall the last few centimetres.
-    if (!mover && !Grounded && wasGrounded && !Jumped && Velocity.y <= 0.0f) {
-        const glm::vec3 before = CharacterFeet();
-        if (MoveCharacter(glm::vec3(0.0f, -0.3f, 0.0f), dt) & PhysicsWorld::CC_DOWN) Grounded = true;
-        else SetCharacterFeet(before);
-    }
+    if (mover && (GroundAccelTime > 0.0f || GroundDecelTime > 0.0f || AirAccelTime > 0.0f)) { Velocity.x = moverVelocity[0]; Velocity.z = moverVelocity[2]; }
+    Grounded = mover && moverGrounded;
     if ((Grounded && Velocity.y < 0.0f) || ((flags & PhysicsWorld::CC_UP) && Velocity.y > 0.0f)) Velocity.y = 0.0f;
     Cam.Yaw += PhysicsWorld::PlatformYawDelta();
     // A step up or down: the eye eases over it (a critically damped spring, ~0.15 s) rather than jumping with the feet.

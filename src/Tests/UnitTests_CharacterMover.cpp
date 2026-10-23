@@ -23,10 +23,7 @@ constexpr float kRadius = 0.22f, kHeight = 1.85f; // Apartment Hallway's player
 struct MoverWorld {
     World world;
     bool Ok = false;
-    bool WasMover = false;
     explicit MoverWorld(const std::function<void(MoverWorld&)>& build, const glm::vec3& feet) {
-        WasMover = ProjectSettings::Physics().UseCustomCharacterMover;
-        ProjectSettings::MutablePhysics().UseCustomCharacterMover = true;
         build(*this);
         world.SyncActiveInHierarchy();
         world.RebuildWorldTransformCache();
@@ -36,10 +33,7 @@ struct MoverWorld {
         PhysicsWorld::CreateCharacter(kRadius, kHeight * 0.5f - kRadius, &feet.x);
         Ok = PhysicsWorld::HasCharacter();
     }
-    ~MoverWorld() {
-        PhysicsWorld::Destroy();
-        ProjectSettings::MutablePhysics().UseCustomCharacterMover = WasMover;
-    }
+    ~MoverWorld() { PhysicsWorld::Destroy(); }
     void Box(const glm::vec3& centre, const glm::vec3& half, float yawDeg = 0.0f) {
         const entt::entity e = world.CreateEmptyEntity(centre, glm::vec3(0.0f, yawDeg, 0.0f), glm::vec3(1.0f), "Box");
         ColliderComponent c;
