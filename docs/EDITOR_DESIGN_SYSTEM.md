@@ -254,7 +254,7 @@ brightness and opacity, never hue.
 | | Log slide, caret, line sweep | `OutCubic` / smooth | 220 / 70 / 700 | Console lines slide in 10 px; the IDE caret glides; a jumped-to line gets one white sweep |
 | **15. Viewport and startup** | Gizmo hover | spring 1 / 260 / 18 | 360 | Handles grow 18% and brighten; the dragged axis pulses at 2.2 Hz |
 | | Selection outline | smooth bezier | 300 | The outline sweeps on |
-| | View cube / radial menu | spring | 520 / 360 | The view cube turns; the hold-Space radial menu blooms, its labels following the ring |
+| | View cube / radial menu | spring | 520 / 360 | The view cube turns; the hold-Space radial menu blooms, each wedge an icon over a horizontal label on whole pixels (only the plate and washes scale; text fades and slides), icons only past 8 slots with the hovered name in the hub |
 | | **Startup sequence** | per panel `OutCubic` | ≈ 1200 in all | Panels assemble in a wave from the centre (520 each, +70 per step); rims glint in order; the headline staggers in. Any click or key settles it |
 
 **Sounds.** Ten editor sound events go with these moments: `ThemeSwitch`, `FlingRelease` (pitch
