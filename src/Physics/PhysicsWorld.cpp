@@ -212,6 +212,7 @@ struct PhysicsState {
         MoverDebug Debug;
     };
     std::unique_ptr<CharacterBody> playerBody;
+    float playerDoorAssist = 0.0f, playerDoorAssistMaxAngle = 35.0f; // SetCharacterDoorwayAssist
     // NPC capsules, indexed by CharacterId (a released slot stays null). npcActors: their actors,
     // for the query filters that skip characters.
     // On the custom mover a soldier has `body` instead of `ctrl` (the setting is read when he's made).
@@ -1887,6 +1888,12 @@ bool LastMoverResult(float outVelocity[3], bool* outGrounded, float* outStepDelt
     return true;
 }
 
+void SetCharacterDoorwayAssist(float strength, float maxAngleDeg) {
+    if (!g_State) return;
+    g_State->playerDoorAssist = std::clamp(strength, 0.0f, 1.0f);
+    g_State->playerDoorAssistMaxAngle = std::clamp(maxAngleDeg, 0.0f, 89.0f);
+}
+
 unsigned MoveCharacter(const float disp[3], float dt, bool snapToGround) {
     if (!HasCharacter() || dt <= 0.0f) return 0;
 
@@ -1928,7 +1935,10 @@ unsigned MoveCharacter(const float disp[3], float dt, bool snapToGround) {
         PhysxMoverWorld w(*g_State, b->Actor, layerFilter.Mask);
         const glm::vec3 delta(d.x, d.y, d.z), velocity = glm::vec3(disp[0], disp[1], disp[2]) / dt;
         const bool debug = (g_DebugDrawFlags & PDD_Movers) != 0u;
-        b->Last = CharacterMover::Move(w, b->Cap, b->Feet, velocity, delta, ProjectMoverSettings(), b->Grounded, snapToGround,
+        MoverSettings ms = ProjectMoverSettings();
+        ms.DoorAssist = g_State->playerDoorAssist;
+        ms.DoorAssistMaxAngle = g_State->playerDoorAssistMaxAngle;
+        b->Last = CharacterMover::Move(w, b->Cap, b->Feet, velocity, delta, ms, b->Grounded, snapToGround,
                                        debug ? &b->Debug : nullptr);
         if (!debug) b->Debug.Clear();
         b->Feet = b->Last.Feet;
@@ -3674,6 +3684,27 @@ CharacterId NpcCharacterOf(unsigned entity) {
     for (size_t i = 0; i < g_State->npcs.size(); ++i)
         if (g_State->npcs[i].Used() && g_State->npcs[i].entity == entity) return (CharacterId)i;
     return kNoCharacter;
+}
+
+int BoxOverlapsCharacters(const float centre[3], const float halfExtents[3], const float rotation[4]) {
+    if (!g_State || !g_State->scene) return 0;
+    struct CharactersOnly : PxQueryFilterCallback {
+        const PxRigidActor* Player = nullptr;
+        PxQueryHitType::Enum preFilter(const PxFilterData&, const PxShape*, const PxRigidActor* actor, PxHitFlags&) override {
+            return actor && (actor == Player || g_State->npcActors.count(actor)) ? PxQueryHitType::eTOUCH : PxQueryHitType::eNONE;
+        }
+        PxQueryHitType::Enum postFilter(const PxFilterData&, const PxQueryHit&, const PxShape*, const PxRigidActor*) override {
+            return PxQueryHitType::eTOUCH;
+        }
+    } f;
+    f.Player = g_State->playerBody ? static_cast<const PxRigidActor*>(g_State->playerBody->Actor)
+                                   : g_State->controller ? g_State->controller->getActor() : nullptr;
+    const PxVec3 he(std::max(halfExtents[0], 1e-4f), std::max(halfExtents[1], 1e-4f), std::max(halfExtents[2], 1e-4f));
+    PxOverlapHit hits[8];
+    PxOverlapBuffer buf(hits, 8);
+    const PxQueryFilterData fd(PxQueryFlag::eDYNAMIC | PxQueryFlag::ePREFILTER | PxQueryFlag::eNO_BLOCK);
+    g_State->scene->overlap(PxBoxGeometry(he), PxTransform(PxVec3(centre[0], centre[1], centre[2]), ToQuat(rotation)), buf, fd, &f);
+    return (int)buf.getNbTouches();
 }
 
 // --- NPC hitboxes ----------------------------------------------------------------------

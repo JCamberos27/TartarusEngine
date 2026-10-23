@@ -87,6 +87,9 @@ unsigned MoveCharacter(const float disp[3], float dt, bool snapToGround = false)
 // into anything hit, whether it ended on the floor, and how far a step up or down moved the feet (the eye eases over it).
 // False on the PhysX controller.
 bool LastMoverResult(float outVelocity[3], bool* outGrounded, float* outStepDelta);
+// The Player's doorway assist on the custom mover (FirstPersonControllerComponent): 0..1 of the radius, and the widest
+// angle off head on it helps at. Kept until changed; the PhysX controller has none.
+void SetCharacterDoorwayAssist(float strength, float maxAngleDeg);
 // The walls the last MoveCharacter ran into (its side touches): each one's normal, world space, up to `max`; how many.
 int LastMoveWallNormals(float (*out)[3], int max);
 
@@ -119,6 +122,9 @@ bool     IgnoreRagdollForNpc(CharacterId id, int ragdoll);
 void     SetNpcPassesRagdolls(CharacterId id, bool on);
 // The NPC character owned by `entity`, or kNoCharacter.
 CharacterId NpcCharacterOf(unsigned entity);
+// How many characters' capsules (the Player's, the NPCs') a box at `centre` (half extents, rotation x,y,z,w) overlaps:
+// a closing door's leaf about to swing into somebody.
+int BoxOverlapsCharacters(const float centre[3], const float halfExtents[3], const float rotation[4]);
 
 // --- Ragdolls ------------------------------------------------------------------------
 // A dead character's body as jointed capsules (Npc/NpcRagdoll.h), one PhysX reduced-coordinate articulation: each part is a
