@@ -487,6 +487,12 @@ void FirstPersonBodyCopyArmShape(const Model& m, const Model& rig, float weight,
 // same rig frame after frame - no name lookups per frame.
 void FirstPersonBodyArmShapeLinks(const Model& m, const Model& rig, const std::vector<int>& parents,
                                   std::vector<FirstPersonArmShapeLink>& out);
+// Grip Inset's direction: the way `rig`'s hand on `side` (0 left, 1 right) closes, world - from its knuckle toward its
+// curled middle fingertip, across the hand's length. Zero when the rig has no such bones or the hand is open.
+glm::vec3 FirstPersonBodyPalmDirection(const Model& rig, const glm::mat4& rigWorld, int side);
+// Finger Curl Extra: every finger joint of `m` (index / middle / ring / pinky 01-03, not the thumb) turned `degrees`
+// further about the axis it has already turned on from its rest - the way the grip closes it.
+void FirstPersonBodyCurlFingers(const Model& m, std::vector<LocalTRS>& pose, float degrees);
 void FirstPersonBodyCopyArmShape(const std::vector<FirstPersonArmShapeLink>& links, const Model& rig, float weight,
                                  std::vector<LocalTRS>& pose, float clavicleWeight);
 // The arm solve's steps the player's body (FirstPersonBody::LateUpdate) and the soldiers' (NpcBody::WeaponEye /

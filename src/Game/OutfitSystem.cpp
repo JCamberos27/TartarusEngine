@@ -259,8 +259,26 @@ std::shared_ptr<const Wardrobe::Wardrobe> LayerWardrobe(const std::string& path)
 
 } // namespace
 
-std::shared_ptr<const Catalog> LoadCatalog(AssetLibrary& assets, const std::string& path, bool rescan, std::string* error) {
+std::map<std::string, std::shared_ptr<const Catalog>>& CatalogCache() {
     static std::map<std::string, std::shared_ptr<const Catalog>> cache;
+    return cache;
+}
+
+void RaceGrip(const World& world, entt::entity root, float& inset, float& curl) {
+    inset = curl = 0.0f;
+    const auto* outfit = world.Registry.valid(root) ? world.Registry.try_get<CharacterOutfitComponent>(root) : nullptr;
+    if (!outfit) return;
+    const auto& cache = CatalogCache();
+    const auto it = cache.find(Lower(Rel(outfit->Wardrobe)));
+    if (it == cache.end() || !it->second) return;
+    if (const Wardrobe::RaceDef* race = Wardrobe::FindRace(it->second->W, (Wardrobe::Gender)outfit->Gender, outfit->Race)) {
+        inset = race->GripInset;
+        curl = race->FingerCurlExtra;
+    }
+}
+
+std::shared_ptr<const Catalog> LoadCatalog(AssetLibrary& assets, const std::string& path, bool rescan, std::string* error) {
+    auto& cache = CatalogCache();
     // Failures too: the Inspector asks every frame, and a missing or broken file would be read each time.
     static std::map<std::string, std::string> failed;
     const std::string key = Lower(Rel(path));
