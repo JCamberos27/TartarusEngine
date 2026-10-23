@@ -165,6 +165,30 @@ public:
     // at it, so its outfit is in view. False (camera untouched) when the scene has none.
     static bool FrameFirstPersonBody(World& world, Camera& editorCamera);
     void FrameOpenedScene(World& world, const std::string& path);
+    // The Scene camera per scene (EditorSettings::SceneCameras). PlaceSceneCamera puts `cam` where
+    // `path` was last left; with no saved pose: behind the Player Spawn, else in front of a First
+    // Person Body, else pulled back to fit the scene. Snaps (no glide). RememberSceneCamera stores
+    // `cam` for `path`. Both do nothing saved/restored while SetDeterministicSceneCamera is on
+    // (smoke / screenshot runs always take the fallback chain).
+    bool PlaceSceneCamera(World& world, Camera& cam, const std::string& path);
+    void RememberSceneCamera(const std::string& path, const Camera& cam);
+    void SetDeterministicSceneCamera(bool on) { m_DeterministicSceneCamera = on; }
+    // The editor camera main.cpp owns (null until the first Draw); main saves it on shutdown.
+    void RememberCurrentSceneCamera(const Camera& cam) { RememberSceneCamera(m_CurrentScenePath, cam); }
+    // Outline tint for the Scene view's selection / hover: the theme's bright accent under Black
+    // Glass (near white), Tartarus orange otherwise.
+    glm::vec3 SelectionOutlineColor() const;
+    // True when `entity` is selected or sits under a selected entity (Colliders > selected only).
+    bool InSelectionTree(const World& world, entt::entity entity) const;
+    // Scene-view hover pre-highlight: the entity under the mouse (null when none / not hovering the
+    // viewport / a gizmo or the fly camera has the mouse). Refreshed by UpdateHoverPick.
+    entt::entity HoveredEntity() const { return m_HoverEntity; }
+    void UpdateHoverPick(World& world, Camera& editorCamera);
+private:
+    bool m_DeterministicSceneCamera = false;
+    entt::entity m_HoverEntity = entt::null;
+    glm::vec2 m_HoverMouse{-1.0f};
+public:
 
     // The floating action bar centered over the Scene/Game viewport — Undo/Redo/Save, the
     // Play/Stop/Pause/Step/Fullscreen transport, and the panel-toggle/notification
@@ -1405,7 +1429,14 @@ private:
     bool m_ShowGrid = true;
     bool m_ShowGizmos = true; // View menu toggle for the viewport transform gizmo (audit #60)
     bool m_GizmosMasterVisible = true; // #236 "Gizmos" dropdown master switch — hides every viewport gizmo/icon at once
-    bool m_ShowEntityIcons = true;     // #236 — the billboard light/camera/empty icons in the viewport
+    bool m_ShowEntityIcons = true;     // #236 — scripted override (smoke tests / clean shots) ANDed with EditorSettings::EntityIconsMode
+    // Entity-icon occlusion cache: one camera-to-icon ray per entity, refreshed round-robin (the
+    // stalest first, a few dozen per frame) — an entity never checked counts as visible.
+    struct IconOcclusion { bool Occluded = false; std::uint32_t FrameChecked = 0; };
+    std::unordered_map<entt::entity, IconOcclusion> m_IconOcclusion;
+    std::uint32_t m_IconOcclusionFrame = 0;
+    // True when `entity` is selected or sits under a selected entity (the Volume / Collider "selected only" rule).
+    bool IsSelectedOrUnderSelected(const World& world, entt::entity entity) const;
     bool m_FrameOnSelect = false;   // auto-frame the editor camera when the selection changes (#69)
     bool m_PendingFrameSelect = false; // set by SelectItem, consumed in Draw() where the camera is in scope
     bool m_GridSnapEnabled = true;    // hold Ctrl to invert momentarily, Blender-style

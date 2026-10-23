@@ -631,10 +631,87 @@ void EditorLayer::RequestOpenScene(World& world, AssetLibrary& assets, const std
     FrameOpenedScene(world, path);
 }
 
-// A scene the user opened (not a revert of the one already open) starts looking at its player's body.
+// A scene the user opened (not a revert of the one already open) starts where it was left, or framed.
 void EditorLayer::FrameOpenedScene(World& world, const std::string& path) {
     if (!m_EditorCameraPtr || m_CurrentScenePath != path) return; // the open failed or was refused
-    if (FrameFirstPersonBody(world, *m_EditorCameraPtr)) m_ViewTransition.Active = false;
+    PlaceSceneCamera(world, *m_EditorCameraPtr, path);
+}
+
+// The first "Player Spawn"-like entity: one with a First Person Controller, else a name containing
+// "spawn" (any case). Camera ~3.5 m behind it and 1.7 m up, looking along its forward (-Z) a little down.
+static bool FrameSpawn(World& world, Camera& cam) {
+    entt::entity spawn = entt::null;
+    auto controllers = world.Registry.view<FirstPersonControllerComponent>(entt::exclude<InactiveTag>);
+    if (controllers.begin() != controllers.end()) spawn = *controllers.begin();
+    if (spawn == entt::null) {
+        for (entt::entity e : world.Registry.view<NameComponent>(entt::exclude<InactiveTag>)) {
+            std::string n = world.Registry.get<NameComponent>(e).Name;
+            std::transform(n.begin(), n.end(), n.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+            if (n.find("spawn") != std::string::npos) { spawn = e; break; }
+        }
+    }
+    if (spawn == entt::null) return false;
+    const glm::mat4 xf = world.ComposeWorldTransform(spawn);
+    glm::vec3 fwd(-xf[2].x, 0.0f, -xf[2].z);
+    fwd = glm::length(fwd) > 1e-4f ? glm::normalize(fwd) : glm::vec3(0.0f, 0.0f, -1.0f);
+    cam.Position = glm::vec3(xf[3]) - fwd * 3.5f + glm::vec3(0.0f, 1.7f, 0.0f);
+    cam.Yaw = glm::degrees(std::atan2(fwd.z, fwd.x));
+    cam.Pitch = -10.0f;
+    return true;
+}
+
+bool EditorLayer::PlaceSceneCamera(World& world, Camera& cam, const std::string& path) {
+    // Test and screenshot runs keep the old, fixed behaviour (their fixtures place the camera
+    // themselves): only a player body is framed.
+    if (m_DeterministicSceneCamera) {
+        const bool framed = FrameFirstPersonBody(world, cam);
+        if (framed) m_ViewTransition.Active = false;
+        return framed;
+    }
+    if (!path.empty()) {
+        if (const EditorSettings::SceneCameraPose* saved = EditorSettings::Get().FindSceneCamera(path)) {
+            cam.Position = glm::vec3(saved->X, saved->Y, saved->Z);
+            cam.Yaw = saved->Yaw;
+            cam.Pitch = saved->Pitch;
+            EditorSettings::Get().SceneCameraFlySpeed = saved->FlySpeed;
+            m_ViewTransition.Active = false;
+            return true;
+        }
+    }
+    if (FrameSpawn(world, cam) || FrameFirstPersonBody(world, cam)) { m_ViewTransition.Active = false; return true; }
+    // Neutral aim (never the Sandbox's), then pull back to fit the scene; snap rather than glide.
+    cam.Position = glm::vec3(0.0f, 2.5f, 6.0f);
+    cam.Yaw = -90.0f;
+    cam.Pitch = -20.0f;
+    FrameSceneBounds(world, cam);
+    if (m_ViewTransition.Active) { cam.Position = m_ViewTransition.ToPos; m_ViewTransition.Active = false; }
+    return true;
+}
+
+void EditorLayer::RememberSceneCamera(const std::string& path, const Camera& cam) {
+    if (path.empty() || m_DeterministicSceneCamera) return;
+    EditorSettings::SceneCameraPose pose;
+    pose.ScenePath = path;
+    pose.X = cam.Position.x; pose.Y = cam.Position.y; pose.Z = cam.Position.z;
+    pose.Yaw = cam.Yaw; pose.Pitch = cam.Pitch;
+    pose.FlySpeed = EditorSettings::Get().SceneCameraFlySpeed;
+    EditorSettings::Get().RememberSceneCamera(pose);
+    EditorSettings::Save();
+}
+
+glm::vec3 EditorLayer::SelectionOutlineColor() const {
+    if (GlassThemeActive()) return glm::vec3(EditorTheme::AccentBright.x, EditorTheme::AccentBright.y, EditorTheme::AccentBright.z);
+    return glm::vec3(1.0f, 0.55f, 0.1f);
+}
+
+bool EditorLayer::InSelectionTree(const World& world, entt::entity entity) const {
+    for (int depth = 0; entity != entt::null && depth < 64; ++depth) {
+        if (!world.Registry.valid(entity)) return false;
+        if (IsSelected(entity)) return true;
+        const auto* h = world.Registry.try_get<HierarchyComponent>(entity);
+        entity = h ? h->Parent : entt::null;
+    }
+    return false;
 }
 
 void EditorLayer::RequestRevertScene(World& world, AssetLibrary& assets) {
@@ -1273,6 +1350,7 @@ void EditorLayer::NewScene(World& world, AssetLibrary& assets) {
         // recovery snapshot (#216) — while m_CurrentScenePath still names the outgoing scene,
         // so a failed write below leaves that snapshot in place as the way back.
         ClearRecoverySnapshot();
+        if (m_EditorCameraPtr) RememberSceneCamera(m_CurrentScenePath, *m_EditorCameraPtr);
         m_CurrentScenePath = pathStr;
         m_LoadFailedScenePath.clear(); // #84
         m_Dirty = false;                       // matches disk
@@ -1308,6 +1386,7 @@ void EditorLayer::OpenScene(World& world, AssetLibrary& assets, const std::strin
     m_LoadFailedScenePath.clear(); // #84 — a real scene is loaded now
     InvalidateModelThumbnail();
     ClearRecoverySnapshot(); // drop the outgoing scene's snapshot before switching away from it
+    if (m_EditorCameraPtr && m_CurrentScenePath != path) RememberSceneCamera(m_CurrentScenePath, *m_EditorCameraPtr);
     m_CurrentScenePath = path;
     RememberLastScene(path); // reopen this one next launch (#95)
     ClearSelection();

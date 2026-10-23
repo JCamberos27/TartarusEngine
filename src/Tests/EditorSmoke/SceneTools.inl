@@ -35,7 +35,7 @@ struct EditorSmokeAccess_SceneTools {
     static bool Snap(EditorLayer& e) { return e.m_GridSnapEnabled; }
     static float SnapStep(EditorLayer& e) { return e.m_SnapTranslation; }
     static bool Gizmos(EditorLayer& e) { return e.m_GizmosMasterVisible; }
-    static bool EntityIcons(EditorLayer& e) { return e.m_ShowEntityIcons; }
+    static bool TransformGizmo(EditorLayer& e) { return e.m_ShowGizmos; }
     static int Shading(EditorLayer& e) { return (int)e.m_ShadingMode; }
     static bool Gliding(EditorLayer& e) { return e.m_ViewTransition.Active; }
     static bool GizmoEngaged(EditorLayer& e) { return e.m_GizmoEngaged; }
@@ -569,14 +569,14 @@ void RegisterSceneToolsTests() {
          ExpectTrue("and on", [](Ctx& c) { return ST::Grid(c.E); }),
          ChromeUi::CloseMenus(), Wait(2),
          RightClick(Rail(EDITOR_ICON_TOGGLE_GIZMOS)),
-         Until("the gizmos popover", [](Ctx&) { return Find(PopupItem("Entity icons")) != nullptr; }),
-         Click(PopupItem("Entity icons")), Wait(2),
-         ExpectTrue("entity icons off", [](Ctx& c) { return !ST::EntityIcons(c.E); }),
+         Until("the gizmos popover", [](Ctx&) { return Find(PopupItem("Show transform gizmo")) != nullptr; }),
+         Click(PopupItem("Show transform gizmo")), Wait(2),
+         ExpectTrue("the transform gizmo off", [](Ctx& c) { return !ST::TransformGizmo(c.E); }),
          Shot("gizmos-popover", {kScene}),
-         Click(PopupItem("Entity icons")), Wait(2),
-         ExpectTrue("entity icons on", [](Ctx& c) { return ST::EntityIcons(c.E); }),
+         Click(PopupItem("Show transform gizmo")), Wait(2),
+         ExpectTrue("and on again", [](Ctx& c) { return ST::TransformGizmo(c.E); }),
          Key(ImGuiKey_Escape), Wait(2),
-         ExpectTrue("Escape closes the popover", [](Ctx&) { return Find(PopupItem("Entity icons")) == nullptr; }),
+         ExpectTrue("Escape closes the popover", [](Ctx&) { return Find(PopupItem("Show transform gizmo")) == nullptr; }),
          ExpectDepth("toggles pushed no undo step", 1)},
         Tidy(),
     }));

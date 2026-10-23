@@ -450,9 +450,11 @@ void DecalSystem::RefreshSubstrate(uint32_t idx) {
         const DecalTextureArrays::Slot* slot = m_Textures->Request(e.Src.Key, e.Src);
         if (slot && !e.Logged) {
             e.Logged = true;
+#ifndef NDEBUG // streaming diagnostics: one per substrate, too chatty for a Release Console
             Log::Info("Decals: substrate " + std::to_string(idx + 1) + " ready (" + ProjectPaths::Relativize(e.Src.Albedo) +
                       ", layer " + std::to_string(slot->Alloc.Layer) + ", " + std::to_string(slot->Alloc.Size) + " px, map flags " +
                       std::to_string(slot->TexFlags) + ", tiling " + std::to_string(e.Gpu.Params.x) + ")");
+#endif
         }
         e.Ready = slot != nullptr;
         if (slot) {

@@ -453,7 +453,7 @@ void EditorLayer::DrawStatusBar(World& world, Camera& editorCamera) {
 #define TARTARUS_BUILD_CONFIG "Build?"
 #endif
 #if defined(NDEBUG)
-    segs.push_back({TARTARUS_BUILD_CONFIG, EditorTheme::Dim, nullptr, 0});
+    // Release says nothing: the build label is only news when it isn't the normal one.
 #else
     segs.push_back({TARTARUS_BUILD_CONFIG, EditorTheme::Warning, "A Debug build: expect low frame rates", 0});
 #endif
@@ -466,7 +466,12 @@ void EditorLayer::DrawStatusBar(World& world, Camera& editorCamera) {
         for (int i = 0; i < m_FrameTimeHistoryFilled; ++i) worst = std::max(worst, m_FrameTimeHistory[i]);
         snprintf(b, sizeof(b), "%.0f fps  %.1f ms", fps, m_SmoothedFrameMs);
         segs.push_back({b, EditorTheme::Secondary, "Open the Statistics panel", 1});
-        if (worst > 33.0f) {
+        // Launching and opening a scene compile shaders and stream assets: those first seconds
+        // always hitch, so the warning waits until the scene has settled.
+        static std::string s_HitchScene = m_CurrentScenePath;
+        static double s_SettledAt = 5.0;
+        if (s_HitchScene != m_CurrentScenePath) { s_HitchScene = m_CurrentScenePath; s_SettledAt = ImGui::GetTime() + 5.0; }
+        if (worst > 33.0f && ImGui::GetTime() >= s_SettledAt) {
             // A hitch (one frame over 33 ms) stays visible while it's in the recent history; the
             // smoothed figure hides it.
             snprintf(b, sizeof(b), "hitch %.0f ms", worst);
@@ -600,11 +605,28 @@ void EditorLayer::DrawStatusBar(World& world, Camera& editorCamera) {
     }
 
     // --- left: the latest log message -----------------------------------------------------------
+    // An Info line shows for a few seconds and fades; a warning or error stays for half a minute.
+    // Either way the bar goes quiet once the news is old - the Console keeps the full history.
     const std::vector<LogEntry>& entries = Log::Entries();
+    static unsigned long long s_LogSeq = 0;
+    static int s_LogRepeat = 0;
+    static double s_LogAt = -1000.0;
+    if (!entries.empty() && (entries.back().Seq != s_LogSeq || entries.back().Count != s_LogRepeat)) {
+        s_LogSeq = entries.back().Seq; // a new entry, or the same message collapsing again
+        s_LogRepeat = entries.back().Count;
+        s_LogAt = ImGui::GetTime();
+    }
+    float logAlpha = 0.0f;
     if (!entries.empty()) {
+        const bool loud = entries.back().Level != LogLevel::Info;
+        const double hold = loud ? 30.0 : 5.0, fade = 1.0;
+        const double age = ImGui::GetTime() - s_LogAt;
+        logAlpha = age < hold ? 1.0f : (float)std::clamp(1.0 - (age - hold) / fade, 0.0, 1.0);
+    }
+    if (!entries.empty() && logAlpha > 0.0f) {
         const LogEntry& e = entries.back();
-        const ImVec4 col = e.Level == LogLevel::Error ? EditorTheme::Danger
-                         : e.Level == LogLevel::Warning ? EditorTheme::Warning : EditorTheme::Secondary;
+        const ImVec4 col = EditorTheme::WithAlpha(e.Level == LogLevel::Error ? EditorTheme::Danger
+                         : e.Level == LogLevel::Warning ? EditorTheme::Warning : EditorTheme::Secondary, logAlpha);
         const char* icon = e.Level == LogLevel::Error ? ICON_FA_CIRCLE_XMARK
                          : e.Level == LogLevel::Warning ? ICON_FA_TRIANGLE_EXCLAMATION : ICON_FA_CIRCLE_INFO;
         std::string line = e.Message;
@@ -627,6 +649,7 @@ void EditorLayer::DrawStatusBar(World& world, Camera& editorCamera) {
             dl->AddText(ImVec2(wpos.x + padX, textY), EditorTheme::U32(col), icon);
             const float ix = wpos.x + padX + ImGui::CalcTextSize(icon).x + EditorTheme::Px(7.0f);
             dl->AddText(ImVec2(ix, textY), EditorTheme::U32(hovered ? EditorTheme::Text : col), line.c_str());
+            if (hovered) s_LogAt = std::max(s_LogAt, ImGui::GetTime() - 1.0); // hold it while it's being read
             dl->PopClipRect();
         }
     }
@@ -1148,21 +1171,45 @@ void EditorLayer::DrawGizmosPopupBody() {
     // reads as a noun, a Checkbox as a sentence, so that's a genuine format difference, not the
     // same three-different-labels problem this pass is fixing).
     EditorUIPrimitives::Checkbox("Show transform gizmo", &m_ShowGizmos);
-    EditorUIPrimitives::Checkbox("Entity icons", &m_ShowEntityIcons);
-    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("The billboard light / camera / empty markers.");
-    bool lightGiz = EditorSettings::Get().ShowLightGizmos;
-    if (EditorUIPrimitives::Checkbox("Light gizmos", &lightGiz)) {
-        EditorSettings::Get().ShowLightGizmos = lightGiz;
-        EditorSettings::Save();
+    EditorSettings& gp = EditorSettings::Get();
+    // One saved toggle row: the checkbox, its tooltip, and the Save on change.
+    auto pref = [&](const char* label, bool& value, const char* tip) {
+        bool v = value;
+        if (EditorUIPrimitives::Checkbox(label, &v)) {
+            value = v;
+            EditorSettings::Save();
+        }
+        if (tip && ImGui::IsItemHovered()) EditorUI::SetTooltip("%s", tip);
+    };
+
+    EditorUIPrimitives::SectionHeader("Icons");
+    {
+        static const char* kIconModes[] = {"All", "Lights & cameras", "None"};
+        int mode = std::clamp(gp.EntityIconsMode, 0, 2);
+        ImGui::SetNextItemWidth(160.0f * m_UIScale);
+        if (ImGui::Combo("##EntityIconsMode", &mode, kIconModes, IM_ARRAYSIZE(kIconModes))) {
+            gp.EntityIconsMode = mode;
+            EditorSettings::Save();
+        }
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Which billboard markers the Scene view shows. A selected object always keeps its icon.");
+        pref("Through walls", gp.EntityIconsThroughWalls,
+             "Icons behind geometry stay visible, dimmed. Off hides them.");
     }
-    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Range spheres and spot cones drawn from each light.");
-    bool colliderGiz = EditorSettings::Get().ShowColliders;
-    if (EditorUIPrimitives::Checkbox("Colliders", &colliderGiz)) {
-        EditorSettings::Get().ShowColliders = colliderGiz;
-        EditorSettings::Save();
-    }
-    if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Green wireframe of every Collider's shape (#185), edit and Play mode.");
+
+    EditorUIPrimitives::SectionHeader("Shapes");
+    pref("Light gizmos", gp.ShowLightGizmos, "Range spheres and spot cones drawn from each light.");
+    if (gp.ShowLightGizmos) pref("Selected lights only", gp.LightGizmoSelectedOnly, nullptr);
+    pref("Colliders", gp.ShowColliders, "Wireframe of every Collider's shape (#185), edit and Play mode.");
+    if (gp.ShowColliders) pref("Selected colliders only", gp.CollidersSelectedOnly, nullptr);
+    pref("Decals", gp.ShowDecalGizmos, "The projection box of each decal.");
+    pref("Reflection probes", gp.ShowProbeGizmos, "The influence box of each reflection probe.");
+    pref("Volumes", gp.ShowVolumeGizmos, "The box of each local post-process volume.");
+    pref("Selected only (decals, probes, volumes)", gp.VolumeGizmosSelectedOnly,
+         "Draw those boxes only for the selected object and its children.");
     ImGui::EndDisabled();
+
+    EditorUIPrimitives::SectionHeader("Debug");
 
     bool bodyDbg = EditorSettings::Get().ShowBodyDebug;
     if (EditorUIPrimitives::Checkbox("Player body", &bodyDbg)) {
@@ -1200,6 +1247,25 @@ void EditorLayer::DrawGizmosPopupBody() {
 
     ImGui::Separator();
     EditorUIPrimitives::Checkbox("Show grid", &m_ShowGrid); // independent of the master switch, like Unity's grid
+    if (GlassThemeActive()) {
+        pref("Stats pill", gp.GlassStatsPill, "The small FPS / frame-time pill over the Scene view (Glass theme only).");
+    }
+    ImGui::Spacing();
+    if (EditorUIPrimitives::SecondaryButton("Restore clean view")) {
+        // Back to the clean defaults: the theme goes through the pending-theme path so it tweens
+        // like any other switch, and the live copies of the grid / gizmo toggles follow the prefs.
+        const int oldTheme = gp.EditorThemeId;
+        gp.ResetViewDefaults();
+        const int newTheme = gp.EditorThemeId;
+        gp.EditorThemeId = oldTheme;
+        if (newTheme != oldTheme) m_PendingThemeId = newTheme;
+        m_ShowGrid = gp.ViewShowGrid;
+        m_ShowGizmos = gp.ViewShowGizmo;
+        m_GizmosMasterVisible = true;
+        EditorSettings::Save();
+    }
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Put the Scene view's gizmos, icons, grid and overlays back to the clean defaults.");
 
     // --- Layers (#236 A1) -------------------------------------------------------------
     // Per-layer Scene-viewport visibility (eye) + pick-lock (padlock), plus rename for the
