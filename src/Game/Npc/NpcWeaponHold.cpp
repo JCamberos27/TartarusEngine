@@ -452,7 +452,7 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
         }
         // The rig's arm shapes first, so the elbows bend the way the animation has them; the solve then only
         // fixes the hands.
-        if (driver) FirstPersonBodyCopyArmShape(m_ArmLinks, *gripRig, w, pose, m_Set.ClavicleFollow);
+        if (driver) FirstPersonBodyCopyArmShape(m_ArmLinks, m, *gripRig, w, pose, m_Set.ClavicleFollow);
         else FirstPersonBodyCopyArmShape(m, *gripRig, w, pose, parents, m_Set.ClavicleFollow);
         IK::ComputeGlobals(pose, parents, globals);
         const bool isSource = !sourceDone;
@@ -475,7 +475,7 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
             if (upper < 0 || lower < 0 || hand < 0) continue;
             const int clav = bones.Clav[s];
             const glm::vec3 target = glm::vec3(toModel * glm::vec4(handPos[s], 1.0f));
-            const glm::quat rot = glm::normalize(toModelRot * handRot[s]);
+            const glm::quat rot = glm::normalize(toModelRot * handRot[s] * FirstPersonBodyRestOffset(m, *gripRig, hand));
             if (!isSource && clav >= 0 && AngleOf(clavTurn[s]) > 1e-5f)
                 IK::OffsetBone(pose, parents, globals, clav, glm::vec3(0.0f), clavTurn[s], IK::Position(globals[(size_t)clav]));
             // A hand beyond the arm's reach: the shoulder shrugs toward it instead of the arm stretching.
@@ -569,7 +569,8 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
             if (i < 0 || i >= (int)pose.size()) continue;
             const int par = parents[(size_t)i];
             const glm::quat parentRot = par >= 0 ? IK::Rotation(globals[(size_t)par]) : kNone;
-            pose[(size_t)i].R = glm::slerp(pose[(size_t)i].R, glm::normalize(glm::inverse(parentRot) * f.Rot), w);
+            const glm::quat rot = f.Rot * FirstPersonBodyRestOffset(m, *gripRig, i);
+            pose[(size_t)i].R = glm::slerp(pose[(size_t)i].R, glm::normalize(glm::inverse(parentRot) * rot), w);
             const glm::mat4 local = pose[(size_t)i].ToMatrix();
             globals[(size_t)i] = par >= 0 ? globals[(size_t)par] * local : local;
         }

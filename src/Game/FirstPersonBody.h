@@ -487,7 +487,13 @@ void FirstPersonBodyCopyArmShape(const Model& m, const Model& rig, float weight,
 // same rig frame after frame - no name lookups per frame.
 void FirstPersonBodyArmShapeLinks(const Model& m, const Model& rig, const std::vector<int>& parents,
                                   std::vector<FirstPersonArmShapeLink>& out);
-void FirstPersonBodyCopyArmShape(const std::vector<FirstPersonArmShapeLink>& links, const Model& rig, float weight,
+// What turns a rig bone's world rotation into body node `node`'s, for a body whose rest isn't the rig's (identity when
+// it is): the hand targets and finger copies take the rig's rotations through it, so a UE4 mannequin's palm and fingers
+// face where the rig's do rather than wherever its own differently-aimed bone axes point.
+glm::quat FirstPersonBodyRestOffset(const Model& m, const Model& rig, int node);
+// `m` is the body the links were made for: one whose rest isn't the rig's (a UE4 mannequin) takes the rig's turns from
+// rest instead of its locals.
+void FirstPersonBodyCopyArmShape(const std::vector<FirstPersonArmShapeLink>& links, const Model& m, const Model& rig, float weight,
                                  std::vector<LocalTRS>& pose, float clavicleWeight);
 // The arm solve's steps the player's body (FirstPersonBody::LateUpdate) and the soldiers' (NpcBody::WeaponEye /
 // HoldWeapon) share. Where the two have come to differ, the difference is a parameter, each keeping its own.
