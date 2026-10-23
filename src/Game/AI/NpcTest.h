@@ -169,6 +169,7 @@ private:
         glm::vec3 Centre{0.0f};  // the opening's middle, on the floor in the wall's plane
         glm::vec3 Normal{0.0f};  // through the opening (the leaf's +Z)
         glm::vec3 Along{0.0f};   // along the wall, toward the latch side
+        std::uint32_t Leaf = 0xFFFFFFFFu; // the leaf's entity (the Openable)
     };
     struct DoorRun {
         glm::vec3 Start{0.0f}, Dir{0.0f}, Heading{0.0f}, Prev{0.0f};
@@ -180,6 +181,11 @@ private:
     void DoorsDrive(Player& player, float dt, float& wantYaw, float& wantPitch);
     void DoorsSetUp(World& world);
     void DoorsPassSetUp(const Player& player);
+    void DoorsShut(World& world);
+    // After the passes: a door shut on the player standing in it, for the first few doors (m_DShut: which; -1 not yet).
+    int m_DShut = -1, m_DShutOk = 0, m_DShutPen = 0;
+    float m_DShutClock = 0.0f;
+    bool m_DShutPlaced = false;
     std::vector<DoorSpot> m_DDoors;
     DoorRun m_DRun;
     int m_DDoor = 0, m_DPass = 0, m_DOk = 0, m_DTotal = 0, m_DPen = 0;

@@ -23,10 +23,7 @@ constexpr float kRadius = 0.22f, kHeight = 1.85f; // Apartment Hallway's player
 struct MoverWorld {
     World world;
     bool Ok = false;
-    bool WasMover = false;
     explicit MoverWorld(const std::function<void(MoverWorld&)>& build, const glm::vec3& feet) {
-        WasMover = ProjectSettings::Physics().UseCustomCharacterMover;
-        ProjectSettings::MutablePhysics().UseCustomCharacterMover = true;
         build(*this);
         world.SyncActiveInHierarchy();
         world.RebuildWorldTransformCache();
@@ -36,10 +33,7 @@ struct MoverWorld {
         PhysicsWorld::CreateCharacter(kRadius, kHeight * 0.5f - kRadius, &feet.x);
         Ok = PhysicsWorld::HasCharacter();
     }
-    ~MoverWorld() {
-        PhysicsWorld::Destroy();
-        ProjectSettings::MutablePhysics().UseCustomCharacterMover = WasMover;
-    }
+    ~MoverWorld() { PhysicsWorld::Destroy(); }
     void Box(const glm::vec3& centre, const glm::vec3& half, float yawDeg = 0.0f) {
         const entt::entity e = world.CreateEmptyEntity(centre, glm::vec3(0.0f, yawDeg, 0.0f), glm::vec3(1.0f), "Box");
         ColliderComponent c;
@@ -151,6 +145,52 @@ void TestMoverDoorway() {
         CHECK(w.Feet().z > 1.0f);
         CHECK(slowest > 0.6f);
     }
+}
+
+// The doorway assist (the player's DoorwayAssist): the same jamb graze as above keeps more of its speed with it on; a wall
+// met head on, or slid along at 20 degrees, is the same with it as without.
+void TestMoverDoorwayAssist() {
+    auto doorway = [](MoverWorld& m) {
+        m.Floor();
+        m.Box(glm::vec3(-2.96f, 1.4f, 0.0f), glm::vec3(2.5f, 1.4f, 0.075f));
+        m.Box(glm::vec3(2.96f, 1.4f, 0.0f), glm::vec3(2.5f, 1.4f, 0.075f));
+        m.Box(glm::vec3(0.0f, 2.43f, 0.0f), glm::vec3(0.46f, 0.37f, 0.075f));
+    };
+    auto graze = [&](float assist) {
+        const float tilt = glm::radians(10.0f), lateral = -(0.46f - kRadius + 0.08f);
+        const glm::vec3 dir(std::sin(tilt), 0.0f, std::cos(tilt));
+        MoverWorld w(doorway, glm::vec3(lateral - 1.5f * std::tan(tilt), 0.02f, -1.5f));
+        if (!w.Ok) return -1.0f;
+        PhysicsWorld::SetCharacterDoorwayAssist(assist, 35.0f);
+        glm::vec3 prev = w.Feet();
+        float slowest = 1e9f;
+        w.Walk(dir, 4.0f, 1.0f, [&](const MoverWorld::Frame&) {
+            const glm::vec3 f = w.Feet();
+            if (std::abs(f.z) < 0.5f) slowest = std::min(slowest, glm::length(glm::vec2(f.x - prev.x, f.z - prev.z)) / kDt / 4.0f);
+            prev = f;
+        });
+        return w.Feet().z > 1.0f ? slowest : 0.0f;
+    };
+    const float off = graze(0.0f), on = graze(0.5f);
+    std::printf("[UnitTest] doorway graze: slowest %.2f without the assist, %.2f with it\n", off, on);
+    CHECK(on >= off - 0.01f);
+    CHECK(on >= 0.75f);
+
+    // Into a flat wall head on: stopped, not nudged sideways. Along one at 20 degrees: the same path either way.
+    auto wall = [](MoverWorld& m) {
+        m.Floor();
+        m.Box(glm::vec3(0.0f, 1.5f, 1.0f), glm::vec3(10.0f, 1.5f, 0.1f)); // z = 0.9
+    };
+    auto walkWall = [&](float assist, const glm::vec3& dir) {
+        MoverWorld w(wall, glm::vec3(0.0f, 0.02f, 0.0f));
+        if (!w.Ok) return glm::vec3(1e9f);
+        PhysicsWorld::SetCharacterDoorwayAssist(assist, 35.0f);
+        w.Walk(dir, 4.0f, 0.6f);
+        return w.Feet();
+    };
+    CHECK(std::abs(walkWall(0.5f, glm::vec3(0, 0, 1)).x) < 1e-3f);
+    const glm::vec3 slant(std::sin(glm::radians(70.0f)), 0.0f, std::cos(glm::radians(70.0f))); // 20 degrees off the wall
+    CHECK(glm::length(walkWall(0.5f, slant) - walkWall(0.0f, slant)) < 1e-3f);
 }
 
 // A 25 cm step under a ceiling 6 cm over the capsule's top once stepped: climbed (the step only as tall as the room);
@@ -390,6 +430,7 @@ void RegisterCharacterMoverTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"MoverClipToPlanes", TestMoverClipToPlanes});
     tests.push_back({"MoverWallAndCorner", TestMoverWallAndCorner});
     tests.push_back({"MoverDoorway", TestMoverDoorway});
+    tests.push_back({"MoverDoorwayAssist", TestMoverDoorwayAssist});
     tests.push_back({"MoverStepUnderLowCeiling", TestMoverStepUnderLowCeiling});
     tests.push_back({"MoverStairsAndBlock", TestMoverStairsAndBlock});
     tests.push_back({"MoverSlopes", TestMoverSlopes});

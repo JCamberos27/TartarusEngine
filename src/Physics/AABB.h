@@ -20,7 +20,7 @@ struct AABB {
     }
 
     // (AABB::MTV — the min-translation push-out the old Play-mode Player collision used — was
-    // removed in #185 PR 3 when that moved to a PxCapsuleController. Re-add from git history if
+    // removed in #185 PR 3 when that moved to a physics capsule. Re-add from git history if
     // a cheap AABB depenetration is ever needed again.)
 
     // World-space AABB enclosing this local-space box after a (possibly rotating) transform.
