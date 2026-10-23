@@ -8,6 +8,7 @@
 #include "GameModuleAPI.h" // RaycastHit, QueryFilter, kPlayerEntity
 #include "Log.h"
 #include "NpcBrain.h"
+#include "NpcConfig.h"
 #include "OutfitSystem.h"
 #include "Profiler.h"
 #include "PhysicsWorld.h"
@@ -28,7 +29,7 @@
 
 namespace {
 
-constexpr float kRadius = 0.3f;
+constexpr float kRadius = kNpcCapsuleRadius;
 constexpr float kStandCyl = 0.6f;    // capsule 1.8 m standing
 constexpr float kCrouchCyl = 0.33f;  // 1.26 m crouched
 constexpr float kDownedGrace = 0.25f; // seconds after going down wounded that body rounds don't finish it
@@ -596,7 +597,7 @@ int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
     n->Body.WarmHoldTables(world);
     const float bodyMs = since();
     n->Cct = PhysicsWorld::CreateNpcCharacter(Id(root), kRadius, kStandCyl, &feet.x);
-    n->Agent = m_Crowd.Add(feet, 0.34f, 1.8f, 3.2f);
+    n->Agent = m_Crowd.Add(feet, kNpcNavRadius, 1.8f, 3.2f);
     // The soldier prefab's Health (Max, Invulnerable) when it has one; 100 otherwise.
     auto& health = reg.get_or_emplace<HealthComponent>(root);
     health.Max = std::clamp(health.Max, 1.0f, 100000.0f);
