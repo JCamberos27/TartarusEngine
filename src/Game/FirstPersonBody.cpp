@@ -23,7 +23,6 @@
 #include "World.h"
 
 #include <glm/gtc/quaternion.hpp>
-#include <glm/gtx/quaternion.hpp>
 
 #include <algorithm>
 #include <array>
@@ -33,9 +32,6 @@
 #include <unordered_set>
 #include <cstdio>
 #include <emmintrin.h> // SSE2: the elbow-gap point loop
-#include <memory>
-#include <mutex>
-#include <tuple>
 #include <sstream>
 
 namespace {
@@ -108,188 +104,11 @@ std::shared_ptr<SkinHideBuffer> CollarVerts(const std::shared_ptr<Model>& pieceR
     return buffer;
 }
 
-// A body whose rest pose isn't the arms rig's - a UE4 mannequin (the Realistic Skeleton) under the UE5 Quantum arms -
-// can't take the rig's local rotations by name: the same local bends its differently-aimed bones another way, and the
-// rig's metacarpals (none on the body) drop their turns, so the fingers splay. Instead each body bone takes its rig
-// bone's turn from rest, measured from the bone the clavicles hang from, after its rest is swung to point where the
-// rig's rest bone points (AnimRetarget's bake, live). Null for a body that shares the rig's rest: the plain copy is exact.
-struct ArmRemap {
-    std::vector<int> Rig;              // per body node: its rig counterpart, when under the clavicles (-1 otherwise)
-    std::vector<char> BodyUnder, RigUnder, Clavicle;
-    std::vector<glm::quat> BodyRest;   // per body node: its swung rest, relative to the clavicles' parent
-    std::vector<glm::quat> RigRestInv; // per rig node: inverse rest, relative to the rig clavicles' parent
-    glm::quat C{1.0f, 0.0f, 0.0f, 0.0f}, CInv{1.0f, 0.0f, 0.0f, 0.0f}; // rig base frame -> body base frame, at rest
-};
-
-const ArmRemap* ArmRemapFor(const Model& m, const Model& rig, int clavicleL, int clavicleR) {
-    struct Key {
-        const Model *Body, *Rig;
-        int BodyNodes, RigNodes, L, R;
-        bool operator<(const Key& o) const {
-            return std::tie(Body, Rig, BodyNodes, RigNodes, L, R) < std::tie(o.Body, o.Rig, o.BodyNodes, o.RigNodes, o.L, o.R);
-        }
-    };
-    static std::mutex mutex;
-    static auto& cache = *new std::map<Key, std::unique_ptr<ArmRemap>>(); // leaked: entries are handed out by pointer
-    const Key key{&m, &rig, m.NodeCount(), rig.NodeCount(), clavicleL, clavicleR};
-    std::lock_guard<std::mutex> lock(mutex);
-    if (const auto it = cache.find(key); it != cache.end()) return it->second.get();
-    std::unique_ptr<ArmRemap>& slot = cache[key];
-
-    const int nb = m.NodeCount(), nr = rig.NodeCount();
-    const int rigClavL = rig.NodeIndex(FPBody::kBoneClavicle[0]), rigClavR = rig.NodeIndex(FPBody::kBoneClavicle[1]);
-    if (clavicleL < 0 || rigClavL < 0) return nullptr;
-    const int base = m.NodeParent(clavicleL), rigBase = rig.NodeParent(rigClavL);
-    if (base < 0 || rigBase < 0) return nullptr;
-    std::vector<LocalTRS> bb, rb;
-    m.BindLocalPose(bb);
-    rig.BindLocalPose(rb);
-    std::vector<glm::mat4> gb((size_t)nb), gr((size_t)nr);
-    for (int i = 0; i < nb; ++i)
-        gb[(size_t)i] = m.NodeParent(i) >= 0 ? gb[(size_t)m.NodeParent(i)] * bb[(size_t)i].ToMatrix() : bb[(size_t)i].ToMatrix();
-    for (int r = 0; r < nr; ++r)
-        gr[(size_t)r] = rig.NodeParent(r) >= 0 ? gr[(size_t)rig.NodeParent(r)] * rb[(size_t)r].ToMatrix() : rb[(size_t)r].ToMatrix();
-    auto rot = [](const glm::mat4& g) {
-        glm::mat3 r(g);
-        for (int c = 0; c < 3; ++c)
-            if (const float len = glm::length(r[c]); len > 1e-8f) r[c] /= len;
-        return glm::normalize(glm::quat_cast(r));
-    };
-    const glm::quat none(1.0f, 0.0f, 0.0f, 0.0f);
-
-    auto a = std::make_unique<ArmRemap>();
-    a->C = glm::normalize(glm::inverse(rot(gb[(size_t)base])) * rot(gr[(size_t)rigBase]));
-    a->CInv = glm::inverse(a->C);
-    a->Rig.assign((size_t)nb, -1);
-    a->BodyUnder.assign((size_t)nb, 0);
-    a->Clavicle.assign((size_t)nb, 0);
-    a->RigUnder.assign((size_t)nr, 0);
-    for (const int c : {clavicleL, clavicleR})
-        if (c >= 0) a->BodyUnder[(size_t)c] = a->Clavicle[(size_t)c] = 1;
-    for (const int c : {rigClavL, rigClavR})
-        if (c >= 0) a->RigUnder[(size_t)c] = 1;
-    for (int i = 0; i < nb; ++i)
-        if (!a->BodyUnder[(size_t)i] && m.NodeParent(i) >= 0 && a->BodyUnder[(size_t)m.NodeParent(i)]) a->BodyUnder[(size_t)i] = 1;
-    for (int r = 0; r < nr; ++r)
-        if (!a->RigUnder[(size_t)r] && rig.NodeParent(r) >= 0 && a->RigUnder[(size_t)rig.NodeParent(r)]) a->RigUnder[(size_t)r] = 1;
-
-    // Rest rotations and positions relative to each side's base, the rig's positions in the body's base frame.
-    const glm::mat4 bodyBaseInv = glm::inverse(gb[(size_t)base]), rigBaseInv = glm::inverse(gr[(size_t)rigBase]);
-    std::vector<glm::quat> bodyRel((size_t)nb, none);
-    std::vector<glm::vec3> bodyPos((size_t)nb), rigPos((size_t)nr);
-    a->RigRestInv.assign((size_t)nr, none);
-    std::vector<glm::quat> rigRel((size_t)nr, none);
-    for (int r = 0; r < nr; ++r) {
-        if (!a->RigUnder[(size_t)r]) continue;
-        const int p = rig.NodeParent(r);
-        rigRel[(size_t)r] = glm::normalize((a->RigUnder[(size_t)p] ? rigRel[(size_t)p] : none) * rb[(size_t)r].R);
-        rigPos[(size_t)r] = a->C * glm::vec3(rigBaseInv * gr[(size_t)r][3]);
-        a->RigRestInv[(size_t)r] = glm::inverse(rigRel[(size_t)r]);
-    }
-    bool differs = std::abs(a->C.w) < 0.99999f;
-    for (int i = 0; i < nb; ++i) {
-        if (!a->BodyUnder[(size_t)i]) continue;
-        const int p = m.NodeParent(i);
-        bodyRel[(size_t)i] = glm::normalize((a->BodyUnder[(size_t)p] ? bodyRel[(size_t)p] : none) * bb[(size_t)i].R);
-        bodyPos[(size_t)i] = glm::vec3(bodyBaseInv * gb[(size_t)i][3]);
-        const int r = rig.NodeIndex(m.NodeName(i));
-        if (r < 0 || !a->RigUnder[(size_t)r]) continue;
-        a->Rig[(size_t)i] = r;
-        if (std::abs(glm::dot(bb[(size_t)i].R, rb[(size_t)r].R)) < 0.99999f) differs = true;
-        if (a->BodyUnder[(size_t)p] && a->Rig[(size_t)p] != rig.NodeParent(r)) differs = true; // a rig bone in between (the metacarpals)
-    }
-    if (!differs) return nullptr;
-
-    // Each linked bone's swing: its rest direction (toward its main linked child) onto the rig rest's. A bone with no
-    // linked child (a fingertip) keeps its parent's swing.
-    std::vector<glm::quat> swing((size_t)nb, none);
-    a->BodyRest.assign((size_t)nb, none);
-    for (int i = 0; i < nb; ++i) {
-        if (!a->BodyUnder[(size_t)i]) continue;
-        const int p = m.NodeParent(i);
-        glm::quat s = a->BodyUnder[(size_t)p] ? swing[(size_t)p] : none;
-        if (a->Rig[(size_t)i] >= 0) {
-            int best = -1, bestScore = -1;
-            for (int c = i + 1; c < nb; ++c) {
-                if (m.NodeParent(c) != i || a->Rig[(size_t)c] < 0) continue;
-                const std::string& n = m.NodeName(c);
-                if (n.find("twist") != std::string::npos) continue;
-                const int score = n.rfind("middle_01", 0) == 0 ? 2
-                                  : (n.rfind("upperarm", 0) == 0 || n.rfind("lowerarm", 0) == 0 || n.rfind("hand", 0) == 0) ? 1
-                                                                                                                             : 0;
-                if (score > bestScore) { best = c; bestScore = score; }
-            }
-            if (best >= 0) {
-                const glm::vec3 bd = bodyPos[(size_t)best] - bodyPos[(size_t)i];
-                const glm::vec3 rd = rigPos[(size_t)a->Rig[(size_t)best]] - rigPos[(size_t)a->Rig[(size_t)i]];
-                if (glm::length(bd) > 1e-6f && glm::length(rd) > 1e-6f) {
-                    // From the parent's swing, so a finger keeps its hand's roll; then onto the rig's direction.
-                    const glm::vec3 from = glm::normalize(s * bd), to = glm::normalize(rd);
-                    s = glm::normalize((glm::dot(from, to) > 0.999999f ? none : glm::rotation(from, to)) * s);
-                    // A hand also rolls about that direction until its palm (index to pinky knuckle) lies as the rig's.
-                    const std::string& n = m.NodeName(i);
-                    const std::string side = n.size() > 2 ? n.substr(n.size() - 2) : std::string();
-                    const int bi = m.NodeIndex("index_01" + side), bp = m.NodeIndex("pinky_01" + side);
-                    if (n.rfind("hand", 0) == 0 && bi >= 0 && bp >= 0 && a->Rig[(size_t)bi] >= 0 && a->Rig[(size_t)bp] >= 0) {
-                        glm::vec3 ba = s * (bodyPos[(size_t)bp] - bodyPos[(size_t)bi]);
-                        glm::vec3 ra = rigPos[(size_t)a->Rig[(size_t)bp]] - rigPos[(size_t)a->Rig[(size_t)bi]];
-                        ba -= to * glm::dot(ba, to);
-                        ra -= to * glm::dot(ra, to);
-                        if (glm::length(ba) > 1e-6f && glm::length(ra) > 1e-6f) {
-                            ba = glm::normalize(ba);
-                            ra = glm::normalize(ra);
-                            const float roll = std::atan2(glm::dot(glm::cross(ba, ra), to), glm::dot(ba, ra));
-                            s = glm::normalize(glm::angleAxis(roll, to) * s);
-                        }
-                    }
-                }
-            }
-        }
-        swing[(size_t)i] = s;
-        a->BodyRest[(size_t)i] = glm::normalize(s * bodyRel[(size_t)i]);
-    }
-    slot = std::move(a);
-    return slot.get();
-}
-
-// The remapped copy: CopyArmShape's result for a body ArmRemapFor says doesn't share the rig's rest.
-void CopyArmShapeRemapped(const ArmRemap& a, const Model& m, const Model& rig, float weight, std::vector<LocalTRS>& pose,
-                          float clavicleWeight) {
-    const IK::Pose& rigPose = rig.AppliedLocalPose();
-    if ((int)rigPose.size() != rig.NodeCount() || pose.size() != a.Rig.size()) return;
-    thread_local std::vector<glm::quat> rq, bq;
-    const glm::quat none(1.0f, 0.0f, 0.0f, 0.0f);
-    rq.resize(rigPose.size());
-    for (int r = 0; r < (int)rigPose.size(); ++r) {
-        if (!a.RigUnder[(size_t)r]) continue;
-        const int p = rig.NodeParent(r);
-        rq[(size_t)r] = (a.RigUnder[(size_t)p] ? rq[(size_t)p] : none) * rigPose[(size_t)r].R;
-    }
-    const float clavWeight = weight * std::clamp(clavicleWeight, 0.0f, 1.0f);
-    bq.resize(pose.size());
-    for (int i = 0; i < (int)pose.size(); ++i) {
-        if (!a.BodyUnder[(size_t)i]) continue;
-        const int p = m.NodeParent(i);
-        const glm::quat parentQ = a.BodyUnder[(size_t)p] ? bq[(size_t)p] : none;
-        if (const int r = a.Rig[(size_t)i]; r >= 0) {
-            const glm::quat want = a.C * rq[(size_t)r] * a.RigRestInv[(size_t)r] * a.CInv * a.BodyRest[(size_t)i];
-            const glm::quat local = glm::normalize(glm::inverse(parentQ) * want);
-            pose[(size_t)i].R = glm::normalize(glm::slerp(pose[(size_t)i].R, local, a.Clavicle[(size_t)i] ? clavWeight : weight));
-        }
-        bq[(size_t)i] = glm::normalize(parentQ * pose[(size_t)i].R);
-    }
-}
-
 // The rig's arm shapes onto `pose` (rotations only, every node under the clavicles: the body keeps
 // its own bone lengths), blended by `weight` - the clavicles themselves by `weight * clavicleWeight`
 // (Clavicle Follow: the rig's collarbones swing freely, with no torso or head in their way).
 void CopyArmShape(const Model& m, const Model& rig, float weight, IK::Pose& pose, const std::vector<int>& parents,
                   const std::map<std::string, std::string>& boneMap, float clavicleWeight) {
-    if (const ArmRemap* remap = ArmRemapFor(m, rig, m.NodeIndex(FPBody::MappedBone(boneMap, FPBody::kBoneClavicle[0])),
-                                            m.NodeIndex(FPBody::MappedBone(boneMap, FPBody::kBoneClavicle[1])))) {
-        CopyArmShapeRemapped(*remap, m, rig, weight, pose, clavicleWeight);
-        return;
-    }
     const IK::Pose& rigPose = rig.AppliedLocalPose();
     if ((int)rigPose.size() != rig.NodeCount()) return;
     std::vector<char> under(pose.size(), 0), clavicle(pose.size(), 0);
@@ -311,12 +130,6 @@ std::string Trim(const std::string& s) {
 }
 
 } // namespace
-
-glm::quat FirstPersonBodyRestOffset(const Model& m, const Model& rig, int node) {
-    const ArmRemap* a = ArmRemapFor(m, rig, m.NodeIndex(FPBody::kBoneClavicle[0]), m.NodeIndex(FPBody::kBoneClavicle[1]));
-    if (!a || node < 0 || node >= (int)a->Rig.size() || a->Rig[(size_t)node] < 0) return glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
-    return glm::normalize(a->RigRestInv[(size_t)a->Rig[(size_t)node]] * a->CInv * a->BodyRest[(size_t)node]);
-}
 
 glm::vec3 FirstPersonBodyPalmDirection(const Model& rig, const glm::mat4& rigWorld, int side) {
     const std::string sfx = side ? "_r" : "_l";
@@ -371,12 +184,8 @@ void FirstPersonBodyArmShapeLinks(const Model& m, const Model& rig, const std::v
     FirstPersonBodyArmShapeLinksFrom(m.NodeCount(), parents, clavicles, [&](int i) { return rig.NodeIndex(m.NodeName(i)); }, out);
 }
 
-void FirstPersonBodyCopyArmShape(const std::vector<FirstPersonArmShapeLink>& links, const Model& m, const Model& rig, float weight,
+void FirstPersonBodyCopyArmShape(const std::vector<FirstPersonArmShapeLink>& links, const Model& rig, float weight,
                                  std::vector<LocalTRS>& pose, float clavicleWeight) {
-    if (const ArmRemap* remap = ArmRemapFor(m, rig, m.NodeIndex(FPBody::kBoneClavicle[0]), m.NodeIndex(FPBody::kBoneClavicle[1]))) {
-        CopyArmShapeRemapped(*remap, m, rig, weight, pose, clavicleWeight);
-        return;
-    }
     const IK::Pose& rigPose = rig.AppliedLocalPose();
     if ((int)rigPose.size() != rig.NodeCount()) return;
     const float clavWeight = weight * std::clamp(clavicleWeight, 0.0f, 1.0f);
@@ -404,12 +213,7 @@ void FirstPersonBody::CopyArmShapeCached(const Model& m, const Model& rig, float
         entry = &m_ArmShapeCache.back();
         FirstPersonBodyArmShapeLinksFrom(m.NodeCount(), parents, clavicles, [&](int i) { return rig.NodeIndex(m.NodeName(i)); }, entry->Links);
     }
-    if (const ArmRemap* remap = ArmRemapFor(m, rig, m.NodeIndex(FPBody::MappedBone(m_BoneMap, FPBody::kBoneClavicle[0])),
-                                            m.NodeIndex(FPBody::MappedBone(m_BoneMap, FPBody::kBoneClavicle[1])))) {
-        CopyArmShapeRemapped(*remap, m, rig, weight, pose, clavicleWeight);
-        return;
-    }
-    FirstPersonBodyCopyArmShape(entry->Links, m, rig, weight, pose, clavicleWeight);
+    FirstPersonBodyCopyArmShape(entry->Links, rig, weight, pose, clavicleWeight);
 }
 
 float FirstPersonBodyYaw(const glm::vec3& front, float fallback) {
@@ -2467,7 +2271,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                           hand = m.NodeIndex(Bone(kSides[s].Hand));
                 if (upper < 0 || lower < 0 || hand < 0) continue;
                 const glm::vec3 target = glm::vec3(toModel * glm::vec4(handPos[s] + palmDir[s] * gripInset * m_ArmsWeight, 1.0f));
-                const glm::quat rot = glm::normalize(toModelRot * handRot[s] * FirstPersonBodyRestOffset(m, *rig, hand));
+                const glm::quat rot = glm::normalize(toModelRot * handRot[s]);
                 const int clav = m.NodeIndex(Bone(kSides[s].Clavicle));
                 if (isSource) {
                     // Before any shoulder move: how far the hand is, of the arm's length, and how far the body's
@@ -2769,7 +2573,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                 if (gun->MeshClearance > 0.0f) {
                     SkinnedPoints(world, BodyRegion::Head, m_HeadPointBuffer);
                     body.HeadPoints = &m_HeadPointBuffer;
-                    if (gun->TorsoKeepOut > 1e-3f && (twinPoint(driverTwin, "spine_05", chest) || twinPoint(driverTwin, "spine_03", chest))) { // UE4 bodies: spine_03
+                    if (gun->TorsoKeepOut > 1e-3f && twinPoint(driverTwin, "spine_05", chest)) {
                         SkinnedPoints(world, BodyRegion::Torso, m_TorsoPointBuffer);
                         body.Chest = &chest;
                         body.TorsoPoints = &m_TorsoPointBuffer;

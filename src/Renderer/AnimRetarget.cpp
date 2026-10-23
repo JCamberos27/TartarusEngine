@@ -82,14 +82,10 @@ bool RetargetIsUe4ToUe5(const std::vector<AnimNode>& source, const std::vector<A
     return FindNode(source, "spine_03") >= 0 && FindNode(source, "spine_04") < 0 && FindNode(target, "spine_05") >= 0;
 }
 
-bool RetargetIsUe5ToUe4(const std::vector<AnimNode>& source, const std::vector<AnimNode>& target) {
-    return RetargetIsUe4ToUe5(target, source);
-}
-
 std::vector<int> RetargetMatchNodes(const std::vector<AnimNode>& source, const std::vector<AnimNode>& target) {
     std::unordered_map<std::string, int> byName;
     for (int i = (int)source.size() - 1; i >= 0; --i) byName[source[i].Name] = i; // the first of a name wins
-    const bool ue4to5 = RetargetIsUe4ToUe5(source, target), ue5to4 = RetargetIsUe5ToUe4(source, target);
+    const bool ue4to5 = RetargetIsUe4ToUe5(source, target);
     std::vector<int> match(target.size(), -1);
     for (int t = 0; t < (int)target.size(); ++t) {
         std::string name = target[t].Name;
@@ -99,11 +95,6 @@ std::vector<int> RetargetMatchNodes(const std::vector<AnimNode>& source, const s
             if (name == "spine_02" || name == "spine_04") continue;
             if (name == "spine_03") name = "spine_02";
             else if (name == "spine_05") name = "spine_03";
-        } else if (ue5to4) {
-            // The same pairing the other way: UE4 spine_02 / 03 take UE5 spine_03 / 05, and neck_01 the UE5 neck_01
-            // (head carries the world turn neck_02 adds, so the neck still lands where the clip puts it).
-            if (name == "spine_02") name = "spine_03";
-            else if (name == "spine_03") name = "spine_05";
         }
         if (const auto it = byName.find(name); it != byName.end()) match[t] = it->second;
     }

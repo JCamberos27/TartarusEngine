@@ -208,6 +208,7 @@ bool Parse(const std::string& jsonText, Wardrobe& out, std::string* error) {
             r.Skin = c.contains("skin") && c["skin"].is_boolean() ? (c["skin"].get<bool>() ? 1 : 0) : -1;
             const std::string g = String(c, "gender");
             r.Gender = IEquals(g, "Female") ? 1 : IEquals(g, "Male") ? 0 : -1;
+            r.Race = String(c, "race");
             r.Hide = Strings(c, "hide");
             r.Replace = String(c, "replace");
             r.With = String(c, "with");
@@ -467,6 +468,7 @@ Resolved Resolve(const Wardrobe& w, const std::vector<Item>& catalog, const Requ
         if (AnyIn(item.Stem, rule.NameLacksAll)) continue;
         if (rule.Skin >= 0 && (rule.Skin == 1) != item.Skin) continue;
         if (rule.Gender >= 0 && rule.Gender != (int)request.Sex) continue;
+        if (!rule.Race.empty() && !(race && IEquals(rule.Race, race->Name))) continue;
         for (const auto& hide : rule.Hide) {
             const size_t before = parts.size();
             parts.erase(std::remove_if(parts.begin(), parts.end(), [&](const auto& p) { return p.first == hide; }), parts.end());
@@ -474,11 +476,17 @@ Resolved Resolve(const Wardrobe& w, const std::vector<Item>& catalog, const Requ
         }
         if (!rule.Replace.empty())
             if (auto alt = body.Alternates.find(rule.With); alt != body.Alternates.end()) {
-                // The race's own alternate first: a skeleton under a long sleeve keeps its bone hands, not skin ones.
+                // The race's own alternate first: a skeleton under a long sleeve keeps its bone hands, not skin
+                // ones; "" drops the part (its feet in shoes).
                 std::string with = alt->second;
                 if (race)
                     if (auto own = race->Alternates.find(rule.With); own != race->Alternates.end()) with = own->second;
-                if (with.empty()) continue;
+                if (with.empty()) {
+                    const size_t before = parts.size();
+                    parts.erase(std::remove_if(parts.begin(), parts.end(), [&](const auto& p) { return p.first == rule.Replace; }), parts.end());
+                    if (parts.size() != before) result.Notes.push_back(item.Name + " hides " + rule.Replace);
+                    continue;
+                }
                 for (auto& [part, model] : parts)
                     if (part == rule.Replace && !IEquals(model, with)) {
                         model = with;

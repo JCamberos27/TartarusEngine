@@ -37,8 +37,8 @@
         { "name": "Old",      "head": "Models/Old/Quantum_Old_Head.fbx",     "skin": "_Old", "tone": [0.80, 0.63, 0.53] },
         { "name": "Young",    "head": "Models/Young/Quantum_Young_Head.fbx", "skin": "",    "tone": [0.91, 0.73, 0.61] },
         { "name": "Skeleton", "head": "assets/Characters/RealisticSkeleton/Skeleton_Head.fbx", "skin": "", "tone": [0.78, 0.70, 0.55], "random": false,
-          "parts": { "Torso": "assets/Characters/RealisticSkeleton/Skeleton_Torso.fbx", "Arms": "assets/Characters/RealisticSkeleton/Skeleton_Arms.fbx", "Legs": "assets/Characters/RealisticSkeleton/Skeleton_Legs.fbx", "Feet": "assets/Characters/RealisticSkeleton/Skeleton_Feet.fbx", "UnderPants": "" },
-          "alternates": { "SleeveHands": "assets/Characters/RealisticSkeleton/Skeleton_Hands.fbx", "ShoeFeet": "assets/Characters/RealisticSkeleton/Skeleton_Feet.fbx" },
+          "parts": { "Torso": "assets/Characters/RealisticSkeleton/Skeleton_Torso.fbx", "Arms": "assets/Characters/RealisticSkeleton/Skeleton_Arms.fbx", "Legs": "assets/Characters/RealisticSkeleton/Skeleton_Legs.fbx", "Feet": "assets/Characters/RealisticSkeleton/Skeleton_Feet.fbx", "UnderPants": "assets/Characters/RealisticSkeleton/Skeleton_Pelvis.fbx" },
+          "alternates": { "SleeveHands": "assets/Characters/RealisticSkeleton/Skeleton_Hands.fbx", "ShoeFeet": "" },
           "gripInset": 0.025, "fingerCurlExtra": 18 }
       ]
     },
@@ -67,7 +67,9 @@
     { "slot": "Top", "gender": "Male", "nameHasAny": ["SKM_Hoodie", "SKM_Shirt_Classic"], "replace": "Arms", "with": "SleeveHands" },
     { "slot": "Outerwear", "gender": "Male",
       "nameHasAny": ["SKM_Bomber_", "SKM_Coat_", "SKM_Jacket_Classic", "SKM_Jacket_Shirt", "SKM_Jacket_Winter",
-                     "SKM_Jeans_Jacket", "SKM_Leather_Jacket", "SKM_Puffer_Jacket"], "replace": "Arms", "with": "SleeveHands" }
+                     "SKM_Jeans_Jacket", "SKM_Leather_Jacket", "SKM_Puffer_Jacket"], "replace": "Arms", "with": "SleeveHands" },
+    { "slot": "Top", "race": "Skeleton", "hide": ["Torso"] },
+    { "slot": "Outerwear", "race": "Skeleton", "hide": ["Torso"] }
   ],
 
   "tags": [

@@ -487,19 +487,13 @@ void FirstPersonBodyCopyArmShape(const Model& m, const Model& rig, float weight,
 // same rig frame after frame - no name lookups per frame.
 void FirstPersonBodyArmShapeLinks(const Model& m, const Model& rig, const std::vector<int>& parents,
                                   std::vector<FirstPersonArmShapeLink>& out);
-// What turns a rig bone's world rotation into body node `node`'s, for a body whose rest isn't the rig's (identity when
-// it is): the hand targets and finger copies take the rig's rotations through it, so a UE4 mannequin's palm and fingers
-// face where the rig's do rather than wherever its own differently-aimed bone axes point.
-glm::quat FirstPersonBodyRestOffset(const Model& m, const Model& rig, int node);
 // Grip Inset's direction: the way `rig`'s hand on `side` (0 left, 1 right) closes, world - from its knuckle toward its
 // curled middle fingertip, across the hand's length. Zero when the rig has no such bones or the hand is open.
 glm::vec3 FirstPersonBodyPalmDirection(const Model& rig, const glm::mat4& rigWorld, int side);
 // Finger Curl Extra: every finger joint of `m` (index / middle / ring / pinky 01-03, not the thumb) turned `degrees`
 // further about the axis it has already turned on from its rest - the way the grip closes it.
 void FirstPersonBodyCurlFingers(const Model& m, std::vector<LocalTRS>& pose, float degrees);
-// `m` is the body the links were made for: one whose rest isn't the rig's (a UE4 mannequin) takes the rig's turns from
-// rest instead of its locals.
-void FirstPersonBodyCopyArmShape(const std::vector<FirstPersonArmShapeLink>& links, const Model& m, const Model& rig, float weight,
+void FirstPersonBodyCopyArmShape(const std::vector<FirstPersonArmShapeLink>& links, const Model& rig, float weight,
                                  std::vector<LocalTRS>& pose, float clavicleWeight);
 // The arm solve's steps the player's body (FirstPersonBody::LateUpdate) and the soldiers' (NpcBody::WeaponEye /
 // HoldWeapon) share. Where the two have come to differ, the difference is a parameter, each keeping its own.
