@@ -219,7 +219,7 @@ void ColliderGizmo::Draw(const glm::mat4& view, const glm::mat4& proj, const Wor
         }
     }
 
-    // The Player's capsule (#185): it's a PxCapsuleController, not an ECS entity with a
+    // The Player's capsule (#185): it's the mover's kinematic capsule, not an ECS entity with a
     // ColliderComponent, so the loop above never draws it. Same green as a solid collider.
     if (drawShapes) {
         float foot[3], r = 0.0f, hh = 0.0f;
