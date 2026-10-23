@@ -60,13 +60,20 @@ constexpr ImVec4 Warning = Rgb(0xE6, 0xA4, 0x50);
 constexpr ImVec4 Success = Rgb(0x7C, 0xD8, 0x8C);
 constexpr ImVec4 Info    = Rgb(0x96, 0xB8, 0xE6);
 
-// --- Axes (gizmos, vector fields, the orientation gizmo) ------------------------------------------
-// The Enhancers palette's red / green / blue (Palette::Defaults), so the gizmos, the vector fields,
-// the orientation gizmo and the viewport grid's axis lines carry the same spectrum as the
-// Hierarchy and folder colours: clear hues, neither washed out nor pure primaries.
-constexpr ImVec4 AxisX = Rgb(0xF5, 0x50, 0x4F);
-constexpr ImVec4 AxisY = Rgb(0x5F, 0xE3, 0x5A);
-constexpr ImVec4 AxisZ = Rgb(0x4D, 0x8B, 0xFF);
+// --- Signal colours: the window's traffic lights (EditorModuleToolbar.cpp) ----------------------
+// The few saturated colours on screen. Everything that means "X / Y / Z" or "Play / Stop" is drawn
+// from these, so the close / minimize / zoom lights, the gizmo, the compass, the grid's axis lines,
+// the vector fields and the Play button all read as one family. Blue has no light of its own: it is
+// the same family's system blue, at the lights' brightness.
+constexpr ImVec4 SignalRed   = Rgb(0xFF, 0x5F, 0x57);
+constexpr ImVec4 SignalAmber = Rgb(0xFE, 0xBC, 0x2E);
+constexpr ImVec4 SignalGreen = Rgb(0x28, 0xC8, 0x40);
+constexpr ImVec4 SignalBlue  = Rgb(0x0A, 0x84, 0xFF);
+
+// --- Axes (gizmos, vector fields, the orientation gizmo, the viewport grid's axis lines) ---------
+constexpr ImVec4 AxisX = SignalRed;
+constexpr ImVec4 AxisY = SignalGreen;
+constexpr ImVec4 AxisZ = SignalBlue;
 
 // --- Entity / asset kinds (hierarchy icons, asset tile stripes) ------------------------------------
 // Tinted greys: a hint of hue so kinds stay tellable apart, without breaking the monochrome screen.

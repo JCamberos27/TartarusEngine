@@ -102,11 +102,12 @@ constexpr ImVec4 Danger  = Rgb(0xE8, 0x5C, 0x54);
 constexpr ImVec4 Warning = Rgb(0xE6, 0xA4, 0x50);
 constexpr ImVec4 Success = Rgb(0x7C, 0xD8, 0x8C);
 
-// Axis colours for vector rows and gizmo labels: the editor's own (EditorTheme.h), since colour
-// that carries meaning is the one place hue belongs.
-constexpr ImVec4 AxisX = Rgb(0xF5, 0x50, 0x4F);
-constexpr ImVec4 AxisY = Rgb(0x5F, 0xE3, 0x5A);
-constexpr ImVec4 AxisZ = Rgb(0x4D, 0x8B, 0xFF);
+// Axis colours for vector rows and gizmo labels: the editor's own signal colours (EditorTheme.h
+// SignalRed / Green / Blue, the traffic lights' family), since colour that carries meaning is the
+// one place hue belongs. Keep in step with EditorTheme.
+constexpr ImVec4 AxisX = Rgb(0xFF, 0x5F, 0x57);
+constexpr ImVec4 AxisY = Rgb(0x28, 0xC8, 0x40);
+constexpr ImVec4 AxisZ = Rgb(0x0A, 0x84, 0xFF);
 
 // =================================================================================================
 // 2. The continuous rounding and spacing law
