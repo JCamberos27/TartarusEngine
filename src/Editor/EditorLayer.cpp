@@ -271,26 +271,24 @@ void EditorLayer::Init(GLFWwindow* window) {
         gz.Colors[ImGuizmo::DIRECTION_X] = EditorTheme::AxisX;
         gz.Colors[ImGuizmo::DIRECTION_Y] = EditorTheme::AxisY;
         gz.Colors[ImGuizmo::DIRECTION_Z] = EditorTheme::AxisZ;
-        // Keep plane drag targets functional but unfilled: opaque/dark squares beside the
-        // arrows made the compact gizmo look boxy and obscured nearby level geometry.
-        gz.Colors[ImGuizmo::PLANE_X] = ImVec4(0.95f, 0.78f, 0.25f, 0.00f);
-        gz.Colors[ImGuizmo::PLANE_Y] = ImVec4(0.95f, 0.78f, 0.25f, 0.00f);
-        gz.Colors[ImGuizmo::PLANE_Z] = ImVec4(0.95f, 0.78f, 0.25f, 0.00f);
-        gz.Colors[ImGuizmo::SELECTION] = EditorTheme::AccentBright; // a hovered / dragged handle
-        ApplyGizmoAccent(); // the Glass theme's accent instead, when it's selected
-        // The in-use rotation arc: the palette's orange (Palette::Defaults) rather than
-        // ImGuizmo's stock, so a live rotate reads as part of the same spectrum as the axes.
-        gz.Colors[ImGuizmo::ROTATION_USING_BORDER] = EditorTheme::Rgb(0xF2, 0x99, 0x4A);
-        gz.Colors[ImGuizmo::ROTATION_USING_FILL]   = EditorTheme::Rgb(0xF2, 0x99, 0x4A, 0.35f);
-        // A compact, sturdy manipulator is easier to read against level geometry than
-        // ImGuizmo's thin default strokes. These are screen-space values, so follow the UI DPI.
-        gz.TranslationLineThickness = 7.0f * m_UIScale;
-        gz.TranslationLineArrowSize = 11.0f * m_UIScale;
-        gz.ScaleLineThickness = 6.0f * m_UIScale;
-        gz.ScaleLineCircleSize = 8.0f * m_UIScale;
-        gz.CenterCircleSize = 9.0f * m_UIScale;
-        gz.RotationLineThickness = 4.5f * m_UIScale;
-        gz.RotationOuterLineThickness = 5.5f * m_UIScale;
+        // Plane drag targets: small soft squares in the axis colour of their normal, so they
+        // read as part of the gizmo without boxing in nearby geometry.
+        gz.Colors[ImGuizmo::PLANE_X] = ImVec4(EditorTheme::AxisX.x, EditorTheme::AxisX.y, EditorTheme::AxisX.z, 0.20f);
+        gz.Colors[ImGuizmo::PLANE_Y] = ImVec4(EditorTheme::AxisY.x, EditorTheme::AxisY.y, EditorTheme::AxisY.z, 0.20f);
+        gz.Colors[ImGuizmo::PLANE_Z] = ImVec4(EditorTheme::AxisZ.x, EditorTheme::AxisZ.y, EditorTheme::AxisZ.z, 0.20f);
+        // SELECTION (a hovered / dragged handle) and the in-use rotation arc follow the theme.
+        ApplyGizmoAccent();
+        // Thin, Unreal-style strokes: the handles stay grabbable (ImGuizmo hit-tests a band wider
+        // than the line) while the gizmo stops covering the object it moves. Screen-space values,
+        // so they follow the UI DPI.
+        gz.TranslationLineThickness = 3.0f * m_UIScale;
+        gz.TranslationLineArrowSize = 8.0f * m_UIScale;
+        gz.ScaleLineThickness = 3.0f * m_UIScale;
+        gz.ScaleLineCircleSize = 5.5f * m_UIScale;
+        gz.CenterCircleSize = 5.0f * m_UIScale;
+        gz.HatchedAxisLineThickness = 3.0f * m_UIScale;
+        gz.RotationLineThickness = 2.5f * m_UIScale;
+        gz.RotationOuterLineThickness = 2.0f * m_UIScale;
     }
 
     // Fonts. Inter (SIL OFL, bundled under extern/fonts/) is the UI face, JetBrains Mono the

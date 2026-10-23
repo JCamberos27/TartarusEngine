@@ -104,9 +104,9 @@ constexpr ImVec4 Success = Rgb(0x7C, 0xD8, 0x8C);
 
 // Axis colours for vector rows and gizmo labels: the editor's own (EditorTheme.h), since colour
 // that carries meaning is the one place hue belongs.
-constexpr ImVec4 AxisX = Rgb(0xE5, 0x48, 0x4D);
-constexpr ImVec4 AxisY = Rgb(0x4C, 0xC3, 0x8A);
-constexpr ImVec4 AxisZ = Rgb(0x4C, 0x8D, 0xF6);
+constexpr ImVec4 AxisX = Rgb(0xF5, 0x50, 0x4F);
+constexpr ImVec4 AxisY = Rgb(0x5F, 0xE3, 0x5A);
+constexpr ImVec4 AxisZ = Rgb(0x4D, 0x8B, 0xFF);
 
 // =================================================================================================
 // 2. The continuous rounding and spacing law

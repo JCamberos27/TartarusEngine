@@ -312,7 +312,7 @@ void EditorSettings::Load() {
     clampF(s.LightGizmoOpacity, 0.0f, 1.0f, 0.5f);
     clampF(s.LightGizmoScale, 0.25f, 3.0f, 1.0f);
     // #135 — same ranges as the Preferences / toolbar sliders.
-    clampF(s.GizmoSize, 0.05f, 0.40f, 0.15f);
+    clampF(s.GizmoSize, 0.05f, 0.40f, 0.10f);
     clampF(s.VertexPickPixels, 5.0f, 150.0f, 35.0f);
     clampF(s.SnapTranslation, 0.001f, 100.0f, 1.0f);
     clampF(s.SnapRotationDeg, 0.1f, 180.0f, 15.0f);
@@ -374,6 +374,7 @@ bool EditorSettings::MigratePrefs(EditorSettings& s, int from) {
         s.ResetViewDefaults();
         resetLayout = true; // the old dock focused Statistics; rebuild the default arrangement
     }
+    if (from < 3 && std::fabs(s.GizmoSize - 0.15f) < 1e-4f) s.GizmoSize = EditorSettings{}.GizmoSize; // a size you set is kept
     s.PrefsVersion = kPrefsVersion;
     return resetLayout;
 }
