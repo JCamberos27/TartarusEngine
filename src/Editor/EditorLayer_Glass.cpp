@@ -330,7 +330,13 @@ GlassEditorState& EditorLayer::GlassState() {
 }
 
 void EditorLayer::ApplyGizmoAccent() {
-    ImGuizmo::GetStyle().Colors[ImGuizmo::SELECTION] = GlassThemeActive() ? Glass::AccentBright : EditorTheme::AccentBright;
+    ImGuizmo::Style& gz = ImGuizmo::GetStyle();
+    const bool glass = GlassThemeActive();
+    gz.Colors[ImGuizmo::SELECTION] = glass ? Glass::AccentBright : EditorTheme::AccentBright;
+    // A live rotate: Glass keeps it monochrome (a white arc, a faint wash); Tartarus keeps the
+    // palette's orange so it reads as part of the same spectrum as the axes.
+    gz.Colors[ImGuizmo::ROTATION_USING_BORDER] = glass ? Glass::Rgb(0xFF, 0xFF, 0xFF, 0.90f) : EditorTheme::Rgb(0xF2, 0x99, 0x4A);
+    gz.Colors[ImGuizmo::ROTATION_USING_FILL]   = glass ? Glass::Rgb(0xFF, 0xFF, 0xFF, 0.10f) : EditorTheme::Rgb(0xF2, 0x99, 0x4A, 0.35f);
 }
 
 void EditorLayer::ReleaseGlass() {
@@ -1365,7 +1371,7 @@ void EditorLayer::DrawGlassLibrary(World& world, AssetLibrary& assets) {
 // --- Viewport HUDs ------------------------------------------------------------------------------
 
 void EditorLayer::DrawGlassViewportOverlays(World& world) {
-    if (!GlassThemeActive() || m_HideOverlaysThisFrame) return;
+    if (!GlassThemeActive() || OverlaysHidden()) return;
     const EditorSettings& prefs = EditorSettings::Get();
     if (!prefs.GlassViewportHuds) return;
     GlassEditorState& g = GlassState();

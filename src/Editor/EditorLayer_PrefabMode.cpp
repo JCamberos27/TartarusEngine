@@ -201,7 +201,7 @@ void EditorLayer::DrawPrefabModeBar(World& world, AssetLibrary& assets) {
     const bool haveViewport = m_ViewportSize.x > 50.0f && m_ViewportSize.y > 1.0f &&
                               sceneWindow && sceneWindow->Active && !sceneWindow->Hidden && !sceneWindow->SkipItems;
     const ImVec2 anchor = haveViewport ? ImVec2(m_ViewportPos.x + m_ViewportSize.x * 0.5f, m_ViewportPos.y + 8.0f * m_UIScale)
-                                       : ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + ToolbarHeightPx() + 8.0f * m_UIScale);
+                                       : ImVec2(vp->Pos.x + vp->Size.x * 0.5f, vp->Pos.y + ToolbarHeightPx() + MainToolbarHeightPx() + 8.0f * m_UIScale);
     ImGui::SetNextWindowPos(anchor, ImGuiCond_Always, ImVec2(0.5f, 0.0f));
     ImGui::SetNextWindowViewport(vp->ID);
     ImGui::SetNextWindowBgAlpha(0.92f);

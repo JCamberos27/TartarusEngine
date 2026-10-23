@@ -1,7 +1,7 @@
 // Editor smoke suite: SceneTools. Included by src/Tests/EditorUiTests.cpp inside its anonymous namespace
 // (see README.md in this folder).
 //
-// The Scene view's own tools: the left tool palette (EditorLayer_ToolPalette.cpp) clicked button by
+// The Scene view's own tools: the viewport header strip (EditorLayer_ToolPalette.cpp) clicked button by
 // button, the same tools from their viewport shortcuts (Q/W/E/R/T/Y/M with the Scene hovered, the
 // Alt chords for space / pivot / grid / snap / draw mode), view presets (1/3/7, Ctrl for the
 // opposite face, 0, 5 and the nav gizmo's axis bubbles), Frame Selected, picking and box select
@@ -10,9 +10,9 @@
 // against the undo stack. The View menu copies of these (presets, Orthographic, Measure, Transform
 // Gizmo) are in the Menus suite.
 //
-// The palette is one column of ~17 buttons. In CI's ~1044x788 window the Scene view is shorter
-// than that, so tests that click its lower buttons hide the Assets panel first (RoomForRail),
-// which gives the Scene view the full height, and show it again afterwards.
+// The header is one row above the image; in CI's ~1044x788 window its right group may drop its
+// labels (icons stay), which the queries below allow for. Measure and Duplicate Array live in its
+// Tools dropdown, the grid/snap and gizmo popovers behind their carets.
 
 } // namespace
 #ifdef _MSC_VER
@@ -97,28 +97,37 @@ using ST = EditorSmokeAccess_SceneTools;
 using ChromeUi::Steps;
 using ChromeUi::Seq;
 
-// A palette button: icon-only, labelled by its glyph, inside the Scene window's ##ToolPalette child.
+// A toolbar button whose label starts with `icon` (icon-only buttons, and the labelled ones -
+// "<icon>  Shaded", "<icon>  1 m" - alike): in the main toolbar row (tools, space, snap) or the
+// Scene panel's header (Perspective, draw mode, Show).
+const char* kMainBar = "##MainToolbar";
 Query Rail(const char* icon) {
-    Query q = ByExact(icon, kScene);
-    q.Pred = [](const UiItem& it) { return Contains(it.Window, "##ToolPalette"); };
+    Query q;
+    const std::string glyph = icon;
+    q.Pred = [glyph](const UiItem& it) {
+        return it.Label.rfind(glyph, 0) == 0 && (Contains(it.Root, kMainBar) || Contains(it.Root, kScene));
+    };
     return q;
-}
-const UiItem* LastRailButton() {
-    const UiItem* it = Find(Rail(EDITOR_ICON_PERSPECTIVE));
-    return it ? it : Find(Rail(EDITOR_ICON_ORTHOGRAPHIC));
 }
 bool FullyShown(const UiItem& it) {
     ImRect r = it.Rect;
     r.ClipWithFull(it.Clip);
     return r.GetWidth() >= it.Rect.GetWidth() - 0.5f && r.GetHeight() >= it.Rect.GetHeight() - 0.5f;
 }
-// The palette is taller than CI's Scene view: hide Assets so the Scene view gets its height.
+// The right group of the header (draw mode .. camera speed): wait until it is on screen whole.
 Steps RoomForRail() {
     return {
-        Do("hide the Assets panel (room for the whole palette)", [](Ctx& c) { ST::ShowAssets(c.E) = false; }),
-        Until("the whole tool palette fits", [](Ctx&) { const UiItem* it = LastRailButton(); return it && FullyShown(*it); }, 180),
+        Until("the header's view group is shown", [](Ctx&) {
+            const UiItem* it = Find(Rail(EDITOR_ICON_TOGGLE_GIZMOS));
+            return it && FullyShown(*it);
+        }, 180),
     };
 }
+// The header's Tools dropdown, then one of its items.
+Query ToolsButton() { return ByLabel("Tools", kMainBar); }
+Query SnapCaret() { return ByExact(ICON_FA_CARET_DOWN "##snapcaret", kMainBar); }
+// The header's Show menu: the grid and the gizmo popover's body.
+Query ShowButton() { return ByLabel("Show", kScene); }
 // Every test ends here: tools back to their defaults, the camera reset, panels as they were.
 Steps Tidy() {
     return {
@@ -466,7 +475,8 @@ void RegisterSceneToolsTests() {
     Add("scenetools: Measure chains points by click, right-click clears, Escape exits", Seq({
         ToolScene(),
         {SelectByName("Beta"), Wait(2),
-         Click(Rail(EDITOR_ICON_MEASURE)), Wait(2),
+         Click(ToolsButton()), Until("the Tools menu", [](Ctx&) { return Find(MenuItem("Measure")) != nullptr; }),
+         Click(MenuItem("Measure")), Wait(2),
          ExpectTrue("Measure on", [](Ctx& c) { return ST::Measure(c.E) && ST::MeasurePoints(c.E) == 0; }),
          ClickAt("a first point", AtSpot(0.6f, 0.8f)),
          ClickAt("a second point", AtSpot(0.85f, 0.7f)), Wait(2),
@@ -489,11 +499,13 @@ void RegisterSceneToolsTests() {
     Add("scenetools: Duplicate Array from the palette lays out a 3 x 1 x 2 grid; undo removes it", Seq({
         ToolScene(),
         {Do("nothing selected", [](Ctx& c) { X::Deselect(c.E); }), Wait(2),
-         Click(Rail(EDITOR_ICON_DUPLICATE_ARRAY)), Wait(3),
+         Click(ToolsButton()), Until("the Tools menu", [](Ctx&) { return Find(MenuItem("Duplicate Array")) != nullptr; }),
+             Click(MenuItem("Duplicate Array")), Wait(3),
          ExpectTrue("with nothing selected the dialog does not open", [](Ctx& c) { return !ST::ArrayDupShown(c.E); }),
          SelectByName("Gamma"), Wait(2),
          Do("note the scene", [](Ctx& c) { g_Text = SceneSerializer::SaveToString(c.W, c.A); }),
-         Click(Rail(EDITOR_ICON_DUPLICATE_ARRAY)),
+         Click(ToolsButton()), Until("the Tools menu", [](Ctx&) { return Find(MenuItem("Duplicate Array")) != nullptr; }),
+             Click(MenuItem("Duplicate Array")),
          Until("the dialog", [](Ctx&) { return Find(ByExact("Create", "##ArrayDup")) != nullptr; }),
          Do("3 x 1 x 2 cells, 2 m apart in X and 1.5 m in Z", [](Ctx& c) { ST::SetArrayDup(c.E, 3, 1, 2, glm::vec3(2.0f, 0.0f, 1.5f)); }),
          Wait(2),
@@ -545,8 +557,10 @@ void RegisterSceneToolsTests() {
          Until("the button now shows Center", [](Ctx&) { return Find(Rail(EDITOR_ICON_PIVOT_CENTER)) != nullptr; }),
          HoverPanel(kScene), Key(ImGuiKey_X, ImGuiMod_Alt | ImGuiMod_Shift), Wait(2),
          ExpectTrue("Alt+Shift+X: Pivot again", [](Ctx& c) { return !ST::Center(c.E); }),
-         Click(Rail(EDITOR_ICON_GRID)), Wait(2),
+         Click(ShowButton()), Until("the Show menu", [](Ctx&) { return Find(MenuItem("Grid")) != nullptr; }),
+         Click(MenuItem("Grid")), Wait(2),
          ExpectTrue("grid off", [](Ctx& c) { return !ST::Grid(c.E); }),
+         ChromeUi::CloseMenus(), Wait(2),
          Shot("no-grid", {kScene}),
          HoverPanel(kScene), Key(ImGuiKey_G, ImGuiMod_Alt), Wait(2),
          ExpectTrue("Alt+G: grid on", [](Ctx& c) { return ST::Grid(c.E); }),
@@ -554,13 +568,13 @@ void RegisterSceneToolsTests() {
          ExpectTrue("snap off", [](Ctx& c) { return !ST::Snap(c.E); }),
          HoverPanel(kScene), Key(ImGuiKey_G, ImGuiMod_Alt | ImGuiMod_Shift), Wait(2),
          ExpectTrue("Alt+Shift+G: snap on", [](Ctx& c) { return ST::Snap(c.E); }),
-         Click(Rail(EDITOR_ICON_TOGGLE_GIZMOS)), Wait(2),
-         ExpectTrue("gizmos off", [](Ctx& c) { return !ST::Gizmos(c.E); }),
+         HoverPanel(kScene), Key(ImGuiKey_G, ImGuiMod_Shift), Wait(2),
+         ExpectTrue("Shift+G: gizmos off", [](Ctx& c) { return !ST::Gizmos(c.E); }),
          Shot("no-gizmos", {kScene}),
-         Click(Rail(EDITOR_ICON_TOGGLE_GIZMOS)), Wait(2),
-         ExpectTrue("gizmos on", [](Ctx& c) { return ST::Gizmos(c.E); }),
+         HoverPanel(kScene), Key(ImGuiKey_G, ImGuiMod_Shift), Wait(2),
+         ExpectTrue("Shift+G: gizmos on", [](Ctx& c) { return ST::Gizmos(c.E); }),
          // Right-click opens each button's settings popover.
-         RightClick(Rail(EDITOR_ICON_GRID)),
+         Click(SnapCaret()),
          Until("the grid & snap popover", [](Ctx&) { return Find(PopupItem("Show grid")) != nullptr; }),
          Shot("grid-popover"),
          Click(PopupItem("Show grid")), Wait(2),
@@ -568,7 +582,7 @@ void RegisterSceneToolsTests() {
          Click(PopupItem("Show grid")), Wait(2),
          ExpectTrue("and on", [](Ctx& c) { return ST::Grid(c.E); }),
          ChromeUi::CloseMenus(), Wait(2),
-         RightClick(Rail(EDITOR_ICON_TOGGLE_GIZMOS)),
+         Click(ShowButton()),
          Until("the gizmos popover", [](Ctx&) { return Find(PopupItem("Show transform gizmo")) != nullptr; }),
          Click(PopupItem("Show transform gizmo")), Wait(2),
          ExpectTrue("the transform gizmo off", [](Ctx& c) { return !ST::TransformGizmo(c.E); }),
@@ -621,11 +635,13 @@ void RegisterSceneToolsTests() {
     Add("scenetools: orthographic by click and 5; view presets 1 3 7 (Ctrl: opposite) and 0; the nav gizmo's axis", Seq({
         ToolScene(), RoomForRail(),
         {Do("nothing selected (views pivot on the scene)", [](Ctx& c) { X::Deselect(c.E); }), Wait(2),
-         Click(Rail(EDITOR_ICON_PERSPECTIVE)), Wait(2),
+         Click(Rail(EDITOR_ICON_PERSPECTIVE)), Until("the projection menu", [](Ctx&) { return Find(MenuItem("Orthographic")) != nullptr; }),
+         Click(MenuItem("Orthographic")), Wait(2),
          UntilLooks("the same way, orthographic", Look(-90.0f, -10.0f), 1),
          Until("the button shows Orthographic", [](Ctx&) { return Find(Rail(EDITOR_ICON_ORTHOGRAPHIC)) != nullptr; }),
          Shot("ortho", {kScene}),
-         Click(Rail(EDITOR_ICON_ORTHOGRAPHIC)), Wait(2),
+         Click(Rail(EDITOR_ICON_ORTHOGRAPHIC)), Until("the projection menu", [](Ctx&) { return Find(MenuItem("Perspective")) != nullptr; }),
+         Click(MenuItem("Perspective")), Wait(2),
          UntilLooks("the same way, perspective", Look(-90.0f, -10.0f), 0),
          HoverPanel(kScene), Key(ImGuiKey_5), Wait(2),
          UntilLooks("the same way after 5, orthographic", Look(-90.0f, -10.0f), 1),
@@ -913,7 +929,8 @@ void RegisterSceneToolsTests() {
                  c.W.Registry.get<LightComponent>(ByName(c.W, "Gamma")).Intensity = 0.25f;
              }), Wait(3), Record("dimming Gamma"),
              Do("Duplicate Array 3 x 1 x 1", [](Ctx& c) { ST::SetArrayDup(c.E, 3, 1, 1, glm::vec3(0.0f, 0.0f, 2.0f)); }),
-             Click(Rail(EDITOR_ICON_DUPLICATE_ARRAY)),
+             Click(ToolsButton()), Until("the Tools menu", [](Ctx&) { return Find(MenuItem("Duplicate Array")) != nullptr; }),
+             Click(MenuItem("Duplicate Array")),
              Click(ByExact("Create", "##ArrayDup")), Wait(3), Record("Duplicate Array"),
              Click(Rail(EDITOR_ICON_ROTATE)), Wait(2),
              ClickAt("the cube", AtObject("Cube")), Wait(3), Record("picking the cube")},

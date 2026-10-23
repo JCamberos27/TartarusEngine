@@ -235,6 +235,14 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
     ImGui::EndChild();
 
     ImVec2 avail = ImGui::GetContentRegionAvail();
+    DrawView(ImGui::GetCursorScreenPos(), avail, 1.0f, stats, playing, inputEngaged, noSceneCamera);
+
+    ImGui::End();
+    DrawCustomResolutionModal();
+}
+
+void GameViewPanel::DrawView(ImVec2 containerStart, ImVec2 avail, float alpha, const GameViewStats* stats, bool playing,
+                             bool inputEngaged, bool noSceneCamera) {
     m_LastAvailableRegion = avail;
     m_ViewImageSize = ImVec2(0.0f, 0.0f);
 
@@ -242,11 +250,10 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
         float targetAspect = m_CurrentPreset.Mode == AspectRatioMode::FreeAspect ? -1.0f : m_CurrentPreset.AspectRatio;
         ResolutionManager::LetterboxRect rect = ResolutionManager::CalculateLetterboxRect(avail, targetAspect);
 
-        ImVec2 containerStart = ImGui::GetCursorScreenPos();
         ImDrawList* dl = ImGui::GetWindowDrawList();
         // Explicit black bars rather than leaving the panel's own background showing through -
         // reads as an intentional letterbox/pillarbox instead of an unrendered gap.
-        dl->AddRectFilled(containerStart, ImVec2(containerStart.x + avail.x, containerStart.y + avail.y), IM_COL32(0, 0, 0, 255));
+        dl->AddRectFilled(containerStart, ImVec2(containerStart.x + avail.x, containerStart.y + avail.y), IM_COL32(0, 0, 0, (int)(255.0f * alpha)));
 
         // Scale: the fitted rect is the default; zoomed, the frame is drawn at framebuffer size x zoom,
         // centred (plus the pan) and clipped to the panel - only the part on screen is submitted, with
@@ -282,7 +289,8 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
         // down the image (the whole frame: uv0=(0,1), uv1=(1,0)).
         const ImVec2 uv0((visMin.x - fullMin.x) / shown.x, 1.0f - (visMin.y - fullMin.y) / shown.y);
         const ImVec2 uv1((visMax.x - fullMin.x) / shown.x, 1.0f - (visMax.y - fullMin.y) / shown.y);
-        ImGui::Image((ImTextureID)(intptr_t)m_Framebuffer.ColorTexture(), rect.Size, uv0, uv1);
+        ImGui::ImageWithBg((ImTextureID)(intptr_t)m_Framebuffer.ColorTexture(), rect.Size, uv0, uv1,
+                           ImVec4(0.0f, 0.0f, 0.0f, 0.0f), ImVec4(1.0f, 1.0f, 1.0f, alpha));
         m_ViewHovered = ImGui::IsItemHovered();
         if (punching) {
             // Up in the first 60 ms, then back down on the spring (its small overshoot reads as a settle).
@@ -301,7 +309,7 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
         }
 
         // Zoom with the wheel about the cursor, pan with the middle button - not while the game has input.
-        if (!(playing && inputEngaged)) {
+        if (!(playing && inputEngaged) && alpha >= 1.0f) {
             ImGuiIO& io = ImGui::GetIO();
             if (m_ViewHovered && io.MouseWheel != 0.0f) {
                 const float next = std::clamp(scale * std::pow(1.15f, io.MouseWheel), std::min(m_FitScale, 1.0f), 8.0f);
@@ -326,7 +334,9 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
 
         // In-panel play: first click inside the running view captures mouse/keyboard for the
         // game. (Esc releases — handled in main.cpp.)
-        if (playing && !inputEngaged) {
+        if (alpha < 1.0f) {
+            // Mid-dissolve: the view isn't interactive yet.
+        } else if (playing && !inputEngaged) {
             if (m_ViewHovered && (ImGui::IsMouseClicked(ImGuiMouseButton_Left) || ImGui::IsMouseClicked(ImGuiMouseButton_Right))) {
                 m_EngageClickPending = true;
             }
@@ -342,7 +352,7 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
         // (The persistent "Esc to release the cursor" banner was removed — that binding now
         // lives in Preferences ▸ Shortcuts like every other key.)
 
-        if (EditorSettings::Get().GameViewShowStats && stats) {
+        if (EditorSettings::Get().GameViewShowStats && stats && alpha >= 1.0f) {
             ImVec2 statsPos(imagePos.x + 8.0f, imagePos.y + 8.0f);
             char buf[320];
             // The FPS rolls (Odometer) to a held value: it moves on a change of 2 or more, or after
@@ -384,8 +394,13 @@ void GameViewPanel::RenderUI(const GameViewStats* stats, bool isOsFullscreen, bo
         ImGui::Dummy(ImVec2(0.0f, 0.0f));
     }
 
-    ImGui::End();
-    DrawCustomResolutionModal();
+}
+
+void GameViewPanel::RenderEmbedded(ImVec2 pos, ImVec2 size, float alpha) {
+    m_ViewHovered = false;
+    m_Visible = true;
+    ImGui::SetCursorScreenPos(pos);
+    DrawView(pos, size, std::clamp(alpha, 0.0f, 1.0f), &m_FrameStats, m_FramePlaying, m_FrameInputEngaged, m_FrameNoSceneCamera);
 }
 
 void GameViewPanel::LoadSettings() {

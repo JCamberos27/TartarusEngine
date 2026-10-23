@@ -218,153 +218,35 @@ void EditorLayer::DrawPlayTransportButtons(bool playing, bool maximized, bool pa
     ImGui::PopStyleColor(3);
 }
 
-// The floating action bar centered over whichever of the Scene/Game viewports is on screen —
-// Undo/Redo/Save, the Play/Stop/Pause/Step/Fullscreen transport, and the panel-toggle /
-// notification cluster that all used to live in the toolbar's one-click icon row.
-// Moving them here (instead of a fixed toolbar strip) means they're always over the content
-// they act on, in both Scene and Game view, and freed the toolbar down to just its menu bar
-// (kToolbarHeight shrank to match — more of the window is now viewport). Replaces the old
-// DrawPlayStopButton, which only handled this positioning for the one case (maximized play)
-// where the toolbar was hidden entirely; every other state routed Play/Stop through the
-// toolbar's Zone B instead. Now there's only one path, used unconditionally.
+// Play / Stop and the rest of the transport live in the main toolbar row now (DrawMainToolbar,
+// EditorLayer_ToolPalette.cpp), under the menus: nothing floats over the scene. This draws that
+// row, the prefab-mode bar, and - only while play is maximized and the editor chrome is hidden -
+// a slim transport over the game.
 void EditorLayer::DrawViewportActionBar(World& world, AssetLibrary& assets,
                                          bool playing, bool maximized, bool paused) {
+    if (playing && !m_MotionPlaying) m_PlayStartedAt = ImGui::GetTime();
     m_MotionPlaying = playing; // the play-mode frame (Glass::DrawPlayFrame, EndFrame)
     m_MotionPaused = paused;
-    // Both modes own the same overlay position. Draw only one, after every panel
-    // has had a chance to open a prefab, including the Inspector and Asset Browser.
-    if (InPrefabMode() || !m_InspectorRequestedPrefab.empty()) {
+    m_TransportMaximized = maximized;
+    const bool prefab = InPrefabMode() || !m_InspectorRequestedPrefab.empty();
+    if (!maximized) DrawMainToolbar(world, assets, playing, paused, /*transport=*/!prefab);
+    if (prefab) {
         DrawPrefabModeBar(world, assets);
         return; // also on the frame Back to Scene is clicked
     }
-    int ww, wh;
-    glfwGetWindowSize(m_Window, &ww, &wh);
-    float w = (float)ww;
+    if (!maximized) return;
 
-    // NoDocking: without it this is technically a dockable floating window, and Reset Layout's
-    // DockBuilderRemoveNode + full dockspace rebuild (in Draw()) can knock an undocked-but-
-    // dockable window out of the visible window list entirely.
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+    int ww = 0, wh = 0;
+    glfwGetWindowSize(m_Window, &ww, &wh);
+    // NoDocking: a dockable floating window can drop out of the window list on a dock rebuild.
+    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
         ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
         ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_AlwaysAutoResize;
-
-    // Rides over whichever of the two shared-dock-node viewports is actually on screen: the Game
-    // view when its tab is up, otherwise the Scene view — so it never floats in a plate over the
-    // middle of the window, and it's on the Scene view too when you tab there mid-play.
-    const bool overGame  = m_GameViewImgSize.x > 1.0f && m_GameViewImgSize.y > 1.0f;
-    const bool overScene = !overGame && m_ViewportSize.x > 1.0f && m_ViewportSize.y > 1.0f;
-    // Other tabs (such as Script IDE) have no viewport to anchor this bar to.
-    if (!overScene && !overGame && !maximized) return;
-
-    if (overScene || overGame) {
-        const ImVec2 imgPos  = overGame ? m_GameViewImgPos  : ImVec2(m_ViewportPos.x, m_ViewportPos.y);
-        const ImVec2 imgSize = overGame ? m_GameViewImgSize : ImVec2(m_ViewportSize.x, m_ViewportSize.y);
-
-        // (The play-mode frame is the travelling rim round the Scene and Game views now:
-        // Glass::DrawPlayFrame, drawn after every panel.)
-        const float cx = imgPos.x + imgSize.x * 0.5f;
-        const float cy = imgPos.y + 8.0f * m_UIScale;
-        ImGui::SetNextWindowPos(ImVec2(cx, cy), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
-    } else {
-        // No viewport rect to anchor to (before the first Scene/Game frame) — float near the
-        // top of the window.
-        ImGui::SetNextWindowPos(ImVec2(w * 0.5f, 10.0f * m_UIScale), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
-    }
-
-    // #5 item 2 — this used to be a 60%-alpha wash behind fixed near-white text, which (on a pale
-    // scene) was the audit's "single most important control ... the least visible thing on
-    // screen" at ~2:1 contrast. Same fixed opaque plate + fixed light text every other viewport
-    // HUD uses since Defect #54 (kHudPlateColor/kHudTextColor), not a bespoke translucency.
+    ImGui::SetNextWindowPos(ImVec2((float)ww * 0.5f, 8.0f * m_UIScale), ImGuiCond_Always, ImVec2(0.5f, 0.0f));
     ImGui::PushStyleColor(ImGuiCol_WindowBg, EditorUIPrimitives::kHudPlateColor);
     ImGui::PushStyleColor(ImGuiCol_Text,     EditorUIPrimitives::kHudTextColor);
-
     ImGui::Begin("##ViewportActionBar", nullptr, flags);
-    // A dock rebuild elsewhere (Reset Layout) can bury this behind the freshly recreated dock
-    // windows; bring it forward only then — when it sits behind the viewport it rides on — so a
-    // floating window (Settings, Lighting) or a popup the user opened over the viewport stays on
-    // top of it. (It used to be forced to the very front every frame, over those windows too.)
-    {
-        ImGuiWindow* self = ImGui::GetCurrentWindow();
-        ImGuiWindow* viewport = ImGui::FindWindowByName(overGame ? EditorPanels::Game : EditorPanels::Scene);
-        if (viewport && ImGui::FindWindowDisplayIndex(self) < ImGui::FindWindowDisplayIndex(viewport->RootWindow))
-            ImGui::BringWindowToDisplayFront(self);
-    }
-
-    // A short inset tick between clusters — same treatment the old toolbar row's dividers used,
-    // lighter than the icons themselves rather than another hard-edged shape the same weight.
-    auto divider = [this]() {
-        ImGui::SameLine(0.0f, 10.0f * m_UIScale);
-        const ImVec2 p = ImGui::GetCursorScreenPos();
-        const float h = ImGui::GetFrameHeight();
-        const float inset = h * 0.22f;
-        ImGui::GetWindowDrawList()->AddLine(ImVec2(p.x, p.y + inset), ImVec2(p.x, p.y + h - inset),
-                                            ImGui::GetColorU32(ImGuiCol_Separator));
-        ImGui::Dummy(ImVec2(1.0f, h));
-        ImGui::SameLine(0.0f, 10.0f * m_UIScale);
-    };
-
-    // --- Undo / Redo / Save ------------------------------------------------------------------
-    // Edits to the scene don't apply while it plays: the cluster (and its divider) folds away on
-    // Play and returns on Stop.
-    static bool s_EditClusterWas = !playing;
-    bool editCluster = false;
-    {
-        ToolbarFoldRun fold("##foldEdit", !playing, s_EditClusterWas);
-        editCluster = fold.Visible();
-        if (editCluster) { // these sound when the action lands (EditorSound: Undo / Redo / Save), not as clicks
-            if (playing) ImGui::BeginDisabled();
-            EditorSoundEvents::ScopedClickSilence quiet;
-            if (ActionButton(EDITOR_ICON_UNDO, "Undo (Ctrl+Z)")) ToolbarUndo(world, assets);
-            ImGui::SameLine();
-            if (ActionButton(EDITOR_ICON_REDO, "Redo (Ctrl+Y)")) ToolbarRedo(world, assets);
-            ImGui::SameLine();
-            if (ActionButton(EDITOR_ICON_SAVE, "Save (Ctrl+S)")) SaveScene(world, assets);
-            divider();
-            ImGui::Dummy(ImVec2(0.0f, 0.0f)); // the divider ends on SameLine: close the group's line
-            if (playing) ImGui::EndDisabled();
-        }
-    }
-
-    // --- Play / Stop / Pause / Step / Fullscreen ---------------------------------------------
-    if (editCluster) ImGui::SameLine(0.0f, 0.0f);
     DrawPlayTransportButtons(playing, maximized, paused);
-
-    // --- Panel toggles ------------------------------------------------------------------------
-    divider();
-    {
-        // The stats drawn over the view itself (the Game view's readout, the Scene view's stats
-        // pill). The Statistics panel is Window > Statistics.
-        bool showStats = EditorSettings::Get().GameViewShowStats;
-        bool statsClicked = false;
-        {
-            EditorSoundEvents::ScopedClickSilence quiet; // StatsOn / StatsOff instead
-            statsClicked = ActionButton(EDITOR_ICON_STATISTICS, "Show stats over the view", showStats);
-        }
-        if (statsClicked) {
-            EditorSettings::Get().GameViewShowStats = !showStats;
-            EditorSettings::Save();
-            EditorSound::Play(showStats ? EditorSound::Event::StatsOff : EditorSound::Event::StatsOn, EditorSound::LastItemScreenX());
-        }
-    }
-    ImGui::SameLine();
-    {
-        // Defect #11 — flip Visible off only when Console is already the front/selected tab;
-        // if it's hidden behind a sibling dock tab (Asset Browser), focus it instead of closing
-        // an already-closed panel.
-        EditorConsoleState& cs = EditorModuleHost::ConsoleState();
-        if (ActionButton(EDITOR_ICON_CONSOLE, "Toggle Console", cs.Visible)) {
-            if (!cs.Visible) {
-                cs.Visible = true;
-            } else {
-                ImGuiWindow* consoleWin = ImGui::FindWindowByName(EditorPanels::Console);
-                if (consoleWin && consoleWin->Hidden) ImGui::FocusWindow(consoleWin);
-                else cs.Visible = false;
-            }
-        }
-    }
-    ImGui::SameLine();
-    if (ActionButton(EDITOR_ICON_HISTORY, "Toggle History", m_ShowHistory)) m_ShowHistory = !m_ShowHistory;
-
     ImGui::PopStyleColor(2);
     ImGui::End();
 }
@@ -706,6 +588,7 @@ void EditorLayer::DrawHistoryListBody(World& world, AssetLibrary& assets) {
 }
 
 float EditorLayer::ToolbarHeightPx() const { return kToolbarHeight * m_UIScale; }
+float EditorLayer::MainToolbarHeightPx() const { return std::floor(kMainToolbarHeight * m_UIScale); }
 float EditorLayer::StatusBarHeightPx() const { return kStatusBarHeight * m_UIScale; }
 
 // The toolbar strip + its menu bar + the window min/max/close controls moved into

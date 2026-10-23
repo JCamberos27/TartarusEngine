@@ -22,7 +22,7 @@ namespace fs = std::filesystem;
 using PF = EditorSmokeAccess_Prefabs;
 using PA = EditorSmokeAccess_PlayMode;
 const char* kModeBar = "##PrefabModeBar";
-const char* kActionBar = "##ViewportActionBar";
+const char* kActionBar = "##MainToolbar";
 
 std::string ScratchDir() { return ProjectPaths::Resolve("editor-smoke-scratch"); }
 std::string PrefabPath() { return (fs::path(ScratchDir()) / "SmokeCrate.prefab").generic_string(); }
@@ -178,10 +178,9 @@ Step RightClickLabel(std::string tag) {
     }, 120};
 }
 bool ModeBarShown() { return Find(ByLabel("Scene", kModeBar)) != nullptr; }
-bool ActionBarShown() {
-    ImGuiWindow* w = ImGui::FindWindowByName(kActionBar);
-    return w && w->WasActive && !w->Hidden;
-}
+// The Play transport (in the title bar since the chrome moved out of the viewport) steps aside
+// for the prefab-mode bar.
+bool ActionBarShown() { return Find(ByLabel("Play", kActionBar)) != nullptr; }
 } // namespace smoke_prefabs
 
 void RegisterPrefabsTests() {

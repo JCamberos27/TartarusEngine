@@ -2,24 +2,37 @@
 // (see README.md in this folder). Uses the ChromeUi helpers from Menus.inl (included before this).
 //
 // Every dockable panel (EditorPanels.h) and the other editor windows, opened the way a user opens
-// them (Window menu, shortcut, the viewport action bar, the status bar), shot non-blank, their main
-// controls used lightly, closed with their own x, and checked gone. Also the floating viewport
-// action bar and the window-wide status bar.
+// them (Window menu, shortcut, the title bar's toggles, the status bar), shot non-blank, their main
+// controls used lightly, closed with their own x, and checked gone. Also the title bar's Play
+// transport, the maximized-play bar and the window-wide status bar.
 
 void RegisterPanelsTests() {
     using namespace ChromeUi;
-    const char* kBar = "##ViewportActionBar";
+    const char* kBar = "##MainToolbar";           // the main toolbar row: transport + panel toggles
+    const char* kMaxBar = "##ViewportActionBar";  // the slim transport over maximized play
     const char* kStatus = "##StatusBar";
 
     // ---------------------------------------------------------------------------------- chrome
-    Add("panels: Scene, toolbar, action bar and status bar are drawn", {
+    Add("panels: Scene, title bar, viewport header and status bar are drawn", {
         FreshScene(), Wait(3),
         UntilShown(EditorPanels::Scene),
-        Shot("editor", {"###Scene", "###Hierarchy", "###Inspector", "###Assets", "##Toolbar", kStatus, kBar}),
-        Expect("the action bar's controls", [kBar](Ctx&) {
-            for (const char* icon : {EDITOR_ICON_UNDO, EDITOR_ICON_REDO, EDITOR_ICON_SAVE, EDITOR_ICON_STATISTICS, EDITOR_ICON_CONSOLE, EDITOR_ICON_HISTORY})
+        Shot("editor", {"###Scene", "###Hierarchy", "###Inspector", "###Assets", "##Toolbar", kStatus}),
+        Expect("the title bar's controls", [kBar](Ctx&) {
+            for (const char* icon : {EDITOR_ICON_STATISTICS, EDITOR_ICON_CONSOLE, EDITOR_ICON_HISTORY})
                 if (!Find(ByExact(icon, kBar))) return std::string("missing an icon button");
             return Find(ByLabel("Play", kBar)) ? std::string() : std::string("no Play");
+        }),
+        ExpectTrue("nothing floats over the scene (no action bar while windowed)", [kMaxBar](Ctx&) {
+            ImGuiWindow* w = ImGui::FindWindowByName(kMaxBar);
+            return !w || !w->WasActive || w->Hidden;
+        }),
+        ExpectTrue("the main toolbar's tools", [kBar](Ctx&) {
+            for (const char* icon : {EDITOR_ICON_HAND_TOOL, EDITOR_ICON_TRANSLATE, EDITOR_ICON_ROTATE, EDITOR_ICON_SCALE})
+                if (!Find(ByExact(icon, kBar))) return false;
+            return true;
+        }),
+        ExpectTrue("the viewport header's view menus", [](Ctx&) {
+            return Find(ByLabel("Perspective", "###Scene")) && Find(ByLabel("Show", "###Scene"));
         }),
         ExpectTrue("the status bar's segments", [kStatus](Ctx&) {
             return FindAll(ByExact("##seg", kStatus)).size() >= 5 && Find(ByExact("##lastlog", kStatus)) != nullptr;
@@ -54,16 +67,22 @@ void RegisterPanelsTests() {
         Add("panels: Hierarchy, Inspector and Assets close with their x and come back", s);
     }
 
-    Add("panels: the Game tab shows the game view; the Scene tab comes back", {
+    Add("panels: the viewport's Game switch shows the game view in the same rect; Scene comes back", {
         FreshScene(), Wait(2),
-        Click(TabOf(EditorPanels::Game)),
-        UntilShown(EditorPanels::Game),
+        Do("note the viewport size", [](Ctx& c) { g_Number = c.E.ViewportSize().x; }),
+        Click(ByLabel("Game", "###Scene")),
+        Until("the game is showing", [](Ctx& c) {
+            return c.E.GetViewportMode() == EditorLayer::ViewportMode::Game && !c.E.ViewFadeActive();
+        }),
         Wait(5),
-        Shot("game", {"###Game"}),
-        ExpectTrue("the action bar rides over the Game view", [kBar](Ctx&) { return Find(ByLabel("Play", kBar)) != nullptr; }),
-        Click(TabOf(EditorPanels::Scene)),
-        UntilShown(EditorPanels::Scene),
-        ExpectTrue("Game hidden behind it", [](Ctx&) { return !Shown(EditorPanels::Game); }),
+        Shot("game", {"###Scene"}),
+        ExpectTrue("no separate Game window", [](Ctx&) { return !Shown(EditorPanels::Game); }),
+        ExpectTrue("Play stays in the title bar over the Game view", [kBar](Ctx&) { return Find(ByLabel("Play", kBar)) != nullptr; }),
+        Click(ByLabel("Scene", "###Scene")),
+        Until("the scene is back, the same size", [](Ctx& c) {
+            return c.E.GetViewportMode() == EditorLayer::ViewportMode::Scene && !c.E.ViewFadeActive() &&
+                   std::abs(c.E.ViewportSize().x - (float)g_Number) < 1.0f;
+        }),
     });
 
     // ---------------------------------------------------------------------------------- Console
@@ -348,21 +367,9 @@ void RegisterPanelsTests() {
         UntilGone(EditorPanels::Settings),
     });
 
-    // ---------------------------------------------------------------------------------- action bar
-    Add("panels: action bar Undo, Redo and Save", {
-        FreshScene(), Wait(2),
-        Do("rename Gamma with undo", [](Ctx& c) { X::PushUndo(c.E, c.W, "Rename"); c.W.Registry.get<NameComponent>(ByName(c.W, "Gamma")).Name = "Gamma Renamed"; }),
-        Wait(3),
-        Click(ByExact(EDITOR_ICON_UNDO, kBar)),
-        Until("undone", [](Ctx& c) { return ByName(c.W, "Gamma") != entt::null; }),
-        Click(ByExact(EDITOR_ICON_REDO, kBar)),
-        Until("redone", [](Ctx& c) { return ByName(c.W, "Gamma Renamed") != entt::null; }),
-        Do("no scratch file yet", [](Ctx&) { std::error_code ec; std::filesystem::remove(g_ScratchScene, ec); }),
-        Click(ByExact(EDITOR_ICON_SAVE, kBar)),
-        Until("saved", [](Ctx& c) { return !A::Dirty(c.E) && Contains(ReadText(g_ScratchScene), "Gamma Renamed"); }),
-    });
-
-    Add("panels: action bar Play, Pause, Step, Fullscreen, Stop", {
+    // ---------------------------------------------------------------------------------- title bar
+    // (Undo / Redo / Save left the bar for the Edit and File menus: Menus.inl covers them.)
+    Add("panels: title bar Play, Pause, Step, Fullscreen, Stop", {
         FreshScene(), Wait(2),
         Click(ByLabel("Play", kBar)),
         Until("playing", [](Ctx& c) { return X::InPlay(c.E); }, 300), Wait(5),
@@ -383,8 +390,8 @@ void RegisterPanelsTests() {
         Click(ByLabel("Resume", kBar)),
         Until("running again", [kBar](Ctx&) { return Find(ByLabel("Pause", kBar)) != nullptr; }),
         Click(ByLabel("Fullscreen", kBar)),
-        Until("maximized (Restore shown)", [kBar](Ctx&) { return Find(ByLabel("Restore", kBar)) != nullptr; }), Wait(5),
-        Shot("maximized", {kBar}),
+        Until("maximized (Restore shown over the game)", [kMaxBar](Ctx&) { return Find(ByLabel("Restore", kMaxBar)) != nullptr; }), Wait(5),
+        Shot("maximized", {kMaxBar}),
         // Maximized play gives the mouse to the game (ImGui runs with NoMouse) until Esc, which is
         // read from GLFW and can't be sent from here: restore the way F4 / Esc-then-click does.
         Do("restore", [](Ctx& c) { A::RequestMaximizeToggle(c.E); }),
@@ -395,7 +402,7 @@ void RegisterPanelsTests() {
         BringToFront(EditorPanels::Scene), UntilShown(EditorPanels::Scene),
     });
 
-    Add("panels: action bar toggles - stats overlay, Console, History", {
+    Add("panels: title bar toggles - stats overlay, Console, History", {
         FreshScene(), Wait(2),
         Do("note", [](Ctx&) { g_Number = EditorSettings::Get().GameViewShowStats ? 1.0 : 0.0; }),
         Click(ByExact(EDITOR_ICON_STATISTICS, kBar)), Wait(3),

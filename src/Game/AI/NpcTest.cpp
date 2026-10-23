@@ -10,6 +10,8 @@
 #include "NpcDirector.h"
 #include "PhysicsWorld.h"
 #include "Player.h"
+#include "SceneSerializer.h"
+#include "Components.h"
 #include "Npc/NpcRagdoll.h"
 #include "Npc/NpcHitboxes.h"
 
@@ -99,6 +101,18 @@ NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "w
         std::cout << "[NpcTest] room '" << m_Room << "' (shift " << m_RoomShift.x << ", " << m_RoomShift.z << ")" << std::endl;
     }
     std::cout << "[NpcTest] scenario '" << m_Scenario << "', " << m_Duration << " s" << std::endl;
+}
+
+void NpcTest::AddSceneSquad(World& world, AssetLibrary& assets) const {
+    const bool apartment = m_Scenario == "escape" || m_Scenario == "escapeshut" || m_Scenario == "aptwounds" || m_Scenario == "aptfight";
+    if (!apartment) return;
+    auto spawns = world.Registry.view<NpcSpawnComponent>();
+    if (spawns.begin() != spawns.end()) return; // a scene that has its own
+    // What tools/scenes/build_apartment_hallway.py used to put in 301's living room (world space).
+    static const char* kSquad = R"json({"empties": [{"Squad Settings": {"Bleed-Out Time": 20.0, "Corpse Time": 14.0, "Cover Peek Step": 0.800000011920929, "Cover Reach": 0.8500000238418579, "Cover Sample Spacing": 0.8999999761581421, "Crawl Speed": 0.85, "Difficulty": 1.0, "Fall Gravity": 18.0, "Foot IK Range": 25.0, "Heavy Hit Damage": 40.0, "High Cover Height": 1.5499999523162842, "Hitbox Range": 60.0, "Limp Speed Scale": 0.6000000238418579, "Limp Time": 6.0, "Low Cover Height": 0.8500000238418579, "Melee Damage": 25.0, "Melee Hit Time": 0.2199999988079071, "Melee Time": 0.550000011920929, "Mesh Check Range": 12.0, "NPC Damage Scale": 0.44999998807907104, "Respawn": true, "Respawn Delay": 3.0, "Squad Size": 2, "Stagger Time": 0.4000000059604645}, "id": 964, "name": "Test Squad Settings", "order": 964, "position": [-8.1, 0.0, -9.175], "rotation": [0.0, 0.0, 0.0, 1.0], "scale": [1.0, 1.0, 1.0]}, {"NPC Spawn": {"Bare": false, "Brain": "Squad AI", "Outfit Seed": 1, "Skill": 0.5, "Squad": 0, "Weapon": "AKS-74U"}, "id": 965, "name": "Soldier Spawn A", "order": 965, "position": [-9.1, 0.0, -6.017], "rotation": [0.0, 0.0, 0.0, 1.0], "scale": [1.0, 1.0, 1.0]}, {"NPC Spawn": {"Bare": false, "Brain": "Squad AI", "Outfit Seed": 2, "Skill": 0.5, "Squad": 0, "Weapon": "AKS-74U"}, "id": 966, "name": "Soldier Spawn B", "order": 966, "position": [-7.1, 0.0, -6.017], "rotation": [0.0, 0.0, 0.0, 1.0], "scale": [1.0, 1.0, 1.0]}]})json";
+    std::vector<entt::entity> created;
+    if (!SceneSerializer::AppendEntitiesFromString(world, assets, kSquad, created) || created.size() != 3)
+        std::cout << "[NpcTest] FAIL could not add the test squad" << std::endl;
 }
 
 void NpcTest::PrintCosts(const NpcDirector& npcs) const {

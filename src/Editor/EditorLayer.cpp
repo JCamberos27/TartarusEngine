@@ -36,6 +36,7 @@
 #include <GLFW/glfw3.h>
 #include "BuildPipeline.h" // #174 - m_LastBuildReport
 #include "Shortcuts.h"
+#include "GameViewPanel.h"
 #include "Enhancers/EnhancerUserState.h"
 #include "Enhancers/Palette.h"
 #include "Enhancers/UiStyles.h"
@@ -270,26 +271,24 @@ void EditorLayer::Init(GLFWwindow* window) {
         gz.Colors[ImGuizmo::DIRECTION_X] = EditorTheme::AxisX;
         gz.Colors[ImGuizmo::DIRECTION_Y] = EditorTheme::AxisY;
         gz.Colors[ImGuizmo::DIRECTION_Z] = EditorTheme::AxisZ;
-        // Keep plane drag targets functional but unfilled: opaque/dark squares beside the
-        // arrows made the compact gizmo look boxy and obscured nearby level geometry.
-        gz.Colors[ImGuizmo::PLANE_X] = ImVec4(0.95f, 0.78f, 0.25f, 0.00f);
-        gz.Colors[ImGuizmo::PLANE_Y] = ImVec4(0.95f, 0.78f, 0.25f, 0.00f);
-        gz.Colors[ImGuizmo::PLANE_Z] = ImVec4(0.95f, 0.78f, 0.25f, 0.00f);
-        gz.Colors[ImGuizmo::SELECTION] = EditorTheme::AccentBright; // a hovered / dragged handle
-        ApplyGizmoAccent(); // the Glass theme's accent instead, when it's selected
-        // The in-use rotation arc: the palette's orange (Palette::Defaults) rather than
-        // ImGuizmo's stock, so a live rotate reads as part of the same spectrum as the axes.
-        gz.Colors[ImGuizmo::ROTATION_USING_BORDER] = EditorTheme::Rgb(0xF2, 0x99, 0x4A);
-        gz.Colors[ImGuizmo::ROTATION_USING_FILL]   = EditorTheme::Rgb(0xF2, 0x99, 0x4A, 0.35f);
-        // A compact, sturdy manipulator is easier to read against level geometry than
-        // ImGuizmo's thin default strokes. These are screen-space values, so follow the UI DPI.
-        gz.TranslationLineThickness = 7.0f * m_UIScale;
-        gz.TranslationLineArrowSize = 11.0f * m_UIScale;
-        gz.ScaleLineThickness = 6.0f * m_UIScale;
-        gz.ScaleLineCircleSize = 8.0f * m_UIScale;
-        gz.CenterCircleSize = 9.0f * m_UIScale;
-        gz.RotationLineThickness = 4.5f * m_UIScale;
-        gz.RotationOuterLineThickness = 5.5f * m_UIScale;
+        // Plane drag targets: small soft squares in the axis colour of their normal, so they
+        // read as part of the gizmo without boxing in nearby geometry.
+        gz.Colors[ImGuizmo::PLANE_X] = ImVec4(EditorTheme::AxisX.x, EditorTheme::AxisX.y, EditorTheme::AxisX.z, 0.20f);
+        gz.Colors[ImGuizmo::PLANE_Y] = ImVec4(EditorTheme::AxisY.x, EditorTheme::AxisY.y, EditorTheme::AxisY.z, 0.20f);
+        gz.Colors[ImGuizmo::PLANE_Z] = ImVec4(EditorTheme::AxisZ.x, EditorTheme::AxisZ.y, EditorTheme::AxisZ.z, 0.20f);
+        // SELECTION (a hovered / dragged handle) and the in-use rotation arc follow the theme.
+        ApplyGizmoAccent();
+        // Thin, Unreal-style strokes: the handles stay grabbable (ImGuizmo hit-tests a band wider
+        // than the line) while the gizmo stops covering the object it moves. Screen-space values,
+        // so they follow the UI DPI.
+        gz.TranslationLineThickness = 3.0f * m_UIScale;
+        gz.TranslationLineArrowSize = 8.0f * m_UIScale;
+        gz.ScaleLineThickness = 3.0f * m_UIScale;
+        gz.ScaleLineCircleSize = 5.5f * m_UIScale;
+        gz.CenterCircleSize = 5.0f * m_UIScale;
+        gz.HatchedAxisLineThickness = 3.0f * m_UIScale;
+        gz.RotationLineThickness = 2.5f * m_UIScale;
+        gz.RotationOuterLineThickness = 2.0f * m_UIScale;
     }
 
     // Fonts. Inter (SIL OFL, bundled under extern/fonts/) is the UI face, JetBrains Mono the
@@ -3021,7 +3020,8 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     // every neighbor sharing that border reacts too, and ImGui persists the whole arrangement
     // to imgui.ini across launches — DockBuilder below only runs once, to seed that arrangement
     // the very first time there's no saved layout yet.
-    const float toolbarH = kToolbarHeight * m_UIScale;
+    // The menu strip, then (whenever the editor chrome shows) the main toolbar row under it.
+    const float toolbarH = kToolbarHeight * m_UIScale + MainToolbarHeightPx();
 
     // The full-width toolbar strip is drawn by the reloadable editor module now (issue #229):
     // EditorModuleToolbar::Draw(), invoked from main.cpp's editorModule.Draw() immediately after
@@ -3144,11 +3144,11 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         // window the first time either is toggled on.
         ImGui::DockBuilderDockWindow(EditorPanels::Statistics, wantRight ? right : bottom);
         ImGui::DockBuilderDockWindow(EditorPanels::History, wantRight ? right : bottom);
-        // Scene and Game are Unity's own pair of tabs sharing one dock node — Scene is the
-        // editor's 3D viewport, Game is the locked-aspect Play Mode preview; only whichever tab
-        // is active actually shows/renders (see m_SceneViewportVisible below).
+        // Scene is the unified viewport: the scene or the game in one rect (Scene | Game in its
+        // header, EditorLayer_ViewportMode.cpp).
         ImGui::DockBuilderDockWindow(EditorPanels::Scene, center);
-        ImGui::DockBuilderDockWindow(EditorPanels::Game, center);
+        // (Game lives inside the Scene panel - the unified viewport - unless popped out with
+        // Window > Game, when it opens as its own floating window.)
         ImGui::DockBuilderDockWindow("Script IDE", center);
         ImGui::DockBuilderFinish(dockspaceId);
         m_SceneGameDockNodeId = center;
@@ -3230,14 +3230,28 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         if (sceneWindow->DockId != 0) m_SceneGameDockNodeId = sceneWindow->DockId;
     }
     if (m_SceneViewportVisible) {
-        ImVec2 contentMin = ImGui::GetWindowContentRegionMin();
-        ImVec2 windowPos = ImGui::GetWindowPos();
+        // The header strip first (skipped for a clean capture, which wants the image alone);
+        // the viewport is whatever is left below it.
+        if (!m_HideOverlaysThisFrame) DrawViewportHeader(world, editorCamera);
+        const ImVec2 imageMin = ImGui::GetCursorScreenPos();
         ImVec2 contentSize = ImGui::GetContentRegionAvail();
-        m_ViewportPos = {windowPos.x + contentMin.x, windowPos.y + contentMin.y};
-        m_ViewportSize = {contentSize.x, contentSize.y};
-        m_LastSceneContentRegion = m_ViewportSize;
+        if (Shortcuts::Triggered("view.sceneGame") && !GameViewPoppedOut())
+            SetViewportMode(m_ViewportMode == ViewportMode::Game ? ViewportMode::Scene : ViewportMode::Game);
+        // The unified viewport: the scene, the game, or (mid-dissolve) the game over the scene, all
+        // in this one rect. The scene keeps its render size while Game shows so the way back is
+        // ready; its tools, picking and gizmos only exist while the scene is what's on screen.
+        const bool sceneShown = SceneImageWanted();
+        const bool gameShown = GameImageWanted();
+        m_LastSceneContentRegion = {contentSize.x, contentSize.y};
+        if (sceneShown) {
+            m_ViewportPos = {imageMin.x, imageMin.y};
+            m_ViewportSize = {contentSize.x, contentSize.y};
+        } else {
+            m_ViewportPos = {0.0f, 0.0f};
+            m_ViewportSize = {0.0f, 0.0f};
+        }
 
-        if (m_SceneColorTexture != 0 && contentSize.x > 0.0f && contentSize.y > 0.0f) {
+        if (sceneShown && m_SceneColorTexture != 0 && contentSize.x > 0.0f && contentSize.y > 0.0f) {
             // uv0=(0,1)/uv1=(1,0): OpenGL textures are bottom-left origin, ImGui::Image expects
             // top-left, so this flips the framebuffer's color attachment right-side up. Filled
             // exactly (no letterboxing) since the offscreen render is sized to match this exact
@@ -3246,12 +3260,10 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
             ImGui::Image((ImTextureID)(intptr_t)m_SceneColorTexture, contentSize, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
         }
 
-        // Phase 3 item 3 — drawn inside Scene's own Begin/End (painting on top of the Image()
-        // above, in this same window) rather than a separate floating window; see
-        // EditorLayer_ToolPalette.cpp for why. Skipped for a clean capture, same as every other
-        // viewport overlay.
-        if (!m_HideOverlaysThisFrame) DrawToolPalette(world, editorCamera);
-        DrawGlassViewportOverlays(world); // Glass theme only: the frosted HUDs (skips clean captures itself)
+        if (gameShown && m_GameView && contentSize.x > 1.0f && contentSize.y > 1.0f)
+            m_GameView->RenderEmbedded(imageMin, contentSize, m_ViewFade.Active ? m_ViewFade.Alpha : 1.0f);
+
+        if (sceneShown) DrawGlassViewportOverlays(world); // Glass theme only: the frosted HUDs (skips clean captures itself)
     } else {
         m_ViewportPos = {0.0f, 0.0f};
         m_ViewportSize = {0.0f, 0.0f};
@@ -3364,7 +3376,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         UpdateVertexDrag(world, editorCamera);
     }
 
-    if (!m_HideOverlaysThisFrame && m_GizmosMasterVisible) {
+    if (!OverlaysHidden() && m_GizmosMasterVisible) {
         if (m_ShowEntityIcons) DrawEntityIcons(world, editorCamera); // DrawLightGizmos self-gates on EditorSettings::ShowLightGizmos
         DrawLightGizmos(world, editorCamera);
         DrawReflectionProbeGizmos(world, editorCamera); // PR14: probe box overlays
@@ -3376,7 +3388,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
     // occlude it and block its mouse input. Draw mode and
     // ortho/persp used to get their own chip row here too (DrawViewStateChips) — moved into the
     // left tool palette (DrawToolPalette, called elsewhere) instead.
-    if (!m_HideOverlaysThisFrame) DrawViewGizmo(world, editorCamera);
+    if (!OverlaysHidden() && m_ViewportSize.x > 0.0f) DrawViewGizmo(world, editorCamera);
 
     // Self-heal a leaked ImGuizmo drag (audit #80). ImGuizmo::IsUsing() claiming a drag is still
     // in progress requires the left mouse button to still be physically held — if it isn't, that
@@ -3400,7 +3412,7 @@ void EditorLayer::Draw(World& world, AssetLibrary& assets, Camera& editorCamera,
         } else {
             UpdateLightHandles(world, editorCamera);
             HandleViewportPicking(world, editorCamera);
-            if (m_ShowGizmos && m_GizmosMasterVisible && !m_HideOverlaysThisFrame) DrawGizmo(world, editorCamera);
+            if (m_ShowGizmos && m_GizmosMasterVisible && !OverlaysHidden()) DrawGizmo(world, editorCamera);
         }
     }
     UpdateLockViewToSelection(world, editorCamera); // Shift+F — camera follows the selection centroid (#236 E)

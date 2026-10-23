@@ -503,11 +503,12 @@ void RegisterMenusTests() {
             s.push_back(BringToFront(core.Window));
             s.push_back(UntilShown(core.Window));
         }
-        // Game: open by default (a tab beside Scene); its toggle round-trips through main.cpp.
+        // Game: lives in the viewport by default; Window > Game pops it out into its own window
+        // and back (the toggle round-trips through main.cpp).
         for (Step& st : MenuClick("Window", "Hierarchy", "Game")) s.push_back(st);
-        s.push_back(Until("Game closed", [](Ctx& c) { return !A::GameOpen(c.E) && Gone(EditorPanels::Game); }));
+        s.push_back(Until("Game popped out", [](Ctx& c) { return A::GameOpen(c.E) && Open(EditorPanels::Game); }));
         for (Step& st : MenuClick("Window", "Hierarchy", "Game")) s.push_back(st);
-        s.push_back(Until("Game back", [](Ctx& c) { return A::GameOpen(c.E) && Open(EditorPanels::Game); }));
+        s.push_back(Until("Game back in the viewport", [](Ctx& c) { return !A::GameOpen(c.E) && Gone(EditorPanels::Game); }));
         s.push_back(BringToFront(EditorPanels::Scene));
         s.push_back(UntilShown(EditorPanels::Scene));
         Add("menus: Window closes and reopens Hierarchy, Inspector, Assets and Game", s);

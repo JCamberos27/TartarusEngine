@@ -128,6 +128,7 @@ void EditorSettings::Load() {
     if (auto it = root.find("recentScenes"); it != root.end() && it->is_array())
         for (const auto& p : *it) if (p.is_string() && !p.get<std::string>().empty()) s.RecentScenes.push_back(p.get<std::string>());
     s.GameViewMaximizeOnPlay = SafeValue(root, "gameViewMaximizeOnPlay", s.GameViewMaximizeOnPlay);
+    s.PlayTransitionGlide = SafeValue(root, "playTransitionGlide", s.PlayTransitionGlide);
     s.GameViewShowStats = SafeValue(root, "gameViewShowStats", s.GameViewShowStats);
     s.SceneShowStats = SafeValue(root, "sceneShowStats", s.SceneShowStats);
     s.SceneCameraFov = SafeValue(root, "sceneCameraFov", s.SceneCameraFov);
@@ -311,7 +312,7 @@ void EditorSettings::Load() {
     clampF(s.LightGizmoOpacity, 0.0f, 1.0f, 0.5f);
     clampF(s.LightGizmoScale, 0.25f, 3.0f, 1.0f);
     // #135 — same ranges as the Preferences / toolbar sliders.
-    clampF(s.GizmoSize, 0.05f, 0.40f, 0.15f);
+    clampF(s.GizmoSize, 0.05f, 0.40f, 0.10f);
     clampF(s.VertexPickPixels, 5.0f, 150.0f, 35.0f);
     clampF(s.SnapTranslation, 0.001f, 100.0f, 1.0f);
     clampF(s.SnapRotationDeg, 0.1f, 180.0f, 15.0f);
@@ -373,6 +374,7 @@ bool EditorSettings::MigratePrefs(EditorSettings& s, int from) {
         s.ResetViewDefaults();
         resetLayout = true; // the old dock focused Statistics; rebuild the default arrangement
     }
+    if (from < 3 && std::fabs(s.GizmoSize - 0.15f) < 1e-4f) s.GizmoSize = EditorSettings{}.GizmoSize; // a size you set is kept
     s.PrefsVersion = kPrefsVersion;
     return resetLayout;
 }
@@ -453,6 +455,7 @@ void EditorSettings::Flush() {
     root["gameViewMaximizeOnPlay"] = Get().GameViewMaximizeOnPlay;
     root["gameViewShowStats"] = Get().GameViewShowStats;
     root["sceneShowStats"] = Get().SceneShowStats;
+    root["playTransitionGlide"] = Get().PlayTransitionGlide;
     root["sceneCameraFov"] = Get().SceneCameraFov;
     root["sceneCameraFlySpeed"] = Get().SceneCameraFlySpeed;
     root["sceneCameraNear"] = Get().SceneCameraNear;

@@ -210,6 +210,7 @@ void BuildDefaultTable() {
     Register("grid.toggle",       "Toggle Grid",                    Ctx_Global, Ak(ImGuiKey_G));
     Register("snap.toggleGrid",   "Toggle Snap to Grid",            Ctx_Global, ASk(ImGuiKey_G));
     Register("view.toggleGizmos", "Toggle Gizmos",                  Ctx_Viewport, Sk(ImGuiKey_G));
+    Register("view.sceneGame",    "Viewport: Scene / Game",         Ctx_Global,   Ck(ImGuiKey_GraveAccent));
     Register("tools.snapToGround","Snap Selection to Ground",       Ctx_Global, Ak(ImGuiKey_H));
     Register("view.nextDrawMode", "Next Draw Mode",                 Ctx_Global, Ak(ImGuiKey_D));
     Register("view.prevDrawMode", "Previous Draw Mode",             Ctx_Global, ASk(ImGuiKey_D));

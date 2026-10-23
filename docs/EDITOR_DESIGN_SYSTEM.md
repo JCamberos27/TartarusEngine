@@ -95,7 +95,7 @@ Washes drawn on a surface are plain white at low alpha, so they lighten black an
 | `OnAccent` | `#000000` | Text on an accent fill (inverse video) |
 
 There is no accent hue. Status colours have fixed meanings: `Danger #E85C54`, `Warning #E6A450`,
-`Success #7CD88C`. Axis colours are the editor's own: `X #E5484D`, `Y #4CC38A`, `Z #4C8DF6`.
+`Success #7CD88C`. Axis colours are the editor's own: `X #F5504F`, `Y #5FE35A`, `Z #4D8BFF`.
 
 While Black Glass is active, ImGuizmo's selection colour is `AccentBright`. It goes back to the
 Tartarus accent when you switch away.
