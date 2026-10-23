@@ -17,6 +17,7 @@
 #include "Camera.h"
 
 #include <imgui.h>
+#include <imgui_internal.h> // ClearActiveID
 #include <IconsFontAwesome6.h>
 
 #include <algorithm>
@@ -145,9 +146,17 @@ void EditorLayer::DrawViewportModeSwitch(float btnH) {
         SetViewportMode(ViewportMode::Scene);
     ImGui::SameLine(0.0f, 0.0f);
     ImGui::BeginDisabled(poppedOut);
-    if (ActionButton(ICON_FA_GAMEPAD "  Game", poppedOut ? "The Game view is in its own window (Window > Game)"
-                                                         : "What the player sees, through the game camera (Ctrl+`)",
+    if (ActionButton(ICON_FA_GAMEPAD "  Game", poppedOut ? "The Game view is in its own window (close it to bring it back)"
+                                                         : "What the player sees, through the game camera (Ctrl+`)\n"
+                                                           "Drag it out to dock the Game view anywhere in the layout",
                      game && !poppedOut, ImVec2(0.0f, btnH)))
         SetViewportMode(ViewportMode::Game);
+    // Dragged off the button: tear the Game view out into its own tab, carried by the mouse.
+    if (!poppedOut && m_GameView && ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left, EditorTheme::Px(8.0f))) {
+        ImGui::ClearActiveID();
+        SetViewportMode(ViewportMode::Scene);
+        m_GameView->SetWindowOpen(true);
+        m_GameTearOff = true;
+    }
     ImGui::EndDisabled();
 }
