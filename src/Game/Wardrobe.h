@@ -47,8 +47,14 @@ struct RaceDef {
     std::string Name;
     std::string Head;                           // head model (path under the wardrobe's root)
     std::string SkinSuffix;                     // appended to a skin material's name ("_Afro"); "" = the base skin
-    std::map<std::string, std::string> Parts;   // body parts this race replaces (part -> model), usually none
+    std::map<std::string, std::string> Parts;   // body parts this race replaces (part -> model, "" = none), usually none
+    std::map<std::string, std::string> Alternates; // the body's alternates this race swaps ("" = keeps its own part)
     glm::vec3 Tone{0.8f, 0.6f, 0.5f};           // the Inspector's swatch colour
+    bool Random = true;                         // Randomize may pick it (a skeleton only when asked for)
+    // A body whose hands have no flesh (the Realistic Skeleton): added to First Person Body's Grip Inset (m) and
+    // Finger Curl Extra (degrees) while this race is worn - by the player and by soldiers alike.
+    float GripInset = 0.0f;
+    float FingerCurlExtra = 0.0f;
 };
 
 // How one gender's body is built.

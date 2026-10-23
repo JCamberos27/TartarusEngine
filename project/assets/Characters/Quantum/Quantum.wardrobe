@@ -35,7 +35,11 @@
                      "Feet": "Models/Afro/Quantum_Feet_Afro.fbx", "UnderPants": "Models/Afro/Quantum_UnderPants_Afro.fbx" } },
         { "name": "Asian",    "head": "Models/Asian/Quantum_Head_Asian.fbx", "skin": "",    "tone": [0.88, 0.72, 0.56] },
         { "name": "Old",      "head": "Models/Old/Quantum_Old_Head.fbx",     "skin": "_Old", "tone": [0.80, 0.63, 0.53] },
-        { "name": "Young",    "head": "Models/Young/Quantum_Young_Head.fbx", "skin": "",    "tone": [0.91, 0.73, 0.61] }
+        { "name": "Young",    "head": "Models/Young/Quantum_Young_Head.fbx", "skin": "",    "tone": [0.91, 0.73, 0.61] },
+        { "name": "Skeleton", "head": "assets/Characters/RealisticSkeleton/Skeleton_Head.fbx", "skin": "", "tone": [0.78, 0.70, 0.55], "random": false,
+          "parts": { "Torso": "assets/Characters/RealisticSkeleton/Skeleton_Torso.fbx", "Arms": "assets/Characters/RealisticSkeleton/Skeleton_Arms.fbx", "Legs": "assets/Characters/RealisticSkeleton/Skeleton_Legs.fbx", "Feet": "assets/Characters/RealisticSkeleton/Skeleton_Feet.fbx", "UnderPants": "" },
+          "alternates": { "SleeveHands": "assets/Characters/RealisticSkeleton/Skeleton_Hands.fbx", "ShoeFeet": "assets/Characters/RealisticSkeleton/Skeleton_Feet.fbx" },
+          "gripInset": 0.025, "fingerCurlExtra": 18 }
       ]
     },
     "Female": {
