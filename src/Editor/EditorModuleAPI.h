@@ -149,9 +149,7 @@ struct EditorMotionHooks; // EditorMotionHooks.h
 //        press back with a soft cancel when it is dragged off.
 //   44 - Glass Motion v2: EditorMotionHooks grows CategoryOn, Odometer, Inertia*, DrawSheen,
 //        DrawCursorGlow, RippleDelay, BeginLayer / EndLayer and seven new motion tokens.
-//   45 - Editor chrome: DrawTitleBarControls, the Play transport and panel toggles drawn by the
-//        host into the title bar's free span (they left the floating viewport action bar).
-constexpr std::uint32_t kEditorModuleAPIVersion = 45;
+constexpr std::uint32_t kEditorModuleAPIVersion = 44;
 
 // Editor Enhancers / vFolders (API v40): how one Asset Browser folder looks. POD - crosses the
 // module boundary. Glyphs are UTF-8 Font Awesome characters (at most 4 bytes + NUL).
@@ -357,10 +355,6 @@ struct EditorModuleHostAPI {
     void (*WindowMinimize)() = nullptr;
     void (*WindowToggleMaximize)() = nullptr;
     void (*WindowClose)() = nullptr;
-    // The title bar's middle: the host draws the Play / Pause / Step transport centred in the free
-    // span [spanMinX, spanMaxX] (screen x, between the last menu and the traffic lights) and its
-    // panel toggles at the span's right end, inside the module's "##Toolbar" window.
-    void (*DrawTitleBarControls)(float spanMinX, float spanMaxX, float toolbarH) = nullptr;
     bool (*WindowIsMaximized)() = nullptr;
 
     bool (*GetShowHistory)() = nullptr;      void (*SetShowHistory)(bool on) = nullptr;

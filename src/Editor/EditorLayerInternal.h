@@ -35,6 +35,8 @@ namespace EditorInternal {
 // was the point of the move. Tuned empirically against the actual menu-bar row height; adjust if
 // a future font/metric change leaves a visible gap or clips the row.
 inline constexpr float kToolbarHeight = 30.0f;
+// The main toolbar row under the menus (Save, tools, snap | Play | panels), Unreal-style.
+inline constexpr float kMainToolbarHeight = 42.0f;
 // Height of the window-wide status bar under the dock space (EditorLayer::DrawStatusBar).
 inline constexpr float kStatusBarHeight = 32.0f;
 
