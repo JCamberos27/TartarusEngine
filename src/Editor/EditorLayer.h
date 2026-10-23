@@ -1445,7 +1445,7 @@ private:
     bool m_GizmoLocalSpace = false; // false = world-aligned handles, true = aligned to the object's own rotation
     // Phase 3 item 6 (audit #5) — raised from 0.09, which read as cramped against the object;
     // still overridable via Preferences > Viewport's "Gizmo size" slider (0.05-0.40).
-    float m_GizmoSize = 0.15f;
+    float m_GizmoSize = 0.10f;
     bool m_GizmoEngaged = false;
     bool m_GizmoUsing = false; // see GizmoUsing() above — narrower than m_GizmoEngaged
     bool m_GizmoWasUsing = false;

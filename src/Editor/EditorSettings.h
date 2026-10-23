@@ -293,7 +293,7 @@ struct EditorSettings {
     bool  ViewShowGrid         = true;
     bool  ViewShowGizmo        = true;
     bool  ViewFrameOnSelect    = false;
-    float GizmoSize            = 0.15f;
+    float GizmoSize            = 0.10f;
     float VertexPickPixels     = 35.0f;
     bool  SnapEnabled          = true;
     float SnapTranslation      = 1.0f;
@@ -397,7 +397,8 @@ struct EditorSettings {
     // The prefs schema. v2 (clean first launch): Glass theme, colliders off, no stats panel, the
     // selected-only gizmo defaults. Load() moves an older file forward once (MigratePrefs) and
     // flags the dock layout for a rebuild (TakeLayoutResetRequest).
-    static constexpr int kPrefsVersion = 2;
+    // v3: the slimmer transform gizmo (GizmoSize 0.15 -> 0.10, an untouched old default only).
+    static constexpr int kPrefsVersion = 3;
     int PrefsVersion = kPrefsVersion;
     // Puts the viewport/overlay/theme preferences back to the clean defaults (Gizmos popup >
     // Restore clean view, Preferences). Everything else - paths, recent scenes, tools - is kept.

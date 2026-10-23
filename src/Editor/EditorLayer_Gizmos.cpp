@@ -3158,23 +3158,35 @@ void EditorLayer::DrawViewGizmo(World& world, Camera& editorCamera) {
     m_ViewGizmoBlocking = false;
     if (m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) return;
 
-    // The library's own defaults (256px rotate ring, 50px tool buttons) are sized for a full
-    // editor viewport; scaled down to sit in the corner instead of taking it over. Phase 3 item
-    // 6 (audit #5) — was halved (0.5) to ~64px radius, which the audit called out as too small
-    // alongside the unlabelled negative axes fixed in ImViewGuizmo.h; 0.7 (~90px) keeps it a
-    // corner overlay, not a takeover, while actually being readable.
+    // A small round plate in the corner, like the editor's other floating surfaces: dark glass
+    // with a hairline edge, thin spokes to lettered +X/+Y/+Z dots, the negative axes as faint
+    // rings. The library's geometry is in units of a 256px box (plate radius 80, dots at 64), so
+    // scale 0.5 gives an 80px plate; the dots are sized up from its default to carry a letter.
+    // It rests at 70% and comes up to full strength while the pointer is on it.
     ImViewGuizmo::Style& style = ImViewGuizmo::GetStyle();
-    style.scale = m_UIScale * 0.7f;
+    const bool glass = GlassThemeActive();
+    style.scale = m_UIScale * 0.5f;
+    style.circleRadius = 17.0f;  // ~8.5px dots
+    style.lineWidth = 3.0f;      // 1.5px spokes
+    style.highlightWidth = 3.0f;
+    style.labelSize = 0.75f;
+    style.fadeFactor = 0.45f;
+    style.restAlpha = 0.7f;
     style.axisColors[0] = EditorTheme::U32(EditorTheme::AxisX);
     style.axisColors[1] = EditorTheme::U32(EditorTheme::AxisY);
     style.axisColors[2] = EditorTheme::U32(EditorTheme::AxisZ);
-    style.highlightColor = EditorTheme::U32(EditorTheme::Accent);
+    style.highlightColor = EditorTheme::U32(glass ? Glass::AccentBright : EditorTheme::AccentBright);
+    style.labelColor = IM_COL32(8, 8, 8, 255);
+    style.plateColor = EditorTheme::U32(glass ? Glass::OverlayTint : ImVec4(EditorTheme::Raised.x, EditorTheme::Raised.y, EditorTheme::Raised.z, 0.85f));
+    style.plateEdgeColor = EditorTheme::U32(glass ? Glass::GlassEdge : EditorTheme::Hairline);
+    style.bigCircleColor = EditorTheme::U32(glass ? Glass::WashHover : ImVec4(1.0f, 1.0f, 1.0f, 0.06f));
 
-    float gizmoRadius = 128.0f * style.scale; // half of the library's fixed 256px rotate-ring box
-    float margin = 14.0f * m_UIScale;
-
-    ImVec2 rotatePos(m_ViewportPos.x + m_ViewportSize.x - margin - gizmoRadius,
-        m_ViewportPos.y + margin + gizmoRadius);
+    // Placed by the plate (not the library's larger invisible box) `margin` from the corner, on
+    // whole pixels so the letters stay crisp.
+    const float plateRadius = style.bigCircleRadius * style.scale;
+    const float margin = 12.0f * m_UIScale;
+    ImVec2 rotatePos(std::floor(m_ViewportPos.x + m_ViewportSize.x - margin - plateRadius),
+        std::floor(m_ViewportPos.y + margin + plateRadius));
 
     // Append to Scene itself: docked tabs and floating panels occlude this layer naturally.
     if (!ImGui::Begin(EditorPanels::Scene)) {
