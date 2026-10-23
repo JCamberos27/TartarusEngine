@@ -19,17 +19,12 @@
 //   - The two files' world frames (up axis, facing, unit scale) are aligned from the rest skeletons.
 
 // Per target node, the source node it takes its motion from (-1 none). By name, with the UE4 -> UE5 spine
-// map when one side is a UE4 mannequin and the other a UE5 one. ik_* bones are never matched.
+// map when the source is a UE4 mannequin and the target a UE5 one. ik_* bones are never matched.
 std::vector<int> RetargetMatchNodes(const std::vector<AnimNode>& source, const std::vector<AnimNode>& target);
 
 // Whether `source` is a UE4 mannequin skeleton (spine_03, no spine_04) and `target` a UE5 one (spine_05):
 // the case AttachClip bakes rather than copying locals.
 bool RetargetIsUe4ToUe5(const std::vector<AnimNode>& source, const std::vector<AnimNode>& target);
-
-// The reverse: UE5 clips (Quantum / MoCap Central UE5_Skel) on a UE4 mannequin body such as the Realistic
-// Skeleton. Also baked - UE5 spine_01 / 03 / 05 drive UE4 spine_01 / 02 / 03; spine_02 / 04, neck_02 and the
-// metacarpals have no counterpart and drop out.
-bool RetargetIsUe5ToUe4(const std::vector<AnimNode>& source, const std::vector<AnimNode>& target);
 
 // `clip` (animating `source`) baked onto `target`: `out` gets a channel per driven target node, keyed at
 // the source's key times, and `nodeChannel` (per target node) its channel or -1. False when fewer than

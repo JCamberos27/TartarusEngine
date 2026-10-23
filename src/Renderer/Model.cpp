@@ -1555,15 +1555,14 @@ int Model::AttachClip(const Model& source, int sourceIndex, const std::string& r
         mt.Baked = x.Baked;
         mt.Matched = matched;
     };
-    // A UE4 mannequin pack on a UE5 rig, or UE5 clips on a UE4 body: different spine counts, rest poses and
-    // proportions - baked onto this skeleton (AnimRetarget) rather than copying locals by name.
-    const bool ue4to5 = RetargetIsUe4ToUe5(source.m_D->Nodes, m_D->Nodes);
-    if (ue4to5 || RetargetIsUe5ToUe4(source.m_D->Nodes, m_D->Nodes)) {
+    // A UE4 mannequin pack on a UE5 rig: different spine counts, rest poses and proportions - baked onto this
+    // skeleton (AnimRetarget) rather than copying locals by name.
+    if (RetargetIsUe4ToUe5(source.m_D->Nodes, m_D->Nodes)) {
         auto baked = std::make_shared<AnimationClip>();
         if (RetargetBakeClip(source.m_D->Nodes, clip, m_D->Nodes, *baked, x.NodeChannel)) {
             matched = (int)baked->Channels.size();
             x.Baked = std::move(baked);
-            Log::Info("Animation: '" + ref + "' retargeted from a " + std::string(ue4to5 ? "UE4 mannequin" : "UE5 rig") + " onto '" +
+            Log::Info("Animation: '" + ref + "' retargeted from a UE4 mannequin onto '" +
                       std::filesystem::u8path(m_Path).filename().u8string() + "' (" + std::to_string(matched) + " bones baked).",
                       LogContext::Asset(m_Path));
             remember();

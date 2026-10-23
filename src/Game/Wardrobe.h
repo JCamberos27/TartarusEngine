@@ -48,7 +48,7 @@ struct RaceDef {
     std::string Head;                           // head model (path under the wardrobe's root)
     std::string SkinSuffix;                     // appended to a skin material's name ("_Afro"); "" = the base skin
     std::map<std::string, std::string> Parts;   // body parts this race replaces (part -> model, "" = none), usually none
-    std::map<std::string, std::string> Alternates; // the body's alternates this race swaps ("" = keeps its own part)
+    std::map<std::string, std::string> Alternates; // the body's alternates this race swaps ("" = the part is dropped)
     glm::vec3 Tone{0.8f, 0.6f, 0.5f};           // the Inspector's swatch colour
     bool Random = true;                         // Randomize may pick it (a skeleton only when asked for)
     // A body whose hands have no flesh (the Realistic Skeleton): added to First Person Body's Grip Inset (m) and
@@ -71,6 +71,7 @@ struct CoverRule {
     std::vector<std::string> NameLacksAll; // ... and none of these
     int Skin = -1;                         // -1 any; 0 the item carries no skin of its own; 1 it does
     int Gender = -1;                       // -1 both bodies, else only this Gender's (their parts differ)
+    std::string Race;                      // "" every race, else only this one's (a skeleton drops its torso under a top)
     std::vector<std::string> Hide;         // parts not built
     std::string Replace, With;             // part -> body alternate (BodyDef::Alternates)
 };
