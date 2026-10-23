@@ -218,17 +218,19 @@ void EditorLayer::DrawPlayTransportButtons(bool playing, bool maximized, bool pa
     ImGui::PopStyleColor(3);
 }
 
-// Play / Stop and the rest of the transport live in the title bar now (DrawTitleBarControls
-// below), with Undo / Redo / Save in the Edit and File menus: nothing floats over the scene.
-// This keeps the play state the title bar reads, the prefab-mode bar, and - only while play is
-// maximized and the editor chrome (title bar included) is hidden - a slim transport over the game.
+// Play / Stop and the rest of the transport live in the main toolbar row now (DrawMainToolbar,
+// EditorLayer_ToolPalette.cpp), under the menus: nothing floats over the scene. This draws that
+// row, the prefab-mode bar, and - only while play is maximized and the editor chrome is hidden -
+// a slim transport over the game.
 void EditorLayer::DrawViewportActionBar(World& world, AssetLibrary& assets,
                                          bool playing, bool maximized, bool paused) {
     if (playing && !m_MotionPlaying) m_PlayStartedAt = ImGui::GetTime();
     m_MotionPlaying = playing; // the play-mode frame (Glass::DrawPlayFrame, EndFrame)
     m_MotionPaused = paused;
     m_TransportMaximized = maximized;
-    if (InPrefabMode() || !m_InspectorRequestedPrefab.empty()) {
+    const bool prefab = InPrefabMode() || !m_InspectorRequestedPrefab.empty();
+    if (!maximized) DrawMainToolbar(world, assets, playing, paused, /*transport=*/!prefab);
+    if (prefab) {
         DrawPrefabModeBar(world, assets);
         return; // also on the frame Back to Scene is clicked
     }
@@ -247,94 +249,6 @@ void EditorLayer::DrawViewportActionBar(World& world, AssetLibrary& assets,
     DrawPlayTransportButtons(playing, maximized, paused);
     ImGui::PopStyleColor(2);
     ImGui::End();
-}
-
-void EditorLayer::DrawTitleBarControls(float spanMinX, float spanMaxX, float toolbarH) {
-    if (InPrefabMode() || spanMaxX - spanMinX < EditorTheme::Px(120.0f)) return;
-    const bool playing = m_MotionPlaying, paused = m_MotionPaused;
-    ImGuiWindow* bar = ImGui::GetCurrentWindow();
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-    const float top = bar->Pos.y;
-    const ImVec2 savedCursor = ImGui::GetCursorScreenPos();
-
-    // The menu bar pads frames to fill the strip; these buttons want their ordinary height,
-    // centred in it.
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(EditorTheme::Px(7.0f), EditorTheme::Px(3.0f)));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(EditorTheme::Px(4.0f), 0.0f));
-    const float frameH = ImGui::GetFrameHeight();
-    const float y = top + std::floor((toolbarH - frameH) * 0.5f);
-
-    // While playing the whole strip says so: a faint wash of the Play green and a 2 px rule along
-    // its bottom edge, visible wherever you're looking in the window.
-    if (playing) {
-        const ImVec4 g = paused ? EditorTheme::Warning : EditorUIPrimitives::SuccessColor();
-        dl->AddRectFilled(ImVec2(bar->Pos.x, top), ImVec2(bar->Pos.x + bar->Size.x, top + toolbarH),
-                          EditorTheme::U32(EditorTheme::WithAlpha(g, 0.06f)));
-        dl->AddRectFilled(ImVec2(bar->Pos.x, top + toolbarH - EditorTheme::Px(2.0f)),
-                          ImVec2(bar->Pos.x + bar->Size.x, top + toolbarH), EditorTheme::U32(EditorTheme::WithAlpha(g, 0.85f)));
-    }
-
-    // --- Panel toggles, at the span's right end ---------------------------------------------------
-    float right = spanMaxX;
-    {
-        const float b = frameH;
-        right -= b * 3.0f + EditorTheme::Px(4.0f) * 2.0f;
-        ImGui::SetCursorScreenPos(ImVec2(std::floor(right), y));
-        {
-            EditorSoundEvents::ScopedClickSilence quiet; // StatsOn / StatsOff instead
-            const bool showStats = EditorSettings::Get().GameViewShowStats;
-            if (ActionButton(EDITOR_ICON_STATISTICS, "Show stats over the Game view", showStats, ImVec2(b, b))) {
-                EditorSettings::Get().GameViewShowStats = !showStats;
-                EditorSettings::Save();
-                EditorSound::Play(showStats ? EditorSound::Event::StatsOff : EditorSound::Event::StatsOn, EditorSound::LastItemScreenX());
-            }
-        }
-        ImGui::SameLine();
-        {
-            // Defect #11: hidden behind a sibling tab focuses it rather than closing it.
-            EditorConsoleState& cs = EditorModuleHost::ConsoleState();
-            if (ActionButton(EDITOR_ICON_CONSOLE, "Toggle Console", cs.Visible, ImVec2(b, b))) {
-                if (!cs.Visible) cs.Visible = true;
-                else {
-                    ImGuiWindow* consoleWin = ImGui::FindWindowByName(EditorPanels::Console);
-                    if (consoleWin && consoleWin->Hidden) ImGui::FocusWindow(consoleWin);
-                    else cs.Visible = false;
-                }
-            }
-        }
-        ImGui::SameLine();
-        if (ActionButton(EDITOR_ICON_HISTORY, "Toggle History", m_ShowHistory, ImVec2(b, b))) m_ShowHistory = !m_ShowHistory;
-        right -= EditorTheme::Px(12.0f);
-    }
-
-    // --- Transport, centred on the window (or as near as the menus and toggles allow) -------------
-    const float w = m_TitleTransportW > 0.0f ? m_TitleTransportW : EditorTheme::Px(90.0f);
-    const float centre = bar->Pos.x + bar->Size.x * 0.5f;
-    float x = std::floor(centre - w * 0.5f);
-    x = std::min(x, right - w);
-    x = std::max(x, spanMinX + EditorTheme::Px(12.0f));
-    ImGui::SetCursorScreenPos(ImVec2(x, y));
-    ImGui::BeginGroup();
-    DrawPlayTransportButtons(playing, m_TransportMaximized, paused);
-    ImGui::EndGroup();
-    m_TitleTransportW = ImGui::GetItemRectSize().x;
-
-    // The play clock beside it, while playing: how long this run has been going.
-    if (playing && m_PlayStartedAt >= 0.0) {
-        const int secs = (int)(ImGui::GetTime() - m_PlayStartedAt);
-        char clock[32];
-        std::snprintf(clock, sizeof(clock), paused ? "%d:%02d  paused" : "%d:%02d", secs / 60, secs % 60);
-        const float cx = ImGui::GetItemRectMax().x + EditorTheme::Px(10.0f);
-        if (cx + ImGui::CalcTextSize(clock).x < right) {
-            EditorTheme::PushMono();
-            dl->AddText(ImVec2(cx, top + std::floor((toolbarH - ImGui::GetFontSize()) * 0.5f)),
-                        EditorTheme::U32(EditorTheme::Secondary), clock);
-            EditorTheme::PopFont();
-        }
-    }
-
-    ImGui::PopStyleVar(2);
-    ImGui::SetCursorScreenPos(savedCursor);
 }
 
 // The Console panel moved into TartarusEditor.dll (src/Editor/EditorModuleConsole.cpp) so its
@@ -674,6 +588,7 @@ void EditorLayer::DrawHistoryListBody(World& world, AssetLibrary& assets) {
 }
 
 float EditorLayer::ToolbarHeightPx() const { return kToolbarHeight * m_UIScale; }
+float EditorLayer::MainToolbarHeightPx() const { return std::floor(kMainToolbarHeight * m_UIScale); }
 float EditorLayer::StatusBarHeightPx() const { return kStatusBarHeight * m_UIScale; }
 
 // The toolbar strip + its menu bar + the window min/max/close controls moved into
