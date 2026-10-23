@@ -70,7 +70,9 @@ void RegisterPanelsTests() {
     Add("panels: the viewport's Game switch shows the game view in the same rect; Scene comes back", {
         FreshScene(), Wait(2),
         Do("note the viewport size", [](Ctx& c) { g_Number = c.E.ViewportSize().x; }),
-        Click(ByLabel("Game", "###Scene")),
+        // Exact: the viewport's own tab reads the same "<cube>  Scene" as the switch's button.
+        Click(ByExact(ICON_FA_GAMEPAD "  Game", "###Scene")),
+        WaitSeconds(1.0), // the dissolve runs in real time
         Until("the game is showing", [](Ctx& c) {
             return c.E.GetViewportMode() == EditorLayer::ViewportMode::Game && !c.E.ViewFadeActive();
         }),
@@ -78,7 +80,8 @@ void RegisterPanelsTests() {
         Shot("game", {"###Scene"}),
         ExpectTrue("no separate Game window", [](Ctx&) { return !Shown(EditorPanels::Game); }),
         ExpectTrue("Play stays in the title bar over the Game view", [kBar](Ctx&) { return Find(ByLabel("Play", kBar)) != nullptr; }),
-        Click(ByLabel("Scene", "###Scene")),
+        Click(ByExact(ICON_FA_CUBE "  Scene", "###Scene")),
+        WaitSeconds(1.0),
         Until("the scene is back, the same size", [](Ctx& c) {
             return c.E.GetViewportMode() == EditorLayer::ViewportMode::Scene && !c.E.ViewFadeActive() &&
                    std::abs(c.E.ViewportSize().x - (float)g_Number) < 1.0f;

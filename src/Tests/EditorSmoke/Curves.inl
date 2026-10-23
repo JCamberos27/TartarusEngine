@@ -80,9 +80,11 @@ Step CloseCurveWindows() {
     auto phase = std::make_shared<int>(0);
     return {"close the curve windows", [phase](Ctx&) {
         ImGuiIO& io = ImGui::GetIO();
+        // Down, up, then two quiet frames: a window closed by the up is still listed the frame after, and the
+        // second click went through its spot to whatever is under it (the main toolbar's History toggle).
         if (*phase >= 1) {
-            io.AddMouseButtonEvent(0, *phase == 1);
-            if (++*phase > 2) *phase = 0;
+            if (*phase <= 2) io.AddMouseButtonEvent(0, *phase == 1);
+            if (++*phase > 4) *phase = 0;
             return false;
         }
         ImGuiWindow* w = CurveWindow();
