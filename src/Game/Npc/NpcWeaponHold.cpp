@@ -383,6 +383,7 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
         handPos[s] = glm::vec3(w[3]);
         handRot[s] = IK::Rotation(w);
         haveHand[s] = true;
+        if (m_Set.GripInset > 0.0f) handPos[s] += FirstPersonBodyPalmDirection(*gripRig, gripWorld, s) * m_Set.GripInset;
         m_HandTarget[s] = handPos[s];
         m_HaveHandTarget[s] = true;
         if (gripRig->NodeTransform(FPBody::kBoneUpperArm[s], u) && gripRig->NodeTransform(FPBody::kBoneLowerArm[s], l)) {
@@ -574,6 +575,7 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
             const glm::mat4 local = pose[(size_t)i].ToMatrix();
             globals[(size_t)i] = par >= 0 ? globals[(size_t)par] * local : local;
         }
+        FirstPersonBodyCurlFingers(m, pose, m_Set.FingerCurlExtra * w);
         m.ApplyLocalPose(pose);
     }
 

@@ -1057,12 +1057,18 @@ void RegisterEngineComponents() {
         m.Fields.push_back({ "Stride Pelvis Adjust", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, StridePelvisAdjust), 0.05f,
               "How much the pelvis sinks for a longer stride so the legs do not overstretch (0 = not at all, 1 = the full amount).", 0.0f, 1.0f });
         m.Fields.back().Group = "Stride Warping";
+        m.Fields.push_back({ "Grip Inset", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, GripInset), 0.001f,
+              "Metres each hand moves toward its palm while holding a gun: for a body with no flesh on its hands (a skeleton),\n"
+              "whose bones sit short of where the rig's skinned palm meets the gun. 0 for a skinned body.", 0.0f, 0.05f });
+        m.Fields.push_back({ "Finger Curl Extra", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonBodyComponent, FingerCurlExtra), 0.5f,
+              "Degrees each finger joint closes beyond the rig's grip: bare finger bones need more curl than skinned fingers\n"
+              "to reach the gun. 0 for a skinned body.", 0.0f, 45.0f });
         // ---- end lane A ----
         // Groups, by name (not by position: reordering fields must not move them).
         {
             static const std::pair<const char*, const char*> kGroups[] = {
                 {"Head Bone", "Camera"}, {"Camera Offset", "Camera"}, {"Armed Eye Offset", "Camera"}, {"Head Bob", "Camera"}, {"Camera Smoothing", "Camera"},
-                {"Weapon Arms", "Arms"}, {"Spine Aim", "Arms"}, {"Spine Aim Down", "Arms"}, {"Shoulder Line Match", "Arms"}, {"Arms Piece", "Arms"}, {"Hands Piece", "Arms"},
+                {"Weapon Arms", "Arms"}, {"Spine Aim", "Arms"}, {"Spine Aim Down", "Arms"}, {"Shoulder Line Match", "Arms"}, {"Arms Piece", "Arms"}, {"Hands Piece", "Arms"}, {"Grip Inset", "Arms"}, {"Finger Curl Extra", "Arms"},
                 {"Turn Threshold", "Turning"}, {"Spine Twist", "Turning"}, {"Max Turn Rate", "Turning"},
                 {"Crouch Height", "Crouch"}, {"Crouch Speed", "Crouch"},
                 {"Foot IK", "Foot IK"}, {"Foot IK Max Drop", "Foot IK"}, {"Bone Map", "Camera"}, {"Start Stop Clips", "Locomotion"},

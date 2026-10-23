@@ -346,6 +346,8 @@ bool NpcDirector::Start(World& world, AssetLibrary& assets, const FirstPersonCon
         m_HoldSettings.ShrugMax = fpb.ShrugMax;
         m_HoldSettings.ReachLeanMax = fpb.ReachLeanMax;
         m_HoldSettings.ElbowClearance = fpb.ElbowClearance;
+        m_HoldSettings.GripInset = fpb.GripInset;
+        m_HoldSettings.FingerCurlExtra = fpb.FingerCurlExtra;
         m_HoldSettings.ReachSlack = fpb.ReachSlack;
         m_HoldSettings.ShoulderLineMatch = fpb.ShoulderLineMatch;
         m_HoldSettings.SpineAim = fpb.SpineAim;

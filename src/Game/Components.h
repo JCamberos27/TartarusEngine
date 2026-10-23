@@ -703,6 +703,12 @@ struct FirstPersonBodyComponent {
     // A modular body's hands, when they are a piece of their own (a long sleeve hides the arms and leaves
     // the hands): treated as part of the arms - drawn with them, hidden with them.
     std::string HandsPiece = "Hands";
+    // A body with no flesh on its hands (the Realistic Skeleton): the rig's grip is tuned for a skinned hand, whose palm
+    // and finger pads sit a centimetre or two out from the bones, so a bare-bone hand in the same pose floats off the
+    // gun. Grip Inset moves each hand that far (metres) toward its palm; Finger Curl Extra closes the fingers by that
+    // many more degrees per joint. Both 0 for a skinned body. Copied to NPCs at Play like the other hold settings.
+    float GripInset = 0.0f;
+    float FingerCurlExtra = 0.0f;
     // How much of the camera's pitch the spine takes (0 = the body stays upright, 1 = the chest
     // tilts as far as the view), so the shoulders follow the view and the hands stay in reach.
     float SpineAim = 0.0f;
