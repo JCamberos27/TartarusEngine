@@ -16,7 +16,7 @@ namespace {
 float WrapDeg(float d) { d = std::fmod(d, 360.0f); return d > 180.0f ? d - 360.0f : d <= -180.0f ? d + 360.0f : d; }
 glm::vec3 CharacterFeet() { glm::vec3 f; PhysicsWorld::GetCharacterFootPosition(&f.x); return f; }
 void SetCharacterFeet(const glm::vec3& f) { PhysicsWorld::SetCharacterFootPosition(&f.x); }
-unsigned MoveCharacter(const glm::vec3& d, float dt) { return PhysicsWorld::MoveCharacter(&d.x, dt); }
+unsigned MoveCharacter(const glm::vec3& d, float dt, bool snap = false) { return PhysicsWorld::MoveCharacter(&d.x, dt, snap); }
 }
 
 void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) {
@@ -99,11 +99,19 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
     const glm::vec3 feet = Cam.Position - glm::vec3(0.0f, eye, 0.0f);
     if (!PhysicsWorld::IsActive()) { Cam.Position += Velocity * dt; Grounded = false; return; }
     if (!hasCharacter) PhysicsWorld::CreateCharacter(radius, stand, &feet.x);
-    const unsigned flags = MoveCharacter(Velocity * dt, dt);
+    const unsigned flags = MoveCharacter(Velocity * dt, dt, wasGrounded && !Jumped && Velocity.y <= 0.0f);
+    float moverVelocity[3], stepDelta = 0.0f;
+    bool moverGrounded = false;
+    const bool mover = PhysicsWorld::LastMoverResult(moverVelocity, &moverGrounded, &stepDelta);
+    if (mover) {
+        // The custom mover: it slid the velocity along what it hit and followed the floor down itself.
+        if (GroundAccelTime > 0.0f || GroundDecelTime > 0.0f || AirAccelTime > 0.0f) { Velocity.x = moverVelocity[0]; Velocity.z = moverVelocity[2]; }
+        Grounded = moverGrounded;
+    }
     // Blocked by a wall: the part of the velocity into it goes, the part along it stays. (Cutting it to the speed actually
     // travelled took the slide along the wall too: a jamb grazed in a doorway left the player crawling until the
     // acceleration caught up.)
-    if ((GroundAccelTime > 0.0f || GroundDecelTime > 0.0f || AirAccelTime > 0.0f) && dt > 0.0f) {
+    else if ((GroundAccelTime > 0.0f || GroundDecelTime > 0.0f || AirAccelTime > 0.0f) && dt > 0.0f) {
         float n[8][3];
         glm::vec3 walls[8];
         const int count = PhysicsWorld::LastMoveWallNormals(n, 8);
@@ -111,20 +119,30 @@ void Player::Update(float dt, World& world, GLFWwindow* window, bool readInput) 
         const glm::vec3 v = PlayerClipVelocity(glm::vec3(Velocity.x, 0.0f, Velocity.z), walls, count);
         Velocity.x = v.x; Velocity.z = v.z;
     }
-    Grounded = (flags & PhysicsWorld::CC_DOWN) != 0;
+    if (!mover) Grounded = (flags & PhysicsWorld::CC_DOWN) != 0;
     // Walking off a step down: stay on the ground rather than fall the last few centimetres.
-    if (!Grounded && wasGrounded && !Jumped && Velocity.y <= 0.0f) {
+    if (!mover && !Grounded && wasGrounded && !Jumped && Velocity.y <= 0.0f) {
         const glm::vec3 before = CharacterFeet();
         if (MoveCharacter(glm::vec3(0.0f, -0.3f, 0.0f), dt) & PhysicsWorld::CC_DOWN) Grounded = true;
         else SetCharacterFeet(before);
     }
     if ((Grounded && Velocity.y < 0.0f) || ((flags & PhysicsWorld::CC_UP) && Velocity.y > 0.0f)) Velocity.y = 0.0f;
     Cam.Yaw += PhysicsWorld::PlatformYawDelta();
-    Cam.Position = CharacterFeet() + glm::vec3(0.0f, eye, 0.0f);
+    // A step up or down: the eye eases over it (a critically damped spring, ~0.15 s) rather than jumping with the feet.
+    {
+        const float w = 20.0f;
+        const float x = std::clamp(StepEase - stepDelta, -0.4f, 0.4f), v = StepEaseRate;
+        const float e = std::exp(-w * dt), k = (v + w * x) * dt;
+        StepEase = (x + k) * e;
+        StepEaseRate = (v - w * k) * e;
+        if (std::abs(StepEase) < 1e-4f && std::abs(StepEaseRate) < 1e-3f) StepEase = StepEaseRate = 0.0f;
+    }
+    Cam.Position = CharacterFeet() + glm::vec3(0.0f, eye + StepEase, 0.0f);
     if (Cam.Position.y < KillY) {
         SetCharacterFeet(RespawnFeet);
         Cam.Position = RespawnFeet + glm::vec3(0.0f, eye, 0.0f);
         Velocity = glm::vec3(0.0f);
+        StepEase = StepEaseRate = 0.0f;
     }
 }
 
