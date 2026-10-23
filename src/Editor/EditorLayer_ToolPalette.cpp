@@ -75,7 +75,8 @@ std::string SnapLabel(float v, const char* unit) {
 
 void EditorLayer::DrawMainToolbar(World& world, AssetLibrary& assets, bool playing, bool paused, bool transport) {
     int ww = 0, wh = 0;
-    glfwGetWindowSize(m_Window, &ww, &wh);
+    if (m_Window) glfwGetWindowSize(m_Window, &ww, &wh);
+    else ww = (int)ImGui::GetIO().DisplaySize.x; // headless (unit tests): no OS window
     const float rowH = MainToolbarHeightPx();
     if (ww <= 0 || rowH <= 0.0f) return;
 
