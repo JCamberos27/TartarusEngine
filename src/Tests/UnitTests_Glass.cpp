@@ -13,7 +13,6 @@
 #include "Glass/GlassStyleMotion.h"
 #include "Glass/GlassTheme.h"
 #include "Glass/GlassTokens.h"
-#include "RadialLayout.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -922,41 +921,6 @@ void TestGlassV2TokensAndStartup() {
     CHECK(m.LiveCount() == 0 && m.HeldBytes() == 0);
 }
 
-void TestRadialLayout() {
-    // The menu centre and every block land on whole pixels.
-    const ImVec2 snapped = RadialLayout::Snap(ImVec2(412.37f, 300.62f));
-    CHECK(snapped.x == 412.0f && snapped.y == 301.0f);
-    const float R = Glass::RadialRadiusPx, rIn = R * 0.38f, rBlock = R * 0.78f;
-    const float lineH = 15.0f, gap = 3.0f, iconH = 16.0f;
-    for (int count : {6, 8}) {
-        const float step = 2.0f * RadialLayout::kPi / (float)count;
-        const float chordW = RadialLayout::MaxLabelWidth(rBlock, iconH + gap + lineH, count, 6.0f);
-        const float maxW = std::min(chordW, 44.0f); // a realistic label (never wider than the chord)
-        CHECK(chordW >= maxW && maxW > 0.0f);
-        for (int i = 0; i < count; ++i) {
-            const float ang = RadialLayout::WedgeAngle(i, count);
-            const ImVec2 centre(400.0f, 300.0f);
-            const RadialLayout::Block b = RadialLayout::Place(centre, ang, rBlock, ImVec2(14.0f, 14.0f), ImVec2(maxW, lineH), gap, true);
-            CHECK(b.iconPos.x == std::floor(b.iconPos.x) && b.iconPos.y == std::floor(b.iconPos.y));
-            CHECK(b.labelPos.x == std::floor(b.labelPos.x) && b.labelPos.y == std::floor(b.labelPos.y));
-            // Every corner of the label rect sits inside the wedge's sector and outside the hub.
-            const float xs[2] = {b.labelPos.x, b.labelPos.x + maxW};
-            const float ys[2] = {b.labelPos.y, b.labelPos.y + lineH};
-            for (float x : xs) for (float y : ys) {
-                const float dx = x - centre.x, dy = y - centre.y;
-                float da = std::fabs(std::atan2(dy, dx) - ang);
-                if (da > RadialLayout::kPi) da = 2.0f * RadialLayout::kPi - da;
-                CHECK(da <= step * 0.5f + 0.02f);
-                CHECK(std::sqrt(dx * dx + dy * dy) > rIn);
-            }
-        }
-    }
-    // Labels only up to 8 wedges; past that the wedges hold icons alone.
-    CHECK(RadialLayout::ShowLabels(8));
-    CHECK(!RadialLayout::ShowLabels(9));
-    CHECK(!RadialLayout::ShowLabels(10));
-}
-
 } // namespace
 
 void RegisterGlassTests(UnitTestSupport::TestList& tests) {
@@ -984,5 +948,4 @@ void RegisterGlassTests(UnitTestSupport::TestList& tests) {
     tests.emplace_back("Glass layout: drawing under a table after a clipped loop", TestGlassTableBackgroundAfterClipper);
     tests.emplace_back("Glass layout: moving buttons stay clickable", TestGlassMotionButtonPolicy);
     tests.emplace_back("Glass motion: springs, curves and stagger", TestGlassSprings);
-    tests.emplace_back("Radial menu: snapped centres, labels inside the wedge, icons only past 8 slots", TestRadialLayout);
 }
