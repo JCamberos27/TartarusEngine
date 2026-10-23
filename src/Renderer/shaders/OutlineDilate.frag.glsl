@@ -11,6 +11,7 @@ uniform int uRadius;     // outline width, in scene pixels
 // default 0 (an unset uniform) is the whole ring.
 uniform float uSweepHide;
 uniform vec2 uSweepCenter;
+uniform float uFade;       // 0 = the full ring; 0.65 = the hover pre-highlight's 35%
 void main() {
     // Anti-aliased ring. The mask is sampled on circles at sub-pixel offsets rather than on the
     // pixel grid, and its coverage is continuous, so the ring's value varies smoothly with how
@@ -38,6 +39,7 @@ void main() {
         float head = 1.0 - smoothstep(0.0, 0.10, reveal - a);
         color = mix(uColor, vec3(1.0), head * step(a, reveal) * 0.75);
     }
+    alpha *= 1.0 - uFade;
     if (alpha < 0.004) discard;
     FragColor = vec4(color, alpha);
 }

@@ -1,7 +1,9 @@
 #pragma once
+#include <functional>
 #include <memory>
 #include <unordered_map>
 #include <vector>
+#include <entt/entt.hpp>
 #include <glm/glm.hpp>
 
 class Shader;
@@ -23,7 +25,10 @@ public:
 
     // drawShapes false = skip the collider wireframes (Colliders toggle off) but still draw the
     // contact crosses + physics debug-draw channels, which have their own toggles (#185).
-    void Draw(const glm::mat4& view, const glm::mat4& proj, const World& world, bool drawShapes = true);
+    // `only`, when set, limits the wireframes to entities it returns true for (Colliders > selected
+    // only); the contact crosses and debug channels are not filtered.
+    void Draw(const glm::mat4& view, const glm::mat4& proj, const World& world, bool drawShapes = true,
+              const std::function<bool(entt::entity)>* only = nullptr);
 
 private:
     unsigned int m_VAO = 0;

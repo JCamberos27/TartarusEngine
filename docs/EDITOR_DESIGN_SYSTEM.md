@@ -1,6 +1,6 @@
 # Black Glass: the editor design system
 
-Black Glass is an opt-in look for the Tartarus editor with one rule: **things that float are glass,
+Black Glass is the Tartarus editor's default look, with one rule: **things that float are glass,
 things you work in are solid.** Docked panels, the menu bar and the status bar are solid black.
 Everything that floats over them (menus, popups, combo lists, context menus, tooltips, modals,
 undocked windows, the viewport toolbar, tool rail, overlays, HUDs and notifications) is real
@@ -9,9 +9,9 @@ coming only from content (the scene) and from colours that carry meaning (axes, 
 
 It covers a palette, a spacing law, a motion language, a complete `ImGuiStyle`, a compositor that
 puts glass under every floating ImGui window, three Glass Workspace panels and the viewport HUDs.
-The default Tartarus theme is unchanged; nothing in this document runs until you switch to it.
+The older Tartarus phosphor theme is still one click away; nothing in this document runs while it's selected.
 
-**Turn it on:** *Preferences > General > Appearance > Editor theme > Black Glass*. Two more options
+**Switch themes:** *Preferences > General > Appearance > Editor theme*. Two more options
 appear there:
 
 * *Frosted blur* blurs what is behind every glass surface. With it off, glass is an opaque near-black.
@@ -547,6 +547,26 @@ Elements stay clickable and hit-accurate while they animate:
   and a card edited mid-reveal.
 * **Viewport picking.** The HUDs are real ImGui items, so the viewport's click-to-pick (which
   ignores clicks while `IsAnyItemHovered`) never selects through a HUD.
+
+## 6½. First-launch defaults
+
+A first launch (or the one-time prefs v2 migration, `EditorSettings::MigratePrefs`) opens on a
+clean, readable Scene view. The rule: **an overlay draws where it means something, and nowhere else.**
+
+* **Theme:** Black Glass. The viewport stats pill is off (the status bar carries the frame figures).
+* **Shapes only for the selection.** Light shapes, decal / reflection-probe / post-process boxes
+  and (when switched on) collider wireframes draw for the selection and its children only.
+  Colliders are off by default.
+* **Icons for lights and cameras only**, faded with distance, hidden behind geometry, decluttered
+  so overlapping icons never stack, and tinted only by meaning (a light's own colour, desaturated).
+* **Selection outline** is the accent (white under Glass); hovering a mesh pre-highlights it faintly.
+* **Camera:** each scene reopens where you left it; a scene seen for the first time is framed on
+  its Player Spawn, then the player body, then the scene bounds.
+* **Layout:** Hierarchy, Inspector (in front), Assets beside the Console, the Scene view focused.
+* **Status bar:** an Info line fades after a few seconds, a warning after half a minute; the hitch
+  warning waits until a newly opened scene has settled; the build label only shows off Release.
+* **Getting back here:** *Gizmos popup > Restore clean view* (or Preferences) resets just these;
+  smoke tests and benchmarks run in Tartarus unless they ask for Glass.
 
 ---
 
