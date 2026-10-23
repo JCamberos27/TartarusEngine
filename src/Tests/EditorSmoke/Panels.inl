@@ -8,7 +8,7 @@
 
 void RegisterPanelsTests() {
     using namespace ChromeUi;
-    const char* kBar = "##Toolbar";               // the title bar: transport + panel toggles
+    const char* kBar = "##MainToolbar";           // the main toolbar row: transport + panel toggles
     const char* kMaxBar = "##ViewportActionBar";  // the slim transport over maximized play
     const char* kStatus = "##StatusBar";
 
@@ -26,10 +26,13 @@ void RegisterPanelsTests() {
             ImGuiWindow* w = ImGui::FindWindowByName(kMaxBar);
             return !w || !w->WasActive || w->Hidden;
         }),
-        ExpectTrue("the viewport header's tools", [](Ctx&) {
+        ExpectTrue("the main toolbar's tools", [kBar](Ctx&) {
             for (const char* icon : {EDITOR_ICON_HAND_TOOL, EDITOR_ICON_TRANSLATE, EDITOR_ICON_ROTATE, EDITOR_ICON_SCALE})
-                if (!Find(ByExact(icon, "###Scene"))) return false;
+                if (!Find(ByExact(icon, kBar))) return false;
             return true;
+        }),
+        ExpectTrue("the viewport header's view menus", [](Ctx&) {
+            return Find(ByLabel("Perspective", "###Scene")) && Find(ByLabel("Show", "###Scene"));
         }),
         ExpectTrue("the status bar's segments", [kStatus](Ctx&) {
             return FindAll(ByExact("##seg", kStatus)).size() >= 5 && Find(ByExact("##lastlog", kStatus)) != nullptr;

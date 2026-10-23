@@ -23,7 +23,7 @@ struct EditorSmokeAccess_PlayMode {
 namespace {
 namespace smoke_play {
 using PA = EditorSmokeAccess_PlayMode;
-const char* kBar = "##Toolbar";               // the title bar's transport
+const char* kBar = "##MainToolbar";           // the main toolbar row's transport
 const char* kMaxBar = "##ViewportActionBar";  // the slim transport over maximized play
 
 Step Tap(int glfwKey, const char* what) {
