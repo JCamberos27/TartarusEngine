@@ -5794,6 +5794,7 @@ int RunUnitTests(const char* filter) {
     { void RegisterRenderTests(UnitTestSupport::TestList&); RegisterRenderTests(tests); } // UnitTests_Render.cpp
     { void RegisterWorldTextTests(UnitTestSupport::TestList&); RegisterWorldTextTests(tests); } // UnitTests_WorldText.cpp
     { void RegisterOpenableTests(UnitTestSupport::TestList&); RegisterOpenableTests(tests); } // UnitTests_Openable.cpp
+    RegisterCharacterMoverTests(tests); // UnitTests_CharacterMover.cpp
     RegisterEngineTests(tests);
     { void RegisterGameplayTests(UnitTestSupport::TestList&); RegisterGameplayTests(tests); }
     RegisterBloodTests(tests);

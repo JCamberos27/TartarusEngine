@@ -81,7 +81,12 @@ bool GetCharacterCapsule(float outFootPos[3], float* outRadius, float* outCylHal
 
 // Sweep-move the capsule by `disp` (world units, already scaled by dt at the call site).
 // Returns a mask of CharacterCollision bits; 0 when there is no character or world.
-unsigned MoveCharacter(const float disp[3], float dt);
+// `snapToGround` (the custom mover only): walking, so the feet follow the floor down a step or a slope.
+unsigned MoveCharacter(const float disp[3], float dt, bool snapToGround = false);
+// With the custom mover (ProjectSettings UseCustomCharacterMover): the last MoveCharacter's velocity less the part of it
+// into anything hit, whether it ended on the floor, and how far a step up or down moved the feet (the eye eases over it).
+// False on the PhysX controller.
+bool LastMoverResult(float outVelocity[3], bool* outGrounded, float* outStepDelta);
 // The walls the last MoveCharacter ran into (its side touches): each one's normal, world space, up to `max`; how many.
 int LastMoveWallNormals(float (*out)[3], int max);
 
@@ -363,6 +368,7 @@ enum PhysicsDebugDrawFlag : unsigned {
     PDD_Raycasts = 1u << 1,   // recent raycasts & sweeps: ray line, hit burst, hit normal — fading
     PDD_Velocity = 1u << 2,   // per-dynamic-body velocity arrow from the centre of mass
     PDD_Sleep    = 1u << 3,   // dim "z" marker above each sleeping body
+    PDD_Movers   = 1u << 4,   // the custom character mover's last move: walls and creases, the floor, steps tried
 };
 void     SetDebugDrawFlags(unsigned flags);
 unsigned GetDebugDrawFlags();

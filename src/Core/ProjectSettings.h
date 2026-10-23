@@ -35,6 +35,14 @@ struct PhysicsSettings {
     float PlayerPushStrength = 2.0f; // impulse the walking Player imparts to a dynamic body it hits
     int   PlayerLayer        = 0;    // collision-matrix layer the Player capsule is on (0-31)
 
+    // The characters' own collide-and-slide (CharacterMover) in place of PhysX's capsule controller. Off while it's new.
+    bool  UseCustomCharacterMover   = false;
+    float CharacterSkinWidth        = 0.02f; // kept between a character's capsule and what it touches
+    float CharacterStepHeight       = 0.35f; // climbed without a jump (no higher than the room above allows)
+    float CharacterWalkableSlopeDeg = 50.0f; // the steepest floor stood on
+    float CharacterStepDownSnap     = 0.3f;  // followed down a step or a slope while walking
+    float CharacterLedgeTolerance   = 0.6f;  // an edge holds the capsule up while touched within this much of its radius from the axis
+
     bool LayersCollide(int a, int b) const {
         if (!LayerRegistry::IsValid(a) || !LayerRegistry::IsValid(b)) return true;
         return (LayerCollisionMask[a] >> b) & 1u;
