@@ -605,6 +605,11 @@ void RegisterEngineComponents() {
             { "Air Accel Time", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, AirAccelTime), 0.005f,
               "How quickly the input steers the player in the air. Higher keeps more of the jump's momentum.\n"
               "0 = full air control.", 0.0f, 5.0f },
+            { "Doorway Assist", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, DoorwayAssist), 0.01f,
+              "Clipping a doorway's jamb while walking into it eases the player sideways past it, up to this much of the\n"
+              "capsule's radius. 0 = off.", 0.0f, 1.0f },
+            { "Doorway Assist Max Angle", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, DoorwayAssistMaxAngle), 0.5f,
+              "... only when the jamb is met within this many degrees of head on (sliding along a wall never counts).", 0.0f, 80.0f },
             { "Eye Height", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, EyeHeight), 0.01f,
               "Camera height above the feet.", 0.1f, 10.0f },
             { "Capsule Radius", T::Float, TARTARUS_REFLECT_FIELD(FirstPersonControllerComponent, CapsuleRadius), 0.01f,

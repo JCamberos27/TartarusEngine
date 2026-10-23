@@ -38,3 +38,4 @@ void RegisterSwayPortTests(UnitTestSupport::TestList& tests);
 void RegisterEngineTests(UnitTestSupport::TestList& tests);    // UnitTests_Engine.cpp
 void RegisterBloodTests(UnitTestSupport::TestList& tests);     // UnitTests_Blood.cpp
 void RegisterGlassTests(UnitTestSupport::TestList& tests);     // UnitTests_Glass.cpp
+void RegisterCharacterMoverTests(UnitTestSupport::TestList& tests); // UnitTests_CharacterMover.cpp
