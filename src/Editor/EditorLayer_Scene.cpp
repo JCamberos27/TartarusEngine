@@ -641,7 +641,8 @@ void EditorLayer::FrameOpenedScene(World& world, const std::string& path) {
 // "spawn" (any case). Camera ~3.5 m behind it and 1.7 m up, looking along its forward (-Z) a little down.
 static bool FrameSpawn(World& world, Camera& cam) {
     entt::entity spawn = entt::null;
-    for (entt::entity e : world.Registry.view<FirstPersonControllerComponent>(entt::exclude<InactiveTag>)) { spawn = e; break; }
+    auto controllers = world.Registry.view<FirstPersonControllerComponent>(entt::exclude<InactiveTag>);
+    if (controllers.begin() != controllers.end()) spawn = *controllers.begin();
     if (spawn == entt::null) {
         for (entt::entity e : world.Registry.view<NameComponent>(entt::exclude<InactiveTag>)) {
             std::string n = world.Registry.get<NameComponent>(e).Name;
