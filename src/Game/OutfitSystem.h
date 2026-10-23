@@ -41,6 +41,9 @@ std::shared_ptr<const Catalog> LoadCatalog(AssetLibrary& assets, const std::stri
 
 // The outfit's pieces: slot -> child entity.
 std::map<std::string, entt::entity> Pieces(const World& world, entt::entity root);
+// The worn race's Grip Inset (m) and Finger Curl Extra (degrees) on `root`'s Character Outfit, from a wardrobe already
+// loaded (no file is read here: it runs every frame); zero when none is.
+void RaceGrip(const World& world, entt::entity root, float& inset, float& curl);
 // What the character wears now, as a request (its gender, race and item pieces).
 Wardrobe::Request CurrentRequest(const World& world, entt::entity root);
 

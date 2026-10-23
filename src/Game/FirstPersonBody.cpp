@@ -2355,6 +2355,10 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
     glm::vec3 handPos[2]{};
     glm::quat handRot[2]{};
     glm::vec3 palmDir[2]{}; // world, Grip Inset's way
+    float gripInset = 0.0f, fingerCurl = 0.0f; // the body's settings plus the worn race's (a skeleton's)
+    OutfitSystem::RaceGrip(world, m_Body, gripInset, fingerCurl);
+    gripInset += cfg.GripInset;
+    fingerCurl += cfg.FingerCurlExtra;
     bool haveHand[2] = {false, false};
     glm::vec3 rigShoulder[2]{}, rigElbow[2]{}; // world: the rig's upper arm and elbow (its bend plane)
     bool haveRigElbow[2] = {false, false};
@@ -2428,7 +2432,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
             // The rig's arm shapes first, so the elbows bend the way the animation has them; the solve
             // then only fixes the hands.
             CopyArmShapeCached(m, *shapeRig, m_ArmsWeight, pose, parents, cfg.ClavicleFollow);
-            FirstPersonBodyCurlFingers(m, pose, cfg.FingerCurlExtra * m_ArmsWeight);
+            FirstPersonBodyCurlFingers(m, pose, fingerCurl * m_ArmsWeight);
 
             const glm::mat4 toModel = glm::inverse(pieceWorld);
             // The first piece in `order` works the shoulder moves out; the rest copy them. (What of the torso's
@@ -2462,7 +2466,7 @@ void FirstPersonBody::ArmsLateUpdate(World& world, entt::entity weaponArms, floa
                 const int upper = m.NodeIndex(Bone(kSides[s].Upper)), lower = m.NodeIndex(Bone(kSides[s].Lower)),
                           hand = m.NodeIndex(Bone(kSides[s].Hand));
                 if (upper < 0 || lower < 0 || hand < 0) continue;
-                const glm::vec3 target = glm::vec3(toModel * glm::vec4(handPos[s] + palmDir[s] * cfg.GripInset * m_ArmsWeight, 1.0f));
+                const glm::vec3 target = glm::vec3(toModel * glm::vec4(handPos[s] + palmDir[s] * gripInset * m_ArmsWeight, 1.0f));
                 const glm::quat rot = glm::normalize(toModelRot * handRot[s] * FirstPersonBodyRestOffset(m, *rig, hand));
                 const int clav = m.NodeIndex(Bone(kSides[s].Clavicle));
                 if (isSource) {

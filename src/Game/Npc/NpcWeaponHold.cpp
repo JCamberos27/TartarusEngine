@@ -7,6 +7,7 @@
 // body's arms reach them. HoldWeapon then moves the gun the little left to seat the stock in the shoulder
 // pocket and keep it out of the head, neck and torso, and solves every piece's arms onto the rig's hands.
 #include "NpcBody.h"
+#include "OutfitSystem.h"
 
 #include "Camera.h"
 #include "Components.h"
@@ -373,6 +374,10 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
             for (int b = 4; b >= 0 && m_DriverArm.Chest < 0; --b) m_DriverArm.Chest = d.NodeIndex(FPBody::kBoneSpine[b]);
         }
     }
+    float gripInset = 0.0f, fingerCurl = 0.0f; // the hold settings plus this soldier's race's (a skeleton's)
+    OutfitSystem::RaceGrip(world, m_Root, gripInset, fingerCurl);
+    gripInset += m_Set.GripInset;
+    fingerCurl += m_Set.FingerCurlExtra;
     struct Finger { const FingerNode* Node; glm::quat Rot; };
     thread_local std::vector<Finger> fingers;
     fingers.clear();
@@ -383,7 +388,7 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
         handPos[s] = glm::vec3(w[3]);
         handRot[s] = IK::Rotation(w);
         haveHand[s] = true;
-        if (m_Set.GripInset > 0.0f) handPos[s] += FirstPersonBodyPalmDirection(*gripRig, gripWorld, s) * m_Set.GripInset;
+        if (gripInset > 0.0f) handPos[s] += FirstPersonBodyPalmDirection(*gripRig, gripWorld, s) * gripInset;
         m_HandTarget[s] = handPos[s];
         m_HaveHandTarget[s] = true;
         if (gripRig->NodeTransform(FPBody::kBoneUpperArm[s], u) && gripRig->NodeTransform(FPBody::kBoneLowerArm[s], l)) {
@@ -575,7 +580,7 @@ glm::vec3 NpcBody::HoldWeapon(World& world, entt::entity armsRig, entt::entity w
             const glm::mat4 local = pose[(size_t)i].ToMatrix();
             globals[(size_t)i] = par >= 0 ? globals[(size_t)par] * local : local;
         }
-        FirstPersonBodyCurlFingers(m, pose, m_Set.FingerCurlExtra * w);
+        FirstPersonBodyCurlFingers(m, pose, fingerCurl * w);
         m.ApplyLocalPose(pose);
     }
 

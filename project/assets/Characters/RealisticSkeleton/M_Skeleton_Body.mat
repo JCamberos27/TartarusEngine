@@ -1,0 +1,31 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Skeleton_Body",
+  "properties": {
+    "_AOMap": "assets/Characters/RealisticSkeleton/Textures/Skeleton_Body_Ao.png",
+    "_AlbedoMap": "assets/Characters/RealisticSkeleton/Textures/Skeleton_Body_Albedo_Transparency.png",
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Characters/RealisticSkeleton/Textures/Skeleton_Body_Normal_Opn_Gl.png",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/Characters/RealisticSkeleton/Textures/Skeleton_Body_Roughness.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader"
+}

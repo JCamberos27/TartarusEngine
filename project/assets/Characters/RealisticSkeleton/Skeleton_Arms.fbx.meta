@@ -1,0 +1,10 @@
+{
+  "folder": "assets/Characters/RealisticSkeleton",
+  "guid": "5e3a24333a527223",
+  "materialRemap": {
+    "Skeleton_Body": "assets/Characters/RealisticSkeleton/M_Skeleton_Body.mat",
+    "Skeleton_Skull": "assets/Characters/RealisticSkeleton/M_Skeleton_Skull.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}
