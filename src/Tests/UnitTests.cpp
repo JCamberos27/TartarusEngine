@@ -1124,6 +1124,17 @@ void TestPlayerAcceleration() {
     CHECK(PlayerMovementTarget(glm::vec3(0,0,4),glm::vec3(0,0,2),0.5f,false)==glm::vec3(0,0,3));
     CHECK(PlayerMovementTarget(glm::vec3(0),glm::vec3(0,0,2),1.0f,true)==glm::vec3(0,0,2));
     const glm::vec3 run(0.0f, 0.0f, 4.5f);
+    {
+        // Into a wall: only the part into it goes; into a corner of two walls: along the corner, or stopped head on.
+        const glm::vec3 wall(-1.0f, 0.0f, 0.0f), v(2.0f, 0.0f, 3.0f);
+        CHECK(glm::length(PlayerClipVelocity(v, &wall, 1) - glm::vec3(0.0f, 0.0f, 3.0f)) < 1e-5f);
+        CHECK(PlayerClipVelocity(glm::vec3(-2.0f, 0.0f, 3.0f), &wall, 1) == glm::vec3(-2.0f, 0.0f, 3.0f)); // moving away: untouched
+        const glm::vec3 corner[2] = {glm::vec3(-1.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f)};
+        CHECK(glm::length(PlayerClipVelocity(glm::vec3(1.0f, 0.0f, 1.0f), corner, 2)) < 1e-5f);
+        const glm::vec3 vee[2] = {glm::normalize(glm::vec3(-1.0f, 0.0f, 1.0f)), glm::normalize(glm::vec3(-1.0f, 0.0f, -1.0f))};
+        CHECK(glm::length(PlayerClipVelocity(glm::vec3(3.0f, 0.0f, 0.0f), vee, 2)) < 1e-5f); // into a V's point: stopped
+        CHECK(PlayerClipVelocity(v, nullptr, 0) == v);
+    }
     CHECK(PlayerApproachVelocity(glm::vec3(0.0f), run, 1.0f / 60.0f, 0.0f, 0.0f) == run);
     CHECK(PlayerApproachVelocity(run, glm::vec3(0.0f), 1.0f / 60.0f, 0.07f, 0.0f) == glm::vec3(0.0f)); // no decel time: stops dead
     auto after = [&](float hz, float seconds, glm::vec3 from, glm::vec3 to) {

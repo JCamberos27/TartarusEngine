@@ -53,6 +53,10 @@ class World;
 //   decals  (scenes/Apartment Hallway.json) rounds and blood put on a corridor wall and floor at fixed spots, shot from
 //           fixed Scene-view cameras: the before/after of bullet holes and blood moving to the clustered decals
 //           (NpcTest_Decals.cpp, docs/DECALS.md)
+//   doors   (scenes/Apartment Hallway.json, no squad) every door opened and the player walked through each one five ways -
+//           straight, grazing the hinge jamb, grazing the latch jamb, strafing, sprinting on a diagonal - each pass measured:
+//           through in time, the speed kept within half a metre of the wall, time stuck, frames inside anything
+//           (NpcTest_Doors.cpp)
 //   pose    the weapon hold, close up: an AK and a Remington soldier, the AI frozen, put through aim level /
 //           up / down / to the side, at the hip, crouched, strafing, reloading and sprinting; four views of each
 //           and the gun's / elbows' / hands' clearances (NpcBody::MeasureHold) logged and checked
@@ -82,8 +86,8 @@ public:
     bool Aiming() const { return !m_Target.empty(); }   // sights up (rounds go where the view looks)
     bool WantsReload() const { return m_Reload; }
     bool WantsAiOverlay() const { return m_Scenario == "sandbox"; } // the AI overlay in the sandbox shots
-    bool RunsWithoutSquad() const { return m_Scenario == "decals"; } // After() even in a scene with no squad
-    bool WantsCleanViews() const { return m_Scenario == "blood" || m_Scenario == "ragdoll" || m_Scenario == "decals"; } // no collider / physics-debug overlays
+    bool RunsWithoutSquad() const { return m_Scenario == "decals" || m_Scenario == "doors"; } // After() even in a scene with no squad
+    bool WantsCleanViews() const { return m_Scenario == "blood" || m_Scenario == "ragdoll" || m_Scenario == "decals" || m_Scenario == "doors"; } // no collider / physics-debug overlays
     // Time stands still this frame (the host steps the game by zero): the ragdoll scenario's multi-angle shots of one moment.
     bool Frozen() const { return m_RFreeze; }
     // The blood scenario's view of the blood, filled by the host each frame.
@@ -159,6 +163,30 @@ private:
     void TrackWound(World& world, const Npc& n, WoundTrack& w, float now, float dt, bool motion);
     void Decals(World& world, NpcDirector& npcs, float now); // NpcTest_Decals.cpp
     void DecalsDrive(Player& player, float& wantYaw, float& wantPitch);
+    // doors (NpcTest_Doors.cpp)
+    struct DoorSpot {
+        std::string Name;
+        glm::vec3 Centre{0.0f};  // the opening's middle, on the floor in the wall's plane
+        glm::vec3 Normal{0.0f};  // through the opening (the leaf's +Z)
+        glm::vec3 Along{0.0f};   // along the wall, toward the latch side
+    };
+    struct DoorRun {
+        glm::vec3 Start{0.0f}, Dir{0.0f}, Heading{0.0f}, Prev{0.0f};
+        float Speed = 0.0f, Budget = 0.0f, Clock = 0.0f, Time = 0.0f, MinRatio = 0.0f, Stuck = 0.0f;
+        int PenFrames = 0;
+        bool Placed = false, HavePrev = false, Sprint = false, Strafe = false;
+    };
+    void Doors(World& world, const Player& player);
+    void DoorsDrive(Player& player, float dt, float& wantYaw, float& wantPitch);
+    void DoorsSetUp(World& world);
+    void DoorsPassSetUp(const Player& player);
+    std::vector<DoorSpot> m_DDoors;
+    DoorRun m_DRun;
+    int m_DDoor = 0, m_DPass = 0, m_DOk = 0, m_DTotal = 0, m_DPen = 0;
+    float m_DDt = 0.0f, m_DWait = 0.0f, m_DWorst = 1e9f, m_DWorstStuck = 0.0f;
+    bool m_DReady = false, m_DDone = false, m_DTrace = false;
+    std::string m_DWorstAt;
+    std::vector<std::string> m_DFailedThrough;
     // decals
     int m_KStep = 0, m_KShot = 0;
     int m_KStressFrame = 0; // TARTARUS_DECAL_STRESS: frames of rounds and blood fired so far
