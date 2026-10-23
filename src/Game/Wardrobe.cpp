@@ -188,6 +188,12 @@ bool Parse(const std::string& jsonText, Wardrobe& out, std::string* error) {
                 if (r.contains("parts") && r["parts"].is_object())
                     for (const auto& [k, v] : r["parts"].items())
                         if (v.is_string()) race.Parts[k] = Join(w.Root, v.get<std::string>());
+                if (r.contains("alternates") && r["alternates"].is_object())
+                    for (const auto& [k, v] : r["alternates"].items())
+                        if (v.is_string()) race.Alternates[k] = Join(w.Root, v.get<std::string>());
+                if (r.contains("random") && r["random"].is_boolean()) race.Random = r["random"].get<bool>();
+                if (r.contains("gripInset") && r["gripInset"].is_number()) race.GripInset = r["gripInset"].get<float>();
+                if (r.contains("fingerCurlExtra") && r["fingerCurlExtra"].is_number()) race.FingerCurlExtra = r["fingerCurlExtra"].get<float>();
                 body.Races.push_back(std::move(race));
             }
     }
@@ -202,6 +208,7 @@ bool Parse(const std::string& jsonText, Wardrobe& out, std::string* error) {
             r.Skin = c.contains("skin") && c["skin"].is_boolean() ? (c["skin"].get<bool>() ? 1 : 0) : -1;
             const std::string g = String(c, "gender");
             r.Gender = IEquals(g, "Female") ? 1 : IEquals(g, "Male") ? 0 : -1;
+            r.Race = String(c, "race");
             r.Hide = Strings(c, "hide");
             r.Replace = String(c, "replace");
             r.With = String(c, "with");
@@ -461,18 +468,31 @@ Resolved Resolve(const Wardrobe& w, const std::vector<Item>& catalog, const Requ
         if (AnyIn(item.Stem, rule.NameLacksAll)) continue;
         if (rule.Skin >= 0 && (rule.Skin == 1) != item.Skin) continue;
         if (rule.Gender >= 0 && rule.Gender != (int)request.Sex) continue;
+        if (!rule.Race.empty() && !(race && IEquals(rule.Race, race->Name))) continue;
         for (const auto& hide : rule.Hide) {
             const size_t before = parts.size();
             parts.erase(std::remove_if(parts.begin(), parts.end(), [&](const auto& p) { return p.first == hide; }), parts.end());
             if (parts.size() != before) result.Notes.push_back(item.Name + " hides " + hide);
         }
         if (!rule.Replace.empty())
-            if (auto alt = body.Alternates.find(rule.With); alt != body.Alternates.end())
+            if (auto alt = body.Alternates.find(rule.With); alt != body.Alternates.end()) {
+                // The race's own alternate first: a skeleton under a long sleeve keeps its bone hands, not skin
+                // ones; "" drops the part (its feet in shoes).
+                std::string with = alt->second;
+                if (race)
+                    if (auto own = race->Alternates.find(rule.With); own != race->Alternates.end()) with = own->second;
+                if (with.empty()) {
+                    const size_t before = parts.size();
+                    parts.erase(std::remove_if(parts.begin(), parts.end(), [&](const auto& p) { return p.first == rule.Replace; }), parts.end());
+                    if (parts.size() != before) result.Notes.push_back(item.Name + " hides " + rule.Replace);
+                    continue;
+                }
                 for (auto& [part, model] : parts)
-                    if (part == rule.Replace && !IEquals(model, alt->second)) {
-                        model = alt->second;
-                        result.Notes.push_back(rule.Replace + " -> " + PrettyName(Stem(alt->second)));
+                    if (part == rule.Replace && !IEquals(model, with)) {
+                        model = with;
+                        result.Notes.push_back(rule.Replace + " -> " + PrettyName(Stem(with)));
                     }
+            }
     }
 
     for (const auto& [part, model] : parts) {
@@ -535,8 +555,10 @@ Request Randomize(const Wardrobe& w, const std::vector<Item>& catalog, const Req
     auto kept = [&](const std::string& s) { return std::any_of(keep.begin(), keep.end(), [&](const std::string& k) { return IEquals(k, s); }); };
     Request req = base;
 
-    const auto& races = w.Body(req.Sex).Races;
-    if (!kept("Race") && !races.empty()) req.Race = races[rng() % races.size()].Name;
+    std::vector<const RaceDef*> races; // the ones Randomize may pick, in order (the same draw as before for those)
+    for (const auto& r : w.Body(req.Sex).Races)
+        if (r.Random) races.push_back(&r);
+    if (!kept("Race") && !races.empty()) req.Race = races[rng() % races.size()]->Name;
 
     // The style: the one asked for, else one for this gender by weight.
     const Style* st = style.empty() ? nullptr : FindStyle(w, style);
