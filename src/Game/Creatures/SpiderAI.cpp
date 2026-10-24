@@ -62,11 +62,27 @@ bool SpiderSystem::SeesPlayer(const Body& b, const SpiderComponent& sc, const Ta
     return dist < 1.5f || LineClear(eye, t.Eye); // close enough to feel them through anything
 }
 
-int SpiderSystem::PickPerch(const glm::vec3& near) const {
+// A pounce needs open air to the player: inside 3.5 m a clear line to their chest or eyes (a chair leg may hide the eyes),
+// farther out it must see them. Never through a wall, a floor or a ceiling slab - one that leapt anyway hit the slab and
+// tried again, for ever.
+bool SpiderSystem::LeapClear(const Body& b, const SpiderComponent& sc, const Target& t, float dist) const {
+    const glm::vec3 from = b.Mover.Position() + b.Mover.Up() * 0.2f;
+    if (dist >= 3.5f) return SeesPlayer(b, sc, t);
+    return LineClear(from, t.Feet + glm::vec3(0.0f, 0.8f, 0.0f)) || LineClear(from, t.Eye);
+}
+
+int SpiderSystem::Reach(const Body& b) const {
+    const glm::vec3 up = b.Mover.Up();
+    const int n = m_Nav.Empty() ? -1 : m_Nav.Nearest(b.Mover.Position(), 0.8f, &up);
+    return n >= 0 ? m_Nav.Component(n) : -1;
+}
+
+int SpiderSystem::PickPerch(const glm::vec3& near, int component) const {
     int best = -1;
     float bestScore = -1e9f;
     for (int i = 0; i < m_Nav.NodeCount(); ++i) {
         if (m_Nav.Normal(i).y > -0.9f) continue; // the ceiling
+        if (component >= 0 && m_Nav.Component(i) != component) continue; // one it can get to, not a slab's underside in a void
         const float d = glm::length(m_Nav.Pos(i) - near);
         if (d > 7.0f) continue;
         // A corner (a node linked to a wall) hides the body against two surfaces.
@@ -142,7 +158,7 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
     case Mode::Perch: {
         b.Costs = Spider::PathCosts{3.0f, 1.0f, 1.0f};
         sc.Run = false;
-        if (ai.Perch < 0) ai.Perch = PickPerch(pos);
+        if (ai.Perch < 0) ai.Perch = PickPerch(pos, Reach(b));
         if (ai.Perch >= 0) {
             sc.Goal = m_Nav.Pos(ai.Perch);
             sc.HasGoal = glm::length(pos - sc.Goal) > 0.15f;
@@ -168,13 +184,13 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
                 const glm::vec3 from = t.Eye, dir(0.0f, 1.0f, 0.0f);
                 if (PhysicsWorld::RaycastSolid(&from.x, &dir.x, 5.0f, f, h) && h.Hit) above = glm::vec3(h.Point[0], h.Point[1], h.Point[2]);
                 const glm::vec3 down(0.0f, -1.0f, 0.0f);
-                node = m_Nav.Nearest(above, 1.0f, &down);
+                node = m_Nav.Nearest(above, 1.0f, &down, Reach(b));
             } else if (!m_Nav.Empty()) {
                 // Circling: high on a wall a few metres off, waiting for a place in the attack.
                 const glm::vec3 away = Flat(pos - t.Feet);
                 const glm::vec3 spot = t.Feet + (glm::length(away) > 0.0f ? away : glm::vec3(1.0f, 0.0f, 0.0f)) * 3.0f +
                                        glm::vec3(0.0f, 1.6f, 0.0f);
-                node = m_Nav.Nearest(spot, 2.5f);
+                node = m_Nav.Nearest(spot, 2.5f, nullptr, Reach(b));
             }
             sc.Goal = node >= 0 ? m_Nav.Pos(node) : t.Feet;
             sc.HasGoal = true;
@@ -210,7 +226,20 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
         if (dist < 1.2f) {
             enter(Mode::Bite);
             if (anim) anim->SetTrigger("Attack");
-        } else if (ai.PounceIn <= 0.0f && dist > 2.2f && dist < 5.0f && b.Mover.Attached() && (dist < 3.5f || SeesPlayer(b, sc, t))) {
+        } else if (ai.PounceIn <= 0.0f && dist > 2.2f && dist < 5.0f && b.Mover.Attached() && !LeapClear(b, sc, t, dist)) {
+#pragma warning(suppress : 4996)
+            static const bool trace = std::getenv("TARTARUS_SPIDER_TRACE") != nullptr;
+            if (trace && ai.Clock - dt < std::floor(ai.Clock) + 1e-6f && ai.Clock >= std::floor(ai.Clock)) { // once a second
+                const glm::vec3 from = pos + up * 0.2f, to = t.Feet + glm::vec3(0.0f, 0.8f, 0.0f), d = glm::normalize(to - from);
+                RaycastHit h;
+                QueryFilter f;
+                f.HitTriggers = 0;
+                const bool hit = PhysicsWorld::RaycastSolid(&from.x, &d.x, glm::length(to - from), f, h);
+                const auto* n = hit ? world.Registry.try_get<NameComponent>((entt::entity)h.Entity) : nullptr;
+                std::printf("[Spider] %u: no pounce at %.2f m: chest line blocked by %s at %.2f m\n", (unsigned)entt::to_integral(b.Root),
+                            dist, n ? n->Name.c_str() : (hit ? "an unnamed solid" : "nothing"), hit ? h.Distance : 0.0f);
+            }
+        } else if (ai.PounceIn <= 0.0f && dist > 2.2f && dist < 5.0f && b.Mover.Attached()) {
             enter(Mode::Telegraph);
             if (anim) anim->SetTrigger("Jump");
             Sound("hiss", pos, 0.8f); // the tell
@@ -298,7 +327,7 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
             const glm::vec3 away = Flat(pos - t.Feet);
             const glm::vec3 spot = t.Feet + (glm::length(away) > 0.0f ? away : glm::vec3(1.0f, 0.0f, 0.0f)) * 3.5f +
                                    glm::vec3(0.0f, 1.3f, 0.0f);
-            const int node = m_Nav.Empty() ? -1 : m_Nav.Nearest(spot, 2.5f);
+            const int node = m_Nav.Empty() ? -1 : m_Nav.Nearest(spot, 2.5f, nullptr, Reach(b));
             sc.Goal = node >= 0 ? m_Nav.Pos(node) : spot;
         }
         sc.HasGoal = true;

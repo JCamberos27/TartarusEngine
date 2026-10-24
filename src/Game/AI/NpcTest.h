@@ -91,8 +91,8 @@ public:
     bool Aiming() const { return !m_Target.empty(); }   // sights up (rounds go where the view looks)
     bool WantsReload() const { return m_Reload; }
     bool WantsAiOverlay() const { return m_Scenario == "sandbox"; } // the AI overlay in the sandbox shots
-    bool RunsWithoutSquad() const { return m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "spider" || m_Scenario == "spiderdeath" || m_Scenario == "spiderhunt"; } // After() even in a scene with no squad
-    bool WantsCleanViews() const { return m_Scenario == "blood" || m_Scenario == "ragdoll" || m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "spider" || m_Scenario == "spiderdeath" || m_Scenario == "spiderhunt"; } // no collider / physics-debug overlays
+    bool RunsWithoutSquad() const { return m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "spider" || m_Scenario == "spiderdeath" || m_Scenario == "spiderhunt" || m_Scenario == "spiderplay"; } // After() even in a scene with no squad
+    bool WantsCleanViews() const { return m_Scenario == "blood" || m_Scenario == "ragdoll" || m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "spider" || m_Scenario == "spiderdeath" || m_Scenario == "spiderhunt" || m_Scenario == "spiderplay"; } // no collider / physics-debug overlays
     // Time stands still this frame (the host steps the game by zero): the ragdoll scenario's multi-angle shots of one moment.
     bool Frozen() const { return m_RFreeze; }
     // The blood scenario's view of the blood, filled by the host each frame.
@@ -192,6 +192,19 @@ private:
     void SpiderWatchDrive(Player& player, float& wantYaw, float& wantPitch);
     glm::vec3 m_WatchAt{0.0f};
     bool m_HaveWatch = false, m_WatchPlaced = false;
+    // spiderplay (NpcTest_SpiderPlay.cpp): editor Play - hunters left alone go up unaware; the player comes in and shoots
+    void SpiderPlay(World& world);
+    void SpiderPlayDrive(Player& player, FirstPersonPresentation& weapon, float dt, float& wantYaw, float& wantPitch);
+    std::vector<std::uint32_t> m_PRoots;
+    float m_PClock = 0.0f, m_PShotAt = -1.0f, m_PFirstAttackAt = -1.0f, m_PRoomShotAt = -1.0f, m_PRoomAttackAt = -1.0f;
+    int m_PStage = 0, m_PAwareEarly = 0, m_PUnder = 0, m_PAmmoStart = 0, m_PAmmoSpent = 0, m_PRoomAmmo = 0, m_PRoomSpent = 0;
+    int m_PAttacksBefore = -1, m_PReachable = 0, m_PVoid = 0, m_PAbove = 0, m_POutside = 0, m_PBarriers = 0;
+    bool m_PReached[3] = {false, false, false};
+    bool m_POutSaid[3] = {false, false, false};
+    bool m_PPlaced = false, m_PEntered = false, m_PHaveAim = false, m_PPerchedAll = false, m_PNavSame = false, m_PDone = false;
+    bool m_PDown[3] = {false, false, false};
+    glm::vec3 m_PAim{0.0f};
+    std::string m_PNavWhy;
     // spiderhunt (NpcTest_SpiderHunt.cpp): hunters let loose on the player in 301's living room
     void SpiderHunt(World& world);
     void SpiderHuntDrive(Player& player, PlayerVitals& vitals, float& wantYaw, float& wantPitch);

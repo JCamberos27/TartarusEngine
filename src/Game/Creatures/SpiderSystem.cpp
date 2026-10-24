@@ -20,29 +20,31 @@
 
 namespace {
 
-// The solid world (statics and kinematic bodies, not props rolling about, not triggers), counted.
-class WorldQuery : public Spider::SurfaceQuery {
-public:
-    bool Ray(const glm::vec3& from, const glm::vec3& dir, float maxDistance, Spider::SurfaceHit& out) const override {
-        ++Rays;
-        RaycastHit h;
-        QueryFilter f;
-        f.HitTriggers = 0;
-        if (!PhysicsWorld::RaycastSolid(&from.x, &dir.x, maxDistance, f, h) || !h.Hit) return false;
-        out.Hit = true;
-        out.Distance = h.Distance;
-        out.Point = glm::vec3(h.Point[0], h.Point[1], h.Point[2]);
-        out.Normal = glm::vec3(h.Normal[0], h.Normal[1], h.Normal[2]);
-        return true;
+// Every CreatureBarrierComponent's box: its entity's render bounds (a unit box without a model) through its world
+// transform, grown by its padding.
+void CollectBarriers(const World& world, std::vector<Spider::Barrier>& out) {
+    out.clear();
+    const auto& reg = world.Registry;
+    for (entt::entity e : reg.view<const CreatureBarrierComponent, const TransformComponent>(entt::exclude<InactiveTag>)) {
+        glm::vec3 lo(-0.5f), hi(0.5f);
+        if (const auto* r = reg.try_get<RenderableComponent>(e); r && r->ModelRef) {
+            lo = r->ModelRef->BoundsMin();
+            hi = r->ModelRef->BoundsMax();
+        }
+        const glm::mat4 m = world.ComposeWorldTransform(e);
+        glm::mat3 axes(m);
+        glm::vec3 scale;
+        for (int a = 0; a < 3; ++a) {
+            scale[a] = glm::length(axes[a]);
+            if (scale[a] > 1e-6f) axes[a] /= scale[a];
+        }
+        Spider::Barrier b;
+        b.Centre = glm::vec3(m * glm::vec4(0.5f * (lo + hi), 1.0f));
+        b.Rotation = glm::normalize(glm::quat_cast(axes));
+        b.Half = 0.5f * glm::abs(hi - lo) * scale + glm::vec3(std::max(0.0f, reg.get<CreatureBarrierComponent>(e).Padding));
+        out.push_back(b);
     }
-    bool Occupied(const glm::vec3& centre, float radius) const override {
-        QueryFilter f;
-        f.HitTriggers = 0;
-        unsigned hit = 0;
-        return PhysicsWorld::OverlapSphereFiltered(&centre.x, radius, f, &hit, 1) > 0;
-    }
-    mutable int Rays = 0;
-};
+}
 
 bool ReadText(const std::string& projectPath, std::string& out) {
     std::ifstream in(std::filesystem::u8path(ProjectPaths::Resolve(projectPath)), std::ios::binary);
@@ -146,6 +148,42 @@ bool SpiderSystem::Resolve(World& world, AssetLibrary&, Body& b) {
     return true;
 }
 
+bool Spider::WorldQuery::Ray(const glm::vec3& from, const glm::vec3& dir, float maxDistance, Spider::SurfaceHit& out) const {
+    ++Rays;
+    RaycastHit h;
+    QueryFilter f;
+    f.HitTriggers = 0;
+    if (!(StaticOnly ? PhysicsWorld::RaycastStatic(&from.x, &dir.x, maxDistance, f, h)
+                     : PhysicsWorld::RaycastSolid(&from.x, &dir.x, maxDistance, f, h, /*fromOutside=*/true)) ||
+        !h.Hit)
+        return false;
+    out.Hit = true;
+    out.Distance = h.Distance;
+    out.Point = glm::vec3(h.Point[0], h.Point[1], h.Point[2]);
+    out.Normal = glm::vec3(h.Normal[0], h.Normal[1], h.Normal[2]);
+    return true;
+}
+
+bool Spider::WorldQuery::Occupied(const glm::vec3& centre, float radius) const {
+    QueryFilter f;
+    f.HitTriggers = 0;
+    if (StaticOnly) return PhysicsWorld::OverlapSphereStatic(&centre.x, radius, f);
+    unsigned hit = 0;
+    return PhysicsWorld::OverlapSphereFiltered(&centre.x, radius, f, &hit, 1) > 0;
+}
+
+glm::vec3 SpiderSystem::Shove(const glm::vec3& velocity, const glm::vec3& push) {
+    const glm::vec2 p(push.x, push.z), v(velocity.x, velocity.z);
+    const float strength = glm::length(p);
+    if (strength <= 1e-3f) return velocity;
+    const glm::vec2 dir = p / strength;
+    const float along = glm::dot(v, dir);
+    glm::vec2 out = along < strength ? v + dir * (strength - along) : v;
+    const float cap = std::max(strength, glm::length(v)), speed = glm::length(out);
+    if (speed > cap) out *= cap / speed;
+    return glm::vec3(out.x, velocity.y, out.y);
+}
+
 void SpiderSystem::Sound(const char* element, const glm::vec3& pos, float gain) {
     WeaponAudio& wa = WeaponAudio::Get();
     if (!wa.Active()) return;
@@ -157,21 +195,23 @@ void SpiderSystem::Sound(const char* element, const glm::vec3& pos, float gain) 
     if (wa.PlayKeyed(*set, pos, false, gain).Started) ++s_SoundsStarted;
 }
 
-void SpiderSystem::BuildNav() {
+void SpiderSystem::BuildNav(const World& world) {
     m_NavTried = true;
+    CollectBarriers(world, m_Barriers);
     PROFILE_SCOPE("Spider Nav");
     const auto t0 = std::chrono::steady_clock::now();
     std::vector<float> verts;
     std::vector<int> tris;
     PhysicsWorld::CollectStaticGeometry(verts, tris, /*includeKinematic=*/false);
     const Spider::NavSettings s;
-    const std::uint64_t hash = Spider::SurfaceGraph::HashInput(verts, tris, s);
+    const std::uint64_t hash = Spider::SurfaceGraph::HashBarriers(Spider::SurfaceGraph::HashInput(verts, tris, s), m_Barriers);
     char name[64];
     std::snprintf(name, sizeof name, "Library/SpiderNavCache/%016llx.snav", (unsigned long long)hash);
     const std::string cache = ProjectPaths::Resolve(name);
     bool loaded = m_Nav.Load(cache, hash);
     if (!loaded) {
-        WorldQuery q;
+        Spider::WorldQuery solid(/*staticOnly=*/true);
+        const Spider::BarrierQuery q(solid, m_Barriers);
         if (!m_Nav.Build(verts, tris, q, s)) {
             Log::Error("Spider: the surface graph didn't build - spiders head straight for their goals.");
             return;
@@ -183,6 +223,36 @@ void SpiderSystem::BuildNav() {
     const float ms = std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - t0).count();
     Log::Info("Spider: surface graph " + std::to_string(m_Nav.NodeCount()) + " nodes, " + std::to_string(m_Nav.LinkCount()) +
               " links (" + (loaded ? "cached" : "baked") + ", " + std::to_string((int)ms) + " ms).");
+}
+
+bool SpiderSystem::NavMatchesFreshBuild(std::string& why) const {
+    std::vector<float> verts;
+    std::vector<int> tris;
+    PhysicsWorld::CollectStaticGeometry(verts, tris, /*includeKinematic=*/false);
+    Spider::SurfaceGraph fresh;
+    Spider::WorldQuery solid(/*staticOnly=*/true);
+    const Spider::BarrierQuery q(solid, m_Barriers);
+    if (!fresh.Build(verts, tris, q, Spider::NavSettings{})) {
+        why = "the fresh build failed";
+        return false;
+    }
+    const Spider::SurfaceGraph& g = m_Nav;
+    if (g.NodeCount() != fresh.NodeCount() || g.LinkCount() != fresh.LinkCount()) {
+        why = "in use " + std::to_string(g.NodeCount()) + " nodes / " + std::to_string(g.LinkCount()) + " links, fresh " +
+              std::to_string(fresh.NodeCount()) + " / " + std::to_string(fresh.LinkCount());
+        return false;
+    }
+    for (int i = 0; i < g.NodeCount(); ++i) {
+        bool same = glm::length(g.Pos(i) - fresh.Pos(i)) < 1e-4f && glm::length(g.Normal(i) - fresh.Normal(i)) < 1e-4f &&
+                    g.FirstLink(i + 1) - g.FirstLink(i) == fresh.FirstLink(i + 1) - fresh.FirstLink(i);
+        for (int k = 0; same && k < g.FirstLink(i + 1) - g.FirstLink(i); ++k)
+            same = g.Neighbour(g.FirstLink(i) + k) == fresh.Neighbour(fresh.FirstLink(i) + k);
+        if (!same) {
+            why = "node " + std::to_string(i) + " differs";
+            return false;
+        }
+    }
+    return true;
 }
 
 glm::vec3 SpiderSystem::Steer(Body& b, const glm::vec3& goal, float dt) {
@@ -197,7 +267,7 @@ glm::vec3 SpiderSystem::Steer(Body& b, const glm::vec3& goal, float dt) {
         b.Route.clear();
         b.RouteNormal.clear();
         b.RouteAt = 0;
-        const int from = m_Nav.Nearest(pos, 0.8f, &up), to = m_Nav.Nearest(goal, 1.0f);
+        const int from = m_Nav.Nearest(pos, 0.8f, &up), to = m_Nav.Nearest(goal, 1.0f, nullptr, from >= 0 ? m_Nav.Component(from) : -1);
         b.RouteFailed = from < 0 || to < 0 || !m_Nav.FindPath(from, to, b.Costs, b.RouteScratch);
         if (!b.RouteFailed) {
             for (int n : b.RouteScratch) {
@@ -232,8 +302,9 @@ void SpiderSystem::Think(World& world, AssetLibrary& assets, float dt, const Tar
     if (m_Bodies.empty() || dt <= 0.0f) return;
 
     PROFILE_SCOPE("Spiders");
-    if (!m_NavTried) BuildNav();
-    WorldQuery q;
+    if (!m_NavTried) BuildNav(world);
+    Spider::WorldQuery wq;
+    const Spider::BarrierQuery q(wq, m_Barriers);
     for (Body& b : m_Bodies) {
         if (!b.Ready && !Resolve(world, assets, b)) continue;
         if (b.Pain.Dead) continue; // its ragdoll has it
@@ -246,7 +317,7 @@ void SpiderSystem::Think(World& world, AssetLibrary& assets, float dt, const Tar
         if (!sc.HasGoal) b.Route.clear();
         in.SpeedScale = b.Ai.Hold ? 0.0f : (sc.Run && sc.WalkSpeed > 1e-3f ? sc.RunSpeed / sc.WalkSpeed : 1.0f) * b.Pain.SpeedScale;
         in.LegUp = b.Gait.MeanNormal();
-        q.Rays = 0;
+        wq.Rays = 0;
         b.Mover.Step(q, MoverFrom(sc), in, dt);
         if (b.Mover.Attached() && !b.WasAttached) Sound("thud", b.Mover.Position()); // down from a leap, a drop, a fall
         // For tests: stuck (meaning to move, not moving) and sunk (an end of the body inside a surface).
@@ -265,7 +336,7 @@ void SpiderSystem::Think(World& world, AssetLibrary& assets, float dt, const Tar
             }
         }
         b.WasAttached = b.Mover.Attached();
-        b.Last.Rays = q.Rays;
+        b.Last.Rays = wq.Rays;
 
         auto& t = reg.get<TransformComponent>(b.Root);
         t.Position = b.Mover.Position();
@@ -281,7 +352,8 @@ void SpiderSystem::LatePose(World& world, float dt) {
     if (m_Bodies.empty() || dt <= 0.0f) return;
     PROFILE_SCOPE("Spider Legs");
     auto& reg = world.Registry;
-    WorldQuery q;
+    Spider::WorldQuery wq;
+    const Spider::BarrierQuery q(wq, m_Barriers);
     for (Body& b : m_Bodies) {
         if (!b.Ready || b.Pain.Dead || !reg.valid(b.ModelEntity)) continue;
         const auto& sc = reg.get<SpiderComponent>(b.Root);
@@ -290,11 +362,11 @@ void SpiderSystem::LatePose(World& world, float dt) {
         Model& m = *rc->ModelRef;
         const glm::mat4 model = world.ComposeWorldTransform(b.ModelEntity);
 
-        q.Rays = 0;
+        wq.Rays = 0;
         b.Gait.Step(q, GaitFrom(sc), model, b.Mover.Position(), b.Mover.Up(), b.Mover.Velocity(), b.Mover.Attached(), dt);
 
         Stats& st = b.Last;
-        st.Rays += q.Rays;
+        st.Rays += wq.Rays;
         st.PlantedSlide = 0.0f;
         st.Grounded = 0;
         for (int i = 0; i < Spider::kLegs; ++i) {

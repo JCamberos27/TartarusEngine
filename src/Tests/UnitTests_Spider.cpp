@@ -4,6 +4,9 @@
 #include "Creatures/SpiderLocomotion.h"
 #include "Creatures/SpiderNav.h"
 #include "Creatures/SpiderRagdoll.h"
+#include "Creatures/SpiderSystem.h"
+#include "Components.h"
+#include "GameModuleAPI.h"
 #include "IK.h"
 #include "PhysicsWorld.h"
 #include "ProjectPaths.h"
@@ -240,6 +243,26 @@ void TestSpiderGoesOverABox() {
     CHECK(r.Arrived);
     CHECK(!r.Fell);
     CHECK(r.Up.y > 0.97f);
+}
+
+void TestSpiderWedgedStaysDown() {
+    // Wedged in a slot shorter than its body (0.55 m; head 0.26 + abdomen 0.4 m), standing still: both ends touch, so the
+    // push-out lifts it - only a little off the floor, however long it stays there (unbounded, it rose every frame).
+    BoxWorld w;
+    w.RoomMax.y = 1.2f;
+    w.Boxes.push_back({glm::vec3(-2.0f, 0.0f, -2.0f), glm::vec3(2.0f, 1.2f, -0.25f)});
+    w.Boxes.push_back({glm::vec3(-2.0f, 0.0f, 0.3f), glm::vec3(2.0f, 1.2f, 2.0f)});
+    Spider::Mover m;
+    m.Reset(glm::vec3(0.0f, 0.0f, 0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f)); // facing -z, into the end wall
+    Spider::MoverSettings s;
+    Spider::MoveInput in;
+    in.HasGoal = false;
+    float highest = 0.0f;
+    for (int i = 0; i < 300; ++i) {
+        m.Step(w, s, in, 1.0f / 60.0f);
+        highest = std::max(highest, m.Position().y);
+    }
+    CHECK(highest < 0.4f);
 }
 
 void TestSpiderFallsAndLands() {
@@ -596,6 +619,160 @@ void TestSpiderNavRoutesFloorToCeiling() {
     CHECK(!ceilingUsed);
 }
 
+void TestSpiderNavOneSidedPlaneSplits() {
+    // A thin ceiling plane across a taller room, solid only from below (a mesh collider is one-sided): the walls go on
+    // above it into the void, and no link may join the room's walls to theirs, whichever way the link's ray is cast.
+    struct PlaneWorld : BoxWorld {
+        float PlaneY = 1.2f;
+        bool Ray(const glm::vec3& o, const glm::vec3& d, float maxDistance, Spider::SurfaceHit& out) const override {
+            Spider::SurfaceHit h;
+            const bool room = BoxWorld::Ray(o, d, maxDistance, h);
+            if (d.y > 1e-6f && o.y < PlaneY) { // its face is down: only a ray going up hits it
+                const float t = (PlaneY - o.y) / d.y;
+                if (t <= maxDistance && (!room || t < h.Distance)) {
+                    out.Hit = true;
+                    out.Distance = t;
+                    out.Point = o + d * t;
+                    out.Normal = glm::vec3(0.0f, -1.0f, 0.0f);
+                    return true;
+                }
+            }
+            if (room) out = h;
+            return room;
+        }
+    };
+    PlaneWorld w;
+    std::vector<float> verts;
+    std::vector<int> tris;
+    w.Triangles(verts, tris);
+    Spider::SurfaceGraph g;
+    CHECK(g.Build(verts, tris, w, Spider::NavSettings{}));
+    int crossing = 0;
+    for (int i = 0; i < g.NodeCount(); ++i)
+        for (int k = g.FirstLink(i); k < g.FirstLink(i + 1); ++k)
+            if ((g.Pos(i).y - w.PlaneY) * (g.Pos(g.Neighbour(k)).y - w.PlaneY) < 0.0f) ++crossing;
+    CHECK(crossing == 0);
+    // Above and below are separate pieces, and a pick restricted to the floor's piece never lands above the plane.
+    const glm::vec3 upY(0.0f, 1.0f, 0.0f);
+    const int floor = g.Nearest(glm::vec3(0.0f, 0.0f, 0.0f), 1.0f, &upY);
+    CHECK(floor >= 0);
+    const int high = g.Nearest(glm::vec3(1.9f, 2.0f, 0.0f), 1.0f);
+    CHECK(high >= 0 && g.Component(high) != g.Component(floor));
+    const int pick = g.Nearest(glm::vec3(1.9f, 2.0f, 0.0f), 1.5f, nullptr, g.Component(floor));
+    CHECK(pick < 0 || g.Pos(pick).y < w.PlaneY);
+}
+
+void TestSpiderBarrierClosesAnOpening() {
+    // A window's opening has no collider: a creature barrier across it (turned 90 degrees, as a window in a side wall is)
+    // closes it to spiders alone. Without one, the graph links the two sides and a spider walks through; with one,
+    // no link crosses it, the sides are separate pieces, and a spider sent across never gets past it.
+    BoxWorld w;
+    std::vector<Spider::Barrier> barriers(1);
+    barriers[0].Centre = glm::vec3(0.0f, 1.2f, 0.0f);
+    barriers[0].Rotation = glm::angleAxis(glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    barriers[0].Half = glm::vec3(0.03f, 1.3f, 2.1f); // its local z runs along world x, wall to wall and into them
+    const Spider::BarrierQuery closed(w, barriers);
+    const std::vector<Spider::Barrier> none;
+    const Spider::BarrierQuery open(w, none);
+    std::vector<float> verts;
+    std::vector<int> tris;
+    w.Triangles(verts, tris);
+    const Spider::NavSettings s;
+    const glm::vec3 upY(0.0f, 1.0f, 0.0f);
+    auto crossings = [](const Spider::SurfaceGraph& g) {
+        int n = 0;
+        for (int i = 0; i < g.NodeCount(); ++i)
+            for (int k = g.FirstLink(i); k < g.FirstLink(i + 1); ++k) n += g.Pos(i).z * g.Pos(g.Neighbour(k)).z < 0.0f ? 1 : 0;
+        return n;
+    };
+    Spider::SurfaceGraph without, with;
+    CHECK(without.Build(verts, tris, open, s));
+    CHECK(crossings(without) > 0);
+    CHECK(with.Build(verts, tris, closed, s));
+    CHECK(crossings(with) == 0);
+    const int near = with.Nearest(glm::vec3(0.0f, 0.0f, 1.5f), 1.0f, &upY), far = with.Nearest(glm::vec3(0.0f, 0.0f, -1.5f), 1.0f, &upY);
+    CHECK(near >= 0 && far >= 0 && with.Component(near) != with.Component(far));
+    // The cache key changes with the barriers: a graph baked before a window was closed isn't taken.
+    const std::uint64_t h = Spider::SurfaceGraph::HashInput(verts, tris, s);
+    CHECK(Spider::SurfaceGraph::HashBarriers(h, barriers) != h);
+    CHECK(Spider::SurfaceGraph::HashBarriers(h, none) == h);
+
+    // The mover alone (no graph): straight at the far side, it climbs the barrier like a wall but never passes it.
+    auto furthest = [](const Spider::SurfaceQuery& q) {
+        Spider::Mover m;
+        m.Reset(glm::vec3(0.0f, 0.0f, 1.5f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
+        Spider::MoverSettings ms;
+        Spider::MoveInput in;
+        in.HasGoal = true;
+        in.Goal = glm::vec3(0.0f, 0.0f, -1.5f);
+        float least = 1e9f;
+        for (int i = 0; i < 20 * 60; ++i) {
+            m.Step(q, ms, in, 1.0f / 60.0f);
+            least = std::min(least, m.Position().z);
+        }
+        return least;
+    };
+    CHECK(furthest(open) < -1.0f);
+    CHECK(furthest(closed) > 0.0f);
+}
+
+void TestSpiderProbeStartsInsideASolid() {
+    // The real world, through PhysX: a floor, and a low solid shelf 0.2-0.5 m over it. A spider standing under the shelf
+    // probes for its footing from a quarter metre up - inside the shelf. PhysX reports a solid a ray starts inside at the
+    // ray's origin; taken as footing, it stood the body on its own probe's start and lifted it every frame, up through
+    // the shelf (in 301, through furniture and the ceiling slab onto the roof). The spider's query passes through it to
+    // the floor.
+    World world;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    ColliderComponent col;
+    col.Kind = ColliderComponent::Shape::Box;
+    col.HalfExtents = glm::vec3(5.0f, 0.5f, 5.0f);
+    world.Registry.emplace<ColliderComponent>(world.CreateEmptyEntity(glm::vec3(0.0f, -0.5f, 0.0f), zero, one, "Floor"), col);
+    col.HalfExtents = glm::vec3(2.0f, 0.15f, 2.0f);
+    world.Registry.emplace<ColliderComponent>(world.CreateEmptyEntity(glm::vec3(0.0f, 0.35f, 0.0f), zero, one, "Shelf"), col);
+    world.SyncActiveInHierarchy();
+    world.RebuildWorldTransformCache();
+    PhysicsWorld::Create(world);
+    CHECK(PhysicsWorld::IsActive());
+    if (!PhysicsWorld::IsActive()) return;
+
+    const float from[3] = {0.0f, 0.25f, 0.0f}, down[3] = {0.0f, -1.0f, 0.0f};
+    QueryFilter f;
+    f.HitTriggers = 0;
+    RaycastHit h;
+    CHECK(PhysicsWorld::RaycastSolid(from, down, 1.0f, f, h) && h.Distance < 1e-4f); // PhysX: the shelf, at the origin
+    CHECK(PhysicsWorld::RaycastSolid(from, down, 1.0f, f, h, /*fromOutside=*/true) && std::fabs(h.Distance - 0.25f) < 1e-3f &&
+          h.Normal[1] > 0.99f); // the floor
+
+    const Spider::WorldQuery q;
+    Spider::Mover m;
+    m.Reset(glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
+    Spider::MoverSettings s;
+    Spider::MoveInput in;
+    in.HasGoal = false;
+    float highest = 0.0f;
+    for (int i = 0; i < 120; ++i) {
+        m.Step(q, s, in, 1.0f / 60.0f);
+        highest = std::max(highest, m.Position().y);
+    }
+    CHECK(m.Attached());
+    CHECK(highest < 0.15f);
+    PhysicsWorld::Destroy();
+}
+
+void TestSpiderShoveNeverStacks() {
+    // A bite shoves a standing player back at its speed; a second from the side, while they still reel, leaves them no
+    // faster (the old cap was only along each shove's own line: two at right angles made 1.41 times the speed, and a
+    // pounce with a bite threw the player 1.5 m in a second). Already running faster, a shove doesn't slow them.
+    const glm::vec3 a = SpiderSystem::Shove(glm::vec3(0.0f), glm::vec3(2.5f, 0.0f, 0.0f));
+    CHECK(std::fabs(a.x - 2.5f) < 1e-4f && std::fabs(a.z) < 1e-4f);
+    const glm::vec3 b = SpiderSystem::Shove(a, glm::vec3(0.0f, 0.0f, 3.75f));
+    CHECK(glm::length(glm::vec2(b.x, b.z)) <= 3.75f + 1e-4f);
+    CHECK(b.z > 2.0f); // it does turn them toward the new shove
+    const glm::vec3 c = SpiderSystem::Shove(glm::vec3(0.0f, -1.0f, 5.0f), glm::vec3(2.5f, 0.0f, 0.0f));
+    CHECK(std::fabs(glm::length(glm::vec2(c.x, c.z)) - 5.0f) < 1e-3f && std::fabs(c.y + 1.0f) < 1e-6f);
+}
+
 void TestSpiderNavCacheRoundTrips() {
     BoxWorld w;
     std::vector<float> verts;
@@ -609,6 +786,13 @@ void TestSpiderNavCacheRoundTrips() {
     CHECK(g.Save(path, hash));
     CHECK(back.Load(path, hash));
     CHECK(!back.Load(path, hash + 1)); // another level's graph isn't taken
+    // A graph an older builder baked from this same level isn't taken either: the key holds the builder's version.
+    const std::uint64_t older = Spider::SurfaceGraph::HashInput(verts, tris, s, Spider::SurfaceGraph::kBuildVersion - 1);
+    CHECK(older != hash);
+    CHECK(g.Save(path, older));
+    CHECK(!back.Load(path, hash));
+    CHECK(g.Save(path, hash));
+    CHECK(back.Load(path, hash));
     CHECK(back.NodeCount() == g.NodeCount() && back.LinkCount() == g.LinkCount());
     std::vector<int> p1, p2;
     const int from = g.Nearest(glm::vec3(1.5f, 0.0f, 1.5f)), to = g.Nearest(glm::vec3(-1.5f, 2.4f, -1.5f));
@@ -624,6 +808,11 @@ void RegisterSpiderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"SolveChainReachesAndBendsTowardPole", TestSolveChainReachesAndBendsTowardPole});
     tests.push_back({"SpiderClimbsFloorWallCeiling", TestSpiderClimbsFloorWallCeiling});
     tests.push_back({"SpiderGoesOverABox", TestSpiderGoesOverABox});
+    tests.push_back({"SpiderWedgedStaysDown", TestSpiderWedgedStaysDown});
+    tests.push_back({"SpiderNavOneSidedPlaneSplits", TestSpiderNavOneSidedPlaneSplits});
+    tests.push_back({"SpiderBarrierClosesAnOpening", TestSpiderBarrierClosesAnOpening});
+    tests.push_back({"SpiderProbeStartsInsideASolid", TestSpiderProbeStartsInsideASolid});
+    tests.push_back({"SpiderShoveNeverStacks", TestSpiderShoveNeverStacks});
     tests.push_back({"SpiderFallsAndLands", TestSpiderFallsAndLands});
     tests.push_back({"SpiderGaitAlternates", TestSpiderGaitAlternates});
     tests.push_back({"SpiderRigParses", TestSpiderRigParses});

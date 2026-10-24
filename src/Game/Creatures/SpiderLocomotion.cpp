@@ -144,6 +144,11 @@ void Mover::Step(const SurfaceQuery& q, const MoverSettings& s, const MoveInput&
     // lifted off along its up (into the corner's open side) instead.
     // A few passes: one push can leave the other end touching (a corner).
     // Each end is pushed back only as far as the other end has room; what is left over lifts the body along its up.
+    // The lift is bounded: only so far off the surface it stands on, only into open room above it, and none with nothing
+    // under it. Unbounded, a body wedged between two faces rose every frame - up through a ceiling, or out of the top of a
+    // wall into the void above the room, where it stayed.
+    constexpr float kMaxLift = 0.35f, kHeadroom = 0.08f;
+    float lifted = 0.0f;
     for (int pass = 0; pass < 3; ++pass) {
         const glm::vec3 u = Up(), f = Forward(), mid = m_Pos + u * s.BodyLift;
         constexpr float kLook = 0.5f; // how far past each end the free room is measured
@@ -165,6 +170,12 @@ void Mover::Step(const SurfaceQuery& q, const MoverSettings& s, const MoveInput&
             m_Pos += f * slide;
             lift = back - slide;
         }
+        lift = supported ? std::min(lift, kMaxLift - lifted) : 0.0f;
+        SurfaceHit over;
+        if (lift > 0.0f && q.Ray(m_Pos + u * s.BodyLift, u, lift + kHeadroom, over))
+            lift = std::min(lift, over.Distance - kHeadroom);
+        lift = std::max(0.0f, lift);
+        lifted += lift;
         m_Pos += u * lift;
     }
     m_Vel = (m_Pos - before) / dt;
@@ -465,6 +476,55 @@ const char* ZoneName(PartZone z) {
     case PartZone::Leg: return "leg";
     }
     return "leg";
+}
+
+bool BarrierQuery::Ray(const glm::vec3& from, const glm::vec3& dir, float maxDistance, SurfaceHit& out) const {
+    const bool hit = World.Ray(from, dir, maxDistance, out);
+    float best = hit ? out.Distance : maxDistance;
+    int found = -1, axis = -1;
+    float sign = 1.0f;
+    for (size_t i = 0; i < Barriers.size(); ++i) { // slabs, in the box's own frame
+        const Barrier& b = Barriers[i];
+        const glm::quat inv = glm::conjugate(b.Rotation);
+        const glm::vec3 o = inv * (from - b.Centre), d = inv * dir;
+        float t0 = 0.0f, t1 = best;
+        int a0 = -1;
+        float s0 = 1.0f;
+        bool miss = false;
+        for (int a = 0; a < 3 && !miss; ++a) {
+            if (std::fabs(d[a]) < 1e-9f) {
+                miss = o[a] < -b.Half[a] || o[a] > b.Half[a];
+                continue;
+            }
+            float ta = (-b.Half[a] - o[a]) / d[a], tb = (b.Half[a] - o[a]) / d[a];
+            const float s = d[a] > 0.0f ? -1.0f : 1.0f; // the face it enters through faces back along the ray
+            if (ta > tb) std::swap(ta, tb);
+            if (ta > t0) { t0 = ta; a0 = a; s0 = s; }
+            t1 = std::min(t1, tb);
+            miss = t0 > t1;
+        }
+        if (miss || a0 < 0 || t0 >= best) continue;
+        best = t0;
+        found = (int)i;
+        axis = a0;
+        sign = s0;
+    }
+    if (found < 0) return hit;
+    glm::vec3 n(0.0f);
+    n[axis] = sign;
+    out.Hit = true;
+    out.Distance = best;
+    out.Point = from + dir * best;
+    out.Normal = Barriers[(size_t)found].Rotation * n;
+    return true;
+}
+
+bool BarrierQuery::Occupied(const glm::vec3& centre, float radius) const {
+    for (const Barrier& b : Barriers) {
+        const glm::vec3 c = glm::conjugate(b.Rotation) * (centre - b.Centre);
+        if (glm::length(c - glm::clamp(c, -b.Half, b.Half)) < radius) return true;
+    }
+    return World.Occupied(centre, radius);
 }
 
 } // namespace Spider

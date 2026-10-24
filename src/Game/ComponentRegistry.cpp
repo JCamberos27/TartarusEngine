@@ -196,6 +196,16 @@ void RegisterEngineComponents() {
               "Hits register but take nothing." },
         },
     });
+    Register<CreatureBarrierComponent>({
+        "Creature Barrier", ICON_FA_BAN,
+        "Closes this entity's render bounds to creatures (spiders) alone: put it on a window, so they never climb out\n"
+        "through the opening. The player, bullets and light pass as before.",
+        "AI",
+        {
+            { "Padding", T::Float, TARTARUS_REFLECT_FIELD(CreatureBarrierComponent, Padding), 0.005f,
+              "Metres the box grows on every side past the render bounds.", 0.0f, 1.0f },
+        },
+    });
     {
     ReflectComponent sm{
         "Spider", ICON_FA_SPIDER,
