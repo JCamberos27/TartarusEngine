@@ -5,6 +5,7 @@
     "thorax": "Bone",
     "abdomen": "Bone.001"
   },
+  "stanceClip": "Spider|idle",
   "pedipalps": {
     "L": [
       "Bone.038",
