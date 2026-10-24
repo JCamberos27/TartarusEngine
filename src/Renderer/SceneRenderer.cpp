@@ -479,6 +479,9 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     // program that reads the froxel lists is bound.
     if (fs.clusterOn) {
         PROFILE_GPU_SCOPE("Cluster Cull");
+        // The cull reads the lights at binding 0: this frame's, not whatever an editor preview (the outfit or material
+        // preview, lit by its own fixed lights) left bound there - binned from those, every lamp went dark.
+        lightBuffer.Bind(0);
         clusterGrid.Cull(*in.clusterBuildShader, *in.clusterCullShader, ctx.View, ctx.Proj,
                          fs.clusterNearZ, fs.clusterFarZ, fs.vp[2], fs.vp[3], in.decalCullShader, fs.decalCount);
     }
@@ -1158,6 +1161,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         vmFs.decalCount = vmDecals ? fs.decalCount : 0;
         if (vmFs.clusterOn) {
             if (vmFs.decalCount > 0) in.decals->BindForCull();
+            lightBuffer.Bind(0); // this frame's lights, as for the main view's cull
             clusterGrid.Cull(*in.clusterBuildShader, *in.clusterCullShader, vmCtx.View, vmCtx.Proj,
                              vmFs.clusterNearZ, vmFs.clusterFarZ, vmFs.vp[2], vmFs.vp[3], in.decalCullShader,
                              vmFs.decalCount);
