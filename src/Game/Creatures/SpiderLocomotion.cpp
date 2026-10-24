@@ -212,6 +212,7 @@ void Gait::Step(const SurfaceQuery& q, const GaitSettings& s, const glm::mat4& m
                 const glm::vec3& up, const glm::vec3& velocity, bool attached, float dt) {
     if (dt <= 0.0f) return;
     const glm::vec3 travel = velocity - up * glm::dot(velocity, up);
+    const float speed01 = std::clamp(glm::length(travel) / 2.5f, 0.0f, 1.0f);
     const glm::vec3 lead = travel * (s.StepTime * s.Lead);
 
     // Footholds: every stepping leg (its target moves with the body), and a few of the others in turn.
@@ -237,8 +238,9 @@ void Gait::Step(const SurfaceQuery& q, const GaitSettings& s, const glm::mat4& m
         return;
     }
 
-    const float speed01 = std::clamp(glm::length(travel) / 2.5f, 0.0f, 1.0f);
-    const float duration = std::max(s.MinStepTime, s.StepTime * (1.0f - 0.55f * speed01));
+    // A run quickens the legs more than it lengthens the stride: a leg waiting for its group's turn mustn't be left
+    // stretched past its reach.
+    const float duration = std::max(s.MinStepTime, s.StepTime * (1.0f - 0.65f * speed01));
     const float stepDistance = s.StepDistance * (1.0f + speed01);
 
     // New steps, in strict turns: a group lifts only once every leg stands again, and the turn passes to the other group
