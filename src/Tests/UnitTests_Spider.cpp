@@ -1,8 +1,18 @@
 #include "UnitTestSupport.h"
 
+#include "Creatures/SpiderDamage.h"
 #include "Creatures/SpiderLocomotion.h"
 #include "Creatures/SpiderNav.h"
+#include "Creatures/SpiderRagdoll.h"
 #include "IK.h"
+#include "PhysicsWorld.h"
+#include "ProjectPaths.h"
+#include "Renderer/BloodPalette.h"
+#include "World.h"
+
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 
 #include <cstdio>
 
@@ -314,6 +324,219 @@ void TestSpiderRigParses() {
     CHECK(!error.empty());
 }
 
+// Eight legs' worth of JSON for a rig text (the gait test's names and groups), and `parts` spliced in.
+std::string RigText(const std::string& parts) {
+    std::string legs, a = "[", b = "[";
+    const char* names[Spider::kLegs] = {"L1", "R1", "L2", "R2", "L3", "R3", "L4", "R4"};
+    const int groups[Spider::kLegs] = {0, 1, 1, 0, 0, 1, 1, 0};
+    for (int i = 0; i < Spider::kLegs; ++i) {
+        legs += std::string(i ? "," : "") + "{\"name\":\"" + names[i] + "\",\"bones\":[\"a" + std::to_string(i) + "\",\"b" +
+                std::to_string(i) + "\"]}";
+        std::string& g = groups[i] ? b : a;
+        g += std::string(g.size() > 1 ? "," : "") + "\"" + names[i] + "\"";
+    }
+    return "{\"legs\":[" + legs + "],\"gaitGroups\":[" + a + "]," + b + "]]" + (parts.empty() ? "" : ",\"parts\":" + parts) + "}";
+}
+
+// The body-part table: Spider.rig.json's 26 parts (the thorax the one root, the abdomen on it, three segments a leg in
+// a chain off the thorax, every zone named), and a table that is wrong in each way the parser refuses.
+void TestSpiderPartsParse() {
+    std::string text;
+    {
+        std::ifstream in(std::filesystem::u8path(ProjectPaths::Resolve("assets/Characters/Spider/Spider.rig.json")), std::ios::binary);
+        std::stringstream ss;
+        ss << in.rdbuf();
+        text = ss.str();
+    }
+    Spider::RigDef rig;
+    std::string error;
+    CHECK(!text.empty() && Spider::ParseRig(text, rig, &error));
+    CHECK(rig.Parts.size() == 26);
+    int roots = 0, legParts = 0, heads = 0, abdomens = 0;
+    std::array<int, Spider::kLegs> perLeg{};
+    for (const Spider::PartDef& p : rig.Parts) {
+        if (p.Parent < 0) { ++roots; CHECK(p.Name == "thorax" && p.Zone == Spider::PartZone::Head); }
+        heads += p.Zone == Spider::PartZone::Head;
+        abdomens += p.Zone == Spider::PartZone::Abdomen;
+        if (p.Leg >= 0) {
+            ++legParts;
+            ++perLeg[(size_t)p.Leg];
+            CHECK(p.Zone == Spider::PartZone::Leg);
+            // A leg's first segment hangs off the thorax, the next two off the one before.
+            const Spider::PartDef& parent = rig.Parts[(size_t)p.Parent];
+            CHECK(p.Segment == 0 ? parent.Name == "thorax" : (parent.Leg == p.Leg && parent.Segment == p.Segment - 1));
+            CHECK(!p.End.empty() && p.Radius > 0.01f && p.Mass > 0.0f);
+        }
+    }
+    CHECK(roots == 1 && heads == 1 && abdomens == 1 && legParts == 24);
+    for (int n : perLeg) CHECK(n == 3);
+    CHECK(rig.ZoneMultiplier[0] > 2.0f && rig.ZoneMultiplier[2] < 1.0f);
+
+    const std::string root = "{\"name\":\"t\",\"bone\":\"B\",\"end\":\"E\",\"zone\":\"head\"}";
+    CHECK(Spider::ParseRig(RigText("[" + root + "]"), rig) && rig.Parts.size() == 1);
+    CHECK(!Spider::ParseRig(RigText("[" + root + ",{\"name\":\"x\",\"bone\":\"C\",\"end\":\"D\",\"parent\":\"nobody\"}]"), rig));
+    CHECK(!Spider::ParseRig(RigText("[" + root + "," + root + "]"), rig));                     // two roots
+    CHECK(!Spider::ParseRig(RigText("[{\"name\":\"t\",\"bone\":\"B\",\"end\":\"E\",\"zone\":\"tail\"}]"), rig)); // no such zone
+    CHECK(!Spider::ParseRig(RigText("[{\"name\":\"t\",\"bone\":\"B\"}]"), rig));           // no end, no length
+    std::string many = "[" + root;
+    for (int i = 0; i < 32; ++i)
+        many += ",{\"name\":\"p" + std::to_string(i) + "\",\"bone\":\"B\",\"end\":\"E\",\"parent\":\"t\"}";
+    CHECK(!Spider::ParseRig(RigText(many + "]"), rig)); // 33 parts: past the ragdoll's 32
+}
+
+// A spider's table: thorax, abdomen and eight legs of three segments (26 parts), standing at the origin as the rig
+// does, for the ragdoll test.
+void SpiderBody(std::vector<Spider::PartDef>& defs, std::vector<SpiderRagdoll::PartPoint>& points, float lift) {
+    defs.clear();
+    points.clear();
+    Spider::PartDef t;
+    t.Name = "thorax"; t.Bone = "B"; t.End = "E"; t.Radius = 0.1f; t.Mass = 1.0f; t.Zone = Spider::PartZone::Head;
+    defs.push_back(t);
+    points.push_back({{0.0f, 0.15f + lift, -0.19f}, {0.0f, 0.15f + lift, -0.19f}, {0.0f, 0.15f + lift, 0.12f}});
+    Spider::PartDef a = t;
+    a.Name = "abdomen"; a.Radius = 0.135f; a.Mass = 1.2f; a.Zone = Spider::PartZone::Abdomen; a.Parent = 0; a.Swing = 25.0f;
+    defs.push_back(a);
+    points.push_back({{0.0f, 0.16f + lift, 0.12f}, {0.0f, 0.16f + lift, 0.12f}, {0.0f, 0.25f + lift, 0.5f}});
+    const float angles[Spider::kLegs] = {35, -35, 75, -75, 105, -105, 145, -145};
+    for (int leg = 0; leg < Spider::kLegs; ++leg) {
+        const float r = glm::radians(angles[leg]);
+        const glm::vec3 out(-std::sin(r), 0.0f, -std::cos(r));
+        const glm::vec3 hip = glm::vec3(0.0f, 0.08f + lift, 0.0f) + out * 0.03f, coxa = hip + out * 0.12f + glm::vec3(0, 0.03f, 0);
+        const glm::vec3 knee = hip + out * 0.2f + glm::vec3(0, 0.26f, 0), ankle = hip + out * 0.33f + glm::vec3(0, 0.12f, 0);
+        const glm::vec3 tip = hip + out * 0.45f + glm::vec3(0, -0.07f, 0);
+        const float radius[3] = {0.032f, 0.026f, 0.02f}, mass[3] = {0.22f, 0.15f, 0.1f}, curl[3] = {-25.0f, 75.0f, 65.0f};
+        const glm::vec3 from[3] = {coxa, knee, ankle}, to[3] = {knee, ankle, tip}, anchor[3] = {hip, knee, ankle};
+        for (int s = 0; s < 3; ++s) {
+            Spider::PartDef d;
+            d.Name = "leg"; d.Bone = "B"; d.End = "E"; d.Radius = radius[s]; d.Mass = mass[s]; d.Zone = Spider::PartZone::Leg;
+            d.Leg = leg; d.Segment = s; d.Curl = curl[s]; d.Swing = s ? 60.0f : 45.0f; d.Twist = s ? 10.0f : 20.0f;
+            d.Parent = s == 0 ? 0 : (int)defs.size() - 1;
+            defs.push_back(d);
+            points.push_back({anchor[s], from[s], to[s]});
+        }
+    }
+}
+
+// More than 16 parts: a 26-part spider builds as one ragdoll (the old cap was 16), its legs don't collide with each
+// other but do with the body, and powered by the death curl it falls, folds and stays whole: every part finite, none
+// flung. 33 parts are refused.
+void TestSpiderRagdollBuilds() {
+    World world;
+    PhysicsWorld::Create(world);
+    CHECK(PhysicsWorld::IsActive());
+    if (!PhysicsWorld::IsActive()) return;
+    std::vector<Spider::PartDef> defs;
+    std::vector<SpiderRagdoll::PartPoint> points;
+    SpiderBody(defs, points, 1.0f);
+    const int count = (int)defs.size();
+    CHECK(count == 26 && count > 16 && count <= PhysicsWorld::kMaxRagdollParts);
+    std::array<PhysicsWorld::RagdollPart, Spider::kMaxParts> parts{};
+    std::array<glm::mat4, Spider::kMaxParts> partWorld{};
+    CHECK(SpiderRagdoll::BuildParts(defs.data(), count, points.data(), glm::vec3(0, 1, 0), parts.data(), partWorld.data()));
+    const PhysicsWorld::RagdollParams prm = SpiderRagdoll::BodyParams();
+    const int id = PhysicsWorld::CreateRagdoll(9191u, parts.data(), count, &prm);
+    CHECK(id >= 0);
+    if (id >= 0) {
+        CHECK(!PhysicsWorld::RagdollPairCollides(id, 4, 7));   // L1's tip and R1's tip: different legs
+        CHECK(!PhysicsWorld::RagdollPairCollides(id, 0, 2));   // the thorax and L1's first segment: parent and child
+        std::array<glm::quat, Spider::kMaxParts> targets{};
+        std::array<float, Spider::kMaxParts> weight{};
+        for (int k = 0; k < count; ++k) {
+            weight[(size_t)k] = defs[(size_t)k].Leg >= 0 ? 1.0f : 0.0f;
+            const glm::vec3 c = points[(size_t)k].B;
+            glm::vec3 out(c.x, 0.0f, c.z);
+            targets[(size_t)k] = SpiderRagdoll::CurlTarget(defs[(size_t)k], glm::quat_cast(glm::mat3(partWorld[(size_t)k])), glm::vec3(0, 1, 0),
+                                                           glm::length(out) > 1e-4f ? glm::normalize(out) : glm::vec3(1, 0, 0));
+        }
+        SpiderRagdoll::LimpMotor motor;
+        motor.Begin(id, count, targets.data(), weight.data(), SpiderRagdoll::LimpMotor::Settings());
+        float tipStart = 0.0f;
+        for (int k = 4; k < count; k += 3) tipStart += glm::length(glm::vec2(points[(size_t)k].B.x, points[(size_t)k].B.z));
+        bool finite = true;
+        float fastest = 0.0f;
+        for (int f = 0; f < 60; ++f) { // a second: the curl at full strength, the body falling free
+            motor.Update(1.0f / 60.0f);
+            PhysicsWorld::Step(1.0f / 60.0f, world, {});
+            float lin = 0.0f, ang = 0.0f;
+            PhysicsWorld::RagdollMotion(id, &lin, &ang);
+            fastest = std::max(fastest, ang);
+            for (int k = 0; k < count; ++k) {
+                float p[3], q[4];
+                PhysicsWorld::GetRagdollPart(id, k, p, q);
+                finite = finite && std::isfinite(p[0]) && std::isfinite(p[1]) && std::isfinite(p[2]);
+            }
+        }
+        // The legs came in: each tip nearer the thorax's line than it stood.
+        float thorax[3], tq[4], tipNow = 0.0f;
+        PhysicsWorld::GetRagdollPart(id, 0, thorax, tq);
+        for (int k = 4; k < count; k += 3) {
+            float p[3], q[4];
+            PhysicsWorld::GetRagdollPart(id, k, p, q);
+            const glm::quat r(q[3], q[0], q[1], q[2]);
+            float rad = 0.0f, half = 0.0f;
+            PhysicsWorld::GetRagdollPartShape(id, k, &rad, &half);
+            const glm::vec3 tip = glm::vec3(p[0], p[1], p[2]) + r * glm::vec3(half, 0, 0);
+            tipNow += glm::length(glm::vec2(tip.x - thorax[0], tip.z - thorax[2]));
+        }
+        CHECK(finite);
+        CHECK(fastest < 40.0f); // rad/s: no leg spun out
+        CHECK(tipNow < tipStart * 0.85f);
+        PhysicsWorld::DestroyRagdoll(id);
+    }
+    std::array<PhysicsWorld::RagdollPart, 33> tooMany{};
+    for (int i = 1; i < 33; ++i) { tooMany[(size_t)i].Parent = 0; tooMany[(size_t)i].Position[1] = 0.3f * (float)i; }
+    CHECK(PhysicsWorld::CreateRagdoll(9192u, tooMany.data(), 33, &prm) < 0);
+    PhysicsWorld::Destroy();
+}
+
+// The blood palette: a person's is exactly what it was before palettes were per body (the constants every stain and
+// spray was drawn with), palette 0 is a person's, and anything unknown falls back to it; the ichor is yellow-green.
+void TestBloodPaletteHumanUnchanged() {
+    const BloodPalette::Look& h = BloodPalette::Of(BloodPalette::kHuman);
+    auto same = [](const glm::vec3& a, float x, float y, float z) { return a.x == x && a.y == y && a.z == z; };
+    CHECK(same(h.Fresh, 0.16f, 0.006f, 0.005f));
+    CHECK(same(h.Dried, 0.045f, 0.014f, 0.010f));
+    CHECK(same(h.Thin, 0.20f, 0.0075f, 0.006f));
+    CHECK(same(h.Mist, 0.09f, 0.0034f, 0.0028f));
+    CHECK(same(h.Subsurface, 0.34f, 0.010f, 0.007f));
+    CHECK(h.RoughFresh == 0.38f && h.RoughPool == 0.32f && h.RoughDried == 0.75f && h.RoughSpray == 0.28f && h.RoughSprite == 0.30f &&
+          h.RoughCloth == 0.35f);
+    CHECK(h.Thickness == 0.55f && h.FilmOpacity == 1.0f); // the spray's thickness the renderer always set; stains fully covering
+    CHECK(same(BloodPalette::Human.Fresh, 0.16f, 0.006f, 0.005f) && same(BloodPalette::Fresh, 0.16f, 0.006f, 0.005f));
+    CHECK(&BloodPalette::Of(-1) == &BloodPalette::Of(0) && &BloodPalette::Of(57) == &BloodPalette::Of(0));
+    const BloodPalette::Look& i = BloodPalette::Of(BloodPalette::kIchor);
+    CHECK(i.Fresh.g > i.Fresh.r && i.Fresh.r > 3.0f * i.Fresh.b); // yellow-green
+    CHECK(i.Dried.g < i.Fresh.g * 0.3f);                           // darker dried: olive
+    CHECK(i.FilmOpacity < 1.0f);                                    // a little translucent
+}
+
+// Damage by zone: the head 2.5x, the abdomen 1.2x, a leg 0.5x (the defaults and the rig's), and what knocks a spider off
+// a wall (a shotgun's pellets, or a round past 25).
+void TestSpiderZoneMultipliers() {
+    Spider::RigDef rig;
+    CHECK(SpiderDamage::ZoneMultiplier(rig, Spider::PartZone::Head) == 2.5f);
+    CHECK(SpiderDamage::ZoneMultiplier(rig, Spider::PartZone::Abdomen) == 1.2f);
+    CHECK(SpiderDamage::ZoneMultiplier(rig, Spider::PartZone::Leg) == 0.5f);
+    const std::string text = RigText("[]").substr(0, RigText("[]").size() - 1) +
+                             ",\"zones\":{\"head\":{\"damage\":3.0},\"leg\":{\"damage\":0.25,\"flinch\":40}}}";
+    CHECK(Spider::ParseRig(text, rig));
+    CHECK(SpiderDamage::ZoneMultiplier(rig, Spider::PartZone::Head) == 3.0f);
+    CHECK(SpiderDamage::ZoneMultiplier(rig, Spider::PartZone::Abdomen) == 1.2f);
+    CHECK(SpiderDamage::ZoneMultiplier(rig, Spider::PartZone::Leg) == 0.25f && rig.FlinchDeg[2] == 40.0f);
+    // A rifle round (34): two to the body and it is nearly dead (60), one to the head kills.
+    Spider::RigDef d;
+    CHECK(34.0f * SpiderDamage::ZoneMultiplier(d, Spider::PartZone::Head) >= 60.0f);
+    CHECK(34.0f * SpiderDamage::ZoneMultiplier(d, Spider::PartZone::Leg) + 34.0f * SpiderDamage::ZoneMultiplier(d, Spider::PartZone::Abdomen) < 60.0f);
+    CHECK(SpiderDamage::Heavy(10.0f, 8) && SpiderDamage::Heavy(26.0f, 1) && !SpiderDamage::Heavy(17.0f, 1));
+    // The ichor's hit: the spider's palette, the abdomen throwing more.
+    SpiderDamage::Result r;
+    r.Damage = 40.0f;
+    r.Zone = Spider::PartZone::Abdomen;
+    r.Living = true;
+    const BloodFx::Hit h = SpiderDamage::Blood(r);
+    CHECK(h.Palette == BloodPalette::kIchor && h.Damage > r.Damage && !h.Corpse && !h.Head);
+}
+
 } // namespace
 
 void TestSpiderNavRoutesFloorToCeiling() {
@@ -398,4 +621,8 @@ void RegisterSpiderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"SpiderFallsAndLands", TestSpiderFallsAndLands});
     tests.push_back({"SpiderGaitAlternates", TestSpiderGaitAlternates});
     tests.push_back({"SpiderRigParses", TestSpiderRigParses});
+    tests.push_back({"SpiderPartsParse", TestSpiderPartsParse});
+    tests.push_back({"SpiderRagdollBuilds", TestSpiderRagdollBuilds});
+    tests.push_back({"BloodPaletteHumanUnchanged", TestBloodPaletteHumanUnchanged});
+    tests.push_back({"SpiderZoneMultipliers", TestSpiderZoneMultipliers});
 }

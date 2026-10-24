@@ -4,6 +4,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include <array>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -71,6 +72,10 @@ public:
     float Speed() const { return m_Speed; }       // along the surface, m/s
     bool Attached() const { return m_Attached; }
     bool Arrived() const { return m_Arrived; }
+    // Knocked off whatever it holds (a heavy round into it on a wall or a ceiling): it lets go at once, moving at
+    // `velocity` (world, m/s), falls, lands and rights itself. It is lifted a little clear of the surface first, so the
+    // fall's ray doesn't start inside what it just let go of.
+    void Detach(const glm::vec3& velocity);
     // The surface it stands on: its normal and how far the origin is off it (m; < 0: no surface found this frame).
     glm::vec3 SurfaceNormal() const { return m_SurfaceNormal; }
     float SurfaceGap() const { return m_SurfaceGap; }
@@ -153,6 +158,26 @@ private:
 
 // ---- rig ----
 
+// ---- body parts ----
+
+// Where a round lands on a spider, for its damage: the head (the cephalothorax: critical), the soft abdomen, a leg.
+enum class PartZone : std::uint8_t { Head = 0, Abdomen = 1, Leg = 2 };
+constexpr int kZones = 3;
+constexpr int kMaxParts = 32; // PhysicsWorld::kMaxRagdollParts
+
+// One body part (the rig's "parts"): a capsule over a run of bones that is both a hitbox while the spider lives and a
+// ragdoll link once it is dead. Bone is the joint it turns about (and the bone it drives); the capsule runs from Start
+// (empty: Bone) to End (empty: Length metres on along the bone).
+struct PartDef {
+    std::string Name, Bone, Start, End;
+    float Length = 0.0f, Radius = 0.03f, Mass = 0.2f;
+    PartZone Zone = PartZone::Leg;
+    int Parent = -1;            // index into the parts (-1: the root, exactly one)
+    int Leg = -1, Segment = 0;  // a leg's part: which leg (the rig's order) and which of its segments from the hip
+    float Swing = 30.0f, Twist = 15.0f; // the ragdoll joint's cone and twist (degrees)
+    float Curl = 0.0f;          // degrees the joint folds in the death curl (positive: the far end down and in)
+};
+
 // Spider.rig.json: which of the model's bones are which (the pack's are only numbered).
 struct RigDef {
     std::string Thorax, Abdomen;
@@ -160,7 +185,13 @@ struct RigDef {
     std::array<std::string, kLegs> LegNames{};
     std::array<std::vector<std::string>, kLegs> LegBones{};
     std::array<int, kLegs> LegGroup{};
+    std::vector<PartDef> Parts; // empty: the rig names none (no hitboxes, no ragdoll)
+    // Damage x by zone, and the flinch's peak (degrees) by zone and its length (seconds).
+    float ZoneMultiplier[kZones] = {2.5f, 1.2f, 0.5f};
+    float FlinchDeg[kZones] = {10.0f, 8.0f, 28.0f};
+    float FlinchTime = 0.35f;
 };
+const char* ZoneName(PartZone z);
 // Parses the file's text. False (with `error`) when it is not a rig of eight legs in two gait groups.
 bool ParseRig(const std::string& json, RigDef& out, std::string* error = nullptr);
 

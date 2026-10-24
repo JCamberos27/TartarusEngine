@@ -129,7 +129,9 @@ int BoxOverlapsCharacters(const float centre[3], const float halfExtents[3], con
 // capsule along its local +X, posed in world space; one part is the root (no parent), every other names its parent, and a
 // spherical joint at `Anchor` (world) lets it swing and twist within its limits (exactly: the chain never stretches). The parts
 // collide with the world and with each other (never parent and child; a pair that overlaps in the pose it is built in only
-// once it has come apart), and report `entity` when queries or contacts hit them. At most 16 parts.
+// once it has come apart), and report `entity` when queries or contacts hit them. At most kMaxRagdollParts parts (one bit
+// each in IgnoreMask and the collision filter's mask: a spider's eight three-segment legs, thorax and abdomen fit).
+constexpr int kMaxRagdollParts = 32;
 struct RagdollPart {
     int Parent = -1;
     float Position[3] = {0, 0, 0};
@@ -245,6 +247,8 @@ struct HitCapsule {
     float HalfLength = 0.1f, Radius = 0.05f;
 };
 int  CreateNpcHitboxes(CharacterId owner, const HitCapsule* parts, int count);
+// The same for a body with no character capsule (a spider): the capsules report `entity`, and there is nothing to shadow.
+int  CreateBodyHitboxes(unsigned entity, const HitCapsule* parts, int count);
 void SetNpcHitboxPoses(int id, const HitCapsule* parts, int count); // poses only (Position / Rotation)
 void SetNpcHitboxesActive(int id, bool active);                      // false: the capsule answers queries again
 void DestroyNpcHitboxes(int id);

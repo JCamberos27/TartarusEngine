@@ -48,6 +48,7 @@ public:
         int Pellets = 1;
         glm::vec3 Origin{0.0f};  // the shooter's muzzle
         bool ByPlayer = false;   // the player fired: at point blank it comes back onto the gun and hands
+        int Palette = 0;         // what the body bleeds (BloodPalette::Kind): a person's, a spider's ichor
     };
 
     // How hard a hit is, ~1 for a rifle round at combat range: its damage (a shotgun's pellets arrive as one
@@ -149,6 +150,7 @@ public:
         glm::vec4 ClipPlane{0.0f, 0.0f, 0.0f, 1.0f};
         glm::vec3 Tint{1.0f};
         unsigned Entity = 0xFFFFFFFFu;
+        int Palette = 0;                  // BloodPalette::Kind
     };
     const std::vector<Spray>& Sprays() const { return m_Sprays; }
     struct Decal {
@@ -171,6 +173,7 @@ public:
         float DryAge = 0.0f;              // seconds spent out of view: it only dries while nobody looks
         bool Print = false;               // a footprint (its own budget; fades slowly once old)
         float FadeAt = 1e9f, FadeLen = 1.0f; // a print fades out from FadeAt (its age) over FadeLen seconds, then goes
+        int Palette = 0;                  // BloodPalette::Kind
     };
     static constexpr float kPrintLife = 600.0f, kPrintFade = 180.0f; // prints stay 10 min, then fade over 3
     const std::vector<Decal>& Decals() const { return m_Decals; }
@@ -190,6 +193,7 @@ public:
         float Age = 0.0f, Grow = 1.0f, DrySeconds = 120.0f, Opacity = 1.0f;
         unsigned Key = 0;      // SplatSpace::Keys: drawn on whatever entity the key resolves to now
         float DryAge = 0.0f;   // seconds its body spent out of view
+        int Palette = 0;       // BloodPalette::Kind
     };
     const std::vector<Splat>& Splats() const { return m_Splats; }
     // The entity a splat is drawn on now: a keyed one on whatever its key resolves to (the player's gun after a swap),
@@ -323,11 +327,13 @@ private:
     // A shot into a body lying there: blood splashing out around the wound onto what it lies on, and a little pool.
     void SpawnCorpseSplash(const Hit& hit, float energy);
     int m_GroundSplatters = 0, m_BleedDrops = 0;
-    struct Bleed { unsigned Entity; float Until; float Next; float Rate; };
+    struct Bleed { unsigned Entity; float Until; float Next; float Rate; int Palette; };
     std::vector<Bleed> m_Bleeds;
     // A body that died: once it has come to rest (its centre still between two looks 0.2 s apart, or 4 s on), one pool
     // spreads from under its centre. Each body pools once.
-    struct PendingPool { unsigned Entity; float At; float Size; glm::vec3 Last{0.0f}; bool HasLast = false; float Deadline = 0.0f; };
+    struct PendingPool { unsigned Entity; float At; float Size; glm::vec3 Last{0.0f}; bool HasLast = false; float Deadline = 0.0f; int Palette = 0; };
+    // The palette everything spawned now is stamped with (the body being hit, pooled or dripping; else a person's).
+    int m_Palette = 0;
     std::vector<unsigned> m_Pooled;
     ResolveFn m_Resolve;
     bool InViewPoint(const glm::vec3& c, float r) const;
