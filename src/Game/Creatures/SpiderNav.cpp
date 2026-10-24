@@ -124,6 +124,18 @@ bool SurfaceGraph::Build(const std::vector<float>& verts, const std::vector<int>
                     face = -n;
                     if (q.Occupied(p + face * s.Room, s.RoomRadius)) continue;
                 }
+                // Footing: the same surface on at least three sides of it.
+                {
+                    const glm::vec3 t1 = glm::normalize(glm::cross(face, std::fabs(face.y) < 0.9f ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0)));
+                    const glm::vec3 t2 = glm::cross(face, t1);
+                    const glm::vec3 offs[4] = {t1 * s.Footing, -t1 * s.Footing, t2 * s.Footing, -t2 * s.Footing};
+                    int feet = 0;
+                    for (const glm::vec3& o : offs) {
+                        SurfaceHit fh;
+                        if (q.Ray(p + face * 0.08f + o, -face, 0.16f, fh) && std::fabs(fh.Distance - 0.08f) < 0.03f) ++feet;
+                    }
+                    if (feet < 3) continue;
+                }
                 if (!seen.insert(PointKey(p, face, sp)).second) continue;
                 m_Pos.push_back(p);
                 m_Normal.push_back(face);

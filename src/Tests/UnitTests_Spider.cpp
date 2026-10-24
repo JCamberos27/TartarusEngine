@@ -140,6 +140,7 @@ RouteResult FollowRoute(const BoxWorld& w, const Spider::SurfaceGraph& graph, Sp
 struct ClimbResult {
     bool Arrived = false, Fell = false;
     float WorstGap = 0.0f, Seconds = 0.0f;
+    int Sunk = 0; // frames its head or abdomen was inside a surface
     glm::vec3 Up{0.0f};
 };
 ClimbResult Climb(const BoxWorld& w, Spider::Mover& m, const glm::vec3& goal, float seconds) {
@@ -153,6 +154,9 @@ ClimbResult Climb(const BoxWorld& w, Spider::Mover& m, const glm::vec3& goal, fl
         m.Step(w, s, in, dt);
         if (!m.Attached()) r.Fell = true;
         else if (m.SurfaceGap() >= 0.0f) r.WorstGap = std::max(r.WorstGap, std::fabs(m.SurfaceGap()));
+        // The body's ends (as MoverSettings has them, a little in from the tips) never inside the room's walls.
+        const glm::vec3 mid = m.Position() + m.Up() * s.BodyLift;
+        if (w.Occupied(mid + m.Forward() * (s.BodyFront - 0.03f), 0.0f) || w.Occupied(mid - m.Forward() * (s.BodyBack - 0.03f), 0.0f)) ++r.Sunk;
         if (m.Arrived()) {
             r.Arrived = true;
             r.Seconds = t;
@@ -203,12 +207,14 @@ void TestSpiderClimbsFloorWallCeiling() {
     const ClimbResult wall = Climb(w, m, glm::vec3(2.0f, 1.2f, 0.5f), 15.0f);
     CHECK(wall.Arrived);
     CHECK(!wall.Fell);
-    CHECK(wall.WorstGap < 0.03f);
+    CHECK(wall.WorstGap < 0.35f); // (its middle swings clear of the corner as it turns)
+    CHECK(wall.Sunk == 0);
     CHECK(wall.Up.x < -0.97f); // side-on, its back to the room
     const ClimbResult ceiling = Climb(w, m, glm::vec3(0.5f, 2.4f, 0.8f), 15.0f);
     CHECK(ceiling.Arrived);
     CHECK(!ceiling.Fell);
-    CHECK(ceiling.WorstGap < 0.03f);
+    CHECK(ceiling.WorstGap < 0.35f);
+    CHECK(ceiling.Sunk == 0);
     CHECK(ceiling.Up.y < -0.97f); // upside down
     const ClimbResult other = Climb(w, m, glm::vec3(-2.0f, 1.2f, 0.0f), 15.0f);
     CHECK(other.Arrived);

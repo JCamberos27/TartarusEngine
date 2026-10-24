@@ -22,6 +22,8 @@ struct NavSettings {
     float RoomRadius = 0.11f;   // ... of this radius must touch nothing)
     float LinkRadius = 0.5f;    // nodes this close may be linked
     float LinkLift = 0.1f;      // a link is clear when the line between its nodes, lifted this far off their surfaces, is
+    float Footing = 0.14f;      // the surface must carry on this far round a node (at least three ways of four): not a
+                                // floor slab's thin edge, through which a route would wrap into the void under it
 };
 
 // What a route prefers: each link costs its length times its far end's surface's weight (>= 1 keeps A* exact).

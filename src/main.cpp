@@ -2877,7 +2877,14 @@ int main(int argc, char** argv) {
                     for (const SpiderSystem::PlayerHit& h : spiders.TakePlayerHits()) {
                         const float before = playerVitals.Health();
                         playerVitals.ApplyDamage(h.Amount, h.Source);
-                        player.Velocity += h.Push;
+                        // The shove: along the ground, up to its speed - a bite on a player already reeling back doesn't add
+                        // to it, so a flurry staggers them rather than throwing them across the level.
+                        const glm::vec3 push(h.Push.x, 0.0f, h.Push.z);
+                        if (const float strength = glm::length(push); strength > 1e-3f) {
+                            const glm::vec3 dir = push / strength;
+                            const float along = glm::dot(glm::vec3(player.Velocity.x, 0.0f, player.Velocity.z), dir);
+                            if (along < strength) player.Velocity += dir * (strength - along);
+                        }
                         // The jolt: the view knocked up and aside, harder for a pounce.
                         const float side = glm::dot(glm::normalize(glm::vec3(h.Push.x, 0.0f, h.Push.z) + glm::vec3(1e-4f, 0.0f, 0.0f)),
                                                     player.Cam.Right());
@@ -4471,7 +4478,7 @@ int main(int argc, char** argv) {
                 // them out of bloom, vignette and grain. The grid quad sits at a constant depth and
                 // never occluded against the scene, so no depth test is lost by drawing here.
                 sceneFramebuffer.Bind();
-                if (editor.ShowGrid() && !editor.OverlaysHidden()) {
+                if (editor.ShowGrid() && !editor.OverlaysHidden() && !(npcTest && npcTest->WantsCleanViews())) { // (no grid lines through a test's shots)
                     const GLboolean gridHadDepthTest = glIsEnabled(GL_DEPTH_TEST);
                     glDisable(GL_DEPTH_TEST);
                     // The grid shader fades lines by literal world-space distance from the

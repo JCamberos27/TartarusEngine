@@ -20,7 +20,7 @@
 namespace {
 constexpr float kDt = 1.0f / 60.0f;
 const glm::vec3 kStand(2.5f, 0.02f, -6.4f);      // the player: the living room's middle
-const glm::vec3 kEye(2.5f, 1.6f, -4.25f);        // the Scene view: the room's entry end
+const glm::vec3 kEye(4.55f, 2.35f, -4.2f);       // the Scene view: high in the room's entry corner
 const glm::vec3 kFirst(3.9f, 1.0f, -8.8f);       // the first hunter: the far corner
 const glm::vec3 kMore[3] = {{1.2f, 1.0f, -8.9f}, {4.1f, 1.0f, -4.6f}, {1.0f, 1.0f, -4.5f}};
 constexpr float kMoreAt = 22.0f;                 // when the other three come
@@ -46,6 +46,11 @@ void NpcTest::SpiderHuntDrive(Player& player, PlayerVitals& vitals, float& wantY
         player.Cam.Position = kStand + glm::vec3(0.0f, player.EyeHeight, 0.0f);
         m_HPlaced = true;
     }
+    // A throw shows as a lot of ground covered in a moment; a minute of bites adds up to drift, which a player walks back.
+    const glm::vec2 at(player.Cam.Position.x, player.Cam.Position.z);
+    m_HTrail.push_back(at);
+    if (m_HTrail.size() > 60) m_HTrail.erase(m_HTrail.begin());
+    m_HMaxDrift = std::max(m_HMaxDrift, glm::length(at - m_HTrail.front()));
     wantYaw = -90.0f; // into the room, toward the far wall
     wantPitch = 0.0f;
 }
@@ -104,8 +109,18 @@ void NpcTest::SpiderHunt(World& world) {
     }
     m_HMaxAttackers = std::max(m_HMaxAttackers, attackers);
     if (haveFirst) {
+        // Framed on the fight: between the player and the hunter nearest them.
+        glm::vec3 nearest = first.Pos;
+        float best = 1e9f;
+        for (std::uint32_t r : m_HRoots) {
+            SpiderSystem::Stats s2;
+            if (Spiders->Inspect((entt::entity)r, s2) && s2.Ready && glm::length(s2.Pos - kStand) < best) {
+                best = glm::length(s2.Pos - kStand);
+                nearest = s2.Pos;
+            }
+        }
         m_CamPos = kEye;
-        const glm::vec3 d = glm::normalize(first.Pos + first.Up * 0.2f - kEye);
+        const glm::vec3 d = glm::normalize(glm::mix(kStand + glm::vec3(0.0f, 0.9f, 0.0f), nearest, 0.5f) - kEye);
         m_CamYaw = glm::degrees(std::atan2(d.z, d.x));
         m_CamPitch = glm::degrees(std::asin(std::clamp(d.y, -1.0f, 1.0f)));
         m_HaveCam = true;
@@ -122,6 +137,8 @@ void NpcTest::SpiderHunt(World& world) {
     Check(bites >= 2, "spiderhunt: the hunters bite the player");
     Check(m_HMaxAttackers <= 2, "spiderhunt: never more than two attack at once");
     Check(m_HFellThrough == 0, "spiderhunt: no spider through the floor");
+    std::printf("[NpcTest] spiderhunt: the hits moved the player at most %.2f m in a second\n", m_HMaxDrift);
+    Check(m_HMaxDrift < 1.5f, "spiderhunt: the knockback staggers the player, never throws them across the room");
     std::printf("[NpcTest] spiderhunt: %d spider sounds started, %d asked for with nothing to play\n", SpiderSystem::SoundsStarted(),
                 SpiderSystem::SoundsMissing());
     Check(SpiderSystem::SoundsMissing() == 0, "spiderhunt: every spider sound it asks for has takes in the manifest");

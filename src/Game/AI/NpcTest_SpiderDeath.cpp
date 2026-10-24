@@ -129,6 +129,8 @@ void NpcTest::SpiderDeath(World& world) {
         m_CamPos = kEye;
         YawPitchAt(kEye, at, m_CamYaw, m_CamPitch);
         m_HaveCam = true;
+        m_WatchAt = at;
+        m_HaveWatch = true;
     };
     // A round from `from` at `target`: true when a spider took it.
     auto shoot = [&](const glm::vec3& from, const glm::vec3& target, float damage, int pellets, std::uint32_t want) {

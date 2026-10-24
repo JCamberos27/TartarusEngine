@@ -1279,7 +1279,7 @@ struct SpiderComponent {
     float SightRange = 14.0f; // m it sees the player within (with a clear line)
     float BiteDamage = 12.0f;
     float PounceDamage = 18.0f;
-    float Knockback = 4.0f;   // m/s a bite shoves the player back (a pounce more)
+    float Knockback = 2.5f;   // m/s a bite shoves the player back (a pounce half as much again)
     // --- runtime (not serialized)
     bool HasGoal = false;
     bool Run = false;

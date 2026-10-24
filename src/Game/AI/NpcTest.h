@@ -188,11 +188,16 @@ private:
         int Frames = 0, StepsAtStart = 0;
     };
     void SpiderRoute(World& world);
+    // spider / spiderdeath: the player stood in 301's doorway, looking at what the Scene view is on (m_WatchAt)
+    void SpiderWatchDrive(Player& player, float& wantYaw, float& wantPitch);
+    glm::vec3 m_WatchAt{0.0f};
+    bool m_HaveWatch = false, m_WatchPlaced = false;
     // spiderhunt (NpcTest_SpiderHunt.cpp): hunters let loose on the player in 301's living room
     void SpiderHunt(World& world);
     void SpiderHuntDrive(Player& player, PlayerVitals& vitals, float& wantYaw, float& wantPitch);
     std::vector<std::uint32_t> m_HRoots;
-    float m_HClock = 0.0f;
+    float m_HClock = 0.0f, m_HMaxDrift = 0.0f; // m_HMaxDrift: the farthest the hits moved the player in any one second
+    std::vector<glm::vec2> m_HTrail;           // the player's last second of positions (over the floor)
     int m_HStage = 0, m_HMaxAttackers = 0, m_HFellThrough = 0;
     bool m_HPlaced = false, m_HDone = false, m_HDropShot = false, m_HPounceShot = false, m_HBiteShot = false;
     void SpiderSetUp(World& world);

@@ -208,7 +208,7 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
         if (dist < 1.2f) {
             enter(Mode::Bite);
             if (anim) anim->SetTrigger("Attack");
-        } else if (ai.PounceIn <= 0.0f && dist > 2.2f && dist < 5.0f && b.Mover.Attached() && SeesPlayer(b, sc, t)) {
+        } else if (ai.PounceIn <= 0.0f && dist > 2.2f && dist < 5.0f && b.Mover.Attached() && (dist < 3.5f || SeesPlayer(b, sc, t))) {
             enter(Mode::Telegraph);
             if (anim) anim->SetTrigger("Jump");
             Sound("hiss", pos, 0.8f); // the tell
@@ -227,7 +227,7 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
             v.y += 0.5f * kGravity * flight;
             b.Mover.Detach(v);
             ai.FromDrop = false;
-            ai.PounceIn = 4.0f;
+            ai.PounceIn = 3.0f;
             Sound("screech", pos);
             Sound("pounce", pos);
             ++b.Last.Leaps;
@@ -243,7 +243,7 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
         const float near = std::min({ToPlayer(pos + up * 0.15f, t), ToPlayer(pos + up * 0.15f + flightStep * 0.5f, t),
                                      ToPlayer(pos + up * 0.15f + flightStep, t)});
         if (!ai.Struck && target && near < 0.5f) {
-            strike(sc.PounceDamage, Flat(t.Feet - pos) * (sc.Knockback * 1.5f) + glm::vec3(0.0f, 1.5f, 0.0f), true);
+            strike(sc.PounceDamage, Flat(t.Feet - pos) * (sc.Knockback * 1.5f), true);
             ++(ai.FromDrop ? b.Last.Drops : b.Last.Pounces);
             ai.Landed = true;
         }
@@ -270,7 +270,7 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
         if (!ai.Struck && ai.Clock >= 0.3f && target) {
             const glm::vec3 fangs = pos + b.Mover.Forward() * 0.45f + up * 0.15f;
             if (ToPlayer(fangs, t) < 0.45f) {
-                strike(sc.BiteDamage, Flat(t.Feet - pos) * sc.Knockback + glm::vec3(0.0f, 0.8f, 0.0f), false);
+                strike(sc.BiteDamage, Flat(t.Feet - pos) * sc.Knockback, false);
                 ++b.Last.Bites;
             }
         }
