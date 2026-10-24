@@ -88,6 +88,15 @@ bool SolveTwoBone(Pose& pose, const std::vector<int>& parents, std::vector<glm::
                   int upper, int lower, int end, const glm::vec3& targetPos, const glm::quat* targetRot,
                   float weight, float swivel = 0.0f, const TwoBoneHint* hint = nullptr);
 
+// FABRIK for a chain of any length (a spider's leg, coxa to tarsus). `chain` holds `count` bones root first, each the
+// parent of the next; `tipOffset` is the chain's end point in the last bone's own frame (a leaf bone has no child to
+// mark where it ends). The joints between root and tip bend toward `pole` (model space: a leg's knees go up and out).
+// Bone lengths are kept and the root stays put; a target out of reach is reached for along the straightened chain.
+// `weight` blends from the input pose (0) to the solved one (1). Returns false for an invalid or degenerate chain.
+bool SolveChain(Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals, const int* chain, int count,
+                const glm::vec3& tipOffset, const glm::vec3& targetPos, const glm::vec3& pole, float weight,
+                int iterations = 12);
+
 // Twist bones. IK re-rolls a limb (a hand turned to a grip the clip never had) and leaves the roll at one joint: with
 // the skin weighted across the limb's twist bones, the wrist then wrings like a sweet wrapper. A limb segment's roll
 // beyond its bind pose is measured about the segment's own axis and spread over the segment's twist bones (children
