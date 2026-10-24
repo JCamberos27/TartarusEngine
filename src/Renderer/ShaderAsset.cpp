@@ -387,6 +387,9 @@ void ShaderAsset::BuildBindings() {
     }
     int unit = 1;
     for (int i = 0; i < (int)m_Props.size(); ++i) {
+        // Shell fur is FurRenderer's to bind: the surface program reads none of it, and the mask would take a
+        // material texture unit the Standard shaders have no room for.
+        if (MaterialAsset::IsFurProp(m_Props[i].Name)) continue;
         PropertyBinding b;
         b.Type      = m_Props[i].Type;
         b.PropIndex = i;

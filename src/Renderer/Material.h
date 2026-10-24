@@ -113,6 +113,27 @@ struct Material {
     // reveal it too. Its maps live in the decal texture arrays (uMaterialSubstrate), not on units.
     SubstrateDesc Substrate;
 
+    // Shell fur (FurRenderer): after the surface itself, copies of it pushed out along the (skinned) normal, each
+    // alpha-tested against per-strand cells so the stack reads as hair. Only the opaque camera pass draws them:
+    // they cast no shadows (the surface does) and skip the SSAO pre-pass. Not part of Hash(): the surface's own
+    // BindMaterial reads none of it, and FurRenderer binds its own uniforms.
+    struct FurDesc {
+        bool  Enabled = false;
+        float Length  = 0.015f;            // metres from the skin to the longest tips (white in the mask)
+        float Density = 220.0f;            // strand cells per UV unit, across the 0-1 square
+        int   Shells  = 16;                // the most shells drawn, up close; fewer with distance, none far away
+        float Gravity = 0.3f;              // droop at the tips, as a share of Length
+        glm::vec3 Tint{1.0f};              // x the albedo map
+        float Rim     = 0.35f;             // back-lit sheen along the silhouette
+        std::shared_ptr<Texture> Mask;     // R: where it grows and how long; none = everywhere, full length
+        bool operator==(const FurDesc& o) const {
+            return Enabled == o.Enabled && Length == o.Length && Density == o.Density && Shells == o.Shells &&
+                   Gravity == o.Gravity && Tint == o.Tint && Rim == o.Rim && Mask == o.Mask;
+        }
+    };
+    FurDesc Fur;
+    static constexpr int kMaxFurShells = 32;
+
     // Values of a linked shader's custom (non-built-in) properties, keyed by property name
     // ("_Foo"), pushed as `u<Foo>` uniforms by BindMaterialDataDriven. Lives here rather than on
     // MaterialAsset (#104) so the Inspector's Material-level Get*/Set* reach them too.
