@@ -250,6 +250,79 @@ bool SolveTwoBone(Pose& pose, const std::vector<int>& parents, std::vector<glm::
     return true;
 }
 
+bool SolveChain(Pose& pose, const std::vector<int>& parents, std::vector<glm::mat4>& globals, const int* chain, int count,
+                const glm::vec3& tipOffset, const glm::vec3& targetPos, const glm::vec3& pole, float weight, int iterations) {
+    constexpr int kMax = 8;
+    if (!chain || count < 1 || count > kMax) return false;
+    for (int i = 0; i < count; ++i)
+        if (!ValidNode(pose, chain[i]) || (i > 0 && parents[chain[i]] != chain[i - 1])) return false;
+    weight = std::clamp(weight, 0.0f, 1.0f);
+    if (weight <= 0.0f) return true;
+
+    // The joints as they stand: each bone's origin, then the tip.
+    const int n = count;
+    glm::vec3 p[kMax + 1];
+    float len[kMax];
+    for (int i = 0; i < n; ++i) p[i] = Position(globals[chain[i]]);
+    p[n] = glm::vec3(globals[chain[n - 1]] * glm::vec4(tipOffset, 1.0f));
+    float reach = 0.0f;
+    for (int i = 0; i < n; ++i) {
+        len[i] = glm::length(p[i + 1] - p[i]);
+        if (len[i] < 1e-6f) return false;
+        reach += len[i];
+    }
+    const glm::vec3 root = p[0];
+    const glm::vec3 t = glm::mix(p[n], targetPos, weight);
+
+    if (glm::length(t - root) >= reach * 0.9999f) {
+        const glm::vec3 d = glm::normalize(t - root);
+        for (int i = 0; i < n; ++i) p[i + 1] = p[i] + d * len[i];
+    } else {
+        const float tolerance = reach * 1e-4f;
+        for (int it = 0; it < std::max(1, iterations); ++it) {
+            p[n] = t; // backward: from the tip to the root
+            for (int i = n - 1; i >= 0; --i) {
+                const glm::vec3 d = p[i] - p[i + 1];
+                const float l = glm::length(d);
+                p[i] = p[i + 1] + (l > 1e-8f ? d / l : glm::vec3(0.0f, 1.0f, 0.0f)) * len[i];
+            }
+            p[0] = root; // forward: from the root to the tip
+            for (int i = 0; i < n; ++i) {
+                const glm::vec3 d = p[i + 1] - p[i];
+                const float l = glm::length(d);
+                p[i + 1] = p[i] + (l > 1e-8f ? d / l : glm::vec3(0.0f, 1.0f, 0.0f)) * len[i];
+            }
+            // Each inner joint turns about the line through its neighbours toward the pole: an arch, never a flip.
+            for (int i = 1; i < n; ++i) {
+                const glm::vec3 a = p[i - 1], b = p[i + 1];
+                const glm::vec3 axis = b - a;
+                const float al = glm::length(axis);
+                if (al < 1e-6f) continue;
+                const glm::vec3 ax = axis / al;
+                const glm::vec3 je = (p[i] - a) - ax * glm::dot(p[i] - a, ax);
+                const glm::vec3 pe = (pole - a) - ax * glm::dot(pole - a, ax);
+                if (glm::length(je) < 1e-7f || glm::length(pe) < 1e-7f) continue;
+                const float turn = std::atan2(glm::dot(glm::cross(je, pe), ax), glm::dot(je, pe));
+                p[i] = a + glm::angleAxis(turn, ax) * (p[i] - a);
+            }
+            if (glm::length(p[n] - t) < tolerance) break;
+        }
+    }
+
+    // The bones onto the solved joints, root first: each turns by the least rotation that points it at its next joint.
+    for (int i = 0; i < n; ++i) {
+        const int b = chain[i];
+        const glm::vec3 at = Position(globals[b]);
+        const glm::vec3 next = i + 1 < n ? Position(globals[chain[i + 1]]) : glm::vec3(globals[b] * glm::vec4(tipOffset, 1.0f));
+        const glm::vec3 from = next - at, to = p[i + 1] - p[i];
+        if (glm::length(from) < 1e-8f || glm::length(to) < 1e-8f) continue;
+        const glm::quat rot = glm::normalize(RotationBetween(glm::normalize(from), glm::normalize(to)) * Rotation(globals[b]));
+        pose[b].R = glm::normalize(glm::inverse(ParentRotation(parents, globals, b)) * rot);
+        RefreshGlobals(pose, parents, globals, b);
+    }
+    return true;
+}
+
 void ChainDivisors(const float* weights, int count, float* out) {
     float sum = 0.0f;
     for (int k = 0; k < count; ++k) sum += std::max(0.0f, weights[k]);

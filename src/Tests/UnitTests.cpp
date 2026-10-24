@@ -5786,6 +5786,7 @@ int RunUnitTests(const char* filter) {
         {"AiMath", TestAiMath},
     };
     RegisterRagdollTests(tests);
+    RegisterSpiderTests(tests);
     RegisterAnimationTests(tests);
     RegisterEditorTests(tests);
     RegisterEnhancerTests(tests);

@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <functional>
 
 #include <glm/glm.hpp>
@@ -13,6 +14,7 @@ class NpcDirector;
 struct Npc;
 class Player;
 class PlayerVitals;
+class SpiderSystem;
 class World;
 
 // --npc-test [scenario] [--smoke-shots dir]: the enemy squad, headless, in scenes/Arena.json. The host
@@ -86,8 +88,8 @@ public:
     bool Aiming() const { return !m_Target.empty(); }   // sights up (rounds go where the view looks)
     bool WantsReload() const { return m_Reload; }
     bool WantsAiOverlay() const { return m_Scenario == "sandbox"; } // the AI overlay in the sandbox shots
-    bool RunsWithoutSquad() const { return m_Scenario == "decals" || m_Scenario == "doors"; } // After() even in a scene with no squad
-    bool WantsCleanViews() const { return m_Scenario == "blood" || m_Scenario == "ragdoll" || m_Scenario == "decals" || m_Scenario == "doors"; } // no collider / physics-debug overlays
+    bool RunsWithoutSquad() const { return m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "spider"; } // After() even in a scene with no squad
+    bool WantsCleanViews() const { return m_Scenario == "blood" || m_Scenario == "ragdoll" || m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "spider"; } // no collider / physics-debug overlays
     // Time stands still this frame (the host steps the game by zero): the ragdoll scenario's multi-angle shots of one moment.
     bool Frozen() const { return m_RFreeze; }
     // The blood scenario's view of the blood, filled by the host each frame.
@@ -125,6 +127,10 @@ public:
     // An NPC's can: a character stood at `feet` facing `yawDeg` (0 = +Z) sprays `piece` through
     // SprayCanAction::ForCharacter (from its hand, along its facing).
     std::function<bool(const std::string& piece, const glm::vec3& feet, float yawDeg, float seconds)> SprayNpc;
+    // --npc-test spider: a spider put in the scene at `pos` facing `yawDeg` (its root entity; 0xFFFFFFFF when it won't
+    // build), and the system running it (NpcTest_Spider.cpp).
+    std::function<std::uint32_t(const glm::vec3& pos, float yawDeg)> SpawnSpider;
+    SpiderSystem* Spiders = nullptr;
 
 private:
     void Check(bool ok, const std::string& what);
@@ -161,6 +167,22 @@ private:
         std::vector<std::pair<std::string, float>> States; // each body state as it began (s after the hit)
     };
     void TrackWound(World& world, const Npc& n, WoundTrack& w, float now, float dt, bool motion);
+    // spider (NpcTest_Spider.cpp): one spider sent round Apartment 301's living room - floor, wall, ceiling, wall,
+    // floor - each leg of the route measured
+    struct SpiderLeg {
+        std::string Name;
+        glm::vec3 Goal{0.0f};
+        bool Run = false, Arrived = false, Fell = false;
+        float Clock = 0.0f, WorstGap = 0.0f, WorstTip = 0.0f, WorstSlide = 0.0f, SumTip = 0.0f;
+        int Frames = 0, StepsAtStart = 0;
+    };
+    void SpiderRoute(World& world);
+    void SpiderSetUp(World& world);
+    std::uint32_t m_SRoot = 0xFFFFFFFFu;
+    std::vector<SpiderLeg> m_SLegs;
+    int m_SLeg = 0, m_SWorstRays = 0;
+    float m_SClock = 0.0f, m_SSettle = 0.0f;
+    bool m_SReady = false, m_SDone = false, m_SShotTilt = false;
     void Decals(World& world, NpcDirector& npcs, float now); // NpcTest_Decals.cpp
     void DecalsDrive(Player& player, float& wantYaw, float& wantPitch);
     // doors (NpcTest_Doors.cpp)
