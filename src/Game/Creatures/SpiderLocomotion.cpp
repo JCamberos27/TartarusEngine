@@ -44,6 +44,15 @@ void Mover::Reset(const glm::vec3& pos, const glm::quat& rot) {
     m_SurfaceNormal = Up();
 }
 
+void Mover::Detach(const glm::vec3& velocity) {
+    m_Attached = false;
+    m_Vel = velocity;
+    m_Speed = 0.0f;
+    m_Arrived = false;
+    // Clear of the surface first, or the landing probe finds the surface it leapt from.
+    m_Pos += Up() * 0.06f;
+}
+
 void Mover::TurnUpToward(const glm::vec3& want, float rate, float dt) {
     const glm::vec3 up = Up();
     const glm::vec3 w = SafeNormalize(want, up);

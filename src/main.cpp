@@ -1209,11 +1209,15 @@ int main(int argc, char** argv) {
                 v.RuntimeDecals = DecalSystem::Current() ? DecalSystem::Current()->RuntimeCount() : 0;
             };
             // --npc-test spider: a spider put in the scene, and the system that runs it
-            npcTest->SpawnSpider = [&](const glm::vec3& pos, float yawDeg) {
+            auto spawnSpider = [&](const glm::vec3& pos, float yawDeg, int brain) {
                 const entt::entity e = spiders.Spawn(world, assets, "assets/Characters/Spider/Spider.json", pos,
                                                      glm::angleAxis(glm::radians(yawDeg), glm::vec3(0.0f, 1.0f, 0.0f)));
+                if (auto* sc = e != entt::null ? world.Registry.try_get<SpiderComponent>(e) : nullptr) sc->Brain = brain;
                 return (std::uint32_t)entt::to_integral(e);
             };
+            npcTest->SpawnSpider = [spawnSpider](const glm::vec3& pos, float yawDeg) { return spawnSpider(pos, yawDeg, 1); }; // scripted
+            // --npc-test spiderhunt: a hunter (its own AI)
+            npcTest->SpawnHunter = [spawnSpider](const glm::vec3& pos, float yawDeg) { return spawnSpider(pos, yawDeg, 0); };
             npcTest->Spiders = &spiders;
         }
 
@@ -1936,7 +1940,7 @@ int main(int argc, char** argv) {
                                                               : opt.npcTestScenario == "blood" ? "scenes/BloodTest.json"
                                                               : opt.npcTestScenario == "ragdoll" ? "scenes/RagdollTest.json"
                                                               : opt.npcTestScenario == "escape" || opt.npcTestScenario == "escapeshut" || opt.npcTestScenario == "aptwounds" || opt.npcTestScenario == "aptfight" ? "scenes/Apartment Hallway.json"
-                                                              : opt.npcTestScenario == "decals" || opt.npcTestScenario == "doors" || opt.npcTestScenario == "spider" ? "scenes/Apartment Hallway.json"
+                                                              : opt.npcTestScenario == "decals" || opt.npcTestScenario == "doors" || opt.npcTestScenario == "spider" || opt.npcTestScenario == "spiderhunt" ? "scenes/Apartment Hallway.json"
                                                                                            : "scenes/Arena.json"));
             std::cout << "[SmokeTest] Found " << smokeScenePaths.size() << " scene(s) under "
                       << scenesDir << std::endl;
@@ -2829,8 +2833,34 @@ int main(int argc, char** argv) {
                     editor.UpdatePlayModeAudio(world, gameDt,
                         listener != entt::null ? glm::vec3(world.ComposeWorldTransform(listener)[3]) : gameCam->Position);
                 }
-                // The spiders move over the surfaces before the animators pose them.
-                spiders.Think(world, assets, gameDt);
+                // The spiders move over the surfaces before the animators pose them; the hunters among them go after
+                // the player, and what their bites and pounces do lands on the player now.
+                {
+                    SpiderSystem::Target prey;
+                    prey.Valid = playUsesPlayer && PhysicsWorld::HasCharacter() && !devPanel.Invisible;
+                    if (prey.Valid) {
+                        float foot[3], r = 0.3f, cyl = 0.6f;
+                        PhysicsWorld::GetCharacterCapsule(foot, &r, &cyl);
+                        prey.Feet = glm::vec3(foot[0], foot[1], foot[2]);
+                        prey.Radius = r;
+                        prey.Eye = player.Cam.Position;
+                        prey.Velocity = player.Velocity;
+                        prey.Dead = playerVitals.IsDead();
+                        prey.Loud = glm::length(glm::vec2(player.Velocity.x, player.Velocity.z)) > player.MoveSpeed * 1.1f;
+                    }
+                    spiders.Think(world, assets, gameDt, &prey);
+                    for (const SpiderSystem::PlayerHit& h : spiders.TakePlayerHits()) {
+                        const float before = playerVitals.Health();
+                        playerVitals.ApplyDamage(h.Amount, h.Source);
+                        player.Velocity += h.Push;
+                        // The jolt: the view knocked up and aside, harder for a pounce.
+                        const float side = glm::dot(glm::normalize(glm::vec3(h.Push.x, 0.0f, h.Push.z) + glm::vec3(1e-4f, 0.0f, 0.0f)),
+                                                    player.Cam.Right());
+                        player.Cam.Pitch += h.Pounce ? 9.0f : 5.0f;
+                        player.Cam.Yaw += (side >= 0.0f ? 1.0f : -1.0f) * (h.Pounce ? 7.0f : 4.0f);
+                        if (playerVitals.Health() < before) combatFx.Play(CombatFx::Cue::FleshHit, prey.Eye, true, 0.8f);
+                    }
+                }
                 // Procedural spin/orbit/bob/light-hue. Play-only: edit mode keeps the authored
                 // pose, and the play-mode snapshot restores everything this touched on Stop.
                 UpdateAnimators(world, gameDt);
