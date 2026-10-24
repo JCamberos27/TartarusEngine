@@ -115,9 +115,11 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
 
     // Senses, a few times a second.
     const bool target = t.Valid && !t.Dead;
-    if (target && ai.LookIn <= 0.0f) {
+    const bool alarmed = ai.Alarmed;
+    ai.Alarmed = false;
+    if (target && (ai.LookIn <= 0.0f || alarmed)) {
         ai.LookIn = 0.15f;
-        if (SeesPlayer(b, sc, t) || (t.Loud && glm::length(t.Feet - pos) < 20.0f)) {
+        if (alarmed || SeesPlayer(b, sc, t) || (t.Loud && glm::length(t.Feet - pos) < 20.0f)) {
             ai.SeenAgo = 0.0f;
             ai.LastKnown = t.Feet;
             if (!ai.Aware && ai.State == Mode::Perch) {
@@ -193,7 +195,7 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
             break;
         }
         // A charger, or a dropper that has waited long enough, attacks when a place is free.
-        if ((!ai.Dropper || ai.Clock > 12.0f) && Attackers() < kMaxAttackers) {
+        if ((!ai.Dropper || ai.Clock > 6.0f) && Attackers() < kMaxAttackers) {
             ai.Token = true;
             enter(Mode::Engage);
         }

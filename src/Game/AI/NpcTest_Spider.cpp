@@ -76,7 +76,8 @@ void NpcTest::SpiderSetUp(World& world) {
 void NpcTest::SpiderWatchDrive(Player& player, float& wantYaw, float& wantPitch) {
     player.ScriptMove = glm::vec2(0.0f);
     if (!m_WatchPlaced) {
-        const glm::vec3 door(2.5f, 0.02f, -4.3f); // 301's living room, by its doorway
+        // 301's living room: by its doorway, or (spiderdeath, whose own camera is there) at the far end looking back
+        const glm::vec3 door = m_Scenario == "spiderdeath" ? glm::vec3(2.5f, 0.02f, -9.0f) : glm::vec3(2.5f, 0.02f, -4.3f);
         PhysicsWorld::SetCharacterFootPosition(&door.x);
         player.Velocity = glm::vec3(0.0f);
         player.Cam.Position = door + glm::vec3(0.0f, player.EyeHeight, 0.0f);
@@ -109,7 +110,8 @@ void NpcTest::SpiderRoute(World& world) {
     // The Scene view beside the spider, a little off its surface, so a change of surface shows side-on; the player's
     // view (SpiderWatchDrive) has the room-wide shot.
     {
-        const glm::vec3 side = glm::normalize(glm::cross(st.Up, st.Forward) + glm::vec3(1e-4f, 0.0f, 0.0f));
+        glm::vec3 side = glm::normalize(glm::cross(st.Up, st.Forward) + glm::vec3(1e-4f, 0.0f, 0.0f));
+        if (glm::dot(side, glm::vec3(2.5f, 2.0f, -5.4f) - st.Pos) < 0.0f) side = -side; // the work light's side: lit, not a silhouette
         glm::vec3 eye = st.Pos + side * 1.5f + st.Up * 0.6f - st.Forward * 0.3f;
         eye = glm::clamp(eye, glm::vec3(0.45f, 0.15f, -9.2f), glm::vec3(4.6f, 2.5f, -4.15f)); // inside the room
         m_CamPos = eye;

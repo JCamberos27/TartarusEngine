@@ -84,6 +84,8 @@ void NpcTest::SpiderHunt(World& world) {
     SpiderSystem::Stats first;
     bool haveFirst = false;
     int drops = 0, pounces = 0, bites = 0, leaps = 0;
+    float worstStuck = 0.0f;
+    int sunk = 0;
     bool anyAware = false;
     for (size_t k = 0; k < m_HRoots.size(); ++k) {
         SpiderSystem::Stats st;
@@ -100,6 +102,9 @@ void NpcTest::SpiderHunt(World& world) {
         leaps += st.Leaps;
         anyAware = anyAware || st.Aware;
         if (st.Pos.y < -0.5f) ++m_HFellThrough;
+        worstStuck = std::max(worstStuck, st.WorstStuck);
+        sunk += st.SunkFrames;
+        if (st.Pos.y > 2.0f) ++m_HCeilFrames[k];
         // The shots: the first drop, pounce and bite to land, framed on that spider.
         const char* shot = nullptr;
         if (st.Drops > 0 && !m_HDropShot) { m_HDropShot = true; shot = "spiderhunt_drop"; }
@@ -137,6 +142,11 @@ void NpcTest::SpiderHunt(World& world) {
     Check(bites >= 2, "spiderhunt: the hunters bite the player");
     Check(m_HMaxAttackers <= 2, "spiderhunt: never more than two attack at once");
     Check(m_HFellThrough == 0, "spiderhunt: no spider through the floor");
+    std::printf("[NpcTest] spiderhunt: longest stall %.1f s, %d frames with a body end inside a surface, ceiling frames %d %d %d %d\n",
+                worstStuck, sunk,
+                m_HCeilFrames[0], m_HCeilFrames[1], m_HCeilFrames[2], m_HCeilFrames[3]);
+    Check(worstStuck < 2.0f, "spiderhunt: no hunter stalls for 2 s while it means to move");
+    Check(sunk < 30, "spiderhunt: a hunter's body hardly ever inside a wall or ceiling (under a second in all)");
     std::printf("[NpcTest] spiderhunt: the hits moved the player at most %.2f m in a second\n", m_HMaxDrift);
     Check(m_HMaxDrift < 1.5f, "spiderhunt: the knockback staggers the player, never throws them across the room");
     std::printf("[NpcTest] spiderhunt: %d spider sounds started, %d asked for with nothing to play\n", SpiderSystem::SoundsStarted(),

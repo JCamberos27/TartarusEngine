@@ -72,6 +72,10 @@ public:
         Mode AiMode = Mode::Scripted;
         bool Aware = false, HasToken = false;
         int Bites = 0, Pounces = 0, Drops = 0, Leaps = 0; // landed on the player / leaps and drops tried
+        float StuckFor = 0.0f, WorstStuck = 0.0f; // seconds it has meant to move and not (now / the longest)
+        int SunkFrames = 0;          // frames its head or abdomen was inside a surface
+        glm::vec3 Goal{0.0f};        // where it is heading (the component's goal)
+        bool HasGoal = false;
     };
     bool Inspect(entt::entity root, Stats& out) const;
     // One of the spider's sounds (snd.foley.spider.<element>: tap, hiss, screech, bite, pounce, hurt, death, thud, splat)
@@ -89,6 +93,10 @@ public:
         bool Dead = false;
     };
     Hurt* HurtOf(entt::entity root);
+    // Wakes a hunter: it was shot, or heard a shot. It turns on the player wherever they are.
+    void Alarm(entt::entity root);
+    // A gunshot at `origin`: every hunter within `radius` m hears it.
+    void HearShot(const glm::vec3& origin, float radius = 25.0f);
     // Knocks a spider off whatever it holds, moving at `velocity` (world, m/s): it falls, lands and rights itself.
     bool Detach(entt::entity root, const glm::vec3& velocity);
 
@@ -122,6 +130,7 @@ private:
             Mode State = Mode::Perch;
             float Clock = 0.0f;          // seconds in this state
             bool Aware = false, Token = false, Struck = false;
+            bool Alarmed = false;        // shot or heard a shot since its last think
             bool Hold = false;           // facing its goal without moving (the tell, a bite)
             bool FromDrop = false, Landed = false; // this leap is a drop from above; it struck the player
             float SeenAgo = 1e9f;        // seconds since it last saw or heard the player
