@@ -2927,6 +2927,1071 @@
    "mix_db": -13.45
   },
   {
+   "file": "Creatures/spider/bite_1.wav",
+   "key": "snd.foley.spider.bite",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -22.05,
+   "lufs_m_max": -22.01,
+   "true_peak_dbtp": -9.58,
+   "length_s": 0.31,
+   "peak_ms": 94.2,
+   "sources": [
+    {
+     "file": "../Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 01_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.06,
+     "pitch_st": 6.0
+    },
+    {
+     "file": "sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Hit_Body_Flesh_25.wav",
+     "start": 0.158,
+     "end": 0.458,
+     "pitch_st": 6.0
+    },
+    {
+     "file": "spider/screech/attack_05.ogg",
+     "start": 0.004,
+     "end": 0.133,
+     "pitch_st": 6.0
+    }
+   ],
+   "anchor_ms": 84.2,
+   "element": "bite",
+   "category": "spider",
+   "variant": 1,
+   "source": "FEETHmn_HEELS-High Heels Wood Single Step 01_Ocular_Stride.wav@0.00 +6st + PM_BBI_Bullet_Impact_Hit_Body_Flesh_25.wav@0.00 + attack_05.ogg@0.00 -3st",
+   "mix_db": -2.06
+  },
+  {
+   "file": "Creatures/spider/bite_2.wav",
+   "key": "snd.foley.spider.bite",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -22.14,
+   "lufs_m_max": -22.1,
+   "true_peak_dbtp": -5.75,
+   "length_s": 0.27,
+   "peak_ms": 13.1,
+   "sources": [
+    {
+     "file": "../Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 03_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.06,
+     "pitch_st": 4.0
+    },
+    {
+     "file": "ae/ColdBore Flesh/FleshImpact_02.wav",
+     "start": 0.0,
+     "end": 0.3,
+     "pitch_st": 4.0
+    }
+   ],
+   "anchor_ms": 10.1,
+   "element": "bite",
+   "category": "spider",
+   "variant": 2,
+   "source": "FEETHmn_HEELS-High Heels Wood Single Step 03_Ocular_Stride.wav@0.00 +4st + FleshImpact_02.wav@0.00",
+   "mix_db": -2.32
+  },
+  {
+   "file": "Creatures/spider/bite_3.wav",
+   "key": "snd.foley.spider.bite",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -22.93,
+   "lufs_m_max": -22.89,
+   "true_peak_dbtp": -8.06,
+   "length_s": 0.262,
+   "peak_ms": 44.0,
+   "sources": [
+    {
+     "file": "../Footsteps/High Heels/Concrete/FEETHmn_HEELS-High Heels Concrete Single Step 02_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.06,
+     "pitch_st": 7.0
+    },
+    {
+     "file": "sonniss/Gamemaster Audio - Punch and Combat Sounds/punch_grit_wet_impact_05.wav",
+     "start": 0.008,
+     "end": 0.308,
+     "pitch_st": 7.0
+    }
+   ],
+   "anchor_ms": 1.7,
+   "element": "bite",
+   "category": "spider",
+   "variant": 3,
+   "source": "FEETHmn_HEELS-High Heels Concrete Single Step 02_Ocular_Stride.wav@0.00 +7st + punch_grit_wet_impact_05.wav@0.00 +3st",
+   "mix_db": -1.49
+  },
+  {
+   "file": "Creatures/spider/bite_4.wav",
+   "key": "snd.foley.spider.bite",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -22.18,
+   "lufs_m_max": -22.14,
+   "true_peak_dbtp": -5.59,
+   "length_s": 0.24,
+   "peak_ms": 16.5,
+   "sources": [
+    {
+     "file": "../Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 02_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.06,
+     "pitch_st": 5.0
+    },
+    {
+     "file": "ae/ColdBore Flesh/FleshImpact_05.wav",
+     "start": 0.0,
+     "end": 0.3,
+     "pitch_st": 5.0
+    },
+    {
+     "file": "spider/bite/attack_03.ogg",
+     "start": 0.044,
+     "end": 0.244,
+     "pitch_st": 5.0
+    }
+   ],
+   "anchor_ms": 2.5,
+   "element": "bite",
+   "category": "spider",
+   "variant": 4,
+   "source": "FEETHmn_HEELS-High Heels Wood Single Step 02_Ocular_Stride.wav@0.00 +5st + FleshImpact_05.wav@0.00 + attack_03.ogg@0.00 -2st",
+   "mix_db": -1.53
+  },
+  {
+   "file": "Creatures/spider/death_1.wav",
+   "key": "snd.foley.spider.death",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -27.72,
+   "lufs_m_max": -22.94,
+   "true_peak_dbtp": -13.16,
+   "length_s": 1.752,
+   "peak_ms": 61.8,
+   "sources": [
+    {
+     "file": "spider/screech/insectoralien.flac",
+     "start": 0.104,
+     "end": 1.273,
+     "pitch_st": 19.0
+    },
+    {
+     "file": "ae/ColdBore Flesh/FleshImpact_02.wav",
+     "start": 0.0,
+     "end": 0.3,
+     "pitch_st": 19.0
+    },
+    {
+     "file": "../Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 01_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.04,
+     "pitch_st": 19.0
+    },
+    {
+     "file": "../Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 02_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.04,
+     "pitch_st": 19.0
+    },
+    {
+     "file": "../Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 03_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.04,
+     "pitch_st": 19.0
+    }
+   ],
+   "anchor_ms": 5.1,
+   "element": "death",
+   "category": "spider",
+   "variant": 1,
+   "source": "insectoralien.flac@0.00 -7st + FleshImpact_02.wav@0.00 + FEETHmn_HEELS-High Heels Wood Single Step 01_Ocular_Stride.wav@0.00 +16st + FEETHmn_HEELS-High Heels Wood Single Step 02_Ocular_Stride.wav@0.00 +18st + FEETHmn_HEELS-High Heels Wood Single Step 03_Ocular_Stride.wav@0.00 +15st + FEETHmn_HEELS-High Heels Wood Single Step 01_Ocular_Stride.wav@0.00 +19st",
+   "mix_db": -2.29
+  },
+  {
+   "file": "Creatures/spider/death_2.wav",
+   "key": "snd.foley.spider.death",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -26.25,
+   "lufs_m_max": -22.63,
+   "true_peak_dbtp": -14.77,
+   "length_s": 0.882,
+   "peak_ms": 116.0,
+   "sources": [
+    {
+     "file": "spider/screech/insectoralienshort_0.flac",
+     "start": 0.095,
+     "end": 0.651,
+     "pitch_st": 18.0
+    },
+    {
+     "file": "ae/ColdBore Flesh/FleshImpact_06.wav",
+     "start": 0.0,
+     "end": 0.3,
+     "pitch_st": 18.0
+    },
+    {
+     "file": "../Footsteps/High Heels/Concrete/FEETHmn_HEELS-High Heels Concrete Single Step 01_Ocular_Stride.wav",
+     "start": 0.012,
+     "end": 0.052,
+     "pitch_st": 18.0
+    },
+    {
+     "file": "../Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 02_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.04,
+     "pitch_st": 18.0
+    },
+    {
+     "file": "../Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 03_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.04,
+     "pitch_st": 18.0
+    }
+   ],
+   "anchor_ms": 2.2,
+   "element": "death",
+   "category": "spider",
+   "variant": 2,
+   "source": "insectoralienshort_0.flac@0.00 -8st + FleshImpact_06.wav@0.00 + FEETHmn_HEELS-High Heels Concrete Single Step 01_Ocular_Stride.wav@0.00 +17st + FEETHmn_HEELS-High Heels Wood Single Step 02_Ocular_Stride.wav@0.00 +15st + FEETHmn_HEELS-High Heels Wood Single Step 03_Ocular_Stride.wav@0.00 +18st",
+   "mix_db": -2.6
+  },
+  {
+   "file": "Creatures/spider/death_3.wav",
+   "key": "snd.foley.spider.death",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -27.4,
+   "lufs_m_max": -22.46,
+   "true_peak_dbtp": -12.78,
+   "length_s": 1.598,
+   "peak_ms": 117.1,
+   "sources": [
+    {
+     "file": "spider/screech/insectoralien.flac",
+     "start": 0.248,
+     "end": 1.198,
+     "pitch_st": 16.0
+    },
+    {
+     "file": "sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Hit_Body_Flesh_25.wav",
+     "start": 0.158,
+     "end": 0.458,
+     "pitch_st": 16.0
+    },
+    {
+     "file": "../Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 01_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.04,
+     "pitch_st": 16.0
+    },
+    {
+     "file": "../Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 02_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.04,
+     "pitch_st": 16.0
+    }
+   ],
+   "anchor_ms": 9.4,
+   "element": "death",
+   "category": "spider",
+   "variant": 3,
+   "source": "insectoralien.flac@0.25 -9st + PM_BBI_Bullet_Impact_Hit_Body_Flesh_25.wav@0.00 + FEETHmn_HEELS-High Heels Wood Single Step 01_Ocular_Stride.wav@0.00 +16st + FEETHmn_HEELS-High Heels Wood Single Step 02_Ocular_Stride.wav@0.00 +14st",
+   "mix_db": -2.77
+  },
+  {
+   "file": "Creatures/spider/hiss_1.wav",
+   "key": "snd.foley.spider.hiss",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -30.52,
+   "lufs_m_max": -26.99,
+   "true_peak_dbtp": -18.28,
+   "length_s": 0.935,
+   "peak_ms": 99.7,
+   "sources": [
+    {
+     "file": "spider/screech/insectoralienshort_0.flac",
+     "start": 0.095,
+     "end": 0.651,
+     "pitch_st": -9.0
+    }
+   ],
+   "anchor_ms": 32.0,
+   "element": "hiss",
+   "category": "spider",
+   "variant": 1,
+   "source": "noise 2600-9500 + insectoralienshort_0.flac@0.00 -9st",
+   "mix_db": -4.24
+  },
+  {
+   "file": "Creatures/spider/hiss_2.wav",
+   "key": "snd.foley.spider.hiss",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -29.98,
+   "lufs_m_max": -27.04,
+   "true_peak_dbtp": -16.83,
+   "length_s": 0.749,
+   "peak_ms": 75.5,
+   "sources": [
+    {
+     "file": "spider/screech/insectoralien.flac",
+     "start": 0.298,
+     "end": 0.798,
+     "pitch_st": -7.0
+    }
+   ],
+   "anchor_ms": 31.0,
+   "element": "hiss",
+   "category": "spider",
+   "variant": 2,
+   "source": "noise 3000-11000 + insectoralien.flac@0.30 -7st",
+   "mix_db": -4.13
+  },
+  {
+   "file": "Creatures/spider/hiss_3.wav",
+   "key": "snd.foley.spider.hiss",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -29.36,
+   "lufs_m_max": -26.95,
+   "true_peak_dbtp": -19.06,
+   "length_s": 0.95,
+   "peak_ms": 82.4,
+   "sources": [],
+   "anchor_ms": 60.4,
+   "element": "hiss",
+   "category": "spider",
+   "variant": 3,
+   "source": "noise 2200-8000",
+   "mix_db": -4.28
+  },
+  {
+   "file": "Creatures/spider/hiss_4.wav",
+   "key": "snd.foley.spider.hiss",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -28.18,
+   "lufs_m_max": -26.97,
+   "true_peak_dbtp": -17.79,
+   "length_s": 0.534,
+   "peak_ms": 84.5,
+   "sources": [
+    {
+     "file": "spider/screech/insectoralienshort_0.flac",
+     "start": 0.099,
+     "end": 0.499,
+     "pitch_st": -5.0
+    }
+   ],
+   "anchor_ms": 12.7,
+   "element": "hiss",
+   "category": "spider",
+   "variant": 4,
+   "source": "noise 3500-12000 + insectoralienshort_0.flac@0.10 -5st",
+   "mix_db": -4.32
+  },
+  {
+   "file": "Creatures/spider/hurt_1.wav",
+   "key": "snd.foley.spider.hurt",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -23.29,
+   "lufs_m_max": -23.24,
+   "true_peak_dbtp": -6.82,
+   "length_s": 0.324,
+   "peak_ms": 11.2,
+   "sources": [
+    {
+     "file": "ae/ColdBore Flesh/FleshImpact_01.wav",
+     "start": 0.0,
+     "end": 0.3,
+     "pitch_st": 3.0
+    },
+    {
+     "file": "spider/screech/insectoralienshort_0.flac",
+     "start": 0.095,
+     "end": 0.445,
+     "pitch_st": 3.0
+    }
+   ],
+   "anchor_ms": 2.5,
+   "element": "hurt",
+   "category": "spider",
+   "variant": 1,
+   "source": "FleshImpact_01.wav@0.00 + insectoralienshort_0.flac@0.05 +3st",
+   "mix_db": -3.4
+  },
+  {
+   "file": "Creatures/spider/hurt_2.wav",
+   "key": "snd.foley.spider.hurt",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -23.05,
+   "lufs_m_max": -23.0,
+   "true_peak_dbtp": -5.54,
+   "length_s": 0.308,
+   "peak_ms": 11.9,
+   "sources": [
+    {
+     "file": "ae/ColdBore Flesh/FleshImpact_03.wav",
+     "start": 0.0,
+     "end": 0.3,
+     "pitch_st": 4.0
+    },
+    {
+     "file": "spider/screech/insectoralien.flac",
+     "start": 0.198,
+     "end": 0.548,
+     "pitch_st": 4.0
+    }
+   ],
+   "anchor_ms": 2.2,
+   "element": "hurt",
+   "category": "spider",
+   "variant": 2,
+   "source": "FleshImpact_03.wav@0.00 + insectoralien.flac@0.20 +4st",
+   "mix_db": -4.02
+  },
+  {
+   "file": "Creatures/spider/hurt_3.wav",
+   "key": "snd.foley.spider.hurt",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -22.58,
+   "lufs_m_max": -22.54,
+   "true_peak_dbtp": -5.61,
+   "length_s": 0.27,
+   "peak_ms": 9.9,
+   "sources": [
+    {
+     "file": "ae/ColdBore Flesh/FleshImpact_04.wav",
+     "start": 0.0,
+     "end": 0.3,
+     "pitch_st": 5.0
+    },
+    {
+     "file": "spider/screech/insectoralienshort_0.flac",
+     "start": 0.198,
+     "end": 0.498,
+     "pitch_st": 5.0
+    }
+   ],
+   "anchor_ms": 4.4,
+   "element": "hurt",
+   "category": "spider",
+   "variant": 3,
+   "source": "FleshImpact_04.wav@0.00 + insectoralienshort_0.flac@0.20 +5st",
+   "mix_db": -4.9
+  },
+  {
+   "file": "Creatures/spider/hurt_4.wav",
+   "key": "snd.foley.spider.hurt",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -22.42,
+   "lufs_m_max": -22.38,
+   "true_peak_dbtp": -6.49,
+   "length_s": 0.32,
+   "peak_ms": 8.1,
+   "sources": [
+    {
+     "file": "ae/ColdBore Flesh/FleshImpact_06.wav",
+     "start": 0.0,
+     "end": 0.3,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 2.2,
+   "element": "hurt",
+   "category": "spider",
+   "variant": 4,
+   "source": "FleshImpact_06.wav@0.00 + noise 3000-10000",
+   "mix_db": -5.14
+  },
+  {
+   "file": "Creatures/spider/pounce_1.wav",
+   "key": "snd.foley.spider.pounce",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -24.83,
+   "lufs_m_max": -24.78,
+   "true_peak_dbtp": -4.94,
+   "length_s": 0.378,
+   "peak_ms": 74.1,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio - Punch and Combat Sounds/whoosh_weapon_knife_swing_04.wav",
+     "start": 0.026,
+     "end": 0.246,
+     "pitch_st": -4.0
+    },
+    {
+     "file": "spider/screech/insectoralienshort_0.flac",
+     "start": 0.095,
+     "end": 0.495,
+     "pitch_st": -4.0
+    }
+   ],
+   "anchor_ms": 65.6,
+   "element": "pounce",
+   "category": "spider",
+   "variant": 1,
+   "source": "whoosh_weapon_knife_swing_04.wav@0.00 -4st + insectoralienshort_0.flac@0.00 +1st",
+   "mix_db": -4.5
+  },
+  {
+   "file": "Creatures/spider/pounce_2.wav",
+   "key": "snd.foley.spider.pounce",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -26.03,
+   "lufs_m_max": -25.99,
+   "true_peak_dbtp": -9.87,
+   "length_s": 0.39,
+   "peak_ms": 37.3,
+   "sources": [
+    {
+     "file": "sonniss/David Dumais Audio - Weapon Sounds - Weapon Swings/MeleeSwingsPack_96khz_Stereo_HighSwings15.wav",
+     "start": 0.048,
+     "end": 0.428,
+     "pitch_st": -2.0
+    }
+   ],
+   "anchor_ms": 31.6,
+   "element": "pounce",
+   "category": "spider",
+   "variant": 2,
+   "source": "MeleeSwingsPack_96khz_Stereo_HighSwings15.wav@0.00 -2st",
+   "mix_db": -3.24
+  },
+  {
+   "file": "Creatures/spider/pounce_3.wav",
+   "key": "snd.foley.spider.pounce",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -24.88,
+   "lufs_m_max": -24.01,
+   "true_peak_dbtp": -14.87,
+   "length_s": 0.801,
+   "peak_ms": 323.1,
+   "sources": [
+    {
+     "file": "sonniss/David Dumais Audio - Weapon Sounds - Weapon Swings/MeleeSwingsPack_96khz_Mono_DesignedSwings12.wav",
+     "start": 0.027,
+     "end": 0.627,
+     "pitch_st": -5.0
+    }
+   ],
+   "anchor_ms": 85.0,
+   "element": "pounce",
+   "category": "spider",
+   "variant": 3,
+   "source": "MeleeSwingsPack_96khz_Mono_DesignedSwings12.wav@0.00 -5st + noise 3000-9000",
+   "mix_db": -1.29
+  },
+  {
+   "file": "Creatures/spider/screech_1.wav",
+   "key": "snd.foley.spider.screech",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -27.22,
+   "lufs_m_max": -22.99,
+   "true_peak_dbtp": -13.27,
+   "length_s": 1.308,
+   "peak_ms": 49.0,
+   "sources": [
+    {
+     "file": "spider/screech/insectoralien.flac",
+     "start": 0.104,
+     "end": 1.204,
+     "pitch_st": -3.0
+    }
+   ],
+   "anchor_ms": 39.6,
+   "element": "screech",
+   "category": "spider",
+   "variant": 1,
+   "source": "insectoralien.flac@0.00 -3st + noise 3000-10000",
+   "mix_db": -2.24
+  },
+  {
+   "file": "Creatures/spider/screech_2.wav",
+   "key": "snd.foley.spider.screech",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -25.97,
+   "lufs_m_max": -22.49,
+   "true_peak_dbtp": -13.76,
+   "length_s": 1.068,
+   "peak_ms": 61.1,
+   "sources": [
+    {
+     "file": "spider/screech/insectoralienshort_0.flac",
+     "start": 0.095,
+     "end": 0.651,
+     "pitch_st": -5.0
+    },
+    {
+     "file": "spider/screech/attack_04.ogg",
+     "start": 0.032,
+     "end": 0.832,
+     "pitch_st": -5.0
+    }
+   ],
+   "anchor_ms": 42.7,
+   "element": "screech",
+   "category": "spider",
+   "variant": 2,
+   "source": "insectoralienshort_0.flac@0.00 -4st + attack_04.ogg@0.00 -5st",
+   "mix_db": -2.74
+  },
+  {
+   "file": "Creatures/spider/screech_3.wav",
+   "key": "snd.foley.spider.screech",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -26.64,
+   "lufs_m_max": -22.8,
+   "true_peak_dbtp": -16.39,
+   "length_s": 1.068,
+   "peak_ms": 13.9,
+   "sources": [
+    {
+     "file": "spider/screech/insectoralien.flac",
+     "start": 0.398,
+     "end": 1.198,
+     "pitch_st": -5.0
+    }
+   ],
+   "anchor_ms": 3.4,
+   "element": "screech",
+   "category": "spider",
+   "variant": 3,
+   "source": "insectoralien.flac@0.40 -5st + noise 2500-9000",
+   "mix_db": -2.43
+  },
+  {
+   "file": "Creatures/spider/screech_4.wav",
+   "key": "snd.foley.spider.screech",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -24.61,
+   "lufs_m_max": -22.54,
+   "true_peak_dbtp": -13.48,
+   "length_s": 0.606,
+   "peak_ms": 52.8,
+   "sources": [
+    {
+     "file": "spider/screech/insectoralienshort_0.flac",
+     "start": 0.095,
+     "end": 0.651,
+     "pitch_st": -4.0
+    },
+    {
+     "file": "spider/screech/attack_03.ogg",
+     "start": 0.112,
+     "end": 0.51,
+     "pitch_st": -4.0
+    }
+   ],
+   "anchor_ms": 37.0,
+   "element": "screech",
+   "category": "spider",
+   "variant": 4,
+   "source": "insectoralienshort_0.flac@0.00 -1.5st + attack_03.ogg@0.00 -4st",
+   "mix_db": -2.69
+  },
+  {
+   "file": "Creatures/spider/splat_1.wav",
+   "key": "snd.foley.spider.splat",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -26.36,
+   "lufs_m_max": -26.32,
+   "true_peak_dbtp": -10.92,
+   "length_s": 0.43,
+   "peak_ms": 254.1,
+   "sources": [
+    {
+     "file": "spider/ichor_splat/slime_02.ogg",
+     "start": 0.035,
+     "end": 0.534,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 24.8,
+   "element": "splat",
+   "category": "spider",
+   "variant": 1,
+   "source": "slime_02.ogg@0.00",
+   "mix_db": -6.54
+  },
+  {
+   "file": "Creatures/spider/splat_2.wav",
+   "key": "snd.foley.spider.splat",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -26.12,
+   "lufs_m_max": -26.08,
+   "true_peak_dbtp": -7.69,
+   "length_s": 0.29,
+   "peak_ms": 28.2,
+   "sources": [
+    {
+     "file": "spider/ichor_splat/slime_03.ogg",
+     "start": 0.055,
+     "end": 0.454,
+     "pitch_st": 0.0
+    }
+   ],
+   "anchor_ms": 6.3,
+   "element": "splat",
+   "category": "spider",
+   "variant": 2,
+   "source": "slime_03.ogg@0.00",
+   "mix_db": -7.35
+  },
+  {
+   "file": "Creatures/spider/splat_3.wav",
+   "key": "snd.foley.spider.splat",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -26.94,
+   "lufs_m_max": -26.9,
+   "true_peak_dbtp": -12.11,
+   "length_s": 0.37,
+   "peak_ms": 35.9,
+   "sources": [
+    {
+     "file": "sonniss/Gamemaster Audio - Punch and Combat Sounds/punch_grit_wet_impact_05.wav",
+     "start": 0.008,
+     "end": 0.358,
+     "pitch_st": 2.0
+    },
+    {
+     "file": "spider/ichor_splat/slime_01.ogg",
+     "start": 0.034,
+     "end": 0.534,
+     "pitch_st": 2.0
+    }
+   ],
+   "anchor_ms": 6.2,
+   "element": "splat",
+   "category": "spider",
+   "variant": 3,
+   "source": "punch_grit_wet_impact_05.wav@0.00 +2st + slime_01.ogg@0.00",
+   "mix_db": -6.79
+  },
+  {
+   "file": "Creatures/spider/splat_4.wav",
+   "key": "snd.foley.spider.splat",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -26.04,
+   "lufs_m_max": -26.0,
+   "true_peak_dbtp": -11.62,
+   "length_s": 0.43,
+   "peak_ms": 96.1,
+   "sources": [
+    {
+     "file": "spider/ichor_splat/slime_06.ogg",
+     "start": 0.036,
+     "end": 0.448,
+     "pitch_st": -1.0
+    }
+   ],
+   "anchor_ms": 49.9,
+   "element": "splat",
+   "category": "spider",
+   "variant": 4,
+   "source": "slime_06.ogg@0.00 -1st",
+   "mix_db": -7.03
+  },
+  {
+   "file": "Creatures/spider/tap_1.wav",
+   "key": "snd.foley.spider.tap",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -30.04,
+   "lufs_m_max": -30.0,
+   "true_peak_dbtp": -5.76,
+   "length_s": 0.019,
+   "peak_ms": 2.1,
+   "sources": [
+    {
+     "file": "../Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 01_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.045,
+     "pitch_st": 15.0
+    }
+   ],
+   "anchor_ms": 1.2,
+   "element": "tap",
+   "category": "spider",
+   "variant": 1,
+   "source": "FEETHmn_HEELS-High Heels Wood Single Step 01_Ocular_Stride.wav@0.00 +15st",
+   "mix_db": -9.23
+  },
+  {
+   "file": "Creatures/spider/tap_2.wav",
+   "key": "snd.foley.spider.tap",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -30.04,
+   "lufs_m_max": -30.0,
+   "true_peak_dbtp": -4.59,
+   "length_s": 0.017,
+   "peak_ms": 1.3,
+   "sources": [
+    {
+     "file": "../Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 02_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.045,
+     "pitch_st": 17.0
+    }
+   ],
+   "anchor_ms": 0.9,
+   "element": "tap",
+   "category": "spider",
+   "variant": 2,
+   "source": "FEETHmn_HEELS-High Heels Wood Single Step 02_Ocular_Stride.wav@0.00 +17st",
+   "mix_db": -9.23
+  },
+  {
+   "file": "Creatures/spider/tap_3.wav",
+   "key": "snd.foley.spider.tap",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -30.04,
+   "lufs_m_max": -30.0,
+   "true_peak_dbtp": -5.14,
+   "length_s": 0.019,
+   "peak_ms": 1.6,
+   "sources": [
+    {
+     "file": "../Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 03_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.04,
+     "pitch_st": 13.0
+    }
+   ],
+   "anchor_ms": 1.0,
+   "element": "tap",
+   "category": "spider",
+   "variant": 3,
+   "source": "FEETHmn_HEELS-High Heels Wood Single Step 03_Ocular_Stride.wav@0.00 +13st",
+   "mix_db": -9.23
+  },
+  {
+   "file": "Creatures/spider/tap_4.wav",
+   "key": "snd.foley.spider.tap",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -30.04,
+   "lufs_m_max": -30.0,
+   "true_peak_dbtp": -2.31,
+   "length_s": 0.018,
+   "peak_ms": 1.7,
+   "sources": [
+    {
+     "file": "../Footsteps/High Heels/Concrete/FEETHmn_HEELS-High Heels Concrete Single Step 01_Ocular_Stride.wav",
+     "start": 0.012,
+     "end": 0.057,
+     "pitch_st": 16.0
+    }
+   ],
+   "anchor_ms": 1.4,
+   "element": "tap",
+   "category": "spider",
+   "variant": 4,
+   "source": "FEETHmn_HEELS-High Heels Concrete Single Step 01_Ocular_Stride.wav@0.00 +16st",
+   "mix_db": -9.23
+  },
+  {
+   "file": "Creatures/spider/tap_5.wav",
+   "key": "snd.foley.spider.tap",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -30.04,
+   "lufs_m_max": -30.0,
+   "true_peak_dbtp": -4.46,
+   "length_s": 0.014,
+   "peak_ms": 0.9,
+   "sources": [
+    {
+     "file": "../Footsteps/High Heels/Concrete/FEETHmn_HEELS-High Heels Concrete Single Step 02_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.04,
+     "pitch_st": 18.0
+    }
+   ],
+   "anchor_ms": 0.9,
+   "element": "tap",
+   "category": "spider",
+   "variant": 5,
+   "source": "FEETHmn_HEELS-High Heels Concrete Single Step 02_Ocular_Stride.wav@0.00 +18st",
+   "mix_db": -9.23
+  },
+  {
+   "file": "Creatures/spider/tap_6.wav",
+   "key": "snd.foley.spider.tap",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -30.04,
+   "lufs_m_max": -30.0,
+   "true_peak_dbtp": -6.68,
+   "length_s": 0.021,
+   "peak_ms": 12.0,
+   "sources": [
+    {
+     "file": "../Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 02_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.035,
+     "pitch_st": 19.0
+    },
+    {
+     "file": "../Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 01_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.03,
+     "pitch_st": 19.0
+    }
+   ],
+   "anchor_ms": 1.4,
+   "element": "tap",
+   "category": "spider",
+   "variant": 6,
+   "source": "FEETHmn_HEELS-High Heels Wood Single Step 02_Ocular_Stride.wav@0.00 +14st + FEETHmn_HEELS-High Heels Wood Single Step 01_Ocular_Stride.wav@0.00 +19st",
+   "mix_db": -9.23
+  },
+  {
+   "file": "Creatures/spider/thud_1.wav",
+   "key": "snd.foley.spider.thud",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -24.05,
+   "lufs_m_max": -24.01,
+   "true_peak_dbtp": -4.29,
+   "length_s": 0.258,
+   "peak_ms": 13.1,
+   "sources": [
+    {
+     "file": "sonniss/The Chris Alan - Hand-to-Hand Combat - Body Hits & Vocal Excursions/Hand-to-Hand Combat - Body Hits - Body Slam Floor 08.wav",
+     "start": 0.102,
+     "end": 0.446,
+     "pitch_st": 5.0
+    }
+   ],
+   "anchor_ms": 4.1,
+   "element": "thud",
+   "category": "spider",
+   "variant": 1,
+   "source": "Hand-to-Hand Combat - Body Hits - Body Slam Floor 08.wav@0.00 +5st",
+   "mix_db": -5.28
+  },
+  {
+   "file": "Creatures/spider/thud_2.wav",
+   "key": "snd.foley.spider.thud",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -24.1,
+   "lufs_m_max": -24.06,
+   "true_peak_dbtp": -8.24,
+   "length_s": 0.15,
+   "peak_ms": 37.0,
+   "sources": [
+    {
+     "file": "sonniss/Shapeforms - Hit & Punch/IMPACT_LOW_THUD_10.wav",
+     "start": 0.0,
+     "end": 0.205,
+     "pitch_st": 14.0
+    },
+    {
+     "file": "../Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 02_Ocular_Stride.wav",
+     "start": 0.0,
+     "end": 0.04,
+     "pitch_st": 14.0
+    }
+   ],
+   "anchor_ms": 10.8,
+   "element": "thud",
+   "category": "spider",
+   "variant": 2,
+   "source": "IMPACT_LOW_THUD_10.wav@0.00 +4st + FEETHmn_HEELS-High Heels Wood Single Step 02_Ocular_Stride.wav@0.00 +14st",
+   "mix_db": -5.17
+  },
+  {
+   "file": "Creatures/spider/thud_3.wav",
+   "key": "snd.foley.spider.thud",
+   "layer": "foley",
+   "channels": 1,
+   "sample_rate": 48000,
+   "lufs_i": -24.05,
+   "lufs_m_max": -24.01,
+   "true_peak_dbtp": -5.23,
+   "length_s": 0.252,
+   "peak_ms": 11.2,
+   "sources": [
+    {
+     "file": "sonniss/The Chris Alan - Hand-to-Hand Combat - Body Hits & Vocal Excursions/Hand-to-Hand Combat - Body Hits - Body Slam Floor 08.wav",
+     "start": 0.102,
+     "end": 0.446,
+     "pitch_st": 7.0
+    },
+    {
+     "file": "spider/body_thud/stomp_01.ogg",
+     "start": 0.0,
+     "end": 0.3,
+     "pitch_st": 7.0
+    }
+   ],
+   "anchor_ms": 3.7,
+   "element": "thud",
+   "category": "spider",
+   "variant": 3,
+   "source": "Hand-to-Hand Combat - Body Hits - Body Slam Floor 08.wav@0.00 +7st + stomp_01.ogg@0.00 +3st",
+   "mix_db": -4.85
+  },
+  {
    "file": "Foley/barefoot_carpet/run_1.wav",
    "key": "snd.foley.barefoot_carpet.run",
    "layer": "step",

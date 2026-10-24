@@ -1,0 +1,95 @@
+{
+  "_doc": "The enemy spider's sounds (Creatures/SpiderSystem): element -> variants; a variant is a list of layers summed. A file layer: src (relative to the Drive's Raw\\Audio folder, the parent of TARTARUS_AUDIO_SRC), t (cut start s, snapped to the onset at or after it), dur (s), at (placement in the output s, default 0), db (default 0), pitch (semitones, default 0), hp / lp (Hz). A noise layer (a hiss, synthesised): noise (s), band [lo, hi] Hz, attack / release (s), tremolo (Hz, the rattle in it; 0 none), db. Outputs Creatures/spider/<element>_<n>.wav, mono 48 kHz, key snd.foley.spider.<element> (it mixes as NPC foley), levelled to target_lufs_m per element. Credits: Raw\\Audio\\audio-src\\spider\\CREDITS.md and the packs' own licences.",
+  "target_lufs_m": {"tap": -30.0, "hiss": -24.0, "screech": -20.0, "bite": -22.0, "pounce": -24.0, "hurt": -22.0, "death": -20.0, "thud": -24.0, "splat": -26.0},
+  "tail_floor_db": -50.0,
+  "elements": {
+    "tap": [
+      [{"src": "Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 01_Ocular_Stride.wav", "t": 0.0, "dur": 0.045, "pitch": 15.0, "hp": 1400}],
+      [{"src": "Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 02_Ocular_Stride.wav", "t": 0.0, "dur": 0.045, "pitch": 17.0, "hp": 1600}],
+      [{"src": "Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 03_Ocular_Stride.wav", "t": 0.0, "dur": 0.04, "pitch": 13.0, "hp": 1200}],
+      [{"src": "Footsteps/High Heels/Concrete/FEETHmn_HEELS-High Heels Concrete Single Step 01_Ocular_Stride.wav", "t": 0.0, "dur": 0.045, "pitch": 16.0, "hp": 1500}],
+      [{"src": "Footsteps/High Heels/Concrete/FEETHmn_HEELS-High Heels Concrete Single Step 02_Ocular_Stride.wav", "t": 0.0, "dur": 0.04, "pitch": 18.0, "hp": 1800}],
+      [{"src": "Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 02_Ocular_Stride.wav", "t": 0.0, "dur": 0.035, "pitch": 14.0, "hp": 1300},
+       {"src": "Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 01_Ocular_Stride.wav", "t": 0.0, "dur": 0.03, "pitch": 19.0, "hp": 2000, "at": 0.011, "db": -6.0}]
+    ],
+    "hiss": [
+      [{"noise": 0.75, "band": [2600, 9500], "attack": 0.05, "release": 0.4, "tremolo": 26, "db": 0.0},
+       {"src": "audio-src/spider/screech/insectoralienshort_0.flac", "t": 0.0, "dur": 0.6, "pitch": -9.0, "hp": 1800, "db": -16.0}],
+      [{"noise": 0.6, "band": [3000, 11000], "attack": 0.03, "release": 0.3, "tremolo": 34, "db": 0.0},
+       {"src": "audio-src/spider/screech/insectoralien.flac", "t": 0.3, "dur": 0.5, "pitch": -7.0, "hp": 2200, "db": -18.0}],
+      [{"noise": 0.95, "band": [2200, 8000], "attack": 0.08, "release": 0.55, "tremolo": 20, "db": 0.0}],
+      [{"noise": 0.5, "band": [3500, 12000], "attack": 0.02, "release": 0.25, "tremolo": 40, "db": 0.0},
+       {"src": "audio-src/spider/screech/insectoralienshort_0.flac", "t": 0.1, "dur": 0.4, "pitch": -5.0, "hp": 2500, "db": -15.0}]
+    ],
+    "screech": [
+      [{"src": "audio-src/spider/screech/insectoralien.flac", "t": 0.0, "dur": 1.1, "pitch": -3.0, "hp": 300},
+       {"noise": 0.5, "band": [3000, 10000], "attack": 0.01, "release": 0.4, "tremolo": 30, "db": -12.0}],
+      [{"src": "audio-src/spider/screech/insectoralienshort_0.flac", "t": 0.0, "dur": 0.65, "pitch": -4.0, "hp": 300},
+       {"src": "audio-src/spider/screech/attack_04.ogg", "t": 0.0, "dur": 0.8, "pitch": -5.0, "hp": 400, "db": -10.0}],
+      [{"src": "audio-src/spider/screech/insectoralien.flac", "t": 0.4, "dur": 0.8, "pitch": -5.0, "hp": 300},
+       {"noise": 0.4, "band": [2500, 9000], "attack": 0.01, "release": 0.3, "tremolo": 24, "db": -12.0}],
+      [{"src": "audio-src/spider/screech/insectoralienshort_0.flac", "t": 0.0, "dur": 0.65, "pitch": -1.5, "hp": 400},
+       {"src": "audio-src/spider/screech/attack_03.ogg", "t": 0.0, "dur": 0.5, "pitch": -4.0, "hp": 400, "db": -11.0}]
+    ],
+    "bite": [
+      [{"src": "Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 01_Ocular_Stride.wav", "t": 0.0, "dur": 0.06, "pitch": 6.0, "hp": 500},
+       {"src": "audio-src/sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Hit_Body_Flesh_25.wav", "t": 0.0, "dur": 0.3, "at": 0.01, "db": -5.0},
+       {"src": "audio-src/spider/screech/attack_05.ogg", "t": 0.0, "dur": 0.13, "pitch": -3.0, "hp": 500, "db": -12.0}],
+      [{"src": "Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 03_Ocular_Stride.wav", "t": 0.0, "dur": 0.06, "pitch": 4.0, "hp": 450},
+       {"src": "audio-src/ae/ColdBore Flesh/FleshImpact_02.wav", "t": 0.0, "dur": 0.3, "at": 0.008, "db": -6.0}],
+      [{"src": "Footsteps/High Heels/Concrete/FEETHmn_HEELS-High Heels Concrete Single Step 02_Ocular_Stride.wav", "t": 0.0, "dur": 0.06, "pitch": 7.0, "hp": 600},
+       {"src": "audio-src/sonniss/Gamemaster Audio - Punch and Combat Sounds/punch_grit_wet_impact_05.wav", "t": 0.0, "dur": 0.3, "pitch": 3.0, "at": 0.01, "db": -7.0}],
+      [{"src": "Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 02_Ocular_Stride.wav", "t": 0.0, "dur": 0.06, "pitch": 5.0, "hp": 500},
+       {"src": "audio-src/ae/ColdBore Flesh/FleshImpact_05.wav", "t": 0.0, "dur": 0.3, "at": 0.01, "db": -6.0},
+       {"src": "audio-src/spider/bite/attack_03.ogg", "t": 0.0, "dur": 0.2, "pitch": -2.0, "hp": 600, "db": -13.0}]
+    ],
+    "pounce": [
+      [{"src": "audio-src/sonniss/Gamemaster Audio - Punch and Combat Sounds/whoosh_weapon_knife_swing_04.wav", "t": 0.0, "dur": 0.5, "pitch": -4.0, "hp": 150},
+       {"src": "audio-src/spider/screech/insectoralienshort_0.flac", "t": 0.0, "dur": 0.4, "pitch": 1.0, "hp": 800, "db": -13.0}],
+      [{"src": "audio-src/sonniss/David Dumais Audio - Weapon Sounds - Weapon Swings/MeleeSwingsPack_96khz_Stereo_HighSwings15.wav", "t": 0.0, "dur": 0.55, "pitch": -2.0, "hp": 150}],
+      [{"src": "audio-src/sonniss/David Dumais Audio - Weapon Sounds - Weapon Swings/MeleeSwingsPack_96khz_Mono_DesignedSwings12.wav", "t": 0.0, "dur": 0.6, "pitch": -5.0, "hp": 120},
+       {"noise": 0.3, "band": [3000, 9000], "attack": 0.01, "release": 0.25, "tremolo": 30, "db": -14.0}]
+    ],
+    "hurt": [
+      [{"src": "audio-src/ae/ColdBore Flesh/FleshImpact_01.wav", "t": 0.0, "dur": 0.3},
+       {"src": "audio-src/spider/screech/insectoralienshort_0.flac", "t": 0.05, "dur": 0.35, "pitch": 3.0, "hp": 600, "at": 0.03, "db": -7.0}],
+      [{"src": "audio-src/ae/ColdBore Flesh/FleshImpact_03.wav", "t": 0.0, "dur": 0.3},
+       {"src": "audio-src/spider/screech/insectoralien.flac", "t": 0.2, "dur": 0.35, "pitch": 4.0, "hp": 700, "at": 0.03, "db": -8.0}],
+      [{"src": "audio-src/ae/ColdBore Flesh/FleshImpact_04.wav", "t": 0.0, "dur": 0.3},
+       {"src": "audio-src/spider/screech/insectoralienshort_0.flac", "t": 0.2, "dur": 0.3, "pitch": 5.0, "hp": 700, "at": 0.025, "db": -8.0}],
+      [{"src": "audio-src/ae/ColdBore Flesh/FleshImpact_06.wav", "t": 0.0, "dur": 0.3},
+       {"noise": 0.3, "band": [3000, 10000], "attack": 0.005, "release": 0.25, "tremolo": 40, "at": 0.02, "db": -10.0}]
+    ],
+    "death": [
+      [{"src": "audio-src/spider/screech/insectoralien.flac", "t": 0.0, "dur": 1.25, "pitch": -7.0, "hp": 200, "lp": 7000},
+       {"src": "audio-src/ae/ColdBore Flesh/FleshImpact_02.wav", "t": 0.0, "dur": 0.3, "db": -6.0},
+       {"src": "Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 01_Ocular_Stride.wav", "t": 0.0, "dur": 0.04, "pitch": 16.0, "hp": 1500, "at": 0.9, "db": -9.0},
+       {"src": "Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 02_Ocular_Stride.wav", "t": 0.0, "dur": 0.04, "pitch": 18.0, "hp": 1700, "at": 1.02, "db": -11.0},
+       {"src": "Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 03_Ocular_Stride.wav", "t": 0.0, "dur": 0.04, "pitch": 15.0, "hp": 1400, "at": 1.11, "db": -12.0},
+       {"src": "Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 01_Ocular_Stride.wav", "t": 0.0, "dur": 0.04, "pitch": 19.0, "hp": 1800, "at": 1.26, "db": -15.0}],
+      [{"src": "audio-src/spider/screech/insectoralienshort_0.flac", "t": 0.0, "dur": 0.65, "pitch": -8.0, "hp": 200, "lp": 6000},
+       {"src": "audio-src/ae/ColdBore Flesh/FleshImpact_06.wav", "t": 0.0, "dur": 0.3, "db": -6.0},
+       {"src": "Footsteps/High Heels/Concrete/FEETHmn_HEELS-High Heels Concrete Single Step 01_Ocular_Stride.wav", "t": 0.0, "dur": 0.04, "pitch": 17.0, "hp": 1600, "at": 0.55, "db": -10.0},
+       {"src": "Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 02_Ocular_Stride.wav", "t": 0.0, "dur": 0.04, "pitch": 15.0, "hp": 1400, "at": 0.7, "db": -12.0},
+       {"src": "Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 03_Ocular_Stride.wav", "t": 0.0, "dur": 0.04, "pitch": 18.0, "hp": 1700, "at": 0.78, "db": -14.0}],
+      [{"src": "audio-src/spider/screech/insectoralien.flac", "t": 0.25, "dur": 0.95, "pitch": -9.0, "hp": 200, "lp": 5500},
+       {"src": "audio-src/sonniss/PMSFX - Bullet Bys &Impacts/PM_BBI_Bullet_Impact_Hit_Body_Flesh_25.wav", "t": 0.0, "dur": 0.3, "db": -6.0},
+       {"src": "Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 01_Ocular_Stride.wav", "t": 0.0, "dur": 0.04, "pitch": 16.0, "hp": 1500, "at": 0.85, "db": -10.0},
+       {"src": "Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 02_Ocular_Stride.wav", "t": 0.0, "dur": 0.04, "pitch": 14.0, "hp": 1300, "at": 0.97, "db": -12.0}]
+    ],
+    "thud": [
+      [{"src": "audio-src/sonniss/The Chris Alan - Hand-to-Hand Combat - Body Hits & Vocal Excursions/Hand-to-Hand Combat - Body Hits - Body Slam Floor 08.wav", "t": 0.0, "dur": 0.45, "pitch": 5.0, "hp": 90}],
+      [{"src": "audio-src/sonniss/Shapeforms - Hit & Punch/IMPACT_LOW_THUD_10.wav", "t": 0.0, "dur": 0.4, "pitch": 4.0, "hp": 90},
+       {"src": "Footsteps/High Heels/Wood/FEETHmn_HEELS-High Heels Wood Single Step 02_Ocular_Stride.wav", "t": 0.0, "dur": 0.04, "pitch": 14.0, "hp": 1400, "at": 0.02, "db": -10.0}],
+      [{"src": "audio-src/sonniss/The Chris Alan - Hand-to-Hand Combat - Body Hits & Vocal Excursions/Hand-to-Hand Combat - Body Hits - Body Slam Floor 08.wav", "t": 0.0, "dur": 0.4, "pitch": 7.0, "hp": 120},
+       {"src": "audio-src/spider/body_thud/stomp_01.ogg", "t": 0.0, "dur": 0.3, "pitch": 3.0, "db": -8.0}]
+    ],
+    "splat": [
+      [{"src": "audio-src/spider/ichor_splat/slime_02.ogg", "t": 0.0, "dur": 0.5}],
+      [{"src": "audio-src/spider/ichor_splat/slime_03.ogg", "t": 0.0, "dur": 0.45}],
+      [{"src": "audio-src/sonniss/Gamemaster Audio - Punch and Combat Sounds/punch_grit_wet_impact_05.wav", "t": 0.0, "dur": 0.35, "pitch": 2.0},
+       {"src": "audio-src/spider/ichor_splat/slime_01.ogg", "t": 0.0, "dur": 0.5, "db": -6.0}],
+      [{"src": "audio-src/spider/ichor_splat/slime_06.ogg", "t": 0.0, "dur": 0.45, "pitch": -1.0}]
+    ]
+  }
+}

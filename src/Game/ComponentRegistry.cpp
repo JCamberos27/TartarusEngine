@@ -196,12 +196,23 @@ void RegisterEngineComponents() {
               "Hits register but take nothing." },
         },
     });
-    Register<SpiderComponent>({
+    {
+    ReflectComponent sm{
         "Spider", ICON_FA_SPIDER,
         "An enemy spider, on a spider prefab's root (its model and Animator Controller on a child).\n"
-        "In Play it sticks to floors, walls and ceilings, and its eight legs step with IK.",
+        "In Play it sticks to floors, walls and ceilings, and its eight legs step with IK. A hunter perches on the\n"
+        "ceiling, stalks the player over walls and ceilings, drops on them from above, pounces and bites.",
         "AI",
         {
+            { "Brain", T::Enum, TARTARUS_REFLECT_FIELD(SpiderComponent, Brain), 0.0f,
+              "Hunter: its own AI. Scripted: it only goes where code sends it (tests, cutscenes)." },
+            { "Sight Range", T::Float, TARTARUS_REFLECT_FIELD(SpiderComponent, SightRange), 0.1f,
+              "Metres it sees the player within, given a clear line.", 1.0f, 60.0f },
+            { "Bite Damage", T::Float, TARTARUS_REFLECT_FIELD(SpiderComponent, BiteDamage), 0.5f, "Damage a bite does.", 0.0f, 200.0f },
+            { "Pounce Damage", T::Float, TARTARUS_REFLECT_FIELD(SpiderComponent, PounceDamage), 0.5f,
+              "Damage a pounce or a drop from above does when it lands on the player.", 0.0f, 200.0f },
+            { "Knockback", T::Float, TARTARUS_REFLECT_FIELD(SpiderComponent, Knockback), 0.05f,
+              "Metres per second a bite shoves the player back (a pounce half as much again).", 0.0f, 20.0f },
             { "Rig", T::String, TARTARUS_REFLECT_FIELD(SpiderComponent, Rig), 0.0f,
               "The rig file naming its leg bones and gait groups (.rig.json)." },
             { "Walk Speed", T::Float, TARTARUS_REFLECT_FIELD(SpiderComponent, WalkSpeed), 0.01f, "Metres per second at a walk.", 0.05f, 10.0f },
@@ -214,7 +225,11 @@ void RegisterEngineComponents() {
             { "Leg IK", T::Bool, TARTARUS_REFLECT_FIELD(SpiderComponent, LegIK), 0.0f,
               "Off: the legs play the clips as authored instead of stepping on the surface." },
         },
-    });
+    };
+    sm.Fields[0].EnumLabels = "Hunter\0Scripted\0";
+    sm.Fields[0].EnumCount = 2;
+    Register<SpiderComponent>(std::move(sm));
+    }
     {
         ReflectComponent m;
         m.Name = "NPC Spawn"; m.Icon = ICON_FA_PERSON_RIFLE; m.Category = "AI";
