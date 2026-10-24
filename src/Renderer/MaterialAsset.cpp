@@ -11,6 +11,7 @@
 
 #include <json.hpp>
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <unordered_set>
@@ -323,6 +324,18 @@ std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::st
     m.SpecularHighlights = r.Bool(key("_SpecularHighlights", "specularHighlights"), true);
     m.GlossyReflections  = r.Bool(key("_GlossyReflections", "glossyReflections"), true);
     m.ParallaxScale  = r.Num(key("_ParallaxScale", "parallaxScale"), 0.02f);
+    // Shell fur (Material::FurDesc); a missing key is the default, so older files load without it.
+    {
+        const Material::FurDesc def;
+        m.Fur.Enabled = r.Bool(key("_FurEnabled", "furEnabled"), def.Enabled);
+        m.Fur.Length  = std::max(0.0f, r.Num(key("_FurLength", "furLength"), def.Length));
+        m.Fur.Density = std::max(1.0f, r.Num(key("_FurDensity", "furDensity"), def.Density));
+        m.Fur.Shells  = std::clamp((int)std::lround(r.Num(key("_FurShells", "furShells"), (float)def.Shells)), 0, Material::kMaxFurShells);
+        m.Fur.Gravity = r.Num(key("_FurGravity", "furGravity"), def.Gravity);
+        m.Fur.Tint    = r.Vec3(key("_FurTint", "furTint"), def.Tint);
+        m.Fur.Rim     = std::max(0.0f, r.Num(key("_FurRim", "furRim"), def.Rim));
+        ma->FurMaskPath = r.Str(key("_FurMask", "furMask"));
+    }
 
     if (lib) {
         // A project-relative path (what Save writes, so .mat files are portable) resolves
@@ -347,6 +360,7 @@ std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::st
         m.DetailAlbedoMap      = loadTex(ma->DetailAlbedoMapPath, Use::Color);
         m.DetailNormalMap      = loadTex(ma->DetailNormalMapPath, Use::Normal);
         m.GrungeMap            = loadTex(ma->GrungeMapPath, Use::Color);
+        m.Fur.Mask             = loadTex(ma->FurMaskPath);
 
         // Resolve shader asset when path is set (AssetLibrary handles caching). A project-
         // relative "shader" value is resolved against the project root so a .mat works from any
@@ -490,6 +504,18 @@ bool MaterialAsset::Save() const {
         if (m.IOR                  != 1.5f)         props["_IOR"]                     = m.IOR;
         if (m.SubsurfaceEnabled)                    props["_SubsurfaceEnabled"]      = true;
         if (m.ReflectionProbes)                     props["_ReflectionProbes"]       = true;
+        // Shell fur: non-defaults only, so a material without fur saves exactly as before.
+        {
+            const Material::FurDesc def;
+            if (m.Fur.Enabled != def.Enabled) props["_FurEnabled"] = m.Fur.Enabled;
+            if (m.Fur.Length  != def.Length)  props["_FurLength"]  = m.Fur.Length;
+            if (m.Fur.Density != def.Density) props["_FurDensity"] = m.Fur.Density;
+            if (m.Fur.Shells  != def.Shells)  props["_FurShells"]  = m.Fur.Shells;
+            if (m.Fur.Gravity != def.Gravity) props["_FurGravity"] = m.Fur.Gravity;
+            if (m.Fur.Tint    != def.Tint)    props["_FurTint"]    = Vec3ToJson(m.Fur.Tint);
+            if (m.Fur.Rim     != def.Rim)     props["_FurRim"]     = m.Fur.Rim;
+            if (!FurMaskPath.empty())         props["_FurMask"]    = FurMaskPath;
+        }
 
         // Non-builtin linked-shader properties (#354).
         for (const auto& [name, p] : m.ExtraProps) {
@@ -599,6 +625,7 @@ bool MaterialAsset::IsBuiltinProp(const std::string& n) {
         "_SpecularHighlights", "_GlossyReflections",
         "_HeightMap", "_ParallaxScale", "_DetailAlbedoMap", "_DetailNormalMap", "_DetailTiling",
         "_GrungeMap", "_GrungeStrength", "_GrungeScale", "_ReceiveDecals",
+        "_FurEnabled", "_FurLength", "_FurDensity", "_FurShells", "_FurMask", "_FurGravity", "_FurTint", "_FurRim",
     };
     return kBuiltin.count(n) != 0;
 }
@@ -618,6 +645,7 @@ const std::shared_ptr<Texture>& MaterialAsset::GetTexture(const Material& m, con
     if (n == "_DetailAlbedoMap")      return m.DetailAlbedoMap;
     if (n == "_DetailNormalMap")      return m.DetailNormalMap;
     if (n == "_GrungeMap")            return m.GrungeMap;
+    if (n == "_FurMask")              return m.Fur.Mask;
     auto it = m.ExtraProps.find(n);
     return it != m.ExtraProps.end() ? it->second.Tex : sNull;
 }
@@ -627,6 +655,7 @@ glm::vec3 MaterialAsset::GetColor(const Material& m, const std::string& n) {
     if (n == "_EmissiveColor")  return m.EmissiveColor * m.EmissiveStrength; // pre-multiply
     if (n == "_Sheen")          return m.Sheen;
     if (n == "_SubsurfaceColor")return m.SubsurfaceColor;
+    if (n == "_FurTint")        return m.Fur.Tint;
     auto it = m.ExtraProps.find(n);
     return it != m.ExtraProps.end() ? glm::vec3(it->second.V) : glm::vec3(0.0f);
 }
@@ -637,6 +666,7 @@ glm::vec3 MaterialAsset::GetAuthoredColor(const Material& m, const std::string& 
 }
 
 int MaterialAsset::GetInt(const Material& m, const std::string& n) {
+    if (n == "_FurShells") return m.Fur.Shells;
     auto it = m.ExtraProps.find(n);
     return it != m.ExtraProps.end() ? it->second.I : 0;
 }
@@ -650,6 +680,7 @@ glm::vec4 MaterialAsset::GetVec(const Material& m, const std::string& n) {
 }
 
 void MaterialAsset::SetInt(Material& m, const std::string& n, int v) {
+    if (n == "_FurShells") { m.Fur.Shells = std::clamp(v, 0, Material::kMaxFurShells); return; }
     auto it = m.ExtraProps.find(n);
     if (it != m.ExtraProps.end()) { it->second.I = v; it->second.F = (float)v; }
 }
@@ -677,6 +708,7 @@ void MaterialAsset::SyncTexturePathsFromMat() {
     DetailAlbedoMapPath      = pathOf(Mat.DetailAlbedoMap);
     DetailNormalMapPath      = pathOf(Mat.DetailNormalMap);
     GrungeMapPath            = pathOf(Mat.GrungeMap);
+    FurMaskPath              = pathOf(Mat.Fur.Mask);
     for (auto& [name, p] : Mat.ExtraProps)
         if (p.Type == ShaderPropType::Texture2D) p.TexPath = pathOf(p.Tex);
 }
@@ -698,6 +730,11 @@ float MaterialAsset::GetFloat(const Material& m, const std::string& n) {
     if (n == "_ParallaxScale")           return m.ParallaxScale;
     if (n == "_GrungeStrength")          return m.GrungeStrength;
     if (n == "_GrungeScale")             return m.GrungeScale;
+    if (n == "_FurLength")               return m.Fur.Length;
+    if (n == "_FurDensity")              return m.Fur.Density;
+    if (n == "_FurGravity")              return m.Fur.Gravity;
+    if (n == "_FurRim")                  return m.Fur.Rim;
+    if (n == "_FurShells")               return (float)m.Fur.Shells;
     auto it = m.ExtraProps.find(n);
     return it != m.ExtraProps.end() ? it->second.F : 0.0f;
 }
@@ -710,6 +747,7 @@ bool MaterialAsset::GetBool(const Material& m, const std::string& n) {
     if (n == "_SpecularHighlights") return m.SpecularHighlights;
     if (n == "_GlossyReflections") return m.GlossyReflections;
     if (n == "_ReceiveDecals") return m.ReceiveDecals;
+    if (n == "_FurEnabled") return m.Fur.Enabled;
     auto it = m.ExtraProps.find(n);
     return it != m.ExtraProps.end() && it->second.B;
 }
@@ -736,12 +774,14 @@ void MaterialAsset::ResolveBuiltin(const std::string& n, ShaderPropType type,
         {"_DetailAlbedoMap",      [](const Material& m) -> const std::shared_ptr<Texture>& { return m.DetailAlbedoMap; }},
         {"_DetailNormalMap",      [](const Material& m) -> const std::shared_ptr<Texture>& { return m.DetailNormalMap; }},
         {"_GrungeMap",            [](const Material& m) -> const std::shared_ptr<Texture>& { return m.GrungeMap; }},
+        {"_FurMask",              [](const Material& m) -> const std::shared_ptr<Texture>& { return m.Fur.Mask; }},
     };
     static const ValEntry kColor[] = {
         {"_BaseColor",       [](const Material& m) { return glm::vec4(m.BaseColor, 0.0f); }},
         {"_EmissiveColor",   [](const Material& m) { return glm::vec4(m.EmissiveColor * m.EmissiveStrength, 0.0f); }},
         {"_Sheen",           [](const Material& m) { return glm::vec4(m.Sheen, 0.0f); }},
         {"_SubsurfaceColor", [](const Material& m) { return glm::vec4(m.SubsurfaceColor, 0.0f); }},
+        {"_FurTint",         [](const Material& m) { return glm::vec4(m.Fur.Tint, 0.0f); }},
     };
     static const ValEntry kVec[] = {
         {"_UVTiling",     [](const Material& m) { return glm::vec4(m.UVTiling, 0.0f, 0.0f); }},
@@ -765,6 +805,10 @@ void MaterialAsset::ResolveBuiltin(const std::string& n, ShaderPropType type,
         {"_ParallaxScale",        [](const Material& m) { return glm::vec4(m.ParallaxScale, 0, 0, 0); }},
         {"_GrungeStrength",       [](const Material& m) { return glm::vec4(m.GrungeStrength, 0, 0, 0); }},
         {"_GrungeScale",          [](const Material& m) { return glm::vec4(m.GrungeScale, 0, 0, 0); }},
+        {"_FurLength",            [](const Material& m) { return glm::vec4(m.Fur.Length, 0, 0, 0); }},
+        {"_FurDensity",           [](const Material& m) { return glm::vec4(m.Fur.Density, 0, 0, 0); }},
+        {"_FurGravity",           [](const Material& m) { return glm::vec4(m.Fur.Gravity, 0, 0, 0); }},
+        {"_FurRim",               [](const Material& m) { return glm::vec4(m.Fur.Rim, 0, 0, 0); }},
     };
     static const ValEntry kBool[] = {
         {"_Triplanar",          [](const Material& m) { return glm::vec4(m.Triplanar ? 1.0f : 0.0f, 0, 0, 0); }},
@@ -774,6 +818,8 @@ void MaterialAsset::ResolveBuiltin(const std::string& n, ShaderPropType type,
         {"_SpecularHighlights", [](const Material& m) { return glm::vec4(m.SpecularHighlights ? 1.0f : 0.0f, 0, 0, 0); }},
         {"_GlossyReflections",  [](const Material& m) { return glm::vec4(m.GlossyReflections ? 1.0f : 0.0f, 0, 0, 0); }},
         {"_ReceiveDecals",      [](const Material& m) { return glm::vec4(m.ReceiveDecals ? 1.0f : 0.0f, 0, 0, 0); }},
+        {"_FurEnabled",         [](const Material& m) { return glm::vec4(m.Fur.Enabled ? 1.0f : 0.0f, 0, 0, 0); }},
+        {"_FurShells",          [](const Material& m) { return glm::vec4((float)m.Fur.Shells, 0, 0, 0); }}, // Int
     };
     tex = nullptr;
     val = nullptr;
@@ -809,6 +855,7 @@ void MaterialAsset::SetTexture(Material& m, const std::string& n, const std::sha
     if (n == "_DetailAlbedoMap")      { m.DetailAlbedoMap = tex; return; }
     if (n == "_DetailNormalMap")      { m.DetailNormalMap = tex; return; }
     if (n == "_GrungeMap")            { m.GrungeMap = tex; return; }
+    if (n == "_FurMask")              { m.Fur.Mask = tex; return; }
     auto it = m.ExtraProps.find(n);
     if (it != m.ExtraProps.end()) { it->second.Tex = tex; it->second.TexPath = tex ? tex->Path() : std::string(); }
 }
@@ -818,6 +865,7 @@ void MaterialAsset::SetColor(Material& m, const std::string& n, const glm::vec3&
     if (n == "_EmissiveColor")   { m.EmissiveColor = v; return; }
     if (n == "_Sheen")           { m.Sheen = v; return; }
     if (n == "_SubsurfaceColor") { m.SubsurfaceColor = v; return; }
+    if (n == "_FurTint")         { m.Fur.Tint = v; return; }
     auto it = m.ExtraProps.find(n);
     if (it != m.ExtraProps.end()) it->second.V = glm::vec4(v, it->second.V.w);
 }
@@ -839,6 +887,11 @@ void MaterialAsset::SetFloat(Material& m, const std::string& n, float v) {
     if (n == "_ParallaxScale")           { m.ParallaxScale = v; return; }
     if (n == "_GrungeStrength")          { m.GrungeStrength = v; return; }
     if (n == "_GrungeScale")             { m.GrungeScale = v; return; }
+    if (n == "_FurLength")               { m.Fur.Length = std::max(0.0f, v); return; }
+    if (n == "_FurDensity")              { m.Fur.Density = std::max(1.0f, v); return; }
+    if (n == "_FurGravity")              { m.Fur.Gravity = v; return; }
+    if (n == "_FurRim")                  { m.Fur.Rim = std::max(0.0f, v); return; }
+    if (n == "_FurShells")               { m.Fur.Shells = std::clamp((int)std::lround(v), 0, Material::kMaxFurShells); return; }
     auto it = m.ExtraProps.find(n);
     if (it != m.ExtraProps.end()) { it->second.F = v; it->second.I = (int)v; }
 }
@@ -851,6 +904,7 @@ void MaterialAsset::SetBool(Material& m, const std::string& n, bool v) {
     if (n == "_SpecularHighlights") { m.SpecularHighlights = v; return; }
     if (n == "_GlossyReflections") { m.GlossyReflections = v; return; }
     if (n == "_ReceiveDecals") { m.ReceiveDecals = v; return; }
+    if (n == "_FurEnabled") { m.Fur.Enabled = v; return; }
     auto it = m.ExtraProps.find(n);
     if (it != m.ExtraProps.end()) it->second.B = v;
 }

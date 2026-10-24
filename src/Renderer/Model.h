@@ -393,6 +393,13 @@ public:
                       const std::function<void(Shader&)>& onProgramBound = {},
                       MeshPass pass = MeshPass::All, bool forceDoubleSided = false,
                       const VisibleIndexBuffer* visible = nullptr, int instances = 1);
+    // Shell fur (FurRenderer): binds the model's skin (this frame's pre-skinned vertices or its bone palette) and
+    // `xform` on `prog` the way DrawSelected does, then draws each opaque sub-mesh whose material has fur on as
+    // `bind`'s return value of instances - one per shell (0 skips it). `bind` sets that material's uniforms.
+    // Returns the triangles drawn.
+    using FurBindFn = int (*)(Shader& prog, const Material& mat, void* user);
+    long long DrawFurShells(Shader& prog, const glm::mat4& xform, const std::vector<std::shared_ptr<MaterialAsset>>& slots,
+                            FurBindFn bind, void* user);
     int MeshCount() const { return (int)m_D->Meshes.size(); }
     // Sub-mesh `index`'s triangle indices, local to it (ModelMesh::LocalIndices).
     const std::vector<unsigned int>& MeshLocalIndices(int index) const { return m_D->Meshes[index]->LocalIndices(); }
