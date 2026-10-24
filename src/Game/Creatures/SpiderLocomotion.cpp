@@ -160,6 +160,20 @@ void Mover::Fall(const SurfaceQuery& q, const MoverSettings& s, float dt) {
     m_SurfaceGap = -1.0f;
 }
 
+void Mover::Detach(const glm::vec3& velocity) {
+    if (!m_Attached) {
+        m_Vel += velocity;
+        return;
+    }
+    m_Pos += Up() * 0.12f;
+    m_Vel = velocity;
+    m_Attached = false;
+    m_Arrived = false;
+    m_Speed = 0.0f;
+    m_Unsupported = 0.0f;
+    m_SurfaceGap = -1.0f;
+}
+
 // ---- legs ----
 
 void Gait::Init(const std::array<LegRest, kLegs>& rest, const glm::mat4& model) {
@@ -349,7 +363,75 @@ bool ParseRig(const std::string& text, RigDef& out, std::string* error) {
                 if (name.is_string() && name.get<std::string>() == out.LegNames[(size_t)i]) out.LegGroup[(size_t)i] = g;
     for (int i = 0; i < kLegs; ++i)
         if (out.LegGroup[(size_t)i] < 0) return fail("a leg is in no gait group");
+
+    // The body parts (optional): named, their parents by name, resolved once all are read.
+    auto zoneOf = [](const std::string& z, PartZone& out) {
+        for (int k = 0; k < kZones; ++k)
+            if (z == ZoneName((PartZone)k)) { out = (PartZone)k; return true; }
+        return false;
+    };
+    if (const auto zs = j.find("zones"); zs != j.end() && zs->is_object())
+        for (int k = 0; k < kZones; ++k) {
+            const auto z = zs->find(ZoneName((PartZone)k));
+            if (z == zs->end() || !z->is_object()) continue;
+            out.ZoneMultiplier[k] = z->value("damage", out.ZoneMultiplier[k]);
+            out.FlinchDeg[k] = z->value("flinch", out.FlinchDeg[k]);
+        }
+    out.FlinchTime = std::max(0.05f, j.value("flinchTime", out.FlinchTime));
+    if (const auto ps = j.find("parts"); ps != j.end()) {
+        if (!ps->is_array()) return fail("parts isn't an array");
+        if (ps->size() > (size_t)kMaxParts) return fail("more than 32 parts");
+        std::vector<std::string> parents;
+        for (const auto& p : *ps) {
+            if (!p.is_object()) return fail("a part isn't an object");
+            PartDef d;
+            d.Name = p.value("name", std::string());
+            d.Bone = p.value("bone", std::string());
+            d.Start = p.value("start", std::string());
+            d.End = p.value("end", std::string());
+            d.Length = p.value("length", 0.0f);
+            d.Radius = p.value("radius", d.Radius);
+            d.Mass = p.value("mass", d.Mass);
+            d.Swing = p.value("swing", d.Swing);
+            d.Twist = p.value("twist", d.Twist);
+            d.Curl = p.value("curl", d.Curl);
+            d.Segment = p.value("segment", 0);
+            if (d.Name.empty() || d.Bone.empty()) return fail("a part needs a name and a bone");
+            if (d.End.empty() && d.Length <= 0.0f) return fail("a part needs an end bone or a length");
+            if (!(d.Radius > 0.0f) || !(d.Mass > 0.0f)) return fail("a part needs a radius and a mass");
+            if (!zoneOf(p.value("zone", std::string("leg")), d.Zone)) return fail("a part's zone is head, abdomen or leg");
+            const std::string leg = p.value("leg", std::string());
+            for (int i = 0; i < kLegs && !leg.empty(); ++i)
+                if (out.LegNames[(size_t)i] == leg) d.Leg = i;
+            if (!leg.empty() && d.Leg < 0) return fail("a part names a leg the rig hasn't");
+            parents.push_back(p.value("parent", std::string()));
+            out.Parts.push_back(std::move(d));
+        }
+        int roots = 0;
+        for (size_t i = 0; i < out.Parts.size(); ++i) {
+            if (parents[i].empty()) { ++roots; continue; }
+            for (size_t k = 0; k < out.Parts.size(); ++k)
+                if (k != i && out.Parts[k].Name == parents[i]) out.Parts[i].Parent = (int)k;
+            if (out.Parts[i].Parent < 0) return fail("a part's parent isn't a part");
+        }
+        if (!out.Parts.empty() && roots != 1) return fail("the parts need exactly one root");
+        // No loops: every part reaches the root within the part count.
+        for (size_t i = 0; i < out.Parts.size(); ++i) {
+            int at = (int)i, guard = 0;
+            while (at >= 0 && guard++ <= (int)out.Parts.size()) at = out.Parts[(size_t)at].Parent;
+            if (at >= 0) return fail("the parts' parents loop");
+        }
+    }
     return true;
+}
+
+const char* ZoneName(PartZone z) {
+    switch (z) {
+    case PartZone::Head: return "head";
+    case PartZone::Abdomen: return "abdomen";
+    case PartZone::Leg: return "leg";
+    }
+    return "leg";
 }
 
 } // namespace Spider

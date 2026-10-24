@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <functional>
+#include <memory>
 
 #include <glm/glm.hpp>
 
@@ -15,6 +16,8 @@ struct Npc;
 class Player;
 class PlayerVitals;
 class SpiderSystem;
+class SpiderDamage;
+class BloodFx;
 class World;
 
 // --npc-test [scenario] [--smoke-shots dir]: the enemy squad, headless, in scenes/Arena.json. The host
@@ -88,8 +91,8 @@ public:
     bool Aiming() const { return !m_Target.empty(); }   // sights up (rounds go where the view looks)
     bool WantsReload() const { return m_Reload; }
     bool WantsAiOverlay() const { return m_Scenario == "sandbox"; } // the AI overlay in the sandbox shots
-    bool RunsWithoutSquad() const { return m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "spider"; } // After() even in a scene with no squad
-    bool WantsCleanViews() const { return m_Scenario == "blood" || m_Scenario == "ragdoll" || m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "spider"; } // no collider / physics-debug overlays
+    bool RunsWithoutSquad() const { return m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "spider" || m_Scenario == "spiderdeath"; } // After() even in a scene with no squad
+    bool WantsCleanViews() const { return m_Scenario == "blood" || m_Scenario == "ragdoll" || m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "spider" || m_Scenario == "spiderdeath"; } // no collider / physics-debug overlays
     // Time stands still this frame (the host steps the game by zero): the ragdoll scenario's multi-angle shots of one moment.
     bool Frozen() const { return m_RFreeze; }
     // The blood scenario's view of the blood, filled by the host each frame.
@@ -131,6 +134,12 @@ public:
     // build), and the system running it (NpcTest_Spider.cpp).
     std::function<std::uint32_t(const glm::vec3& pos, float yawDeg)> SpawnSpider;
     SpiderSystem* Spiders = nullptr;
+    // --npc-test spiderdeath: a round of `damage` (x `pellets`) fired from `from` along `dir` down the host's player-round
+    // path (what it strikes: a spider's hitboxes take the damage and throw the ichor; anything else, a hole). Returns the
+    // entity struck (0xFFFFFFFF: a miss) and, for a spider, whether it was claimed as one.
+    std::function<std::uint32_t(const glm::vec3& from, const glm::vec3& dir, float damage, int pellets, bool& spider)> ShootSpider;
+    const SpiderDamage* SpiderHurt = nullptr;
+    const BloodFx* BloodFxView = nullptr;
 
 private:
     void Check(bool ok, const std::string& what);
@@ -178,6 +187,11 @@ private:
     };
     void SpiderRoute(World& world);
     void SpiderSetUp(World& world);
+    // spiderdeath (NpcTest_SpiderDeath.cpp): spiders shot in 301's living room - a leg, the abdomen, the head; one killed
+    // on the ceiling, one knocked off a wall
+    struct SpiderDeathRun;
+    std::shared_ptr<SpiderDeathRun> m_SD;
+    void SpiderDeath(World& world);
     std::uint32_t m_SRoot = 0xFFFFFFFFu;
     std::vector<SpiderLeg> m_SLegs;
     int m_SLeg = 0, m_SWorstRays = 0;
