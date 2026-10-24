@@ -222,7 +222,7 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
         ai.Hold = true;
         if (ai.Clock >= 0.45f) {
             const float flight = std::clamp(dist / 7.0f, 0.35f, 0.6f);
-            const glm::vec3 aim = t.Feet + t.Velocity * (flight * 0.6f) + glm::vec3(0.0f, 0.3f, 0.0f);
+            const glm::vec3 aim = t.Feet + t.Velocity * (flight * 0.6f) + glm::vec3(0.0f, 0.8f, 0.0f); // at the chest
             glm::vec3 v = (aim - pos) / flight;
             v.y += 0.5f * kGravity * flight;
             b.Mover.Detach(v);
@@ -237,7 +237,12 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
     }
     case Mode::Leap: {
         sc.HasGoal = false;
-        if (!ai.Struck && target && ToPlayer(pos + up * 0.15f, t) < 0.35f) {
+        // Swept along this frame's flight (it covers a hand's width a frame), against the reach of a body with legs
+        // spread wide: a leap that passes within half a metre of the player has them.
+        const glm::vec3 flightStep = b.Mover.Velocity() * dt;
+        const float near = std::min({ToPlayer(pos + up * 0.15f, t), ToPlayer(pos + up * 0.15f + flightStep * 0.5f, t),
+                                     ToPlayer(pos + up * 0.15f + flightStep, t)});
+        if (!ai.Struck && target && near < 0.5f) {
             strike(sc.PounceDamage, Flat(t.Feet - pos) * (sc.Knockback * 1.5f) + glm::vec3(0.0f, 1.5f, 0.0f), true);
             ++(ai.FromDrop ? b.Last.Drops : b.Last.Pounces);
             ai.Landed = true;
