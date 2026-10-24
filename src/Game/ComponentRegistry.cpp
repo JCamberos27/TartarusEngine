@@ -196,6 +196,25 @@ void RegisterEngineComponents() {
               "Hits register but take nothing." },
         },
     });
+    Register<SpiderComponent>({
+        "Spider", ICON_FA_SPIDER,
+        "An enemy spider, on a spider prefab's root (its model and Animator Controller on a child).\n"
+        "In Play it sticks to floors, walls and ceilings, and its eight legs step with IK.",
+        "AI",
+        {
+            { "Rig", T::String, TARTARUS_REFLECT_FIELD(SpiderComponent, Rig), 0.0f,
+              "The rig file naming its leg bones and gait groups (.rig.json)." },
+            { "Walk Speed", T::Float, TARTARUS_REFLECT_FIELD(SpiderComponent, WalkSpeed), 0.01f, "Metres per second at a walk.", 0.05f, 10.0f },
+            { "Run Speed", T::Float, TARTARUS_REFLECT_FIELD(SpiderComponent, RunSpeed), 0.01f, "Metres per second at a run.", 0.05f, 15.0f },
+            { "Turn Rate", T::Float, TARTARUS_REFLECT_FIELD(SpiderComponent, TurnRate), 1.0f, "Degrees per second it turns.", 10.0f, 1440.0f },
+            { "Step Height", T::Float, TARTARUS_REFLECT_FIELD(SpiderComponent, StepHeight), 0.005f,
+              "Metres a foot lifts off the surface mid-step.", 0.0f, 0.5f },
+            { "Step Time", T::Float, TARTARUS_REFLECT_FIELD(SpiderComponent, StepTime), 0.005f,
+              "Seconds a step takes at a walk (shorter when it runs).", 0.05f, 1.0f },
+            { "Leg IK", T::Bool, TARTARUS_REFLECT_FIELD(SpiderComponent, LegIK), 0.0f,
+              "Off: the legs play the clips as authored instead of stepping on the surface." },
+        },
+    });
     {
         ReflectComponent m;
         m.Name = "NPC Spawn"; m.Icon = ICON_FA_PERSON_RIFLE; m.Category = "AI";
