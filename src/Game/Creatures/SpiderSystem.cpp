@@ -6,6 +6,7 @@
 #include "GameModuleAPI.h" // RaycastHit, QueryFilter
 #include "Log.h"
 #include "Model.h"
+#include "Openable.h"
 #include "PhysicsWorld.h"
 #include "Profiler.h"
 #include "ProjectPaths.h"
@@ -13,6 +14,8 @@
 #include "World.h"
 
 #include <algorithm>
+#include <cstdio>
+#include <cstdlib>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -44,6 +47,16 @@ void CollectBarriers(const World& world, std::vector<Spider::Barrier>& out) {
         b.Half = 0.5f * glm::abs(hi - lo) * scale + glm::vec3(std::max(0.0f, reg.get<CreatureBarrierComponent>(e).Padding));
         out.push_back(b);
     }
+}
+
+// The openable a hit belongs to: the entity hit, or a parent of it (a door's collider on a child of its leaf).
+entt::entity OpenableOf(const World& world, entt::entity e) {
+    for (int i = 0; i < 4 && e != entt::null && world.Registry.valid(e); ++i) {
+        if (world.Registry.all_of<OpenableComponent>(e)) return e;
+        const auto* h = world.Registry.try_get<HierarchyComponent>(e);
+        e = h ? h->Parent : entt::null;
+    }
+    return entt::null;
 }
 
 bool ReadText(const std::string& projectPath, std::string& out) {
@@ -281,6 +294,183 @@ glm::vec3 SpiderSystem::Steer(Body& b, const glm::vec3& goal, float dt) {
     return Spider::RouteAim(b.Route, b.RouteNormal, b.RouteAt, pos, up, goal);
 }
 
+glm::vec3 SpiderSystem::Doors(World& world, Body& b, const glm::vec3& aim, float dt, bool& hold) {
+    hold = false;
+    auto& reg = world.Registry;
+    const glm::vec3 pos = b.Mover.Position(), up = b.Mover.Up();
+    if (b.Door == entt::null) {
+        RaycastHit h;
+        QueryFilter f;
+        f.HitTriggers = 0;
+        const glm::vec3 from = pos + up * 0.15f;
+        // The door it is standing on (the mover climbed a shut leaf as it would a wall), else the one ahead on its way,
+        // within a body's length or so.
+        const glm::vec3 down = -up;
+        bool onLeaf = PhysicsWorld::RaycastSolid(&from.x, &down.x, 0.4f, f, h, /*fromOutside=*/true) && h.Hit;
+        entt::entity door = onLeaf ? OpenableOf(world, static_cast<entt::entity>(h.Entity)) : entt::null;
+        onLeaf = door != entt::null;
+        if (!onLeaf) {
+            glm::vec3 d = aim - pos;
+            d -= up * glm::dot(d, up);
+            const float len = glm::length(d);
+            if (len < 1e-3f) return aim;
+            d /= len;
+            if (!PhysicsWorld::RaycastSolid(&from.x, &d.x, 1.0f, f, h, /*fromOutside=*/true) || !h.Hit) return aim;
+            door = OpenableOf(world, static_cast<entt::entity>(h.Entity));
+        }
+        const auto* o = door != entt::null ? reg.try_get<OpenableComponent>(door) : nullptr;
+        if (!o || !o->Started || o->Target > 0.5f || o->Progress > 0.5f) return aim;
+        // A door: a hinged leaf a person walks through, standing on the floor - never a cabinet's, a drawer or a lid.
+        glm::vec3 hinge, toLatch, swing;
+        float width = 0.0f, height = 0.0f;
+        if (!Openable::Leaf(world, door, hinge, toLatch, width, swing, &height) || height < 1.6f || width < 0.6f) return aim;
+        const glm::vec3 mid = hinge + toLatch * (0.5f * width);
+        // Its side of the door: the face it stands on, or where it stands.
+        const float side = (onLeaf ? glm::dot(up, swing) : glm::dot(glm::vec3(pos.x - mid.x, 0.0f, pos.z - mid.z), swing)) > 0.0f ? 1.0f : -1.0f;
+        // Only a door its way goes through: where it heads next, or the route's next few nodes, past the door's plane and
+        // through its opening - not one it merely brushes walking along the wall beside it.
+        auto through = [&](const glm::vec3& p) {
+            const glm::vec3 d(p.x - mid.x, 0.0f, p.z - mid.z);
+            return glm::dot(d, swing) * side < 0.0f && std::fabs(glm::dot(d, toLatch)) < 0.5f * width + 0.3f;
+        };
+        bool crosses = through(aim);
+        for (int k = b.RouteAt; !crosses && k < (int)b.Route.size() && k < b.RouteAt + 6; ++k) crosses = through(b.Route[(size_t)k]);
+        if (!crosses) return aim;
+        if (b.Ai.State == Mode::Perch) {
+            // Only settling, unaware: it doesn't go pushing doors - it perches on this side of this one.
+            const glm::vec3 n = swing * side;
+            b.PerchAvoid.push_back(glm::vec4(n, -glm::dot(n, mid) + 0.1f));
+            b.Ai.Perch = -1;
+            b.RouteAge = 1e9f;
+            if (onLeaf) b.Mover.Detach(up * 1.2f); // off the door it had started up
+            return aim;
+        }
+        b.Door = door;
+        b.DoorFor = 0.0f;
+        b.DoorPushed = false;
+#pragma warning(suppress : 4996)
+        static const bool trace = std::getenv("TARTARUS_SPIDER_TRACE") != nullptr;
+        if (trace)
+            std::printf("[Spider] %u: a shut door on its way at %.2f %.2f %.2f\n", (unsigned)entt::to_integral(b.Root), hinge.x,
+                        hinge.y, hinge.z);
+        b.DoorPress = pos;
+        b.DoorFace = glm::vec3(mid.x, pos.y, mid.z);
+        if (onLeaf) {
+            // On the leaf itself: it pushes it from there, and springs off as it swings.
+            if (Openable::Open(world, door)) ++b.Last.DoorsOpened;
+            Sound("thud", pos, 0.6f);
+            b.Mover.Detach(up * 1.2f);
+            b.Door = entt::null;
+            return aim;
+        }
+        if (up.y > 0.7f) {
+            // On the floor: it presses where the leaf won't sweep it - its middle when it swings away; when it swings
+            // toward the spider, past its latch edge (out of the swing's reach) or, if that spot is in a wall or a
+            // corner's furniture, past its hinge edge (behind where the leaf stops).
+            const Spider::WorldQuery solid;
+            auto standable = [&](const glm::vec3& p) {
+                Spider::SurfaceHit under;
+                const glm::vec3 dn(0.0f, -1.0f, 0.0f);
+                return !solid.Occupied(p + glm::vec3(0.0f, 0.25f, 0.0f), 0.22f) &&
+                       solid.Ray(p + glm::vec3(0.0f, 0.3f, 0.0f), dn, 0.6f, under) && under.Normal.y > 0.8f;
+            };
+            const glm::vec3 spots[2] = {hinge + toLatch * (width + 0.55f) + swing * 0.4f, hinge - toLatch * 0.6f + swing * 0.25f};
+            if (side < 0.0f) {
+                b.DoorPress = mid - swing * 0.45f;
+            } else {
+                b.DoorPress = spots[0];
+                for (const glm::vec3& s : spots)
+                    if (standable(glm::vec3(s.x, pos.y, s.z))) {
+                        b.DoorPress = s;
+                        break;
+                    }
+            }
+            b.DoorPress.y = pos.y;
+        } else { // on a wall or the ceiling over it: it pushes from where it is
+            b.DoorPress = pos;
+            b.DoorFace = glm::vec3(h.Point[0], h.Point[1], h.Point[2]);
+        }
+    }
+    auto* o = reg.valid(b.Door) ? reg.try_get<OpenableComponent>(b.Door) : nullptr;
+    if (!o) {
+        b.Door = entt::null;
+        return aim;
+    }
+    b.DoorFor += dt;
+    if (!b.DoorPushed) {
+        // At its spot - or, if it can't get there, from wherever it got to.
+        if (glm::length(b.DoorPress - pos) < 0.3f || b.DoorFor > 4.0f) {
+            const bool opened = Openable::Open(world, b.Door);
+            if (opened) {
+                ++b.Last.DoorsOpened;
+                Sound("thud", pos, 0.6f); // its weight against the leaf
+            }
+            b.DoorPushed = opened || o->Target > 0.5f;
+            b.DoorFor = 0.0f;
+        }
+        if (!b.DoorPushed) return b.DoorPress;
+    }
+    // Pushed: it holds, facing the door, while the door swings; then on along its way. It stays open.
+    if (o->Progress >= 0.85f || o->Target < 0.5f || b.DoorFor > 3.0f) {
+        b.Door = entt::null;
+        return aim;
+    }
+    hold = true;
+    return b.DoorFace;
+}
+
+void SpiderSystem::UpdateDoorBlocks(World& world) {
+    if (m_Nav.Empty()) return;
+    auto& reg = world.Registry;
+    bool changed = false;
+    for (auto e : reg.view<OpenableComponent>(entt::exclude<InactiveTag>)) {
+        const auto& o = reg.get<OpenableComponent>(e);
+        if (!o.Started) continue;
+        auto it = std::find_if(m_DoorBlocks.begin(), m_DoorBlocks.end(), [&](const DoorBlock& d) { return d.Door == e; });
+        const float was = it != m_DoorBlocks.end() ? it->Progress : -1.0f;
+        const bool settled = o.Progress == 0.0f || o.Progress == 1.0f;
+        if (o.Progress == was || (!settled && std::fabs(o.Progress - was) < 0.05f)) continue;
+        // Doors only - a hinged leaf a person walks through (a cabinet's swings over furniture, where no route runs).
+        glm::vec3 hinge, toLatch, swing;
+        float width = 0.0f, height = 0.0f;
+        if (!Openable::Leaf(world, e, hinge, toLatch, width, swing, &height) || height < 1.6f || width < 0.6f) continue;
+        if (it == m_DoorBlocks.end()) {
+            m_DoorBlocks.push_back(DoorBlock{e});
+            it = m_DoorBlocks.end() - 1;
+        }
+        // Metres of route per doorway node: a route crosses about four, so a door to push weighs some 4 m (stopping,
+        // pushing, the swing).
+        constexpr float kPushCost = 1.0f;
+        for (int n : it->Nodes) {
+            if (it->Shut) m_Nav.AddPenalty(n, -kPushCost);
+            else m_Nav.Block(n, -1);
+        }
+        it->Nodes.clear();
+        it->Progress = o.Progress;
+        it->Shut = o.Progress <= 0.0f;
+        changed = true;
+        glm::vec3 centre, half;
+        glm::quat rot;
+        if (!Openable::LeafBox(world, e, centre, half, rot)) continue;
+        // Open: no room within a body's half-width of the leaf. Shut: the doorway, both sides of the leaf.
+        const glm::vec3 reach = half + glm::vec3(it->Shut ? 0.35f : 0.25f);
+        const float r2 = glm::dot(reach, reach);
+        const glm::quat inv = glm::conjugate(rot);
+        for (int i = 0; i < m_Nav.NodeCount(); ++i) {
+            const glm::vec3 d = m_Nav.Pos(i) - centre;
+            if (glm::dot(d, d) > r2) continue;
+            const glm::vec3 l = glm::abs(inv * d);
+            if (l.x <= reach.x && l.y <= reach.y && l.z <= reach.z) {
+                if (it->Shut) m_Nav.AddPenalty(i, kPushCost);
+                else m_Nav.Block(i, 1);
+                it->Nodes.push_back(i);
+            }
+        }
+    }
+    if (changed)
+        for (Body& b : m_Bodies) b.RouteAge = 1e9f; // routes afresh round where the leaves are now
+}
+
 void SpiderSystem::Think(World& world, AssetLibrary& assets, float dt, const Target* target) {
     if (const std::uint64_t gen = PhysicsWorld::SimulationGeneration(); gen != m_Generation) {
         Clear(); // a new Play, maybe of another scene
@@ -303,6 +493,7 @@ void SpiderSystem::Think(World& world, AssetLibrary& assets, float dt, const Tar
 
     PROFILE_SCOPE("Spiders");
     if (!m_NavTried) BuildNav(world);
+    UpdateDoorBlocks(world);
     Spider::WorldQuery wq;
     const Spider::BarrierQuery q(wq, m_Barriers);
     for (Body& b : m_Bodies) {
@@ -315,7 +506,10 @@ void SpiderSystem::Think(World& world, AssetLibrary& assets, float dt, const Tar
         in.HasGoal = sc.HasGoal;
         in.Goal = sc.HasGoal ? Steer(b, sc.Goal, dt) : sc.Goal;
         if (!sc.HasGoal) b.Route.clear();
-        in.SpeedScale = b.Ai.Hold ? 0.0f : (sc.Run && sc.WalkSpeed > 1e-3f ? sc.RunSpeed / sc.WalkSpeed : 1.0f) * b.Pain.SpeedScale;
+        bool doorHold = false;
+        if (sc.HasGoal && b.Mover.Attached() && !b.Ai.Hold) in.Goal = Doors(world, b, in.Goal, dt, doorHold);
+        else if (!b.Mover.Attached()) b.Door = entt::null;
+        in.SpeedScale = b.Ai.Hold || doorHold ? 0.0f : (sc.Run && sc.WalkSpeed > 1e-3f ? sc.RunSpeed / sc.WalkSpeed : 1.0f) * b.Pain.SpeedScale;
         in.LegUp = b.Gait.MeanNormal();
         wq.Rays = 0;
         b.Mover.Step(q, MoverFrom(sc), in, dt);
@@ -325,9 +519,14 @@ void SpiderSystem::Think(World& world, AssetLibrary& assets, float dt, const Tar
             Stats& st = b.Last;
             st.Goal = sc.Goal;
             st.HasGoal = sc.HasGoal;
-            const bool meansToMove = sc.HasGoal && !b.Mover.Arrived() && !b.Ai.Hold && b.Mover.Attached();
+            const bool meansToMove = sc.HasGoal && !b.Mover.Arrived() && !b.Ai.Hold && !doorHold && b.Mover.Attached();
             st.StuckFor = meansToMove && glm::length(b.Mover.Velocity()) < 0.05f ? st.StuckFor + dt : 0.0f;
-            st.WorstStuck = std::max(st.WorstStuck, st.StuckFor);
+            if (st.StuckFor > st.WorstStuck) {
+                st.WorstStuck = st.StuckFor;
+                st.WorstStuckAt = b.Mover.Position();
+                st.WorstStuckGoal = in.Goal;
+                st.WorstStuckMode = (int)b.Ai.State;
+            }
             if (b.Mover.Attached()) {
                 const Spider::MoverSettings ms = MoverFrom(sc);
                 const glm::vec3 u = b.Mover.Up(), f = b.Mover.Forward(), mid = b.Mover.Position() + u * ms.BodyLift;

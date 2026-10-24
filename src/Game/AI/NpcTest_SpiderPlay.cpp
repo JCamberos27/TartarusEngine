@@ -11,6 +11,7 @@
 #include "Creatures/SpiderSystem.h"
 #include "FirstPersonPresentation.h"
 #include "GameModuleAPI.h" // RaycastHit, QueryFilter
+#include "Openable.h"
 #include "PhysicsWorld.h"
 #include "Player.h"
 #include "World.h"
@@ -201,5 +202,16 @@ void NpcTest::SpiderPlay(World& world) {
     Check(m_POutside == 0, "spiderplay: no hunter ever gets out through a window");
     Check(m_PUnder == 0, "spiderplay: no hunter ever crawls the void under the floor");
     Check(m_PAbove == 0, "spiderplay: no hunter ever gets above the ceiling");
+    // The player never interacts here: anything opened, the hunters pushed. Doors on their way, and nothing else.
+    int furniture = 0;
+    for (auto e : world.Registry.view<OpenableComponent>()) {
+        const auto& o = world.Registry.get<OpenableComponent>(e);
+        glm::vec3 hinge, toLatch, swing;
+        float width = 0.0f, height = 0.0f;
+        const bool door = Openable::Leaf(world, e, hinge, toLatch, width, swing, &height) && height >= 1.6f && width >= 0.6f;
+        if (o.Target > 0.5f && !o.StartOpen && !door) ++furniture;
+    }
+    std::printf("[NpcTest] spiderplay: %d cabinet, drawer or lid openables opened\n", furniture);
+    Check(furniture == 0, "spiderplay: the hunters open doors on their way, never a cabinet, drawer or lid");
     m_PDone = m_Done = true;
 }

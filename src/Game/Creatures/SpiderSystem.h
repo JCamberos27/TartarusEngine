@@ -64,7 +64,7 @@ public:
 
     void Think(World& world, AssetLibrary& assets, float dt, const Target* target = nullptr);
     void LatePose(World& world, float dt);
-    void Clear() { m_Bodies.clear(); m_Nav.Clear(); m_NavTried = false; m_Barriers.clear(); }
+    void Clear() { m_Bodies.clear(); m_Nav.Clear(); m_NavTried = false; m_Barriers.clear(); m_DoorBlocks.clear(); }
     bool Active() const { return !m_Bodies.empty(); }
 
     // The level's surface graph (SpiderNav.h), baked (or read from its cache) when the first spider appears in Play.
@@ -99,7 +99,9 @@ public:
         bool Aware = false, HasToken = false;
         int Bites = 0, Pounces = 0, Drops = 0, Leaps = 0; // landed on the player / leaps and drops tried
         float StuckFor = 0.0f, WorstStuck = 0.0f; // seconds it has meant to move and not (now / the longest)
+        glm::vec3 WorstStuckAt{0.0f}, WorstStuckGoal{0.0f}; int WorstStuckMode = -1; // where, heading where, doing what
         int SunkFrames = 0;          // frames its head or abdomen was inside a surface
+        int DoorsOpened = 0;         // shut doors it pushed open on its way
         glm::vec3 Goal{0.0f};        // where it is heading (the component's goal)
         bool HasGoal = false;
     };
@@ -149,11 +151,19 @@ private:
         bool RouteFailed = false;
         // How its routes weigh floor, wall and ceiling: the hunter makes climbing cheap to stalk, the floor to charge.
         Spider::PathCosts Costs;
+        // A shut door on its way (OpenableComponent): it goes to where it presses on it - the leaf's middle when it swings
+        // away, past its latch edge when it swings toward the spider (clear of the swing) - pushes it open, and waits.
+        entt::entity Door = entt::null;
+        glm::vec3 DoorPress{0.0f}, DoorFace{0.0f};
+        float DoorFor = 0.0f;        // seconds since it found the door
+        bool DoorPushed = false;
+        std::vector<glm::vec4> PerchAvoid; // the far sides of shut doors met while settling (see PickPerch)
         float TapIn = 0.0f;          // seconds until another leg tap may sound (eight legs would chatter)
         bool WasAttached = true;     // last frame: holding on (a landing is heard)
         // The hunter (SpiderAI.cpp).
         struct Mind {
             Mode State = Mode::Perch;
+            float Searched = 0.0f;       // Search: seconds spent looking about where it last knew the player was
             float Clock = 0.0f;          // seconds in this state
             bool Aware = false, Token = false, Struck = false;
             bool Alarmed = false;        // shot or heard a shot since its last think
@@ -176,12 +186,17 @@ private:
     // Where the mover heads this frame: the route's next waypoint (as far along the surface it is on as the route stays
     // on it), or the goal itself on its last stretch or without a graph.
     glm::vec3 Steer(Body& b, const glm::vec3& goal, float dt);
+    // A shut door ahead on its way: pushes it open (Openable::Open) and holds while it swings; returns where to head
+    // meanwhile and sets `hold` while it waits.
+    glm::vec3 Doors(World& world, Body& b, const glm::vec3& aim, float dt, bool& hold);
     // The hunter's decision for this frame: sets the component's goal / run, triggers attacks and leaps (SpiderAI.cpp).
     void Hunt(World& world, Body& b, SpiderComponent& sc, const Target& t, float dt);
     bool SeesPlayer(const Body& b, const SpiderComponent& sc, const Target& t) const;
     bool LeapClear(const Body& b, const SpiderComponent& sc, const Target& t, float dist) const;
     int Reach(const Body& b) const; // the graph piece it is on (-1: none near) - its goals are picked inside it
-    int PickPerch(const glm::vec3& near, int component) const;
+    // `avoid`: planes (normal, offset) a perch must not lie behind - the far side of a shut door it won't push while it
+    // only settles.
+    int PickPerch(const glm::vec3& near, int component, const std::vector<glm::vec4>* avoid = nullptr) const;
     static inline int s_SoundsStarted = 0, s_SoundsMissing = 0;
     int Attackers() const;
 
@@ -191,6 +206,16 @@ private:
     Spider::SurfaceGraph m_Nav;
     bool m_NavTried = false;
     std::vector<Spider::Barrier> m_Barriers;
+    // The graph nodes each door's leaf stands over as it hangs now: open or swinging, blocked to routes (a route never runs
+    // up the wall behind an open door); shut, its doorway weighed (pushing it costs time). Redone as a leaf moves.
+    struct DoorBlock {
+        entt::entity Door = entt::null;
+        float Progress = -1.0f;      // (none yet: a shut door is weighed from the first frame)
+        std::vector<int> Nodes;      // blocked under its open leaf, or weighed in its shut doorway
+        bool Shut = false;
+    };
+    std::vector<DoorBlock> m_DoorBlocks;
+    void UpdateDoorBlocks(World& world);
 
     std::vector<Body> m_Bodies;
     std::uint64_t m_Generation = 0;

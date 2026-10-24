@@ -86,7 +86,6 @@ void NpcTest::SpiderHunt(World& world) {
     int drops = 0, pounces = 0, bites = 0, leaps = 0;
     float worstStuck = 0.0f;
     int sunk = 0;
-    bool anyAware = false;
     for (size_t k = 0; k < m_HRoots.size(); ++k) {
         SpiderSystem::Stats st;
         const entt::entity e = (entt::entity)m_HRoots[k];
@@ -100,8 +99,12 @@ void NpcTest::SpiderHunt(World& world) {
         pounces += st.Pounces;
         bites += st.Bites;
         leaps += st.Leaps;
-        anyAware = anyAware || st.Aware;
+        m_HEverAware = m_HEverAware || st.Aware; // at any time: one that loses them for 8 s goes back to unaware
         if (st.Pos.y < -0.15f) ++m_HFellThrough; // the floor is at 0: below it is the slab's underside, the void
+        if (m_HClock >= kEnd && st.WorstStuck > 1.0f)
+            std::printf("[NpcTest] spiderhunt: hunter %zu stalled %.1f s at %.2f %.2f %.2f heading for %.2f %.2f %.2f, mode %d\n", k,
+                        st.WorstStuck, st.WorstStuckAt.x, st.WorstStuckAt.y, st.WorstStuckAt.z, st.WorstStuckGoal.x,
+                        st.WorstStuckGoal.y, st.WorstStuckGoal.z, st.WorstStuckMode);
         worstStuck = std::max(worstStuck, st.WorstStuck);
         sunk += st.SunkFrames;
         if (st.Pos.y > 2.0f) ++m_HCeilFrames[k];
@@ -136,7 +139,7 @@ void NpcTest::SpiderHunt(World& world) {
                 "at once, %d frames under the floor\n",
                 m_HRoots.size(), drops, pounces, bites, leaps, m_HMaxAttackers, m_HFellThrough);
     Check(m_HRoots.size() == 4, "spiderhunt: four hunters built");
-    Check(anyAware, "spiderhunt: the hunters notice the player");
+    Check(m_HEverAware, "spiderhunt: the hunters notice the player");
     Check(drops >= 1, "spiderhunt: a hunter drops on the player from above");
     Check(pounces >= 1, "spiderhunt: a hunter pounces on the player");
     Check(bites >= 2, "spiderhunt: the hunters bite the player");

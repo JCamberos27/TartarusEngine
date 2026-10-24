@@ -77,12 +77,16 @@ int SpiderSystem::Reach(const Body& b) const {
     return n >= 0 ? m_Nav.Component(n) : -1;
 }
 
-int SpiderSystem::PickPerch(const glm::vec3& near, int component) const {
+int SpiderSystem::PickPerch(const glm::vec3& near, int component, const std::vector<glm::vec4>* avoid) const {
     int best = -1;
     float bestScore = -1e9f;
     for (int i = 0; i < m_Nav.NodeCount(); ++i) {
         if (m_Nav.Normal(i).y > -0.9f) continue; // the ceiling
         if (component >= 0 && m_Nav.Component(i) != component) continue; // one it can get to, not a slab's underside in a void
+        bool behind = false;
+        if (avoid)
+            for (const glm::vec4& pl : *avoid) behind = behind || glm::dot(glm::vec3(pl), m_Nav.Pos(i)) + pl.w < 0.0f;
+        if (behind) continue;
         const float d = glm::length(m_Nav.Pos(i) - near);
         if (d > 7.0f) continue;
         // A corner (a node linked to a wall) hides the body against two surfaces.
@@ -106,9 +110,9 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
 #pragma warning(suppress : 4996)
         static const bool trace = std::getenv("TARTARUS_SPIDER_TRACE") != nullptr; // the hunters' decisions, for tuning
         if (trace)
-            std::printf("[Spider] %u: %d -> %d  pos %.2f %.2f %.2f up %.2f  player %.2f %.2f %.2f (%.2f m)%s\n",
-                        (unsigned)entt::to_integral(b.Root), (int)ai.State, (int)m, pos.x, pos.y, pos.z, up.y, t.Feet.x, t.Feet.y,
-                        t.Feet.z, glm::length(t.Feet - pos), b.Mover.Attached() ? "" : " (in the air)");
+            std::printf("[Spider] %u: %d -> %d after %.1f s  pos %.2f %.2f %.2f up %.2f  player %.2f %.2f %.2f (%.2f m)%s\n",
+                        (unsigned)entt::to_integral(b.Root), (int)ai.State, (int)m, ai.Clock, pos.x, pos.y, pos.z, up.y, t.Feet.x,
+                        t.Feet.y, t.Feet.z, glm::length(t.Feet - pos), b.Mover.Attached() ? "" : " (in the air)");
         ai.State = m;
         ai.Clock = 0.0f;
         b.RouteAge = 1e9f; // a new state weighs routes its own way: plan afresh
@@ -158,7 +162,7 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
     case Mode::Perch: {
         b.Costs = Spider::PathCosts{3.0f, 1.0f, 1.0f};
         sc.Run = false;
-        if (ai.Perch < 0) ai.Perch = PickPerch(pos, Reach(b));
+        if (ai.Perch < 0) ai.Perch = PickPerch(pos, Reach(b), &b.PerchAvoid);
         if (ai.Perch >= 0) {
             sc.Goal = m_Nav.Pos(ai.Perch);
             sc.HasGoal = glm::length(pos - sc.Goal) > 0.15f;
@@ -170,7 +174,7 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
     case Mode::Stalk: {
         // Over walls and ceiling to the ceiling above the player (droppers), or near them until it may attack.
         b.Costs = Spider::PathCosts{4.0f, 1.0f, 1.0f};
-        sc.Run = dist < 8.0f;
+        sc.Run = true; // it scuttles: at a walk, a hunter in 301 took 20 s to reach a shot fired down the hallway
         ai.AimIn -= dt;
         if (ai.AimIn <= 0.0f || !sc.HasGoal) { // re-aimed a few times a second
             ai.AimIn = 0.4f;
@@ -336,11 +340,15 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
     }
     case Mode::Search: {
         b.Costs = Spider::PathCosts{1.0f, 1.2f, 1.5f};
-        sc.Run = false;
+        sc.Run = glm::length(ai.LastKnown - pos) > 6.0f; // hurries there, creeps the last few metres
         sc.Goal = ai.LastKnown;
         sc.HasGoal = !b.Mover.Arrived();
+        // All the way to where it last knew them (from 301 to the hallway's far end is a long walk), a look about there,
+        // then back to a perch; a search it can't finish ends in time too.
+        if (ai.Clock < dt) ai.Searched = 0.0f;
+        if (glm::length(ai.LastKnown - pos) < 1.5f) ai.Searched += dt;
         if (ai.Aware) enter(Mode::Stalk);
-        else if (ai.Clock > 10.0f) {
+        else if (ai.Searched > 6.0f || ai.Clock > 40.0f) {
             ai.Perch = -1;
             enter(Mode::Perch);
         }

@@ -64,6 +64,14 @@ public:
     // Which connected piece of the graph node i is in: the rooms a spider can crawl between are one; a void sealed off
     // behind a wall, above a ceiling or under a floor is another.
     int Component(int i) const { return m_Comp[(size_t)i]; }
+    // Nodes something movable stands on now (an open door's leaf against the wall): routes don't pass them. Counted, so
+    // two leaves over one node both have to leave. Runtime only - never baked, saved or hashed.
+    void Block(int i, int delta);
+    bool Blocked(int i) const { return !m_Blocked.empty() && m_Blocked[(size_t)i] > 0; }
+    // Extra route cost (metres) for passing node `i`, added to: a shut door's doorway costs about what pushing it open
+    // takes, so a route takes an open way round when there is a fair one. Runtime only, like Block.
+    void AddPenalty(int i, float metres);
+    float Penalty(int i) const { return m_Penalty.empty() ? 0.0f : m_Penalty[(size_t)i]; }
     // A* from node `from` to node `to`: the nodes in order, both ends included. False when unreachable or when it would
     // expand more than `maxExpand` nodes.
     bool FindPath(int from, int to, const PathCosts& costs, std::vector<int>& out, int maxExpand = 80000) const;
@@ -90,6 +98,8 @@ private:
     std::vector<int> m_First; // CSR: NodeCount + 1 entries
     std::vector<int> m_Links;
     std::vector<int> m_Comp; // per node, its connected piece (LabelComponents)
+    std::vector<int> m_Blocked; // per node, how many movable things stand on it now (Block)
+    std::vector<float> m_Penalty; // per node, extra route cost now (AddPenalty)
     // Spatial hash for Nearest: node ids sorted by cell.
     std::vector<std::pair<long long, int>> m_Grid;
     // A* scratch, reused between searches.

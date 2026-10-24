@@ -91,8 +91,8 @@ public:
     bool Aiming() const { return !m_Target.empty(); }   // sights up (rounds go where the view looks)
     bool WantsReload() const { return m_Reload; }
     bool WantsAiOverlay() const { return m_Scenario == "sandbox"; } // the AI overlay in the sandbox shots
-    bool RunsWithoutSquad() const { return m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "spider" || m_Scenario == "spiderdeath" || m_Scenario == "spiderhunt" || m_Scenario == "spiderplay"; } // After() even in a scene with no squad
-    bool WantsCleanViews() const { return m_Scenario == "blood" || m_Scenario == "ragdoll" || m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "spider" || m_Scenario == "spiderdeath" || m_Scenario == "spiderhunt" || m_Scenario == "spiderplay"; } // no collider / physics-debug overlays
+    bool RunsWithoutSquad() const { return m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "spider" || m_Scenario == "spiderdeath" || m_Scenario == "spiderhunt" || m_Scenario == "spiderplay" || m_Scenario == "spiderdoor"; } // After() even in a scene with no squad
+    bool WantsCleanViews() const { return m_Scenario == "blood" || m_Scenario == "ragdoll" || m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "spider" || m_Scenario == "spiderdeath" || m_Scenario == "spiderhunt" || m_Scenario == "spiderplay" || m_Scenario == "spiderdoor"; } // no collider / physics-debug overlays
     // Time stands still this frame (the host steps the game by zero): the ragdoll scenario's multi-angle shots of one moment.
     bool Frozen() const { return m_RFreeze; }
     // The blood scenario's view of the blood, filled by the host each frame.
@@ -204,12 +204,21 @@ private:
     bool m_PPlaced = false, m_PEntered = false, m_PHaveAim = false, m_PPerchedAll = false, m_PNavSame = false, m_PDone = false;
     bool m_PDown[3] = {false, false, false};
     glm::vec3 m_PAim{0.0f};
+    // spiderdoor (NpcTest_SpiderDoor.cpp): a hunter behind 301's shut front door pushes it open to reach the player
+    void SpiderDoor(World& world);
+    void SpiderDoorDrive(Player& player, FirstPersonPresentation& weapon, float& wantYaw, float& wantPitch);
+    std::uint32_t m_SDDoor = 0xFFFFFFFFu, m_SDRoot = 0xFFFFFFFFu;
+    float m_SDClock = 0.0f, m_SDWidth = 0.0f, m_SDOpenedAt = -1.0f, m_SDReachedAt = -1.0f, m_SDWorstStuck = 0.0f;
+    int m_SDStage = 0, m_SDAmmoStart = -1, m_SDAmmoSpent = 0, m_SDSwept = 0, m_SDOutside = 0, m_SDPushes = 0, m_SDAttacks = 0;
+    bool m_SDReady = false, m_SDPlaced = false, m_SDShutAtStart = false, m_SDDone = false;
+    glm::vec3 m_SDHinge{0.0f}, m_SDToLatch{0.0f}, m_SDSwing{0.0f}, m_SDStand{0.0f};
     std::string m_PNavWhy;
     // spiderhunt (NpcTest_SpiderHunt.cpp): hunters let loose on the player in 301's living room
     void SpiderHunt(World& world);
     void SpiderHuntDrive(Player& player, PlayerVitals& vitals, float& wantYaw, float& wantPitch);
     std::vector<std::uint32_t> m_HRoots;
     float m_HClock = 0.0f, m_HMaxDrift = 0.0f; // m_HMaxDrift: the farthest the hits moved the player in any one second
+    bool m_HEverAware = false;
     std::vector<glm::vec2> m_HTrail;           // the player's last second of positions (over the floor)
     int m_HCeilFrames[4] = {0, 0, 0, 0};       // frames each hunter spent up on the ceiling                            // the corner of the room the player walks to next
     int m_HStage = 0, m_HMaxAttackers = 0, m_HFellThrough = 0;

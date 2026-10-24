@@ -286,6 +286,9 @@ struct PhysicsState {
     struct Hitboxes { std::vector<PxRigidDynamic*> Bodies; const PxRigidActor* Capsule = nullptr; bool Active = false; };
     std::vector<Hitboxes> hitboxes;
     std::unordered_set<const PxRigidActor*> hitboxActors;
+    // Of those, a creature body's (CreateBodyHitboxes: a spider's, with no capsule): for shots only - they never push or
+    // block a character's mover.
+    std::unordered_set<const PxRigidActor*> bodyHitboxActors;
     std::unordered_set<const PxRigidActor*> hitboxedCapsules;
     std::unordered_map<PxJoint*, std::uint32_t>       jointOwner;
     std::unordered_map<std::uint32_t, PxRigidStatic*> staticByEntity;
@@ -1606,6 +1609,8 @@ struct PhysxMoverWorld : IMoverWorld {
             if (actor == W->Self || (shape->getFlags() & PxShapeFlag::eTRIGGER_SHAPE)) return PxQueryHitType::eNONE;
             if (W->SelfEntity != 0xFFFFFFFFu && actor && UserDataToEntity(actor->userData) == W->SelfEntity) return PxQueryHitType::eNONE;
             if (W->PassRagdolls && IsRagdollPart(shape->getSimulationFilterData())) return PxQueryHitType::eNONE;
+            // A spider's hitboxes: a biting spider against the player's legs slid them away every frame it held there.
+            if (actor && W->S.bodyHitboxActors.count(actor)) return PxQueryHitType::eNONE;
             const PxU32 layer = shape->getSimulationFilterData().word1 & 31u;
             if (!((W->Mask >> layer) & 1u)) return PxQueryHitType::eNONE;
             return Touch ? PxQueryHitType::eTOUCH : PxQueryHitType::eBLOCK;
@@ -3506,6 +3511,7 @@ int MakeHitboxes(PxRigidActor* capsule, std::uint32_t entity, const HitCapsule* 
         s.scene->addActor(*b);
         h.Bodies.push_back(b);
         s.hitboxActors.insert(b);
+        if (!capsule) s.bodyHitboxActors.insert(b);
     }
     h.Active = true;
     ShadowCapsule(h, true);
@@ -3550,6 +3556,7 @@ void DestroyNpcHitboxes(int id) {
         if (b) {
             if (g_State->playerGround == b) g_State->playerGround = nullptr;
             g_State->hitboxActors.erase(b);
+            g_State->bodyHitboxActors.erase(b);
             b->release();
         }
     h.Bodies.clear();

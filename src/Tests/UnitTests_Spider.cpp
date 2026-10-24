@@ -773,6 +773,126 @@ void TestSpiderShoveNeverStacks() {
     CHECK(std::fabs(glm::length(glm::vec2(c.x, c.z)) - 5.0f) < 1e-3f && std::fabs(c.y + 1.0f) < 1e-6f);
 }
 
+void TestSpiderBodyNeverShovesThePlayer() {
+    // A spider's body hitboxes are for shots. Biting at the player's legs, one overlapped their capsule, and the player's
+    // mover slid them out of it every frame it held there - over a metre a second, with no hit landing. Standing still
+    // with a hitbox in their legs, the player stays put; a ray still finds the hitbox.
+    World world;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    ColliderComponent col;
+    col.Kind = ColliderComponent::Shape::Box;
+    col.HalfExtents = glm::vec3(5.0f, 0.5f, 5.0f);
+    world.Registry.emplace<ColliderComponent>(world.CreateEmptyEntity(glm::vec3(0.0f, -0.5f, 0.0f), zero, one, "Floor"), col);
+    world.SyncActiveInHierarchy();
+    world.RebuildWorldTransformCache();
+    PhysicsWorld::Create(world);
+    CHECK(PhysicsWorld::IsActive());
+    if (!PhysicsWorld::IsActive()) return;
+    const float foot[3] = {0.0f, 0.0f, 0.0f};
+    PhysicsWorld::CreateCharacter(0.3f, 0.6f, foot);
+    PhysicsWorld::HitCapsule part;
+    part.Position[0] = 0.25f; // its thorax in the player's shins
+    part.Position[1] = 0.2f;
+    part.Radius = 0.15f;
+    part.HalfLength = 0.15f;
+    CHECK(PhysicsWorld::CreateBodyHitboxes(4242u, &part, 1) >= 0);
+    const float still[3] = {0.0f, -0.01f, 0.0f};
+    for (int i = 0; i < 60; ++i) PhysicsWorld::MoveCharacter(still, 1.0f / 60.0f, true);
+    float at[3];
+    PhysicsWorld::GetCharacterFootPosition(at);
+    CHECK(std::sqrt(at[0] * at[0] + at[2] * at[2]) < 0.01f);
+    const float from[3] = {1.0f, 0.2f, 0.0f}, left[3] = {-1.0f, 0.0f, 0.0f};
+    QueryFilter f;
+    RaycastHit h;
+    CHECK(PhysicsWorld::RaycastFiltered(from, left, 2.0f, f, h) && h.Entity == 4242u);
+    PhysicsWorld::Destroy();
+}
+
+void TestSpiderNavRoutesRoundBlockedNodes() {
+    // An open door's leaf against a wall stands over graph nodes the static bake made: blocked, no route uses them (one
+    // did, and a hunter pushed at the open leaf for 2 s). Floor to floor across the room with a band of the floor
+    // blocked, the route goes round it - up the walls - and freeing the band brings the floor route back.
+    BoxWorld w;
+    std::vector<float> verts;
+    std::vector<int> tris;
+    w.Triangles(verts, tris);
+    Spider::SurfaceGraph g;
+    CHECK(g.Build(verts, tris, w, Spider::NavSettings{}));
+    const int from = g.Nearest(glm::vec3(0.0f, 0.0f, 1.5f)), to = g.Nearest(glm::vec3(0.0f, 0.0f, -1.5f));
+    std::vector<int> band, path;
+    for (int i = 0; i < g.NodeCount(); ++i)
+        if (g.Normal(i).y > 0.9f && std::fabs(g.Pos(i).z) < 0.3f) band.push_back(i);
+    CHECK(!band.empty());
+    for (int i : band) g.Block(i, 1);
+    CHECK(g.FindPath(from, to, Spider::PathCosts{}, path));
+    bool usesBlocked = false, leavesFloor = false;
+    for (int n : path) {
+        usesBlocked = usesBlocked || g.Blocked(n);
+        leavesFloor = leavesFloor || g.Normal(n).y < 0.7f;
+    }
+    CHECK(!usesBlocked);
+    CHECK(leavesFloor);
+    for (int i : band) g.Block(i, -1);
+    CHECK(g.FindPath(from, to, Spider::PathCosts{}, path));
+    bool allFloor = true;
+    for (int n : path) allFloor = allFloor && g.Normal(n).y > 0.9f;
+    CHECK(allFloor);
+}
+
+void TestSpiderNeverSlipsUnderAWall() {
+    // 301's walls stand 5 mm clear of the floor slab, and a body's origin sits on the floor: below a wall's bottom, where
+    // the wall probes (10 cm up and more) don't look. A hunter that landed right on a wall's face, holding there for a bite,
+    // slid under the wall; inside it, its probes passed through the wall from within and it walked out of the building.
+    // Landed on the face of a wall like that, and sent on into it or along it, the body never gets under it.
+    int worst = 0;
+    for (int a = 0; a < 6; ++a) {
+        BoxWorld w;
+        w.Boxes.push_back({glm::vec3(-2.0f, 0.005f, -1.6f), glm::vec3(2.0f, 2.4f, -1.3f)}); // a wall 0.3 m thick, 5 mm up
+        Spider::Mover m;
+        const float yaw = glm::radians(-50.0f + 20.0f * (float)a); // into the wall, head on to obliquely
+        m.Reset(glm::vec3(0.0f, 0.0f, -1.3f), glm::angleAxis(yaw, glm::vec3(0.0f, 1.0f, 0.0f)));
+        Spider::MoverSettings s;
+        Spider::MoveInput in;
+        in.HasGoal = true;
+        in.Goal = glm::vec3(-1.5f * std::sin(yaw), 0.0f, -1.9f); // the floor beyond the wall
+        in.SpeedScale = (a % 2) ? 2.4f / 0.9f : 0.3f;
+        int under = 0;
+        for (int i = 0; i < 4 * 60; ++i) {
+            m.Step(w, s, in, 1.0f / 60.0f);
+            under += m.Position().z < -1.3f - 0.02f && m.Position().y < 0.05f ? 1 : 0; // on the floor, under the wall
+        }
+        worst = std::max(worst, under);
+    }
+    CHECK(worst == 0);
+}
+
+void TestSpiderNavWeighsShutDoors() {
+    // A shut door's doorway costs what pushing it takes: a route goes a fair way round to avoid it, but through it when
+    // the way round is much longer. (A hunter's routes ran through a bedroom's two shut doors, beside an open doorway,
+    // and it spent 20 s pushing them.)
+    BoxWorld w;
+    std::vector<float> verts;
+    std::vector<int> tris;
+    w.Triangles(verts, tris);
+    Spider::SurfaceGraph g;
+    CHECK(g.Build(verts, tris, w, Spider::NavSettings{}));
+    const int from = g.Nearest(glm::vec3(0.0f, 0.0f, 1.5f)), to = g.Nearest(glm::vec3(0.0f, 0.0f, -1.5f));
+    std::vector<int> band, path;
+    for (int i = 0; i < g.NodeCount(); ++i)
+        if (g.Normal(i).y > 0.9f && std::fabs(g.Pos(i).z) < 0.3f) band.push_back(i);
+    auto offFloor = [&](const std::vector<int>& p) {
+        bool off = false;
+        for (int n : p) off = off || g.Normal(n).y < 0.7f;
+        return off;
+    };
+    for (int i : band) g.AddPenalty(i, 20.0f); // dear: round, up the walls
+    CHECK(g.FindPath(from, to, Spider::PathCosts{}, path));
+    CHECK(offFloor(path));
+    for (int i : band) g.AddPenalty(i, -19.9f); // cheap: straight over
+    CHECK(g.FindPath(from, to, Spider::PathCosts{}, path));
+    CHECK(!offFloor(path));
+}
+
 void TestSpiderNavCacheRoundTrips() {
     BoxWorld w;
     std::vector<float> verts;
@@ -813,6 +933,10 @@ void RegisterSpiderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"SpiderBarrierClosesAnOpening", TestSpiderBarrierClosesAnOpening});
     tests.push_back({"SpiderProbeStartsInsideASolid", TestSpiderProbeStartsInsideASolid});
     tests.push_back({"SpiderShoveNeverStacks", TestSpiderShoveNeverStacks});
+    tests.push_back({"SpiderBodyNeverShovesThePlayer", TestSpiderBodyNeverShovesThePlayer});
+    tests.push_back({"SpiderNavRoutesRoundBlockedNodes", TestSpiderNavRoutesRoundBlockedNodes});
+    tests.push_back({"SpiderNavWeighsShutDoors", TestSpiderNavWeighsShutDoors});
+    tests.push_back({"SpiderNeverSlipsUnderAWall", TestSpiderNeverSlipsUnderAWall});
     tests.push_back({"SpiderFallsAndLands", TestSpiderFallsAndLands});
     tests.push_back({"SpiderGaitAlternates", TestSpiderGaitAlternates});
     tests.push_back({"SpiderRigParses", TestSpiderRigParses});

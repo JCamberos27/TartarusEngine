@@ -178,6 +178,16 @@ void Mover::Step(const SurfaceQuery& q, const MoverSettings& s, const MoveInput&
         lifted += lift;
         m_Pos += u * lift;
     }
+    // Never under something: the origin sits on the surface - in 301 on the floor slab's top, 5 mm below the walls'
+    // bottoms - while the probes that find walls look 10 cm up and more. A hunter that landed on a wall's face and held
+    // there for a bite slid under the wall; inside it, its probes passed through the wall from within and it walked on out
+    // of the building. A spot with something solid just over it (no room for a body) is refused.
+    if (glm::dot(up, Up()) > 0.95f) {
+        constexpr float kRoomOver = 0.05f;
+        SurfaceHit lid;
+        auto covered = [&](const glm::vec3& at, const glm::vec3& u) { return q.Ray(at + u * 0.001f, u, kRoomOver, lid); };
+        if (covered(m_Pos, Up())) m_Pos = before; // (one landed on a wall's face is covered already: it may only move out)
+    }
     m_Vel = (m_Pos - before) / dt;
 }
 

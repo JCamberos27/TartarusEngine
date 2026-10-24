@@ -52,6 +52,18 @@ glm::vec3 RouteAim(const std::vector<glm::vec3>& route, const std::vector<glm::v
     return aim >= n - 1 ? goal : route[(size_t)aim];
 }
 
+void SurfaceGraph::Block(int i, int delta) {
+    if (i < 0 || i >= (int)m_Pos.size()) return;
+    if (m_Blocked.size() != m_Pos.size()) m_Blocked.assign(m_Pos.size(), 0);
+    m_Blocked[(size_t)i] = std::max(0, m_Blocked[(size_t)i] + delta);
+}
+
+void SurfaceGraph::AddPenalty(int i, float metres) {
+    if (i < 0 || i >= (int)m_Pos.size()) return;
+    if (m_Penalty.size() != m_Pos.size()) m_Penalty.assign(m_Pos.size(), 0.0f);
+    m_Penalty[(size_t)i] = std::max(0.0f, m_Penalty[(size_t)i] + metres);
+}
+
 void SurfaceGraph::Clear() {
     m_Pos.clear();
     m_Normal.clear();
@@ -59,6 +71,8 @@ void SurfaceGraph::Clear() {
     m_Links.clear();
     m_Grid.clear();
     m_Comp.clear();
+    m_Blocked.clear();
+    m_Penalty.clear();
 }
 
 long long SurfaceGraph::CellKey(const glm::vec3& p) const {
@@ -263,7 +277,8 @@ bool SurfaceGraph::FindPath(int from, int to, const PathCosts& costs, std::vecto
         if (++expanded > maxExpand) return false;
         for (int k = m_First[(size_t)cur]; k < m_First[(size_t)cur + 1]; ++k) {
             const int nb = m_Links[(size_t)k];
-            const float ng = g + glm::length(m_Pos[(size_t)nb] - m_Pos[(size_t)cur]) * CostOf(costs, m_Normal[(size_t)nb]);
+            if (nb != to && Blocked(nb)) continue;
+            const float ng = g + glm::length(m_Pos[(size_t)nb] - m_Pos[(size_t)cur]) * CostOf(costs, m_Normal[(size_t)nb]) + Penalty(nb);
             if (m_Stamp[(size_t)nb] == m_Search && m_G[(size_t)nb] <= ng) continue;
             m_Stamp[(size_t)nb] = m_Search;
             m_G[(size_t)nb] = ng;
