@@ -1,0 +1,73 @@
+{
+  "formatVersion": 4,
+  "boxes": [],
+  "empties": [
+    {
+      "id": 0,
+      "name": "Spider",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    }
+  ],
+  "models": [
+    {
+      "Animator Controller": {
+        "Controller": "assets/Characters/Spider/Spider.controller",
+        "Speed": 1.0,
+        "Track": "",
+        "rootMotion": "In Place",
+        "rootMotionBone": "",
+        "rootMotionRotation": false,
+        "rootMotionVertical": false
+      },
+      "id": 1,
+      "materials": [
+        {
+          "guid": "2c753c3a3302c762",
+          "path": "assets/Characters/Spider/M_Spider_Body.mat"
+        },
+        {
+          "guid": "96389978b353e2a0",
+          "path": "assets/Characters/Spider/M_Spider_Eye.mat"
+        }
+      ],
+      "name": "Body",
+      "order": 0,
+      "parentId": 0,
+      "path": "assets/Characters/Spider/Spider.fbx",
+      "pathGuid": "42f1c05df4220ebf",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ]
+}

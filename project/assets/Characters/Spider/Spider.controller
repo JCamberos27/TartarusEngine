@@ -1,0 +1,56 @@
+{
+  "version": 2,
+  "parameters": [
+    {"name": "Speed", "type": "float", "default": 0.0},
+    {"name": "Airborne", "type": "bool", "default": 0.0},
+    {"name": "Attack", "type": "trigger", "default": 0.0},
+    {"name": "Jump", "type": "trigger", "default": 0.0}
+  ],
+  "tracks": ["main"],
+  "layers": [
+    {
+      "name": "Base Layer",
+      "weight": 1.0,
+      "blending": "Override",
+      "defaultState": "Locomotion",
+      "entryPosition": [-260.0, 0.0],
+      "anyPosition": [-260.0, -120.0],
+      "exitPosition": [1100.0, 0.0],
+      "states": [
+        {"name": "Locomotion", "speed": 1.0, "loop": true, "position": [0.0, 0.0],
+         "motions": {"main": {"blendParam": "Speed", "children": [
+           {"clip": "assets/Characters/Spider/Spider.fbx#Spider|idle", "threshold": 0.0, "speed": 1.0},
+           {"clip": "assets/Characters/Spider/Spider.fbx#Spider|slow_walk", "threshold": 0.5, "speed": 1.0},
+           {"clip": "assets/Characters/Spider/Spider.fbx#Spider|walk", "threshold": 1.2, "speed": 1.0},
+           {"clip": "assets/Characters/Spider/Spider.fbx#Spider|run", "threshold": 3.0, "speed": 1.0}
+         ]}}},
+        {"name": "Attack", "speed": 1.0, "loop": false, "position": [260.0, -140.0],
+         "motions": {"main": {"clip": "assets/Characters/Spider/Spider.fbx#Spider|attack"}}},
+        {"name": "Lunge Attack", "speed": 1.0, "loop": false, "position": [260.0, -260.0],
+         "motions": {"main": {"clip": "assets/Characters/Spider/Spider.fbx#Spider|lunge_attack"}}},
+        {"name": "Jump Start", "speed": 1.0, "loop": false, "position": [260.0, 140.0],
+         "motions": {"main": {"clip": "assets/Characters/Spider/Spider.fbx#Spider|start_jump"}}},
+        {"name": "In Air", "speed": 1.0, "loop": true, "position": [520.0, 140.0],
+         "motions": {"main": {"clip": "assets/Characters/Spider/Spider.fbx#Spider|in_air"}}},
+        {"name": "Land", "speed": 1.0, "loop": false, "position": [780.0, 140.0],
+         "motions": {"main": {"clip": "assets/Characters/Spider/Spider.fbx#Spider|end_jump"}}}
+      ],
+      "transitions": [
+        {"from": "Locomotion", "to": "Attack", "hasExitTime": false, "exitTime": 0.0, "duration": 0.1,
+         "conditions": [{"param": "Attack", "mode": "if", "threshold": 0.0}, {"param": "Speed", "mode": "less", "threshold": 1.0}]},
+        {"from": "Locomotion", "to": "Lunge Attack", "hasExitTime": false, "exitTime": 0.0, "duration": 0.1,
+         "conditions": [{"param": "Attack", "mode": "if", "threshold": 0.0}, {"param": "Speed", "mode": "greater", "threshold": 0.99}]},
+        {"from": "Attack", "to": "Locomotion", "hasExitTime": true, "exitTime": 0.95, "duration": 0.15, "conditions": []},
+        {"from": "Lunge Attack", "to": "Locomotion", "hasExitTime": true, "exitTime": 0.95, "duration": 0.15, "conditions": []},
+        {"from": "Locomotion", "to": "Jump Start", "hasExitTime": false, "exitTime": 0.0, "duration": 0.08,
+         "conditions": [{"param": "Jump", "mode": "if", "threshold": 0.0}]},
+        {"from": "Locomotion", "to": "In Air", "hasExitTime": false, "exitTime": 0.0, "duration": 0.15,
+         "conditions": [{"param": "Airborne", "mode": "if", "threshold": 0.0}]},
+        {"from": "Jump Start", "to": "In Air", "hasExitTime": true, "exitTime": 0.9, "duration": 0.08, "conditions": []},
+        {"from": "In Air", "to": "Land", "hasExitTime": false, "exitTime": 0.0, "duration": 0.06,
+         "conditions": [{"param": "Airborne", "mode": "ifNot", "threshold": 0.0}]},
+        {"from": "Land", "to": "Locomotion", "hasExitTime": true, "exitTime": 0.85, "duration": 0.15, "conditions": []}
+      ]
+    }
+  ]
+}
