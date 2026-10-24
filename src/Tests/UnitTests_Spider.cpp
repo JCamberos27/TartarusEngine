@@ -8,6 +8,7 @@
 #include "Components.h"
 #include "GameModuleAPI.h"
 #include "IK.h"
+#include "Log.h"
 #include "PhysicsWorld.h"
 #include "ProjectPaths.h"
 #include "Renderer/BloodPalette.h"
@@ -370,6 +371,11 @@ std::string RigText(const std::string& parts) {
 // The body-part table: Spider.rig.json's 26 parts (the thorax the one root, the abdomen on it, three segments a leg in
 // a chain off the thorax, every zone named), and a table that is wrong in each way the parser refuses.
 void TestSpiderPartsParse() {
+    // The spider is project content, not engine data: a packaged engine (CI's standalone check) runs without it.
+    if (!std::filesystem::exists(ProjectPaths::Resolve("assets/Characters/Spider/Spider.rig.json"))) {
+        Log::Info("SpiderPartsParse: no spider in this project - skipped.");
+        return;
+    }
     std::string text;
     {
         std::ifstream in(std::filesystem::u8path(ProjectPaths::Resolve("assets/Characters/Spider/Spider.rig.json")), std::ios::binary);
