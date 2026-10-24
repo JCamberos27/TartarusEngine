@@ -83,6 +83,7 @@
       "land_light": -18.0,
       "land_heavy": -14.0
     },
+    "spider": {"_doc": "the enemy spider (Creatures/SpiderSystem), a threat: its bite and screech cut through like a soldier's shot, its hiss and leg taps sit under your steps (you hear it coming close)", "tap": -24.0, "hiss": -16.0, "screech": -10.0, "bite": -9.0, "pounce": -14.0, "hurt": -12.0, "death": -10.0, "thud": -14.0, "splat": -18.0},
     "door": {
       "_doc": "interior doors (OpenableComponent), world tier: a close thuds like a heavy landing, the open / latch / rattle sit with your run",
       "open": -20.0,

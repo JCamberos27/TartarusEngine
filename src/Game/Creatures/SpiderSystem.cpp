@@ -1,6 +1,7 @@
 #include "SpiderSystem.h"
 
 #include "AssetLibrary.h"
+#include "Audio/WeaponAudio.h"
 #include "Components.h"
 #include "GameModuleAPI.h" // RaycastHit, QueryFilter
 #include "Log.h"
@@ -145,6 +146,17 @@ bool SpiderSystem::Resolve(World& world, AssetLibrary&, Body& b) {
     return true;
 }
 
+void SpiderSystem::Sound(const char* element, const glm::vec3& pos, float gain) {
+    WeaponAudio& wa = WeaponAudio::Get();
+    if (!wa.Active()) return;
+    SoundSet* set = wa.FoleySet("spider", element);
+    if (!set || set->Files.empty()) {
+        ++s_SoundsMissing;
+        return;
+    }
+    if (wa.PlayKeyed(*set, pos, false, gain).Started) ++s_SoundsStarted;
+}
+
 void SpiderSystem::BuildNav() {
     m_NavTried = true;
     PROFILE_SCOPE("Spider Nav");
@@ -235,6 +247,8 @@ void SpiderSystem::Think(World& world, AssetLibrary& assets, float dt, const Tar
         in.LegUp = b.Gait.MeanNormal();
         q.Rays = 0;
         b.Mover.Step(q, MoverFrom(sc), in, dt);
+        if (b.Mover.Attached() && !b.WasAttached) Sound("thud", b.Mover.Position()); // down from a leap, a drop, a fall
+        b.WasAttached = b.Mover.Attached();
         b.Last.Rays = q.Rays;
 
         auto& t = reg.get<TransformComponent>(b.Root);
@@ -275,7 +289,14 @@ void SpiderSystem::LatePose(World& world, float dt) {
             b.PrevPlanted[(size_t)i] = l.Planted && l.Grounded;
             if (l.Planted && l.Grounded) ++st.Grounded;
         }
-        st.Steps += b.Gait.TakeLanded();
+        const int landed = b.Gait.TakeLanded();
+        st.Steps += landed;
+        // Its feet: a chitin tap as legs land, no more than one every few frames (a run would chatter otherwise).
+        b.TapIn -= dt;
+        if (landed > 0 && b.TapIn <= 0.0f) {
+            Sound("tap", b.Mover.Position(), 0.7f + 0.1f * (float)std::min(landed, 3));
+            b.TapIn = 0.045f;
+        }
         st.TipError = 0.0f;
         if (!sc.LegIK) continue;
 

@@ -120,7 +120,10 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
         if (SeesPlayer(b, sc, t) || (t.Loud && glm::length(t.Feet - pos) < 20.0f)) {
             ai.SeenAgo = 0.0f;
             ai.LastKnown = t.Feet;
-            if (!ai.Aware && ai.State == Mode::Perch) enter(Mode::Stalk);
+            if (!ai.Aware && ai.State == Mode::Perch) {
+                enter(Mode::Stalk);
+                Sound("hiss", pos); // it has seen them
+            }
             ai.Aware = true;
         }
     }
@@ -183,6 +186,8 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
             b.Mover.Detach(glm::vec3(off.x, 0.0f, off.z) / std::max(time, 0.15f) + t.Velocity * 0.5f);
             ai.FromDrop = true;
             ai.Token = true;
+            Sound("screech", pos);
+            Sound("pounce", pos, 0.7f);
             ++b.Last.Leaps;
             enter(Mode::Leap);
             break;
@@ -206,6 +211,7 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
         } else if (ai.PounceIn <= 0.0f && dist > 2.2f && dist < 5.0f && b.Mover.Attached() && SeesPlayer(b, sc, t)) {
             enter(Mode::Telegraph);
             if (anim) anim->SetTrigger("Jump");
+            Sound("hiss", pos, 0.8f); // the tell
         }
         break;
     }
@@ -222,6 +228,8 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
             b.Mover.Detach(v);
             ai.FromDrop = false;
             ai.PounceIn = 4.0f;
+            Sound("screech", pos);
+            Sound("pounce", pos);
             ++b.Last.Leaps;
             enter(Mode::Leap);
         }
@@ -253,6 +261,7 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
         sc.Goal = t.Feet;
         sc.HasGoal = true;
         ai.Hold = true;
+        if (ai.Clock >= 0.3f && ai.Clock - dt < 0.3f) Sound("bite", pos + b.Mover.Forward() * 0.45f); // the fangs snap, hit or miss
         if (!ai.Struck && ai.Clock >= 0.3f && target) {
             const glm::vec3 fangs = pos + b.Mover.Forward() * 0.45f + up * 0.15f;
             if (ToPlayer(fangs, t) < 0.45f) {
