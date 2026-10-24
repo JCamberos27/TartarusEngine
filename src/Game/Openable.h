@@ -1,6 +1,7 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <entt/entt.hpp>
 #include <glm/gtc/quaternion.hpp>
 
 class World;
@@ -30,6 +31,20 @@ float RayBox(const glm::mat4& xform, const glm::vec3& lo, const glm::vec3& hi, c
 // One Play frame: with `interact` (the Interact button went down), the nearest openable under the crosshair within
 // kReach, and not behind a wall, opens or shuts; then every openable moves toward its target.
 void Update(World& world, const glm::vec3& eye, const glm::vec3& forward, bool interact, float dt);
+
+// Opens `e`'s openable as Interact does (its open sound, the same swing): what a creature pushing on it uses. False
+// when it isn't one, hasn't started (its first Play frame) or is open or opening already.
+bool Open(World& world, entt::entity e);
+
+// A hinged door's leaf as it hangs shut, flat on the ground plane: the hinge's foot, the unit direction from the hinge
+// to the latch edge, the leaf's width and height, and the unit direction it swings toward. False for anything but a
+// started Hinge Left / Right with a box collider.
+bool Leaf(World& world, entt::entity e, glm::vec3& hinge, glm::vec3& toLatch, float& width, glm::vec3& swingsToward,
+          float* height = nullptr);
+
+// The part's box where it stands now (its Progress): centre, half-extents along its own axes, rotation. False for one
+// without a box collider or not started.
+bool LeafBox(World& world, entt::entity e, glm::vec3& centre, glm::vec3& half, glm::quat& rot);
 
 // Every openable straight to open (t = 1) or shut (0), outside Play too: --smoke-shots with TARTARUS_OPEN_ALL=1 shows
 // them all open, to check each hinge.

@@ -1965,7 +1965,7 @@ int main(int argc, char** argv) {
                                                               : opt.npcTestScenario == "blood" ? "scenes/BloodTest.json"
                                                               : opt.npcTestScenario == "ragdoll" ? "scenes/RagdollTest.json"
                                                               : opt.npcTestScenario == "escape" || opt.npcTestScenario == "escapeshut" || opt.npcTestScenario == "aptwounds" || opt.npcTestScenario == "aptfight" ? "scenes/Apartment Hallway.json"
-                                                              : opt.npcTestScenario == "decals" || opt.npcTestScenario == "doors" || opt.npcTestScenario == "spider" || opt.npcTestScenario == "spiderdeath" || opt.npcTestScenario == "spiderhunt" || opt.npcTestScenario == "spiderplay" ? "scenes/Apartment Hallway.json"
+                                                              : opt.npcTestScenario == "decals" || opt.npcTestScenario == "doors" || opt.npcTestScenario == "spider" || opt.npcTestScenario == "spiderdeath" || opt.npcTestScenario == "spiderhunt" || opt.npcTestScenario == "spiderplay" || opt.npcTestScenario == "spiderdoor" ? "scenes/Apartment Hallway.json"
                                                                                            : "scenes/Arena.json"));
             std::cout << "[SmokeTest] Found " << smokeScenePaths.size() << " scene(s) under "
                       << scenesDir << std::endl;
@@ -2879,7 +2879,16 @@ int main(int argc, char** argv) {
                         playerVitals.ApplyDamage(h.Amount, h.Source);
                         // The shove: along the ground, up to its speed - a bite on a player already reeling back doesn't add
                         // to it, so a flurry staggers them rather than throwing them across the level.
+                        const glm::vec3 wasGoing = player.Velocity;
                         player.Velocity = SpiderSystem::Shove(player.Velocity, h.Push);
+#pragma warning(suppress : 4996)
+                        static const bool traceHits = std::getenv("TARTARUS_SPIDER_TRACE") != nullptr;
+                        if (traceHits)
+                            std::printf("[Spider] hit the player at %.2f %.2f: %s, push %.2f %.2f, ground speed %.2f -> %.2f, grounded %d, decel %.2f s, air %.2f s\n",
+                                        player.Cam.Position.x, player.Cam.Position.z, h.Pounce ? "pounce" : "bite/drop", h.Push.x,
+                                        h.Push.z, glm::length(glm::vec2(wasGoing.x, wasGoing.z)),
+                                        glm::length(glm::vec2(player.Velocity.x, player.Velocity.z)), (int)player.Grounded,
+                                        player.GroundDecelTime, player.AirAccelTime);
                         // The jolt: the view knocked up and aside, harder for a pounce.
                         const float side = glm::dot(glm::normalize(glm::vec3(h.Push.x, 0.0f, h.Push.z) + glm::vec3(1e-4f, 0.0f, 0.0f)),
                                                     player.Cam.Right());
