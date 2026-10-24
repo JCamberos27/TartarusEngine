@@ -78,6 +78,17 @@ public:
     static int SoundsStarted() { return s_SoundsStarted; }
     static int SoundsMissing() { return s_SoundsMissing; }
 
+    // How a hurt or dead spider moves (SpiderDamage.h writes these): a struck leg drawn up off its foothold for a moment, a
+    // limp, and a dead body handed to its ragdoll, neither moved nor posed here from then on.
+    struct Hurt {
+        std::array<float, Spider::kLegs> LegCurl{}; // 0..1: the leg's foot drawn up toward its hip
+        float SpeedScale = 1.0f;                    // x its speed
+        bool Dead = false;
+    };
+    Hurt* HurtOf(entt::entity root);
+    // Knocks a spider off whatever it holds, moving at `velocity` (world, m/s): it falls, lands and rights itself.
+    bool Detach(entt::entity root, const glm::vec3& velocity);
+
 private:
     struct Body {
         entt::entity Root = entt::null, ModelEntity = entt::null;
@@ -120,6 +131,7 @@ private:
             bool Dropper = false;        // waits overhead and drops (the others charge)
         } Ai;
         Stats Last;
+        SpiderSystem::Hurt Pain; // (SpiderDamage)
     };
     bool Resolve(World& world, AssetLibrary& assets, Body& b);
     void BuildNav();
