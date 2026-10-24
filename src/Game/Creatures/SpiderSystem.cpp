@@ -160,11 +160,12 @@ void SpiderSystem::Think(World& world, AssetLibrary& assets, float dt) {
     WorldQuery q;
     for (Body& b : m_Bodies) {
         if (!b.Ready && !Resolve(world, assets, b)) continue;
+        if (b.Pain.Dead) continue; // its ragdoll has it
         const auto& sc = reg.get<SpiderComponent>(b.Root);
         Spider::MoveInput in;
         in.HasGoal = sc.HasGoal;
         in.Goal = sc.Goal;
-        in.SpeedScale = sc.Run && sc.WalkSpeed > 1e-3f ? sc.RunSpeed / sc.WalkSpeed : 1.0f;
+        in.SpeedScale = (sc.Run && sc.WalkSpeed > 1e-3f ? sc.RunSpeed / sc.WalkSpeed : 1.0f) * b.Pain.SpeedScale;
         in.LegUp = b.Gait.MeanNormal();
         q.Rays = 0;
         b.Mover.Step(q, MoverFrom(sc), in, dt);
@@ -186,7 +187,7 @@ void SpiderSystem::LatePose(World& world, float dt) {
     auto& reg = world.Registry;
     WorldQuery q;
     for (Body& b : m_Bodies) {
-        if (!b.Ready || !reg.valid(b.ModelEntity)) continue;
+        if (!b.Ready || b.Pain.Dead || !reg.valid(b.ModelEntity)) continue;
         const auto& sc = reg.get<SpiderComponent>(b.Root);
         auto* rc = reg.try_get<RenderableComponent>(b.ModelEntity);
         if (!rc || !rc->ModelRef) continue;
@@ -221,8 +222,10 @@ void SpiderSystem::LatePose(World& world, float dt) {
         const glm::vec3 centre = b.Thorax >= 0 ? IK::Position(b.Globals[(size_t)b.Thorax]) : glm::vec3(0.0f);
         for (int i = 0; i < Spider::kLegs; ++i) {
             const auto& chain = b.Chains[(size_t)i];
-            const glm::vec3 foot = glm::vec3(toModel * glm::vec4(b.Gait.Leg(i).Foot, 1.0f));
+            glm::vec3 foot = glm::vec3(toModel * glm::vec4(b.Gait.Leg(i).Foot, 1.0f));
             const glm::vec3 hip = IK::Position(b.Globals[(size_t)chain.front()]);
+            if (const float curl = b.Pain.LegCurl[(size_t)i]; curl > 0.0f) // a struck leg drawn up off its foothold
+                foot = glm::mix(foot, glm::mix(hip, foot, 0.45f) + glm::vec3(0.0f, 0.16f, 0.0f), std::min(curl, 1.0f));
             // The knees bend up and out from the body: the arch a spider's leg stands in.
             glm::vec3 out = hip - centre;
             out.y = 0.0f;
@@ -264,6 +267,21 @@ entt::entity SpiderSystem::Spawn(World& world, AssetLibrary& assets, const std::
     t.Position = pos;
     t.Rotation = glm::normalize(rot);
     return root;
+}
+
+SpiderSystem::Hurt* SpiderSystem::HurtOf(entt::entity root) {
+    for (Body& b : m_Bodies)
+        if (b.Root == root) return &b.Pain;
+    return nullptr;
+}
+
+bool SpiderSystem::Detach(entt::entity root, const glm::vec3& velocity) {
+    for (Body& b : m_Bodies)
+        if (b.Root == root && b.Ready && !b.Pain.Dead) {
+            b.Mover.Detach(velocity);
+            return true;
+        }
+    return false;
 }
 
 bool SpiderSystem::Inspect(entt::entity root, Stats& out) const {

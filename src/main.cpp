@@ -38,6 +38,7 @@
 #include "Model.h"
 #include "SceneSerializer.h"
 #include "Creatures/SpiderSystem.h"
+#include "Creatures/SpiderDamage.h"
 #include "AnimationSystem.h"
 #include "ParticleSystem.h"
 #include "AnimatorController.h"
@@ -769,6 +770,7 @@ int main(int argc, char** argv) {
         BulletHoleList bulletHoles; // where this Play's rounds struck
         NpcDirector npcDirector;    // the enemy squad, in scenes with NPC Spawns
         SpiderSystem spiders;       // the enemy spiders (Spider components): bodies on any surface, legs by IK
+        SpiderDamage spiderDamage;  // ... their hitboxes, wounds, ichor and deaths (Creatures/SpiderDamage.h)
         CombatFx combatFx;          // its (and the player's) gunfire, flashes, tracers and hits
         BloodFx bloodFx;            // the volumetric blood out of every body a round goes into (docs/BLOOD_FX.md)
         SprayCanSystem sprayCans;   // graffiti sprayed on in Play, by the player (F6) or an NPC (docs/GRAFFITI_DESIGNER.md)
@@ -891,7 +893,8 @@ int main(int argc, char** argv) {
             // Bloody footprints out of fresh blood; the player's point the way they face (turning on the spot too).
             bloodFx.OnFootstep(walker, feet, vel, foot, walker < 0 ? player.Cam.Front() : glm::vec3(0.0f));
         });
-        bloodFx.SetBodyLookup([&npcDirector](unsigned entity, glm::vec3& centre) { // where a corpse lies, for its pool
+        bloodFx.SetBodyLookup([&npcDirector, &spiderDamage, &world](unsigned entity, glm::vec3& centre) { // where a corpse lies, for its pool
+            if (spiderDamage.BodyCentre(world, entity, centre)) return true;
             for (const auto& n : npcDirector.Npcs()) {
                 if (!n || (unsigned)entt::to_integral(n->Root) != entity) continue;
                 // The middle of the body: pelvis toward chest (its pool spreads from under there).
@@ -979,6 +982,7 @@ int main(int argc, char** argv) {
                 (void)m;
                 return !out.Members.empty();
             }
+            if (spiderDamage.Owns(entity)) return spiderDamage.SplatSpace(world, entity, part, point, out);
             const entt::entity e = static_cast<entt::entity>(entity);
             if (!world.Registry.valid(e) || !world.Registry.all_of<RigidbodyComponent, RenderableComponent>(e)) return false;
             out.Group = entity;
@@ -1014,6 +1018,7 @@ int main(int argc, char** argv) {
             if (group == kPlayerEntity) return true;
             for (const auto& n : npcDirector.Npcs())
                 if (n && (unsigned)entt::to_integral(n->Root) == group) return true;
+            if (spiderDamage.Owns(group)) return true;
             const entt::entity e = static_cast<entt::entity>(group);
             if (!world.Registry.valid(e) || !world.Registry.all_of<RigidbodyComponent, RenderableComponent>(e)) return false;
             out.push_back(group);
@@ -1215,6 +1220,26 @@ int main(int argc, char** argv) {
                 return (std::uint32_t)entt::to_integral(e);
             };
             npcTest->Spiders = &spiders;
+            npcTest->SpiderHurt = &spiderDamage;
+            npcTest->BloodFxView = &bloodFx;
+            npcTest->ShootSpider = [&](const glm::vec3& from, const glm::vec3& dir, float damage, int pellets, bool& spider) {
+                spider = false;
+                const float o[3] = {from.x, from.y, from.z}, d[3] = {dir.x, dir.y, dir.z};
+                QueryFilter f;
+                f.HitTriggers = 0;
+                RaycastHit h;
+                if (!PhysicsWorld::RaycastFiltered(o, d, 20.0f, f, h) || !h.Hit) return 0xFFFFFFFFu;
+                const glm::vec3 p(h.Point[0], h.Point[1], h.Point[2]), n(h.Normal[0], h.Normal[1], h.Normal[2]);
+                SpiderDamage::Result sr; // the player-round path's: a spider takes it, anything else gets a hole
+                if (spiderDamage.OnHit(world, spiders, h.Entity, p, from, dir, damage, pellets, sr)) {
+                    spider = true;
+                    bloodFx.OnFleshHit(SpiderDamage::Blood(sr));
+                    return h.Entity;
+                }
+                combatFx.Impact(world, h.Entity, p);
+                worldImpact(h.Entity, p, n, dir, 0.0027f);
+                return h.Entity;
+            };
         }
 
         if (resaveMode) {
@@ -1936,7 +1961,7 @@ int main(int argc, char** argv) {
                                                               : opt.npcTestScenario == "blood" ? "scenes/BloodTest.json"
                                                               : opt.npcTestScenario == "ragdoll" ? "scenes/RagdollTest.json"
                                                               : opt.npcTestScenario == "escape" || opt.npcTestScenario == "escapeshut" || opt.npcTestScenario == "aptwounds" || opt.npcTestScenario == "aptfight" ? "scenes/Apartment Hallway.json"
-                                                              : opt.npcTestScenario == "decals" || opt.npcTestScenario == "doors" || opt.npcTestScenario == "spider" ? "scenes/Apartment Hallway.json"
+                                                              : opt.npcTestScenario == "decals" || opt.npcTestScenario == "doors" || opt.npcTestScenario == "spider" || opt.npcTestScenario == "spiderdeath" ? "scenes/Apartment Hallway.json"
                                                                                            : "scenes/Arena.json"));
             std::cout << "[SmokeTest] Found " << smokeScenePaths.size() << " scene(s) under "
                       << scenesDir << std::endl;
@@ -2842,6 +2867,7 @@ int main(int argc, char** argv) {
                 }
                 // The spiders' legs onto this frame's footholds, over the pose their animators just gave them.
                 spiders.LatePose(world, gameDt);
+                spiderDamage.LateUpdate(world, spiders, gameDt); // flinches, hitboxes, the dead onto their ragdolls
                 // The arms are posed now (clips + IK): seat the gun in this frame's hands.
                 if (playUsesPlayer) {
                     PROFILE_SCOPE("First Person IK");
@@ -2882,6 +2908,15 @@ int main(int argc, char** argv) {
                     PROFILE_SCOPE("Player Shots + Impacts");
                     for (const FirstPersonPresentation::ShotHit& hit : firstPersonPresentation.TakeShotHits()) {
                         if (weaponTest) weaponTest->OnHit(hit.Point);
+                        if (SpiderDamage::Result sr; spiderDamage.OnHit(world, spiders, hit.Entity, hit.Point, hit.Origin, hit.Direction,
+                                                                         firstPersonPresentation.Set().Gameplay, hit.Pellets, sr)) {
+                            bloodFx.OnFleshHit(SpiderDamage::Blood(sr)); // ichor, not a hole in the wall behind it
+                            if (sr.Living) {
+                                playerVitals.MarkHit(sr.Killed, sr.Zone == Spider::PartZone::Head);
+                                combatFx.Play(sr.Killed ? CombatFx::Cue::HitmarkerKill : CombatFx::Cue::Hitmarker, hit.Point);
+                            }
+                            continue;
+                        }
                         if (npcDirector.Active()) {
                             bool killed = false, head = false, aliveWhenHit = false;
                             if (npcDirector.OnPlayerHit(world, hit.Entity, hit.Point, hit.Origin, hit.Direction,

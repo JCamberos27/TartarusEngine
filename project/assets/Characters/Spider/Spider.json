@@ -31,6 +31,10 @@
         "Step Height": 0.07,
         "Step Time": 0.2,
         "Leg IK": true
+      },
+      "Health": {
+        "Max": 60.0,
+        "Invulnerable": false
       }
     }
   ],

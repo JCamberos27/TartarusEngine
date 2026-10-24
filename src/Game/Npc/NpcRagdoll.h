@@ -39,7 +39,7 @@ public:
         int WeakLeg = -1;          // a living body shot down by a leg: that leg (0 left, 1 right) gives at once, whole (the struck joint's weakness)
         bool Prone = false;        // killed already down on the floor (crawling): no collapse to make, a flinch and then slack, flat
         bool HaveNeutral = false;
-        glm::quat Neutral[16];     // each joint's rotation from the death pose back to its neutral (straight limb, upright spine); needs the joint frames
+        glm::quat Neutral[32];     // (PhysicsWorld::kMaxRagdollParts) each joint's rotation from the death pose back to its neutral (straight limb, upright spine); needs the joint frames
         Fall();
     };
     // Starts powering ragdoll `id`, built from `parts` (BuildParts: the joints' frames) in a body whose axes are `root`'s (x left,

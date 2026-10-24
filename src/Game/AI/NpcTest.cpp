@@ -81,6 +81,7 @@ NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "w
     if (m_Scenario == "decals") m_Duration = 52.0f;
     if (m_Scenario == "doors") m_Duration = 300.0f; // (done once the route is walked)
     if (m_Scenario == "spider") m_Duration = 150.0f; // (done once the route is crawled)
+    if (m_Scenario == "spiderdeath") m_Duration = 60.0f; // (done once the last body has settled)
     if (m_Scenario == "ragdoll") m_Duration = 240.0f;
     if (const char* t = EnvVar("NPC_TEST_SECONDS")) m_Duration = std::max(5.0f, (float)std::atof(t));
     if (const char* r = EnvVar("NPC_TEST_RECORD")) m_RecordDir = r;
@@ -372,6 +373,10 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
     }
     if (m_Scenario == "spider") {
         SpiderRoute(world);
+        return;
+    }
+    if (m_Scenario == "spiderdeath") {
+        SpiderDeath(world);
         return;
     }
     if (m_Scenario == "feet") {
