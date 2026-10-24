@@ -229,24 +229,30 @@ for o in meshes:
     m = o.modifiers.new('Armature', 'ARMATURE'); m.object = qarm
 bpy.data.objects.remove(sarm)
 
-# The skull fitted inside the Quantum head with a little tissue all round: crown and chin set its height, face and back
-# of the head its depth; its width keeps the skull's own proportions (the head's width counts the ears).
+# The skull fitted inside the Quantum head with a little tissue all round: crown and chin set its height; its depth runs
+# from the forehead (not the nose, which stands well clear of the skull and pushed the forehead through the skin) to the
+# back of the head; its width keeps the skull's own proportions (the head's width counts the ears).
 _skull = next(o for o in meshes if 'Skull' in o.name)
 _sp = [_skull.matrix_world @ v.co for v in _skull.data.vertices]
 s_lo = Vector((min(p.x for p in _sp), min(p.y for p in _sp), min(p.z for p in _sp)))
 s_hi = Vector((max(p.x for p in _sp), max(p.y for p in _sp), max(p.z for p in _sp)))
-SCALP, CHIN, FACE, BACK = 0.006, 0.008, 0.007, 0.008
-t_lo = Vector((Q_HEAD_LO.x, Q_HEAD_LO.y + FACE, Q_HEAD_LO.z + CHIN))
-t_hi = Vector((Q_HEAD_HI.x, Q_HEAD_HI.y - BACK, Q_HEAD_HI.z - SCALP))
-sz = (t_hi.z - t_lo.z) / (s_hi.z - s_lo.z)
-sy = (t_hi.y - t_lo.y) / (s_hi.y - s_lo.y)
+SCALP, CHIN, FOREHEAD, BACK = 0.006, 0.008, 0.006, 0.008
+z_lo, z_hi = Q_HEAD_LO.z + CHIN, Q_HEAD_HI.z - SCALP
+sz = (z_hi - z_lo) / (s_hi.z - s_lo.z)
+fit_z = lambda p: z_lo + (p.z - s_lo.z) * sz
+# The forehead: the band from the brow up to near the crown, on both the head and the fitted skull.
+band = (Q_HEAD_HI.z - 0.14, Q_HEAD_HI.z - 0.03)
+q_fore = min(p.y for p in _pts if band[0] < p.z < band[1])
+s_fore = min(p.y for p in _sp if band[0] < fit_z(p) < band[1])
+y_back = Q_HEAD_HI.y - BACK
+sy = (y_back - (q_fore + FOREHEAD)) / (s_hi.y - s_fore)
 sx = (sy + sz) / 2
-s_c, t_c = (s_lo + s_hi) / 2, (t_lo + t_hi) / 2
+x_c, s_xc = (Q_HEAD_LO.x + Q_HEAD_HI.x) / 2, (s_lo.x + s_hi.x) / 2
+fit_skull = lambda p: Vector((x_c + (p.x - s_xc) * sx, y_back + (p.y - s_hi.y) * sy, fit_z(p)))
 _inv = _skull.matrix_world.inverted()
 for v, p in zip(_skull.data.vertices, _sp):
-    d = p - s_c
-    v.co = _inv @ (t_c + Vector((d.x * sx, d.y * sy, d.z * sz)))
-print('SKULLFIT scale x %.3f y %.3f z %.3f, moved %.1f cm' % (sx, sy, sz, (t_c - s_c).length * 100))
+    v.co = _inv @ fit_skull(p)
+print('SKULLFIT scale x %.3f y %.3f z %.3f' % (sx, sy, sz))
 
 # The neck vertebrae run from where they leave the ribcage up to the skull's base (Quantum's head joint): the skull
 # moved with its fit, and the top vertebra has to meet it.
@@ -257,9 +263,7 @@ _np = [_body.matrix_world @ v.co for v in _nv]
 n_bot = min(p.z for p in _np); n_top = max(p.z for p in _np)
 n_top_c = sum((p for p in _np if p.z > n_top - 0.01), Vector()) / max(1, sum(1 for p in _np if p.z > n_top - 0.01))
 # Where the top vertebra touched the skull before the fit, and where the fit took that spot.
-_contact = min(_sp, key=lambda p: (p - n_top_c).length)
-_d = _contact - s_c
-q_joint = t_c + Vector((_d.x * sx, _d.y * sy, _d.z * sz))
+q_joint = fit_skull(min(_sp, key=lambda p: (p - n_top_c).length))
 _binv = _body.matrix_world.inverted()
 for v, p in zip(_nv, _np):
     t = (p.z - n_bot) / max(n_top - n_bot, 1e-6)  # 0 at the ribcage, 1 at the top vertebra
@@ -347,6 +351,52 @@ for side in ('_l', '_r'):
     top_n = nfp[fp.index(top)]
     print('FEET %s scale x %.3f y %.3f z %.3f, slid %.1f cm; ankle bone %.1f cm from the joint (was %.1f)' % (
         side, kx, ky, kz, ty * 100, (top_n - ankle).length * 100, (top - ankle).length * 100))
+
+# Whatever still reaches the skin (the breastbone between the chest muscles, the lower ribs and the hip bones' front
+# points where the belly falls away, the shin's edge, the ankle knobs, the heels) is drawn back under it: any bone
+# vertex less than TISSUE inside Quantum's skin moves along the skin's normal to TISSUE deep. The eyes, teeth and other
+# inner parts of the head aren't skin; a vertex more than REACH from the skin is left alone (the armpit, where the
+# torso and arm meshes meet, has no skin to measure against).
+import bmesh
+from mathutils.bvhtree import BVHTree
+TISSUE, REACH = 0.004, 0.03
+NOT_SKIN = ('eye', 'teeth', 'saliva', 'lash', 'brow', 'tongue', 'facial')
+_seen = set(bpy.data.objects)
+for rel in ('Quantum_Torso.fbx', 'Quantum_Legs.fbx', 'Quantum_Feet.fbx', 'Quantum_Head.fbx', 'Quantum_UnderPants.fbx',
+            '../../FirstPerson/Quantum_Arms_FP.fbx'):
+    bpy.ops.import_scene.fbx(filepath=__import__('os').path.join(__import__('os').path.dirname(qpath), rel))
+_skin = bmesh.new()
+_teeth = []
+for o in [o for o in bpy.data.objects if o not in _seen and o.type == 'MESH']:
+    t = bmesh.new(); t.from_mesh(o.data); t.transform(o.matrix_world)
+    inner = {i for i, s in enumerate(o.material_slots) if s.material and any(k in s.material.name.lower() for k in NOT_SKIN)}
+    teeth = {i for i, s in enumerate(o.material_slots) if s.material and 'teeth' in s.material.name.lower()}
+    _teeth += [v.co.copy() for f in t.faces if f.material_index in teeth for v in f.verts]
+    bmesh.ops.delete(t, geom=[f for f in t.faces if f.material_index in inner], context='FACES')
+    me = bpy.data.meshes.new('skin'); t.to_mesh(me); t.free(); _skin.from_mesh(me)
+for o in [o for o in bpy.data.objects if o not in _seen]: bpy.data.objects.remove(o)
+_skin.normal_update()
+_tree = BVHTree.FromBMesh(_skin)
+# The mouth: inside it the nearest 'skin' is the mouth's lining, and the skull's teeth belong where Quantum's are.
+MOUTH = 0.015
+m_lo = Vector((min(p.x for p in _teeth), min(p.y for p in _teeth), min(p.z for p in _teeth))) - Vector((MOUTH,) * 3)
+m_hi = Vector((max(p.x for p in _teeth), max(p.y for p in _teeth), max(p.z for p in _teeth))) + Vector((MOUTH,) * 3)
+in_mouth = lambda p: all(m_lo[i] <= p[i] <= m_hi[i] for i in range(3))
+for o in meshes:
+    inv = o.matrix_world.inverted()
+    names = {g.index: g.name for g in o.vertex_groups}
+    moved = {}
+    for v in o.data.vertices:
+        p = o.matrix_world @ v.co
+        loc, nrm, _, dist = _tree.find_nearest(p)
+        if loc is None or dist > REACH or in_mouth(p): continue
+        depth = dist if (p - loc).dot(nrm) < 0 else -dist
+        if depth >= TISSUE: continue
+        v.co = inv @ (loc - nrm.normalized() * TISSUE)
+        g = names[max(v.groups, key=lambda x: x.weight).group].rstrip('_lr') if v.groups else o.name
+        n, worst = moved.get(g, (0, 0.0)); moved[g] = (n + 1, max(worst, TISSUE - depth))
+    for g, (n, worst) in sorted(moved.items()):
+        if worst > 0.002: print('UNDERSKIN %-14s %-18s %5d verts, furthest %.1f cm' % (o.name, g, n, worst * 100))
 
 body = next(o for o in meshes if 'Body' in o.name)
 skull = next(o for o in meshes if 'Skull' in o.name)
