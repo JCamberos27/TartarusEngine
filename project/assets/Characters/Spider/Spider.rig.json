@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "model": "assets/Characters/Spider/Spider.fbx",
+  "body": {
+    "thorax": "Bone",
+    "abdomen": "Bone.001"
+  },
+  "stanceClip": "Spider|idle",
+  "pedipalps": {
+    "L": [
+      "Bone.038",
+      "Bone.039",
+      "Bone.040"
+    ],
+    "R": [
+      "Bone.041",
+      "Bone.042",
+      "Bone.043"
+    ]
+  },
+  "legs": [
+    {
+      "name": "L1",
+      "bones": [
+        "Bone.033",
+        "Bone.034",
+        "Bone.035",
+        "Bone.036",
+        "Bone.037"
+      ]
+    },
+    {
+      "name": "R1",
+      "bones": [
+        "Bone.028",
+        "Bone.029",
+        "Bone.030",
+        "Bone.031",
+        "Bone.032"
+      ]
+    },
+    {
+      "name": "L2",
+      "bones": [
+        "Bone.010",
+        "Bone.011",
+        "Bone.012",
+        "Bone.013"
+      ]
+    },
+    {
+      "name": "R2",
+      "bones": [
+        "Bone.014",
+        "Bone.015",
+        "Bone.016",
+        "Bone.017"
+      ]
+    },
+    {
+      "name": "L3",
+      "bones": [
+        "Bone.006",
+        "Bone.007",
+        "Bone.008",
+        "Bone.009"
+      ]
+    },
+    {
+      "name": "R3",
+      "bones": [
+        "Bone.002",
+        "Bone.003",
+        "Bone.004",
+        "Bone.005"
+      ]
+    },
+    {
+      "name": "L4",
+      "bones": [
+        "Bone.018",
+        "Bone.019",
+        "Bone.020",
+        "Bone.021",
+        "Bone.022"
+      ]
+    },
+    {
+      "name": "R4",
+      "bones": [
+        "Bone.023",
+        "Bone.024",
+        "Bone.025",
+        "Bone.026",
+        "Bone.027"
+      ]
+    }
+  ],
+  "gaitGroups": [
+    [
+      "L1",
+      "R2",
+      "L3",
+      "R4"
+    ],
+    [
+      "R1",
+      "L2",
+      "R3",
+      "L4"
+    ]
+  ]
+}

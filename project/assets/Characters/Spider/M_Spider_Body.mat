@@ -1,0 +1,41 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Spider_Body",
+  "properties": {
+    "_BaseColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_Roughness": 1.0,
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0,
+    "_AlbedoMap": "assets/Characters/Spider/Textures/T_Spider_Albedo.png",
+    "_NormalMap": "assets/Characters/Spider/Textures/T_Spider_Normal.png",
+    "_RoughnessMap": "assets/Characters/Spider/Textures/T_Spider_Roughness.png",
+    "_AOMap": "assets/Characters/Spider/Textures/T_Spider_AO.png",
+    "_Sheen": [0.3, 0.26, 0.2],
+    "_SheenRoughness": 0.6,
+    "_SubsurfaceEnabled": true,
+    "_SubsurfaceColor": [
+      0.55,
+      0.32,
+      0.16
+    ],
+    "_ThicknessMap": "assets/Characters/Spider/Textures/T_Spider_Thickness.png",
+    "_Thickness": 0.6
+  },
+  "shader": "engine://Standard.shader"
+}
