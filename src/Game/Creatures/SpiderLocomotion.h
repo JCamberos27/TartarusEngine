@@ -58,6 +58,9 @@ struct MoveInput {
 class Mover {
 public:
     void Reset(const glm::vec3& pos, const glm::quat& rot);
+    // Lets go of the surface with `velocity` (a leap, a drop from the ceiling, a hit that knocks it off): it flies
+    // under gravity, rights itself and catches the first surface it meets.
+    void Detach(const glm::vec3& velocity);
     void Step(const SurfaceQuery& q, const MoverSettings& s, const MoveInput& in, float dt);
 
     glm::vec3 Position() const { return m_Pos; }

@@ -1,6 +1,7 @@
 #include "SpiderSystem.h"
 
 #include "AssetLibrary.h"
+#include "Audio/WeaponAudio.h"
 #include "Components.h"
 #include "GameModuleAPI.h" // RaycastHit, QueryFilter
 #include "Log.h"
@@ -145,6 +146,17 @@ bool SpiderSystem::Resolve(World& world, AssetLibrary&, Body& b) {
     return true;
 }
 
+void SpiderSystem::Sound(const char* element, const glm::vec3& pos, float gain) {
+    WeaponAudio& wa = WeaponAudio::Get();
+    if (!wa.Active()) return;
+    SoundSet* set = wa.FoleySet("spider", element);
+    if (!set || set->Files.empty()) {
+        ++s_SoundsMissing;
+        return;
+    }
+    if (wa.PlayKeyed(*set, pos, false, gain).Started) ++s_SoundsStarted;
+}
+
 void SpiderSystem::BuildNav() {
     m_NavTried = true;
     PROFILE_SCOPE("Spider Nav");
@@ -186,7 +198,7 @@ glm::vec3 SpiderSystem::Steer(Body& b, const glm::vec3& goal, float dt) {
         b.RouteNormal.clear();
         b.RouteAt = 0;
         const int from = m_Nav.Nearest(pos, 0.8f, &up), to = m_Nav.Nearest(goal, 1.0f);
-        b.RouteFailed = from < 0 || to < 0 || !m_Nav.FindPath(from, to, RouteCosts, b.RouteScratch);
+        b.RouteFailed = from < 0 || to < 0 || !m_Nav.FindPath(from, to, b.Costs, b.RouteScratch);
         if (!b.RouteFailed) {
             for (int n : b.RouteScratch) {
                 b.Route.push_back(m_Nav.Pos(n));
@@ -199,7 +211,7 @@ glm::vec3 SpiderSystem::Steer(Body& b, const glm::vec3& goal, float dt) {
     return Spider::RouteAim(b.Route, b.RouteNormal, b.RouteAt, pos, up, goal);
 }
 
-void SpiderSystem::Think(World& world, AssetLibrary& assets, float dt) {
+void SpiderSystem::Think(World& world, AssetLibrary& assets, float dt, const Target* target) {
     if (const std::uint64_t gen = PhysicsWorld::SimulationGeneration(); gen != m_Generation) {
         Clear(); // a new Play, maybe of another scene
         m_Generation = gen;
@@ -213,6 +225,8 @@ void SpiderSystem::Think(World& world, AssetLibrary& assets, float dt) {
         if (std::none_of(m_Bodies.begin(), m_Bodies.end(), [&](const Body& b) { return b.Root == e; })) {
             Body b;
             b.Root = e;
+            b.Ai.Dropper = (m_SpawnCount++ % 2) == 0; // every other one waits overhead
+            b.Ai.LookIn = 0.05f * (float)(m_SpawnCount % 3); // their looks spread over frames
             m_Bodies.push_back(std::move(b));
         }
     if (m_Bodies.empty() || dt <= 0.0f) return;
@@ -222,15 +236,19 @@ void SpiderSystem::Think(World& world, AssetLibrary& assets, float dt) {
     WorldQuery q;
     for (Body& b : m_Bodies) {
         if (!b.Ready && !Resolve(world, assets, b)) continue;
-        const auto& sc = reg.get<SpiderComponent>(b.Root);
+        auto& sc = reg.get<SpiderComponent>(b.Root);
+        if (sc.Brain == 0 && target) Hunt(world, b, sc, *target, dt);
+        else b.Ai.State = Mode::Scripted;
         Spider::MoveInput in;
         in.HasGoal = sc.HasGoal;
         in.Goal = sc.HasGoal ? Steer(b, sc.Goal, dt) : sc.Goal;
         if (!sc.HasGoal) b.Route.clear();
-        in.SpeedScale = sc.Run && sc.WalkSpeed > 1e-3f ? sc.RunSpeed / sc.WalkSpeed : 1.0f;
+        in.SpeedScale = b.Ai.Hold ? 0.0f : sc.Run && sc.WalkSpeed > 1e-3f ? sc.RunSpeed / sc.WalkSpeed : 1.0f;
         in.LegUp = b.Gait.MeanNormal();
         q.Rays = 0;
         b.Mover.Step(q, MoverFrom(sc), in, dt);
+        if (b.Mover.Attached() && !b.WasAttached) Sound("thud", b.Mover.Position()); // down from a leap, a drop, a fall
+        b.WasAttached = b.Mover.Attached();
         b.Last.Rays = q.Rays;
 
         auto& t = reg.get<TransformComponent>(b.Root);
@@ -271,7 +289,14 @@ void SpiderSystem::LatePose(World& world, float dt) {
             b.PrevPlanted[(size_t)i] = l.Planted && l.Grounded;
             if (l.Planted && l.Grounded) ++st.Grounded;
         }
-        st.Steps += b.Gait.TakeLanded();
+        const int landed = b.Gait.TakeLanded();
+        st.Steps += landed;
+        // Its feet: a chitin tap as legs land, no more than one every few frames (a run would chatter otherwise).
+        b.TapIn -= dt;
+        if (landed > 0 && b.TapIn <= 0.0f) {
+            Sound("tap", b.Mover.Position(), 0.7f + 0.1f * (float)std::min(landed, 3));
+            b.TapIn = 0.045f;
+        }
         st.TipError = 0.0f;
         if (!sc.LegIK) continue;
 
@@ -341,6 +366,9 @@ bool SpiderSystem::Inspect(entt::entity root, Stats& out) const {
         out.SurfaceGap = b.Mover.SurfaceGap();
         out.SurfaceNormal = b.Mover.SurfaceNormal();
         out.LegNormal = b.Gait.MeanNormal();
+        out.AiMode = b.Ai.State;
+        out.Aware = b.Ai.Aware;
+        out.HasToken = b.Ai.Token;
         out.Attached = b.Mover.Attached();
         out.Arrived = b.Mover.Arrived();
         out.Lifted[0] = b.Gait.Stepping(0);
