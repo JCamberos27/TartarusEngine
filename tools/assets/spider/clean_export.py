@@ -39,14 +39,29 @@ for a in list(bpy.data.actions):
         bpy.data.actions.remove(a)
 print("actions", sorted(a.name for a in bpy.data.actions))
 
-# No action assigned, so the rest pose exported is the bind pose, not a clip's first frame.
+# The FBX import keyed the rig object's own transform into every clip: exported as is, each clip would put the rig
+# back at the pack's scale and place, whatever it is given below. Only the bones' keys stay.
+for a in bpy.data.actions:
+    for layer in a.layers:
+        for strip in layer.strips:
+            for bag in strip.channelbags:
+                for fc in [fc for fc in bag.fcurves if not fc.data_path.startswith("pose.bones")]:
+                    bag.fcurves.remove(fc)
+
+# No action assigned and every bone at rest, so the rest pose exported is the bind pose, not a clip's frame.
 if arm.animation_data:
     arm.animation_data.action = None
+for pb in arm.pose.bones:
+    pb.location = (0.0, 0.0, 0.0)
+    pb.rotation_quaternion = (1.0, 0.0, 0.0, 0.0)
+    pb.rotation_euler = (0.0, 0.0, 0.0)
+    pb.scale = (1.0, 1.0, 1.0)
 
-# Game size baked into the rig's own transform (0.443: ~1.3 m across the legs, a medium dog), so the
-# skin, bind pose and every clip's keys agree - an importer scale only reached the bind pose.
+# Game size baked into the rig's own transform, so the skin, bind pose and every clip's keys agree (an importer
+# scale only reaches the bind pose). 0.40: the splayed rest pose is ~1.3 m across, the standing stance ~1.2 m - a
+# medium dog.
 from mathutils import Vector
-arm.scale = (0.443, 0.443, 0.443)
+arm.scale = (0.40, 0.40, 0.40)
 bpy.context.view_layer.update()
 pts = [mesh.matrix_world @ v.co for v in mesh.data.vertices]
 lo = Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts)))
