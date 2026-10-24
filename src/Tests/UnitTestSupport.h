@@ -39,3 +39,4 @@ void RegisterEngineTests(UnitTestSupport::TestList& tests);    // UnitTests_Engi
 void RegisterBloodTests(UnitTestSupport::TestList& tests);     // UnitTests_Blood.cpp
 void RegisterGlassTests(UnitTestSupport::TestList& tests);     // UnitTests_Glass.cpp
 void RegisterCharacterMoverTests(UnitTestSupport::TestList& tests); // UnitTests_CharacterMover.cpp
+void RegisterSpiderTests(UnitTestSupport::TestList& tests);    // UnitTests_Spider.cpp

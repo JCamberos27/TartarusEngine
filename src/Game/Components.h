@@ -1264,6 +1264,23 @@ struct HealthComponent {
     float Current = -1.0f; // < 0 = not started yet (reads as Max)
 };
 
+// An enemy spider (Creatures/SpiderSystem.h), on a spider prefab's root above the child that holds its model and
+// Animator Controller. In Play it sticks to floors, walls and ceilings and its legs step on them with IK. Where it
+// heads is runtime: the AI (or a test) sets the goal.
+struct SpiderComponent {
+    std::string Rig = "assets/Characters/Spider/Spider.rig.json"; // which bones are its legs (SpiderLocomotion.h)
+    float WalkSpeed = 0.9f;   // m/s
+    float RunSpeed = 2.4f;    // m/s
+    float TurnRate = 260.0f;  // deg/s
+    float StepHeight = 0.07f; // m a foot lifts mid-step
+    float StepTime = 0.2f;    // s a step takes at a walk
+    bool LegIK = true;        // off: the legs play the clips as authored
+    // --- runtime (not serialized)
+    bool HasGoal = false;
+    bool Run = false;
+    glm::vec3 Goal{0.0f};
+};
+
 // Where an enemy soldier appears in Play (Npc/NpcSpawner.h). The enemy squad is built from these.
 struct NpcSpawnComponent {
     int Weapon = 0;        // 0 = AKS-74U, 1 = Remington 870, 2 = either, picked at random
