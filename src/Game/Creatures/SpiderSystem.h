@@ -14,6 +14,7 @@
 #include <vector>
 
 class AssetLibrary;
+struct SpiderComponent;
 class World;
 
 // The enemy spiders in Play: every active entity with a Spider component (a spider prefab's root, its model and Animator
@@ -21,7 +22,26 @@ class World;
 // after them, steps the legs and puts them onto their footholds with IK (SpiderLocomotion.h has the how).
 class SpiderSystem {
 public:
-    void Think(World& world, AssetLibrary& assets, float dt);
+    // Who the hunters hunt: the player, as they are this frame.
+    struct Target {
+        bool Valid = false, Dead = false;
+        glm::vec3 Feet{0.0f}, Eye{0.0f}, Velocity{0.0f};
+        float Radius = 0.3f;
+        bool Loud = false;           // a shot, or a sprint: heard through walls (within ~20 m)
+    };
+    // What a hunter did to the player this frame (the host applies the damage, the shove and the view's jolt).
+    struct PlayerHit {
+        float Amount = 0.0f;
+        glm::vec3 Source{0.0f};      // the spider
+        glm::vec3 Push{0.0f};        // m/s added to the player's velocity
+        bool Pounce = false;         // a leap or a drop landed (harder jolt) rather than a bite
+    };
+    std::vector<PlayerHit> TakePlayerHits() { std::vector<PlayerHit> out; out.swap(m_PlayerHits); return out; }
+
+    // A hunter's state of mind (SpiderAI.cpp).
+    enum class Mode : int { Perch, Stalk, Engage, Telegraph, Leap, Bite, Recover, Reposition, Search, Scripted };
+
+    void Think(World& world, AssetLibrary& assets, float dt, const Target* target = nullptr);
     void LatePose(World& world, float dt);
     void Clear() { m_Bodies.clear(); m_Nav.Clear(); m_NavTried = false; }
     bool Active() const { return !m_Bodies.empty(); }
@@ -29,8 +49,6 @@ public:
     // The level's surface graph (SpiderNav.h), baked (or read from its cache) when the first spider appears in Play.
     // Empty when the bake failed: spiders then head straight for their goals.
     const Spider::SurfaceGraph& Nav() const { return m_Nav; }
-    // How routes are weighed (the AI makes walls and ceilings cheap to stalk, the floor cheap to charge).
-    Spider::PathCosts RouteCosts;
 
     // A spider from `prefab` (a scene file whose root carries a Spider component) at `pos` facing `rot`: its root, or
     // entt::null when the prefab won't load.
@@ -51,6 +69,9 @@ public:
         int Rays = 0;                // surface rays this frame
         int RouteNodes = 0;          // the current route's length in graph nodes (0: heading straight for the goal)
         int Replans = 0;             // routes planned so far
+        Mode AiMode = Mode::Scripted;
+        bool Aware = false, HasToken = false;
+        int Bites = 0, Pounces = 0, Drops = 0, Leaps = 0; // landed on the player / leaps and drops tried
     };
     bool Inspect(entt::entity root, Stats& out) const;
 
@@ -75,6 +96,24 @@ private:
         glm::vec3 RouteGoal{0.0f};
         float RouteAge = 0.0f;
         bool RouteFailed = false;
+        // How its routes weigh floor, wall and ceiling: the hunter makes climbing cheap to stalk, the floor to charge.
+        Spider::PathCosts Costs;
+        // The hunter (SpiderAI.cpp).
+        struct Mind {
+            Mode State = Mode::Perch;
+            float Clock = 0.0f;          // seconds in this state
+            bool Aware = false, Token = false, Struck = false;
+            bool Hold = false;           // facing its goal without moving (the tell, a bite)
+            bool FromDrop = false, Landed = false; // this leap is a drop from above; it struck the player
+            float SeenAgo = 1e9f;        // seconds since it last saw or heard the player
+            float LookIn = 0.0f;         // seconds to the next sight check (staggered between spiders)
+            float PounceIn = 0.0f, BiteIn = 0.0f; // cooldowns
+            float AimIn = 0.0f;          // seconds to re-aiming at a spot over the player
+            int BitesInRow = 0;
+            int Perch = -1;              // graph node it waits on
+            glm::vec3 LastKnown{0.0f};
+            bool Dropper = false;        // waits overhead and drops (the others charge)
+        } Ai;
         Stats Last;
     };
     bool Resolve(World& world, AssetLibrary& assets, Body& b);
@@ -82,6 +121,14 @@ private:
     // Where the mover heads this frame: the route's next waypoint (as far along the surface it is on as the route stays
     // on it), or the goal itself on its last stretch or without a graph.
     glm::vec3 Steer(Body& b, const glm::vec3& goal, float dt);
+    // The hunter's decision for this frame: sets the component's goal / run, triggers attacks and leaps (SpiderAI.cpp).
+    void Hunt(World& world, Body& b, SpiderComponent& sc, const Target& t, float dt);
+    bool SeesPlayer(const Body& b, const SpiderComponent& sc, const Target& t) const;
+    int PickPerch(const glm::vec3& near) const;
+    int Attackers() const;
+
+    std::vector<PlayerHit> m_PlayerHits;
+    int m_SpawnCount = 0;
 
     Spider::SurfaceGraph m_Nav;
     bool m_NavTried = false;
