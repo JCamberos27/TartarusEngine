@@ -210,6 +210,7 @@ void NpcTest::Drive(Player& player, FirstPersonPresentation& weapon, NpcDirector
     if (m_Scenario == "decals") DecalsDrive(player, wantYaw, wantPitch);
     if (m_Scenario == "doors") DoorsDrive(player, dt, wantYaw, wantPitch);
     if (m_Scenario == "spiderhunt") SpiderHuntDrive(player, vitals, wantYaw, wantPitch);
+    if (m_Scenario == "spider" || m_Scenario == "spiderdeath") SpiderWatchDrive(player, wantYaw, wantPitch);
     if (m_Scenario == "fight") {
         // Shoot whoever is in sight: the nearest soldier with a clear line to its chest.
         const Npc* target = nullptr;

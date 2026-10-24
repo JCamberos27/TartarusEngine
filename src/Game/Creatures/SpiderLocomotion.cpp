@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 
 namespace Spider {
 
@@ -136,6 +138,35 @@ void Mover::Step(const SurfaceQuery& q, const MoverSettings& s, const MoveInput&
         if (glm::dot(legUp, wantUp) > 0.85f) wantUp = SafeNormalize(wantUp * 0.65f + legUp * 0.35f, wantUp);
     }
     TurnUpToward(wantUp, s.UpRate * (wallWeight > 0.0f ? 1.6f : 1.0f), dt);
+
+    // The body itself, not just its origin, stays out of the surfaces: its head out of the wall it is turning onto, its
+    // abdomen out of the floor it is leaving. Fore and aft along the body; in a corner, where both would sink, it is
+    // lifted off along its up (into the corner's open side) instead.
+    // A few passes: one push can leave the other end touching (a corner).
+    // Each end is pushed back only as far as the other end has room; what is left over lifts the body along its up.
+    for (int pass = 0; pass < 3; ++pass) {
+        const glm::vec3 u = Up(), f = Forward(), mid = m_Pos + u * s.BodyLift;
+        constexpr float kLook = 0.5f; // how far past each end the free room is measured
+        SurfaceHit h;
+        const float aheadHit = q.Ray(mid, f, s.BodyFront + kLook, h) ? h.Distance : s.BodyFront + kLook;
+        const float behindHit = q.Ray(mid, -f, s.BodyBack + kLook, h) ? h.Distance : s.BodyBack + kLook;
+        const float front = std::max(0.0f, s.BodyFront - aheadHit), back = std::max(0.0f, s.BodyBack - behindHit);
+        if (front <= 1e-4f && back <= 1e-4f) break;
+        const float roomAhead = std::max(0.0f, aheadHit - s.BodyFront), roomBehind = std::max(0.0f, behindHit - s.BodyBack);
+        float lift = 0.0f;
+        if (front > 0.0f && back > 0.0f) {
+            lift = std::max(front, back);
+        } else if (front > 0.0f) {
+            const float slide = std::min(front, roomBehind);
+            m_Pos -= f * slide;
+            lift = front - slide;
+        } else {
+            const float slide = std::min(back, roomAhead);
+            m_Pos += f * slide;
+            lift = back - slide;
+        }
+        m_Pos += u * lift;
+    }
     m_Vel = (m_Pos - before) / dt;
 }
 

@@ -42,8 +42,11 @@ struct MoverSettings {
     float ProbeLift = 0.25f;     // the down probe starts this far above the body's origin ...
     float ProbeDepth = 0.6f;     // ... and looks this far down
     float ProbeHeight = 0.12f;   // the forward probe runs this high off the surface ...
-    float Reach = 0.45f;         // ... this far ahead: a wall inside it is climbed onto
-    float Clearance = 0.16f;     // the body never gets closer to a wall ahead than this (it turns onto it instead)
+    float Reach = 0.6f;          // ... this far ahead: a wall inside it is climbed onto
+    float Clearance = 0.28f;     // the body never gets closer to a wall ahead than this (it turns onto it instead)
+    // The body's own extent from its origin (the model's, between its feet): its head this far forward, its abdomen this
+    // far back, both about this high off the surface. Whatever they would sink into, the body is pushed back out of.
+    float BodyFront = 0.26f, BodyBack = 0.4f, BodyLift = 0.1f;
     float Gravity = 9.81f;       // m/s^2 while it has let go
     float LetGoAfter = 0.12f;    // seconds with no surface under it before it falls
     float Arrive = 0.12f;        // metres: within this of the goal it stops
