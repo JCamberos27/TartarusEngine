@@ -74,6 +74,9 @@ public:
         int Bites = 0, Pounces = 0, Drops = 0, Leaps = 0; // landed on the player / leaps and drops tried
     };
     bool Inspect(entt::entity root, Stats& out) const;
+    // One of the spider's sounds (snd.foley.spider.<element>: tap, hiss, screech, bite, pounce, hurt, death, thud, splat)
+    // at `pos`, when the audio is up.
+    static void Sound(const char* element, const glm::vec3& pos, float gain = 1.0f);
     // Spider sounds started so far (and asked for with no files to play: the manifest lacks them), for tests.
     static int SoundsStarted() { return s_SoundsStarted; }
     static int SoundsMissing() { return s_SoundsMissing; }
@@ -142,9 +145,6 @@ private:
     void Hunt(World& world, Body& b, SpiderComponent& sc, const Target& t, float dt);
     bool SeesPlayer(const Body& b, const SpiderComponent& sc, const Target& t) const;
     int PickPerch(const glm::vec3& near) const;
-    // One of the spider's sounds (snd.foley.spider.<element>: tap, hiss, screech, bite, pounce, hurt, death, thud, splat)
-    // at `pos`, when the audio is up.
-    static void Sound(const char* element, const glm::vec3& pos, float gain = 1.0f);
     static inline int s_SoundsStarted = 0, s_SoundsMissing = 0;
     int Attackers() const;
 

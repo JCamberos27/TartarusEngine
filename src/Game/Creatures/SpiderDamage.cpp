@@ -212,6 +212,8 @@ bool SpiderDamage::OnHit(World& world, SpiderSystem& spiders, unsigned entity, c
         return true;
     }
     Flinch(*b, part, dir, out.Damage, model);
+    SpiderSystem::Sound("hurt", point);
+    SpiderSystem::Sound("splat", point, 0.8f);
     if (def.Zone == Spider::PartZone::Leg && def.Leg >= 0) { // it staggers: that leg up off its foothold, a limp after
         b->CurlAge[(size_t)def.Leg] = 0.0f;
         b->LimpAge = 0.0f;
@@ -395,6 +397,8 @@ void SpiderDamage::PoseLiving(World& world, SpiderSystem& spiders, Body& b, floa
 void SpiderDamage::Kill(World& world, SpiderSystem& spiders, Body& b, int part, const glm::vec3& dir, float damage, const glm::vec3& point) {
     b.Dead = true;
     b.DeadFor = 0.0f;
+    SpiderSystem::Sound("death", point);
+    SpiderSystem::Sound("splat", point);
     if (SpiderSystem::Hurt* hurt = spiders.HurtOf(b.Root)) {
         hurt->Dead = true;
         hurt->LegCurl.fill(0.0f);
