@@ -66,9 +66,26 @@ bpy.context.view_layer.update()
 pts = [mesh.matrix_world @ v.co for v in mesh.data.vertices]
 lo = Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts)))
 hi = Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
-arm.location -= Vector(((lo.x + hi.x) / 2, (lo.y + hi.y) / 2, lo.z))   # feet on the floor, centred
+# Centred over its rest pose, but stood on its idle: the rest pose lies with its legs flat, and every clip stands the
+# body lower over its feet than that, so grounding the rest pose would sink the animated spider into the floor.
+idle = bpy.data.actions["idle"]
+arm.animation_data_create()
+arm.animation_data.action = idle
+if idle.slots:
+    arm.animation_data.action_slot = idle.slots[0]
+bpy.context.scene.frame_set(1)
 bpy.context.view_layer.update()
-print("size", [round(x, 3) for x in (hi - lo)])
+posed = mesh.evaluated_get(bpy.context.evaluated_depsgraph_get())
+floor = min((posed.matrix_world @ v.co).z for v in posed.data.vertices)
+arm.animation_data.action = None
+for pb in arm.pose.bones:
+    pb.location = (0.0, 0.0, 0.0)
+    pb.rotation_quaternion = (1.0, 0.0, 0.0, 0.0)
+    pb.rotation_euler = (0.0, 0.0, 0.0)
+    pb.scale = (1.0, 1.0, 1.0)
+arm.location -= Vector(((lo.x + hi.x) / 2, (lo.y + hi.y) / 2, floor))
+bpy.context.view_layer.update()
+print("size", [round(x, 3) for x in (hi - lo)], "idle floor below rest", round(lo.z - floor, 3))
 
 bpy.ops.object.select_all(action="SELECT")
 bpy.ops.export_scene.fbx(filepath=out, use_selection=True, object_types={"ARMATURE", "MESH"},
