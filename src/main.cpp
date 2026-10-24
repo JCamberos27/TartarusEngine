@@ -2972,6 +2972,7 @@ int main(int argc, char** argv) {
                     // Every pellet's line: the report, and rounds cracking past soldiers' heads (suppression).
                     for (const FirstPersonPresentation::ShotTrace& t : firstPersonPresentation.TakeShotTraces()) {
                         if (npcDirector.Active()) npcDirector.OnPlayerShotLine(t.Origin, t.End);
+                        if (t.FirstPellet) spiders.HearShot(t.Origin);
                         if (t.FirstPellet)
                             combatFx.Shot(world, firstPersonPresentation.Set().Gameplay.Pellets > 1 ? CombatFx::Gun::Shotgun : CombatFx::Gun::Rifle,
                                           t.Origin, t.End, true, false, 0, firstPersonPresentation.MuzzleEffects());

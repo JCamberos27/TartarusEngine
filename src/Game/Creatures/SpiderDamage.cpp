@@ -154,6 +154,7 @@ bool SpiderDamage::OnHit(World& world, SpiderSystem& spiders, unsigned entity, c
                          const glm::vec3& dirIn, float damage, int pellets, Result& out) {
     Body* b = Find(entity);
     if (!b || !b->Ready) return false;
+    if (!b->Dead) spiders.Alarm(b->Root); // shot: it turns on the shooter
     out = Result{};
     const glm::vec3 dir = glm::length(dirIn) > 1e-6f ? glm::normalize(dirIn) : glm::vec3(0.0f, 0.0f, -1.0f);
     out.Entity = entity;

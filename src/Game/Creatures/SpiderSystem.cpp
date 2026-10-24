@@ -249,6 +249,21 @@ void SpiderSystem::Think(World& world, AssetLibrary& assets, float dt, const Tar
         q.Rays = 0;
         b.Mover.Step(q, MoverFrom(sc), in, dt);
         if (b.Mover.Attached() && !b.WasAttached) Sound("thud", b.Mover.Position()); // down from a leap, a drop, a fall
+        // For tests: stuck (meaning to move, not moving) and sunk (an end of the body inside a surface).
+        {
+            Stats& st = b.Last;
+            st.Goal = sc.Goal;
+            st.HasGoal = sc.HasGoal;
+            const bool meansToMove = sc.HasGoal && !b.Mover.Arrived() && !b.Ai.Hold && b.Mover.Attached();
+            st.StuckFor = meansToMove && glm::length(b.Mover.Velocity()) < 0.05f ? st.StuckFor + dt : 0.0f;
+            st.WorstStuck = std::max(st.WorstStuck, st.StuckFor);
+            if (b.Mover.Attached()) {
+                const Spider::MoverSettings ms = MoverFrom(sc);
+                const glm::vec3 u = b.Mover.Up(), f = b.Mover.Forward(), mid = b.Mover.Position() + u * ms.BodyLift;
+                Spider::SurfaceHit h;
+                if ((q.Ray(mid, f, ms.BodyFront - 0.03f, h)) || (q.Ray(mid, -f, ms.BodyBack - 0.03f, h))) ++st.SunkFrames;
+            }
+        }
         b.WasAttached = b.Mover.Attached();
         b.Last.Rays = q.Rays;
 
@@ -361,6 +376,16 @@ SpiderSystem::Hurt* SpiderSystem::HurtOf(entt::entity root) {
     for (Body& b : m_Bodies)
         if (b.Root == root) return &b.Pain;
     return nullptr;
+}
+
+void SpiderSystem::Alarm(entt::entity root) {
+    for (Body& b : m_Bodies)
+        if (b.Root == root) b.Ai.Alarmed = true;
+}
+
+void SpiderSystem::HearShot(const glm::vec3& origin, float radius) {
+    for (Body& b : m_Bodies)
+        if (glm::length(b.Mover.Position() - origin) < radius) b.Ai.Alarmed = true;
 }
 
 bool SpiderSystem::Detach(entt::entity root, const glm::vec3& velocity) {

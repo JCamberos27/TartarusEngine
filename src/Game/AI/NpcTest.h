@@ -198,6 +198,7 @@ private:
     std::vector<std::uint32_t> m_HRoots;
     float m_HClock = 0.0f, m_HMaxDrift = 0.0f; // m_HMaxDrift: the farthest the hits moved the player in any one second
     std::vector<glm::vec2> m_HTrail;           // the player's last second of positions (over the floor)
+    int m_HCeilFrames[4] = {0, 0, 0, 0};       // frames each hunter spent up on the ceiling                            // the corner of the room the player walks to next
     int m_HStage = 0, m_HMaxAttackers = 0, m_HFellThrough = 0;
     bool m_HPlaced = false, m_HDone = false, m_HDropShot = false, m_HPounceShot = false, m_HBiteShot = false;
     void SpiderSetUp(World& world);
