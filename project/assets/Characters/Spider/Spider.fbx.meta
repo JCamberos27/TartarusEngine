@@ -1,0 +1,18 @@
+{
+  "folder": "assets/Characters/Spider",
+  "guid": "42f1c05df4220ebf",
+  "importer": {
+    "globalScale": 1,
+    "importAnimations": true,
+    "importNormals": true,
+    "importSkeleton": true,
+    "materialImportMode": 0,
+    "optimizeGraph": true
+  },
+  "materialRemap": {
+    "eye-mat": "assets/Characters/Spider/M_Spider_Eye.mat",
+    "spider-mat": "assets/Characters/Spider/M_Spider_Body.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}
