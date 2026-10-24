@@ -122,5 +122,9 @@ void NpcTest::SpiderHunt(World& world) {
     Check(bites >= 2, "spiderhunt: the hunters bite the player");
     Check(m_HMaxAttackers <= 2, "spiderhunt: never more than two attack at once");
     Check(m_HFellThrough == 0, "spiderhunt: no spider through the floor");
+    std::printf("[NpcTest] spiderhunt: %d spider sounds started, %d asked for with nothing to play\n", SpiderSystem::SoundsStarted(),
+                SpiderSystem::SoundsMissing());
+    Check(SpiderSystem::SoundsMissing() == 0, "spiderhunt: every spider sound it asks for has takes in the manifest");
+    Check(SpiderSystem::SoundsStarted() > 0, "spiderhunt: the spiders are heard (taps, hiss, screech, bite)");
     m_HDone = m_Done = true;
 }

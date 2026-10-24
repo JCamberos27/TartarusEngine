@@ -74,6 +74,9 @@ public:
         int Bites = 0, Pounces = 0, Drops = 0, Leaps = 0; // landed on the player / leaps and drops tried
     };
     bool Inspect(entt::entity root, Stats& out) const;
+    // Spider sounds started so far (and asked for with no files to play: the manifest lacks them), for tests.
+    static int SoundsStarted() { return s_SoundsStarted; }
+    static int SoundsMissing() { return s_SoundsMissing; }
 
 private:
     struct Body {
@@ -98,6 +101,8 @@ private:
         bool RouteFailed = false;
         // How its routes weigh floor, wall and ceiling: the hunter makes climbing cheap to stalk, the floor to charge.
         Spider::PathCosts Costs;
+        float TapIn = 0.0f;          // seconds until another leg tap may sound (eight legs would chatter)
+        bool WasAttached = true;     // last frame: holding on (a landing is heard)
         // The hunter (SpiderAI.cpp).
         struct Mind {
             Mode State = Mode::Perch;
@@ -125,6 +130,10 @@ private:
     void Hunt(World& world, Body& b, SpiderComponent& sc, const Target& t, float dt);
     bool SeesPlayer(const Body& b, const SpiderComponent& sc, const Target& t) const;
     int PickPerch(const glm::vec3& near) const;
+    // One of the spider's sounds (snd.foley.spider.<element>: tap, hiss, screech, bite, pounce, hurt, death, thud, splat)
+    // at `pos`, when the audio is up.
+    static void Sound(const char* element, const glm::vec3& pos, float gain = 1.0f);
+    static inline int s_SoundsStarted = 0, s_SoundsMissing = 0;
     int Attackers() const;
 
     std::vector<PlayerHit> m_PlayerHits;
