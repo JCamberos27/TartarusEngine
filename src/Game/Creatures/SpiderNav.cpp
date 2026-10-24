@@ -52,12 +52,27 @@ glm::vec3 RouteAim(const std::vector<glm::vec3>& route, const std::vector<glm::v
     return aim >= n - 1 ? goal : route[(size_t)aim];
 }
 
+void SurfaceGraph::Block(int i, int delta) {
+    if (i < 0 || i >= (int)m_Pos.size()) return;
+    if (m_Blocked.size() != m_Pos.size()) m_Blocked.assign(m_Pos.size(), 0);
+    m_Blocked[(size_t)i] = std::max(0, m_Blocked[(size_t)i] + delta);
+}
+
+void SurfaceGraph::AddPenalty(int i, float metres) {
+    if (i < 0 || i >= (int)m_Pos.size()) return;
+    if (m_Penalty.size() != m_Pos.size()) m_Penalty.assign(m_Pos.size(), 0.0f);
+    m_Penalty[(size_t)i] = std::max(0.0f, m_Penalty[(size_t)i] + metres);
+}
+
 void SurfaceGraph::Clear() {
     m_Pos.clear();
     m_Normal.clear();
     m_First.clear();
     m_Links.clear();
     m_Grid.clear();
+    m_Comp.clear();
+    m_Blocked.clear();
+    m_Penalty.clear();
 }
 
 long long SurfaceGraph::CellKey(const glm::vec3& p) const {
@@ -124,6 +139,18 @@ bool SurfaceGraph::Build(const std::vector<float>& verts, const std::vector<int>
                     face = -n;
                     if (q.Occupied(p + face * s.Room, s.RoomRadius)) continue;
                 }
+                // Footing: the same surface on at least three sides of it.
+                {
+                    const glm::vec3 t1 = glm::normalize(glm::cross(face, std::fabs(face.y) < 0.9f ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0)));
+                    const glm::vec3 t2 = glm::cross(face, t1);
+                    const glm::vec3 offs[4] = {t1 * s.Footing, -t1 * s.Footing, t2 * s.Footing, -t2 * s.Footing};
+                    int feet = 0;
+                    for (const glm::vec3& o : offs) {
+                        SurfaceHit fh;
+                        if (q.Ray(p + face * 0.08f + o, -face, 0.16f, fh) && std::fabs(fh.Distance - 0.08f) < 0.03f) ++feet;
+                    }
+                    if (feet < 3) continue;
+                }
                 if (!seen.insert(PointKey(p, face, sp)).second) continue;
                 m_Pos.push_back(p);
                 m_Normal.push_back(face);
@@ -153,8 +180,10 @@ bool SurfaceGraph::Build(const std::vector<float>& verts, const std::vector<int>
                         if (glm::dot(ni, nj) < -0.2f) continue; // back to back: a wall's two sides
                         const glm::vec3 la = pi + ni * s.LinkLift, lb = pj + nj * s.LinkLift;
                         const float ll = glm::length(lb - la);
+                        // Clear both ways: a mesh collider is one-sided, so a thin ceiling or floor plane stops a ray from
+                        // its front only - checked one way, a wall's face linked up past the ceiling into the void above.
                         SurfaceHit h;
-                        if (ll > 1e-4f && q.Ray(la, (lb - la) / ll, ll, h)) continue;
+                        if (ll > 1e-4f && (q.Ray(la, (lb - la) / ll, ll, h) || q.Ray(lb, (la - lb) / ll, ll, h))) continue;
                         adj[(size_t)i].push_back(j);
                         adj[(size_t)j].push_back(i);
                     }
@@ -164,10 +193,32 @@ bool SurfaceGraph::Build(const std::vector<float>& verts, const std::vector<int>
     for (size_t i = 0; i < adj.size(); ++i) m_First[i + 1] = m_First[i] + (int)adj[i].size();
     m_Links.reserve((size_t)m_First.back());
     for (const auto& a : adj) m_Links.insert(m_Links.end(), a.begin(), a.end());
+    LabelComponents();
     return true;
 }
 
-int SurfaceGraph::Nearest(const glm::vec3& p, float maxDistance, const glm::vec3* up) const {
+void SurfaceGraph::LabelComponents() {
+    m_Comp.assign(m_Pos.size(), -1);
+    std::vector<int> open;
+    int next = 0;
+    for (int s = 0; s < (int)m_Pos.size(); ++s) {
+        if (m_Comp[(size_t)s] >= 0) continue;
+        m_Comp[(size_t)s] = next;
+        open.push_back(s);
+        while (!open.empty()) {
+            const int i = open.back();
+            open.pop_back();
+            for (int k = m_First[(size_t)i]; k < m_First[(size_t)i + 1]; ++k)
+                if (m_Comp[(size_t)m_Links[(size_t)k]] < 0) {
+                    m_Comp[(size_t)m_Links[(size_t)k]] = next;
+                    open.push_back(m_Links[(size_t)k]);
+                }
+        }
+        ++next;
+    }
+}
+
+int SurfaceGraph::Nearest(const glm::vec3& p, float maxDistance, const glm::vec3* up, int component) const {
     if (m_Pos.empty()) return -1;
     int best = -1;
     float bestD = maxDistance;
@@ -181,6 +232,7 @@ int SurfaceGraph::Nearest(const glm::vec3& p, float maxDistance, const glm::vec3
                 for (; it != m_Grid.end() && it->first == key; ++it) {
                     const int i = it->second;
                     if (up && glm::dot(m_Normal[(size_t)i], *up) < 0.0f) continue;
+                    if (component >= 0 && m_Comp[(size_t)i] != component) continue;
                     const float d = glm::length(m_Pos[(size_t)i] - p);
                     if (d < bestD) {
                         bestD = d;
@@ -225,7 +277,8 @@ bool SurfaceGraph::FindPath(int from, int to, const PathCosts& costs, std::vecto
         if (++expanded > maxExpand) return false;
         for (int k = m_First[(size_t)cur]; k < m_First[(size_t)cur + 1]; ++k) {
             const int nb = m_Links[(size_t)k];
-            const float ng = g + glm::length(m_Pos[(size_t)nb] - m_Pos[(size_t)cur]) * CostOf(costs, m_Normal[(size_t)nb]);
+            if (nb != to && Blocked(nb)) continue;
+            const float ng = g + glm::length(m_Pos[(size_t)nb] - m_Pos[(size_t)cur]) * CostOf(costs, m_Normal[(size_t)nb]) + Penalty(nb);
             if (m_Stamp[(size_t)nb] == m_Search && m_G[(size_t)nb] <= ng) continue;
             m_Stamp[(size_t)nb] = m_Search;
             m_G[(size_t)nb] = ng;
@@ -239,7 +292,8 @@ bool SurfaceGraph::FindPath(int from, int to, const PathCosts& costs, std::vecto
     return true;
 }
 
-std::uint64_t SurfaceGraph::HashInput(const std::vector<float>& verts, const std::vector<int>& tris, const NavSettings& s) {
+std::uint64_t SurfaceGraph::HashInput(const std::vector<float>& verts, const std::vector<int>& tris, const NavSettings& s,
+                                      std::uint32_t buildVersion) {
     std::uint64_t h = 1469598103934665603ull; // FNV-1a over the input's bytes
     auto mix = [&](const void* data, size_t bytes) {
         const unsigned char* b = static_cast<const unsigned char*>(data);
@@ -248,8 +302,17 @@ std::uint64_t SurfaceGraph::HashInput(const std::vector<float>& verts, const std
     mix(verts.data(), verts.size() * sizeof(float));
     mix(tris.data(), tris.size() * sizeof(int));
     mix(&s, sizeof s);
-    const std::uint32_t version = 1;
-    mix(&version, sizeof version);
+    mix(&buildVersion, sizeof buildVersion);
+    return h;
+}
+
+std::uint64_t SurfaceGraph::HashBarriers(std::uint64_t h, const std::vector<Barrier>& barriers) {
+    for (const Barrier& b : barriers) {
+        const float f[10] = {b.Centre.x, b.Centre.y, b.Centre.z, b.Rotation.w, b.Rotation.x, b.Rotation.y, b.Rotation.z,
+                             b.Half.x,   b.Half.y,   b.Half.z};
+        const unsigned char* p = reinterpret_cast<const unsigned char*>(f);
+        for (size_t i = 0; i < sizeof f; ++i) h = (h ^ p[i]) * 1099511628211ull;
+    }
     return h;
 }
 
@@ -297,6 +360,7 @@ bool SurfaceGraph::Load(const std::string& path, std::uint64_t hash) {
         return false;
     }
     BuildGrid();
+    LabelComponents();
     return true;
 }
 

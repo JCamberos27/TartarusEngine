@@ -153,9 +153,22 @@ static_assert(sizeof(GpuSplat) == 80, "std430 layout");
 constexpr unsigned kSplatBinding = 6;
 } // namespace
 
+void BloodRenderer::SetSplatPalette(unsigned entity, int palette) {
+    if (palette <= 0) m_SplatPalettes.erase(entity);
+    else m_SplatPalettes[entity] = palette;
+}
+
+void BloodRenderer::SplatLook(unsigned entity, glm::vec4& fresh, glm::vec4& dried) const {
+    const auto it = m_SplatPalettes.find(entity);
+    const BloodPalette::Look& l = BloodPalette::Of(it == m_SplatPalettes.end() ? 0 : it->second);
+    fresh = glm::vec4(l.Fresh, l.RoughCloth);
+    dried = glm::vec4(l.Dried, l.RoughDried);
+}
+
 void BloodRenderer::SetSplats(const std::vector<Splat>& splats, const std::vector<std::pair<unsigned, glm::ivec2>>& ranges) {
     DecalPerf::SubmitScope perf;
     m_SplatRanges.clear();
+    m_SplatPalettes.clear();
     m_SplatCount = 0;
     DecalSystem* ds = DecalSystem::Current();
     if (splats.empty() || m_SetNames.empty() || !ds) return;
@@ -226,7 +239,10 @@ int BloodRenderer::DrawSprays(const glm::mat4& view, const glm::mat4& proj,
         order.push_back(i);
     }
     if (order.empty()) return 0;
-    std::sort(order.begin(), order.end(), [&](int a, int b) { return m_Sprays[a].Sim < m_Sprays[b].Sim; });
+    // By palette, then sim: each palette's fluid is one material (its colour, roughness, the light through it).
+    std::sort(order.begin(), order.end(), [&](int a, int b) {
+        return m_Sprays[a].Palette != m_Sprays[b].Palette ? m_Sprays[a].Palette < m_Sprays[b].Palette : m_Sprays[a].Sim < m_Sprays[b].Sim;
+    });
     gpu.clear();
     for (int i : order) {
         const Spray& s = m_Sprays[i];
@@ -268,10 +284,20 @@ int BloodRenderer::DrawSprays(const glm::mat4& view, const glm::mat4& proj,
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
     int draws = 0;
+    int palette = 0; // a person's, set above
     for (size_t first = 0; first < order.size();) {
         const int sim = m_Sprays[order[first]].Sim;
+        const int pal = m_Sprays[order[first]].Palette;
         size_t last = first;
-        while (last < order.size() && m_Sprays[order[last]].Sim == sim) ++last;
+        while (last < order.size() && m_Sprays[order[last]].Sim == sim && m_Sprays[order[last]].Palette == pal) ++last;
+        if (pal != palette) {
+            palette = pal;
+            const BloodPalette::Look& l = BloodPalette::Of(pal);
+            prog.SetVec3("uBaseColor", pal == 0 ? FluidAlbedo : l.Fresh);
+            prog.SetFloat("uRoughness", pal == 0 ? FluidRoughness : l.RoughSpray);
+            prog.SetVec3("uSubsurfaceColor", l.Subsurface);
+            prog.SetFloat("uThickness", l.Thickness);
+        }
         const auto& h = m_Sims[sim].Header;
         // The flag describes the soup's corner order against its own normals; the fluid's outside winds the other way.
         glFrontFace((h.Flags & BloodFxImport::VatFlagClockwise) ? GL_CCW : GL_CW);
@@ -460,7 +486,8 @@ int BloodRenderer::ToRuntime(const Decal& d, RuntimeDecal out[2]) {
     } else {
         const DecalTextureArrays::Source* src = nullptr;
         float band = 0.05f; // the old pass's (reveal - cutout) x 20
-        float wet = BloodPalette::RoughFresh;
+        const BloodPalette::Look& look = BloodPalette::Of(d.Palette);
+        float wet = look.RoughFresh;
         if (k) {
             const bool albedo = (k->Flags & KnifeFxImport::EntryAlbedo) != 0; // the entry's own stain image
             src = KnifeMaps(d.Knife, albedo ? DecalBake::KnifeMode::BloodAlbedo : DecalBake::KnifeMode::BloodMask);
@@ -468,7 +495,7 @@ int BloodRenderer::ToRuntime(const Decal& d, RuntimeDecal out[2]) {
             r.Rows = k->Rows;
             r.Frame = d.Cell;
             band = 0.18f; // its alpha x 6, through the reveal's (0.6 + 0.6 r) at mid-cell
-            if (albedo && k->Lib == KnifeFxImport::Library::DecalLarge) wet = BloodPalette::RoughPool; // the large library: pools
+            if (albedo && k->Lib == KnifeFxImport::Library::DecalLarge) wet = look.RoughPool; // the large library: pools
         } else {
             src = SetMaps(d.Set);
         }
@@ -478,13 +505,15 @@ int BloodRenderer::ToRuntime(const Decal& d, RuntimeDecal out[2]) {
         const bool asset = a && !a->Missing;
         const float dry = std::clamp(d.Dry, 0.0f, 1.0f);
         r.Maps = src;
-        r.Tint = glm::mix(FilmFresh, FilmDried, dry);
-        r.AlbedoOp = (asset ? a->AlbedoOp : 1.0f) * d.Opacity;
+        // A person's blood is the renderer's film (Blood Lab tunes it); another palette's its own, a thin fresh film of
+        // it letting the surface through (FilmOpacity) until it dries.
+        r.Tint = d.Palette == 0 ? glm::mix(FilmFresh, FilmDried, dry) : glm::mix(look.Fresh, look.Dried, dry);
+        r.AlbedoOp = (asset ? a->AlbedoOp : 1.0f) * d.Opacity * glm::mix(look.FilmOpacity, 1.0f, dry);
         r.NormalOp = (asset ? a->NormalOp : 1.0f) * d.NormalStrength / 0.6f; // the asset's normal is the default strength's
         r.RoughnessOp = (asset ? a->RoughnessOp : 1.0f) * d.Opacity;
         // Wet blood is glossy (the palette's film / pool roughness), dried matte; dried blood also flakes.
-        if (asset && wet == BloodPalette::RoughFresh) wet = a->Roughness;
-        r.Roughness = glm::mix(wet, BloodPalette::RoughDried, dry);
+        if (asset && d.Palette == 0 && wet == BloodPalette::RoughFresh) wet = a->Roughness;
+        r.Roughness = glm::mix(wet, look.RoughDried, dry);
         r.Wear = kDryWear * dry;
         r.AngleFadeStart = asset ? a->AngleFadeStart : 0.65f;
         r.AngleFadeEnd = asset ? a->AngleFadeEnd : 0.35f;

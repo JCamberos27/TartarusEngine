@@ -217,6 +217,7 @@ void BloodFx::AddSplat(unsigned entity, int part, bool corpse, const glm::vec3& 
             for (auto it = m_Splats.begin(); it != m_Splats.end(); ++it)
                 if (same(*it)) { m_Splats.erase(it); break; }
         }
+        sp.Palette = m_Palette;
         m_Splats.push_back(sp);
         ++m_SplatsSpawned;
     }
@@ -258,7 +259,7 @@ int BloodFx::DuplicateOf(int set, int knife, const glm::mat4& model) const {
     const float size = std::max(glm::length(glm::vec3(model[0])), glm::length(glm::vec3(model[2])));
     for (int i = (int)m_Decals.size() - 1; i >= 0; --i) {
         const Decal& d = m_Decals[(size_t)i];
-        if (d.Set != set || d.Knife != knife || d.Age > 5.0f) continue;
+        if (d.Set != set || d.Knife != knife || d.Age > 5.0f || d.Palette != m_Palette) continue;
         const float other = std::max(glm::length(glm::vec3(d.Model[0])), glm::length(glm::vec3(d.Model[2])));
         if (std::abs(other - size) > 0.25f * size) continue;
         if (glm::length(glm::vec3(d.Model[3]) - c) > 0.15f * size) continue;
@@ -291,6 +292,7 @@ BloodFx::Decal* BloodFx::AddKnifeDecal(const char* entry, const glm::vec3& centr
         ++m_StainsMerged;
         return &m_Decals[(size_t)dup];
     }
+    d.Palette = m_Palette;
     m_Decals.push_back(d);
     ++m_DecalsSpawned;
     return &m_Decals.back();
@@ -519,6 +521,7 @@ BloodFx::Decal* BloodFx::AddDecal(const char* set, const glm::vec3& centre, cons
         ++m_StainsMerged;
         return &m_Decals[(size_t)dup];
     }
+    d.Palette = m_Palette;
     m_Decals.push_back(d);
     ++m_DecalsSpawned;
     return &m_Decals.back();
@@ -560,6 +563,12 @@ void BloodFx::SpawnFloorDecals(const BloodPresetDef& preset, const glm::mat4& pr
 void BloodFx::OnFleshHit(const Hit& hit) {
     if (!Config.Enabled || Config.Gore <= 0) return;
     EnsureHooks();
+    // Everything this hit throws is the body's own blood (a spider's ichor); a person's again once it returns.
+    struct PaletteScope {
+        int& Slot;
+        PaletteScope(int& slot, int palette) : Slot(slot) { Slot = palette; }
+        ~PaletteScope() { Slot = 0; }
+    } paletteScope(m_Palette, hit.Palette);
     const glm::vec3 dir = glm::length(hit.Direction) > 1e-5f ? glm::normalize(hit.Direction) : glm::vec3(0.0f, 0.0f, -1.0f);
     // One spray per body per moment: a shotgun's pellets arrive together (the first carries the load's energy);
     // the rest each still puff where they go in.
@@ -662,7 +671,7 @@ void BloodFx::OnFleshHit(const Hit& hit) {
         for (Bleed& x : m_Bleeds)
             if (x.Entity == hit.Entity) b = &x;
         if (!b) {
-            m_Bleeds.push_back({hit.Entity, 0.0f, m_Now + 0.4f, 0.0f});
+            m_Bleeds.push_back({hit.Entity, 0.0f, m_Now + 0.4f, 0.0f, hit.Palette});
             b = &m_Bleeds.back();
         }
         b->Until = m_Now + kBleedSeconds;
@@ -681,6 +690,7 @@ void BloodFx::OnFleshHit(const Hit& hit) {
     if (hit.Killed && !hit.Player && Config.Pools && !Pooled(hit.Entity)) {
         PendingPool pp{hit.Entity, m_Now + 0.6f, size};
         pp.Deadline = m_Now + 4.0f;
+        pp.Palette = hit.Palette;
         m_Pools.push_back(pp);
     }
 }
@@ -848,8 +858,8 @@ void BloodFx::SpawnPuffs(const Hit& hit, const glm::vec3& dir, float energy, boo
     FxSprites& fx = *m_Sprites;
     // Knife "Real Blood" BloodHit / BloodExplosion, re-timed for a round: everything here is over in well under a
     // second - the frame the round goes in has to read as a hit before the volumetric spray has moved.
-    const glm::vec3 kBlood = BloodPalette::Thin; // the liquid in a thin sheet (the palette: one material with the stains)
-    const glm::vec3 kMist = BloodPalette::Mist;  // a fine dark-red haze
+    const glm::vec3 kBlood = BloodPalette::Of(m_Palette).Thin; // the liquid in a thin sheet (the palette: one material with the stains)
+    const glm::vec3 kMist = BloodPalette::Of(m_Palette).Mist;  // a fine dark-red haze
     const int hitSheet = fx.Entry("blood_hit"), burst = fx.Entry("blood_burst"), jet = fx.Entry("blood_jet");
     const int cloud = fx.Entry("blood_cloud"), drop = fx.Entry("blood_drop"), fan = fx.Entry("blood_fan");
     const float k = std::sqrt(std::max(energy, 0.1f));
@@ -1039,6 +1049,7 @@ void BloodFx::SpawnSprays(const BloodPresetDef& preset, const glm::mat4& prefabT
         s.ClipPlane = clip;
         s.Tint = glm::vec3(tint);
         s.Entity = entity;
+        s.Palette = m_Palette;
         m_Sprays.push_back(s);
         ++m_SpraysSpawned;
     }
@@ -1091,6 +1102,7 @@ void BloodFx::Update(float dt) {
         m_Pools.erase(m_Pools.begin() + (std::ptrdiff_t)i);
         m_Pooled.push_back(pp.Entity);
         EnsureHooks();
+        m_Palette = pp.Palette; // (a person's again after the loops)
         if (!m_Ray(centre + glm::vec3(0.0f, 0.3f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f), 1.8f, p, n) || n.y < 0.6f) continue;
         const float s = std::clamp(pp.Size, 0.5f, 1.0f) * (1.3f + 0.4f * Random01());
         // Real Blood's PBR pools when the Knife library is there (bigger: the pool fills ~70% of its cell).
@@ -1112,6 +1124,7 @@ void BloodFx::Update(float dt) {
         if (m_Now >= b.Next) {
             b.Next = m_Now + b.Rate * (0.7f + 0.6f * Random01());
             EnsureHooks();
+            m_Palette = b.Palette;
             const glm::vec3 at = centre + glm::vec3((Random01() - 0.5f) * 0.3f, 0.0f, (Random01() - 0.5f) * 0.3f);
             if (m_Ray(at, glm::vec3(0.0f, -1.0f, 0.0f), 2.5f, p, n) && n.y > 0.6f) {
                 const float s = 0.05f + 0.06f * Random01();
@@ -1195,6 +1208,10 @@ void BloodFx::Submit(BloodRenderer& renderer) const {
             if (count > 0) ranges.emplace_back(member, glm::ivec2(first, count));
         }
         renderer.SetSplats(splats, ranges);
+        // Each mesh draws its splats in one palette: its newest's (a body bleeds one kind).
+        for (const Splat& s : m_Splats)
+            if (s.Palette != 0)
+                if (const unsigned m = drawnOn(s); m != 0xFFFFFFFFu) renderer.SetSplatPalette(m, s.Palette);
     }
     for (const Decal& d : m_Decals) {
         if (d.Age < 0.0f) continue;
@@ -1219,6 +1236,7 @@ void BloodFx::Submit(BloodRenderer& renderer) const {
         r.Dry = std::clamp(d.DryAge / std::max(d.DrySeconds, 1.0f), 0.0f, 1.0f);
         r.Opacity = d.Opacity;
         if (d.Print) r.Opacity *= 1.0f - std::clamp((d.Age - d.FadeAt) / std::max(d.FadeLen, 1e-3f), 0.0f, 1.0f);
+        r.Palette = d.Palette;
         renderer.AddDecal(r);
     }
     for (const Spray& s : m_Sprays) {
@@ -1228,6 +1246,7 @@ void BloodFx::Submit(BloodRenderer& renderer) const {
         d.Frame = FrameAt(s.Age / std::max(s.Duration, 1e-3f), s.FramesCount);
         d.Tint = s.Tint;
         d.ClipPlane = s.ClipPlane;
+        d.Palette = s.Palette;
         renderer.AddSpray(d);
     }
 }

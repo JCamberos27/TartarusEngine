@@ -51,6 +51,7 @@ public:
         int Frame = 0;
         glm::vec3 Tint{1.0f};        // x the fluid's albedo
         glm::vec4 ClipPlane{0, 0, 0, 1}; // the fluid behind this plane (dot < 0) isn't drawn
+        int Palette = 0;             // BloodPalette::Kind (0: FluidAlbedo / FluidRoughness, a person's)
     };
     void BeginFrame();
     // The spray and decal programs compiled now (Play's start), not on the first wound mid-fight.
@@ -94,6 +95,7 @@ public:
         bool Blood = true;         // the palette's blood (false: a bullet hole, its surface's own material)
         bool Mirror = false;       // the image flipped across (the same stain, another shape)
         float Rim = 0.0f;          // a bullet hole's chipped rim fades out by here (cell half-widths; 0 = not cut)
+        int Palette = 0;           // BloodPalette::Kind (0: FilmFresh / FilmDried, a person's)
     };
     // Submits the decal to the DecalSystem (a stain the first time its maps are asked for shows a moment later,
     // once they are made and decoded). Returns the runtime decals it became (0..2: a flipbook between cells is two).
@@ -124,6 +126,10 @@ public:
     // This frame's splats and which entities draw which run of them (entity -> first, count).
     void SetSplats(const std::vector<Splat>& splats, const std::vector<std::pair<unsigned, glm::ivec2>>& ranges);
     bool SplatRange(unsigned entity, int& first, int& count) const;
+    // The palette `entity`'s splats are drawn in (after SetSplats, which forgets them all; unset: a person's), and the
+    // look a mesh's splats take: fresh and dried colour, each with its roughness on cloth / skin.
+    void SetSplatPalette(unsigned entity, int palette);
+    void SplatLook(unsigned entity, glm::vec4& fresh, glm::vec4& dried) const;
     int SplatCount() const { return m_SplatCount; }
     // Binds the splat list for the model shader (once per scene draw); the maps are the decal arrays (units 22-25).
     void BindSplatResources() const;
@@ -166,4 +172,5 @@ private:
     size_t m_SplatCapacity = 0;
     int m_SplatCount = 0;
     std::unordered_map<unsigned, glm::ivec2> m_SplatRanges;
+    std::unordered_map<unsigned, int> m_SplatPalettes;
 };
