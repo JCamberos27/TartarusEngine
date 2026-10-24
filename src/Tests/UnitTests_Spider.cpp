@@ -1,7 +1,10 @@
 #include "UnitTestSupport.h"
 
 #include "Creatures/SpiderLocomotion.h"
+#include "Creatures/SpiderNav.h"
 #include "IK.h"
+
+#include <cstdio>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -64,7 +67,63 @@ public:
         out.Normal = n;
         return true;
     }
+    bool Occupied(const glm::vec3& c, float r) const override {
+        for (int a = 0; a < 3; ++a) // past the room's walls
+            if (c[a] - r < RoomMin[a] || c[a] + r > RoomMax[a]) return true;
+        for (const Box& b : Boxes)
+            if (glm::length(glm::clamp(c, b.Min, b.Max) - c) < r) return true;
+        return false;
+    }
+    // The room's and the boxes' faces as triangles (what PhysicsWorld::CollectStaticGeometry gives the game).
+    void Triangles(std::vector<float>& verts, std::vector<int>& tris) const {
+        auto box = [&](const glm::vec3& lo, const glm::vec3& hi) {
+            const int base = (int)verts.size() / 3;
+            for (int k = 0; k < 8; ++k) {
+                const glm::vec3 p((k & 1) ? hi.x : lo.x, (k & 2) ? hi.y : lo.y, (k & 4) ? hi.z : lo.z);
+                verts.insert(verts.end(), {p.x, p.y, p.z});
+            }
+            const int faces[6][4] = {{0, 2, 6, 4}, {1, 5, 7, 3}, {0, 4, 5, 1}, {2, 3, 7, 6}, {0, 1, 3, 2}, {4, 6, 7, 5}};
+            for (const auto& f : faces) tris.insert(tris.end(), {base + f[0], base + f[1], base + f[2], base + f[0], base + f[2], base + f[3]});
+        };
+        box(RoomMin, RoomMax);
+        for (const Box& b : Boxes) box(b.Min, b.Max);
+    }
 };
+
+// Follows a route over `graph` to `goal` with the mover, as SpiderSystem does.
+struct RouteResult {
+    bool Planned = false, Arrived = false, Fell = false;
+    glm::vec3 Up{0.0f};
+    int Nodes = 0, OffSurface = 0; // route length; nodes on walls / ceilings / other faces than the start's
+};
+RouteResult FollowRoute(const BoxWorld& w, const Spider::SurfaceGraph& graph, Spider::Mover& m, const glm::vec3& goal, float seconds) {
+    RouteResult r;
+    std::vector<int> nodes;
+    const glm::vec3 up = m.Up();
+    const int from = graph.Nearest(m.Position(), 0.8f, &up), to = graph.Nearest(goal, 1.0f);
+    r.Planned = from >= 0 && to >= 0 && graph.FindPath(from, to, Spider::PathCosts{}, nodes);
+    if (!r.Planned) return r;
+    std::vector<glm::vec3> route, normals;
+    for (int n : nodes) {
+        route.push_back(graph.Pos(n));
+        normals.push_back(graph.Normal(n));
+        if (glm::dot(graph.Normal(n), up) < 0.95f) ++r.OffSurface;
+    }
+    r.Nodes = (int)nodes.size();
+    Spider::MoverSettings s;
+    Spider::MoveInput in;
+    in.HasGoal = true;
+    int at = 0;
+    const float dt = 1.0f / 60.0f;
+    for (float t = 0.0f; t < seconds && !r.Arrived; t += dt) {
+        in.Goal = Spider::RouteAim(route, normals, at, m.Position(), m.Up(), goal);
+        m.Step(w, s, in, dt);
+        r.Fell = r.Fell || !m.Attached();
+        r.Arrived = m.Arrived() && glm::length(m.Position() - goal) < 0.2f;
+    }
+    r.Up = m.Up();
+    return r;
+}
 
 // Runs the mover toward `goal` for up to `seconds`; reports the worst gap off the surface while it was attached and
 // whether it ever let go.
@@ -257,7 +316,82 @@ void TestSpiderRigParses() {
 
 } // namespace
 
+void TestSpiderNavRoutesFloorToCeiling() {
+    // A crate across the room's middle, wall to wall: from the floor on one side to the ceiling over the other.
+    BoxWorld w;
+    w.Boxes.push_back({glm::vec3(-2.0f, 0.0f, -0.4f), glm::vec3(2.0f, 0.6f, 0.4f)});
+    std::vector<float> verts;
+    std::vector<int> tris;
+    w.Triangles(verts, tris);
+    Spider::SurfaceGraph g;
+    const Spider::NavSettings s;
+    CHECK(g.Build(verts, tris, w, s));
+    CHECK(g.NodeCount() > 400 && g.LinkCount() > g.NodeCount());
+    // Every node has room over it, faces into the open, and every link is short.
+    bool roomy = true, shortLinks = true;
+    for (int i = 0; i < g.NodeCount(); ++i) {
+        roomy = roomy && !w.Occupied(g.Pos(i) + g.Normal(i) * s.Room, s.RoomRadius * 0.9f);
+        for (int k = g.FirstLink(i); k < g.FirstLink(i + 1); ++k) shortLinks = shortLinks && glm::length(g.Pos(g.Neighbour(k)) - g.Pos(i)) <= s.LinkRadius + 1e-4f;
+    }
+    CHECK(roomy);
+    CHECK(shortLinks);
+    // No node inside the crate or on the room's outside.
+    int buried = 0;
+    for (int i = 0; i < g.NodeCount(); ++i) buried += g.Pos(i).y < -0.01f || g.Pos(i).y > 2.41f ? 1 : 0;
+    CHECK(buried == 0);
+
+    Spider::Mover m;
+    m.Reset(glm::vec3(0.0f, 0.0f, 1.5f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
+    const RouteResult up = FollowRoute(w, g, m, glm::vec3(0.5f, 2.4f, -1.2f), 30.0f);
+    CHECK(up.Planned);
+    CHECK(up.OffSurface > 0); // it leaves the floor: up a wall (or over the crate and up)
+    CHECK(up.Arrived);
+    CHECK(!up.Fell);
+    CHECK(up.Up.y < -0.97f);
+    // And back down to the floor on the start's side.
+    const RouteResult down = FollowRoute(w, g, m, glm::vec3(-1.0f, 0.0f, 1.2f), 30.0f);
+    CHECK(down.Arrived);
+    CHECK(!down.Fell);
+    CHECK(down.Up.y > 0.97f);
+
+    // Walls cost more: a floor-to-floor route over the crate still goes over it (no way round), but stays as short.
+    std::vector<int> a, b;
+    const int from = g.Nearest(glm::vec3(0.0f, 0.0f, 1.5f)), to = g.Nearest(glm::vec3(0.0f, 0.0f, -1.5f));
+    CHECK(g.FindPath(from, to, Spider::PathCosts{}, a));
+    Spider::PathCosts climbShy;
+    climbShy.Wall = 3.0f;
+    climbShy.Ceiling = 5.0f;
+    CHECK(g.FindPath(from, to, climbShy, b));
+    bool ceilingUsed = false;
+    for (int n : b) ceilingUsed = ceilingUsed || g.Normal(n).y < -0.7f;
+    CHECK(!ceilingUsed);
+}
+
+void TestSpiderNavCacheRoundTrips() {
+    BoxWorld w;
+    std::vector<float> verts;
+    std::vector<int> tris;
+    w.Triangles(verts, tris);
+    Spider::SurfaceGraph g, back;
+    const Spider::NavSettings s;
+    CHECK(g.Build(verts, tris, w, s));
+    const std::uint64_t hash = Spider::SurfaceGraph::HashInput(verts, tris, s);
+    const std::string path = "UnitTest_SpiderNav.snav";
+    CHECK(g.Save(path, hash));
+    CHECK(back.Load(path, hash));
+    CHECK(!back.Load(path, hash + 1)); // another level's graph isn't taken
+    CHECK(back.NodeCount() == g.NodeCount() && back.LinkCount() == g.LinkCount());
+    std::vector<int> p1, p2;
+    const int from = g.Nearest(glm::vec3(1.5f, 0.0f, 1.5f)), to = g.Nearest(glm::vec3(-1.5f, 2.4f, -1.5f));
+    CHECK(g.FindPath(from, to, Spider::PathCosts{}, p1));
+    CHECK(back.FindPath(back.Nearest(glm::vec3(1.5f, 0.0f, 1.5f)), back.Nearest(glm::vec3(-1.5f, 2.4f, -1.5f)), Spider::PathCosts{}, p2));
+    CHECK(p1 == p2);
+    std::remove(path.c_str());
+}
+
 void RegisterSpiderTests(UnitTestSupport::TestList& tests) {
+    tests.push_back({"SpiderNavRoutesFloorToCeiling", TestSpiderNavRoutesFloorToCeiling});
+    tests.push_back({"SpiderNavCacheRoundTrips", TestSpiderNavCacheRoundTrips});
     tests.push_back({"SolveChainReachesAndBendsTowardPole", TestSolveChainReachesAndBendsTowardPole});
     tests.push_back({"SpiderClimbsFloorWallCeiling", TestSpiderClimbsFloorWallCeiling});
     tests.push_back({"SpiderGoesOverABox", TestSpiderGoesOverABox});

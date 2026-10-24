@@ -50,6 +50,9 @@ void NpcTest::SpiderSetUp(World& world) {
         {"ceiling across", {2.1f, 1.3f, -7.6f}, {0.0f, 1.0f, 0.0f}, false}, // clear of the left wall's corner (a body there leans into its climb)
         {"left wall", {2.5f, 1.3f, -7.6f}, {-1.0f, 0.0f, 0.0f}, false},
         {"floor at a run", {2.5f, 1.0f, -5.3f}, {0.0f, -1.0f, 0.0f}, true},
+        // Two surfaces away: only the surface graph's route (up the nearest wall, down the nearest wall) gets there.
+        {"ceiling by route", {3.4f, 1.3f, -8.6f}, {0.0f, 1.0f, 0.0f}, false},
+        {"floor by route", {1.9f, 1.0f, -5.0f}, {0.0f, -1.0f, 0.0f}, true},
     };
     for (const Spot& s : spots) {
         SpiderLeg leg;
@@ -132,7 +135,10 @@ void NpcTest::SpiderRoute(World& world) {
                 m_SLeg + 1, leg.Name.c_str(), leg.Arrived ? "there" : "NOT there", leg.Clock, st.Up.x, st.Up.y, st.Up.z,
                 leg.WorstGap * 100.0f, leg.Frames ? leg.SumTip / (float)leg.Frames * 100.0f : 0.0f, leg.WorstTip * 100.0f,
                 leg.WorstSlide * 1000.0f, (int)steps, leg.Fell ? "FELL" : "held on");
+    std::printf("[NpcTest]   route %d nodes (%d planned so far)\n", st.RouteNodes, st.Replans);
     Check(leg.Arrived, "spider: '" + leg.Name + "' reached in time");
+    if (leg.Name.find("by route") != std::string::npos)
+        Check(st.RouteNodes > 0, "spider: '" + leg.Name + "' went by the surface graph's route");
     Check(!leg.Fell, "spider: never let go on the way to '" + leg.Name + "'");
     Check(leg.WorstGap < 0.04f, "spider: the body stays on the surface on the way to '" + leg.Name + "'");
     Check(leg.Frames && leg.SumTip / (float)leg.Frames < 0.02f && leg.WorstTip < 0.08f,

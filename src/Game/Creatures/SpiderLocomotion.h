@@ -29,6 +29,8 @@ public:
     virtual ~SurfaceQuery() = default;
     // Nearest surface along `dir` (unit) from `from` within `maxDistance`.
     virtual bool Ray(const glm::vec3& from, const glm::vec3& dir, float maxDistance, SurfaceHit& out) const = 0;
+    // Whether a sphere there would touch anything solid (the surface graph's room for the body).
+    virtual bool Occupied(const glm::vec3& centre, float radius) const { (void)centre; (void)radius; return false; }
 };
 
 struct MoverSettings {
@@ -89,7 +91,7 @@ constexpr int kLegs = 8;
 
 struct GaitSettings {
     float StepTime = 0.2f;       // seconds a step takes at a walk (shorter as it speeds up)
-    float MinStepTime = 0.09f;   // ... never shorter than this
+    float MinStepTime = 0.07f;   // ... never shorter than this
     float StepHeight = 0.07f;    // metres the foot lifts off the surface at mid-step
     float StepDistance = 0.11f;  // a planted foot this far from where it wants to be steps
     float Lead = 0.6f;           // the foothold is picked this many step-times ahead of the body's travel
