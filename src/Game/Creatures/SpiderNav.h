@@ -59,24 +59,37 @@ public:
 
     // The node nearest `p` within `maxDistance` (-1: none). With `up`, nodes whose surface faces away from it (a wall's
     // far side) are passed over.
-    int Nearest(const glm::vec3& p, float maxDistance = 1.0f, const glm::vec3* up = nullptr) const;
+    // component >= 0: only nodes in that connected piece of the graph (Component), so a pick is somewhere it can get to.
+    int Nearest(const glm::vec3& p, float maxDistance = 1.0f, const glm::vec3* up = nullptr, int component = -1) const;
+    // Which connected piece of the graph node i is in: the rooms a spider can crawl between are one; a void sealed off
+    // behind a wall, above a ceiling or under a floor is another.
+    int Component(int i) const { return m_Comp[(size_t)i]; }
     // A* from node `from` to node `to`: the nodes in order, both ends included. False when unreachable or when it would
     // expand more than `maxExpand` nodes.
     bool FindPath(int from, int to, const PathCosts& costs, std::vector<int>& out, int maxExpand = 80000) const;
 
-    // A cache on disk, keyed by the input's hash (HashInput): a level's graph is baked once.
-    static std::uint64_t HashInput(const std::vector<float>& verts, const std::vector<int>& tris, const NavSettings& s);
+    // A cache on disk, keyed by the input's hash (HashInput): a level's graph is baked once. The key holds the builder's
+    // version too - bump kBuildVersion with any change to what Build makes, or every level keeps the graph it baked before.
+    // (3: baked against the static world alone; before, a door, the player or a spider at the bake changed the graph.)
+    // (4: a link is clear only if clear both ways - a one-sided ceiling or floor plane let links through from behind.)
+    static constexpr std::uint32_t kBuildVersion = 4;
+    static std::uint64_t HashInput(const std::vector<float>& verts, const std::vector<int>& tris, const NavSettings& s,
+                                   std::uint32_t buildVersion = kBuildVersion);
+    // `hash` with the level's creature barriers mixed in: they cut links, so a graph baked without them isn't this one.
+    static std::uint64_t HashBarriers(std::uint64_t hash, const std::vector<Barrier>& barriers);
     bool Save(const std::string& path, std::uint64_t hash) const;
     bool Load(const std::string& path, std::uint64_t hash);
 
 private:
     void BuildGrid();
+    void LabelComponents();
     long long CellKey(const glm::vec3& p) const;
 
     float m_Cell = 0.5f;
     std::vector<glm::vec3> m_Pos, m_Normal;
     std::vector<int> m_First; // CSR: NodeCount + 1 entries
     std::vector<int> m_Links;
+    std::vector<int> m_Comp; // per node, its connected piece (LabelComponents)
     // Spatial hash for Nearest: node ids sorted by cell.
     std::vector<std::pair<long long, int>> m_Grid;
     // A* scratch, reused between searches.

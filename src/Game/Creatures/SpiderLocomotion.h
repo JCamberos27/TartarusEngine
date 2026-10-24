@@ -34,6 +34,26 @@ public:
     virtual bool Occupied(const glm::vec3& centre, float radius) const { (void)centre; (void)radius; return false; }
 };
 
+// A volume only creatures see (CreatureBarrierComponent): a window's opening, which has no collider. An oriented box in
+// world space - its centre, its rotation and its half-extents along its own axes.
+struct Barrier {
+    glm::vec3 Centre{0.0f};
+    glm::quat Rotation{1.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec3 Half{0.0f};
+};
+
+// `world` with barriers in it: its rays stop on a barrier's faces (from outside; a ray starting inside one passes) and
+// its room tests count them solid. Wrapped round every query the spiders make - the graph's bake, the body's mover and
+// its legs - so neither the planner nor the mover takes a spider through one.
+class BarrierQuery : public SurfaceQuery {
+public:
+    BarrierQuery(const SurfaceQuery& world, const std::vector<Barrier>& barriers) : World(world), Barriers(barriers) {}
+    bool Ray(const glm::vec3& from, const glm::vec3& dir, float maxDistance, SurfaceHit& out) const override;
+    bool Occupied(const glm::vec3& centre, float radius) const override;
+    const SurfaceQuery& World;
+    const std::vector<Barrier>& Barriers;
+};
+
 struct MoverSettings {
     float Speed = 0.9f;          // m/s along the surface when it has somewhere to go
     float Accel = 6.0f;          // m/s^2 up to that speed and back down

@@ -331,7 +331,10 @@ bool SphereCastFiltered(const float origin[3], const float dir[3], float radius,
 // isn't cover. Engine-side only (not in the gameplay-module API).
 // RaycastFiltered that only hits the solid world (statics and kinematic bodies), not simulated props:
 // for the foot IK's ground probe, so a rolling ball is not ground. Engine-side only.
-bool RaycastSolid(const float origin[3], const float dir[3], float maxDistance, const QueryFilter& f, RaycastHit& outHit);
+// fromOutside: a shape the ray starts inside isn't hit (PhysX would report it at distance 0, facing back along the ray);
+// the ray goes on to the first surface it enters - for probes that must find a face, not the solid they begin in.
+bool RaycastSolid(const float origin[3], const float dir[3], float maxDistance, const QueryFilter& f, RaycastHit& outHit,
+                  bool fromOutside = false);
 bool SphereCastSolid(const float origin[3], const float dir[3], float radius, float maxDistance,
                      const QueryFilter& f, RaycastHit& outHit);
 bool BoxCast(const float center[3], const float halfExtents[3], const float rotation[4], const float dir[3],
@@ -339,6 +342,10 @@ bool BoxCast(const float center[3], const float halfExtents[3], const float rota
 bool CapsuleCast(const float point1[3], const float point2[3], float radius, const float dir[3],
                  float maxDistance, const QueryFilter& f, RaycastHit& outHit);
 int  OverlapSphereFiltered(const float center[3], float radius, const QueryFilter& f, unsigned* out, int maxEntities);
+// RaycastSolid / an overlap test against static colliders only - the world CollectStaticGeometry(.., false) returns: for
+// bakes from that geometry, so a door, the player or a spider wherever it happens to be at the bake isn't baked in.
+bool RaycastStatic(const float origin[3], const float dir[3], float maxDistance, const QueryFilter& f, RaycastHit& outHit);
+bool OverlapSphereStatic(const float center[3], float radius, const QueryFilter& f);
 int  OverlapBox(const float center[3], const float halfExtents[3], const float rotation[4], const QueryFilter& f,
                 unsigned* out, int maxEntities);
 

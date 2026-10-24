@@ -15,6 +15,23 @@
 
 class AssetLibrary;
 struct SpiderComponent;
+
+namespace Spider {
+// The solid world (statics and kinematic bodies, not props rolling about, not triggers), counted. StaticOnly: the static
+// world alone - the surface graph's bake, which must see just the triangles it is built from, never a door, the player or
+// a spider where it happens to be (or the graph differs with the moment it was baked, and the cache keeps that).
+// A ray finds the first face it enters, as the unit tests' boxes do: the live one passes through a solid it starts inside
+// (PhysX reports that solid at the ray's origin, so a probe begun in a table top or a slab stood the body on its own
+// probe's start, and each frame's probe lifted it a quarter metre, up through the slab).
+class WorldQuery : public SurfaceQuery {
+public:
+    explicit WorldQuery(bool staticOnly = false) : StaticOnly(staticOnly) {}
+    bool Ray(const glm::vec3& from, const glm::vec3& dir, float maxDistance, SurfaceHit& out) const override;
+    bool Occupied(const glm::vec3& centre, float radius) const override;
+    bool StaticOnly = false;
+    mutable int Rays = 0;
+};
+} // namespace Spider
 class World;
 
 // The enemy spiders in Play: every active entity with a Spider component (a spider prefab's root, its model and Animator
@@ -37,18 +54,27 @@ public:
         bool Pounce = false;         // a leap or a drop landed (harder jolt) rather than a bite
     };
     std::vector<PlayerHit> TakePlayerHits() { std::vector<PlayerHit> out; out.swap(m_PlayerHits); return out; }
+    // The player's velocity after a hit's shove (`push`, m/s along the ground): it staggers, never throws. Their speed
+    // along the ground ends no faster than the shove or than they were already going, so hits from two sides (two
+    // attackers, a pounce then a bite) don't stack into a throw across the room.
+    static glm::vec3 Shove(const glm::vec3& velocity, const glm::vec3& push);
 
     // A hunter's state of mind (SpiderAI.cpp).
     enum class Mode : int { Perch, Stalk, Engage, Telegraph, Leap, Bite, Recover, Reposition, Search, Scripted };
 
     void Think(World& world, AssetLibrary& assets, float dt, const Target* target = nullptr);
     void LatePose(World& world, float dt);
-    void Clear() { m_Bodies.clear(); m_Nav.Clear(); m_NavTried = false; }
+    void Clear() { m_Bodies.clear(); m_Nav.Clear(); m_NavTried = false; m_Barriers.clear(); }
     bool Active() const { return !m_Bodies.empty(); }
 
     // The level's surface graph (SpiderNav.h), baked (or read from its cache) when the first spider appears in Play.
     // Empty when the bake failed: spiders then head straight for their goals.
     const Spider::SurfaceGraph& Nav() const { return m_Nav; }
+    // The level's creature barriers (CreatureBarrierComponent), gathered with the graph's bake.
+    const std::vector<Spider::Barrier>& Barriers() const { return m_Barriers; }
+    // Tests: whether the graph in use - maybe read from the disk cache - is the one the builder makes from this level
+    // now. A cache the builder has moved on from (a change to Build without a new SurfaceGraph::kBuildVersion) fails it.
+    bool NavMatchesFreshBuild(std::string& why) const;
 
     // A spider from `prefab` (a scene file whose root carries a Spider component) at `pos` facing `rot`: its root, or
     // entt::null when the prefab won't load.
@@ -146,14 +172,16 @@ private:
         SpiderSystem::Hurt Pain; // (SpiderDamage)
     };
     bool Resolve(World& world, AssetLibrary& assets, Body& b);
-    void BuildNav();
+    void BuildNav(const World& world);
     // Where the mover heads this frame: the route's next waypoint (as far along the surface it is on as the route stays
     // on it), or the goal itself on its last stretch or without a graph.
     glm::vec3 Steer(Body& b, const glm::vec3& goal, float dt);
     // The hunter's decision for this frame: sets the component's goal / run, triggers attacks and leaps (SpiderAI.cpp).
     void Hunt(World& world, Body& b, SpiderComponent& sc, const Target& t, float dt);
     bool SeesPlayer(const Body& b, const SpiderComponent& sc, const Target& t) const;
-    int PickPerch(const glm::vec3& near) const;
+    bool LeapClear(const Body& b, const SpiderComponent& sc, const Target& t, float dist) const;
+    int Reach(const Body& b) const; // the graph piece it is on (-1: none near) - its goals are picked inside it
+    int PickPerch(const glm::vec3& near, int component) const;
     static inline int s_SoundsStarted = 0, s_SoundsMissing = 0;
     int Attackers() const;
 
@@ -162,6 +190,7 @@ private:
 
     Spider::SurfaceGraph m_Nav;
     bool m_NavTried = false;
+    std::vector<Spider::Barrier> m_Barriers;
 
     std::vector<Body> m_Bodies;
     std::uint64_t m_Generation = 0;

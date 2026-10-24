@@ -1965,7 +1965,7 @@ int main(int argc, char** argv) {
                                                               : opt.npcTestScenario == "blood" ? "scenes/BloodTest.json"
                                                               : opt.npcTestScenario == "ragdoll" ? "scenes/RagdollTest.json"
                                                               : opt.npcTestScenario == "escape" || opt.npcTestScenario == "escapeshut" || opt.npcTestScenario == "aptwounds" || opt.npcTestScenario == "aptfight" ? "scenes/Apartment Hallway.json"
-                                                              : opt.npcTestScenario == "decals" || opt.npcTestScenario == "doors" || opt.npcTestScenario == "spider" || opt.npcTestScenario == "spiderdeath" || opt.npcTestScenario == "spiderhunt" ? "scenes/Apartment Hallway.json"
+                                                              : opt.npcTestScenario == "decals" || opt.npcTestScenario == "doors" || opt.npcTestScenario == "spider" || opt.npcTestScenario == "spiderdeath" || opt.npcTestScenario == "spiderhunt" || opt.npcTestScenario == "spiderplay" ? "scenes/Apartment Hallway.json"
                                                                                            : "scenes/Arena.json"));
             std::cout << "[SmokeTest] Found " << smokeScenePaths.size() << " scene(s) under "
                       << scenesDir << std::endl;
@@ -2879,12 +2879,7 @@ int main(int argc, char** argv) {
                         playerVitals.ApplyDamage(h.Amount, h.Source);
                         // The shove: along the ground, up to its speed - a bite on a player already reeling back doesn't add
                         // to it, so a flurry staggers them rather than throwing them across the level.
-                        const glm::vec3 push(h.Push.x, 0.0f, h.Push.z);
-                        if (const float strength = glm::length(push); strength > 1e-3f) {
-                            const glm::vec3 dir = push / strength;
-                            const float along = glm::dot(glm::vec3(player.Velocity.x, 0.0f, player.Velocity.z), dir);
-                            if (along < strength) player.Velocity += dir * (strength - along);
-                        }
+                        player.Velocity = SpiderSystem::Shove(player.Velocity, h.Push);
                         // The jolt: the view knocked up and aside, harder for a pounce.
                         const float side = glm::dot(glm::normalize(glm::vec3(h.Push.x, 0.0f, h.Push.z) + glm::vec3(1e-4f, 0.0f, 0.0f)),
                                                     player.Cam.Right());

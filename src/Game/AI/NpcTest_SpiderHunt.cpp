@@ -101,7 +101,7 @@ void NpcTest::SpiderHunt(World& world) {
         bites += st.Bites;
         leaps += st.Leaps;
         anyAware = anyAware || st.Aware;
-        if (st.Pos.y < -0.5f) ++m_HFellThrough;
+        if (st.Pos.y < -0.15f) ++m_HFellThrough; // the floor is at 0: below it is the slab's underside, the void
         worstStuck = std::max(worstStuck, st.WorstStuck);
         sunk += st.SunkFrames;
         if (st.Pos.y > 2.0f) ++m_HCeilFrames[k];
