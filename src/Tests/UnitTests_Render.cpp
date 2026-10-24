@@ -3,6 +3,7 @@
 #include "../Renderer/Model.h"
 #include "../Renderer/InstanceBatch.h"
 #include "../Renderer/MaterialAsset.h"
+#include "../Renderer/FurRenderer.h"
 #include "../Renderer/VolumetricFog.h"
 #include "../Game/SceneSerializer.h"
 #include "AssetLibrary.h"
@@ -13,6 +14,8 @@
 #include "../Core/Log.h"
 #include <algorithm>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <json.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -258,6 +261,88 @@ void VolumetricSettingsRoundTrip() {
     }
 }
 
+// FurRenderer::ShellCount: the shells follow the hair's height on screen - more up close, fewer far away, none
+// once a hair is under a pixel - within the material's maximum.
+void FurShellLod() {
+    const float proj = 1.732f, h = 1080.0f, len = 0.015f; // 60-degree vertical field of view
+    CHECK(FurRenderer::ShellCount(16, len, 0.5f, proj, h) == 16); // up close: the material's maximum
+    const int at1 = FurRenderer::ShellCount(16, len, 1.0f, proj, h);
+    const int at3 = FurRenderer::ShellCount(16, len, 3.0f, proj, h);
+    const int at8 = FurRenderer::ShellCount(16, len, 8.0f, proj, h);
+    CHECK(at1 >= at3 && at3 >= at8 && at1 > at8);
+    CHECK(at8 >= FurRenderer::kMinShells); // still drawn: thinned to the floor, not to a single floating layer
+    CHECK(FurRenderer::ShellCount(16, len, 40.0f, proj, h) == 0); // under a pixel: none
+    // Monotonic all the way out.
+    int last = 1 << 30;
+    for (float d = 0.1f; d < 60.0f; d *= 1.1f) {
+        const int n = FurRenderer::ShellCount(16, len, d, proj, h);
+        CHECK(n <= last && n >= 0 && n <= 16);
+        last = n;
+    }
+    // A smaller view needs fewer; a lower maximum caps it, below the floor too.
+    CHECK(FurRenderer::ShellCount(16, len, 3.0f, proj, 540.0f) <= at3);
+    CHECK(FurRenderer::ShellCount(6, len, 0.5f, proj, h) == 6);
+    CHECK(FurRenderer::ShellCount(2, len, 8.0f, proj, h) == 2);
+    // Off: no shells, no length, no view.
+    CHECK(FurRenderer::ShellCount(0, len, 0.5f, proj, h) == 0);
+    CHECK(FurRenderer::ShellCount(16, 0.0f, 0.5f, proj, h) == 0);
+    CHECK(FurRenderer::ShellCount(16, len, 0.5f, proj, 0.0f) == 0);
+    CHECK(FurRenderer::ShellCount(16, len, 0.0f, proj, h) == 16); // the eye at the surface: clamped, not inf
+}
+
+// The shell-fur properties save to a .mat and load back; a material without fur writes none of them, and the
+// property accessors (the Inspector's path) reach the same fields.
+void FurMaterialRoundTrip() {
+    const std::filesystem::path dir = std::filesystem::temp_directory_path() / "tartarus_fur_test";
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    MaterialAsset ma;
+    ma.Path = (dir / "M_Fur.mat").string();
+    ma.Name = "M_Fur";
+    ma.ShaderPath = "engine://Standard.shader";
+    ma.Mat.Fur.Enabled = true;
+    ma.Mat.Fur.Length = 0.018f;
+    ma.Mat.Fur.Density = 300.0f;
+    ma.Mat.Fur.Shells = 12;
+    ma.Mat.Fur.Gravity = 0.5f;
+    ma.Mat.Fur.Tint = glm::vec3(0.9f, 0.8f, 0.7f);
+    ma.Mat.Fur.Rim = 0.6f;
+    ma.FurMaskPath = "assets/Characters/Spider/Textures/T_Spider_FurMask.png";
+    CHECK(ma.Save());
+    const auto back = MaterialAsset::Load(ma.Path);
+    CHECK(back != nullptr);
+    if (back) {
+        const Material::FurDesc& f = back->Mat.Fur;
+        CHECK(f.Enabled && f.Length == 0.018f && f.Density == 300.0f && f.Shells == 12 && f.Gravity == 0.5f &&
+              f.Tint == glm::vec3(0.9f, 0.8f, 0.7f) && f.Rim == 0.6f);
+        CHECK(back->FurMaskPath == ma.FurMaskPath);
+    }
+    // No fur: none of its keys in the file, and the defaults back.
+    MaterialAsset plain;
+    plain.Path = (dir / "M_Plain.mat").string();
+    plain.Name = "M_Plain";
+    plain.ShaderPath = "engine://Standard.shader";
+    CHECK(plain.Save());
+    {
+        std::ifstream in(plain.Path);
+        const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        CHECK(text.find("_Fur") == std::string::npos);
+    }
+    const auto plainBack = MaterialAsset::Load(plain.Path);
+    CHECK(plainBack && plainBack->Mat.Fur == Material::FurDesc{});
+    // The Inspector's accessors: built-in, kept off the surface program's bindings, clamped like the loader.
+    Material m;
+    CHECK(MaterialAsset::IsBuiltinProp("_FurMask") && MaterialAsset::IsFurProp("_FurShells") && !MaterialAsset::IsFurProp("_Sheen"));
+    MaterialAsset::SetBool(m, "_FurEnabled", true);
+    MaterialAsset::SetFloat(m, "_FurLength", 0.02f);
+    MaterialAsset::SetInt(m, "_FurShells", 99);
+    MaterialAsset::SetColor(m, "_FurTint", glm::vec3(0.5f));
+    CHECK(MaterialAsset::GetBool(m, "_FurEnabled") && MaterialAsset::GetFloat(m, "_FurLength") == 0.02f);
+    CHECK(MaterialAsset::GetInt(m, "_FurShells") == Material::kMaxFurShells);
+    CHECK(MaterialAsset::GetColor(m, "_FurTint") == glm::vec3(0.5f));
+    std::filesystem::remove_all(dir, ec);
+}
+
 } // namespace
 
 void RegisterRenderTests(UnitTestSupport::TestList& tests) {
@@ -269,4 +354,6 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"GPU instancing: placed copies share one import id", InstanceImportId});
     tests.push_back({"Volumetric fog: blue-noise jitter ranks are a permutation, evenly spread", VolumetricBlueNoise});
     tests.push_back({"Volumetric fog: settings and Volumetric Intensity round-trip; old scenes default off / 1", VolumetricSettingsRoundTrip});
+    tests.push_back({"Fur: shell count follows the hair's size on screen", FurShellLod});
+    tests.push_back({"Fur: material properties round-trip through a .mat and the accessors", FurMaterialRoundTrip});
 }
