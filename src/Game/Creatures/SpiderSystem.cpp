@@ -12,6 +12,7 @@
 #include "World.h"
 
 #include <algorithm>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -32,6 +33,12 @@ public:
         out.Point = glm::vec3(h.Point[0], h.Point[1], h.Point[2]);
         out.Normal = glm::vec3(h.Normal[0], h.Normal[1], h.Normal[2]);
         return true;
+    }
+    bool Occupied(const glm::vec3& centre, float radius) const override {
+        QueryFilter f;
+        f.HitTriggers = 0;
+        unsigned hit = 0;
+        return PhysicsWorld::OverlapSphereFiltered(&centre.x, radius, f, &hit, 1) > 0;
     }
     mutable int Rays = 0;
 };
@@ -138,9 +145,63 @@ bool SpiderSystem::Resolve(World& world, AssetLibrary&, Body& b) {
     return true;
 }
 
+void SpiderSystem::BuildNav() {
+    m_NavTried = true;
+    PROFILE_SCOPE("Spider Nav");
+    const auto t0 = std::chrono::steady_clock::now();
+    std::vector<float> verts;
+    std::vector<int> tris;
+    PhysicsWorld::CollectStaticGeometry(verts, tris, /*includeKinematic=*/false);
+    const Spider::NavSettings s;
+    const std::uint64_t hash = Spider::SurfaceGraph::HashInput(verts, tris, s);
+    char name[64];
+    std::snprintf(name, sizeof name, "Library/SpiderNavCache/%016llx.snav", (unsigned long long)hash);
+    const std::string cache = ProjectPaths::Resolve(name);
+    bool loaded = m_Nav.Load(cache, hash);
+    if (!loaded) {
+        WorldQuery q;
+        if (!m_Nav.Build(verts, tris, q, s)) {
+            Log::Error("Spider: the surface graph didn't build - spiders head straight for their goals.");
+            return;
+        }
+        std::error_code ec;
+        std::filesystem::create_directories(std::filesystem::u8path(cache).parent_path(), ec);
+        m_Nav.Save(cache, hash);
+    }
+    const float ms = std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    Log::Info("Spider: surface graph " + std::to_string(m_Nav.NodeCount()) + " nodes, " + std::to_string(m_Nav.LinkCount()) +
+              " links (" + (loaded ? "cached" : "baked") + ", " + std::to_string((int)ms) + " ms).");
+}
+
+glm::vec3 SpiderSystem::Steer(Body& b, const glm::vec3& goal, float dt) {
+    if (m_Nav.Empty()) return goal;
+    const glm::vec3 pos = b.Mover.Position(), up = b.Mover.Up();
+    b.RouteAge += dt;
+    // A new route when the goal has moved, when the old one is used up or stale, or (once a second) after a failure.
+    const bool moved = glm::length(goal - b.RouteGoal) > 0.4f;
+    if (b.Route.empty() ? (moved || !b.RouteFailed || b.RouteAge > 1.0f) : (moved || b.RouteAge > 3.0f)) {
+        b.RouteGoal = goal;
+        b.RouteAge = 0.0f;
+        b.Route.clear();
+        b.RouteNormal.clear();
+        b.RouteAt = 0;
+        const int from = m_Nav.Nearest(pos, 0.8f, &up), to = m_Nav.Nearest(goal, 1.0f);
+        b.RouteFailed = from < 0 || to < 0 || !m_Nav.FindPath(from, to, RouteCosts, b.RouteScratch);
+        if (!b.RouteFailed) {
+            for (int n : b.RouteScratch) {
+                b.Route.push_back(m_Nav.Pos(n));
+                b.RouteNormal.push_back(m_Nav.Normal(n));
+            }
+            ++b.Last.Replans;
+        }
+    }
+    b.Last.RouteNodes = (int)b.Route.size();
+    return Spider::RouteAim(b.Route, b.RouteNormal, b.RouteAt, pos, up, goal);
+}
+
 void SpiderSystem::Think(World& world, AssetLibrary& assets, float dt) {
     if (const std::uint64_t gen = PhysicsWorld::SimulationGeneration(); gen != m_Generation) {
-        m_Bodies.clear(); // a new Play
+        Clear(); // a new Play, maybe of another scene
         m_Generation = gen;
     }
     auto& reg = world.Registry;
@@ -157,13 +218,15 @@ void SpiderSystem::Think(World& world, AssetLibrary& assets, float dt) {
     if (m_Bodies.empty() || dt <= 0.0f) return;
 
     PROFILE_SCOPE("Spiders");
+    if (!m_NavTried) BuildNav();
     WorldQuery q;
     for (Body& b : m_Bodies) {
         if (!b.Ready && !Resolve(world, assets, b)) continue;
         const auto& sc = reg.get<SpiderComponent>(b.Root);
         Spider::MoveInput in;
         in.HasGoal = sc.HasGoal;
-        in.Goal = sc.Goal;
+        in.Goal = sc.HasGoal ? Steer(b, sc.Goal, dt) : sc.Goal;
+        if (!sc.HasGoal) b.Route.clear();
         in.SpeedScale = sc.Run && sc.WalkSpeed > 1e-3f ? sc.RunSpeed / sc.WalkSpeed : 1.0f;
         in.LegUp = b.Gait.MeanNormal();
         q.Rays = 0;
