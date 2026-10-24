@@ -22,7 +22,16 @@
         1,
         1,
         1
-      ]
+      ],
+      "Spider": {
+        "Rig": "assets/Characters/Spider/Spider.rig.json",
+        "Walk Speed": 0.9,
+        "Run Speed": 2.4,
+        "Turn Rate": 260.0,
+        "Step Height": 0.07,
+        "Step Time": 0.2,
+        "Leg IK": true
+      }
     }
   ],
   "models": [

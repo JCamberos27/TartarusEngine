@@ -37,6 +37,7 @@
 #include "Shortcuts.h" // play / window keys route through the Shortcuts Manager (#236 F)
 #include "Model.h"
 #include "SceneSerializer.h"
+#include "Creatures/SpiderSystem.h"
 #include "AnimationSystem.h"
 #include "ParticleSystem.h"
 #include "AnimatorController.h"
@@ -767,6 +768,7 @@ int main(int argc, char** argv) {
         WeaponFxRenderer weaponFx;  // the weapon's laser beam / spot and the bullet holes
         BulletHoleList bulletHoles; // where this Play's rounds struck
         NpcDirector npcDirector;    // the enemy squad, in scenes with NPC Spawns
+        SpiderSystem spiders;       // the enemy spiders (Spider components): bodies on any surface, legs by IK
         CombatFx combatFx;          // its (and the player's) gunfire, flashes, tracers and hits
         BloodFx bloodFx;            // the volumetric blood out of every body a round goes into (docs/BLOOD_FX.md)
         SprayCanSystem sprayCans;   // graffiti sprayed on in Play, by the player (F6) or an NPC (docs/GRAFFITI_DESIGNER.md)
@@ -1206,6 +1208,13 @@ int main(int argc, char** argv) {
                 v.Sounds = sprayCans.SoundsPlayed(); v.Hissing = sprayCans.Hissing();
                 v.RuntimeDecals = DecalSystem::Current() ? DecalSystem::Current()->RuntimeCount() : 0;
             };
+            // --npc-test spider: a spider put in the scene, and the system that runs it
+            npcTest->SpawnSpider = [&](const glm::vec3& pos, float yawDeg) {
+                const entt::entity e = spiders.Spawn(world, assets, "assets/Characters/Spider/Spider.json", pos,
+                                                     glm::angleAxis(glm::radians(yawDeg), glm::vec3(0.0f, 1.0f, 0.0f)));
+                return (std::uint32_t)entt::to_integral(e);
+            };
+            npcTest->Spiders = &spiders;
         }
 
         if (resaveMode) {
@@ -1927,7 +1936,7 @@ int main(int argc, char** argv) {
                                                               : opt.npcTestScenario == "blood" ? "scenes/BloodTest.json"
                                                               : opt.npcTestScenario == "ragdoll" ? "scenes/RagdollTest.json"
                                                               : opt.npcTestScenario == "escape" || opt.npcTestScenario == "escapeshut" || opt.npcTestScenario == "aptwounds" || opt.npcTestScenario == "aptfight" ? "scenes/Apartment Hallway.json"
-                                                              : opt.npcTestScenario == "decals" || opt.npcTestScenario == "doors" ? "scenes/Apartment Hallway.json"
+                                                              : opt.npcTestScenario == "decals" || opt.npcTestScenario == "doors" || opt.npcTestScenario == "spider" ? "scenes/Apartment Hallway.json"
                                                                                            : "scenes/Arena.json"));
             std::cout << "[SmokeTest] Found " << smokeScenePaths.size() << " scene(s) under "
                       << scenesDir << std::endl;
@@ -2820,6 +2829,8 @@ int main(int argc, char** argv) {
                     editor.UpdatePlayModeAudio(world, gameDt,
                         listener != entt::null ? glm::vec3(world.ComposeWorldTransform(listener)[3]) : gameCam->Position);
                 }
+                // The spiders move over the surfaces before the animators pose them.
+                spiders.Think(world, assets, gameDt);
                 // Procedural spin/orbit/bob/light-hue. Play-only: edit mode keeps the authored
                 // pose, and the play-mode snapshot restores everything this touched on Stop.
                 UpdateAnimators(world, gameDt);
@@ -2829,6 +2840,8 @@ int main(int argc, char** argv) {
                 PROFILE_SCOPE("Animator Controllers");
                 UpdateAnimatorControllers(world, assets, gameDt); // #175 Part B — state machines
                 }
+                // The spiders' legs onto this frame's footholds, over the pose their animators just gave them.
+                spiders.LatePose(world, gameDt);
                 // The arms are posed now (clips + IK): seat the gun in this frame's hands.
                 if (playUsesPlayer) {
                     PROFILE_SCOPE("First Person IK");
