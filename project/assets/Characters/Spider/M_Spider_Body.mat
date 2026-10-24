@@ -35,7 +35,15 @@
       0.16
     ],
     "_ThicknessMap": "assets/Characters/Spider/Textures/T_Spider_Thickness.png",
-    "_Thickness": 0.6
+    "_Thickness": 0.6,
+    "_FurEnabled": true,
+    "_FurLength": 0.012,
+    "_FurDensity": 480.0,
+    "_FurShells": 16,
+    "_FurMask": "assets/Characters/Spider/Textures/T_Spider_FurMask.png",
+    "_FurGravity": 0.35,
+    "_FurTint": [1.05, 0.95, 0.85],
+    "_FurRim": 0.35
   },
   "shader": "engine://Standard.shader"
 }
