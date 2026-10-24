@@ -1275,6 +1275,11 @@ struct SpiderComponent {
     float StepHeight = 0.07f; // m a foot lifts mid-step
     float StepTime = 0.2f;    // s a step takes at a walk
     bool LegIK = true;        // off: the legs play the clips as authored
+    int Brain = 0;            // 0 = hunter (its own AI: perches, stalks, ambushes, pounces, bites), 1 = scripted (Goal only)
+    float SightRange = 14.0f; // m it sees the player within (with a clear line)
+    float BiteDamage = 12.0f;
+    float PounceDamage = 18.0f;
+    float Knockback = 4.0f;   // m/s a bite shoves the player back (a pounce more)
     // --- runtime (not serialized)
     bool HasGoal = false;
     bool Run = false;

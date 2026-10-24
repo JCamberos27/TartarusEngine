@@ -88,8 +88,8 @@ public:
     bool Aiming() const { return !m_Target.empty(); }   // sights up (rounds go where the view looks)
     bool WantsReload() const { return m_Reload; }
     bool WantsAiOverlay() const { return m_Scenario == "sandbox"; } // the AI overlay in the sandbox shots
-    bool RunsWithoutSquad() const { return m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "spider"; } // After() even in a scene with no squad
-    bool WantsCleanViews() const { return m_Scenario == "blood" || m_Scenario == "ragdoll" || m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "spider"; } // no collider / physics-debug overlays
+    bool RunsWithoutSquad() const { return m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "spider" || m_Scenario == "spiderhunt"; } // After() even in a scene with no squad
+    bool WantsCleanViews() const { return m_Scenario == "blood" || m_Scenario == "ragdoll" || m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "spider" || m_Scenario == "spiderhunt"; } // no collider / physics-debug overlays
     // Time stands still this frame (the host steps the game by zero): the ragdoll scenario's multi-angle shots of one moment.
     bool Frozen() const { return m_RFreeze; }
     // The blood scenario's view of the blood, filled by the host each frame.
@@ -131,6 +131,8 @@ public:
     // build), and the system running it (NpcTest_Spider.cpp).
     std::function<std::uint32_t(const glm::vec3& pos, float yawDeg)> SpawnSpider;
     SpiderSystem* Spiders = nullptr;
+    // --npc-test spiderhunt: the same, but a hunter (its own AI) rather than a scripted spider.
+    std::function<std::uint32_t(const glm::vec3& pos, float yawDeg)> SpawnHunter;
 
 private:
     void Check(bool ok, const std::string& what);
@@ -177,6 +179,13 @@ private:
         int Frames = 0, StepsAtStart = 0;
     };
     void SpiderRoute(World& world);
+    // spiderhunt (NpcTest_SpiderHunt.cpp): hunters let loose on the player in 301's living room
+    void SpiderHunt(World& world);
+    void SpiderHuntDrive(Player& player, PlayerVitals& vitals, float& wantYaw, float& wantPitch);
+    std::vector<std::uint32_t> m_HRoots;
+    float m_HClock = 0.0f;
+    int m_HStage = 0, m_HMaxAttackers = 0, m_HFellThrough = 0;
+    bool m_HPlaced = false, m_HDone = false, m_HDropShot = false, m_HPounceShot = false, m_HBiteShot = false;
     void SpiderSetUp(World& world);
     std::uint32_t m_SRoot = 0xFFFFFFFFu;
     std::vector<SpiderLeg> m_SLegs;
