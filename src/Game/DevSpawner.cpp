@@ -18,6 +18,7 @@
 #include <glm/gtc/quaternion.hpp>
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 
 namespace {
 
@@ -165,6 +166,10 @@ void DevSpawner::SpawnSpider(const Context& c) {
         }
         m_SpiderIds.push_back(e);
         ++made;
+        char msg[160];
+        std::snprintf(msg, sizeof msg, "F10: %s spider at (%.2f, %.2f, %.2f), aimed from (%.2f, %.2f, %.2f).", kSpiders[m_Spider], p.x, p.y, p.z,
+                      c.Eye.x, c.Eye.y, c.Eye.z);
+        Log::Info(msg);
     }
     if (made == 0) {
         FKeyRow::Show("F10", "Spider", "Couldn't spawn");
