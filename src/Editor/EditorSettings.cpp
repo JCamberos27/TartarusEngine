@@ -242,6 +242,12 @@ void EditorSettings::Load() {
     // session-only (see the struct field's comment), so a session left slowed/frozen can't leave
     // physics silently frozen the next time the editor opens.
     s.PlayDebugOverlay = SafeValue(root, "playDebugOverlay", s.PlayDebugOverlay);
+    s.FRowOverlay = SafeValue(root, "fRowOverlay", s.FRowOverlay);
+    s.FRowLightDebug = SafeValue(root, "fRowLightDebug", s.FRowLightDebug);
+    s.PostFxOff = SafeValue(root, "postFxOff", s.PostFxOff);
+    s.FRowLook = SafeValue(root, "fRowLook", s.FRowLook);
+    s.FRowStyle = SafeValue(root, "fRowStyle", s.FRowStyle);
+    s.FRowOutfitSeed = SafeValue(root, "fRowOutfitSeed", s.FRowOutfitSeed);
     s.LayerVisibleMask = SafeValue(root, "layerVisibleMask", s.LayerVisibleMask);
     s.LayerPickLockMask = SafeValue(root, "layerPickLockMask", s.LayerPickLockMask);
     s.ViewShowGrid = SafeValue(root, "viewShowGrid", s.ViewShowGrid);
@@ -358,6 +364,12 @@ void EditorSettings::ResetViewDefaults() {
     ShowBodyDebug = d.ShowBodyDebug;
     PhysicsDebugDrawFlags = d.PhysicsDebugDrawFlags;
     PlayDebugOverlay = d.PlayDebugOverlay;
+    FRowOverlay = d.FRowOverlay;
+    FRowLightDebug = d.FRowLightDebug;
+    PostFxOff = d.PostFxOff;
+    FRowLook = d.FRowLook;
+    FRowStyle = d.FRowStyle;
+    FRowOutfitSeed = d.FRowOutfitSeed;
     LayerVisibleMask = d.LayerVisibleMask;
     ViewShowGrid = d.ViewShowGrid;
     ViewShowGizmo = d.ViewShowGizmo;
@@ -545,6 +557,12 @@ void EditorSettings::Flush() {
     root["logPhysicsEvents"] = Get().LogPhysicsEvents;
     // PhysicsSimTimeScale is session-only - see the matching comment in Load().
     root["playDebugOverlay"] = Get().PlayDebugOverlay;
+    root["fRowOverlay"] = Get().FRowOverlay;
+    root["fRowLightDebug"] = Get().FRowLightDebug;
+    root["postFxOff"] = Get().PostFxOff;
+    root["fRowLook"] = Get().FRowLook;
+    root["fRowStyle"] = Get().FRowStyle;
+    root["fRowOutfitSeed"] = Get().FRowOutfitSeed;
     root["layerVisibleMask"] = Get().LayerVisibleMask;
     root["layerPickLockMask"] = Get().LayerPickLockMask;
     root["viewShowGrid"] = Get().ViewShowGrid;

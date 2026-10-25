@@ -208,9 +208,19 @@ void main() {
         }
     }
 
-    // --- Scene-view debug draw modes (#236 R2) ---
-    if (uDebugView != 0) {
-        if (uDebugView == 1) {            // Normals
+    // --- Debug draw modes (#236 R2; 4-7 the F7 light views) ---
+    if (uDebugView == 4) albedo = vec3(0.75); // Lighting only: lit as usual on a flat grey
+    if (uDebugView != 0 && uDebugView != 4) {
+        if (uDebugView == 5) {            // Albedo
+            FragColor = vec4(albedo, 1.0);
+        } else if (uDebugView == 6) {     // Roughness (red) / Metallic (green)
+            FragColor = vec4(roughness, metallic, 0.0, 1.0);
+        } else if (uDebugView == 7) {     // Light complexity: this froxel's point + spot count, blue 0 -> red 16+
+            float n = clustered ? float(uClusterRange[cluster].count) : 0.0;
+            float t = clamp(n / 16.0, 0.0, 1.0);
+            vec3 heat = t < 0.5 ? mix(vec3(0.05, 0.1, 0.5), vec3(0.1, 0.9, 0.3), t * 2.0) : mix(vec3(0.1, 0.9, 0.3), vec3(1.0, 0.15, 0.1), t * 2.0 - 1.0);
+            FragColor = vec4(n == 0.0 ? vec3(0.03) : heat, 1.0);
+        } else if (uDebugView == 1) {     // Normals
             FragColor = vec4(N * 0.5 + 0.5, 1.0);
         } else if (uDebugView == 2) {     // Shadow cascades
             if (uShadowEnabled == 0) { FragColor = vec4(0.30, 0.30, 0.32, 1.0); return; }

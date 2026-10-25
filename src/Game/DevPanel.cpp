@@ -20,13 +20,6 @@ void DevPanel::Reset(PlayerVitals& vitals, NpcDirector& npcs) {
     npcs.HoldFire = false;
 }
 
-void DevPanel::Keys(PlayerVitals& vitals, NpcDirector& npcs) {
-    (void)npcs;
-    if (Input::IsKeyPressed(GLFW_KEY_F7)) Open = !Open;
-    if (Input::IsKeyPressed(GLFW_KEY_F8)) vitals.GodMode = !vitals.GodMode;
-    if (Input::IsKeyPressed(GLFW_KEY_F9)) AiOverlay = !AiOverlay;
-}
-
 int DevPanel::KillAll(World& world, NpcDirector& npcs) {
     int killed = 0;
     for (const auto& up : npcs.Npcs()) {
@@ -53,13 +46,13 @@ void DevPanel::Draw(const Context& c) {
     ImGui::SetNextWindowPos(ImVec2(24.0f, 80.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(320.0f, 0.0f), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowBgAlpha(0.92f);
-    if (!ImGui::Begin("Dev (F7)", &Open, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (!ImGui::Begin("Dev", &Open, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::End();
         return;
     }
     NpcDirector& d = *c.Npcs;
     ImGui::SeparatorText("Player");
-    ImGui::Checkbox("God mode (F8)", &c.Vitals->GodMode);
+    ImGui::Checkbox("God mode", &c.Vitals->GodMode);
     ImGui::Checkbox("Infinite ammo", &InfiniteAmmo);
     ImGui::Checkbox("Invisible to AI", &Invisible);
     ImGui::SeparatorText("Squad");
@@ -88,7 +81,7 @@ void DevPanel::Draw(const Context& c) {
         EditorSound::Play(EditorSound::Event::TimeReset, EditorSound::LastItemScreenX());
         Time::SetTimeScale(1.0f);
     }
-    ImGui::Checkbox("AI debug overlay (F9)", &AiOverlay);
+    ImGui::Checkbox("AI debug overlay", &AiOverlay);
     if (c.BloodLab) ImGui::Checkbox("Blood Lab", c.BloodLab);
     ImGui::TextDisabled("F7 panel   F8 god mode   F9 AI overlay");
     ImGui::End();

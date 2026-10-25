@@ -15,7 +15,6 @@
 #include "SceneSerializer.h"
 #include "World.h"
 
-#include <GLFW/glfw3.h>
 
 #include <algorithm>
 #include <chrono>
@@ -342,16 +341,11 @@ void SprayCanSystem::Update(World& world, float dt, const glm::vec3& listener) {
     }
 }
 
-entt::entity SprayCanSystem::PlayerKeys(World& world, const glm::vec3& eye, const glm::vec3& front) {
-    static bool held = false;
-    GLFWwindow* w = glfwGetCurrentContext();
-    const bool down = w && glfwGetKey(w, GLFW_KEY_F6) == GLFW_PRESS;
-    const bool pressed = down && !held;
-    held = down;
+entt::entity SprayCanSystem::PlayerKeys(World& world, const glm::vec3& eye, const glm::vec3& front, bool pressed) {
     if (!pressed) return entt::null;
     const std::vector<std::string> pieces = Pieces();
     if (pieces.empty()) {
-        Log::Warn("Spray can (F6): no graffiti pieces in assets/Decals/Graffiti/Pieces");
+        Log::Warn("Spray can: no graffiti pieces in assets/Decals/Graffiti/Pieces");
         return entt::null;
     }
     SprayCanAction a;
@@ -360,7 +354,7 @@ entt::entity SprayCanSystem::PlayerKeys(World& world, const glm::vec3& eye, cons
     a.Direction = front;
     a.Painter = "Player";
     const entt::entity e = Start(world, a);
-    if (e == entt::null) Log::Info("Spray can (F6): no wall within reach");
+    if (e == entt::null) Log::Info("Spray can: no wall within reach");
     return e;
 }
 

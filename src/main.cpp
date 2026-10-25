@@ -34,6 +34,7 @@
 #include "EditorSound.h"
 #include "AppAudioMuter.h"
 #include "EditorTheme.h"   // grid axis colours (GridColors)
+#include "FKeyRow.h"
 #include "Shortcuts.h" // play / window keys route through the Shortcuts Manager (#236 F)
 #include "Model.h"
 #include "SceneSerializer.h"
@@ -108,7 +109,8 @@
 #include "Combat/ImpactFx.h"
 #include "Combat/BloodLab.h"
 #include "CombatHud.h"          // ammo, kill feed, radio subtitles, awareness markers, AI overlay
-#include "DevPanel.h"           // F7 dev overlay in Play
+#include "DevPanel.h"           // the dev overlay in Play
+#include "PlayerLook.h"         // F7 / F8
 #include "GameViewPanel.h"
 #include "EditorPanels.h"
 #include "ProjectPaths.h"
@@ -382,6 +384,9 @@ static PostSettings MakePostSettings(const World& world, unsigned int bloomTex, 
     PostSettings p;
     p.ExposureEV = world.ExposureEV;
     p.Operator = world.TonemapOperator;
+    p.DeltaTime = dt;
+    p.ExposureSlot = exposureSlot;
+    if (FKeyRow::PostFxOff()) return p; // F8: exposure and the tonemap only - no bloom, grade, lens or auto exposure
     p.BloomTexture = bloomTex;
     p.BloomIntensity = bloomIntensity;
     p.Temperature = world.GradeTemperature;
@@ -1046,7 +1051,8 @@ int main(int argc, char** argv) {
             bulletHoles.Clear();
         };
         CombatHud combatHud;        // ammo, kill feed, radio subtitles, awareness chevrons, AI debug overlay
-        DevPanel devPanel;          // F7 / F8 / F9 dev tools in Play
+        DevPanel devPanel;          // dev tools in Play (no default keys)
+        PlayerLook playerLook;      // F7 / F8: the player's look and clothes, kept between Plays
         PlayState play; // Play's state bits (App/PlaySession.h); the locals named after them alias its fields
         glm::vec3& deathCamOffset = play.DeathCamOffset;
         float& deathCamRoll = play.DeathCamRoll;
@@ -1081,6 +1087,28 @@ int main(int argc, char** argv) {
             if (firstPersonPresentation.IsActive() && firstPersonPresentation.IsEquipped()) dot.Visible = false;
             return dot;
         };
+        // F6 Nav: the soldiers' navmesh edges (green) and the spiders' surface graph near the player (cyan), 7 floats a vertex.
+        auto navDebugLines = [&](std::vector<float>& out) {
+            auto line = [&](const glm::vec3& a, const glm::vec3& b, const glm::vec4& c) {
+                const float v[14] = {a.x, a.y, a.z, c.r, c.g, c.b, c.a, b.x, b.y, b.z, c.r, c.g, c.b, c.a};
+                out.insert(out.end(), v, v + 14);
+            };
+            static std::vector<NavMesh::Edge> edges;
+            edges.clear();
+            npcDirector.Nav().BoundaryEdges(edges);
+            const glm::vec3 lift(0.0f, 0.05f, 0.0f);
+            for (const NavMesh::Edge& e : edges) line(e.A + lift, e.B + lift, glm::vec4(0.35f, 1.0f, 0.45f, 0.85f));
+            const Spider::SurfaceGraph& g = spiders.Nav();
+            if (g.Empty()) return;
+            static std::vector<int> nearNodes;
+            nearNodes.clear();
+            g.NodesNear(player.Cam.Position, 12.0f, nearNodes);
+            for (int i : nearNodes)
+                for (int k = g.FirstLink(i); k < g.FirstLink(i + 1); ++k) {
+                    const int j = g.Neighbour(k);
+                    if (j > i) line(g.Pos(i), g.Pos(j), glm::vec4(0.3f, 0.85f, 1.0f, 0.6f));
+                }
+        };
         // The text-and-shapes combat HUD (ammo, kill feed, radio subtitles, awareness chevrons, AI overlay) for one view.
         auto drawCombatHud = [&](unsigned fbo, int w, int h, const glm::mat4& v, const glm::mat4& p) {
             if(!playUsesPlayer)return;
@@ -1102,7 +1130,13 @@ int main(int argc, char** argv) {
             }
             in.God = playerVitals.GodMode;
             in.InfiniteAmmo = devPanel.InfiniteAmmo;
-            in.AiOverlay = devPanel.AiOverlay || (npcTest && npcTest->WantsAiOverlay());
+            in.AiOverlay = devPanel.AiOverlay || FKeyRow::CurrentOverlay() == FKeyRow::OverlayAi || (npcTest && npcTest->WantsAiOverlay());
+            // F6 Nav / Hitboxes: world lines the HUD projects like the AI overlay's.
+            static std::vector<float> fRowLines;
+            fRowLines.clear();
+            if (FKeyRow::CurrentOverlay() == FKeyRow::OverlayNav) navDebugLines(fRowLines);
+            else if (FKeyRow::CurrentOverlay() == FKeyRow::OverlayHitboxes) PhysicsWorld::HitboxDebugLines(fRowLines);
+            in.Lines = fRowLines.empty() ? nullptr : &fRowLines;
             combatHud.Draw(in, npcDirector);
         };
         // The weapon's world effects for one view, drawn inside the scene pass (after the world,
@@ -1765,7 +1799,7 @@ int main(int argc, char** argv) {
                                 playerVitals, npcDirector, devPanel, bulletHoles, shellCasings, weaponTest.get(), weaponLab.get(),
                                 npcTest.get());
         auto startPlay = [&]() { playSession.Start(); };
-        auto stopPlay = [&]() { playSession.Stop(); };
+        auto stopPlay = [&]() { playerLook.Forget(); playSession.Stop(); };
         auto togglePlay = [&]() { if (playing) stopPlay(); else startPlay(); };
         // Play's own cursor capture (the Game view click, Esc, focus loss, the dev panel), with the
         // CursorLock / CursorRelease sound when the lock really changes. Not the editor camera's drag lock, and not Play
@@ -2481,10 +2515,15 @@ int main(int argc, char** argv) {
                 EditorSound::Play(es.PlayDebugOverlay ? EditorSound::Event::DebugOn : EditorSound::Event::DebugOff);
                 EditorSettings::Save();
             }
-            // Play with an enemy squad: F7 the dev panel, F8 god mode, F9 the AI debug overlay (DevPanel.h).
+            // F5-F8: the F-row's view states (FKeyRow.h), in any mode.
+            if (devKeys && !editor.ScriptIDEHasKeyboardFocus()) FKeyRow::PollViews(editor);
+            if (playing && playUsesPlayer) playerLook.Update(world, assets, devKeys && !editor.ScriptIDEHasKeyboardFocus());
+            // Play with an enemy squad: the dev panel, god mode and the AI debug overlay (DevPanel.h; no default keys).
             if (devKeys && playing && playUsesPlayer && npcDirector.Active()) {
                 const bool wasOpen=devPanel.Open,wasGod=playerVitals.GodMode,wasAiOverlay=devPanel.AiOverlay;
-                devPanel.Keys(playerVitals,npcDirector);
+                if (Shortcuts::TriggeredGlfw("dev.panel")) devPanel.Open = !devPanel.Open;
+                if (Shortcuts::TriggeredGlfw("dev.godMode")) playerVitals.GodMode = !playerVitals.GodMode;
+                if (Shortcuts::TriggeredGlfw("dev.aiOverlay")) devPanel.AiOverlay = !devPanel.AiOverlay;
                 if(!wasOpen && devPanel.Open && playMaximized)setPlayCursorLocked(false);
                 // Centred DebugOn / DebugOff, a step higher per key so F7 / F8 / F9 tell apart (only the keys: Reset clears the flags too).
                 auto devToggleSound = [](bool devWas, bool devNow, float devPitch) {
@@ -3069,7 +3108,7 @@ int main(int argc, char** argv) {
                     BloodRenderer::Get().BeginFrame();
                     bloodFx.Submit(BloodRenderer::Get());
                     bulletHoles.Submit(world); // every hole a clustered decal, following what it's in (after the blood's BeginFrame)
-                    if (playUsesPlayer && gameHasInput) sprayCans.PlayerKeys(world, player.Cam.Position, player.Cam.Front());
+                    if (playUsesPlayer && gameHasInput) sprayCans.PlayerKeys(world, player.Cam.Position, player.Cam.Front(), Shortcuts::TriggeredGlfw("dev.sprayCan"));
                     sprayCans.Update(world, gameDt, player.Cam.Position);
                     FxSpriteRenderer::Get().BeginFrame();
                     fxSprites.Submit(FxSpriteRenderer::Get());
@@ -4129,6 +4168,7 @@ int main(int argc, char** argv) {
             sceneInputs.pointShadowNormalBias = pointShadowNormalBias;
             sceneInputs.shadowsEnabled   = world.ShadowsEnabled;
             sceneInputs.ssaoEnabled      = world.SsaoEnabled;
+            sceneInputs.postFxOff        = FKeyRow::PostFxOff(); // F8
             sceneInputs.ssaoIntensity    = world.SsaoIntensity;
             sceneInputs.layerVisibleMask = frameSettings.LayerVisibleMask;
             auto drawScene = [&](const RenderFrameContext& ctx, EditorLayer::RenderStats* outStats) {
@@ -4239,10 +4279,7 @@ int main(int argc, char** argv) {
                 EditorLayer::ShadingMode shading = editor.GetShadingMode();
                 bool sceneWireframe = shading == EditorLayer::ShadingMode::Wireframe;
                 bool sceneUnlit = shading == EditorLayer::ShadingMode::Unlit;
-                int sceneDebugView = 0; // model shader uDebugView: 1 Normals, 2 Cascades, 3 Mip
-                if (shading == EditorLayer::ShadingMode::Normals)  sceneDebugView = 1;
-                else if (shading == EditorLayer::ShadingMode::Cascades) sceneDebugView = 2;
-                else if (shading == EditorLayer::ShadingMode::Mip)      sceneDebugView = 3;
+                const int sceneDebugView = FKeyRow::DebugViewFor((int)shading); // model shader uDebugView (FKeyRow.h)
                 if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
                 // PR15: SSAO depth pre-pass — runs before drawScene so the occlusion map is ready.
@@ -4427,7 +4464,7 @@ int main(int argc, char** argv) {
                 // Resize takes the FULL scene resolution; Bloom halves it internally for mip 0.
                 unsigned int bloomGlowTex  = 0u;
                 float        bloomIntensity = 0.0f;
-                if (world.BloomEnabled) {
+                if (world.BloomEnabled && !FKeyRow::PostFxOff()) { // F8 off: no bloom
                     PROFILE_GPU_SCOPE("Bloom");
                     bloom.Resize(scW, scH);
                     // audit #358 — only run the pyramid passes if every mip FBO validated
@@ -4585,6 +4622,18 @@ int main(int argc, char** argv) {
                 }
                 if (editorUIVisible) editor.Draw(world, assets, editorCamera, dt);
                 else if (playing && devKeys) editor.DrawPlayModeOverlays(world); // #185 — physics panel + HUD over maximized play
+                {   // The F-row's pill, over the view the keys are acting on: the game in Play, else the Scene view.
+                    const ImGuiViewport* mvp = ImGui::GetMainViewport();
+                    ImVec2 pMin = mvp->Pos, pMax(mvp->Pos.x + mvp->Size.x, mvp->Pos.y + mvp->Size.y);
+                    if (editorUIVisible && playing && gameView.GetViewImageSize().x > 0.0f) {
+                        pMin = gameView.GetViewImagePos();
+                        pMax = ImVec2(pMin.x + gameView.GetViewImageSize().x, pMin.y + gameView.GetViewImageSize().y);
+                    } else if (editorUIVisible && editor.ViewportSize().x > 0.0f) {
+                        pMin = ImVec2(editor.ViewportPos().x, editor.ViewportPos().y);
+                        pMax = ImVec2(pMin.x + editor.ViewportSize().x, pMin.y + editor.ViewportSize().y);
+                    }
+                    FKeyRow::Draw(pMin, pMax);
+                }
                 if (playing && devKeys && playUsesPlayer && npcDirector.Active() && devPanel.Open) {
                     DevPanel::Context ctx;
                     ctx.WorldPtr = &world;
@@ -4723,8 +4772,9 @@ int main(int argc, char** argv) {
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
                 // SSAO depth pre-pass - the Game view's own Ssao instance/resolution, apart from the Scene view's (see the
                 // gameSsao declaration). The two callers are mutually exclusive per frame, so no resize thrash.
-                if (world.SsaoEnabled) gameSsao.Resize(rw, rh);
-                if (world.SsaoEnabled && gameSsao.IsValid()) { // audit #358 - skip if any FBO incomplete
+                const bool gameSsaoOn = world.SsaoEnabled && !FKeyRow::PostFxOff(); // F8
+                if (gameSsaoOn) gameSsao.Resize(rw, rh);
+                if (gameSsaoOn && gameSsao.IsValid()) { // audit #358 - skip if any FBO incomplete
                     PROFILE_SCOPE("SSAO Depth Pre-pass (Game)");
                     PROFILE_GPU_SCOPE("SSAO Depth Pre-pass (Game)");
                     ssaoDepthPrepass(gameSsao, rw, rh, view, proj, /*editorView=*/false);
@@ -4732,15 +4782,20 @@ int main(int argc, char** argv) {
                     gameHdr.BindForRender(); // restore for the main scene draw below
                 }
 
-                drawScene(RenderFrameContext{ view, proj, eye, /*Unlit=*/false,
-                              /*EditorView=*/false, /*DebugView=*/0,
+                // F5's draw mode and F7's light view reach the game camera too (FKeyRow.h).
+                const EditorLayer::ShadingMode gameShading = editor.GetShadingMode();
+                const bool gameWire = gameShading == EditorLayer::ShadingMode::Wireframe;
+                if (gameWire) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+                drawScene(RenderFrameContext{ view, proj, eye, /*Unlit=*/gameShading == EditorLayer::ShadingMode::Unlit,
+                              /*EditorView=*/false, /*DebugView=*/FKeyRow::DebugViewFor((int)gameShading),
                               &gameHdr, &gameOpaqueColor, &gameSsao,
                               firstPersonPresentation.ViewModelFov(),
                               weaponOverlay(playing && playUsesPlayer, view, proj, eye, rh),
                               /*OwnerView=*/playing && playUsesPlayer },
                           &stats);
+                if (gameWire) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
-                // Physics debug overlay over the game view (#185, F5) - depth-tested, no depth write.
+                // Physics debug overlay over the game view (#185, F6 Physics) - depth-tested, no depth write.
                 if ((playing || !overlayInPlayOnly) && EditorSettings::Get().PlayDebugOverlay) {
                     glEnable(GL_DEPTH_TEST); glDepthMask(GL_FALSE);
                     colliderGizmo.Draw(view, proj, world, EditorSettings::Get().ShowColliders);
@@ -4754,7 +4809,7 @@ int main(int argc, char** argv) {
                 // PR16: Bloom for the Game view - own Bloom instance (see gameBloom declaration).
                 unsigned int bloomGlowTex   = 0u;
                 float        bloomGlowIntensity = 0.0f;
-                if (world.BloomEnabled) {
+                if (world.BloomEnabled && !FKeyRow::PostFxOff()) { // F8 off: no bloom
                     PROFILE_GPU_SCOPE("Bloom (Game)");
                     gameBloom.Resize(rw, rh);
                     if (gameBloom.IsValid()) { // audit #358 - no glow if any mip FBO is incomplete
@@ -4795,7 +4850,8 @@ int main(int argc, char** argv) {
                         playerHud.Draw(outFbo, outW, outH,
                                        MakePlayerHudState(playerVitals, player.Cam.Position, player.Cam.Yaw), (float)glfwGetTime());
                 }
-                if (playing && playUsesPlayer && npcDirector.Active()) drawCombatHud(outFbo, outW, outH, view, proj);
+                if (playing && playUsesPlayer && (npcDirector.Active() || FKeyRow::CurrentOverlay() >= FKeyRow::OverlayNav))
+                    drawCombatHud(outFbo, outW, outH, view, proj);
             };
 
             // --- Game View offscreen pass -----------------------------------------------------

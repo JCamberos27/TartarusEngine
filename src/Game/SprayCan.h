@@ -61,7 +61,7 @@ public:
     void Update(World& world, float dt, const glm::vec3& listener);
     // Play's F6 (a dev key, no HUD): the player sprays the next piece of assets/Decals/Graffiti/Pieces at the
     // crosshair. Returns the entity started, or entt::null.
-    entt::entity PlayerKeys(World& world, const glm::vec3& eye, const glm::vec3& front);
+    entt::entity PlayerKeys(World& world, const glm::vec3& eye, const glm::vec3& front, bool pressed);
     // Play stopped: the sounds end, every reveal is dropped.
     void Stop();
 
