@@ -290,15 +290,17 @@ void BuildDefaultTable() {
     Register("play.pause",        "Pause / Resume",          Ctx_App, K(ImGuiKey_F2));
     Register("play.step",         "Step One Frame",          Ctx_App, K(ImGuiKey_F3));
     Register("play.maximize",     "Maximize / Restore Game", Ctx_App, K(ImGuiKey_F4));
-    // The F-row (FKeyRow.h): F5-F8 cycle views everywhere, F9-F12 spawn in Play. Shift steps back /
+    // The F-row (FKeyRow.h): F5-F6 cycle views everywhere, F7-F8 your look and clothes, F9-F12 spawn in Play. Shift steps back /
     // picks the next variant. The keys these replaced keep their actions with no default key.
     Register("fkey.drawMode",     "F-Row: Next Draw Mode",        Ctx_App, K(ImGuiKey_F5));
     Register("fkey.drawModeBack", "F-Row: Previous Draw Mode",    Ctx_App, Sk(ImGuiKey_F5));
     Register("fkey.overlay",      "F-Row: Next Debug Overlay",    Ctx_App, K(ImGuiKey_F6));
     Register("fkey.overlayBack",  "F-Row: Previous Debug Overlay", Ctx_App, Sk(ImGuiKey_F6));
-    Register("fkey.light",        "F-Row: Next Light Debug View", Ctx_App, K(ImGuiKey_F7));
-    Register("fkey.lightBack",    "F-Row: Previous Light Debug View", Ctx_App, Sk(ImGuiKey_F7));
-    Register("fkey.postFx",       "F-Row: Post FX On / Off",      Ctx_App, K(ImGuiKey_F8));
+    Register("fkey.look",         "F-Row: Next Look (Body + Race)", Ctx_App, K(ImGuiKey_F7));
+    Register("fkey.lookBack",     "F-Row: Previous Look",         Ctx_App, Sk(ImGuiKey_F7));
+    Register("fkey.outfit",       "F-Row: New Random Outfit",     Ctx_App, K(ImGuiKey_F8));
+    Register("fkey.outfitStyle",  "F-Row: Next Outfit Style",     Ctx_App, Sk(ImGuiKey_F8));
+    Register("fkey.postFx",       "Post FX On / Off",             Ctx_App, Chord{});
     Register("fkey.spawnNpc",     "F-Row: Spawn NPC",             Ctx_App, K(ImGuiKey_F9));
     Register("fkey.nextNpc",      "F-Row: Next NPC Variant",      Ctx_App, Sk(ImGuiKey_F9));
     Register("fkey.spawnSpider",  "F-Row: Spawn Spider",          Ctx_App, K(ImGuiKey_F10));
