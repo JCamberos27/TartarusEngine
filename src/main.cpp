@@ -2714,6 +2714,7 @@ int main(int argc, char** argv) {
                     dc.Assets = &assets;
                     dc.Npcs = &npcDirector;
                     dc.Spiders = &spiders;
+                    dc.SpiderHurt = &spiderDamage;
                     dc.Gun = &firstPersonPresentation;
                     dc.Eye = player.Cam.Position;
                     dc.Front = player.Cam.Front();
