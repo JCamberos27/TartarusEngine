@@ -2811,7 +2811,7 @@ void TestWardrobeQuantum() {
     const auto cat = OutfitSystem::LoadCatalog(assets, "assets/Characters/Quantum/Quantum.wardrobe", true, &err);
     CHECK(cat != nullptr);
     if (!cat) { Log::Warn("Quantum wardrobe: " + err); return; }
-    CHECK(cat->Items.size() > 100);
+    CHECK(cat->Items.size() > 80);
     auto exists = [](const std::string& rel) { return std::filesystem::exists(ProjectPaths::Resolve(rel)); };
     for (const auto& body : cat->W.Bodies) {
         for (const auto& [part, model] : body.Parts) CHECK(exists(model));
@@ -2825,7 +2825,7 @@ void TestWardrobeQuantum() {
         for (int g = 0; g < 2; ++g) {
             const auto n = cat->ForSlot(slot.Id, (Wardrobe::Gender)g).size();
             Log::Info("Quantum wardrobe: " + slot.Id + " " + Wardrobe::GenderName((Wardrobe::Gender)g) + " " + std::to_string(n));
-            if (slot.Id != "Collar") CHECK(n > 0);
+            CHECK(n > 0);
         }
     auto item = [&](const std::string& rel) {
         const auto* it = cat->Find("assets/Characters/Quantum/Models/" + rel);
@@ -2863,10 +2863,6 @@ void TestWardrobeQuantum() {
         const auto b = Wardrobe::LayerOf(cat->W, "Balaclava", item("Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx"), false);
         CHECK(Wardrobe::Hides(h, "Balaclava", b, slot) && !Wardrobe::Hides(b, slot, h, "Balaclava"));
     }
-    // A parka is too bulky for a bag.
-    r = Wardrobe::Resolve(cat->W, cat->Items, [&] { Wardrobe::Request m; m.Items = {{"Outerwear", item("Clothing/Male/Outerwear/SKM_Jacket_Winter_Closed_Hood_Closed.fbx")},
-                                                                                  {"Bag", item("Clothing/Male/Bags/SKM_Backpack_Sport.fbx")}}; return m; }());
-    CHECK(pieceFor(r, "Bag").empty() && !pieceFor(r, "Outerwear").empty());
 
     // What goes together: jackets with a top of their own take the top off, an open one keeps a thin top
     // but not a hoodie, boots cut to go under the pants keep the plain pants, socks are their own slot.
@@ -2877,10 +2873,16 @@ void TestWardrobeQuantum() {
     };
     r = male({{"Outerwear", item("Clothing/Male/Outerwear/SKM_Leather_Jacket.fbx")}, {"Top", item("Clothing/Male/Tops/SKM_Hoodie.fbx")}});
     CHECK(pieceFor(r, "Top").empty() && r.Dropped.size() == 1);
-    r = male({{"Outerwear", item("Clothing/Male/Outerwear/SKM_Jacket_M65.fbx")}, {"Top", item("Clothing/Male/Tops/SKM_Hoodie.fbx")}});
+    auto female = [&](std::map<std::string, std::string> items) {
+        Wardrobe::Request m;
+        m.Sex = Wardrobe::Gender::Female;
+        m.Items = std::move(items);
+        return Wardrobe::Resolve(cat->W, cat->Items, m);
+    };
+    r = female({{"Outerwear", item("Clothing/Female/Outerwear/SKM_F_Bomber.fbx")}, {"Top", item("Clothing/Female/Tops/SKM_F_Hoodie.fbx")}});
     CHECK(pieceFor(r, "Top").empty() && !pieceFor(r, "Outerwear").empty());
-    r = male({{"Outerwear", item("Clothing/Male/Outerwear/SKM_Jacket_M65.fbx")}, {"Top", item("Clothing/Male/Tops/SKM_Tshirt.fbx")}});
-    CHECK(pieceFor(r, "Top") == "SKM_Tshirt" && r.Dropped.empty());
+    r = female({{"Outerwear", item("Clothing/Female/Outerwear/SKM_F_Bomber.fbx")}, {"Top", item("Clothing/Female/Tops/SKM_F_Tshirt_Tucked.fbx")}});
+    CHECK(pieceFor(r, "Top") == "SKM_F_Tshirt_Tucked" && r.Dropped.empty());
     r = male({{"Shoes", item("Clothing/Male/Shoes/SKM_Boots_Inboots.fbx")}, {"Pants", item("Clothing/Male/Pants/SKM_Jeans.fbx")},
               {"Socks", item("Clothing/Male/Shoes/SKM_Socks.fbx")}});
     CHECK(pieceFor(r, "Pants") == "SKM_Jeans" && pieceFor(r, "Socks") == "SKM_Socks" && pieceFor(r, "Shoes") == "SKM_Boots_Inboots");
@@ -2964,8 +2966,8 @@ void TestAsyncImportCpu() {
         const auto body = deferred("assets/Characters/Quantum/Models/Female/Body/Parts/SKM_F_Vivian_Body.fbx");
         CHECK(body && body->BoundsMax().y > 1.4f && body->BoundsMax().z < 0.5f); // upright, not stretched along Z
         // Offsets carrying a group node's frame, not the mesh node's (the jackets' "Cloth" group): chest height.
-        const auto m65 = deferred("assets/Characters/Quantum/Models/Clothing/Male/Outerwear/SKM_Jacket_M65.fbx");
-        CHECK(m65 && m65->BoundsMax().y > 1.3f && m65->BoundsMax().z < 0.6f);
+        const auto jacket = deferred("assets/Characters/Quantum/Models/Clothing/Male/Outerwear/SKM_Leather_Jacket.fbx");
+        CHECK(jacket && jacket->BoundsMax().y > 1.3f && jacket->BoundsMax().z < 0.6f);
         const auto oldHead = deferred("assets/Characters/Quantum/Models/Female/Body/Heads/SKM_F_Vivian_Head_Old.fbx");
         CHECK(oldHead && oldHead->BoundsMax().y > 1.6f && oldHead->BoundsMin().y > 1.3f);
     } else {
@@ -3030,8 +3032,8 @@ void TestFirstPersonBodyClothingHide() {
     CHECK(FirstPersonBodyCollarVertices(points, neck, shoulderL, shoulderR, -1.0f).empty()); // off
     CHECK(FirstPersonBodyCollarVertices(points, neck, shoulderL, shoulderL, 0.02f).empty()); // no shoulder line
 
-    // The Quantum pack's winter jacket, hood up: its hood and collar are found, its body and sleeves aren't. Needs the pack (project content).
-    const std::string jacketPath = "assets/Characters/Quantum/Models/Clothing/Male/Outerwear/SKM_Jacket_Winter_Open_Hood_Closed.fbx";
+    // The Quantum pack's hooded coat, hood up: its hood and collar are found, its body and sleeves aren't. Needs the pack (project content).
+    const std::string jacketPath = "assets/Characters/Quantum/Models/Clothing/Male/Outerwear/SKM_Coat_Hoodie_Hood.fbx";
     if (!std::filesystem::exists(ProjectPaths::Resolve(jacketPath))) {
         Log::Info("FirstPersonBodyClothingHide: no Quantum pack - model checks skipped.");
         return;
@@ -3061,11 +3063,11 @@ void TestFirstPersonBodyClothingHide() {
         if (pos[i].y < std::min(jL.y, jR.y) - 0.1f && collar[i]) ++low;          // nothing from the chest down
         if (pos[i].y > jNeck.y) { ++head; headHidden += collar[i]; }                 // the hood, up round the head
     }
-    Log::Info("FirstPersonBodyClothingHide: winter jacket " + std::to_string(hidden) + " / " + std::to_string(pos.size()) +
+    Log::Info("FirstPersonBodyClothingHide: hooded coat " + std::to_string(hidden) + " / " + std::to_string(pos.size()) +
               " collar vertices; shoulders at " + std::to_string(jL.y) + " m, neck " + std::to_string(jNeck.y) + " m, top " +
               std::to_string(yMax) + " m.");
     CHECK(jL.y > 1.2f && jL.y < 1.7f && jNeck.y > jL.y); // bones and vertices share the model's upright, metre frame
-    // This jacket's hood is up: its fur is most of the mesh, and all of it is round the camera.
+    // This coat's hood is up: all of it is round the camera.
     CHECK(hidden > 0 && hidden < pos.size() && head > 0 && headHidden == head);
     CHECK(top > 0 && topHidden == top);
     CHECK(low == 0);

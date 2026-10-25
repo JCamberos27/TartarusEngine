@@ -3767,10 +3767,6 @@
       "pathGuid": "4cff1d1f9a8c50a6"
     },
     {
-      "path": "assets/Characters/Quantum/Materials/Clothing/Pants/Pants_Cargo/M_Pants_Cargo_Black.mat",
-      "pathGuid": "80035c5ed784ac0d"
-    },
-    {
       "path": "assets/Characters/Quantum/Materials/Clothing/Shoes/Sneakers/Sneakers_Leather/M_F_Sneakers_Leather_Black.mat",
       "pathGuid": "6ff7cafa7e9d186a"
     },
@@ -3785,10 +3781,6 @@
     {
       "path": "assets/Characters/Quantum/Materials/Clothing/Glasses/Glasses Aviator/M_Glasses_Aviator_Gold.mat",
       "pathGuid": "935a4eb426ae6b4a"
-    },
-    {
-      "path": "assets/Characters/Quantum/Materials/Clothing/Pants/Pants_Cargo/M_Pants_Cargo_Blue.mat",
-      "pathGuid": "492a4132f3ecddcf"
     },
     {
       "path": "assets/Characters/Quantum/Materials/Clothing/Shoes/Sneakers/Sneakers_Leather/M_F_Sneakers_Leather_White.mat",
@@ -4069,10 +4061,6 @@
       "pathGuid": "cbc683d30726b7fe"
     },
     {
-      "path": "assets/Characters/Quantum/Models/Clothing/Male/Pants/SKM_Pants_Cargo_Straight.fbx",
-      "pathGuid": "c9b2e6178519947c"
-    },
-    {
       "path": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/SKM_Sneakers.fbx",
       "pathGuid": "907719222c820ea8"
     },
@@ -4261,22 +4249,6 @@
       "pathGuid": "52cb6702c8f831e9"
     },
     {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Black_BaseColor.png",
-      "pathGuid": "36fc41cbd4c5c281"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Unity_Normal.png",
-      "pathGuid": "6640e70ecc7a215b"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Roughness.png",
-      "pathGuid": "171417cd52427cf3"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Occlusion.png",
-      "pathGuid": "1aa6a68120e52f02"
-    },
-    {
       "path": "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_Black_BaseColor.png",
       "pathGuid": "8e3df431656c6989"
     },
@@ -4335,10 +4307,6 @@
     {
       "path": "assets/Characters/Quantum/Textures/Clothing/Glasses/Glasses Aviator/T_Glasses_Aviator_Gold_Occlusion.png",
       "pathGuid": "ed4eecf9d5033f2c"
-    },
-    {
-      "path": "assets/Characters/Quantum/Textures/Clothing/Pants/Pants_Cargo/T_Pants_Cargo_Blue_BaseColor.png",
-      "pathGuid": "3889487dfd0b78ea"
     },
     {
       "path": "assets/Characters/Quantum/Textures/Clothing/Shoes/Sneakers/Sneakers_Leather/T_F_Sneakers_Leather_White_BaseColor.png",
