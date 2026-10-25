@@ -30,6 +30,7 @@ struct CombatHudInput {
     bool God = false;
     bool InfiniteAmmo = false;
     bool AiOverlay = false;
+    const std::vector<float>* Lines = nullptr; // F6 Nav / Hitboxes: world lines, 7 floats per vertex (xyz rgba), two per line
 };
 
 class CombatHud {
@@ -58,6 +59,7 @@ private:
     void DrawFeed(const CombatHudInput& in, float now);
     void DrawAwareness(const CombatHudInput& in, const NpcDirector& npcs);
     void DrawDebug(const CombatHudInput& in, const NpcDirector& npcs);
+    void DrawLines(const CombatHudInput& in, const std::vector<float>& lines); // world lines, clipped to the near plane
     bool Project(const CombatHudInput& in, const glm::vec3& p, glm::vec2& out) const;
 
     HudText m_Text;

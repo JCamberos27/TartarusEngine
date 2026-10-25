@@ -255,6 +255,9 @@ int  CreateBodyHitboxes(unsigned entity, const HitCapsule* parts, int count);
 void SetNpcHitboxPoses(int id, const HitCapsule* parts, int count); // poses only (Position / Rotation)
 void SetNpcHitboxesActive(int id, bool active);                      // false: the capsule answers queries again
 void DestroyNpcHitboxes(int id);
+// The F6 Hitboxes overlay: each active hitbox capsule as lines (its axis and two end rings), appended to `out` at 7 floats
+// per vertex (xyz rgba), two vertices per line. Soldiers' in orange, creature bodies' in magenta.
+void HitboxDebugLines(std::vector<float>& out);
 
 // A ray against body parts only - the hitboxes of living characters and the parts of ragdolls - for which part of
 // a body a round struck. `kind` 1 = hitbox, 2 = ragdoll part; `part` is the index in the soldier's part order.

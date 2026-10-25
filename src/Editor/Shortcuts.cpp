@@ -285,17 +285,36 @@ void BuildDefaultTable() {
 
     // --- Application / play controls (Ctx_App) — evaluated in the main loop via TriggeredGlfw,
     // so they work with the editor UI hidden and never clash (own scope) with the Global F2
-    // rename etc. ---
+    // rename (edit mode only; F2 pauses in Play) ---
     Register("play.toggle",       "Play / Stop",             Ctx_App, K(ImGuiKey_F1));
     Register("play.pause",        "Pause / Resume",          Ctx_App, K(ImGuiKey_F2));
     Register("play.step",         "Step One Frame",          Ctx_App, K(ImGuiKey_F3));
     Register("play.maximize",     "Maximize / Restore Game", Ctx_App, K(ImGuiKey_F4));
-    Register("window.fullscreen", "Toggle Window Fullscreen", Ctx_App, K(ImGuiKey_F11));
-    // #141 — were hard-coded in main.cpp, invisible to rebinding and conflict detection.
-    Register("physics.overlay",   "Toggle Physics Debug Overlay", Ctx_App, K(ImGuiKey_F5));
-    Register("physics.panel",     "Toggle Physics Debug Panel",   Ctx_App, K(ImGuiKey_F6));
-    // F12: the Game view to <project>/screenshots (main.cpp). App-level, so it works in Play with the game holding the keys.
-    Register("view.screenshot",   "Screenshot Game View",         Ctx_App, K(ImGuiKey_F12));
+    // The F-row (FKeyRow.h): F5-F8 cycle views everywhere, F9-F12 spawn in Play. Shift steps back /
+    // picks the next variant. The keys these replaced keep their actions with no default key.
+    Register("fkey.drawMode",     "F-Row: Next Draw Mode",        Ctx_App, K(ImGuiKey_F5));
+    Register("fkey.drawModeBack", "F-Row: Previous Draw Mode",    Ctx_App, Sk(ImGuiKey_F5));
+    Register("fkey.overlay",      "F-Row: Next Debug Overlay",    Ctx_App, K(ImGuiKey_F6));
+    Register("fkey.overlayBack",  "F-Row: Previous Debug Overlay", Ctx_App, Sk(ImGuiKey_F6));
+    Register("fkey.light",        "F-Row: Next Light Debug View", Ctx_App, K(ImGuiKey_F7));
+    Register("fkey.lightBack",    "F-Row: Previous Light Debug View", Ctx_App, Sk(ImGuiKey_F7));
+    Register("fkey.postFx",       "F-Row: Post FX On / Off",      Ctx_App, K(ImGuiKey_F8));
+    Register("fkey.spawnNpc",     "F-Row: Spawn NPC",             Ctx_App, K(ImGuiKey_F9));
+    Register("fkey.nextNpc",      "F-Row: Next NPC Variant",      Ctx_App, Sk(ImGuiKey_F9));
+    Register("fkey.spawnSpider",  "F-Row: Spawn Spider",          Ctx_App, K(ImGuiKey_F10));
+    Register("fkey.nextSpider",   "F-Row: Next Spider Variant",   Ctx_App, Sk(ImGuiKey_F10));
+    Register("fkey.spawnItem",    "F-Row: Drop Item",             Ctx_App, K(ImGuiKey_F11));
+    Register("fkey.nextItem",     "F-Row: Next Item",             Ctx_App, Sk(ImGuiKey_F11));
+    Register("fkey.clearSpawns",  "F-Row: Clear Spawned",         Ctx_App, K(ImGuiKey_F12));
+    // Moved off the F-row: no default key, still in their menus and rebindable.
+    Register("window.fullscreen", "Toggle Window Fullscreen",     Ctx_App, Chord{});
+    Register("physics.overlay",   "Toggle Physics Debug Overlay", Ctx_App, Chord{});
+    Register("physics.panel",     "Toggle Physics Debug Panel",   Ctx_App, Chord{});
+    Register("view.screenshot",   "Screenshot Game View",         Ctx_App, Chord{});
+    Register("dev.panel",         "Dev Panel",                    Ctx_App, Chord{});
+    Register("dev.godMode",       "God Mode",                     Ctx_App, Chord{});
+    Register("dev.aiOverlay",     "AI Debug Overlay",             Ctx_App, Chord{});
+    Register("dev.sprayCan",      "Spray Can",                    Ctx_App, Chord{});
 }
 
 // --- key <-> name (small, covers everything the table + json can hold) --------------------

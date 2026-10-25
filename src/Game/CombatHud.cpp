@@ -142,15 +142,12 @@ void CombatHud::DrawAwareness(const CombatHudInput& in, const NpcDirector& npcs)
     }
 }
 
-void CombatHud::DrawDebug(const CombatHudInput& in, const NpcDirector& npcs) {
+void CombatHud::DrawLines(const CombatHudInput& in, const std::vector<float>& lines) {
     const float s = m_Text.Scale();
-    // The director's lines (cover points, sight lines, goals, tokens), clipped to the near plane.
-    m_Lines.clear();
-    npcs.DebugLines(m_Lines);
     const float kNear = 0.05f, maxDist2 = 80.0f * 80.0f;
-    for (size_t i = 0; i + 14 <= m_Lines.size(); i += 14) {
-        const glm::vec3 a(m_Lines[i], m_Lines[i + 1], m_Lines[i + 2]), b(m_Lines[i + 7], m_Lines[i + 8], m_Lines[i + 9]);
-        const glm::vec4 col(m_Lines[i + 3], m_Lines[i + 4], m_Lines[i + 5], m_Lines[i + 6]);
+    for (size_t i = 0; i + 14 <= lines.size(); i += 14) {
+        const glm::vec3 a(lines[i], lines[i + 1], lines[i + 2]), b(lines[i + 7], lines[i + 8], lines[i + 9]);
+        const glm::vec4 col(lines[i + 3], lines[i + 4], lines[i + 5], lines[i + 6]);
         const glm::vec3 da = a - in.CamPos, db = b - in.CamPos;
         if (glm::dot(da, da) > maxDist2 && glm::dot(db, db) > maxDist2) continue;
         glm::vec4 ca = in.ViewProj * glm::vec4(a, 1.0f), cb = in.ViewProj * glm::vec4(b, 1.0f);
@@ -161,6 +158,14 @@ void CombatHud::DrawDebug(const CombatHudInput& in, const NpcDirector& npcs) {
         const glm::vec2 pb((cb.x / cb.w * 0.5f + 0.5f) * (float)in.Width, (1.0f - (cb.y / cb.w * 0.5f + 0.5f)) * (float)in.Height);
         m_Text.Line(pa, pb, 2.0f * s, col);
     }
+}
+
+void CombatHud::DrawDebug(const CombatHudInput& in, const NpcDirector& npcs) {
+    const float s = m_Text.Scale();
+    // The director's lines (cover points, sight lines, goals, tokens), clipped to the near plane.
+    m_Lines.clear();
+    npcs.DebugLines(m_Lines);
+    DrawLines(in, m_Lines);
     // A label over each soldier's head.
     for (const auto& up : npcs.Npcs()) {
         if (!up || up->Dead) continue;
@@ -187,7 +192,7 @@ void CombatHud::DrawDebug(const CombatHudInput& in, const NpcDirector& npcs) {
         m_Text.Text(x, y + lh, l2, size, glm::vec4(0.85f, 0.85f, 0.85f, 1.0f), HudText::Align::Center, false);
         m_Text.Text(x, y + lh * 2.0f, l3, size, glm::vec4(0.7f, 0.85f, 1.0f, 1.0f), HudText::Align::Center, false);
     }
-    m_Text.Text(40.0f * s, 40.0f * s, "AI DEBUG (F9)", 18.0f, glm::vec4(0.55f, 0.9f, 1.0f, 0.9f));
+    m_Text.Text(40.0f * s, 40.0f * s, "AI DEBUG (F6)", 18.0f, glm::vec4(0.55f, 0.9f, 1.0f, 0.9f));
 }
 
 void CombatHud::Draw(const CombatHudInput& in, NpcDirector& npcs) {
@@ -196,6 +201,7 @@ void CombatHud::Draw(const CombatHudInput& in, NpcDirector& npcs) {
     const float now = npcs.Now();
     const float s = m_Text.Scale();
     if (in.AiOverlay) DrawDebug(in, npcs);
+    if (in.Lines) DrawLines(in, *in.Lines);
     // (The player's half is off until the HUD is redesigned: only the AI debug overlay above draws.)
     constexpr bool kPlayerHud = false;
     if constexpr (kPlayerHud) {
