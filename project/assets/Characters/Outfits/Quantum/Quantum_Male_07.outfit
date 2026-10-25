@@ -4,7 +4,7 @@
   "race": "Young",
   "items": {
     "Bag": {
-      "item": "assets/Characters/Quantum/Models/Clothing/Male/Bags/SKM_Backpack_Casual.fbx"
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Bags/SKM_Backpack_Sport.fbx"
     },
     "Balaclava": {
       "item": "assets/Characters/Quantum/Models/Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx",
@@ -13,7 +13,7 @@
       }
     },
     "Pants": {
-      "item": "assets/Characters/Quantum/Models/Clothing/Male/Pants/SKM_Pants_Cargo_Straight.fbx"
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Pants/SKM_Jeans.fbx"
     },
     "Shoes": {
       "item": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/SKM_Sneakers.fbx"
