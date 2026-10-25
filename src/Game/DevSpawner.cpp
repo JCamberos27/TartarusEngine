@@ -1,6 +1,7 @@
 #include "DevSpawner.h"
 #include "AI/NpcDirector.h"
 #include "Creatures/SpiderSystem.h"
+#include "Creatures/SpiderDamage.h"
 #include "Npc/NpcDroppedWeapon.h"
 #include "FirstPersonPresentation.h"
 #include "Components.h"
@@ -251,8 +252,11 @@ void DevSpawner::Clear(const Context& c) {
     if (c.Npcs)
         for (int idx : m_NpcIds)
             if (const Npc* npc = c.Npcs->Find(idx); npc && npc->DevSpawned) c.Npcs->Remove(world, idx); // the slot may be a squad soldier's now
-    for (entt::entity e : m_SpiderIds)
-        if (world.Registry.valid(e)) world.DestroyEntityAndChildren(e);
+    for (entt::entity e : m_SpiderIds) {
+        if (!world.Registry.valid(e)) continue;
+        if (c.SpiderHurt) c.SpiderHurt->Forget(e);
+        world.DestroyEntityAndChildren(e);
+    }
     m_NpcIds.clear();
     m_SpiderIds.clear();
     m_WaitSquad = false;

@@ -9,6 +9,7 @@ class World;
 class AssetLibrary;
 class NpcDirector;
 class SpiderSystem;
+class SpiderDamage;
 class FirstPersonPresentation;
 class NpcDroppedWeapon;
 
@@ -22,6 +23,7 @@ public:
         AssetLibrary* Assets = nullptr;
         NpcDirector* Npcs = nullptr;
         SpiderSystem* Spiders = nullptr;
+        SpiderDamage* SpiderHurt = nullptr; // F12 takes a spider's hitboxes and ragdoll down before its entity
         FirstPersonPresentation* Gun = nullptr; // the player's weapons: what a pickup gives
         glm::vec3 Eye{0.0f}, Front{0.0f, 0.0f, -1.0f};
         float Dt = 0.0f;

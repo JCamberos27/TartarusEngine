@@ -280,6 +280,17 @@ void SpiderDamage::Flinch(Body& b, int part, const glm::vec3& dirWorld, float da
 
 // ---- every frame ----
 
+void SpiderDamage::Forget(entt::entity root) {
+    m_Bodies.erase(std::remove_if(m_Bodies.begin(), m_Bodies.end(),
+                                  [&](const Body& b) {
+                                      if (b.Root != root) return false;
+                                      if (b.Hitboxes >= 0) PhysicsWorld::DestroyNpcHitboxes(b.Hitboxes);
+                                      if (b.Ragdoll >= 0) PhysicsWorld::DestroyRagdoll(b.Ragdoll);
+                                      return true;
+                                  }),
+                   m_Bodies.end());
+}
+
 void SpiderDamage::LateUpdate(World& world, SpiderSystem& spiders, float dt) {
     if (const std::uint64_t gen = PhysicsWorld::SimulationGeneration(); gen != m_Generation) {
         m_Bodies.clear(); // a new Play (the physics went with the last one)
