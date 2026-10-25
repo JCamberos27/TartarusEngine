@@ -73,6 +73,7 @@ bool BuildParts(const Spider::PartDef* defs, int count, const PartPoint* points,
 
 PhysicsWorld::RagdollParams BodyParams() {
     PhysicsWorld::RagdollParams p;
+    p.SpeculativeCCD = true; // (thin legs, dropped off ceilings)
     p.LinearDamping = 0.12f;
     p.AngularDamping = 0.6f;
     p.SolverPosIters = 32;
