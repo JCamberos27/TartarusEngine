@@ -87,7 +87,7 @@ FrameState SceneRenderer::GatherFrameState(World& world, const RenderFrameContex
     fs.shadowsOn    = in.shadowsEnabled && !ctx.Unlit;
     fs.sunShadowsOn = fs.shadowsOn && in.sunShadowsReady;
     fs.iblOn        = in.iblProbe->IsValid() && !ctx.Unlit;
-    fs.ssaoOn       = in.ssaoEnabled && ctx.SsaoSrc && ctx.SsaoSrc->IsValid() && !ctx.Unlit;
+    fs.ssaoOn       = in.ssaoEnabled && !in.postFxOff && ctx.SsaoSrc && ctx.SsaoSrc->IsValid() && !ctx.Unlit;
     fs.ssaoIntensity = in.ssaoIntensity;
     fs.spotCountForView  = fs.shadowsOn ? in.spotShadowCount  : 0;
     fs.pointCountForView = fs.shadowsOn ? in.pointShadowCount : 0;
@@ -103,7 +103,8 @@ FrameState SceneRenderer::GatherFrameState(World& world, const RenderFrameContex
         fs.clusterNearZ = std::abs(ctx.Proj[3][2] / (ctx.Proj[2][2] - 1.0f));
         fs.clusterFarZ  = std::abs(ctx.Proj[3][2] / (ctx.Proj[2][2] + 1.0f));
     }
-    fs.volOn = VolumetricFog::WantedFor(world, ctx, fs.vp);
+    fs.fogOn = !in.postFxOff;
+    fs.volOn = fs.fogOn && VolumetricFog::WantedFor(world, ctx, fs.vp);
     return fs;
 }
 
@@ -339,8 +340,8 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
     m_Volumetrics->ApplyToProgram(program, ctx.TxHdr, fs.volOn);
 
     // #162 - fog.
-    program.SetInt("uFogMode", fs.world && fs.world->FogEnabled ? std::clamp(fs.world->FogMode, 1, 3) : 0);
-    if (fs.world && fs.world->FogEnabled) {
+    program.SetInt("uFogMode", fs.fogOn && fs.world && fs.world->FogEnabled ? std::clamp(fs.world->FogMode, 1, 3) : 0);
+    if (fs.fogOn && fs.world && fs.world->FogEnabled) {
         const World& w = *fs.world;
         {
             program.SetVec3("uFogColor", glm::max(w.FogColor, glm::vec3(0.0f)));

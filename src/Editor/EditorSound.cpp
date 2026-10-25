@@ -198,6 +198,14 @@ const EventInfo kEvents[kEventCount] = {
     {"GraffitiLayerReorder", Category::DecalsGraffiti, 0.0f,  80.0f, 0.02f, false, false, "Reorder"},
     {"GraffitiBakeStart",    Category::DecalsGraffiti, 0.0f, 500.0f, 0.0f,  true,  false, "AssetReimport"},
     {"GraffitiBakeDone",     Category::DecalsGraffiti,-2.0f, 600.0f, 0.0f,  true,  true,  "SyncDone"},
+    // The F-row (FKeyRow.cpp): centred, like the rest of Play mode's.
+    {"FKeyCycle",        Category::PlayMode,      0.0f,  40.0f, 0.0f,  true},
+    {"FKeyCycleBack",    Category::PlayMode,      0.0f,  40.0f, 0.0f,  true},
+    {"FKeyOff",          Category::PlayMode,      0.0f,  40.0f, 0.0f,  true},
+    {"SpawnNpc",         Category::PlayMode,      0.0f,  60.0f, 0.03f, true},
+    {"SpawnSpider",      Category::PlayMode,      0.0f,  60.0f, 0.04f, true},
+    {"SpawnItem",        Category::PlayMode,      0.0f,  60.0f, 0.02f, true},
+    {"ClearSpawns",      Category::PlayMode,      0.0f, 200.0f, 0.0f,  true},
 };
 
 const char* kCategoryNames[kCategoryCount] = {"Clicks", "Sliders", "Hover",  "Panels",             "Drag & Drop", "Notifications",

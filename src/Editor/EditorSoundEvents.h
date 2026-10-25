@@ -197,6 +197,14 @@ enum class Event : uint8_t {
     GraffitiLayerReorder,
     GraffitiBakeStart, // the layers start baking into the decal
     GraffitiBakeDone,  // ...done (a "done" chime)
+    // The F-row (FKeyRow.h)
+    FKeyCycle,         // F5-F7: a view steps forward (pitch climbs with the step)
+    FKeyCycleBack,     // ...Shift: steps back
+    FKeyOff,           // ...lands back on its default (Shaded, Off, Post FX on)
+    SpawnNpc,          // F9
+    SpawnSpider,       // F10
+    SpawnItem,         // F11
+    ClearSpawns,       // F12
     Count
 };
 
