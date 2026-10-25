@@ -33,6 +33,7 @@
 #include "Camera.h"    // MakePerspective — the view-model sub-pass's one projection switch
 #include "ParticleRenderer.h"
 #include "BloodRenderer.h"
+#include "FurRenderer.h"
 #include "BloodPalette.h"
 #include "FxSpriteRenderer.h"
 #include "WorldText.h"
@@ -909,8 +910,10 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         prog.SetInt("uBloodSplatCount", bloodCount);
         if (bloodCount > 0) {
             prog.SetInt("uBloodSplatFirst", bloodFirst);
-            prog.SetVec4("uBloodFresh", glm::vec4(BloodPalette::Fresh, BloodPalette::RoughCloth));
-            prog.SetVec4("uBloodDried", glm::vec4(BloodPalette::Dried, BloodPalette::RoughDried));
+            glm::vec4 fresh, dried; // the body's own palette (a spider's ichor), a person's by default
+            BloodRenderer::Get().SplatLook(probeItem->Entity, fresh, dried);
+            prog.SetVec4("uBloodFresh", fresh);
+            prog.SetVec4("uBloodDried", dried);
         }
     };
     BloodRenderer::Get().BindSplatResources();
@@ -1027,6 +1030,35 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         p->SetInt("uInstanced", 0);
     }
     modelShader.Bind();
+
+    // Shell fur (FurRenderer) over the opaque surfaces just drawn - the visible set only, so nothing off-screen pays
+    // for it. Depth-writing and alpha-tested, so it needs no order of its own.
+    if (!FurRenderer::Disabled()) {
+        static std::vector<FurRenderer::Item> furItems;
+        furItems.clear();
+        for (const DrawItem& it : drawList) {
+            if (!FurRenderer::HasFur(*it.Ref, *it.Slots)) continue;
+            FurRenderer::Item f;
+            f.Ref = it.Ref;
+            f.Slots = it.Slots;
+            f.Xform = it.Xform;
+            f.Centre = it.Centre;
+            const float scale = std::max({glm::length(glm::vec3(it.Xform[0])), glm::length(glm::vec3(it.Xform[1])),
+                                          glm::length(glm::vec3(it.Xform[2]))});
+            f.Radius = 0.5f * glm::length(it.Ref->BoundsMax() - it.Ref->BoundsMin()) * scale;
+            f.LayerBit = it.LayerBit;
+            f.ReceiveShadows = it.ReceiveShadows;
+            furItems.push_back(f);
+        }
+        if (!furItems.empty()) {
+            long long furTris = 0;
+            localStats.DrawCalls += FurRenderer::Get().Draw(furItems, ctx.View, ctx.Proj, ctx.ViewPos, (float)fs.vp[3],
+                                                            ctx.TxHdr && ctx.TxHdr->Samples() > 1,
+                                                            [&](Shader& p) { ApplyFrameState(p, fs); }, furTris);
+            localStats.Triangles += (int)furTris;
+            modelShader.Bind();
+        }
+    }
 
     // Volumetric blood in the air: opaque fluid, so before the sky and with the
     // opaque geometry it lands on already in depth.

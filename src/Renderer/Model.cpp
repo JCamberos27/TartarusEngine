@@ -2810,6 +2810,36 @@ void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<Mate
     }
 }
 
+long long Model::DrawFurShells(Shader& prog, const glm::mat4& xform, const std::vector<std::shared_ptr<MaterialAsset>>& slots,
+                               FurBindFn bind, void* user) {
+    long long tris = 0;
+    bool bound = false, preSkinned = false;
+    const MaterialLocs* locs = nullptr;
+    int firstVertex = 0;
+    for (int i = 0; i < (int)m_D->Meshes.size(); ++i) {
+        const int meshFirstVertex = firstVertex;
+        firstVertex += (int)m_D->Meshes[i]->VertexCount();
+        const bool hasSlot = i < (int)slots.size() && slots[i];
+        if (hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::Transparent) continue;
+        const Material& mat = hasSlot ? slots[i]->Mat : m_D->Meshes[i]->Mat;
+        if (!mat.Fur.Enabled) continue;
+        if (!bound) { // only a model that has fur pays for the skin binding
+            prog.Bind();
+            preSkinned = UploadBoneMatrices(prog);
+            locs = &CachedMaterialLocs(prog);
+            prog.SetMat4(prog.Loc("uModel"), xform);
+            prog.SetMat4(prog.Loc("uNormalMatrix"), glm::mat4(glm::transpose(glm::inverse(glm::mat3(xform)))));
+            bound = true;
+        }
+        const int shells = bind(prog, mat, user);
+        if (shells <= 0) continue;
+        if (preSkinned) prog.SetInt(locs->skinBase, m_PreSkin.Base + meshFirstVertex);
+        m_D->Meshes[i]->Draw(shells);
+        tris += (long long)(m_D->Meshes[i]->IndexCount() / 3u) * shells;
+    }
+    return tris;
+}
+
 unsigned int Model::TriangleCount() const {
     unsigned int total = 0;
     for (const auto& mesh : m_D->Meshes) total += mesh->IndexCount() / 3;

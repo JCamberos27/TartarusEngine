@@ -1,8 +1,22 @@
 #include "UnitTestSupport.h"
 
+#include "Creatures/SpiderDamage.h"
 #include "Creatures/SpiderLocomotion.h"
 #include "Creatures/SpiderNav.h"
+#include "Creatures/SpiderRagdoll.h"
+#include "Creatures/SpiderSystem.h"
+#include "Components.h"
+#include "GameModuleAPI.h"
 #include "IK.h"
+#include "Log.h"
+#include "PhysicsWorld.h"
+#include "ProjectPaths.h"
+#include "Renderer/BloodPalette.h"
+#include "World.h"
+
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 
 #include <cstdio>
 
@@ -130,6 +144,7 @@ RouteResult FollowRoute(const BoxWorld& w, const Spider::SurfaceGraph& graph, Sp
 struct ClimbResult {
     bool Arrived = false, Fell = false;
     float WorstGap = 0.0f, Seconds = 0.0f;
+    int Sunk = 0; // frames its head or abdomen was inside a surface
     glm::vec3 Up{0.0f};
 };
 ClimbResult Climb(const BoxWorld& w, Spider::Mover& m, const glm::vec3& goal, float seconds) {
@@ -143,6 +158,9 @@ ClimbResult Climb(const BoxWorld& w, Spider::Mover& m, const glm::vec3& goal, fl
         m.Step(w, s, in, dt);
         if (!m.Attached()) r.Fell = true;
         else if (m.SurfaceGap() >= 0.0f) r.WorstGap = std::max(r.WorstGap, std::fabs(m.SurfaceGap()));
+        // The body's ends (as MoverSettings has them, a little in from the tips) never inside the room's walls.
+        const glm::vec3 mid = m.Position() + m.Up() * s.BodyLift;
+        if (w.Occupied(mid + m.Forward() * (s.BodyFront - 0.03f), 0.0f) || w.Occupied(mid - m.Forward() * (s.BodyBack - 0.03f), 0.0f)) ++r.Sunk;
         if (m.Arrived()) {
             r.Arrived = true;
             r.Seconds = t;
@@ -193,12 +211,14 @@ void TestSpiderClimbsFloorWallCeiling() {
     const ClimbResult wall = Climb(w, m, glm::vec3(2.0f, 1.2f, 0.5f), 15.0f);
     CHECK(wall.Arrived);
     CHECK(!wall.Fell);
-    CHECK(wall.WorstGap < 0.03f);
+    CHECK(wall.WorstGap < 0.35f); // (its middle swings clear of the corner as it turns)
+    CHECK(wall.Sunk == 0);
     CHECK(wall.Up.x < -0.97f); // side-on, its back to the room
     const ClimbResult ceiling = Climb(w, m, glm::vec3(0.5f, 2.4f, 0.8f), 15.0f);
     CHECK(ceiling.Arrived);
     CHECK(!ceiling.Fell);
-    CHECK(ceiling.WorstGap < 0.03f);
+    CHECK(ceiling.WorstGap < 0.35f);
+    CHECK(ceiling.Sunk == 0);
     CHECK(ceiling.Up.y < -0.97f); // upside down
     const ClimbResult other = Climb(w, m, glm::vec3(-2.0f, 1.2f, 0.0f), 15.0f);
     CHECK(other.Arrived);
@@ -224,6 +244,26 @@ void TestSpiderGoesOverABox() {
     CHECK(r.Arrived);
     CHECK(!r.Fell);
     CHECK(r.Up.y > 0.97f);
+}
+
+void TestSpiderWedgedStaysDown() {
+    // Wedged in a slot shorter than its body (0.55 m; head 0.26 + abdomen 0.4 m), standing still: both ends touch, so the
+    // push-out lifts it - only a little off the floor, however long it stays there (unbounded, it rose every frame).
+    BoxWorld w;
+    w.RoomMax.y = 1.2f;
+    w.Boxes.push_back({glm::vec3(-2.0f, 0.0f, -2.0f), glm::vec3(2.0f, 1.2f, -0.25f)});
+    w.Boxes.push_back({glm::vec3(-2.0f, 0.0f, 0.3f), glm::vec3(2.0f, 1.2f, 2.0f)});
+    Spider::Mover m;
+    m.Reset(glm::vec3(0.0f, 0.0f, 0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f)); // facing -z, into the end wall
+    Spider::MoverSettings s;
+    Spider::MoveInput in;
+    in.HasGoal = false;
+    float highest = 0.0f;
+    for (int i = 0; i < 300; ++i) {
+        m.Step(w, s, in, 1.0f / 60.0f);
+        highest = std::max(highest, m.Position().y);
+    }
+    CHECK(highest < 0.4f);
 }
 
 void TestSpiderFallsAndLands() {
@@ -314,6 +354,224 @@ void TestSpiderRigParses() {
     CHECK(!error.empty());
 }
 
+// Eight legs' worth of JSON for a rig text (the gait test's names and groups), and `parts` spliced in.
+std::string RigText(const std::string& parts) {
+    std::string legs, a = "[", b = "[";
+    const char* names[Spider::kLegs] = {"L1", "R1", "L2", "R2", "L3", "R3", "L4", "R4"};
+    const int groups[Spider::kLegs] = {0, 1, 1, 0, 0, 1, 1, 0};
+    for (int i = 0; i < Spider::kLegs; ++i) {
+        legs += std::string(i ? "," : "") + "{\"name\":\"" + names[i] + "\",\"bones\":[\"a" + std::to_string(i) + "\",\"b" +
+                std::to_string(i) + "\"]}";
+        std::string& g = groups[i] ? b : a;
+        g += std::string(g.size() > 1 ? "," : "") + "\"" + names[i] + "\"";
+    }
+    return "{\"legs\":[" + legs + "],\"gaitGroups\":[" + a + "]," + b + "]]" + (parts.empty() ? "" : ",\"parts\":" + parts) + "}";
+}
+
+// The body-part table: Spider.rig.json's 26 parts (the thorax the one root, the abdomen on it, three segments a leg in
+// a chain off the thorax, every zone named), and a table that is wrong in each way the parser refuses.
+void TestSpiderPartsParse() {
+    // The spider is project content, not engine data: a packaged engine (CI's standalone check) runs without it.
+    if (!std::filesystem::exists(ProjectPaths::Resolve("assets/Characters/Spider/Spider.rig.json"))) {
+        Log::Info("SpiderPartsParse: no spider in this project - skipped.");
+        return;
+    }
+    std::string text;
+    {
+        std::ifstream in(std::filesystem::u8path(ProjectPaths::Resolve("assets/Characters/Spider/Spider.rig.json")), std::ios::binary);
+        std::stringstream ss;
+        ss << in.rdbuf();
+        text = ss.str();
+    }
+    Spider::RigDef rig;
+    std::string error;
+    CHECK(!text.empty() && Spider::ParseRig(text, rig, &error));
+    CHECK(rig.Parts.size() == 26);
+    int roots = 0, legParts = 0, heads = 0, abdomens = 0;
+    std::array<int, Spider::kLegs> perLeg{};
+    for (const Spider::PartDef& p : rig.Parts) {
+        if (p.Parent < 0) { ++roots; CHECK(p.Name == "thorax" && p.Zone == Spider::PartZone::Head); }
+        heads += p.Zone == Spider::PartZone::Head;
+        abdomens += p.Zone == Spider::PartZone::Abdomen;
+        if (p.Leg >= 0) {
+            ++legParts;
+            ++perLeg[(size_t)p.Leg];
+            CHECK(p.Zone == Spider::PartZone::Leg);
+            // A leg's first segment hangs off the thorax, the next two off the one before.
+            const Spider::PartDef& parent = rig.Parts[(size_t)p.Parent];
+            CHECK(p.Segment == 0 ? parent.Name == "thorax" : (parent.Leg == p.Leg && parent.Segment == p.Segment - 1));
+            CHECK(!p.End.empty() && p.Radius > 0.01f && p.Mass > 0.0f);
+        }
+    }
+    CHECK(roots == 1 && heads == 1 && abdomens == 1 && legParts == 24);
+    for (int n : perLeg) CHECK(n == 3);
+    CHECK(rig.ZoneMultiplier[0] > 2.0f && rig.ZoneMultiplier[2] < 1.0f);
+
+    const std::string root = "{\"name\":\"t\",\"bone\":\"B\",\"end\":\"E\",\"zone\":\"head\"}";
+    CHECK(Spider::ParseRig(RigText("[" + root + "]"), rig) && rig.Parts.size() == 1);
+    CHECK(!Spider::ParseRig(RigText("[" + root + ",{\"name\":\"x\",\"bone\":\"C\",\"end\":\"D\",\"parent\":\"nobody\"}]"), rig));
+    CHECK(!Spider::ParseRig(RigText("[" + root + "," + root + "]"), rig));                     // two roots
+    CHECK(!Spider::ParseRig(RigText("[{\"name\":\"t\",\"bone\":\"B\",\"end\":\"E\",\"zone\":\"tail\"}]"), rig)); // no such zone
+    CHECK(!Spider::ParseRig(RigText("[{\"name\":\"t\",\"bone\":\"B\"}]"), rig));           // no end, no length
+    std::string many = "[" + root;
+    for (int i = 0; i < 32; ++i)
+        many += ",{\"name\":\"p" + std::to_string(i) + "\",\"bone\":\"B\",\"end\":\"E\",\"parent\":\"t\"}";
+    CHECK(!Spider::ParseRig(RigText(many + "]"), rig)); // 33 parts: past the ragdoll's 32
+}
+
+// A spider's table: thorax, abdomen and eight legs of three segments (26 parts), standing at the origin as the rig
+// does, for the ragdoll test.
+void SpiderBody(std::vector<Spider::PartDef>& defs, std::vector<SpiderRagdoll::PartPoint>& points, float lift) {
+    defs.clear();
+    points.clear();
+    Spider::PartDef t;
+    t.Name = "thorax"; t.Bone = "B"; t.End = "E"; t.Radius = 0.1f; t.Mass = 1.0f; t.Zone = Spider::PartZone::Head;
+    defs.push_back(t);
+    points.push_back({{0.0f, 0.15f + lift, -0.19f}, {0.0f, 0.15f + lift, -0.19f}, {0.0f, 0.15f + lift, 0.12f}});
+    Spider::PartDef a = t;
+    a.Name = "abdomen"; a.Radius = 0.135f; a.Mass = 1.2f; a.Zone = Spider::PartZone::Abdomen; a.Parent = 0; a.Swing = 25.0f;
+    defs.push_back(a);
+    points.push_back({{0.0f, 0.16f + lift, 0.12f}, {0.0f, 0.16f + lift, 0.12f}, {0.0f, 0.25f + lift, 0.5f}});
+    const float angles[Spider::kLegs] = {35, -35, 75, -75, 105, -105, 145, -145};
+    for (int leg = 0; leg < Spider::kLegs; ++leg) {
+        const float r = glm::radians(angles[leg]);
+        const glm::vec3 out(-std::sin(r), 0.0f, -std::cos(r));
+        const glm::vec3 hip = glm::vec3(0.0f, 0.08f + lift, 0.0f) + out * 0.03f, coxa = hip + out * 0.12f + glm::vec3(0, 0.03f, 0);
+        const glm::vec3 knee = hip + out * 0.2f + glm::vec3(0, 0.26f, 0), ankle = hip + out * 0.33f + glm::vec3(0, 0.12f, 0);
+        const glm::vec3 tip = hip + out * 0.45f + glm::vec3(0, -0.07f, 0);
+        const float radius[3] = {0.032f, 0.026f, 0.02f}, mass[3] = {0.22f, 0.15f, 0.1f}, curl[3] = {-25.0f, 75.0f, 65.0f};
+        const glm::vec3 from[3] = {coxa, knee, ankle}, to[3] = {knee, ankle, tip}, anchor[3] = {hip, knee, ankle};
+        for (int s = 0; s < 3; ++s) {
+            Spider::PartDef d;
+            d.Name = "leg"; d.Bone = "B"; d.End = "E"; d.Radius = radius[s]; d.Mass = mass[s]; d.Zone = Spider::PartZone::Leg;
+            d.Leg = leg; d.Segment = s; d.Curl = curl[s]; d.Swing = s ? 60.0f : 45.0f; d.Twist = s ? 10.0f : 20.0f;
+            d.Parent = s == 0 ? 0 : (int)defs.size() - 1;
+            defs.push_back(d);
+            points.push_back({anchor[s], from[s], to[s]});
+        }
+    }
+}
+
+// More than 16 parts: a 26-part spider builds as one ragdoll (the old cap was 16), its legs don't collide with each
+// other but do with the body, and powered by the death curl it falls, folds and stays whole: every part finite, none
+// flung. 33 parts are refused.
+void TestSpiderRagdollBuilds() {
+    World world;
+    PhysicsWorld::Create(world);
+    CHECK(PhysicsWorld::IsActive());
+    if (!PhysicsWorld::IsActive()) return;
+    std::vector<Spider::PartDef> defs;
+    std::vector<SpiderRagdoll::PartPoint> points;
+    SpiderBody(defs, points, 1.0f);
+    const int count = (int)defs.size();
+    CHECK(count == 26 && count > 16 && count <= PhysicsWorld::kMaxRagdollParts);
+    std::array<PhysicsWorld::RagdollPart, Spider::kMaxParts> parts{};
+    std::array<glm::mat4, Spider::kMaxParts> partWorld{};
+    CHECK(SpiderRagdoll::BuildParts(defs.data(), count, points.data(), glm::vec3(0, 1, 0), parts.data(), partWorld.data()));
+    const PhysicsWorld::RagdollParams prm = SpiderRagdoll::BodyParams();
+    const int id = PhysicsWorld::CreateRagdoll(9191u, parts.data(), count, &prm);
+    CHECK(id >= 0);
+    if (id >= 0) {
+        CHECK(!PhysicsWorld::RagdollPairCollides(id, 4, 7));   // L1's tip and R1's tip: different legs
+        CHECK(!PhysicsWorld::RagdollPairCollides(id, 0, 2));   // the thorax and L1's first segment: parent and child
+        std::array<glm::quat, Spider::kMaxParts> targets{};
+        std::array<float, Spider::kMaxParts> weight{};
+        for (int k = 0; k < count; ++k) {
+            weight[(size_t)k] = defs[(size_t)k].Leg >= 0 ? 1.0f : 0.0f;
+            const glm::vec3 c = points[(size_t)k].B;
+            glm::vec3 out(c.x, 0.0f, c.z);
+            targets[(size_t)k] = SpiderRagdoll::CurlTarget(defs[(size_t)k], glm::quat_cast(glm::mat3(partWorld[(size_t)k])), glm::vec3(0, 1, 0),
+                                                           glm::length(out) > 1e-4f ? glm::normalize(out) : glm::vec3(1, 0, 0));
+        }
+        SpiderRagdoll::LimpMotor motor;
+        motor.Begin(id, count, targets.data(), weight.data(), SpiderRagdoll::LimpMotor::Settings());
+        float tipStart = 0.0f;
+        for (int k = 4; k < count; k += 3) tipStart += glm::length(glm::vec2(points[(size_t)k].B.x, points[(size_t)k].B.z));
+        bool finite = true;
+        float fastest = 0.0f;
+        for (int f = 0; f < 60; ++f) { // a second: the curl at full strength, the body falling free
+            motor.Update(1.0f / 60.0f);
+            PhysicsWorld::Step(1.0f / 60.0f, world, {});
+            float lin = 0.0f, ang = 0.0f;
+            PhysicsWorld::RagdollMotion(id, &lin, &ang);
+            fastest = std::max(fastest, ang);
+            for (int k = 0; k < count; ++k) {
+                float p[3], q[4];
+                PhysicsWorld::GetRagdollPart(id, k, p, q);
+                finite = finite && std::isfinite(p[0]) && std::isfinite(p[1]) && std::isfinite(p[2]);
+            }
+        }
+        // The legs came in: each tip nearer the thorax's line than it stood.
+        float thorax[3], tq[4], tipNow = 0.0f;
+        PhysicsWorld::GetRagdollPart(id, 0, thorax, tq);
+        for (int k = 4; k < count; k += 3) {
+            float p[3], q[4];
+            PhysicsWorld::GetRagdollPart(id, k, p, q);
+            const glm::quat r(q[3], q[0], q[1], q[2]);
+            float rad = 0.0f, half = 0.0f;
+            PhysicsWorld::GetRagdollPartShape(id, k, &rad, &half);
+            const glm::vec3 tip = glm::vec3(p[0], p[1], p[2]) + r * glm::vec3(half, 0, 0);
+            tipNow += glm::length(glm::vec2(tip.x - thorax[0], tip.z - thorax[2]));
+        }
+        CHECK(finite);
+        CHECK(fastest < 40.0f); // rad/s: no leg spun out
+        CHECK(tipNow < tipStart * 0.85f);
+        PhysicsWorld::DestroyRagdoll(id);
+    }
+    std::array<PhysicsWorld::RagdollPart, 33> tooMany{};
+    for (int i = 1; i < 33; ++i) { tooMany[(size_t)i].Parent = 0; tooMany[(size_t)i].Position[1] = 0.3f * (float)i; }
+    CHECK(PhysicsWorld::CreateRagdoll(9192u, tooMany.data(), 33, &prm) < 0);
+    PhysicsWorld::Destroy();
+}
+
+// The blood palette: a person's is exactly what it was before palettes were per body (the constants every stain and
+// spray was drawn with), palette 0 is a person's, and anything unknown falls back to it; the ichor is yellow-green.
+void TestBloodPaletteHumanUnchanged() {
+    const BloodPalette::Look& h = BloodPalette::Of(BloodPalette::kHuman);
+    auto same = [](const glm::vec3& a, float x, float y, float z) { return a.x == x && a.y == y && a.z == z; };
+    CHECK(same(h.Fresh, 0.16f, 0.006f, 0.005f));
+    CHECK(same(h.Dried, 0.045f, 0.014f, 0.010f));
+    CHECK(same(h.Thin, 0.20f, 0.0075f, 0.006f));
+    CHECK(same(h.Mist, 0.09f, 0.0034f, 0.0028f));
+    CHECK(same(h.Subsurface, 0.34f, 0.010f, 0.007f));
+    CHECK(h.RoughFresh == 0.38f && h.RoughPool == 0.32f && h.RoughDried == 0.75f && h.RoughSpray == 0.28f && h.RoughSprite == 0.30f &&
+          h.RoughCloth == 0.35f);
+    CHECK(h.Thickness == 0.55f && h.FilmOpacity == 1.0f); // the spray's thickness the renderer always set; stains fully covering
+    CHECK(same(BloodPalette::Human.Fresh, 0.16f, 0.006f, 0.005f) && same(BloodPalette::Fresh, 0.16f, 0.006f, 0.005f));
+    CHECK(&BloodPalette::Of(-1) == &BloodPalette::Of(0) && &BloodPalette::Of(57) == &BloodPalette::Of(0));
+    const BloodPalette::Look& i = BloodPalette::Of(BloodPalette::kIchor);
+    CHECK(i.Fresh.g > i.Fresh.r && i.Fresh.r > 3.0f * i.Fresh.b); // yellow-green
+    CHECK(i.Dried.g < i.Fresh.g * 0.3f);                           // darker dried: olive
+    CHECK(i.FilmOpacity < 1.0f);                                    // a little translucent
+}
+
+// Damage by zone: the head 2.5x, the abdomen 1.2x, a leg 0.5x (the defaults and the rig's), and what knocks a spider off
+// a wall (a shotgun's pellets, or a round past 25).
+void TestSpiderZoneMultipliers() {
+    Spider::RigDef rig;
+    CHECK(SpiderDamage::ZoneMultiplier(rig, Spider::PartZone::Head) == 2.5f);
+    CHECK(SpiderDamage::ZoneMultiplier(rig, Spider::PartZone::Abdomen) == 1.2f);
+    CHECK(SpiderDamage::ZoneMultiplier(rig, Spider::PartZone::Leg) == 0.5f);
+    const std::string text = RigText("[]").substr(0, RigText("[]").size() - 1) +
+                             ",\"zones\":{\"head\":{\"damage\":3.0},\"leg\":{\"damage\":0.25,\"flinch\":40}}}";
+    CHECK(Spider::ParseRig(text, rig));
+    CHECK(SpiderDamage::ZoneMultiplier(rig, Spider::PartZone::Head) == 3.0f);
+    CHECK(SpiderDamage::ZoneMultiplier(rig, Spider::PartZone::Abdomen) == 1.2f);
+    CHECK(SpiderDamage::ZoneMultiplier(rig, Spider::PartZone::Leg) == 0.25f && rig.FlinchDeg[2] == 40.0f);
+    // A rifle round (34): two to the body and it is nearly dead (60), one to the head kills.
+    Spider::RigDef d;
+    CHECK(34.0f * SpiderDamage::ZoneMultiplier(d, Spider::PartZone::Head) >= 60.0f);
+    CHECK(34.0f * SpiderDamage::ZoneMultiplier(d, Spider::PartZone::Leg) + 34.0f * SpiderDamage::ZoneMultiplier(d, Spider::PartZone::Abdomen) < 60.0f);
+    CHECK(SpiderDamage::Heavy(10.0f, 8) && SpiderDamage::Heavy(26.0f, 1) && !SpiderDamage::Heavy(17.0f, 1));
+    // The ichor's hit: the spider's palette, the abdomen throwing more.
+    SpiderDamage::Result r;
+    r.Damage = 40.0f;
+    r.Zone = Spider::PartZone::Abdomen;
+    r.Living = true;
+    const BloodFx::Hit h = SpiderDamage::Blood(r);
+    CHECK(h.Palette == BloodPalette::kIchor && h.Damage > r.Damage && !h.Corpse && !h.Head);
+}
+
 } // namespace
 
 void TestSpiderNavRoutesFloorToCeiling() {
@@ -367,6 +625,280 @@ void TestSpiderNavRoutesFloorToCeiling() {
     CHECK(!ceilingUsed);
 }
 
+void TestSpiderNavOneSidedPlaneSplits() {
+    // A thin ceiling plane across a taller room, solid only from below (a mesh collider is one-sided): the walls go on
+    // above it into the void, and no link may join the room's walls to theirs, whichever way the link's ray is cast.
+    struct PlaneWorld : BoxWorld {
+        float PlaneY = 1.2f;
+        bool Ray(const glm::vec3& o, const glm::vec3& d, float maxDistance, Spider::SurfaceHit& out) const override {
+            Spider::SurfaceHit h;
+            const bool room = BoxWorld::Ray(o, d, maxDistance, h);
+            if (d.y > 1e-6f && o.y < PlaneY) { // its face is down: only a ray going up hits it
+                const float t = (PlaneY - o.y) / d.y;
+                if (t <= maxDistance && (!room || t < h.Distance)) {
+                    out.Hit = true;
+                    out.Distance = t;
+                    out.Point = o + d * t;
+                    out.Normal = glm::vec3(0.0f, -1.0f, 0.0f);
+                    return true;
+                }
+            }
+            if (room) out = h;
+            return room;
+        }
+    };
+    PlaneWorld w;
+    std::vector<float> verts;
+    std::vector<int> tris;
+    w.Triangles(verts, tris);
+    Spider::SurfaceGraph g;
+    CHECK(g.Build(verts, tris, w, Spider::NavSettings{}));
+    int crossing = 0;
+    for (int i = 0; i < g.NodeCount(); ++i)
+        for (int k = g.FirstLink(i); k < g.FirstLink(i + 1); ++k)
+            if ((g.Pos(i).y - w.PlaneY) * (g.Pos(g.Neighbour(k)).y - w.PlaneY) < 0.0f) ++crossing;
+    CHECK(crossing == 0);
+    // Above and below are separate pieces, and a pick restricted to the floor's piece never lands above the plane.
+    const glm::vec3 upY(0.0f, 1.0f, 0.0f);
+    const int floor = g.Nearest(glm::vec3(0.0f, 0.0f, 0.0f), 1.0f, &upY);
+    CHECK(floor >= 0);
+    const int high = g.Nearest(glm::vec3(1.9f, 2.0f, 0.0f), 1.0f);
+    CHECK(high >= 0 && g.Component(high) != g.Component(floor));
+    const int pick = g.Nearest(glm::vec3(1.9f, 2.0f, 0.0f), 1.5f, nullptr, g.Component(floor));
+    CHECK(pick < 0 || g.Pos(pick).y < w.PlaneY);
+}
+
+void TestSpiderBarrierClosesAnOpening() {
+    // A window's opening has no collider: a creature barrier across it (turned 90 degrees, as a window in a side wall is)
+    // closes it to spiders alone. Without one, the graph links the two sides and a spider walks through; with one,
+    // no link crosses it, the sides are separate pieces, and a spider sent across never gets past it.
+    BoxWorld w;
+    std::vector<Spider::Barrier> barriers(1);
+    barriers[0].Centre = glm::vec3(0.0f, 1.2f, 0.0f);
+    barriers[0].Rotation = glm::angleAxis(glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    barriers[0].Half = glm::vec3(0.03f, 1.3f, 2.1f); // its local z runs along world x, wall to wall and into them
+    const Spider::BarrierQuery closed(w, barriers);
+    const std::vector<Spider::Barrier> none;
+    const Spider::BarrierQuery open(w, none);
+    std::vector<float> verts;
+    std::vector<int> tris;
+    w.Triangles(verts, tris);
+    const Spider::NavSettings s;
+    const glm::vec3 upY(0.0f, 1.0f, 0.0f);
+    auto crossings = [](const Spider::SurfaceGraph& g) {
+        int n = 0;
+        for (int i = 0; i < g.NodeCount(); ++i)
+            for (int k = g.FirstLink(i); k < g.FirstLink(i + 1); ++k) n += g.Pos(i).z * g.Pos(g.Neighbour(k)).z < 0.0f ? 1 : 0;
+        return n;
+    };
+    Spider::SurfaceGraph without, with;
+    CHECK(without.Build(verts, tris, open, s));
+    CHECK(crossings(without) > 0);
+    CHECK(with.Build(verts, tris, closed, s));
+    CHECK(crossings(with) == 0);
+    const int near = with.Nearest(glm::vec3(0.0f, 0.0f, 1.5f), 1.0f, &upY), far = with.Nearest(glm::vec3(0.0f, 0.0f, -1.5f), 1.0f, &upY);
+    CHECK(near >= 0 && far >= 0 && with.Component(near) != with.Component(far));
+    // The cache key changes with the barriers: a graph baked before a window was closed isn't taken.
+    const std::uint64_t h = Spider::SurfaceGraph::HashInput(verts, tris, s);
+    CHECK(Spider::SurfaceGraph::HashBarriers(h, barriers) != h);
+    CHECK(Spider::SurfaceGraph::HashBarriers(h, none) == h);
+
+    // The mover alone (no graph): straight at the far side, it climbs the barrier like a wall but never passes it.
+    auto furthest = [](const Spider::SurfaceQuery& q) {
+        Spider::Mover m;
+        m.Reset(glm::vec3(0.0f, 0.0f, 1.5f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
+        Spider::MoverSettings ms;
+        Spider::MoveInput in;
+        in.HasGoal = true;
+        in.Goal = glm::vec3(0.0f, 0.0f, -1.5f);
+        float least = 1e9f;
+        for (int i = 0; i < 20 * 60; ++i) {
+            m.Step(q, ms, in, 1.0f / 60.0f);
+            least = std::min(least, m.Position().z);
+        }
+        return least;
+    };
+    CHECK(furthest(open) < -1.0f);
+    CHECK(furthest(closed) > 0.0f);
+}
+
+void TestSpiderProbeStartsInsideASolid() {
+    // The real world, through PhysX: a floor, and a low solid shelf 0.2-0.5 m over it. A spider standing under the shelf
+    // probes for its footing from a quarter metre up - inside the shelf. PhysX reports a solid a ray starts inside at the
+    // ray's origin; taken as footing, it stood the body on its own probe's start and lifted it every frame, up through
+    // the shelf (in 301, through furniture and the ceiling slab onto the roof). The spider's query passes through it to
+    // the floor.
+    World world;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    ColliderComponent col;
+    col.Kind = ColliderComponent::Shape::Box;
+    col.HalfExtents = glm::vec3(5.0f, 0.5f, 5.0f);
+    world.Registry.emplace<ColliderComponent>(world.CreateEmptyEntity(glm::vec3(0.0f, -0.5f, 0.0f), zero, one, "Floor"), col);
+    col.HalfExtents = glm::vec3(2.0f, 0.15f, 2.0f);
+    world.Registry.emplace<ColliderComponent>(world.CreateEmptyEntity(glm::vec3(0.0f, 0.35f, 0.0f), zero, one, "Shelf"), col);
+    world.SyncActiveInHierarchy();
+    world.RebuildWorldTransformCache();
+    PhysicsWorld::Create(world);
+    CHECK(PhysicsWorld::IsActive());
+    if (!PhysicsWorld::IsActive()) return;
+
+    const float from[3] = {0.0f, 0.25f, 0.0f}, down[3] = {0.0f, -1.0f, 0.0f};
+    QueryFilter f;
+    f.HitTriggers = 0;
+    RaycastHit h;
+    CHECK(PhysicsWorld::RaycastSolid(from, down, 1.0f, f, h) && h.Distance < 1e-4f); // PhysX: the shelf, at the origin
+    CHECK(PhysicsWorld::RaycastSolid(from, down, 1.0f, f, h, /*fromOutside=*/true) && std::fabs(h.Distance - 0.25f) < 1e-3f &&
+          h.Normal[1] > 0.99f); // the floor
+
+    const Spider::WorldQuery q;
+    Spider::Mover m;
+    m.Reset(glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
+    Spider::MoverSettings s;
+    Spider::MoveInput in;
+    in.HasGoal = false;
+    float highest = 0.0f;
+    for (int i = 0; i < 120; ++i) {
+        m.Step(q, s, in, 1.0f / 60.0f);
+        highest = std::max(highest, m.Position().y);
+    }
+    CHECK(m.Attached());
+    CHECK(highest < 0.15f);
+    PhysicsWorld::Destroy();
+}
+
+void TestSpiderShoveNeverStacks() {
+    // A bite shoves a standing player back at its speed; a second from the side, while they still reel, leaves them no
+    // faster (the old cap was only along each shove's own line: two at right angles made 1.41 times the speed, and a
+    // pounce with a bite threw the player 1.5 m in a second). Already running faster, a shove doesn't slow them.
+    const glm::vec3 a = SpiderSystem::Shove(glm::vec3(0.0f), glm::vec3(2.5f, 0.0f, 0.0f));
+    CHECK(std::fabs(a.x - 2.5f) < 1e-4f && std::fabs(a.z) < 1e-4f);
+    const glm::vec3 b = SpiderSystem::Shove(a, glm::vec3(0.0f, 0.0f, 3.75f));
+    CHECK(glm::length(glm::vec2(b.x, b.z)) <= 3.75f + 1e-4f);
+    CHECK(b.z > 2.0f); // it does turn them toward the new shove
+    const glm::vec3 c = SpiderSystem::Shove(glm::vec3(0.0f, -1.0f, 5.0f), glm::vec3(2.5f, 0.0f, 0.0f));
+    CHECK(std::fabs(glm::length(glm::vec2(c.x, c.z)) - 5.0f) < 1e-3f && std::fabs(c.y + 1.0f) < 1e-6f);
+}
+
+void TestSpiderBodyNeverShovesThePlayer() {
+    // A spider's body hitboxes are for shots. Biting at the player's legs, one overlapped their capsule, and the player's
+    // mover slid them out of it every frame it held there - over a metre a second, with no hit landing. Standing still
+    // with a hitbox in their legs, the player stays put; a ray still finds the hitbox.
+    World world;
+    const glm::vec3 zero(0.0f), one(1.0f);
+    ColliderComponent col;
+    col.Kind = ColliderComponent::Shape::Box;
+    col.HalfExtents = glm::vec3(5.0f, 0.5f, 5.0f);
+    world.Registry.emplace<ColliderComponent>(world.CreateEmptyEntity(glm::vec3(0.0f, -0.5f, 0.0f), zero, one, "Floor"), col);
+    world.SyncActiveInHierarchy();
+    world.RebuildWorldTransformCache();
+    PhysicsWorld::Create(world);
+    CHECK(PhysicsWorld::IsActive());
+    if (!PhysicsWorld::IsActive()) return;
+    const float foot[3] = {0.0f, 0.0f, 0.0f};
+    PhysicsWorld::CreateCharacter(0.3f, 0.6f, foot);
+    PhysicsWorld::HitCapsule part;
+    part.Position[0] = 0.25f; // its thorax in the player's shins
+    part.Position[1] = 0.2f;
+    part.Radius = 0.15f;
+    part.HalfLength = 0.15f;
+    CHECK(PhysicsWorld::CreateBodyHitboxes(4242u, &part, 1) >= 0);
+    const float still[3] = {0.0f, -0.01f, 0.0f};
+    for (int i = 0; i < 60; ++i) PhysicsWorld::MoveCharacter(still, 1.0f / 60.0f, true);
+    float at[3];
+    PhysicsWorld::GetCharacterFootPosition(at);
+    CHECK(std::sqrt(at[0] * at[0] + at[2] * at[2]) < 0.01f);
+    const float from[3] = {1.0f, 0.2f, 0.0f}, left[3] = {-1.0f, 0.0f, 0.0f};
+    QueryFilter f;
+    RaycastHit h;
+    CHECK(PhysicsWorld::RaycastFiltered(from, left, 2.0f, f, h) && h.Entity == 4242u);
+    PhysicsWorld::Destroy();
+}
+
+void TestSpiderNavRoutesRoundBlockedNodes() {
+    // An open door's leaf against a wall stands over graph nodes the static bake made: blocked, no route uses them (one
+    // did, and a hunter pushed at the open leaf for 2 s). Floor to floor across the room with a band of the floor
+    // blocked, the route goes round it - up the walls - and freeing the band brings the floor route back.
+    BoxWorld w;
+    std::vector<float> verts;
+    std::vector<int> tris;
+    w.Triangles(verts, tris);
+    Spider::SurfaceGraph g;
+    CHECK(g.Build(verts, tris, w, Spider::NavSettings{}));
+    const int from = g.Nearest(glm::vec3(0.0f, 0.0f, 1.5f)), to = g.Nearest(glm::vec3(0.0f, 0.0f, -1.5f));
+    std::vector<int> band, path;
+    for (int i = 0; i < g.NodeCount(); ++i)
+        if (g.Normal(i).y > 0.9f && std::fabs(g.Pos(i).z) < 0.3f) band.push_back(i);
+    CHECK(!band.empty());
+    for (int i : band) g.Block(i, 1);
+    CHECK(g.FindPath(from, to, Spider::PathCosts{}, path));
+    bool usesBlocked = false, leavesFloor = false;
+    for (int n : path) {
+        usesBlocked = usesBlocked || g.Blocked(n);
+        leavesFloor = leavesFloor || g.Normal(n).y < 0.7f;
+    }
+    CHECK(!usesBlocked);
+    CHECK(leavesFloor);
+    for (int i : band) g.Block(i, -1);
+    CHECK(g.FindPath(from, to, Spider::PathCosts{}, path));
+    bool allFloor = true;
+    for (int n : path) allFloor = allFloor && g.Normal(n).y > 0.9f;
+    CHECK(allFloor);
+}
+
+void TestSpiderNeverSlipsUnderAWall() {
+    // 301's walls stand 5 mm clear of the floor slab, and a body's origin sits on the floor: below a wall's bottom, where
+    // the wall probes (10 cm up and more) don't look. A hunter that landed right on a wall's face, holding there for a bite,
+    // slid under the wall; inside it, its probes passed through the wall from within and it walked out of the building.
+    // Landed on the face of a wall like that, and sent on into it or along it, the body never gets under it.
+    int worst = 0;
+    for (int a = 0; a < 6; ++a) {
+        BoxWorld w;
+        w.Boxes.push_back({glm::vec3(-2.0f, 0.005f, -1.6f), glm::vec3(2.0f, 2.4f, -1.3f)}); // a wall 0.3 m thick, 5 mm up
+        Spider::Mover m;
+        const float yaw = glm::radians(-50.0f + 20.0f * (float)a); // into the wall, head on to obliquely
+        m.Reset(glm::vec3(0.0f, 0.0f, -1.3f), glm::angleAxis(yaw, glm::vec3(0.0f, 1.0f, 0.0f)));
+        Spider::MoverSettings s;
+        Spider::MoveInput in;
+        in.HasGoal = true;
+        in.Goal = glm::vec3(-1.5f * std::sin(yaw), 0.0f, -1.9f); // the floor beyond the wall
+        in.SpeedScale = (a % 2) ? 2.4f / 0.9f : 0.3f;
+        int under = 0;
+        for (int i = 0; i < 4 * 60; ++i) {
+            m.Step(w, s, in, 1.0f / 60.0f);
+            under += m.Position().z < -1.3f - 0.02f && m.Position().y < 0.05f ? 1 : 0; // on the floor, under the wall
+        }
+        worst = std::max(worst, under);
+    }
+    CHECK(worst == 0);
+}
+
+void TestSpiderNavWeighsShutDoors() {
+    // A shut door's doorway costs what pushing it takes: a route goes a fair way round to avoid it, but through it when
+    // the way round is much longer. (A hunter's routes ran through a bedroom's two shut doors, beside an open doorway,
+    // and it spent 20 s pushing them.)
+    BoxWorld w;
+    std::vector<float> verts;
+    std::vector<int> tris;
+    w.Triangles(verts, tris);
+    Spider::SurfaceGraph g;
+    CHECK(g.Build(verts, tris, w, Spider::NavSettings{}));
+    const int from = g.Nearest(glm::vec3(0.0f, 0.0f, 1.5f)), to = g.Nearest(glm::vec3(0.0f, 0.0f, -1.5f));
+    std::vector<int> band, path;
+    for (int i = 0; i < g.NodeCount(); ++i)
+        if (g.Normal(i).y > 0.9f && std::fabs(g.Pos(i).z) < 0.3f) band.push_back(i);
+    auto offFloor = [&](const std::vector<int>& p) {
+        bool off = false;
+        for (int n : p) off = off || g.Normal(n).y < 0.7f;
+        return off;
+    };
+    for (int i : band) g.AddPenalty(i, 20.0f); // dear: round, up the walls
+    CHECK(g.FindPath(from, to, Spider::PathCosts{}, path));
+    CHECK(offFloor(path));
+    for (int i : band) g.AddPenalty(i, -19.9f); // cheap: straight over
+    CHECK(g.FindPath(from, to, Spider::PathCosts{}, path));
+    CHECK(!offFloor(path));
+}
+
 void TestSpiderNavCacheRoundTrips() {
     BoxWorld w;
     std::vector<float> verts;
@@ -380,6 +912,13 @@ void TestSpiderNavCacheRoundTrips() {
     CHECK(g.Save(path, hash));
     CHECK(back.Load(path, hash));
     CHECK(!back.Load(path, hash + 1)); // another level's graph isn't taken
+    // A graph an older builder baked from this same level isn't taken either: the key holds the builder's version.
+    const std::uint64_t older = Spider::SurfaceGraph::HashInput(verts, tris, s, Spider::SurfaceGraph::kBuildVersion - 1);
+    CHECK(older != hash);
+    CHECK(g.Save(path, older));
+    CHECK(!back.Load(path, hash));
+    CHECK(g.Save(path, hash));
+    CHECK(back.Load(path, hash));
     CHECK(back.NodeCount() == g.NodeCount() && back.LinkCount() == g.LinkCount());
     std::vector<int> p1, p2;
     const int from = g.Nearest(glm::vec3(1.5f, 0.0f, 1.5f)), to = g.Nearest(glm::vec3(-1.5f, 2.4f, -1.5f));
@@ -395,7 +934,20 @@ void RegisterSpiderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"SolveChainReachesAndBendsTowardPole", TestSolveChainReachesAndBendsTowardPole});
     tests.push_back({"SpiderClimbsFloorWallCeiling", TestSpiderClimbsFloorWallCeiling});
     tests.push_back({"SpiderGoesOverABox", TestSpiderGoesOverABox});
+    tests.push_back({"SpiderWedgedStaysDown", TestSpiderWedgedStaysDown});
+    tests.push_back({"SpiderNavOneSidedPlaneSplits", TestSpiderNavOneSidedPlaneSplits});
+    tests.push_back({"SpiderBarrierClosesAnOpening", TestSpiderBarrierClosesAnOpening});
+    tests.push_back({"SpiderProbeStartsInsideASolid", TestSpiderProbeStartsInsideASolid});
+    tests.push_back({"SpiderShoveNeverStacks", TestSpiderShoveNeverStacks});
+    tests.push_back({"SpiderBodyNeverShovesThePlayer", TestSpiderBodyNeverShovesThePlayer});
+    tests.push_back({"SpiderNavRoutesRoundBlockedNodes", TestSpiderNavRoutesRoundBlockedNodes});
+    tests.push_back({"SpiderNavWeighsShutDoors", TestSpiderNavWeighsShutDoors});
+    tests.push_back({"SpiderNeverSlipsUnderAWall", TestSpiderNeverSlipsUnderAWall});
     tests.push_back({"SpiderFallsAndLands", TestSpiderFallsAndLands});
     tests.push_back({"SpiderGaitAlternates", TestSpiderGaitAlternates});
     tests.push_back({"SpiderRigParses", TestSpiderRigParses});
+    tests.push_back({"SpiderPartsParse", TestSpiderPartsParse});
+    tests.push_back({"SpiderRagdollBuilds", TestSpiderRagdollBuilds});
+    tests.push_back({"BloodPaletteHumanUnchanged", TestBloodPaletteHumanUnchanged});
+    tests.push_back({"SpiderZoneMultipliers", TestSpiderZoneMultipliers});
 }

@@ -4,6 +4,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include <array>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -33,6 +34,26 @@ public:
     virtual bool Occupied(const glm::vec3& centre, float radius) const { (void)centre; (void)radius; return false; }
 };
 
+// A volume only creatures see (CreatureBarrierComponent): a window's opening, which has no collider. An oriented box in
+// world space - its centre, its rotation and its half-extents along its own axes.
+struct Barrier {
+    glm::vec3 Centre{0.0f};
+    glm::quat Rotation{1.0f, 0.0f, 0.0f, 0.0f};
+    glm::vec3 Half{0.0f};
+};
+
+// `world` with barriers in it: its rays stop on a barrier's faces (from outside; a ray starting inside one passes) and
+// its room tests count them solid. Wrapped round every query the spiders make - the graph's bake, the body's mover and
+// its legs - so neither the planner nor the mover takes a spider through one.
+class BarrierQuery : public SurfaceQuery {
+public:
+    BarrierQuery(const SurfaceQuery& world, const std::vector<Barrier>& barriers) : World(world), Barriers(barriers) {}
+    bool Ray(const glm::vec3& from, const glm::vec3& dir, float maxDistance, SurfaceHit& out) const override;
+    bool Occupied(const glm::vec3& centre, float radius) const override;
+    const SurfaceQuery& World;
+    const std::vector<Barrier>& Barriers;
+};
+
 struct MoverSettings {
     float Speed = 0.9f;          // m/s along the surface when it has somewhere to go
     float Accel = 6.0f;          // m/s^2 up to that speed and back down
@@ -41,8 +62,11 @@ struct MoverSettings {
     float ProbeLift = 0.25f;     // the down probe starts this far above the body's origin ...
     float ProbeDepth = 0.6f;     // ... and looks this far down
     float ProbeHeight = 0.12f;   // the forward probe runs this high off the surface ...
-    float Reach = 0.45f;         // ... this far ahead: a wall inside it is climbed onto
-    float Clearance = 0.16f;     // the body never gets closer to a wall ahead than this (it turns onto it instead)
+    float Reach = 0.6f;          // ... this far ahead: a wall inside it is climbed onto
+    float Clearance = 0.28f;     // the body never gets closer to a wall ahead than this (it turns onto it instead)
+    // The body's own extent from its origin (the model's, between its feet): its head this far forward, its abdomen this
+    // far back, both about this high off the surface. Whatever they would sink into, the body is pushed back out of.
+    float BodyFront = 0.26f, BodyBack = 0.4f, BodyLift = 0.1f;
     float Gravity = 9.81f;       // m/s^2 while it has let go
     float LetGoAfter = 0.12f;    // seconds with no surface under it before it falls
     float Arrive = 0.12f;        // metres: within this of the goal it stops
@@ -58,9 +82,6 @@ struct MoveInput {
 class Mover {
 public:
     void Reset(const glm::vec3& pos, const glm::quat& rot);
-    // Lets go of the surface with `velocity` (a leap, a drop from the ceiling, a hit that knocks it off): it flies
-    // under gravity, rights itself and catches the first surface it meets.
-    void Detach(const glm::vec3& velocity);
     void Step(const SurfaceQuery& q, const MoverSettings& s, const MoveInput& in, float dt);
 
     glm::vec3 Position() const { return m_Pos; }
@@ -71,6 +92,10 @@ public:
     float Speed() const { return m_Speed; }       // along the surface, m/s
     bool Attached() const { return m_Attached; }
     bool Arrived() const { return m_Arrived; }
+    // Knocked off whatever it holds (a heavy round into it on a wall or a ceiling): it lets go at once, moving at
+    // `velocity` (world, m/s), falls, lands and rights itself. It is lifted a little clear of the surface first, so the
+    // fall's ray doesn't start inside what it just let go of.
+    void Detach(const glm::vec3& velocity);
     // The surface it stands on: its normal and how far the origin is off it (m; < 0: no surface found this frame).
     glm::vec3 SurfaceNormal() const { return m_SurfaceNormal; }
     float SurfaceGap() const { return m_SurfaceGap; }
@@ -153,6 +178,26 @@ private:
 
 // ---- rig ----
 
+// ---- body parts ----
+
+// Where a round lands on a spider, for its damage: the head (the cephalothorax: critical), the soft abdomen, a leg.
+enum class PartZone : std::uint8_t { Head = 0, Abdomen = 1, Leg = 2 };
+constexpr int kZones = 3;
+constexpr int kMaxParts = 32; // PhysicsWorld::kMaxRagdollParts
+
+// One body part (the rig's "parts"): a capsule over a run of bones that is both a hitbox while the spider lives and a
+// ragdoll link once it is dead. Bone is the joint it turns about (and the bone it drives); the capsule runs from Start
+// (empty: Bone) to End (empty: Length metres on along the bone).
+struct PartDef {
+    std::string Name, Bone, Start, End;
+    float Length = 0.0f, Radius = 0.03f, Mass = 0.2f;
+    PartZone Zone = PartZone::Leg;
+    int Parent = -1;            // index into the parts (-1: the root, exactly one)
+    int Leg = -1, Segment = 0;  // a leg's part: which leg (the rig's order) and which of its segments from the hip
+    float Swing = 30.0f, Twist = 15.0f; // the ragdoll joint's cone and twist (degrees)
+    float Curl = 0.0f;          // degrees the joint folds in the death curl (positive: the far end down and in)
+};
+
 // Spider.rig.json: which of the model's bones are which (the pack's are only numbered).
 struct RigDef {
     std::string Thorax, Abdomen;
@@ -160,7 +205,13 @@ struct RigDef {
     std::array<std::string, kLegs> LegNames{};
     std::array<std::vector<std::string>, kLegs> LegBones{};
     std::array<int, kLegs> LegGroup{};
+    std::vector<PartDef> Parts; // empty: the rig names none (no hitboxes, no ragdoll)
+    // Damage x by zone, and the flinch's peak (degrees) by zone and its length (seconds).
+    float ZoneMultiplier[kZones] = {2.5f, 1.2f, 0.5f};
+    float FlinchDeg[kZones] = {10.0f, 8.0f, 28.0f};
+    float FlinchTime = 0.35f;
 };
+const char* ZoneName(PartZone z);
 // Parses the file's text. False (with `error`) when it is not a rig of eight legs in two gait groups.
 bool ParseRig(const std::string& json, RigDef& out, std::string* error = nullptr);
 
