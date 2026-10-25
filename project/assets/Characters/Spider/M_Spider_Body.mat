@@ -26,16 +26,32 @@
     "_NormalMap": "assets/Characters/Spider/Textures/T_Spider_Normal.png",
     "_RoughnessMap": "assets/Characters/Spider/Textures/T_Spider_Roughness.png",
     "_AOMap": "assets/Characters/Spider/Textures/T_Spider_AO.png",
-    "_Sheen": [0.3, 0.26, 0.2],
+    "_Sheen": [
+      0.06,
+      0.05,
+      0.04
+    ],
     "_SheenRoughness": 0.6,
-    "_SubsurfaceEnabled": true,
+    "_SubsurfaceEnabled": false,
     "_SubsurfaceColor": [
       0.55,
       0.32,
       0.16
     ],
     "_ThicknessMap": "assets/Characters/Spider/Textures/T_Spider_Thickness.png",
-    "_Thickness": 0.6
+    "_Thickness": 0.6,
+    "_FurEnabled": true,
+    "_FurLength": 0.006,
+    "_FurDensity": 1100.0,
+    "_FurShells": 16,
+    "_FurMask": "assets/Characters/Spider/Textures/T_Spider_FurMask.png",
+    "_FurGravity": 0.2,
+    "_FurTint": [
+      0.55,
+      0.47,
+      0.38
+    ],
+    "_FurRim": 0.08
   },
   "shader": "engine://Standard.shader"
 }

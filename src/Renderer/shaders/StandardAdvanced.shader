@@ -27,6 +27,14 @@ Properties {
     [Header(Grunge)] [Tooltip(Grime laid over the whole surface in world space, ignoring the UVs: white leaves it clean, dark dirties and roughens it.)] _GrungeMap ("Grunge Map", Texture2D) = "white"
     [Tooltip(How much of the Grunge Map shows. 0 = off.)] _GrungeStrength ("Grunge Strength", Range(0, 1)) = 0
     [Tooltip(Grunge Map repeats per metre.)] _GrungeScale ("Grunge Tiling", Float) = 0.5
+    [Header(Fur)] [Tooltip(Shell fur: copies of the surface pushed out along its normal and cut into strands, drawn after it. For short hair and fuzz, not long locks.)] _FurEnabled ("Fur", Bool) = 0
+    [Tooltip(Metres from the skin to the longest tips, where the Fur Mask is white.)] _FurLength ("Fur Length", Range(0, 0.1)) = 0.015
+    [Tooltip(Strands across the 0-1 UV square. Higher = finer, denser hair.)] _FurDensity ("Fur Density", Range(10, 1000)) = 220
+    [Tooltip(The most shells drawn, up close. Fewer are drawn as it gets smaller on screen, none far away.)] _FurShells ("Fur Shells", Int) = 16
+    [Tooltip(Red channel: where fur grows and how long. Black = bare. None = everywhere, full length.)] _FurMask ("Fur Mask", Texture2D) = "white"
+    [Tooltip(How far the tips droop toward the ground, as a share of the length.)] _FurGravity ("Fur Droop", Range(0, 1)) = 0.3
+    [Tooltip(Multiplies the albedo for the hair.)] _FurTint ("Fur Tint", Color) = (1, 1, 1)
+    [Tooltip(Light caught along the silhouette, where the hair is seen edge-on.)] _FurRim ("Fur Rim", Range(0, 2)) = 0.35
     [Header(Advanced Options)] [Tooltip(Draw and light both sides: foliage, cloth, thin planes.)] _DoubleSided ("Double Sided", Bool) = 0
     [Tooltip(Multiply the colour and alpha by the mesh's vertex colours.)] _VertexColors ("Vertex Colors", Bool) = 0
     [Tooltip(For normal maps authored for DirectX, where green points down, e.g. from Unreal or Substance DX presets.)] _NormalFlipY ("Normal Map Is DirectX", Bool) = 0

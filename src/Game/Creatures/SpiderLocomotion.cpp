@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 
 namespace Spider {
 
@@ -42,15 +44,6 @@ void Mover::Reset(const glm::vec3& pos, const glm::quat& rot) {
     m_Pos = pos;
     m_Rot = glm::normalize(rot);
     m_SurfaceNormal = Up();
-}
-
-void Mover::Detach(const glm::vec3& velocity) {
-    m_Attached = false;
-    m_Vel = velocity;
-    m_Speed = 0.0f;
-    m_Arrived = false;
-    // Clear of the surface first, or the landing probe finds the surface it leapt from.
-    m_Pos += Up() * 0.06f;
 }
 
 void Mover::TurnUpToward(const glm::vec3& want, float rate, float dt) {
@@ -145,6 +138,56 @@ void Mover::Step(const SurfaceQuery& q, const MoverSettings& s, const MoveInput&
         if (glm::dot(legUp, wantUp) > 0.85f) wantUp = SafeNormalize(wantUp * 0.65f + legUp * 0.35f, wantUp);
     }
     TurnUpToward(wantUp, s.UpRate * (wallWeight > 0.0f ? 1.6f : 1.0f), dt);
+
+    // The body itself, not just its origin, stays out of the surfaces: its head out of the wall it is turning onto, its
+    // abdomen out of the floor it is leaving. Fore and aft along the body; in a corner, where both would sink, it is
+    // lifted off along its up (into the corner's open side) instead.
+    // A few passes: one push can leave the other end touching (a corner).
+    // Each end is pushed back only as far as the other end has room; what is left over lifts the body along its up.
+    // The lift is bounded: only so far off the surface it stands on, only into open room above it, and none with nothing
+    // under it. Unbounded, a body wedged between two faces rose every frame - up through a ceiling, or out of the top of a
+    // wall into the void above the room, where it stayed.
+    constexpr float kMaxLift = 0.35f, kHeadroom = 0.08f;
+    float lifted = 0.0f;
+    for (int pass = 0; pass < 3; ++pass) {
+        const glm::vec3 u = Up(), f = Forward(), mid = m_Pos + u * s.BodyLift;
+        constexpr float kLook = 0.5f; // how far past each end the free room is measured
+        SurfaceHit h;
+        const float aheadHit = q.Ray(mid, f, s.BodyFront + kLook, h) ? h.Distance : s.BodyFront + kLook;
+        const float behindHit = q.Ray(mid, -f, s.BodyBack + kLook, h) ? h.Distance : s.BodyBack + kLook;
+        const float front = std::max(0.0f, s.BodyFront - aheadHit), back = std::max(0.0f, s.BodyBack - behindHit);
+        if (front <= 1e-4f && back <= 1e-4f) break;
+        const float roomAhead = std::max(0.0f, aheadHit - s.BodyFront), roomBehind = std::max(0.0f, behindHit - s.BodyBack);
+        float lift = 0.0f;
+        if (front > 0.0f && back > 0.0f) {
+            lift = std::max(front, back);
+        } else if (front > 0.0f) {
+            const float slide = std::min(front, roomBehind);
+            m_Pos -= f * slide;
+            lift = front - slide;
+        } else {
+            const float slide = std::min(back, roomAhead);
+            m_Pos += f * slide;
+            lift = back - slide;
+        }
+        lift = supported ? std::min(lift, kMaxLift - lifted) : 0.0f;
+        SurfaceHit over;
+        if (lift > 0.0f && q.Ray(m_Pos + u * s.BodyLift, u, lift + kHeadroom, over))
+            lift = std::min(lift, over.Distance - kHeadroom);
+        lift = std::max(0.0f, lift);
+        lifted += lift;
+        m_Pos += u * lift;
+    }
+    // Never under something: the origin sits on the surface - in 301 on the floor slab's top, 5 mm below the walls'
+    // bottoms - while the probes that find walls look 10 cm up and more. A hunter that landed on a wall's face and held
+    // there for a bite slid under the wall; inside it, its probes passed through the wall from within and it walked on out
+    // of the building. A spot with something solid just over it (no room for a body) is refused.
+    if (glm::dot(up, Up()) > 0.95f) {
+        constexpr float kRoomOver = 0.05f;
+        SurfaceHit lid;
+        auto covered = [&](const glm::vec3& at, const glm::vec3& u) { return q.Ray(at + u * 0.001f, u, kRoomOver, lid); };
+        if (covered(m_Pos, Up())) m_Pos = before; // (one landed on a wall's face is covered already: it may only move out)
+    }
     m_Vel = (m_Pos - before) / dt;
 }
 
@@ -166,6 +209,20 @@ void Mover::Fall(const SurfaceQuery& q, const MoverSettings& s, float dt) {
         return;
     }
     m_Pos += move;
+    m_SurfaceGap = -1.0f;
+}
+
+void Mover::Detach(const glm::vec3& velocity) {
+    if (!m_Attached) {
+        m_Vel += velocity;
+        return;
+    }
+    m_Pos += Up() * 0.12f;
+    m_Vel = velocity;
+    m_Attached = false;
+    m_Arrived = false;
+    m_Speed = 0.0f;
+    m_Unsupported = 0.0f;
     m_SurfaceGap = -1.0f;
 }
 
@@ -360,7 +417,124 @@ bool ParseRig(const std::string& text, RigDef& out, std::string* error) {
                 if (name.is_string() && name.get<std::string>() == out.LegNames[(size_t)i]) out.LegGroup[(size_t)i] = g;
     for (int i = 0; i < kLegs; ++i)
         if (out.LegGroup[(size_t)i] < 0) return fail("a leg is in no gait group");
+
+    // The body parts (optional): named, their parents by name, resolved once all are read.
+    auto zoneOf = [](const std::string& z, PartZone& out) {
+        for (int k = 0; k < kZones; ++k)
+            if (z == ZoneName((PartZone)k)) { out = (PartZone)k; return true; }
+        return false;
+    };
+    if (const auto zs = j.find("zones"); zs != j.end() && zs->is_object())
+        for (int k = 0; k < kZones; ++k) {
+            const auto z = zs->find(ZoneName((PartZone)k));
+            if (z == zs->end() || !z->is_object()) continue;
+            out.ZoneMultiplier[k] = z->value("damage", out.ZoneMultiplier[k]);
+            out.FlinchDeg[k] = z->value("flinch", out.FlinchDeg[k]);
+        }
+    out.FlinchTime = std::max(0.05f, j.value("flinchTime", out.FlinchTime));
+    if (const auto ps = j.find("parts"); ps != j.end()) {
+        if (!ps->is_array()) return fail("parts isn't an array");
+        if (ps->size() > (size_t)kMaxParts) return fail("more than 32 parts");
+        std::vector<std::string> parents;
+        for (const auto& p : *ps) {
+            if (!p.is_object()) return fail("a part isn't an object");
+            PartDef d;
+            d.Name = p.value("name", std::string());
+            d.Bone = p.value("bone", std::string());
+            d.Start = p.value("start", std::string());
+            d.End = p.value("end", std::string());
+            d.Length = p.value("length", 0.0f);
+            d.Radius = p.value("radius", d.Radius);
+            d.Mass = p.value("mass", d.Mass);
+            d.Swing = p.value("swing", d.Swing);
+            d.Twist = p.value("twist", d.Twist);
+            d.Curl = p.value("curl", d.Curl);
+            d.Segment = p.value("segment", 0);
+            if (d.Name.empty() || d.Bone.empty()) return fail("a part needs a name and a bone");
+            if (d.End.empty() && d.Length <= 0.0f) return fail("a part needs an end bone or a length");
+            if (!(d.Radius > 0.0f) || !(d.Mass > 0.0f)) return fail("a part needs a radius and a mass");
+            if (!zoneOf(p.value("zone", std::string("leg")), d.Zone)) return fail("a part's zone is head, abdomen or leg");
+            const std::string leg = p.value("leg", std::string());
+            for (int i = 0; i < kLegs && !leg.empty(); ++i)
+                if (out.LegNames[(size_t)i] == leg) d.Leg = i;
+            if (!leg.empty() && d.Leg < 0) return fail("a part names a leg the rig hasn't");
+            parents.push_back(p.value("parent", std::string()));
+            out.Parts.push_back(std::move(d));
+        }
+        int roots = 0;
+        for (size_t i = 0; i < out.Parts.size(); ++i) {
+            if (parents[i].empty()) { ++roots; continue; }
+            for (size_t k = 0; k < out.Parts.size(); ++k)
+                if (k != i && out.Parts[k].Name == parents[i]) out.Parts[i].Parent = (int)k;
+            if (out.Parts[i].Parent < 0) return fail("a part's parent isn't a part");
+        }
+        if (!out.Parts.empty() && roots != 1) return fail("the parts need exactly one root");
+        // No loops: every part reaches the root within the part count.
+        for (size_t i = 0; i < out.Parts.size(); ++i) {
+            int at = (int)i, guard = 0;
+            while (at >= 0 && guard++ <= (int)out.Parts.size()) at = out.Parts[(size_t)at].Parent;
+            if (at >= 0) return fail("the parts' parents loop");
+        }
+    }
     return true;
+}
+
+const char* ZoneName(PartZone z) {
+    switch (z) {
+    case PartZone::Head: return "head";
+    case PartZone::Abdomen: return "abdomen";
+    case PartZone::Leg: return "leg";
+    }
+    return "leg";
+}
+
+bool BarrierQuery::Ray(const glm::vec3& from, const glm::vec3& dir, float maxDistance, SurfaceHit& out) const {
+    const bool hit = World.Ray(from, dir, maxDistance, out);
+    float best = hit ? out.Distance : maxDistance;
+    int found = -1, axis = -1;
+    float sign = 1.0f;
+    for (size_t i = 0; i < Barriers.size(); ++i) { // slabs, in the box's own frame
+        const Barrier& b = Barriers[i];
+        const glm::quat inv = glm::conjugate(b.Rotation);
+        const glm::vec3 o = inv * (from - b.Centre), d = inv * dir;
+        float t0 = 0.0f, t1 = best;
+        int a0 = -1;
+        float s0 = 1.0f;
+        bool miss = false;
+        for (int a = 0; a < 3 && !miss; ++a) {
+            if (std::fabs(d[a]) < 1e-9f) {
+                miss = o[a] < -b.Half[a] || o[a] > b.Half[a];
+                continue;
+            }
+            float ta = (-b.Half[a] - o[a]) / d[a], tb = (b.Half[a] - o[a]) / d[a];
+            const float s = d[a] > 0.0f ? -1.0f : 1.0f; // the face it enters through faces back along the ray
+            if (ta > tb) std::swap(ta, tb);
+            if (ta > t0) { t0 = ta; a0 = a; s0 = s; }
+            t1 = std::min(t1, tb);
+            miss = t0 > t1;
+        }
+        if (miss || a0 < 0 || t0 >= best) continue;
+        best = t0;
+        found = (int)i;
+        axis = a0;
+        sign = s0;
+    }
+    if (found < 0) return hit;
+    glm::vec3 n(0.0f);
+    n[axis] = sign;
+    out.Hit = true;
+    out.Distance = best;
+    out.Point = from + dir * best;
+    out.Normal = Barriers[(size_t)found].Rotation * n;
+    return true;
+}
+
+bool BarrierQuery::Occupied(const glm::vec3& centre, float radius) const {
+    for (const Barrier& b : Barriers) {
+        const glm::vec3 c = glm::conjugate(b.Rotation) * (centre - b.Centre);
+        if (glm::length(c - glm::clamp(c, -b.Half, b.Half)) < radius) return true;
+    }
+    return World.Occupied(centre, radius);
 }
 
 } // namespace Spider

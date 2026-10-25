@@ -82,6 +82,9 @@ NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "w
     if (m_Scenario == "doors") m_Duration = 300.0f; // (done once the route is walked)
     if (m_Scenario == "spider") m_Duration = 150.0f; // (done once the route is crawled)
     if (m_Scenario == "spiderhunt") m_Duration = 75.0f;
+    if (m_Scenario == "spiderplay") m_Duration = 75.0f;
+    if (m_Scenario == "spiderdoor") m_Duration = 45.0f;
+    if (m_Scenario == "spiderdeath") m_Duration = 60.0f; // (done once the last body has settled)
     if (m_Scenario == "ragdoll") m_Duration = 240.0f;
     if (const char* t = EnvVar("NPC_TEST_SECONDS")) m_Duration = std::max(5.0f, (float)std::atof(t));
     if (const char* r = EnvVar("NPC_TEST_RECORD")) m_RecordDir = r;
@@ -209,6 +212,9 @@ void NpcTest::Drive(Player& player, FirstPersonPresentation& weapon, NpcDirector
     if (m_Scenario == "decals") DecalsDrive(player, wantYaw, wantPitch);
     if (m_Scenario == "doors") DoorsDrive(player, dt, wantYaw, wantPitch);
     if (m_Scenario == "spiderhunt") SpiderHuntDrive(player, vitals, wantYaw, wantPitch);
+    if (m_Scenario == "spiderplay") SpiderPlayDrive(player, weapon, dt, wantYaw, wantPitch);
+    if (m_Scenario == "spiderdoor") SpiderDoorDrive(player, weapon, wantYaw, wantPitch);
+    if (m_Scenario == "spider" || m_Scenario == "spiderdeath") SpiderWatchDrive(player, wantYaw, wantPitch);
     if (m_Scenario == "fight") {
         // Shoot whoever is in sight: the nearest soldier with a clear line to its chest.
         const Npc* target = nullptr;
@@ -378,6 +384,18 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
     }
     if (m_Scenario == "spiderhunt") {
         SpiderHunt(world);
+        return;
+    }
+    if (m_Scenario == "spiderplay") {
+        SpiderPlay(world);
+        return;
+    }
+    if (m_Scenario == "spiderdoor") {
+        SpiderDoor(world);
+        return;
+    }
+    if (m_Scenario == "spiderdeath") {
+        SpiderDeath(world);
         return;
     }
     if (m_Scenario == "feet") {

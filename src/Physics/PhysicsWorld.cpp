@@ -108,8 +108,9 @@ constexpr PxU32 kPassRagdolls = 1u << 30;
 // word1 of a ragdoll's parts: it started in or on another body, and passes the other ragdolls (not its own parts, not the world)
 // until it is clear of them (UpdateBodyPasses).
 constexpr PxU32 kPassBodies = 1u << 29;
-// A ragdoll's own part (word2: its id + 1, the part 0..15 above), not an object told to ignore one (slot 16).
-inline bool IsRagdollPart(const PxFilterData& f) { return (f.word2 & 0xFFFFu) != 0u && ((f.word2 >> 16) & 31u) < 16u; }
+// A ragdoll's own part (word2: its id + 1, the part 0..31 above), not an object told to ignore one (slot kRagdollIgnorerSlot).
+constexpr PxU32 kRagdollIgnorerSlot = 32u;
+inline bool IsRagdollPart(const PxFilterData& f) { return (f.word2 & 0xFFFFu) != 0u && ((f.word2 >> 16) & 63u) < kRagdollIgnorerSlot; }
 
 PxFilterFlags EngineFilterShader(
     PxFilterObjectAttributes attributes0, PxFilterData filterData0,
@@ -131,8 +132,9 @@ PxFilterFlags EngineFilterShader(
         if (r0 != r1 && ((filterData0.word1 | filterData1.word1) & kPassBodies) && IsRagdollPart(filterData0) && IsRagdollPart(filterData1))
             return PxFilterFlag::eKILL;
         if (r0 != 0u && r0 == r1) {
-            const PxU32 p0 = (filterData0.word2 >> 16) & 31u, p1 = (filterData1.word2 >> 16) & 31u;
-            if (((filterData0.word3 >> p1) & 1u) || ((filterData1.word3 >> p0) & 1u)) return PxFilterFlag::eKILL;
+            // (An ignorer's slot is past the 32 part bits: only its own mask decides.)
+            const PxU32 p0 = (filterData0.word2 >> 16) & 63u, p1 = (filterData1.word2 >> 16) & 63u;
+            if ((p1 < 32u && ((filterData0.word3 >> p1) & 1u)) || (p0 < 32u && ((filterData1.word3 >> p0) & 1u))) return PxFilterFlag::eKILL;
         }
     }
     if (PxFilterObjectIsTrigger(attributes0) || PxFilterObjectIsTrigger(attributes1)) {
@@ -284,6 +286,9 @@ struct PhysicsState {
     struct Hitboxes { std::vector<PxRigidDynamic*> Bodies; const PxRigidActor* Capsule = nullptr; bool Active = false; };
     std::vector<Hitboxes> hitboxes;
     std::unordered_set<const PxRigidActor*> hitboxActors;
+    // Of those, a creature body's (CreateBodyHitboxes: a spider's, with no capsule): for shots only - they never push or
+    // block a character's mover.
+    std::unordered_set<const PxRigidActor*> bodyHitboxActors;
     std::unordered_set<const PxRigidActor*> hitboxedCapsules;
     std::unordered_map<PxJoint*, std::uint32_t>       jointOwner;
     std::unordered_map<std::uint32_t, PxRigidStatic*> staticByEntity;
@@ -1604,6 +1609,8 @@ struct PhysxMoverWorld : IMoverWorld {
             if (actor == W->Self || (shape->getFlags() & PxShapeFlag::eTRIGGER_SHAPE)) return PxQueryHitType::eNONE;
             if (W->SelfEntity != 0xFFFFFFFFu && actor && UserDataToEntity(actor->userData) == W->SelfEntity) return PxQueryHitType::eNONE;
             if (W->PassRagdolls && IsRagdollPart(shape->getSimulationFilterData())) return PxQueryHitType::eNONE;
+            // A spider's hitboxes: a biting spider against the player's legs slid them away every frame it held there.
+            if (actor && W->S.bodyHitboxActors.count(actor)) return PxQueryHitType::eNONE;
             const PxU32 layer = shape->getSimulationFilterData().word1 & 31u;
             if (!((W->Mask >> layer) & 1u)) return PxQueryHitType::eNONE;
             return Touch ? PxQueryHitType::eTOUCH : PxQueryHitType::eBLOCK;
@@ -1978,6 +1985,7 @@ struct LayerQueryFilter : PxQueryFilterCallback {
     bool triggers = true;
     bool touchMode = false;
     bool skipSimulated = false; // ignore simulated (non-kinematic) dynamic bodies
+    bool skipStartInside = false; // ignore a shape the ray starts inside (PhysX reports it at distance 0, normal -dir)
     PxQueryHitType::Enum preFilter(const PxFilterData&, const PxShape* shape, const PxRigidActor* actor,
                                    PxHitFlags&) override {
         if (actor && actor == skip) return PxQueryHitType::eNONE;
@@ -1996,8 +2004,9 @@ struct LayerQueryFilter : PxQueryFilterCallback {
         }
         return touchMode ? PxQueryHitType::eTOUCH : PxQueryHitType::eBLOCK;
     }
-    PxQueryHitType::Enum postFilter(const PxFilterData&, const PxQueryHit&, const PxShape*,
+    PxQueryHitType::Enum postFilter(const PxFilterData&, const PxQueryHit& hit, const PxShape*,
                                     const PxRigidActor*) override {
+        if (skipStartInside && static_cast<const PxLocationHit&>(hit).hadInitialOverlap()) return PxQueryHitType::eNONE;
         return touchMode ? PxQueryHitType::eTOUCH : PxQueryHitType::eBLOCK;
     }
 };
@@ -2094,13 +2103,29 @@ bool RaycastFiltered(const float origin[3], const float dir[3], float maxDistanc
 }
 
 bool RaycastSolid(const float origin[3], const float dir[3], float maxDistance, const QueryFilter& f,
-                  RaycastHit& outHit) {
+                  RaycastHit& outHit, bool fromOutside) {
     outHit = RaycastHit{};
     PxVec3 d;
     if (!g_State || !g_State->scene || maxDistance <= 0.0f || !NormalizedDir(dir, d)) return false;
     LayerQueryFilter lf = MakeFilter(f);
     lf.skipSimulated = true;
-    PxQueryFilterData fd(PxQueryFlag::eSTATIC | PxQueryFlag::eDYNAMIC | PxQueryFlag::ePREFILTER);
+    lf.skipStartInside = fromOutside;
+    PxQueryFilterData fd(PxQueryFlag::eSTATIC | PxQueryFlag::eDYNAMIC | PxQueryFlag::ePREFILTER |
+                         (fromOutside ? PxQueryFlags(PxQueryFlag::ePOSTFILTER) : PxQueryFlags()));
+    PxRaycastBuffer buf;
+    if (!g_State->scene->raycast(PxVec3(origin[0], origin[1], origin[2]), d, maxDistance, buf, PxHitFlag::eDEFAULT, fd, &lf) ||
+        !buf.hasBlock)
+        return false;
+    FillHit(buf.block, outHit);
+    return true;
+}
+
+bool RaycastStatic(const float origin[3], const float dir[3], float maxDistance, const QueryFilter& f, RaycastHit& outHit) {
+    outHit = RaycastHit{};
+    PxVec3 d;
+    if (!g_State || !g_State->scene || maxDistance <= 0.0f || !NormalizedDir(dir, d)) return false;
+    LayerQueryFilter lf = MakeFilter(f);
+    PxQueryFilterData fd(PxQueryFlag::eSTATIC | PxQueryFlag::ePREFILTER);
     PxRaycastBuffer buf;
     if (!g_State->scene->raycast(PxVec3(origin[0], origin[1], origin[2]), d, maxDistance, buf, PxHitFlag::eDEFAULT, fd, &lf) ||
         !buf.hasBlock)
@@ -2178,6 +2203,16 @@ int OverlapSphereFiltered(const float center[3], float radius, const QueryFilter
     if (radius <= 0.0f) return 0;
     return OverlapFiltered(PxSphereGeometry(radius), PxTransform(PxVec3(center[0], center[1], center[2])),
                            f, out, maxEntities);
+}
+
+bool OverlapSphereStatic(const float center[3], float radius, const QueryFilter& f) {
+    if (!g_State || !g_State->scene || radius <= 0.0f) return false;
+    PxOverlapHit hits[8];
+    PxOverlapBuffer buf(hits, 8);
+    LayerQueryFilter lf = MakeFilter(f, /*touchMode=*/true);
+    PxQueryFilterData fd(PxQueryFlag::eSTATIC | PxQueryFlag::ePREFILTER | PxQueryFlag::eNO_BLOCK);
+    g_State->scene->overlap(PxSphereGeometry(radius), PxTransform(PxVec3(center[0], center[1], center[2])), buf, fd, &lf);
+    return buf.getNbTouches() > 0;
 }
 
 int OverlapBox(const float center[3], const float halfExtents[3], const float rotation[4], const QueryFilter& f,
@@ -2481,7 +2516,7 @@ void RagdollRotationToJointAxes(const float rotXYZW[4], float out[3]) {
 }
 
 int CreateRagdoll(unsigned entity, const RagdollPart* parts, int count, const RagdollParams* params) {
-    if (!g_State || !g_State->scene || !parts || count <= 0 || count > 16) return -1;
+    if (!g_State || !g_State->scene || !parts || count <= 0 || count > kMaxRagdollParts) return -1;
     PhysicsState& s = *g_State;
     // Parents first: an articulation link is made under one that exists (the head hangs off the neck, which comes after it).
     std::vector<int> order;
@@ -2543,7 +2578,7 @@ int CreateRagdoll(unsigned entity, const RagdollPart* parts, int count, const Ra
         rd.Ignore[(size_t)pa] |= 1u << i;
     }
     if (!prm.SelfCollision) {
-        for (PxU32& m : rd.Ignore) m = 0xFFFFu;
+        for (PxU32& m : rd.Ignore) m = 0xFFFFFFFFu;
     } else {
         for (int i = 0; i < count; ++i)
             for (int j = i + 1; j < count; ++j) {
@@ -3035,9 +3070,9 @@ bool IgnoreRagdollParts(unsigned entity, int ragdoll, unsigned partMask) {
     body->getShapes(shapes.data(), (PxU32)shapes.size());
     for (PxShape* sh : shapes) {
         PxFilterData f = sh->getSimulationFilterData();
-        // Slot 16 of the ragdoll's own numbering: not one of its parts, so only this object's mask decides.
-        f.word2 = on ? (((PxU32)ragdoll + 1u) | (16u << 16)) : 0u;
-        f.word3 = on ? (partMask & 0xFFFFu) : 0u;
+        // The ignorer slot of the ragdoll's own numbering: not one of its parts, so only this object's mask decides.
+        f.word2 = on ? (((PxU32)ragdoll + 1u) | (kRagdollIgnorerSlot << 16)) : 0u;
+        f.word3 = on ? partMask : 0u;
         sh->setSimulationFilterData(f);
     }
     if (body->getScene()) {
@@ -3058,7 +3093,7 @@ unsigned RagdollPartsOverlapping(unsigned entity, int ragdoll, unsigned partMask
     body->getShapes(shapes.data(), (PxU32)shapes.size());
     const PxTransform bodyPose = body->getGlobalPose();
     unsigned out = 0u;
-    for (int i = 0; i < (int)rd.Bodies.size() && i < 16; ++i) {
+    for (int i = 0; i < (int)rd.Bodies.size() && i < kMaxRagdollParts; ++i) {
         if (!(partMask & (1u << i)) || !rd.Bodies[(size_t)i]) continue;
         PxShape* ps = LinkShape(rd.Bodies[(size_t)i]);
         if (!ps || ps->getGeometry().getType() != PxGeometryType::eCAPSULE) continue;
@@ -3085,7 +3120,7 @@ bool PushOutOfRagdoll(unsigned entity, int ragdoll, unsigned partMask) {
     bool moved = false;
     for (int pass = 0; pass < 4; ++pass) {
         PxVec3 shift(0.0f);
-        for (int i = 0; i < (int)rd.Bodies.size() && i < 16; ++i) {
+        for (int i = 0; i < (int)rd.Bodies.size() && i < kMaxRagdollParts; ++i) {
             if (!(partMask & (1u << i)) || !rd.Bodies[(size_t)i]) continue;
             PxShape* ps = LinkShape(rd.Bodies[(size_t)i]);
             if (!ps || ps->getGeometry().getType() != PxGeometryType::eCAPSULE) continue;
@@ -3326,9 +3361,9 @@ bool IgnoreRagdollForNpc(CharacterId id, int ragdoll) {
     a->getShapes(shapes.data(), (PxU32)shapes.size());
     for (PxShape* sh : shapes) {
         PxFilterData f = sh->getSimulationFilterData();
-        // As IgnoreRagdollParts: slot 16 of the ragdoll's own numbering, every part's bit in the mask.
-        f.word2 = on ? (((PxU32)ragdoll + 1u) | (16u << 16)) : 0u;
-        f.word3 = on ? 0xFFFFu : 0u;
+        // As IgnoreRagdollParts: the ignorer slot of the ragdoll's own numbering, every part's bit in the mask.
+        f.word2 = on ? (((PxU32)ragdoll + 1u) | (kRagdollIgnorerSlot << 16)) : 0u;
+        f.word3 = on ? 0xFFFFFFFFu : 0u;
         sh->setSimulationFilterData(f);
     }
     if (a->getScene()) g_State->scene->resetFiltering(*a);
@@ -3452,9 +3487,9 @@ void ShadowCapsule(PhysicsState::Hitboxes& h, bool on) {
 }
 } // namespace
 
-int CreateNpcHitboxes(CharacterId owner, const HitCapsule* parts, int count) {
-    PxRigidActor* capsule = NpcActor(owner);
-    if (!g_State || !g_State->scene || !capsule || !parts || count <= 0) return -1;
+namespace {
+// Kinematic query-only capsules reporting `entity`; `capsule` (may be null) is the character capsule they stand in for.
+int MakeHitboxes(PxRigidActor* capsule, std::uint32_t entity, const HitCapsule* parts, int count) {
     PhysicsState& s = *g_State;
     int id = -1;
     for (size_t i = 0; i < s.hitboxes.size(); ++i)
@@ -3462,7 +3497,6 @@ int CreateNpcHitboxes(CharacterId owner, const HitCapsule* parts, int count) {
     if (id < 0) { id = (int)s.hitboxes.size(); s.hitboxes.emplace_back(); }
     PhysicsState::Hitboxes& h = s.hitboxes[(size_t)id];
     h.Capsule = capsule;
-    const std::uint32_t entity = s.npcs[(size_t)owner].entity;
     for (int i = 0; i < count; ++i) {
         PxRigidDynamic* b = s.physics->createRigidDynamic(HitboxPose(parts[i]));
         PxShape* sh = PxRigidActorExt::createExclusiveShape(
@@ -3477,10 +3511,23 @@ int CreateNpcHitboxes(CharacterId owner, const HitCapsule* parts, int count) {
         s.scene->addActor(*b);
         h.Bodies.push_back(b);
         s.hitboxActors.insert(b);
+        if (!capsule) s.bodyHitboxActors.insert(b);
     }
     h.Active = true;
     ShadowCapsule(h, true);
     return id;
+}
+} // namespace
+
+int CreateNpcHitboxes(CharacterId owner, const HitCapsule* parts, int count) {
+    PxRigidActor* capsule = NpcActor(owner);
+    if (!g_State || !g_State->scene || !capsule || !parts || count <= 0) return -1;
+    return MakeHitboxes(capsule, g_State->npcs[(size_t)owner].entity, parts, count);
+}
+
+int CreateBodyHitboxes(unsigned entity, const HitCapsule* parts, int count) {
+    if (!g_State || !g_State->scene || !parts || count <= 0) return -1;
+    return MakeHitboxes(nullptr, entity, parts, count);
 }
 
 void SetNpcHitboxPoses(int id, const HitCapsule* parts, int count) {
@@ -3509,6 +3556,7 @@ void DestroyNpcHitboxes(int id) {
         if (b) {
             if (g_State->playerGround == b) g_State->playerGround = nullptr;
             g_State->hitboxActors.erase(b);
+            g_State->bodyHitboxActors.erase(b);
             b->release();
         }
     h.Bodies.clear();

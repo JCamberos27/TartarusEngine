@@ -62,11 +62,31 @@ bool SpiderSystem::SeesPlayer(const Body& b, const SpiderComponent& sc, const Ta
     return dist < 1.5f || LineClear(eye, t.Eye); // close enough to feel them through anything
 }
 
-int SpiderSystem::PickPerch(const glm::vec3& near) const {
+// A pounce needs open air to the player: inside 3.5 m a clear line to their chest or eyes (a chair leg may hide the eyes),
+// farther out it must see them. Never through a wall, a floor or a ceiling slab - one that leapt anyway hit the slab and
+// tried again, for ever.
+bool SpiderSystem::LeapClear(const Body& b, const SpiderComponent& sc, const Target& t, float dist) const {
+    const glm::vec3 from = b.Mover.Position() + b.Mover.Up() * 0.2f;
+    if (dist >= 3.5f) return SeesPlayer(b, sc, t);
+    return LineClear(from, t.Feet + glm::vec3(0.0f, 0.8f, 0.0f)) || LineClear(from, t.Eye);
+}
+
+int SpiderSystem::Reach(const Body& b) const {
+    const glm::vec3 up = b.Mover.Up();
+    const int n = m_Nav.Empty() ? -1 : m_Nav.Nearest(b.Mover.Position(), 0.8f, &up);
+    return n >= 0 ? m_Nav.Component(n) : -1;
+}
+
+int SpiderSystem::PickPerch(const glm::vec3& near, int component, const std::vector<glm::vec4>* avoid) const {
     int best = -1;
     float bestScore = -1e9f;
     for (int i = 0; i < m_Nav.NodeCount(); ++i) {
         if (m_Nav.Normal(i).y > -0.9f) continue; // the ceiling
+        if (component >= 0 && m_Nav.Component(i) != component) continue; // one it can get to, not a slab's underside in a void
+        bool behind = false;
+        if (avoid)
+            for (const glm::vec4& pl : *avoid) behind = behind || glm::dot(glm::vec3(pl), m_Nav.Pos(i)) + pl.w < 0.0f;
+        if (behind) continue;
         const float d = glm::length(m_Nav.Pos(i) - near);
         if (d > 7.0f) continue;
         // A corner (a node linked to a wall) hides the body against two surfaces.
@@ -90,9 +110,9 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
 #pragma warning(suppress : 4996)
         static const bool trace = std::getenv("TARTARUS_SPIDER_TRACE") != nullptr; // the hunters' decisions, for tuning
         if (trace)
-            std::printf("[Spider] %u: %d -> %d  pos %.2f %.2f %.2f up %.2f  player %.2f %.2f %.2f (%.2f m)%s\n",
-                        (unsigned)entt::to_integral(b.Root), (int)ai.State, (int)m, pos.x, pos.y, pos.z, up.y, t.Feet.x, t.Feet.y,
-                        t.Feet.z, glm::length(t.Feet - pos), b.Mover.Attached() ? "" : " (in the air)");
+            std::printf("[Spider] %u: %d -> %d after %.1f s  pos %.2f %.2f %.2f up %.2f  player %.2f %.2f %.2f (%.2f m)%s\n",
+                        (unsigned)entt::to_integral(b.Root), (int)ai.State, (int)m, ai.Clock, pos.x, pos.y, pos.z, up.y, t.Feet.x,
+                        t.Feet.y, t.Feet.z, glm::length(t.Feet - pos), b.Mover.Attached() ? "" : " (in the air)");
         ai.State = m;
         ai.Clock = 0.0f;
         b.RouteAge = 1e9f; // a new state weighs routes its own way: plan afresh
@@ -115,9 +135,11 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
 
     // Senses, a few times a second.
     const bool target = t.Valid && !t.Dead;
-    if (target && ai.LookIn <= 0.0f) {
+    const bool alarmed = ai.Alarmed;
+    ai.Alarmed = false;
+    if (target && (ai.LookIn <= 0.0f || alarmed)) {
         ai.LookIn = 0.15f;
-        if (SeesPlayer(b, sc, t) || (t.Loud && glm::length(t.Feet - pos) < 20.0f)) {
+        if (alarmed || SeesPlayer(b, sc, t) || (t.Loud && glm::length(t.Feet - pos) < 20.0f)) {
             ai.SeenAgo = 0.0f;
             ai.LastKnown = t.Feet;
             if (!ai.Aware && ai.State == Mode::Perch) {
@@ -140,7 +162,7 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
     case Mode::Perch: {
         b.Costs = Spider::PathCosts{3.0f, 1.0f, 1.0f};
         sc.Run = false;
-        if (ai.Perch < 0) ai.Perch = PickPerch(pos);
+        if (ai.Perch < 0) ai.Perch = PickPerch(pos, Reach(b), &b.PerchAvoid);
         if (ai.Perch >= 0) {
             sc.Goal = m_Nav.Pos(ai.Perch);
             sc.HasGoal = glm::length(pos - sc.Goal) > 0.15f;
@@ -152,7 +174,7 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
     case Mode::Stalk: {
         // Over walls and ceiling to the ceiling above the player (droppers), or near them until it may attack.
         b.Costs = Spider::PathCosts{4.0f, 1.0f, 1.0f};
-        sc.Run = dist < 8.0f;
+        sc.Run = true; // it scuttles: at a walk, a hunter in 301 took 20 s to reach a shot fired down the hallway
         ai.AimIn -= dt;
         if (ai.AimIn <= 0.0f || !sc.HasGoal) { // re-aimed a few times a second
             ai.AimIn = 0.4f;
@@ -166,13 +188,13 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
                 const glm::vec3 from = t.Eye, dir(0.0f, 1.0f, 0.0f);
                 if (PhysicsWorld::RaycastSolid(&from.x, &dir.x, 5.0f, f, h) && h.Hit) above = glm::vec3(h.Point[0], h.Point[1], h.Point[2]);
                 const glm::vec3 down(0.0f, -1.0f, 0.0f);
-                node = m_Nav.Nearest(above, 1.0f, &down);
+                node = m_Nav.Nearest(above, 1.0f, &down, Reach(b));
             } else if (!m_Nav.Empty()) {
                 // Circling: high on a wall a few metres off, waiting for a place in the attack.
                 const glm::vec3 away = Flat(pos - t.Feet);
                 const glm::vec3 spot = t.Feet + (glm::length(away) > 0.0f ? away : glm::vec3(1.0f, 0.0f, 0.0f)) * 3.0f +
                                        glm::vec3(0.0f, 1.6f, 0.0f);
-                node = m_Nav.Nearest(spot, 2.5f);
+                node = m_Nav.Nearest(spot, 2.5f, nullptr, Reach(b));
             }
             sc.Goal = node >= 0 ? m_Nav.Pos(node) : t.Feet;
             sc.HasGoal = true;
@@ -193,7 +215,7 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
             break;
         }
         // A charger, or a dropper that has waited long enough, attacks when a place is free.
-        if ((!ai.Dropper || ai.Clock > 12.0f) && Attackers() < kMaxAttackers) {
+        if ((!ai.Dropper || ai.Clock > 6.0f) && Attackers() < kMaxAttackers) {
             ai.Token = true;
             enter(Mode::Engage);
         }
@@ -208,7 +230,20 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
         if (dist < 1.2f) {
             enter(Mode::Bite);
             if (anim) anim->SetTrigger("Attack");
-        } else if (ai.PounceIn <= 0.0f && dist > 2.2f && dist < 5.0f && b.Mover.Attached() && SeesPlayer(b, sc, t)) {
+        } else if (ai.PounceIn <= 0.0f && dist > 2.2f && dist < 5.0f && b.Mover.Attached() && !LeapClear(b, sc, t, dist)) {
+#pragma warning(suppress : 4996)
+            static const bool trace = std::getenv("TARTARUS_SPIDER_TRACE") != nullptr;
+            if (trace && ai.Clock - dt < std::floor(ai.Clock) + 1e-6f && ai.Clock >= std::floor(ai.Clock)) { // once a second
+                const glm::vec3 from = pos + up * 0.2f, to = t.Feet + glm::vec3(0.0f, 0.8f, 0.0f), d = glm::normalize(to - from);
+                RaycastHit h;
+                QueryFilter f;
+                f.HitTriggers = 0;
+                const bool hit = PhysicsWorld::RaycastSolid(&from.x, &d.x, glm::length(to - from), f, h);
+                const auto* n = hit ? world.Registry.try_get<NameComponent>((entt::entity)h.Entity) : nullptr;
+                std::printf("[Spider] %u: no pounce at %.2f m: chest line blocked by %s at %.2f m\n", (unsigned)entt::to_integral(b.Root),
+                            dist, n ? n->Name.c_str() : (hit ? "an unnamed solid" : "nothing"), hit ? h.Distance : 0.0f);
+            }
+        } else if (ai.PounceIn <= 0.0f && dist > 2.2f && dist < 5.0f && b.Mover.Attached()) {
             enter(Mode::Telegraph);
             if (anim) anim->SetTrigger("Jump");
             Sound("hiss", pos, 0.8f); // the tell
@@ -222,12 +257,12 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
         ai.Hold = true;
         if (ai.Clock >= 0.45f) {
             const float flight = std::clamp(dist / 7.0f, 0.35f, 0.6f);
-            const glm::vec3 aim = t.Feet + t.Velocity * (flight * 0.6f) + glm::vec3(0.0f, 0.3f, 0.0f);
+            const glm::vec3 aim = t.Feet + t.Velocity * (flight * 0.6f) + glm::vec3(0.0f, 0.8f, 0.0f); // at the chest
             glm::vec3 v = (aim - pos) / flight;
             v.y += 0.5f * kGravity * flight;
             b.Mover.Detach(v);
             ai.FromDrop = false;
-            ai.PounceIn = 4.0f;
+            ai.PounceIn = 3.0f;
             Sound("screech", pos);
             Sound("pounce", pos);
             ++b.Last.Leaps;
@@ -237,8 +272,13 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
     }
     case Mode::Leap: {
         sc.HasGoal = false;
-        if (!ai.Struck && target && ToPlayer(pos + up * 0.15f, t) < 0.35f) {
-            strike(sc.PounceDamage, Flat(t.Feet - pos) * (sc.Knockback * 1.5f) + glm::vec3(0.0f, 1.5f, 0.0f), true);
+        // Swept along this frame's flight (it covers a hand's width a frame), against the reach of a body with legs
+        // spread wide: a leap that passes within half a metre of the player has them.
+        const glm::vec3 flightStep = b.Mover.Velocity() * dt;
+        const float near = std::min({ToPlayer(pos + up * 0.15f, t), ToPlayer(pos + up * 0.15f + flightStep * 0.5f, t),
+                                     ToPlayer(pos + up * 0.15f + flightStep, t)});
+        if (!ai.Struck && target && near < 0.5f) {
+            strike(sc.PounceDamage, Flat(t.Feet - pos) * (sc.Knockback * 1.5f), true);
             ++(ai.FromDrop ? b.Last.Drops : b.Last.Pounces);
             ai.Landed = true;
         }
@@ -265,7 +305,7 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
         if (!ai.Struck && ai.Clock >= 0.3f && target) {
             const glm::vec3 fangs = pos + b.Mover.Forward() * 0.45f + up * 0.15f;
             if (ToPlayer(fangs, t) < 0.45f) {
-                strike(sc.BiteDamage, Flat(t.Feet - pos) * sc.Knockback + glm::vec3(0.0f, 0.8f, 0.0f), false);
+                strike(sc.BiteDamage, Flat(t.Feet - pos) * sc.Knockback, false);
                 ++b.Last.Bites;
             }
         }
@@ -291,7 +331,7 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
             const glm::vec3 away = Flat(pos - t.Feet);
             const glm::vec3 spot = t.Feet + (glm::length(away) > 0.0f ? away : glm::vec3(1.0f, 0.0f, 0.0f)) * 3.5f +
                                    glm::vec3(0.0f, 1.3f, 0.0f);
-            const int node = m_Nav.Empty() ? -1 : m_Nav.Nearest(spot, 2.5f);
+            const int node = m_Nav.Empty() ? -1 : m_Nav.Nearest(spot, 2.5f, nullptr, Reach(b));
             sc.Goal = node >= 0 ? m_Nav.Pos(node) : spot;
         }
         sc.HasGoal = true;
@@ -300,11 +340,15 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
     }
     case Mode::Search: {
         b.Costs = Spider::PathCosts{1.0f, 1.2f, 1.5f};
-        sc.Run = false;
+        sc.Run = glm::length(ai.LastKnown - pos) > 6.0f; // hurries there, creeps the last few metres
         sc.Goal = ai.LastKnown;
         sc.HasGoal = !b.Mover.Arrived();
+        // All the way to where it last knew them (from 301 to the hallway's far end is a long walk), a look about there,
+        // then back to a perch; a search it can't finish ends in time too.
+        if (ai.Clock < dt) ai.Searched = 0.0f;
+        if (glm::length(ai.LastKnown - pos) < 1.5f) ai.Searched += dt;
         if (ai.Aware) enter(Mode::Stalk);
-        else if (ai.Clock > 10.0f) {
+        else if (ai.Searched > 6.0f || ai.Clock > 40.0f) {
             ai.Perch = -1;
             enter(Mode::Perch);
         }

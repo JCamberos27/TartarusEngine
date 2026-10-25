@@ -50,6 +50,9 @@ struct MaterialAsset {
     // True if `name` is one of the built-in PBR property names handled by Get*/Set* below (and
     // therefore stored on Mat, not in ExtraProps).
     static bool IsBuiltinProp(const std::string& name);
+    // The shell-fur properties (_Fur*): built-in, but read by FurRenderer rather than the surface program, so
+    // ShaderAsset gives them no binding (no texture unit, no per-draw uniform).
+    static bool IsFurProp(const std::string& name) { return name.rfind("_Fur", 0) == 0 && IsBuiltinProp(name); }
 
     // #102 — metallic / roughness maps used to REPLACE their factors; now factor * map. A
     // material saved before that (no "factorsScaleMaps" marker) gets factor 1 on every slot that
@@ -76,6 +79,7 @@ struct MaterialAsset {
     std::string DetailAlbedoMapPath;  // #102
     std::string DetailNormalMapPath;  // #102
     std::string GrungeMapPath;        // docs/DECALS.md
+    std::string FurMaskPath;          // Material::FurDesc::Mask
 
     // Loads a MaterialAsset from a .mat JSON file. Resolves and loads textures via `lib` when
     // non-null (they remain null otherwise). Returns nullptr on I/O or parse error.

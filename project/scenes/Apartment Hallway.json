@@ -84046,6 +84046,9 @@
       ]
     },
     {
+      "Creature Barrier": {
+        "Padding": 0.02
+      },
       "castShadows": 0,
       "id": 814,
       "materials": [
@@ -84106,6 +84109,9 @@
       "static": true
     },
     {
+      "Creature Barrier": {
+        "Padding": 0.02
+      },
       "castShadows": 0,
       "id": 819,
       "materials": [
@@ -84166,6 +84172,9 @@
       "static": true
     },
     {
+      "Creature Barrier": {
+        "Padding": 0.02
+      },
       "castShadows": 0,
       "id": 824,
       "materials": [
@@ -84226,6 +84235,9 @@
       "static": true
     },
     {
+      "Creature Barrier": {
+        "Padding": 0.02
+      },
       "castShadows": 0,
       "id": 829,
       "materials": [
@@ -84286,6 +84298,9 @@
       "static": true
     },
     {
+      "Creature Barrier": {
+        "Padding": 0.02
+      },
       "castShadows": 0,
       "id": 834,
       "materials": [
@@ -84346,6 +84361,9 @@
       "static": true
     },
     {
+      "Creature Barrier": {
+        "Padding": 0.02
+      },
       "castShadows": 0,
       "id": 839,
       "materials": [
@@ -84406,6 +84424,9 @@
       "static": true
     },
     {
+      "Creature Barrier": {
+        "Padding": 0.02
+      },
       "castShadows": 0,
       "id": 844,
       "materials": [
@@ -84466,6 +84487,9 @@
       "static": true
     },
     {
+      "Creature Barrier": {
+        "Padding": 0.02
+      },
       "castShadows": 0,
       "id": 849,
       "materials": [
@@ -84526,6 +84550,9 @@
       "static": true
     },
     {
+      "Creature Barrier": {
+        "Padding": 0.02
+      },
       "castShadows": 0,
       "id": 854,
       "materials": [
@@ -84586,6 +84613,9 @@
       "static": true
     },
     {
+      "Creature Barrier": {
+        "Padding": 0.02
+      },
       "castShadows": 0,
       "id": 859,
       "materials": [
@@ -84646,6 +84676,9 @@
       "static": true
     },
     {
+      "Creature Barrier": {
+        "Padding": 0.02
+      },
       "castShadows": 0,
       "id": 864,
       "materials": [
@@ -84706,6 +84739,9 @@
       "static": true
     },
     {
+      "Creature Barrier": {
+        "Padding": 0.02
+      },
       "castShadows": 0,
       "id": 869,
       "materials": [
@@ -84766,6 +84802,9 @@
       "static": true
     },
     {
+      "Creature Barrier": {
+        "Padding": 0.02
+      },
       "castShadows": 0,
       "id": 874,
       "materials": [
@@ -84826,6 +84865,9 @@
       "static": true
     },
     {
+      "Creature Barrier": {
+        "Padding": 0.02
+      },
       "castShadows": 0,
       "id": 879,
       "materials": [
@@ -84886,6 +84928,9 @@
       "static": true
     },
     {
+      "Creature Barrier": {
+        "Padding": 0.02
+      },
       "castShadows": 0,
       "id": 884,
       "materials": [
@@ -84946,6 +84991,9 @@
       "static": true
     },
     {
+      "Creature Barrier": {
+        "Padding": 0.02
+      },
       "castShadows": 0,
       "id": 889,
       "materials": [
@@ -85006,6 +85054,9 @@
       "static": true
     },
     {
+      "Creature Barrier": {
+        "Padding": 0.02
+      },
       "castShadows": 0,
       "id": 894,
       "materials": [
@@ -85066,6 +85117,9 @@
       "static": true
     },
     {
+      "Creature Barrier": {
+        "Padding": 0.02
+      },
       "castShadows": 0,
       "id": 899,
       "materials": [
@@ -85126,6 +85180,9 @@
       "static": true
     },
     {
+      "Creature Barrier": {
+        "Padding": 0.02
+      },
       "castShadows": 0,
       "id": 904,
       "materials": [
@@ -85186,6 +85243,9 @@
       "static": true
     },
     {
+      "Creature Barrier": {
+        "Padding": 0.02
+      },
       "castShadows": 0,
       "id": 909,
       "materials": [

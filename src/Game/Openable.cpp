@@ -233,8 +233,8 @@ void Update(World& world, const glm::vec3& eye, const glm::vec3& forward, bool i
                                  !IsSelfOrAncestor(world, best, static_cast<entt::entity>(hit.Entity));
             if (!blocked) {
                 auto& o = view.get<OpenableComponent>(best);
-                o.Target = o.Target > 0.5f ? 0.0f : 1.0f;
-                if (o.Target > 0.5f) PlaySound(o.OpenSound, glm::vec3(world.GetCachedWorldTransform(best)[3]));
+                if (o.Target > 0.5f) o.Target = 0.0f;
+                else Open(world, best);
             }
         }
     }
@@ -272,6 +272,60 @@ void SetAll(World& world, float t) {
         o.Progress = o.Target = std::clamp(t, 0.0f, 1.0f);
         Apply(o, view.get<TransformComponent>(e));
     }
+}
+
+bool LeafBox(World& world, entt::entity e, glm::vec3& centre, glm::vec3& half, glm::quat& rot) {
+    const auto* o = world.Registry.valid(e) ? world.Registry.try_get<OpenableComponent>(e) : nullptr;
+    const auto* t = o ? world.Registry.try_get<TransformComponent>(e) : nullptr;
+    return o && t && o->Started && LeafBoxAt(world, e, *o, *t, o->Progress, centre, half, rot);
+}
+
+bool Open(World& world, entt::entity e) {
+    auto* o = world.Registry.valid(e) ? world.Registry.try_get<OpenableComponent>(e) : nullptr;
+    if (!o || !o->Started || o->Target > 0.5f) return false;
+    o->Target = 1.0f;
+    PlaySound(o->OpenSound, glm::vec3(world.GetCachedWorldTransform(e)[3]));
+    return true;
+}
+
+bool Leaf(World& world, entt::entity e, glm::vec3& hinge, glm::vec3& toLatch, float& width, glm::vec3& swingsToward,
+          float* height) {
+    const auto* o = world.Registry.valid(e) ? world.Registry.try_get<OpenableComponent>(e) : nullptr;
+    const auto* t = o ? world.Registry.try_get<TransformComponent>(e) : nullptr;
+    if (!o || !t || !o->Started || ((Kind)o->Motion != Kind::HingeLeft && (Kind)o->Motion != Kind::HingeRight)) return false;
+    glm::vec3 shut, open, half, openHalf;
+    glm::quat rot, openRot;
+    if (!LeafBoxAt(world, e, *o, *t, 0.0f, shut, half, rot) || !LeafBoxAt(world, e, *o, *t, 1.0f, open, openHalf, openRot))
+        return false;
+    // Its width runs along whichever of its box's axes is longest across the ground.
+    int across = -1;
+    float widest = 0.0f;
+    for (int a = 0; a < 3; ++a) {
+        glm::vec3 axis = rot * glm::vec3(a == 0, a == 1, a == 2);
+        axis.y = 0.0f;
+        const float flat = glm::length(axis) * half[a];
+        if (flat > widest) {
+            widest = flat;
+            across = a;
+        }
+    }
+    if (across < 0) return false;
+    glm::vec3 axis = rot * glm::vec3(across == 0, across == 1, across == 2);
+    axis.y = 0.0f;
+    axis = glm::normalize(axis);
+    const glm::vec3 base(shut.x, 0.0f, shut.z), opened(open.x, 0.0f, open.z);
+    const glm::vec3 a = base + axis * widest, b = base - axis * widest;
+    // Swung open, its middle stays half a width from the hinge and moves well away from the latch.
+    hinge = glm::length(a - opened) < glm::length(b - opened) ? a : b;
+    toLatch = glm::normalize(base - hinge);
+    width = 2.0f * widest;
+    glm::vec3 side = (opened - base) - toLatch * glm::dot(opened - base, toLatch);
+    if (glm::length(side) < 1e-4f) return false;
+    swingsToward = glm::normalize(side);
+    hinge.y = toLatch.y = swingsToward.y = 0.0f;
+    hinge.y = shut.y - half.y; // its foot (a door's box is upright)
+    if (height) *height = 2.0f * half.y;
+    return true;
 }
 
 } // namespace Openable

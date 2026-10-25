@@ -375,6 +375,18 @@ json MaterialSlotsToJson(const std::vector<std::shared_ptr<MaterialAsset>>& matS
             if (smat.GrungeStrength != 0.0f)       em["grungeStrength"] = smat.GrungeStrength;
             if (smat.GrungeScale != 0.5f)          em["grungeScale"] = smat.GrungeScale;
             if (!smat.ReceiveDecals)               em["receiveDecals"] = false;
+            // Shell fur (Material::FurDesc), non-defaults only, as a .mat writes it.
+            {
+                const Material::FurDesc def;
+                if (smat.Fur.Enabled)                  em["furEnabled"] = true;
+                if (smat.Fur.Length != def.Length)     em["furLength"] = smat.Fur.Length;
+                if (smat.Fur.Density != def.Density)   em["furDensity"] = smat.Fur.Density;
+                if (smat.Fur.Shells != def.Shells)     em["furShells"] = smat.Fur.Shells;
+                if (smat.Fur.Gravity != def.Gravity)   em["furGravity"] = smat.Fur.Gravity;
+                if (smat.Fur.Tint != def.Tint)         em["furTint"] = {smat.Fur.Tint.x, smat.Fur.Tint.y, smat.Fur.Tint.z};
+                if (smat.Fur.Rim != def.Rim)           em["furRim"] = smat.Fur.Rim;
+                if (smat.Fur.Mask)                     em["furMask"] = PathRef(PathOrEmpty(smat.Fur.Mask));
+            }
             if (!smat.Substrate.Albedo.empty())
                 em["substrate"] = SubstrateJson::Write<json>(smat.Substrate, [](const std::string& p) { return PathRef(ProjectPaths::Resolve(p)); });
             if (smat.AlphaCutoff != 0.5f)          em["alphaCutoff"] = smat.AlphaCutoff;
@@ -437,6 +449,19 @@ std::shared_ptr<MaterialAsset> ReadEmbeddedMat(AssetLibrary& assets, const json&
         ma->Mat.GrungeStrength  = mj.value("grungeStrength", 0.0f);
         ma->Mat.GrungeScale     = mj.value("grungeScale", 0.5f);
         ma->Mat.ReceiveDecals   = mj.value("receiveDecals", true);
+        {
+            Material::FurDesc& fur = ma->Mat.Fur;
+            const Material::FurDesc def;
+            fur.Enabled = mj.value("furEnabled", def.Enabled);
+            fur.Length  = std::max(0.0f, mj.value("furLength", def.Length));
+            fur.Density = std::max(1.0f, mj.value("furDensity", def.Density));
+            fur.Shells  = std::clamp(mj.value("furShells", def.Shells), 0, Material::kMaxFurShells);
+            fur.Gravity = mj.value("furGravity", def.Gravity);
+            if (auto t = mj.find("furTint"); t != mj.end() && t->is_array() && t->size() >= 3)
+                fur.Tint = glm::vec3((*t)[0].get<float>(), (*t)[1].get<float>(), (*t)[2].get<float>());
+            fur.Rim  = std::max(0.0f, mj.value("furRim", def.Rim));
+            fur.Mask = LoadIfPresent(assets, mj, "furMask");
+        }
         // Substrate (Substrate.h): {path, pathGuid} refs, kept project-relative in memory like a .decal's.
         if (auto sub = mj.find("substrate"); sub != mj.end())
             SubstrateJson::Read(*sub, ma->Mat.Substrate, [](const json& v) {
