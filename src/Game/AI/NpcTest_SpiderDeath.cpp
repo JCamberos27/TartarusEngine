@@ -63,6 +63,11 @@ struct NpcTest::SpiderDeathRun {
     float CeilTop = 0.0f;
     bool KnockedOff = false, WallFell = false;
     int SpraysIchor = 0, SpraysRed = 0;
+    // corpses: each one's centre last frame, frames it shook after 3 s dead, whether it lies on its side or back asleep
+    glm::vec3 CorpseWas[3]{};
+    int CorpseJitter = 0;
+    bool CorpseRolled[3] = {false, false, false};
+    float CorpseUpY[3] = {1.0f, 1.0f, 1.0f};
 };
 
 void NpcTest::SpiderDeath(World& world) {
@@ -138,6 +143,19 @@ void NpcTest::SpiderDeath(World& world) {
         const std::uint32_t hit = ShootSpider(from, glm::normalize(target - from), damage, pellets, spider);
         return spider && hit == want;
     };
+    {
+        const SpiderDamage::View* views[3] = {&fv, &wv, &cv};
+        for (int k = 0; k < 3; ++k) {
+            const SpiderDamage::View& v = *views[k];
+            if (!v.Dead) continue;
+            if (v.DeadFor > 3.0f && glm::length(v.Centre - r.CorpseWas[k]) > 0.002f) ++r.CorpseJitter;
+            if (v.Asleep) {
+                r.CorpseRolled[k] = std::fabs(v.Up.y) < 0.7f; // on its side (belly-down or on its back both lie flat)
+                r.CorpseUpY[k] = v.Up.y;
+            }
+            r.CorpseWas[k] = v.Centre;
+        }
+    }
     SpiderSystem::Stats fs;
     if (Spiders) Spiders->Inspect(entity(r.Floor), fs);
     glm::vec3 thorax(0.0f), abdomen(0.0f), leg(0.0f);
@@ -302,6 +320,12 @@ void NpcTest::SpiderDeath(World& world) {
         break;
     }
     default:
+        if (m_Done) break; // (reported once)
+        std::printf("[NpcTest] spiderdeath: corpses shook on %d frames after 3 s; on its side: %d %d %d (up.y %.2f %.2f %.2f)\n", r.CorpseJitter,
+                    r.CorpseRolled[0], r.CorpseRolled[1], r.CorpseRolled[2], r.CorpseUpY[0], r.CorpseUpY[1], r.CorpseUpY[2]);
+        Check(r.CorpseJitter == 0, "spiderdeath: a corpse lies still after 3 s (no jitter)");
+        Check(!r.CorpseRolled[0] && !r.CorpseRolled[1] && !r.CorpseRolled[2], "spiderdeath: corpses lie flat, never on a side");
+        SpiderJank("spiderdeath");
         m_Done = true;
         break;
     }

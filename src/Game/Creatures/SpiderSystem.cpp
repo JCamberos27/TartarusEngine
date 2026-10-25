@@ -88,6 +88,14 @@ Spider::MoverSettings MoverFrom(const SpiderComponent& c) {
     return s;
 }
 
+double UsSince(std::chrono::steady_clock::time_point t0) {
+    return std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count();
+}
+
+// The jank counters' bar for turning: the body's up never swings faster than the mover lets it (a 90-degree roll over an
+// edge takes 1/6 s or more), and its whole rotation no faster than that plus its turn rate.
+const float kMaxUpRateDeg = Spider::MoverSettings{}.MaxUpRate;
+
 Spider::GaitSettings GaitFrom(const SpiderComponent& c) {
     Spider::GaitSettings s;
     s.StepHeight = c.StepHeight;
@@ -274,14 +282,38 @@ glm::vec3 SpiderSystem::Steer(Body& b, const glm::vec3& goal, float dt) {
     b.RouteAge += dt;
     // A new route when the goal has moved, when the old one is used up or stale, or (once a second) after a failure.
     const bool moved = glm::length(goal - b.RouteGoal) > 0.4f;
-    if (b.Route.empty() ? (moved || !b.RouteFailed || b.RouteAge > 1.0f) : (moved || b.RouteAge > 3.0f)) {
+    bool want = b.Route.empty() ? (moved || !b.RouteFailed || b.RouteAge > 1.0f) : (moved || b.RouteAge > 3.0f);
+    // One search a frame between all the spiders (a search can walk much of the graph): another that wants one this frame
+    // keeps its route a frame or two longer. One with no route at all waits no more than a couple of frames.
+    if (want && m_SearchedThisFrame && (!b.Route.empty() || b.PlanWait < 2)) {
+        ++b.PlanWait;
+        want = false;
+    }
+    if (want) {
+        const int from = m_Nav.Nearest(pos, 0.8f, &up), to = m_Nav.Nearest(goal, 1.0f, nullptr, from >= 0 ? m_Nav.Component(from) : -1);
+        // The same search as one that failed, with nothing blocked or freed since, fails the same way: it isn't run again.
+        const bool same = b.RouteFailed && from == b.FailFrom && to == b.FailTo && m_Nav.BlockGeneration() == b.FailGen;
         b.RouteGoal = goal;
         b.RouteAge = 0.0f;
+        b.PlanWait = 0;
         b.Route.clear();
         b.RouteNormal.clear();
         b.RouteAt = 0;
-        const int from = m_Nav.Nearest(pos, 0.8f, &up), to = m_Nav.Nearest(goal, 1.0f, nullptr, from >= 0 ? m_Nav.Component(from) : -1);
-        b.RouteFailed = from < 0 || to < 0 || !m_Nav.FindPath(from, to, b.Costs, b.RouteScratch);
+        if (!same) {
+            const auto t0 = std::chrono::steady_clock::now();
+            b.RouteFailed = from < 0 || to < 0 || !m_Nav.FindPath(from, to, b.Costs, b.RouteScratch);
+            if (from >= 0 && to >= 0) {
+                const double us = UsSince(t0);
+                m_SearchedThisFrame = true;
+                ++m_Times.Searches;
+                m_Times.SearchUs += us;
+                m_Times.WorstSearchUs = std::max(m_Times.WorstSearchUs, us);
+                m_Times.WorstExpanded = std::max(m_Times.WorstExpanded, m_Nav.LastExpanded());
+            }
+            b.FailFrom = from;
+            b.FailTo = to;
+            b.FailGen = m_Nav.BlockGeneration();
+        }
         if (!b.RouteFailed) {
             for (int n : b.RouteScratch) {
                 b.Route.push_back(m_Nav.Pos(n));
@@ -423,7 +455,14 @@ void SpiderSystem::UpdateDoorBlocks(World& world) {
     if (m_Nav.Empty()) return;
     auto& reg = world.Registry;
     bool changed = false;
-    for (auto e : reg.view<OpenableComponent>(entt::exclude<InactiveTag>)) {
+    // A few doors a frame, taken in turn: the first frame of a Play found every door in the building new at once (a 1+ ms
+    // hitch); a door left for a frame or two is blocked a frame or two late.
+    constexpr int kDoorsPerFrame = 3;
+    auto doors = reg.view<OpenableComponent>(entt::exclude<InactiveTag>);
+    unsigned index = 0, done = 0, first = m_DoorTurn;
+    for (auto e : doors) {
+        const unsigned at = index++;
+        if (at < first || done >= (unsigned)kDoorsPerFrame) continue;
         const auto& o = reg.get<OpenableComponent>(e);
         if (!o.Started) continue;
         auto it = std::find_if(m_DoorBlocks.begin(), m_DoorBlocks.end(), [&](const DoorBlock& d) { return d.Door == e; });
@@ -446,6 +485,8 @@ void SpiderSystem::UpdateDoorBlocks(World& world) {
             else m_Nav.Block(n, -1);
         }
         it->Nodes.clear();
+        ++done;
+        m_DoorTurn = at + 1;
         it->Progress = o.Progress;
         it->Shut = o.Progress <= 0.0f;
         changed = true;
@@ -456,9 +497,10 @@ void SpiderSystem::UpdateDoorBlocks(World& world) {
         const glm::vec3 reach = half + glm::vec3(it->Shut ? 0.35f : 0.25f);
         const float r2 = glm::dot(reach, reach);
         const glm::quat inv = glm::conjugate(rot);
-        for (int i = 0; i < m_Nav.NodeCount(); ++i) {
+        m_Near.clear();
+        m_Nav.NodesNear(centre, std::sqrt(r2), m_Near); // (the leaf's neighbourhood, not all the graph's nodes)
+        for (int i : m_Near) {
             const glm::vec3 d = m_Nav.Pos(i) - centre;
-            if (glm::dot(d, d) > r2) continue;
             const glm::vec3 l = glm::abs(inv * d);
             if (l.x <= reach.x && l.y <= reach.y && l.z <= reach.z) {
                 if (it->Shut) m_Nav.AddPenalty(i, kPushCost);
@@ -467,6 +509,7 @@ void SpiderSystem::UpdateDoorBlocks(World& world) {
             }
         }
     }
+    if (done < (unsigned)kDoorsPerFrame) m_DoorTurn = 0; // (round to the first door again)
     if (changed)
         for (Body& b : m_Bodies) b.RouteAge = 1e9f; // routes afresh round where the leaves are now
 }
@@ -492,13 +535,24 @@ void SpiderSystem::Think(World& world, AssetLibrary& assets, float dt, const Tar
     if (m_Bodies.empty() || dt <= 0.0f) return;
 
     PROFILE_SCOPE("Spiders");
-    if (!m_NavTried) BuildNav(world);
+    const auto thinkStart = std::chrono::steady_clock::now();
+    double navUs = 0.0;
+    if (!m_NavTried) {
+        BuildNav(world);
+        navUs = m_Times.NavUs = UsSince(thinkStart);
+    }
+    const auto doorsStart = std::chrono::steady_clock::now();
     UpdateDoorBlocks(world);
+    const double doorsUs = UsSince(doorsStart);
+    m_SearchedThisFrame = false;
+    m_Times.DoorBlocksUs += doorsUs;
+    m_Times.WorstDoorBlocksUs = std::max(m_Times.WorstDoorBlocksUs, doorsUs);
     Spider::WorldQuery wq;
     const Spider::BarrierQuery q(wq, m_Barriers);
     for (Body& b : m_Bodies) {
         if (!b.Ready && !Resolve(world, assets, b)) continue;
         if (b.Pain.Dead) continue; // its ragdoll has it
+        const auto bodyStart = std::chrono::steady_clock::now();
         auto& sc = reg.get<SpiderComponent>(b.Root);
         if (sc.Brain == 0 && target) Hunt(world, b, sc, *target, dt);
         else b.Ai.State = Mode::Scripted;
@@ -531,11 +585,27 @@ void SpiderSystem::Think(World& world, AssetLibrary& assets, float dt, const Tar
                 const Spider::MoverSettings ms = MoverFrom(sc);
                 const glm::vec3 u = b.Mover.Up(), f = b.Mover.Forward(), mid = b.Mover.Position() + u * ms.BodyLift;
                 Spider::SurfaceHit h;
-                if ((q.Ray(mid, f, ms.BodyFront - 0.03f, h)) || (q.Ray(mid, -f, ms.BodyBack - 0.03f, h))) ++st.SunkFrames;
+                const bool sunkAhead = q.Ray(mid, f, ms.BodyFront - 0.03f, h);
+                if (sunkAhead || (q.Ray(mid, -f, ms.BodyBack - 0.03f, h))) {
+#pragma warning(suppress : 4996)
+                    static const bool trace = std::getenv("TARTARUS_SPIDER_TRACE") != nullptr;
+                    if (trace && st.SunkFrames < 15)
+                        std::printf("[SpiderJank] %u sunk at %.2f %.2f %.2f up %.2f %.2f %.2f hit %.2f %s n %.2f %.2f %.2f fwd %.2f %.2f %.2f speed %.2f mode %d corner %d\n",
+                                    (unsigned)entt::to_integral(b.Root), b.Mover.Position().x, b.Mover.Position().y, b.Mover.Position().z, u.x, u.y,
+                                    u.z, h.Distance, sunkAhead ? "ahead" : "behind", h.Normal.x, h.Normal.y, h.Normal.z, f.x, f.y, f.z,
+                                    b.Mover.Speed(), (int)b.Ai.State, b.Mover.Cornering());
+                    ++st.SunkFrames;
+                }
             }
         }
         b.WasAttached = b.Mover.Attached();
         b.Last.Rays = wq.Rays;
+        {
+            const bool meansToMove = sc.HasGoal && !b.Mover.Arrived() && !b.Ai.Hold && !doorHold && b.Mover.Attached();
+            b.Track.ThinkUs = UsSince(bodyStart);
+            const unsigned moves = b.Mover.TakeMoves();
+            MeasureBody(b, q, sc, in.Goal, meansToMove, moves, dt);
+        }
 
         auto& t = reg.get<TransformComponent>(b.Root);
         t.Position = b.Mover.Position();
@@ -545,6 +615,7 @@ void SpiderSystem::Think(World& world, AssetLibrary& assets, float dt, const Tar
             ac->SetBool("Airborne", !b.Mover.Attached());
         }
     }
+    m_ThinkUs = UsSince(thinkStart) - navUs; // (the graph's bake, once a Play, is timed on its own)
 }
 
 void SpiderSystem::LatePose(World& world, float dt) {
@@ -553,8 +624,23 @@ void SpiderSystem::LatePose(World& world, float dt) {
     auto& reg = world.Registry;
     Spider::WorldQuery wq;
     const Spider::BarrierQuery q(wq, m_Barriers);
+    double legsUs = 0.0;
     for (Body& b : m_Bodies) {
         if (!b.Ready || b.Pain.Dead || !reg.valid(b.ModelEntity)) continue;
+        // Its cost this frame, think and legs, however the loop leaves (the jank counters' per-spider budget).
+        struct Cost {
+            Body& B;
+            double& Sum;
+            std::chrono::steady_clock::time_point T0 = std::chrono::steady_clock::now();
+            ~Cost() {
+                const double legs = UsSince(T0), us = legs + B.Track.ThinkUs;
+                Sum += legs;
+                Stats::JankStats& j = B.Last.Jank;
+                j.CostUs += us;
+                j.WorstCostUs = std::max(j.WorstCostUs, us);
+                ++j.CostFrames;
+            }
+        } cost{b, legsUs};
         const auto& sc = reg.get<SpiderComponent>(b.Root);
         auto* rc = reg.try_get<RenderableComponent>(b.ModelEntity);
         if (!rc || !rc->ModelRef) continue;
@@ -584,6 +670,7 @@ void SpiderSystem::LatePose(World& world, float dt) {
             Sound("tap", b.Mover.Position(), 0.7f + 0.1f * (float)std::min(landed, 3));
             b.TapIn = 0.045f;
         }
+        MeasureLegs(b, q, GaitFrom(sc), model, dt);
         st.TipError = 0.0f;
         if (!sc.LegIK) continue;
 
@@ -612,6 +699,11 @@ void SpiderSystem::LatePose(World& world, float dt) {
         }
         m.ApplyLocalPose(b.Pose);
     }
+    const double frameUs = m_ThinkUs + legsUs;
+    m_ThinkUs = 0.0;
+    m_Times.SumUs += frameUs;
+    m_Times.WorstUs = std::max(m_Times.WorstUs, frameUs);
+    ++m_Times.Frames;
 }
 
 entt::entity SpiderSystem::Spawn(World& world, AssetLibrary& assets, const std::string& prefab, const glm::vec3& pos,
@@ -691,4 +783,275 @@ bool SpiderSystem::Inspect(entt::entity root, Stats& out) const {
         return true;
     }
     return false;
+}
+
+void SpiderSystem::MeasureBody(Body& b, const Spider::SurfaceQuery& q, const SpiderComponent& sc, const glm::vec3& aim,
+                               bool meansToMove, unsigned moves, float dt) {
+    Stats::JankStats& j = b.Last.Jank;
+    Body::JankTrack& t = b.Track;
+    const Spider::Mover& m = b.Mover;
+    const glm::vec3 pos = m.Position(), up = m.Up(), fwd = m.Forward();
+    const float moved = glm::length(pos - t.Pos);
+    // Pops are measured at the body's centre (its belly, what the eye follows): over a corner the body turns about it, and
+    // the origin between its feet swings round it.
+    const float lift = Spider::MoverSettings{}.BodyLift;
+    const float centreMoved = glm::length((pos + up * lift) - (t.Pos + t.Rot * glm::vec3(0.0f, lift, 0.0f)));
+    if (t.Valid) {
+        // Pops: further in a frame than its speed takes it (on a surface its own speed, in the air its fall's).
+        const float v = m.Attached() && t.Attached ? std::max(t.Speed, m.Speed()) : std::max(glm::length(t.Vel), glm::length(m.Velocity()));
+#pragma warning(suppress : 4996)
+        static const bool trace = std::getenv("TARTARUS_SPIDER_TRACE") != nullptr;
+        if (trace && (moves & (Spider::Mover::kMoveLetGo | Spider::Mover::kMoveDetach)))
+            std::printf("[SpiderJank] %u lets go at %.2f %.2f %.2f up %.2f %.2f %.2f moves 0x%x mode %d\n", (unsigned)entt::to_integral(b.Root),
+                        t.Pos.x, t.Pos.y, t.Pos.z, up.x, up.y, up.z, moves, (int)b.Ai.State);
+        if (centreMoved > 1.5f * v * dt + 0.01f) {
+            if (trace && j.Pops < 40)
+                std::printf("[SpiderJank] %u pop %.3f m %.2f %.2f %.2f -> %.2f %.2f %.2f moves 0x%x mode %d attached %d\n",
+                            (unsigned)entt::to_integral(b.Root), centreMoved, t.Pos.x, t.Pos.y, t.Pos.z, pos.x, pos.y, pos.z, moves,
+                            (int)b.Ai.State, m.Attached());
+            ++j.Pops;
+            if (centreMoved > j.WorstPop) {
+                j.WorstPop = centreMoved;
+                j.WorstPopAt = pos;
+                j.WorstPopMode = (int)b.Ai.State;
+                j.WorstPopMoves = moves;
+            }
+        }
+        {
+            static int lowLines = 0;
+            if (trace && pos.y < 0.0f && pos.y > -1.0f && t.Pos.y >= -0.004f && lowLines < 12) {
+                ++lowLines;
+                std::printf("[SpiderJank] %u below the floor top: %.3f %.3f %.3f -> %.3f %.3f %.3f up %.2f %.2f %.2f moves 0x%x corner %d mode %d\n",
+                            (unsigned)entt::to_integral(b.Root), t.Pos.x, t.Pos.y, t.Pos.z, pos.x, pos.y, pos.z, up.x, up.y, up.z, moves,
+                            m.Cornering(), (int)b.Ai.State);
+            }
+        }
+        // Snaps: its up, or its whole rotation, turned faster than it may.
+        const glm::vec3 upWas = t.Rot * glm::vec3(0.0f, 1.0f, 0.0f);
+        const float upTurn = glm::degrees(std::acos(std::clamp(glm::dot(upWas, up), -1.0f, 1.0f)));
+        const glm::quat d = m.Rotation() * glm::conjugate(t.Rot);
+        const float total = glm::degrees(2.0f * std::acos(std::clamp(std::fabs(d.w), 0.0f, 1.0f)));
+        if (upTurn > kMaxUpRateDeg * dt * 1.25f + 0.5f || total > (sc.TurnRate + kMaxUpRateDeg) * dt * 1.25f + 0.5f) {
+            ++j.Snaps;
+            if (std::max(upTurn, total) > j.WorstSnap) {
+                j.WorstSnap = std::max(upTurn, total);
+                j.WorstSnapAt = pos;
+                j.WorstSnapMode = (int)b.Ai.State;
+                j.WorstSnapMoves = moves;
+            }
+        }
+        // Stutter: stopped dead for a moment and off again while it meant to go on; or given far less than its speed.
+        const float vel = moved / dt;
+        if (meansToMove) {
+            if (vel < 0.05f) {
+                t.StoppedFor += dt;
+            } else {
+                if (t.WasMoving && t.StoppedFor > 0.0f && t.StoppedFor < 0.4f) ++j.Stutters;
+                t.StoppedFor = 0.0f;
+                t.WasMoving = t.WasMoving || vel > 0.2f;
+            }
+            if (m.Speed() > 0.2f && moved < 0.25f * m.Speed() * dt) {
+                ++j.Refused;
+                static int refusedLines = 0;
+#pragma warning(suppress : 4996)
+                static const bool traceRefused = std::getenv("TARTARUS_SPIDER_TRACE") != nullptr;
+                if (traceRefused && refusedLines < 40 && (j.Refused % 15) == 1) {
+                    ++refusedLines;
+                    const glm::vec3 u = m.Up(), f = m.Forward();
+                    Spider::SurfaceHit lid;
+                    const bool hasLid = q.Ray(pos + u * 0.001f, u, 0.05f, lid);
+                    Spider::SurfaceHit ah, lo;
+                    const bool hasAhead = q.Ray(pos + u * 0.1f, f, 0.8f, ah), hasLow = q.Ray(pos + u * 0.08f, f, 0.8f, lo);
+                    std::printf("[SpiderJank]   ahead belly %.3f n %.2f %.2f %.2f at %.2f %.2f %.2f | low %.3f n %.2f %.2f %.2f\n", hasAhead ? ah.Distance : -1.0f,
+                                ah.Normal.x, ah.Normal.y, ah.Normal.z, ah.Point.x, ah.Point.y, ah.Point.z, hasLow ? lo.Distance : -1.0f, lo.Normal.x,
+                                lo.Normal.y, lo.Normal.z);
+                    std::printf("[SpiderJank] %u refused at %.3f %.3f %.3f up %.2f %.2f %.2f fwd %.2f %.2f %.2f speed %.2f moved %.4f lid %.3f moves 0x%x corner %d reject %d mode %d\n",
+                                (unsigned)entt::to_integral(b.Root), pos.x, pos.y, pos.z, u.x, u.y, u.z, f.x, f.y, f.z, m.Speed(), moved,
+                                hasLid ? lid.Distance : -1.0f, moves, m.Cornering(), m.CornerReject(), (int)b.Ai.State);
+                }
+            }
+        } else {
+            t.WasMoving = false;
+            t.StoppedFor = 0.0f;
+        }
+        // A stopped body that moves anyway.
+        if (m.Attached() && t.Attached && t.Speed < 0.01f && m.Speed() < 0.01f && moved > 0.002f) {
+            if (trace && j.StopSlides < 15)
+                std::printf("[SpiderJank] %u stop slide %.3f at %.2f %.2f %.2f moves 0x%x mode %d corner %d\n", (unsigned)entt::to_integral(b.Root),
+                            moved, pos.x, pos.y, pos.z, moves, (int)b.Ai.State, m.Cornering());
+            ++j.StopSlides;
+        }
+        // Its aim turning back on itself twice within a second (a route flip-flopping).
+        glm::vec3 a = aim - pos;
+        a -= up * glm::dot(a, up);
+        t.FlipAgo += dt;
+        if (meansToMove && glm::length(a) > 0.05f) {
+            a = glm::normalize(a);
+            if (glm::length(t.Aim) > 0.5f && glm::dot(a, t.Aim) < 0.0f) {
+                if (t.FlipAgo < 1.0f) ++j.Flips;
+                t.FlipAgo = 0.0f;
+            }
+            t.Aim = a;
+        } else {
+            t.Aim = glm::vec3(0.0f);
+        }
+        // A full turn on the spot or near it (its yaw, decaying over about a second and a half).
+        glm::vec3 f0 = t.Rot * glm::vec3(0.0f, 0.0f, -1.0f);
+        f0 -= up * glm::dot(f0, up);
+        if (glm::length(f0) > 1e-3f) {
+            f0 = glm::normalize(f0);
+            t.Yaw = t.Yaw * std::exp(-dt / 1.5f) + std::atan2(glm::dot(glm::cross(f0, fwd), up), glm::dot(f0, fwd));
+            if (std::fabs(t.Yaw) > 6.2832f) {
+                ++j.Spins;
+                t.Yaw = 0.0f;
+            }
+        }
+    }
+    // Dithering: meaning to move for 2.5 s and never more than 0.3 m from where it was.
+    t.MeantFor = meansToMove ? t.MeantFor + dt : 0.0f;
+    if (!meansToMove) t.RingN = 0;
+    t.RingClock += dt;
+    if (t.RingClock >= 0.25f) {
+        t.RingClock = 0.0f;
+        for (size_t k = t.Ring.size() - 1; k > 0; --k) t.Ring[k] = t.Ring[k - 1];
+        t.Ring[0] = pos;
+        t.RingN = std::min(t.RingN + 1, (int)t.Ring.size());
+    }
+    if (t.RingN == (int)t.Ring.size() && t.MeantFor > 2.5f) {
+        float far = 0.0f;
+        for (const glm::vec3& r : t.Ring) far = std::max(far, glm::length(r - pos));
+        if (far < 0.3f) {
+#pragma warning(suppress : 4996)
+            static const bool trace = std::getenv("TARTARUS_SPIDER_TRACE") != nullptr;
+            if (trace && std::fmod(j.Dither, 1.0f) < dt)
+                std::printf("[SpiderJank] %u dither at %.2f %.2f %.2f up %.2f %.2f %.2f aim %.2f %.2f %.2f speed %.2f corner %d mode %d\n",
+                            (unsigned)entt::to_integral(b.Root), pos.x, pos.y, pos.z, up.x, up.y, up.z, aim.x, aim.y, aim.z, m.Speed(),
+                            m.Cornering(), (int)b.Ai.State);
+            j.Dither += dt;
+        }
+    }
+    // Landing on nothing; standing off its surface.
+    if (MeasureJank && m.Attached() && !m.Cornering()) { // (mid-corner the body bridges the two faces on its legs)
+        Spider::SurfaceHit h;
+        float gap = 1.0f;
+        if (q.Ray(pos + up * 0.1f, -up, 0.25f, h)) gap = h.Distance - 0.1f;
+        const glm::vec3 n = m.SurfaceNormal();
+        if (gap > 0.04f && q.Ray(pos + n * 0.1f, -n, 0.25f, h)) gap = std::min(gap, h.Distance - 0.1f);
+        if (gap > 0.04f) {
+            if (!t.Attached) ++j.AirLandings;
+            ++j.Floating;
+        }
+    }
+    t.Valid = true;
+    t.Pos = pos;
+    t.Rot = m.Rotation();
+    t.Speed = m.Speed();
+    t.Vel = m.Velocity();
+    t.Attached = m.Attached();
+}
+
+void SpiderSystem::MeasureLegs(Body& b, const Spider::SurfaceQuery& q, const Spider::GaitSettings& gs, const glm::mat4& model,
+                               float dt) {
+    Stats::JankStats& j = b.Last.Jank;
+    Body::JankTrack& t = b.Track;
+    const glm::vec3 body = b.Mover.Position();
+    const float bodyMove = glm::length(body - t.LegBody);
+    // The body's turn this frame sweeps a foot that goes with it (hanging, or swinging free while it falls).
+    const glm::quat dq = b.Mover.Rotation() * glm::conjugate(t.LegRot);
+    const float turned = 2.0f * std::acos(std::clamp(std::fabs(dq.w), 0.0f, 1.0f));
+    bool stepping = false;
+    for (int i = 0; i < Spider::kLegs; ++i) {
+        const Spider::LegState& l = b.Gait.Leg(i);
+        const Spider::LegRest& r = b.Gait.Rest(i);
+        if (t.FeetValid) {
+            // A foot further in a frame than its step takes it (a smoothstep's peak is 1.5x its mean) or the body carries it.
+            float allowed = bodyMove + turned * glm::length(l.Foot - body) + 0.01f;
+            if (!(l.Planted && l.Grounded) && !l.Stepping) allowed += Spider::kLegSwing * dt; // (a free foot swings to where it hangs)
+            if (l.Stepping || t.Stepping[(size_t)i]) { // (a step's landing frame is still the step)
+                const float dur = std::max(1e-3f, l.Duration);
+                allowed += 1.6f * glm::length(l.To - l.From) * dt / dur + gs.StepHeight * 3.1416f * dt / dur;
+            }
+            const bool standing = l.Planted && l.Grounded && b.PrevPlanted[(size_t)i]; // (its travel is the slide)
+            if (!standing && glm::length(l.Foot - t.Feet[(size_t)i]) > allowed) {
+#pragma warning(suppress : 4996)
+                static const bool trace = std::getenv("TARTARUS_SPIDER_TRACE") != nullptr;
+                if (trace && j.LegPops < 25)
+                    std::printf("[SpiderJank] %u leg %d pop %.3f allowed %.3f planted %d grounded %d stepping %d wasStepping %d T %.2f attached %d mode %d\n",
+                                (unsigned)entt::to_integral(b.Root), i, glm::length(l.Foot - t.Feet[(size_t)i]), allowed, l.Planted, l.Grounded,
+                                l.Stepping, (int)t.Stepping[(size_t)i], l.T, b.Mover.Attached(), (int)b.Ai.State);
+                ++j.LegPops;
+            }
+        }
+        t.Feet[(size_t)i] = l.Foot;
+        t.Stepping[(size_t)i] = l.Stepping;
+        stepping = stepping || l.Stepping;
+        if (!(l.Planted && l.Grounded) || !b.Mover.Attached()) continue;
+        const glm::vec3 hip = glm::vec3(model * glm::vec4(r.Hip, 1.0f));
+        if (glm::length(l.Foot - hip) > r.Reach * 1.03f) ++j.Overreach;
+        if (!MeasureJank) continue;
+        // Standing on nothing, or under (inside) a surface.
+        Spider::SurfaceHit h;
+        const glm::vec3 n = l.Normal;
+        if (!q.Ray(l.Foot + n * 0.06f, -n, 0.06f + std::max(0.0f, r.Lift) + 0.04f, h)) {
+#pragma warning(suppress : 4996)
+            static const bool trace = std::getenv("TARTARUS_SPIDER_TRACE") != nullptr;
+            if (trace && j.FeetInAir < 15)
+                std::printf("[SpiderJank] %u leg %d in air at %.2f %.2f %.2f n %.2f %.2f %.2f reach %.2f/%.2f body %.2f %.2f %.2f corner %d mode %d\n",
+                            (unsigned)entt::to_integral(b.Root), i, l.Foot.x, l.Foot.y, l.Foot.z, n.x, n.y, n.z, glm::length(l.Foot - hip), r.Reach,
+                            body.x, body.y, body.z, b.Mover.Cornering(), (int)b.Ai.State);
+            ++j.FeetInAir;
+        }
+        else if (q.Ray(l.Foot + n * 0.08f, -n, 0.08f - 0.002f, h)) ++j.FeetInside;
+    }
+    t.FeetValid = true;
+    t.LegBody = body;
+    t.LegRot = b.Mover.Rotation();
+    j.WorstSlide = std::max(j.WorstSlide, b.Last.PlantedSlide);
+    // The gait out of step with the body: moving at pace with no leg stepping.
+    const glm::vec3 up = b.Mover.Up(), v = b.Mover.Velocity();
+    const float travel = glm::length(v - up * glm::dot(v, up));
+    t.IdleLegs = b.Mover.Attached() && travel > 0.3f && !stepping ? t.IdleLegs + dt : 0.0f;
+    if (t.IdleLegs > 0.4f) ++j.Skating;
+}
+
+int SpiderSystem::SumJank(Stats::JankStats& out) const {
+    out = Stats::JankStats{};
+    int n = 0;
+    for (const Body& b : m_Bodies) {
+        if (!b.Ready) continue;
+        const Stats::JankStats& j = b.Last.Jank;
+        ++n;
+        out.Pops += j.Pops;
+        if (j.WorstPop > out.WorstPop) {
+            out.WorstPop = j.WorstPop;
+            out.WorstPopAt = j.WorstPopAt;
+            out.WorstPopMode = j.WorstPopMode;
+            out.WorstPopMoves = j.WorstPopMoves;
+        }
+        out.Snaps += j.Snaps;
+        if (j.WorstSnap > out.WorstSnap) {
+            out.WorstSnap = j.WorstSnap;
+            out.WorstSnapAt = j.WorstSnapAt;
+            out.WorstSnapMode = j.WorstSnapMode;
+            out.WorstSnapMoves = j.WorstSnapMoves;
+        }
+        out.Stutters += j.Stutters;
+        out.Refused += j.Refused;
+        out.FeetInAir += j.FeetInAir;
+        out.FeetInside += j.FeetInside;
+        out.WorstSlide = std::max(out.WorstSlide, j.WorstSlide);
+        out.LegPops += j.LegPops;
+        out.Skating += j.Skating;
+        out.Overreach += j.Overreach;
+        out.Flips += j.Flips;
+        out.Spins += j.Spins;
+        out.Dither += j.Dither;
+        out.AirLandings += j.AirLandings;
+        out.Floating += j.Floating;
+        out.StopSlides += j.StopSlides;
+        out.CostUs += j.CostUs;
+        out.CostFrames += j.CostFrames;
+        out.WorstCostUs = std::max(out.WorstCostUs, j.WorstCostUs);
+    }
+    return n;
 }

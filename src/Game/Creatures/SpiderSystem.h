@@ -104,8 +104,36 @@ public:
         int DoorsOpened = 0;         // shut doors it pushed open on its way
         glm::vec3 Goal{0.0f};        // where it is heading (the component's goal)
         bool HasGoal = false;
+        // Jank, counted since it was built (the npc tests' bar: none of it). Pops and snaps carry where, in which mode and
+        // which mover branches moved it (Spider::Mover::kMove* bits).
+        struct JankStats {
+            int Pops = 0; float WorstPop = 0.0f; glm::vec3 WorstPopAt{0.0f}; int WorstPopMode = -1; unsigned WorstPopMoves = 0;
+            int Snaps = 0; float WorstSnap = 0.0f; glm::vec3 WorstSnapAt{0.0f}; int WorstSnapMode = -1; unsigned WorstSnapMoves = 0;
+            int Stutters = 0;        // stop-start events while it meant to move
+            int Refused = 0;         // frames it meant to move at speed and the mover gave it under a quarter of that
+            int FeetInAir = 0, FeetInside = 0; // planted, standing feet with nothing under them / inside a surface (frames x feet)
+            float WorstSlide = 0.0f; // the worst planted foot's travel in a frame (m)
+            int LegPops = 0;         // a foot moving further in a frame than its step (or the body) takes it
+            int Skating = 0;         // frames moving at pace with no leg stepping for 0.4 s (the gait out of step with the body)
+            int Overreach = 0;       // frames a standing foot is past its leg's reach
+            int Flips = 0, Spins = 0; // its aim turning back on itself twice within a second / a full turn on the spot
+            float Dither = 0.0f;     // seconds it meant to move and got nowhere (under 0.3 m in 2.5 s)
+            int AirLandings = 0, Floating = 0, StopSlides = 0; // landed on nothing / standing off its surface / moving while stopped
+            double CostUs = 0.0, WorstCostUs = 0.0; int CostFrames = 0; // its own think + legs, per frame (microseconds)
+        } Jank;
     };
+    // The whole system's cost per frame (microseconds): every spider, the door blocks and the graph's bake.
+    struct Timing {
+        double SumUs = 0.0, WorstUs = 0.0, DoorBlocksUs = 0.0, WorstDoorBlocksUs = 0.0, NavUs = 0.0;
+        int Frames = 0;
+        int Searches = 0, WorstExpanded = 0; double SearchUs = 0.0, WorstSearchUs = 0.0; // route searches (FindPath)
+    };
+    const Timing& Times() const { return m_Times; }
+    // Extra probes for the jank counters (feet in the air or in a surface, floating): the npc tests turn them on.
+    bool MeasureJank = false;
     bool Inspect(entt::entity root, Stats& out) const;
+    // Every spider's jank summed (worsts kept with where they were), for the npc tests' report; returns the bodies counted.
+    int SumJank(Stats::JankStats& out) const;
     // One of the spider's sounds (snd.foley.spider.<element>: tap, hiss, screech, bite, pounce, hurt, death, thud, splat)
     // at `pos`, when the audio is up.
     static void Sound(const char* element, const glm::vec3& pos, float gain = 1.0f);
@@ -149,6 +177,9 @@ private:
         glm::vec3 RouteGoal{0.0f};
         float RouteAge = 0.0f;
         bool RouteFailed = false;
+        int PlanWait = 0;                         // frames a wanted search has waited its turn
+        int FailFrom = -1, FailTo = -1;           // the last failed search's ends ...
+        std::uint32_t FailGen = 0;                // ... and the graph's blocks then
         // How its routes weigh floor, wall and ceiling: the hunter makes climbing cheap to stalk, the floor to charge.
         Spider::PathCosts Costs;
         // A shut door on its way (OpenableComponent): it goes to where it presses on it - the leaf's middle when it swings
@@ -179,6 +210,17 @@ private:
             bool Dropper = false;        // waits overhead and drops (the others charge)
         } Ai;
         Stats Last;
+        // The jank counters' memory of the last frame.
+        struct JankTrack {
+            bool Valid = false, Attached = true, WasMoving = false, Moving = false;
+            glm::vec3 Pos{0.0f}, Aim{0.0f}, Vel{0.0f};
+            glm::quat Rot{1.0f, 0.0f, 0.0f, 0.0f};
+            float Speed = 0.0f, StoppedFor = 0.0f, FlipAgo = 1e9f, Yaw = 0.0f, MeantFor = 0.0f, IdleLegs = 0.0f, RingClock = 0.0f;
+            std::array<glm::vec3, 10> Ring{}; int RingN = 0;
+            std::array<glm::vec3, Spider::kLegs> Feet{}; std::array<bool, Spider::kLegs> Stepping{};
+            glm::vec3 LegBody{0.0f}; glm::quat LegRot{1.0f, 0.0f, 0.0f, 0.0f}; bool FeetValid = false;
+            double ThinkUs = 0.0;
+        } Track;
         SpiderSystem::Hurt Pain; // (SpiderDamage)
     };
     bool Resolve(World& world, AssetLibrary& assets, Body& b);
@@ -216,9 +258,18 @@ private:
     };
     std::vector<DoorBlock> m_DoorBlocks;
     void UpdateDoorBlocks(World& world);
+    // The jank counters (Stats::JankStats): the body after its mover's step, the legs after the gait's.
+    void MeasureBody(Body& b, const Spider::SurfaceQuery& q, const SpiderComponent& sc, const glm::vec3& aim, bool meansToMove,
+                     unsigned moves, float dt);
+    void MeasureLegs(Body& b, const Spider::SurfaceQuery& q, const Spider::GaitSettings& gs, const glm::mat4& model, float dt);
 
     std::vector<Body> m_Bodies;
     std::uint64_t m_Generation = 0;
+    Timing m_Times;
+    double m_ThinkUs = 0.0; // this frame's Think, for the frame's total in LatePose
+    bool m_SearchedThisFrame = false; // a route search ran this frame (one a frame, between all the spiders)
+    std::vector<int> m_Near;          // UpdateDoorBlocks' scratch
+    unsigned m_DoorTurn = 0;          // UpdateDoorBlocks: the door its budget starts at this frame (round robin)
     std::string m_RigPath, m_RigText;
     Spider::RigDef m_Rig;
     bool m_RigOk = false;

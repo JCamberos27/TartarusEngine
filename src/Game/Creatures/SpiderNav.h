@@ -61,6 +61,8 @@ public:
     // far side) are passed over.
     // component >= 0: only nodes in that connected piece of the graph (Component), so a pick is somewhere it can get to.
     int Nearest(const glm::vec3& p, float maxDistance = 1.0f, const glm::vec3* up = nullptr, int component = -1) const;
+    // Every node within `radius` of `p` (appended to `out`), by the spatial hash rather than a walk of the whole graph.
+    void NodesNear(const glm::vec3& p, float radius, std::vector<int>& out) const;
     // Which connected piece of the graph node i is in: the rooms a spider can crawl between are one; a void sealed off
     // behind a wall, above a ceiling or under a floor is another.
     int Component(int i) const { return m_Comp[(size_t)i]; }
@@ -75,6 +77,10 @@ public:
     // A* from node `from` to node `to`: the nodes in order, both ends included. False when unreachable or when it would
     // expand more than `maxExpand` nodes.
     bool FindPath(int from, int to, const PathCosts& costs, std::vector<int>& out, int maxExpand = 80000) const;
+    // Nodes the last FindPath expanded (its cost), and a count bumped by every Block and AddPenalty: a route that failed
+    // fails again until it changes.
+    int LastExpanded() const { return m_LastExpanded; }
+    std::uint32_t BlockGeneration() const { return m_BlockGen; }
 
     // A cache on disk, keyed by the input's hash (HashInput): a level's graph is baked once. The key holds the builder's
     // version too - bump kBuildVersion with any change to what Build makes, or every level keeps the graph it baked before.
@@ -107,6 +113,9 @@ private:
     mutable std::vector<int> m_From;
     mutable std::vector<std::uint32_t> m_Stamp;
     mutable std::uint32_t m_Search = 0;
+    mutable std::vector<std::pair<float, int>> m_Open; // the open list's heap (kept: no allocation per search)
+    mutable int m_LastExpanded = 0;
+    std::uint32_t m_BlockGen = 0;
 };
 
 } // namespace Spider

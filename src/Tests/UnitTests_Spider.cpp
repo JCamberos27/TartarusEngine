@@ -332,6 +332,390 @@ void TestSpiderGaitAlternates() {
     for (int i = 0; i < Spider::kLegs; ++i) CHECK(std::fabs(gait.Leg(i).Foot.y) < 0.08f);
 }
 
+// Eight legs in a ring round the body, hips at 0.15 m, feet at 0.6 m; groups L1 R2 L3 R4 / R1 L2 R3 L4.
+std::array<Spider::LegRest, Spider::kLegs> RingLegs() {
+    std::array<Spider::LegRest, Spider::kLegs> rest{};
+    const float angles[Spider::kLegs] = {35, -35, 75, -75, 105, -105, 145, -145}; // L1 R1 L2 R2 L3 R3 L4 R4, from -Z
+    const int groups[Spider::kLegs] = {0, 1, 1, 0, 0, 1, 1, 0};
+    for (int i = 0; i < Spider::kLegs; ++i) {
+        const float a = glm::radians(angles[i]);
+        const glm::vec3 dir(-std::sin(a), 0.0f, -std::cos(a));
+        rest[(size_t)i].Hip = dir * 0.15f + glm::vec3(0.0f, 0.25f, 0.0f);
+        rest[(size_t)i].Foot = dir * 0.6f;
+        rest[(size_t)i].Reach = 0.75f;
+        rest[(size_t)i].Group = groups[i];
+    }
+    return rest;
+}
+
+// The jank a run shows, counted as the npc tests count it (SpiderSystem::MeasureBody / MeasureLegs): the body further in
+// a frame than its speed takes it, its up or its rotation turning faster than the mover's rates allow, its head or abdomen
+// inside a surface, a foot moving further than its step (or the body) takes it, a planted foot sliding.
+constexpr float kRunScale = 2.4f / 0.9f; // a hunter's run, x the walk
+constexpr float kMaxUpRateDeg = 540.0f;  // MoverSettings::MaxUpRate (spelled out: the test outlives a change of default)
+struct JankResult {
+    bool Arrived = false, Fell = false;
+    int Pops = 0, Snaps = 0, Sunk = 0, LegPops = 0;
+    float WorstPop = 0.0f, WorstSnap = 0.0f, WorstSlide = 0.0f, LowestY = 1e9f;
+    glm::vec3 Up{0.0f}, LowestAt{0.0f}, LowestUp{0.0f};
+    int LowestCorner = -1;
+};
+JankResult RunJank(const BoxWorld& w, Spider::Mover& m, Spider::Gait* gait, const glm::vec3& goal, float scale, float seconds) {
+    JankResult r;
+    const Spider::MoverSettings s;
+    const Spider::GaitSettings gs;
+    Spider::MoveInput in;
+    in.HasGoal = true;
+    in.Goal = goal;
+    in.SpeedScale = scale;
+    const float dt = 1.0f / 60.0f;
+    auto modelOf = [&] { return glm::translate(glm::mat4(1.0f), m.Position()) * glm::mat4_cast(m.Rotation()); };
+    std::array<glm::vec3, Spider::kLegs> feet{};
+    std::array<bool, Spider::kLegs> planted{}, stepping{};
+    if (gait) {
+        gait->Init(RingLegs(), modelOf());
+        for (int i = 0; i < Spider::kLegs; ++i) feet[(size_t)i] = gait->Leg(i).Foot;
+    }
+    for (float t = 0.0f; t < seconds; t += dt) {
+        const glm::vec3 p0 = m.Position();
+        const glm::quat r0 = m.Rotation();
+        const float v0 = m.Speed();
+        const bool a0 = m.Attached();
+        const glm::vec3 vel0 = m.Velocity();
+        if (gait) in.LegUp = gait->MeanNormal();
+        m.Step(w, s, in, dt);
+        const float moved = glm::length(m.Position() - p0);
+        // (At the body's centre, its belly: the origin between the feet swings round it as the body turns a corner.)
+        const float centreMoved = glm::length((m.Position() + m.Up() * s.BodyLift) - (p0 + r0 * glm::vec3(0.0f, s.BodyLift, 0.0f)));
+        const float v = a0 && m.Attached() ? std::max(v0, m.Speed()) : std::max(glm::length(vel0), glm::length(m.Velocity()));
+        if (centreMoved > 1.5f * v * dt + 0.01f) {
+            ++r.Pops;
+            r.WorstPop = std::max(r.WorstPop, centreMoved);
+        }
+        const float upTurn = glm::degrees(std::acos(std::clamp(glm::dot(r0 * glm::vec3(0, 1, 0), m.Up()), -1.0f, 1.0f)));
+        const glm::quat d = m.Rotation() * glm::conjugate(r0);
+        const float total = glm::degrees(2.0f * std::acos(std::clamp(std::fabs(d.w), 0.0f, 1.0f)));
+        if (upTurn > kMaxUpRateDeg * dt * 1.25f + 0.5f || total > (s.TurnRate + kMaxUpRateDeg) * dt * 1.25f + 0.5f) {
+            ++r.Snaps;
+            r.WorstSnap = std::max(r.WorstSnap, std::max(upTurn, total));
+        }
+        r.Fell = r.Fell || !m.Attached();
+        if (m.Position().y < r.LowestY) {
+            r.LowestY = m.Position().y;
+            r.LowestAt = m.Position();
+            r.LowestUp = m.Up();
+            r.LowestCorner = m.Cornering();
+        }
+        const glm::vec3 mid = m.Position() + m.Up() * s.BodyLift;
+        if (w.Occupied(mid + m.Forward() * (s.BodyFront - 0.03f), 0.0f) || w.Occupied(mid - m.Forward() * (s.BodyBack - 0.03f), 0.0f)) ++r.Sunk;
+        if (gait) {
+            const glm::mat4 model = modelOf();
+            gait->Step(w, gs, model, m.Position(), m.Up(), m.Velocity(), m.Attached(), dt);
+            const float turned = glm::radians(total);
+            for (int i = 0; i < Spider::kLegs; ++i) {
+                const Spider::LegState& l = gait->Leg(i);
+                const float step = glm::length(l.Foot - feet[(size_t)i]);
+                if (l.Planted && l.Grounded && planted[(size_t)i]) {
+                    r.WorstSlide = std::max(r.WorstSlide, step);
+                } else {
+                    float allowed = moved + turned * glm::length(l.Foot - m.Position()) + 2.0f * dt + 0.01f;
+                    if (l.Stepping || stepping[(size_t)i]) { // (a step's landing frame is still the step)
+                        const float dur = std::max(1e-3f, l.Duration);
+                        allowed += 1.6f * glm::length(l.To - l.From) * dt / dur + gs.StepHeight * 3.1416f * dt / dur;
+                    }
+                    if (step > allowed) ++r.LegPops;
+                }
+                feet[(size_t)i] = l.Foot;
+                planted[(size_t)i] = l.Planted && l.Grounded;
+                stepping[(size_t)i] = l.Stepping;
+            }
+        }
+        if (m.Arrived()) {
+            r.Arrived = true;
+            break;
+        }
+    }
+    r.Up = m.Up();
+    return r;
+}
+
+void TestSpiderCornersTurnWithoutPops() {
+    // At a run, floor to wall, wall to ceiling, ceiling to wall, wall to floor: every inside corner turned with the body
+    // and the legs moving continuously. The old mover held the origin on the floor while its up turned, then its abdomen's
+    // push-out slid it off and the support probe snapped it onto the wall - a pop of up to 0.3 m and a snap of its up.
+    BoxWorld w;
+    Spider::Mover m;
+    Spider::Gait gait;
+    m.Reset(glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
+    const glm::vec3 goals[4] = {{2.0f, 1.2f, 0.5f}, {0.5f, 2.4f, 0.8f}, {-2.0f, 1.2f, 0.0f}, {-1.0f, 0.0f, 0.0f}};
+    for (const glm::vec3& g : goals) {
+        const JankResult r = RunJank(w, m, &gait, g, kRunScale, 15.0f);
+        CHECK(r.Arrived);
+        CHECK(!r.Fell);
+        CHECK(r.Pops == 0);
+        CHECK(r.Snaps == 0);
+        CHECK(r.Sunk == 0);
+        CHECK(r.LegPops == 0);
+        CHECK(r.WorstSlide < 0.002f);
+        if (r.Pops || r.Snaps || r.Sunk || r.LegPops)
+            std::printf("    corner to %.1f %.1f %.1f: pops %d (worst %.3f m), snaps %d (worst %.1f deg), sunk %d, leg pops %d, slide %.4f\n",
+                        g.x, g.y, g.z, r.Pops, r.WorstPop, r.Snaps, r.WorstSnap, r.Sunk, r.LegPops, r.WorstSlide);
+    }
+    CHECK(m.Up().y > 0.97f);
+}
+
+void TestSpiderEdgesRollWithoutPops() {
+    // At a run over a crate (up its side, over two outside edges, down the far side) and off the top of a tall one down its
+    // side: each edge rolled over, never a probe's snap (the old one dropped the origin to the floor below a ledge, or
+    // snapped it back under the body onto the side).
+    BoxWorld w;
+    w.Boxes.push_back({glm::vec3(-2.0f, 0.0f, -0.4f), glm::vec3(2.0f, 0.6f, 0.4f)});
+    Spider::Mover m;
+    Spider::Gait gait;
+    m.Reset(glm::vec3(0.0f, 0.0f, 1.5f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
+    const glm::vec3 goals[2] = {{0.0f, 0.6f, 0.0f}, {0.0f, 0.0f, -1.5f}};
+    for (const glm::vec3& g : goals) {
+        const JankResult r = RunJank(w, m, &gait, g, kRunScale, 15.0f);
+        CHECK(r.Arrived);
+        CHECK(!r.Fell);
+        CHECK(r.Pops == 0);
+        CHECK(r.Snaps == 0);
+        CHECK(r.Sunk == 0);
+        CHECK(r.LegPops == 0);
+        CHECK(r.WorstSlide < 0.002f);
+        if (r.Pops || r.Snaps || r.Sunk || r.LegPops)
+            std::printf("    edge to %.1f %.1f %.1f: pops %d (worst %.3f m), snaps %d (worst %.1f deg), sunk %d, leg pops %d, slide %.4f\n",
+                        g.x, g.y, g.z, r.Pops, r.WorstPop, r.Snaps, r.WorstSnap, r.Sunk, r.LegPops, r.WorstSlide);
+    }
+    CHECK(m.Up().y > 0.97f);
+    // Off a 1.2 m block's top, down its side to the floor.
+    BoxWorld tall;
+    tall.Boxes.push_back({glm::vec3(-0.5f, 0.0f, -0.5f), glm::vec3(0.5f, 1.2f, 0.5f)});
+    Spider::Mover t;
+    t.Reset(glm::vec3(0.0f, 1.2f, 0.2f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
+    const JankResult down = RunJank(tall, t, &gait, glm::vec3(0.0f, 0.3f, -0.5f), kRunScale, 10.0f);
+    CHECK(down.Arrived);
+    CHECK(!down.Fell);
+    CHECK(down.Pops == 0);
+    CHECK(down.Snaps == 0);
+    CHECK(down.Up.z < -0.97f); // side-on to the block's -Z face
+    if (down.Pops || down.Snaps)
+        std::printf("    off the block: pops %d (worst %.3f m), snaps %d (worst %.1f deg)\n", down.Pops, down.WorstPop, down.Snaps, down.WorstSnap);
+}
+
+void TestSpiderWallCornerKeepsOutOfTheFloor() {
+    // Low on one wall, heading down and across into the next: the wall-to-wall corner's line runs down into the floor. The
+    // turn carried it along that line unchecked, through the floor slab (in 301 a hunter came out under the floor).
+    BoxWorld w;
+    Spider::Mover m;
+    m.Reset(glm::vec3(2.0f, 0.9f, -1.4f), glm::angleAxis(glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f))); // up -X
+    const JankResult r = RunJank(w, m, nullptr, glm::vec3(1.0f, 0.05f, -2.0f), kRunScale, 10.0f);
+    CHECK(!r.Fell);
+    CHECK(r.LowestY > -0.001f);
+    CHECK(r.Pops == 0);
+    if (r.LowestY <= -0.001f) std::printf("    wall corner: origin down to y %.3f at %.2f %.2f up %.2f %.2f %.2f corner %d\n", r.LowestY, r.LowestAt.x,
+                                          r.LowestAt.z, r.LowestUp.x, r.LowestUp.y, r.LowestUp.z, r.LowestCorner);
+}
+
+void TestSpiderClimbsAWallItIsPressedTo() {
+    // Its belly a centimetre off a wall it has turned to face (in 301, turned from alongside a wardrobe): the next step
+    // starts the turn up it. The corner was refused while its belly was nearer the wall than its height, and it stood
+    // pressed there.
+    BoxWorld w;
+    Spider::Mover m;
+    m.Reset(glm::vec3(1.99f, 0.0f, 0.0f), glm::angleAxis(glm::radians(-90.0f), glm::vec3(0.0f, 1.0f, 0.0f))); // facing +X
+    Spider::MoveInput in;
+    in.HasGoal = true;
+    in.Goal = glm::vec3(2.0f, 1.2f, 0.0f);
+    const Spider::MoverSettings s;
+    bool turning = false;
+    for (int i = 0; i < 20 && !turning; ++i) {
+        m.Step(w, s, in, 1.0f / 60.0f);
+        turning = m.Cornering();
+    }
+    CHECK(turning);
+    const JankResult r = RunJank(w, m, nullptr, in.Goal, 1.0f, 8.0f);
+    CHECK(r.Arrived);
+    CHECK(r.Up.x < -0.9f);
+}
+
+void TestSpiderSlidesAlongAWallItGrazes() {
+    // Walking along a wall, a little into it, toward a spot up that wall further on: it slides along the wall and turns up
+    // it. Its grazing head was pushed back along the body - straight against its walk - and it stood still (in 301, by
+    // the outside wall under the window).
+    BoxWorld w;
+    Spider::Mover m;
+    m.Reset(glm::vec3(1.86f, 0.0f, 1.5f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f)); // facing -Z, alongside the +X wall
+    const JankResult r = RunJank(w, m, nullptr, glm::vec3(2.0f, 1.2f, -1.5f), 0.4f, 25.0f); // (a perching pace)
+    CHECK(r.Arrived);
+    CHECK(r.Up.x < -0.9f);
+    if (!r.Arrived) std::printf("    grazing a wall: never arrived, up %.2f %.2f %.2f\n", r.Up.x, r.Up.y, r.Up.z);
+}
+
+void TestSpiderCorpseNeverRestsOnItsSide() {
+    // A corpse come to rest side-on (a round body with nothing to tip it either way - in 301 one propped on its abdomen and
+    // curled legs): the settler rolls it gently onto its belly or its back, and never puts it to sleep on its side (the old
+    // 5 s rule froze one mid-roll there).
+    World world;
+    const entt::entity floorE = world.CreateEmptyEntity(glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Floor");
+    ColliderComponent col;
+    col.Kind = ColliderComponent::Shape::Box;
+    col.HalfExtents = glm::vec3(10.0f, 0.5f, 10.0f);
+    world.Registry.emplace<ColliderComponent>(floorE, col);
+    world.SyncActiveInHierarchy();
+    world.RebuildWorldTransformCache();
+    PhysicsWorld::Create(world);
+    CHECK(PhysicsWorld::IsActive());
+    if (!PhysicsWorld::IsActive()) return;
+    // One capsule along X, lying on the floor, rolled a quarter turn about its length: its up (local +Y) points along +Z.
+    PhysicsWorld::RagdollPart part;
+    part.Radius = 0.12f;
+    part.HalfLength = 0.15f;
+    part.Position[1] = -0.5f + part.Radius;
+    const glm::quat side = glm::angleAxis(glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+    part.Rotation[0] = side.x;
+    part.Rotation[1] = side.y;
+    part.Rotation[2] = side.z;
+    part.Rotation[3] = side.w;
+    const int ragdoll = PhysicsWorld::CreateRagdoll(77u, &part, 1);
+    CHECK(ragdoll >= 0);
+    if (ragdoll < 0) return;
+    SpiderRagdoll::Settler settle;
+    settle.Begin(ragdoll);
+    float upY = 0.0f;
+    for (int i = 0; i < 60 * 10; ++i) {
+        PhysicsWorld::Step(1.0f / 60.0f, world, {});
+        settle.Update(1.0f / 60.0f, 0, glm::vec3(0.0f, 1.0f, 0.0f));
+        float p[3], q[4];
+        if (PhysicsWorld::GetRagdollPart(ragdoll, 0, p, q)) upY = (glm::quat(q[3], q[0], q[1], q[2]) * glm::vec3(0.0f, 1.0f, 0.0f)).y;
+        if (settle.Asleep() && i > 60) break;
+    }
+    CHECK(std::fabs(upY) > 0.7f);
+    CHECK(settle.Asleep());
+    if (std::fabs(upY) <= 0.7f || !settle.Asleep()) std::printf("    corpse: up.y %.2f, asleep %d\n", upY, (int)settle.Asleep());
+    PhysicsWorld::DestroyRagdoll(ragdoll);
+    PhysicsWorld::Destroy();
+}
+
+void TestSpiderLetsGoWithoutAJump() {
+    // Knocked off a wall it lets go from where it is: no jump off the face (the old one lifted it 12 cm in a frame first).
+    BoxWorld w;
+    Spider::Mover m;
+    m.Reset(glm::vec3(2.0f, 1.2f, 0.0f), glm::angleAxis(glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f))); // up -X
+    const Spider::MoverSettings s;
+    Spider::MoveInput in;
+    m.Step(w, s, in, 1.0f / 60.0f);
+    const glm::vec3 was = m.Position();
+    const glm::vec3 v = m.Up() * 1.2f;
+    m.Detach(v);
+    m.Step(w, s, in, 1.0f / 60.0f);
+    CHECK(!m.Attached());
+    CHECK(glm::length(m.Position() - was) < 1.5f * glm::length(v) / 60.0f + 0.01f);
+    // Off a door's leaf (4 cm thick): it leaves the leaf rather than landing straight back on it from behind.
+    BoxWorld d;
+    d.Boxes.push_back({glm::vec3(-0.5f, 0.0f, -0.02f), glm::vec3(0.5f, 2.0f, 0.02f)});
+    Spider::Mover l;
+    l.Reset(glm::vec3(0.0f, 1.0f, 0.02f), glm::angleAxis(glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f))); // up +Z
+    l.Step(d, s, in, 1.0f / 60.0f);
+    l.Detach(l.Up() * 1.2f);
+    for (int f = 0; f < 5; ++f) l.Step(d, s, in, 1.0f / 60.0f);
+    CHECK(!l.Attached());
+    CHECK(l.Position().z > 0.08f);
+}
+
+void TestSpiderLegsSwingFreeWhenItLetsGo() {
+    // Letting go, the legs swing toward where they hang with the body - they don't snap there in a frame - and a foot
+    // over nothing (hanging off an edge) goes smoothly with the body, never jumping when it is looked for again.
+    BoxWorld w;
+    w.RoomMin = glm::vec3(-50.0f, 0.0f, -50.0f);
+    w.RoomMax = glm::vec3(50.0f, 10.0f, 50.0f);
+    Spider::Gait gait;
+    glm::vec3 pos(0.0f);
+    gait.Init(RingLegs(), glm::translate(glm::mat4(1.0f), pos));
+    const Spider::GaitSettings s;
+    const float dt = 1.0f / 60.0f;
+    const glm::vec3 up(0.0f, 1.0f, 0.0f);
+    glm::vec3 vel(0.0f, 0.0f, -1.0f);
+    for (int f = 0; f < 30; ++f) {
+        pos += vel * dt;
+        gait.Step(w, s, glm::translate(glm::mat4(1.0f), pos), pos, up, vel, true, dt);
+    }
+    std::array<glm::vec3, Spider::kLegs> prev{};
+    for (int i = 0; i < Spider::kLegs; ++i) prev[(size_t)i] = gait.Leg(i).Foot;
+    vel = glm::vec3(0.0f, 2.0f, -1.0f); // a leap
+    float worst = 0.0f;
+    for (int f = 0; f < 30; ++f) {
+        const glm::vec3 was = pos;
+        pos += vel * dt;
+        gait.Step(w, s, glm::translate(glm::mat4(1.0f), pos), pos, up, vel, false, dt);
+        for (int i = 0; i < Spider::kLegs; ++i) {
+            // Relative to the body: no more than a leg's swing in a frame.
+            const float rel = glm::length((gait.Leg(i).Foot - pos) - (prev[(size_t)i] - was));
+            worst = std::max(worst, rel);
+            prev[(size_t)i] = gait.Leg(i).Foot;
+        }
+    }
+    CHECK(worst < 2.0f * dt + 0.005f);
+    // Walking out over a pit: the legs over it hang, following the body without a jump.
+    BoxWorld pit;
+    pit.RoomMin = glm::vec3(-50.0f, -5.0f, -50.0f);
+    pit.RoomMax = glm::vec3(50.0f, 10.0f, 50.0f);
+    pit.Boxes.push_back({glm::vec3(-50.0f, -5.0f, -0.1f), glm::vec3(50.0f, 0.0f, 50.0f)}); // a ledge: nothing past z -0.1
+    Spider::Gait g2;
+    pos = glm::vec3(0.0f, 0.0f, 0.3f);
+    g2.Init(RingLegs(), glm::translate(glm::mat4(1.0f), pos));
+    vel = glm::vec3(0.0f, 0.0f, -0.6f);
+    for (int i = 0; i < Spider::kLegs; ++i) prev[(size_t)i] = g2.Leg(i).Foot;
+    worst = 0.0f;
+    for (int f = 0; f < 40; ++f) {
+        const glm::vec3 was = pos;
+        pos += vel * dt;
+        g2.Step(pit, s, glm::translate(glm::mat4(1.0f), pos), pos, up, vel, true, dt);
+        for (int i = 0; i < Spider::kLegs; ++i) {
+            const Spider::LegState& l = g2.Leg(i);
+            if (!l.Stepping && !(l.Planted && l.Grounded))
+                worst = std::max(worst, glm::length((l.Foot - pos) - (prev[(size_t)i] - was)));
+            prev[(size_t)i] = l.Foot;
+        }
+    }
+    CHECK(worst < 2.0f * dt + 0.005f);
+}
+
+void TestSpiderRouteAimNeverTurnsBack() {
+    // A fresh route starts at the node nearest the body - here just behind it. The aim is ahead along the route, never
+    // back at that node (heading back turned the body round, then round again: a flip-flop at every re-plan).
+    // (Its next node is already on the wall ahead, so the aim can't look past the one behind along the floor.)
+    const std::vector<glm::vec3> route = {{0.0f, 0.0f, 0.4f}, {0.0f, 0.2f, -0.3f}, {0.0f, 0.6f, -0.3f}};
+    const std::vector<glm::vec3> normals = {{0, 1, 0}, {0, 0, 1}, {0, 0, 1}};
+    int at = 0;
+    const glm::vec3 pos(0.0f, 0.0f, -0.05f), up(0.0f, 1.0f, 0.0f);
+    const glm::vec3 aim = Spider::RouteAim(route, normals, at, pos, up, glm::vec3(0.0f, 1.5f, -1.0f));
+    CHECK(aim.z < pos.z); // ahead (-Z), not behind
+}
+
+void TestSpiderNodesNearMatchesAWalk() {
+    // The spatial query the door blocks use finds exactly the nodes a walk of the whole graph does.
+    BoxWorld w;
+    w.Boxes.push_back({glm::vec3(-0.5f, 0.0f, -0.5f), glm::vec3(0.5f, 0.7f, 0.5f)});
+    std::vector<float> verts;
+    std::vector<int> tris;
+    w.Triangles(verts, tris);
+    Spider::SurfaceGraph g;
+    CHECK(g.Build(verts, tris, w, Spider::NavSettings{}));
+    const glm::vec3 probes[3] = {{0.0f, 0.7f, 0.0f}, {1.9f, 1.0f, 1.9f}, {-1.0f, 0.0f, 0.3f}};
+    for (const glm::vec3& p : probes) {
+        for (float radius : {0.3f, 1.1f}) {
+            std::vector<int> fast, walk;
+            g.NodesNear(p, radius, fast);
+            for (int i = 0; i < g.NodeCount(); ++i)
+                if (glm::dot(g.Pos(i) - p, g.Pos(i) - p) <= radius * radius) walk.push_back(i);
+            std::sort(fast.begin(), fast.end());
+            CHECK(fast == walk);
+            CHECK(!walk.empty() || radius < 0.5f);
+        }
+    }
+}
+
 void TestSpiderRigParses() {
     std::string legs, a = "[", b = "[";
     const char* names[Spider::kLegs] = {"L1", "R1", "L2", "R2", "L3", "R3", "L4", "R4"};
@@ -845,6 +1229,29 @@ void TestSpiderNavRoutesRoundBlockedNodes() {
     CHECK(allFloor);
 }
 
+void TestSpiderNavSearchStaysCheap() {
+    // Across the room, floor corner to the far ceiling corner: the search expands a small share of the graph, and the route
+    // is no more than 1.3x the shortest (weighted A*). The plain search expanded nearly all of it - in 301 up to 18k nodes,
+    // a 3 ms frame.
+    BoxWorld w;
+    std::vector<float> verts;
+    std::vector<int> tris;
+    w.Triangles(verts, tris);
+    Spider::SurfaceGraph g;
+    CHECK(g.Build(verts, tris, w, Spider::NavSettings{}));
+    const int from = g.Nearest(glm::vec3(-1.8f, 0.0f, 1.8f)), to = g.Nearest(glm::vec3(1.8f, 2.4f, -1.8f));
+    std::vector<int> path;
+    CHECK(g.FindPath(from, to, Spider::PathCosts{}, path));
+    float length = 0.0f;
+    for (size_t i = 1; i < path.size(); ++i) length += glm::length(g.Pos(path[i]) - g.Pos(path[i - 1]));
+    const float shortest = 7.49f; // (the plain search's route)
+    const float share = (float)g.LastExpanded() / (float)std::max(1, g.NodeCount());
+    CHECK(share < 0.5f);
+    CHECK(length < 1.3f * shortest);
+    std::printf("    search: expanded %d of %d nodes (%.0f%%), route %.2f m (the shortest %.2f)\n", g.LastExpanded(), g.NodeCount(), share * 100.0f,
+                length, shortest);
+}
+
 void TestSpiderNeverSlipsUnderAWall() {
     // 301's walls stand 5 mm clear of the floor slab, and a body's origin sits on the floor: below a wall's bottom, where
     // the wall probes (10 cm up and more) don't look. A hunter that landed right on a wall's face, holding there for a bite,
@@ -945,6 +1352,17 @@ void RegisterSpiderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"SpiderNeverSlipsUnderAWall", TestSpiderNeverSlipsUnderAWall});
     tests.push_back({"SpiderFallsAndLands", TestSpiderFallsAndLands});
     tests.push_back({"SpiderGaitAlternates", TestSpiderGaitAlternates});
+    tests.push_back({"SpiderCornersTurnWithoutPops", TestSpiderCornersTurnWithoutPops});
+    tests.push_back({"SpiderEdgesRollWithoutPops", TestSpiderEdgesRollWithoutPops});
+    tests.push_back({"SpiderLetsGoWithoutAJump", TestSpiderLetsGoWithoutAJump});
+    tests.push_back({"SpiderNavSearchStaysCheap", TestSpiderNavSearchStaysCheap});
+    tests.push_back({"SpiderCorpseNeverRestsOnItsSide", TestSpiderCorpseNeverRestsOnItsSide});
+    tests.push_back({"SpiderClimbsAWallItIsPressedTo", TestSpiderClimbsAWallItIsPressedTo});
+    tests.push_back({"SpiderSlidesAlongAWallItGrazes", TestSpiderSlidesAlongAWallItGrazes});
+    tests.push_back({"SpiderWallCornerKeepsOutOfTheFloor", TestSpiderWallCornerKeepsOutOfTheFloor});
+    tests.push_back({"SpiderLegsSwingFreeWhenItLetsGo", TestSpiderLegsSwingFreeWhenItLetsGo});
+    tests.push_back({"SpiderRouteAimNeverTurnsBack", TestSpiderRouteAimNeverTurnsBack});
+    tests.push_back({"SpiderNodesNearMatchesAWalk", TestSpiderNodesNearMatchesAWalk});
     tests.push_back({"SpiderRigParses", TestSpiderRigParses});
     tests.push_back({"SpiderPartsParse", TestSpiderPartsParse});
     tests.push_back({"SpiderRagdollBuilds", TestSpiderRagdollBuilds});

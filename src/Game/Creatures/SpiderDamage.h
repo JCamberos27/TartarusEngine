@@ -84,6 +84,7 @@ public:
         float LegFold = 0.0f;       // dead: the mean angle (deg) each leg's tip has turned about the body since death (the curl)
         float LowestPart = 0.0f;    // dead: the lowest capsule's bottom (world y)
         glm::vec3 Centre{0.0f};     // dead: the root part's centre
+        glm::vec3 Up{0.0f, 1.0f, 0.0f}; // dead: the body's up (its back) as it lies now
         bool Finite = true;         // dead: every part's pose finite
         float MaxSpeed = 0.0f;      // dead: the fastest part's speed now (m/s)
     };
@@ -125,6 +126,7 @@ private:
         std::vector<int> Owner;            // per node: the part that carries it (-1: none, it keeps its pose)
         std::vector<glm::mat4> Offset;     // per node: its world = its part's capsule world * Offset
         std::array<glm::mat4, Spider::kMaxParts> PartWorld{};
+        glm::vec3 UpInRoot{0.0f, 1.0f, 0.0f}; // the body's up at death, in the root part's frame
         std::array<glm::vec3, Spider::kLegs> TipAtDeath{}; // each leg tip relative to the root part, its frame at death
         glm::vec3 RootOffset{0.0f};        // the root entity from the root part's centre at death (world)
         bool PoseWritten = false;
