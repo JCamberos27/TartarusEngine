@@ -1090,26 +1090,47 @@ int main(int argc, char** argv) {
             return dot;
         };
         // F6 Nav: the soldiers' navmesh edges (green) and the spiders' surface graph near the player (cyan), 7 floats a vertex.
+        // Built once per navmesh / when the player has moved, not every frame: the edges are static, and the graph's
+        // neighbourhood only changes as the player walks (capped, so a dense graph can't flood the HUD).
         auto navDebugLines = [&](std::vector<float>& out) {
-            auto line = [&](const glm::vec3& a, const glm::vec3& b, const glm::vec4& c) {
+            auto line = [](std::vector<float>& o, const glm::vec3& a, const glm::vec3& b, const glm::vec4& c) {
                 const float v[14] = {a.x, a.y, a.z, c.r, c.g, c.b, c.a, b.x, b.y, b.z, c.r, c.g, c.b, c.a};
-                out.insert(out.end(), v, v + 14);
+                o.insert(o.end(), v, v + 14);
             };
-            static std::vector<NavMesh::Edge> edges;
-            edges.clear();
-            npcDirector.Nav().BoundaryEdges(edges);
-            const glm::vec3 lift(0.0f, 0.05f, 0.0f);
-            for (const NavMesh::Edge& e : edges) line(e.A + lift, e.B + lift, glm::vec4(0.35f, 1.0f, 0.45f, 0.85f));
+            static std::vector<float> meshLines, graphLines;
+            static int meshPolys = -1;
+            static const Spider::SurfaceGraph* graphFor = nullptr;
+            static int graphNodes = -1;
+            static glm::vec3 graphAt(1e9f);
+            const NavMesh& nav = npcDirector.Nav();
+            if (nav.PolyCount() != meshPolys) {
+                meshPolys = nav.PolyCount();
+                meshLines.clear();
+                std::vector<NavMesh::Edge> edges;
+                nav.BoundaryEdges(edges);
+                const glm::vec3 lift(0.0f, 0.05f, 0.0f);
+                for (const NavMesh::Edge& e : edges) line(meshLines, e.A + lift, e.B + lift, glm::vec4(0.35f, 1.0f, 0.45f, 0.85f));
+            }
             const Spider::SurfaceGraph& g = spiders.Nav();
-            if (g.Empty()) return;
-            static std::vector<int> nearNodes;
-            nearNodes.clear();
-            g.NodesNear(player.Cam.Position, 12.0f, nearNodes);
-            for (int i : nearNodes)
-                for (int k = g.FirstLink(i); k < g.FirstLink(i + 1); ++k) {
-                    const int j = g.Neighbour(k);
-                    if (j > i) line(g.Pos(i), g.Pos(j), glm::vec4(0.3f, 0.85f, 1.0f, 0.6f));
+            if (g.Empty()) graphLines.clear();
+            else if (&g != graphFor || g.NodeCount() != graphNodes || glm::length(player.Cam.Position - graphAt) > 0.75f) {
+                graphFor = &g;
+                graphNodes = g.NodeCount();
+                graphAt = player.Cam.Position;
+                graphLines.clear();
+                static std::vector<int> nearNodes;
+                nearNodes.clear();
+                g.NodesNear(player.Cam.Position, 10.0f, nearNodes);
+                constexpr size_t kMaxGraphLines = 4000;
+                for (int i : nearNodes) {
+                    for (int k = g.FirstLink(i); k < g.FirstLink(i + 1) && graphLines.size() < kMaxGraphLines * 14; ++k) {
+                        const int j = g.Neighbour(k);
+                        if (j > i) line(graphLines, g.Pos(i), g.Pos(j), glm::vec4(0.3f, 0.85f, 1.0f, 0.6f));
+                    }
                 }
+            }
+            out.insert(out.end(), meshLines.begin(), meshLines.end());
+            out.insert(out.end(), graphLines.begin(), graphLines.end());
         };
         // The text-and-shapes combat HUD (ammo, kill feed, radio subtitles, awareness chevrons, AI overlay) for one view.
         auto drawCombatHud = [&](unsigned fbo, int w, int h, const glm::mat4& v, const glm::mat4& p) {
@@ -2737,9 +2758,9 @@ int main(int argc, char** argv) {
                         static float fRowClock = 0.0f;
                         static int fRowStep = 0;
                         fRowClock += gameDt;
-                        const int keys[] = {GLFW_KEY_F9, GLFW_KEY_F10, GLFW_KEY_F11, -1, GLFW_KEY_F12, -1};
-                        const float times[] = {2.0f, 3.0f, 4.0f, 6.0f, 6.5f, 7.5f};
-                        if (fRowStep < 6 && fRowClock >= times[fRowStep]) {
+                        const int keys[] = {GLFW_KEY_F9, GLFW_KEY_F10, GLFW_KEY_F11, -1, GLFW_KEY_F12, -1, GLFW_KEY_F8, GLFW_KEY_F8};
+                        const float times[] = {2.0f, 3.0f, 4.0f, 6.0f, 6.5f, 7.5f, 8.0f, 14.0f};
+                        if (fRowStep < 8 && fRowClock >= times[fRowStep]) {
                             if (keys[fRowStep] >= 0) Input::SimulateKeyTap(keys[fRowStep]);
                             else for (auto [se, ssc, st] : world.Registry.view<SpiderComponent, TransformComponent>().each())
                                 std::printf("[FRowTest] spider %u at (%.2f, %.2f, %.2f) brain %d\n", (unsigned)entt::to_integral(se), st.Position.x, st.Position.y, st.Position.z, ssc.Brain);
@@ -4665,9 +4686,13 @@ int main(int argc, char** argv) {
                 // F6 Nav while editing: the navmesh this scene baked in its last Play (Library/NavCache/scene_<name>.txt names
                 // it), its edges drawn over the Scene view. The physics scene the navmesh is built from only exists in Play.
                 {
-                    const std::string navNote = ProjectPaths::Resolve("Library/NavCache/scene_" + editor.SceneTitle() + ".txt");
                     static std::string navRecorded;
-                    if (playing && npcDirector.Started() && !npcDirector.NavCachePath().empty() && navRecorded != navNote) {
+                    const bool wantNav = !playing && editorUIVisible && FKeyRow::CurrentOverlay() == FKeyRow::OverlayNav;
+                    const bool recordNav = playing && npcDirector.Started() && !npcDirector.NavCachePath().empty() && navRecorded.empty();
+                    // (the note's path is only built on the frames that need it: an editor frame allocates nothing here)
+                    static std::string navNote;
+                    if (wantNav || recordNav) navNote = ProjectPaths::Resolve("Library/NavCache/scene_" + editor.SceneTitle() + ".txt");
+                    if (recordNav) {
                         std::ofstream(std::filesystem::u8path(navNote)) << npcDirector.NavCachePath() << std::endl << npcDirector.NavHash() << std::endl;
                         navRecorded = navNote;
                     }
@@ -4675,7 +4700,6 @@ int main(int argc, char** argv) {
                     static NavMesh editNav;
                     static std::vector<NavMesh::Edge> editNavEdges;
                     static std::string editNavFor;
-                    const bool wantNav = !playing && editorUIVisible && FKeyRow::CurrentOverlay() == FKeyRow::OverlayNav;
                     if (!wantNav) editNavFor.clear();
                     else if (editNavFor != navNote) {
                         editNavFor = navNote;

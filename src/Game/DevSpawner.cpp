@@ -93,10 +93,10 @@ void WarmPrefab(AssetLibrary& assets, const std::string& rel) {
 }
 
 void DevSpawner::Warm(const Context& c) {
-    m_Warmed = true;
     const SquadSettingsComponent squad = c.Npcs ? c.Npcs->Settings() : SquadSettingsComponent{};
-    for (const std::string& p : {std::string(kSpiderPrefab), squad.BodyPrefab, squad.RiflePrefab, squad.ShotgunPrefab})
-        if (!p.empty()) WarmPrefab(*c.Assets, p);
+    const std::string prefabs[] = {kSpiderPrefab, squad.BodyPrefab, squad.RiflePrefab, squad.ShotgunPrefab};
+    if (m_Warmed < 4 && !prefabs[m_Warmed].empty()) WarmPrefab(*c.Assets, prefabs[m_Warmed]);
+    ++m_Warmed;
 }
 
 bool DevSpawner::Place(const Context& c, glm::vec3& at, float& yawDeg) const {
@@ -124,7 +124,7 @@ bool DevSpawner::Place(const Context& c, glm::vec3& at, float& yawDeg) const {
 
 void DevSpawner::Update(const Context& c) {
     if (!c.WorldPtr || !c.Assets) return;
-    if (!m_Warmed) Warm(c);
+    if (m_Warmed < 4) Warm(c); // one prefab a frame
     // The first F9 in a scene with no NPC Spawn started the soldiers: their navmesh is up after a Think.
     if (m_WaitSquad && c.Npcs && c.Npcs->Started()) { m_WaitSquad = false; SpawnNpc(c); }
     if (c.Keys) {
@@ -308,7 +308,7 @@ void DevSpawner::Stop(World& world) {
 }
 
 void DevSpawner::Forget() {
-    m_Warmed = false;
+    m_Warmed = 0;
     m_NpcIds.clear();
     m_SpiderIds.clear();
     m_Props.clear();

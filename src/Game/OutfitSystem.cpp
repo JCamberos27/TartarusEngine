@@ -765,26 +765,24 @@ int Preload(World& world, AssetLibrary& assets, entt::entity root, const Wardrob
     return (int)Prefetch(world, assets, root, *cat, request, notes).size(); // (the tickets go: the loads go on)
 }
 
-int PreloadWardrobe(AssetLibrary& assets, const Catalog& cat, Wardrobe::Gender gender) {
-    int n = 0;
-    auto model = [&](const std::string& rel) {
-        if (rel.empty()) return;
-        const std::string abs = ProjectPaths::Resolve(rel);
-        assets.RequestModelAsync(abs);
-        for (const auto& [name, mat] : assets.MaterialRemap(abs)) {
-            std::vector<AssetLibrary::AsyncHandle> t;
-            RequestMaterial(assets, mat, t);
-        }
-        ++n;
-    };
+void WardrobeModels(const Catalog& cat, Wardrobe::Gender gender, std::vector<std::string>& out) {
     for (const Wardrobe::Item& it : cat.Items)
-        if (it.Sex == gender) model(it.Path);
+        if (it.Sex == gender) out.push_back(it.Path);
     const std::string root = cat.W.Root.empty() ? std::string() : cat.W.Root + "/";
+    auto rel = [&](const std::string& p) { return p.rfind("assets/", 0) == 0 ? p : root + p; };
     for (const Wardrobe::RaceDef& race : cat.W.Body(gender).Races) {
-        model(race.Head.rfind("assets/", 0) == 0 ? race.Head : root + race.Head);
-        for (const auto& [part, path] : race.Parts) model(path.rfind("assets/", 0) == 0 ? path : root + path);
+        if (!race.Head.empty()) out.push_back(rel(race.Head));
+        for (const auto& [part, path] : race.Parts)
+            if (!path.empty()) out.push_back(rel(path));
     }
-    return n;
+}
+
+void PreloadModel(AssetLibrary& assets, const std::string& rel) {
+    if (rel.empty()) return;
+    const std::string abs = ProjectPaths::Resolve(rel);
+    assets.RequestModelAsync(abs);
+    std::vector<AssetLibrary::AsyncHandle> tickets;
+    for (const auto& [name, mat] : assets.MaterialRemap(abs)) RequestMaterial(assets, mat, tickets);
 }
 
 Result Randomize(World& world, AssetLibrary& assets, entt::entity root, std::uint32_t seed, const std::string& style) {

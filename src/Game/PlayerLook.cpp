@@ -8,13 +8,14 @@
 #include "EditorSound.h"
 #include "FKeyRow.h"
 #include "Shortcuts.h"
+#include <algorithm>
 #include <chrono>
 #include <string>
 #include <vector>
 
 namespace {
 
-struct Look { Wardrobe::Gender Sex; std::string Race; };
+using Look = PlayerLook::Look;
 
 const char* SexName(Wardrobe::Gender g) { return g == Wardrobe::Gender::Female ? "Female" : "Male"; }
 std::string Key(const Look& l) { return std::string(SexName(l.Sex)) + "/" + l.Race; }
@@ -81,23 +82,20 @@ int NextStyle(const Wardrobe::Wardrobe& w, int style, Wardrobe::Gender sex) {
 
 // What the next press of each key puts on, loading now: F8's next outfit (its seed drawn now), Shift+F8's next style,
 // F7's next look.
-void PlayerLook::LoadAhead(World& world, AssetLibrary& assets, entt::entity root) {
+void PlayerLook::LoadAhead(World& world, AssetLibrary& assets, entt::entity root, int step) {
     auto& outfit = world.Registry.get<CharacterOutfitComponent>(root);
-    const auto cat = OutfitSystem::LoadCatalog(assets, outfit.Wardrobe);
-    if (!cat) return;
-    const Wardrobe::Wardrobe& w = cat->W;
+    if (!m_Catalog) return;
+    const Wardrobe::Wardrobe& w = m_Catalog->W;
     const EditorSettings& es = EditorSettings::Get();
     const int bare = (int)w.Styles.size();
-    m_NextSeed = NewSeed();
-    {
+    if (step == 0) m_NextSeed = NewSeed();
+    if (step <= 1) {
         KeepRace keep(outfit);
-        if (es.FRowStyle < bare)
-            OutfitSystem::Preload(world, assets, root, OutfitSystem::PlanRandom(world, assets, root, m_NextSeed, StyleName(w, es.FRowStyle)));
-        const int next = NextStyle(w, es.FRowStyle, (Wardrobe::Gender)outfit.Gender);
-        if (next < bare)
-            OutfitSystem::Preload(world, assets, root, OutfitSystem::PlanRandom(world, assets, root, m_NextSeed, StyleName(w, next)));
+        const int style = step == 0 ? es.FRowStyle : NextStyle(w, es.FRowStyle, (Wardrobe::Gender)outfit.Gender);
+        if (style < bare) OutfitSystem::Preload(world, assets, root, OutfitSystem::PlanRandom(world, assets, root, m_NextSeed, StyleName(w, style)));
+        return;
     }
-    const std::vector<Look> looks = Looks(w);
+    const std::vector<Look>& looks = m_Looks;
     for (int i = 0; i < (int)looks.size(); ++i)
         if (looks[(size_t)i].Sex == (Wardrobe::Gender)outfit.Gender && looks[(size_t)i].Race == outfit.Race) {
             const Look& l = looks[(size_t)((i + 1) % (int)looks.size())];
@@ -109,15 +107,41 @@ void PlayerLook::LoadAhead(World& world, AssetLibrary& assets, entt::entity root
         }
 }
 
+// A slice of the wardrobe warm-up: models started loading until about half a millisecond has gone (each one's first
+// look reads its .meta here), so the Play-start warm-up never costs a frame.
+void PlayerLook::WarmSome(AssetLibrary& assets) {
+    // A few loads in flight at most: the loader serves in order, so a swap (or the next outfit drawn ahead) asked for
+    // now would otherwise wait behind the whole wardrobe.
+    constexpr int kMaxInFlight = 3;
+    const auto start = std::chrono::steady_clock::now();
+    while (m_WarmAt < m_Warm.size() && assets.AsyncInFlight() < kMaxInFlight) {
+        OutfitSystem::PreloadModel(assets, m_Warm[m_WarmAt++]);
+        if (std::chrono::steady_clock::now() - start > std::chrono::microseconds(500)) break;
+    }
+    if (m_WarmAt >= m_Warm.size()) { m_Warm.clear(); m_Warm.shrink_to_fit(); m_WarmAt = 0; }
+}
+
 void PlayerLook::Update(World& world, AssetLibrary& assets, bool keys) {
-    const entt::entity root = PlayerRoot(world);
+    // An idle frame (no key, nothing loading, the warm-up done) costs the root check and the key lookups.
+    const bool next = keys && Shortcuts::TriggeredGlfw("fkey.look");
+    const bool prev = keys && !next && Shortcuts::TriggeredGlfw("fkey.lookBack");
+    const bool fresh = keys && Shortcuts::TriggeredGlfw("fkey.outfit");
+    const bool restyle = keys && !fresh && Shortcuts::TriggeredGlfw("fkey.outfitStyle");
+    entt::entity root = m_AppliedFor;
+    if (root == entt::null || !world.Registry.valid(root) || !world.Registry.all_of<CharacterOutfitComponent>(root)) root = PlayerRoot(world);
     if (root == entt::null) return;
+    if (root == m_AppliedFor && !next && !prev && !fresh && !restyle && !m_Dressing && !m_Ahead && m_Warm.empty()) return;
+    if (!m_Warm.empty() && !m_Dressing) WarmSome(assets); // (a swap waiting on its loads goes first)
     auto& outfit = world.Registry.get<CharacterOutfitComponent>(root);
-    const auto cat = OutfitSystem::LoadCatalog(assets, outfit.Wardrobe);
-    if (!cat) return;
+    if (!m_Catalog || m_WardrobePath != outfit.Wardrobe) {
+        m_WardrobePath = outfit.Wardrobe;
+        m_Catalog = OutfitSystem::LoadCatalog(assets, outfit.Wardrobe);
+        m_Looks = m_Catalog ? Looks(m_Catalog->W) : std::vector<Look>{};
+    }
+    if (!m_Catalog || m_Looks.empty()) return;
+    const auto& cat = m_Catalog;
     const Wardrobe::Wardrobe& w = cat->W;
-    const std::vector<Look> looks = Looks(w);
-    if (looks.empty()) return;
+    const std::vector<Look>& looks = m_Looks;
     EditorSettings& es = EditorSettings::Get();
     const int bare = (int)w.Styles.size();
 
@@ -125,22 +149,31 @@ void PlayerLook::Update(World& world, AssetLibrary& assets, bool keys) {
     if (m_AppliedFor != root) {
         m_AppliedFor = root;
         m_Ahead = true;
+        m_AheadStep = 0;
         for (const Look& l : looks)
             if (Key(l) == es.FRowLook) PutOn(world, assets, root, l);
         if (es.FRowStyle >= 0 && es.FRowStyle <= bare) Dress(world, assets, root, w, es.FRowStyle, es.FRowOutfitSeed);
-        OutfitSystem::PreloadWardrobe(assets, *cat, (Wardrobe::Gender)outfit.Gender); // this body first, then the other
-        OutfitSystem::PreloadWardrobe(assets, *cat, outfit.Gender == 0 ? Wardrobe::Gender::Female : Wardrobe::Gender::Male);
+        m_Warm.clear();
+        m_WarmAt = 0;
+        OutfitSystem::WardrobeModels(*cat, (Wardrobe::Gender)outfit.Gender, m_Warm); // this body first, then the other
+        OutfitSystem::WardrobeModels(*cat, outfit.Gender == 0 ? Wardrobe::Gender::Female : Wardrobe::Gender::Male, m_Warm);
     }
     // A swap waiting on loads: the pill counts them, then says it is done.
     int done = 0, total = 0;
-    const bool pending = OutfitSystem::IsPending(world, root, &done, &total);
-    if (m_Dressing && pending) FKeyRow::Hold(m_LookSwap ? "F7" : "F8", m_LookSwap ? "Look" : "Outfit", "Loading " + std::to_string(done) + "/" + std::to_string(total));
-    if (m_Dressing && !pending) { m_Dressing = false; FKeyRow::Release("Ready"); }
-    if (m_Ahead && !pending) { m_Ahead = false; LoadAhead(world, assets, root); }
-    if (!keys) return;
+    const bool pending = (m_Dressing || m_Ahead) && OutfitSystem::IsPending(world, root, &done, &total);
+    if (m_Dressing && pending && (done != m_HeldDone || total != m_HeldTotal)) {
+        m_HeldDone = done;
+        m_HeldTotal = total;
+        m_HoldText = "Loading " + std::to_string(done) + "/" + std::to_string(total);
+        FKeyRow::Hold(m_LookSwap ? "F7" : "F8", m_LookSwap ? "Look" : "Outfit", m_HoldText);
+    }
+    if (m_Dressing && !pending) { m_Dressing = false; m_HeldDone = m_HeldTotal = -1; FKeyRow::Release("Ready"); }
+    if (m_Ahead && !pending) {
+        LoadAhead(world, assets, root, m_AheadStep);
+        if (++m_AheadStep > 2) { m_Ahead = false; m_AheadStep = 0; }
+    }
 
     // F7 / Shift+F7: the next / previous look.
-    const bool next = Shortcuts::TriggeredGlfw("fkey.look"), prev = !next && Shortcuts::TriggeredGlfw("fkey.lookBack");
     if (next || prev) {
         int cur = -1;
         for (int i = 0; i < (int)looks.size(); ++i)
@@ -156,10 +189,10 @@ void PlayerLook::Update(World& world, AssetLibrary& assets, bool keys) {
         EditorSound::Play(next ? EditorSound::Event::FKeyCycle : EditorSound::Event::FKeyCycleBack, -1.0f, 1.0f + 0.04f * (float)i);
         FKeyRow::Show("F7", "Look", Label(l), i, n);
         m_Dressing = m_Ahead = m_LookSwap = true;
+        m_AheadStep = 0;
     }
 
     // F8: a new random outfit in the current style. Shift+F8: the next style, dressed in it.
-    const bool fresh = Shortcuts::TriggeredGlfw("fkey.outfit"), restyle = !fresh && Shortcuts::TriggeredGlfw("fkey.outfitStyle");
     if (fresh || restyle) {
         const Wardrobe::Gender sex = (Wardrobe::Gender)outfit.Gender;
         if (restyle) es.FRowStyle = NextStyle(w, es.FRowStyle, sex);
@@ -171,6 +204,7 @@ void PlayerLook::Update(World& world, AssetLibrary& assets, bool keys) {
         if (restyle) FKeyRow::Show("F8", "Style", style, std::max(es.FRowStyle, 0), bare + 1);
         else FKeyRow::Show("F8", "Outfit", "New " + style + " outfit");
         m_Dressing = m_Ahead = true;
+        m_AheadStep = 0;
         m_LookSwap = false;
         m_NextSeed = 0;
     }

@@ -55,7 +55,7 @@ private:
     void Pickups(const Context& c);
     bool Place(const Context& c, glm::vec3& at, float& yawDeg) const;
     void Warm(const Context& c);
-    bool m_Warmed = false; // this Play's spawn assets asked for (Warm)
+    int m_Warmed = 0; // how many of this Play's spawn prefabs have been warmed (Warm: one a frame)
     int m_Npc = 0, m_Spider = 0, m_Item = 0;
     bool m_WaitSquad = false; // started the soldiers this press: spawn once their navmesh is up
     std::vector<int> m_NpcIds;
