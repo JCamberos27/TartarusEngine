@@ -60,11 +60,17 @@ void ApplyOverlay(EditorSettings& es, int overlay) {
 void PollViews(EditorLayer& editor) {
     EditorSettings& es = EditorSettings::Get();
     bool back = false;
-    int i = Step("fkey.drawMode", "fkey.drawModeBack", editor.ShadingModeIndex(), kDrawCount, back);
+    // F5: the draw modes, then the light views (Shaded under them), in one cycle.
+    const int light = std::clamp(es.FRowLightDebug, 0, LightCount - 1);
+    const int cur = light != LightOff ? kDrawCount - 1 + light : editor.ShadingModeIndex();
+    int i = Step("fkey.drawMode", "fkey.drawModeBack", cur, kDrawCount + LightCount - 1, back);
     if (i >= 0) {
-        editor.SetShadingModeIndex(i);
+        const bool lightView = i >= kDrawCount;
+        editor.SetShadingModeIndex(lightView ? 0 : i);
+        es.FRowLightDebug = lightView ? i - kDrawCount + 1 : LightOff;
+        EditorSettings::Save();
         CycleSound(i, back);
-        Show("F5", "Draw", kDrawNames[i], i, kDrawCount);
+        Show("F5", "View", lightView ? kLightNames[es.FRowLightDebug] : kDrawNames[i], i, kDrawCount + LightCount - 1);
     }
     i = Step("fkey.overlay", "fkey.overlayBack", std::clamp(es.FRowOverlay, 0, OverlayCount - 1), OverlayCount, back);
     if (i >= 0) {
@@ -74,18 +80,12 @@ void PollViews(EditorLayer& editor) {
         CycleSound(i, back);
         Show("F6", "Overlay", kOverlayNames[i], i, OverlayCount);
     }
-    i = Step("fkey.light", "fkey.lightBack", std::clamp(es.FRowLightDebug, 0, LightCount - 1), LightCount, back);
-    if (i >= 0) {
-        es.FRowLightDebug = i;
-        EditorSettings::Save();
-        CycleSound(i, back);
-        Show("F7", "Light", kLightNames[i], i, LightCount);
-    }
+    // Post FX on / off: no default key any more (fkey.postFx, rebindable).
     if (Shortcuts::TriggeredGlfw("fkey.postFx")) {
         es.PostFxOff = !es.PostFxOff;
         EditorSettings::Save();
         CycleSound(es.PostFxOff ? 1 : 0, false);
-        Show("F8", "Post FX", es.PostFxOff ? "Off" : "On", es.PostFxOff ? 1 : 0, 2);
+        Show("", "Post FX", es.PostFxOff ? "Off" : "On", es.PostFxOff ? 1 : 0, 2);
     }
 }
 

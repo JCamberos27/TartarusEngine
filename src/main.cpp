@@ -109,7 +109,8 @@
 #include "Combat/ImpactFx.h"
 #include "Combat/BloodLab.h"
 #include "CombatHud.h"          // ammo, kill feed, radio subtitles, awareness markers, AI overlay
-#include "DevPanel.h"           // F7 dev overlay in Play
+#include "DevPanel.h"           // the dev overlay in Play
+#include "PlayerLook.h"         // F7 / F8
 #include "GameViewPanel.h"
 #include "EditorPanels.h"
 #include "ProjectPaths.h"
@@ -1050,7 +1051,8 @@ int main(int argc, char** argv) {
             bulletHoles.Clear();
         };
         CombatHud combatHud;        // ammo, kill feed, radio subtitles, awareness chevrons, AI debug overlay
-        DevPanel devPanel;          // F7 / F8 / F9 dev tools in Play
+        DevPanel devPanel;          // dev tools in Play (no default keys)
+        PlayerLook playerLook;      // F7 / F8: the player's look and clothes, kept between Plays
         PlayState play; // Play's state bits (App/PlaySession.h); the locals named after them alias its fields
         glm::vec3& deathCamOffset = play.DeathCamOffset;
         float& deathCamRoll = play.DeathCamRoll;
@@ -1797,7 +1799,7 @@ int main(int argc, char** argv) {
                                 playerVitals, npcDirector, devPanel, bulletHoles, shellCasings, weaponTest.get(), weaponLab.get(),
                                 npcTest.get());
         auto startPlay = [&]() { playSession.Start(); };
-        auto stopPlay = [&]() { playSession.Stop(); };
+        auto stopPlay = [&]() { playerLook.Forget(); playSession.Stop(); };
         auto togglePlay = [&]() { if (playing) stopPlay(); else startPlay(); };
         // Play's own cursor capture (the Game view click, Esc, focus loss, the dev panel), with the
         // CursorLock / CursorRelease sound when the lock really changes. Not the editor camera's drag lock, and not Play
@@ -2515,6 +2517,7 @@ int main(int argc, char** argv) {
             }
             // F5-F8: the F-row's view states (FKeyRow.h), in any mode.
             if (devKeys && !editor.ScriptIDEHasKeyboardFocus()) FKeyRow::PollViews(editor);
+            if (playing && playUsesPlayer) playerLook.Update(world, assets, devKeys && !editor.ScriptIDEHasKeyboardFocus());
             // Play with an enemy squad: the dev panel, god mode and the AI debug overlay (DevPanel.h; no default keys).
             if (devKeys && playing && playUsesPlayer && npcDirector.Active()) {
                 const bool wasOpen=devPanel.Open,wasGod=playerVitals.GodMode,wasAiOverlay=devPanel.AiOverlay;
