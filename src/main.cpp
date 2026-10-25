@@ -2746,8 +2746,8 @@ int main(int argc, char** argv) {
                     dc.Keys = devKeys && playUsesPlayer && !editor.ScriptIDEHasKeyboardFocus();
                     dc.Interact = gameHasInput && playUsesPlayer && !playerVitals.IsDead() && InputMap::GetButtonDown("Interact");
                     dc.StartSquad = [&]() {
-                        const FirstPersonControllerComponent* fp = nullptr;
-                        for (auto [e, c] : world.Registry.view<FirstPersonControllerComponent>().each()) { fp = &c; break; }
+                        auto fps = world.Registry.view<FirstPersonControllerComponent>();
+                        const FirstPersonControllerComponent* fp = fps.begin() != fps.end() ? &fps.get<FirstPersonControllerComponent>(*fps.begin()) : nullptr;
                         return fp && npcDirector.Start(world, assets, fp, /*allowEmpty=*/true);
                     };
                     if (playUsesPlayer) devSpawner.Update(dc);
