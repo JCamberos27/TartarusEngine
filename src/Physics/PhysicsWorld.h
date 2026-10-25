@@ -178,6 +178,8 @@ struct RagdollParams {
     float StabilizationThreshold = -1.0f;
     // The flesh over the capsules (m): contacts rest this far out, so the skinned mesh lies on the floor rather than in it.
     float SkinOffset = 0.0f;
+    // Speculative CCD on every part: contacts found ahead of a fast step (a small body dropped from a ceiling, thin legs).
+    bool SpeculativeCCD = false;
     // Gravity on the body, as a multiple of the scene's (> 1: it reads heavier at game scale).
     float GravityScale = 1.0f;
     // The parts collide with each other (off: only with the world).

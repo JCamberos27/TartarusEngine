@@ -2660,9 +2660,9 @@ int CreateRagdoll(unsigned entity, const RagdollPart* parts, int count, const Ra
             sh->setRestOffset(prm.SkinOffset);
         }
         sh->userData = BodyPartTag(kBodyPartRagdoll, (unsigned)i); // RaycastBodyParts: ragdoll part i
-        // Thin parts fast (a body dropped off the ceiling lands at ~7 m/s, 12 cm a step): contacts found ahead of the
-        // step, or a leg's tip sank 4 cm into the floor on landing.
-        link->setRigidBodyFlag(PxRigidBodyFlag::eENABLE_SPECULATIVE_CCD, true);
+        // Thin parts fast (a spider dropped off the ceiling lands at ~7 m/s, 12 cm a step): contacts found ahead of the
+        // step, or a leg's tip sank 4 cm into the floor on landing. (Opt-in: it changes how a body's contacts resolve.)
+        if (prm.SpeculativeCCD) link->setRigidBodyFlag(PxRigidBodyFlag::eENABLE_SPECULATIVE_CCD, true);
         PxRigidBodyExt::setMassAndUpdateInertia(*link, std::max(p.Mass, 0.1f));
         if (p.InertiaHalfWidth > 0.0f || p.InertiaScale != 1.0f) {
             PxVec3 I = link->getMassSpaceInertiaTensor();
