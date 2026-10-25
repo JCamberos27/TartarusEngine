@@ -47,7 +47,7 @@ bool Ray(const glm::vec3& from, const glm::vec3& dir, float maxDist, glm::vec3& 
 std::unique_ptr<NpcDroppedWeapon> DropGun(World& world, AssetLibrary& assets, const std::string& prefab, const glm::vec3& at) {
     const entt::entity tmp = SceneSerializer::InstantiatePrefab(world, assets, ProjectPaths::Resolve(prefab));
     if (tmp == entt::null) return nullptr;
-    if (auto* t = world.Registry.try_get<TransformComponent>(tmp)) { t->Position = at; t->Rotation = glm::vec3(0.0f, 0.0f, 90.0f); }
+    if (auto* t = world.Registry.try_get<TransformComponent>(tmp)) { t->Position = at; t->Rotation = glm::quat(glm::radians(glm::vec3(0.0f, 0.0f, 90.0f))); } // lying on its side
     DroppedWeaponSettingsComponent cfg = NpcDroppedWeapon::SettingsIn(world);
     cfg.Lifetime = 0.0f;
     auto gun = NpcDroppedWeapon::DropAt(world, tmp, glm::vec3(0.0f), glm::vec3(0.0f), cfg);
