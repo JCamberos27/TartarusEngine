@@ -22,10 +22,12 @@ struct Pill {
     std::string Key, Title, Value;
     int Step = 0, Count = 0;
     unsigned Serial = 0; // bumped per Show: the stagger and pop restart
+    double Born = -1e9;  // Glass::Motion().Now() at Show
+    bool Holding = false;
 };
 Pill g_Pill;
-constexpr ImGuiID kPulse = 0x46524F57u; // 'FROW': the pill's life
-constexpr float kLife = 1.6f;           // s on screen, fade included
+constexpr float kLife = 1.6f;   // s on screen, fade included
+constexpr float kSettled = 0.6f; // the age a held pill stays at: popped in, not fading
 
 int Wrap(int i, int n) { return ((i % n) + n) % n; }
 
@@ -108,13 +110,29 @@ void Show(const char* key, const std::string& title, const std::string& value, i
     g_Pill.Step = step;
     g_Pill.Count = count;
     ++g_Pill.Serial;
-    Glass::Motion().Pulse(kPulse, kLife);
+    g_Pill.Born = Glass::Motion().Now();
+    g_Pill.Holding = false;
+}
+
+void Hold(const char* key, const std::string& title, const std::string& value) {
+    const bool fresh = !g_Pill.Holding || g_Pill.Key != (key ? key : "");
+    if (fresh) Show(key, title, value);
+    g_Pill.Value = value;
+    g_Pill.Holding = true;
+}
+
+void Release(const std::string& value) {
+    if (!g_Pill.Holding) return;
+    g_Pill.Holding = false;
+    g_Pill.Value = value;
+    g_Pill.Born = Glass::Motion().Now() - kSettled; // fades from here, no second pop
 }
 
 void Draw(ImVec2 min, ImVec2 max) {
     Glass::ImAnimContext& m = Glass::Motion();
-    if (g_Pill.Serial == 0 || !m.PulseActive(kPulse)) return;
-    const float age = m.PulseElapsed(kPulse, kLife);
+    if (g_Pill.Serial == 0) return;
+    if (g_Pill.Holding && m.Now() - g_Pill.Born > kSettled) g_Pill.Born = m.Now() - kSettled; // held: never starts fading
+    const float age = (float)(m.Now() - g_Pill.Born);
     const float t = age / kLife;
     if (t >= 1.0f) return;
 
@@ -134,7 +152,7 @@ void Draw(ImVec2 min, ImVec2 max) {
     const float w = (padX * 2.0f + headSz.x + gap + valSz.x + (dots ? gap + dotsW : 0.0f)) * scale;
     const float h = (padY * 2.0f + fs) * scale;
     const float rise = Glass::ToastPopRisePx * (1.0f - pop);
-    const ImVec2 p0((min.x + max.x) * 0.5f - w * 0.5f, min.y + fs * 2.2f + rise);
+    const ImVec2 p0((min.x + max.x) * 0.5f - w * 0.5f, max.y - h - fs * 3.0f + rise);
     const ImVec2 p1(p0.x + w, p0.y + h);
 
     // A borderless, input-less window the size of the pill: the text stagger draws into the current window.

@@ -99,6 +99,16 @@ Result SetRace(World& world, AssetLibrary& assets, entt::entity root, const std:
 Result Randomize(World& world, AssetLibrary& assets, entt::entity root, std::uint32_t seed,
                  const std::string& style = std::string());
 
+// --- Loading ahead (F7 / F8: PlayerLook) -----------------------------------------------------------
+// The outfit Randomize(root, seed, style) would dress `root` in, without dressing it: the same draw.
+Wardrobe::Request PlanRandom(World& world, AssetLibrary& assets, entt::entity root, std::uint32_t seed,
+                             const std::string& style = std::string());
+// What `request` would put on `root`, its models and materials, started loading in the background; nothing changes.
+// When the change is asked for, it lands in a frame. Returns how many loads were asked for (already loaded ones count).
+int Preload(World& world, AssetLibrary& assets, entt::entity root, const Wardrobe::Request& request);
+// Every item the wardrobe has for `gender` (and that body's race heads and parts) started loading in the background.
+int PreloadWardrobe(AssetLibrary& assets, const Catalog& cat, Wardrobe::Gender gender);
+
 // A piece's colourways: one group per material the piece's model is remapped to.
 struct ColourGroup {
     std::string Source;                 // the remapped .mat (project-relative)
