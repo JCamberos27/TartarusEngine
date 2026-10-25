@@ -193,5 +193,39 @@ void NpcTest::SpiderRoute(World& world) {
     Check(m_SWorstRays <= 26, "spider: at most 26 surface rays a frame (worst " + std::to_string(m_SWorstRays) + ")");
     std::printf("[NpcTest] spider: %d steps, worst %d rays a frame, both groups lifted on %d frames\n", st.Steps, m_SWorstRays,
                 st.BothLifted);
+    SpiderJank("spider");
     m_SDone = m_Done = true;
+}
+
+void NpcTest::SpiderJank(const char* test) {
+    if (!Spiders) return;
+    SpiderSystem::Stats::JankStats j;
+    const int n = Spiders->SumJank(j);
+    const SpiderSystem::Timing& tm = Spiders->Times();
+    const double perSpider = j.CostFrames ? j.CostUs / (double)j.CostFrames : 0.0;
+    const double perFrame = tm.Frames ? tm.SumUs / (double)tm.Frames : 0.0;
+    std::printf("[NpcTest] %s jank (%d spiders): pops %d (worst %.3f m at %.2f %.2f %.2f, mode %d, moves 0x%x), snaps %d (worst %.1f deg "
+                "at %.2f %.2f %.2f, mode %d, moves 0x%x)\n", test, n, j.Pops, j.WorstPop, j.WorstPopAt.x, j.WorstPopAt.y, j.WorstPopAt.z,
+                j.WorstPopMode, j.WorstPopMoves, j.Snaps, j.WorstSnap, j.WorstSnapAt.x, j.WorstSnapAt.y, j.WorstSnapAt.z, j.WorstSnapMode,
+                j.WorstSnapMoves);
+    std::printf("[NpcTest] %s jank: stutters %d, refused %d | feet in air %d, inside %d | slide %.2f cm, leg pops %d, skating %d, "
+                "overreach %d | flips %d, spins %d, dither %.2f s | air landings %d, floating %d, stop slides %d\n", test, j.Stutters,
+                j.Refused, j.FeetInAir, j.FeetInside, j.WorstSlide * 100.0f, j.LegPops, j.Skating, j.Overreach, j.Flips, j.Spins,
+                j.Dither, j.AirLandings, j.Floating, j.StopSlides);
+    std::printf("[NpcTest] %s cost: %.1f us a spider a frame (worst %.1f), system %.1f us a frame (worst %.1f), door blocks worst "
+                "%.1f us, graph bake %.1f ms, %d route searches (mean %.1f us, worst %.1f us, %d nodes)\n", test, perSpider,
+                j.WorstCostUs, perFrame, tm.WorstUs, tm.WorstDoorBlocksUs, tm.NavUs / 1000.0, tm.Searches,
+                tm.Searches ? tm.SearchUs / tm.Searches : 0.0, tm.WorstSearchUs, tm.WorstExpanded);
+    const std::string t = std::string(test) + ": ";
+    // Budgets (measured in all five: door blocks 250-410 us at worst, a spider 59-85 us a frame on average).
+    Check(tm.WorstDoorBlocksUs < 500.0, t + "door blocks cost under 0.5 ms in any frame");
+    Check(perSpider < 100.0, t + "a spider costs under 100 us a frame on average");
+    Check(j.Pops == 0, t + "no position pops (never further in a frame than its speed takes it)");
+    Check(j.Snaps == 0, t + "no rotation snaps (its up rolls over edges at its rate)");
+    Check(j.Stutters == 0 && j.Refused == 0, t + "no stutter (no stop-starts, no refused steps)");
+    Check(j.FeetInAir == 0 && j.FeetInside == 0, t + "standing feet on a surface, never in the air or inside one");
+    Check(j.WorstSlide < 0.002f && j.LegPops == 0 && j.Skating == 0 && j.Overreach == 0,
+          t + "legs keep contact: planted feet under 2 mm of slide, no leg pops, gait in step with the body, no overreach");
+    Check(j.Flips == 0 && j.Spins == 0 && j.Dither < 0.5f, t + "no flip-flopping routes, spins or dithering");
+    Check(j.AirLandings == 0 && j.Floating == 0 && j.StopSlides == 0, t + "no mid-air landings, floating or sliding after a stop");
 }

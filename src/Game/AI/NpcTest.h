@@ -224,6 +224,8 @@ private:
     int m_HStage = 0, m_HMaxAttackers = 0, m_HFellThrough = 0;
     bool m_HPlaced = false, m_HDone = false, m_HDropShot = false, m_HPounceShot = false, m_HBiteShot = false;
     void SpiderSetUp(World& world);
+    // Every spider scenario's jank report and bar (pops, snaps, stutter, clipping, legs, decisions, physics, cost).
+    void SpiderJank(const char* test);
     // spiderdeath (NpcTest_SpiderDeath.cpp): spiders shot in 301's living room - a leg, the abdomen, the head; one killed
     // on the ceiling, one knocked off a wall
     struct SpiderDeathRun;

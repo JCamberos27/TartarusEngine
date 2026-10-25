@@ -471,6 +471,7 @@ void SpiderDamage::Kill(World& world, SpiderSystem& spiders, Body& b, int part, 
     }
     const int root = RootPart();
     const glm::mat4 rootInv = glm::inverse(b.PartWorld[(size_t)root]);
+    b.UpInRoot = glm::normalize(glm::mat3(rootInv) * glm::vec3(model[1]));
     for (int k = 0; k < b.Count; ++k) {
         const Spider::PartDef& d = m_Rig.Parts[(size_t)k];
         if (d.Leg >= 0 && d.Segment == 2) b.TipAtDeath[(size_t)d.Leg] = glm::vec3(rootInv * glm::vec4(points[(size_t)k].B, 1.0f));
@@ -491,7 +492,7 @@ void SpiderDamage::PoseDead(World& world, Body& b, float dt) {
         return;
     }
     b.Motor.Update(dt);
-    b.Settle.Update(dt);
+    b.Settle.Update(dt, RootPart(), b.UpInRoot);
     // Asleep and already shown so: the same pose again (the animator still writes its own each frame).
     if (b.PoseWritten && PhysicsWorld::RagdollAsleep(b.Ragdoll)) {
         m.ApplyLocalPose(b.Pose);
@@ -618,6 +619,7 @@ bool SpiderDamage::Inspect(entt::entity root, View& out) const {
     if (PhysicsWorld::RagdollMotion(b->Ragdoll, &lin, &ang)) out.MaxSpeed = lin;
     const int rp = RootPart();
     out.Centre = P(b->PartWorld[(size_t)rp]);
+    out.Up = glm::normalize(glm::mat3(b->PartWorld[(size_t)rp]) * b->UpInRoot);
     out.LowestPart = 1e9f;
     const glm::mat4 rootInv = glm::inverse(b->PartWorld[(size_t)rp]);
     float fold = 0.0f;

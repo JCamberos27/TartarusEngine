@@ -43,7 +43,14 @@ glm::vec3 RouteAim(const std::vector<glm::vec3>& route, const std::vector<glm::v
     const int n = (int)std::min(route.size(), normals.size());
     if (n == 0) return goal;
     at = std::clamp(at, 0, n - 1);
-    while (at < n - 1 && glm::length(pos - route[(size_t)at]) < 0.35f) ++at;
+    // A waypoint is passed once it is within reach or once the body is past it along the route (a fresh route starts at
+    // the node nearest the body, often just behind it: heading back to it first turned the body round and back again).
+    while (at < n - 1) {
+        const glm::vec3 off = pos - route[(size_t)at];
+        const float d = glm::length(off);
+        if (d < 0.35f || (d < 1.0f && glm::dot(off, route[(size_t)at + 1] - route[(size_t)at]) > 0.0f)) ++at;
+        else break;
+    }
     int aim = at;
     for (int k = at; k < n && k < at + 8; ++k) {
         if (glm::dot(normals[(size_t)k], up) < 0.95f) break;
@@ -56,12 +63,14 @@ void SurfaceGraph::Block(int i, int delta) {
     if (i < 0 || i >= (int)m_Pos.size()) return;
     if (m_Blocked.size() != m_Pos.size()) m_Blocked.assign(m_Pos.size(), 0);
     m_Blocked[(size_t)i] = std::max(0, m_Blocked[(size_t)i] + delta);
+    ++m_BlockGen;
 }
 
 void SurfaceGraph::AddPenalty(int i, float metres) {
     if (i < 0 || i >= (int)m_Pos.size()) return;
     if (m_Penalty.size() != m_Pos.size()) m_Penalty.assign(m_Pos.size(), 0.0f);
     m_Penalty[(size_t)i] = std::max(0.0f, m_Penalty[(size_t)i] + metres);
+    ++m_BlockGen;
 }
 
 void SurfaceGraph::Clear() {
@@ -243,8 +252,26 @@ int SurfaceGraph::Nearest(const glm::vec3& p, float maxDistance, const glm::vec3
     return best;
 }
 
+void SurfaceGraph::NodesNear(const glm::vec3& p, float radius, std::vector<int>& out) const {
+    if (m_Pos.empty()) return;
+    const int reach = (int)std::ceil(radius / m_Cell);
+    const glm::ivec3 c(glm::floor(p / m_Cell));
+    const float r2 = radius * radius;
+    for (int dx = -reach; dx <= reach; ++dx)
+        for (int dy = -reach; dy <= reach; ++dy)
+            for (int dz = -reach; dz <= reach; ++dz) {
+                const long long key = CellKey((glm::vec3(c + glm::ivec3(dx, dy, dz)) + 0.5f) * m_Cell);
+                auto it = std::lower_bound(m_Grid.begin(), m_Grid.end(), std::make_pair(key, -1));
+                for (; it != m_Grid.end() && it->first == key; ++it) {
+                    const glm::vec3 d = m_Pos[(size_t)it->second] - p;
+                    if (glm::dot(d, d) <= r2) out.push_back(it->second);
+                }
+            }
+}
+
 bool SurfaceGraph::FindPath(int from, int to, const PathCosts& costs, std::vector<int>& out, int maxExpand) const {
     out.clear();
+    m_LastExpanded = 0;
     const int n = (int)m_Pos.size();
     if (from < 0 || to < 0 || from >= n || to >= n) return false;
     if (from == to) {
@@ -261,19 +288,26 @@ bool SurfaceGraph::FindPath(int from, int to, const PathCosts& costs, std::vecto
         m_Search = 1;
     }
     const glm::vec3 goal = m_Pos[(size_t)to];
+    // Weighted A*: the heuristic leant on a little (a route at most 1.3x the shortest) - the plain one expanded up to 18k
+    // nodes (3 ms) for a route across 301 and out.
+    constexpr float kGreed = 1.3f;
+    auto h = [&](int i) { return kGreed * glm::length(goal - m_Pos[(size_t)i]); };
     using Entry = std::pair<float, int>;
-    std::priority_queue<Entry, std::vector<Entry>, std::greater<Entry>> open;
+    auto& open = m_Open; // a min-heap on f
+    open.clear();
+    const auto later = std::greater<Entry>();
     m_Stamp[(size_t)from] = m_Search;
     m_G[(size_t)from] = 0.0f;
     m_From[(size_t)from] = -1;
-    open.push({glm::length(goal - m_Pos[(size_t)from]), from});
-    int expanded = 0;
+    open.push_back({h(from), from});
+    int& expanded = m_LastExpanded;
     while (!open.empty()) {
-        const auto [f, cur] = open.top();
-        open.pop();
+        std::pop_heap(open.begin(), open.end(), later);
+        const auto [f, cur] = open.back();
+        open.pop_back();
         if (cur == to) break;
         const float g = m_G[(size_t)cur];
-        if (f - glm::length(goal - m_Pos[(size_t)cur]) > g + 1e-4f) continue; // a stale entry
+        if (f - h(cur) > g + 1e-4f) continue; // a stale entry
         if (++expanded > maxExpand) return false;
         for (int k = m_First[(size_t)cur]; k < m_First[(size_t)cur + 1]; ++k) {
             const int nb = m_Links[(size_t)k];
@@ -283,7 +317,8 @@ bool SurfaceGraph::FindPath(int from, int to, const PathCosts& costs, std::vecto
             m_Stamp[(size_t)nb] = m_Search;
             m_G[(size_t)nb] = ng;
             m_From[(size_t)nb] = cur;
-            open.push({ng + glm::length(goal - m_Pos[(size_t)nb]), nb});
+            open.push_back({ng + h(nb), nb});
+            std::push_heap(open.begin(), open.end(), later);
         }
     }
     if (m_Stamp[(size_t)to] != m_Search) return false;

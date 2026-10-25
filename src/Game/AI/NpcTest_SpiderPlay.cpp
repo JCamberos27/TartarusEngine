@@ -213,5 +213,6 @@ void NpcTest::SpiderPlay(World& world) {
     }
     std::printf("[NpcTest] spiderplay: %d cabinet, drawer or lid openables opened\n", furniture);
     Check(furniture == 0, "spiderplay: the hunters open doors on their way, never a cabinet, drawer or lid");
+    SpiderJank("spiderplay");
     m_PDone = m_Done = true;
 }

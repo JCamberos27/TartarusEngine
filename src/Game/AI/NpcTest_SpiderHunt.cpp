@@ -156,5 +156,6 @@ void NpcTest::SpiderHunt(World& world) {
                 SpiderSystem::SoundsMissing());
     Check(SpiderSystem::SoundsMissing() == 0, "spiderhunt: every spider sound it asks for has takes in the manifest");
     Check(SpiderSystem::SoundsStarted() > 0, "spiderhunt: the spiders are heard (taps, hiss, screech, bite)");
+    SpiderJank("spiderhunt");
     m_HDone = m_Done = true;
 }
