@@ -57,7 +57,7 @@ void ApplyOverlay(EditorSettings& es, int overlay) {
 
 } // namespace
 
-void PollViews(EditorLayer& editor) {
+void PollViews(EditorLayer& editor, bool playing) {
     EditorSettings& es = EditorSettings::Get();
     bool back = false;
     int i = Step("fkey.drawMode", "fkey.drawModeBack", editor.ShadingModeIndex(), kDrawCount, back);
@@ -67,6 +67,8 @@ void PollViews(EditorLayer& editor) {
         Show("F5", "Draw", kDrawNames[i], i, kDrawCount);
     }
     i = Step("fkey.overlay", "fkey.overlayBack", std::clamp(es.FRowOverlay, 0, OverlayCount - 1), OverlayCount, back);
+    // Editing: Off > Physics > Nav (AI and Hitboxes need living NPCs).
+    while (i >= 0 && !playing && (i == OverlayAi || i == OverlayHitboxes)) i = Wrap(i + (back ? -1 : 1), OverlayCount);
     if (i >= 0) {
         es.FRowOverlay = i;
         ApplyOverlay(es, i);

@@ -109,7 +109,8 @@
 #include "Combat/ImpactFx.h"
 #include "Combat/BloodLab.h"
 #include "CombatHud.h"          // ammo, kill feed, radio subtitles, awareness markers, AI overlay
-#include "DevPanel.h"           // F7 dev overlay in Play
+#include "DevPanel.h"           // the dev overlay in Play
+#include "DevSpawner.h"         // F9-F12 spawns
 #include "GameViewPanel.h"
 #include "EditorPanels.h"
 #include "ProjectPaths.h"
@@ -1050,7 +1051,8 @@ int main(int argc, char** argv) {
             bulletHoles.Clear();
         };
         CombatHud combatHud;        // ammo, kill feed, radio subtitles, awareness chevrons, AI debug overlay
-        DevPanel devPanel;          // F7 / F8 / F9 dev tools in Play
+        DevPanel devPanel;          // dev tools in Play (no default keys)
+        DevSpawner devSpawner;      // F9-F12: soldiers, spiders and items at the crosshair
         PlayState play; // Play's state bits (App/PlaySession.h); the locals named after them alias its fields
         glm::vec3& deathCamOffset = play.DeathCamOffset;
         float& deathCamRoll = play.DeathCamRoll;
@@ -1797,7 +1799,7 @@ int main(int argc, char** argv) {
                                 playerVitals, npcDirector, devPanel, bulletHoles, shellCasings, weaponTest.get(), weaponLab.get(),
                                 npcTest.get());
         auto startPlay = [&]() { playSession.Start(); };
-        auto stopPlay = [&]() { playSession.Stop(); };
+        auto stopPlay = [&]() { devSpawner.Forget(); playSession.Stop(); };
         auto togglePlay = [&]() { if (playing) stopPlay(); else startPlay(); };
         // Play's own cursor capture (the Game view click, Esc, focus loss, the dev panel), with the
         // CursorLock / CursorRelease sound when the lock really changes. Not the editor camera's drag lock, and not Play
@@ -2514,7 +2516,7 @@ int main(int argc, char** argv) {
                 EditorSettings::Save();
             }
             // F5-F8: the F-row's view states (FKeyRow.h), in any mode.
-            if (devKeys && !editor.ScriptIDEHasKeyboardFocus()) FKeyRow::PollViews(editor);
+            if (devKeys && !editor.ScriptIDEHasKeyboardFocus()) FKeyRow::PollViews(editor, playing);
             // Play with an enemy squad: the dev panel, god mode and the AI debug overlay (DevPanel.h; no default keys).
             if (devKeys && playing && playUsesPlayer && npcDirector.Active()) {
                 const bool wasOpen=devPanel.Open,wasGod=playerVitals.GodMode,wasAiOverlay=devPanel.AiOverlay;
@@ -2704,6 +2706,41 @@ int main(int argc, char** argv) {
                 // Play mode, not a debug tool — always live whenever the game has input focus.
                 if (gameHasInput && playUsesPlayer && gravityGunLive() && !playerVitals.IsDead()) {
                     gravityGun.Update(gameDt, player);
+                }
+                // F9-F12 (DevSpawner.h) and the items they drop, picked up with Interact.
+                {
+                    DevSpawner::Context dc;
+                    dc.WorldPtr = &world;
+                    dc.Assets = &assets;
+                    dc.Npcs = &npcDirector;
+                    dc.Spiders = &spiders;
+                    dc.Gun = &firstPersonPresentation;
+                    dc.Eye = player.Cam.Position;
+                    dc.Front = player.Cam.Front();
+                    dc.Dt = gameDt;
+                    dc.Keys = devKeys && playUsesPlayer && !editor.ScriptIDEHasKeyboardFocus();
+                    dc.Interact = gameHasInput && playUsesPlayer && !playerVitals.IsDead() && InputMap::GetButtonDown("Interact");
+                    dc.StartSquad = [&]() {
+                        const FirstPersonControllerComponent* fp = nullptr;
+                        for (auto [e, c] : world.Registry.view<FirstPersonControllerComponent>().each()) { fp = &c; break; }
+                        return fp && npcDirector.Start(world, assets, fp, /*allowEmpty=*/true);
+                    };
+                    if (playUsesPlayer) devSpawner.Update(dc);
+                    // TARTARUS_FROW_TEST=1 with any --npc-test: F9, F10, F11 tapped a second apart, then F12; the counts printed.
+#pragma warning(suppress : 4996)
+                    static const bool fRowTest = npcTest && std::getenv("TARTARUS_FROW_TEST") != nullptr;
+                    if (fRowTest) {
+                        static float fRowClock = 0.0f;
+                        static int fRowStep = 0;
+                        fRowClock += gameDt;
+                        const int keys[] = {GLFW_KEY_F9, GLFW_KEY_F10, GLFW_KEY_F11, -1, GLFW_KEY_F12, -1};
+                        const float times[] = {2.0f, 3.0f, 4.0f, 6.0f, 6.5f, 7.5f};
+                        if (fRowStep < 6 && fRowClock >= times[fRowStep]) {
+                            if (keys[fRowStep] >= 0) Input::SimulateKeyTap(keys[fRowStep]);
+                            else std::printf("[FRowTest] t=%.1f spawned=%d npcs=%d\n", fRowClock, devSpawner.Spawned(), (int)npcDirector.Npcs().size());
+                            ++fRowStep;
+                        }
+                    }
                 }
                 // Doors, drawers and lids (Openable): Interact opens the one under the crosshair; all of them move.
                 Openable::Update(world, player.Cam.Position, player.Cam.Front(),
@@ -4619,6 +4656,49 @@ int main(int argc, char** argv) {
                 }
                 if (editorUIVisible) editor.Draw(world, assets, editorCamera, dt);
                 else if (playing && devKeys) editor.DrawPlayModeOverlays(world); // #185 — physics panel + HUD over maximized play
+                // F6 Nav while editing: the navmesh this scene baked in its last Play (Library/NavCache/scene_<name>.txt names
+                // it), its edges drawn over the Scene view. The physics scene the navmesh is built from only exists in Play.
+                {
+                    const std::string navNote = ProjectPaths::Resolve("Library/NavCache/scene_" + editor.SceneTitle() + ".txt");
+                    static std::string navRecorded;
+                    if (playing && npcDirector.Started() && !npcDirector.NavCachePath().empty() && navRecorded != navNote) {
+                        std::ofstream(std::filesystem::u8path(navNote)) << npcDirector.NavCachePath() << std::endl << npcDirector.NavHash() << std::endl;
+                        navRecorded = navNote;
+                    }
+                    if (!playing) navRecorded.clear();
+                    static NavMesh editNav;
+                    static std::vector<NavMesh::Edge> editNavEdges;
+                    static std::string editNavFor;
+                    const bool wantNav = !playing && editorUIVisible && FKeyRow::CurrentOverlay() == FKeyRow::OverlayNav;
+                    if (!wantNav) editNavFor.clear();
+                    else if (editNavFor != navNote) {
+                        editNavFor = navNote;
+                        editNavEdges.clear();
+                        std::ifstream in(std::filesystem::u8path(navNote));
+                        std::string cachePath;
+                        unsigned long long hash = 0;
+                        if (in && std::getline(in, cachePath) && (in >> hash) && editNav.Load(cachePath, hash)) editNav.BoundaryEdges(editNavEdges);
+                        if (editNavEdges.empty()) FKeyRow::Show("F6", "Nav", "Play once to bake this scene's navmesh");
+                    }
+                    if (wantNav && !editNavEdges.empty() && editor.ViewportSize().x > 1.0f && editor.ViewportSize().y > 1.0f) {
+                        const glm::vec2 vpPos = editor.ViewportPos(), vpSize = editor.ViewportSize();
+                        const glm::mat4 vp = editorCamera.ProjectionMatrix(vpSize.x / vpSize.y) * editorCamera.ViewMatrix();
+                        ImDrawList* dl = ImGui::GetForegroundDrawList();
+                        dl->PushClipRect(ImVec2(vpPos.x, vpPos.y), ImVec2(vpPos.x + vpSize.x, vpPos.y + vpSize.y), true);
+                        auto toScreen = [&](const glm::vec3& w, ImVec2& out) {
+                            const glm::vec4 c = vp * glm::vec4(w, 1.0f);
+                            if (c.w < 0.05f) return false;
+                            out = ImVec2(vpPos.x + (c.x / c.w * 0.5f + 0.5f) * vpSize.x, vpPos.y + (1.0f - (c.y / c.w * 0.5f + 0.5f)) * vpSize.y);
+                            return true;
+                        };
+                        const ImU32 col = IM_COL32(90, 255, 115, 215);
+                        for (const NavMesh::Edge& e : editNavEdges) {
+                            ImVec2 a, b;
+                            if (toScreen(e.A + glm::vec3(0.0f, 0.05f, 0.0f), a) && toScreen(e.B + glm::vec3(0.0f, 0.05f, 0.0f), b)) dl->AddLine(a, b, col, 1.5f);
+                        }
+                        dl->PopClipRect();
+                    }
+                }
                 {   // The F-row's pill, over the view the keys are acting on: the game in Play, else the Scene view.
                     const ImGuiViewport* mvp = ImGui::GetMainViewport();
                     ImVec2 pMin = mvp->Pos, pMax(mvp->Pos.x + mvp->Size.x, mvp->Pos.y + mvp->Size.y);

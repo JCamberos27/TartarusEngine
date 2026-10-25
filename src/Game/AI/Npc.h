@@ -69,6 +69,8 @@ struct Npc {
     int SpawnIndex = -1;
     int Squad = 0;
     const char* WeaponAction = nullptr; // a weapon trigger to pull with this frame's weapon tick (tests: "Fidget", "Inspect")
+    bool Passive = false;           // F9 Passive: ignores the player until hurt
+    bool DevSpawned = false;        // put there by F9: never respawns
     bool Dummy = false;             // a training dummy (NPC Spawn Brain 1): stands where it spawned, never shoots or calls out, takes hits
     float Skill = 0.5f;
     std::string Name;

@@ -13,8 +13,9 @@ namespace FKeyRow {
 enum Overlay : int { OverlayOff = 0, OverlayPhysics, OverlayAi, OverlayNav, OverlayHitboxes, OverlayCount };
 enum LightView : int { LightOff = 0, LightLighting, LightAlbedo, LightRoughMetal, LightComplexity, LightCount };
 
-// F5-F8 (and Shift+F5-F7 back), from the main loop through Shortcuts::TriggeredGlfw, in any mode.
-void PollViews(EditorLayer& editor);
+// F5-F8 (and Shift+F5-F7 back), from the main loop through Shortcuts::TriggeredGlfw, in any mode. Outside Play F6 skips
+// AI and Hitboxes (they need living NPCs).
+void PollViews(EditorLayer& editor, bool playing);
 
 int  CurrentOverlay();
 bool PostFxOff();
