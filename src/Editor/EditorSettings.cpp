@@ -245,6 +245,9 @@ void EditorSettings::Load() {
     s.FRowOverlay = SafeValue(root, "fRowOverlay", s.FRowOverlay);
     s.FRowLightDebug = SafeValue(root, "fRowLightDebug", s.FRowLightDebug);
     s.PostFxOff = SafeValue(root, "postFxOff", s.PostFxOff);
+    s.FRowLook = SafeValue(root, "fRowLook", s.FRowLook);
+    s.FRowStyle = SafeValue(root, "fRowStyle", s.FRowStyle);
+    s.FRowOutfitSeed = SafeValue(root, "fRowOutfitSeed", s.FRowOutfitSeed);
     s.LayerVisibleMask = SafeValue(root, "layerVisibleMask", s.LayerVisibleMask);
     s.LayerPickLockMask = SafeValue(root, "layerPickLockMask", s.LayerPickLockMask);
     s.ViewShowGrid = SafeValue(root, "viewShowGrid", s.ViewShowGrid);
@@ -364,6 +367,9 @@ void EditorSettings::ResetViewDefaults() {
     FRowOverlay = d.FRowOverlay;
     FRowLightDebug = d.FRowLightDebug;
     PostFxOff = d.PostFxOff;
+    FRowLook = d.FRowLook;
+    FRowStyle = d.FRowStyle;
+    FRowOutfitSeed = d.FRowOutfitSeed;
     LayerVisibleMask = d.LayerVisibleMask;
     ViewShowGrid = d.ViewShowGrid;
     ViewShowGizmo = d.ViewShowGizmo;
@@ -554,6 +560,9 @@ void EditorSettings::Flush() {
     root["fRowOverlay"] = Get().FRowOverlay;
     root["fRowLightDebug"] = Get().FRowLightDebug;
     root["postFxOff"] = Get().PostFxOff;
+    root["fRowLook"] = Get().FRowLook;
+    root["fRowStyle"] = Get().FRowStyle;
+    root["fRowOutfitSeed"] = Get().FRowOutfitSeed;
     root["layerVisibleMask"] = Get().LayerVisibleMask;
     root["layerPickLockMask"] = Get().LayerPickLockMask;
     root["viewShowGrid"] = Get().ViewShowGrid;
