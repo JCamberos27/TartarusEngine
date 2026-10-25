@@ -4,23 +4,23 @@
 
 class EditorLayer;
 
-// The F-row: F1-F4 play controls (Shortcuts' play.*), F5-F8 view states that cycle, F9-F12 Play-only spawns
-// (DevSpawner). Every key is one action or one state you flip through - no menus. The F5-F8 states live in
-// EditorSettings (FRowOverlay / FRowLightDebug / PostFxOff, plus the editor's own shading mode for F5), so they
-// survive Play and restarts. Each press says what it did in a glass pill over the view (Show / Draw).
+// The F-row: F1-F4 play controls (Shortcuts' play.*), F5-F6 view states that cycle, F7-F8 the player's look and
+// clothes (PlayerLook), F9-F12 Play-only spawns (DevSpawner). Every key is one action or one state you flip through - no
+// menus. The view states live in EditorSettings (FRowOverlay / FRowLightDebug, plus the editor's own shading mode for
+// F5), so they survive Play and restarts. Each press says what it did in a glass pill over the view (Show / Draw).
 namespace FKeyRow {
 
 enum Overlay : int { OverlayOff = 0, OverlayPhysics, OverlayAi, OverlayNav, OverlayHitboxes, OverlayCount };
 enum LightView : int { LightOff = 0, LightLighting, LightAlbedo, LightRoughMetal, LightComplexity, LightCount };
 
-// F5-F8 (and Shift+F5-F7 back), from the main loop through Shortcuts::TriggeredGlfw, in any mode. Outside Play F6 skips
-// AI and Hitboxes (they need living NPCs).
+// F5-F6 (and Shift+F5-F6 back), from the main loop through Shortcuts::TriggeredGlfw, in any mode. Outside Play F6
+// skips AI and Hitboxes (they need living NPCs).
 void PollViews(EditorLayer& editor, bool playing);
 
 int  CurrentOverlay();
 bool PostFxOff();
-// The model shader's uDebugView for a view drawn with `shadingIndex` (EditorLayer::ShadingMode): an F7 light view
-// overrides F5's Normals / Cascades / Mip.
+// The model shader's uDebugView for a view drawn with `shadingIndex` (EditorLayer::ShadingMode): F5's light views (the
+// end of its cycle) override Normals / Cascades / Mip.
 int DebugViewFor(int shadingIndex);
 
 // The pill: "F10" | "Spider" | "Hunter (Passive)"; `step` of `count` draws the cycle's dots (count 0: none).
