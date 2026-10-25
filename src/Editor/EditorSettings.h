@@ -274,7 +274,11 @@ struct EditorSettings {
     // deliberately session-only (NOT read/written by Load/Save below): a session left at 0x
     // must not silently freeze physics again the next time the editor opens.
     float    PhysicsSimTimeScale   = 1.0f;
-    bool     PlayDebugOverlay      = false;  // F3: draw the collider wireframes + debug channels
+    bool     PlayDebugOverlay      = false;  // F6 Physics: draw the collider wireframes + debug channels
+    // The F-row's cycling states (FKeyRow.h), kept across Play and restarts.
+    int      FRowOverlay           = 0;      // F6: 0 Off, 1 Physics, 2 AI, 3 Nav, 4 Hitboxes
+    int      FRowLightDebug        = 0;      // F7: 0 Off, 1 Lighting, 2 Albedo, 3 Roughness/Metal, 4 Light complexity
+    bool     PostFxOff             = false;  // F8: no post chain, fog or AO
                                              // over the game view during maximized play too
 
     // --- Per-layer viewport mask (#236 A1). One bit per LayerRegistry slot (bit N = layer N).

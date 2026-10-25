@@ -3584,6 +3584,35 @@ void SetNpcHitboxesActive(int id, bool active) {
     ShadowCapsule(h, active);
 }
 
+void HitboxDebugLines(std::vector<float>& out) {
+    if (!g_State) return;
+    auto line = [&](const PxVec3& a, const PxVec3& b, const PxVec3& c) {
+        const float v[14] = {a.x, a.y, a.z, c.x, c.y, c.z, 0.9f, b.x, b.y, b.z, c.x, c.y, c.z, 0.9f};
+        out.insert(out.end(), v, v + 14);
+    };
+    for (const auto& h : g_State->hitboxes) {
+        if (!h.Active) continue;
+        const PxVec3 col = h.Capsule ? PxVec3(1.0f, 0.55f, 0.15f) : PxVec3(1.0f, 0.25f, 0.85f);
+        for (const PxRigidDynamic* b : h.Bodies) {
+            PxShape* sh = nullptr;
+            if (!b || b->getShapes(&sh, 1) != 1 || !sh || sh->getGeometry().getType() != PxGeometryType::eCAPSULE) continue;
+            const auto& g = static_cast<const PxCapsuleGeometry&>(sh->getGeometry());
+            const PxTransform t = b->getGlobalPose() * sh->getLocalPose();
+            const PxVec3 ax = t.q.rotate(PxVec3(1, 0, 0)), u = t.q.rotate(PxVec3(0, 1, 0)), w = t.q.rotate(PxVec3(0, 0, 1));
+            const PxVec3 e0 = t.p - ax * g.halfHeight, e1 = t.p + ax * g.halfHeight;
+            line(e0 - ax * g.radius, e1 + ax * g.radius, col);
+            constexpr int kSeg = 8;
+            for (int k = 0; k < kSeg; ++k) {
+                const float a0 = 6.2831853f * k / kSeg, a1 = 6.2831853f * (k + 1) / kSeg;
+                const PxVec3 r0 = (u * std::cos(a0) + w * std::sin(a0)) * g.radius, r1 = (u * std::cos(a1) + w * std::sin(a1)) * g.radius;
+                line(e0 + r0, e0 + r1, col);
+                line(e1 + r0, e1 + r1, col);
+                if (k % 2 == 0) line(e0 + r0, e1 + r0, col);
+            }
+        }
+    }
+}
+
 void DestroyNpcHitboxes(int id) {
     if (!g_State || id < 0 || id >= (int)g_State->hitboxes.size()) return;
     auto& h = g_State->hitboxes[(size_t)id];

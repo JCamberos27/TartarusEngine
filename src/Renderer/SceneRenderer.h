@@ -111,6 +111,7 @@ struct SceneRenderInputs {
     bool     shadowsEnabled   = true;
     bool     ssaoEnabled      = false;
     float    ssaoIntensity    = 1.0f;  // #160 — occlusion exponent (World::SsaoIntensity)
+    bool     postFxOff        = false; // F8: no SSAO, no fog (distance or volumetric) in any view
     unsigned layerVisibleMask = 0xFFFFFFFFu;
 
     // sun shadow tuning (from the active directional light this frame)
@@ -148,6 +149,7 @@ struct FrameState {
 
     bool shadowsOn = false, sunShadowsOn = false;
     bool iblOn = false, ssaoOn = false, clusterOn = false;
+    bool fogOn = true;  // distance fog (F8 Post FX off clears it)
     bool volOn = false; // this view builds and applies the volumetric fog (VolumetricFog::WantedFor)
     float ssaoIntensity = 1.0f; // #160
     int  spotCountForView = 0, pointCountForView = 0;

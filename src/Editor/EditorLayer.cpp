@@ -1470,7 +1470,7 @@ void EditorLayer::DrawSettingsWindow(World& world) {
             if (ImGui::IsItemHovered())
                 EditorUI::SetTooltip("Borderless window: covers the display, instant Alt+Tab, other displays keep working.\n"
                                      "Exclusive: takes over the display's video mode (can be marginally faster, slow to Alt+Tab).\n"
-                                     "Applies the next time you go fullscreen (F11).");
+                                     "Applies the next time you go fullscreen.");
             const std::vector<std::string> monitors = Window::MonitorNames();
             std::string current = prefs.FullscreenMonitor < 0 || prefs.FullscreenMonitor >= (int)monitors.size()
                 ? std::string("Current display")
