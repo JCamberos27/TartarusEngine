@@ -1291,6 +1291,7 @@ struct SpiderComponent {
     bool HasGoal = false;
     bool Run = false;
     glm::vec3 Goal{0.0f};
+    bool Passive = false; // F10 Passive: ignores the player until shot
 };
 
 // Where an enemy soldier appears in Play (Npc/NpcSpawner.h). The enemy squad is built from these.

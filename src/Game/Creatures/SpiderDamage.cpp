@@ -154,7 +154,10 @@ bool SpiderDamage::OnHit(World& world, SpiderSystem& spiders, unsigned entity, c
                          const glm::vec3& dirIn, float damage, int pellets, Result& out) {
     Body* b = Find(entity);
     if (!b || !b->Ready) return false;
-    if (!b->Dead) spiders.Alarm(b->Root); // shot: it turns on the shooter
+    if (!b->Dead) {
+        spiders.Alarm(b->Root); // shot: it turns on the shooter
+        if (auto* sc = world.Registry.try_get<SpiderComponent>(b->Root)) sc->Passive = false; // ...a Passive one too
+    }
     out = Result{};
     const glm::vec3 dir = glm::length(dirIn) > 1e-6f ? glm::normalize(dirIn) : glm::vec3(0.0f, 0.0f, -1.0f);
     out.Entity = entity;
@@ -276,6 +279,17 @@ void SpiderDamage::Flinch(Body& b, int part, const glm::vec3& dirWorld, float da
 }
 
 // ---- every frame ----
+
+void SpiderDamage::Forget(entt::entity root) {
+    m_Bodies.erase(std::remove_if(m_Bodies.begin(), m_Bodies.end(),
+                                  [&](const Body& b) {
+                                      if (b.Root != root) return false;
+                                      if (b.Hitboxes >= 0) PhysicsWorld::DestroyNpcHitboxes(b.Hitboxes);
+                                      if (b.Ragdoll >= 0) PhysicsWorld::DestroyRagdoll(b.Ragdoll);
+                                      return true;
+                                  }),
+                   m_Bodies.end());
+}
 
 void SpiderDamage::LateUpdate(World& world, SpiderSystem& spiders, float dt) {
     if (const std::uint64_t gen = PhysicsWorld::SimulationGeneration(); gen != m_Generation) {

@@ -110,6 +110,7 @@
 #include "Combat/BloodLab.h"
 #include "CombatHud.h"          // ammo, kill feed, radio subtitles, awareness markers, AI overlay
 #include "DevPanel.h"           // the dev overlay in Play
+#include "DevSpawner.h"         // F9-F12 spawns
 #include "PlayerLook.h"         // F7 / F8
 #include "GameViewPanel.h"
 #include "EditorPanels.h"
@@ -1052,6 +1053,7 @@ int main(int argc, char** argv) {
         };
         CombatHud combatHud;        // ammo, kill feed, radio subtitles, awareness chevrons, AI debug overlay
         DevPanel devPanel;          // dev tools in Play (no default keys)
+        DevSpawner devSpawner;      // F9-F12: soldiers, spiders and items at the crosshair
         PlayerLook playerLook;      // F7 / F8: the player's look and clothes, kept between Plays
         PlayState play; // Play's state bits (App/PlaySession.h); the locals named after them alias its fields
         glm::vec3& deathCamOffset = play.DeathCamOffset;
@@ -1088,26 +1090,47 @@ int main(int argc, char** argv) {
             return dot;
         };
         // F6 Nav: the soldiers' navmesh edges (green) and the spiders' surface graph near the player (cyan), 7 floats a vertex.
+        // Built once per navmesh / when the player has moved, not every frame: the edges are static, and the graph's
+        // neighbourhood only changes as the player walks (capped, so a dense graph can't flood the HUD).
         auto navDebugLines = [&](std::vector<float>& out) {
-            auto line = [&](const glm::vec3& a, const glm::vec3& b, const glm::vec4& c) {
+            auto line = [](std::vector<float>& o, const glm::vec3& a, const glm::vec3& b, const glm::vec4& c) {
                 const float v[14] = {a.x, a.y, a.z, c.r, c.g, c.b, c.a, b.x, b.y, b.z, c.r, c.g, c.b, c.a};
-                out.insert(out.end(), v, v + 14);
+                o.insert(o.end(), v, v + 14);
             };
-            static std::vector<NavMesh::Edge> edges;
-            edges.clear();
-            npcDirector.Nav().BoundaryEdges(edges);
-            const glm::vec3 lift(0.0f, 0.05f, 0.0f);
-            for (const NavMesh::Edge& e : edges) line(e.A + lift, e.B + lift, glm::vec4(0.35f, 1.0f, 0.45f, 0.85f));
+            static std::vector<float> meshLines, graphLines;
+            static int meshPolys = -1;
+            static const Spider::SurfaceGraph* graphFor = nullptr;
+            static int graphNodes = -1;
+            static glm::vec3 graphAt(1e9f);
+            const NavMesh& nav = npcDirector.Nav();
+            if (nav.PolyCount() != meshPolys) {
+                meshPolys = nav.PolyCount();
+                meshLines.clear();
+                std::vector<NavMesh::Edge> edges;
+                nav.BoundaryEdges(edges);
+                const glm::vec3 lift(0.0f, 0.05f, 0.0f);
+                for (const NavMesh::Edge& e : edges) line(meshLines, e.A + lift, e.B + lift, glm::vec4(0.35f, 1.0f, 0.45f, 0.85f));
+            }
             const Spider::SurfaceGraph& g = spiders.Nav();
-            if (g.Empty()) return;
-            static std::vector<int> nearNodes;
-            nearNodes.clear();
-            g.NodesNear(player.Cam.Position, 12.0f, nearNodes);
-            for (int i : nearNodes)
-                for (int k = g.FirstLink(i); k < g.FirstLink(i + 1); ++k) {
-                    const int j = g.Neighbour(k);
-                    if (j > i) line(g.Pos(i), g.Pos(j), glm::vec4(0.3f, 0.85f, 1.0f, 0.6f));
+            if (g.Empty()) graphLines.clear();
+            else if (&g != graphFor || g.NodeCount() != graphNodes || glm::length(player.Cam.Position - graphAt) > 0.75f) {
+                graphFor = &g;
+                graphNodes = g.NodeCount();
+                graphAt = player.Cam.Position;
+                graphLines.clear();
+                static std::vector<int> nearNodes;
+                nearNodes.clear();
+                g.NodesNear(player.Cam.Position, 10.0f, nearNodes);
+                constexpr size_t kMaxGraphLines = 4000;
+                for (int i : nearNodes) {
+                    for (int k = g.FirstLink(i); k < g.FirstLink(i + 1) && graphLines.size() < kMaxGraphLines * 14; ++k) {
+                        const int j = g.Neighbour(k);
+                        if (j > i) line(graphLines, g.Pos(i), g.Pos(j), glm::vec4(0.3f, 0.85f, 1.0f, 0.6f));
+                    }
                 }
+            }
+            out.insert(out.end(), meshLines.begin(), meshLines.end());
+            out.insert(out.end(), graphLines.begin(), graphLines.end());
         };
         // The text-and-shapes combat HUD (ammo, kill feed, radio subtitles, awareness chevrons, AI overlay) for one view.
         auto drawCombatHud = [&](unsigned fbo, int w, int h, const glm::mat4& v, const glm::mat4& p) {
@@ -1799,7 +1822,7 @@ int main(int argc, char** argv) {
                                 playerVitals, npcDirector, devPanel, bulletHoles, shellCasings, weaponTest.get(), weaponLab.get(),
                                 npcTest.get());
         auto startPlay = [&]() { playSession.Start(); };
-        auto stopPlay = [&]() { playerLook.Forget(); playSession.Stop(); };
+        auto stopPlay = [&]() { devSpawner.Forget(); playerLook.Forget(); playSession.Stop(); };
         auto togglePlay = [&]() { if (playing) stopPlay(); else startPlay(); };
         // Play's own cursor capture (the Game view click, Esc, focus loss, the dev panel), with the
         // CursorLock / CursorRelease sound when the lock really changes. Not the editor camera's drag lock, and not Play
@@ -2516,7 +2539,7 @@ int main(int argc, char** argv) {
                 EditorSettings::Save();
             }
             // F5-F8: the F-row's view states (FKeyRow.h), in any mode.
-            if (devKeys && !editor.ScriptIDEHasKeyboardFocus()) FKeyRow::PollViews(editor);
+            if (devKeys && !editor.ScriptIDEHasKeyboardFocus()) FKeyRow::PollViews(editor, playing);
             if (playing && playUsesPlayer) playerLook.Update(world, assets, devKeys && !editor.ScriptIDEHasKeyboardFocus());
             // Play with an enemy squad: the dev panel, god mode and the AI debug overlay (DevPanel.h; no default keys).
             if (devKeys && playing && playUsesPlayer && npcDirector.Active()) {
@@ -2707,6 +2730,44 @@ int main(int argc, char** argv) {
                 // Play mode, not a debug tool — always live whenever the game has input focus.
                 if (gameHasInput && playUsesPlayer && gravityGunLive() && !playerVitals.IsDead()) {
                     gravityGun.Update(gameDt, player);
+                }
+                // F9-F12 (DevSpawner.h) and the items they drop, picked up with Interact.
+                {
+                    DevSpawner::Context dc;
+                    dc.WorldPtr = &world;
+                    dc.Assets = &assets;
+                    dc.Npcs = &npcDirector;
+                    dc.Spiders = &spiders;
+                    dc.SpiderHurt = &spiderDamage;
+                    dc.Gun = &firstPersonPresentation;
+                    dc.Eye = player.Cam.Position;
+                    dc.Front = player.Cam.Front();
+                    dc.Dt = gameDt;
+                    dc.Keys = devKeys && playUsesPlayer && !editor.ScriptIDEHasKeyboardFocus();
+                    dc.Interact = gameHasInput && playUsesPlayer && !playerVitals.IsDead() && InputMap::GetButtonDown("Interact");
+                    dc.StartSquad = [&]() {
+                        auto fps = world.Registry.view<FirstPersonControllerComponent>();
+                        const FirstPersonControllerComponent* fp = fps.begin() != fps.end() ? &fps.get<FirstPersonControllerComponent>(*fps.begin()) : nullptr;
+                        return fp && npcDirector.Start(world, assets, fp, /*allowEmpty=*/true);
+                    };
+                    if (playUsesPlayer) devSpawner.Update(dc);
+                    // TARTARUS_FROW_TEST=1 with any --npc-test: F9, F10, F11 tapped a second apart, then F12; the counts printed.
+#pragma warning(suppress : 4996)
+                    static const bool fRowTest = npcTest && std::getenv("TARTARUS_FROW_TEST") != nullptr;
+                    if (fRowTest) {
+                        static float fRowClock = 0.0f;
+                        static int fRowStep = 0;
+                        fRowClock += gameDt;
+                        const int keys[] = {GLFW_KEY_F9, GLFW_KEY_F10, GLFW_KEY_F11, -1, GLFW_KEY_F12, -1, GLFW_KEY_F8, GLFW_KEY_F8};
+                        const float times[] = {2.0f, 3.0f, 4.0f, 6.0f, 6.5f, 7.5f, 8.0f, 14.0f};
+                        if (fRowStep < 8 && fRowClock >= times[fRowStep]) {
+                            if (keys[fRowStep] >= 0) Input::SimulateKeyTap(keys[fRowStep]);
+                            else for (auto [se, ssc, st] : world.Registry.view<SpiderComponent, TransformComponent>().each())
+                                std::printf("[FRowTest] spider %u at (%.2f, %.2f, %.2f) brain %d\n", (unsigned)entt::to_integral(se), st.Position.x, st.Position.y, st.Position.z, ssc.Brain);
+                            if (keys[fRowStep] < 0) std::printf("[FRowTest] t=%.1f spawned=%d npcs=%d\n", fRowClock, devSpawner.Spawned(), (int)npcDirector.Npcs().size());
+                            ++fRowStep;
+                        }
+                    }
                 }
                 // Doors, drawers and lids (Openable): Interact opens the one under the crosshair; all of them move.
                 Openable::Update(world, player.Cam.Position, player.Cam.Front(),
@@ -4622,6 +4683,52 @@ int main(int argc, char** argv) {
                 }
                 if (editorUIVisible) editor.Draw(world, assets, editorCamera, dt);
                 else if (playing && devKeys) editor.DrawPlayModeOverlays(world); // #185 — physics panel + HUD over maximized play
+                // F6 Nav while editing: the navmesh this scene baked in its last Play (Library/NavCache/scene_<name>.txt names
+                // it), its edges drawn over the Scene view. The physics scene the navmesh is built from only exists in Play.
+                {
+                    static std::string navRecorded;
+                    const bool wantNav = !playing && editorUIVisible && FKeyRow::CurrentOverlay() == FKeyRow::OverlayNav;
+                    const bool recordNav = playing && npcDirector.Started() && !npcDirector.NavCachePath().empty() && navRecorded.empty();
+                    // (the note's path is only built on the frames that need it: an editor frame allocates nothing here)
+                    static std::string navNote;
+                    if (wantNav || recordNav) navNote = ProjectPaths::Resolve("Library/NavCache/scene_" + editor.SceneTitle() + ".txt");
+                    if (recordNav) {
+                        std::ofstream(std::filesystem::u8path(navNote)) << npcDirector.NavCachePath() << std::endl << npcDirector.NavHash() << std::endl;
+                        navRecorded = navNote;
+                    }
+                    if (!playing) navRecorded.clear();
+                    static NavMesh editNav;
+                    static std::vector<NavMesh::Edge> editNavEdges;
+                    static std::string editNavFor;
+                    if (!wantNav) editNavFor.clear();
+                    else if (editNavFor != navNote) {
+                        editNavFor = navNote;
+                        editNavEdges.clear();
+                        std::ifstream in(std::filesystem::u8path(navNote));
+                        std::string cachePath;
+                        unsigned long long hash = 0;
+                        if (in && std::getline(in, cachePath) && (in >> hash) && editNav.Load(cachePath, hash)) editNav.BoundaryEdges(editNavEdges);
+                        if (editNavEdges.empty()) FKeyRow::Show("F6", "Nav", "Play once to bake this scene's navmesh");
+                    }
+                    if (wantNav && !editNavEdges.empty() && editor.ViewportSize().x > 1.0f && editor.ViewportSize().y > 1.0f) {
+                        const glm::vec2 vpPos = editor.ViewportPos(), vpSize = editor.ViewportSize();
+                        const glm::mat4 vp = editorCamera.ProjectionMatrix(vpSize.x / vpSize.y) * editorCamera.ViewMatrix();
+                        ImDrawList* dl = ImGui::GetForegroundDrawList();
+                        dl->PushClipRect(ImVec2(vpPos.x, vpPos.y), ImVec2(vpPos.x + vpSize.x, vpPos.y + vpSize.y), true);
+                        auto toScreen = [&](const glm::vec3& w, ImVec2& out) {
+                            const glm::vec4 c = vp * glm::vec4(w, 1.0f);
+                            if (c.w < 0.05f) return false;
+                            out = ImVec2(vpPos.x + (c.x / c.w * 0.5f + 0.5f) * vpSize.x, vpPos.y + (1.0f - (c.y / c.w * 0.5f + 0.5f)) * vpSize.y);
+                            return true;
+                        };
+                        const ImU32 col = IM_COL32(90, 255, 115, 215);
+                        for (const NavMesh::Edge& e : editNavEdges) {
+                            ImVec2 a, b;
+                            if (toScreen(e.A + glm::vec3(0.0f, 0.05f, 0.0f), a) && toScreen(e.B + glm::vec3(0.0f, 0.05f, 0.0f), b)) dl->AddLine(a, b, col, 1.5f);
+                        }
+                        dl->PopClipRect();
+                    }
+                }
                 {   // The F-row's pill, over the view the keys are acting on: the game in Play, else the Scene view.
                     const ImGuiViewport* mvp = ImGui::GetMainViewport();
                     ImVec2 pMin = mvp->Pos, pMax(mvp->Pos.x + mvp->Size.x, mvp->Pos.y + mvp->Size.y);

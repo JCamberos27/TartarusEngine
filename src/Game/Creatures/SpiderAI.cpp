@@ -134,7 +134,7 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
     ai.LookIn -= dt;
 
     // Senses, a few times a second.
-    const bool target = t.Valid && !t.Dead;
+    const bool target = t.Valid && !t.Dead && !sc.Passive; // F10 Passive: not hunting until it's shot
     const bool alarmed = ai.Alarmed;
     ai.Alarmed = false;
     if (target && (ai.LookIn <= 0.0f || alarmed)) {

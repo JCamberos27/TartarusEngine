@@ -1,4 +1,6 @@
 #include "Shortcuts.h"
+#include <map>
+#include <string_view>
 
 #include "EditorPanels.h"
 #include "EditorSound.h"
@@ -120,15 +122,20 @@ bool SameConflictScope(std::uint32_t a, std::uint32_t b) {
            pair(Ctx_Inspector, Ctx_InspectorHover);
 }
 
-Shortcut* FindMut(const std::string& id) {
-    for (auto& s : g_Table) if (s.Id == id) return &s;
-    return nullptr;
+// Id -> table index. std::less<> finds by string_view: the per-frame queries (the F-row's twenty-odd) don't
+// build a std::string each (an id over 15 characters would allocate).
+std::map<std::string, size_t, std::less<>> g_Index;
+
+Shortcut* FindMut(std::string_view id) {
+    const auto it = g_Index.find(id);
+    return it != g_Index.end() && it->second < g_Table.size() ? &g_Table[it->second] : nullptr;
 }
 
 void Register(const char* id, const char* label, std::uint32_t ctx, Chord def) {
     Shortcut s;
     s.Id = id; s.Label = label; s.Ctx = ctx;
     s.Default = def; s.Current = def; s.Overridden = false;
+    g_Index[s.Id] = g_Table.size();
     g_Table.push_back(std::move(s));
 }
 
@@ -143,6 +150,7 @@ Chord CAk(ImGuiKey k)                          { Chord c; c.Key = k; c.Ctrl = tr
 
 void BuildDefaultTable() {
     g_Table.clear();
+    g_Index.clear();
 
     // --- File / history (Global) ---
     Register("editor.undo",        "Undo",                    Ctx_Global, Ck(ImGuiKey_Z));
@@ -376,14 +384,14 @@ const std::vector<Shortcut>& All() { return g_Table; }
 Shortcut* Find(const char* id) { return FindMut(id ? id : ""); }
 
 void SetChord(const char* id, const Chord& chord) {
-    Shortcut* s = FindMut(id ? id : "");
+    Shortcut* s = FindMut(id ? std::string_view(id) : std::string_view());
     if (!s) return;
     s->Current = chord;
     s->Overridden = (chord != s->Default);
 }
 
 void ResetToDefault(const char* id) {
-    Shortcut* s = FindMut(id ? id : "");
+    Shortcut* s = FindMut(id ? std::string_view(id) : std::string_view());
     if (!s) return;
     s->Current = s->Default;
     s->Overridden = false;
@@ -649,7 +657,7 @@ int GlfwKeyFromImGui(ImGuiKey k) {
 } // namespace
 
 bool TriggeredGlfw(const char* id) {
-    Shortcut* s = FindMut(id ? id : "");
+    Shortcut* s = FindMut(id ? std::string_view(id) : std::string_view());
     if (!s || !s->Current.IsBound()) return false;
     const Chord& c = s->Current; // sequences never reach this path; the prefix half is ignored
     const int gk = GlfwKeyFromImGui(c.Key);

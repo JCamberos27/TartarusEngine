@@ -62,6 +62,9 @@ public:
     // hitboxes onto the bones, the dead onto their ragdolls.
     void LateUpdate(World& world, SpiderSystem& spiders, float dt);
     void Clear() { m_Bodies.clear(); }
+    // A spider about to be destroyed (F12): its hitboxes and ragdoll go now, before its entity does - a query between the
+    // two would otherwise hit a hitbox reporting an entity that no longer exists.
+    void Forget(entt::entity root);
 
     // For the blood: whether `entity` is a spider's root, where its body is now (a corpse's pool spreads from under it),
     // and the mesh space a wound splat on part `part` near `point` is pinned in.

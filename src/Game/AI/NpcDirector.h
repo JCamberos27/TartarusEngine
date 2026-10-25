@@ -64,7 +64,8 @@ public:
 
     // Remembers the scene's spawns and settings; the navigation mesh and the first soldiers come on the
     // first Think, once the physics world is up. False when the scene has no NPC Spawn.
-    bool Start(World& world, AssetLibrary& assets, const FirstPersonControllerComponent* playerConfig);
+    // `allowEmpty`: start even with no NPC Spawn (F9's first press): no squad, the navmesh seeded from the player.
+    bool Start(World& world, AssetLibrary& assets, const FirstPersonControllerComponent* playerConfig, bool allowEmpty = false);
     // Reads the scene's Squad Settings and Ragdoll Settings (Start does; the defaults without them).
     void ApplySettings(const entt::registry& reg);
     const SquadSettingsComponent& Settings() const { return m_Cfg; }
@@ -152,6 +153,15 @@ public:
     // A scripted test can put a soldier somewhere and give it a goal.
     Npc* Find(int index);
     int Spawn(World& world, AssetLibrary& assets, int spawnIndex); // -1 on failure
+    // F9: a soldier at `pos` (brain 0 Soldier / 1 Dummy, weapon 0 AK / 1 Remington / 3 none), no respawn; -1 before the
+    // navmesh is up. `passive`: it ignores the player until hurt.
+    int SpawnAt(World& world, AssetLibrary& assets, const glm::vec3& pos, float yawDeg, int brain, int weapon, bool passive);
+    // F12: soldier `index` and its body gone at once (alive or a corpse).
+    void Remove(World& world, int index);
+    bool Started() const { return m_Started; }
+    // The navmesh's cache file and its input hash (after the first Think): F6 Nav shows it again outside Play.
+    const std::string& NavCachePath() const { return m_NavCachePath; }
+    std::uint64_t NavHash() const { return m_NavHash; }
     int ReusedBodies() const { return m_Reused; }                  // spawns that took a pooled body
     // The soldier dies this frame; its ragdoll starts after this frame's late pose (so it takes the pose it died in),
     // the shove on part `part` (-1: the part nearest `point`).
@@ -272,6 +282,10 @@ private:
     bool m_Active = false, m_Started = false;
     float m_Now = 0.0f;
     std::vector<SpawnPoint> m_Spawns;
+    static constexpr int kDevSpawn = -2; // Spawn's index for m_DevPoint (SpawnAt)
+    SpawnPoint m_DevPoint;
+    std::string m_NavCachePath;
+    std::uint64_t m_NavHash = 0;
     int m_SquadSize = 4;
     float m_RespawnDelay = 8.0f, m_Difficulty = 1.0f, m_DamageScale = 0.45f;
     SquadSettingsComponent m_Cfg;            // the scene's Squad Settings (defaults without one)

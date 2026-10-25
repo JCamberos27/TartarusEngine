@@ -99,6 +99,19 @@ Result SetRace(World& world, AssetLibrary& assets, entt::entity root, const std:
 Result Randomize(World& world, AssetLibrary& assets, entt::entity root, std::uint32_t seed,
                  const std::string& style = std::string());
 
+// --- Loading ahead (F7 / F8: PlayerLook) -----------------------------------------------------------
+// The outfit Randomize(root, seed, style) would dress `root` in, without dressing it: the same draw.
+Wardrobe::Request PlanRandom(World& world, AssetLibrary& assets, entt::entity root, std::uint32_t seed,
+                             const std::string& style = std::string());
+// What `request` would put on `root`, its models and materials, started loading in the background; nothing changes.
+// When the change is asked for, it lands in a frame. Returns how many loads were asked for (already loaded ones count).
+int Preload(World& world, AssetLibrary& assets, entt::entity root, const Wardrobe::Request& request);
+// Every model the wardrobe has for `gender`: its items, then that body's race heads and parts (project-relative).
+void WardrobeModels(const Catalog& cat, Wardrobe::Gender gender, std::vector<std::string>& out);
+// One model and the materials its remap names, started loading in the background. Its first call reads the model's
+// .meta on this thread (a fraction of a millisecond): PlayerLook spreads a wardrobe's worth over frames.
+void PreloadModel(AssetLibrary& assets, const std::string& rel);
+
 // A piece's colourways: one group per material the piece's model is remapped to.
 struct ColourGroup {
     std::string Source;                 // the remapped .mat (project-relative)
