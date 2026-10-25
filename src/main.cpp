@@ -2737,7 +2737,9 @@ int main(int argc, char** argv) {
                         const float times[] = {2.0f, 3.0f, 4.0f, 6.0f, 6.5f, 7.5f};
                         if (fRowStep < 6 && fRowClock >= times[fRowStep]) {
                             if (keys[fRowStep] >= 0) Input::SimulateKeyTap(keys[fRowStep]);
-                            else std::printf("[FRowTest] t=%.1f spawned=%d npcs=%d\n", fRowClock, devSpawner.Spawned(), (int)npcDirector.Npcs().size());
+                            else for (auto [se, ssc, st] : world.Registry.view<SpiderComponent, TransformComponent>().each())
+                                std::printf("[FRowTest] spider %u at (%.2f, %.2f, %.2f) brain %d\n", (unsigned)entt::to_integral(se), st.Position.x, st.Position.y, st.Position.z, ssc.Brain);
+                            if (keys[fRowStep] < 0) std::printf("[FRowTest] t=%.1f spawned=%d npcs=%d\n", fRowClock, devSpawner.Spawned(), (int)npcDirector.Npcs().size());
                             ++fRowStep;
                         }
                     }
