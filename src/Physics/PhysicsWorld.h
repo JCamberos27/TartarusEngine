@@ -197,6 +197,7 @@ bool RagdollMotion(int ragdoll, float* outMaxLinear, float* outMaxAngular);
 // Puts every part to sleep now (a body that has come to rest stays so until something hits it: RagdollImpulse wakes it).
 void RagdollSleep(int ragdoll);
 void RagdollImpulse(int ragdoll, int part, const float impulse[3], const float point[3]);
+void RagdollAddSpin(int ragdoll, const float angular[3]); // a turn (rad/s, world) added to the whole body about its centre of mass
 bool GetRagdollPart(int ragdoll, int part, float outPos[3], float outRotXYZW[4]);
 bool RagdollAsleep(int ragdoll);
 // At rest long enough to have been frozen (its parts a static copy, out of the solver until something hits it).

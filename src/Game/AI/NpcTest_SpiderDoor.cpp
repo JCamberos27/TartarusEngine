@@ -112,5 +112,6 @@ void NpcTest::SpiderDoor(World& world) {
     Check(m_SDAttacks > 0, "spiderdoor: and attacks them");
     Check(m_SDOutside == 0, "spiderdoor: the hunter never leaves the storey");
     Check(m_SDWorstStuck < 2.0f, "spiderdoor: it never stalls for 2 s while it means to move");
+    SpiderJank("spiderdoor");
     m_SDDone = m_Done = true;
 }

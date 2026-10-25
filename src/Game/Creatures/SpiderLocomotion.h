@@ -59,13 +59,12 @@ struct MoverSettings {
     float Accel = 6.0f;          // m/s^2 up to that speed and back down
     float TurnRate = 260.0f;     // deg/s about its up
     float UpRate = 10.0f;        // 1/s: how fast its up follows the surface's (a time constant's inverse)
-    float ProbeLift = 0.25f;     // the down probe starts this far above the body's origin ...
-    float ProbeDepth = 0.6f;     // ... and looks this far down
-    float ProbeHeight = 0.12f;   // the forward probe runs this high off the surface ...
-    float Reach = 0.6f;          // ... this far ahead: a wall inside it is climbed onto
-    float Clearance = 0.28f;     // the body never gets closer to a wall ahead than this (it turns onto it instead)
+    float MaxUpRate = 540.0f;    // deg/s: its up never swings faster (a 90-degree roll over an edge takes 1/6 s or more)
+    float StepUp = 0.08f;        // a rise or a drop under this is walked over; a face rising higher is climbed
+    float EdgeRun = 0.25f;       // metres (at least) over which it rolls over an outside edge - longer at speed
     // The body's own extent from its origin (the model's, between its feet): its head this far forward, its abdomen this
-    // far back, both about this high off the surface. Whatever they would sink into, the body is pushed back out of.
+    // far back, both about this high off the surface. An inside corner is turned with the abdomen on the face it leaves
+    // and the head on the next; nothing it passes sinks into the body.
     float BodyFront = 0.26f, BodyBack = 0.4f, BodyLift = 0.1f;
     float Gravity = 9.81f;       // m/s^2 while it has let go
     float LetGoAfter = 0.12f;    // seconds with no surface under it before it falls
@@ -93,16 +92,43 @@ public:
     bool Attached() const { return m_Attached; }
     bool Arrived() const { return m_Arrived; }
     // Knocked off whatever it holds (a heavy round into it on a wall or a ceiling): it lets go at once, moving at
-    // `velocity` (world, m/s), falls, lands and rights itself. It is lifted a little clear of the surface first, so the
-    // fall's ray doesn't start inside what it just let go of.
+    // `velocity` (world, m/s), falls, lands and rights itself.
     void Detach(const glm::vec3& velocity);
     // The surface it stands on: its normal and how far the origin is off it (m; < 0: no surface found this frame).
     glm::vec3 SurfaceNormal() const { return m_SurfaceNormal; }
     float SurfaceGap() const { return m_SurfaceGap; }
+    // What moved it since the last call, for the jank counters: which branches of Step, Fall and Detach ran.
+    enum : unsigned { kMoveSupport = 1, kMoveEdge = 2, kMoveFree = 4, kMoveSlide = 8, kMoveRefused = 32, kMoveLetGo = 64,
+                      kMoveFall = 128, kMoveLand = 256, kMoveDetach = 512, kMoveCorner = 1024 };
+    // Mid-turn over a corner (an inside one or an outside edge) now.
+    bool Cornering() const { return m_Corner.Kind != 0; }
+    int CornerReject() const { return m_Reject; } // (traces) why the last look found no inside corner: 1 nothing ahead, 2 a floor, 3 glancing, 5 too near, 6 too far, 7 not yet
+    unsigned TakeMoves() { const unsigned m = m_Moves; m_Moves = 0; return m; }
 
 private:
+    // A corner being turned. Inside (1: a wall ahead, from the floor): the body's line runs from its abdomen on this face
+    // to its head on the wall, a body's length apart along them, and At (0..1) is how far round it is - so the origin and
+    // the up move continuously, never faster than the turn allows. Outside (2: over an edge): the body rolls about the
+    // edge line, its origin at At (-Length/2..Length/2) along the body from the edge, its up eased over that run.
+    struct Corner {
+        int Kind = 0;
+        glm::vec3 Point{0.0f};   // inside: the belly-level corner line; outside: the edge line (moved along Axis as it goes)
+        glm::vec3 Axis{0.0f}, D1{0.0f}, D2{0.0f}, U0{0.0f}; // the turn's axis, along the first face, along the second, up then
+        float Span = 0.0f, Length = 0.0f, At = 0.0f, Turned = 0.0f; // radians to turn, the turn's run, how far, radians turned
+        float Facing = 1.0f, WallLift = 0.0f; // inside: how squarely the wall faces it; the head's offset off the wall at the start
+    };
+    // The surface it let go of (Fall doesn't look back into it while leaving).
+    struct SurfaceLeft {
+        glm::vec3 Point{0.0f}, Normal{0.0f};
+    };
     void Fall(const SurfaceQuery& q, const MoverSettings& s, float dt);
-    void TurnUpToward(const glm::vec3& want, float rate, float dt);
+    void TurnUpToward(const glm::vec3& want, float rate, float maxRateDeg, float dt);
+    // The nearest corner within `look` metres of travel ahead, and how far off its turn starts.
+    bool FindCorner(const SurfaceQuery& q, const MoverSettings& s, float look, Corner& out, float& start) const;
+    float CornerSpeed(const MoverSettings& s, const Corner& c) const;
+    // Travels `dist` round the corner being turned (no more than `turnBudget` radians of up); returns what is left over
+    // once it is out onto a face.
+    float FollowCorner(const SurfaceQuery& q, const MoverSettings& s, float dist, float dt, float& turnBudget);
 
     glm::vec3 m_Pos{0.0f}, m_Vel{0.0f};
     glm::quat m_Rot{1.0f, 0.0f, 0.0f, 0.0f};
@@ -111,11 +137,16 @@ private:
     float m_Speed = 0.0f;
     float m_Unsupported = 0.0f;
     bool m_Attached = true, m_Arrived = false;
+    unsigned m_Moves = 0;
+    Corner m_Corner;
+    mutable int m_Reject = 0;
+    SurfaceLeft m_Left;
 };
 
 // ---- legs ----
 
 constexpr int kLegs = 8;
+constexpr float kLegSwing = 2.0f; // m/s: a foot on nothing swings toward where it hangs no faster than this (relative to the body)
 
 struct GaitSettings {
     float StepTime = 0.2f;       // seconds a step takes at a walk (shorter as it speeds up)
@@ -144,7 +175,9 @@ struct LegState {
     glm::vec3 From{0.0f}, To{0.0f}, FromNormal{0.0f, 1.0f, 0.0f}, ToNormal{0.0f, 1.0f, 0.0f};
     glm::vec3 Want{0.0f}, WantNormal{0.0f, 1.0f, 0.0f}; // the last foothold found
     bool WantGround = false;     // false: nothing under the rest spot (it dangles there)
+    glm::vec3 Local{0.0f};       // the model's space: where a foot on nothing is (it swings there with the body)
     bool Planted = true, Stepping = false, Grounded = false;
+    bool ToGround = true;        // the step's target is a foothold (not a hang spot)
     float T = 0.0f, Duration = 0.2f;
 };
 
@@ -174,6 +207,7 @@ private:
     std::array<LegState, kLegs> m_Legs{};
     int m_NextProbe = 0, m_Landed = 0, m_BothLifted = 0;
     int m_LastGroup = 1; // the group that last lifted (the other gets the next turn)
+    glm::mat4 m_LastModel{1.0f}; // last frame's model matrix (a foot let go keeps its place on the body)
 };
 
 // ---- rig ----

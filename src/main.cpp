@@ -1224,6 +1224,7 @@ int main(int argc, char** argv) {
             // --npc-test spiderhunt: a hunter (its own AI)
             npcTest->SpawnHunter = [spawnSpider](const glm::vec3& pos, float yawDeg) { return spawnSpider(pos, yawDeg, 0); };
             npcTest->Spiders = &spiders;
+            spiders.MeasureJank = true; // the jank counters' extra probes (feet, floating)
             npcTest->SpiderHurt = &spiderDamage;
             npcTest->BloodFxView = &bloodFx;
             npcTest->ShootSpider = [&](const glm::vec3& from, const glm::vec3& dir, float damage, int pellets, bool& spider) {
