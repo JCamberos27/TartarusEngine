@@ -31,8 +31,8 @@ std::vector<Look> Looks(const Wardrobe::Wardrobe& w) {
 }
 
 entt::entity PlayerRoot(World& world) {
-    for (auto [e, body, outfit] : world.Registry.view<FirstPersonBodyComponent, CharacterOutfitComponent>().each()) return e;
-    return entt::null;
+    auto view = world.Registry.view<FirstPersonBodyComponent, CharacterOutfitComponent>();
+    return view.begin() != view.end() ? *view.begin() : entt::entity(entt::null);
 }
 
 void PutOn(World& world, AssetLibrary& assets, entt::entity root, const Look& l) {
