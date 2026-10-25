@@ -749,6 +749,44 @@ std::vector<std::string> ParseLocks(const std::string& locks) {
     return out;
 }
 
+Wardrobe::Request PlanRandom(World& world, AssetLibrary& assets, entt::entity root, std::uint32_t seed, const std::string& style) {
+    Result r;
+    auto cat = CatalogFor(world, assets, root, r);
+    if (!cat) return BaseRequest(world, root);
+    const auto locks = ParseLocks(world.Registry.get<CharacterOutfitComponent>(root).Locks);
+    return Wardrobe::Randomize(cat->W, cat->Items, BaseRequest(world, root), seed, locks, style);
+}
+
+int Preload(World& world, AssetLibrary& assets, entt::entity root, const Wardrobe::Request& request) {
+    Result r;
+    auto cat = CatalogFor(world, assets, root, r);
+    if (!cat) return 0;
+    std::vector<std::string> notes;
+    return (int)Prefetch(world, assets, root, *cat, request, notes).size(); // (the tickets go: the loads go on)
+}
+
+int PreloadWardrobe(AssetLibrary& assets, const Catalog& cat, Wardrobe::Gender gender) {
+    int n = 0;
+    auto model = [&](const std::string& rel) {
+        if (rel.empty()) return;
+        const std::string abs = ProjectPaths::Resolve(rel);
+        assets.RequestModelAsync(abs);
+        for (const auto& [name, mat] : assets.MaterialRemap(abs)) {
+            std::vector<AssetLibrary::AsyncHandle> t;
+            RequestMaterial(assets, mat, t);
+        }
+        ++n;
+    };
+    for (const Wardrobe::Item& it : cat.Items)
+        if (it.Sex == gender) model(it.Path);
+    const std::string root = cat.W.Root.empty() ? std::string() : cat.W.Root + "/";
+    for (const Wardrobe::RaceDef& race : cat.W.Body(gender).Races) {
+        model(race.Head.rfind("assets/", 0) == 0 ? race.Head : root + race.Head);
+        for (const auto& [part, path] : race.Parts) model(path.rfind("assets/", 0) == 0 ? path : root + path);
+    }
+    return n;
+}
+
 Result Randomize(World& world, AssetLibrary& assets, entt::entity root, std::uint32_t seed, const std::string& style) {
     Result r;
     auto cat = CatalogFor(world, assets, root, r);

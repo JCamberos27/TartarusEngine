@@ -19,6 +19,10 @@
 #include <glm/gtc/quaternion.hpp>
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <regex>
+#include <sstream>
 #include <cstdio>
 
 namespace {
@@ -72,6 +76,29 @@ entt::entity Box(World& world, AssetLibrary& assets, const glm::vec3& at, const 
 DevSpawner::DevSpawner() = default;
 DevSpawner::~DevSpawner() = default;
 
+// The models and materials a prefab (or scene fragment) names, started loading in the background: the first F9 / F10 /
+// F11 of a Play then finds them in memory instead of importing them on the spot.
+void WarmPrefab(AssetLibrary& assets, const std::string& rel) {
+    std::ifstream in(std::filesystem::u8path(ProjectPaths::Resolve(rel)));
+    if (!in) return;
+    std::stringstream ss;
+    ss << in.rdbuf();
+    static const std::regex kPath("\"(assets/[^\"]+\\.(fbx|FBX|glb|gltf|obj|mat))\"");
+    const std::string text = ss.str();
+    for (std::sregex_iterator it(text.begin(), text.end(), kPath), end; it != end; ++it) {
+        const std::string path = ProjectPaths::Resolve((*it)[1].str());
+        if ((*it)[2].str() == "mat") assets.RequestMaterialAsync(path);
+        else assets.RequestModelAsync(path);
+    }
+}
+
+void DevSpawner::Warm(const Context& c) {
+    m_Warmed = true;
+    const SquadSettingsComponent squad = c.Npcs ? c.Npcs->Settings() : SquadSettingsComponent{};
+    for (const std::string& p : {std::string(kSpiderPrefab), squad.BodyPrefab, squad.RiflePrefab, squad.ShotgunPrefab})
+        if (!p.empty()) WarmPrefab(*c.Assets, p);
+}
+
 bool DevSpawner::Place(const Context& c, glm::vec3& at, float& yawDeg) const {
     const glm::vec3 f = glm::normalize(c.Front);
     glm::vec3 p, n;
@@ -97,6 +124,7 @@ bool DevSpawner::Place(const Context& c, glm::vec3& at, float& yawDeg) const {
 
 void DevSpawner::Update(const Context& c) {
     if (!c.WorldPtr || !c.Assets) return;
+    if (!m_Warmed) Warm(c);
     // The first F9 in a scene with no NPC Spawn started the soldiers: their navmesh is up after a Think.
     if (m_WaitSquad && c.Npcs && c.Npcs->Started()) { m_WaitSquad = false; SpawnNpc(c); }
     if (c.Keys) {
@@ -280,6 +308,7 @@ void DevSpawner::Stop(World& world) {
 }
 
 void DevSpawner::Forget() {
+    m_Warmed = false;
     m_NpcIds.clear();
     m_SpiderIds.clear();
     m_Props.clear();
