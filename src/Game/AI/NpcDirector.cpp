@@ -285,7 +285,7 @@ void NpcDirector::ApplySettings(const entt::registry& reg) {
     else m_RagdollCfg = RagdollSettingsComponent();
 }
 
-bool NpcDirector::Start(World& world, AssetLibrary& assets, const FirstPersonControllerComponent* playerConfig) {
+bool NpcDirector::Start(World& world, AssetLibrary& assets, const FirstPersonControllerComponent* playerConfig, bool allowEmpty) {
     (void)assets;
     Stop(world);
     auto& reg = world.Registry;
@@ -315,7 +315,7 @@ bool NpcDirector::Start(World& world, AssetLibrary& assets, const FirstPersonCon
         const auto* order = reg.try_get<OrderComponent>(e);
         found.push_back({order ? order->Value : (int)entt::to_integral(e), s});
     }
-    if (found.empty()) return false;
+    if (found.empty() && !allowEmpty) return false;
     std::sort(found.begin(), found.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
     for (const auto& f : found) m_Spawns.push_back(f.second);
     ApplySettings(reg);
@@ -430,6 +430,8 @@ void NpcDirector::BuildNav(World& world) {
     char name[64];
     std::snprintf(name, sizeof name, "Library/NavCache/%016llx.nav", (unsigned long long)hash);
     const std::string cache = ProjectPaths::Resolve(name);
+    m_NavCachePath = cache;
+    m_NavHash = hash;
     bool loaded = m_Nav.Load(cache, hash);
     std::string error;
     if (!loaded) {
@@ -444,6 +446,7 @@ void NpcDirector::BuildNav(World& world) {
     // Only what the soldiers can walk to from their spawns: a building's roof is walkable to Recast too.
     std::vector<glm::vec3> seeds;
     for (const SpawnPoint& sp : m_Spawns) seeds.push_back(sp.Pos);
+    if (seeds.empty() && m_Player.Valid) seeds.push_back(m_Player.Feet); // started by F9 with no NPC Spawn: where the player is
     const int unreachable = m_Nav.KeepReachable(seeds, glm::vec3(2.0f, 0.6f, 2.0f));
     const int cover = m_Cover.Build(m_Nav, CoverTuning{m_Cfg.CoverSpacing, m_Cfg.CoverReach, m_Cfg.CoverKneeHeight, m_Cfg.CoverHeadHeight, m_Cfg.CoverStep});
     m_Crowd.Init(m_Nav, 16, 0.6f);
@@ -507,11 +510,31 @@ std::shared_ptr<NpcDirector::SoldierBody> NpcDirector::BuildBody(World& world, A
     return built;
 }
 
+int NpcDirector::SpawnAt(World& world, AssetLibrary& assets, const glm::vec3& pos, float yawDeg, int brain, int weapon, bool passive) {
+    if (!m_Started) return -1; // the navigation mesh comes on the first Think
+    m_DevPoint = SpawnPoint{};
+    m_DevPoint.Pos = pos;
+    m_DevPoint.Yaw = yawDeg;
+    m_DevPoint.Brain = brain;
+    m_DevPoint.Weapon = weapon;
+    const int idx = Spawn(world, assets, kDevSpawn);
+    if (Npc* n = Find(idx)) { n->Passive = passive; n->DevSpawned = true; }
+    return idx;
+}
+
+void NpcDirector::Remove(World& world, int index) {
+    Npc* n = Find(index);
+    if (!n) return;
+    Despawn(world, *n);
+    m_Npcs[(size_t)index].reset();
+}
+
 int NpcDirector::Spawn(World& world, AssetLibrary& assets, int spawnIndex) {
-    if (spawnIndex < 0 || spawnIndex >= (int)m_Spawns.size() || m_SoldierJson.empty()) return -1;
-    SpawnPoint sp = m_Spawns[(size_t)spawnIndex];
-    sp.Pos += SpawnShift;
-    if (TestDummies) {
+    const bool dev = spawnIndex == kDevSpawn;
+    if ((!dev && (spawnIndex < 0 || spawnIndex >= (int)m_Spawns.size())) || m_SoldierJson.empty()) return -1;
+    SpawnPoint sp = dev ? m_DevPoint : m_Spawns[(size_t)spawnIndex];
+    if (!dev) sp.Pos += SpawnShift;
+    if (TestDummies && !dev) {
         sp.Brain = 1;
         sp.Weapon = spawnIndex == 1 ? 3 : 0;
         sp.Bare = spawnIndex != 1;
@@ -733,6 +756,11 @@ void NpcDirector::Think(World& world, AssetLibrary& assets, float dt, const Play
             if (h->Current <= 0.0f) { Kill(world, *up, {0, 0, 1}, up->Feet, 0); continue; }
         }
         SubTimer timer(*this, SubPerceive);
+        if (up->Passive) { // F9 Passive: unaware of the player until something hurts it
+            up->Mem.Known = up->Mem.Visible = false;
+            up->Mem.Awareness = 0.0f;
+            continue;
+        }
         Perceive(world, *up, p, dt);
         anyoneSees = anyoneSees || up->Mem.Visible;
     }
@@ -1965,6 +1993,7 @@ void NpcDirector::ApplyDamage(World& world, Npc& n, float amount, HitZone zone, 
                              : zone == HitZone::Head ? HitRegion::Head
                              : zone == HitZone::Limb ? HitRegion::Leg
                                                      : HitRegion::Torso;
+    n.Passive = false; // hurt: a Passive spawn fights back
     n.Health -= amount;
     // The player's round in a leg puts it down on its belly, crawling (Leg Down chance: always, but for the tests), whatever
     // its health; one in the body that would leave it under 20% - or kill it - may put it down dying instead (Wound chance).
@@ -2114,7 +2143,7 @@ void NpcDirector::Kill(World& world, Npc& n, const glm::vec3& dir, const glm::ve
             if (glm::length(o->Feet - n.Feet) < 25.0f) Callout(*o, CallKind::ManDown);
         }
     }
-    if (m_Respawn) m_RespawnTimers.push_back(m_Now + m_RespawnDelay);
+    if (m_Respawn && !n.DevSpawned) m_RespawnTimers.push_back(m_Now + m_RespawnDelay);
 }
 
 void NpcDirector::FinishDeath(World& world, Npc& n) {

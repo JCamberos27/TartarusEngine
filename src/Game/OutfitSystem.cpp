@@ -515,6 +515,8 @@ std::vector<AssetLibrary::AsyncHandle> Prefetch(World& world, AssetLibrary& asse
     };
     for (const auto& p : resolved.Pieces) {
         const std::string abs = ProjectPaths::Resolve(p.Path);
+        std::error_code ec;
+        if (!fs::exists(abs, ec)) continue; // not on this machine (a checkout without the Drive's assets): the apply says so
         out.push_back(assets.RequestModelAsync(abs));
         for (const auto& [name, mat] : assets.MaterialRemap(abs)) want(mat);
     }
@@ -747,6 +749,44 @@ std::vector<std::string> ParseLocks(const std::string& locks) {
         if (!s.empty()) out.push_back(s);
     }
     return out;
+}
+
+Wardrobe::Request PlanRandom(World& world, AssetLibrary& assets, entt::entity root, std::uint32_t seed, const std::string& style) {
+    Result r;
+    auto cat = CatalogFor(world, assets, root, r);
+    if (!cat) return BaseRequest(world, root);
+    const auto locks = ParseLocks(world.Registry.get<CharacterOutfitComponent>(root).Locks);
+    return Wardrobe::Randomize(cat->W, cat->Items, BaseRequest(world, root), seed, locks, style);
+}
+
+int Preload(World& world, AssetLibrary& assets, entt::entity root, const Wardrobe::Request& request) {
+    Result r;
+    auto cat = CatalogFor(world, assets, root, r);
+    if (!cat) return 0;
+    std::vector<std::string> notes;
+    return (int)Prefetch(world, assets, root, *cat, request, notes).size(); // (the tickets go: the loads go on)
+}
+
+void WardrobeModels(const Catalog& cat, Wardrobe::Gender gender, std::vector<std::string>& out) {
+    for (const Wardrobe::Item& it : cat.Items)
+        if (it.Sex == gender) out.push_back(it.Path);
+    const std::string root = cat.W.Root.empty() ? std::string() : cat.W.Root + "/";
+    auto rel = [&](const std::string& p) { return p.rfind("assets/", 0) == 0 ? p : root + p; };
+    for (const Wardrobe::RaceDef& race : cat.W.Body(gender).Races) {
+        if (!race.Head.empty()) out.push_back(rel(race.Head));
+        for (const auto& [part, path] : race.Parts)
+            if (!path.empty()) out.push_back(rel(path));
+    }
+}
+
+void PreloadModel(AssetLibrary& assets, const std::string& rel) {
+    if (rel.empty()) return;
+    const std::string abs = ProjectPaths::Resolve(rel);
+    std::error_code ec;
+    if (!fs::exists(abs, ec)) return; // a warm-up asks quietly: a model this checkout lacks isn't an error until it's worn
+    assets.RequestModelAsync(abs);
+    std::vector<AssetLibrary::AsyncHandle> tickets;
+    for (const auto& [name, mat] : assets.MaterialRemap(abs)) RequestMaterial(assets, mat, tickets);
 }
 
 Result Randomize(World& world, AssetLibrary& assets, entt::entity root, std::uint32_t seed, const std::string& style) {

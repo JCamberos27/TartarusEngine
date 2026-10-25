@@ -13,8 +13,9 @@ namespace FKeyRow {
 enum Overlay : int { OverlayOff = 0, OverlayPhysics, OverlayAi, OverlayNav, OverlayHitboxes, OverlayCount };
 enum LightView : int { LightOff = 0, LightLighting, LightAlbedo, LightRoughMetal, LightComplexity, LightCount };
 
-// F5-F6 (and Shift+F5-F6 back), from the main loop through Shortcuts::TriggeredGlfw, in any mode.
-void PollViews(EditorLayer& editor);
+// F5-F6 (and Shift+F5-F6 back), from the main loop through Shortcuts::TriggeredGlfw, in any mode. Outside Play F6
+// skips AI and Hitboxes (they need living NPCs).
+void PollViews(EditorLayer& editor, bool playing);
 
 int  CurrentOverlay();
 bool PostFxOff();
@@ -25,7 +26,11 @@ int DebugViewFor(int shadingIndex);
 // The pill: "F10" | "Spider" | "Hunter (Passive)"; `step` of `count` draws the cycle's dots (count 0: none).
 // A new press replaces the one showing and pops again.
 void Show(const char* key, const std::string& title, const std::string& value, int step = 0, int count = 0);
-// Draws the pill at the top centre of [min, max] (screen px). Inside an ImGui frame, after the panels.
+// A pill that stays up while something loads ("Dressing... 3/7"): `value` changes in place, no pop. Release ends it
+// with `value` ("Ready"), and it fades as usual.
+void Hold(const char* key, const std::string& title, const std::string& value);
+void Release(const std::string& value);
+// Draws the pill at the bottom centre of [min, max] (screen px), clear of the toolbars. Inside an ImGui frame.
 void Draw(ImVec2 min, ImVec2 max);
 
 } // namespace FKeyRow
