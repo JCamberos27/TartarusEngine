@@ -515,6 +515,8 @@ std::vector<AssetLibrary::AsyncHandle> Prefetch(World& world, AssetLibrary& asse
     };
     for (const auto& p : resolved.Pieces) {
         const std::string abs = ProjectPaths::Resolve(p.Path);
+        std::error_code ec;
+        if (!fs::exists(abs, ec)) continue; // not on this machine (a checkout without the Drive's assets): the apply says so
         out.push_back(assets.RequestModelAsync(abs));
         for (const auto& [name, mat] : assets.MaterialRemap(abs)) want(mat);
     }
@@ -780,6 +782,8 @@ void WardrobeModels(const Catalog& cat, Wardrobe::Gender gender, std::vector<std
 void PreloadModel(AssetLibrary& assets, const std::string& rel) {
     if (rel.empty()) return;
     const std::string abs = ProjectPaths::Resolve(rel);
+    std::error_code ec;
+    if (!fs::exists(abs, ec)) return; // a warm-up asks quietly: a model this checkout lacks isn't an error until it's worn
     assets.RequestModelAsync(abs);
     std::vector<AssetLibrary::AsyncHandle> tickets;
     for (const auto& [name, mat] : assets.MaterialRemap(abs)) RequestMaterial(assets, mat, tickets);

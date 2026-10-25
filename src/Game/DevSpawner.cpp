@@ -87,6 +87,8 @@ void WarmPrefab(AssetLibrary& assets, const std::string& rel) {
     const std::string text = ss.str();
     for (std::sregex_iterator it(text.begin(), text.end(), kPath), end; it != end; ++it) {
         const std::string path = ProjectPaths::Resolve((*it)[1].str());
+        std::error_code ec;
+        if (!std::filesystem::exists(std::filesystem::u8path(path), ec)) continue; // (a checkout without the Drive's assets)
         if ((*it)[2].str() == "mat") assets.RequestMaterialAsync(path);
         else assets.RequestModelAsync(path);
     }
