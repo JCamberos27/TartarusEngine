@@ -66,7 +66,9 @@ private:
 class Settler {
 public:
     void Begin(int id) { *this = Settler(); m_Id = id; }
-    void Update(float dt);
+    // rootPart / upInRoot: the body's up, in its root part's frame - a corpse come to rest on its side is rolled gently
+    // onto its belly or its back (whichever is nearer), and never put to sleep on a side.
+    void Update(float dt, int rootPart = -1, const glm::vec3& upInRoot = glm::vec3(0.0f, 1.0f, 0.0f));
     void Wake() { m_Still = 0.0f; m_Asleep = false; m_Heavy = -1.0f; m_Time = std::min(m_Time, 0.6f); }
     bool Asleep() const { return m_Asleep; }
     float AsleepAt() const { return m_AsleepAt; } // seconds from its start it first slept (-1: not yet)
@@ -75,6 +77,10 @@ private:
     int m_Id = -1;
     float m_Time = 0.0f, m_Still = 0.0f, m_Heavy = -1.0f, m_AsleepAt = -1.0f;
     bool m_Asleep = false;
+    bool m_OnSide = false, m_Reached = false; // on its side; rolled flat (left to settle)
+    float m_Age = 0.0f; // (since Begin - Wake winds m_Time back)
+    float m_SideFor = 0.0f; // seconds it has been pushed over off its side
+    float m_Target = 0.0f, m_Best = -2.0f, m_BestAt = 0.0f, m_PrevOff = -1.0f; // the flat it is rolled to (+1 belly, -1 back), its best yet, when
 };
 
 } // namespace SpiderRagdoll

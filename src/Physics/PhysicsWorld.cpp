@@ -2660,6 +2660,9 @@ int CreateRagdoll(unsigned entity, const RagdollPart* parts, int count, const Ra
             sh->setRestOffset(prm.SkinOffset);
         }
         sh->userData = BodyPartTag(kBodyPartRagdoll, (unsigned)i); // RaycastBodyParts: ragdoll part i
+        // Thin parts fast (a spider dropped off the ceiling lands at ~7 m/s, 12 cm a step): contacts found ahead of the
+        // step, or a leg's tip sank 4 cm into the floor on landing. (Opt-in: it changes how a body's contacts resolve.)
+        if (prm.SpeculativeCCD) link->setRigidBodyFlag(PxRigidBodyFlag::eENABLE_SPECULATIVE_CCD, true);
         PxRigidBodyExt::setMassAndUpdateInertia(*link, std::max(p.Mass, 0.1f));
         if (p.InertiaHalfWidth > 0.0f || p.InertiaScale != 1.0f) {
             PxVec3 I = link->getMassSpaceInertiaTensor();
@@ -2894,6 +2897,39 @@ void RagdollSleep(int ragdoll) {
     auto& rd = g_State->ragdolls[(size_t)ragdoll];
     SleepRestingNeighbours(*g_State, rd); // (a frozen body's parts are where they lay: it still finds them)
     if (!rd.Frozen && !rd.Art->isSleeping()) rd.Art->putToSleep(); // (its velocities go to zero)
+}
+
+void RagdollAddSpin(int ragdoll, const float angular[3]) {
+    if (!ValidRagdoll(ragdoll) || !angular) return;
+    auto& rd = g_State->ragdolls[(size_t)ragdoll];
+    ThawRagdoll(*g_State, rd);
+    // The whole body turned as one - each part given the turn's velocity at where it is, and the turn itself (velocity
+    // changes: no masses or inertias to get right, no joint fought) - rolled over the low edge on the side it tips toward,
+    // as a body rolls on the floor (turned about its centre instead, its feet's friction on the floor held it).
+    PxVec3 com(0.0f);
+    float mass = 0.0f, low = 1e9f, spread = 0.0f;
+    for (PxRigidBody* b : rd.Bodies) {
+        if (!b) continue;
+        const PxVec3 p = (b->getGlobalPose() * b->getCMassLocalPose()).p;
+        com += p * b->getMass();
+        mass += b->getMass();
+        low = std::min(low, p.y);
+    }
+    if (mass <= 0.0f) return;
+    com /= mass;
+    const PxVec3 w(angular[0], angular[1], angular[2]);
+    const float rate = w.magnitude();
+    if (rate < 1e-6f) return;
+    PxVec3 down = (w / rate).cross(PxVec3(0.0f, 1.0f, 0.0f)); // (horizontal, where the turn carries the body down)
+    for (PxRigidBody* b : rd.Bodies)
+        if (b) spread = std::max(spread, ((b->getGlobalPose() * b->getCMassLocalPose()).p - com).dot(down));
+    const PxVec3 pivot = PxVec3(com.x, low, com.z) + down * spread;
+    for (PxRigidBody* b : rd.Bodies) {
+        if (!b) continue;
+        const PxVec3 r = (b->getGlobalPose() * b->getCMassLocalPose()).p - pivot;
+        b->addForce(w.cross(r), PxForceMode::eVELOCITY_CHANGE, true);
+        b->addTorque(w, PxForceMode::eVELOCITY_CHANGE, true);
+    }
 }
 
 void RagdollImpulse(int ragdoll, int part, const float impulse[3], const float point[3]) {

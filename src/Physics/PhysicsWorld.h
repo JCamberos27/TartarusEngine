@@ -178,6 +178,8 @@ struct RagdollParams {
     float StabilizationThreshold = -1.0f;
     // The flesh over the capsules (m): contacts rest this far out, so the skinned mesh lies on the floor rather than in it.
     float SkinOffset = 0.0f;
+    // Speculative CCD on every part: contacts found ahead of a fast step (a small body dropped from a ceiling, thin legs).
+    bool SpeculativeCCD = false;
     // Gravity on the body, as a multiple of the scene's (> 1: it reads heavier at game scale).
     float GravityScale = 1.0f;
     // The parts collide with each other (off: only with the world).
@@ -197,6 +199,7 @@ bool RagdollMotion(int ragdoll, float* outMaxLinear, float* outMaxAngular);
 // Puts every part to sleep now (a body that has come to rest stays so until something hits it: RagdollImpulse wakes it).
 void RagdollSleep(int ragdoll);
 void RagdollImpulse(int ragdoll, int part, const float impulse[3], const float point[3]);
+void RagdollAddSpin(int ragdoll, const float angular[3]); // a turn (rad/s, world) added to the whole body about its centre of mass
 bool GetRagdollPart(int ragdoll, int part, float outPos[3], float outRotXYZW[4]);
 bool RagdollAsleep(int ragdoll);
 // At rest long enough to have been frozen (its parts a static copy, out of the solver until something hits it).
