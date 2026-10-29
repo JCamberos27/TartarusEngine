@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.0,
+          0.014715
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.35,
+          0.35,
+          0.014783
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Mirror",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Mirror.FBX",
+      "pathGuid": "dbe40e98353134d1",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

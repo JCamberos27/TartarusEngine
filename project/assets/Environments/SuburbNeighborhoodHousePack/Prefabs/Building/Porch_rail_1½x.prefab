@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.75,
+          0.679828,
+          -0.039306
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.750301,
+          0.423486,
+          0.041133
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Porch_rail_1\\xBDx",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Porch_rail_1\u00bdx.FBX",
+      "pathGuid": "a20e61f1c7a462b2",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

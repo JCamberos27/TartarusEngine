@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.25,
+          0.0,
+          -3.5
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.25,
+          0.0,
+          3.5
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Ceiling_\\xBDx_7x",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Ceiling_\u00bdx_7x.FBX",
+      "pathGuid": "a32e5fdec8b7edd5",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

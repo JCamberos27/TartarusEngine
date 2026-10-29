@@ -1,0 +1,81 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.02,
+          0.440117,
+          0.02
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Lamp_chandelier Collider 1",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        -0.43245,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.027473,
+          -0.7,
+          -0.000137
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.25,
+          0.125,
+          0.25
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Lamp_chandelier",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Lamp_chandelier.FBX",
+      "pathGuid": "fbd455cd400d87a9",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.00071,
+          0.033565,
+          0.009057
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          1.579398,
+          0.08,
+          0.347039
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Ground_moss_stones",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior/Ground_moss_stones.FBX",
+      "pathGuid": "49e5cb275ccc7000",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

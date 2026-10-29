@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior",
+  "guid": "3a672afe2ee380b9",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      35.0,
+      -12.0,
+      -1e-06
+    ]
+  },
+  "materialRemap": {
+    "NightTable": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_NightTable.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

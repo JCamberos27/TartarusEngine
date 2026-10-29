@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior",
+  "guid": "0593419c7fda8259",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      26.0,
+      -8.0,
+      -1e-06
+    ]
+  },
+  "materialRemap": {
+    "LeatherChair": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_LeatherChair.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -1,0 +1,103 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "id": 0,
+      "name": "Window_blocker_window_bay_B",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "id": 1,
+      "name": "Window_blocker_curtains_small",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Window_blocker_curtains_small.FBX",
+      "pathGuid": "29aac0cb20a5f7f8",
+      "position": [
+        -11.7117,
+        0.172347,
+        7.87543
+      ],
+      "rotation": [
+        0.707107,
+        0.0,
+        0.0,
+        0.707107
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Window_blocker_curtains",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Window_blocker_curtains.FBX",
+      "pathGuid": "92d2017834be4f9b",
+      "position": [
+        -5.47621,
+        0.172347,
+        7.71978
+      ],
+      "rotation": [
+        0.707107,
+        0.0,
+        0.0,
+        0.707107
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Window_blocker_curtains_small",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Window_blocker_curtains_small.FBX",
+      "pathGuid": "29aac0cb20a5f7f8",
+      "position": [
+        -11.7117,
+        0.172347,
+        7.87543
+      ],
+      "rotation": [
+        0.707107,
+        0.0,
+        0.0,
+        0.707107
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ]
+}

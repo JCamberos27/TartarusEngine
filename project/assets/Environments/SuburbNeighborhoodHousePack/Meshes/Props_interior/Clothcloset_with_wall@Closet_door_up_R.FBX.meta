@@ -1,0 +1,41 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior",
+  "guid": "4f18739b4a433f50",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "meshNodes": [
+      "Closet_door_up_R"
+    ],
+    "optimizeGraph": true,
+    "rootTransform": [
+      1.0,
+      1e-06,
+      -0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      1e-06,
+      -1.0,
+      0.0,
+      0.0,
+      11.900071,
+      0.353179,
+      -0.141659,
+      1.0
+    ]
+  },
+  "materialRemap": {
+    "Bedroom_Closets": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Bedroom_Closets.mat",
+    "In_WhitePlaster": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_In_WhitePlaster.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

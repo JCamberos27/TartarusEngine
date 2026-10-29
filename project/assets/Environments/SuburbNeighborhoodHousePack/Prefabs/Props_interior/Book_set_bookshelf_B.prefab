@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.002386,
+          0.666194,
+          -0.140295
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.716178,
+          0.631628,
+          0.13925
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Book_set_bookshelf_B",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Book_set_bookshelf_B.FBX",
+      "pathGuid": "b9769c50df1f34a0",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

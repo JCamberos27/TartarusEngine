@@ -1,0 +1,161 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.196564,
+          0.371003,
+          0.065
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "T_toilet Collider 1",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        0.0,
+        0.370347,
+        -0.25
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.22,
+          -0.006512
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.196564,
+          0.22,
+          0.307907
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "T_toilet",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/T_toilet@T_toilet.FBX",
+      "pathGuid": "9bcb00db87c77c8d",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.001001,
+          0.017944,
+          0.184148
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.177678,
+          0.01126,
+          0.212715
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "T_toilet_lid",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/T_toilet@T_toilet_lid.FBX",
+      "pathGuid": "43430e64a766bc53",
+      "position": [
+        0.000156,
+        0.409894,
+        -0.105191
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          -0.015444,
+          0.183326
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.180321,
+          0.026225,
+          0.215018
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 3,
+      "name": "T_toilet_seat",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/T_toilet@T_toilet_seat.FBX",
+      "pathGuid": "1163d28cb1f4e9d8",
+      "position": [
+        0.000156,
+        0.409894,
+        -0.105191
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

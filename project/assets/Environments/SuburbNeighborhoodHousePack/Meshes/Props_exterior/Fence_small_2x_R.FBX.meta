@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior",
+  "guid": "4f243db413e63ae7",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -9.0,
+      -0.0,
+      -3e-06
+    ]
+  },
+  "materialRemap": {
+    "Fence_Whitewood": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Fence_Whitewood.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

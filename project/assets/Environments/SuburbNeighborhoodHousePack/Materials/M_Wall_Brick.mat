@@ -1,0 +1,38 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Wall_Brick",
+  "properties": {
+    "_AOMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Wall_Brick_MaskMap_AO100.png",
+    "_AlbedoMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Wall_Brick_BaseColor.tga",
+    "_BaseColor": [
+      0.9044,
+      0.9044,
+      0.9044
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_HeightMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Wall_Brick_Height_Height.png",
+    "_Metallic": 1.0,
+    "_MetallicMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Wall_Brick_MaskMap_Metallic.png",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Wall_Brick_Normal.tga",
+    "_ParallaxScale": 0.02,
+    "_ReflectionProbes": true,
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Wall_Brick_MaskMap_Roughness100.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0,
+    "_UVTiling": [
+      2,
+      2
+    ]
+  },
+  "shader": "engine://Standard.shader"
+}

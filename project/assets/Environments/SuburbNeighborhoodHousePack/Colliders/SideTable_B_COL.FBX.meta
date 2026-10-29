@@ -1,0 +1,17 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Colliders",
+  "guid": "4ba6730eb38ae2b4",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true
+  },
+  "materialRemap": {},
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -1,0 +1,25 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior",
+  "guid": "21cf768e64d2130a",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -6.99829,
+      -0.005193,
+      4.95123
+    ]
+  },
+  "materialRemap": {
+    "Plant_Flowers": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Plant_Flowers.mat",
+    "Plant_Grass": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Plant_Grass.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

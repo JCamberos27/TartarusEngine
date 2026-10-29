@@ -1,0 +1,117 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 0,
+      "name": "Workdesk_solo",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Workdesk_solo@Workdesk_solo.FBX",
+      "pathGuid": "b625cee63c91fa27",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.205939,
+          0.0,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.205406,
+          0.275485,
+          0.022484
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Workdesk_door_L",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Workdesk_solo@Workdesk_door_L.FBX",
+      "pathGuid": "365876c05d77ee02",
+      "position": [
+        0.83476,
+        0.409088,
+        0.457503
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.204264,
+          0.0,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.205406,
+          0.275485,
+          0.022484
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Workdesk_door_R",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Workdesk_solo@Workdesk_door_R.FBX",
+      "pathGuid": "dcf348a7e9d066b5",
+      "position": [
+        -0.831831,
+        0.409088,
+        0.457503
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

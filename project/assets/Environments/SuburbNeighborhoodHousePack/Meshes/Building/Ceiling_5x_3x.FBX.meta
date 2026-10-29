@@ -1,0 +1,25 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building",
+  "guid": "9369d07daf4b9bff",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      24.0,
+      -2.999999,
+      -20.0
+    ]
+  },
+  "materialRemap": {
+    "In_Floor_Carpet": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_In_Floor_Carpet.mat",
+    "In_Roof_Plaster": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_In_Roof_Plaster.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

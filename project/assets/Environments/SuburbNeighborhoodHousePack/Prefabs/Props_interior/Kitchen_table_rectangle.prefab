@@ -1,0 +1,180 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.03,
+          0.365428,
+          0.03
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Kitchen_table_rectangle Collider 1",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        -0.37,
+        0.365058,
+        0.68
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.03,
+          0.365428,
+          0.03
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Kitchen_table_rectangle Collider 2",
+      "order": 2,
+      "parentId": 0,
+      "position": [
+        0.37,
+        0.365058,
+        0.68
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.03,
+          0.365428,
+          0.03
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 3,
+      "name": "Kitchen_table_rectangle Collider 3",
+      "order": 3,
+      "parentId": 0,
+      "position": [
+        -0.37,
+        0.365058,
+        -0.68
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.03,
+          0.365428,
+          0.03
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 4,
+      "name": "Kitchen_table_rectangle Collider 4",
+      "order": 4,
+      "parentId": 0,
+      "position": [
+        0.35,
+        0.365058,
+        -0.68
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          5e-06,
+          0.67,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.483707,
+          0.05,
+          0.837
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Kitchen_table_rectangle",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Kitchen_table_rectangle.FBX",
+      "pathGuid": "1f8de8d88d22fd6a",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

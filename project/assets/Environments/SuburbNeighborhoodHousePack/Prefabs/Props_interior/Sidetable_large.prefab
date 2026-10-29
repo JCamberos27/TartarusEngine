@@ -1,0 +1,177 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 0,
+      "name": "Sidetable_large",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Sidetable_large@Sidetable_large.FBX",
+      "pathGuid": "f90692f3420b2dc7",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 1,
+      "name": "Sidetable_large_drawer_A",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Sidetable_large@Sidetable_large_drawer_A.FBX",
+      "pathGuid": "7c384a15a8246255",
+      "position": [
+        -0.00026,
+        0.886527,
+        0.01461
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 2,
+      "name": "Sidetable_large_drawer_B",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Sidetable_large@Sidetable_large_drawer_B.FBX",
+      "pathGuid": "d34068dce36078c4",
+      "position": [
+        -0.00026,
+        0.679814,
+        0.01461
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.22819,
+          -1e-06,
+          0.013622
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.233057,
+          0.223352,
+          0.023052
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 3,
+      "name": "Sidetable_large_door_L",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Sidetable_large@Sidetable_large_door_L.FBX",
+      "pathGuid": "813a7a3bd34c13fb",
+      "position": [
+        0.427303,
+        0.347323,
+        0.141656
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.226735,
+          1e-06,
+          0.013526
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.231252,
+          0.223352,
+          0.023052
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 4,
+      "name": "Sidetable_large_door_R",
+      "order": 4,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Sidetable_large@Sidetable_large_door_R.FBX",
+      "pathGuid": "e43a3807c2be9f17",
+      "position": [
+        -0.490878,
+        0.345659,
+        0.141764
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

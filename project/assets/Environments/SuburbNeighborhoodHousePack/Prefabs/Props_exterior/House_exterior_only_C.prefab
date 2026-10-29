@@ -1,0 +1,109 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 0,
+      "name": "House_exterior_only_C",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior/House_exterior_only_C.FBX",
+      "pathGuid": "c0454407c872e6ab",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 1,
+      "name": "Door_exterior_paneled",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Door_exterior_paneled.FBX",
+      "pathGuid": "028e0b30dfd168c6",
+      "position": [
+        1.51241,
+        0.022798,
+        0.0
+      ],
+      "rotation": [
+        0.707107,
+        0.0,
+        0.0,
+        0.707107
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Door_garage_brown_5x",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Door_garage_brown_5x.FBX",
+      "pathGuid": "d2f5d3fb6e262560",
+      "position": [
+        -4.0,
+        -0.0,
+        0.0
+      ],
+      "rotation": [
+        0.707107,
+        0.0,
+        0.0,
+        0.707107
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Door_exterior_windowed",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Door_exterior_windowed.FBX",
+      "pathGuid": "d32df1d566c99c82",
+      "position": [
+        -0.987923,
+        0.024358,
+        0.0
+      ],
+      "rotation": [
+        0.707107,
+        0.0,
+        0.0,
+        0.707107
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ]
+}

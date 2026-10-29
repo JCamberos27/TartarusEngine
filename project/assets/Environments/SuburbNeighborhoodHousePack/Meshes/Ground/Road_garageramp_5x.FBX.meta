@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Ground",
+  "guid": "cb4fa49039c84a11",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      4.0,
+      0.0,
+      -1.9
+    ]
+  },
+  "materialRemap": {
+    "Floor_ConcretePlates": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Floor_ConcretePlates.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -1,0 +1,34 @@
+{
+  "alphaCutoff": 0.35,
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Fence_Darkwood",
+  "properties": {
+    "_AOMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Fence_Wooden_MaskMap_AO100.png",
+    "_AlbedoMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Fence_Wooden_BaseColor.tga",
+    "_BaseColor": [
+      0.8529,
+      0.8529,
+      0.8529
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 1.0,
+    "_MetallicMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Fence_Wooden_MaskMap_Metallic.png",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Fence_Wooden_Normal.tga",
+    "_ReflectionProbes": true,
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Fence_Wooden_MaskMap_Roughness100.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "renderQueue": 1,
+  "shader": "engine://Standard.shader"
+}

@@ -1,0 +1,167 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.30095,
+          -0.02
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          1.008703,
+          0.299834,
+          0.165
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Sidetable_TV",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Sidetable_TV@Sidetable_TV.FBX",
+      "pathGuid": "41d8306bbc21ff26",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 1,
+      "name": "Sidetable_TV_drawer_A",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Sidetable_TV@Sidetable_TV_drawer_A.FBX",
+      "pathGuid": "39b7135ccb3a0b25",
+      "position": [
+        -0.452511,
+        0.423893,
+        0.039771
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 2,
+      "name": "Sidetable_TV_drawer_B",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Sidetable_TV@Sidetable_TV_drawer_B.FBX",
+      "pathGuid": "96c2b3c6857b4b04",
+      "position": [
+        -0.452511,
+        0.21718,
+        0.039771
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 3,
+      "name": "Sidetable_TV_drawer_C",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Sidetable_TV@Sidetable_TV_drawer_C.FBX",
+      "pathGuid": "8da4cdb21c88e3ef",
+      "position": [
+        0.516335,
+        0.423893,
+        0.039771
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 4,
+      "name": "Sidetable_TV_drawer_D",
+      "order": 4,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Sidetable_TV@Sidetable_TV_drawer_D.FBX",
+      "pathGuid": "bb69b328839f2743",
+      "position": [
+        0.516335,
+        0.21718,
+        0.039771
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

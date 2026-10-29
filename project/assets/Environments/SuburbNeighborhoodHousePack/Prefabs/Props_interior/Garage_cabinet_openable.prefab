@@ -1,0 +1,77 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 0,
+      "name": "Garage_cabinet_openable",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Garage_cabinet_openable@Garage_cabinet_openable.FBX",
+      "pathGuid": "66ffda699beedede",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.180574,
+          0.0,
+          0.006505
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.184143,
+          0.329379,
+          0.023734
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Garage_cabinet_door",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Garage_cabinet_openable@Garage_cabinet_door.FBX",
+      "pathGuid": "0f35704c782e1e20",
+      "position": [
+        0.0208,
+        0.0,
+        0.365
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

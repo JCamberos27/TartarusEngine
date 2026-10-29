@@ -1,0 +1,54 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "id": 0,
+      "name": "Door_exterior_windowed_brown",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "id": 1,
+      "name": "Door_exterior_windowed",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Door_exterior_windowed.FBX",
+      "pathGuid": "d32df1d566c99c82",
+      "position": [
+        -0.987923,
+        0.024358,
+        0.0
+      ],
+      "rotation": [
+        0.707107,
+        0.0,
+        0.0,
+        0.707107
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ]
+}

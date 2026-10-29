@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior",
+  "guid": "aafecf944d37aaaa",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -37.0,
+      0.0,
+      -1.5625
+    ]
+  },
+  "materialRemap": {
+    "Kitchen_TableChair": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Kitchen_TableChair.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

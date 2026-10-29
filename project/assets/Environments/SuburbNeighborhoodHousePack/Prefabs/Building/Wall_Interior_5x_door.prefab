@@ -1,0 +1,124 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.385,
+          1.4,
+          0.100001
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Wall_Interior_5x_door Collider 1",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        4.66,
+        1.6,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          2.5,
+          0.175,
+          0.1
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Wall_Interior_5x_door Collider 2",
+      "order": 2,
+      "parentId": 0,
+      "position": [
+        2.5,
+        2.85,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.35,
+          1.6,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.385,
+          1.4,
+          0.100001
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "materials": [
+        {
+          "guid": "dff9d658a30789cf",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_In_WhitePlaster.mat"
+        },
+        {
+          "guid": "dff9d658a30789cf",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_In_WhitePlaster.mat"
+        }
+      ],
+      "name": "Wall_Interior_5x_door",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Wall_Interior_5x_door.FBX",
+      "pathGuid": "35c080183a86abd9",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

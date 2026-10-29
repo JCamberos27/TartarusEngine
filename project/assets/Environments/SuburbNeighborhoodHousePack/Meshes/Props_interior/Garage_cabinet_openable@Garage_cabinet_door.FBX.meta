@@ -1,0 +1,40 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior",
+  "guid": "0f35704c782e1e20",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "meshNodes": [
+      "Garage_cabinet_door"
+    ],
+    "optimizeGraph": true,
+    "rootTransform": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      -1.0,
+      0.0,
+      0.0,
+      15.980638,
+      0.012654,
+      -0.366774,
+      1.0
+    ]
+  },
+  "materialRemap": {
+    "GarageSet": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_GarageSet.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

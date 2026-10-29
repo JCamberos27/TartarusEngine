@@ -1,0 +1,36 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_In_Floor_Carpet",
+  "properties": {
+    "_AOMap": "",
+    "_AlbedoMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/In_Floorcarpet_BaseColor.tga",
+    "_BaseColor": [
+      0.9632,
+      0.9632,
+      0.9632
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/In_Floorcarpet_Normal.tga",
+    "_ReflectionProbes": true,
+    "_Roughness": 1.0,
+    "_RoughnessMap": "",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0,
+    "_UVTiling": [
+      2,
+      2
+    ]
+  },
+  "shader": "engine://Standard.shader"
+}

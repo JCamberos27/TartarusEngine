@@ -1,0 +1,25 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building",
+  "guid": "d3bd78bb35afc1d1",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      11.5,
+      -0.0,
+      0.5
+    ]
+  },
+  "materialRemap": {
+    "Floor_ConcretePlates": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Floor_ConcretePlates.mat",
+    "Floor_PorchPlanks": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Floor_PorchPlanks.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

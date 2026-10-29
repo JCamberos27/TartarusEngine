@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior",
+  "guid": "7348a235b85c5add",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -24.9788,
+      -12.9799,
+      -0.109057
+    ]
+  },
+  "materialRemap": {
+    "Toilet_ExtraProps": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Toilet_ExtraProps.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

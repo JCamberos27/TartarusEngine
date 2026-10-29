@@ -95,8 +95,12 @@ def read_nodes(exe, files):
     env = dict(os.environ, TARTARUS_NODES_PIVOTS='1')
     files = sorted(set(files))
     for i in range(0, len(files), 150):
-        res = subprocess.run([exe, '--model-nodes', *files[i:i + 150]], capture_output=True, text=True,
-                             encoding='utf-8', errors='replace', env=env)
+        batch = files[i:i + 150]
+        for attempt in range(3):   # the exe occasionally drops a batch; ask again for what is missing
+            res = subprocess.run([exe, '--model-nodes', *batch], capture_output=True, text=True,
+                                 encoding='utf-8', errors='replace', env=env)
+            if res.stdout.count(' unitscale ') >= len(batch):
+                break
         cur = None
         for line in res.stdout.splitlines():
             m = re.match(r'\[ModelNodes\] (.*) unitscale (\S+)$', line.strip())
@@ -132,12 +136,32 @@ class FbxInfo:
             non_geo, geo = list(IDENT), list(IDENT)
             for h in chain:
                 if '_$AssimpFbx$_Geometric' in h['name']:
-                    geo = mul(geo, h['L'])
+                    # a node's geometric transform is its own: the parent's matching *Inverse helpers hang in this
+                    # chain too, and hand Unity's children back an undisturbed frame, so they are not part of it
+                    if 'Inverse' not in h['name']:
+                        geo = mul(geo, h['L'])
                 else:
                     non_geo = mul(non_geo, h['L'])
             geo = mul(geo, n['L'])
+            # What the engine's own load bakes for this node: it folds the pivot chain, and the folded node keeps its
+            # geometric rotation but not the matching inverse that hands the children back upright.
+            eng = list(IDENT)
+            for h in chain:
+                if 'Inverse' not in h['name']:
+                    eng = mul(eng, h['L'])
+            eng = mul(eng, n['L'])
             self.real[name] = {'name': name, 'parent': p if p in nodes else None, 'local': non_geo, 'geo': geo,
-                               'meshes': n['meshes']}
+                               'meshes': n['meshes'], 'eng': eng}
+        # The root node's own matrix (Assimp's axis conversion; Rx(90) in most Blender exports) sits in 'geo' of the
+        # root because it has no pivot helpers. It is part of what the engine bakes, so it belongs to the parent chain.
+        self.root_L = list(nodes[self.root]['L']) if self.root in nodes else list(IDENT)
+        if self.root in self.real:
+            self.real[self.root]['local'], self.real[self.root]['geo'] = list(self.root_L), list(IDENT)
+        # Unity keeps unit scale but drops the axis rotation (it is baked into the mesh): the scale-only part of the root.
+        self.root_S = [0.0] * 16
+        for c in range(3):
+            self.root_S[c * 5] = math.sqrt(sum(self.root_L[c * 4 + r] ** 2 for r in range(3))) or 1.0
+        self.root_S[15] = 1.0
         self.children = collections.defaultdict(list)
         for name, n in self.real.items():
             if n['parent'] is not None:
@@ -149,6 +173,15 @@ class FbxInfo:
         p = n['parent']
         while p is not None:  # a parent's geometric transform is its own: it doesn't reach its children
             m = mul(self.real[p]['local'], m)
+            p = self.real[p]['parent']
+        return m
+
+    def engine_global(self, name):
+        """The transform the engine bakes into <name>'s vertices (every ancestor's folded transform, then its own)."""
+        m = self.real[name]['eng']
+        p = self.real[name]['parent']
+        while p is not None:
+            m = mul(self.real[p]['eng'], m)
             p = self.real[p]['parent']
         return m
 
@@ -173,18 +206,16 @@ class FbxInfo:
 
     def correction(self, node):
         """Root correction so the model draws in Unity's space for <node>: its geometric space, unit scale kept."""
-        root = self.real[self.root]['local'] if self.root in self.real else IDENT
-        full = self.global_of(node)  # includes the root
+        full = self.engine_global(node)  # includes the root
         geo = self.real[node]['geo']
-        return mul(mul(root, geo), inverse(full))
+        return mul(mul(self.root_S, geo), inverse(full))
 
     def file_correction(self):
         r = self.collapsed_root()
         if r is None:
             return list(IDENT)
-        root = self.real[self.root]['local']
-        # undo the collapsed root's own (non-geometric) transform, keeping the file's unit scale
-        return mul(mul(root, inverse(self.real[r]['local'])), inverse(root))
+        # the collapsed node drawn in its own geometric space (root axis rotation and own transform undone)
+        return self.correction(r)
 
 
 def correction_meta(c):
@@ -202,6 +233,7 @@ class UObj:
         self.pos, self.rot, self.scale = [0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0], [1.0, 1.0, 1.0]
         self.children, self.comps, self.static, self.source = [], [], False, None
         self.comp_ids, self.mat_mods = set(), {}  # component fileIDs (LOD groups name renderers by them)
+        self.open_spec = None  # a door / lift clip that moves this object (Converter.open_specs), becomes an Openable
         self.renderer_mods = {}  # instance overrides of the MeshRenderer: m_CastShadows, m_ReceiveShadows, m_Enabled
 
 
@@ -218,6 +250,7 @@ class Converter:
         self.prefab_cache = {}   # unity prefab guid -> (roots, objects by fileID)
         self.mat_guids = {}      # engine mat path -> guid
         self.model_guids = {}    # engine model path -> guid
+        self.clips = {}          # unity .anim guid -> clip summary
         self.slot_cache = {}     # engine model path -> engine slot material names
 
     # models ---------------------------------------------------------------------------------------------------
@@ -229,6 +262,8 @@ class Converter:
             r = raw.get(os.path.normcase(os.path.normpath(src))) if src else None
             if r and r['order']:
                 self.fbx[g] = FbxInfo(r)
+            elif src:
+                self.pack.report['FBX the engine could not read (--model-nodes): placed without a correction'].append(os.path.basename(src))
 
     def mesh_names(self, guid):
         """Unity mesh fileID -> mesh name, and GameObject / Transform fileID -> node name, from the importer table."""
@@ -507,13 +542,109 @@ class Converter:
         else:
             out['empties'].append(e)
         self.colliders(o, comps, e, out, ids, is_model='path' in e)
+        self.open_specs(o, comps)
+        if o.open_spec and 'path' in e:
+            self.openable(o, e)
         self.lights(comps, e)
+        self.probes(comps, e)
         children = list(o.children)
         lod = (comps.get('LODGroup') or [None])[0]
         if lod is not None:
             children = self.lod_group(o, lod, e, children)
         for c in children:
             self.emit_one(c, out, ids, e['id'])
+
+    # doors and lifts --------------------------------------------------------------------------------------------
+    def clip(self, guid):
+        """{'name', 'length', 'euler_y', 'pos'} of an .anim: per target path, the total Y turn (degrees) and the
+        position change of its curves, for the clip's last key."""
+        if guid in self.clips:
+            return self.clips[guid]
+        res = None
+        path = self.pack.guids.get(guid)
+        if path and path.lower().endswith('.anim'):
+            body = next((b for c, _, t, b, _s in uy.docs(uy.read(path)) if t == 'AnimationClip'), None)
+            if body:
+                def last(curve):
+                    keys = (curve.get('curve') or {}).get('m_Curve') or []
+                    return keys[-1] if keys else None, keys[0] if keys else None
+                by_path = collections.defaultdict(dict)
+                length = 0.0
+                for c in body.get('m_EulerCurves') or []:
+                    hi, lo = last(c)
+                    if hi:
+                        by_path[c.get('path') or ''].setdefault('euler_y', vec(hi['value'])[1] - vec(lo['value'])[1])
+                        length = max(length, float(hi['time']))
+                for c in body.get('m_PositionCurves') or []:
+                    hi, lo = last(c)
+                    if hi:
+                        by_path[c.get('path') or '']['pos'] = [a - b for a, b in zip(vec(hi['value']), vec(lo['value']))]
+                        length = max(length, float(hi['time']))
+                res = {'name': body.get('m_Name', ''), 'length': length, 'paths': dict(by_path)}
+        self.clips[guid] = res
+        return res
+
+    def open_clip(self, comps):
+        """The clip that opens a door: the Animator controller's 'Open' state, or a legacy Animation's clip named for it."""
+        guids = []
+        for a in comps.get('Animator', []):
+            cg = (a.get('m_Controller') or {}).get('guid')
+            cpath = self.pack.guids.get(cg)
+            if cpath:
+                for c, _, t, b, _s in uy.docs(uy.read(cpath)):
+                    if t == 'AnimatorState' and str(b.get('m_Name', '')).lower() == 'open':
+                        guids.append((b.get('m_Motion') or {}).get('guid'))
+        for a in comps.get('Animation', []):
+            guids += [(m or {}).get('guid') for m in a.get('m_Animations') or []]
+        for g in guids:
+            clip = self.clip(g) if g else None
+            if clip and 'open' in clip['name'].lower() and 'close' not in clip['name'].lower():
+                return clip
+        return None
+
+    def open_specs(self, o, comps):
+        """Hand the 'open' clip's per-path motion to the objects it moves."""
+        if not (comps.get('Animator') or comps.get('Animation')):
+            return
+        clip = self.open_clip(comps)
+        if not clip:
+            return
+        for path, m in clip['paths'].items():
+            target = o
+            for part in [x for x in path.split('/') if x]:
+                target = next((c for c in target.children if c.name == part), None)
+                if target is None:
+                    break
+            if target is not None:
+                target.open_spec = dict(m, length=clip['length'])
+                self.pack.counts['openable clips applied'] += 1
+
+    def openable(self, o, e):
+        """The engine's Openable (src/Game/Openable.h) for a door or lift leaf the clip moves. The hinge or slide comes
+        from the model's own bounds (front +Z), so only which edge and which way are decided here: the leaf sits on the
+        engine's +X side of its pivot (a box collider's centre) for Hinge Left, -X for Hinge Right. A Unity turn about Y
+        throws that edge toward +Z when the leaf's engine X and sin(turn) agree, else toward -Z (Swing Back)."""
+        spec = o.open_spec
+        col = e.get('collider') or {}
+        side = (col.get('center') or [1.0])[0]
+        if 'euler_y' in spec and abs(spec['euler_y']) > 1.0:
+            turn = spec['euler_y']
+            left = side >= 0
+            front = (side * math.sin(math.radians(turn))) > 0
+            op = {'Motion': 'Hinge Left' if left else 'Hinge Right', 'Amount': round(abs(turn), 2),
+                  'Open Time': round(max(spec['length'], 0.05), 3), 'Start Open': False}
+            if not front:
+                op['Swing Back'] = True
+            op.update({k: ';'.join(f'assets/Audio/Foley/door/{k_}_{i}.wav' for i in range(1, 5))
+                       for k, k_ in (('Open Sound', 'open'), ('Close Sound', 'close'), ('Latch Sound', 'latch'))})
+        elif 'pos' in spec and abs(spec['pos'][0]) > 0.05:
+            dx = -spec['pos'][0]  # Unity -> engine X
+            op = {'Motion': 'Slide Right' if dx > 0 else 'Slide Left', 'Amount': round(abs(dx), 3),
+                  'Open Time': round(max(spec['length'], 0.05), 3), 'Start Open': False}
+        else:
+            return
+        e['Openable'] = op
+        self.pack.counts['openables'] += 1
 
     def node_for_mesh(self, guid, mesh_name):
         info = self.fbx.get(guid)
@@ -523,7 +654,14 @@ class Converter:
             if n == mesh_name or any(m[0] == mesh_name for m in info.real[n]['meshes']):
                 return n
         meshes = info.mesh_nodes()
-        return meshes[0] if len(meshes) == 1 else None
+        if len(meshes) == 1:
+            return meshes[0]
+        # an unlisted (hashed) id on an object named for its part ('Lockers' for 'Lockers_body'): the one node that
+        # carries the object's name as a prefix
+        if mesh_name:
+            pre = [n for n in meshes if n.startswith(mesh_name + '_')]
+            return pre[0] if len(pre) == 1 else None
+        return None
 
     def material_overrides(self, rel, o, renderer):
         """The entity's material list when the renderer's materials differ from the model's .meta remap."""
@@ -619,6 +757,21 @@ class Converter:
             out['empties'].append({'id': ids[0], 'name': f'{o.name} Collider {i}', 'order': ids[0],
                                    'parentId': e['id'], 'position': c, 'rotation': rot, 'scale': [1.0, 1.0, 1.0],
                                    'collider': s, **({'static': True} if o.static else {})})
+
+    def probes(self, comps, e):
+        """Unity ReflectionProbe -> the engine's Reflection Probe: the box volume (axes are unsigned, so no mirroring) and
+        Importance. The box offset moves the volume off the object in Unity; the engine's probe sits at the object, so
+        an offset probe is nudged (X mirrored) by placing it on a child empty."""
+        for pr in comps.get('ReflectionProbe', []):
+            if not pr.get('m_Enabled', 1) or pr.get('m_Type', 0) != 0:
+                continue
+            e['Reflection Probe'] = {'Importance': float(pr.get('m_Importance', 1)),
+                                     'Size': r6([abs(v) for v in vec(pr.get('m_BoxSize'), default=1.0)])}
+            off = vec(pr.get('m_BoxOffset'))
+            if any(abs(v) > 1e-4 for v in off):
+                e['position'] = r6([a + b for a, b in zip(e['position'], [-off[0], off[1], off[2]])])  # parent frame approx
+                self.pack.report['reflection probes with a box offset (moved the probe, ignoring the parent rotation)'].append(e['name'])
+            self.pack.counts['reflection probes'] += 1
 
     def lights(self, comps, e):
         for l in comps.get('Light', []):
@@ -738,7 +891,7 @@ def strip_skipped(pack, roots, where):
             pack.report['particle systems left out (rebuild with the engine\'s Particle System)'].append(
                 f'{where}: {o.name}')
         if 'Animator' in kinds or 'Animation' in kinds:
-            pack.report['animated objects (static here; doors and lifts become Openables in their pack\'s pass)'].append(
+            pack.report['animated objects (doors and lifts became Openables; the rest stay static)'].append(
                 f'{where}: {o.name}')
         if any(t == 'MonoBehaviour' for t, _ in o.comps):
             pack.counts['scripts dropped (MonoBehaviour)'] += 1
@@ -770,6 +923,55 @@ def convert(pack, exe):
     for p in pack_files(pack, '.unity'):
         write_scene(conv, p)
     return conv
+
+
+def _qmul(a, b):
+    x1, y1, z1, w1 = a
+    x2, y2, z2, w2 = b
+    return (w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2, w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+            w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2, w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2)
+
+
+def _qrot(q, v):
+    x, y, z, w = q
+    t = (2 * (y * v[2] - z * v[1]), 2 * (z * v[0] - x * v[2]), 2 * (x * v[1] - y * v[0]))
+    return (v[0] + w * t[0] + (y * t[2] - z * t[1]), v[1] + w * t[1] + (z * t[0] - x * t[2]),
+            v[2] + w * t[2] + (x * t[1] - y * t[0]))
+
+
+def dedupe_openables(out):
+    """Two prefabs can each carry the same door in the same place (an elevator car and the wall around its shaft). Only
+    one of them opens under Interact, so the twin would stay shut, in view and in the way: the later one is removed.
+    (A leaf has no children; the removed entity's id is simply left unused.)"""
+    ents = {e['id']: e for k in ('models', 'empties') for e in out[k]}
+    cache = {}
+
+    def world(e):
+        if e['id'] not in cache:
+            par = ents.get(e['parentId'])
+            if par is None:
+                cache[e['id']] = (tuple(e['position']), tuple(e['rotation']), tuple(e['scale']))
+            else:
+                pp, pq, ps = world(par)
+                v = _qrot(pq, tuple(a * b for a, b in zip(e['position'], ps)))
+                cache[e['id']] = (tuple(a + b for a, b in zip(pp, v)), _qmul(pq, tuple(e['rotation'])),
+                                  tuple(a * b for a, b in zip(ps, e['scale'])))
+        return cache[e['id']]
+    kept, twins = [], []
+    for e in out['models']:
+        if 'Openable' not in e:
+            continue
+        pos, rot, _ = world(e)
+        twin = any(k[0] == e['path'] and k[3] == e['Openable']['Motion'] and
+                   max(abs(a - b) for a, b in zip(k[1], pos)) < 0.1 and abs(sum(a * b for a, b in zip(k[2], rot))) > 0.999
+                   for k in kept)
+        if twin:
+            twins.append(e)
+        else:
+            kept.append((e['path'], pos, rot, e['Openable']['Motion']))
+    out['models'] = [e for e in out['models'] if not any(e is t for t in twins)]
+    dropped = len(twins)
+    return dropped
 
 
 def write_scene(conv, path):
@@ -806,6 +1008,10 @@ def write_scene(conv, path):
     out = {'boxes': [], 'empties': keep, 'models': models}
     start = max([e['id'] for e in keep + models] + [0])
     conv.emit(roots, out, [start])
+    pack.counts['duplicate openables dropped (a twin door within 10 cm)'] += dedupe_openables(out)
+    # The scene's own directional light replaces the template's Sun (two suns blow every surface out to white).
+    if any((e.get('Light') or {}).get('Type') == 'Directional' for e in out['empties'] if e['name'] != 'Sun'):
+        out['empties'] = [e for e in out['empties'] if e['name'] != 'Sun']
     scene.update(out)
     scene['formatVersion'] = 4
     dst = os.path.join(pack.repo, 'project', 'scenes', f'{pack.name}_{stem}.json')

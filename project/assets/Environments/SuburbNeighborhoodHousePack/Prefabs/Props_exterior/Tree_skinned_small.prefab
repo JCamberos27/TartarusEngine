@@ -1,0 +1,189 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "id": 0,
+      "name": "Tree_skinned_small",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "collider": {
+        "center": [
+          1.5,
+          0.0,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          1.5,
+          0.05,
+          0.05
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Bone01",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        0.008126,
+        -0.011107,
+        -0.0
+      ],
+      "rotation": [
+        -0.000926,
+        0.000919,
+        0.706081,
+        0.70813
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Bone02",
+      "order": 2,
+      "parentId": 1,
+      "position": [
+        2.955028,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        -4.6e-05,
+        -0.022581,
+        -0.00245,
+        0.999742
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          3.197068,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.05,
+          3.206201,
+          0.05
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 4,
+      "name": "Tree_small",
+      "order": 4,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          1e-06,
+          0.01,
+          -0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.3,
+          0.01,
+          0.3
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 3,
+      "name": "Tree_grate",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior/Tree_skinned_small@Tree_grate.FBX",
+      "pathGuid": "6e67f7e99d886998",
+      "position": [
+        -0.006249,
+        0.001953,
+        -0.001449
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.25155,
+        1.25155,
+        1.25155
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Tree_groundplane",
+      "order": 5,
+      "parentId": 4,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior/Tree_skinned_small@Tree_groundplane.FBX",
+      "pathGuid": "bae5e3281b7ac3ff",
+      "position": [
+        -0.002313,
+        0.011911,
+        0.009767
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "id": 0,
+      "name": "Door_interior",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "id": 1,
+      "name": "Door_interior",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Door_interior.FBX",
+      "pathGuid": "6c8b943962df8354",
+      "position": [
+        -2.28759,
+        0.022646,
+        0.0
+      ],
+      "rotation": [
+        0.707107,
+        0.0,
+        0.0,
+        0.707107
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ]
+}
