@@ -300,6 +300,14 @@
       ]
     },
     {
+      "Reflection Probe": {
+        "Importance": 1.0,
+        "Size": [
+          300.0,
+          300.0,
+          70.9
+        ]
+      },
       "id": 655,
       "name": "Reflection Probe",
       "order": 655,
@@ -10647,6 +10655,14 @@
       ]
     },
     {
+      "Reflection Probe": {
+        "Importance": 1.0,
+        "Size": [
+          300.0,
+          300.0,
+          46.3
+        ]
+      },
       "id": 2174,
       "name": "Reflection Probe",
       "order": 2174,

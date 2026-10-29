@@ -8,12 +8,7 @@
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "optimizeGraph": true,
-    "pivotOffset": [
-      1e-06,
-      8.0,
-      7.999999
-    ]
+    "optimizeGraph": true
   },
   "materialRemap": {
     "Floor_Rock_Gray": "assets/Environments/OfficeAndPoliceStation/Materials/M_Floor_Rock_Gray.mat",
