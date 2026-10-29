@@ -136,8 +136,15 @@ class FbxInfo:
                 else:
                     non_geo = mul(non_geo, h['L'])
             geo = mul(geo, n['L'])
+            # What the engine's own load bakes for this node: it folds the pivot chain, and the folded node keeps its
+            # geometric rotation but not the matching inverse that hands the children back upright.
+            eng = list(IDENT)
+            for h in chain:
+                if 'Inverse' not in h['name']:
+                    eng = mul(eng, h['L'])
+            eng = mul(eng, n['L'])
             self.real[name] = {'name': name, 'parent': p if p in nodes else None, 'local': non_geo, 'geo': geo,
-                               'meshes': n['meshes']}
+                               'meshes': n['meshes'], 'eng': eng}
         self.children = collections.defaultdict(list)
         for name, n in self.real.items():
             if n['parent'] is not None:
@@ -149,6 +156,15 @@ class FbxInfo:
         p = n['parent']
         while p is not None:  # a parent's geometric transform is its own: it doesn't reach its children
             m = mul(self.real[p]['local'], m)
+            p = self.real[p]['parent']
+        return m
+
+    def engine_global(self, name):
+        """The transform the engine bakes into <name>'s vertices (every ancestor's folded transform, then its own)."""
+        m = self.real[name]['eng']
+        p = self.real[name]['parent']
+        while p is not None:
+            m = mul(self.real[p]['eng'], m)
             p = self.real[p]['parent']
         return m
 
@@ -174,7 +190,7 @@ class FbxInfo:
     def correction(self, node):
         """Root correction so the model draws in Unity's space for <node>: its geometric space, unit scale kept."""
         root = self.real[self.root]['local'] if self.root in self.real else IDENT
-        full = self.global_of(node)  # includes the root
+        full = self.engine_global(node)  # includes the root
         geo = self.real[node]['geo']
         return mul(mul(root, geo), inverse(full))
 
@@ -513,6 +529,7 @@ class Converter:
         if o.open_spec and 'path' in e:
             self.openable(o, e)
         self.lights(comps, e)
+        self.probes(comps, e)
         children = list(o.children)
         lod = (comps.get('LODGroup') or [None])[0]
         if lod is not None:
@@ -723,6 +740,21 @@ class Converter:
             out['empties'].append({'id': ids[0], 'name': f'{o.name} Collider {i}', 'order': ids[0],
                                    'parentId': e['id'], 'position': c, 'rotation': rot, 'scale': [1.0, 1.0, 1.0],
                                    'collider': s, **({'static': True} if o.static else {})})
+
+    def probes(self, comps, e):
+        """Unity ReflectionProbe -> the engine's Reflection Probe: the box volume (axes are unsigned, so no mirroring) and
+        Importance. The box offset moves the volume off the object in Unity; the engine's probe sits at the object, so
+        an offset probe is nudged (X mirrored) by placing it on a child empty."""
+        for pr in comps.get('ReflectionProbe', []):
+            if not pr.get('m_Enabled', 1) or pr.get('m_Type', 0) != 0:
+                continue
+            e['Reflection Probe'] = {'Importance': float(pr.get('m_Importance', 1)),
+                                     'Size': r6([abs(v) for v in vec(pr.get('m_BoxSize'), default=1.0)])}
+            off = vec(pr.get('m_BoxOffset'))
+            if any(abs(v) > 1e-4 for v in off):
+                e['position'] = r6([a + b for a, b in zip(e['position'], [-off[0], off[1], off[2]])])  # parent frame approx
+                self.pack.report['reflection probes with a box offset (moved the probe, ignoring the parent rotation)'].append(e['name'])
+            self.pack.counts['reflection probes'] += 1
 
     def lights(self, comps, e):
         for l in comps.get('Light', []):

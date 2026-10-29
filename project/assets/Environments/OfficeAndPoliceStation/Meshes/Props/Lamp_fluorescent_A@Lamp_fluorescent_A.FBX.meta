@@ -8,7 +8,12 @@
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "optimizeGraph": true
+    "optimizeGraph": true,
+    "pivotOffset": [
+      4.0,
+      -2.40345,
+      -0.0
+    ]
   },
   "materialRemap": {
     "Lamps_On": "assets/Environments/OfficeAndPoliceStation/Materials/M_Lamps_On.mat"

@@ -2,13 +2,19 @@
   "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
   "guid": "e1c42d7693edd3d3",
   "importer": {
+    "excludeNodes": [],
     "globalScale": 1.0,
     "importAnimations": false,
     "importNormals": true,
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "optimizeGraph": true
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -23.1864,
+      0.015816,
+      -0.03643
+    ]
   },
   "materialRemap": {
     "Desk_and_stools": "assets/Environments/OfficeAndPoliceStation/Materials/M_Desk_and_stools.mat"

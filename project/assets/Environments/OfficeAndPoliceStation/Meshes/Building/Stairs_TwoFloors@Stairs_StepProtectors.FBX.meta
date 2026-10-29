@@ -2,16 +2,12 @@
   "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Building",
   "guid": "1d1c92ceb0803992",
   "importer": {
-    "excludeNodes": [],
     "globalScale": 1.0,
     "importAnimations": false,
     "importNormals": true,
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "meshNodes": [
-      "Stairs_StepProtectors"
-    ],
     "optimizeGraph": true
   },
   "materialRemap": {

@@ -2,13 +2,19 @@
   "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
   "guid": "db5e83be7131e23d",
   "importer": {
+    "excludeNodes": [],
     "globalScale": 1.0,
     "importAnimations": false,
     "importNormals": true,
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "optimizeGraph": true
+    "optimizeGraph": true,
+    "pivotOffset": [
+      58.0511,
+      -0.0,
+      0.0
+    ]
   },
   "materialRemap": {
     "Glass": "assets/Environments/OfficeAndPoliceStation/Materials/M_Glass.mat",

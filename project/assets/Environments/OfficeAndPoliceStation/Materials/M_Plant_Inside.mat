@@ -23,6 +23,7 @@
     "_MetallicMap": "assets/Environments/OfficeAndPoliceStation/Textures/Plant_Inside_MaskMap_Metallic.png",
     "_MetallicRoughnessMap": "",
     "_NormalMap": "assets/Environments/OfficeAndPoliceStation/Textures/Plant_Inside_Normal.tga",
+    "_ReflectionProbes": true,
     "_Roughness": 1.0,
     "_RoughnessMap": "assets/Environments/OfficeAndPoliceStation/Textures/Plant_Inside_MaskMap_Roughness100.png",
     "_Triplanar": false,

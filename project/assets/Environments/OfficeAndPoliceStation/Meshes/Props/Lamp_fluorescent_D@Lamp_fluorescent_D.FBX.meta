@@ -8,7 +8,12 @@
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "optimizeGraph": true
+    "optimizeGraph": true,
+    "pivotOffset": [
+      0.9,
+      -2.3,
+      -0.0
+    ]
   },
   "materialRemap": {
     "CeilingLamp": "assets/Environments/OfficeAndPoliceStation/Materials/M_CeilingLamp.mat"

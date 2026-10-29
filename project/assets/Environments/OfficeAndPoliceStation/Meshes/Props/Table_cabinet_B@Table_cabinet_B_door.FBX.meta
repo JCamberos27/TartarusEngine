@@ -8,7 +8,12 @@
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "optimizeGraph": true
+    "optimizeGraph": true,
+    "pivotOffset": [
+      43.843536,
+      -0.671944,
+      -0.392433
+    ]
   },
   "materialRemap": {
     "Metal_Cleantiled": "assets/Environments/OfficeAndPoliceStation/Materials/M_Metal_Cleantiled.mat",

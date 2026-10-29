@@ -46146,6 +46146,14 @@
       ]
     },
     {
+      "Reflection Probe": {
+        "Importance": 1.0,
+        "Size": [
+          105.0,
+          4.0,
+          78.57
+        ]
+      },
       "id": 3989,
       "name": "Reflection Probe",
       "order": 3989,
@@ -46168,6 +46176,14 @@
       ]
     },
     {
+      "Reflection Probe": {
+        "Importance": 1.0,
+        "Size": [
+          25.0,
+          5.0,
+          26.0
+        ]
+      },
       "id": 3990,
       "name": "Reflection Probe (1)",
       "order": 3990,
@@ -46190,6 +46206,14 @@
       ]
     },
     {
+      "Reflection Probe": {
+        "Importance": 1.0,
+        "Size": [
+          35.0,
+          5.0,
+          26.0
+        ]
+      },
       "id": 3991,
       "name": "Reflection Probe (2)",
       "order": 3991,
@@ -46212,6 +46236,14 @@
       ]
     },
     {
+      "Reflection Probe": {
+        "Importance": 1.0,
+        "Size": [
+          35.0,
+          5.0,
+          26.0
+        ]
+      },
       "id": 3992,
       "name": "Reflection Probe (3)",
       "order": 3992,
@@ -46234,6 +46266,14 @@
       ]
     },
     {
+      "Reflection Probe": {
+        "Importance": 1.0,
+        "Size": [
+          7.0,
+          5.0,
+          25.23
+        ]
+      },
       "id": 3993,
       "name": "Reflection Probe (4)",
       "order": 3993,
@@ -46256,12 +46296,20 @@
       ]
     },
     {
+      "Reflection Probe": {
+        "Importance": 1.0,
+        "Size": [
+          10.0,
+          5.0,
+          9.0
+        ]
+      },
       "id": 3994,
       "name": "Reflection Probe (5)",
       "order": 3994,
       "parentId": 3987,
       "position": [
-        -7.5,
+        -8.64,
         2.5,
         40.0
       ],
@@ -46278,6 +46326,14 @@
       ]
     },
     {
+      "Reflection Probe": {
+        "Importance": 1.0,
+        "Size": [
+          5.0,
+          3.2,
+          6.0
+        ]
+      },
       "id": 3995,
       "name": "Reflection Probe (6)",
       "order": 3995,
@@ -46300,6 +46356,14 @@
       ]
     },
     {
+      "Reflection Probe": {
+        "Importance": 1.0,
+        "Size": [
+          12.0,
+          5.0,
+          6.6
+        ]
+      },
       "id": 3996,
       "name": "Reflection Probe (7)",
       "order": 3996,
@@ -46322,6 +46386,14 @@
       ]
     },
     {
+      "Reflection Probe": {
+        "Importance": 1.0,
+        "Size": [
+          7.0,
+          5.0,
+          6.6
+        ]
+      },
       "id": 3997,
       "name": "Reflection Probe (8)",
       "order": 3997,

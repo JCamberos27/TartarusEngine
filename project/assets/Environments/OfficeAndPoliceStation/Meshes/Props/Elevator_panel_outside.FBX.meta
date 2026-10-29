@@ -2,13 +2,19 @@
   "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
   "guid": "dc5089fbab14d4e2",
   "importer": {
+    "excludeNodes": [],
     "globalScale": 1.0,
     "importAnimations": false,
     "importNormals": true,
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "optimizeGraph": true
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -37.0,
+      0.0,
+      0.0
+    ]
   },
   "materialRemap": {
     "Elevator": "assets/Environments/OfficeAndPoliceStation/Materials/M_Elevator.mat",

@@ -8,7 +8,12 @@
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "optimizeGraph": true
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -1.0,
+      -3.0,
+      -0.0
+    ]
   },
   "materialRemap": {
     "PaintingSet": "assets/Environments/OfficeAndPoliceStation/Materials/M_PaintingSet.mat"

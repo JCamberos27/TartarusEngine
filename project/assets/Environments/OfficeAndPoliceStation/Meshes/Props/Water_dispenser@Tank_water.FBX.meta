@@ -8,12 +8,7 @@
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "optimizeGraph": true,
-    "pivotOffset": [
-      94.00159,
-      -1.346595,
-      -0.010336
-    ]
+    "optimizeGraph": true
   },
   "materialRemap": {
     "Water_Dispenser": "assets/Environments/OfficeAndPoliceStation/Materials/M_Water_Dispenser.mat",
