@@ -2,12 +2,16 @@
   "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
   "guid": "61a68c71c6bc0b2c",
   "importer": {
+    "excludeNodes": [],
     "globalScale": 1.0,
     "importAnimations": false,
     "importNormals": true,
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
+    "meshNodes": [
+      "Toilet"
+    ],
     "optimizeGraph": true,
     "pivotOffset": [
       0.000531,

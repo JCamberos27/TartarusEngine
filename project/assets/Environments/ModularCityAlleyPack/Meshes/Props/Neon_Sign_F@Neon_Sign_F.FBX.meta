@@ -2,12 +2,16 @@
   "folder": "assets/Environments/ModularCityAlleyPack/Meshes/Props",
   "guid": "20dfe1b8e6716827",
   "importer": {
+    "excludeNodes": [],
     "globalScale": 1.0,
     "importAnimations": false,
     "importNormals": true,
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
+    "meshNodes": [
+      "Neon_Sign_F"
+    ],
     "optimizeGraph": true,
     "pivotOffset": [
       22.2845,

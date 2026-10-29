@@ -2,13 +2,35 @@
   "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Building",
   "guid": "96183f7a18c5ea52",
   "importer": {
+    "excludeNodes": [],
     "globalScale": 1.0,
     "importAnimations": false,
     "importNormals": true,
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "optimizeGraph": true
+    "meshNodes": [
+      "StairsMod_RailingOutside"
+    ],
+    "optimizeGraph": true,
+    "rootTransform": [
+      -1.0,
+      -0.0,
+      0.0,
+      0.0,
+      0.0,
+      -0.0,
+      1.0,
+      0.0,
+      -0.0,
+      1.0,
+      -0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
   },
   "materialRemap": {
     "Floor_Rock_Gray": "assets/Environments/OfficeAndPoliceStation/Materials/M_Floor_Rock_Gray.mat",

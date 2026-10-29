@@ -12,7 +12,7 @@
     "optimizeGraph": true,
     "pivotOffset": [
       0.303467,
-      0.0,
+      -0.0,
       -0.15
     ]
   },

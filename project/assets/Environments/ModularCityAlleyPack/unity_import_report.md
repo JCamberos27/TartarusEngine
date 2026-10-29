@@ -18,6 +18,7 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\ModularCityAlleyPa
 - scenes: 3
 - scripts dropped (MonoBehaviour): 25
 - textures: 166
+- textures cooked: 83
 
 ## Not converted / approximated
 

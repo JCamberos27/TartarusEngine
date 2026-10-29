@@ -2,12 +2,16 @@
   "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Building",
   "guid": "268b722bbe3e5f06",
   "importer": {
+    "excludeNodes": [],
     "globalScale": 1.0,
     "importAnimations": false,
     "importNormals": true,
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
+    "meshNodes": [
+      "ElevatorDoor_L"
+    ],
     "optimizeGraph": true,
     "pivotOffset": [
       0.728919,

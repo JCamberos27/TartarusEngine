@@ -2,13 +2,35 @@
   "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
   "guid": "4ef0b21e35e8daa4",
   "importer": {
+    "excludeNodes": [],
     "globalScale": 1.0,
     "importAnimations": false,
     "importNormals": true,
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "optimizeGraph": true
+    "meshNodes": [
+      "Desk_metal_drawer_C"
+    ],
+    "optimizeGraph": true,
+    "rootTransform": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      -1.0,
+      0.0,
+      0.0,
+      -25.014019,
+      -0.808072,
+      -0.448819,
+      1.0
+    ]
   },
   "materialRemap": {
     "Desk_and_stools": "assets/Environments/OfficeAndPoliceStation/Materials/M_Desk_and_stools.mat"

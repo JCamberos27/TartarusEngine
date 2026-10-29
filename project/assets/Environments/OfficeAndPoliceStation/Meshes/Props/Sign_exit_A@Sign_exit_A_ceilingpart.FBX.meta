@@ -2,13 +2,35 @@
   "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
   "guid": "9bf7cb7e880400c9",
   "importer": {
+    "excludeNodes": [],
     "globalScale": 1.0,
     "importAnimations": false,
     "importNormals": true,
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "optimizeGraph": true
+    "meshNodes": [
+      "Sign_exit_A_ceilingpart"
+    ],
+    "optimizeGraph": true,
+    "rootTransform": [
+      -1.0,
+      -0.0,
+      0.0,
+      0.0,
+      0.0,
+      -0.0,
+      1.0,
+      0.0,
+      -0.0,
+      1.0,
+      -0.0,
+      0.0,
+      -17.4758,
+      -0.135687,
+      -0.113777,
+      1.0
+    ]
   },
   "materialRemap": {
     "CeilingLamp": "assets/Environments/OfficeAndPoliceStation/Materials/M_CeilingLamp.mat"

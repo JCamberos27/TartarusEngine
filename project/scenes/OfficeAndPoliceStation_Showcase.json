@@ -99,49 +99,6 @@
       ]
     },
     {
-      "Light": {
-        "Angular Size": 1.2000000476837158,
-        "Cast Shadows": true,
-        "Color": [
-          1.0,
-          1.0,
-          1.0
-        ],
-        "ColorTempK": 0.0,
-        "Culling Mask": -1,
-        "Intensity": 3.0,
-        "Range": 200.0,
-        "Shadow Bias": 1.0,
-        "Shadow Near Plane": 0.05000000074505806,
-        "Shadow Normal Bias": 1.0,
-        "Shadow Resolution": "Follow global",
-        "Shadow Softness": 0.3499999940395355,
-        "Shadow Update Mode": "Dynamic",
-        "Spot Angle": 35.0,
-        "Type": "Directional"
-      },
-      "id": 600,
-      "name": "Sun",
-      "order": 8,
-      "parentId": -1,
-      "position": [
-        0.0,
-        30.0,
-        0.0
-      ],
-      "rotation": [
-        -0.38715118169784546,
-        -0.27481505274772644,
-        -0.12206829339265823,
-        0.8716019988059998
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
       "Character Outfit": {
         "Auto Hide Skin": true,
         "Bare Body (debug)": true,

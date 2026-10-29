@@ -2,13 +2,35 @@
   "folder": "assets/Environments/ModularCityAlleyPack/Meshes/Props",
   "guid": "976183f2178610d3",
   "importer": {
+    "excludeNodes": [],
     "globalScale": 1.0,
     "importAnimations": false,
     "importNormals": true,
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "optimizeGraph": true
+    "meshNodes": [
+      "Sign_WallAttach"
+    ],
+    "optimizeGraph": true,
+    "rootTransform": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      -1.0,
+      0.0,
+      0.0,
+      36.6119,
+      0.287869,
+      -11.8734,
+      1.0
+    ]
   },
   "materialRemap": {
     "Shops_And_Lights": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Shops_And_Lights.mat"
