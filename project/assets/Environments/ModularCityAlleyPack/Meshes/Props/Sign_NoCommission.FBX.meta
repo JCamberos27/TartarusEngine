@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/ModularCityAlleyPack/Meshes/Props",
+  "guid": "9221ed0d1a7a8eba",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      31.1733,
+      -11.1262,
+      0.00613
+    ]
+  },
+  "materialRemap": {
+    "Street_Shops": "assets/Environments/ModularCityAlleyPack/Materials/Walls/M_Street_Shops.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

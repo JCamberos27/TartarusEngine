@@ -1,0 +1,71 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.0,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.125,
+          0.105,
+          0.785
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Collider",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        0.489,
+        -0.075,
+        -0.489
+      ],
+      "rotation": [
+        0.0,
+        -0.382683,
+        -0.0,
+        0.92388
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "id": 0,
+      "name": "Floor_StonePavemet_B_Corner45ZigZag",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_B_Corner45ZigZag.FBX",
+      "pathGuid": "e392fdb47b68c2a9",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

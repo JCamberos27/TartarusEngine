@@ -1,0 +1,34 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Decals_Water",
+  "opacity": 0.716,
+  "properties": {
+    "_AOMap": "",
+    "_AlbedoMap": "assets/Environments/ModularCityAlleyPack/Textures/Decals_Water_BaseColor.tga",
+    "_BaseColor": [
+      0.0441,
+      0.0441,
+      0.0441
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.171,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "",
+    "_ReceiveDecals": false,
+    "_Roughness": 0.064,
+    "_RoughnessMap": "",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "renderQueue": 2,
+  "shader": "engine://Standard.shader"
+}

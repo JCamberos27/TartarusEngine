@@ -1,0 +1,180 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.4,
+          1.773595,
+          0.5
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Wall_D_Brick_Xxxshop_6x Collider 1",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        -2.65,
+        1.726406,
+        -0.390448
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          3.0,
+          0.64,
+          0.515197
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Wall_D_Brick_Xxxshop_6x Collider 2",
+      "order": 2,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        3.46,
+        -0.390448
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          3.0,
+          0.1,
+          0.23
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 3,
+      "name": "Wall_D_Brick_Xxxshop_6x Collider 3",
+      "order": 3,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        0.1,
+        -0.390448
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          3.0,
+          1.773595,
+          0.035
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 4,
+      "name": "Wall_D_Brick_Xxxshop_6x Collider 4",
+      "order": 4,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        1.726406,
+        -0.59
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          2.6,
+          1.726406,
+          -0.390448
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.5,
+          1.773595,
+          0.5
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Wall_D_Brick_Xxxshop_6x",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_Xxxshop_6x.FBX",
+      "pathGuid": "8f8fe2207d737362",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

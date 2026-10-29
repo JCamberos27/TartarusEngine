@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/ModularCityAlleyPack/Meshes/Decals",
+  "guid": "dd7e3b766d45efbb",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.590687,
+      0.0,
+      0.477965
+    ]
+  },
+  "materialRemap": {
+    "Decals_Water": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Decals_Water.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

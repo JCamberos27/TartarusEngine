@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Environments/ModularCityAlleyPack/Meshes/Props",
+  "guid": "d76ef9b6b00d1d26",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "meshNodes": [
+      "Tree_Static"
+    ],
+    "optimizeGraph": true
+  },
+  "materialRemap": {
+    "TreeDead": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_TreeDead.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

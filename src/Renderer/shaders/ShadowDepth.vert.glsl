@@ -11,6 +11,13 @@ layout (location = 8) in ivec4 aBoneIDs2; // influences 5-8 (MAX_BONE_INFLUENCE 
 layout (location = 9) in vec4 aWeights2;
 uniform mat4 uModel;
 uniform mat4 uLightViewProj;
+// The camera depth pre-pass (SceneRenderer): uProj * (uView * world), the model VS's own expression, so both passes
+// round a vertex to the same depth. A face square to the view has no slope for the polygon offset to work with, and
+// far from the origin the premultiplied matrix rounded past the offset's few units: the opaque pass failed its
+// GL_LEQUAL on the whole face, which was left the clear colour (black slab sides in the City Alley).
+uniform int uSplitViewProj;
+uniform mat4 uView;
+uniform mat4 uProj;
 // 1 = sun cascades in one pass: instance i renders into layer uCascadeFirst + i with that
 // cascade's matrix, instead of one draw per cascade with uLightViewProj.
 uniform int uCascadeLayered;
@@ -63,5 +70,5 @@ void main() {
         return;
     }
 #endif
-    gl_Position = uLightViewProj * worldPos;
+    gl_Position = uSplitViewProj == 1 ? uProj * (uView * worldPos) : uLightViewProj * worldPos;
 }

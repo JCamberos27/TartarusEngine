@@ -1,0 +1,167 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.013254,
+          0.180239,
+          -0.015317
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          5.646375,
+          0.05,
+          0.025126
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Lamp_HangingBulbs",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/WireStraight.FBX",
+      "pathGuid": "b4c7ce6255560fde",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          -0.229201,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.063741,
+          0.244232,
+          0.06538
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Lamp_BulbHanging (2)",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Lamp_BulbHanging.FBX",
+      "pathGuid": "b35c687b4aa5ae5d",
+      "position": [
+        -3.106,
+        0.12,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          -0.229201,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.063741,
+          0.244232,
+          0.06538
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Lamp_BulbHanging (1)",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Lamp_BulbHanging.FBX",
+      "pathGuid": "b35c687b4aa5ae5d",
+      "position": [
+        0.12,
+        -0.016,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          -0.229201,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.063741,
+          0.244232,
+          0.06538
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 3,
+      "name": "Lamp_BulbHanging",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Lamp_BulbHanging.FBX",
+      "pathGuid": "b35c687b4aa5ae5d",
+      "position": [
+        3.263,
+        0.089,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}
