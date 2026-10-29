@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building",
+  "guid": "92d2017834be4f9b",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      5.47621,
+      -7.71978,
+      0.172347
+    ]
+  },
+  "materialRemap": {
+    "House_Exterior_Equip": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_House_Exterior_Equip.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -1,0 +1,40 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior",
+  "guid": "bd81adafa812296d",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "meshNodes": [
+      "Lamp_wall_desk_lamp"
+    ],
+    "optimizeGraph": true,
+    "rootTransform": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      -0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      -1.0,
+      0.0,
+      0.0,
+      19.99945,
+      -0.021394,
+      -8.086541,
+      1.0
+    ]
+  },
+  "materialRemap": {
+    "Lamps_House": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -1,0 +1,187 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.55,
+          1.75,
+          0.1
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Wall_1st_3x_window_single_D Collider 1",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        2.6,
+        1.25,
+        -0.1
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          1.5,
+          0.275,
+          0.1
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Wall_1st_3x_window_single_D Collider 2",
+      "order": 2,
+      "parentId": 0,
+      "position": [
+        1.5,
+        2.85,
+        -0.1
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          1.5,
+          0.66,
+          0.1
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 3,
+      "name": "Wall_1st_3x_window_single_D Collider 3",
+      "order": 3,
+      "parentId": 0,
+      "position": [
+        1.5,
+        0.5,
+        -0.1
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.5,
+          1.25,
+          -0.1
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.55,
+          1.75,
+          0.1
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Wall_1st_3x_window_single_D",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Wall_1st_3x_window_single_D.FBX",
+      "pathGuid": "a1a410937cd5a013",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.0,
+          -0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.410051,
+          0.645042,
+          0.040355
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 4,
+      "name": "Windowglass_singlewindow",
+      "order": 4,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Windowglass_singlewindow.FBX",
+      "pathGuid": "837a06a9d9a4a0ba",
+      "position": [
+        1.540001,
+        1.875,
+        -0.081
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.212993,
+        1.064496,
+        0.015
+      ],
+      "static": true
+    }
+  ]
+}

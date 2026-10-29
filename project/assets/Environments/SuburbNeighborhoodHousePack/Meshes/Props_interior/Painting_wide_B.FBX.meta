@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior",
+  "guid": "6f2e10d23390356a",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      16.7858,
+      -13.3185,
+      0.005182
+    ]
+  },
+  "materialRemap": {
+    "Paintings_House": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Paintings_House.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

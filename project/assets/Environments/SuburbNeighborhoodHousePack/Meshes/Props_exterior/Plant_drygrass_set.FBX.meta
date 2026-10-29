@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior",
+  "guid": "efd8caa9c2791e73",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -1.98313,
+      0.01001,
+      -0.004743
+    ]
+  },
+  "materialRemap": {
+    "Plant_Treebush": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Plant_Treebush.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

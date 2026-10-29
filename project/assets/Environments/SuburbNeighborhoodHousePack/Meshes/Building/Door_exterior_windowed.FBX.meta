@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building",
+  "guid": "d32df1d566c99c82",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      0.987923,
+      -0.0,
+      0.024358
+    ]
+  },
+  "materialRemap": {
+    "Door_Windowed": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Door_Windowed.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

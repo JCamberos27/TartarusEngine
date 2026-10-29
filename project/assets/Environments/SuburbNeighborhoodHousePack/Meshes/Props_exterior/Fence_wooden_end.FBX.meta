@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior",
+  "guid": "2d0d0f8ff05ea786",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      3.17379,
+      0.0,
+      -1.0603
+    ]
+  },
+  "materialRemap": {
+    "Fence_Darkwood": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Fence_Darkwood.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

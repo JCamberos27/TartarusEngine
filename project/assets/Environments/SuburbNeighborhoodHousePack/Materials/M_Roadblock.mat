@@ -1,0 +1,32 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Roadblock",
+  "properties": {
+    "_AOMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Roadblock_MaskMap_AO100.png",
+    "_AlbedoMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Roadblock_BaseColor.tga",
+    "_BaseColor": [
+      0.8456,
+      0.8456,
+      0.8456
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 1.0,
+    "_MetallicMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Roadblock_MaskMap_Metallic.png",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Roadblock_Normal.tga",
+    "_ReflectionProbes": true,
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Roadblock_MaskMap_Roughness100.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader"
+}

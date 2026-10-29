@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior",
+  "guid": "09aad1702859c495",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      0.0,
+      -0.006737,
+      -0.0
+    ]
+  },
+  "materialRemap": {
+    "Basement_Props": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Basement_Props.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

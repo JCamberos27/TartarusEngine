@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior",
+  "guid": "06faa382ea01b96a",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -8.56039,
+      -6.99893,
+      -0.393678
+    ]
+  },
+  "materialRemap": {
+    "Kitchen_Props": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Kitchen_Props.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

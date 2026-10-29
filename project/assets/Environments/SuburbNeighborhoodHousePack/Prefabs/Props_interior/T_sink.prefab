@@ -1,0 +1,117 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 0,
+      "name": "T_sink",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/T_sink@T_sink.FBX",
+      "pathGuid": "0019ae340e1fb457",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.230998,
+          0.0,
+          0.014693
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.235222,
+          0.342136,
+          0.025327
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "T_sink_door_L",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/T_sink@T_sink_door_L.FBX",
+      "pathGuid": "2f93f197d1055a62",
+      "position": [
+        -0.466554,
+        0.466426,
+        0.531496
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.232104,
+          0.0,
+          0.014693
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.235222,
+          0.342136,
+          0.025327
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "T_sink_door_R",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/T_sink@T_sink_door_R.FBX",
+      "pathGuid": "91e581e04bd83188",
+      "position": [
+        0.469174,
+        0.466426,
+        0.531496
+      ],
+      "rotation": [
+        -0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

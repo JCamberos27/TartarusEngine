@@ -1,0 +1,87 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.486685,
+          0.092633
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.25,
+          0.493603,
+          0.325
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Trashbin",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior/Trashbin@Trashbin.FBX",
+      "pathGuid": "a9686b87b1e94930",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          2.9e-05,
+          0.02787,
+          0.33802
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.3053,
+          0.044675,
+          0.351913
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Trashbin_lid",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior/Trashbin@Trashbin_lid.FBX",
+      "pathGuid": "9788cf481c9cb537",
+      "position": [
+        -0.0,
+        0.971064,
+        -0.21837
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

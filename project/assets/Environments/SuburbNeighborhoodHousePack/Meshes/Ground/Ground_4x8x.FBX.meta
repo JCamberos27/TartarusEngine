@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Ground",
+  "guid": "469a8685b3a5ceb3",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      17.0,
+      -0.500001,
+      16.0
+    ]
+  },
+  "materialRemap": {
+    "Floor_Grass": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Floor_Grass.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

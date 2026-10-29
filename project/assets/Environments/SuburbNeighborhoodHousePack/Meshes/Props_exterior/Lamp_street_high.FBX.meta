@@ -1,0 +1,20 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior",
+  "guid": "f0c6c056b013d9b3",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true
+  },
+  "materialRemap": {
+    "Glass": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Glass.mat",
+    "Lamps_On": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_On.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

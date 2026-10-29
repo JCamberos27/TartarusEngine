@@ -1,0 +1,26 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Ground",
+  "guid": "b25e4d221b9ba392",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      29.0,
+      -0.500001,
+      16.0
+    ]
+  },
+  "materialRemap": {
+    "Floor_Grass": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Floor_Grass.mat",
+    "Pool_Tiles_1": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Pool_Tiles_1.mat",
+    "Pool_Tiles_2": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Pool_Tiles_2.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -1,0 +1,40 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior",
+  "guid": "813a7a3bd34c13fb",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "meshNodes": [
+      "Sidetable_large_door_L"
+    ],
+    "optimizeGraph": true,
+    "rootTransform": [
+      1.0,
+      -0.0,
+      -0.0,
+      0.0,
+      -0.0,
+      0.0,
+      1.0,
+      0.0,
+      -0.0,
+      -1.0,
+      0.0,
+      0.0,
+      -2.427303,
+      -0.347322,
+      -13.141656,
+      1.0
+    ]
+  },
+  "materialRemap": {
+    "Bedroom_Closets": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Bedroom_Closets.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

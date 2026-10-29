@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior",
+  "guid": "a254e51adcfdb7f3",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      19.4009,
+      -0.001314,
+      -0.786573
+    ]
+  },
+  "materialRemap": {
+    "GarageSet": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_GarageSet.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

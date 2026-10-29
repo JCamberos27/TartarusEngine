@@ -1,0 +1,155 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 0,
+      "materials": [
+        {
+          "guid": "217a12308b9b8049",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_House_Exterior_Equip.mat"
+        },
+        {
+          "guid": "dfeaae095277a796",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Wall_Brick2.mat"
+        },
+        {
+          "guid": "ec0e7024d9994cd8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Wall_ConcreteWhite_Dirty.mat"
+        },
+        {
+          "guid": "1fe427d3502afacb",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_WhiteWood_Tiled.mat"
+        },
+        {
+          "guid": "01a44b41a045cc12",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Floor_ConcretePlates.mat"
+        },
+        {
+          "guid": "cd7bd3a65723f952",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Floor_PorchPlanks.mat"
+        },
+        {
+          "guid": "20ca02b1f8e83ae6",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Roof_Metal.mat"
+        },
+        {
+          "guid": "660fa79a7cd14982",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Roof_UnderPlanks.mat"
+        },
+        {
+          "guid": "a7dd7f308fa3e97d",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Wall_HouseWoodPlank_Blue.mat"
+        },
+        {
+          "guid": "a57de690da8fdf64",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Glass.mat"
+        },
+        {
+          "guid": "75b9c082662bb452",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Wall_HouseWoodPlank.mat"
+        }
+      ],
+      "name": "House_exterior_only_D",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior/House_exterior_only_D.FBX",
+      "pathGuid": "6a3325ecc30c1af2",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 1,
+      "name": "Door_exterior_white",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Door_exterior_white.FBX",
+      "pathGuid": "ace1be574b492cf6",
+      "position": [
+        0.312414,
+        0.022942,
+        0.0
+      ],
+      "rotation": [
+        0.707107,
+        0.0,
+        0.0,
+        0.707107
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Door_garage_5x",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Door_garage_5x.FBX",
+      "pathGuid": "ba4eba42e5433f80",
+      "position": [
+        -4.0,
+        -0.0,
+        0.0
+      ],
+      "rotation": [
+        0.707107,
+        0.0,
+        0.0,
+        0.707107
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Door_exterior_white",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Door_exterior_white.FBX",
+      "pathGuid": "ace1be574b492cf6",
+      "position": [
+        0.312414,
+        0.022942,
+        0.0
+      ],
+      "rotation": [
+        0.707107,
+        0.0,
+        0.0,
+        0.707107
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ]
+}

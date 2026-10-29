@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior",
+  "guid": "ac9df249e38b4a1f",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      26.9942,
+      -8.0,
+      -0.492132
+    ]
+  },
+  "materialRemap": {
+    "LivingRoom_Props": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_LivingRoom_Props.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

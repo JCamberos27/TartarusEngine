@@ -1,0 +1,40 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior",
+  "guid": "33f9463139dcf946",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "meshNodes": [
+      "Roadblock_sign"
+    ],
+    "optimizeGraph": true,
+    "rootTransform": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      -1.0,
+      0.0,
+      0.0,
+      -3.500411,
+      -0.728339,
+      -0.026686,
+      1.0
+    ]
+  },
+  "materialRemap": {
+    "Roadblock": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Roadblock.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -1,0 +1,53 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          1.0,
+          0.2,
+          -1.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          1.0,
+          0.0,
+          1.0
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "materials": [
+        {
+          "guid": "337d9ed2a0b35aa8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_In_Floor_WoodFine.mat"
+        }
+      ],
+      "name": "Floor_2x_2x",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Floor_2x_2x.FBX",
+      "pathGuid": "cab9763e320ac5f8",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}
