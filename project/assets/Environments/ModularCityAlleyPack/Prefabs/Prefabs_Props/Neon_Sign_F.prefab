@@ -1,0 +1,72 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.0,
+          0.814555
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.058655,
+          0.266525,
+          0.757962
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Neon_Sign_F",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Neon_Sign_F@Neon_Sign_F.FBX",
+      "pathGuid": "20dfe1b8e6716827",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 1,
+      "name": "Sign_WallMounting",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Neon_Sign_F@Sign_WallMounting.FBX",
+      "pathGuid": "43b2da98df30c2ae",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

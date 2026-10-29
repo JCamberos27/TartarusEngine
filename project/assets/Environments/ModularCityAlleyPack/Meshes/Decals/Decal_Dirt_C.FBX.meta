@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/ModularCityAlleyPack/Meshes/Decals",
+  "guid": "1e6b1173ce5003f7",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.992039,
+      -1.93945,
+      0.015249
+    ]
+  },
+  "materialRemap": {
+    "Decals_Dirt": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Decals_Dirt.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

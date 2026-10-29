@@ -1,0 +1,144 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "id": 0,
+      "name": "TreeDead_Static",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          1,
+          0.865,
+          0.0
+        ],
+        "isTrigger": false,
+        "shape": 2
+      },
+      "id": 3,
+      "name": "Tree_Static Collider 1",
+      "order": 3,
+      "parentId": 2,
+      "position": [
+        0.07264,
+        4.07,
+        0.190173
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.002986,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.375465,
+          0.022045,
+          0.375465
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Tree_Groundplate",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/TreeDead_Static@Tree_Groundplate.FBX",
+      "pathGuid": "6c9d3c79f48f1595",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          1.92,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.05,
+          2.005,
+          0.05
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Tree_Static",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/TreeDead_Static@Tree_Static.FBX",
+      "pathGuid": "d76ef9b6b00d1d26",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

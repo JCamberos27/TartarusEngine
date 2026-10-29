@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Environments/ModularCityAlleyPack/Colliders",
+  "guid": "83915fab863d20cb",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      131.497,
+      7.9e-05,
+      1.0
+    ]
+  },
+  "materialRemap": {},
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/ModularCityAlleyPack/Meshes/Floors",
+  "guid": "ba8c246d773f8ed9",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      104.0,
+      0.0,
+      -10.5
+    ]
+  },
+  "materialRemap": {
+    "Floor_Concrete": "assets/Environments/ModularCityAlleyPack/Materials/Floors/M_Floor_Concrete.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

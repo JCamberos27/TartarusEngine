@@ -1,0 +1,32 @@
+{
+  "folder": "assets/Environments/ModularCityAlleyPack/Meshes/Walls",
+  "guid": "e61e2fe5974b2e5c",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      127.0,
+      36.0,
+      2e-06
+    ]
+  },
+  "materialRemap": {
+    "Midwall_ConcreteDetailed": "assets/Environments/ModularCityAlleyPack/Materials/Walls/M_Midwall_ConcreteDetailed.mat",
+    "Midwall_ConcreteDirty": "assets/Environments/ModularCityAlleyPack/Materials/Walls/M_Midwall_ConcreteDirty.mat",
+    "Midwall_ConcreteDirty_B": "assets/Environments/ModularCityAlleyPack/Materials/Walls/M_Midwall_ConcreteDirty_B.mat",
+    "RustyMetalTiled": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_RustyMetalTiled.mat",
+    "Shops_And_Lights": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Shops_And_Lights.mat",
+    "StonePavement": "assets/Environments/ModularCityAlleyPack/Materials/Floors/M_StonePavement.mat",
+    "Street_Doors_Windows": "assets/Environments/ModularCityAlleyPack/Materials/Walls/M_Street_Doors_Windows.mat",
+    "Street_Shops": "assets/Environments/ModularCityAlleyPack/Materials/Walls/M_Street_Shops.mat",
+    "Wall_Brickwall_Red": "assets/Environments/ModularCityAlleyPack/Materials/Walls/M_Wall_Brickwall_Red.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

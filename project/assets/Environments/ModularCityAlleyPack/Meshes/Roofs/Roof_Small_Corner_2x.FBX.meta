@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/ModularCityAlleyPack/Meshes/Roofs",
+  "guid": "84fbab52079f56c0",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      12.0,
+      0.0,
+      0.0
+    ]
+  },
+  "materialRemap": {
+    "Roof_Metal": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Roof_Metal.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -65,6 +65,13 @@ struct ModelImportSettings {
     // Nodes left out of the import, with everything under them: kit files that ship every variant
     // stacked in one place (a door with ten handles, ten lock sets and every house number).
     std::vector<std::string> ExcludeNodes;
+    // Only these nodes' meshes are imported (their children still are, if listed): one piece out of a multi-mesh
+    // file, where ExcludeNodes would also drop the pieces under a left-out parent. Empty = every node's meshes.
+    std::vector<std::string> MeshNodes;
+    // Applied to the whole model before the up axis and pivot, in the file's model space: a full correction (turn and
+    // move) that brings a model into the space another engine drew it in (tools/assets/unity_import.py sets it so
+    // Unity's prefab transforms carry over unchanged).
+    glm::mat4 RootTransform{1.0f};
     // Nodes whose own rotation is dropped (their position and scale kept), with everything under them following:
     // kit files where a child was exported with a stray quarter turn against its parent (the model library's glass
     // panes lie flat across their door frames, the ceiling fan's blades stand on edge).

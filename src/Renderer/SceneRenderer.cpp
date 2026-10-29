@@ -930,6 +930,9 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         Shader& depth = *in.depthShader;
         depth.Bind();
         depth.SetMat4("uLightViewProj", ctx.Proj * ctx.View);
+        depth.SetInt("uSplitViewProj", 1); // the model VS's own uProj * (uView * world): see ShadowDepth.vert.glsl
+        depth.SetMat4("uView", ctx.View);
+        depth.SetMat4("uProj", ctx.Proj);
         depth.SetInt("uUseSkinning", 0);
         depth.SetInt("uCascadeLayered", 0);
         glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
@@ -943,6 +946,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             prepass.push_back({it.Ref, it.Slots, it.Visible, &it.Xform});
         }
         DrawDepthCasters(depth, prepass);
+        depth.SetInt("uSplitViewProj", 0); // the shadow passes share this program
         glPolygonOffset(0.0f, 0.0f);
         glDisable(GL_POLYGON_OFFSET_FILL);
         glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);

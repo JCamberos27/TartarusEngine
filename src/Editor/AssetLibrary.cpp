@@ -66,6 +66,13 @@ bool ParseModelImporter(const json& j, ModelImportSettings& s) {
     if (imp.contains("excludeNodes") && imp["excludeNodes"].is_array())
         for (const auto& n : imp["excludeNodes"])
             if (n.is_string() && !n.get<std::string>().empty()) s.ExcludeNodes.push_back(n.get<std::string>());
+    s.MeshNodes.clear();
+    if (imp.contains("meshNodes") && imp["meshNodes"].is_array())
+        for (const auto& n : imp["meshNodes"])
+            if (n.is_string() && !n.get<std::string>().empty()) s.MeshNodes.push_back(n.get<std::string>());
+    s.RootTransform = glm::mat4(1.0f);
+    if (imp.contains("rootTransform") && imp["rootTransform"].is_array() && imp["rootTransform"].size() == 16)
+        for (int k = 0; k < 16; ++k) s.RootTransform[k / 4][k % 4] = imp["rootTransform"][k].get<float>();
     s.UnrotateNodes.clear();
     if (imp.contains("unrotateNodes") && imp["unrotateNodes"].is_array())
         for (const auto& n : imp["unrotateNodes"])
@@ -758,6 +765,12 @@ json ModelImporterJson(const ModelImportSettings& settings) {
     if (settings.PivotOffset != glm::vec3(0.0f))
         imp["pivotOffset"] = {ShortFloat(settings.PivotOffset.x), ShortFloat(settings.PivotOffset.y), ShortFloat(settings.PivotOffset.z)};
     if (!settings.ExcludeNodes.empty()) imp["excludeNodes"] = settings.ExcludeNodes;
+    if (!settings.MeshNodes.empty()) imp["meshNodes"] = settings.MeshNodes;
+    if (settings.RootTransform != glm::mat4(1.0f)) {
+        json m = json::array();
+        for (int k = 0; k < 16; ++k) m.push_back(ShortFloat(settings.RootTransform[k / 4][k % 4]));
+        imp["rootTransform"] = m;
+    }
     if (!settings.UnrotateNodes.empty()) imp["unrotateNodes"] = settings.UnrotateNodes;
     if (!settings.MoveNodes.empty()) {
         json moves = json::array();

@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/ModularCityAlleyPack/Meshes/Props",
+  "guid": "bfd16228ef6d18d5",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      7.9,
+      0.0,
+      1.74441
+    ]
+  },
+  "materialRemap": {
+    "Dumpster_Set": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Dumpster_Set.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

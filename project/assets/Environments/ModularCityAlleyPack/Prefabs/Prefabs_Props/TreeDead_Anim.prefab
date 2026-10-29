@@ -1,0 +1,183 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "id": 0,
+      "name": "TreeDead_Anim",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 1,
+      "name": "Bone01",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        0.008126,
+        -0.011107,
+        -0.0
+      ],
+      "rotation": [
+        -5e-06,
+        -0.001448,
+        -0.001305,
+        0.999998
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Bone02",
+      "order": 2,
+      "parentId": 1,
+      "position": [
+        0.017095,
+        2.954969,
+        -0.007726
+      ],
+      "rotation": [
+        -2e-06,
+        -0.019685,
+        0.00016,
+        0.999806
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          1.92,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.05,
+          2.005,
+          0.05
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 4,
+      "name": "Tree_Skinned",
+      "order": 4,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          1,
+          0.865,
+          0.0
+        ],
+        "isTrigger": false,
+        "shape": 2
+      },
+      "id": 5,
+      "name": "Tree_Skinned Collider 1",
+      "order": 5,
+      "parentId": 4,
+      "position": [
+        0.07264,
+        4.07,
+        0.190173
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.002986,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.375465,
+          0.022045,
+          0.375465
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 3,
+      "name": "Tree_Groundplate",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/TreeDead_Anim@Tree_Groundplate.FBX",
+      "pathGuid": "19eb26f5e5d55faa",
+      "position": [
+        -0.006249,
+        0.001953,
+        -0.001449
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}
