@@ -20,6 +20,7 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\OfficeAndPoliceSta
 - scenes: 2
 - scripts dropped (MonoBehaviour): 110
 - textures: 274
+- textures cooked: 157
 - textures halved: 6
 
 ## Not converted / approximated

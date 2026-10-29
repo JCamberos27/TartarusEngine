@@ -2,12 +2,16 @@
   "folder": "assets/Environments/ModularCityAlleyPack/Meshes/Props",
   "guid": "87f3af2e5534cfef",
   "importer": {
+    "excludeNodes": [],
     "globalScale": 1.0,
     "importAnimations": false,
     "importNormals": true,
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
+    "meshNodes": [
+      "Trashcan_A"
+    ],
     "optimizeGraph": true,
     "pivotOffset": [
       50.3007,

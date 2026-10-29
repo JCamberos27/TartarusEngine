@@ -2,13 +2,35 @@
   "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
   "guid": "41649c513c6303e9",
   "importer": {
+    "excludeNodes": [],
     "globalScale": 1.0,
     "importAnimations": false,
     "importNormals": true,
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "optimizeGraph": true
+    "meshNodes": [
+      "Glass_R"
+    ],
+    "optimizeGraph": true,
+    "rootTransform": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      -1.0,
+      0.0,
+      0.0,
+      0.0,
+      -0.0,
+      -1.0,
+      0.0,
+      -14.756805,
+      0.284005,
+      -1.01552,
+      1.0
+    ]
   },
   "materialRemap": {
     "DrawerCloset": "assets/Environments/OfficeAndPoliceStation/Materials/M_DrawerCloset.mat",

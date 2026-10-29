@@ -10,23 +10,10 @@
     "materialImportMode": 1,
     "mergeByMaterial": true,
     "optimizeGraph": true,
-    "rootTransform": [
-      1.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      0.0,
-      -1.0,
-      0.0,
-      0.0,
-      1.0,
-      0.0,
-      0.0,
+    "pivotOffset": [
       48.1933,
       0.001191,
-      3.26322,
-      1.0
+      3.26322
     ]
   },
   "materialRemap": {},

@@ -2,12 +2,16 @@
   "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
   "guid": "6d4ce2062ec02b80",
   "importer": {
+    "excludeNodes": [],
     "globalScale": 1.0,
     "importAnimations": false,
     "importNormals": true,
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
+    "meshNodes": [
+      "Sign_exitway"
+    ],
     "optimizeGraph": true,
     "pivotOffset": [
       18.1733,
