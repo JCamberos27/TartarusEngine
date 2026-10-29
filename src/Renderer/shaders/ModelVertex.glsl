@@ -26,6 +26,7 @@ uniform int uUseSkinning;
 // entries (#113); the index is clamped to the buffer's length so a bad index can't read past it.
 layout(std430, binding = 1) readonly buffer BoneBlock { mat4 uBones[]; };
 #include "SkinnedVertex.glsl"
+#include "FoliageWind.glsl"
 layout(std430, binding = 26) readonly buffer SkinnedBlock { uint uSkinned[]; };
 uniform int uSkinBase;
 
@@ -122,7 +123,8 @@ void main() {
         model = uInstances[at];
         normalMat = mat3(uInstances[at + 1]);
     }
-    vec4 world = model * localPos;
+    precise vec4 world = model * localPos;
+    world.xyz += FoliageWindOffset(localPos.xyz, aColor, model[3].xyz); // opt-in; zero unless uFoliage
     vWorldPos = world.xyz;
 
     vNormal = normalize(normalMat * localNormal);

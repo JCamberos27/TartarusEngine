@@ -40,6 +40,13 @@ SHADERS = {
 }
 # Shader graphs that convert to Standard with a note until their own shader exists (by .shadergraph file name).
 GRAPHS = {'Foliage': 'foliage', 'Water': 'water'}
+# The engine's foliage shader params (_WindStrength = metres of sway at the top of _WindHeight; _WindFlutter = leaf flutter
+# share), by material name; anything else gets the default. The pack's own graph wind values are not stored in the .mat.
+FOLIAGE_WIND = {
+    'Tree': (0.30, 10.0, 0.35), 'Plant_Treebush': (0.10, 3.0, 0.5), 'Plant_Hedgebush': (0.06, 2.0, 0.5),
+    'Plant_BushGrass': (0.10, 1.0, 0.4), 'Plant_Grass': (0.12, 0.6, 0.3), 'Plant_Flowers': (0.10, 0.8, 0.3),
+    'ClimberPlant': (0.05, 3.0, 0.5),
+}
 
 
 def rel_project(repo, p):
@@ -170,9 +177,10 @@ class Pack:
         write_meta(dst, os.path.dirname(rel_project(self.repo, dst)), 'material')
         self.mats[guid] = rel_project(self.repo, dst)
         self.counts['materials'] += 1
-        if kind not in ('lit', 'unlit'):
-            self.report['Foliage - revisit in P3 (parked: Standard cutout two-sided; wind shader later)' if kind == 'foliage'
-                        else f'materials approximated on Standard ({kind})'].append(name)
+        if kind == 'foliage':
+            self.report['Foliage (engine foliage wind + leaf translucency; params from FOLIAGE_WIND)'].append(name)
+        elif kind not in ('lit', 'unlit'):
+            self.report[f'materials approximated on Standard ({kind})'].append(name)
         return self.mats[guid]
 
     def convert_material(self, name, kind, tex, fl, co, keywords):
@@ -229,6 +237,10 @@ class Pack:
             # plants are never metal; a foliage MaskMap's R channel is not metallic in any case
             p['_MetallicMap'], p['_Metallic'] = '', 0.0
             p['_RoughnessMap'], p['_Roughness'] = '', 0.85   # Smoothness 1 on leaves rendered black mirrors
+        if kind == 'foliage':
+            strength, height, flutter = FOLIAGE_WIND.get(name, (0.12, 4.0, 0.3))
+            p.update({'_Foliage': True, '_WindStrength': strength, '_WindHeight': height, '_WindFlutter': flutter,
+                      '_Translucency': 0.6})
         if kind == 'water':
             p['_Roughness'] = min(p['_Roughness'], 0.05)
         g, _ = guid_of('_OcclusionMap')

@@ -276,6 +276,7 @@ uniform vec2  uUVTiling;       // (0,0) = unset -> (1,1)
 uniform vec2  uUVOffset;
 uniform float uNormalStrength; // 0 = unset -> 1
 uniform int   uNormalFlipY;    // 1: DirectX-style normal map (green down)
+uniform float uTranslucency;  // foliage: sun light through a thin leaf from behind, tinted by albedo; 0 = off
 uniform int   uDoubleSided;    // 1: back faces are lit as front faces (culling is off for them)
 uniform int   uClothInterior;  // 1: clothing drawn double-sided - its back faces are the garment's inside, in its shadow
 // Unity Standard's Forward Rendering Options, as "off" flags so a caller that never sets them (a

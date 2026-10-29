@@ -5,6 +5,7 @@
 #extension GL_AMD_vertex_shader_layer : enable
 layout (location = 0) in vec3 aPos;
 layout (location = 2) in vec2 aUV;
+layout (location = 7) in vec4 aColor; // vertex colour (white when none): the foliage wind mask
 layout (location = 4) in ivec4 aBoneIDs;
 layout (location = 5) in vec4 aWeights;
 layout (location = 8) in ivec4 aBoneIDs2; // influences 5-8 (MAX_BONE_INFLUENCE 8)
@@ -23,6 +24,7 @@ uniform mat4 uProj;
 uniform int uCascadeLayered;
 uniform int uCascadeFirst;
 uniform mat4 uCascadeViewProj[4];
+#include "FoliageWind.glsl"
 uniform int uUseSkinning;
 layout(std430, binding = 1) readonly buffer BoneBlock { mat4 uBones[]; }; // shared with the model VS (#104)
 // uUseSkinning 2: skinned once this frame already (Model::PreSkin, SkinnedVertex.glsl); only the position is read.
@@ -60,7 +62,8 @@ void main() {
         model = uInstances[(uInstanceBase + gl_InstanceID / layers) * 2];
         layerOffset = gl_InstanceID % layers;
     }
-    vec4 worldPos = model * localPos;
+    precise vec4 worldPos = model * localPos;
+    worldPos.xyz += FoliageWindOffset(localPos.xyz, aColor, model[3].xyz); // same as ModelVertex.glsl
     vWorldPos = worldPos.xyz;
 #if defined(GL_ARB_shader_viewport_layer_array) || defined(GL_AMD_vertex_shader_layer)
     if (uCascadeLayered == 1) {

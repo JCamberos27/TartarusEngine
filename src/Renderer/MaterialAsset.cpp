@@ -314,6 +314,12 @@ std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::st
     m.GrungeStrength = r.Num(key("_GrungeStrength", "grungeStrength"), 0.0f);
     m.GrungeScale    = r.Num(key("_GrungeScale", "grungeScale"), 0.5f);
     m.ReceiveDecals  = r.Bool(key("_ReceiveDecals", "receiveDecals"), true);
+    m.Foliage        = r.Bool(key("_Foliage", "foliage"), false);
+    m.WindStrength   = r.Num(key("_WindStrength", "windStrength"), 0.15f);
+    m.WindFrequency  = r.Num(key("_WindFrequency", "windFrequency"), 1.0f);
+    m.WindFlutter    = r.Num(key("_WindFlutter", "windFlutter"), 0.3f);
+    m.WindHeight     = r.Num(key("_WindHeight", "windHeight"), 6.0f);
+    m.Translucency   = r.Num(key("_Translucency", "translucency"), 0.0f);
     m.UVTiling     = r.Vec2(key("_UVTiling", "uvTiling"), {1, 1});
     m.UVOffset     = r.Vec2(key("_UVOffset", "uvOffset"), {0, 0});
     m.DetailTiling = r.Vec2(key("_DetailTiling", "detailTiling"), {4, 4});
@@ -500,6 +506,12 @@ bool MaterialAsset::Save() const {
         if (m.GrungeStrength != 0.0f)               props["_GrungeStrength"] = m.GrungeStrength;
         if (m.GrungeScale != 0.5f)                  props["_GrungeScale"]    = m.GrungeScale;
         if (!m.ReceiveDecals)                       props["_ReceiveDecals"]  = false;
+        if (m.Foliage)                              props["_Foliage"]        = true;
+        if (m.WindStrength != 0.15f)                props["_WindStrength"]   = m.WindStrength;
+        if (m.WindFrequency != 1.0f)                props["_WindFrequency"]  = m.WindFrequency;
+        if (m.WindFlutter != 0.3f)                  props["_WindFlutter"]    = m.WindFlutter;
+        if (m.WindHeight != 6.0f)                   props["_WindHeight"]     = m.WindHeight;
+        if (m.Translucency != 0.0f)                 props["_Translucency"]   = m.Translucency;
         if (m.TransmissionStrength != 0.0f)         props["_TransmissionStrength"]    = m.TransmissionStrength;
         if (m.IOR                  != 1.5f)         props["_IOR"]                     = m.IOR;
         if (m.SubsurfaceEnabled)                    props["_SubsurfaceEnabled"]      = true;
@@ -578,6 +590,12 @@ bool MaterialAsset::Save() const {
         if (m.GrungeStrength != 0.0f)       j["grungeStrength"]     = m.GrungeStrength;
         if (m.GrungeScale != 0.5f)          j["grungeScale"]        = m.GrungeScale;
         if (!m.ReceiveDecals)               j["receiveDecals"]      = false;
+        if (m.Foliage)                      j["foliage"]            = true;
+        if (m.WindStrength != 0.15f)        j["windStrength"]       = m.WindStrength;
+        if (m.WindFrequency != 1.0f)        j["windFrequency"]      = m.WindFrequency;
+        if (m.WindFlutter != 0.3f)          j["windFlutter"]        = m.WindFlutter;
+        if (m.WindHeight != 6.0f)           j["windHeight"]         = m.WindHeight;
+        if (m.Translucency != 0.0f)         j["translucency"]       = m.Translucency;
         if (m.TransmissionStrength != 0.0f) j["transmission"]      = m.TransmissionStrength;
         if (m.IOR                 != 1.5f) j["ior"]                = m.IOR;
         if (m.SubsurfaceEnabled)            j["subsurface"]         = true;
@@ -625,6 +643,7 @@ bool MaterialAsset::IsBuiltinProp(const std::string& n) {
         "_SpecularHighlights", "_GlossyReflections",
         "_HeightMap", "_ParallaxScale", "_DetailAlbedoMap", "_DetailNormalMap", "_DetailTiling",
         "_GrungeMap", "_GrungeStrength", "_GrungeScale", "_ReceiveDecals",
+        "_Foliage", "_WindStrength", "_WindFrequency", "_WindFlutter", "_WindHeight", "_Translucency",
         "_FurEnabled", "_FurLength", "_FurDensity", "_FurShells", "_FurMask", "_FurGravity", "_FurTint", "_FurRim",
     };
     return kBuiltin.count(n) != 0;
@@ -730,6 +749,11 @@ float MaterialAsset::GetFloat(const Material& m, const std::string& n) {
     if (n == "_ParallaxScale")           return m.ParallaxScale;
     if (n == "_GrungeStrength")          return m.GrungeStrength;
     if (n == "_GrungeScale")             return m.GrungeScale;
+    if (n == "_WindStrength")            return m.WindStrength;
+    if (n == "_WindFrequency")           return m.WindFrequency;
+    if (n == "_WindFlutter")             return m.WindFlutter;
+    if (n == "_WindHeight")              return m.WindHeight;
+    if (n == "_Translucency")            return m.Translucency;
     if (n == "_FurLength")               return m.Fur.Length;
     if (n == "_FurDensity")              return m.Fur.Density;
     if (n == "_FurGravity")              return m.Fur.Gravity;
@@ -747,6 +771,7 @@ bool MaterialAsset::GetBool(const Material& m, const std::string& n) {
     if (n == "_SpecularHighlights") return m.SpecularHighlights;
     if (n == "_GlossyReflections") return m.GlossyReflections;
     if (n == "_ReceiveDecals") return m.ReceiveDecals;
+    if (n == "_Foliage") return m.Foliage;
     if (n == "_FurEnabled") return m.Fur.Enabled;
     auto it = m.ExtraProps.find(n);
     return it != m.ExtraProps.end() && it->second.B;
@@ -805,6 +830,11 @@ void MaterialAsset::ResolveBuiltin(const std::string& n, ShaderPropType type,
         {"_ParallaxScale",        [](const Material& m) { return glm::vec4(m.ParallaxScale, 0, 0, 0); }},
         {"_GrungeStrength",       [](const Material& m) { return glm::vec4(m.GrungeStrength, 0, 0, 0); }},
         {"_GrungeScale",          [](const Material& m) { return glm::vec4(m.GrungeScale, 0, 0, 0); }},
+        {"_WindStrength",         [](const Material& m) { return glm::vec4(m.WindStrength, 0, 0, 0); }},
+        {"_WindFrequency",        [](const Material& m) { return glm::vec4(m.WindFrequency, 0, 0, 0); }},
+        {"_WindFlutter",          [](const Material& m) { return glm::vec4(m.WindFlutter, 0, 0, 0); }},
+        {"_WindHeight",           [](const Material& m) { return glm::vec4(m.WindHeight, 0, 0, 0); }},
+        {"_Translucency",         [](const Material& m) { return glm::vec4(m.Translucency, 0, 0, 0); }},
         {"_FurLength",            [](const Material& m) { return glm::vec4(m.Fur.Length, 0, 0, 0); }},
         {"_FurDensity",           [](const Material& m) { return glm::vec4(m.Fur.Density, 0, 0, 0); }},
         {"_FurGravity",           [](const Material& m) { return glm::vec4(m.Fur.Gravity, 0, 0, 0); }},
@@ -818,6 +848,7 @@ void MaterialAsset::ResolveBuiltin(const std::string& n, ShaderPropType type,
         {"_SpecularHighlights", [](const Material& m) { return glm::vec4(m.SpecularHighlights ? 1.0f : 0.0f, 0, 0, 0); }},
         {"_GlossyReflections",  [](const Material& m) { return glm::vec4(m.GlossyReflections ? 1.0f : 0.0f, 0, 0, 0); }},
         {"_ReceiveDecals",      [](const Material& m) { return glm::vec4(m.ReceiveDecals ? 1.0f : 0.0f, 0, 0, 0); }},
+        {"_Foliage",            [](const Material& m) { return glm::vec4(m.Foliage ? 1.0f : 0.0f, 0, 0, 0); }},
         {"_FurEnabled",         [](const Material& m) { return glm::vec4(m.Fur.Enabled ? 1.0f : 0.0f, 0, 0, 0); }},
         {"_FurShells",          [](const Material& m) { return glm::vec4((float)m.Fur.Shells, 0, 0, 0); }}, // Int
     };
@@ -887,6 +918,11 @@ void MaterialAsset::SetFloat(Material& m, const std::string& n, float v) {
     if (n == "_ParallaxScale")           { m.ParallaxScale = v; return; }
     if (n == "_GrungeStrength")          { m.GrungeStrength = v; return; }
     if (n == "_GrungeScale")             { m.GrungeScale = v; return; }
+    if (n == "_WindStrength")            { m.WindStrength = v; return; }
+    if (n == "_WindFrequency")           { m.WindFrequency = v; return; }
+    if (n == "_WindFlutter")             { m.WindFlutter = v; return; }
+    if (n == "_WindHeight")              { m.WindHeight = v; return; }
+    if (n == "_Translucency")            { m.Translucency = v; return; }
     if (n == "_FurLength")               { m.Fur.Length = std::max(0.0f, v); return; }
     if (n == "_FurDensity")              { m.Fur.Density = std::max(1.0f, v); return; }
     if (n == "_FurGravity")              { m.Fur.Gravity = v; return; }
@@ -904,6 +940,7 @@ void MaterialAsset::SetBool(Material& m, const std::string& n, bool v) {
     if (n == "_SpecularHighlights") { m.SpecularHighlights = v; return; }
     if (n == "_GlossyReflections") { m.GlossyReflections = v; return; }
     if (n == "_ReceiveDecals") { m.ReceiveDecals = v; return; }
+    if (n == "_Foliage") { m.Foliage = v; return; }
     if (n == "_FurEnabled") { m.Fur.Enabled = v; return; }
     auto it = m.ExtraProps.find(n);
     if (it != m.ExtraProps.end()) it->second.B = v;
