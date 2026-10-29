@@ -24,6 +24,7 @@
     "_MetallicRoughnessMap": "",
     "_NormalMap": "assets/Environments/ModularCityAlleyPack/Textures/Floor_SidewalkPlates_Normal.tga",
     "_ParallaxScale": 0.02,
+    "_ReflectionProbes": true,
     "_Roughness": 1.0,
     "_RoughnessMap": "assets/Environments/ModularCityAlleyPack/Textures/Floor_SidewalkPlates_MaskMap_Roughness100.png",
     "_Triplanar": false,

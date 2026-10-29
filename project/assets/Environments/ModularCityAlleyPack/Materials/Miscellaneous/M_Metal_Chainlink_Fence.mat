@@ -23,6 +23,7 @@
     "_MetallicMap": "",
     "_MetallicRoughnessMap": "",
     "_NormalMap": "assets/Environments/ModularCityAlleyPack/Textures/Metal_Chainlink_Fence_Normal.tga",
+    "_ReflectionProbes": true,
     "_Roughness": 0.754,
     "_RoughnessMap": "",
     "_Triplanar": false,

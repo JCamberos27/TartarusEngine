@@ -132,7 +132,10 @@ class FbxInfo:
             non_geo, geo = list(IDENT), list(IDENT)
             for h in chain:
                 if '_$AssimpFbx$_Geometric' in h['name']:
-                    geo = mul(geo, h['L'])
+                    # a node's geometric transform is its own: the parent's matching *Inverse helpers hang in this
+                    # chain too, and hand Unity's children back an undisturbed frame, so they are not part of it
+                    if 'Inverse' not in h['name']:
+                        geo = mul(geo, h['L'])
                 else:
                     non_geo = mul(non_geo, h['L'])
             geo = mul(geo, n['L'])
