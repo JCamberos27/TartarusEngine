@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.002455,
+          -0.05217,
+          -0.019191
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.674811,
+          0.912424,
+          0.221358
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Window_F",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Window_F.FBX",
+      "pathGuid": "3770ffa076ee121b",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

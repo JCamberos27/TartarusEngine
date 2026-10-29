@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          1.74875,
+          -0.128811
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          2.0,
+          1.75125,
+          0.15
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Wall_C_Brick_Shops_BMod_4x",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_Shops_BMod_4x.FBX",
+      "pathGuid": "8cd2d8a8718653b3",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

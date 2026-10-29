@@ -1,0 +1,32 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "id": 0,
+      "name": "Decal_Dirt_E",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Decals/Decal_Dirt_E.FBX",
+      "pathGuid": "42bb39f4bf456dbc",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

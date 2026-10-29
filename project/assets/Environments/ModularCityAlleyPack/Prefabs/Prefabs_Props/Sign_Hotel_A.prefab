@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          -0.0,
+          -0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          1.456961,
+          0.347344,
+          0.079307
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Sign_Hotel_A",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Sign_Hotel_A.FBX",
+      "pathGuid": "a7a620a9969e571f",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

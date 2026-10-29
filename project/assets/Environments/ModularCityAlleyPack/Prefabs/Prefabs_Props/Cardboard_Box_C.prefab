@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.169698,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.313558,
+          0.171586,
+          0.223291
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Cardboard_Box_C",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Cardboard_Box_C.FBX",
+      "pathGuid": "605875a9a36165e5",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

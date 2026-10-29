@@ -1,0 +1,87 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.014835,
+          0.451687,
+          0.011856
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.3,
+          0.455508,
+          0.3
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Trashcan_B",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Trashcan_B@Trashcan_B.FBX",
+      "pathGuid": "d9f81b646ee11c3a",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          -0.04,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.3,
+          0.015,
+          0.3
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Trashcan_Lid",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Trashcan_B@Trashcan_Lid.FBX",
+      "pathGuid": "c489e7031bdf1b38",
+      "position": [
+        -0.015,
+        0.966,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

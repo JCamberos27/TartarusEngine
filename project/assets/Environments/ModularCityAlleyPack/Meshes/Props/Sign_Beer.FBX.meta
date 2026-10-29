@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/ModularCityAlleyPack/Meshes/Props",
+  "guid": "fd6b59d5bdc21597",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      22.629,
+      -11.6891,
+      -0.05
+    ]
+  },
+  "materialRemap": {
+    "Awnings": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Awnings.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

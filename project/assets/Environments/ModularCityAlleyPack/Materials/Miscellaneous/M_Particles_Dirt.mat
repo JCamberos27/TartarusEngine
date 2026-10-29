@@ -1,0 +1,36 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Particles_Dirt",
+  "opacity": 1,
+  "properties": {
+    "_AOMap": "",
+    "_AlbedoMap": "",
+    "_BaseColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      1,
+      1,
+      1
+    ],
+    "_EmissiveMap": "assets/Environments/ModularCityAlleyPack/Textures/Dirt_BaseColor.png",
+    "_EmissiveStrength": 1.0,
+    "_GlossyReflections": false,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "",
+    "_ReceiveDecals": false,
+    "_Roughness": 1.0,
+    "_RoughnessMap": "",
+    "_SpecularHighlights": false,
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "renderQueue": 2,
+  "shader": "engine://Standard.shader"
+}

@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/ModularCityAlleyPack/Meshes/Props",
+  "guid": "a7a620a9969e571f",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      33.7939,
+      -11.3117,
+      -0.28787
+    ]
+  },
+  "materialRemap": {
+    "Shops_And_Lights": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Shops_And_Lights.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

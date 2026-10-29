@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/ModularCityAlleyPack/Meshes/Props",
+  "guid": "e27768c0ac620aa6",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      3.8934,
+      -1.2,
+      0.0014
+    ]
+  },
+  "materialRemap": {
+    "Bed": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Bed.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

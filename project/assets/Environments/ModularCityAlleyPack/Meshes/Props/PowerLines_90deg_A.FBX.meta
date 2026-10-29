@@ -1,0 +1,25 @@
+{
+  "folder": "assets/Environments/ModularCityAlleyPack/Meshes/Props",
+  "guid": "511c8d8fab16ca2b",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -39.2325,
+      -6.71128,
+      -0.0
+    ]
+  },
+  "materialRemap": {
+    "RubberTiled": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_RubberTiled.mat",
+    "RustyMetalTiled": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_RustyMetalTiled.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

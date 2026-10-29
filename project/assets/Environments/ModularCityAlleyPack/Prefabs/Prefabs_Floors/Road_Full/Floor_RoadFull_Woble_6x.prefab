@@ -1,0 +1,477 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "id": 0,
+      "name": "Floor_RoadFull_Woble_6x",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          -0.062133,
+          -0.019128
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          3.0,
+          0.165629,
+          1.019129
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Floor_Sidewalk_Woble_B_6x2",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Woble_B_6x2.FBX",
+      "pathGuid": "28a2507cca442a08",
+      "position": [
+        -0.0,
+        0.0,
+        -2.5
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          -0.217069,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          3.01,
+          0.1,
+          1.51
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "materials": [
+        {
+          "guid": "16b77a9224986ebc",
+          "path": "assets/Environments/ModularCityAlleyPack/Materials/Floors/M_Floor_Concrete2.mat"
+        }
+      ],
+      "name": "Floor_Street_Woble_A_6x3",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Woble_A_Street_6x3.FBX",
+      "pathGuid": "ef4558a3c878b135",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.251295,
+          -0.06967,
+          0.002216
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.251295,
+          0.104267,
+          0.152216
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 3,
+      "name": "Floor_StonePavemet_A_\\xBDx",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_A_\u00bdx.FBX",
+      "pathGuid": "0a0a95bddff78abd",
+      "position": [
+        1.0,
+        0.074,
+        1.5
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.5,
+          -0.06967,
+          0.002216
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.5,
+          0.104267,
+          0.152216
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 4,
+      "name": "Floor_StonePavemet_A_1x",
+      "order": 4,
+      "parentId": 0,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_A_1x.FBX",
+      "pathGuid": "3264209b25ee3021",
+      "position": [
+        -0.0,
+        0.011,
+        1.5
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        0.017966,
+        0.999839
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.749161,
+          -0.066581,
+          -0.01319
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.75,
+          0.107355,
+          0.16935
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 5,
+      "name": "Floor_StonePavemet_B_1\\xBDx",
+      "order": 5,
+      "parentId": 0,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_B_1\u00bdx.FBX",
+      "pathGuid": "8ba36242c3cc6d16",
+      "position": [
+        3.0,
+        0.0,
+        1.5
+      ],
+      "rotation": [
+        -0.028141,
+        -0.999604,
+        -0.0,
+        -0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          -0.07426,
+          -0.019128
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          3.0,
+          0.167069,
+          1.019129
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 6,
+      "name": "Floor_Sidewalk_Woble_A_6x2",
+      "order": 6,
+      "parentId": 0,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Woble_A_6x2.FBX",
+      "pathGuid": "bed5941e5827ec93",
+      "position": [
+        -0.0,
+        0.0,
+        2.5
+      ],
+      "rotation": [
+        0.0,
+        -1.0,
+        -0.0,
+        -0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          1.5,
+          -0.062859,
+          -0.015055
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          1.5,
+          0.111078,
+          0.165055
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 7,
+      "name": "Floor_StonePavemet_A_3x",
+      "order": 7,
+      "parentId": 0,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_A_3x.FBX",
+      "pathGuid": "8b23e22248114108",
+      "position": [
+        -3.0,
+        0.0,
+        -1.5
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.009138,
+        -0.999958
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.749161,
+          -0.066581,
+          -0.01319
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.75,
+          0.107355,
+          0.16935
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 8,
+      "name": "Floor_StonePavemet_B_1\\xBDx (1)",
+      "order": 8,
+      "parentId": 0,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_B_1\u00bdx.FBX",
+      "pathGuid": "8ba36242c3cc6d16",
+      "position": [
+        -0.0,
+        0.074,
+        -1.5
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        0.011025,
+        -0.999939
+      ],
+      "scale": [
+        1.0,
+        1.1239,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.749772,
+          -0.074506,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.75,
+          0.09943,
+          0.15
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 9,
+      "name": "Floor_StonePavemet_A_1\\xBDx (1)",
+      "order": 9,
+      "parentId": 0,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_A_1\u00bdx.FBX",
+      "pathGuid": "41aa6ae6273bd2c5",
+      "position": [
+        1.5,
+        0.05,
+        -1.5
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        0.012216,
+        -0.999925
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.749161,
+          -0.066581,
+          -0.01319
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.75,
+          0.107355,
+          0.16935
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 10,
+      "name": "Floor_StonePavemet_B_1\\xBDx",
+      "order": 10,
+      "parentId": 0,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_B_1\u00bdx.FBX",
+      "pathGuid": "8ba36242c3cc6d16",
+      "position": [
+        -3.0,
+        0.016,
+        1.5
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        -1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.749772,
+          -0.074506,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.75,
+          0.09943,
+          0.15
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 11,
+      "name": "Floor_StonePavemet_A_1\\xBDx",
+      "order": 11,
+      "parentId": 0,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_A_1\u00bdx.FBX",
+      "pathGuid": "41aa6ae6273bd2c5",
+      "position": [
+        -1.5,
+        0.014,
+        1.5
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        -1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

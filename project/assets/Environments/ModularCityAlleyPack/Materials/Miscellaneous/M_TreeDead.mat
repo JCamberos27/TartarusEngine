@@ -1,0 +1,33 @@
+{
+  "alphaCutoff": 0.148,
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_TreeDead",
+  "properties": {
+    "_AOMap": "",
+    "_AlbedoMap": "assets/Environments/ModularCityAlleyPack/Textures/TreeDead_BaseColor.tga",
+    "_BaseColor": [
+      0.6912,
+      0.6912,
+      0.6912
+    ],
+    "_DoubleSided": true,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 1.0,
+    "_MetallicMap": "assets/Environments/ModularCityAlleyPack/Textures/TreeDead_MaskMap_Metallic.png",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Environments/ModularCityAlleyPack/Textures/TreeDead_Normal.tga",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/Environments/ModularCityAlleyPack/Textures/TreeDead_MaskMap_Roughness100.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "renderQueue": 1,
+  "shader": "engine://Standard.shader"
+}

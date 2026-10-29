@@ -1,0 +1,253 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "id": 0,
+      "name": "Floor_RoadFull_Hill_6x",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.0,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          3.0,
+          0.09,
+          0.135
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Collider",
+      "order": 2,
+      "parentId": 1,
+      "position": [
+        -0.009,
+        -0.295,
+        -0.026
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.042425,
+        0.9991
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.0,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          3.0,
+          0.09,
+          0.135
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 7,
+      "name": "Collider",
+      "order": 7,
+      "parentId": 6,
+      "position": [
+        -0.024,
+        -0.287,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.042425,
+        0.9991
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "id": 1,
+      "name": "Floor_StonePavemet_Hill_B_6x",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_Hill_B_6x.FBX",
+      "pathGuid": "e5a9422f73156aed",
+      "position": [
+        -0.0,
+        0.0,
+        -1.5
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 3,
+      "materials": [
+        {
+          "guid": "16b77a9224986ebc",
+          "path": "assets/Environments/ModularCityAlleyPack/Materials/Floors/M_Floor_Concrete2.mat"
+        }
+      ],
+      "name": "Floor_Street_Hill_6x3",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_HillStreet_6x3.FBX",
+      "pathGuid": "f81a5f4fb8ebcc13",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 4,
+      "name": "Floor_Sidewalk_Hill_A_6x2",
+      "order": 4,
+      "parentId": 0,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Hill_A_6x2.FBX",
+      "pathGuid": "d93e83155b010700",
+      "position": [
+        -0.0,
+        0.0,
+        -2.5
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 5,
+      "name": "Floor_Sidewalk_Hill_B_6x2",
+      "order": 5,
+      "parentId": 0,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Hill_B_6x2.FBX",
+      "pathGuid": "d1bac610aa9c0cad",
+      "position": [
+        -0.0,
+        0.0,
+        2.5
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 6,
+      "name": "Floor_StonePavemet_Hill_A_6x",
+      "order": 6,
+      "parentId": 0,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_Hill_A_6x.FBX",
+      "pathGuid": "f85cfdea8b4b3f92",
+      "position": [
+        -0.0,
+        0.0,
+        1.5
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

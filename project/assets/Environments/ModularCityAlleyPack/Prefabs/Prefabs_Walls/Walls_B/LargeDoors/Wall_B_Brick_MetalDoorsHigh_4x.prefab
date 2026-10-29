@@ -1,0 +1,114 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.325,
+          1.754571,
+          0.175
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Wall_B_Brick_MetalDoorsHigh_4x Collider 1",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        -1.74,
+        1.745429,
+        -0.115448
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          2.0,
+          1.754571,
+          0.045
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Wall_B_Brick_MetalDoorsHigh_4x Collider 2",
+      "order": 2,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        1.745429,
+        -0.26
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          1.8,
+          1.745429,
+          -0.115448
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.25,
+          1.754571,
+          0.175
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Wall_B_Brick_MetalDoorsHigh_4x",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_MetalDoorsHigh_4x.FBX",
+      "pathGuid": "3a948e2a78c2f7dc",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

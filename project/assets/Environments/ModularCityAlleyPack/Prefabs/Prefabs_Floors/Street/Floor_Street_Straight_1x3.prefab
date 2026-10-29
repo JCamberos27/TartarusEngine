@@ -1,0 +1,53 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.5,
+          -0.217069,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.51,
+          0.1,
+          1.5
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "materials": [
+        {
+          "guid": "408176b40c835f15",
+          "path": "assets/Environments/ModularCityAlleyPack/Materials/Floors/M_Floor_AsphaltRoad.mat"
+        }
+      ],
+      "name": "Floor_Street_Straight_1x3",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_StraightStreet_1x3.FBX",
+      "pathGuid": "fd9f669b4baf5d00",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

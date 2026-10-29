@@ -1,0 +1,25 @@
+{
+  "folder": "assets/Environments/ModularCityAlleyPack/Meshes/Props",
+  "guid": "add5423cb99992a9",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -13.2,
+      0.0,
+      0.0
+    ]
+  },
+  "materialRemap": {
+    "Metal_Chainlink_Fence": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Metal_Chainlink_Fence.mat",
+    "RustyMetalTiled": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_RustyMetalTiled.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

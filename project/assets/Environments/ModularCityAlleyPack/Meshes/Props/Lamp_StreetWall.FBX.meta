@@ -1,0 +1,25 @@
+{
+  "folder": "assets/Environments/ModularCityAlleyPack/Meshes/Props",
+  "guid": "53ab10d656ce26c1",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      3.99932,
+      -7.27275,
+      0.000494
+    ]
+  },
+  "materialRemap": {
+    "RustyMetalTiled": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_RustyMetalTiled.mat",
+    "Shops_And_Lights": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Shops_And_Lights.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

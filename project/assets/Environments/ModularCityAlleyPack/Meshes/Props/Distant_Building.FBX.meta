@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/ModularCityAlleyPack/Meshes/Props",
+  "guid": "ac4e8cea2998bd4a",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      70.9194,
+      5.48437,
+      0.0
+    ]
+  },
+  "materialRemap": {
+    "Distant_Building": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Distant_Building.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

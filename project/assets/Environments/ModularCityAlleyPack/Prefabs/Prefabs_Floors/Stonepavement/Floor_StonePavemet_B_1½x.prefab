@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.749161,
+          -0.066581,
+          -0.01319
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.75,
+          0.107355,
+          0.16935
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Floor_StonePavemet_B_1\\xBDx",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_B_1\u00bdx.FBX",
+      "pathGuid": "8ba36242c3cc6d16",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}
