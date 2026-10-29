@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/ModularCityAlleyPack/Meshes/Floors",
+  "guid": "7d597bb08bba0b59",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -1.00145,
+      0.0,
+      -3.00452
+    ]
+  },
+  "materialRemap": {
+    "StonePavement": "assets/Environments/ModularCityAlleyPack/Materials/Floors/M_StonePavement.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

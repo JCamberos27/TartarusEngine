@@ -190,6 +190,7 @@ void Model::ImportFromFile(const ModelImportSettings& settings) {
         glm::mat4 fix = glm::translate(glm::mat4(1.0f), settings.PivotOffset);
         if (settings.SourceUpAxis == ModelImportSettings::UpAxis::Z) fix = fix * AxisCorrection(2, 1, 1, -1);
         else if (settings.SourceUpAxis == ModelImportSettings::UpAxis::NegZ) fix = fix * AxisCorrection(2, -1, 1, 1);
+        fix = fix * settings.RootTransform;
         if (fix != glm::mat4(1.0f)) {
             const glm::mat4 root = fix * AiToGlm(scene->mRootNode->mTransformation);
             aiMatrix4x4& m = scene->mRootNode->mTransformation;
@@ -406,7 +407,9 @@ void Model::ProcessNode(aiNode* node, const aiScene* scene, const glm::mat4& par
     // separate nodes). Skipping this accumulation collapses every part to the model origin.
     glm::mat4 nodeTransform = parentTransform * AiToGlm(node->mTransformation);
 
-    for (unsigned int i = 0; i < node->mNumMeshes; ++i) {
+    const auto& only = m_D->Settings.MeshNodes;
+    const bool keep = only.empty() || std::find(only.begin(), only.end(), node->mName.C_Str()) != only.end();
+    for (unsigned int i = 0; keep && i < node->mNumMeshes; ++i) {
         aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
         if (auto m = ProcessMesh(mesh, scene, nodeTransform, node)) m_D->Meshes.push_back(std::move(m));
     }

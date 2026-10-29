@@ -1,0 +1,16 @@
+{
+  "folder": "assets/Environments/ModularCityAlleyPack/Textures",
+  "guid": "8d795182b5380f3a",
+  "importer": {
+    "anisoLevel": 8,
+    "compression": 1,
+    "filterMode": 2,
+    "generateMipmaps": true,
+    "isSRGB": false,
+    "maxTextureSize": 2048,
+    "textureType": 0,
+    "wrapMode": 0
+  },
+  "metaVersion": 1,
+  "type": "texture"
+}

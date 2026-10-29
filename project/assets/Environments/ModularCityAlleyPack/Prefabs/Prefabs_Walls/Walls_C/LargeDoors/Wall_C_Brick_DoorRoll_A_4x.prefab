@@ -1,0 +1,147 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.32,
+          1.752294,
+          0.15
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Wall_C_Brick_DoorRoll_A_4x Collider 1",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        1.73,
+        1.747707,
+        -0.100944
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          2.0,
+          0.4,
+          0.225693
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Wall_C_Brick_DoorRoll_A_4x Collider 2",
+      "order": 2,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        3.14,
+        -0.100944
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          2.0,
+          1.752294,
+          0.055
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 3,
+      "name": "Wall_C_Brick_DoorRoll_A_4x Collider 3",
+      "order": 3,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        1.747707,
+        -0.25
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -1.73,
+          1.747707,
+          -0.100944
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.32,
+          1.752294,
+          0.15
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Wall_C_Brick_DoorRoll_A_4x",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_DoorRoll_A_4x.FBX",
+      "pathGuid": "a11ab3457ac0c8bc",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

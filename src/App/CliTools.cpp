@@ -17,6 +17,9 @@
 #include "ShaderLibrary.h"
 #include "Tests/UnitTests.h"
 
+#include <assimp/Importer.hpp>
+#include <assimp/postprocess.h>
+#include <assimp/scene.h>
 #include <json.hpp>
 
 #include <algorithm>
@@ -69,6 +72,11 @@ int ModelReport(int argc, char** argv, int i) {
                 if (imp.contains("excludeNodes") && imp["excludeNodes"].is_array())
                     for (const auto& n : imp["excludeNodes"])
                         if (n.is_string()) s.ExcludeNodes.push_back(n.get<std::string>());
+                if (imp.contains("meshNodes") && imp["meshNodes"].is_array())
+                    for (const auto& n : imp["meshNodes"])
+                        if (n.is_string()) s.MeshNodes.push_back(n.get<std::string>());
+                if (imp.contains("rootTransform") && imp["rootTransform"].is_array() && imp["rootTransform"].size() == 16)
+                    for (int k = 0; k < 16; ++k) s.RootTransform[k / 4][k % 4] = imp["rootTransform"][k].get<float>();
                 if (imp.contains("unrotateNodes") && imp["unrotateNodes"].is_array())
                     for (const auto& n : imp["unrotateNodes"])
                         if (n.is_string()) s.UnrotateNodes.push_back(n.get<std::string>());
@@ -116,6 +124,72 @@ int ModelReport(int argc, char** argv, int i) {
     return failed ? 1 : 0;
 }
 
+// `--model-nodes <folder or model> [more ...]`: each model's node tree as Assimp reads it with the engine's import
+// flags (unit scale applied, pivots folded), before any baking: one line per node with its parent, local transform
+// (column-major) and the node-local bounds of its meshes. tools/assets/unity_import.py places Unity prefab pieces
+// with it: Unity draws a mesh in its own node's space, the engine bakes the node tree into the vertices.
+void PrintModelNodes(const aiScene* scene, const aiNode* node, const char* parent) {
+    const aiMatrix4x4& t = node->mTransformation;
+    std::printf("[ModelNodes]   node %s parent %s local %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g %g", node->mName.C_Str(),
+                parent, t.a1, t.b1, t.c1, t.d1, t.a2, t.b2, t.c2, t.d2, t.a3, t.b3, t.c3, t.d3, t.a4, t.b4, t.c4, t.d4);
+    for (unsigned int m = 0; m < node->mNumMeshes; ++m) {
+        const aiMesh* mesh = scene->mMeshes[node->mMeshes[m]];
+        aiVector3D lo(1e30f), hi(-1e30f);
+        for (unsigned int v = 0; v < mesh->mNumVertices; ++v) {
+            const aiVector3D& p = mesh->mVertices[v];
+            lo.x = std::min(lo.x, p.x); lo.y = std::min(lo.y, p.y); lo.z = std::min(lo.z, p.z);
+            hi.x = std::max(hi.x, p.x); hi.y = std::max(hi.y, p.y); hi.z = std::max(hi.z, p.z);
+        }
+        aiString mat;
+        if (mesh->mMaterialIndex < scene->mNumMaterials) mat = scene->mMaterials[mesh->mMaterialIndex]->GetName();
+        std::printf(" | mesh %s material %s aabb %g %g %g %g %g %g", mesh->mName.C_Str(), mat.C_Str(), lo.x, lo.y, lo.z, hi.x,
+                    hi.y, hi.z);
+    }
+    std::printf("\n");
+    for (unsigned int c = 0; c < node->mNumChildren; ++c) PrintModelNodes(scene, node->mChildren[c], node->mName.C_Str());
+}
+
+int ModelNodes(int argc, char** argv, int i) {
+    namespace fs = std::filesystem;
+    std::vector<fs::path> files;
+    for (int j = i + 1; j < argc && argv[j][0] != '-'; ++j) {
+        std::error_code ec;
+        const auto isFbx = [](const fs::path& p) {
+            std::string e = p.extension().string();
+            for (char& c : e) c = (char)std::tolower((unsigned char)c);
+            return e == ".fbx";
+        };
+        if (fs::is_directory(argv[j], ec)) {
+            for (const auto& f : fs::recursive_directory_iterator(argv[j], ec))
+                if (f.is_regular_file() && isFbx(f.path())) files.push_back(f.path());
+        } else if (isFbx(argv[j])) files.push_back(argv[j]);
+    }
+    std::sort(files.begin(), files.end());
+    int failed = 0;
+    for (const auto& f : files) {
+        Assimp::Importer importer;
+        importer.SetPropertyFloat(AI_CONFIG_GLOBAL_SCALE_FACTOR_KEY, 1.0f);
+        // TARTARUS_NODES_PIVOTS=1 keeps the FBX pivot chain as "$AssimpFbx$_<part>" helper nodes (what the engine folds).
+        char* pv = nullptr;
+        size_t pvn = 0;
+        _dupenv_s(&pv, &pvn, "TARTARUS_NODES_PIVOTS");
+        importer.SetPropertyBool(AI_CONFIG_IMPORT_FBX_PRESERVE_PIVOTS, pv && *pv == '1');
+        std::free(pv);
+        const aiScene* scene = importer.ReadFile(f.string(), aiProcess_Triangulate | aiProcess_GlobalScale);
+        if (!scene || !scene->mRootNode) {
+            ++failed;
+            std::cout << "[ModelNodes] FAILED " << f.generic_string() << "\n";
+            continue;
+        }
+        double unit = 1.0;
+        if (scene->mMetaData) scene->mMetaData->Get("UnitScaleFactor", unit);
+        std::printf("[ModelNodes] %s unitscale %g\n", f.generic_string().c_str(), unit);
+        PrintModelNodes(scene, scene->mRootNode, "-");
+    }
+    std::cout << "[ModelNodes] " << files.size() << " models, " << failed << " failed" << std::endl;
+    return failed ? 1 : 0;
+}
+
 } // namespace
 
 int RunEarlyCliTool(int argc, char** argv) {
@@ -153,6 +227,11 @@ int RunEarlyCliTool(int argc, char** argv) {
         if (std::string(argv[i]) != "--model-report") continue;
         CrashHandler::SetInteractive(false);
         return ModelReport(argc, argv, i);
+    }
+    for (int i = 1; i < argc; ++i) {
+        if (std::string(argv[i]) != "--model-nodes") continue;
+        CrashHandler::SetInteractive(false);
+        return ModelNodes(argc, argv, i);
     }
     // `--audio-test [scene]`: the audio engine's own test, offline (no window, no audio device): a scripted tour of a scene's reverb zones.
     for (int i = 1; i < argc; ++i)

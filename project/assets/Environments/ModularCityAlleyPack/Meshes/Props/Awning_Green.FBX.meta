@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/ModularCityAlleyPack/Meshes/Props",
+  "guid": "a8aa9662825a2c19",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -9.64733,
+      -7.82551,
+      -0.0
+    ]
+  },
+  "materialRemap": {
+    "Street_Doors_Windows": "assets/Environments/ModularCityAlleyPack/Materials/Walls/M_Street_Doors_Windows.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

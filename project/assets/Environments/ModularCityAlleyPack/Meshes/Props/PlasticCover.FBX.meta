@@ -1,0 +1,25 @@
+{
+  "folder": "assets/Environments/ModularCityAlleyPack/Meshes/Props",
+  "guid": "4fd1dbe7d2523657",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -33.3467,
+      -6.9984,
+      0.18831
+    ]
+  },
+  "materialRemap": {
+    "Alley_Prop_Set": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Alley_Prop_Set.mat",
+    "Storage_Prop_Set": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Storage_Prop_Set.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -1,0 +1,31 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Neon_Signs",
+  "properties": {
+    "_AOMap": "",
+    "_AlbedoMap": "assets/Environments/ModularCityAlleyPack/Textures/Neon_Signs_BaseColor.tga",
+    "_BaseColor": [
+      0.8603,
+      0.8603,
+      0.8603
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "_EmissiveMap": "assets/Environments/ModularCityAlleyPack/Textures/Neon_Signs_Emissive.tga",
+    "_EmissiveStrength": 1.5801,
+    "_Metallic": 0.495,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "",
+    "_Roughness": 0.11,
+    "_RoughnessMap": "",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader"
+}

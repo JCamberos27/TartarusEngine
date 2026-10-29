@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/ModularCityAlleyPack/Meshes/Props",
+  "guid": "70d4dda68d05437e",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      32.2654,
+      -7.50974,
+      -0.005414
+    ]
+  },
+  "materialRemap": {
+    "Neon_Signs": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Neon_Signs.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

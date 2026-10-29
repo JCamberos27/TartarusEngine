@@ -1,0 +1,187 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.05,
+          0.525,
+          0.531719
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "FireEscape Collider 1",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        1.67,
+        0.06,
+        0.537386
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.05,
+          0.525,
+          0.531719
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "FireEscape Collider 2",
+      "order": 2,
+      "parentId": 0,
+      "position": [
+        -1.67,
+        0.06,
+        0.537386
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          1.682365,
+          0.525,
+          0.05
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 3,
+      "name": "FireEscape Collider 3",
+      "order": 3,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        0.06,
+        1.01
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          -0.44,
+          0.537386
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          1.682365,
+          0.1,
+          0.531719
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "FireEscape",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/FireEscape@FireEscape.FBX",
+      "pathGuid": "544c6688956c4e91",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.04,
+          -1.950999,
+          0.147454
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.105,
+          1.89,
+          0.37963
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 4,
+      "name": "FireEscape_Stairs",
+      "order": 4,
+      "parentId": 0,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/FireEscape@FireEscape_Stairs.FBX",
+      "pathGuid": "56d9a82bbeaf7827",
+      "position": [
+        -1.526558,
+        -0.326235,
+        0.424118
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        0.241922,
+        0.970296
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

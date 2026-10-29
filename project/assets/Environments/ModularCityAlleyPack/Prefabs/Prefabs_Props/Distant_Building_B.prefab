@@ -1,0 +1,53 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          20.0,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          10.0,
+          20.0,
+          10.0
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "materials": [
+        {
+          "guid": "54d5a7526e0dcc47",
+          "path": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Distant_Building_B.mat"
+        }
+      ],
+      "name": "Distant_Building_B",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Distant_Building.FBX",
+      "pathGuid": "ac4e8cea2998bd4a",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}
