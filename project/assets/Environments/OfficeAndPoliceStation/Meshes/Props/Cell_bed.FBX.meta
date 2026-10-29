@@ -1,0 +1,18 @@
+{
+  "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
+  "guid": "ea7977f9a73a97e4",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true
+  },
+  "materialRemap": {
+    "Cell_Props": "assets/Environments/OfficeAndPoliceStation/Materials/M_Cell_Props.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

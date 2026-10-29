@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
+  "guid": "10b201cd2e05226e",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      25.7028,
+      9e-05,
+      -0.065997
+    ]
+  },
+  "materialRemap": {
+    "Plant_Inside": "assets/Environments/OfficeAndPoliceStation/Materials/M_Plant_Inside.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

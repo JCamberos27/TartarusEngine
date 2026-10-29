@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
+  "guid": "2b2ecdde3a15e60d",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -14.756805,
+      -1.01552,
+      -0.284005
+    ]
+  },
+  "materialRemap": {
+    "DrawerCloset": "assets/Environments/OfficeAndPoliceStation/Materials/M_DrawerCloset.mat",
+    "Glass": "assets/Environments/OfficeAndPoliceStation/Materials/M_Glass.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

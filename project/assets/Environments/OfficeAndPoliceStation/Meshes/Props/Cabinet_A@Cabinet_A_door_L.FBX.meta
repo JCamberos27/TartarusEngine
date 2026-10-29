@@ -1,0 +1,23 @@
+{
+  "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
+  "guid": "ab9b43115be7fcec",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -48.806892,
+      -1.253143,
+      -0.227828
+    ]
+  },
+  "materialRemap": {
+    "MetalShelf": "assets/Environments/OfficeAndPoliceStation/Materials/M_MetalShelf.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -1,0 +1,31 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_LCD_Screens",
+  "properties": {
+    "_AOMap": "assets/Environments/OfficeAndPoliceStation/Textures/LCD_Screens_MaskMap_AO50.png",
+    "_AlbedoMap": "assets/Environments/OfficeAndPoliceStation/Textures/LCD_Screens_BaseColor.tga",
+    "_BaseColor": [
+      0.8015,
+      0.8015,
+      0.8015
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      1,
+      1,
+      1
+    ],
+    "_EmissiveMap": "assets/Environments/OfficeAndPoliceStation/Textures/LCD_Screens_Emissive.tga",
+    "_EmissiveStrength": 1,
+    "_Metallic": 1.0,
+    "_MetallicMap": "assets/Environments/OfficeAndPoliceStation/Textures/LCD_Screens_MaskMap_Metallic.png",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Environments/OfficeAndPoliceStation/Textures/LCD_Screens_Normal.tga",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/Environments/OfficeAndPoliceStation/Textures/LCD_Screens_MaskMap_Roughness100.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader"
+}

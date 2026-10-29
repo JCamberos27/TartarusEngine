@@ -202,6 +202,7 @@ class UObj:
         self.pos, self.rot, self.scale = [0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0], [1.0, 1.0, 1.0]
         self.children, self.comps, self.static, self.source = [], [], False, None
         self.comp_ids, self.mat_mods = set(), {}  # component fileIDs (LOD groups name renderers by them)
+        self.open_spec = None  # a door / lift clip that moves this object (Converter.open_specs), becomes an Openable
         self.renderer_mods = {}  # instance overrides of the MeshRenderer: m_CastShadows, m_ReceiveShadows, m_Enabled
 
 
@@ -218,6 +219,7 @@ class Converter:
         self.prefab_cache = {}   # unity prefab guid -> (roots, objects by fileID)
         self.mat_guids = {}      # engine mat path -> guid
         self.model_guids = {}    # engine model path -> guid
+        self.clips = {}          # unity .anim guid -> clip summary
         self.slot_cache = {}     # engine model path -> engine slot material names
 
     # models ---------------------------------------------------------------------------------------------------
@@ -507,6 +509,9 @@ class Converter:
         else:
             out['empties'].append(e)
         self.colliders(o, comps, e, out, ids, is_model='path' in e)
+        self.open_specs(o, comps)
+        if o.open_spec and 'path' in e:
+            self.openable(o, e)
         self.lights(comps, e)
         children = list(o.children)
         lod = (comps.get('LODGroup') or [None])[0]
@@ -514,6 +519,98 @@ class Converter:
             children = self.lod_group(o, lod, e, children)
         for c in children:
             self.emit_one(c, out, ids, e['id'])
+
+    # doors and lifts --------------------------------------------------------------------------------------------
+    def clip(self, guid):
+        """{'name', 'length', 'euler_y', 'pos'} of an .anim: per target path, the total Y turn (degrees) and the
+        position change of its curves, for the clip's last key."""
+        if guid in self.clips:
+            return self.clips[guid]
+        res = None
+        path = self.pack.guids.get(guid)
+        if path and path.lower().endswith('.anim'):
+            body = next((b for c, _, t, b, _s in uy.docs(uy.read(path)) if t == 'AnimationClip'), None)
+            if body:
+                def last(curve):
+                    keys = (curve.get('curve') or {}).get('m_Curve') or []
+                    return keys[-1] if keys else None, keys[0] if keys else None
+                by_path = collections.defaultdict(dict)
+                length = 0.0
+                for c in body.get('m_EulerCurves') or []:
+                    hi, lo = last(c)
+                    if hi:
+                        by_path[c.get('path') or ''].setdefault('euler_y', vec(hi['value'])[1] - vec(lo['value'])[1])
+                        length = max(length, float(hi['time']))
+                for c in body.get('m_PositionCurves') or []:
+                    hi, lo = last(c)
+                    if hi:
+                        by_path[c.get('path') or '']['pos'] = [a - b for a, b in zip(vec(hi['value']), vec(lo['value']))]
+                        length = max(length, float(hi['time']))
+                res = {'name': body.get('m_Name', ''), 'length': length, 'paths': dict(by_path)}
+        self.clips[guid] = res
+        return res
+
+    def open_clip(self, comps):
+        """The clip that opens a door: the Animator controller's 'Open' state, or a legacy Animation's clip named for it."""
+        guids = []
+        for a in comps.get('Animator', []):
+            cg = (a.get('m_Controller') or {}).get('guid')
+            cpath = self.pack.guids.get(cg)
+            if cpath:
+                for c, _, t, b, _s in uy.docs(uy.read(cpath)):
+                    if t == 'AnimatorState' and str(b.get('m_Name', '')).lower() == 'open':
+                        guids.append((b.get('m_Motion') or {}).get('guid'))
+        for a in comps.get('Animation', []):
+            guids += [(m or {}).get('guid') for m in a.get('m_Animations') or []]
+        for g in guids:
+            clip = self.clip(g) if g else None
+            if clip and 'open' in clip['name'].lower() and 'close' not in clip['name'].lower():
+                return clip
+        return None
+
+    def open_specs(self, o, comps):
+        """Hand the 'open' clip's per-path motion to the objects it moves."""
+        if not (comps.get('Animator') or comps.get('Animation')):
+            return
+        clip = self.open_clip(comps)
+        if not clip:
+            return
+        for path, m in clip['paths'].items():
+            target = o
+            for part in [x for x in path.split('/') if x]:
+                target = next((c for c in target.children if c.name == part), None)
+                if target is None:
+                    break
+            if target is not None:
+                target.open_spec = dict(m, length=clip['length'])
+                self.pack.counts['openable clips applied'] += 1
+
+    def openable(self, o, e):
+        """The engine's Openable (src/Game/Openable.h) for a door or lift leaf the clip moves. The hinge or slide comes
+        from the model's own bounds (front +Z), so only which edge and which way are decided here: the leaf sits on the
+        engine's +X side of its pivot (a box collider's centre) for Hinge Left, -X for Hinge Right. A Unity turn about Y
+        throws that edge toward +Z when the leaf's engine X and sin(turn) agree, else toward -Z (Swing Back)."""
+        spec = o.open_spec
+        col = e.get('collider') or {}
+        side = (col.get('center') or [1.0])[0]
+        if 'euler_y' in spec and abs(spec['euler_y']) > 1.0:
+            turn = spec['euler_y']
+            left = side >= 0
+            front = (side * math.sin(math.radians(turn))) > 0
+            op = {'Motion': 'Hinge Left' if left else 'Hinge Right', 'Amount': round(abs(turn), 2),
+                  'Open Time': round(max(spec['length'], 0.05), 3), 'Start Open': False}
+            if not front:
+                op['Swing Back'] = True
+            op.update({k: ';'.join(f'assets/Audio/Foley/door/{k_}_{i}.wav' for i in range(1, 5))
+                       for k, k_ in (('Open Sound', 'open'), ('Close Sound', 'close'), ('Latch Sound', 'latch'))})
+        elif 'pos' in spec and abs(spec['pos'][0]) > 0.05:
+            dx = -spec['pos'][0]  # Unity -> engine X
+            op = {'Motion': 'Slide Right' if dx > 0 else 'Slide Left', 'Amount': round(abs(dx), 3),
+                  'Open Time': round(max(spec['length'], 0.05), 3), 'Start Open': False}
+        else:
+            return
+        e['Openable'] = op
+        self.pack.counts['openables'] += 1
 
     def node_for_mesh(self, guid, mesh_name):
         info = self.fbx.get(guid)
@@ -523,7 +620,14 @@ class Converter:
             if n == mesh_name or any(m[0] == mesh_name for m in info.real[n]['meshes']):
                 return n
         meshes = info.mesh_nodes()
-        return meshes[0] if len(meshes) == 1 else None
+        if len(meshes) == 1:
+            return meshes[0]
+        # an unlisted (hashed) id on an object named for its part ('Lockers' for 'Lockers_body'): the one node that
+        # carries the object's name as a prefix
+        if mesh_name:
+            pre = [n for n in meshes if n.startswith(mesh_name + '_')]
+            return pre[0] if len(pre) == 1 else None
+        return None
 
     def material_overrides(self, rel, o, renderer):
         """The entity's material list when the renderer's materials differ from the model's .meta remap."""
@@ -738,7 +842,7 @@ def strip_skipped(pack, roots, where):
             pack.report['particle systems left out (rebuild with the engine\'s Particle System)'].append(
                 f'{where}: {o.name}')
         if 'Animator' in kinds or 'Animation' in kinds:
-            pack.report['animated objects (static here; doors and lifts become Openables in their pack\'s pass)'].append(
+            pack.report['animated objects (doors and lifts became Openables; the rest stay static)'].append(
                 f'{where}: {o.name}')
         if any(t == 'MonoBehaviour' for t, _ in o.comps):
             pack.counts['scripts dropped (MonoBehaviour)'] += 1
@@ -770,6 +874,55 @@ def convert(pack, exe):
     for p in pack_files(pack, '.unity'):
         write_scene(conv, p)
     return conv
+
+
+def _qmul(a, b):
+    x1, y1, z1, w1 = a
+    x2, y2, z2, w2 = b
+    return (w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2, w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+            w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2, w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2)
+
+
+def _qrot(q, v):
+    x, y, z, w = q
+    t = (2 * (y * v[2] - z * v[1]), 2 * (z * v[0] - x * v[2]), 2 * (x * v[1] - y * v[0]))
+    return (v[0] + w * t[0] + (y * t[2] - z * t[1]), v[1] + w * t[1] + (z * t[0] - x * t[2]),
+            v[2] + w * t[2] + (x * t[1] - y * t[0]))
+
+
+def dedupe_openables(out):
+    """Two prefabs can each carry the same door in the same place (an elevator car and the wall around its shaft). Only
+    one of them opens under Interact, so the twin would stay shut, in view and in the way: the later one is removed.
+    (A leaf has no children; the removed entity's id is simply left unused.)"""
+    ents = {e['id']: e for k in ('models', 'empties') for e in out[k]}
+    cache = {}
+
+    def world(e):
+        if e['id'] not in cache:
+            par = ents.get(e['parentId'])
+            if par is None:
+                cache[e['id']] = (tuple(e['position']), tuple(e['rotation']), tuple(e['scale']))
+            else:
+                pp, pq, ps = world(par)
+                v = _qrot(pq, tuple(a * b for a, b in zip(e['position'], ps)))
+                cache[e['id']] = (tuple(a + b for a, b in zip(pp, v)), _qmul(pq, tuple(e['rotation'])),
+                                  tuple(a * b for a, b in zip(ps, e['scale'])))
+        return cache[e['id']]
+    kept, twins = [], []
+    for e in out['models']:
+        if 'Openable' not in e:
+            continue
+        pos, rot, _ = world(e)
+        twin = any(k[0] == e['path'] and k[3] == e['Openable']['Motion'] and
+                   max(abs(a - b) for a, b in zip(k[1], pos)) < 0.1 and abs(sum(a * b for a, b in zip(k[2], rot))) > 0.999
+                   for k in kept)
+        if twin:
+            twins.append(e)
+        else:
+            kept.append((e['path'], pos, rot, e['Openable']['Motion']))
+    out['models'] = [e for e in out['models'] if not any(e is t for t in twins)]
+    dropped = len(twins)
+    return dropped
 
 
 def write_scene(conv, path):
@@ -806,6 +959,7 @@ def write_scene(conv, path):
     out = {'boxes': [], 'empties': keep, 'models': models}
     start = max([e['id'] for e in keep + models] + [0])
     conv.emit(roots, out, [start])
+    pack.counts['duplicate openables dropped (a twin door within 10 cm)'] += dedupe_openables(out)
     scene.update(out)
     scene['formatVersion'] = 4
     dst = os.path.join(pack.repo, 'project', 'scenes', f'{pack.name}_{stem}.json')

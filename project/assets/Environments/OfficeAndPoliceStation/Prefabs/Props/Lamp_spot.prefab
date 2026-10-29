@@ -1,0 +1,87 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          -0.039961,
+          -0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.071179,
+          0.041411,
+          0.071179
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Lamp_spot",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Lamp_spot@Lamp_spot.FBX",
+      "pathGuid": "8335822a2d140aa7",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.000578,
+          -0.068454,
+          0.027505
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.075426,
+          0.089551,
+          0.102372
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Lamp_spot",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Lamp_spot@Lamp_spot.FBX",
+      "pathGuid": "8335822a2d140aa7",
+      "position": [
+        0.000166,
+        -0.063083,
+        -0.000613
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

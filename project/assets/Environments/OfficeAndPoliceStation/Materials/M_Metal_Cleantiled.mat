@@ -1,0 +1,35 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Metal_Cleantiled",
+  "properties": {
+    "_AOMap": "",
+    "_AlbedoMap": "assets/Environments/OfficeAndPoliceStation/Textures/Metal_Cleantiled_BaseColor.tga",
+    "_BaseColor": [
+      0.7555,
+      0.75,
+      0.75
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.96,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Environments/OfficeAndPoliceStation/Textures/Metal_Cleantiled_Normal.tga",
+    "_Roughness": 0.23,
+    "_RoughnessMap": "",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0,
+    "_UVTiling": [
+      2,
+      2
+    ]
+  },
+  "shader": "engine://Standard.shader"
+}

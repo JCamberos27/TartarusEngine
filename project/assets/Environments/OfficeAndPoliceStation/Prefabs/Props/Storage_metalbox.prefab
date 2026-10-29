@@ -1,0 +1,127 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.000317,
+          0.102641,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.157321,
+          0.102756,
+          0.221953
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Storage_metalbox",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Storage_metalbox@Storage_metalbox.FBX",
+      "pathGuid": "4dad49e03d6117b2",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.000452,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.161694,
+          0.013389,
+          0.228122
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Storage_metalbox_cover",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Storage_metalbox@Storage_metalbox_cover.FBX",
+      "pathGuid": "ea551c172a23ade7",
+      "position": [
+        -0.0,
+        0.211477,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.156646,
+          -0.118685
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.042195,
+          0.15859,
+          0.12273
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Folder_C",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_C.FBX",
+      "pathGuid": "ea1365318c82b008",
+      "position": [
+        -0.133316,
+        0.108,
+        -0.201008
+      ],
+      "rotation": [
+        0.5,
+        -0.5,
+        -0.5,
+        0.5
+      ],
+      "scale": [
+        2.0983,
+        1.22301,
+        1.1563
+      ],
+      "static": true
+    }
+  ]
+}
