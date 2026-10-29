@@ -8,12 +8,7 @@
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "optimizeGraph": true,
-    "pivotOffset": [
-      0.323627,
-      -1.1025,
-      -0.402768
-    ]
+    "optimizeGraph": true
   },
   "materialRemap": {
     "Lockers": "assets/Environments/OfficeAndPoliceStation/Materials/M_Lockers.mat"

@@ -8,12 +8,7 @@
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "optimizeGraph": true,
-    "pivotOffset": [
-      0.003276,
-      -0.485125,
-      0.149984
-    ]
+    "optimizeGraph": true
   },
   "materialRemap": {
     "Toilet": "assets/Environments/OfficeAndPoliceStation/Materials/M_Toilet.mat"

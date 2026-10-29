@@ -8,7 +8,12 @@
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "optimizeGraph": true
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -25.0,
+      0.001335,
+      0.0
+    ]
   },
   "materialRemap": {
     "Desk_and_stools": "assets/Environments/OfficeAndPoliceStation/Materials/M_Desk_and_stools.mat"

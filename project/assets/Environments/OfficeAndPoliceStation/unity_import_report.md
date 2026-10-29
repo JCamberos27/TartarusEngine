@@ -15,6 +15,7 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\OfficeAndPoliceSta
 - openable clips applied: 90
 - openables: 76
 - prefabs: 221
+- reflection probes: 9
 - renderers: 2973
 - scenes: 2
 - scripts dropped (MonoBehaviour): 110
@@ -92,4 +93,7 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\OfficeAndPoliceSta
 - FPS Controller.prefab: FPS Controller
 - OfficePack_Example: FPS Controller
 - Showcase: Main Camera
+
+### reflection probes with a box offset (moved the probe, ignoring the parent rotation) (1)
+- Reflection Probe (5)
 

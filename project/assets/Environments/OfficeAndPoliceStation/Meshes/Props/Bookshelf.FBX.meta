@@ -2,13 +2,19 @@
   "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
   "guid": "74ae8de1c928e2a1",
   "importer": {
+    "excludeNodes": [],
     "globalScale": 1.0,
     "importAnimations": false,
     "importNormals": true,
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "optimizeGraph": true
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -5.0,
+      -0.0,
+      0.0
+    ]
   },
   "materialRemap": {
     "Metal_Cleantiled": "assets/Environments/OfficeAndPoliceStation/Materials/M_Metal_Cleantiled.mat",

@@ -23,6 +23,7 @@
     "_MetallicMap": "assets/Environments/OfficeAndPoliceStation/Textures/MetalShelf_MaskMap_Metallic.png",
     "_MetallicRoughnessMap": "",
     "_NormalMap": "assets/Environments/OfficeAndPoliceStation/Textures/MetalShelf_Normal.tga",
+    "_ReflectionProbes": true,
     "_Roughness": 1.0,
     "_RoughnessMap": "assets/Environments/OfficeAndPoliceStation/Textures/MetalShelf_MaskMap_Roughness100.png",
     "_Triplanar": false,

@@ -8,12 +8,7 @@
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "optimizeGraph": true,
-    "pivotOffset": [
-      -52.05619,
-      -1.261211,
-      -0.243002
-    ]
+    "optimizeGraph": true
   },
   "materialRemap": {
     "MetalShelf": "assets/Environments/OfficeAndPoliceStation/Materials/M_MetalShelf.mat"

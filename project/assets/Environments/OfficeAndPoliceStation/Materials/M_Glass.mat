@@ -25,6 +25,7 @@
     "_NormalMap": "assets/Environments/OfficeAndPoliceStation/Textures/Metal_Cleantiled_Normal.tga",
     "_NormalStrength": 0.2,
     "_ReceiveDecals": false,
+    "_ReflectionProbes": true,
     "_Roughness": 1.0,
     "_RoughnessMap": "assets/Environments/OfficeAndPoliceStation/Textures/Glass_MaskMap_Roughness100.png",
     "_Triplanar": false,

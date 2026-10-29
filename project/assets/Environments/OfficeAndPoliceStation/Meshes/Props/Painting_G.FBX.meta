@@ -2,13 +2,19 @@
   "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
   "guid": "7eec0b1309a86abe",
   "importer": {
+    "excludeNodes": [],
     "globalScale": 1.0,
     "importAnimations": false,
     "importNormals": true,
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "optimizeGraph": true
+    "optimizeGraph": true,
+    "pivotOffset": [
+      11.8703,
+      -3.62672,
+      -0.005078
+    ]
   },
   "materialRemap": {
     "Paintings": "assets/Environments/OfficeAndPoliceStation/Materials/M_Paintings.mat"

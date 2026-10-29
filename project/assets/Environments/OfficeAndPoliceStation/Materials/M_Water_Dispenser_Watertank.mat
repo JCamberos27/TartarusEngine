@@ -24,6 +24,7 @@
     "_MetallicRoughnessMap": "",
     "_NormalMap": "assets/Environments/OfficeAndPoliceStation/Textures/Water_Dispenser_Normal.tga",
     "_ReceiveDecals": false,
+    "_ReflectionProbes": true,
     "_Roughness": 1.0,
     "_RoughnessMap": "assets/Environments/OfficeAndPoliceStation/Textures/Water_Dispenser_MaskMap_Roughness100.png",
     "_Triplanar": false,

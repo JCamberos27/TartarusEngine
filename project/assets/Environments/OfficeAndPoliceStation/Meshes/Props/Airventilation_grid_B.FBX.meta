@@ -2,13 +2,19 @@
   "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
   "guid": "d3bd76c970a6971c",
   "importer": {
+    "excludeNodes": [],
     "globalScale": 1.0,
     "importAnimations": false,
     "importNormals": true,
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "optimizeGraph": true
+    "optimizeGraph": true,
+    "pivotOffset": [
+      6.01238,
+      -0.117285,
+      -0.007132
+    ]
   },
   "materialRemap": {
     "AirventilationGrids": "assets/Environments/OfficeAndPoliceStation/Materials/M_AirventilationGrids.mat"
