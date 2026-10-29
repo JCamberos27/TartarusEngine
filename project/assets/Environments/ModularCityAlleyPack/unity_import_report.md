@@ -6,12 +6,14 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\ModularCityAlleyPa
 
 - baked-only lights (now realtime): 7
 - colliders: 5754
+- duplicate openables dropped (a twin door within 10 cm): 0
 - lights: 24
 - material overrides on instances: 643
 - materials: 43
 - model variants (one mesh of a multi-mesh FBX): 26
 - models: 400
 - prefabs: 387
+- reflection probes: 4
 - renderers: 4764
 - scenes: 3
 - scripts dropped (MonoBehaviour): 25
@@ -19,7 +21,7 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\ModularCityAlleyPa
 
 ## Not converted / approximated
 
-### animated objects (static here; doors and lifts become Openables in their pack's pass) (12)
+### animated objects (doors and lifts became Openables; the rest stay static) (12)
 - Example_Scene_Day: TreeDead_Anim
 - Example_Scene_Day: TreeDead_Anim (1)
 - Example_Scene_Day: TreeDead_Anim (2)

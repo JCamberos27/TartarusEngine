@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
+  "guid": "91ed9f5da9342253",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      51.9511,
+      0.0,
+      -0.011321
+    ]
+  },
+  "materialRemap": {
+    "Table_And_Screen": "assets/Environments/OfficeAndPoliceStation/Materials/M_Table_And_Screen.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

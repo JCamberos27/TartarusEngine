@@ -8,12 +8,7 @@
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "optimizeGraph": true,
-    "pivotOffset": [
-      21.5907,
-      -7.84963,
-      0.000557
-    ]
+    "optimizeGraph": true
   },
   "materialRemap": {
     "Neon_Signs": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Neon_Signs.mat"

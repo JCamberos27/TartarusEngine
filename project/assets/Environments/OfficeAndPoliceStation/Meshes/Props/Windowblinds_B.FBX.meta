@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
+  "guid": "565d2de86ae06b89",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      29.6,
+      -4.0,
+      -0.0
+    ]
+  },
+  "materialRemap": {
+    "WindowBlinds": "assets/Environments/OfficeAndPoliceStation/Materials/M_WindowBlinds.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

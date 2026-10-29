@@ -1,0 +1,212 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "id": 1,
+      "name": "Elevator_Doors_ParentMain",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        0.0,
+        1.445999
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Elevator_Doors",
+      "order": 2,
+      "parentId": 1,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 0,
+      "name": "Elevator",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Elevator.FBX",
+      "pathGuid": "c351d7d25f7256a2",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "Openable": {
+        "Amount": 0.72,
+        "Motion": "Slide Left",
+        "Open Time": 1.15,
+        "Start Open": false
+      },
+      "collider": {
+        "center": [
+          0.36433,
+          1.149974,
+          -0.00076
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.364429,
+          1.15,
+          0.025
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 3,
+      "name": "ElevatorDoor_L",
+      "order": 3,
+      "parentId": 2,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Elevator_Doors@ElevatorDoor_L.FBX",
+      "pathGuid": "268b722bbe3e5f06",
+      "position": [
+        -0.728919,
+        0.017527,
+        -0.07424
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "Openable": {
+        "Amount": 0.721,
+        "Motion": "Slide Right",
+        "Open Time": 1.15,
+        "Start Open": false
+      },
+      "collider": {
+        "center": [
+          -0.364511,
+          1.149766,
+          -0.00076
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.364395,
+          1.15,
+          0.025
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 4,
+      "name": "ElevatorDoor_R",
+      "order": 4,
+      "parentId": 2,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Elevator_Doors@ElevatorDoor_R.FBX",
+      "pathGuid": "843ea463b0016d45",
+      "position": [
+        0.728965,
+        0.017735,
+        -0.07424
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          -0.0,
+          -0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.072059,
+          0.135166,
+          0.012151
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 5,
+      "name": "Elevator_panel_inside",
+      "order": 5,
+      "parentId": 0,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Elevator_panel_inside.FBX",
+      "pathGuid": "48da70083a1e2996",
+      "position": [
+        -0.938618,
+        1.2435,
+        1.265219
+      ],
+      "rotation": [
+        0.0,
+        -1.0,
+        0.0,
+        -0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

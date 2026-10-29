@@ -1,0 +1,127 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -1e-06,
+          0.166542,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.062661,
+          0.166542,
+          0.129199
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Folderholder",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folderholder.FBX",
+      "pathGuid": "d4539192454beecb",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.023022,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.116562,
+          0.023022,
+          0.158505
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Folder_A",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_A.FBX",
+      "pathGuid": "a02c4685104fce6f",
+      "position": [
+        0.045955,
+        0.159333,
+        -0.005018
+      ],
+      "rotation": [
+        -0.5,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.023022,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.116562,
+          0.023022,
+          0.158505
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Folder_B",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_B.FBX",
+      "pathGuid": "241221c81661b536",
+      "position": [
+        -0.011945,
+        0.143499,
+        -0.007219
+      ],
+      "rotation": [
+        -0.477363,
+        0.521656,
+        0.521656,
+        0.477363
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

@@ -22,6 +22,7 @@
     "_MetallicMap": "assets/Environments/ModularCityAlleyPack/Textures/Floor_StreetPlatesConcrete_MaskMap_Metallic.png",
     "_MetallicRoughnessMap": "",
     "_NormalMap": "assets/Environments/ModularCityAlleyPack/Textures/Floor_StreetPlatesConcrete_Normal.tga",
+    "_ReflectionProbes": true,
     "_Roughness": 1.0,
     "_RoughnessMap": "assets/Environments/ModularCityAlleyPack/Textures/Floor_StreetPlatesConcrete_MaskMap_Roughness100.png",
     "_Triplanar": false,

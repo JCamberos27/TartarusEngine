@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
+  "guid": "9e022604b8a9e11e",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -16.5431,
+      0.052068,
+      -0.395336
+    ]
+  },
+  "materialRemap": {
+    "CouchLeather": "assets/Environments/OfficeAndPoliceStation/Materials/M_CouchLeather.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

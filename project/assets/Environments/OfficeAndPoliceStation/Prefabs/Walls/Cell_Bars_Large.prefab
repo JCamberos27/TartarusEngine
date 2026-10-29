@@ -1,0 +1,114 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.3,
+          1.249697,
+          0.059514
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Cell_Bars_Large Collider 1",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        -2.8,
+        1.249697,
+        -0.015795
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          1.509271,
+          0.15,
+          0.059514
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Cell_Bars_Large Collider 2",
+      "order": 2,
+      "parentId": 0,
+      "position": [
+        -1.596137,
+        2.35,
+        -0.015795
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.4,
+          1.249697,
+          -0.015795
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.3,
+          1.249697,
+          0.059514
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Cell_Bars_Large",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Cell_Bars_Large.FBX",
+      "pathGuid": "5def697121620807",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

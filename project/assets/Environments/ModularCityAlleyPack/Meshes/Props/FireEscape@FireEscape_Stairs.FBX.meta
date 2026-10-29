@@ -8,12 +8,7 @@
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "optimizeGraph": true,
-    "pivotOffset": [
-      32.52656,
-      -1.673765,
-      -0.424118
-    ]
+    "optimizeGraph": true
   },
   "materialRemap": {
     "RustyMetalTiled": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_RustyMetalTiled.mat"

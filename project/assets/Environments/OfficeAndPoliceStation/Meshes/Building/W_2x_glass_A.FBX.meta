@@ -1,0 +1,25 @@
+{
+  "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Building",
+  "guid": "748b6c9165eb0009",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -15.0018,
+      -0.0,
+      -0.025
+    ]
+  },
+  "materialRemap": {
+    "Door_MetalDark": "assets/Environments/OfficeAndPoliceStation/Materials/M_Door_MetalDark.mat",
+    "Glass": "assets/Environments/OfficeAndPoliceStation/Materials/M_Glass.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

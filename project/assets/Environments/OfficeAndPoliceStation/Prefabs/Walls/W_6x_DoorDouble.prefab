@@ -1,0 +1,114 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          1.025,
+          1.5,
+          0.039398
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "W_6x_DoorDouble Collider 1",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        2.02,
+        1.5,
+        0.06
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          3.0,
+          0.34,
+          0.039398
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "W_6x_DoorDouble Collider 2",
+      "order": 2,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        2.65,
+        0.06
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -2.02,
+          1.5,
+          0.06
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          1.025,
+          1.5,
+          0.039398
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "W_6x_DoorDouble",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/W_6x_DoorDouble.FBX",
+      "pathGuid": "49db19457f88f779",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}
