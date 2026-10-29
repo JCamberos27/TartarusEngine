@@ -1,0 +1,37 @@
+{
+  "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
+  "guid": "05a7f1fc0d94e9d1",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "rootTransform": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      -1.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      -10.0,
+      0.0,
+      -0.0,
+      1.0
+    ]
+  },
+  "materialRemap": {
+    "Carpets": "assets/Environments/OfficeAndPoliceStation/Materials/M_Carpets.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -1,0 +1,33 @@
+{
+  "alphaCutoff": 0.5,
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Plant_Inside",
+  "properties": {
+    "_AOMap": "",
+    "_AlbedoMap": "assets/Environments/OfficeAndPoliceStation/Textures/Plant_Inside_BaseColor.tga",
+    "_BaseColor": [
+      0.8824,
+      0.8824,
+      0.8824
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 1.0,
+    "_MetallicMap": "assets/Environments/OfficeAndPoliceStation/Textures/Plant_Inside_MaskMap_Metallic.png",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Environments/OfficeAndPoliceStation/Textures/Plant_Inside_Normal.tga",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/Environments/OfficeAndPoliceStation/Textures/Plant_Inside_MaskMap_Roughness100.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "renderQueue": 1,
+  "shader": "engine://Standard.shader"
+}

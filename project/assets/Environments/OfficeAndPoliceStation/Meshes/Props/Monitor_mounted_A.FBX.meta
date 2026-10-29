@@ -1,0 +1,18 @@
+{
+  "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
+  "guid": "0297123082cb0795",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true
+  },
+  "materialRemap": {
+    "LCD_Screens": "assets/Environments/OfficeAndPoliceStation/Materials/M_LCD_Screens.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

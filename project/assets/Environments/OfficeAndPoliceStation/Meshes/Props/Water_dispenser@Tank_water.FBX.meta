@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
+  "guid": "b79dea2ea74dbcf0",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      94.00159,
+      -1.346595,
+      -0.010336
+    ]
+  },
+  "materialRemap": {
+    "Water_Dispenser": "assets/Environments/OfficeAndPoliceStation/Materials/M_Water_Dispenser.mat",
+    "Water_Dispenser_Watertank": "assets/Environments/OfficeAndPoliceStation/Materials/M_Water_Dispenser_Watertank.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

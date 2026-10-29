@@ -1,0 +1,25 @@
+{
+  "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Building",
+  "guid": "481180c79bc5fae1",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      6.0,
+      0.0,
+      -1e-06
+    ]
+  },
+  "materialRemap": {
+    "Floor_Rock_Gray": "assets/Environments/OfficeAndPoliceStation/Materials/M_Floor_Rock_Gray.mat",
+    "Roof_Plate": "assets/Environments/OfficeAndPoliceStation/Materials/M_Roof_Plate.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

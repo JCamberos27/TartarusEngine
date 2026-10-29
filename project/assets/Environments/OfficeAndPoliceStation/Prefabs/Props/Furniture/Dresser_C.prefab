@@ -1,0 +1,392 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.180979,
+          0.1,
+          0.015
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Dresser_C_drawer_A Collider 1",
+      "order": 2,
+      "parentId": 1,
+      "position": [
+        0.0,
+        -0.03,
+        -0.55
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.015,
+          0.1,
+          0.26
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 3,
+      "name": "Dresser_C_drawer_A Collider 2",
+      "order": 3,
+      "parentId": 1,
+      "position": [
+        0.17,
+        -0.03,
+        -0.28
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.015,
+          0.1,
+          0.26
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 4,
+      "name": "Dresser_C_drawer_A Collider 3",
+      "order": 4,
+      "parentId": 1,
+      "position": [
+        -0.17,
+        -0.03,
+        -0.262304
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.180979,
+          0.015,
+          0.286713
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 5,
+      "name": "Dresser_C_drawer_A Collider 4",
+      "order": 5,
+      "parentId": 1,
+      "position": [
+        0.0,
+        -0.13,
+        -0.28
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.180979,
+          0.1,
+          0.015
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 7,
+      "name": "Dresser_C_drawer_A Collider 1",
+      "order": 7,
+      "parentId": 6,
+      "position": [
+        0.0,
+        -0.03,
+        -0.55
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.015,
+          0.1,
+          0.26
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 8,
+      "name": "Dresser_C_drawer_A Collider 2",
+      "order": 8,
+      "parentId": 6,
+      "position": [
+        0.17,
+        -0.03,
+        -0.28
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.015,
+          0.1,
+          0.26
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 9,
+      "name": "Dresser_C_drawer_A Collider 3",
+      "order": 9,
+      "parentId": 6,
+      "position": [
+        -0.17,
+        -0.03,
+        -0.262304
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.180979,
+          0.015,
+          0.286713
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 10,
+      "name": "Dresser_C_drawer_A Collider 4",
+      "order": 10,
+      "parentId": 6,
+      "position": [
+        0.0,
+        -0.13,
+        -0.28
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.395746,
+          -0.019425
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.198013,
+          0.396025,
+          0.312105
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Dresser_C",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Dresser_C.FBX",
+      "pathGuid": "52036993594b97ea",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.0,
+          -0.01
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.180979,
+          0.149042,
+          0.015
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Dresser_C_drawer_A",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Dresser_C_drawer_A.FBX",
+      "pathGuid": "976fbd5c22905654",
+      "position": [
+        -0.0,
+        0.624,
+        0.304
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.0,
+          -0.01
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.180979,
+          0.149042,
+          0.015
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 6,
+      "name": "Dresser_C_drawer_A",
+      "order": 6,
+      "parentId": 0,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Dresser_C_drawer_A.FBX",
+      "pathGuid": "976fbd5c22905654",
+      "position": [
+        -0.0,
+        0.324,
+        0.304
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

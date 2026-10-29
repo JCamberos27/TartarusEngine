@@ -1,0 +1,87 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          -0.13897,
+          0.132701
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.448189,
+          0.113795,
+          0.041173
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Sign_exitway",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Sign_exitway@Sign_exitway.FBX",
+      "pathGuid": "6d4ce2062ec02b80",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.004957,
+          -0.014209,
+          0.128923
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.372335,
+          0.015551,
+          0.020894
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Sign_exitway_ceilingpart",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Sign_exitway@Sign_exitway_ceilingpart.FBX",
+      "pathGuid": "bd46e24a86f1edd3",
+      "position": [
+        -0.0,
+        -0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

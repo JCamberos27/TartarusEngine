@@ -1,0 +1,31 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Wall_Stucco_WhiteBlue",
+  "properties": {
+    "_AOMap": "assets/Environments/OfficeAndPoliceStation/Textures/Wall_Stucco_Blue_MaskMap_AO20.png",
+    "_AlbedoMap": "assets/Environments/OfficeAndPoliceStation/Textures/Wall_Stucco_WhiteBlue_BaseColor.tga",
+    "_BaseColor": [
+      1,
+      1,
+      1
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 1.0,
+    "_MetallicMap": "assets/Environments/OfficeAndPoliceStation/Textures/Wall_Stucco_Blue_MaskMap_Metallic.png",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Environments/OfficeAndPoliceStation/Textures/Wall_Stucco_Blue_Normal.tga",
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/Environments/OfficeAndPoliceStation/Textures/Wall_Stucco_Blue_MaskMap_Roughness100.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader"
+}
