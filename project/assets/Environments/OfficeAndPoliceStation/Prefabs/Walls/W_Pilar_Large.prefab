@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          1.5,
+          -0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.5,
+          1.5,
+          0.5
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "W_Pilar_Large",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/W_Pilar_Large.FBX",
+      "pathGuid": "9236518f2119b7bd",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
+  "guid": "6d4ce2062ec02b80",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      18.1733,
+      -0.13897,
+      0.0
+    ]
+  },
+  "materialRemap": {
+    "CeilingLamp": "assets/Environments/OfficeAndPoliceStation/Materials/M_CeilingLamp.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
+  "guid": "5d32d78c7b14841f",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -2.39881,
+      -1.36007,
+      0.010098
+    ]
+  },
+  "materialRemap": {
+    "Bulletinboard": "assets/Environments/OfficeAndPoliceStation/Materials/M_Bulletinboard.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

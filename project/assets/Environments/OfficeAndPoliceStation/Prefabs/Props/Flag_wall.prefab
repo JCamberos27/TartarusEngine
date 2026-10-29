@@ -1,0 +1,37 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 0,
+      "name": "Flag_wall",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Flag_wall.FBX",
+      "pathGuid": "1808aab21e2f8162",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

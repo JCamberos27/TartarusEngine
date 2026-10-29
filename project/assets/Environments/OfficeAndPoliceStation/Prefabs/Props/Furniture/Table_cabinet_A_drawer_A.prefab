@@ -1,0 +1,180 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.314947,
+          0.084605,
+          0.015
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Table_cabinet_A_drawer_A Collider 1",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        3e-06,
+        -0.0,
+        -0.64
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.015,
+          0.084605,
+          0.329235
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Table_cabinet_A_drawer_A Collider 2",
+      "order": 2,
+      "parentId": 0,
+      "position": [
+        0.29,
+        -0.0,
+        -0.310917
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.015,
+          0.084605,
+          0.329235
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 3,
+      "name": "Table_cabinet_A_drawer_A Collider 3",
+      "order": 3,
+      "parentId": 0,
+      "position": [
+        -0.29,
+        -0.0,
+        -0.310917
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.314947,
+          0.015,
+          0.329235
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 4,
+      "name": "Table_cabinet_A_drawer_A Collider 4",
+      "order": 4,
+      "parentId": 0,
+      "position": [
+        3e-06,
+        -0.08,
+        -0.310917
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          3e-06,
+          -0.0,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.314947,
+          0.084605,
+          0.015
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Table_cabinet_A_drawer_A",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Table_cabinet_A_drawer_A.FBX",
+      "pathGuid": "c99b24a62bb8ea05",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

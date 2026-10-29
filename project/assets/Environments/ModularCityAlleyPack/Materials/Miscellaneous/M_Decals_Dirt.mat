@@ -24,6 +24,7 @@
     "_MetallicRoughnessMap": "",
     "_NormalMap": "assets/Environments/ModularCityAlleyPack/Textures/Decals_Dirt_Normal.tga",
     "_NormalStrength": 0.85,
+    "_ReflectionProbes": true,
     "_Roughness": 0.487,
     "_RoughnessMap": "",
     "_Triplanar": false,

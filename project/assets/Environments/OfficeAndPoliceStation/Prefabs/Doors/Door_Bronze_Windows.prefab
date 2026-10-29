@@ -1,0 +1,78 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "id": 0,
+      "name": "Door_Bronze_Windows",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "Openable": {
+        "Amount": 90.0,
+        "Close Sound": "assets/Audio/Foley/door/close_1.wav;assets/Audio/Foley/door/close_2.wav;assets/Audio/Foley/door/close_3.wav;assets/Audio/Foley/door/close_4.wav",
+        "Latch Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav;assets/Audio/Foley/door/latch_3.wav;assets/Audio/Foley/door/latch_4.wav",
+        "Motion": "Hinge Left",
+        "Open Sound": "assets/Audio/Foley/door/open_1.wav;assets/Audio/Foley/door/open_2.wav;assets/Audio/Foley/door/open_3.wav;assets/Audio/Foley/door/open_4.wav",
+        "Open Time": 0.833,
+        "Start Open": false
+      },
+      "collider": {
+        "center": [
+          0.506145,
+          1.15,
+          -0.026828
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.490462,
+          1.144302,
+          0.03
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Door_Bronze_Windows_mesh",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Door_Bronze_Windows.FBX",
+      "pathGuid": "c8b4189839845ad4",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ]
+}

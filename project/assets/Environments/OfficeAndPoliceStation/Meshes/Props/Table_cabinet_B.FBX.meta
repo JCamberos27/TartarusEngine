@@ -1,0 +1,38 @@
+{
+  "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
+  "guid": "dca1d0846c7f3df9",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "rootTransform": [
+      1.0,
+      0.0,
+      -0.0,
+      0.0,
+      -0.0,
+      0.0,
+      -1.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      44.0,
+      0.0,
+      -1.3e-05,
+      1.0
+    ]
+  },
+  "materialRemap": {
+    "Metal_Cleantiled": "assets/Environments/OfficeAndPoliceStation/Materials/M_Metal_Cleantiled.mat",
+    "Other_WoodBlack_Tiled": "assets/Environments/OfficeAndPoliceStation/Materials/M_Other_WoodBlack_Tiled.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

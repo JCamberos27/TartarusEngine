@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
+  "guid": "f5b222817fe50ce4",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true
+  },
+  "materialRemap": {
+    "Floor_Rock_Gray": "assets/Environments/OfficeAndPoliceStation/Materials/M_Floor_Rock_Gray.mat",
+    "Other_WoodBlack_Tiled": "assets/Environments/OfficeAndPoliceStation/Materials/M_Other_WoodBlack_Tiled.mat",
+    "Stairs_Railing": "assets/Environments/OfficeAndPoliceStation/Materials/M_Stairs_Railing.mat",
+    "Wall_Cell_Concrete": "assets/Environments/OfficeAndPoliceStation/Materials/M_Wall_Cell_Concrete.mat",
+    "Wall_Stucco_White": "assets/Environments/OfficeAndPoliceStation/Materials/M_Wall_Stucco_White.mat",
+    "Windowframe": "assets/Environments/OfficeAndPoliceStation/Materials/M_Windowframe.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

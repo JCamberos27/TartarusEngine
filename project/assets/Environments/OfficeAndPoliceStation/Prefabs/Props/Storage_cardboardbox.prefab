@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.122827,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.166972,
+          0.123713,
+          0.201433
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Storage_cardboardbox",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Storage_cardboardbox.FBX",
+      "pathGuid": "1fa6baacd00f8743",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

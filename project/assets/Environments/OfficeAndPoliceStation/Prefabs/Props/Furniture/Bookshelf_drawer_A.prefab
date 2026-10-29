@@ -1,0 +1,180 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          1.001289,
+          0.1,
+          0.02
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Bookshelf_drawer_A Collider 1",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        -0.0,
+        -0.5
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.015,
+          0.08965,
+          0.26009
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Bookshelf_drawer_A Collider 2",
+      "order": 2,
+      "parentId": 0,
+      "position": [
+        0.97,
+        0.0,
+        -0.241709
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.015,
+          0.08965,
+          0.26009
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 3,
+      "name": "Bookshelf_drawer_A Collider 3",
+      "order": 3,
+      "parentId": 0,
+      "position": [
+        -0.97,
+        0.0,
+        -0.241709
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          1.001289,
+          0.015,
+          0.26009
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 4,
+      "name": "Bookshelf_drawer_A Collider 4",
+      "order": 4,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        -0.07,
+        -0.241709
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          -0.0,
+          -0.01
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          1.001289,
+          0.1,
+          0.02
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Bookshelf_drawer_A",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Bookshelf_drawer_A.FBX",
+      "pathGuid": "6f6e4bcaf2bcb8c8",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

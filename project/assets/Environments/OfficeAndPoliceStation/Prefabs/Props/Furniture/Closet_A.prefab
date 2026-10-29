@@ -1,0 +1,310 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.782,
+          0.03,
+          0.275
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Closet_A Collider 1",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        0.03,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.025,
+          1.010639,
+          0.275
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Closet_A Collider 2",
+      "order": 2,
+      "parentId": 0,
+      "position": [
+        0.77,
+        1.00565,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.025,
+          1.010639,
+          0.275
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 3,
+      "name": "Closet_A Collider 3",
+      "order": 3,
+      "parentId": 0,
+      "position": [
+        -0.77,
+        1.00565,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.782,
+          1.010639,
+          0.015
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 4,
+      "name": "Closet_A Collider 4",
+      "order": 4,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        1.00565,
+        -0.24
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          2.0,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.782,
+          0.02,
+          0.275
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Closet_A",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Closet_A@Closet_A.FBX",
+      "pathGuid": "a48a45264388b710",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.371848,
+          0.0,
+          0.014617
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.373031,
+          0.954127,
+          0.025994
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 5,
+      "name": "Closet_door_L",
+      "order": 5,
+      "parentId": 0,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Closet_A@Closet_door_L.FBX",
+      "pathGuid": "323132e24ea7e61e",
+      "position": [
+        -0.750616,
+        1.015522,
+        0.283359
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 6,
+      "name": "Glass_L",
+      "order": 6,
+      "parentId": 5,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Closet_A@Glass_L.FBX",
+      "pathGuid": "3d1604b82b9d4ce8",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.381044,
+          0.0,
+          0.013971
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.379509,
+          0.954127,
+          0.025994
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 7,
+      "name": "Closet_door_R",
+      "order": 7,
+      "parentId": 0,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Closet_A@Closet_door_R.FBX",
+      "pathGuid": "2b2ecdde3a15e60d",
+      "position": [
+        0.756805,
+        1.015522,
+        0.284005
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 8,
+      "name": "Glass_R",
+      "order": 8,
+      "parentId": 7,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Closet_A@Glass_R.FBX",
+      "pathGuid": "41649c513c6303e9",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

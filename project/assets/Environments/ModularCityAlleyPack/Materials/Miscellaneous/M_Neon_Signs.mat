@@ -22,6 +22,7 @@
     "_MetallicMap": "",
     "_MetallicRoughnessMap": "",
     "_NormalMap": "",
+    "_ReflectionProbes": true,
     "_Roughness": 0.11,
     "_RoughnessMap": "",
     "_Triplanar": false,

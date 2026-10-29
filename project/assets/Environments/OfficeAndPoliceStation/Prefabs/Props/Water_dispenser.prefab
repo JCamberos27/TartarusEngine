@@ -1,0 +1,72 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.00092,
+          0.846623,
+          -0.009166
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.169864,
+          0.846623,
+          0.178109
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Water_dispenser",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Water_dispenser@Water_dispenser.FBX",
+      "pathGuid": "58899913a0169008",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 1,
+      "name": "Tank_water",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Water_dispenser@Tank_water.FBX",
+      "pathGuid": "b79dea2ea74dbcf0",
+      "position": [
+        0.001016,
+        1.349001,
+        -0.006592
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

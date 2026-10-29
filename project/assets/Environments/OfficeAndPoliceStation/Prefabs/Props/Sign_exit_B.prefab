@@ -1,0 +1,87 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          -0.127067,
+          0.014662
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.158419,
+          0.097353,
+          0.011505
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Sign_exit_B",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Sign_exit_B@Sign_exit_B.FBX",
+      "pathGuid": "c17c2d424c4fc896",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.000403,
+          -0.014377,
+          0.013901
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.053614,
+          0.015551,
+          0.020894
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Sign_exit_B_ceilingpart",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Sign_exit_B@Sign_exit_B_ceilingpart.FBX",
+      "pathGuid": "486cbf8a92b14b28",
+      "position": [
+        -0.0,
+        0.0,
+        -0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

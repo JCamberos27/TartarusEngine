@@ -1,0 +1,37 @@
+{
+  "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
+  "guid": "bd8a7cfccc5f798b",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "rootTransform": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      -1.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.1,
+      -2.5,
+      -0.0,
+      1.0
+    ]
+  },
+  "materialRemap": {
+    "Lamps_On": "assets/Environments/OfficeAndPoliceStation/Materials/M_Lamps_On.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

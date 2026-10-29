@@ -1,0 +1,161 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.22,
+          0.235,
+          0.105
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Toilet Collider 1",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        0.001259,
+        0.655,
+        -0.05
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.001259,
+          0.25,
+          0.219242
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.22,
+          0.235,
+          0.335
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Toilet",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Toilet@Toilet.FBX",
+      "pathGuid": "61a68c71c6bc0b2c",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.002548,
+          0.018673,
+          0.252207
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.21525,
+          0.011535,
+          0.258147
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Toilet_lid",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Toilet@Toilet_lid.FBX",
+      "pathGuid": "cc6edf70a2bd9dc2",
+      "position": [
+        -0.002855,
+        0.484104,
+        0.096464
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.00255,
+          -0.000335,
+          0.254061
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.21465,
+          0.009295,
+          0.254665
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 3,
+      "name": "Toilet_seat_high",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Toilet@Toilet_seat_high.FBX",
+      "pathGuid": "6c7c7356bd202c73",
+      "position": [
+        -0.002745,
+        0.485604,
+        0.097683
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

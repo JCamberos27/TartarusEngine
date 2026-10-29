@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
+  "guid": "82b3346a7e369771",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      9.5,
+      -0.4,
+      -0.0
+    ]
+  },
+  "materialRemap": {
+    "Airventilation": "assets/Environments/OfficeAndPoliceStation/Materials/M_Airventilation.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

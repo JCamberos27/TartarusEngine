@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
+  "guid": "8ff2ee7f017204fb",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      79.0048,
+      -0.954244,
+      0.025868
+    ]
+  },
+  "materialRemap": {
+    "Toilet_Partitions": "assets/Environments/OfficeAndPoliceStation/Materials/M_Toilet_Partitions.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

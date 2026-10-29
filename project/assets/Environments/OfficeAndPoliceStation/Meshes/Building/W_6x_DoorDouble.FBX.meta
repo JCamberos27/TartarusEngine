@@ -1,0 +1,26 @@
+{
+  "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Building",
+  "guid": "49db19457f88f779",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -3.0,
+      -3.0,
+      0.0
+    ]
+  },
+  "materialRemap": {
+    "Other_WoodBlack_Tiled": "assets/Environments/OfficeAndPoliceStation/Materials/M_Other_WoodBlack_Tiled.mat",
+    "Wall_Stucco_White": "assets/Environments/OfficeAndPoliceStation/Materials/M_Wall_Stucco_White.mat",
+    "Windowframe": "assets/Environments/OfficeAndPoliceStation/Materials/M_Windowframe.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}
