@@ -5,6 +5,7 @@
 #include <glm/gtx/norm.hpp>
 #include <algorithm>
 #include <array>
+#include <cmath>
 
 void ReflectionProbeArray::Update(const World& world) {
     m_Probes.clear();
@@ -27,17 +28,9 @@ void ReflectionProbeArray::Update(const World& world) {
     }
 }
 
-void ReflectionProbeArray::Bind(Shader& shader, const glm::vec3& viewCenter) const {
-    if (m_Probes.empty()) {
-        shader.SetInt("uProbeCount", 0);
-        return;
-    }
-
+int ReflectionProbeArray::Select(const glm::vec3& viewCenter, Scored (&best)[kMaxDraw], float& totalScore) const {
     // Score = importance / (1 + distance^2): closer + more important scores higher.
-    struct Scored { int idx; float score; };
-    std::array<Scored, kMaxDraw> best;
     int found = 0;
-
     for (int i = 0; i < (int)m_Probes.size(); ++i) {
         float d2 = glm::length2(m_Probes[i].Center - viewCenter);
         float score = m_Probes[i].Importance / (1.0f + d2);
@@ -53,11 +46,34 @@ void ReflectionProbeArray::Bind(Shader& shader, const glm::vec3& viewCenter) con
                 std::swap(best[j], best[j-1]);
         }
     }
-
     // Normalise blend weights so they sum to 1.
-    float totalScore = 0.0f;
+    totalScore = 0.0f;
     for (int j = 0; j < found; ++j) totalScore += best[j].score;
     if (totalScore < 1e-6f) totalScore = 1.0f;
+    return found;
+}
+
+std::uint32_t ReflectionProbeArray::SelectionKey(const glm::vec3& centre) const {
+    if (m_Probes.empty()) return 0u;
+    Scored best[kMaxDraw];
+    float total = 1.0f;
+    const int found = Select(centre, best, total);
+    if (found == 0) return 0u;
+    std::uint32_t key = (std::uint32_t)found << 30;
+    key |= (std::uint32_t)(best[0].idx & 0x3FF) << 20;
+    if (found > 1) key |= (std::uint32_t)(best[1].idx & 0x3FF) << 10;
+    key |= (std::uint32_t)std::clamp((int)std::lround(best[0].score / total * 64.0f), 0, 64);
+    return key;
+}
+
+void ReflectionProbeArray::Bind(Shader& shader, const glm::vec3& viewCenter) const {
+    if (m_Probes.empty()) {
+        shader.SetInt("uProbeCount", 0);
+        return;
+    }
+    Scored best[kMaxDraw];
+    float totalScore = 1.0f;
+    const int found = Select(viewCenter, best, totalScore);
 
     if (found == 0) { shader.SetInt("uProbeCount", 0); return; }
     shader.SetInt("uProbeCount", found);
