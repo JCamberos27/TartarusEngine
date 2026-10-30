@@ -11,6 +11,8 @@
 #include "Player.h"
 #include "FirstPersonPresentation.h"
 #include "Editor/GameModuleBuild.h"
+#include <execution>
+#include <numeric>
 #include "FirstPersonWeaponTest.h" // --weapon-test
 #include "WeaponLab.h"            // --weapon-lab
 #include "BodyDebugDraw.h"
@@ -475,6 +477,37 @@ struct StillModelCache {
         Still[k] = m && m->NeverAnimates() ? 1 : 0;
         return Still[k] != 0;
     }
+    // The renderables that may animate (each one Skip doesn't rule out, with a model), in pool order. The pool is read
+    // across the cores in fixed chunks - one thread reading ~150k components' ModelRef was ~1 ms of the forest's frame,
+    // paid by the animation tick and again by the pre-skin gather. Skip only writes its own slot, so chunks don't meet.
+    void Gather(World& world, std::vector<entt::entity>& out) {
+        const auto& pool = world.Registry.storage<RenderableComponent>();
+        const size_t count = pool.size();
+        Sync(world, count);
+        const auto comps = pool.cbegin();
+        const auto ents = static_cast<const entt::sparse_set&>(pool).begin();
+        constexpr size_t kChunk = 8192;
+        const size_t chunks = (count + kChunk - 1) / kChunk;
+        if (ChunkOut.size() < chunks) ChunkOut.resize(chunks);
+        ChunkIds.resize(chunks);
+        std::iota(ChunkIds.begin(), ChunkIds.end(), size_t(0));
+        auto scan = [&](size_t c) {
+            std::vector<entt::entity>& o = ChunkOut[c];
+            o.clear();
+            const size_t end = std::min(count, (c + 1) * kChunk);
+            for (size_t i = c * kChunk; i < end; ++i) {
+                const Model* m = comps[(std::ptrdiff_t)i].ModelRef.get();
+                if (Skip(i, m) || !m) continue;
+                o.push_back(ents[(std::ptrdiff_t)i]);
+            }
+        };
+        if (chunks > 1) std::for_each(std::execution::par, ChunkIds.begin(), ChunkIds.end(), scan);
+        else if (chunks == 1) scan(0);
+        out.clear();
+        for (size_t c = 0; c < chunks; ++c) out.insert(out.end(), ChunkOut[c].begin(), ChunkOut[c].end());
+    }
+    std::vector<std::vector<entt::entity>> ChunkOut;
+    std::vector<size_t> ChunkIds;
 };
 static StillModelCache s_StillModels;
 
@@ -3296,18 +3329,14 @@ int main(int argc, char** argv) {
                 // defensively so a future shared-Model path can't tick one player N*dt (#106).
                 // Model::TickAnimationOnce() compares against its own m_LastTickedFrame instead
                 // of this loop building a heap-allocated std::unordered_set<Model*> every frame.
-                auto renderables = world.Registry.view<RenderableComponent>();
-                const size_t poolSize = world.Registry.storage<RenderableComponent>().size();
-                s_StillModels.Sync(world, poolSize);
                 // Play: the game's scaled step, frozen while paused. Edit: real time, so a
                 // preview isn't slowed by a time scale left over from the last run.
                 const float animDt = playing ? (simThisFrame ? gameDt : 0.0f) : dt;
-                size_t slot = 0;
-                for (auto entity : renderables) {
-                    Model* m = renderables.get<RenderableComponent>(entity).ModelRef.get();
-                    if (s_StillModels.Skip(slot++, m) || !m) continue; // never animates (StillModelCache)
+                static std::vector<entt::entity> s_MaybeAnimated;
+                s_StillModels.Gather(world, s_MaybeAnimated); // never-animating models left out (StillModelCache)
+                for (auto entity : s_MaybeAnimated) {
                     if (world.Registry.all_of<InactiveTag>(entity)) continue; // #199 - an inactive object is paused, not just hidden
-                    m->TickAnimationOnce(frameIndex, animDt);
+                    world.Registry.get<RenderableComponent>(entity).ModelRef->TickAnimationOnce(frameIndex, animDt);
                 }
             }
 
@@ -3332,8 +3361,8 @@ int main(int argc, char** argv) {
             // falls back to composing on demand for anything the cache doesn't hold.
             {
             PROFILE_SCOPE("Outfits + Transform Cache");
-            OutfitSystem::UpdateAttachments(world); // rigid head wear onto the head bone, now it's posed
-            world.RebuildWorldTransformCache();
+            { PROFILE_SCOPE("Outfit Attachments"); OutfitSystem::UpdateAttachments(world); } // rigid head wear onto the head bone, now it's posed
+            { PROFILE_SCOPE("Transform Cache"); world.RebuildWorldTransformCache(); }
             }
             // Background asset loads: a few ms of GL uploads per frame, then any outfit change whose
             // models and materials are now all in memory lands in one frame.
@@ -3784,12 +3813,10 @@ int main(int argc, char** argv) {
                 PROFILE_GPU_SCOPE("Pre-Skin");
                 static std::vector<Model*> s_PreSkinModels;
                 s_PreSkinModels.clear();
-                auto preSkinPool = world.Registry.view<RenderableComponent>();
-                s_StillModels.Sync(world, world.Registry.storage<RenderableComponent>().size());
-                size_t preSkinSlot = 0;
-                for (auto preSkinEntity : preSkinPool) {
-                    Model* preSkinModel = preSkinPool.get<RenderableComponent>(preSkinEntity).ModelRef.get();
-                    if (s_StillModels.Skip(preSkinSlot++, preSkinModel) || !preSkinModel) continue; // no bones (StillModelCache)
+                static std::vector<entt::entity> s_PreSkinCandidates;
+                s_StillModels.Gather(world, s_PreSkinCandidates); // no bones (StillModelCache)
+                for (auto preSkinEntity : s_PreSkinCandidates) {
+                    Model* preSkinModel = world.Registry.get<RenderableComponent>(preSkinEntity).ModelRef.get();
                     if (!world.Registry.all_of<TransformComponent>(preSkinEntity)) continue;
                     if (world.Registry.any_of<InactiveTag, LodCulledTag, PoseSourceTag>(preSkinEntity)) continue; // not drawn
                     if (preSkinModel->BoneCount() > 0) s_PreSkinModels.push_back(preSkinModel);
@@ -4299,6 +4326,13 @@ int main(int argc, char** argv) {
             // ViewModelTag is skipped unconditionally for the same reason those did: the arms and
             // weapon are a camera-attached overlay composited over the world in their own
             // sub-pass, so their depth here would only darken the world pixels hugging them.
+            // The occlusion + blur from `target`'s depth, however that depth was filled.
+            auto ssaoCompute = [&](Ssao& target, const glm::mat4& proj) {
+                PROFILE_GPU_SCOPE("SSAO Compute + Blur");
+                target.Compute(ssaoComputeShader, proj, world.SsaoRadius, world.SsaoBias);
+                target.Blur(ssaoBlurShader);
+                GLStateCache::Invalidate();
+            };
             auto ssaoDepthPrepass = [&](Ssao& target, int w, int h, const glm::mat4& view,
                                         const glm::mat4& proj, bool editorView) {
                 world.ApplyLod(glm::vec3(glm::inverse(view)[3]), proj); // #163 - same levels as the draw
@@ -4348,10 +4382,7 @@ int main(int argc, char** argv) {
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 GLStateCache::Invalidate();
 
-                PROFILE_GPU_SCOPE("SSAO Compute + Blur");
-                target.Compute(ssaoComputeShader, proj, world.SsaoRadius, world.SsaoBias);
-                target.Blur(ssaoBlurShader);
-                GLStateCache::Invalidate();
+                ssaoCompute(target, proj);
             };
 
             // --- Scene tab (editor viewport) offscreen pass -----------------------------------
@@ -4411,7 +4442,10 @@ int main(int argc, char** argv) {
                 // audit #358 — if any SSAO FBO came back incomplete, skip the passes outright
                 // (the scene just renders without ambient occlusion) instead of drawing into a
                 // zero/invalid framebuffer.
-                if (world.SsaoEnabled && !sceneUnlit && ssao.IsValid()) {
+                // With the depth pre-pass on, SSAO takes that pass's depth instead (sceneCtx.SsaoFromPrepass below).
+                const bool sceneSsaoFromPrepass = world.SsaoEnabled && !sceneUnlit && ssao.IsValid() &&
+                                                  ProjectSettings::Quality().DepthPrepass;
+                if (world.SsaoEnabled && !sceneUnlit && ssao.IsValid() && !sceneSsaoFromPrepass) {
                     PROFILE_SCOPE("SSAO Depth Pre-pass");
                     PROFILE_GPU_SCOPE("SSAO Depth Pre-pass");
                     ssaoDepthPrepass(ssao, scW, scH, sceneViewMat, sceneDrawProj, /*editorView=*/true);
@@ -4425,6 +4459,10 @@ int main(int argc, char** argv) {
                     RenderFrameContext sceneCtx{ sceneViewMat, sceneDrawProj, editorCamera.Position,
                                                  sceneUnlit, /*EditorView=*/true, /*DebugView=*/sceneDebugView,
                                                  &sceneHdr, &sceneOpaqueColor, &ssao };
+                    if (sceneSsaoFromPrepass)
+                        sceneCtx.SsaoFromPrepass = [&] { ssaoCompute(ssao, sceneDrawProj); };
+                    if (sceneSsaoFromPrepass)
+                        sceneCtx.SsaoFromPrepass = [&] { ssaoCompute(ssao, sceneDrawProj); };
                     sceneCtx.TaaVelocity = sceneTaaOn;
                     sceneCtx.TaaJitterNdc = sceneTaa.JitterNdc();
                     sceneCtx.TaaPrevViewProj = sceneTaa.PrevViewProj();
@@ -4962,7 +5000,9 @@ int main(int argc, char** argv) {
                 // gameSsao declaration). The two callers are mutually exclusive per frame, so no resize thrash.
                 const bool gameSsaoOn = world.SsaoEnabled && !FKeyRow::PostFxOff(); // F8
                 if (gameSsaoOn) gameSsao.Resize(rw, rh);
-                if (gameSsaoOn && gameSsao.IsValid()) { // audit #358 - skip if any FBO incomplete
+                // With the depth pre-pass on, SSAO takes that pass's depth instead (gameCtx.SsaoFromPrepass below).
+                const bool gameSsaoFromPrepass = gameSsaoOn && gameSsao.IsValid() && ProjectSettings::Quality().DepthPrepass;
+                if (gameSsaoOn && gameSsao.IsValid() && !gameSsaoFromPrepass) { // audit #358 - skip if any FBO incomplete
                     PROFILE_SCOPE("SSAO Depth Pre-pass (Game)");
                     PROFILE_GPU_SCOPE("SSAO Depth Pre-pass (Game)");
                     ssaoDepthPrepass(gameSsao, rw, rh, view, drawProj, /*editorView=*/false);
@@ -4981,6 +5021,8 @@ int main(int argc, char** argv) {
                                                 firstPersonPresentation.ViewModelFov(),
                                                 weaponOverlay(playing && playUsesPlayer, view, drawProj, eye, rh),
                                                 /*OwnerView=*/playing && playUsesPlayer };
+                    if (gameSsaoFromPrepass)
+                        gameCtx.SsaoFromPrepass = [&] { ssaoCompute(gameSsao, drawProj); };
                     gameCtx.TaaVelocity = gameTaaOn;
                     gameCtx.TaaJitterNdc = gameTaa.JitterNdc();
                     gameCtx.TaaPrevViewProj = gameTaa.PrevViewProj();
@@ -5106,6 +5148,14 @@ int main(int argc, char** argv) {
                 // With the Scene view hidden (the Game tab in front), the Game view is the frame on
                 // screen: the Statistics panel reports it, so it agrees with the Game view's overlay.
                 if (!editor.SceneImageWanted()) editor.SetRenderStats(gvRenderStats);
+                // --perf-bench --smoke-shots <dir>: one picture of maximized play, to check what was measured.
+                static int perfMaxFrames = 0;
+                if (opt.perfBenchMode && !opt.smokeShotsDir.empty() && playMaxLocked && ++perfMaxFrames == 400) {
+                    std::vector<unsigned char> px = GrabTopDown(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight);
+                    for (size_t i = 3; i < px.size(); i += 4) px[i] = 255;
+                    WritePngTo(opt.smokeShotsDir, std::filesystem::path(smokeScenePaths[smokeSceneIndex]).stem().string() + "_playmax",
+                               gvWidth, gvHeight, px);
+                }
                 // --weapon-test --smoke-shots <dir>: the Game view through the reloads.
                 const std::string harnessShot = weaponTest ? weaponTest->ShotName() : npcTest ? npcTest->ShotName() : std::string();
                 if ((weaponTest || npcTest) && !opt.smokeShotsDir.empty() && !harnessShot.empty()) {
