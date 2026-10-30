@@ -7,8 +7,8 @@
 // reflection stays).
 layout(local_size_x = 8, local_size_y = 8) in;
 
-layout(binding = 28) uniform sampler2D uDepth;     // full-res depth (depth pre-pass, single sample)
-layout(binding = 29) uniform sampler2D uPrevColor; // last frame's resolved HDR colour
+layout(binding = 32) uniform sampler2D uDepth;     // full-res depth (depth pre-pass, single sample)
+layout(binding = 33) uniform sampler2D uPrevColor; // last frame's resolved HDR colour
 layout(rgba16f, binding = 0) uniform writeonly image2D uOut;
 
 uniform mat4 uProj;

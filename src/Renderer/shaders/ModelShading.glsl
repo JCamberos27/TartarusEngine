@@ -221,15 +221,16 @@ uniform int   uProbeCount;        // 0-2 probes bound this draw call
 uniform vec3  uProbeCenter[2];    // world-space probe origin
 uniform vec3  uProbeHalfSize[2];  // half-extents of the capture box
 uniform float uProbeBlend[2];     // normalised blend weights (sum == 1)
-// Room captures (ReflectionProbeCapture): the probe's layer in the captured, GGX-prefiltered cube array (unit 19),
+// Room captures (ReflectionProbeCapture): the probe's layer in the captured, GGX-prefiltered cube array (unit 26),
 // same mip layout as uPrefilteredMap; -1 = not captured (yet) -> the sky's cube, parallax-corrected as before.
 uniform int   uProbeLayer[2];
-layout(binding = 19) uniform samplerCubeArray uProbeCubes;
+layout(binding = 26) uniform samplerCubeArray uProbeCubes;
 #endif
 
 // Puddle screen-space reflections (PuddleSsr): this view's half-res traced reflection, rgb = radiance, a = confidence
-// (0 = missed / off screen -> the probe or sky reflection stays). Unit 18; only read when uSsrEnabled == 1.
-layout(binding = 18) uniform sampler2D uSsrMap;
+// (0 = missed / off screen -> the probe or sky reflection stays). Unit 29 (1-7 and 16-20 are
+// material maps, ShaderAsset::BuildBindings); only read when uSsrEnabled == 1.
+layout(binding = 29) uniform sampler2D uSsrMap;
 uniform int uSsrEnabled;
 
 // Fresnel with a roughness term: a rough surface's grazing-angle reflectance must not exceed

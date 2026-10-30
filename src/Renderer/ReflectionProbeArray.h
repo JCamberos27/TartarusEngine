@@ -39,7 +39,7 @@ public:
 
     // Room captures (ReflectionProbeCapture): probe i samples layer `layer` of the captured, prefiltered cube array
     // instead of the sky's specular cube; -1 (what Update() leaves) = the sky. Bind() uploads uProbeLayer[]. The
-    // array goes on texture unit 19 (SceneRenderer::ApplyFrameState) whenever it exists.
+    // array goes on texture unit 26 (SceneRenderer::ApplyFrameState) whenever it exists.
     struct ProbeVolume { glm::vec3 Center, HalfSize; bool Capture; };
     ProbeVolume Volume(int i) const { return {m_Probes[i].Center, m_Probes[i].HalfSize, m_Probes[i].Capture}; }
     void SetLayer(int i, int layer) { m_Probes[i].Layer = layer; }
