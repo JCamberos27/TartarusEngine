@@ -60,4 +60,10 @@ struct RenderFrameContext {
     // body trimmed around the eye (PlayerBodyTag). Every other view - the Scene tab, a scene camera, a
     // reflection or a mirror - draws the whole outfit.
     bool OwnerView = false;
+
+    // TAA (TemporalAA.h): Proj already carries this frame's jitter; the model shaders write motion vectors
+    // (current minus last frame, jitter removed) into TxHdr's velocity attachment. Off = no motion vectors.
+    bool      TaaVelocity = false;
+    glm::vec2 TaaJitterNdc{0.0f};
+    glm::mat4 TaaPrevViewProj{1.0f}; // last frame, unjittered
 };

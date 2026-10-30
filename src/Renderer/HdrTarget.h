@@ -48,6 +48,16 @@ public:
     unsigned int MultisampleFbo() const { return m_MsFbo; }
     unsigned int DepthTexture() const { return m_MsDepth; }              // GL_TEXTURE_2D_MULTISAMPLE, DEPTH_COMPONENT32F
 
+    // TAA motion vectors (TemporalAA.h): an RG16F second colour attachment at the same sample count. Off by default
+    // and allocated only while a view wants it. Even when on, location 1 is NOT in the draw buffers unless
+    // SetVelocityWrites(true): only the opaque and view-model passes (ModelFragment.glsl) write it, so the sky,
+    // transparents, particles and editor overlays - shaders without a location-1 output - never touch it.
+    void SetVelocityEnabled(bool on);
+    bool VelocityEnabled() const { return m_MsVelocity != 0; }
+    void SetVelocityWrites(bool on) const;
+    void ClearVelocity(float value) const; // every pixel = (value, value): "unknown, reproject from depth"
+    unsigned int VelocityTexture() const { return m_MsVelocity; } // GL_TEXTURE_2D_MULTISAMPLE, RG16F
+
     int Width() const { return m_Width; }
     int Height() const { return m_Height; }
     int Samples() const { return m_Samples; }
@@ -56,6 +66,8 @@ public:
 private:
     unsigned int m_MsFbo = 0, m_MsColor = 0, m_MsDepth = 0;
     unsigned int m_ResolveFbo = 0, m_ResolveColor = 0;
+    unsigned int m_MsVelocity = 0; // TAA motion vectors, 0 unless SetVelocityEnabled(true)
+    bool m_WantVelocity = false;   // sticky across Resize()/Create()
     mutable unsigned int m_ResolveDepth = 0; // 0 until ResolvedDepthTexture() is first called
     mutable bool m_DepthRequested = false;   // sticky, so a later Resize()/Create() still provisions it
     int m_Width = 0, m_Height = 0, m_Samples = 0;

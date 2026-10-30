@@ -375,6 +375,7 @@ json MaterialSlotsToJson(const std::vector<std::shared_ptr<MaterialAsset>>& matS
             if (smat.GrungeStrength != 0.0f)       em["grungeStrength"] = smat.GrungeStrength;
             if (smat.GrungeScale != 0.5f)          em["grungeScale"] = smat.GrungeScale;
             if (!smat.ReceiveDecals)               em["receiveDecals"] = false;
+            if (smat.NoWetness)                    em["noWetness"] = true;
             // Shell fur (Material::FurDesc), non-defaults only, as a .mat writes it.
             {
                 const Material::FurDesc def;
@@ -449,6 +450,7 @@ std::shared_ptr<MaterialAsset> ReadEmbeddedMat(AssetLibrary& assets, const json&
         ma->Mat.GrungeStrength  = mj.value("grungeStrength", 0.0f);
         ma->Mat.GrungeScale     = mj.value("grungeScale", 0.5f);
         ma->Mat.ReceiveDecals   = mj.value("receiveDecals", true);
+        ma->Mat.NoWetness       = mj.value("noWetness", false);
         {
             Material::FurDesc& fur = ma->Mat.Fur;
             const Material::FurDesc def;
@@ -1268,6 +1270,16 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
     root["motionBlur"] = world.MotionBlur;                      // #162
     root["motionBlurIntensity"] = world.MotionBlurIntensity;
     root["motionBlurSamples"] = world.MotionBlurSamples;
+    // Anti-aliasing mode: written only when it says more than msaaSamples + fxaa already do (TAA), so
+    // scenes that never touch it save byte-for-byte as before. Rain wetness likewise only when set.
+    if (world.AntiAliasing != World::LegacyAntiAliasing(world.MsaaSamples, world.FxaaEnabled)) {
+        static const char* const kAa[] = {"Off", "FXAA", "MSAA", "TAA"};
+        root["antiAliasing"] = kAa[std::clamp((int)world.AntiAliasing, 0, 3)];
+    }
+    if (world.TaaSharpness != 0.35f) root["taaSharpness"] = world.TaaSharpness;
+    if (world.Wetness != 0.0f) root["wetness"] = world.Wetness;
+    if (world.PuddleAmount != 0.0f) root["puddleAmount"] = world.PuddleAmount;
+    if (world.PuddleScale != 4.0f) root["puddleScale"] = world.PuddleScale;
     root["focusRange"] = world.FocusRange;
     root["dofMaxBlur"] = world.DofMaxBlur;
         root["fogEnabled"] = world.FogEnabled;
@@ -1671,6 +1683,19 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
     world.MotionBlur          = root.value("motionBlur", false); // #162
     world.MotionBlurIntensity = std::clamp(root.value("motionBlurIntensity", 0.5f), 0.0f, 1.0f);
     world.MotionBlurSamples   = std::clamp(root.value("motionBlurSamples", 12), 2, 32);
+    // Absent: the mode the older msaaSamples / fxaa fields already describe (never TAA).
+    world.AntiAliasing = World::LegacyAntiAliasing(world.MsaaSamples, world.FxaaEnabled);
+    if (const auto aa = root.find("antiAliasing"); aa != root.end() && aa->is_string()) {
+        const std::string v = aa->get<std::string>();
+        if (v == "Off") world.AntiAliasing = World::AntiAliasingMode::Off;
+        else if (v == "FXAA") world.AntiAliasing = World::AntiAliasingMode::Fxaa;
+        else if (v == "MSAA") world.AntiAliasing = World::AntiAliasingMode::Msaa;
+        else if (v == "TAA") world.AntiAliasing = World::AntiAliasingMode::Taa;
+    }
+    world.TaaSharpness = std::clamp(root.value("taaSharpness", 0.35f), 0.0f, 1.0f);
+    world.Wetness      = std::clamp(root.value("wetness", 0.0f), 0.0f, 1.0f);
+    world.PuddleAmount = std::clamp(root.value("puddleAmount", 0.0f), 0.0f, 1.0f);
+    world.PuddleScale  = std::clamp(root.value("puddleScale", 4.0f), 0.25f, 100.0f);
     world.FocusRange    = std::clamp(root.value("focusRange", 3.0f), 0.01f, 10000.0f);
     world.DofMaxBlur    = std::clamp(root.value("dofMaxBlur", 8.0f), 0.0f, 32.0f);
             world.FogEnabled       = root.value("fogEnabled", false);

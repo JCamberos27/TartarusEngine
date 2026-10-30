@@ -2456,6 +2456,7 @@ void SetWindFrame(Shader& shader) {
     if (last == Material::HashFrame()) return;
     last = Material::HashFrame();
     shader.SetFloat("uWindTime", Material::WindTime());
+    shader.SetFloat("uPrevWindTime", Material::PrevWindTime());
     shader.SetVec2("uWindDir", Material::WindDirection());
 }
 // The per-material half. uFoliage = 0 for everything else, so a program last used by a foliage material is reset.
@@ -2487,6 +2488,8 @@ void SetSurfaceOptions(Shader& shader, const Material& mat) {
     shader.SetFloat("uGrungeStrength", mat.GrungeStrength);
     shader.SetFloat("uGrungeScale", mat.GrungeScale);
     shader.SetInt("uReceiveDecals", mat.ReceiveDecals ? 1 : 0);
+    shader.SetInt("uNoWetness", mat.NoWetness ? 1 : 0);
+    shader.SetInt("uFoliageSurface", mat.Foliage ? 1 : 0);
     SetFoliageUniforms(shader, mat);
     // Its substrate's row in the decal system's table (index + 1, 0 = none / still decoding).
     shader.SetInt("uMaterialSubstrate", mat.Substrate.Enabled() ? DecalSystem::MaterialSubstrate(mat.Substrate) : 0);
