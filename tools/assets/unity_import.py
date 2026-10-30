@@ -209,7 +209,7 @@ class Pack:
         """SeedMesh graphs: the exposed props are _MainTex (albedo + alpha), Normal_vegetation, mask_vegetation (HDRP mask:
         R metallic, G AO, A smoothness; no metal anywhere in the pack) and _Color; _BaseColorMap / _MaskMap / _NormalMap are
         stale HDRP leftovers (often a different texture). _ASSET_TYPE 0 common, 1 foliage, 2 moss variant. _Covering_* /
-        _Snow_* layers and the moss-variant blend are not converted (the base layer is drawn)."""
+        _Snow_*_sm layers become the Standard shaders' _Cover* world-up blend (seed_cover.py)."""
         def first(*keys):
             for k in keys:
                 if k in tex:
@@ -261,9 +261,11 @@ class Pack:
             if wind:
                 p.update({'_Foliage': True, '_WindStrength': wind[0], '_WindHeight': wind[1], '_WindFlutter': wind[2]})
         if any(k.startswith(('_Covering', '_Snow', '_COVERING')) for k in list(tex) + list(fl)):
-            self.report['SeedMesh _Covering / _Snow layers (not converted; base layer drawn)'].append(name)
-        if fl.get('_ASSET_TYPE', 0) == 2:
-            self.report['SeedMesh moss-variant blend (_moss materials: base layer only)'].append(name)
+            import seed_cover
+            if seed_cover.add_cover(self, name, tex, fl, p, foliage):
+                self.report['SeedMesh _Covering layer (moss, world-up blend: Standard.shader _Cover*)'].append(name)
+            else:
+                self.report['SeedMesh _Covering / _Snow layers (unused or foliage: base layer drawn)'].append(name)
         return p, extra
 
     def convert_material(self, name, kind, tex, fl, co, keywords):
