@@ -4170,7 +4170,7 @@ int main(int argc, char** argv) {
                 prevWasHdri = false;
                 // A forced capture (scene load, entering this mode) convolves at once; the periodic
                 // re-captures (drifting clouds every 4 s, the sun moving, edits) are small changes,
-                // so their convolution is spread over the next 7 frames instead of spiking one.
+                // so their convolution is spread over the next 12 frames instead of spiking one.
                 const bool urgent = skyAtmosphere.EnvironmentDirty() &&
                                     (skyAtmosphere.EnvironmentUrgent() || !iblProbe.IsValid());
                 if (skyAtmosphere.EnvironmentDirty() && !urgent) {
