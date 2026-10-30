@@ -4,11 +4,12 @@
 #   python tools/assets/asset_manifest.py export <repo> <Used dir>  copies every listed file into <Used dir>
 #   python tools/assets/asset_manifest.py verify <dir> [--hash]     checks <dir> (a repo or a Used folder)
 #
-# The Drive holds the listed payloads and nothing else: code, scenes, prefabs and every .meta live in git.
+# The Drive holds the listed payloads and nothing else: code, prefabs and every .meta live in git, and so
+# do scenes, except an oversized one that .gitignore excludes (GitHub's 100 MB limit).
 # Verifying a Used folder (no .git) also fails on any file under it the CSV doesn't list - a script or a
 # stale .meta there would be copied over a clone's own by an unguarded fetch.
 #
-# "External" = every file under project/assets that .gitignore excludes, whether git still tracks it
+# "External" = every file under project/assets or project/scenes that .gitignore excludes, whether git still tracks it
 # or not, minus local leftovers (EXCLUDE). The CSV holds project-relative paths, sizes and SHA-256s;
 # the editor reads it so a missing file keeps its tracked .meta (AssetDatabase::ScanProject), and
 # tools/assets/fetch-assets.ps1 uses it to report what a clone is still missing.
@@ -50,8 +51,8 @@ def canonical_case(repo, paths):
 
 
 def external_files(repo):
-    ignored = git(repo, 'ls-files', '-z', '--others', '--ignored', '--exclude-standard', '--', 'project/assets')
-    tracked = git(repo, 'ls-files', '-z', '--cached', '--ignored', '--exclude-standard', '--', 'project/assets')
+    ignored = git(repo, 'ls-files', '-z', '--others', '--ignored', '--exclude-standard', '--', 'project/assets', 'project/scenes')
+    tracked = git(repo, 'ls-files', '-z', '--cached', '--ignored', '--exclude-standard', '--', 'project/assets', 'project/scenes')
     keep = [p for p in set(ignored) | set(tracked)
             if not any(p.lower().startswith(x.lower()) for x in EXCLUDE_PREFIXES)
             and not p.endswith(EXCLUDE_SUFFIXES)
