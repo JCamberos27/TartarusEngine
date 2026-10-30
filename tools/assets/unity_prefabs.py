@@ -939,7 +939,7 @@ class Converter:
         for pr in comps.get('ReflectionProbe', []):
             if not pr.get('m_Enabled', 1) or pr.get('m_Type', 0) != 0:
                 continue
-            e['Reflection Probe'] = {'Importance': float(pr.get('m_Importance', 1)),
+            e['Reflection Probe'] = {'Capture Scene': True, 'Importance': float(pr.get('m_Importance', 1)),
                                      'Size': r6([abs(v) for v in vec(pr.get('m_BoxSize'), default=1.0)])}
             off = vec(pr.get('m_BoxOffset'))
             if any(abs(v) > 1e-4 for v in off):
@@ -1195,7 +1195,7 @@ LOOK_NIGHT = dict(
     exposureEV=1.0, autoExposureMinEV=-1.0, autoExposureMaxEV=4.0, gradeTemperature=-10.0,
     gradeColorFilter=[0.9, 0.97, 1.05], bloomIntensity=0.2,
     volumetricEnabled=True, volDensity=0.008, volAnisotropy=0.6, volHeightFalloff=0.1, volDistance=64.0, volQuality=1,
-    wetness=0.85, puddleAmount=0.45, puddleScale=4.0,
+    wetness=0.85, puddleAmount=0.45, puddleScale=4.0, puddleSsr=True,  # the lamps and facades in the puddles
 )
 LOOK_SCENES = {
     ('ModularCityAlleyPack', 'Example_Scene_Day'): LOOK_DAY,

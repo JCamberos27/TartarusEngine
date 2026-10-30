@@ -77,6 +77,7 @@
 #include "IblProbe.h"
 #include "Cubemap.h"               // PR13: HDRI environment cubemap
 #include "ReflectionProbeArray.h"  // PR14: placed reflection probes
+#include "ReflectionProbeCapture.h" // probes that capture the room around them
 #include "OutfitSystem.h"          // character outfits: skin hidden under clothing
 #include "Ssao.h"                  // PR15: depth pre-pass + screen-space ambient occlusion
 #include "RenderFrameContext.h"    // audit #359 — per-viewport scene-draw inputs
@@ -740,6 +741,8 @@ int main(int argc, char** argv) {
         bool                      prevWasAtmosphere = false;
         // PR14: reflection probe array — rebuilt from scene each frame, bound per drawScene
         ReflectionProbeArray probeArray;
+        // Room captures for the probes with Capture Scene on: rendered + prefiltered a face per frame, never per frame.
+        ReflectionProbeCapture probeCapture;
         // PR15: SSAO — depth pre-pass FBO + compute + blur shaders (all scene-view only)
         Ssao ssao;
         // #158: every vertex+fragment program above and below re-compiles itself when one of its
@@ -4248,6 +4251,7 @@ int main(int argc, char** argv) {
             {
                 PROFILE_SCOPE("Probe Gather");
                 probeArray.Update(world);
+                probeCapture.Sync(probeArray, iblProbe.IsValid(), glfwGetTime());
             }
 
             // Renders the lit scene (sky + every Transform+Renderable entity) into whatever
@@ -4318,6 +4322,17 @@ int main(int argc, char** argv) {
                 sceneInputs.sunShadowsReady = renderSunShadows(ctx.View, steadyProj); // #109
                 sceneRenderer.RenderScene(world, ctx, sceneInputs, outStats);
             };
+
+            // Reflection probe room captures (ReflectionProbeCapture): this frame's share - at most one cube face
+            // rendered and one prefiltered - before any view draws, so the views see the frame's finished layers.
+            if (probeCapture.Busy()) {
+                PROFILE_SCOPE("Probe Capture");
+                PROFILE_GPU_SCOPE("Probe Capture");
+                probeCapture.Step(iblProbe, probeArray, [&](const RenderFrameContext& c) { drawScene(c, nullptr); });
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                glViewport(0, 0, window.GetWidth(), window.GetHeight());
+                GLStateCache::Invalidate();
+            }
 
             // #111 — the SSAO depth pre-pass, shared by the Scene view, the docked Game view and
             // maximised Play (it was pasted three times). Uses the main pass's visibility rules:

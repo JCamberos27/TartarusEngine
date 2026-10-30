@@ -1053,6 +1053,12 @@ void EditorLayer::DrawPostProcessSettings(World& world, float w) {
     if (world.PuddleAmount > 0.0f)
         postSlider("Puddle scale", &world.PuddleScale, 0.5f, 20.0f, "%.1f m", "Edit Puddles",
                    "Size of the puddle pattern in metres.");
+    if (world.PuddleAmount > 0.0f) {
+        if (EditorUIPrimitives::Checkbox("Puddle reflections", &world.PuddleSsr)) PushUndo(world, "Toggle Puddle Reflections");
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Screen-space reflections in the puddles only: lamps and buildings show in the water.\n"
+                                 "Where the reflection leaves the screen, the probe / sky reflection stays.");
+    }
 
     EditorUIPrimitives::SectionHeader("Fog");
     if (EditorUIPrimitives::Checkbox("Fog", &world.FogEnabled)) PushUndo(world, "Toggle Fog");

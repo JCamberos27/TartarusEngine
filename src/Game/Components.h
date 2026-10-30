@@ -1379,6 +1379,9 @@ struct PrefabInstanceComponent {
 struct ReflectionProbeComponent {
     glm::vec3 Size{5.0f, 5.0f, 5.0f}; // full extents of the capture volume, in world units
     float Importance{1.0f};            // higher wins 2-probe selection tie-breaks
+    // Render the room into this probe's own cubemap (ReflectionProbeCapture) at scene load / when the probe moves,
+    // instead of only parallax-correcting the sky. Off = the old sky-only probe.
+    bool CaptureScene{true};
 };
 
 // Clustered PBR decal (docs/DECALS.md). Projects a .decal asset along the entity's local -Z

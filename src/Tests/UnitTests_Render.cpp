@@ -6,6 +6,7 @@
 #include "../Renderer/FurRenderer.h"
 #include "../Renderer/VolumetricFog.h"
 #include "../Renderer/TemporalAA.h"
+#include "../Renderer/ReflectionProbeCapture.h"
 #include "../Game/SceneSerializer.h"
 #include "AssetLibrary.h"
 #include "../Game/World.h"
@@ -393,7 +394,47 @@ void FurMaterialRoundTrip() {
 
 } // namespace
 
+// Reflection probe room captures: each cube face's view looks down its GL face axis and is a pure rotation (culling
+// holds); only probes whose volume changed are queued again. Puddle SSR: off by default, saved only when on, and a
+// probe's Capture Scene defaults on and survives a save.
+void ProbeCaptureAndPuddleSsr() {
+    static const glm::vec3 kAxis[6] = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+    const glm::vec3 pos(1.0f, 2.0f, 3.0f);
+    for (int f = 0; f < 6; ++f) {
+        const glm::mat4 v = ReflectionProbeCapture::FaceView(pos, f);
+        const glm::vec4 ahead = v * glm::vec4(pos + kAxis[f], 1.0f); // straight ahead = view -Z
+        CHECK(std::abs(ahead.x) < 1e-4f && std::abs(ahead.y) < 1e-4f && std::abs(ahead.z + 1.0f) < 1e-4f);
+        CHECK(std::abs(glm::determinant(glm::mat3(v)) - 1.0f) < 1e-4f);
+    }
+    using V = ReflectionProbeCapture::Volume;
+    const std::vector<V> have = {{{0, 0, 0}, {1, 1, 1}}, {{5, 0, 0}, {2, 2, 2}}};
+    std::vector<V> want = have;
+    want[1].Center.x += 0.5f;
+    want.push_back({{9, 0, 0}, {1, 1, 1}});
+    const std::vector<bool> ch = ReflectionProbeCapture::Changed(have, want);
+    CHECK(ch.size() == 3 && !ch[0] && ch[1] && ch[2]);
+    CHECK(ReflectionProbeCapture::Changed(have, have) == std::vector<bool>(2, false));
+
+    AssetLibrary assets;
+    World world;
+    CHECK(!world.PuddleSsr);
+    const entt::entity probe = world.Registry.create();
+    world.Registry.emplace<TransformComponent>(probe);
+    CHECK(world.Registry.emplace<ReflectionProbeComponent>(probe).CaptureScene);
+    CHECK(!nlohmann::json::parse(SceneSerializer::SaveToString(world)).contains("puddleSsr"));
+    world.PuddleSsr = true;
+    world.Registry.get<ReflectionProbeComponent>(probe).CaptureScene = false;
+    const std::string saved = SceneSerializer::SaveToString(world);
+    World reloaded;
+    CHECK(SceneSerializer::LoadFromString(reloaded, assets, saved));
+    CHECK(reloaded.PuddleSsr);
+    int probes = 0;
+    for (auto [e, rp] : reloaded.Registry.view<const ReflectionProbeComponent>().each()) { ++probes; CHECK(!rp.CaptureScene); }
+    CHECK(probes == 1);
+}
+
 void RegisterRenderTests(UnitTestSupport::TestList& tests) {
+    tests.push_back({"Reflection probe captures + puddle SSR setting", ProbeCaptureAndPuddleSsr});
     tests.push_back({"Small-object cull: projected bounding-sphere height", SmallObjectCull});
     tests.push_back({"GatherVisible: per-frame candidates, per-query filters, invalidation", GatherCache});
     tests.push_back({"Model import: mergeByMaterial keeps geometry, one mesh per material", MergeByMaterial});
