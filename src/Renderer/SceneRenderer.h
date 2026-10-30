@@ -81,6 +81,7 @@ class ClusterGrid;
 class DecalSystem;
 struct RenderFrameContext;
 class VolumetricFog;
+class PuddleSsr;
 
 // Engine resources + this frame's light/shadow state that the scene-draw pass needs, gathered
 // into one explicit value instead of the ~25 `[&]`-captures the old main.cpp lambda relied on
@@ -165,6 +166,7 @@ struct FrameState {
     float clusterNearZ = 0.0f, clusterFarZ = 0.0f;
     int  vp[4] = {0, 0, 0, 0};
     int  decalCount = 0; // decals visible in this view (uDecalCount); 0 without clustering
+    unsigned int ssrTex = 0; // puddle SSR result (PuddleSsr) the opaque pass reads on unit 18; 0 = none this view
 };
 
 // Host-owned scene-draw pass, extracted from main.cpp's `drawScene` lambda (audit #359, pass 2).
@@ -210,4 +212,6 @@ private:
 
     // Froxel volumetric fog: per-view volumes, built in RenderScene before the opaque pass.
     std::unique_ptr<VolumetricFog> m_Volumetrics;
+    // Puddle screen-space reflections: per-view half-res traces, between the depth pre-pass and the opaque pass.
+    std::unique_ptr<PuddleSsr> m_Ssr;
 };

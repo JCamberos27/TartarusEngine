@@ -138,6 +138,10 @@ public:
     float Wetness{0.0f};       // 0..1
     float PuddleAmount{0.0f};  // 0..1
     float PuddleScale{4.0f};   // metres per noise cell (bigger = larger puddles)
+    // Screen-space reflections on the puddles only (PuddleSsr): lamps and facades show in the standing water. Off by
+    // default for now: on the night scenes the puddles still come out blown out white (not yet tracked down); only
+    // does anything while PuddleAmount > 0.
+    bool PuddleSsr{false};
 
     // #162 - distance fog (Unity's Lighting > Other Settings > Fog).
     bool  FogEnabled{false};
