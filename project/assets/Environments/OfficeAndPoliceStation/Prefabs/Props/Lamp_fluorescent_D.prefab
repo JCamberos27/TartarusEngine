@@ -1,0 +1,121 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.03,
+          0.192914,
+          0.035364
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Lamp_fluorescent_D_ceilingpart Collider 1",
+      "order": 2,
+      "parentId": 1,
+      "position": [
+        -0.45,
+        0.191748,
+        3.5e-05
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.062255,
+          -0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.589269,
+          0.059273,
+          0.173612
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Lamp_fluorescent_D",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Lamp_fluorescent_D@Lamp_fluorescent_D.FBX",
+      "pathGuid": "13213a5fc8d5ccea",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.45,
+          0.191748,
+          3.5e-05
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.03,
+          0.192914,
+          0.035364
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Lamp_fluorescent_D_ceilingpart",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Lamp_fluorescent_D@Lamp_fluorescent_D_ceilingpart.FBX",
+      "pathGuid": "bc60697613c548d2",
+      "position": [
+        -0.0,
+        0.118297,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

@@ -1,0 +1,121 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.025,
+          0.254667,
+          0.021734
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Lamp_fluorescent_B_ceilingpart Collider 1",
+      "order": 2,
+      "parentId": 1,
+      "position": [
+        -0.45,
+        0.247683,
+        0.001793
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          -0.095631,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.601587,
+          0.102173,
+          0.072604
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Lamp_fluorescent_B",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Lamp_fluorescent_B@Lamp_fluorescent_B.FBX",
+      "pathGuid": "881f375b6b48d5e7",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.45,
+          0.247683,
+          0.001793
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.025,
+          0.254667,
+          0.021734
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Lamp_fluorescent_B_ceilingpart",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Lamp_fluorescent_B@Lamp_fluorescent_B_ceilingpart.FBX",
+      "pathGuid": "46c0a147aeba59d3",
+      "position": [
+        -0.0,
+        0.008701,
+        -0.013569
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
+  "guid": "32456749f96fb7b9",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -31.2,
+      0.0,
+      0.0
+    ]
+  },
+  "materialRemap": {
+    "Chair_and_Dresser": "assets/Environments/OfficeAndPoliceStation/Materials/M_Chair_and_Dresser.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

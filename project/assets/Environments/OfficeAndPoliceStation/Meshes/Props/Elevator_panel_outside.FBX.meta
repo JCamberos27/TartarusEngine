@@ -1,0 +1,28 @@
+{
+  "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
+  "guid": "dc5089fbab14d4e2",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -37.0,
+      0.0,
+      0.0
+    ]
+  },
+  "materialRemap": {
+    "Elevator": "assets/Environments/OfficeAndPoliceStation/Materials/M_Elevator.mat",
+    "Glass": "assets/Environments/OfficeAndPoliceStation/Materials/M_Glass.mat",
+    "Other_WoodBlack_Tiled": "assets/Environments/OfficeAndPoliceStation/Materials/M_Other_WoodBlack_Tiled.mat",
+    "Wall_Stucco_White": "assets/Environments/OfficeAndPoliceStation/Materials/M_Wall_Stucco_White.mat",
+    "Windowframe": "assets/Environments/OfficeAndPoliceStation/Materials/M_Windowframe.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

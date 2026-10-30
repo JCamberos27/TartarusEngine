@@ -8,12 +8,7 @@
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "optimizeGraph": true,
-    "pivotOffset": [
-      50.3007,
-      -0.961381,
-      0.0
-    ]
+    "optimizeGraph": true
   },
   "materialRemap": {
     "Dumpster_Set": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Dumpster_Set.mat"

@@ -1,0 +1,114 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.25,
+          1.500173,
+          0.031428
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "W_2x_glass_Door Collider 1",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        0.25,
+        1.499827,
+        -0.000221
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          1.0,
+          0.35,
+          0.031428
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "W_2x_glass_Door Collider 2",
+      "order": 2,
+      "parentId": 0,
+      "position": [
+        1.0,
+        2.65,
+        -0.000221
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          1.75,
+          1.499827,
+          -0.000221
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.25,
+          1.500173,
+          0.031428
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "W_2x_glass_Door",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/W_2x_glass_Door.FBX",
+      "pathGuid": "6d8918dd6501d506",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

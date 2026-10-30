@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
+  "guid": "519fc9313357a50b",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.8,
+      0.0,
+      0.1
+    ]
+  },
+  "materialRemap": {
+    "Urinal": "assets/Environments/OfficeAndPoliceStation/Materials/M_Urinal.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

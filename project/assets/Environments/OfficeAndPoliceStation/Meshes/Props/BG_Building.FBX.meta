@@ -1,0 +1,19 @@
+{
+  "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
+  "guid": "98bd7130673512ab",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true
+  },
+  "materialRemap": {
+    "BG_Building": "assets/Environments/OfficeAndPoliceStation/Materials/M_BG_Building.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

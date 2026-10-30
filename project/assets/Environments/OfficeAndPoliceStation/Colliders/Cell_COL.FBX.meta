@@ -1,0 +1,35 @@
+{
+  "folder": "assets/Environments/OfficeAndPoliceStation/Colliders",
+  "guid": "b6051d0f7740ccd9",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "rootTransform": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      -1.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      -3.5,
+      -3.4,
+      1.6,
+      1.0
+    ]
+  },
+  "materialRemap": {},
+  "metaVersion": 1,
+  "type": "model"
+}

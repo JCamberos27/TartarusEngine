@@ -1,0 +1,32 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Table_And_Screen",
+  "properties": {
+    "_AOMap": "assets/Environments/OfficeAndPoliceStation/Textures/Table_and_Screen_MaskMap_AO100.png",
+    "_AlbedoMap": "assets/Environments/OfficeAndPoliceStation/Textures/Table_and_Screen_BaseColor.tga",
+    "_BaseColor": [
+      0.7941,
+      0.8116,
+      0.8116
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 1.0,
+    "_MetallicMap": "assets/Environments/OfficeAndPoliceStation/Textures/Table_and_Screen_MaskMap_Metallic.png",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Environments/OfficeAndPoliceStation/Textures/Table_and_Screen_Normal.tga",
+    "_ReflectionProbes": true,
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/Environments/OfficeAndPoliceStation/Textures/Table_and_Screen_MaskMap_Roughness100.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader"
+}

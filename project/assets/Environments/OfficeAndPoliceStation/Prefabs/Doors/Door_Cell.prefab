@@ -1,0 +1,79 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "id": 0,
+      "name": "Door_Cell",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "Openable": {
+        "Amount": 115.0,
+        "Close Sound": "assets/Audio/Foley/door/close_1.wav;assets/Audio/Foley/door/close_2.wav;assets/Audio/Foley/door/close_3.wav;assets/Audio/Foley/door/close_4.wav",
+        "Latch Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav;assets/Audio/Foley/door/latch_3.wav;assets/Audio/Foley/door/latch_4.wav",
+        "Motion": "Hinge Left",
+        "Open Sound": "assets/Audio/Foley/door/open_1.wav;assets/Audio/Foley/door/open_2.wav;assets/Audio/Foley/door/open_3.wav;assets/Audio/Foley/door/open_4.wav",
+        "Open Time": 0.833,
+        "Start Open": false,
+        "Swing Back": true
+      },
+      "collider": {
+        "center": [
+          0.482872,
+          1.141304,
+          0.053486
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.496988,
+          1.051664,
+          0.067598
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Door_Cell_mesh",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Door_Cell.FBX",
+      "pathGuid": "b35b8812eb75950c",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ]
+}

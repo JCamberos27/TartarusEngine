@@ -187,7 +187,7 @@ class Pack:
         p = {'_AlbedoMap': '', '_AOMap': '', '_BaseColor': [1.0, 1.0, 1.0], '_DoubleSided': False,
              '_EmissiveColor': [0.0, 0.0, 0.0], '_EmissiveMap': '', '_EmissiveStrength': 1.0, '_Metallic': 0.0,
              '_MetallicMap': '', '_MetallicRoughnessMap': '', '_NormalMap': '', '_Roughness': 0.5, '_RoughnessMap': '',
-             '_Triplanar': False, '_TriplanarScale': 1.0}
+             '_Triplanar': False, '_TriplanarScale': 1.0, '_ReflectionProbes': True}
         extra = {}
         base = colour('_BaseColor', colour('_Color'))
         p['_BaseColor'] = [round(v, 4) for v in base[:3]]

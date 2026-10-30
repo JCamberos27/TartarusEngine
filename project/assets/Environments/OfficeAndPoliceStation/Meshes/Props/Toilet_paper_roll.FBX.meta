@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
+  "guid": "b6c576e88e1a5e7e",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      0.806956,
+      -0.45946,
+      0.093792
+    ]
+  },
+  "materialRemap": {
+    "Toilet": "assets/Environments/OfficeAndPoliceStation/Materials/M_Toilet.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

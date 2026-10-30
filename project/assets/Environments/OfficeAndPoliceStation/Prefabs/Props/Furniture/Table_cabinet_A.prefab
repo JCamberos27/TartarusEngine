@@ -1,0 +1,564 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.314947,
+          0.084605,
+          0.015
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Table_cabinet_A_drawer_A Collider 1",
+      "order": 2,
+      "parentId": 1,
+      "position": [
+        3e-06,
+        -0.0,
+        -0.64
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.015,
+          0.084605,
+          0.329235
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 3,
+      "name": "Table_cabinet_A_drawer_A Collider 2",
+      "order": 3,
+      "parentId": 1,
+      "position": [
+        0.29,
+        -0.0,
+        -0.310917
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.015,
+          0.084605,
+          0.329235
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 4,
+      "name": "Table_cabinet_A_drawer_A Collider 3",
+      "order": 4,
+      "parentId": 1,
+      "position": [
+        -0.29,
+        -0.0,
+        -0.310917
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.314947,
+          0.015,
+          0.329235
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 5,
+      "name": "Table_cabinet_A_drawer_A Collider 4",
+      "order": 5,
+      "parentId": 1,
+      "position": [
+        3e-06,
+        -0.08,
+        -0.310917
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.314947,
+          0.084605,
+          0.015
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 7,
+      "name": "Table_cabinet_A_drawer_A Collider 1",
+      "order": 7,
+      "parentId": 6,
+      "position": [
+        3e-06,
+        -0.0,
+        -0.64
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.015,
+          0.084605,
+          0.329235
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 8,
+      "name": "Table_cabinet_A_drawer_A Collider 2",
+      "order": 8,
+      "parentId": 6,
+      "position": [
+        0.29,
+        -0.0,
+        -0.310917
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.015,
+          0.084605,
+          0.329235
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 9,
+      "name": "Table_cabinet_A_drawer_A Collider 3",
+      "order": 9,
+      "parentId": 6,
+      "position": [
+        -0.29,
+        -0.0,
+        -0.310917
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.314947,
+          0.015,
+          0.329235
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 10,
+      "name": "Table_cabinet_A_drawer_A Collider 4",
+      "order": 10,
+      "parentId": 6,
+      "position": [
+        3e-06,
+        -0.08,
+        -0.310917
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.314947,
+          0.16251,
+          0.015
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 12,
+      "name": "Table_cabinet_A_drawer_B Collider 1",
+      "order": 12,
+      "parentId": 11,
+      "position": [
+        3e-06,
+        -0.0,
+        -0.63
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.015,
+          0.16251,
+          0.329235
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 13,
+      "name": "Table_cabinet_A_drawer_B Collider 2",
+      "order": 13,
+      "parentId": 11,
+      "position": [
+        0.29,
+        -0.0,
+        -0.31007
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.015,
+          0.16251,
+          0.329235
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 14,
+      "name": "Table_cabinet_A_drawer_B Collider 3",
+      "order": 14,
+      "parentId": 11,
+      "position": [
+        -0.29,
+        -0.0,
+        -0.31007
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.314947,
+          0.015,
+          0.329235
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 15,
+      "name": "Table_cabinet_A_drawer_B Collider 4",
+      "order": 15,
+      "parentId": 11,
+      "position": [
+        3e-06,
+        -0.15,
+        -0.31007
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.001038,
+          0.385531,
+          0.33465
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.335222,
+          0.385501,
+          0.335037
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Table_cabinet_A",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Table_cabinet_A.FBX",
+      "pathGuid": "c983c65b55e75b5c",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          3e-06,
+          -0.0,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.314947,
+          0.084605,
+          0.015
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Table_cabinet_A_drawer_A",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Table_cabinet_A_drawer_A.FBX",
+      "pathGuid": "c99b24a62bb8ea05",
+      "position": [
+        -0.0,
+        0.472,
+        0.689
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          3e-06,
+          -0.0,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.314947,
+          0.084605,
+          0.015
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 6,
+      "name": "Table_cabinet_A_drawer_A",
+      "order": 6,
+      "parentId": 0,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Table_cabinet_A_drawer_A.FBX",
+      "pathGuid": "c99b24a62bb8ea05",
+      "position": [
+        -0.0,
+        0.646,
+        0.689
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          3e-06,
+          -0.0,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.314947,
+          0.16251,
+          0.015
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 11,
+      "name": "Table_cabinet_A_drawer_B",
+      "order": 11,
+      "parentId": 0,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Table_cabinet_A_drawer_B.FBX",
+      "pathGuid": "a607fc3eef99bdae",
+      "position": [
+        -0.0,
+        0.222,
+        0.681
+      ],
+      "rotation": [
+        -0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}
