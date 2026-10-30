@@ -1,0 +1,43 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 0,
+      "materials": [
+        {
+          "guid": "cbf75acfab25f2e1",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Car_Gray.mat"
+        }
+      ],
+      "name": "Car_gray",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior/Car.FBX",
+      "pathGuid": "9db3a3c698530f34",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

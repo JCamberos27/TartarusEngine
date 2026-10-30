@@ -1,0 +1,317 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 0,
+      "name": "Clothcloset_C",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Clothcloset_C@Clothcloset_C.FBX",
+      "pathGuid": "241d9e84632ffe2f",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.250802,
+          -0.0,
+          0.014694
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.255996,
+          0.342136,
+          0.025327
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Closet_door_down_L",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Clothcloset_C@Closet_door_down_L.FBX",
+      "pathGuid": "81fb872d336f56d6",
+      "position": [
+        0.507491,
+        1.251183,
+        0.258698
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.251607,
+          -0.0,
+          0.015039
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.256762,
+          0.342136,
+          0.025327
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Closet_door_down_R",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Clothcloset_C@Closet_door_down_R.FBX",
+      "pathGuid": "26d10a2b29b3ebd8",
+      "position": [
+        -0.508981,
+        1.251183,
+        0.258352
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.251033,
+          -0.0,
+          0.014861
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.255996,
+          0.2454,
+          0.025327
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 3,
+      "name": "Closet_door_up_L",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Clothcloset_C@Closet_door_up_L.FBX",
+      "pathGuid": "c55c9be9b297895d",
+      "position": [
+        0.507722,
+        1.846831,
+        0.258531
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.251413,
+          -0.0,
+          0.014968
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.256762,
+          0.2454,
+          0.025327
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 4,
+      "name": "Closet_door_up_R",
+      "order": 4,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Clothcloset_C@Closet_door_up_R.FBX",
+      "pathGuid": "965dbde706261c8b",
+      "position": [
+        -0.508788,
+        1.846831,
+        0.258423
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 5,
+      "name": "Drawer_A",
+      "order": 5,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Clothcloset_C@Drawer_A.FBX",
+      "pathGuid": "a21bbf356fc29fde",
+      "position": [
+        0.001544,
+        0.813857,
+        0.026528
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 6,
+      "name": "Drawer_B",
+      "order": 6,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Clothcloset_C@Drawer_B.FBX",
+      "pathGuid": "d4ad03c03c9fba88",
+      "position": [
+        0.001544,
+        0.61145,
+        0.026528
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 7,
+      "name": "Drawer_C",
+      "order": 7,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Clothcloset_C@Drawer_C.FBX",
+      "pathGuid": "d3361e1e3b54d5d9",
+      "position": [
+        0.001544,
+        0.409044,
+        0.026528
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 8,
+      "name": "Drawer_D",
+      "order": 8,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Clothcloset_C@Drawer_D.FBX",
+      "pathGuid": "a678cfad82690cf8",
+      "position": [
+        0.001544,
+        0.206637,
+        0.026528
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

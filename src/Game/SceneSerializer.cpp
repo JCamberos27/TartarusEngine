@@ -2036,6 +2036,12 @@ void AppendAssetLibraryJson(json& root, const AssetLibrary& assets, bool include
         if (m.SimplifyRatio < 1.0f) mi["simplify"] = m.SimplifyRatio;
         if (m.PivotOffset != glm::vec3(0.0f)) mi["pivotOffset"] = {m.PivotOffset.x, m.PivotOffset.y, m.PivotOffset.z};
         if (!m.ExcludeNodes.empty()) mi["excludeNodes"] = m.ExcludeNodes;
+        if (!m.MeshNodes.empty()) mi["meshNodes"] = m.MeshNodes;
+        if (m.RootTransform != glm::mat4(1.0f)) {
+            json rt = json::array();
+            for (int k = 0; k < 16; ++k) rt.push_back(m.RootTransform[k / 4][k % 4]);
+            mi["rootTransform"] = rt;
+        }
         if (!m.UnrotateNodes.empty()) mi["unrotateNodes"] = m.UnrotateNodes;
         if (!m.MoveNodes.empty()) {
             json moves = json::array();
@@ -2133,6 +2139,11 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root, bool fromUndo
                 if (m.contains("excludeNodes") && m["excludeNodes"].is_array())
                     for (const auto& n : m["excludeNodes"])
                         if (n.is_string()) sm.ExcludeNodes.push_back(n.get<std::string>());
+                if (m.contains("meshNodes") && m["meshNodes"].is_array())
+                    for (const auto& n : m["meshNodes"])
+                        if (n.is_string()) sm.MeshNodes.push_back(n.get<std::string>());
+                if (m.contains("rootTransform") && m["rootTransform"].is_array() && m["rootTransform"].size() == 16)
+                    for (int k = 0; k < 16; ++k) sm.RootTransform[k / 4][k % 4] = m["rootTransform"][k].get<float>();
                 if (m.contains("unrotateNodes") && m["unrotateNodes"].is_array())
                     for (const auto& n : m["unrotateNodes"])
                         if (n.is_string()) sm.UnrotateNodes.push_back(n.get<std::string>());

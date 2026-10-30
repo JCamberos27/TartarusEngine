@@ -1,0 +1,27 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior",
+  "guid": "d39966151fbd4008",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "meshNodes": [
+      "Roadblock_wooden"
+    ],
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -3.49875,
+      -0.00832,
+      0.006772
+    ]
+  },
+  "materialRemap": {
+    "Roadblock": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Roadblock.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

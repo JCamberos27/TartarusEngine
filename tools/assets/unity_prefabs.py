@@ -95,8 +95,12 @@ def read_nodes(exe, files):
     env = dict(os.environ, TARTARUS_NODES_PIVOTS='1')
     files = sorted(set(files))
     for i in range(0, len(files), 150):
-        res = subprocess.run([exe, '--model-nodes', *files[i:i + 150]], capture_output=True, text=True,
-                             encoding='utf-8', errors='replace', env=env)
+        batch = files[i:i + 150]
+        for attempt in range(3):   # the exe occasionally drops a batch; ask again for what is missing
+            res = subprocess.run([exe, '--model-nodes', *batch], capture_output=True, text=True,
+                                 encoding='utf-8', errors='replace', env=env)
+            if res.stdout.count(' unitscale ') >= len(batch):
+                break
         cur = None
         for line in res.stdout.splitlines():
             m = re.match(r'\[ModelNodes\] (.*) unitscale (\S+)$', line.strip())
@@ -148,6 +152,16 @@ class FbxInfo:
             eng = mul(eng, n['L'])
             self.real[name] = {'name': name, 'parent': p if p in nodes else None, 'local': non_geo, 'geo': geo,
                                'meshes': n['meshes'], 'eng': eng}
+        # The root node's own matrix (Assimp's axis conversion; Rx(90) in most Blender exports) sits in 'geo' of the
+        # root because it has no pivot helpers. It is part of what the engine bakes, so it belongs to the parent chain.
+        self.root_L = list(nodes[self.root]['L']) if self.root in nodes else list(IDENT)
+        if self.root in self.real:
+            self.real[self.root]['local'], self.real[self.root]['geo'] = list(self.root_L), list(IDENT)
+        # Unity keeps unit scale but drops the axis rotation (it is baked into the mesh): the scale-only part of the root.
+        self.root_S = [0.0] * 16
+        for c in range(3):
+            self.root_S[c * 5] = math.sqrt(sum(self.root_L[c * 4 + r] ** 2 for r in range(3))) or 1.0
+        self.root_S[15] = 1.0
         self.children = collections.defaultdict(list)
         for name, n in self.real.items():
             if n['parent'] is not None:
@@ -192,18 +206,16 @@ class FbxInfo:
 
     def correction(self, node):
         """Root correction so the model draws in Unity's space for <node>: its geometric space, unit scale kept."""
-        root = self.real[self.root]['local'] if self.root in self.real else IDENT
         full = self.engine_global(node)  # includes the root
         geo = self.real[node]['geo']
-        return mul(mul(root, geo), inverse(full))
+        return mul(mul(self.root_S, geo), inverse(full))
 
     def file_correction(self):
         r = self.collapsed_root()
         if r is None:
             return list(IDENT)
-        root = self.real[self.root]['local']
-        # undo the collapsed root's own (non-geometric) transform, keeping the file's unit scale
-        return mul(mul(root, inverse(self.real[r]['local'])), inverse(root))
+        # the collapsed node drawn in its own geometric space (root axis rotation and own transform undone)
+        return self.correction(r)
 
 
 def correction_meta(c):
@@ -250,6 +262,8 @@ class Converter:
             r = raw.get(os.path.normcase(os.path.normpath(src))) if src else None
             if r and r['order']:
                 self.fbx[g] = FbxInfo(r)
+            elif src:
+                self.pack.report['FBX the engine could not read (--model-nodes): placed without a correction'].append(os.path.basename(src))
 
     def mesh_names(self, guid):
         """Unity mesh fileID -> mesh name, and GameObject / Transform fileID -> node name, from the importer table."""
@@ -995,6 +1009,9 @@ def write_scene(conv, path):
     start = max([e['id'] for e in keep + models] + [0])
     conv.emit(roots, out, [start])
     pack.counts['duplicate openables dropped (a twin door within 10 cm)'] += dedupe_openables(out)
+    # The scene's own directional light replaces the template's Sun (two suns blow every surface out to white).
+    if any((e.get('Light') or {}).get('Type') == 'Directional' for e in out['empties'] if e['name'] != 'Sun'):
+        out['empties'] = [e for e in out['empties'] if e['name'] != 'Sun']
     scene.update(out)
     scene['formatVersion'] = 4
     dst = os.path.join(pack.repo, 'project', 'scenes', f'{pack.name}_{stem}.json')

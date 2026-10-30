@@ -1,0 +1,157 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 0,
+      "name": "Bed_queen",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Bed_queen.FBX",
+      "pathGuid": "b71df2786ea14a42",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 1,
+      "name": "Pillow_small",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Pillow_small.FBX",
+      "pathGuid": "19bc3c43be3a6878",
+      "position": [
+        -0.307,
+        0.707,
+        -0.645
+      ],
+      "rotation": [
+        0.251539,
+        0.058406,
+        0.01296,
+        0.965997
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 2,
+      "name": "Pillow_small",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Pillow_small.FBX",
+      "pathGuid": "19bc3c43be3a6878",
+      "position": [
+        0.18,
+        0.707,
+        -0.65
+      ],
+      "rotation": [
+        0.317481,
+        -0.097557,
+        0.05389,
+        0.941693
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 3,
+      "name": "Pillow_large",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Pillow_large.FBX",
+      "pathGuid": "5611b8d07aadfcd4",
+      "position": [
+        0.31,
+        0.609,
+        -0.898
+      ],
+      "rotation": [
+        0.063811,
+        0.005018,
+        0.022382,
+        0.997698
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 4,
+      "name": "Pillow_large",
+      "order": 4,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Pillow_large.FBX",
+      "pathGuid": "5611b8d07aadfcd4",
+      "position": [
+        -0.404,
+        0.621,
+        -0.858
+      ],
+      "rotation": [
+        0.063629,
+        -0.006954,
+        0.012878,
+        0.997866
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

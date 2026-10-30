@@ -1,0 +1,27 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior",
+  "guid": "a9686b87b1e94930",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "meshNodes": [
+      "Trashbin"
+    ],
+    "optimizeGraph": true,
+    "pivotOffset": [
+      0.000952,
+      -0.0,
+      0.003222
+    ]
+  },
+  "materialRemap": {
+    "Trashbin": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Trashbin.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

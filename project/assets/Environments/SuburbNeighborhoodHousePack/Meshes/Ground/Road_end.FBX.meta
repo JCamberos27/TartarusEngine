@@ -1,0 +1,26 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Ground",
+  "guid": "9346c590cc7edd6c",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -51.0,
+      0.0,
+      0.0
+    ]
+  },
+  "materialRemap": {
+    "Floor_Grass": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Floor_Grass.mat",
+    "Floor_Sidewalk": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Floor_Sidewalk.mat",
+    "Road": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Road.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

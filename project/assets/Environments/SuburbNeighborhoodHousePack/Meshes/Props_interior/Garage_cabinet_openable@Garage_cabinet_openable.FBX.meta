@@ -1,0 +1,27 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior",
+  "guid": "66ffda699beedede",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "meshNodes": [
+      "Garage_cabinet_openable"
+    ],
+    "optimizeGraph": true,
+    "pivotOffset": [
+      16.0,
+      0.0,
+      0.0
+    ]
+  },
+  "materialRemap": {
+    "GarageSet": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_GarageSet.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

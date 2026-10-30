@@ -1,0 +1,124 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          2.5,
+          0.1,
+          1.5
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Floor_stairs_5x_3x Collider 1",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        -2.5,
+        0.1,
+        1.5
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          2.5,
+          0.1,
+          0.45
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Floor_stairs_5x_3x Collider 2",
+      "order": 2,
+      "parentId": 0,
+      "position": [
+        -2.5,
+        3.1,
+        2.6
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -2.5,
+          6.05,
+          1.5
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          2.5,
+          0.05,
+          1.5
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "materials": [
+        {
+          "guid": "337d9ed2a0b35aa8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_In_Floor_WoodFine.mat"
+        },
+        {
+          "guid": "f6068605e210795d",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_In_Roof_Plaster.mat"
+        }
+      ],
+      "name": "Floor_stairs_5x_3x",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Floor_stairs_5x_3x.FBX",
+      "pathGuid": "9136b05b8b8ff99c",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

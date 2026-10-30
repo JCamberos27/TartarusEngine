@@ -1,0 +1,41 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior",
+  "guid": "6e67f7e99d886998",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "meshNodes": [
+      "Tree_grate"
+    ],
+    "optimizeGraph": true,
+    "rootTransform": [
+      0.799009,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.799009,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.799009,
+      0.0,
+      0.004993,
+      -0.00156,
+      0.001158,
+      1.0
+    ]
+  },
+  "materialRemap": {
+    "Tree": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Tree.mat",
+    "TreeTrunkTiled": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_TreeTrunkTiled.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

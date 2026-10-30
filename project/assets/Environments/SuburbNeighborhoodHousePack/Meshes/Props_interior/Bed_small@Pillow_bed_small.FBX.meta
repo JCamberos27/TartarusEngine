@@ -1,0 +1,40 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior",
+  "guid": "69f1068791616c94",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "meshNodes": [
+      "Pillow_bed_small"
+    ],
+    "optimizeGraph": true,
+    "rootTransform": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      -1.0,
+      0.0,
+      0.0,
+      0.037469,
+      -0.631735,
+      0.781681,
+      1.0
+    ]
+  },
+  "materialRemap": {
+    "Bed_Small": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Bed_Small.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

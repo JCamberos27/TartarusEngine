@@ -1,0 +1,32 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior",
+  "guid": "2d6e52f9ee653b4d",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -113.0,
+      -0.5,
+      -0.0
+    ]
+  },
+  "materialRemap": {
+    "Floor_ConcretePlates": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Floor_ConcretePlates.mat",
+    "Floor_PorchPlanks": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Floor_PorchPlanks.mat",
+    "Glass": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Glass.mat",
+    "House_Exterior_Equip": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_House_Exterior_Equip.mat",
+    "Roof_HouseRoof": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Roof_HouseRoof.mat",
+    "Roof_UnderPlanks": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Roof_UnderPlanks.mat",
+    "Wall_ConcreteWhite_Dirty": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Wall_ConcreteWhite_Dirty.mat",
+    "Wall_HouseWoodPlank": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Wall_HouseWoodPlank.mat",
+    "WhiteWood_Tiled": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_WhiteWood_Tiled.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

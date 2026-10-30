@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior",
+  "guid": "9d709f504434d087",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      0.036826,
+      0.0,
+      -0.005865
+    ]
+  },
+  "materialRemap": {
+    "TableSet": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_TableSet.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

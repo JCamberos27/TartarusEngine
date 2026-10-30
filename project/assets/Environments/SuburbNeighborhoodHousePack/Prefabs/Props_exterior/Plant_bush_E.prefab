@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.025429,
+          0.55223,
+          -0.074045
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.2,
+          0.443964,
+          0.0
+        ],
+        "isTrigger": false,
+        "shape": 2
+      },
+      "id": 0,
+      "name": "Plant_bush_E",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior/Plant_bush_E.FBX",
+      "pathGuid": "35c75fbc6beb842c",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

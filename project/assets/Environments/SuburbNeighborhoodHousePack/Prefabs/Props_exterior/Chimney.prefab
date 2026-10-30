@@ -1,0 +1,91 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.495,
+          5.551987,
+          0.460513
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Chimney Collider 1",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        5.051987,
+        -0.4
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          1.44,
+          -0.4
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.877587,
+          1.75,
+          0.460513
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "materials": [
+        {
+          "guid": "abe3f08985e4646a",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Wall_Brick.mat"
+        },
+        {
+          "guid": "ec0e7024d9994cd8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Wall_ConcreteWhite_Dirty.mat"
+        }
+      ],
+      "name": "Chimney",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior/Chimney.FBX",
+      "pathGuid": "28a65a2112552f39",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

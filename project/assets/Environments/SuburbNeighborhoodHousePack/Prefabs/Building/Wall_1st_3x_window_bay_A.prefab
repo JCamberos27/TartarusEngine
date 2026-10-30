@@ -1,0 +1,155 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 0,
+      "materials": [
+        {
+          "guid": "ec0e7024d9994cd8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Wall_ConcreteWhite_Dirty.mat"
+        },
+        {
+          "guid": "75b9c082662bb452",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Wall_HouseWoodPlank.mat"
+        },
+        {
+          "guid": "217a12308b9b8049",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_House_Exterior_Equip.mat"
+        },
+        {
+          "guid": "dff9d658a30789cf",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_In_WhitePlaster.mat"
+        },
+        {
+          "guid": "dfe2f0f0488bc8d5",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Roof_HouseRoof.mat"
+        },
+        {
+          "guid": "1fe427d3502afacb",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_WhiteWood_Tiled.mat"
+        },
+        {
+          "guid": "660fa79a7cd14982",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Roof_UnderPlanks.mat"
+        },
+        {
+          "guid": "f6068605e210795d",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_In_Roof_Plaster.mat"
+        },
+        {
+          "guid": "337d9ed2a0b35aa8",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_In_Floor_WoodFine.mat"
+        }
+      ],
+      "name": "Wall_1st_3x_window_bay_A",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Wall_1st_3x_window_bay_A.FBX",
+      "pathGuid": "959d882ddd9ac812",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.0,
+          -0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.410051,
+          0.645042,
+          0.040355
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Windowglass_singlewindow",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Windowglass_singlewindow.FBX",
+      "pathGuid": "837a06a9d9a4a0ba",
+      "position": [
+        1.063,
+        1.719,
+        0.412994
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        0.91682
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.0,
+          -0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.410051,
+          0.645042,
+          0.040355
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Windowglass_singlewindow",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Windowglass_singlewindow.FBX",
+      "pathGuid": "837a06a9d9a4a0ba",
+      "position": [
+        1.962999,
+        1.719,
+        0.412994
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        0.91682
+      ],
+      "static": true
+    }
+  ]
+}

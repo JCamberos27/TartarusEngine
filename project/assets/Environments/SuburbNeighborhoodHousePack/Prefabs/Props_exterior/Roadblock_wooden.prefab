@@ -1,0 +1,154 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.05,
+          0.396904,
+          0.3
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Roadblock_wooden Collider 1",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        0.78,
+        0.390172,
+        -0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.05,
+          0.396904,
+          0.3
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Roadblock_wooden Collider 2",
+      "order": 2,
+      "parentId": 0,
+      "position": [
+        -0.78,
+        0.390172,
+        -0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.72,
+          -0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          1.013364,
+          0.065,
+          0.03
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Roadblock_wooden",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior/Roadblock_wooden@Roadblock_wooden.FBX",
+      "pathGuid": "d39966151fbd4008",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.0,
+          -0.169262,
+          0.002873
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.360422,
+          0.233279,
+          0.002873
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 3,
+      "name": "Roadblock_sign",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior/Roadblock_wooden@Roadblock_sign.FBX",
+      "pathGuid": "33f9463139dcf946",
+      "position": [
+        0.001661,
+        0.721567,
+        0.018365
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

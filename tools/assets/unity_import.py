@@ -97,7 +97,7 @@ class Pack:
         """Engine path of texture <guid> through <expr> (unity_tex_cook.py), copying it as-is where that's enough."""
         src = self.guids.get(guid)
         if not src:
-            self.report['missing textures'].append(guid)
+            self.report['missing textures (dangling in the source pack: asset deleted, nothing to convert)'].append(f'{guid} (used by {getattr(self, "cur", "?")})')
             return ''
         key = (src, json.dumps(expr), suffix)
         if key in self.cooked:
@@ -136,7 +136,7 @@ class Pack:
         src = self.guids.get(guid)
         self.mats[guid] = None
         if not src or not src.endswith('.mat'):
-            self.report['missing materials'].append(guid)
+            self.report['missing materials (dangling in the source pack: asset deleted)'].append(f'{guid} (used by {getattr(self, "cur", "?")})')
             return None
         doc = uy.load(uy.read(src).split('\n', 3)[3])['Material']
         name = doc.get('m_Name') or os.path.splitext(os.path.basename(src))[0]
@@ -159,9 +159,10 @@ class Pack:
         for e in (doc.get('m_SavedProperties') or {}).get('m_Colors') or []:
             co.update(e)
         keywords = set(doc.get('m_ValidKeywords') or []) | set((doc.get('m_ShaderKeywords') or '').split())
+        prev, self.cur = getattr(self, 'cur', '?'), 'material ' + name
         props, extra = self.convert_material(name, kind, tex, fl, co, keywords)
-        dst = self.out_path(src, '.mat')
-        dst = os.path.join(os.path.dirname(dst), 'M_' + tidy(name) + '.mat')
+        self.cur = prev
+        dst = os.path.join(os.path.dirname(self.out_path(src, '.mat')), 'M_' + tidy(name) + '.mat')
         data = {'factorsScaleMaps': True, 'matVersion': 2, 'name': 'M_' + tidy(name), 'properties': props,
                 'shader': 'engine://Standard.shader'}
         data.update(extra)
@@ -170,7 +171,8 @@ class Pack:
         self.mats[guid] = rel_project(self.repo, dst)
         self.counts['materials'] += 1
         if kind not in ('lit', 'unlit'):
-            self.report[f'materials approximated on Standard ({kind})'].append(name)
+            self.report['Foliage - revisit in P3 (parked: Standard cutout two-sided; wind shader later)' if kind == 'foliage'
+                        else f'materials approximated on Standard ({kind})'].append(name)
         return self.mats[guid]
 
     def convert_material(self, name, kind, tex, fl, co, keywords):
@@ -217,9 +219,18 @@ class Pack:
             else:
                 p['_RoughnessMap'] = self.texture(g, ['ch', 3, -smooth, 1.0], 'data', f'_Roughness{round(smooth * 100)}')
             p['_Roughness'] = 1.0
+            if not p['_MetallicMap']:   # the mask texture was deleted from the pack: the slider alone would make it chrome
+                p['_Metallic'], p['_Roughness'] = 0.0, round(1.0 - smooth, 4) if smooth < 1.0 else 0.85
+                p['_RoughnessMap'] = ''
         elif kind != 'unlit':
             p['_Metallic'] = round(fl.get('_Metallic', 0.0), 4)
             p['_Roughness'] = round(1.0 - smooth, 4)
+        if kind == 'foliage':
+            # plants are never metal; a foliage MaskMap's R channel is not metallic in any case
+            p['_MetallicMap'], p['_Metallic'] = '', 0.0
+            p['_RoughnessMap'], p['_Roughness'] = '', 0.85   # Smoothness 1 on leaves rendered black mirrors
+        if kind == 'water':
+            p['_Roughness'] = min(p['_Roughness'], 0.05)
         g, _ = guid_of('_OcclusionMap')
         if g and kind != 'unlit':
             strength = fl.get('_OcclusionStrength', 1.0)
@@ -229,6 +240,8 @@ class Pack:
             p['_NormalMap'] = self.texture(g, 'rgb', 'normal')
             if fl.get('_BumpScale', 1.0) != 1.0:
                 p['_NormalStrength'] = fl['_BumpScale']
+            if kind == 'water':   # the pack's 0.03 flattens the ripples away
+                p['_NormalStrength'] = max(p.get('_NormalStrength', 1.0), 0.3)
         g, _ = guid_of('_ParallaxMap', '_HeightMap')
         if g:
             p['_HeightMap'] = self.texture(g, ['ch', 1, 1.0, 0.0], 'data', '_Height')
@@ -274,6 +287,7 @@ class Pack:
             return None
         dst = self.out_path(src)
         copy_if_changed(src, dst)
+        self.cur = os.path.basename(src)
         imp = self.meta(guid).get('ModelImporter') or {}
         meshes = imp.get('meshes') or {}
         remap = {}

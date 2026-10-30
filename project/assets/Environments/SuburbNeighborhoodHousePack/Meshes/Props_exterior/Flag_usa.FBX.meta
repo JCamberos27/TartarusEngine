@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior",
+  "guid": "6b797eb30a90163d",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.518767,
+      -0.209595,
+      -0.036679
+    ]
+  },
+  "materialRemap": {
+    "Porch_Props": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Porch_Props.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

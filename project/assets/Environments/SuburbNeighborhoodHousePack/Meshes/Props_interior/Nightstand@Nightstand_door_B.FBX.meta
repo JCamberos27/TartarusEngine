@@ -1,0 +1,40 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior",
+  "guid": "8a4e7bc133fc2f85",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "meshNodes": [
+      "Nightstand_door_B"
+    ],
+    "optimizeGraph": true,
+    "rootTransform": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      -1.0,
+      0.0,
+      0.0,
+      34.706892,
+      -0.344033,
+      -12.195835,
+      1.0
+    ]
+  },
+  "materialRemap": {
+    "NightTable": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_NightTable.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}
