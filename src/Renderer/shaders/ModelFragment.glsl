@@ -357,15 +357,22 @@ void main() {
         vec3 L = normalize(-uLights[i].DirCutoff.xyz); // DirCutoff.xyz travels forward; L points back
         // #102 — only the directional light that owns the cascade map samples it (Params.y 0);
         // any other directional used to be shadowed by the primary sun's map.
-        // A surface turned away from the sun gets nothing from it (every lobe below carries N.L, clamped),
-        // so it skips the cascade lookup: the soft-PCF fetches were most of the sun's cost per pixel.
-        // Subsurface wraps light past the terminator, so it still samples there.
+        // One cascade lookup per pixel, from whichever side the sun is on. Lit from the front, every
+        // lobe below carries a clamped N.L and the leaf transmission's max(-N.L) is zero; lit from
+        // behind, only the transmission can see the sun, and it wants the lookup biased toward it
+        // (along -N). So a sun-facing surface samples along N, a translucent back-lit one along -N,
+        // and the rest skip the soft PCF altogether - and the shader carries one inlined copy of
+        // it instead of two. Subsurface wraps light past the terminator, so it keeps both lookups.
+        bool sunShadowed = uLights[i].Params.y >= 0.0;
 #ifdef _SUBSURFACE
-        bool sunFacing = true;
+        vec3 radiance = uLights[i].ColorRange.rgb * (sunShadowed ? SunShadow(vWorldPos, N, L) * CloudShadow(vWorldPos) : 1.0);
 #else
-        bool sunFacing = dot(N, L) > 0.0;
+        bool sunFront = dot(N, L) > 0.0;
+        float sunVis = 1.0;
+        if (sunShadowed)
+            sunVis = (sunFront || uTranslucency > 0.0) ? SunShadow(vWorldPos, sunFront ? N : -N, L) * CloudShadow(vWorldPos) : 0.0;
+        vec3 radiance = uLights[i].ColorRange.rgb * sunVis;
 #endif
-        vec3 radiance = uLights[i].ColorRange.rgb * (uLights[i].Params.y >= 0.0 ? (sunFacing ? SunShadow(vWorldPos, N, L) : 0.0) * CloudShadow(vWorldPos) : 1.0);
 #ifdef _ANISO
         Lo += ShadeLightAniso(N, V, L, radiance, albedo, F0, metallic, roughness, anisoT, anisoB);
 #else
@@ -377,7 +384,11 @@ void main() {
             // would put the lookup behind the leaf's own shadow caster. Brighter when looking toward the sun.
             float back = max(dot(-N, L), 0.0);
             float fwd = pow(max(dot(-V, L), 0.0), 3.0);
-            vec3 rad = uLights[i].ColorRange.rgb * (uLights[i].Params.y >= 0.0 ? SunShadow(vWorldPos, -N, L) * CloudShadow(vWorldPos) : 1.0);
+#ifdef _SUBSURFACE
+            vec3 rad = uLights[i].ColorRange.rgb * (sunShadowed ? SunShadow(vWorldPos, -N, L) * CloudShadow(vWorldPos) : 1.0);
+#else
+            vec3 rad = radiance; // back-lit: radiance was looked up along -N above
+#endif
             Lo += albedo * rad * (back * (0.35 + 1.4 * fwd) * uTranslucency / PI);
         }
 #ifdef _CLEARCOAT
