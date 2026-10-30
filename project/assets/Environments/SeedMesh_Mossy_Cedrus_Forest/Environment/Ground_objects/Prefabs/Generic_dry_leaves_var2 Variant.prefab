@@ -1,0 +1,32 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "castShadows": 0,
+      "id": 0,
+      "name": "Generic_dry_leaves_var2 Variant",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Generic_Dry_Leaves/Mesh/Generic_dry_leaves_var2.fbx",
+      "pathGuid": "68de1e6d36f342b8",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ]
+}

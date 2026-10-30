@@ -1,0 +1,157 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "LOD Group": {
+        "LOD 0": 0.4,
+        "LOD 1": 0.25,
+        "LOD 2": 0.15,
+        "LOD 3": 0.085,
+        "Size": 0.0
+      },
+      "id": 0,
+      "name": "Rotten_cedrus_branch_var4 Moss Variant",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "id": 1,
+      "materials": [
+        {
+          "guid": "3b209e95ffa35f85",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Dry_branches/1_Rotten_cedrus_Branches/M_Rotten_cedrus_branches_mat_moss.mat"
+        }
+      ],
+      "name": "Rotten_cedrus_branch_var4_LOD0",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Dry_branches/1_Rotten_cedrus_Branches/Rotten_cedrus_branch_var4@Rotten_cedrus_branch_var4_LOD0.fbx",
+      "pathGuid": "15d648c2499cdc9a",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 2,
+      "materials": [
+        {
+          "guid": "3b209e95ffa35f85",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Dry_branches/1_Rotten_cedrus_Branches/M_Rotten_cedrus_branches_mat_moss.mat"
+        }
+      ],
+      "name": "Rotten_cedrus_branch_var4_LOD1",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Dry_branches/1_Rotten_cedrus_Branches/Rotten_cedrus_branch_var4@Rotten_cedrus_branch_var4_LOD1.fbx",
+      "pathGuid": "78dde9fe9a66d404",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 3,
+      "materials": [
+        {
+          "guid": "3b209e95ffa35f85",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Dry_branches/1_Rotten_cedrus_Branches/M_Rotten_cedrus_branches_mat_moss.mat"
+        }
+      ],
+      "name": "Rotten_cedrus_branch_var4_LOD2",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Dry_branches/1_Rotten_cedrus_Branches/Rotten_cedrus_branch_var4@Rotten_cedrus_branch_var4_LOD2.fbx",
+      "pathGuid": "61a57ddebaf8ff3f",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 4,
+      "materials": [
+        {
+          "guid": "3b209e95ffa35f85",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Dry_branches/1_Rotten_cedrus_Branches/M_Rotten_cedrus_branches_mat_moss.mat"
+        }
+      ],
+      "name": "Rotten_cedrus_branch_var4_LOD3",
+      "order": 4,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Dry_branches/1_Rotten_cedrus_Branches/Rotten_cedrus_branch_var4@Rotten_cedrus_branch_var4_LOD3.fbx",
+      "pathGuid": "806f3094d63eb71e",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ]
+}

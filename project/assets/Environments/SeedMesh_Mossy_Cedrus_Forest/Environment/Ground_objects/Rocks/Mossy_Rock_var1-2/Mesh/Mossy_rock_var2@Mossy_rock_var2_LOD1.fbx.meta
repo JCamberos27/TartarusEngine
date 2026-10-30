@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rocks/Mossy_Rock_var1-2/Mesh",
+  "guid": "dd391b358e0d0d8a",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "meshNodes": [
+      "Mossy_rock_var2_LOD1"
+    ],
+    "optimizeGraph": true
+  },
+  "materialRemap": {
+    "Little_mossy_rocks_var1_2": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rocks/Mossy_Rock_var1-2/Textures/M_Little_mossy_rocks_var1_2.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

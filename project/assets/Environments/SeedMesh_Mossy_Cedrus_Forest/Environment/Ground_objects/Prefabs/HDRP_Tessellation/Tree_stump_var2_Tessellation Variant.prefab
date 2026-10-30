@@ -1,0 +1,185 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "LOD Group": {
+        "LOD 0": 0.25,
+        "LOD 1": 0.125,
+        "LOD 2": 0.0625,
+        "LOD 3": 0.01,
+        "Size": 0.0
+      },
+      "id": 0,
+      "name": "Tree_stump_var2_Tessellation Variant",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 5,
+      "name": "Tree_stump_var2_Collider",
+      "order": 5,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "id": 1,
+      "materials": [
+        {
+          "guid": "2583926673a380a9",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Stumps/Stump_2/M_T_Tree_stump_var2_mat.mat"
+        }
+      ],
+      "name": "Tree_stump_var2_LOD0",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Stumps/Stump_2/Tree_stump_var2@Tree_stump_var2_LOD0.fbx",
+      "pathGuid": "e7152e20cf054f58",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 2,
+      "materials": [
+        {
+          "guid": "2583926673a380a9",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Stumps/Stump_2/M_T_Tree_stump_var2_mat.mat"
+        }
+      ],
+      "name": "Tree_stump_var2_LOD1",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Stumps/Stump_2/Tree_stump_var2@Tree_stump_var2_LOD1.fbx",
+      "pathGuid": "5a06e0f16e1c94c6",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 3,
+      "materials": [
+        {
+          "guid": "2583926673a380a9",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Stumps/Stump_2/M_T_Tree_stump_var2_mat.mat"
+        }
+      ],
+      "name": "Tree_stump_var2_LOD2",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Stumps/Stump_2/Tree_stump_var2@Tree_stump_var2_LOD2.fbx",
+      "pathGuid": "384a073119a089d3",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 4,
+      "materials": [
+        {
+          "guid": "2583926673a380a9",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Stumps/Stump_2/M_T_Tree_stump_var2_mat.mat"
+        }
+      ],
+      "name": "Tree_stump_var2_LOD3",
+      "order": 4,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Stumps/Stump_2/Tree_stump_var2@Tree_stump_var2_LOD3.fbx",
+      "pathGuid": "82075dceb480a9ea",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

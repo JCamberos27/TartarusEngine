@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Forest_Ground_scans/Forest_Ground_scan_var4",
+  "guid": "30c65f1d8a0eac8d",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "meshNodes": [
+      "Volcanic_Mossy_Rocks_LOD3"
+    ],
+    "optimizeGraph": true
+  },
+  "materialRemap": {
+    "Volc_Mossy_rocks_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Forest_Ground_scans/Forest_Ground_scan_var4/M_Volc_Mossy_rocks.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

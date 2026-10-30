@@ -1,0 +1,90 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "LOD Group": {
+        "LOD 0": 0.25,
+        "LOD 1": 0.05,
+        "LOD 2": 0.0,
+        "LOD 3": 0.0,
+        "Size": 0.0
+      },
+      "id": 0,
+      "name": "Dry_cedrus_debris_Var2",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "castShadows": 0,
+      "id": 1,
+      "name": "Dry_cedrus_debris_var2_LOD0",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Dry_cedrus_leaves_debris/Dry_cedrus_debris_Var2@Dry_cedrus_debris_var2_LOD0.fbx",
+      "pathGuid": "1822e78ccfc588ef",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "castShadows": 0,
+      "id": 2,
+      "name": "Dry_cedrus_debris_var2_LOD1",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Dry_cedrus_leaves_debris/Dry_cedrus_debris_Var2@Dry_cedrus_debris_var2_LOD1.fbx",
+      "pathGuid": "d99e8a1899962d0e",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

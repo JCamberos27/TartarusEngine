@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Dry_branches/1_Rotten_cedrus_Branches",
+  "guid": "3843d0d3fb04a933",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "meshNodes": [
+      "Rotten_cedrus_branchGroup_var1_LOD2"
+    ],
+    "optimizeGraph": true
+  },
+  "materialRemap": {
+    "Rotten_cedrus_branches_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Dry_branches/1_Rotten_cedrus_Branches/M_Rotten_cedrus_branches_ground_mat.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

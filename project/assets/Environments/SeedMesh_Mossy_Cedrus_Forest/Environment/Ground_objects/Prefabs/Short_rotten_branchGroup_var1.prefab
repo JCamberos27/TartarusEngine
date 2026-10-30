@@ -1,0 +1,138 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "LOD Group": {
+        "LOD 0": 0.4,
+        "LOD 1": 0.25,
+        "LOD 2": 0.15,
+        "LOD 3": 0.048,
+        "Size": 0.0
+      },
+      "id": 0,
+      "name": "Short_rotten_branchGroup_var1",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "id": 1,
+      "name": "Short_rotten_branchGroup_var1_LOD0",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Branch_Debris/Short_branch_debris/Short_rotten_branchGroup_var1@Short_rotten_branchGroup_var1_LOD0.fbx",
+      "pathGuid": "5feced1b0aa7cb72",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 2,
+      "name": "Short_rotten_branchGroup_var1_LOD1",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Branch_Debris/Short_branch_debris/Short_rotten_branchGroup_var1@Short_rotten_branchGroup_var1_LOD1.fbx",
+      "pathGuid": "9ac85cbdde323a4e",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 3,
+      "name": "Short_rotten_branchGroup_var1_LOD2",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Branch_Debris/Short_branch_debris/Short_rotten_branchGroup_var1@Short_rotten_branchGroup_var1_LOD2.fbx",
+      "pathGuid": "48e337f9598c20f2",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 4,
+      "name": "Short_rotten_branchGroup_var1_LOD3",
+      "order": 4,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Branch_Debris/Short_branch_debris/Short_rotten_branchGroup_var1@Short_rotten_branchGroup_var1_LOD3.fbx",
+      "pathGuid": "8f410d4abdb0bc6c",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

@@ -1,0 +1,268 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "LOD Group": {
+        "LOD 0": 0.70026,
+        "LOD 1": 0.39731,
+        "LOD 2": 0.16068,
+        "LOD 3": 0.07724,
+        "Size": 0.0
+      },
+      "id": 0,
+      "name": "Cedrus_tree_var14",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.793515,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.12,
+          0.733505,
+          0.0
+        ],
+        "isTrigger": false,
+        "shape": 2
+      },
+      "id": 6,
+      "name": "Collider_1",
+      "order": 6,
+      "parentId": 0,
+      "position": [
+        -0.034,
+        0.052,
+        -0.019
+      ],
+      "rotation": [
+        -0.01578,
+        0.000139,
+        0.008833,
+        0.999837
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.793515,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.1,
+          0.753505,
+          0.0
+        ],
+        "isTrigger": false,
+        "shape": 2
+      },
+      "id": 7,
+      "name": "Collider_2",
+      "order": 7,
+      "parentId": 0,
+      "position": [
+        -0.062,
+        1.621,
+        -0.036
+      ],
+      "rotation": [
+        0.015838,
+        0.001554,
+        -0.024109,
+        0.999583
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "collider": {
+        "center": [
+          0.0,
+          1.106208,
+          -0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.085,
+          1.0812,
+          0.0
+        ],
+        "isTrigger": false,
+        "shape": 2
+      },
+      "id": 8,
+      "name": "Collider_3",
+      "order": 8,
+      "parentId": 0,
+      "position": [
+        0.017,
+        3.251,
+        0.016
+      ],
+      "rotation": [
+        0.017313,
+        0.002209,
+        -0.072733,
+        0.997199
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "id": 1,
+      "name": "Cedrus_tree_var14_LOD0",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var14@Cedrus_tree_var14_LOD0.fbx",
+      "pathGuid": "8b13d79d35f4e23b",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Cedrus_tree_var14_LOD1",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var14@Cedrus_tree_var14_LOD1.fbx",
+      "pathGuid": "625cddf72c917061",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Cedrus_tree_var14_LOD2",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var14@Cedrus_tree_var14_LOD2.fbx",
+      "pathGuid": "bca93b7d7d4235ed",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Cedrus_tree_var14_LOD3",
+      "order": 4,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var14@Cedrus_tree_var14_LOD3.fbx",
+      "pathGuid": "0a1145e8508f06b8",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Cedrus_tree_var14_LOD4",
+      "order": 5,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var14@Cedrus_tree_var14_LOD4.fbx",
+      "pathGuid": "3c921007a78dd955",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ]
+}

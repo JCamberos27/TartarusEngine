@@ -1,0 +1,29 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "id": 0,
+      "name": "SeedMesh_Shaders_Manager (Snow)",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "formatVersion": 4,
+  "models": []
+}

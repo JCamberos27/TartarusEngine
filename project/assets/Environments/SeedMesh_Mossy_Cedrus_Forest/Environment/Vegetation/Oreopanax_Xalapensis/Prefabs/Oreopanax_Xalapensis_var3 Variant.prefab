@@ -1,0 +1,143 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.266077,
+          1e-06
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.01,
+          0.29607,
+          0.0
+        ],
+        "isTrigger": false,
+        "shape": 2
+      },
+      "id": 1,
+      "name": "Collider (2)",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        0.813,
+        -0.011
+      ],
+      "rotation": [
+        0.11595,
+        -0.006083,
+        0.036,
+        0.992584
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.40485,
+          -0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.02,
+          0.424841,
+          0.0
+        ],
+        "isTrigger": false,
+        "shape": 2
+      },
+      "id": 2,
+      "name": "Collider",
+      "order": 2,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.000191,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.330626,
+          -0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.01,
+          0.360619,
+          0.0
+        ],
+        "isTrigger": false,
+        "shape": 2
+      },
+      "id": 3,
+      "name": "Collider (1)",
+      "order": 3,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        0.789,
+        -0.015
+      ],
+      "rotation": [
+        -0.058373,
+        -0.0,
+        -0.0,
+        0.998295
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "id": 0,
+      "name": "Oreopanax_Xalapensis_var3 Variant",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Oreopanax_Xalapensis/Mesh/Oreopanax_Xalapensis_var3.fbx",
+      "pathGuid": "e82bc7564374236e",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ]
+}

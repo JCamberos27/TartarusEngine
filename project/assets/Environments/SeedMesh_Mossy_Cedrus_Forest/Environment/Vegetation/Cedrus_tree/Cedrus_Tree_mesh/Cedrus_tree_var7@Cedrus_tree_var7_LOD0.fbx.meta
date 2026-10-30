@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh",
+  "guid": "1f206c08ec39ab03",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "meshNodes": [
+      "Cedrus_tree_var7_LOD0"
+    ],
+    "optimizeGraph": true
+  },
+  "materialRemap": {
+    "Cedrus_7_8_9_billboards": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Billboards/Var7-8-9/M_Cedrus_7-8-9_billboards.mat",
+    "Cedrus_bark_young_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Textures/M_Cedrus_young_bark_2.mat",
+    "Cedrus_leaves_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Textures/M_Cedrus_leaves.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

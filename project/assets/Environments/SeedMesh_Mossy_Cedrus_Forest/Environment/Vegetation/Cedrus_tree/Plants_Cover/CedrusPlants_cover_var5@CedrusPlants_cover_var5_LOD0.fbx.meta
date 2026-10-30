@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Plants_Cover",
+  "guid": "1c4681e13684a5ff",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "meshNodes": [
+      "CedrusPlants_cover_var5_LOD0"
+    ],
+    "optimizeGraph": true
+  },
+  "materialRemap": {
+    "Moss_cover": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Moss_cover/Textures/M_Moss_cover.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

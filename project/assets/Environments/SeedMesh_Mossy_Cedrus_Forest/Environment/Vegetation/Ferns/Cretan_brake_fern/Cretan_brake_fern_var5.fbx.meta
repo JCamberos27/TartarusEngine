@@ -1,0 +1,20 @@
+{
+  "folder": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Cretan_brake_fern",
+  "guid": "9be7c0adffbd11dd",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true
+  },
+  "materialRemap": {
+    "Cretan_brake_fern_billboards": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Cretan_brake_fern/M_Cretan_brake_fern_billboards.mat",
+    "Cretan_brake_fern_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Cretan_brake_fern/M_cretan_brake_fern_mat.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

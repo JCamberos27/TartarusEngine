@@ -1,0 +1,157 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "LOD Group": {
+        "LOD 0": 0.55,
+        "LOD 1": 0.35,
+        "LOD 2": 0.25,
+        "LOD 3": 0.1,
+        "Size": 0.0
+      },
+      "id": 0,
+      "name": "Mossy_log_var9 Moss Variant",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "id": 1,
+      "materials": [
+        {
+          "guid": "20edeab9b1d09f4b",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/9_Mossy_rotten_log_var9/M_Rotten_log_var_9_mat_moss.mat"
+        }
+      ],
+      "name": "Mossy_log_var9_LOD0",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/9_Mossy_rotten_log_var9/Mossy_log_var9@Mossy_log_var9_LOD0.fbx",
+      "pathGuid": "174298ddeaa07f1b",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 2,
+      "materials": [
+        {
+          "guid": "20edeab9b1d09f4b",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/9_Mossy_rotten_log_var9/M_Rotten_log_var_9_mat_moss.mat"
+        }
+      ],
+      "name": "Mossy_log_var9_LOD1",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/9_Mossy_rotten_log_var9/Mossy_log_var9@Mossy_log_var9_LOD1.fbx",
+      "pathGuid": "5cbb00a71b7a6ebe",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 3,
+      "materials": [
+        {
+          "guid": "20edeab9b1d09f4b",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/9_Mossy_rotten_log_var9/M_Rotten_log_var_9_mat_moss.mat"
+        }
+      ],
+      "name": "Mossy_log_var9_LOD2",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/9_Mossy_rotten_log_var9/Mossy_log_var9@Mossy_log_var9_LOD2.fbx",
+      "pathGuid": "a9423d60b3edecb6",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 4,
+      "materials": [
+        {
+          "guid": "20edeab9b1d09f4b",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/9_Mossy_rotten_log_var9/M_Rotten_log_var_9_mat_moss.mat"
+        }
+      ],
+      "name": "Mossy_log_var9_LOD3",
+      "order": 4,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/9_Mossy_rotten_log_var9/Mossy_log_var9@Mossy_log_var9_LOD3.fbx",
+      "pathGuid": "2b74fe45be6a95aa",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ]
+}

@@ -1,0 +1,137 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "LOD Group": {
+        "LOD 0": 0.25,
+        "LOD 1": 0.13,
+        "LOD 2": 0.035,
+        "LOD 3": 0.029,
+        "Size": 0.0
+      },
+      "id": 0,
+      "name": "ForestClover_var3",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "castShadows": 0,
+      "id": 1,
+      "name": "ForestClover_var3_LOD0",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ground_cover_plants/Mesh/ForestClover_var3@ForestClover_var3_LOD0.fbx",
+      "pathGuid": "1eb70d70b092a4c9",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "castShadows": 0,
+      "id": 2,
+      "name": "ForestClover_var3_LOD1",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ground_cover_plants/Mesh/ForestClover_var3@ForestClover_var3_LOD1.fbx",
+      "pathGuid": "39e67180d15b876d",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "castShadows": 0,
+      "id": 3,
+      "name": "ForestClover_var3_LOD2",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ground_cover_plants/Mesh/ForestClover_var3@ForestClover_var3_LOD2.fbx",
+      "pathGuid": "6da31fb3de0e79e5",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "castShadows": 0,
+      "id": 4,
+      "name": "ForestClover_var3_LOD3",
+      "order": 4,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ground_cover_plants/Mesh/ForestClover_var3@ForestClover_var3_LOD3.fbx",
+      "pathGuid": "2a5f94107abf1770",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ]
+}

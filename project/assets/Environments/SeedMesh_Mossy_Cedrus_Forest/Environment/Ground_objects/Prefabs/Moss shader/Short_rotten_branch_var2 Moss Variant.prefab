@@ -1,0 +1,157 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "LOD Group": {
+        "LOD 0": 0.4,
+        "LOD 1": 0.25,
+        "LOD 2": 0.15,
+        "LOD 3": 0.048,
+        "Size": 0.0
+      },
+      "id": 0,
+      "name": "Short_rotten_branch_var2 Moss Variant",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "id": 1,
+      "materials": [
+        {
+          "guid": "7529edf649321d13",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Branch_Debris/Short_branch_debris/M_Short_Rotten_branches_mat_moss.mat"
+        }
+      ],
+      "name": "Short_rotten_branch_var2_LOD0",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Branch_Debris/Short_branch_debris/Short_rotten_branch_var2@Short_rotten_branch_var2_LOD0.fbx",
+      "pathGuid": "865330ac911141fd",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 2,
+      "materials": [
+        {
+          "guid": "7529edf649321d13",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Branch_Debris/Short_branch_debris/M_Short_Rotten_branches_mat_moss.mat"
+        }
+      ],
+      "name": "Short_rotten_branch_var2_LOD1",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Branch_Debris/Short_branch_debris/Short_rotten_branch_var2@Short_rotten_branch_var2_LOD1.fbx",
+      "pathGuid": "86141d204e3d3b07",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 3,
+      "materials": [
+        {
+          "guid": "7529edf649321d13",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Branch_Debris/Short_branch_debris/M_Short_Rotten_branches_mat_moss.mat"
+        }
+      ],
+      "name": "Short_rotten_branch_var2_LOD2",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Branch_Debris/Short_branch_debris/Short_rotten_branch_var2@Short_rotten_branch_var2_LOD2.fbx",
+      "pathGuid": "aea003bb6f2979cb",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 4,
+      "materials": [
+        {
+          "guid": "7529edf649321d13",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Branch_Debris/Short_branch_debris/M_Short_Rotten_branches_mat_moss.mat"
+        }
+      ],
+      "name": "Short_rotten_branch_var2_LOD3",
+      "order": 4,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Branch_Debris/Short_branch_debris/Short_rotten_branch_var2@Short_rotten_branch_var2_LOD3.fbx",
+      "pathGuid": "81ea806b2922c0f4",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ]
+}
