@@ -1,5 +1,8 @@
 #include "World.h"
 #include <cstring>
+#include <atomic>
+#include <execution>
+#include <numeric>
 #include "Model.h"
 #include "Log.h"
 #include <string>
@@ -441,11 +444,13 @@ std::uint64_t LocalHash(const TransformComponent& t) {
     std::memcpy(w, &t.Position, 12);
     std::memcpy(w + 3, &t.Rotation, 16);
     std::memcpy(w + 7, &t.Scale, 12);
-    std::uint64_t h = 0x9E3779B97F4A7C15ull;
-    for (int i = 0; i < 10; i += 2) {
-        h ^= ((std::uint64_t)w[i] | ((std::uint64_t)w[i + 1] << 32)) * 0xBF58476D1CE4E5B9ull;
-        h = (h ^ (h >> 31)) * 0x94D049BB133111EBull;
-    }
+    // Five independent products summed (each pair of words times its own odd constant), not a chain where each step waits
+    // on the last: the scan is ALU-latency bound otherwise (~40 cycles a transform, ~1 ms for the forest). A change in
+    // any one word changes the sum (odd multipliers are invertible mod 2^64).
+    auto pair = [&](int i) { return (std::uint64_t)w[i] | ((std::uint64_t)w[i + 1] << 32); };
+    std::uint64_t h = pair(0) * 0xBF58476D1CE4E5B9ull + pair(2) * 0x94D049BB133111EBull + pair(4) * 0x9E3779B97F4A7C15ull +
+                      pair(6) * 0xD6E8FEB86659FD93ull + pair(8) * 0xC2B2AE3D27D4EB4Full;
+    h ^= h >> 29;
     return h | 1u;
 }
 } // namespace
@@ -592,11 +597,35 @@ bool World::RebuildChangedTransformsOnly() {
     if (!std::equal(structure, structure + 3, m_TransformStructure)) return false;
     std::vector<entt::entity>& dirty = m_DirtyScratch;
     dirty.clear();
-    for (auto [e, t] : view.each()) {
-        const size_t s = (size_t)entt::to_entity(e);
-        if (s >= m_WorldTransformKeys.size() || m_WorldTransformKeys[s] != e) return false; // new to the cache
-        if (m_LocalHashes[s] != LocalHash(t)) dirty.push_back(e); // 0 (no transform at the snapshot) never matches
-    }
+    // The scan is split across the cores in fixed chunks of the transform pool (read only; each chunk keeps its own
+    // list): one thread took ~1.7 ms over the forest's 200k transforms, every frame. Chunk order keeps the pool's order.
+    const auto& pool = Registry.storage<TransformComponent>();
+    const size_t count = pool.size();
+    const auto comps = pool.cbegin();
+    const auto ents = static_cast<const entt::sparse_set&>(pool).begin();
+    constexpr size_t kChunk = 8192;
+    const size_t chunks = (count + kChunk - 1) / kChunk;
+    static std::vector<std::vector<entt::entity>> s_ChunkDirty;
+    static std::vector<size_t> s_ChunkIds;
+    if (s_ChunkDirty.size() < chunks) s_ChunkDirty.resize(chunks);
+    s_ChunkIds.resize(chunks);
+    std::iota(s_ChunkIds.begin(), s_ChunkIds.end(), size_t(0));
+    std::atomic<bool> newToCache{false};
+    auto scan = [&](size_t c) {
+        std::vector<entt::entity>& out = s_ChunkDirty[c];
+        out.clear();
+        const size_t end = std::min(count, (c + 1) * kChunk);
+        for (size_t i = c * kChunk; i < end; ++i) {
+            const entt::entity e = ents[(std::ptrdiff_t)i];
+            const size_t s = (size_t)entt::to_entity(e);
+            if (s >= m_WorldTransformKeys.size() || m_WorldTransformKeys[s] != e) { newToCache = true; return; }
+            if (m_LocalHashes[s] != LocalHash(comps[(std::ptrdiff_t)i])) out.push_back(e); // 0 (no transform at the snapshot) never matches
+        }
+    };
+    if (chunks > 1) std::for_each(std::execution::par, s_ChunkIds.begin(), s_ChunkIds.end(), scan);
+    else if (chunks == 1) scan(0);
+    if (newToCache) return false; // new to the cache
+    for (size_t c = 0; c < chunks; ++c) dirty.insert(dirty.end(), s_ChunkDirty[c].begin(), s_ChunkDirty[c].end());
     if (dirty.empty()) return true;
 
     const std::uint32_t gen = ++m_RebuildGeneration;

@@ -66,4 +66,11 @@ struct RenderFrameContext {
     bool      TaaVelocity = false;
     glm::vec2 TaaJitterNdc{0.0f};
     glm::mat4 TaaPrevViewProj{1.0f}; // last frame, unjittered
+
+    // Set = SSAO takes its depth from this view's depth pre-pass instead of drawing the scene again: right after the
+    // pre-pass the renderer copies the depth into SsaoSrc's depth target, adds what the pre-pass leaves out (skinned
+    // and moving things), then calls this to compute + blur the occlusion, all before the opaque pass samples it.
+    // The caller sets it only when the pre-pass runs (Project Settings > Quality > Depth Pre-pass); otherwise it
+    // draws SSAO's own depth pass before the scene, as before.
+    std::function<void()> SsaoFromPrepass;
 };

@@ -1128,9 +1128,39 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         for (const DrawItem& it : drawList)
             if (prepassed(it)) prepass.push_back({it.Ref, it.Slots, it.Visible, &it.Xform});
         DrawDepthCasters(depth, prepass);
-        depth.SetInt("uSplitViewProj", 0); // the shadow passes share this program
         glPolygonOffset(0.0f, 0.0f);
         glDisable(GL_POLYGON_OFFSET_FILL);
+
+        // SSAO from this pre-pass (RenderFrameContext::SsaoFromPrepass): copy the depth into SSAO's own target and
+        // add only what the pre-pass left out, rather than SSAO drawing the whole visible scene a second time. The
+        // view model and the player's own trimmed body stay out, as they did from SSAO's own pass (DrawItem::NoSsao).
+        if (ctx.SsaoFromPrepass && fs.ssaoOn && ctx.TxHdr && ctx.TxHdr->IsValid() &&
+            ctx.SsaoSrc->Width() == ctx.TxHdr->Width() && ctx.SsaoSrc->Height() == ctx.TxHdr->Height()) {
+            PROFILE_GPU_SCOPE("SSAO Depth From Pre-pass");
+            const int w = ctx.TxHdr->Width(), h = ctx.TxHdr->Height();
+            { PROFILE_GPU_SCOPE("SSAO Depth Blit");
+            glBlitNamedFramebuffer(ctx.TxHdr->MultisampleFbo(), ctx.SsaoSrc->DepthFbo(), 0, 0, w, h, 0, 0, w, h,
+                                   GL_DEPTH_BUFFER_BIT, GL_NEAREST); }
+            glBindFramebuffer(GL_FRAMEBUFFER, ctx.SsaoSrc->DepthFbo());
+            glViewport(0, 0, w, h);
+            prepass.clear();
+            for (const DrawItem& it : drawList)
+                if (!prepassed(it) && !it.NoSsao) prepass.push_back({it.Ref, it.Slots, it.Visible, &it.Xform});
+            DrawDepthCasters(depth, prepass);
+            depth.SetInt("uSplitViewProj", 0);
+            glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE); // the occlusion passes write colour
+            ctx.SsaoFromPrepass();
+            GLStateCache::Invalidate();
+            ctx.TxHdr->BindForRender();
+            glViewport(fs.vp[0], fs.vp[1], fs.vp[2], fs.vp[3]);
+            glEnable(GL_DEPTH_TEST);
+            glDepthMask(GL_TRUE);
+            glEnable(GL_CULL_FACE);
+            glCullFace(GL_BACK);
+            glDisable(GL_BLEND);
+            ApplyFrameState(modelShader, fs); // the occlusion passes used texture units 0 and 1
+        }
+        depth.SetInt("uSplitViewProj", 0); // the shadow passes share this program
         glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
         GLStateCache::Invalidate();
         modelShader.Bind();
@@ -1397,6 +1427,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         }
         vmFs.decalCount = vmDecals ? fs.decalCount : 0;
         if (vmFs.clusterOn) {
+            PROFILE_GPU_SCOPE("View Model Cluster Cull");
             if (vmFs.decalCount > 0) in.decals->BindForCull();
             lightBuffer.Bind(0); // this frame's lights, as for the main view's cull
             clusterGrid.Cull(*in.clusterBuildShader, *in.clusterCullShader, vmCtx.View, vmCtx.Proj,
@@ -1414,10 +1445,50 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         modelShader.SetInt("uAlphaBlend", 0);
 
         sortOpaque(viewModelList);
+        // The arms and gun get a depth pre-pass of their own, for the world pass's reason: the model program can
+        // discard, so drawn with depth writes on they lost early depth testing and every hidden layer of the gun (its
+        // inner parts, the hands behind it) was shaded in full - about 1 ms of a frame for two models. Skinned pieces
+        // can go in here, unlike the world's: both programs read this frame's pre-skinned vertices (Model::PreSkin).
+        // Left out, as there: what the model program hides (near hide, hidden bones/vertices) and two-sided draws.
+        const auto vmPrepassed = [&](const DrawItem& it) {
+            return depthPrepass && !(it.NearHide > 0.0f || it.HideBones || it.HideVerts || it.CollarVerts ||
+                                     it.BoneMaskMode || it.LayerPull != 0.0f || it.DoubleSided);
+        };
+        if (depthPrepass) {
+            PROFILE_GPU_SCOPE("View Model Depth Pre-pass");
+            static std::vector<DepthCaster> vmPrepass;
+            vmPrepass.clear();
+            for (const DrawItem& it : viewModelList)
+                if (vmPrepassed(it)) vmPrepass.push_back({it.Ref, it.Slots, it.Visible, &it.Xform});
+            if (!vmPrepass.empty()) {
+                Shader& depth = *in.depthShader;
+                depth.Bind();
+                depth.SetMat4("uLightViewProj", vmProj * ctx.View);
+                depth.SetInt("uSplitViewProj", 1);
+                depth.SetMat4("uView", ctx.View);
+                depth.SetMat4("uProj", vmProj);
+                depth.SetInt("uUseSkinning", 0);
+                depth.SetInt("uCascadeLayered", 0);
+                glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+                glEnable(GL_POLYGON_OFFSET_FILL);
+                glPolygonOffset(1.0f, 4.0f);
+                DrawDepthCasters(depth, vmPrepass);
+                glPolygonOffset(0.0f, 0.0f);
+                glDisable(GL_POLYGON_OFFSET_FILL);
+                glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+                depth.SetInt("uSplitViewProj", 0);
+                GLStateCache::Invalidate();
+                modelShader.Bind();
+            }
+        }
+        PROFILE_GPU_SCOPE("View Model Opaque");
         if (velocityOut) ctx.TxHdr->SetVelocityWrites(true); // TAA: the arms and gun write zero motion
         for (const DrawItem& it : viewModelList) {
             probeItem = &it;
+            const bool prepassedVm = vmPrepassed(it);
+            if (prepassedVm) glDepthMask(GL_FALSE);
             it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, 1.0f, perDraw, it.Pass, it.DoubleSided, it.Visible);
+            if (prepassedVm) glDepthMask(GL_TRUE);
 
             localStats.DrawCalls += it.Meshes;
             localStats.Triangles += it.Tris;
