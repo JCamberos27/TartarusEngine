@@ -47,6 +47,7 @@ Properties {
     [Header(Forward Rendering Options)] [Tooltip(The shiny highlight lights leave on the surface. Off = fully matte under lights.)] _SpecularHighlights ("Specular Highlights", Bool) = 1
     [Tooltip(Reflections of the sky and reflection probes. Off = no reflections, whatever the Smoothness.)] _GlossyReflections ("Reflections", Bool) = 1
     [Tooltip(Decals project onto this surface. Off for glass, screens and anything decals should skip.)] _ReceiveDecals ("Receive Decals", Bool) = 1
+    [Tooltip(Stays dry under the scene's rain Wetness and Puddles. On for interiors and anything under cover.)] _NoWetness ("No Wetness", Bool) = 0
 
     // Engine-internal and advanced lobes: bound and saved as before, not shown.
     [Hidden] _Triplanar      ("Triplanar",        Bool)      = 0

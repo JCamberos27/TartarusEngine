@@ -314,6 +314,7 @@ std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::st
     m.GrungeStrength = r.Num(key("_GrungeStrength", "grungeStrength"), 0.0f);
     m.GrungeScale    = r.Num(key("_GrungeScale", "grungeScale"), 0.5f);
     m.ReceiveDecals  = r.Bool(key("_ReceiveDecals", "receiveDecals"), true);
+    m.NoWetness      = r.Bool(key("_NoWetness", "noWetness"), false);
     m.Foliage        = r.Bool(key("_Foliage", "foliage"), false);
     m.WindStrength   = r.Num(key("_WindStrength", "windStrength"), 0.15f);
     m.WindFrequency  = r.Num(key("_WindFrequency", "windFrequency"), 1.0f);
@@ -506,6 +507,7 @@ bool MaterialAsset::Save() const {
         if (m.GrungeStrength != 0.0f)               props["_GrungeStrength"] = m.GrungeStrength;
         if (m.GrungeScale != 0.5f)                  props["_GrungeScale"]    = m.GrungeScale;
         if (!m.ReceiveDecals)                       props["_ReceiveDecals"]  = false;
+        if (m.NoWetness)                            props["_NoWetness"]      = true;
         if (m.Foliage)                              props["_Foliage"]        = true;
         if (m.WindStrength != 0.15f)                props["_WindStrength"]   = m.WindStrength;
         if (m.WindFrequency != 1.0f)                props["_WindFrequency"]  = m.WindFrequency;
@@ -590,6 +592,7 @@ bool MaterialAsset::Save() const {
         if (m.GrungeStrength != 0.0f)       j["grungeStrength"]     = m.GrungeStrength;
         if (m.GrungeScale != 0.5f)          j["grungeScale"]        = m.GrungeScale;
         if (!m.ReceiveDecals)               j["receiveDecals"]      = false;
+        if (m.NoWetness)                    j["noWetness"]          = true;
         if (m.Foliage)                      j["foliage"]            = true;
         if (m.WindStrength != 0.15f)        j["windStrength"]       = m.WindStrength;
         if (m.WindFrequency != 1.0f)        j["windFrequency"]      = m.WindFrequency;
@@ -642,7 +645,7 @@ bool MaterialAsset::IsBuiltinProp(const std::string& n) {
         "_UVTiling", "_UVOffset", "_NormalStrength", "_NormalFlipY", "_DoubleSided", "_VertexColors",
         "_SpecularHighlights", "_GlossyReflections",
         "_HeightMap", "_ParallaxScale", "_DetailAlbedoMap", "_DetailNormalMap", "_DetailTiling",
-        "_GrungeMap", "_GrungeStrength", "_GrungeScale", "_ReceiveDecals",
+        "_GrungeMap", "_GrungeStrength", "_GrungeScale", "_ReceiveDecals", "_NoWetness",
         "_Foliage", "_WindStrength", "_WindFrequency", "_WindFlutter", "_WindHeight", "_Translucency",
         "_FurEnabled", "_FurLength", "_FurDensity", "_FurShells", "_FurMask", "_FurGravity", "_FurTint", "_FurRim",
     };
@@ -771,6 +774,7 @@ bool MaterialAsset::GetBool(const Material& m, const std::string& n) {
     if (n == "_SpecularHighlights") return m.SpecularHighlights;
     if (n == "_GlossyReflections") return m.GlossyReflections;
     if (n == "_ReceiveDecals") return m.ReceiveDecals;
+    if (n == "_NoWetness") return m.NoWetness;
     if (n == "_Foliage") return m.Foliage;
     if (n == "_FurEnabled") return m.Fur.Enabled;
     auto it = m.ExtraProps.find(n);
@@ -848,6 +852,7 @@ void MaterialAsset::ResolveBuiltin(const std::string& n, ShaderPropType type,
         {"_SpecularHighlights", [](const Material& m) { return glm::vec4(m.SpecularHighlights ? 1.0f : 0.0f, 0, 0, 0); }},
         {"_GlossyReflections",  [](const Material& m) { return glm::vec4(m.GlossyReflections ? 1.0f : 0.0f, 0, 0, 0); }},
         {"_ReceiveDecals",      [](const Material& m) { return glm::vec4(m.ReceiveDecals ? 1.0f : 0.0f, 0, 0, 0); }},
+        {"_NoWetness",          [](const Material& m) { return glm::vec4(m.NoWetness ? 1.0f : 0.0f, 0, 0, 0); }},
         {"_Foliage",            [](const Material& m) { return glm::vec4(m.Foliage ? 1.0f : 0.0f, 0, 0, 0); }},
         {"_FurEnabled",         [](const Material& m) { return glm::vec4(m.Fur.Enabled ? 1.0f : 0.0f, 0, 0, 0); }},
         {"_FurShells",          [](const Material& m) { return glm::vec4((float)m.Fur.Shells, 0, 0, 0); }}, // Int
@@ -940,6 +945,7 @@ void MaterialAsset::SetBool(Material& m, const std::string& n, bool v) {
     if (n == "_SpecularHighlights") { m.SpecularHighlights = v; return; }
     if (n == "_GlossyReflections") { m.GlossyReflections = v; return; }
     if (n == "_ReceiveDecals") { m.ReceiveDecals = v; return; }
+    if (n == "_NoWetness") { m.NoWetness = v; return; }
     if (n == "_Foliage") { m.Foliage = v; return; }
     if (n == "_FurEnabled") { m.Fur.Enabled = v; return; }
     auto it = m.ExtraProps.find(n);

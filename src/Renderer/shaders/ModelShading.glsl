@@ -4,6 +4,7 @@
 #pragma once
 
 uniform vec3 uViewPos;
+uniform int uTaaVelocity; // TAA: 1 = write motion vectors (ModelVertex / ModelFragment)
 // The player's own body (PlayerBodyTag): nothing of it within this many metres of the eye is drawn - the
 // near plane would slice it into slivers. 0 for everything else.
 uniform float uNearHide;
