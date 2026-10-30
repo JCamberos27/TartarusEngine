@@ -13,6 +13,7 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\ModularCityAlleyPa
 - materials: 43
 - model variants (one mesh of a multi-mesh FBX): 27
 - models: 400
+- prefab scale overrides applied: 68
 - prefabs: 387
 - reflection probes: 4
 - renderers: 4776
