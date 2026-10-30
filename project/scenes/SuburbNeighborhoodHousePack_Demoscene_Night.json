@@ -945,7 +945,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 53.0,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 847,
       "name": "Spotlight_Street_high",
@@ -988,7 +989,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 53.0,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 848,
       "name": "Spotlight_Street_high",
@@ -1031,7 +1033,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 53.0,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 849,
       "name": "Spotlight_Street_high",
@@ -1074,7 +1077,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 53.0,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 850,
       "name": "Spotlight_Street_high",
@@ -1117,7 +1121,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 52.0,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 851,
       "name": "Spotlight_Street_low",
@@ -1160,7 +1165,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 52.0,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 852,
       "name": "Spotlight_Street_low",
@@ -1203,7 +1209,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 63.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 853,
       "name": "Pointlight WallLamp",
@@ -1246,7 +1253,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 63.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 854,
       "name": "Pointlight WallLamp",
@@ -1289,7 +1297,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 63.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 855,
       "name": "Pointlight WallLamp",
@@ -1332,7 +1341,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 63.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 856,
       "name": "Pointlight WallLamp",
@@ -1375,7 +1385,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 63.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 857,
       "name": "Pointlight WallLamp",
@@ -1418,7 +1429,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 63.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 858,
       "name": "Pointlight WallLamp",
@@ -1461,7 +1473,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 63.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 859,
       "name": "Pointlight WallLamp",
@@ -1504,7 +1517,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 63.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 860,
       "name": "Pointlight WallLamp",
@@ -1547,7 +1561,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 63.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 861,
       "name": "Pointlight WallLamp",
@@ -1590,7 +1605,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 63.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 862,
       "name": "Pointlight WallLamp",
@@ -1633,7 +1649,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 63.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 863,
       "name": "Pointlight WallLamp",
@@ -1676,7 +1693,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 63.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 864,
       "name": "Pointlight WallLamp",
@@ -1719,7 +1737,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 68.5,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 865,
       "name": "Spotlight garden_small",
@@ -1762,7 +1781,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 68.5,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 866,
       "name": "Spotlight garden_small",
@@ -1805,7 +1825,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 68.5,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 867,
       "name": "Spotlight garden_small",
@@ -1848,7 +1869,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 68.5,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 868,
       "name": "Spotlight garden_small",
@@ -1891,7 +1913,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 68.5,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 869,
       "name": "Spotlight garden_small",
@@ -1934,7 +1957,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 68.5,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 870,
       "name": "Spotlight garden_small",
@@ -1977,7 +2001,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 68.5,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 871,
       "name": "Spotlight garden_small",
@@ -2020,7 +2045,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 68.5,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 872,
       "name": "Spotlight garden_small",
@@ -2063,7 +2089,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 68.5,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 873,
       "name": "Spotlight garden_small",
@@ -2106,7 +2133,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 68.5,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 874,
       "name": "Spotlight garden_small",
@@ -2149,7 +2177,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 68.5,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 875,
       "name": "Spotlight Garden_pilar",
@@ -2192,7 +2221,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 68.5,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 876,
       "name": "Spotlight Garden_pilar",
@@ -2235,7 +2265,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 68.5,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 877,
       "name": "Spotlight Garden_pilar",
@@ -2278,7 +2309,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 68.5,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 878,
       "name": "Spotlight Garden_pilar",
@@ -2321,7 +2353,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 68.5,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 879,
       "name": "Spotlight Garden_pilar",
@@ -2364,7 +2397,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 68.5,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 880,
       "name": "Spotlight Garden_pilar",
@@ -17202,7 +17236,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 77.5,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 3563,
       "name": "Spot Light Baked",
@@ -17245,7 +17280,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 65.0,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 3564,
       "name": "Spot Light Baked",
@@ -17288,7 +17324,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 65.0,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 3565,
       "name": "Spot Light Baked",
@@ -17331,7 +17368,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 65.0,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 3566,
       "name": "Spot Light Baked",
@@ -17374,7 +17412,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 77.5,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 3567,
       "name": "Spot Light Baked",
@@ -17417,7 +17456,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 65.0,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 3568,
       "name": "Spot Light Baked",
@@ -17460,7 +17500,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 64.6114,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 3569,
       "name": "Spot Light Baked",
@@ -17503,7 +17544,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 77.5,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 3570,
       "name": "Spot Light Baked",
@@ -17546,7 +17588,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 70.0,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 3571,
       "name": "Spot Light Baked",
@@ -17589,7 +17632,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 77.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3572,
       "name": "Point Light Baked",
@@ -17632,7 +17676,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 77.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3573,
       "name": "Point Light Baked",
@@ -17675,7 +17720,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3574,
       "name": "Point Light Baked",
@@ -17718,7 +17764,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3575,
       "name": "Point Light Baked",
@@ -17761,7 +17808,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3576,
       "name": "Point Light Baked",
@@ -17804,7 +17852,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3577,
       "name": "Point Light Baked",
@@ -17847,7 +17896,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3578,
       "name": "Point Light Baked",
@@ -17890,7 +17940,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3579,
       "name": "Point Light Baked",
@@ -17933,7 +17984,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3580,
       "name": "Point Light Baked",
@@ -17976,7 +18028,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3581,
       "name": "Point Light Baked",
@@ -18019,7 +18072,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3582,
       "name": "Point Light Baked",
@@ -18062,7 +18116,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3583,
       "name": "Point Light Baked",
@@ -18105,7 +18160,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3584,
       "name": "Point Light Baked",
@@ -18192,7 +18248,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 77.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3587,
       "name": "Point Light Baked",
@@ -18235,7 +18292,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 77.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3588,
       "name": "Point Light Baked",
@@ -18278,7 +18336,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 77.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3589,
       "name": "Point Light Baked",
@@ -18321,7 +18380,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 77.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3590,
       "name": "Point Light Baked",
@@ -18364,7 +18424,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 77.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3591,
       "name": "Point Light Baked",
@@ -18407,7 +18468,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 77.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3592,
       "name": "Point Light Baked",
@@ -18450,7 +18512,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 77.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3593,
       "name": "Point Light Baked",
@@ -18493,7 +18556,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3594,
       "name": "Point Light Baked",
@@ -18536,7 +18600,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3595,
       "name": "Point Light Baked",
@@ -18623,7 +18688,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 70.0,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 3598,
       "name": "Spot Light Baked",
@@ -18666,7 +18732,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3599,
       "name": "Point Light Baked",
@@ -18709,7 +18776,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3600,
       "name": "Point Light Baked",
@@ -18752,7 +18820,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3601,
       "name": "Point Light Baked",
@@ -18795,7 +18864,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3602,
       "name": "Point Light Baked",
@@ -18838,7 +18908,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3603,
       "name": "Point Light Baked",
@@ -18881,7 +18952,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 77.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3604,
       "name": "Point Light Baked",
@@ -18924,7 +18996,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 77.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3605,
       "name": "Point Light Baked",
@@ -19033,7 +19106,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 70.0,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 3609,
       "name": "Spot Light Baked",
@@ -19076,7 +19150,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 65.0,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 3610,
       "name": "Spot Light Baked",
@@ -19119,7 +19194,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3611,
       "name": "Point Light Baked",
@@ -19162,7 +19238,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3612,
       "name": "Point Light Baked",
@@ -19205,7 +19282,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3613,
       "name": "Point Light Baked",
@@ -19248,7 +19326,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3614,
       "name": "Point Light Baked",
@@ -19291,7 +19370,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3615,
       "name": "Point Light Baked",
@@ -19378,7 +19458,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 60.0,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 3618,
       "name": "Spot Light Baked",
@@ -19421,7 +19502,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 65.0,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 3619,
       "name": "Spot Light Baked",
@@ -19464,7 +19546,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 65.0,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 3620,
       "name": "Spot Light Baked",
@@ -19507,7 +19590,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3621,
       "name": "Point Light Baked",
@@ -19550,7 +19634,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3622,
       "name": "Point Light Baked",
@@ -19593,7 +19678,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3623,
       "name": "Point Light Baked",
@@ -19636,7 +19722,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3624,
       "name": "Point Light Baked",
@@ -19679,7 +19766,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3625,
       "name": "Point Light Baked",
@@ -19722,7 +19810,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3626,
       "name": "Point Light Baked",
@@ -19765,7 +19854,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3627,
       "name": "Point Light Baked",
@@ -19852,7 +19942,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 62.5,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 3630,
       "name": "Spot Light Baked",
@@ -19895,7 +19986,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 62.5,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 3631,
       "name": "Spot Light Baked",
@@ -19938,7 +20030,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 65.0,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 3632,
       "name": "Spot Light Baked",
@@ -19981,7 +20074,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 65.0,
-        "Type": "Spot"
+        "Type": "Spot",
+        "Volumetric Intensity": 0.5
       },
       "id": 3633,
       "name": "Spot Light Baked",
@@ -20024,7 +20118,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3634,
       "name": "Point Light Baked",
@@ -20067,7 +20162,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3635,
       "name": "Point Light Baked",
@@ -20110,7 +20206,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3636,
       "name": "Point Light Baked",
@@ -20153,7 +20250,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3637,
       "name": "Point Light Baked",
@@ -20196,7 +20294,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3638,
       "name": "Point Light Baked",
@@ -20261,7 +20360,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3640,
       "name": "Point Light Baked",
@@ -20304,7 +20404,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3641,
       "name": "Point Light Baked",
@@ -20347,7 +20448,8 @@
         "Shadow Softness": 1.0,
         "Shadow Update Mode": "Dynamic",
         "Spot Angle": 74.5,
-        "Type": "Point"
+        "Type": "Point",
+        "Volumetric Intensity": 0.5
       },
       "id": 3642,
       "name": "Point Light Baked",
