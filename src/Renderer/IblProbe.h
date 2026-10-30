@@ -104,9 +104,9 @@ private:
     void BeginCubeFace(unsigned int tex, int face, int mip, int size) const;
     // Uploads the six face-basis uniforms (uFaceForward / uFaceRight / uFaceUp) for `face`.
     static void SetFaceBasis(const Shader& shader, int face);
-    // Convolution steps [first, last] into the given cubes: 0-5 = irradiance face, 6 = every
-    // specular mip and face. False when the FBO failed its completeness check (step 0 only).
-    static constexpr int kBakeSteps = 7;
+    // Convolution steps [first, last] into the given cubes: 0-5 = irradiance face, 6-11 = every
+    // specular mip of face step - 6. False when the FBO failed its completeness check (step 0 only).
+    static constexpr int kBakeSteps = 12;
     bool Convolve(unsigned int irradiance, unsigned int specular, unsigned int envCube, int faceSize,
                   float rotationRadians, float radianceClamp, int first, int last);
     static unsigned int CreateIrradianceCube();

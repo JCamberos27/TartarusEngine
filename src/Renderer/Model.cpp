@@ -145,6 +145,7 @@ std::shared_ptr<Model> Model::CreateInstance() const {
 }
 
 void Model::ImportFromFile(const ModelImportSettings& settings) {
+    BumpAnimationEpoch(); // bones or clips may appear (a reimport reaches every instance sharing m_D)
     Assimp::Importer importer;
     // FBX files embed their own unit scale (commonly centimeters, sometimes meters or
     // inches) in the file's global settings. aiProcess_GlobalScale + this property tells
@@ -288,7 +289,7 @@ bool Model::Reimport(const ModelImportSettings& settings) {
     return !m_D->Meshes.empty();
 }
 
-Model::~Model() = default;
+Model::~Model() { BumpAnimationEpoch(); }
 
 void Model::CollisionGeometry(std::vector<glm::vec3>& outVertices,
                               std::vector<unsigned int>& outIndices) const {
@@ -1503,6 +1504,7 @@ int Model::FindClipByRef(const std::string& ref) const {
 
 int Model::AttachClip(const Model& source, int sourceIndex, const std::string& ref, const std::string& displayName) {
     if (int existing = FindClipByRef(ref); existing >= 0) return existing;
+    if (AnimationCount() == 0) BumpAnimationEpoch(); // its first clip: the animation tick stops skipping it
     if (sourceIndex < 0 || sourceIndex >= (int)source.m_D->Animations.size()) return -1;
     const std::pair<std::string, const SharedData*> key(ref, source.m_D.get());
     if (std::find(m_UnmatchedClips.begin(), m_UnmatchedClips.end(), key) != m_UnmatchedClips.end()) return -1;
@@ -1637,6 +1639,7 @@ int Model::AttachClip(const Model& source, int sourceIndex, const std::string& r
 }
 
 void Model::PlayAnimation(int index, float fadeSeconds, AnimationWrapMode wrap, float speed) {
+    if (NeverAnimates()) BumpAnimationEpoch(); // its pending pose change must reach the animation tick
     if (index >= AnimationCount()) index = -1;
     // Taking playback back from ApplyLocalPose: the built-in path owns the pose again. There is no
     // live clip to fade from in that case (the animator's pose isn't one), so this starts clean.
@@ -2565,7 +2568,12 @@ void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const Shade
     for (const PropertyBinding& b : bindings) {
         const ShaderProperty& prop = props[b.PropIndex];
         const std::string& pname   = prop.Name;
-        const std::string& uname = b.Uniform; // "_AlbedoMap" → "uAlbedoMap"
+        if (b.LocProgram != shader.Serial()) { // "_AlbedoMap" → "uAlbedoMap", "uHasAlbedoMap"
+            b.LocProgram = shader.Serial();
+            b.UniformLoc = shader.Loc(b.Uniform);
+            b.HasUniformLoc = b.HasUniform.empty() ? -1 : shader.Loc(b.HasUniform);
+        }
+        const int uname = b.UniformLoc;
         const bool builtin = b.Builtin;
         const MaterialProp* extra = nullptr;
         if (!builtin) {
@@ -2575,7 +2583,7 @@ void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const Shade
 
         switch (prop.Type) {
         case ShaderPropType::Texture2D: {
-            const std::string& hasName = b.HasUniform;
+            const int hasName = b.HasUniformLoc;
             const std::shared_ptr<Texture>& tex =
                 builtin ? (b.GetTex ? b.GetTex(mat) : MaterialAsset::GetTexture(mat, pname))
                         : (extra ? extra->Tex : MaterialAsset::GetTexture(mat, pname) /*null*/);

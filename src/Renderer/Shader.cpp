@@ -57,6 +57,7 @@ Shader::Shader(const std::string& vertexSrc, const std::string& fragmentSrc, con
     }
 
     m_Program = glCreateProgram();
+    m_Serial = NextSerial();
     glAttachShader(m_Program, vs);
     glAttachShader(m_Program, fs);
     glLinkProgram(m_Program);
@@ -80,6 +81,7 @@ Shader::Shader(const std::string& computeSrc, const char* debugName) {
     unsigned int cs = Compile(GL_COMPUTE_SHADER, computeSrc);
 
     m_Program = glCreateProgram();
+    m_Serial = NextSerial();
     glAttachShader(m_Program, cs);
     glLinkProgram(m_Program);
     glDeleteShader(cs);
@@ -129,6 +131,7 @@ void Shader::Reload(const std::string& vertFile, const std::string& fragFile) {
 
     glDeleteProgram(m_Program);
     m_Program = newProg;
+    m_Serial = NextSerial();
     m_UniformCache.clear();
     for (FastUniform& f : m_FastUniforms) f.Ptr = nullptr;
     m_Values.clear(); // a relinked program starts from its defaults
