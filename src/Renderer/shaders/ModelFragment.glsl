@@ -295,6 +295,15 @@ void main() {
 #else
         Lo += ShadeLight(N, V, L, radiance, albedo, F0, metallic, roughness);
 #endif
+        if (uTranslucency > 0.0) {
+            // Leaf transmission: the sun behind the surface (the normal already faces the viewer, so a two-sided leaf
+            // seen from either side works). Shadowed with the bias pushed TOWARD the sun - the usual bias along N
+            // would put the lookup behind the leaf's own shadow caster. Brighter when looking toward the sun.
+            float back = max(dot(-N, L), 0.0);
+            float fwd = pow(max(dot(-V, L), 0.0), 3.0);
+            vec3 rad = uLights[i].ColorRange.rgb * (uLights[i].Params.y >= 0.0 ? SunShadow(vWorldPos, -N, L) * CloudShadow(vWorldPos) : 1.0);
+            Lo += albedo * rad * (back * (0.35 + 1.4 * fwd) * uTranslucency / PI);
+        }
 #ifdef _CLEARCOAT
         LoCc += radiance * max(dot(N, L), 0.0) * ClearCoatLobe(N, V, L, ccRough) * ccStrength;
 #endif

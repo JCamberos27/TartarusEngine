@@ -21,10 +21,11 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\SuburbNeighborhood
 - scenes: 3
 - scripts dropped (MonoBehaviour): 2590
 - textures: 477
+- textures cooked: 277
 
 ## Not converted / approximated
 
-### Foliage - revisit in P3 (parked: Standard cutout two-sided; wind shader later) (7)
+### Foliage (engine foliage wind + leaf translucency; params from FOLIAGE_WIND) (7)
 - ClimberPlant
 - Plant_BushGrass
 - Plant_Flowers
