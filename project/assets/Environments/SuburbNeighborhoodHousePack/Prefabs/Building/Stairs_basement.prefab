@@ -1,6 +1,106 @@
 {
   "boxes": [],
-  "empties": [],
+  "empties": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.1,
+          0.118914,
+          2.532575
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Stairs_basement_frame Collider 1",
+      "order": 2,
+      "parentId": 1,
+      "position": [
+        1.4,
+        0.100097,
+        2.534164
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.1,
+          0.118914,
+          2.532575
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 3,
+      "name": "Stairs_basement_frame Collider 2",
+      "order": 3,
+      "parentId": 1,
+      "position": [
+        -1.4,
+        0.100097,
+        2.534164
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          1.5,
+          0.118914,
+          0.1
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 4,
+      "name": "Stairs_basement_frame Collider 3",
+      "order": 4,
+      "parentId": 1,
+      "position": [
+        -0.0,
+        0.100097,
+        4.96
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
   "formatVersion": 4,
   "models": [
     {
@@ -34,6 +134,21 @@
       "static": true
     },
     {
+      "collider": {
+        "center": [
+          -0.0,
+          0.100097,
+          0.06
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          1.5,
+          0.118914,
+          0.1
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
       "id": 1,
       "name": "Stairs_basement_frame",
       "order": 1,
@@ -41,21 +156,22 @@
       "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Stairs_basement_frame.FBX",
       "pathGuid": "3e6090d567dde6bd",
       "position": [
-        16.0,
-        -10.0,
+        -0.0,
+        0.0,
         0.0
       ],
       "rotation": [
-        0.707107,
         0.0,
-        0.0,
-        0.707107
+        -0.0,
+        -0.0,
+        1.0
       ],
       "scale": [
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "static": true
     }
   ]
 }

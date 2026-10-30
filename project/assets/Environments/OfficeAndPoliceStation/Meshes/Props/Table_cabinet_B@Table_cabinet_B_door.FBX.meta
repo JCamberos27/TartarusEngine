@@ -2,13 +2,35 @@
   "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
   "guid": "e5eb8529127d853d",
   "importer": {
+    "excludeNodes": [],
     "globalScale": 1.0,
     "importAnimations": false,
     "importNormals": true,
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "optimizeGraph": true
+    "meshNodes": [
+      "Table_cabinet_B_door"
+    ],
+    "optimizeGraph": true,
+    "rootTransform": [
+      -1.0,
+      -0.0,
+      0.0,
+      0.0,
+      0.0,
+      -0.0,
+      1.0,
+      0.0,
+      -0.0,
+      1.0,
+      -0.0,
+      0.0,
+      -43.843535,
+      -0.392426,
+      -0.67194,
+      1.0
+    ]
   },
   "materialRemap": {
     "Metal_Cleantiled": "assets/Environments/OfficeAndPoliceStation/Materials/M_Metal_Cleantiled.mat",

@@ -69,43 +69,6 @@
     },
     {
       "collider": {
-        "center": [
-          -0.0,
-          1.92,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.05,
-          2.005,
-          0.05
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
-      "id": 4,
-      "name": "Tree_Skinned",
-      "order": 4,
-      "parentId": 0,
-      "position": [
-        -0.0,
-        0.0,
-        0.0
-      ],
-      "rotation": [
-        0.0,
-        -0.0,
-        -0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
-      "collider": {
         "friction": 0.6,
         "halfExtents": [
           1,
@@ -178,6 +141,45 @@
         1.0
       ],
       "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          1.92,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.05,
+          2.005,
+          0.05
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 4,
+      "name": "Tree_Skinned",
+      "order": 4,
+      "parentId": 0,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/TreeDead_Anim@Tree_Skinned.FBX",
+      "pathGuid": "6c2f9485b26d7148",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
     }
   ]
 }

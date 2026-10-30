@@ -5,18 +5,21 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\SuburbNeighborhood
 ## Counts
 
 - baked-only lights (now realtime): 154
-- colliders: 7902
+- built-in cubes as boxes: 5
+- colliders: 8096
 - duplicate openables dropped (a twin door within 10 cm): 0
 - lights: 173
-- material overrides on instances: 1619
+- material overrides on instances: 1636
 - materials: 108
-- model variants (one mesh of a multi-mesh FBX): 98
+- model variants (one mesh of a multi-mesh FBX): 102
 - models: 537
+- openable clips applied: 80
+- openables: 64
 - prefabs: 463
 - reflection probes: 12
-- renderers: 7565
+- renderers: 7619
 - scenes: 3
-- scripts dropped (MonoBehaviour): 2510
+- scripts dropped (MonoBehaviour): 2590
 - textures: 477
 - textures cooked: 277
 
@@ -31,7 +34,14 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\SuburbNeighborhood
 - Plant_Treebush
 - Tree
 
-### animated objects (doors and lifts became Openables; the rest stay static) (57)
+### animated objects (doors and lifts became Openables; the rest stay static) (89)
+- Demoscene_Day: Door_exterior_paneled_mesh
+- Demoscene_Day: Door_exterior_white_mesh
+- Demoscene_Day: Door_exterior_windowed_brown_mesh
+- Demoscene_Day: Door_exterior_windowed_mesh
+- Demoscene_Day: Door_garage_5x
+- Demoscene_Day: Door_garage_brown_3x
+- Demoscene_Day: Door_interior_mesh
 - Demoscene_Day: ParticlesParent
 - Demoscene_Day: Tree_skinned_large
 - Demoscene_Day: Tree_skinned_large (1)
@@ -57,6 +67,13 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\SuburbNeighborhood
 - Demoscene_Day: Tree_skinned_small (1)
 - Demoscene_Day: Tree_skinned_small (2)
 - Demoscene_Day: Tree_skinned_small (3)
+- Demoscene_Night: Door_exterior_paneled_mesh
+- Demoscene_Night: Door_exterior_white_mesh
+- Demoscene_Night: Door_exterior_windowed_brown_mesh
+- Demoscene_Night: Door_exterior_windowed_mesh
+- Demoscene_Night: Door_garage_5x
+- Demoscene_Night: Door_garage_brown_3x
+- Demoscene_Night: Door_interior_mesh
 - Demoscene_Night: Tree_skinned_large
 - Demoscene_Night: Tree_skinned_large (1)
 - Demoscene_Night: Tree_skinned_large (2)
@@ -81,6 +98,24 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\SuburbNeighborhood
 - Demoscene_Night: Tree_skinned_small (1)
 - Demoscene_Night: Tree_skinned_small (2)
 - Demoscene_Night: Tree_skinned_small (3)
+- Door_exterior_paneled.prefab: Door_exterior_paneled_mesh
+- Door_exterior_white.prefab: Door_exterior_white_mesh
+- Door_exterior_windowed.prefab: Door_exterior_windowed_mesh
+- Door_exterior_windowed_brown.prefab: Door_exterior_windowed_brown_mesh
+- Door_garage_3x.prefab: Door_garage_3x
+- Door_garage_5x.prefab: Door_garage_5x
+- Door_garage_brown_3x.prefab: Door_garage_brown_3x
+- Door_garage_brown_5x.prefab: Door_garage_brown_5x
+- Door_interior.prefab: Door_interior_mesh
+- Showcase: Door_exterior_paneled_mesh
+- Showcase: Door_exterior_white_mesh
+- Showcase: Door_exterior_windowed_brown_mesh
+- Showcase: Door_exterior_windowed_mesh
+- Showcase: Door_garage_3x
+- Showcase: Door_garage_5x
+- Showcase: Door_garage_brown_3x
+- Showcase: Door_garage_brown_5x
+- Showcase: Door_interior_mesh
 - Showcase: ParticlesParent
 - Showcase: Tree_skinned_large
 - Showcase: Tree_skinned_large_split

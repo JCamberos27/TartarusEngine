@@ -34,6 +34,21 @@
       "static": true
     },
     {
+      "collider": {
+        "center": [
+          0.501299,
+          1.300357,
+          -0.000236
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.508945,
+          1.074597,
+          0.082507
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
       "id": 1,
       "name": "Door_exterior_windowed",
       "order": 1,
@@ -41,23 +56,39 @@
       "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Door_exterior_windowed.FBX",
       "pathGuid": "d32df1d566c99c82",
       "position": [
-        -0.987923,
-        0.024358,
-        0.0
+        -0.0,
+        0.0,
+        3.0
       ],
       "rotation": [
-        0.707107,
         0.0,
+        -0.0,
         0.0,
-        0.707107
+        1.0
       ],
       "scale": [
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "static": true
     },
     {
+      "collider": {
+        "center": [
+          0.500689,
+          1.297946,
+          -0.000478
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.509005,
+          1.075053,
+          0.071944
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
       "id": 2,
       "name": "Door_exterior_white",
       "order": 2,
@@ -65,23 +96,39 @@
       "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Door_exterior_white.FBX",
       "pathGuid": "ace1be574b492cf6",
       "position": [
-        0.312414,
-        0.022942,
-        0.0
+        1.0,
+        -0.0,
+        -5.0
       ],
       "rotation": [
-        0.707107,
         0.0,
+        -1.0,
         0.0,
-        0.707107
+        -0.0
       ],
       "scale": [
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "static": true
     },
     {
+      "collider": {
+        "center": [
+          -0.000427,
+          1.103823,
+          -0.122613
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          2.400689,
+          1.082949,
+          0.020044
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
       "id": 3,
       "name": "Door_garage_brown_5x",
       "order": 3,
@@ -89,21 +136,22 @@
       "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Door_garage_brown_5x.FBX",
       "pathGuid": "d2f5d3fb6e262560",
       "position": [
-        -4.0,
-        -0.0,
-        0.0
+        4.5,
+        0.0,
+        3.0
       ],
       "rotation": [
-        0.707107,
         0.0,
-        0.0,
-        0.707107
+        -0.0,
+        -0.0,
+        1.0
       ],
       "scale": [
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "static": true
     }
   ]
 }

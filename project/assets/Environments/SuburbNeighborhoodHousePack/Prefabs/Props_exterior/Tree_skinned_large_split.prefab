@@ -89,44 +89,6 @@
         1.0,
         1.0
       ]
-    },
-    {
-      "collider": {
-        "center": [
-          -0.0,
-          5.3,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.2,
-          5.5,
-          0.2
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
-      "id": 6,
-      "name": "TreeLarge_Split",
-      "order": 6,
-      "parentId": 0,
-      "position": [
-        -0.008561,
-        0.031277,
-        0.0
-      ],
-      "rotation": [
-        0.0,
-        -0.0,
-        -0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ],
-      "static": true
     }
   ],
   "formatVersion": 4,
@@ -182,6 +144,46 @@
         -0.010874,
         0.043188,
         0.009767
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          5.3,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.2,
+          5.5,
+          0.2
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 6,
+      "name": "TreeLarge_Split",
+      "order": 6,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior/Tree_skinned_large_split@TreeLarge_Split.FBX",
+      "pathGuid": "b70f1cbe88ac015c",
+      "position": [
+        -0.008561,
+        0.031277,
+        0.0
       ],
       "rotation": [
         0.0,
