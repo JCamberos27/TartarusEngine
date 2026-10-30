@@ -357,7 +357,15 @@ void main() {
         vec3 L = normalize(-uLights[i].DirCutoff.xyz); // DirCutoff.xyz travels forward; L points back
         // #102 — only the directional light that owns the cascade map samples it (Params.y 0);
         // any other directional used to be shadowed by the primary sun's map.
-        vec3 radiance = uLights[i].ColorRange.rgb * (uLights[i].Params.y >= 0.0 ? SunShadow(vWorldPos, N, L) * CloudShadow(vWorldPos) : 1.0);
+        // A surface turned away from the sun gets nothing from it (every lobe below carries N.L, clamped),
+        // so it skips the cascade lookup: the soft-PCF fetches were most of the sun's cost per pixel.
+        // Subsurface wraps light past the terminator, so it still samples there.
+#ifdef _SUBSURFACE
+        bool sunFacing = true;
+#else
+        bool sunFacing = dot(N, L) > 0.0;
+#endif
+        vec3 radiance = uLights[i].ColorRange.rgb * (uLights[i].Params.y >= 0.0 ? (sunFacing ? SunShadow(vWorldPos, N, L) : 0.0) * CloudShadow(vWorldPos) : 1.0);
 #ifdef _ANISO
         Lo += ShadeLightAniso(N, V, L, radiance, albedo, F0, metallic, roughness, anisoT, anisoB);
 #else
