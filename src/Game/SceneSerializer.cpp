@@ -1280,6 +1280,7 @@ json BuildSceneJson(const World& world, const std::set<entt::entity>* only = nul
     if (world.Wetness != 0.0f) root["wetness"] = world.Wetness;
     if (world.PuddleAmount != 0.0f) root["puddleAmount"] = world.PuddleAmount;
     if (world.PuddleScale != 4.0f) root["puddleScale"] = world.PuddleScale;
+    if (world.PuddleSsr) root["puddleSsr"] = true;
     root["focusRange"] = world.FocusRange;
     root["dofMaxBlur"] = world.DofMaxBlur;
         root["fogEnabled"] = world.FogEnabled;
@@ -1696,6 +1697,7 @@ bool ApplySceneJsonImpl(World& world, AssetLibrary& assets, const json& root,
     world.Wetness      = std::clamp(root.value("wetness", 0.0f), 0.0f, 1.0f);
     world.PuddleAmount = std::clamp(root.value("puddleAmount", 0.0f), 0.0f, 1.0f);
     world.PuddleScale  = std::clamp(root.value("puddleScale", 4.0f), 0.25f, 100.0f);
+    world.PuddleSsr    = root.value("puddleSsr", false);
     world.FocusRange    = std::clamp(root.value("focusRange", 3.0f), 0.01f, 10000.0f);
     world.DofMaxBlur    = std::clamp(root.value("dofMaxBlur", 8.0f), 0.0f, 32.0f);
             world.FogEnabled       = root.value("fogEnabled", false);
