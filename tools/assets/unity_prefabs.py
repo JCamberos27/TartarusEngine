@@ -1187,14 +1187,14 @@ LOOK_BASE = dict(
     gradeContrast=14.0, gradeSaturation=-10.0, gradeTint=0.0,
 )
 LOOK_DAY = dict(
-    exposureEV=0.0, gradeTemperature=4.0, gradeColorFilter=[1.0, 0.98, 0.95],
-    volumetricEnabled=True, volDensity=0.012, volAnisotropy=0.7, volHeightFalloff=0.08, volDistance=96.0, volQuality=1,
+    exposureEV=-0.3, gradeTemperature=2.0, gradeColorFilter=[1.0, 0.99, 0.97],
+    volumetricEnabled=True, volDensity=0.004, volAnisotropy=0.7, volHeightFalloff=0.08, volDistance=96.0, volQuality=1,
 )
 # Dark and lamp-lit: a dim moon, the street lamps and windows carry the light, the streets are wet.
 LOOK_NIGHT = dict(
-    exposureEV=0.0, autoExposureMinEV=-1.0, autoExposureMaxEV=2.5, gradeTemperature=-10.0,
+    exposureEV=1.0, autoExposureMinEV=-1.0, autoExposureMaxEV=4.0, gradeTemperature=-10.0,
     gradeColorFilter=[0.9, 0.97, 1.05], bloomIntensity=0.2,
-    volumetricEnabled=True, volDensity=0.02, volAnisotropy=0.6, volHeightFalloff=0.1, volDistance=64.0, volQuality=1,
+    volumetricEnabled=True, volDensity=0.008, volAnisotropy=0.6, volHeightFalloff=0.1, volDistance=64.0, volQuality=1,
     wetness=0.85, puddleAmount=0.45, puddleScale=4.0,
 )
 LOOK_SCENES = {
@@ -1202,15 +1202,16 @@ LOOK_SCENES = {
     ('ModularCityAlleyPack', 'Example_Scene_Night'): LOOK_NIGHT,
     ('OfficeAndPoliceStation', 'OfficePack_Example'): dict(
         exposureEV=0.0, gradeTemperature=-2.0, gradeColorFilter=[0.97, 1.0, 1.0], volumetricEnabled=False),
-    ('SuburbNeighborhoodHousePack', 'Demoscene_Day'): LOOK_DAY,
-    ('SuburbNeighborhoodHousePack', 'Demoscene_Night'): LOOK_NIGHT,
-    # Low ground mist hugging the trail, lit through the canopy for god rays.
+    # ~100 real-time lamps: 2 sun/moon cascades keep the street in budget (4 cost 1.7 ms more for no visible gain).
+    ('SuburbNeighborhoodHousePack', 'Demoscene_Day'): dict(LOOK_DAY, shadowCascades=2),
+    ('SuburbNeighborhoodHousePack', 'Demoscene_Night'): dict(LOOK_NIGHT, shadowCascades=2),
+    # Low ground mist hugging the trail (the terrain sits around y 3-4), lit through the canopy for god rays.
     ('SeedMesh_Mossy_Cedrus_Forest', 'Mossy_forest_trail'): dict(
         LOOK_DAY, gradeTemperature=0.0, gradeColorFilter=[0.97, 1.0, 0.96],
-        volDensity=0.05, volHeightFalloff=0.6, volAnisotropy=0.75, volDistance=80.0),
+        volDensity=0.08, volHeightFalloff=0.4, volBaseHeight=3.0, volAnisotropy=0.75, volDistance=80.0, shadowCascades=2),
 }
 NIGHT_MOON_SKY = 0.006  # sky moonBrightness: dim, though the full high moon from the night offset is still there to see by
-NIGHT_MOON_LIGHT = 0.2  # the moon's directional light (the Unity scene's own, or the template Sun standing in for it)
+NIGHT_MOON_LIGHT = 0.35 # the moon's directional light (the Unity scene's own, or the template Sun standing in for it)
 
 
 def apply_look(pack, stem, scene, empties):
@@ -1219,7 +1220,7 @@ def apply_look(pack, stem, scene, empties):
     if look is None:
         return
     scene.update(look)
-    if look is LOOK_NIGHT:
+    if 'night' in stem.lower():
         scene['sky'] = dict(scene['sky'], moonBrightness=NIGHT_MOON_SKY)
         for e in empties:
             if (e.get('Light') or {}).get('Type') == 'Directional':

@@ -1,7 +1,7 @@
 {
   "antiAliasing": "TAA",
   "autoExposure": true,
-  "autoExposureMaxEV": 2.5,
+  "autoExposureMaxEV": 4.0,
   "autoExposureMinEV": -1.0,
   "autoExposureSpeedDown": 1.0,
   "autoExposureSpeedUp": 1.5,
@@ -471,7 +471,7 @@
         ],
         "ColorTempK": 0.0,
         "Culling Mask": -1,
-        "Intensity": 0.2,
+        "Intensity": 0.35,
         "Range": 200.0,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05000000074505806,
@@ -18833,7 +18833,7 @@
       "static": true
     }
   ],
-  "exposureEV": 0.0,
+  "exposureEV": 1.0,
   "filmGrain": 0.0,
   "filmGrainResponse": 0.800000011920929,
   "focusDistance": 10.0,
@@ -98599,7 +98599,7 @@
   "vignetteIntensity": 0.0,
   "vignetteSmoothness": 0.44999998807907104,
   "volAnisotropy": 0.6,
-  "volDensity": 0.02,
+  "volDensity": 0.008,
   "volDistance": 64.0,
   "volHeightFalloff": 0.1,
   "volQuality": 1,

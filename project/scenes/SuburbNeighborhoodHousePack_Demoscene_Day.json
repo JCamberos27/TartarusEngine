@@ -25177,7 +25177,7 @@
       ]
     }
   ],
-  "exposureEV": 0.0,
+  "exposureEV": -0.3,
   "filmGrain": 0.0,
   "filmGrainResponse": 0.800000011920929,
   "focusDistance": 10.0,
@@ -25198,12 +25198,12 @@
   "fxaa": false,
   "gradeColorFilter": [
     1.0,
-    0.98,
-    0.95
+    0.99,
+    0.97
   ],
   "gradeContrast": 14.0,
   "gradeSaturation": -10.0,
-  "gradeTemperature": 4.0,
+  "gradeTemperature": 2.0,
   "gradeTint": 0.0,
   "maxPointShadows": 2,
   "maxSpotShadows": 4,
@@ -152893,7 +152893,7 @@
   "motionBlurIntensity": 0.5,
   "motionBlurSamples": 12,
   "msaaSamples": 1,
-  "shadowCascades": 4,
+  "shadowCascades": 2,
   "shadowDistance": 150.0,
   "shadowResolution": 4096,
   "shadowsEnabled": true,
@@ -152985,7 +152985,7 @@
   "vignetteIntensity": 0.0,
   "vignetteSmoothness": 0.44999998807907104,
   "volAnisotropy": 0.7,
-  "volDensity": 0.012,
+  "volDensity": 0.004,
   "volDistance": 96.0,
   "volHeightFalloff": 0.08,
   "volQuality": 1,
