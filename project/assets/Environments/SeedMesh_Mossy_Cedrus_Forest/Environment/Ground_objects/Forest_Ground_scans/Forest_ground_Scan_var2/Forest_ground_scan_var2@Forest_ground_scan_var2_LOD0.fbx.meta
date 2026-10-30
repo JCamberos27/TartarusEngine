@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Forest_Ground_scans/Forest_ground_Scan_var2",
+  "guid": "5d3e6bbc18389608",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "meshNodes": [
+      "Forest_ground_scan_var2_LOD0"
+    ],
+    "optimizeGraph": true
+  },
+  "materialRemap": {
+    "Forest_ground_scan_var2_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Forest_Ground_scans/Forest_ground_Scan_var2/M_Forest_ground_scan_var2_mat.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

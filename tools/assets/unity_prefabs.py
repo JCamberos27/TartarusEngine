@@ -272,6 +272,11 @@ class Converter:
         self.pack, self.exe = pack, exe
         self.fbx = {}            # unity model guid -> FbxInfo
         self.variants = {}       # (model guid, node) -> engine model path
+        self.local_meshes = {}   # the current scene's embedded Mesh fileID -> name
+        self.scene_path = None
+        self.parent_off = False
+        self.embedded = {}       # (scene, mesh name) -> engine model path or None
+        self.terrain_mats = {}   # engine path of a terrain OBJ -> its material path
         self.prefab_cache = {}   # unity prefab guid -> (roots, objects by fileID)
         self.mat_guids = {}      # engine mat path -> guid
         self.model_guids = {}    # engine model path -> guid
@@ -306,6 +311,77 @@ class Converter:
             (k, v), = e['first'].items()
             by_class[int(k)][int(v)] = e['second']
         return by_class
+
+    EMBEDDED_DUMP = os.environ.get('TARTARUS_EMBEDDED_DUMP', 'C:/Users/jacob/unity_truth/embedded')
+
+    def embedded_model(self, name):
+        """Engine path of a mesh stored inside the current scene, exported by TartarusDump.EmbeddedMeshes as an OBJ
+        (mirrored into the engine's handedness there; one usemtl group sub<i> per submesh). Copied next to the scene."""
+        scene = os.path.splitext(os.path.basename(self.scene_path))[0]
+        key = (scene, name)
+        if key in self.embedded:
+            return self.embedded[key]
+        rel = os.path.relpath(os.path.dirname(self.scene_path), self.pack.src)
+        dst_dir = os.path.join(self.pack.dest, rel, scene + '_embedded')
+        top = os.path.relpath(self.pack.src, self.pack.assets).split(os.sep)[0]
+        src_dir = os.path.join(self.EMBEDDED_DUMP, top, scene)
+        res = None
+        idx = os.path.join(src_dir, 'index.json')
+        if not os.path.exists(idx) and os.path.exists(os.path.join(src_dir, 'terrain_index.json')):
+            idx = os.path.join(src_dir, 'terrain_index.json')
+        if os.path.exists(idx):
+            # same-named meshes are the same Polybrush copy of one tree LOD; the first export stands for them
+            ents = json.load(open(idx, encoding='utf-8'))
+            tidx = os.path.join(src_dir, 'terrain_index.json')  # TartarusDump.Terrains: a Unity Terrain as an OBJ grid
+            if os.path.exists(tidx):
+                ents += json.load(open(tidx, encoding='utf-8'))
+            ent = next((e for e in ents if e['name'] == name), None)
+            if ent:
+                from unity_import import copy_if_changed
+                dst = os.path.join(dst_dir, ent['file'])
+                os.makedirs(dst_dir, exist_ok=True)
+                mtl = os.path.splitext(dst)[0] + '.mtl'
+                with open(mtl, 'w') as f:
+                    f.write(''.join(f'newmtl sub{i}\nKd 0.8 0.8 0.8\n' for i in range(ent['subMeshes'])))
+                txt = open(os.path.join(src_dir, ent['file']), encoding='utf-8').read()
+                with open(dst, 'w', encoding='utf-8', newline='\n') as f:
+                    f.write(f'mtllib {os.path.basename(mtl)}\n' + txt)
+                rel_p = os.path.relpath(dst, os.path.join(self.pack.repo, 'project')).replace(os.sep, '/')
+                imp = {'excludeNodes': [], 'globalScale': 1.0, 'importAnimations': False, 'importNormals': True,
+                       'importSkeleton': False, 'materialImportMode': 1, 'mergeByMaterial': False, 'optimizeGraph': False}
+                write_meta(dst, os.path.dirname(rel_p), 'model', {'importer': imp, 'materialRemap': {}})
+                res = rel_p
+                if ent.get('albedo') is not None:
+                    self.terrain_mats[rel_p] = self.terrain_material(ent, dst)
+                self.pack.counts['scene-embedded meshes (OBJ)'] += 1
+        self.embedded[key] = res
+        return res
+
+    def terrain_material(self, ent, obj_dst):
+        """Lit material for a terrain OBJ: the dominant terrain layer's albedo + normal. The OBJ's UVs are already metres
+        divided by the layer's tileSize, so the material itself does not tile."""
+        from unity_import import tidy, rel_project
+        name = 'M_Terrain_' + tidy(ent.get('layer') or 'Ground')
+        p = {'_AlbedoMap': '', '_AOMap': '', '_BaseColor': [1.0, 1.0, 1.0], '_DoubleSided': False,
+             '_EmissiveColor': [0.0, 0.0, 0.0], '_EmissiveMap': '', '_EmissiveStrength': 1.0, '_Metallic': 0.0,
+             '_MetallicMap': '', '_MetallicRoughnessMap': '', '_NormalMap': '', '_Roughness': 0.9, '_RoughnessMap': '',
+             '_Triplanar': False, '_TriplanarScale': 1.0, '_ReflectionProbes': True}
+        prev, self.pack.cur = getattr(self.pack, 'cur', '?'), 'terrain ' + name
+        if ent.get('albedo') in self.pack.guids:
+            p['_AlbedoMap'] = self.pack.texture(ent['albedo'], 'rgb', 'albedo')
+        if ent.get('normal') in self.pack.guids:
+            p['_NormalMap'] = self.pack.texture(ent['normal'], 'rgb', 'normal')
+        self.pack.cur = prev
+        dst = os.path.join(os.path.dirname(obj_dst), name + '.mat')
+        write_json(dst, {'factorsScaleMaps': True, 'matVersion': 2, 'name': name, 'properties': p,
+                         'shader': 'engine://Standard.shader'})
+        rel = os.path.relpath(os.path.dirname(obj_dst), os.path.join(self.pack.repo, 'project')).replace(os.sep, '/')
+        write_meta(dst, rel, 'material')
+        mat = rel_project(self.pack.repo, dst)
+        self.pack.counts['terrain meshes'] += 1
+        self.pack.report['terrain meshes (dominant layer only, no splat blend; UVs baked to tileSize)'].append(
+            f"{ent['name']}: {ent['tris']} tris at {ent['spacing']} m, layer {ent.get('layer')}")
+        return mat
 
     def model_entity_path(self, guid, node=None):
         """Engine model path for the whole file (node None) or one mesh node of it (a variant file when needed)."""
@@ -353,6 +429,9 @@ class Converter:
         """GameObject tree of a .prefab / .unity: (roots, objects by fileID, scene-level docs)."""
         docs = uy.docs(uy.read(path))
         by_id = {fid: (cls, t, body, stripped) for cls, fid, t, body, stripped in docs}
+        if path.lower().endswith('.unity'):  # meshes saved inside the scene (Polybrush edits): fileID -> name
+            self.scene_path = path
+            self.local_meshes = {fid: v[2].get('m_Name') for fid, v in by_id.items() if v[1] == 'Mesh' and not v[3]}
         objs, tf_of, tf_go = {}, {}, {}
         for fid, (cls, t, body, stripped) in by_id.items():
             if t == 'GameObject' and not stripped:
@@ -557,7 +636,7 @@ class Converter:
         ids[0] += 1
         e = {'id': ids[0], 'name': o.name, 'order': ids[0], 'parentId': parent, 'position': r6(pos),
              'rotation': r6(rot), 'scale': r6(scale)}
-        if not o.active:
+        if not o.active or self.parent_off:  # a child of an inactive object is off too: say so on the entity itself
             e['active'] = False
         if o.static:
             e['static'] = True
@@ -581,6 +660,11 @@ class Converter:
                     model = (self.model_entity_path(g, node), node)
                 else:
                     self.pack.report['meshes not found in their FBX'].append(f'{o.name}: {name}')
+            elif not g and mesh.get('fileID') in self.local_meshes:
+                model = (self.embedded_model(self.local_meshes[mesh['fileID']]), None)
+                if model[0] is None:
+                    self.pack.report['scene-embedded meshes with no exported OBJ (run TartarusDump.EmbeddedMeshes)'].append(
+                        f'{o.name}: {self.local_meshes[mesh["fileID"]]}')
             elif g == UNITY_BUILTIN and mesh.get('fileID') == BUILTIN_CUBE:
                 model = ('box', None)  # Unity's unit cube is the engine's box (the alley's sun blockers)
             elif g == UNITY_BUILTIN and mesh.get('fileID') == BUILTIN_PLANE and not o.children:
@@ -590,6 +674,10 @@ class Converter:
             elif g:
                 self.pack.report['non-FBX meshes (Unity built-ins / .asset), skipped'].append(
                     f'{o.name}: {os.path.basename(self.pack.guids.get(g, g))}')
+        if model is None and comps.get('Terrain'):
+            model = (self.embedded_model(o.name + '_Terrain'), None)
+            if model[0] is None:
+                self.pack.report['terrains with no exported OBJ (run TartarusDump.Terrains)'].append(o.name)
         renderer = (comps.get('MeshRenderer') or comps.get('SkinnedMeshRenderer') or [None])[0]
         if o.renderer_mods:
             renderer = dict(renderer or {'m_Materials': []}, **o.renderer_mods)
@@ -604,6 +692,9 @@ class Converter:
             e['path'] = model[0]
             e['pathGuid'] = self.guid_of(model[0])
             mats = self.material_overrides(model[0], o, renderer)
+            if model[0] in self.terrain_mats:
+                m = self.terrain_mats[model[0]]
+                mats = [{'guid': self._mat_guid(m), 'path': m}]
             if mats:
                 e['materials'] = mats
             if renderer and renderer.get('m_CastShadows', 1) != 1:
@@ -624,8 +715,11 @@ class Converter:
         lod = (comps.get('LODGroup') or [None])[0]
         if lod is not None:
             children = self.lod_group(o, lod, e, children)
+        was_off = self.parent_off
+        self.parent_off = was_off or not o.active
         for c in children:
             self.emit_one(c, out, ids, e['id'])
+        self.parent_off = was_off
 
     # doors and lifts --------------------------------------------------------------------------------------------
     def clip(self, guid):
@@ -742,6 +836,9 @@ class Converter:
             return None
         unity = [m.get('guid') for m in renderer.get('m_Materials') or []]
         unity = [o.mat_mods.get(i, g) for i, g in enumerate(unity)]
+        if '_embedded/' in rel:  # an exported scene mesh: slot i is submesh i, so the renderer's list is the answer
+            paths = [self.pack.material(g) if g else None for g in unity]
+            return [{'guid': self._mat_guid(m), 'path': m} if m else {} for m in paths] if any(paths) else None
         meta = json.load(open(os.path.join(self.pack.repo, 'project', *rel.split('/')) + '.meta', encoding='utf-8'))
         remap = meta.get('materialRemap', {})
         guid = self._model_guid_for(rel)
@@ -786,7 +883,7 @@ class Converter:
 
     def colliders(self, o, comps, e, out, ids, is_model):
         shapes = []
-        for t in ('BoxCollider', 'SphereCollider', 'CapsuleCollider', 'MeshCollider'):
+        for t in ('BoxCollider', 'SphereCollider', 'CapsuleCollider', 'MeshCollider', 'TerrainCollider'):
             for c in comps.get(t, []):
                 if c.get('m_Enabled', 1) == 0:
                     continue
@@ -846,7 +943,11 @@ class Converter:
                 self.pack.report['reflection probes with a box offset (moved the probe, ignoring the parent rotation)'].append(e['name'])
             self.pack.counts['reflection probes'] += 1
 
+    HDRP_TO_ENGINE = 3.0 / 120000.0  # HDRP lights are physical (sun ~120k lux, points/spots in candela); engine sun ~3
+
     def lights(self, comps, e):
+        # An HDRP pack (SeedMesh) stores physical intensities: scale every light by one factor so the balance holds.
+        k = self.HDRP_TO_ENGINE if self.pack.counts['seedmesh materials'] else 1.0
         for l in comps.get('Light', []):
             kind = {0: 'Spot', 1: 'Directional', 2: 'Point'}.get(l.get('m_Type', 2))
             if kind is None:
@@ -855,7 +956,7 @@ class Converter:
             col = l.get('m_Color') or {}
             sh = (l.get('m_Shadows') or {}).get('m_Type', 0)
             e['Light'] = {'Angular Size': 0.53, 'Cast Shadows': sh != 0, 'Color': r6([col.get('r', 1), col.get('g', 1), col.get('b', 1)]),
-                          'ColorTempK': 0.0, 'Culling Mask': -1, 'Intensity': round(float(l.get('m_Intensity', 1.0)), 4),
+                          'ColorTempK': 0.0, 'Culling Mask': -1, 'Intensity': round(float(l.get('m_Intensity', 1.0)) * k, 4),
                           'Range': round(float(l.get('m_Range', 10.0)), 4), 'Shadow Bias': 1.0, 'Shadow Near Plane': 0.05,
                           'Shadow Normal Bias': 1.0, 'Shadow Resolution': 'Follow global', 'Shadow Softness': 1.0,
                           'Shadow Update Mode': 'Dynamic', 'Spot Angle': round(float(l.get('m_SpotAngle', 30.0)) / 2, 4),
@@ -871,25 +972,35 @@ class Converter:
     def lod_group(self, o, lod, e, children):
         """Unity LODGroup -> engine LOD Group: the level renderers become the first children, in level order."""
         levels = lod.get('m_LODs') or []
-        if len(levels) > 4:
-            self.pack.report['LOD groups with more than 4 levels (extra levels dropped)'].append(o.name)
-        level_objs = []
-        for lv in levels[:4]:
+        n = len(levels)
+        # The engine holds 4 levels: keep the first, the last and evenly spaced ones between. A kept level stays up
+        # until the next kept one takes over, so it inherits the threshold of the level just before that one.
+        keep = sorted({round(i * (n - 1) / 3) for i in range(4)}) if n > 4 else list(range(n))
+        if n > 4:
+            self.pack.report['LOD groups with more than 4 levels (kept first, last and evenly spaced)'].append(o.name)
+        all_objs = []
+        for lv in levels:
             members = []
             for r in lv.get('renderers') or []:
                 fid = (r.get('renderer') or {}).get('fileID')
                 for c in children:
                     if fid in c.comp_ids:
                         members.append(c)
-            level_objs.append(members)
+            all_objs.append(members)
+        level_objs = [all_objs[i] for i in keep]
         if not any(level_objs) or any(len(m) != 1 for m in level_objs):
             self.pack.report['LOD groups not converted (levels are not one direct child each)'].append(o.name)
             return children
-        thresholds = [round(float(lv.get('screenRelativeHeight', 0.0)), 5) for lv in levels[:4]]
+        ends = [keep[j + 1] - 1 for j in range(len(keep) - 1)] + [keep[-1]]
+        thresholds = [round(float(levels[i].get('screenRelativeHeight', 0.0)), 5) for i in ends]
         thresholds += [0.0] * (4 - len(thresholds))
         e['LOD Group'] = {'LOD 0': thresholds[0], 'LOD 1': thresholds[1], 'LOD 2': thresholds[2],
                           'LOD 3': thresholds[3], 'Size': 0.0}
         firsts = [m[0] for m in level_objs]
+        for i, m in enumerate(all_objs):  # dropped levels would otherwise draw on top of the kept ones
+            if i not in keep:
+                for c in m:
+                    c.active = False
         self.pack.counts['LOD groups'] += 1
         return firsts + [c for c in children if c not in firsts]
 
@@ -1051,6 +1162,44 @@ def dedupe_openables(out):
     return dropped
 
 
+def _walk(objs):
+    for o in objs:
+        yield o
+        yield from _walk(o.children)
+
+
+def spawn_on_terrain(conv, pack, out, keep):
+    """The player spawn must stand above the scene's terrain mesh: one outside the terrain (the Unity rig can sit anywhere)
+    moves to a point a quarter of the way across it, and one below the surface is lifted to a metre above it."""
+    ter = next((e for e in out['models'] if e.get('path') in conv.terrain_mats and e['parentId'] == -1), None)
+    spawn = next((e for e in keep if e['name'] == 'Player Spawn'), None)
+    if ter is None or spawn is None:
+        return
+    vs = []
+    with open(os.path.join(pack.repo, 'project', *ter['path'].split('/')), encoding='utf-8') as f:
+        for line in f:
+            if line.startswith('v '):
+                _, x, y, z = line.split()
+                vs.append((float(x), float(y), float(z)))
+    nx = next(i for i, v in enumerate(vs) if v[2] != vs[0][2])
+    nz = len(vs) // nx
+    x0, x1, z0, z1 = vs[nx - 1][0], vs[0][0], vs[0][2], vs[-1][2]   # the OBJ is mirrored: x runs from 0 down to -width
+
+    def height(x, z):
+        i = min(max(round((x1 - x) / (x1 - x0) * (nx - 1)), 0), nx - 1)
+        j = min(max(round((z - z0) / (z1 - z0) * (nz - 1)), 0), nz - 1)
+        return vs[j * nx + i][1] * ter['scale'][1] + ter['position'][1]
+    lx, lz = spawn['position'][0] - ter['position'][0], spawn['position'][2] - ter['position'][2]
+    if not (x0 <= lx <= x1 and z0 <= lz <= z1):
+        lx, lz = x1 + (x0 - x1) * 0.25, z0 + (z1 - z0) * 0.25
+        spawn['position'][0], spawn['position'][2] = r6([lx + ter['position'][0]])[0], r6([lz + ter['position'][2]])[0]
+        pack.report['player spawn outside the terrain (moved a quarter of the way across it)'].append(pack.name)
+    ground = height(lx, lz)
+    if spawn['position'][1] < ground + 1.0:
+        spawn['position'][1] = round(ground + 1.0, 6)
+        pack.report['player spawn below the terrain (lifted to 1 m above it)'].append(pack.name)
+
+
 def write_scene(conv, path):
     pack = conv.pack
     roots, _, _ = conv.parse_file(path)
@@ -1096,6 +1245,12 @@ def write_scene(conv, path):
     # The scene's own directional light replaces the template's Sun (two suns blow every surface out to white).
     if any((e.get('Light') or {}).get('Type') == 'Directional' for e in out['empties'] if e['name'] != 'Sun'):
         out['empties'] = [e for e in out['empties'] if e['name'] != 'Sun']
+    # The template's physical sky draws a grey planet below the horizon, which reads as a floor that Unity's scene doesn't
+    # have (HDRP shows sky all round). A scene with no terrain of its own turns that planet off; one with a Unity terrain
+    # (not converted yet) keeps it so the trail still looks like it sits on something.
+    if pack.name.startswith('SeedMesh') and not any(t == 'Terrain' for o in _walk(roots) for t, _ in o.comps):
+        scene['sky'] = dict(scene['sky'], showGround=False)
+    spawn_on_terrain(conv, pack, out, keep)
     scene.update(out)
     scene['formatVersion'] = 4
     dst = os.path.join(pack.repo, 'project', 'scenes', f'{pack.name}_{stem}.json')

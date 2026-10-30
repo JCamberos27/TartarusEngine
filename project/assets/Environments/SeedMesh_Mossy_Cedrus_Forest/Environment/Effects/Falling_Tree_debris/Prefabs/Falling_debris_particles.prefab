@@ -1,0 +1,29 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "id": 0,
+      "name": "Falling_debris_particles",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        -150.32,
+        22.98,
+        166.64
+      ],
+      "rotation": [
+        0.173145,
+        0.685581,
+        -0.685581,
+        0.173145
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "formatVersion": 4,
+  "models": []
+}

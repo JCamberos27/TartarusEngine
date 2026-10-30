@@ -37,7 +37,20 @@ SHADERS = {
     'b7839dad95683814aa64166edc107ae2': 'particle',     # Universal Render Pipeline/Particles/Unlit
     '0406db5a14f94604a8c57ccfbc9f3b46': 'particle',     # Universal Render Pipeline/Particles/Simple Lit
     '0000000000000000f000000000000000': 'skybox',
+    # SeedMesh Mossy Cedrus Forest shader graphs (sources are not in the pack; HDRP-style leftover props, see convert_seed)
+    '212a9bade42d94343aad8c430fbd5665': 'seed',         # SeedMesh vegetation / ground / rock
+    '418e3a61ec2e31d4a8f2efe6d641361c': 'seed',         # SeedMesh billboards
+    '0ee7d7421b85b65448c87cdc62c1dc5c': 'seed',         # SeedMesh foliage cards (ferns, grass, leaves)
+    '4328de05b5eecf74db8cc6d7b684a465': 'seed',         # SeedMesh bark / trunk blend
+    'aa6663de77e9ce04d96f600b02434771': 'seed',         # SeedMesh branches
+    '756bac9090102564582875f4c7e30202': 'hdrplit',      # HDRP/Lit Tessellation ("T_" variants): plain HDRP props, no displacement
+    '6e4ae4064600d784cac1e41a9e6f2e59': 'lit',          # flat-colour display graph (Background_color, Ground)
+    '41e99d5f2ee486e4f85e8cf7bf74a0bc': 'puddle',       # transparent puddle graph (only a water normal)
 }
+# SeedMesh wind (strength m, height m, flutter) by material-name pattern; first match wins. Billboards and mushrooms don't sway.
+SEED_WIND = [(re.compile(r'billboard|mushroom', re.I), None),
+             (re.compile(r'^Cedrus_leaves', re.I), (0.30, 14.0, 0.4)),
+             (re.compile(r'.*'), (0.10, 0.8, 0.4))]
 # Shader graphs that convert to Standard with a note until their own shader exists (by .shadergraph file name).
 GRAPHS = {'Foliage': 'foliage', 'Water': 'water'}
 # The engine's foliage shader params (_WindStrength = metres of sway at the top of _WindHeight; _WindFlutter = leaf flutter
@@ -179,11 +192,80 @@ class Pack:
         self.counts['materials'] += 1
         if kind == 'foliage':
             self.report['Foliage (engine foliage wind + leaf translucency; params from FOLIAGE_WIND)'].append(name)
+        elif kind in ('seed', 'hdrplit', 'puddle'):
+            self.counts['seedmesh materials'] += 1
         elif kind not in ('lit', 'unlit'):
             self.report[f'materials approximated on Standard ({kind})'].append(name)
         return self.mats[guid]
 
+    def convert_seed(self, name, tex, fl, co, keywords, hdrp=False):
+        """SeedMesh graphs: the exposed props are _MainTex (albedo + alpha), Normal_vegetation, mask_vegetation (HDRP mask:
+        R metallic, G AO, A smoothness; no metal anywhere in the pack) and _Color; _BaseColorMap / _MaskMap / _NormalMap are
+        stale HDRP leftovers (often a different texture). _ASSET_TYPE 0 common, 1 foliage, 2 moss variant. _Covering_* /
+        _Snow_* layers and the moss-variant blend are not converted (the base layer is drawn)."""
+        def first(*keys):
+            for k in keys:
+                if k in tex:
+                    return tex[k]['m_Texture']['guid'], tex[k]
+            return None, None
+        c = co.get('_Color') or co.get('_BaseColor') or {}
+        p = {'_AlbedoMap': '', '_AOMap': '', '_BaseColor': [round(c.get(k, 1.0), 4) for k in 'rgb'], '_DoubleSided': False,
+             '_EmissiveColor': [0.0, 0.0, 0.0], '_EmissiveMap': '', '_EmissiveStrength': 1.0, '_Metallic': 0.0,
+             '_MetallicMap': '', '_MetallicRoughnessMap': '', '_NormalMap': '', '_Roughness': 0.9, '_RoughnessMap': '',
+             '_Triplanar': False, '_TriplanarScale': 1.0, '_ReflectionProbes': True}
+        cutout = fl.get('_AlphaCutoffEnable', 0) == 1 or '_ALPHATEST_ON' in keywords
+        if hdrp:   # real HDRP/Lit props
+            g, t = first('_BaseColorMap', '_MainTex')
+        else:
+            g, t = first('_MainTex', '_BaseColorMap', '_BaseColorMap1', 'base_color_moss')
+        if g:
+            p['_AlbedoMap'] = self.texture(g, 'rgba' if cutout else 'rgb', 'albedo')
+            sc, off = t.get('m_Scale') or {}, t.get('m_Offset') or {}
+            if (sc.get('x', 1), sc.get('y', 1)) != (1, 1):
+                p['_UVTiling'] = [sc.get('x', 1), sc.get('y', 1)]
+            if (off.get('x', 0), off.get('y', 0)) != (0, 0):
+                p['_UVOffset'] = [off.get('x', 0), off.get('y', 0)]
+        g, _ = first('_MaskMap', 'mask_vegetation') if hdrp else first('mask_vegetation', '_MaskMap', '_MaskMap1', 'mask_moss')
+        if g:
+            lo, hi = fl.get('_SmoothnessRemapMin', 0.0), fl.get('_SmoothnessRemapMax', 1.0)
+            if hi <= lo:
+                lo, hi = 0.0, 1.0
+            k = hi - lo   # roughness = 1 - (lo + A*(hi-lo))
+            p['_RoughnessMap'] = self.texture(g, ['ch', 3, -k, 1.0 - lo], 'data', f'_Roughness{round(k * 100)}_{round(lo * 100)}')
+            p['_Roughness'] = 1.0
+            p['_AOMap'] = self.texture(g, ['ao', 1, 1.0], 'data', '_AO100')
+        g, _ = first('_NormalMap', 'Normal_vegetation') if hdrp else first('Normal_vegetation', '_NormalMap', '_NormalMap1', 'normal_moss')
+        if g:
+            p['_NormalMap'] = self.texture(g, 'rgb', 'normal')
+            ns = fl.get('_NormalScale', 1.0) if hdrp else fl.get('Normal_intensity_vegetation', 1.0)
+            if ns != 1.0:
+                p['_NormalStrength'] = ns
+        extra = {}
+        if fl.get('_CullMode', 2) == 0 or fl.get('_DoubleSidedEnable', 0) == 1:
+            p['_DoubleSided'] = True
+        if cutout:
+            extra['renderQueue'] = 1
+            extra['alphaCutoff'] = round(fl.get('_AlphaCutoff', 0.5), 4)
+        foliage = fl.get('_ASSET_TYPE', 0) == 1 or fl.get('_MaterialTypeMask', 2) == 32 or 'billboard' in name.lower()
+        if foliage:
+            p['_DoubleSided'] = True
+            p['_Translucency'] = 0.6
+            wind = next(w for rx, w in SEED_WIND if rx.search(name))
+            if wind:
+                p.update({'_Foliage': True, '_WindStrength': wind[0], '_WindHeight': wind[1], '_WindFlutter': wind[2]})
+        if any(k.startswith(('_Covering', '_Snow', '_COVERING')) for k in list(tex) + list(fl)):
+            self.report['SeedMesh _Covering / _Snow layers (not converted; base layer drawn)'].append(name)
+        if fl.get('_ASSET_TYPE', 0) == 2:
+            self.report['SeedMesh moss-variant blend (_moss materials: base layer only)'].append(name)
+        return p, extra
+
     def convert_material(self, name, kind, tex, fl, co, keywords):
+        if kind in ('seed', 'hdrplit', 'puddle'):
+            p, extra = self.convert_seed(name, tex, fl, co, keywords, hdrp=kind == 'hdrplit')
+            if kind == 'puddle':
+                p.update({'_BaseColor': [0.12, 0.16, 0.16], '_Roughness': 0.04, '_RoughnessMap': '', '_AOMap': '', '_ReceiveDecals': False})
+                extra.update({'renderQueue': 2, 'opacity': 0.55})
+            return p, extra
         def colour(k, d=(1.0, 1.0, 1.0, 1.0)):
             c = co.get(k)
             return [c['r'], c['g'], c['b'], c.get('a', 1.0)] if c else list(d)

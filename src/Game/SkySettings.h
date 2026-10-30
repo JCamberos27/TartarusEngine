@@ -24,6 +24,7 @@ struct SkySettings {
     bool  AtmosphereTintsSun = true;
     float SunDiscBrightness = 1.0f;   // visible disc only; the scene lighting is the light's own
     float SunDiscScale = 1.0f;        // x the light's Angular Size
+    bool  ShowGround = true;          // draw the planet below the horizon (off: the sky continues down, as in a skybox)
     bool  MoonEnabled = true;
     float MoonBrightness = 0.004f;    // full-moon light as a fraction of the sun's (real: ~2e-6; brightened for play)
     float MoonPhaseOffset = 0.0f;     // 0..1 shifts the lunar cycle (0 = follows the date)
@@ -100,6 +101,7 @@ struct SkySettings {
     X(AtmosphereTintsSun) \
     X(SunDiscBrightness) \
     X(SunDiscScale) \
+    X(ShowGround) \
     X(MoonEnabled) \
     X(MoonBrightness) \
     X(MoonPhaseOffset) \

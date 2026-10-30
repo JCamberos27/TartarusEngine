@@ -1,0 +1,17 @@
+{
+  "folder": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Demo_Scene/Asset_list_embedded",
+  "guid": "3003eda6c20a8361",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": false,
+    "optimizeGraph": false
+  },
+  "materialRemap": {},
+  "metaVersion": 1,
+  "type": "model"
+}

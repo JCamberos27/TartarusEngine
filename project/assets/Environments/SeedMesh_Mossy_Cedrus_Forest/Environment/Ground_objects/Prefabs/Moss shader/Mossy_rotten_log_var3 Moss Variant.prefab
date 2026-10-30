@@ -1,0 +1,179 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "LOD Group": {
+        "LOD 0": 0.5,
+        "LOD 1": 0.35,
+        "LOD 2": 0.2,
+        "LOD 3": 0.04,
+        "Size": 0.0
+      },
+      "id": 0,
+      "name": "Mossy_rotten_log_var3 Moss Variant",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Mossy_rotten_log_var3_Collider",
+      "order": 5,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "id": 1,
+      "materials": [
+        {
+          "guid": "95cfe16725dfb4b5",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/3_Mossy_rotten_log_var3/M_Mossy_Rotten_log_var3_mat_moss.mat"
+        }
+      ],
+      "name": "Mossy_rotten_log_var3_LOD0",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/3_Mossy_rotten_log_var3/Mossy_rotten_log_var3@Mossy_rotten_log_var3_LOD0.fbx",
+      "pathGuid": "26656a839a7e3934",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 2,
+      "materials": [
+        {
+          "guid": "95cfe16725dfb4b5",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/3_Mossy_rotten_log_var3/M_Mossy_Rotten_log_var3_mat_moss.mat"
+        }
+      ],
+      "name": "Mossy_rotten_log_var3_LOD1",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/3_Mossy_rotten_log_var3/Mossy_rotten_log_var3@Mossy_rotten_log_var3_LOD1.fbx",
+      "pathGuid": "38d444bfd7461d39",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 3,
+      "materials": [
+        {
+          "guid": "95cfe16725dfb4b5",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/3_Mossy_rotten_log_var3/M_Mossy_Rotten_log_var3_mat_moss.mat"
+        }
+      ],
+      "name": "Mossy_rotten_log_var3_LOD2",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/3_Mossy_rotten_log_var3/Mossy_rotten_log_var3@Mossy_rotten_log_var3_LOD2.fbx",
+      "pathGuid": "76952d59973c54dc",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 4,
+      "materials": [
+        {
+          "guid": "95cfe16725dfb4b5",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/3_Mossy_rotten_log_var3/M_Mossy_Rotten_log_var3_mat_moss.mat"
+        }
+      ],
+      "name": "Mossy_rotten_log_var3_LOD3",
+      "order": 4,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/3_Mossy_rotten_log_var3/Mossy_rotten_log_var3@Mossy_rotten_log_var3_LOD3.fbx",
+      "pathGuid": "b5bf1c95dca578b6",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/12_Rotten_Log_var12",
+  "guid": "5715b5c8b3f80bf9",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "meshNodes": [
+      "Rotten_log_var12_LOD1"
+    ],
+    "optimizeGraph": true
+  },
+  "materialRemap": {
+    "Rotten_log_var12_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/12_Rotten_Log_var12/M_Rotten_log_var12_mat.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

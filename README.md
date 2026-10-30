@@ -46,6 +46,7 @@ Without the exemption, a GUID would be re-minted once the file arrived, and its 
 ### Adding or changing a third-party asset
 
 1. Put the file in `project/assets/...` as usual and let the editor create its `.meta`.
+   (A scene JSON too big for GitHub goes the same way: gitignore it under `project/scenes`, keep its `.meta`.)
 2. Rebuild the list: `python tools/assets/asset_manifest.py build .`
 3. Copy the new or changed files to the Drive:
    `python tools/assets/asset_manifest.py export . "<Drive>\Tartarus Assets\Used"`.

@@ -1,0 +1,23 @@
+{
+  "folder": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ground_cover_plants/Mesh",
+  "guid": "2a5f94107abf1770",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "meshNodes": [
+      "ForestClover_var3_LOD3"
+    ],
+    "optimizeGraph": true
+  },
+  "materialRemap": {
+    "Forest_ground_cover_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ground_cover_plants/Textures/M_Ground_cover_plants_mat.mat",
+    "Ground_cover_billboards": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ground_cover_plants/Textures/M_Ground_cover_billboards.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

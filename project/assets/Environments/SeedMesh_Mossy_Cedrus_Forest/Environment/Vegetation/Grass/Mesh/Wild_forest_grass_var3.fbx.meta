@@ -1,0 +1,20 @@
+{
+  "folder": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Grass/Mesh",
+  "guid": "44cd544deba0f4ac",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true
+  },
+  "materialRemap": {
+    "Wild_Forest_grass_billboards": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Grass/Textures/M_Wild_fores_grass_billboards.mat",
+    "Wild_forest_grass": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Grass/Textures/M_Wild_forest_grass.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

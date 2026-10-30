@@ -1,0 +1,20 @@
+{
+  "folder": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Moss_cover/Mesh",
+  "guid": "b23028aa88368520",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "meshNodes": [
+      "Moss_cover_var1_LOD0"
+    ],
+    "optimizeGraph": true
+  },
+  "materialRemap": {},
+  "metaVersion": 1,
+  "type": "model"
+}
