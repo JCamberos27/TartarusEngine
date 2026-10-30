@@ -272,6 +272,8 @@ AREA_FILL_HALF_ANGLE = 65.0  # a rect/disc area light lights its front hemispher
 # window fills inside houses seen from the street: 43 more lights on a night street with no frame time to spare.
 AREA_FILL_PACKS = {'OfficeAndPoliceStation'}
 AREA_FILL_SCALE = 1.0        # Unity area intensity is per unit area: the stand-in's intensity is intensity x area x this
+AREA_FILL_RANGE = 5.0        # a fill only has to reach the floor and the near walls; Unity's 10 m doubled the Office's frame
+AREA_FILL_MIN = 1.0          # below this (sign glows, the 5 cm backside strips) a fill adds cost and no light
 
 
 def area_fill_intensity(l):
@@ -979,9 +981,13 @@ class Converter:
             if area and self.pack.name not in AREA_FILL_PACKS:
                 self.pack.report['area lights (baked only in Unity), skipped'].append(e['name'])
                 continue
+            if area and area_fill_intensity(l) < AREA_FILL_MIN:
+                self.pack.report['area lights too dim to stand in a fill (sign glows), skipped'].append(e['name'])
+                continue
             if area:  # Unity bakes area lights into lightmaps only; the engine has none, so stand in a broad fill
                 kind, sh = 'Spot', 0
-                l = dict(l, m_Intensity=area_fill_intensity(l) / k, m_SpotAngle=2 * AREA_FILL_HALF_ANGLE)
+                l = dict(l, m_Intensity=area_fill_intensity(l) / k, m_SpotAngle=2 * AREA_FILL_HALF_ANGLE,
+                         m_Range=min(float(l.get('m_Range', 10.0)), AREA_FILL_RANGE))
                 self.pack.counts['area lights (baked only in Unity) -> unshadowed wide spot fills'] += 1
             e['Light'] = {'Angular Size': 0.53, 'Cast Shadows': sh != 0, 'Color': r6([col.get('r', 1), col.get('g', 1), col.get('b', 1)]),
                           'ColorTempK': 0.0, 'Culling Mask': -1, 'Intensity': round(float(l.get('m_Intensity', 1.0)) * k, 4),
