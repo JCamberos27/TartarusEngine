@@ -269,6 +269,20 @@ uniform vec3 uEmissiveColor;
 uniform int uTriplanar;
 uniform float uTriplanarScale;
 
+// Cover layer (Standard.shader _Cover*): a second material laid over up-facing surfaces, projected from above in world space.
+// Compiled only into the _COVER variant, so materials without it pay nothing. Units 0/28/20 are bound by ShaderAsset (26/29 are the probe cubes and puddle SSR; 0 is only the depth/shadow
+// programs' albedo, 28 is free, and 20 is shared with _ThicknessMap, so a cover material gives up its thickness map).
+#ifdef _COVER
+layout(binding = 0) uniform sampler2D uCoverAlbedoMap;
+layout(binding = 28) uniform sampler2D uCoverNormalMap;
+layout(binding = 20) uniform sampler2D uCoverMaskMap;   // R height, G occlusion, B smoothness
+uniform float uCoverStrength;
+uniform float uCoverScale;        // tiles per metre
+uniform float uCoverThreshold;    // up-facing share where the cover starts
+uniform float uCoverSharpness;
+uniform float uCoverHeight;       // how much the cover height breaks the edge up
+#endif
+
 // PR 9 — transparent queue. uAlphaBlend = 0 (opaque, default) keeps alpha = 1 (bit-identical).
 uniform int   uAlphaBlend;  // 0 = opaque pass, 1 = transparent pass
 uniform float uOpacity;     // material surface alpha (only used when uAlphaBlend != 0)

@@ -381,6 +381,12 @@ std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::st
             m.AlphaClip = ma->RenderQueue == Queue::AlphaTest;
         }
 
+        // The cover layer's maps are colour / normal / raw values, not sRGB all (other custom maps keep the default).
+        auto CoverTexUse = [](const std::string& n) {
+            using U = AssetLibrary::TextureUse;
+            if (n.rfind("_Cover", 0) != 0) return U::Color;
+            return n.find("Normal") != std::string::npos ? U::Normal : n.find("Albedo") != std::string::npos ? U::Color : U::Data;
+        };
         // Typed store for every linked-shader property that isn't a built-in Material field
         // (#354). Value comes from the .mat "properties" object; a missing key falls back to the
         // property's declared default. Needs the resolved shader for the type + default list.
@@ -409,7 +415,7 @@ std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::st
                     break;
                 case ShaderPropType::Texture2D:
                     mp.TexPath = v && v->is_string() ? v->get<std::string>() : std::string();
-                    mp.Tex = mp.TexPath.empty() ? nullptr : lib->LoadTexture(AbsoluteAssetPath(mp.TexPath));
+                    mp.Tex = mp.TexPath.empty() ? nullptr : lib->LoadTexture(AbsoluteAssetPath(mp.TexPath), CoverTexUse(p.Name));
                     break;
                 }
                 ma->Mat.ExtraProps.emplace(p.Name, std::move(mp));
