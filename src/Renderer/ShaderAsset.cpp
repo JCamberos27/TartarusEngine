@@ -403,8 +403,9 @@ void ShaderAsset::BuildBindings() {
             b.TextureUnit = Decals::UNIT_GRUNGE; // ModelDecals.glsl's layout(binding = 21)
         } else if (m_Props[i].Type == ShaderPropType::Texture2D && (m_Props[i].Name == "_CoverAlbedoMap" ||
                    m_Props[i].Name == "_CoverNormalMap" || m_Props[i].Name == "_CoverMaskMap")) {
-            // The cover layer's maps sit on the three free high units (ModelFragment.glsl's layout(binding = 26/28/29)).
-            b.TextureUnit = m_Props[i].Name == "_CoverAlbedoMap" ? 26 : m_Props[i].Name == "_CoverNormalMap" ? 28 : 29;
+            // The cover layer's maps sit on 0 (only the depth/shadow programs use it), 28 (free) and 20 (shared with _ThicknessMap), see
+            // ModelShading.glsl's layout(binding = 0/28/20): 26/29 are the probe cubes / puddle SSR and everything else is taken.
+            b.TextureUnit = m_Props[i].Name == "_CoverAlbedoMap" ? 0 : m_Props[i].Name == "_CoverNormalMap" ? 28 : 20;
         } else if (m_Props[i].Type == ShaderPropType::Texture2D) {
             if (unit == 8) unit = 16; // skip the engine's reserved 8..15
             if (unit >= s_MaxUnits) {
