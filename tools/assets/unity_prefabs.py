@@ -19,6 +19,7 @@ from import_model_library import write_json, write_meta
 
 IDENT = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
 CLASS_GO, CLASS_TRANSFORM, CLASS_MESHFILTER, CLASS_MESHRENDERER, CLASS_MESH = 1, 4, 33, 23, 43
+UNITY_BUILTIN, BUILTIN_CUBE, BUILTIN_PLANE = '0000000000000000e000000000000000', 10202, 10209
 
 
 # --- matrices (column-major lists of 16) ------------------------------------------------------------------------
@@ -142,7 +143,9 @@ class FbxInfo:
                         geo = mul(geo, h['L'])
                 else:
                     non_geo = mul(non_geo, h['L'])
-            geo = mul(geo, n['L'])
+            # The node's own matrix is its Translation / Rotation / Scaling (Assimp splits a geometric transform off into
+            # helpers, so none of it is geometric): Unity keeps it on the GameObject, e.g. a sign exported scaled x2.07.
+            non_geo = mul(non_geo, n['L'])
             # What the engine's own load bakes for this node: it folds the pivot chain, and the folded node keeps its
             # geometric rotation but not the matching inverse that hands the children back upright.
             eng = list(IDENT)
@@ -242,6 +245,28 @@ def vec(d, keys='xyz', default=0.0):
     return [float(d.get(k, default) or 0.0) for k in keys]
 
 
+_FILEIDS = None
+
+
+def unity_fileids():
+    """Unity's real sub-object fileIDs per model guid, dumped from the Unity editor (unity_fileids/*.json). Newer
+    imports (fileIdsGeneration 2) leave internalIDToNameTable empty and hash their ids, and older tables go stale
+    when a file is re-exported, so this dump is the authority: {guid: {'root', 'ids': [{'id', 'cls', 'name'}]}}."""
+    global _FILEIDS
+    if _FILEIDS is None:
+        _FILEIDS = {}
+        d = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'unity_fileids')
+        for f in sorted(os.listdir(d)) if os.path.isdir(d) else []:
+            if f.endswith('.json'):
+                _FILEIDS.update(json.load(open(os.path.join(d, f), encoding='utf-8')))
+    return _FILEIDS
+
+
+# a GameObject's own placement, name and switch: on a child node of a whole-model instance these can't be folded into
+# the model entity (they'd move, rename or hide the whole model)
+NODE_PROPS = ('m_LocalPosition', 'm_LocalRotation', 'm_LocalScale', 'm_LocalEulerAnglesHint', 'm_Name', 'm_IsActive')
+
+
 class Converter:
     def __init__(self, pack, exe):
         self.pack, self.exe = pack, exe
@@ -267,8 +292,16 @@ class Converter:
 
     def mesh_names(self, guid):
         """Unity mesh fileID -> mesh name, and GameObject / Transform fileID -> node name, from the importer table."""
-        imp = self.pack.meta(guid).get('ModelImporter') or {}
         by_class = collections.defaultdict(dict)
+        dumped = unity_fileids().get(guid)
+        if dumped:
+            for e in dumped['ids']:
+                cls, name = int(e['cls']), e['name']
+                if cls != CLASS_MESH:  # objects are keyed by node name like the importer table: the root is //RootNode
+                    name = name.rsplit('/', 1)[-1] if name else '//RootNode'
+                by_class[cls][int(e['id'])] = name
+            return by_class
+        imp = self.pack.meta(guid).get('ModelImporter') or {}
         for e in imp.get('internalIDToNameTable') or []:
             (k, v), = e['first'].items()
             by_class[int(k)][int(v)] = e['second']
@@ -346,6 +379,16 @@ class Converter:
         for fid, (cls, t, body, stripped) in by_id.items():
             if t == 'PrefabInstance':
                 instances[fid] = self.expand_instance(body)
+        # An object inside a nested instance has, in this file, the id (instance id XOR its source id) with the top bit
+        # cleared: edits made here, and by whoever nests this file in turn, target it by that id.
+        self.nested_ids, self.nested_types = {}, {}
+        for fid, inst in instances.items():
+            if inst:
+                for src_id, o in inst[1].items():
+                    nid = ((fid & 0xFFFFFFFFFFFFFFFF) ^ (src_id & 0xFFFFFFFFFFFFFFFF)) & 0x7FFFFFFFFFFFFFFF
+                    self.nested_ids.setdefault(nid, o)
+                    if src_id in inst[3]:
+                        self.nested_types.setdefault(nid, inst[3][src_id])
         # stripped transforms stand for an instance's object: map them so children can attach
         stripped_tf = {}
         for fid, (cls, t, body, stripped) in by_id.items():
@@ -380,7 +423,7 @@ class Converter:
         for fid, inst in instances.items():
             if inst is None:
                 continue
-            root, _, parent_tf = inst
+            root, _, parent_tf, _ = inst
             if not parent_tf:
                 roots.append(root)
             elif parent_tf in tf_go:
@@ -428,14 +471,21 @@ class Converter:
         for m in mod.get('m_Modifications') or []:
             target = (m.get('target') or {}).get('fileID')
             o = by_src.get(target)
-            if o is None:
-                continue
             prop, val = m.get('propertyPath') or '', m.get('value')
-            if prop in ('m_CastShadows', 'm_ReceiveShadows', 'm_Enabled') and types.get(target) != 'MeshRenderer':
+            if o is None:
+                if prop.split('.')[0] in NODE_PROPS[:3] + ('m_IsActive',):
+                    self.pack.report['instance transform / active edits whose target was not found'].append(
+                        f'{os.path.basename(path)}: {target} {prop}')
+                continue
+            if prop in ('m_CastShadows', 'm_ReceiveShadows', 'm_Enabled') and types.get(target) not in ('MeshRenderer', 'SkinnedMeshRenderer'):
                 continue  # a collider's or light's own switch, not the renderer's
+            if types.get(target) == 'child node' and prop.split('.')[0] in NODE_PROPS:
+                if prop.split('.')[0] not in ('m_LocalEulerAnglesHint', 'm_Name'):
+                    self.pack.counts['child-node transform / active edits of whole-model instances, not applied'] += 1
+                continue
             ref = m.get('objectReference') or {}
             apply_mod(o, prop, val, ref, self.pack)
-        return root, by_src, (mod.get('m_TransformParent') or {}).get('fileID')
+        return root, by_src, (mod.get('m_TransformParent') or {}).get('fileID'), types
 
     def prefab_tree(self, guid):
         """A fresh copy of a source prefab's tree, keyed by its own fileIDs (and its nested instances' ids)."""
@@ -445,6 +495,9 @@ class Converter:
             return None
         root = roots[0]
         by_src, types = dict(objs), {}
+        for nid, o in self.nested_ids.items():
+            by_src.setdefault(nid, o)
+        types.update(self.nested_types)
         # Transforms and components resolve to their GameObject: modifications target any of them
         for fid, (cls, t, body, stripped) in self._docs_index(path).items():
             types[fid] = t
@@ -467,7 +520,7 @@ class Converter:
             return None
         names = self.mesh_names(guid)
         id_of = {}
-        for cls in (CLASS_GO, CLASS_TRANSFORM, CLASS_MESHFILTER, CLASS_MESHRENDERER):
+        for cls in (CLASS_GO, CLASS_TRANSFORM, CLASS_MESHFILTER, CLASS_MESHRENDERER, 137):
             for fid, nm in names.get(cls, {}).items():
                 id_of.setdefault(nm, []).append(fid)
         top = info.collapsed_root() or info.root
@@ -479,12 +532,18 @@ class Converter:
         root.comp_ids.update(names.get(CLASS_MESHRENDERER, {}).keys())
         by_src = {}
         types = {fid: 'MeshRenderer' for fid in names.get(CLASS_MESHRENDERER, {})}
+        types.update({fid: 'SkinnedMeshRenderer' for fid in names.get(137, {})})
         for fid in id_of.get('//RootNode', []):
             by_src[fid] = root
-        # child objects resolve to the root model entity: per-node edits are folded into it (reported)
+        # child objects resolve to the root model entity: renderer / material edits are folded into it, but a child
+        # node's own transform, name and active switch are not (see expand_instance)
+        exact = guid in unity_fileids()
         for nm, fids in id_of.items():
             for fid in fids:
-                by_src.setdefault(fid, root)
+                if fid not in by_src:
+                    by_src[fid] = root
+                    if exact and types.get(fid) not in ('MeshRenderer', 'SkinnedMeshRenderer'):
+                        types[fid] = 'child node'
         return root, by_src, types
 
     # engine output --------------------------------------------------------------------------------------------
@@ -508,8 +567,9 @@ class Converter:
         model = None
         if o.source and o.source[0] == 'model':
             model = (self.model_entity_path(o.source[1]), None)
-        elif comps.get('MeshFilter'):
-            mesh = comps['MeshFilter'][0].get('m_Mesh') or {}
+        elif comps.get('MeshFilter') or comps.get('SkinnedMeshRenderer'):
+            # a skinned mesh (the pack's wind-rigged trees) draws as a static model in its bind pose
+            mesh = (comps.get('MeshFilter') or comps['SkinnedMeshRenderer'])[0].get('m_Mesh') or {}
             g = mesh.get('guid')
             if g in self.pack.guids and self.pack.guids[g].lower().endswith('.fbx'):
                 if g not in self.fbx:
@@ -521,13 +581,26 @@ class Converter:
                     model = (self.model_entity_path(g, node), node)
                 else:
                     self.pack.report['meshes not found in their FBX'].append(f'{o.name}: {name}')
+            elif g == UNITY_BUILTIN and mesh.get('fileID') == BUILTIN_CUBE:
+                model = ('box', None)  # Unity's unit cube is the engine's box (the alley's sun blockers)
+            elif g == UNITY_BUILTIN and mesh.get('fileID') == BUILTIN_PLANE and not o.children:
+                # Unity's plane is 10 x 10 with no thickness: a flat box (the suburb's water)
+                model = ('box', None)
+                e['scale'] = r6([e['scale'][0] * 10.0, e['scale'][1] * 0.002, e['scale'][2] * 10.0])
             elif g:
                 self.pack.report['non-FBX meshes (Unity built-ins / .asset), skipped'].append(
                     f'{o.name}: {os.path.basename(self.pack.guids.get(g, g))}')
-        renderer = (comps.get('MeshRenderer') or [None])[0]
+        renderer = (comps.get('MeshRenderer') or comps.get('SkinnedMeshRenderer') or [None])[0]
         if o.renderer_mods:
             renderer = dict(renderer or {'m_Materials': []}, **o.renderer_mods)
-        if model and model[0] and (renderer is None or renderer.get('m_Enabled', 1)):
+        if model and model[0] == 'box' and (renderer is None or renderer.get('m_Enabled', 1)):
+            mats = [self.pack.material(m.get('guid')) for m in (renderer or {}).get('m_Materials') or []]
+            e['materials'] = [{'guid': self._mat_guid(m), 'path': m} if m else {} for m in mats[:1]]
+            if renderer and renderer.get('m_CastShadows', 1) != 1:
+                e['castShadows'] = int(renderer.get('m_CastShadows', 1))
+            out['boxes'].append(e)
+            self.pack.counts['built-in cubes as boxes'] += 1
+        elif model and model[0] and (renderer is None or renderer.get('m_Enabled', 1)):
             e['path'] = model[0]
             e['pathGuid'] = self.guid_of(model[0])
             mats = self.material_overrides(model[0], o, renderer)

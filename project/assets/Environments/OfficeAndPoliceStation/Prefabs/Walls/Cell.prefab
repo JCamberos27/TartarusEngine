@@ -89,9 +89,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Door_Cell.FBX",
       "pathGuid": "b35b8812eb75950c",
       "position": [
-        -0.0,
+        0.004,
         0.0,
-        0.0
+        -0.053
       ],
       "rotation": [
         0.0,

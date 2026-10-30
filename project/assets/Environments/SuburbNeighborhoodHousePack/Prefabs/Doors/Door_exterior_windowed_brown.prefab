@@ -27,22 +27,46 @@
   "formatVersion": 4,
   "models": [
     {
+      "Openable": {
+        "Amount": 90.0,
+        "Close Sound": "assets/Audio/Foley/door/close_1.wav;assets/Audio/Foley/door/close_2.wav;assets/Audio/Foley/door/close_3.wav;assets/Audio/Foley/door/close_4.wav",
+        "Latch Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav;assets/Audio/Foley/door/latch_3.wav;assets/Audio/Foley/door/latch_4.wav",
+        "Motion": "Hinge Left",
+        "Open Sound": "assets/Audio/Foley/door/open_1.wav;assets/Audio/Foley/door/open_2.wav;assets/Audio/Foley/door/open_3.wav;assets/Audio/Foley/door/open_4.wav",
+        "Open Time": 0.5,
+        "Start Open": false
+      },
+      "collider": {
+        "center": [
+          0.501299,
+          1.300357,
+          -0.000236
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.508945,
+          1.074597,
+          0.035
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
       "id": 1,
-      "name": "Door_exterior_windowed",
+      "name": "Door_exterior_windowed_brown_mesh",
       "order": 1,
       "parentId": 0,
       "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Door_exterior_windowed.FBX",
       "pathGuid": "d32df1d566c99c82",
       "position": [
-        -0.987923,
-        0.024358,
+        -0.0,
+        0.0,
         0.0
       ],
       "rotation": [
-        0.707107,
         0.0,
+        -0.0,
         0.0,
-        0.707107
+        1.0
       ],
       "scale": [
         1.0,

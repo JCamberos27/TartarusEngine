@@ -51359,9 +51359,9 @@
       ],
       "rotation": [
         0.0,
-        -1.0,
+        -0.590887,
         -0.0,
-        -0.0
+        0.806754
       ],
       "scale": [
         1.0,
@@ -53026,9 +53026,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Dresser_A_drawer.FBX",
       "pathGuid": "398671ca4776ff51",
       "position": [
-        -0.417099,
+        -0.417,
         0.446,
-        0.406
+        0.447
       ],
       "rotation": [
         0.0,
@@ -53226,9 +53226,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Dresser_A_drawer.FBX",
       "pathGuid": "398671ca4776ff51",
       "position": [
-        0.4179,
+        0.418,
         0.277,
-        0.406
+        0.445
       ],
       "rotation": [
         0.0,
@@ -55543,15 +55543,15 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Table_cabinet_A.FBX",
       "pathGuid": "c983c65b55e75b5c",
       "position": [
-        -0.000999,
+        1.91,
         0.0,
-        1.9023
+        -0.001
       ],
       "rotation": [
+        0.0,
         -0.0,
-        0.707107,
         -0.0,
-        0.707107
+        1.0
       ],
       "scale": [
         1.0,
@@ -55665,7 +55665,7 @@
       "position": [
         -0.0,
         0.222,
-        0.681
+        0.725
       ],
       "rotation": [
         -0.0,
@@ -55703,15 +55703,15 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Table_cabinet_B@Table_cabinet_B.FBX",
       "pathGuid": "b09f8672482cd9b9",
       "position": [
-        1.745003,
+        0.003,
         0.0,
-        -0.003
+        1.774
       ],
       "rotation": [
         0.0,
+        -0.707107,
         -0.0,
-        0.0,
-        1.0
+        -0.707107
       ],
       "scale": [
         1.0,
@@ -58156,7 +58156,7 @@
       "position": [
         -0.0,
         0.324,
-        0.304
+        0.368
       ],
       "rotation": [
         0.0,
@@ -58783,8 +58783,8 @@
       "name": "Lamp_spot",
       "order": 1004,
       "parentId": 669,
-      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Lamp_spot@Lamp_spot.FBX",
-      "pathGuid": "8335822a2d140aa7",
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Lamp_spot@Lamp_spot_ceilingpart.FBX",
+      "pathGuid": "ffa48874a3d90102",
       "position": [
         14.399,
         3.663,
@@ -70501,8 +70501,8 @@
       "name": "Lamp_spot",
       "order": 1495,
       "parentId": 669,
-      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Lamp_spot@Lamp_spot.FBX",
-      "pathGuid": "8335822a2d140aa7",
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Lamp_spot@Lamp_spot_ceilingpart.FBX",
+      "pathGuid": "ffa48874a3d90102",
       "position": [
         19.401,
         -0.387,
@@ -86098,7 +86098,7 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_E.FBX",
       "pathGuid": "2742c2f55905c8b4",
       "position": [
-        -0.074,
+        0.102,
         1.85,
         0.259
       ],
@@ -86258,9 +86258,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_B.FBX",
       "pathGuid": "7cf75bb5011e54da",
       "position": [
-        -0.29,
+        -0.114001,
         1.85,
-        0.261153
+        0.261155
       ],
       "rotation": [
         0.0,
@@ -86498,9 +86498,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_B.FBX",
       "pathGuid": "7cf75bb5011e54da",
       "position": [
-        -0.364,
+        0.551,
         0.861,
-        0.280153
+        0.28
       ],
       "rotation": [
         0.0,
@@ -86538,7 +86538,7 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_G.FBX",
       "pathGuid": "53045d5410fd39e7",
       "position": [
-        0.4478,
+        0.3128,
         0.861,
         0.271767
       ],
@@ -86618,9 +86618,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_F.FBX",
       "pathGuid": "a84bb68ca4caa9bf",
       "position": [
-        -0.144,
+        0.771001,
         0.861,
-        0.273
+        0.272848
       ],
       "rotation": [
         0.0,
@@ -86658,7 +86658,7 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_C.FBX",
       "pathGuid": "98da71f3d5f6276d",
       "position": [
-        0.221,
+        0.086,
         0.861,
         0.271
       ],
@@ -86698,7 +86698,7 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_D.FBX",
       "pathGuid": "37af9429351e2207",
       "position": [
-        0.741,
+        -0.325,
         0.861,
         0.274
       ],
@@ -89400,7 +89400,7 @@
       "position": [
         -0.0,
         0.624,
-        0.304
+        0.377
       ],
       "rotation": [
         0.0,
@@ -91430,7 +91430,7 @@
       "position": [
         -0.0,
         0.324,
-        0.304
+        0.34
       ],
       "rotation": [
         0.0,
@@ -94544,15 +94544,15 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Table_cabinet_A.FBX",
       "pathGuid": "c983c65b55e75b5c",
       "position": [
-        -0.000999,
+        1.914,
         0.0,
-        1.9023
+        0.003
       ],
       "rotation": [
+        0.0,
         -0.0,
-        0.707107,
         -0.0,
-        0.707107
+        1.0
       ],
       "scale": [
         1.0,
@@ -94704,15 +94704,15 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Table_cabinet_B@Table_cabinet_B.FBX",
       "pathGuid": "b09f8672482cd9b9",
       "position": [
-        1.745003,
+        -0.004,
         0.0,
-        -0.003
+        1.786
       ],
       "rotation": [
         0.0,
+        0.707107,
         -0.0,
-        0.0,
-        1.0
+        0.707107
       ],
       "scale": [
         1.0,
@@ -98157,7 +98157,7 @@
       "position": [
         -0.593,
         0.586,
-        0.444
+        0.661
       ],
       "rotation": [
         0.0,
@@ -99704,6 +99704,7 @@
       "static": true
     },
     {
+      "active": false,
       "collider": {
         "center": [
           0.0,
@@ -104728,9 +104729,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Dresser_A_drawer.FBX",
       "pathGuid": "398671ca4776ff51",
       "position": [
-        -0.410198,
+        -0.41,
         0.277,
-        0.406
+        0.474
       ],
       "rotation": [
         0.0,
@@ -105250,7 +105251,7 @@
       "position": [
         -0.0,
         0.651,
-        0.159
+        0.228
       ],
       "rotation": [
         0.0,
@@ -110401,8 +110402,8 @@
       "name": "Lamp_spot",
       "order": 3246,
       "parentId": 669,
-      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Lamp_spot@Lamp_spot.FBX",
-      "pathGuid": "8335822a2d140aa7",
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Lamp_spot@Lamp_spot_ceilingpart.FBX",
+      "pathGuid": "ffa48874a3d90102",
       "position": [
         -17.139,
         3.9975,
@@ -110626,7 +110627,7 @@
       "position": [
         -0.0,
         0.472,
-        0.689
+        0.73
       ],
       "rotation": [
         0.0,
@@ -114442,8 +114443,8 @@
       "name": "Lamp_spot (1)",
       "order": 3406,
       "parentId": 669,
-      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Lamp_spot@Lamp_spot.FBX",
-      "pathGuid": "8335822a2d140aa7",
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Lamp_spot@Lamp_spot_ceilingpart.FBX",
+      "pathGuid": "ffa48874a3d90102",
       "position": [
         14.399,
         3.663,
@@ -116701,15 +116702,15 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Table_cabinet_A.FBX",
       "pathGuid": "c983c65b55e75b5c",
       "position": [
-        -0.000999,
+        2.336,
         0.0,
-        1.9023
+        -0.002
       ],
       "rotation": [
+        0.0,
         -0.0,
-        0.707107,
         -0.0,
-        0.707107
+        1.0
       ],
       "scale": [
         1.0,
@@ -128479,7 +128480,8 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "static": true
     },
     {
       "Openable": {
@@ -128707,7 +128709,7 @@
       "position": [
         -0.0,
         0.0,
-        0.0
+        0.006
       ],
       "rotation": [
         0.0,
@@ -129103,7 +129105,8 @@
         1.0,
         1.0,
         1.0
-      ]
+      ],
+      "static": true
     },
     {
       "Openable": {
@@ -129296,9 +129299,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Elevator_panel_outside.FBX",
       "pathGuid": "dc5089fbab14d4e2",
       "position": [
-        0.956261,
+        -0.959,
         1.15,
-        0.110599
+        0.111
       ],
       "rotation": [
         0.0,
@@ -132386,9 +132389,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Elevator_Doors@ElevatorDoor_L.FBX",
       "pathGuid": "268b722bbe3e5f06",
       "position": [
-        -0.728919,
+        -1.459,
         0.017527,
-        -0.07424
+        -0.074
       ],
       "rotation": [
         0.0,
@@ -132431,9 +132434,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Elevator_Doors@ElevatorDoor_R.FBX",
       "pathGuid": "843ea463b0016d45",
       "position": [
-        0.728965,
+        1.463,
         0.017735,
-        -0.07424
+        -0.074
       ],
       "rotation": [
         0.0,
@@ -132470,9 +132473,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Elevator_panel_outside.FBX",
       "pathGuid": "dc5089fbab14d4e2",
       "position": [
-        0.956261,
+        -0.959,
         1.15,
-        0.110599
+        0.111
       ],
       "rotation": [
         0.0,
@@ -139033,9 +139036,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Door_Cell.FBX",
       "pathGuid": "b35b8812eb75950c",
       "position": [
-        -0.0,
+        0.004,
         0.0,
-        0.0
+        -0.053
       ],
       "rotation": [
         0.0,
@@ -139410,9 +139413,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Door_Cell.FBX",
       "pathGuid": "b35b8812eb75950c",
       "position": [
-        -0.0,
+        0.004,
         0.0,
-        0.0
+        -0.053
       ],
       "rotation": [
         0.0,
@@ -139507,9 +139510,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Door_Cell.FBX",
       "pathGuid": "b35b8812eb75950c",
       "position": [
-        -0.0,
+        0.004,
         0.0,
-        0.0
+        -0.053
       ],
       "rotation": [
         0.0,
@@ -139654,9 +139657,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Door_Cell.FBX",
       "pathGuid": "b35b8812eb75950c",
       "position": [
-        -0.0,
+        0.004,
         0.0,
-        0.0
+        -0.053
       ],
       "rotation": [
         0.0,
@@ -139951,9 +139954,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Door_Cell.FBX",
       "pathGuid": "b35b8812eb75950c",
       "position": [
-        -0.0,
+        0.004,
         0.0,
-        0.0
+        -0.053
       ],
       "rotation": [
         0.0,
@@ -140348,9 +140351,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Door_Cell.FBX",
       "pathGuid": "b35b8812eb75950c",
       "position": [
-        -0.0,
+        0.004,
         0.0,
-        0.0
+        -0.053
       ],
       "rotation": [
         0.0,

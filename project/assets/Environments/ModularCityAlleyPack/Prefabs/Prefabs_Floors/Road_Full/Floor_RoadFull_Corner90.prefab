@@ -190,7 +190,7 @@
         "shape": 0
       },
       "id": 3,
-      "name": "Floor_StonePavemet_A_1\\xBDx (1)",
+      "name": "Floor_StonePavemet_A_1\u00bdx (1)",
       "order": 3,
       "parentId": 0,
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_A_1\u00bdx.FBX",
@@ -476,7 +476,7 @@
         "shape": 0
       },
       "id": 11,
-      "name": "Floor_StonePavemet_A_1\\xBDx",
+      "name": "Floor_StonePavemet_A_1\u00bdx",
       "order": 11,
       "parentId": 0,
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_A_1\u00bdx.FBX",
