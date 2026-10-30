@@ -53,6 +53,7 @@
 #include "OpaqueColorCopy.h"
 #include "Tonemapper.h"
 #include "Upscaler.h"
+#include "TemporalAA.h"
 #include "GameModuleAPI.h" // #170 smoke: QueryFilter / RaycastHit
 #include "Tests/UnitTests.h" // #173
 #include "Tests/EditorUiTests.h" // --editor-tests
@@ -403,7 +404,7 @@ static PostSettings MakePostSettings(const World& world, unsigned int bloomTex, 
     p.FocusDistance = world.FocusDistance;
     p.FocusRange = world.FocusRange;
     p.MaxBlur = world.DofMaxBlur;
-    p.Fxaa = world.FxaaEnabled;
+    p.Fxaa = world.EffectiveFxaa(); // TAA replaces it
     p.AutoExposure = world.AutoExposure;
     p.AutoExposureMinEV = world.AutoExposureMinEV;
     p.AutoExposureMaxEV = world.AutoExposureMaxEV;
@@ -1730,6 +1731,10 @@ int main(int argc, char** argv) {
         // framebuffers above (and into FBO 0 for free-aspect maximized play).
         HdrTarget sceneHdr;
         HdrTarget gameHdr;
+        // TAA history per view (World::AntiAliasingMode::Taa): the Scene tab, and the game camera (docked Game view
+        // and maximized play share it, as they share gameHdr; a camera cut resets it).
+        TemporalAA sceneTaa;
+        TemporalAA gameTaa;
         OpaqueColorCopy sceneOpaqueColor;  // PR12: opaque color capture for scene-view refraction
         OpaqueColorCopy gameOpaqueColor;   // PR12: opaque color capture for game-view refraction
         Tonemapper tonemapper;
@@ -4235,8 +4240,11 @@ int main(int argc, char** argv) {
             sceneInputs.ssaoIntensity    = world.SsaoIntensity;
             sceneInputs.layerVisibleMask = frameSettings.LayerVisibleMask;
             auto drawScene = [&](const RenderFrameContext& ctx, EditorLayer::RenderStats* outStats) {
-                world.ApplyLod(ctx.ViewPos, ctx.Proj); // #163 - this view's LOD levels (sun shadows too)
-                sceneInputs.sunShadowsReady = renderSunShadows(ctx.View, ctx.Proj); // #109
+                // TAA: LOD picks and the sun's cascade fit see the unjittered projection, or the cascades would
+                // re-fit (and shimmer) with every sub-pixel step.
+                const glm::mat4 steadyProj = ctx.TaaVelocity ? TemporalAA::JitterProjection(ctx.Proj, -ctx.TaaJitterNdc) : ctx.Proj;
+                world.ApplyLod(ctx.ViewPos, steadyProj); // #163 - this view's LOD levels (sun shadows too)
+                sceneInputs.sunShadowsReady = renderSunShadows(ctx.View, steadyProj); // #109
                 sceneRenderer.RenderScene(world, ctx, sceneInputs, outStats);
             };
 
@@ -4330,14 +4338,22 @@ int main(int argc, char** argv) {
                 const int scH = std::max((int)available.y, 1);
 
                 sceneFramebuffer.Resize(scW, scH);
-                sceneHdr.Resize(scW, scH, world.MsaaSamples);
+                sceneHdr.Resize(scW, scH, world.EffectiveMsaaSamples());
+                // TAA: a velocity attachment and the resolved depth for the resolve; jitter goes on below.
+                const bool sceneTaaOn = world.TaaEnabled() && sceneHdr.IsValid();
+                sceneHdr.SetVelocityEnabled(sceneTaaOn);
+                if (sceneTaaOn) sceneHdr.ResolvedDepthTexture(); // provisioned before this frame's ResolveTo
+                else sceneTaa.Reset();
                 sceneHdr.BindForRender();
                 glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                if (sceneTaaOn) sceneHdr.ClearVelocity(TemporalAA::kVelocityUnknown);
 
                 float sceneAspect = (float)scW / (float)scH;
                 glm::mat4 sceneViewMat = editorCamera.ViewMatrix();
                 glm::mat4 sceneProjMat = editorCamera.ProjectionMatrix(sceneAspect);
+                // The world pass draws through the jittered projection; picking, gizmos, the grid and outlines keep sceneProjMat.
+                const glm::mat4 sceneDrawProj = sceneTaaOn ? sceneTaa.BeginFrame(sceneViewMat, sceneProjMat, scW, scH) : sceneProjMat;
 
                 EditorLayer::ShadingMode shading = editor.GetShadingMode();
                 bool sceneWireframe = shading == EditorLayer::ShadingMode::Wireframe;
@@ -4355,17 +4371,22 @@ int main(int argc, char** argv) {
                 if (world.SsaoEnabled && !sceneUnlit && ssao.IsValid()) {
                     PROFILE_SCOPE("SSAO Depth Pre-pass");
                     PROFILE_GPU_SCOPE("SSAO Depth Pre-pass");
-                    ssaoDepthPrepass(ssao, scW, scH, sceneViewMat, sceneProjMat, /*editorView=*/true);
+                    ssaoDepthPrepass(ssao, scW, scH, sceneViewMat, sceneDrawProj, /*editorView=*/true);
 
                     // Restore HdrTarget for the main scene draw
                     sceneHdr.BindForRender();
                 }
 
                 EditorLayer::RenderStats sceneStats;
-                drawScene(RenderFrameContext{ sceneViewMat, sceneProjMat, editorCamera.Position,
-                              sceneUnlit, /*EditorView=*/true, /*DebugView=*/sceneDebugView,
-                              &sceneHdr, &sceneOpaqueColor, &ssao },
-                          &sceneStats);
+                {
+                    RenderFrameContext sceneCtx{ sceneViewMat, sceneDrawProj, editorCamera.Position,
+                                                 sceneUnlit, /*EditorView=*/true, /*DebugView=*/sceneDebugView,
+                                                 &sceneHdr, &sceneOpaqueColor, &ssao };
+                    sceneCtx.TaaVelocity = sceneTaaOn;
+                    sceneCtx.TaaJitterNdc = sceneTaa.JitterNdc();
+                    sceneCtx.TaaPrevViewProj = sceneTaa.PrevViewProj();
+                    drawScene(sceneCtx, &sceneStats);
+                }
 
                 editor.SetRenderStats(sceneStats);
 
@@ -4571,9 +4592,16 @@ int main(int argc, char** argv) {
                 // Bloom. Tonemap the linear-HDR scene into the LDR texture the Scene tab displays
                 // (exposure -> curve -> gamma, once, in Tonemapper).
                 sceneHdr.ResolveTo();
+                unsigned int sceneColorTex = sceneHdr.ResolvedColorTexture();
+                if (sceneTaaOn) {
+                    PROFILE_SCOPE("TAA");
+                    PROFILE_GPU_SCOPE("TAA");
+                    sceneColorTex = sceneTaa.Resolve(sceneColorTex, sceneHdr.ResolvedDepthTexture(), sceneHdr.VelocityTexture(),
+                                                     world.TaaSharpness);
+                }
                 {
                 PROFILE_GPU_SCOPE("Tonemap");
-                tonemapper.Apply(sceneHdr.ResolvedColorTexture(), sceneFramebuffer.Handle(), scW, scH,
+                tonemapper.Apply(sceneColorTex, sceneFramebuffer.Handle(), scW, scH,
                                  MakePostSettings(world, bloomGlowTex, bloomIntensity, dt, 0, editorCamera.Position));
                 }
 
@@ -4875,10 +4903,18 @@ int main(int argc, char** argv) {
                                        unsigned outFbo, int outW, int outH, int postSlot, bool overlayInPlayOnly,
                                        EditorLayer::RenderStats& stats) {
                 const bool scaled = rw != outW || rh != outH;
-                gameHdr.Resize(rw, rh, world.MsaaSamples);
+                gameHdr.Resize(rw, rh, world.EffectiveMsaaSamples());
+                const bool gameTaaOn = world.TaaEnabled() && gameHdr.IsValid();
+                gameHdr.SetVelocityEnabled(gameTaaOn);
+                if (gameTaaOn) gameHdr.ResolvedDepthTexture(); // provisioned before this frame's ResolveTo
+                else gameTaa.Reset();
+                // TAA: the world pass (and its SSAO pre-pass) draws jittered; the view-model sub-pass builds its own
+                // unjittered projection (SceneRenderer), and the overlays below keep `proj`.
+                const glm::mat4 drawProj = gameTaaOn ? gameTaa.BeginFrame(view, proj, rw, rh) : proj;
                 gameHdr.BindForRender();
                 glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                if (gameTaaOn) gameHdr.ClearVelocity(TemporalAA::kVelocityUnknown);
                 // SSAO depth pre-pass - the Game view's own Ssao instance/resolution, apart from the Scene view's (see the
                 // gameSsao declaration). The two callers are mutually exclusive per frame, so no resize thrash.
                 const bool gameSsaoOn = world.SsaoEnabled && !FKeyRow::PostFxOff(); // F8
@@ -4886,7 +4922,7 @@ int main(int argc, char** argv) {
                 if (gameSsaoOn && gameSsao.IsValid()) { // audit #358 - skip if any FBO incomplete
                     PROFILE_SCOPE("SSAO Depth Pre-pass (Game)");
                     PROFILE_GPU_SCOPE("SSAO Depth Pre-pass (Game)");
-                    ssaoDepthPrepass(gameSsao, rw, rh, view, proj, /*editorView=*/false);
+                    ssaoDepthPrepass(gameSsao, rw, rh, view, drawProj, /*editorView=*/false);
 
                     gameHdr.BindForRender(); // restore for the main scene draw below
                 }
@@ -4895,13 +4931,18 @@ int main(int argc, char** argv) {
                 const EditorLayer::ShadingMode gameShading = editor.GetShadingMode();
                 const bool gameWire = gameShading == EditorLayer::ShadingMode::Wireframe;
                 if (gameWire) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-                drawScene(RenderFrameContext{ view, proj, eye, /*Unlit=*/gameShading == EditorLayer::ShadingMode::Unlit,
-                              /*EditorView=*/false, /*DebugView=*/FKeyRow::DebugViewFor((int)gameShading),
-                              &gameHdr, &gameOpaqueColor, &gameSsao,
-                              firstPersonPresentation.ViewModelFov(),
-                              weaponOverlay(playing && playUsesPlayer, view, proj, eye, rh),
-                              /*OwnerView=*/playing && playUsesPlayer },
-                          &stats);
+                {
+                    RenderFrameContext gameCtx{ view, drawProj, eye, /*Unlit=*/gameShading == EditorLayer::ShadingMode::Unlit,
+                                                /*EditorView=*/false, /*DebugView=*/FKeyRow::DebugViewFor((int)gameShading),
+                                                &gameHdr, &gameOpaqueColor, &gameSsao,
+                                                firstPersonPresentation.ViewModelFov(),
+                                                weaponOverlay(playing && playUsesPlayer, view, drawProj, eye, rh),
+                                                /*OwnerView=*/playing && playUsesPlayer };
+                    gameCtx.TaaVelocity = gameTaaOn;
+                    gameCtx.TaaJitterNdc = gameTaa.JitterNdc();
+                    gameCtx.TaaPrevViewProj = gameTaa.PrevViewProj();
+                    drawScene(gameCtx, &stats);
+                }
                 if (gameWire) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
                 // Physics debug overlay over the game view (#185, F6 Physics) - depth-tested, no depth write.
@@ -4914,6 +4955,13 @@ int main(int argc, char** argv) {
                     drawThrowArc(view, proj, eye);
 
                 gameHdr.ResolveTo();
+                unsigned int gameColorTex = gameHdr.ResolvedColorTexture();
+                if (gameTaaOn) {
+                    PROFILE_SCOPE("TAA (Game)");
+                    PROFILE_GPU_SCOPE("TAA (Game)");
+                    gameColorTex = gameTaa.Resolve(gameColorTex, gameHdr.ResolvedDepthTexture(), gameHdr.VelocityTexture(),
+                                                   world.TaaSharpness);
+                }
 
                 // PR16: Bloom for the Game view - own Bloom instance (see gameBloom declaration).
                 unsigned int bloomGlowTex   = 0u;
@@ -4923,7 +4971,7 @@ int main(int argc, char** argv) {
                     gameBloom.Resize(rw, rh);
                     if (gameBloom.IsValid()) { // audit #358 - no glow if any mip FBO is incomplete
                         gameBloom.Compute(bloomThreshShader, bloomDownsampleShader, bloomUpsampleShader,
-                                          gameHdr.ResolvedColorTexture(),
+                                          gameColorTex,
                                           world.BloomThreshold,
                                           world.BloomKnee);
                         bloomGlowTex       = gameBloom.GlowTexture();
@@ -4936,9 +4984,9 @@ int main(int argc, char** argv) {
                 const PostSettings post = WithDepthEffects(MakePostSettings(world, bloomGlowTex, bloomGlowIntensity, dt, 1, eye), world, gameHdr, view, proj, postSlot);
                 if (scaled) {
                     gameLdr.Resize(rw, rh);
-                    tonemapper.Apply(gameHdr.ResolvedColorTexture(), gameLdr.Handle(), rw, rh, post);
+                    tonemapper.Apply(gameColorTex, gameLdr.Handle(), rw, rh, post);
                 } else {
-                    tonemapper.Apply(gameHdr.ResolvedColorTexture(), outFbo, outW, outH, post);
+                    tonemapper.Apply(gameColorTex, outFbo, outW, outH, post);
                 }
                 }
                 if (scaled) {
