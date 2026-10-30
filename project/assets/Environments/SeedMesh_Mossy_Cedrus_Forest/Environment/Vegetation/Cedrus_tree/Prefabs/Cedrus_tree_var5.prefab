@@ -4,9 +4,9 @@
     {
       "LOD Group": {
         "LOD 0": 0.6,
-        "LOD 1": 0.4,
-        "LOD 2": 0.25,
-        "LOD 3": 0.0926,
+        "LOD 1": 0.25,
+        "LOD 2": 0.0926,
+        "LOD 3": 0.04,
         "Size": 0.0
       },
       "id": 0,
@@ -162,33 +162,8 @@
     },
     {
       "id": 3,
-      "name": "Cedrus_tree_var5_LOD2",
-      "order": 3,
-      "parentId": 0,
-      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var5@Cedrus_tree_var5_LOD2.fbx",
-      "pathGuid": "97d02d8a25f275de",
-      "position": [
-        -0.0,
-        0.0,
-        0.0
-      ],
-      "rotation": [
-        0.0,
-        -0.0,
-        -0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ],
-      "static": true
-    },
-    {
-      "id": 4,
       "name": "Cedrus_tree_var5_LOD3",
-      "order": 4,
+      "order": 3,
       "parentId": 0,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var5@Cedrus_tree_var5_LOD3.fbx",
       "pathGuid": "c5ea733d83f7b37c",
@@ -211,12 +186,38 @@
       "static": true
     },
     {
-      "id": 5,
+      "id": 4,
       "name": "Cedrus_tree_var5_LOD4",
-      "order": 5,
+      "order": 4,
       "parentId": 0,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var5@Cedrus_tree_var5_LOD4.fbx",
       "pathGuid": "e7cef8bcf4384c67",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "active": false,
+      "id": 5,
+      "name": "Cedrus_tree_var5_LOD2",
+      "order": 5,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var5@Cedrus_tree_var5_LOD2.fbx",
+      "pathGuid": "97d02d8a25f275de",
       "position": [
         -0.0,
         0.0,

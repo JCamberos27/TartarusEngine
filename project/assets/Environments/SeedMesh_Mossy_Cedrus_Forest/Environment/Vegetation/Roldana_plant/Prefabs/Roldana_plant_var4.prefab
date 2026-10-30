@@ -4,9 +4,9 @@
     {
       "LOD Group": {
         "LOD 0": 0.5,
-        "LOD 1": 0.2,
-        "LOD 2": 0.1,
-        "LOD 3": 0.05,
+        "LOD 1": 0.1,
+        "LOD 2": 0.05,
+        "LOD 3": 0.035,
         "Size": 0.0
       },
       "id": 0,
@@ -84,32 +84,8 @@
     },
     {
       "id": 3,
-      "name": "Roldana_plant_var4_LOD2",
-      "order": 3,
-      "parentId": 0,
-      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Roldana_plant/Mesh/Roldana_plant_var4@Roldana_plant_var4_LOD2.fbx",
-      "pathGuid": "b4b9a947a86d88a5",
-      "position": [
-        -0.0,
-        0.0,
-        0.0
-      ],
-      "rotation": [
-        0.0,
-        -0.0,
-        -0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
-      "id": 4,
       "name": "Roldana_plant_var4_LOD3",
-      "order": 4,
+      "order": 3,
       "parentId": 0,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Roldana_plant/Mesh/Roldana_plant_var4@Roldana_plant_var4_LOD3.fbx",
       "pathGuid": "b284fbecc5a9cd6f",
@@ -131,12 +107,37 @@
       ]
     },
     {
-      "id": 5,
+      "id": 4,
       "name": "Roldana_plant_var4_LOD4",
-      "order": 5,
+      "order": 4,
       "parentId": 0,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Roldana_plant/Mesh/Roldana_plant_var4@Roldana_plant_var4_LOD4.fbx",
       "pathGuid": "3d483967829841b9",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "active": false,
+      "id": 5,
+      "name": "Roldana_plant_var4_LOD2",
+      "order": 5,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Roldana_plant/Mesh/Roldana_plant_var4@Roldana_plant_var4_LOD2.fbx",
+      "pathGuid": "b4b9a947a86d88a5",
       "position": [
         -0.0,
         0.0,

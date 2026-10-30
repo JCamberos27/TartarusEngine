@@ -7,7 +7,7 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\SeedMesh\Mossy_Ced
 - LOD groups: 45449
 - built-in cubes as boxes: 10
 - child-node transform / active edits of whole-model instances, not applied: 20
-- colliders: 3903
+- colliders: 3904
 - duplicate openables dropped (a twin door within 10 cm): 0
 - lights: 53
 - material overrides on instances: 939
@@ -16,17 +16,18 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\SeedMesh\Mossy_Ced
 - models: 194
 - prefabs: 265
 - reflection probes: 2
-- renderers: 158101
-- scene-embedded meshes (OBJ): 1
+- renderers: 158102
+- scene-embedded meshes (OBJ): 2
 - scenes: 3
 - scripts dropped (MonoBehaviour): 201
 - seedmesh materials: 133
+- terrain meshes: 1
 - textures: 345
 - textures halved: 191
 
 ## Not converted / approximated
 
-### LOD groups with more than 4 levels (extra levels dropped) (114)
+### LOD groups with more than 4 levels (kept first, last and evenly spaced) (114)
 - Cedrus_tree_var1
 - Cedrus_tree_var1 (1)
 - Cedrus_tree_var1 (2)
@@ -364,4 +365,13 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\SeedMesh\Mossy_Ced
 - Mossy_forest_trail: Camera_9_Mushrooms (4)
 - Mossy_forest_trail: Camera_9_Mushrooms (5)
 - Mossy_forest_trail: Camera_Images
+
+### player spawn below the terrain (lifted to 1 m above it) (1)
+- SeedMesh_Mossy_Cedrus_Forest
+
+### player spawn outside the terrain (moved a quarter of the way across it) (1)
+- SeedMesh_Mossy_Cedrus_Forest
+
+### terrain meshes (dominant layer only, no splat blend; UVs baked to tileSize) (1)
+- Terrain_Terrain: 180000 tris at 1 m, layer Yellow_plant_leaves
 

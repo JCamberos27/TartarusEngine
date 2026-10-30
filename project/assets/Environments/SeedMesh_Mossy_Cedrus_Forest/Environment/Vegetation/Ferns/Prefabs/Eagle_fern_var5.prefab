@@ -4,9 +4,9 @@
     {
       "LOD Group": {
         "LOD 0": 0.25,
-        "LOD 1": 0.125,
-        "LOD 2": 0.0625,
-        "LOD 3": 0.03125,
+        "LOD 1": 0.0625,
+        "LOD 2": 0.03125,
+        "LOD 3": 0.018,
         "Size": 0.0
       },
       "id": 0,
@@ -83,32 +83,8 @@
     },
     {
       "id": 3,
-      "name": "Eagle_fern_var5_LOD2",
-      "order": 3,
-      "parentId": 0,
-      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Eagle_fern/Eagle_fern_var5@Eagle_fern_var5_LOD2.fbx",
-      "pathGuid": "f4155e5b0a1fbe1a",
-      "position": [
-        -0.0,
-        0.0,
-        0.0
-      ],
-      "rotation": [
-        0.0,
-        -0.0,
-        -0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
-      "id": 4,
       "name": "Eagle_fern_var5_LOD3",
-      "order": 4,
+      "order": 3,
       "parentId": 0,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Eagle_fern/Eagle_fern_var5@Eagle_fern_var5_LOD3.fbx",
       "pathGuid": "b44ed5cde822b266",
@@ -130,12 +106,37 @@
       ]
     },
     {
-      "id": 5,
+      "id": 4,
       "name": "Eagle_fern_var5_LOD4",
-      "order": 5,
+      "order": 4,
       "parentId": 0,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Eagle_fern/Eagle_fern_var5@Eagle_fern_var5_LOD4.fbx",
       "pathGuid": "3b6d470b2830a160",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "active": false,
+      "id": 5,
+      "name": "Eagle_fern_var5_LOD2",
+      "order": 5,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Eagle_fern/Eagle_fern_var5@Eagle_fern_var5_LOD2.fbx",
+      "pathGuid": "f4155e5b0a1fbe1a",
       "position": [
         -0.0,
         0.0,

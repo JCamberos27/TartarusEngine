@@ -4,9 +4,9 @@
     {
       "LOD Group": {
         "LOD 0": 0.70028,
-        "LOD 1": 0.40414,
-        "LOD 2": 0.14602,
-        "LOD 3": 0.04846,
+        "LOD 1": 0.14602,
+        "LOD 2": 0.04846,
+        "LOD 3": 0.01,
         "Size": 0.0
       },
       "id": 0,
@@ -105,32 +105,8 @@
     },
     {
       "id": 3,
-      "name": "Tree_stump_var5_LOD2",
-      "order": 3,
-      "parentId": 0,
-      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Stumps/Stump_5/Tree_stump_var5@Tree_stump_var5_LOD2.fbx",
-      "pathGuid": "48f710edbca23d46",
-      "position": [
-        -0.0,
-        0.0,
-        0.0
-      ],
-      "rotation": [
-        0.0,
-        -0.0,
-        -0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
-      "id": 4,
       "name": "Tree_stump_var5_LOD3",
-      "order": 4,
+      "order": 3,
       "parentId": 0,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Stumps/Stump_5/Tree_stump_var5@Tree_stump_var5_LOD3.fbx",
       "pathGuid": "4cb11a4bd6147563",
@@ -152,12 +128,37 @@
       ]
     },
     {
-      "id": 5,
+      "id": 4,
       "name": "Tree_stump_var5_LOD4",
-      "order": 5,
+      "order": 4,
       "parentId": 0,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Stumps/Stump_5/Tree_stump_var5@Tree_stump_var5_LOD4.fbx",
       "pathGuid": "45ab53255adf49a2",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "active": false,
+      "id": 5,
+      "name": "Tree_stump_var5_LOD2",
+      "order": 5,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Stumps/Stump_5/Tree_stump_var5@Tree_stump_var5_LOD2.fbx",
+      "pathGuid": "48f710edbca23d46",
       "position": [
         -0.0,
         0.0,

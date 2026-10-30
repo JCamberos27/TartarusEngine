@@ -1140,9 +1140,9 @@
     {
       "LOD Group": {
         "LOD 0": 0.59561,
-        "LOD 1": 0.29969,
-        "LOD 2": 0.1977,
-        "LOD 3": 0.12332,
+        "LOD 1": 0.1977,
+        "LOD 2": 0.12332,
+        "LOD 3": 0.02434,
         "Size": 0.0
       },
       "id": 742,
@@ -1220,9 +1220,9 @@
     {
       "LOD Group": {
         "LOD 0": 0.25,
-        "LOD 1": 0.125,
-        "LOD 2": 0.0625,
-        "LOD 3": 0.03125,
+        "LOD 1": 0.0625,
+        "LOD 2": 0.03125,
+        "LOD 3": 0.01,
         "Size": 0.0
       },
       "id": 754,
@@ -1271,9 +1271,9 @@
     {
       "LOD Group": {
         "LOD 0": 0.6,
-        "LOD 1": 0.4,
-        "LOD 2": 0.25,
-        "LOD 3": 0.09913,
+        "LOD 1": 0.25,
+        "LOD 2": 0.09913,
+        "LOD 3": 0.04,
         "Size": 0.0
       },
       "id": 761,
@@ -3483,9 +3483,9 @@
     {
       "LOD Group": {
         "LOD 0": 0.25,
-        "LOD 1": 0.125,
-        "LOD 2": 0.0625,
-        "LOD 3": 0.03125,
+        "LOD 1": 0.0625,
+        "LOD 2": 0.03125,
+        "LOD 3": 0.018,
         "Size": 0.0
       },
       "id": 1004,
@@ -7057,9 +7057,9 @@
     {
       "LOD Group": {
         "LOD 0": 0.25,
-        "LOD 1": 0.125,
-        "LOD 2": 0.0625,
-        "LOD 3": 0.03125,
+        "LOD 1": 0.0625,
+        "LOD 2": 0.03125,
+        "LOD 3": 0.01,
         "Size": 0.0
       },
       "id": 1386,
@@ -7318,9 +7318,9 @@
     {
       "LOD Group": {
         "LOD 0": 0.25,
-        "LOD 1": 0.125,
-        "LOD 2": 0.0625,
-        "LOD 3": 0.03125,
+        "LOD 1": 0.0625,
+        "LOD 2": 0.03125,
+        "LOD 3": 0.01,
         "Size": 0.0
       },
       "id": 1418,
@@ -8658,9 +8658,9 @@
     {
       "LOD Group": {
         "LOD 0": 0.25,
-        "LOD 1": 0.125,
-        "LOD 2": 0.0625,
-        "LOD 3": 0.03125,
+        "LOD 1": 0.0625,
+        "LOD 2": 0.03125,
+        "LOD 3": 0.018,
         "Size": 0.0
       },
       "id": 1566,
@@ -21043,9 +21043,9 @@
     {
       "LOD Group": {
         "LOD 0": 0.25,
-        "LOD 1": 0.125,
-        "LOD 2": 0.0625,
-        "LOD 3": 0.03125,
+        "LOD 1": 0.0625,
+        "LOD 2": 0.03125,
+        "LOD 3": 0.01,
         "Size": 0.0
       },
       "id": 2896,
@@ -22703,9 +22703,9 @@
     {
       "LOD Group": {
         "LOD 0": 0.25,
-        "LOD 1": 0.125,
-        "LOD 2": 0.0625,
-        "LOD 3": 0.03125,
+        "LOD 1": 0.0625,
+        "LOD 2": 0.03125,
+        "LOD 3": 0.018,
         "Size": 0.0
       },
       "id": 3076,
@@ -26947,9 +26947,9 @@
     {
       "LOD Group": {
         "LOD 0": 0.25,
-        "LOD 1": 0.125,
-        "LOD 2": 0.0625,
-        "LOD 3": 0.03125,
+        "LOD 1": 0.0625,
+        "LOD 2": 0.03125,
+        "LOD 3": 0.018,
         "Size": 0.0
       },
       "id": 3532,
@@ -30556,32 +30556,8 @@
     },
     {
       "id": 745,
-      "name": "Volcanic_Mossy_Rocks_LOD2",
-      "order": 745,
-      "parentId": 742,
-      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Forest_Ground_scans/Forest_Ground_scan_var4/Volcanic_Mossy_Rocks@Volcanic_Mossy_Rocks_LOD2.fbx",
-      "pathGuid": "ab52537195359b52",
-      "position": [
-        -0.0,
-        0.0,
-        0.0
-      ],
-      "rotation": [
-        0.0,
-        -0.0,
-        -0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
-      "id": 746,
       "name": "Volcanic_Mossy_Rocks_LOD3",
-      "order": 746,
+      "order": 745,
       "parentId": 742,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Forest_Ground_scans/Forest_Ground_scan_var4/Volcanic_Mossy_Rocks@Volcanic_Mossy_Rocks_LOD3.fbx",
       "pathGuid": "30c65f1d8a0eac8d",
@@ -30603,12 +30579,37 @@
       ]
     },
     {
-      "id": 747,
+      "id": 746,
       "name": "Volcanic_Mossy_Rocks_LOD4",
-      "order": 747,
+      "order": 746,
       "parentId": 742,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Forest_Ground_scans/Forest_Ground_scan_var4/Volcanic_Mossy_Rocks@Volcanic_Mossy_Rocks_LOD4.fbx",
       "pathGuid": "9ab58c239b92463e",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "active": false,
+      "id": 747,
+      "name": "Volcanic_Mossy_Rocks_LOD2",
+      "order": 747,
+      "parentId": 742,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Forest_Ground_scans/Forest_Ground_scan_var4/Volcanic_Mossy_Rocks@Volcanic_Mossy_Rocks_LOD2.fbx",
+      "pathGuid": "ab52537195359b52",
       "position": [
         -0.0,
         0.0,
@@ -30772,32 +30773,8 @@
     },
     {
       "id": 757,
-      "name": "Rotten_log_var12_LOD2",
-      "order": 757,
-      "parentId": 754,
-      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/12_Rotten_Log_var12/Rotten_log_var12@Rotten_log_var12_LOD2.fbx",
-      "pathGuid": "7714e141f16c6b44",
-      "position": [
-        -0.0,
-        0.0,
-        0.0
-      ],
-      "rotation": [
-        0.0,
-        -0.0,
-        -0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
-      "id": 758,
       "name": "Rotten_log_var12_LOD3",
-      "order": 758,
+      "order": 757,
       "parentId": 754,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/12_Rotten_Log_var12/Rotten_log_var12@Rotten_log_var12_LOD3.fbx",
       "pathGuid": "0291a21749c70b34",
@@ -30819,12 +30796,37 @@
       ]
     },
     {
-      "id": 759,
+      "id": 758,
       "name": "Rotten_log_var12_LOD4",
-      "order": 759,
+      "order": 758,
       "parentId": 754,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/12_Rotten_Log_var12/Rotten_log_var12@Rotten_log_var12_LOD4.fbx",
       "pathGuid": "e7a40a7f7b048025",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "active": false,
+      "id": 759,
+      "name": "Rotten_log_var12_LOD2",
+      "order": 759,
+      "parentId": 754,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/12_Rotten_Log_var12/Rotten_log_var12@Rotten_log_var12_LOD2.fbx",
+      "pathGuid": "7714e141f16c6b44",
       "position": [
         -0.0,
         0.0,
@@ -30894,33 +30896,8 @@
     },
     {
       "id": 764,
-      "name": "Cedrus_tree_var2_LOD2",
-      "order": 764,
-      "parentId": 761,
-      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var2@Cedrus_tree_var2_LOD2.fbx",
-      "pathGuid": "004fcd1e25fe5b15",
-      "position": [
-        -0.0,
-        0.0,
-        0.0
-      ],
-      "rotation": [
-        0.0,
-        -0.0,
-        -0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ],
-      "static": true
-    },
-    {
-      "id": 765,
       "name": "Cedrus_tree_var2_LOD3",
-      "order": 765,
+      "order": 764,
       "parentId": 761,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var2@Cedrus_tree_var2_LOD3.fbx",
       "pathGuid": "7993a20310eb26c0",
@@ -30943,12 +30920,38 @@
       "static": true
     },
     {
-      "id": 766,
+      "id": 765,
       "name": "Cedrus_tree_var2_LOD4",
-      "order": 766,
+      "order": 765,
       "parentId": 761,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var2@Cedrus_tree_var2_LOD4.fbx",
       "pathGuid": "2ac5a65c65d82ba7",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "active": false,
+      "id": 766,
+      "name": "Cedrus_tree_var2_LOD2",
+      "order": 766,
+      "parentId": 761,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var2@Cedrus_tree_var2_LOD2.fbx",
+      "pathGuid": "004fcd1e25fe5b15",
       "position": [
         -0.0,
         0.0,
@@ -35175,32 +35178,8 @@
     },
     {
       "id": 1007,
-      "name": "Eagle_fern_var5_LOD2",
-      "order": 1007,
-      "parentId": 1004,
-      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Eagle_fern/Eagle_fern_var5@Eagle_fern_var5_LOD2.fbx",
-      "pathGuid": "f4155e5b0a1fbe1a",
-      "position": [
-        -0.0,
-        0.0,
-        0.0
-      ],
-      "rotation": [
-        0.0,
-        -0.0,
-        -0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
-      "id": 1008,
       "name": "Eagle_fern_var5_LOD3",
-      "order": 1008,
+      "order": 1007,
       "parentId": 1004,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Eagle_fern/Eagle_fern_var5@Eagle_fern_var5_LOD3.fbx",
       "pathGuid": "b44ed5cde822b266",
@@ -35222,12 +35201,37 @@
       ]
     },
     {
-      "id": 1009,
+      "id": 1008,
       "name": "Eagle_fern_var5_LOD4",
-      "order": 1009,
+      "order": 1008,
       "parentId": 1004,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Eagle_fern/Eagle_fern_var5@Eagle_fern_var5_LOD4.fbx",
       "pathGuid": "3b6d470b2830a160",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "active": false,
+      "id": 1009,
+      "name": "Eagle_fern_var5_LOD2",
+      "order": 1009,
+      "parentId": 1004,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Eagle_fern/Eagle_fern_var5@Eagle_fern_var5_LOD2.fbx",
+      "pathGuid": "f4155e5b0a1fbe1a",
       "position": [
         -0.0,
         0.0,
@@ -42019,32 +42023,8 @@
     },
     {
       "id": 1389,
-      "name": "Cretan_brake_fern_var2_LOD2",
-      "order": 1389,
-      "parentId": 1386,
-      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Cretan_brake_fern/Cretan_brake_fern_var2@Cretan_brake_fern_var2_LOD2.fbx",
-      "pathGuid": "e1386cbd57755ff9",
-      "position": [
-        -0.0,
-        0.0,
-        0.0
-      ],
-      "rotation": [
-        0.0,
-        -0.0,
-        -0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
-      "id": 1390,
       "name": "Cretan_brake_fern_var2_LOD3",
-      "order": 1390,
+      "order": 1389,
       "parentId": 1386,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Cretan_brake_fern/Cretan_brake_fern_var2@Cretan_brake_fern_var2_LOD3.fbx",
       "pathGuid": "a0d83fab2db40561",
@@ -42066,12 +42046,37 @@
       ]
     },
     {
-      "id": 1391,
+      "id": 1390,
       "name": "Cretan_brake_fern_var2_LOD4",
-      "order": 1391,
+      "order": 1390,
       "parentId": 1386,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Cretan_brake_fern/Cretan_brake_fern_var2@Cretan_brake_fern_var2_LOD4.fbx",
       "pathGuid": "595879dff56be293",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "active": false,
+      "id": 1391,
+      "name": "Cretan_brake_fern_var2_LOD2",
+      "order": 1391,
+      "parentId": 1386,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Cretan_brake_fern/Cretan_brake_fern_var2@Cretan_brake_fern_var2_LOD2.fbx",
+      "pathGuid": "e1386cbd57755ff9",
       "position": [
         -0.0,
         0.0,
@@ -42595,32 +42600,8 @@
     },
     {
       "id": 1421,
-      "name": "Cretan_brake_fern_var4_LOD2",
-      "order": 1421,
-      "parentId": 1418,
-      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Cretan_brake_fern/Cretan_brake_fern_var4@Cretan_brake_fern_var4_LOD2.fbx",
-      "pathGuid": "a4ee2843ee75b71e",
-      "position": [
-        -0.0,
-        0.0,
-        0.0
-      ],
-      "rotation": [
-        0.0,
-        -0.0,
-        -0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
-      "id": 1422,
       "name": "Cretan_brake_fern_var4_LOD3",
-      "order": 1422,
+      "order": 1421,
       "parentId": 1418,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Cretan_brake_fern/Cretan_brake_fern_var4@Cretan_brake_fern_var4_LOD3.fbx",
       "pathGuid": "12f4ed3c0684ba33",
@@ -42642,12 +42623,37 @@
       ]
     },
     {
-      "id": 1423,
+      "id": 1422,
       "name": "Cretan_brake_fern_var4_LOD4",
-      "order": 1423,
+      "order": 1422,
       "parentId": 1418,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Cretan_brake_fern/Cretan_brake_fern_var4@Cretan_brake_fern_var4_LOD4.fbx",
       "pathGuid": "9560a5b9393fbc83",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "active": false,
+      "id": 1423,
+      "name": "Cretan_brake_fern_var4_LOD2",
+      "order": 1423,
+      "parentId": 1418,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Cretan_brake_fern/Cretan_brake_fern_var4@Cretan_brake_fern_var4_LOD2.fbx",
+      "pathGuid": "a4ee2843ee75b71e",
       "position": [
         -0.0,
         0.0,
@@ -45313,32 +45319,8 @@
     },
     {
       "id": 1569,
-      "name": "Eagle_fern_var3_LOD2",
-      "order": 1569,
-      "parentId": 1566,
-      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Eagle_fern/Eagle_fern_var3@Eagle_fern_var3_LOD2.fbx",
-      "pathGuid": "52d4a3d6446a881a",
-      "position": [
-        -0.0,
-        0.0,
-        0.0
-      ],
-      "rotation": [
-        0.0,
-        -0.0,
-        -0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
-      "id": 1570,
       "name": "Eagle_fern_var3_LOD3",
-      "order": 1570,
+      "order": 1569,
       "parentId": 1566,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Eagle_fern/Eagle_fern_var3@Eagle_fern_var3_LOD3.fbx",
       "pathGuid": "2accffe083dc803c",
@@ -45360,12 +45342,37 @@
       ]
     },
     {
-      "id": 1571,
+      "id": 1570,
       "name": "Eagle_fern_var3_LOD4",
-      "order": 1571,
+      "order": 1570,
       "parentId": 1566,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Eagle_fern/Eagle_fern_var3@Eagle_fern_var3_LOD4.fbx",
       "pathGuid": "43936fbab5c993a9",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "active": false,
+      "id": 1571,
+      "name": "Eagle_fern_var3_LOD2",
+      "order": 1571,
+      "parentId": 1566,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Eagle_fern/Eagle_fern_var3@Eagle_fern_var3_LOD2.fbx",
+      "pathGuid": "52d4a3d6446a881a",
       "position": [
         -0.0,
         0.0,
@@ -69183,32 +69190,8 @@
     },
     {
       "id": 2899,
-      "name": "Cretan_brake_fern_var5_LOD2",
-      "order": 2899,
-      "parentId": 2896,
-      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Cretan_brake_fern/Cretan_brake_fern_var5@Cretan_brake_fern_var5_LOD2.fbx",
-      "pathGuid": "102671318c49f70e",
-      "position": [
-        -0.0,
-        0.0,
-        0.0
-      ],
-      "rotation": [
-        0.0,
-        -0.0,
-        -0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
-      "id": 2900,
       "name": "Cretan_brake_fern_var5_LOD3",
-      "order": 2900,
+      "order": 2899,
       "parentId": 2896,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Cretan_brake_fern/Cretan_brake_fern_var5@Cretan_brake_fern_var5_LOD3.fbx",
       "pathGuid": "21aff0a4e576eca7",
@@ -69230,12 +69213,37 @@
       ]
     },
     {
-      "id": 2901,
+      "id": 2900,
       "name": "Cretan_brake_fern_var5_LOD4",
-      "order": 2901,
+      "order": 2900,
       "parentId": 2896,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Cretan_brake_fern/Cretan_brake_fern_var5@Cretan_brake_fern_var5_LOD4.fbx",
       "pathGuid": "d8ee7647d429c069",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "active": false,
+      "id": 2901,
+      "name": "Cretan_brake_fern_var5_LOD2",
+      "order": 2901,
+      "parentId": 2896,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Cretan_brake_fern/Cretan_brake_fern_var5@Cretan_brake_fern_var5_LOD2.fbx",
+      "pathGuid": "102671318c49f70e",
       "position": [
         -0.0,
         0.0,
@@ -72453,32 +72461,8 @@
     },
     {
       "id": 3079,
-      "name": "Eagle_fern_var6_LOD2",
-      "order": 3079,
-      "parentId": 3076,
-      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Eagle_fern/Eagle_fern_var6@Eagle_fern_var6_LOD2.fbx",
-      "pathGuid": "5658eb09dc3f2da2",
-      "position": [
-        -0.0,
-        0.0,
-        0.0
-      ],
-      "rotation": [
-        0.0,
-        -0.0,
-        -0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
-      "id": 3080,
       "name": "Eagle_fern_var6_LOD3",
-      "order": 3080,
+      "order": 3079,
       "parentId": 3076,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Eagle_fern/Eagle_fern_var6@Eagle_fern_var6_LOD3.fbx",
       "pathGuid": "3dcb55dcd49e103f",
@@ -72500,12 +72484,37 @@
       ]
     },
     {
-      "id": 3081,
+      "id": 3080,
       "name": "Eagle_fern_var6_LOD4",
-      "order": 3081,
+      "order": 3080,
       "parentId": 3076,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Eagle_fern/Eagle_fern_var6@Eagle_fern_var6_LOD4.fbx",
       "pathGuid": "feb529c07bee8f36",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "active": false,
+      "id": 3081,
+      "name": "Eagle_fern_var6_LOD2",
+      "order": 3081,
+      "parentId": 3076,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Eagle_fern/Eagle_fern_var6@Eagle_fern_var6_LOD2.fbx",
+      "pathGuid": "5658eb09dc3f2da2",
       "position": [
         -0.0,
         0.0,
@@ -80679,32 +80688,8 @@
     },
     {
       "id": 3535,
-      "name": "Eagle_fern_var6_LOD2",
-      "order": 3535,
-      "parentId": 3532,
-      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Eagle_fern/Eagle_fern_var6@Eagle_fern_var6_LOD2.fbx",
-      "pathGuid": "5658eb09dc3f2da2",
-      "position": [
-        -0.0,
-        0.0,
-        0.0
-      ],
-      "rotation": [
-        0.0,
-        -0.0,
-        -0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
-      "id": 3536,
       "name": "Eagle_fern_var6_LOD3",
-      "order": 3536,
+      "order": 3535,
       "parentId": 3532,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Eagle_fern/Eagle_fern_var6@Eagle_fern_var6_LOD3.fbx",
       "pathGuid": "3dcb55dcd49e103f",
@@ -80726,12 +80711,37 @@
       ]
     },
     {
-      "id": 3537,
+      "id": 3536,
       "name": "Eagle_fern_var6_LOD4",
-      "order": 3537,
+      "order": 3536,
       "parentId": 3532,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Eagle_fern/Eagle_fern_var6@Eagle_fern_var6_LOD4.fbx",
       "pathGuid": "feb529c07bee8f36",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "active": false,
+      "id": 3537,
+      "name": "Eagle_fern_var6_LOD2",
+      "order": 3537,
+      "parentId": 3532,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Eagle_fern/Eagle_fern_var6@Eagle_fern_var6_LOD2.fbx",
+      "pathGuid": "5658eb09dc3f2da2",
       "position": [
         -0.0,
         0.0,

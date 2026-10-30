@@ -276,6 +276,7 @@ class Converter:
         self.scene_path = None
         self.parent_off = False
         self.embedded = {}       # (scene, mesh name) -> engine model path or None
+        self.terrain_mats = {}   # engine path of a terrain OBJ -> its material path
         self.prefab_cache = {}   # unity prefab guid -> (roots, objects by fileID)
         self.mat_guids = {}      # engine mat path -> guid
         self.model_guids = {}    # engine model path -> guid
@@ -326,9 +327,15 @@ class Converter:
         src_dir = os.path.join(self.EMBEDDED_DUMP, top, scene)
         res = None
         idx = os.path.join(src_dir, 'index.json')
+        if not os.path.exists(idx) and os.path.exists(os.path.join(src_dir, 'terrain_index.json')):
+            idx = os.path.join(src_dir, 'terrain_index.json')
         if os.path.exists(idx):
             # same-named meshes are the same Polybrush copy of one tree LOD; the first export stands for them
-            ent = next((e for e in json.load(open(idx, encoding='utf-8')) if e['name'] == name), None)
+            ents = json.load(open(idx, encoding='utf-8'))
+            tidx = os.path.join(src_dir, 'terrain_index.json')  # TartarusDump.Terrains: a Unity Terrain as an OBJ grid
+            if os.path.exists(tidx):
+                ents += json.load(open(tidx, encoding='utf-8'))
+            ent = next((e for e in ents if e['name'] == name), None)
             if ent:
                 from unity_import import copy_if_changed
                 dst = os.path.join(dst_dir, ent['file'])
@@ -344,9 +351,37 @@ class Converter:
                        'importSkeleton': False, 'materialImportMode': 1, 'mergeByMaterial': False, 'optimizeGraph': False}
                 write_meta(dst, os.path.dirname(rel_p), 'model', {'importer': imp, 'materialRemap': {}})
                 res = rel_p
+                if ent.get('albedo') is not None:
+                    self.terrain_mats[rel_p] = self.terrain_material(ent, dst)
                 self.pack.counts['scene-embedded meshes (OBJ)'] += 1
         self.embedded[key] = res
         return res
+
+    def terrain_material(self, ent, obj_dst):
+        """Lit material for a terrain OBJ: the dominant terrain layer's albedo + normal. The OBJ's UVs are already metres
+        divided by the layer's tileSize, so the material itself does not tile."""
+        from unity_import import tidy, rel_project
+        name = 'M_Terrain_' + tidy(ent.get('layer') or 'Ground')
+        p = {'_AlbedoMap': '', '_AOMap': '', '_BaseColor': [1.0, 1.0, 1.0], '_DoubleSided': False,
+             '_EmissiveColor': [0.0, 0.0, 0.0], '_EmissiveMap': '', '_EmissiveStrength': 1.0, '_Metallic': 0.0,
+             '_MetallicMap': '', '_MetallicRoughnessMap': '', '_NormalMap': '', '_Roughness': 0.9, '_RoughnessMap': '',
+             '_Triplanar': False, '_TriplanarScale': 1.0, '_ReflectionProbes': True}
+        prev, self.pack.cur = getattr(self.pack, 'cur', '?'), 'terrain ' + name
+        if ent.get('albedo') in self.pack.guids:
+            p['_AlbedoMap'] = self.pack.texture(ent['albedo'], 'rgb', 'albedo')
+        if ent.get('normal') in self.pack.guids:
+            p['_NormalMap'] = self.pack.texture(ent['normal'], 'rgb', 'normal')
+        self.pack.cur = prev
+        dst = os.path.join(os.path.dirname(obj_dst), name + '.mat')
+        write_json(dst, {'factorsScaleMaps': True, 'matVersion': 2, 'name': name, 'properties': p,
+                         'shader': 'engine://Standard.shader'})
+        rel = os.path.relpath(os.path.dirname(obj_dst), os.path.join(self.pack.repo, 'project')).replace(os.sep, '/')
+        write_meta(dst, rel, 'material')
+        mat = rel_project(self.pack.repo, dst)
+        self.pack.counts['terrain meshes'] += 1
+        self.pack.report['terrain meshes (dominant layer only, no splat blend; UVs baked to tileSize)'].append(
+            f"{ent['name']}: {ent['tris']} tris at {ent['spacing']} m, layer {ent.get('layer')}")
+        return mat
 
     def model_entity_path(self, guid, node=None):
         """Engine model path for the whole file (node None) or one mesh node of it (a variant file when needed)."""
@@ -639,6 +674,10 @@ class Converter:
             elif g:
                 self.pack.report['non-FBX meshes (Unity built-ins / .asset), skipped'].append(
                     f'{o.name}: {os.path.basename(self.pack.guids.get(g, g))}')
+        if model is None and comps.get('Terrain'):
+            model = (self.embedded_model(o.name + '_Terrain'), None)
+            if model[0] is None:
+                self.pack.report['terrains with no exported OBJ (run TartarusDump.Terrains)'].append(o.name)
         renderer = (comps.get('MeshRenderer') or comps.get('SkinnedMeshRenderer') or [None])[0]
         if o.renderer_mods:
             renderer = dict(renderer or {'m_Materials': []}, **o.renderer_mods)
@@ -653,6 +692,9 @@ class Converter:
             e['path'] = model[0]
             e['pathGuid'] = self.guid_of(model[0])
             mats = self.material_overrides(model[0], o, renderer)
+            if model[0] in self.terrain_mats:
+                m = self.terrain_mats[model[0]]
+                mats = [{'guid': self._mat_guid(m), 'path': m}]
             if mats:
                 e['materials'] = mats
             if renderer and renderer.get('m_CastShadows', 1) != 1:
@@ -841,7 +883,7 @@ class Converter:
 
     def colliders(self, o, comps, e, out, ids, is_model):
         shapes = []
-        for t in ('BoxCollider', 'SphereCollider', 'CapsuleCollider', 'MeshCollider'):
+        for t in ('BoxCollider', 'SphereCollider', 'CapsuleCollider', 'MeshCollider', 'TerrainCollider'):
             for c in comps.get(t, []):
                 if c.get('m_Enabled', 1) == 0:
                     continue
@@ -926,25 +968,35 @@ class Converter:
     def lod_group(self, o, lod, e, children):
         """Unity LODGroup -> engine LOD Group: the level renderers become the first children, in level order."""
         levels = lod.get('m_LODs') or []
-        if len(levels) > 4:
-            self.pack.report['LOD groups with more than 4 levels (extra levels dropped)'].append(o.name)
-        level_objs = []
-        for lv in levels[:4]:
+        n = len(levels)
+        # The engine holds 4 levels: keep the first, the last and evenly spaced ones between. A kept level stays up
+        # until the next kept one takes over, so it inherits the threshold of the level just before that one.
+        keep = sorted({round(i * (n - 1) / 3) for i in range(4)}) if n > 4 else list(range(n))
+        if n > 4:
+            self.pack.report['LOD groups with more than 4 levels (kept first, last and evenly spaced)'].append(o.name)
+        all_objs = []
+        for lv in levels:
             members = []
             for r in lv.get('renderers') or []:
                 fid = (r.get('renderer') or {}).get('fileID')
                 for c in children:
                     if fid in c.comp_ids:
                         members.append(c)
-            level_objs.append(members)
+            all_objs.append(members)
+        level_objs = [all_objs[i] for i in keep]
         if not any(level_objs) or any(len(m) != 1 for m in level_objs):
             self.pack.report['LOD groups not converted (levels are not one direct child each)'].append(o.name)
             return children
-        thresholds = [round(float(lv.get('screenRelativeHeight', 0.0)), 5) for lv in levels[:4]]
+        ends = [keep[j + 1] - 1 for j in range(len(keep) - 1)] + [keep[-1]]
+        thresholds = [round(float(levels[i].get('screenRelativeHeight', 0.0)), 5) for i in ends]
         thresholds += [0.0] * (4 - len(thresholds))
         e['LOD Group'] = {'LOD 0': thresholds[0], 'LOD 1': thresholds[1], 'LOD 2': thresholds[2],
                           'LOD 3': thresholds[3], 'Size': 0.0}
         firsts = [m[0] for m in level_objs]
+        for i, m in enumerate(all_objs):  # dropped levels would otherwise draw on top of the kept ones
+            if i not in keep:
+                for c in m:
+                    c.active = False
         self.pack.counts['LOD groups'] += 1
         return firsts + [c for c in children if c not in firsts]
 
@@ -1112,6 +1164,38 @@ def _walk(objs):
         yield from _walk(o.children)
 
 
+def spawn_on_terrain(conv, pack, out, keep):
+    """The player spawn must stand above the scene's terrain mesh: one outside the terrain (the Unity rig can sit anywhere)
+    moves to a point a quarter of the way across it, and one below the surface is lifted to a metre above it."""
+    ter = next((e for e in out['models'] if e.get('path') in conv.terrain_mats and e['parentId'] == -1), None)
+    spawn = next((e for e in keep if e['name'] == 'Player Spawn'), None)
+    if ter is None or spawn is None:
+        return
+    vs = []
+    with open(os.path.join(pack.repo, 'project', *ter['path'].split('/')), encoding='utf-8') as f:
+        for line in f:
+            if line.startswith('v '):
+                _, x, y, z = line.split()
+                vs.append((float(x), float(y), float(z)))
+    nx = next(i for i, v in enumerate(vs) if v[2] != vs[0][2])
+    nz = len(vs) // nx
+    x0, x1, z0, z1 = vs[nx - 1][0], vs[0][0], vs[0][2], vs[-1][2]   # the OBJ is mirrored: x runs from 0 down to -width
+
+    def height(x, z):
+        i = min(max(round((x1 - x) / (x1 - x0) * (nx - 1)), 0), nx - 1)
+        j = min(max(round((z - z0) / (z1 - z0) * (nz - 1)), 0), nz - 1)
+        return vs[j * nx + i][1] * ter['scale'][1] + ter['position'][1]
+    lx, lz = spawn['position'][0] - ter['position'][0], spawn['position'][2] - ter['position'][2]
+    if not (x0 <= lx <= x1 and z0 <= lz <= z1):
+        lx, lz = x1 + (x0 - x1) * 0.25, z0 + (z1 - z0) * 0.25
+        spawn['position'][0], spawn['position'][2] = r6([lx + ter['position'][0]])[0], r6([lz + ter['position'][2]])[0]
+        pack.report['player spawn outside the terrain (moved a quarter of the way across it)'].append(pack.name)
+    ground = height(lx, lz)
+    if spawn['position'][1] < ground + 1.0:
+        spawn['position'][1] = round(ground + 1.0, 6)
+        pack.report['player spawn below the terrain (lifted to 1 m above it)'].append(pack.name)
+
+
 def write_scene(conv, path):
     pack = conv.pack
     roots, _, _ = conv.parse_file(path)
@@ -1155,6 +1239,7 @@ def write_scene(conv, path):
     # (not converted yet) keeps it so the trail still looks like it sits on something.
     if pack.name.startswith('SeedMesh') and not any(t == 'Terrain' for o in _walk(roots) for t, _ in o.comps):
         scene['sky'] = dict(scene['sky'], showGround=False)
+    spawn_on_terrain(conv, pack, out, keep)
     scene.update(out)
     scene['formatVersion'] = 4
     dst = os.path.join(pack.repo, 'project', 'scenes', f'{pack.name}_{stem}.json')
