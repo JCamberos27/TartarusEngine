@@ -2822,7 +2822,9 @@ int main(int argc, char** argv) {
                 {
                     const EditorSettings& es = EditorSettings::Get();
                     PhysicsWorld::SetDebugDrawFlags(es.PhysicsDebugDrawFlags);
-                    BodyDebug::SetEnabled(playing && es.ShowBodyDebug);
+                    // The player-body overlay costs ~4.5 ms a frame (its camera probe walks every skinned vertex), so a
+                    // benchmark measures the game without it even when the editor has it switched on.
+                    BodyDebug::SetEnabled(playing && es.ShowBodyDebug && !opt.perfBenchMode);
                     PhysicsWorld::SetEventLogging(es.LogPhysicsEvents || opt.smokeTestMode); // #169
                     PhysicsWorld::SetQueryRecording((es.PhysicsDebugDrawFlags & PhysicsWorld::PDD_Raycasts) != 0u);
                 }
