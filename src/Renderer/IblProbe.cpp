@@ -108,6 +108,19 @@ unsigned int IblProbe::CreateSpecularCube() {
     return tex;
 }
 
+unsigned int IblProbe::CreateSpecularCubeArray(int layers) {
+    unsigned int tex = 0;
+    glCreateTextures(GL_TEXTURE_CUBE_MAP_ARRAY, 1, &tex);
+    // R11G11B10F: half the memory of RGB16F for a room's reflection (no alpha, no negative values to keep).
+    glTextureStorage3D(tex, kSpecularMips, GL_R11F_G11F_B10F, kSpecularSize, kSpecularSize, 6 * std::max(layers, 1));
+    glTextureParameteri(tex, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTextureParameteri(tex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTextureParameteri(tex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(tex, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTextureParameteri(tex, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    return tex;
+}
+
 void IblProbe::BeginCubeFace(unsigned int tex, int face, int mip, int size) const {
     glBindFramebuffer(GL_FRAMEBUFFER, m_Fbo);
     glNamedFramebufferTextureLayer(m_Fbo, GL_COLOR_ATTACHMENT0, tex, mip, face);
@@ -393,4 +406,24 @@ void IblProbe::BakeBrdfLut() {
     m_BrdfShader->Bind();
     glDrawArrays(GL_TRIANGLES, 0, 6);
     m_BrdfLutBaked = true;
+}
+
+void IblProbe::PrefilterIntoArray(unsigned int envCube, int faceSize, unsigned int cubeArray, int layer, int face) {
+    EnsureCreated();
+    if (!m_Fbo || !envCube || !cubeArray) return;
+    BakeStateScope state;
+    glBindVertexArray(m_Vao);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, envCube);
+    m_PrefilterShader->Bind();
+    m_PrefilterShader->SetInt("uEnvMap", 0);
+    m_PrefilterShader->SetFloat("uEnvResolution", (float)(faceSize > 0 ? faceSize : kEnvSize));
+    m_PrefilterShader->SetFloat("uEnvRotation", 0.0f);
+    m_PrefilterShader->SetFloat("uRadianceClamp", 0.0f);
+    SetFaceBasis(*m_PrefilterShader, face);
+    for (int mip = 0; mip < kSpecularMips; ++mip) {
+        m_PrefilterShader->SetFloat("uRoughness", (float)mip / (float)(kSpecularMips - 1));
+        BeginCubeFace(cubeArray, layer * 6 + face, mip, kSpecularSize >> mip); // a cube array's layer-face
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+    }
 }

@@ -31,5 +31,8 @@ unsigned int Volume();
 // 1x1 GL_TEXTURE_CUBE_MAP RGBA8 (0,0,0,1): a complete cube for samplerCube slots (IBL irradiance /
 // specular) when the probe has no baked maps, so the sampler never reads an undefined texture.
 unsigned int BlackCube();
+// 1x1 GL_TEXTURE_CUBE_MAP_ARRAY RGBA8 (0,0,0,1), one cube: the captured reflection probes' slot (uProbeCubes) when no
+// probe has captured anything.
+unsigned int BlackCubeArray();
 
 } // namespace DefaultTextures

@@ -9,6 +9,7 @@
 #include "Sky.h"
 #include "SkyAtmosphere.h"
 #include "VolumetricFog.h"
+#include "PuddleSsr.h"
 #include "Shader.h"
 #include "Cubemap.h"
 #include "CascadedShadowMap.h"
@@ -105,14 +106,14 @@ FrameState SceneRenderer::GatherFrameState(World& world, const RenderFrameContex
         fs.clusterFarZ  = std::abs(ctx.Proj[3][2] / (ctx.Proj[2][2] + 1.0f));
     }
     fs.fogOn = !in.postFxOff;
-    fs.volOn = fs.fogOn && VolumetricFog::WantedFor(world, ctx, fs.vp);
+    fs.volOn = fs.fogOn && !ctx.ProbeCapture && VolumetricFog::WantedFor(world, ctx, fs.vp);
     return fs;
 }
 
-SceneRenderer::SceneRenderer() : m_Volumetrics(std::make_unique<VolumetricFog>()) {}
+SceneRenderer::SceneRenderer() : m_Volumetrics(std::make_unique<VolumetricFog>()), m_Ssr(std::make_unique<PuddleSsr>()) {}
 SceneRenderer::~SceneRenderer() = default;
 
-void SceneRenderer::WarmUpVolumetrics() { m_Volumetrics->WarmUp(); }
+void SceneRenderer::WarmUpVolumetrics() { m_Volumetrics->WarmUp(); m_Ssr->WarmUp(); }
 
 namespace {
 // What GatherVisible needs of each renderable, read from the registry once per frame instead of once per view and
@@ -527,6 +528,12 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
             program.SetFloat("uFogBaseHeight", w.FogBaseHeight);
         }
     }
+    // Captured room probes (ReflectionProbeCapture) on unit 26, the puddle SSR (PuddleSsr) on unit 29: units 1-7 and
+    // 16-20 are material maps (ShaderAsset::BuildBindings) - a 2D map and the cube array sharing a unit made draws
+    // fail, and the SSR read a material's white default. Never texture 0 either.
+    glBindTextureUnit(26, probeArray.CubeArray() ? probeArray.CubeArray() : DefaultTextures::BlackCubeArray());
+    program.SetInt("uSsrEnabled", fs.ssrTex ? 1 : 0);
+    glBindTextureUnit(29, fs.ssrTex ? fs.ssrTex : DefaultTextures::Black());
     glActiveTexture(GL_TEXTURE0);
 
     // PR14: nearest 2 reflection probes for parallax box projection — no-op (uProbeCount=0 or the
@@ -649,6 +656,14 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                                                  ProjectSettings::Quality().DecalMaxDistance, grading, ctx.EditorView);
         in.decals->BindForCull();
     }
+    // Puddle SSR: wanted with standing water, IBL and a depth pre-pass to trace against; the trace itself runs after
+    // that pre-pass, below. Not for probe captures, debug views or orthographic views.
+    const bool ssrWanted = world.PuddleSsr && world.PuddleAmount > 0.0f && gathered.iblOn && !ctx.ProbeCapture &&
+                           ctx.DebugView == 0 && ctx.TxHdr && ctx.TxHdr->IsValid() && in.depthShader &&
+                           ProjectSettings::Quality().DepthPrepass && std::abs(ctx.Proj[3][3]) < 0.5f &&
+                           gathered.vp[0] == 0 && gathered.vp[1] == 0 && gathered.vp[2] == ctx.TxHdr->Width() &&
+                           gathered.vp[3] == ctx.TxHdr->Height();
+    gathered.ssrTex = ssrWanted ? m_Ssr->Prepare(ctx.TxHdr) : 0u;
     const FrameState fs = gathered;
     // Which frame state the program selector pushes. The view-model sub-pass swaps this for its
     // own (see below) — that swap is the only reason it isn't a plain const FrameState.
@@ -796,6 +811,11 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     inView.OwnerView = ctx.OwnerView;
     inView.EditorView = ctx.EditorView;
     inView.LayerVisibleMask = in.layerVisibleMask;
+    if (ctx.ProbeCapture) { // a probe's room capture: the room, not the player or what's in the air
+        inView.SkipViewModels = true;
+        inView.SkipPlayerBody = true;
+        inView.SkipTransparent = true;
+    }
     // Too small to see from here (Project Settings > Quality); perspective views only. The SSAO depth pre-pass culls
     // with the same test, so the two agree on what stands in front.
     if (std::abs(ctx.Proj[3][3]) < 0.5f) {
@@ -1108,6 +1128,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     // behind it doesn't. Only what draws whole is in it: nothing skinned or moving (Dynamic), and none of the
     // player body's or outfits' hidden parts, which the model program discards.
     const bool depthPrepass = in.depthShader && ProjectSettings::Quality().DepthPrepass;
+    constexpr float kPrepassSlopeOffset = 0.02f;
     const auto prepassed = [&](const DrawItem& it) {
         return depthPrepass && !(it.Dynamic || it.NearHide > 0.0f || it.HideBones || it.HideVerts || it.CollarVerts ||
                                  it.BoneMaskMode || it.LayerPull != 0.0f || it.Ref->HasBones());
@@ -1124,7 +1145,10 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         depth.SetInt("uCascadeLayered", 0);
         glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
         glEnable(GL_POLYGON_OFFSET_FILL);
-        glPolygonOffset(1.0f, 4.0f);
+        // A small slope factor: the two programs' positions differ by rounding, far under a pixel. A whole pixel's
+        // slope (factor 1) pushed a grazing floor back ~15 cm at 10 m, so a floor mat 1.3 cm above it lost the
+        // LEQUAL test to the floor whenever the floor's program happened to sort after the mat's (Office hallway).
+        glPolygonOffset(kPrepassSlopeOffset, 4.0f);
         static std::vector<DepthCaster> prepass;
         prepass.clear();
         for (const DrawItem& it : drawList)
@@ -1167,6 +1191,17 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         depth.SetInt("uSplitViewProj", 0); // the shadow passes share this program
         glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
         GLStateCache::Invalidate();
+        if (ssrWanted) {
+            // Against this view's depth: SSAO's copy (everything) when it was made, else the pre-pass's own (static).
+            unsigned int ssrDepth = 0;
+            if (viewDepthCopied) {
+                ssrDepth = ctx.SsaoSrc->DepthTexture();
+            } else {
+                ctx.TxHdr->ResolveDepthOnly();
+                ssrDepth = ctx.TxHdr->ResolvedDepthTexture();
+            }
+            m_Ssr->Trace(ctx.TxHdr, ssrDepth, ctx.View, ctx.Proj, world);
+        }
         modelShader.Bind();
         if (cloudsAfterDepth) {
             // The clouds, skipping the sky the scene hides all around (a street, a room) - with SSAO off there is no
@@ -1384,12 +1419,14 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
 
     // #177 - particles last: depth-tested against everything above, blended, no depth write.
     // The player's own muzzle flame waits for the view-model sub-pass.
+    if (!ctx.ProbeCapture) { // a probe's room capture keeps only the room
     if (Particles()->Draw(world, ctx, viewModelPass) > 0) ++localStats.DrawCalls;
     // The Knife flipbook particles: blood mist, impact dust and debris, muzzle smoke.
     localStats.DrawCalls += FxSpriteRenderer::Get().Draw(ctx.View, ctx.Proj, fs.vp, ctx.TxHdr, false,
                                                          [&](Shader& p) { ApplyFrameState(p, fs); });
     // Labels in the world (World Text): unlit, depth-tested against everything above.
     localStats.DrawCalls += WorldTextRenderer::Get().Draw(world, ctx.View, ctx.Proj, ctx.ViewPos, ctx.EditorView);
+    }
     if (ctx.WorldOverlay) {
         ctx.WorldOverlay();
         GLStateCache::Invalidate();
@@ -1422,6 +1459,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         vmCtx.Proj = vmProj;
         vmCtx.TaaVelocity = false; // unjittered, and it moves with the eye: zero motion (written below)
         FrameState vmFs = GatherFrameState(world, vmCtx, in);
+        vmFs.ssrTex = 0; // traced for the world's projection, not the arms'
         // The SSAO map was built from the world's depth pre-pass, which skips the view model, so
         // sampling it here stamps whatever stands behind the gun (a character, a wall) onto it as
         // occlusion - the weapon read as see-through. The view model gets no screen-space AO.

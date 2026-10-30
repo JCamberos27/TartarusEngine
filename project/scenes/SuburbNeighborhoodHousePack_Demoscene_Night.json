@@ -154101,6 +154101,7 @@
   "msaaSamples": 1,
   "puddleAmount": 0.45,
   "puddleScale": 4.0,
+  "puddleSsr": true,
   "shadowCascades": 2,
   "shadowDistance": 150.0,
   "shadowResolution": 2048,
