@@ -253,6 +253,32 @@ void main() {
     } else if (backFace) {
         N = -N;
     }
+    // Cover layer (moss / snow): up-facing surfaces take the second material, its edge broken up by the cover's height.
+    // Skipped (with its three fetches) where the weight is zero and beyond ~100 m, where the base layer carries on alone.
+#ifdef _COVER
+    {
+        vec3 upN = backFace ? -normalize(vNormal) : normalize(vNormal);
+        float covDist = length(vWorldPos - uViewPos);
+        vec2 cuv = vWorldPos.xz * uCoverScale;
+        vec2 cdx = dFdx(cuv), cdy = dFdy(cuv);
+        float coverBase = (upN.y - uCoverThreshold) * uCoverSharpness * 0.25;
+        if (covDist < 110.0 && coverBase + uCoverHeight * 0.1 > 0.0) {
+            vec4 cm = textureGrad(uCoverMaskMap, cuv, cdx, cdy);
+            float cw = clamp(coverBase + (cm.r - 0.5) * uCoverHeight * 0.1 * uCoverSharpness * 0.25 + 0.0, 0.0, 1.0)
+                       * uCoverStrength * (1.0 - smoothstep(60.0, 110.0, covDist));
+            if (cw > 0.0) {
+                vec3 ca = textureGrad(uCoverAlbedoMap, cuv, cdx, cdy).rgb;
+                vec3 ct = UnpackNormal(textureGrad(uCoverNormalMap, cuv, cdx, cdy).rgb);
+                albedo = mix(albedo, ca, cw);
+                roughness = mix(roughness, 1.0 - cm.b, cw);
+                ao = mix(ao, cm.g, cw);
+                metallic *= 1.0 - cw;
+                vec3 cn = normalize(vec3(N.x + ct.x, N.y * ct.z, N.z + ct.y));
+                N = normalize(mix(N, cn, cw));
+            }
+        }
+    }
+#endif
     // Material -> Grunge -> decals -> blood -> lighting (docs/DECALS.md).
     vec3 geoN = backFace ? -normalize(vNormal) : normalize(vNormal);
     // This fragment's froxel, once: the decal list and the light loop below both read it.

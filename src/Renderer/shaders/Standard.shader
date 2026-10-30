@@ -33,6 +33,14 @@ Properties {
     [Header(Grunge)] [Tooltip(Grime laid over the whole surface in world space, ignoring the UVs: white leaves it clean, dark dirties and roughens it.)] _GrungeMap ("Grunge Map", Texture2D) = "white"
     [Tooltip(How much of the Grunge Map shows. 0 = off.)] _GrungeStrength ("Grunge Strength", Range(0, 1)) = 0
     [Tooltip(Grunge Map repeats per metre.)] _GrungeScale ("Grunge Tiling", Float) = 0.5
+    [Header(Cover Layer)] [Tooltip(A second material (moss, snow) laid over the up-facing surfaces in world space, drawn only when Cover is above 0.)] _CoverStrength ("Cover", Range(0, 1)) = 0
+    [Tooltip(Colour of the cover layer.)] _CoverAlbedoMap ("Cover Albedo", Texture2D) = "white"
+    [Normal] [Tooltip(Surface detail of the cover layer.)] _CoverNormalMap ("Cover Normal", Texture2D) = "normal"
+    [Tooltip(Green = occlusion, alpha = smoothness, red = height (used to break the edge up).)] _CoverMaskMap ("Cover Mask", Texture2D) = "white"
+    [Tooltip(Cover tiles per metre, projected from above.)] _CoverScale ("Cover Tiling", Float) = 0.5
+    [Tooltip(How level a surface must be before it starts to cover: 1 = only dead flat, 0 = also vertical.)] _CoverThreshold ("Cover Threshold", Range(0, 1)) = 0.6
+    [Tooltip(How hard the cover edge is.)] _CoverSharpness ("Cover Sharpness", Range(0.5, 30)) = 8
+    [Tooltip(How much the cover height breaks the edge up. 0 = a smooth edge.)] _CoverHeight ("Cover Height Blend", Range(0, 12)) = 3
     [Header(Fur)] [Tooltip(Shell fur: copies of the surface pushed out along its normal and cut into strands, drawn after it. For short hair and fuzz, not long locks.)] _FurEnabled ("Fur", Bool) = 0
     [Tooltip(Metres from the skin to the longest tips, where the Fur Mask is white.)] _FurLength ("Fur Length", Range(0, 0.1)) = 0.015
     [Tooltip(Strands across the 0-1 UV square. Higher = finer, denser hair.)] _FurDensity ("Fur Density", Range(10, 1000)) = 220
@@ -74,6 +82,7 @@ Keywords {
     _SUBSURFACE
     _TRANSMISSION
     _REFLECTION_PROBES
+    _COVER
 }
 
 Vertex   { ModelVertex.glsl }
