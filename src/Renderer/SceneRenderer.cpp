@@ -136,8 +136,35 @@ struct CandidateCache {
     std::uint64_t Stamp = 0;
     size_t Renderables = 0;
     entt::entity First = entt::null, Last = entt::null;
+    std::uint64_t Flags = 0;          // FlagSignature at the build
     std::vector<Candidate> List;
+    std::vector<std::uint32_t> Index; // entity slot -> List index (kNoCandidate when none)
 };
+constexpr std::uint32_t kNoCandidate = ~0u;
+
+// A fingerprint of everything a Candidate's Flags and Layer were read from: while it holds, a new frame only has to
+// patch the candidates whose transforms moved (World::ChangedWorldTransforms) instead of re-reading every renderable.
+template <class Tag>
+std::uint64_t TagFingerprint(World& world, std::uint64_t salt) {
+    const entt::sparse_set& st = world.Registry.storage<Tag>();
+    std::uint64_t h = (std::uint64_t)st.size() * salt;
+    const entt::entity* data = st.data();
+    for (size_t i = 0, n = st.size(); i < n; ++i) {
+        std::uint64_t v = ((std::uint64_t)entt::to_integral(data[i]) + salt) * 0x9E3779B97F4A7C15ull;
+        v ^= v >> 29;
+        h += v * 0xBF58476D1CE4E5B9ull;
+    }
+    return h;
+}
+std::uint64_t FlagSignature(World& world) {
+    std::uint64_t h = TagFingerprint<InactiveTag>(world, 1) ^ TagFingerprint<PoseSourceTag>(world, 3) ^
+                      TagFingerprint<OwnerViewOnlyTag>(world, 5) ^ TagFingerprint<HiddenFromOwnerTag>(world, 7) ^
+                      TagFingerprint<ViewModelTag>(world, 11) ^ TagFingerprint<PlayerBodyTag>(world, 13) ^
+                      TagFingerprint<HiddenInSceneTag>(world, 17) ^ TagFingerprint<LayerComponent>(world, 19);
+    for (auto [e, lc] : world.Registry.view<LayerComponent>().each()) // a layer is edited in place
+        h += ((std::uint64_t)entt::to_integral(e) * 31 + (std::uint64_t)(std::uint32_t)lc.Layer) * 0xD6E8FEB86659FD93ull;
+    return h;
+}
 
 void FillBounds(VisibleRenderable& v, const RenderableComponent& r) {
     r.ModelRef->PosedBounds(v.LocalMin, v.LocalMax);
@@ -158,11 +185,33 @@ const std::vector<Candidate>& Candidates(World& world) {
     const entt::sparse_set& storage = world.Registry.storage<RenderableComponent>();
     const entt::entity first = storage.empty() ? entt::null : storage.data()[0];
     const entt::entity last = storage.empty() ? entt::null : storage.data()[storage.size() - 1];
-    if (cache.Owner == &world && cache.Stamp == world.TransformCacheStamp() && world.TransformCacheStamp() != 0 &&
-        cache.Renderables == storage.size() && cache.First == first && cache.Last == last)
+    const bool sameSet = cache.Owner == &world && world.TransformCacheStamp() != 0 && cache.Renderables == storage.size() &&
+                         cache.First == first && cache.Last == last;
+    if (sameSet && cache.Stamp == world.TransformCacheStamp()) return cache.List;
+    const std::uint64_t flags = FlagSignature(world);
+    // One rebuild on from the last build, nothing entered or left the transform cache and no flag changed: patch the
+    // moved ones (and everything posed reads its bounds live anyway).
+    if (sameSet && cache.Flags == flags && cache.Stamp != 0 && cache.Stamp == world.PreviousTransformCacheStamp() &&
+        !world.TransformCacheMembershipChanged()) {
+        for (entt::entity e : world.ChangedWorldTransforms()) {
+            const size_t slot = (size_t)entt::to_entity(e);
+            if (slot >= cache.Index.size() || cache.Index[slot] == kNoCandidate) continue;
+            Candidate& c = cache.List[cache.Index[slot]];
+            if (c.Entity != e) continue;
+            c.V.Xform = world.GetCachedWorldTransform(e);
+            FillBounds(c.V, *c.Renderable);
+        }
+        cache.Stamp = world.TransformCacheStamp();
         return cache.List;
-    cache = {&world, world.TransformCacheStamp(), storage.size(), first, last, std::move(cache.List)};
+    }
+    cache.Owner = &world;
+    cache.Stamp = world.TransformCacheStamp();
+    cache.Renderables = storage.size();
+    cache.First = first;
+    cache.Last = last;
+    cache.Flags = flags;
     cache.List.clear();
+    std::fill(cache.Index.begin(), cache.Index.end(), kNoCandidate);
     auto& reg = world.Registry;
     for (auto entity : reg.view<TransformComponent, RenderableComponent>()) {
         auto& r = reg.get<RenderableComponent>(entity);
@@ -182,6 +231,9 @@ const std::vector<Candidate>& Candidates(World& world) {
         c.V.Renderable = &r;
         c.V.Xform = world.GetCachedWorldTransform(entity);
         FillBounds(c.V, r);
+        const size_t slot = (size_t)entt::to_entity(entity);
+        if (slot >= cache.Index.size()) cache.Index.resize(slot + 1, kNoCandidate);
+        cache.Index[slot] = (std::uint32_t)cache.List.size();
         cache.List.push_back(c);
     }
     return cache.List;

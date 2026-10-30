@@ -137,18 +137,42 @@ glm::mat4 World::ComposeWorldTransform(entt::entity entity) const {
 
 void World::ClearLod() {
     Registry.clear<LodCulledTag>();
+    m_LodValid = false;
 }
 
 int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
     auto groups = Registry.view<LODGroupComponent, HierarchyComponent>();
     if (groups.begin() == groups.end()) {
         if (!Registry.view<LodCulledTag>().empty()) ClearLod();
+        m_LodValid = false;
         return 0;
     }
-    ClearLod();
+    // Incremental (perf): each group remembers the level it last tagged for, and a call only re-tags the groups whose
+    // level changed - a forest of 40k groups used to clear and re-emplace ~100k tags per view, three views a frame.
+    // Anything that could change which renderers sit under which level (re-parenting, renderers or hierarchies added
+    // or removed, a group's own children changing) falls back to the full clear-and-tag below.
+    const std::uint64_t signature[4] = {m_HierarchyVersion, (std::uint64_t)Registry.storage<RenderableComponent>().size(),
+                                        (std::uint64_t)Registry.storage<HierarchyComponent>().size(),
+                                        (std::uint64_t)Registry.storage<LODGroupComponent>().size()};
+    bool full = !m_LodValid || !std::equal(signature, signature + 4, m_LodSignature);
     const bool ortho = proj[3][3] == 1.0f; // glm::ortho leaves w = 1; perspective sets it 0
     const float yScale = proj[1][1];       // 1 / tan(fovY/2), or 1 / halfHeight for ortho
-    std::vector<entt::entity> stack;
+    std::vector<entt::entity>& stack = m_LodStack;
+    // The recorded group at `e`, if any.
+    auto recordOf = [&](entt::entity e) -> const LodGroupState* {
+        const size_t s = (size_t)entt::to_entity(e);
+        if (s >= m_LodIndex.size() || m_LodIndex[s] >= m_LodState.size()) return nullptr;
+        const LodGroupState& st = m_LodState[m_LodIndex[s]];
+        return st.Group == e ? &st : nullptr;
+    };
+    // Whether a recorded group tags its child `child` (not the level it uses).
+    auto levelTagged = [](const LodGroupState& st, entt::entity child) {
+        if (st.Active < -1) return false;
+        for (int j = 0; j < st.Levels; ++j)
+            if (st.Kids[j] == child) return j != st.Active;
+        return false; // a fifth child or later: always drawn
+    };
+    // Full pass: tag a level's whole subtree (an untouched renderer stays tagged by whichever group tagged it).
     auto tagSubtree = [&](entt::entity root) {
         stack.assign(1, root);
         while (!stack.empty()) {
@@ -159,6 +183,38 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
             if (const auto* h = Registry.try_get<HierarchyComponent>(e))
                 stack.insert(stack.end(), h->Children.begin(), h->Children.end());
         }
+    };
+    // Incremental pass: set a changed level's subtree to what every group above each renderer says - culled by this
+    // level (`culled`) or by a level of any group nested inside it.
+    std::vector<std::pair<entt::entity, bool>>& walk = m_LodWalk;
+    auto retagSubtree = [&](entt::entity root, bool culled) {
+        walk.assign(1, {root, culled});
+        while (!walk.empty()) {
+            const auto [e, cull] = walk.back();
+            walk.pop_back();
+            if (!Registry.valid(e)) continue;
+            if (Registry.all_of<RenderableComponent>(e)) {
+                if (cull) Registry.emplace_or_replace<LodCulledTag>(e);
+                else Registry.remove<LodCulledTag>(e);
+            }
+            const auto* h = Registry.try_get<HierarchyComponent>(e);
+            if (!h) continue;
+            const LodGroupState* nested = Registry.all_of<LODGroupComponent>(e) ? recordOf(e) : nullptr;
+            for (entt::entity c : h->Children) walk.emplace_back(c, cull || (nested && levelTagged(*nested, c)));
+        }
+    };
+    // A group sitting inside a level some group above it culls: everything under it is tagged already.
+    auto culledFromAbove = [&](entt::entity g) {
+        entt::entity child = g;
+        for (size_t depth = 0; depth <= kMaxHierarchyDepth; ++depth) {
+            const auto* h = Registry.try_get<HierarchyComponent>(child);
+            const entt::entity parent = h ? h->Parent : entt::null;
+            if (parent == entt::null || !Registry.valid(parent)) return false;
+            if (Registry.all_of<LODGroupComponent>(parent))
+                if (const LodGroupState* st = recordOf(parent); st && levelTagged(*st, child)) return true;
+            child = parent;
+        }
+        return false;
     };
     // Diagonal of a subtree's renderers' world bounds, for the automatic group size.
     auto subtreeSize = [&](entt::entity root) {
@@ -186,25 +242,96 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
         return lo.x <= hi.x ? glm::length(hi - lo) : 0.0f;
     };
 
+    // A group's centre and automatic size, from the transform cache.
+    auto measure = [&](LodGroupState& st, const LODGroupComponent& lod) {
+        const glm::mat4 groupWorld = GetCachedWorldTransform(st.Group);
+        st.Centre = glm::vec3(groupWorld[3]);
+        // Automatic size: LOD 0's bounds, measured again whenever the group itself moves.
+        if (lod.Size <= 0.0f && st.Levels > 0) st.AutoSize = subtreeSize(st.Kids[0]);
+    };
+
+    // One pass over the groups; returns false when the incremental pass meets a group it has no record of, and the
+    // caller redoes everything in full. The records are dense, in the view's order, so the steady pass over 40k
+    // groups reads them front to back.
     int evaluated = 0;
-    for (entt::entity g : groups) {
-        if (Registry.all_of<InactiveTag>(g)) continue;
-        const auto& lod = groups.get<LODGroupComponent>(g);
-        const auto& children = groups.get<HierarchyComponent>(g).Children;
-        const int levels = (int)std::min<size_t>(children.size(), 4);
-        if (levels == 0) continue;
-        ++evaluated;
-        const float size = lod.Size > 0.0f ? lod.Size : subtreeSize(children[0]);
-        const glm::vec3 centre = glm::vec3(GetCachedWorldTransform(g)[3]);
-        const float dist = std::max(glm::length(centre - viewPos), 1e-4f);
-        const float height = ortho ? size * yScale * 0.5f : size * yScale / (2.0f * dist);
-        const float thresholds[4] = {lod.Lod0, lod.Lod1, lod.Lod2, lod.Lod3};
-        int active = -1; // -1 = culled
-        for (int i = 0; i < levels; ++i)
-            if (height >= thresholds[i]) { active = i; break; }
-        for (int i = 0; i < levels; ++i)
-            if (i != active) tagSubtree(children[i]);
+    auto pass = [&]() -> bool {
+        evaluated = 0;
+        if (full) {
+            Registry.clear<LodCulledTag>();
+            m_LodState.clear();
+            std::fill(m_LodIndex.begin(), m_LodIndex.end(), ~0u);
+        } else if (m_LodCentreStamp != m_TransformCacheStamp || m_TransformCacheStamp == 0) {
+            // Only what the transform cache moved since the records were measured, when it can say.
+            const bool patch = m_TransformCacheStamp != 0 && m_LodCentreStamp == m_PrevTransformCacheStamp &&
+                               !m_TransformMembershipChanged;
+            if (patch) {
+                for (entt::entity e : m_ChangedTransforms) {
+                    const size_t s = (size_t)entt::to_entity(e);
+                    if (s >= m_LodIndex.size() || m_LodIndex[s] == ~0u) continue;
+                    LodGroupState& st = m_LodState[m_LodIndex[s]];
+                    if (st.Group == e) measure(st, Registry.get<LODGroupComponent>(e));
+                }
+            } else {
+                for (LodGroupState& st : m_LodState)
+                    if (Registry.valid(st.Group) && Registry.all_of<LODGroupComponent>(st.Group))
+                        measure(st, Registry.get<LODGroupComponent>(st.Group));
+            }
+        }
+        m_LodCentreStamp = m_TransformCacheStamp;
+        size_t index = 0;
+        for (entt::entity g : groups) {
+            const auto& lod = groups.get<LODGroupComponent>(g);
+            const size_t at = index++;
+            if (full) {
+                const auto& children = groups.get<HierarchyComponent>(g).Children;
+                LodGroupState& st = m_LodState.emplace_back();
+                st.Group = g;
+                st.Levels = (std::uint8_t)std::min<size_t>(children.size(), 4);
+                for (int i = 0; i < st.Levels; ++i) st.Kids[i] = children[i];
+                const size_t slot = (size_t)entt::to_entity(g);
+                if (slot >= m_LodIndex.size()) m_LodIndex.resize(slot + 1, ~0u);
+                m_LodIndex[slot] = (std::uint32_t)at;
+                measure(st, lod);
+            } else if (at >= m_LodState.size() || m_LodState[at].Group != g) {
+                return false; // the children can't have changed without the signature changing
+            }
+            LodGroupState& st = m_LodState[at];
+            const int levels = st.Levels;
+            if (levels == 0) continue;
+            int active = kLodSkipped; // an inactive group tags nothing
+            if (!Registry.all_of<InactiveTag>(g)) {
+                ++evaluated;
+                const float size = lod.Size > 0.0f ? lod.Size : st.AutoSize;
+                const float dist = std::max(glm::length(st.Centre - viewPos), 1e-4f);
+                const float height = ortho ? size * yScale * 0.5f : size * yScale / (2.0f * dist);
+                const float thresholds[4] = {lod.Lod0, lod.Lod1, lod.Lod2, lod.Lod3};
+                active = -1; // -1 = culled
+                for (int i = 0; i < levels; ++i)
+                    if (height >= thresholds[i]) { active = i; break; }
+            }
+            const int was = st.Active; // kLodSkipped (or a fresh record) tagged nothing
+            if (!full && was == active) continue;
+            st.Active = (std::int8_t)active; // first: the retag below reads this group's own record for nested ones
+            if (full) {
+                for (int i = 0; i < levels; ++i)
+                    if (i != active) tagSubtree(st.Kids[i]);
+                continue;
+            }
+            if (culledFromAbove(g)) continue;
+            for (int i = 0; i < levels; ++i) {
+                const bool wasTagged = was >= -1 && i != was;
+                const bool nowTagged = active >= -1 && i != active;
+                if (wasTagged != nowTagged) retagSubtree(st.Kids[i], nowTagged);
+            }
+        }
+        return index == m_LodState.size();
+    };
+    if (!pass()) {
+        full = true;
+        pass();
     }
+    std::copy(signature, signature + 4, m_LodSignature);
+    m_LodValid = true;
     return evaluated;
 }
 
@@ -250,32 +377,91 @@ void World::SyncActiveInHierarchy() {
     for (entt::entity e : activate) Registry.remove<InactiveTag>(e);
 }
 
+namespace {
+// Order-independent fingerprint of a storage's entities (size, and a sum of mixed ids): SyncActiveInHierarchy's inputs.
+std::uint64_t StorageFingerprint(const entt::sparse_set& st) {
+    std::uint64_t h = 0;
+    const auto* data = st.data();
+    for (size_t i = 0, n = st.size(); i < n; ++i) {
+        std::uint64_t v = (std::uint64_t)entt::to_integral(data[i]) * 0x9E3779B97F4A7C15ull;
+        v ^= v >> 31;
+        h += v * 0xBF58476D1CE4E5B9ull;
+    }
+    return h;
+}
+} // namespace
+
+void World::ActiveSignature(std::uint64_t out[6]) {
+    const entt::sparse_set& deactivated = Registry.storage<DeactivatedTag>();
+    const entt::sparse_set& inactive = Registry.storage<InactiveTag>();
+    out[0] = m_HierarchyVersion;
+    out[1] = Registry.storage<TransformComponent>().size();
+    out[2] = deactivated.size();
+    out[3] = StorageFingerprint(deactivated);
+    out[4] = inactive.size();
+    out[5] = StorageFingerprint(inactive);
+}
+
 void World::RebuildWorldTransformCache() {
     static uint64_t s_Stamps = 0; // shared by every World, so two worlds never hand out the same stamp
+    m_PrevTransformCacheStamp = m_TransformCacheStamp;
     m_TransformCacheStamp = ++s_Stamps;
-    SyncActiveInHierarchy();
+    // Active-in-hierarchy only changes with the hierarchy, the Deactivated set or someone else's InactiveTag edits (all
+    // in the signature): re-derived only then. A destroy-and-create of an unparented entity leaves it out, which is fine
+    // - a fresh root without DeactivatedTag is active, which is what it starts as.
+    {
+        std::uint64_t sig[6];
+        ActiveSignature(sig);
+        if (!m_ActiveSignatureValid || !std::equal(sig, sig + 6, m_ActiveSignature)) {
+            SyncActiveInHierarchy();
+            ActiveSignature(m_ActiveSignature); // as Sync left it
+            m_ActiveSignatureValid = true;
+        }
+    }
     auto view = Registry.view<TransformComponent>();
+    m_ChangedTransforms.clear();
+    m_TransformMembershipChanged = false;
+    if (RebuildChangedTransformsOnly()) return;
     size_t slots = 0;
     for (entt::entity entity : view) slots = std::max(slots, (size_t)entt::to_entity(entity) + 1);
-    m_WorldTransformKeys.assign(slots, entt::null);
-    m_WorldTransformCache.resize(slots);
+    auto ensureSlots = [&](size_t n) {
+        if (n <= m_WorldTransformKeys.size()) return;
+        m_WorldTransformKeys.resize(n, entt::null);
+        m_WorldTransformCache.resize(n);
+        m_LocalSnapshots.resize(n);
+        m_RebuildDone.resize(n, 0);
+        m_RebuildChanged.resize(n, 0);
+    };
+    ensureSlots(slots);
+    const std::uint32_t gen = ++m_RebuildGeneration;
+    auto doneNow = [&](entt::entity e) {
+        const size_t s = (size_t)entt::to_entity(e);
+        return s < m_RebuildDone.size() && m_RebuildDone[s] == gen && m_WorldTransformKeys[s] == e;
+    };
 
-    // Chain scratch, reused across entities so a deep hierarchy doesn't allocate per entity.
-    std::vector<entt::entity> chain;
+    // Chain scratch (entity + its parent), reused across entities so a deep hierarchy doesn't allocate per entity.
+    std::vector<std::pair<entt::entity, entt::entity>> chain;
     for (entt::entity entity : view) {
-        if (IsWorldTransformCached(entity)) continue; // already filled as some ancestor
+        if (doneNow(entity)) continue; // already filled as some ancestor
 
-        // Walk UP collecting the uncached part of the parent chain, then compose DOWN from the
-        // topmost one. Every entity is therefore composed exactly once per rebuild, no matter
-        // how many of its descendants the view visits afterwards.
+        // Walk UP collecting the part of the parent chain this rebuild hasn't reached, then go DOWN from the topmost
+        // one. Every entity is therefore visited exactly once per rebuild, no matter how many of its descendants the
+        // view visits afterwards.
         chain.clear();
         glm::mat4 base(1.0f);
+        bool baseChanged = false;
         for (entt::entity walk = entity; walk != entt::null; ) {
-            if (IsWorldTransformCached(walk)) { base = m_WorldTransformCache[(size_t)entt::to_entity(walk)]; break; }
-            chain.push_back(walk);
+            if (doneNow(walk)) {
+                const size_t s = (size_t)entt::to_entity(walk);
+                base = m_WorldTransformCache[s];
+                baseChanged = m_RebuildChanged[s] != 0;
+                break;
+            }
             const auto* h = Registry.try_get<HierarchyComponent>(walk);
             entt::entity next = h ? h->Parent : entt::null;
-            if (next == entt::null || !Registry.valid(next)) break;
+            if (next != entt::null && !Registry.valid(next)) next = entt::null;
+            chain.emplace_back(walk, next);
+            if (next == entt::null) break;
             // SetParent rejects cycles, but AttachChildRaw (used by scene loading) doesn't
             // validate — bail rather than spin forever on a malformed file. Previously silent;
             // now reported once per offending entity through the same guard
@@ -287,25 +473,134 @@ void World::RebuildWorldTransformCache() {
                                std::to_string(kMaxHierarchyDepth) +
                                " levels (cycle in parentId?); world transform truncated.");
                 }
+                chain.back().second = entt::null; // composed as a root, like the old truncation
                 break;
             }
             walk = next;
         }
 
         for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
+            const entt::entity e = it->first;
+            const size_t slot = (size_t)entt::to_entity(e);
+            ensureSlots(slot + 1); // a Transform-less ancestor past the view's highest slot
             // An ancestor with no TransformComponent contributes identity rather than throwing:
             // every entity the editor can create has one, but the cache must not be the thing
             // that crashes on a hand-edited or future component layout.
-            if (const auto* t = Registry.try_get<TransformComponent>(*it)) base = base * ComposeTransform(*t);
-            const auto slot = (size_t)entt::to_entity(*it);
-            if (slot >= m_WorldTransformKeys.size()) { // a Transform-less ancestor past the view's highest slot
-                m_WorldTransformKeys.resize(slot + 1, entt::null);
-                m_WorldTransformCache.resize(slot + 1);
+            const auto* t = Registry.try_get<TransformComponent>(e);
+            LocalSnapshot& snap = m_LocalSnapshots[slot];
+            const bool member = m_WorldTransformKeys[slot] == e;
+            const bool same = member && snap.Parent == it->second && snap.HasTransform == (t != nullptr) &&
+                              (!t || (snap.Position == t->Position && snap.Rotation == t->Rotation && snap.Scale == t->Scale));
+            const bool changed = baseChanged || !same;
+            if (changed) {
+                if (t) base = base * ComposeTransform(*t);
+                m_WorldTransformCache[slot] = base;
+                snap.Parent = it->second;
+                snap.HasTransform = t != nullptr;
+                if (t) {
+                    snap.Position = t->Position;
+                    snap.Rotation = t->Rotation;
+                    snap.Scale = t->Scale;
+                }
+                m_ChangedTransforms.push_back(e);
+            } else {
+                base = m_WorldTransformCache[slot];
             }
-            m_WorldTransformKeys[slot] = *it;
-            m_WorldTransformCache[slot] = base;
+            if (!member) m_TransformMembershipChanged = true;
+            m_WorldTransformKeys[slot] = e;
+            m_RebuildDone[slot] = gen;
+            m_RebuildChanged[slot] = changed ? 1 : 0;
+            baseChanged = changed;
         }
     }
+    // Whatever this rebuild didn't reach (destroyed, or lost its transform) leaves the cache.
+    for (size_t s = 0; s < m_WorldTransformKeys.size(); ++s) {
+        if (m_WorldTransformKeys[s] != entt::null && m_RebuildDone[s] != gen) {
+            m_WorldTransformKeys[s] = entt::null;
+            m_TransformMembershipChanged = true;
+        }
+    }
+    TransformStructure(m_TransformStructure);
+    m_TransformStructureValid = true;
+}
+
+void World::TransformStructure(std::uint64_t out[3]) {
+    out[0] = m_HierarchyVersion;
+    out[1] = Registry.storage<HierarchyComponent>().size();
+    out[2] = Registry.storage<TransformComponent>().size();
+}
+
+// The common frame: the hierarchy is as the last full rebuild left it and the same entities have transforms, so each
+// slot's recorded parent still holds. One linear pass over the transforms finds the ones whose local values moved;
+// only those and their descendants are recomposed (parents first), everything else keeps its matrix. Returns false,
+// having changed nothing, when the full walk is needed instead.
+bool World::RebuildChangedTransformsOnly() {
+    if (!m_TransformStructureValid) return false;
+    auto view = Registry.view<TransformComponent>();
+    std::uint64_t structure[3];
+    TransformStructure(structure);
+    if (!std::equal(structure, structure + 3, m_TransformStructure)) return false;
+    std::vector<entt::entity>& dirty = m_DirtyScratch;
+    dirty.clear();
+    for (auto [e, t] : view.each()) {
+        const size_t s = (size_t)entt::to_entity(e);
+        if (s >= m_WorldTransformKeys.size() || m_WorldTransformKeys[s] != e) return false; // new to the cache
+        const LocalSnapshot& snap = m_LocalSnapshots[s];
+        if (!snap.HasTransform || snap.Position != t.Position || snap.Rotation != t.Rotation || snap.Scale != t.Scale)
+            dirty.push_back(e);
+    }
+    if (dirty.empty()) return true;
+
+    const std::uint32_t gen = ++m_RebuildGeneration;
+    // Everything under a moved entity is recomposed too: mark the subtrees (m_RebuildChanged doubles as "pending").
+    std::vector<entt::entity>& pending = m_PendingScratch;
+    pending.clear();
+    std::vector<entt::entity>& stack = m_LodStack;
+    for (entt::entity d : dirty) {
+        stack.assign(1, d);
+        while (!stack.empty()) {
+            const entt::entity e = stack.back();
+            stack.pop_back();
+            const size_t s = (size_t)entt::to_entity(e);
+            if (s >= m_WorldTransformKeys.size() || m_WorldTransformKeys[s] != e) continue;
+            if (m_RebuildDone[s] == gen) continue; // already marked
+            m_RebuildDone[s] = gen;
+            m_RebuildChanged[s] = 1; // not composed yet
+            pending.push_back(e);
+            if (const auto* h = Registry.try_get<HierarchyComponent>(e))
+                stack.insert(stack.end(), h->Children.begin(), h->Children.end());
+        }
+    }
+    std::vector<entt::entity>& chain = m_ChainScratch;
+    auto isPending = [&](entt::entity e) {
+        const size_t s = (size_t)entt::to_entity(e);
+        return m_RebuildDone[s] == gen && m_RebuildChanged[s] != 0;
+    };
+    for (entt::entity e : pending) {
+        if (!isPending(e)) continue; // composed already, as some descendant's ancestor
+        chain.clear();
+        entt::entity walk = e;
+        while (walk != entt::null && isPending(walk)) {
+            chain.push_back(walk);
+            walk = m_LocalSnapshots[(size_t)entt::to_entity(walk)].Parent;
+            if (chain.size() > kMaxHierarchyDepth) return false; // a parent cycle: the full walk truncates and logs it
+        }
+        glm::mat4 base = walk != entt::null ? m_WorldTransformCache[(size_t)entt::to_entity(walk)] : glm::mat4(1.0f);
+        for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
+            const size_t s = (size_t)entt::to_entity(*it);
+            LocalSnapshot& snap = m_LocalSnapshots[s];
+            if (const auto* t = Registry.try_get<TransformComponent>(*it)) {
+                base = base * ComposeTransform(*t);
+                snap.Position = t->Position;
+                snap.Rotation = t->Rotation;
+                snap.Scale = t->Scale;
+            }
+            m_WorldTransformCache[s] = base;
+            m_RebuildChanged[s] = 0;
+            m_ChangedTransforms.push_back(*it);
+        }
+    }
+    return true;
 }
 
 TransformComponent World::WorldSpaceTransform(entt::entity entity) const {
@@ -375,6 +670,7 @@ bool World::SetParent(entt::entity child, entt::entity parent) {
         }
     }
 
+    ++m_HierarchyVersion;
     auto& childHier = Registry.get_or_emplace<HierarchyComponent>(child);
     childHier.Parent = parent;
     if (parent != entt::null) {
@@ -398,6 +694,7 @@ bool World::SetParent(entt::entity child, entt::entity parent) {
 
 void World::AttachChildRaw(entt::entity child, entt::entity parent) {
     if (!Registry.valid(child) || !Registry.valid(parent) || child == parent) return;
+    ++m_HierarchyVersion;
     auto& childHier = Registry.get_or_emplace<HierarchyComponent>(child);
     childHier.Parent = parent;
     Registry.get_or_emplace<HierarchyComponent>(parent).Children.push_back(child);
@@ -429,6 +726,7 @@ int World::RepairHierarchyCycles() {
                 }
                 hier.Parent = entt::null;
                 ++broken;
+                ++m_HierarchyVersion;
                 Log::Error("Hierarchy: " + EntityLogRef(Registry, walk) + " was its own ancestor - "
                            "the parent link was cut and it is now a root. The scene file's parent "
                            "ids form a loop (#202).", EntityLogContext(Registry, walk));
@@ -447,6 +745,7 @@ int World::RepairHierarchyCycles() {
 
 void World::DestroyEntityAndChildren(entt::entity entity) {
     if (!Registry.valid(entity)) return;
+    ++m_HierarchyVersion;
     if (auto* hier = Registry.try_get<HierarchyComponent>(entity)) {
         // Copy first — destroying a child mutates its parent's HierarchyComponent (this one),
         // so recursing over the live vector would invalidate the iteration.

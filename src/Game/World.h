@@ -188,13 +188,21 @@ public:
     // RebuildWorldTransformCache() computes every entity's world matrix ONCE, top-down (a
     // child's world = its parent's already-cached world * its own local), and
     // GetCachedWorldTransform() then hands it back for free. Call the rebuild once per frame
-    // AFTER that frame's transform edits and BEFORE the shadow/render passes; the whole cache
-    // is thrown away and rebuilt each time, so creation, destruction and re-parenting can never
-    // leave a stale or dangling entry.
+    // AFTER that frame's transform edits and BEFORE the shadow/render passes. Every entity is
+    // visited each time, so creation, destruction and re-parenting can never leave a stale or
+    // dangling entry; but an entity whose local transform and parent are what they were last
+    // time, under an unchanged parent, keeps its matrix instead of recomposing it (a forest of
+    // 200k entities that never move was 25 ms a frame).
     void RebuildWorldTransformCache();
     // Changes every time RebuildWorldTransformCache runs, never repeating across worlds: what is derived from the
     // cached transforms (GatherVisible's per-frame candidates) is good for as long as this stays the same.
     uint64_t TransformCacheStamp() const { return m_TransformCacheStamp; }
+    // The stamp of the rebuild before the latest one, and what the latest one changed relative to it: the entities
+    // whose world matrix it recomputed, and whether any entity entered or left the cache. A cache derived at the
+    // previous stamp can patch just those instead of starting over.
+    uint64_t PreviousTransformCacheStamp() const { return m_PrevTransformCacheStamp; }
+    const std::vector<entt::entity>& ChangedWorldTransforms() const { return m_ChangedTransforms; }
+    bool TransformCacheMembershipChanged() const { return m_TransformMembershipChanged; }
 
     // #163 - picks each LOD Group's level for a view (eye position + projection) and tags the
     // renderers of every other level with LodCulledTag. Call before each view's draw and shadow
@@ -272,6 +280,52 @@ private:
     std::vector<glm::mat4> m_WorldTransformCache;
     std::vector<entt::entity> m_WorldTransformKeys;
     uint64_t m_TransformCacheStamp = 0;
+    uint64_t m_PrevTransformCacheStamp = 0;
+    // What each slot's matrix was composed from, so the next rebuild can tell it is unchanged.
+    struct LocalSnapshot {
+        glm::vec3 Position{0.0f};
+        glm::quat Rotation{1.0f, 0.0f, 0.0f, 0.0f};
+        glm::vec3 Scale{1.0f};
+        entt::entity Parent = entt::null;
+        bool HasTransform = false;
+    };
+    std::vector<LocalSnapshot> m_LocalSnapshots;
+    std::vector<std::uint32_t> m_RebuildDone;     // the rebuild generation that filled the slot
+    std::vector<std::uint8_t> m_RebuildChanged;   // that rebuild recomputed it
+    std::uint32_t m_RebuildGeneration = 0;
+    std::vector<entt::entity> m_ChangedTransforms;
+    bool m_TransformMembershipChanged = true;
+    // The hierarchy version and hierarchy/transform counts as of the last full rebuild (see RebuildChangedTransformsOnly).
+    std::uint64_t m_TransformStructure[3] = {};
+    bool m_TransformStructureValid = false;
+    std::vector<entt::entity> m_DirtyScratch, m_PendingScratch, m_ChainScratch;
+    void TransformStructure(std::uint64_t out[3]);
+    bool RebuildChangedTransformsOnly();
+    // SyncActiveInHierarchy's inputs as of its last run (hierarchy, transforms, Deactivated/InactiveTag sets): it is
+    // skipped while they stay the same.
+    std::uint64_t m_ActiveSignature[6] = {};
+    bool m_ActiveSignatureValid = false;
+    void ActiveSignature(std::uint64_t out[6]);
+    // ApplyLod's memory of what it tagged, per LOD Group slot (see ApplyLod). Active is the level left untagged, -1 for
+    // a culled group (every level tagged), kLodSkipped for one that tagged nothing (inactive, or not seen yet).
+    static constexpr int kLodSkipped = -2;
+    struct LodGroupState {
+        entt::entity Group = entt::null;
+        std::int8_t Active = kLodSkipped;
+        std::uint8_t Levels = 0;
+        entt::entity Kids[4] = {entt::null, entt::null, entt::null, entt::null};
+        float AutoSize = 0.0f;     // LOD 0's measured size (for LODGroupComponent::Size 0)
+        glm::vec3 Centre{0.0f};    // the group's world position
+    };
+    std::vector<LodGroupState> m_LodState;    // dense, in the groups view's order
+    std::vector<std::uint32_t> m_LodIndex;    // entity slot -> m_LodState index (~0u: none)
+    std::uint64_t m_LodCentreStamp = 0;       // the transform cache stamp the centres were read at
+    std::vector<entt::entity> m_LodStack;
+    std::vector<std::pair<entt::entity, bool>> m_LodWalk;
+    std::uint64_t m_LodSignature[4] = {};
+    bool m_LodValid = false;  // the tags match m_LodState
+    // Bumped by every re-parent, attach and hierarchy destroy: ApplyLod's records are only good while it stays put.
+    std::uint64_t m_HierarchyVersion = 0;
     bool IsWorldTransformCached(entt::entity e) const {
         const auto i = (size_t)entt::to_entity(e);
         return i < m_WorldTransformKeys.size() && m_WorldTransformKeys[i] == e;
