@@ -3802,6 +3802,7 @@ int main(int argc, char** argv) {
             // camera the user is mainly looking through (each view's draw re-applies its own).
             {
                 const Camera& lodCam = playing ? *gameCam : editorCamera;
+                PROFILE_SCOPE("LOD Select");
                 world.ApplyLod(lodCam.Position, lodCam.ProjectionMatrix(1.0f));
             }
             // Skin every character once, here, before the first pass that draws one: the shadow maps, the SSAO
@@ -4313,7 +4314,7 @@ int main(int argc, char** argv) {
                 // TAA: LOD picks and the sun's cascade fit see the unjittered projection, or the cascades would
                 // re-fit (and shimmer) with every sub-pixel step.
                 const glm::mat4 steadyProj = ctx.TaaVelocity ? TemporalAA::JitterProjection(ctx.Proj, -ctx.TaaJitterNdc) : ctx.Proj;
-                world.ApplyLod(ctx.ViewPos, steadyProj); // #163 - this view's LOD levels (sun shadows too)
+                { PROFILE_SCOPE("LOD Select"); world.ApplyLod(ctx.ViewPos, steadyProj); } // #163 - this view's LOD levels (sun shadows too)
                 sceneInputs.sunShadowsReady = renderSunShadows(ctx.View, steadyProj); // #109
                 sceneRenderer.RenderScene(world, ctx, sceneInputs, outStats);
             };
