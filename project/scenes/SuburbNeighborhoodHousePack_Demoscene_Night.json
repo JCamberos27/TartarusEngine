@@ -154001,7 +154001,7 @@
   "puddleScale": 4.0,
   "shadowCascades": 2,
   "shadowDistance": 150.0,
-  "shadowResolution": 4096,
+  "shadowResolution": 2048,
   "shadowsEnabled": true,
   "sky": {
     "aerialPerspectiveScale": 6.0,
@@ -154021,7 +154021,7 @@
     "cloudHorizonHaze": 0.019999999552965164,
     "cloudMultiScattering": 1.0,
     "cloudPowder": 0.3499999940395355,
-    "cloudQuality": 1,
+    "cloudQuality": 0,
     "cloudScale": 1.0,
     "cloudSeed": 0.0,
     "cloudShadowStrength": 0.6000000238418579,
