@@ -36,9 +36,9 @@
       "order": 655,
       "parentId": -1,
       "position": [
-        -16.5,
-        10.5,
-        9.5
+        -13.53,
+        8.61,
+        7.79
       ],
       "rotation": [
         0.0,
@@ -47,9 +47,9 @@
         1.0
       ],
       "scale": [
-        200.0,
-        1.0,
-        200.0
+        164.0,
+        0.82,
+        164.0
       ],
       "static": true
     }
@@ -128,8 +128,8 @@
       "parentId": -1,
       "position": [
         0.0,
-        0.10000000149011612,
-        7.199999809265137
+        0.082,
+        5.904
       ],
       "rotation": [
         0.0,
@@ -373,7 +373,7 @@
       "parentId": -1,
       "position": [
         -0.0,
-        3.0,
+        2.46,
         0.0
       ],
       "rotation": [
@@ -1208,9 +1208,9 @@
       "order": 765,
       "parentId": 668,
       "position": [
-        22.65,
-        11.0,
-        55.0
+        18.573,
+        9.02,
+        45.1
       ],
       "rotation": [
         0.0,
@@ -1627,9 +1627,9 @@
       "order": 834,
       "parentId": 668,
       "position": [
-        19.65,
-        11.0,
-        55.0
+        16.113,
+        9.02,
+        45.1
       ],
       "rotation": [
         0.0,
@@ -1649,8 +1649,8 @@
       "order": 835,
       "parentId": 834,
       "position": [
-        0.008126,
-        -0.011107,
+        0.006663,
+        -0.009108,
         -0.0
       ],
       "rotation": [
@@ -1671,9 +1671,9 @@
       "order": 836,
       "parentId": 835,
       "position": [
-        0.017095,
-        2.954969,
-        -0.007726
+        0.014018,
+        2.423075,
+        -0.006335
       ],
       "rotation": [
         -2e-06,
@@ -6471,9 +6471,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Distant_Building.FBX",
       "pathGuid": "ac4e8cea2998bd4a",
       "position": [
-        -38.0,
-        11.0,
-        -41.0
+        -31.16,
+        9.02,
+        -33.62
       ],
       "rotation": [
         -0.0,
@@ -6482,9 +6482,9 @@
         -1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -6511,9 +6511,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Distant_Building.FBX",
       "pathGuid": "ac4e8cea2998bd4a",
       "position": [
-        11.0,
-        11.0,
-        -40.5
+        9.02,
+        9.02,
+        -33.21
       ],
       "rotation": [
         -0.0,
@@ -6522,9 +6522,9 @@
         -1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -6557,9 +6557,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Distant_Building.FBX",
       "pathGuid": "ac4e8cea2998bd4a",
       "position": [
-        -14.5,
-        11.0,
-        -40.5
+        -11.89,
+        9.02,
+        -33.21
       ],
       "rotation": [
         -0.0,
@@ -6568,9 +6568,9 @@
         -1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -6597,9 +6597,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Roofs/Roof_Large_Set.FBX",
       "pathGuid": "3e4cf54315a23f74",
       "position": [
-        4.5,
-        11.0,
-        29.5
+        3.69,
+        9.02,
+        24.19
       ],
       "rotation": [
         0.0,
@@ -6608,9 +6608,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -6637,9 +6637,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Roofs/Roof_Small_Set.FBX",
       "pathGuid": "1990c95f5f367bd2",
       "position": [
-        14.5,
-        11.0,
-        28.0
+        11.89,
+        9.02,
+        22.96
       ],
       "rotation": [
         0.0,
@@ -6648,9 +6648,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -6677,9 +6677,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Roofs/Roof_Large_Tiled_4x.FBX",
       "pathGuid": "506296f70ec3f7cc",
       "position": [
-        -4.5,
-        11.0,
-        30.0
+        -3.69,
+        9.02,
+        24.6
       ],
       "rotation": [
         0.0,
@@ -6688,9 +6688,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -6717,9 +6717,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Roofs/Roof_Large_Corner_4x.FBX",
       "pathGuid": "7e70f34efa4e6b44",
       "position": [
-        -11.0,
-        11.0,
-        30.0
+        -9.02,
+        9.02,
+        24.6
       ],
       "rotation": [
         0.0,
@@ -6728,9 +6728,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -6757,9 +6757,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Roofs/Roof_Small_Tiled_2x.FBX",
       "pathGuid": "82e5808950fb154d",
       "position": [
-        21.0,
-        11.0,
-        28.0
+        17.22,
+        9.02,
+        22.96
       ],
       "rotation": [
         0.0,
@@ -6768,9 +6768,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -6797,9 +6797,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Roofs/Roof_Small_Corner_2x.FBX",
       "pathGuid": "84fbab52079f56c0",
       "position": [
-        19.0,
-        11.0,
-        28.0
+        15.58,
+        9.02,
+        22.96
       ],
       "rotation": [
         0.0,
@@ -6808,9 +6808,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -6837,9 +6837,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Neon_Sign_B@Neon_Sign_B.FBX",
       "pathGuid": "88afdff90eaa2252",
       "position": [
-        -18.0,
-        12.5,
-        43.5
+        -14.76,
+        10.25,
+        35.67
       ],
       "rotation": [
         0.0,
@@ -6848,9 +6848,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -6902,9 +6902,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Box_Gray.FBX",
       "pathGuid": "0d2a121d6915e6fe",
       "position": [
-        4.65,
-        11.0,
-        54.0
+        3.813,
+        9.02,
+        44.28
       ],
       "rotation": [
         0.0,
@@ -6942,9 +6942,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/PowerLines_Straight_A.FBX",
       "pathGuid": "3a842dc864298ce4",
       "position": [
-        10.0,
-        13.0,
-        43.0
+        8.2,
+        10.66,
+        35.26
       ],
       "rotation": [
         0.0,
@@ -6953,9 +6953,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -6982,9 +6982,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Sign_Hotel_A.FBX",
       "pathGuid": "a7a620a9969e571f",
       "position": [
-        -31.5,
-        12.5,
-        53.0
+        -25.83,
+        10.25,
+        43.46
       ],
       "rotation": [
         0.0,
@@ -6993,9 +6993,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -7022,9 +7022,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Bed_Frame.FBX",
       "pathGuid": "6b5e82e0c5dda8fb",
       "position": [
-        -21.64,
-        11.0,
-        36.5
+        -17.7448,
+        9.02,
+        29.93
       ],
       "rotation": [
         0.0,
@@ -7062,9 +7062,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Pipe_Set_C.FBX",
       "pathGuid": "267f2d26f1209187",
       "position": [
-        -0.5,
-        11.5,
-        42.0
+        -0.41,
+        9.43,
+        34.44
       ],
       "rotation": [
         0.0,
@@ -7073,9 +7073,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -7102,9 +7102,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/ElectricBox.FBX",
       "pathGuid": "71dcad23ae34ecd6",
       "position": [
-        -26.55,
-        11.0,
-        36.5
+        -21.771,
+        9.02,
+        29.93
       ],
       "rotation": [
         0.0,
@@ -7142,9 +7142,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/PowerLines_Hanging_A.FBX",
       "pathGuid": "d87f354b8a6e516d",
       "position": [
-        10.0,
-        12.5,
-        43.0
+        8.2,
+        10.25,
+        35.26
       ],
       "rotation": [
         0.0,
@@ -7153,9 +7153,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -7182,9 +7182,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Fence_MetalChainlink_2x_tile.FBX",
       "pathGuid": "9294b08dcb6bc52a",
       "position": [
-        -9.0,
-        11.0,
-        36.5
+        -7.38,
+        9.02,
+        29.93
       ],
       "rotation": [
         0.0,
@@ -7222,9 +7222,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/PowerLines_WrappedAround_A.FBX",
       "pathGuid": "4486443594d8615d",
       "position": [
-        12.0,
-        14.0,
-        43.0
+        9.84,
+        11.48,
+        35.26
       ],
       "rotation": [
         0.0,
@@ -7233,9 +7233,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -7262,9 +7262,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Box_Cardboard.FBX",
       "pathGuid": "db1de0302cfd5ce1",
       "position": [
-        3.65,
-        11.0,
-        54.0
+        2.993,
+        9.02,
+        44.28
       ],
       "rotation": [
         0.0,
@@ -7302,9 +7302,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Window_MetalBars_A.FBX",
       "pathGuid": "7088dae2994ed1dc",
       "position": [
-        -25.5,
-        12.0,
-        43.0
+        -20.91,
+        9.84,
+        35.26
       ],
       "rotation": [
         0.0,
@@ -7313,9 +7313,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -7342,9 +7342,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/FireEscape@FireEscape.FBX",
       "pathGuid": "544c6688956c4e91",
       "position": [
-        24.61,
-        14.5,
-        37.22
+        20.1802,
+        11.89,
+        30.5204
       ],
       "rotation": [
         0.0,
@@ -7353,9 +7353,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -7422,9 +7422,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Bench.FBX",
       "pathGuid": "cfce4461cd8e9ead",
       "position": [
-        9.65,
-        11.0,
-        54.5
+        7.913,
+        9.02,
+        44.69
       ],
       "rotation": [
         0.0,
@@ -7462,9 +7462,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Airduct_2x.FBX",
       "pathGuid": "bcee89608bbc5f87",
       "position": [
-        -47.5,
-        11.0,
-        36.5
+        -38.95,
+        9.02,
+        29.93
       ],
       "rotation": [
         0.0,
@@ -7473,9 +7473,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -7502,9 +7502,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Lamp_StreetHigh.FBX",
       "pathGuid": "01539e1d1c3c8a87",
       "position": [
-        -29.0,
-        11.5,
-        53.0
+        -23.78,
+        9.43,
+        43.46
       ],
       "rotation": [
         0.0,
@@ -7542,9 +7542,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/DumpsterOpen.FBX",
       "pathGuid": "83b022bd3dbad5f0",
       "position": [
-        17.79,
-        11.0,
-        36.94
+        14.5878,
+        9.02,
+        30.2908
       ],
       "rotation": [
         0.0,
@@ -7582,9 +7582,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Air_Conditioner.FBX",
       "pathGuid": "48aa63b00890b3db",
       "position": [
-        -25.0,
-        12.5,
-        54.0
+        -20.5,
+        10.25,
+        44.28
       ],
       "rotation": [
         0.0,
@@ -7622,9 +7622,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Box_Black.FBX",
       "pathGuid": "f5795a88b4f6fe30",
       "position": [
-        2.65,
-        11.0,
-        54.0
+        2.173,
+        9.02,
+        44.28
       ],
       "rotation": [
         0.0,
@@ -7647,9 +7647,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Garbage_Set_C.FBX",
       "pathGuid": "08c9c5980249af52",
       "position": [
-        -43.5,
-        11.0,
-        44.5
+        -35.67,
+        9.02,
+        36.49
       ],
       "rotation": [
         0.0,
@@ -7672,9 +7672,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/PowerLines_OnGround_A.FBX",
       "pathGuid": "2d788d581aabd0b2",
       "position": [
-        5.38,
-        11.0,
-        42.47
+        4.4116,
+        9.02,
+        34.8254
       ],
       "rotation": [
         0.0,
@@ -7683,9 +7683,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -7712,9 +7712,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/GarbageBag_B.FBX",
       "pathGuid": "847d25394b4bd1fd",
       "position": [
-        10.0,
-        11.0,
-        37.0
+        8.2,
+        9.02,
+        30.34
       ],
       "rotation": [
         0.0,
@@ -7752,9 +7752,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Street_StoppingPole.FBX",
       "pathGuid": "2f8d57d3156cd7bc",
       "position": [
-        14.15,
-        11.0,
-        54.5
+        11.603,
+        9.02,
+        44.69
       ],
       "rotation": [
         0.0,
@@ -7792,9 +7792,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/AirConditioner_A.FBX",
       "pathGuid": "e291fa42b75c9182",
       "position": [
-        -31.5,
-        13.0,
-        36.0
+        -25.83,
+        10.66,
+        29.52
       ],
       "rotation": [
         0.0,
@@ -7832,9 +7832,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/ElectricBox.FBX",
       "pathGuid": "71dcad23ae34ecd6",
       "position": [
-        -27.55,
-        11.0,
-        36.5
+        -22.591,
+        9.02,
+        29.93
       ],
       "rotation": [
         0.0,
@@ -7872,9 +7872,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Trashcan_A@Trashcan_A.FBX",
       "pathGuid": "87f3af2e5534cfef",
       "position": [
-        13.0,
-        11.0,
-        37.0
+        10.66,
+        9.02,
+        30.34
       ],
       "rotation": [
         0.0,
@@ -7952,9 +7952,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Lamp_StreetWall.FBX",
       "pathGuid": "53ab10d656ce26c1",
       "position": [
-        -28.5,
-        13.0,
-        53.0
+        -23.37,
+        10.66,
+        43.46
       ],
       "rotation": [
         0.0,
@@ -7982,9 +7982,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Awning_Green.FBX",
       "pathGuid": "a8aa9662825a2c19",
       "position": [
-        -17.5,
-        13.0,
-        54.0
+        -14.35,
+        10.66,
+        44.28
       ],
       "rotation": [
         0.0,
@@ -7993,9 +7993,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -8022,9 +8022,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Street_TrashCan.FBX",
       "pathGuid": "ce45960b1fbcd995",
       "position": [
-        15.15,
-        11.0,
-        54.5
+        12.423,
+        9.02,
+        44.69
       ],
       "rotation": [
         0.0,
@@ -8062,9 +8062,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Fence_MetalChainlink_3x.FBX",
       "pathGuid": "259db8b03a6c60e9",
       "position": [
-        -6.0,
-        11.0,
-        36.5
+        -4.92,
+        9.02,
+        29.93
       ],
       "rotation": [
         0.0,
@@ -8087,9 +8087,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Grass.FBX",
       "pathGuid": "67cf3c183689b7ca",
       "position": [
-        18.65,
-        11.0,
-        55.0
+        15.293,
+        9.02,
+        45.1
       ],
       "rotation": [
         0.0,
@@ -8127,9 +8127,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Bed_Full.FBX",
       "pathGuid": "bff89c6c656ca76f",
       "position": [
-        -24.14,
-        11.0,
-        36.5
+        -19.7948,
+        9.02,
+        29.93
       ],
       "rotation": [
         0.0,
@@ -8152,9 +8152,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Decals/Decal_Dirt_E.FBX",
       "pathGuid": "42bb39f4bf456dbc",
       "position": [
-        -52.5,
-        12.0,
-        43.0
+        -43.05,
+        9.84,
+        35.26
       ],
       "rotation": [
         0.0,
@@ -8163,9 +8163,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -8192,9 +8192,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Lamp_Wall.FBX",
       "pathGuid": "72d59623d5ee6c8e",
       "position": [
-        -37.0,
-        12.0,
-        53.0
+        -30.34,
+        9.84,
+        43.46
       ],
       "rotation": [
         0.0,
@@ -8232,9 +8232,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Pipe_Set_Straight.FBX",
       "pathGuid": "bfbbfb08be806978",
       "position": [
-        2.0,
-        17.5,
-        42.0
+        1.64,
+        14.35,
+        34.44
       ],
       "rotation": [
         0.0,
@@ -8243,9 +8243,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -8272,9 +8272,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Street_Manhole_B.FBX",
       "pathGuid": "79937984860f608b",
       "position": [
-        13.15,
-        11.0,
-        54.5
+        10.783,
+        9.02,
+        44.69
       ],
       "rotation": [
         0.0,
@@ -8312,9 +8312,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/PowerLines_90deg_A.FBX",
       "pathGuid": "511c8d8fab16ca2b",
       "position": [
-        -0.5,
-        12.5,
-        44.5
+        -0.41,
+        10.25,
+        36.49
       ],
       "rotation": [
         0.0,
@@ -8323,9 +8323,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -8352,9 +8352,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Window_MetalBars_C.FBX",
       "pathGuid": "715f1144f75d0493",
       "position": [
-        -21.5,
-        12.0,
-        43.0
+        -17.63,
+        9.84,
+        35.26
       ],
       "rotation": [
         0.0,
@@ -8363,9 +8363,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -8382,9 +8382,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Lamp_Chinatown_Long.FBX",
       "pathGuid": "eb50e07e825c1974",
       "position": [
-        -45.5,
-        12.5,
-        53.0
+        -37.31,
+        10.25,
+        43.46
       ],
       "rotation": [
         0.0,
@@ -8422,9 +8422,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Pipe_Large_2x.FBX",
       "pathGuid": "c661a14f2ad59137",
       "position": [
-        -4.0,
-        11.0,
-        44.0
+        -3.28,
+        9.02,
+        36.08
       ],
       "rotation": [
         0.0,
@@ -8433,9 +8433,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -8462,9 +8462,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Cardboard_Box_C.FBX",
       "pathGuid": "605875a9a36165e5",
       "position": [
-        5.5,
-        11.0,
-        36.5
+        4.51,
+        9.02,
+        29.93
       ],
       "rotation": [
         0.0,
@@ -8502,9 +8502,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Sign_Pizza.FBX",
       "pathGuid": "0974ccd00e423387",
       "position": [
-        1.23,
-        13.0,
-        54.0
+        1.0086,
+        10.66,
+        44.28
       ],
       "rotation": [
         0.0,
@@ -8513,9 +8513,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -8542,9 +8542,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/PlasticCover.FBX",
       "pathGuid": "4fd1dbe7d2523657",
       "position": [
-        -28.66,
-        11.0,
-        36.38
+        -23.5012,
+        9.02,
+        29.8316
       ],
       "rotation": [
         0.0,
@@ -8582,9 +8582,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Pipe_Small_2x.FBX",
       "pathGuid": "1173f001fa9df509",
       "position": [
-        -2.5,
-        11.0,
-        44.0
+        -2.05,
+        9.02,
+        36.08
       ],
       "rotation": [
         0.0,
@@ -8593,9 +8593,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -8622,9 +8622,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Wooden_Crate.FBX",
       "pathGuid": "773128a3fe2bd40f",
       "position": [
-        15.14,
-        11.0,
-        36.91
+        12.4148,
+        9.02,
+        30.2662
       ],
       "rotation": [
         0.0,
@@ -8648,9 +8648,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Decals/Decal_Water_B.FBX",
       "pathGuid": "dd7e3b766d45efbb",
       "position": [
-        -51.5,
-        11.0,
-        44.5
+        -42.23,
+        9.02,
+        36.49
       ],
       "rotation": [
         0.0,
@@ -8659,9 +8659,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -8688,9 +8688,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Pipe_Small_1x.FBX",
       "pathGuid": "fd17a5b69b2b4b99",
       "position": [
-        -3.0,
-        11.0,
-        44.0
+        -2.46,
+        9.02,
+        36.08
       ],
       "rotation": [
         0.0,
@@ -8699,9 +8699,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -8718,9 +8718,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/AwningStripes.FBX",
       "pathGuid": "a12a2eb13a9a2bf7",
       "position": [
-        -8.75,
-        12.7,
-        53.91
+        -7.175,
+        10.414,
+        44.2062
       ],
       "rotation": [
         0.0,
@@ -8729,9 +8729,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -8758,9 +8758,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/StreetSign.FBX",
       "pathGuid": "859ba838d18e408b",
       "position": [
-        16.15,
-        11.0,
-        54.5
+        13.243,
+        9.02,
+        44.69
       ],
       "rotation": [
         0.0,
@@ -8798,9 +8798,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Airduct_90deg_Small.FBX",
       "pathGuid": "564e4d3ed213fafe",
       "position": [
-        -46.5,
-        14.0,
-        36.5
+        -38.13,
+        11.48,
+        29.93
       ],
       "rotation": [
         0.0,
@@ -8809,9 +8809,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -8838,9 +8838,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Fence_MetalChainlink_1x.FBX",
       "pathGuid": "6276f5ed95e4f685",
       "position": [
-        -14.0,
-        11.0,
-        36.5
+        -11.48,
+        9.02,
+        29.93
       ],
       "rotation": [
         0.0,
@@ -8878,9 +8878,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Fence_MetalChainlink_2x.FBX",
       "pathGuid": "fdef8a4006d3c7bb",
       "position": [
-        -11.0,
-        11.0,
-        36.5
+        -9.02,
+        9.02,
+        29.93
       ],
       "rotation": [
         0.0,
@@ -8918,9 +8918,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Pipe_Set_A.FBX",
       "pathGuid": "74c53bb2a098d887",
       "position": [
-        -1.0,
-        13.5,
-        42.0
+        -0.82,
+        11.07,
+        34.44
       ],
       "rotation": [
         0.0,
@@ -8929,9 +8929,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -8958,9 +8958,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/MetalPlateRoof_B.FBX",
       "pathGuid": "8b9aac2bcf35381a",
       "position": [
-        -37.0,
-        13.0,
-        36.0
+        -30.34,
+        10.66,
+        29.52
       ],
       "rotation": [
         0.0,
@@ -8969,9 +8969,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -8983,9 +8983,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Decals/Decal_Dirt_C.FBX",
       "pathGuid": "1e6b1173ce5003f7",
       "position": [
-        -49.5,
-        14.5,
-        43.0
+        -40.59,
+        11.89,
+        35.26
       ],
       "rotation": [
         0.0,
@@ -8994,9 +8994,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -9023,9 +9023,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Concrete_Stop.FBX",
       "pathGuid": "d0812345100a371a",
       "position": [
-        11.15,
-        11.0,
-        54.5
+        9.143,
+        9.02,
+        44.69
       ],
       "rotation": [
         0.0,
@@ -9063,9 +9063,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/GarbageBag_A.FBX",
       "pathGuid": "60ffbf963e4bb853",
       "position": [
-        9.0,
-        11.0,
-        37.0
+        7.38,
+        9.02,
+        30.34
       ],
       "rotation": [
         0.0,
@@ -9103,9 +9103,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Balcony.FBX",
       "pathGuid": "2cafe3c43aed279f",
       "position": [
-        28.11,
-        14.0,
-        37.22
+        23.0502,
+        11.48,
+        30.5204
       ],
       "rotation": [
         0.0,
@@ -9114,9 +9114,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -9128,9 +9128,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Decals/Decal_Dirt_D.FBX",
       "pathGuid": "b25abdafc360f71b",
       "position": [
-        -51.0,
-        14.0,
-        43.0
+        -41.82,
+        11.48,
+        35.26
       ],
       "rotation": [
         0.0,
@@ -9139,9 +9139,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -9168,9 +9168,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Pallet.FBX",
       "pathGuid": "ec20920b9fdb4711",
       "position": [
-        20.010002,
-        11.0,
-        36.94
+        16.408202,
+        9.02,
+        30.2908
       ],
       "rotation": [
         0.0,
@@ -9208,9 +9208,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/MetalPlate_A.FBX",
       "pathGuid": "1414dcca3036c721",
       "position": [
-        -39.5,
-        13.5,
-        36.0
+        -32.39,
+        11.07,
+        29.52
       ],
       "rotation": [
         0.0,
@@ -9219,9 +9219,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -9248,9 +9248,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Cardboard_Box_A.FBX",
       "pathGuid": "5c4cd1d2335982fc",
       "position": [
-        3.5,
-        11.0,
-        36.5
+        2.87,
+        9.02,
+        29.93
       ],
       "rotation": [
         0.0,
@@ -9288,9 +9288,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Neon_Sign_E@Neon_Sign_E.FBX",
       "pathGuid": "e157ccdf79966529",
       "position": [
-        -14.5,
-        12.5,
-        43.5
+        -11.89,
+        10.25,
+        35.67
       ],
       "rotation": [
         0.0,
@@ -9299,9 +9299,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -9353,9 +9353,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/MetalPlateRoof_Stand.FBX",
       "pathGuid": "f1be0432ef53a911",
       "position": [
-        -43.0,
-        11.0,
-        35.5
+        -35.26,
+        9.02,
+        29.11
       ],
       "rotation": [
         0.0,
@@ -9364,9 +9364,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -9378,9 +9378,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Cable_On_Floor.FBX",
       "pathGuid": "bfd16228ef6d18d5",
       "position": [
-        2.5,
-        11.0,
-        37.0
+        2.05,
+        9.02,
+        30.34
       ],
       "rotation": [
         0.0,
@@ -9418,9 +9418,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Paper_On_Floor.FBX",
       "pathGuid": "c1211f10d9f21cfb",
       "position": [
-        12.0,
-        11.0,
-        37.0
+        9.84,
+        9.02,
+        30.34
       ],
       "rotation": [
         0.0,
@@ -9458,9 +9458,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Neon_Sign_G.FBX",
       "pathGuid": "61277ff6f2819c27",
       "position": [
-        -11.5,
-        12.5,
-        43.5
+        -9.43,
+        10.25,
+        35.67
       ],
       "rotation": [
         0.0,
@@ -9469,9 +9469,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -9483,9 +9483,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Decals/Decal_Dirt_B.FBX",
       "pathGuid": "c005c76207c0d939",
       "position": [
-        -50.0,
-        13.0,
-        43.0
+        -41.0,
+        10.66,
+        35.26
       ],
       "rotation": [
         0.0,
@@ -9494,9 +9494,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -9534,9 +9534,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -9603,9 +9603,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/PowerLines_90deg_B.FBX",
       "pathGuid": "04bab892e5058916",
       "position": [
-        3.0,
-        13.5,
-        44.5
+        2.46,
+        11.07,
+        36.49
       ],
       "rotation": [
         0.0,
@@ -9614,9 +9614,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -9643,9 +9643,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Sign_Hotel_B@Sign_Hotel_B.FBX",
       "pathGuid": "3f10ff33892f64d5",
       "position": [
-        -29.5,
-        12.5,
-        53.0
+        -24.19,
+        10.25,
+        43.46
       ],
       "rotation": [
         0.0,
@@ -9654,9 +9654,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -9708,9 +9708,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Bed_Frame_Small.FBX",
       "pathGuid": "e27768c0ac620aa6",
       "position": [
-        -20.14,
-        11.0,
-        36.5
+        -16.5148,
+        9.02,
+        29.93
       ],
       "rotation": [
         0.0,
@@ -9748,9 +9748,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Street_Manhole_A.FBX",
       "pathGuid": "af4686396dcb0df0",
       "position": [
-        12.15,
-        11.0,
-        54.5
+        9.963,
+        9.02,
+        44.69
       ],
       "rotation": [
         0.0,
@@ -9778,9 +9778,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/AwningBlue.FBX",
       "pathGuid": "844fe5e4c2d117dd",
       "position": [
-        -13.75,
-        12.7,
-        53.91
+        -11.275,
+        10.414,
+        44.2062
       ],
       "rotation": [
         0.0,
@@ -9789,9 +9789,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -9803,9 +9803,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Garbage_Set_A.FBX",
       "pathGuid": "fc7e7e75990387dc",
       "position": [
-        -43.5,
-        11.0,
-        42.0
+        -35.67,
+        9.02,
+        34.44
       ],
       "rotation": [
         0.0,
@@ -9829,9 +9829,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Decals/Decal_Water_C.FBX",
       "pathGuid": "6265e46af38335be",
       "position": [
-        -49.5,
-        11.0,
-        44.5
+        -40.59,
+        9.02,
+        36.49
       ],
       "rotation": [
         0.0,
@@ -9840,9 +9840,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -9869,9 +9869,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Sign_China_A.FBX",
       "pathGuid": "844bcc28b0ea3fa0",
       "position": [
-        -35.5,
-        12.5,
-        53.0
+        -29.11,
+        10.25,
+        43.46
       ],
       "rotation": [
         0.0,
@@ -9880,9 +9880,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -9909,9 +9909,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Sign_China_Hanging.FBX",
       "pathGuid": "750ba31d2bd86128",
       "position": [
-        -34.0,
-        12.5,
-        53.0
+        -27.88,
+        10.25,
+        43.46
       ],
       "rotation": [
         0.0,
@@ -9920,9 +9920,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -9949,9 +9949,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Pipe_Large_90deg.FBX",
       "pathGuid": "6be089fccf49e9c1",
       "position": [
-        -3.5,
-        11.0,
-        44.0
+        -2.87,
+        9.02,
+        36.08
       ],
       "rotation": [
         0.0,
@@ -9960,9 +9960,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -9989,9 +9989,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Stool_Metal.FBX",
       "pathGuid": "e80ef48749872510",
       "position": [
-        8.267,
-        11.0,
-        54.412
+        6.77894,
+        9.02,
+        44.61784
       ],
       "rotation": [
         0.0,
@@ -10029,9 +10029,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Door_Metal_Chainlink.FBX",
       "pathGuid": "79d6e9761118d87a",
       "position": [
-        -16.0,
-        12.0,
-        36.5
+        -13.12,
+        9.84,
+        29.93
       ],
       "rotation": [
         0.0,
@@ -10069,9 +10069,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Door_MetalBars_A.FBX",
       "pathGuid": "09acf0fded8c80fa",
       "position": [
-        -27.5,
-        11.0,
-        43.0
+        -22.55,
+        9.02,
+        35.26
       ],
       "rotation": [
         0.0,
@@ -10080,9 +10080,9 @@
         1.0
       ],
       "scale": [
-        0.648734,
-        0.648734,
-        0.648734
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -10109,9 +10109,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Pipe_Large_1x.FBX",
       "pathGuid": "3530b4827cd8bca5",
       "position": [
-        -4.5,
-        11.0,
-        44.0
+        -3.69,
+        9.02,
+        36.08
       ],
       "rotation": [
         0.0,
@@ -10120,9 +10120,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -10134,9 +10134,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/PowerLines_OnGround_B.FBX",
       "pathGuid": "0c1d7947a3f97481",
       "position": [
-        8.0,
-        11.0,
-        42.63
+        6.56,
+        9.02,
+        34.9566
       ],
       "rotation": [
         0.0,
@@ -10145,9 +10145,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -10174,9 +10174,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Lamp_BulbHanging.FBX",
       "pathGuid": "b35c687b4aa5ae5d",
       "position": [
-        -37.5,
-        12.5,
-        53.0
+        -30.75,
+        10.25,
+        43.46
       ],
       "rotation": [
         0.0,
@@ -10214,9 +10214,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Table_Metal.FBX",
       "pathGuid": "bd3ac640d62f0278",
       "position": [
-        7.15,
-        11.0,
-        54.5
+        5.863,
+        9.02,
+        44.69
       ],
       "rotation": [
         0.0,
@@ -10244,9 +10244,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Awning.FBX",
       "pathGuid": "0e79fead2975797e",
       "position": [
-        -21.5,
-        12.5,
-        54.0
+        -17.63,
+        10.25,
+        44.28
       ],
       "rotation": [
         0.0,
@@ -10255,9 +10255,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -10284,9 +10284,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/CleaningBottle.FBX",
       "pathGuid": "0d1fbfd70e01e57b",
       "position": [
-        6.193,
-        11.0,
-        53.961
+        5.07826,
+        9.02,
+        44.24802
       ],
       "rotation": [
         0.0,
@@ -10324,9 +10324,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/AirConditioner_B.FBX",
       "pathGuid": "f04de4bd6a76439f",
       "position": [
-        -30.5,
-        13.0,
-        36.0
+        -25.01,
+        10.66,
+        29.52
       ],
       "rotation": [
         0.0,
@@ -10364,9 +10364,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Neon_Sign_F@Neon_Sign_F.FBX",
       "pathGuid": "20dfe1b8e6716827",
       "position": [
-        -13.5,
-        12.5,
-        43.5
+        -11.07,
+        10.25,
+        35.67
       ],
       "rotation": [
         0.0,
@@ -10375,9 +10375,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -10414,9 +10414,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Garbage_Set_E.FBX",
       "pathGuid": "6e257ab2e90b6d67",
       "position": [
-        -33.0,
-        11.0,
-        42.5
+        -27.06,
+        9.02,
+        34.85
       ],
       "rotation": [
         0.0,
@@ -10454,9 +10454,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Fence_MetalChainlink_3x_tile.FBX",
       "pathGuid": "f29b299dff8f5106",
       "position": [
-        -3.0,
-        11.0,
-        36.5
+        -2.46,
+        9.02,
+        29.93
       ],
       "rotation": [
         0.0,
@@ -10494,9 +10494,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Bed_Mattress.FBX",
       "pathGuid": "8f67f5a34b89b7ff",
       "position": [
-        -18.67,
-        11.0,
-        36.5
+        -15.3094,
+        9.02,
+        29.93
       ],
       "rotation": [
         0.0,
@@ -10534,9 +10534,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Cart.FBX",
       "pathGuid": "ab607feac1cc2f8c",
       "position": [
-        5.65,
-        11.0,
-        54.0
+        4.633,
+        9.02,
+        44.28
       ],
       "rotation": [
         0.0,
@@ -10559,9 +10559,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Garbage_Set_D.FBX",
       "pathGuid": "7de8d0730117e2cc",
       "position": [
-        -38.0,
-        11.0,
-        45.0
+        -31.16,
+        9.02,
+        36.9
       ],
       "rotation": [
         0.0,
@@ -10599,9 +10599,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Window_MetalBars_B.FBX",
       "pathGuid": "69020d2a084556ec",
       "position": [
-        -23.5,
-        12.0,
-        43.0
+        -19.27,
+        9.84,
+        35.26
       ],
       "rotation": [
         0.0,
@@ -10610,9 +10610,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -10639,9 +10639,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Lamp_Cone_Spot.FBX",
       "pathGuid": "6ab863f2751bafb9",
       "position": [
-        -38.0,
-        12.5,
-        53.0
+        -31.16,
+        10.25,
+        43.46
       ],
       "rotation": [
         0.0,
@@ -10679,9 +10679,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Sign_Beer.FBX",
       "pathGuid": "fd6b59d5bdc21597",
       "position": [
-        -5.749998,
-        12.2,
-        53.91
+        -4.714998,
+        10.004,
+        44.2062
       ],
       "rotation": [
         0.0,
@@ -10690,9 +10690,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -10719,9 +10719,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Lamp_Cone_Hanging.FBX",
       "pathGuid": "adb80fb2e5c70a10",
       "position": [
-        -38.5,
-        12.5,
-        53.0
+        -31.57,
+        10.25,
+        43.46
       ],
       "rotation": [
         0.0,
@@ -10759,9 +10759,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Airduct_90deg.FBX",
       "pathGuid": "39e374faf87ca5ea",
       "position": [
-        -47.5,
-        13.5,
-        36.5
+        -38.95,
+        11.07,
+        29.93
       ],
       "rotation": [
         0.0,
@@ -10770,9 +10770,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -10789,9 +10789,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Lamp_Chinatown_MediumLenght.FBX",
       "pathGuid": "a7cd3b65e4ce6d32",
       "position": [
-        -45.0,
-        13.5,
-        53.0
+        -36.9,
+        11.07,
+        43.46
       ],
       "rotation": [
         0.0,
@@ -10829,9 +10829,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Lamp_Chinatown_Single.FBX",
       "pathGuid": "aa58f0c194333947",
       "position": [
-        -39.0,
-        12.5,
-        53.0
+        -31.98,
+        10.25,
+        43.46
       ],
       "rotation": [
         0.0,
@@ -10869,9 +10869,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/MetalPlate_On_Floor.FBX",
       "pathGuid": "4d3c94bd1de462d3",
       "position": [
-        10.649,
-        11.0,
-        37.0
+        8.73218,
+        9.02,
+        30.34
       ],
       "rotation": [
         0.0,
@@ -10909,9 +10909,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Pipe_Small_90deg.FBX",
       "pathGuid": "92a549d49c01034c",
       "position": [
-        -2.0,
-        11.0,
-        44.0
+        -1.64,
+        9.02,
+        36.08
       ],
       "rotation": [
         0.0,
@@ -10920,9 +10920,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -10949,9 +10949,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/MetalPlateRoof_C.FBX",
       "pathGuid": "1ed436a68878cf03",
       "position": [
-        -34.0,
-        13.5,
-        36.0
+        -27.88,
+        11.07,
+        29.52
       ],
       "rotation": [
         0.0,
@@ -10960,9 +10960,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -10974,9 +10974,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Decals/Decal_Dirt_A.FBX",
       "pathGuid": "430e97029987f337",
       "position": [
-        -50.0,
-        12.0,
-        43.0
+        -41.0,
+        9.84,
+        35.26
       ],
       "rotation": [
         0.0,
@@ -10985,9 +10985,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -11014,9 +11014,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Neon_Sign_D@Neon_Sign_D.FBX",
       "pathGuid": "3b024cce900cc497",
       "position": [
-        -15.5,
-        12.5,
-        43.5
+        -12.71,
+        10.25,
+        35.67
       ],
       "rotation": [
         0.0,
@@ -11025,9 +11025,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -11079,9 +11079,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Pipe_Set_A.FBX",
       "pathGuid": "74c53bb2a098d887",
       "position": [
-        -4.5,
-        13.5,
-        42.0
+        -3.69,
+        11.07,
+        34.44
       ],
       "rotation": [
         0.0,
@@ -11090,9 +11090,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -11119,9 +11119,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Neon_Sign_C@Neon_Sign_C.FBX",
       "pathGuid": "b33ac39d221396b5",
       "position": [
-        -17.0,
-        12.5,
-        43.5
+        -13.94,
+        10.25,
+        35.67
       ],
       "rotation": [
         0.0,
@@ -11130,9 +11130,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -11184,9 +11184,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Sign_NoCommission.FBX",
       "pathGuid": "9221ed0d1a7a8eba",
       "position": [
-        0.23,
-        13.0,
-        54.0
+        0.1886,
+        10.66,
+        44.28
       ],
       "rotation": [
         0.0,
@@ -11195,9 +11195,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -11224,9 +11224,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Sign_China_B.FBX",
       "pathGuid": "69175bee48e7d4e9",
       "position": [
-        -4.75,
-        12.2,
-        53.91
+        -3.895,
+        10.004,
+        44.2062
       ],
       "rotation": [
         0.0,
@@ -11235,9 +11235,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -11264,9 +11264,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Fence_MetalChainlink_1x_tile.FBX",
       "pathGuid": "add5423cb99992a9",
       "position": [
-        -13.0,
-        11.0,
-        36.5
+        -10.66,
+        9.02,
+        29.93
       ],
       "rotation": [
         0.0,
@@ -11304,9 +11304,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Commercial.FBX",
       "pathGuid": "9a24ffe545f1143c",
       "position": [
-        2.15,
-        12.5,
-        54.0
+        1.763,
+        10.25,
+        44.28
       ],
       "rotation": [
         0.0,
@@ -11315,9 +11315,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -11330,9 +11330,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Decals/Decal_Water_A.FBX",
       "pathGuid": "b31c9e3bd29fa937",
       "position": [
-        -52.5,
-        11.0,
-        44.5
+        -43.05,
+        9.02,
+        36.49
       ],
       "rotation": [
         0.0,
@@ -11341,9 +11341,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -11360,9 +11360,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Lamp_HangingCone_MediumLenght.FBX",
       "pathGuid": "34ca8d131147dbf2",
       "position": [
-        -45.0,
-        15.5,
-        53.0
+        -36.9,
+        13.07,
+        43.46
       ],
       "rotation": [
         0.0,
@@ -11400,9 +11400,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Sign_BarTabac.FBX",
       "pathGuid": "cef53bd5d3e7e0bf",
       "position": [
-        -2.27,
-        13.0,
-        54.0
+        -1.8614,
+        10.66,
+        44.28
       ],
       "rotation": [
         0.0,
@@ -11411,9 +11411,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -11430,9 +11430,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Lamp_Chinatown_Short.FBX",
       "pathGuid": "92cbc11ed76f7249",
       "position": [
-        -45.5,
-        14.5,
-        53.0
+        -37.31,
+        12.069999,
+        43.46
       ],
       "rotation": [
         0.0,
@@ -11470,9 +11470,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Neon_Sign_H.FBX",
       "pathGuid": "70d4dda68d05437e",
       "position": [
-        -9.5,
-        12.5,
-        43.5
+        -7.79,
+        10.25,
+        35.67
       ],
       "rotation": [
         0.0,
@@ -11481,9 +11481,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -11510,9 +11510,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Cardboard_Box_B.FBX",
       "pathGuid": "4316820adf37048f",
       "position": [
-        4.5,
-        11.0,
-        36.5
+        3.69,
+        9.02,
+        29.93
       ],
       "rotation": [
         0.0,
@@ -11550,9 +11550,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/TreeDead_Anim@Tree_Groundplate.FBX",
       "pathGuid": "19eb26f5e5d55faa",
       "position": [
-        -0.006249,
-        0.001953,
-        -0.001449
+        -0.005124,
+        0.001601,
+        -0.001188
       ],
       "rotation": [
         0.0,
@@ -11561,9 +11561,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -11629,9 +11629,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/PowerLines_ZigZag_A.FBX",
       "pathGuid": "98d7208844431ef3",
       "position": [
-        17.5,
-        11.0,
-        42.5
+        14.35,
+        9.02,
+        34.85
       ],
       "rotation": [
         0.0,
@@ -11640,9 +11640,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -11669,9 +11669,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Trashcan_B@Trashcan_B.FBX",
       "pathGuid": "d9f81b646ee11c3a",
       "position": [
-        14.0,
-        11.0,
-        37.0
+        11.48,
+        9.02,
+        30.34
       ],
       "rotation": [
         0.0,
@@ -11739,9 +11739,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Dumpster@Dumpster.FBX",
       "pathGuid": "ffc6f40dcce8d86c",
       "position": [
-        7.0,
-        11.0,
-        37.0
+        5.74,
+        9.02,
+        30.34
       ],
       "rotation": [
         0.0,
@@ -11824,9 +11824,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Garbage_Set_B.FBX",
       "pathGuid": "803985bd981c1ff6",
       "position": [
-        -38.5,
-        11.0,
-        42.5
+        -31.57,
+        9.02,
+        34.85
       ],
       "rotation": [
         0.0,
@@ -11864,9 +11864,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Neon_Sign_A@Neon_Sign_A.FBX",
       "pathGuid": "92ee0820151a4820",
       "position": [
-        -19.0,
-        12.5,
-        43.5
+        -15.58,
+        10.25,
+        35.67
       ],
       "rotation": [
         0.0,
@@ -11875,9 +11875,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -11929,9 +11929,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_A_1x.FBX",
       "pathGuid": "3264209b25ee3021",
       "position": [
-        -34.5,
-        11.5,
-        28.0
+        -28.29,
+        9.43,
+        22.96
       ],
       "rotation": [
         0.0,
@@ -11940,9 +11940,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -11969,9 +11969,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Sidewalk_ExtraHeight_6x.FBX",
       "pathGuid": "1226a73686dc4d34",
       "position": [
-        -44.5,
-        11.5,
-        20.0
+        -36.49,
+        9.43,
+        16.4
       ],
       "rotation": [
         0.0,
@@ -11980,9 +11980,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -11999,9 +11999,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Straight_1x_\u00bdx_ZigZag.FBX",
       "pathGuid": "d8e8fe8d97ec139e",
       "position": [
-        -29.5,
-        11.5,
-        25.0
+        -24.19,
+        9.43,
+        20.5
       ],
       "rotation": [
         0.0,
@@ -12010,9 +12010,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -12029,9 +12029,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Hill_B_6x2.FBX",
       "pathGuid": "d1bac610aa9c0cad",
       "position": [
-        -64.5,
-        12.5,
-        25.0
+        -52.89,
+        10.25,
+        20.5
       ],
       "rotation": [
         0.0,
@@ -12040,9 +12040,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -12069,9 +12069,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_B_1x.FBX",
       "pathGuid": "3fff24328223af93",
       "position": [
-        -34.5,
-        11.5,
-        30.0
+        -28.29,
+        9.43,
+        24.6
       ],
       "rotation": [
         0.0,
@@ -12080,9 +12080,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -12109,9 +12109,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Straight_2x2.FBX",
       "pathGuid": "fdb265a54a2705fb",
       "position": [
-        -27.5,
-        11.5,
-        26.0
+        -22.55,
+        9.43,
+        21.32
       ],
       "rotation": [
         0.0,
@@ -12120,9 +12120,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -12139,9 +12139,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Hill_Woble_B_6x2.FBX",
       "pathGuid": "6e31daead1150613",
       "position": [
-        -58.5,
-        12.0,
-        25.0
+        -47.97,
+        9.84,
+        20.5
       ],
       "rotation": [
         0.0,
@@ -12150,9 +12150,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -12179,9 +12179,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Straight_6x3.FBX",
       "pathGuid": "9da4fab0ec043d3c",
       "position": [
-        -28.5,
-        11.5,
-        20.5
+        -23.37,
+        9.43,
+        16.81
       ],
       "rotation": [
         0.0,
@@ -12190,9 +12190,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -12204,9 +12204,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_B_Corner45ZigZag.FBX",
       "pathGuid": "e392fdb47b68c2a9",
       "position": [
-        -27.5,
-        11.5,
-        31.0
+        -22.55,
+        9.43,
+        25.42
       ],
       "rotation": [
         0.0,
@@ -12215,9 +12215,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -12244,9 +12244,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_StraightStreet_3x3.FBX",
       "pathGuid": "a297270d917e2148",
       "position": [
-        -33.0,
-        11.5,
-        22.5
+        -27.06,
+        9.43,
+        18.45
       ],
       "rotation": [
         0.0,
@@ -12255,9 +12255,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -12284,9 +12284,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_B_1\u00bdx.FBX",
       "pathGuid": "8ba36242c3cc6d16",
       "position": [
-        -33.0,
-        11.5,
-        30.0
+        -27.06,
+        9.43,
+        24.6
       ],
       "rotation": [
         0.0,
@@ -12295,9 +12295,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -12314,9 +12314,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_HillStreet_6x3.FBX",
       "pathGuid": "f81a5f4fb8ebcc13",
       "position": [
-        -64.5,
-        12.5,
-        22.5
+        -52.89,
+        10.25,
+        18.45
       ],
       "rotation": [
         0.0,
@@ -12325,9 +12325,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -12344,9 +12344,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Straight_1x_\u00bdx_ZigZag.FBX",
       "pathGuid": "d8e8fe8d97ec139e",
       "position": [
-        -34.5,
-        11.5,
-        25.0
+        -28.29,
+        9.43,
+        20.5
       ],
       "rotation": [
         0.0,
@@ -12355,9 +12355,9 @@
         -0.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -12369,9 +12369,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_A_Corner45ZigZag.FBX",
       "pathGuid": "51fd38f1ea8f3ef4",
       "position": [
-        -27.5,
-        11.5,
-        28.0
+        -22.55,
+        9.43,
+        22.96
       ],
       "rotation": [
         0.0,
@@ -12380,9 +12380,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -12409,9 +12409,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_B_3x.FBX",
       "pathGuid": "340142dee48d423e",
       "position": [
-        -31.0,
-        11.5,
-        30.0
+        -25.42,
+        9.43,
+        24.6
       ],
       "rotation": [
         0.0,
@@ -12420,9 +12420,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -12439,9 +12439,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Stairs_B_3x1.FBX",
       "pathGuid": "523d2cfe41b58191",
       "position": [
-        -69.0,
-        12.5,
-        22.0
+        -56.58,
+        10.25,
+        18.04
       ],
       "rotation": [
         0.0,
@@ -12450,9 +12450,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -12479,9 +12479,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_B_Corner90deg.FBX",
       "pathGuid": "f1c43238d39cb718",
       "position": [
-        -25.5,
-        11.5,
-        30.0
+        -20.91,
+        9.43,
+        24.6
       ],
       "rotation": [
         0.0,
@@ -12490,9 +12490,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -12519,9 +12519,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Straight_6x2.FBX",
       "pathGuid": "e715ddbc9612d54a",
       "position": [
-        -52.5,
-        11.5,
-        25.0
+        -43.05,
+        9.43,
+        20.5
       ],
       "rotation": [
         0.0,
@@ -12530,9 +12530,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -12549,9 +12549,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_CornerBig90_2x2.FBX",
       "pathGuid": "59dcaa548375571e",
       "position": [
-        -24.0,
-        11.5,
-        27.0
+        -19.68,
+        9.43,
+        22.14
       ],
       "rotation": [
         0.0,
@@ -12560,9 +12560,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -12579,9 +12579,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Hill_Woble_A_6x2.FBX",
       "pathGuid": "f3e86f86570f96a0",
       "position": [
-        -58.5,
-        12.0,
-        20.0
+        -47.97,
+        9.84,
+        16.4
       ],
       "rotation": [
         0.0,
@@ -12590,9 +12590,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -12619,9 +12619,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_B_1x.FBX",
       "pathGuid": "3fff24328223af93",
       "position": [
-        -34.5,
-        11.5,
-        29.0
+        -28.29,
+        9.43,
+        23.78
       ],
       "rotation": [
         0.0,
@@ -12630,9 +12630,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -12649,9 +12649,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Stairs_A_2x\u00bd.FBX",
       "pathGuid": "cb5e24f01f915029",
       "position": [
-        -72.5,
-        12.0,
-        20.0
+        -59.45,
+        9.84,
+        16.4
       ],
       "rotation": [
         0.0,
@@ -12660,9 +12660,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -12689,9 +12689,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Straight_1x1.FBX",
       "pathGuid": "fcd26601f360a6cf",
       "position": [
-        -33.5,
-        11.5,
-        25.0
+        -27.47,
+        9.43,
+        20.5
       ],
       "rotation": [
         0.0,
@@ -12700,9 +12700,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -12729,9 +12729,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_A_\u00bdx.FBX",
       "pathGuid": "0a0a95bddff78abd",
       "position": [
-        -35.5,
-        11.5,
-        29.0
+        -29.11,
+        9.43,
+        23.78
       ],
       "rotation": [
         0.0,
@@ -12740,9 +12740,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -12759,9 +12759,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_A_CornerBig90.FBX",
       "pathGuid": "47542fb091c9fcb7",
       "position": [
-        -24.5,
-        11.5,
-        28.0
+        -20.09,
+        9.43,
+        22.96
       ],
       "rotation": [
         0.0,
@@ -12770,9 +12770,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -12799,9 +12799,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_StraightStreet_6x3.FBX",
       "pathGuid": "ba8c246d773f8ed9",
       "position": [
-        -28.5,
-        11.5,
-        23.5
+        -23.37,
+        9.43,
+        19.27
       ],
       "rotation": [
         0.0,
@@ -12810,9 +12810,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -12839,9 +12839,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_A_Corner90deg.FBX",
       "pathGuid": "7d597bb08bba0b59",
       "position": [
-        -25.5,
-        11.5,
-        28.0
+        -20.91,
+        9.43,
+        22.96
       ],
       "rotation": [
         0.0,
@@ -12850,9 +12850,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -12879,9 +12879,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Straight_1x2.FBX",
       "pathGuid": "504a0fcf89e75623",
       "position": [
-        -32.5,
-        11.5,
-        26.0
+        -26.65,
+        9.43,
+        21.32
       ],
       "rotation": [
         0.0,
@@ -12890,9 +12890,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -12909,9 +12909,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Stairs_A_2x1.FBX",
       "pathGuid": "26aa94b27ccd4934",
       "position": [
-        -69.0,
-        12.5,
-        19.5
+        -56.58,
+        10.25,
+        15.99
       ],
       "rotation": [
         0.0,
@@ -12920,9 +12920,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -12939,9 +12939,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Stairs_B_3x\u00bd.FBX",
       "pathGuid": "2229e0e190cfc748",
       "position": [
-        -72.5,
-        12.0,
-        22.5
+        -59.45,
+        9.84,
+        18.45
       ],
       "rotation": [
         0.0,
@@ -12950,9 +12950,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -12979,9 +12979,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Woble_B_Street_6x3.FBX",
       "pathGuid": "2d45f7eac7d64612",
       "position": [
-        -46.5,
-        11.5,
-        22.5
+        -38.13,
+        9.43,
+        18.45
       ],
       "rotation": [
         0.0,
@@ -12990,9 +12990,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -13019,9 +13019,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_A_1\u00bdx.FBX",
       "pathGuid": "41aa6ae6273bd2c5",
       "position": [
-        -33.0,
-        11.5,
-        28.0
+        -27.06,
+        9.43,
+        22.96
       ],
       "rotation": [
         0.0,
@@ -13030,9 +13030,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -13059,9 +13059,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Straight_12x6.FBX",
       "pathGuid": "7ffeec0d4276e707",
       "position": [
-        -79.5,
-        12.0,
-        24.0
+        -65.19,
+        9.84,
+        19.68
       ],
       "rotation": [
         0.0,
@@ -13070,9 +13070,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -13099,9 +13099,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Woble_A_Street_6x3.FBX",
       "pathGuid": "ef4558a3c878b135",
       "position": [
-        -52.5,
-        11.5,
-        22.5
+        -43.05,
+        9.43,
+        18.45
       ],
       "rotation": [
         0.0,
@@ -13110,9 +13110,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -13139,9 +13139,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_A_3x.FBX",
       "pathGuid": "8b23e22248114108",
       "position": [
-        -31.0,
-        11.5,
-        28.0
+        -25.42,
+        9.43,
+        22.96
       ],
       "rotation": [
         0.0,
@@ -13150,9 +13150,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -13179,9 +13179,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Straight_1x1.FBX",
       "pathGuid": "fcd26601f360a6cf",
       "position": [
-        -29.5,
-        11.5,
-        26.0
+        -24.19,
+        9.43,
+        21.32
       ],
       "rotation": [
         0.0,
@@ -13190,9 +13190,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -13219,9 +13219,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Straight_1x1.FBX",
       "pathGuid": "fcd26601f360a6cf",
       "position": [
-        -33.5,
-        11.5,
-        26.0
+        -27.47,
+        9.43,
+        21.32
       ],
       "rotation": [
         0.0,
@@ -13230,9 +13230,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -13259,9 +13259,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_StraightStreet_2x3.FBX",
       "pathGuid": "16b91afaa3ef4fd4",
       "position": [
-        -24.5,
-        11.5,
-        22.5
+        -20.09,
+        9.43,
+        18.45
       ],
       "rotation": [
         0.0,
@@ -13270,9 +13270,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -13299,9 +13299,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Straight_6x2.FBX",
       "pathGuid": "e715ddbc9612d54a",
       "position": [
-        -52.5,
-        11.5,
-        20.0
+        -43.05,
+        9.43,
+        16.4
       ],
       "rotation": [
         0.0,
@@ -13310,9 +13310,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -13339,9 +13339,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Woble_A_6x2.FBX",
       "pathGuid": "bed5941e5827ec93",
       "position": [
-        -44.5,
-        11.5,
-        25.0
+        -36.49,
+        9.43,
+        20.5
       ],
       "rotation": [
         0.0,
@@ -13350,9 +13350,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -13379,9 +13379,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_StraightStreet_3x3.FBX",
       "pathGuid": "a297270d917e2148",
       "position": [
-        -33.0,
-        11.5,
-        25.5
+        -27.06,
+        9.43,
+        20.91
       ],
       "rotation": [
         0.0,
@@ -13390,9 +13390,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -13419,9 +13419,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Straight_2x2.FBX",
       "pathGuid": "fdb265a54a2705fb",
       "position": [
-        -48.5,
-        11.5,
-        20.0
+        -39.77,
+        9.43,
+        16.4
       ],
       "rotation": [
         0.0,
@@ -13430,9 +13430,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -13459,9 +13459,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_StraightStreet_6x3.FBX",
       "pathGuid": "ba8c246d773f8ed9",
       "position": [
-        -40.5,
-        11.5,
-        22.5
+        -33.21,
+        9.43,
+        18.45
       ],
       "rotation": [
         0.0,
@@ -13470,9 +13470,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -13499,9 +13499,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Midfloor_4x2.FBX",
       "pathGuid": "f8fd031dd7580418",
       "position": [
-        -5.5,
-        11.0,
-        -7.0
+        -4.51,
+        9.02,
+        -5.74
       ],
       "rotation": [
         0.0,
@@ -13510,9 +13510,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -13539,9 +13539,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Woble_B_6x2.FBX",
       "pathGuid": "28a2507cca442a08",
       "position": [
-        -38.5,
-        11.5,
-        25.0
+        -31.57,
+        9.43,
+        20.5
       ],
       "rotation": [
         0.0,
@@ -13550,9 +13550,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -13569,9 +13569,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Hill_A_6x2.FBX",
       "pathGuid": "d93e83155b010700",
       "position": [
-        -64.5,
-        12.5,
-        20.0
+        -52.89,
+        10.25,
+        16.4
       ],
       "rotation": [
         0.0,
@@ -13580,9 +13580,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -13599,9 +13599,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Stairs_A_2x1.FBX",
       "pathGuid": "26aa94b27ccd4934",
       "position": [
-        -69.0,
-        12.5,
-        24.5
+        -56.58,
+        10.25,
+        20.09
       ],
       "rotation": [
         0.0,
@@ -13610,9 +13610,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -13639,9 +13639,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Straight_2x2.FBX",
       "pathGuid": "fdb265a54a2705fb",
       "position": [
-        -48.5,
-        11.5,
-        25.0
+        -39.77,
+        9.43,
+        20.5
       ],
       "rotation": [
         0.0,
@@ -13650,9 +13650,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -13669,9 +13669,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_HillStreet_Woble_6x3.FBX",
       "pathGuid": "bd2ea85d90a4fb0a",
       "position": [
-        -58.5,
-        12.0,
-        22.5
+        -47.97,
+        9.84,
+        18.45
       ],
       "rotation": [
         0.0,
@@ -13680,9 +13680,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -13709,9 +13709,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Woble_12x6.FBX",
       "pathGuid": "90b9cb38daa36514",
       "position": [
-        -79.5,
-        12.0,
-        17.0
+        -65.19,
+        9.84,
+        13.94
       ],
       "rotation": [
         0.0,
@@ -13720,9 +13720,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -13749,9 +13749,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Straight_2x2.FBX",
       "pathGuid": "fdb265a54a2705fb",
       "position": [
-        -31.5,
-        11.5,
-        26.0
+        -25.83,
+        9.43,
+        21.32
       ],
       "rotation": [
         0.0,
@@ -13760,9 +13760,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -13789,9 +13789,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Straight_1x2.FBX",
       "pathGuid": "504a0fcf89e75623",
       "position": [
-        -34.5,
-        11.5,
-        25.0
+        -28.29,
+        9.43,
+        20.5
       ],
       "rotation": [
         0.0,
@@ -13800,9 +13800,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -13819,9 +13819,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Stairs_A_2x\u00bd.FBX",
       "pathGuid": "cb5e24f01f915029",
       "position": [
-        -72.5,
-        12.0,
-        25.0
+        -59.45,
+        9.84,
+        20.5
       ],
       "rotation": [
         0.0,
@@ -13830,9 +13830,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -13859,9 +13859,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Straight_1x1.FBX",
       "pathGuid": "fcd26601f360a6cf",
       "position": [
-        -29.5,
-        11.5,
-        25.0
+        -24.19,
+        9.43,
+        20.5
       ],
       "rotation": [
         0.0,
@@ -13870,9 +13870,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -13899,9 +13899,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_StraightStreet_3x3.FBX",
       "pathGuid": "a297270d917e2148",
       "position": [
-        -36.0,
-        11.5,
-        22.5
+        -29.52,
+        9.43,
+        18.45
       ],
       "rotation": [
         0.0,
@@ -13910,9 +13910,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -13929,9 +13929,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_Arc_2x.FBX",
       "pathGuid": "845f868adfe5f71c",
       "position": [
-        -19.5,
-        11.0,
-        24.5
+        -15.99,
+        9.02,
+        20.09
       ],
       "rotation": [
         -0.0,
@@ -13940,9 +13940,9 @@
         -1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -13969,9 +13969,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_DoorRoll_B_6x.FBX",
       "pathGuid": "dbc5e3fd83c14e13",
       "position": [
-        1.5,
-        11.0,
-        16.5
+        1.23,
+        9.02,
+        13.53
       ],
       "rotation": [
         0.0,
@@ -13980,9 +13980,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -13999,9 +13999,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_DoorRoll_C_6x.FBX",
       "pathGuid": "e33a0736be13558c",
       "position": [
-        -20.5,
-        11.0,
-        10.0
+        -16.81,
+        9.02,
+        8.2
       ],
       "rotation": [
         0.0,
@@ -14010,9 +14010,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -14039,9 +14039,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_Window_B_2x.FBX",
       "pathGuid": "9a5e88e30304717f",
       "position": [
-        5.0,
-        11.0,
-        22.0
+        4.1,
+        9.02,
+        18.04
       ],
       "rotation": [
         0.0,
@@ -14050,9 +14050,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -14079,9 +14079,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_Shops_BMod_4x.FBX",
       "pathGuid": "8cd2d8a8718653b3",
       "position": [
-        -60.0,
-        11.0,
-        10.0
+        -49.2,
+        9.02,
+        8.2
       ],
       "rotation": [
         0.0,
@@ -14090,9 +14090,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -14119,9 +14119,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_MetalDoorsHigh_4x.FBX",
       "pathGuid": "3a948e2a78c2f7dc",
       "position": [
-        -13.0,
-        11.0,
-        4.5
+        -10.66,
+        9.02,
+        3.69
       ],
       "rotation": [
         0.0,
@@ -14130,9 +14130,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -14159,9 +14159,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Door_A.FBX",
       "pathGuid": "f892de3d6c58bdaa",
       "position": [
-        -13.0,
-        11.0,
-        -7.5
+        -10.66,
+        9.02,
+        -6.15
       ],
       "rotation": [
         0.0,
@@ -14170,9 +14170,9 @@
         1.0
       ],
       "scale": [
-        0.823293,
-        0.823293,
-        0.823293
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -14189,9 +14189,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/WallFence_A_Pilar.FBX",
       "pathGuid": "2103ab82a7fdd5c0",
       "position": [
-        -23.0,
-        11.0,
-        24.0
+        -18.86,
+        9.02,
+        19.68
       ],
       "rotation": [
         0.0,
@@ -14200,9 +14200,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -14229,9 +14229,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_MetalDoors_6x.FBX",
       "pathGuid": "a742d8bc3273cef2",
       "position": [
-        21.5,
-        11.0,
-        16.5
+        17.63,
+        9.02,
+        13.53
       ],
       "rotation": [
         0.0,
@@ -14240,9 +14240,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -14269,9 +14269,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_4x.FBX",
       "pathGuid": "779326f4e061df0b",
       "position": [
-        2.0,
-        11.0,
-        -7.5
+        1.64,
+        9.02,
+        -6.15
       ],
       "rotation": [
         0.0,
@@ -14280,9 +14280,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -14309,9 +14309,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Window_F.FBX",
       "pathGuid": "3770ffa076ee121b",
       "position": [
-        -25.0,
-        12.5,
-        -7.5
+        -20.5,
+        10.25,
+        -6.15
       ],
       "rotation": [
         0.0,
@@ -14320,9 +14320,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -14349,9 +14349,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_Door_B_2x.FBX",
       "pathGuid": "a267eaa37c5a0b00",
       "position": [
-        -54.0,
-        11.0,
-        4.5
+        -44.28,
+        9.02,
+        3.69
       ],
       "rotation": [
         0.0,
@@ -14360,9 +14360,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -14379,9 +14379,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_DoorRoll_C_6x.FBX",
       "pathGuid": "f3b4eb3147bdfc31",
       "position": [
-        -32.0,
-        11.0,
-        4.5
+        -26.24,
+        9.02,
+        3.69
       ],
       "rotation": [
         0.0,
@@ -14390,9 +14390,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -14419,9 +14419,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_DoorsHigh_4x.FBX",
       "pathGuid": "84de9136de45cef9",
       "position": [
-        -23.0,
-        11.0,
-        4.5
+        -18.86,
+        9.02,
+        3.69
       ],
       "rotation": [
         0.0,
@@ -14430,9 +14430,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -14459,9 +14459,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_MetalDoorsShop_6x.FBX",
       "pathGuid": "6121d8734f4aefff",
       "position": [
-        31.5,
-        11.0,
-        16.5
+        25.83,
+        9.02,
+        13.53
       ],
       "rotation": [
         0.0,
@@ -14470,9 +14470,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -14489,8 +14489,8 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_TriangleIn_6x.FBX",
       "pathGuid": "1de93e20c15fef06",
       "position": [
-        -19.0,
-        11.0,
+        -15.58,
+        9.02,
         0.0
       ],
       "rotation": [
@@ -14500,9 +14500,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -14529,9 +14529,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_Pilar_Tile_1x.FBX",
       "pathGuid": "e61e2fe5974b2e5c",
       "position": [
-        34.5,
-        11.0,
-        22.0
+        28.29,
+        9.02,
+        18.04
       ],
       "rotation": [
         0.0,
@@ -14540,9 +14540,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -14569,9 +14569,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_2x.FBX",
       "pathGuid": "8302d2d554f884fd",
       "position": [
-        19.5,
-        11.0,
-        8.5
+        15.99,
+        9.02,
+        6.97
       ],
       "rotation": [
         0.0,
@@ -14580,9 +14580,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -14599,9 +14599,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_TriangleIn_6x.FBX",
       "pathGuid": "efc38a5787b14744",
       "position": [
-        16.0,
-        11.0,
-        5.0
+        13.12,
+        9.02,
+        4.1
       ],
       "rotation": [
         0.0,
@@ -14610,9 +14610,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -14639,9 +14639,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_Window_C_2x.FBX",
       "pathGuid": "a660d987a1689e5e",
       "position": [
-        -55.0,
-        11.0,
-        14.5
+        -45.1,
+        9.02,
+        11.89
       ],
       "rotation": [
         0.0,
@@ -14650,9 +14650,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -14679,9 +14679,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_Window_H_2x.FBX",
       "pathGuid": "9875a5ec83e2f3c2",
       "position": [
-        -46.0,
-        11.0,
-        14.5
+        -37.72,
+        9.02,
+        11.89
       ],
       "rotation": [
         0.0,
@@ -14690,9 +14690,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -14719,9 +14719,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Door_C.FBX",
       "pathGuid": "5f9b539925a377f1",
       "position": [
-        -10.0,
-        11.0,
-        -7.5
+        -8.2,
+        9.02,
+        -6.15
       ],
       "rotation": [
         0.0,
@@ -14730,9 +14730,9 @@
         1.0
       ],
       "scale": [
-        0.782443,
-        0.782443,
-        0.782443
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -14759,9 +14759,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_DoorRoll_B_6x.FBX",
       "pathGuid": "76a010f37fe7440c",
       "position": [
-        -14.5,
-        11.0,
-        10.0
+        -11.89,
+        9.02,
+        8.2
       ],
       "rotation": [
         0.0,
@@ -14770,9 +14770,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -14799,9 +14799,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_DoorRoll_C_6x.FBX",
       "pathGuid": "041b68c18b6ff1b9",
       "position": [
-        7.5,
-        11.0,
-        16.5
+        6.15,
+        9.02,
+        13.53
       ],
       "rotation": [
         0.0,
@@ -14810,9 +14810,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -14839,9 +14839,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_Door_C_2x.FBX",
       "pathGuid": "989f761b141cc381",
       "position": [
-        -52.0,
-        11.0,
-        4.5
+        -42.64,
+        9.02,
+        3.69
       ],
       "rotation": [
         0.0,
@@ -14850,9 +14850,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -14879,9 +14879,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_Pilar_1x.FBX",
       "pathGuid": "e4fc17a669455451",
       "position": [
-        34.0,
-        11.0,
-        22.0
+        27.88,
+        9.02,
+        18.04
       ],
       "rotation": [
         0.0,
@@ -14890,9 +14890,9 @@
         -0.707107
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -14919,9 +14919,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_Shops_AMod_4x01.FBX",
       "pathGuid": "0251a8b027793abb",
       "position": [
-        3.0,
-        11.0,
-        5.0
+        2.46,
+        9.02,
+        4.1
       ],
       "rotation": [
         0.0,
@@ -14930,9 +14930,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -14959,9 +14959,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_DoorsHigh_4x.FBX",
       "pathGuid": "ddfa6da5bc236aa1",
       "position": [
-        23.0,
-        11.0,
-        -1.0
+        18.86,
+        9.02,
+        -0.82
       ],
       "rotation": [
         0.0,
@@ -14970,9 +14970,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -14999,9 +14999,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Window_B.FBX",
       "pathGuid": "14cea0b1aec9d960",
       "position": [
-        -18.5,
-        12.5,
-        -7.5
+        -15.17,
+        10.25,
+        -6.15
       ],
       "rotation": [
         -0.0,
@@ -15010,9 +15010,9 @@
         -1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -15039,9 +15039,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_1x.FBX",
       "pathGuid": "a03c53efc263a092",
       "position": [
-        -3.0,
-        11.0,
-        -7.5
+        -2.46,
+        9.02,
+        -6.15
       ],
       "rotation": [
         0.0,
@@ -15050,9 +15050,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -15079,9 +15079,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_CornerIn_1x.FBX",
       "pathGuid": "3036210c31a7c886",
       "position": [
-        -60.0,
-        11.0,
-        3.5
+        -49.2,
+        9.02,
+        2.87
       ],
       "rotation": [
         0.0,
@@ -15090,9 +15090,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -15119,9 +15119,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_Window_D_2x.FBX",
       "pathGuid": "aef0820c531a015f",
       "position": [
-        -53.0,
-        11.0,
-        14.5
+        -43.46,
+        9.02,
+        11.89
       ],
       "rotation": [
         0.0,
@@ -15130,9 +15130,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -15159,8 +15159,8 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_Pilar_1x.FBX",
       "pathGuid": "b9d002cc89d49e39",
       "position": [
-        3.0,
-        11.0,
+        2.46,
+        9.02,
         0.0
       ],
       "rotation": [
@@ -15170,9 +15170,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -15199,9 +15199,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_Door_A_2x.FBX",
       "pathGuid": "6f27a1810765cb49",
       "position": [
-        -16.5,
-        11.0,
-        16.5
+        -13.53,
+        9.02,
+        13.53
       ],
       "rotation": [
         0.0,
@@ -15210,9 +15210,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -15239,9 +15239,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_MetalDoors_6x.FBX",
       "pathGuid": "2832d272c0c2f5e7",
       "position": [
-        18.0,
-        11.0,
-        -1.0
+        14.76,
+        9.02,
+        -0.82
       ],
       "rotation": [
         0.0,
@@ -15250,9 +15250,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -15279,9 +15279,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_Door_B_2x.FBX",
       "pathGuid": "27fcf60c62997c9a",
       "position": [
-        1.5,
-        11.0,
-        9.5
+        1.23,
+        9.02,
+        7.79
       ],
       "rotation": [
         0.0,
@@ -15290,9 +15290,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -15319,9 +15319,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_PilarConcrete_3\u00bdx.FBX",
       "pathGuid": "59c1535b7ee86f84",
       "position": [
-        -22.0,
-        11.0,
-        24.5
+        -18.04,
+        9.02,
+        20.09
       ],
       "rotation": [
         -0.0,
@@ -15330,9 +15330,9 @@
         -1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -15359,8 +15359,8 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_Window_C_2x.FBX",
       "pathGuid": "6d8fd623b0dc7190",
       "position": [
-        -27.0,
-        11.0,
+        -22.14,
+        9.02,
         0.0
       ],
       "rotation": [
@@ -15370,9 +15370,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -15399,9 +15399,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_Window_A_2x.FBX",
       "pathGuid": "4a6896846d36ed3a",
       "position": [
-        -59.0,
-        11.0,
-        14.5
+        -48.38,
+        9.02,
+        11.89
       ],
       "rotation": [
         0.0,
@@ -15410,9 +15410,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -15439,8 +15439,8 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_Shops_A_4x.FBX",
       "pathGuid": "e09987b4fba50cf7",
       "position": [
-        -6.0,
-        11.0,
+        -4.92,
+        9.02,
         0.0
       ],
       "rotation": [
@@ -15450,9 +15450,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -15479,9 +15479,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_Window_F_2x.FBX",
       "pathGuid": "735fe09fc315e0ef",
       "position": [
-        -3.0,
-        11.0,
-        22.0
+        -2.46,
+        9.02,
+        18.04
       ],
       "rotation": [
         0.0,
@@ -15490,9 +15490,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -15519,9 +15519,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_Window_A_2x.FBX",
       "pathGuid": "9beeb392ebd946e8",
       "position": [
-        20.0,
-        11.0,
-        5.0
+        16.4,
+        9.02,
+        4.1
       ],
       "rotation": [
         0.0,
@@ -15530,9 +15530,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -15559,8 +15559,8 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_4x.FBX",
       "pathGuid": "b6e714a7dcc5f40d",
       "position": [
-        -53.0,
-        11.0,
+        -43.46,
+        9.02,
         0.0
       ],
       "rotation": [
@@ -15570,9 +15570,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -15589,9 +15589,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_TriangleIn_6x.FBX",
       "pathGuid": "7c76793a48749334",
       "position": [
-        11.0,
-        11.0,
-        22.0
+        9.02,
+        9.02,
+        18.04
       ],
       "rotation": [
         0.0,
@@ -15600,9 +15600,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -15629,9 +15629,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_Shops_A_4x.FBX",
       "pathGuid": "60b6779d381294a8",
       "position": [
-        -1.0,
-        11.0,
-        5.0
+        -0.82,
+        9.02,
+        4.1
       ],
       "rotation": [
         0.0,
@@ -15640,9 +15640,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -15669,9 +15669,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_CornerOut_1x.FBX",
       "pathGuid": "b48f6ff8737a4e72",
       "position": [
-        -20.0,
-        11.0,
-        16.5
+        -16.4,
+        9.02,
+        13.53
       ],
       "rotation": [
         0.0,
@@ -15680,9 +15680,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -15709,9 +15709,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_6x.FBX",
       "pathGuid": "377de9056f1376c9",
       "position": [
-        11.5,
-        11.0,
-        8.5
+        9.43,
+        9.02,
+        6.97
       ],
       "rotation": [
         0.0,
@@ -15720,9 +15720,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -15739,9 +15739,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_DoorRoll_C_6x.FBX",
       "pathGuid": "a762b3ccb5b9ed06",
       "position": [
-        32.0,
-        11.0,
-        -1.0
+        26.24,
+        9.02,
+        -0.82
       ],
       "rotation": [
         0.0,
@@ -15750,9 +15750,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -15779,9 +15779,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_MetalDoors_6x.FBX",
       "pathGuid": "2b25eff8d1edc753",
       "position": [
-        -18.0,
-        11.0,
-        4.5
+        -14.76,
+        9.02,
+        3.69
       ],
       "rotation": [
         0.0,
@@ -15790,9 +15790,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -15819,9 +15819,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_Window_G_1x.FBX",
       "pathGuid": "fa0f479bfbf261c8",
       "position": [
-        -5.0,
-        11.0,
-        22.0
+        -4.1,
+        9.02,
+        18.04
       ],
       "rotation": [
         0.0,
@@ -15830,9 +15830,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -15849,9 +15849,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_TriangleIn_6x.FBX",
       "pathGuid": "c37a87983bb94c9e",
       "position": [
-        -63.0,
-        11.0,
-        14.5
+        -51.66,
+        9.02,
+        11.89
       ],
       "rotation": [
         0.0,
@@ -15860,9 +15860,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -15889,9 +15889,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_Door_D_2x.FBX",
       "pathGuid": "783837781ed0d42b",
       "position": [
-        -2.5,
-        11.0,
-        9.5
+        -2.05,
+        9.02,
+        7.79
       ],
       "rotation": [
         0.0,
@@ -15900,9 +15900,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -15929,8 +15929,8 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_6x.FBX",
       "pathGuid": "66d7bd5fb4d81649",
       "position": [
-        -58.0,
-        11.0,
+        -47.56,
+        9.02,
         0.0
       ],
       "rotation": [
@@ -15940,9 +15940,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -15969,9 +15969,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_Shops_A_4x.FBX",
       "pathGuid": "31abc80d0dda2e43",
       "position": [
-        24.0,
-        11.0,
-        22.0
+        19.68,
+        9.02,
+        18.04
       ],
       "rotation": [
         0.0,
@@ -15980,9 +15980,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -16009,9 +16009,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_Door_E_2x.FBX",
       "pathGuid": "19f85b5739ebe983",
       "position": [
-        22.5,
-        11.0,
-        -5.5
+        18.45,
+        9.02,
+        -4.51
       ],
       "rotation": [
         0.0,
@@ -16020,9 +16020,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -16049,9 +16049,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_4x.FBX",
       "pathGuid": "f2b239bd515e725f",
       "position": [
-        -29.0,
-        11.0,
-        14.5
+        -23.78,
+        9.02,
+        11.89
       ],
       "rotation": [
         0.0,
@@ -16060,9 +16060,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -16089,9 +16089,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_2x.FBX",
       "pathGuid": "6ff2364db4813ceb",
       "position": [
-        -32.0,
-        11.0,
-        14.5
+        -26.24,
+        9.02,
+        11.89
       ],
       "rotation": [
         0.0,
@@ -16100,9 +16100,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -16129,9 +16129,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_MetalDoorsShop_6x.FBX",
       "pathGuid": "46ede054c5ce0c0b",
       "position": [
-        8.0,
-        11.0,
-        -1.0
+        6.56,
+        9.02,
+        -0.82
       ],
       "rotation": [
         0.0,
@@ -16140,9 +16140,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -16169,9 +16169,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_Xxxshop_6x.FBX",
       "pathGuid": "c15cca4edb299c12",
       "position": [
-        -38.0,
-        11.0,
-        14.5
+        -31.16,
+        9.02,
+        11.89
       ],
       "rotation": [
         0.0,
@@ -16180,9 +16180,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -16209,9 +16209,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_CornerIn_1x.FBX",
       "pathGuid": "de38babba1e51056",
       "position": [
-        11.0,
-        11.0,
-        -7.5
+        9.02,
+        9.02,
+        -6.15
       ],
       "rotation": [
         0.0,
@@ -16220,9 +16220,9 @@
         -1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -16249,9 +16249,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Window_A.FBX",
       "pathGuid": "6da7867c018d1380",
       "position": [
-        -15.5,
-        12.5,
-        -7.5
+        -12.71,
+        10.25,
+        -6.15
       ],
       "rotation": [
         -0.0,
@@ -16260,9 +16260,9 @@
         -1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -16289,9 +16289,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_Window_E_2x.FBX",
       "pathGuid": "ae47e0f6c2e4d966",
       "position": [
-        28.0,
-        11.0,
-        5.0
+        22.96,
+        9.02,
+        4.1
       ],
       "rotation": [
         0.0,
@@ -16300,9 +16300,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -16319,9 +16319,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/WallFence_A_Tile_4x.FBX",
       "pathGuid": "91bc45925c9c8c53",
       "position": [
-        -21.5,
-        11.0,
-        22.5
+        -17.63,
+        9.02,
+        18.45
       ],
       "rotation": [
         0.0,
@@ -16330,9 +16330,9 @@
         -0.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -16359,9 +16359,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_1x.FBX",
       "pathGuid": "049777f96202b839",
       "position": [
-        -34.0,
-        11.0,
-        14.5
+        -27.88,
+        9.02,
+        11.89
       ],
       "rotation": [
         0.0,
@@ -16370,9 +16370,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -16399,9 +16399,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_Door_E_2x.FBX",
       "pathGuid": "58d82fbba770bcc8",
       "position": [
-        -48.0,
-        11.0,
-        4.5
+        -39.36,
+        9.02,
+        3.69
       ],
       "rotation": [
         0.0,
@@ -16410,9 +16410,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -16439,9 +16439,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_MetalDoorsHigh_4x.FBX",
       "pathGuid": "7149d249b5e2fc77",
       "position": [
-        26.5,
-        11.0,
-        16.5
+        21.73,
+        9.02,
+        13.53
       ],
       "rotation": [
         0.0,
@@ -16450,9 +16450,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -16479,9 +16479,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_DoorRoll_D_4x.FBX",
       "pathGuid": "f97e82e7aaa5f489",
       "position": [
-        12.5,
-        11.0,
-        16.5
+        10.25,
+        9.02,
+        13.53
       ],
       "rotation": [
         0.0,
@@ -16490,9 +16490,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -16519,9 +16519,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_Shops_China_4x.FBX",
       "pathGuid": "b6ef71d792b4cb63",
       "position": [
-        -64.0,
-        11.0,
-        10.0
+        -52.48,
+        9.02,
+        8.2
       ],
       "rotation": [
         0.0,
@@ -16530,9 +16530,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -16559,9 +16559,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_Window_J_2x.FBX",
       "pathGuid": "e02bde234a3baa21",
       "position": [
-        -8.0,
-        11.0,
-        22.0
+        -6.56,
+        9.02,
+        18.04
       ],
       "rotation": [
         0.0,
@@ -16570,9 +16570,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -16589,9 +16589,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_DoorRoll_D_4x.FBX",
       "pathGuid": "42aae52c7ac6bbd7",
       "position": [
-        -27.0,
-        11.0,
-        4.5
+        -22.14,
+        9.02,
+        3.69
       ],
       "rotation": [
         0.0,
@@ -16600,9 +16600,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -16629,9 +16629,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_Window_E_2x.FBX",
       "pathGuid": "e6bd33aa1cfe2a92",
       "position": [
-        -1.0,
-        11.0,
-        22.0
+        -0.82,
+        9.02,
+        18.04
       ],
       "rotation": [
         0.0,
@@ -16640,9 +16640,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -16669,9 +16669,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_Window_J_2x.FBX",
       "pathGuid": "5b7bc86019e17c43",
       "position": [
-        -42.0,
-        11.0,
-        14.5
+        -34.44,
+        9.02,
+        11.89
       ],
       "rotation": [
         0.0,
@@ -16680,9 +16680,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -16709,8 +16709,8 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_Window_A_2x.FBX",
       "pathGuid": "f41ca4a0857f2b0f",
       "position": [
-        -23.0,
-        11.0,
+        -18.86,
+        9.02,
         0.0
       ],
       "rotation": [
@@ -16720,9 +16720,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -16749,9 +16749,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_Shops_China_4x.FBX",
       "pathGuid": "e0125424b02256d2",
       "position": [
-        11.0,
-        11.0,
-        5.0
+        9.02,
+        9.02,
+        4.1
       ],
       "rotation": [
         0.0,
@@ -16760,9 +16760,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -16789,9 +16789,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_Window_I_2x.FBX",
       "pathGuid": "78ecd94cb964017d",
       "position": [
-        35.0,
-        11.0,
-        5.0
+        28.7,
+        9.02,
+        4.1
       ],
       "rotation": [
         0.0,
@@ -16800,9 +16800,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -16829,9 +16829,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_DoorRoll_A_4x.FBX",
       "pathGuid": "32b5cd9d111c40f8",
       "position": [
-        27.5,
-        11.0,
-        -5.5
+        22.55,
+        9.02,
+        -4.51
       ],
       "rotation": [
         0.0,
@@ -16840,9 +16840,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -16869,8 +16869,8 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_Window_G_1x.FBX",
       "pathGuid": "a467e774b428cfe3",
       "position": [
-        -35.0,
-        11.0,
+        -28.7,
+        9.02,
         0.0
       ],
       "rotation": [
@@ -16880,9 +16880,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -16909,8 +16909,8 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_Window_E_2x.FBX",
       "pathGuid": "c6c654b41cb3420e",
       "position": [
-        -31.0,
-        11.0,
+        -25.42,
+        9.02,
         0.0
       ],
       "rotation": [
@@ -16920,9 +16920,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -16939,9 +16939,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_Door_F_2x.FBX",
       "pathGuid": "9e4f7aaaa523c0e0",
       "position": [
-        -46.0,
-        11.0,
-        4.5
+        -37.72,
+        9.02,
+        3.69
       ],
       "rotation": [
         0.0,
@@ -16950,9 +16950,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -16979,9 +16979,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_Window_F_2x.FBX",
       "pathGuid": "e43d9aa6a8d455b5",
       "position": [
-        30.0,
-        11.0,
-        5.0
+        24.6,
+        9.02,
+        4.1
       ],
       "rotation": [
         0.0,
@@ -16990,9 +16990,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -17019,9 +17019,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_Door_A_2x.FBX",
       "pathGuid": "d16db4b2113c3797",
       "position": [
-        3.5,
-        11.0,
-        9.5
+        2.87,
+        9.02,
+        7.79
       ],
       "rotation": [
         0.0,
@@ -17030,9 +17030,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -17049,9 +17049,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_Door_F_2x.FBX",
       "pathGuid": "d8e8929e52de91bf",
       "position": [
-        24.5,
-        11.0,
-        -5.5
+        20.09,
+        9.02,
+        -4.51
       ],
       "rotation": [
         0.0,
@@ -17060,9 +17060,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -17089,8 +17089,8 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_Xxxshop_6x.FBX",
       "pathGuid": "ae0bf2cb62138923",
       "position": [
-        -44.0,
-        11.0,
+        -36.08,
+        9.02,
         0.0
       ],
       "rotation": [
@@ -17100,9 +17100,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -17129,9 +17129,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_Window_E_2x.FBX",
       "pathGuid": "bf6c477b7500c29a",
       "position": [
-        -51.0,
-        11.0,
-        14.5
+        -41.82,
+        9.02,
+        11.89
       ],
       "rotation": [
         0.0,
@@ -17140,9 +17140,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -17169,9 +17169,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_Pilar_1x.FBX",
       "pathGuid": "0366bb655bebdada",
       "position": [
-        -43.0,
-        11.0,
-        10.0
+        -35.26,
+        9.02,
+        8.2
       ],
       "rotation": [
         0.0,
@@ -17180,9 +17180,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -17209,9 +17209,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_DoorsHigh_4x.FBX",
       "pathGuid": "023c42e8c074ad56",
       "position": [
-        16.5,
-        11.0,
-        16.5
+        13.53,
+        9.02,
+        13.53
       ],
       "rotation": [
         0.0,
@@ -17220,9 +17220,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -17239,9 +17239,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/WallFence_A_4x.FBX",
       "pathGuid": "5dccaba80b989fa4",
       "position": [
-        -17.5,
-        11.0,
-        22.5
+        -14.35,
+        9.02,
+        18.45
       ],
       "rotation": [
         0.0,
@@ -17250,9 +17250,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -17279,9 +17279,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_CornerOut_B_1x.FBX",
       "pathGuid": "ba3492db03c7fcb0",
       "position": [
-        -58.0,
-        11.0,
-        5.5
+        -47.56,
+        9.02,
+        4.51
       ],
       "rotation": [
         0.0,
@@ -17290,9 +17290,9 @@
         -0.707107
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -17319,8 +17319,8 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_Window_B_2x.FBX",
       "pathGuid": "d93029f2c567aa62",
       "position": [
-        -25.0,
-        11.0,
+        -20.5,
+        9.02,
         0.0
       ],
       "rotation": [
@@ -17330,9 +17330,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -17359,9 +17359,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_RectangleIn_6x.FBX",
       "pathGuid": "52da82cfc1d5ce42",
       "position": [
-        29.0,
-        11.0,
-        22.0
+        23.78,
+        9.02,
+        18.04
       ],
       "rotation": [
         0.0,
@@ -17370,9 +17370,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -17399,9 +17399,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_CornerOut_1x.FBX",
       "pathGuid": "a3b6d679bbad1ded",
       "position": [
-        11.0,
-        11.0,
-        -5.5
+        9.02,
+        9.02,
+        -4.51
       ],
       "rotation": [
         0.0,
@@ -17410,9 +17410,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -17439,9 +17439,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Window_C.FBX",
       "pathGuid": "3b1596f1626a5f62",
       "position": [
-        -21.0,
-        12.5,
-        -7.5
+        -17.22,
+        10.25,
+        -6.15
       ],
       "rotation": [
         0.0,
@@ -17450,9 +17450,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -17479,9 +17479,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Window_I.FBX",
       "pathGuid": "84502cbbffbc1840",
       "position": [
-        -28.0,
-        12.5,
-        -7.5
+        -22.96,
+        10.25,
+        -6.15
       ],
       "rotation": [
         0.0,
@@ -17490,9 +17490,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -17509,9 +17509,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_Door_F_2x.FBX",
       "pathGuid": "d712f7a8e1109ff7",
       "position": [
-        -6.5,
-        11.0,
-        9.5
+        -5.33,
+        9.02,
+        7.79
       ],
       "rotation": [
         0.0,
@@ -17520,9 +17520,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -17549,9 +17549,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_DoorRoll_B_6x.FBX",
       "pathGuid": "6f2df70c9f29c30e",
       "position": [
-        32.5,
-        11.0,
-        -5.5
+        26.65,
+        9.02,
+        -4.51
       ],
       "rotation": [
         0.0,
@@ -17560,9 +17560,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -17589,9 +17589,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_Window_I_2x.FBX",
       "pathGuid": "8fd501329405927b",
       "position": [
-        -44.0,
-        11.0,
-        14.5
+        -36.08,
+        9.02,
+        11.89
       ],
       "rotation": [
         0.0,
@@ -17600,9 +17600,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -17629,9 +17629,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_6x.FBX",
       "pathGuid": "337a5a667af21f50",
       "position": [
-        7.0,
-        11.0,
-        -7.5
+        5.74,
+        9.02,
+        -6.15
       ],
       "rotation": [
         0.0,
@@ -17640,9 +17640,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -17669,9 +17669,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_MetalDoors_6x.FBX",
       "pathGuid": "6a8711db7bb2f7a5",
       "position": [
-        -34.5,
-        11.0,
-        10.0
+        -28.29,
+        9.02,
+        8.2
       ],
       "rotation": [
         0.0,
@@ -17680,9 +17680,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -17709,8 +17709,8 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_Window_J_2x.FBX",
       "pathGuid": "bdc1c9df0fcc1992",
       "position": [
-        -40.0,
-        11.0,
+        -32.8,
+        9.02,
         0.0
       ],
       "rotation": [
@@ -17720,9 +17720,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -17749,9 +17749,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_DoorRoll_B_6x.FBX",
       "pathGuid": "2fa54ee4307c1979",
       "position": [
-        -38.0,
-        11.0,
-        4.5
+        -31.16,
+        9.02,
+        3.69
       ],
       "rotation": [
         0.0,
@@ -17760,9 +17760,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -17789,9 +17789,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_Door_D_2x.FBX",
       "pathGuid": "f62108783325fe7d",
       "position": [
-        -10.5,
-        11.0,
-        16.5
+        -8.61,
+        9.02,
+        13.53
       ],
       "rotation": [
         0.0,
@@ -17800,9 +17800,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -17829,9 +17829,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_RectangleIn_6x.FBX",
       "pathGuid": "fe3173131f024b0a",
       "position": [
-        -47.0,
-        11.0,
-        10.0
+        -38.54,
+        9.02,
+        8.2
       ],
       "rotation": [
         0.0,
@@ -17840,9 +17840,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -17869,9 +17869,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_Window_H_2x.FBX",
       "pathGuid": "a28d933a2c1c89ce",
       "position": [
-        -6.0,
-        11.0,
-        22.0
+        -4.92,
+        9.02,
+        18.04
       ],
       "rotation": [
         0.0,
@@ -17880,9 +17880,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -17909,9 +17909,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_CornerIn_1x.FBX",
       "pathGuid": "070f25b921d7e088",
       "position": [
-        7.5,
-        11.0,
-        8.5
+        6.15,
+        9.02,
+        6.97
       ],
       "rotation": [
         0.0,
@@ -17920,9 +17920,9 @@
         -0.707107
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -17949,9 +17949,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_Xxxshop_6x.FBX",
       "pathGuid": "03263cb9ee1444c6",
       "position": [
-        35.0,
-        11.0,
-        9.0
+        28.7,
+        9.02,
+        7.38
       ],
       "rotation": [
         0.0,
@@ -17960,9 +17960,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -17989,9 +17989,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_Window_G_1x.FBX",
       "pathGuid": "c32f6d8578cc5909",
       "position": [
-        31.0,
-        11.0,
-        5.0
+        25.42,
+        9.02,
+        4.1
       ],
       "rotation": [
         0.0,
@@ -18000,9 +18000,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -18029,9 +18029,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_MetalDoorsHigh_4x.FBX",
       "pathGuid": "8b24e64c30a9db93",
       "position": [
-        -39.5,
-        11.0,
-        10.0
+        -32.39,
+        9.02,
+        8.2
       ],
       "rotation": [
         0.0,
@@ -18040,9 +18040,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -18069,9 +18069,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_Window_J_2x.FBX",
       "pathGuid": "865327230ea877b0",
       "position": [
-        37.0,
-        11.0,
-        5.0
+        30.34,
+        9.02,
+        4.1
       ],
       "rotation": [
         0.0,
@@ -18080,9 +18080,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -18109,9 +18109,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_Window_B_2x.FBX",
       "pathGuid": "27ae158ec7ddf10c",
       "position": [
-        -57.0,
-        11.0,
-        14.5
+        -46.74,
+        9.02,
+        11.89
       ],
       "rotation": [
         0.0,
@@ -18120,9 +18120,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -18149,9 +18149,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_Door_B_2x.FBX",
       "pathGuid": "c893eb9671d10e1e",
       "position": [
-        -14.5,
-        11.0,
-        16.5
+        -11.89,
+        9.02,
+        13.53
       ],
       "rotation": [
         0.0,
@@ -18160,9 +18160,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -18189,9 +18189,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_Window_D_2x.FBX",
       "pathGuid": "974a6af43f9c2fe5",
       "position": [
-        26.0,
-        11.0,
-        5.0
+        21.32,
+        9.02,
+        4.1
       ],
       "rotation": [
         0.0,
@@ -18200,9 +18200,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -18229,9 +18229,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_CornerIn_1x.FBX",
       "pathGuid": "d19ebf7388596fdc",
       "position": [
-        -20.0,
-        11.0,
-        14.5
+        -16.4,
+        9.02,
+        11.89
       ],
       "rotation": [
         0.0,
@@ -18240,9 +18240,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -18269,9 +18269,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_Pilar_1x.FBX",
       "pathGuid": "d9f63f99732888e7",
       "position": [
-        -10.5,
-        11.0,
-        5.0
+        -8.61,
+        9.02,
+        4.1
       ],
       "rotation": [
         0.0,
@@ -18280,9 +18280,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -18309,9 +18309,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_Shops_B_4x.FBX",
       "pathGuid": "6fdde7562e5b4a0b",
       "position": [
-        20.0,
-        11.0,
-        22.0
+        16.4,
+        9.02,
+        18.04
       ],
       "rotation": [
         0.0,
@@ -18320,9 +18320,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -18349,9 +18349,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Door_D.FBX",
       "pathGuid": "9d3a460773c26cbf",
       "position": [
-        -8.5,
-        11.0,
-        -7.5
+        -6.97,
+        9.02,
+        -6.15
       ],
       "rotation": [
         0.0,
@@ -18360,9 +18360,9 @@
         1.0
       ],
       "scale": [
-        0.782443,
-        0.782443,
-        0.782443
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -18389,9 +18389,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_Door_D_2x.FBX",
       "pathGuid": "42245562071aff45",
       "position": [
-        20.5,
-        11.0,
-        -5.5
+        16.81,
+        9.02,
+        -4.51
       ],
       "rotation": [
         0.0,
@@ -18400,9 +18400,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -18419,9 +18419,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_DoorRoll_D_4x.FBX",
       "pathGuid": "913184f46ad3136e",
       "position": [
-        -25.5,
-        11.0,
-        10.0
+        -20.91,
+        9.02,
+        8.2
       ],
       "rotation": [
         0.0,
@@ -18430,9 +18430,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -18459,8 +18459,8 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_Window_D_2x.FBX",
       "pathGuid": "a833313e7a13c9ec",
       "position": [
-        -29.0,
-        11.0,
+        -23.78,
+        9.02,
         0.0
       ],
       "rotation": [
@@ -18470,9 +18470,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -18499,9 +18499,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_Window_C_2x.FBX",
       "pathGuid": "9df80ce4ee7c51e1",
       "position": [
-        24.0,
-        11.0,
-        5.0
+        19.68,
+        9.02,
+        4.1
       ],
       "rotation": [
         0.0,
@@ -18510,9 +18510,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -18539,9 +18539,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Door_B.FBX",
       "pathGuid": "c55db69e0842849b",
       "position": [
-        -11.5,
-        11.0,
-        -7.5
+        -9.43,
+        9.02,
+        -6.15
       ],
       "rotation": [
         -0.0,
@@ -18550,9 +18550,9 @@
         -1.0
       ],
       "scale": [
-        0.823293,
-        0.823293,
-        0.823293
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -18579,8 +18579,8 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_Window_F_2x.FBX",
       "pathGuid": "e272f007ed104636",
       "position": [
-        -33.0,
-        11.0,
+        -27.06,
+        9.02,
         0.0
       ],
       "rotation": [
@@ -18590,9 +18590,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -18619,9 +18619,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_DoorRoll_A_4x.FBX",
       "pathGuid": "5b4614a327c8898a",
       "position": [
-        -43.0,
-        11.0,
-        4.5
+        -35.26,
+        9.02,
+        3.69
       ],
       "rotation": [
         0.0,
@@ -18630,9 +18630,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -18659,9 +18659,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_RectangleIn_6x.FBX",
       "pathGuid": "45b5aedce73329bc",
       "position": [
-        -6.0,
-        11.0,
-        5.0
+        -4.92,
+        9.02,
+        4.1
       ],
       "rotation": [
         0.0,
@@ -18670,9 +18670,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -18699,9 +18699,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_Door_B_2x.FBX",
       "pathGuid": "7ff17357d707d361",
       "position": [
-        16.5,
-        11.0,
-        -5.5
+        13.53,
+        9.02,
+        -4.51
       ],
       "rotation": [
         0.0,
@@ -18710,9 +18710,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -18739,9 +18739,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_Window_A_2x.FBX",
       "pathGuid": "3e20290722c20996",
       "position": [
-        7.0,
-        11.0,
-        22.0
+        5.74,
+        9.02,
+        18.04
       ],
       "rotation": [
         0.0,
@@ -18750,9 +18750,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -18779,9 +18779,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_Door_E_2x.FBX",
       "pathGuid": "2f31f9f098376a1d",
       "position": [
-        -8.5,
-        11.0,
-        16.5
+        -6.97,
+        9.02,
+        13.53
       ],
       "rotation": [
         0.0,
@@ -18790,9 +18790,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -18819,9 +18819,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_2x.FBX",
       "pathGuid": "19642d1d3d81925f",
       "position": [
-        -1.0,
-        11.0,
-        -7.5
+        -0.82,
+        9.02,
+        -6.15
       ],
       "rotation": [
         0.0,
@@ -18830,9 +18830,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -18859,8 +18859,8 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_2x.FBX",
       "pathGuid": "2f1d08f06f4df078",
       "position": [
-        -50.0,
-        11.0,
+        -41.0,
+        9.02,
         0.0
       ],
       "rotation": [
@@ -18870,9 +18870,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -18899,9 +18899,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_Shops_A_4x.FBX",
       "pathGuid": "8062abf5002b3eb2",
       "position": [
-        -52.0,
-        11.0,
-        10.0
+        -42.64,
+        9.02,
+        8.2
       ],
       "rotation": [
         0.0,
@@ -18910,9 +18910,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -18939,9 +18939,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_Door_A_2x.FBX",
       "pathGuid": "255d26ab9d94eec2",
       "position": [
-        -56.0,
-        11.0,
-        4.5
+        -45.92,
+        9.02,
+        3.69
       ],
       "rotation": [
         0.0,
@@ -18950,9 +18950,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -18979,9 +18979,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_Door_E_2x.FBX",
       "pathGuid": "be207bfb758fe8ab",
       "position": [
-        -4.5,
-        11.0,
-        9.5
+        -3.69,
+        9.02,
+        7.79
       ],
       "rotation": [
         0.0,
@@ -18990,9 +18990,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -19019,9 +19019,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_DoorsHigh_4x.FBX",
       "pathGuid": "7170689b3d16e010",
       "position": [
-        -29.5,
-        11.0,
-        10.0
+        -24.19,
+        9.02,
+        8.2
       ],
       "rotation": [
         0.0,
@@ -19030,9 +19030,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -19059,9 +19059,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_Window_C_2x.FBX",
       "pathGuid": "6bb65345536397ff",
       "position": [
-        3.0,
-        11.0,
-        22.0
+        2.46,
+        9.02,
+        18.04
       ],
       "rotation": [
         0.0,
@@ -19070,9 +19070,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -19099,9 +19099,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_Window_B_2x.FBX",
       "pathGuid": "50d02c2096c80080",
       "position": [
-        22.0,
-        11.0,
-        5.0
+        18.04,
+        9.02,
+        4.1
       ],
       "rotation": [
         0.0,
@@ -19110,9 +19110,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -19139,9 +19139,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_Door_D_2x.FBX",
       "pathGuid": "8ee24f477f8e57ed",
       "position": [
-        -50.0,
-        11.0,
-        4.5
+        -41.0,
+        9.02,
+        3.69
       ],
       "rotation": [
         0.0,
@@ -19150,9 +19150,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -19179,9 +19179,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_Door_C_2x.FBX",
       "pathGuid": "4895c22f6fdcfd9e",
       "position": [
-        -12.5,
-        11.0,
-        16.5
+        -10.25,
+        9.02,
+        13.53
       ],
       "rotation": [
         0.0,
@@ -19190,9 +19190,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -19219,8 +19219,8 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_Window_I_2x.FBX",
       "pathGuid": "35c41c4d66413fb2",
       "position": [
-        -38.0,
-        11.0,
+        -31.16,
+        9.02,
         0.0
       ],
       "rotation": [
@@ -19230,9 +19230,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -19259,9 +19259,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_Window_D_2x.FBX",
       "pathGuid": "e0313353ba67a16d",
       "position": [
-        1.0,
-        11.0,
-        22.0
+        0.82,
+        9.02,
+        18.04
       ],
       "rotation": [
         0.0,
@@ -19270,9 +19270,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -19299,8 +19299,8 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_Shops_B_4x.FBX",
       "pathGuid": "339b556c2522d36e",
       "position": [
-        -10.0,
-        11.0,
+        -8.2,
+        9.02,
         0.0
       ],
       "rotation": [
@@ -19310,9 +19310,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -19339,9 +19339,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_DoorRoll_A_4x.FBX",
       "pathGuid": "b7a8a61156147f0a",
       "position": [
-        -3.5,
-        11.0,
-        16.5
+        -2.87,
+        9.02,
+        13.53
       ],
       "rotation": [
         0.0,
@@ -19350,9 +19350,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -19379,9 +19379,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_1x.FBX",
       "pathGuid": "8488a27cd84724be",
       "position": [
-        20.5,
-        11.0,
-        8.5
+        16.81,
+        9.02,
+        6.97
       ],
       "rotation": [
         0.0,
@@ -19390,9 +19390,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -19419,9 +19419,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_Shops_B_4x.FBX",
       "pathGuid": "8c37edbf58baab8a",
       "position": [
-        -56.0,
-        11.0,
-        10.0
+        -45.92,
+        9.02,
+        8.2
       ],
       "rotation": [
         0.0,
@@ -19430,9 +19430,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -19459,9 +19459,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_Shops_B_4x.FBX",
       "pathGuid": "44d116ccfd6ccb50",
       "position": [
-        7.0,
-        11.0,
-        5.0
+        5.74,
+        9.02,
+        4.1
       ],
       "rotation": [
         0.0,
@@ -19470,9 +19470,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -19499,9 +19499,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_Door_C_2x.FBX",
       "pathGuid": "d87d1374e44c5629",
       "position": [
-        18.5,
-        11.0,
-        -5.5
+        15.17,
+        9.02,
+        -4.51
       ],
       "rotation": [
         0.0,
@@ -19510,9 +19510,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -19539,9 +19539,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_Window_H_2x.FBX",
       "pathGuid": "0b636218d1ef5c7c",
       "position": [
-        33.0,
-        11.0,
-        5.0
+        27.06,
+        9.02,
+        4.1
       ],
       "rotation": [
         0.0,
@@ -19550,9 +19550,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -19579,9 +19579,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_Door_C_2x.FBX",
       "pathGuid": "2c00ddf2413c6c45",
       "position": [
-        -0.5,
-        11.0,
-        9.5
+        -0.41,
+        9.02,
+        7.79
       ],
       "rotation": [
         0.0,
@@ -19590,9 +19590,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -19619,9 +19619,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_Window_G_1x.FBX",
       "pathGuid": "fed6ff35206f827e",
       "position": [
-        -48.0,
-        11.0,
-        14.5
+        -39.36,
+        9.02,
+        11.89
       ],
       "rotation": [
         0.0,
@@ -19630,9 +19630,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -19659,9 +19659,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_DoorRoll_A_4x.FBX",
       "pathGuid": "a11ab3457ac0c8bc",
       "position": [
-        -9.5,
-        11.0,
-        10.0
+        -7.79,
+        9.02,
+        8.2
       ],
       "rotation": [
         0.0,
@@ -19670,9 +19670,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -19699,8 +19699,8 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_1x.FBX",
       "pathGuid": "4742c2f654114d33",
       "position": [
-        -49.0,
-        11.0,
+        -40.18,
+        9.02,
         0.0
       ],
       "rotation": [
@@ -19710,9 +19710,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -19739,9 +19739,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_CornerOut_B_1x.FBX",
       "pathGuid": "0435c0959b86f1cd",
       "position": [
-        -18.5,
-        11.0,
-        16.5
+        -15.17,
+        9.02,
+        13.53
       ],
       "rotation": [
         0.0,
@@ -19750,9 +19750,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -19779,9 +19779,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_Shops_China_4x.FBX",
       "pathGuid": "ecd52e563004198b",
       "position": [
-        16.0,
-        11.0,
-        22.0
+        13.12,
+        9.02,
+        18.04
       ],
       "rotation": [
         0.0,
@@ -19790,9 +19790,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -19819,9 +19819,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_B_Brick_CornerOut_1x.FBX",
       "pathGuid": "ca8c41ab73cf372f",
       "position": [
-        -60.0,
-        11.0,
-        5.5
+        -49.2,
+        9.02,
+        4.51
       ],
       "rotation": [
         0.0,
@@ -19830,9 +19830,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -19859,9 +19859,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Window_E.FBX",
       "pathGuid": "237f64b387695fe5",
       "position": [
-        -23.0,
-        12.5,
-        -7.5
+        -18.86,
+        10.25,
+        -6.15
       ],
       "rotation": [
         0.0,
@@ -19870,9 +19870,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -19899,9 +19899,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_CornerOut_1x.FBX",
       "pathGuid": "62147848d2a73a58",
       "position": [
-        7.5,
-        11.0,
-        10.5
+        6.15,
+        9.02,
+        8.61
       ],
       "rotation": [
         0.0,
@@ -19910,9 +19910,9 @@
         -0.707107
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -19939,9 +19939,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_4x.FBX",
       "pathGuid": "80a8412c55a52313",
       "position": [
-        16.5,
-        11.0,
-        8.5
+        13.53,
+        9.02,
+        6.97
       ],
       "rotation": [
         0.0,
@@ -19950,9 +19950,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -19979,8 +19979,8 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_RectangleIn_6x.FBX",
       "pathGuid": "44b1cc9f94a0768b",
       "position": [
-        -1.0,
-        11.0,
+        -0.82,
+        9.02,
         0.0
       ],
       "rotation": [
@@ -19990,9 +19990,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -20019,8 +20019,8 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_Window_H_2x.FBX",
       "pathGuid": "048531f44279cd50",
       "position": [
-        -36.0,
-        11.0,
+        -29.52,
+        9.02,
         0.0
       ],
       "rotation": [
@@ -20030,9 +20030,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -20059,9 +20059,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_CornerOut_B_1x.FBX",
       "pathGuid": "9477df880d8a2222",
       "position": [
-        5.5,
-        11.0,
-        10.5
+        4.51,
+        9.02,
+        8.61
       ],
       "rotation": [
         0.0,
@@ -20070,9 +20070,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -20099,8 +20099,8 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_Shops_China_4x.FBX",
       "pathGuid": "8189ea905ef9e03b",
       "position": [
-        -14.0,
-        11.0,
+        -11.48,
+        9.02,
         0.0
       ],
       "rotation": [
@@ -20110,9 +20110,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -20129,9 +20129,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_Door_F_2x.FBX",
       "pathGuid": "a01f33228c104352",
       "position": [
-        -6.5,
-        11.0,
-        16.5
+        -5.33,
+        9.02,
+        13.53
       ],
       "rotation": [
         0.0,
@@ -20140,9 +20140,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -20169,9 +20169,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_Door_A_2x.FBX",
       "pathGuid": "5c37b79ab5b4d8d5",
       "position": [
-        14.5,
-        11.0,
-        -5.5
+        11.89,
+        9.02,
+        -4.51
       ],
       "rotation": [
         0.0,
@@ -20180,9 +20180,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -20209,9 +20209,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_Xxxshop_6x.FBX",
       "pathGuid": "8f8fe2207d737362",
       "position": [
-        -12.0,
-        11.0,
-        22.0
+        -9.84,
+        9.02,
+        18.04
       ],
       "rotation": [
         0.0,
@@ -20220,9 +20220,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -20249,9 +20249,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Window_H.FBX",
       "pathGuid": "c5f92bc56e8e316d",
       "position": [
-        -26.5,
-        12.5,
-        -7.5
+        -21.73,
+        10.25,
+        -6.15
       ],
       "rotation": [
         0.0,
@@ -20260,9 +20260,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -20289,9 +20289,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_D_Brick_6x.FBX",
       "pathGuid": "db5aabb0ae192361",
       "position": [
-        -24.0,
-        11.0,
-        14.5
+        -19.68,
+        9.02,
+        11.89
       ],
       "rotation": [
         0.0,
@@ -20300,9 +20300,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -20319,9 +20319,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_DoorRoll_D_4x.FBX",
       "pathGuid": "6d92cddb16b33d92",
       "position": [
-        27.0,
-        11.0,
-        -1.0
+        22.14,
+        9.02,
+        -0.82
       ],
       "rotation": [
         0.0,
@@ -20330,9 +20330,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -20359,9 +20359,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_C_Brick_Window_F_2x.FBX",
       "pathGuid": "ae1f598dd4238237",
       "position": [
-        -49.0,
-        11.0,
-        14.5
+        -40.18,
+        9.02,
+        11.89
       ],
       "rotation": [
         0.0,
@@ -20370,9 +20370,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -20399,9 +20399,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_A_Brick_MetalDoorsHigh_4x.FBX",
       "pathGuid": "0cbf01ae3c094c20",
       "position": [
-        13.0,
-        11.0,
-        -1.0
+        10.66,
+        9.02,
+        -0.82
       ],
       "rotation": [
         0.0,
@@ -20410,9 +20410,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -20439,9 +20439,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/W_Windows_C_16x.FBX",
       "pathGuid": "535044174a08dd0d",
       "position": [
-        51.0,
-        11.0,
-        23.5
+        41.82,
+        9.02,
+        19.27
       ],
       "rotation": [
         0.0,
@@ -20450,9 +20450,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -20479,9 +20479,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/W_WindowSet_A_16x.FBX",
       "pathGuid": "3f1d0b0f90ffe67f",
       "position": [
-        51.5,
-        11.0,
-        26.0
+        42.23,
+        9.02,
+        21.32
       ],
       "rotation": [
         0.0,
@@ -20490,9 +20490,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -20519,9 +20519,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/W_Shop_Front_C_8x.FBX",
       "pathGuid": "ec86d9d5e43b7fd2",
       "position": [
-        55.0,
-        11.0,
-        17.5
+        45.1,
+        9.02,
+        14.35
       ],
       "rotation": [
         0.0,
@@ -20530,9 +20530,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -20559,9 +20559,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/W_A_DoorOpen_4x.FBX",
       "pathGuid": "35b6cebe36709047",
       "position": [
-        47.5,
-        11.0,
-        -5.0
+        38.95,
+        9.02,
+        -4.1
       ],
       "rotation": [
         0.0,
@@ -20570,9 +20570,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -20599,9 +20599,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/W_C_DoorOpen_4x.FBX",
       "pathGuid": "7071a2a6d28a7f14",
       "position": [
-        61.0,
-        11.0,
-        -5.0
+        50.02,
+        9.02,
+        -4.1
       ],
       "rotation": [
         0.0,
@@ -20610,9 +20610,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -20629,9 +20629,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/W_Shop_Front_D_8x.FBX",
       "pathGuid": "ef048dad01071a79",
       "position": [
-        63.5,
-        11.0,
-        17.5
+        52.07,
+        9.02,
+        14.35
       ],
       "rotation": [
         0.0,
@@ -20640,9 +20640,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -20669,9 +20669,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/W_RectangleIn_16x.FBX",
       "pathGuid": "54180942e7ac0e75",
       "position": [
-        52.0,
-        11.0,
-        7.0
+        42.64,
+        9.02,
+        5.74
       ],
       "rotation": [
         0.0,
@@ -20680,9 +20680,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -20699,9 +20699,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/W_RectangleIn_Door_6x.FBX",
       "pathGuid": "5dbd861689727728",
       "position": [
-        47.0,
-        11.0,
-        11.0
+        38.54,
+        9.02,
+        9.02
       ],
       "rotation": [
         0.0,
@@ -20710,9 +20710,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -20739,9 +20739,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/W_Windows_B_16x.FBX",
       "pathGuid": "ffbf646b23b5dec3",
       "position": [
-        51.0,
-        11.0,
-        22.0
+        41.82,
+        9.02,
+        18.04
       ],
       "rotation": [
         0.0,
@@ -20750,9 +20750,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -20779,9 +20779,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/W_WindowSet_B_16x.FBX",
       "pathGuid": "118d28f41976fc57",
       "position": [
-        51.5,
-        11.0,
-        27.5
+        42.23,
+        9.02,
+        22.55
       ],
       "rotation": [
         0.0,
@@ -20790,9 +20790,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -20819,9 +20819,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/W_B_DoorOpen_2x.FBX",
       "pathGuid": "f235d813e3926f4d",
       "position": [
-        51.5,
-        11.0,
-        -5.0
+        42.23,
+        9.02,
+        -4.1
       ],
       "rotation": [
         0.0,
@@ -20830,9 +20830,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -20859,9 +20859,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/W_DoorSet_B_16x.FBX",
       "pathGuid": "986a8f51d35464e5",
       "position": [
-        51.5,
-        11.0,
-        2.5
+        42.23,
+        9.02,
+        2.05
       ],
       "rotation": [
         0.0,
@@ -20870,9 +20870,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -20899,9 +20899,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/W_Shop_Front_B_8x.FBX",
       "pathGuid": "b2e5f249520b481e",
       "position": [
-        63.5,
-        11.0,
-        13.0
+        52.07,
+        9.02,
+        10.66
       ],
       "rotation": [
         0.0,
@@ -20910,9 +20910,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -20939,9 +20939,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/W_A_DoorOpen_2x.FBX",
       "pathGuid": "577734e417142b96",
       "position": [
-        44.5,
-        11.0,
-        -5.0
+        36.49,
+        9.02,
+        -4.1
       ],
       "rotation": [
         0.0,
@@ -20950,9 +20950,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -20979,9 +20979,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/W_WindowSet_D_8x.FBX",
       "pathGuid": "10443a55df6aff9f",
       "position": [
-        54.5,
-        11.0,
-        31.0
+        44.69,
+        9.02,
+        25.42
       ],
       "rotation": [
         0.0,
@@ -20990,9 +20990,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -21019,9 +21019,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/W_Windows_A_16x.FBX",
       "pathGuid": "1b900042a915f6e3",
       "position": [
-        51.0,
-        11.0,
-        20.5
+        41.82,
+        9.02,
+        16.81
       ],
       "rotation": [
         0.0,
@@ -21030,9 +21030,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -21059,9 +21059,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/W_B_DoorOpen_4x.FBX",
       "pathGuid": "f0d52f044af6b653",
       "position": [
-        54.5,
-        11.0,
-        -5.0
+        44.69,
+        9.02,
+        -4.1
       ],
       "rotation": [
         0.0,
@@ -21070,9 +21070,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -21099,9 +21099,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/W_C_DoorOpen_2x.FBX",
       "pathGuid": "39473179e2369b52",
       "position": [
-        58.0,
-        11.0,
-        -5.0
+        47.56,
+        9.02,
+        -4.1
       ],
       "rotation": [
         0.0,
@@ -21110,9 +21110,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -21139,9 +21139,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/W_Shop_Front_A_8x.FBX",
       "pathGuid": "bc023498306fdbe8",
       "position": [
-        55.0,
-        11.0,
-        13.0
+        45.1,
+        9.02,
+        10.66
       ],
       "rotation": [
         0.0,
@@ -21150,9 +21150,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -21179,9 +21179,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/W_WindowSet_C_16x.FBX",
       "pathGuid": "0cc83de4b27781e8",
       "position": [
-        51.5,
-        11.0,
-        29.0
+        42.23,
+        9.02,
+        23.78
       ],
       "rotation": [
         0.0,
@@ -21190,9 +21190,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -21209,9 +21209,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/W_DoorSet_A_16x.FBX",
       "pathGuid": "a2f46cbf22dcb2ba",
       "position": [
-        51.5,
-        11.0,
-        -0.5
+        42.23,
+        9.02,
+        -0.41
       ],
       "rotation": [
         0.0,
@@ -21220,9 +21220,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     }
