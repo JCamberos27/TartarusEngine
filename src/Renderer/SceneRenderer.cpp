@@ -629,7 +629,9 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     // The physical sky renders this view's aerial perspective and clouds up front (compute
     // passes, no FBO change): the model shader samples the aerial volume. The sky itself draws
     // after the opaque pass (below), only where no geometry landed.
-    if (in.skyAtmosphere) in.skyAtmosphere->RenderView(ctx.TxHdr, ctx.View, ctx.Proj, ctx.ViewPos);
+    // With a depth pre-pass, the clouds wait for it (RenderClouds below): what the scene hides isn't marched.
+    const bool cloudsAfterDepth = in.skyAtmosphere && in.depthShader && ProjectSettings::Quality().DepthPrepass;
+    if (in.skyAtmosphere) in.skyAtmosphere->RenderView(ctx.TxHdr, ctx.View, ctx.Proj, ctx.ViewPos, cloudsAfterDepth);
 
     FrameState gathered = GatherFrameState(world, ctx, in);
     // Clustered decals (docs/DECALS.md): this view's visible set, uploaded before the cluster cull
@@ -1134,6 +1136,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // SSAO from this pre-pass (RenderFrameContext::SsaoFromPrepass): copy the depth into SSAO's own target and
         // add only what the pre-pass left out, rather than SSAO drawing the whole visible scene a second time. The
         // view model and the player's own trimmed body stay out, as they did from SSAO's own pass (DrawItem::NoSsao).
+        bool viewDepthCopied = false; // SSAO's depth target holds this view's depth now
         if (ctx.SsaoFromPrepass && fs.ssaoOn && ctx.TxHdr && ctx.TxHdr->IsValid() &&
             ctx.SsaoSrc->Width() == ctx.TxHdr->Width() && ctx.SsaoSrc->Height() == ctx.TxHdr->Height()) {
             PROFILE_GPU_SCOPE("SSAO Depth From Pre-pass");
@@ -1148,6 +1151,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
                 if (!prepassed(it) && !it.NoSsao) prepass.push_back({it.Ref, it.Slots, it.Visible, &it.Xform});
             DrawDepthCasters(depth, prepass);
             depth.SetInt("uSplitViewProj", 0);
+            viewDepthCopied = true;
             glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE); // the occlusion passes write colour
             ctx.SsaoFromPrepass();
             GLStateCache::Invalidate();
@@ -1164,16 +1168,28 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
         GLStateCache::Invalidate();
         modelShader.Bind();
+        if (cloudsAfterDepth) {
+            // The clouds, skipping the sky the scene hides all around (a street, a room) - with SSAO off there is no
+            // single-sample copy of the depth to read, and every texel is marched as before.
+            in.skyAtmosphere->RenderClouds(ctx.TxHdr, ctx.View, ctx.Proj, ctx.ViewPos,
+                                           viewDepthCopied ? ctx.SsaoSrc->DepthTexture() : 0u);
+            ApplyFrameState(modelShader, fs); // the cloud passes used texture units up to 12
+        }
     }
 
     passAlphaBlend = 0;
     modelShader.SetInt("uAlphaBlend", 0); // explicit: ensure opaque pass outputs alpha=1
     // GPU instancing (Project Settings > Quality): copies of a static model that draw exactly alike - the same
     // materials and programs, sidedness, shadow receiving, lighting layer and SSAO - go out as one instanced draw at the
-    // first copy's place in the sorted list. Per-object reflection probes and blood splats, and anything skinned, moving
-    // or partly hidden, still draw one by one. The groups keep the list's order: the static world (all the batches)
-    // first, then the moving things.
-    const bool instancing = ProjectSettings::Quality().GpuInstancing && !anyProbes;
+    // first copy's place in the sorted list. With reflection probes, only copies that pick the same probes with the same
+    // blend (ReflectionProbeArray::SelectionKey) - every city scene has probes, and the whole pass used to fall back to
+    // one draw per copy for them. Blood splats, and anything skinned, moving or partly hidden, still draw one by one.
+    // The groups keep the list's order: the static world (all the batches) first, then the moving things.
+    const bool instancing = ProjectSettings::Quality().GpuInstancing;
+    static std::vector<std::uint32_t> probeKeys;
+    probeKeys.assign(anyProbes && instancing ? drawList.size() : 0, 0u);
+    for (std::size_t i = 0; i < probeKeys.size(); ++i) probeKeys[i] = in.probeArray->SelectionKey(drawList[i].Centre);
+    const auto probeKey = [&](std::uint32_t i) { return i < probeKeys.size() ? probeKeys[i] : 0u; };
     const auto batchable = [&](const DrawItem& it) {
         if (!instancing || it.Dynamic || it.Ref->HasBones() || it.Visible || it.NearHide > 0.0f || it.HideBones ||
             it.HideVerts || it.CollarVerts || it.BoneMaskMode || it.LayerPull != 0.0f)
@@ -1197,14 +1213,15 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             if (!batchable(it)) return kNoBatch;
             std::uint64_t seed = (std::uint64_t)(std::uintptr_t)it.Ref->ImportId() * 0x9E3779B97F4A7C15ull;
             seed ^= (std::uint64_t)it.Pass | ((std::uint64_t)it.DoubleSided << 4) | ((std::uint64_t)it.ReceiveShadows << 5) |
-                    ((std::uint64_t)it.NoSsao << 6) | ((std::uint64_t)(std::uint32_t)it.LayerBit << 8);
+                    ((std::uint64_t)it.NoSsao << 6) | ((std::uint64_t)(std::uint32_t)it.LayerBit << 8) |
+                    ((std::uint64_t)probeKey(i) << 32);
             return HashSlots(*it.Slots, seed);
         },
         [&](std::uint32_t a, std::uint32_t b) {
             const DrawItem& x = drawList[a];
             const DrawItem& y = drawList[b];
             return x.Ref->ImportId() == y.Ref->ImportId() && x.Pass == y.Pass && x.DoubleSided == y.DoubleSided && x.ReceiveShadows == y.ReceiveShadows &&
-                   x.NoSsao == y.NoSsao && x.LayerBit == y.LayerBit && SameSlots(*x.Slots, *y.Slots);
+                   x.NoSsao == y.NoSsao && x.LayerBit == y.LayerBit && probeKey(a) == probeKey(b) && SameSlots(*x.Slots, *y.Slots);
         },
         opaqueGroups);
     static std::vector<int> groupBase;
