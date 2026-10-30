@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Roldana_plant/Mesh",
+  "guid": "bf874be87fdd3434",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "meshNodes": [
+      "Roldana_plant_var4_LOD1"
+    ],
+    "optimizeGraph": true
+  },
+  "materialRemap": {
+    "Roldana_bark_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Roldana_plant/Textures/M_Roldana_bark_mat.mat",
+    "Roldana_billboards_1_6": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Roldana_plant/Textures/M_Roldana_billboards_1-6.mat",
+    "Roldana_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Roldana_plant/Textures/M_Roldana_mat.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

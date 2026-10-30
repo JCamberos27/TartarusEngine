@@ -1,0 +1,34 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Secundary_objects",
+  "properties": {
+    "_AOMap": "",
+    "_AlbedoMap": "",
+    "_BaseColor": [
+      1,
+      1,
+      1
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_HeightMap": "",
+    "_Metallic": 0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "",
+    "_ParallaxScale": 0.02,
+    "_ReflectionProbes": true,
+    "_Roughness": 1.0,
+    "_RoughnessMap": "",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "shader": "engine://Standard.shader"
+}

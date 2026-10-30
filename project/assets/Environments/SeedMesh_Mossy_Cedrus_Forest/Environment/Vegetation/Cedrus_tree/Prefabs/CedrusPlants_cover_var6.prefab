@@ -1,0 +1,185 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "LOD Group": {
+        "LOD 0": 0.8,
+        "LOD 1": 0.4,
+        "LOD 2": 0.2,
+        "LOD 3": 0.1,
+        "Size": 0.0
+      },
+      "id": 0,
+      "name": "CedrusPlants_cover_var6",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "id": 1,
+      "materials": [
+        {
+          "guid": "98d1a842d36dfaba",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Moss_cover/Textures/M_Moss_cover.mat"
+        },
+        {
+          "guid": "62cf707c173f858c",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Wild_ferns/1/M_Wild_ferns_mat_Tree.mat"
+        },
+        {
+          "guid": "16c1e52357a8125c",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ground_cover_plants/Textures/M_Ground_cover_plants_mat.mat"
+        }
+      ],
+      "name": "CedrusPlants_cover_var6_LOD0",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Plants_Cover/CedrusPlants_cover_var6@CedrusPlants_cover_var6_LOD0.fbx",
+      "pathGuid": "6354308ed13be447",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 2,
+      "materials": [
+        {
+          "guid": "98d1a842d36dfaba",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Moss_cover/Textures/M_Moss_cover.mat"
+        },
+        {
+          "guid": "62cf707c173f858c",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Wild_ferns/1/M_Wild_ferns_mat_Tree.mat"
+        },
+        {
+          "guid": "16c1e52357a8125c",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ground_cover_plants/Textures/M_Ground_cover_plants_mat.mat"
+        }
+      ],
+      "name": "CedrusPlants_cover_var6_LOD1",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Plants_Cover/CedrusPlants_cover_var6@CedrusPlants_cover_var6_LOD1.fbx",
+      "pathGuid": "f63a9d5dcde23f4e",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 3,
+      "materials": [
+        {
+          "guid": "98d1a842d36dfaba",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Moss_cover/Textures/M_Moss_cover.mat"
+        },
+        {
+          "guid": "62cf707c173f858c",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Wild_ferns/1/M_Wild_ferns_mat_Tree.mat"
+        },
+        {
+          "guid": "16c1e52357a8125c",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ground_cover_plants/Textures/M_Ground_cover_plants_mat.mat"
+        }
+      ],
+      "name": "CedrusPlants_cover_var6_LOD2",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Plants_Cover/CedrusPlants_cover_var6@CedrusPlants_cover_var6_LOD2.fbx",
+      "pathGuid": "361b28db0c192775",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 4,
+      "materials": [
+        {
+          "guid": "62cf707c173f858c",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Wild_ferns/1/M_Wild_ferns_mat_Tree.mat"
+        },
+        {
+          "guid": "16c1e52357a8125c",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ground_cover_plants/Textures/M_Ground_cover_plants_mat.mat"
+        }
+      ],
+      "name": "CedrusPlants_cover_var6_LOD3",
+      "order": 4,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Plants_Cover/CedrusPlants_cover_var6@CedrusPlants_cover_var6_LOD3.fbx",
+      "pathGuid": "3183fa4bcc7238ba",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ]
+}

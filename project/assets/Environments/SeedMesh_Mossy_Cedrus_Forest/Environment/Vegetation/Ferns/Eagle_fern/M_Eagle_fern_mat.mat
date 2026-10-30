@@ -1,0 +1,40 @@
+{
+  "alphaCutoff": 0.5,
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Eagle_fern_mat",
+  "properties": {
+    "_AOMap": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Eagle_fern/Eagle_fern_HDRP_mask_AO100.png",
+    "_AlbedoMap": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Eagle_fern/Eagle_fern_basecolor.png",
+    "_BaseColor": [
+      0.9057,
+      0.9057,
+      0.9057
+    ],
+    "_DoubleSided": true,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Foliage": true,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Eagle_fern/Eagle_fern_normal.png",
+    "_NormalStrength": 1.5,
+    "_ReflectionProbes": true,
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Eagle_fern/Eagle_fern_HDRP_mask_Roughness100_0.png",
+    "_Translucency": 0.6,
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0,
+    "_WindFlutter": 0.4,
+    "_WindHeight": 0.8,
+    "_WindStrength": 0.1
+  },
+  "renderQueue": 1,
+  "shader": "engine://Standard.shader"
+}

@@ -1,0 +1,134 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "center": [
+          0.001421,
+          1.300001,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.298938,
+          1.207594,
+          0.0
+        ],
+        "isTrigger": false,
+        "shape": 2
+      },
+      "id": 1,
+      "name": "Tree_collider_1",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        0.05,
+        0.23,
+        0.0
+      ],
+      "rotation": [
+        -0.01959,
+        0.00105,
+        -0.019259,
+        0.999622
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.006308,
+          2.265707,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.260829,
+          2.211406,
+          0.0
+        ],
+        "isTrigger": false,
+        "shape": 2
+      },
+      "id": 2,
+      "name": "Tree_collider_2",
+      "order": 2,
+      "parentId": 0,
+      "position": [
+        0.139,
+        2.898,
+        -0.155
+      ],
+      "rotation": [
+        0.001035,
+        -2.8e-05,
+        -0.000348,
+        0.999999
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "id": 0,
+      "name": "Cedrus_tree_var4",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var4.fbx",
+      "pathGuid": "1bc92478e17ae7f4",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "active": false,
+      "id": 3,
+      "name": "Cedrus_tree_var4_BakeMesh",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Bake_Mesh/Cedrus_tree_var4_BakeMesh.fbx",
+      "pathGuid": "462876c154b9b22a",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}
