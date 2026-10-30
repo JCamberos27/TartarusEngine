@@ -11,6 +11,8 @@
 #include "Player.h"
 #include "FirstPersonPresentation.h"
 #include "Editor/GameModuleBuild.h"
+#include <execution>
+#include <numeric>
 #include "FirstPersonWeaponTest.h" // --weapon-test
 #include "WeaponLab.h"            // --weapon-lab
 #include "BodyDebugDraw.h"
@@ -53,6 +55,7 @@
 #include "OpaqueColorCopy.h"
 #include "Tonemapper.h"
 #include "Upscaler.h"
+#include "TemporalAA.h"
 #include "GameModuleAPI.h" // #170 smoke: QueryFilter / RaycastHit
 #include "Tests/UnitTests.h" // #173
 #include "Tests/EditorUiTests.h" // --editor-tests
@@ -403,7 +406,7 @@ static PostSettings MakePostSettings(const World& world, unsigned int bloomTex, 
     p.FocusDistance = world.FocusDistance;
     p.FocusRange = world.FocusRange;
     p.MaxBlur = world.DofMaxBlur;
-    p.Fxaa = world.FxaaEnabled;
+    p.Fxaa = world.EffectiveFxaa(); // TAA replaces it
     p.AutoExposure = world.AutoExposure;
     p.AutoExposureMinEV = world.AutoExposureMinEV;
     p.AutoExposureMaxEV = world.AutoExposureMaxEV;
@@ -449,6 +452,64 @@ static float RollFromWorld(const glm::mat4& m, const Camera& unrolled) {
     const float x = -glm::dot(up, unrolled.Right()), y = glm::dot(up, unrolled.Up());
     return (x * x + y * y) > 1e-12f ? glm::degrees(std::atan2(x, y)) : 0.0f;
 }
+
+// Renderables whose models never animate (Model::NeverAnimates: no bones, no clips - every rock and fern), remembered
+// by their slot in the renderable pool so the per-frame animation tick and the pre-skin gather skip them without
+// touching the Model: reading ~150k of them a frame was 15 ms in the forest. Re-checked whenever the pool changes size
+// or Model::AnimationEpoch() moves.
+struct StillModelCache {
+    std::vector<const Model*> Models;
+    std::vector<std::uint8_t> Still;
+    const World* Owner = nullptr;
+    std::uint64_t Epoch = ~0ull;
+    void Sync(const World& world, size_t poolSize) {
+        if (Owner == &world && Models.size() == poolSize && Epoch == Model::AnimationEpoch()) return;
+        Models.assign(poolSize, nullptr);
+        Still.assign(poolSize, 0);
+        Owner = &world;
+        Epoch = Model::AnimationEpoch();
+    }
+    // Slot k of the pool holds `m`: true when it is known not to animate; otherwise (re)classifies it.
+    bool Skip(size_t k, const Model* m) {
+        if (k >= Models.size()) return false;
+        if (m == Models[k] && Still[k]) return true;
+        Models[k] = m;
+        Still[k] = m && m->NeverAnimates() ? 1 : 0;
+        return Still[k] != 0;
+    }
+    // The renderables that may animate (each one Skip doesn't rule out, with a model), in pool order. The pool is read
+    // across the cores in fixed chunks - one thread reading ~150k components' ModelRef was ~1 ms of the forest's frame,
+    // paid by the animation tick and again by the pre-skin gather. Skip only writes its own slot, so chunks don't meet.
+    void Gather(World& world, std::vector<entt::entity>& out) {
+        const auto& pool = world.Registry.storage<RenderableComponent>();
+        const size_t count = pool.size();
+        Sync(world, count);
+        const auto comps = pool.cbegin();
+        const auto ents = static_cast<const entt::sparse_set&>(pool).begin();
+        constexpr size_t kChunk = 8192;
+        const size_t chunks = (count + kChunk - 1) / kChunk;
+        if (ChunkOut.size() < chunks) ChunkOut.resize(chunks);
+        ChunkIds.resize(chunks);
+        std::iota(ChunkIds.begin(), ChunkIds.end(), size_t(0));
+        auto scan = [&](size_t c) {
+            std::vector<entt::entity>& o = ChunkOut[c];
+            o.clear();
+            const size_t end = std::min(count, (c + 1) * kChunk);
+            for (size_t i = c * kChunk; i < end; ++i) {
+                const Model* m = comps[(std::ptrdiff_t)i].ModelRef.get();
+                if (Skip(i, m) || !m) continue;
+                o.push_back(ents[(std::ptrdiff_t)i]);
+            }
+        };
+        if (chunks > 1) std::for_each(std::execution::par, ChunkIds.begin(), ChunkIds.end(), scan);
+        else if (chunks == 1) scan(0);
+        out.clear();
+        for (size_t c = 0; c < chunks; ++c) out.insert(out.end(), ChunkOut[c].begin(), ChunkOut[c].end());
+    }
+    std::vector<std::vector<entt::entity>> ChunkOut;
+    std::vector<size_t> ChunkIds;
+};
+static StillModelCache s_StillModels;
 
 int main(int argc, char** argv) {
     // Before anything else: on a crash, write a minidump to %LOCALAPPDATA%\TartarusEngine\Crashes
@@ -1730,6 +1791,10 @@ int main(int argc, char** argv) {
         // framebuffers above (and into FBO 0 for free-aspect maximized play).
         HdrTarget sceneHdr;
         HdrTarget gameHdr;
+        // TAA history per view (World::AntiAliasingMode::Taa): the Scene tab, and the game camera (docked Game view
+        // and maximized play share it, as they share gameHdr; a camera cut resets it).
+        TemporalAA sceneTaa;
+        TemporalAA gameTaa;
         OpaqueColorCopy sceneOpaqueColor;  // PR12: opaque color capture for scene-view refraction
         OpaqueColorCopy gameOpaqueColor;   // PR12: opaque color capture for game-view refraction
         Tonemapper tonemapper;
@@ -2790,7 +2855,9 @@ int main(int argc, char** argv) {
                 {
                     const EditorSettings& es = EditorSettings::Get();
                     PhysicsWorld::SetDebugDrawFlags(es.PhysicsDebugDrawFlags);
-                    BodyDebug::SetEnabled(playing && es.ShowBodyDebug);
+                    // The player-body overlay costs ~4.5 ms a frame (its camera probe walks every skinned vertex), so a
+                    // benchmark measures the game without it even when the editor has it switched on.
+                    BodyDebug::SetEnabled(playing && es.ShowBodyDebug && !opt.perfBenchMode);
                     PhysicsWorld::SetEventLogging(es.LogPhysicsEvents || opt.smokeTestMode); // #169
                     PhysicsWorld::SetQueryRecording((es.PhysicsDebugDrawFlags & PhysicsWorld::PDD_Raycasts) != 0u);
                 }
@@ -3262,12 +3329,14 @@ int main(int argc, char** argv) {
                 // defensively so a future shared-Model path can't tick one player N*dt (#106).
                 // Model::TickAnimationOnce() compares against its own m_LastTickedFrame instead
                 // of this loop building a heap-allocated std::unordered_set<Model*> every frame.
-                for (auto entity : world.Registry.view<RenderableComponent>(entt::exclude<InactiveTag>)) { // #199 - an inactive object is paused, not just hidden
-                    Model* m = world.Registry.get<RenderableComponent>(entity).ModelRef.get();
-                    // Play: the game's scaled step, frozen while paused. Edit: real time, so a
-                    // preview isn't slowed by a time scale left over from the last run.
-                    const float animDt = playing ? (simThisFrame ? gameDt : 0.0f) : dt;
-                    if (m) m->TickAnimationOnce(frameIndex, animDt);
+                // Play: the game's scaled step, frozen while paused. Edit: real time, so a
+                // preview isn't slowed by a time scale left over from the last run.
+                const float animDt = playing ? (simThisFrame ? gameDt : 0.0f) : dt;
+                static std::vector<entt::entity> s_MaybeAnimated;
+                s_StillModels.Gather(world, s_MaybeAnimated); // never-animating models left out (StillModelCache)
+                for (auto entity : s_MaybeAnimated) {
+                    if (world.Registry.all_of<InactiveTag>(entity)) continue; // #199 - an inactive object is paused, not just hidden
+                    world.Registry.get<RenderableComponent>(entity).ModelRef->TickAnimationOnce(frameIndex, animDt);
                 }
             }
 
@@ -3292,8 +3361,8 @@ int main(int argc, char** argv) {
             // falls back to composing on demand for anything the cache doesn't hold.
             {
             PROFILE_SCOPE("Outfits + Transform Cache");
-            OutfitSystem::UpdateAttachments(world); // rigid head wear onto the head bone, now it's posed
-            world.RebuildWorldTransformCache();
+            { PROFILE_SCOPE("Outfit Attachments"); OutfitSystem::UpdateAttachments(world); } // rigid head wear onto the head bone, now it's posed
+            { PROFILE_SCOPE("Transform Cache"); world.RebuildWorldTransformCache(); }
             }
             // Background asset loads: a few ms of GL uploads per frame, then any outfit change whose
             // models and materials are now all in memory lands in one frame.
@@ -3603,11 +3672,19 @@ int main(int argc, char** argv) {
                 };
                 static std::vector<SunCaster> sunCasters;
                 sunCasters.clear();
-                // #160 — world bounds of everything that casts, so the cascades' near planes
-                // reach every occluder.
+                // #160 — the cascades' near planes reach every occluder: fitted to a box around everything that can
+                // draw (RenderableBounds, a cheap superset of the casters), so the casters can then be gathered
+                // against the fitted cascades - a forest's casters outside every cascade are never read at all.
                 glm::vec3 casterMin(std::numeric_limits<float>::max()), casterMax(-std::numeric_limits<float>::max());
+                RenderableBounds(world, casterMin, casterMax);
+                shadowMap.SetSplitLambda(world.ShadowCascadeSplit);
+                shadowMap.Update(fitView, fitProj, frameSunDir, world.ShadowDistance, &casterMin, &casterMax);
+                Frustum casterCells[CascadedShadowMap::kMaxCascades];
+                for (int c = 0; c < shadowMap.Count(); ++c) casterCells[c] = Frustum::FromViewProj(shadowMap.LightViewProj(c));
                 VisibilityQuery casts; // #163 - Cast Shadows: Off skips
                 casts.ShadowCasters = true;
+                casts.CellCull = casterCells; // castsInto below draws nothing outside every cascade's frustum
+                casts.CellCullCount = shadowMap.Count();
                 static std::vector<VisibleRenderable> casting;
                 GatherVisible(world, casts, casting);
                 for (const VisibleRenderable& v : casting) {
@@ -3623,16 +3700,11 @@ int main(int argc, char** argv) {
                     // As posed (Model::PosedBounds), the bounds the main pass culls with.
                     sc.bounded = v.Bounded;
                     sc.bounds = AABB{v.WorldMin, v.WorldMax};
-                    if (!sc.bounded) continue;
-                    casterMin = glm::min(casterMin, sc.bounds.Min);
-                    casterMax = glm::max(casterMax, sc.bounds.Max);
                 }
                 // Consecutive draws of the same model share its VAO and (usually) its material,
                 // which the state cache then skips rebinding.
                 std::sort(sunCasters.begin(), sunCasters.end(),
                           [](const SunCaster& a, const SunCaster& b) { return a.model < b.model; });
-                shadowMap.SetSplitLambda(world.ShadowCascadeSplit);
-                shadowMap.Update(fitView, fitProj, frameSunDir, world.ShadowDistance, &casterMin, &casterMax);
 
                 glEnable(GL_DEPTH_TEST);
                 glDepthMask(GL_TRUE);
@@ -3730,6 +3802,7 @@ int main(int argc, char** argv) {
             // camera the user is mainly looking through (each view's draw re-applies its own).
             {
                 const Camera& lodCam = playing ? *gameCam : editorCamera;
+                PROFILE_SCOPE("LOD Select");
                 world.ApplyLod(lodCam.Position, lodCam.ProjectionMatrix(1.0f));
             }
             // Skin every character once, here, before the first pass that draws one: the shadow maps, the SSAO
@@ -3741,10 +3814,13 @@ int main(int argc, char** argv) {
                 PROFILE_GPU_SCOPE("Pre-Skin");
                 static std::vector<Model*> s_PreSkinModels;
                 s_PreSkinModels.clear();
-                for (auto preSkinEntity : world.Registry.view<TransformComponent, RenderableComponent>()) {
-                    if (world.Registry.any_of<InactiveTag, LodCulledTag, PoseSourceTag>(preSkinEntity)) continue; // not drawn
+                static std::vector<entt::entity> s_PreSkinCandidates;
+                s_StillModels.Gather(world, s_PreSkinCandidates); // no bones (StillModelCache)
+                for (auto preSkinEntity : s_PreSkinCandidates) {
                     Model* preSkinModel = world.Registry.get<RenderableComponent>(preSkinEntity).ModelRef.get();
-                    if (preSkinModel && preSkinModel->BoneCount() > 0) s_PreSkinModels.push_back(preSkinModel);
+                    if (!world.Registry.all_of<TransformComponent>(preSkinEntity)) continue;
+                    if (world.Registry.any_of<InactiveTag, LodCulledTag, PoseSourceTag>(preSkinEntity)) continue; // not drawn
+                    if (preSkinModel->BoneCount() > 0) s_PreSkinModels.push_back(preSkinModel);
                 }
                 Model::PreSkin(s_PreSkinModels);
             }
@@ -4129,7 +4205,7 @@ int main(int argc, char** argv) {
                 prevWasHdri = false;
                 // A forced capture (scene load, entering this mode) convolves at once; the periodic
                 // re-captures (drifting clouds every 4 s, the sun moving, edits) are small changes,
-                // so their convolution is spread over the next 7 frames instead of spiking one.
+                // so their convolution is spread over the next 12 frames instead of spiking one.
                 const bool urgent = skyAtmosphere.EnvironmentDirty() &&
                                     (skyAtmosphere.EnvironmentUrgent() || !iblProbe.IsValid());
                 if (skyAtmosphere.EnvironmentDirty() && !urgent) {
@@ -4235,8 +4311,11 @@ int main(int argc, char** argv) {
             sceneInputs.ssaoIntensity    = world.SsaoIntensity;
             sceneInputs.layerVisibleMask = frameSettings.LayerVisibleMask;
             auto drawScene = [&](const RenderFrameContext& ctx, EditorLayer::RenderStats* outStats) {
-                world.ApplyLod(ctx.ViewPos, ctx.Proj); // #163 - this view's LOD levels (sun shadows too)
-                sceneInputs.sunShadowsReady = renderSunShadows(ctx.View, ctx.Proj); // #109
+                // TAA: LOD picks and the sun's cascade fit see the unjittered projection, or the cascades would
+                // re-fit (and shimmer) with every sub-pixel step.
+                const glm::mat4 steadyProj = ctx.TaaVelocity ? TemporalAA::JitterProjection(ctx.Proj, -ctx.TaaJitterNdc) : ctx.Proj;
+                { PROFILE_SCOPE("LOD Select"); world.ApplyLod(ctx.ViewPos, steadyProj); } // #163 - this view's LOD levels (sun shadows too)
+                sceneInputs.sunShadowsReady = renderSunShadows(ctx.View, steadyProj); // #109
                 sceneRenderer.RenderScene(world, ctx, sceneInputs, outStats);
             };
 
@@ -4248,6 +4327,13 @@ int main(int argc, char** argv) {
             // ViewModelTag is skipped unconditionally for the same reason those did: the arms and
             // weapon are a camera-attached overlay composited over the world in their own
             // sub-pass, so their depth here would only darken the world pixels hugging them.
+            // The occlusion + blur from `target`'s depth, however that depth was filled.
+            auto ssaoCompute = [&](Ssao& target, const glm::mat4& proj) {
+                PROFILE_GPU_SCOPE("SSAO Compute + Blur");
+                target.Compute(ssaoComputeShader, proj, world.SsaoRadius, world.SsaoBias);
+                target.Blur(ssaoBlurShader);
+                GLStateCache::Invalidate();
+            };
             auto ssaoDepthPrepass = [&](Ssao& target, int w, int h, const glm::mat4& view,
                                         const glm::mat4& proj, bool editorView) {
                 world.ApplyLod(glm::vec3(glm::inverse(view)[3]), proj); // #163 - same levels as the draw
@@ -4297,10 +4383,7 @@ int main(int argc, char** argv) {
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 GLStateCache::Invalidate();
 
-                PROFILE_GPU_SCOPE("SSAO Compute + Blur");
-                target.Compute(ssaoComputeShader, proj, world.SsaoRadius, world.SsaoBias);
-                target.Blur(ssaoBlurShader);
-                GLStateCache::Invalidate();
+                ssaoCompute(target, proj);
             };
 
             // --- Scene tab (editor viewport) offscreen pass -----------------------------------
@@ -4330,14 +4413,22 @@ int main(int argc, char** argv) {
                 const int scH = std::max((int)available.y, 1);
 
                 sceneFramebuffer.Resize(scW, scH);
-                sceneHdr.Resize(scW, scH, world.MsaaSamples);
+                sceneHdr.Resize(scW, scH, world.EffectiveMsaaSamples());
+                // TAA: a velocity attachment and the resolved depth for the resolve; jitter goes on below.
+                const bool sceneTaaOn = world.TaaEnabled() && sceneHdr.IsValid();
+                sceneHdr.SetVelocityEnabled(sceneTaaOn);
+                if (sceneTaaOn) sceneHdr.ResolvedDepthTexture(); // provisioned before this frame's ResolveTo
+                else sceneTaa.Reset();
                 sceneHdr.BindForRender();
                 glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                if (sceneTaaOn) sceneHdr.ClearVelocity(TemporalAA::kVelocityUnknown);
 
                 float sceneAspect = (float)scW / (float)scH;
                 glm::mat4 sceneViewMat = editorCamera.ViewMatrix();
                 glm::mat4 sceneProjMat = editorCamera.ProjectionMatrix(sceneAspect);
+                // The world pass draws through the jittered projection; picking, gizmos, the grid and outlines keep sceneProjMat.
+                const glm::mat4 sceneDrawProj = sceneTaaOn ? sceneTaa.BeginFrame(sceneViewMat, sceneProjMat, scW, scH) : sceneProjMat;
 
                 EditorLayer::ShadingMode shading = editor.GetShadingMode();
                 bool sceneWireframe = shading == EditorLayer::ShadingMode::Wireframe;
@@ -4352,20 +4443,32 @@ int main(int argc, char** argv) {
                 // audit #358 — if any SSAO FBO came back incomplete, skip the passes outright
                 // (the scene just renders without ambient occlusion) instead of drawing into a
                 // zero/invalid framebuffer.
-                if (world.SsaoEnabled && !sceneUnlit && ssao.IsValid()) {
+                // With the depth pre-pass on, SSAO takes that pass's depth instead (sceneCtx.SsaoFromPrepass below).
+                const bool sceneSsaoFromPrepass = world.SsaoEnabled && !sceneUnlit && ssao.IsValid() &&
+                                                  ProjectSettings::Quality().DepthPrepass;
+                if (world.SsaoEnabled && !sceneUnlit && ssao.IsValid() && !sceneSsaoFromPrepass) {
                     PROFILE_SCOPE("SSAO Depth Pre-pass");
                     PROFILE_GPU_SCOPE("SSAO Depth Pre-pass");
-                    ssaoDepthPrepass(ssao, scW, scH, sceneViewMat, sceneProjMat, /*editorView=*/true);
+                    ssaoDepthPrepass(ssao, scW, scH, sceneViewMat, sceneDrawProj, /*editorView=*/true);
 
                     // Restore HdrTarget for the main scene draw
                     sceneHdr.BindForRender();
                 }
 
                 EditorLayer::RenderStats sceneStats;
-                drawScene(RenderFrameContext{ sceneViewMat, sceneProjMat, editorCamera.Position,
-                              sceneUnlit, /*EditorView=*/true, /*DebugView=*/sceneDebugView,
-                              &sceneHdr, &sceneOpaqueColor, &ssao },
-                          &sceneStats);
+                {
+                    RenderFrameContext sceneCtx{ sceneViewMat, sceneDrawProj, editorCamera.Position,
+                                                 sceneUnlit, /*EditorView=*/true, /*DebugView=*/sceneDebugView,
+                                                 &sceneHdr, &sceneOpaqueColor, &ssao };
+                    if (sceneSsaoFromPrepass)
+                        sceneCtx.SsaoFromPrepass = [&] { ssaoCompute(ssao, sceneDrawProj); };
+                    if (sceneSsaoFromPrepass)
+                        sceneCtx.SsaoFromPrepass = [&] { ssaoCompute(ssao, sceneDrawProj); };
+                    sceneCtx.TaaVelocity = sceneTaaOn;
+                    sceneCtx.TaaJitterNdc = sceneTaa.JitterNdc();
+                    sceneCtx.TaaPrevViewProj = sceneTaa.PrevViewProj();
+                    drawScene(sceneCtx, &sceneStats);
+                }
 
                 editor.SetRenderStats(sceneStats);
 
@@ -4571,9 +4674,16 @@ int main(int argc, char** argv) {
                 // Bloom. Tonemap the linear-HDR scene into the LDR texture the Scene tab displays
                 // (exposure -> curve -> gamma, once, in Tonemapper).
                 sceneHdr.ResolveTo();
+                unsigned int sceneColorTex = sceneHdr.ResolvedColorTexture();
+                if (sceneTaaOn) {
+                    PROFILE_SCOPE("TAA");
+                    PROFILE_GPU_SCOPE("TAA");
+                    sceneColorTex = sceneTaa.Resolve(sceneColorTex, sceneHdr.ResolvedDepthTexture(), sceneHdr.VelocityTexture(),
+                                                     world.TaaSharpness);
+                }
                 {
                 PROFILE_GPU_SCOPE("Tonemap");
-                tonemapper.Apply(sceneHdr.ResolvedColorTexture(), sceneFramebuffer.Handle(), scW, scH,
+                tonemapper.Apply(sceneColorTex, sceneFramebuffer.Handle(), scW, scH,
                                  MakePostSettings(world, bloomGlowTex, bloomIntensity, dt, 0, editorCamera.Position));
                 }
 
@@ -4875,18 +4985,28 @@ int main(int argc, char** argv) {
                                        unsigned outFbo, int outW, int outH, int postSlot, bool overlayInPlayOnly,
                                        EditorLayer::RenderStats& stats) {
                 const bool scaled = rw != outW || rh != outH;
-                gameHdr.Resize(rw, rh, world.MsaaSamples);
+                gameHdr.Resize(rw, rh, world.EffectiveMsaaSamples());
+                const bool gameTaaOn = world.TaaEnabled() && gameHdr.IsValid();
+                gameHdr.SetVelocityEnabled(gameTaaOn);
+                if (gameTaaOn) gameHdr.ResolvedDepthTexture(); // provisioned before this frame's ResolveTo
+                else gameTaa.Reset();
+                // TAA: the world pass (and its SSAO pre-pass) draws jittered; the view-model sub-pass builds its own
+                // unjittered projection (SceneRenderer), and the overlays below keep `proj`.
+                const glm::mat4 drawProj = gameTaaOn ? gameTaa.BeginFrame(view, proj, rw, rh) : proj;
                 gameHdr.BindForRender();
                 glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                if (gameTaaOn) gameHdr.ClearVelocity(TemporalAA::kVelocityUnknown);
                 // SSAO depth pre-pass - the Game view's own Ssao instance/resolution, apart from the Scene view's (see the
                 // gameSsao declaration). The two callers are mutually exclusive per frame, so no resize thrash.
                 const bool gameSsaoOn = world.SsaoEnabled && !FKeyRow::PostFxOff(); // F8
                 if (gameSsaoOn) gameSsao.Resize(rw, rh);
-                if (gameSsaoOn && gameSsao.IsValid()) { // audit #358 - skip if any FBO incomplete
+                // With the depth pre-pass on, SSAO takes that pass's depth instead (gameCtx.SsaoFromPrepass below).
+                const bool gameSsaoFromPrepass = gameSsaoOn && gameSsao.IsValid() && ProjectSettings::Quality().DepthPrepass;
+                if (gameSsaoOn && gameSsao.IsValid() && !gameSsaoFromPrepass) { // audit #358 - skip if any FBO incomplete
                     PROFILE_SCOPE("SSAO Depth Pre-pass (Game)");
                     PROFILE_GPU_SCOPE("SSAO Depth Pre-pass (Game)");
-                    ssaoDepthPrepass(gameSsao, rw, rh, view, proj, /*editorView=*/false);
+                    ssaoDepthPrepass(gameSsao, rw, rh, view, drawProj, /*editorView=*/false);
 
                     gameHdr.BindForRender(); // restore for the main scene draw below
                 }
@@ -4895,13 +5015,20 @@ int main(int argc, char** argv) {
                 const EditorLayer::ShadingMode gameShading = editor.GetShadingMode();
                 const bool gameWire = gameShading == EditorLayer::ShadingMode::Wireframe;
                 if (gameWire) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-                drawScene(RenderFrameContext{ view, proj, eye, /*Unlit=*/gameShading == EditorLayer::ShadingMode::Unlit,
-                              /*EditorView=*/false, /*DebugView=*/FKeyRow::DebugViewFor((int)gameShading),
-                              &gameHdr, &gameOpaqueColor, &gameSsao,
-                              firstPersonPresentation.ViewModelFov(),
-                              weaponOverlay(playing && playUsesPlayer, view, proj, eye, rh),
-                              /*OwnerView=*/playing && playUsesPlayer },
-                          &stats);
+                {
+                    RenderFrameContext gameCtx{ view, drawProj, eye, /*Unlit=*/gameShading == EditorLayer::ShadingMode::Unlit,
+                                                /*EditorView=*/false, /*DebugView=*/FKeyRow::DebugViewFor((int)gameShading),
+                                                &gameHdr, &gameOpaqueColor, &gameSsao,
+                                                firstPersonPresentation.ViewModelFov(),
+                                                weaponOverlay(playing && playUsesPlayer, view, drawProj, eye, rh),
+                                                /*OwnerView=*/playing && playUsesPlayer };
+                    if (gameSsaoFromPrepass)
+                        gameCtx.SsaoFromPrepass = [&] { ssaoCompute(gameSsao, drawProj); };
+                    gameCtx.TaaVelocity = gameTaaOn;
+                    gameCtx.TaaJitterNdc = gameTaa.JitterNdc();
+                    gameCtx.TaaPrevViewProj = gameTaa.PrevViewProj();
+                    drawScene(gameCtx, &stats);
+                }
                 if (gameWire) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
                 // Physics debug overlay over the game view (#185, F6 Physics) - depth-tested, no depth write.
@@ -4914,6 +5041,13 @@ int main(int argc, char** argv) {
                     drawThrowArc(view, proj, eye);
 
                 gameHdr.ResolveTo();
+                unsigned int gameColorTex = gameHdr.ResolvedColorTexture();
+                if (gameTaaOn) {
+                    PROFILE_SCOPE("TAA (Game)");
+                    PROFILE_GPU_SCOPE("TAA (Game)");
+                    gameColorTex = gameTaa.Resolve(gameColorTex, gameHdr.ResolvedDepthTexture(), gameHdr.VelocityTexture(),
+                                                   world.TaaSharpness);
+                }
 
                 // PR16: Bloom for the Game view - own Bloom instance (see gameBloom declaration).
                 unsigned int bloomGlowTex   = 0u;
@@ -4923,7 +5057,7 @@ int main(int argc, char** argv) {
                     gameBloom.Resize(rw, rh);
                     if (gameBloom.IsValid()) { // audit #358 - no glow if any mip FBO is incomplete
                         gameBloom.Compute(bloomThreshShader, bloomDownsampleShader, bloomUpsampleShader,
-                                          gameHdr.ResolvedColorTexture(),
+                                          gameColorTex,
                                           world.BloomThreshold,
                                           world.BloomKnee);
                         bloomGlowTex       = gameBloom.GlowTexture();
@@ -4936,9 +5070,9 @@ int main(int argc, char** argv) {
                 const PostSettings post = WithDepthEffects(MakePostSettings(world, bloomGlowTex, bloomGlowIntensity, dt, 1, eye), world, gameHdr, view, proj, postSlot);
                 if (scaled) {
                     gameLdr.Resize(rw, rh);
-                    tonemapper.Apply(gameHdr.ResolvedColorTexture(), gameLdr.Handle(), rw, rh, post);
+                    tonemapper.Apply(gameColorTex, gameLdr.Handle(), rw, rh, post);
                 } else {
-                    tonemapper.Apply(gameHdr.ResolvedColorTexture(), outFbo, outW, outH, post);
+                    tonemapper.Apply(gameColorTex, outFbo, outW, outH, post);
                 }
                 }
                 if (scaled) {
@@ -5015,6 +5149,14 @@ int main(int argc, char** argv) {
                 // With the Scene view hidden (the Game tab in front), the Game view is the frame on
                 // screen: the Statistics panel reports it, so it agrees with the Game view's overlay.
                 if (!editor.SceneImageWanted()) editor.SetRenderStats(gvRenderStats);
+                // --perf-bench --smoke-shots <dir>: one picture of maximized play, to check what was measured.
+                static int perfMaxFrames = 0;
+                if (opt.perfBenchMode && !opt.smokeShotsDir.empty() && playMaxLocked && ++perfMaxFrames == 400) {
+                    std::vector<unsigned char> px = GrabTopDown(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight);
+                    for (size_t i = 3; i < px.size(); i += 4) px[i] = 255;
+                    WritePngTo(opt.smokeShotsDir, std::filesystem::path(smokeScenePaths[smokeSceneIndex]).stem().string() + "_playmax",
+                               gvWidth, gvHeight, px);
+                }
                 // --weapon-test --smoke-shots <dir>: the Game view through the reloads.
                 const std::string harnessShot = weaponTest ? weaponTest->ShotName() : npcTest ? npcTest->ShotName() : std::string();
                 if ((weaponTest || npcTest) && !opt.smokeShotsDir.empty() && !harnessShot.empty()) {

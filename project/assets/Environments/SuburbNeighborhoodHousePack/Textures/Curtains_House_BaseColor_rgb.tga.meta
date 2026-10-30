@@ -1,0 +1,16 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Textures",
+  "guid": "9fb25e990f16a78b",
+  "importer": {
+    "anisoLevel": 8,
+    "compression": 1,
+    "filterMode": 2,
+    "generateMipmaps": true,
+    "isSRGB": true,
+    "maxTextureSize": 2048,
+    "textureType": 0,
+    "wrapMode": 0
+  },
+  "metaVersion": 1,
+  "type": "texture"
+}

@@ -5,6 +5,7 @@
 #include "../Renderer/MaterialAsset.h"
 #include "../Renderer/FurRenderer.h"
 #include "../Renderer/VolumetricFog.h"
+#include "../Renderer/TemporalAA.h"
 #include "../Game/SceneSerializer.h"
 #include "AssetLibrary.h"
 #include "../Game/World.h"
@@ -206,6 +207,53 @@ void VolumetricBlueNoise() {
     CHECK(adjacent == 0);
 }
 
+// TAA mode and rain wetness save and load; an older scene (no keys) keeps its MSAA / FXAA mode and stays dry, and
+// a scene that never touches them doesn't gain the keys. Also: the TAA jitter is Halton (2,3) and un-jitters exactly.
+void TaaAndWetnessRoundTrip() {
+    AssetLibrary assets;
+    World world;
+    world.AntiAliasing = World::AntiAliasingMode::Taa;
+    world.TaaSharpness = 0.6f;
+    world.Wetness = 0.8f;
+    world.PuddleAmount = 0.4f;
+    world.PuddleScale = 7.5f;
+    const std::string saved = SceneSerializer::SaveToString(world);
+    {
+        World reloaded;
+        CHECK(SceneSerializer::LoadFromString(reloaded, assets, saved));
+        CHECK(reloaded.AntiAliasing == World::AntiAliasingMode::Taa && reloaded.TaaSharpness == 0.6f);
+        CHECK(reloaded.TaaEnabled() && reloaded.EffectiveMsaaSamples() == 1 && !reloaded.EffectiveFxaa());
+        CHECK(reloaded.Wetness == 0.8f && reloaded.PuddleAmount == 0.4f && reloaded.PuddleScale == 7.5f);
+        CHECK(reloaded.MsaaSamples == world.MsaaSamples); // kept for switching back
+    }
+    nlohmann::json j = nlohmann::json::parse(saved);
+    for (const char* k : {"antiAliasing", "taaSharpness", "wetness", "puddleAmount", "puddleScale"}) CHECK(j.erase(k) == 1);
+    j["fxaa"] = true;
+    {
+        World old;
+        CHECK(SceneSerializer::LoadFromString(old, assets, j.dump()));
+        CHECK(old.AntiAliasing == World::AntiAliasingMode::Fxaa && old.EffectiveFxaa() && !old.TaaEnabled());
+        CHECK(old.EffectiveMsaaSamples() == old.MsaaSamples);
+        CHECK(old.Wetness == 0.0f && old.PuddleAmount == 0.0f && old.PuddleScale == 4.0f && old.TaaSharpness == 0.35f);
+    }
+    {
+        const World plain;
+        CHECK(plain.AntiAliasing == World::AntiAliasingMode::Msaa && plain.EffectiveMsaaSamples() == plain.MsaaSamples);
+        const nlohmann::json pj = nlohmann::json::parse(SceneSerializer::SaveToString(plain));
+        CHECK(!pj.contains("antiAliasing") && !pj.contains("wetness") && !pj.contains("puddleAmount"));
+    }
+    CHECK(TemporalAA::HaltonJitter(1) == glm::vec2(0.0f, 1.0f / 3.0f - 0.5f));
+    const glm::mat4 proj = glm::perspective(glm::radians(60.0f), 16.0f / 9.0f, 0.1f, 500.0f);
+    const glm::vec2 j2(0.001f, -0.002f);
+    const glm::mat4 jp = TemporalAA::JitterProjection(proj, j2);
+    const glm::vec4 p(1.0f, 2.0f, -7.0f, 1.0f);
+    const glm::vec4 a = proj * p, b = jp * p;
+    CHECK(std::abs(b.x / b.w - (a.x / a.w + j2.x)) < 1e-5f && std::abs(b.y / b.w - (a.y / a.w + j2.y)) < 1e-5f);
+    const glm::mat4 back = TemporalAA::JitterProjection(jp, -j2);
+    for (int c = 0; c < 4; ++c)
+        for (int r = 0; r < 4; ++r) CHECK(std::abs(back[c][r] - proj[c][r]) < 1e-6f);
+}
+
 // Volumetric fog settings and a light's Volumetric Intensity save and load; a scene saved before
 // they existed loads with the fog off and every light at 1.
 void VolumetricSettingsRoundTrip() {
@@ -354,6 +402,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"GPU instancing: placed copies share one import id", InstanceImportId});
     tests.push_back({"Volumetric fog: blue-noise jitter ranks are a permutation, evenly spread", VolumetricBlueNoise});
     tests.push_back({"Volumetric fog: settings and Volumetric Intensity round-trip; old scenes default off / 1", VolumetricSettingsRoundTrip});
+    tests.push_back({"TAA mode + rain wetness round-trip; old scenes keep MSAA/FXAA and stay dry; jitter un-jitters", TaaAndWetnessRoundTrip});
     tests.push_back({"Fur: shell count follows the hair's size on screen", FurShellLod});
     tests.push_back({"Fur: material properties round-trip through a .mat and the accessors", FurMaterialRoundTrip});
 }

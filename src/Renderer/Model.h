@@ -230,6 +230,16 @@ public:
     // frame if N entities reference the same Model (#106). frameIndex is a monotonically
     // increasing per-frame counter owned by the caller; comparing against it needs no
     // allocation or hashing, unlike the per-frame std::unordered_set<Model*> this replaced.
+    // A model with no bones, no clips and no pose change queued: UpdateAnimation would do nothing for it. The per-frame
+    // animation tick skips these (a forest is ~150k of them) and re-checks every model once AnimationEpoch() moves:
+    // it changes whenever a model could start animating (a clip attached or played, a reimport) or one is destroyed
+    // (so a new model at a freed address is never taken for the old one).
+    bool NeverAnimates() const {
+        return !HasBones() && AnimationCount() == 0 && !m_PosePending && m_Anim.Clip < 0 && m_FadeDuration <= 0.0f;
+    }
+    static uint64_t AnimationEpoch() { return s_AnimationEpoch; }
+    static void BumpAnimationEpoch() { ++s_AnimationEpoch; }
+
     void TickAnimationOnce(uint64_t frameIndex, float dt) {
         if (m_LastTickedFrame == frameIndex) return;
         m_LastTickedFrame = frameIndex;
@@ -587,6 +597,7 @@ private:
     // Last engine frame index on which TickAnimationOnce() actually advanced this model; an
     // impossible sentinel (uint64_t max) so frame index 0 doesn't look "already ticked".
     uint64_t m_LastTickedFrame = ~0ull;
+    static inline uint64_t s_AnimationEpoch = 0;
 
     // Import-time only: each node's model-space bind transform, for the bind-pose palette (#98).
     std::map<std::string, glm::mat4> m_ImportNodeGlobals;

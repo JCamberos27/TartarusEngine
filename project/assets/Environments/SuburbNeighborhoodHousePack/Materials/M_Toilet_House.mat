@@ -21,7 +21,7 @@
     "_Metallic": 1.0,
     "_MetallicMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Toilet_House_MaskMap_Metallic.png",
     "_MetallicRoughnessMap": "",
-    "_NormalMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Toilet_House_Normal.tga",
+    "_NormalMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Toilet_House_Normal_rgb.tga",
     "_ReflectionProbes": true,
     "_Roughness": 1.0,
     "_RoughnessMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Toilet_House_MaskMap_Roughness100.png",

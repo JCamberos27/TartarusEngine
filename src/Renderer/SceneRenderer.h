@@ -40,6 +40,12 @@ struct VisibilityQuery {
     const glm::vec3* SizeCullEye = nullptr;
     float SizeCullProjScale = 0.0f;  // the camera projection's [1][1] (1 / tan(fovY / 2))
     float MinScreenHeight = 0.0f;
+    // A coarse test of whole ground-plan cells of renderables (see GatherVisible), for queries whose per-object test
+    // happens later: a cell is skipped when its bounds miss every one of these CellCullCount frusta. Callers pass a
+    // superset of what their own test accepts. Animated, unbounded, view-model and player-body renderables are never
+    // in a cell, so they always come through.
+    const Frustum* CellCull = nullptr;
+    int CellCullCount = 0;
 };
 struct VisibleRenderable {
     entt::entity Entity;
@@ -53,6 +59,9 @@ struct VisibleRenderable {
 };
 // Clears `out` and fills it with what passes `q`.
 void GatherVisible(World& world, const VisibilityQuery& q, std::vector<VisibleRenderable>& out);
+// A box holding every renderable GatherVisible knows (a superset of any query's result), cheaply: the sun's cascades
+// fit their near planes to it before the casters are gathered against them. False when there are none.
+bool RenderableBounds(World& world, glm::vec3& outMin, glm::vec3& outMax);
 // VisibilityQuery's small-object test: the box's bounding sphere seen from `eye` is shorter than `minScreenHeight`
 // (a share of the viewport height). Never true from inside the sphere, or with the test off (a value <= 0).
 bool TooSmallOnScreen(const glm::vec3& worldMin, const glm::vec3& worldMax, const glm::vec3& eye, float projScaleY,

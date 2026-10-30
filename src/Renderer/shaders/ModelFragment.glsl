@@ -4,7 +4,14 @@ in vec3 vNormal;
 in vec2 vUV;
 in mat3 vTBN;
 in vec4 vColor; // #113
-out vec4 FragColor;
+layout(location = 0) out vec4 FragColor;
+// TAA motion vectors (TemporalAA.h): this pixel's screen motion since last frame, in UV units (current - previous).
+// Only reaches a texture while the HDR target has its velocity attachment enabled (the opaque and view-model passes);
+// every other target leaves location 1 at GL_NONE, where it is discarded.
+layout(location = 1) out vec2 oVelocity;
+in vec4 vCurClip;
+in vec4 vPrevClip;
+const float kVelocityUnknown = 4.0; // also TemporalAA's clear value: reproject this pixel from depth instead
 
 in float vHidden; // ModelVertex: the share of the vertex moved by uHideBones
 in vec3 vBindPos;    // the surface in the mesh's bind-pose space (ModelVertex)
@@ -43,6 +50,57 @@ vec3 UnpackNormal(vec3 s) {
 // Clustered decals and the material's Grunge map (ApplyDecals, ApplyGrunge).
 #include "ModelDecals.glsl"
 
+// --- Global rain wetness (World::Wetness / PuddleAmount / PuddleScale) ------------------------------------------
+// Lagarde's wet surfaces, simplified. Wetness: porous (rough, non-metal) albedo darkens and roughness drops, scaled by
+// how much the surface faces the sky (walls get a little, undersides none) and by its AO map (crevices are sheltered).
+// Puddles: a world-space value-noise mask on near-flat ground (geometric normal y > ~0.7), flooded to PuddleAmount;
+// there the surface is water - the flat geometric normal, roughness 0.02, the albedo seen darkened through a tinted film.
+// There is no rain-occlusion map: what stays dry indoors is opted out per material (_NoWetness -> uNoWetness).
+uniform float uWetness;
+uniform float uPuddleAmount;
+uniform float uPuddleScale;
+uniform int   uNoWetness;
+uniform int   uFoliageSurface; // Material::Foliage (Model.cpp)
+
+float WetHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float WetNoise(vec2 p) {
+    vec2 i = floor(p), f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(WetHash(i), WetHash(i + vec2(1, 0)), u.x), mix(WetHash(i + vec2(0, 1)), WetHash(i + vec2(1, 1)), u.x), u.y);
+}
+
+void ApplyWetness(inout vec3 albedo, inout vec3 N, inout float roughness, inout float metallic, vec3 geoN, float ao) {
+    if (uNoWetness == 1 || (uWetness <= 0.0 && uPuddleAmount <= 0.0)) return;
+    float sky = smoothstep(-0.1, 0.4, geoN.y) * mix(0.35, 1.0, clamp(geoN.y, 0.0, 1.0)); // facing the rain
+    float shelter = mix(0.4, 1.0, clamp(ao, 0.0, 1.0));
+    float wet = clamp(uWetness * sky * shelter, 0.0, 1.0);
+
+    float puddle = 0.0;
+    if (uPuddleAmount > 0.0 && geoN.y > 0.65 && uFoliageSurface == 0) { // no puddles on leaves or grass
+        vec2 q = vWorldPos.xz / max(uPuddleScale, 0.05);
+        float n = WetNoise(q) * 0.65 + WetNoise(q * 2.7 + 17.3) * 0.35;
+        float t = 1.0 - uPuddleAmount * 0.75;                        // 0 -> none, 1 -> most of the ground
+        float level = smoothstep(0.7, 0.9, geoN.y) * shelter;
+        puddle = smoothstep(t, t + 0.04, n) * level;
+        wet = max(wet, smoothstep(t - 0.12, t, n) * level * max(uPuddleAmount, uWetness)); // the soaked rim
+    }
+    if (wet <= 0.0 && puddle <= 0.0) return;
+
+    // Porosity: rough dielectrics soak (brick, concrete, wood); metals and glossy paint just bead.
+    float porosity = (1.0 - metallic) * smoothstep(0.25, 0.8, roughness);
+    albedo *= mix(1.0, mix(0.85, 0.45, porosity), wet);
+    roughness = mix(roughness, mix(0.12, 0.3, porosity * 0.5) * mix(1.0, roughness, 0.35), wet);
+    N = normalize(mix(N, geoN, wet * 0.35)); // water fills the fine relief a little
+
+    if (puddle > 0.0) {
+        const vec3 kWaterTint = vec3(0.55, 0.6, 0.58);
+        albedo = mix(albedo, albedo * 0.35 * kWaterTint, puddle);
+        roughness = mix(roughness, 0.02, puddle);
+        metallic = mix(metallic, 0.0, puddle);
+        N = normalize(mix(N, geoN, puddle));
+    }
+}
+
 vec3 BloodSplatCover() {
     vec3 acc = vec3(0.0);
     vec3 bn = normalize(vBindNormal);
@@ -77,6 +135,14 @@ vec3 BloodSplatCover() {
 }
 
 void main() {
+    // uTaaVelocity 1: the vertex stage carried both clip positions (w 0 = a stage that can't, e.g. the blood VAT).
+    // 0: the view-model sub-pass (it moves with the camera: no motion) or TAA off (discarded anyway).
+    oVelocity = vec2(0.0);
+    if (uTaaVelocity == 1) {
+        oVelocity = vec2(kVelocityUnknown);
+        if (vCurClip.w > 1e-5 && vPrevClip.w > 1e-5)
+            oVelocity = (vCurClip.xy / vCurClip.w - vPrevClip.xy / vPrevClip.w) * 0.5;
+    }
     if (uNearHide > 0.0) {
         vec3 d = vWorldPos - uViewPos;
         if (uNearHideWidth > 0.0) { // FirstPersonBodyNearHidden
@@ -208,6 +274,8 @@ void main() {
         }
     }
 
+    ApplyWetness(albedo, N, roughness, metallic, geoN, ao); // after decals and blood: the rain is on top of them
+
     // --- Debug draw modes (#236 R2; 4-7 the F7 light views) ---
     if (uDebugView == 4) albedo = vec3(0.75); // Lighting only: lit as usual on a flat grey
     if (uDebugView != 0 && uDebugView != 4) {
@@ -289,7 +357,22 @@ void main() {
         vec3 L = normalize(-uLights[i].DirCutoff.xyz); // DirCutoff.xyz travels forward; L points back
         // #102 — only the directional light that owns the cascade map samples it (Params.y 0);
         // any other directional used to be shadowed by the primary sun's map.
-        vec3 radiance = uLights[i].ColorRange.rgb * (uLights[i].Params.y >= 0.0 ? SunShadow(vWorldPos, N, L) * CloudShadow(vWorldPos) : 1.0);
+        // One cascade lookup per pixel, from whichever side the sun is on. Lit from the front, every
+        // lobe below carries a clamped N.L and the leaf transmission's max(-N.L) is zero; lit from
+        // behind, only the transmission can see the sun, and it wants the lookup biased toward it
+        // (along -N). So a sun-facing surface samples along N, a translucent back-lit one along -N,
+        // and the rest skip the soft PCF altogether - and the shader carries one inlined copy of
+        // it instead of two. Subsurface wraps light past the terminator, so it keeps both lookups.
+        bool sunShadowed = uLights[i].Params.y >= 0.0;
+#ifdef _SUBSURFACE
+        vec3 radiance = uLights[i].ColorRange.rgb * (sunShadowed ? SunShadow(vWorldPos, N, L) * CloudShadow(vWorldPos) : 1.0);
+#else
+        bool sunFront = dot(N, L) > 0.0;
+        float sunVis = 1.0;
+        if (sunShadowed)
+            sunVis = (sunFront || uTranslucency > 0.0) ? SunShadow(vWorldPos, sunFront ? N : -N, L) * CloudShadow(vWorldPos) : 0.0;
+        vec3 radiance = uLights[i].ColorRange.rgb * sunVis;
+#endif
 #ifdef _ANISO
         Lo += ShadeLightAniso(N, V, L, radiance, albedo, F0, metallic, roughness, anisoT, anisoB);
 #else
@@ -301,7 +384,11 @@ void main() {
             // would put the lookup behind the leaf's own shadow caster. Brighter when looking toward the sun.
             float back = max(dot(-N, L), 0.0);
             float fwd = pow(max(dot(-V, L), 0.0), 3.0);
-            vec3 rad = uLights[i].ColorRange.rgb * (uLights[i].Params.y >= 0.0 ? SunShadow(vWorldPos, -N, L) * CloudShadow(vWorldPos) : 1.0);
+#ifdef _SUBSURFACE
+            vec3 rad = uLights[i].ColorRange.rgb * (sunShadowed ? SunShadow(vWorldPos, -N, L) * CloudShadow(vWorldPos) : 1.0);
+#else
+            vec3 rad = radiance; // back-lit: radiance was looked up along -N above
+#endif
             Lo += albedo * rad * (back * (0.35 + 1.4 * fwd) * uTranslucency / PI);
         }
 #ifdef _CLEARCOAT

@@ -21,7 +21,7 @@
     "_Metallic": 1.0,
     "_MetallicMap": "assets/Environments/OfficeAndPoliceStation/Textures/Other_WoodBlack_Tiled_MaskMap_Metallic.png",
     "_MetallicRoughnessMap": "",
-    "_NormalMap": "assets/Environments/OfficeAndPoliceStation/Textures/Other_WoodBlack_Tiled_Normal.tga",
+    "_NormalMap": "assets/Environments/OfficeAndPoliceStation/Textures/Other_WoodBlack_Tiled_Normal_rgb.tga",
     "_ReflectionProbes": true,
     "_Roughness": 1.0,
     "_RoughnessMap": "assets/Environments/OfficeAndPoliceStation/Textures/Other_WoodBlack_Tiled_MaskMap_Roughness100.png",

@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <glm/glm.hpp>
 #include <vector>
 
@@ -29,10 +30,16 @@ public:
     // Selects up to kMaxDraw nearest probes by distance, weighted by Importance.
     // No-op (uProbeCount = 0) when no probes exist or the shader has _REFLECTION_PROBES off.
     void Bind(Shader& shader, const glm::vec3& viewCenter) const;
+    // Which probes Bind(shader, centre) picks and its leading blend weight to 1/64, in 32 bits: draws with equal keys
+    // bind the same probes with blends within 1/128 of each other, so copies of a model can go out as one instanced
+    // draw under the first copy's probe uniforms (SceneRenderer) instead of one draw each.
+    std::uint32_t SelectionKey(const glm::vec3& centre) const;
 
     int Count() const { return (int)m_Probes.size(); }
 
 private:
+    struct Scored { int idx; float score; };
+    int Select(const glm::vec3& centre, Scored (&best)[kMaxDraw], float& total) const; // how many picked
     struct ProbeData {
         glm::vec3 Center;
         glm::vec3 HalfSize;

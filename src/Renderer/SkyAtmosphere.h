@@ -97,8 +97,13 @@ public:
     // Prepares one view's sky: its sky-view LUTs, aerial-perspective volume and clouds (compute
     // only). `viewKey` identifies the view across frames (for the clouds' temporal history); any
     // stable pointer, e.g. the view's HDR target. The viewport bound now is the one DrawSky uses.
+    // `deferClouds`: leave the clouds to RenderClouds(), called once the view's depth is known.
     void RenderView(const void* viewKey, const glm::mat4& view, const glm::mat4& proj,
-                    const glm::vec3& cameraWorld);
+                    const glm::vec3& cameraWorld, bool deferClouds = false);
+    // The clouds of a view RenderView(viewKey, ..., deferClouds = true) prepared, skipping what `sceneDepth` (the view's
+    // depth, its viewport's size; 0 = none) hides all around. Before DrawSky; rebinds texture units up to 12.
+    void RenderClouds(const void* viewKey, const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraWorld,
+                      unsigned int sceneDepth);
     // The full-screen sky for the view RenderView(viewKey) prepared, drawn at the far plane under
     // a GL_LEQUAL depth test with depth writes off: call it after the opaque geometry, so only
     // the pixels still showing sky run the atmosphere/cloud shader.
@@ -151,6 +156,8 @@ private:
     void RenderLuts();
     void RenderSkyViewLuts(ViewResources& vr);
     void BindLuts(const ViewResources& vr);
+    void RenderCloudsFor(ViewResources& vr, const glm::mat4& view, const glm::mat4& proj, const glm::vec3& cameraWorld,
+                         const int vp[4], unsigned int sceneDepth);
     void CaptureEnvironment(const SkySettings& s, ViewResources& frameView);
     ViewResources& View(const void* key);
 
