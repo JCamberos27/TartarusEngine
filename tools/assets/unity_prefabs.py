@@ -846,7 +846,11 @@ class Converter:
                 self.pack.report['reflection probes with a box offset (moved the probe, ignoring the parent rotation)'].append(e['name'])
             self.pack.counts['reflection probes'] += 1
 
+    HDRP_TO_ENGINE = 3.0 / 120000.0  # HDRP lights are physical (sun ~120k lux, points/spots in candela); engine sun ~3
+
     def lights(self, comps, e):
+        # An HDRP pack (SeedMesh) stores physical intensities: scale every light by one factor so the balance holds.
+        k = self.HDRP_TO_ENGINE if self.pack.counts['seedmesh materials'] else 1.0
         for l in comps.get('Light', []):
             kind = {0: 'Spot', 1: 'Directional', 2: 'Point'}.get(l.get('m_Type', 2))
             if kind is None:
@@ -855,7 +859,7 @@ class Converter:
             col = l.get('m_Color') or {}
             sh = (l.get('m_Shadows') or {}).get('m_Type', 0)
             e['Light'] = {'Angular Size': 0.53, 'Cast Shadows': sh != 0, 'Color': r6([col.get('r', 1), col.get('g', 1), col.get('b', 1)]),
-                          'ColorTempK': 0.0, 'Culling Mask': -1, 'Intensity': round(float(l.get('m_Intensity', 1.0)), 4),
+                          'ColorTempK': 0.0, 'Culling Mask': -1, 'Intensity': round(float(l.get('m_Intensity', 1.0)) * k, 4),
                           'Range': round(float(l.get('m_Range', 10.0)), 4), 'Shadow Bias': 1.0, 'Shadow Near Plane': 0.05,
                           'Shadow Normal Bias': 1.0, 'Shadow Resolution': 'Follow global', 'Shadow Softness': 1.0,
                           'Shadow Update Mode': 'Dynamic', 'Spot Angle': round(float(l.get('m_SpotAngle', 30.0)) / 2, 4),
