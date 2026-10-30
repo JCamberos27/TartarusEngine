@@ -69,6 +69,8 @@ float WetNoise(vec2 p) {
     return mix(mix(WetHash(i), WetHash(i + vec2(1, 0)), u.x), mix(WetHash(i + vec2(0, 1)), WetHash(i + vec2(1, 1)), u.x), u.y);
 }
 
+float gPuddle = 0.0; // this fragment's standing water (ApplyWetness): where the puddle SSR replaces the reflection
+
 void ApplyWetness(inout vec3 albedo, inout vec3 N, inout float roughness, inout float metallic, vec3 geoN, float ao) {
     if (uNoWetness == 1 || (uWetness <= 0.0 && uPuddleAmount <= 0.0)) return;
     float sky = smoothstep(-0.1, 0.4, geoN.y) * mix(0.35, 1.0, clamp(geoN.y, 0.0, 1.0)); // facing the rain
@@ -92,6 +94,7 @@ void ApplyWetness(inout vec3 albedo, inout vec3 N, inout float roughness, inout 
     roughness = mix(roughness, mix(0.12, 0.3, porosity * 0.5) * mix(1.0, roughness, 0.35), wet);
     N = normalize(mix(N, geoN, wet * 0.35)); // water fills the fine relief a little
 
+    gPuddle = puddle;
     if (puddle > 0.0) {
         const vec3 kWaterTint = vec3(0.55, 0.6, 0.58);
         albedo = mix(albedo, albedo * 0.35 * kWaterTint, puddle);
@@ -476,6 +479,7 @@ void main() {
     // and only what used to be a flat vec3(0.03) is different. Without probes (the offscreen
     // preview renderers, which have no sky to bake from) it falls back to that old constant.
     vec3 ambient;
+    vec3 ssrAdd = vec3(0.0); // puddle SSR, added after the SSAO (it carries its own occlusion)
     if (uIBLEnabled == 1) {
         float NdotV = max(dot(N, V), 0.0);
         vec3 F = FresnelSchlickRoughness(NdotV, F0, roughness);
@@ -508,20 +512,36 @@ void main() {
                 float fa = max(min(min(rbminmax.x, rbminmax.y), rbminmax.z), 0.0);
                 vec3 intersect = vWorldPos + R * fa;
                 vec3 correctedR = normalize(intersect - uProbeCenter[pi]);
-                blendedPrefilter += textureLod(uPrefilteredMap, correctedR,
-                                               roughness * uIBLSpecularMaxLod).rgb * uProbeBlend[pi];
+                // A captured room (its own prefiltered cube) or the sky's - one fetch, not both (a ?: of two fetches
+                // runs both). Leaves keep the sky's: a canopy's inside never sees the lit street the probe saw, and
+                // the room's average on every leaf greyed the night trees.
+                vec3 probeSpec;
+                if (uProbeLayer[pi] >= 0 && uFoliageSurface == 0)
+                    probeSpec = textureLod(uProbeCubes, vec4(correctedR, float(uProbeLayer[pi])), roughness * uIBLSpecularMaxLod).rgb;
+                else
+                    probeSpec = textureLod(uPrefilteredMap, correctedR, roughness * uIBLSpecularMaxLod).rgb;
+                blendedPrefilter += probeSpec * uProbeBlend[pi];
             }
             prefiltered = blendedPrefilter;
         }
 #endif
         vec2 ab = texture(uBrdfLut, vec2(NdotV, roughness)).rg;
-        vec3 specularIBL = uNoGlossyReflections == 1 ? vec3(0.0) : prefiltered * (F * ab.x + ab.y);
+        vec3 specW = F * ab.x + ab.y;
+        vec3 specularIBL = uNoGlossyReflections == 1 ? vec3(0.0) : prefiltered * specW;
 
         ambient = (kD * diffuseIBL + specularIBL) * ao * uIBLIntensity;
+        // Puddle SSR: where the traced ray found the scene, its radiance replaces the probe / sky reflection (which is
+        // in ambient's ao * intensity terms; the trace is already radiance). Rough water fades back to the probe.
+        if (uSsrEnabled == 1 && gPuddle > 0.0 && uNoGlossyReflections == 0) {
+            vec4 ssr = texture(uSsrMap, gl_FragCoord.xy / uScreenSize);
+            float w = ssr.a * gPuddle * (1.0 - smoothstep(0.08, 0.3, roughness));
+            if (w > 0.0 && !any(isnan(ssr.rgb)) && !any(isinf(ssr.rgb))) ssrAdd = (ssr.rgb - prefiltered * ao * uIBLIntensity * ssaoFactor) * specW * w;
+        }
     } else {
         ambient = vec3(0.03) * albedo * ao;
     }
     ambient *= ssaoFactor;
+    ambient += ssrAdd;
     vec3 emissive = emissiveEarly;
 
 #ifdef _CLEARCOAT

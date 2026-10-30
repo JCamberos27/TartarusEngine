@@ -81,6 +81,13 @@ public:
     float BakedRotation() const { return m_BakedRotation; }
     float BakedRadianceClamp() const { return m_BakedRadianceClamp; }
 
+    // Room probes (ReflectionProbeCapture): GGX-prefilters face `face` of envCube (a cube with a full mip chain, base
+    // size faceSize) into every mip of layer `layer` of a cube-map array made by CreateSpecularCubeArray - the same
+    // roughness-per-mip layout as SpecularMap(), so the model shader samples both alike. One face per call, like the
+    // amortized sky bake's steps. Leaves the bake FBO bound; the caller restores its framebuffer and viewport.
+    void PrefilterIntoArray(unsigned int envCube, int faceSize, unsigned int cubeArray, int layer, int face);
+    static unsigned int CreateSpecularCubeArray(int layers);
+
     unsigned int IrradianceMap() const { return m_IrradianceCube; } // samplerCube
     unsigned int SpecularMap() const { return m_SpecularCube; }     // samplerCube, kSpecularMips levels
     unsigned int BrdfLut() const { return m_BrdfLut; }              // sampler2D, RG16F
