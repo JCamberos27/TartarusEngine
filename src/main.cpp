@@ -450,6 +450,33 @@ static float RollFromWorld(const glm::mat4& m, const Camera& unrolled) {
     return (x * x + y * y) > 1e-12f ? glm::degrees(std::atan2(x, y)) : 0.0f;
 }
 
+// Renderables whose models never animate (Model::NeverAnimates: no bones, no clips - every rock and fern), remembered
+// by their slot in the renderable pool so the per-frame animation tick and the pre-skin gather skip them without
+// touching the Model: reading ~150k of them a frame was 15 ms in the forest. Re-checked whenever the pool changes size
+// or Model::AnimationEpoch() moves.
+struct StillModelCache {
+    std::vector<const Model*> Models;
+    std::vector<std::uint8_t> Still;
+    const World* Owner = nullptr;
+    std::uint64_t Epoch = ~0ull;
+    void Sync(const World& world, size_t poolSize) {
+        if (Owner == &world && Models.size() == poolSize && Epoch == Model::AnimationEpoch()) return;
+        Models.assign(poolSize, nullptr);
+        Still.assign(poolSize, 0);
+        Owner = &world;
+        Epoch = Model::AnimationEpoch();
+    }
+    // Slot k of the pool holds `m`: true when it is known not to animate; otherwise (re)classifies it.
+    bool Skip(size_t k, const Model* m) {
+        if (k >= Models.size()) return false;
+        if (m == Models[k] && Still[k]) return true;
+        Models[k] = m;
+        Still[k] = m && m->NeverAnimates() ? 1 : 0;
+        return Still[k] != 0;
+    }
+};
+static StillModelCache s_StillModels;
+
 int main(int argc, char** argv) {
     // Before anything else: on a crash, write a minidump to %LOCALAPPDATA%\TartarusEngine\Crashes
     // and tell the user, instead of vanishing with a bare exit 139 (#148).
@@ -3262,12 +3289,18 @@ int main(int argc, char** argv) {
                 // defensively so a future shared-Model path can't tick one player N*dt (#106).
                 // Model::TickAnimationOnce() compares against its own m_LastTickedFrame instead
                 // of this loop building a heap-allocated std::unordered_set<Model*> every frame.
-                for (auto entity : world.Registry.view<RenderableComponent>(entt::exclude<InactiveTag>)) { // #199 - an inactive object is paused, not just hidden
-                    Model* m = world.Registry.get<RenderableComponent>(entity).ModelRef.get();
-                    // Play: the game's scaled step, frozen while paused. Edit: real time, so a
-                    // preview isn't slowed by a time scale left over from the last run.
-                    const float animDt = playing ? (simThisFrame ? gameDt : 0.0f) : dt;
-                    if (m) m->TickAnimationOnce(frameIndex, animDt);
+                auto renderables = world.Registry.view<RenderableComponent>();
+                const size_t poolSize = world.Registry.storage<RenderableComponent>().size();
+                s_StillModels.Sync(world, poolSize);
+                // Play: the game's scaled step, frozen while paused. Edit: real time, so a
+                // preview isn't slowed by a time scale left over from the last run.
+                const float animDt = playing ? (simThisFrame ? gameDt : 0.0f) : dt;
+                size_t slot = 0;
+                for (auto entity : renderables) {
+                    Model* m = renderables.get<RenderableComponent>(entity).ModelRef.get();
+                    if (s_StillModels.Skip(slot++, m) || !m) continue; // never animates (StillModelCache)
+                    if (world.Registry.all_of<InactiveTag>(entity)) continue; // #199 - an inactive object is paused, not just hidden
+                    m->TickAnimationOnce(frameIndex, animDt);
                 }
             }
 
@@ -3741,10 +3774,15 @@ int main(int argc, char** argv) {
                 PROFILE_GPU_SCOPE("Pre-Skin");
                 static std::vector<Model*> s_PreSkinModels;
                 s_PreSkinModels.clear();
-                for (auto preSkinEntity : world.Registry.view<TransformComponent, RenderableComponent>()) {
+                auto preSkinPool = world.Registry.view<RenderableComponent>();
+                s_StillModels.Sync(world, world.Registry.storage<RenderableComponent>().size());
+                size_t preSkinSlot = 0;
+                for (auto preSkinEntity : preSkinPool) {
+                    Model* preSkinModel = preSkinPool.get<RenderableComponent>(preSkinEntity).ModelRef.get();
+                    if (s_StillModels.Skip(preSkinSlot++, preSkinModel) || !preSkinModel) continue; // no bones (StillModelCache)
+                    if (!world.Registry.all_of<TransformComponent>(preSkinEntity)) continue;
                     if (world.Registry.any_of<InactiveTag, LodCulledTag, PoseSourceTag>(preSkinEntity)) continue; // not drawn
-                    Model* preSkinModel = world.Registry.get<RenderableComponent>(preSkinEntity).ModelRef.get();
-                    if (preSkinModel && preSkinModel->BoneCount() > 0) s_PreSkinModels.push_back(preSkinModel);
+                    if (preSkinModel->BoneCount() > 0) s_PreSkinModels.push_back(preSkinModel);
                 }
                 Model::PreSkin(s_PreSkinModels);
             }
