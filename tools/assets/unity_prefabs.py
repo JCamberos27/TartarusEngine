@@ -961,6 +961,10 @@ class Converter:
                           'Shadow Normal Bias': 1.0, 'Shadow Resolution': 'Follow global', 'Shadow Softness': 1.0,
                           'Shadow Update Mode': 'Dynamic', 'Spot Angle': round(float(l.get('m_SpotAngle', 30.0)) / 2, 4),
                           'Type': kind}
+            # Unity lights shine along +Z, the engine's along -Z: turn the light 180 degrees about its own Y (q * Ry180),
+            # or every street lamp, spot and the moon lights the sky instead of the ground.
+            qx, qy, qz, qw = e['rotation']
+            e['rotation'] = r6([-qz, qw, qx, -qy])
             if l.get('m_Lightmapping', 4) == 2:  # Baked only: Unity drew it into lightmaps, not live
                 self.pack.counts['baked-only lights (now realtime)'] += 1
             self.pack.counts['lights'] += 1
@@ -1226,7 +1230,14 @@ def write_scene(conv, path):
                 p, _, _ = to_engine(spawn.pos, spawn.rot, spawn.scale)
                 e['position'] = r6(p)
     if 'night' in stem.lower():
-        scene['sky'] = dict(scene['sky'], timeOfDayHours=23.0)
+        # 23:00 on the template's day/latitude puts the moon below the horizon and a third lit, so the whole scene went
+        # black. Offset the lunar phase to a high, full moon (its light drives the scene), expose a little up from the
+        # template, and match the template Sun (3.0, a daylight value) to the 0.7 a Unity night scene uses for its moon.
+        scene['sky'] = dict(scene['sky'], timeOfDayHours=23.0, moonPhaseOffset=0.68, moonBrightness=0.02)
+        scene['exposureEV'] = 0.5
+        for e in keep:
+            if e['name'] == 'Sun' and e.get('Light'):
+                e['Light']['Intensity'] = 0.7
     out = {'boxes': [], 'empties': keep, 'models': models}
     start = max([e['id'] for e in keep + models] + [0])
     conv.emit(roots, out, [start])
