@@ -21,7 +21,7 @@
     "_Metallic": 1.0,
     "_MetallicMap": "assets/Environments/OfficeAndPoliceStation/Textures/Chair_and_Dresser_MaskMap_Metallic.png",
     "_MetallicRoughnessMap": "",
-    "_NormalMap": "assets/Environments/OfficeAndPoliceStation/Textures/Chair_and_Dresser_Normal.tga",
+    "_NormalMap": "assets/Environments/OfficeAndPoliceStation/Textures/Chair_and_Dresser_Normal_rgb.tga",
     "_ReflectionProbes": true,
     "_Roughness": 1.0,
     "_RoughnessMap": "assets/Environments/OfficeAndPoliceStation/Textures/Chair_and_Dresser_MaskMap_Roughness100.png",

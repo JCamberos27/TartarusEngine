@@ -127,7 +127,14 @@ class Pack:
         plain = expr in ('rgba', 'rgb') and not suffix
         if plain and ext in ('.png', '.tga', '.jpg') and max(w, h) <= MAX_TEX:
             dst = self.out_path(src)
-            copy_if_changed(src, dst)
+            if expr == 'rgb' and has_alpha_data(src):
+                # The engine's mip chain weights colour by alpha, so an opaque material whose albedo carries alpha (an
+                # atlas whose alpha is 0 where the artist painted nothing, smoothness leftovers) goes black in the distance
+                # (the Office pack's wall flags). Opaque use gets an RGB-only copy next to the original.
+                dst = self.out_path(src, '_rgb' + ext)
+                strip_alpha(src, dst)
+            else:
+                copy_if_changed(src, dst)
         else:
             dst = self.out_path(src, (suffix or '') + '.png')
             if not os.path.exists(dst) or os.path.getmtime(dst) < os.path.getmtime(src):
@@ -409,6 +416,27 @@ def copy_if_changed(src, dst):
     if not os.path.exists(dst) or os.path.getsize(dst) != os.path.getsize(src):
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         shutil.copy2(src, dst)
+
+
+def has_alpha_data(path):
+    """True when the image has an alpha channel that is not fully opaque."""
+    try:
+        from PIL import Image
+        with Image.open(path) as im:
+            if im.mode not in ('RGBA', 'LA', 'PA') and not (im.mode == 'P' and 'transparency' in im.info):
+                return False
+            return im.convert('RGBA').getchannel('A').getextrema()[0] < 255
+    except Exception:
+        return False
+
+
+def strip_alpha(src, dst):
+    if os.path.exists(dst) and os.path.getmtime(dst) >= os.path.getmtime(src):
+        return
+    from PIL import Image
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    with Image.open(src) as im:
+        im.convert('RGB').save(dst)
 
 
 def image_size(path):
