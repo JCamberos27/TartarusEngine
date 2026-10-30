@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
+  "guid": "debff47a6a1a8fcc",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -2.22336,
+      -0.0,
+      -0.014516
+    ]
+  },
+  "materialRemap": {
+    "Lockers": "assets/Environments/OfficeAndPoliceStation/Materials/M_Lockers.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

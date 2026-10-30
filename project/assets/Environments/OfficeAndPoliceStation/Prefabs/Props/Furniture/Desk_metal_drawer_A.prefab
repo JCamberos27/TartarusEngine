@@ -1,0 +1,180 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.175,
+          0.06,
+          0.01
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Desk_metal_drawer_A Collider 1",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        -0.01,
+        -0.79
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.01,
+          0.065,
+          0.40855
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Desk_metal_drawer_A Collider 2",
+      "order": 2,
+      "parentId": 0,
+      "position": [
+        0.18,
+        -0.01,
+        -0.384479
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.01,
+          0.065,
+          0.40855
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 3,
+      "name": "Desk_metal_drawer_A Collider 3",
+      "order": 3,
+      "parentId": 0,
+      "position": [
+        -0.18,
+        -0.01,
+        -0.384479
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.208415,
+          0.01,
+          0.4
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 4,
+      "name": "Desk_metal_drawer_A Collider 4",
+      "order": 4,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        -0.05,
+        -0.384479
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          -0.0,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.208415,
+          0.086787,
+          0.02
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Desk_metal_drawer_A",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Desk_metal_drawer_A.FBX",
+      "pathGuid": "6114b55def86cb88",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
+  "guid": "a3febc22a2b4cd03",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      20.9962,
+      -0.792522,
+      0.107846
+    ]
+  },
+  "materialRemap": {
+    "Office_PropSet": "assets/Environments/OfficeAndPoliceStation/Materials/M_Office_PropSet.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

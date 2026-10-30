@@ -1,0 +1,27 @@
+{
+  "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Building",
+  "guid": "cbc0d4eb1d5026d7",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -21.0,
+      0.0,
+      0.399994
+    ]
+  },
+  "materialRemap": {
+    "Cell_Props": "assets/Environments/OfficeAndPoliceStation/Materials/M_Cell_Props.mat",
+    "Floor_PaintedGrey": "assets/Environments/OfficeAndPoliceStation/Materials/M_Floor_PaintedGrey.mat",
+    "Wall_Brick": "assets/Environments/OfficeAndPoliceStation/Materials/M_Wall_Brick.mat",
+    "Wall_Cell_Concrete": "assets/Environments/OfficeAndPoliceStation/Materials/M_Wall_Cell_Concrete.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

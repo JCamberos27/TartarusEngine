@@ -1,0 +1,23 @@
+{
+  "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
+  "guid": "881f375b6b48d5e7",
+  "importer": {
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      5.5,
+      -2.38441,
+      0.000182
+    ]
+  },
+  "materialRemap": {
+    "Lamps_On": "assets/Environments/OfficeAndPoliceStation/Materials/M_Lamps_On.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

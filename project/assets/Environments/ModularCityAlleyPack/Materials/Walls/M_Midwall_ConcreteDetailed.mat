@@ -24,6 +24,7 @@
     "_MetallicRoughnessMap": "",
     "_NormalMap": "assets/Environments/ModularCityAlleyPack/Textures/Midwall_ConcreteDetailed_Normal.tga",
     "_ParallaxScale": 0.0586,
+    "_ReflectionProbes": true,
     "_Roughness": 0.5,
     "_RoughnessMap": "",
     "_Triplanar": false,

@@ -1,0 +1,1890 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          1.006616,
+          0.01,
+          0.2
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Bookshelf_B Collider 1",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        1.84,
+        0.23
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          1.006616,
+          0.01,
+          0.2
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Bookshelf_B Collider 2",
+      "order": 2,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        1.335,
+        0.23
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          1.006616,
+          0.01,
+          0.25
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 3,
+      "name": "Bookshelf_B Collider 3",
+      "order": 3,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        0.85,
+        0.27
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          1.006616,
+          0.01,
+          0.25
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 4,
+      "name": "Bookshelf_B Collider 4",
+      "order": 4,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        0.0,
+        0.27
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.015,
+          0.425,
+          0.269538
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 5,
+      "name": "Bookshelf_B Collider 5",
+      "order": 5,
+      "parentId": 0,
+      "position": [
+        1.0,
+        0.44,
+        0.272409
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.015,
+          0.425,
+          0.269538
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 6,
+      "name": "Bookshelf_B Collider 6",
+      "order": 6,
+      "parentId": 0,
+      "position": [
+        -1.0,
+        0.44,
+        0.272409
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.015,
+          0.805,
+          0.22
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 7,
+      "name": "Bookshelf_B Collider 7",
+      "order": 7,
+      "parentId": 0,
+      "position": [
+        1.0,
+        1.55,
+        0.22
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.015,
+          0.805,
+          0.22
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 8,
+      "name": "Bookshelf_B Collider 8",
+      "order": 8,
+      "parentId": 0,
+      "position": [
+        -1.0,
+        1.55,
+        0.22
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 9,
+      "name": "Folders_Books",
+      "order": 9,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          1.001289,
+          0.175,
+          0.02
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 37,
+      "name": "Bookshelf_drawer_B Collider 1",
+      "order": 37,
+      "parentId": 36,
+      "position": [
+        -0.0,
+        0.0,
+        -0.5
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.01,
+          0.175,
+          0.26009
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 38,
+      "name": "Bookshelf_drawer_B Collider 2",
+      "order": 38,
+      "parentId": 36,
+      "position": [
+        0.98,
+        0.0,
+        -0.244692
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.01,
+          0.175,
+          0.26009
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 39,
+      "name": "Bookshelf_drawer_B Collider 3",
+      "order": 39,
+      "parentId": 36,
+      "position": [
+        -0.98,
+        0.0,
+        -0.244692
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          1.001289,
+          0.015,
+          0.26009
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 40,
+      "name": "Bookshelf_drawer_B Collider 4",
+      "order": 40,
+      "parentId": 36,
+      "position": [
+        -0.0,
+        -0.18,
+        -0.244692
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          1.001289,
+          0.1,
+          0.02
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 42,
+      "name": "Bookshelf_drawer_A Collider 1",
+      "order": 42,
+      "parentId": 41,
+      "position": [
+        -0.0,
+        -0.0,
+        -0.5
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.015,
+          0.08965,
+          0.26009
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 43,
+      "name": "Bookshelf_drawer_A Collider 2",
+      "order": 43,
+      "parentId": 41,
+      "position": [
+        0.97,
+        0.0,
+        -0.241709
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.015,
+          0.08965,
+          0.26009
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 44,
+      "name": "Bookshelf_drawer_A Collider 3",
+      "order": 44,
+      "parentId": 41,
+      "position": [
+        -0.97,
+        0.0,
+        -0.241709
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          1.001289,
+          0.015,
+          0.26009
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 45,
+      "name": "Bookshelf_drawer_A Collider 4",
+      "order": 45,
+      "parentId": 41,
+      "position": [
+        -0.0,
+        -0.07,
+        -0.241709
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          1.001289,
+          0.1,
+          0.02
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 47,
+      "name": "Bookshelf_drawer_A Collider 1",
+      "order": 47,
+      "parentId": 46,
+      "position": [
+        -0.0,
+        -0.0,
+        -0.5
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.015,
+          0.08965,
+          0.26009
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 48,
+      "name": "Bookshelf_drawer_A Collider 2",
+      "order": 48,
+      "parentId": 46,
+      "position": [
+        0.97,
+        0.0,
+        -0.241709
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.015,
+          0.08965,
+          0.26009
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 49,
+      "name": "Bookshelf_drawer_A Collider 3",
+      "order": 49,
+      "parentId": 46,
+      "position": [
+        -0.97,
+        0.0,
+        -0.241709
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          1.001289,
+          0.015,
+          0.26009
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 50,
+      "name": "Bookshelf_drawer_A Collider 4",
+      "order": 50,
+      "parentId": 46,
+      "position": [
+        -0.0,
+        -0.07,
+        -0.241709
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          2.34,
+          0.23
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          1.006616,
+          0.01,
+          0.2
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Bookshelf_B",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Bookshelf.FBX",
+      "pathGuid": "74ae8de1c928e2a1",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.132767,
+          -0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.087661,
+          0.132883,
+          0.100529
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 10,
+      "name": "Books_E",
+      "order": 10,
+      "parentId": 9,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_E.FBX",
+      "pathGuid": "2742c2f55905c8b4",
+      "position": [
+        0.555999,
+        1.8508,
+        0.278
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.132767,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.136355,
+          0.133544,
+          0.099242
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 11,
+      "name": "Books_B",
+      "order": 11,
+      "parentId": 9,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_B.FBX",
+      "pathGuid": "7cf75bb5011e54da",
+      "position": [
+        0.338785,
+        1.8498,
+        0.271
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.132767,
+          -0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.087661,
+          0.132883,
+          0.100529
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 12,
+      "name": "Books_G",
+      "order": 12,
+      "parentId": 9,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_G.FBX",
+      "pathGuid": "53045d5410fd39e7",
+      "position": [
+        0.872,
+        1.8508,
+        0.272
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.132767,
+          -0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.088459,
+          0.134093,
+          0.100799
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 13,
+      "name": "Books_F",
+      "order": 13,
+      "parentId": 9,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_F.FBX",
+      "pathGuid": "a84bb68ca4caa9bf",
+      "position": [
+        0.713,
+        1.8508,
+        0.273
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.160545,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.253163,
+          0.160545,
+          0.131117
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 14,
+      "name": "Folder_set (3)",
+      "order": 14,
+      "parentId": 9,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_set.FBX",
+      "pathGuid": "ec956ba2cc99bc97",
+      "position": [
+        -0.080214,
+        1.8485,
+        0.264
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.160545,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.253163,
+          0.160545,
+          0.131117
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 15,
+      "name": "Folder_set",
+      "order": 15,
+      "parentId": 9,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_set.FBX",
+      "pathGuid": "ec956ba2cc99bc97",
+      "position": [
+        -0.559214,
+        1.345,
+        0.243
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          5.9e-05,
+          0.169955,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.035748,
+          0.17,
+          0.13384
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 16,
+      "name": "Folder_D (2)",
+      "order": 16,
+      "parentId": 9,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_D.FBX",
+      "pathGuid": "fc6667899210047f",
+      "position": [
+        0.777786,
+        1.345,
+        0.266001
+      ],
+      "rotation": [
+        -0.0,
+        0.050768,
+        -0.0,
+        -0.99871
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.160545,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.253163,
+          0.160545,
+          0.131117
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 17,
+      "name": "Folder_set (1)",
+      "order": 17,
+      "parentId": 9,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_set.FBX",
+      "pathGuid": "ec956ba2cc99bc97",
+      "position": [
+        0.459787,
+        1.345,
+        0.266001
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.169955,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.044583,
+          0.17,
+          0.13384
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 18,
+      "name": "Folder_E (1)",
+      "order": 18,
+      "parentId": 9,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_E.FBX",
+      "pathGuid": "d6eef5628e97b7c3",
+      "position": [
+        -0.742113,
+        0.9687,
+        0.468201
+      ],
+      "rotation": [
+        -0.524217,
+        -0.474549,
+        0.474549,
+        0.524217
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          5.9e-05,
+          0.169955,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.035748,
+          0.17,
+          0.13384
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 19,
+      "name": "Folder_D (6)",
+      "order": 19,
+      "parentId": 9,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_D.FBX",
+      "pathGuid": "fc6667899210047f",
+      "position": [
+        -0.157213,
+        0.8616,
+        0.297001
+      ],
+      "rotation": [
+        -0.0,
+        0.279597,
+        -0.0,
+        -0.960117
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          5.9e-05,
+          0.169955,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.035748,
+          0.17,
+          0.13384
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 20,
+      "name": "Folder_D (1)",
+      "order": 20,
+      "parentId": 9,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_D.FBX",
+      "pathGuid": "fc6667899210047f",
+      "position": [
+        -0.233213,
+        1.345,
+        0.218
+      ],
+      "rotation": [
+        0.0,
+        -0.091425,
+        -0.0,
+        -0.995812
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.017923,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.120485,
+          0.017934,
+          0.159759
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 21,
+      "name": "Papers_pile",
+      "order": 21,
+      "parentId": 9,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Papers_pile.FBX",
+      "pathGuid": "65363166d11f1da2",
+      "position": [
+        0.417788,
+        0.86,
+        0.290001
+      ],
+      "rotation": [
+        0.0,
+        -0.031362,
+        -0.0,
+        -0.999508
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          5.9e-05,
+          0.169955,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.035748,
+          0.17,
+          0.13384
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 22,
+      "name": "Folder_D (7)",
+      "order": 22,
+      "parentId": 9,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_D.FBX",
+      "pathGuid": "fc6667899210047f",
+      "position": [
+        0.905087,
+        0.8616,
+        0.3022
+      ],
+      "rotation": [
+        0.0,
+        -0.014021,
+        -0.0,
+        -0.999902
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.169955,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.044583,
+          0.17,
+          0.13384
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 23,
+      "name": "Folder_E",
+      "order": 23,
+      "parentId": 9,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_E.FBX",
+      "pathGuid": "d6eef5628e97b7c3",
+      "position": [
+        0.100786,
+        1.345,
+        0.244
+      ],
+      "rotation": [
+        -0.0,
+        0.017788,
+        -0.0,
+        -0.999842
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.156646,
+          -0.118685
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.042195,
+          0.15859,
+          0.12273
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 24,
+      "name": "Folder_C (1)",
+      "order": 24,
+      "parentId": 9,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_C.FBX",
+      "pathGuid": "ea1365318c82b008",
+      "position": [
+        0.012787,
+        0.8616,
+        0.417
+      ],
+      "rotation": [
+        0.0,
+        -0.040841,
+        -0.0,
+        -0.999166
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.023022,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.116562,
+          0.023022,
+          0.158505
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 25,
+      "name": "Folder_B",
+      "order": 25,
+      "parentId": 9,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_B.FBX",
+      "pathGuid": "241221c81661b536",
+      "position": [
+        0.697786,
+        0.86,
+        0.295
+      ],
+      "rotation": [
+        0.0,
+        0.023761,
+        -0.0,
+        -0.999718
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.169955,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.044583,
+          0.17,
+          0.13384
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 26,
+      "name": "Folder_E (3)",
+      "order": 26,
+      "parentId": 9,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_E.FBX",
+      "pathGuid": "d6eef5628e97b7c3",
+      "position": [
+        0.211786,
+        0.8616,
+        0.292
+      ],
+      "rotation": [
+        -0.0,
+        0.017788,
+        -0.0,
+        -0.999842
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.160545,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.253163,
+          0.160545,
+          0.131117
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 27,
+      "name": "Folder_set (2)",
+      "order": 27,
+      "parentId": 9,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_set.FBX",
+      "pathGuid": "ec956ba2cc99bc97",
+      "position": [
+        -0.597214,
+        1.8485,
+        0.275999
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          5.9e-05,
+          0.169955,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.035748,
+          0.17,
+          0.13384
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 28,
+      "name": "Folder_D (4)",
+      "order": 28,
+      "parentId": 9,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_D.FBX",
+      "pathGuid": "fc6667899210047f",
+      "position": [
+        0.881786,
+        1.3461,
+        0.262001
+      ],
+      "rotation": [
+        0.0,
+        -0.023227,
+        -0.0,
+        -0.99973
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.002684,
+          0.006377,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.113607,
+          0.006189,
+          0.149313
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 29,
+      "name": "Folder_file (1)",
+      "order": 29,
+      "parentId": 9,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_file.FBX",
+      "pathGuid": "599f739c1ba45d95",
+      "position": [
+        0.710186,
+        0.8931,
+        0.2864
+      ],
+      "rotation": [
+        -0.005666,
+        0.104197,
+        0.053997,
+        -0.993074
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.169955,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.044583,
+          0.17,
+          0.13384
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 30,
+      "name": "Folder_E (2)",
+      "order": 30,
+      "parentId": 9,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_E.FBX",
+      "pathGuid": "d6eef5628e97b7c3",
+      "position": [
+        -0.907213,
+        1.8455,
+        0.262998
+      ],
+      "rotation": [
+        -0.0,
+        0.017788,
+        -0.0,
+        -0.999842
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.023022,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.116562,
+          0.023022,
+          0.158505
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 31,
+      "name": "Folder_A",
+      "order": 31,
+      "parentId": 9,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_A.FBX",
+      "pathGuid": "a02c4685104fce6f",
+      "position": [
+        -0.427214,
+        0.86,
+        0.307001
+      ],
+      "rotation": [
+        0.0,
+        -0.119785,
+        -0.0,
+        -0.9928
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.169955,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.044583,
+          0.17,
+          0.13384
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 32,
+      "name": "Folder_E (4)",
+      "order": 32,
+      "parentId": 9,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_E.FBX",
+      "pathGuid": "d6eef5628e97b7c3",
+      "position": [
+        0.114786,
+        0.8616,
+        0.289
+      ],
+      "rotation": [
+        0.0,
+        -0.00058,
+        -0.0,
+        -1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          5.9e-05,
+          0.169955,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.035748,
+          0.17,
+          0.13384
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 33,
+      "name": "Folder_D (3)",
+      "order": 33,
+      "parentId": 9,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_D.FBX",
+      "pathGuid": "fc6667899210047f",
+      "position": [
+        -0.751213,
+        0.9025,
+        0.479999
+      ],
+      "rotation": [
+        -0.5,
+        -0.5,
+        0.5,
+        0.5
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.156646,
+          -0.118685
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.042195,
+          0.15859,
+          0.12273
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 34,
+      "name": "Folder_C",
+      "order": 34,
+      "parentId": 9,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_C.FBX",
+      "pathGuid": "ea1365318c82b008",
+      "position": [
+        -0.098213,
+        1.345,
+        0.368999
+      ],
+      "rotation": [
+        0.0,
+        -0.040841,
+        -0.0,
+        -0.999166
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          5.9e-05,
+          0.169955,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.035748,
+          0.17,
+          0.13384
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 35,
+      "name": "Folder_D (5)",
+      "order": 35,
+      "parentId": 9,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_D.FBX",
+      "pathGuid": "fc6667899210047f",
+      "position": [
+        -0.899613,
+        1.345,
+        0.2694
+      ],
+      "rotation": [
+        -0.0,
+        0.118608,
+        -0.0,
+        -0.992941
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          -0.0,
+          -0.01
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          1.001289,
+          0.237912,
+          0.02
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 36,
+      "name": "Bookshelf_drawer_B",
+      "order": 36,
+      "parentId": 0,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Bookshelf_drawer_B.FBX",
+      "pathGuid": "64dbdf0a5939b647",
+      "position": [
+        -0.0,
+        0.248,
+        0.563
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          -0.0,
+          -0.01
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          1.001289,
+          0.1,
+          0.02
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 41,
+      "name": "Bookshelf_drawer_A",
+      "order": 41,
+      "parentId": 0,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Bookshelf_drawer_A.FBX",
+      "pathGuid": "6f6e4bcaf2bcb8c8",
+      "position": [
+        -0.0,
+        0.764,
+        0.568
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          -0.0,
+          -0.01
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          1.001289,
+          0.1,
+          0.02
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 46,
+      "name": "Bookshelf_drawer_A",
+      "order": 46,
+      "parentId": 0,
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Bookshelf_drawer_A.FBX",
+      "pathGuid": "6f6e4bcaf2bcb8c8",
+      "position": [
+        -0.0,
+        0.579,
+        0.568
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

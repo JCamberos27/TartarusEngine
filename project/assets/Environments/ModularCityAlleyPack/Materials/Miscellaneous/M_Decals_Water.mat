@@ -24,6 +24,7 @@
     "_MetallicRoughnessMap": "",
     "_NormalMap": "",
     "_ReceiveDecals": false,
+    "_ReflectionProbes": true,
     "_Roughness": 0.064,
     "_RoughnessMap": "",
     "_Triplanar": false,

@@ -8,12 +8,7 @@
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "optimizeGraph": true,
-    "pivotOffset": [
-      36.6119,
-      -11.8734,
-      -0.28787
-    ]
+    "optimizeGraph": true
   },
   "materialRemap": {
     "Shops_And_Lights": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Shops_And_Lights.mat"

@@ -29,6 +29,7 @@
     "_MetallicRoughnessMap": "",
     "_NormalMap": "assets/Environments/ModularCityAlleyPack/Textures/Wall_Brickwall_Red_Damaged_Normal.tga",
     "_ParallaxScale": 0.02,
+    "_ReflectionProbes": true,
     "_Roughness": 1.0,
     "_RoughnessMap": "assets/Environments/ModularCityAlleyPack/Textures/Wall_Brickwall_Red_Damaged_MaskMap_Roughness100.png",
     "_Triplanar": false,
