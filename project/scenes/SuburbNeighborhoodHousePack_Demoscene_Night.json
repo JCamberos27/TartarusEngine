@@ -154102,7 +154102,7 @@
   "puddleAmount": 0.45,
   "puddleScale": 4.0,
   "puddleSsr": true,
-  "shadowCascades": 2,
+  "shadowCascades": 1,
   "shadowDistance": 150.0,
   "shadowResolution": 2048,
   "shadowsEnabled": true,
@@ -154187,7 +154187,7 @@
     0.7400000095367432
   ],
   "ssaoBias": 0.02500000037252903,
-  "ssaoEnabled": true,
+  "ssaoEnabled": false,
   "ssaoIntensity": 1.0,
   "ssaoRadius": 0.5,
   "tonemapOperator": 1,
@@ -154197,7 +154197,7 @@
   "volDensity": 0.008,
   "volDistance": 64.0,
   "volHeightFalloff": 0.1,
-  "volQuality": 1,
+  "volQuality": 0,
   "volumetricEnabled": true,
   "wetness": 0.85
 }
