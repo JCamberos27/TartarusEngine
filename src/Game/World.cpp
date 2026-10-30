@@ -310,6 +310,43 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
             }
         }
         m_LodCentreStamp = m_TransformCacheStamp;
+        // The level each record wants, picked across the cores in fixed chunks (read only: the transform-cache centres,
+        // the group components and the inactive tags); a steady forest of 40k groups took ~1 ms on one thread. The
+        // serial walk below then only applies the changes. The full pass builds the records, so it picks inline.
+        const auto pickLevel = [&](const LodGroupState& st, const LODGroupComponent& lod, int& counted) -> int {
+            if (Registry.all_of<InactiveTag>(st.Group)) return kLodSkipped; // an inactive group tags nothing
+            ++counted;
+            const float size = lod.Size > 0.0f ? lod.Size : st.AutoSize;
+            const float dist = std::max(glm::length(st.Centre - viewPos), 1e-4f);
+            const float height = ortho ? size * yScale * 0.5f : size * yScale / (2.0f * dist);
+            const float thresholds[4] = {lod.Lod0, lod.Lod1, lod.Lod2, lod.Lod3};
+            for (int i = 0; i < st.Levels; ++i)
+                if (height >= thresholds[i]) return i;
+            return -1; // culled
+        };
+        if (!full) {
+            const size_t count = m_LodState.size();
+            constexpr size_t kChunk = 4096;
+            const size_t chunks = (count + kChunk - 1) / kChunk;
+            m_LodNext.resize(count);
+            m_LodChunkEvaluated.assign(chunks, 0);
+            m_LodChunkIds.resize(chunks);
+            std::iota(m_LodChunkIds.begin(), m_LodChunkIds.end(), size_t(0));
+            auto pick = [&](size_t c) {
+                int counted = 0;
+                const size_t end = std::min(count, (c + 1) * kChunk);
+                for (size_t i = c * kChunk; i < end; ++i) {
+                    const LodGroupState& st = m_LodState[i];
+                    const LODGroupComponent* lod =
+                        st.Levels > 0 && Registry.valid(st.Group) ? Registry.try_get<LODGroupComponent>(st.Group) : nullptr;
+                    m_LodNext[i] = (std::int8_t)(lod ? pickLevel(st, *lod, counted) : kLodSkipped);
+                }
+                m_LodChunkEvaluated[c] = counted;
+            };
+            if (chunks > 1) std::for_each(std::execution::par, m_LodChunkIds.begin(), m_LodChunkIds.end(), pick);
+            else if (chunks == 1) pick(0);
+            for (int n : m_LodChunkEvaluated) evaluated += n;
+        }
         size_t index = 0;
         for (entt::entity g : groups) {
             const auto& lod = groups.get<LODGroupComponent>(g);
@@ -330,17 +367,7 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
             LodGroupState& st = m_LodState[at];
             const int levels = st.Levels;
             if (levels == 0) continue;
-            int active = kLodSkipped; // an inactive group tags nothing
-            if (!Registry.all_of<InactiveTag>(g)) {
-                ++evaluated;
-                const float size = lod.Size > 0.0f ? lod.Size : st.AutoSize;
-                const float dist = std::max(glm::length(st.Centre - viewPos), 1e-4f);
-                const float height = ortho ? size * yScale * 0.5f : size * yScale / (2.0f * dist);
-                const float thresholds[4] = {lod.Lod0, lod.Lod1, lod.Lod2, lod.Lod3};
-                active = -1; // -1 = culled
-                for (int i = 0; i < levels; ++i)
-                    if (height >= thresholds[i]) { active = i; break; }
-            }
+            const int active = full ? pickLevel(st, lod, evaluated) : m_LodNext[at];
             const int was = st.Active; // kLodSkipped (or a fresh record) tagged nothing
             if (!full && was == active) continue;
             st.Active = (std::int8_t)active; // first: the retag below reads this group's own record for nested ones

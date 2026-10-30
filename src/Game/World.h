@@ -357,6 +357,9 @@ private:
     std::vector<entt::entity> m_LodCulledOwner; // entity slot -> the entity tagged there (IsLodCulled)
     void SetLodCulled(entt::entity e, bool culled);
     std::vector<std::pair<entt::entity, bool>> m_LodWalk;
+    std::vector<std::int8_t> m_LodNext;       // ApplyLod's incremental pass: each record's new level, picked in parallel
+    std::vector<int> m_LodChunkEvaluated;
+    std::vector<size_t> m_LodChunkIds;
     std::uint64_t m_LodSignature[4] = {};
     bool m_LodValid = false;  // the tags match m_LodState
     // Bumped by every re-parent, attach and hierarchy destroy: ApplyLod's records are only good while it stays put.
