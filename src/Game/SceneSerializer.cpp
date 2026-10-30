@@ -1165,6 +1165,7 @@ const SkyBoolField kSkyBoolFields[] = {
     {"timeOfDay", &SkySettings::TimeOfDayEnabled},
     {"animateInEditor", &SkySettings::AnimateInEditor},
     {"atmosphereTintsSun", &SkySettings::AtmosphereTintsSun},
+    {"showGround", &SkySettings::ShowGround},
     {"moon", &SkySettings::MoonEnabled},
     {"clouds", &SkySettings::CloudsEnabled},
     {"cloudShadows", &SkySettings::CloudShadows},

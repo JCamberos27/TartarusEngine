@@ -103,7 +103,7 @@ MediumSample SampleMedium(vec3 p) {
     float h = max(length(p) - uAtmRadii.x, 0.0);
     float dR = exp(uAtmRayleigh.w * h);
     float dM = exp(uAtmMieScat.w * h);
-    float dO = max(0.0, 1.0 - abs(h - uAtmOzone.w) / max(uAtmGround.w, 1e-3));
+    float dO = max(0.0, 1.0 - abs(h - uAtmOzone.w) / max(abs(uAtmGround.w), 1e-3));
     MediumSample s;
     s.scatRayleigh = uAtmRayleigh.rgb * dR;
     s.scatMie = uAtmMieScat.rgb * dM;

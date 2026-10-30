@@ -243,7 +243,12 @@ void main() {
 
     float groundT = RaySphereNearest(cam, dir, vec3(0.0), uAtmRadii.x);
     bool groundHit = groundT >= 0.0;
-    if (groundHit) {
+    if (groundHit && uAtmGround.w < 0.0) {
+        // No planet: the sky carries on below the horizon (the sky above it, mirrored).
+        vec3 up = normalize(cam);
+        vec3 mirrored = normalize(dir - up * (2.0 * min(dot(dir, up), 0.0)));
+        L = SkyRadiance(cam, mirrored) * uAtmRadii.z;
+    } else if (groundHit) {
         L += GroundRadiance(cam, dir, groundT, SkyAmbientTerm(0)) * uAtmRadii.z;
     } else {
         vec3 T = TransmittanceToSpace(cam, dir);

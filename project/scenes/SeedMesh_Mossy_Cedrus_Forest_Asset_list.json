@@ -411,7 +411,7 @@
         ],
         "ColorTempK": 0.0,
         "Culling Mask": -1,
-        "Intensity": 0.0001,
+        "Intensity": 3.0,
         "Range": 200.0,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05000000074505806,
@@ -1086,50 +1086,6 @@
       ]
     },
     {
-      "id": 723,
-      "name": "Ground_background",
-      "order": 723,
-      "parentId": -1,
-      "position": [
-        7.0,
-        2.667855,
-        3.0
-      ],
-      "rotation": [
-        0.0,
-        -0.0,
-        -0.0,
-        1.0
-      ],
-      "scale": [
-        10.485615,
-        7.14133,
-        9.936893
-      ]
-    },
-    {
-      "id": 724,
-      "name": "Ground_background (1)",
-      "order": 724,
-      "parentId": -1,
-      "position": [
-        -29.3205,
-        12.3305,
-        -27.76
-      ],
-      "rotation": [
-        0.707107,
-        -0.0,
-        -0.0,
-        0.707107
-      ],
-      "scale": [
-        2.406812,
-        1.018568,
-        1.933337
-      ]
-    },
-    {
       "Light": {
         "Angular Size": 0.53,
         "Cast Shadows": true,
@@ -1217,6 +1173,7 @@
         "Spot Angle": 48.3842,
         "Type": "Spot"
       },
+      "active": false,
       "id": 727,
       "name": "Spot Light (4)",
       "order": 727,
@@ -1260,6 +1217,7 @@
         "Spot Angle": 48.3842,
         "Type": "Spot"
       },
+      "active": false,
       "id": 728,
       "name": "Spot Light (5)",
       "order": 728,
@@ -1348,6 +1306,7 @@
         "Spot Angle": 51.6508,
         "Type": "Spot"
       },
+      "active": false,
       "id": 731,
       "name": "Point Light",
       "order": 731,
@@ -1391,6 +1350,7 @@
         "Spot Angle": 51.6508,
         "Type": "Spot"
       },
+      "active": false,
       "id": 732,
       "name": "Point Light (1)",
       "order": 732,
@@ -1434,6 +1394,7 @@
         "Spot Angle": 51.6508,
         "Type": "Spot"
       },
+      "active": false,
       "id": 733,
       "name": "Point Light (2)",
       "order": 733,
@@ -1477,6 +1438,7 @@
         "Spot Angle": 51.6508,
         "Type": "Spot"
       },
+      "active": false,
       "id": 734,
       "name": "Point Light (3)",
       "order": 734,
@@ -1520,6 +1482,7 @@
         "Spot Angle": 51.6508,
         "Type": "Spot"
       },
+      "active": false,
       "id": 735,
       "name": "Point Light (4)",
       "order": 735,
@@ -1563,6 +1526,7 @@
         "Spot Angle": 51.6508,
         "Type": "Spot"
       },
+      "active": false,
       "id": 736,
       "name": "Point Light (5)",
       "order": 736,
@@ -1606,6 +1570,7 @@
         "Spot Angle": 48.5137,
         "Type": "Spot"
       },
+      "active": false,
       "id": 737,
       "name": "Point Light (7)",
       "order": 737,
@@ -1649,6 +1614,7 @@
         "Spot Angle": 60.1773,
         "Type": "Spot"
       },
+      "active": false,
       "id": 738,
       "name": "Point Light (8)",
       "order": 738,
@@ -1692,6 +1658,7 @@
         "Spot Angle": 60.1773,
         "Type": "Spot"
       },
+      "active": false,
       "id": 739,
       "name": "Point Light (9)",
       "order": 739,
@@ -1735,6 +1702,7 @@
         "Spot Angle": 48.5137,
         "Type": "Spot"
       },
+      "active": false,
       "id": 740,
       "name": "Point Light (10)",
       "order": 740,
@@ -1778,6 +1746,7 @@
         "Spot Angle": 48.5137,
         "Type": "Spot"
       },
+      "active": false,
       "id": 741,
       "name": "Point Light (11)",
       "order": 741,
@@ -2035,28 +2004,6 @@
         1.0,
         1.0,
         1.0
-      ]
-    },
-    {
-      "id": 753,
-      "name": "Ground_background (2)",
-      "order": 753,
-      "parentId": -1,
-      "position": [
-        -32.3687,
-        54.1,
-        -48.3
-      ],
-      "rotation": [
-        0.707107,
-        -0.0,
-        -0.0,
-        0.707107
-      ],
-      "scale": [
-        8.744018,
-        1.018568,
-        5.326925
       ]
     },
     {
@@ -15764,6 +15711,111 @@
       ]
     },
     {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 723,
+      "materials": [
+        {
+          "guid": "47a17f41809df524",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Demo_Scene/Asset_list/M_Background_color.mat"
+        }
+      ],
+      "name": "Ground_background",
+      "order": 723,
+      "parentId": -1,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Demo_Scene/Asset_list_embedded/PolybrushMesh32340.obj",
+      "pathGuid": "3003eda6c20a8361",
+      "position": [
+        7.0,
+        2.667855,
+        3.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        10.485615,
+        7.14133,
+        9.936893
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 724,
+      "materials": [
+        {
+          "guid": "47a17f41809df524",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Demo_Scene/Asset_list/M_Background_color.mat"
+        }
+      ],
+      "name": "Ground_background (1)",
+      "order": 724,
+      "parentId": -1,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Demo_Scene/Asset_list_embedded/PolybrushMesh32340.obj",
+      "pathGuid": "3003eda6c20a8361",
+      "position": [
+        -29.3205,
+        12.3305,
+        -27.76
+      ],
+      "rotation": [
+        0.707107,
+        -0.0,
+        -0.0,
+        0.707107
+      ],
+      "scale": [
+        2.406812,
+        1.018568,
+        1.933337
+      ]
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 753,
+      "materials": [
+        {
+          "guid": "47a17f41809df524",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Demo_Scene/Asset_list/M_Background_color.mat"
+        }
+      ],
+      "name": "Ground_background (2)",
+      "order": 753,
+      "parentId": -1,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Demo_Scene/Asset_list_embedded/PolybrushMesh32340.obj",
+      "pathGuid": "3003eda6c20a8361",
+      "position": [
+        -32.3687,
+        54.1,
+        -48.3
+      ],
+      "rotation": [
+        0.707107,
+        -0.0,
+        -0.0,
+        0.707107
+      ],
+      "scale": [
+        8.744018,
+        1.018568,
+        5.326925
+      ]
+    },
+    {
       "id": 757,
       "name": "Eagle_fern_var1_LOD0",
       "order": 757,
@@ -19366,15 +19418,15 @@
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/_Shared/SourceFiles/StarterAssets/ThirdPersonController/Character/Models/Armature.fbx",
       "pathGuid": "808b4175eb3061d9",
       "position": [
-        0.0,
-        0.0,
-        0.0
+        0.019,
+        2.667855,
+        9.726
       ],
       "rotation": [
         0.0,
-        0.0,
-        0.0,
-        1.0
+        -1.0,
+        -0.0,
+        0.0
       ],
       "scale": [
         1.0,
@@ -41641,6 +41693,7 @@
       1.0
     ],
     "seaLevel": 0.0,
+    "showGround": false,
     "skyIntensity": 1.0,
     "starsBrightness": 1.0,
     "sunDiscBrightness": 1.0,
