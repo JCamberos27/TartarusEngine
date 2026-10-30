@@ -4,7 +4,7 @@
   "name": "M_Wall_Brickwall_RedDark",
   "properties": {
     "_AOMap": "assets/Environments/ModularCityAlleyPack/Textures/Wall_Brickwall_Red_MaskMap_AO60.png",
-    "_AlbedoMap": "assets/Environments/ModularCityAlleyPack/Textures/Wall_Brickwall_RedDark_BaseColor.tga",
+    "_AlbedoMap": "assets/Environments/ModularCityAlleyPack/Textures/Wall_Brickwall_RedDark_BaseColor_rgb.tga",
     "_BaseColor": [
       0.7794,
       0.7794,
@@ -27,7 +27,7 @@
     "_Metallic": 1.0,
     "_MetallicMap": "assets/Environments/ModularCityAlleyPack/Textures/Wall_Brickwall_Red_MaskMap_Metallic.png",
     "_MetallicRoughnessMap": "",
-    "_NormalMap": "assets/Environments/ModularCityAlleyPack/Textures/Wall_Brickwall_Red_Normal.tga",
+    "_NormalMap": "assets/Environments/ModularCityAlleyPack/Textures/Wall_Brickwall_Red_Normal_rgb.tga",
     "_ParallaxScale": 0.02,
     "_ReflectionProbes": true,
     "_Roughness": 1.0,

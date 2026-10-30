@@ -21,7 +21,7 @@
     "_Metallic": 1.0,
     "_MetallicMap": "assets/Environments/ModularCityAlleyPack/Textures/Floor_AsphaltRoad_MaskMap_Metallic.png",
     "_MetallicRoughnessMap": "",
-    "_NormalMap": "assets/Environments/ModularCityAlleyPack/Textures/Floor_AsphaltRoad_Normal.tga",
+    "_NormalMap": "assets/Environments/ModularCityAlleyPack/Textures/Floor_AsphaltRoad_Normal_rgb.tga",
     "_ReflectionProbes": true,
     "_Roughness": 1.0,
     "_RoughnessMap": "assets/Environments/ModularCityAlleyPack/Textures/Floor_AsphaltRoad_MaskMap_Roughness100.png",

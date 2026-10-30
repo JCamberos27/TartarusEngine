@@ -4,7 +4,7 @@
   "name": "M_Garbage_Set",
   "properties": {
     "_AOMap": "",
-    "_AlbedoMap": "assets/Environments/ModularCityAlleyPack/Textures/Garbage_Set_BaseColor.tga",
+    "_AlbedoMap": "assets/Environments/ModularCityAlleyPack/Textures/Garbage_Set_BaseColor_rgb.tga",
     "_BaseColor": [
       0.8971,
       0.8971,
@@ -21,7 +21,7 @@
     "_Metallic": 1.0,
     "_MetallicMap": "assets/Environments/ModularCityAlleyPack/Textures/Garbage_Set_MaskMap_Metallic.png",
     "_MetallicRoughnessMap": "",
-    "_NormalMap": "assets/Environments/ModularCityAlleyPack/Textures/Garbage_Set_Normal.tga",
+    "_NormalMap": "assets/Environments/ModularCityAlleyPack/Textures/Garbage_Set_Normal_rgb.tga",
     "_ReflectionProbes": true,
     "_Roughness": 1.0,
     "_RoughnessMap": "assets/Environments/ModularCityAlleyPack/Textures/Garbage_Set_MaskMap_Roughness100.png",
