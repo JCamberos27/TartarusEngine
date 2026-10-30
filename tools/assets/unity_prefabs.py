@@ -1214,6 +1214,7 @@ NIGHT_MOON_SKY = 0.006  # sky moonBrightness: dim, though the full high moon fro
 NIGHT_SHADOW_RES = 2048  # world shadowResolution for night scenes (moon map); 4096 default
 NIGHT_CLOUD_QUALITY = 0 # sky cloudQuality 0 = Low
 NIGHT_MOON_LIGHT = 0.35 # the moon's directional light (the Unity scene's own, or the template Sun standing in for it)
+NIGHT_LAMP_VOLUMETRIC = 0.5  # point/spot lights' Volumetric Intensity: halves the street-lamp beams in the night fog
 
 
 def apply_look(pack, stem, scene, empties):
@@ -1226,8 +1227,11 @@ def apply_look(pack, stem, scene, empties):
         scene['sky'] = dict(scene['sky'], moonBrightness=NIGHT_MOON_SKY, cloudQuality=NIGHT_CLOUD_QUALITY)
         scene['shadowResolution'] = NIGHT_SHADOW_RES
         for e in empties:
-            if (e.get('Light') or {}).get('Type') == 'Directional':
-                e['Light']['Intensity'] = NIGHT_MOON_LIGHT
+            light = e.get('Light') or {}
+            if light.get('Type') == 'Directional':
+                light['Intensity'] = NIGHT_MOON_LIGHT
+            elif light.get('Type') in ('Point', 'Spot'):
+                light['Volumetric Intensity'] = NIGHT_LAMP_VOLUMETRIC
     pack.counts['scenes given the AAA look preset'] += 1
 
 
