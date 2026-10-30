@@ -267,6 +267,22 @@ def unity_fileids():
 NODE_PROPS = ('m_LocalPosition', 'm_LocalRotation', 'm_LocalScale', 'm_LocalEulerAnglesHint', 'm_Name', 'm_IsActive')
 
 
+AREA_FILL_HALF_ANGLE = 65.0  # a rect/disc area light lights its front hemisphere; a wide spot with a falloff to the walls
+# Packs whose interiors were lit by their baked area lights (the Office's ceiling panels and windows). The Suburb's are
+# window fills inside houses seen from the street: 43 more lights on a night street with no frame time to spare.
+AREA_FILL_PACKS = {'OfficeAndPoliceStation'}
+AREA_FILL_SCALE = 1.0        # Unity area intensity is per unit area: the stand-in's intensity is intensity x area x this
+
+
+def area_fill_intensity(l):
+    """Engine intensity of the wide unshadowed spot standing in for a Unity rect (3) or disc (4) area light: the
+    light's total output (intensity x emitting area), so a long ceiling tube and a big panel keep their balance."""
+    sz = l.get('m_AreaSize') or {}
+    w, h = float(sz.get('x', 1.0)), float(sz.get('y', 1.0))
+    a = math.pi * w * w if l.get('m_Type') == 4 else w * h
+    return float(l.get('m_Intensity', 1.0)) * a * AREA_FILL_SCALE
+
+
 class Converter:
     def __init__(self, pack, exe):
         self.pack, self.exe = pack, exe
@@ -954,11 +970,19 @@ class Converter:
         k = self.HDRP_TO_ENGINE if self.pack.counts['seedmesh materials'] else 1.0
         for l in comps.get('Light', []):
             kind = {0: 'Spot', 1: 'Directional', 2: 'Point'}.get(l.get('m_Type', 2))
-            if kind is None:
-                self.pack.report['area lights (baked only in Unity), skipped'].append(e['name'])
+            area = l.get('m_Type') in (3, 4)
+            if kind is None and not area:
+                self.pack.report['lights of an unknown type, skipped'].append(e['name'])
                 continue
             col = l.get('m_Color') or {}
             sh = (l.get('m_Shadows') or {}).get('m_Type', 0)
+            if area and self.pack.name not in AREA_FILL_PACKS:
+                self.pack.report['area lights (baked only in Unity), skipped'].append(e['name'])
+                continue
+            if area:  # Unity bakes area lights into lightmaps only; the engine has none, so stand in a broad fill
+                kind, sh = 'Spot', 0
+                l = dict(l, m_Intensity=area_fill_intensity(l) / k, m_SpotAngle=2 * AREA_FILL_HALF_ANGLE)
+                self.pack.counts['area lights (baked only in Unity) -> unshadowed wide spot fills'] += 1
             e['Light'] = {'Angular Size': 0.53, 'Cast Shadows': sh != 0, 'Color': r6([col.get('r', 1), col.get('g', 1), col.get('b', 1)]),
                           'ColorTempK': 0.0, 'Culling Mask': -1, 'Intensity': round(float(l.get('m_Intensity', 1.0)) * k, 4),
                           'Range': round(float(l.get('m_Range', 10.0)), 4), 'Shadow Bias': 1.0, 'Shadow Near Plane': 0.05,
@@ -1200,11 +1224,18 @@ LOOK_NIGHT = dict(
 LOOK_SCENES = {
     ('ModularCityAlleyPack', 'Example_Scene_Day'): LOOK_DAY,
     ('ModularCityAlleyPack', 'Example_Scene_Night'): LOOK_NIGHT,
+    # Unity lit this interior with baked area lights and no sky ambient at all (Ambient Intensity 0): the open sky
+    # flooding every wall evenly is what made it look unlit. The room probes' diffuse and the area fills light it now.
     ('OfficeAndPoliceStation', 'OfficePack_Example'): dict(
-        exposureEV=0.0, gradeTemperature=-2.0, gradeColorFilter=[0.97, 1.0, 1.0], volumetricEnabled=False),
+        exposureEV=-0.7, gradeTemperature=-2.0, gradeColorFilter=[0.97, 1.0, 1.0], volumetricEnabled=False,
+        skyAmbientIntensity=0.35, ssaoIntensity=1.6),
     # ~100 real-time lamps: 2 sun/moon cascades keep the street in budget (4 cost 1.7 ms more for no visible gain).
-    ('SuburbNeighborhoodHousePack', 'Demoscene_Day'): dict(LOOK_DAY, shadowCascades=2),
-    ('SuburbNeighborhoodHousePack', 'Demoscene_Night'): dict(LOOK_NIGHT, shadowCascades=2),
+    # Day: a stronger sun over less sky fill, so shade reads as shade (Unity's ratio was ~5:1, ours was ~2:1).
+    ('SuburbNeighborhoodHousePack', 'Demoscene_Day'): dict(LOOK_DAY, shadowCascades=2, skyAmbientIntensity=0.6),
+    # Night: the moon and sky fill were lifting the whole street to dusk; the exposure cap keeps dark dark.
+    ('SuburbNeighborhoodHousePack', 'Demoscene_Night'): dict(
+        LOOK_NIGHT, shadowCascades=2, skyAmbientIntensity=0.35, autoExposureMaxEV=2.5,
+        gradeTemperature=-4.0),  # a lighter cool grade: the sodium lamps keep their amber
     # Low ground mist hugging the trail (the terrain sits around y 3-4), lit through the canopy for god rays.
     ('SeedMesh_Mossy_Cedrus_Forest', 'Mossy_forest_trail'): dict(
         LOOK_DAY, gradeTemperature=0.0, gradeColorFilter=[0.97, 1.0, 0.96],
@@ -1215,6 +1246,17 @@ NIGHT_SHADOW_RES = 2048  # world shadowResolution for night scenes (moon map); 4
 NIGHT_CLOUD_QUALITY = 0 # sky cloudQuality 0 = Low
 NIGHT_MOON_LIGHT = 0.35 # the moon's directional light (the Unity scene's own, or the template Sun standing in for it)
 NIGHT_LAMP_VOLUMETRIC = 0.5  # point/spot lights' Volumetric Intensity: halves the street-lamp beams in the night fog
+
+
+# Per-scene light fixes, as absolute values so re-applying the look never compounds: 'Directional' is the sun/moon, any
+# other key a light name; each maps Light fields to set.
+LOOK_LIGHTS = {
+    ('SuburbNeighborhoodHousePack', 'Demoscene_Day'): {'Directional': {'Intensity': 3.2}},
+    ('SuburbNeighborhoodHousePack', 'Demoscene_Night'): {
+        'Directional': {'Intensity': 0.15},
+        'Spotlight_Street_high': {'Intensity': 45.0, 'Shadow Softness': 2.5},
+        'Spotlight_Street_low': {'Shadow Softness': 2.5}},
+}
 
 
 def apply_look(pack, stem, scene, empties):
@@ -1232,6 +1274,11 @@ def apply_look(pack, stem, scene, empties):
                 light['Intensity'] = NIGHT_MOON_LIGHT
             elif light.get('Type') in ('Point', 'Spot'):
                 light['Volumetric Intensity'] = NIGHT_LAMP_VOLUMETRIC
+    fixes = LOOK_LIGHTS.get((pack.name, stem), {})
+    for e in empties:
+        light = e.get('Light')
+        if light:
+            light.update(fixes.get('Directional' if light.get('Type') == 'Directional' else e['name'], {}))
     pack.counts['scenes given the AAA look preset'] += 1
 
 
