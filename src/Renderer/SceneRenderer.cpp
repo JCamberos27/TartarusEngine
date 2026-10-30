@@ -45,6 +45,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cmath>
+#include <limits>
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -129,15 +130,57 @@ struct Candidate {
     const Model* ModelAtBuild; // a renderable whose model changes since gets its bounds read live
     std::uint16_t Flags;
     int Layer;
+    std::uint32_t Cell;        // CandidateCache::Cells index
     VisibleRenderable V;       // transform, bounds and world bounds as of the build
+};
+// Candidates bucketed by where they stand (a square of the ground plan), so a camera's frustum rejects a whole bucket
+// at once: a 150k-object forest is mostly behind or beside the camera. Anything animated or without bounds sits in
+// the one Always cell (index 0 when present) and is tested on its own.
+struct CandidateCell {
+    glm::vec3 Min, Max;        // grows when a member moves (patched), never shrinks until the next full build
+    std::uint32_t First, Count;
+    bool Always;
 };
 struct CandidateCache {
     const World* Owner = nullptr;
     std::uint64_t Stamp = 0;
     size_t Renderables = 0;
     entt::entity First = entt::null, Last = entt::null;
-    std::vector<Candidate> List;
+    std::uint64_t Flags = 0;          // FlagSignature at the build
+    std::vector<Candidate> List;      // grouped by cell
+    // List's entity and flags, packed: most of a forest's candidates are rejected by these alone (an LOD level not in
+    // use), and reading them from the ~200-byte Candidate cost more than the rest of the gather.
+    struct HotCandidate { entt::entity Entity; std::uint16_t Flags; };
+    std::vector<HotCandidate> Hot;
+    std::vector<CandidateCell> Cells;
+    std::vector<std::uint32_t> Index; // entity slot -> List index (kNoCandidate when none)
+    std::vector<const Model*> PoolModels; // each renderable's model, in pool order: a swapped model rebuilds
 };
+constexpr std::uint32_t kNoCandidate = ~0u;
+
+// A fingerprint of everything a Candidate's Flags and Layer were read from: while it holds, a new frame only has to
+// patch the candidates whose transforms moved (World::ChangedWorldTransforms) instead of re-reading every renderable.
+template <class Tag>
+std::uint64_t TagFingerprint(World& world, std::uint64_t salt) {
+    const entt::sparse_set& st = world.Registry.storage<Tag>();
+    std::uint64_t h = (std::uint64_t)st.size() * salt;
+    const entt::entity* data = st.data();
+    for (size_t i = 0, n = st.size(); i < n; ++i) {
+        std::uint64_t v = ((std::uint64_t)entt::to_integral(data[i]) + salt) * 0x9E3779B97F4A7C15ull;
+        v ^= v >> 29;
+        h += v * 0xBF58476D1CE4E5B9ull;
+    }
+    return h;
+}
+std::uint64_t FlagSignature(World& world) {
+    std::uint64_t h = TagFingerprint<InactiveTag>(world, 1) ^ TagFingerprint<PoseSourceTag>(world, 3) ^
+                      TagFingerprint<OwnerViewOnlyTag>(world, 5) ^ TagFingerprint<HiddenFromOwnerTag>(world, 7) ^
+                      TagFingerprint<ViewModelTag>(world, 11) ^ TagFingerprint<PlayerBodyTag>(world, 13) ^
+                      TagFingerprint<HiddenInSceneTag>(world, 17) ^ TagFingerprint<LayerComponent>(world, 19);
+    for (auto [e, lc] : world.Registry.view<LayerComponent>().each()) // a layer is edited in place
+        h += ((std::uint64_t)entt::to_integral(e) * 31 + (std::uint64_t)(std::uint32_t)lc.Layer) * 0xD6E8FEB86659FD93ull;
+    return h;
+}
 
 void FillBounds(VisibleRenderable& v, const RenderableComponent& r) {
     r.ModelRef->PosedBounds(v.LocalMin, v.LocalMax);
@@ -151,23 +194,69 @@ void FillBounds(VisibleRenderable& v, const RenderableComponent& r) {
     }
 }
 
-const std::vector<Candidate>& Candidates(World& world) {
+const CandidateCache& Candidates(World& world) {
     static CandidateCache cache;
     // Its entities (the storage's own iterators yield components): the first and last as a cheap check that the set
     // didn't change under an unchanged size.
     const entt::sparse_set& storage = world.Registry.storage<RenderableComponent>();
     const entt::entity first = storage.empty() ? entt::null : storage.data()[0];
     const entt::entity last = storage.empty() ? entt::null : storage.data()[storage.size() - 1];
-    if (cache.Owner == &world && cache.Stamp == world.TransformCacheStamp() && world.TransformCacheStamp() != 0 &&
-        cache.Renderables == storage.size() && cache.First == first && cache.Last == last)
-        return cache.List;
-    cache = {&world, world.TransformCacheStamp(), storage.size(), first, last, std::move(cache.List)};
-    cache.List.clear();
+    const bool sameSet = cache.Owner == &world && world.TransformCacheStamp() != 0 && cache.Renderables == storage.size() &&
+                         cache.First == first && cache.Last == last;
+    if (sameSet && cache.Stamp == world.TransformCacheStamp()) return cache;
     auto& reg = world.Registry;
+    const std::uint64_t flags = FlagSignature(world);
+    // A renderable given another model (Inspector, outfits) brings other bounds, which its cell may not hold.
+    auto sameModels = [&]() {
+        size_t k = 0;
+        for (auto [e, r] : reg.view<RenderableComponent>().each()) {
+            if (k >= cache.PoolModels.size() || cache.PoolModels[k] != r.ModelRef.get()) return false;
+            ++k;
+        }
+        return k == cache.PoolModels.size();
+    };
+    // One rebuild on from the last build, nothing entered or left the transform cache and no flag or model changed:
+    // patch the moved ones (and everything posed reads its bounds live anyway).
+    if (sameSet && cache.Flags == flags && cache.Stamp != 0 && cache.Stamp == world.PreviousTransformCacheStamp() &&
+        !world.TransformCacheMembershipChanged() && sameModels()) {
+        for (entt::entity e : world.ChangedWorldTransforms()) {
+            const size_t slot = (size_t)entt::to_entity(e);
+            if (slot >= cache.Index.size() || cache.Index[slot] == kNoCandidate) continue;
+            Candidate& c = cache.List[cache.Index[slot]];
+            if (c.Entity != e) continue;
+            c.V.Xform = world.GetCachedWorldTransform(e);
+            FillBounds(c.V, *c.Renderable);
+            CandidateCell& cell = cache.Cells[c.Cell];
+            if (!cell.Always) {
+                if (!c.V.Bounded) {
+                    cell.Always = true; // lost its bounds: the cell is tested member by member now
+                } else {
+                    cell.Min = glm::min(cell.Min, c.V.WorldMin);
+                    cell.Max = glm::max(cell.Max, c.V.WorldMax);
+                }
+            }
+        }
+        cache.Stamp = world.TransformCacheStamp();
+        return cache;
+    }
+    cache.Owner = &world;
+    cache.Stamp = world.TransformCacheStamp();
+    cache.Renderables = storage.size();
+    cache.First = first;
+    cache.Last = last;
+    cache.Flags = flags;
+    cache.List.clear();
+    cache.Hot.clear();
+    cache.Cells.clear();
+    std::fill(cache.Index.begin(), cache.Index.end(), kNoCandidate);
+    cache.PoolModels.clear();
+    for (auto [e, r] : reg.view<RenderableComponent>().each()) cache.PoolModels.push_back(r.ModelRef.get());
+    static std::vector<Candidate> built;
+    built.clear();
     for (auto entity : reg.view<TransformComponent, RenderableComponent>()) {
         auto& r = reg.get<RenderableComponent>(entity);
         if (!r.ModelRef) continue; // its model failed to load (or isn't assigned yet): nothing to draw
-        Candidate c{entity, &r, r.ModelRef.get(), 0, 0, {}};
+        Candidate c{entity, &r, r.ModelRef.get(), 0, 0, 0, {}};
         if (reg.all_of<InactiveTag>(entity)) c.Flags |= kCandInactive;
         if (reg.all_of<PoseSourceTag>(entity)) c.Flags |= kCandPoseSource;
         if (reg.all_of<OwnerViewOnlyTag>(entity)) c.Flags |= kCandOwnerViewOnly;
@@ -182,11 +271,72 @@ const std::vector<Candidate>& Candidates(World& world) {
         c.V.Renderable = &r;
         c.V.Xform = world.GetCachedWorldTransform(entity);
         FillBounds(c.V, r);
+        built.push_back(c);
+    }
+    // Bucket by ground-plan square: key = cell (0 = Always) above the candidate's index, sorted.
+    constexpr float kCellSize = 32.0f;
+    static std::vector<std::uint64_t> keys;
+    keys.resize(built.size());
+    for (size_t i = 0; i < built.size(); ++i) {
+        const Candidate& c = built[i];
+        std::uint64_t cell = 0;
+        if (c.V.Bounded && !(c.Flags & (kCandPosed | kCandViewModel | kCandPlayerBody))) {
+            const glm::vec3 centre = (c.V.WorldMin + c.V.WorldMax) * 0.5f;
+            auto axis = [&](float v) {
+                const float k = std::floor(v / kCellSize) + 524288.0f; // 2^19: the world centred in 20 bits
+                return (std::uint64_t)std::clamp(k, 1.0f, 1048575.0f);
+            };
+            cell = (axis(centre.x) << 20) | axis(centre.z);
+        }
+        keys[i] = (cell << 24) | (std::uint64_t)i; // 2^24 candidates at most
+    }
+    std::sort(keys.begin(), keys.end());
+    cache.List.reserve(built.size());
+    std::uint64_t cellNow = ~0ull;
+    for (const std::uint64_t key : keys) {
+        Candidate c = built[(size_t)(key & 0xFFFFFFull)];
+        const std::uint64_t cell = key >> 24;
+        if (cell != cellNow) {
+            cache.Cells.push_back({c.V.WorldMin, c.V.WorldMax, (std::uint32_t)cache.List.size(), 0, cell == 0});
+            cellNow = cell;
+        }
+        CandidateCell& at = cache.Cells.back();
+        at.Min = glm::min(at.Min, c.V.WorldMin);
+        at.Max = glm::max(at.Max, c.V.WorldMax);
+        ++at.Count;
+        c.Cell = (std::uint32_t)cache.Cells.size() - 1;
+        const size_t slot = (size_t)entt::to_entity(c.Entity);
+        if (slot >= cache.Index.size()) cache.Index.resize(slot + 1, kNoCandidate);
+        cache.Index[slot] = (std::uint32_t)cache.List.size();
+        cache.Hot.push_back({c.Entity, c.Flags});
         cache.List.push_back(c);
     }
-    return cache.List;
+    return cache;
 }
 } // namespace
+
+bool RenderableBounds(World& world, glm::vec3& outMin, glm::vec3& outMax) {
+    const CandidateCache& cache = Candidates(world);
+    glm::vec3 lo(std::numeric_limits<float>::max()), hi(-std::numeric_limits<float>::max());
+    for (const CandidateCell& cell : cache.Cells) {
+        if (!cell.Always) {
+            lo = glm::min(lo, cell.Min);
+            hi = glm::max(hi, cell.Max);
+            continue;
+        }
+        for (std::uint32_t i = cell.First, end = cell.First + cell.Count; i < end; ++i) { // as they stand now
+            VisibleRenderable v = cache.List[i].V;
+            if (!cache.List[i].Renderable->ModelRef) continue;
+            FillBounds(v, *cache.List[i].Renderable);
+            if (!v.Bounded) continue;
+            lo = glm::min(lo, v.WorldMin);
+            hi = glm::max(hi, v.WorldMax);
+        }
+    }
+    outMin = lo;
+    outMax = hi;
+    return lo.x <= hi.x;
+}
 
 bool TooSmallOnScreen(const glm::vec3& worldMin, const glm::vec3& worldMax, const glm::vec3& eye, float projScaleY,
                       float minScreenHeight) {
@@ -202,10 +352,23 @@ bool TooSmallOnScreen(const glm::vec3& worldMin, const glm::vec3& worldMax, cons
 void GatherVisible(World& world, const VisibilityQuery& q, std::vector<VisibleRenderable>& out) {
     out.clear();
     const bool anyLod = !world.Registry.storage<LodCulledTag>().empty();
-    for (const Candidate& c : Candidates(world)) {
+    const CandidateCache& cache = Candidates(world);
+    for (const CandidateCell& cell : cache.Cells) {
+    if (!cell.Always) { // the whole square is out of view
+        const AABB box{cell.Min, cell.Max};
+        if (q.Cull && !q.Cull->Intersects(box)) continue;
+        if (q.CellCullCount > 0) {
+            bool any = false;
+            for (int f = 0; f < q.CellCullCount && !any; ++f) any = q.CellCull[f].Intersects(box);
+            if (!any) continue;
+        }
+    }
+    for (std::uint32_t i = cell.First, end = cell.First + cell.Count; i < end; ++i) {
         // GameObject active / LOD level (#163); PoseSourceTag is animated only (the first-person arms rig).
-        if (c.Flags & (kCandInactive | kCandPoseSource)) continue;
-        if (anyLod && world.Registry.all_of<LodCulledTag>(c.Entity)) continue;
+        const CandidateCache::HotCandidate& hot = cache.Hot[i];
+        if (hot.Flags & (kCandInactive | kCandPoseSource)) continue;
+        if (anyLod && world.IsLodCulled(hot.Entity)) continue;
+        const Candidate& c = cache.List[i];
         // Split poses: the first-person copy only in the player's own camera, the world copy everywhere else (and
         // the world copy is the one that casts).
         if (c.Flags & ((q.ShadowCasters || !q.OwnerView) ? kCandOwnerViewOnly : kCandHiddenFromOwner)) continue;
@@ -221,15 +384,18 @@ void GatherVisible(World& world, const VisibilityQuery& q, std::vector<VisibleRe
                             : r.CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) continue;
         if (q.SkipTransparent && !r.Materials.empty() && r.Materials[0] &&
             r.Materials[0]->RenderQueue == MaterialAsset::Queue::Transparent) continue;
-        VisibleRenderable v = c.V;
         // An animated model's bounds move with its pose, and a swapped model brings its own: read those live.
-        if ((c.Flags & kCandPosed) || r.ModelRef.get() != c.ModelAtBuild) FillBounds(v, r);
+        const bool live = (c.Flags & kCandPosed) || r.ModelRef.get() != c.ModelAtBuild;
+        VisibleRenderable liveV;
+        if (live) { liveV = c.V; FillBounds(liveV, r); }
+        const VisibleRenderable& v = live ? liveV : c.V; // tested in place; copied out only when it passes
         if (v.Bounded) {
             if (q.Cull && !q.Cull->Intersects(AABB{v.WorldMin, v.WorldMax})) continue;
             if (q.SizeCullEye && TooSmallOnScreen(v.WorldMin, v.WorldMax, *q.SizeCullEye, q.SizeCullProjScale,
                                                   q.MinScreenHeight)) continue;
         }
         out.push_back(v);
+    }
     }
 }
 
@@ -635,6 +801,10 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         inView.SizeCullProjScale = ctx.Proj[1][1];
         inView.MinScreenHeight = ProjectSettings::Quality().SmallObjectCullHeight;
     }
+    // Whole cells outside both of the frusta the test below uses are skipped up front.
+    const Frustum viewCells[2] = {camFrustum, vmFrustum};
+    inView.CellCull = viewCells;
+    inView.CellCullCount = viewModelPass ? 2 : 1;
     static std::vector<VisibleRenderable> visible;
     GatherVisible(world, inView, visible);
     for (const VisibleRenderable& vis : visible) {
@@ -935,7 +1105,13 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     // pushed back by a polygon offset: under the opaque pass's GL_LEQUAL the surface itself still passes, anything
     // behind it doesn't. Only what draws whole is in it: nothing skinned or moving (Dynamic), and none of the
     // player body's or outfits' hidden parts, which the model program discards.
-    if (in.depthShader && ProjectSettings::Quality().DepthPrepass) {
+    const bool depthPrepass = in.depthShader && ProjectSettings::Quality().DepthPrepass;
+    const auto prepassed = [&](const DrawItem& it) {
+        return depthPrepass && !(it.Dynamic || it.NearHide > 0.0f || it.HideBones || it.HideVerts || it.CollarVerts ||
+                                 it.BoneMaskMode || it.LayerPull != 0.0f || it.Ref->HasBones());
+    };
+    if (depthPrepass) {
+        PROFILE_GPU_SCOPE("Depth Pre-pass");
         Shader& depth = *in.depthShader;
         depth.Bind();
         depth.SetMat4("uLightViewProj", ctx.Proj * ctx.View);
@@ -949,11 +1125,8 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         glPolygonOffset(1.0f, 4.0f);
         static std::vector<DepthCaster> prepass;
         prepass.clear();
-        for (const DrawItem& it : drawList) {
-            if (it.Dynamic || it.NearHide > 0.0f || it.HideBones || it.HideVerts || it.CollarVerts ||
-                it.BoneMaskMode || it.LayerPull != 0.0f || it.Ref->HasBones()) continue;
-            prepass.push_back({it.Ref, it.Slots, it.Visible, &it.Xform});
-        }
+        for (const DrawItem& it : drawList)
+            if (prepassed(it)) prepass.push_back({it.Ref, it.Slots, it.Visible, &it.Xform});
         DrawDepthCasters(depth, prepass);
         depth.SetInt("uSplitViewProj", 0); // the shadow passes share this program
         glPolygonOffset(0.0f, 0.0f);
@@ -1025,9 +1198,18 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     // buffers for it alone, and leaves again before fur, the sky and the transparents.
     const bool velocityOut = ctx.TxHdr && ctx.TxHdr->VelocityEnabled();
     if (velocityOut) ctx.TxHdr->SetVelocityWrites(true);
+    {
+    PROFILE_GPU_SCOPE("Opaque");
+    // What the pre-pass laid down draws without writing depth again: the model program can discard (alpha clip, hidden
+    // parts), and a program that discards while writing depth loses early depth testing - every hidden layer of a
+    // street or a forest was shaded in full. With writes off the test runs first, and the pre-pass depth (the same
+    // clip) already holds the answer.
+    GLboolean depthWrites = GL_TRUE;
     for (std::size_t g = 0; g < opaqueGroups.Groups.size(); ++g) {
         const auto& grp = opaqueGroups.Groups[g];
         const DrawItem& it = drawList[opaqueGroups.Order[grp.First]];
+        const GLboolean wantWrites = prepassed(it) ? GL_FALSE : GL_TRUE;
+        if (wantWrites != depthWrites) glDepthMask(depthWrites = wantWrites);
         probeItem = &it;
         instanceBase = groupBase[g];
         it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, 1.0f, perDraw, it.Pass, it.DoubleSided, it.Visible,
@@ -1039,6 +1221,8 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             localStats.Triangles += member.Tris;
             localStats.Vertices += member.Verts;
         }
+    }
+    if (depthWrites != GL_TRUE) glDepthMask(GL_TRUE);
     }
     instanceBase = -1;
     if (velocityOut) ctx.TxHdr->SetVelocityWrites(false);
@@ -1105,6 +1289,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
 
     // --- Transparent pass: back-to-front sorted, blended, no depth write -----------
     if (!transparentList.empty()) {
+        PROFILE_GPU_SCOPE("Transparent");
         passAlphaBlend = 1;
         // Every program already brought up for the opaque pass flips to blended output; new
         // programs picked up below get passAlphaBlend via the selector.
