@@ -2,13 +2,35 @@
   "folder": "assets/Environments/OfficeAndPoliceStation/Meshes/Props",
   "guid": "415079468b57331d",
   "importer": {
+    "excludeNodes": [],
     "globalScale": 1.0,
     "importAnimations": false,
     "importNormals": true,
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
-    "optimizeGraph": true
+    "meshNodes": [
+      "Pipe_ceiling_holder"
+    ],
+    "optimizeGraph": true,
+    "rootTransform": [
+      -1.0,
+      -0.0,
+      0.0,
+      0.0,
+      0.0,
+      -0.0,
+      1.0,
+      0.0,
+      -0.0,
+      1.0,
+      -0.0,
+      0.0,
+      1.000015,
+      -0.001238,
+      -2.006882,
+      1.0
+    ]
   },
   "materialRemap": {
     "PaintingSet": "assets/Environments/OfficeAndPoliceStation/Materials/M_PaintingSet.mat"

@@ -2,12 +2,16 @@
   "folder": "assets/Environments/ModularCityAlleyPack/Meshes/Props",
   "guid": "3f10ff33892f64d5",
   "importer": {
+    "excludeNodes": [],
     "globalScale": 1.0,
     "importAnimations": false,
     "importNormals": true,
     "importSkeleton": false,
     "materialImportMode": 1,
     "mergeByMaterial": true,
+    "meshNodes": [
+      "Sign_Hotel_B"
+    ],
     "optimizeGraph": true,
     "pivotOffset": [
       36.6119,

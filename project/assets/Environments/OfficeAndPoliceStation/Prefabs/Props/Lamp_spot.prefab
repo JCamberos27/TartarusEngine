@@ -23,8 +23,8 @@
       "name": "Lamp_spot",
       "order": 0,
       "parentId": -1,
-      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Lamp_spot@Lamp_spot.FBX",
-      "pathGuid": "8335822a2d140aa7",
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Lamp_spot@Lamp_spot_ceilingpart.FBX",
+      "pathGuid": "ffa48874a3d90102",
       "position": [
         -0.0,
         0.0,

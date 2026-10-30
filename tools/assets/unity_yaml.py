@@ -5,14 +5,28 @@
 import re
 
 _DOC = re.compile(r'^--- !u!(\d+) &(-?\d+)( stripped)?\s*$', re.M)
+_GUID = re.compile(r'^[0-9a-f]{32}$')
+_ESC = {'n': '\n', 't': '\t', 'r': '\r', '0': '\0', '"': '"', '\\': '\\', '/': '/'}
+
+
+def _unescape(m):
+    e = m.group(1)
+    if e[0] in 'xu' and len(e) > 1:
+        return chr(int(e[1:], 16))
+    return _ESC.get(e, e)
 
 
 def _scalar(s):
     s = s.strip()
     if s == '' or s == '~' or s == 'null':
         return None
-    if len(s) >= 2 and s[0] == s[-1] and s[0] in '\'"':
-        return s[1:-1]
+    if len(s) >= 2 and s[0] == s[-1] and s[0] == "'":
+        return s[1:-1].replace("''", "'")
+    if len(s) >= 2 and s[0] == s[-1] == '"':
+        # double-quoted: Unity escapes non-ASCII ('Wall_1st_\xBDx' is Wall_1st_½x)
+        return re.sub(r'\\(x[0-9A-Fa-f]{2}|u[0-9A-Fa-f]{4}|.)', _unescape, s[1:-1])
+    if _GUID.match(s):  # a guid, even one that reads as a number ('0000000000000000e000000000000000' is 0.0)
+        return s
     try:
         return int(s)
     except ValueError:

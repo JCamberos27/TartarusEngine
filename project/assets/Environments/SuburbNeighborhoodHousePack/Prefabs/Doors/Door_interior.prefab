@@ -27,22 +27,46 @@
   "formatVersion": 4,
   "models": [
     {
+      "Openable": {
+        "Amount": 90.0,
+        "Close Sound": "assets/Audio/Foley/door/close_1.wav;assets/Audio/Foley/door/close_2.wav;assets/Audio/Foley/door/close_3.wav;assets/Audio/Foley/door/close_4.wav",
+        "Latch Sound": "assets/Audio/Foley/door/latch_1.wav;assets/Audio/Foley/door/latch_2.wav;assets/Audio/Foley/door/latch_3.wav;assets/Audio/Foley/door/latch_4.wav",
+        "Motion": "Hinge Left",
+        "Open Sound": "assets/Audio/Foley/door/open_1.wav;assets/Audio/Foley/door/open_2.wav;assets/Audio/Foley/door/open_3.wav;assets/Audio/Foley/door/open_4.wav",
+        "Open Time": 0.5,
+        "Start Open": false
+      },
+      "collider": {
+        "center": [
+          0.500689,
+          1.297946,
+          -0.000595
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.509005,
+          1.075053,
+          0.035
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
       "id": 1,
-      "name": "Door_interior",
+      "name": "Door_interior_mesh",
       "order": 1,
       "parentId": 0,
       "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Door_interior.FBX",
       "pathGuid": "6c8b943962df8354",
       "position": [
-        -2.28759,
-        0.022646,
+        -0.0,
+        0.0,
         0.0
       ],
       "rotation": [
-        0.707107,
         0.0,
-        0.0,
-        0.707107
+        -0.0,
+        -0.0,
+        1.0
       ],
       "scale": [
         1.0,
