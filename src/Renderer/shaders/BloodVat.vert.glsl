@@ -28,6 +28,8 @@ out vec4 vColor;
 out float vHidden;
 out vec3 vBindPos;    // ModelFragment's blood splats: none on the fluid itself
 out vec3 vBindNormal;
+out vec4 vCurClip;  // ModelFragment's TAA velocity: w 0 = unknown, the resolve reprojects by depth
+out vec4 vPrevClip;
 out gl_PerVertex { vec4 gl_Position; float gl_ClipDistance[1]; };
 
 vec3 UnpackOct(uint p) {
@@ -61,4 +63,6 @@ void main() {
     vBindNormal = vec3(0.0, 1.0, 0.0);
     gl_ClipDistance[0] = dot(vec4(world.xyz, 1.0), s.ClipPlane);
     gl_Position = uProj * (uView * world);
+    vCurClip = vec4(0.0);
+    vPrevClip = vec4(0.0);
 }

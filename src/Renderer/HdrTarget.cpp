@@ -27,6 +27,7 @@ void HdrTarget::Release() {
     if (m_MsFbo)        { glDeleteFramebuffers(1, &m_MsFbo);       m_MsFbo = 0; }
     if (m_MsColor)      { glDeleteTextures(1, &m_MsColor);         m_MsColor = 0; }
     if (m_MsDepth)      { glDeleteTextures(1, &m_MsDepth);         m_MsDepth = 0; }
+    if (m_MsVelocity)   { glDeleteTextures(1, &m_MsVelocity);      m_MsVelocity = 0; }
     // m_DepthRequested is deliberately NOT reset - a Resize() calls Release() then Create(),
     // and if depth was already provisioned before that resize, Create() needs to know to
     // re-provision it rather than silently dropping it (#206).
@@ -79,6 +80,8 @@ void HdrTarget::Create(int width, int height, int samples) {
     if (m_ResolveDepth) glNamedFramebufferTexture(m_ResolveFbo, GL_DEPTH_ATTACHMENT, m_ResolveDepth, 0);
     glNamedFramebufferDrawBuffers(m_ResolveFbo, 1, &drawBuf);
 
+    if (m_WantVelocity) SetVelocityEnabled(true);
+
     GLenum ms = glCheckNamedFramebufferStatus(m_MsFbo, GL_FRAMEBUFFER);
     GLenum rs = glCheckNamedFramebufferStatus(m_ResolveFbo, GL_FRAMEBUFFER);
     if (ms != GL_FRAMEBUFFER_COMPLETE || rs != GL_FRAMEBUFFER_COMPLETE) {
@@ -87,6 +90,37 @@ void HdrTarget::Create(int width, int height, int samples) {
                    std::to_string(ms) + " resolve=0x" + std::to_string(rs) + ")");
         Release();
     }
+}
+
+void HdrTarget::SetVelocityEnabled(bool on) {
+    m_WantVelocity = on;
+    if (!m_MsFbo) return;
+    if (on && !m_MsVelocity) {
+        glCreateTextures(GL_TEXTURE_2D_MULTISAMPLE, 1, &m_MsVelocity);
+        glTextureStorage2DMultisample(m_MsVelocity, m_Samples, GL_RG16F, m_Width, m_Height, GL_TRUE);
+        glNamedFramebufferTexture(m_MsFbo, GL_COLOR_ATTACHMENT1, m_MsVelocity, 0);
+    } else if (!on && m_MsVelocity) {
+        glNamedFramebufferTexture(m_MsFbo, GL_COLOR_ATTACHMENT1, 0, 0);
+        glDeleteTextures(1, &m_MsVelocity);
+        m_MsVelocity = 0;
+    }
+    SetVelocityWrites(false);
+}
+
+void HdrTarget::SetVelocityWrites(bool on) const {
+    if (!m_MsFbo) return;
+    const GLenum bufs[2] = {GL_COLOR_ATTACHMENT0, (on && m_MsVelocity) ? (GLenum)GL_COLOR_ATTACHMENT1 : (GLenum)GL_NONE};
+    glNamedFramebufferDrawBuffers(m_MsFbo, 2, bufs);
+}
+
+void HdrTarget::ClearVelocity(float value) const {
+    if (!m_MsFbo || !m_MsVelocity) return;
+    const GLenum bufs[2] = {GL_NONE, GL_COLOR_ATTACHMENT1};
+    glNamedFramebufferDrawBuffers(m_MsFbo, 2, bufs);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE); // a clear honours the write mask
+    const float v[4] = {value, value, 0.0f, 0.0f};
+    glClearNamedFramebufferfv(m_MsFbo, GL_COLOR, 1, v);
+    SetVelocityWrites(false);
 }
 
 void HdrTarget::BindForRender() const {

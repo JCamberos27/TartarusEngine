@@ -247,6 +247,15 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
     program.SetMat4("uProj", ctx.Proj);
     program.SetVec3("uViewPos", ctx.ViewPos);
     program.SetInt("uDebugView", ctx.DebugView); // #236 R2 scene-view debug modes
+    // TAA motion vectors (TemporalAA.h) and rain wetness (ModelFragment.glsl ApplyWetness).
+    program.SetInt("uTaaVelocity", ctx.TaaVelocity ? 1 : 0);
+    if (ctx.TaaVelocity) {
+        program.SetMat4("uPrevViewProj", ctx.TaaPrevViewProj);
+        program.SetVec2("uTaaJitter", ctx.TaaJitterNdc);
+    }
+    program.SetFloat("uWetness", fs.world ? fs.world->Wetness : 0.0f);
+    program.SetFloat("uPuddleAmount", fs.world ? fs.world->PuddleAmount : 0.0f);
+    program.SetFloat("uPuddleScale", fs.world ? fs.world->PuddleScale : 4.0f);
 
     // Cascaded-shadow uniforms + the depth array on unit 8 (material maps use 1..7).
     program.SetInt("uShadowEnabled", fs.sunShadowsOn ? 1 : 0);
@@ -1012,6 +1021,10 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         }
         InstanceBuffer::Upload();
     }
+    // TAA: the opaque pass (ModelFragment.glsl) is what writes motion vectors - location 1 joins the draw
+    // buffers for it alone, and leaves again before fur, the sky and the transparents.
+    const bool velocityOut = ctx.TxHdr && ctx.TxHdr->VelocityEnabled();
+    if (velocityOut) ctx.TxHdr->SetVelocityWrites(true);
     for (std::size_t g = 0; g < opaqueGroups.Groups.size(); ++g) {
         const auto& grp = opaqueGroups.Groups[g];
         const DrawItem& it = drawList[opaqueGroups.Order[grp.First]];
@@ -1028,6 +1041,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         }
     }
     instanceBase = -1;
+    if (velocityOut) ctx.TxHdr->SetVelocityWrites(false);
     // Nothing after this pass draws instanced: leave every program it used reading uModel again (the previews share
     // the material shaders' programs).
     for (Shader* p : appliedPrograms) {
@@ -1174,6 +1188,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         // here: the world's draws have already consumed this frame's lists.
         RenderFrameContext vmCtx = ctx;
         vmCtx.Proj = vmProj;
+        vmCtx.TaaVelocity = false; // unjittered, and it moves with the eye: zero motion (written below)
         FrameState vmFs = GatherFrameState(world, vmCtx, in);
         // The SSAO map was built from the world's depth pre-pass, which skips the view model, so
         // sampling it here stamps whatever stands behind the gun (a character, a wall) onto it as
@@ -1214,6 +1229,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         modelShader.SetInt("uAlphaBlend", 0);
 
         sortOpaque(viewModelList);
+        if (velocityOut) ctx.TxHdr->SetVelocityWrites(true); // TAA: the arms and gun write zero motion
         for (const DrawItem& it : viewModelList) {
             probeItem = &it;
             it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, 1.0f, perDraw, it.Pass, it.DoubleSided, it.Visible);
@@ -1222,6 +1238,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             localStats.Triangles += it.Tris;
             localStats.Vertices += it.Verts;
         }
+        if (velocityOut) ctx.TxHdr->SetVelocityWrites(false);
 
         // Transparent view-model slots (a lens, glass) follow the opaque arms rather than
         // preceding them as they would in the world pass — here the opaque geometry of the same

@@ -109,6 +109,7 @@ struct Material {
     float GrungeStrength = 0.0f;          // 0 = off
     float GrungeScale    = 0.5f;          // tiles per metre
     bool  ReceiveDecals  = true;          // clustered decals project onto this surface
+    bool  NoWetness      = false;         // _NoWetness: World rain wetness / puddles skip it (interiors)
     // Foliage (docs: FoliageWind.glsl). Opt-in; off = the vertex and fragment shaders behave exactly as before.
     // Vertex wind: a world-space gust (global direction + time, Model::SetWind) scaled by a height mask (the mesh's
     // local Y over WindHeight, or the vertex colour's red when UseVertexColor is on) bends it, and a small
@@ -179,10 +180,12 @@ struct Material {
         // Foliage wind: one clock value per frame, so the depth pre-pass, the shadow passes and the main pass bend a
         // vertex identically (a mismatch fails the main pass's LEQUAL against the pre-pass depth).
         static const auto t0 = std::chrono::steady_clock::now();
+        s_PrevWindTime = s_WindTime; // TAA: the wind's motion vectors need where the leaves were last frame
         s_WindTime = std::chrono::duration<float>(std::chrono::steady_clock::now() - t0).count();
     }
     static std::uint32_t HashFrame() { return s_HashFrame; }
     static float WindTime() { return s_WindTime; }
+    static float PrevWindTime() { return s_PrevWindTime; }
     static glm::vec2 WindDirection() { return s_WindDir; }
     static void SetWindDirection(glm::vec2 d) { if (glm::dot(d, d) > 1e-6f) s_WindDir = glm::normalize(d); }
 
@@ -246,7 +249,8 @@ struct Material {
                                   | (SpecularHighlights ? 0u : 128u)
                                   | (GlossyReflections ? 0u : 256u)
                                   | (ReceiveDecals ? 0u : 512u)
-                                  | (Foliage ? 1024u : 0u);
+                                  | (Foliage ? 1024u : 0u)
+                                  | (NoWetness ? 2048u : 0u);
         put(&flags, sizeof(flags));
         const Texture* const texs[] = {
             AlbedoMap.get(), NormalMap.get(), MetallicRoughnessMap.get(), MetallicMap.get(),
@@ -284,5 +288,6 @@ private:
     mutable const void* m_VariantOwner = nullptr;
     inline static std::uint32_t s_HashFrame = 1;
     inline static float s_WindTime = 0.0f;
+    inline static float s_PrevWindTime = 0.0f;
     inline static glm::vec2 s_WindDir{0.8f, 0.6f}; // world XZ, unit length
 };

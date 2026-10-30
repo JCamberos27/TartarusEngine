@@ -3,6 +3,7 @@
 // it off the offset is exactly zero and nothing else about the vertex changes.
 uniform int   uFoliage;
 uniform float uWindTime;        // seconds, one value per frame (Material::WindTime)
+uniform float uPrevWindTime;    // last frame's uWindTime: TAA motion vectors (ModelVertex.glsl)
 uniform vec2  uWindDir;         // world-space gust direction on XZ, unit length
 uniform float uWindStrength;    // metres the top of uWindHeight moves in a full gust
 uniform float uWindFrequency;   // gust speed multiplier
@@ -19,10 +20,10 @@ float WindHash(vec3 p) {
 // land a vertex on bit-identical depth, or the main pass fails GL_LEQUAL against the pre-pass and the leaf is left black.
 // World-space offset for one vertex. originWorld is the object's origin (the whole tree shares one gust phase from it,
 // so the trunk bends as one piece while the gust still travels across a hedge row).
-vec3 FoliageWindOffset(vec3 localPos, vec4 color, vec3 originWorld) {
+vec3 FoliageWindOffsetAt(vec3 localPos, vec4 color, vec3 originWorld, float windTime) {
     if (uFoliage == 0) return vec3(0.0);
     precise float mask = uWindVertexMask == 1 ? color.r : clamp(localPos.y / max(uWindHeight, 0.01), 0.0, 1.0);
-    precise float t = uWindTime * uWindFrequency;
+    precise float t = windTime * uWindFrequency;
     precise float along = dot(originWorld.xz, uWindDir);
     // Gust: a slow travelling wave plus two faster ones; ~[0.1, 1].
     precise float gust = 0.55 + 0.30 * sin(along * 0.35 - t * 1.1) + 0.15 * sin(along * 0.9 - t * 2.3 + 1.7);
@@ -34,4 +35,8 @@ vec3 FoliageWindOffset(vec3 localPos, vec4 color, vec3 originWorld) {
     precise float flAmp = smoothstep(0.15, 0.6, mask) * (0.4 + 0.6 * gust);
     precise vec3 off = (vec3(bend.x, 0.0, bend.y) * (1.0 - uWindFlutter) * 1.4 + fl * flAmp * uWindFlutter * 0.6) * uWindStrength;
     return off;
+}
+
+vec3 FoliageWindOffset(vec3 localPos, vec4 color, vec3 originWorld) {
+    return FoliageWindOffsetAt(localPos, color, originWorld, uWindTime);
 }

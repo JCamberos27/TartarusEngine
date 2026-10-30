@@ -41,6 +41,7 @@ Properties {
     [Header(Forward Rendering Options)] [Tooltip(The shiny highlight lights leave on the surface. Off = fully matte under lights.)] _SpecularHighlights ("Specular Highlights", Bool) = 1
     [Tooltip(Reflections of the sky and reflection probes. Off = no reflections, whatever the Smoothness.)] _GlossyReflections ("Reflections", Bool) = 1
     [Tooltip(Decals project onto this surface. Off for glass, screens and anything decals should skip.)] _ReceiveDecals ("Receive Decals", Bool) = 1
+    [Tooltip(Stays dry under the scene's rain Wetness and Puddles. On for interiors and anything under cover.)] _NoWetness ("No Wetness", Bool) = 0
     [Header(Clear Coat)] [Tooltip(A thin glossy varnish layer over the base: car paint, lacquered wood. 0 = none.)] _ClearCoat ("Clear Coat", Range(0, 1)) = 0
     [Tooltip(Roughness of the varnish layer: 0 = mirror, 1 = matte.)] _ClearCoatRoughness ("Clear Coat Roughness", Range(0, 1)) = 0.5
     [Tooltip(Masks Clear Coat by its red channel.)] _ClearCoatMap ("Clear Coat Map", Texture2D) = "white"

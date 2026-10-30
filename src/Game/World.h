@@ -116,6 +116,29 @@ public:
     float MotionBlurIntensity{0.5f};
     int   MotionBlurSamples{12};
 
+    // Anti-aliasing mode (Unity's camera Anti-aliasing). Off / FXAA / MSAA only summarise the older
+    // MsaaSamples + FxaaEnabled fields, which still drive those modes exactly as before (so a scene saved
+    // before this existed renders the same). TAA is the new one: jittered projection, per-pixel motion
+    // vectors and a history resolve (TemporalAA.h); it forces the HDR target to 1 sample and skips FXAA.
+    enum class AntiAliasingMode { Off = 0, Fxaa = 1, Msaa = 2, Taa = 3 };
+    AntiAliasingMode AntiAliasing{AntiAliasingMode::Msaa};
+    float TaaSharpness{0.35f};          // 0..1, the post-resolve sharpen (TAA only)
+    int  EffectiveMsaaSamples() const { return AntiAliasing == AntiAliasingMode::Taa ? 1 : MsaaSamples; }
+    bool EffectiveFxaa() const { return AntiAliasing != AntiAliasingMode::Taa && FxaaEnabled; }
+    bool TaaEnabled() const { return AntiAliasing == AntiAliasingMode::Taa; }
+    // What Off / FXAA / MSAA a scene without the key reads as (derived from the two older fields).
+    static AntiAliasingMode LegacyAntiAliasing(int msaaSamples, bool fxaa) {
+        return fxaa ? AntiAliasingMode::Fxaa : msaaSamples > 1 ? AntiAliasingMode::Msaa : AntiAliasingMode::Off;
+    }
+
+    // Global rain wetness (ModelFragment.glsl ApplyWetness). 0 = dry, the default: nothing changes.
+    // Wetness darkens porous albedo and lowers roughness on upward-facing surfaces; PuddleAmount
+    // floods a world-space noise mask on near-flat ground (flat normal, roughness ~0.02, water tint).
+    // Materials with NoWetness (_NoWetness) stay dry - interiors are opted out that way.
+    float Wetness{0.0f};       // 0..1
+    float PuddleAmount{0.0f};  // 0..1
+    float PuddleScale{4.0f};   // metres per noise cell (bigger = larger puddles)
+
     // #162 - distance fog (Unity's Lighting > Other Settings > Fog).
     bool  FogEnabled{false};
     int   FogMode{2};               // 1 Linear, 2 Exponential, 3 Exponential Squared

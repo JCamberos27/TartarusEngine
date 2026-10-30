@@ -934,10 +934,39 @@ void EditorLayer::DrawPostProcessSettings(World& world, float w) {
         EditorUI::SetTooltip("Curve that maps linear HDR to display. ACES = punchy filmic; AgX = gentler, less hue shift.");
 
     // #162 - anti-aliasing, colour grading and vignette (all in the final tonemap pass).
-    if (EditorUIPrimitives::Checkbox("FXAA", &world.FxaaEnabled)) PushUndo(world, "Toggle FXAA");
-    if (ImGui::IsItemHovered())
-        EditorUI::SetTooltip("Fast approximate anti-aliasing on the final image. Smooths what MSAA misses:\n"
-                             "shiny highlights, alpha-cutout edges, thin lines. Slightly softens texture detail.");
+    {
+        // Unity's Anti-aliasing mode. Off / FXAA / MSAA set the older MSAA + FXAA fields; TAA overrides both.
+        static const char* kAaLabels[] = { "Off", "FXAA", "MSAA", "TAA" };
+        int aa = std::clamp((int)world.AntiAliasing, 0, 3);
+        ImGui::SetNextItemWidth(w);
+        if (ImGui::Combo("Anti-aliasing", &aa, kAaLabels, IM_ARRAYSIZE(kAaLabels))) {
+            PushUndo(world, "Change Anti-aliasing");
+            world.AntiAliasing = (World::AntiAliasingMode)aa;
+            switch (world.AntiAliasing) {
+                case World::AntiAliasingMode::Off:  world.MsaaSamples = 1; world.FxaaEnabled = false; break;
+                case World::AntiAliasingMode::Fxaa: world.MsaaSamples = 1; world.FxaaEnabled = true; break;
+                case World::AntiAliasingMode::Msaa: if (world.MsaaSamples < 2) world.MsaaSamples = 4; world.FxaaEnabled = false; break;
+                case World::AntiAliasingMode::Taa:  break; // keeps MSAA / FXAA for switching back
+            }
+        }
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("FXAA: fast filter on the final image. MSAA: multisampled geometry edges.\n"
+                                 "TAA: jittered frames blended over time with motion vectors - smooths alpha-cutout\n"
+                                 "foliage, specular shimmer and thin lines that MSAA misses. ~0.5 ms at 1080p.");
+        if (world.AntiAliasing == World::AntiAliasingMode::Taa) {
+            ImGui::SetNextItemWidth(w);
+            bool activated = false;
+            EditorUI::SliderFloat("TAA sharpness", &world.TaaSharpness, 0.0f, 1.0f, "%.2f", 0, &activated);
+            if (activated) PushUndo(world, "Edit TAA Sharpness");
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Sharpening after the temporal resolve, so 1080p doesn't read soft. 0 = none.");
+        } else if (world.AntiAliasing != World::AntiAliasingMode::Off) {
+            if (EditorUIPrimitives::Checkbox("FXAA", &world.FxaaEnabled)) PushUndo(world, "Toggle FXAA");
+            if (ImGui::IsItemHovered())
+                EditorUI::SetTooltip("Fast approximate anti-aliasing on the final image. Smooths what MSAA misses:\n"
+                                     "shiny highlights, alpha-cutout edges, thin lines. Slightly softens texture detail.");
+        }
+    }
 
     auto postSlider = [&](const char* label, float* v, float lo, float hi, const char* fmt, const char* undo,
                           const char* tip) {
@@ -1014,6 +1043,16 @@ void EditorLayer::DrawPostProcessSettings(World& world, float w) {
         if (ImGui::IsItemHovered())
             EditorUI::SetTooltip("Taps along the streak. More is smoother and costs more.");
     }
+
+    EditorUIPrimitives::SectionHeader("Rain Wetness");
+    postSlider("Wetness", &world.Wetness, 0.0f, 1.0f, "%.2f", "Edit Wetness",
+               "Rain-soaked look: porous surfaces darken and every upward-facing surface gets glossier.\n"
+               "0 = dry. Materials with No Wetness (interiors) stay dry.");
+    postSlider("Puddles", &world.PuddleAmount, 0.0f, 1.0f, "%.2f", "Edit Puddles",
+               "Standing water on flat ground: mirror-flat, tinted patches from a world-space noise mask.");
+    if (world.PuddleAmount > 0.0f)
+        postSlider("Puddle scale", &world.PuddleScale, 0.5f, 20.0f, "%.1f m", "Edit Puddles",
+                   "Size of the puddle pattern in metres.");
 
     EditorUIPrimitives::SectionHeader("Fog");
     if (EditorUIPrimitives::Checkbox("Fog", &world.FogEnabled)) PushUndo(world, "Toggle Fog");
