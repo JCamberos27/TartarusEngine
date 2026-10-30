@@ -19,6 +19,7 @@
     ],
     "_EmissiveMap": "",
     "_EmissiveStrength": 1.0,
+    "_Foliage": true,
     "_Metallic": 0.0,
     "_MetallicMap": "",
     "_MetallicRoughnessMap": "",
@@ -27,8 +28,12 @@
     "_ReflectionProbes": true,
     "_Roughness": 0.85,
     "_RoughnessMap": "",
+    "_Translucency": 0.6,
     "_Triplanar": false,
-    "_TriplanarScale": 1.0
+    "_TriplanarScale": 1.0,
+    "_WindFlutter": 0.35,
+    "_WindHeight": 10.0,
+    "_WindStrength": 0.3
   },
   "renderQueue": 1,
   "shader": "engine://Standard.shader"
