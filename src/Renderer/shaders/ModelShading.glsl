@@ -270,11 +270,12 @@ uniform int uTriplanar;
 uniform float uTriplanarScale;
 
 // Cover layer (Standard.shader _Cover*): a second material laid over up-facing surfaces, projected from above in world space.
-// Compiled only into the _COVER variant, so materials without it pay nothing. Units 26/28/29 are bound by ShaderAsset.
+// Compiled only into the _COVER variant, so materials without it pay nothing. Units 0/28/20 are bound by ShaderAsset (26/29 are the probe cubes and puddle SSR; 0 is only the depth/shadow
+// programs' albedo, 28 is free, and 20 is shared with _ThicknessMap, so a cover material gives up its thickness map).
 #ifdef _COVER
-layout(binding = 26) uniform sampler2D uCoverAlbedoMap;
+layout(binding = 0) uniform sampler2D uCoverAlbedoMap;
 layout(binding = 28) uniform sampler2D uCoverNormalMap;
-layout(binding = 29) uniform sampler2D uCoverMaskMap;   // R height, G occlusion, B smoothness
+layout(binding = 20) uniform sampler2D uCoverMaskMap;   // R height, G occlusion, B smoothness
 uniform float uCoverStrength;
 uniform float uCoverScale;        // tiles per metre
 uniform float uCoverThreshold;    // up-facing share where the cover starts
