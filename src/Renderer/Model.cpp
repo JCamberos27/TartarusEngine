@@ -2060,6 +2060,12 @@ struct MaterialLocs {
     int hasGrunge, grungeMap; // docs/DECALS.md
     // UploadBoneMatrices and DrawDepthOnly (the shadow / depth pre-pass programs).
     int useSkinning, skinBase, uvTiling, uvOffset, depthAlbedo, alphaTest;
+    // SetSurfaceOptions / SetFoliageUniforms and the per-draw uniforms of the multi-program draw: resolved here too, so
+    // a material bind does no name lookups at all (a forest binds a few thousand a frame).
+    int normalStrength, normalFlipY, doubleSided, useVertexColor, noSpecularHighlights, noGlossyReflections;
+    int parallaxScale, detailTiling, grungeStrength, grungeScale, receiveDecals, noWetness, foliageSurface;
+    int materialSubstrate, foliage, windVertexMask, translucency, windStrength, windFrequency, windFlutter, windHeight;
+    int opacity, hideVertBase, clothInterior, model, normalMatrix;
 };
 
 MaterialLocs ResolveMaterialLocs(Shader& shader) {
@@ -2100,6 +2106,32 @@ MaterialLocs ResolveMaterialLocs(Shader& shader) {
     L.uvOffset = shader.Loc("uUVOffset");
     L.depthAlbedo = shader.Loc("uAlbedo");
     L.alphaTest = shader.Loc("uAlphaTest");
+    L.normalStrength = shader.Loc("uNormalStrength");
+    L.normalFlipY = shader.Loc("uNormalFlipY");
+    L.doubleSided = shader.Loc("uDoubleSided");
+    L.useVertexColor = shader.Loc("uUseVertexColor");
+    L.noSpecularHighlights = shader.Loc("uNoSpecularHighlights");
+    L.noGlossyReflections = shader.Loc("uNoGlossyReflections");
+    L.parallaxScale = shader.Loc("uParallaxScale");
+    L.detailTiling = shader.Loc("uDetailTiling");
+    L.grungeStrength = shader.Loc("uGrungeStrength");
+    L.grungeScale = shader.Loc("uGrungeScale");
+    L.receiveDecals = shader.Loc("uReceiveDecals");
+    L.noWetness = shader.Loc("uNoWetness");
+    L.foliageSurface = shader.Loc("uFoliageSurface");
+    L.materialSubstrate = shader.Loc("uMaterialSubstrate");
+    L.foliage = shader.Loc("uFoliage");
+    L.windVertexMask = shader.Loc("uWindVertexMask");
+    L.translucency = shader.Loc("uTranslucency");
+    L.windStrength = shader.Loc("uWindStrength");
+    L.windFrequency = shader.Loc("uWindFrequency");
+    L.windFlutter = shader.Loc("uWindFlutter");
+    L.windHeight = shader.Loc("uWindHeight");
+    L.opacity = shader.Loc("uOpacity");
+    L.hideVertBase = shader.Loc("uHideVertBase");
+    L.clothInterior = shader.Loc("uClothInterior");
+    L.model = shader.Loc("uModel");
+    L.normalMatrix = shader.Loc("uNormalMatrix");
     return L;
 }
 
@@ -2463,39 +2495,39 @@ void SetWindFrame(Shader& shader) {
     shader.SetVec2("uWindDir", Material::WindDirection());
 }
 // The per-material half. uFoliage = 0 for everything else, so a program last used by a foliage material is reset.
-void SetFoliageUniforms(Shader& shader, const Material& mat) {
-    shader.SetInt("uFoliage", mat.Foliage ? 1 : 0);
-    shader.SetInt("uWindVertexMask", mat.UseVertexColor ? 1 : 0);
-    if (!mat.Foliage) { shader.SetFloat("uTranslucency", 0.0f); return; }
-    shader.SetFloat("uWindStrength", mat.WindStrength);
-    shader.SetFloat("uWindFrequency", mat.WindFrequency);
-    shader.SetFloat("uWindFlutter", mat.WindFlutter);
-    shader.SetFloat("uWindHeight", mat.WindHeight);
-    shader.SetFloat("uTranslucency", mat.Translucency);
+void SetFoliageUniforms(Shader& shader, const Material& mat, const MaterialLocs& L) {
+    shader.SetInt(L.foliage, mat.Foliage ? 1 : 0);
+    shader.SetInt(L.windVertexMask, mat.UseVertexColor ? 1 : 0);
+    if (!mat.Foliage) { shader.SetFloat(L.translucency, 0.0f); return; }
+    shader.SetFloat(L.windStrength, mat.WindStrength);
+    shader.SetFloat(L.windFrequency, mat.WindFrequency);
+    shader.SetFloat(L.windFlutter, mat.WindFlutter);
+    shader.SetFloat(L.windHeight, mat.WindHeight);
+    shader.SetFloat(L.translucency, mat.Translucency);
 }
 
 // #102 / #113 — the surface-option uniforms, set for BOTH the built-in and the data-driven
 // (Standard.shader) paths so a shader that declares them gets them either way.
-void SetSurfaceOptions(Shader& shader, const Material& mat) {
-    shader.SetVec2("uUVTiling", mat.UVTiling);
-    shader.SetVec2("uUVOffset", mat.UVOffset);
-    shader.SetFloat("uNormalStrength", mat.NormalStrength);
-    shader.SetInt("uNormalFlipY", mat.NormalFlipY ? 1 : 0);
-    shader.SetInt("uDoubleSided", mat.DoubleSided ? 1 : 0);
-    shader.SetInt("uUseVertexColor", mat.UseVertexColor ? 1 : 0);
-    shader.SetInt("uNoSpecularHighlights", mat.SpecularHighlights ? 0 : 1);
-    shader.SetInt("uNoGlossyReflections", mat.GlossyReflections ? 0 : 1);
-    shader.SetFloat("uParallaxScale", mat.ParallaxScale);
-    shader.SetVec2("uDetailTiling", mat.DetailTiling);
+void SetSurfaceOptions(Shader& shader, const Material& mat, const MaterialLocs& L) {
+    shader.SetVec2(L.uvTiling, mat.UVTiling);
+    shader.SetVec2(L.uvOffset, mat.UVOffset);
+    shader.SetFloat(L.normalStrength, mat.NormalStrength);
+    shader.SetInt(L.normalFlipY, mat.NormalFlipY ? 1 : 0);
+    shader.SetInt(L.doubleSided, mat.DoubleSided ? 1 : 0);
+    shader.SetInt(L.useVertexColor, mat.UseVertexColor ? 1 : 0);
+    shader.SetInt(L.noSpecularHighlights, mat.SpecularHighlights ? 0 : 1);
+    shader.SetInt(L.noGlossyReflections, mat.GlossyReflections ? 0 : 1);
+    shader.SetFloat(L.parallaxScale, mat.ParallaxScale);
+    shader.SetVec2(L.detailTiling, mat.DetailTiling);
     // Grunge and decals (ModelDecals.glsl); the Standard shaders' properties set the same uniforms.
-    shader.SetFloat("uGrungeStrength", mat.GrungeStrength);
-    shader.SetFloat("uGrungeScale", mat.GrungeScale);
-    shader.SetInt("uReceiveDecals", mat.ReceiveDecals ? 1 : 0);
-    shader.SetInt("uNoWetness", mat.NoWetness ? 1 : 0);
-    shader.SetInt("uFoliageSurface", mat.Foliage ? 1 : 0);
-    SetFoliageUniforms(shader, mat);
+    shader.SetFloat(L.grungeStrength, mat.GrungeStrength);
+    shader.SetFloat(L.grungeScale, mat.GrungeScale);
+    shader.SetInt(L.receiveDecals, mat.ReceiveDecals ? 1 : 0);
+    shader.SetInt(L.noWetness, mat.NoWetness ? 1 : 0);
+    shader.SetInt(L.foliageSurface, mat.Foliage ? 1 : 0);
+    SetFoliageUniforms(shader, mat, L);
     // Its substrate's row in the decal system's table (index + 1, 0 = none / still decoding).
-    shader.SetInt("uMaterialSubstrate", mat.Substrate.Enabled() ? DecalSystem::MaterialSubstrate(mat.Substrate) : 0);
+    shader.SetInt(L.materialSubstrate, mat.Substrate.Enabled() ? DecalSystem::MaterialSubstrate(mat.Substrate) : 0);
 }
 
 void BindMaterial(Shader& shader, const Material& mat, const MaterialLocs& locs) {
@@ -2544,7 +2576,7 @@ void BindMaterial(Shader& shader, const Material& mat, const MaterialLocs& locs)
     bindSlot(17, mat.DetailAlbedoMap, locs.hasDetailAlbedo, locs.detailAlbedoMap, DefaultTextures::White());
     bindSlot(18, mat.DetailNormalMap, locs.hasDetailNormal, locs.detailNormalMap, DefaultTextures::FlatNormal());
     bindSlot(21, mat.GrungeMap, locs.hasGrunge, locs.grungeMap, DefaultTextures::White()); // Decals::UNIT_GRUNGE
-    SetSurfaceOptions(shader, mat);
+    SetSurfaceOptions(shader, mat, locs);
 }
 // Data-driven BindMaterial using ShaderAsset::Bindings() + MaterialAsset property accessors.
 // Activates when the MaterialAsset has a linked ShaderAsset (v2 .mat files referencing a .shader).
@@ -2558,10 +2590,11 @@ void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const Shade
     size_t hash = (size_t)mat.HashWithExtraProps();
     hash ^= (size_t)ma.RenderQueue + 0x9e3779b97f4a7c15ull + (hash << 6) + (hash >> 2);
     if (GLStateCache::MaterialAlreadyBound(hash, shader.Program())) return;
+    const MaterialLocs& locs = CachedMaterialLocs(shader);
     // #101 — cutout for the AlphaTest queue (Standard.shader includes ModelFragment's uAlphaClip).
-    shader.SetInt("uAlphaClip", (mat.AlphaClip || ma.RenderQueue == MaterialAsset::Queue::AlphaTest) ? 1 : 0);
-    SetSurfaceOptions(shader, mat); // #102
-    shader.SetFloat("uAlphaCutoff", mat.AlphaCutoff);
+    shader.SetInt(locs.alphaClip, (mat.AlphaClip || ma.RenderQueue == MaterialAsset::Queue::AlphaTest) ? 1 : 0);
+    SetSurfaceOptions(shader, mat, locs); // #102
+    shader.SetFloat(locs.alphaCutoff, mat.AlphaCutoff);
 
     const auto& props    = sa.Properties();
     const auto& bindings = sa.Bindings();
@@ -2773,16 +2806,16 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
             prog->Bind();
             preSkinned = UploadBoneMatrices(*prog); // uUseSkinning + bone SSBO (or this frame's skinned vertices)
             locs = &CachedMaterialLocs(*prog);
-            prog->SetMat4(prog->Loc("uModel"), xform);
-            prog->SetMat4(prog->Loc("uNormalMatrix"), nrm);
+            prog->SetMat4(locs->model, xform);
+            prog->SetMat4(locs->normalMatrix, nrm);
             if (onProgramBound) onProgramBound(*prog); // per-draw uniforms, e.g. probes (#108)
             lastProg = prog;
         }
         // Per-draw: the transparent pass varies opacity per entity. No-op on opaque programs
         // (uOpacity is only read when uAlphaBlend == 1; an absent uniform is loc -1).
         // In the transparent pass each submesh uses its own slot's opacity (#112).
-        prog->SetFloat("uOpacity", pass == MeshPass::Transparent ? slots[i]->Opacity : opacity);
-        prog->SetInt("uHideVertBase", meshFirstVertex);
+        prog->SetFloat(locs->opacity, pass == MeshPass::Transparent ? slots[i]->Opacity : opacity);
+        prog->SetInt(locs->hideVertBase, meshFirstVertex);
         if (preSkinned) prog->SetInt(locs->skinBase, m_PreSkin.Base + meshFirstVertex);
 
         const Material& mat = hasSlot ? slots[i]->Mat : m_D->Meshes[i]->Mat;
@@ -2792,8 +2825,8 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
         else
             BindMaterial(*prog, mat, *locs);
         // After the bind (which a repeat of the same material skips): back faces lit with a flipped normal.
-        prog->SetInt("uDoubleSided", forceDoubleSided || mat.DoubleSided ? 1 : 0);
-        prog->SetInt("uClothInterior", forceDoubleSided && !mat.DoubleSided ? 1 : 0); // not hair cards: both sides are hair
+        prog->SetInt(locs->doubleSided, forceDoubleSided || mat.DoubleSided ? 1 : 0);
+        prog->SetInt(locs->clothInterior, forceDoubleSided && !mat.DoubleSided ? 1 : 0); // not hair cards: both sides are hair
         if (useVisible)
             m_D->Meshes[i]->DrawIndices(visible->Id(), visible->MeshRange(i).Offset, visible->MeshRange(i).Count, instances);
         else
@@ -2826,7 +2859,7 @@ void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<Mate
         // in this pass drew with the same material.
         const bool clip = mat.AlphaClip || (hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::AlphaTest);
         if (!GLStateCache::MaterialAlreadyBound(mat.Hash() ^ (clip ? 0x5bd1e995ull : 0ull), shader.Program())) {
-            SetFoliageUniforms(shader, mat); // the same sway as the main pass, so shadows move with the leaves
+            SetFoliageUniforms(shader, mat, locs); // the same sway as the main pass, so shadows move with the leaves
             shader.SetVec2(locs.uvTiling, mat.UVTiling); // #102 — the cutout follows the material's tiling
             shader.SetVec2(locs.uvOffset, mat.UVOffset);
             if (clip && mat.AlbedoMap && mat.AlbedoMap->IsValid()) {
