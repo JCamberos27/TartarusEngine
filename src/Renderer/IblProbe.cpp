@@ -309,8 +309,10 @@ bool IblProbe::Convolve(unsigned int irradiance, unsigned int specular, unsigned
         }
     }
 
-    // Pass 3: GGX prefilter -> specular cube
+    // Pass 3: GGX prefilter -> specular cube, one face (every mip) per step: all six in one step was a 10-12 ms
+    // frame every few seconds under a drifting physical sky.
     if (last >= 6) {
+        const int firstFace = std::max(first, 6) - 6, lastFace = std::min(last, 11) - 6;
         m_PrefilterShader->Bind();
         m_PrefilterShader->SetInt("uEnvMap", 0);
         m_PrefilterShader->SetFloat("uEnvResolution", envResolution);
@@ -320,7 +322,7 @@ bool IblProbe::Convolve(unsigned int irradiance, unsigned int specular, unsigned
             int size = kSpecularSize >> mip;
             float roughness = (float)mip / (float)(kSpecularMips - 1);
             m_PrefilterShader->SetFloat("uRoughness", roughness);
-            for (int face = 0; face < 6; ++face) {
+            for (int face = firstFace; face <= lastFace; ++face) {
                 BeginCubeFace(specular, face, mip, size);
                 SetFaceBasis(*m_PrefilterShader, face);
                 glDrawArrays(GL_TRIANGLES, 0, 6);

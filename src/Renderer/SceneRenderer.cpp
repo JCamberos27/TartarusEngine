@@ -1096,7 +1096,13 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     // pushed back by a polygon offset: under the opaque pass's GL_LEQUAL the surface itself still passes, anything
     // behind it doesn't. Only what draws whole is in it: nothing skinned or moving (Dynamic), and none of the
     // player body's or outfits' hidden parts, which the model program discards.
-    if (in.depthShader && ProjectSettings::Quality().DepthPrepass) {
+    const bool depthPrepass = in.depthShader && ProjectSettings::Quality().DepthPrepass;
+    const auto prepassed = [&](const DrawItem& it) {
+        return depthPrepass && !(it.Dynamic || it.NearHide > 0.0f || it.HideBones || it.HideVerts || it.CollarVerts ||
+                                 it.BoneMaskMode || it.LayerPull != 0.0f || it.Ref->HasBones());
+    };
+    if (depthPrepass) {
+        PROFILE_GPU_SCOPE("Depth Pre-pass");
         Shader& depth = *in.depthShader;
         depth.Bind();
         depth.SetMat4("uLightViewProj", ctx.Proj * ctx.View);
@@ -1110,11 +1116,8 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         glPolygonOffset(1.0f, 4.0f);
         static std::vector<DepthCaster> prepass;
         prepass.clear();
-        for (const DrawItem& it : drawList) {
-            if (it.Dynamic || it.NearHide > 0.0f || it.HideBones || it.HideVerts || it.CollarVerts ||
-                it.BoneMaskMode || it.LayerPull != 0.0f || it.Ref->HasBones()) continue;
-            prepass.push_back({it.Ref, it.Slots, it.Visible, &it.Xform});
-        }
+        for (const DrawItem& it : drawList)
+            if (prepassed(it)) prepass.push_back({it.Ref, it.Slots, it.Visible, &it.Xform});
         DrawDepthCasters(depth, prepass);
         depth.SetInt("uSplitViewProj", 0); // the shadow passes share this program
         glPolygonOffset(0.0f, 0.0f);
@@ -1182,9 +1185,18 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         }
         InstanceBuffer::Upload();
     }
+    {
+    PROFILE_GPU_SCOPE("Opaque");
+    // What the pre-pass laid down draws without writing depth again: the model program can discard (alpha clip, hidden
+    // parts), and a program that discards while writing depth loses early depth testing - every hidden layer of a
+    // street or a forest was shaded in full. With writes off the test runs first, and the pre-pass depth (the same
+    // clip) already holds the answer.
+    GLboolean depthWrites = GL_TRUE;
     for (std::size_t g = 0; g < opaqueGroups.Groups.size(); ++g) {
         const auto& grp = opaqueGroups.Groups[g];
         const DrawItem& it = drawList[opaqueGroups.Order[grp.First]];
+        const GLboolean wantWrites = prepassed(it) ? GL_FALSE : GL_TRUE;
+        if (wantWrites != depthWrites) glDepthMask(depthWrites = wantWrites);
         probeItem = &it;
         instanceBase = groupBase[g];
         it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, 1.0f, perDraw, it.Pass, it.DoubleSided, it.Visible,
@@ -1196,6 +1208,8 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             localStats.Triangles += member.Tris;
             localStats.Vertices += member.Verts;
         }
+    }
+    if (depthWrites != GL_TRUE) glDepthMask(GL_TRUE);
     }
     instanceBase = -1;
     // Nothing after this pass draws instanced: leave every program it used reading uModel again (the previews share
@@ -1261,6 +1275,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
 
     // --- Transparent pass: back-to-front sorted, blended, no depth write -----------
     if (!transparentList.empty()) {
+        PROFILE_GPU_SCOPE("Transparent");
         passAlphaBlend = 1;
         // Every program already brought up for the opaque pass flips to blended output; new
         // programs picked up below get passAlphaBlend via the selector.
