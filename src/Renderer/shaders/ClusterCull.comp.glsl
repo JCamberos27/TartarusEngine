@@ -65,6 +65,11 @@ bool coneIntersectsSphere(vec3 apex, vec3 dir, float range, float cosOuter,
 const uint TILE = 64u;
 const uint MAX_LIGHTS = 256u; // LightBuffer::kMaxLights
 const uint MASK_WORDS = MAX_LIGHTS / 32u;
+// Per-cluster cap: a froxel shades at most this many point/spot lights. The list is nearest-first
+// (LightBuffer::SortLocalNearestFirst), so an over-full froxel - a far one down a lamp-lined street -
+// drops its farthest lights, which the distance fade has already dimmed. A worst-case guard on the
+// shading loop: none of the shipped scenes reaches it.
+const uint MAX_PER_CLUSTER = 64u;
 shared vec4 sPosRange[TILE]; // view-space position, range (< 0: not clustered - a directional)
 shared vec4 sDirCos[TILE];   // view-space aim, outer cone cos (> 1: a point light, no cone test)
 shared uint sMask[TILE * MASK_WORDS];
@@ -108,7 +113,7 @@ void main() {
         if (live) {
             uint tileCount = min(TILE, lightCount - base);
             for (uint t = 0u; t < tileCount; ++t) {
-                if (tileLightHitsCluster(t, mn, mx)) {
+                if (n < MAX_PER_CLUSTER && tileLightHitsCluster(t, mn, mx)) {
                     uint li = base + t;
                     sMask[lid * MASK_WORDS + (li >> 5u)] |= 1u << (li & 31u);
                     n++;

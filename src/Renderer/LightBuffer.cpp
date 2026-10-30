@@ -74,6 +74,20 @@ void LightBuffer::AddSpot(const glm::vec3& posWorld, const glm::vec3& dirWorld, 
     m_Lights.push_back(l);
 }
 
+void LightBuffer::SortLocalNearestFirst(const glm::vec3& eye) {
+    auto gap = [&](const GpuLight& l) {
+        const float d = glm::length(glm::vec3(l.PositionType) - eye) - l.ColorRange.a;
+        return d > 0.0f ? d : 0.0f;
+    };
+    for (size_t i = (size_t)m_DirectionalCount + 1; i < m_Lights.size(); ++i) {
+        const GpuLight l = m_Lights[i];
+        const float k = gap(l);
+        size_t j = i;
+        while (j > (size_t)m_DirectionalCount && gap(m_Lights[j - 1]) > k) { m_Lights[j] = m_Lights[j - 1]; --j; }
+        m_Lights[j] = l;
+    }
+}
+
 void LightBuffer::Upload() {
     EnsureCreated();
     uint32_t count = (uint32_t)m_Lights.size();
