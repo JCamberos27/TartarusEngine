@@ -283,7 +283,7 @@ struct InactiveTag {};
 // the whole group is culled. Evaluated per view by World::ApplyLod.
 struct LODGroupComponent {
     float Lod0 = 0.6f, Lod1 = 0.3f, Lod2 = 0.1f, Lod3 = 0.03f; // screen-height thresholds, 0..1
-    float Size = 0.0f; // world-space size used for the screen height; 0 = automatic from LOD 0's bounds
+    float Size = 0.0f; // world-space size used for the screen height; 0 = automatic: the largest axis of LOD 0's world bounds (as Unity)
 };
 
 // Runtime only, never saved: this renderer belongs to an LOD level the current view isn't

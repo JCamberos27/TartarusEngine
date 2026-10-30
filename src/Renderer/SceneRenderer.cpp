@@ -148,6 +148,10 @@ struct CandidateCache {
     entt::entity First = entt::null, Last = entt::null;
     std::uint64_t Flags = 0;          // FlagSignature at the build
     std::vector<Candidate> List;      // grouped by cell
+    // List's entity and flags, packed: most of a forest's candidates are rejected by these alone (an LOD level not in
+    // use), and reading them from the ~200-byte Candidate cost more than the rest of the gather.
+    struct HotCandidate { entt::entity Entity; std::uint16_t Flags; };
+    std::vector<HotCandidate> Hot;
     std::vector<CandidateCell> Cells;
     std::vector<std::uint32_t> Index; // entity slot -> List index (kNoCandidate when none)
     std::vector<const Model*> PoolModels; // each renderable's model, in pool order: a swapped model rebuilds
@@ -242,6 +246,7 @@ const CandidateCache& Candidates(World& world) {
     cache.Last = last;
     cache.Flags = flags;
     cache.List.clear();
+    cache.Hot.clear();
     cache.Cells.clear();
     std::fill(cache.Index.begin(), cache.Index.end(), kNoCandidate);
     cache.PoolModels.clear();
@@ -303,6 +308,7 @@ const CandidateCache& Candidates(World& world) {
         const size_t slot = (size_t)entt::to_entity(c.Entity);
         if (slot >= cache.Index.size()) cache.Index.resize(slot + 1, kNoCandidate);
         cache.Index[slot] = (std::uint32_t)cache.List.size();
+        cache.Hot.push_back({c.Entity, c.Flags});
         cache.List.push_back(c);
     }
     return cache;
@@ -358,10 +364,11 @@ void GatherVisible(World& world, const VisibilityQuery& q, std::vector<VisibleRe
         }
     }
     for (std::uint32_t i = cell.First, end = cell.First + cell.Count; i < end; ++i) {
-        const Candidate& c = cache.List[i];
         // GameObject active / LOD level (#163); PoseSourceTag is animated only (the first-person arms rig).
-        if (c.Flags & (kCandInactive | kCandPoseSource)) continue;
-        if (anyLod && world.IsLodCulled(c.Entity)) continue;
+        const CandidateCache::HotCandidate& hot = cache.Hot[i];
+        if (hot.Flags & (kCandInactive | kCandPoseSource)) continue;
+        if (anyLod && world.IsLodCulled(hot.Entity)) continue;
+        const Candidate& c = cache.List[i];
         // Split poses: the first-person copy only in the player's own camera, the world copy everywhere else (and
         // the world copy is the one that casts).
         if (c.Flags & ((q.ShadowCasters || !q.OwnerView) ? kCandOwnerViewOnly : kCandHiddenFromOwner)) continue;
@@ -377,9 +384,11 @@ void GatherVisible(World& world, const VisibilityQuery& q, std::vector<VisibleRe
                             : r.CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) continue;
         if (q.SkipTransparent && !r.Materials.empty() && r.Materials[0] &&
             r.Materials[0]->RenderQueue == MaterialAsset::Queue::Transparent) continue;
-        VisibleRenderable v = c.V;
         // An animated model's bounds move with its pose, and a swapped model brings its own: read those live.
-        if ((c.Flags & kCandPosed) || r.ModelRef.get() != c.ModelAtBuild) FillBounds(v, r);
+        const bool live = (c.Flags & kCandPosed) || r.ModelRef.get() != c.ModelAtBuild;
+        VisibleRenderable liveV;
+        if (live) { liveV = c.V; FillBounds(liveV, r); }
+        const VisibleRenderable& v = live ? liveV : c.V; // tested in place; copied out only when it passes
         if (v.Bounded) {
             if (q.Cull && !q.Cull->Intersects(AABB{v.WorldMin, v.WorldMax})) continue;
             if (q.SizeCullEye && TooSmallOnScreen(v.WorldMin, v.WorldMax, *q.SizeCullEye, q.SizeCullProjScale,

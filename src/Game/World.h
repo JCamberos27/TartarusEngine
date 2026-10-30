@@ -327,6 +327,9 @@ private:
     std::vector<std::uint32_t> m_LodIndex;    // entity slot -> m_LodState index (~0u: none)
     std::uint64_t m_LodCentreStamp = 0;       // the transform cache stamp the centres were read at
     std::vector<entt::entity> m_LodStack;
+    struct LodMemo { std::uint64_t Stamp = 0; glm::vec3 ViewPos{0.0f}; float YScale = 0.0f; bool Ortho = false;
+                     std::uint64_t Inactive = 0; int Evaluated = 0; };
+    LodMemo m_LodMemo; // the last ApplyLod's view, so the same view again within a frame is free
     std::vector<entt::entity> m_LodCulledOwner; // entity slot -> the entity tagged there (IsLodCulled)
     void SetLodCulled(entt::entity e, bool culled);
     std::vector<std::pair<entt::entity, bool>> m_LodWalk;

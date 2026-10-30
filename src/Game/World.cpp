@@ -170,6 +170,12 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
     bool full = !m_LodValid || !std::equal(signature, signature + 4, m_LodSignature);
     const bool ortho = proj[3][3] == 1.0f; // glm::ortho leaves w = 1; perspective sets it 0
     const float yScale = proj[1][1];       // 1 / tan(fovY/2), or 1 / halfHeight for ortho
+    // A frame asks again for the view it just applied (the spot shadows, the SSAO pre-pass and the draw all use the
+    // game camera): nothing moved since (the transform cache stamp is per frame), so the tags already match.
+    const std::uint64_t inactiveCount = (std::uint64_t)Registry.storage<InactiveTag>().size();
+    if (!full && m_LodMemo.Stamp == m_TransformCacheStamp && m_TransformCacheStamp != 0 && m_LodMemo.ViewPos == viewPos &&
+        m_LodMemo.YScale == yScale && m_LodMemo.Ortho == ortho && m_LodMemo.Inactive == inactiveCount)
+        return m_LodMemo.Evaluated;
     std::vector<entt::entity>& stack = m_LodStack;
     // The recorded group at `e`, if any.
     auto recordOf = [&](entt::entity e) -> const LodGroupState* {
@@ -228,7 +234,7 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
         }
         return false;
     };
-    // Diagonal of a subtree's renderers' world bounds, for the automatic group size.
+    // Largest axis of a subtree's renderers' world bounds, for the automatic group size.
     auto subtreeSize = [&](entt::entity root) {
         glm::vec3 lo(std::numeric_limits<float>::max()), hi(-std::numeric_limits<float>::max());
         stack.assign(1, root);
@@ -251,7 +257,11 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
             if (const auto* h = Registry.try_get<HierarchyComponent>(e))
                 stack.insert(stack.end(), h->Children.begin(), h->Children.end());
         }
-        return lo.x <= hi.x ? glm::length(hi - lo) : 0.0f;
+        // Unity's LODGroup size is the largest axis of its bounds (not the diagonal, up to 1.7x larger, which held
+        // every level - and a forest's ground cover - on screen far longer than the pack was tuned for).
+        if (lo.x > hi.x) return 0.0f;
+        const glm::vec3 ext = hi - lo;
+        return std::max(ext.x, std::max(ext.y, ext.z));
     };
 
     // A group's centre and automatic size, from the transform cache.
@@ -345,6 +355,7 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
     }
     std::copy(signature, signature + 4, m_LodSignature);
     m_LodValid = true;
+    m_LodMemo = {m_TransformCacheStamp, viewPos, yScale, ortho, inactiveCount, evaluated};
     return evaluated;
 }
 
