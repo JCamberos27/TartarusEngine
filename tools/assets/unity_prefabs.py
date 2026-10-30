@@ -1176,6 +1176,57 @@ SPAWN_FLOOR_Y = {
 }
 
 
+# The AAA look, so regenerating a scene keeps it. Every pack scene gets the physical sky, TAA, bloom, auto exposure and a
+# gritty grade, with the lens effects (grain, vignette, CA, motion blur, DOF) off. The playable scenes then get their own
+# time of day on top; the catalog scenes (Showcase, Prefabs, Asset_list) keep the base look only.
+LOOK_BASE = dict(
+    skySource=2, antiAliasing='TAA', msaaSamples=1, fxaa=False, tonemapOperator=1,
+    filmGrain=0.0, vignetteIntensity=0.0, chromaticAberration=0.0, motionBlur=False, depthOfField=False,
+    bloomEnabled=True, bloomThreshold=1.0, bloomKnee=0.5, bloomIntensity=0.14,
+    autoExposure=True, autoExposureMinEV=-3.0, autoExposureMaxEV=3.0, autoExposureSpeedUp=1.5, autoExposureSpeedDown=1.0,
+    gradeContrast=14.0, gradeSaturation=-10.0, gradeTint=0.0,
+)
+LOOK_DAY = dict(
+    exposureEV=0.0, gradeTemperature=4.0, gradeColorFilter=[1.0, 0.98, 0.95],
+    volumetricEnabled=True, volDensity=0.012, volAnisotropy=0.7, volHeightFalloff=0.08, volDistance=96.0, volQuality=1,
+)
+# Dark and lamp-lit: a dim moon, the street lamps and windows carry the light, the streets are wet.
+LOOK_NIGHT = dict(
+    exposureEV=0.0, autoExposureMinEV=-1.0, autoExposureMaxEV=2.5, gradeTemperature=-10.0,
+    gradeColorFilter=[0.9, 0.97, 1.05], bloomIntensity=0.2,
+    volumetricEnabled=True, volDensity=0.02, volAnisotropy=0.6, volHeightFalloff=0.1, volDistance=64.0, volQuality=1,
+    wetness=0.85, puddleAmount=0.45, puddleScale=4.0,
+)
+LOOK_SCENES = {
+    ('ModularCityAlleyPack', 'Example_Scene_Day'): LOOK_DAY,
+    ('ModularCityAlleyPack', 'Example_Scene_Night'): LOOK_NIGHT,
+    ('OfficeAndPoliceStation', 'OfficePack_Example'): dict(
+        exposureEV=0.0, gradeTemperature=-2.0, gradeColorFilter=[0.97, 1.0, 1.0], volumetricEnabled=False),
+    ('SuburbNeighborhoodHousePack', 'Demoscene_Day'): LOOK_DAY,
+    ('SuburbNeighborhoodHousePack', 'Demoscene_Night'): LOOK_NIGHT,
+    # Low ground mist hugging the trail, lit through the canopy for god rays.
+    ('SeedMesh_Mossy_Cedrus_Forest', 'Mossy_forest_trail'): dict(
+        LOOK_DAY, gradeTemperature=0.0, gradeColorFilter=[0.97, 1.0, 0.96],
+        volDensity=0.05, volHeightFalloff=0.6, volAnisotropy=0.75, volDistance=80.0),
+}
+NIGHT_MOON_SKY = 0.006  # sky moonBrightness: dim, though the full high moon from the night offset is still there to see by
+NIGHT_MOON_LIGHT = 0.2  # the moon's directional light (the Unity scene's own, or the template Sun standing in for it)
+
+
+def apply_look(pack, stem, scene, empties):
+    scene.update(LOOK_BASE)
+    look = LOOK_SCENES.get((pack.name, stem))
+    if look is None:
+        return
+    scene.update(look)
+    if look is LOOK_NIGHT:
+        scene['sky'] = dict(scene['sky'], moonBrightness=NIGHT_MOON_SKY)
+        for e in empties:
+            if (e.get('Light') or {}).get('Type') == 'Directional':
+                e['Light']['Intensity'] = NIGHT_MOON_LIGHT
+    pack.counts['scenes given the AAA look preset'] += 1
+
+
 def convert(pack, exe):
     conv = Converter(pack, exe)
     fbx = [guid_for_path(pack, p) for p in pack_files(pack, '.fbx')]
@@ -1422,6 +1473,7 @@ def write_scene(conv, path):
     # The scene's own directional light replaces the template's Sun (two suns blow every surface out to white).
     if any((e.get('Light') or {}).get('Type') == 'Directional' for e in out['empties'] if e['name'] != 'Sun'):
         out['empties'] = [e for e in out['empties'] if e['name'] != 'Sun']
+    apply_look(pack, stem, scene, out['empties'])
     # The template's physical sky draws a grey planet below the horizon, which reads as a floor that Unity's scene doesn't
     # have (HDRP shows sky all round). A scene with no terrain of its own turns that planet off; one with a Unity terrain
     # (not converted yet) keeps it so the trail still looks like it sits on something.
