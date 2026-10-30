@@ -1,13 +1,14 @@
 {
-  "autoExposure": false,
-  "autoExposureMaxEV": 4.0,
-  "autoExposureMinEV": -4.0,
+  "antiAliasing": "TAA",
+  "autoExposure": true,
+  "autoExposureMaxEV": 3.0,
+  "autoExposureMinEV": -3.0,
   "autoExposureSpeedDown": 1.0,
-  "autoExposureSpeedUp": 2.0,
+  "autoExposureSpeedUp": 1.5,
   "bloomEnabled": true,
-  "bloomIntensity": 0.11999999731779099,
+  "bloomIntensity": 0.14,
   "bloomKnee": 0.5,
-  "bloomThreshold": 1.2000000476837158,
+  "bloomThreshold": 1.0,
   "boxes": [
     {
       "collider": {
@@ -11390,8 +11391,8 @@
     1.0,
     1.0
   ],
-  "gradeContrast": 8.0,
-  "gradeSaturation": 6.0,
+  "gradeContrast": 14.0,
+  "gradeSaturation": -10.0,
   "gradeTemperature": -6.0,
   "gradeTint": 0.0,
   "maxPointShadows": 2,
@@ -25894,7 +25895,7 @@
   "motionBlur": false,
   "motionBlurIntensity": 0.5,
   "motionBlurSamples": 12,
-  "msaaSamples": 4,
+  "msaaSamples": 1,
   "shadowCascades": 4,
   "shadowDistance": 150.0,
   "shadowResolution": 4096,
@@ -25984,6 +25985,6 @@
   "ssaoIntensity": 1.0,
   "ssaoRadius": 0.5,
   "tonemapOperator": 1,
-  "vignetteIntensity": 0.18000000715255737,
+  "vignetteIntensity": 0.0,
   "vignetteSmoothness": 0.44999998807907104
 }
