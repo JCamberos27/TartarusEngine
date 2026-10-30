@@ -1373,6 +1373,119 @@ def scene_bounds(conv, scene):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+# Generated LODs for the heavy meshes a pack ships without any (the forest's Oreopanax shrubs, two cedars, the Roldana
+# plants, the mushrooms: ~9M triangles, every one drawn at any distance). Each such model entity becomes an engine LOD
+# Group whose levels are the model and Simplify variants of it (copies of the file beside it, like the one-node variants
+# above, so Drive payloads; their metas carry the importer's Simplify ratio). The last level is never culled, so
+# nothing that drew before disappears. levels: (Simplify ratio, screen-relative height it holds down to).
+AUTO_LOD = {
+    'SeedMesh_Mossy_Cedrus_Forest': dict(min_tris=5000, levels=((1.0, 0.25), (0.4, 0.1), (0.15, 0.0))),
+}
+
+
+def model_tris(exe, repo, rels):
+    """Triangles of each project-relative model path, as imported with its meta (the engine's --model-report)."""
+    if not rels:
+        return {}
+    absf = {os.path.normcase(os.path.normpath(os.path.join(repo, 'project', *r.split('/')))): r for r in rels}
+    out = subprocess.run([exe, '--model-report', *absf], capture_output=True, text=True, encoding='utf-8',
+                         errors='replace').stdout
+    tris, cur = {}, None
+    for line in out.splitlines():
+        line = line.strip()
+        m = re.match(r'\[ModelReport\] (.*) size \S+ \S+ \S+ min ', line)
+        if m:
+            cur = absf.get(os.path.normcase(os.path.normpath(m.group(1))))
+            continue
+        m = re.match(r'\[ModelReport\]\s+tris: (\d+)', line)
+        if m and cur:
+            tris[cur] = int(m.group(1))
+            cur = None
+    return tris
+
+
+def auto_lod(exe, repo, pack_name, scene, counts, report=None):
+    cfg = AUTO_LOD.get(pack_name)
+    if not cfg:
+        return
+    from unity_import import copy_if_changed
+    every = scene['boxes'] + scene['empties'] + scene['models']
+    ids = {e['id']: e for e in every}
+
+    def drawn_without_lod(e):
+        if 'LOD Group' in e or e.get('active', True) is False:
+            return False
+        p, depth = ids.get(e.get('parentId')), 0
+        while p is not None and depth < 256:
+            if 'LOD Group' in p or p.get('active', True) is False:
+                return False
+            p, depth = ids.get(p.get('parentId')), depth + 1
+        return True
+
+    cands = [e for e in scene['models'] if f'/{pack_name}/' in e.get('path', '') and e['path'].lower().endswith('.fbx')
+             and '_autoLOD' not in e['path'] and drawn_without_lod(e)]
+    tris = model_tris(exe, repo, sorted({e['path'] for e in cands}))
+    heavy = sorted(p for p, t in tris.items() if t >= cfg['min_tris'])
+    if not heavy:
+        return
+    variants = {}  # (path, level) -> (path, guid)
+    for rel in heavy:
+        src = os.path.join(repo, 'project', *rel.split('/'))
+        meta = json.load(open(src + '.meta', encoding='utf-8'))
+        stem, ext = os.path.splitext(rel)
+        for i, (ratio, _) in enumerate(cfg['levels']):
+            if ratio >= 1.0:
+                variants[(rel, i)] = (rel, meta['guid'])
+                continue
+            vrel = f'{stem}_autoLOD{i}{ext}'
+            dst = os.path.join(repo, 'project', *vrel.split('/'))
+            copy_if_changed(src, dst)
+            extra = {'importer': dict(meta['importer'], simplify=ratio)}
+            if 'materialRemap' in meta:
+                extra['materialRemap'] = meta['materialRemap']
+            variants[(rel, i)] = (vrel, write_meta(dst, os.path.dirname(vrel), 'model', extra))
+    if report is not None:
+        after = model_tris(exe, repo, sorted(v[0] for k, v in variants.items() if k[1] > 0))
+        for rel in heavy:
+            report.append(f"{rel.split('/')[-1]}: " + ' / '.join(
+                str(tris[rel] if i == 0 else after.get(variants[(rel, i)][0], '?')) for i in range(len(cfg['levels']))))
+    heavy = set(heavy)
+    chosen = {e['id'] for e in cands if e['path'] in heavy}
+    next_id = max(ids) + 1
+    next_order = max(e.get('order', 0) for e in every) + 1
+    models, empties = [], scene['empties']
+    thresholds = [h for _, h in cfg['levels']] + [0.0] * (4 - len(cfg['levels']))
+    for e in scene['models']:
+        if e['id'] not in chosen:
+            models.append(e)
+            continue
+        # The entity keeps its id, transform and any children, as an empty; the levels hang under a group below it.
+        empties.append({k: v for k, v in e.items() if k not in ('path', 'pathGuid', 'materials')})
+        group = {'id': next_id, 'name': f"{e['name']} LODs", 'order': next_order, 'parentId': e['id'],
+                 'position': [0.0, 0.0, 0.0], 'rotation': [0.0, 0.0, 0.0, 1.0], 'scale': [1.0, 1.0, 1.0],
+                 'LOD Group': {'LOD 0': thresholds[0], 'LOD 1': thresholds[1], 'LOD 2': thresholds[2],
+                               'LOD 3': thresholds[3], 'Size': 0.0}}
+        if 'static' in e:
+            group['static'] = e['static']
+        empties.append(group)
+        gid = next_id
+        next_id += 1
+        next_order += 1
+        for i in range(len(cfg['levels'])):  # in level order: the group's children are its levels
+            vrel, vguid = variants[(e['path'], i)]
+            lv = {'id': next_id, 'name': f"{e['name']}_LOD{i}", 'order': next_order, 'parentId': gid, 'path': vrel,
+                  'pathGuid': vguid, 'position': [0.0, 0.0, 0.0], 'rotation': [0.0, 0.0, 0.0, 1.0],
+                  'scale': [1.0, 1.0, 1.0]}
+            for k in ('materials', 'static'):
+                if k in e:
+                    lv[k] = e[k]
+            models.append(lv)
+            next_id += 1
+            next_order += 1
+        counts['model entities given generated LODs'] += 1
+    scene['models'] = models
+
+
 def settle_props(pack, out, b0, b1):
     """After ARCH_SCALE scaled the layout about the origin, put every free-standing prop back on what it rested on in the
     unscaled scene (--scene-bounds before/after): its pivot may not be at its base, and a prop stacked on another prop
@@ -1493,6 +1606,8 @@ def write_scene(conv, path):
         b0 = scene_bounds(conv, scene)
         arch_rescale(pack, out, False)
         settle_props(pack, out, b0, scene_bounds(conv, scene))
+    auto_lod(conv.exe, pack.repo, pack.name, scene, pack.counts,
+             pack.report['generated LODs (triangles per level)'] if pack.name in AUTO_LOD else None)
     scene['formatVersion'] = 4
     dst = os.path.join(pack.repo, 'project', 'scenes', f'{pack.name}_{stem}.json')
     write_json(dst, scene)

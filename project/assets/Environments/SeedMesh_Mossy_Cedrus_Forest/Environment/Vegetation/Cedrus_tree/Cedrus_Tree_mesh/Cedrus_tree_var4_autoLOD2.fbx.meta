@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh",
+  "guid": "3c5d638af2e03398",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "simplify": 0.15
+  },
+  "materialRemap": {
+    "Cedrus_4_5_billboards": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Billboards/Var4-5/M_Cedrus_4-5_billboards.mat",
+    "Cedrus_bark_var1": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Textures/M_Cedrus_bark_1.mat",
+    "Cedrus_leaves_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Textures/M_Cedrus_leaves.mat",
+    "Cedrus_trunk_var4": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Textures/Cedrus_trunk_var4/M_Cedrus_trunk_var4_Lowpoly_Solid1.mat",
+    "Rotten_cedrus_branches_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Dry_branches/1_Rotten_cedrus_Branches/M_Rotten_cedrus_branches_mat.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}
