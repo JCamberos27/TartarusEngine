@@ -2448,6 +2448,28 @@ bool Model::PreSkinSelfTest(std::string& why) {
 }
 
 namespace {
+// Foliage wind (FoliageWind.glsl): the frame's clock and gust direction, once per program per frame - they are the same
+// for every material, so the material-bind skip must not be what carries them.
+void SetWindFrame(Shader& shader) {
+    static std::unordered_map<unsigned int, std::uint32_t> done;
+    std::uint32_t& last = done[shader.Program()];
+    if (last == Material::HashFrame()) return;
+    last = Material::HashFrame();
+    shader.SetFloat("uWindTime", Material::WindTime());
+    shader.SetVec2("uWindDir", Material::WindDirection());
+}
+// The per-material half. uFoliage = 0 for everything else, so a program last used by a foliage material is reset.
+void SetFoliageUniforms(Shader& shader, const Material& mat) {
+    shader.SetInt("uFoliage", mat.Foliage ? 1 : 0);
+    shader.SetInt("uWindVertexMask", mat.UseVertexColor ? 1 : 0);
+    if (!mat.Foliage) { shader.SetFloat("uTranslucency", 0.0f); return; }
+    shader.SetFloat("uWindStrength", mat.WindStrength);
+    shader.SetFloat("uWindFrequency", mat.WindFrequency);
+    shader.SetFloat("uWindFlutter", mat.WindFlutter);
+    shader.SetFloat("uWindHeight", mat.WindHeight);
+    shader.SetFloat("uTranslucency", mat.Translucency);
+}
+
 // #102 / #113 — the surface-option uniforms, set for BOTH the built-in and the data-driven
 // (Standard.shader) paths so a shader that declares them gets them either way.
 void SetSurfaceOptions(Shader& shader, const Material& mat) {
@@ -2465,6 +2487,7 @@ void SetSurfaceOptions(Shader& shader, const Material& mat) {
     shader.SetFloat("uGrungeStrength", mat.GrungeStrength);
     shader.SetFloat("uGrungeScale", mat.GrungeScale);
     shader.SetInt("uReceiveDecals", mat.ReceiveDecals ? 1 : 0);
+    SetFoliageUniforms(shader, mat);
     // Its substrate's row in the decal system's table (index + 1, 0 = none / still decoding).
     shader.SetInt("uMaterialSubstrate", mat.Substrate.Enabled() ? DecalSystem::MaterialSubstrate(mat.Substrate) : 0);
 }
@@ -2603,6 +2626,7 @@ void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const Shade
 } // namespace
 
 void Model::Draw(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset>>& slots) {
+    SetWindFrame(shader);
     const bool preSkinned = UploadBoneMatrices(shader);
     const MaterialLocs& locs = CachedMaterialLocs(shader);
     int skinBase = m_PreSkin.Base; // this sub-mesh's first vertex in the skinned buffer
@@ -2751,6 +2775,7 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
         if (preSkinned) prog->SetInt(locs->skinBase, m_PreSkin.Base + meshFirstVertex);
 
         const Material& mat = hasSlot ? slots[i]->Mat : m_D->Meshes[i]->Mat;
+        if (mat.Foliage) SetWindFrame(*prog); // the main pass's clock and gust, equal to the depth passes'
         if (hasSlot && slots[i]->Shader)
             BindMaterialDataDriven(*prog, *slots[i], *slots[i]->Shader);
         else
@@ -2767,6 +2792,7 @@ void Model::DrawSelected(Shader& fallback, const glm::mat4& xform,
 
 void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<MaterialAsset>>& slots, int instances,
                           const VisibleIndexBuffer* visible) {
+    SetWindFrame(shader);
     const bool preSkinned = UploadBoneMatrices(shader);
     const MaterialLocs& locs = CachedMaterialLocs(shader);
     ShaderStateScope stateScope; // #104 — a Cull Off (double-sided) shader casts from both sides
@@ -2789,6 +2815,7 @@ void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<Mate
         // in this pass drew with the same material.
         const bool clip = mat.AlphaClip || (hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::AlphaTest);
         if (!GLStateCache::MaterialAlreadyBound(mat.Hash() ^ (clip ? 0x5bd1e995ull : 0ull), shader.Program())) {
+            SetFoliageUniforms(shader, mat); // the same sway as the main pass, so shadows move with the leaves
             shader.SetVec2(locs.uvTiling, mat.UVTiling); // #102 — the cutout follows the material's tiling
             shader.SetVec2(locs.uvOffset, mat.UVOffset);
             if (clip && mat.AlbedoMap && mat.AlbedoMap->IsValid()) {
