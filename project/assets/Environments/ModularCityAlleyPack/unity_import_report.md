@@ -5,20 +5,20 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\ModularCityAlleyPa
 ## Counts
 
 - baked-only lights (now realtime): 7
+- built-in cubes as boxes: 17
 - colliders: 5754
 - duplicate openables dropped (a twin door within 10 cm): 0
 - lights: 24
-- material overrides on instances: 643
+- material overrides on instances: 669
 - materials: 43
-- model variants (one mesh of a multi-mesh FBX): 26
+- model variants (one mesh of a multi-mesh FBX): 27
 - models: 400
 - prefabs: 387
 - reflection probes: 4
-- renderers: 4764
+- renderers: 4776
 - scenes: 3
 - scripts dropped (MonoBehaviour): 25
 - textures: 166
-- textures cooked: 83
 
 ## Not converted / approximated
 

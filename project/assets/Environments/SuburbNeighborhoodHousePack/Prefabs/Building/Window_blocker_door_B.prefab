@@ -28,6 +28,21 @@
   "formatVersion": 4,
   "models": [
     {
+      "collider": {
+        "center": [
+          -0.01094,
+          -0.052257,
+          0.014603
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.294401,
+          0.938252,
+          0.0
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
       "id": 1,
       "name": "Window_blocker_curtains_small",
       "order": 1,
@@ -35,23 +50,39 @@
       "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Window_blocker_curtains_small.FBX",
       "pathGuid": "29aac0cb20a5f7f8",
       "position": [
-        -11.7117,
-        0.172347,
-        7.87543
+        2.402,
+        1.794,
+        -0.139999
       ],
       "rotation": [
-        0.707107,
         0.0,
-        0.0,
-        0.707107
+        -0.0,
+        -0.0,
+        1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
+        0.77114,
+        0.77114,
+        0.77114
+      ],
+      "static": true
     },
     {
+      "collider": {
+        "center": [
+          -0.01094,
+          -0.052257,
+          0.014603
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.294401,
+          0.938252,
+          0.0
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
       "id": 2,
       "name": "Window_blocker_curtains_small",
       "order": 2,
@@ -59,21 +90,22 @@
       "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Window_blocker_curtains_small.FBX",
       "pathGuid": "29aac0cb20a5f7f8",
       "position": [
-        -11.7117,
-        0.172347,
-        7.87543
+        0.652,
+        1.794,
+        -0.139999
       ],
       "rotation": [
-        0.707107,
         0.0,
-        0.0,
-        0.707107
+        -0.0,
+        -0.0,
+        1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
+        0.77114,
+        0.77114,
+        0.77114
+      ],
+      "static": true
     }
   ]
 }

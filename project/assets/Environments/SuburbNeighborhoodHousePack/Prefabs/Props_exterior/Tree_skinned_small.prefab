@@ -81,43 +81,6 @@
         1.0,
         1.0
       ]
-    },
-    {
-      "collider": {
-        "center": [
-          -0.0,
-          3.197068,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.05,
-          3.206201,
-          0.05
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
-      "id": 4,
-      "name": "Tree_small",
-      "order": 4,
-      "parentId": 0,
-      "position": [
-        -0.0,
-        0.0,
-        0.0
-      ],
-      "rotation": [
-        0.0,
-        -0.0,
-        -0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
     }
   ],
   "formatVersion": 4,
@@ -159,6 +122,45 @@
         1.25155,
         1.25155,
         1.25155
+      ]
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          3.197068,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.05,
+          3.206201,
+          0.05
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 4,
+      "name": "Tree_small",
+      "order": 4,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior/Tree_skinned_small@Tree_small.FBX",
+      "pathGuid": "c1f76f6ee00cdcd3",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
       ]
     },
     {

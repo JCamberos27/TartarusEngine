@@ -130,7 +130,7 @@
         "shape": 0
       },
       "id": 3,
-      "name": "Floor_StonePavemet_A_\\xBDx",
+      "name": "Floor_StonePavemet_A_\u00bdx",
       "order": 3,
       "parentId": 0,
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_A_\u00bdx.FBX",
@@ -210,7 +210,7 @@
         "shape": 0
       },
       "id": 5,
-      "name": "Floor_StonePavemet_B_1\\xBDx",
+      "name": "Floor_StonePavemet_B_1\u00bdx",
       "order": 5,
       "parentId": 0,
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_B_1\u00bdx.FBX",
@@ -330,7 +330,7 @@
         "shape": 0
       },
       "id": 8,
-      "name": "Floor_StonePavemet_B_1\\xBDx (1)",
+      "name": "Floor_StonePavemet_B_1\u00bdx (1)",
       "order": 8,
       "parentId": 0,
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_B_1\u00bdx.FBX",
@@ -370,7 +370,7 @@
         "shape": 0
       },
       "id": 9,
-      "name": "Floor_StonePavemet_A_1\\xBDx (1)",
+      "name": "Floor_StonePavemet_A_1\u00bdx (1)",
       "order": 9,
       "parentId": 0,
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_A_1\u00bdx.FBX",
@@ -410,7 +410,7 @@
         "shape": 0
       },
       "id": 10,
-      "name": "Floor_StonePavemet_B_1\\xBDx",
+      "name": "Floor_StonePavemet_B_1\u00bdx",
       "order": 10,
       "parentId": 0,
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_B_1\u00bdx.FBX",
@@ -450,7 +450,7 @@
         "shape": 0
       },
       "id": 11,
-      "name": "Floor_StonePavemet_A_1\\xBDx",
+      "name": "Floor_StonePavemet_A_1\u00bdx",
       "order": 11,
       "parentId": 0,
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_A_1\u00bdx.FBX",

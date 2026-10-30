@@ -8,7 +8,52 @@
   "bloomIntensity": 0.11999999731779099,
   "bloomKnee": 0.5,
   "bloomThreshold": 1.2000000476837158,
-  "boxes": [],
+  "boxes": [
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.0,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 655,
+      "materials": [
+        {
+          "guid": "963b0f01bd96f2d1",
+          "path": "assets/Environments/ModularCityAlleyPack/Materials/Walls/M_Midwall_ConcreteDirty_C.mat"
+        }
+      ],
+      "name": "Cube",
+      "order": 655,
+      "parentId": -1,
+      "position": [
+        -16.5,
+        10.5,
+        9.5
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        200.0,
+        1.0,
+        200.0
+      ],
+      "static": true
+    }
+  ],
   "chromaticAberration": 0.0,
   "depthOfField": false,
   "dofMaxBlur": 8.0,
@@ -255,44 +300,6 @@
         1.0,
         1.0
       ]
-    },
-    {
-      "collider": {
-        "center": [
-          -0.0,
-          0.0,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.5,
-          0.5,
-          0.5
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
-      "id": 655,
-      "name": "Cube",
-      "order": 655,
-      "parentId": -1,
-      "position": [
-        -16.5,
-        10.5,
-        9.5
-      ],
-      "rotation": [
-        0.0,
-        -0.0,
-        -0.0,
-        1.0
-      ],
-      "scale": [
-        200.0,
-        1.0,
-        200.0
-      ],
-      "static": true
     },
     {
       "id": 656,
@@ -1673,43 +1680,6 @@
         -0.019685,
         0.00016,
         0.999806
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
-      "collider": {
-        "center": [
-          -0.0,
-          1.92,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.05,
-          2.005,
-          0.05
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
-      "id": 838,
-      "name": "Tree_Skinned",
-      "order": 838,
-      "parentId": 834,
-      "position": [
-        -0.0,
-        0.0,
-        0.0
-      ],
-      "rotation": [
-        0.0,
-        -0.0,
-        -0.0,
-        1.0
       ],
       "scale": [
         1.0,
@@ -11600,6 +11570,45 @@
     {
       "collider": {
         "center": [
+          -0.0,
+          1.92,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.05,
+          2.005,
+          0.05
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 838,
+      "name": "Tree_Skinned",
+      "order": 838,
+      "parentId": 834,
+      "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/TreeDead_Anim@Tree_Skinned.FBX",
+      "pathGuid": "6c2f9485b26d7148",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "collider": {
+        "center": [
           0.22144,
           3.015925,
           0.059553
@@ -11984,7 +11993,7 @@
         "shape": 4
       },
       "id": 852,
-      "name": "Floor_Sidewalk_Straight_1x_\\xBDx_ZigZag (1)",
+      "name": "Floor_Sidewalk_Straight_1x_\u00bdx_ZigZag (1)",
       "order": 852,
       "parentId": 849,
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Straight_1x_\u00bdx_ZigZag.FBX",
@@ -12269,7 +12278,7 @@
         "shape": 0
       },
       "id": 861,
-      "name": "Floor_StonePavemet_B_1\\xBDx",
+      "name": "Floor_StonePavemet_B_1\u00bdx",
       "order": 861,
       "parentId": 849,
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_B_1\u00bdx.FBX",
@@ -12329,7 +12338,7 @@
         "shape": 4
       },
       "id": 863,
-      "name": "Floor_Sidewalk_Straight_1x_\\xBDx_ZigZag",
+      "name": "Floor_Sidewalk_Straight_1x_\u00bdx_ZigZag",
       "order": 863,
       "parentId": 849,
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Plate_Straight_1x_\u00bdx_ZigZag.FBX",
@@ -12634,7 +12643,7 @@
         "shape": 4
       },
       "id": 874,
-      "name": "Floor_Stairs_A_2x\\xBD (1)",
+      "name": "Floor_Stairs_A_2x\u00bd (1)",
       "order": 874,
       "parentId": 849,
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Stairs_A_2x\u00bd.FBX",
@@ -12714,7 +12723,7 @@
         "shape": 0
       },
       "id": 876,
-      "name": "Floor_StonePavemet_A_\\xBDx",
+      "name": "Floor_StonePavemet_A_\u00bdx",
       "order": 876,
       "parentId": 849,
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_A_\u00bdx.FBX",
@@ -12924,7 +12933,7 @@
         "shape": 4
       },
       "id": 883,
-      "name": "Floor_Stairs_B_3x\\xBD",
+      "name": "Floor_Stairs_B_3x\u00bd",
       "order": 883,
       "parentId": 849,
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Stairs_B_3x\u00bd.FBX",
@@ -13004,7 +13013,7 @@
         "shape": 0
       },
       "id": 885,
-      "name": "Floor_StonePavemet_A_1\\xBDx",
+      "name": "Floor_StonePavemet_A_1\u00bdx",
       "order": 885,
       "parentId": 849,
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_StonePavemet_A_1\u00bdx.FBX",
@@ -13804,7 +13813,7 @@
         "shape": 4
       },
       "id": 906,
-      "name": "Floor_Stairs_A_2x\\xBD",
+      "name": "Floor_Stairs_A_2x\u00bd",
       "order": 906,
       "parentId": 849,
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Floors/Floor_Stairs_A_2x\u00bd.FBX",
@@ -15304,7 +15313,7 @@
         "shape": 0
       },
       "id": 958,
-      "name": "Wall_PilarConcrete_3\\xBDx",
+      "name": "Wall_PilarConcrete_3\u00bdx",
       "order": 958,
       "parentId": 909,
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Walls/Wall_PilarConcrete_3\u00bdx.FBX",

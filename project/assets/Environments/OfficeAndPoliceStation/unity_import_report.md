@@ -5,12 +5,13 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\OfficeAndPoliceSta
 ## Counts
 
 - baked-only lights (now realtime): 18
+- built-in cubes as boxes: 1
 - colliders: 4946
 - duplicate openables dropped (a twin door within 10 cm): 10
 - lights: 32
 - material overrides on instances: 275
 - materials: 65
-- model variants (one mesh of a multi-mesh FBX): 64
+- model variants (one mesh of a multi-mesh FBX): 65
 - models: 232
 - openable clips applied: 90
 - openables: 76
@@ -20,7 +21,6 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\OfficeAndPoliceSta
 - scenes: 2
 - scripts dropped (MonoBehaviour): 110
 - textures: 274
-- textures cooked: 157
 - textures halved: 6
 
 ## Not converted / approximated

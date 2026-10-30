@@ -8,7 +8,51 @@
   "bloomIntensity": 0.11999999731779099,
   "bloomKnee": 0.5,
   "bloomThreshold": 1.2000000476837158,
-  "boxes": [],
+  "boxes": [
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.0,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 655,
+      "materials": [
+        {
+          "guid": "93c44e6b6c88a868",
+          "path": "assets/Environments/OfficeAndPoliceStation/Materials/M_Wall_Stucco_White.mat"
+        }
+      ],
+      "name": "Cube",
+      "order": 655,
+      "parentId": -1,
+      "position": [
+        -0.0,
+        -0.5,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        400.0,
+        0.99,
+        282.8385
+      ]
+    }
+  ],
   "chromaticAberration": 0.0,
   "depthOfField": false,
   "dofMaxBlur": 8.0,
@@ -254,43 +298,6 @@
         1.0,
         1.0,
         1.0
-      ]
-    },
-    {
-      "collider": {
-        "center": [
-          -0.0,
-          0.0,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.5,
-          0.5,
-          0.5
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
-      "id": 655,
-      "name": "Cube",
-      "order": 655,
-      "parentId": -1,
-      "position": [
-        -0.0,
-        -0.5,
-        0.0
-      ],
-      "rotation": [
-        0.0,
-        -0.0,
-        -0.0,
-        1.0
-      ],
-      "scale": [
-        400.0,
-        0.99,
-        282.8385
       ]
     },
     {
@@ -17905,8 +17912,8 @@
       "name": "Lamp_spot",
       "order": 963,
       "parentId": 656,
-      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Lamp_spot@Lamp_spot.FBX",
-      "pathGuid": "8335822a2d140aa7",
+      "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Lamp_spot@Lamp_spot_ceilingpart.FBX",
+      "pathGuid": "ffa48874a3d90102",
       "position": [
         43.7,
         0.27,
@@ -24925,7 +24932,7 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Door_Bronze_Windows.FBX",
       "pathGuid": "c8b4189839845ad4",
       "position": [
-        -0.0,
+        -9.5,
         0.0,
         0.0
       ],
@@ -25495,9 +25502,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Door_Cell.FBX",
       "pathGuid": "b35b8812eb75950c",
       "position": [
-        -0.0,
+        0.004,
         0.0,
-        0.0
+        -0.053
       ],
       "rotation": [
         0.0,

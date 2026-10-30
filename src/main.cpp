@@ -5508,6 +5508,8 @@ int main(int argc, char** argv) {
                     editorCamera.Position = shotCameras[pose].Position;
                     editorCamera.Yaw = shotCameras[pose].Yaw;
                     editorCamera.Pitch = shotCameras[pose].Pitch;
+                    // TARTARUS_SHOT_FOV=<vertical degrees>: match another renderer's camera (Unity reference shots)
+                    if (const char* fov = std::getenv("TARTARUS_SHOT_FOV")) editorCamera.Fov = (float)std::atof(fov);
                 } else if (!opt.smokeShotsDir.empty() && !opt.perfBenchMode) {
                     // Frames 40 / 70 / 100 are captured after 30+ frames at each pose, so
                     // temporally accumulated effects have converged; the pose for the NEXT frame
