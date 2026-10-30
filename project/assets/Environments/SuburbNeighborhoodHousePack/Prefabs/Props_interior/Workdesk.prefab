@@ -1,0 +1,347 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 0,
+      "name": "Workdesk",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Workdesk@Workdesk.FBX",
+      "pathGuid": "e5a4bb19330d3694",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.160104,
+          0.057948,
+          0.225556
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Workdesk_drawer_A",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Workdesk@Workdesk_drawer_A.FBX",
+      "pathGuid": "283cc4bf7bd8d93a",
+      "position": [
+        -0.279732,
+        0.627521,
+        1.197024
+      ],
+      "rotation": [
+        0.0,
+        -0.707107,
+        -0.0,
+        0.707107
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.160104,
+          0.057948,
+          0.225556
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Workdesk_drawer_B",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Workdesk@Workdesk_drawer_B.FBX",
+      "pathGuid": "2085ec8dca0e8240",
+      "position": [
+        -0.279732,
+        0.510245,
+        1.197024
+      ],
+      "rotation": [
+        0.0,
+        -0.707107,
+        -0.0,
+        0.707107
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.160104,
+          0.057948,
+          0.225556
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 3,
+      "name": "Workdesk_drawer_C",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Workdesk@Workdesk_drawer_C.FBX",
+      "pathGuid": "d5760ab437a6cbbf",
+      "position": [
+        -0.279732,
+        0.392969,
+        1.197024
+      ],
+      "rotation": [
+        0.0,
+        -0.707107,
+        -0.0,
+        0.707107
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.160104,
+          0.099976,
+          0.225556
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 4,
+      "name": "Workdesk_drawer_D",
+      "order": 4,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Workdesk@Workdesk_drawer_D.FBX",
+      "pathGuid": "b8895e1410f5532b",
+      "position": [
+        -0.279732,
+        0.233407,
+        1.197024
+      ],
+      "rotation": [
+        0.0,
+        -0.707107,
+        -0.0,
+        0.707107
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.204264,
+          0.0,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.205406,
+          0.275485,
+          0.022484
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 5,
+      "name": "Workdesk_door",
+      "order": 5,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Workdesk@Workdesk_door.FBX",
+      "pathGuid": "724d1e1be4825868",
+      "position": [
+        -1.697368,
+        0.409088,
+        0.45882
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 6,
+      "name": "Workdesk_up",
+      "order": 6,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Workdesk@Workdesk_up.FBX",
+      "pathGuid": "3e06c67dfb150791",
+      "position": [
+        -0.175849,
+        0.705085,
+        0.689021
+      ],
+      "rotation": [
+        0.0,
+        -0.707107,
+        -0.0,
+        0.707107
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.185317,
+          0.0,
+          1e-06
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.184039,
+          0.246828,
+          0.020146
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 7,
+      "name": "Workdesk_up_door_L",
+      "order": 7,
+      "parentId": 6,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Workdesk@Workdesk_up_door_L.FBX",
+      "pathGuid": "019f85832fca797d",
+      "position": [
+        0.6804,
+        0.627,
+        0.143
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.183823,
+          -0.0,
+          1e-06
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.184039,
+          0.246828,
+          0.020146
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 8,
+      "name": "Workdesk_up_door_R",
+      "order": 8,
+      "parentId": 6,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Workdesk@Workdesk_up_door_R.FBX",
+      "pathGuid": "69042725d7d7e3dc",
+      "position": [
+        -0.668,
+        0.627,
+        0.135
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

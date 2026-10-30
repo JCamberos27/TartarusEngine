@@ -1,0 +1,95 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.1,
+          1.4,
+          0.3
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Wall_Interior_corner_T Collider 1",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        0.5,
+        1.6,
+        -0.2
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.499999,
+          1.6,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.500001,
+          1.4,
+          0.1
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "materials": [
+        {
+          "guid": "dff9d658a30789cf",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_In_WhitePlaster.mat"
+        },
+        {
+          "guid": "dff9d658a30789cf",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_In_WhitePlaster.mat"
+        },
+        {
+          "guid": "dff9d658a30789cf",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_In_WhitePlaster.mat"
+        }
+      ],
+      "name": "Wall_Interior_corner_T",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Wall_Interior_corner_T.FBX",
+      "pathGuid": "948a7a38c6e9e678",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

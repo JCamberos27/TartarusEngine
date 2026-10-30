@@ -1,0 +1,25 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building",
+  "guid": "fd7d9f70277969dd",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      62.0,
+      -10.8,
+      0.525779
+    ]
+  },
+  "materialRemap": {
+    "Fireplace": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Fireplace.mat",
+    "In_WhitePlaster": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_In_WhitePlaster.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

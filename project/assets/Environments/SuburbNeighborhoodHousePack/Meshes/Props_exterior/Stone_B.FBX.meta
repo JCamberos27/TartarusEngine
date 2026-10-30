@@ -1,0 +1,25 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior",
+  "guid": "2e6eba6bf5104ee0",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      0.607467,
+      -0.180502,
+      -0.362925
+    ]
+  },
+  "materialRemap": {
+    "Moss_Tiled": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Moss_Tiled.mat",
+    "Stones": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Stones.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

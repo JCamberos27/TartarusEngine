@@ -1,0 +1,26 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior",
+  "guid": "e3a1e221c0721ce1",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      43.0,
+      -0.0,
+      2.0
+    ]
+  },
+  "materialRemap": {
+    "Kitchen_Cabinet_Marble": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Kitchen_Cabinet_Marble.mat",
+    "Kitchen_Cabinet_Metals": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Kitchen_Cabinet_Metals.mat",
+    "Kitchen_Cabinet_Wood": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Kitchen_Cabinet_Wood.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

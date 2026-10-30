@@ -1,0 +1,27 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior",
+  "guid": "58a75e8e95e58df3",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "meshNodes": [
+      "Sofa_stool"
+    ],
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -7.75742,
+      -12.9998,
+      -0.417695
+    ]
+  },
+  "materialRemap": {
+    "Sofa_House": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Sofa_House.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

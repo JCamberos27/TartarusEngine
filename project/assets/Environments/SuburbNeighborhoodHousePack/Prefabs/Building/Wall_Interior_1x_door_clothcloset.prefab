@@ -1,0 +1,128 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.075,
+          1.40124,
+          0.1
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Wall_Interior_1x_door_clothcloset Collider 1",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        1.05,
+        1.59876,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.602647,
+          0.35,
+          0.1
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Wall_Interior_1x_door_clothcloset Collider 2",
+      "order": 2,
+      "parentId": 0,
+      "position": [
+        0.504398,
+        2.7,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.05,
+          1.59876,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.075,
+          1.40124,
+          0.1
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "materials": [
+        {
+          "guid": "dff9d658a30789cf",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_In_WhitePlaster.mat"
+        },
+        {
+          "guid": "dff9d658a30789cf",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_In_WhitePlaster.mat"
+        },
+        {
+          "guid": "a40dedb049691b5c",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_DoorFrame.mat"
+        }
+      ],
+      "name": "Wall_Interior_1x_door_clothcloset",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Wall_Interior_1x_door_clothcloset.FBX",
+      "pathGuid": "924428aefc148ae5",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

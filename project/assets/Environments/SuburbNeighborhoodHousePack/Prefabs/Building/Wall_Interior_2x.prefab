@@ -1,0 +1,57 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          1.0,
+          1.6,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          1.0,
+          1.4,
+          0.1
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "materials": [
+        {
+          "guid": "dff9d658a30789cf",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_In_WhitePlaster.mat"
+        },
+        {
+          "guid": "dff9d658a30789cf",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_In_WhitePlaster.mat"
+        }
+      ],
+      "name": "Wall_Interior_2x",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Wall_Interior_2x.FBX",
+      "pathGuid": "a707d7dd9a997b3d",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

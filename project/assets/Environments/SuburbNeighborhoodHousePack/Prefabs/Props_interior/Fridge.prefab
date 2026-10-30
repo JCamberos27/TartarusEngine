@@ -1,0 +1,87 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.862796,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.317139,
+          0.867243,
+          0.340645
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Fridge",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Fridge@Fridge.FBX",
+      "pathGuid": "2284a9100d9f2c7d",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.296859,
+          0.001262,
+          0.02408
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.317139,
+          0.806711,
+          0.132627
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Fridge_Doors",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Fridge@Fridge_Doors.FBX",
+      "pathGuid": "0beff011d32a53a9",
+      "position": [
+        0.296745,
+        0.825782,
+        0.252383
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

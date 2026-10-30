@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior",
+  "guid": "cf97e0de7dd937f6",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -9.38061,
+      0.0,
+      0.0
+    ]
+  },
+  "materialRemap": {
+    "ClimberPlant": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_ClimberPlant.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

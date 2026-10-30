@@ -1908,7 +1908,9 @@ int main(int argc, char** argv) {
                     shotCameras.push_back(c);
             }
         }
-        constexpr int kShotCameraStart = 40, kShotCameraSettle = 30;
+        // TARTARUS_SHOT_START=<frames>: first capture frame (default 40); big packs need longer for their maps to decode.
+        const int kShotCameraStart = [] { const char* e = std::getenv("TARTARUS_SHOT_START"); return e ? std::max(1, std::atoi(e)) : 40; }();
+        constexpr int kShotCameraSettle = 30;
         const int kSmokeTestFrames = opt.weaponTestMode || opt.npcTestMode ? 60 * 60 * 6 : opt.perfBenchMode ? 3 * kPerfPhaseFrames
                                    : !opt.outfitShotsDir.empty() ? kOutfitShotStart + kOutfitShotSettle * kOutfitShotMax + 1
                                    : !shotCameras.empty() ? kShotCameraStart + kShotCameraSettle * (int)shotCameras.size() + 1 : 100;
@@ -5485,12 +5487,12 @@ int main(int argc, char** argv) {
                     // waits (on the same pose) until they're in, up to kShotStreamHold frames per scene.
                     static int shotHold = 0;
                     if (smokeFramesRendered == 1) shotHold = 0;
-                    constexpr int kShotStreamHold = 900;
-                    const bool hold = captureFrame && decalSystem.Streaming() && shotHold < kShotStreamHold;
+                    constexpr int kShotStreamHold = 3000; // a big pack (500 maps) takes a few thousand frames of async uploads
+                    const bool hold = captureFrame && (decalSystem.Streaming() || assets.AsyncInFlight() > 0) && shotHold < kShotStreamHold;
                     if (hold) {
                         ++shotHold;
                         --smokeFramesRendered; // this frame again next time round
-                    } else if (captureFrame && shotHold >= kShotStreamHold && decalSystem.Streaming()) {
+                    } else if (captureFrame && shotHold >= kShotStreamHold && (decalSystem.Streaming() || assets.AsyncInFlight() > 0)) {
                         Log::Warn("Smoke shots: decal textures still streaming after " + std::to_string(kShotStreamHold) +
                                   " held frames - captured anyway.");
                     }

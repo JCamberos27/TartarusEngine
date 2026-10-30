@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior",
+  "guid": "daf9d92c4e95e289",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      10.9042,
+      -14.0,
+      0.007517
+    ]
+  },
+  "materialRemap": {
+    "Plants_InteriorHouse": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Plants_InteriorHouse.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

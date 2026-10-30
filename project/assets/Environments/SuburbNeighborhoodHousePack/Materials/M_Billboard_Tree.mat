@@ -1,0 +1,35 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Billboard_Tree",
+  "opacity": 1,
+  "properties": {
+    "_AOMap": "",
+    "_AlbedoMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Tree_Billboard_BaseColor.png",
+    "_BaseColor": [
+      0.9559,
+      0.9559,
+      0.9559
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "",
+    "_ReceiveDecals": false,
+    "_ReflectionProbes": true,
+    "_Roughness": 1.0,
+    "_RoughnessMap": "",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "renderQueue": 2,
+  "shader": "engine://Standard.shader"
+}

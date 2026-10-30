@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior",
+  "guid": "ebc88fdc4e113b66",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -3.12528,
+      0.001505,
+      0.06437
+    ]
+  },
+  "materialRemap": {
+    "Plant_Hedgebush": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Plant_Hedgebush.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

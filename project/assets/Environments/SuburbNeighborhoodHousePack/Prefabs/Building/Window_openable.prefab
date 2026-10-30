@@ -1,0 +1,87 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.352779,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.446783,
+          0.378323,
+          0.027311
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Window_openable",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Window_openable.FBX",
+      "pathGuid": "e09cabb3b29e144d",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.0,
+          -0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.410051,
+          0.645042,
+          0.040355
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Windowglass_singlewindow",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Windowglass_singlewindow.FBX",
+      "pathGuid": "837a06a9d9a4a0ba",
+      "position": [
+        -0.0,
+        0.353,
+        0.011
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        0.50491,
+        0.14563
+      ],
+      "static": true
+    }
+  ]
+}

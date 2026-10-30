@@ -1,0 +1,117 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 0,
+      "name": "Clothcloset_B",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Clothcloset_B@Clothcloset_B.FBX",
+      "pathGuid": "c0ef19728e74a935",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.253333,
+          0.0,
+          0.013786
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.256756,
+          1.0,
+          0.030118
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Closet_grid_door_L",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Clothcloset_B@Closet_grid_door_L.FBX",
+      "pathGuid": "24230402c2a5512d",
+      "position": [
+        0.514715,
+        1.098362,
+        0.264484
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.251322,
+          0.0,
+          0.013786
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.256756,
+          1.0,
+          0.030118
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Closet_grid_door_R",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Clothcloset_B@Closet_grid_door_R.FBX",
+      "pathGuid": "2a3c4a452c06d099",
+      "position": [
+        -0.505222,
+        1.098362,
+        0.264484
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

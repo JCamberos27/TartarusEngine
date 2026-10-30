@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior",
+  "guid": "74945db2f6d7e6a1",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      3.60559,
+      -2.75806,
+      0.107634
+    ]
+  },
+  "materialRemap": {
+    "Curtains_House": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Curtains_House.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

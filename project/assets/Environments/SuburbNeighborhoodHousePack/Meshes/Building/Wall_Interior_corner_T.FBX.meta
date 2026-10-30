@@ -1,0 +1,26 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building",
+  "guid": "948a7a38c6e9e678",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      17.0,
+      -11.0,
+      -1e-06
+    ]
+  },
+  "materialRemap": {
+    "In_Wallpaper_Flowers": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_In_Wallpaper_Flowers.mat",
+    "In_Wallpaper_Red": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_In_Wallpaper_Red.mat",
+    "In_WhitePlaster": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_In_WhitePlaster.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

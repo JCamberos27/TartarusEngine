@@ -1,0 +1,34 @@
+{
+  "alphaCutoff": 0.275,
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Plant_BushGrass",
+  "properties": {
+    "_AOMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Plant_Bush_MaskMap_AO20.png",
+    "_AlbedoMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Plant_Bush_BaseColor.tga",
+    "_BaseColor": [
+      0.8309,
+      0.8309,
+      0.8309
+    ],
+    "_DoubleSided": true,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Plant_Bush_Normal.tga",
+    "_ReflectionProbes": true,
+    "_Roughness": 0.85,
+    "_RoughnessMap": "",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "renderQueue": 1,
+  "shader": "engine://Standard.shader"
+}

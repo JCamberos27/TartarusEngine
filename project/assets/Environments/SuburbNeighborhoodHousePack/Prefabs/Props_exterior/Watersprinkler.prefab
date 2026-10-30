@@ -1,0 +1,117 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "id": 1,
+      "name": "ParticlesParent",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 2,
+      "name": "Particles_Shower",
+      "order": 2,
+      "parentId": 1,
+      "position": [
+        -0.008497,
+        0.007449,
+        0.024941
+      ],
+      "rotation": [
+        0.235302,
+        0.01028,
+        0.042418,
+        -0.970942
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 3,
+      "name": "Particles_Shower",
+      "order": 3,
+      "parentId": 1,
+      "position": [
+        -0.008497,
+        0.00745,
+        0.024941
+      ],
+      "rotation": [
+        0.968579,
+        -0.0,
+        -0.0,
+        -0.248706
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.075034,
+          -0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.038511,
+          0.077801,
+          0.038511
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Watersprinkler",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior/Watersprinkler.FBX",
+      "pathGuid": "7a4cb4984f2a86f3",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

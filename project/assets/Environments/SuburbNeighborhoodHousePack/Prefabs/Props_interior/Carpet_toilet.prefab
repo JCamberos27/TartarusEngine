@@ -1,0 +1,53 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.002949,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.302357,
+          0.002949,
+          0.384352
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "materials": [
+        {
+          "guid": "6d729fd9872f6107",
+          "path": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Carpet_C.mat"
+        }
+      ],
+      "name": "Carpet_toilet",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Carpet_toilet.FBX",
+      "pathGuid": "764ab53eb5fde5b4",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

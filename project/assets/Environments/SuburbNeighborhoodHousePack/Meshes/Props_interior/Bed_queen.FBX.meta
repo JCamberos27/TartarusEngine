@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior",
+  "guid": "b71df2786ea14a42",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -0.032676,
+      -0.0,
+      0.130523
+    ]
+  },
+  "materialRemap": {
+    "Bed": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Bed.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

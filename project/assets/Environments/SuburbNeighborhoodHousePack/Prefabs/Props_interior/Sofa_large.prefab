@@ -1,0 +1,582 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "id": 0,
+      "name": "Sofa_large",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.115,
+          0.446503,
+          0.314988
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 4,
+      "name": "Sofa_A Collider 1",
+      "order": 4,
+      "parentId": 3,
+      "position": [
+        0.27,
+        0.446344,
+        -0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.115,
+          0.446503,
+          0.314988
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 6,
+      "name": "Sofa_B Collider 1",
+      "order": 6,
+      "parentId": 5,
+      "position": [
+        0.27,
+        0.446344,
+        -0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.3,
+          0.446503,
+          0.09
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 8,
+      "name": "Sofa_continuation Collider 1",
+      "order": 8,
+      "parentId": 7,
+      "position": [
+        0.01,
+        0.446344,
+        -0.25
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.115,
+          0.446503,
+          0.314988
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 10,
+      "name": "Sofa_corner_L Collider 1",
+      "order": 10,
+      "parentId": 9,
+      "position": [
+        0.27,
+        0.446344,
+        -0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.376642,
+          0.446503,
+          0.095
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 11,
+      "name": "Sofa_corner_L Collider 2",
+      "order": 11,
+      "parentId": 9,
+      "position": [
+        -0.0,
+        0.446344,
+        -0.25
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.115,
+          0.446503,
+          0.314988
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 13,
+      "name": "Sofa_corner_R Collider 1",
+      "order": 13,
+      "parentId": 12,
+      "position": [
+        0.27,
+        0.446344,
+        -0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.376642,
+          0.446503,
+          0.09
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 14,
+      "name": "Sofa_corner_R Collider 2",
+      "order": 14,
+      "parentId": 12,
+      "position": [
+        -0.0,
+        0.446344,
+        0.26
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.000115,
+          0.0,
+          0.001017
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.107994,
+          0.175926,
+          0.167355
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Sofa_cushion_A",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Sofa_large@Sofa_cushion_A.FBX",
+      "pathGuid": "6517de13f4ba7b7c",
+      "position": [
+        0.007253,
+        0.699013,
+        -0.026373
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.00057,
+          0.000725,
+          0.001017
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.13,
+          0.125,
+          0.167355
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Sofa_cushion_B",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Sofa_large@Sofa_cushion_B.FBX",
+      "pathGuid": "8a9f66a82cf83342",
+      "position": [
+        -0.021847,
+        0.699013,
+        -0.941332
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.26,
+          -0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.375198,
+          0.225,
+          0.314988
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 3,
+      "name": "Sofa_A",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Sofa_large@Sofa_A.FBX",
+      "pathGuid": "d3691383986ffe3a",
+      "position": [
+        0.015873,
+        0.000105,
+        0.306967
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.26,
+          -0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.375198,
+          0.225,
+          0.314988
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 5,
+      "name": "Sofa_B",
+      "order": 5,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Sofa_large@Sofa_B.FBX",
+      "pathGuid": "652d2f83f26007c2",
+      "position": [
+        0.015873,
+        0.000105,
+        -0.318891
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.27,
+          0.26,
+          -0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.6,
+          0.225,
+          0.314988
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 7,
+      "name": "Sofa_continuation",
+      "order": 7,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Sofa_large@Sofa_continuation.FBX",
+      "pathGuid": "bb4ea657b73d12e9",
+      "position": [
+        -0.663066,
+        0.000105,
+        -1.014389
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.26,
+          -0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.375198,
+          0.225,
+          0.314988
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 9,
+      "name": "Sofa_corner_L",
+      "order": 9,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Sofa_large@Sofa_corner_L.FBX",
+      "pathGuid": "54a4be92efce010e",
+      "position": [
+        0.016942,
+        0.000105,
+        -1.008422
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.26,
+          -0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.375198,
+          0.225,
+          0.314988
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 12,
+      "name": "Sofa_corner_R",
+      "order": 12,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Sofa_large@Sofa_corner_R.FBX",
+      "pathGuid": "6f7a6d0a84465d65",
+      "position": [
+        0.016942,
+        0.000105,
+        1.011246
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.001623,
+          0.25978,
+          0.006846
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.3,
+          0.259939,
+          0.35
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 15,
+      "name": "Sofa_stool",
+      "order": 15,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Sofa_large@Sofa_stool.FBX",
+      "pathGuid": "58a75e8e95e58df3",
+      "position": [
+        -1.270713,
+        0.000105,
+        0.435434
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

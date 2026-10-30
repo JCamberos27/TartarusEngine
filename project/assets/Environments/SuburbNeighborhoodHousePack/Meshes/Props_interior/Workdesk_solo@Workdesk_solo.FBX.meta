@@ -1,0 +1,27 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior",
+  "guid": "b625cee63c91fa27",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "meshNodes": [
+      "Workdesk_solo"
+    ],
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -38.0,
+      -13.0,
+      -1e-06
+    ]
+  },
+  "materialRemap": {
+    "WorkDesk": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_WorkDesk.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

@@ -1,0 +1,24 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior",
+  "guid": "764ab53eb5fde5b4",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      2.0,
+      0.0,
+      0.0
+    ]
+  },
+  "materialRemap": {
+    "Carpet_A": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Carpet_A.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

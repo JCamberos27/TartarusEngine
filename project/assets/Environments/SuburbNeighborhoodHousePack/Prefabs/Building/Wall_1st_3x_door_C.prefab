@@ -1,0 +1,260 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          1.5,
+          0.35,
+          0.1
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Wall_1st_3x_door_C Collider 1",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        1.5,
+        -0.13,
+        -0.1
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.075,
+          1.75,
+          0.1
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Wall_1st_3x_door_C Collider 2",
+      "order": 2,
+      "parentId": 0,
+      "position": [
+        0.9,
+        1.25,
+        -0.1
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.32,
+          1.75,
+          0.1
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 3,
+      "name": "Wall_1st_3x_door_C Collider 3",
+      "order": 3,
+      "parentId": 0,
+      "position": [
+        0.26,
+        1.25,
+        -0.1
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.5,
+          1.75,
+          0.1
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 4,
+      "name": "Wall_1st_3x_door_C Collider 4",
+      "order": 4,
+      "parentId": 0,
+      "position": [
+        2.51,
+        1.25,
+        -0.1
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          1.5,
+          2.7,
+          -0.1
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          1.5,
+          0.35,
+          0.1
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Wall_1st_3x_door_C",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Wall_1st_3x_door_C.FBX",
+      "pathGuid": "d21486578a3e402e",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.0,
+          -0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.410051,
+          0.645042,
+          0.040355
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 5,
+      "name": "Windowglass_singlewindow",
+      "order": 5,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Windowglass_singlewindow.FBX",
+      "pathGuid": "837a06a9d9a4a0ba",
+      "position": [
+        0.711,
+        1.329001,
+        -0.117996
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        0.343635,
+        1.472373,
+        0.153118
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.0,
+          -0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.410051,
+          0.645042,
+          0.040355
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 6,
+      "name": "Windowglass_singlewindow",
+      "order": 6,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Windowglass_singlewindow.FBX",
+      "pathGuid": "837a06a9d9a4a0ba",
+      "position": [
+        1.253,
+        2.58,
+        -0.118
+      ],
+      "rotation": [
+        -0.0,
+        -0.0,
+        -0.707107,
+        0.707107
+      ],
+      "scale": [
+        0.230541,
+        1.263429,
+        0.153118
+      ],
+      "static": true
+    }
+  ]
+}

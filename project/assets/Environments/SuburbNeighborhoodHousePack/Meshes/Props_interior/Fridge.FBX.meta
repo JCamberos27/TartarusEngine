@@ -1,0 +1,25 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior",
+  "guid": "4d21c77444c40099",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      -1.7e-05,
+      -0.003195,
+      -0.340882
+    ]
+  },
+  "materialRemap": {
+    "Fridge": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Fridge.mat",
+    "Fridge_Glasses": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Fridge_Glasses.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

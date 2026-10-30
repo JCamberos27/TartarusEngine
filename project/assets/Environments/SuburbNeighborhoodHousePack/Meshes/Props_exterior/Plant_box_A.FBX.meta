@@ -1,0 +1,28 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_exterior",
+  "guid": "595040de11d5931d",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "optimizeGraph": true,
+    "pivotOffset": [
+      6.92093,
+      0.10507,
+      -0.015582
+    ]
+  },
+  "materialRemap": {
+    "ClimberPlant": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_ClimberPlant.mat",
+    "Moss_Tiled": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Moss_Tiled.mat",
+    "Plant_BushGrass": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Plant_BushGrass.mat",
+    "Plant_Flowers": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Plant_Flowers.mat",
+    "Wall_HouseWoodPlank": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Wall_HouseWoodPlank.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

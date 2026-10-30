@@ -1,0 +1,36 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Water",
+  "opacity": 0.259,
+  "properties": {
+    "_AOMap": "",
+    "_AlbedoMap": "",
+    "_BaseColor": [
+      0.3444,
+      0.4779,
+      0.4779
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Water_Normal.tga",
+    "_NormalStrength": 0.3,
+    "_ReceiveDecals": false,
+    "_ReflectionProbes": true,
+    "_Roughness": 0.0,
+    "_RoughnessMap": "",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "renderQueue": 2,
+  "shader": "engine://Standard.shader"
+}

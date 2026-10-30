@@ -1,0 +1,40 @@
+{
+  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior",
+  "guid": "1163d28cb1f4e9d8",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "meshNodes": [
+      "T_toilet_seat"
+    ],
+    "optimizeGraph": true,
+    "rootTransform": [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      -1.0,
+      0.0,
+      0.0,
+      -14.894406,
+      0.342655,
+      -12.87528,
+      1.0
+    ]
+  },
+  "materialRemap": {
+    "Toilet_House": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Toilet_House.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

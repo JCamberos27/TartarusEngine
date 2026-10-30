@@ -1,0 +1,72 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "id": 0,
+      "name": "Lamp_wall_desk",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Lamp_wall_desk@Lamp_wall_desk.FBX",
+      "pathGuid": "904435d4c61faaed",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          -0.064508,
+          0.044954
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.066635,
+          0.076194,
+          0.063818
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Lamp_wall_desk_lamp",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Lamp_wall_desk@Lamp_wall_desk_lamp.FBX",
+      "pathGuid": "bd81adafa812296d",
+      "position": [
+        0.000554,
+        0.021398,
+        0.086548
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

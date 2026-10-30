@@ -1,0 +1,147 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 0,
+      "name": "Nightstand",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Nightstand@Nightstand.FBX",
+      "pathGuid": "1b3046b7aeec00c8",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.146248,
+          0.0,
+          0.002158
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.146562,
+          0.17221,
+          0.020793
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Nightstand_door_A",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Nightstand@Nightstand_door_A.FBX",
+      "pathGuid": "4cd85be316c4f311",
+      "position": [
+        -0.292651,
+        0.344035,
+        0.195178
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.145953,
+          1e-06,
+          0.0015
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.146562,
+          0.17221,
+          0.020793
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Nightstand_door_B",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Nightstand@Nightstand_door_B.FBX",
+      "pathGuid": "8a4e7bc133fc2f85",
+      "position": [
+        0.293109,
+        0.344035,
+        0.195835
+      ],
+      "rotation": [
+        -0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 3,
+      "name": "Nightstand_drawer",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Nightstand@Nightstand_drawer.FBX",
+      "pathGuid": "ad68fa15ba4c808c",
+      "position": [
+        0.000712,
+        0.603437,
+        0.035482
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

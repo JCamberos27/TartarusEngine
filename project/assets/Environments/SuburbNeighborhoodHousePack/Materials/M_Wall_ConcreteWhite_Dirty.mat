@@ -1,0 +1,40 @@
+{
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Wall_ConcreteWhite_Dirty",
+  "properties": {
+    "_AOMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Wall_ConcreteWhite_Dirty_MaskMap_AO100.png",
+    "_AlbedoMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Wall_ConcreteWhite_Dirty_BaseColor.tga",
+    "_BaseColor": [
+      0.8456,
+      0.8456,
+      0.8456
+    ],
+    "_DoubleSided": false,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 1.0,
+    "_MetallicMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Wall_ConcreteWhite_Dirty_MaskMap_Metallic.png",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Wall_ConcreteWhite_Dirty_Normal.tga",
+    "_ReflectionProbes": true,
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Wall_ConcreteWhite_Dirty_MaskMap_Roughness100.png",
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0,
+    "_UVOffset": [
+      0,
+      1.78
+    ],
+    "_UVTiling": [
+      1,
+      3
+    ]
+  },
+  "shader": "engine://Standard.shader"
+}

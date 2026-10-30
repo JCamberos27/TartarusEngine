@@ -1,0 +1,397 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 0,
+      "name": "Clothcloset_with_wall",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Clothcloset_with_wall@Clothcloset_with_wall.FBX",
+      "pathGuid": "376fa8ab05112211",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.250802,
+          -1e-06,
+          0.014694
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.255996,
+          0.342136,
+          0.025327
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Closet_door_down_L",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Clothcloset_with_wall@Closet_door_down_L.FBX",
+      "pathGuid": "c706340ae7671bd3",
+      "position": [
+        1.216207,
+        1.451183,
+        0.14193
+      ],
+      "rotation": [
+        -0.0,
+        0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.251607,
+          -2e-06,
+          0.015038
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.256762,
+          0.342136,
+          0.025327
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Closet_door_down_R",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Clothcloset_with_wall@Closet_door_down_R.FBX",
+      "pathGuid": "349d036f49f76fe0",
+      "position": [
+        0.199735,
+        1.451183,
+        0.141585
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.250994,
+          -2e-06,
+          0.013078
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.25625,
+          1.0,
+          0.030118
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 3,
+      "name": "Closet_door_L",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Clothcloset_with_wall@Closet_door_L.FBX",
+      "pathGuid": "7203b2378834d0d8",
+      "position": [
+        2.266502,
+        1.299345,
+        0.148336
+      ],
+      "rotation": [
+        -0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.250741,
+          2e-06,
+          0.01564
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.256235,
+          1.0,
+          0.030118
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 4,
+      "name": "Closet_door_R",
+      "order": 4,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Clothcloset_with_wall@Closet_door_R.FBX",
+      "pathGuid": "6e68db937f58b786",
+      "position": [
+        1.251441,
+        1.299346,
+        0.145774
+      ],
+      "rotation": [
+        -0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          -0.251034,
+          -0.0,
+          0.01486
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.255996,
+          0.2454,
+          0.025327
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 5,
+      "name": "Closet_door_up_L",
+      "order": 5,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Clothcloset_with_wall@Closet_door_up_L.FBX",
+      "pathGuid": "5b7561913fe9f9c4",
+      "position": [
+        1.216438,
+        2.046833,
+        0.141763
+      ],
+      "rotation": [
+        -0.0,
+        0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.251414,
+          -0.0,
+          0.014968
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.256762,
+          0.2454,
+          0.025327
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 6,
+      "name": "Closet_door_up_R",
+      "order": 6,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Clothcloset_with_wall@Closet_door_up_R.FBX",
+      "pathGuid": "4f18739b4a433f50",
+      "position": [
+        0.199928,
+        2.046831,
+        0.141656
+      ],
+      "rotation": [
+        -0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 7,
+      "name": "Drawer_A",
+      "order": 7,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Clothcloset_with_wall@Drawer_A.FBX",
+      "pathGuid": "5b724714c27d2d58",
+      "position": [
+        0.71026,
+        1.013856,
+        -0.09024
+      ],
+      "rotation": [
+        -0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 8,
+      "name": "Drawer_B",
+      "order": 8,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Clothcloset_with_wall@Drawer_B.FBX",
+      "pathGuid": "d3fa032578809446",
+      "position": [
+        0.71026,
+        0.81145,
+        -0.09024
+      ],
+      "rotation": [
+        -0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 9,
+      "name": "Drawer_C",
+      "order": 9,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Clothcloset_with_wall@Drawer_C.FBX",
+      "pathGuid": "099cc3ad3256ec3d",
+      "position": [
+        0.71026,
+        0.609044,
+        -0.09024
+      ],
+      "rotation": [
+        -0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "friction": 0.6,
+        "isTrigger": false,
+        "shape": 4
+      },
+      "id": 10,
+      "name": "Drawer_D",
+      "order": 10,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Clothcloset_with_wall@Drawer_D.FBX",
+      "pathGuid": "7c8dc86f934ab5b8",
+      "position": [
+        0.71026,
+        0.406637,
+        -0.09024
+      ],
+      "rotation": [
+        -0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

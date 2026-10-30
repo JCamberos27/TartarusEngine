@@ -1,0 +1,121 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "friction": 0.6,
+        "halfExtents": [
+          0.572542,
+          0.459939,
+          0.025
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 1,
+      "name": "Bed_small Collider 1",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        0.0,
+        0.451397,
+        -1.01
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.25,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.572542,
+          0.275,
+          1.026113
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Bed_small",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Bed_small@Bed_small.FBX",
+      "pathGuid": "aca1ccd531b96e40",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "collider": {
+        "center": [
+          0.0,
+          3e-06,
+          -0.000825
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.300517,
+          0.092683,
+          0.188895
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 2,
+      "name": "Pillow_bed_small",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Props_interior/Bed_small@Pillow_bed_small.FBX",
+      "pathGuid": "69f1068791616c94",
+      "position": [
+        -0.045,
+        0.614,
+        -0.808
+      ],
+      "rotation": [
+        0.237997,
+        -0.0,
+        0.0,
+        0.971266
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}
