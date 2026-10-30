@@ -453,7 +453,7 @@ void SkyAtmosphere::CaptureEnvironment(const SkySettings& s, ViewResources& fv) 
 }
 
 void SkyAtmosphere::RenderView(const void* viewKey, const glm::mat4& view, const glm::mat4& proj,
-                               const glm::vec3& cameraWorld) {
+                               const glm::vec3& cameraWorld, bool deferClouds) {
     if (!m_Prepared) return;
     PROFILE_SCOPE("Sky Atmosphere");
     PROFILE_GPU_SCOPE("Sky Atmosphere");
@@ -488,21 +488,39 @@ void SkyAtmosphere::RenderView(const void* viewKey, const glm::mat4& view, const
     }
 
     vr.CloudsValid = false;
-    if (s.CloudsEnabled && (s.CloudCoverage > 0.0f || s.CirrusCoverage > 0.0f)) {
-        PROFILE_SCOPE("Volumetric Clouds");
-        PROFILE_GPU_SCOPE("Volumetric Clouds");
-        BindLuts(vr);
-        m_Clouds.UpdateUniforms(s, m_Lighting);
-        vr.CloudTexture = m_Clouds.RenderView(vr.Clouds, s, view, proj, cameraWorld, vp[2], vp[3],
-                                              (float)(m_Frame % 1024), 1.0f / kKmPerWorldUnit);
-        vr.CloudsValid = vr.CloudTexture != 0;
-    }
+    if (!deferClouds) RenderCloudsFor(vr, view, proj, cameraWorld, vp, 0u);
     glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
     vr.InvViewProj = invViewProj;
     vr.CameraWorld = cameraWorld;
     for (int i = 0; i < 4; ++i) vr.Viewport[i] = vp[i];
     vr.Rendered = true;
+    GLStateCache::Invalidate();
+}
+
+void SkyAtmosphere::RenderCloudsFor(ViewResources& vr, const glm::mat4& view, const glm::mat4& proj,
+                                    const glm::vec3& cameraWorld, const int vp[4], unsigned int sceneDepth) {
+    const SkySettings& s = m_Settings;
+    if (!(s.CloudsEnabled && (s.CloudCoverage > 0.0f || s.CirrusCoverage > 0.0f))) return;
+    PROFILE_SCOPE("Volumetric Clouds");
+    PROFILE_GPU_SCOPE("Volumetric Clouds");
+    BindLuts(vr);
+    m_Clouds.UpdateUniforms(s, m_Lighting);
+    vr.CloudTexture = m_Clouds.RenderView(vr.Clouds, s, view, proj, cameraWorld, vp[2], vp[3],
+                                          (float)(m_Frame % 1024), 1.0f / kKmPerWorldUnit, sceneDepth);
+    vr.CloudsValid = vr.CloudTexture != 0;
+}
+
+void SkyAtmosphere::RenderClouds(const void* viewKey, const glm::mat4& view, const glm::mat4& proj,
+                                 const glm::vec3& cameraWorld, unsigned int sceneDepth) {
+    if (!m_Prepared) return;
+    const auto it = m_Views.find(viewKey);
+    if (it == m_Views.end() || !it->second->Rendered) return;
+    ViewResources& vr = *it->second;
+    // Another view may have filled the shared atmosphere UBO with its own camera altitude since.
+    UpdateAtmosphereUniforms(m_Settings, m_Lighting, vr.CameraWorld);
+    RenderCloudsFor(vr, view, proj, cameraWorld, vr.Viewport, sceneDepth);
+    glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
     GLStateCache::Invalidate();
 }
 
