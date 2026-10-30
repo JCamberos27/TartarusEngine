@@ -939,7 +939,7 @@ class Converter:
         for pr in comps.get('ReflectionProbe', []):
             if not pr.get('m_Enabled', 1) or pr.get('m_Type', 0) != 0:
                 continue
-            e['Reflection Probe'] = {'Importance': float(pr.get('m_Importance', 1)),
+            e['Reflection Probe'] = {'Capture Scene': True, 'Importance': float(pr.get('m_Importance', 1)),
                                      'Size': r6([abs(v) for v in vec(pr.get('m_BoxSize'), default=1.0)])}
             off = vec(pr.get('m_BoxOffset'))
             if any(abs(v) > 1e-4 for v in off):

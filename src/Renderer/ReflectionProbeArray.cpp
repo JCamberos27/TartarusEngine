@@ -24,7 +24,7 @@ void ReflectionProbeArray::Update(const World& world) {
             glm::length(glm::vec3(wt[1])),
             glm::length(glm::vec3(wt[2])));
         glm::vec3 halfSize = rp.Size * scale * 0.5f;
-        m_Probes.push_back({center, halfSize, rp.Importance});
+        m_Probes.push_back({center, halfSize, rp.Importance, rp.CaptureScene, -1});
     }
 }
 
@@ -81,10 +81,12 @@ void ReflectionProbeArray::Bind(Shader& shader, const glm::vec3& viewCenter) con
     static const char* kCenter[kMaxDraw]   = {"uProbeCenter[0]",   "uProbeCenter[1]"};
     static const char* kHalfSize[kMaxDraw] = {"uProbeHalfSize[0]", "uProbeHalfSize[1]"};
     static const char* kBlend[kMaxDraw]    = {"uProbeBlend[0]",    "uProbeBlend[1]"};
+    static const char* kLayer[kMaxDraw]    = {"uProbeLayer[0]",    "uProbeLayer[1]"};
     for (int j = 0; j < found; ++j) {
         const ProbeData& p = m_Probes[best[j].idx];
         shader.SetVec3(kCenter[j],   p.Center);
         shader.SetVec3(kHalfSize[j], p.HalfSize);
         shader.SetFloat(kBlend[j],   best[j].score / totalScore);
+        shader.SetInt(kLayer[j],     m_Capturing || m_CubeArray == 0 ? -1 : p.Layer);
     }
 }
