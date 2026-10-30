@@ -79,6 +79,7 @@
 #include <cmath>
 #include <cctype>
 #include <cstring>
+#include "ReflectionProbeCapture.h"
 #include <functional>
 #include <variant>
 #include <cfloat>
@@ -4813,6 +4814,16 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
     // doing nothing. FPBody::Validate is the same table the docs (docs/BODY_SETUP.md) are written from.
     if (std::strcmp(componentName, "Character Outfit") == 0 && phase == ReflectExtraPhase::Bottom) {
         DrawCharacterOutfitEditor(world, entity);
+        return;
+    }
+
+    // Reflection Probe: captures only redo on their own when a probe moves; lights and props moving don't.
+    if (std::strcmp(componentName, "Reflection Probe") == 0 && phase == ReflectExtraPhase::Bottom) {
+        if (EditorUIPrimitives::SecondaryButton(ICON_FA_ROTATE "  Recapture Probes"))
+            ReflectionProbeCapture::RequestRecapture();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Render every Capture Scene probe's room again (a few frames each).\n"
+                                 "They capture at scene load and when a probe moves; after moving lights or props, press this.");
         return;
     }
 

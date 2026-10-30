@@ -73,4 +73,8 @@ struct RenderFrameContext {
     // The caller sets it only when the pre-pass runs (Project Settings > Quality > Depth Pre-pass); otherwise it
     // draws SSAO's own depth pass before the scene, as before.
     std::function<void()> SsaoFromPrepass;
+
+    // A reflection probe's room capture (ReflectionProbeCapture): opaque geometry, sky and lights only - no view model,
+    // player body, transparents, particles, sprites, labels, volumetric fog or puddle reflections.
+    bool ProbeCapture = false;
 };

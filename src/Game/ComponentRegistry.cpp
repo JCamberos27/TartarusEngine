@@ -1616,6 +1616,9 @@ void RegisterEngineComponents() {
               "The parallax correction clips reflection rays to this box boundary.", 0.0f, 0.0f },
             { "Importance", T::Float, TARTARUS_REFLECT_FIELD(ReflectionProbeComponent, Importance), 0.05f,
               "Blend weight priority. Higher wins 2-probe selection when many probes overlap.", 0.0f, 10.0f },
+            { "Capture Scene", T::Bool, TARTARUS_REFLECT_FIELD(ReflectionProbeComponent, CaptureScene), 0.0f,
+              "Render the room around the probe into its own cubemap (once at scene load and when the probe moves),\n"
+              "so metal and glossy surfaces reflect the room. Off = the sky reflection, parallax-corrected.", 0.0f, 0.0f },
         },
     });
 

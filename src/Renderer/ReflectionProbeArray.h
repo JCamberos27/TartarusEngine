@@ -37,6 +37,19 @@ public:
 
     int Count() const { return (int)m_Probes.size(); }
 
+    // Room captures (ReflectionProbeCapture): probe i samples layer `layer` of the captured, prefiltered cube array
+    // instead of the sky's specular cube; -1 (what Update() leaves) = the sky. Bind() uploads uProbeLayer[]. The
+    // array goes on texture unit 19 (SceneRenderer::ApplyFrameState) whenever it exists.
+    struct ProbeVolume { glm::vec3 Center, HalfSize; bool Capture; };
+    ProbeVolume Volume(int i) const { return {m_Probes[i].Center, m_Probes[i].HalfSize, m_Probes[i].Capture}; }
+    void SetLayer(int i, int layer) { m_Probes[i].Layer = layer; }
+    int Layer(int i) const { return m_Probes[i].Layer; }
+    void SetCubeArray(unsigned int tex) { m_CubeArray = tex; }
+    unsigned int CubeArray() const { return m_CubeArray; }
+    // While a capture renders, every probe reads the sky: a probe's own half-written layer is never sampled, and a
+    // capture is the same whichever probes were ready when it ran.
+    void SetCapturing(bool on) { m_Capturing = on; }
+
 private:
     struct Scored { int idx; float score; };
     int Select(const glm::vec3& centre, Scored (&best)[kMaxDraw], float& total) const; // how many picked
@@ -44,6 +57,10 @@ private:
         glm::vec3 Center;
         glm::vec3 HalfSize;
         float     Importance;
+        bool      Capture = false; // ReflectionProbeComponent::CaptureScene
+        int       Layer = -1;      // captured cube-array layer, -1 = sky
     };
     std::vector<ProbeData> m_Probes;
+    unsigned int m_CubeArray = 0;
+    bool m_Capturing = false;
 };
