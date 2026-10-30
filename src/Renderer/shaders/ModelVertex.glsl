@@ -61,6 +61,16 @@ uniform int uCollarVerts;
 // ray - the depth changes, the picture doesn't - so cloth wins the depth test against the layer it lies on.
 uniform float uLayerPull;
 
+// TAA motion vectors (TemporalAA.h). uTaaVelocity 1: this view writes velocity, so carry this frame's and last
+// frame's clip positions without the projection jitter. Last frame = the same object transform (no previous
+// transforms are kept) under last frame's camera, with last frame's wind - so camera motion and foliage wind
+// both reproject exactly; skinned or moving objects fall back to the resolve's colour clipping.
+uniform int  uTaaVelocity;
+uniform mat4 uPrevViewProj; // last frame, unjittered
+uniform vec2 uTaaJitter;    // this frame's jitter in NDC (subtracted from gl_Position)
+out vec4 vCurClip;
+out vec4 vPrevClip;
+
 void main() {
     vBindPos = aPos;
     vBindNormal = aNormal;
@@ -147,4 +157,14 @@ void main() {
         }
     }
     gl_Position = uProj * viewPos;
+    if (uTaaVelocity == 1) {
+        vCurClip = gl_Position;
+        vCurClip.xy -= uTaaJitter * gl_Position.w;
+        vec4 prevWorld = model * localPos;
+        prevWorld.xyz += FoliageWindOffsetAt(localPos.xyz, aColor, model[3].xyz, uPrevWindTime);
+        vPrevClip = uPrevViewProj * prevWorld;
+    } else {
+        vCurClip = vec4(0.0, 0.0, 0.0, 1.0);
+        vPrevClip = vec4(0.0, 0.0, 0.0, 1.0);
+    }
 }

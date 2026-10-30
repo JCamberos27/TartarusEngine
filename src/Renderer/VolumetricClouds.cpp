@@ -4,6 +4,7 @@
 #include "Shader.h"
 #include "ShaderLibrary.h"
 #include "Log.h"
+#include "DefaultTextures.h"
 #include "gl.h"
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -242,7 +243,8 @@ void VolumetricClouds::RenderShadowMap(const SkySettings& s, const glm::vec3& ca
 
 unsigned int VolumetricClouds::RenderView(ViewState& st, const SkySettings& s, const glm::mat4& view,
                                           const glm::mat4& proj, const glm::vec3& cameraWorld,
-                                          int viewWidth, int viewHeight, float frame, float worldUnitsPerKm) {
+                                          int viewWidth, int viewHeight, float frame, float worldUnitsPerKm,
+                                          unsigned int sceneDepth) {
     EnsureResources();
     const QualityLevel q = Quality(s.CloudQuality);
     const int w = std::max(1, viewWidth / q.Divisor), h = std::max(1, viewHeight / q.Divisor);
@@ -288,6 +290,16 @@ unsigned int VolumetricClouds::RenderView(ViewState& st, const SkySettings& s, c
     m_RaymarchShader->SetFloat("uPixelAngle", 2.0f / (std::max(std::abs(proj[1][1]), 1e-3f) * (float)h));
     glUniform2i(m_RaymarchShader->Loc("uChecker"), checker.x, checker.y);
     m_RaymarchShader->SetFloat("uMarchIndex", (float)((phase >> 2) & 1023u));
+    // `sceneDepth` (this view's depth, viewWidth x viewHeight): texels with geometry in front of the sky all around them
+    // are neither marched nor resolved (CloudTexelHidden) - a street or a room hides most of the sky, and every one of
+    // its texels was marched anyway.
+    const auto sceneDepthUniforms = [&](Shader& sh) {
+        sh.SetInt("uSceneDepthOn", sceneDepth ? 1 : 0);
+        glUniform2i(sh.Loc("uDepthSize"), viewWidth, viewHeight);
+        sh.SetInt("uDivisor", q.Divisor);
+    };
+    glBindTextureUnit(12, sceneDepth ? sceneDepth : DefaultTextures::White());
+    sceneDepthUniforms(*m_RaymarchShader);
     glBindImageTexture(0, st.Color, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16F);
     glBindImageTexture(1, st.Depth, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_R32F);
     m_RaymarchShader->DispatchCompute(Groups(marchW, 8), Groups(marchH, 8), 1);
@@ -307,6 +319,7 @@ unsigned int VolumetricClouds::RenderView(ViewState& st, const SkySettings& s, c
     m_TemporalShader->SetFloat("uBlend", blend);
     m_TemporalShader->SetInt("uReset", reset ? 1 : 0);
     glUniform2i(m_TemporalShader->Loc("uChecker"), checker.x, checker.y);
+    sceneDepthUniforms(*m_TemporalShader);
     glBindImageTexture(0, st.History[dst], 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16F);
     m_TemporalShader->DispatchCompute(Groups(w, 8), Groups(h, 8), 1);
     glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);

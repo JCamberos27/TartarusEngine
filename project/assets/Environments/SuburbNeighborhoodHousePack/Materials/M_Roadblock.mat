@@ -4,7 +4,7 @@
   "name": "M_Roadblock",
   "properties": {
     "_AOMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Roadblock_MaskMap_AO100.png",
-    "_AlbedoMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Roadblock_BaseColor.tga",
+    "_AlbedoMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Roadblock_BaseColor_rgb.tga",
     "_BaseColor": [
       0.8456,
       0.8456,
@@ -21,7 +21,7 @@
     "_Metallic": 1.0,
     "_MetallicMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Roadblock_MaskMap_Metallic.png",
     "_MetallicRoughnessMap": "",
-    "_NormalMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Roadblock_Normal.tga",
+    "_NormalMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Roadblock_Normal_rgb.tga",
     "_ReflectionProbes": true,
     "_Roughness": 1.0,
     "_RoughnessMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Roadblock_MaskMap_Roughness100.png",

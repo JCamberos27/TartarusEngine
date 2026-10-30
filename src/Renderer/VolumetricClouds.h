@@ -65,7 +65,7 @@ public:
     // composite should sample (rgb radiance, a transmittance).
     unsigned int RenderView(ViewState& state, const SkySettings& s, const glm::mat4& view,
                             const glm::mat4& proj, const glm::vec3& cameraWorld, int viewWidth,
-                            int viewHeight, float frame, float worldUnitsPerKm);
+                            int viewHeight, float frame, float worldUnitsPerKm, unsigned int sceneDepth = 0);
 
     unsigned int ShadowMap() const { return m_ShadowMap; }
     // xy = world XZ at the shadow map's centre, z = 1 / world extent, w = strength (0 = off).

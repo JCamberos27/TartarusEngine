@@ -691,6 +691,10 @@ class Converter:
         elif model and model[0] and (renderer is None or renderer.get('m_Enabled', 1)):
             e['path'] = model[0]
             e['pathGuid'] = self.guid_of(model[0])
+            k = SCALE_OVERRIDES.get(self.pack.name, {}).get(re.sub(r' \(\d+\)$', '', o.name))
+            if k:
+                e['scale'] = r6([c * k for c in e['scale']])
+                self.pack.counts['prefab scale overrides applied'] += 1
             mats = self.material_overrides(model[0], o, renderer)
             if model[0] in self.terrain_mats:
                 m = self.terrain_mats[model[0]]
@@ -1088,6 +1092,149 @@ def strip_skipped(pack, roots, where):
     return keep
 
 
+# Per-pack prefab scale overrides: prefab (root object) name -> uniform scale, applied wherever the prefab is emitted so the
+# prefab files and every scene instance agree (colliders and child parts ride on the root entity). Measured against the
+# 1.81 m Quantum rig: the office's metal desk and leather chair are too tall.
+SCALE_OVERRIDES = {
+    'OfficeAndPoliceStation': {'Desk_metal': 0.75 / 0.90, 'Chair_office_leather': 1.10 / 1.28},
+}
+
+
+# Architecture scale: the alley's building kit is 1.2-1.3x too big for the 1.81 m Quantum rig (doors 2.49 m, the narrowest
+# alley 4+ m wide). A uniform factor shrinks the building pieces, and the whole scene layout scales about the world origin
+# by the same factor, so the walls still tile and the props (kept at 1.0) still sit on the floors. 2.49 m x 0.82 = 2.04 m.
+ARCH_SCALE = {'ModularCityAlleyPack': 0.82}
+ARCH_FOLDERS = {'ModularCityAlleyPack': {'Walls', 'Floors', 'Roofs', 'Decals'}}
+# building-mounted kit that lives in the Props folder (free-standing props stay out)
+ARCH_PROP_RE = {'ModularCityAlleyPack': re.compile(
+    r'^(Airduct|Awning|Balcony|Commercial$|Distant_Building|FireEscape|MetalPlateRoof_|MetalPlate_A$|Neon_Sign_|Sign_|Pipe_|'
+    r'PlasticHanging|PowerLines_|Window_MetalBars_|WindowShutter|Door_MetalBars_|Tree_Groundplate|WireStraight)')}
+
+
+def arch_class(pack_name, e):
+    """True for a building piece, False for a free-standing prop; None when the entity is not a model."""
+    path = e.get('path')
+    if not path:
+        return None
+    seg = path.replace(chr(92), '/').split('/Meshes/')[-1].split('/')
+    name = re.sub(r' \(\d+\)$', '', e['name'])
+    if seg[0] in ARCH_FOLDERS[pack_name]:
+        return True
+    return bool(ARCH_PROP_RE[pack_name].match(name))
+
+
+def arch_rescale(pack, out, prefab):
+    """Apply ARCH_SCALE to an emitted prefab (root scale only) or scene (every entity directly under the scene or an
+    identity group: building pieces get the scale, their positions all scale about the origin; props keep size)."""
+    s = ARCH_SCALE.get(pack.name)
+    if s is None:
+        return
+    ents = out['boxes'] + out['empties'] + out['models']
+    ids = {e['id']: e for e in ents}
+    skip = set()
+    for e in ents:  # the spawn's rig and the template Sun are not part of the layout
+        if e['name'] in ('Player Spawn', 'Sun'):
+            skip.add(e['id'])
+    for e in ents:
+        q = e
+        while q is not None and q['parentId'] in ids:
+            q = ids[q['parentId']]
+            if q['id'] in skip:
+                skip.add(e['id'])
+                break
+    for e in ents:
+        par = ids.get(e['parentId'])
+        top = par is None or 'path' not in par
+        if prefab:
+            if par is not None or 'path' not in e:
+                continue
+        elif e['id'] in skip:
+            if e['name'] == 'Player Spawn':
+                e['position'] = r6([c * s for c in e['position']])
+            continue
+        elif top:
+            e['position'] = r6([c * s for c in e['position']])
+        if not top and not prefab:
+            continue
+        kind = arch_class(pack.name, e)
+        if kind is None and e in out['boxes']:
+            kind = True
+        if kind:
+            e['scale'] = r6([c * s for c in e['scale']])
+        if kind is not None and not prefab:
+            pack.counts[f'architecture scaled x{s}' if kind else 'free-standing props kept at 1.0'] += 1
+
+
+# Player Spawn floor tops (world y of the surface under the spawn's x/z, taken from --scene-bounds): Unity's rig starts
+# inside the geometry and its CharacterController pushes it out, which the engine's player doesn't do. (The alley spawn is
+# on a sloped hill tile whose AABB top is 0.43 m above the real surface, so it keeps Unity's height.)
+SPAWN_FLOOR_Y = {
+    ('SuburbNeighborhoodHousePack', 'Demoscene_Day'): 0.5,
+    ('SuburbNeighborhoodHousePack', 'Demoscene_Night'): 0.5,
+    ('SuburbNeighborhoodHousePack', 'Showcase'): 0.5,
+    ('OfficeAndPoliceStation', 'Showcase'): 0.0,
+}
+
+
+# The AAA look, so regenerating a scene keeps it. Every pack scene gets the physical sky, TAA, bloom, auto exposure and a
+# gritty grade, with the lens effects (grain, vignette, CA, motion blur, DOF) off. The playable scenes then get their own
+# time of day on top; the catalog scenes (Showcase, Prefabs, Asset_list) keep the base look only.
+LOOK_BASE = dict(
+    skySource=2, antiAliasing='TAA', msaaSamples=1, fxaa=False, tonemapOperator=1,
+    filmGrain=0.0, vignetteIntensity=0.0, chromaticAberration=0.0, motionBlur=False, depthOfField=False,
+    bloomEnabled=True, bloomThreshold=1.0, bloomKnee=0.5, bloomIntensity=0.14,
+    autoExposure=True, autoExposureMinEV=-3.0, autoExposureMaxEV=3.0, autoExposureSpeedUp=1.5, autoExposureSpeedDown=1.0,
+    gradeContrast=14.0, gradeSaturation=-10.0, gradeTint=0.0,
+)
+LOOK_DAY = dict(
+    exposureEV=-0.3, gradeTemperature=2.0, gradeColorFilter=[1.0, 0.99, 0.97],
+    volumetricEnabled=True, volDensity=0.004, volAnisotropy=0.7, volHeightFalloff=0.08, volDistance=96.0, volQuality=1,
+)
+# Dark and lamp-lit: a dim moon, the street lamps and windows carry the light, the streets are wet.
+LOOK_NIGHT = dict(
+    exposureEV=1.0, autoExposureMinEV=-1.0, autoExposureMaxEV=4.0, gradeTemperature=-10.0,
+    gradeColorFilter=[0.9, 0.97, 1.05], bloomIntensity=0.2,
+    volumetricEnabled=True, volDensity=0.008, volAnisotropy=0.6, volHeightFalloff=0.1, volDistance=64.0, volQuality=1,
+    wetness=0.85, puddleAmount=0.45, puddleScale=4.0,
+)
+LOOK_SCENES = {
+    ('ModularCityAlleyPack', 'Example_Scene_Day'): LOOK_DAY,
+    ('ModularCityAlleyPack', 'Example_Scene_Night'): LOOK_NIGHT,
+    ('OfficeAndPoliceStation', 'OfficePack_Example'): dict(
+        exposureEV=0.0, gradeTemperature=-2.0, gradeColorFilter=[0.97, 1.0, 1.0], volumetricEnabled=False),
+    # ~100 real-time lamps: 2 sun/moon cascades keep the street in budget (4 cost 1.7 ms more for no visible gain).
+    ('SuburbNeighborhoodHousePack', 'Demoscene_Day'): dict(LOOK_DAY, shadowCascades=2),
+    ('SuburbNeighborhoodHousePack', 'Demoscene_Night'): dict(LOOK_NIGHT, shadowCascades=2),
+    # Low ground mist hugging the trail (the terrain sits around y 3-4), lit through the canopy for god rays.
+    ('SeedMesh_Mossy_Cedrus_Forest', 'Mossy_forest_trail'): dict(
+        LOOK_DAY, gradeTemperature=0.0, gradeColorFilter=[0.97, 1.0, 0.96],
+        volDensity=0.12, volHeightFalloff=0.8, volBaseHeight=3.0, volAnisotropy=0.8, volDistance=80.0, shadowCascades=2),
+}
+NIGHT_MOON_SKY = 0.006  # sky moonBrightness: dim, though the full high moon from the night offset is still there to see by
+NIGHT_SHADOW_RES = 2048  # world shadowResolution for night scenes (moon map); 4096 default
+NIGHT_CLOUD_QUALITY = 0 # sky cloudQuality 0 = Low
+NIGHT_MOON_LIGHT = 0.35 # the moon's directional light (the Unity scene's own, or the template Sun standing in for it)
+NIGHT_LAMP_VOLUMETRIC = 0.5  # point/spot lights' Volumetric Intensity: halves the street-lamp beams in the night fog
+
+
+def apply_look(pack, stem, scene, empties):
+    scene.update(LOOK_BASE)
+    look = LOOK_SCENES.get((pack.name, stem))
+    if look is None:
+        return
+    scene.update(look)
+    if 'night' in stem.lower():
+        scene['sky'] = dict(scene['sky'], moonBrightness=NIGHT_MOON_SKY, cloudQuality=NIGHT_CLOUD_QUALITY)
+        scene['shadowResolution'] = NIGHT_SHADOW_RES
+        for e in empties:
+            light = e.get('Light') or {}
+            if light.get('Type') == 'Directional':
+                light['Intensity'] = NIGHT_MOON_LIGHT
+            elif light.get('Type') in ('Point', 'Spot'):
+                light['Volumetric Intensity'] = NIGHT_LAMP_VOLUMETRIC
+    pack.counts['scenes given the AAA look preset'] += 1
+
+
 def convert(pack, exe):
     conv = Converter(pack, exe)
     fbx = [guid_for_path(pack, p) for p in pack_files(pack, '.fbx')]
@@ -1103,6 +1250,7 @@ def convert(pack, exe):
             continue
         out = {'formatVersion': 4, 'boxes': [], 'empties': [], 'models': []}
         conv.emit(roots[:1], out, [-1])
+        arch_rescale(pack, out, True)
         dst = pack.out_path(p, '.prefab')
         write_json(dst, out)
         write_meta(dst, os.path.dirname(os.path.relpath(dst, os.path.join(pack.repo, 'project')).replace(os.sep, '/')),
@@ -1200,6 +1348,202 @@ def spawn_on_terrain(conv, pack, out, keep):
         pack.report['player spawn below the terrain (lifted to 1 m above it)'].append(pack.name)
 
 
+def scene_bounds(conv, scene):
+    """World AABB of every model/box entity of an in-memory scene, by entity id (the engine's --scene-bounds on a temp copy
+    whose names carry the id, since bounds come back in registry order)."""
+    import copy
+    import shutil
+    import tempfile
+    tmp = tempfile.mkdtemp(prefix='unity_bounds_')
+    try:
+        sc = copy.deepcopy(scene)
+        for k in ('models', 'boxes'):
+            for e in sc[k]:
+                e['name'] = f"{e['name']}~{e['id']}"
+        src = os.path.join(tmp, 'bounds_tmp.json')
+        write_json(src, sc)
+        subprocess.run([conv.exe, '--project', os.path.join(conv.pack.repo, 'project'), '--scene-bounds', src, '--out', tmp],
+                       capture_output=True, text=True, encoding='utf-8', errors='replace')
+        res = json.load(open(os.path.join(tmp, 'scenes', 'bounds_tmp.json'), encoding='utf-8'))
+        out = {}
+        for x in res['entities']:
+            out[int(x['path'].split('/')[-1].rsplit('~', 1)[1])] = (list(x['min']), list(x['max']))
+        return out
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+# Generated LODs for the heavy meshes a pack ships without any (the forest's Oreopanax shrubs, two cedars, the Roldana
+# plants, the mushrooms: ~9M triangles, every one drawn at any distance). Each such model entity becomes an engine LOD
+# Group whose levels are the model and Simplify variants of it (copies of the file beside it, like the one-node variants
+# above, so Drive payloads; their metas carry the importer's Simplify ratio). The last level is never culled, so
+# nothing that drew before disappears. levels: (Simplify ratio, screen-relative height it holds down to).
+AUTO_LOD = {
+    'SeedMesh_Mossy_Cedrus_Forest': dict(min_tris=5000, levels=((1.0, 0.25), (0.4, 0.1), (0.15, 0.0))),
+}
+
+
+def model_tris(exe, repo, rels):
+    """Triangles of each project-relative model path, as imported with its meta (the engine's --model-report)."""
+    if not rels:
+        return {}
+    absf = {os.path.normcase(os.path.normpath(os.path.join(repo, 'project', *r.split('/')))): r for r in rels}
+    out = subprocess.run([exe, '--model-report', *absf], capture_output=True, text=True, encoding='utf-8',
+                         errors='replace').stdout
+    tris, cur = {}, None
+    for line in out.splitlines():
+        line = line.strip()
+        m = re.match(r'\[ModelReport\] (.*) size \S+ \S+ \S+ min ', line)
+        if m:
+            cur = absf.get(os.path.normcase(os.path.normpath(m.group(1))))
+            continue
+        m = re.match(r'\[ModelReport\]\s+tris: (\d+)', line)
+        if m and cur:
+            tris[cur] = int(m.group(1))
+            cur = None
+    return tris
+
+
+def auto_lod(exe, repo, pack_name, scene, counts, report=None):
+    cfg = AUTO_LOD.get(pack_name)
+    if not cfg:
+        return
+    from unity_import import copy_if_changed
+    every = scene['boxes'] + scene['empties'] + scene['models']
+    ids = {e['id']: e for e in every}
+
+    def drawn_without_lod(e):
+        if 'LOD Group' in e or e.get('active', True) is False:
+            return False
+        p, depth = ids.get(e.get('parentId')), 0
+        while p is not None and depth < 256:
+            if 'LOD Group' in p or p.get('active', True) is False:
+                return False
+            p, depth = ids.get(p.get('parentId')), depth + 1
+        return True
+
+    cands = [e for e in scene['models'] if f'/{pack_name}/' in e.get('path', '') and e['path'].lower().endswith('.fbx')
+             and '_autoLOD' not in e['path'] and drawn_without_lod(e)]
+    tris = model_tris(exe, repo, sorted({e['path'] for e in cands}))
+    heavy = sorted(p for p, t in tris.items() if t >= cfg['min_tris'])
+    if not heavy:
+        return
+    variants = {}  # (path, level) -> (path, guid)
+    for rel in heavy:
+        src = os.path.join(repo, 'project', *rel.split('/'))
+        meta = json.load(open(src + '.meta', encoding='utf-8'))
+        stem, ext = os.path.splitext(rel)
+        for i, (ratio, _) in enumerate(cfg['levels']):
+            if ratio >= 1.0:
+                variants[(rel, i)] = (rel, meta['guid'])
+                continue
+            vrel = f'{stem}_autoLOD{i}{ext}'
+            dst = os.path.join(repo, 'project', *vrel.split('/'))
+            copy_if_changed(src, dst)
+            extra = {'importer': dict(meta['importer'], simplify=ratio)}
+            if 'materialRemap' in meta:
+                extra['materialRemap'] = meta['materialRemap']
+            variants[(rel, i)] = (vrel, write_meta(dst, os.path.dirname(vrel), 'model', extra))
+    if report is not None:
+        after = model_tris(exe, repo, sorted(v[0] for k, v in variants.items() if k[1] > 0))
+        for rel in heavy:
+            report.append(f"{rel.split('/')[-1]}: " + ' / '.join(
+                str(tris[rel] if i == 0 else after.get(variants[(rel, i)][0], '?')) for i in range(len(cfg['levels']))))
+    heavy = set(heavy)
+    chosen = {e['id'] for e in cands if e['path'] in heavy}
+    next_id = max(ids) + 1
+    next_order = max(e.get('order', 0) for e in every) + 1
+    models, empties = [], scene['empties']
+    thresholds = [h for _, h in cfg['levels']] + [0.0] * (4 - len(cfg['levels']))
+    for e in scene['models']:
+        if e['id'] not in chosen:
+            models.append(e)
+            continue
+        # The entity keeps its id, transform and any children, as an empty; the levels hang under a group below it.
+        empties.append({k: v for k, v in e.items() if k not in ('path', 'pathGuid', 'materials')})
+        group = {'id': next_id, 'name': f"{e['name']} LODs", 'order': next_order, 'parentId': e['id'],
+                 'position': [0.0, 0.0, 0.0], 'rotation': [0.0, 0.0, 0.0, 1.0], 'scale': [1.0, 1.0, 1.0],
+                 'LOD Group': {'LOD 0': thresholds[0], 'LOD 1': thresholds[1], 'LOD 2': thresholds[2],
+                               'LOD 3': thresholds[3], 'Size': 0.0}}
+        if 'static' in e:
+            group['static'] = e['static']
+        empties.append(group)
+        gid = next_id
+        next_id += 1
+        next_order += 1
+        for i in range(len(cfg['levels'])):  # in level order: the group's children are its levels
+            vrel, vguid = variants[(e['path'], i)]
+            lv = {'id': next_id, 'name': f"{e['name']}_LOD{i}", 'order': next_order, 'parentId': gid, 'path': vrel,
+                  'pathGuid': vguid, 'position': [0.0, 0.0, 0.0], 'rotation': [0.0, 0.0, 0.0, 1.0],
+                  'scale': [1.0, 1.0, 1.0]}
+            for k in ('materials', 'static'):
+                if k in e:
+                    lv[k] = e[k]
+            models.append(lv)
+            next_id += 1
+            next_order += 1
+        counts['model entities given generated LODs'] += 1
+    scene['models'] = models
+
+
+def settle_props(pack, out, b0, b1):
+    """After ARCH_SCALE scaled the layout about the origin, put every free-standing prop back on what it rested on in the
+    unscaled scene (--scene-bounds before/after): its pivot may not be at its base, and a prop stacked on another prop
+    (a box on a table) must follow that prop, which kept its size. The gap above the support scales with a building
+    support and stays as is on a prop."""
+    s = ARCH_SCALE[pack.name]
+    ents = out['models'] + out['boxes']
+    ids = {e['id']: e for e in out['boxes'] + out['empties'] + out['models']}
+    skip = {e['id'] for e in ids.values() if e['name'] in ('Player Spawn', 'Sun')}
+    for e in ids.values():
+        q = e
+        while q['parentId'] in ids:
+            q = ids[q['parentId']]
+            if q['id'] in skip:
+                skip.add(e['id'])
+                break
+    box_ids = {e['id'] for e in out['boxes']}
+    cls = {}
+    for e in out['models']:
+        if e['id'] in skip or e['id'] not in b0 or e['id'] not in b1:
+            continue
+        par = ids.get(e['parentId'])
+        cls[e['id']] = None if (par is not None and 'path' in par) else arch_class(pack.name, e)
+    cur = {i: [list(b1[i][0]), list(b1[i][1])] for i in cls}
+    decals = {i for i, e in ((i, ids[i]) for i in cls) if (e['path'].replace(chr(92), '/').split('/Meshes/')[-1].split('/')[0]
+                                                         in ('Decals',))}
+    supports = [i for i in cls if i not in decals and i not in box_ids]
+    props = sorted((i for i in cls if cls[i] is False), key=lambda i: b0[i][0][1])
+    fixed = skipped = 0
+    for i in props:
+        lo, hi = b0[i]
+        cx, cz = (lo[0] + hi[0]) / 2, (lo[2] + hi[2]) / 2
+        best = None
+        for j in supports:
+            if j == i:
+                continue
+            slo, shi = b0[j]
+            if slo[0] <= cx <= shi[0] and slo[2] <= cz <= shi[2] and shi[1] <= lo[1] + 0.05 and (best is None or shi[1] > b0[best][1][1]):
+                best = j
+        if best is None or lo[1] - b0[best][1][1] > 0.3:
+            continue
+        gap = lo[1] - b0[best][1][1]
+        want = cur[best][1][1] + (s if cls[best] else 1.0) * gap
+        dy = want - cur[i][0][1]
+        if abs(dy) <= 0.004:
+            continue
+        if abs(dy) > 0.4:
+            skipped += 1
+            continue
+        ids[i]['position'][1] = round(ids[i]['position'][1] + dy, 6)
+        cur[i][0][1] += dy
+        cur[i][1][1] += dy
+        fixed += 1
+    pack.counts['props re-seated on their floor after the architecture scale'] += fixed
+    if skipped:
+        pack.counts['props left unseated (> 0.4 m off)'] += skipped
+
+
 def write_scene(conv, path):
     pack = conv.pack
     roots, _, _ = conv.parse_file(path)
@@ -1229,6 +1573,11 @@ def write_scene(conv, path):
             if e['name'] == 'Player Spawn':
                 p, _, _ = to_engine(spawn.pos, spawn.rot, spawn.scale)
                 e['position'] = r6(p)
+    floor = SPAWN_FLOOR_Y.get((pack.name, stem))
+    if floor is not None:  # a scene with no Unity rig keeps the template's spawn x/z, but still stands on the floor
+        for e in keep:
+            if e['name'] == 'Player Spawn':
+                e['position'][1] = floor
     if 'night' in stem.lower():
         # 23:00 on the template's day/latitude puts the moon below the horizon and a third lit, so the whole scene went
         # black. Offset the lunar phase to a high, full moon (its light drives the scene), expose a little up from the
@@ -1245,6 +1594,7 @@ def write_scene(conv, path):
     # The scene's own directional light replaces the template's Sun (two suns blow every surface out to white).
     if any((e.get('Light') or {}).get('Type') == 'Directional' for e in out['empties'] if e['name'] != 'Sun'):
         out['empties'] = [e for e in out['empties'] if e['name'] != 'Sun']
+    apply_look(pack, stem, scene, out['empties'])
     # The template's physical sky draws a grey planet below the horizon, which reads as a floor that Unity's scene doesn't
     # have (HDRP shows sky all round). A scene with no terrain of its own turns that planet off; one with a Unity terrain
     # (not converted yet) keeps it so the trail still looks like it sits on something.
@@ -1252,6 +1602,12 @@ def write_scene(conv, path):
         scene['sky'] = dict(scene['sky'], showGround=False)
     spawn_on_terrain(conv, pack, out, keep)
     scene.update(out)
+    if pack.name in ARCH_SCALE:
+        b0 = scene_bounds(conv, scene)
+        arch_rescale(pack, out, False)
+        settle_props(pack, out, b0, scene_bounds(conv, scene))
+    auto_lod(conv.exe, pack.repo, pack.name, scene, pack.counts,
+             pack.report['generated LODs (triangles per level)'] if pack.name in AUTO_LOD else None)
     scene['formatVersion'] = 4
     dst = os.path.join(pack.repo, 'project', 'scenes', f'{pack.name}_{stem}.json')
     write_json(dst, scene)

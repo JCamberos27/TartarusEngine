@@ -57,18 +57,28 @@ bool coneIntersectsSphere(vec3 apex, vec3 dir, float range, float cosOuter,
     return !(angleCull || frontCull || backCull);
 }
 
-bool lightHitsCluster(uint i, vec3 mn, vec3 mx) {
-    int type = int(uLights[i].PositionType.w);
-    if (type == 0) return false; // directional: not clustered
-    vec3  pv = (uView * vec4(uLights[i].PositionType.xyz, 1.0)).xyz;
-    float r  = uLights[i].ColorRange.a;                     // range in metres
-    if (sqDistPointAABB(pv, mn, mx) > r * r) return false;  // sphere test: cheap first reject
+// The lights go through in tiles of 64: each invocation puts one light into view space in shared
+// memory, then every invocation tests its cluster against the whole tile. The old loop moved each
+// light into view space (and normalised each spot's aim) once per cluster per pass - 3456 x lights
+// x 2 - and walked the SSBO twice; this does it once per workgroup and keeps the hits as a bitmask,
+// so the second pass only writes. Same tests, same ascending index order, same result.
+const uint TILE = 64u;
+const uint MAX_LIGHTS = 256u; // LightBuffer::kMaxLights
+const uint MASK_WORDS = MAX_LIGHTS / 32u;
+shared vec4 sPosRange[TILE]; // view-space position, range (< 0: not clustered - a directional)
+shared vec4 sDirCos[TILE];   // view-space aim, outer cone cos (> 1: a point light, no cone test)
+shared uint sMask[TILE * MASK_WORDS];
 
-    if (type == 2) { // spot: narrow further with a cone test
-        vec3  dirV = normalize(mat3(uView) * uLights[i].DirCutoff.xyz);
+bool tileLightHitsCluster(uint t, vec3 mn, vec3 mx) {
+    float r = sPosRange[t].w;
+    if (r < 0.0) return false;
+    vec3 pv = sPosRange[t].xyz;
+    if (sqDistPointAABB(pv, mn, mx) > r * r) return false;  // sphere test: cheap first reject
+    float cosOuter = sDirCos[t].w;
+    if (cosOuter <= 1.0) { // spot: narrow further with a cone test
         vec3  sphereCenter = 0.5 * (mn + mx);
         float sphereRadius = 0.5 * length(mx - mn);
-        if (!coneIntersectsSphere(pv, dirV, r, uLights[i].DirCutoff.w, sphereCenter, sphereRadius))
+        if (!coneIntersectsSphere(pv, sDirCos[t].xyz, r, cosOuter, sphereCenter, sphereRadius))
             return false;
     }
     return true;
@@ -76,37 +86,60 @@ bool lightHitsCluster(uint i, vec3 mn, vec3 mx) {
 
 void main() {
     uint c = gl_GlobalInvocationID.x;
-    if (c >= GX * GY * GZ) return;
+    uint lid = gl_LocalInvocationID.x;
+    bool live = c < GX * GY * GZ;
 
-    vec3 mn = uClusters[c].mn.xyz;
-    vec3 mx = uClusters[c].mx.xyz;
+    vec3 mn = vec3(0.0), mx = vec3(0.0);
+    if (live) { mn = uClusters[c].mn.xyz; mx = uClusters[c].mx.xyz; }
+    for (uint w = 0u; w < MASK_WORDS; ++w) sMask[lid * MASK_WORDS + w] = 0u;
 
-    // Pass 1: count this cluster's surviving lights without writing anything yet, so the single
-    // atomicAdd below can reserve one contiguous block sized exactly for them — no separate
-    // prefix-sum pass over all clusters needed.
+    uint lightCount = min(uLightCount, MAX_LIGHTS);
     uint n = 0u;
-    for (uint i = 0u; i < uLightCount; ++i) {
-        if (lightHitsCluster(i, mn, mx)) n++;
+    for (uint base = 0u; base < lightCount; base += TILE) {
+        uint i = base + lid;
+        if (i < lightCount) {
+            int type = int(uLights[i].PositionType.w);
+            vec3 pv = (uView * vec4(uLights[i].PositionType.xyz, 1.0)).xyz;
+            sPosRange[lid] = vec4(pv, type == 0 ? -1.0 : uLights[i].ColorRange.a);
+            sDirCos[lid] = type == 2 ? vec4(normalize(mat3(uView) * uLights[i].DirCutoff.xyz), uLights[i].DirCutoff.w)
+                                     : vec4(0.0, 0.0, 0.0, 2.0);
+        }
+        barrier();
+        if (live) {
+            uint tileCount = min(TILE, lightCount - base);
+            for (uint t = 0u; t < tileCount; ++t) {
+                if (tileLightHitsCluster(t, mn, mx)) {
+                    uint li = base + t;
+                    sMask[lid * MASK_WORDS + (li >> 5u)] |= 1u << (li & 31u);
+                    n++;
+                }
+            }
+        }
+        barrier();
     }
+    if (!live) return;
 
+    // One atomicAdd reserves this cluster's contiguous block, sized exactly for its hits.
     uint offset = 0u;
     if (n > 0u) offset = atomicAdd(uGlobalCounter, n);
 
     // Clamp to the list's actual capacity: a cluster whose reserved block would run past the
     // end (because earlier clusters already filled it) gets a truncated, never out-of-bounds,
-    // write, and flags the same overflow warning #204 introduced — now meaning "the shared list
+    // write, and flags the same overflow warning #204 introduced � now meaning "the shared list
     // is full" rather than "this one cluster hit its 100-light cap".
     uint writable = n;
     if (offset >= GLOBAL_CAPACITY) writable = 0u;
     else if (offset + n > GLOBAL_CAPACITY) writable = GLOBAL_CAPACITY - offset;
     if (writable < n) atomicOr(uOverflowFlag, 1u);
 
-    // Pass 2: re-run the same test and write surviving indices contiguously into the block this
-    // cluster reserved.
+    // Pass 2: the hits, in ascending light order, into the block this cluster reserved.
     uint w = 0u;
-    for (uint i = 0u; i < uLightCount && w < writable; ++i) {
-        if (lightHitsCluster(i, mn, mx)) {
-            uIndex[offset + w] = i;
+    for (uint word = 0u; word < MASK_WORDS && w < writable; ++word) {
+        uint bits = sMask[lid * MASK_WORDS + word];
+        while (bits != 0u && w < writable) {
+            int b = findLSB(bits);
+            bits &= bits - 1u;
+            uIndex[offset + w] = word * 32u + uint(b);
             w++;
         }
     }

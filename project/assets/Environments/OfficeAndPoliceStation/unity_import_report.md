@@ -15,6 +15,7 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\OfficeAndPoliceSta
 - models: 232
 - openable clips applied: 90
 - openables: 76
+- prefab scale overrides applied: 34
 - prefabs: 221
 - reflection probes: 9
 - renderers: 2973

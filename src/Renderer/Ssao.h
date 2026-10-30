@@ -27,6 +27,7 @@ public:
     // Depth-only FBO to bind for the camera pre-pass. GL_DEPTH_ATTACHMENT only;
     // glDrawBuffer is GL_NONE. Clear GL_DEPTH_BUFFER_BIT before drawing into it.
     unsigned int DepthFbo() const { return m_DepthFbo; }
+    unsigned int DepthTexture() const { return m_DepthTex; } // DEPTH_COMPONENT32F, this frame's view depth
     unsigned int DepthTex() const { return m_DepthTex; }
 
     // SSAO compute pass — reads DepthTex() and the noise texture, writes the raw occlusion at half

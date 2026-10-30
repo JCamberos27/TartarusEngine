@@ -71,6 +71,7 @@ int ModelReport(int argc, char** argv, int i) {
                 s.ImportSkeleton = imp.value("importSkeleton", true);
                 s.SkinIgnoresMeshNode = imp.value("skinIgnoresMeshNode", false);
                 s.MergeByMaterial = imp.value("mergeByMaterial", false);
+                s.SimplifyRatio = std::clamp(imp.value("simplify", 1.0f), 0.01f, 1.0f);
                 s.SourceUpAxis = Model::ParseUpAxis(imp.value("upAxis", std::string("Y")));
                 if (imp.contains("pivotOffset") && imp["pivotOffset"].is_array() && imp["pivotOffset"].size() == 3)
                     s.PivotOffset = {imp["pivotOffset"][0].get<float>(), imp["pivotOffset"][1].get<float>(), imp["pivotOffset"][2].get<float>()};
@@ -107,6 +108,7 @@ int ModelReport(int argc, char** argv, int i) {
         std::printf("[ModelReport] %s size %.3f %.3f %.3f min %.3f %.3f %.3f max %.3f %.3f %.3f meshes %d materials %s\n",
                     f.generic_string().c_str(), size.x, size.y, size.z, lo.x, lo.y, lo.z, hi.x, hi.y, hi.z,
                     model->MeshCount(), mats.c_str());
+        std::printf("[ModelReport]   tris: %u\n", model->TriangleCount());
         int skinned = 0, overflow = 0, most = 0;
         float lost = 0.0f;
         model->SkinStats(skinned, overflow, most, lost);

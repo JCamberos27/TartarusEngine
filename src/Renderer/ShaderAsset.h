@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <string>
 #include <vector>
 #include <memory>
@@ -82,6 +83,10 @@ struct PropertyBinding {
     // compares. Null when the name has no field of this type: the bind falls back to Get*.
     const std::shared_ptr<Texture>& (*GetTex)(const Material&) = nullptr;
     glm::vec4 (*GetVal)(const Material&) = nullptr;
+    // Uniform / HasUniform's locations in the program last bound with them (BindMaterialDataDriven): a forest binds
+    // a few thousand materials a frame, and looking each name up again was a sixth of its CPU time.
+    mutable std::uint64_t LocProgram = 0; // Shader::Serial
+    mutable int UniformLoc = -1, HasUniformLoc = -1;
 };
 
 class ShaderAsset {

@@ -4,7 +4,7 @@
   "name": "M_In_Floor_Garage",
   "properties": {
     "_AOMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Floor_GaragePaint_MaskMap_AO100.png",
-    "_AlbedoMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Floor_GaragePaint_BaseColor.tga",
+    "_AlbedoMap": "assets/Environments/SuburbNeighborhoodHousePack/Textures/Floor_GaragePaint_BaseColor_rgb.tga",
     "_BaseColor": [
       0.8603,
       0.8603,

@@ -4,7 +4,7 @@
   "name": "M_Cedrus_leaves_BakeMesh",
   "properties": {
     "_AOMap": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Textures/Cedrus_leaves/Cedrus_Leaves_Mask_AO100.png",
-    "_AlbedoMap": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Textures/Cedrus_leaves/Cedrus_Leaves_basecolor.png",
+    "_AlbedoMap": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Textures/Cedrus_leaves/Cedrus_Leaves_basecolor_rgb.png",
     "_BaseColor": [
       1,
       1,
