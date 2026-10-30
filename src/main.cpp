@@ -3636,11 +3636,19 @@ int main(int argc, char** argv) {
                 };
                 static std::vector<SunCaster> sunCasters;
                 sunCasters.clear();
-                // #160 — world bounds of everything that casts, so the cascades' near planes
-                // reach every occluder.
+                // #160 — the cascades' near planes reach every occluder: fitted to a box around everything that can
+                // draw (RenderableBounds, a cheap superset of the casters), so the casters can then be gathered
+                // against the fitted cascades - a forest's casters outside every cascade are never read at all.
                 glm::vec3 casterMin(std::numeric_limits<float>::max()), casterMax(-std::numeric_limits<float>::max());
+                RenderableBounds(world, casterMin, casterMax);
+                shadowMap.SetSplitLambda(world.ShadowCascadeSplit);
+                shadowMap.Update(fitView, fitProj, frameSunDir, world.ShadowDistance, &casterMin, &casterMax);
+                Frustum casterCells[CascadedShadowMap::kMaxCascades];
+                for (int c = 0; c < shadowMap.Count(); ++c) casterCells[c] = Frustum::FromViewProj(shadowMap.LightViewProj(c));
                 VisibilityQuery casts; // #163 - Cast Shadows: Off skips
                 casts.ShadowCasters = true;
+                casts.CellCull = casterCells; // castsInto below draws nothing outside every cascade's frustum
+                casts.CellCullCount = shadowMap.Count();
                 static std::vector<VisibleRenderable> casting;
                 GatherVisible(world, casts, casting);
                 for (const VisibleRenderable& v : casting) {
@@ -3656,16 +3664,11 @@ int main(int argc, char** argv) {
                     // As posed (Model::PosedBounds), the bounds the main pass culls with.
                     sc.bounded = v.Bounded;
                     sc.bounds = AABB{v.WorldMin, v.WorldMax};
-                    if (!sc.bounded) continue;
-                    casterMin = glm::min(casterMin, sc.bounds.Min);
-                    casterMax = glm::max(casterMax, sc.bounds.Max);
                 }
                 // Consecutive draws of the same model share its VAO and (usually) its material,
                 // which the state cache then skips rebinding.
                 std::sort(sunCasters.begin(), sunCasters.end(),
                           [](const SunCaster& a, const SunCaster& b) { return a.model < b.model; });
-                shadowMap.SetSplitLambda(world.ShadowCascadeSplit);
-                shadowMap.Update(fitView, fitProj, frameSunDir, world.ShadowDistance, &casterMin, &casterMax);
 
                 glEnable(GL_DEPTH_TEST);
                 glDepthMask(GL_TRUE);

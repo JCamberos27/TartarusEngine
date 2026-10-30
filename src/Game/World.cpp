@@ -135,8 +135,21 @@ glm::mat4 World::ComposeWorldTransform(entt::entity entity) const {
     return world;
 }
 
+void World::SetLodCulled(entt::entity e, bool culled) {
+    const size_t s = (size_t)entt::to_entity(e);
+    if (culled) {
+        Registry.emplace_or_replace<LodCulledTag>(e);
+        if (s >= m_LodCulledOwner.size()) m_LodCulledOwner.resize(s + 1, entt::null);
+        m_LodCulledOwner[s] = e;
+    } else {
+        Registry.remove<LodCulledTag>(e);
+        if (s < m_LodCulledOwner.size() && m_LodCulledOwner[s] == e) m_LodCulledOwner[s] = entt::null;
+    }
+}
+
 void World::ClearLod() {
     Registry.clear<LodCulledTag>();
+    std::fill(m_LodCulledOwner.begin(), m_LodCulledOwner.end(), entt::null);
     m_LodValid = false;
 }
 
@@ -179,7 +192,7 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
             const entt::entity e = stack.back();
             stack.pop_back();
             if (!Registry.valid(e)) continue;
-            if (Registry.all_of<RenderableComponent>(e)) Registry.emplace_or_replace<LodCulledTag>(e);
+            if (Registry.all_of<RenderableComponent>(e)) SetLodCulled(e, true);
             if (const auto* h = Registry.try_get<HierarchyComponent>(e))
                 stack.insert(stack.end(), h->Children.begin(), h->Children.end());
         }
@@ -194,8 +207,7 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
             walk.pop_back();
             if (!Registry.valid(e)) continue;
             if (Registry.all_of<RenderableComponent>(e)) {
-                if (cull) Registry.emplace_or_replace<LodCulledTag>(e);
-                else Registry.remove<LodCulledTag>(e);
+                SetLodCulled(e, cull);
             }
             const auto* h = Registry.try_get<HierarchyComponent>(e);
             if (!h) continue;
@@ -258,6 +270,7 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
         evaluated = 0;
         if (full) {
             Registry.clear<LodCulledTag>();
+            std::fill(m_LodCulledOwner.begin(), m_LodCulledOwner.end(), entt::null);
             m_LodState.clear();
             std::fill(m_LodIndex.begin(), m_LodIndex.end(), ~0u);
         } else if (m_LodCentreStamp != m_TransformCacheStamp || m_TransformCacheStamp == 0) {
