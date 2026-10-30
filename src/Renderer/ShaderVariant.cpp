@@ -19,6 +19,10 @@ ShaderVariantKey ShaderVariantKeyFor(const Material& m, const ShaderAsset& sa) {
     bit("_SUBSURFACE",        m.SubsurfaceEnabled);
     bit("_TRANSMISSION",      m.TransmissionStrength > 0.0f);
     bit("_REFLECTION_PROBES", m.ReflectionProbes);
+    {   // the cover layer (moss / snow over up-facing surfaces) costs nothing on materials without it
+        const auto it = m.ExtraProps.find("_CoverStrength");
+        bit("_COVER", it != m.ExtraProps.end() && it->second.F > 0.0f);
+    }
     // #104 — the material's custom keywords (the engine never drives these; the user ticks them).
     for (const std::string& k : m.ShaderKeywords)
         if (!ShaderAsset::IsBuiltinKeyword(k)) bit(k.c_str(), true);
