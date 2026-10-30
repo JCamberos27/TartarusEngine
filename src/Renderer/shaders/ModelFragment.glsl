@@ -486,8 +486,9 @@ void main() {
         // Metals have no diffuse; what isn't reflected is what's left to scatter.
         vec3 kD = (1.0 - F) * (1.0 - metallic);
 
-        vec3 irradiance = texture(uIrradianceMap, N).rgb;
-        vec3 diffuseIBL = irradiance * albedo;
+        // The sky's irradiance, scaled by the scene's Ambient intensity. Inside a captured room probe the probe's own
+        // cube replaces it below: indoors the open sky is not what lights a wall.
+        vec3 irradiance = texture(uIrradianceMap, N).rgb * uIBLIntensity;
 
         vec3 R = reflect(-V, N);
         vec3 prefiltered = textureLod(uPrefilteredMap, R, roughness * uIBLSpecularMaxLod).rgb;
@@ -497,6 +498,8 @@ void main() {
         // Zero probes → uProbeCount == 0 → falls through to the sky sample above.
         if (uProbeCount > 0) {
             vec3 blendedPrefilter = vec3(0.0);
+            vec3 roomIrradiance = vec3(0.0);
+            float roomW = 0.0;
             for (int pi = 0; pi < uProbeCount; ++pi) {
                 // Lagarde's box intersection: find t where R exits the probe box.
                 vec3 rInv = vec3(
@@ -521,15 +524,30 @@ void main() {
                 else
                     probeSpec = textureLod(uPrefilteredMap, correctedR, roughness * uIBLSpecularMaxLod).rgb;
                 blendedPrefilter += probeSpec * uProbeBlend[pi];
+                // Room diffuse (a stand-in for baked GI): the captured room's widest GGX mip along N is close to its
+                // cosine-weighted irradiance - the lamps, the lit walls and the windows, not the open sky. It is the
+                // scene's own radiance, so the sky's Ambient intensity does not scale it. Full weight in the box's
+                // core, fading to the sky's over its outer 20% so an outdoor neighbour shows no seam.
+                if (uProbeLayer[pi] >= 0 && uFoliageSurface == 0) {
+                    vec3 q = abs(vWorldPos - uProbeCenter[pi]) / max(uProbeHalfSize[pi], vec3(1e-3));
+                    float inBox = 1.0 - smoothstep(0.8, 1.0, max(q.x, max(q.y, q.z)));
+                    if (inBox > 0.0) {
+                        vec3 roomIrr = textureLod(uProbeCubes, vec4(N, float(uProbeLayer[pi])), uIBLSpecularMaxLod).rgb;
+                        roomIrradiance += roomIrr * uProbeBlend[pi] * inBox;
+                        roomW += uProbeBlend[pi] * inBox;
+                    }
+                }
             }
             prefiltered = blendedPrefilter;
+            if (roomW > 0.0) irradiance = irradiance * (1.0 - roomW) + roomIrradiance;
         }
 #endif
         vec2 ab = texture(uBrdfLut, vec2(NdotV, roughness)).rg;
         vec3 specW = F * ab.x + ab.y;
         vec3 specularIBL = uNoGlossyReflections == 1 ? vec3(0.0) : prefiltered * specW;
 
-        ambient = (kD * diffuseIBL + specularIBL) * ao * uIBLIntensity;
+        vec3 diffuseIBL = irradiance * albedo; // already in Ambient-intensity terms (see above)
+        ambient = (kD * diffuseIBL + specularIBL * uIBLIntensity) * ao;
         // Puddle SSR: where the traced ray found the scene, its radiance replaces the probe / sky reflection (which is
         // in ambient's ao * intensity terms; the trace is already radiance). Rough water fades back to the probe.
         if (uSsrEnabled == 1 && gPuddle > 0.0 && uNoGlossyReflections == 0) {
