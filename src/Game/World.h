@@ -296,6 +296,7 @@ private:
         bool HasTransform = false;
     };
     std::vector<LocalSnapshot> m_LocalSnapshots;
+    std::vector<std::uint64_t> m_LocalHashes; // LocalHash of each snapshot's transform (0: none), by slot
     std::vector<std::uint32_t> m_RebuildDone;     // the rebuild generation that filled the slot
     std::vector<std::uint8_t> m_RebuildChanged;   // that rebuild recomputed it
     std::uint32_t m_RebuildGeneration = 0;

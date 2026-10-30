@@ -2565,7 +2565,12 @@ void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const Shade
     for (const PropertyBinding& b : bindings) {
         const ShaderProperty& prop = props[b.PropIndex];
         const std::string& pname   = prop.Name;
-        const std::string& uname = b.Uniform; // "_AlbedoMap" → "uAlbedoMap"
+        if (b.LocProgram != shader.Serial()) { // "_AlbedoMap" → "uAlbedoMap", "uHasAlbedoMap"
+            b.LocProgram = shader.Serial();
+            b.UniformLoc = shader.Loc(b.Uniform);
+            b.HasUniformLoc = b.HasUniform.empty() ? -1 : shader.Loc(b.HasUniform);
+        }
+        const int uname = b.UniformLoc;
         const bool builtin = b.Builtin;
         const MaterialProp* extra = nullptr;
         if (!builtin) {
@@ -2575,7 +2580,7 @@ void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const Shade
 
         switch (prop.Type) {
         case ShaderPropType::Texture2D: {
-            const std::string& hasName = b.HasUniform;
+            const int hasName = b.HasUniformLoc;
             const std::shared_ptr<Texture>& tex =
                 builtin ? (b.GetTex ? b.GetTex(mat) : MaterialAsset::GetTexture(mat, pname))
                         : (extra ? extra->Tex : MaterialAsset::GetTexture(mat, pname) /*null*/);

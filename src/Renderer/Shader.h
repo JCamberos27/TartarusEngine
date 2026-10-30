@@ -31,6 +31,9 @@ public:
     // The raw GL program name. Used as half the key for the material-bind dedup (#192) — a
     // cached "this material is already bound" is only valid while the same program is current.
     unsigned int Program() const { return m_Program; }
+    // Unique to this linked program for the life of the process (a GL program name is reused after a delete): a
+    // cache of its uniform locations kept outside it is keyed by this.
+    std::uint64_t Serial() const { return m_Serial; }
     // Whether the instanced draw path may use this program: its vertex stage reads the per-instance transforms
     // (uInstanced, InstanceBatch.h) and nothing else reads uModel. Set by whoever builds it; off by default.
     bool Instancing() const { return m_Instancing; }
@@ -80,6 +83,8 @@ public:
 
 private:
     unsigned int m_Program = 0;
+    std::uint64_t m_Serial = 0;
+    static std::uint64_t NextSerial() { static std::uint64_t n = 0; return ++n; }
     bool m_Instancing = false;
     unsigned int Compile(unsigned int type, const std::string& src);
     // glGetUniformLocation hashes the name string in the driver on every call — cheap in
