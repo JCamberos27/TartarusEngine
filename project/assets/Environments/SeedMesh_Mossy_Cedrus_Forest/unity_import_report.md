@@ -6,16 +6,18 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\SeedMesh\Mossy_Ced
 
 - LOD groups: 45449
 - built-in cubes as boxes: 10
-- colliders: 3900
+- child-node transform / active edits of whole-model instances, not applied: 20
+- colliders: 3903
 - duplicate openables dropped (a twin door within 10 cm): 0
 - lights: 53
-- material overrides on instances: 936
+- material overrides on instances: 939
 - materials: 136
 - model variants (one mesh of a multi-mesh FBX): 515
 - models: 194
 - prefabs: 265
 - reflection probes: 2
-- renderers: 158098
+- renderers: 158101
+- scene-embedded meshes (OBJ): 1
 - scenes: 3
 - scripts dropped (MonoBehaviour): 201
 - seedmesh materials: 133
@@ -269,34 +271,7 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\SeedMesh\Mossy_Ced
 - Asset_list: Tree_Mushroom_var4 (2)
 - Asset_list: Tree_stump_var2 (1)
 
-### instance transform / active edits whose target was not found (34)
-- Armature.fbx: -2300648904398533519 m_LocalRotation.w
-- Armature.fbx: -2300648904398533519 m_LocalRotation.x
-- Armature.fbx: -2300648904398533519 m_LocalRotation.y
-- Armature.fbx: -2300648904398533519 m_LocalRotation.z
-- Armature.fbx: -6962208583103358048 m_LocalRotation.w
-- Armature.fbx: -6962208583103358048 m_LocalRotation.x
-- Armature.fbx: -6962208583103358048 m_LocalRotation.y
-- Armature.fbx: -6962208583103358048 m_LocalRotation.z
-- Armature.fbx: -8652301172574506809 m_LocalRotation.w
-- Armature.fbx: -8652301172574506809 m_LocalRotation.x
-- Armature.fbx: -8652301172574506809 m_LocalRotation.y
-- Armature.fbx: -8652301172574506809 m_LocalRotation.z
-- Armature.fbx: -8679921383154817045 m_LocalPosition.x
-- Armature.fbx: -8679921383154817045 m_LocalPosition.y
-- Armature.fbx: -8679921383154817045 m_LocalPosition.z
-- Armature.fbx: -8679921383154817045 m_LocalRotation.w
-- Armature.fbx: -8679921383154817045 m_LocalRotation.x
-- Armature.fbx: -8679921383154817045 m_LocalRotation.y
-- Armature.fbx: -8679921383154817045 m_LocalRotation.z
-- Armature.fbx: 3571007000418402386 m_LocalRotation.w
-- Armature.fbx: 3571007000418402386 m_LocalRotation.x
-- Armature.fbx: 3571007000418402386 m_LocalRotation.y
-- Armature.fbx: 3571007000418402386 m_LocalRotation.z
-- Armature.fbx: 7302368333829783924 m_LocalRotation.w
-- Armature.fbx: 7302368333829783924 m_LocalRotation.x
-- Armature.fbx: 7302368333829783924 m_LocalRotation.y
-- Armature.fbx: 7302368333829783924 m_LocalRotation.z
+### instance transform / active edits whose target was not found (7)
 - Cedrus_tree_var4.prefab: 9000773417880785332 m_LocalPosition.x
 - Cedrus_tree_var4.prefab: 9000773417880785332 m_LocalPosition.y
 - Cedrus_tree_var4.prefab: 9000773417880785332 m_LocalPosition.z
@@ -311,12 +286,9 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\SeedMesh\Mossy_Ced
 ### materials not converted (unknown shader eb607f5e8fc16e140b732f33d26c8c31) (1)
 - Terrain_material
 
-### mesh colliders without a renderer (skipped) (28)
+### mesh colliders without a renderer (skipped) (25)
 - Cedrus_stump_1_Collider
 - Forest_ground_scan_var2_Collider
-- Ground_background
-- Ground_background (1)
-- Ground_background (2)
 - Large_RottenCedrus_log_1_Collider
 - Mossy_Rock_var3_Collider
 - Mossy_Rotten_log_var1_Collider

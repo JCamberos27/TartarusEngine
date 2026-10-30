@@ -272,6 +272,10 @@ class Converter:
         self.pack, self.exe = pack, exe
         self.fbx = {}            # unity model guid -> FbxInfo
         self.variants = {}       # (model guid, node) -> engine model path
+        self.local_meshes = {}   # the current scene's embedded Mesh fileID -> name
+        self.scene_path = None
+        self.parent_off = False
+        self.embedded = {}       # (scene, mesh name) -> engine model path or None
         self.prefab_cache = {}   # unity prefab guid -> (roots, objects by fileID)
         self.mat_guids = {}      # engine mat path -> guid
         self.model_guids = {}    # engine model path -> guid
@@ -306,6 +310,43 @@ class Converter:
             (k, v), = e['first'].items()
             by_class[int(k)][int(v)] = e['second']
         return by_class
+
+    EMBEDDED_DUMP = os.environ.get('TARTARUS_EMBEDDED_DUMP', 'C:/Users/jacob/unity_truth/embedded')
+
+    def embedded_model(self, name):
+        """Engine path of a mesh stored inside the current scene, exported by TartarusDump.EmbeddedMeshes as an OBJ
+        (mirrored into the engine's handedness there; one usemtl group sub<i> per submesh). Copied next to the scene."""
+        scene = os.path.splitext(os.path.basename(self.scene_path))[0]
+        key = (scene, name)
+        if key in self.embedded:
+            return self.embedded[key]
+        rel = os.path.relpath(os.path.dirname(self.scene_path), self.pack.src)
+        dst_dir = os.path.join(self.pack.dest, rel, scene + '_embedded')
+        top = os.path.relpath(self.pack.src, self.pack.assets).split(os.sep)[0]
+        src_dir = os.path.join(self.EMBEDDED_DUMP, top, scene)
+        res = None
+        idx = os.path.join(src_dir, 'index.json')
+        if os.path.exists(idx):
+            # same-named meshes are the same Polybrush copy of one tree LOD; the first export stands for them
+            ent = next((e for e in json.load(open(idx, encoding='utf-8')) if e['name'] == name), None)
+            if ent:
+                from unity_import import copy_if_changed
+                dst = os.path.join(dst_dir, ent['file'])
+                os.makedirs(dst_dir, exist_ok=True)
+                mtl = os.path.splitext(dst)[0] + '.mtl'
+                with open(mtl, 'w') as f:
+                    f.write(''.join(f'newmtl sub{i}\nKd 0.8 0.8 0.8\n' for i in range(ent['subMeshes'])))
+                txt = open(os.path.join(src_dir, ent['file']), encoding='utf-8').read()
+                with open(dst, 'w', encoding='utf-8', newline='\n') as f:
+                    f.write(f'mtllib {os.path.basename(mtl)}\n' + txt)
+                rel_p = os.path.relpath(dst, os.path.join(self.pack.repo, 'project')).replace(os.sep, '/')
+                imp = {'excludeNodes': [], 'globalScale': 1.0, 'importAnimations': False, 'importNormals': True,
+                       'importSkeleton': False, 'materialImportMode': 1, 'mergeByMaterial': False, 'optimizeGraph': False}
+                write_meta(dst, os.path.dirname(rel_p), 'model', {'importer': imp, 'materialRemap': {}})
+                res = rel_p
+                self.pack.counts['scene-embedded meshes (OBJ)'] += 1
+        self.embedded[key] = res
+        return res
 
     def model_entity_path(self, guid, node=None):
         """Engine model path for the whole file (node None) or one mesh node of it (a variant file when needed)."""
@@ -353,6 +394,9 @@ class Converter:
         """GameObject tree of a .prefab / .unity: (roots, objects by fileID, scene-level docs)."""
         docs = uy.docs(uy.read(path))
         by_id = {fid: (cls, t, body, stripped) for cls, fid, t, body, stripped in docs}
+        if path.lower().endswith('.unity'):  # meshes saved inside the scene (Polybrush edits): fileID -> name
+            self.scene_path = path
+            self.local_meshes = {fid: v[2].get('m_Name') for fid, v in by_id.items() if v[1] == 'Mesh' and not v[3]}
         objs, tf_of, tf_go = {}, {}, {}
         for fid, (cls, t, body, stripped) in by_id.items():
             if t == 'GameObject' and not stripped:
@@ -557,7 +601,7 @@ class Converter:
         ids[0] += 1
         e = {'id': ids[0], 'name': o.name, 'order': ids[0], 'parentId': parent, 'position': r6(pos),
              'rotation': r6(rot), 'scale': r6(scale)}
-        if not o.active:
+        if not o.active or self.parent_off:  # a child of an inactive object is off too: say so on the entity itself
             e['active'] = False
         if o.static:
             e['static'] = True
@@ -581,6 +625,11 @@ class Converter:
                     model = (self.model_entity_path(g, node), node)
                 else:
                     self.pack.report['meshes not found in their FBX'].append(f'{o.name}: {name}')
+            elif not g and mesh.get('fileID') in self.local_meshes:
+                model = (self.embedded_model(self.local_meshes[mesh['fileID']]), None)
+                if model[0] is None:
+                    self.pack.report['scene-embedded meshes with no exported OBJ (run TartarusDump.EmbeddedMeshes)'].append(
+                        f'{o.name}: {self.local_meshes[mesh["fileID"]]}')
             elif g == UNITY_BUILTIN and mesh.get('fileID') == BUILTIN_CUBE:
                 model = ('box', None)  # Unity's unit cube is the engine's box (the alley's sun blockers)
             elif g == UNITY_BUILTIN and mesh.get('fileID') == BUILTIN_PLANE and not o.children:
@@ -624,8 +673,11 @@ class Converter:
         lod = (comps.get('LODGroup') or [None])[0]
         if lod is not None:
             children = self.lod_group(o, lod, e, children)
+        was_off = self.parent_off
+        self.parent_off = was_off or not o.active
         for c in children:
             self.emit_one(c, out, ids, e['id'])
+        self.parent_off = was_off
 
     # doors and lifts --------------------------------------------------------------------------------------------
     def clip(self, guid):
@@ -742,6 +794,9 @@ class Converter:
             return None
         unity = [m.get('guid') for m in renderer.get('m_Materials') or []]
         unity = [o.mat_mods.get(i, g) for i, g in enumerate(unity)]
+        if '_embedded/' in rel:  # an exported scene mesh: slot i is submesh i, so the renderer's list is the answer
+            paths = [self.pack.material(g) if g else None for g in unity]
+            return [{'guid': self._mat_guid(m), 'path': m} if m else {} for m in paths] if any(paths) else None
         meta = json.load(open(os.path.join(self.pack.repo, 'project', *rel.split('/')) + '.meta', encoding='utf-8'))
         remap = meta.get('materialRemap', {})
         guid = self._model_guid_for(rel)
@@ -1051,6 +1106,12 @@ def dedupe_openables(out):
     return dropped
 
 
+def _walk(objs):
+    for o in objs:
+        yield o
+        yield from _walk(o.children)
+
+
 def write_scene(conv, path):
     pack = conv.pack
     roots, _, _ = conv.parse_file(path)
@@ -1089,6 +1150,11 @@ def write_scene(conv, path):
     # The scene's own directional light replaces the template's Sun (two suns blow every surface out to white).
     if any((e.get('Light') or {}).get('Type') == 'Directional' for e in out['empties'] if e['name'] != 'Sun'):
         out['empties'] = [e for e in out['empties'] if e['name'] != 'Sun']
+    # The template's physical sky draws a grey planet below the horizon, which reads as a floor that Unity's scene doesn't
+    # have (HDRP shows sky all round). A scene with no terrain of its own turns that planet off; one with a Unity terrain
+    # (not converted yet) keeps it so the trail still looks like it sits on something.
+    if pack.name.startswith('SeedMesh') and not any(t == 'Terrain' for o in _walk(roots) for t, _ in o.comps):
+        scene['sky'] = dict(scene['sky'], showGround=False)
     scene.update(out)
     scene['formatVersion'] = 4
     dst = os.path.join(pack.repo, 'project', 'scenes', f'{pack.name}_{stem}.json')

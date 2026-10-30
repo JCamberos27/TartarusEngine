@@ -135,6 +135,7 @@ void EditorLayer::DrawPhysicalSkySettings(World& world, float w) {
                "The visible disc only. The scene's light is the directional light's own intensity.");
         slider("Sun disc size", &s.SunDiscScale, 0.2f, 20.0f, "%.2f x",
                "x the directional light's Angular Size (the real sun is 0.53 deg).", ImGuiSliderFlags_Logarithmic);
+        checkbox("Show ground", &s.ShowGround, "Draw the planet below the horizon. Off: the sky simply continues downward, like a skybox.");
         checkbox("Moon", &s.MoonEnabled, "Draw the moon, and let it light the scene once the sun has set.");
         if (s.MoonEnabled) {
             slider("Moon brightness", &s.MoonBrightness, 0.0005f, 0.05f, "%.4f",
