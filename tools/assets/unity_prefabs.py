@@ -1208,7 +1208,7 @@ LOOK_SCENES = {
     # Low ground mist hugging the trail (the terrain sits around y 3-4), lit through the canopy for god rays.
     ('SeedMesh_Mossy_Cedrus_Forest', 'Mossy_forest_trail'): dict(
         LOOK_DAY, gradeTemperature=0.0, gradeColorFilter=[0.97, 1.0, 0.96],
-        volDensity=0.08, volHeightFalloff=0.4, volBaseHeight=3.0, volAnisotropy=0.75, volDistance=80.0, shadowCascades=2),
+        volDensity=0.12, volHeightFalloff=0.8, volBaseHeight=3.0, volAnisotropy=0.8, volDistance=80.0, shadowCascades=2),
 }
 NIGHT_MOON_SKY = 0.006  # sky moonBrightness: dim, though the full high moon from the night offset is still there to see by
 NIGHT_SHADOW_RES = 2048  # world shadowResolution for night scenes (moon map); 4096 default
