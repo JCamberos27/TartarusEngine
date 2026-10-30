@@ -26,9 +26,9 @@
     {
       "LOD Group": {
         "LOD 0": 0.74789,
-        "LOD 1": 0.49538,
-        "LOD 2": 0.24725,
-        "LOD 3": 0.09584,
+        "LOD 1": 0.24725,
+        "LOD 2": 0.09584,
+        "LOD 3": 0.01,
         "Size": 0.0
       },
       "id": 1,
@@ -92,9 +92,9 @@
     {
       "LOD Group": {
         "LOD 0": 0.75092,
-        "LOD 1": 0.49785,
-        "LOD 2": 0.24552,
-        "LOD 3": 0.09584,
+        "LOD 1": 0.24552,
+        "LOD 2": 0.09584,
+        "LOD 3": 0.01,
         "Size": 0.0
       },
       "id": 8,
@@ -430,32 +430,8 @@
     },
     {
       "id": 4,
-      "name": "Cedrus_tree_var12_LOD2",
-      "order": 4,
-      "parentId": 1,
-      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var12@Cedrus_tree_var12_LOD2.fbx",
-      "pathGuid": "615b64eba9b4b415",
-      "position": [
-        -0.0,
-        0.0,
-        0.0
-      ],
-      "rotation": [
-        0.0,
-        -0.0,
-        -0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
-      "id": 5,
       "name": "Cedrus_tree_var12_LOD3",
-      "order": 5,
+      "order": 4,
       "parentId": 1,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var12@Cedrus_tree_var12_LOD3.fbx",
       "pathGuid": "9de3703c19bd6d3c",
@@ -477,12 +453,37 @@
       ]
     },
     {
-      "id": 6,
+      "id": 5,
       "name": "Cedrus_tree_var12_LOD4",
-      "order": 6,
+      "order": 5,
       "parentId": 1,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var12@Cedrus_tree_var12_LOD4.fbx",
       "pathGuid": "1c0fa13716aa5b8b",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "active": false,
+      "id": 6,
+      "name": "Cedrus_tree_var12_LOD2",
+      "order": 6,
+      "parentId": 1,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var12@Cedrus_tree_var12_LOD2.fbx",
+      "pathGuid": "615b64eba9b4b415",
       "position": [
         -0.0,
         0.0,
@@ -550,32 +551,8 @@
     },
     {
       "id": 11,
-      "name": "Cedrus_tree_var12_LOD2",
-      "order": 11,
-      "parentId": 8,
-      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var13@Cedrus_tree_var12_LOD2.fbx",
-      "pathGuid": "6b422b62777191df",
-      "position": [
-        -0.0,
-        0.0,
-        0.0
-      ],
-      "rotation": [
-        0.0,
-        -0.0,
-        -0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
-      "id": 12,
       "name": "Cedrus_tree_var12_LOD3",
-      "order": 12,
+      "order": 11,
       "parentId": 8,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var13@Cedrus_tree_var12_LOD3.fbx",
       "pathGuid": "94565098d1955fc7",
@@ -597,12 +574,37 @@
       ]
     },
     {
-      "id": 13,
+      "id": 12,
       "name": "Cedrus_tree_var12_LOD4",
-      "order": 13,
+      "order": 12,
       "parentId": 8,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var13@Cedrus_tree_var12_LOD4.fbx",
       "pathGuid": "fd4ce8eda0cb015c",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "active": false,
+      "id": 13,
+      "name": "Cedrus_tree_var12_LOD2",
+      "order": 13,
+      "parentId": 8,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var13@Cedrus_tree_var12_LOD2.fbx",
+      "pathGuid": "6b422b62777191df",
       "position": [
         -0.0,
         0.0,

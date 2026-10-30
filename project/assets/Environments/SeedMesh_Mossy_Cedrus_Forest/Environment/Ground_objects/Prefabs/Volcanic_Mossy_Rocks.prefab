@@ -4,9 +4,9 @@
     {
       "LOD Group": {
         "LOD 0": 0.59561,
-        "LOD 1": 0.29969,
-        "LOD 2": 0.1977,
-        "LOD 3": 0.12332,
+        "LOD 1": 0.1977,
+        "LOD 2": 0.12332,
+        "LOD 3": 0.02434,
         "Size": 0.0
       },
       "id": 0,
@@ -105,32 +105,8 @@
     },
     {
       "id": 3,
-      "name": "Volcanic_Mossy_Rocks_LOD2",
-      "order": 3,
-      "parentId": 0,
-      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Forest_Ground_scans/Forest_Ground_scan_var4/Volcanic_Mossy_Rocks@Volcanic_Mossy_Rocks_LOD2.fbx",
-      "pathGuid": "ab52537195359b52",
-      "position": [
-        -0.0,
-        0.0,
-        0.0
-      ],
-      "rotation": [
-        0.0,
-        -0.0,
-        -0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ]
-    },
-    {
-      "id": 4,
       "name": "Volcanic_Mossy_Rocks_LOD3",
-      "order": 4,
+      "order": 3,
       "parentId": 0,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Forest_Ground_scans/Forest_Ground_scan_var4/Volcanic_Mossy_Rocks@Volcanic_Mossy_Rocks_LOD3.fbx",
       "pathGuid": "30c65f1d8a0eac8d",
@@ -152,12 +128,37 @@
       ]
     },
     {
-      "id": 5,
+      "id": 4,
       "name": "Volcanic_Mossy_Rocks_LOD4",
-      "order": 5,
+      "order": 4,
       "parentId": 0,
       "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Forest_Ground_scans/Forest_Ground_scan_var4/Volcanic_Mossy_Rocks@Volcanic_Mossy_Rocks_LOD4.fbx",
       "pathGuid": "9ab58c239b92463e",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "active": false,
+      "id": 5,
+      "name": "Volcanic_Mossy_Rocks_LOD2",
+      "order": 5,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Forest_Ground_scans/Forest_Ground_scan_var4/Volcanic_Mossy_Rocks@Volcanic_Mossy_Rocks_LOD2.fbx",
+      "pathGuid": "ab52537195359b52",
       "position": [
         -0.0,
         0.0,
