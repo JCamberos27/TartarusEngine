@@ -1,4 +1,5 @@
 #pragma once
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -108,6 +109,16 @@ struct Material {
     float GrungeStrength = 0.0f;          // 0 = off
     float GrungeScale    = 0.5f;          // tiles per metre
     bool  ReceiveDecals  = true;          // clustered decals project onto this surface
+    // Foliage (docs: FoliageWind.glsl). Opt-in; off = the vertex and fragment shaders behave exactly as before.
+    // Vertex wind: a world-space gust (global direction + time, Model::SetWind) scaled by a height mask (the mesh's
+    // local Y over WindHeight, or the vertex colour's red when UseVertexColor is on) bends it, and a small
+    // per-vertex flutter shakes the leaves. Shadows use the same offset. Translucency adds sun light through the leaf.
+    bool  Foliage        = false;
+    float WindStrength   = 0.15f;         // metres the top of WindHeight sways in a full gust
+    float WindFrequency  = 1.0f;          // gust speed multiplier
+    float WindFlutter    = 0.3f;          // 0 = all slow bend, 1 = all leaf flutter
+    float WindHeight     = 6.0f;          // metres of local Y that map to a full wind mask
+    float Translucency   = 0.0f;          // back-lit sun transmission, tinted by albedo; 0 = off
     // Substrate (Substrate.h): the material under the paint. Where the Grunge map's peel mask says the
     // paint is gone it shows instead (colour, normal, roughness, AO), and peeling-paint decals on Auto
     // reveal it too. Its maps live in the decal texture arrays (uMaterialSubstrate), not on units.
@@ -163,7 +174,17 @@ struct Material {
         return m_HashCache.Value;
     }
     // A new frame: every material's Hash() is worked out again on first use (values may have been edited since).
-    static void NextHashFrame() { if (++s_HashFrame == 0) s_HashFrame = 1; }
+    static void NextHashFrame() {
+        if (++s_HashFrame == 0) s_HashFrame = 1;
+        // Foliage wind: one clock value per frame, so the depth pre-pass, the shadow passes and the main pass bend a
+        // vertex identically (a mismatch fails the main pass's LEQUAL against the pre-pass depth).
+        static const auto t0 = std::chrono::steady_clock::now();
+        s_WindTime = std::chrono::duration<float>(std::chrono::steady_clock::now() - t0).count();
+    }
+    static std::uint32_t HashFrame() { return s_HashFrame; }
+    static float WindTime() { return s_WindTime; }
+    static glm::vec2 WindDirection() { return s_WindDir; }
+    static void SetWindDirection(glm::vec2 d) { if (glm::dot(d, d) > 1e-6f) s_WindDir = glm::normalize(d); }
 
     // ShaderVariantKeyForCached's per-frame slot, for the one shader this material links.
     bool CachedVariantKey(const void* shader, std::uint32_t& key) const {
@@ -196,7 +217,7 @@ struct Material {
     }
 
     std::uint64_t ComputeHash() const {
-        std::uint32_t words[64];
+        std::uint32_t words[80];
         std::size_t n = 0;
         auto put = [&words, &n](const void* p, std::size_t bytes) {
             std::memcpy(words + n, p, bytes);
@@ -212,6 +233,7 @@ struct Material {
             TransmissionStrength, IOR, AlphaCutoff,
             UVTiling.x, UVTiling.y, UVOffset.x, UVOffset.y, NormalStrength, ParallaxScale,
             DetailTiling.x, DetailTiling.y, GrungeStrength, GrungeScale,
+            WindStrength, WindFrequency, WindFlutter, WindHeight, Translucency,
         };
         put(scalars, sizeof(scalars));
         const std::uint32_t flags = (Triplanar ? 1u : 0u)
@@ -223,7 +245,8 @@ struct Material {
                                   | (UseVertexColor ? 64u : 0u)
                                   | (SpecularHighlights ? 0u : 128u)
                                   | (GlossyReflections ? 0u : 256u)
-                                  | (ReceiveDecals ? 0u : 512u);
+                                  | (ReceiveDecals ? 0u : 512u)
+                                  | (Foliage ? 1024u : 0u);
         put(&flags, sizeof(flags));
         const Texture* const texs[] = {
             AlbedoMap.get(), NormalMap.get(), MetallicRoughnessMap.get(), MetallicMap.get(),
@@ -260,4 +283,6 @@ private:
     mutable HashCache m_VariantCache; // a copy drops it (HashCache), so the owner below needs no reset
     mutable const void* m_VariantOwner = nullptr;
     inline static std::uint32_t s_HashFrame = 1;
+    inline static float s_WindTime = 0.0f;
+    inline static glm::vec2 s_WindDir{0.8f, 0.6f}; // world XZ, unit length
 };
