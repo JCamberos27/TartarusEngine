@@ -10,6 +10,14 @@
       0.7445,
       0.7067
     ],
+    "_CoverAlbedoMap": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Global_textures/Moss/SeedMesh_Moss_surface_basecolor.png",
+    "_CoverHeight": 6,
+    "_CoverMaskMap": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Global_textures/Moss/SeedMesh_Moss_surface_Mask_CoverMask.png",
+    "_CoverNormalMap": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Global_textures/Moss/SeedMesh_Moss_surface_normal.png",
+    "_CoverScale": 0.5,
+    "_CoverSharpness": 9.17,
+    "_CoverStrength": 1.0,
+    "_CoverThreshold": 0.6,
     "_DoubleSided": false,
     "_EmissiveColor": [
       0.0,
