@@ -1,0 +1,32 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "active": false,
+      "id": 0,
+      "name": "Cedrus_tree_var16 Variant Variant",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var16.fbx",
+      "pathGuid": "3536b7d74374719b",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ]
+}

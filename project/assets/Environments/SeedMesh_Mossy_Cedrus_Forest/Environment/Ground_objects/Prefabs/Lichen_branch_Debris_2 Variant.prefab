@@ -1,0 +1,31 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "id": 0,
+      "name": "Lichen_branch_Debris_2 Variant",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Branch_Debris/Lichen_Branch_Debris/Lichen_branch_Debris_2.fbx",
+      "pathGuid": "09a895e023495c11",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ]
+}

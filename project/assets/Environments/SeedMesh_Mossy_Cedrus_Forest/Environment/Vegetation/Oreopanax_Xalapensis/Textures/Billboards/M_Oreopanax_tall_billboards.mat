@@ -1,0 +1,35 @@
+{
+  "alphaCutoff": 0.5,
+  "factorsScaleMaps": true,
+  "matVersion": 2,
+  "name": "M_Oreopanax_tall_billboards",
+  "properties": {
+    "_AOMap": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Oreopanax_Xalapensis/Textures/Billboards/Oreopanax_Billboards_tall_Mask_AO100.png",
+    "_AlbedoMap": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Oreopanax_Xalapensis/Textures/Billboards/Oreopanax_Billboards_tall_basecolor.png",
+    "_BaseColor": [
+      0.865,
+      0.865,
+      0.865
+    ],
+    "_DoubleSided": true,
+    "_EmissiveColor": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "_EmissiveMap": "",
+    "_EmissiveStrength": 1.0,
+    "_Metallic": 0.0,
+    "_MetallicMap": "",
+    "_MetallicRoughnessMap": "",
+    "_NormalMap": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Oreopanax_Xalapensis/Textures/Billboards/Oreopanax_Billboards_tall_normal.png",
+    "_ReflectionProbes": true,
+    "_Roughness": 1.0,
+    "_RoughnessMap": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Oreopanax_Xalapensis/Textures/Billboards/Oreopanax_Billboards_tall_Mask_Roughness100_0.png",
+    "_Translucency": 0.6,
+    "_Triplanar": false,
+    "_TriplanarScale": 1.0
+  },
+  "renderQueue": 1,
+  "shader": "engine://Standard.shader"
+}

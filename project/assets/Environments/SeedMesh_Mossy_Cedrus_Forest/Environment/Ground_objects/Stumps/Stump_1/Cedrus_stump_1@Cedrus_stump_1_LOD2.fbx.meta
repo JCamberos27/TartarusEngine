@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Stumps/Stump_1",
+  "guid": "db2c431f5caa3c1d",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "meshNodes": [
+      "Cedrus_stump_1_LOD2"
+    ],
+    "optimizeGraph": true
+  },
+  "materialRemap": {
+    "Cedrus_stump_1_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Stumps/Stump_1/M_Cedrus_stump_1_mat.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

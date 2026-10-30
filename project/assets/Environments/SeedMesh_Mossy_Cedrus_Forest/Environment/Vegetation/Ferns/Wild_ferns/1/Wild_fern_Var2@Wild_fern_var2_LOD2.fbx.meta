@@ -1,0 +1,23 @@
+{
+  "folder": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Wild_ferns/1",
+  "guid": "8d0d3f56e9bcc17c",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "meshNodes": [
+      "Wild_fern_var2_LOD2"
+    ],
+    "optimizeGraph": true
+  },
+  "materialRemap": {
+    "Wild_ferns_billboards": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Wild_ferns/1/M_Wild_ferns_billboards.mat",
+    "Wild_ferns_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Wild_ferns/1/M_Wild_ferns_mat.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

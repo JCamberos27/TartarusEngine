@@ -1,0 +1,162 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "LOD Group": {
+        "LOD 0": 0.25,
+        "LOD 1": 0.125,
+        "LOD 2": 0.0625,
+        "LOD 3": 0.02,
+        "Size": 0.0
+      },
+      "id": 0,
+      "name": "Tree_Mushroom_var1 Moss Variant",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "id": 1,
+      "materials": [
+        {
+          "guid": "0b6e8098b98103c7",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/M_Tree_mushroom_mat_moss.mat"
+        }
+      ],
+      "name": "Tree_mushroom_var1_LOD0",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/Tree_Mushroom_var1@Tree_mushroom_var1_LOD0.fbx",
+      "pathGuid": "766fa0778e00e9a4",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 2,
+      "materials": [
+        {
+          "guid": "0b6e8098b98103c7",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/M_Tree_mushroom_mat_moss.mat"
+        }
+      ],
+      "name": "Tree_mushroom_var1_LOD1",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/Tree_Mushroom_var1@Tree_mushroom_var1_LOD1.fbx",
+      "pathGuid": "060c14cfa6bea964",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 3,
+      "materials": [
+        {
+          "guid": "0b6e8098b98103c7",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/M_Tree_mushroom_mat_moss.mat"
+        }
+      ],
+      "name": "Tree_mushroom_var1_LOD2",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/Tree_Mushroom_var1@Tree_mushroom_var1_LOD2.fbx",
+      "pathGuid": "978ce9ec7fa2b989",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 4,
+      "materials": [
+        {
+          "guid": "0b6e8098b98103c7",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/M_Tree_mushroom_mat_moss.mat"
+        }
+      ],
+      "name": "Tree_mushroom_var1_LOD3",
+      "order": 4,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/Tree_Mushroom_var1@Tree_mushroom_var1_LOD3.fbx",
+      "pathGuid": "dd4a11d0052af576",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

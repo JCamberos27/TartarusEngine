@@ -1,0 +1,1398 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "id": 0,
+      "name": "Cedrus_tree_var_13.2",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 1,
+      "name": "Cedrus_tree_var_13.1",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        -3.8e-05,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "LOD Group": {
+        "LOD 0": 0.25,
+        "LOD 1": 0.0625,
+        "LOD 2": 0.03125,
+        "LOD 3": 0.01,
+        "Size": 0.0
+      },
+      "id": 2,
+      "name": "Cedrus_tree_var13",
+      "order": 2,
+      "parentId": 1,
+      "position": [
+        -0.127365,
+        2.192,
+        -0.38246
+      ],
+      "rotation": [
+        0.565793,
+        -0.345597,
+        0.463426,
+        0.587944
+      ],
+      "scale": [
+        1.0884,
+        1.0884,
+        1.0884
+      ]
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.851096,
+          1e-06
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.1,
+          0.811091,
+          0.0
+        ],
+        "isTrigger": false,
+        "shape": 2
+      },
+      "id": 8,
+      "name": "Collider_1",
+      "order": 8,
+      "parentId": 2,
+      "position": [
+        -0.0,
+        0.572,
+        2.739
+      ],
+      "rotation": [
+        -0.799115,
+        -0.0,
+        -0.0,
+        0.601179
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.481741,
+          1e-06
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.1,
+          0.441737,
+          0.0
+        ],
+        "isTrigger": false,
+        "shape": 2
+      },
+      "id": 9,
+      "name": "Collider_2",
+      "order": 9,
+      "parentId": 2,
+      "position": [
+        -0.0,
+        0.095,
+        1.093
+      ],
+      "rotation": [
+        -0.733597,
+        -0.0,
+        -0.0,
+        0.679585
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.643053,
+          1e-06
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.09,
+          0.61305,
+          0.0
+        ],
+        "isTrigger": false,
+        "shape": 2
+      },
+      "id": 10,
+      "name": "Collider_3",
+      "order": 10,
+      "parentId": 2,
+      "position": [
+        0.011,
+        0.048,
+        0.146
+      ],
+      "rotation": [
+        -0.689971,
+        -0.006015,
+        -0.00631,
+        0.723785
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          0.643053,
+          1e-06
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.07,
+          0.63305,
+          0.0
+        ],
+        "isTrigger": false,
+        "shape": 2
+      },
+      "id": 11,
+      "name": "Collider_4",
+      "order": 11,
+      "parentId": 2,
+      "position": [
+        0.045,
+        0.101,
+        -1.205
+      ],
+      "rotation": [
+        -0.650614,
+        0.002285,
+        0.002634,
+        0.759401
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.2836,
+          1e-06
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.05,
+          0.293598,
+          0.0
+        ],
+        "isTrigger": false,
+        "shape": 2
+      },
+      "id": 12,
+      "name": "Collider_5",
+      "order": 12,
+      "parentId": 2,
+      "position": [
+        0.035,
+        0.314,
+        -2.579
+      ],
+      "rotation": [
+        -0.658327,
+        0.002258,
+        0.002657,
+        0.752724
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.405101,
+          1e-06
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.04,
+          0.425099,
+          0.0
+        ],
+        "isTrigger": false,
+        "shape": 2
+      },
+      "id": 13,
+      "name": "Collider_6",
+      "order": 13,
+      "parentId": 2,
+      "position": [
+        0.031,
+        0.395,
+        -3.179
+      ],
+      "rotation": [
+        -0.581077,
+        0.012057,
+        0.015272,
+        0.813616
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.565062,
+          1e-06
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.02,
+          0.605059,
+          0.0
+        ],
+        "isTrigger": false,
+        "shape": 2
+      },
+      "id": 14,
+      "name": "Collider_7",
+      "order": 14,
+      "parentId": 2,
+      "position": [
+        -0.003,
+        0.699,
+        -4.01
+      ],
+      "rotation": [
+        -0.547096,
+        0.008919,
+        0.008887,
+        0.836975
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "LOD Group": {
+        "LOD 0": 0.25,
+        "LOD 1": 0.0625,
+        "LOD 2": 0.03125,
+        "LOD 3": 0.01,
+        "Size": 0.0
+      },
+      "id": 15,
+      "name": "Cedrus_tree_var12",
+      "order": 15,
+      "parentId": 1,
+      "position": [
+        0.519989,
+        4.312,
+        0.233
+      ],
+      "rotation": [
+        0.729484,
+        0.137918,
+        -0.175029,
+        0.646682
+      ],
+      "scale": [
+        1.3447,
+        1.3447,
+        1.3447
+      ]
+    },
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          3.316461,
+          -0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.1,
+          3.276451,
+          0.0
+        ],
+        "isTrigger": false,
+        "shape": 2
+      },
+      "id": 21,
+      "name": "Collider",
+      "order": 21,
+      "parentId": 15,
+      "position": [
+        -0.0,
+        0.151,
+        3.886
+      ],
+      "rotation": [
+        -0.703778,
+        -0.0,
+        -0.0,
+        0.71042
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "LOD Group": {
+        "LOD 0": 0.25,
+        "LOD 1": 0.125,
+        "LOD 2": 0.0625,
+        "LOD 3": 0.02,
+        "Size": 0.0
+      },
+      "id": 22,
+      "name": "Tree_Mushroom_var4 (2)",
+      "order": 22,
+      "parentId": 0,
+      "position": [
+        -0.224243,
+        0.785248,
+        -0.129181
+      ],
+      "rotation": [
+        0.0,
+        -0.632887,
+        -0.0,
+        0.774244
+      ],
+      "scale": [
+        0.795004,
+        0.795004,
+        0.795004
+      ]
+    },
+    {
+      "LOD Group": {
+        "LOD 0": 0.25,
+        "LOD 1": 0.125,
+        "LOD 2": 0.0625,
+        "LOD 3": 0.02,
+        "Size": 0.0
+      },
+      "id": 27,
+      "name": "Tree_Mushroom_var3 (2)",
+      "order": 27,
+      "parentId": 0,
+      "position": [
+        -0.072388,
+        0.559677,
+        -0.16748
+      ],
+      "rotation": [
+        0.040224,
+        0.855844,
+        -0.067336,
+        0.511252
+      ],
+      "scale": [
+        0.73485,
+        0.73485,
+        0.73485
+      ]
+    },
+    {
+      "LOD Group": {
+        "LOD 0": 0.25,
+        "LOD 1": 0.125,
+        "LOD 2": 0.0625,
+        "LOD 3": 0.02,
+        "Size": 0.0
+      },
+      "id": 32,
+      "name": "Tree_Mushroom_var4 (1)",
+      "order": 32,
+      "parentId": 0,
+      "position": [
+        -0.142456,
+        1.103889,
+        -0.13678
+      ],
+      "rotation": [
+        0.0,
+        -0.180415,
+        -0.0,
+        0.983591
+      ],
+      "scale": [
+        0.65528,
+        0.65528,
+        0.65528
+      ]
+    },
+    {
+      "LOD Group": {
+        "LOD 0": 0.25,
+        "LOD 1": 0.125,
+        "LOD 2": 0.0625,
+        "LOD 3": 0.02,
+        "Size": 0.0
+      },
+      "id": 37,
+      "name": "Tree_Mushroom_var3 (1)",
+      "order": 37,
+      "parentId": 0,
+      "position": [
+        -0.066101,
+        1.195518,
+        -0.147369
+      ],
+      "rotation": [
+        0.0,
+        0.113794,
+        -0.0,
+        0.993504
+      ],
+      "scale": [
+        0.68179,
+        0.68179,
+        0.68179
+      ]
+    },
+    {
+      "LOD Group": {
+        "LOD 0": 0.25,
+        "LOD 1": 0.125,
+        "LOD 2": 0.0625,
+        "LOD 3": 0.02,
+        "Size": 0.0
+      },
+      "id": 42,
+      "name": "Tree_Mushroom_var4",
+      "order": 42,
+      "parentId": 0,
+      "position": [
+        0.458252,
+        0.705177,
+        0.094513
+      ],
+      "rotation": [
+        0.073074,
+        0.528359,
+        -0.045711,
+        0.844634
+      ],
+      "scale": [
+        0.8851,
+        0.8851,
+        0.8851
+      ]
+    },
+    {
+      "LOD Group": {
+        "LOD 0": 0.25,
+        "LOD 1": 0.125,
+        "LOD 2": 0.0625,
+        "LOD 3": 0.02,
+        "Size": 0.0
+      },
+      "id": 47,
+      "name": "Tree_Mushroom_var3",
+      "order": 47,
+      "parentId": 0,
+      "position": [
+        0.330749,
+        0.517471,
+        0.172913
+      ],
+      "rotation": [
+        0.056866,
+        0.141132,
+        -0.00812,
+        0.988323
+      ],
+      "scale": [
+        0.82323,
+        0.82323,
+        0.82323
+      ]
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "id": 3,
+      "name": "Cedrus_tree_var12_LOD0",
+      "order": 3,
+      "parentId": 2,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var13@Cedrus_tree_var12_LOD0.fbx",
+      "pathGuid": "975fdd587e5e5203",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Cedrus_tree_var12_LOD1",
+      "order": 4,
+      "parentId": 2,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var13@Cedrus_tree_var12_LOD1.fbx",
+      "pathGuid": "ad23fe8c4d8dc9eb",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Cedrus_tree_var12_LOD3",
+      "order": 5,
+      "parentId": 2,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var13@Cedrus_tree_var12_LOD3.fbx",
+      "pathGuid": "94565098d1955fc7",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 6,
+      "name": "Cedrus_tree_var12_LOD4",
+      "order": 6,
+      "parentId": 2,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var13@Cedrus_tree_var12_LOD4.fbx",
+      "pathGuid": "fd4ce8eda0cb015c",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "active": false,
+      "id": 7,
+      "name": "Cedrus_tree_var12_LOD2",
+      "order": 7,
+      "parentId": 2,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var13@Cedrus_tree_var12_LOD2.fbx",
+      "pathGuid": "6b422b62777191df",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 16,
+      "name": "Cedrus_tree_var12_LOD0",
+      "order": 16,
+      "parentId": 15,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var12@Cedrus_tree_var12_LOD0.fbx",
+      "pathGuid": "4a5a62d3d0d4a103",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 17,
+      "name": "Cedrus_tree_var12_LOD1",
+      "order": 17,
+      "parentId": 15,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var12@Cedrus_tree_var12_LOD1.fbx",
+      "pathGuid": "deb576371b737ff9",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 18,
+      "name": "Cedrus_tree_var12_LOD3",
+      "order": 18,
+      "parentId": 15,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var12@Cedrus_tree_var12_LOD3.fbx",
+      "pathGuid": "9de3703c19bd6d3c",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 19,
+      "name": "Cedrus_tree_var12_LOD4",
+      "order": 19,
+      "parentId": 15,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var12@Cedrus_tree_var12_LOD4.fbx",
+      "pathGuid": "1c0fa13716aa5b8b",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "active": false,
+      "id": 20,
+      "name": "Cedrus_tree_var12_LOD2",
+      "order": 20,
+      "parentId": 15,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Tree_mesh/Cedrus_tree_var12@Cedrus_tree_var12_LOD2.fbx",
+      "pathGuid": "615b64eba9b4b415",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 23,
+      "name": "Tree_mushroom_var4_LOD0",
+      "order": 23,
+      "parentId": 22,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/Tree_Mushroom_var4@Tree_mushroom_var4_LOD0.fbx",
+      "pathGuid": "8cb5457b1cb737a1",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 24,
+      "name": "Tree_mushroom_var4_LOD1",
+      "order": 24,
+      "parentId": 22,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/Tree_Mushroom_var4@Tree_mushroom_var4_LOD1.fbx",
+      "pathGuid": "7b3c2173ccf4278c",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 25,
+      "name": "Tree_mushroom_var4_LOD2",
+      "order": 25,
+      "parentId": 22,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/Tree_Mushroom_var4@Tree_mushroom_var4_LOD2.fbx",
+      "pathGuid": "16d89f6c3c3da63c",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 26,
+      "name": "Tree_mushroom_var4_LOD3",
+      "order": 26,
+      "parentId": 22,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/Tree_Mushroom_var4@Tree_mushroom_var4_LOD3.fbx",
+      "pathGuid": "930cfe1acdc104b3",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 28,
+      "name": "Tree_mushroom_var3_LOD0",
+      "order": 28,
+      "parentId": 27,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/Tree_Mushroom_var3@Tree_mushroom_var3_LOD0.fbx",
+      "pathGuid": "0c5512ce46c4aa3c",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 29,
+      "name": "Tree_mushroom_var3_LOD1",
+      "order": 29,
+      "parentId": 27,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/Tree_Mushroom_var3@Tree_mushroom_var3_LOD1.fbx",
+      "pathGuid": "0f74d32e42b54843",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 30,
+      "name": "Tree_mushroom_var3_LOD2",
+      "order": 30,
+      "parentId": 27,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/Tree_Mushroom_var3@Tree_mushroom_var3_LOD2.fbx",
+      "pathGuid": "d9e119b38ec2ece4",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 31,
+      "name": "Tree_mushroom_var3_LOD3",
+      "order": 31,
+      "parentId": 27,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/Tree_Mushroom_var3@Tree_mushroom_var3_LOD3.fbx",
+      "pathGuid": "cf9386fcd742a1d0",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 33,
+      "name": "Tree_mushroom_var4_LOD0",
+      "order": 33,
+      "parentId": 32,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/Tree_Mushroom_var4@Tree_mushroom_var4_LOD0.fbx",
+      "pathGuid": "8cb5457b1cb737a1",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 34,
+      "name": "Tree_mushroom_var4_LOD1",
+      "order": 34,
+      "parentId": 32,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/Tree_Mushroom_var4@Tree_mushroom_var4_LOD1.fbx",
+      "pathGuid": "7b3c2173ccf4278c",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 35,
+      "name": "Tree_mushroom_var4_LOD2",
+      "order": 35,
+      "parentId": 32,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/Tree_Mushroom_var4@Tree_mushroom_var4_LOD2.fbx",
+      "pathGuid": "16d89f6c3c3da63c",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 36,
+      "name": "Tree_mushroom_var4_LOD3",
+      "order": 36,
+      "parentId": 32,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/Tree_Mushroom_var4@Tree_mushroom_var4_LOD3.fbx",
+      "pathGuid": "930cfe1acdc104b3",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 38,
+      "name": "Tree_mushroom_var3_LOD0",
+      "order": 38,
+      "parentId": 37,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/Tree_Mushroom_var3@Tree_mushroom_var3_LOD0.fbx",
+      "pathGuid": "0c5512ce46c4aa3c",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 39,
+      "name": "Tree_mushroom_var3_LOD1",
+      "order": 39,
+      "parentId": 37,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/Tree_Mushroom_var3@Tree_mushroom_var3_LOD1.fbx",
+      "pathGuid": "0f74d32e42b54843",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 40,
+      "name": "Tree_mushroom_var3_LOD2",
+      "order": 40,
+      "parentId": 37,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/Tree_Mushroom_var3@Tree_mushroom_var3_LOD2.fbx",
+      "pathGuid": "d9e119b38ec2ece4",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 41,
+      "name": "Tree_mushroom_var3_LOD3",
+      "order": 41,
+      "parentId": 37,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/Tree_Mushroom_var3@Tree_mushroom_var3_LOD3.fbx",
+      "pathGuid": "cf9386fcd742a1d0",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 43,
+      "name": "Tree_mushroom_var4_LOD0",
+      "order": 43,
+      "parentId": 42,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/Tree_Mushroom_var4@Tree_mushroom_var4_LOD0.fbx",
+      "pathGuid": "8cb5457b1cb737a1",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 44,
+      "name": "Tree_mushroom_var4_LOD1",
+      "order": 44,
+      "parentId": 42,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/Tree_Mushroom_var4@Tree_mushroom_var4_LOD1.fbx",
+      "pathGuid": "7b3c2173ccf4278c",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 45,
+      "name": "Tree_mushroom_var4_LOD2",
+      "order": 45,
+      "parentId": 42,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/Tree_Mushroom_var4@Tree_mushroom_var4_LOD2.fbx",
+      "pathGuid": "16d89f6c3c3da63c",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 46,
+      "name": "Tree_mushroom_var4_LOD3",
+      "order": 46,
+      "parentId": 42,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/Tree_Mushroom_var4@Tree_mushroom_var4_LOD3.fbx",
+      "pathGuid": "930cfe1acdc104b3",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 48,
+      "name": "Tree_mushroom_var3_LOD0",
+      "order": 48,
+      "parentId": 47,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/Tree_Mushroom_var3@Tree_mushroom_var3_LOD0.fbx",
+      "pathGuid": "0c5512ce46c4aa3c",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 49,
+      "name": "Tree_mushroom_var3_LOD1",
+      "order": 49,
+      "parentId": 47,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/Tree_Mushroom_var3@Tree_mushroom_var3_LOD1.fbx",
+      "pathGuid": "0f74d32e42b54843",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 50,
+      "name": "Tree_mushroom_var3_LOD2",
+      "order": 50,
+      "parentId": 47,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/Tree_Mushroom_var3@Tree_mushroom_var3_LOD2.fbx",
+      "pathGuid": "d9e119b38ec2ece4",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 51,
+      "name": "Tree_mushroom_var3_LOD3",
+      "order": 51,
+      "parentId": 47,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/Tree_Mushroom_var3@Tree_mushroom_var3_LOD3.fbx",
+      "pathGuid": "cf9386fcd742a1d0",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ]
+}

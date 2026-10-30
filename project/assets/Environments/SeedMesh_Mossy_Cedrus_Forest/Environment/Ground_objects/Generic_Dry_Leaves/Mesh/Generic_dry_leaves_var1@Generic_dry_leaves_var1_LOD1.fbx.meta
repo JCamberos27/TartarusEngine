@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Generic_Dry_Leaves/Mesh",
+  "guid": "fc7702464e3af1cc",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "meshNodes": [
+      "Generic_dry_leaves_var1_LOD1"
+    ],
+    "optimizeGraph": true
+  },
+  "materialRemap": {
+    "Generic_leaves": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Generic_Dry_Leaves/Textures/M_Generic_dry_leaves.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

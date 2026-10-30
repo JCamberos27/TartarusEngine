@@ -299,7 +299,8 @@ void SkyAtmosphere::UpdateAtmosphereUniforms(const SkySettings& s, const SkyLigh
     u.MieScat = glm::vec4(m.MieScat, -m.MieInvH);
     u.MieExt = glm::vec4(m.MieExt, std::clamp(s.MieAnisotropy, 0.0f, 0.99f));
     u.Ozone = glm::vec4(m.Ozone, kOzoneCenterKm);
-    u.Ground = glm::vec4(glm::clamp(s.GroundAlbedo, glm::vec3(0.0f), glm::vec3(1.0f)), kOzoneHalfWidthKm);
+    u.Ground = glm::vec4(glm::clamp(s.GroundAlbedo, glm::vec3(0.0f), glm::vec3(1.0f)),
+                       (s.ShowGround ? 1.0f : -1.0f) * kOzoneHalfWidthKm); // the sign hides the planet in the sky pass
     // Sky intensity carries the night brightening, so the visible sky, the haze, the clouds and
     // the environment capture (hence the ambient light) all rise together.
     u.Radii = glm::vec4(m.BottomRadius, m.TopRadius, std::max(s.SkyIntensity, 0.0f) * lit.NightBoost,

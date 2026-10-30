@@ -1,0 +1,378 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "id": 0,
+      "name": "Merged_Stump_var1",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "LOD Group": {
+        "LOD 0": 0.4,
+        "LOD 1": 0.2,
+        "LOD 2": 0.1,
+        "LOD 3": 0.04,
+        "Size": 0.0
+      },
+      "id": 1,
+      "name": "Cedrus_stump_1_Moss (1)",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        2.116287,
+        0.299726,
+        0.14016
+      ],
+      "rotation": [
+        -0.601655,
+        0.540106,
+        0.443741,
+        0.386512
+      ],
+      "scale": [
+        2.291239,
+        2.291239,
+        2.291239
+      ],
+      "static": true
+    },
+    {
+      "id": 6,
+      "name": "Cedrus_stump_1_Collider",
+      "order": 6,
+      "parentId": 1,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "LOD Group": {
+        "LOD 0": 0.5,
+        "LOD 1": 0.35,
+        "LOD 2": 0.2,
+        "LOD 3": 0.04,
+        "Size": 0.0
+      },
+      "id": 7,
+      "name": "Mossy_rotten_log_var3 Moss Variant (2)",
+      "order": 7,
+      "parentId": 0,
+      "position": [
+        -1.331024,
+        0.172059,
+        -0.060799
+      ],
+      "rotation": [
+        -0.764719,
+        -0.011301,
+        -0.019103,
+        -0.643982
+      ],
+      "scale": [
+        2.285956,
+        2.285956,
+        2.285956
+      ]
+    },
+    {
+      "id": 12,
+      "name": "Mossy_rotten_log_var3_Collider",
+      "order": 12,
+      "parentId": 7,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "id": 2,
+      "materials": [
+        {
+          "guid": "c7b37dfa5127f51a",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Stumps/Stump_1/M_Cedrus_stump_1_moss.mat"
+        }
+      ],
+      "name": "Cedrus_stump_1_LOD0",
+      "order": 2,
+      "parentId": 1,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Stumps/Stump_1/Cedrus_stump_1@Cedrus_stump_1_LOD0.fbx",
+      "pathGuid": "d3064e73ce457b6a",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 3,
+      "materials": [
+        {
+          "guid": "c7b37dfa5127f51a",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Stumps/Stump_1/M_Cedrus_stump_1_moss.mat"
+        }
+      ],
+      "name": "Cedrus_stump_1_LOD1",
+      "order": 3,
+      "parentId": 1,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Stumps/Stump_1/Cedrus_stump_1@Cedrus_stump_1_LOD1.fbx",
+      "pathGuid": "705837cce18f35bb",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 4,
+      "materials": [
+        {
+          "guid": "c7b37dfa5127f51a",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Stumps/Stump_1/M_Cedrus_stump_1_moss.mat"
+        }
+      ],
+      "name": "Cedrus_stump_1_LOD2",
+      "order": 4,
+      "parentId": 1,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Stumps/Stump_1/Cedrus_stump_1@Cedrus_stump_1_LOD2.fbx",
+      "pathGuid": "db2c431f5caa3c1d",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 5,
+      "materials": [
+        {
+          "guid": "c7b37dfa5127f51a",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Stumps/Stump_1/M_Cedrus_stump_1_moss.mat"
+        }
+      ],
+      "name": "Cedrus_stump_1_LOD3",
+      "order": 5,
+      "parentId": 1,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Stumps/Stump_1/Cedrus_stump_1@Cedrus_stump_1_LOD3.fbx",
+      "pathGuid": "63d00627547729f9",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 8,
+      "materials": [
+        {
+          "guid": "95cfe16725dfb4b5",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/3_Mossy_rotten_log_var3/M_Mossy_Rotten_log_var3_mat_moss.mat"
+        }
+      ],
+      "name": "Mossy_rotten_log_var3_LOD0",
+      "order": 8,
+      "parentId": 7,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/3_Mossy_rotten_log_var3/Mossy_rotten_log_var3@Mossy_rotten_log_var3_LOD0.fbx",
+      "pathGuid": "26656a839a7e3934",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 9,
+      "materials": [
+        {
+          "guid": "95cfe16725dfb4b5",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/3_Mossy_rotten_log_var3/M_Mossy_Rotten_log_var3_mat_moss.mat"
+        }
+      ],
+      "name": "Mossy_rotten_log_var3_LOD1",
+      "order": 9,
+      "parentId": 7,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/3_Mossy_rotten_log_var3/Mossy_rotten_log_var3@Mossy_rotten_log_var3_LOD1.fbx",
+      "pathGuid": "38d444bfd7461d39",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 10,
+      "materials": [
+        {
+          "guid": "95cfe16725dfb4b5",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/3_Mossy_rotten_log_var3/M_Mossy_Rotten_log_var3_mat_moss.mat"
+        }
+      ],
+      "name": "Mossy_rotten_log_var3_LOD2",
+      "order": 10,
+      "parentId": 7,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/3_Mossy_rotten_log_var3/Mossy_rotten_log_var3@Mossy_rotten_log_var3_LOD2.fbx",
+      "pathGuid": "76952d59973c54dc",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 11,
+      "materials": [
+        {
+          "guid": "95cfe16725dfb4b5",
+          "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/3_Mossy_rotten_log_var3/M_Mossy_Rotten_log_var3_mat_moss.mat"
+        }
+      ],
+      "name": "Mossy_rotten_log_var3_LOD3",
+      "order": 11,
+      "parentId": 7,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/3_Mossy_rotten_log_var3/Mossy_rotten_log_var3@Mossy_rotten_log_var3_LOD3.fbx",
+      "pathGuid": "b5bf1c95dca578b6",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Branch_Debris/Short_branch_debris",
+  "guid": "ec676da972800a7c",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 1.0,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "meshNodes": [
+      "Short_rotten_branch_var3_LOD0"
+    ],
+    "optimizeGraph": true
+  },
+  "materialRemap": {
+    "Short_Rotten_branches_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Branch_Debris/Short_branch_debris/M_Short_Rotten_branches_mat.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

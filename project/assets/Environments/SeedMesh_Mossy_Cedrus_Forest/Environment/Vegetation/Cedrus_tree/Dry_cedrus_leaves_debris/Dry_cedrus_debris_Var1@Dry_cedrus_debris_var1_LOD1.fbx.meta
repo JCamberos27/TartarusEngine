@@ -1,0 +1,22 @@
+{
+  "folder": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Dry_cedrus_leaves_debris",
+  "guid": "4a5ebc17598482ab",
+  "importer": {
+    "excludeNodes": [],
+    "globalScale": 0.8,
+    "importAnimations": false,
+    "importNormals": true,
+    "importSkeleton": false,
+    "materialImportMode": 1,
+    "mergeByMaterial": true,
+    "meshNodes": [
+      "Dry_cedrus_debris_var1_LOD1"
+    ],
+    "optimizeGraph": true
+  },
+  "materialRemap": {
+    "Dry_cedrus_leaves_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Dry_cedrus_leaves_debris/M_Dry_cedrus_leaves_mat.mat"
+  },
+  "metaVersion": 1,
+  "type": "model"
+}

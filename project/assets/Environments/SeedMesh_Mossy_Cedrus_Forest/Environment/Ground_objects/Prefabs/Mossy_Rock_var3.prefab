@@ -1,0 +1,161 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "LOD Group": {
+        "LOD 0": 0.25,
+        "LOD 1": 0.125,
+        "LOD 2": 0.0625,
+        "LOD 3": 0.01,
+        "Size": 0.0
+      },
+      "id": 0,
+      "name": "Mossy_Rock_var3",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 5,
+      "name": "Mossy_Rock_var3_Collider",
+      "order": 5,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "id": 1,
+      "name": "Mossy_Rock_var3_LOD0",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rocks/Mossy_rock_var3/Mossy_Rock_var3@Mossy_Rock_var3_LOD0.fbx",
+      "pathGuid": "5fa237d40e801174",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 2,
+      "name": "Mossy_Rock_var3_LOD1",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rocks/Mossy_rock_var3/Mossy_Rock_var3@Mossy_Rock_var3_LOD1.fbx",
+      "pathGuid": "b14e3e09a1a31129",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 3,
+      "name": "Mossy_Rock_var3_LOD2",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rocks/Mossy_rock_var3/Mossy_Rock_var3@Mossy_Rock_var3_LOD2.fbx",
+      "pathGuid": "d04fb6f2f4799ea2",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    },
+    {
+      "id": 4,
+      "name": "Mossy_Rock_var3_LOD3",
+      "order": 4,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rocks/Mossy_rock_var3/Mossy_Rock_var3@Mossy_Rock_var3_LOD3.fbx",
+      "pathGuid": "2d16e6dda5024edf",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

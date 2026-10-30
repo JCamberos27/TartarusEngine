@@ -1,0 +1,16 @@
+{
+  "folder": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ground_cover_plants/Textures",
+  "guid": "4fa4a35b2026d31d",
+  "importer": {
+    "anisoLevel": 8,
+    "compression": 1,
+    "filterMode": 2,
+    "generateMipmaps": true,
+    "isSRGB": false,
+    "maxTextureSize": 2048,
+    "textureType": 1,
+    "wrapMode": 0
+  },
+  "metaVersion": 1,
+  "type": "texture"
+}

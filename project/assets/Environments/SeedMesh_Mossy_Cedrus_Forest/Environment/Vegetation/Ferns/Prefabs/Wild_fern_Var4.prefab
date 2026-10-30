@@ -1,0 +1,133 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "LOD Group": {
+        "LOD 0": 0.25,
+        "LOD 1": 0.08,
+        "LOD 2": 0.03,
+        "LOD 3": 0.02,
+        "Size": 0.0
+      },
+      "id": 0,
+      "name": "Wild_fern_Var4",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "id": 1,
+      "name": "Wild_fern_var4_LOD0",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Wild_ferns/1/Wild_fern_Var4@Wild_fern_var4_LOD0.fbx",
+      "pathGuid": "65d99925b423e05d",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Wild_fern_var4_LOD1",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Wild_ferns/1/Wild_fern_Var4@Wild_fern_var4_LOD1.fbx",
+      "pathGuid": "1892ca3dca475d23",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Wild_fern_var4_LOD2",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Wild_ferns/1/Wild_fern_Var4@Wild_fern_var4_LOD2.fbx",
+      "pathGuid": "cf0d780af5fdaece",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Wild_fern_var4_LOD3",
+      "order": 4,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Wild_ferns/1/Wild_fern_Var4@Wild_fern_var4_LOD3.fbx",
+      "pathGuid": "818930a7e0ba8479",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ]
+}

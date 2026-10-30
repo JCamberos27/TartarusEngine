@@ -1,0 +1,109 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "LOD Group": {
+        "LOD 0": 0.10309,
+        "LOD 1": 0.05018,
+        "LOD 2": 0.0199,
+        "LOD 3": 0.0,
+        "Size": 0.0
+      },
+      "id": 0,
+      "name": "Generic_dry_leaves_var1",
+      "order": 0,
+      "parentId": -1,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "id": 1,
+      "name": "Generic_dry_leaves_var1_LOD0",
+      "order": 1,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Generic_Dry_Leaves/Mesh/Generic_dry_leaves_var1@Generic_dry_leaves_var1_LOD0.fbx",
+      "pathGuid": "5118253529524e82",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Generic_dry_leaves_var1_LOD1",
+      "order": 2,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Generic_Dry_Leaves/Mesh/Generic_dry_leaves_var1@Generic_dry_leaves_var1_LOD1.fbx",
+      "pathGuid": "fc7702464e3af1cc",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Generic_dry_leaves_var1_LOD2",
+      "order": 3,
+      "parentId": 0,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Generic_Dry_Leaves/Mesh/Generic_dry_leaves_var1@Generic_dry_leaves_var1_LOD2.fbx",
+      "pathGuid": "b9c39cde706d2eb2",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ]
+}

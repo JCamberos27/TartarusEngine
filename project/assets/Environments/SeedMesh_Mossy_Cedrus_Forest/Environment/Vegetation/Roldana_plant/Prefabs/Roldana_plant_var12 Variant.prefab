@@ -1,0 +1,31 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "id": 0,
+      "name": "Roldana_plant_var12 Variant",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Roldana_plant/Mesh/Roldana_plant_var12.fbx",
+      "pathGuid": "88ed4a1269fb6de3",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ]
+}

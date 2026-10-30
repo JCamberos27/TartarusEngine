@@ -1,0 +1,69 @@
+{
+  "boxes": [],
+  "empties": [
+    {
+      "collider": {
+        "center": [
+          -0.0,
+          1.097976,
+          -0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.025,
+          1.112968,
+          0.0
+        ],
+        "isTrigger": false,
+        "shape": 2
+      },
+      "id": 1,
+      "name": "Collider",
+      "order": 1,
+      "parentId": 0,
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        -0.0052,
+        -1.4e-05,
+        0.002697,
+        0.999983
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "formatVersion": 4,
+  "models": [
+    {
+      "id": 0,
+      "name": "Oreopanax_Xalapensis_var4 Variant",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Oreopanax_Xalapensis/Mesh/Oreopanax_Xalapensis_var4.fbx",
+      "pathGuid": "74c2e914e540f777",
+      "position": [
+        -0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        -0.0,
+        -0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ]
+}
