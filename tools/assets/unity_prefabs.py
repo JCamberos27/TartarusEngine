@@ -1211,6 +1211,8 @@ LOOK_SCENES = {
         volDensity=0.08, volHeightFalloff=0.4, volBaseHeight=3.0, volAnisotropy=0.75, volDistance=80.0, shadowCascades=2),
 }
 NIGHT_MOON_SKY = 0.006  # sky moonBrightness: dim, though the full high moon from the night offset is still there to see by
+NIGHT_SHADOW_RES = 2048  # world shadowResolution for night scenes (moon map); 4096 default
+NIGHT_CLOUD_QUALITY = 0 # sky cloudQuality 0 = Low
 NIGHT_MOON_LIGHT = 0.35 # the moon's directional light (the Unity scene's own, or the template Sun standing in for it)
 
 
@@ -1221,7 +1223,8 @@ def apply_look(pack, stem, scene, empties):
         return
     scene.update(look)
     if 'night' in stem.lower():
-        scene['sky'] = dict(scene['sky'], moonBrightness=NIGHT_MOON_SKY)
+        scene['sky'] = dict(scene['sky'], moonBrightness=NIGHT_MOON_SKY, cloudQuality=NIGHT_CLOUD_QUALITY)
+        scene['shadowResolution'] = NIGHT_SHADOW_RES
         for e in empties:
             if (e.get('Light') or {}).get('Type') == 'Directional':
                 e['Light']['Intensity'] = NIGHT_MOON_LIGHT
