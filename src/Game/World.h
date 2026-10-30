@@ -210,6 +210,12 @@ public:
     int ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj);
     // Removes every LodCulledTag.
     void ClearLod();
+    // Whether ApplyLod tagged `e` LodCulledTag: the same answer as the tag, read from a flat per-slot table (the
+    // visibility gathers ask for every renderable, several times a frame).
+    bool IsLodCulled(entt::entity e) const {
+        const size_t s = (size_t)entt::to_entity(e);
+        return s < m_LodCulledOwner.size() && m_LodCulledOwner[s] == e;
+    }
     // #201 - derives InactiveTag (activeInHierarchy == false) from DeactivatedTag on the entity
     // or any ancestor. RebuildWorldTransformCache() runs it every frame; scene/prefab loads run
     // it on the way out so their callers see a consistent state immediately.
@@ -321,6 +327,8 @@ private:
     std::vector<std::uint32_t> m_LodIndex;    // entity slot -> m_LodState index (~0u: none)
     std::uint64_t m_LodCentreStamp = 0;       // the transform cache stamp the centres were read at
     std::vector<entt::entity> m_LodStack;
+    std::vector<entt::entity> m_LodCulledOwner; // entity slot -> the entity tagged there (IsLodCulled)
+    void SetLodCulled(entt::entity e, bool culled);
     std::vector<std::pair<entt::entity, bool>> m_LodWalk;
     std::uint64_t m_LodSignature[4] = {};
     bool m_LodValid = false;  // the tags match m_LodState
