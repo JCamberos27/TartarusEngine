@@ -1094,12 +1094,75 @@ def strip_skipped(pack, roots, where):
 
 # Per-pack prefab scale overrides: prefab (root object) name -> uniform scale, applied wherever the prefab is emitted so the
 # prefab files and every scene instance agree (colliders and child parts ride on the root entity). Measured against the
-# 1.81 m Quantum rig: the alley's doors are 1.2-1.3x too big for the player, the office's metal desk and leather chair too tall.
+# 1.81 m Quantum rig: the office's metal desk and leather chair are too tall.
 SCALE_OVERRIDES = {
-    'ModularCityAlleyPack': {'Door_A': 2.05 / 2.49, 'Door_B': 2.05 / 2.49, 'Door_C': 2.05 / 2.62, 'Door_D': 2.05 / 2.62,
-                             'Door_MetalBars_A': 2.05 / 3.16},
     'OfficeAndPoliceStation': {'Desk_metal': 0.75 / 0.90, 'Chair_office_leather': 1.10 / 1.28},
 }
+
+
+# Architecture scale: the alley's building kit is 1.2-1.3x too big for the 1.81 m Quantum rig (doors 2.49 m, the narrowest
+# alley 4+ m wide). A uniform factor shrinks the building pieces, and the whole scene layout scales about the world origin
+# by the same factor, so the walls still tile and the props (kept at 1.0) still sit on the floors. 2.49 m x 0.82 = 2.04 m.
+ARCH_SCALE = {'ModularCityAlleyPack': 0.82}
+ARCH_FOLDERS = {'ModularCityAlleyPack': {'Walls', 'Floors', 'Roofs', 'Decals'}}
+# building-mounted kit that lives in the Props folder (free-standing props stay out)
+ARCH_PROP_RE = {'ModularCityAlleyPack': re.compile(
+    r'^(Airduct|Awning|Balcony|Commercial$|Distant_Building|FireEscape|MetalPlateRoof_|MetalPlate_A$|Neon_Sign_|Sign_|Pipe_|'
+    r'PlasticHanging|PowerLines_|Window_MetalBars_|WindowShutter|Door_MetalBars_|Tree_Groundplate|WireStraight)')}
+
+
+def arch_class(pack_name, e):
+    """True for a building piece, False for a free-standing prop; None when the entity is not a model."""
+    path = e.get('path')
+    if not path:
+        return None
+    seg = path.replace(chr(92), '/').split('/Meshes/')[-1].split('/')
+    name = re.sub(r' \(\d+\)$', '', e['name'])
+    if seg[0] in ARCH_FOLDERS[pack_name]:
+        return True
+    return bool(ARCH_PROP_RE[pack_name].match(name))
+
+
+def arch_rescale(pack, out, prefab):
+    """Apply ARCH_SCALE to an emitted prefab (root scale only) or scene (every entity directly under the scene or an
+    identity group: building pieces get the scale, their positions all scale about the origin; props keep size)."""
+    s = ARCH_SCALE.get(pack.name)
+    if s is None:
+        return
+    ents = out['boxes'] + out['empties'] + out['models']
+    ids = {e['id']: e for e in ents}
+    skip = set()
+    for e in ents:  # the spawn's rig and the template Sun are not part of the layout
+        if e['name'] in ('Player Spawn', 'Sun'):
+            skip.add(e['id'])
+    for e in ents:
+        q = e
+        while q is not None and q['parentId'] in ids:
+            q = ids[q['parentId']]
+            if q['id'] in skip:
+                skip.add(e['id'])
+                break
+    for e in ents:
+        par = ids.get(e['parentId'])
+        top = par is None or 'path' not in par
+        if prefab:
+            if par is not None or 'path' not in e:
+                continue
+        elif e['id'] in skip:
+            if e['name'] == 'Player Spawn':
+                e['position'] = r6([c * s for c in e['position']])
+            continue
+        elif top:
+            e['position'] = r6([c * s for c in e['position']])
+        if not top and not prefab:
+            continue
+        kind = arch_class(pack.name, e)
+        if kind is None and e in out['boxes']:
+            kind = True
+        if kind:
+            e['scale'] = r6([c * s for c in e['scale']])
+        if kind is not None and not prefab:
+            pack.counts[f'architecture scaled x{s}' if kind else 'free-standing props kept at 1.0'] += 1
 
 
 # Player Spawn floor tops (world y of the surface under the spawn's x/z, taken from --scene-bounds): Unity's rig starts
@@ -1128,6 +1191,7 @@ def convert(pack, exe):
             continue
         out = {'formatVersion': 4, 'boxes': [], 'empties': [], 'models': []}
         conv.emit(roots[:1], out, [-1])
+        arch_rescale(pack, out, True)
         dst = pack.out_path(p, '.prefab')
         write_json(dst, out)
         write_meta(dst, os.path.dirname(os.path.relpath(dst, os.path.join(pack.repo, 'project')).replace(os.sep, '/')),
@@ -1225,6 +1289,89 @@ def spawn_on_terrain(conv, pack, out, keep):
         pack.report['player spawn below the terrain (lifted to 1 m above it)'].append(pack.name)
 
 
+def scene_bounds(conv, scene):
+    """World AABB of every model/box entity of an in-memory scene, by entity id (the engine's --scene-bounds on a temp copy
+    whose names carry the id, since bounds come back in registry order)."""
+    import copy
+    import shutil
+    import tempfile
+    tmp = tempfile.mkdtemp(prefix='unity_bounds_')
+    try:
+        sc = copy.deepcopy(scene)
+        for k in ('models', 'boxes'):
+            for e in sc[k]:
+                e['name'] = f"{e['name']}~{e['id']}"
+        src = os.path.join(tmp, 'bounds_tmp.json')
+        write_json(src, sc)
+        subprocess.run([conv.exe, '--project', os.path.join(conv.pack.repo, 'project'), '--scene-bounds', src, '--out', tmp],
+                       capture_output=True, text=True, encoding='utf-8', errors='replace')
+        res = json.load(open(os.path.join(tmp, 'scenes', 'bounds_tmp.json'), encoding='utf-8'))
+        out = {}
+        for x in res['entities']:
+            out[int(x['path'].split('/')[-1].rsplit('~', 1)[1])] = (list(x['min']), list(x['max']))
+        return out
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def settle_props(pack, out, b0, b1):
+    """After ARCH_SCALE scaled the layout about the origin, put every free-standing prop back on what it rested on in the
+    unscaled scene (--scene-bounds before/after): its pivot may not be at its base, and a prop stacked on another prop
+    (a box on a table) must follow that prop, which kept its size. The gap above the support scales with a building
+    support and stays as is on a prop."""
+    s = ARCH_SCALE[pack.name]
+    ents = out['models'] + out['boxes']
+    ids = {e['id']: e for e in out['boxes'] + out['empties'] + out['models']}
+    skip = {e['id'] for e in ids.values() if e['name'] in ('Player Spawn', 'Sun')}
+    for e in ids.values():
+        q = e
+        while q['parentId'] in ids:
+            q = ids[q['parentId']]
+            if q['id'] in skip:
+                skip.add(e['id'])
+                break
+    box_ids = {e['id'] for e in out['boxes']}
+    cls = {}
+    for e in out['models']:
+        if e['id'] in skip or e['id'] not in b0 or e['id'] not in b1:
+            continue
+        par = ids.get(e['parentId'])
+        cls[e['id']] = None if (par is not None and 'path' in par) else arch_class(pack.name, e)
+    cur = {i: [list(b1[i][0]), list(b1[i][1])] for i in cls}
+    decals = {i for i, e in ((i, ids[i]) for i in cls) if (e['path'].replace(chr(92), '/').split('/Meshes/')[-1].split('/')[0]
+                                                         in ('Decals',))}
+    supports = [i for i in cls if i not in decals and i not in box_ids]
+    props = sorted((i for i in cls if cls[i] is False), key=lambda i: b0[i][0][1])
+    fixed = skipped = 0
+    for i in props:
+        lo, hi = b0[i]
+        cx, cz = (lo[0] + hi[0]) / 2, (lo[2] + hi[2]) / 2
+        best = None
+        for j in supports:
+            if j == i:
+                continue
+            slo, shi = b0[j]
+            if slo[0] <= cx <= shi[0] and slo[2] <= cz <= shi[2] and shi[1] <= lo[1] + 0.05 and (best is None or shi[1] > b0[best][1][1]):
+                best = j
+        if best is None or lo[1] - b0[best][1][1] > 0.3:
+            continue
+        gap = lo[1] - b0[best][1][1]
+        want = cur[best][1][1] + (s if cls[best] else 1.0) * gap
+        dy = want - cur[i][0][1]
+        if abs(dy) <= 0.004:
+            continue
+        if abs(dy) > 0.4:
+            skipped += 1
+            continue
+        ids[i]['position'][1] = round(ids[i]['position'][1] + dy, 6)
+        cur[i][0][1] += dy
+        cur[i][1][1] += dy
+        fixed += 1
+    pack.counts['props re-seated on their floor after the architecture scale'] += fixed
+    if skipped:
+        pack.counts['props left unseated (> 0.4 m off)'] += skipped
+
+
 def write_scene(conv, path):
     pack = conv.pack
     roots, _, _ = conv.parse_file(path)
@@ -1282,6 +1429,10 @@ def write_scene(conv, path):
         scene['sky'] = dict(scene['sky'], showGround=False)
     spawn_on_terrain(conv, pack, out, keep)
     scene.update(out)
+    if pack.name in ARCH_SCALE:
+        b0 = scene_bounds(conv, scene)
+        arch_rescale(pack, out, False)
+        settle_props(pack, out, b0, scene_bounds(conv, scene))
     scene['formatVersion'] = 4
     dst = os.path.join(pack.repo, 'project', 'scenes', f'{pack.name}_{stem}.json')
     write_json(dst, scene)
