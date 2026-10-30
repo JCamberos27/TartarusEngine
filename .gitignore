@@ -89,3 +89,6 @@ blood_v2_preview/
 project/scripts/*.log
 __pycache__/
 *.py[cod]
+
+# Oversized scene (>100 MB): lives on the Drive, listed in project/external_assets.csv
+project/scenes/SeedMesh_Mossy_Cedrus_Forest_Mossy_forest_trail.json
