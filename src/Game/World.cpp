@@ -1,4 +1,5 @@
 #include "World.h"
+#include <cstring>
 #include "Model.h"
 #include "Log.h"
 #include <string>
@@ -234,8 +235,13 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
         }
         return false;
     };
-    // Largest axis of a subtree's renderers' world bounds, for the automatic group size.
-    auto subtreeSize = [&](entt::entity root) {
+    // The automatic group size, as Unity's LODGroup: the largest axis of the subtree's renderers' bounds in the
+    // group's own space, times the group's largest scale (a yawed bush's world box is up to 1.4x wider).
+    auto subtreeSize = [&](entt::entity root, const glm::mat4& groupWorld) {
+        const float scale = std::max(glm::length(glm::vec3(groupWorld[0])),
+                                     std::max(glm::length(glm::vec3(groupWorld[1])), glm::length(glm::vec3(groupWorld[2]))));
+        if (!(scale > 1e-8f) || std::abs(glm::determinant(glm::mat3(groupWorld))) < 1e-12f) return 0.0f;
+        const glm::mat4 toGroup = glm::inverse(groupWorld);
         glm::vec3 lo(std::numeric_limits<float>::max()), hi(-std::numeric_limits<float>::max());
         stack.assign(1, root);
         while (!stack.empty()) {
@@ -245,7 +251,7 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
             if (const auto* r = Registry.try_get<RenderableComponent>(e); r && r->ModelRef) {
                 const glm::vec3 bmin = r->ModelRef->BoundsMin(), bmax = r->ModelRef->BoundsMax();
                 if (bmin.x <= bmax.x && bmin.y <= bmax.y && bmin.z <= bmax.z) {
-                    const glm::mat4 m = GetCachedWorldTransform(e);
+                    const glm::mat4 m = toGroup * GetCachedWorldTransform(e);
                     for (int c = 0; c < 8; ++c) {
                         const glm::vec3 corner((c & 1) ? bmax.x : bmin.x, (c & 2) ? bmax.y : bmin.y, (c & 4) ? bmax.z : bmin.z);
                         const glm::vec3 w = glm::vec3(m * glm::vec4(corner, 1.0f));
@@ -261,7 +267,7 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
         // every level - and a forest's ground cover - on screen far longer than the pack was tuned for).
         if (lo.x > hi.x) return 0.0f;
         const glm::vec3 ext = hi - lo;
-        return std::max(ext.x, std::max(ext.y, ext.z));
+        return std::max(ext.x, std::max(ext.y, ext.z)) * scale;
     };
 
     // A group's centre and automatic size, from the transform cache.
@@ -269,7 +275,7 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
         const glm::mat4 groupWorld = GetCachedWorldTransform(st.Group);
         st.Centre = glm::vec3(groupWorld[3]);
         // Automatic size: LOD 0's bounds, measured again whenever the group itself moves.
-        if (lod.Size <= 0.0f && st.Levels > 0) st.AutoSize = subtreeSize(st.Kids[0]);
+        if (lod.Size <= 0.0f && st.Levels > 0) st.AutoSize = subtreeSize(st.Kids[0], groupWorld);
     };
 
     // One pass over the groups; returns false when the incremental pass meets a group it has no record of, and the
@@ -426,6 +432,24 @@ void World::ActiveSignature(std::uint64_t out[6]) {
     out[5] = StorageFingerprint(inactive);
 }
 
+namespace {
+// A transform's local position, rotation and scale folded into 64 bits (never 0, which marks "no transform"): the
+// per-frame scan for moved entities compares these 8 bytes instead of a 48-byte snapshot, a forest's 200k
+// transforms being a memory-bandwidth problem more than an arithmetic one.
+std::uint64_t LocalHash(const TransformComponent& t) {
+    std::uint32_t w[10];
+    std::memcpy(w, &t.Position, 12);
+    std::memcpy(w + 3, &t.Rotation, 16);
+    std::memcpy(w + 7, &t.Scale, 12);
+    std::uint64_t h = 0x9E3779B97F4A7C15ull;
+    for (int i = 0; i < 10; i += 2) {
+        h ^= ((std::uint64_t)w[i] | ((std::uint64_t)w[i + 1] << 32)) * 0xBF58476D1CE4E5B9ull;
+        h = (h ^ (h >> 31)) * 0x94D049BB133111EBull;
+    }
+    return h | 1u;
+}
+} // namespace
+
 void World::RebuildWorldTransformCache() {
     static uint64_t s_Stamps = 0; // shared by every World, so two worlds never hand out the same stamp
     m_PrevTransformCacheStamp = m_TransformCacheStamp;
@@ -453,6 +477,7 @@ void World::RebuildWorldTransformCache() {
         m_WorldTransformKeys.resize(n, entt::null);
         m_WorldTransformCache.resize(n);
         m_LocalSnapshots.resize(n);
+        m_LocalHashes.resize(n, 0);
         m_RebuildDone.resize(n, 0);
         m_RebuildChanged.resize(n, 0);
     };
@@ -521,6 +546,7 @@ void World::RebuildWorldTransformCache() {
                 m_WorldTransformCache[slot] = base;
                 snap.Parent = it->second;
                 snap.HasTransform = t != nullptr;
+                m_LocalHashes[slot] = t ? LocalHash(*t) : 0;
                 if (t) {
                     snap.Position = t->Position;
                     snap.Rotation = t->Rotation;
@@ -569,9 +595,7 @@ bool World::RebuildChangedTransformsOnly() {
     for (auto [e, t] : view.each()) {
         const size_t s = (size_t)entt::to_entity(e);
         if (s >= m_WorldTransformKeys.size() || m_WorldTransformKeys[s] != e) return false; // new to the cache
-        const LocalSnapshot& snap = m_LocalSnapshots[s];
-        if (!snap.HasTransform || snap.Position != t.Position || snap.Rotation != t.Rotation || snap.Scale != t.Scale)
-            dirty.push_back(e);
+        if (m_LocalHashes[s] != LocalHash(t)) dirty.push_back(e); // 0 (no transform at the snapshot) never matches
     }
     if (dirty.empty()) return true;
 
@@ -618,6 +642,7 @@ bool World::RebuildChangedTransformsOnly() {
                 snap.Position = t->Position;
                 snap.Rotation = t->Rotation;
                 snap.Scale = t->Scale;
+                m_LocalHashes[s] = LocalHash(*t);
             }
             m_WorldTransformCache[s] = base;
             m_RebuildChanged[s] = 0;
