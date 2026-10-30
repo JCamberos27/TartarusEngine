@@ -486,10 +486,14 @@ void main() {
                 float fa = max(min(min(rbminmax.x, rbminmax.y), rbminmax.z), 0.0);
                 vec3 intersect = vWorldPos + R * fa;
                 vec3 correctedR = normalize(intersect - uProbeCenter[pi]);
-                // A captured room (its own prefiltered cube) or the sky's.
-                vec3 probeSpec = uProbeLayer[pi] >= 0
-                    ? textureLod(uProbeCubes, vec4(correctedR, float(uProbeLayer[pi])), roughness * uIBLSpecularMaxLod).rgb
-                    : textureLod(uPrefilteredMap, correctedR, roughness * uIBLSpecularMaxLod).rgb;
+                // A captured room (its own prefiltered cube) or the sky's - one fetch, not both (a ?: of two fetches
+                // runs both). Leaves keep the sky's: a canopy's inside never sees the lit street the probe saw, and
+                // the room's average on every leaf greyed the night trees.
+                vec3 probeSpec;
+                if (uProbeLayer[pi] >= 0 && uFoliageSurface == 0)
+                    probeSpec = textureLod(uProbeCubes, vec4(correctedR, float(uProbeLayer[pi])), roughness * uIBLSpecularMaxLod).rgb;
+                else
+                    probeSpec = textureLod(uPrefilteredMap, correctedR, roughness * uIBLSpecularMaxLod).rgb;
                 blendedPrefilter += probeSpec * uProbeBlend[pi];
             }
             prefiltered = blendedPrefilter;

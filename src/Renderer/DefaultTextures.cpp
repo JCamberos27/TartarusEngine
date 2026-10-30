@@ -77,6 +77,20 @@ unsigned int Volume() {
     }();
     return t;
 }
+unsigned int BlackCubeArray() {
+    static const unsigned int t = [] {
+        GLuint tex = 0;
+        glCreateTextures(kTextureCubeMapArray, 1, &tex);
+        glTextureStorage3D(tex, 1, GL_RGBA8, 1, 1, 6);
+        unsigned char px[6 * 4] = {};
+        for (int f = 0; f < 6; ++f) px[f * 4 + 3] = 255;
+        glTextureSubImage3D(tex, 0, 0, 0, 0, 1, 1, 6, kRGBA, kUnsignedByte, px);
+        glTextureParameteri(tex, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTextureParameteri(tex, kTexMagFilter, GL_NEAREST);
+        return tex;
+    }();
+    return t;
+}
 unsigned int BlackCube() {
     static const unsigned int t = [] {
         GLuint tex = 0;

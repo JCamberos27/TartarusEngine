@@ -14,7 +14,7 @@ class World;
 // sky only, so the night streets' puddles never showed the lamps and facades above them. Per view, between the depth
 // pre-pass and the opaque pass, a half-res compute (PuddleSsr.comp.glsl) traces the reflected ray of every puddle
 // pixel against this frame's depth and fetches last frame's HDR colour where it lands (reprojected). The model shader
-// reads the result on unit 18 and replaces its probe / sky reflection with it on puddle pixels by its confidence.
+// reads the result on unit 29 and replaces its probe / sky reflection with it on puddle pixels by its confidence.
 //
 // Cost control: pixels off the puddle noise mask or not on flat ground leave after one depth fetch; 20 linear steps +
 // 5 refine steps on the rest. Needs the depth pre-pass (Project Settings > Quality); without it, no SSR.

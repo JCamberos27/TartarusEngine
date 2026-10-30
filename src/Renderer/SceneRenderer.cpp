@@ -528,16 +528,12 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
             program.SetFloat("uFogBaseHeight", w.FogBaseHeight);
         }
     }
-    // Captured room probes (ReflectionProbeCapture) on unit 19, the puddle SSR (PuddleSsr) on unit 18.
-    if (probeArray.CubeArray()) {
-        glActiveTexture(GL_TEXTURE0 + 19);
-        glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY, probeArray.CubeArray());
-    }
+    // Captured room probes (ReflectionProbeCapture) on unit 26, the puddle SSR (PuddleSsr) on unit 29: units 1-7 and
+    // 16-20 are material maps (ShaderAsset::BuildBindings) - a 2D map and the cube array sharing a unit made draws
+    // fail, and the SSR read a material's white default. Never texture 0 either.
+    glBindTextureUnit(26, probeArray.CubeArray() ? probeArray.CubeArray() : DefaultTextures::BlackCubeArray());
     program.SetInt("uSsrEnabled", fs.ssrTex ? 1 : 0);
-    if (fs.ssrTex) {
-        glActiveTexture(GL_TEXTURE0 + 18);
-        glBindTexture(GL_TEXTURE_2D, fs.ssrTex);
-    }
+    glBindTextureUnit(29, fs.ssrTex ? fs.ssrTex : DefaultTextures::Black());
     glActiveTexture(GL_TEXTURE0);
 
     // PR14: nearest 2 reflection probes for parallax box projection — no-op (uProbeCount=0 or the
@@ -1132,6 +1128,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     // behind it doesn't. Only what draws whole is in it: nothing skinned or moving (Dynamic), and none of the
     // player body's or outfits' hidden parts, which the model program discards.
     const bool depthPrepass = in.depthShader && ProjectSettings::Quality().DepthPrepass;
+    constexpr float kPrepassSlopeOffset = 0.02f;
     const auto prepassed = [&](const DrawItem& it) {
         return depthPrepass && !(it.Dynamic || it.NearHide > 0.0f || it.HideBones || it.HideVerts || it.CollarVerts ||
                                  it.BoneMaskMode || it.LayerPull != 0.0f || it.Ref->HasBones());
@@ -1148,7 +1145,10 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         depth.SetInt("uCascadeLayered", 0);
         glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
         glEnable(GL_POLYGON_OFFSET_FILL);
-        glPolygonOffset(1.0f, 4.0f);
+        // A small slope factor: the two programs' positions differ by rounding, far under a pixel. A whole pixel's
+        // slope (factor 1) pushed a grazing floor back ~15 cm at 10 m, so a floor mat 1.3 cm above it lost the
+        // LEQUAL test to the floor whenever the floor's program happened to sort after the mat's (Office hallway).
+        glPolygonOffset(kPrepassSlopeOffset, 4.0f);
         static std::vector<DepthCaster> prepass;
         prepass.clear();
         for (const DrawItem& it : drawList)

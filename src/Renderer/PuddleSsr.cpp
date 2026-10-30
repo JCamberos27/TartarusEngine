@@ -61,15 +61,15 @@ void PuddleSsr::Trace(const HdrTarget* target, unsigned int depthTex, const glm:
         p.SetInt("uSteps", kSteps);
         p.SetFloat("uMaxDistance", kMaxDistance);
         p.SetInt("uFrame", ++m_Frame);
-        glBindTextureUnit(28, depthTex);
-        glBindTextureUnit(29, target->ResolvedColorTexture());
+        glBindTextureUnit(32, depthTex); // past the 0-31 the draws use: nothing of theirs to clobber
+        glBindTextureUnit(33, target->ResolvedColorTexture());
         glBindImageTexture(0, v.Tex, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16F);
         const int w = std::max(1, (v.W + 1) / 2), h = std::max(1, (v.H + 1) / 2);
         glDispatchCompute((unsigned)((w + 7) / 8), (unsigned)((h + 7) / 8), 1);
         glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
         glBindImageTexture(0, 0, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16F);
-        glBindTextureUnit(28, 0);
-        glBindTextureUnit(29, 0);
+        glBindTextureUnit(32, 0);
+        glBindTextureUnit(33, 0);
         GLStateCache::Invalidate();
     }
     v.PrevViewProj = viewProj;
