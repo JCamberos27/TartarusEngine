@@ -2598,9 +2598,13 @@ void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const Shade
 
     const auto& props    = sa.Properties();
     const auto& bindings = sa.Bindings();
+    // The cover layer (Standard shaders' _Cover*): materials without it neither bind its units nor set its uniforms.
+    const auto coverIt = mat.ExtraProps.find("_CoverStrength");
+    const bool hasCover = coverIt != mat.ExtraProps.end() && coverIt->second.F > 0.0f;
     for (const PropertyBinding& b : bindings) {
         const ShaderProperty& prop = props[b.PropIndex];
         const std::string& pname   = prop.Name;
+        if (!hasCover && pname.size() > 6 && pname.compare(0, 6, "_Cover") == 0) continue;
         if (b.LocProgram != shader.Serial()) { // "_AlbedoMap" → "uAlbedoMap", "uHasAlbedoMap"
             b.LocProgram = shader.Serial();
             b.UniformLoc = shader.Loc(b.Uniform);
