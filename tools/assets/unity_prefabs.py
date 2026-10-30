@@ -691,6 +691,10 @@ class Converter:
         elif model and model[0] and (renderer is None or renderer.get('m_Enabled', 1)):
             e['path'] = model[0]
             e['pathGuid'] = self.guid_of(model[0])
+            k = SCALE_OVERRIDES.get(self.pack.name, {}).get(re.sub(r' \(\d+\)$', '', o.name))
+            if k:
+                e['scale'] = r6([c * k for c in e['scale']])
+                self.pack.counts['prefab scale overrides applied'] += 1
             mats = self.material_overrides(model[0], o, renderer)
             if model[0] in self.terrain_mats:
                 m = self.terrain_mats[model[0]]
@@ -1088,6 +1092,27 @@ def strip_skipped(pack, roots, where):
     return keep
 
 
+# Per-pack prefab scale overrides: prefab (root object) name -> uniform scale, applied wherever the prefab is emitted so the
+# prefab files and every scene instance agree (colliders and child parts ride on the root entity). Measured against the
+# 1.81 m Quantum rig: the alley's doors are 1.2-1.3x too big for the player, the office's metal desk and leather chair too tall.
+SCALE_OVERRIDES = {
+    'ModularCityAlleyPack': {'Door_A': 2.05 / 2.49, 'Door_B': 2.05 / 2.49, 'Door_C': 2.05 / 2.62, 'Door_D': 2.05 / 2.62,
+                             'Door_MetalBars_A': 2.05 / 3.16},
+    'OfficeAndPoliceStation': {'Desk_metal': 0.75 / 0.90, 'Chair_office_leather': 1.10 / 1.28},
+}
+
+
+# Player Spawn floor tops (world y of the surface under the spawn's x/z, taken from --scene-bounds): Unity's rig starts
+# inside the geometry and its CharacterController pushes it out, which the engine's player doesn't do. (The alley spawn is
+# on a sloped hill tile whose AABB top is 0.43 m above the real surface, so it keeps Unity's height.)
+SPAWN_FLOOR_Y = {
+    ('SuburbNeighborhoodHousePack', 'Demoscene_Day'): 0.5,
+    ('SuburbNeighborhoodHousePack', 'Demoscene_Night'): 0.5,
+    ('SuburbNeighborhoodHousePack', 'Showcase'): 0.5,
+    ('OfficeAndPoliceStation', 'Showcase'): 0.0,
+}
+
+
 def convert(pack, exe):
     conv = Converter(pack, exe)
     fbx = [guid_for_path(pack, p) for p in pack_files(pack, '.fbx')]
@@ -1229,6 +1254,11 @@ def write_scene(conv, path):
             if e['name'] == 'Player Spawn':
                 p, _, _ = to_engine(spawn.pos, spawn.rot, spawn.scale)
                 e['position'] = r6(p)
+    floor = SPAWN_FLOOR_Y.get((pack.name, stem))
+    if floor is not None:  # a scene with no Unity rig keeps the template's spawn x/z, but still stands on the floor
+        for e in keep:
+            if e['name'] == 'Player Spawn':
+                e['position'][1] = floor
     if 'night' in stem.lower():
         # 23:00 on the template's day/latitude puts the moon below the horizon and a third lit, so the whole scene went
         # black. Offset the lunar phase to a high, full moon (its light drives the scene), expose a little up from the
