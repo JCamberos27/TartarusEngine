@@ -2261,8 +2261,7 @@ void EditorLayer::DrawProjectSettingsBody(World& /*world*/) {
         SettingsLabel("GPU-driven draws");
         if (EditorUIPrimitives::Checkbox("##GPU-driven draws", &q.GpuDrivenDraws)) ProjectSettings::Save();
         if (ImGui::IsItemHovered())
-            EditorUI::SetTooltip("With GPU instancing: static meshes that draw with the same material go out as one
-"
+            EditorUI::SetTooltip("With GPU instancing: static meshes that draw with the same material go out as one\n"
                                  "multi-draw indirect call per pass, across different models, not only copies.");
 
         // #171 - Unity's Audio Mixer: master + one volume per bus (Audio Source > Output).
