@@ -54,6 +54,12 @@ public:
                  float intensity, float range, float cosOuter, float cosInner, int shadowSlot = -1,
                  std::uint32_t excludedLayers = 0, float volumetric = 1.0f);
 
+    // Orders the point/spot lights nearest-first (by the gap from `eye` to each light's range sphere), so a froxel
+    // over the cluster cull's per-cluster cap (ClusterCull.comp.glsl MAX_PER_CLUSTER) keeps the near lights and
+    // drops far ones. Directionals stay packed at the front. Insertion sort: no allocation, and the order barely
+    // changes frame to frame.
+    void SortLocalNearestFirst(const glm::vec3& eye);
+
     // (Lazily creates the SSBO on first call.) Uploads the current list.
     void Upload();
     // glBindBufferBase(GL_SHADER_STORAGE_BUFFER, binding, ...). Bind after Upload(), before draws.
@@ -69,6 +75,22 @@ public:
 
     // Allocates the light SSBO now (load-time warm-up).
     void WarmUp() { EnsureCreated(); }
+
+    // Distant-light fade (night streets: ~100 lamps). A point/spot light far away still costs every fragment in
+    // the froxels its range sphere touches - and a far froxel is a big one - while what it lights is a few pixels.
+    // So a light fades out by its range sphere's projected radius, in pixels at a 1080p reference height (the same
+    // fade at any resolution): full strength above kFadeFullPx, a smooth fall to nothing at kFadeGonePx, where it
+    // leaves the buffer. Its lit pool is a fraction of its range, so at kFadeFullPx the pool is a few pixels wide.
+    // `tanHalfFovY`: the camera's tan(vertical FOV / 2). Returns 1 inside the sphere, 0..1 outside.
+    static constexpr float kFadeFullPx = 24.0f;
+    static constexpr float kFadeGonePx = 10.0f;
+    static float DistanceFade(float range, float dist, float tanHalfFovY) {
+        if (dist <= range || range <= 0.0f) return 1.0f;
+        const float px = range / dist * (540.0f / (tanHalfFovY > 1e-3f ? tanHalfFovY : 1e-3f));
+        float t = (px - kFadeGonePx) / (kFadeFullPx - kFadeGonePx);
+        t = t < 0.0f ? 0.0f : t > 1.0f ? 1.0f : t;
+        return t * t * (3.0f - 2.0f * t);
+    }
 
 private:
     struct GpuLight {
