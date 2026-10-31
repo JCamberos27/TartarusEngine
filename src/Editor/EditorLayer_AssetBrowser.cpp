@@ -1717,223 +1717,265 @@ std::string EditorLayer::AssetBrowserTreeFrameSetup(AssetLibrary& assets) {
 // tree/splitter and its End(); `contentHeight` is the tree pane's height, computed module-side.
 // Rebuild the per-frame tile list and run the Ctrl+A "select every visible item" shortcut. The
 // module calls this right after ImGui::BeginChild("##AssetList") so IsWindowFocused is meaningful.
+bool EditorLayer::PlayUiThrottle() {
+    static const bool on = [] {
+        char* e = nullptr;
+        size_t n = 0;
+        const bool off = _dupenv_s(&e, &n, "TARTARUS_NO_UI_THROTTLE") == 0 && e && e[0] == '1';
+        std::free(e);
+        return !off;
+    }();
+    return on;
+}
+
 void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
     (void)world;
     auto& cells = m_AssetGridCells;
-    cells.clear();
 
     bool searching = !m_AssetSearchFilter.empty();
     ParsedAssetSearch parsedSearch = ParseAssetSearch(m_AssetSearchFilter);
-    // A type/label filter still narrows results even inside a specific folder (not just while
-    // searching by name) - e.g. "t:Texture" alone, browsing normally, should hide non-textures
-    // right where they are rather than forcing a switch to whole-library search first.
-    // "filtering" collects candidate cells from the WHOLE library (not just the current
-    // folder). A search/type/label filter does that, and so does the favourites-only view —
-    // its whole point is to gather starred assets from anywhere.
-    bool filtering = searching || !parsedSearch.typeTerms.empty() || !parsedSearch.labelTerms.empty()
-                     || m_AssetFavoritesOnly;
 
-    // Search scope (#236 G): unless "whole project" is on, a filtered result must also live in
-    // the current folder or one of its descendants. Browsing (no filter) is always folder-local.
-    const bool scopeGlobal = EditorSettings::Get().AssetSearchGlobal;
-    auto inSearchScope = [&](const std::string& assetFolder) {
-        if (scopeGlobal || m_AssetFavoritesOnly || m_CurrentAssetFolder.empty()) return true;
-        return assetFolder == m_CurrentAssetFolder ||
-               assetFolder.rfind(m_CurrentAssetFolder + "/", 0) == 0;
-    };
+    // During Play the list is kept between frames: collecting and sorting it walks every folder and every asset in
+    // the library (~3 ms with ~11k assets) while the game is what's being watched. A change the user makes - folder,
+    // search, favourites view, scope, sort - rebuilds it at once. The library growing (Play streams assets in) does
+    // at most every kPlayGridLibraryFrames frames, and renames or label edits show within kPlayGridRefreshFrames.
+    // Edit mode rebuilds it every frame, as before.
+    constexpr int kPlayGridLibraryFrames = 30, kPlayGridRefreshFrames = 60;
+    std::uint64_t userKey = std::hash<std::string>{}(m_CurrentAssetFolder) * 31u + std::hash<std::string>{}(m_AssetSearchFilter);
+    userKey ^= ((std::uint64_t)m_AssetFavoritesOnly | ((std::uint64_t)EditorSettings::Get().AssetSearchGlobal << 1) |
+                ((std::uint64_t)EditorSettings::Get().AssetSortDesc << 2) | ((std::uint64_t)EditorSettings::Get().AssetSortMode << 3)) *
+               0x9E3779B97F4A7C15ull;
+    std::uint64_t gridKey = 0;
+    const auto mixKey = [&gridKey](std::uint64_t v) { gridKey ^= v + 0x9E3779B97F4A7C15ull + (gridKey << 6) + (gridKey >> 2); };
+    mixKey(assets.Models().size());
+    mixKey(assets.Textures().size());
+    mixKey(assets.Materials().size());
+    mixKey(assets.Sounds().size());
+    mixKey(assets.Prefabs().size());
+    mixKey(assets.Folders().size());
+    mixKey(m_ProjectAssetIndex.files.size());
+    mixKey(m_ListedAssetKeys.size());
+    const int gridFrame = ImGui::GetFrameCount();
+    const int gridAge = gridFrame - m_AssetGridCellsFrame;
+    const bool reuseCells = m_InPlayMode && PlayUiThrottle() && m_AssetGridCellsValid && userKey == m_AssetGridCellsUserKey &&
+                            (gridKey == m_AssetGridCellsKey ? gridAge < kPlayGridRefreshFrames : gridAge < kPlayGridLibraryFrames);
+    if (!reuseCells) {
+        cells.clear();
+        m_AssetGridCellsValid = true;
+        m_AssetGridCellsUserKey = userKey;
+        m_AssetGridCellsKey = gridKey;
+        m_AssetGridCellsFrame = gridFrame;
+        // A type/label filter still narrows results even inside a specific folder (not just while
+        // searching by name) - e.g. "t:Texture" alone, browsing normally, should hide non-textures
+        // right where they are rather than forcing a switch to whole-library search first.
+        // "filtering" collects candidate cells from the WHOLE library (not just the current
+        // folder). A search/type/label filter does that, and so does the favourites-only view —
+        // its whole point is to gather starred assets from anywhere.
+        bool filtering = searching || !parsedSearch.typeTerms.empty() || !parsedSearch.labelTerms.empty()
+                         || m_AssetFavoritesOnly;
 
-    // A special, filesystem-backed folder (not one of AssetLibrary's virtual reference
-    // folders) listing every *.json under scenes/ on disk, so scenes can be browsed and
-    // opened the same way models/textures/sounds are, instead of only via File > Open.
-    static const std::string kScenesFolder = "Scenes";
-    assets.CreateFolder(kScenesFolder);
-    if ((filtering && inSearchScope(kScenesFolder)) || m_CurrentAssetFolder == kScenesFolder) {
-        RefreshScenesListingIfNeeded(); // (#175) cached — see m_ScenesListingCache
-        for (const auto& path : m_ScenesListingCache.paths) {
-            std::string name = std::filesystem::path(path).stem().string();
-            if (!MatchesAssetSearch(parsedSearch, name, "scene", assets.Labels(path))) continue;
-            cells.push_back({Cell::Kind::Scene, path, name, nullptr, nullptr});
-        }
-    }
-
-    // Phase 6 item 15 — a "Shaders" folder listing every *.shader under project/shaders/, so
-    // shaders are browsable the same way scenes are, instead of invisible to the Asset Browser.
-    static const std::string kShadersFolder = "Shaders";
-    assets.CreateFolder(kShadersFolder);
-    if ((filtering && inSearchScope(kShadersFolder)) || m_CurrentAssetFolder == kShadersFolder) {
-        RefreshShadersListingIfNeeded();
-        for (const auto& path : m_ShadersListingCache.paths) {
-            std::string name = std::filesystem::path(path).stem().string();
-            if (!MatchesAssetSearch(parsedSearch, name, "shader", {})) continue;
-            if (IsBuiltinShaderPath(path)) name += " (built-in)";
-            cells.push_back({Cell::Kind::Shader, path, name, nullptr, nullptr});
-        }
-    }
-
-    // Animation assets use their real project folders, like prefabs and scripts.
-    // Retire the old all-project shortcut when it has no authored folder behind it.
-    // DeleteFolder only changes the browser folder list; it does not delete files.
-    // The folder list first: the disk is only asked while there is a shortcut to retire.
-    std::error_code animationFolderEc;
-    const auto& browserFolders = assets.Folders();
-    if (std::find(browserFolders.begin(), browserFolders.end(), "Animation") != browserFolders.end() &&
-        !std::filesystem::is_directory(ProjectPaths::Resolve("Animation"), animationFolderEc)) {
-        if (assets.CanDeleteFolder("Animation")) {
-            assets.DeleteFolder("Animation");
-            if (m_CurrentAssetFolder == "Animation") NavigateAssetFolder("assets/Weapons", /*sound=*/false);
-        }
-    }
-
-    for (const auto& folder : assets.Folders()) {
-        bool show = filtering ? (MatchesAssetSearch(parsedSearch, LeafNameOf(folder), "folder", {})
-                                 && inSearchScope(ParentFolderOf(folder)))
-            : (ParentFolderOf(folder) == m_CurrentAssetFolder);
-        if (show) cells.push_back({Cell::Kind::Folder, folder, LeafNameOf(folder), nullptr, nullptr});
-    }
-    // Where it's filed first (a lookup, no copies): browsing shows one folder of thousands of assets, so
-    // the name, labels and search match are only worked out for the ones that can show.
-    auto inView = [&](const std::string& path) {
-        const std::string& folder = assets.AssetFolderRef(path);
-        return filtering ? inSearchScope(folder) : folder == m_CurrentAssetFolder;
-    };
-    for (const auto& model : assets.Models()) {
-        const std::string& path = model->Path();
-        if (!inView(path)) continue;
-        std::string name = assets.DisplayName(path);
-        if (!MatchesAssetSearch(parsedSearch, name, "model", assets.Labels(path))) continue;
-        cells.push_back({Cell::Kind::Model, path, std::move(name), model, nullptr});
-    }
-    for (const auto& tex : assets.Textures()) {
-        const std::string& path = tex->Path();
-        if (!inView(path)) continue;
-        std::string name = assets.DisplayName(path);
-        if (!MatchesAssetSearch(parsedSearch, name, "texture", assets.Labels(path))) continue;
-        cells.push_back({Cell::Kind::Texture, path, std::move(name), nullptr, tex});
-    }
-    for (const auto& mat : assets.Materials()) {
-        const std::string& path = mat->Path;
-        if (!inView(path)) continue;
-        std::string name = assets.DisplayName(path);
-        if (!MatchesAssetSearch(parsedSearch, name, "material", assets.Labels(path))) continue;
-        cells.push_back({Cell::Kind::Material, path, std::move(name), nullptr, nullptr, mat});
-    }
-    for (const auto& sound : assets.Sounds()) {
-        if (!inView(sound)) continue;
-        std::string name = assets.DisplayName(sound);
-        if (!MatchesAssetSearch(parsedSearch, name, "sound", assets.Labels(sound))) continue;
-        cells.push_back({Cell::Kind::Sound, sound, std::move(name), nullptr, nullptr});
-    }
-    for (const auto& prefab : assets.Prefabs()) {
-        if (!inView(prefab)) continue;
-        std::string name = assets.DisplayName(prefab);
-        if (!MatchesAssetSearch(parsedSearch, name, "prefab", assets.Labels(prefab))) continue;
-        cells.push_back({Cell::Kind::Prefab, prefab, std::move(name), nullptr, nullptr});
-    }
-    // Every other asset file in the project, unloaded until it's used (see m_ProjectAssetIndex),
-    // and the kinds that are never library entries.
-    RefreshProjectAssetIndexIfNeeded(assets);
-    for (const auto& f : m_ProjectAssetIndex.files) {
-        const std::string& moved = assets.AssetFolderRef(f.Path); // filed elsewhere in the browser since indexing
-        const std::string& folder = moved.empty() ? f.Folder : moved;
-        if (filtering ? !inSearchScope(folder) : folder != m_CurrentAssetFolder) continue;
-        if (m_ListedAssetKeys.count(f.Key)) continue;
-        const bool fileOnly = f.Kind == Cell::Kind::Animator || f.Kind == Cell::Kind::Weapon ||
-                              f.Kind == Cell::Kind::Recoil || f.Kind == Cell::Kind::CameraShake ||
-                              f.Kind == Cell::Kind::Hdri || f.Kind == Cell::Kind::Script ||
-                              f.Kind == Cell::Kind::Decal || f.Kind == Cell::Kind::Graffiti;
-        const char* kindName = f.Kind == Cell::Kind::Model ? "model" : f.Kind == Cell::Kind::Texture ? "texture"
-                             : f.Kind == Cell::Kind::Material ? "material" : f.Kind == Cell::Kind::Sound ? "sound"
-                             : f.Kind == Cell::Kind::Animator ? "animator" : f.Kind == Cell::Kind::Weapon ? "weapon"
-                             : f.Kind == Cell::Kind::Recoil ? "recoil"
-                             : f.Kind == Cell::Kind::CameraShake ? "camerashake"
-                             : f.Kind == Cell::Kind::Decal ? "decal"
-                             : f.Kind == Cell::Kind::Graffiti ? "graffiti"
-                             : f.Kind == Cell::Kind::Script ? "script" : f.Kind == Cell::Kind::Hdri ? "hdri" : "prefab";
-        // An HDRI is an image: both t:Hdri and t:Texture find it (like a screenshot).
-        if (!MatchesAssetSearch(parsedSearch, f.Name, kindName, {}) &&
-            !(f.Kind == Cell::Kind::Hdri && MatchesAssetSearch(parsedSearch, f.Name, "texture", {}))) continue;
-        Cell c{f.Kind, f.Path, f.Name, nullptr, nullptr};
-        c.unloaded = !fileOnly;
-        cells.push_back(std::move(c));
-    }
-
-    // Favourites view (#236 G): a flat list of just the starred entries — assets, folders,
-    // scenes and screenshots alike — from anywhere.
-    if (m_AssetFavoritesOnly) {
-        cells.erase(std::remove_if(cells.begin(), cells.end(),
-            [&](const Cell& c) { return !IsAssetFavorite(c.key); }), cells.end());
-    }
-
-    // Sort control (#236 G) — folders always first; within each group, Name / Type / Date / Size,
-    // ascending or descending. Date/Size stat the on-disk file once here (primitive:// and other
-    // fileless keys fall back to 0, sorting to the "oldest / smallest" end).
-    {
-        const int mode = std::clamp(EditorSettings::Get().AssetSortMode, 0, 3);
-        const bool desc = EditorSettings::Get().AssetSortDesc;
-        auto typeRank = [](Cell::Kind k) {
-            switch (k) {
-                case Cell::Kind::Folder:     return 0;
-                case Cell::Kind::Scene:      return 1;
-                case Cell::Kind::Prefab:     return 2;
-                case Cell::Kind::Model:      return 3;
-                case Cell::Kind::Texture:    return 4;
-                case Cell::Kind::Material:   return 5;
-                case Cell::Kind::Decal:      return 5;
-                case Cell::Kind::Graffiti:   return 5;
-                case Cell::Kind::Sound:      return 6;
-                case Cell::Kind::Shader:     return 8;
-                case Cell::Kind::Animator:   return 9;
-                case Cell::Kind::Weapon:     return 10;
-                case Cell::Kind::Recoil:     return 10;
-                case Cell::Kind::CameraShake:return 10;
-                case Cell::Kind::Hdri:       return 11;
-                case Cell::Kind::Script:     return 12;
-            }
-            return 7;
+        // Search scope (#236 G): unless "whole project" is on, a filtered result must also live in
+        // the current folder or one of its descendants. Browsing (no filter) is always folder-local.
+        const bool scopeGlobal = EditorSettings::Get().AssetSearchGlobal;
+        auto inSearchScope = [&](const std::string& assetFolder) {
+            if (scopeGlobal || m_AssetFavoritesOnly || m_CurrentAssetFolder.empty()) return true;
+            return assetFolder == m_CurrentAssetFolder ||
+                   assetFolder.rfind(m_CurrentAssetFolder + "/", 0) == 0;
         };
-        std::unordered_map<std::string, long long> mtime;
-        std::unordered_map<std::string, unsigned long long> fsize;
-        if (mode == 2 || mode == 3) {
-            std::error_code ec;
-            for (const auto& c : cells) {
-                if (c.kind == Cell::Kind::Folder) continue;
-                std::filesystem::path p(c.key);
-                if (!std::filesystem::exists(p, ec)) continue;
-                if (mode == 2) {
-                    auto t = std::filesystem::last_write_time(p, ec);
-                    if (!ec) mtime[c.key] = (long long)t.time_since_epoch().count();
-                } else {
-                    auto s = std::filesystem::file_size(p, ec);
-                    if (!ec) fsize[c.key] = (unsigned long long)s;
-                }
+
+        // A special, filesystem-backed folder (not one of AssetLibrary's virtual reference
+        // folders) listing every *.json under scenes/ on disk, so scenes can be browsed and
+        // opened the same way models/textures/sounds are, instead of only via File > Open.
+        static const std::string kScenesFolder = "Scenes";
+        assets.CreateFolder(kScenesFolder);
+        if ((filtering && inSearchScope(kScenesFolder)) || m_CurrentAssetFolder == kScenesFolder) {
+            RefreshScenesListingIfNeeded(); // (#175) cached — see m_ScenesListingCache
+            for (const auto& path : m_ScenesListingCache.paths) {
+                std::string name = std::filesystem::path(path).stem().string();
+                if (!MatchesAssetSearch(parsedSearch, name, "scene", assets.Labels(path))) continue;
+                cells.push_back({Cell::Kind::Scene, path, name, nullptr, nullptr});
             }
         }
-        auto lower = [](std::string s) { for (char& c : s) c = (char)std::tolower((unsigned char)c); return s; };
-        std::sort(cells.begin(), cells.end(), [&](const Cell& a, const Cell& b) {
-            const bool aFolder = a.kind == Cell::Kind::Folder, bFolder = b.kind == Cell::Kind::Folder;
-            if (aFolder != bFolder) return aFolder; // folders first, always
-            int cmp = 0;
-            switch (mode) {
-                case 1: cmp = typeRank(a.kind) - typeRank(b.kind); break;
-                case 2: {
-                    long long ta = mtime.count(a.key) ? mtime[a.key] : 0;
-                    long long tb = mtime.count(b.key) ? mtime[b.key] : 0;
-                    cmp = (ta < tb) ? -1 : (ta > tb) ? 1 : 0;
-                    break;
-                }
-                case 3: {
-                    unsigned long long sa = fsize.count(a.key) ? fsize[a.key] : 0;
-                    unsigned long long sb = fsize.count(b.key) ? fsize[b.key] : 0;
-                    cmp = (sa < sb) ? -1 : (sa > sb) ? 1 : 0;
-                    break;
-                }
-                default: break;
-            }
-            if (cmp == 0) cmp = lower(a.display).compare(lower(b.display)); // stable tiebreak by name
-            return desc ? cmp > 0 : cmp < 0;
-        });
-    }
 
+        // Phase 6 item 15 — a "Shaders" folder listing every *.shader under project/shaders/, so
+        // shaders are browsable the same way scenes are, instead of invisible to the Asset Browser.
+        static const std::string kShadersFolder = "Shaders";
+        assets.CreateFolder(kShadersFolder);
+        if ((filtering && inSearchScope(kShadersFolder)) || m_CurrentAssetFolder == kShadersFolder) {
+            RefreshShadersListingIfNeeded();
+            for (const auto& path : m_ShadersListingCache.paths) {
+                std::string name = std::filesystem::path(path).stem().string();
+                if (!MatchesAssetSearch(parsedSearch, name, "shader", {})) continue;
+                if (IsBuiltinShaderPath(path)) name += " (built-in)";
+                cells.push_back({Cell::Kind::Shader, path, name, nullptr, nullptr});
+            }
+        }
+
+        // Animation assets use their real project folders, like prefabs and scripts.
+        // Retire the old all-project shortcut when it has no authored folder behind it.
+        // DeleteFolder only changes the browser folder list; it does not delete files.
+        // The folder list first: the disk is only asked while there is a shortcut to retire.
+        std::error_code animationFolderEc;
+        const auto& browserFolders = assets.Folders();
+        if (std::find(browserFolders.begin(), browserFolders.end(), "Animation") != browserFolders.end() &&
+            !std::filesystem::is_directory(ProjectPaths::Resolve("Animation"), animationFolderEc)) {
+            if (assets.CanDeleteFolder("Animation")) {
+                assets.DeleteFolder("Animation");
+                if (m_CurrentAssetFolder == "Animation") NavigateAssetFolder("assets/Weapons", /*sound=*/false);
+            }
+        }
+
+        for (const auto& folder : assets.Folders()) {
+            bool show = filtering ? (MatchesAssetSearch(parsedSearch, LeafNameOf(folder), "folder", {})
+                                     && inSearchScope(ParentFolderOf(folder)))
+                : (ParentFolderOf(folder) == m_CurrentAssetFolder);
+            if (show) cells.push_back({Cell::Kind::Folder, folder, LeafNameOf(folder), nullptr, nullptr});
+        }
+        // Where it's filed first (a lookup, no copies): browsing shows one folder of thousands of assets, so
+        // the name, labels and search match are only worked out for the ones that can show.
+        auto inView = [&](const std::string& path) {
+            const std::string& folder = assets.AssetFolderRef(path);
+            return filtering ? inSearchScope(folder) : folder == m_CurrentAssetFolder;
+        };
+        for (const auto& model : assets.Models()) {
+            const std::string& path = model->Path();
+            if (!inView(path)) continue;
+            std::string name = assets.DisplayName(path);
+            if (!MatchesAssetSearch(parsedSearch, name, "model", assets.Labels(path))) continue;
+            cells.push_back({Cell::Kind::Model, path, std::move(name), model, nullptr});
+        }
+        for (const auto& tex : assets.Textures()) {
+            const std::string& path = tex->Path();
+            if (!inView(path)) continue;
+            std::string name = assets.DisplayName(path);
+            if (!MatchesAssetSearch(parsedSearch, name, "texture", assets.Labels(path))) continue;
+            cells.push_back({Cell::Kind::Texture, path, std::move(name), nullptr, tex});
+        }
+        for (const auto& mat : assets.Materials()) {
+            const std::string& path = mat->Path;
+            if (!inView(path)) continue;
+            std::string name = assets.DisplayName(path);
+            if (!MatchesAssetSearch(parsedSearch, name, "material", assets.Labels(path))) continue;
+            cells.push_back({Cell::Kind::Material, path, std::move(name), nullptr, nullptr, mat});
+        }
+        for (const auto& sound : assets.Sounds()) {
+            if (!inView(sound)) continue;
+            std::string name = assets.DisplayName(sound);
+            if (!MatchesAssetSearch(parsedSearch, name, "sound", assets.Labels(sound))) continue;
+            cells.push_back({Cell::Kind::Sound, sound, std::move(name), nullptr, nullptr});
+        }
+        for (const auto& prefab : assets.Prefabs()) {
+            if (!inView(prefab)) continue;
+            std::string name = assets.DisplayName(prefab);
+            if (!MatchesAssetSearch(parsedSearch, name, "prefab", assets.Labels(prefab))) continue;
+            cells.push_back({Cell::Kind::Prefab, prefab, std::move(name), nullptr, nullptr});
+        }
+        // Every other asset file in the project, unloaded until it's used (see m_ProjectAssetIndex),
+        // and the kinds that are never library entries.
+        RefreshProjectAssetIndexIfNeeded(assets);
+        for (const auto& f : m_ProjectAssetIndex.files) {
+            const std::string& moved = assets.AssetFolderRef(f.Path); // filed elsewhere in the browser since indexing
+            const std::string& folder = moved.empty() ? f.Folder : moved;
+            if (filtering ? !inSearchScope(folder) : folder != m_CurrentAssetFolder) continue;
+            if (m_ListedAssetKeys.count(f.Key)) continue;
+            const bool fileOnly = f.Kind == Cell::Kind::Animator || f.Kind == Cell::Kind::Weapon ||
+                                  f.Kind == Cell::Kind::Recoil || f.Kind == Cell::Kind::CameraShake ||
+                                  f.Kind == Cell::Kind::Hdri || f.Kind == Cell::Kind::Script ||
+                                  f.Kind == Cell::Kind::Decal || f.Kind == Cell::Kind::Graffiti;
+            const char* kindName = f.Kind == Cell::Kind::Model ? "model" : f.Kind == Cell::Kind::Texture ? "texture"
+                                 : f.Kind == Cell::Kind::Material ? "material" : f.Kind == Cell::Kind::Sound ? "sound"
+                                 : f.Kind == Cell::Kind::Animator ? "animator" : f.Kind == Cell::Kind::Weapon ? "weapon"
+                                 : f.Kind == Cell::Kind::Recoil ? "recoil"
+                                 : f.Kind == Cell::Kind::CameraShake ? "camerashake"
+                                 : f.Kind == Cell::Kind::Decal ? "decal"
+                                 : f.Kind == Cell::Kind::Graffiti ? "graffiti"
+                                 : f.Kind == Cell::Kind::Script ? "script" : f.Kind == Cell::Kind::Hdri ? "hdri" : "prefab";
+            // An HDRI is an image: both t:Hdri and t:Texture find it (like a screenshot).
+            if (!MatchesAssetSearch(parsedSearch, f.Name, kindName, {}) &&
+                !(f.Kind == Cell::Kind::Hdri && MatchesAssetSearch(parsedSearch, f.Name, "texture", {}))) continue;
+            Cell c{f.Kind, f.Path, f.Name, nullptr, nullptr};
+            c.unloaded = !fileOnly;
+            cells.push_back(std::move(c));
+        }
+
+        // Favourites view (#236 G): a flat list of just the starred entries — assets, folders,
+        // scenes and screenshots alike — from anywhere.
+        if (m_AssetFavoritesOnly) {
+            cells.erase(std::remove_if(cells.begin(), cells.end(),
+                [&](const Cell& c) { return !IsAssetFavorite(c.key); }), cells.end());
+        }
+
+        // Sort control (#236 G) — folders always first; within each group, Name / Type / Date / Size,
+        // ascending or descending. Date/Size stat the on-disk file once here (primitive:// and other
+        // fileless keys fall back to 0, sorting to the "oldest / smallest" end).
+        {
+            const int mode = std::clamp(EditorSettings::Get().AssetSortMode, 0, 3);
+            const bool desc = EditorSettings::Get().AssetSortDesc;
+            auto typeRank = [](Cell::Kind k) {
+                switch (k) {
+                    case Cell::Kind::Folder:     return 0;
+                    case Cell::Kind::Scene:      return 1;
+                    case Cell::Kind::Prefab:     return 2;
+                    case Cell::Kind::Model:      return 3;
+                    case Cell::Kind::Texture:    return 4;
+                    case Cell::Kind::Material:   return 5;
+                    case Cell::Kind::Decal:      return 5;
+                    case Cell::Kind::Graffiti:   return 5;
+                    case Cell::Kind::Sound:      return 6;
+                    case Cell::Kind::Shader:     return 8;
+                    case Cell::Kind::Animator:   return 9;
+                    case Cell::Kind::Weapon:     return 10;
+                    case Cell::Kind::Recoil:     return 10;
+                    case Cell::Kind::CameraShake:return 10;
+                    case Cell::Kind::Hdri:       return 11;
+                    case Cell::Kind::Script:     return 12;
+                }
+                return 7;
+            };
+            std::unordered_map<std::string, long long> mtime;
+            std::unordered_map<std::string, unsigned long long> fsize;
+            if (mode == 2 || mode == 3) {
+                std::error_code ec;
+                for (const auto& c : cells) {
+                    if (c.kind == Cell::Kind::Folder) continue;
+                    std::filesystem::path p(c.key);
+                    if (!std::filesystem::exists(p, ec)) continue;
+                    if (mode == 2) {
+                        auto t = std::filesystem::last_write_time(p, ec);
+                        if (!ec) mtime[c.key] = (long long)t.time_since_epoch().count();
+                    } else {
+                        auto s = std::filesystem::file_size(p, ec);
+                        if (!ec) fsize[c.key] = (unsigned long long)s;
+                    }
+                }
+            }
+            auto lower = [](std::string s) { for (char& c : s) c = (char)std::tolower((unsigned char)c); return s; };
+            std::sort(cells.begin(), cells.end(), [&](const Cell& a, const Cell& b) {
+                const bool aFolder = a.kind == Cell::Kind::Folder, bFolder = b.kind == Cell::Kind::Folder;
+                if (aFolder != bFolder) return aFolder; // folders first, always
+                int cmp = 0;
+                switch (mode) {
+                    case 1: cmp = typeRank(a.kind) - typeRank(b.kind); break;
+                    case 2: {
+                        long long ta = mtime.count(a.key) ? mtime[a.key] : 0;
+                        long long tb = mtime.count(b.key) ? mtime[b.key] : 0;
+                        cmp = (ta < tb) ? -1 : (ta > tb) ? 1 : 0;
+                        break;
+                    }
+                    case 3: {
+                        unsigned long long sa = fsize.count(a.key) ? fsize[a.key] : 0;
+                        unsigned long long sb = fsize.count(b.key) ? fsize[b.key] : 0;
+                        cmp = (sa < sb) ? -1 : (sa > sb) ? 1 : 0;
+                        break;
+                    }
+                    default: break;
+                }
+                if (cmp == 0) cmp = lower(a.display).compare(lower(b.display)); // stable tiebreak by name
+                return desc ? cmp > 0 : cmp < 0;
+            });
+        }
+
+    }
     // SearchEmpty: once, when typing turns a search that found something into one that finds nothing.
     if (searching && cells.empty() && m_SearchSoundPrevHadResults && !m_SearchSoundPrevFilter.empty() &&
         m_AssetSearchFilter != m_SearchSoundPrevFilter)

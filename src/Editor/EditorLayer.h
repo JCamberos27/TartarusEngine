@@ -1785,6 +1785,13 @@ private:
     // multi-select (m_AssetSelectionAnchorIndex indexes into this). Never mutated between
     // FrameBegin and the last DrawAssetCell of a frame.
     std::vector<AssetGridCell> m_AssetGridCells;
+    // Whether the Asset Browser's list and folder summaries are reused between frames during Play (above, and
+    // RebuildFolderSummariesIfNeeded). TARTARUS_NO_UI_THROTTLE=1 turns it off for A/B benches.
+    static bool PlayUiThrottle();
+    // AssetGridFrameBegin's Play-mode reuse of the list: what it was built for, and on which frame.
+    bool m_AssetGridCellsValid = false;
+    std::uint64_t m_AssetGridCellsKey = 0, m_AssetGridCellsUserKey = 0;
+    int m_AssetGridCellsFrame = 0;
 
     // Unity Project-window-style left folder tree, shown alongside the icon grid rather than
     // breadcrumb-only navigation. Which folders are expanded is tracked here (not left to
