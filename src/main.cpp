@@ -4822,7 +4822,7 @@ int main(int argc, char** argv) {
                                     w->DockNode->TabBar->NextSelectedTabId = w->TabId;
                     }
                 }
-                if (editorUIVisible) editor.Draw(world, assets, editorCamera, dt);
+                if (editorUIVisible) { PROFILE_SCOPE("UI Editor Draw"); editor.Draw(world, assets, editorCamera, dt); }
                 else if (playing && devKeys) editor.DrawPlayModeOverlays(world); // #185 — physics panel + HUD over maximized play
                 // F6 Nav while editing: the navmesh this scene baked in its last Play (Library/NavCache/scene_<name>.txt names
                 // it), its edges drawn over the Scene view. The physics scene the navmesh is built from only exists in Play.
@@ -4949,7 +4949,7 @@ int main(int argc, char** argv) {
                 // every module panel (Inspector, Hierarchy, Asset Browser, Console) has had its
                 // chance to act this frame — those are all drawn inside editorModule.Draw() above,
                 // not inside editor.Draw(). See EditorLayer::PostModuleDraw()'s comment.
-                editor.PostModuleDraw(world);
+                { PROFILE_SCOPE("UI Post Module"); editor.PostModuleDraw(world); }
 
                 // Eyedropper (#236 R2): a colour field armed EditorLayer's viewport eyedropper
                 // and HandleViewportPicking just captured a click. Read that one pixel off the

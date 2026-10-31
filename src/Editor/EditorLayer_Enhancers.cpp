@@ -2668,6 +2668,11 @@ void EditorLayer::RebuildFolderSummariesIfNeeded(AssetLibrary& assets) {
                        (assets.AssetFolders().size() << 20) ^ (assets.Folders().size() << 40);
     m_FolderSummaryAge += ImGui::GetIO().DeltaTime;
     if (sig == m_FolderSummarySig && m_FolderSummaryAge < 1.0f) return;
+    // During Play the summaries walk the whole library (~3 ms) at most once a second, and only when it changed: Play
+    // streams assets in, and each arrival moved the signature, so the walk ran on frame after frame of the load.
+    const bool throttle = m_InPlayMode && PlayUiThrottle();
+    if (throttle && m_FolderSummaryAge < 1.0f) return;
+    if (throttle && sig == m_FolderSummarySig) { m_FolderSummaryAge = 0.0f; return; }
     m_FolderSummarySig = sig;
     m_FolderSummaryAge = 0.0f;
     m_FolderSummaries.clear();
