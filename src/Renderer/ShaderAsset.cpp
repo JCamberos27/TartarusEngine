@@ -8,6 +8,8 @@
 #include "Log.h"
 #include "MaterialAsset.h"
 #include "DecalTypes.h"
+#include "TextureUnits.h"
+#include "SkyAtmosphere.h"
 
 #include <fstream>
 #include <sstream>
@@ -367,25 +369,28 @@ bool ShaderAsset::ReloadFromDisk() {
     return true;
 }
 
+static_assert(Decals::UNIT_GRUNGE == TextureUnits::Grunge && Decals::UNIT_ALBEDO == TextureUnits::DecalAlbedo &&
+              Decals::UNIT_AUX == TextureUnits::ProbeCubes - 1, "TextureUnits.h is out of step with DecalTypes.h");
+static_assert(SkyAtmosphere::kAerialUnit == TextureUnits::Aerial && SkyAtmosphere::kCloudShadowUnit == TextureUnits::CloudShadow,
+              "TextureUnits.h is out of step with SkyAtmosphere.h");
+
 void ShaderAsset::BuildBindings() {
     m_Bindings.clear();
-    // Material texture units: 1..7, then 16 and up. 0 is the depth-prepass albedo, 8/9/10 the
-    // shadow maps, 11-13 IBL, 14 the opaque-colour copy, 15 SSAO (see
-    // SceneRenderer::ApplyFrameState). #207 — the budget used to stop at 7, which left the
-    // Standard shader's clear-coat / thickness maps (#206) with nowhere to go; units from 16 up
-    // to the driver's GL_MAX_TEXTURE_IMAGE_UNITS (capped at 32) are now used too. Anything past
-    // that still gets no unit and a warning (#354). Units 30 and 31 are the physical sky's
-    // (SkyAtmosphere::kAerialUnit / kCloudShadowUnit), so materials stop at 29. Decals (docs/DECALS.md)
-    // took 22-25 for their texture arrays and 21 for the Standard shaders' _GrungeMap, so every other
-    // material map now ends at 20 (Standard and StandardAdvanced use exactly 1-7 and 16-20).
-    static int s_MaxUnits = 0;
+    // Material texture units (TextureUnits.h): 1..7, then 16..20, then 37 and up. 0 is the depth-prepass
+    // albedo, 8-15 and 21-31 the engine's frame state, decals and sky, 32-36 puddle SSR's compute pass and
+    // the cover layer. #207 opened 16+ for the Standard shader's clear-coat / thickness maps (#206), and
+    // Standard / StandardAdvanced use exactly 1-7 and 16-20. GL units are one pool of
+    // GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS (>= 96 on GL 4.3+); GL_MAX_TEXTURE_IMAGE_UNITS only caps how many
+    // samplers one fragment stage reads, so units past 31 are fine and nothing has to share a unit any more.
+    static int s_MaxUnits = 0, s_MaxExtended = 0;
     if (s_MaxUnits == 0) {
-        GLint n = 16;
+        GLint n = 16, combined = 48;
         glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &n);
-        // 21: _GrungeMap; 22-25: the decal arrays; 27: volumetric fog; 30, 31: the physical sky
-        s_MaxUnits = std::clamp((int)n, 16, Decals::UNIT_GRUNGE);
+        glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &combined);
+        s_MaxUnits = std::clamp((int)n, 16, TextureUnits::Grunge);
+        s_MaxExtended = std::clamp((int)combined, TextureUnits::ExtendedMaterialFirst, TextureUnits::Count);
     }
-    int unit = 1;
+    int unit = TextureUnits::MaterialFirst;
     for (int i = 0; i < (int)m_Props.size(); ++i) {
         // Shell fur is FurRenderer's to bind: the surface program reads none of it, and the mask would take a
         // material texture unit the Standard shaders have no room for.
@@ -400,17 +405,20 @@ void ShaderAsset::BuildBindings() {
         b.Builtin = MaterialAsset::IsBuiltinProp(m_Props[i].Name);
         if (b.Builtin) MaterialAsset::ResolveBuiltin(m_Props[i].Name, b.Type, b.GetTex, b.GetVal);
         if (m_Props[i].Type == ShaderPropType::Texture2D && m_Props[i].Name == "_GrungeMap") {
-            b.TextureUnit = Decals::UNIT_GRUNGE; // ModelDecals.glsl's layout(binding = 21)
+            b.TextureUnit = TextureUnits::Grunge; // ModelDecals.glsl's layout(binding = 21)
         } else if (m_Props[i].Type == ShaderPropType::Texture2D && (m_Props[i].Name == "_CoverAlbedoMap" ||
                    m_Props[i].Name == "_CoverNormalMap" || m_Props[i].Name == "_CoverMaskMap")) {
-            // The cover layer's maps sit on 0 (only the depth/shadow programs use it), 28 (free) and 20 (shared with _ThicknessMap), see
-            // ModelShading.glsl's layout(binding = 0/28/20): 26/29 are the probe cubes / puddle SSR and everything else is taken.
-            b.TextureUnit = m_Props[i].Name == "_CoverAlbedoMap" ? 0 : m_Props[i].Name == "_CoverNormalMap" ? 28 : 20;
+            // The cover layer's own units, ModelShading.glsl's layout(binding = 34/35/36).
+            b.TextureUnit = m_Props[i].Name == "_CoverAlbedoMap" ? TextureUnits::CoverAlbedo
+                          : m_Props[i].Name == "_CoverNormalMap" ? TextureUnits::CoverNormal : TextureUnits::CoverMask;
         } else if (m_Props[i].Type == ShaderPropType::Texture2D) {
-            if (unit == 8) unit = 16; // skip the engine's reserved 8..15
-            if (unit >= s_MaxUnits) {
+            if (unit == TextureUnits::SunShadow) unit = TextureUnits::MaterialResume; // skip the engine's reserved 8..15
+            if (unit == s_MaxUnits) unit = TextureUnits::ExtendedMaterialFirst;      // skip 21..36
+            if (unit >= s_MaxExtended) {
                 Log::Warn("ShaderAsset: '" + m_Path + "' texture property '" + m_Props[i].Name +
-                          "' exceeds the material texture-unit budget (" + std::to_string(7 + s_MaxUnits - 16) +
+                          "' exceeds the material texture-unit budget (" +
+                          std::to_string(7 + (s_MaxUnits - TextureUnits::MaterialResume) +
+                                         (s_MaxExtended - TextureUnits::ExtendedMaterialFirst)) +
                           " on this GPU); left unbound.");
             } else {
                 b.TextureUnit = unit++;
