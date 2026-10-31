@@ -66,6 +66,7 @@ public:
     void Bind(unsigned int binding = 0) const;
 
     int Count() const { return (int)m_Lights.size(); }
+    int DirectionalCount() const { return m_DirectionalCount; } // packed at the front (#188)
 
     // True if an Add* call this frame (since the last Clear()) was refused because the buffer was
     // already at kMaxLights (#204). Also settable by a caller that stops enumerating scene lights

@@ -14,6 +14,7 @@
 #include "../Renderer/Animation.h"
 #include "../Renderer/SceneRenderer.h"
 #include "../Renderer/MaterialAsset.h"
+#include "../Renderer/ShaderVariant.h"
 #include "../Renderer/CascadedShadowMap.h"
 #include "../Renderer/Texture.h"
 #include <filesystem>
@@ -194,6 +195,21 @@ static void Test_Model_AxisCorrection() {
     CHECK(Model::ParseUpAxis("-Z") == ModelImportSettings::UpAxis::NegZ && Model::ParseUpAxis("x") == ModelImportSettings::UpAxis::Y);
     CHECK(std::string(Model::UpAxisName(ModelImportSettings::UpAxis::NegZ)) == "-Z");
     CHECK(Model::AxisCorrection(5, 1, 2, 1) == glm::mat4(1.0f));
+}
+
+// Engine variant bits (ShaderVariant.h) sit in the key's top byte, apart from the material keywords, and a material
+// only drops grunge or parallax code when its own strength / scale says the shader would skip it.
+void Test_ShaderVariant_EngineBits() {
+    CHECK((kVariantEngineMask & ((1u << kVariantMaterialKeywords) - 1u)) == 0u);
+    for (ShaderVariantKey b : {kVariantNoLocalLights, kVariantNoDecals, kVariantNoDebugView, kVariantNoGrunge, kVariantNoParallax})
+        CHECK((b & kVariantEngineMask) == b);
+    Material m;
+    m.GrungeStrength = 0.0f;
+    m.ParallaxScale = 0.0f;
+    CHECK(ShaderVariantEngineBits(m) == (kVariantNoGrunge | kVariantNoParallax));
+    m.GrungeStrength = 0.4f;
+    m.ParallaxScale = 0.02f;
+    CHECK(ShaderVariantEngineBits(m) == 0u);
 }
 
 // Load-time shader-variant warm-up: materials without a ShaderAsset draw through the model shader
@@ -555,5 +571,6 @@ void RegisterEngineTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Model::AffinePaletteMatchesGeneric", Test_Model_AffinePaletteMatchesGeneric});
     tests.push_back({"Model::AxisCorrection", Test_Model_AxisCorrection});
     tests.push_back({"SceneRenderer::WarmShaderVariantsSkipsShaderless", Test_SceneRenderer_WarmShaderVariantsSkipsShaderless});
+    tests.push_back({"ShaderVariant: engine bits", Test_ShaderVariant_EngineBits});
     tests.push_back({"FxHud::SettingsDrivePureHelpers", Test_FxHud_SettingsDrivePureHelpers});
 }

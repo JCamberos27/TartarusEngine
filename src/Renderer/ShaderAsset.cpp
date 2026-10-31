@@ -479,9 +479,13 @@ void ShaderAsset::CompileVariant(ShaderVariantKey key) {
     if (key != 0) {
         auto inject = [&](std::string& src) {
             std::string defines;
-            for (int i = 0; i < (int)m_Keywords.size(); ++i)
+            for (int i = 0; i < (int)m_Keywords.size() && i < 24; ++i) // the top byte: engine bits (ShaderVariant.h)
                 if (key & (1u << i))
                     defines += "#define " + m_Keywords[i] + "\n";
+            static const char* const kEngine[8] = {nullptr, nullptr, nullptr, "_ENGINE_NO_PARALLAX", "_ENGINE_NO_GRUNGE",
+                                                   "_ENGINE_NO_DEBUG_VIEW", "_ENGINE_NO_DECALS", "_ENGINE_NO_LOCAL_LIGHTS"};
+            for (int b = 0; b < 8; ++b)
+                if (kEngine[b] && (key & (1u << (24 + b)))) defines += std::string("#define ") + kEngine[b] + "\n";
             // #104 — after the #version line (GLSL requires it first, and a file may open with
             // comments), not blindly after line 1. No #version: prepend.
             size_t at = std::string::npos;

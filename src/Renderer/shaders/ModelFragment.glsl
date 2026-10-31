@@ -165,6 +165,7 @@ void main() {
     // #102 — per-material UV tiling / offset, then parallax offset from a height map.
     vec2 uv = vUV * (uUVTiling == vec2(0.0) ? vec2(1.0) : uUVTiling) + uUVOffset;
     bool backFace = uDoubleSided == 1 && !gl_FrontFacing;
+#ifndef _ENGINE_NO_PARALLAX // ShaderVariant.h: compiled out where Parallax Scale is 0
     if (uHasHeightMap == 1 && !tri && uParallaxScale > 0.0) {
         // Parallax occlusion mapping: march the view ray through the height field in tangent
         // space (more layers at grazing angles), then interpolate between the last two samples.
@@ -190,6 +191,8 @@ void main() {
         float w = after / (after - before + 1e-5);
         uv = mix(cur, prev, clamp(w, 0.0, 1.0));
     }
+#endif
+
     vec4 albedoSample = tri ? SampleTriplanar(uAlbedoMap, vWorldPos, triW, uTriplanarScale)
                              : texture(uAlbedoMap, uv);
     if (uUseVertexColor == 1) albedoSample.a *= vColor.a; // #113
@@ -289,9 +292,15 @@ void main() {
     uint cluster = clustered ? clusterIndex() : 0u;
     uint grungeSub;
     SubstrateSample grungeSS;
+#ifdef _ENGINE_NO_GRUNGE // ShaderVariant.h: Grunge Strength 0, where ApplyGrunge returns at once
+    grungeSub = 0u;
+#else
     ApplyGrunge(albedo, N, roughness, metallic, ao, geoN, grungeSub, grungeSS);
+#endif
     vec3 decalEmissive = vec3(0.0);
+#ifndef _ENGINE_NO_DECALS // ShaderVariant.h: no clustered decal in this view
     ApplyDecals(albedo, N, roughness, metallic, ao, decalEmissive, geoN, cluster, grungeSub, grungeSS);
+#endif
     if (uBloodSplatCount > 0) {
         // Soaked in: fabric and skin take the blood's colour, darker where it pooled, glossy while wet.
         vec3 blood = BloodSplatCover();
@@ -306,6 +315,7 @@ void main() {
     ApplyWetness(albedo, N, roughness, metallic, geoN, ao); // after decals and blood: the rain is on top of them
 
     // --- Debug draw modes (#236 R2; 4-7 the F7 light views) ---
+#ifndef _ENGINE_NO_DEBUG_VIEW // ShaderVariant.h: the view draws no debug mode
     if (uDebugView == 4) albedo = vec3(0.75); // Lighting only: lit as usual on a flat grey
     if (uDebugView != 0 && uDebugView != 4) {
         if (uDebugView == 5) {            // Albedo
@@ -336,6 +346,8 @@ void main() {
         }
         return;
     }
+#endif
+
 
     // #102 — the map is TINTED by Emissive Color x Strength (uEmissiveColor carries both), the
     // same as Unity and glTF; it used to replace them, so the colour/strength controls did
@@ -437,6 +449,7 @@ void main() {
     // Point + spot lights: this fragment's froxel list when clustering is active (#120),
     // otherwise every light (offscreen preview path, no compute pass).
     // One loop for both: the light index comes from the froxel's list or straight from uLights.
+#ifndef _ENGINE_NO_LOCAL_LIGHTS // ShaderVariant.h: the frame has no point or spot light
     uint lightOffset = 0u;
     uint lightCount = uLightCount;
     if (clustered) {
@@ -464,6 +477,8 @@ void main() {
         LoSSS += SubsurfaceTransmission(N, L, radiance, sssThickness);
 #endif
     }
+#endif
+
 
     // PR15 — SSAO: sample the blurred occlusion map at this fragment's screen position.
     // ssaoFactor == 1.0 when SSAO is off (uSSAOEnabled == 0, the GL default) — no change.
