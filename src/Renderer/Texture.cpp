@@ -389,8 +389,61 @@ std::shared_ptr<Texture> Texture::CreatePending(TextureCpuData&& data) {
 
 void Texture::FinishUpload() {
     if (!m_Pending) return;
+    if (UploadStaging::TmpTrace()) std::printf("[TmpTrace] direct tex upload %dx%d ch%d px%zu %s\n", m_Pending->Width, m_Pending->Height, m_Pending->Channels, m_Pending->Pixels.size(), m_Path.c_str());
+    UploadStaging::Abandon(m_Stage); // a staged copy in flight: this upload reads memory instead
     const std::unique_ptr<TextureCpuData> data = std::move(m_Pending);
     Upload(*data);
+}
+
+namespace { TextureImportSettings Effective(const TextureImportSettings& settings); }
+
+UploadStaging::Step Texture::UploadStep(bool stage) {
+    using UploadStaging::Step;
+    if (!m_Pending) return Step::Done;
+    if (!m_Stage.Valid()) {
+        // Grey colour maps are expanded to RGBA on the CPU at upload: those still go from memory.
+        const TextureCpuData& d = *m_Pending;
+        const bool expands = (d.Channels == 1 || d.Channels == 2) && Effective(d.Settings).IsSRGB && d.GLFormat == 0;
+        // RGB rows are widened to RGBA on the way into the ring: the driver converts 3-byte texels on the CPU, from a
+        // pixel buffer too, and that conversion was most of a big map's upload.
+        const bool widen = d.GLFormat == 0 && d.Channels == 3;
+        const std::size_t texels = (std::size_t)d.Width * d.Height;
+        if (stage && !expands && !d.Pixels.empty() && (!widen || d.Pixels.size() == texels * 3))
+            m_Stage = UploadStaging::Reserve(widen ? texels * 4 : d.Pixels.size());
+        if (!m_Stage.Valid()) {
+            FinishUpload();
+            return Step::Progress;
+        }
+        const unsigned char* src = d.Pixels.data();
+        const std::size_t n = d.Pixels.size();
+        if (widen) {
+            UploadStaging::StageCopy(m_Stage, [src, texels](unsigned char* dst) {
+                for (std::size_t i = 0; i < texels; ++i) {
+                    dst[i * 4 + 0] = src[i * 3 + 0];
+                    dst[i * 4 + 1] = src[i * 3 + 1];
+                    dst[i * 4 + 2] = src[i * 3 + 2];
+                    dst[i * 4 + 3] = 255;
+                }
+            });
+        } else {
+            UploadStaging::StageCopy(m_Stage, [src, n](unsigned char* dst) { std::memcpy(dst, src, n); });
+        }
+        m_StageWidened = widen;
+        return Step::Waiting;
+    }
+    if (!m_Stage.Ready()) return Step::Waiting;
+    const auto tmpT0 = std::chrono::steady_clock::now();
+    std::unique_ptr<TextureCpuData> data = std::move(m_Pending);
+    constexpr GLenum kPixelUnpackBuffer = 0x88EC; // GL_PIXEL_UNPACK_BUFFER
+    glBindBuffer(kPixelUnpackBuffer, UploadStaging::Buffer());
+    Upload(*data, reinterpret_cast<const unsigned char*>(static_cast<std::uintptr_t>(m_Stage.Offset)), m_StageWidened);
+    glBindBuffer(kPixelUnpackBuffer, 0);
+    UploadStaging::Retire(m_Stage);
+    if (UploadStaging::TmpTrace()) std::printf("[TmpTrace] staged tex upload %.2f ms %dx%d ch%d fmt%u %s\n", std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tmpT0).count(), data->Width, data->Height, data->Channels, data->GLFormat, m_Path.c_str());
+    // The decoded pixels go back to the OS on the worker: freeing 16-64 MB here took a millisecond or more.
+    TextureCpuData* spent = data.release();
+    UploadStaging::Dispose([spent] { delete spent; });
+    return Step::Progress;
 }
 
 namespace {
@@ -550,7 +603,7 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
     Upload(data);
 }
 
-void Texture::Upload(const TextureCpuData& data) {
+void Texture::Upload(const TextureCpuData& data, const unsigned char* staged, bool stagedRgba) {
     InitGpuCaps();
     if (!data.Ok) return;
     const auto uploadStart = std::chrono::steady_clock::now();
@@ -559,7 +612,7 @@ void Texture::Upload(const TextureCpuData& data) {
     m_Height = data.SourceHeight;
     m_Channels = data.Channels;
     const int uploadW = data.Width, uploadH = data.Height;
-    const unsigned char* uploadData = data.Pixels.data();
+    const unsigned char* uploadData = staged ? staged : data.Pixels.data();
     const TextureCpuData* compressed = data.GLFormat != 0 ? &data : nullptr;
 
     // Sized internal formats on both branches (#100) — the sRGB branch already used them;
@@ -600,7 +653,7 @@ void Texture::Upload(const TextureCpuData& data) {
         swizzle[1] = swizzle[2] = GL_RED; swizzle[3] = GL_GREEN;
         useSwizzle = true;
     } else if (m_Channels == 3) {
-        format = GL_RGB;
+        format = stagedRgba ? GL_RGBA : GL_RGB; // staged RGB arrives widened (UploadStep); the stored format is the same
         internalFormat = effective.IsSRGB ? GL_SRGB8 : GL_RGB8;
     } else if (m_Channels == 4) {
         format = GL_RGBA;
@@ -623,7 +676,7 @@ void Texture::Upload(const TextureCpuData& data) {
         const GLenum cf = (GLenum)data.GLFormat;
         levels = (int)compressed->LevelSizes.size();
         glTextureStorage2D(m_ID, levels, cf, uploadW, uploadH);
-        const unsigned char* blocks = compressed->Pixels.data();
+        const unsigned char* blocks = staged ? staged : compressed->Pixels.data();
         m_GpuBytes = 0;
         for (int l = 0; l < levels; ++l) {
             const int lw = std::max(1, uploadW >> l), lh = std::max(1, uploadH >> l);
@@ -732,6 +785,7 @@ bool Texture::Reimport(const TextureImportSettings& settings) {
 }
 
 Texture::~Texture() {
+    UploadStaging::Abandon(m_Stage);
     if (m_ID) glDeleteTextures(1, &m_ID);
 }
 

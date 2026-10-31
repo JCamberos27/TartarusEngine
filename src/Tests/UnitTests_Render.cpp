@@ -2,6 +2,7 @@
 #include "../Renderer/SceneRenderer.h"
 #include "../Renderer/Model.h"
 #include "../Renderer/InstanceBatch.h"
+#include "../Renderer/UploadStaging.h"
 #include "../Renderer/MaterialAsset.h"
 #include "../Renderer/FurRenderer.h"
 #include "../Renderer/VolumetricFog.h"
@@ -172,6 +173,19 @@ void InstanceGrouping() {
 
 // Material slots batch when they draw alike: the same asset, or separate copies with the same values; a different
 // colour, queue or slot count keeps them apart, and the hash agrees with the comparison.
+// UploadStaging's ring: blocks go after the head, wrap to the start up to the oldest live block, and never overlap it.
+void UploadStagingRing() {
+    constexpr std::size_t kNone = ~std::size_t(0);
+    CHECK(UploadStaging::RingFit(1000, 0, 0, true, 400) == 0);
+    CHECK(UploadStaging::RingFit(1000, 0, 0, true, 1001) == kNone);
+    CHECK(UploadStaging::RingFit(1024, 400, 0, false, 300) == 512);   // after the head, aligned to 256
+    CHECK(UploadStaging::RingFit(1024, 700, 300, false, 300) == 0);   // no room at the end: wraps
+    CHECK(UploadStaging::RingFit(1024, 700, 300, false, 301) == kNone); // would run into the oldest block
+    CHECK(UploadStaging::RingFit(1024, 100, 600, false, 100) == 256); // wrapped: between head and tail
+    CHECK(UploadStaging::RingFit(1024, 100, 600, false, 400) == kNone);
+    CHECK(UploadStaging::RingFit(1024, 300, 300, false, 1) == kNone); // head == tail and not empty: full
+}
+
 void InstanceSlots() {
     Material::NextHashFrame();
     auto mat = [](glm::vec3 colour) {
@@ -462,6 +476,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Model import: mergeByMaterial keeps geometry, one mesh per material", MergeByMaterial});
     tests.push_back({"GPU instancing: grouping keeps first-appearance order, kNoBatch stands alone", InstanceGrouping});
     tests.push_back({"GPU instancing: material slots batch by asset or identical values", InstanceSlots});
+    tests.push_back({"Async uploads: staging ring placement wraps and never overlaps", UploadStagingRing});
     tests.push_back({"GPU instancing: placed copies share one import id", InstanceImportId});
     tests.push_back({"Volumetric fog: blue-noise jitter ranks are a permutation, evenly spread", VolumetricBlueNoise});
     tests.push_back({"Volumetric fog: settings and Volumetric Intensity round-trip; old scenes default off / 1", VolumetricSettingsRoundTrip});
