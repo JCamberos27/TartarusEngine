@@ -104,6 +104,7 @@ void Upload(const std::vector<IndirectCommand>& commands) {
                       commands.empty() ? nullptr : commands.data(), GL_STREAM_DRAW);
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, g_Indirect);
 }
+unsigned Handle() { return g_Indirect; }
 } // namespace IndirectBuffer
 
 namespace {

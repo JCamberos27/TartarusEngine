@@ -17,6 +17,9 @@ uniform mat4 uNormalMatrix; // mat3 inverse-transpose of uModel in a mat4 (loade
 uniform int uInstanced;
 uniform int uInstanceBase;
 layout(std430, binding = 27) readonly buffer InstanceBlock { mat4 uInstances[]; };
+// uInstanced 2 (HiZCuller.h): the opaque multi-draw after occlusion culling - instance i of a command is the copy at
+// slot uInstanceRemap[baseInstance + i], the visible copies of its group packed at the group's own range.
+layout(std430, binding = 28) readonly buffer InstanceRemapBlock { int uInstanceRemap[]; };
 uniform mat4 uView;
 uniform mat4 uProj;
 // 0 = not skinned, 1 = skin here from the bone palette, 2 = already skinned this frame (Model::PreSkin): read the
@@ -128,8 +131,9 @@ void main() {
 
     mat4 model = uModel;
     mat3 normalMat = mat3(uNormalMatrix); // inverse-transpose of uModel, computed once on the CPU (#104)
-    if (uInstanced == 1) {
-        int at = (uInstanceBase + gl_BaseInstance + gl_InstanceID) * 2; // gl_BaseInstance: the multi-draw command's group
+    if (uInstanced != 0) {
+        // gl_BaseInstance: the multi-draw command's group
+        int at = (uInstanced == 2 ? uInstanceRemap[gl_BaseInstance + gl_InstanceID] : uInstanceBase + gl_BaseInstance + gl_InstanceID) * 2;
         model = uInstances[at];
         normalMat = mat3(uInstances[at + 1]);
     }
