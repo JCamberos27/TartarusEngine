@@ -90,17 +90,6 @@ bool EnsureRing() {
         r.Failed = true;
         return false;
     }
-    // The GPU's first read of the ring costs ~200 ms (the driver makes the pinned pages resident): pay it here, at
-    // startup, instead of on the first mesh that comes through it.
-    GLuint scratch = 0;
-    glCreateBuffers(1, &scratch);
-    glNamedBufferStorage(scratch, (GLsizeiptr)kAlign, nullptr, 0);
-    glCopyNamedBufferSubData(r.Buffer, scratch, 0, 0, (GLsizeiptr)kAlign);
-    if (GLsync f = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0)) {
-        glClientWaitSync(f, GL_SYNC_FLUSH_COMMANDS_BIT, 2000000000ull);
-        glDeleteSync(f);
-    }
-    glDeleteBuffers(1, &scratch);
     return true;
 }
 } // namespace
@@ -188,8 +177,4 @@ void UploadStaging::Abandon(Region& reg) {
     if (!reg.Valid()) return;
     while (!reg.Ready()) std::this_thread::yield(); // the worker is mid-copy into it: let it finish first
     Retire(reg);
-}
-bool UploadStaging::TmpTrace() { // TEMP
-    static const bool on = [] { char* e = nullptr; size_t n = 0; const bool v = _dupenv_s(&e, &n, "TARTARUS_TMP_TRACE") == 0 && e; std::free(e); return v; }();
-    return on;
 }

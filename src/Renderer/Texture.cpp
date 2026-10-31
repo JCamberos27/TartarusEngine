@@ -389,7 +389,6 @@ std::shared_ptr<Texture> Texture::CreatePending(TextureCpuData&& data) {
 
 void Texture::FinishUpload() {
     if (!m_Pending) return;
-    if (UploadStaging::TmpTrace()) std::printf("[TmpTrace] direct tex upload %dx%d ch%d px%zu %s\n", m_Pending->Width, m_Pending->Height, m_Pending->Channels, m_Pending->Pixels.size(), m_Path.c_str());
     UploadStaging::Abandon(m_Stage); // a staged copy in flight: this upload reads memory instead
     const std::unique_ptr<TextureCpuData> data = std::move(m_Pending);
     Upload(*data);
@@ -432,14 +431,12 @@ UploadStaging::Step Texture::UploadStep(bool stage) {
         return Step::Waiting;
     }
     if (!m_Stage.Ready()) return Step::Waiting;
-    const auto tmpT0 = std::chrono::steady_clock::now();
     std::unique_ptr<TextureCpuData> data = std::move(m_Pending);
     constexpr GLenum kPixelUnpackBuffer = 0x88EC; // GL_PIXEL_UNPACK_BUFFER
     glBindBuffer(kPixelUnpackBuffer, UploadStaging::Buffer());
     Upload(*data, reinterpret_cast<const unsigned char*>(static_cast<std::uintptr_t>(m_Stage.Offset)), m_StageWidened);
     glBindBuffer(kPixelUnpackBuffer, 0);
     UploadStaging::Retire(m_Stage);
-    if (UploadStaging::TmpTrace()) std::printf("[TmpTrace] staged tex upload %.2f ms %dx%d ch%d fmt%u %s\n", std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tmpT0).count(), data->Width, data->Height, data->Channels, data->GLFormat, m_Path.c_str());
     // The decoded pixels go back to the OS on the worker: freeing 16-64 MB here took a millisecond or more.
     TextureCpuData* spent = data.release();
     UploadStaging::Dispose([spent] { delete spent; });
