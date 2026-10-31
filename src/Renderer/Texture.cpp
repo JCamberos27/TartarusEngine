@@ -1,4 +1,6 @@
 #include "Texture.h"
+#include <mutex>
+#include <unordered_set>
 #include "Log.h"
 #include "AssetDatabase.h"
 #include "gl.h"
@@ -533,6 +535,22 @@ TextureCpuData Decode(const std::string& path, std::vector<unsigned char> memory
 
 } // namespace
 
+namespace {
+// --mem-report: every Texture that has uploaded, so the report can list them without a second owner.
+struct LiveTextures {
+    static std::mutex& Mu() { static std::mutex m; return m; }
+    static std::unordered_set<const Texture*>& Set() { static std::unordered_set<const Texture*> s; return s; }
+    static void Add(const Texture* t) { std::lock_guard<std::mutex> l(Mu()); Set().insert(t); }
+    static void Remove(const Texture* t) { std::lock_guard<std::mutex> l(Mu()); Set().erase(t); }
+};
+}
+
+void Texture::ForEachLive(const std::function<void(const Texture&)>& fn) {
+    std::vector<const Texture*> all;
+    { std::lock_guard<std::mutex> l(LiveTextures::Mu()); all.assign(LiveTextures::Set().begin(), LiveTextures::Set().end()); }
+    for (const Texture* t : all) fn(*t);
+}
+
 TextureCpuData Texture::DecodeFile(const std::string& path, const TextureImportSettings& settings) {
     return Decode(path, {}, 0, 0, settings);
 }
@@ -703,6 +721,8 @@ void Texture::Upload(const TextureCpuData& data) {
     }
 
     m_Settings = data.Settings;
+    m_UpW = uploadW; m_UpH = uploadH;
+    LiveTextures::Add(this);
     TextureLoadStats::AddUpload(MsSince(uploadStart), m_GpuBytes);
 }
 
@@ -732,6 +752,7 @@ bool Texture::Reimport(const TextureImportSettings& settings) {
 }
 
 Texture::~Texture() {
+    LiveTextures::Remove(this);
     if (m_ID) glDeleteTextures(1, &m_ID);
 }
 
