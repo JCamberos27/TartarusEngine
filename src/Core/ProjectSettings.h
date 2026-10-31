@@ -84,6 +84,9 @@ struct QualitySettings {
     // Repeated copies of a static model (the same model, materials and lighting state) draw as one instanced draw per
     // pass - the opaque and depth pre-passes, the SSAO pre-pass and every shadow map - instead of one draw each.
     bool GpuInstancing = true;
+    // Background loads copy their textures and meshes into a staging ring on a worker thread, and the main thread only
+    // queues the GPU copy (UploadStaging.h) - no multi-millisecond memcpy inside a frame.
+    bool AsyncUploads = true;
     // With GPU instancing: the static world's meshes share vertex / index pages (MeshArena.h), and every run of
     // sub-meshes that bind alike - across models, not only copies of one - goes out as one multi-draw indirect.
     bool GpuDrivenDraws = true;
