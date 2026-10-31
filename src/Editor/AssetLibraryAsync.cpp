@@ -24,6 +24,7 @@
 #include <exception>
 #include <filesystem>
 #include <map>
+#include <set>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -50,6 +51,10 @@ struct AsyncJob {
     std::atomic<bool> Done{false};
 
     bool Finalized = false; // main thread: uploaded and in the library (or dropped)
+    // Main thread: the load generation it was requested in (AssetLibrary::m_LoadGen), and whether
+    // Stop dropped it (a Play load nothing wants any more: its result is discarded on arrival).
+    std::uint32_t Gen = 0;
+    bool Forget = false;
     // Main thread: jobs this one started when it finished (a material's textures). A ticket
     // waiting on this job waits on these too.
     std::vector<std::shared_ptr<AsyncJob>> Children;
@@ -79,9 +84,17 @@ public:
     std::vector<std::shared_ptr<AsyncJob>> Jobs;
     std::string MaterialPath; // loaded from the (now warm) caches once every job is finalized
     bool Ready = false;
+    std::uint32_t Gen = 0;    // as AsyncJob::Gen
+    bool Forget = false;      // Stop dropped it: turns ready without loading its material
 };
 
 namespace {
+// An edit-mode request (one from before Play) that lands during Play is kept at Stop.
+template <class Mark>
+void KeepPastPlay(Mark& mark, std::uint32_t gen, std::set<std::string>& into, const std::string& path) {
+    if (mark.Active && gen != mark.Gen) into.insert(path);
+}
+
 // Worker side of a material request: the .mat's map paths (parsing without a library loads
 // nothing) and each map's .meta, so the main thread only files them.
 void ReadMaterialMaps(AsyncJob& job) {
@@ -205,10 +218,14 @@ AssetLibrary::AsyncHandle AssetLibrary::RequestModelAsync(const std::string& pat
     auto ticket = std::make_shared<AsyncTicket>();
     const std::string key = AssetDatabase::PathKey(path);
     std::shared_ptr<AsyncJob> job;
-    if (auto it = a.InFlight.find(key); it != a.InFlight.end()) job = it->second;
-    else {
+    if (auto it = a.InFlight.find(key); it != a.InFlight.end()) {
+        job = it->second;
+        // Asked for again after Stop dropped it: wanted after all, and Stop forgot its settings.
+        if (job->Forget) { job->Forget = false; job->Gen = m_LoadGen; PrepareModelImport(path); }
+    } else {
         PrepareModelImport(path); // .meta settings and browser data, as LoadModel does first
         job = std::make_shared<AsyncJob>();
+        job->Gen = m_LoadGen;
         job->K = AsyncJob::Kind::Model;
         job->Path = path;
         job->ModelSettings = GetModelSettings(path);
@@ -216,6 +233,7 @@ AssetLibrary::AsyncHandle AssetLibrary::RequestModelAsync(const std::string& pat
         a.Active.push_back(job);
         a.Push(job);
     }
+    ticket->Gen = m_LoadGen;
     ticket->Jobs.push_back(job);
     a.Tickets.push_back(ticket);
     return ticket;
@@ -232,14 +250,22 @@ AssetLibrary::AsyncHandle AssetLibrary::RequestTextureAsync(const std::string& p
     auto ticket = std::make_shared<AsyncTicket>();
     const std::string key = AssetDatabase::PathKey(path);
     std::shared_ptr<AsyncJob> job;
-    if (auto it = a.InFlight.find(key); it != a.InFlight.end()) job = it->second;
-    else {
+    if (auto it = a.InFlight.find(key); it != a.InFlight.end()) {
+        job = it->second;
+        if (job->Forget) { // as RequestModelAsync
+            job->Forget = false;
+            job->Gen = m_LoadGen;
+            ResolveTextureSettings(path, use, metaJson);
+            AdoptDiskFolder(path, metaJson);
+        }
+    } else {
         // As LoadTexture: settings first, and the GUID before the decode, since TextureCache
         // keys its entry by GUID (audit #75).
         ResolveTextureSettings(path, use, metaJson);
         AdoptDiskFolder(path, metaJson);
         AssetDatabase::EnsureGuid(path);
         job = std::make_shared<AsyncJob>();
+        job->Gen = m_LoadGen;
         job->K = AsyncJob::Kind::Texture;
         job->Path = path;
         job->TexSettings = GetTextureSettings(path);
@@ -247,6 +273,7 @@ AssetLibrary::AsyncHandle AssetLibrary::RequestTextureAsync(const std::string& p
         a.Active.push_back(job);
         a.Push(job);
     }
+    ticket->Gen = m_LoadGen;
     ticket->Jobs.push_back(job);
     a.Tickets.push_back(ticket);
     return ticket;
@@ -260,15 +287,19 @@ AssetLibrary::AsyncHandle AssetLibrary::RequestMaterialAsync(const std::string& 
     // The .mat and its maps' .meta files are read on a worker; PumpAsync then requests the maps.
     const std::string key = "mat|" + AssetDatabase::PathKey(path);
     std::shared_ptr<AsyncJob> job;
-    if (auto it = a.InFlight.find(key); it != a.InFlight.end()) job = it->second;
-    else {
+    if (auto it = a.InFlight.find(key); it != a.InFlight.end()) {
+        job = it->second;
+        if (job->Forget) { job->Forget = false; job->Gen = m_LoadGen; }
+    } else {
         job = std::make_shared<AsyncJob>();
+        job->Gen = m_LoadGen;
         job->K = AsyncJob::Kind::Material;
         job->Path = path;
         a.InFlight[key] = job;
         a.Active.push_back(job);
         a.Push(job);
     }
+    ticket->Gen = m_LoadGen;
     ticket->Jobs.push_back(job);
     a.Tickets.push_back(ticket);
     return ticket;
@@ -290,8 +321,9 @@ int AssetLibrary::PumpAsync(double budgetMs) {
         if (job.K == AsyncJob::Kind::Material) {
             materialsDone.push_back(*it);
         } else if (job.K == AsyncJob::Kind::Model) {
-            if (!job.ModelResult || HasModel(job.Path)) {
-                // Failed, or a synchronous LoadModel got there first: that one wins.
+            if (!job.ModelResult || HasModel(job.Path) || job.Forget) {
+                // Failed, or a synchronous LoadModel got there first: that one wins. Or Stop
+                // dropped it: Play wanted it and Play is over.
                 job.ModelResult.reset();
             } else {
                 // One mesh or texture per step, re-checking the budget between them.
@@ -303,11 +335,14 @@ int AssetLibrary::PumpAsync(double budgetMs) {
                     if (job.ModelResult->MeshCount() == 0 && !job.ModelResult->HasAnimations())
                         Log::Error("Model: async import of '" + job.Path + "' produced nothing.", LogContext::Asset(job.Path));
                     RegisterModel(job.Path, std::move(job.ModelResult));
+                    KeepPastPlay(m_PlayMark, job.Gen, m_PlayMark.Models, job.Path);
                 }
             }
         } else {
-            if (job.TexResult.Ok && !HasTexture(job.Path))
+            if (job.TexResult.Ok && !HasTexture(job.Path) && !job.Forget) {
                 RegisterTexture(job.Path, std::make_shared<Texture>(std::move(job.TexResult)));
+                KeepPastPlay(m_PlayMark, job.Gen, m_PlayMark.Textures, job.Path);
+            }
             job.TexResult = TextureCpuData{};
         }
         worked = true;
@@ -318,10 +353,15 @@ int AssetLibrary::PumpAsync(double budgetMs) {
         it = a.Active.erase(it);
     }
     for (const auto& m : materialsDone) {
+        // The maps are requested in the material's generation, so they share its fate at Stop.
+        const std::uint32_t gen = m_LoadGen;
+        m_LoadGen = m->Gen;
         for (const auto& map : m->Maps) {
+            if (m->Forget) break;
             AsyncHandle t = RequestTextureAsync(map.Path, map.Use, &map.Meta);
             m->Children.insert(m->Children.end(), t->Jobs.begin(), t->Jobs.end());
         }
+        m_LoadGen = gen;
         m->Maps.clear();
     }
 
@@ -332,7 +372,10 @@ int AssetLibrary::PumpAsync(double budgetMs) {
         const bool all = std::all_of(t->Jobs.begin(), t->Jobs.end(),
                                      [](const std::shared_ptr<AsyncJob>& j) { return j->Complete(); });
         if (all) {
-            if (!t->MaterialPath.empty()) LoadMaterial(t->MaterialPath);
+            if (!t->MaterialPath.empty() && !t->Forget) {
+                LoadMaterial(t->MaterialPath);
+                KeepPastPlay(m_PlayMark, t->Gen, m_PlayMark.Materials, t->MaterialPath);
+            }
             t->Jobs.clear();
             t->Ready = true;
             it = a.Tickets.erase(it);
@@ -341,4 +384,78 @@ int AssetLibrary::PumpAsync(double budgetMs) {
         }
     }
     return (int)a.Active.size();
+}
+
+// --- Play scope (see AssetLibrary.h) -----------------------------------------------------------------
+void AssetLibrary::BeginPlayScope() {
+    PlayMark& m = m_PlayMark;
+    m = PlayMark{};
+    m.Active = true;
+    m.Gen = ++m_LoadGen;
+    for (const auto& [k, v] : m_ModelCache) m.Models.insert(k);
+    for (const auto& [k, v] : m_TextureCache) m.Textures.insert(k);
+    for (const auto& [k, v] : m_MaterialCache) m.Materials.insert(k);
+    m.Sounds.insert(m_Sounds.begin(), m_Sounds.end());
+    m.Prefabs.insert(m_Prefabs.begin(), m_Prefabs.end());
+    m.Folders.insert(m_Folders.begin(), m_Folders.end());
+    for (const auto& [k, v] : m_AssetFolder) m.FolderKeys.insert(k);
+    for (const auto& [k, v] : m_DisplayNames) m.NameKeys.insert(k);
+    for (const auto& [k, v] : m_Labels) m.LabelKeys.insert(k);
+    for (const auto& [k, v] : m_TextureSettings) m.TextureSettingKeys.insert(k);
+    for (const auto& [k, v] : m_ModelSettings) m.ModelSettingKeys.insert(k);
+}
+
+int AssetLibrary::EndPlayScope() {
+    PlayMark& m = m_PlayMark;
+    if (!m.Active) return 0;
+    m.Active = false;
+
+    // What Play left loading: dropped on arrival unless asked for again (RequestXAsync revives it).
+    if (m_Async) {
+        for (const auto& job : m_Async->Active)
+            if (job->Gen == m.Gen) job->Forget = true;
+        for (const auto& w : m_Async->Tickets)
+            if (auto t = w.lock(); t && t->Gen == m.Gen) t->Forget = true;
+    }
+    ++m_LoadGen; // requests from here on are edit mode's again
+
+    int forgot = 0;
+    for (const auto& t : std::vector<std::shared_ptr<Texture>>(m_TextureList))
+        if (!m.Textures.count(t->Path())) { RemoveTexture(t); ++forgot; }
+    for (const auto& mo : std::vector<std::shared_ptr<Model>>(m_ModelList))
+        if (!m.Models.count(mo->Path())) { RemoveModel(mo); ++forgot; }
+    for (const auto& ma : std::vector<std::shared_ptr<MaterialAsset>>(m_MaterialList))
+        if (!m.Materials.count(ma->Path)) { RemoveMaterial(ma); ++forgot; }
+    for (const auto& s : std::vector<std::string>(m_Sounds))
+        if (!m.Sounds.count(s)) { RemoveSound(s); ++forgot; }
+    for (const auto& p : std::vector<std::string>(m_Prefabs))
+        if (!m.Prefabs.count(p)) { RemovePrefab(p); ++forgot; }
+
+    // Metadata Play's loads read in (or that requests still in flight prepared). A key new since
+    // Play on an asset loaded before it is an Asset Browser edit, already in its .meta: kept.
+    std::set<std::string> loaded;
+    for (const auto* set : {&m.Models, &m.Textures, &m.Materials, &m.Sounds, &m.Prefabs})
+        for (const auto& p : *set) loaded.insert(AssetDatabase::PathKey(p));
+    auto prune = [&](auto& map, const std::set<std::string>& before) {
+        for (auto it = map.begin(); it != map.end();) {
+            if (!before.count(it->first) && !loaded.count(AssetDatabase::PathKey(it->first))) it = map.erase(it);
+            else ++it;
+        }
+    };
+    prune(m_AssetFolder, m.FolderKeys);
+    prune(m_DisplayNames, m.NameKeys);
+    prune(m_Labels, m.LabelKeys);
+    prune(m_TextureSettings, m.TextureSettingKeys);
+    prune(m_ModelSettings, m.ModelSettingKeys);
+    m_AllLabelsDirty = true;
+
+    // Folders adopted from disk for those assets (in memory only, AddFolderPath). One made in the
+    // browser during Play is in m_SavedFolders (and settings.json): kept.
+    m_Folders.erase(std::remove_if(m_Folders.begin(), m_Folders.end(), [&](const std::string& f) {
+        return !m.Folders.count(f) &&
+               std::find(m_SavedFolders.begin(), m_SavedFolders.end(), f) == m_SavedFolders.end();
+    }), m_Folders.end());
+
+    m = PlayMark{};
+    return forgot;
 }
