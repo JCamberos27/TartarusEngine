@@ -158,7 +158,7 @@ void Load() {
         if (f != it->end() && f->is_number())
             g_Quality.SmallObjectCullHeight = std::clamp(f->get<float>(), 0.0f, 0.1f);
         g_Quality.DepthPrepass = it->value("depthPrepass", true);
-        g_Quality.OcclusionCulling = it->value("occlusionCulling", true);
+        g_Quality.OcclusionCulling = it->value("occlusionCulling", false);
         g_Quality.GpuInstancing = it->value("gpuInstancing", true);
         g_Quality.DecalTextureBudgetMB = std::clamp(it->value("decalTextureBudgetMB", 1024), 32, 4096);
         g_Quality.DecalMaxDistance = std::clamp(it->value("decalMaxDistance", 60.0f), 1.0f, 1000.0f);
