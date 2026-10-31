@@ -141,6 +141,8 @@ public:
     // One mesh or one texture per call, so a loader can spread a big model over several frames.
     // Returns true once everything is uploaded.
     bool FinishGpuUploadStep();
+    // The same through UploadStaging: Waiting = a staged copy isn't in yet (come back next pump).
+    UploadStaging::Step GpuUploadStep();
 
     // Builds a procedural primitive (kind: "cube"/"sphere"/"cylinder"/"cone"/"plane") instead
     // of importing a file. `path` is stored as this Model's Path() so the editor's usual

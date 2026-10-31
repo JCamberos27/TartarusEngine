@@ -2258,6 +2258,11 @@ void EditorLayer::DrawProjectSettingsBody(World& /*world*/) {
             EditorUI::SetTooltip("Copies of the same static model with the same materials draw together, one draw\n"
                                  "call per pass instead of one per copy (camera, depth pre-passes and shadows).\n"
                                  "Skinned, moving, transparent and partly hidden models still draw one by one.");
+        SettingsLabel("Async uploads");
+        if (EditorUIPrimitives::Checkbox("##Async uploads", &q.AsyncUploads)) ProjectSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Background loads copy textures and meshes to a staging buffer on a worker thread;\n"
+                                 "the frame only queues the GPU copy, so a big texture arriving mid-play doesn't hitch.");
 
         // #171 - Unity's Audio Mixer: master + one volume per bus (Audio Source > Output).
         EditorUIPrimitives::SectionHeader("Audio");

@@ -126,6 +126,23 @@ void Model::FinishGpuUpload() {
     while (!FinishGpuUploadStep()) {}
 }
 
+UploadStaging::Step Model::GpuUploadStep() {
+    using UploadStaging::Step;
+    if (!m_GpuPending) return Step::Done;
+    for (auto& mesh : m_D->Meshes)
+        if (mesh->NeedsUpload()) {
+            const Step s = mesh->UploadStep(true);
+            return s == Step::Done ? Step::Progress : s;
+        }
+    for (auto& [key, tex] : m_D->TextureCache)
+        if (tex && tex->IsPendingUpload()) {
+            const Step s = tex->UploadStep(true);
+            return s == Step::Done ? Step::Progress : s;
+        }
+    m_GpuPending = false;
+    return Step::Done;
+}
+
 bool Model::FinishGpuUploadStep() {
     if (!m_GpuPending) return true;
     for (auto& mesh : m_D->Meshes)

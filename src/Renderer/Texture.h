@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include "UploadStaging.h"
 
 // Mirrors the knobs a Unity-style Texture Importer would expose. Stored per-asset-path in
 // AssetLibrary (see AssetLibrary::TextureSettings/SetTextureSettings) and applied whenever a
@@ -102,6 +103,8 @@ public:
     // thread) turns it into a real GL texture. Null if the decode failed.
     static std::shared_ptr<Texture> CreatePending(TextureCpuData&& data);
     bool IsPendingUpload() const { return m_Pending != nullptr; }
+    // One step of a pending upload through UploadStaging (`stage` false: straight from memory, as FinishUpload).
+    UploadStaging::Step UploadStep(bool stage);
     void FinishUpload();
     ~Texture();
 
@@ -143,7 +146,11 @@ private:
     void UploadFromFile(const TextureImportSettings& settings);
     // The GL half: creates m_ID from `data` and fills the size/format fields. Leaves m_ID 0 if
     // the decode failed.
-    void Upload(const TextureCpuData& data);
+    // `staged`: the pixels are at that byte offset of the bound GL_PIXEL_UNPACK_BUFFER instead of data.Pixels.
+    // `stagedRgba`: a 3-channel image staged as RGBA (alpha 255); it is still stored as RGB8 / SRGB8.
+    void Upload(const TextureCpuData& data, const unsigned char* staged = nullptr, bool stagedRgba = false);
+    UploadStaging::Region m_Stage; // a pending texture's pixels on their way up
+    bool m_StageWidened = false;
 
     Texture() = default; // CreatePending
 

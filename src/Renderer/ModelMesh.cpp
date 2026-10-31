@@ -3,6 +3,10 @@
 #include "GLStateCache.h"
 #include "meshoptimizer.h"
 #include <cstddef>
+#include <cstring>
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
 #include <vector>
 
 // Triangle order for the GPU's post-transform vertex cache: a vertex shared by neighbouring triangles
@@ -63,12 +67,50 @@ void ModelMesh::KeepSkin(const std::vector<ModelVertex>& vertices) {
 
 void ModelMesh::FinishUpload() {
     if (m_VAO) return;
+    if (UploadStaging::TmpTrace()) std::printf("[TmpTrace] direct mesh v%zu i%zu\n", m_PendingVertices.size(), m_LocalIndices.size());
+    UploadStaging::Abandon(m_Stage);
     CreateGpu(m_PendingVertices);
     m_PendingVertices.clear();
     m_PendingVertices.shrink_to_fit();
 }
 
-void ModelMesh::CreateGpu(const std::vector<ModelVertex>& vertices) {
+namespace {
+constexpr std::size_t kIndexAlign = 256; // the indices start this far into the staged block, aligned
+std::size_t StagedIndexOffset(std::size_t vertexBytes) { return (vertexBytes + kIndexAlign - 1) / kIndexAlign * kIndexAlign; }
+}
+
+UploadStaging::Step ModelMesh::UploadStep(bool stage) {
+    using UploadStaging::Step;
+    if (m_VAO) return Step::Done;
+    const std::size_t vBytes = m_PendingVertices.size() * sizeof(ModelVertex);
+    const std::size_t iBytes = m_LocalIndices.size() * sizeof(unsigned int);
+    if (!m_Stage.Valid()) {
+        if (stage && vBytes && iBytes) m_Stage = UploadStaging::Reserve(StagedIndexOffset(vBytes) + iBytes);
+        if (!m_Stage.Valid()) {
+            FinishUpload();
+            return Step::Progress;
+        }
+        const unsigned char* v = reinterpret_cast<const unsigned char*>(m_PendingVertices.data());
+        const unsigned char* i = reinterpret_cast<const unsigned char*>(m_LocalIndices.data());
+        const std::size_t iAt = StagedIndexOffset(vBytes);
+        UploadStaging::StageCopy(m_Stage, [v, i, vBytes, iBytes, iAt](unsigned char* dst) {
+            std::memcpy(dst, v, vBytes);
+            std::memcpy(dst + iAt, i, iBytes);
+        });
+        return Step::Waiting;
+    }
+    if (!m_Stage.Ready()) return Step::Waiting;
+    const auto tmpT0 = std::chrono::steady_clock::now();
+    CreateGpu(m_PendingVertices, &m_Stage);
+    if (UploadStaging::TmpTrace()) std::printf("[TmpTrace] staged mesh %.2f ms v%zu\n", std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tmpT0).count(), m_PendingVertices.size());
+    UploadStaging::Retire(m_Stage);
+    auto spent = std::make_shared<std::vector<ModelVertex>>(std::move(m_PendingVertices));
+    m_PendingVertices = {};
+    UploadStaging::Dispose([spent]() mutable { spent.reset(); });
+    return Step::Progress;
+}
+
+void ModelMesh::CreateGpu(const std::vector<ModelVertex>& vertices, const UploadStaging::Region* staged) {
     const std::vector<unsigned int>& indices = m_LocalIndices;
     // glNamedBufferStorage rejects a zero size; a degenerate empty sub-mesh still needs a
     // valid buffer name for the VAO bindings, so floor the allocation at one element.
@@ -79,8 +121,17 @@ void ModelMesh::CreateGpu(const std::vector<ModelVertex>& vertices) {
 
     glCreateBuffers(1, &m_VBO);
     glCreateBuffers(1, &m_EBO);
-    glNamedBufferStorage(m_VBO, vboBytes, vertices.empty() ? nullptr : vertices.data(), 0);
-    glNamedBufferStorage(m_EBO, eboBytes, indices.empty() ? nullptr : indices.data(), 0);
+    if (staged) {
+        // Out of the staging ring on the GPU: the driver queues the copies, nothing is read from memory here.
+        glNamedBufferStorage(m_VBO, vboBytes, nullptr, 0);
+        glNamedBufferStorage(m_EBO, eboBytes, nullptr, 0);
+        const GLuint ring = UploadStaging::Buffer();
+        glCopyNamedBufferSubData(ring, m_VBO, (GLintptr)staged->Offset, 0, vboBytes);
+        glCopyNamedBufferSubData(ring, m_EBO, (GLintptr)(staged->Offset + StagedIndexOffset((std::size_t)vboBytes)), 0, eboBytes);
+    } else {
+        glNamedBufferStorage(m_VBO, vboBytes, vertices.empty() ? nullptr : vertices.data(), 0);
+        glNamedBufferStorage(m_EBO, eboBytes, indices.empty() ? nullptr : indices.data(), 0);
+    }
 
     glCreateVertexArrays(1, &m_VAO);
     glVertexArrayVertexBuffer(m_VAO, 0, m_VBO, 0, sizeof(ModelVertex));
@@ -120,7 +171,7 @@ void ModelMesh::CreateGpu(const std::vector<ModelVertex>& vertices) {
     });
 }
 
-ModelMesh::~ModelMesh() = default; // m_GpuOwner frees the buffers with the last mesh using them (none while deferred)
+ModelMesh::~ModelMesh() { UploadStaging::Abandon(m_Stage); } // m_GpuOwner frees the buffers with the last mesh using them (none while deferred)
 
 void ModelMesh::DrawIndices(unsigned elementBuffer, std::uint32_t offset, std::uint32_t count, int instances) const {
     if (!m_VAO || !count) return;

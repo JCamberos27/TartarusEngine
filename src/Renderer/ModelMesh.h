@@ -4,6 +4,7 @@
 #include <vector>
 #include "ModelVertex.h"
 #include "Material.h"
+#include "UploadStaging.h"
 
 // One drawable sub-mesh of an imported Model (own vertex/index buffers, own PBR material
 // as extracted from the source file's own material assignment).
@@ -22,6 +23,8 @@ public:
     bool NeedsUpload() const { return m_VAO == 0; }
     unsigned int VertexBuffer() const { return m_VBO; } // ModelVertex[], read by PreSkin.comp.glsl
     void FinishUpload();
+    // One step of a deferred upload through UploadStaging (`stage` false: straight from memory, as FinishUpload).
+    UploadStaging::Step UploadStep(bool stage);
 
     // `instances` > 1 draws that many instances (the sun's layered cascade pass).
     void Draw(int instances = 1) const;
@@ -59,7 +62,9 @@ public:
     unsigned int VertexCount() const { return (unsigned int)m_LocalPositions.size(); }
 
 private:
-    void CreateGpu(const std::vector<ModelVertex>& vertices);
+    // `staged`: the vertices then the indices are in the staging ring there (UploadStaging), not read from memory.
+    void CreateGpu(const std::vector<ModelVertex>& vertices, const UploadStaging::Region* staged = nullptr);
+    UploadStaging::Region m_Stage; // a deferred mesh's bytes on their way up
 
     std::vector<ModelVertex> m_PendingVertices; // deferred meshes only, until FinishUpload
     unsigned int m_VAO = 0, m_VBO = 0, m_EBO = 0;
