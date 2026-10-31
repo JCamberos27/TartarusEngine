@@ -2,6 +2,8 @@
 #include "gl.h"
 #include "GLStateCache.h"
 #include "meshoptimizer.h"
+#include "MeshArena.h"
+#include <algorithm>
 #include <cstddef>
 #include <cstring>
 #include <chrono>
@@ -46,7 +48,7 @@ ModelMesh::ModelMesh(std::vector<ModelVertex>&& vertices, const std::vector<unsi
 }
 
 ModelMesh::ModelMesh(const ModelMesh& source, ShareGeometry)
-    : Mat(source.Mat), m_VAO(source.m_VAO), m_VBO(source.m_VBO), m_EBO(source.m_EBO), m_GpuOwner(source.m_GpuOwner),
+    : Mat(source.Mat), m_VAO(source.m_VAO), m_VBO(source.m_VBO), m_EBO(source.m_EBO), m_GpuOwner(source.m_GpuOwner), m_Range(source.m_Range),
       m_IndexCount(source.m_IndexCount), m_LocalPositions(source.m_LocalPositions), m_LocalIndices(source.m_LocalIndices),
       m_Skin(source.m_Skin) {}
 
@@ -110,32 +112,11 @@ UploadStaging::Step ModelMesh::UploadStep(bool stage) {
     return Step::Progress;
 }
 
-void ModelMesh::CreateGpu(const std::vector<ModelVertex>& vertices, const UploadStaging::Region* staged) {
-    const std::vector<unsigned int>& indices = m_LocalIndices;
-    // glNamedBufferStorage rejects a zero size; a degenerate empty sub-mesh still needs a
-    // valid buffer name for the VAO bindings, so floor the allocation at one element.
-    const GLsizeiptr vboBytes = static_cast<GLsizeiptr>(
-        (vertices.empty() ? 1 : vertices.size()) * sizeof(ModelVertex));
-    const GLsizeiptr eboBytes = static_cast<GLsizeiptr>(
-        (indices.empty() ? 1 : indices.size()) * sizeof(unsigned int));
-
-    glCreateBuffers(1, &m_VBO);
-    glCreateBuffers(1, &m_EBO);
-    if (staged) {
-        // Out of the staging ring on the GPU: the driver queues the copies, nothing is read from memory here.
-        glNamedBufferStorage(m_VBO, vboBytes, nullptr, 0);
-        glNamedBufferStorage(m_EBO, eboBytes, nullptr, 0);
-        const GLuint ring = UploadStaging::Buffer();
-        glCopyNamedBufferSubData(ring, m_VBO, (GLintptr)staged->Offset, 0, vboBytes);
-        glCopyNamedBufferSubData(ring, m_EBO, (GLintptr)(staged->Offset + StagedIndexOffset((std::size_t)vboBytes)), 0, eboBytes);
-    } else {
-        glNamedBufferStorage(m_VBO, vboBytes, vertices.empty() ? nullptr : vertices.data(), 0);
-        glNamedBufferStorage(m_EBO, eboBytes, indices.empty() ? nullptr : indices.data(), 0);
-    }
-
-    glCreateVertexArrays(1, &m_VAO);
-    glVertexArrayVertexBuffer(m_VAO, 0, m_VBO, 0, sizeof(ModelVertex));
-    glVertexArrayElementBuffer(m_VAO, m_EBO);
+// The ModelVertex attribute layout on `vao` over `vbo` / `ebo` (also each MeshArena page's VAO).
+void ConfigureModelVao(unsigned vao, unsigned vbo, unsigned ebo) {
+    const GLuint m_VAO = vao;
+    glVertexArrayVertexBuffer(m_VAO, 0, vbo, 0, sizeof(ModelVertex));
+    glVertexArrayElementBuffer(m_VAO, ebo);
 
     auto floatAttrib = [&](GLuint index, GLint size, std::size_t offset) {
         glEnableVertexArrayAttrib(m_VAO, index);
@@ -160,6 +141,47 @@ void ModelMesh::CreateGpu(const std::vector<ModelVertex>& vertices, const Upload
     floatAttrib(9, 4, offsetof(ModelVertex, Weights) + 4 * sizeof(float));
     floatAttrib(6, 1, offsetof(ModelVertex, TangentSign));
     floatAttrib(7, 4, offsetof(ModelVertex, Color)); // #113
+}
+
+void ModelMesh::CreateGpu(const std::vector<ModelVertex>& vertices, const UploadStaging::Region* staged) {
+    const std::vector<unsigned int>& indices = m_LocalIndices;
+    // glNamedBufferStorage rejects a zero size; a degenerate empty sub-mesh still needs a
+    // valid buffer name for the VAO bindings, so floor the allocation at one element.
+    const GLsizeiptr vboBytes = static_cast<GLsizeiptr>(
+        (vertices.empty() ? 1 : vertices.size()) * sizeof(ModelVertex));
+    const GLsizeiptr eboBytes = static_cast<GLsizeiptr>(
+        (indices.empty() ? 1 : indices.size()) * sizeof(unsigned int));
+
+    // Unskinned meshes share the arena's pages (MeshArena.h), so different meshes can go out in one indirect draw.
+    if (m_Skin.empty() && !vertices.empty() && !indices.empty() &&
+        MeshArena::Allocate(vertices.data(), (std::uint32_t)vertices.size(), indices.data(), (std::uint32_t)indices.size(), m_Range,
+                            staged ? UploadStaging::Buffer() : 0u, staged ? staged->Offset : 0,
+                            staged ? staged->Offset + StagedIndexOffset(vertices.size() * sizeof(ModelVertex)) : 0)) {
+        m_VAO = MeshArena::PageVao(m_Range.Page);
+        m_VBO = MeshArena::PageVbo(m_Range.Page);
+        m_EBO = MeshArena::PageEbo(m_Range.Page);
+        const MeshArena::Range range = m_Range;
+        m_GpuOwner = std::shared_ptr<void>(new MeshArena::Range(range), [](void* p) {
+            MeshArena::Free(*static_cast<MeshArena::Range*>(p));
+            delete static_cast<MeshArena::Range*>(p);
+        });
+        return;
+    }
+    glCreateBuffers(1, &m_VBO);
+    glCreateBuffers(1, &m_EBO);
+    if (staged) {
+        // Out of the staging ring on the GPU: the driver queues the copies, nothing is read from memory here.
+        glNamedBufferStorage(m_VBO, vboBytes, nullptr, 0);
+        glNamedBufferStorage(m_EBO, eboBytes, nullptr, 0);
+        const GLuint ring = UploadStaging::Buffer();
+        glCopyNamedBufferSubData(ring, m_VBO, (GLintptr)staged->Offset, 0, vboBytes);
+        glCopyNamedBufferSubData(ring, m_EBO, (GLintptr)(staged->Offset + StagedIndexOffset((std::size_t)vboBytes)), 0, eboBytes);
+    } else {
+        glNamedBufferStorage(m_VBO, vboBytes, vertices.empty() ? nullptr : vertices.data(), 0);
+        glNamedBufferStorage(m_EBO, eboBytes, indices.empty() ? nullptr : indices.data(), 0);
+    }
+    glCreateVertexArrays(1, &m_VAO);
+    ConfigureModelVao(m_VAO, m_VBO, m_EBO);
 
     struct Ids { unsigned vao, vbo, ebo; };
     m_GpuOwner = std::shared_ptr<void>(new Ids{m_VAO, m_VBO, m_EBO}, [](void* p) {
@@ -178,18 +200,20 @@ void ModelMesh::DrawIndices(unsigned elementBuffer, std::uint32_t offset, std::u
     GLStateCache::BindVertexArray(m_VAO);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementBuffer); // VAO state: put the mesh's own back below
     const void* at = reinterpret_cast<const void*>((std::uintptr_t)offset);
-    if (instances > 1)
-        glDrawElementsInstanced(GL_TRIANGLES, (GLsizei)count, GL_UNSIGNED_INT, at, instances);
-    else
-        glDrawElements(GL_TRIANGLES, (GLsizei)count, GL_UNSIGNED_INT, at);
+    glDrawElementsInstancedBaseVertex(GL_TRIANGLES, (GLsizei)count, GL_UNSIGNED_INT, at, std::max(instances, 1),
+                                      (GLint)m_Range.BaseVertex);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_EBO);
 }
 
 void ModelMesh::Draw(int instances) const {
     if (!m_VAO) return; // still deferred
     GLStateCache::BindVertexArray(m_VAO);
-    if (instances > 1)
-        glDrawElementsInstanced(GL_TRIANGLES, m_IndexCount, GL_UNSIGNED_INT, nullptr, instances);
-    else
-        glDrawElements(GL_TRIANGLES, m_IndexCount, GL_UNSIGNED_INT, nullptr);
+    const void* at = reinterpret_cast<const void*>((std::uintptr_t)m_Range.FirstIndex * sizeof(unsigned int));
+    if (!m_Range.Page) {
+        if (instances > 1) glDrawElementsInstanced(GL_TRIANGLES, m_IndexCount, GL_UNSIGNED_INT, nullptr, instances);
+        else glDrawElements(GL_TRIANGLES, m_IndexCount, GL_UNSIGNED_INT, nullptr);
+        return;
+    }
+    glDrawElementsInstancedBaseVertex(GL_TRIANGLES, m_IndexCount, GL_UNSIGNED_INT, at, std::max(instances, 1),
+                                      (GLint)m_Range.BaseVertex);
 }

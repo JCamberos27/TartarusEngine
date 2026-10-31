@@ -3,6 +3,8 @@
 #include "../Renderer/Model.h"
 #include "../Renderer/InstanceBatch.h"
 #include "../Renderer/UploadStaging.h"
+#include "../Renderer/MeshArena.h"
+#include "../Renderer/HiZCuller.h"
 #include "../Renderer/MaterialAsset.h"
 #include "../Renderer/FurRenderer.h"
 #include "../Renderer/VolumetricFog.h"
@@ -169,6 +171,69 @@ void InstanceGrouping() {
     CHECK(g.Groups.size() == 2 && g.Groups[0].Count == 2 && g.Groups[1].Count == 1);
     GroupInstances(0, [](std::uint32_t) { return std::uint64_t(1); }, [](std::uint32_t, std::uint32_t) { return true; }, g);
     CHECK(g.Groups.empty() && g.Order.empty());
+}
+
+// BuildIndirectBatches: one batch per key in first-appearance order, each batch's commands contiguous and in item
+// order, its tag the first item's; nothing in, nothing out.
+void IndirectBuilder() {
+    auto item = [](std::uint64_t key, std::uint32_t tag, std::uint32_t first) {
+        return IndirectItem{key, tag, {3, 1, first, 0, tag}};
+    };
+    const std::vector<IndirectItem> items{item(5, 0, 0), item(9, 1, 3), item(5, 2, 6), item(7, 3, 9), item(9, 4, 12), item(5, 5, 15)};
+    std::vector<IndirectCommand> cmds;
+    std::vector<IndirectBatch> batches;
+    BuildIndirectBatches(items, cmds, batches);
+    CHECK(batches.size() == 3);
+    CHECK(cmds.size() == items.size());
+    CHECK(batches[0].Key == 5 && batches[0].Tag == 0 && batches[0].First == 0 && batches[0].Count == 3);
+    CHECK(batches[1].Key == 9 && batches[1].Tag == 1 && batches[1].First == 3 && batches[1].Count == 2);
+    CHECK(batches[2].Key == 7 && batches[2].Tag == 3 && batches[2].First == 5 && batches[2].Count == 1);
+    const std::vector<std::uint32_t> firsts{0, 6, 15, 3, 12, 9};
+    for (std::size_t i = 0; i < cmds.size(); ++i) CHECK(cmds[i].FirstIndex == firsts[i]);
+    CHECK(cmds[4].BaseInstance == 4 && cmds[4].Count == 3 && cmds[4].InstanceCount == 1);
+    // Every batch's first group comes no later than the next batch's (the opaque pass draws them in that order).
+    for (std::size_t b = 1; b < batches.size(); ++b) CHECK(batches[b - 1].Tag < batches[b].Tag);
+    BuildIndirectBatches({}, cmds, batches);
+    CHECK(cmds.empty() && batches.empty());
+}
+
+// MeshArena::FreeList: first fit, freed runs merge with both neighbours, a full list refuses.
+void MeshArenaFreeList() {
+    MeshArena::FreeList f(100);
+    const std::uint32_t a = f.Take(10), b = f.Take(20), c = f.Take(30);
+    CHECK(a == 0 && b == 10 && c == 30);
+    CHECK(f.FreeUnits() == 40);
+    CHECK(f.Take(41) == ~0u);
+    f.Give(b, 20); // a hole between a and c
+    CHECK(f.Runs() == 2);
+    CHECK(f.Take(15) == 10); // first fit: the hole
+    f.Give(10, 15);
+    f.Give(a, 10); // merges with the hole after it
+    CHECK(f.Runs() == 2);
+    f.Give(c, 30); // and everything joins up again
+    CHECK(f.Runs() == 1 && f.FreeUnits() == 100);
+    CHECK(f.Take(100) == 0 && f.Take(1) == ~0u);
+}
+
+// HiZCuller: the pyramid level a rectangle tests at spans at most two texels each way; boxes near the eye always draw.
+void HiZPieces() {
+    CHECK(HiZCuller::LevelFor(10, 10, 11, 11) == 0);
+    CHECK(HiZCuller::LevelFor(10, 10, 12, 10) == 1);       // 10>>1=5, 12>>1=6
+    CHECK(HiZCuller::LevelFor(0, 0, 1023, 0) == 9);        // 1023>>9 = 1
+    CHECK(HiZCuller::LevelFor(511, 0, 512, 0) == 0);        // two pixels straddling a boundary
+    for (int x0 = 0; x0 < 40; x0 += 3)
+        for (int x1 = x0; x1 < 300; x1 += 7) {
+            const int l = HiZCuller::LevelFor(x0, 0, x1, 0);
+            CHECK((x1 >> l) - (x0 >> l) <= 1);
+            CHECK(l == 0 || (x1 >> (l - 1)) - (x0 >> (l - 1)) > 1);
+        }
+    glm::vec3 lo(0.0f), hi(1.0f);
+    HiZCuller::PadBounds(lo, hi);
+    CHECK(lo.x < 0.0f && hi.x > 1.0f);
+    CHECK(HiZCuller::NearEye(lo, hi, glm::vec3(0.5f), 0.5f));
+    CHECK(HiZCuller::NearEye(lo, hi, glm::vec3(1.3f, 0.5f, 0.5f), 0.5f));
+    CHECK(!HiZCuller::NearEye(lo, hi, glm::vec3(3.0f, 0.5f, 0.5f), 0.5f));
+    CHECK(HiZCuller::FoliageSway(0.15f) > 0.3f);
 }
 
 // Material slots batch when they draw alike: the same asset, or separate copies with the same values; a different
@@ -477,6 +542,9 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"GPU instancing: grouping keeps first-appearance order, kNoBatch stands alone", InstanceGrouping});
     tests.push_back({"GPU instancing: material slots batch by asset or identical values", InstanceSlots});
     tests.push_back({"Async uploads: staging ring placement wraps and never overlaps", UploadStagingRing});
+    tests.push_back({"GPU-driven draws: indirect batches by key, in first-appearance order", IndirectBuilder});
+    tests.push_back({"GPU-driven draws: mesh arena free list is first-fit and coalesces", MeshArenaFreeList});
+    tests.push_back({"GPU occlusion culling: pyramid level choice, padding and near-eye boxes", HiZPieces});
     tests.push_back({"GPU instancing: placed copies share one import id", InstanceImportId});
     tests.push_back({"Volumetric fog: blue-noise jitter ranks are a permutation, evenly spread", VolumetricBlueNoise});
     tests.push_back({"Volumetric fog: settings and Volumetric Intensity round-trip; old scenes default off / 1", VolumetricSettingsRoundTrip});

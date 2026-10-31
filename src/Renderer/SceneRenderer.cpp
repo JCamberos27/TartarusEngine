@@ -39,6 +39,7 @@
 #include "FxSpriteRenderer.h"
 #include "WorldText.h"
 #include "GLStateCache.h"
+#include "HiZCuller.h"
 #include "gl.h"
 #include "Core/Profiler.h"
 
@@ -793,6 +794,9 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         unsigned Entity = 0xFFFFFFFFu; // for the blood splats on it (BloodRenderer::SplatRange)
         // Which decals take to it (Affect Static / Dynamic): StaticTag, or nothing skinned or simulated.
         bool StaticReceiver = true;
+        // World bounds (HiZCuller box test); Bounded false = none, never culled.
+        glm::vec3 WorldMin{0.0f}, WorldMax{0.0f};
+        bool Bounded = false;
     };
     static std::vector<DrawItem> drawList;
     static std::vector<DrawItem> transparentList;
@@ -970,6 +974,9 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             item.Dynamic = dynamicItem;
             item.StaticReceiver = staticReceiver;
             item.Entity = (unsigned)entt::to_integral(entity);
+            item.WorldMin = vis.WorldMin;
+            item.WorldMax = vis.WorldMax;
+            item.Bounded = validBounds;
             if (outfitHide && outfitHide->Visible) {
                 item.Visible = outfitHide->Visible.get();
                 item.Tris = (int)item.Visible->Triangles();
@@ -1079,8 +1086,9 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     glm::vec3 nearHideRight(ctx.View[0][0], 0.0f, ctx.View[2][0]);
     nearHideRight = glm::dot(nearHideRight, nearHideRight) > 1e-8f ? glm::normalize(nearHideRight) : glm::vec3(1.0f, 0.0f, 0.0f);
     int instanceBase = -1; // the opaque pass's current group in the instance buffer, -1 = drawn with uModel
+    int instanceMode = 1;  // uInstanced while instanceBase >= 0: 2 = through HiZCuller's remap
     const std::function<void(Shader&)> perDraw = [&](Shader& prog) {
-        prog.SetInt("uInstanced", instanceBase >= 0 ? 1 : 0);
+        prog.SetInt("uInstanced", instanceBase >= 0 ? instanceMode : 0);
         if (instanceBase >= 0) prog.SetInt("uInstanceBase", instanceBase);
         if (anyProbes) in.probeArray->Bind(prog, probeItem->Centre);
         prog.SetInt("uNoReceiveShadows", probeItem->ReceiveShadows ? 0 : 1);
@@ -1128,6 +1136,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     // behind it doesn't. Only what draws whole is in it: nothing skinned or moving (Dynamic), and none of the
     // player body's or outfits' hidden parts, which the model program discards.
     const bool depthPrepass = in.depthShader && ProjectSettings::Quality().DepthPrepass;
+    unsigned hizDepth = 0; // the view's depth after the pre-pass, single sample: HiZCuller's occluders
     constexpr float kPrepassSlopeOffset = 0.02f;
     const auto prepassed = [&](const DrawItem& it) {
         return depthPrepass && !(it.Dynamic || it.NearHide > 0.0f || it.HideBones || it.HideVerts || it.CollarVerts ||
@@ -1191,11 +1200,24 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         depth.SetInt("uSplitViewProj", 0); // the shadow passes share this program
         glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
         GLStateCache::Invalidate();
+        // GPU occlusion culling (HiZCuller.h) tests against SSAO's copy (the pre-pass plus what it left out, all of
+        // which the opaque pass draws in front of the culled copies too), else the pre-pass's own depth.
+        if (ctx.TxHdr && ctx.TxHdr->IsValid() && !ctx.ProbeCapture && ctx.DebugView == 0 && std::abs(ctx.Proj[3][3]) < 0.5f &&
+            ProjectSettings::Quality().GpuInstancing && HiZCuller::Enabled()) {
+            if (viewDepthCopied) {
+                hizDepth = ctx.SsaoSrc->DepthTexture();
+            } else {
+                ctx.TxHdr->ResolveDepthOnly();
+                hizDepth = ctx.TxHdr->ResolvedDepthTexture();
+            }
+        }
         if (ssrWanted) {
             // Against this view's depth: SSAO's copy (everything) when it was made, else the pre-pass's own (static).
             unsigned int ssrDepth = 0;
             if (viewDepthCopied) {
                 ssrDepth = ctx.SsaoSrc->DepthTexture();
+            } else if (hizDepth) {
+                ssrDepth = hizDepth; // resolved just above
             } else {
                 ctx.TxHdr->ResolveDepthOnly();
                 ssrDepth = ctx.TxHdr->ResolvedDepthTexture();
@@ -1261,12 +1283,86 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         opaqueGroups);
     static std::vector<int> groupBase;
     groupBase.assign(opaqueGroups.Groups.size(), -1);
+    // GPU-driven draws (InstanceBatch.h): every batchable group of an arena model - a single copy too - goes into the
+    // instance buffer, and each of its opaque sub-meshes becomes one indirect command in the batch of sub-meshes that
+    // bind alike: the same program, material, render state and per-object state (probes, shadows, layer, SSAO). A
+    // batch draws where its first group stood in the sorted list, so the static world still goes out first.
+    const bool multiDraw = instancing && MultiDrawEnabled();
+    static std::vector<std::uint8_t> groupIndirect; // 1: drawn by the multi-draw batches
+    groupIndirect.assign(opaqueGroups.Groups.size(), 0);
+    struct OpaqueTag { std::uint32_t Group; std::uint16_t Mesh; };
+    static std::vector<OpaqueTag> opaqueTags;
+    static std::vector<IndirectItem> opaqueItems;
+    static std::vector<IndirectCommand> opaqueCommands;
+    static std::vector<IndirectBatch> opaqueBatches;
+    opaqueTags.clear();
+    opaqueItems.clear();
+    opaqueBatches.clear();
+    const bool hiz = multiDraw && hizDepth != 0;
+    static std::vector<HiZCuller::Group> hizGroups;
+    static std::vector<std::uint32_t> hizCmdList, hizSlotGroup;
+    hizGroups.clear();
+    HiZCuller::Boxes().clear();
+    bool hizCulled = false;
     {
         std::vector<glm::mat4>& staging = InstanceBuffer::Staging();
         staging.clear();
+        for (std::size_t g = 0; multiDraw && g < opaqueGroups.Groups.size(); ++g) {
+            const auto& grp = opaqueGroups.Groups[g];
+            const std::uint32_t leadIndex = opaqueGroups.Order[grp.First];
+            const DrawItem& lead = drawList[leadIndex];
+            if (lead.Pass == Model::MeshPass::Transparent || !batchable(lead) || !lead.Ref->InArena()) continue;
+            groupIndirect[g] = 1;
+            const std::uint32_t base = (std::uint32_t)(staging.size() / 2);
+            groupBase[g] = (int)base;
+            for (std::uint32_t k = 0; k < grp.Count; ++k) {
+                const glm::mat4& x = drawList[opaqueGroups.Order[grp.First + k]].Xform;
+                staging.push_back(x);
+                staging.push_back(glm::mat4(glm::transpose(glm::inverse(glm::mat3(x)))));
+            }
+            if (hiz) {
+                // Foliage sways past its bounds: the box grows by the most any of its materials can move a vertex.
+                float sway = 0.0f;
+                for (int m = 0; m < lead.Ref->MeshCount(); ++m) {
+                    const MaterialAsset* ma = m < (int)lead.Slots->size() ? (*lead.Slots)[m].get() : nullptr;
+                    const Material& mat = ma ? ma->Mat : lead.Ref->MeshMaterial(m);
+                    if (mat.Foliage) sway = std::max(sway, HiZCuller::FoliageSway(std::abs(mat.WindStrength)));
+                }
+                for (std::uint32_t k = 0; k < grp.Count; ++k) {
+                    const DrawItem& member = drawList[opaqueGroups.Order[grp.First + k]];
+                    HiZCuller::AddBox(member.WorldMin, member.WorldMax, member.Bounded, sway);
+                }
+                hizGroups.push_back({base, grp.Count, 0, 0});
+            }
+            // Everything the per-draw hook and the material bind read, but the transforms.
+            std::uint64_t objectKey = (std::uint64_t)lead.ReceiveShadows | ((std::uint64_t)lead.StaticReceiver << 1) |
+                                      ((std::uint64_t)lead.NoSsao << 2) | ((std::uint64_t)lead.DoubleSided << 3) |
+                                      ((std::uint64_t)prepassed(lead) << 4) | ((std::uint64_t)(std::uint32_t)lead.LayerBit << 8) |
+                                      ((std::uint64_t)probeKey(leadIndex) << 40);
+            for (int m = 0; m < lead.Ref->MeshCount(); ++m) {
+                const MaterialAsset* ma = m < (int)lead.Slots->size() ? (*lead.Slots)[m].get() : nullptr;
+                if (ma && ma->RenderQueue == MaterialAsset::Queue::Transparent) continue;
+                const MeshArena::Range& r = lead.Ref->Mesh(m).ArenaRange();
+                if (!r.IndexCount) continue;
+                std::uint32_t variant = 0;
+                const Shader* prog = programFor(ma, variant);
+                const Material& mat = ma ? ma->Mat : lead.Ref->MeshMaterial(m);
+                std::uint64_t key = objectKey;
+                const auto mix = [&key](std::uint64_t v) { key ^= v + 0x9E3779B97F4A7C15ull + (key << 6) + (key >> 2); };
+                mix((std::uint64_t)(std::uintptr_t)prog);
+                mix(mat.HashWithExtraProps());
+                mix(ma ? (std::uint64_t)(std::uintptr_t)ma->Shader.get() : 1ull);
+                mix(lead.Ref->MeshStateKey(m, *lead.Slots, lead.DoubleSided));
+                mix(r.Page);
+                opaqueTags.push_back({(std::uint32_t)g, (std::uint16_t)m});
+                opaqueItems.push_back({key, (std::uint32_t)opaqueTags.size() - 1,
+                                       {r.IndexCount, grp.Count, r.FirstIndex, (std::int32_t)r.BaseVertex, base}});
+            }
+        }
+        if (!opaqueItems.empty()) BuildIndirectBatches(opaqueItems, opaqueCommands, opaqueBatches);
         for (std::size_t g = 0; g < opaqueGroups.Groups.size(); ++g) {
             const auto& grp = opaqueGroups.Groups[g];
-            if (grp.Count < 2) continue;
+            if (groupIndirect[g] || grp.Count < 2) continue;
             groupBase[g] = (int)(staging.size() / 2);
             for (std::uint32_t k = 0; k < grp.Count; ++k) {
                 const glm::mat4& x = drawList[opaqueGroups.Order[grp.First + k]].Xform;
@@ -1275,6 +1371,30 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             }
         }
         InstanceBuffer::Upload();
+        if (!opaqueItems.empty()) IndirectBuffer::Upload(opaqueCommands);
+        if (hiz && !opaqueItems.empty() && !hizGroups.empty()) {
+            PROFILE_GPU_SCOPE("Occlusion Cull");
+            // Each group's commands (a command's baseInstance is its group's first slot), listed group by group.
+            const std::uint32_t mdiSlots = hizGroups.back().Base + hizGroups.back().Count;
+            hizSlotGroup.assign(mdiSlots, ~0u);
+            for (std::uint32_t i = 0; i < (std::uint32_t)hizGroups.size(); ++i) hizSlotGroup[hizGroups[i].Base] = i;
+            for (const IndirectCommand& c : opaqueCommands) ++hizGroups[hizSlotGroup[c.BaseInstance]].CmdCount;
+            std::uint32_t at = 0;
+            for (HiZCuller::Group& g : hizGroups) {
+                g.CmdFirst = at;
+                at += g.CmdCount;
+                g.CmdCount = 0;
+            }
+            hizCmdList.resize(at);
+            for (std::uint32_t i = 0; i < (std::uint32_t)opaqueCommands.size(); ++i) {
+                HiZCuller::Group& g = hizGroups[hizSlotGroup[opaqueCommands[i].BaseInstance]];
+                hizCmdList[g.CmdFirst + g.CmdCount++] = i;
+            }
+            hizCulled = HiZCuller::Cull(hizDepth, ctx.TxHdr->Width(), ctx.TxHdr->Height(),
+                                        glm::vec4(fs.vp[0], fs.vp[1], fs.vp[2], fs.vp[3]), ctx.Proj * ctx.View, ctx.ViewPos,
+                                        hizGroups, hizCmdList, IndirectBuffer::Handle(), mdiSlots);
+            modelShader.Bind();
+        }
     }
     // TAA: the opaque pass (ModelFragment.glsl) is what writes motion vectors - location 1 joins the draw
     // buffers for it alone, and leaves again before fur, the sky and the transparents.
@@ -1287,13 +1407,36 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     // street or a forest was shaded in full. With writes off the test runs first, and the pre-pass depth (the same
     // clip) already holds the answer.
     GLboolean depthWrites = GL_TRUE;
+    std::uint32_t nextBatch = 0; // batches draw in order, each at the first group it holds
     for (std::size_t g = 0; g < opaqueGroups.Groups.size(); ++g) {
         const auto& grp = opaqueGroups.Groups[g];
         const DrawItem& it = drawList[opaqueGroups.Order[grp.First]];
+        if (groupIndirect[g]) {
+            for (; nextBatch < opaqueBatches.size() && opaqueTags[opaqueBatches[nextBatch].Tag].Group == g; ++nextBatch) {
+                const IndirectBatch& b = opaqueBatches[nextBatch];
+                const OpaqueTag& t = opaqueTags[b.Tag];
+                const DrawItem& lead = drawList[opaqueGroups.Order[opaqueGroups.Groups[t.Group].First]];
+                const GLboolean leadWrites = prepassed(lead) ? GL_FALSE : GL_TRUE;
+                if (leadWrites != depthWrites) glDepthMask(depthWrites = leadWrites);
+                probeItem = &lead;
+                instanceBase = 0; // uInstanced on; each command's baseInstance is its group's
+                instanceMode = hizCulled ? 2 : 1;
+                if (lead.Ref->DrawMeshIndirect(modelShader, t.Mesh, *lead.Slots, selectProgram, perDraw, lead.DoubleSided,
+                                               IndirectBuffer::Offset(b.First), (int)b.Count))
+                    ++localStats.DrawCalls;
+            }
+            for (std::uint32_t k = 0; k < grp.Count; ++k) {
+                const DrawItem& member = drawList[opaqueGroups.Order[grp.First + k]];
+                localStats.Triangles += member.Tris;
+                localStats.Vertices += member.Verts;
+            }
+            continue;
+        }
         const GLboolean wantWrites = prepassed(it) ? GL_FALSE : GL_TRUE;
         if (wantWrites != depthWrites) glDepthMask(depthWrites = wantWrites);
         probeItem = &it;
         instanceBase = groupBase[g];
+        instanceMode = 1;
         it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, 1.0f, perDraw, it.Pass, it.DoubleSided, it.Visible,
                              instanceBase >= 0 ? (int)grp.Count : 1);
 

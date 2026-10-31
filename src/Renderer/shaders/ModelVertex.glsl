@@ -17,6 +17,9 @@ uniform mat4 uNormalMatrix; // mat3 inverse-transpose of uModel in a mat4 (loade
 uniform int uInstanced;
 uniform int uInstanceBase;
 layout(std430, binding = 27) readonly buffer InstanceBlock { mat4 uInstances[]; };
+// uInstanced 2 (HiZCuller.h): the opaque multi-draw after occlusion culling - instance i of a command is the copy at
+// slot uInstanceRemap[baseInstance + i], the visible copies of its group packed at the group's own range.
+layout(std430, binding = 28) readonly buffer InstanceRemapBlock { int uInstanceRemap[]; };
 uniform mat4 uView;
 uniform mat4 uProj;
 // 0 = not skinned, 1 = skin here from the bone palette, 2 = already skinned this frame (Model::PreSkin): read the
@@ -80,12 +83,12 @@ void main() {
 
     vHidden = 0.0;
     if (uHideVerts == 1) {
-        int id = gl_VertexID + uHideVertBase;
+        int id = gl_VertexID - gl_BaseVertex + uHideVertBase;
         uint word = uHideVertBits[clamp(id >> 5, 0, uHideVertBits.length() - 1)];
         if (((word >> uint(id & 31)) & 1u) != 0u) vHidden = 1.0;
     }
     if (uCollarVerts == 1) {
-        int id = gl_VertexID + uHideVertBase;
+        int id = gl_VertexID - gl_BaseVertex + uHideVertBase;
         uint word = uCollarVertBits[clamp(id >> 5, 0, uCollarVertBits.length() - 1)];
         if (((word >> uint(id & 31)) & 1u) != 0u) vHidden = 1.0;
     }
@@ -104,7 +107,7 @@ void main() {
             vHidden += uBoneMaskMode == 1 ? masked : 1.0 - masked;
         }
         if (uUseSkinning == 2) {
-            uint s = uint(gl_VertexID + uSkinBase) * kSkinnedWords;
+            uint s = uint(gl_VertexID - gl_BaseVertex + uSkinBase) * kSkinnedWords;
             localPos = vec4(uintBitsToFloat(uSkinned[s]), uintBitsToFloat(uSkinned[s + 1u]), uintBitsToFloat(uSkinned[s + 2u]), 1.0);
             localNormal = UnpackUnitOct(uSkinned[s + 3u]);
             localTangent = UnpackUnitOct(uSkinned[s + 4u]);
@@ -128,8 +131,9 @@ void main() {
 
     mat4 model = uModel;
     mat3 normalMat = mat3(uNormalMatrix); // inverse-transpose of uModel, computed once on the CPU (#104)
-    if (uInstanced == 1) {
-        int at = (uInstanceBase + gl_InstanceID) * 2;
+    if (uInstanced != 0) {
+        // gl_BaseInstance: the multi-draw command's group
+        int at = (uInstanced == 2 ? uInstanceRemap[gl_BaseInstance + gl_InstanceID] : uInstanceBase + gl_BaseInstance + gl_InstanceID) * 2;
         model = uInstances[at];
         normalMat = mat3(uInstances[at + 1]);
     }

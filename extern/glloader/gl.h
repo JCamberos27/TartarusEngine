@@ -564,6 +564,14 @@ extern PFNGLBEGINQUERYPROC glBeginQuery;
 extern PFNGLENDQUERYPROC glEndQuery;
 extern PFNGLGETQUERYOBJECTIVPROC glGetQueryObjectiv;
 extern PFNGLGETQUERYOBJECTUI64VPROC glGetQueryObjectui64v;
+// GPU-driven draws (InstanceBatch.h, MeshArena.h): meshes at a base vertex of shared buffers, many draws per call.
+#define GL_STREAM_DRAW 0x88E0
+#define GL_DRAW_INDIRECT_BUFFER 0x8F3F
+#define GL_COMMAND_BARRIER_BIT 0x00000040
+typedef void (__stdcall* PFNGLDRAWELEMENTSINSTANCEDBASEVERTEXPROC)(GLenum, GLsizei, GLenum, const void*, GLsizei, GLint);
+typedef void (__stdcall* PFNGLMULTIDRAWELEMENTSINDIRECTPROC)(GLenum, GLenum, const void*, GLsizei, GLsizei);
+extern PFNGLDRAWELEMENTSINSTANCEDBASEVERTEXPROC glDrawElementsInstancedBaseVertex;
+extern PFNGLMULTIDRAWELEMENTSINDIRECTPROC glMultiDrawElementsIndirect;
 // Timestamp queries nest, unlike GL_TIME_ELAPSED (#147 GPU profiler).
 typedef void (__stdcall* PFNGLQUERYCOUNTERPROC)(GLuint, GLenum);
 extern PFNGLQUERYCOUNTERPROC glQueryCounter;

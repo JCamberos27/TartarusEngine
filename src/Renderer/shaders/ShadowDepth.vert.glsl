@@ -41,7 +41,7 @@ out vec3 vWorldPos; // used by the local-light (spot/point) depth FS; the sun FS
 void main() {
     vec4 localPos = vec4(aPos, 1.0);
     if (uUseSkinning == 2) {
-        uint s = uint(gl_VertexID + uSkinBase) * 5u;
+        uint s = uint(gl_VertexID - gl_BaseVertex + uSkinBase) * 5u;
         localPos = vec4(uintBitsToFloat(uSkinned[s]), uintBitsToFloat(uSkinned[s + 1u]), uintBitsToFloat(uSkinned[s + 2u]), 1.0);
     } else if (uUseSkinning == 1) {
         int boneIds[8] = int[8](aBoneIDs.x, aBoneIDs.y, aBoneIDs.z, aBoneIDs.w, aBoneIDs2.x, aBoneIDs2.y, aBoneIDs2.z, aBoneIDs2.w);
@@ -59,7 +59,7 @@ void main() {
     int layerOffset = gl_InstanceID;
     if (uInstanced == 1) {
         int layers = max(uInstanceLayers, 1);
-        model = uInstances[(uInstanceBase + gl_InstanceID / layers) * 2];
+        model = uInstances[(uInstanceBase + gl_BaseInstance + gl_InstanceID / layers) * 2]; // gl_BaseInstance: the multi-draw command's caster
         layerOffset = gl_InstanceID % layers;
     }
     precise vec4 worldPos = model * localPos;

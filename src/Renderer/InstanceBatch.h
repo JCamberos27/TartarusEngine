@@ -98,6 +98,37 @@ std::vector<glm::mat4>& Staging();
 void Upload();
 }
 
+// Multi-draw indirect: one glMultiDrawElementsIndirect per run of sub-meshes that bind alike, however many models and
+// copies they come from (their meshes share the MeshArena's pages). Each command's baseInstance is where its copies'
+// transforms start in the instance buffer, which the vertex programs add to gl_InstanceID. Project Settings > Quality
+// > GPU-driven draws (with GPU instancing); TARTARUS_NO_MDI=1 turns it off for A/B benches.
+bool MultiDrawEnabled();
+struct IndirectCommand { // GL's DrawElementsIndirectCommand
+    std::uint32_t Count, InstanceCount, FirstIndex;
+    std::int32_t BaseVertex;
+    std::uint32_t BaseInstance;
+};
+static_assert(sizeof(IndirectCommand) == 20, "the GL command layout");
+struct IndirectItem {
+    std::uint64_t Key;    // items with equal keys draw in one batch (the caller packs page, state and material in)
+    std::uint32_t Tag;    // the caller's: what the batch binds from (its first item's)
+    IndirectCommand Cmd;
+};
+struct IndirectBatch {
+    std::uint64_t Key;
+    std::uint32_t Tag;           // the batch's first item's
+    std::uint32_t First, Count;  // its commands
+};
+// Batches in the order their keys first appear; commands keep their item order within a batch.
+void BuildIndirectBatches(const std::vector<IndirectItem>& items, std::vector<IndirectCommand>& commands,
+                          std::vector<IndirectBatch>& batches);
+namespace IndirectBuffer {
+// Uploads the commands into a fresh data store and binds it as GL_DRAW_INDIRECT_BUFFER (draws issued before keep theirs).
+void Upload(const std::vector<IndirectCommand>& commands);
+unsigned Handle(); // the GL buffer the last Upload filled
+inline const void* Offset(std::uint32_t command) { return (const void*)((std::uintptr_t)command * sizeof(IndirectCommand)); }
+}
+
 // One caster in a depth-only pass: the SSAO and opaque depth pre-passes, and the sun, spot and point shadow maps.
 struct DepthCaster {
     Model* Ref;
