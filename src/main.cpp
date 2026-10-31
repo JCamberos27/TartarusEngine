@@ -3475,8 +3475,12 @@ int main(int argc, char** argv) {
             if (playing && playUsesPlayer) flashlight.Update(player.Cam, gameDt);
             const int sceneSpotShadowBudget = std::max(spotShadowBudget - (torchLit ? 1 : 0), 0);
             const int pointShadowBudget = std::clamp(world.MaxPointShadows, 0, PointShadowMap::kMaxPoints);
+            // The view the point/spot lights fade by (LightBuffer::DistanceFade): a light too small on screen to show
+            // fades out and leaves the buffer, and takes no shadow slot.
+            const Camera& lightViewCam = playing ? *gameCam : editorCamera;
+            const float lightTanHalfFov = std::tan(glm::radians(lightViewCam.Fov) * 0.5f);
             {
-                const glm::vec3 viewPos = (playing ? *gameCam : editorCamera).Position;
+                const glm::vec3 viewPos = lightViewCam.Position;
                 std::vector<std::pair<float, entt::entity>> spots, points;
                 for (auto e : world.Registry.view<TransformComponent, LightComponent>()) {
                     const auto& lc = world.Registry.get<LightComponent>(e);
@@ -3488,7 +3492,9 @@ int main(int argc, char** argv) {
                         continue;
                     const glm::vec3 lpos = glm::vec3(world.ComposeWorldTransform(e)[3]);
                     const float range = std::max(lc.Range, 0.2f);
-                    const float gap = std::max(glm::length(lpos - viewPos) - range, 0.0f);
+                    const float lightDist = glm::length(lpos - viewPos);
+                    if (LightBuffer::DistanceFade(lc.Range, lightDist, lightTanHalfFov) <= 0.0f) continue;
+                    const float gap = std::max(lightDist - range, 0.0f);
                     float score = lc.Intensity * range * range / (gap * gap + 1.0f);
                     if (s_PrevShadowed.count(e)) score *= 1.25f;
                     (lc.Kind == LightComponent::Type::Spot ? spots : points).emplace_back(score, e);
@@ -3558,6 +3564,13 @@ int main(int argc, char** argv) {
                 glm::mat4 m = world.ComposeWorldTransform(e);
                 glm::vec3 pos = glm::vec3(m[3]);
                 glm::vec3 aim = glm::normalize(glm::vec3(m * glm::vec4(0, 0, -1, 0)));
+                // A point/spot light too small on screen to show fades out, then drops out (DistanceFade).
+                float localIntensity = lc.Intensity;
+                if (lc.Kind != LightComponent::Type::Directional) {
+                    const float fade = LightBuffer::DistanceFade(lc.Range, glm::length(pos - lightViewCam.Position), lightTanHalfFov);
+                    if (fade <= 0.0f) continue;
+                    localIntensity *= fade;
+                }
                 if (lc.Kind == LightComponent::Type::Directional) {
                     glm::vec3 dirColor = lc.Color;
                     float dirIntensity = lc.Intensity;
@@ -3609,7 +3622,7 @@ int main(int argc, char** argv) {
                         spotShadowVP[slot] = MakePerspective(glm::degrees(fov), 1.0f, nearP, spotShadowFar[slot]) *
                                              glm::lookAt(pos, pos + aim, up);
                     }
-                    lightBuffer.AddSpot(pos, aim, lc.Color, lc.Intensity, lc.Range, cosOuter, cosInner, slot,
+                    lightBuffer.AddSpot(pos, aim, lc.Color, localIntensity, lc.Range, cosOuter, cosInner, slot,
                                         ~(std::uint32_t)lc.CullingMask, lc.VolumetricIntensity); // #203
                 } else {
                     int slot = -1;
@@ -3623,7 +3636,7 @@ int main(int argc, char** argv) {
                         pointShadowBias[slot] = lc.Shadow.Bias;
                         pointShadowNormalBias[slot] = lc.Shadow.NormalBias;
                     }
-                    lightBuffer.AddPoint(pos, lc.Color, lc.Intensity, lc.Range, slot, ~(std::uint32_t)lc.CullingMask,
+                    lightBuffer.AddPoint(pos, lc.Color, localIntensity, lc.Range, slot, ~(std::uint32_t)lc.CullingMask,
                                         lc.VolumetricIntensity); // #203
                 }
             }
@@ -3651,6 +3664,7 @@ int main(int argc, char** argv) {
                 }
             }
             // Ordinary scenes without lights remain intentionally unlit.
+            lightBuffer.SortLocalNearestFirst(lightViewCam.Position); // the per-cluster cap keeps the near ones
             lightBuffer.Upload();
             const int frameLightCount = lightBuffer.Count();
 

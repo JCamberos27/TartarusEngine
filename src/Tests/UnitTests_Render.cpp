@@ -5,6 +5,7 @@
 #include "../Renderer/MaterialAsset.h"
 #include "../Renderer/FurRenderer.h"
 #include "../Renderer/VolumetricFog.h"
+#include "../Renderer/LightBuffer.h"
 #include "../Renderer/TemporalAA.h"
 #include "../Renderer/ReflectionProbeCapture.h"
 #include "../Game/SceneSerializer.h"
@@ -32,6 +33,26 @@ void SmallObjectCull() {
     CHECK(!TooSmallOnScreen(lo, hi, glm::vec3(0, 0, 0.05f), proj, 0.5f)); // the eye inside it: never culled
     // A narrower lens (larger proj[1][1]) magnifies: kept again at the same distance.
     CHECK(!TooSmallOnScreen(lo, hi, glm::vec3(0, 0, 30), 4.0f, 0.004f));
+}
+
+// LightBuffer::DistanceFade: full strength near and inside the range sphere, a smooth monotonic fall by projected
+// size, nothing once the sphere is a few pixels; the same at any distance for the same size.
+void LightDistanceFade() {
+    const float th = std::tan(glm::radians(37.5f)); // a 75-degree vertical FOV: 704 px focal at 1080p
+    CHECK(LightBuffer::DistanceFade(5.0f, 2.0f, th) == 1.0f);   // inside the sphere
+    CHECK(LightBuffer::DistanceFade(5.0f, 100.0f, th) == 1.0f); // 35 px: full
+    CHECK(LightBuffer::DistanceFade(5.0f, 400.0f, th) == 0.0f); // 9 px: gone
+    float prev = 1.0f;
+    bool monotonic = true;
+    for (float d = 100.0f; d <= 400.0f; d += 5.0f) {
+        const float f = LightBuffer::DistanceFade(5.0f, d, th);
+        monotonic = monotonic && f <= prev + 1e-6f && f >= 0.0f;
+        prev = f;
+    }
+    CHECK(monotonic);
+    const float mid = LightBuffer::DistanceFade(5.0f, 200.0f, th);
+    CHECK(mid > 0.0f && mid < 1.0f);
+    CHECK(std::abs(LightBuffer::DistanceFade(10.0f, 400.0f, th) - mid) < 1e-5f); // scale-invariant
 }
 
 std::vector<entt::entity> Gather(World& w, const VisibilityQuery& q) {
@@ -436,6 +457,7 @@ void ProbeCaptureAndPuddleSsr() {
 void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Reflection probe captures + puddle SSR setting", ProbeCaptureAndPuddleSsr});
     tests.push_back({"Small-object cull: projected bounding-sphere height", SmallObjectCull});
+    tests.push_back({"Light distance fade: by projected size, smooth, then dropped", LightDistanceFade});
     tests.push_back({"GatherVisible: per-frame candidates, per-query filters, invalidation", GatherCache});
     tests.push_back({"Model import: mergeByMaterial keeps geometry, one mesh per material", MergeByMaterial});
     tests.push_back({"GPU instancing: grouping keeps first-appearance order, kNoBatch stands alone", InstanceGrouping});
