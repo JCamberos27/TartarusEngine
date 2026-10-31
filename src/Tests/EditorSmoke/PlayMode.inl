@@ -62,6 +62,21 @@ bool GameShown(Ctx& c) {
 std::string g_Before;     // the scene dump taken before Play
 size_t g_UndoBefore = 0;  // undo depth before Play
 float g_Y = 0.0f;         // a remembered crate height
+
+// Empty when the dump matches g_Before, else where it first differs (with context either side).
+std::string SceneDiff(const std::string& now) {
+    if (now == g_Before) return std::string();
+    std::string keys; // every top-level key that changed, so one run shows the whole picture
+    const nlohmann::json a = nlohmann::json::parse(g_Before, nullptr, false), b = nlohmann::json::parse(now, nullptr, false);
+    if (a.is_object() && b.is_object()) {
+        for (const auto& [k, v] : a.items()) if (!b.contains(k) || b[k] != v) keys += (keys.empty() ? "" : ", ") + k;
+        for (const auto& [k, v] : b.items()) if (!a.contains(k)) keys += (keys.empty() ? "" : ", ") + k;
+    }
+    size_t i = 0;
+    while (i < now.size() && i < g_Before.size() && now[i] == g_Before[i]) ++i;
+    const size_t from = i > 80 ? i - 80 : 0;
+    return "keys [" + keys + "] differ; first at byte " + std::to_string(i) + ": before '" + g_Before.substr(from, 160) + "' after '" + now.substr(from, 160) + "'";
+}
 } // namespace smoke_play
 
 void RegisterPlayModeTests() {
@@ -138,14 +153,7 @@ void RegisterPlayModeTests() {
         Until("the crate fell", [](Ctx& c) { return CrateY(c) < 9.0f; }, 300),
         Tap(GLFW_KEY_F1, "F1"),
         Until("stopped", [](Ctx& c) { return !X::InPlay(c.E); }, 300), Wait(3),
-        Expect("the scene dump is identical", [](Ctx& c) {
-            const std::string now = SceneSerializer::SaveToString(c.W, c.A);
-            if (now == g_Before) return std::string();
-            size_t i = 0;
-            while (i < now.size() && i < g_Before.size() && now[i] == g_Before[i]) ++i;
-            const size_t from = i > 80 ? i - 80 : 0;
-            return "differs at byte " + std::to_string(i) + ": before '" + g_Before.substr(from, 160) + "' after '" + now.substr(from, 160) + "'";
-        }),
+        Expect("the scene dump is identical", [](Ctx& c) { return SceneDiff(SceneSerializer::SaveToString(c.W, c.A)); }),
         ExpectTrue("nothing spawned in Play survived", [](Ctx& c) { return ByName(c.W, "Spawned In Play") == entt::null; }),
         Expect("Beta still selected", [](Ctx& c) { return ExpectSelected(c, "Beta"); }),
         Expect("undo history unchanged", [](Ctx& c) {
@@ -211,7 +219,7 @@ void RegisterPlayModeTests() {
         Shot("game", {"###Scene"}),
         Tap(GLFW_KEY_F1, "F1"),
         Until("stopped", [](Ctx& c) { return !X::InPlay(c.E); }, 300), Wait(3),
-        ExpectTrue("scene restored", [](Ctx& c) { return SceneSerializer::SaveToString(c.W, c.A) == g_Before; }),
+        Expect("scene restored", [](Ctx& c) { return SceneDiff(SceneSerializer::SaveToString(c.W, c.A)); }),
         Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(3),
         Expect("undo moves the player back", [](Ctx& c) {
             const entt::entity p = ByName(c.W, "Player Spawn");
