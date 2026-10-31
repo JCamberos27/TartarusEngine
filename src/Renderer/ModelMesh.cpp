@@ -69,7 +69,6 @@ void ModelMesh::KeepSkin(const std::vector<ModelVertex>& vertices) {
 
 void ModelMesh::FinishUpload() {
     if (m_VAO) return;
-    if (UploadStaging::TmpTrace()) std::printf("[TmpTrace] direct mesh v%zu i%zu\n", m_PendingVertices.size(), m_LocalIndices.size());
     UploadStaging::Abandon(m_Stage);
     CreateGpu(m_PendingVertices);
     m_PendingVertices.clear();
@@ -102,9 +101,7 @@ UploadStaging::Step ModelMesh::UploadStep(bool stage) {
         return Step::Waiting;
     }
     if (!m_Stage.Ready()) return Step::Waiting;
-    const auto tmpT0 = std::chrono::steady_clock::now();
     CreateGpu(m_PendingVertices, &m_Stage);
-    if (UploadStaging::TmpTrace()) std::printf("[TmpTrace] staged mesh %.2f ms v%zu\n", std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tmpT0).count(), m_PendingVertices.size());
     UploadStaging::Retire(m_Stage);
     auto spent = std::make_shared<std::vector<ModelVertex>>(std::move(m_PendingVertices));
     m_PendingVertices = {};

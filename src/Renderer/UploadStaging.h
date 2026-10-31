@@ -23,7 +23,6 @@ namespace UploadStaging {
 enum class Step { Done, Progress, Waiting };
 
 bool Enabled();
-bool TmpTrace(); // TEMP
 
 // One staged copy: Ready() once the worker has written the bytes.
 struct Region {
@@ -47,8 +46,8 @@ void Abandon(Region& r);
 void Dispose(std::function<void()> f);
 // The ring buffer's GL name (bind as GL_PIXEL_UNPACK_BUFFER / copy source). 0 when staging is off.
 unsigned Buffer();
-// Creates the ring now (pinning 128 MiB costs ~200 ms once): the first pump calls it, at startup, so the first load
-// in Play doesn't pay it.
+// Creates the ring now (pinning 128 MiB takes a while): the first pump calls it, at startup, so the first load in
+// Play doesn't pay it.
 void Warm();
 // Recycles the regions whose fences have passed. Called by Reserve, and once per pump.
 void Poll();
