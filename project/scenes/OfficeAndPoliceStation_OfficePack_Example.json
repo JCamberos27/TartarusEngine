@@ -46571,6 +46571,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.924528,
+          0.899033,
+          0.84167
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 6.5,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4005,
       "name": "Area Light Window",
       "order": 4005,
@@ -46582,8 +46603,8 @@
       ],
       "rotation": [
         0.0,
-        -0.707107,
-        -0.0,
+        0.707107,
+        0.0,
         0.707107
       ],
       "scale": [
@@ -46593,6 +46614,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.924528,
+          0.899033,
+          0.84167
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 6.5,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4006,
       "name": "Area Light Window (1)",
       "order": 4006,
@@ -46604,8 +46646,8 @@
       ],
       "rotation": [
         0.0,
-        -0.707107,
-        -0.0,
+        0.707107,
+        0.0,
         0.707107
       ],
       "scale": [
@@ -46615,6 +46657,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.849057,
+          0.773219,
+          0.596743
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 29.232,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4007,
       "name": "Area Light Window (2)",
       "order": 4007,
@@ -46626,9 +46689,9 @@
       ],
       "rotation": [
         0.0,
-        -1.0,
         -0.0,
-        -0.0
+        0.0,
+        1.0
       ],
       "scale": [
         1.0,
@@ -46637,6 +46700,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.849057,
+          0.773219,
+          0.596743
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 29.232,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4008,
       "name": "Area Light Window (3)",
       "order": 4008,
@@ -46648,9 +46732,9 @@
       ],
       "rotation": [
         0.0,
-        -1.0,
         -0.0,
-        -0.0
+        0.0,
+        1.0
       ],
       "scale": [
         1.0,
@@ -46659,6 +46743,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.849057,
+          0.773219,
+          0.596743
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 2.8,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4009,
       "name": "Area Light Window (4)",
       "order": 4009,
@@ -46670,9 +46775,9 @@
       ],
       "rotation": [
         0.0,
-        -1.0,
         -0.0,
-        -0.0
+        0.0,
+        1.0
       ],
       "scale": [
         1.0,
@@ -46681,6 +46786,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.849057,
+          0.773219,
+          0.596743
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 2.8,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4010,
       "name": "Area Light Window (5)",
       "order": 4010,
@@ -46692,9 +46818,9 @@
       ],
       "rotation": [
         0.0,
-        -1.0,
         -0.0,
-        -0.0
+        0.0,
+        1.0
       ],
       "scale": [
         1.0,
@@ -46703,6 +46829,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.85098,
+          0.772549,
+          0.596078
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 4.2,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4011,
       "name": "Area Light Window (6)",
       "order": 4011,
@@ -46714,9 +46861,9 @@
       ],
       "rotation": [
         0.0,
-        -1.0,
         -0.0,
-        -0.0
+        0.0,
+        1.0
       ],
       "scale": [
         1.0,
@@ -46725,6 +46872,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.85098,
+          0.772549,
+          0.596078
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 4.2,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4012,
       "name": "Area Light Window (7)",
       "order": 4012,
@@ -46736,9 +46904,9 @@
       ],
       "rotation": [
         0.0,
-        -1.0,
         -0.0,
-        -0.0
+        0.0,
+        1.0
       ],
       "scale": [
         1.0,
@@ -46747,6 +46915,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.849057,
+          0.773219,
+          0.596743
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 4.2,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4013,
       "name": "Area Light Window (8)",
       "order": 4013,
@@ -46758,9 +46947,9 @@
       ],
       "rotation": [
         0.0,
-        -1.0,
         -0.0,
-        -0.0
+        0.0,
+        1.0
       ],
       "scale": [
         1.0,
@@ -46769,6 +46958,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.849057,
+          0.773219,
+          0.596743
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 4.2,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4014,
       "name": "Area Light Window (9)",
       "order": 4014,
@@ -46780,9 +46990,9 @@
       ],
       "rotation": [
         0.0,
-        -1.0,
         -0.0,
-        -0.0
+        0.0,
+        1.0
       ],
       "scale": [
         1.0,
@@ -46791,6 +47001,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.849057,
+          0.773219,
+          0.596743
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 4.2,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4015,
       "name": "Area Light Window (10)",
       "order": 4015,
@@ -46802,9 +47033,9 @@
       ],
       "rotation": [
         0.0,
-        -1.0,
         -0.0,
-        -0.0
+        0.0,
+        1.0
       ],
       "scale": [
         1.0,
@@ -46813,6 +47044,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.849057,
+          0.773219,
+          0.596743
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 4.2,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4016,
       "name": "Area Light Window (11)",
       "order": 4016,
@@ -46824,9 +47076,9 @@
       ],
       "rotation": [
         0.0,
-        -1.0,
         -0.0,
-        -0.0
+        0.0,
+        1.0
       ],
       "scale": [
         1.0,
@@ -46835,6 +47087,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.849057,
+          0.773219,
+          0.596743
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 4.2,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4017,
       "name": "Area Light Window (12)",
       "order": 4017,
@@ -46846,9 +47119,9 @@
       ],
       "rotation": [
         0.0,
-        -1.0,
         -0.0,
-        -0.0
+        0.0,
+        1.0
       ],
       "scale": [
         1.0,
@@ -46857,6 +47130,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.849057,
+          0.773219,
+          0.596743
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 4.2,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4018,
       "name": "Area Light Window (13)",
       "order": 4018,
@@ -46868,9 +47162,9 @@
       ],
       "rotation": [
         0.0,
-        -1.0,
         -0.0,
-        -0.0
+        0.0,
+        1.0
       ],
       "scale": [
         1.0,
@@ -46879,6 +47173,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.933962,
+          0.891941,
+          0.797392
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 4.2,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4019,
       "name": "Area Light Window (14)",
       "order": 4019,
@@ -46890,9 +47205,9 @@
       ],
       "rotation": [
         0.0,
-        -0.0,
-        -0.0,
-        1.0
+        1.0,
+        0.0,
+        0.0
       ],
       "scale": [
         1.0,
@@ -46901,6 +47216,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.933962,
+          0.891941,
+          0.797392
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 9.8,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4020,
       "name": "Area Light Window (15)",
       "order": 4020,
@@ -46912,9 +47248,9 @@
       ],
       "rotation": [
         0.0,
-        -0.0,
-        -0.0,
-        1.0
+        1.0,
+        0.0,
+        0.0
       ],
       "scale": [
         1.0,
@@ -46923,6 +47259,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.933962,
+          0.891941,
+          0.797392
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 4.2,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4021,
       "name": "Area Light Window (16)",
       "order": 4021,
@@ -46934,9 +47291,9 @@
       ],
       "rotation": [
         0.0,
-        -0.0,
-        -0.0,
-        1.0
+        1.0,
+        0.0,
+        0.0
       ],
       "scale": [
         1.0,
@@ -46945,6 +47302,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.933962,
+          0.891941,
+          0.797392
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 4.2,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4022,
       "name": "Area Light Window (17)",
       "order": 4022,
@@ -46956,9 +47334,9 @@
       ],
       "rotation": [
         0.0,
-        -0.0,
-        -0.0,
-        1.0
+        1.0,
+        0.0,
+        0.0
       ],
       "scale": [
         1.0,
@@ -46967,6 +47345,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.943396,
+          0.912832,
+          0.814347
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 7.7,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4023,
       "name": "Area Light ceiling 2nd",
       "order": 4023,
@@ -46977,8 +47376,8 @@
         24.497997
       ],
       "rotation": [
-        0.5,
         -0.5,
+        0.5,
         0.5,
         0.5
       ],
@@ -46989,6 +47388,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.943396,
+          0.912832,
+          0.814347
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 38.0,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4024,
       "name": "Area Light ceiling embeded double",
       "order": 4024,
@@ -46999,10 +47419,10 @@
         24.52
       ],
       "rotation": [
+        0.0,
         0.707107,
-        -0.0,
-        -0.0,
-        0.707107
+        0.707107,
+        0.0
       ],
       "scale": [
         1.0,
@@ -47011,6 +47431,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.943396,
+          0.912832,
+          0.814347
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 38.0,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4025,
       "name": "Area Light ceiling embeded double",
       "order": 4025,
@@ -47021,10 +47462,10 @@
         24.52
       ],
       "rotation": [
+        0.0,
         0.707107,
-        -0.0,
-        -0.0,
-        0.707107
+        0.707107,
+        0.0
       ],
       "scale": [
         1.0,
@@ -47033,6 +47474,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.943396,
+          0.912832,
+          0.814347
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 38.0,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4026,
       "name": "Area Light ceiling embeded double",
       "order": 4026,
@@ -47043,10 +47505,10 @@
         24.52
       ],
       "rotation": [
+        0.0,
         0.707107,
-        -0.0,
-        -0.0,
-        0.707107
+        0.707107,
+        0.0
       ],
       "scale": [
         1.0,
@@ -47055,6 +47517,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.962264,
+          0.942974,
+          0.885101
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 5.25,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4027,
       "name": "Area Light police area",
       "order": 4027,
@@ -47067,8 +47550,8 @@
       "rotation": [
         -0.5,
         -0.5,
-        0.5,
-        -0.5
+        -0.5,
+        0.5
       ],
       "scale": [
         1.0,
@@ -47077,6 +47560,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.962264,
+          0.942974,
+          0.885101
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 5.25,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4028,
       "name": "Area Light police area",
       "order": 4028,
@@ -47089,8 +47593,8 @@
       "rotation": [
         -0.5,
         -0.5,
-        0.5,
-        -0.5
+        -0.5,
+        0.5
       ],
       "scale": [
         1.0,
@@ -47099,6 +47603,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.962264,
+          0.942974,
+          0.885101
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 5.25,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4029,
       "name": "Area Light police area",
       "order": 4029,
@@ -47111,8 +47636,8 @@
       "rotation": [
         -0.5,
         -0.5,
-        0.5,
-        -0.5
+        -0.5,
+        0.5
       ],
       "scale": [
         1.0,
@@ -47121,6 +47646,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.962264,
+          0.942974,
+          0.885101
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 5.25,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4030,
       "name": "Area Light police area",
       "order": 4030,
@@ -47133,8 +47679,8 @@
       "rotation": [
         -0.5,
         -0.5,
-        0.5,
-        -0.5
+        -0.5,
+        0.5
       ],
       "scale": [
         1.0,
@@ -47143,6 +47689,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.962264,
+          0.942974,
+          0.885101
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 5.25,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4031,
       "name": "Area Light police area",
       "order": 4031,
@@ -47155,8 +47722,8 @@
       "rotation": [
         -0.5,
         -0.5,
-        0.5,
-        -0.5
+        -0.5,
+        0.5
       ],
       "scale": [
         1.0,
@@ -47165,6 +47732,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.962264,
+          0.942974,
+          0.885101
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 5.25,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4032,
       "name": "Area Light police area",
       "order": 4032,
@@ -47177,8 +47765,8 @@
       "rotation": [
         -0.5,
         -0.5,
-        0.5,
-        -0.5
+        -0.5,
+        0.5
       ],
       "scale": [
         1.0,
@@ -47187,6 +47775,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.962264,
+          0.942974,
+          0.885101
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 5.25,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4033,
       "name": "Area Light police area chief",
       "order": 4033,
@@ -47197,10 +47806,10 @@
         25.93
       ],
       "rotation": [
-        -0.0,
         -0.707107,
-        0.707107,
-        -0.0
+        -0.0,
+        -0.0,
+        0.707107
       ],
       "scale": [
         1.0,
@@ -47341,6 +47950,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.943396,
+          0.912832,
+          0.814347
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 30.0,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4040,
       "name": "Area Light ceiling embeded single",
       "order": 4040,
@@ -47351,10 +47981,10 @@
         15.0
       ],
       "rotation": [
+        0.0,
         0.707107,
-        -0.0,
-        -0.0,
-        0.707107
+        0.707107,
+        0.0
       ],
       "scale": [
         1.0,
@@ -47363,6 +47993,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.943396,
+          0.912832,
+          0.814347
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 30.0,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4041,
       "name": "Area Light ceiling embeded single",
       "order": 4041,
@@ -47373,10 +48024,10 @@
         7.007
       ],
       "rotation": [
+        0.0,
         0.707107,
-        -0.0,
-        -0.0,
-        0.707107
+        0.707107,
+        0.0
       ],
       "scale": [
         1.0,
@@ -47385,6 +48036,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.943396,
+          0.912832,
+          0.814347
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 30.0,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4042,
       "name": "Area Light ceiling embeded single",
       "order": 4042,
@@ -47395,10 +48067,10 @@
         18.009
       ],
       "rotation": [
+        0.0,
         0.707107,
-        -0.0,
-        -0.0,
-        0.707107
+        0.707107,
+        0.0
       ],
       "scale": [
         1.0,
@@ -47407,6 +48079,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.943396,
+          0.912832,
+          0.814347
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 30.0,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4043,
       "name": "Area Light ceiling embeded single",
       "order": 4043,
@@ -47417,10 +48110,10 @@
         12.967
       ],
       "rotation": [
+        0.0,
         0.707107,
-        -0.0,
-        -0.0,
-        0.707107
+        0.707107,
+        0.0
       ],
       "scale": [
         1.0,
@@ -47429,6 +48122,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.943396,
+          0.912832,
+          0.814347
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 30.0,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4044,
       "name": "Area Light ceiling embeded single",
       "order": 4044,
@@ -47439,10 +48153,10 @@
         18.009
       ],
       "rotation": [
+        0.0,
         0.707107,
-        -0.0,
-        -0.0,
-        0.707107
+        0.707107,
+        0.0
       ],
       "scale": [
         1.0,
@@ -47451,6 +48165,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.943396,
+          0.912832,
+          0.814347
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 30.0,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4045,
       "name": "Area Light ceiling embeded single ",
       "order": 4045,
@@ -47461,10 +48196,10 @@
         12.967
       ],
       "rotation": [
+        0.0,
         0.707107,
-        -0.0,
-        -0.0,
-        0.707107
+        0.707107,
+        0.0
       ],
       "scale": [
         1.0,
@@ -47473,6 +48208,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.943396,
+          0.912832,
+          0.814347
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 30.0,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4046,
       "name": "Area Light ceiling embeded single",
       "order": 4046,
@@ -47483,10 +48239,10 @@
         18.009
       ],
       "rotation": [
+        0.0,
         0.707107,
-        -0.0,
-        -0.0,
-        0.707107
+        0.707107,
+        0.0
       ],
       "scale": [
         1.0,
@@ -47495,6 +48251,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.943396,
+          0.912832,
+          0.814347
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 30.0,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4047,
       "name": "Area Light ceiling embeded single",
       "order": 4047,
@@ -47505,10 +48282,10 @@
         12.967
       ],
       "rotation": [
+        0.0,
         0.707107,
-        -0.0,
-        -0.0,
-        0.707107
+        0.707107,
+        0.0
       ],
       "scale": [
         1.0,
@@ -47517,6 +48294,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.943396,
+          0.912832,
+          0.814347
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 4.5,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4048,
       "name": "Area Light ceiling cell",
       "order": 4048,
@@ -47527,10 +48325,10 @@
         23.1
       ],
       "rotation": [
+        0.0,
         0.707107,
-        -0.0,
-        -0.0,
-        0.707107
+        0.707107,
+        0.0
       ],
       "scale": [
         1.0,
@@ -47539,6 +48337,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.943396,
+          0.912832,
+          0.814347
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 4.95,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4049,
       "name": "Area Light ceiling cells corridor",
       "order": 4049,
@@ -47549,10 +48368,10 @@
         25.998
       ],
       "rotation": [
+        0.0,
         0.707107,
-        -0.0,
-        -0.0,
-        0.707107
+        0.707107,
+        0.0
       ],
       "scale": [
         1.0,
@@ -47561,6 +48380,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.943396,
+          0.912832,
+          0.814347
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 4.95,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4050,
       "name": "Area Light ceiling cells corridor",
       "order": 4050,
@@ -47571,10 +48411,10 @@
         25.998
       ],
       "rotation": [
+        0.0,
         0.707107,
-        -0.0,
-        -0.0,
-        0.707107
+        0.707107,
+        0.0
       ],
       "scale": [
         1.0,
@@ -47583,6 +48423,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.95283,
+          0.944314,
+          0.91238
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 8.4,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4051,
       "name": "Area Light ceiling conference room",
       "order": 4051,
@@ -47595,8 +48456,8 @@
       "rotation": [
         -0.5,
         -0.5,
-        0.5,
-        -0.5
+        -0.5,
+        0.5
       ],
       "scale": [
         1.0,
@@ -47605,6 +48466,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.95283,
+          0.944314,
+          0.91238
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 8.4,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4052,
       "name": "Area Light ceiling conference room",
       "order": 4052,
@@ -47617,8 +48499,8 @@
       "rotation": [
         -0.5,
         -0.5,
-        0.5,
-        -0.5
+        -0.5,
+        0.5
       ],
       "scale": [
         1.0,
@@ -47627,6 +48509,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.943396,
+          0.912832,
+          0.814347
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 9.1,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4053,
       "name": "Area Light ceiling stairs",
       "order": 4053,
@@ -47637,8 +48540,8 @@
         32.454
       ],
       "rotation": [
-        0.5,
         -0.5,
+        0.5,
         0.5,
         0.5
       ],
@@ -47649,6 +48552,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.943396,
+          0.912832,
+          0.814347
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 9.1,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4054,
       "name": "Area Light ceiling stairs",
       "order": 4054,
@@ -47659,8 +48583,8 @@
         32.454
       ],
       "rotation": [
-        0.5,
         -0.5,
+        0.5,
         0.5,
         0.5
       ],
@@ -47671,6 +48595,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.943396,
+          0.912832,
+          0.814347
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 9.1,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4055,
       "name": "Area Light ceiling stairs",
       "order": 4055,
@@ -47681,8 +48626,8 @@
         32.454
       ],
       "rotation": [
-        0.5,
         -0.5,
+        0.5,
         0.5,
         0.5
       ],
@@ -47693,6 +48638,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.943396,
+          0.912832,
+          0.814347
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 9.1,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4056,
       "name": "Area Light ceiling stairs",
       "order": 4056,
@@ -47703,8 +48669,8 @@
         31.922
       ],
       "rotation": [
-        0.5,
         -0.5,
+        0.5,
         0.5,
         0.5
       ],
@@ -47715,6 +48681,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.943396,
+          0.912832,
+          0.814347
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 9.1,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4057,
       "name": "Area Light ceiling stairs",
       "order": 4057,
@@ -47725,8 +48712,8 @@
         32.454
       ],
       "rotation": [
-        0.5,
         -0.5,
+        0.5,
         0.5,
         0.5
       ],
@@ -48020,6 +49007,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.981132,
+          0.964303,
+          0.911712
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 8.4,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4068,
       "name": "Area Light ceiling lockers",
       "order": 4068,
@@ -48030,10 +49038,10 @@
         40.098
       ],
       "rotation": [
-        -0.707107,
         0.0,
-        -0.0,
-        -0.707107
+        -0.707107,
+        -0.707107,
+        -0.0
       ],
       "scale": [
         1.0,
@@ -48042,6 +49050,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.981132,
+          0.964303,
+          0.911712
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 8.4,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4069,
       "name": "Area Light ceiling lockers",
       "order": 4069,
@@ -48052,10 +49081,10 @@
         40.098
       ],
       "rotation": [
-        -0.707107,
         0.0,
-        -0.0,
-        -0.707107
+        -0.707107,
+        -0.707107,
+        -0.0
       ],
       "scale": [
         1.0,
@@ -48064,6 +49093,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.981132,
+          0.981132,
+          0.981132
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 8.25,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4070,
       "name": "Area Light ceiling fluorescent desksroom",
       "order": 4070,
@@ -48076,8 +49126,8 @@
       "rotation": [
         -0.5,
         -0.5,
-        0.5,
-        -0.5
+        -0.5,
+        0.5
       ],
       "scale": [
         1.0,
@@ -48086,6 +49136,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.981132,
+          0.981132,
+          0.981132
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 8.25,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4071,
       "name": "Area Light ceiling fluorescent desksroom",
       "order": 4071,
@@ -48098,8 +49169,8 @@
       "rotation": [
         -0.5,
         -0.5,
-        0.5,
-        -0.5
+        -0.5,
+        0.5
       ],
       "scale": [
         1.0,
@@ -48108,6 +49179,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.981132,
+          0.981132,
+          0.981132
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 8.25,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4072,
       "name": "Area Light ceiling fluorescent desksroom",
       "order": 4072,
@@ -48120,8 +49212,8 @@
       "rotation": [
         -0.5,
         -0.5,
-        0.5,
-        -0.5
+        -0.5,
+        0.5
       ],
       "scale": [
         1.0,
@@ -48130,6 +49222,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.981132,
+          0.981132,
+          0.981132
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 8.25,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4073,
       "name": "Area Light ceiling fluorescent desksroom",
       "order": 4073,
@@ -48142,8 +49255,8 @@
       "rotation": [
         -0.5,
         -0.5,
-        0.5,
-        -0.5
+        -0.5,
+        0.5
       ],
       "scale": [
         1.0,
@@ -48152,6 +49265,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.981132,
+          0.981132,
+          0.981132
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 8.25,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4074,
       "name": "Area Light ceiling fluorescent desksroom",
       "order": 4074,
@@ -48164,8 +49298,8 @@
       "rotation": [
         -0.5,
         -0.5,
-        0.5,
-        -0.5
+        -0.5,
+        0.5
       ],
       "scale": [
         1.0,
@@ -48174,6 +49308,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.981132,
+          0.981132,
+          0.981132
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 8.25,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4075,
       "name": "Area Light ceiling fluorescent desksroom",
       "order": 4075,
@@ -48186,8 +49341,8 @@
       "rotation": [
         -0.5,
         -0.5,
-        0.5,
-        -0.5
+        -0.5,
+        0.5
       ],
       "scale": [
         1.0,
@@ -48196,6 +49351,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.981132,
+          0.981132,
+          0.981132
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 8.25,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4076,
       "name": "Area Light ceiling fluorescent desksroom",
       "order": 4076,
@@ -48208,8 +49384,8 @@
       "rotation": [
         -0.5,
         -0.5,
-        0.5,
-        -0.5
+        -0.5,
+        0.5
       ],
       "scale": [
         1.0,
@@ -48218,6 +49394,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.981132,
+          0.981132,
+          0.981132
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 8.25,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4077,
       "name": "Area Light ceiling fluorescent desksroom",
       "order": 4077,
@@ -48230,8 +49427,8 @@
       "rotation": [
         -0.5,
         -0.5,
-        0.5,
-        -0.5
+        -0.5,
+        0.5
       ],
       "scale": [
         1.0,
@@ -48240,6 +49437,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          1,
+          1,
+          1
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 42.32,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4078,
       "name": "Area Light ceiling elevator",
       "order": 4078,
@@ -48250,10 +49468,10 @@
         25.996
       ],
       "rotation": [
+        0.0,
         0.707107,
-        -0.0,
-        -0.0,
-        0.707107
+        0.707107,
+        0.0
       ],
       "scale": [
         1.0,
@@ -48262,6 +49480,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.95283,
+          0.936487,
+          0.885413
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 1.0,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4079,
       "name": "Area Light ceiling toilet",
       "order": 4079,
@@ -48272,10 +49511,10 @@
         29.328
       ],
       "rotation": [
+        0.0,
         0.707107,
-        -0.0,
-        -0.0,
-        0.707107
+        0.707107,
+        0.0
       ],
       "scale": [
         1.0,
@@ -48284,6 +49523,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.981132,
+          0.964303,
+          0.911712
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 1.2,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4080,
       "name": "Area Light ceiling toilet",
       "order": 4080,
@@ -48294,10 +49554,10 @@
         30.328
       ],
       "rotation": [
+        0.0,
         0.707107,
-        -0.0,
-        -0.0,
-        0.707107
+        0.707107,
+        0.0
       ],
       "scale": [
         1.0,
@@ -48306,6 +49566,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.95283,
+          0.936487,
+          0.885413
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 1.0,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4081,
       "name": "Area Light ceiling toilet",
       "order": 4081,
@@ -48316,10 +49597,10 @@
         31.365
       ],
       "rotation": [
+        0.0,
         0.707107,
-        -0.0,
-        -0.0,
-        0.707107
+        0.707107,
+        0.0
       ],
       "scale": [
         1.0,
@@ -48328,6 +49609,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.981132,
+          0.964303,
+          0.911712
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 1.2,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4082,
       "name": "Area Light ceiling toilet",
       "order": 4082,
@@ -48338,10 +49640,10 @@
         30.004
       ],
       "rotation": [
+        0.0,
         0.707107,
-        -0.0,
-        -0.0,
-        0.707107
+        0.707107,
+        0.0
       ],
       "scale": [
         1.0,
@@ -48350,6 +49652,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.95283,
+          0.936487,
+          0.885413
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 1.0,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4083,
       "name": "Area Light ceiling toilet",
       "order": 4083,
@@ -48360,10 +49683,10 @@
         28.348
       ],
       "rotation": [
+        0.0,
         0.707107,
-        -0.0,
-        -0.0,
-        0.707107
+        0.707107,
+        0.0
       ],
       "scale": [
         1.0,
@@ -48372,6 +49695,27 @@
       ]
     },
     {
+      "Light": {
+        "Angular Size": 0.53,
+        "Cast Shadows": false,
+        "Color": [
+          0.981132,
+          0.964303,
+          0.911712
+        ],
+        "ColorTempK": 0.0,
+        "Culling Mask": -1,
+        "Intensity": 1.2,
+        "Range": 5.0,
+        "Shadow Bias": 1.0,
+        "Shadow Near Plane": 0.05,
+        "Shadow Normal Bias": 1.0,
+        "Shadow Resolution": "Follow global",
+        "Shadow Softness": 1.0,
+        "Shadow Update Mode": "Dynamic",
+        "Spot Angle": 65.0,
+        "Type": "Spot"
+      },
       "id": 4084,
       "name": "Area Light ceiling toilet",
       "order": 4084,
@@ -48382,10 +49726,10 @@
         31.394999
       ],
       "rotation": [
+        0.0,
         0.707107,
-        -0.0,
-        -0.0,
-        0.707107
+        0.707107,
+        0.0
       ],
       "scale": [
         1.0,
@@ -51723,7 +53067,7 @@
       ]
     }
   ],
-  "exposureEV": 0.0,
+  "exposureEV": -0.7,
   "filmGrain": 0.0,
   "filmGrainResponse": 0.800000011920929,
   "focusDistance": 10.0,
@@ -143213,7 +144557,7 @@
     "timeOfDay": true,
     "timeOfDayHours": 16.0
   },
-  "skyAmbientIntensity": 1.0,
+  "skyAmbientIntensity": 0.35,
   "skyHdriPath": "assets/sky/kloofendal_48d_partly_cloudy_puresky_4k.hdr",
   "skyHorizonColor": [
     0.699999988079071,
@@ -143229,7 +144573,7 @@
   ],
   "ssaoBias": 0.02500000037252903,
   "ssaoEnabled": true,
-  "ssaoIntensity": 1.0,
+  "ssaoIntensity": 1.6,
   "ssaoRadius": 0.5,
   "tonemapOperator": 1,
   "vignetteIntensity": 0.0,
