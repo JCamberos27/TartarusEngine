@@ -35,6 +35,10 @@ struct Region {
 
 // Space for `size` bytes (offset aligned to 256), or an invalid region when staging is off or the ring is full.
 Region Reserve(std::size_t size);
+// Whether a `size`-byte request can ever be staged (staging on, the ring mapped, not too big for it): when it can and
+// Reserve still failed, the ring is only full for now - wait a pump for the GPU to free some, rather than going the
+// slow way on the main thread.
+bool Stageable(std::size_t size);
 // Queues `fill(dst)` on the copy worker (the caller keeps the source alive until Ready()).
 void StageCopy(Region& r, std::function<void(unsigned char* dst)> fill);
 // After the GL commands that read the region are issued: fences it, and it is recycled once the GPU is past them.
