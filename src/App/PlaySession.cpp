@@ -92,6 +92,7 @@ void PlaySession::Start() {
     if (m_Editor.InPrefabMode()) m_Editor.ExitPrefabMode(m_World, m_Assets); // #176 - Play runs the scene
     if (EditorModuleHost::ConsoleState().ClearOnPlay) Log::Clear(); // #236 A5
     m_Editor.OnEnterPlayMode(m_World);
+    m_Assets.BeginPlayScope(); // Stop forgets what Play loads (OnExitPlayMode)
     EditorSound::Play(EditorSound::Event::PlayEnter);
     // Character Outfit's Randomize On Play: dressed afresh, after the snapshot so Stop brings the
     // edited outfit back. It loads in the background; FirstPersonBody takes the new pieces once
