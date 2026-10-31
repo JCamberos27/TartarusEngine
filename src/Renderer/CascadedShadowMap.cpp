@@ -72,6 +72,7 @@ void CascadedShadowMap::Update(const glm::mat4& camView, const glm::mat4& camPro
 
     // Full camera frustum corners in world space, from the inverse view-projection.
     glm::mat4 invVP = glm::inverse(camProj * camView);
+    m_Eye = glm::vec3(glm::inverse(camView)[3]);
     glm::vec3 nearC[4], farC[4];
     const glm::vec2 ndc[4] = {{-1, -1}, {1, -1}, {1, 1}, {-1, 1}};
     for (int i = 0; i < 4; ++i) {
@@ -202,9 +203,48 @@ void CascadedShadowMap::Update(const glm::mat4& camView, const glm::mat4& camPro
     }
 }
 
+// The light clip-space rectangle cascade c's receivers can read: the slice footprint's bounding box (for cascade 0 also
+// everything within kViewModelReach of the eye: the view model draws at its own field of view, so its fragments can sit
+// outside the world view's frustum near the eye), grown by what SunShadow reaches from a receiver - the Poisson kernel
+// (longest offset ~1.23 radii, radius widened 35% per cascade), the 2x2 compare, the normal offset (at most one texel x
+// normalBias) and a texel of slack.
+void CascadedShadowMap::ReadRect(int c, float kernelTexels, float normalBias, glm::vec2& lo, glm::vec2& hi) const {
+    const float res = (float)std::max(m_Resolution, 1);
+    const float texels = (kernelTexels > 0.0f ? std::max(kernelTexels, 0.5f) * (1.0f + 0.35f * (float)c) * 1.25f : 0.0f) +
+                         std::max(normalBias, 0.0f) + 3.0f;
+    lo = m_SliceMin[c];
+    hi = m_SliceMax[c];
+    if (c == 0) {
+        constexpr float kViewModelReach = 2.0f; // metres
+        const glm::vec4 e = m_LightViewProj[0] * glm::vec4(m_Eye, 1.0f);
+        const glm::vec2 eye = glm::vec2(e) / e.w;
+        const float r = kViewModelReach * 2.0f / std::max(m_TexelWorld[0] * res, 1e-6f); // metres -> light NDC
+        lo = glm::min(lo, eye - glm::vec2(r));
+        hi = glm::max(hi, eye + glm::vec2(r));
+    }
+    const float margin = texels * 2.0f / res;
+    lo -= glm::vec2(margin);
+    hi += glm::vec2(margin);
+}
+
 bool CascadedShadowMap::CasterReachesSlice(int c, const glm::vec3& boundsMin, const glm::vec3& boundsMax,
                                            float kernelTexels, float normalBias) const {
-    if (c <= 0 || c >= m_Count) return true;
+    if (c < 0 || c >= m_Count) return true;
+    if (c == 0) { // the near slice plus the eye's surroundings (ReadRect): its bounding box is the whole test
+        glm::vec2 rlo, rhi;
+        ReadRect(0, kernelTexels, normalBias, rlo, rhi);
+        const glm::mat4& vp0 = m_LightViewProj[0];
+        glm::vec2 lo(std::numeric_limits<float>::max()), hi(-std::numeric_limits<float>::max());
+        for (int k = 0; k < 8; ++k) {
+            const glm::vec3 p((k & 1) ? boundsMax.x : boundsMin.x, (k & 2) ? boundsMax.y : boundsMin.y,
+                              (k & 4) ? boundsMax.z : boundsMin.z);
+            const glm::vec4 q = vp0 * glm::vec4(p, 1.0f);
+            const glm::vec2 xy = glm::vec2(q) / q.w;
+            lo = glm::min(lo, xy);
+            hi = glm::max(hi, xy);
+        }
+        return !(rhi.x < lo.x || rlo.x > hi.x || rhi.y < lo.y || rlo.y > hi.y);
+    }
     // The caster's footprint: its bounds' light clip-space x/y extent, grown by what the shader can
     // reach from a receiver - the Poisson kernel (longest offset ~1.23 radii, radius widened 35% per
     // cascade), the 2x2 compare, the normal offset (at most one texel x normalBias) and a texel of slack.
@@ -274,6 +314,39 @@ bool CascadedShadowMap::LayeredSupported() {
         return false;
     }();
     return supported;
+}
+
+bool CascadedShadowMap::ViewportIndexSupported() {
+    static const bool supported = [] {
+        GLint n = 0;
+        glGetIntegerv(GL_NUM_EXTENSIONS, &n);
+        for (GLint i = 0; i < n; ++i) {
+            const char* ext = reinterpret_cast<const char*>(glGetStringi(GL_EXTENSIONS, (GLuint)i));
+            if (ext && std::strcmp(ext, "GL_ARB_shader_viewport_layer_array") == 0) return true;
+        }
+        return false;
+    }();
+    return supported;
+}
+
+void CascadedShadowMap::BeginLayeredScissor(float kernelTexels, float normalBias) const {
+    const float res = (float)std::max(m_Resolution, 1);
+    for (int c = 0; c < m_Count; ++c) {
+        glViewportIndexedf((GLuint)c, 0.0f, 0.0f, res, res);
+        glm::vec2 lo, hi;
+        ReadRect(c, kernelTexels, normalBias, lo, hi);
+        const auto toTexel = [&](float ndc) { return (ndc * 0.5f + 0.5f) * res; };
+        const int x0 = std::clamp((int)std::floor(toTexel(lo.x)) - 1, 0, m_Resolution); // a texel more for the rounding
+        const int y0 = std::clamp((int)std::floor(toTexel(lo.y)) - 1, 0, m_Resolution);
+        const int x1 = std::clamp((int)std::ceil(toTexel(hi.x)) + 1, 0, m_Resolution);
+        const int y1 = std::clamp((int)std::ceil(toTexel(hi.y)) + 1, 0, m_Resolution);
+        glScissorIndexed((GLuint)c, x0, y0, std::max(x1 - x0, 0), std::max(y1 - y0, 0));
+    }
+    glEnable(GL_SCISSOR_TEST);
+}
+
+void CascadedShadowMap::EndLayeredScissor() {
+    glDisable(GL_SCISSOR_TEST);
 }
 
 glm::vec4 CascadedShadowMap::SplitDepthsVec4() const {
