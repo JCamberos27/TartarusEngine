@@ -412,6 +412,28 @@ public:
                       const std::function<void(Shader&)>& onProgramBound = {},
                       MeshPass pass = MeshPass::All, bool forceDoubleSided = false,
                       const VisibleIndexBuffer* visible = nullptr, int instances = 1);
+    // Multi-draw indirect (InstanceBatch.h). Whether every sub-mesh sits in the shared mesh arena (MeshArena.h), so
+    // the model's meshes can join other models' in one indirect draw: never for a skinned model.
+    bool InArena() const;
+    const ModelMesh& Mesh(int index) const { return *m_D->Meshes[index]; }
+    // Sub-mesh `index` as DrawDepthOnly draws it: false when the depth passes skip it (transparent). `cull`: the face
+    // culling its shader or material asks for (ShaderRenderState::CullMode as an int, 0 = the pass's own), and
+    // `stateKey` what its depth draw binds (0 for a plain opaque mesh: every such mesh draws alike).
+    bool DepthMeshState(int index, const std::vector<std::shared_ptr<MaterialAsset>>& slots, int& cull, std::uint64_t& stateKey) const;
+    // Binds what DrawDepthOnly binds before drawing sub-mesh `index` (the wind clock, no skinning, its cutout and
+    // sway), leaving the draw to the caller.
+    void BindDepthMesh(Shader& shader, int index, const std::vector<std::shared_ptr<MaterialAsset>>& slots);
+    // The opaque pass's per-mesh setup (DrawSelected's) for sub-mesh `index`, then `drawCount` indirect commands at
+    // byte `indirect` of the bound GL_DRAW_INDIRECT_BUFFER through the mesh's arena page. Instanced: the program reads
+    // transforms from the instance buffer (the caller sets uInstanced from `onProgramBound`). Returns false (nothing
+    // drawn) when the pass skips that mesh.
+    // A key for sub-mesh `index`'s render state in the opaque pass (its shader's, plus Double Sided): meshes with the
+    // same key draw under the same GL state.
+    std::uint64_t MeshStateKey(int index, const std::vector<std::shared_ptr<MaterialAsset>>& slots, bool forceDoubleSided) const;
+    bool DrawMeshIndirect(Shader& fallback, int index, const std::vector<std::shared_ptr<MaterialAsset>>& slots,
+                          const ProgramSelector& selectProgram, const std::function<void(Shader&)>& onProgramBound,
+                          bool forceDoubleSided, const void* indirect, int drawCount);
+
     // Shell fur (FurRenderer): binds the model's skin (this frame's pre-skinned vertices or its bone palette) and
     // `xform` on `prog` the way DrawSelected does, then draws each opaque sub-mesh whose material has fur on as
     // `bind`'s return value of instances - one per shell (0 skips it). `bind` sets that material's uniforms.
