@@ -348,7 +348,7 @@ static void Test_CascadedShadowMap_SliceTestMatchesAllPairs() {
     int disagree = 0, culled = 0;
     for (int i = 0; i < 4000; ++i) {
         const glm::vec3 a(pos(rng), pos(rng) * 0.1f, pos(rng)), e(size(rng), size(rng), size(rng));
-        for (int c = 0; c < csm.Count(); ++c) {
+        for (int c = 1; c < csm.Count(); ++c) { // cascade 0 has its own test below
             const bool got = csm.CasterReachesSlice(c, a, a + e, 3.0f, 1.0f), want = reference(c, a, a + e, 3.0f, 1.0f);
             disagree += got != want;
             culled += !want;
@@ -356,6 +356,24 @@ static void Test_CascadedShadowMap_SliceTestMatchesAllPairs() {
     }
     CHECK(disagree == 0);
     CHECK(culled > 1000); // the slices do cull: the test exercises both answers
+    // Cascade 0: everything at the eye (the view model, at its own FOV) and along the view inside the near slice casts;
+    // something well behind the camera, outside the near slice's light-space box, doesn't.
+    const glm::vec3 eye(3.0f, 1.7f, -2.0f), fwd = glm::normalize(glm::vec3(10.0f, 1.0f, 20.0f) - eye);
+    const glm::vec3 side = glm::normalize(glm::cross(fwd, glm::vec3(0.0f, 1.0f, 0.0f)));
+    const glm::vec3 h(0.1f);
+    CHECK(csm.CasterReachesSlice(0, eye - h, eye + h, 3.0f, 1.0f));
+    CHECK(csm.CasterReachesSlice(0, eye + side * 1.5f - h, eye + side * 1.5f + h, 3.0f, 1.0f)); // beside the eye
+    bool alongAll = true;
+    for (float d = 0.5f; d < csm.SplitDepthsVec4().x; d += 0.5f)
+        alongAll = alongAll && csm.CasterReachesSlice(0, eye + fwd * d - h, eye + fwd * d + h, 3.0f, 1.0f);
+    CHECK(alongAll);
+    const glm::vec3 behind = eye - fwd * 40.0f;
+    CHECK(!csm.CasterReachesSlice(0, behind - h, behind + h, 3.0f, 1.0f));
+    // The scissor rectangle is the same test: the eye's surroundings stay inside it.
+    glm::vec2 lo, hi;
+    csm.ReadRect(0, 3.0f, 1.0f, lo, hi);
+    const glm::vec4 e0 = csm.LightViewProj(0) * glm::vec4(eye, 1.0f);
+    CHECK(e0.x / e0.w > lo.x && e0.x / e0.w < hi.x && e0.y / e0.w > lo.y && e0.y / e0.w < hi.y);
 }
 
 // Material::Hash is cached per frame: an edit shows from the next frame on, and a copy changed within the frame

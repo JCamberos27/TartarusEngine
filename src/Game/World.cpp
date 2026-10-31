@@ -346,6 +346,24 @@ int World::ApplyLod(const glm::vec3& viewPos, const glm::mat4& proj) {
             if (chunks > 1) std::for_each(std::execution::par, m_LodChunkIds.begin(), m_LodChunkIds.end(), pick);
             else if (chunks == 1) pick(0);
             for (int n : m_LodChunkEvaluated) evaluated += n;
+            // Steady state: apply only the records whose level changed, read straight from the dense records. Walking
+            // the groups view to reach them (and its per-group component reads) cost more than the picks. The records
+            // are in the view's order, and the signature above sends any change of membership to the full pass.
+            for (size_t at = 0; at < count; ++at) {
+                LodGroupState& st = m_LodState[at];
+                const int levels = st.Levels;
+                const int active = m_LodNext[at];
+                const int was = st.Active;
+                if (levels == 0 || was == active) continue;
+                st.Active = (std::int8_t)active;
+                if (culledFromAbove(st.Group)) continue;
+                for (int i = 0; i < levels; ++i) {
+                    const bool wasTagged = was >= -1 && i != was;
+                    const bool nowTagged = active >= -1 && i != active;
+                    if (wasTagged != nowTagged) retagSubtree(st.Kids[i], nowTagged);
+                }
+            }
+            return true;
         }
         size_t index = 0;
         for (entt::entity g : groups) {

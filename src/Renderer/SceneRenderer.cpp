@@ -45,6 +45,7 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
+#include <execution>
 #include <cstdint>
 #include <cmath>
 #include <limits>
@@ -208,14 +209,28 @@ const CandidateCache& Candidates(World& world) {
     if (sameSet && cache.Stamp == world.TransformCacheStamp()) return cache;
     auto& reg = world.Registry;
     const std::uint64_t flags = FlagSignature(world);
-    // A renderable given another model (Inspector, outfits) brings other bounds, which its cell may not hold.
+    // A renderable given another model (Inspector, outfits) brings other bounds, which its cell may not hold. Read
+    // straight from the component pool, across the cores: one pass over a forest's 150k renderables touches ~10 MB
+    // and took half a millisecond a frame on one thread.
+    const auto& pool = reg.storage<RenderableComponent>();
     auto sameModels = [&]() {
-        size_t k = 0;
-        for (auto [e, r] : reg.view<RenderableComponent>().each()) {
-            if (k >= cache.PoolModels.size() || cache.PoolModels[k] != r.ModelRef.get()) return false;
-            ++k;
-        }
-        return k == cache.PoolModels.size();
+        const size_t n = pool.size();
+        if (n != cache.PoolModels.size()) return false;
+        constexpr size_t kChunk = 8192;
+        const size_t chunks = (n + kChunk - 1) / kChunk;
+        static std::vector<size_t> chunkIds;
+        static std::vector<std::uint8_t> chunkSame;
+        chunkIds.resize(chunks);
+        chunkSame.assign(chunks, 1);
+        for (size_t c = 0; c < chunks; ++c) chunkIds[c] = c;
+        const auto first = pool.cbegin();
+        const auto scan = [&](size_t c) {
+            for (size_t k = c * kChunk, end = std::min(n, k + kChunk); k < end; ++k)
+                if (cache.PoolModels[k] != first[(std::ptrdiff_t)k].ModelRef.get()) { chunkSame[c] = 0; return; }
+        };
+        if (chunks > 1) std::for_each(std::execution::par, chunkIds.begin(), chunkIds.end(), scan);
+        else if (chunks == 1) scan(0);
+        return std::all_of(chunkSame.begin(), chunkSame.end(), [](std::uint8_t v) { return v != 0; });
     };
     // One rebuild on from the last build, nothing entered or left the transform cache and no flag or model changed:
     // patch the moved ones (and everything posed reads its bounds live anyway).
@@ -252,7 +267,7 @@ const CandidateCache& Candidates(World& world) {
     cache.Cells.clear();
     std::fill(cache.Index.begin(), cache.Index.end(), kNoCandidate);
     cache.PoolModels.clear();
-    for (auto [e, r] : reg.view<RenderableComponent>().each()) cache.PoolModels.push_back(r.ModelRef.get());
+    for (auto it = pool.cbegin(), end = pool.cend(); it != end; ++it) cache.PoolModels.push_back(it->ModelRef.get());
     static std::vector<Candidate> built;
     built.clear();
     for (auto entity : reg.view<TransformComponent, RenderableComponent>()) {
@@ -355,50 +370,96 @@ void GatherVisible(World& world, const VisibilityQuery& q, std::vector<VisibleRe
     out.clear();
     const bool anyLod = !world.Registry.storage<LodCulledTag>().empty();
     const CandidateCache& cache = Candidates(world);
-    for (const CandidateCell& cell : cache.Cells) {
-    if (!cell.Always) { // the whole square is out of view
-        const AABB box{cell.Min, cell.Max};
-        if (q.Cull && !q.Cull->Intersects(box)) continue;
-        if (q.CellCullCount > 0) {
-            bool any = false;
-            for (int f = 0; f < q.CellCullCount && !any; ++f) any = q.CellCull[f].Intersects(box);
-            if (!any) continue;
-        }
-    }
-    for (std::uint32_t i = cell.First, end = cell.First + cell.Count; i < end; ++i) {
+    // One candidate: appended to `to` when the query takes it. Read only (the cache, the registry's components, the LOD
+    // table), so the static cells below run across the cores.
+    const auto consider = [&](std::uint32_t i, std::vector<VisibleRenderable>& to) {
         // GameObject active / LOD level (#163); PoseSourceTag is animated only (the first-person arms rig).
         const CandidateCache::HotCandidate& hot = cache.Hot[i];
-        if (hot.Flags & (kCandInactive | kCandPoseSource)) continue;
-        if (anyLod && world.IsLodCulled(hot.Entity)) continue;
+        if (hot.Flags & (kCandInactive | kCandPoseSource)) return;
+        if (anyLod && world.IsLodCulled(hot.Entity)) return;
         const Candidate& c = cache.List[i];
         // Split poses: the first-person copy only in the player's own camera, the world copy everywhere else (and
         // the world copy is the one that casts).
-        if (c.Flags & ((q.ShadowCasters || !q.OwnerView) ? kCandOwnerViewOnly : kCandHiddenFromOwner)) continue;
-        if (q.SkipViewModels && (c.Flags & kCandViewModel)) continue;
-        if (q.SkipPlayerBody && (c.Flags & kCandPlayerBody)) continue;
+        if (c.Flags & ((q.ShadowCasters || !q.OwnerView) ? kCandOwnerViewOnly : kCandHiddenFromOwner)) return;
+        if (q.SkipViewModels && (c.Flags & kCandViewModel)) return;
+        if (q.SkipPlayerBody && (c.Flags & kCandPlayerBody)) return;
         // The editor Scene view: hidden by the entity's own toggle (HiddenInSceneTag, #236 B) or by its layer (#236 A1).
         if (q.EditorView && ((c.Flags & kCandHiddenInScene) ||
-                             (c.Layer >= 0 && c.Layer < 32 && !((q.LayerVisibleMask >> c.Layer) & 1u)))) continue;
+                             (c.Layer >= 0 && c.Layer < 32 && !((q.LayerVisibleMask >> c.Layer) & 1u)))) return;
         const RenderableComponent& r = *c.Renderable;
-        if (!r.ModelRef) continue;
+        if (!r.ModelRef) return;
         // #163 - Cast Shadows: Off never casts; Shadows Only is drawn by the shadow passes, never in a camera view.
         if (q.ShadowCasters ? r.CastShadows == RenderableComponent::ShadowCasting::Off
-                            : r.CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) continue;
+                            : r.CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) return;
         if (q.SkipTransparent && !r.Materials.empty() && r.Materials[0] &&
-            r.Materials[0]->RenderQueue == MaterialAsset::Queue::Transparent) continue;
+            r.Materials[0]->RenderQueue == MaterialAsset::Queue::Transparent) return;
         // An animated model's bounds move with its pose, and a swapped model brings its own: read those live.
         const bool live = (c.Flags & kCandPosed) || r.ModelRef.get() != c.ModelAtBuild;
         VisibleRenderable liveV;
         if (live) { liveV = c.V; FillBounds(liveV, r); }
         const VisibleRenderable& v = live ? liveV : c.V; // tested in place; copied out only when it passes
         if (v.Bounded) {
-            if (q.Cull && !q.Cull->Intersects(AABB{v.WorldMin, v.WorldMax})) continue;
+            if (q.Cull && !q.Cull->Intersects(AABB{v.WorldMin, v.WorldMax})) return;
             if (q.SizeCullEye && TooSmallOnScreen(v.WorldMin, v.WorldMax, *q.SizeCullEye, q.SizeCullProjScale,
-                                                  q.MinScreenHeight)) continue;
+                                                  q.MinScreenHeight)) return;
         }
-        out.push_back(v);
+        to.push_back(v);
+    };
+    // The cells the query can see. The Always cell (animated, unbounded: posed bounds are resolved on the model as they
+    // are read) stays on this thread; the static cells of a big scene go out in chunks of about kChunk candidates, each
+    // into its own list, joined in cell order (what one pass over the cells takes).
+    static std::vector<std::uint32_t> cells;
+    cells.clear();
+    std::size_t staticCandidates = 0;
+    for (std::uint32_t ci = 0; ci < (std::uint32_t)cache.Cells.size(); ++ci) {
+        const CandidateCell& cell = cache.Cells[ci];
+        if (cell.Always) {
+            for (std::uint32_t i = cell.First, end = cell.First + cell.Count; i < end; ++i) consider(i, out);
+            continue;
+        }
+        const AABB box{cell.Min, cell.Max}; // the whole square is out of view
+        if (q.Cull && !q.Cull->Intersects(box)) continue;
+        if (q.CellCullCount > 0) {
+            bool any = false;
+            for (int f = 0; f < q.CellCullCount && !any; ++f) any = q.CellCull[f].Intersects(box);
+            if (!any) continue;
+        }
+        cells.push_back(ci);
+        staticCandidates += cell.Count;
     }
+    constexpr std::size_t kChunk = 4096;
+    if (staticCandidates < 4 * kChunk) { // a few thousand: not worth the hand-off
+        for (std::uint32_t ci : cells) {
+            const CandidateCell& cell = cache.Cells[ci];
+            for (std::uint32_t i = cell.First, end = cell.First + cell.Count; i < end; ++i) consider(i, out);
+        }
+        return;
     }
+    struct Chunk { std::size_t FirstCell, EndCell; };
+    static std::vector<Chunk> chunks;
+    static std::vector<std::vector<VisibleRenderable>> parts;
+    chunks.clear();
+    for (std::size_t k = 0, n = 0, first = 0; k < cells.size(); ++k) {
+        n += cache.Cells[cells[k]].Count;
+        if (n >= kChunk || k + 1 == cells.size()) {
+            chunks.push_back({first, k + 1});
+            first = k + 1;
+            n = 0;
+        }
+    }
+    if (parts.size() < chunks.size()) parts.resize(chunks.size());
+    std::for_each(std::execution::par, chunks.begin(), chunks.end(), [&](const Chunk& ch) {
+        std::vector<VisibleRenderable>& to = parts[(std::size_t)(&ch - chunks.data())];
+        to.clear();
+        for (std::size_t k = ch.FirstCell; k < ch.EndCell; ++k) {
+            const CandidateCell& cell = cache.Cells[cells[k]];
+            for (std::uint32_t i = cell.First, end = cell.First + cell.Count; i < end; ++i) consider(i, to);
+        }
+    });
+    std::size_t total = out.size();
+    for (std::size_t k = 0; k < chunks.size(); ++k) total += parts[k].size();
+    out.reserve(total);
+    for (std::size_t k = 0; k < chunks.size(); ++k) out.insert(out.end(), parts[k].begin(), parts[k].end());
 }
 
 void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const {

@@ -60,6 +60,9 @@ public:
     // Whether the driver lets a vertex shader write gl_Layer (ARB_shader_viewport_layer_array or
     // AMD_vertex_shader_layer). Checked once; needs a current GL context.
     static bool LayeredSupported();
+    // GL_ARB_shader_viewport_layer_array: the vertex shader can also pick the viewport (and so the scissor box) per
+    // cascade, which BeginLayeredScissor needs.
+    static bool ViewportIndexSupported();
 
     unsigned int DepthArray() const { return m_DepthArray; }
     int Resolution() const { return m_Resolution; }
@@ -73,6 +76,14 @@ public:
     // for cascade 0 and cascade 3 at the same time (#117). Packed into a vec4 like the splits.
     glm::vec4 TexelWorldSizesVec4() const;
 
+    // The layered pass's scissor boxes (ShadowDepth.vert routes each cascade to its own viewport): each cascade only
+    // rasterises ReadRect, the texels a receiver in its slice can read. The rest of a layer keeps the clear depth and
+    // is never sampled. Call after BeginLayered; EndLayeredScissor turns the test off again.
+    void BeginLayeredScissor(float kernelTexels, float normalBias) const;
+    static void EndLayeredScissor();
+    // Cascade c's readable rectangle in its light clip space (x, y): see the definition.
+    void ReadRect(int c, float kernelTexels, float normalBias, glm::vec2& lo, glm::vec2& hi) const;
+
     // Whether a caster with these world bounds can shadow anything that samples cascade `c`. A
     // cascade's light box is a square around a sphere around its view slice, far wider than the
     // slice; only fragments whose view depth selects the cascade (or blends into it from the one
@@ -80,8 +91,9 @@ public:
     // the view frustum. Seen along the light, a caster can only darken what its own footprint
     // covers, so it is needed iff its light-space footprint - grown by the PCF kernel
     // (`kernelTexels`, before the per-cascade widening SunShadow applies) and the normal offset -
-    // overlaps the slice's. Cascade 0 always answers true: the view model draws at its own FOV, so
-    // its fragments can sit outside the world view's frustum near the eye.
+    // overlaps the slice's. Cascade 0 tests against ReadRect (the near slice's bounding box and the
+    // eye's surroundings, where the view model draws at its own FOV): what misses it would be
+    // scissored away anyway.
     bool CasterReachesSlice(int c, const glm::vec3& boundsMin, const glm::vec3& boundsMax,
                             float kernelTexels, float normalBias) const;
     // Cascade c's receiver slice corners in its light clip space (x, y), from Update().
@@ -109,6 +121,7 @@ private:
     std::array<std::array<SliceAxis, 8>, kMaxCascades> m_SliceAxes{};
     std::array<int, kMaxCascades> m_SliceAxisCount{};
     std::array<glm::vec2, kMaxCascades> m_SliceMin{}, m_SliceMax{};
+    glm::vec3 m_Eye{0.0f}; // the fitted view's eye (BeginLayeredScissor's view-model reach)
     mutable bool m_CompleteChecked = false; // audit GL-204 — one-shot FBO completeness check in Begin()
 
     void Release();

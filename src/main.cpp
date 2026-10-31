@@ -3780,7 +3780,20 @@ int main(int argc, char** argv) {
                             c = end + 1;
                         }
                     }
+                    // Each cascade rasterises only the texels its slice of the view can read (CascadedShadowMap::
+                    // BeginLayeredScissor): the rest of a layer is never sampled, and the forest's terrain and
+                    // canopy filled all of it - most of the pass's fill cost.
+                    static const bool sliceScissor = std::getenv("TARTARUS_NO_SHADOW_SCISSOR") == nullptr &&
+                                                     CascadedShadowMap::ViewportIndexSupported();
+                    if (sliceScissor) {
+                        shadowMap.BeginLayeredScissor(sunKernelTexels, frameSunShadowNormalBias);
+                        shadowShader.SetInt("uCascadeViewport", 1);
+                    }
                     DrawDepthCasters(shadowShader, sunDraws, firstLoc);
+                    if (sliceScissor) {
+                        shadowShader.SetInt("uCascadeViewport", 0);
+                        CascadedShadowMap::EndLayeredScissor();
+                    }
                     // The SSAO depth pre-pass reuses this program with uLightViewProj.
                     shadowShader.SetInt("uCascadeLayered", 0);
                 }
