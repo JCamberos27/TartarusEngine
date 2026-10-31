@@ -275,6 +275,20 @@ public:
     int PumpAsync(double budgetMs = 3.0);
     int AsyncInFlight() const;
 
+    // --- Play scope ----------------------------------------------------------------------------
+    // Play loads assets the edit-mode scene never asked for (PlayerLook warms the whole wardrobe,
+    // DevSpawner its prefabs). The Play snapshot holds entities only, so without this they stayed
+    // in the library after Stop - and the library lists are part of what a scene save writes, so
+    // Play + Stop + Save wrote every warmed texture into the scene file. BeginPlayScope (at Play)
+    // remembers what is loaded; EndPlayScope (at Stop, before the snapshot reload) forgets what
+    // was added since - the assets, the metadata their loads read from .meta, the folders adopted
+    // from disk for them - and drops what Play left loading, unless something asks for it again
+    // after Stop. Metadata set on an asset that was loaded before Play (an Asset Browser edit
+    // during Play, written to its .meta) and folders made in the browser are kept.
+    void BeginPlayScope();
+    // Returns how many assets it forgot.
+    int EndPlayScope();
+
     ~AssetLibrary();
 
 private:
@@ -301,6 +315,17 @@ private:
     };
     KeyIndex m_ModelKeys, m_TextureKeys, m_MaterialKeys;
     std::uint64_t m_KeyEpoch = 0;
+
+    // BeginPlayScope's record (keys as each container holds them), and the generation async
+    // requests are stamped with: one generation per Play, so Stop can tell Play's loads apart.
+    struct PlayMark {
+        bool Active = false;
+        std::uint32_t Gen = 0;
+        std::set<std::string> Models, Textures, Materials, Sounds, Prefabs, Folders;
+        std::set<std::string> FolderKeys, NameKeys, LabelKeys, TextureSettingKeys, ModelSettingKeys;
+    };
+    PlayMark m_PlayMark;
+    std::uint32_t m_LoadGen = 0;
 
     std::map<std::string, std::shared_ptr<Model>> m_ModelCache;
     std::map<std::string, std::shared_ptr<Model>> m_ClipSourceCache; // by AssetDatabase::PathKey

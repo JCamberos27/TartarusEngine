@@ -1268,6 +1268,10 @@ void EditorLayer::OnExitPlayMode(World& world, AssetLibrary& assets) {
     m_PlayModeAudioPrevPos.clear();
     m_PlayModeListenerPrevPos.reset();
 
+    // What Play loaded into the library goes too (the snapshot is entities only): otherwise a
+    // Save after Stop writes Play's warm-ups (the whole wardrobe's textures) into the scene.
+    // Before the reload, so nothing the restored scene loads is forgotten.
+    assets.EndPlayScope();
     SceneSerializer::LoadFromString(world, assets, m_PlayModeSnapshot);
     m_PlayModeSnapshot.clear();
 
