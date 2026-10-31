@@ -293,7 +293,8 @@ void main() {
     uint grungeSub;
     SubstrateSample grungeSS;
 #ifdef _ENGINE_NO_GRUNGE // ShaderVariant.h: Grunge Strength 0, where ApplyGrunge returns at once
-    grungeSub = 0u;
+    grungeSub = 0u; // nothing cached: ApplyDecals samples its own substrate, but Mesa warns on an uninitialised copy
+    grungeSS = SubstrateSample(vec3(0.0), vec3(0.0, 0.0, 1.0), 0.0, 0.0, 0.0, vec3(0.0), vec3(0.0), vec3(0.0));
 #else
     ApplyGrunge(albedo, N, roughness, metallic, ao, geoN, grungeSub, grungeSS);
 #endif
