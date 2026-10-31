@@ -140,7 +140,9 @@ std::shared_ptr<Model> Model::CreateInstance() const {
     std::shared_ptr<Model> inst(new Model());
     inst->m_D = m_D;       // #96 — shared import: no Assimp, no new GPU buffers or textures
     inst->m_Path = m_Path;
-    inst->m_FinalBoneMatrices.assign(MAX_BONES, glm::mat4(1.0f));
+    // Only a rig needs its own palette: MAX_BONES matrices are 32 KB, and a forest places ~150k unskinned copies
+    // (~5 GB). EvaluatePose / ResolvePalette grow it on first use, and the readers fall back to the bind pose.
+    if (m_D->BoneCounter > 0) inst->m_FinalBoneMatrices.assign(MAX_BONES, glm::mat4(1.0f));
     return inst;
 }
 
