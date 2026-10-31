@@ -125,6 +125,10 @@ void Poll() {
     if (r.Spans.empty()) r.Head = 0;
 }
 
+bool Stageable(std::size_t size) {
+    return Enabled() && size > 0 && size <= kLargest && R().Base != nullptr;
+}
+
 Region Reserve(std::size_t size) {
     Region out;
     if (!Enabled() || size == 0 || size > kLargest || !EnsureRing()) return out;

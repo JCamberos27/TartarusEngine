@@ -398,7 +398,16 @@ void Texture::FinishUpload() {
     Upload(*data);
 }
 
-namespace { TextureImportSettings Effective(const TextureImportSettings& settings); }
+namespace {
+TextureImportSettings Effective(const TextureImportSettings& settings);
+uint64_t HashBytes(const unsigned char* p, size_t n, uint64_t h);
+constexpr uint64_t kContentHashSeed = 1469598103934665603ull;
+// The bytes the share key covers (Upload): every BCn level, or the decoded texels as they are.
+size_t ShareHashBytes(const TextureCpuData& d) {
+    if (d.GLFormat != 0) return d.Pixels.size();
+    return std::min(d.Pixels.size(), (size_t)d.Width * d.Height * (size_t)std::max(d.Channels, 1));
+}
+}
 
 UploadStaging::Step Texture::UploadStep(bool stage) {
     using UploadStaging::Step;
@@ -411,16 +420,24 @@ UploadStaging::Step Texture::UploadStep(bool stage) {
         // pixel buffer too, and that conversion was most of a big map's upload.
         const bool widen = d.GLFormat == 0 && d.Channels == 3;
         const std::size_t texels = (std::size_t)d.Width * d.Height;
-        if (stage && !expands && !d.Pixels.empty() && (!widen || d.Pixels.size() == texels * 3))
-            m_Stage = UploadStaging::Reserve(widen ? texels * 4 : d.Pixels.size());
+        const bool stageable = stage && !expands && !d.Pixels.empty() && (!widen || d.Pixels.size() == texels * 3);
+        const std::size_t bytes = widen ? texels * 4 : d.Pixels.size();
+        if (stageable) m_Stage = UploadStaging::Reserve(bytes);
+        if (!m_Stage.Valid() && stageable && UploadStaging::Stageable(bytes)) return Step::Waiting; // the ring is full for now
         if (!m_Stage.Valid()) {
             FinishUpload();
             return Step::Progress;
         }
         const unsigned char* src = d.Pixels.data();
         const std::size_t n = d.Pixels.size();
+        // The share key's content hash (Upload) is taken here too, on the worker, while the pixels pass through:
+        // hashing a 2K map on the main thread cost 1-2 ms.
+        m_StageHash = std::make_shared<uint64_t>(0);
+        const std::size_t hashN = ShareHashBytes(d);
+        std::shared_ptr<uint64_t> hashOut = m_StageHash;
         if (widen) {
-            UploadStaging::StageCopy(m_Stage, [src, texels](unsigned char* dst) {
+            UploadStaging::StageCopy(m_Stage, [src, texels, hashN, hashOut](unsigned char* dst) {
+                *hashOut = HashBytes(src, hashN, kContentHashSeed);
                 for (std::size_t i = 0; i < texels; ++i) {
                     dst[i * 4 + 0] = src[i * 3 + 0];
                     dst[i * 4 + 1] = src[i * 3 + 1];
@@ -429,7 +446,10 @@ UploadStaging::Step Texture::UploadStep(bool stage) {
                 }
             });
         } else {
-            UploadStaging::StageCopy(m_Stage, [src, n](unsigned char* dst) { std::memcpy(dst, src, n); });
+            UploadStaging::StageCopy(m_Stage, [src, n, hashN, hashOut](unsigned char* dst) {
+                *hashOut = HashBytes(src, hashN, kContentHashSeed);
+                std::memcpy(dst, src, n);
+            });
         }
         m_StageWidened = widen;
         return Step::Waiting;
@@ -438,7 +458,8 @@ UploadStaging::Step Texture::UploadStep(bool stage) {
     std::unique_ptr<TextureCpuData> data = std::move(m_Pending);
     constexpr GLenum kPixelUnpackBuffer = 0x88EC; // GL_PIXEL_UNPACK_BUFFER
     glBindBuffer(kPixelUnpackBuffer, UploadStaging::Buffer());
-    Upload(*data, true, m_Stage.Offset, m_StageWidened);
+    Upload(*data, true, m_Stage.Offset, m_StageWidened, m_StageHash.get()); // Ready() orders the worker's hash write
+    m_StageHash.reset();
     glBindBuffer(kPixelUnpackBuffer, 0);
     UploadStaging::Retire(m_Stage);
     // The decoded pixels go back to the OS on the worker: freeing 16-64 MB here took a millisecond or more.
@@ -651,7 +672,7 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
     Upload(data);
 }
 
-void Texture::Upload(const TextureCpuData& data, bool staged, std::size_t stagedOffset, bool stagedRgba) {
+void Texture::Upload(const TextureCpuData& data, bool staged, std::size_t stagedOffset, bool stagedRgba, const uint64_t* contentHash) {
     InitGpuCaps();
     if (!data.Ok) return;
     const auto uploadStart = std::chrono::steady_clock::now();
@@ -719,17 +740,19 @@ void Texture::Upload(const TextureCpuData& data, bool staged, std::size_t staged
     }
 
     // Same bytes + same sampler state as a texture already on the GPU: share it.
-    uint64_t shareKey = 1469598103934665603ull;
+    uint64_t shareKey = 0;
     {
-        // The CPU copy, also when staged (uploadData is then an offset into the staging ring, not memory).
-        const unsigned char* src = compressed ? compressed->Pixels.data() : staged ? data.Pixels.data() : uploadData;
+        // The content hash comes from the copy worker when staged (uploadData is then an offset into the staging ring,
+        // not memory); otherwise it is taken here. Either way over the same bytes (ShareHashBytes), so a staged and a
+        // direct upload of one image still share.
+        const unsigned char* src = compressed ? compressed->Pixels.data() : uploadData;
         const size_t srcN = compressed ? compressed->Pixels.size() : (size_t)uploadW * uploadH * (expanded.empty() ? (size_t)std::max(m_Channels, 1) : 4);
         const uint64_t meta[] = {(uint64_t)uploadW, (uint64_t)uploadH, (uint64_t)m_Channels, (uint64_t)data.GLFormat,
                                  (uint64_t)effective.IsSRGB, (uint64_t)effective.GenerateMipmaps, (uint64_t)effective.WrapMode,
                                  (uint64_t)effective.FilterMode, (uint64_t)effective.AnisoLevel, (uint64_t)srcN,
                                  (uint64_t)(compressed ? compressed->LevelSizes.size() : 0)};
-        shareKey = HashBytes((const unsigned char*)meta, sizeof(meta), shareKey);
-        shareKey = HashBytes(src, srcN, shareKey);
+        const uint64_t content = contentHash ? *contentHash : HashBytes(src, srcN, kContentHashSeed);
+        shareKey = HashBytes((const unsigned char*)meta, sizeof(meta), content);
         if (shareKey == 0) shareKey = 1;
         auto it = SharedGlMap().find(shareKey);
         if (it != SharedGlMap().end()) {

@@ -156,9 +156,12 @@ private:
     // `staged`: the pixels are at byte `stagedOffset` of the bound GL_PIXEL_UNPACK_BUFFER instead of data.Pixels (an
     // offset, not a pointer: the ring's first region is at 0, which a null-pointer test would have taken for "none").
     // `stagedRgba`: a 3-channel image staged as RGBA (alpha 255); it is still stored as RGB8 / SRGB8.
-    void Upload(const TextureCpuData& data, bool staged = false, std::size_t stagedOffset = 0, bool stagedRgba = false);
+    // `contentHash`: the share key's hash of the pixels, already taken (the copy worker's, when staged).
+    void Upload(const TextureCpuData& data, bool staged = false, std::size_t stagedOffset = 0, bool stagedRgba = false,
+                const uint64_t* contentHash = nullptr);
     UploadStaging::Region m_Stage; // a pending texture's pixels on their way up
     bool m_StageWidened = false;
+    std::shared_ptr<uint64_t> m_StageHash; // the worker's content hash of the staged pixels
 
     Texture() = default; // CreatePending
 
