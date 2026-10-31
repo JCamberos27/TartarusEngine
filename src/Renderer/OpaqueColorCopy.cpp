@@ -1,3 +1,4 @@
+#include "GpuMemTrack.h"
 #include "OpaqueColorCopy.h"
 #include "GLFramebufferCheck.h"
 #include "../extern/glloader/gl.h"
@@ -20,6 +21,7 @@ void OpaqueColorCopy::CopyFrom(unsigned int srcTex, int width, int height) {
 
         glCreateTextures(GL_TEXTURE_2D, 1, &m_Tex);
         glTextureStorage2D(m_Tex, numMips, GL_RGBA16F, width, height);
+        GpuMemTrack::Set("OpaqueColorCopy", (size_t)width * height * 8 * 4 / 3);
         glTextureParameteri(m_Tex, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
         glTextureParameteri(m_Tex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTextureParameteri(m_Tex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
