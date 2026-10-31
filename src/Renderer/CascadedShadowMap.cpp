@@ -1,3 +1,4 @@
+#include "GpuMemTrack.h"
 #include "CascadedShadowMap.h"
 #include "GLFramebufferCheck.h"
 #include "Log.h"
@@ -30,6 +31,7 @@ void CascadedShadowMap::Configure(int resolution, int count) {
 
     glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &m_DepthArray);
     glTextureStorage3D(m_DepthArray, 1, GL_DEPTH_COMPONENT32F, resolution, resolution, count);
+    GpuMemTrack::Set("CascadedShadowMap", (size_t)resolution * resolution * count * 4);
     glTextureParameteri(m_DepthArray, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTextureParameteri(m_DepthArray, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTextureParameteri(m_DepthArray, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);

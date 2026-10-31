@@ -374,6 +374,45 @@ void AssetLibrary::RegisterSound(const std::string& path) {
     }
 }
 
+AssetLibrary::CacheKeys AssetLibrary::SnapshotCacheKeys() const {
+    CacheKeys k;
+    for (const auto& [p, m] : m_ModelCache) k.Models.insert(p);
+    for (const auto& [p, m] : m_MaterialCache) k.Materials.insert(p);
+    for (const auto& [p, t] : m_TextureCache) k.Textures.insert(p);
+    return k;
+}
+
+int AssetLibrary::ReleaseUnreferenced(const CacheKeys& before, const std::set<std::string>& keepModels) {
+    // The library holds each asset twice (cache map + browser list), so use_count 3 here (+1 for our local copy)
+    // means nobody else does.
+    int dropped = 0;
+    CacheKeys survivors;
+    for (const std::string& p : m_SceneKeys.Models) {
+        auto it = m_ModelCache.find(p);
+        if (it == m_ModelCache.end()) continue;
+        std::shared_ptr<Model> m = it->second;
+        if (m.use_count() <= 3 && !keepModels.count(p)) { RemoveModel(m); ++dropped; } else survivors.Models.insert(p);
+    }
+    for (const std::string& p : m_SceneKeys.Materials) {
+        auto it = m_MaterialCache.find(p);
+        if (it == m_MaterialCache.end()) continue;
+        std::shared_ptr<MaterialAsset> m = it->second;
+        if (m.use_count() <= 3) { RemoveMaterial(m); ++dropped; } else survivors.Materials.insert(p);
+    }
+    for (const std::string& p : m_SceneKeys.Textures) {
+        auto it = m_TextureCache.find(p);
+        if (it == m_TextureCache.end()) continue;
+        std::shared_ptr<Texture> t = it->second;
+        if (t.use_count() <= 3) { RemoveTexture(t); ++dropped; } else survivors.Textures.insert(p);
+    }
+    // Next time: the survivors plus whatever this load added.
+    for (const auto& [p, m] : m_ModelCache) if (!before.Models.count(p)) survivors.Models.insert(p);
+    for (const auto& [p, m] : m_MaterialCache) if (!before.Materials.count(p)) survivors.Materials.insert(p);
+    for (const auto& [p, t] : m_TextureCache) if (!before.Textures.count(p)) survivors.Textures.insert(p);
+    m_SceneKeys = std::move(survivors);
+    return dropped;
+}
+
 void AssetLibrary::RemoveModel(const std::shared_ptr<Model>& model) {
     ++m_KeyEpoch; // cache keys may change without the size changing
     if (!model) return;
