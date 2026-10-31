@@ -24,6 +24,9 @@ uniform mat4 uProj;
 uniform int uCascadeLayered;
 uniform int uCascadeFirst;
 uniform mat4 uCascadeViewProj[4];
+// 1 = each cascade also goes to its own viewport, whose scissor box (CascadedShadowMap::BeginLayeredScissor) keeps it
+// to the texels its receivers can read. Needs GL_ARB_shader_viewport_layer_array; the engine sets it only then.
+uniform int uCascadeViewport;
 #include "FoliageWind.glsl"
 uniform int uUseSkinning;
 layout(std430, binding = 1) readonly buffer BoneBlock { mat4 uBones[]; }; // shared with the model VS (#104)
@@ -69,6 +72,9 @@ void main() {
     if (uCascadeLayered == 1) {
         int layer = uCascadeFirst + layerOffset;
         gl_Layer = layer;
+#ifdef GL_ARB_shader_viewport_layer_array
+        if (uCascadeViewport == 1) gl_ViewportIndex = layer;
+#endif
         gl_Position = uCascadeViewProj[layer] * worldPos;
         return;
     }
