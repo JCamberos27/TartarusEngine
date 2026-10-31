@@ -2087,7 +2087,11 @@ void AppendAssetLibraryJson(json& root, const AssetLibrary& assets, bool include
     root["assetMeta"] = meta;
 }
 
-void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root, bool fromUndoSnapshot = false) {
+// `hold` (optional): receives a reference to every model/texture/material the file's library lists, so a
+// caller can keep them alive across AssetLibrary::ReleaseUnreferenced - they are scene content (the next save
+// writes them back) even when no entity uses them yet (wardrobe pieces, materials only Play applies).
+void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root, bool fromUndoSnapshot = false,
+                           std::vector<std::shared_ptr<void>>* hold = nullptr) {
     // #121 - MIGRATION ONLY. Scenes saved before this change carry an `assetMeta` block that
     // duplicates every asset's folder, display name, labels and import settings. That copy is no
     // longer written, and it is no longer applied to the AssetLibrary either: the asset's .meta
@@ -2195,19 +2199,25 @@ void ApplyAssetLibraryJson(AssetLibrary& assets, const json& root, bool fromUndo
     if (root.contains("libraryModels")) {
         for (const auto& p : root["libraryModels"]) {
             std::string path = ResolveAssetRef(p);
-            if (!path.empty()) assets.LoadModel(path);
+            if (path.empty()) continue;
+            auto a = assets.LoadModel(path);
+            if (hold && a) hold->push_back(a);
         }
     }
     if (root.contains("libraryTextures")) {
         for (const auto& p : root["libraryTextures"]) {
             std::string path = ResolveAssetRef(p);
-            if (!path.empty()) assets.LoadTexture(path);
+            if (path.empty()) continue;
+            auto a = assets.LoadTexture(path);
+            if (hold && a) hold->push_back(a);
         }
     }
     if (root.contains("libraryMaterials")) {
         for (const auto& p : root["libraryMaterials"]) {
             std::string path = ResolveAssetRef(p);
-            if (!path.empty()) assets.LoadMaterial(path);
+            if (path.empty()) continue;
+            auto a = assets.LoadMaterial(path);
+            if (hold && a) hold->push_back(a);
         }
     }
     if (root.contains("librarySounds")) {
@@ -2444,14 +2454,16 @@ bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string
         if (ec) Log::Warn("Scene: couldn't write a backup of '" + path + "' before migrating it: " + ec.message());
     }
 
+    const AssetLibrary::CacheKeys cacheBefore = assets.SnapshotCacheKeys();
     g_MigrationLog.clear();
     // #83 — keep the current world so a malformed file can't leave a half-loaded one behind.
     std::string previous;
     try { previous = SaveToString(world, assets); }
     catch (...) { Log::Warn("Scene: couldn't snapshot the current world before loading '" + path + "'; a failed load can't restore it."); }
     bool ok = true;
+    std::vector<std::shared_ptr<void>> libraryHold; // the file's own library entries: never released below
     try {
-        ApplyAssetLibraryJson(assets, root); // before ApplySceneJson: harmless either order, but library assets should exist first
+        ApplyAssetLibraryJson(assets, root, false, &libraryHold); // before ApplySceneJson: harmless either order, but library assets should exist first
     } catch (const std::exception& e) {
         Log::Error("Scene: asset library data in '" + path + "' is malformed: " + e.what());
         ok = false;
@@ -2461,6 +2473,14 @@ bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string
         Log::Error("Scene: '" + path + "' could not be loaded; the previous scene was kept.");
         if (!previous.empty()) LoadFromString(world, assets, previous);
         return false;
+    }
+
+    {
+        std::set<std::string> keepModels;
+        for (auto [e, rc] : world.Registry.view<RenderableComponent>().each())
+            if (rc.ModelRef) keepModels.insert(rc.ModelRef->Path());
+        const int dropped = assets.ReleaseUnreferenced(cacheBefore, keepModels);
+        if (dropped) Log::Info("Scene: released " + std::to_string(dropped) + " cached asset(s) the new scene doesn't use.");
     }
 
     if (ok && migrating && !g_MigrationLog.empty()) {

@@ -1,3 +1,4 @@
+#include "GpuMemTrack.h"
 #include "HdrTarget.h"
 #include "Log.h"
 #include "gl.h"
@@ -64,6 +65,8 @@ void HdrTarget::Create(int width, int height, int samples) {
     // --- Single-sample resolve target the tonemap pass samples.
     glCreateTextures(GL_TEXTURE_2D, 1, &m_ResolveColor);
     glTextureStorage2D(m_ResolveColor, 1, GL_RGBA16F, width, height);
+    GpuMemTrack::Set("HdrTarget MS color+depth (" + std::to_string(width) + "x" + std::to_string(height) + " x" + std::to_string(samples) + ")", (size_t)width * height * samples * 12);
+    GpuMemTrack::Set("HdrTarget resolve color", (size_t)width * height * 8);
     glTextureParameteri(m_ResolveColor, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTextureParameteri(m_ResolveColor, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTextureParameteri(m_ResolveColor, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -98,6 +101,7 @@ void HdrTarget::SetVelocityEnabled(bool on) {
     if (on && !m_MsVelocity) {
         glCreateTextures(GL_TEXTURE_2D_MULTISAMPLE, 1, &m_MsVelocity);
         glTextureStorage2DMultisample(m_MsVelocity, m_Samples, GL_RG16F, m_Width, m_Height, GL_TRUE);
+        GpuMemTrack::Set("HdrTarget MS velocity", (size_t)m_Width * m_Height * m_Samples * 4);
         glNamedFramebufferTexture(m_MsFbo, GL_COLOR_ATTACHMENT1, m_MsVelocity, 0);
     } else if (!on && m_MsVelocity) {
         glNamedFramebufferTexture(m_MsFbo, GL_COLOR_ATTACHMENT1, 0, 0);
@@ -131,6 +135,7 @@ void HdrTarget::BindForRender() const {
 void HdrTarget::CreateResolveDepth() const {
     glCreateTextures(GL_TEXTURE_2D, 1, &m_ResolveDepth);
     glTextureStorage2D(m_ResolveDepth, 1, GL_DEPTH_COMPONENT32F, m_Width, m_Height);
+    GpuMemTrack::Set("HdrTarget resolve depth", (size_t)m_Width * m_Height * 4);
     glTextureParameteri(m_ResolveDepth, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTextureParameteri(m_ResolveDepth, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTextureParameteri(m_ResolveDepth, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
