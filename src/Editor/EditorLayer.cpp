@@ -2258,6 +2258,16 @@ void EditorLayer::DrawProjectSettingsBody(World& /*world*/) {
             EditorUI::SetTooltip("Copies of the same static model with the same materials draw together, one draw\n"
                                  "call per pass instead of one per copy (camera, depth pre-passes and shadows).\n"
                                  "Skinned, moving, transparent and partly hidden models still draw one by one.");
+        SettingsLabel("GPU-driven draws");
+        if (EditorUIPrimitives::Checkbox("##GPU-driven draws", &q.GpuDrivenDraws)) ProjectSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("With GPU instancing: static meshes that draw with the same material go out as one\n"
+                                 "multi-draw indirect call per pass, across different models, not only copies.");
+        SettingsLabel("GPU occlusion culling");
+        if (EditorUIPrimitives::Checkbox("##GPU occlusion culling", &q.GpuOcclusionCulling)) ProjectSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("With GPU-driven draws: copies the depth pre-pass already hides skip the opaque pass,\n"
+                                 "tested on the GPU against a depth pyramid (no waiting, nothing visible is skipped).");
 
         // #171 - Unity's Audio Mixer: master + one volume per bus (Audio Source > Output).
         EditorUIPrimitives::SectionHeader("Audio");

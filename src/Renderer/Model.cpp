@@ -140,7 +140,9 @@ std::shared_ptr<Model> Model::CreateInstance() const {
     std::shared_ptr<Model> inst(new Model());
     inst->m_D = m_D;       // #96 — shared import: no Assimp, no new GPU buffers or textures
     inst->m_Path = m_Path;
-    inst->m_FinalBoneMatrices.assign(MAX_BONES, glm::mat4(1.0f));
+    // Only a rig needs its own palette: MAX_BONES matrices are 32 KB, and a forest places ~150k unskinned copies
+    // (~5 GB). EvaluatePose / ResolvePalette grow it on first use, and the readers fall back to the bind pose.
+    if (m_D->BoneCounter > 0) inst->m_FinalBoneMatrices.assign(MAX_BONES, glm::mat4(1.0f));
     return inst;
 }
 
@@ -2886,6 +2888,96 @@ void Model::DrawDepthOnly(Shader& shader, const std::vector<std::shared_ptr<Mate
         else
             m_D->Meshes[i]->Draw(instances);
     }
+}
+
+bool Model::InArena() const {
+    if (HasBones() || m_D->Meshes.empty()) return false;
+    for (const auto& m : m_D->Meshes)
+        if (!m->ArenaRange().Page) return false;
+    return true;
+}
+
+bool Model::DepthMeshState(int i, const std::vector<std::shared_ptr<MaterialAsset>>& slots, int& cull, std::uint64_t& stateKey) const {
+    const bool hasSlot = i < (int)slots.size() && slots[i];
+    if (hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::Transparent) return false;
+    const Material& mat = hasSlot ? slots[i]->Mat : m_D->Meshes[i]->Mat;
+    const ShaderRenderState* st = EffectiveRenderState(slots, i, mat);
+    cull = st ? (int)st->Cull : 0;
+    const bool clip = mat.AlphaClip || (hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::AlphaTest);
+    // What BindDepthMesh sets: a plain opaque mesh only turns the sway and the cutout off, so all of them draw alike.
+    if ((clip && mat.AlbedoMap && mat.AlbedoMap->IsValid()) || mat.Foliage)
+        stateKey = (mat.Hash() ^ (clip ? 0x5bd1e995ull : 0ull)) | 1ull;
+    else
+        stateKey = mat.UseVertexColor ? 2ull : 0ull;
+    return true;
+}
+
+void Model::BindDepthMesh(Shader& shader, int i, const std::vector<std::shared_ptr<MaterialAsset>>& slots) {
+    SetWindFrame(shader);
+    UploadBoneMatrices(shader); // no bones: uUseSkinning 0
+    const MaterialLocs& locs = CachedMaterialLocs(shader);
+    const bool hasSlot = i < (int)slots.size() && slots[i];
+    const Material& mat = hasSlot ? slots[i]->Mat : m_D->Meshes[i]->Mat;
+    const bool clip = mat.AlphaClip || (hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::AlphaTest);
+    if (GLStateCache::MaterialAlreadyBound(mat.Hash() ^ (clip ? 0x5bd1e995ull : 0ull), shader.Program())) return;
+    SetFoliageUniforms(shader, mat, locs); // as DrawDepthOnly
+    shader.SetVec2(locs.uvTiling, mat.UVTiling);
+    shader.SetVec2(locs.uvOffset, mat.UVOffset);
+    if (clip && mat.AlbedoMap && mat.AlbedoMap->IsValid()) {
+        mat.AlbedoMap->Bind(0);
+        shader.SetInt(locs.alphaTest, 1);
+        shader.SetFloat(locs.alphaCutoff, mat.AlphaCutoff);
+    } else {
+        GLStateCache::BindTexture2D(0, DefaultTextures::White());
+        shader.SetInt(locs.alphaTest, 0);
+    }
+    shader.SetInt(locs.depthAlbedo, 0);
+}
+
+std::uint64_t Model::MeshStateKey(int i, const std::vector<std::shared_ptr<MaterialAsset>>& slots, bool forceDoubleSided) const {
+    const bool hasSlot = i < (int)slots.size() && slots[i];
+    const Material& mat = hasSlot ? slots[i]->Mat : m_D->Meshes[i]->Mat;
+    const ShaderRenderState* st = EffectiveRenderState(slots, i, mat, forceDoubleSided);
+    if (!st || !st->AffectsDraw()) return 0;
+    std::uint64_t h = 0x9E3779B97F4A7C15ull;
+    const auto mix = [&h](std::uint64_t v) { h ^= v + 0x9E3779B97F4A7C15ull + (h << 6) + (h >> 2); };
+    mix((std::uint64_t)st->Cull);
+    mix((std::uint64_t)(std::int64_t)st->ZWrite);
+    mix(st->ZTest);
+    mix((std::uint64_t)(std::int64_t)st->Blend);
+    mix(st->BlendSrc);
+    mix(st->BlendDst);
+    return h | 1ull;
+}
+
+bool Model::DrawMeshIndirect(Shader& fallback, int i, const std::vector<std::shared_ptr<MaterialAsset>>& slots,
+                             const ProgramSelector& selectProgram, const std::function<void(Shader&)>& onProgramBound,
+                             bool forceDoubleSided, const void* indirect, int drawCount) {
+    const bool hasSlot = i < (int)slots.size() && slots[i];
+    if (hasSlot && slots[i]->RenderQueue == MaterialAsset::Queue::Transparent) return false;
+    const ModelMesh& mesh = *m_D->Meshes[i];
+    if (!mesh.ArenaRange().Page) return false;
+    ShaderStateScope stateScope; // #104
+    const Material& mat = hasSlot ? slots[i]->Mat : mesh.Mat;
+    stateScope.Apply(EffectiveRenderState(slots, i, mat, forceDoubleSided));
+    Shader* prog = &fallback;
+    if (Shader* p = selectProgram(hasSlot ? slots[i].get() : nullptr)) prog = p;
+    prog->Bind();
+    UploadBoneMatrices(*prog);
+    const MaterialLocs& locs = CachedMaterialLocs(*prog);
+    if (onProgramBound) onProgramBound(*prog);
+    prog->SetFloat(locs.opacity, 1.0f);
+    prog->SetInt(locs.hideVertBase, 0);
+    if (mat.Foliage) SetWindFrame(*prog);
+    if (hasSlot && slots[i]->Shader)
+        BindMaterialDataDriven(*prog, *slots[i], *slots[i]->Shader);
+    else
+        BindMaterial(*prog, mat, locs);
+    prog->SetInt(locs.doubleSided, forceDoubleSided || mat.DoubleSided ? 1 : 0);
+    prog->SetInt(locs.clothInterior, forceDoubleSided && !mat.DoubleSided ? 1 : 0);
+    GLStateCache::BindVertexArray(MeshArena::PageVao(mesh.ArenaRange().Page));
+    glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, indirect, drawCount, 0);
+    return true;
 }
 
 long long Model::DrawFurShells(Shader& prog, const glm::mat4& xform, const std::vector<std::shared_ptr<MaterialAsset>>& slots,

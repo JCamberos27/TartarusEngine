@@ -4,6 +4,7 @@
 #include <vector>
 #include "ModelVertex.h"
 #include "Material.h"
+#include "MeshArena.h"
 
 // One drawable sub-mesh of an imported Model (own vertex/index buffers, own PBR material
 // as extracted from the source file's own material assignment).
@@ -21,6 +22,9 @@ public:
 
     bool NeedsUpload() const { return m_VAO == 0; }
     unsigned int VertexBuffer() const { return m_VBO; } // ModelVertex[], read by PreSkin.comp.glsl
+    // Where the mesh sits in the shared arena (Page 0: its own buffers). An arena mesh draws at its base vertex and
+    // first index of the page's buffers, which one indirect draw can share with other meshes (InstanceBatch.h).
+    const MeshArena::Range& ArenaRange() const { return m_Range; }
     void FinishUpload();
 
     // `instances` > 1 draws that many instances (the sun's layered cascade pass).
@@ -73,6 +77,7 @@ private:
     unsigned int m_VAO = 0, m_VBO = 0, m_EBO = 0;
     // Owns the three objects above; every mesh sharing them holds it, the last one deletes them.
     std::shared_ptr<void> m_GpuOwner;
+    MeshArena::Range m_Range;
     unsigned int m_IndexCount = 0;
     std::vector<glm::vec3> m_LocalPositions;
     std::vector<unsigned int> m_LocalIndices;
