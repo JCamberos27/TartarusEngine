@@ -17915,7 +17915,7 @@
         ],
         "ColorTempK": 0.0,
         "Culling Mask": -1,
-        "Intensity": 2.0,
+        "Intensity": 3.2,
         "Range": 10.0,
         "Shadow Bias": 1.0,
         "Shadow Near Plane": 0.05,
@@ -152963,7 +152963,7 @@
     "timeOfDay": true,
     "timeOfDayHours": 16.0
   },
-  "skyAmbientIntensity": 1.0,
+  "skyAmbientIntensity": 0.6,
   "skyHdriPath": "assets/sky/kloofendal_48d_partly_cloudy_puresky_4k.hdr",
   "skyHorizonColor": [
     0.699999988079071,
