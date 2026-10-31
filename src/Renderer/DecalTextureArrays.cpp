@@ -1,3 +1,4 @@
+#include "GpuMemTrack.h"
 #include "DecalTextureArrays.h"
 #include "Texture.h"
 #include "Log.h"
@@ -485,6 +486,7 @@ void DecalTextureArrays::EnsureGpu(int layers, const bool want[kKinds]) {
         unsigned int tex = 0;
         glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &tex);
         glTextureStorage3D(tex, kArrayLevels, kFormat[k], Decals::PAGE_SIZE, Decals::PAGE_SIZE, layers);
+        { size_t lv = 0; for (int l = 0; l < kArrayLevels; ++l) lv += LevelBytes(k, l); GpuMemTrack::Set("DecalTextureArrays kind " + std::to_string(k), lv * (size_t)layers); }
         glTextureParameteri(tex, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
         glTextureParameteri(tex, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTextureParameteri(tex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);

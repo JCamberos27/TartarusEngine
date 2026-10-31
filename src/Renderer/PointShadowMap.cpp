@@ -1,3 +1,4 @@
+#include "GpuMemTrack.h"
 #include "PointShadowMap.h"
 #include "GLFramebufferCheck.h"
 #include "Log.h"
@@ -42,6 +43,7 @@ void PointShadowMap::Configure(int resolution, int cubes) {
     // The static casters' depth, never sampled: only copied from.
     glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &m_StaticArray);
     glTextureStorage3D(m_StaticArray, 1, GL_DEPTH_COMPONENT32F, resolution, resolution, cubes * 6);
+    GpuMemTrack::Set("PointShadowMap (dynamic + static)", (size_t)resolution * resolution * cubes * 6 * 4 * 2);
     glCreateFramebuffers(1, &m_StaticFbo);
     glNamedFramebufferDrawBuffers(m_StaticFbo, 0, nullptr);
 

@@ -10,6 +10,7 @@
 #include "World.h"
 #include "Components.h"
 #include "Profiler.h"
+#include <chrono>
 #include "GLStateCache.h"
 #include "AssetLibrary.h"
 #include "Camera.h"
@@ -399,7 +400,8 @@ void  AbImportViaDialog(int kind, const char* into) {
     if (g_Editor && g_World && g_Assets)
         g_Editor->AssetBrowserImportViaDialog(*g_World, *g_Assets, kind, into ? into : "");
 }
-void  AbGridFrameBegin() { if (g_Editor && g_World && g_Assets) g_Editor->AssetGridFrameBegin(*g_World, *g_Assets); }
+static std::chrono::steady_clock::time_point g_AbGridStart;
+void  AbGridFrameBegin() { g_AbGridStart = std::chrono::steady_clock::now(); if (g_Editor && g_World && g_Assets) g_Editor->AssetGridFrameBegin(*g_World, *g_Assets); }
 int   AbGridCellCount() { return g_Editor ? g_Editor->AssetGridCellCount() : 0; }
 void  AbGetGridMetrics(float* i, float* u, float* l) { if (g_Editor) g_Editor->GetAssetGridMetrics(i, u, l); }
 void  AbDrawCell(int idx, float w, float h, bool grid) {
@@ -411,7 +413,8 @@ void  AbGetSelectionSummary(char* o, int n) {
     else if (o && n > 0) o[0] = '\0';
 }
 void  AbSetIconSize(float px, bool commit) { if (g_Editor) g_Editor->SetAssetIconSize(px, commit); }
-void  AbGridFrameEnd() { if (g_Editor && g_World && g_Assets) g_Editor->AssetGridFrameEnd(*g_World, *g_Assets); }
+void  AbGridFrameEnd() { if (g_Editor && g_World && g_Assets) g_Editor->AssetGridFrameEnd(*g_World, *g_Assets);
+    Profiler::PushSample("UI Asset Grid", std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - g_AbGridStart).count()); }
 
 // --- Scene Hierarchy, thin slice (API v6) ----------------------------------------------------
 // The module owns Begin("Scene Hierarchy") + the search box + the Expand/Collapse-all buttons;
@@ -428,6 +431,7 @@ void  HierGetFilter(char* o, int n) {
 void  HierSetFilter(const char* s) { if (g_Editor) g_Editor->SetHierarchyFilterText(s ? s : ""); }
 void  HierExpandAll(bool open) { if (g_Editor && g_World) g_Editor->HierarchyExpandAll(*g_World, open); }
 void  HierDrawTreeBody() {
+    PROFILE_SCOPE("UI Hierarchy Tree");
     if (g_Editor && g_World && g_Assets) g_Editor->DrawHierarchyTreeBody(*g_World, *g_Assets);
 }
 void  HierDrawNavBar() { // API v39 - Editor Enhancers / vHierarchy
@@ -448,6 +452,7 @@ void  AbDrawFolderNavBar() { if (g_Editor && g_World && g_Assets) g_Editor->Draw
 bool  InspGetShow() { return g_Editor && g_Editor->GetShowInspector(); }
 void  InspSetShow(bool on) { if (g_Editor) g_Editor->SetShowInspector(on); }
 void  InspDrawBody() {
+    PROFILE_SCOPE("UI Inspector Body");
     if (g_Editor && g_World && g_Assets) g_Editor->DrawInspectorBody(*g_World, *g_Assets);
 }
 int   TbGetAssetSort() {
@@ -470,6 +475,7 @@ void  TbSetAssetFavoritesOnly(bool on) { if (g_Editor) g_Editor->SetAssetFavorit
 // The Undo History HUD's window + pin/height math + eased tint live in EditorModuleHistory.cpp;
 // the rows (undo/redo stacks + World&) stay host-side, exactly like the Hierarchy tree body.
 void  HistDrawListBody() {
+    PROFILE_SCOPE("UI History Body");
     if (g_Editor && g_World && g_Assets) g_Editor->DrawHistoryListBody(*g_World, *g_Assets);
 }
 
@@ -717,6 +723,7 @@ void HotReloadEditorModule::Draw(bool editorUIVisible, float deltaTime) {
             Reload(false);
     }
 
+    PROFILE_SCOPE("UI Module Draw");
     if (editorUIVisible && m_API && m_API->Draw) m_API->Draw(kHostAPI);
 }
 
