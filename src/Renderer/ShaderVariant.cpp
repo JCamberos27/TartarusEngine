@@ -1,6 +1,7 @@
 #include "ShaderVariant.h"
 #include "Material.h"
 
+#include <cstdlib>
 #include <cstring>
 
 ShaderVariantKey ShaderVariantKeyFor(const Material& m, const ShaderAsset& sa) {
@@ -9,7 +10,7 @@ ShaderVariantKey ShaderVariantKeyFor(const Material& m, const ShaderAsset& sa) {
 
     auto bit = [&](const char* name, bool on) {
         if (!on) return;
-        for (size_t i = 0; i < kw.size() && i < 32; ++i)
+        for (size_t i = 0; i < kw.size() && i < (size_t)kVariantMaterialKeywords; ++i)
             if (kw[i] == name) { key |= (ShaderVariantKey{1} << i); return; }
     };
 
@@ -35,5 +36,19 @@ ShaderVariantKey ShaderVariantKeyForCached(const Material& m, const ShaderAsset&
     if (m.CachedVariantKey(&sa, key)) return key;
     key = ShaderVariantKeyFor(m, sa);
     m.StoreVariantKey(&sa, key);
+    return key;
+}
+
+bool EngineVariantsEnabled() {
+#pragma warning(suppress : 4996)
+    static const bool on = std::getenv("TARTARUS_NO_ENGINE_VARIANTS") == nullptr;
+    return on;
+}
+
+ShaderVariantKey ShaderVariantEngineBits(const Material& m) {
+    if (!EngineVariantsEnabled()) return 0;
+    ShaderVariantKey key = 0;
+    if (!(m.GrungeStrength > 0.0f)) key |= kVariantNoGrunge;
+    if (!(m.ParallaxScale > 0.0f)) key |= kVariantNoParallax;
     return key;
 }

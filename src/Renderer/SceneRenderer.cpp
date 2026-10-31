@@ -654,12 +654,23 @@ int WarmMaterials(const RenderableComponent& rc, WarmedVariants& done) {
     int built = 0;
     for (const auto& ma : rc.Materials) {
         if (!ma || !ma->Shader) continue;
-        const ShaderVariantKey key = ShaderVariantKeyFor(ma->Mat, *ma->Shader);
+        // The scene draw adds the engine bits (ShaderVariant.h): a game view (no debug mode) with and without point or
+        // spot lights and decals - a flashlight or the first bullet hole must not compile a program mid-fight.
+        const bool engine = EngineVariantsEnabled();
+        const ShaderVariantKey own = ShaderVariantKeyFor(ma->Mat, *ma->Shader) |
+                                     (engine ? ShaderVariantEngineBits(ma->Mat) | kVariantNoDebugView : 0u);
         std::vector<ShaderVariantKey>& keys = done[ma->Shader.get()];
-        if (std::find(keys.begin(), keys.end(), key) != keys.end()) continue;
-        keys.push_back(key);
-        ma->Shader->Variant(key);
-        ++built;
+        if (std::find(keys.begin(), keys.end(), own) != keys.end()) continue;
+        keys.push_back(own);
+        if (!engine) {
+            ma->Shader->Variant(own);
+            ++built;
+            continue;
+        }
+        for (const ShaderVariantKey frame : {0u, kVariantNoLocalLights, kVariantNoDecals, kVariantNoLocalLights | kVariantNoDecals}) {
+            ma->Shader->Variant(own | frame);
+            ++built;
+        }
     }
     return built;
 }
@@ -792,10 +803,22 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     appliedPrograms.push_back(&modelShader);
     int passAlphaBlend = 0;
     // The program a material draws through, without touching GL state — also the opaque sort key.
+    // The code this view's programs can leave out (ShaderVariant.h engine bits): no point or spot light this frame,
+    // no clustered decal in the view, no debug mode. activeFs is the pass's own state (the view-model pass has its
+    // own decal count).
+    const bool noLocalLights = lightBuffer.Count() == lightBuffer.DirectionalCount();
+    const auto frameVariantBits = [&]() -> std::uint32_t {
+        if (!EngineVariantsEnabled()) return 0u;
+        std::uint32_t bits = 0u;
+        if (noLocalLights) bits |= kVariantNoLocalLights;
+        if (activeFs->decalCount == 0) bits |= kVariantNoDecals;
+        if (ctx.DebugView == 0) bits |= kVariantNoDebugView;
+        return bits;
+    };
     auto programFor = [&](const MaterialAsset* ma, std::uint32_t& key) -> Shader* {
         key = 0;
         if (ma && ma->Shader) {
-            key = ShaderVariantKeyForCached(ma->Mat, *ma->Shader);
+            key = ShaderVariantKeyForCached(ma->Mat, *ma->Shader) | ShaderVariantEngineBits(ma->Mat) | frameVariantBits();
             if (Shader* v = ma->Shader->Variant(key)) return v;
         }
         return &modelShader;
