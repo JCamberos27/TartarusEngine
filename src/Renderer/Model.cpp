@@ -2238,9 +2238,11 @@ Shader* BindPreSkinProgram() {
 
 // Skins `count` vertices of `sourceVbo` (ModelVertex[]) with the palette on binding 1 into the buffer on binding 26,
 // from vertex `outBase` on. `cs` is BindPreSkinProgram's, still bound.
-void DispatchPreSkin(Shader& cs, unsigned sourceVbo, unsigned count, unsigned outBase) {
+void DispatchPreSkin(Shader& cs, unsigned sourceVbo, unsigned count, unsigned outBase, std::size_t sourceOffset = 0) {
     static const int countLoc = cs.Loc("uCount"), baseLoc = cs.Loc("uOutBase");
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kSkinSourceBinding, sourceVbo);
+    // A mesh in a shared skinned page: just its range (MeshArena keeps the offset SSBO-aligned).
+    if (sourceOffset) glBindBufferRange(GL_SHADER_STORAGE_BUFFER, kSkinSourceBinding, sourceVbo, (GLintptr)sourceOffset, (GLsizeiptr)count * (GLsizeiptr)sizeof(ModelVertex));
+    else glBindBufferBase(GL_SHADER_STORAGE_BUFFER, kSkinSourceBinding, sourceVbo);
     cs.SetInt(countLoc, (int)count);
     cs.SetInt(baseLoc, (int)outBase);
     glDispatchCompute((count + 63) / 64, 1, 1);
@@ -2400,7 +2402,7 @@ void Model::PreSkin(const std::vector<Model*>& models) {
             unsigned first = (unsigned)p.Base;
             for (const auto& mesh : m.m_D->Meshes) {
                 const unsigned n = mesh->VertexCount();
-                if (n) DispatchPreSkin(*cs, mesh->VertexBuffer(), n, first);
+                if (n) DispatchPreSkin(*cs, mesh->VertexBuffer(), n, first, mesh->VertexBufferOffset());
                 first += n;
             }
             dispatched = true;

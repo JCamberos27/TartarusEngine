@@ -23,6 +23,8 @@ public:
 
     bool NeedsUpload() const { return m_VAO == 0; }
     unsigned int VertexBuffer() const { return m_VBO; } // ModelVertex[], read by PreSkin.comp.glsl
+    // Where vertex 0 sits in VertexBuffer(), in bytes: non-zero for a skinned mesh in a shared skinned page (MeshArena.h).
+    std::size_t VertexBufferOffset() const { return m_VertexOffset; }
     // Where the mesh sits in the shared arena (Page 0: its own buffers). An arena mesh draws at its base vertex and
     // first index of the page's buffers, which one indirect draw can share with other meshes (InstanceBatch.h).
     const MeshArena::Range& ArenaRange() const { return m_Range; }
@@ -83,6 +85,8 @@ private:
     // Owns the three objects above; every mesh sharing them holds it, the last one deletes them.
     std::shared_ptr<void> m_GpuOwner;
     MeshArena::Range m_Range;
+    MeshArena::SkinRange m_SkinRange;                 // a skinned mesh in a skinned page (Page 0: own buffers)
+    std::size_t m_VertexOffset = 0, m_IndexOffset = 0; // bytes into m_VBO / m_EBO where this mesh starts
     unsigned int m_IndexCount = 0;
     std::vector<glm::vec3> m_LocalPositions;
     std::vector<unsigned int> m_LocalIndices;
