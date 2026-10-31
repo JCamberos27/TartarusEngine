@@ -2444,6 +2444,7 @@ bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string
         if (ec) Log::Warn("Scene: couldn't write a backup of '" + path + "' before migrating it: " + ec.message());
     }
 
+    const AssetLibrary::CacheKeys cacheBefore = assets.SnapshotCacheKeys();
     g_MigrationLog.clear();
     // #83 — keep the current world so a malformed file can't leave a half-loaded one behind.
     std::string previous;
@@ -2461,6 +2462,14 @@ bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string
         Log::Error("Scene: '" + path + "' could not be loaded; the previous scene was kept.");
         if (!previous.empty()) LoadFromString(world, assets, previous);
         return false;
+    }
+
+    {
+        std::set<std::string> keepModels;
+        for (auto [e, rc] : world.Registry.view<RenderableComponent>().each())
+            if (rc.ModelRef) keepModels.insert(rc.ModelRef->Path());
+        const int dropped = assets.ReleaseUnreferenced(cacheBefore, keepModels);
+        if (dropped) Log::Info("Scene: released " + std::to_string(dropped) + " cached asset(s) the new scene doesn't use.");
     }
 
     if (ok && migrating && !g_MigrationLog.empty()) {

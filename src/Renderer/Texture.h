@@ -162,6 +162,7 @@ private:
     int m_Width = 0, m_Height = 0, m_Channels = 0;
     size_t m_GpuBytes = 0;
     int m_UpW = 0, m_UpH = 0;
+    uint64_t m_ShareKey = 0; // content key of the shared GL texture (0: not shared)
     const char* m_GpuFormatName = "";
     std::string m_Path;
     TextureImportSettings m_Settings;

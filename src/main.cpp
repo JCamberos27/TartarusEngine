@@ -3812,7 +3812,7 @@ int main(int argc, char** argv) {
             // Layers are allocated for the budget, not the hard ceiling (#110); a zero budget
             // still keeps one layer so sampler unit 9 is never unbound.
             if (world.ShadowsEnabled) {
-                spotShadowMap.Configure(std::min(world.ShadowResolution, 4096), std::max(spotShadowBudget, 1));
+                spotShadowMap.Configure(std::min(world.ShadowResolution, 4096), std::max(spotShadowCount, 1)); // sized to the slots in use (grow-only)
             }
             // #163 - spot/point shadows render once per frame, so they use the LOD levels of the
             // camera the user is mainly looking through (each view's draw re-applies its own).
