@@ -1,3 +1,4 @@
+#include "GpuMemTrack.h"
 #include "ReflectionProbeCapture.h"
 #include "HdrTarget.h"
 #include "IblProbe.h"
@@ -95,6 +96,7 @@ void ReflectionProbeCapture::EnsureCaptureCubes() {
         while ((kFaceSize >> mips) > 0) ++mips; // the prefilter reads well down the chain (like IblProbe's env cube)
         glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &c);
         glTextureStorage2D(c, mips, GL_RGBA16F, kFaceSize, kFaceSize);
+        GpuMemTrack::Set("ReflectionProbeCapture cube " + std::to_string(c), (size_t)kFaceSize * kFaceSize * 6 * 8 * 4 / 3);
         glTextureParameteri(c, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
         glTextureParameteri(c, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTextureParameteri(c, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);

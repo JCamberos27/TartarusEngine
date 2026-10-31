@@ -418,6 +418,7 @@ public:
     long long DrawFurShells(Shader& prog, const glm::mat4& xform, const std::vector<std::shared_ptr<MaterialAsset>>& slots,
                             FurBindFn bind, void* user);
     int MeshCount() const { return (int)m_D->Meshes.size(); }
+    const ModelMesh* MeshPtr(int index) const { return m_D->Meshes[index].get(); } // --mem-report
     // Sub-mesh `index`'s triangle indices, local to it (ModelMesh::LocalIndices).
     const std::vector<unsigned int>& MeshLocalIndices(int index) const { return m_D->Meshes[index]->LocalIndices(); }
     // Sub-mesh `index`'s skinned vertices (ModelMesh::SkinVertices): empty when it isn't skinned.

@@ -1,3 +1,4 @@
+#include "GpuMemTrack.h"
 #include "SpotShadowMap.h"
 #include "GLFramebufferCheck.h"
 #include "Log.h"
@@ -42,6 +43,7 @@ void SpotShadowMap::Configure(int resolution, int layers) {
     // Only ever rendered to and copied from, never sampled.
     glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &m_StaticArray);
     glTextureStorage3D(m_StaticArray, 1, GL_DEPTH_COMPONENT32F, resolution, resolution, layers);
+    GpuMemTrack::Set("SpotShadowMap (dynamic + static)", (size_t)resolution * resolution * layers * 4 * 2);
     glCreateFramebuffers(1, &m_StaticFbo);
     glNamedFramebufferDrawBuffers(m_StaticFbo, 0, nullptr);
 

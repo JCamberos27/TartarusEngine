@@ -1,3 +1,4 @@
+#include "GpuMemTrack.h"
 #include "Ssao.h"
 #include "GLStateCache.h"
 #include "GLStateScope.h"
@@ -72,6 +73,7 @@ void Ssao::Create(int width, int height) {
     // Depth pre-pass: depth-only FBO, no color attachment
     glCreateTextures(GL_TEXTURE_2D, 1, &m_DepthTex);
     glTextureStorage2D(m_DepthTex, 1, GL_DEPTH_COMPONENT32F, width, height);
+    GpuMemTrack::Set("Ssao depth copy", (size_t)width * height * 4);
     glTextureParameteri(m_DepthTex, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTextureParameteri(m_DepthTex, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTextureParameteri(m_DepthTex, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
