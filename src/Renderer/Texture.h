@@ -119,6 +119,10 @@ public:
     // is current; called by the first texture upload anyway, and by AsyncAssetLoader before it
     // starts its workers.
     static void InitGpuCaps();
+    // Keeps a batch of 2D texture names made ahead of time (called once per asset pump). glCreateTextures returns a
+    // name, so with the driver's threaded optimization it waited for the driver thread to drain everything queued
+    // before it: up to 6 ms per texture uploaded mid-Play.
+    static void WarmNames();
 
     void Bind(unsigned int unit = 0) const;
 
