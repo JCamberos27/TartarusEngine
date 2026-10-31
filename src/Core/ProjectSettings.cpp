@@ -159,6 +159,7 @@ void Load() {
             g_Quality.SmallObjectCullHeight = std::clamp(f->get<float>(), 0.0f, 0.1f);
         g_Quality.DepthPrepass = it->value("depthPrepass", true);
         g_Quality.GpuInstancing = it->value("gpuInstancing", true);
+        g_Quality.AsyncUploads = it->value("asyncUploads", true);
         g_Quality.GpuDrivenDraws = it->value("gpuDrivenDraws", true);
         g_Quality.GpuOcclusionCulling = it->value("gpuOcclusionCulling", true);
         g_Quality.DecalTextureBudgetMB = std::clamp(it->value("decalTextureBudgetMB", 1024), 32, 4096);
@@ -275,7 +276,7 @@ void Save() {
         {"timeScale", g_Time.TimeScale},
     };
     root["quality"] = {{"smallObjectCullHeight", g_Quality.SmallObjectCullHeight}, {"depthPrepass", g_Quality.DepthPrepass},
-                       {"gpuInstancing", g_Quality.GpuInstancing}, {"gpuDrivenDraws", g_Quality.GpuDrivenDraws}, {"gpuOcclusionCulling", g_Quality.GpuOcclusionCulling}, {"decalTextureBudgetMB", g_Quality.DecalTextureBudgetMB},
+                       {"gpuInstancing", g_Quality.GpuInstancing}, {"gpuDrivenDraws", g_Quality.GpuDrivenDraws}, {"gpuOcclusionCulling", g_Quality.GpuOcclusionCulling}, {"asyncUploads", g_Quality.AsyncUploads}, {"decalTextureBudgetMB", g_Quality.DecalTextureBudgetMB},
                        {"decalMaxDistance", g_Quality.DecalMaxDistance}};
     root["input"] = InputMap::ToJson(InputMap::Actions()); // #145
     root["audio"] = {

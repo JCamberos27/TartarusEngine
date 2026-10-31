@@ -94,7 +94,7 @@ bool Enabled() {
 }
 
 bool Allocate(const ModelVertex* vertices, std::uint32_t vertexCount, const std::uint32_t* indices, std::uint32_t indexCount,
-              Range& out) {
+              Range& out, unsigned srcBuffer, std::size_t srcVertexOffset, std::size_t srcIndexOffset) {
     if (!Enabled() || !vertexCount || !indexCount) return false;
     const bool big = vertexCount > kPageVertices || indexCount > kPageIndices;
     std::uint32_t page = ~0u, v = ~0u, i = ~0u;
@@ -116,9 +116,15 @@ bool Allocate(const ModelVertex* vertices, std::uint32_t vertexCount, const std:
         i = g_Pages[page]->Indices.Take(indexCount);
     }
     const Page& p = *g_Pages[page];
-    glNamedBufferSubData(p.Vbo, (GLintptr)v * (GLintptr)sizeof(ModelVertex), (GLsizeiptr)vertexCount * (GLsizeiptr)sizeof(ModelVertex),
-                         vertices);
-    glNamedBufferSubData(p.Ebo, (GLintptr)i * 4, (GLsizeiptr)indexCount * 4, indices);
+    if (srcBuffer) {
+        glCopyNamedBufferSubData(srcBuffer, p.Vbo, (GLintptr)srcVertexOffset, (GLintptr)v * (GLintptr)sizeof(ModelVertex),
+                                 (GLsizeiptr)vertexCount * (GLsizeiptr)sizeof(ModelVertex));
+        glCopyNamedBufferSubData(srcBuffer, p.Ebo, (GLintptr)srcIndexOffset, (GLintptr)i * 4, (GLsizeiptr)indexCount * 4);
+    } else {
+        glNamedBufferSubData(p.Vbo, (GLintptr)v * (GLintptr)sizeof(ModelVertex), (GLsizeiptr)vertexCount * (GLsizeiptr)sizeof(ModelVertex),
+                             vertices);
+        glNamedBufferSubData(p.Ebo, (GLintptr)i * 4, (GLsizeiptr)indexCount * 4, indices);
+    }
     out = {page + 1, v, i, vertexCount, indexCount};
     return true;
 }
