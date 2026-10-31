@@ -344,6 +344,26 @@ bool EncodeForced(const unsigned char* src, int w, int h, int c, const TextureIm
 
 } // namespace
 
+namespace {
+std::vector<GLuint> g_SpareTextureNames; // GL_TEXTURE_2D names, made in batches (Texture::WarmNames)
+constexpr int kTextureNameBatch = 128;
+void RefillTextureNames() {
+    GLuint ids[kTextureNameBatch];
+    glCreateTextures(GL_TEXTURE_2D, kTextureNameBatch, ids);
+    g_SpareTextureNames.insert(g_SpareTextureNames.end(), ids, ids + kTextureNameBatch);
+}
+GLuint TakeTextureName() {
+    if (g_SpareTextureNames.empty()) RefillTextureNames();
+    const GLuint id = g_SpareTextureNames.back();
+    g_SpareTextureNames.pop_back();
+    return id;
+}
+} // namespace
+
+void Texture::WarmNames() {
+    if (g_SpareTextureNames.size() < kTextureNameBatch / 4) RefillTextureNames();
+}
+
 void Texture::InitGpuCaps() {
     if (s_S3tc.load(std::memory_order_acquire) >= 0) return;
     GLint n = 0;
@@ -766,7 +786,7 @@ void Texture::Upload(const TextureCpuData& data, bool staged, std::size_t staged
             return;
         }
     }
-    glCreateTextures(GL_TEXTURE_2D, 1, &m_ID);
+    m_ID = TakeTextureName(); // made ahead of time (WarmNames)
     if (compressed) {
         // #156 - BCn: every mip level was built and encoded on the CPU; upload them as-is.
         // Grey sRGB images were expanded to RGBA before encoding (and so aren't swizzled).

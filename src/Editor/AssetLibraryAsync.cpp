@@ -12,6 +12,7 @@
 //   (release/acquire), so it needs no lock.
 #include "AssetLibrary.h"
 #include "AssetDatabase.h"
+#include "MeshArena.h"
 #include "Log.h"
 #include "ProjectPaths.h"
 #include "ProjectSettings.h"
@@ -331,16 +332,40 @@ AssetLibrary::AsyncHandle AssetLibrary::RequestMaterialAsync(const std::string& 
 
 int AssetLibrary::PumpAsync(double budgetMs) {
     UploadStaging::Warm(); // the ring exists before anything loads in Play
+    MeshArena::WarmSkinned(); // and a skinned page with room (a new one is the one big allocation)
+    Texture::WarmNames();     // and texture names (glCreateTextures waits on the driver thread)
     if (!m_Async) return 0;
     AsyncLoader& a = *m_Async;
     const auto start = std::chrono::steady_clock::now();
     bool worked = false;
     UploadStaging::Poll(); // recycle the staging regions the GPU has finished copying out of
+    struct TraceTotal {
+        std::chrono::steady_clock::time_point T0;
+        ~TraceTotal() {
+            const double ms = MsSince(T0);
+            if (PumpTrace() && ms >= 3.5)
+                std::printf("[PumpTrace] pump total %.2f ms\n", ms);
+        }
+    } traceTotal{start};
     const bool stage = UploadStaging::Enabled();
+    // The budget is when the pump stops starting steps, so a step begun just under it ran the frame past it by a whole
+    // step (3 ms plus a 1.5 ms texture). A step isn't begun either when the slowest one so far this pump wouldn't fit
+    // in the budget plus a millisecond.
+    double slowestStep = 0.0;
+    const auto overBudget = [&] {
+        const double t = MsSince(start);
+        return worked && (t >= budgetMs || t + slowestStep > budgetMs + 1.0);
+    };
+    const auto timed = [&](auto&& step) {
+        const auto t0 = std::chrono::steady_clock::now();
+        auto r = step();
+        slowestStep = std::max(slowestStep, MsSince(t0));
+        return r;
+    };
 
     std::vector<std::shared_ptr<AsyncJob>> materialsDone; // their maps are requested after the loop
     for (auto it = a.Active.begin(); it != a.Active.end();) {
-        if (worked && MsSince(start) >= budgetMs) break;
+        if (overBudget()) break;
         AsyncJob& job = **it;
         if (!job.Done.load(std::memory_order_acquire)) { ++it; continue; }
 
@@ -357,15 +382,15 @@ int AssetLibrary::PumpAsync(double budgetMs) {
                 // One mesh or texture per step, re-checking the budget between them. Staged, a step is either the
                 // copy's hand-off to the worker or the GPU copy out of the ring - each a fraction of a millisecond.
                 for (;;) {
-                    const UploadStaging::Step s = [&] {
+                    const UploadStaging::Step s = timed([&] {
                         PumpStepTimer st{"model step", job.Path};
                         return stage ? job.ModelResult->GpuUploadStep()
                                      : (job.ModelResult->FinishGpuUploadStep() ? UploadStaging::Step::Done : UploadStaging::Step::Progress);
-                    }();
+                    });
                     if (s == UploadStaging::Step::Done) break;
                     worked = true;
                     if (s == UploadStaging::Step::Waiting) { finished = false; waiting = true; break; }
-                    if (MsSince(start) >= budgetMs) { finished = false; break; }
+                    if (overBudget()) { finished = false; break; }
                 }
                 if (finished) {
                     if (job.ModelResult->MeshCount() == 0 && !job.ModelResult->HasAnimations())
@@ -380,7 +405,7 @@ int AssetLibrary::PumpAsync(double budgetMs) {
                 job.TexPending = Texture::CreatePending(std::move(job.TexResult));
             if (job.TexPending) {
                 PumpStepTimer st{"texture", job.Path};
-                if (job.TexPending->UploadStep(stage) == UploadStaging::Step::Waiting) {
+                if (timed([&] { return job.TexPending->UploadStep(stage); }) == UploadStaging::Step::Waiting) {
                     finished = false;
                     waiting = true;
                 } else if (!HasTexture(job.Path) && !job.Forget) {

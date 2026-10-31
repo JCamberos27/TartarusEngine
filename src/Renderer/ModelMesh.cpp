@@ -49,6 +49,7 @@ ModelMesh::ModelMesh(std::vector<ModelVertex>&& vertices, const std::vector<unsi
 
 ModelMesh::ModelMesh(const ModelMesh& source, ShareGeometry)
     : Mat(source.Mat), m_VAO(source.m_VAO), m_VBO(source.m_VBO), m_EBO(source.m_EBO), m_GpuOwner(source.m_GpuOwner), m_Range(source.m_Range),
+      m_SkinRange(source.m_SkinRange), m_VertexOffset(source.m_VertexOffset), m_IndexOffset(source.m_IndexOffset),
       m_IndexCount(source.m_IndexCount), m_LocalPositions(source.m_LocalPositions), m_LocalIndices(source.m_LocalIndices),
       m_Skin(source.m_Skin) {}
 
@@ -111,10 +112,11 @@ UploadStaging::Step ModelMesh::UploadStep(bool stage) {
     return Step::Progress;
 }
 
-// The ModelVertex attribute layout on `vao` over `vbo` / `ebo` (also each MeshArena page's VAO).
-void ConfigureModelVao(unsigned vao, unsigned vbo, unsigned ebo) {
+// The ModelVertex attribute layout on `vao` over `vbo` / `ebo` (also each MeshArena page's VAO). `vertexOffset`: the
+// byte offset of vertex 0 in `vbo` (a skinned mesh in a MeshArena skinned page).
+void ConfigureModelVao(unsigned vao, unsigned vbo, unsigned ebo, std::size_t vertexOffset) {
     const GLuint m_VAO = vao;
-    glVertexArrayVertexBuffer(m_VAO, 0, vbo, 0, sizeof(ModelVertex));
+    glVertexArrayVertexBuffer(m_VAO, 0, vbo, (GLintptr)vertexOffset, sizeof(ModelVertex));
     glVertexArrayElementBuffer(m_VAO, ebo);
 
     auto floatAttrib = [&](GLuint index, GLint size, std::size_t offset) {
@@ -141,6 +143,7 @@ void ConfigureModelVao(unsigned vao, unsigned vbo, unsigned ebo) {
     floatAttrib(6, 1, offsetof(ModelVertex, TangentSign));
     floatAttrib(7, 4, offsetof(ModelVertex, Color)); // #113
 }
+void ConfigureModelVao(unsigned vao, unsigned vbo, unsigned ebo) { ConfigureModelVao(vao, vbo, ebo, 0); }
 
 void ModelMesh::CreateGpu(const std::vector<ModelVertex>& vertices, const UploadStaging::Region* staged) {
     const std::vector<unsigned int>& indices = m_LocalIndices;
@@ -163,6 +166,28 @@ void ModelMesh::CreateGpu(const std::vector<ModelVertex>& vertices, const Upload
         m_GpuOwner = std::shared_ptr<void>(new MeshArena::Range(range), [](void* p) {
             MeshArena::Free(*static_cast<MeshArena::Range*>(p));
             delete static_cast<MeshArena::Range*>(p);
+        });
+        return;
+    }
+    // Skinned meshes share the skinned pages (MeshArena.h): no buffer storage is created per mesh. The mesh's own VAO
+    // starts at its first vertex, so it draws (and PreSkin reads it) as if the buffer were its own.
+    if (!m_Skin.empty() && !vertices.empty() && !indices.empty() &&
+        MeshArena::AllocateSkinned(vertices.data(), (std::uint32_t)vertices.size(), indices.data(), (std::uint32_t)indices.size(), m_SkinRange,
+                                   staged ? UploadStaging::Buffer() : 0u, staged ? staged->Offset : 0,
+                                   staged ? staged->Offset + StagedIndexOffset(vertices.size() * sizeof(ModelVertex)) : 0)) {
+        m_VBO = MeshArena::SkinPageVbo(m_SkinRange.Page);
+        m_EBO = MeshArena::SkinPageEbo(m_SkinRange.Page);
+        m_VertexOffset = (std::size_t)m_SkinRange.FirstVertex * sizeof(ModelVertex);
+        m_IndexOffset = (std::size_t)m_SkinRange.FirstIndex * sizeof(unsigned int);
+        m_VAO = MeshArena::TakeVao(); // made and laid out ahead of time (MeshArena.h)
+        glVertexArrayVertexBuffer(m_VAO, 0, m_VBO, (GLintptr)m_VertexOffset, sizeof(ModelVertex)); // the layout is set
+        glVertexArrayElementBuffer(m_VAO, m_EBO);
+        struct Pooled { unsigned vao; MeshArena::SkinRange range; };
+        m_GpuOwner = std::shared_ptr<void>(new Pooled{m_VAO, m_SkinRange}, [](void* p) {
+            Pooled* o = static_cast<Pooled*>(p);
+            glDeleteVertexArrays(1, &o->vao);
+            MeshArena::FreeSkinned(o->range);
+            delete o;
         });
         return;
     }
@@ -209,8 +234,9 @@ void ModelMesh::Draw(int instances) const {
     GLStateCache::BindVertexArray(m_VAO);
     const void* at = reinterpret_cast<const void*>((std::uintptr_t)m_Range.FirstIndex * sizeof(unsigned int));
     if (!m_Range.Page) {
-        if (instances > 1) glDrawElementsInstanced(GL_TRIANGLES, m_IndexCount, GL_UNSIGNED_INT, nullptr, instances);
-        else glDrawElements(GL_TRIANGLES, m_IndexCount, GL_UNSIGNED_INT, nullptr);
+        const void* own = reinterpret_cast<const void*>((std::uintptr_t)m_IndexOffset); // 0 unless in a skinned page
+        if (instances > 1) glDrawElementsInstanced(GL_TRIANGLES, m_IndexCount, GL_UNSIGNED_INT, own, instances);
+        else glDrawElements(GL_TRIANGLES, m_IndexCount, GL_UNSIGNED_INT, own);
         return;
     }
     glDrawElementsInstancedBaseVertex(GL_TRIANGLES, m_IndexCount, GL_UNSIGNED_INT, at, std::max(instances, 1),
