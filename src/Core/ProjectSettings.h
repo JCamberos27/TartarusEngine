@@ -81,6 +81,9 @@ struct QualitySettings {
     // The opaque pass first lays down the depth of the static world, so each pixel is shaded once, by the surface
     // that ends up in front, instead of by everything drawn there before it.
     bool DepthPrepass = true;
+    // Camera views skip static models the depth pre-pass already hides (OcclusionCuller): each one predicted hidden
+    // is box-tested against that depth on the GPU and drawn only if the box shows. Needs the depth pre-pass.
+    bool OcclusionCulling = true;
     // Repeated copies of a static model (the same model, materials and lighting state) draw as one instanced draw per
     // pass - the opaque and depth pre-passes, the SSAO pre-pass and every shadow map - instead of one draw each.
     bool GpuInstancing = true;

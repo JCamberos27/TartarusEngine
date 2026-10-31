@@ -7,6 +7,7 @@
 #include "../Renderer/VolumetricFog.h"
 #include "../Renderer/TemporalAA.h"
 #include "../Renderer/ReflectionProbeCapture.h"
+#include "../Renderer/OcclusionCuller.h"
 #include "../Game/SceneSerializer.h"
 #include "AssetLibrary.h"
 #include "../Game/World.h"
@@ -433,9 +434,26 @@ void ProbeCaptureAndPuddleSsr() {
     CHECK(probes == 1);
 }
 
+// OcclusionCuller's CPU side: a box the eye is at is never held back, padding grows boxes, a cut forgets predictions.
+void OcclusionRules() {
+    const glm::vec3 lo(-1.0f), hi(1.0f);
+    CHECK(OcclusionCuller::NearEye(lo, hi, glm::vec3(0.0f), 0.3f));            // inside
+    CHECK(OcclusionCuller::NearEye(lo, hi, glm::vec3(0, 0, 1.2f), 0.3f));      // just outside
+    CHECK(!OcclusionCuller::NearEye(lo, hi, glm::vec3(0, 0, 2.0f), 0.3f));     // a metre off
+    glm::vec3 a = lo, b = hi;
+    OcclusionCuller::PadBounds(a, b);
+    CHECK(a.x < lo.x && b.y > hi.y);
+    const glm::vec3 fwd(0, 0, -1);
+    CHECK(!OcclusionCuller::IsCut(glm::vec3(0), fwd, glm::vec3(0.1f, 0, 0), fwd));           // walking
+    CHECK(OcclusionCuller::IsCut(glm::vec3(0), fwd, glm::vec3(10, 0, 0), fwd));              // teleport
+    CHECK(OcclusionCuller::IsCut(glm::vec3(0), fwd, glm::vec3(0), glm::vec3(1, 0, 0)));      // a 90-degree snap
+    CHECK(!OcclusionCuller::IsCut(glm::vec3(0), fwd, glm::vec3(0), glm::normalize(glm::vec3(0.1f, 0, -1)))); // a turn
+}
+
 void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"Reflection probe captures + puddle SSR setting", ProbeCaptureAndPuddleSsr});
     tests.push_back({"Small-object cull: projected bounding-sphere height", SmallObjectCull});
+    tests.push_back({"Occlusion culling: near-eye boxes, padding, camera cuts", OcclusionRules});
     tests.push_back({"GatherVisible: per-frame candidates, per-query filters, invalidation", GatherCache});
     tests.push_back({"Model import: mergeByMaterial keeps geometry, one mesh per material", MergeByMaterial});
     tests.push_back({"GPU instancing: grouping keeps first-appearance order, kNoBatch stands alone", InstanceGrouping});

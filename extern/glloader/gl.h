@@ -564,6 +564,15 @@ extern PFNGLGETQUERYOBJECTUI64VPROC glGetQueryObjectui64v;
 // Timestamp queries nest, unlike GL_TIME_ELAPSED (#147 GPU profiler).
 typedef void (__stdcall* PFNGLQUERYCOUNTERPROC)(GLuint, GLenum);
 extern PFNGLQUERYCOUNTERPROC glQueryCounter;
+// Occlusion culling (OcclusionCuller): box queries and the draws they gate on the GPU.
+#define GL_ANY_SAMPLES_PASSED 0x8C2F
+#define GL_ANY_SAMPLES_PASSED_CONSERVATIVE 0x8D6A
+#define GL_QUERY_WAIT 0x8E13
+#define GL_DEPTH_CLAMP 0x864F
+typedef void (__stdcall* PFNGLBEGINCONDITIONALRENDERPROC)(GLuint, GLenum);
+typedef void (__stdcall* PFNGLENDCONDITIONALRENDERPROC)(void);
+extern PFNGLBEGINCONDITIONALRENDERPROC glBeginConditionalRender;
+extern PFNGLENDCONDITIONALRENDERPROC glEndConditionalRender;
 
 // Async pixel readback (PBO) — adaptive HUD contrast sampling without a GPU stall (#178).
 typedef void* (__stdcall* PFNGLMAPNAMEDBUFFERPROC)(GLuint, GLenum);

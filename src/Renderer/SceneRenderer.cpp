@@ -39,6 +39,7 @@
 #include "FxSpriteRenderer.h"
 #include "WorldText.h"
 #include "GLStateCache.h"
+#include "OcclusionCuller.h"
 #include "gl.h"
 #include "Core/Profiler.h"
 
@@ -793,6 +794,9 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         unsigned Entity = 0xFFFFFFFFu; // for the blood splats on it (BloodRenderer::SplatRange)
         // Which decals take to it (Affect Static / Dynamic): StaticTag, or nothing skinned or simulated.
         bool StaticReceiver = true;
+        // World bounds (OcclusionCuller's box test); Bounded false = none, never culled.
+        glm::vec3 WorldMin{0.0f}, WorldMax{0.0f};
+        bool Bounded = false;
     };
     static std::vector<DrawItem> drawList;
     static std::vector<DrawItem> transparentList;
@@ -970,6 +974,9 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             item.Dynamic = dynamicItem;
             item.StaticReceiver = staticReceiver;
             item.Entity = (unsigned)entt::to_integral(entity);
+            item.WorldMin = vis.WorldMin;
+            item.WorldMax = vis.WorldMax;
+            item.Bounded = validBounds;
             if (outfitHide && outfitHide->Visible) {
                 item.Visible = outfitHide->Visible.get();
                 item.Tris = (int)item.Visible->Triangles();
@@ -1133,6 +1140,36 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         return depthPrepass && !(it.Dynamic || it.NearHide > 0.0f || it.HideBones || it.HideVerts || it.CollarVerts ||
                                  it.BoneMaskMode || it.LayerPull != 0.0f || it.Ref->HasBones());
     };
+    // Occlusion culling (OcclusionCuller.h): the static objects the pre-pass draws are its candidates. A suspect (last
+    // tested hidden) is left out of the pre-pass and the batches; its box is tested against the pre-pass depth, and
+    // both its draws wait on that test on the GPU. occQuery[i] is drawList[i]'s query when it is one, else 0.
+    static std::vector<unsigned> occQuery;
+    static std::vector<OcclusionCuller::Candidate> occCandidates;
+    static std::vector<std::uint32_t> occItem; // drawList index of each candidate
+    static std::vector<unsigned> occCandidateQuery;
+    static std::vector<char> occSuspect;
+    occQuery.assign(drawList.size(), 0u);
+    occSuspect.assign(drawList.size(), 0);
+    occCandidates.clear();
+    occItem.clear();
+    OcclusionCuller* occ = nullptr;
+    if (depthPrepass && !ctx.ProbeCapture && ctx.DebugView == 0 && std::abs(ctx.Proj[3][3]) < 0.5f && OcclusionCuller::Enabled())
+        occ = OcclusionCuller::ForView(ctx.EditorView, ctx.OwnerView);
+    if (occ) {
+        const float nearZ = std::abs(ctx.Proj[3][2] / (ctx.Proj[2][2] - 1.0f));
+        const glm::vec3 forward(-ctx.View[0][2], -ctx.View[1][2], -ctx.View[2][2]);
+        occ->BeginFrame(&world, ctx.ViewPos, forward, nearZ);
+        for (std::uint32_t i = 0; i < (std::uint32_t)drawList.size(); ++i) {
+            const DrawItem& it = drawList[i];
+            if (!it.Bounded || it.Entity == 0xFFFFFFFFu || !prepassed(it)) continue;
+            const bool suspect = occ->Suspect(it.Entity, it.WorldMin, it.WorldMax);
+            occSuspect[i] = suspect ? 1 : 0;
+            occCandidates.push_back({it.Entity, it.WorldMin, it.WorldMax, suspect});
+            occItem.push_back(i);
+            if (suspect) localStats.Occluded++;
+        }
+    }
+    localStats.Objects = (int)drawList.size();
     if (depthPrepass) {
         PROFILE_GPU_SCOPE("Depth Pre-pass");
         Shader& depth = *in.depthShader;
@@ -1151,9 +1188,30 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         glPolygonOffset(kPrepassSlopeOffset, 4.0f);
         static std::vector<DepthCaster> prepass;
         prepass.clear();
-        for (const DrawItem& it : drawList)
-            if (prepassed(it)) prepass.push_back({it.Ref, it.Slots, it.Visible, &it.Xform});
+        for (std::size_t i = 0; i < drawList.size(); ++i)
+            if (prepassed(drawList[i]) && !occSuspect[i]) prepass.push_back({drawList[i].Ref, drawList[i].Slots, drawList[i].Visible, &drawList[i].Xform});
         DrawDepthCasters(depth, prepass);
+        if (occ && !occCandidates.empty()) {
+            PROFILE_SCOPE("Occlusion Test");
+            PROFILE_GPU_SCOPE("Occlusion Test");
+            occ->Test(occCandidates, ctx.Proj * ctx.View, occCandidateQuery);
+            // The suspects' own depth, each only if its box showed (or untested - drawn as before).
+            depth.Bind();
+            depth.SetInt("uInstanced", 0);
+            const int modelLoc = depth.Loc("uModel");
+            for (std::size_t c = 0; c < occCandidates.size(); ++c) {
+                if (!occCandidates[c].Suspect) continue;
+                const DrawItem& it = drawList[occItem[c]];
+                const unsigned q = occCandidateQuery[c];
+                occQuery[occItem[c]] = q;
+                if (q) glBeginConditionalRender(q, GL_QUERY_WAIT);
+                depth.SetMat4(modelLoc, it.Xform);
+                it.Ref->DrawDepthOnly(depth, *it.Slots, 1, it.Visible);
+                if (q) glEndConditionalRender();
+            }
+            GLStateCache::Invalidate();
+            depth.Bind();
+        }
         glPolygonOffset(0.0f, 0.0f);
         glDisable(GL_POLYGON_OFFSET_FILL);
 
@@ -1245,7 +1303,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         drawList.size(),
         [&](std::uint32_t i) -> std::uint64_t {
             const DrawItem& it = drawList[i];
-            if (!batchable(it)) return kNoBatch;
+            if (occQuery[i] || !batchable(it)) return kNoBatch;
             std::uint64_t seed = (std::uint64_t)(std::uintptr_t)it.Ref->ImportId() * 0x9E3779B97F4A7C15ull;
             seed ^= (std::uint64_t)it.Pass | ((std::uint64_t)it.DoubleSided << 4) | ((std::uint64_t)it.ReceiveShadows << 5) |
                     ((std::uint64_t)it.NoSsao << 6) | ((std::uint64_t)(std::uint32_t)it.LayerBit << 8) |
@@ -1294,8 +1352,15 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         if (wantWrites != depthWrites) glDepthMask(depthWrites = wantWrites);
         probeItem = &it;
         instanceBase = groupBase[g];
+        // A suspect draws only if its box showed against the pre-pass depth (OcclusionCuller).
+        const unsigned occluderTest = occQuery[opaqueGroups.Order[grp.First]];
+        if (occluderTest) glBeginConditionalRender(occluderTest, GL_QUERY_WAIT);
         it.Ref->DrawSelected(modelShader, it.Xform, *it.Slots, selectProgram, 1.0f, perDraw, it.Pass, it.DoubleSided, it.Visible,
                              instanceBase >= 0 ? (int)grp.Count : 1);
+        if (occluderTest) {
+            glEndConditionalRender();
+            continue; // counted in Occluded, not as drawn
+        }
 
         localStats.DrawCalls += it.Meshes;
         for (std::uint32_t k = 0; k < grp.Count; ++k) {

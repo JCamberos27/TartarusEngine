@@ -14,6 +14,10 @@ struct RenderStats {
     int Vertices = 0;
     int PointLights = 0;
     int Culled = 0; // entities skipped by frustum culling this frame - not drawn at all
+    int Objects = 0;  // opaque objects in view after frustum culling (the opaque pass's draw list)
+    // Of those, predicted hidden by OcclusionCuller: left out of the pre-pass and the batches, and drawn only if their
+    // GPU box test shows them (nearly all stay hidden; a box that shows draws that frame, so nothing pops).
+    int Occluded = 0;
     // #204: the scene has more active lights than the forward LightBuffer can hold
     // (LightBuffer::kMaxLights) - the excess were silently dropped before this existed.
     bool LightBufferOverflowed = false;

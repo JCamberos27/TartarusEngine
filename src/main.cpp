@@ -1978,7 +1978,9 @@ int main(int argc, char** argv) {
         }
         // TARTARUS_SHOT_START=<frames>: first capture frame (default 40); big packs need longer for their maps to decode.
         const int kShotCameraStart = [] { const char* e = std::getenv("TARTARUS_SHOT_START"); return e ? std::max(1, std::atoi(e)) : 40; }();
-        constexpr int kShotCameraSettle = 30;
+        // TARTARUS_SHOT_SETTLE=<frames> on each pose before its capture (default 30). 1 captures the first frame after
+        // every move: a fast camera turn, for pop-in checks (occlusion culling).
+        const int kShotCameraSettle = [] { const char* e = std::getenv("TARTARUS_SHOT_SETTLE"); return e ? std::max(1, std::atoi(e)) : 30; }();
         const int kSmokeTestFrames = opt.weaponTestMode || opt.npcTestMode ? 60 * 60 * 6 : opt.perfBenchMode ? 3 * kPerfPhaseFrames
                                    : !opt.outfitShotsDir.empty() ? kOutfitShotStart + kOutfitShotSettle * kOutfitShotMax + 1
                                    : !shotCameras.empty() ? kShotCameraStart + kShotCameraSettle * (int)shotCameras.size() + 1 : 100;
@@ -5757,6 +5759,9 @@ int main(int argc, char** argv) {
                                     !playing ? "edit" : playMaximized ? "play-max" : "play", perfFrame.N, perfFrame.N ? perfFrame.Sum / perfFrame.N : 0.0,
                                     perfFrame.Sum > 0.0 ? 1000.0 * perfFrame.N / perfFrame.Sum : 0.0,
                                     perfFrame.Max, editor.GetRenderStats().DrawCalls, editor.GetRenderStats().Triangles, window.GetWidth(), window.GetHeight());
+                        // The opaque pass's objects in view and how many of them OcclusionCuller held back (last frame).
+                        std::printf("[PerfBench]   objects=%d occluded=%d drawn=%d\n", editor.GetRenderStats().Objects,
+                                    editor.GetRenderStats().Occluded, editor.GetRenderStats().Objects - editor.GetRenderStats().Occluded);
                         // Every texture this process has uploaded so far (the editor's own icons included), mips included.
                         std::printf("[PerfBench]   textures=%d  %.1f MiB on the GPU\n", TextureLoadStats::Get().Count,
                                     TextureLoadStats::Get().GpuBytes / (1024.0 * 1024.0));

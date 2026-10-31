@@ -2252,6 +2252,12 @@ void EditorLayer::DrawProjectSettingsBody(World& /*world*/) {
             EditorUI::SetTooltip("Lays down the static world's depth before shading it, so each pixel runs the\n"
                                  "lighting once instead of once per surface drawn over it. Cheaper on the GPU for\n"
                                  "crowded interiors; costs a second (depth-only) draw of the static scene.");
+        SettingsLabel("Occlusion culling");
+        if (EditorUIPrimitives::Checkbox("##Occlusion culling", &q.OcclusionCulling)) ProjectSettings::Save();
+        if (ImGui::IsItemHovered())
+            EditorUI::SetTooltip("Static models hidden behind the depth pre-pass skip both of their draws. Each one\n"
+                                 "predicted hidden is box-tested on the GPU first and still draws if any of it shows,\n"
+                                 "so nothing visible is left out. Needs the depth pre-pass; shadows are not affected.");
         SettingsLabel("GPU instancing");
         if (EditorUIPrimitives::Checkbox("##GPU instancing", &q.GpuInstancing)) ProjectSettings::Save();
         if (ImGui::IsItemHovered())
