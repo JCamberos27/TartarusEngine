@@ -61,7 +61,7 @@ void PuddleSsr::Trace(const HdrTarget* target, unsigned int depthTex, const glm:
         p.SetInt("uSteps", kSteps);
         p.SetFloat("uMaxDistance", kMaxDistance);
         p.SetInt("uFrame", ++m_Frame);
-        glBindTextureUnit(32, depthTex); // past the 0-31 the draws use: nothing of theirs to clobber
+        glBindTextureUnit(32, depthTex); // TextureUnits::SsrDepth / SsrPrevColor: no draw uses them
         glBindTextureUnit(33, target->ResolvedColorTexture());
         glBindImageTexture(0, v.Tex, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16F);
         const int w = std::max(1, (v.W + 1) / 2), h = std::max(1, (v.H + 1) / 2);
