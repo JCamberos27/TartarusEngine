@@ -84,6 +84,9 @@ struct QualitySettings {
     // Repeated copies of a static model (the same model, materials and lighting state) draw as one instanced draw per
     // pass - the opaque and depth pre-passes, the SSAO pre-pass and every shadow map - instead of one draw each.
     bool GpuInstancing = true;
+    // With GPU instancing: the static world's meshes share vertex / index pages (MeshArena.h), and every run of
+    // sub-meshes that bind alike - across models, not only copies of one - goes out as one multi-draw indirect.
+    bool GpuDrivenDraws = true;
     // Clustered decals (docs/DECALS.md): what their texture arrays may grow to, least-recently-used
     // decal textures making room past it, and how far away decals still draw (they fade out over the
     // last fifth).
