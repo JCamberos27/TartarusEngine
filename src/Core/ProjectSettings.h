@@ -87,6 +87,9 @@ struct QualitySettings {
     // With GPU instancing: the static world's meshes share vertex / index pages (MeshArena.h), and every run of
     // sub-meshes that bind alike - across models, not only copies of one - goes out as one multi-draw indirect.
     bool GpuDrivenDraws = true;
+    // With GPU-driven draws: the opaque pass skips the copies its depth pre-pass already hides (HiZCuller.h), tested
+    // on the GPU against a depth pyramid - no CPU wait, and only boxes fully behind that depth are skipped.
+    bool GpuOcclusionCulling = true;
     // Clustered decals (docs/DECALS.md): what their texture arrays may grow to, least-recently-used
     // decal textures making room past it, and how far away decals still draw (they fade out over the
     // last fifth).

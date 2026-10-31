@@ -3,6 +3,7 @@
 #include "../Renderer/Model.h"
 #include "../Renderer/InstanceBatch.h"
 #include "../Renderer/MeshArena.h"
+#include "../Renderer/HiZCuller.h"
 #include "../Renderer/MaterialAsset.h"
 #include "../Renderer/FurRenderer.h"
 #include "../Renderer/VolumetricFog.h"
@@ -211,6 +212,27 @@ void MeshArenaFreeList() {
     f.Give(c, 30); // and everything joins up again
     CHECK(f.Runs() == 1 && f.FreeUnits() == 100);
     CHECK(f.Take(100) == 0 && f.Take(1) == ~0u);
+}
+
+// HiZCuller: the pyramid level a rectangle tests at spans at most two texels each way; boxes near the eye always draw.
+void HiZPieces() {
+    CHECK(HiZCuller::LevelFor(10, 10, 11, 11) == 0);
+    CHECK(HiZCuller::LevelFor(10, 10, 12, 10) == 1);       // 10>>1=5, 12>>1=6
+    CHECK(HiZCuller::LevelFor(0, 0, 1023, 0) == 9);        // 1023>>9 = 1
+    CHECK(HiZCuller::LevelFor(511, 0, 512, 0) == 0);        // two pixels straddling a boundary
+    for (int x0 = 0; x0 < 40; x0 += 3)
+        for (int x1 = x0; x1 < 300; x1 += 7) {
+            const int l = HiZCuller::LevelFor(x0, 0, x1, 0);
+            CHECK((x1 >> l) - (x0 >> l) <= 1);
+            CHECK(l == 0 || (x1 >> (l - 1)) - (x0 >> (l - 1)) > 1);
+        }
+    glm::vec3 lo(0.0f), hi(1.0f);
+    HiZCuller::PadBounds(lo, hi);
+    CHECK(lo.x < 0.0f && hi.x > 1.0f);
+    CHECK(HiZCuller::NearEye(lo, hi, glm::vec3(0.5f), 0.5f));
+    CHECK(HiZCuller::NearEye(lo, hi, glm::vec3(1.3f, 0.5f, 0.5f), 0.5f));
+    CHECK(!HiZCuller::NearEye(lo, hi, glm::vec3(3.0f, 0.5f, 0.5f), 0.5f));
+    CHECK(HiZCuller::FoliageSway(0.15f) > 0.3f);
 }
 
 // Material slots batch when they draw alike: the same asset, or separate copies with the same values; a different
@@ -507,6 +529,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"GPU instancing: material slots batch by asset or identical values", InstanceSlots});
     tests.push_back({"GPU-driven draws: indirect batches by key, in first-appearance order", IndirectBuilder});
     tests.push_back({"GPU-driven draws: mesh arena free list is first-fit and coalesces", MeshArenaFreeList});
+    tests.push_back({"GPU occlusion culling: pyramid level choice, padding and near-eye boxes", HiZPieces});
     tests.push_back({"GPU instancing: placed copies share one import id", InstanceImportId});
     tests.push_back({"Volumetric fog: blue-noise jitter ranks are a permutation, evenly spread", VolumetricBlueNoise});
     tests.push_back({"Volumetric fog: settings and Volumetric Intensity round-trip; old scenes default off / 1", VolumetricSettingsRoundTrip});

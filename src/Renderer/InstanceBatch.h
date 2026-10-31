@@ -125,6 +125,7 @@ void BuildIndirectBatches(const std::vector<IndirectItem>& items, std::vector<In
 namespace IndirectBuffer {
 // Uploads the commands into a fresh data store and binds it as GL_DRAW_INDIRECT_BUFFER (draws issued before keep theirs).
 void Upload(const std::vector<IndirectCommand>& commands);
+unsigned Handle(); // the GL buffer the last Upload filled
 inline const void* Offset(std::uint32_t command) { return (const void*)((std::uintptr_t)command * sizeof(IndirectCommand)); }
 }
 
