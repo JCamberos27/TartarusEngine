@@ -29,7 +29,9 @@ vec3 Hash3(ivec3 c) {
     uvec3 h = Pcg3d(uvec3(c + ivec3(4096)) + uvec3(uint(uSeed * 7919.0)));
     return vec3(h) * (1.0 / 4294967295.0);
 }
-ivec3 Wrap(ivec3 c, int period) { return ((c % period) + period) % period; }
+// Floored modulo: GLSL leaves % undefined for a negative operand, and Worley's -1 neighbour cell is one - left to
+// the driver, the noise stopped tiling and the clouds showed a straight seam wherever the textures wrap.
+ivec3 Wrap(ivec3 c, int period) { return c - period * ivec3(floor(vec3(c) / float(period))); }
 
 // Inverted Worley (cellular) noise: 1 at feature points, falling to 0 between them. Tiles with
 // a period of `freq` cells.
