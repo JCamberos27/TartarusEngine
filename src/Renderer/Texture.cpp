@@ -540,8 +540,10 @@ TextureCpuData Decode(const std::string& path, std::vector<unsigned char> memory
 namespace {
 // --mem-report: every Texture that has uploaded, so the report can list them without a second owner.
 struct LiveTextures {
-    static std::mutex& Mu() { static std::mutex m; return m; }
-    static std::unordered_set<const Texture*>& Set() { static std::unordered_set<const Texture*> s; return s; }
+    // Never destroyed: a Texture a static still holds is freed after these statics would have been, at exit, and
+    // its destructor still calls Remove (a destroyed set crashed the editor tests on shutdown).
+    static std::mutex& Mu() { static std::mutex* m = new std::mutex; return *m; }
+    static std::unordered_set<const Texture*>& Set() { static auto* s = new std::unordered_set<const Texture*>; return *s; }
     static void Add(const Texture* t) { std::lock_guard<std::mutex> l(Mu()); Set().insert(t); }
     static void Remove(const Texture* t) { std::lock_guard<std::mutex> l(Mu()); Set().erase(t); }
 };
@@ -551,7 +553,8 @@ namespace {
 // Byte-identical uploads (the packs' constant MaskMap_Metallic / AO100 maps and the like) share one GL texture.
 // Main thread only (Upload / Reimport / ~Texture all run there), so no lock.
 struct SharedGl { unsigned int Id = 0; int Refs = 0; size_t Bytes = 0; const char* Format = ""; };
-std::unordered_map<uint64_t, SharedGl>& SharedGlMap() { static std::unordered_map<uint64_t, SharedGl> m; return m; }
+// Never destroyed, for the same exit-order reason as LiveTextures (~Texture -> ReleaseGl looks it up).
+std::unordered_map<uint64_t, SharedGl>& SharedGlMap() { static auto* m = new std::unordered_map<uint64_t, SharedGl>; return *m; }
 
 uint64_t HashBytes(const unsigned char* p, size_t n, uint64_t h) {
     size_t i = 0;
