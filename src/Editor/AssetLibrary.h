@@ -116,6 +116,14 @@ public:
     // string (Sound) that keeps working independently. It just means a future LoadModel/
     // LoadTexture for that same path re-imports fresh rather than reusing this instance, and
     // the entry stops appearing in the Asset Browser.
+    // Scene switch: the cached models/materials/textures that existed before the load (`before`) and that
+    // nothing but this library still holds are dropped, so the previous scene's assets don't pile up in
+    // RAM/VRAM. Whatever the new scene (or a system) references is kept, so reloading a scene reloads nothing.
+    struct CacheKeys { std::set<std::string> Models, Materials, Textures; };
+    CacheKeys SnapshotCacheKeys() const;
+    // `keepModels`: model paths a live entity instantiates from (their cached original must stay, InstantiateModel re-imports without it).
+    // Only assets that an earlier scene load brought in are eligible - startup assets (player, weapons) never are.
+    int ReleaseUnreferenced(const CacheKeys& before, const std::set<std::string>& keepModels); // returns how many assets were dropped
     void RemoveModel(const std::shared_ptr<Model>& model);
     void RemoveTexture(const std::shared_ptr<Texture>& texture);
     void RemoveSound(const std::string& path);
@@ -325,6 +333,7 @@ private:
     std::map<std::string, std::shared_ptr<MaterialAsset>> m_MaterialCache;
     std::map<std::string, std::shared_ptr<ShaderAsset>> m_ShaderCache;
     std::vector<std::shared_ptr<Model>> m_ModelList;
+    CacheKeys m_SceneKeys; // what scene loads have brought in (ReleaseUnreferenced's eligible set)
     std::vector<std::shared_ptr<Texture>> m_TextureList;
     std::vector<std::string> m_TexturePaths;    // parallel to m_TextureList, kept in sync
     std::map<std::string, std::filesystem::file_time_type> m_TextureWriteTime; // #132 - at load/reimport

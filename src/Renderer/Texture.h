@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -138,6 +139,12 @@ public:
     // the mip chain, and a short format name ("RGBA8", "sRGB BC1", ...).
     size_t GpuBytes() const { return m_GpuBytes; }
     const char* GpuFormatName() const { return m_GpuFormatName; }
+    // --mem-report: the size as uploaded (after Max Size), the embedded source this texture keeps for Reimport,
+    // and a walk over every texture that currently owns a GL object.
+    int UploadWidth() const { return m_UpW; }
+    int UploadHeight() const { return m_UpH; }
+    size_t EmbeddedSourceBytes() const { return m_Memory.size(); }
+    static void ForEachLive(const std::function<void(const Texture&)>& fn);
 
 private:
     void UploadFromFile(const TextureImportSettings& settings);
@@ -154,6 +161,8 @@ private:
     unsigned int m_ID = 0;
     int m_Width = 0, m_Height = 0, m_Channels = 0;
     size_t m_GpuBytes = 0;
+    int m_UpW = 0, m_UpH = 0;
+    uint64_t m_ShareKey = 0; // content key of the shared GL texture (0: not shared)
     const char* m_GpuFormatName = "";
     std::string m_Path;
     TextureImportSettings m_Settings;
