@@ -4,6 +4,7 @@
 #include "../Renderer/InstanceBatch.h"
 #include "../Renderer/MeshArena.h"
 #include "../Renderer/HiZCuller.h"
+#include "../Renderer/ProbeSH.h"
 #include "../Renderer/MaterialAsset.h"
 #include "../Renderer/FurRenderer.h"
 #include "../Renderer/VolumetricFog.h"
@@ -212,6 +213,39 @@ void MeshArenaFreeList() {
     f.Give(c, 30); // and everything joins up again
     CHECK(f.Runs() == 1 && f.FreeUnits() == 100);
     CHECK(f.Take(100) == 0 && f.Take(1) == ~0u);
+}
+
+// ProbeSH: the six faces' solid angles cover the sphere, texel directions follow GL's face table, and a constant or
+// linear cube projects to SH that gives it back.
+void ProbeSHProjection() {
+    constexpr int n = 4;
+    float total = 0.0f;
+    for (int f = 0; f < 6; ++f)
+        for (int y = 0; y < n; ++y)
+            for (int x = 0; x < n; ++x) total += ProbeSH::TexelSolidAngle(x, y, n);
+    CHECK(std::abs(total - 4.0f * 3.14159265f) < 1e-3f);
+    CHECK(ProbeSH::TexelDirection(0, 1, 1, 2).x > 0.5f);   // +X
+    CHECK(ProbeSH::TexelDirection(3, 1, 1, 2).y < -0.5f);  // -Y
+    CHECK(ProbeSH::TexelDirection(5, 1, 1, 2).z < -0.5f);  // -Z
+    CHECK(ProbeSH::TexelDirection(4, 0, 0, 2).y > 0.0f);   // +Z: row 0 is the top (t runs down -Y)
+    std::vector<float> faces((size_t)6 * n * n * 4);
+    for (int f = 0; f < 6; ++f)
+        for (int y = 0; y < n; ++y)
+            for (int x = 0; x < n; ++x) {
+                const glm::vec3 d = ProbeSH::TexelDirection(f, x, y, n);
+                float* px = &faces[(((size_t)f * n + y) * n + x) * 4];
+                px[0] = 2.0f;                 // constant
+                px[1] = 1.0f + 0.5f * d.y;    // linear in y
+                px[2] = 0.0f;
+                px[3] = 1.0f;
+            }
+    const ProbeSH::Coeffs c = ProbeSH::Project(faces.data(), n);
+    for (const glm::vec3 d : {glm::vec3(0, 1, 0), glm::vec3(0, -1, 0), glm::normalize(glm::vec3(1, 1, 1)), glm::vec3(0, 0, -1)}) {
+        const glm::vec3 r = ProbeSH::Evaluate(c, d);
+        CHECK(std::abs(r.x - 2.0f) < 0.02f);
+        CHECK(std::abs(r.y - (1.0f + 0.5f * d.y)) < 0.02f);
+        CHECK(std::abs(r.z) < 1e-4f);
+    }
 }
 
 // HiZCuller: the pyramid level a rectangle tests at spans at most two texels each way; boxes near the eye always draw.
@@ -530,6 +564,7 @@ void RegisterRenderTests(UnitTestSupport::TestList& tests) {
     tests.push_back({"GPU-driven draws: indirect batches by key, in first-appearance order", IndirectBuilder});
     tests.push_back({"GPU-driven draws: mesh arena free list is first-fit and coalesces", MeshArenaFreeList});
     tests.push_back({"GPU occlusion culling: pyramid level choice, padding and near-eye boxes", HiZPieces});
+    tests.push_back({"Room probes: L2 SH projection of a captured cube gives it back", ProbeSHProjection});
     tests.push_back({"GPU instancing: placed copies share one import id", InstanceImportId});
     tests.push_back({"Volumetric fog: blue-noise jitter ranks are a permutation, evenly spread", VolumetricBlueNoise});
     tests.push_back({"Volumetric fog: settings and Volumetric Intensity round-trip; old scenes default off / 1", VolumetricSettingsRoundTrip});

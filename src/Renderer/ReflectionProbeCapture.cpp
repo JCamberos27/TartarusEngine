@@ -158,7 +158,9 @@ void ReflectionProbeCapture::Sync(ReflectionProbeArray& probes, bool environment
     probes.SetCubeArray(m_Array);
     for (int i = 0; i < probes.Count(); ++i) {
         const int s = slotOf[i];
-        probes.SetLayer(i, s >= 0 && s < (int)m_Slots.size() && m_Slots[s].Ready ? s : -1);
+        const bool ready = s >= 0 && s < (int)m_Slots.size() && m_Slots[s].Ready;
+        probes.SetLayer(i, ready ? s : -1);
+        if (ready) probes.SetSH(i, m_Slots[s].SH);
     }
 }
 
@@ -175,7 +177,16 @@ void ReflectionProbeCapture::Step(IblProbe& ibl, ReflectionProbeArray& probes,
     if (m_Pre.Slot >= 0) {
         ibl.PrefilterIntoArray(m_CaptureCube[m_Pre.Buf], kFaceSize, m_Array, m_Pre.Slot, m_Pre.Face);
         if (++m_Pre.Face == 6) {
-            if (m_Pre.Slot < (int)m_Slots.size()) m_Slots[m_Pre.Slot].Ready = true;
+            if (m_Pre.Slot < (int)m_Slots.size()) {
+                // The room diffuse reads the widest GGX mip along N: project that mip onto L2 SH once, here, so the
+                // model shader evaluates nine uniforms instead of fetching the cube for every pixel (ProbeSH.h).
+                constexpr int kTop = IblProbe::kSpecularMips - 1;
+                constexpr int kTopSize = IblProbe::kSpecularSize >> kTop;
+                float px[kTopSize * kTopSize * 6 * 4] = {};
+                glGetTextureSubImage(m_Array, kTop, 0, 0, m_Pre.Slot * 6, kTopSize, kTopSize, 6, GL_RGBA, GL_FLOAT, sizeof(px), px);
+                m_Slots[m_Pre.Slot].SH = ProbeSH::Project(px, kTopSize);
+                m_Slots[m_Pre.Slot].Ready = true;
+            }
             m_Pre = {};
         }
     }

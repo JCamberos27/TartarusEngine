@@ -87,6 +87,9 @@ void ReflectionProbeArray::Bind(Shader& shader, const glm::vec3& viewCenter) con
         shader.SetVec3(kCenter[j],   p.Center);
         shader.SetVec3(kHalfSize[j], p.HalfSize);
         shader.SetFloat(kBlend[j],   best[j].score / totalScore);
-        shader.SetInt(kLayer[j],     m_Capturing || m_CubeArray == 0 ? -1 : p.Layer);
+        const int layer = m_Capturing || m_CubeArray == 0 ? -1 : p.Layer;
+        shader.SetInt(kLayer[j],     layer);
+        static const char* kSH[kMaxDraw] = {"uProbeSH[0]", "uProbeSH[9]"};
+        if (layer >= 0) shader.SetVec3Array(kSH[j], 9, p.SH.data());
     }
 }

@@ -40,6 +40,7 @@
 #include "WorldText.h"
 #include "GLStateCache.h"
 #include "HiZCuller.h"
+#include "ProbeSH.h"
 #include "gl.h"
 #include "Core/Profiler.h"
 
@@ -504,6 +505,7 @@ void SceneRenderer::ApplyFrameState(Shader& program, const FrameState& fs) const
         glBindTexture(GL_TEXTURE_2D, iblProbe.BrdfLut());
         program.SetFloat("uIBLIntensity", std::max(fs.world->SkyAmbientIntensity, 0.0f));
         program.SetFloat("uIBLSpecularMaxLod", (float)(IblProbe::kSpecularMips - 1));
+        program.SetInt("uProbeRoomSH", ProbeSH::Enabled() ? 1 : 0); // the room diffuse from SH (ProbeSH.h)
     }
     program.SetInt("uIBLEnabled", fs.iblOn ? 1 : 0);
 

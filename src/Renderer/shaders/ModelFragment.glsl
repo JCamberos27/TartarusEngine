@@ -532,7 +532,8 @@ void main() {
                     vec3 q = abs(vWorldPos - uProbeCenter[pi]) / max(uProbeHalfSize[pi], vec3(1e-3));
                     float inBox = 1.0 - smoothstep(0.8, 1.0, max(q.x, max(q.y, q.z)));
                     if (inBox > 0.0) {
-                        vec3 roomIrr = textureLod(uProbeCubes, vec4(N, float(uProbeLayer[pi])), uIBLSpecularMaxLod).rgb;
+                        vec3 roomIrr = uProbeRoomSH == 1 ? max(EvalProbeSH(pi, N), vec3(0.0))
+                                                         : textureLod(uProbeCubes, vec4(N, float(uProbeLayer[pi])), uIBLSpecularMaxLod).rgb;
                         roomIrradiance += roomIrr * uProbeBlend[pi] * inBox;
                         roomW += uProbeBlend[pi] * inBox;
                     }

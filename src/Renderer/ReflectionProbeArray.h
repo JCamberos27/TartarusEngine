@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <vector>
+#include "ProbeSH.h"
 
 class Shader;
 class World;
@@ -43,6 +44,8 @@ public:
     struct ProbeVolume { glm::vec3 Center, HalfSize; bool Capture; };
     ProbeVolume Volume(int i) const { return {m_Probes[i].Center, m_Probes[i].HalfSize, m_Probes[i].Capture}; }
     void SetLayer(int i, int layer) { m_Probes[i].Layer = layer; }
+    // The captured layer's diffuse as L2 SH (ProbeSH.h): Bind() uploads it as uProbeSH[] for the room diffuse.
+    void SetSH(int i, const ProbeSH::Coeffs& sh) { m_Probes[i].SH = sh; }
     int Layer(int i) const { return m_Probes[i].Layer; }
     void SetCubeArray(unsigned int tex) { m_CubeArray = tex; }
     unsigned int CubeArray() const { return m_CubeArray; }
@@ -59,6 +62,7 @@ private:
         float     Importance;
         bool      Capture = false; // ReflectionProbeComponent::CaptureScene
         int       Layer = -1;      // captured cube-array layer, -1 = sky
+        ProbeSH::Coeffs SH{};      // that layer's widest mip as L2 SH
     };
     std::vector<ProbeData> m_Probes;
     unsigned int m_CubeArray = 0;

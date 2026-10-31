@@ -4,6 +4,7 @@
 #include <memory>
 #include <vector>
 #include <glm/glm.hpp>
+#include "ProbeSH.h"
 
 class HdrTarget;
 class IblProbe;
@@ -58,7 +59,7 @@ public:
     static std::vector<bool> Changed(const std::vector<Volume>& have, const std::vector<Volume>& want);
 
 private:
-    struct Slot { Volume Vol; bool Ready = false; };
+    struct Slot { Volume Vol; bool Ready = false; ProbeSH::Coeffs SH{}; };
     struct Job { int Slot = -1; int Face = 0; int Buf = 0; bool Done = false; };
     void EnsureArray(int layers);
     void EnsureCaptureCubes();

@@ -225,6 +225,18 @@ uniform float uProbeBlend[2];     // normalised blend weights (sum == 1)
 // same mip layout as uPrefilteredMap; -1 = not captured (yet) -> the sky's cube, parallax-corrected as before.
 uniform int   uProbeLayer[2];
 layout(binding = 26) uniform samplerCubeArray uProbeCubes;
+// The room diffuse (ModelFragment.glsl): each captured probe's widest GGX mip projected onto L2 SH at capture time
+// (ProbeSH.h), nine per probe. uProbeRoomSH 1 = evaluate it, 0 = fetch the cube's mip as before (TARTARUS_NO_PROBE_SH).
+uniform vec3  uProbeSH[18];
+uniform int   uProbeRoomSH;
+vec3 EvalProbeSH(int p, vec3 d) {
+    int b = p * 9;
+    return uProbeSH[b] * 0.282095
+         + (uProbeSH[b + 1] * d.y + uProbeSH[b + 2] * d.z + uProbeSH[b + 3] * d.x) * 0.488603
+         + (uProbeSH[b + 4] * (d.x * d.y) + uProbeSH[b + 5] * (d.y * d.z) + uProbeSH[b + 7] * (d.x * d.z)) * 1.092548
+         + uProbeSH[b + 6] * (0.315392 * (3.0 * d.z * d.z - 1.0))
+         + uProbeSH[b + 8] * (0.546274 * (d.x * d.x - d.y * d.y));
+}
 #endif
 
 // Puddle screen-space reflections (PuddleSsr): this view's half-res traced reflection, rgb = radiance, a = confidence
