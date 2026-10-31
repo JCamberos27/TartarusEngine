@@ -228,8 +228,8 @@ layout(binding = 26) uniform samplerCubeArray uProbeCubes;
 #endif
 
 // Puddle screen-space reflections (PuddleSsr): this view's half-res traced reflection, rgb = radiance, a = confidence
-// (0 = missed / off screen -> the probe or sky reflection stays). Unit 29 (1-7 and 16-20 are
-// material maps, ShaderAsset::BuildBindings); only read when uSsrEnabled == 1.
+// (0 = missed / off screen -> the probe or sky reflection stays). Unit 29 (the full map is TextureUnits.h);
+// only read when uSsrEnabled == 1.
 layout(binding = 29) uniform sampler2D uSsrMap;
 uniform int uSsrEnabled;
 
@@ -270,12 +270,12 @@ uniform int uTriplanar;
 uniform float uTriplanarScale;
 
 // Cover layer (Standard.shader _Cover*): a second material laid over up-facing surfaces, projected from above in world space.
-// Compiled only into the _COVER variant, so materials without it pay nothing. Units 0/28/20 are bound by ShaderAsset (26/29 are the probe cubes and puddle SSR; 0 is only the depth/shadow
-// programs' albedo, 28 is free, and 20 is shared with _ThicknessMap, so a cover material gives up its thickness map).
+// Compiled only into the _COVER variant, so materials without it pay nothing. Units 34/35/36 are its own (TextureUnits.h,
+// bound by ShaderAsset): units past 31 are legal (GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS >= 96), so it shares none.
 #ifdef _COVER
-layout(binding = 0) uniform sampler2D uCoverAlbedoMap;
-layout(binding = 28) uniform sampler2D uCoverNormalMap;
-layout(binding = 20) uniform sampler2D uCoverMaskMap;   // R height, G occlusion, B smoothness
+layout(binding = 34) uniform sampler2D uCoverAlbedoMap;
+layout(binding = 35) uniform sampler2D uCoverNormalMap;
+layout(binding = 36) uniform sampler2D uCoverMaskMap;   // R height, G occlusion, B smoothness
 uniform float uCoverStrength;
 uniform float uCoverScale;        // tiles per metre
 uniform float uCoverThreshold;    // up-facing share where the cover starts
