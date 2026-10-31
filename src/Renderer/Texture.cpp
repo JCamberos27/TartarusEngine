@@ -434,7 +434,7 @@ UploadStaging::Step Texture::UploadStep(bool stage) {
     std::unique_ptr<TextureCpuData> data = std::move(m_Pending);
     constexpr GLenum kPixelUnpackBuffer = 0x88EC; // GL_PIXEL_UNPACK_BUFFER
     glBindBuffer(kPixelUnpackBuffer, UploadStaging::Buffer());
-    Upload(*data, reinterpret_cast<const unsigned char*>(static_cast<std::uintptr_t>(m_Stage.Offset)), m_StageWidened);
+    Upload(*data, true, m_Stage.Offset, m_StageWidened);
     glBindBuffer(kPixelUnpackBuffer, 0);
     UploadStaging::Retire(m_Stage);
     // The decoded pixels go back to the OS on the worker: freeing 16-64 MB here took a millisecond or more.
@@ -600,7 +600,7 @@ void Texture::UploadFromFile(const TextureImportSettings& settings) {
     Upload(data);
 }
 
-void Texture::Upload(const TextureCpuData& data, const unsigned char* staged, bool stagedRgba) {
+void Texture::Upload(const TextureCpuData& data, bool staged, std::size_t stagedOffset, bool stagedRgba) {
     InitGpuCaps();
     if (!data.Ok) return;
     const auto uploadStart = std::chrono::steady_clock::now();
@@ -609,7 +609,8 @@ void Texture::Upload(const TextureCpuData& data, const unsigned char* staged, bo
     m_Height = data.SourceHeight;
     m_Channels = data.Channels;
     const int uploadW = data.Width, uploadH = data.Height;
-    const unsigned char* uploadData = staged ? staged : data.Pixels.data();
+    const unsigned char* const stagedAt = reinterpret_cast<const unsigned char*>(static_cast<std::uintptr_t>(stagedOffset));
+    const unsigned char* uploadData = staged ? stagedAt : data.Pixels.data();
     const TextureCpuData* compressed = data.GLFormat != 0 ? &data : nullptr;
 
     // Sized internal formats on both branches (#100) — the sRGB branch already used them;
@@ -673,7 +674,7 @@ void Texture::Upload(const TextureCpuData& data, const unsigned char* staged, bo
         const GLenum cf = (GLenum)data.GLFormat;
         levels = (int)compressed->LevelSizes.size();
         glTextureStorage2D(m_ID, levels, cf, uploadW, uploadH);
-        const unsigned char* blocks = staged ? staged : compressed->Pixels.data();
+        const unsigned char* blocks = staged ? stagedAt : compressed->Pixels.data();
         m_GpuBytes = 0;
         for (int l = 0; l < levels; ++l) {
             const int lw = std::max(1, uploadW >> l), lh = std::max(1, uploadH >> l);

@@ -146,9 +146,10 @@ private:
     void UploadFromFile(const TextureImportSettings& settings);
     // The GL half: creates m_ID from `data` and fills the size/format fields. Leaves m_ID 0 if
     // the decode failed.
-    // `staged`: the pixels are at that byte offset of the bound GL_PIXEL_UNPACK_BUFFER instead of data.Pixels.
+    // `staged`: the pixels are at byte `stagedOffset` of the bound GL_PIXEL_UNPACK_BUFFER instead of data.Pixels (an
+    // offset, not a pointer: the ring's first region is at 0, which a null-pointer test would have taken for "none").
     // `stagedRgba`: a 3-channel image staged as RGBA (alpha 255); it is still stored as RGB8 / SRGB8.
-    void Upload(const TextureCpuData& data, const unsigned char* staged = nullptr, bool stagedRgba = false);
+    void Upload(const TextureCpuData& data, bool staged = false, std::size_t stagedOffset = 0, bool stagedRgba = false);
     UploadStaging::Region m_Stage; // a pending texture's pixels on their way up
     bool m_StageWidened = false;
 
