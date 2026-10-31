@@ -35,7 +35,7 @@ void main() {
     vec4 localPos = vec4(aPos, 1.0);
     vec3 localNormal = aNormal;
     if (uUseSkinning == 2) {
-        uint s = uint(gl_VertexID + uSkinBase) * kSkinnedWords;
+        uint s = uint(gl_VertexID - gl_BaseVertex + uSkinBase) * kSkinnedWords;
         localPos = vec4(uintBitsToFloat(uSkinned[s]), uintBitsToFloat(uSkinned[s + 1u]), uintBitsToFloat(uSkinned[s + 2u]), 1.0);
         localNormal = UnpackUnitOct(uSkinned[s + 3u]);
     } else if (uUseSkinning == 1) {
