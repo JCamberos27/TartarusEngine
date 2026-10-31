@@ -41,6 +41,8 @@ struct AsyncJob {
     // Worker output, read once Done is set.
     std::shared_ptr<Model> ModelResult;
     TextureCpuData TexResult;
+    // Main thread: the texture being uploaded (UploadStaging), between pumps.
+    std::shared_ptr<Texture> TexPending;
     // A material's texture maps, from its .mat, each with its .meta already read.
     struct MaterialMap {
         std::string Path;
@@ -72,6 +74,28 @@ std::string AbsoluteAssetPath(const std::string& p) {
     if (p.empty() || std::filesystem::path(p).is_absolute()) return p;
     return ProjectPaths::Resolve(p);
 }
+
+// TARTARUS_PUMP_TRACE=1: every PumpAsync step slower than 1 ms, with what it was (finding the stalls).
+bool PumpTrace() {
+    static const bool on = [] {
+        char* e = nullptr;
+        size_t n = 0;
+        const bool v = _dupenv_s(&e, &n, "TARTARUS_PUMP_TRACE") == 0 && e && e[0] == '1';
+        std::free(e);
+        return v;
+    }();
+    return on;
+}
+struct PumpStepTimer {
+    const char* What;
+    const std::string& Path;
+    std::chrono::steady_clock::time_point T0 = std::chrono::steady_clock::now();
+    ~PumpStepTimer() {
+        if (!PumpTrace()) return;
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - T0).count();
+        if (ms >= 1.0) std::printf("[PumpTrace] %.2f ms %s %s\n", ms, What, Path.c_str());
+    }
+};
 
 double MsSince(std::chrono::steady_clock::time_point t) {
     return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t).count();
@@ -306,10 +330,13 @@ AssetLibrary::AsyncHandle AssetLibrary::RequestMaterialAsync(const std::string& 
 }
 
 int AssetLibrary::PumpAsync(double budgetMs) {
+    UploadStaging::Warm(); // the ring exists before anything loads in Play
     if (!m_Async) return 0;
     AsyncLoader& a = *m_Async;
     const auto start = std::chrono::steady_clock::now();
     bool worked = false;
+    UploadStaging::Poll(); // recycle the staging regions the GPU has finished copying out of
+    const bool stage = UploadStaging::Enabled();
 
     std::vector<std::shared_ptr<AsyncJob>> materialsDone; // their maps are requested after the loop
     for (auto it = a.Active.begin(); it != a.Active.end();) {
@@ -318,6 +345,7 @@ int AssetLibrary::PumpAsync(double budgetMs) {
         if (!job.Done.load(std::memory_order_acquire)) { ++it; continue; }
 
         bool finished = true;
+        bool waiting = false; // a staged copy isn't in yet: other jobs go ahead, this one comes back next pump
         if (job.K == AsyncJob::Kind::Material) {
             materialsDone.push_back(*it);
         } else if (job.K == AsyncJob::Kind::Model) {
@@ -326,24 +354,46 @@ int AssetLibrary::PumpAsync(double budgetMs) {
                 // dropped it: Play wanted it and Play is over.
                 job.ModelResult.reset();
             } else {
-                // One mesh or texture per step, re-checking the budget between them.
-                while (!job.ModelResult->FinishGpuUploadStep()) {
+                // One mesh or texture per step, re-checking the budget between them. Staged, a step is either the
+                // copy's hand-off to the worker or the GPU copy out of the ring - each a fraction of a millisecond.
+                for (;;) {
+                    const UploadStaging::Step s = [&] {
+                        PumpStepTimer st{"model step", job.Path};
+                        return stage ? job.ModelResult->GpuUploadStep()
+                                     : (job.ModelResult->FinishGpuUploadStep() ? UploadStaging::Step::Done : UploadStaging::Step::Progress);
+                    }();
+                    if (s == UploadStaging::Step::Done) break;
                     worked = true;
+                    if (s == UploadStaging::Step::Waiting) { finished = false; waiting = true; break; }
                     if (MsSince(start) >= budgetMs) { finished = false; break; }
                 }
                 if (finished) {
                     if (job.ModelResult->MeshCount() == 0 && !job.ModelResult->HasAnimations())
                         Log::Error("Model: async import of '" + job.Path + "' produced nothing.", LogContext::Asset(job.Path));
+                    PumpStepTimer st{"model register", job.Path};
                     RegisterModel(job.Path, std::move(job.ModelResult));
                     KeepPastPlay(m_PlayMark, job.Gen, m_PlayMark.Models, job.Path);
                 }
             }
         } else {
-            if (job.TexResult.Ok && !HasTexture(job.Path) && !job.Forget) {
-                RegisterTexture(job.Path, std::make_shared<Texture>(std::move(job.TexResult)));
-                KeepPastPlay(m_PlayMark, job.Gen, m_PlayMark.Textures, job.Path);
+            if (!job.TexPending && job.TexResult.Ok && !HasTexture(job.Path) && !job.Forget)
+                job.TexPending = Texture::CreatePending(std::move(job.TexResult));
+            if (job.TexPending) {
+                PumpStepTimer st{"texture", job.Path};
+                if (job.TexPending->UploadStep(stage) == UploadStaging::Step::Waiting) {
+                    finished = false;
+                    waiting = true;
+                } else if (!HasTexture(job.Path) && !job.Forget) {
+                    RegisterTexture(job.Path, std::move(job.TexPending));
+                    KeepPastPlay(m_PlayMark, job.Gen, m_PlayMark.Textures, job.Path);
+                }
+                if (finished) job.TexPending.reset();
             }
-            job.TexResult = TextureCpuData{};
+            if (finished) job.TexResult = TextureCpuData{};
+        }
+        if (waiting) {
+            ++it;
+            continue;
         }
         worked = true;
         if (!finished) break;
@@ -356,6 +406,7 @@ int AssetLibrary::PumpAsync(double budgetMs) {
         // The maps are requested in the material's generation, so they share its fate at Stop.
         const std::uint32_t gen = m_LoadGen;
         m_LoadGen = m->Gen;
+        PumpStepTimer st{"material maps request", m->Path};
         for (const auto& map : m->Maps) {
             if (m->Forget) break;
             AsyncHandle t = RequestTextureAsync(map.Path, map.Use, &map.Meta);
@@ -373,6 +424,7 @@ int AssetLibrary::PumpAsync(double budgetMs) {
                                      [](const std::shared_ptr<AsyncJob>& j) { return j->Complete(); });
         if (all) {
             if (!t->MaterialPath.empty() && !t->Forget) {
+                PumpStepTimer st{"material", t->MaterialPath};
                 LoadMaterial(t->MaterialPath);
                 KeepPastPlay(m_PlayMark, t->Gen, m_PlayMark.Materials, t->MaterialPath);
             }

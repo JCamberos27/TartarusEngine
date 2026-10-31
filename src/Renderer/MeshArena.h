@@ -23,8 +23,10 @@ struct Range {
 // Whether meshes go into the arena (TARTARUS_NO_MESH_ARENA=1 turns it off, for A/B benches). Read once.
 bool Enabled();
 // Places the mesh's vertices and (0-based) indices in a page; false when the arena is off or GL refused.
+// `srcBuffer` != 0: the vertices and indices are copied on the GPU from that buffer at those byte offsets (an
+// UploadStaging region) instead of read from the pointers.
 bool Allocate(const ModelVertex* vertices, std::uint32_t vertexCount, const std::uint32_t* indices, std::uint32_t indexCount,
-              Range& out);
+              Range& out, unsigned srcBuffer = 0, std::size_t srcVertexOffset = 0, std::size_t srcIndexOffset = 0);
 void Free(const Range& r);
 // The page's VAO, vertex and element buffers (ModelVertex layout, ModelMesh::CreateGpu's attributes).
 unsigned PageVao(std::uint32_t page);
