@@ -1,5 +1,7 @@
 #include "Texture.h"
 #include <mutex>
+#include <cstring>
+#include <unordered_map>
 #include <unordered_set>
 #include "Log.h"
 #include "AssetDatabase.h"
@@ -545,6 +547,34 @@ struct LiveTextures {
 };
 }
 
+namespace {
+// Byte-identical uploads (the packs' constant MaskMap_Metallic / AO100 maps and the like) share one GL texture.
+// Main thread only (Upload / Reimport / ~Texture all run there), so no lock.
+struct SharedGl { unsigned int Id = 0; int Refs = 0; size_t Bytes = 0; const char* Format = ""; };
+std::unordered_map<uint64_t, SharedGl>& SharedGlMap() { static std::unordered_map<uint64_t, SharedGl> m; return m; }
+
+uint64_t HashBytes(const unsigned char* p, size_t n, uint64_t h) {
+    size_t i = 0;
+    for (; i + 8 <= n; i += 8) { uint64_t w; std::memcpy(&w, p + i, 8); h = (h ^ w) * 1099511628211ull; h ^= h >> 29; }
+    for (; i < n; ++i) h = (h ^ p[i]) * 1099511628211ull;
+    return h;
+}
+
+void ReleaseGl(unsigned int& id, uint64_t key) {
+    if (!id) return;
+    if (key) {
+        auto it = SharedGlMap().find(key);
+        if (it != SharedGlMap().end() && it->second.Id == id) {
+            if (--it->second.Refs <= 0) { glDeleteTextures(1, &id); SharedGlMap().erase(it); }
+            id = 0;
+            return;
+        }
+    }
+    glDeleteTextures(1, &id);
+    id = 0;
+}
+}
+
 void Texture::ForEachLive(const std::function<void(const Texture&)>& fn) {
     std::vector<const Texture*> all;
     { std::lock_guard<std::mutex> l(LiveTextures::Mu()); all.assign(LiveTextures::Set().begin(), LiveTextures::Set().end()); }
@@ -634,6 +664,30 @@ void Texture::Upload(const TextureCpuData& data) {
         while (longEdge > 1) { longEdge >>= 1; ++levels; }
     }
 
+    // Same bytes + same sampler state as a texture already on the GPU: share it.
+    uint64_t shareKey = 1469598103934665603ull;
+    {
+        const unsigned char* src = compressed ? compressed->Pixels.data() : uploadData;
+        const size_t srcN = compressed ? compressed->Pixels.size() : (size_t)uploadW * uploadH * (expanded.empty() ? (size_t)std::max(m_Channels, 1) : 4);
+        const uint64_t meta[] = {(uint64_t)uploadW, (uint64_t)uploadH, (uint64_t)m_Channels, (uint64_t)data.GLFormat,
+                                 (uint64_t)effective.IsSRGB, (uint64_t)effective.GenerateMipmaps, (uint64_t)effective.WrapMode,
+                                 (uint64_t)effective.FilterMode, (uint64_t)effective.AnisoLevel, (uint64_t)srcN,
+                                 (uint64_t)(compressed ? compressed->LevelSizes.size() : 0)};
+        shareKey = HashBytes((const unsigned char*)meta, sizeof(meta), shareKey);
+        shareKey = HashBytes(src, srcN, shareKey);
+        if (shareKey == 0) shareKey = 1;
+        auto it = SharedGlMap().find(shareKey);
+        if (it != SharedGlMap().end()) {
+            ++it->second.Refs;
+            m_ID = it->second.Id; m_ShareKey = shareKey;
+            m_GpuBytes = 0; // the first holder already owns these bytes
+            m_GpuFormatName = it->second.Format;
+            m_Settings = data.Settings;
+            m_UpW = uploadW; m_UpH = uploadH;
+            LiveTextures::Add(this);
+            return;
+        }
+    }
     glCreateTextures(GL_TEXTURE_2D, 1, &m_ID);
     if (compressed) {
         // #156 - BCn: every mip level was built and encoded on the CPU; upload them as-is.
@@ -720,6 +774,8 @@ void Texture::Upload(const TextureCpuData& data) {
         }
     }
 
+    SharedGlMap()[shareKey] = SharedGl{m_ID, 1, m_GpuBytes, m_GpuFormatName};
+    m_ShareKey = shareKey;
     m_Settings = data.Settings;
     m_UpW = uploadW; m_UpH = uploadH;
     LiveTextures::Add(this);
@@ -737,23 +793,25 @@ bool Texture::Reimport(const TextureImportSettings& settings) {
     // doesn't mean the full decode will (truncated data, out of memory); deleting first left
     // this Texture at GL name 0, rendering black, which the comment above used to promise
     // couldn't happen.
-    const unsigned int previous = m_ID;
+    unsigned int previous = m_ID;
+    const uint64_t previousKey = m_ShareKey;
+    m_ShareKey = 0;
     const int prevW = m_Width, prevH = m_Height, prevC = m_Channels;
     m_ID = 0;
     UploadFromFile(settings);
     if (m_ID == 0) {
-        m_ID = previous;
+        m_ID = previous; m_ShareKey = previousKey;
         m_Width = prevW; m_Height = prevH; m_Channels = prevC;
         Log::Error("Texture: reimport of '" + m_Path + "' failed - kept the previous version.", LogContext::Asset(m_Path));
         return false;
     }
-    if (previous) glDeleteTextures(1, &previous);
+    ReleaseGl(previous, previousKey);
     return true;
 }
 
 Texture::~Texture() {
     LiveTextures::Remove(this);
-    if (m_ID) glDeleteTextures(1, &m_ID);
+    ReleaseGl(m_ID, m_ShareKey);
 }
 
 void Texture::Bind(unsigned int unit) const {

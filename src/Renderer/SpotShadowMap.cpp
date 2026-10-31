@@ -19,6 +19,9 @@ void SpotShadowMap::Release() {
 void SpotShadowMap::Configure(int resolution, int layers) {
     resolution = std::clamp(resolution, 256, 4096);
     layers = std::clamp(layers, 1, kMaxSpots);
+    // Grow-only for a given resolution: the array is sized to the slots in use, and never shrinks back
+    // (a shrink then regrow would redraw every cache again for the sake of a few MB).
+    if (m_DepthArray != 0 && resolution == m_Resolution) layers = std::max(layers, m_Layers);
     if (m_DepthArray != 0 && resolution == m_Resolution && layers == m_Layers) return;
 
     Release();
@@ -40,10 +43,8 @@ void SpotShadowMap::Configure(int resolution, int layers) {
     glCreateFramebuffers(1, &m_Fbo);
     glNamedFramebufferDrawBuffers(m_Fbo, 0, nullptr); // depth only
 
-    // Only ever rendered to and copied from, never sampled.
-    glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &m_StaticArray);
-    glTextureStorage3D(m_StaticArray, 1, GL_DEPTH_COMPONENT32F, resolution, resolution, layers);
-    GpuMemTrack::Set("SpotShadowMap (dynamic + static)", (size_t)resolution * resolution * layers * 4 * 2);
+    GpuMemTrack::Set("SpotShadowMap (live)", (size_t)resolution * resolution * layers * 4);
+    GpuMemTrack::Set("SpotShadowMap (static cache)", 0);
     glCreateFramebuffers(1, &m_StaticFbo);
     glNamedFramebufferDrawBuffers(m_StaticFbo, 0, nullptr);
 
@@ -63,7 +64,17 @@ void SpotShadowMap::Begin(int i) const {
     glClear(GL_DEPTH_BUFFER_BIT);
 }
 
+// The static-caster cache (only ever rendered to and copied from, never sampled) is made on first use: a scene whose
+// spots all move (the flashlight) never pays for it.
+void SpotShadowMap::EnsureStatic() const {
+    if (m_StaticArray) return;
+    glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &m_StaticArray);
+    glTextureStorage3D(m_StaticArray, 1, GL_DEPTH_COMPONENT32F, m_Resolution, m_Resolution, m_Layers);
+    GpuMemTrack::Set("SpotShadowMap (static cache)", (size_t)m_Resolution * m_Resolution * m_Layers * 4);
+}
+
 void SpotShadowMap::BeginStatic(int i) const {
+    EnsureStatic();
     i = std::clamp(i, 0, std::max(m_Layers, 1) - 1);
     glBindFramebuffer(GL_FRAMEBUFFER, m_StaticFbo);
     glNamedFramebufferTextureLayer(m_StaticFbo, GL_DEPTH_ATTACHMENT, m_StaticArray, 0, i);
@@ -72,6 +83,7 @@ void SpotShadowMap::BeginStatic(int i) const {
 }
 
 void SpotShadowMap::BeginFromStatic(int i, int x0, int y0, int x1, int y1) const {
+    EnsureStatic();
     i = std::clamp(i, 0, std::max(m_Layers, 1) - 1);
     glNamedFramebufferTextureLayer(m_Fbo, GL_DEPTH_ATTACHMENT, m_DepthArray, 0, i);
     x0 = std::clamp(x0, 0, m_Resolution); x1 = std::clamp(x1, 0, m_Resolution);
