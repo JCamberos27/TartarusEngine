@@ -156,6 +156,7 @@
 #include <ctime>
 #include <future>
 #pragma warning(disable: 4996) // stb_image_write.h's own sprintf() use, not this file's
+#include "Renderer/MemReport.h"
 #include <json.hpp>         // --model-report reads each model's .meta
 #include <cstdio>
 #include <stb_image_write.h> // --asset-load-bench: synthesize PNGs to load (ARCH-201 / #375)
@@ -1982,6 +1983,16 @@ int main(int argc, char** argv) {
         const int kSmokeTestFrames = opt.weaponTestMode || opt.npcTestMode ? 60 * 60 * 6 : opt.perfBenchMode ? 3 * kPerfPhaseFrames
                                    : !opt.outfitShotsDir.empty() ? kOutfitShotStart + kOutfitShotSettle * kOutfitShotMax + 1
                                    : !shotCameras.empty() ? kShotCameraStart + kShotCameraSettle * (int)shotCameras.size() + 1 : 100;
+        // TARTARUS_MEM_REPORT=<dir>: a memory snapshot (MemReport) before the first scene and after each one.
+        const char* const memReportDir = std::getenv("TARTARUS_MEM_REPORT");
+        auto memSnapshot = [&](const std::string& label) {
+            if (!memReportDir) return;
+            std::vector<const Model*> ms;
+            for (const auto& m : assets.Models()) ms.push_back(m.get());
+            for (auto [e, rc] : world.Registry.view<RenderableComponent>().each())
+                if (rc.ModelRef) ms.push_back(rc.ModelRef.get());
+            MemReport::Write(memReportDir, label, ms);
+        };
         struct OutfitShot { std::string Name; glm::vec3 Position; float Yaw, Pitch; };
         std::vector<OutfitShot> outfitShots;
         struct PerfAccum { double Sum = 0.0; double Max = 0.0; int N = 0; };
@@ -2169,6 +2180,7 @@ int main(int argc, char** argv) {
                     // them — it must never rewrite a committed regression fixture on disk just
                     // from loading it (audit #77; tests/smoke-scenes-invalid/ in particular is
                     // documented as static, hand-authored fixtures).
+                    if (smokeSceneIndex == 0) memSnapshot("00_start");
                     smokeSceneLoadOk = SceneSerializer::Load(world, assets, path, /*persistMigration=*/false);
                     warmRenderResources(); // the editor does the same at startup, before its first frame
                     std::cout << "[SmokeTest] Loading " << path
@@ -2229,6 +2241,7 @@ int main(int argc, char** argv) {
                         const std::size_t texBefore = assets.Textures().size();
                         const std::size_t matsBefore = assets.Materials().size();
                         bool rtOk = false;
+                        memSnapshot("pre_rt_" + std::filesystem::path(smokeScenePaths[smokeSceneIndex]).stem().string());
                         try {
                             const std::string snap = SceneSerializer::SaveToString(world, assets);
                             rtOk = SceneSerializer::LoadFromString(world, assets, snap);
@@ -3813,7 +3826,7 @@ int main(int argc, char** argv) {
             // Layers are allocated for the budget, not the hard ceiling (#110); a zero budget
             // still keeps one layer so sampler unit 9 is never unbound.
             if (world.ShadowsEnabled) {
-                spotShadowMap.Configure(std::min(world.ShadowResolution, 4096), std::max(spotShadowBudget, 1));
+                spotShadowMap.Configure(std::min(world.ShadowResolution, 4096), std::max(spotShadowCount, 1)); // sized to the slots in use (grow-only)
             }
             // #163 - spot/point shadows render once per frame, so they use the LOD levels of the
             // camera the user is mainly looking through (each view's draw re-applies its own).
@@ -4822,7 +4835,7 @@ int main(int argc, char** argv) {
                                     w->DockNode->TabBar->NextSelectedTabId = w->TabId;
                     }
                 }
-                if (editorUIVisible) editor.Draw(world, assets, editorCamera, dt);
+                if (editorUIVisible) { PROFILE_SCOPE("UI Editor Draw"); editor.Draw(world, assets, editorCamera, dt); }
                 else if (playing && devKeys) editor.DrawPlayModeOverlays(world); // #185 — physics panel + HUD over maximized play
                 // F6 Nav while editing: the navmesh this scene baked in its last Play (Library/NavCache/scene_<name>.txt names
                 // it), its edges drawn over the Scene view. The physics scene the navmesh is built from only exists in Play.
@@ -4949,7 +4962,7 @@ int main(int argc, char** argv) {
                 // every module panel (Inspector, Hierarchy, Asset Browser, Console) has had its
                 // chance to act this frame — those are all drawn inside editorModule.Draw() above,
                 // not inside editor.Draw(). See EditorLayer::PostModuleDraw()'s comment.
-                editor.PostModuleDraw(world);
+                { PROFILE_SCOPE("UI Post Module"); editor.PostModuleDraw(world); }
 
                 // Eyedropper (#236 R2): a colour field armed EditorLayer's viewport eyedropper
                 // and HandleViewportPicking just captured a click. Read that one pixel off the
@@ -5822,6 +5835,7 @@ int main(int argc, char** argv) {
                         cause += "play-mode cycles incomplete (" + std::to_string(smokePlayCycles) + "/2); ";
                     bool pass = cause.empty();
                     const std::string& path = smokeScenePaths[smokeSceneIndex];
+                    memSnapshot(std::to_string(smokeSceneIndex + 1) + "_" + std::filesystem::path(path).stem().string());
                     smokeResults.push_back({path, smokeFramesRendered, newErrors, newLogErrors,
                                             drawCalls, smokeSceneLoadOk, pass, cause});
                     // #354: which ShaderAsset variant keys drew this scene (0 = default program).
