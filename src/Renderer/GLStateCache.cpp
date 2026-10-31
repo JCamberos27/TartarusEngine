@@ -1,6 +1,7 @@
 #include "GLStateCache.h"
 #include "gl.h"
 #include <array>
+#include "TextureUnits.h"
 #ifndef NDEBUG
 #include "Log.h"
 // Not exposed by the engine's minimal gl.h loader (like GL_ONE / GL_RG elsewhere); only the
@@ -18,9 +19,9 @@ bool g_ProgramValid = false;
 unsigned int g_CurrentVAO = 0;
 bool g_VAOValid = false;
 
-// Material textures use units 1..7 and 16+ (#207), frame state 8..15; 32 covers every unit the
-// engine binds. Units past this fall back to an uncached bind below.
-constexpr int kMaxCachedTextureUnits = 32;
+// Every unit the engine binds (TextureUnits.h, 0..47, the cover layer at 34-36 included). Units past
+// this fall back to an uncached bind below.
+constexpr int kMaxCachedTextureUnits = TextureUnits::Count;
 std::array<unsigned int, kMaxCachedTextureUnits> g_BoundTextures{};
 std::array<bool, kMaxCachedTextureUnits> g_TextureValid{};
 
@@ -84,8 +85,7 @@ void UseProgram(unsigned int program) {
 
 void BindTexture2D(unsigned int unit, unsigned int texture) {
     // An out-of-range unit falls back to an uncached direct call rather than indexing past the
-    // array - this engine never actually uses more than ~7 units, so this branch is a safety
-    // net, not a real code path.
+    // array - a safety net, not a real code path (TextureUnits::Count covers every unit used).
     if (unit >= (unsigned int)kMaxCachedTextureUnits) {
         glActiveTexture(GL_TEXTURE0 + unit);
         glBindTexture(GL_TEXTURE_2D, texture);
