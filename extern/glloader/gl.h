@@ -572,6 +572,11 @@ typedef void (__stdcall* PFNGLDRAWELEMENTSINSTANCEDBASEVERTEXPROC)(GLenum, GLsiz
 typedef void (__stdcall* PFNGLMULTIDRAWELEMENTSINDIRECTPROC)(GLenum, GLenum, const void*, GLsizei, GLsizei);
 extern PFNGLDRAWELEMENTSINSTANCEDBASEVERTEXPROC glDrawElementsInstancedBaseVertex;
 extern PFNGLMULTIDRAWELEMENTSINDIRECTPROC glMultiDrawElementsIndirect;
+// Viewport arrays (GL 4.1): the sun's layered cascades scissor each layer on its own (CascadedShadowMap).
+typedef void (__stdcall* PFNGLVIEWPORTINDEXEDFPROC)(GLuint, GLfloat, GLfloat, GLfloat, GLfloat);
+typedef void (__stdcall* PFNGLSCISSORINDEXEDPROC)(GLuint, GLint, GLint, GLsizei, GLsizei);
+extern PFNGLVIEWPORTINDEXEDFPROC glViewportIndexedf;
+extern PFNGLSCISSORINDEXEDPROC glScissorIndexed;
 // Timestamp queries nest, unlike GL_TIME_ELAPSED (#147 GPU profiler).
 typedef void (__stdcall* PFNGLQUERYCOUNTERPROC)(GLuint, GLenum);
 extern PFNGLQUERYCOUNTERPROC glQueryCounter;

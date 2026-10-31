@@ -2624,12 +2624,16 @@ void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const Shade
         const ShaderProperty& prop = props[b.PropIndex];
         const std::string& pname   = prop.Name;
         if (!hasCover && pname.size() > 6 && pname.compare(0, 6, "_Cover") == 0) continue;
-        if (b.LocProgram != shader.Serial()) { // "_AlbedoMap" → "uAlbedoMap", "uHasAlbedoMap"
-            b.LocProgram = shader.Serial();
-            b.UniformLoc = shader.Loc(b.Uniform);
-            b.HasUniformLoc = b.HasUniform.empty() ? -1 : shader.Loc(b.HasUniform);
+        int slot = 0;
+        while (slot < PropertyBinding::kLocSlots && b.LocProgram[slot] != shader.Serial()) ++slot;
+        if (slot == PropertyBinding::kLocSlots) { // "_AlbedoMap" → "uAlbedoMap", "uHasAlbedoMap"
+            slot = b.LocNext;
+            b.LocNext = (std::uint8_t)((b.LocNext + 1) % PropertyBinding::kLocSlots);
+            b.LocProgram[slot] = shader.Serial();
+            b.UniformLoc[slot] = shader.Loc(b.Uniform);
+            b.HasUniformLoc[slot] = b.HasUniform.empty() ? -1 : shader.Loc(b.HasUniform);
         }
-        const int uname = b.UniformLoc;
+        const int uname = b.UniformLoc[slot];
         const bool builtin = b.Builtin;
         const MaterialProp* extra = nullptr;
         if (!builtin) {
@@ -2639,7 +2643,7 @@ void BindMaterialDataDriven(Shader& shader, const MaterialAsset& ma, const Shade
 
         switch (prop.Type) {
         case ShaderPropType::Texture2D: {
-            const int hasName = b.HasUniformLoc;
+            const int hasName = b.HasUniformLoc[slot];
             const std::shared_ptr<Texture>& tex =
                 builtin ? (b.GetTex ? b.GetTex(mat) : MaterialAsset::GetTexture(mat, pname))
                         : (extra ? extra->Tex : MaterialAsset::GetTexture(mat, pname) /*null*/);

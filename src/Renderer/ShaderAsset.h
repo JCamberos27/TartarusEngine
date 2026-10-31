@@ -83,10 +83,14 @@ struct PropertyBinding {
     // compares. Null when the name has no field of this type: the bind falls back to Get*.
     const std::shared_ptr<Texture>& (*GetTex)(const Material&) = nullptr;
     glm::vec4 (*GetVal)(const Material&) = nullptr;
-    // Uniform / HasUniform's locations in the program last bound with them (BindMaterialDataDriven): a forest binds
-    // a few thousand materials a frame, and looking each name up again was a sixth of its CPU time.
-    mutable std::uint64_t LocProgram = 0; // Shader::Serial
-    mutable int UniformLoc = -1, HasUniformLoc = -1;
+    // Uniform / HasUniform's locations in the last few programs bound with them (BindMaterialDataDriven): a forest
+    // binds a few thousand materials a frame, and looking each name up again was a sixth of its CPU time. Several
+    // slots, because one model's sub-meshes alternate variants of the same shader (a tree's bark, then its foliage
+    // leaves): with one slot nearly every bind missed (4k lookups a frame in the forest trail).
+    static constexpr int kLocSlots = 4;
+    mutable std::uint64_t LocProgram[kLocSlots] = {}; // Shader::Serial, 0 = empty
+    mutable int UniformLoc[kLocSlots] = {-1, -1, -1, -1}, HasUniformLoc[kLocSlots] = {-1, -1, -1, -1};
+    mutable std::uint8_t LocNext = 0; // the slot the next miss replaces
 };
 
 class ShaderAsset {
