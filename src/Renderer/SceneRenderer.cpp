@@ -1261,12 +1261,66 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
         opaqueGroups);
     static std::vector<int> groupBase;
     groupBase.assign(opaqueGroups.Groups.size(), -1);
+    // GPU-driven draws (InstanceBatch.h): every batchable group of an arena model - a single copy too - goes into the
+    // instance buffer, and each of its opaque sub-meshes becomes one indirect command in the batch of sub-meshes that
+    // bind alike: the same program, material, render state and per-object state (probes, shadows, layer, SSAO). A
+    // batch draws where its first group stood in the sorted list, so the static world still goes out first.
+    const bool multiDraw = instancing && MultiDrawEnabled();
+    static std::vector<std::uint8_t> groupIndirect; // 1: drawn by the multi-draw batches
+    groupIndirect.assign(opaqueGroups.Groups.size(), 0);
+    struct OpaqueTag { std::uint32_t Group; std::uint16_t Mesh; };
+    static std::vector<OpaqueTag> opaqueTags;
+    static std::vector<IndirectItem> opaqueItems;
+    static std::vector<IndirectCommand> opaqueCommands;
+    static std::vector<IndirectBatch> opaqueBatches;
+    opaqueTags.clear();
+    opaqueItems.clear();
+    opaqueBatches.clear();
     {
         std::vector<glm::mat4>& staging = InstanceBuffer::Staging();
         staging.clear();
+        for (std::size_t g = 0; multiDraw && g < opaqueGroups.Groups.size(); ++g) {
+            const auto& grp = opaqueGroups.Groups[g];
+            const std::uint32_t leadIndex = opaqueGroups.Order[grp.First];
+            const DrawItem& lead = drawList[leadIndex];
+            if (lead.Pass == Model::MeshPass::Transparent || !batchable(lead) || !lead.Ref->InArena()) continue;
+            groupIndirect[g] = 1;
+            const std::uint32_t base = (std::uint32_t)(staging.size() / 2);
+            groupBase[g] = (int)base;
+            for (std::uint32_t k = 0; k < grp.Count; ++k) {
+                const glm::mat4& x = drawList[opaqueGroups.Order[grp.First + k]].Xform;
+                staging.push_back(x);
+                staging.push_back(glm::mat4(glm::transpose(glm::inverse(glm::mat3(x)))));
+            }
+            // Everything the per-draw hook and the material bind read, but the transforms.
+            std::uint64_t objectKey = (std::uint64_t)lead.ReceiveShadows | ((std::uint64_t)lead.StaticReceiver << 1) |
+                                      ((std::uint64_t)lead.NoSsao << 2) | ((std::uint64_t)lead.DoubleSided << 3) |
+                                      ((std::uint64_t)prepassed(lead) << 4) | ((std::uint64_t)(std::uint32_t)lead.LayerBit << 8) |
+                                      ((std::uint64_t)probeKey(leadIndex) << 40);
+            for (int m = 0; m < lead.Ref->MeshCount(); ++m) {
+                const MaterialAsset* ma = m < (int)lead.Slots->size() ? (*lead.Slots)[m].get() : nullptr;
+                if (ma && ma->RenderQueue == MaterialAsset::Queue::Transparent) continue;
+                const MeshArena::Range& r = lead.Ref->Mesh(m).ArenaRange();
+                if (!r.IndexCount) continue;
+                std::uint32_t variant = 0;
+                const Shader* prog = programFor(ma, variant);
+                const Material& mat = ma ? ma->Mat : lead.Ref->MeshMaterial(m);
+                std::uint64_t key = objectKey;
+                const auto mix = [&key](std::uint64_t v) { key ^= v + 0x9E3779B97F4A7C15ull + (key << 6) + (key >> 2); };
+                mix((std::uint64_t)(std::uintptr_t)prog);
+                mix(mat.HashWithExtraProps());
+                mix(ma ? (std::uint64_t)(std::uintptr_t)ma->Shader.get() : 1ull);
+                mix(lead.Ref->MeshStateKey(m, *lead.Slots, lead.DoubleSided));
+                mix(r.Page);
+                opaqueTags.push_back({(std::uint32_t)g, (std::uint16_t)m});
+                opaqueItems.push_back({key, (std::uint32_t)opaqueTags.size() - 1,
+                                       {r.IndexCount, grp.Count, r.FirstIndex, (std::int32_t)r.BaseVertex, base}});
+            }
+        }
+        if (!opaqueItems.empty()) BuildIndirectBatches(opaqueItems, opaqueCommands, opaqueBatches);
         for (std::size_t g = 0; g < opaqueGroups.Groups.size(); ++g) {
             const auto& grp = opaqueGroups.Groups[g];
-            if (grp.Count < 2) continue;
+            if (groupIndirect[g] || grp.Count < 2) continue;
             groupBase[g] = (int)(staging.size() / 2);
             for (std::uint32_t k = 0; k < grp.Count; ++k) {
                 const glm::mat4& x = drawList[opaqueGroups.Order[grp.First + k]].Xform;
@@ -1275,6 +1329,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
             }
         }
         InstanceBuffer::Upload();
+        if (!opaqueItems.empty()) IndirectBuffer::Upload(opaqueCommands);
     }
     // TAA: the opaque pass (ModelFragment.glsl) is what writes motion vectors - location 1 joins the draw
     // buffers for it alone, and leaves again before fur, the sky and the transparents.
@@ -1287,9 +1342,30 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     // street or a forest was shaded in full. With writes off the test runs first, and the pre-pass depth (the same
     // clip) already holds the answer.
     GLboolean depthWrites = GL_TRUE;
+    std::uint32_t nextBatch = 0; // batches draw in order, each at the first group it holds
     for (std::size_t g = 0; g < opaqueGroups.Groups.size(); ++g) {
         const auto& grp = opaqueGroups.Groups[g];
         const DrawItem& it = drawList[opaqueGroups.Order[grp.First]];
+        if (groupIndirect[g]) {
+            for (; nextBatch < opaqueBatches.size() && opaqueTags[opaqueBatches[nextBatch].Tag].Group == g; ++nextBatch) {
+                const IndirectBatch& b = opaqueBatches[nextBatch];
+                const OpaqueTag& t = opaqueTags[b.Tag];
+                const DrawItem& lead = drawList[opaqueGroups.Order[opaqueGroups.Groups[t.Group].First]];
+                const GLboolean leadWrites = prepassed(lead) ? GL_FALSE : GL_TRUE;
+                if (leadWrites != depthWrites) glDepthMask(depthWrites = leadWrites);
+                probeItem = &lead;
+                instanceBase = 0; // uInstanced on; each command's baseInstance is its group's
+                if (lead.Ref->DrawMeshIndirect(modelShader, t.Mesh, *lead.Slots, selectProgram, perDraw, lead.DoubleSided,
+                                               IndirectBuffer::Offset(b.First), (int)b.Count))
+                    ++localStats.DrawCalls;
+            }
+            for (std::uint32_t k = 0; k < grp.Count; ++k) {
+                const DrawItem& member = drawList[opaqueGroups.Order[grp.First + k]];
+                localStats.Triangles += member.Tris;
+                localStats.Vertices += member.Verts;
+            }
+            continue;
+        }
         const GLboolean wantWrites = prepassed(it) ? GL_FALSE : GL_TRUE;
         if (wantWrites != depthWrites) glDepthMask(depthWrites = wantWrites);
         probeItem = &it;

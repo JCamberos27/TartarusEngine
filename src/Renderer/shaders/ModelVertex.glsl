@@ -80,12 +80,12 @@ void main() {
 
     vHidden = 0.0;
     if (uHideVerts == 1) {
-        int id = gl_VertexID + uHideVertBase;
+        int id = gl_VertexID - gl_BaseVertex + uHideVertBase;
         uint word = uHideVertBits[clamp(id >> 5, 0, uHideVertBits.length() - 1)];
         if (((word >> uint(id & 31)) & 1u) != 0u) vHidden = 1.0;
     }
     if (uCollarVerts == 1) {
-        int id = gl_VertexID + uHideVertBase;
+        int id = gl_VertexID - gl_BaseVertex + uHideVertBase;
         uint word = uCollarVertBits[clamp(id >> 5, 0, uCollarVertBits.length() - 1)];
         if (((word >> uint(id & 31)) & 1u) != 0u) vHidden = 1.0;
     }
@@ -104,7 +104,7 @@ void main() {
             vHidden += uBoneMaskMode == 1 ? masked : 1.0 - masked;
         }
         if (uUseSkinning == 2) {
-            uint s = uint(gl_VertexID + uSkinBase) * kSkinnedWords;
+            uint s = uint(gl_VertexID - gl_BaseVertex + uSkinBase) * kSkinnedWords;
             localPos = vec4(uintBitsToFloat(uSkinned[s]), uintBitsToFloat(uSkinned[s + 1u]), uintBitsToFloat(uSkinned[s + 2u]), 1.0);
             localNormal = UnpackUnitOct(uSkinned[s + 3u]);
             localTangent = UnpackUnitOct(uSkinned[s + 4u]);
@@ -129,7 +129,7 @@ void main() {
     mat4 model = uModel;
     mat3 normalMat = mat3(uNormalMatrix); // inverse-transpose of uModel, computed once on the CPU (#104)
     if (uInstanced == 1) {
-        int at = (uInstanceBase + gl_InstanceID) * 2;
+        int at = (uInstanceBase + gl_BaseInstance + gl_InstanceID) * 2; // gl_BaseInstance: the multi-draw command's group
         model = uInstances[at];
         normalMat = mat3(uInstances[at + 1]);
     }
