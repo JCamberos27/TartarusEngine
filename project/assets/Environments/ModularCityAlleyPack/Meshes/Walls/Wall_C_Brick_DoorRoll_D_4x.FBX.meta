@@ -3,7 +3,7 @@
   "guid": "913184f46ad3136e",
   "importer": {
     "excludeNodes": [],
-    "globalScale": 1.0,
+    "globalScale": 0.82,
     "importAnimations": false,
     "importNormals": true,
     "importSkeleton": false,
@@ -11,8 +11,8 @@
     "mergeByMaterial": true,
     "optimizeGraph": true,
     "pivotOffset": [
-      -30.0,
-      9.0,
+      -24.6,
+      7.38,
       0.0
     ]
   },

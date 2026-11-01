@@ -9,7 +9,7 @@
       "position": [
         -0.0,
         0.0,
-        1.445999
+        1.301399
       ],
       "rotation": [
         0.0,
@@ -18,9 +18,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.9,
+        0.9,
+        0.9
       ]
     },
     {
@@ -80,22 +80,22 @@
     },
     {
       "Openable": {
-        "Amount": 0.72,
+        "Amount": 0.648,
         "Motion": "Slide Left",
         "Open Time": 1.15,
         "Start Open": false
       },
       "collider": {
         "center": [
-          0.36433,
-          1.149974,
-          -0.00076
+          0.327897,
+          1.034977,
+          -0.000684
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.364429,
-          1.15,
-          0.025
+          0.327986,
+          1.035,
+          0.0225
         ],
         "isTrigger": false,
         "shape": 0
@@ -118,29 +118,29 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        1.111111,
+        1.111111,
+        1.111111
       ]
     },
     {
       "Openable": {
-        "Amount": 0.721,
+        "Amount": 0.649,
         "Motion": "Slide Right",
         "Open Time": 1.15,
         "Start Open": false
       },
       "collider": {
         "center": [
-          -0.364511,
-          1.149766,
-          -0.00076
+          -0.32806,
+          1.034789,
+          -0.000684
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.364395,
-          1.15,
-          0.025
+          0.327956,
+          1.035,
+          0.0225
         ],
         "isTrigger": false,
         "shape": 0
@@ -163,9 +163,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        1.111111,
+        1.111111,
+        1.111111
       ]
     },
     {
@@ -191,9 +191,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Elevator_panel_inside.FBX",
       "pathGuid": "48da70083a1e2996",
       "position": [
-        -0.938618,
-        1.2435,
-        1.265219
+        -0.844756,
+        1.11915,
+        1.138697
       ],
       "rotation": [
         0.0,
@@ -202,9 +202,9 @@
         -0.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.9,
+        0.9,
+        0.9
       ],
       "static": true
     }
