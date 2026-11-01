@@ -12,6 +12,7 @@
 class AssetLibrary;
 class FirstPersonPresentation;
 class NpcDirector;
+class NavMesh;
 struct Npc;
 class Player;
 class PlayerVitals;
@@ -91,8 +92,8 @@ public:
     bool Aiming() const { return !m_Target.empty(); }   // sights up (rounds go where the view looks)
     bool WantsReload() const { return m_Reload; }
     bool WantsAiOverlay() const { return m_Scenario == "sandbox"; } // the AI overlay in the sandbox shots
-    bool RunsWithoutSquad() const { return m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "spider" || m_Scenario == "spiderdeath" || m_Scenario == "spiderhunt" || m_Scenario == "spiderplay" || m_Scenario == "spiderdoor"; } // After() even in a scene with no squad
-    bool WantsCleanViews() const { return m_Scenario == "blood" || m_Scenario == "ragdoll" || m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "spider" || m_Scenario == "spiderdeath" || m_Scenario == "spiderhunt" || m_Scenario == "spiderplay" || m_Scenario == "spiderdoor"; } // no collider / physics-debug overlays
+    bool RunsWithoutSquad() const { return m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "roam" || m_Scenario == "spider" || m_Scenario == "spiderdeath" || m_Scenario == "spiderhunt" || m_Scenario == "spiderplay" || m_Scenario == "spiderdoor"; } // After() even in a scene with no squad
+    bool WantsCleanViews() const { return m_Scenario == "blood" || m_Scenario == "ragdoll" || m_Scenario == "decals" || m_Scenario == "doors" || m_Scenario == "roam" || m_Scenario == "spider" || m_Scenario == "spiderdeath" || m_Scenario == "spiderhunt" || m_Scenario == "spiderplay" || m_Scenario == "spiderdoor"; } // no collider / physics-debug overlays
     // Time stands still this frame (the host steps the game by zero): the ragdoll scenario's multi-angle shots of one moment.
     bool Frozen() const { return m_RFreeze; }
     // The blood scenario's view of the blood, filled by the host each frame.
@@ -245,10 +246,14 @@ private:
         glm::vec3 Normal{0.0f};  // through the opening (the leaf's +Z)
         glm::vec3 Along{0.0f};   // along the wall, toward the latch side
         float Half = 0.46f;      // half the opening's width (Apartment Hallway's 0.92 m)
+        bool Pack = false;       // an imported pack's door: its runs stop short of the furniture either side (DoorsPassSetUp)
+        float Thick = 0.0f;      // the leaf's thickness (a pack door)
+        float Swing = 1.0f;      // the side of the wall it opens to: +1 along Normal, -1 back (Swing Back)
         std::uint32_t Leaf = 0xFFFFFFFFu; // the leaf's entity (the Openable)
     };
     struct DoorRun {
         glm::vec3 Start{0.0f}, Dir{0.0f}, Heading{0.0f}, Prev{0.0f};
+        float Before = 0.0f, After = 0.0f; // where it starts before the wall plane and ends past it, along Dir
         float Speed = 0.0f, Budget = 0.0f, Clock = 0.0f, Time = 0.0f, MinRatio = 0.0f, Stuck = 0.0f;
         int PenFrames = 0;
         bool Placed = false, HavePrev = false, Sprint = false, Strafe = false;
@@ -258,6 +263,18 @@ private:
     void DoorsSetUp(World& world);
     void DoorsPassSetUp(const Player& player);
     void DoorsShut(World& world);
+    // roam (NpcTest_Roam.cpp): a walk through every room by the doors' waypoints, along the navigation mesh
+    void Roam(World& world, const Player& player);
+    void RoamDrive(Player& player, float dt, float& wantYaw, float& wantPitch);
+    void RoamSetUp(World& world, const Player& player);
+    std::shared_ptr<NavMesh> m_RoNav; // its own, at the player's size: a scene without a squad builds none
+    std::vector<glm::vec3> m_RoPoints, m_RoPath;
+    glm::vec3 m_RoStart{0.0f}, m_RoFrom{0.0f}, m_RoPrev{0.0f};
+    int m_RoLeg = 0, m_RoCorner = 0, m_RoOk = 0, m_RoTotal = 0, m_RoFalls = 0, m_RoStairs = 0, m_RoStairsOk = 0;
+    int m_RoUnreachable = 0, m_RoOffMesh = 0, m_RoWorstAt = -1;
+    float m_RoWait = 0.0f, m_RoClock = 0.0f, m_RoBudget = 0.0f, m_RoStuck = 0.0f, m_RoStuckSum = 0.0f, m_RoWorstStuck = 0.0f;
+    float m_RoLow = 0.0f;
+    bool m_RoReady = false;
     // After the passes: a door shut on the player standing in it, for the first few doors (m_DShut: which; -1 not yet).
     int m_DShut = -1, m_DShutOk = 0, m_DShutPen = 0;
     float m_DShutClock = 0.0f;
