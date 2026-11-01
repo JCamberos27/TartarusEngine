@@ -8171,21 +8171,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.0,
-          0.056331
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.153632,
-          0.102957,
-          0.056941
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 719,
       "name": "Lamp_Wall",
       "order": 719,
@@ -8374,7 +8359,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 724,
       "name": "Lamp_Chinatown_Long",
@@ -8491,7 +8476,7 @@
         "halfExtents": [
           0.194096,
           0.12513,
-          0.002831
+          0.0164
         ],
         "isTrigger": false,
         "shape": 0
@@ -9190,13 +9175,13 @@
       "collider": {
         "center": [
           -0.0,
-          0.000861,
+          -0.014678,
           0.513815
         ],
         "friction": 0.6,
         "halfExtents": [
           0.85003,
-          0.000861,
+          0.0164,
           0.525377
         ],
         "isTrigger": false,
@@ -9397,21 +9382,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.001669,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.19251,
-          0.0,
-          0.250478
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 762,
       "name": "Paper_On_Floor",
       "order": 762,
@@ -9858,7 +9828,7 @@
         "halfExtents": [
           0.557197,
           0.14389,
-          0.001524
+          0.0164
         ],
         "isTrigger": false,
         "shape": 0
@@ -10263,21 +10233,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.115137,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.042454,
-          0.114609,
-          0.024442
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 793,
       "name": "CleaningBottle",
       "order": 793,
@@ -10618,21 +10573,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          -0.096996,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.15,
-          0.1,
-          0.15
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 806,
       "name": "Lamp_Cone_Spot",
       "order": 806,
@@ -10781,7 +10721,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 812,
       "name": "Lamp_Chinatown_MediumLenght",
@@ -11173,7 +11113,7 @@
         "halfExtents": [
           0.206217,
           0.062204,
-          0.002831
+          0.0164
         ],
         "isTrigger": false,
         "shape": 0
@@ -11352,7 +11292,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 829,
       "name": "Lamp_HangingCone_MediumLenght",
@@ -11389,7 +11329,7 @@
         "halfExtents": [
           1.468711,
           0.113096,
-          0.002831
+          0.0164
         ],
         "isTrigger": false,
         "shape": 0
@@ -11422,7 +11362,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 831,
       "name": "Lamp_Chinatown_Short",
@@ -11731,7 +11671,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 843,
       "name": "Dumpster",
@@ -11761,7 +11701,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 844,
       "name": "DumpsterLid_A",
@@ -11791,7 +11731,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 845,
       "name": "DumpsterLid_B",

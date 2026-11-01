@@ -11892,7 +11892,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 657,
       "name": "Watersprinklerpipe_R",
@@ -11919,21 +11919,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.0,
-          0.01452
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.314444,
-          0.476736,
-          0.015023
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 658,
       "name": "Painting_H",
       "order": 658,
@@ -12144,21 +12129,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          7.8e-05,
-          -0.119787,
-          -0.105295
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.05,
-          0.12301,
-          0.116049
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 665,
       "name": "Watersprinklerpipe_end",
       "order": 665,
@@ -12184,21 +12154,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.132767,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.176494,
-          0.134446,
-          0.099242
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 666,
       "name": "Books_D",
       "order": 666,
@@ -12264,21 +12219,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.0,
-          0.015023
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.314444,
-          0.476736,
-          0.015023
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 671,
       "name": "Painting_F",
       "order": 671,
@@ -12704,21 +12644,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.132767,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.176494,
-          0.134446,
-          0.099242
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 710,
       "name": "Books_D (1)",
       "order": 710,
@@ -12744,21 +12669,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.132767,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.087661,
-          0.132883,
-          0.100529
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 711,
       "name": "Books_E (2)",
       "order": 711,
@@ -12784,21 +12694,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.132767,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.088459,
-          0.134093,
-          0.100799
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 712,
       "name": "Books_F (1)",
       "order": 712,
@@ -12824,21 +12719,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.132767,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.087661,
-          0.132883,
-          0.100529
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 713,
       "name": "Books_G (2)",
       "order": 713,
@@ -12864,21 +12744,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.132767,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.088459,
-          0.134093,
-          0.100799
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 714,
       "name": "Books_F (2)",
       "order": 714,
@@ -12904,21 +12769,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.132767,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.087661,
-          0.132883,
-          0.100529
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 715,
       "name": "Books_G (1)",
       "order": 715,
@@ -12944,21 +12794,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.132767,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.087661,
-          0.132883,
-          0.100529
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 716,
       "name": "Books_E (3)",
       "order": 716,
@@ -12984,21 +12819,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.132767,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.176494,
-          0.134446,
-          0.099242
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 717,
       "name": "Books_D (2)",
       "order": 717,
@@ -13024,21 +12844,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.132767,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.087661,
-          0.132883,
-          0.100529
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 718,
       "name": "Books_E (1)",
       "order": 718,
@@ -13064,21 +12869,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.132767,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.136355,
-          0.133544,
-          0.099242
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 719,
       "name": "Books_B (1)",
       "order": 719,
@@ -13104,21 +12894,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.132767,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.136355,
-          0.133544,
-          0.099242
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 720,
       "name": "Books_B (2)",
       "order": 720,
@@ -13144,21 +12919,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.132767,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.129411,
-          0.133069,
-          0.103726
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 721,
       "name": "Books_A (1)",
       "order": 721,
@@ -13184,21 +12944,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.132767,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.139515,
-          0.1334,
-          0.099242
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 722,
       "name": "Books_C (1)",
       "order": 722,
@@ -13224,21 +12969,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.132767,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.139515,
-          0.1334,
-          0.099242
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 723,
       "name": "Books_C (2)",
       "order": 723,
@@ -13264,21 +12994,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.132767,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.129411,
-          0.133069,
-          0.103726
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 724,
       "name": "Books_A (2)",
       "order": 724,
@@ -13304,21 +13019,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.132767,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.087661,
-          0.132883,
-          0.100529
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 725,
       "name": "Books_E",
       "order": 725,
@@ -13344,21 +13044,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.132767,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.136355,
-          0.133544,
-          0.099242
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 726,
       "name": "Books_B",
       "order": 726,
@@ -13384,21 +13069,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.132767,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.087661,
-          0.132883,
-          0.100529
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 727,
       "name": "Books_G",
       "order": 727,
@@ -13424,21 +13094,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.132767,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.129411,
-          0.133069,
-          0.103726
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 728,
       "name": "Books_A",
       "order": 728,
@@ -13464,21 +13119,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.132767,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.088459,
-          0.134093,
-          0.100799
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 729,
       "name": "Books_F",
       "order": 729,
@@ -13504,21 +13144,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.132767,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.139515,
-          0.1334,
-          0.099242
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 730,
       "name": "Books_C",
       "order": 730,
@@ -13544,21 +13169,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.132767,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.176494,
-          0.134446,
-          0.099242
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 731,
       "name": "Books_D",
       "order": 731,
@@ -13704,21 +13314,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.002684,
-          0.006377,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.113607,
-          0.006189,
-          0.149313
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 747,
       "name": "Folder_file",
       "order": 747,
@@ -13784,21 +13379,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.040437,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.132113,
-          0.041348,
-          0.160797
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 751,
       "name": "Phone",
       "order": 751,
@@ -13904,21 +13484,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.00098,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.116264,
-          0.00098,
-          0.095405
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 755,
       "name": "PC_mousepad",
       "order": 755,
@@ -13984,21 +13549,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.0,
-          0.013263
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.36454,
-          0.284199,
-          0.0134
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 757,
       "name": "Painting_C",
       "order": 757,
@@ -14064,21 +13614,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.005474,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.760247,
-          0.005474,
-          0.63354
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 763,
       "name": "Carpet_round",
       "order": 763,
@@ -14104,21 +13639,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.017923,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.120485,
-          0.017934,
-          0.159759
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 764,
       "name": "Papers_pile",
       "order": 764,
@@ -14224,21 +13744,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.0,
-          0.005709
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.16401,
-          0.059168,
-          0.005709
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 767,
       "name": "Toilet_sign",
       "order": 767,
@@ -14304,21 +13809,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.132767,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.087661,
-          0.132883,
-          0.100529
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 769,
       "name": "Books_G",
       "order": 769,
@@ -14504,21 +13994,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -1e-06,
-          0.166542,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.062661,
-          0.166542,
-          0.129199
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 780,
       "name": "Folderholder",
       "order": 780,
@@ -14544,21 +14019,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.023022,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.116562,
-          0.023022,
-          0.158505
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 781,
       "name": "Folder_A",
       "order": 781,
@@ -14584,21 +14044,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.023022,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.116562,
-          0.023022,
-          0.158505
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 782,
       "name": "Folder_B",
       "order": 782,
@@ -14627,13 +14072,13 @@
       "collider": {
         "center": [
           1.000015,
-          0.002578,
+          -0.014747,
           0.005731
         ],
         "friction": 0.6,
         "halfExtents": [
           0.999985,
-          0.002675,
+          0.02,
           0.017537
         ],
         "isTrigger": false,
@@ -14704,21 +14149,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.169955,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.044583,
-          0.17,
-          0.13384
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 785,
       "name": "Folder_E",
       "order": 785,
@@ -14784,21 +14214,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.006034,
-          0.012929,
-          -0.01018
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.225608,
-          0.01311,
-          0.083768
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 787,
       "name": "PC_keyboard",
       "order": 787,
@@ -14824,21 +14239,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.023022,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.116562,
-          0.023022,
-          0.158505
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 788,
       "name": "Folder_A",
       "order": 788,
@@ -14944,21 +14344,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.002322,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.328503,
-          0.002322,
-          0.229904
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 791,
       "name": "Toilet_carpet",
       "order": 791,
@@ -15397,7 +14782,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 817,
       "name": "Flag_wall",
@@ -15424,21 +14809,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.132767,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.087661,
-          0.132883,
-          0.100529
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 818,
       "name": "Books_E",
       "order": 818,
@@ -15904,21 +15274,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.0,
-          0.013263
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.36454,
-          0.284199,
-          0.0134
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 863,
       "name": "Painting_B",
       "order": 863,
@@ -16104,21 +15459,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.004583,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.004117,
-          0.004329,
-          0.092918
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 874,
       "name": "Pencil",
       "order": 874,
@@ -16144,21 +15484,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.160545,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.253163,
-          0.160545,
-          0.131117
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 875,
       "name": "Folder_set",
       "order": 875,
@@ -16184,21 +15509,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.051337,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.038861,
-          0.051337,
-          0.038861
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 876,
       "name": "Mug",
       "order": 876,
@@ -16224,21 +15534,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.00439,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.105,
-          0.0,
-          0.1485
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 877,
       "name": "Paper_B",
       "order": 877,
@@ -16304,21 +15599,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.0,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.043216,
-          0.117058,
-          0.012151
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 879,
       "name": "Elevator_panel_outside",
       "order": 879,
@@ -16384,21 +15664,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          -0.0,
-          0.050085
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.146252,
-          0.149676,
-          0.051568
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 882,
       "name": "hand_paper",
       "order": 882,
@@ -16624,21 +15889,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.0,
-          0.013263
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.36454,
-          0.284199,
-          0.0134
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 899,
       "name": "Painting_E",
       "order": 899,
@@ -16664,21 +15914,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.023022,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.116562,
-          0.023022,
-          0.158505
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 900,
       "name": "Folder_B",
       "order": 900,
@@ -16704,21 +15939,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.132767,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.139515,
-          0.1334,
-          0.099242
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 901,
       "name": "Books_C",
       "order": 901,
@@ -16744,21 +15964,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          -0.0,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.072059,
-          0.135166,
-          0.012151
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 902,
       "name": "Elevator_panel_inside",
       "order": 902,
@@ -16784,21 +15989,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.097834,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.038392,
-          0.098256,
-          0.037809
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 903,
       "name": "Hand_soap",
       "order": 903,
@@ -16864,21 +16054,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          -0.127067,
-          0.014662
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.158419,
-          0.097353,
-          0.011505
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 905,
       "name": "Sign_exit_B",
       "order": 905,
@@ -16904,21 +16079,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.000403,
-          -0.014377,
-          0.013901
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.053614,
-          0.015551,
-          0.020894
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 906,
       "name": "Sign_exit_B_ceilingpart",
       "order": 906,
@@ -17144,21 +16304,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.009119,
-          0.15219,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.033491,
-          0.15045,
-          0.032599
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 918,
       "name": "Flag_table",
       "order": 918,
@@ -17304,21 +16449,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.006732,
-          1.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          1.0,
-          0.006732,
-          1.0
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 930,
       "name": "Carpet_corridor_end",
       "order": 930,
@@ -17424,21 +16554,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.002301,
-          -0.062821
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.27492,
-          0.002301,
-          0.411016
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 935,
       "name": "Urinal_carpet",
       "order": 935,
@@ -17467,7 +16582,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 936,
       "name": "Table_corner",
@@ -17734,21 +16849,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.007886,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.007295,
-          0.008603,
-          0.086136
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 959,
       "name": "Pen",
       "order": 959,
@@ -17814,21 +16914,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.01,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.121599,
-          0.005,
-          0.168367
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 961,
       "name": "Papers_holder",
       "order": 961,
@@ -17854,21 +16939,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.017923,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.120485,
-          0.017934,
-          0.159759
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 962,
       "name": "Papers_pile",
       "order": 962,
@@ -17894,21 +16964,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          -0.039961,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.071179,
-          0.041411,
-          0.071179
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 963,
       "name": "Lamp_spot",
       "order": 963,
@@ -17934,21 +16989,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.000578,
-          -0.068454,
-          0.027505
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.075426,
-          0.089551,
-          0.102372
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 964,
       "name": "Lamp_spot",
       "order": 964,
@@ -18094,21 +17134,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.156646,
-          -0.118685
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.042195,
-          0.15859,
-          0.12273
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 968,
       "name": "Folder_C",
       "order": 968,
@@ -18134,21 +17159,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          -0.063643,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.035562,
-          0.065389,
-          0.034115
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 969,
       "name": "Watersprinkler",
       "order": 969,
@@ -18174,21 +17184,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.132767,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.088459,
-          0.134093,
-          0.100799
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 970,
       "name": "Books_F",
       "order": 970,
@@ -18734,21 +17729,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.006732,
-          -4.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          1.0,
-          0.006732,
-          4.0
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1033,
       "name": "Carpet_corridor_full",
       "order": 1033,
@@ -18774,21 +17754,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.0,
-          0.013263
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.36454,
-          0.284199,
-          0.0134
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1034,
       "name": "Painting_A",
       "order": 1034,
@@ -18814,21 +17779,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.132767,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.129411,
-          0.133069,
-          0.103726
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1035,
       "name": "Books_A",
       "order": 1035,
@@ -19279,21 +18229,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.0,
-          0.059818
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.205696,
-          0.241425,
-          0.060747
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1048,
       "name": "Toilet_paper",
       "order": 1048,
@@ -19359,21 +18294,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.0,
-          0.009644
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.171475,
-          0.248056,
-          0.010452
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1050,
       "name": "Painting_M",
       "order": 1050,
@@ -19439,21 +18359,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.0,
-          0.024497
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.35,
-          0.481417,
-          0.025
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1053,
       "name": "Painting_K",
       "order": 1053,
@@ -19584,21 +18489,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.0,
-          0.015023
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.314444,
-          0.476736,
-          0.015023
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1057,
       "name": "Painting_G",
       "order": 1057,
@@ -19624,21 +18514,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.0,
-          0.012134
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.398948,
-          0.296055,
-          0.012475
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1058,
       "name": "Painting_L",
       "order": 1058,
@@ -19744,21 +18619,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.00439,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.105,
-          0.0,
-          0.1485
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1063,
       "name": "Paper_A",
       "order": 1063,
@@ -19944,21 +18804,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.156646,
-          -0.118685
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.042195,
-          0.15859,
-          0.12273
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1072,
       "name": "Folder_C",
       "order": 1072,
@@ -19984,21 +18829,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.000793,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.105,
-          0.0,
-          0.14645
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1073,
       "name": "Paper_C",
       "order": 1073,
@@ -20067,7 +18897,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 1075,
       "name": "Desk_metal",
@@ -20617,7 +19447,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 1115,
       "name": "Lamp_desk",
@@ -20644,21 +19474,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          5.9e-05,
-          0.169955,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.035748,
-          0.17,
-          0.13384
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1116,
       "name": "Folder_D",
       "order": 1116,
@@ -20684,21 +19499,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.000344,
-          0.016903,
-          -0.000828
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.029433,
-          0.015086,
-          0.053608
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1117,
       "name": "PC_mouse",
       "order": 1117,
@@ -20847,7 +19647,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 1124,
       "name": "Watersprinklerpipe_L",
@@ -20874,21 +19674,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.002769,
-          -0.053962,
-          0.061538
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.086628,
-          0.095712,
-          0.061538
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1125,
       "name": "Toilet_paper_roll",
       "order": 1125,
@@ -21154,21 +19939,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.0,
-          0.014496
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.314444,
-          0.476736,
-          0.015023
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1149,
       "name": "Painting_I",
       "order": 1149,
@@ -21194,21 +19964,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          -0.128391,
-          0.011517
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.158419,
-          0.097353,
-          0.011505
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1150,
       "name": "Sign_exit_A",
       "order": 1150,
@@ -21234,21 +19989,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.003125,
-          -0.015206,
-          0.010756
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.053614,
-          0.016388,
-          0.020894
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1151,
       "name": "Sign_exit_A_ceilingpart",
       "order": 1151,
@@ -21274,21 +20014,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.0,
-          0.013263
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.36454,
-          0.284199,
-          0.0134
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1152,
       "name": "Painting_D",
       "order": 1152,
@@ -21474,21 +20199,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          -0.00999,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.121285,
-          0.01059,
-          0.121285
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1164,
       "name": "Lamp_ceiling_square",
       "order": 1164,
@@ -21514,21 +20224,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.132767,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.136355,
-          0.133544,
-          0.099242
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1165,
       "name": "Books_B",
       "order": 1165,
@@ -21634,21 +20329,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.006732,
-          -2.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          1.0,
-          0.006732,
-          2.0
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1171,
       "name": "Carpet_corridor_tile",
       "order": 1171,
@@ -21714,21 +20394,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.0,
-          0.023508
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.35,
-          0.481417,
-          0.025
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1174,
       "name": "Painting_J",
       "order": 1174,
@@ -21914,21 +20579,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.132767,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.087661,
-          0.132883,
-          0.100529
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1195,
       "name": "Books_E",
       "order": 1195,
@@ -21954,21 +20604,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.132767,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.136355,
-          0.133544,
-          0.099242
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1196,
       "name": "Books_B",
       "order": 1196,
@@ -21994,21 +20629,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.132767,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.087661,
-          0.132883,
-          0.100529
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1197,
       "name": "Books_G",
       "order": 1197,
@@ -22034,21 +20654,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.132767,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.088459,
-          0.134093,
-          0.100799
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1198,
       "name": "Books_F",
       "order": 1198,
@@ -22074,21 +20679,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.160545,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.253163,
-          0.160545,
-          0.131117
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1199,
       "name": "Folder_set (3)",
       "order": 1199,
@@ -22114,21 +20704,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.160545,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.253163,
-          0.160545,
-          0.131117
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1200,
       "name": "Folder_set",
       "order": 1200,
@@ -22154,21 +20729,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          5.9e-05,
-          0.169955,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.035748,
-          0.17,
-          0.13384
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1201,
       "name": "Folder_D (2)",
       "order": 1201,
@@ -22194,21 +20754,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.160545,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.253163,
-          0.160545,
-          0.131117
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1202,
       "name": "Folder_set (1)",
       "order": 1202,
@@ -22234,21 +20779,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.169955,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.044583,
-          0.17,
-          0.13384
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1203,
       "name": "Folder_E (1)",
       "order": 1203,
@@ -22274,21 +20804,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          5.9e-05,
-          0.169955,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.035748,
-          0.17,
-          0.13384
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1204,
       "name": "Folder_D (6)",
       "order": 1204,
@@ -22314,21 +20829,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          5.9e-05,
-          0.169955,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.035748,
-          0.17,
-          0.13384
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1205,
       "name": "Folder_D (1)",
       "order": 1205,
@@ -22354,21 +20854,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.017923,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.120485,
-          0.017934,
-          0.159759
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1206,
       "name": "Papers_pile",
       "order": 1206,
@@ -22394,21 +20879,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          5.9e-05,
-          0.169955,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.035748,
-          0.17,
-          0.13384
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1207,
       "name": "Folder_D (7)",
       "order": 1207,
@@ -22434,21 +20904,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.169955,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.044583,
-          0.17,
-          0.13384
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1208,
       "name": "Folder_E",
       "order": 1208,
@@ -22474,21 +20929,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.156646,
-          -0.118685
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.042195,
-          0.15859,
-          0.12273
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1209,
       "name": "Folder_C (1)",
       "order": 1209,
@@ -22514,21 +20954,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.023022,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.116562,
-          0.023022,
-          0.158505
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1210,
       "name": "Folder_B",
       "order": 1210,
@@ -22554,21 +20979,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.169955,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.044583,
-          0.17,
-          0.13384
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1211,
       "name": "Folder_E (3)",
       "order": 1211,
@@ -22594,21 +21004,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.160545,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.253163,
-          0.160545,
-          0.131117
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1212,
       "name": "Folder_set (2)",
       "order": 1212,
@@ -22634,21 +21029,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          5.9e-05,
-          0.169955,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.035748,
-          0.17,
-          0.13384
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1213,
       "name": "Folder_D (4)",
       "order": 1213,
@@ -22674,21 +21054,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.002684,
-          0.006377,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.113607,
-          0.006189,
-          0.149313
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1214,
       "name": "Folder_file (1)",
       "order": 1214,
@@ -22714,21 +21079,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.169955,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.044583,
-          0.17,
-          0.13384
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1215,
       "name": "Folder_E (2)",
       "order": 1215,
@@ -22754,21 +21104,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.023022,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.116562,
-          0.023022,
-          0.158505
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1216,
       "name": "Folder_A",
       "order": 1216,
@@ -22794,21 +21129,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.169955,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.044583,
-          0.17,
-          0.13384
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1217,
       "name": "Folder_E (4)",
       "order": 1217,
@@ -22834,21 +21154,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          5.9e-05,
-          0.169955,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.035748,
-          0.17,
-          0.13384
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1218,
       "name": "Folder_D (3)",
       "order": 1218,
@@ -22874,21 +21179,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.156646,
-          -0.118685
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.042195,
-          0.15859,
-          0.12273
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1219,
       "name": "Folder_C",
       "order": 1219,
@@ -22914,21 +21204,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          5.9e-05,
-          0.169955,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.035748,
-          0.17,
-          0.13384
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1220,
       "name": "Folder_D (5)",
       "order": 1220,
@@ -23317,13 +21592,13 @@
       "collider": {
         "center": [
           1.8,
-          0.0,
+          -0.01575,
           -1.35
         ],
         "friction": 0.6,
         "halfExtents": [
           1.8,
-          0.00225,
+          0.018,
           1.35
         ],
         "isTrigger": false,
@@ -23437,13 +21712,13 @@
       "collider": {
         "center": [
           2.7,
-          0.0,
+          -0.01575,
           -0.9
         ],
         "friction": 0.6,
         "halfExtents": [
           2.7,
-          0.00225,
+          0.018,
           0.9
         ],
         "isTrigger": false,
@@ -23477,13 +21752,13 @@
       "collider": {
         "center": [
           2.7,
-          0.0,
+          -0.01575,
           -2.249999
         ],
         "friction": 0.6,
         "halfExtents": [
           2.7,
-          0.00225,
+          0.018,
           2.25
         ],
         "isTrigger": false,
@@ -23517,13 +21792,13 @@
       "collider": {
         "center": [
           5.4,
-          0.0,
+          -0.01575,
           -0.9
         ],
         "friction": 0.6,
         "halfExtents": [
           5.4,
-          0.00225,
+          0.018,
           0.900001
         ],
         "isTrigger": false,
@@ -23557,13 +21832,13 @@
       "collider": {
         "center": [
           5.4,
-          0.0,
+          -0.01575,
           -1.8
         ],
         "friction": 0.6,
         "halfExtents": [
           5.4,
-          0.00225,
+          0.018,
           1.800001
         ],
         "isTrigger": false,
@@ -23797,13 +22072,13 @@
       "collider": {
         "center": [
           1.8,
-          0.0,
+          -0.01575,
           -0.9
         ],
         "friction": 0.6,
         "halfExtents": [
           1.8,
-          0.00225,
+          0.018,
           0.9
         ],
         "isTrigger": false,
@@ -24077,13 +22352,13 @@
       "collider": {
         "center": [
           2.7,
-          0.0,
+          -0.01575,
           -1.799999
         ],
         "friction": 0.6,
         "halfExtents": [
           2.7,
-          0.00225,
+          0.018,
           1.8
         ],
         "isTrigger": false,
@@ -24504,21 +22779,6 @@
       ]
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.0,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.043216,
-          0.117058,
-          0.012151
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1298,
       "name": "Elevator_panel_outside",
       "order": 1298,
@@ -24574,21 +22834,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          -0.0,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.072059,
-          0.135166,
-          0.012151
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1304,
       "name": "Elevator_panel_inside",
       "order": 1304,
@@ -24737,13 +22982,13 @@
       "collider": {
         "center": [
           4.5,
-          0.0,
+          -0.01575,
           -4.5
         ],
         "friction": 0.6,
         "halfExtents": [
           4.5,
-          0.00225,
+          0.018,
           4.5
         ],
         "isTrigger": false,
@@ -24885,13 +23130,13 @@
       "collider": {
         "center": [
           1.35,
-          0.0,
+          -0.01575,
           -1.349999
         ],
         "friction": 0.6,
         "halfExtents": [
           1.35,
-          0.00225,
+          0.018,
           1.35
         ],
         "isTrigger": false,
@@ -25289,13 +23534,13 @@
       "collider": {
         "center": [
           0.9,
-          0.0,
+          -0.01575,
           -0.899999
         ],
         "friction": 0.6,
         "halfExtents": [
           0.9,
-          0.00225,
+          0.018,
           0.9
         ],
         "isTrigger": false,
@@ -25329,13 +23574,13 @@
       "collider": {
         "center": [
           5.4,
-          0.0,
+          -0.01575,
           -0.45
         ],
         "friction": 0.6,
         "halfExtents": [
           5.4,
-          0.00225,
+          0.018,
           0.450001
         ],
         "isTrigger": false,
@@ -25524,13 +23769,13 @@
       "collider": {
         "center": [
           2.7,
-          0.0,
+          -0.01575,
           -1.35
         ],
         "friction": 0.6,
         "halfExtents": [
           2.7,
-          0.00225,
+          0.018,
           1.35
         ],
         "isTrigger": false,

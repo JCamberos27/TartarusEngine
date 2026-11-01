@@ -4,12 +4,16 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\OfficeAndPoliceSta
 
 ## Counts
 
+- ajar doors shut: 15
 - architecture scaled x0.9: 492
 - area lights (baked only in Unity) -> unshadowed wide spot fills: 64
 - baked-only lights (now realtime): 82
 - built-in cubes as boxes: 1
 - colliders: 4946
+- colliders dropped from clutter and flat dressing (by name): 841
+- colliders dropped from small props (under 35 cm): 100
 - duplicate openables dropped (a twin door within 10 cm): 10
+- flat box colliders given a 4 cm slab: 249
 - free-standing props kept at 1.0: 1555
 - lights: 96
 - material overrides on instances: 275
@@ -20,6 +24,7 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\OfficeAndPoliceSta
 - openables: 76
 - prefab scale overrides applied: 34
 - prefabs: 221
+- prop mesh colliders made convex: 50
 - props re-seated on their floor after the architecture scale: 678
 - reflection probes: 9
 - renderers: 2973

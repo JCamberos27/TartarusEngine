@@ -4,21 +4,6 @@
   "formatVersion": 4,
   "models": [
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.147944,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.066448,
-          0.149024,
-          0.066448
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 0,
       "name": "FP_vase_A",
       "order": 0,

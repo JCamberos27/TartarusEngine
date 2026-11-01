@@ -80,6 +80,7 @@ NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "w
     if (m_Scenario == "blood") m_Duration = 44.0f;
     if (m_Scenario == "decals") m_Duration = 52.0f;
     if (m_Scenario == "doors") m_Duration = 300.0f; // (done once the route is walked)
+    if (m_Scenario == "roam") m_Duration = 420.0f;  // (done once the route is walked)
     if (m_Scenario == "spider") m_Duration = 150.0f; // (done once the route is crawled)
     if (m_Scenario == "spiderhunt") m_Duration = 75.0f;
     if (m_Scenario == "spiderplay") m_Duration = 75.0f;
@@ -211,6 +212,7 @@ void NpcTest::Drive(Player& player, FirstPersonPresentation& weapon, NpcDirector
     }
     if (m_Scenario == "decals") DecalsDrive(player, wantYaw, wantPitch);
     if (m_Scenario == "doors") DoorsDrive(player, dt, wantYaw, wantPitch);
+    if (m_Scenario == "roam") RoamDrive(player, dt, wantYaw, wantPitch);
     if (m_Scenario == "spiderhunt") SpiderHuntDrive(player, vitals, wantYaw, wantPitch);
     if (m_Scenario == "spiderplay") SpiderPlayDrive(player, weapon, dt, wantYaw, wantPitch);
     if (m_Scenario == "spiderdoor") SpiderDoorDrive(player, weapon, wantYaw, wantPitch);
@@ -376,6 +378,10 @@ void NpcTest::After(World& world, NpcDirector& npcs, const PlayerVitals& vitals,
     }
     if (m_Scenario == "doors") {
         Doors(world, player);
+        return;
+    }
+    if (m_Scenario == "roam") {
+        Roam(world, player);
         return;
     }
     if (m_Scenario == "spider") {

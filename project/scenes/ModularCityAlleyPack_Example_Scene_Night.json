@@ -663,6 +663,7 @@
     },
     {
       "Reflection Probe": {
+        "Capture Scene": true,
         "Importance": 1.0,
         "Size": [
           300.0,
@@ -11421,6 +11422,7 @@
     },
     {
       "Reflection Probe": {
+        "Capture Scene": true,
         "Importance": 1.0,
         "Size": [
           300.0,
@@ -19371,21 +19373,6 @@
       ]
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.0,
-          0.056331
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.153632,
-          0.102957,
-          0.056941
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 672,
       "name": "Lamp_Wall (6)",
       "order": 672,
@@ -19411,21 +19398,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.0,
-          0.056331
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.153632,
-          0.102957,
-          0.056941
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 673,
       "name": "Lamp_Wall (8)",
       "order": 673,
@@ -19491,21 +19463,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.0,
-          0.056331
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.153632,
-          0.102957,
-          0.056941
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 675,
       "name": "Lamp_Wall (2)",
       "order": 675,
@@ -19574,7 +19531,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 677,
       "name": "Lamp_Chinatown_Short (2)",
@@ -19604,7 +19561,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 678,
       "name": "Lamp_Chinatown_MediumLenght (2)",
@@ -19714,7 +19671,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 681,
       "name": "Lamp_Chinatown_MediumLenght (3)",
@@ -19744,7 +19701,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 682,
       "name": "Lamp_Chinatown_Long (4)",
@@ -19811,21 +19768,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.0,
-          0.056331
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.153632,
-          0.102957,
-          0.056941
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 684,
       "name": "Lamp_Wall (7)",
       "order": 684,
@@ -19854,7 +19796,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 685,
       "name": "Lamp_Chinatown_Long (9)",
@@ -19884,7 +19826,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 686,
       "name": "Lamp_Chinatown_Long (2)",
@@ -19914,7 +19856,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 687,
       "name": "Lamp_Chinatown_Long (8)",
@@ -19944,7 +19886,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 688,
       "name": "Lamp_Chinatown_Long (6)",
@@ -19974,7 +19916,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 689,
       "name": "Lamp_Chinatown_MediumLenght (4)",
@@ -20041,21 +19983,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          -0.229201,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.063741,
-          0.244232,
-          0.06538
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 691,
       "name": "Lamp_BulbHanging (2)",
       "order": 691,
@@ -20081,21 +20008,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          -0.229201,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.063741,
-          0.244232,
-          0.06538
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 692,
       "name": "Lamp_BulbHanging (1)",
       "order": 692,
@@ -20121,21 +20033,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          -0.229201,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.063741,
-          0.244232,
-          0.06538
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 693,
       "name": "Lamp_BulbHanging",
       "order": 693,
@@ -20204,7 +20101,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 700,
       "name": "Lamp_Chinatown_Long (7)",
@@ -20351,21 +20248,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          -0.229201,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.063741,
-          0.244232,
-          0.06538
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 709,
       "name": "Lamp_BulbHanging (2)",
       "order": 709,
@@ -20391,21 +20273,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          -0.229201,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.063741,
-          0.244232,
-          0.06538
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 710,
       "name": "Lamp_BulbHanging (1)",
       "order": 710,
@@ -20431,21 +20298,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          -0.229201,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.063741,
-          0.244232,
-          0.06538
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 711,
       "name": "Lamp_BulbHanging",
       "order": 711,
@@ -20511,21 +20363,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.0,
-          0.056331
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.153632,
-          0.102957,
-          0.056941
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 713,
       "name": "Lamp_Wall (4)",
       "order": 713,
@@ -20671,21 +20508,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.0,
-          0.056331
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.153632,
-          0.102957,
-          0.056941
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 722,
       "name": "Lamp_Wall (3)",
       "order": 722,
@@ -20754,7 +20576,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 724,
       "name": "Lamp_Chinatown_Long (1)",
@@ -20784,7 +20606,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 725,
       "name": "Lamp_Chinatown_Long (5)",
@@ -20811,21 +20633,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.0,
-          0.056331
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.153632,
-          0.102957,
-          0.056941
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 726,
       "name": "Lamp_Wall (12)",
       "order": 726,
@@ -21014,7 +20821,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 731,
       "name": "Lamp_HangingCone_MediumLenght",
@@ -21084,7 +20891,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 733,
       "name": "Lamp_Chinatown_Long (3)",
@@ -21231,21 +21038,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.0,
-          0.056331
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.153632,
-          0.102957,
-          0.056941
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 747,
       "name": "Lamp_Wall (9)",
       "order": 747,
@@ -21271,21 +21063,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.0,
-          0.056331
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.153632,
-          0.102957,
-          0.056941
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 748,
       "name": "Lamp_Wall (5)",
       "order": 748,
@@ -21311,21 +21088,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.0,
-          0.056331
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.153632,
-          0.102957,
-          0.056941
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 749,
       "name": "Lamp_Wall (7)",
       "order": 749,
@@ -21354,7 +21116,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 750,
       "name": "Lamp_Chinatown_MediumLenght (1)",
@@ -21384,7 +21146,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 751,
       "name": "Lamp_HangingCone_MediumLenght (1)",
@@ -70160,21 +69922,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.001669,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.19251,
-          0.0,
-          0.250478
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 2207,
       "name": "Paper_On_Floor (2)",
       "order": 2207,
@@ -71384,21 +71131,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          -0.229201,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.063741,
-          0.244232,
-          0.06538
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 2250,
       "name": "Lamp_BulbHanging (2)",
       "order": 2250,
@@ -71424,21 +71156,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          -0.229201,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.063741,
-          0.244232,
-          0.06538
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 2251,
       "name": "Lamp_BulbHanging (1)",
       "order": 2251,
@@ -71464,21 +71181,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          -0.229201,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.063741,
-          0.244232,
-          0.06538
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 2252,
       "name": "Lamp_BulbHanging",
       "order": 2252,
@@ -71587,7 +71289,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 2255,
       "name": "Dumpster (3)",
@@ -71617,7 +71319,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 2256,
       "name": "DumpsterLid_A",
@@ -71647,7 +71349,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 2257,
       "name": "DumpsterLid_B",
@@ -71952,13 +71654,13 @@
       "collider": {
         "center": [
           -0.0,
-          0.000861,
+          -0.014678,
           0.513815
         ],
         "friction": 0.6,
         "halfExtents": [
           0.85003,
-          0.000861,
+          0.0164,
           0.525377
         ],
         "isTrigger": false,
@@ -72279,21 +71981,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.001669,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.19251,
-          0.0,
-          0.250478
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 2279,
       "name": "Paper_On_Floor (1)",
       "order": 2279,
@@ -73240,21 +72927,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.001669,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.19251,
-          0.0,
-          0.250478
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 2312,
       "name": "Paper_On_Floor (8)",
       "order": 2312,
@@ -73478,13 +73150,13 @@
       "collider": {
         "center": [
           -0.0,
-          0.000861,
+          -0.014678,
           0.513815
         ],
         "friction": 0.6,
         "halfExtents": [
           0.85003,
-          0.000861,
+          0.0164,
           0.525377
         ],
         "isTrigger": false,
@@ -75495,7 +75167,7 @@
         "halfExtents": [
           0.206217,
           0.062204,
-          0.002831
+          0.0164
         ],
         "isTrigger": false,
         "shape": 0
@@ -75895,7 +75567,7 @@
         "halfExtents": [
           0.194096,
           0.12513,
-          0.002831
+          0.0164
         ],
         "isTrigger": false,
         "shape": 0
@@ -76325,21 +75997,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.007876,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.191794,
-          0.012624,
-          0.250478
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 2411,
       "name": "Newspaper (4)",
       "order": 2411,
@@ -76534,7 +76191,7 @@
         "halfExtents": [
           0.206217,
           0.062204,
-          0.002831
+          0.0164
         ],
         "isTrigger": false,
         "shape": 0
@@ -77044,21 +76701,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.115137,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.042454,
-          0.114609,
-          0.024442
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 2433,
       "name": "CleaningBottle (1)",
       "order": 2433,
@@ -77378,7 +77020,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 2442,
       "name": "Dumpster (6)",
@@ -77408,7 +77050,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 2443,
       "name": "DumpsterLid_A",
@@ -77438,7 +77080,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 2444,
       "name": "DumpsterLid_B",
@@ -77708,13 +77350,13 @@
       "collider": {
         "center": [
           -0.0,
-          0.000861,
+          -0.014678,
           0.513815
         ],
         "friction": 0.6,
         "halfExtents": [
           0.85003,
-          0.000861,
+          0.0164,
           0.525377
         ],
         "isTrigger": false,
@@ -77835,7 +77477,7 @@
         "halfExtents": [
           1.468711,
           0.113096,
-          0.002831
+          0.0164
         ],
         "isTrigger": false,
         "shape": 0
@@ -80220,21 +79862,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.001669,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.19251,
-          0.0,
-          0.250478
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 2548,
       "name": "Paper_On_Floor (5)",
       "order": 2548,
@@ -80365,21 +79992,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.115137,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.042454,
-          0.114609,
-          0.024442
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 2552,
       "name": "CleaningBottle (2)",
       "order": 2552,
@@ -80840,21 +80452,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.122953,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.24319,
-          0.126959,
-          0.15557
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 2568,
       "name": "Box_Cardboard (1)",
       "order": 2568,
@@ -81641,7 +81238,7 @@
         "halfExtents": [
           0.194096,
           0.12513,
-          0.002831
+          0.0164
         ],
         "isTrigger": false,
         "shape": 0
@@ -81736,21 +81333,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.007876,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.191794,
-          0.012624,
-          0.250478
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 2601,
       "name": "Newspaper (1)",
       "order": 2601,
@@ -82850,13 +82432,13 @@
       "collider": {
         "center": [
           -0.0,
-          0.000861,
+          -0.014678,
           0.513815
         ],
         "friction": 0.6,
         "halfExtents": [
           0.85003,
-          0.000861,
+          0.0164,
           0.525377
         ],
         "isTrigger": false,
@@ -83355,7 +82937,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 2655,
       "name": "Dumpster",
@@ -83385,7 +82967,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 2656,
       "name": "DumpsterLid_A",
@@ -83415,7 +82997,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 2657,
       "name": "DumpsterLid_B",
@@ -83562,21 +83144,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.121707,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.24319,
-          0.126959,
-          0.15557
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 2666,
       "name": "Box_Gray (1)",
       "order": 2666,
@@ -83695,7 +83262,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 2670,
       "name": "Dumpster (4)",
@@ -83725,7 +83292,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 2671,
       "name": "DumpsterLid_A",
@@ -83755,7 +83322,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 2672,
       "name": "DumpsterLid_B",
@@ -84222,21 +83789,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.001669,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.19251,
-          0.0,
-          0.250478
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 2684,
       "name": "Paper_On_Floor (4)",
       "order": 2684,
@@ -85202,21 +84754,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.007876,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.191794,
-          0.012624,
-          0.250478
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 2720,
       "name": "Newspaper (2)",
       "order": 2720,
@@ -85677,21 +85214,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.001669,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.19251,
-          0.0,
-          0.250478
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 2740,
       "name": "Paper_On_Floor (9)",
       "order": 2740,
@@ -86305,13 +85827,13 @@
       "collider": {
         "center": [
           -0.0,
-          0.000861,
+          -0.014678,
           0.513815
         ],
         "friction": 0.6,
         "halfExtents": [
           0.85003,
-          0.000861,
+          0.0164,
           0.525377
         ],
         "isTrigger": false,
@@ -86643,21 +86165,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.001669,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.19251,
-          0.0,
-          0.250478
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 2773,
       "name": "Paper_On_Floor (1)",
       "order": 2773,
@@ -87753,7 +87260,7 @@
         "halfExtents": [
           0.557197,
           0.14389,
-          0.001524
+          0.0164
         ],
         "isTrigger": false,
         "shape": 0
@@ -88243,7 +87750,7 @@
         "halfExtents": [
           1.468711,
           0.113096,
-          0.002831
+          0.0164
         ],
         "isTrigger": false,
         "shape": 0
@@ -88448,21 +87955,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.001669,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.19251,
-          0.0,
-          0.250478
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 2839,
       "name": "Paper_On_Floor",
       "order": 2839,
@@ -88984,21 +88476,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.001669,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.19251,
-          0.0,
-          0.250478
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 2856,
       "name": "Paper_On_Floor (7)",
       "order": 2856,
@@ -89027,7 +88504,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 2857,
       "name": "Dumpster (2)",
@@ -89057,7 +88534,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 2858,
       "name": "DumpsterLid_A",
@@ -89087,7 +88564,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 2859,
       "name": "DumpsterLid_B",
@@ -89454,21 +88931,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.007876,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.191794,
-          0.012624,
-          0.250478
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 2874,
       "name": "Newspaper (3)",
       "order": 2874,
@@ -89654,21 +89116,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.001669,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.19251,
-          0.0,
-          0.250478
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 2882,
       "name": "Paper_On_Floor (10)",
       "order": 2882,
@@ -92026,7 +91473,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 2960,
       "name": "Dumpster (2)",
@@ -92056,7 +91503,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 2961,
       "name": "DumpsterLid_A",
@@ -92086,7 +91533,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 2962,
       "name": "DumpsterLid_B",
@@ -92381,13 +91828,13 @@
       "collider": {
         "center": [
           -0.0,
-          0.000861,
+          -0.014678,
           0.513815
         ],
         "friction": 0.6,
         "halfExtents": [
           0.85003,
-          0.000861,
+          0.0164,
           0.525377
         ],
         "isTrigger": false,
@@ -92541,7 +91988,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 2975,
       "name": "Dumpster (3)",
@@ -92571,7 +92018,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 2976,
       "name": "DumpsterLid_A",
@@ -92601,7 +92048,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 2977,
       "name": "DumpsterLid_B",
@@ -93156,13 +92603,13 @@
       "collider": {
         "center": [
           -0.0,
-          0.000861,
+          -0.014678,
           0.513815
         ],
         "friction": 0.6,
         "halfExtents": [
           0.85003,
-          0.000861,
+          0.0164,
           0.525377
         ],
         "isTrigger": false,
@@ -93473,21 +92920,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.001669,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.19251,
-          0.0,
-          0.250478
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 3005,
       "name": "Paper_On_Floor (4)",
       "order": 3005,
@@ -95277,21 +94709,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.001669,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.19251,
-          0.0,
-          0.250478
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 3071,
       "name": "Paper_On_Floor (6)",
       "order": 3071,
@@ -95382,21 +94799,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.007876,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.191794,
-          0.012624,
-          0.250478
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 3074,
       "name": "Newspaper",
       "order": 3074,
@@ -95958,21 +95360,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.001669,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.19251,
-          0.0,
-          0.250478
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 3093,
       "name": "Paper_On_Floor (3)",
       "order": 3093,
@@ -96181,7 +95568,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 3099,
       "name": "Dumpster (1)",
@@ -96211,7 +95598,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 3100,
       "name": "DumpsterLid_A",
@@ -96241,7 +95628,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 3101,
       "name": "DumpsterLid_B",
@@ -97183,21 +96570,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.001669,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.19251,
-          0.0,
-          0.250478
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 3138,
       "name": "Paper_On_Floor (2)",
       "order": 3138,
@@ -97411,13 +96783,13 @@
       "collider": {
         "center": [
           -0.0,
-          0.000861,
+          -0.014678,
           0.513815
         ],
         "friction": 0.6,
         "halfExtents": [
           0.85003,
-          0.000861,
+          0.0164,
           0.525377
         ],
         "isTrigger": false,
@@ -97451,7 +96823,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 3145,
       "name": "Dumpster (5)",
@@ -97481,7 +96853,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 3146,
       "name": "DumpsterLid_A",
@@ -97511,7 +96883,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 3147,
       "name": "DumpsterLid_B",
@@ -97541,7 +96913,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 3148,
       "name": "Dumpster (1)",
@@ -97571,7 +96943,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 3149,
       "name": "DumpsterLid_A",
@@ -97601,7 +96973,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 3150,
       "name": "DumpsterLid_B",
@@ -98092,21 +97464,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.001669,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.19251,
-          0.0,
-          0.250478
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 3173,
       "name": "Paper_On_Floor (3)",
       "order": 3173,
@@ -98182,7 +97539,7 @@
         "halfExtents": [
           1.468711,
           0.113096,
-          0.002831
+          0.0164
         ],
         "isTrigger": false,
         "shape": 0
@@ -98477,21 +97834,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.007876,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.191794,
-          0.012624,
-          0.250478
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 3186,
       "name": "Newspaper",
       "order": 3186,

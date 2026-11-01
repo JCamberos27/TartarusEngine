@@ -4,21 +4,6 @@
   "formatVersion": 4,
   "models": [
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.0,
-          0.059818
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.205696,
-          0.241425,
-          0.060747
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 0,
       "name": "Toilet_paper",
       "order": 0,
