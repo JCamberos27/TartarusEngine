@@ -929,6 +929,15 @@ class Converter:
                 trig = bool(c.get('m_IsTrigger', 0))
                 if t == 'BoxCollider':
                     ce, sz = vec(c.get('m_Center')), vec(c.get('m_Size'), default=1.0)
+                    # A flat box (the Suburb's floors and ceilings, 0 thick): Unity collides with it as a plane, PhysX
+                    # rejects it, and the player fell through every upper storey. It becomes a 4 cm slab on the box's
+                    # local -Y side of the face it had, so a floor's walking surface stays where it was.
+                    for a in range(3):
+                        if abs(sz[a]) < 0.01 and max(abs(v) for v in sz) > 0.05:
+                            if a == 1:
+                                ce[1] -= (THIN_BOX - abs(sz[1])) / 2
+                            sz[a] = THIN_BOX
+                            self.pack.counts['flat box colliders given a 4 cm slab'] += 1
                     shapes.append({'shape': 0, 'center': r6([-ce[0], ce[1], ce[2]]),
                                    'halfExtents': r6([abs(v) / 2 for v in sz]), 'isTrigger': trig})
                 elif t == 'SphereCollider':
@@ -950,6 +959,17 @@ class Converter:
                         continue
                     shapes.append({'shape': 3 if c.get('m_Convex', 0) else 4, 'isTrigger': trig})
                 self.pack.counts['colliders'] += 1
+        if shapes and is_model and arch_class(self.pack.name, e) is False:
+            words = set(re.split(r'[^a-z]+', (re.sub(r' \(\d+\)$', '', o.name) + ' ' +
+                                              os.path.basename(e.get('path', ''))[:-4]).lower()))
+            if words & (CLUTTER_WORDS | DRESSING_WORDS) and 'Openable' not in e:
+                # a cup, a book, a rug, a painting: nothing to stand on or take cover behind, only to snag the feet
+                self.pack.counts['colliders dropped from clutter and flat dressing (by name)'] += len(shapes)
+                return
+            for sh in shapes:
+                if sh['shape'] == 4:  # a prop's triangle mesh: its hull is as good to walk round, and the mover's friend
+                    sh['shape'] = 3
+                    self.pack.counts['prop mesh colliders made convex'] += 1
         for i, s in enumerate(shapes):
             axis = s.pop('_axis', None)
             s['friction'] = 0.6
@@ -1102,6 +1122,17 @@ def write_report(pack):
 
 
 # --- driver -----------------------------------------------------------------------------------------------------
+# Props whose colliders go (Converter.colliders): words of the object or mesh name. Small clutter is also caught by size in
+# the scene pass (strip_small_colliders); these are the ones a size can miss (a long rug, a big painting, a stack of books).
+CLUTTER_WORDS = {'cup', 'cups', 'mug', 'mugs', 'book', 'books', 'paper', 'papers', 'newspaper', 'magazine', 'magazines',
+                 'folder', 'folders', 'pencil', 'pencils', 'pen', 'pens', 'bottle', 'bottles', 'plate',
+                 'plates', 'bowl', 'fork', 'knife', 'spoon', 'remote', 'phone', 'mouse', 'mousepad', 'keyboard', 'pillow',
+                 'towel', 'soap', 'toothbrush', 'shampoo', 'toiletpaper', 'tissue', 'candle', 'vase', 'stapler', 'debris',
+                 'trash', 'cigarette', 'lightswitch', 'socket', 'note', 'notes', 'sticker', 'cable', 'cables'}
+DRESSING_WORDS = {'rug', 'rugs', 'carpet', 'doormat', 'decal', 'decals', 'poster', 'posters', 'painting', 'picture', 'graffiti',
+                  'stain', 'puddle', 'curtain', 'curtains', 'showercurtain', 'blinds'}
+SMALL_PROP = 0.35  # metres: a prop smaller than this every way has no collider (strip_small_colliders)
+THIN_BOX = 0.04  # metres: the thickness a flat Unity box collider gets (Converter.colliders)
 SKIP_COMPONENTS = ('Camera', 'CharacterController', 'AudioListener')
 SIMPLE_MODS = re.compile(r'^(m_Local(Position|Rotation|Scale|EulerAnglesHint)\.[xyzw]|m_Name|m_RootOrder|'
                          r'm_StaticEditorFlags|m_IsActive|m_ConstrainProportionsScale)$')
@@ -1382,11 +1413,9 @@ def _qrot(q, v):
             v[2] + w * t[2] + (x * t[1] - y * t[0]))
 
 
-def dedupe_openables(out):
-    """Two prefabs can each carry the same door in the same place (an elevator car and the wall around its shaft). Only
-    one of them opens under Interact, so the twin would stay shut, in view and in the way: the later one is removed.
-    (A leaf has no children; the removed entity's id is simply left unused.)"""
-    ents = {e['id']: e for k in ('models', 'empties') for e in out[k]}
+def _world_of(out):
+    """A function: entity -> its world (position, rotation, scale) in out (rotations and scales composed down the parents)."""
+    ents = {e['id']: e for k in ('models', 'empties', 'boxes') for e in out[k]}
     cache = {}
 
     def world(e):
@@ -1400,6 +1429,100 @@ def dedupe_openables(out):
                 cache[e['id']] = (tuple(a + b for a, b in zip(pp, v)), _qmul(pq, tuple(e['rotation'])),
                                   tuple(a * b for a, b in zip(ps, e['scale'])))
         return cache[e['id']]
+    world.ents = ents
+    return world
+
+
+def shut_ajar(pack, out):
+    """A door the scene left ajar (the Office's dark metal doors, 20-60 degrees off the wall): the engine's Openable takes
+    the authored pose as shut, so it would swing a further 90 degrees into the wall, or across its own doorway. The leaf,
+    or the pivot it hangs on at its origin, turns back to the 90 degree step (in its parent) that sets it in its frame: wall
+    (a box collider) just behind its hinge edge and just past its latch edge, 1 m up, and none across the leaf itself.
+    The pack swings them ajar either way, so the nearest step is only the tie-break."""
+    world = _world_of(out)
+    ents = world.ents
+    doors = set()
+    for e in out['models']:
+        if 'Openable' in e:
+            doors.add(e['id'])
+            doors.add(e['parentId'])
+    boxes = []
+    for e in ents.values():
+        c = e.get('collider') or {}
+        if e['id'] in doors or c.get('shape', -1) != 0 or c.get('isTrigger'):
+            continue
+        pos, rot, sc = world(e)
+        inv = (-rot[0], -rot[1], -rot[2], rot[3])
+        boxes.append((pos, inv, sc, c.get('center') or [0.0, 0.0, 0.0], c['halfExtents']))
+
+    def walled(p):
+        for pos, inv, sc, ce, he in boxes:
+            v = _qrot(inv, tuple(a - b for a, b in zip(p, pos)))
+            if all(abs(v[a] / (sc[a] or 1.0) - ce[a]) * abs(sc[a]) <= he[a] * abs(sc[a]) + 0.02 for a in range(3)):
+                return True
+        return False
+    for leaf in out['models']:
+        motion = (leaf.get('Openable') or {}).get('Motion')
+        if motion not in ('Hinge Left', 'Hinge Right'):
+            continue
+        par = ents.get(leaf['parentId'])
+        at_origin = all(abs(c) < 0.02 for c in leaf['position']) and abs(abs(leaf['rotation'][3]) - 1.0) < 1e-4
+        pivot = par if par is not None and at_origin else leaf
+        x, y, z, w = pivot['rotation']
+        if abs(x) > 1e-3 or abs(z) > 1e-3:
+            continue
+        yaw = math.degrees(2.0 * math.atan2(y, w))
+        off = (yaw + 45.0) % 90.0 - 45.0
+        if abs(off) < 2.0:
+            continue
+        col = leaf.get('collider') or {}
+        sc = world(leaf)[2]
+        width = 2.0 * (col.get('halfExtents') or [0.45])[0] * abs(sc[0]) if col.get('shape', 0) == 0 else 0.9
+        side = 1.0 if motion == 'Hinge Left' else -1.0
+        pp = world(pivot)[0]
+        pq = world(ents[pivot['parentId']])[1] if pivot['parentId'] in ents else (0.0, 0.0, 0.0, 1.0)
+        best = None
+        for k in range(4):
+            h = math.radians(90.0 * k) * 0.5
+            q = (0.0, math.sin(h), 0.0, math.cos(h))
+            d = _qrot(_qmul(pq, q), (side, 0.0, 0.0))
+            n = math.hypot(d[0], d[2]) or 1.0
+            d = (d[0] / n, 0.0, d[2] / n)
+            at = lambda t: (pp[0] + d[0] * t, pp[1] + 1.0, pp[2] + d[2] * t)  # noqa: E731
+            score = walled(at(-0.15)) + walled(at(width + 0.15)) - 2 * walled(at(0.5 * width))
+            turn = abs((yaw - 90.0 * k + 180.0) % 360.0 - 180.0)
+            if best is None or (score, -turn) > (best[0], -best[1]):
+                best = (score, turn, q)
+        if best[0] <= 0:
+            pack.report['ajar doors shut to the nearest 90 degrees (no wall found either side)'].append(pivot['name'])
+        pivot['rotation'] = r6(best[2])
+        pack.counts['ajar doors shut'] += 1
+
+
+def strip_small_colliders(pack, out, bounds):
+    """A free-standing prop under SMALL_PROP every way (a lamp, a switch, a basket, a plate on the floor) loses its
+    colliders, its helper children's too: the player's capsule only snags on them. Openables keep theirs (a drawer)."""
+    keep = {e['id'] for e in out['models'] if 'Openable' in e}
+    gone = set()
+    for e in out['models']:
+        b = bounds.get(e['id'])
+        if (not e.get('collider') or e['id'] in keep or e['parentId'] in keep or b is None or
+                arch_class(pack.name, e) is not False):
+            continue
+        if max(h - l for l, h in zip(*b)) < SMALL_PROP:
+            del e['collider']
+            gone.add(e['id'])
+            pack.counts['colliders dropped from small props (under 35 cm)'] += 1
+    n = len(out['empties'])
+    out['empties'] = [e for e in out['empties'] if not (e.get('collider') and 'path' not in e and e['parentId'] in gone)]
+    pack.counts['colliders dropped from small props (under 35 cm)'] += n - len(out['empties'])
+
+
+def dedupe_openables(out):
+    """Two prefabs can each carry the same door in the same place (an elevator car and the wall around its shaft). Only
+    one of them opens under Interact, so the twin would stay shut, in view and in the way: the later one is removed.
+    (A leaf has no children; the removed entity's id is simply left unused.)"""
+    world = _world_of(out)
     kept, twins = [], []
     for e in out['models']:
         if 'Openable' not in e:
@@ -1717,7 +1840,10 @@ def write_scene(conv, path):
         arch_rescale(pack, plain, False, unscaled=True)
         b0 = scene_bounds(conv, plain)
         arch_rescale(pack, out, False)
-        settle_props(pack, out, b0, scene_bounds(conv, scene))
+        b1 = scene_bounds(conv, scene)
+        settle_props(pack, out, b0, b1)
+        shut_ajar(pack, out)
+        strip_small_colliders(pack, out, b1)
     auto_lod(conv.exe, pack.repo, pack.name, scene, pack.counts,
              pack.report['generated LODs (triangles per level)'] if pack.name in AUTO_LOD else None)
     scene['formatVersion'] = 4
