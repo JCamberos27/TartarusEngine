@@ -244,6 +244,7 @@ private:
         glm::vec3 Centre{0.0f};  // the opening's middle, on the floor in the wall's plane
         glm::vec3 Normal{0.0f};  // through the opening (the leaf's +Z)
         glm::vec3 Along{0.0f};   // along the wall, toward the latch side
+        float Half = 0.46f;      // half the opening's width (Apartment Hallway's 0.92 m)
         std::uint32_t Leaf = 0xFFFFFFFFu; // the leaf's entity (the Openable)
     };
     struct DoorRun {
