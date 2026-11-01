@@ -36,17 +36,37 @@
         "Open Time": 0.5,
         "Start Open": false
       },
+      "Rigidbody": {
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": true,
+        "Linear Damping": 0.05,
+        "Mass": 18.0,
+        "Use Gravity": false
+      },
       "collider": {
         "center": [
-          0.500689,
-          1.297946,
-          -0.000478
+          0.485668,
+          1.259008,
+          -0.000464
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.509005,
-          1.075053,
-          0.035
+          0.493735,
+          1.042801,
+          0.03395
         ],
         "isTrigger": false,
         "shape": 0
@@ -69,9 +89,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        1.030928,
+        1.030928,
+        1.030928
       ]
     }
   ]

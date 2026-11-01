@@ -3,6 +3,7 @@
 // survived within half a metre of the wall, how long it was stuck, and whether the capsule ever ended up inside anything.
 #include "NpcTest.h"
 #include "Components.h"
+#include "Model.h"
 #include "Openable.h"
 #include "PhysicsWorld.h"
 #include "Player.h"
@@ -48,6 +49,42 @@ void NpcTest::DoorsSetUp(World& world) {
         d.Leaf = (std::uint32_t)entt::to_integral(e);
         m_DDoors.push_back(d);
     }
+    // Any other scene (the imported packs, NPC_TEST_SCENE): every hinged leaf a person walks through - at least 1.8 m tall and
+    // 0.6 m wide - with the opening taken from the shut leaf's panel (its box collider, else its model bounds), local X along
+    // the wall and Z through it. The first 24 by name keep the run under the scenario's time.
+    if (m_DDoors.empty()) {
+        auto leaves = world.Registry.view<OpenableComponent, TransformComponent, RenderableComponent>();
+        for (auto e : leaves) {
+            const auto& o = leaves.get<OpenableComponent>(e);
+            const auto& r = leaves.get<RenderableComponent>(e);
+            using MK = OpenableComponent::MotionKind;
+            const auto kind = (MK)o.Motion;
+            if (!r.ModelRef || (kind != MK::HingeLeft && kind != MK::HingeRight)) continue;
+            glm::vec3 lo = r.ModelRef->BoundsMin(), hi = r.ModelRef->BoundsMax();
+            const auto* c = world.Registry.try_get<ColliderComponent>(e);
+            if (c && c->Kind == ColliderComponent::Shape::Box && glm::all(glm::greaterThan(c->HalfExtents, glm::vec3(0.0f)))) {
+                lo = c->Center - c->HalfExtents;
+                hi = c->Center + c->HalfExtents;
+            }
+            const glm::mat4 m = world.GetCachedWorldTransform(e);
+            const float sx = glm::length(glm::vec3(m[0])), sy = glm::length(glm::vec3(m[1]));
+            if ((hi.y - lo.y) * sy < 1.8f || (hi.x - lo.x) * sx < 0.6f) continue;
+            const auto* nc = world.Registry.try_get<NameComponent>(e);
+            DoorSpot d;
+            d.Name = (nc ? nc->Name : std::string("door")) + "#" + std::to_string(entt::to_integral(e));
+            d.Normal = Flat(glm::vec3(m[2]));
+            d.Along = Flat(glm::vec3(m[0]));
+            d.Centre = glm::vec3(m * glm::vec4(0.5f * (lo.x + hi.x), lo.y, 0.5f * (lo.z + hi.z), 1.0f));
+            d.Half = 0.5f * (hi.x - lo.x) * sx;
+            d.Leaf = (std::uint32_t)entt::to_integral(e);
+            m_DDoors.push_back(d);
+        }
+        std::sort(m_DDoors.begin(), m_DDoors.end(), [](const DoorSpot& a, const DoorSpot& b) { return a.Name < b.Name; });
+        if (m_DDoors.size() > 24) m_DDoors.resize(24);
+        for (const DoorSpot& d : m_DDoors)
+            std::printf("[NpcTest] doors: %s at (%.2f %.2f %.2f), %.2f m wide\n", d.Name.c_str(), d.Centre.x, d.Centre.y, d.Centre.z,
+                        2.0f * d.Half);
+    }
     std::sort(m_DDoors.begin(), m_DDoors.end(), [](const DoorSpot& a, const DoorSpot& b) { return a.Name < b.Name; });
     Openable::SetAll(world, 1.0f);
 #pragma warning(suppress : 4996)
@@ -73,7 +110,7 @@ void NpcTest::DoorsPassSetUp(const Player& player) {
     if (k == 1 || k == 2) {
         // A graze: arrive at the wall with the capsule's edge 8 cm over the jamb, heading 10 degrees in toward the middle.
         const float jamb = k == 1 ? -1.0f : 1.0f; // the hinge side is local -X
-        const float half = 0.46f, lateral = half - player.Size.x * 0.5f + 0.08f;
+        const float half = d.Half, lateral = half - player.Size.x * 0.5f + 0.08f;
         const glm::vec3 out = d.Along * jamb;
         const float tilt = 10.0f;
         heading = glm::normalize(n - out * std::tan(glm::radians(tilt)));
@@ -141,7 +178,7 @@ void NpcTest::Doors(World& world, const Player& player) {
         if (m_DWait < 1.0f) return; // the leaves swinging open
         m_DReady = true;
         if (m_DDoors.empty()) {
-            Check(false, "doors: Apartment Hallway's doors found");
+            Check(false, "doors: the scene's doors found");
             m_Done = true;
             return;
         }

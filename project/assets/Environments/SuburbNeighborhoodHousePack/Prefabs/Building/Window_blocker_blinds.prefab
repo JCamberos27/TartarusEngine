@@ -12,8 +12,8 @@
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.97994,
-          0.81082,
+          0.950542,
+          0.786495,
           0.0
         ],
         "isTrigger": false,

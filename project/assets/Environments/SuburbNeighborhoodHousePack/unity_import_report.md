@@ -4,10 +4,12 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\SuburbNeighborhood
 
 ## Counts
 
+- architecture scaled x0.97: 1911
 - baked-only lights (now realtime): 154
 - built-in cubes as boxes: 5
 - colliders: 8096
 - duplicate openables dropped (a twin door within 10 cm): 0
+- free-standing props kept at 1.0: 4002
 - lights: 173
 - material overrides on instances: 1636
 - materials: 108
@@ -16,12 +18,13 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\SuburbNeighborhood
 - openable clips applied: 80
 - openables: 64
 - prefabs: 463
+- props re-seated on their floor after the architecture scale: 469
 - reflection probes: 12
 - renderers: 7619
 - scenes: 3
+- scenes given the AAA look preset: 2
 - scripts dropped (MonoBehaviour): 2590
 - textures: 477
-- textures cooked: 277
 
 ## Not converted / approximated
 

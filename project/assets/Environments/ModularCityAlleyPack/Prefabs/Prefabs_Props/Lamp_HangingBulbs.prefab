@@ -6,15 +6,15 @@
     {
       "collider": {
         "center": [
-          -0.013254,
-          0.180239,
-          -0.015317
+          -0.010868,
+          0.147796,
+          -0.01256
         ],
         "friction": 0.6,
         "halfExtents": [
-          5.646375,
-          0.05,
-          0.025126
+          4.630027,
+          0.041,
+          0.020603
         ],
         "isTrigger": false,
         "shape": 0
@@ -37,9 +37,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        1.219512,
+        1.219512,
+        1.219512
       ],
       "static": true
     },
@@ -66,8 +66,8 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Lamp_BulbHanging.FBX",
       "pathGuid": "b35c687b4aa5ae5d",
       "position": [
-        -3.106,
-        0.12,
+        -2.54692,
+        0.0984,
         0.0
       ],
       "rotation": [
@@ -77,9 +77,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -106,8 +106,8 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Lamp_BulbHanging.FBX",
       "pathGuid": "b35c687b4aa5ae5d",
       "position": [
-        0.12,
-        -0.016,
+        0.0984,
+        -0.01312,
         0.0
       ],
       "rotation": [
@@ -117,9 +117,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     },
@@ -146,8 +146,8 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/Lamp_BulbHanging.FBX",
       "pathGuid": "b35c687b4aa5ae5d",
       "position": [
-        3.263,
-        0.089,
+        2.67566,
+        0.07298,
         0.0
       ],
       "rotation": [
@@ -157,9 +157,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.82,
+        0.82,
+        0.82
       ],
       "static": true
     }

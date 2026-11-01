@@ -38,7 +38,7 @@
       "parentId": -1,
       "position": [
         -0.0,
-        -0.5,
+        -0.45,
         0.0
       ],
       "rotation": [
@@ -48,9 +48,9 @@
         1.0
       ],
       "scale": [
-        400.0,
-        0.99,
-        282.8385
+        360.0,
+        0.891,
+        254.55465
       ]
     }
   ],
@@ -69,7 +69,7 @@
         "Assist Range": 30.0,
         "Camera Bone": "head",
         "Capsule Height": 1.850000023841858,
-        "Capsule Radius": 0.30000001192092896,
+        "Capsule Radius": 0.22,
         "Coyote Time": 0.10000000149011612,
         "Eye Height": 1.7000000476837158,
         "Eye Radius": 0.11999999731779099,
@@ -129,7 +129,7 @@
       "position": [
         -0.0,
         0.0,
-        -10.0
+        -9.0
       ],
       "rotation": [
         0.0,
@@ -307,9 +307,9 @@
       "order": 656,
       "parentId": -1,
       "position": [
-        4.5,
+        4.05,
         0.0,
-        -12.5
+        -11.25
       ],
       "rotation": [
         0.0,
@@ -7081,9 +7081,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          0.01,
-          1.0,
-          0.973878
+          0.009,
+          0.9,
+          0.87649
         ],
         "isTrigger": false,
         "shape": 0
@@ -7093,9 +7093,9 @@
       "order": 1060,
       "parentId": 1059,
       "position": [
-        0.65,
-        1.3,
-        -0.943878
+        0.585,
+        1.17,
+        -0.84949
       ],
       "rotation": [
         0.0,
@@ -7114,9 +7114,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          0.625,
-          0.02,
-          0.015
+          0.5625,
+          0.018,
+          0.0135
         ],
         "isTrigger": false,
         "shape": 0
@@ -7126,9 +7126,9 @@
       "order": 1061,
       "parentId": 1059,
       "position": [
-        -0.08,
-        2.67,
-        0.01
+        -0.072,
+        2.403,
+        0.009
       ],
       "rotation": [
         0.0,
@@ -9127,9 +9127,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          0.01,
-          1.0,
-          0.973878
+          0.009,
+          0.9,
+          0.87649
         ],
         "isTrigger": false,
         "shape": 0
@@ -9139,9 +9139,9 @@
       "order": 1173,
       "parentId": 1172,
       "position": [
-        0.15,
-        1.3,
-        -0.943878
+        0.135,
+        1.17,
+        -0.84949
       ],
       "rotation": [
         0.0,
@@ -10491,9 +10491,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          0.25,
-          1.500173,
-          0.031428
+          0.225,
+          1.350156,
+          0.028285
         ],
         "isTrigger": false,
         "shape": 0
@@ -10503,9 +10503,9 @@
       "order": 1263,
       "parentId": 1262,
       "position": [
-        0.25,
-        1.499827,
-        -0.000221
+        0.225,
+        1.349844,
+        -0.000199
       ],
       "rotation": [
         0.0,
@@ -10524,9 +10524,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          1.0,
-          0.35,
-          0.031428
+          0.9,
+          0.315,
+          0.028285
         ],
         "isTrigger": false,
         "shape": 0
@@ -10536,9 +10536,9 @@
       "order": 1264,
       "parentId": 1262,
       "position": [
-        1.0,
-        2.65,
-        -0.000221
+        0.9,
+        2.385,
+        -0.000199
       ],
       "rotation": [
         0.0,
@@ -10557,9 +10557,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          0.54,
-          1.5,
-          0.039398
+          0.486,
+          1.35,
+          0.035458
         ],
         "isTrigger": false,
         "shape": 0
@@ -10569,9 +10569,9 @@
       "order": 1267,
       "parentId": 1266,
       "position": [
-        1.53,
-        1.5,
-        0.06
+        1.377,
+        1.35,
+        0.054
       ],
       "rotation": [
         0.0,
@@ -10590,9 +10590,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          2.0,
-          0.37,
-          0.039398
+          1.8,
+          0.333,
+          0.035458
         ],
         "isTrigger": false,
         "shape": 0
@@ -10603,8 +10603,8 @@
       "parentId": 1266,
       "position": [
         -0.0,
-        2.65,
-        0.06
+        2.385,
+        0.054
       ],
       "rotation": [
         0.0,
@@ -10623,9 +10623,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          0.3,
-          1.249697,
-          0.059514
+          0.27,
+          1.124727,
+          0.053563
         ],
         "isTrigger": false,
         "shape": 0
@@ -10635,9 +10635,9 @@
       "order": 1274,
       "parentId": 1273,
       "position": [
-        -2.8,
-        1.249697,
-        -0.015795
+        -2.52,
+        1.124727,
+        -0.014216
       ],
       "rotation": [
         0.0,
@@ -10656,9 +10656,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          1.509271,
-          0.15,
-          0.059514
+          1.358344,
+          0.135,
+          0.053563
         ],
         "isTrigger": false,
         "shape": 0
@@ -10668,9 +10668,9 @@
       "order": 1275,
       "parentId": 1273,
       "position": [
-        -1.596137,
-        2.35,
-        -0.015795
+        -1.436523,
+        2.115,
+        -0.014216
       ],
       "rotation": [
         0.0,
@@ -10689,9 +10689,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          1.28,
-          1.5,
-          0.039398
+          1.152,
+          1.35,
+          0.035458
         ],
         "isTrigger": false,
         "shape": 0
@@ -10701,9 +10701,9 @@
       "order": 1279,
       "parentId": 1278,
       "position": [
-        1.77,
-        1.5,
-        0.06
+        1.593,
+        1.35,
+        0.054
       ],
       "rotation": [
         0.0,
@@ -10722,9 +10722,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          3.0,
-          0.37,
-          0.039398
+          2.7,
+          0.333,
+          0.035458
         ],
         "isTrigger": false,
         "shape": 0
@@ -10735,8 +10735,8 @@
       "parentId": 1278,
       "position": [
         -0.0,
-        2.68,
-        0.06
+        2.412,
+        0.054
       ],
       "rotation": [
         0.0,
@@ -10755,9 +10755,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          2.0,
-          0.37,
-          0.039398
+          1.8,
+          0.333,
+          0.035458
         ],
         "isTrigger": false,
         "shape": 0
@@ -10768,8 +10768,8 @@
       "parentId": 1281,
       "position": [
         -0.0,
-        2.65,
-        0.06
+        2.385,
+        0.054
       ],
       "rotation": [
         0.0,
@@ -10788,9 +10788,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          0.79,
-          1.5,
-          0.039398
+          0.711,
+          1.35,
+          0.035458
         ],
         "isTrigger": false,
         "shape": 0
@@ -10800,9 +10800,9 @@
       "order": 1283,
       "parentId": 1281,
       "position": [
-        1.28,
-        1.5,
-        0.06
+        1.152,
+        1.35,
+        0.054
       ],
       "rotation": [
         0.0,
@@ -10834,9 +10834,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.9,
+        0.9,
+        0.9
       ]
     },
     {
@@ -10869,7 +10869,7 @@
       "position": [
         -0.0,
         0.0,
-        1.445999
+        1.301399
       ],
       "rotation": [
         0.0,
@@ -10878,9 +10878,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.9,
+        0.9,
+        0.9
       ]
     },
     {
@@ -10909,9 +10909,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          1.025,
-          1.5,
-          0.039398
+          0.9225,
+          1.35,
+          0.035458
         ],
         "isTrigger": false,
         "shape": 0
@@ -10921,9 +10921,9 @@
       "order": 1306,
       "parentId": 1305,
       "position": [
-        2.02,
-        1.5,
-        0.06
+        1.818,
+        1.35,
+        0.054
       ],
       "rotation": [
         0.0,
@@ -10942,9 +10942,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          3.0,
-          0.34,
-          0.039398
+          2.7,
+          0.306,
+          0.035458
         ],
         "isTrigger": false,
         "shape": 0
@@ -10955,8 +10955,8 @@
       "parentId": 1305,
       "position": [
         -0.0,
-        2.65,
-        0.06
+        2.385,
+        0.054
       ],
       "rotation": [
         0.0,
@@ -10975,9 +10975,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          0.52,
-          1.5,
-          0.039398
+          0.468,
+          1.35,
+          0.035458
         ],
         "isTrigger": false,
         "shape": 0
@@ -10987,9 +10987,9 @@
       "order": 1310,
       "parentId": 1309,
       "position": [
-        1.01,
-        1.5,
-        0.06
+        0.909,
+        1.35,
+        0.054
       ],
       "rotation": [
         0.0,
@@ -11008,9 +11008,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          1.5,
-          0.37,
-          0.039398
+          1.35,
+          0.333,
+          0.035458
         ],
         "isTrigger": false,
         "shape": 0
@@ -11021,8 +11021,8 @@
       "parentId": 1309,
       "position": [
         -0.0,
-        2.65,
-        0.06
+        2.385,
+        0.054
       ],
       "rotation": [
         0.0,
@@ -11041,9 +11041,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          1.3,
-          1.5,
-          0.039398
+          1.17,
+          1.35,
+          0.035458
         ],
         "isTrigger": false,
         "shape": 0
@@ -11053,9 +11053,9 @@
       "order": 1314,
       "parentId": 1313,
       "position": [
-        1.8,
-        1.5,
-        0.06
+        1.62,
+        1.35,
+        0.054
       ],
       "rotation": [
         0.0,
@@ -11074,9 +11074,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          3.0,
-          0.36,
-          0.039398
+          2.7,
+          0.324,
+          0.035458
         ],
         "isTrigger": false,
         "shape": 0
@@ -11087,8 +11087,8 @@
       "parentId": 1313,
       "position": [
         -0.0,
-        2.66,
-        0.06
+        2.394,
+        0.054
       ],
       "rotation": [
         0.0,
@@ -11109,9 +11109,9 @@
       "order": 1316,
       "parentId": 1254,
       "position": [
-        -7.5,
+        -6.75,
         0.0,
-        -12.0
+        -10.8
       ],
       "rotation": [
         0.0,
@@ -11131,9 +11131,9 @@
       "order": 1320,
       "parentId": 1254,
       "position": [
-        3.5,
+        3.15,
         0.0,
-        -12.0
+        -10.8
       ],
       "rotation": [
         0.0,
@@ -11153,9 +11153,9 @@
       "order": 1322,
       "parentId": 1254,
       "position": [
-        -10.5,
+        -9.45,
         0.0,
-        -12.0
+        -10.8
       ],
       "rotation": [
         0.0,
@@ -11173,9 +11173,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          0.285,
-          1.5,
-          0.039398
+          0.2565,
+          1.35,
+          0.035458
         ],
         "isTrigger": false,
         "shape": 0
@@ -11185,9 +11185,9 @@
       "order": 1325,
       "parentId": 1324,
       "position": [
-        1.28,
-        1.5,
-        0.06
+        1.152,
+        1.35,
+        0.054
       ],
       "rotation": [
         0.0,
@@ -11206,9 +11206,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          1.5,
-          0.37,
-          0.039398
+          1.35,
+          0.333,
+          0.035458
         ],
         "isTrigger": false,
         "shape": 0
@@ -11219,8 +11219,8 @@
       "parentId": 1324,
       "position": [
         -0.0,
-        2.65,
-        0.06
+        2.385,
+        0.054
       ],
       "rotation": [
         0.0,
@@ -11241,9 +11241,9 @@
       "order": 1329,
       "parentId": 1254,
       "position": [
-        -12.0,
+        -10.8,
         0.0,
-        -12.0
+        -10.8
       ],
       "rotation": [
         0.0,
@@ -11263,9 +11263,9 @@
       "order": 1340,
       "parentId": 1339,
       "position": [
-        0.605,
+        0.5445,
         0.0,
-        1.5
+        1.35
       ],
       "rotation": [
         0.0,
@@ -11274,9 +11274,9 @@
         -0.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.9,
+        0.9,
+        0.9
       ]
     },
     {
@@ -11285,9 +11285,9 @@
       "order": 1346,
       "parentId": 1254,
       "position": [
-        -9.0,
+        -8.1,
         0.0,
-        -12.0
+        -10.8
       ],
       "rotation": [
         0.0,
@@ -11307,9 +11307,9 @@
       "order": 1351,
       "parentId": 1254,
       "position": [
-        -4.5,
+        -4.05,
         0.0,
-        -12.0
+        -10.8
       ],
       "rotation": [
         0.0,
@@ -11351,7 +11351,7 @@
       "parentId": -1,
       "position": [
         -0.0,
-        3.0,
+        2.7,
         0.0
       ],
       "rotation": [
@@ -11901,9 +11901,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Watersprinklerpipe_R.FBX",
       "pathGuid": "ce44c1fedac9c5a5",
       "position": [
-        34.329998,
-        0.39,
-        3.01
+        30.896998,
+        0.351,
+        2.709
       ],
       "rotation": [
         0.0,
@@ -11941,9 +11941,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Painting_H.FBX",
       "pathGuid": "1f454ae690dc2375",
       "position": [
-        48.46,
-        0.479,
-        2.71
+        43.614,
+        0.4311,
+        2.439
       ],
       "rotation": [
         0.0,
@@ -11981,9 +11981,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Toilet_sink.FBX",
       "pathGuid": "ffd67a9f9e8f7435",
       "position": [
-        48.98,
-        0.59,
-        0.93
+        44.082,
+        0.531,
+        0.837
       ],
       "rotation": [
         0.0,
@@ -12021,9 +12021,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Bench_leather.FBX",
       "pathGuid": "443a06ee8b586494",
       "position": [
-        63.08,
-        -0.005,
-        0.26
+        56.772,
+        -0.0045,
+        0.234
       ],
       "rotation": [
         0.0,
@@ -12061,9 +12061,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Chair_office_leather.FBX",
       "pathGuid": "28c1e0afe65cadfd",
       "position": [
-        39.02,
-        -0.005,
-        2.79
+        35.118,
+        -0.0045,
+        2.511
       ],
       "rotation": [
         0.0,
@@ -12101,9 +12101,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Water_dispenser@Water_dispenser.FBX",
       "pathGuid": "58899913a0169008",
       "position": [
-        57.16,
-        -0.005,
-        4.29
+        51.444,
+        -0.0045,
+        3.861
       ],
       "rotation": [
         0.0,
@@ -12166,9 +12166,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Watersprinklerpipe_end.FBX",
       "pathGuid": "5ca3506054027bc9",
       "position": [
-        35.4,
-        0.38,
-        -2.67
+        31.86,
+        0.342,
+        -2.403
       ],
       "rotation": [
         0.0,
@@ -12206,9 +12206,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_D.FBX",
       "pathGuid": "37af9429351e2207",
       "position": [
-        45.326706,
-        -0.005,
-        7.309056
+        40.794035,
+        -0.0045,
+        6.57815
       ],
       "rotation": [
         0.0,
@@ -12246,9 +12246,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Couch_3seat.FBX",
       "pathGuid": "5d65cb0743075209",
       "position": [
-        58.601353,
-        -0.005,
-        0.450524
+        52.741218,
+        -0.0045,
+        0.405472
       ],
       "rotation": [
         0.0,
@@ -12286,9 +12286,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Painting_F.FBX",
       "pathGuid": "78a4d0b6b06f26d7",
       "position": [
-        46.598465,
-        0.479,
-        2.68616
+        41.938618,
+        0.4311,
+        2.417544
       ],
       "rotation": [
         0.0,
@@ -12326,9 +12326,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Dresser_C.FBX",
       "pathGuid": "52036993594b97ea",
       "position": [
-        44.195694,
-        -0.005,
-        -2.191955
+        39.776125,
+        -0.0045,
+        -1.97276
       ],
       "rotation": [
         0.0,
@@ -12446,9 +12446,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Lamp_fluorescent_C@Lamp_fluorescent_C.FBX",
       "pathGuid": "c6784970879baacf",
       "position": [
-        46.77,
-        0.23,
-        4.35
+        42.093,
+        0.207,
+        3.915
       ],
       "rotation": [
         0.0,
@@ -12526,9 +12526,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Airventilation_3x.FBX",
       "pathGuid": "fa1c3a2836872eda",
       "position": [
-        37.03,
-        0.66,
-        0.22
+        33.327,
+        0.594,
+        0.198
       ],
       "rotation": [
         0.0,
@@ -12566,9 +12566,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Shelf_metal_tall.FBX",
       "pathGuid": "713824bd0539b6bb",
       "position": [
-        48.84036,
-        -0.005,
-        -5.439918
+        43.956324,
+        -0.0045,
+        -4.895926
       ],
       "rotation": [
         0.0,
@@ -12606,9 +12606,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Lamp_fluorescent_B@Lamp_fluorescent_B.FBX",
       "pathGuid": "881f375b6b48d5e7",
       "position": [
-        48.500305,
-        0.24,
-        4.391109
+        43.650275,
+        0.216,
+        3.951998
       ],
       "rotation": [
         0.0,
@@ -12686,9 +12686,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Bookshelf.FBX",
       "pathGuid": "74ae8de1c928e2a1",
       "position": [
-        38.765427,
-        -0.005,
-        -5.85603
+        34.888884,
+        -0.0045,
+        -5.270427
       ],
       "rotation": [
         0.0,
@@ -12726,9 +12726,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_D.FBX",
       "pathGuid": "37af9429351e2207",
       "position": [
-        -0.618,
+        -0.5562,
         1.3451,
-        0.274
+        0.2466
       ],
       "rotation": [
         0.0,
@@ -12766,9 +12766,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_E.FBX",
       "pathGuid": "2742c2f55905c8b4",
       "position": [
-        0.8296,
+        0.74664,
         1.3451,
-        0.278
+        0.2502
       ],
       "rotation": [
         0.0,
@@ -12806,9 +12806,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_F.FBX",
       "pathGuid": "a84bb68ca4caa9bf",
       "position": [
-        0.3931,
+        0.35379,
         1.3451,
-        0.273
+        0.2457
       ],
       "rotation": [
         0.0,
@@ -12846,9 +12846,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_G.FBX",
       "pathGuid": "53045d5410fd39e7",
       "position": [
-        -0.5304,
+        -0.47736,
         1.849,
-        0.271767
+        0.24459
       ],
       "rotation": [
         0.0,
@@ -12886,9 +12886,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_F.FBX",
       "pathGuid": "a84bb68ca4caa9bf",
       "position": [
-        0.549,
+        0.4941,
         1.85,
-        0.254
+        0.2286
       ],
       "rotation": [
         0.0,
@@ -12926,9 +12926,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_G.FBX",
       "pathGuid": "53045d5410fd39e7",
       "position": [
-        -0.901,
+        -0.8109,
         1.3451,
-        0.271767
+        0.24459
       ],
       "rotation": [
         0.0,
@@ -12966,9 +12966,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_E.FBX",
       "pathGuid": "2742c2f55905c8b4",
       "position": [
-        -0.074,
+        -0.0666,
         1.85,
-        0.259
+        0.2331
       ],
       "rotation": [
         0.0,
@@ -13006,9 +13006,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_D.FBX",
       "pathGuid": "37af9429351e2207",
       "position": [
-        -0.7944,
+        -0.71496,
         1.849,
-        0.274
+        0.2466
       ],
       "rotation": [
         0.0,
@@ -13046,9 +13046,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_E.FBX",
       "pathGuid": "2742c2f55905c8b4",
       "position": [
-        -0.355,
+        -0.3195,
         1.3451,
-        0.278
+        0.2502
       ],
       "rotation": [
         0.0,
@@ -13086,9 +13086,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_B.FBX",
       "pathGuid": "7cf75bb5011e54da",
       "position": [
-        0.168,
+        0.1512,
         1.3451,
-        0.280153
+        0.252138
       ],
       "rotation": [
         0.0,
@@ -13126,9 +13126,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_B.FBX",
       "pathGuid": "7cf75bb5011e54da",
       "position": [
-        -0.29,
+        -0.261,
         1.85,
-        0.261153
+        0.235038
       ],
       "rotation": [
         0.0,
@@ -13166,9 +13166,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_A.FBX",
       "pathGuid": "f788dddac3feb848",
       "position": [
-        0.612,
+        0.5508,
         1.3451,
-        0.278
+        0.2502
       ],
       "rotation": [
         0.0,
@@ -13206,9 +13206,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_C.FBX",
       "pathGuid": "98da71f3d5f6276d",
       "position": [
-        -0.117,
+        -0.1053,
         1.3451,
-        0.271
+        0.2439
       ],
       "rotation": [
         0.0,
@@ -13246,9 +13246,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_C.FBX",
       "pathGuid": "98da71f3d5f6276d",
       "position": [
-        0.791,
+        0.7119,
         1.849,
-        0.271
+        0.2439
       ],
       "rotation": [
         0.0,
@@ -13286,9 +13286,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_A.FBX",
       "pathGuid": "f788dddac3feb848",
       "position": [
-        0.33,
+        0.297,
         1.85,
-        0.259
+        0.2331
       ],
       "rotation": [
         0.0,
@@ -13326,9 +13326,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_E.FBX",
       "pathGuid": "2742c2f55905c8b4",
       "position": [
-        -0.614,
+        -0.5526,
         0.861,
-        0.278
+        0.2502
       ],
       "rotation": [
         0.0,
@@ -13366,9 +13366,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_B.FBX",
       "pathGuid": "7cf75bb5011e54da",
       "position": [
-        -0.364,
+        -0.3276,
         0.861,
-        0.280153
+        0.252138
       ],
       "rotation": [
         0.0,
@@ -13406,9 +13406,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_G.FBX",
       "pathGuid": "53045d5410fd39e7",
       "position": [
-        0.4478,
+        0.40302,
         0.861,
-        0.271767
+        0.24459
       ],
       "rotation": [
         0.0,
@@ -13446,9 +13446,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_A.FBX",
       "pathGuid": "f788dddac3feb848",
       "position": [
-        -0.832,
+        -0.7488,
         0.861,
-        0.278
+        0.2502
       ],
       "rotation": [
         0.0,
@@ -13486,9 +13486,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_F.FBX",
       "pathGuid": "a84bb68ca4caa9bf",
       "position": [
-        -0.144,
+        -0.1296,
         0.861,
-        0.273
+        0.2457
       ],
       "rotation": [
         0.0,
@@ -13526,9 +13526,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_C.FBX",
       "pathGuid": "98da71f3d5f6276d",
       "position": [
-        0.221,
+        0.1989,
         0.861,
-        0.271
+        0.2439
       ],
       "rotation": [
         0.0,
@@ -13566,9 +13566,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_D.FBX",
       "pathGuid": "37af9429351e2207",
       "position": [
-        0.741,
+        0.6669,
         0.861,
-        0.274
+        0.2466
       ],
       "rotation": [
         0.0,
@@ -13726,9 +13726,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_file.FBX",
       "pathGuid": "599f739c1ba45d95",
       "position": [
-        50.266903,
-        -0.005,
-        7.342998
+        45.240213,
+        -0.0045,
+        6.608698
       ],
       "rotation": [
         0.0,
@@ -13766,9 +13766,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Whiteboard_standing.FBX",
       "pathGuid": "979617d660cbccde",
       "position": [
-        40.82,
-        -0.005,
-        1.174
+        36.738,
+        -0.0045,
+        1.0566
       ],
       "rotation": [
         0.0,
@@ -13806,9 +13806,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Phone.FBX",
       "pathGuid": "54fb2115d066d26c",
       "position": [
-        53.625935,
-        -0.005,
-        5.488769
+        48.263342,
+        -0.0045,
+        4.939892
       ],
       "rotation": [
         0.0,
@@ -13846,9 +13846,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Cell_sink.FBX",
       "pathGuid": "a27345064104e6a5",
       "position": [
-        55.8345,
-        -0.005,
-        4.41641
+        50.25105,
+        -0.0045,
+        3.974769
       ],
       "rotation": [
         0.0,
@@ -13886,9 +13886,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Watersprinklerpipe_3x.FBX",
       "pathGuid": "301fc7846ec60c1f",
       "position": [
-        34.71,
-        0.44,
-        -0.09
+        31.239,
+        0.396,
+        -0.081
       ],
       "rotation": [
         0.0,
@@ -13926,9 +13926,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/PC_mousepad.FBX",
       "pathGuid": "11b5cd60103374c1",
       "position": [
-        42.322,
-        -0.005,
-        3.886
+        38.0898,
+        -0.0045,
+        3.4974
       ],
       "rotation": [
         0.0,
@@ -13947,14 +13947,14 @@
       "collider": {
         "center": [
           -0.0,
-          0.776987,
+          0.699288,
           0.0
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.969705,
-          0.77631,
-          0.025
+          0.872735,
+          0.698679,
+          0.0225
         ],
         "isTrigger": false,
         "shape": 0
@@ -13966,9 +13966,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Tablescreen_E_glass.FBX",
       "pathGuid": "10829eebce931682",
       "position": [
-        54.0,
+        48.6,
         0.0,
-        -3.5
+        -3.15
       ],
       "rotation": [
         0.0,
@@ -14006,9 +14006,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Painting_C.FBX",
       "pathGuid": "130b53ecac0fbdc9",
       "position": [
-        43.782616,
-        0.479,
-        2.620986
+        39.404354,
+        0.4311,
+        2.358887
       ],
       "rotation": [
         0.0,
@@ -14046,9 +14046,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Table_cabinet_A_drawer_A.FBX",
       "pathGuid": "c99b24a62bb8ea05",
       "position": [
-        48.747047,
-        0.32,
-        -2.077359
+        43.872342,
+        0.288,
+        -1.869623
       ],
       "rotation": [
         0.0,
@@ -14086,9 +14086,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Carpet_round.FBX",
       "pathGuid": "d682ee5790315dd5",
       "position": [
-        59.8,
-        -0.005,
-        8.73
+        53.82,
+        -0.0045,
+        7.857
       ],
       "rotation": [
         0.0,
@@ -14126,9 +14126,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Papers_pile.FBX",
       "pathGuid": "65363166d11f1da2",
       "position": [
-        54.860794,
-        -0.005,
-        6.196365
+        49.374715,
+        -0.0045,
+        5.576729
       ],
       "rotation": [
         0.0,
@@ -14166,9 +14166,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Storage_cardboard_box_E.FBX",
       "pathGuid": "af6db75710f36d84",
       "position": [
-        48.349815,
-        -0.005,
-        5.882346
+        43.514834,
+        -0.0045,
+        5.294111
       ],
       "rotation": [
         0.0,
@@ -14206,9 +14206,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Windowblinds_B.FBX",
       "pathGuid": "565d2de86ae06b89",
       "position": [
-        61.29799,
-        1.484,
-        -4.96
+        55.168191,
+        1.3356,
+        -4.464
       ],
       "rotation": [
         0.0,
@@ -14246,9 +14246,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Toilet_sign.FBX",
       "pathGuid": "a3a6b031d5e4cc48",
       "position": [
-        50.62,
-        0.75,
-        -0.43
+        45.558,
+        0.675,
+        -0.387
       ],
       "rotation": [
         0.0,
@@ -14286,9 +14286,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Urinal_partition.FBX",
       "pathGuid": "50692d67429fe014",
       "position": [
-        52.03,
-        -0.005,
-        -5.12
+        46.827,
+        -0.0045,
+        -4.608
       ],
       "rotation": [
         0.0,
@@ -14326,9 +14326,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_G.FBX",
       "pathGuid": "53045d5410fd39e7",
       "position": [
-        47.311115,
-        -0.005,
-        7.257428
+        42.580004,
+        -0.0045,
+        6.531685
       ],
       "rotation": [
         0.0,
@@ -14366,9 +14366,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Dresser_C_drawer_A.FBX",
       "pathGuid": "976fbd5c22905654",
       "position": [
-        44.178,
-        0.206,
-        -0.904
+        39.7602,
+        0.1854,
+        -0.8136
       ],
       "rotation": [
         0.0,
@@ -14406,9 +14406,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Lamp_fluorescent_A@Lamp_fluorescent_A.FBX",
       "pathGuid": "010ae26b2d367bc3",
       "position": [
-        50.172955,
-        0.38,
-        4.457408
+        45.15566,
+        0.342,
+        4.011667
       ],
       "rotation": [
         0.0,
@@ -14486,9 +14486,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Urinal.FBX",
       "pathGuid": "519fc9313357a50b",
       "position": [
-        46.54,
-        -0.005,
-        -0.66
+        41.886,
+        -0.0045,
+        -0.594
       ],
       "rotation": [
         0.0,
@@ -14526,9 +14526,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folderholder.FBX",
       "pathGuid": "d4539192454beecb",
       "position": [
-        51.560486,
-        -0.005,
-        7.361183
+        46.404437,
+        -0.0045,
+        6.625065
       ],
       "rotation": [
         0.0,
@@ -14646,9 +14646,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Doorfloortrim.FBX",
       "pathGuid": "f5b222817fe50ce4",
       "position": [
-        35.36,
-        -0.005,
-        -0.35
+        31.824,
+        -0.0045,
+        -0.315
       ],
       "rotation": [
         0.0,
@@ -14686,9 +14686,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Storage_cardboard_box_C.FBX",
       "pathGuid": "f4287b32121b3a93",
       "position": [
-        49.85185,
-        -0.005,
-        5.907265
+        44.866665,
+        -0.0045,
+        5.316539
       ],
       "rotation": [
         0.0,
@@ -14726,9 +14726,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_E.FBX",
       "pathGuid": "d6eef5628e97b7c3",
       "position": [
-        49.827446,
-        -0.005,
-        7.351694
+        44.844701,
+        -0.0045,
+        6.616525
       ],
       "rotation": [
         0.0,
@@ -14766,9 +14766,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Cell_bed.FBX",
       "pathGuid": "ea7977f9a73a97e4",
       "position": [
-        55.149765,
-        -0.005,
-        2.579821
+        49.634789,
+        -0.0045,
+        2.321839
       ],
       "rotation": [
         0.0,
@@ -14806,9 +14806,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/PC_keyboard.FBX",
       "pathGuid": "bce2396d31dc7509",
       "position": [
-        39.568,
-        -0.005,
-        4.787
+        35.6112,
+        -0.0045,
+        4.3083
       ],
       "rotation": [
         0.0,
@@ -14846,9 +14846,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_A.FBX",
       "pathGuid": "a02c4685104fce6f",
       "position": [
-        47.9569,
-        -0.005,
-        7.342998
+        43.16121,
+        -0.0045,
+        6.608698
       ],
       "rotation": [
         0.0,
@@ -14886,9 +14886,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/PC_unit.FBX",
       "pathGuid": "b8366a857e12cc7f",
       "position": [
-        39.09184,
-        -0.005,
-        3.944605
+        35.182656,
+        -0.0045,
+        3.550145
       ],
       "rotation": [
         0.0,
@@ -14926,9 +14926,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Monitor_B.FBX",
       "pathGuid": "91578972183e0feb",
       "position": [
-        40.444244,
-        -0.005,
-        4.689843
+        36.39982,
+        -0.0045,
+        4.220859
       ],
       "rotation": [
         0.0,
@@ -14966,9 +14966,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Toilet_carpet.FBX",
       "pathGuid": "d1c88724bd3d632d",
       "position": [
-        48.396103,
-        -0.005,
-        -0.423869
+        43.556493,
+        -0.0045,
+        -0.381482
       ],
       "rotation": [
         0.0,
@@ -14987,14 +14987,14 @@
       "collider": {
         "center": [
           -0.0,
-          0.843323,
+          0.758991,
           0.0
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.969705,
-          0.842646,
-          0.025
+          0.872735,
+          0.758381,
+          0.0225
         ],
         "isTrigger": false,
         "shape": 0
@@ -15006,9 +15006,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Tablescreen_B.FBX",
       "pathGuid": "91ed9f5da9342253",
       "position": [
-        59.0,
+        53.1,
         0.0,
-        -3.5
+        -3.15
       ],
       "rotation": [
         0.0,
@@ -15046,9 +15046,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Table_cabinet_B@Table_cabinet_B.FBX",
       "pathGuid": "b09f8672482cd9b9",
       "position": [
-        49.620884,
-        -0.005,
-        -3.785299
+        44.658796,
+        -0.0045,
+        -3.406769
       ],
       "rotation": [
         0.0,
@@ -15126,9 +15126,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Desk_metal_drawer_B.FBX",
       "pathGuid": "06858c7d639a1ab6",
       "position": [
-        47.52,
-        0.39,
-        -2.08
+        42.768,
+        0.351,
+        -1.872
       ],
       "rotation": [
         0.0,
@@ -15166,9 +15166,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Closet_A@Closet_A.FBX",
       "pathGuid": "a48a45264388b710",
       "position": [
-        46.55,
-        -0.005,
-        -5.55
+        41.895,
+        -0.0045,
+        -4.995
       ],
       "rotation": [
         0.0,
@@ -15336,9 +15336,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Storage_metal_box_A.FBX",
       "pathGuid": "97cef3eeaf505f68",
       "position": [
-        45.808445,
-        -0.005,
-        6.004728
+        41.227601,
+        -0.0045,
+        5.404255
       ],
       "rotation": [
         0.0,
@@ -15376,9 +15376,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Sign_hanging.FBX",
       "pathGuid": "3b7d53679e90a7d7",
       "position": [
-        52.955,
-        0.72,
-        7.18
+        47.6595,
+        0.648,
+        6.462
       ],
       "rotation": [
         0.0,
@@ -15406,9 +15406,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Flag_wall.FBX",
       "pathGuid": "1808aab21e2f8162",
       "position": [
-        53.18,
-        -0.005,
-        0.91
+        47.862,
+        -0.0045,
+        0.819
       ],
       "rotation": [
         0.0,
@@ -15446,9 +15446,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_E.FBX",
       "pathGuid": "2742c2f55905c8b4",
       "position": [
-        46.091484,
-        -0.005,
-        7.274751
+        41.482336,
+        -0.0045,
+        6.547276
       ],
       "rotation": [
         0.0,
@@ -15467,14 +15467,14 @@
       "collider": {
         "center": [
           -0.0,
-          0.843323,
+          0.758991,
           0.0
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.969705,
-          0.842646,
-          0.025
+          0.872735,
+          0.758381,
+          0.0225
         ],
         "isTrigger": false,
         "shape": 0
@@ -15486,9 +15486,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Tablescreen_D.FBX",
       "pathGuid": "bdf539509564a215",
       "position": [
-        63.0,
+        56.7,
         0.0,
-        -3.5
+        -3.15
       ],
       "rotation": [
         0.0,
@@ -15526,9 +15526,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Dresser_B_drawer_A.FBX",
       "pathGuid": "7f0c81f4c8745e4d",
       "position": [
-        43.090004,
-        0.17,
-        -1.36
+        38.781004,
+        0.153,
+        -1.224
       ],
       "rotation": [
         0.0,
@@ -15566,9 +15566,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Bookshelf_drawer_A.FBX",
       "pathGuid": "6f6e4bcaf2bcb8c8",
       "position": [
-        38.875603,
-        0.32,
-        -4.120241
+        34.988043,
+        0.288,
+        -3.708217
       ],
       "rotation": [
         0.0,
@@ -15606,9 +15606,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Dresser_A_singlesided.FBX",
       "pathGuid": "f825f01e5df2eb87",
       "position": [
-        41.31077,
-        -0.005,
-        -1.93891
+        37.179693,
+        -0.0045,
+        -1.745019
       ],
       "rotation": [
         0.0,
@@ -15867,14 +15867,14 @@
       "collider": {
         "center": [
           -0.0,
-          0.846552,
+          0.761897,
           0.0
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.52085,
-          0.842646,
-          0.025
+          0.468765,
+          0.758381,
+          0.0225
         ],
         "isTrigger": false,
         "shape": 0
@@ -15886,9 +15886,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Tablescreen_A.FBX",
       "pathGuid": "09fe08351c1539e1",
       "position": [
-        61.0,
+        54.9,
         0.0,
-        -3.5
+        -3.15
       ],
       "rotation": [
         0.0,
@@ -15926,9 +15926,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Painting_B.FBX",
       "pathGuid": "3dc2bbd4710c5eb2",
       "position": [
-        42.8783,
-        0.479,
-        2.578708
+        38.59047,
+        0.4311,
+        2.320837
       ],
       "rotation": [
         0.0,
@@ -15966,9 +15966,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Desk_metal_drawer_A.FBX",
       "pathGuid": "6114b55def86cb88",
       "position": [
-        46.334225,
-        0.39,
-        -2.003883
+        41.700803,
+        0.351,
+        -1.803495
       ],
       "rotation": [
         0.0,
@@ -16006,9 +16006,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Airventilation_grid_A.FBX",
       "pathGuid": "85884af62bae5657",
       "position": [
-        37.93,
-        0.39,
-        5.33
+        34.137,
+        0.351,
+        4.797
       ],
       "rotation": [
         0.0,
@@ -16046,9 +16046,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Storage_cardboardbox.FBX",
       "pathGuid": "1fa6baacd00f8743",
       "position": [
-        46.463573,
-        -0.005,
-        6.053647
+        41.817216,
+        -0.0045,
+        5.448282
       ],
       "rotation": [
         0.0,
@@ -16086,9 +16086,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Table_wooden_A.FBX",
       "pathGuid": "90430fc3d68c3991",
       "position": [
-        57.11,
-        -0.005,
-        -1.59
+        51.399,
+        -0.0045,
+        -1.431
       ],
       "rotation": [
         0.0,
@@ -16126,9 +16126,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Pencil.FBX",
       "pathGuid": "02d13b39dc0e1a04",
       "position": [
-        53.10803,
-        -0.005,
-        5.483179
+        47.797227,
+        -0.0045,
+        4.934861
       ],
       "rotation": [
         0.0,
@@ -16166,9 +16166,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_set.FBX",
       "pathGuid": "ec956ba2cc99bc97",
       "position": [
-        50.936443,
-        -0.005,
-        7.384282
+        45.842799,
+        -0.0045,
+        6.645854
       ],
       "rotation": [
         0.0,
@@ -16206,9 +16206,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Mug.FBX",
       "pathGuid": "679d57a6e1d35c9c",
       "position": [
-        42.91,
-        -0.005,
-        5.94
+        38.619,
+        -0.0045,
+        5.346
       ],
       "rotation": [
         0.0,
@@ -16246,9 +16246,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Paper_B.FBX",
       "pathGuid": "5e59a6c34876cf50",
       "position": [
-        53.23799,
-        -0.005,
-        6.085952
+        47.914191,
+        -0.0045,
+        5.477357
       ],
       "rotation": [
         0.0,
@@ -16286,9 +16286,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Storage_paperbag.FBX",
       "pathGuid": "7e05d65ad92ae42f",
       "position": [
-        44.59,
-        -0.005,
-        5.87
+        40.131,
+        -0.0045,
+        5.283
       ],
       "rotation": [
         0.0,
@@ -16326,9 +16326,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Elevator_panel_outside.FBX",
       "pathGuid": "dc5089fbab14d4e2",
       "position": [
-        55.434372,
-        0.14,
-        5.051287
+        49.890935,
+        0.126,
+        4.546158
       ],
       "rotation": [
         0.0,
@@ -16366,9 +16366,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Laptop_A.FBX",
       "pathGuid": "0eecb23564886f64",
       "position": [
-        42.945866,
-        -0.005,
-        4.817355
+        38.651279,
+        -0.0045,
+        4.335619
       ],
       "rotation": [
         0.0,
@@ -16406,9 +16406,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/hand_paper.FBX",
       "pathGuid": "d96ab300450167f8",
       "position": [
-        50.4,
-        0.18,
-        -0.558
+        45.36,
+        0.162,
+        -0.5022
       ],
       "rotation": [
         0.0,
@@ -16446,9 +16446,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Table_cabinet_A_drawer_B.FBX",
       "pathGuid": "a607fc3eef99bdae",
       "position": [
-        49.60995,
-        0.23,
-        -2.133639
+        44.648955,
+        0.207,
+        -1.920275
       ],
       "rotation": [
         0.0,
@@ -16486,9 +16486,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Windowblinds_C.FBX",
       "pathGuid": "566638b914d44b23",
       "position": [
-        59.426018,
-        1.484,
-        -4.96
+        53.483416,
+        1.3356,
+        -4.464
       ],
       "rotation": [
         0.0,
@@ -16526,9 +16526,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Couch_2seat.FBX",
       "pathGuid": "eab2a9dae3611aba",
       "position": [
-        56.15,
-        -0.005,
-        0.41
+        50.535,
+        -0.0045,
+        0.369
       ],
       "rotation": [
         0.0,
@@ -16566,9 +16566,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Dresser_A_drawer.FBX",
       "pathGuid": "398671ca4776ff51",
       "position": [
-        38.77,
-        0.27,
-        -0.83
+        34.893,
+        0.243,
+        -0.747
       ],
       "rotation": [
         0.0,
@@ -16586,15 +16586,15 @@
     {
       "collider": {
         "center": [
-          0.599418,
-          1.301155,
-          -0.013884
+          0.539476,
+          1.17104,
+          -0.012496
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.599418,
-          1.0,
-          0.043066
+          0.539476,
+          0.9,
+          0.038759
         ],
         "isTrigger": false,
         "shape": 0
@@ -16606,9 +16606,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Toilet_partition_door.FBX",
       "pathGuid": "c7c6af9eaba240da",
       "position": [
-        55.40804,
-        -0.005,
-        -4.732845
+        49.867236,
+        -0.0045,
+        -4.259561
       ],
       "rotation": [
         0.0,
@@ -16646,9 +16646,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Painting_E.FBX",
       "pathGuid": "8749a4b9fe074c07",
       "position": [
-        45.67521,
-        0.479,
-        2.660925
+        41.107689,
+        0.4311,
+        2.394833
       ],
       "rotation": [
         0.0,
@@ -16686,9 +16686,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_B.FBX",
       "pathGuid": "241221c81661b536",
       "position": [
-        48.50831,
-        -0.005,
-        7.335706
+        43.657479,
+        -0.0045,
+        6.602135
       ],
       "rotation": [
         0.0,
@@ -16726,9 +16726,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_C.FBX",
       "pathGuid": "98da71f3d5f6276d",
       "position": [
-        44.610153,
-        -0.005,
-        7.281503
+        40.149138,
+        -0.0045,
+        6.553353
       ],
       "rotation": [
         0.0,
@@ -16766,9 +16766,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Elevator_panel_inside.FBX",
       "pathGuid": "48da70083a1e2996",
       "position": [
-        55.986996,
-        0.25,
-        5.251903
+        50.388296,
+        0.225,
+        4.726713
       ],
       "rotation": [
         0.0,
@@ -16806,9 +16806,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Hand_soap.FBX",
       "pathGuid": "f4b8086c9e6c0fe6",
       "position": [
-        50.865,
-        -0.005,
-        -0.452
+        45.7785,
+        -0.0045,
+        -0.4068
       ],
       "rotation": [
         0.0,
@@ -16846,9 +16846,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Plant_B.FBX",
       "pathGuid": "10b201cd2e05226e",
       "position": [
-        57.82,
-        -0.005,
-        2.84
+        52.038,
+        -0.0045,
+        2.556
       ],
       "rotation": [
         0.0,
@@ -16886,9 +16886,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Sign_exit_B@Sign_exit_B.FBX",
       "pathGuid": "c17c2d424c4fc896",
       "position": [
-        54.941574,
-        0.45,
-        7.183825
+        49.447417,
+        0.405,
+        6.465442
       ],
       "rotation": [
         0.0,
@@ -16966,9 +16966,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Table_meeting.FBX",
       "pathGuid": "01b8e2a42b93661d",
       "position": [
-        62.36287,
-        -0.005,
-        -1.332208
+        56.126583,
+        -0.0045,
+        -1.198987
       ],
       "rotation": [
         0.0,
@@ -17006,9 +17006,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Lockers_bench.FBX",
       "pathGuid": "debff47a6a1a8fcc",
       "position": [
-        61.14,
-        -0.005,
-        0.18
+        55.026,
+        -0.0045,
+        0.162
       ],
       "rotation": [
         0.0,
@@ -17027,14 +17027,14 @@
       "collider": {
         "center": [
           -0.0,
-          0.527055,
+          0.47435,
           0.0
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.969705,
-          0.526378,
-          0.025
+          0.872735,
+          0.47374,
+          0.0225
         ],
         "isTrigger": false,
         "shape": 0
@@ -17046,9 +17046,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Tablescreen_C.FBX",
       "pathGuid": "37f4126b45cca947",
       "position": [
-        51.5,
+        46.35,
         0.0,
-        -2.0
+        -1.8
       ],
       "rotation": [
         0.0,
@@ -17086,9 +17086,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Monitor_mounted_A.FBX",
       "pathGuid": "0297123082cb0795",
       "position": [
-        41.3436,
-        0.36,
-        3.885328
+        37.20924,
+        0.324,
+        3.496795
       ],
       "rotation": [
         0.0,
@@ -17126,9 +17126,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Table_wooden_B.FBX",
       "pathGuid": "1991081b23d415fd",
       "position": [
-        59.230198,
-        -0.005,
-        -1.572567
+        53.307178,
+        -0.0045,
+        -1.41531
       ],
       "rotation": [
         0.0,
@@ -17166,9 +17166,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Flag_table.FBX",
       "pathGuid": "a3febc22a2b4cd03",
       "position": [
-        43.47,
-        -0.005,
-        5.93
+        39.123,
+        -0.0045,
+        5.337
       ],
       "rotation": [
         0.0,
@@ -17206,9 +17206,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Storage_cardboard_box_open.FBX",
       "pathGuid": "817a4ff25bfecfc9",
       "position": [
-        47.416126,
-        -0.005,
-        5.946262
+        42.674513,
+        -0.0045,
+        5.351636
       ],
       "rotation": [
         0.0,
@@ -17246,9 +17246,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Cell_shelf.FBX",
       "pathGuid": "1de2954a3767b3a3",
       "position": [
-        54.6,
-        0.28,
-        1.92
+        49.14,
+        0.252,
+        1.728
       ],
       "rotation": [
         0.0,
@@ -17286,9 +17286,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Storage_cardboard_box_D.FBX",
       "pathGuid": "434eeeb6654aeb62",
       "position": [
-        49.082855,
-        -0.005,
-        5.91056
+        44.17457,
+        -0.0045,
+        5.319504
       ],
       "rotation": [
         0.0,
@@ -17326,9 +17326,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Carpet_corridor_end.FBX",
       "pathGuid": "68a04ddfee970714",
       "position": [
-        59.671486,
-        -0.005,
-        1.255902
+        53.704337,
+        -0.0045,
+        1.130312
       ],
       "rotation": [
         0.0,
@@ -17366,9 +17366,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Plant_A.FBX",
       "pathGuid": "3de52a5289bc86cb",
       "position": [
-        56.84,
-        -0.005,
-        2.85
+        51.156,
+        -0.0045,
+        2.565
       ],
       "rotation": [
         0.0,
@@ -17406,9 +17406,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Table_office.FBX",
       "pathGuid": "6e903bc3c1b8e3f4",
       "position": [
-        54.98287,
-        -0.005,
-        -2.062208
+        49.484583,
+        -0.0045,
+        -1.855987
       ],
       "rotation": [
         0.0,
@@ -17446,9 +17446,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Urinal_carpet.FBX",
       "pathGuid": "da5369e303831ffb",
       "position": [
-        45.65,
-        -0.005,
-        -0.32
+        41.085,
+        -0.0045,
+        -0.288
       ],
       "rotation": [
         0.0,
@@ -17476,9 +17476,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Table_corner.FBX",
       "pathGuid": "fba0a556ffb11ff1",
       "position": [
-        51.46,
-        -0.005,
-        -0.93
+        46.314,
+        -0.0045,
+        -0.837
       ],
       "rotation": [
         0.0,
@@ -17756,9 +17756,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Pen.FBX",
       "pathGuid": "8f1ccd740746e0f8",
       "position": [
-        52.6815,
-        -0.005,
-        5.493486
+        47.41335,
+        -0.0045,
+        4.944137
       ],
       "rotation": [
         0.0,
@@ -17796,9 +17796,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Windowblinds_closed.FBX",
       "pathGuid": "17ae61272b3de678",
       "position": [
-        57.68,
-        1.484,
-        -4.96
+        51.912,
+        1.3356,
+        -4.464
       ],
       "rotation": [
         0.0,
@@ -17836,9 +17836,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Papers_holder.FBX",
       "pathGuid": "3fced96c9238fffd",
       "position": [
-        54.322014,
-        -0.005,
-        6.166952
+        48.889813,
+        -0.0045,
+        5.550257
       ],
       "rotation": [
         0.0,
@@ -17916,9 +17916,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Lamp_spot@Lamp_spot_ceilingpart.FBX",
       "pathGuid": "ffa48874a3d90102",
       "position": [
-        43.7,
-        0.27,
-        4.36
+        39.33,
+        0.243,
+        3.924
       ],
       "rotation": [
         0.0,
@@ -17977,14 +17977,14 @@
       "collider": {
         "center": [
           -0.0,
-          0.527055,
+          0.47435,
           0.0
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.969705,
-          0.526378,
-          0.025
+          0.872735,
+          0.47374,
+          0.0225
         ],
         "isTrigger": false,
         "shape": 0
@@ -17996,9 +17996,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Tablescreen_E.FBX",
       "pathGuid": "0a56ad4a3be8831d",
       "position": [
-        51.5,
+        46.35,
         0.0,
-        -3.5
+        -3.15
       ],
       "rotation": [
         0.0,
@@ -18036,9 +18036,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Storage_metalbox@Storage_metalbox.FBX",
       "pathGuid": "4dad49e03d6117b2",
       "position": [
-        45.098446,
-        -0.005,
-        5.974728
+        40.588601,
+        -0.0045,
+        5.377255
       ],
       "rotation": [
         0.0,
@@ -18156,9 +18156,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Watersprinkler.FBX",
       "pathGuid": "984e101485277b32",
       "position": [
-        35.06,
-        0.27,
-        3.02
+        31.554,
+        0.243,
+        2.718
       ],
       "rotation": [
         0.0,
@@ -18196,9 +18196,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_F.FBX",
       "pathGuid": "a84bb68ca4caa9bf",
       "position": [
-        46.737267,
-        -0.005,
-        7.267531
+        42.06354,
+        -0.0045,
+        6.540778
       ],
       "rotation": [
         0.0,
@@ -18236,9 +18236,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Dresser_A_doublesided.FBX",
       "pathGuid": "32456749f96fb7b9",
       "position": [
-        39.178684,
-        -0.005,
-        -1.961259
+        35.260816,
+        -0.0045,
+        -1.765133
       ],
       "rotation": [
         0.0,
@@ -18756,9 +18756,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Carpet_corridor_full.FBX",
       "pathGuid": "f4669018bb4a6b02",
       "position": [
-        62.32,
-        -0.005,
-        9.21
+        56.088,
+        -0.0045,
+        8.289
       ],
       "rotation": [
         0.0,
@@ -18796,9 +18796,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Painting_A.FBX",
       "pathGuid": "1030020f559d4822",
       "position": [
-        41.878475,
-        0.38,
-        2.501811
+        37.690628,
+        0.342,
+        2.25163
       ],
       "rotation": [
         0.0,
@@ -18836,9 +18836,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_A.FBX",
       "pathGuid": "f788dddac3feb848",
       "position": [
-        43.352894,
-        -0.005,
-        7.334588
+        39.017605,
+        -0.0045,
+        6.601129
       ],
       "rotation": [
         0.0,
@@ -18876,9 +18876,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Mirror.FBX",
       "pathGuid": "1366bc4981f684c2",
       "position": [
-        46.6,
-        0.64,
-        1.199332
+        41.94,
+        0.576,
+        1.079399
       ],
       "rotation": [
         0.0,
@@ -18916,9 +18916,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Toilet@Toilet.FBX",
       "pathGuid": "61a68c71c6bc0b2c",
       "position": [
-        47.40672,
-        -0.005,
-        -0.671865
+        42.666048,
+        -0.0045,
+        -0.604679
       ],
       "rotation": [
         0.0,
@@ -19036,9 +19036,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Sign_exitway@Sign_exitway.FBX",
       "pathGuid": "6d4ce2062ec02b80",
       "position": [
-        54.106,
-        0.49,
-        7.06
+        48.6954,
+        0.441,
+        6.354
       ],
       "rotation": [
         0.0,
@@ -19116,9 +19116,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Trashcan_plastic.FBX",
       "pathGuid": "b613bd81c88c375d",
       "position": [
-        56.88,
-        -0.005,
-        6.64
+        51.192,
+        -0.0045,
+        5.976
       ],
       "rotation": [
         0.0,
@@ -19156,9 +19156,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Lamp_ceiling_embeded.FBX",
       "pathGuid": "39b88d1938a817f2",
       "position": [
-        51.84,
-        0.169,
-        4.05
+        46.656,
+        0.1521,
+        3.645
       ],
       "rotation": [
         0.0,
@@ -19196,9 +19196,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Pipe_ceiling_2x@Pipe_ceiling_2x.FBX",
       "pathGuid": "f8c6b753df98f88e",
       "position": [
-        35.687,
-        0.549,
-        2.732
+        32.1183,
+        0.4941,
+        2.4588
       ],
       "rotation": [
         0.0,
@@ -19261,9 +19261,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Cell_toilet.FBX",
       "pathGuid": "4e3ca5c8c28d2ba4",
       "position": [
-        54.904343,
-        -0.005,
-        4.010824
+        49.413909,
+        -0.0045,
+        3.609742
       ],
       "rotation": [
         0.0,
@@ -19301,9 +19301,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Toilet_paper.FBX",
       "pathGuid": "8ff2ee7f017204fb",
       "position": [
-        49.243896,
-        0.29,
-        -0.507128
+        44.319506,
+        0.261,
+        -0.456415
       ],
       "rotation": [
         0.0,
@@ -19322,14 +19322,14 @@
       "collider": {
         "center": [
           -0.0,
-          0.777055,
+          0.69935,
           0.0
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.969705,
-          0.776378,
-          0.025
+          0.872735,
+          0.69874,
+          0.0225
         ],
         "isTrigger": false,
         "shape": 0
@@ -19341,9 +19341,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Tablescreen_C_glass.FBX",
       "pathGuid": "db5e83be7131e23d",
       "position": [
-        56.5,
+        50.85,
         0.0,
-        -3.5
+        -3.15
       ],
       "rotation": [
         0.0,
@@ -19381,9 +19381,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Painting_M.FBX",
       "pathGuid": "794de956fcc8b1da",
       "position": [
-        53.127182,
-        0.479,
-        2.731288
+        47.814464,
+        0.4311,
+        2.458159
       ],
       "rotation": [
         0.0,
@@ -19421,9 +19421,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Chair_spinning.FBX",
       "pathGuid": "e1c42d7693edd3d3",
       "position": [
-        40.043293,
-        -0.005,
-        2.769669
+        36.038964,
+        -0.0045,
+        2.492702
       ],
       "rotation": [
         0.0,
@@ -19461,9 +19461,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Painting_K.FBX",
       "pathGuid": "5f5be078a9b1f6b7",
       "position": [
-        51.223053,
-        0.479,
-        2.749449
+        46.100748,
+        0.4311,
+        2.474504
       ],
       "rotation": [
         0.0,
@@ -19501,9 +19501,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Fan_table@Fan_table.FBX",
       "pathGuid": "233b0d6660080715",
       "position": [
-        44.06,
-        -0.005,
-        5.88
+        39.654,
+        -0.0045,
+        5.292
       ],
       "rotation": [
         0.0,
@@ -19566,9 +19566,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Monitor_A.FBX",
       "pathGuid": "0efb80e856cb6872",
       "position": [
-        41.35,
-        -0.005,
-        4.69
+        37.215,
+        -0.0045,
+        4.221
       ],
       "rotation": [
         0.0,
@@ -19606,9 +19606,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Painting_G.FBX",
       "pathGuid": "7eec0b1309a86abe",
       "position": [
-        47.50611,
-        0.479,
-        2.697455
+        42.755499,
+        0.4311,
+        2.42771
       ],
       "rotation": [
         0.0,
@@ -19646,9 +19646,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Painting_L.FBX",
       "pathGuid": "ad5473b2ae0182bd",
       "position": [
-        52.301952,
-        0.479,
-        2.716445
+        47.071757,
+        0.4311,
+        2.444801
       ],
       "rotation": [
         0.0,
@@ -19666,15 +19666,15 @@
     {
       "collider": {
         "center": [
-          0.65,
-          1.350385,
-          0.01
+          0.585,
+          1.215346,
+          0.009
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.15,
-          1.350385,
-          0.015
+          0.135,
+          1.215346,
+          0.0135
         ],
         "isTrigger": false,
         "shape": 0
@@ -19686,9 +19686,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Toilet_partition_tile.FBX",
       "pathGuid": "0e66cc92fa9ef7a1",
       "position": [
-        53.990498,
-        -0.005,
-        -4.693345
+        48.591448,
+        -0.0045,
+        -4.224011
       ],
       "rotation": [
         0.0,
@@ -19726,9 +19726,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Airventilation_grid_B.FBX",
       "pathGuid": "d3bd76c970a6971c",
       "position": [
-        36.48,
-        0.267,
-        5.32
+        32.832,
+        0.2403,
+        4.788
       ],
       "rotation": [
         0.0,
@@ -19766,9 +19766,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Paper_A.FBX",
       "pathGuid": "9e2e25e0296d84e8",
       "position": [
-        52.77,
-        -0.005,
-        6.08
+        47.493,
+        -0.0045,
+        5.472
       ],
       "rotation": [
         0.0,
@@ -19806,9 +19806,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Pipe_ceiling_6x.FBX",
       "pathGuid": "a50ab2910fb5a8d3",
       "position": [
-        36.09,
-        0.27,
-        2.78
+        32.481,
+        0.243,
+        2.502
       ],
       "rotation": [
         0.0,
@@ -19846,9 +19846,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Bookshelf_drawer_B.FBX",
       "pathGuid": "64dbdf0a5939b647",
       "position": [
-        41.07,
-        0.32,
-        -4.08
+        36.963,
+        0.288,
+        -3.672
       ],
       "rotation": [
         0.0,
@@ -19886,9 +19886,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/BG_Building.FBX",
       "pathGuid": "98bd7130673512ab",
       "position": [
-        50.6,
-        -0.005,
-        -25.7
+        45.54,
+        -0.0045,
+        -23.13
       ],
       "rotation": [
         0.0,
@@ -19926,9 +19926,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Trashcan_metal.FBX",
       "pathGuid": "281edc276ecbd5f9",
       "position": [
-        56.97,
-        -0.005,
-        5.59
+        51.273,
+        -0.0045,
+        5.031
       ],
       "rotation": [
         0.0,
@@ -19966,9 +19966,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_C.FBX",
       "pathGuid": "ea1365318c82b008",
       "position": [
-        48.979427,
-        -0.005,
-        7.462404
+        44.081484,
+        -0.0045,
+        6.716164
       ],
       "rotation": [
         0.0,
@@ -20006,9 +20006,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Paper_C.FBX",
       "pathGuid": "13b92bc39e7d33a9",
       "position": [
-        53.706223,
-        -0.005,
-        6.136376
+        48.335601,
+        -0.0045,
+        5.522738
       ],
       "rotation": [
         0.0,
@@ -20046,9 +20046,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Windowblinds_A.FBX",
       "pathGuid": "df2969efbe1bd474",
       "position": [
-        63.17749,
-        1.484,
-        -4.96
+        56.859741,
+        1.3356,
+        -4.464
       ],
       "rotation": [
         0.0,
@@ -20076,9 +20076,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Desk_metal@Desk_metal.FBX",
       "pathGuid": "79b19e32967678d8",
       "position": [
-        46.93,
-        -0.005,
-        -3.55
+        42.237,
+        -0.0045,
+        -3.195
       ],
       "rotation": [
         0.0,
@@ -20316,9 +20316,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Monitor_mounted_B.FBX",
       "pathGuid": "8becf3a42bc1cc20",
       "position": [
-        40.038975,
-        0.324,
-        3.91
+        36.035077,
+        0.2916,
+        3.519
       ],
       "rotation": [
         0.0,
@@ -20356,9 +20356,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Airventilation_T.FBX",
       "pathGuid": "82b3346a7e369771",
       "position": [
-        37.0,
-        0.47,
-        3.93
+        33.3,
+        0.423,
+        3.537
       ],
       "rotation": [
         0.0,
@@ -20396,9 +20396,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Lockers@Lockers_body.FBX",
       "pathGuid": "112de1be3c21f901",
       "position": [
-        36.6,
-        -0.005,
-        -5.58
+        32.94,
+        -0.0045,
+        -5.022
       ],
       "rotation": [
         0.0,
@@ -20596,9 +20596,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Laptop_B.FBX",
       "pathGuid": "b461d81c58994220",
       "position": [
-        42.20441,
-        -0.005,
-        4.77771
+        37.983969,
+        -0.0045,
+        4.299939
       ],
       "rotation": [
         0.0,
@@ -20626,9 +20626,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Lamp_desk.FBX",
       "pathGuid": "7d9049338a96bd31",
       "position": [
-        53.69,
-        -0.005,
-        4.29
+        48.321,
+        -0.0045,
+        3.861
       ],
       "rotation": [
         0.0,
@@ -20666,9 +20666,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_D.FBX",
       "pathGuid": "fc6667899210047f",
       "position": [
-        49.43,
-        -0.005,
-        7.34
+        44.487,
+        -0.0045,
+        6.606
       ],
       "rotation": [
         0.0,
@@ -20706,9 +20706,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/PC_mouse.FBX",
       "pathGuid": "3d878ef9cad3f347",
       "position": [
-        38.98692,
-        -0.005,
-        4.806395
+        35.088228,
+        -0.0045,
+        4.325756
       ],
       "rotation": [
         0.0,
@@ -20746,9 +20746,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Storage_cardboard_box_B.FBX",
       "pathGuid": "a365850ecab9fa01",
       "position": [
-        50.726013,
-        -0.005,
-        5.872721
+        45.653412,
+        -0.0045,
+        5.285449
       ],
       "rotation": [
         0.0,
@@ -20786,9 +20786,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Chair_wooden.FBX",
       "pathGuid": "58b2bc385bb9b072",
       "position": [
-        40.92295,
-        -0.005,
-        2.652203
+        36.830655,
+        -0.0045,
+        2.386983
       ],
       "rotation": [
         0.0,
@@ -20826,9 +20826,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Bulletinboard_standing.FBX",
       "pathGuid": "66a604ac40616573",
       "position": [
-        43.04,
-        -0.005,
-        1.17
+        38.736,
+        -0.0045,
+        1.053
       ],
       "rotation": [
         0.0,
@@ -20856,9 +20856,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Watersprinklerpipe_L.FBX",
       "pathGuid": "59e6dcaaa0d41eae",
       "position": [
-        35.26,
-        0.35,
-        1.51
+        31.734,
+        0.315,
+        1.359
       ],
       "rotation": [
         0.0,
@@ -20896,9 +20896,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Toilet_paper_roll.FBX",
       "pathGuid": "b6c576e88e1a5e7e",
       "position": [
-        49.878647,
-        0.37,
-        -0.524195
+        44.890782,
+        0.333,
+        -0.471775
       ],
       "rotation": [
         0.0,
@@ -20936,9 +20936,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Dresser_B.FBX",
       "pathGuid": "0f7b756c3a67b8fb",
       "position": [
-        43.11,
-        -0.005,
-        -2.12
+        38.799,
+        -0.0045,
+        -1.908
       ],
       "rotation": [
         0.0,
@@ -21096,9 +21096,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Lamp_fluorescent_D@Lamp_fluorescent_D.FBX",
       "pathGuid": "13213a5fc8d5ccea",
       "position": [
-        44.93415,
-        0.16,
-        4.380326
+        40.440735,
+        0.144,
+        3.942293
       ],
       "rotation": [
         0.0,
@@ -21176,9 +21176,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Painting_I.FBX",
       "pathGuid": "48425b8010bfc88c",
       "position": [
-        49.30381,
-        0.479,
-        2.750272
+        44.373429,
+        0.4311,
+        2.475245
       ],
       "rotation": [
         0.0,
@@ -21216,9 +21216,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Sign_exit_A@Sign_exit_A.FBX",
       "pathGuid": "8c57c30657067f9b",
       "position": [
-        55.512,
-        0.465,
-        7.2
+        49.9608,
+        0.4185,
+        6.48
       ],
       "rotation": [
         0.0,
@@ -21296,9 +21296,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Painting_D.FBX",
       "pathGuid": "094f66cccf1d4dde",
       "position": [
-        44.683624,
-        0.479,
-        2.663154
+        40.215262,
+        0.4311,
+        2.396839
       ],
       "rotation": [
         0.0,
@@ -21336,9 +21336,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Cabinet_B@Cabinet_B.FBX",
       "pathGuid": "5063d61a23f46b16",
       "position": [
-        44.753967,
-        -0.005,
-        -5.457278
+        40.27857,
+        -0.0045,
+        -4.91155
       ],
       "rotation": [
         0.0,
@@ -21456,9 +21456,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Bulletinboard_props.FBX",
       "pathGuid": "0fbdf42e23d4cb71",
       "position": [
-        45.12,
-        0.81,
-        1.282
+        40.608,
+        0.729,
+        1.1538
       ],
       "rotation": [
         0.0,
@@ -21496,9 +21496,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Lamp_ceiling_square.FBX",
       "pathGuid": "b76caeb7c5c3b56c",
       "position": [
-        52.89,
-        0.21,
-        4.24
+        47.601,
+        0.189,
+        3.816
       ],
       "rotation": [
         0.0,
@@ -21536,9 +21536,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_B.FBX",
       "pathGuid": "7cf75bb5011e54da",
       "position": [
-        43.96,
-        -0.005,
-        7.32
+        39.564,
+        -0.0045,
+        6.588
       ],
       "rotation": [
         0.0,
@@ -21576,9 +21576,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Couch_1seat.FBX",
       "pathGuid": "9e022604b8a9e11e",
       "position": [
-        54.476208,
-        -0.005,
-        0.413752
+        49.028587,
+        -0.0045,
+        0.372377
       ],
       "rotation": [
         0.0,
@@ -21616,9 +21616,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Storage_cardboard_box_A.FBX",
       "pathGuid": "8990a1f1c2d2fb17",
       "position": [
-        51.678448,
-        -0.005,
-        5.854728
+        46.510603,
+        -0.0045,
+        5.269255
       ],
       "rotation": [
         0.0,
@@ -21656,9 +21656,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Carpet_corridor_tile.FBX",
       "pathGuid": "05a7f1fc0d94e9d1",
       "position": [
-        59.642567,
-        -0.005,
-        7.800269
+        53.67831,
+        -0.0045,
+        7.020242
       ],
       "rotation": [
         0.0,
@@ -21676,15 +21676,15 @@
     {
       "collider": {
         "center": [
-          0.15,
-          1.350385,
-          0.01
+          0.135,
+          1.215346,
+          0.009
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.15,
-          1.350385,
-          0.015
+          0.135,
+          1.215346,
+          0.0135
         ],
         "isTrigger": false,
         "shape": 0
@@ -21696,9 +21696,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Toilet_partition_end.FBX",
       "pathGuid": "54bf94d732144bfe",
       "position": [
-        52.83,
-        -0.005,
-        -4.68
+        47.547,
+        -0.0045,
+        -4.212
       ],
       "rotation": [
         0.0,
@@ -21736,9 +21736,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Painting_J.FBX",
       "pathGuid": "17c70686345f0b2c",
       "position": [
-        50.23774,
-        0.479,
-        2.736506
+        45.213966,
+        0.4311,
+        2.462855
       ],
       "rotation": [
         0.0,
@@ -21776,9 +21776,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Cabinet_A@Cabinet_A.FBX",
       "pathGuid": "ed401c0609a59a31",
       "position": [
-        43.1714,
-        -0.005,
-        -5.447768
+        38.85426,
+        -0.0045,
+        -4.902991
       ],
       "rotation": [
         0.0,
@@ -21896,9 +21896,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Bookshelf.FBX",
       "pathGuid": "74ae8de1c928e2a1",
       "position": [
-        40.99,
-        -0.005,
-        -5.83
+        36.891,
+        -0.0045,
+        -5.247
       ],
       "rotation": [
         0.0,
@@ -21936,9 +21936,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_E.FBX",
       "pathGuid": "2742c2f55905c8b4",
       "position": [
-        0.555999,
-        1.8508,
-        0.278
+        0.500399,
+        1.7163,
+        0.2502
       ],
       "rotation": [
         0.0,
@@ -21976,9 +21976,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_B.FBX",
       "pathGuid": "7cf75bb5011e54da",
       "position": [
-        0.338785,
-        1.8498,
-        0.271
+        0.304907,
+        1.7153,
+        0.2439
       ],
       "rotation": [
         0.0,
@@ -22016,9 +22016,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_G.FBX",
       "pathGuid": "53045d5410fd39e7",
       "position": [
-        0.872,
+        0.7848,
         1.8508,
-        0.272
+        0.2448
       ],
       "rotation": [
         0.0,
@@ -22056,9 +22056,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Books_F.FBX",
       "pathGuid": "a84bb68ca4caa9bf",
       "position": [
-        0.713,
-        1.8508,
-        0.273
+        0.6417,
+        1.66572,
+        0.2457
       ],
       "rotation": [
         0.0,
@@ -22096,9 +22096,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_set.FBX",
       "pathGuid": "ec956ba2cc99bc97",
       "position": [
-        -0.080214,
+        -0.072193,
         1.8485,
-        0.264
+        0.2376
       ],
       "rotation": [
         0.0,
@@ -22136,9 +22136,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_set.FBX",
       "pathGuid": "ec956ba2cc99bc97",
       "position": [
-        -0.559214,
-        1.345,
-        0.243
+        -0.503293,
+        1.2105,
+        0.2187
       ],
       "rotation": [
         0.0,
@@ -22176,9 +22176,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_D.FBX",
       "pathGuid": "fc6667899210047f",
       "position": [
-        0.777786,
-        1.345,
-        0.266001
+        0.700007,
+        1.2105,
+        0.239401
       ],
       "rotation": [
         -0.0,
@@ -22216,9 +22216,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_set.FBX",
       "pathGuid": "ec956ba2cc99bc97",
       "position": [
-        0.459787,
-        1.345,
-        0.266001
+        0.413808,
+        1.2105,
+        0.239401
       ],
       "rotation": [
         0.0,
@@ -22256,9 +22256,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_E.FBX",
       "pathGuid": "d6eef5628e97b7c3",
       "position": [
-        -0.742113,
+        -0.667902,
         0.9687,
-        0.468201
+        0.421381
       ],
       "rotation": [
         -0.524217,
@@ -22296,9 +22296,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_D.FBX",
       "pathGuid": "fc6667899210047f",
       "position": [
-        -0.157213,
+        -0.141492,
         0.8616,
-        0.297001
+        0.267301
       ],
       "rotation": [
         -0.0,
@@ -22336,9 +22336,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_D.FBX",
       "pathGuid": "fc6667899210047f",
       "position": [
-        -0.233213,
+        -0.209892,
         1.345,
-        0.218
+        0.1962
       ],
       "rotation": [
         0.0,
@@ -22376,9 +22376,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Papers_pile.FBX",
       "pathGuid": "65363166d11f1da2",
       "position": [
-        0.417788,
+        0.376009,
         0.86,
-        0.290001
+        0.261001
       ],
       "rotation": [
         0.0,
@@ -22416,9 +22416,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_D.FBX",
       "pathGuid": "fc6667899210047f",
       "position": [
-        0.905087,
+        0.814578,
         0.8616,
-        0.3022
+        0.27198
       ],
       "rotation": [
         0.0,
@@ -22456,9 +22456,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_E.FBX",
       "pathGuid": "d6eef5628e97b7c3",
       "position": [
-        0.100786,
+        0.090707,
         1.345,
-        0.244
+        0.2196
       ],
       "rotation": [
         -0.0,
@@ -22496,9 +22496,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_C.FBX",
       "pathGuid": "ea1365318c82b008",
       "position": [
-        0.012787,
+        0.011508,
         0.8616,
-        0.417
+        0.3753
       ],
       "rotation": [
         0.0,
@@ -22536,9 +22536,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_B.FBX",
       "pathGuid": "241221c81661b536",
       "position": [
-        0.697786,
+        0.628007,
         0.86,
-        0.295
+        0.2655
       ],
       "rotation": [
         0.0,
@@ -22576,9 +22576,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_E.FBX",
       "pathGuid": "d6eef5628e97b7c3",
       "position": [
-        0.211786,
+        0.190607,
         0.8616,
-        0.292
+        0.2628
       ],
       "rotation": [
         -0.0,
@@ -22616,9 +22616,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_set.FBX",
       "pathGuid": "ec956ba2cc99bc97",
       "position": [
-        -0.597214,
-        1.8485,
-        0.275999
+        -0.537493,
+        1.714,
+        0.248399
       ],
       "rotation": [
         0.0,
@@ -22656,9 +22656,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_D.FBX",
       "pathGuid": "fc6667899210047f",
       "position": [
-        0.881786,
+        0.793607,
         1.3461,
-        0.262001
+        0.235801
       ],
       "rotation": [
         0.0,
@@ -22696,9 +22696,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_file.FBX",
       "pathGuid": "599f739c1ba45d95",
       "position": [
-        0.710186,
+        0.639167,
         0.8931,
-        0.2864
+        0.25776
       ],
       "rotation": [
         -0.005666,
@@ -22736,9 +22736,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_E.FBX",
       "pathGuid": "d6eef5628e97b7c3",
       "position": [
-        -0.907213,
-        1.8455,
-        0.262998
+        -0.816492,
+        1.711,
+        0.236698
       ],
       "rotation": [
         -0.0,
@@ -22776,9 +22776,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_A.FBX",
       "pathGuid": "a02c4685104fce6f",
       "position": [
-        -0.427214,
+        -0.384493,
         0.86,
-        0.307001
+        0.276301
       ],
       "rotation": [
         0.0,
@@ -22816,9 +22816,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_E.FBX",
       "pathGuid": "d6eef5628e97b7c3",
       "position": [
-        0.114786,
+        0.103307,
         0.8616,
-        0.289
+        0.2601
       ],
       "rotation": [
         0.0,
@@ -22856,9 +22856,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_D.FBX",
       "pathGuid": "fc6667899210047f",
       "position": [
-        -0.751213,
+        -0.676092,
         0.9025,
-        0.479999
+        0.431999
       ],
       "rotation": [
         -0.5,
@@ -22896,9 +22896,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_C.FBX",
       "pathGuid": "ea1365318c82b008",
       "position": [
-        -0.098213,
+        -0.088392,
         1.345,
-        0.368999
+        0.332099
       ],
       "rotation": [
         0.0,
@@ -22936,9 +22936,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Folder_D.FBX",
       "pathGuid": "fc6667899210047f",
       "position": [
-        -0.899613,
-        1.345,
-        0.2694
+        -0.809652,
+        1.2105,
+        0.24246
       ],
       "rotation": [
         -0.0,
@@ -23096,9 +23096,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Table_cabinet_A.FBX",
       "pathGuid": "c983c65b55e75b5c",
       "position": [
-        48.79,
-        -0.005,
-        -3.84
+        43.911,
+        -0.0045,
+        -3.456
       ],
       "rotation": [
         0.0,
@@ -23256,9 +23256,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Whiteboard_mounted.FBX",
       "pathGuid": "6691414378bafeba",
       "position": [
-        38.777,
-        1.333,
-        1.239
+        34.8993,
+        1.1997,
+        1.1151
       ],
       "rotation": [
         0.0,
@@ -23296,9 +23296,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Shelf_metal_single.FBX",
       "pathGuid": "fbe315a2349b5229",
       "position": [
-        50.89,
-        0.28,
-        -5.43
+        45.801,
+        0.252,
+        -4.887
       ],
       "rotation": [
         0.0,
@@ -23316,15 +23316,15 @@
     {
       "collider": {
         "center": [
-          2.0,
+          1.8,
           0.0,
-          -1.5
+          -1.35
         ],
         "friction": 0.6,
         "halfExtents": [
-          2.0,
-          0.0025,
-          1.5
+          1.8,
+          0.00225,
+          1.35
         ],
         "isTrigger": false,
         "shape": 0
@@ -23336,9 +23336,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Floor_4x3.FBX",
       "pathGuid": "b744d9389e1187e9",
       "position": [
-        11.5,
+        10.35,
         0.0,
-        -8.5
+        -7.65
       ],
       "rotation": [
         0.0,
@@ -23356,15 +23356,15 @@
     {
       "collider": {
         "center": [
-          1.0,
-          1.5,
+          0.9,
+          1.35,
           0.0
         ],
         "friction": 0.6,
         "halfExtents": [
-          1.0,
-          1.5,
-          0.025
+          0.9,
+          1.35,
+          0.0225
         ],
         "isTrigger": false,
         "shape": 0
@@ -23376,9 +23376,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/W_2x_glass_B.FBX",
       "pathGuid": "5ac5a6a257f68031",
       "position": [
-        -22.5,
+        -20.25,
         0.0,
-        -5.5
+        -4.95
       ],
       "rotation": [
         0.0,
@@ -23396,15 +23396,15 @@
     {
       "collider": {
         "center": [
-          1.5,
-          2.75,
+          1.35,
+          2.475,
           0.0
         ],
         "friction": 0.6,
         "halfExtents": [
-          1.5,
-          0.25,
-          0.11
+          1.35,
+          0.225,
+          0.099
         ],
         "isTrigger": false,
         "shape": 0
@@ -23416,9 +23416,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/W_CeilingBeam.FBX",
       "pathGuid": "05f0a8d23cb85ab5",
       "position": [
-        -7.0,
+        -6.3,
         0.0,
-        -9.5
+        -8.55
       ],
       "rotation": [
         0.0,
@@ -23436,15 +23436,15 @@
     {
       "collider": {
         "center": [
-          3.0,
+          2.7,
           0.0,
-          -1.0
+          -0.9
         ],
         "friction": 0.6,
         "halfExtents": [
-          3.0,
-          0.0025,
-          1.0
+          2.7,
+          0.00225,
+          0.9
         ],
         "isTrigger": false,
         "shape": 0
@@ -23456,9 +23456,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Floor_6x2.FBX",
       "pathGuid": "e9dac0873b3b4800",
       "position": [
-        4.5,
+        4.05,
         0.0,
-        -9.5
+        -8.55
       ],
       "rotation": [
         0.0,
@@ -23476,15 +23476,15 @@
     {
       "collider": {
         "center": [
-          3.0,
+          2.7,
           0.0,
-          -2.499999
+          -2.249999
         ],
         "friction": 0.6,
         "halfExtents": [
-          3.0,
-          0.0025,
-          2.5
+          2.7,
+          0.00225,
+          2.25
         ],
         "isTrigger": false,
         "shape": 0
@@ -23496,9 +23496,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Floor_6x5.FBX",
       "pathGuid": "481180c79bc5fae1",
       "position": [
-        4.5,
+        4.05,
         0.0,
-        -16.5
+        -14.85
       ],
       "rotation": [
         0.0,
@@ -23516,15 +23516,15 @@
     {
       "collider": {
         "center": [
-          6.0,
+          5.4,
           0.0,
-          -1.0
+          -0.9
         ],
         "friction": 0.6,
         "halfExtents": [
-          6.0,
-          0.0025,
-          1.000001
+          5.4,
+          0.00225,
+          0.900001
         ],
         "isTrigger": false,
         "shape": 0
@@ -23536,9 +23536,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Floor_12x2.FBX",
       "pathGuid": "1caabf0108ff0eec",
       "position": [
-        22.5,
+        20.25,
         0.0,
-        -5.5
+        -4.95
       ],
       "rotation": [
         0.0,
@@ -23556,15 +23556,15 @@
     {
       "collider": {
         "center": [
-          6.0,
+          5.4,
           0.0,
-          -2.0
+          -1.8
         ],
         "friction": 0.6,
         "halfExtents": [
-          6.0,
-          0.0025,
-          2.000001
+          5.4,
+          0.00225,
+          1.800001
         ],
         "isTrigger": false,
         "shape": 0
@@ -23576,9 +23576,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Floor_12x4.FBX",
       "pathGuid": "91d1ec117d25a13b",
       "position": [
-        27.5,
+        24.75,
         0.0,
-        -5.5
+        -4.95
       ],
       "rotation": [
         0.0,
@@ -23596,15 +23596,15 @@
     {
       "collider": {
         "center": [
-          1.75,
-          1.499827,
-          -0.000221
+          1.575,
+          1.349844,
+          -0.000199
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.25,
-          1.500173,
-          0.031428
+          0.225,
+          1.350156,
+          0.028285
         ],
         "isTrigger": false,
         "shape": 0
@@ -23616,9 +23616,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/W_2x_glass_Door.FBX",
       "pathGuid": "6d8918dd6501d506",
       "position": [
-        -20.0,
+        -18.0,
         0.0,
-        -5.5
+        -4.95
       ],
       "rotation": [
         0.0,
@@ -23637,14 +23637,14 @@
       "collider": {
         "center": [
           -0.0,
-          1.5,
-          0.11
+          1.35,
+          0.099
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.2761,
-          1.5,
-          0.13805
+          0.24849,
+          1.35,
+          0.124245
         ],
         "isTrigger": false,
         "shape": 0
@@ -23656,9 +23656,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/W_ColumnHalf_Small.FBX",
       "pathGuid": "e22b453dd672f896",
       "position": [
-        -13.0,
+        -11.7,
         0.0,
-        -9.5
+        -8.55
       ],
       "rotation": [
         0.0,
@@ -23676,15 +23676,15 @@
     {
       "collider": {
         "center": [
-          -1.53,
-          1.5,
-          0.06
+          -1.377,
+          1.35,
+          0.054
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.54,
-          1.5,
-          0.039398
+          0.486,
+          1.35,
+          0.035458
         ],
         "isTrigger": false,
         "shape": 0
@@ -23696,9 +23696,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/W_4x_DoorDouble.FBX",
       "pathGuid": "783a84a407fccf89",
       "position": [
-        -5.5,
+        -4.95,
         0.0,
-        -7.5
+        -6.75
       ],
       "rotation": [
         0.0,
@@ -23716,15 +23716,15 @@
     {
       "collider": {
         "center": [
-          0.5,
-          1.5,
-          0.06
+          0.45,
+          1.35,
+          0.054
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.56305,
-          1.5,
-          0.039398
+          0.506745,
+          1.35,
+          0.035458
         ],
         "isTrigger": false,
         "shape": 0
@@ -23736,9 +23736,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/W_1x.FBX",
       "pathGuid": "5a78016356a53247",
       "position": [
-        -15.0,
+        -13.5,
         0.0,
-        -5.5
+        -4.95
       ],
       "rotation": [
         0.0,
@@ -23757,14 +23757,14 @@
       "collider": {
         "center": [
           0.0,
-          1.5,
-          0.045
+          1.35,
+          0.0405
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.06305,
-          1.5,
-          0.007873
+          0.056745,
+          1.35,
+          0.007086
         ],
         "isTrigger": false,
         "shape": 0
@@ -23776,9 +23776,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/W_ConnectSeam.FBX",
       "pathGuid": "86f10cdfa1e522af",
       "position": [
-        -16.0,
+        -14.4,
         0.0,
-        -9.5
+        -8.55
       ],
       "rotation": [
         0.0,
@@ -23796,15 +23796,15 @@
     {
       "collider": {
         "center": [
-          2.0,
+          1.8,
           0.0,
-          -1.0
+          -0.9
         ],
         "friction": 0.6,
         "halfExtents": [
-          2.0,
-          0.0025,
-          1.0
+          1.8,
+          0.00225,
+          0.9
         ],
         "isTrigger": false,
         "shape": 0
@@ -23816,9 +23816,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Floor_4x2.FBX",
       "pathGuid": "6601380327b84f57",
       "position": [
-        11.5,
+        10.35,
         0.0,
-        -5.5
+        -4.95
       ],
       "rotation": [
         0.0,
@@ -23837,14 +23837,14 @@
       "collider": {
         "center": [
           -0.0,
-          1.5,
-          0.06
+          1.35,
+          0.054
         ],
         "friction": 0.6,
         "halfExtents": [
-          3.06305,
-          1.5,
-          0.039398
+          2.756745,
+          1.35,
+          0.035458
         ],
         "isTrigger": false,
         "shape": 0
@@ -23858,7 +23858,7 @@
       "position": [
         -0.0,
         0.0,
-        -5.5
+        -4.95
       ],
       "rotation": [
         0.0,
@@ -23876,15 +23876,15 @@
     {
       "collider": {
         "center": [
-          -0.4,
-          1.249697,
-          -0.015795
+          -0.36,
+          1.124727,
+          -0.014216
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.3,
-          1.249697,
-          0.059514
+          0.27,
+          1.124727,
+          0.053563
         ],
         "isTrigger": false,
         "shape": 0
@@ -23896,9 +23896,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Cell_Bars_Large.FBX",
       "pathGuid": "5def697121620807",
       "position": [
-        -23.5,
+        -21.15,
         0.0,
-        -9.5
+        -8.55
       ],
       "rotation": [
         0.0,
@@ -23917,14 +23917,14 @@
       "collider": {
         "center": [
           -0.0,
-          1.5,
-          0.14
+          1.35,
+          0.126
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.5261,
-          1.5,
-          0.16305
+          0.47349,
+          1.35,
+          0.146745
         ],
         "isTrigger": false,
         "shape": 0
@@ -23936,9 +23936,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/W_ColumnHalf_Large.FBX",
       "pathGuid": "a7e0e3bfad96ee9e",
       "position": [
-        -14.5,
+        -13.05,
         0.0,
-        -9.5
+        -8.55
       ],
       "rotation": [
         0.0,
@@ -23957,14 +23957,14 @@
       "collider": {
         "center": [
           -0.0,
-          1.5,
+          1.35,
           -0.0
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.5,
-          1.5,
-          0.5
+          0.45,
+          1.35,
+          0.45
         ],
         "isTrigger": false,
         "shape": 0
@@ -23976,9 +23976,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/W_Pilar_Large.FBX",
       "pathGuid": "9236518f2119b7bd",
       "position": [
-        -14.5,
+        -13.05,
         0.0,
-        -12.0
+        -10.8
       ],
       "rotation": [
         0.0,
@@ -23996,15 +23996,15 @@
     {
       "collider": {
         "center": [
-          -1.77,
-          1.5,
-          0.06
+          -1.593,
+          1.35,
+          0.054
         ],
         "friction": 0.6,
         "halfExtents": [
-          1.28,
-          1.5,
-          0.039398
+          1.152,
+          1.35,
+          0.035458
         ],
         "isTrigger": false,
         "shape": 0
@@ -24018,7 +24018,7 @@
       "position": [
         -0.0,
         0.0,
-        -11.5
+        -10.35
       ],
       "rotation": [
         0.0,
@@ -24036,15 +24036,15 @@
     {
       "collider": {
         "center": [
-          -1.28,
-          1.5,
-          0.06
+          -1.152,
+          1.35,
+          0.054
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.79,
-          1.5,
-          0.039398
+          0.711,
+          1.35,
+          0.035458
         ],
         "isTrigger": false,
         "shape": 0
@@ -24056,9 +24056,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/W_4x_Door.FBX",
       "pathGuid": "a5b2fa61ee2c2cb6",
       "position": [
-        -5.5,
+        -4.95,
         0.0,
-        -5.5
+        -4.95
       ],
       "rotation": [
         0.0,
@@ -24076,15 +24076,15 @@
     {
       "collider": {
         "center": [
-          3.0,
+          2.7,
           0.0,
-          -1.999999
+          -1.799999
         ],
         "friction": 0.6,
         "halfExtents": [
-          3.0,
-          0.0025,
-          2.0
+          2.7,
+          0.00225,
+          1.8
         ],
         "isTrigger": false,
         "shape": 0
@@ -24096,9 +24096,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Floor_6x4.FBX",
       "pathGuid": "7e9cb48b83fd67ad",
       "position": [
-        11.5,
+        10.35,
         0.0,
-        -12.5
+        -11.25
       ],
       "rotation": [
         0.0,
@@ -24126,9 +24126,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/StairsMod_Top@StairsMod_Top.FBX",
       "pathGuid": "0c37c20b880614f6",
       "position": [
-        -5.5,
+        -4.95,
         0.0,
-        -15.0
+        -13.5
       ],
       "rotation": [
         0.0,
@@ -24241,9 +24241,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/StairsMod_Ground@StairsMod_Ground.FBX",
       "pathGuid": "376ba39ad33700d9",
       "position": [
-        -15.5,
+        -13.95,
         0.0,
-        -15.0
+        -13.5
       ],
       "rotation": [
         0.0,
@@ -24356,9 +24356,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/W_3x_Elevator_Door.FBX",
       "pathGuid": "79bb5fd68a0dfe99",
       "position": [
-        -18.0,
+        -16.2,
         0.0,
-        -9.5
+        -8.55
       ],
       "rotation": [
         0.0,
@@ -24375,22 +24375,42 @@
     },
     {
       "Openable": {
-        "Amount": 0.72,
+        "Amount": 0.648,
         "Motion": "Slide Left",
         "Open Time": 1.15,
         "Start Open": false
       },
+      "Rigidbody": {
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": true,
+        "Linear Damping": 0.05,
+        "Mass": 18.0,
+        "Use Gravity": false
+      },
       "collider": {
         "center": [
-          0.36433,
-          1.149974,
-          -0.00076
+          0.327897,
+          1.034977,
+          -0.000684
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.364429,
-          1.15,
-          0.025
+          0.327986,
+          1.035,
+          0.0225
         ],
         "isTrigger": false,
         "shape": 0
@@ -24413,29 +24433,49 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        1.111111,
+        1.111111,
+        1.111111
       ]
     },
     {
       "Openable": {
-        "Amount": 0.721,
+        "Amount": 0.649,
         "Motion": "Slide Right",
         "Open Time": 1.15,
         "Start Open": false
       },
+      "Rigidbody": {
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": true,
+        "Linear Damping": 0.05,
+        "Mass": 18.0,
+        "Use Gravity": false
+      },
       "collider": {
         "center": [
-          -0.364511,
-          1.149766,
-          -0.00076
+          -0.32806,
+          1.034789,
+          -0.000684
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.364395,
-          1.15,
-          0.025
+          0.327956,
+          1.035,
+          0.0225
         ],
         "isTrigger": false,
         "shape": 0
@@ -24458,9 +24498,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        1.111111,
+        1.111111,
+        1.111111
       ]
     },
     {
@@ -24486,9 +24526,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Elevator_panel_outside.FBX",
       "pathGuid": "dc5089fbab14d4e2",
       "position": [
-        0.956261,
-        1.15,
-        0.110599
+        0.860635,
+        1.035,
+        0.099539
       ],
       "rotation": [
         0.0,
@@ -24497,9 +24537,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.9,
+        0.9,
+        0.9
       ],
       "static": true
     },
@@ -24518,7 +24558,7 @@
       "position": [
         -0.0,
         0.0,
-        -1.5
+        -1.35
       ],
       "rotation": [
         0.0,
@@ -24556,9 +24596,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Props/Elevator_panel_inside.FBX",
       "pathGuid": "48da70083a1e2996",
       "position": [
-        -0.938618,
-        1.2435,
-        1.265219
+        -0.844756,
+        1.11915,
+        1.138697
       ],
       "rotation": [
         0.0,
@@ -24567,24 +24607,24 @@
         -0.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.9,
+        0.9,
+        0.9
       ],
       "static": true
     },
     {
       "collider": {
         "center": [
-          -2.02,
-          1.5,
-          0.06
+          -1.818,
+          1.35,
+          0.054
         ],
         "friction": 0.6,
         "halfExtents": [
-          1.025,
-          1.5,
-          0.039398
+          0.9225,
+          1.35,
+          0.035458
         ],
         "isTrigger": false,
         "shape": 0
@@ -24598,7 +24638,7 @@
       "position": [
         -0.0,
         0.0,
-        -9.5
+        -8.55
       ],
       "rotation": [
         0.0,
@@ -24616,15 +24656,15 @@
     {
       "collider": {
         "center": [
-          1.5,
-          1.5,
-          0.06
+          1.35,
+          1.35,
+          0.054
         ],
         "friction": 0.6,
         "halfExtents": [
-          1.56305,
-          1.5,
-          0.039398
+          1.406745,
+          1.35,
+          0.035458
         ],
         "isTrigger": false,
         "shape": 0
@@ -24636,9 +24676,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/W_3x.FBX",
       "pathGuid": "372a5e787f6b375d",
       "position": [
-        -11.0,
+        -9.9,
         0.0,
-        -5.5
+        -4.95
       ],
       "rotation": [
         0.0,
@@ -24656,15 +24696,15 @@
     {
       "collider": {
         "center": [
-          -1.01,
-          1.5,
-          0.06
+          -0.909,
+          1.35,
+          0.054
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.52,
-          1.5,
-          0.039398
+          0.468,
+          1.35,
+          0.035458
         ],
         "isTrigger": false,
         "shape": 0
@@ -24676,9 +24716,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/W_3x_Door.FBX",
       "pathGuid": "ccad0cf4f16a029e",
       "position": [
-        -9.5,
+        -8.55,
         0.0,
-        -7.5
+        -6.75
       ],
       "rotation": [
         0.0,
@@ -24696,15 +24736,15 @@
     {
       "collider": {
         "center": [
-          5.0,
+          4.5,
           0.0,
-          -5.0
+          -4.5
         ],
         "friction": 0.6,
         "halfExtents": [
-          5.0,
-          0.0025,
-          5.0
+          4.5,
+          0.00225,
+          4.5
         ],
         "isTrigger": false,
         "shape": 0
@@ -24716,9 +24756,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Floor_10x10.FBX",
       "pathGuid": "de77ca008584eec9",
       "position": [
-        11.5,
+        10.35,
         0.0,
-        -18.0
+        -16.2
       ],
       "rotation": [
         0.0,
@@ -24736,15 +24776,15 @@
     {
       "collider": {
         "center": [
-          -1.8,
-          1.5,
-          0.06
+          -1.62,
+          1.35,
+          0.054
         ],
         "friction": 0.6,
         "halfExtents": [
-          1.3,
-          1.5,
-          0.039398
+          1.17,
+          1.35,
+          0.035458
         ],
         "isTrigger": false,
         "shape": 0
@@ -24758,7 +24798,7 @@
       "position": [
         -0.0,
         0.0,
-        -7.5
+        -6.75
       ],
       "rotation": [
         0.0,
@@ -24783,17 +24823,37 @@
         "Open Time": 0.833,
         "Start Open": false
       },
+      "Rigidbody": {
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": true,
+        "Linear Damping": 0.05,
+        "Mass": 18.0,
+        "Use Gravity": false
+      },
       "collider": {
         "center": [
-          0.499645,
-          1.15,
-          -0.026828
+          0.449681,
+          1.035,
+          -0.024145
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.496962,
-          1.144302,
-          0.03
+          0.447266,
+          1.029872,
+          0.027
         ],
         "isTrigger": false,
         "shape": 0
@@ -24824,15 +24884,15 @@
     {
       "collider": {
         "center": [
-          1.5,
+          1.35,
           0.0,
-          -1.499999
+          -1.349999
         ],
         "friction": 0.6,
         "halfExtents": [
-          1.5,
-          0.0025,
-          1.5
+          1.35,
+          0.00225,
+          1.35
         ],
         "isTrigger": false,
         "shape": 0
@@ -24844,9 +24904,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Floor_3x3.FBX",
       "pathGuid": "c2f3b64633896ebe",
       "position": [
-        7.5,
+        6.75,
         0.0,
-        -5.5
+        -4.95
       ],
       "rotation": [
         0.0,
@@ -24864,15 +24924,15 @@
     {
       "collider": {
         "center": [
-          1.0,
-          1.5,
-          0.06
+          0.9,
+          1.35,
+          0.054
         ],
         "friction": 0.6,
         "halfExtents": [
-          1.06305,
-          1.5,
-          0.039398
+          0.956745,
+          1.35,
+          0.035458
         ],
         "isTrigger": false,
         "shape": 0
@@ -24884,9 +24944,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/W_2x.FBX",
       "pathGuid": "e3bb77cd602342ad",
       "position": [
-        -13.5,
+        -12.15,
         0.0,
-        -5.5
+        -4.95
       ],
       "rotation": [
         0.0,
@@ -24911,17 +24971,37 @@
         "Open Time": 0.833,
         "Start Open": false
       },
+      "Rigidbody": {
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": true,
+        "Linear Damping": 0.05,
+        "Mass": 18.0,
+        "Use Gravity": false
+      },
       "collider": {
         "center": [
-          0.506145,
-          1.15,
-          -0.026828
+          0.45553,
+          1.035,
+          -0.024145
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.490462,
-          1.144302,
-          0.03
+          0.441416,
+          1.029872,
+          0.027
         ],
         "isTrigger": false,
         "shape": 0
@@ -24933,7 +25013,7 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Door_Bronze_Windows.FBX",
       "pathGuid": "c8b4189839845ad4",
       "position": [
-        -9.5,
+        -8.55,
         0.0,
         0.0
       ],
@@ -24959,17 +25039,37 @@
         "Open Time": 0.833,
         "Start Open": false
       },
+      "Rigidbody": {
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": true,
+        "Linear Damping": 0.05,
+        "Mass": 18.0,
+        "Use Gravity": false
+      },
       "collider": {
         "center": [
-          0.506692,
-          1.150548,
-          -0.026598
+          0.456023,
+          1.035493,
+          -0.023938
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.500706,
-          1.14626,
-          0.03
+          0.450635,
+          1.031634,
+          0.027
         ],
         "isTrigger": false,
         "shape": 0
@@ -25000,15 +25100,15 @@
     {
       "collider": {
         "center": [
-          -1.28,
-          1.5,
-          0.06
+          -1.152,
+          1.35,
+          0.054
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.285,
-          1.5,
-          0.039398
+          0.2565,
+          1.35,
+          0.035458
         ],
         "isTrigger": false,
         "shape": 0
@@ -25020,9 +25120,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/W_3x_DoorDouble.FBX",
       "pathGuid": "0f0a7ae9e64f8200",
       "position": [
-        -9.5,
+        -8.55,
         0.0,
-        -9.5
+        -8.55
       ],
       "rotation": [
         0.0,
@@ -25041,14 +25141,14 @@
       "collider": {
         "center": [
           -0.0,
-          1.5,
-          0.056
+          1.35,
+          0.0504
         ],
         "friction": 0.6,
         "halfExtents": [
-          3.06305,
-          1.5,
-          0.055
+          2.756745,
+          1.35,
+          0.0495
         ],
         "isTrigger": false,
         "shape": 0
@@ -25062,7 +25162,7 @@
       "position": [
         -0.0,
         0.0,
-        -13.5
+        -12.15
       ],
       "rotation": [
         0.0,
@@ -25080,15 +25180,15 @@
     {
       "collider": {
         "center": [
-          1.0,
-          1.5,
+          0.9,
+          1.35,
           0.0
         ],
         "friction": 0.6,
         "halfExtents": [
-          1.0,
-          1.5,
-          0.025
+          0.9,
+          1.35,
+          0.0225
         ],
         "isTrigger": false,
         "shape": 0
@@ -25100,9 +25200,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/W_2x_glass_B.FBX",
       "pathGuid": "5ac5a6a257f68031",
       "position": [
-        -25.0,
+        -22.5,
         0.0,
-        -5.5
+        -4.95
       ],
       "rotation": [
         0.0,
@@ -25127,17 +25227,37 @@
         "Open Time": 0.833,
         "Start Open": false
       },
+      "Rigidbody": {
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": true,
+        "Linear Damping": 0.05,
+        "Mass": 18.0,
+        "Use Gravity": false
+      },
       "collider": {
         "center": [
-          0.506692,
-          1.150548,
-          -0.026598
+          0.456023,
+          1.035493,
+          -0.023938
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.500706,
-          1.14626,
-          0.03
+          0.450635,
+          1.031634,
+          0.027
         ],
         "isTrigger": false,
         "shape": 0
@@ -25168,15 +25288,15 @@
     {
       "collider": {
         "center": [
-          1.0,
+          0.9,
           0.0,
-          -0.999999
+          -0.899999
         ],
         "friction": 0.6,
         "halfExtents": [
-          1.0,
-          0.0025,
-          1.0
+          0.9,
+          0.00225,
+          0.9
         ],
         "isTrigger": false,
         "shape": 0
@@ -25188,9 +25308,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Floor_2x2.FBX",
       "pathGuid": "8fbe10be95e08c37",
       "position": [
-        4.5,
+        4.05,
         0.0,
-        -5.5
+        -4.95
       ],
       "rotation": [
         0.0,
@@ -25208,15 +25328,15 @@
     {
       "collider": {
         "center": [
-          6.0,
+          5.4,
           0.0,
-          -0.5
+          -0.45
         ],
         "friction": 0.6,
         "halfExtents": [
-          6.0,
-          0.0025,
-          0.500001
+          5.4,
+          0.00225,
+          0.450001
         ],
         "isTrigger": false,
         "shape": 0
@@ -25228,9 +25348,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Floor_12x1.FBX",
       "pathGuid": "f9a8898345b6b1bd",
       "position": [
-        19.5,
+        17.55,
         0.0,
-        -5.5
+        -4.95
       ],
       "rotation": [
         0.0,
@@ -25249,14 +25369,14 @@
       "collider": {
         "center": [
           -0.0,
-          1.5,
-          0.04
+          1.35,
+          0.036
         ],
         "friction": 0.6,
         "halfExtents": [
-          3.06305,
-          1.5,
-          0.06305
+          2.756745,
+          1.35,
+          0.056745
         ],
         "isTrigger": false,
         "shape": 0
@@ -25270,7 +25390,7 @@
       "position": [
         -0.0,
         0.0,
-        -17.5
+        -15.75
       ],
       "rotation": [
         0.0,
@@ -25298,9 +25418,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Stairs_TwoFloors@Stairs_TwoFloors.FBX",
       "pathGuid": "e2b9e6e8b935cd4a",
       "position": [
-        -20.5,
+        -18.45,
         0.0,
-        -15.0
+        -13.5
       ],
       "rotation": [
         0.0,
@@ -25403,15 +25523,15 @@
     {
       "collider": {
         "center": [
-          3.0,
+          2.7,
           0.0,
-          -1.5
+          -1.35
         ],
         "friction": 0.6,
         "halfExtents": [
-          3.0,
-          0.0025,
-          1.5
+          2.7,
+          0.00225,
+          1.35
         ],
         "isTrigger": false,
         "shape": 0
@@ -25423,9 +25543,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Floor_6x3.FBX",
       "pathGuid": "7036dd6932ab1166",
       "position": [
-        4.5,
+        4.05,
         0.0,
-        -12.5
+        -11.25
       ],
       "rotation": [
         0.0,
@@ -25453,9 +25573,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/Cell.FBX",
       "pathGuid": "cbc0d4eb1d5026d7",
       "position": [
-        -21.5,
+        -19.35,
         0.0,
-        -11.0
+        -9.9
       ],
       "rotation": [
         0.0,
@@ -25481,17 +25601,37 @@
         "Start Open": false,
         "Swing Back": true
       },
+      "Rigidbody": {
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": true,
+        "Linear Damping": 0.05,
+        "Mass": 18.0,
+        "Use Gravity": false
+      },
       "collider": {
         "center": [
-          0.482872,
-          1.141304,
-          0.053486
+          0.434585,
+          1.027174,
+          0.048137
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.496988,
-          1.051664,
-          0.067598
+          0.447289,
+          0.946498,
+          0.060838
         ],
         "isTrigger": false,
         "shape": 0
@@ -25514,9 +25654,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        1.111111,
+        1.111111,
+        1.111111
       ]
     },
     {
@@ -25532,9 +25672,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/StairsMod_Loop@StairsMod_Loop.FBX",
       "pathGuid": "368da6fa797f3de2",
       "position": [
-        -10.0,
+        -9.0,
         0.0,
-        -15.0
+        -13.5
       ],
       "rotation": [
         0.0,
@@ -25644,17 +25784,37 @@
         "Open Time": 0.833,
         "Start Open": false
       },
+      "Rigidbody": {
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": true,
+        "Linear Damping": 0.05,
+        "Mass": 18.0,
+        "Use Gravity": false
+      },
       "collider": {
         "center": [
-          0.493984,
-          1.148414,
-          -0.013182
+          0.444586,
+          1.033573,
+          -0.011864
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.506016,
-          1.15,
-          0.03
+          0.455414,
+          1.035,
+          0.027
         ],
         "isTrigger": false,
         "shape": 0
@@ -25685,15 +25845,15 @@
     {
       "collider": {
         "center": [
-          1.0,
-          2.65,
+          0.9,
+          2.385,
           0.0
         ],
         "friction": 0.6,
         "halfExtents": [
-          1.0,
-          0.35,
-          0.025
+          0.9,
+          0.315,
+          0.0225
         ],
         "isTrigger": false,
         "shape": 0
@@ -25705,9 +25865,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/W_2x_glass_DoorDouble.FBX",
       "pathGuid": "317aeb1a4f62bbc1",
       "position": [
-        -17.5,
+        -15.75,
         0.0,
-        -5.5
+        -4.95
       ],
       "rotation": [
         0.0,
@@ -25726,14 +25886,14 @@
       "collider": {
         "center": [
           -0.0,
-          1.5,
-          0.054
+          1.35,
+          0.0486
         ],
         "friction": 0.6,
         "halfExtents": [
-          3.06305,
-          1.5,
-          0.05
+          2.756745,
+          1.35,
+          0.045
         ],
         "isTrigger": false,
         "shape": 0
@@ -25747,7 +25907,7 @@
       "position": [
         -0.0,
         0.0,
-        -19.5
+        -17.55
       ],
       "rotation": [
         0.0,
@@ -25766,14 +25926,14 @@
       "collider": {
         "center": [
           -0.0,
-          1.5,
-          0.054
+          1.35,
+          0.0486
         ],
         "friction": 0.6,
         "halfExtents": [
-          3.06305,
-          1.5,
-          0.05
+          2.756745,
+          1.35,
+          0.045
         ],
         "isTrigger": false,
         "shape": 0
@@ -25787,7 +25947,7 @@
       "position": [
         -0.0,
         0.0,
-        -15.5
+        -13.95
       ],
       "rotation": [
         0.0,
@@ -25813,17 +25973,37 @@
         "Start Open": false,
         "Swing Back": true
       },
+      "Rigidbody": {
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": true,
+        "Linear Damping": 0.05,
+        "Mass": 18.0,
+        "Use Gravity": false
+      },
       "collider": {
         "center": [
-          0.482872,
-          1.141304,
-          0.053486
+          0.434585,
+          1.027174,
+          0.048137
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.496988,
-          1.051664,
-          0.067598
+          0.447289,
+          0.946498,
+          0.060838
         ],
         "isTrigger": false,
         "shape": 0
@@ -25855,14 +26035,14 @@
       "collider": {
         "center": [
           -0.0,
-          1.5,
+          1.35,
           -0.0
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.25,
-          1.5,
-          0.25
+          0.225,
+          1.35,
+          0.225
         ],
         "isTrigger": false,
         "shape": 0
@@ -25874,9 +26054,9 @@
       "path": "assets/Environments/OfficeAndPoliceStation/Meshes/Building/W_Pilar_Small.FBX",
       "pathGuid": "883efbbb4678a6e9",
       "position": [
-        -13.0,
+        -11.7,
         0.0,
-        -12.0
+        -10.8
       ],
       "rotation": [
         0.0,

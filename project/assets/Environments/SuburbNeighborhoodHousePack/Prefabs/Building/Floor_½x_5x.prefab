@@ -6,15 +6,15 @@
     {
       "collider": {
         "center": [
-          0.25,
-          0.2,
-          -2.5
+          0.2425,
+          0.194,
+          -2.425
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.25,
+          0.2425,
           0.0,
-          2.5
+          2.425
         ],
         "isTrigger": false,
         "shape": 0
