@@ -7,7 +7,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 0,
       "name": "Sidetable_large",
@@ -37,7 +37,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 1,
       "name": "Sidetable_large_drawer_A",
@@ -67,7 +67,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 2,
       "name": "Sidetable_large_drawer_B",

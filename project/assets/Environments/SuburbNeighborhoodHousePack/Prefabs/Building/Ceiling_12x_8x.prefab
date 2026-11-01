@@ -7,13 +7,13 @@
       "collider": {
         "center": [
           5.82,
-          0.0,
+          -0.0194,
           -3.88
         ],
         "friction": 0.6,
         "halfExtents": [
           5.82,
-          0.0,
+          0.0194,
           3.88
         ],
         "isTrigger": false,

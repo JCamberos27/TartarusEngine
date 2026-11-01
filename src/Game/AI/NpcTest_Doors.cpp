@@ -3,6 +3,7 @@
 // survived within half a metre of the wall, how long it was stuck, and whether the capsule ever ended up inside anything.
 #include "NpcTest.h"
 #include "Components.h"
+#include "GameModuleAPI.h"
 #include "Model.h"
 #include "Openable.h"
 #include "PhysicsWorld.h"
@@ -16,6 +17,10 @@
 namespace {
 constexpr float kDoorWallZ = 0.032f;  // the frame's wall centre, door-local +Z of the leaf's origin (build_apartment_hallway.py)
 constexpr float kRun = 1.2f;          // each pass starts this far before the wall and ends this far past it
+// A pack door's pass ends this far past the wall plane (or short of the first thing in the way): it proves the doorway, not
+// the room behind it, whose furniture often stands right inside (the Suburb's upstairs closets and side tables).
+constexpr float kPackPast = 0.6f;
+constexpr float kPackMin = 0.35f;     // ... and never less: a doorway that is blocked this close is a fail
 constexpr float kSettle = 0.2f;       // seconds stood still at the start of a pass
 constexpr float kNear = 0.5f;         // the speed is judged within this of the wall plane
 const char* const kPassNames[] = {"straight", "graze hinge", "graze latch", "strafe", "sprint diagonal"};
@@ -70,16 +75,27 @@ void NpcTest::DoorsSetUp(World& world) {
             const float sx = glm::length(glm::vec3(m[0])), sy = glm::length(glm::vec3(m[1]));
             if ((hi.y - lo.y) * sy < 1.8f || (hi.x - lo.x) * sx < 0.6f) continue;
             const auto* nc = world.Registry.try_get<NameComponent>(e);
+            const auto* lh = world.Registry.try_get<HierarchyComponent>(e);
+            const auto* ln = lh && lh->Parent != entt::null ? world.Registry.try_get<NameComponent>(lh->Parent) : nullptr;
             DoorSpot d;
-            d.Name = (nc ? nc->Name : std::string("door")) + "#" + std::to_string(entt::to_integral(e));
+            d.Name = (ln ? ln->Name + "/" : std::string()) + (nc ? nc->Name : std::string("door")) + "#" +
+                     std::to_string(entt::to_integral(e));
+            d.Pack = true;
             d.Normal = Flat(glm::vec3(m[2]));
             d.Along = Flat(glm::vec3(m[0]));
             d.Centre = glm::vec3(m * glm::vec4(0.5f * (lo.x + hi.x), lo.y, 0.5f * (lo.z + hi.z), 1.0f));
             d.Half = 0.5f * (hi.x - lo.x) * sx;
+            d.Thick = (hi.z - lo.z) * glm::length(glm::vec3(m[2]));
+            d.Swing = o.SwingBack ? -1.0f : 1.0f;
             d.Leaf = (std::uint32_t)entt::to_integral(e);
             m_DDoors.push_back(d);
         }
         std::sort(m_DDoors.begin(), m_DDoors.end(), [](const DoorSpot& a, const DoorSpot& b) { return a.Name < b.Name; });
+#pragma warning(suppress : 4996)
+        if (const char* only = std::getenv("NPC_TEST_DOORS_ONLY"); only && *only) // a name fragment: just those doors
+            m_DDoors.erase(std::remove_if(m_DDoors.begin(), m_DDoors.end(),
+                                          [&](const DoorSpot& d) { return d.Name.find(only) == std::string::npos; }),
+                           m_DDoors.end());
         if (m_DDoors.size() > 24) m_DDoors.resize(24);
         for (const DoorSpot& d : m_DDoors)
             std::printf("[NpcTest] doors: %s at (%.2f %.2f %.2f), %.2f m wide\n", d.Name.c_str(), d.Centre.x, d.Centre.y, d.Centre.z,
@@ -105,24 +121,44 @@ void NpcTest::DoorsPassSetUp(const Player& player) {
     r.Dir = n;
     r.Sprint = k == 4;
     r.Strafe = k == 3;
+    r.Before = r.After = kRun;
+    if (d.Pack) {
+        // Clear room either side, the player's capsule swept from the opening's middle: the run starts and ends short of it.
+        const float rad = player.Size.x * 0.5f;
+        auto clear = [&](const glm::vec3& dir, float want) -> float {
+            const glm::vec3 a = d.Centre + glm::vec3(0.0f, rad + 0.3f, 0.0f), b = d.Centre + glm::vec3(0.0f, 1.6f, 0.0f);
+            RaycastHit hit;
+            QueryFilter f;
+            f.HitTriggers = 0;
+            if (!PhysicsWorld::CapsuleCast(&a.x, &b.x, rad, &dir.x, want + rad, f, hit)) return want;
+            return std::max(0.0f, hit.Distance - 0.05f);
+        };
+        r.After = std::max(kPackMin, clear(n, kPackPast));
+        r.Before = std::max(kPackMin, clear(-n, kRun));
+    }
     glm::vec3 heading = n;
-    glm::vec3 start = d.Centre - n * kRun;
-    if (k == 1 || k == 2) {
+    glm::vec3 start = d.Centre - n * r.Before;
+    if (k == 1 && d.Pack && -side == d.Swing) {
+        // The hinge graze on the side the leaf swung to: the open leaf stands across the jamb there, so the pass runs
+        // straight along its face, the capsule's edge 3 cm off it, not into it from the wall beside the hinge.
+        const float lateral = d.Half - d.Thick - player.Size.x * 0.5f - 0.03f;
+        start = d.Centre - d.Along * lateral - n * r.Before;
+    } else if (k == 1 || k == 2) {
         // A graze: arrive at the wall with the capsule's edge 8 cm over the jamb, heading 10 degrees in toward the middle.
         const float jamb = k == 1 ? -1.0f : 1.0f; // the hinge side is local -X
         const float half = d.Half, lateral = half - player.Size.x * 0.5f + 0.08f;
         const glm::vec3 out = d.Along * jamb;
         const float tilt = 10.0f;
         heading = glm::normalize(n - out * std::tan(glm::radians(tilt)));
-        start = d.Centre + out * (lateral + kRun * std::tan(glm::radians(tilt))) - n * kRun;
+        start = d.Centre + out * (lateral + r.Before * std::tan(glm::radians(tilt))) - n * r.Before;
     } else if (k == 4) {
         heading = Turn(n, 25.0f);
-        start = d.Centre - heading * (kRun / std::cos(glm::radians(25.0f)));
+        start = d.Centre - heading * (r.Before / std::cos(glm::radians(25.0f)));
     }
     r.Heading = heading;
     r.Start = start;
     r.Speed = player.MoveSpeed * (r.Sprint ? player.SprintMultiplier : 1.0f);
-    r.Budget = 2.0f * (2.0f * kRun / std::max(r.Speed, 0.1f)) + 1.0f;
+    r.Budget = 2.0f * ((r.Before + r.After) / std::max(r.Speed, 0.1f)) + 1.0f;
     r.MinRatio = 1e9f;
 }
 
@@ -202,14 +238,15 @@ void NpcTest::Doors(World& world, const Player& player) {
         const glm::vec3 v = (feet - r.Prev) / dt;
         const float speed = glm::length(glm::vec2(v.x, v.z)), ratio = speed / std::max(r.Speed, 0.01f);
         // Judged once up to speed (past the accel ramp) and near the wall.
-        if (std::abs(along) <= kNear) r.MinRatio = std::min(r.MinRatio, ratio);
+        // (A pack run can start inside kNear, short of a room's furniture: its first steps up to speed don't count.)
+        if (std::abs(along) <= kNear && (!d.Pack || r.Time > 0.3f)) r.MinRatio = std::min(r.MinRatio, ratio);
         if (m_DTrace) // NPC_TEST_DOORS_TRACE=1: every frame of every pass
             std::printf("[NpcTest]   t %.3f along %+.3f lateral %+.3f height %.3f speed %.2f (%.2f)\n", r.Time, along,
                         glm::dot(feet - d.Centre, d.Along), feet.y, speed, ratio);
         if (r.Time > 0.25f && ratio < 0.25f) r.Stuck += dt;
         float pos[3], rad = 0.0f, cyl = 0.0f;
         if (PhysicsWorld::GetCharacterCapsule(pos, &rad, &cyl) && !PhysicsWorld::CharacterFitsAt(cyl)) ++r.PenFrames;
-        const bool through = along >= kRun - 0.3f;
+        const bool through = along >= r.After - (d.Pack ? 0.15f : 0.3f);
         if (through || r.Time > r.Budget) {
             if (r.MinRatio > 1e8f) r.MinRatio = 0.0f;
             const char* name = kPassNames[m_DPass];

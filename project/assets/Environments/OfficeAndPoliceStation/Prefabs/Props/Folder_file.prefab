@@ -4,21 +4,6 @@
   "formatVersion": 4,
   "models": [
     {
-      "collider": {
-        "center": [
-          0.002684,
-          0.006377,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.113607,
-          0.006189,
-          0.149313
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 0,
       "name": "Folder_file",
       "order": 0,

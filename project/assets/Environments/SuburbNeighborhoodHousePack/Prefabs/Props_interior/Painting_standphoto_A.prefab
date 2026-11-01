@@ -4,21 +4,6 @@
   "formatVersion": 4,
   "models": [
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.082377,
-          0.043203
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.107418,
-          0.08381,
-          0.051445
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 0,
       "name": "Painting_standphoto_A",
       "order": 0,

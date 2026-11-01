@@ -7,7 +7,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 0,
       "name": "Sun_table",

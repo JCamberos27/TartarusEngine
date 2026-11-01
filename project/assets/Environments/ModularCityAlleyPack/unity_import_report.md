@@ -8,7 +8,10 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\ModularCityAlleyPa
 - baked-only lights (now realtime): 7
 - built-in cubes as boxes: 17
 - colliders: 5754
+- colliders dropped from clutter and flat dressing (by name): 45
+- colliders dropped from small props (under 35 cm): 49
 - duplicate openables dropped (a twin door within 10 cm): 0
+- flat box colliders given a 4 cm slab: 74
 - free-standing props kept at 1.0: 814
 - lights: 24
 - material overrides on instances: 669
@@ -16,6 +19,7 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\ModularCityAlleyPa
 - model variants (one mesh of a multi-mesh FBX): 27
 - models: 400
 - prefabs: 387
+- prop mesh colliders made convex: 106
 - props re-seated on their floor after the architecture scale: 82
 - reflection probes: 4
 - renderers: 4776

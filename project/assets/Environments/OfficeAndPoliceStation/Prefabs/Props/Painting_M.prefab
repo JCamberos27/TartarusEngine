@@ -4,21 +4,6 @@
   "formatVersion": 4,
   "models": [
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.0,
-          0.009644
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.171475,
-          0.248056,
-          0.010452
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 0,
       "name": "Painting_M",
       "order": 0,

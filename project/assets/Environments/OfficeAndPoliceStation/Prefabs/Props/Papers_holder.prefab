@@ -4,21 +4,6 @@
   "formatVersion": 4,
   "models": [
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.01,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.121599,
-          0.005,
-          0.168367
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 0,
       "name": "Papers_holder",
       "order": 0,
@@ -44,21 +29,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.017923,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.120485,
-          0.017934,
-          0.159759
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1,
       "name": "Papers_pile",
       "order": 1,

@@ -4,21 +4,6 @@
   "formatVersion": 4,
   "models": [
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.0,
-          0.015218
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.352847,
-          0.281432,
-          0.014896
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 0,
       "name": "Painting_large_B",
       "order": 0,
