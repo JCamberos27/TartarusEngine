@@ -843,6 +843,13 @@ class Converter:
         else:
             return
         e['Openable'] = op
+        # A kinematic body, as Apartment Hallway's leaves have: a plain collider is a static actor that stays where the leaf
+        # hung shut, so the player walked into an open doorway's invisible door.
+        e['Rigidbody'] = {'Angular Damping': 0.05, 'Continuous Collision': False, 'Freeze Position X': False,
+                          'Freeze Position Y': False, 'Freeze Position Z': False, 'Freeze Rotation X': False,
+                          'Freeze Rotation Y': False, 'Freeze Rotation Z': False, 'Initial Velocity': [0.0, 0.0, 0.0],
+                          'Interpolate': 'Interpolate', 'Is Kinematic': True, 'Linear Damping': 0.05, 'Mass': 18.0,
+                          'Use Gravity': False}
         self.pack.counts['openables'] += 1
 
     def node_for_mesh(self, guid, mesh_name):
