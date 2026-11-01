@@ -37,6 +37,26 @@
         "Start Open": false,
         "Swing Back": true
       },
+      "Rigidbody": {
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": true,
+        "Linear Damping": 0.05,
+        "Mass": 18.0,
+        "Use Gravity": false
+      },
       "collider": {
         "center": [
           0.434585,
