@@ -20,6 +20,7 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\ModularCityAlleyPa
 - reflection probes: 4
 - renderers: 4776
 - scenes: 3
+- scenes given the AAA look preset: 2
 - scripts dropped (MonoBehaviour): 25
 - textures: 166
 

@@ -80,9 +80,9 @@
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.410051,
-          0.645042,
-          0.040355
+          0.397749,
+          0.625691,
+          0.039144
         ],
         "isTrigger": false,
         "shape": 0
@@ -94,9 +94,9 @@
       "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Windowglass_singlewindow.FBX",
       "pathGuid": "837a06a9d9a4a0ba",
       "position": [
-        1.959,
-        1.719,
-        0.412994
+        1.90023,
+        1.66743,
+        0.400604
       ],
       "rotation": [
         0.0,
@@ -120,9 +120,9 @@
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.410051,
-          0.645042,
-          0.040355
+          0.397749,
+          0.625691,
+          0.039144
         ],
         "isTrigger": false,
         "shape": 0
@@ -134,9 +134,9 @@
       "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Windowglass_singlewindow.FBX",
       "pathGuid": "837a06a9d9a4a0ba",
       "position": [
-        1.059,
-        1.719,
-        0.412994
+        1.02723,
+        1.66743,
+        0.400604
       ],
       "rotation": [
         0.0,
@@ -160,9 +160,9 @@
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.410051,
-          0.645042,
-          0.040355
+          0.397749,
+          0.625691,
+          0.039144
         ],
         "isTrigger": false,
         "shape": 0
@@ -174,9 +174,9 @@
       "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Windowglass_singlewindow.FBX",
       "pathGuid": "837a06a9d9a4a0ba",
       "position": [
-        0.238,
-        1.719,
-        0.193
+        0.23086,
+        1.66743,
+        0.18721
       ],
       "rotation": [
         0.0,
@@ -200,9 +200,9 @@
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.410051,
-          0.645042,
-          0.040355
+          0.397749,
+          0.625691,
+          0.039144
         ],
         "isTrigger": false,
         "shape": 0
@@ -214,9 +214,9 @@
       "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Windowglass_singlewindow.FBX",
       "pathGuid": "837a06a9d9a4a0ba",
       "position": [
-        2.768,
-        1.719,
-        0.187
+        2.68496,
+        1.66743,
+        0.18139
       ],
       "rotation": [
         0.0,

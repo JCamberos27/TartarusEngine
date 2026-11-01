@@ -3,7 +3,7 @@
   "guid": "f613dbd2bdb4e342",
   "importer": {
     "excludeNodes": [],
-    "globalScale": 1.0,
+    "globalScale": 0.82,
     "importAnimations": false,
     "importNormals": true,
     "importSkeleton": false,
@@ -26,9 +26,9 @@
       -1.0,
       0.0,
       0.0,
-      20.2133,
-      -0.002315,
-      -7.37691,
+      16.574906,
+      -0.001899,
+      -6.049066,
       1.0
     ]
   },

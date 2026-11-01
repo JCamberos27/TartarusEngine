@@ -4,11 +4,14 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\OfficeAndPoliceSta
 
 ## Counts
 
-- baked-only lights (now realtime): 18
+- architecture scaled x0.9: 492
+- area lights (baked only in Unity) -> unshadowed wide spot fills: 64
+- baked-only lights (now realtime): 82
 - built-in cubes as boxes: 1
 - colliders: 4946
 - duplicate openables dropped (a twin door within 10 cm): 10
-- lights: 32
+- free-standing props kept at 1.0: 1555
+- lights: 96
 - material overrides on instances: 275
 - materials: 65
 - model variants (one mesh of a multi-mesh FBX): 65
@@ -17,11 +20,13 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\OfficeAndPoliceSta
 - openables: 76
 - prefab scale overrides applied: 34
 - prefabs: 221
+- props re-seated on their floor after the architecture scale: 678
 - reflection probes: 9
 - renderers: 2973
 - scenes: 2
+- scenes given the AAA look preset: 1
 - scripts dropped (MonoBehaviour): 110
-- textures: 274
+- textures: 275
 - textures halved: 6
 
 ## Not converted / approximated
@@ -52,40 +57,8 @@ Source: `C:\Users\jacob\Setup Guide In-Editor Tutorial\Assets\OfficeAndPoliceSta
 - Showcase: Fan_table_blades
 - W_3x_Elevator.prefab: Elevator_Doors
 
-### area lights (baked only in Unity), skipped (34)
-- Area Light Window
-- Area Light Window (1)
-- Area Light Window (10)
-- Area Light Window (11)
-- Area Light Window (12)
-- Area Light Window (13)
-- Area Light Window (14)
-- Area Light Window (15)
-- Area Light Window (16)
-- Area Light Window (17)
-- Area Light Window (2)
-- Area Light Window (3)
-- Area Light Window (4)
-- Area Light Window (5)
-- Area Light Window (6)
-- Area Light Window (7)
-- Area Light Window (8)
-- Area Light Window (9)
-- Area Light ceiling 2nd
-- Area Light ceiling cell
-- Area Light ceiling cells corridor
-- Area Light ceiling conference room
-- Area Light ceiling elevator
-- Area Light ceiling embeded double
-- Area Light ceiling embeded single
-- Area Light ceiling embeded single 
-- Area Light ceiling fluorescent desksroom
-- Area Light ceiling lockers
-- Area Light ceiling stairs
-- Area Light ceiling toilet
-- Area Light police area
+### area lights too dim to stand in a fill (sign glows), skipped (2)
 - Area Light police area backside
-- Area Light police area chief
 - Area Light signs
 
 ### materials not converted (skybox) (1)

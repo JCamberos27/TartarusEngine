@@ -5,9 +5,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          0.375,
-          1.525,
-          0.1
+          0.36375,
+          1.47925,
+          0.097
         ],
         "isTrigger": false,
         "shape": 0
@@ -17,9 +17,9 @@
       "order": 1,
       "parentId": 0,
       "position": [
-        2.7,
-        1.5,
-        -0.1
+        2.619,
+        1.455,
+        -0.097
       ],
       "rotation": [
         0.0,
@@ -38,9 +38,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          1.5,
-          0.3,
-          0.1
+          1.455,
+          0.291,
+          0.097
         ],
         "isTrigger": false,
         "shape": 0
@@ -50,9 +50,9 @@
       "order": 2,
       "parentId": 0,
       "position": [
-        1.5,
-        2.7,
-        -0.1
+        1.455,
+        2.619,
+        -0.097
       ],
       "rotation": [
         0.0,
@@ -71,9 +71,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          1.5,
-          0.575,
-          0.1
+          1.455,
+          0.55775,
+          0.097
         ],
         "isTrigger": false,
         "shape": 0
@@ -83,9 +83,9 @@
       "order": 3,
       "parentId": 0,
       "position": [
-        1.5,
-        0.5,
-        -0.1
+        1.455,
+        0.485,
+        -0.097
       ],
       "rotation": [
         0.0,
@@ -106,15 +106,15 @@
     {
       "collider": {
         "center": [
-          0.3,
-          1.5,
-          -0.1
+          0.291,
+          1.455,
+          -0.097
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.375,
-          1.525,
-          0.1
+          0.36375,
+          1.47925,
+          0.097
         ],
         "isTrigger": false,
         "shape": 0
@@ -152,9 +152,9 @@
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.410051,
-          0.645042,
-          0.040355
+          0.397749,
+          0.625691,
+          0.039144
         ],
         "isTrigger": false,
         "shape": 0
@@ -166,9 +166,9 @@
       "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Windowglass_singlewindow.FBX",
       "pathGuid": "837a06a9d9a4a0ba",
       "position": [
-        1.951,
-        1.731,
-        -0.085999
+        1.89247,
+        1.67907,
+        -0.083419
       ],
       "rotation": [
         0.0,
@@ -192,9 +192,9 @@
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.410051,
-          0.645042,
-          0.040355
+          0.397749,
+          0.625691,
+          0.039144
         ],
         "isTrigger": false,
         "shape": 0
@@ -206,9 +206,9 @@
       "path": "assets/Environments/SuburbNeighborhoodHousePack/Meshes/Building/Windowglass_singlewindow.FBX",
       "pathGuid": "837a06a9d9a4a0ba",
       "position": [
-        1.061001,
-        1.731,
-        -0.085999
+        1.029171,
+        1.67907,
+        -0.083419
       ],
       "rotation": [
         0.0,

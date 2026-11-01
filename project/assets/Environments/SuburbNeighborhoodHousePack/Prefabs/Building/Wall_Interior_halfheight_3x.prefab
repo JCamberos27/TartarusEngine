@@ -5,9 +5,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          1.511771,
-          0.25,
-          0.124408
+          1.466418,
+          0.2425,
+          0.120676
         ],
         "isTrigger": false,
         "shape": 0
@@ -17,8 +17,8 @@
       "order": 1,
       "parentId": 0,
       "position": [
-        1.5,
-        2.79,
+        1.455,
+        2.7063,
         -0.0
       ],
       "rotation": [
@@ -40,15 +40,15 @@
     {
       "collider": {
         "center": [
-          1.5,
-          0.61,
+          1.455,
+          0.5917,
           -0.0
         ],
         "friction": 0.6,
         "halfExtents": [
-          1.52,
-          0.425,
-          0.124408
+          1.4744,
+          0.41225,
+          0.120676
         ],
         "isTrigger": false,
         "shape": 0

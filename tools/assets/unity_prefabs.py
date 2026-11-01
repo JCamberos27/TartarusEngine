@@ -8,6 +8,7 @@
 # too) that brings it back to the space Unity draws it in, and a Unity transform then carries over as it is. The node
 # data comes from the engine's own read of the FBX (--model-nodes, with the pivot chain kept).
 import collections
+import copy
 import json
 import math
 import os
@@ -290,6 +291,7 @@ class Converter:
         self.pack, self.exe = pack, exe
         self.fbx = {}            # unity model guid -> FbxInfo
         self.variants = {}       # (model guid, node) -> engine model path
+        self.unity_scale = {}    # building mesh path -> its Unity import scale (set_correction adds ARCH_SCALE)
         self.local_meshes = {}   # the current scene's embedded Mesh fileID -> name
         self.scene_path = None
         self.parent_off = False
@@ -420,8 +422,11 @@ class Converter:
             copy_if_changed(src, dst)
             meta = json.load(open(src + '.meta', encoding='utf-8'))
             rel = os.path.relpath(dst, os.path.join(self.pack.repo, 'project')).replace(os.sep, '/')
+            imp = dict(meta['importer'])
+            if base in self.unity_scale:  # the base mesh's scale from before set_correction gave it ARCH_SCALE
+                imp['globalScale'] = self.unity_scale[base]
             write_meta(dst, os.path.dirname(rel), 'model',
-                       {'importer': dict(meta['importer']), 'materialRemap': meta.get('materialRemap', {})})
+                       {'importer': imp, 'materialRemap': meta.get('materialRemap', {})})
             self.set_correction(rel, info.correction(node), [node])
             self.variants[key] = rel
             self.pack.counts['model variants (one mesh of a multi-mesh FBX)'] += 1
@@ -433,6 +438,11 @@ class Converter:
         imp = meta['importer']
         imp.pop('pivotOffset', None)
         imp.pop('rootTransform', None)
+        s = ARCH_SCALE.get(self.pack.name, 1.0) if arch_mesh(self.pack.name, rel) else 1.0
+        if s != 1.0:  # a building mesh carries ARCH_SCALE: its import scale, and the correction's metres with it
+            imp['globalScale'] = round(self.unity_scale.setdefault(rel, imp.get('globalScale', 1.0)) * s, 6)
+            c = list(c)
+            c[12:15] = [v * s for v in c[12:15]]
         imp.update(correction_meta(c))
         if only is not None:
             imp['meshNodes'] = only
@@ -1130,15 +1140,34 @@ SCALE_OVERRIDES = {
 }
 
 
-# Architecture scale: the alley's building kit is 1.2-1.3x too big for the 1.81 m Quantum rig (doors 2.49 m, the narrowest
-# alley 4+ m wide). A uniform factor shrinks the building pieces, and the whole scene layout scales about the world origin
-# by the same factor, so the walls still tile and the props (kept at 1.0) still sit on the floors. 2.49 m x 0.82 = 2.04 m.
-ARCH_SCALE = {'ModularCityAlleyPack': 0.82}
-ARCH_FOLDERS = {'ModularCityAlleyPack': {'Walls', 'Floors', 'Roofs', 'Decals'}}
+# Architecture scale, matched to the Apartment Hallway's doors (Door_Op_1: 0.98 x 2.08 m frame, 0.81 x 2.0 m leaf) and the
+# 1.81 m Quantum rig. The alley kit's doors are 2.49 m (narrowest alley 4+ m wide): x0.82 = 2.04 m. The office doors are
+# 2.29 m: x0.9 = 2.06 m. The suburb doors are 2.15 m: x0.97 = 2.09 m. The factor lives in the building meshes themselves
+# (their .meta globalScale, set in Converter.set_correction), so prefab files and scene instances keep scale 1; the scene
+# layout scales about the world origin by the same factor, so the walls still tile and the props (kept at 1.0) still sit
+# on the floors.
+ARCH_SCALE = {'ModularCityAlleyPack': 0.82, 'OfficeAndPoliceStation': 0.9, 'SuburbNeighborhoodHousePack': 0.97}
+ARCH_FOLDERS = {'ModularCityAlleyPack': {'Walls', 'Floors', 'Roofs', 'Decals'},
+                'OfficeAndPoliceStation': {'Building'},
+                'SuburbNeighborhoodHousePack': {'Building', 'Ground'}}
 # building-mounted kit that lives in the Props folder (free-standing props stay out)
 ARCH_PROP_RE = {'ModularCityAlleyPack': re.compile(
     r'^(Airduct|Awning|Balcony|Commercial$|Distant_Building|FireEscape|MetalPlateRoof_|MetalPlate_A$|Neon_Sign_|Sign_|Pipe_|'
-    r'PlasticHanging|PowerLines_|Window_MetalBars_|WindowShutter|Door_MetalBars_|Tree_Groundplate|WireStraight)')}
+    r'PlasticHanging|PowerLines_|Window_MetalBars_|WindowShutter|Door_MetalBars_|Tree_Groundplate|WireStraight)'),
+    # wall-to-wall kit that tiles with the building: toilet stalls and cubicle screens
+    'OfficeAndPoliceStation': re.compile(r'^(Toilet_partition|Tablescreen_)'),
+    'SuburbNeighborhoodHousePack': re.compile(r'^(?!)')}
+
+
+def arch_mesh(pack_name, path):
+    """True when a model file (or one of its @node variants) is a building piece whose mesh carries ARCH_SCALE."""
+    path = path.replace(chr(92), '/')
+    if pack_name not in ARCH_SCALE or '/Meshes/' not in path:
+        return False
+    seg = path.split('/Meshes/')[-1].split('/')
+    if seg[0] in ARCH_FOLDERS[pack_name]:
+        return True
+    return bool(ARCH_PROP_RE[pack_name].match(re.sub(r'@.*$', '', os.path.splitext(seg[-1])[0])))
 
 
 def arch_class(pack_name, e):
@@ -1153,46 +1182,63 @@ def arch_class(pack_name, e):
     return bool(ARCH_PROP_RE[pack_name].match(name))
 
 
-def arch_rescale(pack, out, prefab):
-    """Apply ARCH_SCALE to an emitted prefab (root scale only) or scene (every entity directly under the scene or an
-    identity group: building pieces get the scale, their positions all scale about the origin; props keep size)."""
+def arch_rescale(pack, out, prefab, unscaled=False):
+    """Lay out an emitted prefab or scene for ARCH_SCALE, given that the building meshes already carry it. The result is
+    what scaling each top-level building entity by the factor would give (its children shrink with it, a scene's
+    top-level positions scale about the origin, props keep their size), with entity scales left at 1 wherever the mesh's
+    own scale covers it: an entity only gets a residual scale where it and its asset disagree (a box, a prop nested under
+    a building piece, a building mesh placed as a free-standing prop). unscaled=True instead undoes the meshes' scale, for
+    the --scene-bounds read of the scene as Unity laid it out."""
     s = ARCH_SCALE.get(pack.name)
     if s is None:
         return
+    g = 1.0 if unscaled else s
     ents = out['boxes'] + out['empties'] + out['models']
     ids = {e['id']: e for e in ents}
-    skip = set()
-    for e in ents:  # the spawn's rig and the template Sun are not part of the layout
-        if e['name'] in ('Player Spawn', 'Sun'):
-            skip.add(e['id'])
+    kids = collections.defaultdict(list)
     for e in ents:
-        q = e
-        while q is not None and q['parentId'] in ids:
-            q = ids[q['parentId']]
-            if q['id'] in skip:
-                skip.add(e['id'])
-                break
-    for e in ents:
+        kids[e['parentId'] if e['parentId'] in ids else -1].append(e)
+
+    def walk(e, need_par, applied_par, rig):
         par = ids.get(e['parentId'])
         top = par is None or 'path' not in par
-        if prefab:
-            if par is not None or 'path' not in e:
-                continue
-        elif e['id'] in skip:
-            if e['name'] == 'Player Spawn':
-                e['position'] = r6([c * s for c in e['position']])
-            continue
-        elif top:
-            e['position'] = r6([c * s for c in e['position']])
-        if not top and not prefab:
-            continue
+        rig = rig or e['name'] in ('Player Spawn', 'Sun')  # the spawn's rig and the template Sun are not layout
         kind = arch_class(pack.name, e)
         if kind is None and e in out['boxes']:
             kind = True
-        if kind:
-            e['scale'] = r6([c * s for c in e['scale']])
-        if kind is not None and not prefab:
+        # once inside a scaled building piece (a door leaf under its frame's pivot group) the factor is already applied
+        fresh = need_par == 1.0
+        grow = g if kind and not rig and fresh and (par is None if prefab else top) else 1.0
+        need = need_par * grow  # the entity's size factor, as scaling the building entities would give it
+        asset = s if e.get('path') and arch_mesh(pack.name, e['path']) else 1.0
+        own = need / (asset * applied_par)  # what the entity's own scale still has to add
+        layout = g if not prefab and top and fresh and (not rig or e['name'] == 'Player Spawn') else 1.0
+        move = layout * need_par / applied_par
+        if move != 1.0:
+            e['position'] = r6([c * move for c in e['position']])
+        col = e.get('collider')
+        if col and 'path' not in e and e not in out['boxes'] and not kids[e['id']] and col.get('shape') in (0, 1, 2):
+            for k in ('center', 'halfExtents'):  # a collider-only helper: the shape itself takes the size, not the entity
+                if k in col:
+                    col[k] = r6([c * own for c in col[k]])
+            own = 1.0
+        if abs(own - 1.0) > 1e-9:
+            e['scale'] = r6([c * own for c in e['scale']])
+        if asset != 1.0:  # entity-space lengths measured on the unscaled mesh (a mesh collider follows the mesh)
+            col = e.get('collider') or {}
+            for k in ('center', 'halfExtents'):
+                if k in col:
+                    col[k] = r6([c * asset for c in col[k]])
+            op = e.get('Openable') or {}
+            if op.get('Motion', '').startswith('Slide') and op.get('Amount', 0) > 0:
+                op['Amount'] = round(op['Amount'] * asset, 3)
+        if kind is not None and not prefab and top and not rig and not unscaled:
             pack.counts[f'architecture scaled x{s}' if kind else 'free-standing props kept at 1.0'] += 1
+        for k in kids[e['id']]:
+            walk(k, need, applied_par * own, rig)
+
+    for e in kids[-1]:
+        walk(e, 1.0, 1.0, False)
 
 
 # Player Spawn floor tops (world y of the surface under the spawn's x/z, taken from --scene-bounds): Unity's rig starts
@@ -1240,8 +1286,9 @@ LOOK_SCENES = {
     ('SuburbNeighborhoodHousePack', 'Demoscene_Day'): dict(LOOK_DAY, shadowCascades=2, skyAmbientIntensity=0.6),
     # Night: the moon and sky fill were lifting the whole street to dusk; the exposure cap keeps dark dark.
     ('SuburbNeighborhoodHousePack', 'Demoscene_Night'): dict(
-        LOOK_NIGHT, shadowCascades=2, skyAmbientIntensity=0.35, autoExposureMaxEV=2.5,
-        gradeTemperature=-4.0),  # a lighter cool grade: the sodium lamps keep their amber
+        LOOK_NIGHT, shadowCascades=1, skyAmbientIntensity=0.35, autoExposureMaxEV=2.5,
+        gradeTemperature=-4.0,  # a lighter cool grade: the sodium lamps keep their amber
+        ssaoEnabled=False, volQuality=0),  # under the frame budget: SSAO off, one moon cascade, low froxel fog
     # Low ground mist hugging the trail (the terrain sits around y 3-4), lit through the canopy for god rays.
     ('SeedMesh_Mossy_Cedrus_Forest', 'Mossy_forest_trail'): dict(
         LOOK_DAY, gradeTemperature=0.0, gradeColorFilter=[0.97, 1.0, 0.96],
@@ -1626,6 +1673,9 @@ def write_scene(conv, path):
             if e['name'] == 'Player Spawn':
                 p, _, _ = to_engine(spawn.pos, spawn.rot, spawn.scale)
                 e['position'] = r6(p)
+    for e in keep:  # the Apartment Hallway's capsule: the template's 0.3 m scrapes a 0.87 m doorway, 0.22 m is shoulders
+        if e['name'] == 'Player Spawn' and 'First Person Controller' in e:
+            e['First Person Controller']['Capsule Radius'] = 0.22
     floor = SPAWN_FLOOR_Y.get((pack.name, stem))
     if floor is not None:  # a scene with no Unity rig keeps the template's spawn x/z, but still stands on the floor
         for e in keep:
@@ -1656,7 +1706,9 @@ def write_scene(conv, path):
     spawn_on_terrain(conv, pack, out, keep)
     scene.update(out)
     if pack.name in ARCH_SCALE:
-        b0 = scene_bounds(conv, scene)
+        plain = copy.deepcopy(scene)
+        arch_rescale(pack, plain, False, unscaled=True)
+        b0 = scene_bounds(conv, plain)
         arch_rescale(pack, out, False)
         settle_props(pack, out, b0, scene_bounds(conv, scene))
     auto_lod(conv.exe, pack.repo, pack.name, scene, pack.counts,

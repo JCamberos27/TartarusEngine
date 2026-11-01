@@ -71,7 +71,7 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          1,
+          1.0,
           0.865,
           0.0
         ],
