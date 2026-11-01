@@ -5,9 +5,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          0.05,
-          0.525,
-          0.531719
+          0.041,
+          0.4305,
+          0.43601
         ],
         "isTrigger": false,
         "shape": 0
@@ -17,9 +17,9 @@
       "order": 1,
       "parentId": 0,
       "position": [
-        1.67,
-        0.06,
-        0.537386
+        1.3694,
+        0.0492,
+        0.440657
       ],
       "rotation": [
         0.0,
@@ -38,9 +38,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          0.05,
-          0.525,
-          0.531719
+          0.041,
+          0.4305,
+          0.43601
         ],
         "isTrigger": false,
         "shape": 0
@@ -50,9 +50,9 @@
       "order": 2,
       "parentId": 0,
       "position": [
-        -1.67,
-        0.06,
-        0.537386
+        -1.3694,
+        0.0492,
+        0.440657
       ],
       "rotation": [
         0.0,
@@ -71,9 +71,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          1.682365,
-          0.525,
-          0.05
+          1.379539,
+          0.4305,
+          0.041
         ],
         "isTrigger": false,
         "shape": 0
@@ -84,8 +84,8 @@
       "parentId": 0,
       "position": [
         -0.0,
-        0.06,
-        1.01
+        0.0492,
+        0.8282
       ],
       "rotation": [
         0.0,
@@ -107,14 +107,14 @@
       "collider": {
         "center": [
           -0.0,
-          -0.44,
-          0.537386
+          -0.3608,
+          0.440657
         ],
         "friction": 0.6,
         "halfExtents": [
-          1.682365,
-          0.1,
-          0.531719
+          1.379539,
+          0.082,
+          0.43601
         ],
         "isTrigger": false,
         "shape": 0
@@ -137,24 +137,24 @@
         1.0
       ],
       "scale": [
-        0.82,
-        0.82,
-        0.82
+        1.0,
+        1.0,
+        1.0
       ],
       "static": true
     },
     {
       "collider": {
         "center": [
-          0.04,
-          -1.950999,
-          0.147454
+          0.0328,
+          -1.599819,
+          0.120912
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.105,
-          1.89,
-          0.37963
+          0.0861,
+          1.5498,
+          0.311297
         ],
         "isTrigger": false,
         "shape": 0
@@ -166,9 +166,9 @@
       "path": "assets/Environments/ModularCityAlleyPack/Meshes/Props/FireEscape@FireEscape_Stairs.FBX",
       "pathGuid": "56d9a82bbeaf7827",
       "position": [
-        -1.526558,
-        -0.326235,
-        0.424118
+        -1.251778,
+        -0.267513,
+        0.347777
       ],
       "rotation": [
         0.0,

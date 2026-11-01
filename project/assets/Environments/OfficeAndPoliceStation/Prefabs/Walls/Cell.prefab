@@ -7,9 +7,9 @@
       "order": 1,
       "parentId": 0,
       "position": [
-        0.605,
+        0.5445,
         0.0,
-        1.5
+        1.35
       ],
       "rotation": [
         0.0,
@@ -18,9 +18,9 @@
         -0.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        0.9,
+        0.9,
+        0.9
       ]
     }
   ],
@@ -67,17 +67,37 @@
         "Start Open": false,
         "Swing Back": true
       },
+      "Rigidbody": {
+        "Angular Damping": 0.05,
+        "Continuous Collision": false,
+        "Freeze Position X": false,
+        "Freeze Position Y": false,
+        "Freeze Position Z": false,
+        "Freeze Rotation X": false,
+        "Freeze Rotation Y": false,
+        "Freeze Rotation Z": false,
+        "Initial Velocity": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "Interpolate": "Interpolate",
+        "Is Kinematic": true,
+        "Linear Damping": 0.05,
+        "Mass": 18.0,
+        "Use Gravity": false
+      },
       "collider": {
         "center": [
-          0.482872,
-          1.141304,
-          0.053486
+          0.434585,
+          1.027174,
+          0.048137
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.496988,
-          1.051664,
-          0.067598
+          0.447289,
+          0.946498,
+          0.060838
         ],
         "isTrigger": false,
         "shape": 0
@@ -100,9 +120,9 @@
         1.0
       ],
       "scale": [
-        1.0,
-        1.0,
-        1.0
+        1.111111,
+        1.111111,
+        1.111111
       ]
     }
   ]

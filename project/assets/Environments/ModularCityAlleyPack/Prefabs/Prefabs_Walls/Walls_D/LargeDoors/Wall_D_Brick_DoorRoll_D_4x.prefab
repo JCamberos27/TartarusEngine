@@ -5,9 +5,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          0.275,
-          2.0,
-          0.32
+          0.2255,
+          1.64,
+          0.2624
         ],
         "isTrigger": false,
         "shape": 0
@@ -17,9 +17,9 @@
       "order": 1,
       "parentId": 0,
       "position": [
-        -1.78,
-        2.0,
-        -0.237377
+        -1.4596,
+        1.64,
+        -0.194649
       ],
       "rotation": [
         0.0,
@@ -38,9 +38,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          2.0,
-          0.605,
-          0.362126
+          1.64,
+          0.4961,
+          0.296943
         ],
         "isTrigger": false,
         "shape": 0
@@ -51,8 +51,8 @@
       "parentId": 0,
       "position": [
         -0.0,
-        3.41,
-        -0.237377
+        2.7962,
+        -0.194649
       ],
       "rotation": [
         0.0,
@@ -71,9 +71,9 @@
       "collider": {
         "friction": 0.6,
         "halfExtents": [
-          2.0,
-          2.0,
-          0.07
+          1.64,
+          1.64,
+          0.0574
         ],
         "isTrigger": false,
         "shape": 0
@@ -84,8 +84,8 @@
       "parentId": 0,
       "position": [
         -0.0,
-        2.0,
-        -0.55
+        1.64,
+        -0.451
       ],
       "rotation": [
         0.0,
@@ -106,15 +106,15 @@
     {
       "collider": {
         "center": [
-          1.78,
-          2.0,
-          -0.237377
+          1.4596,
+          1.64,
+          -0.194649
         ],
         "friction": 0.6,
         "halfExtents": [
-          0.275,
-          2.0,
-          0.32
+          0.2255,
+          1.64,
+          0.2624
         ],
         "isTrigger": false,
         "shape": 0
@@ -137,9 +137,9 @@
         1.0
       ],
       "scale": [
-        0.82,
-        0.82,
-        0.82
+        1.0,
+        1.0,
+        1.0
       ],
       "static": true
     }
