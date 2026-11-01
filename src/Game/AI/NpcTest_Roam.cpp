@@ -47,6 +47,19 @@ void NpcTest::RoamSetUp(World& world, const Player& player) {
                 ++m_RoOffMesh;
         }
     // Nearest-first by path from the spawn: the route a person exploring the place would more or less take.
+    if (pts.empty()) {
+        // No doors to go by (the City Alley): points spread over the mesh around the spawn, 6 m apart at least.
+        glm::vec3 spawn;
+        PhysicsWorld::GetCharacterFootPosition(&spawn.x);
+        if (nav.Closest(spawn, spawn, glm::vec3(1.0f, 2.0f, 1.0f)))
+            for (int i = 0; i < 400 && (int)pts.size() < 24; ++i) {
+                glm::vec3 p;
+                const float r1 = (float)((i * 7919) % 1000) / 1000.0f, r2 = (float)((i * 104729) % 1000) / 1000.0f;
+                if (!nav.RandomPointNear(spawn, 40.0f, r1, r2, p)) continue;
+                if (std::none_of(pts.begin(), pts.end(), [&](const glm::vec3& q) { return glm::length(p - q) < 6.0f; }))
+                    pts.push_back(p);
+            }
+    }
 #pragma warning(suppress : 4996)
     if (const char* own = std::getenv("NPC_TEST_ROAM_POINTS"); own && *own) {
         // "x y z; x y z; ...": walk these instead, from the first (a stairs check, a corridor)
