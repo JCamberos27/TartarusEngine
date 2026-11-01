@@ -4,21 +4,6 @@
   "formatVersion": 4,
   "models": [
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.0,
-          0.010431
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.146633,
-          0.182303,
-          0.010495
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 0,
       "name": "Painting_small_A",
       "order": 0,

@@ -4,21 +4,6 @@
   "formatVersion": 4,
   "models": [
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.103435,
-          0.066268
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.0864,
-          0.103945,
-          0.050305
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 0,
       "name": "Painting_stand_A",
       "order": 0,

@@ -4,21 +4,6 @@
   "formatVersion": 4,
   "models": [
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.097834,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.038392,
-          0.098256,
-          0.037809
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 0,
       "name": "Hand_soap",
       "order": 0,

@@ -4,21 +4,6 @@
   "formatVersion": 4,
   "models": [
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.006555,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.140008,
-          0.006535,
-          0.100128
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 0,
       "name": "Newspaper",
       "order": 0,

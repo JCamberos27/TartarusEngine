@@ -4,21 +4,6 @@
   "formatVersion": 4,
   "models": [
     {
-      "collider": {
-        "center": [
-          -0.002769,
-          -0.053962,
-          0.061538
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.086628,
-          0.095712,
-          0.061538
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 0,
       "name": "Toilet_paper_roll",
       "order": 0,

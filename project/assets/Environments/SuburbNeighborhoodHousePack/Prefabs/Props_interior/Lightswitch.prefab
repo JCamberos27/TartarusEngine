@@ -4,21 +4,6 @@
   "formatVersion": 4,
   "models": [
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.0,
-          0.008047
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.037221,
-          0.058234,
-          0.008257
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 0,
       "name": "Lightswitch",
       "order": 0,

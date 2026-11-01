@@ -7,7 +7,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 0,
       "name": "Bed_queen",
@@ -34,11 +34,6 @@
       "static": true
     },
     {
-      "collider": {
-        "friction": 0.6,
-        "isTrigger": false,
-        "shape": 4
-      },
       "id": 1,
       "name": "Pillow_small",
       "order": 1,
@@ -64,11 +59,6 @@
       "static": true
     },
     {
-      "collider": {
-        "friction": 0.6,
-        "isTrigger": false,
-        "shape": 4
-      },
       "id": 2,
       "name": "Pillow_small",
       "order": 2,
@@ -94,11 +84,6 @@
       "static": true
     },
     {
-      "collider": {
-        "friction": 0.6,
-        "isTrigger": false,
-        "shape": 4
-      },
       "id": 3,
       "name": "Pillow_large",
       "order": 3,
@@ -124,11 +109,6 @@
       "static": true
     },
     {
-      "collider": {
-        "friction": 0.6,
-        "isTrigger": false,
-        "shape": 4
-      },
       "id": 4,
       "name": "Pillow_large",
       "order": 4,

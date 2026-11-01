@@ -78,21 +78,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.0,
-          3e-06,
-          -0.000825
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.300517,
-          0.092683,
-          0.188895
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 2,
       "name": "Pillow_bed_small",
       "order": 2,

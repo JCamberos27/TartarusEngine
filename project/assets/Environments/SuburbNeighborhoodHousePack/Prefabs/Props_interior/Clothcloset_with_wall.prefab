@@ -7,7 +7,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 0,
       "name": "Clothcloset_with_wall",
@@ -277,7 +277,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 7,
       "name": "Drawer_A",
@@ -307,7 +307,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 8,
       "name": "Drawer_B",
@@ -337,7 +337,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 9,
       "name": "Drawer_C",
@@ -367,7 +367,7 @@
       "collider": {
         "friction": 0.6,
         "isTrigger": false,
-        "shape": 4
+        "shape": 3
       },
       "id": 10,
       "name": "Drawer_D",
