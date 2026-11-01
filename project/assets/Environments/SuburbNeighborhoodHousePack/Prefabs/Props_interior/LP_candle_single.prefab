@@ -4,21 +4,6 @@
   "formatVersion": 4,
   "models": [
     {
-      "collider": {
-        "center": [
-          0.0,
-          0.209227,
-          0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.03,
-          0.2,
-          0.03
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 0,
       "name": "LP_candle_single",
       "order": 0,

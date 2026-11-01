@@ -4,21 +4,6 @@
   "formatVersion": 4,
   "models": [
     {
-      "collider": {
-        "center": [
-          -0.0,
-          0.132767,
-          -0.0
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.088459,
-          0.134093,
-          0.100799
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 0,
       "name": "Books_F",
       "order": 0,

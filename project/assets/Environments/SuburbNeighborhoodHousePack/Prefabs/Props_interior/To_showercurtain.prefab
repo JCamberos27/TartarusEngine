@@ -4,21 +4,6 @@
   "formatVersion": 4,
   "models": [
     {
-      "collider": {
-        "center": [
-          1.20046,
-          1.4e-05,
-          0.006691
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          1.200659,
-          0.010146,
-          0.010146
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 0,
       "name": "To_showercurtain",
       "order": 0,
@@ -44,21 +29,6 @@
       "static": true
     },
     {
-      "collider": {
-        "center": [
-          0.660706,
-          -0.872781,
-          0.000544
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.648171,
-          0.885157,
-          0.06222
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 1,
       "name": "To_showercurtain",
       "order": 1,

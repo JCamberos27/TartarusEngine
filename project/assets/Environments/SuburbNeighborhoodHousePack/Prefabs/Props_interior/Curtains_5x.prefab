@@ -1,58 +1,9 @@
 {
   "boxes": [],
-  "empties": [
-    {
-      "collider": {
-        "friction": 0.6,
-        "halfExtents": [
-          0.28,
-          1.221658,
-          0.09608
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
-      "id": 1,
-      "name": "Curtains_5x Collider 1",
-      "order": 1,
-      "parentId": 0,
-      "position": [
-        1.74,
-        -1.146405,
-        0.117815
-      ],
-      "rotation": [
-        0.0,
-        0.0,
-        0.0,
-        1.0
-      ],
-      "scale": [
-        1.0,
-        1.0,
-        1.0
-      ],
-      "static": true
-    }
-  ],
+  "empties": [],
   "formatVersion": 4,
   "models": [
     {
-      "collider": {
-        "center": [
-          -2.12,
-          -1.146405,
-          0.117815
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.28,
-          1.221658,
-          0.09608
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 0,
       "name": "Curtains_5x",
       "order": 0,

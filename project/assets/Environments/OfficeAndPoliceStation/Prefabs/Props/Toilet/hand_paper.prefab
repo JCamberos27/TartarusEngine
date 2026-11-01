@@ -4,21 +4,6 @@
   "formatVersion": 4,
   "models": [
     {
-      "collider": {
-        "center": [
-          -0.0,
-          -0.0,
-          0.050085
-        ],
-        "friction": 0.6,
-        "halfExtents": [
-          0.146252,
-          0.149676,
-          0.051568
-        ],
-        "isTrigger": false,
-        "shape": 0
-      },
       "id": 0,
       "name": "hand_paper",
       "order": 0,
