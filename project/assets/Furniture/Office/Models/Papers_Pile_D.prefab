@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.143,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.028,
+          0.143,
+          0.105
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Papers_Pile_D",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Office/Models/Papers_Pile_D.fbx",
+      "pathGuid": "4bc8853ce98228d2",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

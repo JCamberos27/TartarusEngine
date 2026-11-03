@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0005,
+          0.0145,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.1775,
+          0.0145,
+          0.365
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Money_Usa",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Props/Money/Models/Money_Usa.fbx",
+      "pathGuid": "f15dd2c910d8b322",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

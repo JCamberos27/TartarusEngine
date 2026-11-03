@@ -206,6 +206,7 @@ const EventInfo kEvents[kEventCount] = {
     {"SpawnSpider",      Category::PlayMode,      0.0f,  60.0f, 0.04f, true},
     {"SpawnItem",        Category::PlayMode,      0.0f,  60.0f, 0.02f, true},
     {"ClearSpawns",      Category::PlayMode,      0.0f, 200.0f, 0.0f,  true},
+    {"ModularSnap",      Category::Tools,        -2.0f,  90.0f, 0.03f, false, false, "SnapGround"},
 };
 
 const char* kCategoryNames[kCategoryCount] = {"Clicks", "Sliders", "Hover",  "Panels",             "Drag & Drop", "Notifications",

@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.087,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.115,
+          0.087,
+          0.179
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Picking_Bin",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Garage/Models/Picking_Bin.fbx",
+      "pathGuid": "28ed623942aaa90f",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

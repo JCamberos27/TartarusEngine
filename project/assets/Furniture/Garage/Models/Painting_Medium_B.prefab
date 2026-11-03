@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.378,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.498,
+          0.378,
+          0.024
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Painting_Medium_B",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Garage/Models/Painting_Medium_B.fbx",
+      "pathGuid": "c340f859eef5aab7",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

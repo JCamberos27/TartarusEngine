@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.089,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.114,
+          0.089,
+          0.06
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Painting_Table_D",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Garage/Models/Painting_Table_D.fbx",
+      "pathGuid": "c34a57cf81074cba",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

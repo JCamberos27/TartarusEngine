@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0005,
+          0.148,
+          -0.0005
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.0275,
+          0.148,
+          0.1125
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Papers_Folder_E",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Office/Models/Papers_Folder_E.fbx",
+      "pathGuid": "71c210c0027d4690",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

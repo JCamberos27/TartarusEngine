@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.2495,
+          -0.017
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.16,
+          0.2495,
+          0.02
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Electricbox_Door",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Garage/Models/Electricbox_Door.fbx",
+      "pathGuid": "6269d97d71a5dfe0",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

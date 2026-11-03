@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0005,
+          0.235,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.1385,
+          0.235,
+          0.293
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Lamp_Table_Rocket",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Lighting/Models/Lamp_Table_Rocket.fbx",
+      "pathGuid": "3e679f710edef6a3",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

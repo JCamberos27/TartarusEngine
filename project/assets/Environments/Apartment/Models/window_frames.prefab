@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -4.4255,
+          1.385,
+          -0.015
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.0555,
+          1.035,
+          1.65
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "window_frames",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/Apartment/Models/window_frames.gltf",
+      "pathGuid": "2efa0131754d69f7",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0005,
+          0.043,
+          -0.017
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.0295,
+          0.043,
+          0.02
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Door_Number_5",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Architecture/Doors/Models/Door_Number_5.fbx",
+      "pathGuid": "f7775a29d70d9f2e",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

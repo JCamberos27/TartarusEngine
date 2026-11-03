@@ -19,6 +19,7 @@
 #include "AudioEngine.h"
 #include "SceneSerializer.h"
 #include "AABB.h"
+#include "ModularSnap.h"
 #include "Log.h"
 #include "EditorSettings.h"
 #include "GizmoIconMath.h"
@@ -923,7 +924,7 @@ bool EditorLayer::DropLightToSurface(World& world, entt::entity light) {
         glm::vec3(glm::inverse(parentWorld) * glm::vec4(landing, 1.0f));
     return true;
 }
-glm::vec3 EditorLayer::ComputeDropRayPosition(World& world, Camera& editorCamera) const {
+glm::vec3 EditorLayer::ComputeDropRayPosition(World& world, Camera& editorCamera, glm::vec3* outNormal) const {
     glm::mat4 view = editorCamera.ViewMatrix();
     glm::mat4 proj = editorCamera.ProjectionMatrix(m_ViewportSize.x / m_ViewportSize.y);
     glm::mat4 invVP = glm::inverse(proj * view);
@@ -941,20 +942,23 @@ glm::vec3 EditorLayer::ComputeDropRayPosition(World& world, Camera& editorCamera
     // box, so drops onto rotated geometry floated/embedded and collider-less models couldn't be
     // dropped onto), else the Y=0 ground plane, else a fixed distance out.
     float bestT = 1e30f;
+    glm::vec3 normal(0.0f, 1.0f, 0.0f);
     if (const SurfaceHit h = RaycastRenderables(world, origin, dir, [](entt::entity) { return false; }, 500.0f);
         h.Entity != entt::null) {
         bestT = h.T;
+        normal = h.Normal;
     }
     if (std::abs(dir.y) > 1e-5f) {
         float groundT = -origin.y / dir.y;
-        if (groundT > 0.0f && groundT < bestT) bestT = groundT;
+        if (groundT > 0.0f && groundT < bestT) { bestT = groundT; normal = glm::vec3(0.0f, 1.0f, 0.0f); }
     }
+    if (outNormal) *outNormal = normal;
     if (bestT >= 1e30f) bestT = 8.0f;
     glm::vec3 position = origin + dir * bestT;
 
     // Same grid-snap concept as the transform gizmo (m_GridSnapEnabled, Ctrl inverts it
     // momentarily) - XZ only, since Y is about to be re-derived from where the object actually
-    // sits (either here directly, for a prefab, or bottom-aligned in ComputeModelDropPosition).
+    // sits (bottom-aligned in ComputeDropPose).
     bool snapActive = m_GridSnapEnabled != ImGui::GetIO().KeyCtrl;
     float step = EditorSettings::Get().GridMinorSpacing;
     if (snapActive && step > 0.0001f) {
@@ -964,19 +968,150 @@ glm::vec3 EditorLayer::ComputeDropRayPosition(World& world, Camera& editorCamera
     return position;
 }
 
-glm::vec3 EditorLayer::ComputeModelDropPosition(World& world, Model& model, Camera& editorCamera) const {
-    glm::vec3 position = ComputeDropRayPosition(world, editorCamera);
+namespace {
+// asset_library.json keys are project-relative with forward slashes ("assets/...").
+std::string ProjectRelative(const std::string& path) {
+    std::string p = ProjectPaths::Relativize(path);
+    std::replace(p.begin(), p.end(), '\\', '/');
+    return p;
+}
+} // namespace
 
-    // Rest the model's own bottom on the hit point instead of its (possibly arbitrary) pivot -
-    // same technique SnapSelectionToGround() uses for an already-placed object: evaluate the
-    // lowest vertex's world Y at a candidate transform, then shift by however far that missed
-    // the target height. See SnapSelectionToGround's comment for the general formula this is a
-    // special case of (targetY happens to equal the candidate's own Y here).
-    float targetY = position.y;
-    glm::mat4 candidate = ComposeTransform(position, glm::vec3(0.0f), glm::vec3(1.0f));
-    float lowestY = model.LowestVertexWorldY(candidate);
-    position.y += (targetY - lowestY);
-    return position;
+EditorLayer::DropPose EditorLayer::ComputeDropPose(World& world, Camera& editorCamera,
+                                                  const std::vector<DragPreview::Part>& parts,
+                                                  const std::string& path) const {
+    glm::vec3 n(0.0f, 1.0f, 0.0f);
+    const glm::vec3 hit = ComputeDropRayPosition(world, editorCamera, &n);
+    if (!m_SurfaceSnap || !m_SurfaceSnapAlign) n = glm::vec3(0.0f, 1.0f, 0.0f);
+
+    DropPose pose;
+    if (n.y < 0.999f) { // same up-to-normal basis ApplySurfaceSnap builds for an aligned object
+        const glm::vec3 ref = (std::abs(n.y) > 0.99f) ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
+        const glm::vec3 fwd = glm::normalize(glm::cross(ref, n));
+        pose.Rotation = glm::quat_cast(glm::mat3(glm::cross(n, fwd), n, fwd));
+    }
+    // A vertex's height along n, once the basis turns local +Y onto n, is just its local Y, so
+    // the lowest point is measured unrotated whatever the surface.
+    float lowest = 1e30f;
+    for (const auto& part : parts)
+        if (part.ModelRef) lowest = std::min(lowest, part.ModelRef->LowestVertexWorldY(part.Local));
+    pose.Position = lowest < 1e29f ? hit - n * lowest : hit;
+
+    const float module = m_LibraryIndex.KitModuleOf(ProjectRelative(path));
+    if (module > 0.0f && (m_ModularSnap != ImGui::GetIO().KeyShift) && !parts.empty()) {
+        const glm::mat4 at = glm::translate(glm::mat4(1.0f), pose.Position) * glm::mat4_cast(pose.Rotation);
+        AABB box{glm::vec3(1e30f), glm::vec3(-1e30f)};
+        for (const auto& part : parts) {
+            if (!part.ModelRef) continue;
+            const AABB b = AABB{part.ModelRef->BoundsMin(), part.ModelRef->BoundsMax()}.Transformed(at * part.Local);
+            box.Min = glm::min(box.Min, b.Min);
+            box.Max = glm::max(box.Max, b.Max);
+        }
+        const ModularSnap::Result r = ModularSnap::Solve(box, module, NearbyBoxes(world, box, module, entt::null));
+        pose.Position += r.Delta;
+        pose.Snapped = r.Snapped;
+        pose.Face = r.Face;
+    }
+    return pose;
+}
+
+std::vector<AABB> EditorLayer::NearbyBoxes(World& world, const AABB& box, float reach, entt::entity skip) const {
+    const AABB grown{box.Min - glm::vec3(reach), box.Max + glm::vec3(reach)};
+    std::vector<AABB> out;
+    auto view = world.Registry.view<RenderableComponent>();
+    for (entt::entity e : view) {
+        const auto& rc = view.get<RenderableComponent>(e);
+        if (!rc.ModelRef) continue;
+        bool inSkip = false;
+        for (entt::entity c = e; c != entt::null && !inSkip;) {
+            inSkip = c == skip;
+            const auto* hp = world.Registry.try_get<HierarchyComponent>(c);
+            c = hp ? hp->Parent : entt::null;
+        }
+        if (inSkip) continue;
+        const AABB b = AABB{rc.ModelRef->BoundsMin(), rc.ModelRef->BoundsMax()}.Transformed(world.ComposeWorldTransform(e));
+        if (b.Intersects(grown)) out.push_back(b);
+    }
+    return out;
+}
+
+float EditorLayer::KitModuleOf(World& world, entt::entity e) const {
+    if (const auto* pi = world.Registry.try_get<PrefabInstanceComponent>(e))
+        return m_LibraryIndex.KitModuleOf(ProjectRelative(pi->SourcePath));
+    if (const auto* rc = world.Registry.try_get<RenderableComponent>(e); rc && rc->ModelRef)
+        return m_LibraryIndex.KitModuleOf(ProjectRelative(rc->ModelRef->Path()));
+    return 0.0f;
+}
+
+void EditorLayer::ApplyModularSnap(World& world, entt::entity sel, const glm::mat4& parentWorld) {
+    const float module = KitModuleOf(world, sel);
+    if (module <= 0.0f) return;
+    AABB box{glm::vec3(1e30f), glm::vec3(-1e30f)};
+    auto view = world.Registry.view<RenderableComponent>();
+    for (entt::entity e : view) {
+        const auto& rc = view.get<RenderableComponent>(e);
+        if (!rc.ModelRef) continue;
+        bool mine = false;
+        for (entt::entity c = e; c != entt::null && !mine;) {
+            mine = c == sel;
+            const auto* hp = world.Registry.try_get<HierarchyComponent>(c);
+            c = hp ? hp->Parent : entt::null;
+        }
+        if (!mine) continue;
+        const AABB b = AABB{rc.ModelRef->BoundsMin(), rc.ModelRef->BoundsMax()}.Transformed(world.ComposeWorldTransform(e));
+        box.Min = glm::min(box.Min, b.Min);
+        box.Max = glm::max(box.Max, b.Max);
+    }
+    if (box.Min.x > box.Max.x) return;
+    const ModularSnap::Result r = ModularSnap::Solve(box, module, NearbyBoxes(world, box, module, sel));
+    auto& transform = world.Registry.get<TransformComponent>(sel);
+    transform.Position += glm::vec3(glm::inverse(parentWorld) * glm::vec4(r.Delta, 0.0f));
+    if (r.Snapped && !m_ModularSnapWasActive) EditorSound::Play(EditorSound::Event::ModularSnap);
+    m_ModularSnapFaceActive = r.Snapped;
+    m_ModularSnapFace = r.Face;
+}
+
+void EditorLayer::DrawModularSnapFace(Camera& editorCamera) {
+    const bool active = m_ModularSnapFaceActive;
+    m_ModularSnapWasActive = active;
+    m_ModularSnapFaceActive = false; // re-set by this frame's snap, if any
+    if (!active || m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) return;
+    const glm::mat4 vp = editorCamera.ProjectionMatrix(m_ViewportSize.x / m_ViewportSize.y) * editorCamera.ViewMatrix();
+    const AABB& f = m_ModularSnapFace;
+    int flat = 0;
+    for (int a = 1; a < 3; ++a)
+        if (f.Max[a] - f.Min[a] < f.Max[flat] - f.Min[flat]) flat = a;
+    const int b = (flat + 1) % 3, c = (flat + 2) % 3;
+    ImVec2 pts[4];
+    const float us[4] = {0, 1, 1, 0}, vs[4] = {0, 0, 1, 1};
+    for (int i = 0; i < 4; ++i) {
+        glm::vec3 p = f.Min;
+        p[b] = us[i] ? f.Max[b] : f.Min[b];
+        p[c] = vs[i] ? f.Max[c] : f.Min[c];
+        const glm::vec4 clip = vp * glm::vec4(p, 1.0f);
+        if (clip.w <= 1e-4f) return;
+        pts[i] = ImVec2(m_ViewportPos.x + (clip.x / clip.w * 0.5f + 0.5f) * m_ViewportSize.x,
+                        m_ViewportPos.y + (0.5f - clip.y / clip.w * 0.5f) * m_ViewportSize.y);
+    }
+    ImGui::GetForegroundDrawList()->AddPolyline(pts, 4, IM_COL32(255, 255, 255, 220), ImDrawFlags_Closed,
+                                                1.5f * m_UIScale);
+}
+
+const std::vector<EditorLayer::DragPreview::Part>& EditorLayer::PrefabGhostParts(AssetLibrary& assets,
+                                                                                const std::string& path) {
+    if (path == m_PrefabGhostPath) return m_PrefabGhostParts;
+    m_PrefabGhostPath = path;
+    m_PrefabGhostParts.clear();
+    World scratch;
+    const entt::entity root = SceneSerializer::InstantiatePrefab(scratch, assets, path);
+    if (root == entt::null) return m_PrefabGhostParts;
+    scratch.Registry.get<TransformComponent>(root).Position = glm::vec3(0.0f); // the drop point
+    auto view = scratch.Registry.view<RenderableComponent>();
+    for (entt::entity e : view) {
+        const auto& rc = view.get<RenderableComponent>(e);
+        if (rc.ModelRef) m_PrefabGhostParts.push_back({rc.ModelRef, scratch.ComposeWorldTransform(e)});
+    }
+    return m_PrefabGhostParts;
 }
 
 entt::entity EditorLayer::ObjectUnderMouse(World& world, Camera& editorCamera, int& outSlot) const {
@@ -1009,6 +1144,7 @@ void EditorLayer::RestoreMaterialDropPreview(World& world) {
 }
 
 void EditorLayer::DrawViewportDropTarget(World& world, AssetLibrary& assets, Camera& editorCamera) {
+    DrawModularSnapFace(editorCamera); // last frame's flush face, from a gizmo drag or a drop
     const ImGuiPayload* peek = ImGui::GetDragDropPayload();
     bool isModelDrag = peek && peek->IsDataType("ASSET_MODEL_PATH");
     bool isPrefabDrag = peek && peek->IsDataType("ASSET_PREFAB_PATH");
@@ -1057,22 +1193,27 @@ void EditorLayer::DrawViewportDropTarget(World& world, AssetLibrary& assets, Cam
     // that point, so hover only ever registered on the very last frame.
     bool hoveringViewport = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
 
-    // Live preview: recomputed every frame while a model is being dragged over the viewport, so
-    // main.cpp can render a translucent ghost at the exact spot that would be committed if the
-    // mouse were released right now (TintOverlayRenderer, driven by GetDragPreview()). Prefabs
-    // don't get a ghost - they aren't necessarily a single Model with bounds to preview.
-    if (isModelDrag && hoveringViewport) {
-        std::string path((const char*)peek->Data);
-        auto model = assets.LoadModel(path); // cache hit - already imported to appear in the browser
-        if (model) {
-            m_DragPreview.Active = true;
-            m_DragPreview.ModelRef = model;
-            m_DragPreview.Position = ComputeModelDropPosition(world, *model, editorCamera);
-        } else {
-            m_DragPreview.Active = false;
+    // Live preview: recomputed every frame while a model or prefab is being dragged over the
+    // viewport, so main.cpp can render a translucent ghost at the exact pose that would be
+    // committed if the mouse were released right now (TintOverlayRenderer, via GetDragPreview()).
+    m_DragPreview.Active = false;
+    if ((isModelDrag || isPrefabDrag) && hoveringViewport) {
+        const std::string path((const char*)peek->Data);
+        m_DragPreview.Parts.clear();
+        if (isPrefabDrag) {
+            m_DragPreview.Parts = PrefabGhostParts(assets, path);
+        } else if (auto model = assets.LoadModel(path)) { // cache hit - already imported to appear in the browser
+            m_DragPreview.Parts.push_back({model, glm::mat4(1.0f)});
         }
-    } else {
-        m_DragPreview.Active = false;
+        if (!m_DragPreview.Parts.empty()) {
+            const DropPose pose = ComputeDropPose(world, editorCamera, m_DragPreview.Parts, path);
+            m_DragPreview.Active = true;
+            m_DragPreview.Position = pose.Position;
+            m_DragPreview.Rotation = pose.Rotation;
+            if (pose.Snapped && !m_ModularSnapWasActive) EditorSound::Play(EditorSound::Event::ModularSnap);
+            m_ModularSnapFaceActive = pose.Snapped;
+            m_ModularSnapFace = pose.Face;
+        }
     }
 
     // What the drop would do, on a plate beside the cursor.
@@ -1152,21 +1293,24 @@ void EditorLayer::DrawViewportDropTarget(World& world, AssetLibrary& assets, Cam
 
             if (modelPayload) {
                 auto model = assets.InstantiateModel(path);
-                glm::vec3 position = ComputeModelDropPosition(world, *model, editorCamera);
+                const DropPose pose = ComputeDropPose(world, editorCamera, {{model, glm::mat4(1.0f)}}, path);
                 std::string name = std::filesystem::path(path).stem().string();
-                entt::entity e = world.CreateModelEntity(model, position, glm::vec3(0.0f), glm::vec3(1.0f), UniqueNameFor(world, name));
+                entt::entity e = world.CreateModelEntity(model, pose.Position, glm::vec3(0.0f), glm::vec3(1.0f), UniqueNameFor(world, name));
+                if (auto* t = world.Registry.try_get<TransformComponent>(e)) t->SetRotationQuaternion(pose.Rotation);
                 if (auto* rc = world.Registry.try_get<RenderableComponent>(e); rc && rc->ModelRef)
                     assets.ApplyMaterialRemap(*rc->ModelRef, rc->Materials); // its extracted .mat files
                 SelectItem(e, false);
             } else {
-                glm::vec3 position = ComputeDropRayPosition(world, editorCamera);
                 // A prefab carries its own authored transform, so the instance is created first
-                // and then moved to the drop point (children ride along, being local-space).
+                // and then moved to the drop pose (children ride along, being local-space): its
+                // lowest renderable rests on the surface, like a dropped model.
+                const DropPose pose = ComputeDropPose(world, editorCamera, PrefabGhostParts(assets, path), path);
                 entt::entity e = SceneSerializer::InstantiatePrefab(world, assets, path);
                 if (e != entt::null) {
                     UniquifyName(world, e);
                     if (auto* transform = world.Registry.try_get<TransformComponent>(e)) {
-                        transform->Position = position;
+                        transform->Position = pose.Position;
+                        transform->SetRotationQuaternion(pose.Rotation * transform->Rotation);
                     }
                     SelectItem(e, false);
                 }
@@ -2464,6 +2608,13 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
         // #236 E — surface drag-snapping: while translating with the toggle on (hold Shift to
         // invert), override the axis-handle result: drop the object where the cursor ray hits
         // another surface, optionally aligning to that face's normal.
+        if (m_GizmoOp == GizmoOp::Translate && (m_ModularSnap != ImGui::GetIO().KeyShift))
+            ApplyModularSnap(world, m_Selected, parentWorld);
+        else if (m_GizmoOp == GizmoOp::Rotate && m_ModularSnap && KitModuleOf(world, m_Selected) > 0.0f) {
+            glm::vec3 e = transform.EulerDegrees();
+            e.y = ModularSnap::SnapYawDegrees(e.y); // kit pieces meet square
+            transform.SetRotationEuler(e);
+        }
         if (m_GizmoOp == GizmoOp::Translate && (m_SurfaceSnap != ImGui::GetIO().KeyShift)) {
             ApplySurfaceSnap(world, editorCamera, m_Selected, parentWorld);
             const ImVec2 mp = ImGui::GetIO().MousePos;

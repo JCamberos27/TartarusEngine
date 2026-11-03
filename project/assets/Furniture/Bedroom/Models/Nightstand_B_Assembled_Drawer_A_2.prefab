@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.003,
+          0.365,
+          0.0035
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.182,
+          0.065,
+          0.1935
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Nightstand_B_Assembled_Drawer_A_2",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Bedroom/Models/Nightstand_B_Assembled_Drawer_A_2.fbx",
+      "pathGuid": "a839aba3df5609c6",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

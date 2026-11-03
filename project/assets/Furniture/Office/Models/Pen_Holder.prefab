@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.0465,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.087,
+          0.0465,
+          0.04
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Pen_Holder",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Office/Models/Pen_Holder.fbx",
+      "pathGuid": "5da57dc309f90bb7",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

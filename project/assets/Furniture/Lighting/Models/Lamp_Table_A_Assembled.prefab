@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.2885,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.156,
+          0.2885,
+          0.156
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Lamp_Table_A_Assembled",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Lighting/Models/Lamp_Table_A_Assembled.fbx",
+      "pathGuid": "1bead7e9952f33fa",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

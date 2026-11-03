@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.1975,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.123,
+          0.1975,
+          0.11
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Plant_B",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Decor/Models/Plant_B.fbx",
+      "pathGuid": "708e7f016402e977",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.399,
+          1.0035,
+          -0.03
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.408,
+          0.9965,
+          0.134
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "door_bath_leaf",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/Apartment/Models/door_bath_leaf.gltf",
+      "pathGuid": "dee8840ba25217cd",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

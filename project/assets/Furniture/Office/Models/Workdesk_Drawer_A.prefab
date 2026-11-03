@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.563,
+          0.6085,
+          0.0905
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.212,
+          0.0755,
+          0.2555
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Workdesk_Drawer_A",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Office/Models/Workdesk_Drawer_A.fbx",
+      "pathGuid": "3cba4b5958b78a4d",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

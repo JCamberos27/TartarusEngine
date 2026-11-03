@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.093,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.122,
+          0.093,
+          0.16
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Papers_Box_Open_B",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Office/Models/Papers_Box_Open_B.fbx",
+      "pathGuid": "4aed38293a2c95cd",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

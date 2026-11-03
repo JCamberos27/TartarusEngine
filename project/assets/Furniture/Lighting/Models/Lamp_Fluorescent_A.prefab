@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0005,
+          -0.025,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.1035,
+          0.025,
+          0.51
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Lamp_Fluorescent_A",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Lighting/Models/Lamp_Fluorescent_A.fbx",
+      "pathGuid": "531a461150b6ba41",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0005,
+          0.1565,
+          -0.0005
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.1565,
+          0.1565,
+          0.1495
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Paintbucket_A",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Garage/Models/Paintbucket_A.fbx",
+      "pathGuid": "0aac45bd2c3482c1",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

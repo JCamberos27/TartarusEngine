@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          1.5,
+          1.3,
+          0.089
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          1.5,
+          1.3,
+          0.089
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Wall_3m_Door",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Architecture/Building/Models/Wall_3m_Door.fbx",
+      "pathGuid": "efb92cececd0db48",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

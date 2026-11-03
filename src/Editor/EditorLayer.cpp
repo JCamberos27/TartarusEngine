@@ -141,6 +141,7 @@ void EditorLayer::Init(GLFWwindow* window) {
     MigrateAssetFavorites(); // vFavorites: the old asset_favorites.json stars become page 1, once
     Enhancers::Palette::Load();
     Enhancers::FolderStyles::Get().Load(); // project/editor_folders.json (vFolders)
+    m_LibraryIndex.Load(); // project/asset_library.json (Library root, kit modules)
     Enhancers::UiStyles::Get().Load();     // project/editor_ui_styles.json (tab / header colours)
 
     // Authored content lives in the project folder, not the working directory (build/Release/)

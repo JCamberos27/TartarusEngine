@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.175,
+          0.0005
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.052,
+          0.175,
+          0.0655
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Tulips_B",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Decor/Models/Tulips_B.fbx",
+      "pathGuid": "04b83949324c2615",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}
