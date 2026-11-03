@@ -1373,8 +1373,18 @@ std::vector<EditorLayer::ProjectAssetFile> EditorLayer::ScanProjectAssetFiles(co
         if (it->is_directory(entryEc)) {
             // Library/ is caches; screenshots/ holds old editor captures; dot-folders are tooling.
             const std::string dir = it->path().filename().string();
-            if (dir=="bin" || dir=="obj" || (it.depth() == 0 && (dir == "Library" || dir == "screenshots")) || (!dir.empty() && dir[0] == '.'))
+            if (dir=="bin" || dir=="obj" || (it.depth() == 0 && (dir == "Library" || dir == "screenshots")) || (!dir.empty() && dir[0] == '.')) {
                 it.disable_recursion_pending();
+                continue;
+            }
+            // Every folder on disk is a browser folder, empty ones too (Unity's Project window) - except
+            // scenes/ and shaders/, which have their own Scenes / Shaders roots.
+            if (it.depth() == 0 && (dir == "scenes" || dir == "shaders")) continue;
+            EditorLayer::ProjectAssetFile folder;
+            folder.Path = it->path().lexically_normal().string();
+            folder.Kind = Cell::Kind::Folder;
+            folder.Name = dir;
+            files.push_back(std::move(folder));
             continue;
         }
         if (!it->is_regular_file(entryEc)) continue;
@@ -1397,14 +1407,31 @@ std::vector<EditorLayer::ProjectAssetFile> EditorLayer::ScanProjectAssetFiles(co
         f.Name = it->path().filename().string();
         // Filed where it is on disk (Unity's rule); a .meta "folder" from the old virtual folders is ignored.
         // Its labels are read here (worker thread) so an l: search finds files nothing has loaded yet.
-        // Parsed only when it has any (most don't): a full parse of every .meta tripled the scan.
-        if (std::ifstream meta(f.Path + ".meta", std::ios::binary); meta.is_open()) {
-            const std::string text((std::istreambuf_iterator<char>(meta)), std::istreambuf_iterator<char>());
-            const nlohmann::json j = text.find("\"labels\"") == std::string::npos ? nlohmann::json()
-                                   : nlohmann::json::parse(text, nullptr, /*allow_exceptions=*/false);
-            if (j.is_object())
-                if (const auto lj = j.find("labels"); lj != j.end() && lj->is_array())
-                    for (const auto& l : *lj) if (l.is_string()) f.Labels.insert(l.get<std::string>());
+        // Read once per change of the .meta (a stat, not a read, on every later scan): reading all of
+        // them each time tripled the scan. Scans run one at a time, so the cache needs no lock. Only the
+        // kinds Favorites' category searches label (a loaded asset's own labels come from the library).
+        if (f.Kind == Cell::Kind::Prefab || f.Kind == Cell::Kind::Decal || f.Kind == Cell::Kind::Hdri) {
+            struct CachedLabels { fs::file_time_type Time; std::set<std::string> Labels; };
+            static std::unordered_map<std::string, CachedLabels> s_LabelCache;
+            const std::string metaPath = f.Path + ".meta";
+            std::error_code tEc;
+            const fs::file_time_type t = fs::last_write_time(metaPath, tEc);
+            if (!tEc) {
+                auto& entry = s_LabelCache[metaPath];
+                if (entry.Time != t) {
+                    entry.Time = t;
+                    entry.Labels.clear();
+                    if (std::ifstream meta(metaPath, std::ios::binary); meta.is_open()) {
+                        const std::string text((std::istreambuf_iterator<char>(meta)), std::istreambuf_iterator<char>());
+                        const nlohmann::json j = text.find("\"labels\"") == std::string::npos ? nlohmann::json()
+                                               : nlohmann::json::parse(text, nullptr, /*allow_exceptions=*/false);
+                        if (j.is_object())
+                            if (const auto lj = j.find("labels"); lj != j.end() && lj->is_array())
+                                for (const auto& l : *lj) if (l.is_string()) entry.Labels.insert(l.get<std::string>());
+                    }
+                }
+                f.Labels = entry.Labels;
+            }
         }
         // The main thread files it with DiskFolderFor when the scan lands, which canonicalizes the path on disk:
         // done here on the scan's thread, it lands as a memoized lookup (ProjectPaths::Relativize) instead of a
@@ -1439,8 +1466,14 @@ void EditorLayer::RefreshProjectAssetIndexIfNeeded(AssetLibrary& assets) {
     bool replaced = false;
     if (index.scan.valid() && index.scan.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
         index.files = index.scan.get();
-        for (ProjectAssetFile& f : index.files)
+        for (ProjectAssetFile& f : index.files) {
+            if (f.Kind == Cell::Kind::Folder) { // a folder on disk (empty ones too): listed in the tree
+                const std::string rel = AssetLibraryIndex::ProjectRelative(f.Path);
+                if (!rel.empty() && rel.find(':') == std::string::npos) assets.AddFolderPath(rel);
+                continue;
+            }
             f.Folder = f.MetaFolder ? assets.AddFolderPath(f.Folder) : assets.DiskFolderFor(f.Path);
+        }
         replaced = true;
         const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - index.scanStarted).count();
         char buf[128];
@@ -1978,6 +2011,7 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
         // and the kinds that are never library entries.
         RefreshProjectAssetIndexIfNeeded(assets);
         for (const auto& f : m_ProjectAssetIndex.files) {
+            if (f.Kind == Cell::Kind::Folder) continue; // listed as a folder from assets.Folders() above
             const std::string& moved = assets.AssetFolderRef(f.Path); // filed elsewhere in the browser since indexing
             const std::string& folder = moved.empty() ? f.Folder : moved;
             if (filtering ? !inSearchScope(folder) : folder != m_CurrentAssetFolder) continue;
