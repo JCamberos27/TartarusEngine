@@ -31,7 +31,7 @@ struct EditorSmokeAccess_Assets {
     static bool SelectionStep(EditorLayer& e, size_t fromTop) {
         return fromTop < e.m_UndoStack.size() && e.m_UndoStack[e.m_UndoStack.size() - 1 - fromTop].SelectionOnly;
     }
-    static float RefreshFlash(EditorLayer& e) { return e.m_AssetRefreshFlash; }
+    static float& RefreshFlash(EditorLayer& e) { return e.m_AssetRefreshFlash; }
     static AssetLibraryIndex& Library(EditorLayer& e) { e.m_LibraryViewKey = (size_t)-1; return e.m_LibraryIndex; }
 };
 namespace {
@@ -107,8 +107,10 @@ Steps EnsureScratch() {
             AX::FavoritesOnly(c.E) = false;
             AX::ClearSelection(c.E);
         }),
-        // An undo refreshes the browser, and its "Assets refreshed" note wraps the toolbar for a moment.
-        Until("the Assets refreshed note is gone", [](Ctx& c) { return AX::RefreshFlash(c.E) <= 0.0f; }, 240),
+        // An undo refreshes the browser, and its "Assets refreshed" note wraps the toolbar for a moment. Cleared
+        // here rather than waited out: the note lasts 1.6 s of real time, and a frame-count wait can't promise that
+        // (hidden test windows run unpaced, ~1000 fps on a desktop GPU, so 240 frames was a third of a second).
+        Do("clear the Assets refreshed note", [](Ctx& c) { AX::RefreshFlash(c.E) = 0.0f; }), Wait(2),
     };
 }
 
@@ -582,9 +584,9 @@ void RegisterAssetsTests() {
                  World w;
                  const entt::entity e = w.CreateModelEntity(model, glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Smoke Kit Cube");
                  if (!SceneSerializer::SavePrefab(w, e, DirFile("Smoke Kit.prefab"))) Fail("couldn't write the kit prefab");
+                 AX::Refresh(c.E); // first: a refresh re-reads the project's own asset_library.json
                  AX::Library(c.E).LoadFromText(std::string(R"({"categories": [{"id": "furniture", "name": "Furniture"}],
                      "rules": [{"glob": "*Smoke Kit.prefab", "category": "furniture"}], "kits": {")") + kFolder + R"(": 1.0}})");
-                 AX::Refresh(c.E);
              }),
              Navigate(libFolder), Wait(4), UntilListed("Smoke Kit.prefab", 900),
              RevealTile("Smoke Kit.prefab"),
@@ -594,7 +596,8 @@ void RegisterAssetsTests() {
                  const float y = kitBoxes(c)[0].Min.y;
                  return std::fabs(y) <= 0.01f ? std::string() : "its bottom is at y = " + std::to_string(y);
              }),
-             RevealTile("Smoke Kit.prefab"),
+             // Past the double-click time, or the second press opens the prefab in Prefab Mode.
+             WaitSeconds(0.6), RevealTile("Smoke Kit.prefab"),
              Drag(Tile("Smoke Kit.prefab"), AtItem(ByExact("##viewport_drop_zone"))), Wait(5),
              Until("a second kit cube placed", [kitBoxes](Ctx& c) { return kitBoxes(c).size() == 2; }, 240),
              // On top (the ray met the first cube) or beside it (it met the ground next to it): either
