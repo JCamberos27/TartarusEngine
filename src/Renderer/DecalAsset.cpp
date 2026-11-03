@@ -1,4 +1,5 @@
 #include "DecalAsset.h"
+#include "AssetDatabase.h" // FollowRef / RefGuid - texture GUIDs
 #include "AtomicFile.h"
 #include "Log.h"
 #include "SubstrateJson.h"
@@ -120,10 +121,13 @@ std::shared_ptr<DecalAsset> DecalAsset::Load(const std::string& path) {
                   LogContext::Asset(path));
 
     const Reader tex = r.Sub("textures");
-    d->AlbedoPath = tex.Str("albedo");
-    d->NormalPath = tex.Str("normal");
-    d->SurfacePath = tex.Str("surface");
-    d->AuxPath = tex.Str("aux");
+    // Each map is found by its GUID first ("textureGuids", keyed like "textures"), so a moved or
+    // renamed texture keeps its decals; the path is the fallback (older files have no GUIDs).
+    const Reader guids = r.Sub("textureGuids");
+    d->AlbedoPath = AssetDatabase::FollowRef(tex.Str("albedo"), guids.Str("albedo"));
+    d->NormalPath = AssetDatabase::FollowRef(tex.Str("normal"), guids.Str("normal"));
+    d->SurfacePath = AssetDatabase::FollowRef(tex.Str("surface"), guids.Str("surface"));
+    d->AuxPath = AssetDatabase::FollowRef(tex.Str("aux"), guids.Str("aux"));
 
     d->LumaMask = r.Bool("lumaMask", d->LumaMask);
     d->InvertMask = r.Bool("invertMask", d->InvertMask);
@@ -197,6 +201,11 @@ bool DecalAsset::Save() const {
     ojson j;
     j["decalVersion"] = 1;
     j["textures"] = {{"albedo", AlbedoPath}, {"normal", NormalPath}, {"surface", SurfacePath}, {"aux", AuxPath}};
+    ojson guids = ojson::object();
+    for (const auto& [k, p] : {std::pair<const char*, const std::string*>{"albedo", &AlbedoPath}, {"normal", &NormalPath},
+                               {"surface", &SurfacePath}, {"aux", &AuxPath}})
+        if (const std::string g = p->empty() ? std::string() : AssetDatabase::RefGuid(*p); !g.empty()) guids[k] = g;
+    if (!guids.empty()) j["textureGuids"] = std::move(guids);
     j["lumaMask"] = LumaMask;
     j["invertMask"] = InvertMask;
     j["tier"] = Tier;

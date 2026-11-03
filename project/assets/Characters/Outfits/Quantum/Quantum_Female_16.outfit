@@ -1,28 +1,35 @@
 {
   "wardrobe": "assets/Characters/Quantum/Quantum.wardrobe",
+  "wardrobeGuid": "ae5365d372fb447c",
   "gender": "Female",
   "race": "Old",
   "items": {
     "Balaclava": {
       "item": "assets/Characters/Quantum/Models/Clothing/Female/Balaclava/SM_F_Balaclava_Crime.fbx",
+      "itemGuid": "a6f929e340879470",
       "colours": {
         "assets/Characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Black.mat": "assets/Characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Print.mat"
       }
     },
     "Glasses": {
-      "item": "assets/Characters/Quantum/Models/Clothing/Female/Glasses/SKM_F_Glasses_Classic.fbx"
+      "item": "assets/Characters/Quantum/Models/Clothing/Female/Glasses/SKM_F_Glasses_Classic.fbx",
+      "itemGuid": "d0dc6ed971c44511"
     },
     "Outerwear": {
-      "item": "assets/Characters/Quantum/Models/Clothing/Female/Outerwear/SKM_F_Coat_Hoodie_Hood.fbx"
+      "item": "assets/Characters/Quantum/Models/Clothing/Female/Outerwear/SKM_F_Coat_Hoodie_Hood.fbx",
+      "itemGuid": "04644006afa2c6ad"
     },
     "Pants": {
-      "item": "assets/Characters/Quantum/Models/Clothing/Female/Pants/SKM_F_Pants_Jeans.fbx"
+      "item": "assets/Characters/Quantum/Models/Clothing/Female/Pants/SKM_F_Pants_Jeans.fbx",
+      "itemGuid": "233b645ebc16dfae"
     },
     "Shoes": {
-      "item": "assets/Characters/Quantum/Models/Clothing/Female/Shoes/SKM_F_Boots_Inboots.fbx"
+      "item": "assets/Characters/Quantum/Models/Clothing/Female/Shoes/SKM_F_Boots_Inboots.fbx",
+      "itemGuid": "1ee1872190a51cdd"
     },
     "Socks": {
-      "item": "assets/Characters/Quantum/Models/Clothing/Female/Shoes/SKM_F_Socks.fbx"
+      "item": "assets/Characters/Quantum/Models/Clothing/Female/Shoes/SKM_F_Socks.fbx",
+      "itemGuid": "5537e93e5d6bc618"
     }
   }
 }

@@ -6,6 +6,11 @@
     "surface": "assets/Decals/Grime/PeelingPaint/T_Decal_PeelingPaint_038_S.png",
     "aux": ""
   },
+  "textureGuids": {
+    "albedo": "b314dea62fd4b368",
+    "normal": "4451f099898ebf20",
+    "surface": "c2e5ccf89626e019"
+  },
   "lumaMask": false,
   "invertMask": false,
   "tier": 2048,

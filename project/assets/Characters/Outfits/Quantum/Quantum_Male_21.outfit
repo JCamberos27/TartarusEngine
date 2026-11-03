@@ -1,22 +1,28 @@
 {
   "wardrobe": "assets/Characters/Quantum/Quantum.wardrobe",
+  "wardrobeGuid": "ae5365d372fb447c",
   "gender": "Male",
   "race": "Old",
   "items": {
     "Balaclava": {
-      "item": "assets/Characters/Quantum/Models/Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx"
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx",
+      "itemGuid": "18fe3d21a3cde1a0"
     },
     "Pants": {
-      "item": "assets/Characters/Quantum/Models/Clothing/Male/Pants/SKM_Jeans.fbx"
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Pants/SKM_Jeans.fbx",
+      "itemGuid": "f18f6fcc767cc587"
     },
     "Shoes": {
-      "item": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/SKM_Boots_Inboots.fbx"
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/SKM_Boots_Inboots.fbx",
+      "itemGuid": "9ea1e194ee81f109"
     },
     "Socks": {
-      "item": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/SKM_Socks.fbx"
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/SKM_Socks.fbx",
+      "itemGuid": "d2d9305f1b150870"
     },
     "Top": {
-      "item": "assets/Characters/Quantum/Models/Clothing/Male/Tops/SKM_Hoodie.fbx"
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Tops/SKM_Hoodie.fbx",
+      "itemGuid": "684aab07355874fa"
     }
   }
 }

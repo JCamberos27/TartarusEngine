@@ -4484,6 +4484,11 @@ void TestAssetIdentity() {
     CHECK(followed.size() > 4 && followed.compare(followed.size() - 4, 4, "#Run") == 0);
     CHECK(AssetDatabase::FollowRef("Run", "") == "Run");        // an own clip name: not a file
     CHECK(AssetDatabase::FollowRef(ref, "0000000000000001") == ref); // unknown GUID: unchanged
+    // The GUID wins even when another file now sits at the old path (Unity's rule).
+    CHECK(AtomicFile::WriteBytes(model, "a different file", true));
+    const std::string winner = AssetDatabase::FollowRef(ref, refGuid);
+    CHECK(AssetDatabase::PathKey(winner.substr(0, winner.find('#'))) == AssetDatabase::PathKey(moved));
+    fs::remove(model, ec);
     CHECK(AssetDatabase::RefGuid("primitive://cube#3").empty());
 
     // A material follows a renamed texture by the GUID it saved.

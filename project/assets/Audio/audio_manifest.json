@@ -69,6 +69,7 @@
  "files": [
   {
    "file": "Ambience/indoor_large_1.wav",
+   "guid": "d179e889e082557a",
    "key": "snd.amb.indoor_large",
    "layer": "ambience",
    "channels": 2,
@@ -96,6 +97,7 @@
   },
   {
    "file": "Ambience/indoor_large_2.wav",
+   "guid": "006e3c03bb77cab9",
    "key": "snd.amb.indoor_large",
    "layer": "ambience",
    "channels": 2,
@@ -123,6 +125,7 @@
   },
   {
    "file": "Ambience/indoor_small_1.wav",
+   "guid": "0a405b5bdf70762d",
    "key": "snd.amb.indoor_small",
    "layer": "ambience",
    "channels": 2,
@@ -150,6 +153,7 @@
   },
   {
    "file": "Ambience/indoor_small_2.wav",
+   "guid": "772f0fe0fcfd5205",
    "key": "snd.amb.indoor_small",
    "layer": "ambience",
    "channels": 2,
@@ -177,6 +181,7 @@
   },
   {
    "file": "Ambience/night_open_1.wav",
+   "guid": "91d8811489899f56",
    "key": "snd.amb.night_open",
    "layer": "ambience",
    "channels": 2,
@@ -210,6 +215,7 @@
   },
   {
    "file": "Ambience/night_open_2.wav",
+   "guid": "a95e688eec3e0ca1",
    "key": "snd.amb.night_open",
    "layer": "ambience",
    "channels": 2,
@@ -243,6 +249,7 @@
   },
   {
    "file": "Ambience/night_wind_1.wav",
+   "guid": "a7b5f24c4f4a4a7b",
    "key": "snd.amb.night_wind",
    "layer": "ambience",
    "channels": 1,
@@ -270,6 +277,7 @@
   },
   {
    "file": "Ambience/night_wind_2.wav",
+   "guid": "18f3ae689ed411f9",
    "key": "snd.amb.night_wind",
    "layer": "ambience",
    "channels": 1,
@@ -297,6 +305,7 @@
   },
   {
    "file": "Ambience/outdoor_open_1.wav",
+   "guid": "8b744eee25b0f88d",
    "key": "snd.amb.outdoor_open",
    "layer": "ambience",
    "channels": 2,
@@ -324,6 +333,7 @@
   },
   {
    "file": "Ambience/outdoor_open_2.wav",
+   "guid": "cc689bcdb48ba020",
    "key": "snd.amb.outdoor_open",
    "layer": "ambience",
    "channels": 2,
@@ -351,6 +361,7 @@
   },
   {
    "file": "Ambience/outdoor_urban_1.wav",
+   "guid": "cbb2fcd5e06f91bc",
    "key": "snd.amb.outdoor_urban",
    "layer": "ambience",
    "channels": 2,
@@ -384,6 +395,7 @@
   },
   {
    "file": "Ambience/outdoor_urban_2.wav",
+   "guid": "66aa95dd39ce3dfb",
    "key": "snd.amb.outdoor_urban",
    "layer": "ambience",
    "channels": 2,
@@ -417,6 +429,7 @@
   },
   {
    "file": "Ambience/worklight_hum_1.wav",
+   "guid": "d41e410f7940642a",
    "key": "snd.amb.worklight_hum",
    "layer": "ambience",
    "channels": 1,
@@ -444,6 +457,7 @@
   },
   {
    "file": "Body/body_fall_1.wav",
+   "guid": "09bebd05235875d5",
    "key": "snd.body_fall",
    "layer": "bodyfall",
    "channels": 2,
@@ -498,6 +512,7 @@
   },
   {
    "file": "Body/body_fall_2.wav",
+   "guid": "a1b84e43604446a6",
    "key": "snd.body_fall",
    "layer": "bodyfall",
    "channels": 2,
@@ -552,6 +567,7 @@
   },
   {
    "file": "Body/body_fall_3.wav",
+   "guid": "1ff32725103bdeda",
    "key": "snd.body_fall",
    "layer": "bodyfall",
    "channels": 2,
@@ -606,6 +622,7 @@
   },
   {
    "file": "Body/body_fall_4.wav",
+   "guid": "d58ad63d8d1cf784",
    "key": "snd.body_fall",
    "layer": "bodyfall",
    "channels": 2,
@@ -660,6 +677,7 @@
   },
   {
    "file": "Casings/rifle/carpet_1.wav",
+   "guid": "1e32c664f85e8962",
    "key": "snd.casing.rifle.carpet",
    "layer": "casing",
    "channels": 1,
@@ -688,6 +706,7 @@
   },
   {
    "file": "Casings/rifle/carpet_10.wav",
+   "guid": "756ab3a1e0eac1da",
    "key": "snd.casing.rifle.carpet",
    "layer": "casing",
    "channels": 1,
@@ -716,6 +735,7 @@
   },
   {
    "file": "Casings/rifle/carpet_2.wav",
+   "guid": "bd46ab0f0375eab1",
    "key": "snd.casing.rifle.carpet",
    "layer": "casing",
    "channels": 1,
@@ -744,6 +764,7 @@
   },
   {
    "file": "Casings/rifle/carpet_3.wav",
+   "guid": "8ddb035e2330a75e",
    "key": "snd.casing.rifle.carpet",
    "layer": "casing",
    "channels": 1,
@@ -772,6 +793,7 @@
   },
   {
    "file": "Casings/rifle/carpet_4.wav",
+   "guid": "b3c41c3d01756b26",
    "key": "snd.casing.rifle.carpet",
    "layer": "casing",
    "channels": 1,
@@ -800,6 +822,7 @@
   },
   {
    "file": "Casings/rifle/carpet_5.wav",
+   "guid": "fe8b04d2ae3488be",
    "key": "snd.casing.rifle.carpet",
    "layer": "casing",
    "channels": 1,
@@ -828,6 +851,7 @@
   },
   {
    "file": "Casings/rifle/carpet_6.wav",
+   "guid": "10f5cb86061df69e",
    "key": "snd.casing.rifle.carpet",
    "layer": "casing",
    "channels": 1,
@@ -856,6 +880,7 @@
   },
   {
    "file": "Casings/rifle/carpet_7.wav",
+   "guid": "caeed9728f8f7cdf",
    "key": "snd.casing.rifle.carpet",
    "layer": "casing",
    "channels": 1,
@@ -884,6 +909,7 @@
   },
   {
    "file": "Casings/rifle/carpet_8.wav",
+   "guid": "d65b66263360882a",
    "key": "snd.casing.rifle.carpet",
    "layer": "casing",
    "channels": 1,
@@ -912,6 +938,7 @@
   },
   {
    "file": "Casings/rifle/carpet_9.wav",
+   "guid": "a55867626edb7317",
    "key": "snd.casing.rifle.carpet",
    "layer": "casing",
    "channels": 1,
@@ -940,6 +967,7 @@
   },
   {
    "file": "Casings/rifle/concrete_1.wav",
+   "guid": "932b857ecb7ab588",
    "key": "snd.casing.rifle.concrete",
    "layer": "casing",
    "channels": 1,
@@ -968,6 +996,7 @@
   },
   {
    "file": "Casings/rifle/concrete_10.wav",
+   "guid": "c9106d79bf2532a1",
    "key": "snd.casing.rifle.concrete",
    "layer": "casing",
    "channels": 1,
@@ -996,6 +1025,7 @@
   },
   {
    "file": "Casings/rifle/concrete_2.wav",
+   "guid": "f7ccdf9c357bae06",
    "key": "snd.casing.rifle.concrete",
    "layer": "casing",
    "channels": 1,
@@ -1024,6 +1054,7 @@
   },
   {
    "file": "Casings/rifle/concrete_3.wav",
+   "guid": "014a922868806696",
    "key": "snd.casing.rifle.concrete",
    "layer": "casing",
    "channels": 1,
@@ -1052,6 +1083,7 @@
   },
   {
    "file": "Casings/rifle/concrete_4.wav",
+   "guid": "08b002e806a60a18",
    "key": "snd.casing.rifle.concrete",
    "layer": "casing",
    "channels": 1,
@@ -1080,6 +1112,7 @@
   },
   {
    "file": "Casings/rifle/concrete_5.wav",
+   "guid": "e225000104f4865f",
    "key": "snd.casing.rifle.concrete",
    "layer": "casing",
    "channels": 1,
@@ -1108,6 +1141,7 @@
   },
   {
    "file": "Casings/rifle/concrete_6.wav",
+   "guid": "658bf4e791187ca1",
    "key": "snd.casing.rifle.concrete",
    "layer": "casing",
    "channels": 1,
@@ -1136,6 +1170,7 @@
   },
   {
    "file": "Casings/rifle/concrete_7.wav",
+   "guid": "5966b90f2ab62b3f",
    "key": "snd.casing.rifle.concrete",
    "layer": "casing",
    "channels": 1,
@@ -1164,6 +1199,7 @@
   },
   {
    "file": "Casings/rifle/concrete_8.wav",
+   "guid": "00e9900cc85bbefe",
    "key": "snd.casing.rifle.concrete",
    "layer": "casing",
    "channels": 1,
@@ -1192,6 +1228,7 @@
   },
   {
    "file": "Casings/rifle/concrete_9.wav",
+   "guid": "2f61ead1c3623d6b",
    "key": "snd.casing.rifle.concrete",
    "layer": "casing",
    "channels": 1,
@@ -1220,6 +1257,7 @@
   },
   {
    "file": "Casings/rifle/dirt_1.wav",
+   "guid": "0f4c5bb302d29aa2",
    "key": "snd.casing.rifle.dirt",
    "layer": "casing",
    "channels": 1,
@@ -1248,6 +1286,7 @@
   },
   {
    "file": "Casings/rifle/dirt_1.wav",
+   "guid": "0f4c5bb302d29aa2",
    "key": "snd.casing.shell.dirt",
    "layer": "casing",
    "channels": 1,
@@ -1276,6 +1315,7 @@
   },
   {
    "file": "Casings/rifle/dirt_2.wav",
+   "guid": "04371be6fc381aa2",
    "key": "snd.casing.rifle.dirt",
    "layer": "casing",
    "channels": 1,
@@ -1304,6 +1344,7 @@
   },
   {
    "file": "Casings/rifle/dirt_3.wav",
+   "guid": "82d56d2ee8631321",
    "key": "snd.casing.rifle.dirt",
    "layer": "casing",
    "channels": 1,
@@ -1332,6 +1373,7 @@
   },
   {
    "file": "Casings/rifle/dirt_4.wav",
+   "guid": "ea4e26164bf1806e",
    "key": "snd.casing.rifle.dirt",
    "layer": "casing",
    "channels": 1,
@@ -1360,6 +1402,7 @@
   },
   {
    "file": "Casings/rifle/dirt_5.wav",
+   "guid": "98003808a5afecb4",
    "key": "snd.casing.rifle.dirt",
    "layer": "casing",
    "channels": 1,
@@ -1388,6 +1431,7 @@
   },
   {
    "file": "Casings/rifle/dirt_6.wav",
+   "guid": "c253dfe0378c121b",
    "key": "snd.casing.rifle.dirt",
    "layer": "casing",
    "channels": 1,
@@ -1416,6 +1460,7 @@
   },
   {
    "file": "Casings/rifle/metal_1.wav",
+   "guid": "26fd305c9e7fb858",
    "key": "snd.casing.rifle.metal",
    "layer": "casing",
    "channels": 1,
@@ -1444,6 +1489,7 @@
   },
   {
    "file": "Casings/rifle/metal_2.wav",
+   "guid": "7dedcab1f0f38da7",
    "key": "snd.casing.rifle.metal",
    "layer": "casing",
    "channels": 1,
@@ -1472,6 +1518,7 @@
   },
   {
    "file": "Casings/rifle/metal_3.wav",
+   "guid": "dded04b43c258ea9",
    "key": "snd.casing.rifle.metal",
    "layer": "casing",
    "channels": 1,
@@ -1500,6 +1547,7 @@
   },
   {
    "file": "Casings/rifle/metal_4.wav",
+   "guid": "54a4e3eddcc5c2bb",
    "key": "snd.casing.rifle.metal",
    "layer": "casing",
    "channels": 1,
@@ -1528,6 +1576,7 @@
   },
   {
    "file": "Casings/rifle/metal_5.wav",
+   "guid": "f35a9e0eeb2e8436",
    "key": "snd.casing.rifle.metal",
    "layer": "casing",
    "channels": 1,
@@ -1556,6 +1605,7 @@
   },
   {
    "file": "Casings/rifle/metal_6.wav",
+   "guid": "ffe86899511844aa",
    "key": "snd.casing.rifle.metal",
    "layer": "casing",
    "channels": 1,
@@ -1584,6 +1634,7 @@
   },
   {
    "file": "Casings/rifle/tile_1.wav",
+   "guid": "de3b0a66bdf74362",
    "key": "snd.casing.rifle.tile",
    "layer": "casing",
    "channels": 1,
@@ -1612,6 +1663,7 @@
   },
   {
    "file": "Casings/rifle/tile_2.wav",
+   "guid": "bf9c209ce22e271f",
    "key": "snd.casing.rifle.tile",
    "layer": "casing",
    "channels": 1,
@@ -1640,6 +1692,7 @@
   },
   {
    "file": "Casings/rifle/tile_3.wav",
+   "guid": "86c9dd146b2a2e1d",
    "key": "snd.casing.rifle.tile",
    "layer": "casing",
    "channels": 1,
@@ -1668,6 +1721,7 @@
   },
   {
    "file": "Casings/rifle/tile_4.wav",
+   "guid": "9751bafa51c957e1",
    "key": "snd.casing.rifle.tile",
    "layer": "casing",
    "channels": 1,
@@ -1696,6 +1750,7 @@
   },
   {
    "file": "Casings/rifle/tile_5.wav",
+   "guid": "2c381902f474bd84",
    "key": "snd.casing.rifle.tile",
    "layer": "casing",
    "channels": 1,
@@ -1724,6 +1779,7 @@
   },
   {
    "file": "Casings/rifle/wood_1.wav",
+   "guid": "f6fb4ca26aac5dfa",
    "key": "snd.casing.rifle.wood",
    "layer": "casing",
    "channels": 1,
@@ -1752,6 +1808,7 @@
   },
   {
    "file": "Casings/rifle/wood_2.wav",
+   "guid": "9a1b7ebe5f3e2eab",
    "key": "snd.casing.rifle.wood",
    "layer": "casing",
    "channels": 1,
@@ -1780,6 +1837,7 @@
   },
   {
    "file": "Casings/rifle/wood_3.wav",
+   "guid": "b3de121702e5d2c5",
    "key": "snd.casing.rifle.wood",
    "layer": "casing",
    "channels": 1,
@@ -1808,6 +1866,7 @@
   },
   {
    "file": "Casings/rifle/wood_4.wav",
+   "guid": "ebedfc7e1de5c7ae",
    "key": "snd.casing.rifle.wood",
    "layer": "casing",
    "channels": 1,
@@ -1836,6 +1895,7 @@
   },
   {
    "file": "Casings/rifle/wood_5.wav",
+   "guid": "807f069540c9adcb",
    "key": "snd.casing.rifle.wood",
    "layer": "casing",
    "channels": 1,
@@ -1864,6 +1924,7 @@
   },
   {
    "file": "Casings/rifle/wood_6.wav",
+   "guid": "91de49189f5f35a0",
    "key": "snd.casing.rifle.wood",
    "layer": "casing",
    "channels": 1,
@@ -1892,6 +1953,7 @@
   },
   {
    "file": "Casings/shell/carpet_1.wav",
+   "guid": "43ff4b0be5011268",
    "key": "snd.casing.shell.carpet",
    "layer": "casing",
    "channels": 1,
@@ -1920,6 +1982,7 @@
   },
   {
    "file": "Casings/shell/carpet_2.wav",
+   "guid": "965384228979655c",
    "key": "snd.casing.shell.carpet",
    "layer": "casing",
    "channels": 1,
@@ -1948,6 +2011,7 @@
   },
   {
    "file": "Casings/shell/carpet_3.wav",
+   "guid": "6df4c4e2a4659e84",
    "key": "snd.casing.shell.carpet",
    "layer": "casing",
    "channels": 1,
@@ -1976,6 +2040,7 @@
   },
   {
    "file": "Casings/shell/carpet_4.wav",
+   "guid": "56cfdd5d2aae6da7",
    "key": "snd.casing.shell.carpet",
    "layer": "casing",
    "channels": 1,
@@ -2004,6 +2069,7 @@
   },
   {
    "file": "Casings/shell/carpet_5.wav",
+   "guid": "06ba7c32f8414feb",
    "key": "snd.casing.shell.carpet",
    "layer": "casing",
    "channels": 1,
@@ -2032,6 +2098,7 @@
   },
   {
    "file": "Casings/shell/carpet_6.wav",
+   "guid": "4d80eb86e3cec4a5",
    "key": "snd.casing.shell.carpet",
    "layer": "casing",
    "channels": 1,
@@ -2060,6 +2127,7 @@
   },
   {
    "file": "Casings/shell/carpet_7.wav",
+   "guid": "bf1f66d0edac77fa",
    "key": "snd.casing.shell.carpet",
    "layer": "casing",
    "channels": 1,
@@ -2088,6 +2156,7 @@
   },
   {
    "file": "Casings/shell/concrete_1.wav",
+   "guid": "aac846a0da19be8a",
    "key": "snd.casing.shell.concrete",
    "layer": "casing",
    "channels": 1,
@@ -2116,6 +2185,7 @@
   },
   {
    "file": "Casings/shell/concrete_2.wav",
+   "guid": "18a002be49078aae",
    "key": "snd.casing.shell.concrete",
    "layer": "casing",
    "channels": 1,
@@ -2144,6 +2214,7 @@
   },
   {
    "file": "Casings/shell/concrete_3.wav",
+   "guid": "06c91f893212481a",
    "key": "snd.casing.shell.concrete",
    "layer": "casing",
    "channels": 1,
@@ -2172,6 +2243,7 @@
   },
   {
    "file": "Casings/shell/concrete_4.wav",
+   "guid": "94bf537fdaef9986",
    "key": "snd.casing.shell.concrete",
    "layer": "casing",
    "channels": 1,
@@ -2200,6 +2272,7 @@
   },
   {
    "file": "Casings/shell/concrete_5.wav",
+   "guid": "aa7724cf5b799267",
    "key": "snd.casing.shell.concrete",
    "layer": "casing",
    "channels": 1,
@@ -2228,6 +2301,7 @@
   },
   {
    "file": "Casings/shell/concrete_6.wav",
+   "guid": "1147d19930a3ae15",
    "key": "snd.casing.shell.concrete",
    "layer": "casing",
    "channels": 1,
@@ -2256,6 +2330,7 @@
   },
   {
    "file": "Casings/shell/dirt_1.wav",
+   "guid": "619b12edde008c90",
    "key": "snd.casing.shell.dirt",
    "layer": "casing",
    "channels": 1,
@@ -2284,6 +2359,7 @@
   },
   {
    "file": "Casings/shell/dirt_2.wav",
+   "guid": "2c4fd34cf9ef67a8",
    "key": "snd.casing.shell.dirt",
    "layer": "casing",
    "channels": 1,
@@ -2312,6 +2388,7 @@
   },
   {
    "file": "Casings/shell/dirt_3.wav",
+   "guid": "ae0865d819ef55d3",
    "key": "snd.casing.shell.dirt",
    "layer": "casing",
    "channels": 1,
@@ -2340,6 +2417,7 @@
   },
   {
    "file": "Casings/shell/dirt_4.wav",
+   "guid": "f6845769be4d4fee",
    "key": "snd.casing.shell.dirt",
    "layer": "casing",
    "channels": 1,
@@ -2368,6 +2446,7 @@
   },
   {
    "file": "Casings/shell/dirt_5.wav",
+   "guid": "051be2e3cad3efe5",
    "key": "snd.casing.shell.dirt",
    "layer": "casing",
    "channels": 1,
@@ -2396,6 +2475,7 @@
   },
   {
    "file": "Casings/shell/metal_1.wav",
+   "guid": "3760abb6b40a6729",
    "key": "snd.casing.shell.metal",
    "layer": "casing",
    "channels": 1,
@@ -2424,6 +2504,7 @@
   },
   {
    "file": "Casings/shell/metal_2.wav",
+   "guid": "49506d42840b584c",
    "key": "snd.casing.shell.metal",
    "layer": "casing",
    "channels": 1,
@@ -2452,6 +2533,7 @@
   },
   {
    "file": "Casings/shell/metal_3.wav",
+   "guid": "48a84e445a554cbf",
    "key": "snd.casing.shell.metal",
    "layer": "casing",
    "channels": 1,
@@ -2480,6 +2562,7 @@
   },
   {
    "file": "Casings/shell/metal_4.wav",
+   "guid": "4203768edea7a55b",
    "key": "snd.casing.shell.metal",
    "layer": "casing",
    "channels": 1,
@@ -2508,6 +2591,7 @@
   },
   {
    "file": "Casings/shell/metal_5.wav",
+   "guid": "a3134258e854f651",
    "key": "snd.casing.shell.metal",
    "layer": "casing",
    "channels": 1,
@@ -2536,6 +2620,7 @@
   },
   {
    "file": "Casings/shell/metal_6.wav",
+   "guid": "ed02288a4b2940a4",
    "key": "snd.casing.shell.metal",
    "layer": "casing",
    "channels": 1,
@@ -2564,6 +2649,7 @@
   },
   {
    "file": "Casings/shell/tile_1.wav",
+   "guid": "5cf7dbb40cea5988",
    "key": "snd.casing.shell.tile",
    "layer": "casing",
    "channels": 1,
@@ -2592,6 +2678,7 @@
   },
   {
    "file": "Casings/shell/tile_2.wav",
+   "guid": "37cd244e0016688d",
    "key": "snd.casing.shell.tile",
    "layer": "casing",
    "channels": 1,
@@ -2620,6 +2707,7 @@
   },
   {
    "file": "Casings/shell/tile_3.wav",
+   "guid": "821c791851791f92",
    "key": "snd.casing.shell.tile",
    "layer": "casing",
    "channels": 1,
@@ -2648,6 +2736,7 @@
   },
   {
    "file": "Casings/shell/tile_4.wav",
+   "guid": "04dab94a7cf4586e",
    "key": "snd.casing.shell.tile",
    "layer": "casing",
    "channels": 1,
@@ -2676,6 +2765,7 @@
   },
   {
    "file": "Casings/shell/tile_5.wav",
+   "guid": "7a1b3a450405e34e",
    "key": "snd.casing.shell.tile",
    "layer": "casing",
    "channels": 1,
@@ -2704,6 +2794,7 @@
   },
   {
    "file": "Casings/shell/tile_6.wav",
+   "guid": "c87ea8f0f7fc624e",
    "key": "snd.casing.shell.tile",
    "layer": "casing",
    "channels": 1,
@@ -2732,6 +2823,7 @@
   },
   {
    "file": "Casings/shell/wood_1.wav",
+   "guid": "06696d12f62c908e",
    "key": "snd.casing.shell.wood",
    "layer": "casing",
    "channels": 1,
@@ -2760,6 +2852,7 @@
   },
   {
    "file": "Casings/shell/wood_2.wav",
+   "guid": "4d7033dd406c6fa7",
    "key": "snd.casing.shell.wood",
    "layer": "casing",
    "channels": 1,
@@ -2788,6 +2881,7 @@
   },
   {
    "file": "Casings/shell/wood_3.wav",
+   "guid": "6ec164705d2c6a40",
    "key": "snd.casing.shell.wood",
    "layer": "casing",
    "channels": 1,
@@ -2816,6 +2910,7 @@
   },
   {
    "file": "Casings/shell/wood_4.wav",
+   "guid": "1983461ff30236dc",
    "key": "snd.casing.shell.wood",
    "layer": "casing",
    "channels": 1,
@@ -2844,6 +2939,7 @@
   },
   {
    "file": "Casings/shell/wood_5.wav",
+   "guid": "3f8f0b0186782a75",
    "key": "snd.casing.shell.wood",
    "layer": "casing",
    "channels": 1,
@@ -2872,6 +2968,7 @@
   },
   {
    "file": "Casings/shell/wood_6.wav",
+   "guid": "1db91c9a6aec8dc0",
    "key": "snd.casing.shell.wood",
    "layer": "casing",
    "channels": 1,
@@ -2900,6 +2997,7 @@
   },
   {
    "file": "Casings/shell/wood_7.wav",
+   "guid": "1c3e6ccc35650016",
    "key": "snd.casing.shell.wood",
    "layer": "casing",
    "channels": 1,
@@ -2928,6 +3026,7 @@
   },
   {
    "file": "Creatures/spider/bite_1.wav",
+   "guid": "a3f8022a85349e89",
    "key": "snd.foley.spider.bite",
    "layer": "foley",
    "channels": 1,
@@ -2966,6 +3065,7 @@
   },
   {
    "file": "Creatures/spider/bite_2.wav",
+   "guid": "488809752ec7884e",
    "key": "snd.foley.spider.bite",
    "layer": "foley",
    "channels": 1,
@@ -2998,6 +3098,7 @@
   },
   {
    "file": "Creatures/spider/bite_3.wav",
+   "guid": "c0e495ac30b153b3",
    "key": "snd.foley.spider.bite",
    "layer": "foley",
    "channels": 1,
@@ -3030,6 +3131,7 @@
   },
   {
    "file": "Creatures/spider/bite_4.wav",
+   "guid": "4d299ecd67abfaad",
    "key": "snd.foley.spider.bite",
    "layer": "foley",
    "channels": 1,
@@ -3068,6 +3170,7 @@
   },
   {
    "file": "Creatures/spider/death_1.wav",
+   "guid": "6a93994e5b3b45ee",
    "key": "snd.foley.spider.death",
    "layer": "foley",
    "channels": 1,
@@ -3118,6 +3221,7 @@
   },
   {
    "file": "Creatures/spider/death_2.wav",
+   "guid": "e4b9988ca5e74cbe",
    "key": "snd.foley.spider.death",
    "layer": "foley",
    "channels": 1,
@@ -3168,6 +3272,7 @@
   },
   {
    "file": "Creatures/spider/death_3.wav",
+   "guid": "2ac6011912bb3605",
    "key": "snd.foley.spider.death",
    "layer": "foley",
    "channels": 1,
@@ -3212,6 +3317,7 @@
   },
   {
    "file": "Creatures/spider/hiss_1.wav",
+   "guid": "573b4f8a6d402f80",
    "key": "snd.foley.spider.hiss",
    "layer": "foley",
    "channels": 1,
@@ -3238,6 +3344,7 @@
   },
   {
    "file": "Creatures/spider/hiss_2.wav",
+   "guid": "bc4a946adc9fc52e",
    "key": "snd.foley.spider.hiss",
    "layer": "foley",
    "channels": 1,
@@ -3264,6 +3371,7 @@
   },
   {
    "file": "Creatures/spider/hiss_3.wav",
+   "guid": "72b254dd6f67acf9",
    "key": "snd.foley.spider.hiss",
    "layer": "foley",
    "channels": 1,
@@ -3283,6 +3391,7 @@
   },
   {
    "file": "Creatures/spider/hiss_4.wav",
+   "guid": "7dc684311305cead",
    "key": "snd.foley.spider.hiss",
    "layer": "foley",
    "channels": 1,
@@ -3309,6 +3418,7 @@
   },
   {
    "file": "Creatures/spider/hurt_1.wav",
+   "guid": "611beee5606b7ceb",
    "key": "snd.foley.spider.hurt",
    "layer": "foley",
    "channels": 1,
@@ -3341,6 +3451,7 @@
   },
   {
    "file": "Creatures/spider/hurt_2.wav",
+   "guid": "27aaac6d6b7a5e65",
    "key": "snd.foley.spider.hurt",
    "layer": "foley",
    "channels": 1,
@@ -3373,6 +3484,7 @@
   },
   {
    "file": "Creatures/spider/hurt_3.wav",
+   "guid": "a8869712ef4469ed",
    "key": "snd.foley.spider.hurt",
    "layer": "foley",
    "channels": 1,
@@ -3405,6 +3517,7 @@
   },
   {
    "file": "Creatures/spider/hurt_4.wav",
+   "guid": "95348655d593b6f0",
    "key": "snd.foley.spider.hurt",
    "layer": "foley",
    "channels": 1,
@@ -3431,6 +3544,7 @@
   },
   {
    "file": "Creatures/spider/pounce_1.wav",
+   "guid": "fbf8a8b2dbda884e",
    "key": "snd.foley.spider.pounce",
    "layer": "foley",
    "channels": 1,
@@ -3463,6 +3577,7 @@
   },
   {
    "file": "Creatures/spider/pounce_2.wav",
+   "guid": "e4bb9fc096c72bac",
    "key": "snd.foley.spider.pounce",
    "layer": "foley",
    "channels": 1,
@@ -3489,6 +3604,7 @@
   },
   {
    "file": "Creatures/spider/pounce_3.wav",
+   "guid": "56b46724e211fec6",
    "key": "snd.foley.spider.pounce",
    "layer": "foley",
    "channels": 1,
@@ -3515,6 +3631,7 @@
   },
   {
    "file": "Creatures/spider/screech_1.wav",
+   "guid": "9c395cd9d2fb8c67",
    "key": "snd.foley.spider.screech",
    "layer": "foley",
    "channels": 1,
@@ -3541,6 +3658,7 @@
   },
   {
    "file": "Creatures/spider/screech_2.wav",
+   "guid": "5ff1e7343d1b84bf",
    "key": "snd.foley.spider.screech",
    "layer": "foley",
    "channels": 1,
@@ -3573,6 +3691,7 @@
   },
   {
    "file": "Creatures/spider/screech_3.wav",
+   "guid": "409b02b230ad3fbb",
    "key": "snd.foley.spider.screech",
    "layer": "foley",
    "channels": 1,
@@ -3599,6 +3718,7 @@
   },
   {
    "file": "Creatures/spider/screech_4.wav",
+   "guid": "c65155fecea392d2",
    "key": "snd.foley.spider.screech",
    "layer": "foley",
    "channels": 1,
@@ -3631,6 +3751,7 @@
   },
   {
    "file": "Creatures/spider/splat_1.wav",
+   "guid": "1fa771649ae7551f",
    "key": "snd.foley.spider.splat",
    "layer": "foley",
    "channels": 1,
@@ -3657,6 +3778,7 @@
   },
   {
    "file": "Creatures/spider/splat_2.wav",
+   "guid": "4a689c237cb4037b",
    "key": "snd.foley.spider.splat",
    "layer": "foley",
    "channels": 1,
@@ -3683,6 +3805,7 @@
   },
   {
    "file": "Creatures/spider/splat_3.wav",
+   "guid": "41c2bf7e4196a5d4",
    "key": "snd.foley.spider.splat",
    "layer": "foley",
    "channels": 1,
@@ -3715,6 +3838,7 @@
   },
   {
    "file": "Creatures/spider/splat_4.wav",
+   "guid": "42932a59dce107ca",
    "key": "snd.foley.spider.splat",
    "layer": "foley",
    "channels": 1,
@@ -3741,6 +3865,7 @@
   },
   {
    "file": "Creatures/spider/tap_1.wav",
+   "guid": "6df420d5cb61e41d",
    "key": "snd.foley.spider.tap",
    "layer": "foley",
    "channels": 1,
@@ -3767,6 +3892,7 @@
   },
   {
    "file": "Creatures/spider/tap_2.wav",
+   "guid": "2fa38faca0949e2c",
    "key": "snd.foley.spider.tap",
    "layer": "foley",
    "channels": 1,
@@ -3793,6 +3919,7 @@
   },
   {
    "file": "Creatures/spider/tap_3.wav",
+   "guid": "7c819615c33db3cf",
    "key": "snd.foley.spider.tap",
    "layer": "foley",
    "channels": 1,
@@ -3819,6 +3946,7 @@
   },
   {
    "file": "Creatures/spider/tap_4.wav",
+   "guid": "bfd1ff7fc647ec46",
    "key": "snd.foley.spider.tap",
    "layer": "foley",
    "channels": 1,
@@ -3845,6 +3973,7 @@
   },
   {
    "file": "Creatures/spider/tap_5.wav",
+   "guid": "df8f71c25dfbdbed",
    "key": "snd.foley.spider.tap",
    "layer": "foley",
    "channels": 1,
@@ -3871,6 +4000,7 @@
   },
   {
    "file": "Creatures/spider/tap_6.wav",
+   "guid": "fc6df8573d3ea15c",
    "key": "snd.foley.spider.tap",
    "layer": "foley",
    "channels": 1,
@@ -3903,6 +4033,7 @@
   },
   {
    "file": "Creatures/spider/thud_1.wav",
+   "guid": "3e41e8f932b62925",
    "key": "snd.foley.spider.thud",
    "layer": "foley",
    "channels": 1,
@@ -3929,6 +4060,7 @@
   },
   {
    "file": "Creatures/spider/thud_2.wav",
+   "guid": "5cda291afba3c671",
    "key": "snd.foley.spider.thud",
    "layer": "foley",
    "channels": 1,
@@ -3961,6 +4093,7 @@
   },
   {
    "file": "Creatures/spider/thud_3.wav",
+   "guid": "a2873eaa7a60c9c3",
    "key": "snd.foley.spider.thud",
    "layer": "foley",
    "channels": 1,
@@ -3993,6 +4126,7 @@
   },
   {
    "file": "Foley/barefoot_carpet/run_1.wav",
+   "guid": "b12aa9a85886c52a",
    "key": "snd.foley.barefoot_carpet.run",
    "layer": "step",
    "channels": 2,
@@ -4021,6 +4155,7 @@
   },
   {
    "file": "Foley/barefoot_carpet/run_10.wav",
+   "guid": "03d4d36ff21f1fdc",
    "key": "snd.foley.barefoot_carpet.run",
    "layer": "step",
    "channels": 2,
@@ -4049,6 +4184,7 @@
   },
   {
    "file": "Foley/barefoot_carpet/run_2.wav",
+   "guid": "2f25ebf185d1acd5",
    "key": "snd.foley.barefoot_carpet.run",
    "layer": "step",
    "channels": 2,
@@ -4077,6 +4213,7 @@
   },
   {
    "file": "Foley/barefoot_carpet/run_3.wav",
+   "guid": "9e92c20026fb3b5f",
    "key": "snd.foley.barefoot_carpet.run",
    "layer": "step",
    "channels": 2,
@@ -4105,6 +4242,7 @@
   },
   {
    "file": "Foley/barefoot_carpet/run_4.wav",
+   "guid": "916d139c4de49e5c",
    "key": "snd.foley.barefoot_carpet.run",
    "layer": "step",
    "channels": 2,
@@ -4133,6 +4271,7 @@
   },
   {
    "file": "Foley/barefoot_carpet/run_5.wav",
+   "guid": "4d10a799c1218a1f",
    "key": "snd.foley.barefoot_carpet.run",
    "layer": "step",
    "channels": 2,
@@ -4161,6 +4300,7 @@
   },
   {
    "file": "Foley/barefoot_carpet/run_6.wav",
+   "guid": "e106921958066c6b",
    "key": "snd.foley.barefoot_carpet.run",
    "layer": "step",
    "channels": 2,
@@ -4189,6 +4329,7 @@
   },
   {
    "file": "Foley/barefoot_carpet/run_7.wav",
+   "guid": "5acb20e6b8f295b6",
    "key": "snd.foley.barefoot_carpet.run",
    "layer": "step",
    "channels": 2,
@@ -4217,6 +4358,7 @@
   },
   {
    "file": "Foley/barefoot_carpet/run_8.wav",
+   "guid": "3452562376726cb7",
    "key": "snd.foley.barefoot_carpet.run",
    "layer": "step",
    "channels": 2,
@@ -4245,6 +4387,7 @@
   },
   {
    "file": "Foley/barefoot_carpet/run_9.wav",
+   "guid": "04a614927b591eba",
    "key": "snd.foley.barefoot_carpet.run",
    "layer": "step",
    "channels": 2,
@@ -4273,6 +4416,7 @@
   },
   {
    "file": "Foley/barefoot_carpet/walk_1.wav",
+   "guid": "923f12520f008dfb",
    "key": "snd.foley.barefoot_carpet.walk",
    "layer": "step",
    "channels": 2,
@@ -4301,6 +4445,7 @@
   },
   {
    "file": "Foley/barefoot_carpet/walk_10.wav",
+   "guid": "9b79eafbd7e61ff4",
    "key": "snd.foley.barefoot_carpet.walk",
    "layer": "step",
    "channels": 2,
@@ -4329,6 +4474,7 @@
   },
   {
    "file": "Foley/barefoot_carpet/walk_11.wav",
+   "guid": "00b106306dc6c759",
    "key": "snd.foley.barefoot_carpet.walk",
    "layer": "step",
    "channels": 2,
@@ -4357,6 +4503,7 @@
   },
   {
    "file": "Foley/barefoot_carpet/walk_2.wav",
+   "guid": "f10baac03001d403",
    "key": "snd.foley.barefoot_carpet.walk",
    "layer": "step",
    "channels": 2,
@@ -4385,6 +4532,7 @@
   },
   {
    "file": "Foley/barefoot_carpet/walk_3.wav",
+   "guid": "f69761627ae3804f",
    "key": "snd.foley.barefoot_carpet.walk",
    "layer": "step",
    "channels": 2,
@@ -4413,6 +4561,7 @@
   },
   {
    "file": "Foley/barefoot_carpet/walk_4.wav",
+   "guid": "e0c12f310d69fc48",
    "key": "snd.foley.barefoot_carpet.walk",
    "layer": "step",
    "channels": 2,
@@ -4441,6 +4590,7 @@
   },
   {
    "file": "Foley/barefoot_carpet/walk_5.wav",
+   "guid": "9c992211062cde85",
    "key": "snd.foley.barefoot_carpet.walk",
    "layer": "step",
    "channels": 2,
@@ -4469,6 +4619,7 @@
   },
   {
    "file": "Foley/barefoot_carpet/walk_6.wav",
+   "guid": "e460299d50ae34f5",
    "key": "snd.foley.barefoot_carpet.walk",
    "layer": "step",
    "channels": 2,
@@ -4497,6 +4648,7 @@
   },
   {
    "file": "Foley/barefoot_carpet/walk_7.wav",
+   "guid": "6a3e04503e2f3004",
    "key": "snd.foley.barefoot_carpet.walk",
    "layer": "step",
    "channels": 2,
@@ -4525,6 +4677,7 @@
   },
   {
    "file": "Foley/barefoot_carpet/walk_8.wav",
+   "guid": "9a711010ec942b7e",
    "key": "snd.foley.barefoot_carpet.walk",
    "layer": "step",
    "channels": 2,
@@ -4553,6 +4706,7 @@
   },
   {
    "file": "Foley/barefoot_carpet/walk_9.wav",
+   "guid": "f50fc31de71034be",
    "key": "snd.foley.barefoot_carpet.walk",
    "layer": "step",
    "channels": 2,
@@ -4581,6 +4735,7 @@
   },
   {
    "file": "Foley/barefoot_concrete/land_1.wav",
+   "guid": "46520366c2757ae1",
    "key": "snd.foley.barefoot_concrete.land",
    "layer": "foley",
    "channels": 2,
@@ -4609,6 +4764,7 @@
   },
   {
    "file": "Foley/barefoot_concrete/land_2.wav",
+   "guid": "5b0e11102d054570",
    "key": "snd.foley.barefoot_concrete.land",
    "layer": "foley",
    "channels": 2,
@@ -4637,6 +4793,7 @@
   },
   {
    "file": "Foley/barefoot_concrete/land_3.wav",
+   "guid": "1c584747b1c9c238",
    "key": "snd.foley.barefoot_concrete.land",
    "layer": "foley",
    "channels": 2,
@@ -4665,6 +4822,7 @@
   },
   {
    "file": "Foley/barefoot_concrete/land_4.wav",
+   "guid": "e9584c308422357a",
    "key": "snd.foley.barefoot_concrete.land",
    "layer": "foley",
    "channels": 2,
@@ -4693,6 +4851,7 @@
   },
   {
    "file": "Foley/barefoot_concrete/land_5.wav",
+   "guid": "210f2dc8d618144e",
    "key": "snd.foley.barefoot_concrete.land",
    "layer": "foley",
    "channels": 2,
@@ -4721,6 +4880,7 @@
   },
   {
    "file": "Foley/barefoot_concrete/run_1.wav",
+   "guid": "d5faa6bce1ca140a",
    "key": "snd.foley.barefoot_concrete.run",
    "layer": "step",
    "channels": 2,
@@ -4749,6 +4909,7 @@
   },
   {
    "file": "Foley/barefoot_concrete/run_10.wav",
+   "guid": "9a52ddbfb3d78093",
    "key": "snd.foley.barefoot_concrete.run",
    "layer": "step",
    "channels": 2,
@@ -4777,6 +4938,7 @@
   },
   {
    "file": "Foley/barefoot_concrete/run_2.wav",
+   "guid": "767e2509db103aa9",
    "key": "snd.foley.barefoot_concrete.run",
    "layer": "step",
    "channels": 2,
@@ -4805,6 +4967,7 @@
   },
   {
    "file": "Foley/barefoot_concrete/run_3.wav",
+   "guid": "7fb7efbb603278be",
    "key": "snd.foley.barefoot_concrete.run",
    "layer": "step",
    "channels": 2,
@@ -4833,6 +4996,7 @@
   },
   {
    "file": "Foley/barefoot_concrete/run_4.wav",
+   "guid": "db0ce1332a9a3db6",
    "key": "snd.foley.barefoot_concrete.run",
    "layer": "step",
    "channels": 2,
@@ -4861,6 +5025,7 @@
   },
   {
    "file": "Foley/barefoot_concrete/run_5.wav",
+   "guid": "bbc9378b6638b95a",
    "key": "snd.foley.barefoot_concrete.run",
    "layer": "step",
    "channels": 2,
@@ -4889,6 +5054,7 @@
   },
   {
    "file": "Foley/barefoot_concrete/run_6.wav",
+   "guid": "fb539db1e3a8dbbf",
    "key": "snd.foley.barefoot_concrete.run",
    "layer": "step",
    "channels": 2,
@@ -4917,6 +5083,7 @@
   },
   {
    "file": "Foley/barefoot_concrete/run_7.wav",
+   "guid": "a377ab0b3b9f5c96",
    "key": "snd.foley.barefoot_concrete.run",
    "layer": "step",
    "channels": 2,
@@ -4945,6 +5112,7 @@
   },
   {
    "file": "Foley/barefoot_concrete/run_8.wav",
+   "guid": "ab58ce430a4e4c64",
    "key": "snd.foley.barefoot_concrete.run",
    "layer": "step",
    "channels": 2,
@@ -4973,6 +5141,7 @@
   },
   {
    "file": "Foley/barefoot_concrete/run_9.wav",
+   "guid": "a479514c9afcb829",
    "key": "snd.foley.barefoot_concrete.run",
    "layer": "step",
    "channels": 2,
@@ -5001,6 +5170,7 @@
   },
   {
    "file": "Foley/barefoot_concrete/walk_1.wav",
+   "guid": "9005743ec08710ba",
    "key": "snd.foley.barefoot_concrete.walk",
    "layer": "step",
    "channels": 2,
@@ -5029,6 +5199,7 @@
   },
   {
    "file": "Foley/barefoot_concrete/walk_2.wav",
+   "guid": "e07a88d9c7fec4ae",
    "key": "snd.foley.barefoot_concrete.walk",
    "layer": "step",
    "channels": 2,
@@ -5057,6 +5228,7 @@
   },
   {
    "file": "Foley/barefoot_concrete/walk_3.wav",
+   "guid": "e427b3e9453a9e06",
    "key": "snd.foley.barefoot_concrete.walk",
    "layer": "step",
    "channels": 2,
@@ -5085,6 +5257,7 @@
   },
   {
    "file": "Foley/barefoot_concrete/walk_4.wav",
+   "guid": "e5ea879de4e4a811",
    "key": "snd.foley.barefoot_concrete.walk",
    "layer": "step",
    "channels": 2,
@@ -5113,6 +5286,7 @@
   },
   {
    "file": "Foley/barefoot_concrete/walk_5.wav",
+   "guid": "4e5d50f78778705e",
    "key": "snd.foley.barefoot_concrete.walk",
    "layer": "step",
    "channels": 2,
@@ -5141,6 +5315,7 @@
   },
   {
    "file": "Foley/barefoot_glass/land_1.wav",
+   "guid": "6ca525b0f0f799cd",
    "key": "snd.foley.barefoot_glass.land",
    "layer": "foley",
    "channels": 2,
@@ -5169,6 +5344,7 @@
   },
   {
    "file": "Foley/barefoot_glass/land_2.wav",
+   "guid": "e17c897d06fd16e7",
    "key": "snd.foley.barefoot_glass.land",
    "layer": "foley",
    "channels": 2,
@@ -5197,6 +5373,7 @@
   },
   {
    "file": "Foley/barefoot_glass/land_3.wav",
+   "guid": "fddb50ecf233d0b3",
    "key": "snd.foley.barefoot_glass.land",
    "layer": "foley",
    "channels": 2,
@@ -5225,6 +5402,7 @@
   },
   {
    "file": "Foley/barefoot_glass/land_4.wav",
+   "guid": "3b691d672ccf2593",
    "key": "snd.foley.barefoot_glass.land",
    "layer": "foley",
    "channels": 2,
@@ -5253,6 +5431,7 @@
   },
   {
    "file": "Foley/barefoot_glass/land_5.wav",
+   "guid": "cad8dc429ab15cb4",
    "key": "snd.foley.barefoot_glass.land",
    "layer": "foley",
    "channels": 2,
@@ -5281,6 +5460,7 @@
   },
   {
    "file": "Foley/barefoot_glass/run_1.wav",
+   "guid": "fdeca632f38678bb",
    "key": "snd.foley.barefoot_glass.run",
    "layer": "step",
    "channels": 2,
@@ -5309,6 +5489,7 @@
   },
   {
    "file": "Foley/barefoot_glass/run_10.wav",
+   "guid": "5137b9860f088796",
    "key": "snd.foley.barefoot_glass.run",
    "layer": "step",
    "channels": 2,
@@ -5337,6 +5518,7 @@
   },
   {
    "file": "Foley/barefoot_glass/run_2.wav",
+   "guid": "029bf227e2bf37a1",
    "key": "snd.foley.barefoot_glass.run",
    "layer": "step",
    "channels": 2,
@@ -5365,6 +5547,7 @@
   },
   {
    "file": "Foley/barefoot_glass/run_3.wav",
+   "guid": "7bccc50733bee026",
    "key": "snd.foley.barefoot_glass.run",
    "layer": "step",
    "channels": 2,
@@ -5393,6 +5576,7 @@
   },
   {
    "file": "Foley/barefoot_glass/run_4.wav",
+   "guid": "7d89395ceee25b56",
    "key": "snd.foley.barefoot_glass.run",
    "layer": "step",
    "channels": 2,
@@ -5421,6 +5605,7 @@
   },
   {
    "file": "Foley/barefoot_glass/run_5.wav",
+   "guid": "a176af2e3c8fd904",
    "key": "snd.foley.barefoot_glass.run",
    "layer": "step",
    "channels": 2,
@@ -5449,6 +5634,7 @@
   },
   {
    "file": "Foley/barefoot_glass/run_6.wav",
+   "guid": "97fd3b5a7d0bf430",
    "key": "snd.foley.barefoot_glass.run",
    "layer": "step",
    "channels": 2,
@@ -5477,6 +5663,7 @@
   },
   {
    "file": "Foley/barefoot_glass/run_7.wav",
+   "guid": "ce2cf6cbd1e40546",
    "key": "snd.foley.barefoot_glass.run",
    "layer": "step",
    "channels": 2,
@@ -5505,6 +5692,7 @@
   },
   {
    "file": "Foley/barefoot_glass/run_8.wav",
+   "guid": "75dfafc0da90ad40",
    "key": "snd.foley.barefoot_glass.run",
    "layer": "step",
    "channels": 2,
@@ -5533,6 +5721,7 @@
   },
   {
    "file": "Foley/barefoot_glass/run_9.wav",
+   "guid": "be3bf486a07adf53",
    "key": "snd.foley.barefoot_glass.run",
    "layer": "step",
    "channels": 2,
@@ -5561,6 +5750,7 @@
   },
   {
    "file": "Foley/barefoot_glass/walk_1.wav",
+   "guid": "ae1360b513f03a39",
    "key": "snd.foley.barefoot_glass.walk",
    "layer": "step",
    "channels": 2,
@@ -5589,6 +5779,7 @@
   },
   {
    "file": "Foley/barefoot_glass/walk_10.wav",
+   "guid": "77bbc6522e5b46d8",
    "key": "snd.foley.barefoot_glass.walk",
    "layer": "step",
    "channels": 2,
@@ -5617,6 +5808,7 @@
   },
   {
    "file": "Foley/barefoot_glass/walk_11.wav",
+   "guid": "8056a0d4b21513a5",
    "key": "snd.foley.barefoot_glass.walk",
    "layer": "step",
    "channels": 2,
@@ -5645,6 +5837,7 @@
   },
   {
    "file": "Foley/barefoot_glass/walk_2.wav",
+   "guid": "2eff57300d4dbe6a",
    "key": "snd.foley.barefoot_glass.walk",
    "layer": "step",
    "channels": 2,
@@ -5673,6 +5866,7 @@
   },
   {
    "file": "Foley/barefoot_glass/walk_3.wav",
+   "guid": "7c6859d1ae212515",
    "key": "snd.foley.barefoot_glass.walk",
    "layer": "step",
    "channels": 2,
@@ -5701,6 +5895,7 @@
   },
   {
    "file": "Foley/barefoot_glass/walk_4.wav",
+   "guid": "d37d12197e21807c",
    "key": "snd.foley.barefoot_glass.walk",
    "layer": "step",
    "channels": 2,
@@ -5729,6 +5924,7 @@
   },
   {
    "file": "Foley/barefoot_glass/walk_5.wav",
+   "guid": "7b9239211143332e",
    "key": "snd.foley.barefoot_glass.walk",
    "layer": "step",
    "channels": 2,
@@ -5757,6 +5953,7 @@
   },
   {
    "file": "Foley/barefoot_glass/walk_6.wav",
+   "guid": "1044bf6d7f0392d8",
    "key": "snd.foley.barefoot_glass.walk",
    "layer": "step",
    "channels": 2,
@@ -5785,6 +5982,7 @@
   },
   {
    "file": "Foley/barefoot_glass/walk_7.wav",
+   "guid": "d0d8fcd7a0e2c62a",
    "key": "snd.foley.barefoot_glass.walk",
    "layer": "step",
    "channels": 2,
@@ -5813,6 +6011,7 @@
   },
   {
    "file": "Foley/barefoot_glass/walk_8.wav",
+   "guid": "6b742d5d453db1ba",
    "key": "snd.foley.barefoot_glass.walk",
    "layer": "step",
    "channels": 2,
@@ -5841,6 +6040,7 @@
   },
   {
    "file": "Foley/barefoot_glass/walk_9.wav",
+   "guid": "5e7215113a54d3b2",
    "key": "snd.foley.barefoot_glass.walk",
    "layer": "step",
    "channels": 2,
@@ -5869,6 +6069,7 @@
   },
   {
    "file": "Foley/barefoot_metal/land_1.wav",
+   "guid": "6cd54fbfe2b512ac",
    "key": "snd.foley.barefoot_metal.land",
    "layer": "foley",
    "channels": 2,
@@ -5897,6 +6098,7 @@
   },
   {
    "file": "Foley/barefoot_metal/land_2.wav",
+   "guid": "0ae221d3559c8c47",
    "key": "snd.foley.barefoot_metal.land",
    "layer": "foley",
    "channels": 2,
@@ -5925,6 +6127,7 @@
   },
   {
    "file": "Foley/barefoot_metal/land_3.wav",
+   "guid": "da3d1cfa96d96d54",
    "key": "snd.foley.barefoot_metal.land",
    "layer": "foley",
    "channels": 2,
@@ -5953,6 +6156,7 @@
   },
   {
    "file": "Foley/barefoot_metal/land_4.wav",
+   "guid": "d0dc2a4450b255b6",
    "key": "snd.foley.barefoot_metal.land",
    "layer": "foley",
    "channels": 2,
@@ -5981,6 +6185,7 @@
   },
   {
    "file": "Foley/barefoot_metal/land_5.wav",
+   "guid": "8b40947887589413",
    "key": "snd.foley.barefoot_metal.land",
    "layer": "foley",
    "channels": 2,
@@ -6009,6 +6214,7 @@
   },
   {
    "file": "Foley/barefoot_metal/run_1.wav",
+   "guid": "b6be52f558b677af",
    "key": "snd.foley.barefoot_metal.run",
    "layer": "step",
    "channels": 2,
@@ -6037,6 +6243,7 @@
   },
   {
    "file": "Foley/barefoot_metal/run_10.wav",
+   "guid": "7f3508c951ea20c4",
    "key": "snd.foley.barefoot_metal.run",
    "layer": "step",
    "channels": 2,
@@ -6065,6 +6272,7 @@
   },
   {
    "file": "Foley/barefoot_metal/run_2.wav",
+   "guid": "97c0071dadf9dbac",
    "key": "snd.foley.barefoot_metal.run",
    "layer": "step",
    "channels": 2,
@@ -6093,6 +6301,7 @@
   },
   {
    "file": "Foley/barefoot_metal/run_3.wav",
+   "guid": "6cc680cd5a5091b8",
    "key": "snd.foley.barefoot_metal.run",
    "layer": "step",
    "channels": 2,
@@ -6121,6 +6330,7 @@
   },
   {
    "file": "Foley/barefoot_metal/run_4.wav",
+   "guid": "24a644d8af0a5a40",
    "key": "snd.foley.barefoot_metal.run",
    "layer": "step",
    "channels": 2,
@@ -6149,6 +6359,7 @@
   },
   {
    "file": "Foley/barefoot_metal/run_5.wav",
+   "guid": "7b9cdc4ed5a2d6fc",
    "key": "snd.foley.barefoot_metal.run",
    "layer": "step",
    "channels": 2,
@@ -6177,6 +6388,7 @@
   },
   {
    "file": "Foley/barefoot_metal/run_6.wav",
+   "guid": "697c072e293ccdbf",
    "key": "snd.foley.barefoot_metal.run",
    "layer": "step",
    "channels": 2,
@@ -6205,6 +6417,7 @@
   },
   {
    "file": "Foley/barefoot_metal/run_7.wav",
+   "guid": "231352bdee2ddedd",
    "key": "snd.foley.barefoot_metal.run",
    "layer": "step",
    "channels": 2,
@@ -6233,6 +6446,7 @@
   },
   {
    "file": "Foley/barefoot_metal/run_8.wav",
+   "guid": "55041f06265b7b72",
    "key": "snd.foley.barefoot_metal.run",
    "layer": "step",
    "channels": 2,
@@ -6261,6 +6475,7 @@
   },
   {
    "file": "Foley/barefoot_metal/run_9.wav",
+   "guid": "ecc2e2f848c2bd09",
    "key": "snd.foley.barefoot_metal.run",
    "layer": "step",
    "channels": 2,
@@ -6289,6 +6504,7 @@
   },
   {
    "file": "Foley/barefoot_metal/walk_1.wav",
+   "guid": "c3c321bbc0c78a73",
    "key": "snd.foley.barefoot_metal.walk",
    "layer": "step",
    "channels": 2,
@@ -6317,6 +6533,7 @@
   },
   {
    "file": "Foley/barefoot_metal/walk_2.wav",
+   "guid": "445bf1c7b498b676",
    "key": "snd.foley.barefoot_metal.walk",
    "layer": "step",
    "channels": 2,
@@ -6345,6 +6562,7 @@
   },
   {
    "file": "Foley/barefoot_metal/walk_3.wav",
+   "guid": "f3c92c5399c6aeaf",
    "key": "snd.foley.barefoot_metal.walk",
    "layer": "step",
    "channels": 2,
@@ -6373,6 +6591,7 @@
   },
   {
    "file": "Foley/barefoot_metal/walk_4.wav",
+   "guid": "39fffc857a34cf31",
    "key": "snd.foley.barefoot_metal.walk",
    "layer": "step",
    "channels": 2,
@@ -6401,6 +6620,7 @@
   },
   {
    "file": "Foley/barefoot_metal/walk_5.wav",
+   "guid": "e106380f6828a9fe",
    "key": "snd.foley.barefoot_metal.walk",
    "layer": "step",
    "channels": 2,
@@ -6429,6 +6649,7 @@
   },
   {
    "file": "Foley/barefoot_metal/walk_6.wav",
+   "guid": "7d3197f89a3019d3",
    "key": "snd.foley.barefoot_metal.walk",
    "layer": "step",
    "channels": 2,
@@ -6457,6 +6678,7 @@
   },
   {
    "file": "Foley/barefoot_metal/walk_7.wav",
+   "guid": "746bc6e3fbf0ea38",
    "key": "snd.foley.barefoot_metal.walk",
    "layer": "step",
    "channels": 2,
@@ -6485,6 +6707,7 @@
   },
   {
    "file": "Foley/barefoot_metal/walk_8.wav",
+   "guid": "18a1d507418d353a",
    "key": "snd.foley.barefoot_metal.walk",
    "layer": "step",
    "channels": 2,
@@ -6513,6 +6736,7 @@
   },
   {
    "file": "Foley/barefoot_metal/walk_9.wav",
+   "guid": "a5f9d315fcb7f31a",
    "key": "snd.foley.barefoot_metal.walk",
    "layer": "step",
    "channels": 2,
@@ -6541,6 +6765,7 @@
   },
   {
    "file": "Foley/barefoot_water/land_1.wav",
+   "guid": "f284bb6de922c9d9",
    "key": "snd.foley.barefoot_water.land",
    "layer": "foley",
    "channels": 2,
@@ -6569,6 +6794,7 @@
   },
   {
    "file": "Foley/barefoot_water/land_2.wav",
+   "guid": "fcf81499a5013499",
    "key": "snd.foley.barefoot_water.land",
    "layer": "foley",
    "channels": 2,
@@ -6597,6 +6823,7 @@
   },
   {
    "file": "Foley/barefoot_water/land_3.wav",
+   "guid": "7d08291c95a236bc",
    "key": "snd.foley.barefoot_water.land",
    "layer": "foley",
    "channels": 2,
@@ -6625,6 +6852,7 @@
   },
   {
    "file": "Foley/barefoot_water/land_4.wav",
+   "guid": "21eba8704da09faa",
    "key": "snd.foley.barefoot_water.land",
    "layer": "foley",
    "channels": 2,
@@ -6653,6 +6881,7 @@
   },
   {
    "file": "Foley/barefoot_water/land_5.wav",
+   "guid": "ce9367aefef43ab8",
    "key": "snd.foley.barefoot_water.land",
    "layer": "foley",
    "channels": 2,
@@ -6681,6 +6910,7 @@
   },
   {
    "file": "Foley/barefoot_water/run_1.wav",
+   "guid": "9f0772f71e6977dc",
    "key": "snd.foley.barefoot_water.run",
    "layer": "step",
    "channels": 2,
@@ -6709,6 +6939,7 @@
   },
   {
    "file": "Foley/barefoot_water/run_10.wav",
+   "guid": "b34f3104be553a6f",
    "key": "snd.foley.barefoot_water.run",
    "layer": "step",
    "channels": 2,
@@ -6737,6 +6968,7 @@
   },
   {
    "file": "Foley/barefoot_water/run_2.wav",
+   "guid": "70f4825f1ac5ada6",
    "key": "snd.foley.barefoot_water.run",
    "layer": "step",
    "channels": 2,
@@ -6765,6 +6997,7 @@
   },
   {
    "file": "Foley/barefoot_water/run_3.wav",
+   "guid": "b0efd755428fcf5c",
    "key": "snd.foley.barefoot_water.run",
    "layer": "step",
    "channels": 2,
@@ -6793,6 +7026,7 @@
   },
   {
    "file": "Foley/barefoot_water/run_4.wav",
+   "guid": "98e236fa2e7727cb",
    "key": "snd.foley.barefoot_water.run",
    "layer": "step",
    "channels": 2,
@@ -6821,6 +7055,7 @@
   },
   {
    "file": "Foley/barefoot_water/run_5.wav",
+   "guid": "19a28040b7d4e554",
    "key": "snd.foley.barefoot_water.run",
    "layer": "step",
    "channels": 2,
@@ -6849,6 +7084,7 @@
   },
   {
    "file": "Foley/barefoot_water/run_6.wav",
+   "guid": "7a506fbb4cb74425",
    "key": "snd.foley.barefoot_water.run",
    "layer": "step",
    "channels": 2,
@@ -6877,6 +7113,7 @@
   },
   {
    "file": "Foley/barefoot_water/run_7.wav",
+   "guid": "b4015171d6f5f262",
    "key": "snd.foley.barefoot_water.run",
    "layer": "step",
    "channels": 2,
@@ -6905,6 +7142,7 @@
   },
   {
    "file": "Foley/barefoot_water/run_8.wav",
+   "guid": "34fc302f6582a0f2",
    "key": "snd.foley.barefoot_water.run",
    "layer": "step",
    "channels": 2,
@@ -6933,6 +7171,7 @@
   },
   {
    "file": "Foley/barefoot_water/run_9.wav",
+   "guid": "2bf72c1c8615f3a7",
    "key": "snd.foley.barefoot_water.run",
    "layer": "step",
    "channels": 2,
@@ -6961,6 +7200,7 @@
   },
   {
    "file": "Foley/barefoot_water/walk_1.wav",
+   "guid": "a315dff1210946cb",
    "key": "snd.foley.barefoot_water.walk",
    "layer": "step",
    "channels": 2,
@@ -6989,6 +7229,7 @@
   },
   {
    "file": "Foley/barefoot_water/walk_2.wav",
+   "guid": "3cdbb1435b79b042",
    "key": "snd.foley.barefoot_water.walk",
    "layer": "step",
    "channels": 2,
@@ -7017,6 +7258,7 @@
   },
   {
    "file": "Foley/barefoot_water/walk_3.wav",
+   "guid": "d78203e8edb40b4c",
    "key": "snd.foley.barefoot_water.walk",
    "layer": "step",
    "channels": 2,
@@ -7045,6 +7287,7 @@
   },
   {
    "file": "Foley/barefoot_water/walk_4.wav",
+   "guid": "d3b1152fdc671594",
    "key": "snd.foley.barefoot_water.walk",
    "layer": "step",
    "channels": 2,
@@ -7073,6 +7316,7 @@
   },
   {
    "file": "Foley/barefoot_water/walk_5.wav",
+   "guid": "cbd05c013d5d68fc",
    "key": "snd.foley.barefoot_water.walk",
    "layer": "step",
    "channels": 2,
@@ -7101,6 +7345,7 @@
   },
   {
    "file": "Foley/barefoot_water/walk_6.wav",
+   "guid": "0fddf1a8272d8df4",
    "key": "snd.foley.barefoot_water.walk",
    "layer": "step",
    "channels": 2,
@@ -7129,6 +7374,7 @@
   },
   {
    "file": "Foley/barefoot_wood/land_1.wav",
+   "guid": "3861c5d0531c1ef9",
    "key": "snd.foley.barefoot_wood.land",
    "layer": "foley",
    "channels": 2,
@@ -7157,6 +7403,7 @@
   },
   {
    "file": "Foley/barefoot_wood/land_2.wav",
+   "guid": "0dcf47c81452b10a",
    "key": "snd.foley.barefoot_wood.land",
    "layer": "foley",
    "channels": 2,
@@ -7185,6 +7432,7 @@
   },
   {
    "file": "Foley/barefoot_wood/land_3.wav",
+   "guid": "7ee657b5a2f33ff3",
    "key": "snd.foley.barefoot_wood.land",
    "layer": "foley",
    "channels": 2,
@@ -7213,6 +7461,7 @@
   },
   {
    "file": "Foley/barefoot_wood/land_4.wav",
+   "guid": "55af407ebe1a86cd",
    "key": "snd.foley.barefoot_wood.land",
    "layer": "foley",
    "channels": 2,
@@ -7241,6 +7490,7 @@
   },
   {
    "file": "Foley/barefoot_wood/land_5.wav",
+   "guid": "f480d0915270658c",
    "key": "snd.foley.barefoot_wood.land",
    "layer": "foley",
    "channels": 2,
@@ -7269,6 +7519,7 @@
   },
   {
    "file": "Foley/barefoot_wood/run_1.wav",
+   "guid": "e9242c2b9a2fedfe",
    "key": "snd.foley.barefoot_wood.run",
    "layer": "step",
    "channels": 2,
@@ -7297,6 +7548,7 @@
   },
   {
    "file": "Foley/barefoot_wood/run_10.wav",
+   "guid": "9dee341dd23bde63",
    "key": "snd.foley.barefoot_wood.run",
    "layer": "step",
    "channels": 2,
@@ -7325,6 +7577,7 @@
   },
   {
    "file": "Foley/barefoot_wood/run_2.wav",
+   "guid": "dbf9f43fc0922dba",
    "key": "snd.foley.barefoot_wood.run",
    "layer": "step",
    "channels": 2,
@@ -7353,6 +7606,7 @@
   },
   {
    "file": "Foley/barefoot_wood/run_3.wav",
+   "guid": "d3d723678027f091",
    "key": "snd.foley.barefoot_wood.run",
    "layer": "step",
    "channels": 2,
@@ -7381,6 +7635,7 @@
   },
   {
    "file": "Foley/barefoot_wood/run_4.wav",
+   "guid": "4dc4ba277066b9df",
    "key": "snd.foley.barefoot_wood.run",
    "layer": "step",
    "channels": 2,
@@ -7409,6 +7664,7 @@
   },
   {
    "file": "Foley/barefoot_wood/run_5.wav",
+   "guid": "678311f13e898954",
    "key": "snd.foley.barefoot_wood.run",
    "layer": "step",
    "channels": 2,
@@ -7437,6 +7693,7 @@
   },
   {
    "file": "Foley/barefoot_wood/run_6.wav",
+   "guid": "96b02d29b3a67f4c",
    "key": "snd.foley.barefoot_wood.run",
    "layer": "step",
    "channels": 2,
@@ -7465,6 +7722,7 @@
   },
   {
    "file": "Foley/barefoot_wood/run_7.wav",
+   "guid": "b3187f51b85ebf7d",
    "key": "snd.foley.barefoot_wood.run",
    "layer": "step",
    "channels": 2,
@@ -7493,6 +7751,7 @@
   },
   {
    "file": "Foley/barefoot_wood/run_8.wav",
+   "guid": "a518c7d147573316",
    "key": "snd.foley.barefoot_wood.run",
    "layer": "step",
    "channels": 2,
@@ -7521,6 +7780,7 @@
   },
   {
    "file": "Foley/barefoot_wood/run_9.wav",
+   "guid": "77113ecad0d6beeb",
    "key": "snd.foley.barefoot_wood.run",
    "layer": "step",
    "channels": 2,
@@ -7549,6 +7809,7 @@
   },
   {
    "file": "Foley/barefoot_wood/walk_1.wav",
+   "guid": "58bd2f22cc16d5c6",
    "key": "snd.foley.barefoot_wood.walk",
    "layer": "step",
    "channels": 2,
@@ -7577,6 +7838,7 @@
   },
   {
    "file": "Foley/barefoot_wood/walk_10.wav",
+   "guid": "1064538c84276872",
    "key": "snd.foley.barefoot_wood.walk",
    "layer": "step",
    "channels": 2,
@@ -7605,6 +7867,7 @@
   },
   {
    "file": "Foley/barefoot_wood/walk_11.wav",
+   "guid": "4af789d3a18345f9",
    "key": "snd.foley.barefoot_wood.walk",
    "layer": "step",
    "channels": 2,
@@ -7633,6 +7896,7 @@
   },
   {
    "file": "Foley/barefoot_wood/walk_2.wav",
+   "guid": "28a00a5bf91b8e94",
    "key": "snd.foley.barefoot_wood.walk",
    "layer": "step",
    "channels": 2,
@@ -7661,6 +7925,7 @@
   },
   {
    "file": "Foley/barefoot_wood/walk_3.wav",
+   "guid": "e997e8ba9e93de19",
    "key": "snd.foley.barefoot_wood.walk",
    "layer": "step",
    "channels": 2,
@@ -7689,6 +7954,7 @@
   },
   {
    "file": "Foley/barefoot_wood/walk_4.wav",
+   "guid": "b9393325b5bda135",
    "key": "snd.foley.barefoot_wood.walk",
    "layer": "step",
    "channels": 2,
@@ -7717,6 +7983,7 @@
   },
   {
    "file": "Foley/barefoot_wood/walk_5.wav",
+   "guid": "62d4d9a87665f18a",
    "key": "snd.foley.barefoot_wood.walk",
    "layer": "step",
    "channels": 2,
@@ -7745,6 +8012,7 @@
   },
   {
    "file": "Foley/barefoot_wood/walk_6.wav",
+   "guid": "c0e8fbff11ae8ef6",
    "key": "snd.foley.barefoot_wood.walk",
    "layer": "step",
    "channels": 2,
@@ -7773,6 +8041,7 @@
   },
   {
    "file": "Foley/barefoot_wood/walk_7.wav",
+   "guid": "2fc2051ca0b673e3",
    "key": "snd.foley.barefoot_wood.walk",
    "layer": "step",
    "channels": 2,
@@ -7801,6 +8070,7 @@
   },
   {
    "file": "Foley/barefoot_wood/walk_8.wav",
+   "guid": "02cdbab80614fb7c",
    "key": "snd.foley.barefoot_wood.walk",
    "layer": "step",
    "channels": 2,
@@ -7829,6 +8099,7 @@
   },
   {
    "file": "Foley/barefoot_wood/walk_9.wav",
+   "guid": "07229f449b98ec18",
    "key": "snd.foley.barefoot_wood.walk",
    "layer": "step",
    "channels": 2,
@@ -7857,6 +8128,7 @@
   },
   {
    "file": "Foley/door/close_1.wav",
+   "guid": "b2eb53dbf541a285",
    "key": "snd.foley.door.close",
    "layer": "foley",
    "channels": 1,
@@ -7883,6 +8155,7 @@
   },
   {
    "file": "Foley/door/close_2.wav",
+   "guid": "3878b64a17cc157b",
    "key": "snd.foley.door.close",
    "layer": "foley",
    "channels": 1,
@@ -7909,6 +8182,7 @@
   },
   {
    "file": "Foley/door/close_3.wav",
+   "guid": "3e023c534dd5e42e",
    "key": "snd.foley.door.close",
    "layer": "foley",
    "channels": 1,
@@ -7935,6 +8209,7 @@
   },
   {
    "file": "Foley/door/close_4.wav",
+   "guid": "5f42c2467242975a",
    "key": "snd.foley.door.close",
    "layer": "foley",
    "channels": 1,
@@ -7961,6 +8236,7 @@
   },
   {
    "file": "Foley/door/latch_1.wav",
+   "guid": "efe3568c5d44e7d7",
    "key": "snd.foley.door.latch",
    "layer": "foley",
    "channels": 1,
@@ -7987,6 +8263,7 @@
   },
   {
    "file": "Foley/door/latch_2.wav",
+   "guid": "caadd4a691e1eae0",
    "key": "snd.foley.door.latch",
    "layer": "foley",
    "channels": 1,
@@ -8013,6 +8290,7 @@
   },
   {
    "file": "Foley/door/latch_3.wav",
+   "guid": "c6a79650daa08b3b",
    "key": "snd.foley.door.latch",
    "layer": "foley",
    "channels": 1,
@@ -8039,6 +8317,7 @@
   },
   {
    "file": "Foley/door/latch_4.wav",
+   "guid": "b8286579ac377695",
    "key": "snd.foley.door.latch",
    "layer": "foley",
    "channels": 1,
@@ -8065,6 +8344,7 @@
   },
   {
    "file": "Foley/door/open_1.wav",
+   "guid": "73f7a32895c9e9c1",
    "key": "snd.foley.door.open",
    "layer": "foley",
    "channels": 1,
@@ -8097,6 +8377,7 @@
   },
   {
    "file": "Foley/door/open_2.wav",
+   "guid": "49b99a6df1820755",
    "key": "snd.foley.door.open",
    "layer": "foley",
    "channels": 1,
@@ -8129,6 +8410,7 @@
   },
   {
    "file": "Foley/door/open_3.wav",
+   "guid": "f8c6a83a33d9222d",
    "key": "snd.foley.door.open",
    "layer": "foley",
    "channels": 1,
@@ -8161,6 +8443,7 @@
   },
   {
    "file": "Foley/door/open_4.wav",
+   "guid": "2d144a54a78fe380",
    "key": "snd.foley.door.open",
    "layer": "foley",
    "channels": 1,
@@ -8193,6 +8476,7 @@
   },
   {
    "file": "Foley/door/rattle_1.wav",
+   "guid": "8e90ea38765d1b0b",
    "key": "snd.foley.door.rattle",
    "layer": "foley",
    "channels": 1,
@@ -8219,6 +8503,7 @@
   },
   {
    "file": "Foley/door/rattle_2.wav",
+   "guid": "418131973902c553",
    "key": "snd.foley.door.rattle",
    "layer": "foley",
    "channels": 1,
@@ -8245,6 +8530,7 @@
   },
   {
    "file": "Foley/door/rattle_3.wav",
+   "guid": "3a67f059030900dc",
    "key": "snd.foley.door.rattle",
    "layer": "foley",
    "channels": 1,
@@ -8271,6 +8557,7 @@
   },
   {
    "file": "Foley/door/rattle_4.wav",
+   "guid": "4608a226f0f99084",
    "key": "snd.foley.door.rattle",
    "layer": "foley",
    "channels": 1,
@@ -8297,6 +8584,7 @@
   },
   {
    "file": "Foley/move/jump_1.wav",
+   "guid": "469e21de9d86f365",
    "key": "snd.foley.move.jump",
    "layer": "foley",
    "channels": 2,
@@ -8323,6 +8611,7 @@
   },
   {
    "file": "Foley/move/jump_2.wav",
+   "guid": "e0f077946ae7e731",
    "key": "snd.foley.move.jump",
    "layer": "foley",
    "channels": 2,
@@ -8349,6 +8638,7 @@
   },
   {
    "file": "Foley/move/jump_3.wav",
+   "guid": "c4298ed8f112f61f",
    "key": "snd.foley.move.jump",
    "layer": "foley",
    "channels": 2,
@@ -8375,6 +8665,7 @@
   },
   {
    "file": "Foley/move/land_heavy_1.wav",
+   "guid": "078b5720c314b391",
    "key": "snd.foley.move.land_heavy",
    "layer": "foley",
    "channels": 2,
@@ -8413,6 +8704,7 @@
   },
   {
    "file": "Foley/move/land_heavy_2.wav",
+   "guid": "e7d7ae50ce3e4bc1",
    "key": "snd.foley.move.land_heavy",
    "layer": "foley",
    "channels": 2,
@@ -8451,6 +8743,7 @@
   },
   {
    "file": "Foley/move/land_heavy_3.wav",
+   "guid": "c52ed5cbbf688540",
    "key": "snd.foley.move.land_heavy",
    "layer": "foley",
    "channels": 2,
@@ -8489,6 +8782,7 @@
   },
   {
    "file": "Foley/move/land_light_1.wav",
+   "guid": "b798c4d610aa9c1e",
    "key": "snd.foley.move.land_light",
    "layer": "foley",
    "channels": 2,
@@ -8515,6 +8809,7 @@
   },
   {
    "file": "Foley/move/land_light_2.wav",
+   "guid": "0557ac5e8a4261ae",
    "key": "snd.foley.move.land_light",
    "layer": "foley",
    "channels": 2,
@@ -8541,6 +8836,7 @@
   },
   {
    "file": "Foley/move/land_light_3.wav",
+   "guid": "7f68be54f4951665",
    "key": "snd.foley.move.land_light",
    "layer": "foley",
    "channels": 2,
@@ -8567,6 +8863,7 @@
   },
   {
    "file": "Foley/step_carpet/run_1.wav",
+   "guid": "ec43a4bd7a52eaf9",
    "key": "snd.foley.step_carpet.run",
    "layer": "step",
    "channels": 2,
@@ -8594,6 +8891,7 @@
   },
   {
    "file": "Foley/step_carpet/run_10.wav",
+   "guid": "e4e657338132bbde",
    "key": "snd.foley.step_carpet.run",
    "layer": "step",
    "channels": 2,
@@ -8621,6 +8919,7 @@
   },
   {
    "file": "Foley/step_carpet/run_2.wav",
+   "guid": "bb6c85aa0ba7059a",
    "key": "snd.foley.step_carpet.run",
    "layer": "step",
    "channels": 2,
@@ -8648,6 +8947,7 @@
   },
   {
    "file": "Foley/step_carpet/run_3.wav",
+   "guid": "1a2cac71f41850d5",
    "key": "snd.foley.step_carpet.run",
    "layer": "step",
    "channels": 2,
@@ -8675,6 +8975,7 @@
   },
   {
    "file": "Foley/step_carpet/run_4.wav",
+   "guid": "59941dab31e394c2",
    "key": "snd.foley.step_carpet.run",
    "layer": "step",
    "channels": 2,
@@ -8702,6 +9003,7 @@
   },
   {
    "file": "Foley/step_carpet/run_5.wav",
+   "guid": "97f9abf8613ee5a7",
    "key": "snd.foley.step_carpet.run",
    "layer": "step",
    "channels": 2,
@@ -8729,6 +9031,7 @@
   },
   {
    "file": "Foley/step_carpet/run_6.wav",
+   "guid": "c25f83ec821dac35",
    "key": "snd.foley.step_carpet.run",
    "layer": "step",
    "channels": 2,
@@ -8756,6 +9059,7 @@
   },
   {
    "file": "Foley/step_carpet/run_7.wav",
+   "guid": "071807af6871e5f6",
    "key": "snd.foley.step_carpet.run",
    "layer": "step",
    "channels": 2,
@@ -8783,6 +9087,7 @@
   },
   {
    "file": "Foley/step_carpet/run_8.wav",
+   "guid": "7e6209ea907acd48",
    "key": "snd.foley.step_carpet.run",
    "layer": "step",
    "channels": 2,
@@ -8810,6 +9115,7 @@
   },
   {
    "file": "Foley/step_carpet/run_9.wav",
+   "guid": "93917358f13cd54b",
    "key": "snd.foley.step_carpet.run",
    "layer": "step",
    "channels": 2,
@@ -8837,6 +9143,7 @@
   },
   {
    "file": "Foley/step_carpet/walk_1.wav",
+   "guid": "ca3d10fa3731072a",
    "key": "snd.foley.step_carpet.walk",
    "layer": "step",
    "channels": 2,
@@ -8864,6 +9171,7 @@
   },
   {
    "file": "Foley/step_carpet/walk_10.wav",
+   "guid": "19ecf9c51e3d6fc5",
    "key": "snd.foley.step_carpet.walk",
    "layer": "step",
    "channels": 2,
@@ -8891,6 +9199,7 @@
   },
   {
    "file": "Foley/step_carpet/walk_11.wav",
+   "guid": "7d462ea01c2c2097",
    "key": "snd.foley.step_carpet.walk",
    "layer": "step",
    "channels": 2,
@@ -8918,6 +9227,7 @@
   },
   {
    "file": "Foley/step_carpet/walk_2.wav",
+   "guid": "603d2880a0a84031",
    "key": "snd.foley.step_carpet.walk",
    "layer": "step",
    "channels": 2,
@@ -8945,6 +9255,7 @@
   },
   {
    "file": "Foley/step_carpet/walk_3.wav",
+   "guid": "c2e87b3c9d5c6089",
    "key": "snd.foley.step_carpet.walk",
    "layer": "step",
    "channels": 2,
@@ -8972,6 +9283,7 @@
   },
   {
    "file": "Foley/step_carpet/walk_4.wav",
+   "guid": "d618a98f9a50b4ba",
    "key": "snd.foley.step_carpet.walk",
    "layer": "step",
    "channels": 2,
@@ -8999,6 +9311,7 @@
   },
   {
    "file": "Foley/step_carpet/walk_5.wav",
+   "guid": "54c3e8e5b27fb7aa",
    "key": "snd.foley.step_carpet.walk",
    "layer": "step",
    "channels": 2,
@@ -9026,6 +9339,7 @@
   },
   {
    "file": "Foley/step_carpet/walk_6.wav",
+   "guid": "b5d6b7c9c46902f2",
    "key": "snd.foley.step_carpet.walk",
    "layer": "step",
    "channels": 2,
@@ -9053,6 +9367,7 @@
   },
   {
    "file": "Foley/step_carpet/walk_7.wav",
+   "guid": "623eb163fc21e1e2",
    "key": "snd.foley.step_carpet.walk",
    "layer": "step",
    "channels": 2,
@@ -9080,6 +9395,7 @@
   },
   {
    "file": "Foley/step_carpet/walk_8.wav",
+   "guid": "edd7be100d3095e3",
    "key": "snd.foley.step_carpet.walk",
    "layer": "step",
    "channels": 2,
@@ -9107,6 +9423,7 @@
   },
   {
    "file": "Foley/step_carpet/walk_9.wav",
+   "guid": "bac851d753afc513",
    "key": "snd.foley.step_carpet.walk",
    "layer": "step",
    "channels": 2,
@@ -9134,6 +9451,7 @@
   },
   {
    "file": "Foley/step_concrete/land_1.wav",
+   "guid": "714cc83551f95b75",
    "key": "snd.foley.step_concrete.land",
    "layer": "foley",
    "channels": 2,
@@ -9161,6 +9479,7 @@
   },
   {
    "file": "Foley/step_concrete/land_2.wav",
+   "guid": "ecf55a9b62baec54",
    "key": "snd.foley.step_concrete.land",
    "layer": "foley",
    "channels": 2,
@@ -9188,6 +9507,7 @@
   },
   {
    "file": "Foley/step_concrete/land_3.wav",
+   "guid": "b085d43b96d1e204",
    "key": "snd.foley.step_concrete.land",
    "layer": "foley",
    "channels": 2,
@@ -9215,6 +9535,7 @@
   },
   {
    "file": "Foley/step_concrete/land_4.wav",
+   "guid": "dc38daef3c66fbd2",
    "key": "snd.foley.step_concrete.land",
    "layer": "foley",
    "channels": 2,
@@ -9242,6 +9563,7 @@
   },
   {
    "file": "Foley/step_concrete/land_5.wav",
+   "guid": "a481b36cf74b53c1",
    "key": "snd.foley.step_concrete.land",
    "layer": "foley",
    "channels": 2,
@@ -9269,6 +9591,7 @@
   },
   {
    "file": "Foley/step_concrete/run_1.wav",
+   "guid": "964c1c61f8035ebb",
    "key": "snd.foley.step_concrete.run",
    "layer": "step",
    "channels": 2,
@@ -9296,6 +9619,7 @@
   },
   {
    "file": "Foley/step_concrete/run_10.wav",
+   "guid": "1761188013b224dc",
    "key": "snd.foley.step_concrete.run",
    "layer": "step",
    "channels": 2,
@@ -9323,6 +9647,7 @@
   },
   {
    "file": "Foley/step_concrete/run_11.wav",
+   "guid": "6e74acf2d514f76b",
    "key": "snd.foley.step_concrete.run",
    "layer": "step",
    "channels": 2,
@@ -9350,6 +9675,7 @@
   },
   {
    "file": "Foley/step_concrete/run_12.wav",
+   "guid": "81c5eebe50135c42",
    "key": "snd.foley.step_concrete.run",
    "layer": "step",
    "channels": 2,
@@ -9377,6 +9703,7 @@
   },
   {
    "file": "Foley/step_concrete/run_2.wav",
+   "guid": "9bee0eb5194b2975",
    "key": "snd.foley.step_concrete.run",
    "layer": "step",
    "channels": 2,
@@ -9404,6 +9731,7 @@
   },
   {
    "file": "Foley/step_concrete/run_3.wav",
+   "guid": "1bb23e909a2f19ec",
    "key": "snd.foley.step_concrete.run",
    "layer": "step",
    "channels": 2,
@@ -9431,6 +9759,7 @@
   },
   {
    "file": "Foley/step_concrete/run_4.wav",
+   "guid": "cd9b6891bdaa6785",
    "key": "snd.foley.step_concrete.run",
    "layer": "step",
    "channels": 2,
@@ -9458,6 +9787,7 @@
   },
   {
    "file": "Foley/step_concrete/run_5.wav",
+   "guid": "a60275a28c252156",
    "key": "snd.foley.step_concrete.run",
    "layer": "step",
    "channels": 2,
@@ -9485,6 +9815,7 @@
   },
   {
    "file": "Foley/step_concrete/run_6.wav",
+   "guid": "8205c160560c6b36",
    "key": "snd.foley.step_concrete.run",
    "layer": "step",
    "channels": 2,
@@ -9512,6 +9843,7 @@
   },
   {
    "file": "Foley/step_concrete/run_7.wav",
+   "guid": "e71295bf98ca990c",
    "key": "snd.foley.step_concrete.run",
    "layer": "step",
    "channels": 2,
@@ -9539,6 +9871,7 @@
   },
   {
    "file": "Foley/step_concrete/run_8.wav",
+   "guid": "056f6d32fac2a7c8",
    "key": "snd.foley.step_concrete.run",
    "layer": "step",
    "channels": 2,
@@ -9566,6 +9899,7 @@
   },
   {
    "file": "Foley/step_concrete/run_9.wav",
+   "guid": "bad9d7560e15f880",
    "key": "snd.foley.step_concrete.run",
    "layer": "step",
    "channels": 2,
@@ -9593,6 +9927,7 @@
   },
   {
    "file": "Foley/step_concrete/walk_1.wav",
+   "guid": "976b923a9967e022",
    "key": "snd.foley.step_concrete.walk",
    "layer": "step",
    "channels": 2,
@@ -9620,6 +9955,7 @@
   },
   {
    "file": "Foley/step_concrete/walk_10.wav",
+   "guid": "135c5172845b16a9",
    "key": "snd.foley.step_concrete.walk",
    "layer": "step",
    "channels": 2,
@@ -9647,6 +9983,7 @@
   },
   {
    "file": "Foley/step_concrete/walk_11.wav",
+   "guid": "7e2e87bbfd073c43",
    "key": "snd.foley.step_concrete.walk",
    "layer": "step",
    "channels": 2,
@@ -9674,6 +10011,7 @@
   },
   {
    "file": "Foley/step_concrete/walk_12.wav",
+   "guid": "65b735951dd937b9",
    "key": "snd.foley.step_concrete.walk",
    "layer": "step",
    "channels": 2,
@@ -9701,6 +10039,7 @@
   },
   {
    "file": "Foley/step_concrete/walk_13.wav",
+   "guid": "32dabfc5149a60d7",
    "key": "snd.foley.step_concrete.walk",
    "layer": "step",
    "channels": 2,
@@ -9728,6 +10067,7 @@
   },
   {
    "file": "Foley/step_concrete/walk_2.wav",
+   "guid": "c7782efc956b2478",
    "key": "snd.foley.step_concrete.walk",
    "layer": "step",
    "channels": 2,
@@ -9755,6 +10095,7 @@
   },
   {
    "file": "Foley/step_concrete/walk_3.wav",
+   "guid": "cfc050555fa83194",
    "key": "snd.foley.step_concrete.walk",
    "layer": "step",
    "channels": 2,
@@ -9782,6 +10123,7 @@
   },
   {
    "file": "Foley/step_concrete/walk_4.wav",
+   "guid": "91055d2a94594983",
    "key": "snd.foley.step_concrete.walk",
    "layer": "step",
    "channels": 2,
@@ -9809,6 +10151,7 @@
   },
   {
    "file": "Foley/step_concrete/walk_5.wav",
+   "guid": "9ba517b4f417e7cf",
    "key": "snd.foley.step_concrete.walk",
    "layer": "step",
    "channels": 2,
@@ -9836,6 +10179,7 @@
   },
   {
    "file": "Foley/step_concrete/walk_6.wav",
+   "guid": "f78c8a9215f53154",
    "key": "snd.foley.step_concrete.walk",
    "layer": "step",
    "channels": 2,
@@ -9863,6 +10207,7 @@
   },
   {
    "file": "Foley/step_concrete/walk_7.wav",
+   "guid": "57a5d5a9a20809e7",
    "key": "snd.foley.step_concrete.walk",
    "layer": "step",
    "channels": 2,
@@ -9890,6 +10235,7 @@
   },
   {
    "file": "Foley/step_concrete/walk_8.wav",
+   "guid": "cd85656ad83bd0dd",
    "key": "snd.foley.step_concrete.walk",
    "layer": "step",
    "channels": 2,
@@ -9917,6 +10263,7 @@
   },
   {
    "file": "Foley/step_concrete/walk_9.wav",
+   "guid": "32f461cdbd6391b4",
    "key": "snd.foley.step_concrete.walk",
    "layer": "step",
    "channels": 2,
@@ -9944,6 +10291,7 @@
   },
   {
    "file": "Foley/step_glass/land_1.wav",
+   "guid": "b332320a7c3c88d7",
    "key": "snd.foley.step_glass.land",
    "layer": "foley",
    "channels": 2,
@@ -9971,6 +10319,7 @@
   },
   {
    "file": "Foley/step_glass/land_2.wav",
+   "guid": "083558f10d2c53b2",
    "key": "snd.foley.step_glass.land",
    "layer": "foley",
    "channels": 2,
@@ -9998,6 +10347,7 @@
   },
   {
    "file": "Foley/step_glass/land_3.wav",
+   "guid": "9ff619d7421e9000",
    "key": "snd.foley.step_glass.land",
    "layer": "foley",
    "channels": 2,
@@ -10025,6 +10375,7 @@
   },
   {
    "file": "Foley/step_glass/land_4.wav",
+   "guid": "bf329b99079854b6",
    "key": "snd.foley.step_glass.land",
    "layer": "foley",
    "channels": 2,
@@ -10052,6 +10403,7 @@
   },
   {
    "file": "Foley/step_glass/land_5.wav",
+   "guid": "ac923cb5b54cf167",
    "key": "snd.foley.step_glass.land",
    "layer": "foley",
    "channels": 2,
@@ -10079,6 +10431,7 @@
   },
   {
    "file": "Foley/step_glass/run_1.wav",
+   "guid": "806a1155cf477feb",
    "key": "snd.foley.step_glass.run",
    "layer": "step",
    "channels": 2,
@@ -10106,6 +10459,7 @@
   },
   {
    "file": "Foley/step_glass/run_10.wav",
+   "guid": "9164f6ed0a84ec6d",
    "key": "snd.foley.step_glass.run",
    "layer": "step",
    "channels": 2,
@@ -10133,6 +10487,7 @@
   },
   {
    "file": "Foley/step_glass/run_2.wav",
+   "guid": "8658a508da80b273",
    "key": "snd.foley.step_glass.run",
    "layer": "step",
    "channels": 2,
@@ -10160,6 +10515,7 @@
   },
   {
    "file": "Foley/step_glass/run_3.wav",
+   "guid": "9d0bf367b1ad55d8",
    "key": "snd.foley.step_glass.run",
    "layer": "step",
    "channels": 2,
@@ -10187,6 +10543,7 @@
   },
   {
    "file": "Foley/step_glass/run_4.wav",
+   "guid": "c4b66ea6e0f45d63",
    "key": "snd.foley.step_glass.run",
    "layer": "step",
    "channels": 2,
@@ -10214,6 +10571,7 @@
   },
   {
    "file": "Foley/step_glass/run_5.wav",
+   "guid": "b21676a4f3f94e8a",
    "key": "snd.foley.step_glass.run",
    "layer": "step",
    "channels": 2,
@@ -10241,6 +10599,7 @@
   },
   {
    "file": "Foley/step_glass/run_6.wav",
+   "guid": "c0adfd17163ef026",
    "key": "snd.foley.step_glass.run",
    "layer": "step",
    "channels": 2,
@@ -10268,6 +10627,7 @@
   },
   {
    "file": "Foley/step_glass/run_7.wav",
+   "guid": "473bdcc9a8e53982",
    "key": "snd.foley.step_glass.run",
    "layer": "step",
    "channels": 2,
@@ -10295,6 +10655,7 @@
   },
   {
    "file": "Foley/step_glass/run_8.wav",
+   "guid": "591486465c4a1783",
    "key": "snd.foley.step_glass.run",
    "layer": "step",
    "channels": 2,
@@ -10322,6 +10683,7 @@
   },
   {
    "file": "Foley/step_glass/run_9.wav",
+   "guid": "cc8b360ef4aca2f4",
    "key": "snd.foley.step_glass.run",
    "layer": "step",
    "channels": 2,
@@ -10349,6 +10711,7 @@
   },
   {
    "file": "Foley/step_glass/walk_1.wav",
+   "guid": "0ab447eeb6de5126",
    "key": "snd.foley.step_glass.walk",
    "layer": "step",
    "channels": 2,
@@ -10376,6 +10739,7 @@
   },
   {
    "file": "Foley/step_glass/walk_10.wav",
+   "guid": "30a075c71b47770d",
    "key": "snd.foley.step_glass.walk",
    "layer": "step",
    "channels": 2,
@@ -10403,6 +10767,7 @@
   },
   {
    "file": "Foley/step_glass/walk_11.wav",
+   "guid": "4aeb392cd05dce6c",
    "key": "snd.foley.step_glass.walk",
    "layer": "step",
    "channels": 2,
@@ -10430,6 +10795,7 @@
   },
   {
    "file": "Foley/step_glass/walk_2.wav",
+   "guid": "0191309f3cbf66e8",
    "key": "snd.foley.step_glass.walk",
    "layer": "step",
    "channels": 2,
@@ -10457,6 +10823,7 @@
   },
   {
    "file": "Foley/step_glass/walk_3.wav",
+   "guid": "d660374fd899bd4d",
    "key": "snd.foley.step_glass.walk",
    "layer": "step",
    "channels": 2,
@@ -10484,6 +10851,7 @@
   },
   {
    "file": "Foley/step_glass/walk_4.wav",
+   "guid": "10f9d088ee459698",
    "key": "snd.foley.step_glass.walk",
    "layer": "step",
    "channels": 2,
@@ -10511,6 +10879,7 @@
   },
   {
    "file": "Foley/step_glass/walk_5.wav",
+   "guid": "6a65dedeeec38be7",
    "key": "snd.foley.step_glass.walk",
    "layer": "step",
    "channels": 2,
@@ -10538,6 +10907,7 @@
   },
   {
    "file": "Foley/step_glass/walk_6.wav",
+   "guid": "b7c32e81f464d9de",
    "key": "snd.foley.step_glass.walk",
    "layer": "step",
    "channels": 2,
@@ -10565,6 +10935,7 @@
   },
   {
    "file": "Foley/step_glass/walk_7.wav",
+   "guid": "0cbb05c9ce1f71b6",
    "key": "snd.foley.step_glass.walk",
    "layer": "step",
    "channels": 2,
@@ -10592,6 +10963,7 @@
   },
   {
    "file": "Foley/step_glass/walk_8.wav",
+   "guid": "d31d9db34302c076",
    "key": "snd.foley.step_glass.walk",
    "layer": "step",
    "channels": 2,
@@ -10619,6 +10991,7 @@
   },
   {
    "file": "Foley/step_glass/walk_9.wav",
+   "guid": "dbf35e37b7e75d6d",
    "key": "snd.foley.step_glass.walk",
    "layer": "step",
    "channels": 2,
@@ -10646,6 +11019,7 @@
   },
   {
    "file": "Foley/step_metal/land_1.wav",
+   "guid": "bdfe7502d65cf097",
    "key": "snd.foley.step_metal.land",
    "layer": "foley",
    "channels": 2,
@@ -10673,6 +11047,7 @@
   },
   {
    "file": "Foley/step_metal/land_2.wav",
+   "guid": "1573e6b6467f5093",
    "key": "snd.foley.step_metal.land",
    "layer": "foley",
    "channels": 2,
@@ -10700,6 +11075,7 @@
   },
   {
    "file": "Foley/step_metal/land_3.wav",
+   "guid": "cd8ad63cee515310",
    "key": "snd.foley.step_metal.land",
    "layer": "foley",
    "channels": 2,
@@ -10727,6 +11103,7 @@
   },
   {
    "file": "Foley/step_metal/land_4.wav",
+   "guid": "c866aafaa0360478",
    "key": "snd.foley.step_metal.land",
    "layer": "foley",
    "channels": 2,
@@ -10754,6 +11131,7 @@
   },
   {
    "file": "Foley/step_metal/land_5.wav",
+   "guid": "4ef16f5371b235af",
    "key": "snd.foley.step_metal.land",
    "layer": "foley",
    "channels": 2,
@@ -10781,6 +11159,7 @@
   },
   {
    "file": "Foley/step_metal/run_1.wav",
+   "guid": "e49f004de1b00dd7",
    "key": "snd.foley.step_metal.run",
    "layer": "step",
    "channels": 2,
@@ -10808,6 +11187,7 @@
   },
   {
    "file": "Foley/step_metal/run_10.wav",
+   "guid": "de772022d95ed456",
    "key": "snd.foley.step_metal.run",
    "layer": "step",
    "channels": 2,
@@ -10835,6 +11215,7 @@
   },
   {
    "file": "Foley/step_metal/run_2.wav",
+   "guid": "e5b4f57d983923e1",
    "key": "snd.foley.step_metal.run",
    "layer": "step",
    "channels": 2,
@@ -10862,6 +11243,7 @@
   },
   {
    "file": "Foley/step_metal/run_3.wav",
+   "guid": "0cf3565367e10112",
    "key": "snd.foley.step_metal.run",
    "layer": "step",
    "channels": 2,
@@ -10889,6 +11271,7 @@
   },
   {
    "file": "Foley/step_metal/run_4.wav",
+   "guid": "bb2363cbe371e9e5",
    "key": "snd.foley.step_metal.run",
    "layer": "step",
    "channels": 2,
@@ -10916,6 +11299,7 @@
   },
   {
    "file": "Foley/step_metal/run_5.wav",
+   "guid": "984b38a755449bf7",
    "key": "snd.foley.step_metal.run",
    "layer": "step",
    "channels": 2,
@@ -10943,6 +11327,7 @@
   },
   {
    "file": "Foley/step_metal/run_6.wav",
+   "guid": "1d5f471927653397",
    "key": "snd.foley.step_metal.run",
    "layer": "step",
    "channels": 2,
@@ -10970,6 +11355,7 @@
   },
   {
    "file": "Foley/step_metal/run_7.wav",
+   "guid": "c63f91f0e7cf4b30",
    "key": "snd.foley.step_metal.run",
    "layer": "step",
    "channels": 2,
@@ -10997,6 +11383,7 @@
   },
   {
    "file": "Foley/step_metal/run_8.wav",
+   "guid": "f45cf15a2ff7cd5e",
    "key": "snd.foley.step_metal.run",
    "layer": "step",
    "channels": 2,
@@ -11024,6 +11411,7 @@
   },
   {
    "file": "Foley/step_metal/run_9.wav",
+   "guid": "8d8e84ad2a5267eb",
    "key": "snd.foley.step_metal.run",
    "layer": "step",
    "channels": 2,
@@ -11051,6 +11439,7 @@
   },
   {
    "file": "Foley/step_metal/walk_1.wav",
+   "guid": "1c13508a7230e433",
    "key": "snd.foley.step_metal.walk",
    "layer": "step",
    "channels": 2,
@@ -11078,6 +11467,7 @@
   },
   {
    "file": "Foley/step_metal/walk_10.wav",
+   "guid": "ac209f4982aa8e7e",
    "key": "snd.foley.step_metal.walk",
    "layer": "step",
    "channels": 2,
@@ -11105,6 +11495,7 @@
   },
   {
    "file": "Foley/step_metal/walk_11.wav",
+   "guid": "52b4281221c1b4a1",
    "key": "snd.foley.step_metal.walk",
    "layer": "step",
    "channels": 2,
@@ -11132,6 +11523,7 @@
   },
   {
    "file": "Foley/step_metal/walk_2.wav",
+   "guid": "5f37c7d6157abb20",
    "key": "snd.foley.step_metal.walk",
    "layer": "step",
    "channels": 2,
@@ -11159,6 +11551,7 @@
   },
   {
    "file": "Foley/step_metal/walk_3.wav",
+   "guid": "d440eaf2d7f89490",
    "key": "snd.foley.step_metal.walk",
    "layer": "step",
    "channels": 2,
@@ -11186,6 +11579,7 @@
   },
   {
    "file": "Foley/step_metal/walk_4.wav",
+   "guid": "b95c4eb9d2ecb832",
    "key": "snd.foley.step_metal.walk",
    "layer": "step",
    "channels": 2,
@@ -11213,6 +11607,7 @@
   },
   {
    "file": "Foley/step_metal/walk_5.wav",
+   "guid": "2faf16bf3c4410c4",
    "key": "snd.foley.step_metal.walk",
    "layer": "step",
    "channels": 2,
@@ -11240,6 +11635,7 @@
   },
   {
    "file": "Foley/step_metal/walk_6.wav",
+   "guid": "d09eade6847fb554",
    "key": "snd.foley.step_metal.walk",
    "layer": "step",
    "channels": 2,
@@ -11267,6 +11663,7 @@
   },
   {
    "file": "Foley/step_metal/walk_7.wav",
+   "guid": "c34a471e809e8110",
    "key": "snd.foley.step_metal.walk",
    "layer": "step",
    "channels": 2,
@@ -11294,6 +11691,7 @@
   },
   {
    "file": "Foley/step_metal/walk_8.wav",
+   "guid": "01ff550964151ca4",
    "key": "snd.foley.step_metal.walk",
    "layer": "step",
    "channels": 2,
@@ -11321,6 +11719,7 @@
   },
   {
    "file": "Foley/step_metal/walk_9.wav",
+   "guid": "948961bd8282e4cb",
    "key": "snd.foley.step_metal.walk",
    "layer": "step",
    "channels": 2,
@@ -11348,6 +11747,7 @@
   },
   {
    "file": "Foley/step_water/land_1.wav",
+   "guid": "70047807d7e5c4e5",
    "key": "snd.foley.step_water.land",
    "layer": "foley",
    "channels": 2,
@@ -11375,6 +11775,7 @@
   },
   {
    "file": "Foley/step_water/land_2.wav",
+   "guid": "f399649b75cfc51f",
    "key": "snd.foley.step_water.land",
    "layer": "foley",
    "channels": 2,
@@ -11402,6 +11803,7 @@
   },
   {
    "file": "Foley/step_water/land_3.wav",
+   "guid": "fb6b935a6da17439",
    "key": "snd.foley.step_water.land",
    "layer": "foley",
    "channels": 2,
@@ -11429,6 +11831,7 @@
   },
   {
    "file": "Foley/step_water/land_4.wav",
+   "guid": "6794bfa0c7d3e567",
    "key": "snd.foley.step_water.land",
    "layer": "foley",
    "channels": 2,
@@ -11456,6 +11859,7 @@
   },
   {
    "file": "Foley/step_water/land_5.wav",
+   "guid": "1b403af055f00dda",
    "key": "snd.foley.step_water.land",
    "layer": "foley",
    "channels": 2,
@@ -11483,6 +11887,7 @@
   },
   {
    "file": "Foley/step_water/run_1.wav",
+   "guid": "bee783a06eb395c2",
    "key": "snd.foley.step_water.run",
    "layer": "step",
    "channels": 2,
@@ -11510,6 +11915,7 @@
   },
   {
    "file": "Foley/step_water/run_10.wav",
+   "guid": "b7138b1ccc9adb32",
    "key": "snd.foley.step_water.run",
    "layer": "step",
    "channels": 2,
@@ -11537,6 +11943,7 @@
   },
   {
    "file": "Foley/step_water/run_2.wav",
+   "guid": "e95be4a587ceee2d",
    "key": "snd.foley.step_water.run",
    "layer": "step",
    "channels": 2,
@@ -11564,6 +11971,7 @@
   },
   {
    "file": "Foley/step_water/run_3.wav",
+   "guid": "01d0a5b01df92214",
    "key": "snd.foley.step_water.run",
    "layer": "step",
    "channels": 2,
@@ -11591,6 +11999,7 @@
   },
   {
    "file": "Foley/step_water/run_4.wav",
+   "guid": "d6c35204699a040b",
    "key": "snd.foley.step_water.run",
    "layer": "step",
    "channels": 2,
@@ -11618,6 +12027,7 @@
   },
   {
    "file": "Foley/step_water/run_5.wav",
+   "guid": "cde99fb45fec1dea",
    "key": "snd.foley.step_water.run",
    "layer": "step",
    "channels": 2,
@@ -11645,6 +12055,7 @@
   },
   {
    "file": "Foley/step_water/run_6.wav",
+   "guid": "99cf72f2f8f3364b",
    "key": "snd.foley.step_water.run",
    "layer": "step",
    "channels": 2,
@@ -11672,6 +12083,7 @@
   },
   {
    "file": "Foley/step_water/run_7.wav",
+   "guid": "4a273de2a87e295e",
    "key": "snd.foley.step_water.run",
    "layer": "step",
    "channels": 2,
@@ -11699,6 +12111,7 @@
   },
   {
    "file": "Foley/step_water/run_8.wav",
+   "guid": "abee69a81495caf8",
    "key": "snd.foley.step_water.run",
    "layer": "step",
    "channels": 2,
@@ -11726,6 +12139,7 @@
   },
   {
    "file": "Foley/step_water/run_9.wav",
+   "guid": "e65b230232058e3d",
    "key": "snd.foley.step_water.run",
    "layer": "step",
    "channels": 2,
@@ -11753,6 +12167,7 @@
   },
   {
    "file": "Foley/step_water/walk_1.wav",
+   "guid": "c14a49f9e07c6fa8",
    "key": "snd.foley.step_water.walk",
    "layer": "step",
    "channels": 2,
@@ -11780,6 +12195,7 @@
   },
   {
    "file": "Foley/step_water/walk_2.wav",
+   "guid": "1bee8652fcd8d0e2",
    "key": "snd.foley.step_water.walk",
    "layer": "step",
    "channels": 2,
@@ -11807,6 +12223,7 @@
   },
   {
    "file": "Foley/step_water/walk_3.wav",
+   "guid": "0d57fdda159d4704",
    "key": "snd.foley.step_water.walk",
    "layer": "step",
    "channels": 2,
@@ -11834,6 +12251,7 @@
   },
   {
    "file": "Foley/step_water/walk_4.wav",
+   "guid": "523b34de3652693e",
    "key": "snd.foley.step_water.walk",
    "layer": "step",
    "channels": 2,
@@ -11861,6 +12279,7 @@
   },
   {
    "file": "Foley/step_water/walk_5.wav",
+   "guid": "28e679d2c498f735",
    "key": "snd.foley.step_water.walk",
    "layer": "step",
    "channels": 2,
@@ -11888,6 +12307,7 @@
   },
   {
    "file": "Foley/step_wood/land_1.wav",
+   "guid": "94a1117e23e643ef",
    "key": "snd.foley.step_wood.land",
    "layer": "foley",
    "channels": 2,
@@ -11915,6 +12335,7 @@
   },
   {
    "file": "Foley/step_wood/land_2.wav",
+   "guid": "190586bd1b68824f",
    "key": "snd.foley.step_wood.land",
    "layer": "foley",
    "channels": 2,
@@ -11942,6 +12363,7 @@
   },
   {
    "file": "Foley/step_wood/land_3.wav",
+   "guid": "d6ef5a836f91e7f1",
    "key": "snd.foley.step_wood.land",
    "layer": "foley",
    "channels": 2,
@@ -11969,6 +12391,7 @@
   },
   {
    "file": "Foley/step_wood/land_4.wav",
+   "guid": "9c39d63f156aab3b",
    "key": "snd.foley.step_wood.land",
    "layer": "foley",
    "channels": 2,
@@ -11996,6 +12419,7 @@
   },
   {
    "file": "Foley/step_wood/land_5.wav",
+   "guid": "1e11149b17008258",
    "key": "snd.foley.step_wood.land",
    "layer": "foley",
    "channels": 2,
@@ -12023,6 +12447,7 @@
   },
   {
    "file": "Foley/step_wood/run_1.wav",
+   "guid": "995e021f3eee6376",
    "key": "snd.foley.step_wood.run",
    "layer": "step",
    "channels": 2,
@@ -12050,6 +12475,7 @@
   },
   {
    "file": "Foley/step_wood/run_10.wav",
+   "guid": "88ec37c344f1146e",
    "key": "snd.foley.step_wood.run",
    "layer": "step",
    "channels": 2,
@@ -12077,6 +12503,7 @@
   },
   {
    "file": "Foley/step_wood/run_2.wav",
+   "guid": "5221ac500c6d67cb",
    "key": "snd.foley.step_wood.run",
    "layer": "step",
    "channels": 2,
@@ -12104,6 +12531,7 @@
   },
   {
    "file": "Foley/step_wood/run_3.wav",
+   "guid": "3e119a21919fde05",
    "key": "snd.foley.step_wood.run",
    "layer": "step",
    "channels": 2,
@@ -12131,6 +12559,7 @@
   },
   {
    "file": "Foley/step_wood/run_4.wav",
+   "guid": "c1063f47de63ac6f",
    "key": "snd.foley.step_wood.run",
    "layer": "step",
    "channels": 2,
@@ -12158,6 +12587,7 @@
   },
   {
    "file": "Foley/step_wood/run_5.wav",
+   "guid": "fe37d238c3bac915",
    "key": "snd.foley.step_wood.run",
    "layer": "step",
    "channels": 2,
@@ -12185,6 +12615,7 @@
   },
   {
    "file": "Foley/step_wood/run_6.wav",
+   "guid": "1f05b204b58db361",
    "key": "snd.foley.step_wood.run",
    "layer": "step",
    "channels": 2,
@@ -12212,6 +12643,7 @@
   },
   {
    "file": "Foley/step_wood/run_7.wav",
+   "guid": "24984edd5e287cb6",
    "key": "snd.foley.step_wood.run",
    "layer": "step",
    "channels": 2,
@@ -12239,6 +12671,7 @@
   },
   {
    "file": "Foley/step_wood/run_8.wav",
+   "guid": "30d9f7c30f7526aa",
    "key": "snd.foley.step_wood.run",
    "layer": "step",
    "channels": 2,
@@ -12266,6 +12699,7 @@
   },
   {
    "file": "Foley/step_wood/run_9.wav",
+   "guid": "3559f9774d932077",
    "key": "snd.foley.step_wood.run",
    "layer": "step",
    "channels": 2,
@@ -12293,6 +12727,7 @@
   },
   {
    "file": "Foley/step_wood/walk_1.wav",
+   "guid": "2eb7a7f00a0cc0e9",
    "key": "snd.foley.step_wood.walk",
    "layer": "step",
    "channels": 2,
@@ -12320,6 +12755,7 @@
   },
   {
    "file": "Foley/step_wood/walk_10.wav",
+   "guid": "608b1530535993ad",
    "key": "snd.foley.step_wood.walk",
    "layer": "step",
    "channels": 2,
@@ -12347,6 +12783,7 @@
   },
   {
    "file": "Foley/step_wood/walk_11.wav",
+   "guid": "b3f5a8768c901ec2",
    "key": "snd.foley.step_wood.walk",
    "layer": "step",
    "channels": 2,
@@ -12374,6 +12811,7 @@
   },
   {
    "file": "Foley/step_wood/walk_2.wav",
+   "guid": "e91dbd1e1ddc2a04",
    "key": "snd.foley.step_wood.walk",
    "layer": "step",
    "channels": 2,
@@ -12401,6 +12839,7 @@
   },
   {
    "file": "Foley/step_wood/walk_3.wav",
+   "guid": "9191e1084652ea58",
    "key": "snd.foley.step_wood.walk",
    "layer": "step",
    "channels": 2,
@@ -12428,6 +12867,7 @@
   },
   {
    "file": "Foley/step_wood/walk_4.wav",
+   "guid": "5209dd5461225d95",
    "key": "snd.foley.step_wood.walk",
    "layer": "step",
    "channels": 2,
@@ -12455,6 +12895,7 @@
   },
   {
    "file": "Foley/step_wood/walk_5.wav",
+   "guid": "9c9a34a0645b2dab",
    "key": "snd.foley.step_wood.walk",
    "layer": "step",
    "channels": 2,
@@ -12482,6 +12923,7 @@
   },
   {
    "file": "Foley/step_wood/walk_6.wav",
+   "guid": "9d70be5101cb38a3",
    "key": "snd.foley.step_wood.walk",
    "layer": "step",
    "channels": 2,
@@ -12509,6 +12951,7 @@
   },
   {
    "file": "Foley/step_wood/walk_7.wav",
+   "guid": "b65d1ea41c0434f7",
    "key": "snd.foley.step_wood.walk",
    "layer": "step",
    "channels": 2,
@@ -12536,6 +12979,7 @@
   },
   {
    "file": "Foley/step_wood/walk_8.wav",
+   "guid": "4bf832469ee44952",
    "key": "snd.foley.step_wood.walk",
    "layer": "step",
    "channels": 2,
@@ -12563,6 +13007,7 @@
   },
   {
    "file": "Foley/step_wood/walk_9.wav",
+   "guid": "c1ab91e9f192c60c",
    "key": "snd.foley.step_wood.walk",
    "layer": "step",
    "channels": 2,
@@ -12590,6 +13035,7 @@
   },
   {
    "file": "Foley/weapon/ads_in_1.wav",
+   "guid": "a242b3e984a3b605",
    "key": "snd.foley.weapon.ads_in",
    "layer": "foley",
    "channels": 2,
@@ -12616,6 +13062,7 @@
   },
   {
    "file": "Foley/weapon/ads_in_2.wav",
+   "guid": "5adc9fe9b4478e9e",
    "key": "snd.foley.weapon.ads_in",
    "layer": "foley",
    "channels": 2,
@@ -12642,6 +13089,7 @@
   },
   {
    "file": "Foley/weapon/ads_in_3.wav",
+   "guid": "5caa791c5946d4d8",
    "key": "snd.foley.weapon.ads_in",
    "layer": "foley",
    "channels": 2,
@@ -12668,6 +13116,7 @@
   },
   {
    "file": "Foley/weapon/ads_in_4.wav",
+   "guid": "af0bca662083f606",
    "key": "snd.foley.weapon.ads_in",
    "layer": "foley",
    "channels": 2,
@@ -12694,6 +13143,7 @@
   },
   {
    "file": "Foley/weapon/ads_out_1.wav",
+   "guid": "d883a418d77699e5",
    "key": "snd.foley.weapon.ads_out",
    "layer": "foley",
    "channels": 2,
@@ -12720,6 +13170,7 @@
   },
   {
    "file": "Foley/weapon/ads_out_2.wav",
+   "guid": "da7e134c3bc3bef7",
    "key": "snd.foley.weapon.ads_out",
    "layer": "foley",
    "channels": 2,
@@ -12746,6 +13197,7 @@
   },
   {
    "file": "Foley/weapon/ads_out_3.wav",
+   "guid": "7ff50fbcbb6acd40",
    "key": "snd.foley.weapon.ads_out",
    "layer": "foley",
    "channels": 2,
@@ -12772,6 +13224,7 @@
   },
   {
    "file": "Foley/weapon/ads_out_4.wav",
+   "guid": "ffe57fe095968918",
    "key": "snd.foley.weapon.ads_out",
    "layer": "foley",
    "channels": 2,
@@ -12798,6 +13251,7 @@
   },
   {
    "file": "Foley/weapon/equip_1.wav",
+   "guid": "3df3295ef105407f",
    "key": "snd.foley.weapon.equip",
    "layer": "foley",
    "channels": 2,
@@ -12824,6 +13278,7 @@
   },
   {
    "file": "Foley/weapon/equip_2.wav",
+   "guid": "30b85b2e4b119840",
    "key": "snd.foley.weapon.equip",
    "layer": "foley",
    "channels": 2,
@@ -12850,6 +13305,7 @@
   },
   {
    "file": "Foley/weapon/equip_3.wav",
+   "guid": "6f56903cb343cdb8",
    "key": "snd.foley.weapon.equip",
    "layer": "foley",
    "channels": 2,
@@ -12876,6 +13332,7 @@
   },
   {
    "file": "Foley/weapon/equip_4.wav",
+   "guid": "ca0f3ad786279a62",
    "key": "snd.foley.weapon.equip",
    "layer": "foley",
    "channels": 2,
@@ -12902,6 +13359,7 @@
   },
   {
    "file": "Foley/weapon/firemode_1.wav",
+   "guid": "7c119945b4fd9e80",
    "key": "snd.foley.weapon.firemode",
    "layer": "foley",
    "channels": 2,
@@ -12928,6 +13386,7 @@
   },
   {
    "file": "Foley/weapon/firemode_2.wav",
+   "guid": "55cb2e1776aa838f",
    "key": "snd.foley.weapon.firemode",
    "layer": "foley",
    "channels": 2,
@@ -12954,6 +13413,7 @@
   },
   {
    "file": "Foley/weapon/firemode_3.wav",
+   "guid": "c19ed3e66c0d4bb2",
    "key": "snd.foley.weapon.firemode",
    "layer": "foley",
    "channels": 2,
@@ -12980,6 +13440,7 @@
   },
   {
    "file": "Foley/weapon/unequip_1.wav",
+   "guid": "8d48f3ec035d12ff",
    "key": "snd.foley.weapon.unequip",
    "layer": "foley",
    "channels": 2,
@@ -13006,6 +13467,7 @@
   },
   {
    "file": "Foley/weapon/unequip_2.wav",
+   "guid": "008621714a13ad8c",
    "key": "snd.foley.weapon.unequip",
    "layer": "foley",
    "channels": 2,
@@ -13032,6 +13494,7 @@
   },
   {
    "file": "Foley/weapon/unequip_3.wav",
+   "guid": "360ff9de72bbf38f",
    "key": "snd.foley.weapon.unequip",
    "layer": "foley",
    "channels": 2,
@@ -13058,6 +13521,7 @@
   },
   {
    "file": "Foley/weapon/unequip_4.wav",
+   "guid": "45fb9f8272adc898",
    "key": "snd.foley.weapon.unequip",
    "layer": "foley",
    "channels": 2,
@@ -13084,6 +13548,7 @@
   },
   {
    "file": "Gear/flashlight_off_1.wav",
+   "guid": "1626fec740facb36",
    "key": "snd.foley.weapon.flashlight_off",
    "layer": "foley",
    "channels": 2,
@@ -13108,6 +13573,7 @@
   },
   {
    "file": "Gear/flashlight_off_2.wav",
+   "guid": "9abc84f31e146c89",
    "key": "snd.foley.weapon.flashlight_off",
    "layer": "foley",
    "channels": 2,
@@ -13132,6 +13598,7 @@
   },
   {
    "file": "Gear/flashlight_on_1.wav",
+   "guid": "4c8481f0614b0cf8",
    "key": "snd.foley.weapon.flashlight_on",
    "layer": "foley",
    "channels": 2,
@@ -13156,6 +13623,7 @@
   },
   {
    "file": "Gear/flashlight_on_2.wav",
+   "guid": "9e7dd6d11fc625af",
    "key": "snd.foley.weapon.flashlight_on",
    "layer": "foley",
    "channels": 2,
@@ -13180,6 +13648,7 @@
   },
   {
    "file": "IR/apartment_1.wav",
+   "guid": "645ab34c0e2ca888",
    "key": "ir.apartment",
    "layer": "ir",
    "channels": 2,
@@ -13208,6 +13677,7 @@
   },
   {
    "file": "IR/apartment_2.wav",
+   "guid": "98345d883965b50a",
    "key": "ir.apartment",
    "layer": "ir",
    "channels": 2,
@@ -13236,6 +13706,7 @@
   },
   {
    "file": "IR/apartment_3.wav",
+   "guid": "9dbc2723f58cced6",
    "key": "ir.apartment",
    "layer": "ir",
    "channels": 2,
@@ -13264,6 +13735,7 @@
   },
   {
    "file": "IR/indoor_large_1.wav",
+   "guid": "dc128f029019b3d9",
    "key": "ir.indoor_large",
    "layer": "ir",
    "channels": 2,
@@ -13292,6 +13764,7 @@
   },
   {
    "file": "IR/indoor_large_2.wav",
+   "guid": "6af25d0bd73bf5b5",
    "key": "ir.indoor_large",
    "layer": "ir",
    "channels": 2,
@@ -13320,6 +13793,7 @@
   },
   {
    "file": "IR/indoor_large_3.wav",
+   "guid": "032a165bd3a99ee7",
    "key": "ir.indoor_large",
    "layer": "ir",
    "channels": 2,
@@ -13348,6 +13822,7 @@
   },
   {
    "file": "IR/indoor_small_1.wav",
+   "guid": "74aec4fe1ac976c3",
    "key": "ir.indoor_small",
    "layer": "ir",
    "channels": 2,
@@ -13376,6 +13851,7 @@
   },
   {
    "file": "IR/indoor_small_2.wav",
+   "guid": "06d5ab883b31ccb4",
    "key": "ir.indoor_small",
    "layer": "ir",
    "channels": 2,
@@ -13404,6 +13880,7 @@
   },
   {
    "file": "IR/indoor_small_3.wav",
+   "guid": "2ebea8d68e6ccea0",
    "key": "ir.indoor_small",
    "layer": "ir",
    "channels": 2,
@@ -13432,6 +13909,7 @@
   },
   {
    "file": "IR/outdoor_open_1.wav",
+   "guid": "9dcdfded68b3a57a",
    "key": "ir.outdoor_open",
    "layer": "ir",
    "channels": 2,
@@ -13466,6 +13944,7 @@
   },
   {
    "file": "IR/outdoor_open_2.wav",
+   "guid": "6ba18bb3ca5b0c2f",
    "key": "ir.outdoor_open",
    "layer": "ir",
    "channels": 2,
@@ -13500,6 +13979,7 @@
   },
   {
    "file": "IR/outdoor_open_3.wav",
+   "guid": "dee551364235841a",
    "key": "ir.outdoor_open",
    "layer": "ir",
    "channels": 2,
@@ -13534,6 +14014,7 @@
   },
   {
    "file": "IR/outdoor_urban_1.wav",
+   "guid": "c06b3353021bd5bd",
    "key": "ir.outdoor_urban",
    "layer": "ir",
    "channels": 2,
@@ -13562,6 +14043,7 @@
   },
   {
    "file": "IR/outdoor_urban_2.wav",
+   "guid": "12bce394e12cb2ad",
    "key": "ir.outdoor_urban",
    "layer": "ir",
    "channels": 2,
@@ -13590,6 +14072,7 @@
   },
   {
    "file": "IR/outdoor_urban_3.wav",
+   "guid": "974c4f7ca5b60060",
    "key": "ir.outdoor_urban",
    "layer": "ir",
    "channels": 2,
@@ -13618,6 +14101,7 @@
   },
   {
    "file": "Impacts/concrete_1.wav",
+   "guid": "0c335929c8dbb43a",
    "key": "snd.impact.concrete",
    "layer": "impact",
    "channels": 2,
@@ -13644,6 +14128,7 @@
   },
   {
    "file": "Impacts/concrete_2.wav",
+   "guid": "8f4e83f05260460d",
    "key": "snd.impact.concrete",
    "layer": "impact",
    "channels": 2,
@@ -13670,6 +14155,7 @@
   },
   {
    "file": "Impacts/concrete_3.wav",
+   "guid": "a5b5e5acb0ee892a",
    "key": "snd.impact.concrete",
    "layer": "impact",
    "channels": 2,
@@ -13696,6 +14182,7 @@
   },
   {
    "file": "Impacts/concrete_4.wav",
+   "guid": "1e8637d8b617e8dd",
    "key": "snd.impact.concrete",
    "layer": "impact",
    "channels": 2,
@@ -13722,6 +14209,7 @@
   },
   {
    "file": "Impacts/concrete_5.wav",
+   "guid": "275c5ec571108ccc",
    "key": "snd.impact.concrete",
    "layer": "impact",
    "channels": 2,
@@ -13748,6 +14236,7 @@
   },
   {
    "file": "Impacts/dirt_1.wav",
+   "guid": "2a395d9877316852",
    "key": "snd.impact.dirt",
    "layer": "impact",
    "channels": 2,
@@ -13774,6 +14263,7 @@
   },
   {
    "file": "Impacts/dirt_2.wav",
+   "guid": "404a46ec638d4c2f",
    "key": "snd.impact.dirt",
    "layer": "impact",
    "channels": 2,
@@ -13800,6 +14290,7 @@
   },
   {
    "file": "Impacts/dirt_3.wav",
+   "guid": "f63851e417a74a84",
    "key": "snd.impact.dirt",
    "layer": "impact",
    "channels": 2,
@@ -13826,6 +14317,7 @@
   },
   {
    "file": "Impacts/dirt_4.wav",
+   "guid": "6a6908db08cfb208",
    "key": "snd.impact.dirt",
    "layer": "impact",
    "channels": 2,
@@ -13852,6 +14344,7 @@
   },
   {
    "file": "Impacts/dirt_5.wav",
+   "guid": "f65894ba6fbcafdb",
    "key": "snd.impact.dirt",
    "layer": "impact",
    "channels": 2,
@@ -13878,6 +14371,7 @@
   },
   {
    "file": "Impacts/flesh_1.wav",
+   "guid": "6a8e005f58d8f7df",
    "key": "snd.impact.flesh",
    "layer": "impact",
    "channels": 2,
@@ -13904,6 +14398,7 @@
   },
   {
    "file": "Impacts/flesh_10.wav",
+   "guid": "5b1d35b504784a9f",
    "key": "snd.impact.flesh",
    "layer": "impact",
    "channels": 2,
@@ -13930,6 +14425,7 @@
   },
   {
    "file": "Impacts/flesh_11.wav",
+   "guid": "2f27282834d1e7f3",
    "key": "snd.impact.flesh",
    "layer": "impact",
    "channels": 2,
@@ -13956,6 +14452,7 @@
   },
   {
    "file": "Impacts/flesh_12.wav",
+   "guid": "7dce1e849894e6ac",
    "key": "snd.impact.flesh",
    "layer": "impact",
    "channels": 2,
@@ -13982,6 +14479,7 @@
   },
   {
    "file": "Impacts/flesh_13.wav",
+   "guid": "40aba7f4ef629c80",
    "key": "snd.impact.flesh",
    "layer": "impact",
    "channels": 2,
@@ -14008,6 +14506,7 @@
   },
   {
    "file": "Impacts/flesh_2.wav",
+   "guid": "96c5c2741fac6b79",
    "key": "snd.impact.flesh",
    "layer": "impact",
    "channels": 2,
@@ -14034,6 +14533,7 @@
   },
   {
    "file": "Impacts/flesh_3.wav",
+   "guid": "31db0d4f8ce3c4c3",
    "key": "snd.impact.flesh",
    "layer": "impact",
    "channels": 2,
@@ -14060,6 +14560,7 @@
   },
   {
    "file": "Impacts/flesh_4.wav",
+   "guid": "715266cfedf84bd3",
    "key": "snd.impact.flesh",
    "layer": "impact",
    "channels": 2,
@@ -14086,6 +14587,7 @@
   },
   {
    "file": "Impacts/flesh_5.wav",
+   "guid": "69a917077aae2ace",
    "key": "snd.impact.flesh",
    "layer": "impact",
    "channels": 2,
@@ -14112,6 +14614,7 @@
   },
   {
    "file": "Impacts/flesh_6.wav",
+   "guid": "3e23e59ab9e9aba4",
    "key": "snd.impact.flesh",
    "layer": "impact",
    "channels": 2,
@@ -14138,6 +14641,7 @@
   },
   {
    "file": "Impacts/flesh_7.wav",
+   "guid": "da07e05921a7bd62",
    "key": "snd.impact.flesh",
    "layer": "impact",
    "channels": 2,
@@ -14164,6 +14668,7 @@
   },
   {
    "file": "Impacts/flesh_8.wav",
+   "guid": "2682d0f3f655d144",
    "key": "snd.impact.flesh",
    "layer": "impact",
    "channels": 2,
@@ -14190,6 +14695,7 @@
   },
   {
    "file": "Impacts/flesh_9.wav",
+   "guid": "d551353bd87921e4",
    "key": "snd.impact.flesh",
    "layer": "impact",
    "channels": 2,
@@ -14216,6 +14722,7 @@
   },
   {
    "file": "Impacts/flyby_1.wav",
+   "guid": "1d7461a64fa8d726",
    "key": "snd.flyby",
    "layer": "flyby",
    "channels": 2,
@@ -14240,6 +14747,7 @@
   },
   {
    "file": "Impacts/flyby_2.wav",
+   "guid": "d220e440600c0ca0",
    "key": "snd.flyby",
    "layer": "flyby",
    "channels": 2,
@@ -14264,6 +14772,7 @@
   },
   {
    "file": "Impacts/flyby_3.wav",
+   "guid": "9e7abaa3633d0fcb",
    "key": "snd.flyby",
    "layer": "flyby",
    "channels": 2,
@@ -14288,6 +14797,7 @@
   },
   {
    "file": "Impacts/flyby_4.wav",
+   "guid": "631f4a8be321db06",
    "key": "snd.flyby",
    "layer": "flyby",
    "channels": 2,
@@ -14312,6 +14822,7 @@
   },
   {
    "file": "Impacts/flyby_5.wav",
+   "guid": "bf3163d8122eadfa",
    "key": "snd.flyby",
    "layer": "flyby",
    "channels": 2,
@@ -14336,6 +14847,7 @@
   },
   {
    "file": "Impacts/flyby_6.wav",
+   "guid": "773862c7246368c2",
    "key": "snd.flyby",
    "layer": "flyby",
    "channels": 2,
@@ -14360,6 +14872,7 @@
   },
   {
    "file": "Impacts/glass_1.wav",
+   "guid": "b710bc2da659c151",
    "key": "snd.impact.glass",
    "layer": "impact",
    "channels": 2,
@@ -14386,6 +14899,7 @@
   },
   {
    "file": "Impacts/glass_2.wav",
+   "guid": "242b5ec4db037568",
    "key": "snd.impact.glass",
    "layer": "impact",
    "channels": 2,
@@ -14412,6 +14926,7 @@
   },
   {
    "file": "Impacts/glass_3.wav",
+   "guid": "9d5b12c175c79ac6",
    "key": "snd.impact.glass",
    "layer": "impact",
    "channels": 2,
@@ -14438,6 +14953,7 @@
   },
   {
    "file": "Impacts/glass_4.wav",
+   "guid": "1d655222c688e125",
    "key": "snd.impact.glass",
    "layer": "impact",
    "channels": 2,
@@ -14464,6 +14980,7 @@
   },
   {
    "file": "Impacts/glass_5.wav",
+   "guid": "35f104e39543d676",
    "key": "snd.impact.glass",
    "layer": "impact",
    "channels": 2,
@@ -14490,6 +15007,7 @@
   },
   {
    "file": "Impacts/gore_1.wav",
+   "guid": "f9b7273fa019be12",
    "key": "snd.impact.gore",
    "layer": "impact",
    "channels": 2,
@@ -14516,6 +15034,7 @@
   },
   {
    "file": "Impacts/gore_2.wav",
+   "guid": "dc00fa0e66c03b9e",
    "key": "snd.impact.gore",
    "layer": "impact",
    "channels": 2,
@@ -14542,6 +15061,7 @@
   },
   {
    "file": "Impacts/gore_3.wav",
+   "guid": "2f80d89a56c5b722",
    "key": "snd.impact.gore",
    "layer": "impact",
    "channels": 2,
@@ -14568,6 +15088,7 @@
   },
   {
    "file": "Impacts/ice_1.wav",
+   "guid": "6724479f553cadc2",
    "key": "snd.impact.ice",
    "layer": "impact",
    "channels": 2,
@@ -14594,6 +15115,7 @@
   },
   {
    "file": "Impacts/ice_2.wav",
+   "guid": "b74f06c2c7e3dd88",
    "key": "snd.impact.ice",
    "layer": "impact",
    "channels": 2,
@@ -14620,6 +15142,7 @@
   },
   {
    "file": "Impacts/ice_3.wav",
+   "guid": "9c852189a51b1a72",
    "key": "snd.impact.ice",
    "layer": "impact",
    "channels": 2,
@@ -14646,6 +15169,7 @@
   },
   {
    "file": "Impacts/ice_4.wav",
+   "guid": "38f25c12075aa47b",
    "key": "snd.impact.ice",
    "layer": "impact",
    "channels": 2,
@@ -14672,6 +15196,7 @@
   },
   {
    "file": "Impacts/metal_1.wav",
+   "guid": "0a0cacf91334fe89",
    "key": "snd.impact.metal",
    "layer": "impact",
    "channels": 2,
@@ -14698,6 +15223,7 @@
   },
   {
    "file": "Impacts/metal_2.wav",
+   "guid": "ff89ffe659f0481c",
    "key": "snd.impact.metal",
    "layer": "impact",
    "channels": 2,
@@ -14724,6 +15250,7 @@
   },
   {
    "file": "Impacts/metal_3.wav",
+   "guid": "90c92dc612765938",
    "key": "snd.impact.metal",
    "layer": "impact",
    "channels": 2,
@@ -14750,6 +15277,7 @@
   },
   {
    "file": "Impacts/metal_4.wav",
+   "guid": "8bff18425ec291e7",
    "key": "snd.impact.metal",
    "layer": "impact",
    "channels": 2,
@@ -14776,6 +15304,7 @@
   },
   {
    "file": "Impacts/metal_5.wav",
+   "guid": "b4fea942aa01b085",
    "key": "snd.impact.metal",
    "layer": "impact",
    "channels": 2,
@@ -14802,6 +15331,7 @@
   },
   {
    "file": "Impacts/wood_1.wav",
+   "guid": "a456ea3adb20b335",
    "key": "snd.impact.wood",
    "layer": "impact",
    "channels": 2,
@@ -14828,6 +15358,7 @@
   },
   {
    "file": "Impacts/wood_2.wav",
+   "guid": "4efb1d6eb4506120",
    "key": "snd.impact.wood",
    "layer": "impact",
    "channels": 2,
@@ -14854,6 +15385,7 @@
   },
   {
    "file": "Impacts/wood_3.wav",
+   "guid": "f0e16e78400d2635",
    "key": "snd.impact.wood",
    "layer": "impact",
    "channels": 2,
@@ -14880,6 +15412,7 @@
   },
   {
    "file": "Impacts/wood_4.wav",
+   "guid": "f5c5c4f99599d7bb",
    "key": "snd.impact.wood",
    "layer": "impact",
    "channels": 2,
@@ -14906,6 +15439,7 @@
   },
   {
    "file": "Impacts/wood_5.wav",
+   "guid": "ded945ce7861aaa5",
    "key": "snd.impact.wood",
    "layer": "impact",
    "channels": 2,
@@ -14932,6 +15466,7 @@
   },
   {
    "file": "Impacts/wood_6.wav",
+   "guid": "4fccbe33804d3d11",
    "key": "snd.impact.wood",
    "layer": "impact",
    "channels": 2,
@@ -14958,6 +15493,7 @@
   },
   {
    "file": "UI/hitmarker_1.wav",
+   "guid": "79e7bb75a35a44a0",
    "key": "snd.ui.hitmarker",
    "layer": "ui",
    "channels": 2,
@@ -14988,6 +15524,7 @@
   },
   {
    "file": "UI/hitmarker_2.wav",
+   "guid": "0dd08d46a65561b5",
    "key": "snd.ui.hitmarker",
    "layer": "ui",
    "channels": 2,
@@ -15012,6 +15549,7 @@
   },
   {
    "file": "UI/hitmarker_3.wav",
+   "guid": "8bd5be2e7c917ce5",
    "key": "snd.ui.hitmarker",
    "layer": "ui",
    "channels": 2,
@@ -15042,6 +15580,7 @@
   },
   {
    "file": "UI/hitmarker_4.wav",
+   "guid": "ab85bf63ba0537c0",
    "key": "snd.ui.hitmarker",
    "layer": "ui",
    "channels": 2,
@@ -15066,6 +15605,7 @@
   },
   {
    "file": "UI/hitmarker_5.wav",
+   "guid": "fa5aa9df1fb51e9c",
    "key": "snd.ui.hitmarker",
    "layer": "ui",
    "channels": 2,
@@ -15096,6 +15636,7 @@
   },
   {
    "file": "UI/hitmarker_kill_1.wav",
+   "guid": "3e7312f426a9b36f",
    "key": "snd.ui.hitmarker_kill",
    "layer": "ui",
    "channels": 2,
@@ -15138,6 +15679,7 @@
   },
   {
    "file": "UI/hitmarker_kill_2.wav",
+   "guid": "2cf0bff2cb93f7e9",
    "key": "snd.ui.hitmarker_kill",
    "layer": "ui",
    "channels": 2,
@@ -15180,6 +15722,7 @@
   },
   {
    "file": "UI/hitmarker_kill_3.wav",
+   "guid": "4e82d6968db9d6f5",
    "key": "snd.ui.hitmarker_kill",
    "layer": "ui",
    "channels": 2,
@@ -15222,6 +15765,7 @@
   },
   {
    "file": "UI/hitmarker_kill_4.wav",
+   "guid": "2360aecd831c5630",
    "key": "snd.ui.hitmarker_kill",
    "layer": "ui",
    "channels": 2,
@@ -15264,6 +15808,7 @@
   },
   {
    "file": "Weapons/AKS74U/bolt_back_1.wav",
+   "guid": "4f685a411cf35734",
    "key": "snd.ak.bolt_back",
    "layer": "action",
    "channels": 2,
@@ -15291,6 +15836,7 @@
   },
   {
    "file": "Weapons/AKS74U/bolt_back_2.wav",
+   "guid": "f4e6a22fb57ffc0a",
    "key": "snd.ak.bolt_back",
    "layer": "action",
    "channels": 2,
@@ -15318,6 +15864,7 @@
   },
   {
    "file": "Weapons/AKS74U/bolt_back_3.wav",
+   "guid": "bd2ad27fe10ab2c0",
    "key": "snd.ak.bolt_back",
    "layer": "action",
    "channels": 2,
@@ -15345,6 +15892,7 @@
   },
   {
    "file": "Weapons/AKS74U/bolt_back_4.wav",
+   "guid": "0a0e5e77bda7e27e",
    "key": "snd.ak.bolt_back",
    "layer": "action",
    "channels": 2,
@@ -15371,6 +15919,7 @@
   },
   {
    "file": "Weapons/AKS74U/bolt_release_1.wav",
+   "guid": "f8e44a16ac693a32",
    "key": "snd.ak.bolt_release",
    "layer": "action",
    "channels": 2,
@@ -15398,6 +15947,7 @@
   },
   {
    "file": "Weapons/AKS74U/bolt_release_2.wav",
+   "guid": "c1ba558e14e8eac8",
    "key": "snd.ak.bolt_release",
    "layer": "action",
    "channels": 2,
@@ -15425,6 +15975,7 @@
   },
   {
    "file": "Weapons/AKS74U/bolt_release_3.wav",
+   "guid": "91ac2930e83ba5c9",
    "key": "snd.ak.bolt_release",
    "layer": "action",
    "channels": 2,
@@ -15452,6 +16003,7 @@
   },
   {
    "file": "Weapons/AKS74U/bolt_release_4.wav",
+   "guid": "56cc618ed98041c8",
    "key": "snd.ak.bolt_release",
    "layer": "action",
    "channels": 2,
@@ -15478,6 +16030,7 @@
   },
   {
    "file": "Weapons/AKS74U/cloth_1.wav",
+   "guid": "cd02b37e8542fda3",
    "key": "snd.ak.cloth",
    "layer": "action",
    "channels": 2,
@@ -15504,6 +16057,7 @@
   },
   {
    "file": "Weapons/AKS74U/cloth_2.wav",
+   "guid": "9b79bcc61cff7d3c",
    "key": "snd.ak.cloth",
    "layer": "action",
    "channels": 2,
@@ -15530,6 +16084,7 @@
   },
   {
    "file": "Weapons/AKS74U/cloth_3.wav",
+   "guid": "5a1f4f2b1c66dbef",
    "key": "snd.ak.cloth",
    "layer": "action",
    "channels": 2,
@@ -15556,6 +16111,7 @@
   },
   {
    "file": "Weapons/AKS74U/draw_1.wav",
+   "guid": "eaed1e8cb4176844",
    "key": "snd.ak.draw",
    "layer": "action",
    "channels": 2,
@@ -15594,6 +16150,7 @@
   },
   {
    "file": "Weapons/AKS74U/draw_2.wav",
+   "guid": "205dfc41750a495f",
    "key": "snd.ak.draw",
    "layer": "action",
    "channels": 2,
@@ -15632,6 +16189,7 @@
   },
   {
    "file": "Weapons/AKS74U/draw_3.wav",
+   "guid": "175b57b7992e2af5",
    "key": "snd.ak.draw",
    "layer": "action",
    "channels": 2,
@@ -15670,6 +16228,7 @@
   },
   {
    "file": "Weapons/AKS74U/dry_fire_1.wav",
+   "guid": "1b78f85a01db69bb",
    "key": "snd.ak.dry_fire",
    "layer": "action",
    "channels": 2,
@@ -15696,6 +16255,7 @@
   },
   {
    "file": "Weapons/AKS74U/dry_fire_2.wav",
+   "guid": "9c3cb66f56cd2e8c",
    "key": "snd.ak.dry_fire",
    "layer": "action",
    "channels": 2,
@@ -15722,6 +16282,7 @@
   },
   {
    "file": "Weapons/AKS74U/dry_fire_3.wav",
+   "guid": "789cdb7d304d4d08",
    "key": "snd.ak.dry_fire",
    "layer": "action",
    "channels": 2,
@@ -15748,6 +16309,7 @@
   },
   {
    "file": "Weapons/AKS74U/dry_fire_4.wav",
+   "guid": "d36c5ec6b8751f8c",
    "key": "snd.ak.dry_fire",
    "layer": "action",
    "channels": 2,
@@ -15774,6 +16336,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_close_1.wav",
+   "guid": "65623cc89bf21e33",
    "key": "snd.ak.fire_close",
    "layer": "close",
    "channels": 2,
@@ -15818,6 +16381,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_close_2.wav",
+   "guid": "535dd8b650b04f75",
    "key": "snd.ak.fire_close",
    "layer": "close",
    "channels": 2,
@@ -15856,6 +16420,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_close_3.wav",
+   "guid": "1a9bacb59a642433",
    "key": "snd.ak.fire_close",
    "layer": "close",
    "channels": 2,
@@ -15900,6 +16465,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_close_4.wav",
+   "guid": "55e0a8ea2013be06",
    "key": "snd.ak.fire_close",
    "layer": "close",
    "channels": 2,
@@ -15938,6 +16504,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_close_5.wav",
+   "guid": "5529cd63bdbb1211",
    "key": "snd.ak.fire_close",
    "layer": "close",
    "channels": 2,
@@ -15982,6 +16549,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_close_6.wav",
+   "guid": "831e924e323d3aa9",
    "key": "snd.ak.fire_close",
    "layer": "close",
    "channels": 2,
@@ -16020,6 +16588,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_close_7.wav",
+   "guid": "cf4fdcf5ab54941e",
    "key": "snd.ak.fire_close",
    "layer": "close",
    "channels": 2,
@@ -16064,6 +16633,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_close_8.wav",
+   "guid": "d95f5150ed30910b",
    "key": "snd.ak.fire_close",
    "layer": "close",
    "channels": 2,
@@ -16102,6 +16672,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_far_1.wav",
+   "guid": "8db2049faac79a44",
    "key": "snd.ak.fire_far",
    "layer": "far",
    "channels": 1,
@@ -16128,6 +16699,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_far_2.wav",
+   "guid": "2e5e23228139e329",
    "key": "snd.ak.fire_far",
    "layer": "far",
    "channels": 1,
@@ -16154,6 +16726,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_far_3.wav",
+   "guid": "8386d3a6a113e8fc",
    "key": "snd.ak.fire_far",
    "layer": "far",
    "channels": 1,
@@ -16180,6 +16753,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_far_4.wav",
+   "guid": "a98d83c4f7ff46b9",
    "key": "snd.ak.fire_far",
    "layer": "far",
    "channels": 1,
@@ -16206,6 +16780,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_far_5.wav",
+   "guid": "8d0eaf2c934dbd04",
    "key": "snd.ak.fire_far",
    "layer": "far",
    "channels": 1,
@@ -16232,6 +16807,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_far_6.wav",
+   "guid": "7305f85cccb6e767",
    "key": "snd.ak.fire_far",
    "layer": "far",
    "channels": 1,
@@ -16258,6 +16834,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_mech_1.wav",
+   "guid": "c51acdb0dad8040d",
    "key": "snd.ak.fire_mech",
    "layer": "mech",
    "channels": 2,
@@ -16284,6 +16861,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_mech_2.wav",
+   "guid": "0867a373d1bb0a1b",
    "key": "snd.ak.fire_mech",
    "layer": "mech",
    "channels": 2,
@@ -16310,6 +16888,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_mech_3.wav",
+   "guid": "741a1c909391996c",
    "key": "snd.ak.fire_mech",
    "layer": "mech",
    "channels": 2,
@@ -16336,6 +16915,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_mech_4.wav",
+   "guid": "d45b9ccd33a57891",
    "key": "snd.ak.fire_mech",
    "layer": "mech",
    "channels": 2,
@@ -16362,6 +16942,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_sub_1.wav",
+   "guid": "ec9bf09856d7c20c",
    "key": "snd.ak.fire_sub",
    "layer": "sub",
    "channels": 1,
@@ -16400,6 +16981,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_sub_2.wav",
+   "guid": "906a54adf2320130",
    "key": "snd.ak.fire_sub",
    "layer": "sub",
    "channels": 1,
@@ -16438,6 +17020,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_sub_3.wav",
+   "guid": "1211a848827ecdfb",
    "key": "snd.ak.fire_sub",
    "layer": "sub",
    "channels": 1,
@@ -16476,6 +17059,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_sub_4.wav",
+   "guid": "7c001faaea7768b1",
    "key": "snd.ak.fire_sub",
    "layer": "sub",
    "channels": 1,
@@ -16514,6 +17098,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_sub_5.wav",
+   "guid": "a098541235b5f714",
    "key": "snd.ak.fire_sub",
    "layer": "sub",
    "channels": 1,
@@ -16552,6 +17137,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_tail_1.wav",
+   "guid": "1994d26b76616786",
    "key": "snd.ak.fire_tail",
    "layer": "tail",
    "channels": 2,
@@ -16579,6 +17165,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_tail_2.wav",
+   "guid": "bc75591ba463e7a7",
    "key": "snd.ak.fire_tail",
    "layer": "tail",
    "channels": 2,
@@ -16606,6 +17193,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_tail_3.wav",
+   "guid": "6aefc9958c08148d",
    "key": "snd.ak.fire_tail",
    "layer": "tail",
    "channels": 2,
@@ -16633,6 +17221,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_tail_4.wav",
+   "guid": "3cded8775e13bcf4",
    "key": "snd.ak.fire_tail",
    "layer": "tail",
    "channels": 2,
@@ -16660,6 +17249,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_tail_5.wav",
+   "guid": "fd2e134fe6a8c502",
    "key": "snd.ak.fire_tail",
    "layer": "tail",
    "channels": 2,
@@ -16687,6 +17277,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_tail_indoor_large_1.wav",
+   "guid": "63d8a6f1cd6f352f",
    "key": "snd.ak.fire_tail_indoor_large",
    "layer": "tail",
    "channels": 2,
@@ -16716,6 +17307,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_tail_indoor_large_2.wav",
+   "guid": "ff2f086d123985fa",
    "key": "snd.ak.fire_tail_indoor_large",
    "layer": "tail",
    "channels": 2,
@@ -16745,6 +17337,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_tail_indoor_large_3.wav",
+   "guid": "a35fd78d010e99fc",
    "key": "snd.ak.fire_tail_indoor_large",
    "layer": "tail",
    "channels": 2,
@@ -16774,6 +17367,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_tail_indoor_large_4.wav",
+   "guid": "1c9b8d5f29dd9815",
    "key": "snd.ak.fire_tail_indoor_large",
    "layer": "tail",
    "channels": 2,
@@ -16804,6 +17398,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_tail_indoor_large_5.wav",
+   "guid": "d8c5eed29e4d6125",
    "key": "snd.ak.fire_tail_indoor_large",
    "layer": "tail",
    "channels": 2,
@@ -16834,6 +17429,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_tail_indoor_small_1.wav",
+   "guid": "d9d39d5eeb730308",
    "key": "snd.ak.fire_tail_indoor_small",
    "layer": "tail",
    "channels": 2,
@@ -16863,6 +17459,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_tail_indoor_small_2.wav",
+   "guid": "bcc30f736ac205f5",
    "key": "snd.ak.fire_tail_indoor_small",
    "layer": "tail",
    "channels": 2,
@@ -16892,6 +17489,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_tail_indoor_small_3.wav",
+   "guid": "db6e26568a6b8a30",
    "key": "snd.ak.fire_tail_indoor_small",
    "layer": "tail",
    "channels": 2,
@@ -16921,6 +17519,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_tail_indoor_small_4.wav",
+   "guid": "284cc44dfdc5fd68",
    "key": "snd.ak.fire_tail_indoor_small",
    "layer": "tail",
    "channels": 2,
@@ -16951,6 +17550,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_tail_indoor_small_5.wav",
+   "guid": "e4729c5fb00dcf77",
    "key": "snd.ak.fire_tail_indoor_small",
    "layer": "tail",
    "channels": 2,
@@ -16987,6 +17587,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_tail_outdoor_open_1.wav",
+   "guid": "d53d15958abbf166",
    "key": "snd.ak.fire_tail_outdoor_open",
    "layer": "tail",
    "channels": 2,
@@ -17016,6 +17617,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_tail_outdoor_open_2.wav",
+   "guid": "bf46cc43fb9ea520",
    "key": "snd.ak.fire_tail_outdoor_open",
    "layer": "tail",
    "channels": 2,
@@ -17045,6 +17647,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_tail_outdoor_open_3.wav",
+   "guid": "7350fc9e1dd2ba28",
    "key": "snd.ak.fire_tail_outdoor_open",
    "layer": "tail",
    "channels": 2,
@@ -17074,6 +17677,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_tail_outdoor_open_4.wav",
+   "guid": "d4d7bbfa86be4aab",
    "key": "snd.ak.fire_tail_outdoor_open",
    "layer": "tail",
    "channels": 2,
@@ -17110,6 +17714,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_tail_outdoor_open_5.wav",
+   "guid": "b7a405bcaad22f69",
    "key": "snd.ak.fire_tail_outdoor_open",
    "layer": "tail",
    "channels": 2,
@@ -17146,6 +17751,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_tail_outdoor_urban_1.wav",
+   "guid": "87060a115b3476d6",
    "key": "snd.ak.fire_tail_outdoor_urban",
    "layer": "tail",
    "channels": 2,
@@ -17175,6 +17781,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_tail_outdoor_urban_2.wav",
+   "guid": "66eb5ad593184b52",
    "key": "snd.ak.fire_tail_outdoor_urban",
    "layer": "tail",
    "channels": 2,
@@ -17204,6 +17811,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_tail_outdoor_urban_3.wav",
+   "guid": "377f853c67b70e48",
    "key": "snd.ak.fire_tail_outdoor_urban",
    "layer": "tail",
    "channels": 2,
@@ -17233,6 +17841,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_tail_outdoor_urban_4.wav",
+   "guid": "1e3fad2e2df9c382",
    "key": "snd.ak.fire_tail_outdoor_urban",
    "layer": "tail",
    "channels": 2,
@@ -17262,6 +17871,7 @@
   },
   {
    "file": "Weapons/AKS74U/fire_tail_outdoor_urban_5.wav",
+   "guid": "685b3d70ff03d16e",
    "key": "snd.ak.fire_tail_outdoor_urban",
    "layer": "tail",
    "channels": 2,
@@ -17291,6 +17901,7 @@
   },
   {
    "file": "Weapons/AKS74U/firemode_1.wav",
+   "guid": "201ff302d5e49ce1",
    "key": "snd.ak.firemode",
    "layer": "action",
    "channels": 2,
@@ -17317,6 +17928,7 @@
   },
   {
    "file": "Weapons/AKS74U/firemode_2.wav",
+   "guid": "9eb4097e2a3030bd",
    "key": "snd.ak.firemode",
    "layer": "action",
    "channels": 2,
@@ -17343,6 +17955,7 @@
   },
   {
    "file": "Weapons/AKS74U/firemode_3.wav",
+   "guid": "3d8334e0003082cc",
    "key": "snd.ak.firemode",
    "layer": "action",
    "channels": 2,
@@ -17369,6 +17982,7 @@
   },
   {
    "file": "Weapons/AKS74U/handle_1.wav",
+   "guid": "d25d01cf20fe02dd",
    "key": "snd.ak.handle",
    "layer": "action",
    "channels": 2,
@@ -17395,6 +18009,7 @@
   },
   {
    "file": "Weapons/AKS74U/handle_2.wav",
+   "guid": "5bf4a5e993ff972d",
    "key": "snd.ak.handle",
    "layer": "action",
    "channels": 2,
@@ -17421,6 +18036,7 @@
   },
   {
    "file": "Weapons/AKS74U/handle_3.wav",
+   "guid": "6540fa02c386248d",
    "key": "snd.ak.handle",
    "layer": "action",
    "channels": 2,
@@ -17447,6 +18063,7 @@
   },
   {
    "file": "Weapons/AKS74U/handle_4.wav",
+   "guid": "518e36bb3126e5d7",
    "key": "snd.ak.handle",
    "layer": "action",
    "channels": 2,
@@ -17473,6 +18090,7 @@
   },
   {
    "file": "Weapons/AKS74U/holster_1.wav",
+   "guid": "5dafee5e53415008",
    "key": "snd.ak.holster",
    "layer": "action",
    "channels": 2,
@@ -17511,6 +18129,7 @@
   },
   {
    "file": "Weapons/AKS74U/holster_2.wav",
+   "guid": "dc4739d384e00184",
    "key": "snd.ak.holster",
    "layer": "action",
    "channels": 2,
@@ -17549,6 +18168,7 @@
   },
   {
    "file": "Weapons/AKS74U/holster_3.wav",
+   "guid": "0a805e0559e11132",
    "key": "snd.ak.holster",
    "layer": "action",
    "channels": 2,
@@ -17587,6 +18207,7 @@
   },
   {
    "file": "Weapons/AKS74U/mag_in_1.wav",
+   "guid": "53f14a879a6b5cd9",
    "key": "snd.ak.mag_in",
    "layer": "action",
    "channels": 2,
@@ -17613,6 +18234,7 @@
   },
   {
    "file": "Weapons/AKS74U/mag_in_2.wav",
+   "guid": "81bfa1cfef349cc9",
    "key": "snd.ak.mag_in",
    "layer": "action",
    "channels": 2,
@@ -17639,6 +18261,7 @@
   },
   {
    "file": "Weapons/AKS74U/mag_in_3.wav",
+   "guid": "6086bf128e198011",
    "key": "snd.ak.mag_in",
    "layer": "action",
    "channels": 2,
@@ -17666,6 +18289,7 @@
   },
   {
    "file": "Weapons/AKS74U/mag_in_4.wav",
+   "guid": "679d7e467d9c9d6a",
    "key": "snd.ak.mag_in",
    "layer": "action",
    "channels": 2,
@@ -17693,6 +18317,7 @@
   },
   {
    "file": "Weapons/AKS74U/mag_in_5.wav",
+   "guid": "b404c9b06055e692",
    "key": "snd.ak.mag_in",
    "layer": "action",
    "channels": 2,
@@ -17719,6 +18344,7 @@
   },
   {
    "file": "Weapons/AKS74U/mag_in_6.wav",
+   "guid": "bb0871af9b13696c",
    "key": "snd.ak.mag_in",
    "layer": "action",
    "channels": 2,
@@ -17745,6 +18371,7 @@
   },
   {
    "file": "Weapons/AKS74U/mag_in_7.wav",
+   "guid": "e48d45fc26cb1097",
    "key": "snd.ak.mag_in",
    "layer": "action",
    "channels": 2,
@@ -17771,6 +18398,7 @@
   },
   {
    "file": "Weapons/AKS74U/mag_out_1.wav",
+   "guid": "8af02ae4987c5306",
    "key": "snd.ak.mag_out",
    "layer": "action",
    "channels": 2,
@@ -17797,6 +18425,7 @@
   },
   {
    "file": "Weapons/AKS74U/mag_out_2.wav",
+   "guid": "d8fd1d599e212ba3",
    "key": "snd.ak.mag_out",
    "layer": "action",
    "channels": 2,
@@ -17823,6 +18452,7 @@
   },
   {
    "file": "Weapons/AKS74U/mag_out_3.wav",
+   "guid": "ab289f57093bae8a",
    "key": "snd.ak.mag_out",
    "layer": "action",
    "channels": 2,
@@ -17849,6 +18479,7 @@
   },
   {
    "file": "Weapons/AKS74U/mag_out_4.wav",
+   "guid": "b57c2cd21129a7bb",
    "key": "snd.ak.mag_out",
    "layer": "action",
    "channels": 2,
@@ -17875,6 +18506,7 @@
   },
   {
    "file": "Weapons/AKS74U/mag_out_5.wav",
+   "guid": "fffd447c62c2f3ca",
    "key": "snd.ak.mag_out",
    "layer": "action",
    "channels": 2,
@@ -17901,6 +18533,7 @@
   },
   {
    "file": "Weapons/AKS74U/mag_out_6.wav",
+   "guid": "06193d0423d8380a",
    "key": "snd.ak.mag_out",
    "layer": "action",
    "channels": 2,
@@ -17927,6 +18560,7 @@
   },
   {
    "file": "Weapons/AKS74U/mag_release_1.wav",
+   "guid": "2fe461cef36a5119",
    "key": "snd.ak.mag_release",
    "layer": "action",
    "channels": 2,
@@ -17953,6 +18587,7 @@
   },
   {
    "file": "Weapons/AKS74U/mag_release_2.wav",
+   "guid": "84d8cf4de75f8a97",
    "key": "snd.ak.mag_release",
    "layer": "action",
    "channels": 2,
@@ -17979,6 +18614,7 @@
   },
   {
    "file": "Weapons/AKS74U/mag_release_3.wav",
+   "guid": "8a148eb303cbfc49",
    "key": "snd.ak.mag_release",
    "layer": "action",
    "channels": 2,
@@ -18005,6 +18641,7 @@
   },
   {
    "file": "Weapons/AKS74U/mag_release_4.wav",
+   "guid": "e8d19005f319b7df",
    "key": "snd.ak.mag_release",
    "layer": "action",
    "channels": 2,
@@ -18031,6 +18668,7 @@
   },
   {
    "file": "Weapons/AKS74U/mag_release_5.wav",
+   "guid": "fee8a2cec9e40a1c",
    "key": "snd.ak.mag_release",
    "layer": "action",
    "channels": 2,
@@ -18057,6 +18695,7 @@
   },
   {
    "file": "Weapons/AKS74U/mag_tap_1.wav",
+   "guid": "7eecd34e89d7f7a8",
    "key": "snd.ak.mag_tap",
    "layer": "action",
    "channels": 2,
@@ -18083,6 +18722,7 @@
   },
   {
    "file": "Weapons/AKS74U/mag_tap_2.wav",
+   "guid": "9f791b966a42e926",
    "key": "snd.ak.mag_tap",
    "layer": "action",
    "channels": 2,
@@ -18109,6 +18749,7 @@
   },
   {
    "file": "Weapons/AKS74U/mag_tap_3.wav",
+   "guid": "365bf716e3bd16d6",
    "key": "snd.ak.mag_tap",
    "layer": "action",
    "channels": 2,
@@ -18135,6 +18776,7 @@
   },
   {
    "file": "Weapons/AKS74U/mag_tap_4.wav",
+   "guid": "edf068631560d20c",
    "key": "snd.ak.mag_tap",
    "layer": "action",
    "channels": 2,
@@ -18161,6 +18803,7 @@
   },
   {
    "file": "Weapons/AKS74U/melee_hit_1.wav",
+   "guid": "d38312cb2327ffd7",
    "key": "snd.ak.melee_hit",
    "layer": "action",
    "channels": 2,
@@ -18199,6 +18842,7 @@
   },
   {
    "file": "Weapons/AKS74U/melee_hit_2.wav",
+   "guid": "0bbc39d7d3667ef4",
    "key": "snd.ak.melee_hit",
    "layer": "action",
    "channels": 2,
@@ -18237,6 +18881,7 @@
   },
   {
    "file": "Weapons/AKS74U/melee_hit_3.wav",
+   "guid": "09966fd19113d6f2",
    "key": "snd.ak.melee_hit",
    "layer": "action",
    "channels": 2,
@@ -18275,6 +18920,7 @@
   },
   {
    "file": "Weapons/AKS74U/melee_hit_4.wav",
+   "guid": "433ffeea7c5085fa",
    "key": "snd.ak.melee_hit",
    "layer": "action",
    "channels": 2,
@@ -18313,6 +18959,7 @@
   },
   {
    "file": "Weapons/AKS74U/melee_swing_1.wav",
+   "guid": "9c8f7c356f9166de",
    "key": "snd.ak.melee_swing",
    "layer": "action",
    "channels": 2,
@@ -18339,6 +18986,7 @@
   },
   {
    "file": "Weapons/AKS74U/melee_swing_2.wav",
+   "guid": "c8342138029a30c3",
    "key": "snd.ak.melee_swing",
    "layer": "action",
    "channels": 2,
@@ -18365,6 +19013,7 @@
   },
   {
    "file": "Weapons/AKS74U/melee_swing_3.wav",
+   "guid": "34b9806dbc0e9de9",
    "key": "snd.ak.melee_swing",
    "layer": "action",
    "channels": 2,
@@ -18391,6 +19040,7 @@
   },
   {
    "file": "Weapons/AKS74U/melee_swing_4.wav",
+   "guid": "2d523d45a9844bfe",
    "key": "snd.ak.melee_swing",
    "layer": "action",
    "channels": 2,
@@ -18417,6 +19067,7 @@
   },
   {
    "file": "Weapons/Remington870/cloth_1.wav",
+   "guid": "ab0397f021f20890",
    "key": "snd.870.cloth",
    "layer": "action",
    "channels": 2,
@@ -18443,6 +19094,7 @@
   },
   {
    "file": "Weapons/Remington870/cloth_2.wav",
+   "guid": "aff4db19f8993f96",
    "key": "snd.870.cloth",
    "layer": "action",
    "channels": 2,
@@ -18469,6 +19121,7 @@
   },
   {
    "file": "Weapons/Remington870/cloth_3.wav",
+   "guid": "c232106368363f35",
    "key": "snd.870.cloth",
    "layer": "action",
    "channels": 2,
@@ -18495,6 +19148,7 @@
   },
   {
    "file": "Weapons/Remington870/draw_1.wav",
+   "guid": "d60d646b14302122",
    "key": "snd.870.draw",
    "layer": "action",
    "channels": 2,
@@ -18533,6 +19187,7 @@
   },
   {
    "file": "Weapons/Remington870/draw_2.wav",
+   "guid": "f372a35e9d4126fe",
    "key": "snd.870.draw",
    "layer": "action",
    "channels": 2,
@@ -18571,6 +19226,7 @@
   },
   {
    "file": "Weapons/Remington870/draw_3.wav",
+   "guid": "82f11ebc97cb8ef3",
    "key": "snd.870.draw",
    "layer": "action",
    "channels": 2,
@@ -18609,6 +19265,7 @@
   },
   {
    "file": "Weapons/Remington870/dry_fire_1.wav",
+   "guid": "eea70636a0c7152b",
    "key": "snd.870.dry_fire",
    "layer": "action",
    "channels": 2,
@@ -18635,6 +19292,7 @@
   },
   {
    "file": "Weapons/Remington870/dry_fire_2.wav",
+   "guid": "5d8c04407529366c",
    "key": "snd.870.dry_fire",
    "layer": "action",
    "channels": 2,
@@ -18661,6 +19319,7 @@
   },
   {
    "file": "Weapons/Remington870/dry_fire_3.wav",
+   "guid": "ff53dca1fd7610ea",
    "key": "snd.870.dry_fire",
    "layer": "action",
    "channels": 2,
@@ -18687,6 +19346,7 @@
   },
   {
    "file": "Weapons/Remington870/dry_fire_4.wav",
+   "guid": "8eb5ac9c48aa395a",
    "key": "snd.870.dry_fire",
    "layer": "action",
    "channels": 2,
@@ -18713,6 +19373,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_close_1.wav",
+   "guid": "37cc96083016fdb8",
    "key": "snd.870.fire_close",
    "layer": "close",
    "channels": 2,
@@ -18757,6 +19418,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_close_2.wav",
+   "guid": "22619834ebdc87d8",
    "key": "snd.870.fire_close",
    "layer": "close",
    "channels": 2,
@@ -18801,6 +19463,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_close_3.wav",
+   "guid": "8ff8073e4a13dab6",
    "key": "snd.870.fire_close",
    "layer": "close",
    "channels": 2,
@@ -18845,6 +19508,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_close_4.wav",
+   "guid": "af65a62c67e1fb20",
    "key": "snd.870.fire_close",
    "layer": "close",
    "channels": 2,
@@ -18889,6 +19553,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_close_5.wav",
+   "guid": "fa5b5e42c78f6d1c",
    "key": "snd.870.fire_close",
    "layer": "close",
    "channels": 2,
@@ -18933,6 +19598,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_close_6.wav",
+   "guid": "298aba2443776fdd",
    "key": "snd.870.fire_close",
    "layer": "close",
    "channels": 2,
@@ -18977,6 +19643,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_close_7.wav",
+   "guid": "ef6aa176c6520f61",
    "key": "snd.870.fire_close",
    "layer": "close",
    "channels": 2,
@@ -19021,6 +19688,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_close_8.wav",
+   "guid": "49b46c00794419e7",
    "key": "snd.870.fire_close",
    "layer": "close",
    "channels": 2,
@@ -19065,6 +19733,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_far_1.wav",
+   "guid": "f5b279e95deec8bd",
    "key": "snd.870.fire_far",
    "layer": "far",
    "channels": 1,
@@ -19091,6 +19760,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_far_2.wav",
+   "guid": "577f4bbf7abc42eb",
    "key": "snd.870.fire_far",
    "layer": "far",
    "channels": 1,
@@ -19117,6 +19787,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_far_3.wav",
+   "guid": "23020ee19fa0db31",
    "key": "snd.870.fire_far",
    "layer": "far",
    "channels": 1,
@@ -19143,6 +19814,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_far_4.wav",
+   "guid": "db42f148f2c3006d",
    "key": "snd.870.fire_far",
    "layer": "far",
    "channels": 1,
@@ -19169,6 +19841,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_mech_1.wav",
+   "guid": "ffdd0437b91e5b43",
    "key": "snd.870.fire_mech",
    "layer": "mech",
    "channels": 2,
@@ -19195,6 +19868,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_mech_2.wav",
+   "guid": "b6bd9c6a02accb04",
    "key": "snd.870.fire_mech",
    "layer": "mech",
    "channels": 2,
@@ -19221,6 +19895,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_mech_3.wav",
+   "guid": "d2124b36e723c3bd",
    "key": "snd.870.fire_mech",
    "layer": "mech",
    "channels": 2,
@@ -19247,6 +19922,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_mech_4.wav",
+   "guid": "8520f560fdec7776",
    "key": "snd.870.fire_mech",
    "layer": "mech",
    "channels": 2,
@@ -19273,6 +19949,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_sub_1.wav",
+   "guid": "1563031b66d279e8",
    "key": "snd.870.fire_sub",
    "layer": "sub",
    "channels": 1,
@@ -19311,6 +19988,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_sub_2.wav",
+   "guid": "80bfffe4afade46b",
    "key": "snd.870.fire_sub",
    "layer": "sub",
    "channels": 1,
@@ -19349,6 +20027,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_sub_3.wav",
+   "guid": "4b89affef9444cce",
    "key": "snd.870.fire_sub",
    "layer": "sub",
    "channels": 1,
@@ -19387,6 +20066,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_sub_4.wav",
+   "guid": "8505e1e7b3df914e",
    "key": "snd.870.fire_sub",
    "layer": "sub",
    "channels": 1,
@@ -19425,6 +20105,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_sub_5.wav",
+   "guid": "4eaf48d9ca50e34a",
    "key": "snd.870.fire_sub",
    "layer": "sub",
    "channels": 1,
@@ -19463,6 +20144,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_tail_1.wav",
+   "guid": "476a50b1f7ea1624",
    "key": "snd.870.fire_tail",
    "layer": "tail",
    "channels": 2,
@@ -19490,6 +20172,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_tail_2.wav",
+   "guid": "eb7446896f0f42b1",
    "key": "snd.870.fire_tail",
    "layer": "tail",
    "channels": 2,
@@ -19517,6 +20200,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_tail_3.wav",
+   "guid": "54f4d7ebb0a26f5e",
    "key": "snd.870.fire_tail",
    "layer": "tail",
    "channels": 2,
@@ -19544,6 +20228,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_tail_4.wav",
+   "guid": "e1286f6c2a516c4d",
    "key": "snd.870.fire_tail",
    "layer": "tail",
    "channels": 2,
@@ -19571,6 +20256,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_tail_5.wav",
+   "guid": "ff1dd69865d4ce3c",
    "key": "snd.870.fire_tail",
    "layer": "tail",
    "channels": 2,
@@ -19598,6 +20284,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_tail_indoor_large_1.wav",
+   "guid": "bdedb618d8ff6cb7",
    "key": "snd.870.fire_tail_indoor_large",
    "layer": "tail",
    "channels": 2,
@@ -19627,6 +20314,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_tail_indoor_large_2.wav",
+   "guid": "aa4b90eb1950c928",
    "key": "snd.870.fire_tail_indoor_large",
    "layer": "tail",
    "channels": 2,
@@ -19656,6 +20344,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_tail_indoor_large_3.wav",
+   "guid": "c861947288bc8623",
    "key": "snd.870.fire_tail_indoor_large",
    "layer": "tail",
    "channels": 2,
@@ -19685,6 +20374,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_tail_indoor_large_4.wav",
+   "guid": "359236ad7e41eee1",
    "key": "snd.870.fire_tail_indoor_large",
    "layer": "tail",
    "channels": 2,
@@ -19714,6 +20404,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_tail_indoor_large_5.wav",
+   "guid": "4539f88f549276e2",
    "key": "snd.870.fire_tail_indoor_large",
    "layer": "tail",
    "channels": 2,
@@ -19743,6 +20434,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_tail_indoor_small_1.wav",
+   "guid": "4a8d52d1b7322978",
    "key": "snd.870.fire_tail_indoor_small",
    "layer": "tail",
    "channels": 2,
@@ -19772,6 +20464,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_tail_indoor_small_2.wav",
+   "guid": "4f8c8b7ca5dc7685",
    "key": "snd.870.fire_tail_indoor_small",
    "layer": "tail",
    "channels": 2,
@@ -19801,6 +20494,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_tail_indoor_small_3.wav",
+   "guid": "ce065fc708b98090",
    "key": "snd.870.fire_tail_indoor_small",
    "layer": "tail",
    "channels": 2,
@@ -19830,6 +20524,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_tail_indoor_small_4.wav",
+   "guid": "090bbd2b1d5e4741",
    "key": "snd.870.fire_tail_indoor_small",
    "layer": "tail",
    "channels": 2,
@@ -19860,6 +20555,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_tail_indoor_small_5.wav",
+   "guid": "e62db638d10fb4b1",
    "key": "snd.870.fire_tail_indoor_small",
    "layer": "tail",
    "channels": 2,
@@ -19896,6 +20592,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_tail_outdoor_open_1.wav",
+   "guid": "fb2ff91f44502de2",
    "key": "snd.870.fire_tail_outdoor_open",
    "layer": "tail",
    "channels": 2,
@@ -19925,6 +20622,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_tail_outdoor_open_2.wav",
+   "guid": "ee8bc01ff3b902b4",
    "key": "snd.870.fire_tail_outdoor_open",
    "layer": "tail",
    "channels": 2,
@@ -19954,6 +20652,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_tail_outdoor_open_3.wav",
+   "guid": "9ea8c157a0b8e332",
    "key": "snd.870.fire_tail_outdoor_open",
    "layer": "tail",
    "channels": 2,
@@ -19983,6 +20682,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_tail_outdoor_open_4.wav",
+   "guid": "c7eb55e7efe062aa",
    "key": "snd.870.fire_tail_outdoor_open",
    "layer": "tail",
    "channels": 2,
@@ -20019,6 +20719,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_tail_outdoor_open_5.wav",
+   "guid": "eecf9a1a0a693cd7",
    "key": "snd.870.fire_tail_outdoor_open",
    "layer": "tail",
    "channels": 2,
@@ -20055,6 +20756,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_tail_outdoor_urban_1.wav",
+   "guid": "fc7a15bb5140135d",
    "key": "snd.870.fire_tail_outdoor_urban",
    "layer": "tail",
    "channels": 2,
@@ -20084,6 +20786,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_tail_outdoor_urban_2.wav",
+   "guid": "1f4be102c3abb2c5",
    "key": "snd.870.fire_tail_outdoor_urban",
    "layer": "tail",
    "channels": 2,
@@ -20113,6 +20816,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_tail_outdoor_urban_3.wav",
+   "guid": "5251a028e9857702",
    "key": "snd.870.fire_tail_outdoor_urban",
    "layer": "tail",
    "channels": 2,
@@ -20142,6 +20846,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_tail_outdoor_urban_4.wav",
+   "guid": "5e8190e68c99aa26",
    "key": "snd.870.fire_tail_outdoor_urban",
    "layer": "tail",
    "channels": 2,
@@ -20171,6 +20876,7 @@
   },
   {
    "file": "Weapons/Remington870/fire_tail_outdoor_urban_5.wav",
+   "guid": "f7c9931d901cfa1f",
    "key": "snd.870.fire_tail_outdoor_urban",
    "layer": "tail",
    "channels": 2,
@@ -20200,6 +20906,7 @@
   },
   {
    "file": "Weapons/Remington870/handle_1.wav",
+   "guid": "ebf56bd68ab1c7ee",
    "key": "snd.870.handle",
    "layer": "action",
    "channels": 2,
@@ -20226,6 +20933,7 @@
   },
   {
    "file": "Weapons/Remington870/handle_2.wav",
+   "guid": "d1fdb7d8b9e45573",
    "key": "snd.870.handle",
    "layer": "action",
    "channels": 2,
@@ -20252,6 +20960,7 @@
   },
   {
    "file": "Weapons/Remington870/handle_3.wav",
+   "guid": "3985dcf53c7309b6",
    "key": "snd.870.handle",
    "layer": "action",
    "channels": 2,
@@ -20278,6 +20987,7 @@
   },
   {
    "file": "Weapons/Remington870/handle_4.wav",
+   "guid": "f97ec8640968ce10",
    "key": "snd.870.handle",
    "layer": "action",
    "channels": 2,
@@ -20304,6 +21014,7 @@
   },
   {
    "file": "Weapons/Remington870/holster_1.wav",
+   "guid": "67a5d1c2ae4939b0",
    "key": "snd.870.holster",
    "layer": "action",
    "channels": 2,
@@ -20342,6 +21053,7 @@
   },
   {
    "file": "Weapons/Remington870/holster_2.wav",
+   "guid": "512e5d20e976853a",
    "key": "snd.870.holster",
    "layer": "action",
    "channels": 2,
@@ -20380,6 +21092,7 @@
   },
   {
    "file": "Weapons/Remington870/holster_3.wav",
+   "guid": "9c2822513643435c",
    "key": "snd.870.holster",
    "layer": "action",
    "channels": 2,
@@ -20418,6 +21131,7 @@
   },
   {
    "file": "Weapons/Remington870/melee_hit_1.wav",
+   "guid": "c994cf12c0308098",
    "key": "snd.870.melee_hit",
    "layer": "action",
    "channels": 2,
@@ -20456,6 +21170,7 @@
   },
   {
    "file": "Weapons/Remington870/melee_hit_2.wav",
+   "guid": "7264b39a79a64a17",
    "key": "snd.870.melee_hit",
    "layer": "action",
    "channels": 2,
@@ -20494,6 +21209,7 @@
   },
   {
    "file": "Weapons/Remington870/melee_hit_3.wav",
+   "guid": "02f5fdceac029842",
    "key": "snd.870.melee_hit",
    "layer": "action",
    "channels": 2,
@@ -20532,6 +21248,7 @@
   },
   {
    "file": "Weapons/Remington870/melee_hit_4.wav",
+   "guid": "561e7233c970de3f",
    "key": "snd.870.melee_hit",
    "layer": "action",
    "channels": 2,
@@ -20570,6 +21287,7 @@
   },
   {
    "file": "Weapons/Remington870/melee_swing_1.wav",
+   "guid": "6d6d079eeec152e2",
    "key": "snd.870.melee_swing",
    "layer": "action",
    "channels": 2,
@@ -20596,6 +21314,7 @@
   },
   {
    "file": "Weapons/Remington870/melee_swing_2.wav",
+   "guid": "b9df9bfc26603618",
    "key": "snd.870.melee_swing",
    "layer": "action",
    "channels": 2,
@@ -20622,6 +21341,7 @@
   },
   {
    "file": "Weapons/Remington870/melee_swing_3.wav",
+   "guid": "2511d4b101f8c563",
    "key": "snd.870.melee_swing",
    "layer": "action",
    "channels": 2,
@@ -20648,6 +21368,7 @@
   },
   {
    "file": "Weapons/Remington870/melee_swing_4.wav",
+   "guid": "bddbbafb22344eb3",
    "key": "snd.870.melee_swing",
    "layer": "action",
    "channels": 2,
@@ -20674,6 +21395,7 @@
   },
   {
    "file": "Weapons/Remington870/pump_back_1.wav",
+   "guid": "7074ba80a60df07b",
    "key": "snd.870.pump_back",
    "layer": "action",
    "channels": 2,
@@ -20701,6 +21423,7 @@
   },
   {
    "file": "Weapons/Remington870/pump_back_2.wav",
+   "guid": "ef1c6688f8bc09b1",
    "key": "snd.870.pump_back",
    "layer": "action",
    "channels": 2,
@@ -20728,6 +21451,7 @@
   },
   {
    "file": "Weapons/Remington870/pump_back_3.wav",
+   "guid": "259e44886873318d",
    "key": "snd.870.pump_back",
    "layer": "action",
    "channels": 2,
@@ -20755,6 +21479,7 @@
   },
   {
    "file": "Weapons/Remington870/pump_back_4.wav",
+   "guid": "e0c1126d5853f4ad",
    "key": "snd.870.pump_back",
    "layer": "action",
    "channels": 2,
@@ -20782,6 +21507,7 @@
   },
   {
    "file": "Weapons/Remington870/pump_back_5.wav",
+   "guid": "9bd9ba06aeb460be",
    "key": "snd.870.pump_back",
    "layer": "action",
    "channels": 2,
@@ -20809,6 +21535,7 @@
   },
   {
    "file": "Weapons/Remington870/pump_fwd_1.wav",
+   "guid": "a015f5800cb60dda",
    "key": "snd.870.pump_fwd",
    "layer": "action",
    "channels": 2,
@@ -20836,6 +21563,7 @@
   },
   {
    "file": "Weapons/Remington870/pump_fwd_2.wav",
+   "guid": "c7718d5755e2fab8",
    "key": "snd.870.pump_fwd",
    "layer": "action",
    "channels": 2,
@@ -20863,6 +21591,7 @@
   },
   {
    "file": "Weapons/Remington870/pump_fwd_3.wav",
+   "guid": "767ede5390d8d4a3",
    "key": "snd.870.pump_fwd",
    "layer": "action",
    "channels": 2,
@@ -20890,6 +21619,7 @@
   },
   {
    "file": "Weapons/Remington870/pump_fwd_4.wav",
+   "guid": "36377f348f5328d2",
    "key": "snd.870.pump_fwd",
    "layer": "action",
    "channels": 2,
@@ -20917,6 +21647,7 @@
   },
   {
    "file": "Weapons/Remington870/pump_fwd_5.wav",
+   "guid": "76c3802228ac4623",
    "key": "snd.870.pump_fwd",
    "layer": "action",
    "channels": 2,
@@ -20944,6 +21675,7 @@
   },
   {
    "file": "Weapons/Remington870/shell_insert_1.wav",
+   "guid": "2c37ff2d9ed44d63",
    "key": "snd.870.shell_insert",
    "layer": "action",
    "channels": 2,
@@ -20970,6 +21702,7 @@
   },
   {
    "file": "Weapons/Remington870/shell_insert_2.wav",
+   "guid": "05a138c5525e991e",
    "key": "snd.870.shell_insert",
    "layer": "action",
    "channels": 2,
@@ -20996,6 +21729,7 @@
   },
   {
    "file": "Weapons/Remington870/shell_insert_3.wav",
+   "guid": "b3994bc9bce5823f",
    "key": "snd.870.shell_insert",
    "layer": "action",
    "channels": 2,
@@ -21022,6 +21756,7 @@
   },
   {
    "file": "Weapons/Remington870/shell_insert_4.wav",
+   "guid": "c2c76bc8c6494f5a",
    "key": "snd.870.shell_insert",
    "layer": "action",
    "channels": 2,
@@ -21048,6 +21783,7 @@
   },
   {
    "file": "Weapons/Remington870/shell_load_chamber_1.wav",
+   "guid": "8ce2b2ebdf01483a",
    "key": "snd.870.shell_load_chamber",
    "layer": "action",
    "channels": 2,
@@ -21075,6 +21811,7 @@
   },
   {
    "file": "Weapons/Remington870/shell_load_chamber_2.wav",
+   "guid": "2a46d75f1a83bd49",
    "key": "snd.870.shell_load_chamber",
    "layer": "action",
    "channels": 2,
@@ -21102,6 +21839,7 @@
   },
   {
    "file": "Weapons/Remington870/shell_load_chamber_3.wav",
+   "guid": "ac141c8838826f69",
    "key": "snd.870.shell_load_chamber",
    "layer": "action",
    "channels": 2,
@@ -21128,6 +21866,7 @@
   },
   {
    "file": "Weapons/Remington870/shell_load_chamber_4.wav",
+   "guid": "19a2c8c5fb5ec921",
    "key": "snd.870.shell_load_chamber",
    "layer": "action",
    "channels": 2,

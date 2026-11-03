@@ -1,19 +1,24 @@
 {
   "wardrobe": "assets/Characters/Quantum/Quantum.wardrobe",
+  "wardrobeGuid": "ae5365d372fb447c",
   "gender": "Male",
   "race": "Asian",
   "items": {
     "Balaclava": {
-      "item": "assets/Characters/Quantum/Models/Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx"
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Balaclava/SM_Balaclava_Crime.fbx",
+      "itemGuid": "18fe3d21a3cde1a0"
     },
     "Pants": {
-      "item": "assets/Characters/Quantum/Models/Clothing/Male/Pants/SKM_Jeans.fbx"
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Pants/SKM_Jeans.fbx",
+      "itemGuid": "f18f6fcc767cc587"
     },
     "Shoes": {
-      "item": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/SKM_Sneakers.fbx"
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Shoes/SKM_Sneakers.fbx",
+      "itemGuid": "907719222c820ea8"
     },
     "Top": {
-      "item": "assets/Characters/Quantum/Models/Clothing/Male/Tops/SKM_Shirt_RolledUp.fbx"
+      "item": "assets/Characters/Quantum/Models/Clothing/Male/Tops/SKM_Shirt_RolledUp.fbx",
+      "itemGuid": "106ceb81f7534c7b"
     }
   }
 }

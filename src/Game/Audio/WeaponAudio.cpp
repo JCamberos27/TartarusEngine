@@ -1,4 +1,5 @@
 #include "WeaponAudio.h"
+#include "AssetDatabase.h" // FollowRef - manifest entries by GUID
 
 #include "Components.h"
 #include "GameModuleAPI.h"
@@ -178,7 +179,7 @@ bool SoundManifest::FromJson(const std::string& text, SoundManifest& out, std::s
     auto add = [&](const std::string& file, const json& e) {
         if (!e.is_object() || file.empty()) return;
         SoundManifestEntry m;
-        m.File = ManifestPath(file);
+        m.File = AssetDatabase::FollowRef(ManifestPath(file), Str(e, "guid")); // the GUID wins (a moved .wav is found)
         m.Key = Str(e, "key");
         m.Category = Str(e, "category");
         m.Layer = Str(e, "layer");

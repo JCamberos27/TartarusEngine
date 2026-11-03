@@ -61,8 +61,8 @@ void ForgetPath(const std::string& path);
 
 // #132 - references stored as project-relative path strings, optionally with a "#name" suffix
 // (an animation clip inside a model file). RefGuid: the GUID of the referenced file as a string,
-// or "" when it isn't a registered file. FollowRef: `ref` itself while its file exists, else its
-// file's new project-relative location (suffix kept) when `guid` resolves, else `ref` unchanged.
+// or "" when it isn't a registered file. FollowRef: the GUID wins - its file's current
+// project-relative location (suffix kept) when `guid` resolves to a file on disk, else `ref` unchanged.
 std::string RefGuid(const std::string& ref);
 std::string FollowRef(const std::string& ref, const std::string& guid);
 

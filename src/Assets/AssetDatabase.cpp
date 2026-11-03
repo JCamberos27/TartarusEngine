@@ -616,9 +616,11 @@ std::string FollowRef(const std::string& ref, const std::string& guid) {
     const size_t hash = ref.find('#');
     const std::string file = ref.substr(0, hash);
     std::error_code ec;
-    if (!file.empty() && std::filesystem::exists(RefFileAbsolute(file), ec)) return ref;
+    // The GUID wins (Unity's rule): its file's current location, whatever the stored path says. The
+    // path is the fallback for a GUID this project doesn't know (or whose file is gone).
     const std::string moved = PathForGuid(AssetGuid::FromString(guid));
     if (moved.empty() || !std::filesystem::exists(moved, ec)) return ref;
+    if (!file.empty() && std::filesystem::equivalent(RefFileAbsolute(file), moved, ec)) return ref;
     const std::string followed = ProjectPaths::Relativize(moved) + (hash == std::string::npos ? std::string() : ref.substr(hash));
     Log::Info("AssetDatabase: reference '" + ref + "' followed its file to '" + followed + "'.");
     return followed;

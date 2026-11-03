@@ -155,8 +155,9 @@ void WriteTextureGuids(json& j) {
     if (!guids.empty()) j["textureGuids"] = std::move(guids);
 }
 
-// Load side: a texture whose stored path is gone but whose GUID now lives elsewhere (renamed or
-// moved) is re-pointed at its new location, so the material keeps its maps.
+// Load side: the GUID wins (as in scenes): a texture whose GUID now lives elsewhere (renamed or
+// moved) is re-pointed at its new location, so the material keeps its maps. The stored path is
+// only the fallback for a GUID the project doesn't know.
 json FollowMovedTextures(const json& in, const std::string& matPath) {
     const auto guids = in.find("textureGuids");
     if (guids == in.end() || !guids->is_object()) return in;
@@ -169,9 +170,9 @@ json FollowMovedTextures(const json& in, const std::string& matPath) {
         if (it == props.end() || !it->is_string()) continue;
         std::error_code ec;
         const std::string stored = it->get<std::string>();
-        if (!stored.empty() && std::filesystem::exists(AbsoluteAssetPath(stored), ec)) continue;
         const std::string moved = AssetDatabase::PathForGuid(AssetGuid::FromString(gv.get<std::string>()));
         if (moved.empty() || !std::filesystem::exists(moved, ec)) continue;
+        if (!stored.empty() && std::filesystem::equivalent(AbsoluteAssetPath(stored), moved, ec)) continue; // same file
         Log::Info("Material '" + ProjectPaths::Relativize(matPath) + "': " + key + " moved to " +
                   ProjectPaths::Relativize(moved) + ".", LogContext::Asset(matPath));
         *it = moved;
@@ -269,7 +270,7 @@ std::shared_ptr<MaterialAsset> LoadMaterialFromJson(const json& j, const std::st
             const std::string moved = g.IsValid() ? AssetDatabase::PathForGuid(g) : std::string();
             std::error_code ec;
             if (!moved.empty() && std::filesystem::exists(moved, ec) &&
-                !std::filesystem::exists(ResolveShaderPath(ma->ShaderPath), ec)) {
+                !std::filesystem::equivalent(ResolveShaderPath(ma->ShaderPath), moved, ec)) { // the GUID wins
                 Log::Info("Material '" + path + "': shader moved to " + ProjectPaths::Relativize(moved) + ".");
                 ma->ShaderPath = ProjectPaths::Relativize(moved);
             }

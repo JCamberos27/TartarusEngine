@@ -926,6 +926,8 @@ bool SavePreset(const World& world, AssetLibrary& assets, entt::entity root, con
     if (!outfit) { if (error) *error = "no Character Outfit"; return false; }
     json j;
     j["wardrobe"] = outfit->Wardrobe;
+    // GUIDs beside the paths: a moved wardrobe or item file is found again on load (FollowRef).
+    if (const std::string g = AssetDatabase::RefGuid(outfit->Wardrobe); !g.empty()) j["wardrobeGuid"] = g;
     j["gender"] = Wardrobe::GenderName(outfit->Gender == 1 ? Wardrobe::Gender::Female : Wardrobe::Gender::Male);
     j["race"] = outfit->Race;
     json items = json::object();
@@ -934,6 +936,7 @@ bool SavePreset(const World& world, AssetLibrary& assets, entt::entity root, con
         if (p.Flags & OutfitPieceBodyPart) continue;
         json entry;
         entry["item"] = p.Item;
+        if (const std::string g = AssetDatabase::RefGuid(p.Item); !g.empty()) entry["itemGuid"] = g;
         json colours = json::object();
         for (const auto& g : ColourGroups(world, assets, e))
             if (!Same(g.Current, g.Source)) colours[g.Source] = g.Current;
@@ -963,7 +966,7 @@ Result LoadPreset(World& world, AssetLibrary& assets, entt::entity root, const s
         if (j.contains("gender") && !j["gender"].is_string()) throw std::runtime_error("\"gender\" isn't a name");
         req.Sex = Lower(text(j, "gender")) == "female" ? Wardrobe::Gender::Female : Wardrobe::Gender::Male;
         req.Race = text(j, "race");
-        const std::string wardrobe = text(j, "wardrobe");
+        const std::string wardrobe = AssetDatabase::FollowRef(text(j, "wardrobe"), text(j, "wardrobeGuid"));
         if (const auto* outfit = world.Registry.try_get<CharacterOutfitComponent>(root);
             outfit && !wardrobe.empty() && !Same(wardrobe, outfit->Wardrobe))
             r.Notes.push_back("Made for " + wardrobe + ": its items may not be in this wardrobe.");
@@ -971,7 +974,8 @@ Result LoadPreset(World& world, AssetLibrary& assets, entt::entity root, const s
             for (const auto& [slot, v] : j["items"].items()) {
                 if (!v.is_object() || !v.contains("item")) continue;
                 if (!v["item"].is_string()) throw std::runtime_error("the " + slot + " item isn't a path");
-                req.Items[slot] = v["item"].get<std::string>();
+                req.Items[slot] = AssetDatabase::FollowRef(v["item"].get<std::string>(),
+                    v.contains("itemGuid") && v["itemGuid"].is_string() ? v["itemGuid"].get<std::string>() : std::string());
                 if (v.contains("colours")) colours[slot] = v["colours"];
             }
     } catch (const std::exception& e) {

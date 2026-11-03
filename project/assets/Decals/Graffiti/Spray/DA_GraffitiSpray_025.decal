@@ -6,6 +6,9 @@
     "surface": "",
     "aux": ""
   },
+  "textureGuids": {
+    "albedo": "53b4081c625ab5a5"
+  },
   "lumaMask": false,
   "invertMask": false,
   "tier": 2048,
