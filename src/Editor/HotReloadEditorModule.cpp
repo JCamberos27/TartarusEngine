@@ -1,4 +1,5 @@
 #include "HotReloadEditorModule.h"
+#include "AssetLibraryIndex.h" // AssetLibraryView::Folders
 #include "EditorTheme.h"
 
 #include "EditorModuleAPI.h"
@@ -366,12 +367,17 @@ void  AbSetFolderExpanded(const char* p, bool e, bool r) {
 void  AbTreeFrameSetup(char* o, int n) {
     AbPutStr(o, n, (g_Editor && g_Assets) ? g_Editor->AssetBrowserTreeFrameSetup(*g_Assets) : std::string());
 }
-int   AbGetFolderCount() { return g_Assets ? (int)g_Assets->Folders().size() : 0; }
+// The browser's folders, then the Asset Library root's (AssetLibraryView: browser-only, never saved).
+int   AbGetFolderCount() {
+    return g_Assets ? (int)(g_Assets->Folders().size() + AssetLibraryView::Folders().size()) : 0;
+}
 bool  AbGetFolder(int i, char* o, int n) {
-    if (!g_Assets) return false;
+    if (!g_Assets || i < 0) return false;
     const std::vector<std::string>& f = g_Assets->Folders();
-    if (i < 0 || (size_t)i >= f.size()) return false;
-    AbPutStr(o, n, f[(size_t)i]);
+    const std::vector<std::string>& lib = AssetLibraryView::Folders();
+    if ((size_t)i < f.size()) AbPutStr(o, n, f[(size_t)i]);
+    else if ((size_t)i - f.size() < lib.size()) AbPutStr(o, n, lib[(size_t)i - f.size()]);
+    else return false;
     return true;
 }
 int   AbGetKnownLabelCount() { return g_Assets ? (int)g_Assets->AllKnownLabels().size() : 0; }

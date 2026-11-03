@@ -4678,7 +4678,7 @@ int main(int argc, char** argv) {
                     for (const auto& part : dragPreview.Parts)
                         if (part.ModelRef)
                             tintOverlay.Render(*part.ModelRef, pose * part.Local, sceneViewMat, sceneProjMat,
-                                glm::vec3(0.3f, 0.85f, 1.0f), 0.45f);
+                                glm::vec3(0.3f, 0.85f, 1.0f), dragPreview.Alpha);
                 }
 
                 // Resolve MSAA now, before the grid/axis-line and collider-wireframe overlays

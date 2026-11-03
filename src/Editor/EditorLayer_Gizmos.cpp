@@ -969,12 +969,7 @@ glm::vec3 EditorLayer::ComputeDropRayPosition(World& world, Camera& editorCamera
 }
 
 namespace {
-// asset_library.json keys are project-relative with forward slashes ("assets/...").
-std::string ProjectRelative(const std::string& path) {
-    std::string p = ProjectPaths::Relativize(path);
-    std::replace(p.begin(), p.end(), '\\', '/');
-    return p;
-}
+std::string ProjectRelative(const std::string& path) { return AssetLibraryIndex::ProjectRelative(path); }
 } // namespace
 
 EditorLayer::DropPose EditorLayer::ComputeDropPose(World& world, Camera& editorCamera,
@@ -1075,7 +1070,12 @@ void EditorLayer::DrawModularSnapFace(Camera& editorCamera) {
     const bool active = m_ModularSnapFaceActive;
     m_ModularSnapWasActive = active;
     m_ModularSnapFaceActive = false; // re-set by this frame's snap, if any
+    // A short flare each time a piece comes flush (Reduce Motion: the steady outline only).
+    static const ImGuiID kSnapFlare = ImHashStr("##modular_snap_flare");
+    if (active && !m_ModularSnapWasPrev) Glass::Motion().Pulse(kSnapFlare, 0.25f);
+    m_ModularSnapWasPrev = active;
     if (!active || m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) return;
+    const float flare = 1.0f - Glass::Motion().PulseProgress(kSnapFlare);
     const glm::mat4 vp = editorCamera.ProjectionMatrix(m_ViewportSize.x / m_ViewportSize.y) * editorCamera.ViewMatrix();
     const AABB& f = m_ModularSnapFace;
     int flat = 0;
@@ -1093,8 +1093,8 @@ void EditorLayer::DrawModularSnapFace(Camera& editorCamera) {
         pts[i] = ImVec2(m_ViewportPos.x + (clip.x / clip.w * 0.5f + 0.5f) * m_ViewportSize.x,
                         m_ViewportPos.y + (0.5f - clip.y / clip.w * 0.5f) * m_ViewportSize.y);
     }
-    ImGui::GetForegroundDrawList()->AddPolyline(pts, 4, IM_COL32(255, 255, 255, 220), ImDrawFlags_Closed,
-                                                1.5f * m_UIScale);
+    ImGui::GetForegroundDrawList()->AddPolyline(pts, 4, IM_COL32(255, 255, 255, 180 + (int)(75.0f * flare)),
+                                                ImDrawFlags_Closed, (1.5f + 2.0f * flare) * m_UIScale);
 }
 
 const std::vector<EditorLayer::DragPreview::Part>& EditorLayer::PrefabGhostParts(AssetLibrary& assets,
@@ -1196,6 +1196,7 @@ void EditorLayer::DrawViewportDropTarget(World& world, AssetLibrary& assets, Cam
     // Live preview: recomputed every frame while a model or prefab is being dragged over the
     // viewport, so main.cpp can render a translucent ghost at the exact pose that would be
     // committed if the mouse were released right now (TintOverlayRenderer, via GetDragPreview()).
+    const bool ghostWasActive = m_DragPreview.Active;
     m_DragPreview.Active = false;
     if ((isModelDrag || isPrefabDrag) && hoveringViewport) {
         const std::string path((const char*)peek->Data);
@@ -1210,6 +1211,11 @@ void EditorLayer::DrawViewportDropTarget(World& world, AssetLibrary& assets, Cam
             m_DragPreview.Active = true;
             m_DragPreview.Position = pose.Position;
             m_DragPreview.Rotation = pose.Rotation;
+            // The ghost fades in over ~0.18 s as it enters (Reduce Motion: at once).
+            static const ImGuiID kGhostFade = ImHashStr("##drop_ghost_fade");
+            if (!ghostWasActive) Glass::Motion().Pulse(kGhostFade, 0.18f);
+            const float t = Glass::Motion().PulseProgress(kGhostFade);
+            m_DragPreview.Alpha = 0.45f * (1.0f - (1.0f - t) * (1.0f - t));
             if (pose.Snapped && !m_ModularSnapWasActive) EditorSound::Play(EditorSound::Event::ModularSnap);
             m_ModularSnapFaceActive = pose.Snapped;
             m_ModularSnapFace = pose.Face;
