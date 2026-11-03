@@ -682,7 +682,19 @@ void RegisterAssetsTests() {
              HoverPanel(kScene), Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(4),
              Until("undo puts the folder back", [there](Ctx&) {
                  return there("Sub/Sub Tex.png") && there("Sub/Deeper/Deep Tex.png") && !there("Sub Renamed/Sub Tex.png");
-             }, 240)},
+             }, 240),
+             // The real gesture: the mouse drags the tile onto the folder tile. Small tiles keep both on
+             // screen in CI's window (the grid scrolled the folder out of view at 64 px).
+             Navigate(kFolder), Wait(4), UntilListed("Sub"), UntilListed("Smoke Tex.png"),
+             Do("small tiles", [](Ctx& c) { AX::IconSize(c.E) = 32.0f; }), Wait(4),
+             RevealTile("Sub"), RevealTile("Smoke Tex.png"),
+             Drag(Tile("Smoke Tex.png"), AtItem(Tile("Sub"))), Wait(5),
+             Until("the mouse drop moved it into Sub on disk", [there](Ctx&) {
+                 return there("Sub/Smoke Tex.png") && there("Sub/Smoke Tex.png.meta") && !there("Smoke Tex.png");
+             }, 240),
+             HoverPanel(kScene), Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(4),
+             Until("undo moves it back again", [there](Ctx&) { return there("Smoke Tex.png") && !there("Sub/Smoke Tex.png"); }, 240),
+             Do("tiles back to 64 px", [](Ctx& c) { AX::IconSize(c.E) = 64.0f; })},
         }));
     }
 
