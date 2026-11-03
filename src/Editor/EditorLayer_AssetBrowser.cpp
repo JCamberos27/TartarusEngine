@@ -1229,6 +1229,8 @@ void EditorLayer::RefreshAssetBrowser() {
     m_AssetThumbs.Clear();
     m_AssetListingRefreshTimer = 0.0f;
     m_AssetRefreshFlash = 1.6f; // drives the module's brief "Assets refreshed" confirmation
+    m_LibraryIndex.Load(); // asset_library.json edits show on Refresh
+    m_LibraryViewKey = (size_t)-1;
     Log::Info("Asset Browser refreshed - re-scanned the project folder, dropped thumbnail caches.");
 }
 
@@ -1249,7 +1251,7 @@ void EditorLayer::RefreshScenesListingIfNeeded() {
 
 void EditorLayer::RefreshLibraryView() {
     const auto& files = m_ProjectAssetIndex.files;
-    const size_t key = files.size() * 1315423911u + m_LibraryIndex.Categories().size();
+    const size_t key = std::hash<const void*>{}(files.data()) ^ (files.size() * 1315423911u + m_LibraryIndex.Categories().size());
     if (key == m_LibraryViewKey) return;
     m_LibraryViewKey = key;
     m_LibraryItems.clear();
@@ -1893,9 +1895,11 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
 
         // The Asset Library root: placeables by category and pack (asset_library.json), without moving
         // a file. Browsing lists one category folder; a search inside it covers that subtree.
+        // Always kept current (cheap: rebuilt only when the index changes) - the folder tree lists
+        // the Library root from it before anyone has opened it.
+        RefreshProjectAssetIndexIfNeeded(assets);
+        RefreshLibraryView();
         if (AssetLibraryView::IsLibraryFolder(m_CurrentAssetFolder)) {
-            RefreshProjectAssetIndexIfNeeded(assets);
-            RefreshLibraryView();
             const std::string& cur = m_CurrentAssetFolder;
             if (!filtering)
                 for (const auto& folder : AssetLibraryView::Folders())

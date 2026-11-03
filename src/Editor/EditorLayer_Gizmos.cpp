@@ -959,11 +959,16 @@ glm::vec3 EditorLayer::ComputeDropRayPosition(World& world, Camera& editorCamera
     // Same grid-snap concept as the transform gizmo (m_GridSnapEnabled, Ctrl inverts it
     // momentarily) - XZ only, since Y is about to be re-derived from where the object actually
     // sits (bottom-aligned in ComputeDropPose).
+    // Only the part of the snap that slides along the hit surface is kept, so a point on a wall
+    // stays on the wall (on the ground, the normal is +Y and this is the plain XZ snap).
     bool snapActive = m_GridSnapEnabled != ImGui::GetIO().KeyCtrl;
     float step = EditorSettings::Get().GridMinorSpacing;
     if (snapActive && step > 0.0001f) {
-        position.x = std::round(position.x / step) * step;
-        position.z = std::round(position.z / step) * step;
+        glm::vec3 snapped = position;
+        snapped.x = std::round(position.x / step) * step;
+        snapped.z = std::round(position.z / step) * step;
+        const glm::vec3 delta = snapped - position;
+        position += delta - normal * glm::dot(delta, normal);
     }
     return position;
 }
@@ -1023,7 +1028,7 @@ std::vector<AABB> EditorLayer::NearbyBoxes(World& world, const AABB& box, float 
             const auto* hp = world.Registry.try_get<HierarchyComponent>(c);
             c = hp ? hp->Parent : entt::null;
         }
-        if (inSkip) continue;
+        if (inSkip || KitModuleOf(world, e) <= 0.0f) continue;
         const AABB b = AABB{rc.ModelRef->BoundsMin(), rc.ModelRef->BoundsMax()}.Transformed(world.ComposeWorldTransform(e));
         if (b.Intersects(grown)) out.push_back(b);
     }
@@ -1031,10 +1036,14 @@ std::vector<AABB> EditorLayer::NearbyBoxes(World& world, const AABB& box, float 
 }
 
 float EditorLayer::KitModuleOf(World& world, entt::entity e) const {
-    if (const auto* pi = world.Registry.try_get<PrefabInstanceComponent>(e))
-        return m_LibraryIndex.KitModuleOf(ProjectRelative(pi->SourcePath));
     if (const auto* rc = world.Registry.try_get<RenderableComponent>(e); rc && rc->ModelRef)
-        return m_LibraryIndex.KitModuleOf(ProjectRelative(rc->ModelRef->Path()));
+        if (const float m = m_LibraryIndex.KitModuleOf(ProjectRelative(rc->ModelRef->Path())); m > 0.0f) return m;
+    for (entt::entity c = e; c != entt::null;) { // or the prefab instance it's part of
+        if (const auto* pi = world.Registry.try_get<PrefabInstanceComponent>(c))
+            return m_LibraryIndex.KitModuleOf(ProjectRelative(pi->SourcePath));
+        const auto* hp = world.Registry.try_get<HierarchyComponent>(c);
+        c = hp ? hp->Parent : entt::null;
+    }
     return 0.0f;
 }
 
@@ -1159,6 +1168,7 @@ void EditorLayer::DrawViewportDropTarget(World& world, AssetLibrary& assets, Cam
     // otherwise sits over the viewport intercepting camera input.
     if ((!isModelDrag && !isPrefabDrag && !isDecalDrag && !applyType) || m_ViewportSize.x <= 0.0f || m_ViewportSize.y <= 0.0f) {
         m_DragPreview.Active = false;
+        if (!peek) m_PrefabGhostPath.clear(); // the drag is over: the next one re-reads its prefab
         RestoreMaterialDropPreview(world); // the drag ended somewhere else, or was cancelled
         return;
     }
@@ -2614,19 +2624,20 @@ void EditorLayer::DrawGizmo(World& world, Camera& editorCamera) {
         // #236 E — surface drag-snapping: while translating with the toggle on (hold Shift to
         // invert), override the axis-handle result: drop the object where the cursor ray hits
         // another surface, optionally aligning to that face's normal.
-        if (m_GizmoOp == GizmoOp::Translate && (m_ModularSnap != ImGui::GetIO().KeyShift))
-            ApplyModularSnap(world, m_Selected, parentWorld);
-        else if (m_GizmoOp == GizmoOp::Rotate && m_ModularSnap && KitModuleOf(world, m_Selected) > 0.0f) {
-            glm::vec3 e = transform.EulerDegrees();
-            e.y = ModularSnap::SnapYawDegrees(e.y); // kit pieces meet square
-            transform.SetRotationEuler(e);
-        }
         if (m_GizmoOp == GizmoOp::Translate && (m_SurfaceSnap != ImGui::GetIO().KeyShift)) {
             ApplySurfaceSnap(world, editorCamera, m_Selected, parentWorld);
             const ImVec2 mp = ImGui::GetIO().MousePos;
             ImGui::GetForegroundDrawList()->AddText(ImVec2(mp.x + 18.0f, mp.y - 20.0f),
                 IM_COL32(120, 220, 160, 255),
                 m_SurfaceSnapAlign ? "surface + align" : "surface");
+        }
+        // Modular snap last: it refines wherever the axis drag or the surface snap put the piece.
+        if (m_GizmoOp == GizmoOp::Translate && (m_ModularSnap != ImGui::GetIO().KeyShift))
+            ApplyModularSnap(world, m_Selected, parentWorld);
+        else if (m_GizmoOp == GizmoOp::Rotate && m_ModularSnap && KitModuleOf(world, m_Selected) > 0.0f) {
+            glm::vec3 e = transform.EulerDegrees();
+            e.y = ModularSnap::SnapYawDegrees(e.y); // kit pieces meet square
+            transform.SetRotationEuler(e);
         }
         const glm::vec3& shownScale = decalPtr ? decalPtr->Size : transform.Scale;
         DrawGizmoDragReadout(transform.Position, transform.EulerDegrees(), shownScale);
