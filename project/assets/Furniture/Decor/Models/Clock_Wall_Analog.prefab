@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0005,
+          0.1615,
+          -0.004
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.1555,
+          0.1615,
+          0.028
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Clock_Wall_Analog",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Decor/Models/Clock_Wall_Analog.fbx",
+      "pathGuid": "84bfba0ee9654549",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

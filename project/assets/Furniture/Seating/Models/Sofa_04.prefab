@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.5495,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.895,
+          0.5495,
+          0.609
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Sofa_04",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Seating/Models/Sofa_04.fbx",
+      "pathGuid": "b36a181acef25948",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

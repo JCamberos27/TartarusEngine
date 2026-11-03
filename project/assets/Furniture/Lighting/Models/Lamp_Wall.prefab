@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.001,
+          0.138,
+          0.101
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.073,
+          0.138,
+          0.125
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Lamp_Wall",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Lighting/Models/Lamp_Wall.fbx",
+      "pathGuid": "305be377060396b3",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

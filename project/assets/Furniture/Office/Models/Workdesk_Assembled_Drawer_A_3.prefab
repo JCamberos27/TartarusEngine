@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.563,
+          0.2455,
+          0.061
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.212,
+          0.0755,
+          0.256
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Workdesk_Assembled_Drawer_A_3",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Office/Models/Workdesk_Assembled_Drawer_A_3.fbx",
+      "pathGuid": "3247a7a251b1cac4",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

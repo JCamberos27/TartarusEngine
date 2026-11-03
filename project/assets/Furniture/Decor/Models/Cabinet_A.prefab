@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          1.0925,
+          0.0005
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.612,
+          1.0925,
+          0.2995
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Cabinet_A",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Decor/Models/Cabinet_A.fbx",
+      "pathGuid": "8a3237327dcb992d",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

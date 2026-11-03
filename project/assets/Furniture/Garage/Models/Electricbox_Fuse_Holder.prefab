@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0005,
+          0.0215,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.0215,
+          0.0215,
+          0.027
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Electricbox_Fuse_Holder",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Garage/Models/Electricbox_Fuse_Holder.fbx",
+      "pathGuid": "804063517536dd5c",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.028,
+          0.0005
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.076,
+          0.028,
+          0.0545
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Clock_Table_Digital",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Decor/Models/Clock_Table_Digital.fbx",
+      "pathGuid": "264efa6849156c9d",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

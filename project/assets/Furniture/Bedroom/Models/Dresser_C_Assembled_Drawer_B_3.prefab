@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.39,
+          0.3855,
+          -0.0125
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.38,
+          0.0995,
+          0.2185
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Dresser_C_Assembled_Drawer_B_3",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Bedroom/Models/Dresser_C_Assembled_Drawer_B_3.fbx",
+      "pathGuid": "2fa6c7743bc8ef9b",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

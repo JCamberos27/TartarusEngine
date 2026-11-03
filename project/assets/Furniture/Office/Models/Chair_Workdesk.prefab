@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0005,
+          0.394,
+          0.0005
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.1975,
+          0.394,
+          0.2625
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Chair_Workdesk",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Office/Models/Chair_Workdesk.fbx",
+      "pathGuid": "0bcc5f3c07e5cace",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

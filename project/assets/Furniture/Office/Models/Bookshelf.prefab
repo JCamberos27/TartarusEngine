@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          1.0925,
+          0.0005
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.612,
+          1.0925,
+          0.2995
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Bookshelf",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Office/Models/Bookshelf.fbx",
+      "pathGuid": "27a04e3442b60502",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

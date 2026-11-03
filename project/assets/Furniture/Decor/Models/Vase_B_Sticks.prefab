@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.2095,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.061,
+          0.2095,
+          0.057
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Vase_B_Sticks",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Decor/Models/Vase_B_Sticks.fbx",
+      "pathGuid": "f1367e274ebd2328",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

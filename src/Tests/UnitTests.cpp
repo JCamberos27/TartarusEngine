@@ -5809,6 +5809,7 @@ int RunUnitTests(const char* filter) {
     { void RegisterDecalAssetTests(UnitTestSupport::TestList&); RegisterDecalAssetTests(tests); } // UnitTests_DecalAssets.cpp
     { void RegisterGraffitiTests(UnitTestSupport::TestList&); RegisterGraffitiTests(tests); } // UnitTests_Graffiti.cpp
     { void RegisterGizmoIconTests(UnitTestSupport::TestList&); RegisterGizmoIconTests(tests); } // UnitTests_GizmoIcons.cpp
+    { void RegisterAssetLibraryTests(UnitTestSupport::TestList&); RegisterAssetLibraryTests(tests); } // UnitTests_AssetLibrary.cpp
     for (const auto& [name, fn] : tests) {
         if(filter && std::string(name).find(filter)==std::string::npos) continue;
         g_CurrentTest = name;

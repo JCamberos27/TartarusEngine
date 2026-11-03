@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.014,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.024,
+          0.014,
+          0.064
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Toy_Block_A",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Kids_Room/Models/Toy_Block_A.fbx",
+      "pathGuid": "a6d730eafd858b0f",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

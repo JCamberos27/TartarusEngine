@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.424,
+          -0.0005
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.205,
+          0.424,
+          0.0995
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Electricbox_Main",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Garage/Models/Electricbox_Main.fbx",
+      "pathGuid": "9c9949119ad37900",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

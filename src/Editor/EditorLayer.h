@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <imgui.h> // ImGuiID (GetSceneGameDockNodeId)
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp> // DragPreview / DropPose rotations
 #include <entt/entt.hpp>
 #include <string>
 #include <vector>
@@ -20,6 +21,8 @@
 #include <chrono>
 #include <future>
 #include "Enhancers/FolderStyles.h" // Enhancers::FolderSummary (m_FolderSummaries)
+#include "AssetLibraryIndex.h" // m_LibraryIndex - Library root + kit modules
+#include "AABB.h" // DropPose::Face / m_ModularSnapFace
 #include "Enhancers/EnhancerCore.h" // Enhancers::SelectionHistoryEntry (m_SelHistory)
 #include "Enhancers/ComponentTransfer.h" // Enhancers::PlayKeep / PasteMode (vInspector)
 #include "Enhancers/TabState.h" // Enhancers::TabStrip (vTabs)
@@ -715,9 +718,16 @@ public:
     // that spot via TintOverlayRenderer, so what you see while dragging matches exactly what
     // gets committed on release.
     struct DragPreview {
+        // One per renderable: a dragged model is a single part at identity; a dragged prefab
+        // is every renderable in it, relative to its root (authored rotation/scale included).
+        struct Part {
+            std::shared_ptr<Model> ModelRef;
+            glm::mat4 Local{1.0f};
+        };
         bool Active = false;
-        std::shared_ptr<Model> ModelRef;
+        std::vector<Part> Parts;
         glm::vec3 Position{0.0f};
+        glm::quat Rotation{1.0f, 0.0f, 0.0f, 0.0f}; // align-to-normal, applied on top of the parts
     };
     const DragPreview& GetDragPreview() const { return m_DragPreview; }
 
@@ -1493,6 +1503,13 @@ private:
     // the cursor ray hits another surface. Hold Shift to invert the toggle momentarily.
     bool m_SurfaceSnap = false;
     bool m_SurfaceSnapAlign = false;  // also orient local +Y to the hit surface normal
+    // Modular kit snap (ModularSnap.h): kit pieces (asset_library.json "kits") sit flush
+    // against their neighbours and on the kit grid while moved or dropped; Shift inverts.
+    bool m_ModularSnap = true;
+    bool m_ModularSnapFaceActive = false; // the face it is flush against, highlighted this frame
+    bool m_ModularSnapWasActive = false;  // ...and last frame (the snap sound plays on the edge)
+    AABB m_ModularSnapFace{glm::vec3(0.0f), glm::vec3(0.0f)};
+    AssetLibraryIndex m_LibraryIndex;
     // How close (screen pixels) the cursor must be to a vertex to grab/preview/snap onto it —
     // one setting governs the hover circle, the initial grab, AND the drag-time snap search,
     // so "the circle is showing" and "this will snap" always mean the same thing.
@@ -2732,13 +2749,32 @@ private:
     // Y=0 ground plane, then a fixed fallback distance if neither hits) and applies grid
     // snapping (XZ only — Y comes from the hit itself) — the "where does the cursor point"
     // half of a viewport drop, shared by the model and prefab placement paths below.
-    glm::vec3 ComputeDropRayPosition(World& world, Camera& editorCamera) const;
-    // ComputeDropRayPosition(), then rests `model`'s own lowest vertex on that point instead of
-    // its (possibly arbitrary) pivot — same technique SnapSelectionToGround() already uses for
-    // an already-placed object, just evaluated for one that isn't placed yet. This is what the
-    // live drag preview and the on-release commit BOTH call, so what you see while dragging is
-    // exactly what you get.
-    glm::vec3 ComputeModelDropPosition(World& world, Model& model, Camera& editorCamera) const;
+    glm::vec3 ComputeDropRayPosition(World& world, Camera& editorCamera, glm::vec3* outNormal = nullptr) const;
+    // The pose a dragged model/prefab would land in right now: rests the lowest point of
+    // `parts` on the surface under the cursor and, with m_SurfaceSnapAlign, turns local +Y to
+    // that surface's normal. Shared by the ghost and the on-release commit.
+    // A kit piece (`path` in an asset_library.json kit) also gets ModularSnap against the scene.
+    struct DropPose {
+        glm::vec3 Position{0.0f};
+        glm::quat Rotation{1.0f, 0.0f, 0.0f, 0.0f};
+        bool Snapped = false;
+        AABB Face{glm::vec3(0.0f), glm::vec3(0.0f)};
+    };
+    DropPose ComputeDropPose(World& world, Camera& editorCamera, const std::vector<DragPreview::Part>& parts,
+                             const std::string& path) const;
+    // Modular snap for the Move gizmo: nudges `sel` by ModularSnap::Solve against nearby pieces.
+    void ApplyModularSnap(World& world, entt::entity sel, const glm::mat4& parentWorld);
+    // The kit module (metres) of an entity's prefab/model, 0 when it isn't a kit piece.
+    float KitModuleOf(World& world, entt::entity e) const;
+    // World boxes of every renderable within `reach` of `box`, skipping `skip`'s own subtree.
+    std::vector<AABB> NearbyBoxes(World& world, const AABB& box, float reach, entt::entity skip) const;
+    // Thin white outline of m_ModularSnapFace on the Scene view (drawn and cleared once a frame).
+    void DrawModularSnapFace(Camera& editorCamera);
+    // A prefab's renderables, stamped once into a scratch World per dragged path (so the ghost
+    // never touches the scene, its undo or its serializer).
+    const std::vector<DragPreview::Part>& PrefabGhostParts(AssetLibrary& assets, const std::string& path);
+    std::string m_PrefabGhostPath;
+    std::vector<DragPreview::Part> m_PrefabGhostParts;
     DragPreview m_DragPreview;
 
     // Axis-aligned/isometric view presets (Front/Back/Left/Right/Top/Bottom/Iso) and the

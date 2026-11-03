@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.077,
+          -0.0005
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.53,
+          0.077,
+          0.1335
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Shelf",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Decor/Models/Shelf.fbx",
+      "pathGuid": "4a52b2ed3b47d9c2",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

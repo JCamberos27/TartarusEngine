@@ -205,6 +205,8 @@ enum class Event : uint8_t {
     SpawnSpider,       // F10
     SpawnItem,         // F11
     ClearSpawns,       // F12
+    // Asset Library (docs/PROJECT_ASSETS.md)
+    ModularSnap,       // a kit piece comes flush against a neighbour (Move gizmo or a drop)
     Count
 };
 

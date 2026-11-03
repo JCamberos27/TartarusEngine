@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          1.1735,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          1.308,
+          1.1735,
+          0.088
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Curtains_A_Doublewindow",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Living_Room/Models/Curtains_A_Doublewindow.fbx",
+      "pathGuid": "7d7e1695539712d1",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

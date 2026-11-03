@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -3.0995,
+          0.523,
+          0.255
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.2585,
+          0.379,
+          0.027
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Cabinet_A_Door_B_R",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Decor/Models/Cabinet_A_Door_B_R.fbx",
+      "pathGuid": "dd5b429b4cab6afc",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

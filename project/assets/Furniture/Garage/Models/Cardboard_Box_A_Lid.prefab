@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.294,
+          -0.6965
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.15,
+          0.018,
+          0.1975
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Cardboard_Box_A_Lid",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Garage/Models/Cardboard_Box_A_Lid.fbx",
+      "pathGuid": "385f3581d7e83e64",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

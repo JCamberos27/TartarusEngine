@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.3515,
+          0.5425,
+          0.0355
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.3525,
+          0.1285,
+          0.2005
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Dresser_Large_A_Drawer_A",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Bedroom/Models/Dresser_Large_A_Drawer_A.fbx",
+      "pathGuid": "eb5d266d1c0a5c99",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

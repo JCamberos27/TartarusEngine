@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0005,
+          0.019,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.0185,
+          0.019,
+          0.125
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Screwdriver",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Garage/Models/Screwdriver.fbx",
+      "pathGuid": "c4d70b743deca65f",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

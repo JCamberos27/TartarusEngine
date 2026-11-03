@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.6755,
+          0.0725
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.36,
+          0.0575,
+          0.2805
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Desk_Office_Assembled_Drawer",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Office/Models/Desk_Office_Assembled_Drawer.fbx",
+      "pathGuid": "63026b547584869c",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.559,
+          0.0005
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          1.366,
+          0.559,
+          0.4625
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Sofa_03",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Seating/Models/Sofa_03.fbx",
+      "pathGuid": "1db466dd6460ab75",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

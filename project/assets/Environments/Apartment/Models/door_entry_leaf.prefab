@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.009,
+          1.0035,
+          -0.43
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.134,
+          0.9965,
+          0.439
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "door_entry_leaf",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/Apartment/Models/door_entry_leaf.gltf",
+      "pathGuid": "71da43ca47d7dad3",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

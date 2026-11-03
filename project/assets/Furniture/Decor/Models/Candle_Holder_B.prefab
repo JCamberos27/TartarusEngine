@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0005,
+          0.1425,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.0565,
+          0.1425,
+          0.057
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Candle_Holder_B",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Decor/Models/Candle_Holder_B.fbx",
+      "pathGuid": "289dd362ea24bb46",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

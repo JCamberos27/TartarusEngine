@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.261,
+          1.5045,
+          0.2225
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.258,
+          0.5525,
+          0.0275
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Cabinet_A_Assembled_Door_A_R",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Decor/Models/Cabinet_A_Assembled_Door_A_R.fbx",
+      "pathGuid": "e1f31a69c48c8089",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0005,
+          0.374,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.3365,
+          0.374,
+          0.339
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Car_Tire_Pile",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Garage/Models/Car_Tire_Pile.fbx",
+      "pathGuid": "4169ebf5536bf123",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

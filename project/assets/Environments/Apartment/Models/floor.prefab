@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          -0.025,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          4.481,
+          0.025,
+          2.246
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "floor",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/Apartment/Models/floor.gltf",
+      "pathGuid": "87bf86c89d7687ae",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}
