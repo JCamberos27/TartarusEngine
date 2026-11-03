@@ -70,3 +70,39 @@ Original removed files and edited reference files are backed up under
 `build/project-cleanup-backup/`. Machine-readable audit and change manifests
 are `build/project-duplicate-audit.json` and `build/project-cleanup-result.json`.
 The backup is outside the project content and is not exported with the game.
+
+## Asset Library
+
+The Asset Browser's **Asset Library** root lists every placeable thing, sorted by kind. It covers prefabs, decals and HDRIs. Each category is split by pack, for example *Asset Library / Architecture / Walls / ModularCityAlleyPack*. Files never move to make this view; it is computed on every refresh from `project/asset_library.json`.
+
+The JSON has three parts:
+
+- **`categories`** has the shape `{id, name, parent?}`. A category without `parent` is a top-level folder.
+- **`rules`** has the shape `{glob, category}`. Rules are tried in order and the first match wins. Each glob is matched case-insensitively against the project-relative path (`assets/...`), and `*` also crosses `/` (Enhancers `GlobMatch`). A path no rule matches goes to `other`.
+- **`kits`** has the shape `{"<pack folder>": module metres}`. It lists the modular packs whose pieces snap together.
+
+The Library root is a view, so it refuses folder creation, renames and moving assets into it. Drag from it into the Scene view as from any other folder.
+
+To place items, drag a model or prefab into the Scene view:
+
+- A tinted ghost shows the exact landing pose.
+- The lowest point of the model or prefab rests on the surface under the cursor.
+- With **Snap to surface** and **Align to surface normal** both on (grid-snap popover), the dropped object also turns its up axis to the face it lands on.
+
+With **Snap kit pieces together** on (the default; hold Shift to invert), kit pieces behave as follows, whether moved with the Move gizmo or dropped:
+
+- A piece's box comes flush against neighbouring pieces within a quarter of the module. That covers side-by-side faces and lined-up fronts.
+- Axes with nothing near snap to the module grid. Height is kept.
+- Rotation turns in quarter turns.
+- A white outline marks the face the piece is flush against.
+
+The code is in `src/Editor/ModularSnap.h`, with its tests in `UnitTests_AssetLibrary.cpp`.
+
+A file listed in `external_assets.csv` that this checkout hasn't fetched shows as a greyed tile where it would be. Dragging it says to run `tools/assets/fetch-assets.ps1`.
+
+`tools/assets/make_model_prefabs.py` gives every model in Furniture, Architecture, Props and Environments/Apartment a prefab beside it:
+
+- Colliders are a box fitted to the bounds. Architecture gets a triangle-mesh collider, except for doors.
+- Characters are skipped, because their parts are wardrobe pieces used through `.outfit` files.
+- Run it with `--dry` to see counts. It skips prefabs that already exist unless given `--force`.
+- It reads bounds through `TartarusEngine.exe --model-report` in a checkout that has the payloads.

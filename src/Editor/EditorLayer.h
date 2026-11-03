@@ -75,6 +75,9 @@ struct AssetGridCell {
     // A file on disk nothing has loaded yet (EditorLayer::m_ProjectAssetIndex): model / texture /
     // material are null until the user acts on it (EditorLayer::LoadUnloadedAsset).
     bool unloaded = false;
+    // Listed in external_assets.csv but not on disk: a Drive file this checkout hasn't fetched.
+    // Shown greyed; dragging it is refused (run tools/assets/fetch-assets.ps1).
+    bool unfetched = false;
 };
 
 // In-game editor overlay (Dear ImGui + ImGuizmo): import assets, place/inspect
@@ -728,6 +731,7 @@ public:
         std::vector<Part> Parts;
         glm::vec3 Position{0.0f};
         glm::quat Rotation{1.0f, 0.0f, 0.0f, 0.0f}; // align-to-normal, applied on top of the parts
+        float Alpha = 0.45f; // eases in as the drag enters the viewport (Glass motion)
     };
     const DragPreview& GetDragPreview() const { return m_DragPreview; }
 
@@ -1508,6 +1512,7 @@ private:
     bool m_ModularSnap = true;
     bool m_ModularSnapFaceActive = false; // the face it is flush against, highlighted this frame
     bool m_ModularSnapWasActive = false;  // ...and last frame (the snap sound plays on the edge)
+    bool m_ModularSnapWasPrev = false;    // ...as DrawModularSnapFace last saw it (starts the flare)
     AABB m_ModularSnapFace{glm::vec3(0.0f), glm::vec3(0.0f)};
     AssetLibraryIndex m_LibraryIndex;
     // How close (screen pixels) the cursor must be to a vertex to grab/preview/snap onto it —
@@ -1983,6 +1988,11 @@ private:
     float m_AssetListingRefreshTimer = 0.0f;   // ticks up in DrawAssetBrowser; see kAssetListingRefreshInterval
     bool m_AssetBrowserFocusedLastFrame = false; // edge-detects m_AssetBrowserFocused for "just gained focus"
     void RefreshScenesListingIfNeeded();
+    // The "Asset Library" root (AssetLibraryView): files every placeable in m_ProjectAssetIndex into
+    // "Asset Library/<Category>[/<Sub>]/<Pack>" by asset_library.json. Rebuilt when the index changes.
+    void RefreshLibraryView();
+    std::unordered_map<std::string, std::vector<size_t>> m_LibraryItems; // folder -> m_ProjectAssetIndex.files
+    size_t m_LibraryViewKey = (size_t)-1;
     void RefreshShadersListingIfNeeded();
     void RefreshAnimationListingIfNeeded();
     void InvalidateScenesListing() { m_ScenesListingCache.valid = false; }
@@ -2001,6 +2011,7 @@ private:
         std::string Name;
         std::string Folder; // Asset Browser folder: its .meta's chosen folder, else its folder on disk
         bool MetaFolder = false; // Folder came from the .meta (still to register, worker side)
+        bool Unfetched = false;  // an external_assets.csv row with no file on disk (AssetGridCell::unfetched)
         AssetGridCell::Kind Kind = AssetGridCell::Kind::Model;
     };
     struct {
@@ -2021,6 +2032,8 @@ private:
     // when it's a real folder under the project (like Unity), else `fallback`.
     std::string NewAssetFolder(const std::string& fallback) const;
     static std::vector<ProjectAssetFile> ScanProjectAssetFiles(const std::string& root); // worker thread
+    static bool ProjectAssetKindOf(ProjectAssetFile& f); // sets f.Kind from its extension; false = not an asset
+    bool m_UnfetchedDragNoted = false; // the "not fetched" note already given for this drag
     void InvalidateProjectAssetIndex() { m_ProjectAssetIndex.valid = false; }
     // An unloaded tile the user is acting on (click, drag, right-click): load it into the library
     // so the rest of the cell code sees a normal asset. False if it failed to load.

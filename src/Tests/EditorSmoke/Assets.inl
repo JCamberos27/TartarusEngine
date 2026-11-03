@@ -14,6 +14,7 @@
 
 } // namespace
 #include "AssetDatabase.h"
+#include "AssetLibraryIndex.h"
 struct EditorSmokeAccess_Assets {
     static const std::vector<AssetGridCell>& Cells(EditorLayer& e) { return e.m_AssetGridCells; }
     static void Refresh(EditorLayer& e) { e.RefreshAssetBrowser(); }
@@ -31,6 +32,7 @@ struct EditorSmokeAccess_Assets {
         return fromTop < e.m_UndoStack.size() && e.m_UndoStack[e.m_UndoStack.size() - 1 - fromTop].SelectionOnly;
     }
     static float RefreshFlash(EditorLayer& e) { return e.m_AssetRefreshFlash; }
+    static AssetLibraryIndex& Library(EditorLayer& e) { e.m_LibraryViewKey = (size_t)-1; return e.m_LibraryIndex; }
 };
 namespace {
 namespace smoke_assets {
@@ -551,6 +553,67 @@ void RegisterAssetsTests() {
              ExpectTrue("the instance is still there", [](Ctx& c) { return ByName(c.W, "Smoke Prefab Root") != entt::null; }),
              Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(4),
              Until("the third undo removes the instance", [](Ctx& c) { return ByName(c.W, "Smoke Prefab Root") == entt::null; }, 60)},
+        }));
+    }
+
+    // ------------------------------------------------------------------ the Asset Library root
+    // A one-cube prefab filed under Furniture by a test rule, the scratch folder made a 1 m kit: it
+    // lists under Asset Library / Furniture / <pack>, a drop rests its bottom on the ground, and a
+    // second drop onto the first stacks it exactly on top (ModularSnap: flush faces, fronts lined up).
+    {
+        auto kitBoxes = [](Ctx& c) {
+            std::vector<AABB> out;
+            auto view = c.W.Registry.view<PrefabInstanceComponent, RenderableComponent>();
+            for (entt::entity e : view) {
+                const auto& rc = view.get<RenderableComponent>(e);
+                if (!Contains(view.get<PrefabInstanceComponent>(e).SourcePath, "Smoke Kit") || !rc.ModelRef) continue;
+                out.push_back(AABB{rc.ModelRef->BoundsMin(), rc.ModelRef->BoundsMax()}.Transformed(c.W.ComposeWorldTransform(e)));
+            }
+            return out;
+        };
+        const std::string libFolder = AssetLibraryView::kRoot + "/Furniture/" + kFolder;
+        Add("assets: the Asset Library root lists a prefab by category; drops rest on the ground and kit pieces stack flush", Cat({
+            {FreshScene(), Wait(2),
+             Do("Scene tab in front", [](Ctx& c) { c.E.RequestSceneTabFocus(); }), Wait(3)},
+            EnsureScratch(),
+            {Do("a one-cube prefab, filed under Furniture, in a 1 m kit", [](Ctx& c) {
+                 auto model = c.A.InstantiateModel(DirFile("Smoke Cube.obj"));
+                 if (!model) Fail("couldn't load the scratch cube");
+                 World w;
+                 const entt::entity e = w.CreateModelEntity(model, glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Smoke Kit Cube");
+                 if (!SceneSerializer::SavePrefab(w, e, DirFile("Smoke Kit.prefab"))) Fail("couldn't write the kit prefab");
+                 AX::Library(c.E).LoadFromText(std::string(R"({"categories": [{"id": "furniture", "name": "Furniture"}],
+                     "rules": [{"glob": "*Smoke Kit.prefab", "category": "furniture"}], "kits": {")") + kFolder + R"(": 1.0}})");
+                 AX::Refresh(c.E);
+             }),
+             Navigate(libFolder), Wait(4), UntilListed("Smoke Kit.prefab", 900),
+             RevealTile("Smoke Kit.prefab"),
+             Drag(Tile("Smoke Kit.prefab"), AtItem(ByExact("##viewport_drop_zone"))), Wait(5),
+             Until("one kit cube placed", [kitBoxes](Ctx& c) { return kitBoxes(c).size() == 1; }, 240),
+             Expect("it rests on the ground (bottom at y = 0 +- 1 cm)", [kitBoxes](Ctx& c) {
+                 const float y = kitBoxes(c)[0].Min.y;
+                 return std::fabs(y) <= 0.01f ? std::string() : "its bottom is at y = " + std::to_string(y);
+             }),
+             RevealTile("Smoke Kit.prefab"),
+             Drag(Tile("Smoke Kit.prefab"), AtItem(ByExact("##viewport_drop_zone"))), Wait(5),
+             Until("a second kit cube placed", [kitBoxes](Ctx& c) { return kitBoxes(c).size() == 2; }, 240),
+             // On top (the ray met the first cube) or beside it (it met the ground next to it): either
+             // way exactly one axis is a full cube apart and the other two line up.
+             Expect("the second sits flush against the first (gaps under 1 mm)", [kitBoxes](Ctx& c) {
+                 const auto b = kitBoxes(c);
+                 const glm::vec3 d = glm::abs(b[1].Min - b[0].Min);
+                 int apart = 0, aligned = 0;
+                 for (int a = 0; a < 3; ++a) {
+                     apart += std::fabs(d[a] - 1.0f) < 0.001f;
+                     aligned += d[a] < 0.001f;
+                 }
+                 return apart == 1 && aligned == 2 ? std::string()
+                     : "offset " + std::to_string(d.x) + ", " + std::to_string(d.y) + ", " + std::to_string(d.z);
+             }),
+             Shot("kit-stack", {kScene}),
+             HoverPanel(kScene), Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(4), Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(4),
+             Until("undo removes both", [kitBoxes](Ctx& c) { return kitBoxes(c).empty(); }, 60),
+             Do("the project's own library rules back", [](Ctx& c) { AX::Library(c.E).Load(); })},
         }));
     }
 

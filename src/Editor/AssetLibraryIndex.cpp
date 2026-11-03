@@ -6,8 +6,20 @@
 
 #include <json.hpp>
 
+#include <algorithm>
 #include <fstream>
 #include <sstream>
+
+std::vector<std::string>& AssetLibraryView::Folders() {
+    static std::vector<std::string> folders;
+    return folders;
+}
+
+std::string AssetLibraryIndex::ProjectRelative(const std::string& path) {
+    std::string p = ProjectPaths::Relativize(path);
+    std::replace(p.begin(), p.end(), '\\', '/');
+    return p;
+}
 
 void AssetLibraryIndex::Load() {
     std::ifstream in(ProjectPaths::Resolve("asset_library.json"));
