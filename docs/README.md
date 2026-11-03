@@ -4,7 +4,7 @@
 
 The repository [README](../README.md) is authoritative for asset setup and Git policy.
 Licensed third-party models, animations, textures and audio stay in the private asset library;
-only their `.meta` sidecars, authored settings and `project/external_assets.csv` belong in Git.
+only their `.meta` sidecars, authored settings (including each payload hash) belong in Git.
 This also applies to re-exported weapon FBXs and sounds derived from third-party recordings.
 Run `python tools/assets/check_git_assets.py` before committing or pushing.
 

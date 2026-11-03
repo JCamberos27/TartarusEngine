@@ -2,7 +2,7 @@
 
 Third-party payloads remain local or in the private asset library. Git tracks their metadata,
 materials, controllers and authored settings. Follow the root [README](../README.md) to fetch
-the payloads and maintain `project/external_assets.csv`; never commit the models, textures,
+the payloads and keep the `payload` hashes in the `.meta` files up to date; never commit the models, textures,
 animation files or recordings themselves.
 
 The Asset Browser's `Assets` root represents `project/`. The lowercase `assets`
@@ -71,9 +71,11 @@ Original removed files and edited reference files are backed up under
 are `build/project-duplicate-audit.json` and `build/project-cleanup-result.json`.
 The backup is outside the project content and is not exported with the game.
 
-## Asset Library
+## Asset Browser, Favorites and packages
 
-The Asset Browser's **Asset Library** root lists every placeable thing, sorted by kind. It covers prefabs, decals and HDRIs. Each category is split by pack, for example *Asset Library / Architecture / Walls / ModularCityAlleyPack*. Files never move to make this view; it is computed on every refresh from `project/asset_library.json`.
+The Asset Browser shows the disk, like Unity's Project window. Moving or renaming an asset in the browser moves the file and its `.meta` (the GUID is kept); undo moves them back. References resolve by GUID first: scenes, `.mat`, `.decal` `textureGuids`, `.outfit` `itemGuid` / `wardrobeGuid`, `audio_manifest.json` `guid`, and controllers (`tools/assets/add_ref_guids.py` adds GUIDs to older files; `tools/assets/drop_meta_folders.py` strips the retired browser-only `folder` field).
+
+**Favorites** is a root of saved searches. There is one per category in `project/asset_library.json`, searching the label named after the category (letters and digits only, e.g. `l:Walls`; Walls sits under Architecture, whose parent search is `l:Architecture`). Users can add their own with the bookmark button beside the search box. `tools/assets/apply_library_labels.py` labels existing assets; the editor labels new imports.
 
 The JSON has three parts:
 
@@ -81,7 +83,7 @@ The JSON has three parts:
 - **`rules`** has the shape `{glob, category}`. Rules are tried in order and the first match wins. Each glob is matched case-insensitively against the project-relative path (`assets/...`), and `*` also crosses `/` (Enhancers `GlobMatch`). A path no rule matches goes to `other`.
 - **`kits`** has the shape `{"<pack folder>": module metres}`. It lists the modular packs whose pieces snap together.
 
-The Library root is a view, so it refuses folder creation, renames and moving assets into it. Drag from it into the Scene view as from any other folder.
+**Packages:** the vendor packs listed in `project/packages.json` are read-only in the editor: no move, rename, delete, new folder, or material / prefab save inside one, and their folders show a lock icon. Right-click > **Copy into assets/ (editable)** copies a pack item into `assets/Local/<Pack>/...`. The import tools still write into packs.
 
 To place items, drag a model or prefab into the Scene view:
 
@@ -98,7 +100,7 @@ With **Snap kit pieces together** on (the default; hold Shift to invert), kit pi
 
 The code is in `src/Editor/ModularSnap.h`, with its tests in `UnitTests_AssetLibrary.cpp`.
 
-A file listed in `external_assets.csv` that this checkout hasn't fetched shows as a greyed tile where it would be. Dragging it says to run `tools/assets/fetch-assets.ps1`.
+A file with a `payload` in its `.meta` that this checkout hasn't fetched shows as a greyed tile where it would be. Dragging it says to run `tools/assets/fetch-assets.ps1`.
 
 `tools/assets/make_model_prefabs.py` gives every model in Furniture, Architecture, Props and Environments/Apartment a prefab beside it:
 
