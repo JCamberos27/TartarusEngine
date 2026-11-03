@@ -1,6 +1,9 @@
 {
-  "folder": "assets/Environments/ModularCityAlleyPack/Prefabs/Prefabs_Walls/Walls_C/LargeDoors",
   "guid": "5da4415298676bad",
   "metaVersion": 1,
-  "type": "prefab"
+  "type": "prefab",
+  "labels": [
+    "Architecture",
+    "Doors"
+  ]
 }

@@ -1,6 +1,8 @@
 {
-  "folder": "assets/Props/Money/Models",
   "guid": "233e0d64e8834dcf",
   "metaVersion": 1,
-  "type": "prefab"
+  "type": "prefab",
+  "labels": [
+    "Props"
+  ]
 }

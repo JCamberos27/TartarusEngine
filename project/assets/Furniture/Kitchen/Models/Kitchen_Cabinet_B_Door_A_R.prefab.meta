@@ -1,6 +1,8 @@
 {
-  "folder": "assets/Furniture/Kitchen/Models",
   "guid": "2e35059f58c767ba",
   "metaVersion": 1,
-  "type": "prefab"
+  "type": "prefab",
+  "labels": [
+    "Furniture"
+  ]
 }

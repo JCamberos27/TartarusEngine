@@ -470,6 +470,8 @@ struct EditorModuleHostAPI {
     // --- Asset Browser search scope + favourites view (API v14, #236 G) -----------
     // Search scope: false = current folder + subfolders; true = whole project.
     bool (*GetAssetSearchGlobal)() = nullptr;  void (*SetAssetSearchGlobal)(bool on) = nullptr;
+    // Favorites (Unity's saved searches): star / un-star the current search text.
+    void (*ToggleSavedAssetSearch)() = nullptr;  bool (*IsAssetSearchSaved)() = nullptr;
     // Favourites-only grid filter (the toolbar star toggle).
     bool (*GetAssetFavoritesOnly)() = nullptr; void (*SetAssetFavoritesOnly)(bool on) = nullptr;
 

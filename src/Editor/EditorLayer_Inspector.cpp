@@ -1727,6 +1727,7 @@ void EditorLayer::DrawMaterialAssetFields(World& world, AssetLibrary& assets, co
         // commit), so it's the undo state. Recorded only when the save actually changed it.
         std::string before = ReadTextFile(matPath);
         ma->SyncTexturePathsFromMat();
+        if (RefuseInPackage(matPath, "saved")) return; // a vendor pack's material: edit a copy instead
         ma->Save();
         if (ReadTextFile(matPath) != before)
             PushAssetUndo(world, matPath, std::move(before), "Edit " + std::filesystem::path(matPath).stem().string());

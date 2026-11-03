@@ -1,6 +1,9 @@
 {
-  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Prefabs/Building",
   "guid": "220a04c2c2fc86d2",
   "metaVersion": 1,
-  "type": "prefab"
+  "type": "prefab",
+  "labels": [
+    "Architecture",
+    "Ceilings"
+  ]
 }

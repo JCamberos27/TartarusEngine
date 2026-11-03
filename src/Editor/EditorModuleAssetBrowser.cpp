@@ -913,6 +913,14 @@ void Draw(const EditorModuleHostAPI& host) {
     if (newPacked != sortPacked && host.SetAssetSort) host.SetAssetSort(newPacked);
 
     ImGui::SameLine();
+    // Unity's saved searches: star the search in the box and it's kept under Favorites.
+    if (!search.empty() && host.ToggleSavedAssetSearch) {
+        const bool saved = host.IsAssetSearchSaved && host.IsAssetSearchSaved();
+        if (ActionButton(host, ICON_FA_BOOKMARK, saved ? "Saved under Favorites (click to remove it)"
+                                                       : "Save this search to Favorites"))
+            host.ToggleSavedAssetSearch();
+        ImGui::SameLine();
+    }
     if (ActionButton(host, ICON_FA_ROTATE, "Refresh - re-scan folders and thumbnails (Ctrl+R)") && host.RefreshAssetBrowser)
         host.RefreshAssetBrowser();
     ImGui::PopStyleVar(); // the icon cluster's tight spacing

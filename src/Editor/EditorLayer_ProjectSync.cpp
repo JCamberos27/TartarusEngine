@@ -213,26 +213,37 @@ int EditorLayer::ApplyAssetMove(World& world, AssetLibrary& assets, const std::s
 // like Unity, instead of only setting a display name. Keys may be project-relative or absolute;
 // newKey is in the same style as oldKey. File paths and GUID sidecars join global history.
 bool EditorLayer::RenameAssetFile(World& world, AssetLibrary& assets, const std::string& oldKey,
-                                  const std::string& newKey, std::string& error) {
+                                  const std::string& newKey, std::string& error, const char* undoLabel) {
     const std::string oldAbs = AbsoluteOf(oldKey), newAbs = AbsoluteOf(newKey);
     std::error_code ec;
     if (fs::exists(newAbs, ec) && !SameFile(oldAbs, newAbs)) { error = "a file with that name already exists"; return false; }
-    PushUndo(world,"Rename Asset"); // path fixups/library keys are authored scene changes as well
-    AtomicFile::NotifyWillChange(oldAbs);AtomicFile::NotifyWillChange(newAbs);
-    AtomicFile::NotifyWillChange(oldAbs+".meta");AtomicFile::NotifyWillChange(newAbs+".meta");
+    if (!m_GlobalUndoApplying && (RefuseInPackage(oldAbs, "moved or renamed") || RefuseInPackage(newAbs, "given new files"))) {
+        error = "it's in a read-only package";
+        return false;
+    }
+    // History keeps the move itself (UndoEntry::Moves), not the file's bytes: Undo moves it back.
+    // While Undo / Redo replays a move, it isn't a new step.
+    if (!m_GlobalUndoApplying) PushUndo(world, undoLabel); // path fixups/library keys are authored scene changes as well
+    fs::create_directories(fs::path(newAbs).parent_path(), ec); // a move into a folder that isn't there yet
+    ec.clear();
     fs::rename(oldAbs, newAbs, ec);
     if (ec) { error = ec.message(); return false; }
+    if (!m_GlobalUndoApplying) m_GlobalUndoMoves.emplace_back(oldAbs, newAbs);
     if (AssetDatabase::GuidForPath(oldAbs).IsValid()) {
         AssetDatabase::NotifyMoved(oldAbs, newAbs); // moves the .meta, GUID unchanged
     } else if (fs::exists(oldAbs + ".meta", ec)) {
         fs::rename(oldAbs + ".meta", newAbs + ".meta", ec);
         AssetDatabase::EnsureGuid(newAbs);
+    } else {
+        AssetDatabase::EnsureGuid(newAbs); // never registered: it gets its .meta (and GUID) where it lands
     }
     m_SelfMoves.emplace_back(oldAbs, newAbs);
     if (m_SelfMoves.size() > 64) m_SelfMoves.erase(m_SelfMoves.begin()); // watcher off: don't grow forever
 
-    // The library keys by the stored style, the scene fixups by absolute path.
+    // The library keys by the stored style, the scene fixups by absolute path. The browser folder is
+    // where the file now is on disk (SetAssetFolder files by disk location).
     assets.RenamePath(oldKey, newKey);
+    assets.SetAssetFolder(newKey, std::string());
     bool listed = false;
     const int refs = ApplyAssetMove(world, assets, oldAbs, newAbs, listed);
     // Editor Enhancers: favorites, Inspector bookmarks and Inspector tabs follow the file.
@@ -252,11 +263,161 @@ bool EditorLayer::RenameAssetFile(World& world, AssetLibrary& assets, const std:
         if (rekey(ts.Inspector.Tabs) | rekey(ts.Inspector.Closed) | rekey(ts.Starred)) ts.MarkDirty();
     }
     m_AssetThumbs.Invalidate(oldKey);
+    m_AssetThumbs.Invalidate(newKey); // a tile drawn there while it was empty cached "no image"
     InvalidateProjectAssetIndex();
     InvalidateScenesListing();
-    Log::Info("Renamed '" + fs::path(oldAbs).filename().string() + "' to '" + fs::path(newAbs).filename().string() + "'" +
+    Log::Info("Moved '" + ProjectPaths::Relativize(oldAbs) + "' to '" + ProjectPaths::Relativize(newAbs) + "'" +
               (refs ? " - " + std::to_string(refs) + " reference(s) in the scene updated." : "."));
     return true;
+}
+
+bool EditorLayer::RefuseInPackage(const std::string& path, const char* what) {
+    const std::string pack = AssetLibraryView::PackageOf(path);
+    if (pack.empty()) return false;
+    const std::string name = fs::path(pack).filename().string();
+    PushGlassToast("Read-only package", name + " is a vendor pack and can't be " + what +
+                   ". Right-click a file in it > Copy into assets/ for an editable copy.", true);
+    EditorSound::Play(EditorSound::Event::Blocked);
+    return true;
+}
+
+void EditorLayer::CopyIntoAssets(World& world, AssetLibrary& assets, const std::string& key) {
+    const std::string src = AbsoluteOf(key);
+    const std::string pack = AssetLibraryView::PackageOf(src);
+    if (pack.empty()) return;
+    // assets/Local/<pack name>/<the file's path inside the pack>: out of the pack, easy to find, and a
+    // re-import of the pack never touches it. No .meta is copied, so the copy gets its own GUID.
+    const std::string rel = fs::path(AssetLibraryIndex::ProjectRelative(src)).lexically_relative(fs::path(pack)).generic_string();
+    fs::path dest = fs::path(ProjectPaths::Resolve("assets/Local/" + fs::path(pack).filename().string() + "/" + rel)).lexically_normal();
+    std::error_code ec;
+    for (int n = 1; fs::exists(dest, ec); ++n)
+        dest = dest.parent_path() / (fs::path(rel).stem().string() + " (" + std::to_string(n) + ")" + fs::path(rel).extension().string());
+    fs::create_directories(dest.parent_path(), ec);
+    if (!fs::copy_file(src, dest, ec)) { Log::Warn("Copy into assets/: couldn't copy '" + key + "': " + ec.message()); return; }
+    OnExternalAdd(world, assets, dest.string()); // registered (and labelled) like any new file
+    InvalidateProjectAssetIndex();
+    NavigateAssetFolder(AssetLibraryIndex::ProjectRelative(dest.parent_path().string()), /*sound=*/false);
+    Log::Info("Copied '" + ProjectPaths::Relativize(src) + "' to '" + ProjectPaths::Relativize(dest.string()) + "' (editable).");
+}
+
+void EditorLayer::CreateFolderOnDisk(World& world, AssetLibrary& assets, const std::string& folder) {
+    std::error_code ec;
+    const std::string abs = fs::path(ProjectPaths::Resolve(folder)).lexically_normal().string();
+    if (fs::exists(abs, ec)) { assets.AddFolderPath(folder); return; }
+    if (RefuseInPackage(abs, "given new folders")) return;
+    if (!m_GlobalUndoApplying) PushUndo(world, "Create Folder");
+    if (!fs::create_directories(abs, ec)) { Log::Warn("Couldn't create '" + folder + "': " + ec.message()); return; }
+    if (!m_GlobalUndoApplying) m_GlobalUndoMoves.emplace_back(std::string(), abs); // ("", dir): see ApplyHistoryMoves
+    assets.AddFolderPath(folder);
+}
+
+int EditorLayer::MoveAssetsOnDisk(World& world, AssetLibrary& assets, const std::vector<std::string>& keys,
+                                  const std::string& destFolder) {
+    int moved = 0;
+    const fs::path dest = fs::path(ProjectPaths::Resolve(destFolder)).lexically_normal();
+    for (const std::string& key : keys) {
+        std::error_code ec;
+        const fs::path src = fs::path(AbsoluteOf(key)).lexically_normal();
+        if (fs::is_directory(src, ec)) {
+            const std::string from = ProjectPaths::Relativize(src.string()), to = destFolder + "/" + src.filename().string();
+            moved += MoveFolderOnDisk(world, assets, from, to, "Move Folder");
+            continue;
+        }
+        if (src.parent_path() == dest) continue; // already there
+        std::string error;
+        if (RenameAssetFile(world, assets, src.string(), (dest / src.filename()).string(), error, "Move Asset to Folder")) ++moved;
+        else Log::Warn("Couldn't move '" + ProjectPaths::Relativize(src.string()) + "': " + error);
+    }
+    return moved;
+}
+
+int EditorLayer::MoveFolderOnDisk(World& world, AssetLibrary& assets, const std::string& oldFolder,
+                                  const std::string& newFolder, const char* undoLabel) {
+    std::error_code ec;
+    const fs::path from = fs::path(ProjectPaths::Resolve(oldFolder)).lexically_normal();
+    const fs::path to = fs::path(ProjectPaths::Resolve(newFolder)).lexically_normal();
+    const std::string toStr = to.string(), fromStr = from.string();
+    if (from == to || !fs::is_directory(from, ec)) return 0;
+    if (toStr.size() > fromStr.size() && toStr.compare(0, fromStr.size(), fromStr) == 0 && (toStr[fromStr.size()] == '\\' || toStr[fromStr.size()] == '/')) {
+        Log::Warn("Can't move '" + oldFolder + "' into itself.");
+        return 0;
+    }
+    if (fs::exists(to, ec)) { Log::Warn("Can't move '" + oldFolder + "': '" + newFolder + "' already exists."); return 0; }
+    if (!m_GlobalUndoApplying && (RefuseInPackage(fromStr, "moved or renamed") || RefuseInPackage(toStr, "given new folders"))) return 0;
+    // File by file, each with its .meta (and GUID), so every reference follows - like a single rename.
+    std::vector<fs::path> files;
+    for (auto it = fs::recursive_directory_iterator(from, ec); !ec && it != fs::recursive_directory_iterator(); it.increment(ec))
+        if (it->is_regular_file() && it->path().extension() != ".meta") files.push_back(it->path());
+    int moved = 0;
+    if (!m_GlobalUndoApplying) PushUndo(world, undoLabel);
+    if (files.empty()) { // nothing in it but folders: the folder itself moves (an empty New Folder renamed)
+        fs::create_directories(to.parent_path(), ec);
+        fs::rename(from, to, ec);
+        if (!ec) {
+            if (!m_GlobalUndoApplying) m_GlobalUndoMoves.emplace_back(fromStr, toStr);
+            assets.RenameFolder(oldFolder, newFolder);
+        }
+        return 0;
+    }
+    fs::create_directories(to, ec);
+    for (const fs::path& f : files) {
+        std::string error;
+        const fs::path target = to / f.lexically_relative(from);
+        if (RenameAssetFile(world, assets, f.string(), target.string(), error, undoLabel)) ++moved;
+        else Log::Warn("Couldn't move '" + ProjectPaths::Relativize(f.string()) + "': " + error);
+    }
+    // .meta files with no asset beside them (a Drive payload not fetched here) travel too.
+    for (auto it = fs::recursive_directory_iterator(from, ec); !ec && it != fs::recursive_directory_iterator(); it.increment(ec)) {
+        if (!it->is_regular_file() || it->path().extension() != ".meta") continue;
+        const fs::path target = to / it->path().lexically_relative(from);
+        fs::create_directories(target.parent_path(), ec);
+        std::error_code mvEc;
+        fs::rename(it->path(), target, mvEc);
+        if (!mvEc && !m_GlobalUndoApplying) m_GlobalUndoMoves.emplace_back(it->path().string(), target.string());
+    }
+    assets.RenameFolder(oldFolder, newFolder); // the browser's own list (open folders, history)
+    // Folders the move left empty, deepest first. Only empty ones: a file that couldn't move stays put.
+    std::vector<fs::path> dirs;
+    for (auto it = fs::recursive_directory_iterator(from, ec); !ec && it != fs::recursive_directory_iterator(); it.increment(ec))
+        if (it->is_directory()) dirs.push_back(it->path());
+    std::sort(dirs.begin(), dirs.end(), [](const fs::path& a, const fs::path& b) { return a.native().size() > b.native().size(); });
+    dirs.push_back(from);
+    for (const fs::path& d : dirs) {
+        std::error_code rmEc;
+        if (fs::is_empty(d, rmEc) && !rmEc) fs::remove(d, rmEc);
+    }
+    return moved;
+}
+
+void EditorLayer::ApplyHistoryMoves(World& world, AssetLibrary& assets,
+                                    const std::vector<std::pair<std::string, std::string>>& moves, bool backward) {
+    for (size_t k = 0; k < moves.size(); ++k) {
+        const auto& m = backward ? moves[moves.size() - 1 - k] : moves[k];
+        const std::string& a = backward ? m.second : m.first;
+        const std::string& b = backward ? m.first : m.second;
+        std::error_code ec;
+        // ("", dir) is a folder New Folder made: undo removes it (only while empty), redo makes it again.
+        if (m.first.empty()) {
+            if (backward) { if (fs::is_empty(m.second, ec) && !ec) fs::remove(m.second, ec); }
+            else fs::create_directories(m.second, ec);
+            assets.AddFolderPath(ProjectPaths::Relativize(m.second));
+            continue;
+        }
+        if (fs::is_directory(a, ec)) { // an empty folder renamed or moved as a whole
+            fs::create_directories(fs::path(b).parent_path(), ec);
+            fs::rename(a, b, ec);
+            assets.RenameFolder(ProjectPaths::Relativize(a), ProjectPaths::Relativize(b));
+            continue;
+        }
+        if (a.size() > 5 && a.compare(a.size() - 5, 5, ".meta") == 0) { // a lone .meta (unfetched payload)
+            fs::create_directories(fs::path(b).parent_path(), ec);
+            fs::rename(a, b, ec);
+            continue;
+        }
+        std::string error;
+        if (!RenameAssetFile(world, assets, a, b, error))
+            Log::Warn("History couldn't move '" + ProjectPaths::Relativize(a) + "' back: " + error);
+    }
 }
 
 void EditorLayer::OnExternalAdd(World& world, AssetLibrary& assets, const std::string& path) {
@@ -276,6 +437,11 @@ void EditorLayer::OnExternalAdd(World& world, AssetLibrary& assets, const std::s
     else imported = false; // scenes, shaders, controllers, scripts, HDRIs: listed from disk / by reference
     if (type == "scene") InvalidateScenesListing();
 
+    // Unity-style auto-labelling: a new asset gets its asset_library.json category as a label (l:Walls).
+    if (imported || type == "prefab" || type == "decal") {
+        const auto labels = m_LibraryIndex.LabelsOf(m_LibraryIndex.CategoryOf(AssetLibraryIndex::ProjectRelative(path)));
+        if (!labels.empty() && assets.Labels(path).empty()) assets.SetLabels(path, labels);
+    }
     if (imported && assets.AssetFolder(path).empty()) {
         // File it in the Asset Browser folder matching its folder on disk (creating the path).
         // Registered in memory only: it's found again from disk on every load, so it isn't

@@ -1578,6 +1578,9 @@ private:
         // and never reloads the scene - so it also works in Play, where the scene must not be touched.
         bool AssetOnly = false;
         std::vector<EditorFileHistory::State> Files;
+        // Files this step moved on disk (from, to), absolute: Undo moves them back, Redo again.
+        // Recorded as moves, not bytes, so a folder of textures costs nothing to keep in history.
+        std::vector<std::pair<std::string, std::string>> Moves;
         bool CountsAsSceneEdit() const { return !SelectionOnly && !AssetOnly && AssetPath.empty(); }
     };
     std::vector<UndoEntry> m_UndoStack;
@@ -1588,6 +1591,7 @@ private:
     static constexpr size_t kMaxHistory = 100;
     EditorFileHistory::Journal m_FileJournal;
     bool m_GlobalUndoActive = false, m_GlobalUndoApplying = false;
+    std::vector<std::pair<std::string, std::string>> m_GlobalUndoMoves; // this step's file moves (UndoEntry::Moves)
     bool m_GlobalUndoHasScene = false;
     // Last committed authored state. Navigation must never serialize the scene; controls
     // that report a change after updating their value still need this pre-edit state.
@@ -1988,11 +1992,13 @@ private:
     float m_AssetListingRefreshTimer = 0.0f;   // ticks up in DrawAssetBrowser; see kAssetListingRefreshInterval
     bool m_AssetBrowserFocusedLastFrame = false; // edge-detects m_AssetBrowserFocused for "just gained focus"
     void RefreshScenesListingIfNeeded();
-    // The "Asset Library" root (AssetLibraryView): files every placeable in m_ProjectAssetIndex into
-    // "Asset Library/<Category>[/<Sub>]/<Pack>" by asset_library.json. Rebuilt when the index changes.
+    // The Favorites root (AssetLibraryView, Unity's saved searches): a folder per asset_library.json
+    // category ("Favorites/Architecture/Walls" = l:Walls) and per search the user starred. Browsing one
+    // runs its search over the whole project. Rebuilt when the categories or the saved searches change.
     void RefreshLibraryView();
-    std::unordered_map<std::string, std::vector<size_t>> m_LibraryItems; // folder -> m_ProjectAssetIndex.files
+    std::unordered_map<std::string, std::string> m_FavoriteQueries; // Favorites folder -> its search
     size_t m_LibraryViewKey = (size_t)-1;
+
     void RefreshShadersListingIfNeeded();
     void RefreshAnimationListingIfNeeded();
     void InvalidateScenesListing() { m_ScenesListingCache.valid = false; }
@@ -2012,6 +2018,7 @@ private:
         std::string Folder; // Asset Browser folder: its .meta's chosen folder, else its folder on disk
         bool MetaFolder = false; // Folder came from the .meta (still to register, worker side)
         bool Unfetched = false;  // a payload .meta with no file on disk (AssetGridCell::unfetched)
+        std::set<std::string> Labels; // its .meta labels, so l: searches find files nothing has loaded yet
         AssetGridCell::Kind Kind = AssetGridCell::Kind::Model;
     };
     struct {
@@ -2046,6 +2053,9 @@ public:
     // Seconds left on the post-refresh confirmation flash (0 = none). The module reads this to
     // show a brief "Assets refreshed" indicator, since Ctrl+R gives no other visible feedback.
     float AssetRefreshFlash() const { return m_AssetRefreshFlash; }
+    // The bookmark beside the search box: saves the current search to Favorites, or removes it if saved.
+    void ToggleSavedAssetSearch();
+    bool CurrentSearchSaved() const;
 private:
     float m_AssetRefreshFlash = 0.0f;
 
@@ -2171,7 +2181,25 @@ private:
     void OnExternalMove(World& world, AssetLibrary& assets, const std::string& oldPath, const std::string& newPath);
     int  ApplyAssetMove(World& world, AssetLibrary& assets, const std::string& oldPath, const std::string& newPath, bool& listed);
     bool RenameAssetFile(World& world, AssetLibrary& assets, const std::string& oldKey, const std::string& newKey,
-                         std::string& error); // #129
+                         std::string& error,
+                         const char* undoLabel = "Rename Asset");
+    // Unity's Project window: the browser is the disk. Moves every file under each of `keys` (files or
+    // project-relative folders) into `destFolder`, with their .meta files (GUIDs kept) - one undo step.
+    int MoveAssetsOnDisk(World& world, AssetLibrary& assets, const std::vector<std::string>& keys,
+                         const std::string& destFolder);
+    // A folder renamed or moved: everything under `oldFolder` to the same place under `newFolder`.
+    int MoveFolderOnDisk(World& world, AssetLibrary& assets, const std::string& oldFolder, const std::string& newFolder,
+                         const char* undoLabel);
+    // Vendor packs are read-only (AssetLibraryView::InPackage): true (with a toast saying how to get an
+    // editable copy) when `path` is in one and `what` would change it.
+    bool RefuseInPackage(const std::string& path, const char* what);
+    // Right-click > Copy into assets/: an editable copy of a package file under assets/Local/ (a new GUID).
+    void CopyIntoAssets(World& world, AssetLibrary& assets, const std::string& key);
+    // New Folder: a real folder on disk, one undo step (undo removes it while it's still empty).
+    void CreateFolderOnDisk(World& world, AssetLibrary& assets, const std::string& folder);
+    // Undo / Redo of UndoEntry::Moves.
+    void ApplyHistoryMoves(World& world, AssetLibrary& assets, const std::vector<std::pair<std::string, std::string>>& moves,
+                           bool backward); // #129
     std::vector<std::pair<std::string, std::string>> m_SelfMoves; // #129 - our own renames, to skip the watcher's echo
     void OnExternalAdd(World& world, AssetLibrary& assets, const std::string& path);
     void OnExternalRemove(World& world, AssetLibrary& assets, const std::string& path);

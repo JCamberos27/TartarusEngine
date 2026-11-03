@@ -1,6 +1,8 @@
 {
-  "folder": "assets/Furniture/Bedroom/Models",
   "guid": "a90a1223b5e8a335",
   "metaVersion": 1,
-  "type": "prefab"
+  "type": "prefab",
+  "labels": [
+    "Furniture"
+  ]
 }

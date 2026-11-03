@@ -1,6 +1,8 @@
 {
-  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Prefabs/Props_exterior",
   "guid": "0c029083f2501c8e",
   "metaVersion": 1,
-  "type": "prefab"
+  "type": "prefab",
+  "labels": [
+    "Props"
+  ]
 }

@@ -1,6 +1,9 @@
 {
-  "folder": "assets/Architecture/Building/Models",
   "guid": "91ed2025455fb198",
   "metaVersion": 1,
-  "type": "prefab"
+  "type": "prefab",
+  "labels": [
+    "Architecture",
+    "Walls"
+  ]
 }

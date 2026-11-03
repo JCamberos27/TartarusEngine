@@ -1,6 +1,8 @@
 {
-  "folder": "assets/Environments/ModularCityAlleyPack/Prefabs/Prefabs_Props",
   "guid": "235066737a48914d",
   "metaVersion": 1,
-  "type": "prefab"
+  "type": "prefab",
+  "labels": [
+    "Props"
+  ]
 }

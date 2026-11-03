@@ -602,8 +602,23 @@ Step WaitSeconds(double seconds) {
         return now >= *until;
     }, 100000};
 }
+// `timeout` is in frames at 60 fps: it gives up only after that many frames AND that much real time,
+// so a hidden window running at ~1000 fps on a desktop GPU waits as long as a 60 Hz one does (a
+// background scan that takes half a second used to time out a 240-frame wait there).
 Step Until(std::string name, std::function<bool(Ctx&)> pred, int timeout = 120) {
-    return {std::move(name), std::move(pred), timeout};
+    auto start = std::make_shared<double>(-1.0);
+    auto frames = std::make_shared<int>(0);
+    return {name, [name, pred, timeout, start, frames](Ctx& c) {
+        if (pred(c)) { *start = -1.0; *frames = 0; return true; }
+        const double now = ImGui::GetTime();
+        if (*start < 0.0) *start = now;
+        if (++*frames >= timeout && now - *start >= timeout / 60.0) {
+            *start = -1.0; *frames = 0;
+            Fail("step '" + name + "' timed out");
+            return true;
+        }
+        return false;
+    }, 100000000};
 }
 // Fails the test (with `what` as the reason) when `check` returns a non-empty message.
 Step Expect(std::string name, std::function<std::string(Ctx&)> check) {

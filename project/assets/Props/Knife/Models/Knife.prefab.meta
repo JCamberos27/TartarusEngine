@@ -1,6 +1,8 @@
 {
-  "folder": "assets/Props/Knife/Models",
   "guid": "258dd15054f19bbf",
   "metaVersion": 1,
-  "type": "prefab"
+  "type": "prefab",
+  "labels": [
+    "Props"
+  ]
 }

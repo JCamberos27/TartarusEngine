@@ -1,6 +1,9 @@
 {
-  "folder": "assets/Environments/Apartment/Models",
   "guid": "3be9171eefb0091d",
   "metaVersion": 1,
-  "type": "prefab"
+  "type": "prefab",
+  "labels": [
+    "Architecture",
+    "Ceilings"
+  ]
 }

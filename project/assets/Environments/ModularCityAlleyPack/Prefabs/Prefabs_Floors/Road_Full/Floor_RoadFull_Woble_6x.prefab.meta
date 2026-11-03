@@ -1,6 +1,9 @@
 {
-  "folder": "assets/Environments/ModularCityAlleyPack/Prefabs/Prefabs_Floors/Road_Full",
   "guid": "3a098fd71cbeb40b",
   "metaVersion": 1,
-  "type": "prefab"
+  "type": "prefab",
+  "labels": [
+    "Architecture",
+    "Floors"
+  ]
 }

@@ -686,9 +686,23 @@ void EditorLayer::RequestDeleteAssets(World& world, AssetLibrary& assets, const 
 
 bool EditorLayer::PerformAssetDelete(World& world, AssetLibrary& assets, const std::string& key, bool isFolder) {
     (void)world; // undo is now pushed once by the caller, covering the whole batch (#212)
+    if (RefuseInPackage(isFolder ? ProjectPaths::Resolve(key) : key, "deleted from")) return false;
     InvalidateModelThumbnail(); // a freed Model could be reallocated at the same address
     const std::string leaf = std::filesystem::path(key).filename().string();
     if (isFolder) {
+        // Unity's Project window: a real folder goes to the Recycle Bin with everything in it (the
+        // browser lists the disk, so dropping only the listing would just bring it back).
+        std::error_code dirEc;
+        const std::string abs = ProjectPaths::Resolve(key);
+        if (std::filesystem::is_directory(abs, dirEc)) {
+            std::string why;
+            if (!FileDialog::RecycleFile(abs, why)) {
+                m_DeleteError = "Couldn't move '" + key + "' to the Recycle Bin: " + why;
+                m_OpenDeleteErrorRequested = true;
+                return false;
+            }
+            InvalidateProjectAssetIndex();
+        }
         assets.DeleteFolderRecursive(key);
         // Don't leave the browser pointed at a folder that no longer exists. A raw assignment,
         // not NavigateAssetFolder (Phase 5 item 3) - this is a forced correction after the
@@ -1026,10 +1040,12 @@ void EditorLayer::CommitRename(World& world, AssetLibrary& assets) {
         return;
     }
     if (m_RenamingIsFolder) {
-        PushUndo(world, "Rename Folder");
         std::string parent = ParentFolderOf(m_RenamingAssetKey);
         std::string newPath = parent.empty() ? newName : (parent + "/" + newName);
-        assets.RenameFolder(m_RenamingAssetKey, newPath);
+        std::error_code dirEc;
+        if (std::filesystem::is_directory(ProjectPaths::Resolve(m_RenamingAssetKey), dirEc))
+            MoveFolderOnDisk(world, assets, m_RenamingAssetKey, newPath, "Rename Folder"); // renames it on disk
+        else { PushUndo(world, "Rename Folder"); assets.RenameFolder(m_RenamingAssetKey, newPath); } // a browser-only folder
         // Path-patching, not navigation (Phase 5 item 3's NavigateAssetFolder) - the user hasn't
         // gone anywhere, the folder they were already in just changed name out from under them.
         // Patch every history entry that pointed into the renamed subtree too, or Back could walk
@@ -1250,56 +1266,55 @@ void EditorLayer::RefreshScenesListingIfNeeded() {
 }
 
 void EditorLayer::RefreshLibraryView() {
-    const auto& files = m_ProjectAssetIndex.files;
-    const size_t key = std::hash<const void*>{}(files.data()) ^ (files.size() * 1315423911u + m_LibraryIndex.Categories().size());
+    const auto& saved = EditorSettings::Get().SavedAssetSearches;
+    size_t key = m_LibraryIndex.Categories().size() * 1315423911u + saved.size();
+    for (const auto& q : saved) key = key * 31u + std::hash<std::string>{}(q);
     if (key == m_LibraryViewKey) return;
     m_LibraryViewKey = key;
-    m_LibraryItems.clear();
+    m_FavoriteQueries.clear();
 
-    // Each category's folder: its name under its parent's ("Asset Library/Architecture/Walls").
+    // Each category's folder: its name under its parent's ("Favorites/Architecture/Walls"); its search
+    // finds its own label and, for a parent, its children's too (Architecture = every wall, door, ...).
     std::unordered_map<std::string, std::string> catFolder;
     for (int pass = 0; pass < 3; ++pass) // parents are listed before children, but don't rely on it
         for (const auto& c : m_LibraryIndex.Categories()) {
+            if (c.Id == "other") continue;
             if (c.Parent.empty()) catFolder[c.Id] = AssetLibraryView::kRoot + "/" + c.Name;
             else if (auto p = catFolder.find(c.Parent); p != catFolder.end()) catFolder[c.Id] = p->second + "/" + c.Name;
         }
-    const std::string otherFolder = catFolder.count("other") ? catFolder["other"] : AssetLibraryView::kRoot + "/Other";
-
     std::set<std::string> folders{AssetLibraryView::kRoot};
-    for (const auto& [id, folder] : catFolder) {
-        (void)id;
+    for (const auto& c : m_LibraryIndex.Categories()) {
+        const auto it = catFolder.find(c.Id);
+        const std::string label = m_LibraryIndex.LabelOf(c.Id);
+        if (it == catFolder.end() || label.empty()) continue;
+        folders.insert(it->second);
+        m_FavoriteQueries[it->second] = "l:" + label;
+    }
+    // The user's starred searches, by their own text.
+    for (const std::string& q : saved) {
+        std::string leaf = q;
+        std::replace(leaf.begin(), leaf.end(), '/', '|'); // a folder name can't hold a slash
+        const std::string folder = AssetLibraryView::kRoot + "/" + leaf;
         folders.insert(folder);
-        folders.insert(ParentFolderOf(folder));
+        m_FavoriteQueries[folder] = q;
     }
-    for (size_t i = 0; i < files.size(); ++i) {
-        const ProjectAssetFile& f = files[i];
-        if (f.Kind != Cell::Kind::Prefab && f.Kind != Cell::Kind::Decal && f.Kind != Cell::Kind::Hdri) continue;
-        const std::string rel = AssetLibraryIndex::ProjectRelative(f.Path);
-        const auto it = catFolder.find(m_LibraryIndex.CategoryOf(rel));
-        // Grouped by pack: the folder under assets/<Top>/ (a vendor pack, or a library's room set).
-        std::vector<std::string> segs;
-        for (size_t a = 0, b; a < rel.size(); a = b + 1) {
-            b = rel.find('/', a);
-            if (b == std::string::npos) b = rel.size();
-            segs.push_back(rel.substr(a, b - a));
-        }
-        const std::string pack = segs.size() > 3 ? segs[2] : segs.size() > 2 ? segs[1] : segs[0];
-        const std::string folder = (it != catFolder.end() ? it->second : otherFolder) + "/" + pack;
-        folders.insert(folder);
-        m_LibraryItems[folder].push_back(i);
-    }
-    // Empty categories (no pack under them) stay out of the tree.
-    std::vector<std::string>& out = AssetLibraryView::Folders();
-    out.clear();
-    for (const auto& folder : folders) {
-        bool used = m_LibraryItems.count(folder) > 0;
-        for (const auto& [itemFolder, items] : m_LibraryItems) {
-            (void)items;
-            if (used) break;
-            used = itemFolder.rfind(folder + "/", 0) == 0;
-        }
-        if (used) out.push_back(folder);
-    }
+    AssetLibraryView::Folders().assign(folders.begin(), folders.end());
+}
+
+bool EditorLayer::CurrentSearchSaved() const {
+    const auto& saved = EditorSettings::Get().SavedAssetSearches;
+    return std::find(saved.begin(), saved.end(), m_AssetSearchFilter) != saved.end();
+}
+
+void EditorLayer::ToggleSavedAssetSearch() {
+    if (m_AssetSearchFilter.empty()) return;
+    auto& saved = EditorSettings::Get().SavedAssetSearches;
+    const auto it = std::find(saved.begin(), saved.end(), m_AssetSearchFilter);
+    if (it != saved.end()) saved.erase(it);
+    else saved.push_back(m_AssetSearchFilter);
+    EditorSettings::Save();
+    m_LibraryViewKey = (size_t)-1;
+    EditorSound::Play(EditorSound::Event::AssetMove);
 }
 
 // Same idea for project/shaders/ (Phase 6 item 15's browsable Shaders folder) — see
@@ -1380,13 +1395,16 @@ std::vector<EditorLayer::ProjectAssetFile> EditorLayer::ScanProjectAssetFiles(co
         if (!kindOf(f)) continue;
         f.Key = AssetDatabase::PathKey(f.Path);
         f.Name = it->path().filename().string();
-        std::ifstream meta(f.Path + ".meta", std::ios::binary);
-        if (meta.is_open()) {
-            const nlohmann::json j = nlohmann::json::parse(meta, nullptr, /*allow_exceptions=*/false);
-            if (j.is_object() && j.contains("folder") && j["folder"].is_string()) {
-                f.Folder = j["folder"].get<std::string>();
-                f.MetaFolder = true;
-            }
+        // Filed where it is on disk (Unity's rule); a .meta "folder" from the old virtual folders is ignored.
+        // Its labels are read here (worker thread) so an l: search finds files nothing has loaded yet.
+        // Parsed only when it has any (most don't): a full parse of every .meta tripled the scan.
+        if (std::ifstream meta(f.Path + ".meta", std::ios::binary); meta.is_open()) {
+            const std::string text((std::istreambuf_iterator<char>(meta)), std::istreambuf_iterator<char>());
+            const nlohmann::json j = text.find("\"labels\"") == std::string::npos ? nlohmann::json()
+                                   : nlohmann::json::parse(text, nullptr, /*allow_exceptions=*/false);
+            if (j.is_object())
+                if (const auto lj = j.find("labels"); lj != j.end() && lj->is_array())
+                    for (const auto& l : *lj) if (l.is_string()) f.Labels.insert(l.get<std::string>());
         }
         // The main thread files it with DiskFolderFor when the scan lands, which canonicalizes the path on disk:
         // done here on the scan's thread, it lands as a memoized lookup (ProjectPaths::Relativize) instead of a
@@ -1536,20 +1554,17 @@ void EditorLayer::SetAssetTreeWidthPx(float px, bool commit) {
 
 void EditorLayer::AssetBrowserCreateFolder(World& world, AssetLibrary& assets, const std::string& path) {
     if (AssetLibraryView::IsLibraryFolder(path)) return; // the Library root is a view, not storage
-    PushUndo(world, "Create Folder");
-    assets.CreateFolder(path);
+    CreateFolderOnDisk(world, assets, path); // a real folder on disk, one undo step
 }
 void EditorLayer::AssetBrowserRenameFolder(World& world, AssetLibrary& assets,
                                            const std::string& oldPath, const std::string& newPath) {
     if (AssetLibraryView::IsLibraryFolder(oldPath) || AssetLibraryView::IsLibraryFolder(newPath)) return;
-    PushUndo(world, "Move Folder");
-    assets.RenameFolder(oldPath, newPath);
+    MoveFolderOnDisk(world, assets, oldPath, newPath, "Move Folder");
 }
 void EditorLayer::AssetBrowserMoveAssetToFolder(World& world, AssetLibrary& assets,
                                                 const std::string& assetKey, const std::string& folder) {
     if (AssetLibraryView::IsLibraryFolder(folder)) return;
-    PushUndo(world, "Move Asset to Folder");
-    assets.SetAssetFolder(assetKey, folder);
+    MoveAssetsOnDisk(world, assets, {assetKey}, folder);
 }
 
 namespace {
@@ -1808,8 +1823,14 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
     (void)world;
     auto& cells = m_AssetGridCells;
 
-    bool searching = !m_AssetSearchFilter.empty();
-    ParsedAssetSearch parsedSearch = ParseAssetSearch(m_AssetSearchFilter);
+    // A Favorites folder is a saved search: browsing it runs that search over the whole project (and
+    // anything typed in the box narrows it further).
+    RefreshLibraryView();
+    const auto favorite = m_FavoriteQueries.find(m_CurrentAssetFolder);
+    const bool inFavorite = favorite != m_FavoriteQueries.end();
+    const std::string effectiveSearch = inFavorite ? favorite->second + " " + m_AssetSearchFilter : m_AssetSearchFilter;
+    bool searching = !effectiveSearch.empty();
+    ParsedAssetSearch parsedSearch = ParseAssetSearch(effectiveSearch);
 
     // During Play the list is kept between frames: collecting and sorting it walks every folder and every asset in
     // the library (~3 ms with ~11k assets) while the game is what's being watched. A change the user makes - folder,
@@ -1848,11 +1869,11 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
         // folder). A search/type/label filter does that, and so does the favourites-only view —
         // its whole point is to gather starred assets from anywhere.
         bool filtering = searching || !parsedSearch.typeTerms.empty() || !parsedSearch.labelTerms.empty()
-                         || m_AssetFavoritesOnly;
+                         || m_AssetFavoritesOnly || inFavorite;
 
         // Search scope (#236 G): unless "whole project" is on, a filtered result must also live in
         // the current folder or one of its descendants. Browsing (no filter) is always folder-local.
-        const bool scopeGlobal = EditorSettings::Get().AssetSearchGlobal;
+        const bool scopeGlobal = EditorSettings::Get().AssetSearchGlobal || inFavorite || AssetLibraryView::IsLibraryFolder(m_CurrentAssetFolder);
         auto inSearchScope = [&](const std::string& assetFolder) {
             if (scopeGlobal || m_AssetFavoritesOnly || m_CurrentAssetFolder.empty()) return true;
             return assetFolder == m_CurrentAssetFolder ||
@@ -1887,31 +1908,11 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
             }
         }
 
-        // The Asset Library root: placeables by category and pack (asset_library.json), without moving
-        // a file. Browsing lists one category folder; a search inside it covers that subtree.
-        // Always kept current (cheap: rebuilt only when the index changes) - the folder tree lists
-        // the Library root from it before anyone has opened it.
-        RefreshProjectAssetIndexIfNeeded(assets);
-        RefreshLibraryView();
-        if (AssetLibraryView::IsLibraryFolder(m_CurrentAssetFolder)) {
-            const std::string& cur = m_CurrentAssetFolder;
-            if (!filtering)
-                for (const auto& folder : AssetLibraryView::Folders())
-                    if (ParentFolderOf(folder) == cur)
-                        cells.push_back({Cell::Kind::Folder, folder, LeafNameOf(folder), nullptr, nullptr});
-            for (const auto& [folder, items] : m_LibraryItems) {
-                if (filtering ? (folder != cur && folder.rfind(cur + "/", 0) != 0) : folder != cur) continue;
-                for (size_t i : items) {
-                    const ProjectAssetFile& f = m_ProjectAssetIndex.files[i];
-                    const char* kindName = f.Kind == Cell::Kind::Prefab ? "prefab" : f.Kind == Cell::Kind::Decal ? "decal" : "hdri";
-                    if (!MatchesAssetSearch(parsedSearch, f.Name, kindName, assets.Labels(f.Path))) continue;
-                    Cell c{f.Kind, f.Path, f.Name, nullptr, nullptr};
-                    c.unloaded = f.Kind == Cell::Kind::Prefab && !f.Unfetched && !m_ListedAssetKeys.count(f.Key);
-                    c.unfetched = f.Unfetched;
-                    cells.push_back(std::move(c));
-                }
-            }
-        }
+        // Favorites: its saved searches show as folders (a search inside one narrows its results).
+        if (AssetLibraryView::IsLibraryFolder(m_CurrentAssetFolder) && m_AssetSearchFilter.empty())
+            for (const auto& folder : AssetLibraryView::Folders())
+                if (ParentFolderOf(folder) == m_CurrentAssetFolder)
+                    cells.push_back({Cell::Kind::Folder, folder, LeafNameOf(folder), nullptr, nullptr});
 
         // Animation assets use their real project folders, like prefabs and scripts.
         // Retire the old all-project shortcut when it has no authored folder behind it.
@@ -1927,7 +1928,8 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
             }
         }
 
-        for (const auto& folder : assets.Folders()) {
+        static const std::vector<std::string> kNoFolders;
+        for (const auto& folder : AssetLibraryView::IsLibraryFolder(m_CurrentAssetFolder) ? kNoFolders : assets.Folders()) {
             bool show = filtering ? (MatchesAssetSearch(parsedSearch, LeafNameOf(folder), "folder", {})
                                      && inSearchScope(ParentFolderOf(folder)))
                 : (ParentFolderOf(folder) == m_CurrentAssetFolder);
@@ -1993,8 +1995,8 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
                                  : f.Kind == Cell::Kind::Graffiti ? "graffiti"
                                  : f.Kind == Cell::Kind::Script ? "script" : f.Kind == Cell::Kind::Hdri ? "hdri" : "prefab";
             // An HDRI is an image: both t:Hdri and t:Texture find it (like a screenshot).
-            if (!MatchesAssetSearch(parsedSearch, f.Name, kindName, {}) &&
-                !(f.Kind == Cell::Kind::Hdri && MatchesAssetSearch(parsedSearch, f.Name, "texture", {}))) continue;
+            if (!MatchesAssetSearch(parsedSearch, f.Name, kindName, f.Labels) &&
+                !(f.Kind == Cell::Kind::Hdri && MatchesAssetSearch(parsedSearch, f.Name, "texture", f.Labels))) continue;
             Cell c{f.Kind, f.Path, f.Name, nullptr, nullptr};
             c.unloaded = !fileOnly && !f.Unfetched;
             c.unfetched = f.Unfetched;
@@ -2518,39 +2520,16 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 ImGui::EndDragDropSource();
             }
             if (!AssetLibraryView::IsLibraryFolder(cell.key) && ImGui::BeginDragDropTarget()) {
-                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_MODEL_PATH")) {
-                    PushUndo(world, "Move Asset to Folder");
-                    assets.SetAssetFolder((const char*)p->Data, cell.key);
-                }
-                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_TEXTURE_PATH")) {
-                    PushUndo(world, "Move Asset to Folder");
-                    assets.SetAssetFolder((const char*)p->Data, cell.key);
-                }
-                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_SOUND_PATH")) {
-                    PushUndo(world, "Move Asset to Folder");
-                    assets.SetAssetFolder((const char*)p->Data, cell.key);
-                }
-                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_PREFAB_PATH")) {
-                    PushUndo(world, "Move Asset to Folder");
-                    assets.SetAssetFolder((const char*)p->Data, cell.key);
-                }
-                // #184 — materials are foldered by AssetFolder like the kinds above but weren't accepted.
-                if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_MATERIAL_PATH")) {
-                    PushUndo(world, "Move Asset to Folder");
-                    assets.SetAssetFolder((const char*)p->Data, cell.key);
-                }
-                // Controllers, weapon definitions, scripts and decals: files, filed the same way.
-                for (const char* fileType : {"ASSET_FILE_PATH", "ASSET_DECAL_PATH"})
-                    if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(fileType)) {
-                        PushUndo(world, "Move Asset to Folder");
-                        assets.SetAssetFolder((const char*)p->Data, cell.key);
-                    }
+                // Unity's Project window: dropping onto a folder moves the file there on disk (with its
+                // .meta, so every reference follows by GUID); a folder dropped in moves with everything in it.
+                for (const char* type : {"ASSET_MODEL_PATH", "ASSET_TEXTURE_PATH", "ASSET_SOUND_PATH", "ASSET_PREFAB_PATH",
+                                         "ASSET_MATERIAL_PATH", "ASSET_FILE_PATH", "ASSET_DECAL_PATH"})
+                    if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(type))
+                        MoveAssetsOnDisk(world, assets, {std::string((const char*)p->Data)}, cell.key);
                 if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_FOLDER_PATH")) {
                     std::string src((const char*)p->Data);
-                    if (src != cell.key && cell.key.rfind(src + "/", 0) != 0) {
-                        PushUndo(world, "Move Folder");
-                        assets.RenameFolder(src, cell.key + "/" + LeafNameOf(src));
-                    }
+                    if (src != cell.key && cell.key.rfind(src + "/", 0) != 0)
+                        MoveFolderOnDisk(world, assets, src, cell.key + "/" + LeafNameOf(src), "Move Folder");
                 }
                 ImGui::EndDragDropTarget();
             }
@@ -2768,6 +2747,9 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
             // #178 - Unity's Find References In Scene: selects every object in the open scene that
             // uses this asset (as its mesh, a material slot, a texture in any of its materials,
             // its sound, or its prefab source).
+            if (!isFolder && m_ExtraAssetSelection.empty() && AssetLibraryView::InPackage(cell.key) &&
+                ImGui::MenuItem(ICON_FA_COPY "  Copy into assets/ (editable)"))
+                CopyIntoAssets(world, assets, cell.key);
             if (!isFolder && m_ExtraAssetSelection.empty() && ImGui::MenuItem(ICON_FA_MAGNIFYING_GLASS "  Find References in Scene")) {
                 auto same = [](const std::string& a, const std::string& b) {
                     if (a.empty() || b.empty()) return false;
@@ -2938,8 +2920,7 @@ void EditorLayer::HandleAssetGridBackground(World& world, AssetLibrary& assets) 
             return false;
         };
         while (exists(candidate)) candidate = base + " (" + std::to_string(n++) + ")";
-        PushUndo(world, "Create Folder");
-        assets.CreateFolder(candidate);
+        CreateFolderOnDisk(world, assets, candidate); // a real folder on disk (Unity's Project window), one undo step
         BeginRenameAsset(candidate, true, LeafNameOf(candidate));
     };
 

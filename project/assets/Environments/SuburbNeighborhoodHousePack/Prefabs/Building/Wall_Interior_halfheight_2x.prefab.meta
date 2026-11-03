@@ -1,6 +1,9 @@
 {
-  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Prefabs/Building",
   "guid": "76d68ac9bfd6a882",
   "metaVersion": 1,
-  "type": "prefab"
+  "type": "prefab",
+  "labels": [
+    "Architecture",
+    "Walls"
+  ]
 }

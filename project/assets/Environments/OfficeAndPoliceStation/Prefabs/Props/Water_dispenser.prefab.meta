@@ -1,6 +1,8 @@
 {
-  "folder": "assets/Environments/OfficeAndPoliceStation/Prefabs/Props",
   "guid": "7f55a535a25047c5",
   "metaVersion": 1,
-  "type": "prefab"
+  "type": "prefab",
+  "labels": [
+    "Props"
+  ]
 }

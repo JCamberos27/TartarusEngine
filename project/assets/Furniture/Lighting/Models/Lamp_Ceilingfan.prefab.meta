@@ -1,6 +1,8 @@
 {
-  "folder": "assets/Furniture/Lighting/Models",
   "guid": "93fce4b67d4926ce",
   "metaVersion": 1,
-  "type": "prefab"
+  "type": "prefab",
+  "labels": [
+    "Lights"
+  ]
 }

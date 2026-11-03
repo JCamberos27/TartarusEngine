@@ -33,6 +33,9 @@ struct EditorSmokeAccess_Assets {
     }
     static float& RefreshFlash(EditorLayer& e) { return e.m_AssetRefreshFlash; }
     static AssetLibraryIndex& Library(EditorLayer& e) { e.m_LibraryViewKey = (size_t)-1; return e.m_LibraryIndex; }
+    static int MoveFolder(EditorLayer& e, World& w, AssetLibrary& a, const std::string& from, const std::string& to) {
+        return e.MoveFolderOnDisk(w, a, from, to, "Move Folder");
+    }
 };
 namespace {
 namespace smoke_assets {
@@ -573,8 +576,8 @@ void RegisterAssetsTests() {
             }
             return out;
         };
-        const std::string libFolder = AssetLibraryView::kRoot + "/Furniture/" + kFolder;
-        Add("assets: the Asset Library root lists a prefab by category; drops rest on the ground and kit pieces stack flush", Cat({
+        const std::string libFolder = AssetLibraryView::kRoot + "/Furniture";
+        Add("assets: Favorites lists a prefab by its category label; drops rest on the ground and kit pieces stack flush", Cat({
             {FreshScene(), Wait(2),
              Do("Scene tab in front", [](Ctx& c) { c.E.RequestSceneTabFocus(); }), Wait(3)},
             EnsureScratch(),
@@ -584,6 +587,8 @@ void RegisterAssetsTests() {
                  World w;
                  const entt::entity e = w.CreateModelEntity(model, glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "Smoke Kit Cube");
                  if (!SceneSerializer::SavePrefab(w, e, DirFile("Smoke Kit.prefab"))) Fail("couldn't write the kit prefab");
+                 AssetDatabase::EnsureGuid(DirFile("Smoke Kit.prefab")); // labels live in its .meta
+                 c.A.SetLabels(DirFile("Smoke Kit.prefab"), {"Furniture"}); // its category's label (l:Furniture)
                  AX::Refresh(c.E); // first: a refresh re-reads the project's own asset_library.json
                  AX::Library(c.E).LoadFromText(std::string(R"({"categories": [{"id": "furniture", "name": "Furniture"}],
                      "rules": [{"glob": "*Smoke Kit.prefab", "category": "furniture"}], "kits": {")") + kFolder + R"(": 1.0}})");
@@ -617,6 +622,64 @@ void RegisterAssetsTests() {
              HoverPanel(kScene), Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(4), Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(4),
              Until("undo removes both", [kitBoxes](Ctx& c) { return kitBoxes(c).empty(); }, 60),
              Do("the project's own library rules back", [](Ctx& c) { AX::Library(c.E).Load(); })},
+        }));
+    }
+
+    // ------------------------------------------------------------------ the browser is the disk
+    // Unity's Project window: dropping a file onto a folder moves it there on disk with its .meta (same
+    // GUID, so references follow); renaming a folder renames it on disk. Undo moves everything back.
+    {
+        static std::string s_TexGuid;
+        auto there = [](const std::string& rel) { std::error_code ec; return fs::exists(fs::u8path(DirFile(rel)), ec); };
+        Add("assets: a file dropped on a folder moves on disk with its .meta; a folder rename renames it on disk; undo moves back", Cat({
+            {FreshScene(), Wait(2)},
+            EnsureScratch(),
+            {Navigate(kFolder), Wait(4), UntilListed("Smoke Tex.png"), UntilListed("Sub"),
+             Do("give the scratch files their .meta (GUID) and note the texture's", [](Ctx&) {
+                 for (const char* f : {"Smoke Tex.png", "Sub/Sub Tex.png", "Sub/Deeper/Deep Tex.png"}) AssetDatabase::EnsureGuid(DirFile(f));
+                 s_TexGuid = AssetDatabase::GuidForPath(DirFile("Smoke Tex.png")).ToString();
+             }),
+             RevealTile("Smoke Tex.png"),
+             Drag(Tile("Smoke Tex.png"), AtItem(Tile("Sub"))), Wait(5),
+             Until("it moved into Sub on disk", [there](Ctx&) { return there("Sub/Smoke Tex.png") && !there("Smoke Tex.png"); }, 240),
+             WaitSeconds(0.5),
+             Expect("its .meta moved with it (and none was left or re-made at the old place)", [there](Ctx&) {
+                 std::string why;
+                 if (!there("Sub/Smoke Tex.png.meta")) why += " no .meta beside the moved file;";
+                 if (there("Smoke Tex.png.meta")) why += " a .meta is still at the old place;";
+                 if (there("Smoke Tex.png")) why += " the file is back at the old place;";
+                 if (!why.empty()) {
+                     std::error_code ec;
+                     for (const auto& d : {std::string(""), std::string("Sub"), std::string("Sub Renamed"), std::string("Sub Renamed/Deeper")})
+                         for (const auto& e : fs::directory_iterator(fs::u8path(DirFile(d)), ec)) why += " [" + d + "/" + e.path().filename().string() + "]";
+                 }
+                 return why;
+             }),
+             Expect("it kept its GUID", [](Ctx&) {
+                 const std::string g = AssetDatabase::GuidForPath(DirFile("Sub/Smoke Tex.png")).ToString();
+                 return g == s_TexGuid ? std::string() : "GUID " + s_TexGuid + " became " + g;
+             }),
+             HoverPanel(kScene), Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(4),
+             Until("undo moves it back", [there](Ctx&) { return there("Smoke Tex.png") && there("Smoke Tex.png.meta") && !there("Sub/Smoke Tex.png"); }, 240),
+             Do("rename the Sub folder", [](Ctx& c) { AX::MoveFolder(c.E, c.W, c.A, kSub, std::string(kFolder) + "/Sub Renamed"); }), Wait(4),
+             Until("the folder's files moved on disk", [there](Ctx&) { return there("Sub Renamed/Sub Tex.png") && there("Sub Renamed/Deeper/Deep Tex.png"); }, 240),
+             WaitSeconds(0.5),
+             Expect("with their .meta files, and the old folder is gone", [there](Ctx&) {
+                 std::string why;
+                 if (!there("Sub Renamed/Sub Tex.png.meta")) why += " no Sub Tex .meta;";
+                 if (!there("Sub Renamed/Deeper/Deep Tex.png.meta")) why += " no Deep Tex .meta;";
+                 if (there("Sub")) why += " Sub is still there;";
+                 if (!why.empty()) {
+                     std::error_code ec;
+                     for (const auto& d : {std::string(""), std::string("Sub"), std::string("Sub Renamed"), std::string("Sub Renamed/Deeper")})
+                         for (const auto& e : fs::directory_iterator(fs::u8path(DirFile(d)), ec)) why += " [" + d + "/" + e.path().filename().string() + "]";
+                 }
+                 return why;
+             }),
+             HoverPanel(kScene), Key(ImGuiKey_Z, ImGuiMod_Ctrl), Wait(4),
+             Until("undo puts the folder back", [there](Ctx&) {
+                 return there("Sub/Sub Tex.png") && there("Sub/Deeper/Deep Tex.png") && !there("Sub Renamed/Sub Tex.png");
+             }, 240)},
         }));
     }
 

@@ -1,0 +1,21 @@
+{
+  "_comment": "Vendor packs, read-only in the editor like Unity's Packages: no move, rename, delete, new folder or material / prefab save inside one. Right-click > Copy into assets/ makes an editable copy. Import tools (tools/assets/unity_import.py, ...) still write here.",
+  "packages": [
+    {
+      "folder": "assets/Environments/ModularCityAlleyPack",
+      "source": "Unity Asset Store: Modular City Alley Pack"
+    },
+    {
+      "folder": "assets/Environments/OfficeAndPoliceStation",
+      "source": "Unity Asset Store: Office and Police Station"
+    },
+    {
+      "folder": "assets/Environments/SuburbNeighborhoodHousePack",
+      "source": "Unity Asset Store: Suburb Neighborhood House Pack"
+    },
+    {
+      "folder": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest",
+      "source": "Unity Asset Store: SeedMesh Mossy Cedrus Forest"
+    }
+  ]
+}

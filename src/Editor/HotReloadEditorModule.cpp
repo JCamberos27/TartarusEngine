@@ -474,6 +474,8 @@ void  TbRefreshAssetBrowser() { if (g_Editor) g_Editor->RefreshAssetBrowser(); }
 float TbGetAssetRefreshFlash() { return g_Editor ? g_Editor->AssetRefreshFlash() : 0.0f; }
 bool  TbGetAssetSearchGlobal() { return EditorSettings::Get().AssetSearchGlobal; }
 void  TbSetAssetSearchGlobal(bool on) { EditorSettings::Get().AssetSearchGlobal = on; EditorSettings::Save(); }
+void  TbToggleSavedAssetSearch() { if (g_Editor) g_Editor->ToggleSavedAssetSearch(); }
+bool  TbIsAssetSearchSaved() { return g_Editor && g_Editor->CurrentSearchSaved(); }
 bool  TbGetAssetFavoritesOnly() { return g_Editor && g_Editor->AssetFavoritesOnly(); }
 void  TbSetAssetFavoritesOnly(bool on) { if (g_Editor) g_Editor->SetAssetFavoritesOnly(on); }
 
@@ -628,6 +630,8 @@ EditorModuleHostAPI MakeHostAPI() {
     api.RefreshAssetBrowser = &TbRefreshAssetBrowser;
     api.GetAssetRefreshFlash = &TbGetAssetRefreshFlash;
     api.GetAssetSearchGlobal = &TbGetAssetSearchGlobal;
+    api.ToggleSavedAssetSearch = &TbToggleSavedAssetSearch;
+    api.IsAssetSearchSaved = &TbIsAssetSearchSaved;
     api.SetAssetSearchGlobal = &TbSetAssetSearchGlobal;
     api.GetAssetFavoritesOnly = &TbGetAssetFavoritesOnly;
     api.SetAssetFavoritesOnly = &TbSetAssetFavoritesOnly;

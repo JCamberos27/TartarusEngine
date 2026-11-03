@@ -1,6 +1,8 @@
 {
-  "folder": "assets/Furniture/Bathroom/Models",
   "guid": "dc6c8e822e3ba23b",
   "metaVersion": 1,
-  "type": "prefab"
+  "type": "prefab",
+  "labels": [
+    "Furniture"
+  ]
 }

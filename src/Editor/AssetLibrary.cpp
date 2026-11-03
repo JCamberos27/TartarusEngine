@@ -101,10 +101,8 @@ void ApplyMetaBrowserData(const json& j, const std::string& path,
     std::map<std::string, std::set<std::string>>& labels,
     bool& labelsDirty)
 {
-    if (j.contains("folder") && j["folder"].is_string()) {
-        std::string f = j["folder"].get<std::string>();
-        if (!f.empty() && folders.find(path) == folders.end()) folders[path] = f;
-    }
+    // A .meta "folder" (the old browser-only folders) is ignored: the browser files by disk location.
+    (void)folders;
     if (j.contains("displayName") && j["displayName"].is_string()) {
         std::string n = j["displayName"].get<std::string>();
         if (!n.empty() && displayNames.find(path) == displayNames.end()) displayNames[path] = n;
@@ -520,17 +518,14 @@ void AssetLibrary::RemovePrefab(const std::string& path) {
     m_AllLabelsDirty = true;
 }
 
+// Unity's rule: an asset's browser folder is the folder its file is in on disk. Moving it somewhere
+// else is a real move (EditorLayer::MoveAssetsOnDisk), so the requested folder is not stored - this
+// only re-reads the disk location (a scene or undo restoring an old virtual folder lands here too).
 void AssetLibrary::SetAssetFolder(const std::string& assetKey, const std::string& folder) {
-    if (folder.empty()) m_AssetFolder.erase(assetKey);
-    else m_AssetFolder[assetKey] = folder;
-    // A folder adopted from disk (AdoptDiskFolder) was never in the .meta. Restoring it - every
-    // undo restores every asset's folder - must not pin it there, or the asset stops following
-    // its file when that moves on disk.
-    try {
-        const json j = json::parse(AssetDatabase::ReadMetaFields(assetKey));
-        if (!j.contains("folder") && folder == DiskFolderFor(assetKey)) return;
-    } catch (...) { WarnBadMeta(assetKey); }
-    AssetDatabase::MergeMetaFields(assetKey, json{{"folder", folder}}.dump());
+    (void)folder;
+    const std::string disk = DiskFolderFor(assetKey);
+    if (disk.empty()) m_AssetFolder.erase(assetKey);
+    else m_AssetFolder[assetKey] = disk;
 }
 
 std::string AssetLibrary::AssetFolder(const std::string& assetKey) const {
@@ -637,7 +632,6 @@ void AssetLibrary::AdoptDiskFolder(const std::string& path, const std::string* m
     if (path.empty() || path.find("://") != std::string::npos || m_AssetFolder.count(path)) return;
     try {
         const json j = json::parse(metaJson ? *metaJson : AssetDatabase::ReadMetaFields(path));
-        if (j.contains("folder")) return;                            // chosen in the browser
     } catch (...) { WarnBadMeta(path); }
     const std::string folder = DiskFolderFor(path);
     if (!folder.empty()) m_AssetFolder[path] = folder;
@@ -646,11 +640,7 @@ void AssetLibrary::AdoptDiskFolder(const std::string& path, const std::string* m
 std::string AssetLibrary::BrowserFolderFor(const std::string& path) {
     auto it = m_AssetFolder.find(path);
     if (it != m_AssetFolder.end()) return it->second;
-    try {
-        const json j = json::parse(AssetDatabase::ReadMetaFields(path));
-        if (j.contains("folder") && j["folder"].is_string()) return AddFolderPath(j["folder"].get<std::string>());
-    } catch (...) { WarnBadMeta(path); }
-    return DiskFolderFor(path);
+    return DiskFolderFor(path); // the disk is the browser (a .meta "folder" from before is ignored)
 }
 
 std::string AssetLibrary::DiskFolderFor(const std::string& path) {

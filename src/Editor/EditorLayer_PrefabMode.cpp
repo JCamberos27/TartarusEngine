@@ -133,6 +133,7 @@ bool EditorLayer::SavePrefabMode(World& world) {
             return false;
         }
     }
+    if (RefuseInPackage(m_PrefabModePath, "saved")) return false; // a vendor pack's prefab: edit a copy instead
     if (!SceneSerializer::SavePrefab(world, root, m_PrefabModePath)) return false;
     SceneSerializer::ClearPrefabPristineCache(); // instances diff their overrides against the new file
     m_Dirty = false;

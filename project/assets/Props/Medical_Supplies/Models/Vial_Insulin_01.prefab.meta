@@ -1,6 +1,8 @@
 {
-  "folder": "assets/Props/Medical_Supplies/Models",
   "guid": "d89308f7dc580709",
   "metaVersion": 1,
-  "type": "prefab"
+  "type": "prefab",
+  "labels": [
+    "Props"
+  ]
 }

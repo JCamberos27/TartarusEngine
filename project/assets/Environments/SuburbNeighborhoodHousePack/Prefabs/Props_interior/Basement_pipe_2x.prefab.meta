@@ -1,6 +1,8 @@
 {
-  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Prefabs/Props_interior",
   "guid": "25d9387be6958b9c",
   "metaVersion": 1,
-  "type": "prefab"
+  "type": "prefab",
+  "labels": [
+    "Furniture"
+  ]
 }

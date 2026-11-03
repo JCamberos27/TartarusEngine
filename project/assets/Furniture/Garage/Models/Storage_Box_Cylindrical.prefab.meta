@@ -1,6 +1,8 @@
 {
-  "folder": "assets/Furniture/Garage/Models",
   "guid": "6c79743145c77c8a",
   "metaVersion": 1,
-  "type": "prefab"
+  "type": "prefab",
+  "labels": [
+    "Furniture"
+  ]
 }

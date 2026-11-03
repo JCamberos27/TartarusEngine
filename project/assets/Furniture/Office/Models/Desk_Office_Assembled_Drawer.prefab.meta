@@ -1,6 +1,8 @@
 {
-  "folder": "assets/Furniture/Office/Models",
   "guid": "fd9bae145414e77c",
   "metaVersion": 1,
-  "type": "prefab"
+  "type": "prefab",
+  "labels": [
+    "Furniture"
+  ]
 }

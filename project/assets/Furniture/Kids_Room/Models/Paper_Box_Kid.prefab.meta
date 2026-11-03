@@ -1,6 +1,8 @@
 {
-  "folder": "assets/Furniture/Kids_Room/Models",
   "guid": "f5a5795c61a974bb",
   "metaVersion": 1,
-  "type": "prefab"
+  "type": "prefab",
+  "labels": [
+    "Furniture"
+  ]
 }

@@ -1,5 +1,4 @@
 {
-  "folder": "assets/Characters/RealisticSkeleton",
   "guid": "47f32575d368c8b0",
   "materialRemap": {
     "Skeleton_Body": "assets/Characters/RealisticSkeleton/M_Skeleton_Body.mat",

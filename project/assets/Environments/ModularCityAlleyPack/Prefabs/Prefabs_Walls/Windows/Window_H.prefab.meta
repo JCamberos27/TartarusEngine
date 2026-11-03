@@ -1,6 +1,9 @@
 {
-  "folder": "assets/Environments/ModularCityAlleyPack/Prefabs/Prefabs_Walls/Windows",
   "guid": "09d0dc1b723278e0",
   "metaVersion": 1,
-  "type": "prefab"
+  "type": "prefab",
+  "labels": [
+    "Architecture",
+    "Windows"
+  ]
 }

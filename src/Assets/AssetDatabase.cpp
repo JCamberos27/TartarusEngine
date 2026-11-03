@@ -444,6 +444,9 @@ void NotifyMoved(const std::string& oldPath, const std::string& newPath) {
     g_PathToGuid.erase(it);
     g_GuidToPath.erase(guid);
     Register(newPath, guid);
+    // A registered asset whose .meta had gone (an undo of the first metadata edit removes the file it
+    // created) would otherwise arrive with its GUID only in memory and mint a new one next launch.
+    if (!std::filesystem::exists(MetaPath(newPath), ec)) WriteMetaFile(MetaPath(newPath), guid, AssetType(newPath));
 }
 
 // A Drive payload's .meta carries "payload": {sha256, size} (tools/assets/asset_manifest.py build), so the

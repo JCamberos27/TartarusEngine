@@ -1,6 +1,9 @@
 {
-  "folder": "assets/Environments/OfficeAndPoliceStation/Prefabs/Floors_Ceilings",
   "guid": "dbaa07e2899eb36f",
   "metaVersion": 1,
-  "type": "prefab"
+  "type": "prefab",
+  "labels": [
+    "Architecture",
+    "Ceilings"
+  ]
 }

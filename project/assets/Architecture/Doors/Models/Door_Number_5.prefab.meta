@@ -1,6 +1,9 @@
 {
-  "folder": "assets/Architecture/Doors/Models",
   "guid": "1891c164e01e0b6c",
   "metaVersion": 1,
-  "type": "prefab"
+  "type": "prefab",
+  "labels": [
+    "Architecture",
+    "Doors"
+  ]
 }

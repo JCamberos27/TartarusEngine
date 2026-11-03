@@ -1,6 +1,9 @@
 {
-  "folder": "assets/Architecture/Building/Models",
   "guid": "5f25f9862eb77b55",
   "metaVersion": 1,
-  "type": "prefab"
+  "type": "prefab",
+  "labels": [
+    "Architecture",
+    "Ceilings"
+  ]
 }

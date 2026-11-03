@@ -1,5 +1,4 @@
 {
-  "folder": "assets/Weapons/Remington870/FirstPerson",
   "guid": "69616d0572a4981b",
   "materialRemap": {
     "M_Quantum_Arms_PBR": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Arms.mat"

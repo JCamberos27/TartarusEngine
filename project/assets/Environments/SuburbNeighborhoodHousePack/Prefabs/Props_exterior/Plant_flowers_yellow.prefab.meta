@@ -1,6 +1,9 @@
 {
-  "folder": "assets/Environments/SuburbNeighborhoodHousePack/Prefabs/Props_exterior",
   "guid": "92ecdd48fba66f8a",
   "metaVersion": 1,
-  "type": "prefab"
+  "type": "prefab",
+  "labels": [
+    "BushesPlants",
+    "Nature"
+  ]
 }

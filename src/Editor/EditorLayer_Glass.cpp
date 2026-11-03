@@ -1274,10 +1274,8 @@ void EditorLayer::DrawGlassLibrary(World& world, AssetLibrary& assets) {
                                                               "ASSET_PREFAB_PATH", "ASSET_MATERIAL_PATH", "ASSET_FILE_PATH",
                                                               "ASSET_DECAL_PATH"};
                             for (const char* type : kFileable) {
-                                if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload(type)) {
-                                    PushUndo(world, "Move Asset to Folder");
-                                    assets.SetAssetFolder((const char*)pl->Data, cell.key);
-                                }
+                                if (const ImGuiPayload* pl = ImGui::AcceptDragDropPayload(type))
+                                    MoveAssetsOnDisk(world, assets, {std::string((const char*)pl->Data)}, cell.key); // a real move
                             }
                             ImGui::EndDragDropTarget();
                         }

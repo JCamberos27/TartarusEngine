@@ -1,6 +1,8 @@
 {
-  "folder": "assets/Furniture/Living_Room/Models",
   "guid": "2a382e9d2c4d0472",
   "metaVersion": 1,
-  "type": "prefab"
+  "type": "prefab",
+  "labels": [
+    "Furniture"
+  ]
 }

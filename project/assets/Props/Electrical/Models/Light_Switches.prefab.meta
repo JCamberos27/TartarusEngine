@@ -1,6 +1,8 @@
 {
-  "folder": "assets/Props/Electrical/Models",
   "guid": "4fed832d5b1dfc79",
   "metaVersion": 1,
-  "type": "prefab"
+  "type": "prefab",
+  "labels": [
+    "Lights"
+  ]
 }

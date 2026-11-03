@@ -1,5 +1,9 @@
 {
   "guid": "5e9606b2d21b905b",
   "metaVersion": 1,
-  "type": "decal"
+  "type": "decal",
+  "labels": [
+    "Decals",
+    "GrimeStains"
+  ]
 }

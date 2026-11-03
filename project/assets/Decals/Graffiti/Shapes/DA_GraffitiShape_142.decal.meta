@@ -1,5 +1,9 @@
 {
   "guid": "a52b3ffb683fc97b",
   "metaVersion": 1,
-  "type": "decal"
+  "type": "decal",
+  "labels": [
+    "Decals",
+    "Graffiti"
+  ]
 }

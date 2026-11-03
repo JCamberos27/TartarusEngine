@@ -68,13 +68,21 @@
       "color": "#B052EB",
       "icon": "crosshairs"
     },
-    "assets/sky": {
-      "color": "#526AEB",
-      "icon": "cloud-sun"
-    },
     "scripts": {
       "color": "#9B6CF2",
       "icon": "code"
+    },
+    "assets/Environments/ModularCityAlleyPack": {
+      "icon": "lock"
+    },
+    "assets/Environments/OfficeAndPoliceStation": {
+      "icon": "lock"
+    },
+    "assets/Environments/SuburbNeighborhoodHousePack": {
+      "icon": "lock"
+    },
+    "assets/Environments/SeedMesh_Mossy_Cedrus_Forest": {
+      "icon": "lock"
     }
   },
   "rules": [

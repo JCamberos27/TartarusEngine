@@ -124,6 +124,9 @@ struct EditorSettings {
     // Asset Browser search scope (#236 G): false = current folder + subfolders (Unity's
     // default), true = the whole project. Toggled by the button next to the search box.
     bool AssetSearchGlobal = false;
+    // Asset Browser Favorites (Unity's saved searches): searches the user starred, shown under the
+    // Favorites root next to the project's own category searches (asset_library.json).
+    std::vector<std::string> SavedAssetSearches;
 
     std::string GameViewPresetLabel = "Free Aspect";
     int GameViewPresetWidth = 0;

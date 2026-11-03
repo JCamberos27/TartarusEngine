@@ -1,6 +1,9 @@
 {
-  "folder": "assets/Weapons/AKS74U",
   "guid": "b19271e02ef840f1",
   "metaVersion": 1,
-  "type": "prefab"
+  "type": "prefab",
+  "labels": [
+    "Props",
+    "Weapons"
+  ]
 }

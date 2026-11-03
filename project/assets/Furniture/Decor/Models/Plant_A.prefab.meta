@@ -1,6 +1,9 @@
 {
-  "folder": "assets/Furniture/Decor/Models",
   "guid": "8f37f7f57161dbfe",
   "metaVersion": 1,
-  "type": "prefab"
+  "type": "prefab",
+  "labels": [
+    "BushesPlants",
+    "Nature"
+  ]
 }

@@ -1,6 +1,9 @@
 {
-  "folder": "assets/Environments/OfficeAndPoliceStation/Prefabs/Walls",
   "guid": "99d5007d07d55b2b",
   "metaVersion": 1,
-  "type": "prefab"
+  "type": "prefab",
+  "labels": [
+    "Architecture",
+    "Walls"
+  ]
 }

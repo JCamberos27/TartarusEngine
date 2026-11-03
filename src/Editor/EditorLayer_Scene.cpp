@@ -133,6 +133,9 @@ void EditorLayer::BeginGlobalUndoFrame(const World& world) {
     AtomicFile::SetChangeObserver([this,&world](const std::filesystem::path& path) {
         if(m_GlobalUndoApplying) return;
         std::error_code ec;
+        // A folder (Delete Folder recycles one) isn't a file the journal can hold: it would throw.
+        if(std::filesystem::is_directory(path,ec)) return;
+        ec.clear();
         const auto absolute=std::filesystem::absolute(path,ec).lexically_normal();
         const auto relative=absolute.lexically_relative(std::filesystem::absolute(ProjectPaths::Root()).lexically_normal());
         // Editor Enhancers' per-user files (bookmarks / default parents, the style palette) are
@@ -177,17 +180,19 @@ void EditorLayer::FinishGlobalUndo(const World& world,bool force) {
         current=m_AssetsPtr?SceneSerializer::SaveToString(world,*m_AssetsPtr):SceneSerializer::SaveToString(world);
     }
     auto files=m_FileJournal.Changes();
+    auto moves=std::move(m_GlobalUndoMoves);m_GlobalUndoMoves.clear();
     const auto selection=CaptureSelectedOrders(world);
     const bool sceneChanged=m_GlobalUndoHasScene && !m_InPlayMode && current!=m_GlobalUndoScene;
-    if(sceneChanged || !files.empty() || selection!=m_GlobalUndoSelection) {
+    if(sceneChanged || !files.empty() || !moves.empty() || selection!=m_GlobalUndoSelection) {
         // File/selection-only entries never restore scene content. Reuse the chain's anchor
         // (or valid empty JSON for the first entry), avoiding a whole-scene save and diff.
         static const std::string emptyScene="{}";
         const std::string& before=m_GlobalUndoHasScene?m_GlobalUndoScene:
             m_UndoBaseJson.empty()?emptyScene:m_UndoBaseJson;
         UndoEntry entry;entry.Hash=HashSceneJson(before);entry.SelectedOrders=m_GlobalUndoSelection;
-        entry.Label=m_GlobalUndoLabel;entry.Files=std::move(files);
-        entry.AssetOnly=!sceneChanged && !entry.Files.empty();entry.SelectionOnly=!sceneChanged && entry.Files.empty();
+        entry.Label=m_GlobalUndoLabel;entry.Files=std::move(files);entry.Moves=std::move(moves);
+        const bool fileStep=!entry.Files.empty() || !entry.Moves.empty();
+        entry.AssetOnly=!sceneChanged && fileStep;entry.SelectionOnly=!sceneChanged && !fileStep;
         if(entry.CountsAsSceneEdit() && m_SavedUndoDepth>=0 && !m_RedoStack.empty()) m_SavedUndoDepth=-1;
         if(entry.CountsAsSceneEdit()) ++m_ContentDepth;
         PushHistoryEntry(m_UndoStack,m_UndoBaseJson,std::move(entry),before);
@@ -1073,6 +1078,8 @@ void EditorLayer::Undo(World& world, AssetLibrary& assets) {
     redoEntry.AssetOnly = m_UndoStack.back().AssetOnly;
     redoEntry.Files=EditorFileHistory::CaptureCurrent(m_UndoStack.back().Files);
     if(!EditorFileHistory::Restore(m_UndoStack.back().Files)) {Log::Error("Undo could not restore files; history retained.");return;}
+    redoEntry.Moves=m_UndoStack.back().Moves;
+    ApplyHistoryMoves(world,assets,m_UndoStack.back().Moves,/*backward=*/true);
     ReloadHistoryFiles(assets,m_UndoStack.back().Files);
     if (!redoEntry.AssetPath.empty()) redoEntry.AssetJson = ReadTextFile(redoEntry.AssetPath);
     PushHistoryEntry(m_RedoStack, m_RedoBaseJson, std::move(redoEntry), currentJson);
@@ -1118,6 +1125,8 @@ void EditorLayer::Redo(World& world, AssetLibrary& assets) {
     undoEntry.AssetOnly = m_RedoStack.back().AssetOnly;
     undoEntry.Files=EditorFileHistory::CaptureCurrent(m_RedoStack.back().Files);
     if(!EditorFileHistory::Restore(m_RedoStack.back().Files)) {Log::Error("Redo could not restore files; history retained.");return;}
+    undoEntry.Moves=m_RedoStack.back().Moves;
+    ApplyHistoryMoves(world,assets,m_RedoStack.back().Moves,/*backward=*/false);
     ReloadHistoryFiles(assets,m_RedoStack.back().Files);
     if (!undoEntry.AssetPath.empty()) undoEntry.AssetJson = ReadTextFile(undoEntry.AssetPath);
     if (undoEntry.CountsAsSceneEdit()) m_ContentDepth++; // Q6 — a real-edit entry is returning to the live stack

@@ -1,5 +1,4 @@
 {
-  "folder": "assets/Weapons/AKS74U/FirstPerson",
   "guid": "4168495e7bad8625",
   "materialRemap": {
     "M_Quantum_Arms_PBR": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Arms.mat"

@@ -149,6 +149,10 @@ void EditorSettings::Load() {
     s.EditorSoundCategoryOn = SafeValue(root, "editorSoundCategoryOn", s.EditorSoundCategoryOn);
     s.EditorSoundCategoryVolume = SafeValue(root, "editorSoundCategoryVolume", s.EditorSoundCategoryVolume);
     s.MuteAppsWhileMoving = SafeValue(root, "muteAppsWhileMoving", s.MuteAppsWhileMoving);
+    if (auto it = root.find("savedAssetSearches"); it != root.end() && it->is_array()) {
+        s.SavedAssetSearches.clear();
+        for (const auto& v : *it) if (v.is_string() && !v.get<std::string>().empty()) s.SavedAssetSearches.push_back(v.get<std::string>());
+    }
     if (auto it = root.find("muteAppNames"); it != root.end() && it->is_array()) {
         s.MuteAppNames.clear();
         for (const auto& n : *it) if (n.is_string() && !n.get<std::string>().empty()) s.MuteAppNames.push_back(n.get<std::string>());
@@ -482,6 +486,7 @@ void EditorSettings::Flush() {
     root["muteAppsWhileMoving"] = Get().MuteAppsWhileMoving;
     root["muteAppNames"] = Get().MuteAppNames;
     root["assetSearchGlobal"] = Get().AssetSearchGlobal;
+    root["savedAssetSearches"] = Get().SavedAssetSearches;
     root["gameViewPresetLabel"] = Get().GameViewPresetLabel;
     root["gameViewPresetWidth"] = Get().GameViewPresetWidth;
     root["gameViewPresetHeight"] = Get().GameViewPresetHeight;
