@@ -65,6 +65,17 @@ void TestSnapGridAndFree() {
     // A neighbour too far round the side (no overlap on the other axes) doesn't pull.
     const AABB far = Box({0, 0, 10}, {2, 3, 10.2f});
     CHECK(!Solve(Box({2.1f, 0, 0}, {4.1f, 3, 0.2f}), 2.0f, {far}).Snapped);
+    // Dropped half inside a neighbour on the ground (the CI case): lining the fronts up must not
+    // stack it into the neighbour's box - it ends flush beside it, one module over.
+    {
+        const AABB cube = Box({0, 0, 0}, {1, 1, 1});
+        const AABB half = Box({0.3f, 0, 0.1f}, {1.3f, 1, 1.1f});
+        const Result s = Solve(half, 1.0f, {cube});
+        const glm::vec3 mn = half.Min + s.Delta;
+        CHECK(s.Snapped);
+        CHECK(Near(mn.x, 1.0f) || Near(mn.z, 1.0f)); // out on the side it came from (+x / +z)
+        CHECK(Near(mn.y, 0.0f));
+    }
     // No module: no snap at all.
     CHECK(Near(Solve(lone, 0.0f, {}).Delta.x, 0.0f));
     CHECK(Near(SnapYawDegrees(44.0f), 0.0f) && Near(SnapYawDegrees(46.0f), 90.0f) && Near(SnapYawDegrees(-170.0f), -180.0f));
