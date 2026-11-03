@@ -8,5 +8,9 @@
     "M_Quantum_Arms": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Arms.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "8032ebc336ef0ac1f3f0ab560056b0876b2562bcd222973488006cf95c8634d5",
+    "size": 1786800
+  }
 }

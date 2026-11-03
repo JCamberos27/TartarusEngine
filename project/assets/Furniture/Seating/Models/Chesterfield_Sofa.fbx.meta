@@ -19,5 +19,9 @@
     "mat_sofa_vintage_03": "assets/Furniture/Seating/Materials/M_Chesterfield.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "e9eb3ce8054ed73cc2a05dbf30a054142719b6f084c6a09399f57fa680b7ce1a",
+    "size": 317580
+  }
 }

@@ -16,5 +16,9 @@
     "TreeTrunkTiled": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_TreeTrunkTiled.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "4575f72cb5995f50f516afaf3435844742771db3a3fcbcf4656eb5425be727fa",
+    "size": 547056
+  }
 }

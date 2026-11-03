@@ -20,5 +20,9 @@
     "Fence_Darkwood": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Fence_Darkwood.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "47e13d503d70816a6b4618062701827a33529c29e2b17b37e255b1bcfb284bbf",
+    "size": 21680
+  }
 }

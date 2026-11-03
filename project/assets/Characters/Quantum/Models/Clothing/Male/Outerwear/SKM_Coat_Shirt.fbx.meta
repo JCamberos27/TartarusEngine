@@ -6,5 +6,9 @@
     "M_Shirt_Classic": "assets/Characters/Quantum/Materials/Clothing/Tops/Shirt_Classic/M_Shirt_Classic_Black.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "83507db07e966e50bd8101adddf0d2575c0b167abd2bb23a6e74f21e853bce13",
+    "size": 2031264
+  }
 }

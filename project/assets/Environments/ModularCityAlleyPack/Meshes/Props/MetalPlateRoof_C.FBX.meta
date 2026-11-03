@@ -20,5 +20,9 @@
     "Alley_Prop_Set": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Alley_Prop_Set.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "a4393b1a91492c29aa63ee6ff73ff376375831da4dcd18fba32c00a0df725546",
+    "size": 33552
+  }
 }

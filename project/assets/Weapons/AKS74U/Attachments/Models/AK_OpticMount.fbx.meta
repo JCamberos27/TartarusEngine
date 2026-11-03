@@ -2,5 +2,9 @@
   "folder": "assets/Weapons/AKS74U/Attachments/Models",
   "guid": "00d0cf8817dd6b58",
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "bc05a50a92f90bc7f5c78291f6a893244f566d63f612f012120c6a9760ef13f0",
+    "size": 89388
+  }
 }

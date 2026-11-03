@@ -15,5 +15,9 @@
     "TreeDead": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_TreeDead.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "a71a2fba56a0e64d7aabdf79ad0f6ffae6329794ee39283bba6c2e64cd74dca5",
+    "size": 82048
+  }
 }

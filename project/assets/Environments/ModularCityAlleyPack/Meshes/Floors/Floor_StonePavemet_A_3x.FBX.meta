@@ -20,5 +20,9 @@
     "StonePavement": "assets/Environments/ModularCityAlleyPack/Materials/Floors/M_StonePavement.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "8b4447212472eb65e200c128d867309c56b0f6015a429f6aee9788afa41aeab2",
+    "size": 25040
+  }
 }

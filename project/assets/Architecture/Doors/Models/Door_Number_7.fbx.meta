@@ -20,5 +20,9 @@
     "Numbers_Mat": "assets/Architecture/Doors/Materials/M_Door_Numbers_A.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "b66cb3c76d0b613e6e7a3cd3e8296c5aaa7de70c78597d127ecffa6624da7e5b",
+    "size": 17772
+  }
 }

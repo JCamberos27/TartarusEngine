@@ -6,5 +6,9 @@
     "lambert2": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Jacket_Jeans/Jeans_Jacket/M_Jeans_Jacket_Black.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "851923a493542a5ec3c0d8f97ee9afe303d5fc9d8f9823f26b81ee9575102130",
+    "size": 1643232
+  }
 }

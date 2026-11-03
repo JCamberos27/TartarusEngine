@@ -5,5 +5,9 @@
     "M_Hoodie_Zipper": "assets/Characters/Quantum/Materials/Clothing/Tops/Hoodie_Zipper/M_Hoodie_Zipper_Black.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "06ba884179a7e81b900841d39aa112ff357ef816360c93d16d3cfc43f682614a",
+    "size": 3080528
+  }
 }

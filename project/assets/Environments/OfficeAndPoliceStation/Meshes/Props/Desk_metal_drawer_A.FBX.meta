@@ -20,5 +20,9 @@
     "Desk_and_stools": "assets/Environments/OfficeAndPoliceStation/Materials/M_Desk_and_stools.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "b09136b11108988b942aa1bf6f3c5a0cc198e08d06e249bc4b6857d3ed07292b",
+    "size": 26992
+  }
 }

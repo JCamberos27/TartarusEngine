@@ -15,5 +15,9 @@
     "Sofa_House": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Sofa_House.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "74c9288bf0954593341a75b3ed517f2fd09445df4d9465657676f1666d5d1426",
+    "size": 290944
+  }
 }

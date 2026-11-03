@@ -20,5 +20,9 @@
     "Shower_glass": "assets/Furniture/Bathroom/Materials/M_Shower_Glass.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "3c454c8595977620c1c6a2198838403d56def20b5858b022d8a77355e286fea3",
+    "size": 35772
+  }
 }

@@ -19,5 +19,9 @@
     "Lamps_table_on": "assets/Furniture/Lighting/Materials/M_Lamps_Table_On.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "edc3ef8677bafaf0bea79a6b669ef356e61a314801dee436e62b9231a48802f3",
+    "size": 153660
+  }
 }

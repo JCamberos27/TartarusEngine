@@ -14,5 +14,9 @@
     "Chesterfields": "assets/Furniture/Seating/Materials/M_Chesterfield.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "531e1447847cb0af0a395aa14beaf900a7270309db59bb3b33ea4f1e9c4a3a20",
+    "size": 116080
+  }
 }

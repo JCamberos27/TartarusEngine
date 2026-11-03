@@ -18,5 +18,9 @@
     "Rotten_mossy_log_var10_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rotten_Logs/10_Mossy_rotten_log_var10/M_Rotten_mossy_log_var10_mat.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "2206ea217636671b63dd10a32252bf6384fddc97086d778b50fe5b8727d8ae1d",
+    "size": 665392
+  }
 }

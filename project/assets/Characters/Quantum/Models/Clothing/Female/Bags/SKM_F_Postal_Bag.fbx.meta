@@ -5,5 +5,9 @@
     "M_Postal_Bag": "assets/Characters/Quantum/Materials/Clothing/Bags/Bag_Postal/M_Postal_Bag_Beige.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "94c33407d476d68222523baa53b25b7bb7685569f20a10012b58dfd8cfd6c0e0",
+    "size": 905776
+  }
 }

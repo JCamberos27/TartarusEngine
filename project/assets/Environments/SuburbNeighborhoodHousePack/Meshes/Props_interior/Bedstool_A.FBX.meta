@@ -20,5 +20,9 @@
     "BedStool": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_BedStool.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "dab29fa0db29fdc5ed82d9110fb3d61c598d07723b64b180f86e248a2e89263f",
+    "size": 31232
+  }
 }

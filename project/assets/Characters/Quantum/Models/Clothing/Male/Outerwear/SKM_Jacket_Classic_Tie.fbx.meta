@@ -6,5 +6,9 @@
     "lambert1": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Jacket_Classic/M_Jacket_Classic_Black.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "aa9733424e849d4a3c249052655a374e2ebc909fad94cc3dfb392897337c668b",
+    "size": 1842880
+  }
 }

@@ -20,5 +20,9 @@
     "Awnings": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Awnings.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "8a8b24a36783c39ec48e2b1eba8c0780ce3784823001aaf25a1714748a6e6c14",
+    "size": 21904
+  }
 }

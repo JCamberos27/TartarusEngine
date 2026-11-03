@@ -20,5 +20,9 @@
     "Plants_pots": "assets/Furniture/Decor/Materials/M_Plants_Pots.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "8d856a9bfa1cd1f557bcb1c6d9270f670ec606d456cb50da78df4b595cefea2f",
+    "size": 99440
+  }
 }

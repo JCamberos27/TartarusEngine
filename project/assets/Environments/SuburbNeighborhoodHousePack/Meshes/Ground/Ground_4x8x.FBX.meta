@@ -20,5 +20,9 @@
     "Floor_Grass": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Floor_Grass.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "d74b4a4287c002ebb925623b32debb26ce50e56ac128b215ac7c01337f1925ed",
+    "size": 22928
+  }
 }

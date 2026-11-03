@@ -6,5 +6,9 @@
     "MI_F_Bomber_Tshirt": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Bomber/M_Bomber_Black.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "c0c74ea4af9d04bef087261919e9b13faf2fc2d8cb7f8ccb39518039b5ffe14a",
+    "size": 1505488
+  }
 }

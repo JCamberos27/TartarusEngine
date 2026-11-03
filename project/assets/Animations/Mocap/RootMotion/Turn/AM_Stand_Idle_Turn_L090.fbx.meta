@@ -2,5 +2,9 @@
   "folder": "assets/Animations/Mocap/RootMotion/Turn",
   "guid": "df03b6fd87d5fc7e",
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "950cf4ea298915f8fd32e619a3394e1bdd4982b4523467076d7c2a2e147074a6",
+    "size": 1054256
+  }
 }

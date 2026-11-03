@@ -7,5 +7,9 @@
     "M_Quantum_Head": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Head_Afro.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "5ad7896cbfc36a32aa0b56d0acbf7d22f2a19aaa4df6b40977bfeac26f105db4",
+    "size": 1314224
+  }
 }

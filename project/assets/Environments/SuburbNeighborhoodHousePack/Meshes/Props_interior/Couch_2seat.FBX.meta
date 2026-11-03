@@ -20,5 +20,9 @@
     "Couch_Fabric": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Couch_Fabric.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "a949200fd56e832e1d0f1fbef4148833c3d38d290eed32cd2ecee37c96a9e9f2",
+    "size": 39680
+  }
 }

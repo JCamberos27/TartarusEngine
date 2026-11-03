@@ -6,5 +6,9 @@
     "Skeleton_Skull": "assets/Characters/RealisticSkeleton/M_Skeleton_Skull.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "e9ce082b8ecd582bc9c2cc60d2cbb3f93cffa1fa0ee2440adb680bff1fbc5a8e",
+    "size": 1351612
+  }
 }

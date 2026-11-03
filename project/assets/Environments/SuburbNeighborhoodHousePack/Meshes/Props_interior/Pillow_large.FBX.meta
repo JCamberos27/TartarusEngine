@@ -20,5 +20,9 @@
     "PillowLarge": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_PillowLarge.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "d213633106b678d935159a53bcebfa2f6d533320702a908ef225eb3f1c23a3e2",
+    "size": 35552
+  }
 }

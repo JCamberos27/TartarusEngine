@@ -19,5 +19,9 @@
     "Storage_boxes": "assets/Furniture/Garage/Materials/M_Storage_Boxes.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "f7378608f3e7f0ba2321dc3328fba8e891f3301f654921e8d17ecf388a1fa5a5",
+    "size": 57024
+  }
 }

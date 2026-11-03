@@ -20,5 +20,9 @@
     "Toilet_House": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Toilet_House.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "337068d094045a54eac178b80af2d4bb54150bc2d9e04d53d6e0ac089b7d8550",
+    "size": 21392
+  }
 }

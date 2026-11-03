@@ -20,5 +20,9 @@
     "Background_Bush": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Background_Bush.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "5968b66f1babc2c6f42811d2432c392eb5e845de55cb823893ec90e78a376776",
+    "size": 22624
+  }
 }

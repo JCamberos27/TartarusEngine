@@ -5,5 +5,9 @@
     "M_F_Boots6": "assets/Characters/Quantum/Materials/Clothing/Shoes/Boots/M_Boots_Black.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "50de11cc1020b5138712b433bf37f0eed508ddf6dc12621c5188cf2f168e4a14",
+    "size": 1067856
+  }
 }

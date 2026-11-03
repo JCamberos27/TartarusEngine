@@ -20,5 +20,9 @@
     "Plant_Inside": "assets/Environments/OfficeAndPoliceStation/Materials/M_Plant_Inside.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "d32a0b3b08b9fe00f63a98175f8eaa2b83674a7ff887561f3e2a2ed7a34325b3",
+    "size": 93472
+  }
 }

@@ -20,5 +20,9 @@
     "Bulletinboard_props": "assets/Environments/OfficeAndPoliceStation/Materials/M_Bulletinboard_props.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "1e70e8e98b7a545ff3757352b545a8392ddd8221473815f016639529422b8645",
+    "size": 142704
+  }
 }

@@ -19,5 +19,9 @@
     "Cabinets": "assets/Furniture/Decor/Materials/M_Cabinets.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "85d6315a494f8a688e84317e2f18c0eacc625391e29b267cbcdc2c749f8a7c37",
+    "size": 33888
+  }
 }

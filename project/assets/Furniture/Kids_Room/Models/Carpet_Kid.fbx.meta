@@ -19,5 +19,9 @@
     "Carpet_kid": "assets/Furniture/Kids_Room/Materials/M_Carpet_Kid.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "f884b66c709598ea8d20f63f75a05d7f52829187070c623140d893e965094da2",
+    "size": 20112
+  }
 }

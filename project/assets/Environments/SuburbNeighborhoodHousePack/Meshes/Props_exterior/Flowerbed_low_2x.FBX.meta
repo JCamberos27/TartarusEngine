@@ -21,5 +21,9 @@
     "Moss_Tiled": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Moss_Tiled.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "448a3e0d483ed9e6e795729216e4be9e2e4a9a4fd8a5d6950e838841499a9981",
+    "size": 39584
+  }
 }

@@ -20,5 +20,9 @@
     "Distant_Building": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Distant_Building.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "31fb8508d9037106d6d579106129b1fbe588f4e209aca6cb834bca7814824153",
+    "size": 22560
+  }
 }

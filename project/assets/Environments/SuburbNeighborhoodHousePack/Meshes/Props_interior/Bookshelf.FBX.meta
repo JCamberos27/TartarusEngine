@@ -20,5 +20,9 @@
     "Fireplace": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Fireplace.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "5b38ef9de9543a283a688c529f97d988842150a5157b7ce379630523d834e995",
+    "size": 43600
+  }
 }

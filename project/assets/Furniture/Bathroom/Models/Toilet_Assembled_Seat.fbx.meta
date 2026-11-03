@@ -19,5 +19,9 @@
     "Toilet": "assets/Furniture/Bathroom/Materials/M_Toilet.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "d4101e52d0ea99bc75dc891d6f7d970b63501f8cd1fbde9d2f93d7b1f2e9fc50",
+    "size": 45052
+  }
 }

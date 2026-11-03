@@ -19,5 +19,9 @@
     "Bathroom_sink": "assets/Furniture/Bathroom/Materials/M_Bathroom_Sink.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "10b5f119ba811a3ab505220ef6e7ce1f4d06aa59f74572c85f0227782fb2a5ca",
+    "size": 19372
+  }
 }

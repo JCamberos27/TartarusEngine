@@ -15,5 +15,9 @@
     "Tree_mushroom_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Tree_mushroom/M_Tree_mushroom_mat.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "e26862fa7a633b3726868630009ba60aa8994c74610e8602b7eba7ee9529dd49",
+    "size": 197904
+  }
 }

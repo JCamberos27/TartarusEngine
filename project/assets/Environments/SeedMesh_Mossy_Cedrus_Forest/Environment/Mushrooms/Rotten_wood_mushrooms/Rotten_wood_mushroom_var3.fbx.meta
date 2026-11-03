@@ -15,5 +15,9 @@
     "rotten_Wood_Mushrooms_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Rotten_wood_mushrooms/M_rotten_Wood_Mushrooms_mat.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "04f70a2c3234ed898f06f61a3b38916983c4164afe8f05c9fe67bc5af0a5c802",
+    "size": 32608
+  }
 }

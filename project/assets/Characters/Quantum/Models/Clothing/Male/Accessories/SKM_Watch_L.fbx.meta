@@ -5,5 +5,9 @@
     "M_Watch": "assets/Characters/Quantum/Materials/Clothing/Accessories/Watches_Military/M_Watches_Military_Black.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "f18a8bf28f66bd45fe4e093148950c47e1e1295ca1d91297132b89d522af7623",
+    "size": 1226368
+  }
 }

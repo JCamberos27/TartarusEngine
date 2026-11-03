@@ -23,5 +23,9 @@
     "Wall_HouseWoodPlank": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Wall_HouseWoodPlank.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "aee60be88554a23c400f4e04f452e22d5981ec180aaa83aaca06518c6bb9f05e",
+    "size": 40560
+  }
 }

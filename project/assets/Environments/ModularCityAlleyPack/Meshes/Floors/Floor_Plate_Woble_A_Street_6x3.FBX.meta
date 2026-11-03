@@ -20,5 +20,9 @@
     "Floor_Concrete": "assets/Environments/ModularCityAlleyPack/Materials/Floors/M_Floor_Concrete.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "fa9e080d638541fd200f59470fb10b8c3f02e88727474b1f0d8859baf4a6b9a0",
+    "size": 25376
+  }
 }

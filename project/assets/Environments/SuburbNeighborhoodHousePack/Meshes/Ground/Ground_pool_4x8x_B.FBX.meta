@@ -22,5 +22,9 @@
     "Pool_Tiles_2": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Pool_Tiles_2.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "ea9fc955501a20ae621485225e13f6f48cf4edd2ece5a6f40109d0cfd30d4ae5",
+    "size": 50576
+  }
 }

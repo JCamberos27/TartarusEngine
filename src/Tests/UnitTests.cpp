@@ -4491,6 +4491,18 @@ void TestAssetIdentity() {
     fs::remove(model, ec);
     CHECK(AssetDatabase::RefGuid("primitive://cube#3").empty());
 
+    // A Drive payload: its .meta carries "payload" (the hash travels with it); missing on disk = unfetched.
+    const std::string drive = (dir / "Drive.png").string(), local = (dir / "Local.png").string();
+    CHECK(AtomicFile::WriteBytes(drive + ".meta", json({{"guid", AssetGuid::Generate().ToString()}, {"type", "texture"},
+                                                       {"payload", {{"sha256", "00"}, {"size", 1}}}}).dump(), true));
+    CHECK(AtomicFile::WriteBytes(local + ".meta", json({{"guid", AssetGuid::Generate().ToString()}, {"type", "texture"}}).dump(), true));
+    CHECK(AssetDatabase::HasPayload(drive) && !AssetDatabase::HasPayload(local));
+    CHECK(AssetDatabase::IsUnfetchedExternal(drive));   // a payload not on disk
+    CHECK(!AssetDatabase::IsUnfetchedExternal(local));  // a missing file that is not a payload
+    CHECK(AtomicFile::WriteBytes(drive, "png", true));
+    CHECK(!AssetDatabase::IsUnfetchedExternal(drive));  // fetched
+    fs::remove(drive, ec); fs::remove(drive + ".meta", ec); fs::remove(local + ".meta", ec);
+
     // A material follows a renamed texture by the GUID it saved.
     const std::string tex = (dir / "Albedo.png").string(), tex2 = (dir / "Sub" / "Albedo2.png").string();
     CHECK(AtomicFile::WriteBytes(tex, "png", true));

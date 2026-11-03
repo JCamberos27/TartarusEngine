@@ -21,5 +21,9 @@
     "Other_WoodBlack_Tiled": "assets/Environments/OfficeAndPoliceStation/Materials/M_Other_WoodBlack_Tiled.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "516ad1c55a44ab1d9bd094dab835118e143cfab27954202f6dcc07035214a67e",
+    "size": 38000
+  }
 }

@@ -19,5 +19,9 @@
     "Workdesk": "assets/Furniture/Office/Materials/M_Workdesk.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "1f71874b281dd313469decf33b23e46325257b5300d3a13959a29e19d899c407",
+    "size": 25868
+  }
 }

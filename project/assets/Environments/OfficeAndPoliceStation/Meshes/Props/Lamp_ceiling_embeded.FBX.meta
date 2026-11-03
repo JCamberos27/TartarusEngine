@@ -20,5 +20,9 @@
     "CeilingLamp": "assets/Environments/OfficeAndPoliceStation/Materials/M_CeilingLamp.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "e0ec641cf67de8e367d06c421e010cfd2f3ca710aaf5b45b4ba4cb9d9ccbbe59",
+    "size": 33808
+  }
 }

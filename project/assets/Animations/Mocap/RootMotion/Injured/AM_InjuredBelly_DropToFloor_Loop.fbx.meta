@@ -2,5 +2,9 @@
   "folder": "assets/Animations/Mocap/RootMotion/Injured",
   "guid": "e1c31f470d495f17",
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "ed7293f14dd89d49cd17aa710602d52cf305b03b2c0551c381b41ba1f522c8dc",
+    "size": 720672
+  }
 }

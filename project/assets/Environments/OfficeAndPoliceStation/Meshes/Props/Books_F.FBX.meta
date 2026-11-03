@@ -20,5 +20,9 @@
     "Books": "assets/Environments/OfficeAndPoliceStation/Materials/M_Books.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "541d6a8c130eda1dc35be60b3bfdb6c64b63b2d30570c823f8b235a7883cbb95",
+    "size": 26912
+  }
 }

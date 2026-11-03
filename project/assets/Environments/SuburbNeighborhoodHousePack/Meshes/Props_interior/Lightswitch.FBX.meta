@@ -20,5 +20,9 @@
     "Additional_SmallProps": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Additional_SmallProps.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "9fdd0a3f7a1aa224748c388e70eba6ea1593bfa22133c79f3a189f70acbd2867",
+    "size": 19760
+  }
 }

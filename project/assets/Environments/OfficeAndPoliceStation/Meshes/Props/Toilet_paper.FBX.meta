@@ -20,5 +20,9 @@
     "Toilet_Partitions": "assets/Environments/OfficeAndPoliceStation/Materials/M_Toilet_Partitions.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "3be8c63679f9cf48c058ea65cea48b643e6e68bd3c3b69f0a5de80d2e4506136",
+    "size": 29808
+  }
 }

@@ -21,5 +21,9 @@
     "Floor_PorchPlanks": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Floor_PorchPlanks.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "764b941c4d060300f9732b01301c72a8ee6d2aa2968300c0c7267ccedd81cfd6",
+    "size": 37888
+  }
 }

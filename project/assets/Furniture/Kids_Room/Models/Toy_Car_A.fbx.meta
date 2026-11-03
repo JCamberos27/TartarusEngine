@@ -19,5 +19,9 @@
     "Toys": "assets/Furniture/Kids_Room/Materials/M_Toys.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "0ece7c67d1ffc8359d85116a84f05c8995b3dea9c690bbec20cd20ac8e599372",
+    "size": 37456
+  }
 }

@@ -18,5 +18,9 @@
     "Moss_cover1": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Moss_cover/Textures/M_Moss_cover.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "b8adf64917d5298d03260a58c7dcfa36e66622ca36ad5f478498660ca2f87d74",
+    "size": 42464
+  }
 }

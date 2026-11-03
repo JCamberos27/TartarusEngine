@@ -10,5 +10,9 @@
     "optimizeGraph": true
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "4207f071ebc73879618ed112391c2fdbfa333ad80bbdb34e63384eb5d3ab7666",
+    "size": 252076
+  }
 }

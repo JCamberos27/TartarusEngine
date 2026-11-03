@@ -21,5 +21,9 @@
     "Curtains_AB_rod": "assets/Furniture/Decor/Materials/M_Curtains_Ab.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "9de369f40bc5047fe983caf1b6418d025e1ac757cafd321506b51fbb0dd4c028",
+    "size": 210720
+  }
 }

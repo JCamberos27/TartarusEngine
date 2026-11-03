@@ -1365,6 +1365,18 @@ std::vector<EditorLayer::ProjectAssetFile> EditorLayer::ScanProjectAssetFiles(co
         if (!it->is_regular_file(entryEc)) continue;
         EditorLayer::ProjectAssetFile f;
         f.Path = it->path().lexically_normal().string();
+        // A Drive payload this checkout hasn't fetched: its .meta (with a "payload" hash) is here, the
+        // file isn't. It gets a greyed tile where the file would be, so a fresh clone shows what's missing.
+        if (f.Path.size() > 5 && f.Path.compare(f.Path.size() - 5, 5, ".meta") == 0) {
+            f.Path.resize(f.Path.size() - 5);
+            std::error_code existsEc;
+            if (fs::exists(f.Path, existsEc) || !kindOf(f) || !AssetDatabase::HasPayload(f.Path)) continue;
+            f.Key = AssetDatabase::PathKey(f.Path);
+            f.Name = fs::path(f.Path).filename().string();
+            f.Unfetched = true;
+            files.push_back(std::move(f));
+            continue;
+        }
         if (!kindOf(f)) continue;
         f.Key = AssetDatabase::PathKey(f.Path);
         f.Name = it->path().filename().string();
@@ -1381,24 +1393,6 @@ std::vector<EditorLayer::ProjectAssetFile> EditorLayer::ScanProjectAssetFiles(co
         // disk call per file in one frame.
         if (!f.MetaFolder) (void)ProjectPaths::Relativize(f.Path);
         files.push_back(std::move(f));
-    }
-    // Drive files this checkout hasn't fetched: listed in external_assets.csv, not on disk. They get a
-    // greyed tile where the file would be, so a fresh clone shows what's missing instead of hiding it.
-    if (std::ifstream csv(fs::path(root) / "external_assets.csv", std::ios::binary); csv.is_open()) {
-        std::stringstream text;
-        text << csv.rdbuf();
-        for (const std::string& rel : AssetDatabase::ParseExternalAssetList(text.str())) {
-            EditorLayer::ProjectAssetFile f;
-            const fs::path p = (fs::path(root) / rel).lexically_normal();
-            std::error_code existsEc;
-            if (fs::exists(p, existsEc)) continue;
-            f.Path = p.string();
-            if (!kindOf(f)) continue;
-            f.Key = AssetDatabase::PathKey(f.Path);
-            f.Name = p.filename().string();
-            f.Unfetched = true;
-            files.push_back(std::move(f));
-        }
     }
     return files;
 }

@@ -2,5 +2,9 @@
   "folder": "assets/Weapons/AKS74U/Attachments/Textures/1a1",
   "guid": "6c7cb8991d79c5de",
   "metaVersion": 1,
-  "type": "texture"
+  "type": "texture",
+  "payload": {
+    "sha256": "936df5e7dd69591fb98d8a236784a70e8160378f4d17d2528c181b53ae19d67b",
+    "size": 263479
+  }
 }

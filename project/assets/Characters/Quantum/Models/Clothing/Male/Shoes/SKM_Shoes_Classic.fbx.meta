@@ -5,5 +5,9 @@
     "M_Pants_Classic": "assets/Characters/Quantum/Materials/Clothing/Pants/Pants Classic/M_Pants_Classic_Black.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "5737592708b24cdd6446171fb29440379a9c35c0a9ef138b47588d27f23ed64d",
+    "size": 886320
+  }
 }

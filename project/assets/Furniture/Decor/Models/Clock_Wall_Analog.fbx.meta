@@ -25,5 +25,9 @@
     "Clocks_glass": "assets/Furniture/Bedroom/Materials/M_Glass_Clear.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "d5d821e283a991db48f99cea9112c2dc89a63739b0884327bd9590d90de01ce5",
+    "size": 84656
+  }
 }

@@ -5,5 +5,9 @@
     "Material.001": "assets/Weapons/AKS74U/Attachments/Materials/M_1a1.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "db5da8b4e055fc5009e61719706a147de8a9291139012a04c10e519480e73706",
+    "size": 3176796
+  }
 }

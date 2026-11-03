@@ -16,5 +16,9 @@
     "Ground_cover_billboards": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ground_cover_plants/Textures/M_Ground_cover_billboards.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "1d53f995c5edb634d5f8b823a35e199864afa429842e9df4e585ac4e6e4e5fae",
+    "size": 124368
+  }
 }

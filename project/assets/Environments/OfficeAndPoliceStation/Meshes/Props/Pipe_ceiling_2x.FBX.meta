@@ -20,5 +20,9 @@
     "PaintingSet": "assets/Environments/OfficeAndPoliceStation/Materials/M_PaintingSet.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "7beabcdd38152d193761182a89d7253724820313480e6bdee07b24bf2d55d130",
+    "size": 36816
+  }
 }

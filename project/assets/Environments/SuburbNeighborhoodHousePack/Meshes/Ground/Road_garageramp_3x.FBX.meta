@@ -20,5 +20,9 @@
     "Floor_ConcretePlates": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Floor_ConcretePlates.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "c8cedbd6a497656895d07aa9fa1841e6798dba81aec6ddd91b8a646452ac1e5f",
+    "size": 24400
+  }
 }

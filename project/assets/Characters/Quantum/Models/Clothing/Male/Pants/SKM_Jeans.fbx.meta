@@ -5,5 +5,9 @@
     "M_Jeans1": "assets/Characters/Quantum/Materials/Clothing/Pants/Jeans/M_Jeans_Black.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "757c397bce9d79c31b3db481dbed6cd8bb76ad80b42bbe035806267f0f93e63a",
+    "size": 1160016
+  }
 }

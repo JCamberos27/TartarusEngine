@@ -20,5 +20,9 @@
     "Outside_Props": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Outside_Props.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "7b0f7e29fe1a06c5f73a446cae5c6320c35e06e83bcb23903a9131d3a92d2bfb",
+    "size": 23472
+  }
 }

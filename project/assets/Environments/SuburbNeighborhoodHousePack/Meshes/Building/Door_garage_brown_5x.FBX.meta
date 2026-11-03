@@ -20,5 +20,9 @@
     "Door_Garage_Brown": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Door_Garage_Brown.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "917094e63680542f5dd2a0b90d3dd13cf8a366897e9b36637c2dcc93710b7e61",
+    "size": 27056
+  }
 }

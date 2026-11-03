@@ -20,5 +20,9 @@
     "AirductTiled": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_AirductTiled.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "87be034d252d4bab1c673d9e6711e4c0a3babce70daabba50cb61d9a1719f696",
+    "size": 26528
+  }
 }

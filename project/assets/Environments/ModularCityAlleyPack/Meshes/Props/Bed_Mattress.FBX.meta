@@ -20,5 +20,9 @@
     "Bed": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Bed.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "2a070cb5c89b597799b3615446bc033e3fd5120c2d849689b4a25e3f0dc908e6",
+    "size": 38064
+  }
 }

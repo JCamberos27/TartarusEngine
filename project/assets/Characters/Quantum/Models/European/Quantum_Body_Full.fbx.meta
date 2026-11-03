@@ -7,5 +7,9 @@
     "M_Quantum_Head": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Head.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "1ec82f311657b7e994099a00fdb391d20fa305fbf9874de44a36a0405b5452a8",
+    "size": 10101360
+  }
 }

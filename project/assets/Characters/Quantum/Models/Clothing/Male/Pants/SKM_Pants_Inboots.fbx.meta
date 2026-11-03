@@ -5,5 +5,9 @@
     "M_Pants_Inboots": "assets/Characters/Quantum/Materials/Clothing/Generated/M_Pants_Inboots.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "e6f20bf13723a42cfe86f18260fec845765c821012e0332287abf461254d5a1f",
+    "size": 980416
+  }
 }

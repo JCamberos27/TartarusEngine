@@ -5,5 +5,9 @@
     "MI_F_Vivian_Basemesh_Arms": "assets/Characters/Quantum/Materials/Characters/M_F_Vivian_Arms.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "7749432ec18b72297be34d4b4f574f1c2466e484b4fc7b586182150c3eee3db7",
+    "size": 1784944
+  }
 }

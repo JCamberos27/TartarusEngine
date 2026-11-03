@@ -26,5 +26,9 @@
     "Wall_Brickwall_Red": "assets/Environments/ModularCityAlleyPack/Materials/Walls/M_Wall_Brickwall_Red.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "f90cf100c246211d677e636f3a607ea326752ba0e845cc1c97d15cc92ec647c1",
+    "size": 41824
+  }
 }

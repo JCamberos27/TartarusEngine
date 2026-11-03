@@ -19,5 +19,9 @@
     "Lamps_C_on": "assets/Furniture/Lighting/Materials/M_Lamps_C.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "e48ff082c8218439df434457ce6c7c203040d79be5e1ef2d2492b7e3896fe838",
+    "size": 100412
+  }
 }

@@ -20,5 +20,9 @@
     "Devices_On": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Devices_On.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "c6765aefd810789ef33fd50090e4b3b93a161f5030603286c7fbc0d9ae7ab51a",
+    "size": 24224
+  }
 }

@@ -20,5 +20,9 @@
     "Cabinets_kitchen_worktop": "assets/Furniture/Kitchen/Materials/M_Cabinets_Kitchen_Worktop.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "0951d93bc235a0b58a8820f88549439269b3a090b75718c4ffbafc806f635bb8",
+    "size": 33600
+  }
 }

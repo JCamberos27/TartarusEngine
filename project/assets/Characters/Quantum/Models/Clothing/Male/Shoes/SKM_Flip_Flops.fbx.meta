@@ -6,5 +6,9 @@
     "M_Shorts_Breeches1": "assets/Characters/Quantum/Materials/Clothing/Pants/Shorts_Breeches/M_Shorts_Breeches_Gray.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "090b46ef68316611927a224b96c47d0992e379c43fa7b70921421e79b677e8d6",
+    "size": 1543280
+  }
 }

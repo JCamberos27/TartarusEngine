@@ -20,5 +20,9 @@
     "AirventilationGrids": "assets/Environments/OfficeAndPoliceStation/Materials/M_AirventilationGrids.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "9942232a76ed2785e3152abc292d6a061c66f465ca61ba65e78db6e655125826",
+    "size": 31136
+  }
 }

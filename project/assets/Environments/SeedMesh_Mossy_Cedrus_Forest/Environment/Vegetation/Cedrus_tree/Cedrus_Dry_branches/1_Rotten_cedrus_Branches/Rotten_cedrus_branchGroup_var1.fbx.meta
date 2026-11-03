@@ -15,5 +15,9 @@
     "Rotten_cedrus_branches_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Dry_branches/1_Rotten_cedrus_Branches/M_Rotten_cedrus_branches_ground_mat.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "e0be6a94b84df063a6874cf2377a81f1df3680b511d13eb6bddaa74b2a8cb7b1",
+    "size": 808400
+  }
 }

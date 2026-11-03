@@ -16,5 +16,9 @@
     "Lichen_branch_debris_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Branch_Debris/Lichen_Branch_Debris/M_Lichen_branch_debris_mat.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "668c8d32f493c4fa634995124c72dedcf429d3be0da88df2729dd0358beedf8d",
+    "size": 372256
+  }
 }

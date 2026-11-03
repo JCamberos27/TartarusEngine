@@ -2,5 +2,9 @@
   "folder": "assets/Animations/Mocap/RootMotion/Jump",
   "guid": "0cb61f754798296f",
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "a1920c8e4ad2771c082a32ca70a89bc61b512bb4ced4478057836eae3284d53e",
+    "size": 1381040
+  }
 }

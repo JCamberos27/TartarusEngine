@@ -36,5 +36,9 @@
     "WorkDesk": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_WorkDesk.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "9d09b6a29b7018201eab3f90bc4b1cae5222ac8ad2b0e2fd658602f4ee972b20",
+    "size": 46928
+  }
 }

@@ -22,5 +22,9 @@
     "Water_Dispenser": "assets/Environments/OfficeAndPoliceStation/Materials/M_Water_Dispenser.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "29882806ae44f3728f40be3ed3e8aeedcad6930c8ca771dd2a0e4448a9ee1a57",
+    "size": 42160
+  }
 }

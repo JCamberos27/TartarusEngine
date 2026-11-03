@@ -19,5 +19,9 @@
     "Books": "assets/Furniture/Office/Materials/M_Books.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "c5c229744acf798dd65cde24f40e8dc0fd94512c1891cfd505329154fd399690",
+    "size": 26640
+  }
 }

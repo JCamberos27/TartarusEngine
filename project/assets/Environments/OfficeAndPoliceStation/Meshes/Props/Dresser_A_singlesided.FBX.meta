@@ -20,5 +20,9 @@
     "Chair_and_Dresser": "assets/Environments/OfficeAndPoliceStation/Materials/M_Chair_and_Dresser.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "aad458eb6b4d23a83bb1aa16c32fa218edec24f3a914f0fa36506be4d1fe4f5d",
+    "size": 29056
+  }
 }

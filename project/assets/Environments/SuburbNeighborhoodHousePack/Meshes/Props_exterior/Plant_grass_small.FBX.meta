@@ -21,5 +21,9 @@
     "Plant_Grass": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Plant_Grass.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "4464b18a862662a39fef1333593bb74e4a020c0ac3441b7198535de5fc360170",
+    "size": 46144
+  }
 }

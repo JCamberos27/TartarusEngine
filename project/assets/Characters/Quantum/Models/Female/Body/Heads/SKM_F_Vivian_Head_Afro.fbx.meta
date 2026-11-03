@@ -13,5 +13,9 @@
     "eyeRight_lod0_mesh33": "assets/Characters/Quantum/Materials/Characters/Eyes/M_Eye_DarkBrown.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "18f11630b9c9965cbfc18c19bd91685bc9c37af179fff2934f7ac29c16973df5",
+    "size": 3378752
+  }
 }

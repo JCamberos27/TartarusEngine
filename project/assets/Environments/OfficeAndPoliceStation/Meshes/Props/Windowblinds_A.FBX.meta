@@ -20,5 +20,9 @@
     "WindowBlinds": "assets/Environments/OfficeAndPoliceStation/Materials/M_WindowBlinds.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "66524b48fbf7da48a1ab5add299378457b9faca8c7011ec19877e8709a0434ad",
+    "size": 32784
+  }
 }

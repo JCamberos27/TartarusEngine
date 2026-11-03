@@ -5,5 +5,9 @@
     "M_Puffy_Vest": "assets/Characters/Quantum/Materials/Clothing/Outerwear/F_Vests_Puffy/M_F_Puffy_Vest_Black.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "5c75edbba10ceae8cafa07ef9e3d8f432313ba6df38e50d404536ed0af525c10",
+    "size": 1309840
+  }
 }

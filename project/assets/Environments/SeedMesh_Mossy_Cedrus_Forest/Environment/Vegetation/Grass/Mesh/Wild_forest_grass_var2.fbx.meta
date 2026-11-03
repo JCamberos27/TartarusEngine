@@ -16,5 +16,9 @@
     "Wild_forest_grass": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Grass/Textures/M_Wild_forest_grass.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "81c2da8779ff1d12f10835b2d74c9f8668dc406ceb25c02791a7c47814827f5e",
+    "size": 52624
+  }
 }

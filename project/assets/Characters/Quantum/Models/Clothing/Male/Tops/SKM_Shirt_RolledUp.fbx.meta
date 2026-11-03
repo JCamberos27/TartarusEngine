@@ -5,5 +5,9 @@
     "M_Shirt_RolledUp1": "assets/Characters/Quantum/Materials/Clothing/Tops/Shirt_RolledUp/M_Shirt_RolledUp_Gray.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "c10c6dbcf50386feded12139caf709a9dc9b6ad4f5a97af5692ec79b502370b8",
+    "size": 1141456
+  }
 }

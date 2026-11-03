@@ -20,5 +20,9 @@
     "Paintings_House": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Paintings_House.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "5d46c85ef9222b2c55c57c8a3e703f634ab3de59623a432e3860dd73532e8ca4",
+    "size": 25072
+  }
 }

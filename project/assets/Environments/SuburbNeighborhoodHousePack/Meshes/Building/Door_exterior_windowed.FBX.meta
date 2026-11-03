@@ -20,5 +20,9 @@
     "Door_Windowed": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Door_Windowed.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "597cec783aebce425ba5030f9c6d57aa31ff92eccd73f210ebde8c6697c670ab",
+    "size": 83744
+  }
 }

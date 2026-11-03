@@ -2,5 +2,9 @@
   "folder": "assets/Weapons/AKS74U/FirstPerson",
   "guid": "9004884db6cdfb0e",
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "2ea82517c84e4470b96c72924f95ea7b040d6d620c2780068d99789cf83747b1",
+    "size": 1532556
+  }
 }

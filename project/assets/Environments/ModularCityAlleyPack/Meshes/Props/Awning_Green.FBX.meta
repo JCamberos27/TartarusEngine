@@ -20,5 +20,9 @@
     "Street_Doors_Windows": "assets/Environments/ModularCityAlleyPack/Materials/Walls/M_Street_Doors_Windows.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "ff8e217c5e451270ee9d1488486fec065bbd3135e659a2625999f679399f31d1",
+    "size": 26544
+  }
 }

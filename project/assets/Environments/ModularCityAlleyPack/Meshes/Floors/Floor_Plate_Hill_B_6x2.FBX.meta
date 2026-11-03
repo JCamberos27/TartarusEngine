@@ -20,5 +20,9 @@
     "Floor_StreetPlatesConcrete": "assets/Environments/ModularCityAlleyPack/Materials/Floors/M_Floor_StreetPlatesConcrete.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "c75677383e6b7c9d1b175bd2db4f287edff334151ab2bbf08822563589944903",
+    "size": 22656
+  }
 }

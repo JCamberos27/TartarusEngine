@@ -20,5 +20,9 @@
     "Roof_Metal": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Roof_Metal.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "dd721c2a778afcfd7bcde97e76699e966f6bb2e5837722f35dfaa1edb5aed161",
+    "size": 26432
+  }
 }

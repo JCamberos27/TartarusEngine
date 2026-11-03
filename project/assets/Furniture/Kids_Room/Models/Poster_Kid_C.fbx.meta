@@ -19,5 +19,9 @@
     "Posters_kid": "assets/Furniture/Kids_Room/Materials/M_Posters_Kid.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "5c6c20b8255828a469af27114e8a8475b862a1db1894e1e53d550923e8a30edb",
+    "size": 30336
+  }
 }

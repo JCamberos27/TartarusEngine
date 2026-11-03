@@ -20,5 +20,9 @@
     "Storage_Prop_Set": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Storage_Prop_Set.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "4813543a43df177453b05c89f4b0d496a7638884377984c2b21d3bcb6bd2b5ca",
+    "size": 26480
+  }
 }

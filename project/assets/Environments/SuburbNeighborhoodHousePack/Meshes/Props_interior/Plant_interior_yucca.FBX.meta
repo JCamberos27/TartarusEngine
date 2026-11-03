@@ -20,5 +20,9 @@
     "Plants_InteriorHouse": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Plants_InteriorHouse.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "8749603b5ffeb0e5fbf8f6e059a21b21efd90419daa4860d288f4cef02ff6ef8",
+    "size": 191584
+  }
 }

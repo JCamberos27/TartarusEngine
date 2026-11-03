@@ -21,5 +21,9 @@
     "Roof_Plate": "assets/Environments/OfficeAndPoliceStation/Materials/M_Roof_Plate.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "310ac03ed7244b472d34e59fb0ec8915c68a2c7b289cd945b8c0e5ac7f5252fc",
+    "size": 23280
+  }
 }

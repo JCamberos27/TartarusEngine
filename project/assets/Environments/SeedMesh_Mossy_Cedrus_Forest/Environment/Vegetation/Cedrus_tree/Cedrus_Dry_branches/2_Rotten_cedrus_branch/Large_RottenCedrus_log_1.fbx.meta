@@ -15,5 +15,9 @@
     "LargeRottenCedrusLog1_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Cedrus_Dry_branches/2_Rotten_cedrus_branch/M_LargeRottenCedrusLog1_mat.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "582a73e5dde38316baf8b20fde4413f4ea6f65ecd60128a5a59440a00e422396",
+    "size": 852624
+  }
 }

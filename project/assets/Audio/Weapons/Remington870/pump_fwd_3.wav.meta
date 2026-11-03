@@ -1,5 +1,9 @@
 {
   "guid": "767ede5390d8d4a3",
   "metaVersion": 1,
-  "type": "audio"
+  "type": "audio",
+  "payload": {
+    "sha256": "293881292824116ef0ed2d5e2a83ed5e1bde9a89c8f546b8e29aa087016deacd",
+    "size": 84524
+  }
 }

@@ -27,7 +27,10 @@ work/
 
 # HDRI skies (Poly Haven, CC0) for scenes that use one - too big for git; download into
 # project/assets/sky/ (a scene names its file in skyHdriPath).
-project/assets/sky/
+project/assets/sky/**
+!project/assets/sky/**/
+!project/assets/sky/**/*.meta
+# (their .meta files stay tracked: each carries its payload's hash, see tools/assets/asset_manifest.py)
 
 # Editor screenshots (#153): captures land in project/screenshots/ so the Asset Browser's
 # Screenshots folder can show them, but they're per-user output, not project content. The
@@ -79,7 +82,10 @@ project/assets/Characters/Quantum/Textures/Clothing/Hats/
 videos/
 # Volumetric blood data converted from the KriptoFX asset (can't be redistributed) - rebuild with
 # TartarusEngine --import-blood-fx <package>.
-project/assets/Effects/Blood/
+project/assets/Effects/Blood/**
+!project/assets/Effects/Blood/**/
+!project/assets/Effects/Blood/**/*.meta
+# (their .meta files stay tracked: each carries its payload's hash, see tools/assets/asset_manifest.py)
 project/assets/Effects/Knife/
 blood_v2_preview/
 

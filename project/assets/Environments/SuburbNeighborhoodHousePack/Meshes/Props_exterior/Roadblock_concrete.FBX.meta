@@ -20,5 +20,9 @@
     "Roadblock": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Roadblock.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "8a43076cc92fc087c0ad30f85f02cd106ddedea54c95a6378e9953e546ffc938",
+    "size": 27696
+  }
 }

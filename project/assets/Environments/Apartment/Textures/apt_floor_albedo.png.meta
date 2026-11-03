@@ -2,5 +2,9 @@
   "folder": "assets/Environments/Apartment/Textures",
   "guid": "288670b76ceda1cf",
   "metaVersion": 1,
-  "type": "texture"
+  "type": "texture",
+  "payload": {
+    "sha256": "32d3bf770ae9c36bd08681d055fe1f1a46ce88209e053d75f59f418cf9c2d7bc",
+    "size": 6892663
+  }
 }

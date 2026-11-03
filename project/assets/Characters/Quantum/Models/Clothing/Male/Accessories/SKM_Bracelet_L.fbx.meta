@@ -5,5 +5,9 @@
     "M_Bracelet": "assets/Characters/Quantum/Materials/Clothing/Accessories/F_Bracelet/M_Bracelet.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "14f6983f0c8733a7487e037224b3bfb57b02faeaedd3d630c4cd3b9202478120",
+    "size": 1847072
+  }
 }

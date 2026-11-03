@@ -8,5 +8,9 @@
     "M_F_Tank_Top2": "assets/Characters/Quantum/Materials/Clothing/Generated/M_Tank_Top.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "5affaa2db7f54f2886e5dc1b4b715877d354297ad4f1e2f5d97985304b594e9b",
+    "size": 1563200
+  }
 }

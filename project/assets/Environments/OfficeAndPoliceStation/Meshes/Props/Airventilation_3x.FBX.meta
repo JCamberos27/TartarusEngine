@@ -20,5 +20,9 @@
     "Airventilation": "assets/Environments/OfficeAndPoliceStation/Materials/M_Airventilation.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "161000c70b185fb28ea7e3476ede1bd0e24008f8f6658cf605da75a1ba86725c",
+    "size": 25920
+  }
 }

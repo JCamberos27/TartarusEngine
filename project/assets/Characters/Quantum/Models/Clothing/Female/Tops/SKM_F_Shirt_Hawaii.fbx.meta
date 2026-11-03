@@ -6,5 +6,9 @@
     "M_Shirt_Hawaii3": "assets/Characters/Quantum/Materials/Clothing/Tops/Shirt_Hawaiian/M_Hawaii_Shirt_Red_White_Line.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "2a218979d0ea31d8b3e369922eb7fc875f5d48e6a56942c5a2830168415c90b8",
+    "size": 1686224
+  }
 }

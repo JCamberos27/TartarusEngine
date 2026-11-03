@@ -20,5 +20,9 @@
     "Billboard_Tree": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Billboard_Tree.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "02df78f07a653a8469d952cdd818febfe45ef5f0cce1ed5d4c7d047ebf2c14ad",
+    "size": 22832
+  }
 }

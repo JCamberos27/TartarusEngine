@@ -21,5 +21,9 @@
     "Fridge_Glasses": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Fridge_Glasses.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "b5f5972f077001292183cd06d5db2db32e7f05030acf6488a0b71e9b3a8e661c",
+    "size": 266784
+  }
 }

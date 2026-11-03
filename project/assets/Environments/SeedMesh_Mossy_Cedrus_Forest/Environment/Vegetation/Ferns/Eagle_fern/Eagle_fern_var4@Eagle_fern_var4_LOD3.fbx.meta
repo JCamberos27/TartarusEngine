@@ -19,5 +19,9 @@
     "Eagle_fern_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Eagle_fern/M_Eagle_fern_mat.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "3a8426cb58239abffecd75555f5c1f9bf6e48d5347ec2d6796bac3f78490032f",
+    "size": 110704
+  }
 }

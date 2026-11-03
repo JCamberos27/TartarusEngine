@@ -15,5 +15,9 @@
     "Volc_Mossy_rocks_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Forest_Ground_scans/Forest_Ground_scan_var4/M_Volc_Mossy_rocks.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "46516045d6a72f4fe61d578c80565b74e7252c8fc8f3e7839d939d91733d470e",
+    "size": 1055424
+  }
 }

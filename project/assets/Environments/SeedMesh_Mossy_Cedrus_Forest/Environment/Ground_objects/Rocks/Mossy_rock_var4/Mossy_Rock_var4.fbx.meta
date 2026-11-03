@@ -15,5 +15,9 @@
     "Mossy_rock_var4_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Rocks/Mossy_rock_var4/M_Mossy_rock_var4_mat.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "78cae808f27d02de3edc38f490063492b5425404767b2f6f51a3723778ee208e",
+    "size": 887056
+  }
 }

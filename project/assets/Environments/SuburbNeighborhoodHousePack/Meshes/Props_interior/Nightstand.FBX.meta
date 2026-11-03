@@ -20,5 +20,9 @@
     "NightTable": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_NightTable.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "8fb291d7923278e02c2a75f32d919eaf09cbb85b79b7fe01d30de09b548796ef",
+    "size": 61760
+  }
 }

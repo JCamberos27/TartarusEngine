@@ -18,5 +18,9 @@
     "Tree_stump_var5_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Stumps/Stump_5/M_Tree_stump_var5_mat.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "5e9b8aab89387dbb6a47d19e44d68737604750b6be46fa7af2af02bd662963de",
+    "size": 1301328
+  }
 }

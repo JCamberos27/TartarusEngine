@@ -19,5 +19,9 @@
     "DefaultMaterial": "assets/Props/Knife/Materials/M_Steel_Blade.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "cd9b2bd5e6444198d20b3cdd88eac93496ae645e9bdddcf3a356ccfcb2a23ab8",
+    "size": 123164
+  }
 }

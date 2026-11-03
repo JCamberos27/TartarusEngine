@@ -19,5 +19,9 @@
     "Garage_items": "assets/Furniture/Garage/Materials/M_Garage_Items.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "6b8f7d52f8e3aab6bfe43d9fc71a72a46d4ac5a7a2ee06fa4911468403a3893b",
+    "size": 26832
+  }
 }

@@ -19,5 +19,9 @@
     "Table_chair_dining": "assets/Furniture/Kitchen/Materials/M_Table_Chair_Dining.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "0af3a9e8097829bcbdbdc9727f054687bb9bf7f4eaa320a6e59a04f0d351296f",
+    "size": 89664
+  }
 }

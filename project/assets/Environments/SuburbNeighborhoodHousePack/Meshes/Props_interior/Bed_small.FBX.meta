@@ -20,5 +20,9 @@
     "Bed_Small": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Bed_Small.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "1a9ad1ee9edb500f362b9bfcad60d90a48a938675da1fa0acbeba1e8fd1b0c5a",
+    "size": 116608
+  }
 }

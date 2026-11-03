@@ -19,5 +19,9 @@
     "Dressers_B": "assets/Furniture/Bedroom/Materials/M_Dressers_B.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "2334617e97c41004690d8ffd05e36f84b73c2800ddf5684130330ca8327ef33d",
+    "size": 38288
+  }
 }

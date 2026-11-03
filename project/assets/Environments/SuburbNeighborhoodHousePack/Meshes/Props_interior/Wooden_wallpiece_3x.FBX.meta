@@ -20,5 +20,9 @@
     "Basement_Stairs": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Basement_Stairs.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "24681c83edc66f3517d43561cf327f6b49de358e7b8e7399f6a09792c4a21629",
+    "size": 23984
+  }
 }

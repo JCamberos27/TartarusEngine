@@ -5,5 +5,9 @@
     "T_Shoorts2": "assets/Characters/Quantum/Materials/Clothing/Shoes/Boots/M_Boots_Black.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "7943e35e4456abd50ef1ed926ac511bd15384ebf10a3f7f4df523af8b6723b83",
+    "size": 1000544
+  }
 }

@@ -20,5 +20,9 @@
     "LivingRoom_Props": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_LivingRoom_Props.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "7e8eaf55fda7b8246dc6c1436c6029c7110b6aa0a920547af8b3281602fdf5ee",
+    "size": 31104
+  }
 }

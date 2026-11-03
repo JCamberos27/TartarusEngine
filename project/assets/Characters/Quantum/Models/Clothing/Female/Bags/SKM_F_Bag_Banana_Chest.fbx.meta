@@ -5,5 +5,9 @@
     "M_Bag_Banana": "assets/Characters/Quantum/Materials/Clothing/Bags/Bag_Banana/M_Bag_Banana_Black.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "234e0e84b2539f1c973841ff9ec17d394d7b23368d91d5c31c118180821cc12c",
+    "size": 1201952
+  }
 }

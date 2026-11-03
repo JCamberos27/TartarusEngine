@@ -19,5 +19,9 @@
     "Washingmachine": "assets/Furniture/Garage/Materials/M_Washingmachine.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "3645a3903fa47a9102c9ce21a43fd01c7e9da850915249da034fd9386ec77dd0",
+    "size": 25484
+  }
 }

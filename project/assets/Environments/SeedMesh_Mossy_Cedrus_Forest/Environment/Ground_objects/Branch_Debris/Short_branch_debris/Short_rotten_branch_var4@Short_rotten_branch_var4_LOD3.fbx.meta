@@ -18,5 +18,9 @@
     "Short_Rotten_branches_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Branch_Debris/Short_branch_debris/M_Short_Rotten_branches_mat.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "6bdc4ff4c86d17ab163cd572ab88b7aad1b979fc596ec61e8046f5fc313b3161",
+    "size": 152896
+  }
 }

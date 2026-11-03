@@ -2,5 +2,9 @@
   "folder": "assets/Animations/Mocap/RootMotion/Ready",
   "guid": "4b6c8e1779dbd884",
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "900c8ec40ee5172b4349b57c8ecb187003052b586a5618d172ae5d6ecc055211",
+    "size": 1748720
+  }
 }

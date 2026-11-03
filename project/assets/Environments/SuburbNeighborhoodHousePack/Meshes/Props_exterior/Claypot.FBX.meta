@@ -20,5 +20,9 @@
     "TableSet": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_TableSet.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "85fe66dfcd4bab16f62aab868135470255d26f73347993380151f139aab9b8fd",
+    "size": 26016
+  }
 }

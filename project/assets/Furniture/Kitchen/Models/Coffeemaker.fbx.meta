@@ -20,5 +20,9 @@
     "Coffeemaker_glass": "assets/Furniture/Kitchen/Materials/M_Coffeemaker_Glass.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "f4fb4350fdadf8d288dcea2d204da65b075def0a048021c533bef53850eff3ec",
+    "size": 203104
+  }
 }

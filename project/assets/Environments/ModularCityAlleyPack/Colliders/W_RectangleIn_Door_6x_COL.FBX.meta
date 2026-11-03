@@ -18,5 +18,9 @@
   },
   "materialRemap": {},
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "82a11f2c05569222c667d9f2200299cf2c7362f3737a4947fc404d63115c573e",
+    "size": 54528
+  }
 }

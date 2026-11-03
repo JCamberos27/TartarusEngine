@@ -20,5 +20,9 @@
     "Paintings_interior": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Paintings_interior.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "56b52e8b07c1dd69a6fd0e6c2b9ae5d7d07aac7ba94289bdc376cbd4dcba0311",
+    "size": 28704
+  }
 }

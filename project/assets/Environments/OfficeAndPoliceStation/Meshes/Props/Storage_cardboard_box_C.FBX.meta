@@ -20,5 +20,9 @@
     "StorageProps": "assets/Environments/OfficeAndPoliceStation/Materials/M_StorageProps.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "4ba06c8f616e6e4fde3b2d4ba5946c6dd2be77882dfe9798b3c9b0d88f19f3ad",
+    "size": 26128
+  }
 }

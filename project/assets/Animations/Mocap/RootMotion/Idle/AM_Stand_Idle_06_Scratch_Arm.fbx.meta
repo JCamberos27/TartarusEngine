@@ -2,5 +2,9 @@
   "folder": "assets/Animations/Mocap/RootMotion/Idle",
   "guid": "b3fed0e3be9438dc",
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "9b596a8a0d1020ecc7007411713974fdd85a23fc33b9b24f9a017cda0490d6d1",
+    "size": 1596528
+  }
 }

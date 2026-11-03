@@ -12,5 +12,9 @@
     "wrapMode": 1
   },
   "metaVersion": 1,
-  "type": "texture"
+  "type": "texture",
+  "payload": {
+    "sha256": "381ace4efa670aad9db7ab6f45804ab86063974c39c31b79d4e5585d7b63f08b",
+    "size": 12350939
+  }
 }

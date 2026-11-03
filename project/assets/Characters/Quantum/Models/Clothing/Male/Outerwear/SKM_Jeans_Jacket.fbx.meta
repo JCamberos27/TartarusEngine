@@ -6,5 +6,9 @@
     "M_Tshirt_Tucked5": "assets/Characters/Quantum/Materials/Clothing/Tops/TShirt_Tucked/M_TShirt_Tucked_Black.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "92ee61bbbfafca0a10de467dd82377a8c5ec5b7815605852b06af051017cd4b0",
+    "size": 1727872
+  }
 }

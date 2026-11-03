@@ -21,5 +21,9 @@
     "Lamps_On": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_On.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "8449c41006249d016ecbb10770476fd69bdd71512adf70f5a437f96ac5140aee",
+    "size": 39280
+  }
 }

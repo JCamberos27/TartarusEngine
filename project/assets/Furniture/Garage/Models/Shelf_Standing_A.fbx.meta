@@ -19,5 +19,9 @@
     "Desk_office": "assets/Furniture/Office/Materials/M_Desk_Office.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "1c005a7ae6a186e3f9b64d609903c1083c4918b69407a5725de958c757f063ac",
+    "size": 53664
+  }
 }

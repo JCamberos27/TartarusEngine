@@ -15,5 +15,9 @@
     "Carpet_A": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Carpet_A.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "78b0f6d81fa39dc3c1de3cc0e7c49c245c71ba96d4db5ad5aa11c44cb907d73b",
+    "size": 23232
+  }
 }

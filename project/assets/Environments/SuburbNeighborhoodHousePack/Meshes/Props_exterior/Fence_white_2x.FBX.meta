@@ -20,5 +20,9 @@
     "Fence_Whitewood": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Fence_Whitewood.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "cce02279034fb63d50292f816363c43c39759a88ff4122bbeb8483c896dabdbb",
+    "size": 24848
+  }
 }

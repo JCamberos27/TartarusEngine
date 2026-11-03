@@ -6,5 +6,9 @@
     "lambert2": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Coat/Fabric/M_Coat_Fabric_Black.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "2695aef7a0941952150c4156c749e38fbc972800c94f74cbc86525e4bfbd8aab",
+    "size": 1806896
+  }
 }

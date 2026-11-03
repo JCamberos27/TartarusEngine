@@ -36,5 +36,9 @@
     "Neon_Signs": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Neon_Signs.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "3c86770f268d92481de585be69a51912cadd2883c245c7e046098a13aec110f3",
+    "size": 29808
+  }
 }

@@ -20,5 +20,9 @@
     "ToiletProps": "assets/Environments/OfficeAndPoliceStation/Materials/M_ToiletProps.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "f0ea020a2ec52bd032e2309b0fc785649b69c6f710d32ee376dbdbf5b6ca50fa",
+    "size": 22432
+  }
 }

@@ -20,5 +20,9 @@
     "Toilet_ExtraProps": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Toilet_ExtraProps.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "1654471ad07a6f87ad407489025cdae33007aec783811d000b79cb2932d5ec99",
+    "size": 68256
+  }
 }

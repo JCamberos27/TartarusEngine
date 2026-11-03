@@ -20,5 +20,9 @@
     "Dumpster_Set": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Dumpster_Set.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "d91795d84e3423328d53b0e39c16ea3c0052bed3e70da7913cdc8f514c94835a",
+    "size": 18976
+  }
 }

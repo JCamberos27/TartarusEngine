@@ -20,5 +20,9 @@
     "Folders": "assets/Environments/OfficeAndPoliceStation/Materials/M_Folders.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "1f32122c7c1ec40ddfff79d64c5797e0de6a1fa35f859539efe89bc6cba26e7c",
+    "size": 27168
+  }
 }

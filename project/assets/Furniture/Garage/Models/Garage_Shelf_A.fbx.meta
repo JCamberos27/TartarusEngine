@@ -19,5 +19,9 @@
     "Garage_shelves": "assets/Furniture/Garage/Materials/M_Garage_Shelves.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "0b05b99c6d214b6477711620ab86040c4d8dfa555df8600af136ce226538471f",
+    "size": 52640
+  }
 }

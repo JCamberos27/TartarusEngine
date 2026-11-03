@@ -22,5 +22,9 @@
     "Trunk_var5_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Textures/Cedrus_trunk_var5/M_Trunk_var5_Lowpoly_Solid1.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "1cbdf9caa07ecb0d8cd847556226496003496dd29fb83f1e9c5b58b9e70ce7c5",
+    "size": 2797232
+  }
 }

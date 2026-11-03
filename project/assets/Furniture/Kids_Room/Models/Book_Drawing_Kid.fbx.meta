@@ -19,5 +19,9 @@
     "Props_kid": "assets/Furniture/Kids_Room/Materials/M_Props_Kid.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "95a853284cd167d155dd761007144a534e7b194c23edc640c155c33bfae67859",
+    "size": 24880
+  }
 }

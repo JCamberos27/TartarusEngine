@@ -446,53 +446,21 @@ void NotifyMoved(const std::string& oldPath, const std::string& newPath) {
     Register(newPath, guid);
 }
 
-std::vector<std::string> ParseExternalAssetList(const std::string& csvText) {
-    std::vector<std::string> paths;
-    std::istringstream in(csvText);
-    std::string line;
-    bool first = true;
-    while (std::getline(in, line)) {
-        if (!line.empty() && line.back() == '\r') line.pop_back();
-        const bool header = first;
-        first = false;
-        if (line.empty() || line[0] == '#') continue;
-        std::string path;
-        if (line[0] == '"') { // quoted first field ("" is an escaped quote)
-            for (size_t i = 1; i < line.size(); ++i) {
-                if (line[i] != '"') { path += line[i]; continue; }
-                if (i + 1 < line.size() && line[i + 1] == '"') { path += '"'; ++i; continue; }
-                break;
-            }
-        } else {
-            path = line.substr(0, line.find(','));
-        }
-        if (header && path == "path") continue;
-        if (!path.empty()) paths.push_back(path);
-    }
-    return paths;
-}
-
-// Absolute paths of the files external_assets.csv lists (see the header), read fresh per scan.
-static std::vector<std::string> ExternalAssetPaths() {
-    std::ifstream f(ProjectPaths::Resolve("external_assets.csv"), std::ios::binary);
-    if (!f) return {};
+// A Drive payload's .meta carries "payload": {sha256, size} (tools/assets/asset_manifest.py build), so the
+// hash travels with the file through every move; tools/assets/fetch-assets.ps1 copies a missing one from
+// the Drive's content-addressed Store. A substring test, not a parse: .meta files are small and flat.
+bool HasPayload(const std::string& path) {
+    std::ifstream f(MetaPath(ProjectPaths::Resolve(path)), std::ios::binary);
+    if (!f) return false;
     std::stringstream ss;
     ss << f.rdbuf();
-    std::vector<std::string> paths = ParseExternalAssetList(ss.str());
-    for (std::string& p : paths) p = ProjectPaths::Resolve(p);
-    return paths;
+    return ss.str().find("\"payload\"") != std::string::npos;
 }
 
 bool IsUnfetchedExternal(const std::string& path) {
-    static std::once_flag s_Once;
-    static std::unordered_set<std::string> s_Keys;
-    std::call_once(s_Once, [] {
-        for (const std::string& p : ExternalAssetPaths()) s_Keys.insert(Key(p));
-    });
     const std::string resolved = ProjectPaths::Resolve(path);
-    if (!s_Keys.count(Key(resolved))) return false;
     std::error_code ec;
-    return !std::filesystem::exists(resolved, ec);
+    return !std::filesystem::exists(resolved, ec) && HasPayload(resolved);
 }
 
 void ScanProject() {
@@ -502,11 +470,9 @@ void ScanProject() {
     int assets = 0;
 
     // Third-party files kept on the shared Drive: a missing one keeps its .meta (pruning it would
-    // mint a new GUID once the file is copied in and break every reference to it).
-    const std::vector<std::string> external = ExternalAssetPaths();
-    std::unordered_set<std::string> externalKeys;
-    externalKeys.reserve(external.size());
-    for (const std::string& p : external) externalKeys.insert(PathKey(p));
+    // mint a new GUID once the file is copied in and break every reference to it). Its .meta says so
+    // with a "payload" hash (HasPayload).
+    int missingExternal = 0;
 
     std::vector<std::string> orphanMetas;
     std::error_code ec;
@@ -536,9 +502,10 @@ void ScanProject() {
         if (path.size() > 5 && path.substr(path.size() - 5) == ".meta") {
             const std::string assetPath = path.substr(0, path.size() - 5);
             std::error_code existEc;
-            if (!AssetType(assetPath).empty() && !fs::exists(assetPath, existEc) && !existEc &&
-                !externalKeys.count(PathKey(assetPath)))
-                orphanMetas.push_back(path);
+            if (!AssetType(assetPath).empty() && !fs::exists(assetPath, existEc) && !existEc) {
+                if (HasPayload(assetPath)) ++missingExternal;
+                else orphanMetas.push_back(path);
+            }
             continue;
         }
 
@@ -547,15 +514,10 @@ void ScanProject() {
         ++assets;
     }
 
-    int missingExternal = 0;
-    for (const std::string& p : external) {
-        std::error_code existEc;
-        if (!fs::exists(p, existEc)) ++missingExternal;
-    }
     if (missingExternal > 0)
-        Log::Warn("AssetDatabase: " + std::to_string(missingExternal) + " of " + std::to_string(external.size()) +
-                  " third-party asset file(s) in external_assets.csv are missing - copy them from the shared Drive "
-                  "with tools/assets/fetch-assets.ps1. Their .meta files are kept.");
+        Log::Warn("AssetDatabase: " + std::to_string(missingExternal) +
+                  " Drive asset file(s) are missing - copy them from the shared Drive's Store with "
+                  "tools/assets/fetch-assets.ps1. Their .meta files are kept.");
 
     // Unity deletes a .meta whose asset no longer exists; do the same, but say which ones.
     for (const std::string& meta : orphanMetas) {

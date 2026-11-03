@@ -5,5 +5,9 @@
     "M_Socks": "assets/Characters/Quantum/Materials/Clothing/Shoes/Socks/M_Socks_White.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "05d8c45333dd4220676c97582b68bf42f384b7a45405fc32031712999a144510",
+    "size": 649360
+  }
 }

@@ -19,5 +19,9 @@
     "Bed_pillows_mattress": "assets/Furniture/Bedroom/Materials/M_Bed_Pillows_Mattress_Clean.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "9bc894103a8a37c7e3705e9ade7268da39ee8b88b4a0d01f2d8eeb27efb37a00",
+    "size": 65152
+  }
 }

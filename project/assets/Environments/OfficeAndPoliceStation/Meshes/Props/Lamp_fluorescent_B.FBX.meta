@@ -20,5 +20,9 @@
     "Lamps_On": "assets/Environments/OfficeAndPoliceStation/Materials/M_Lamps_On.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "deab8f46632d3625300371201c9cd176e581daa7b6c28e45e040cc68dc8bdbbe",
+    "size": 40496
+  }
 }

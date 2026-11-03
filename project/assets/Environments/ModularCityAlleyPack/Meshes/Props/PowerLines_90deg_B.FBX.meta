@@ -21,5 +21,9 @@
     "RustyMetalTiled": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_RustyMetalTiled.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "22b2e3ed792c61a2d41c55a6f68d93458041fd2bc331703cdd15cc6a9f1df440",
+    "size": 30224
+  }
 }

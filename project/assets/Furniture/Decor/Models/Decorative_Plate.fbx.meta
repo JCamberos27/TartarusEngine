@@ -19,5 +19,9 @@
     "Decorative_props": "assets/Furniture/Decor/Materials/M_Decorative_Props.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "f05d5223607b7a9b6fe889e5e5d5872fb37052d94a6dab00a134d2066adcbb61",
+    "size": 47168
+  }
 }

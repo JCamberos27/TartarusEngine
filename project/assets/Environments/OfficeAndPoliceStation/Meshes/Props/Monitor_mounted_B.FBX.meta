@@ -20,5 +20,9 @@
     "LCD_Screens": "assets/Environments/OfficeAndPoliceStation/Materials/M_LCD_Screens.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "ca4f718b0ad94b315cf20976b4c6cf0834a938390ee46fa7b51aec64dedf07ad",
+    "size": 33520
+  }
 }

@@ -20,5 +20,9 @@
     "Books": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Books.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "7030893cf893151aa3c79f5172eb4425778b8b1ccd8512a86fe26c91d359b20f",
+    "size": 24096
+  }
 }

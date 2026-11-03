@@ -15,5 +15,9 @@
     "Forest_ground_scan_var3_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Forest_Ground_scans/Forest_ground_scan_var3/M_Forest_ground_scan_var3_mat.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "55c309d0a3b17a824b77224b3591df182d17d163458285742c54a02c0e8bb702",
+    "size": 369856
+  }
 }

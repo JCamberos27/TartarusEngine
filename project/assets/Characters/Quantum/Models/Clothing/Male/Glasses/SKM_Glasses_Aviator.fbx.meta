@@ -6,5 +6,9 @@
     "M_Aviator_Glass1": "assets/Characters/Quantum/Materials/Clothing/Glasses/Glasses Aviator/M_Sunglasses_Brown.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "2502b583aec24808cba2d0ff607254ba76dcbf5a6e09ee40b11d3c8bb5c038ab",
+    "size": 958624
+  }
 }

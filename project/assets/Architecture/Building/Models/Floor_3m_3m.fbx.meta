@@ -19,5 +19,9 @@
     "Floor_hardwood": "assets/Architecture/Building/Materials/M_Floor_Hardwood.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "62b82fddd12025c44d22a14f3afa0ee74ac3e50a24f40accc8cc83032f49b1cf",
+    "size": 18160
+  }
 }

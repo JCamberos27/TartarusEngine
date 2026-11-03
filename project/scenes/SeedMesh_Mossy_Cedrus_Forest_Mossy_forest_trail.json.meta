@@ -2,5 +2,9 @@
   "folder": "scenes",
   "guid": "ba047112964d6e51",
   "metaVersion": 1,
-  "type": "scene"
+  "type": "scene",
+  "payload": {
+    "sha256": "27585671e56da873a3366e1461cb0f8e10f624aab3f5e0079bcc34fef0fc69e7",
+    "size": 111004523
+  }
 }

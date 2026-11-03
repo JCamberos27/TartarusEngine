@@ -20,5 +20,9 @@
     "Plant_Hedgebush": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Plant_Hedgebush.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "af3253301ab18ebc2b109a4cb1cae60769f0f8bb95c70935042f4d7f8241b2df",
+    "size": 26064
+  }
 }

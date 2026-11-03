@@ -1,5 +1,9 @@
 {
   "guid": "bbc9378b6638b95a",
   "metaVersion": 1,
-  "type": "audio"
+  "type": "audio",
+  "payload": {
+    "sha256": "c3ffc8ac8534d6e5ecb64f36efd59f1200924e52fe1bdcd42d5d1754009e8cdb",
+    "size": 53804
+  }
 }

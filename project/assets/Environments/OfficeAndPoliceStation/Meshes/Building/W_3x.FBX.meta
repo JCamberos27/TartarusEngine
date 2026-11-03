@@ -21,5 +21,9 @@
     "Wall_Stucco_White": "assets/Environments/OfficeAndPoliceStation/Materials/M_Wall_Stucco_White.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "eb62f29f24fc2d4cfec85b055ad2bf9a9bf888f238f10ef8eb9c6cbfd7687c83",
+    "size": 31168
+  }
 }

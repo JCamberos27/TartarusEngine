@@ -20,5 +20,9 @@
     "GarageSet": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_GarageSet.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "2ced085f487fbf0aeb3e71249dce3df0e050ba133c94d298d15b1119cf0e63bb",
+    "size": 27232
+  }
 }

@@ -19,5 +19,9 @@
     "TexSheet3": "assets/Props/Medical_Supplies/Materials/M_Medical_Supplies.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "ce7e0731e66374b451d0433ceabdb8105f6bbc16b4180f1a0ba2183cb0031304",
+    "size": 29084
+  }
 }

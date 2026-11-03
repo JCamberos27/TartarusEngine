@@ -11,5 +11,9 @@
     ]
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "8b0f5072aa8e94340f21225d83face4c122c497a196edba65d1614a2358bd55e",
+    "size": 2013168
+  }
 }

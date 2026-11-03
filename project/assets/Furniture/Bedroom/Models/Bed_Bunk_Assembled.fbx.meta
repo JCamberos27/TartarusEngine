@@ -20,5 +20,9 @@
     "Bed_small_frames_mattress": "assets/Furniture/Bedroom/Materials/M_Bed_Small_Frames_Mattress.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "0eb99e6480af7817e420ab15ceea60f331161745b64304ca32c6e99dfd92ce19",
+    "size": 167500
+  }
 }

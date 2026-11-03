@@ -20,5 +20,9 @@
     "Lamps_House": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Lamps_House.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "10078316aec259f58d60ac609905a88ffd31bae5a99b9c5625713a26ba8d9616",
+    "size": 53568
+  }
 }

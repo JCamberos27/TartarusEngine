@@ -6,5 +6,9 @@
     "M_Phone_Screen": "assets/Animations/Mocap/Objects/Phone/Materials/M_Phone_Screen.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "1c5111569f5d714ad7d9ae1bb0d7711c9cdb4255e5a7f6a4895dc4cd65b7728e",
+    "size": 28240
+  }
 }

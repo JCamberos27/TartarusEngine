@@ -5,5 +5,9 @@
     "M_Quantum_Arms_PBR": "assets/Characters/Quantum/Materials/Characters/M_Quantum_Arms.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "d2088a3448d67cdc49639392edac9439c47d672f1ccd0be509ac7917008037e1",
+    "size": 4022556
+  }
 }

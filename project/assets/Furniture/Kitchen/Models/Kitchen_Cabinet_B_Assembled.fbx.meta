@@ -19,5 +19,9 @@
     "Cabinets_kitchen": "assets/Furniture/Kitchen/Materials/M_Cabinets_Kitchen.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "a0ec8ee6e8c939ef216012156c427f360a903f4e12140c260a1a55c22aa7be1f",
+    "size": 23804
+  }
 }

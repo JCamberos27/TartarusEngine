@@ -2,5 +2,9 @@
   "folder": "assets/Animations/Mocap/RootMotion/React_Bump",
   "guid": "64d3960ffdba6a55",
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "45fb808419005b6e544dae379e3d48dc3fe17465a187e309632286431c7e6acc",
+    "size": 1367776
+  }
 }

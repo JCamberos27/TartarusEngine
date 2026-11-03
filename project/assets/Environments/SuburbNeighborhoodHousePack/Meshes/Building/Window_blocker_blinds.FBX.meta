@@ -20,5 +20,9 @@
     "House_Exterior_Equip": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_House_Exterior_Equip.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "854d037245ca26931ba2f6cfa60d6bb8678ea296066abe8a4909576dd5f0af01",
+    "size": 23200
+  }
 }

@@ -28,16 +28,14 @@ std::uint64_t Revision();
 // A .meta whose asset is gone is pruned, unless the asset is listed in external_assets.csv.
 void ScanProject();
 
-// project/external_assets.csv lists the third-party files kept on the team's
-// shared Drive instead of in git, so a fresh clone has their tracked .meta files but not the
-// files. Scans must keep those .meta files (their GUIDs carry every reference). Returns the
-// project-relative paths in the first column; the header row, blank lines and '#' lines skipped.
-std::vector<std::string> ParseExternalAssetList(const std::string& csvText);
+// Drive payloads (gitignored third-party files): their .meta carries "payload": {sha256, size}, so a fresh
+// clone has the .meta (and its GUID) but not the file until tools/assets/fetch-assets.ps1 copies it from
+// the Drive's content-addressed Store. HasPayload: `path`'s .meta has that field.
+bool HasPayload(const std::string& path);
 
-// True when `path` (absolute or project-relative) is listed in external_assets.csv and isn't on
-// disk: a Drive file this checkout hasn't fetched. ScanProject already warns once with the count,
-// so loaders skip their per-file error for these; a missing file that isn't listed still errors.
-// The list is read once per process.
+// True when `path` (absolute or project-relative) is a Drive payload that isn't on disk: a file this
+// checkout hasn't fetched. ScanProject already warns once with the count, so loaders skip their
+// per-file error for these; a missing file that isn't a payload still errors.
 bool IsUnfetchedExternal(const std::string& path);
 
 // #132 - ScanProject on a worker thread, so a big project's scan overlaps window / GL / shader

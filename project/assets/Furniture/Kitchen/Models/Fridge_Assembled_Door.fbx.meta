@@ -19,5 +19,9 @@
     "Fridge": "assets/Furniture/Kitchen/Materials/M_Fridge.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "bf5f9869ffc287f0080257714674eefeff874e40fd254904aaf98f85d7e95df0",
+    "size": 32108
+  }
 }

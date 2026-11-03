@@ -20,5 +20,9 @@
     "OfficeEquipmentSet": "assets/Environments/OfficeAndPoliceStation/Materials/M_OfficeEquipmentSet.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "d04ac736bb62101644a43702cee52a2fd9bbb32591f4048920194cabe2c42c36",
+    "size": 25376
+  }
 }

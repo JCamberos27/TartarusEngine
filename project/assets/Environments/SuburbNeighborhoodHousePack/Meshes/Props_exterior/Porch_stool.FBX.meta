@@ -20,5 +20,9 @@
     "Porch_Props": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Porch_Props.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "0a32a0d872a704ac75f1579f90ff335607aab1615065053c16a3450bdfb37637",
+    "size": 43968
+  }
 }

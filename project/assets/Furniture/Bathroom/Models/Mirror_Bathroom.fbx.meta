@@ -19,5 +19,9 @@
     "Mirrors": "assets/Furniture/Bathroom/Materials/M_Mirrors.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "2031a5502302528cffc15bb853b5dcec56c5298c7c5c9a8bfd4398d282c4048f",
+    "size": 24464
+  }
 }

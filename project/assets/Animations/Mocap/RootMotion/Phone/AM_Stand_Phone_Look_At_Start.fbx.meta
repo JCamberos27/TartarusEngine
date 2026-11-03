@@ -1,5 +1,9 @@
 {
   "guid": "d7e33b23db950d7a",
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "59febd7adfe9daba1fdd09c943351b52895ced5d0789e4ef65c977c07b5f12e5",
+    "size": 1269472
+  }
 }

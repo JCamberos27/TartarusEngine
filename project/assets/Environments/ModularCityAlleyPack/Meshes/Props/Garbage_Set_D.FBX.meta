@@ -20,5 +20,9 @@
     "Garbage_Set": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Garbage_Set.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "097c5390985686dfaaeef75811147788c3113e065cac74365ff9b623abdb494a",
+    "size": 37296
+  }
 }

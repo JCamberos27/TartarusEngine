@@ -20,5 +20,9 @@
     "Door_Panaled": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Door_Panaled.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "92a8b8909ffc8bf0a4a62be7056f987043d4caf1f69650d9b211c3974f13ff70",
+    "size": 84192
+  }
 }

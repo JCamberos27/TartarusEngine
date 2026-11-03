@@ -19,5 +19,9 @@
     "Armchair_01": "assets/Furniture/Seating/Materials/M_Arm_Chair_01.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "2952efcfc27c406a9fb3bde345716863b651ec7f3c1bd375b39a53f4b7009898",
+    "size": 251612
+  }
 }

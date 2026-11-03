@@ -2,5 +2,9 @@
   "folder": "assets/Weapons/Remington870/Weapon",
   "guid": "f0216597d55e5ac4",
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "7616e3b304957831bd5522dbc4b5f44d4ded2c15ee735a2882b19f8e9af40859",
+    "size": 495532
+  }
 }

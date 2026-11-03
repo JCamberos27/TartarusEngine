@@ -19,5 +19,9 @@
     "Ceiling_default": "assets/Architecture/Building/Materials/M_Ceiling_Default.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "8c11212358ae9fce301bc67053b9e959272e04d8c725b9fb74206c3ae843b381",
+    "size": 18160
+  }
 }

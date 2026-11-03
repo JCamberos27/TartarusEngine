@@ -20,5 +20,9 @@
     "Plant_Flowers": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Plant_Flowers.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "3945448fc9f4a650d75effc2c767d5acc97ca60fc6cb0a93c02ff75193d531f8",
+    "size": 26608
+  }
 }

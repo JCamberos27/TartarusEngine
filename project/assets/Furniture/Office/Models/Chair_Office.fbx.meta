@@ -19,5 +19,9 @@
     "Chair_office": "assets/Furniture/Office/Materials/M_Chair_Office.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "a4880d9180a119d66fd7ba75512e846d5825049a585acf6448ef130862f0ea03",
+    "size": 230000
+  }
 }

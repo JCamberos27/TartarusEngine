@@ -24,5 +24,9 @@
     "Bed_woodenframes": "assets/Furniture/Bedroom/Materials/M_Bed_Woodenframes_Clean.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "6ee5aad9574e20ad5b93c067347fd05b5cb4181edd9049ba754a916e40c1b227",
+    "size": 351840
+  }
 }

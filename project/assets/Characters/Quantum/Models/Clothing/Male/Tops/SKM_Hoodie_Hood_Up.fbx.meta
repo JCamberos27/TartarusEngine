@@ -5,5 +5,9 @@
     "M_Hoodie_HoodUp": "assets/Characters/Quantum/Materials/Clothing/Tops/Hoodie_Hood_Up/M_Hoodie_Hood_Up_Black.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "f06059fe3d2fc7e31815165953c5a595e07f28e7e94274fe4289a7c924232359",
+    "size": 2397936
+  }
 }

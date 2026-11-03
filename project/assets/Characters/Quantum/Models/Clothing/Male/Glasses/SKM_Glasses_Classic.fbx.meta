@@ -6,5 +6,9 @@
     "M_Classic_Glasses_Glass1": "assets/Characters/Quantum/Materials/Clothing/Glasses/Glasses_Classic/M_Classic_Glasses.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "b0b66d13fb8816ed1706129f1c421fcb799d920be88c528f8fe6a67cd68ab9fe",
+    "size": 678496
+  }
 }

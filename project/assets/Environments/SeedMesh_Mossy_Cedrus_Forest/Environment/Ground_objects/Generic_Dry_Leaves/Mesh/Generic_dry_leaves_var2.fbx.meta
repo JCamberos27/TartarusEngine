@@ -15,5 +15,9 @@
     "Generic_leaves": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Ground_objects/Generic_Dry_Leaves/Textures/M_Generic_dry_leaves.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "5a23f1d25c382e76eb6435fc6619a69987f618c67602168414134f9b6024c74e",
+    "size": 80544
+  }
 }

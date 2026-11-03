@@ -5,5 +5,9 @@
     "MI_F_Bomber": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Bomber/M_Bomber_Black.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "d1eb90f3eaac9ec3f91372d77984f9f6b97faf0bcdbcf0e1969abab2f5443c1b",
+    "size": 1153984
+  }
 }

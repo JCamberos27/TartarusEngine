@@ -6,5 +6,9 @@
     "M_M_Leather_Jacket1": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Jacket_Leather/M_Leather_Jacket_Black.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "8fb13a0fa1098908a2ee38447a5730769b77c839b48f5aec2fdd5e63bfb70e39",
+    "size": 2051280
+  }
 }

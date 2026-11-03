@@ -20,5 +20,9 @@
     "Trashbin": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Trashbin.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "a9c8f3e6309a76e045c12fb405431658000a243e01cd487afe7db17d215548f0",
+    "size": 34752
+  }
 }

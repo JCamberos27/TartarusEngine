@@ -19,5 +19,9 @@
     "Bathroom_props": "assets/Furniture/Bathroom/Materials/M_Bathroom_Props.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "7aacf220e9ef492bf953614585b6b24628e3cbb9fdd73f5cb99ae9b75db938cc",
+    "size": 27568
+  }
 }

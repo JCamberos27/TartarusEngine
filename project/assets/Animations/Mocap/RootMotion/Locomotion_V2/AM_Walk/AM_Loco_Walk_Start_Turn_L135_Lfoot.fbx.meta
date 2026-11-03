@@ -2,5 +2,9 @@
   "folder": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Walk",
   "guid": "4e3109542bde1c8a",
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "bbf4db581f4128cea73a5c863b683b126ec0e6d86b923b4984de97dabd81c7a0",
+    "size": 1367792
+  }
 }

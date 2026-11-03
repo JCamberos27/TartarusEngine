@@ -23,5 +23,9 @@
     "Cabinets_glass": "assets/Furniture/Bedroom/Materials/M_Glass_Clear.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "6f2efbe7c995f78f81fd99eb459108b6c6527209801f3441b0f353928122be98",
+    "size": 38704
+  }
 }

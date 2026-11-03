@@ -21,5 +21,9 @@
     "Wall_Cell_Concrete": "assets/Environments/OfficeAndPoliceStation/Materials/M_Wall_Cell_Concrete.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "8dbe51b60f244c9371e3ee8d8d2bfa13a62df518b7e02c6ec953a166ea4c0785",
+    "size": 43728
+  }
 }

@@ -6,5 +6,9 @@
     "MI_F_Vivian_Basemesh_Body2": "assets/Characters/Quantum/Materials/Characters/M_F_Vivian_Body.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "d67ab01e151109096e5af2b7691c39d02c7c622d1a8ec4b3f5893cb45067d81a",
+    "size": 1655328
+  }
 }

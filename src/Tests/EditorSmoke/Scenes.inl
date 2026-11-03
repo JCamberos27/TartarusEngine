@@ -6,7 +6,7 @@
 // Recent use), left to settle, looked at through the Hierarchy and Inspector, then played for a
 // couple of seconds. Nothing is saved: each test ends back on the scratch scene.
 //
-// CI has none of the files project/external_assets.csv lists (Mixamo characters, the sky HDRIs,
+// CI has none of the Drive payloads (a .meta with a "payload" hash) (Mixamo characters, the sky HDRIs,
 // the furniture packs...). The loaders mostly downgrade an unfetched external file to the asset
 // scan's warning (AssetDatabase::IsUnfetchedExternal), but a few still log an error naming the
 // file - "Model: async import of '<path>' produced nothing." (AssetLibraryAsync.cpp),
@@ -48,20 +48,22 @@ Step UntilSeconds(std::string name, std::function<bool(Ctx&)> pred, double secon
         return false;
     }, 100000000};
 }
-// File names of the external assets (project/external_assets.csv) missing on this machine.
+// File names of the Drive payloads (a .meta with a "payload" hash) missing on this machine.
 const std::vector<std::string>& MissingExternalFiles() {
     static const std::vector<std::string> names = [] {
         std::set<std::string> found;
-        std::ifstream in(fs::path(ProjectPaths::Resolve("external_assets.csv")), std::ios::binary);
-        std::string line;
-        bool header = true;
-        while (std::getline(in, line)) {
-            if (header) { header = false; continue; }
-            const std::string rel = line.substr(0, line.find(','));
-            if (rel.empty()) continue;
-            std::error_code ec;
-            if (fs::exists(fs::path(ProjectPaths::Resolve(rel)), ec)) continue;
-            const std::string name = fs::path(rel).filename().string();
+        std::error_code ec;
+        const fs::path root(ProjectPaths::Root());
+        for (auto it = fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, ec);
+             !ec && it != fs::recursive_directory_iterator(); it.increment(ec)) {
+            if (it.depth() == 0 && it->is_directory() && it->path().filename() == "Library") { it.disable_recursion_pending(); continue; }
+            const fs::path& p = it->path();
+            if (p.extension() != ".meta") continue;
+            fs::path asset = p;
+            asset.replace_extension();
+            std::error_code existsEc;
+            if (fs::exists(asset, existsEc) || !AssetDatabase::HasPayload(asset.string())) continue;
+            const std::string name = asset.filename().string();
             if (name.size() > 4) found.insert(name);
         }
         return std::vector<std::string>(found.begin(), found.end());

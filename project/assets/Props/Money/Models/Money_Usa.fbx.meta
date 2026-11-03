@@ -20,5 +20,9 @@
     "Money_20_50_100": "assets/Props/Money/Materials/M_Money_Large_Bills.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "0844928494eb95f42c76b5de832be4cb62b832015061d2613653ffb55877b403",
+    "size": 174592
+  }
 }

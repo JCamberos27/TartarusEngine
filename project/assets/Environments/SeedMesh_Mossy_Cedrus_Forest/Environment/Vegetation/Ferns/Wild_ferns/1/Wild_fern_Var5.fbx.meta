@@ -16,5 +16,9 @@
     "Wild_ferns_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Wild_ferns/1/M_Wild_ferns_mat.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "548601f6698f2ffa706b581adac51e02177c624c734366aaf0b023d9980776aa",
+    "size": 81664
+  }
 }

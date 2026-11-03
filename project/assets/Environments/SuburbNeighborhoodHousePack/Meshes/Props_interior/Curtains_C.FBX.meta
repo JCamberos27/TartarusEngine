@@ -20,5 +20,9 @@
     "Curtains_House": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Curtains_House.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "cf27751213fc2135722c92359353fe79e5f6b588358e53aa748f7af74f40d162",
+    "size": 28768
+  }
 }

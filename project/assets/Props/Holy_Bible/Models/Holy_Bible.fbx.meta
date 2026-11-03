@@ -19,5 +19,9 @@
     "lambert1": "assets/Props/Holy_Bible/Materials/M_Holy_Bible.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "e8399897caa2185bcbc82d36d7e5d5306370a341d09a6ab703665df4e7a361e7",
+    "size": 47440
+  }
 }

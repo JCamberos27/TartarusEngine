@@ -22,5 +22,9 @@
     "Kitchen_Cabinet_Wood": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Kitchen_Cabinet_Wood.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "d933906f95118a8fe384d76655f163f1835df66bfe5c59ad67dc54d99f4e95bc",
+    "size": 65344
+  }
 }

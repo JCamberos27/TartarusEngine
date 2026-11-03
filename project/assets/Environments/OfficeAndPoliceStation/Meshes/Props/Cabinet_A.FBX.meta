@@ -20,5 +20,9 @@
     "MetalShelf": "assets/Environments/OfficeAndPoliceStation/Materials/M_MetalShelf.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "73a4fc880c51602ea0c54f9a553d71ce5dbbef91edfc2a20aa14eaf432f7db0d",
+    "size": 102976
+  }
 }

@@ -16,5 +16,9 @@
     "Mushrooms_variety_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Mushrooms/Summer_Mushrooms/Mushroom_variety/Textures/M_Mushrooms_variety_mat.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "91647b1d86cc756c1d12e3e593f5de1d7ab89a4aa498b1258a2d7bc3a963e6c4",
+    "size": 942192
+  }
 }

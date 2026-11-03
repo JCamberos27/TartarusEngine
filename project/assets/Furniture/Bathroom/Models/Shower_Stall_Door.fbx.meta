@@ -19,5 +19,9 @@
     "Shower": "assets/Furniture/Bathroom/Materials/M_Shower.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "97ec2a84940edb55a827af76087a05e1ac19b945cf06f921431d6008f979b3ca",
+    "size": 25888
+  }
 }

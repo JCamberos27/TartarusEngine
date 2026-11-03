@@ -6,5 +6,9 @@
     "cartridge_545x39mm": "assets/Weapons/AKS74U/Materials/Cartridge_545x39mm.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "a40d9f15c33918f4bbfea1cb9a7df2138450ade35ac637acbe8bd93186f72cb1",
+    "size": 1675196
+  }
 }

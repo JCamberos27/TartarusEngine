@@ -21,5 +21,9 @@
     "In_Roof_Plaster": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_In_Roof_Plaster.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "dc455b47e31d15b7c59914eb173c6b75730b27907a63193860ae8ed0f0b68fc9",
+    "size": 20832
+  }
 }

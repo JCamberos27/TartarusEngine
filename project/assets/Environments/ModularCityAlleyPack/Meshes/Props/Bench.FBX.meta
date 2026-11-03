@@ -20,5 +20,9 @@
     "Street_Props": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Street_Props.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "2b9f4a4044eb58e75db3c4a6249ce73fa6eea16daf0b3f02b658b6d1d2742e0d",
+    "size": 31248
+  }
 }

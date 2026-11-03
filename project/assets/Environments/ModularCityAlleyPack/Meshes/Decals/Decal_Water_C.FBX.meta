@@ -20,5 +20,9 @@
     "Decals_Water": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Decals_Water.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "e605570bb4aa1462c2f53f3ff31be1f0601e0947f1c1d3a08c874f02044e26ca",
+    "size": 20976
+  }
 }

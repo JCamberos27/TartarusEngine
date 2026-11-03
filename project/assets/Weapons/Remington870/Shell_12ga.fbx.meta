@@ -5,5 +5,9 @@
     "02___Default": "assets/Weapons/Remington870/Materials/Remington870.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "35debd6c9d14faeba5cd1581685fe09ac9d4b79c3ad5cc1d8d6a172d93ab7569",
+    "size": 25372
+  }
 }

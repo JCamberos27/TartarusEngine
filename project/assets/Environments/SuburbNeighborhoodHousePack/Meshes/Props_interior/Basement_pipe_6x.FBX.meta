@@ -20,5 +20,9 @@
     "Basement_Props": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Basement_Props.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "95329fc70a3fa5ea45e43077e463e43f2420f425528fd1b70b0c8e216c7dc290",
+    "size": 42176
+  }
 }

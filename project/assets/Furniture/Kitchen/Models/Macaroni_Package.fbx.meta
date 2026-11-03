@@ -19,5 +19,9 @@
     "Kitchen_props": "assets/Furniture/Kitchen/Materials/M_Kitchen_Props.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "0ee7ce1b4a13544b295a5778c0e3a1a984619b7f11289fcd7d0db922a4b76fdc",
+    "size": 22432
+  }
 }

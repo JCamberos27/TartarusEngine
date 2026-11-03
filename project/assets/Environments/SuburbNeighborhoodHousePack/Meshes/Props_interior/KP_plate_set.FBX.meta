@@ -20,5 +20,9 @@
     "Kitchen_Props": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Kitchen_Props.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "66a0974b465006f4da29ab16c0cf63e7708df7239dfc51a670a66a9e7a4cbf8d",
+    "size": 61808
+  }
 }

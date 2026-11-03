@@ -20,5 +20,9 @@
     "WashingMachine": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_WashingMachine.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "f7e3baa3c6680ee468386515e868515ca5ec621862ef2ea874a99c08599d7538",
+    "size": 31888
+  }
 }

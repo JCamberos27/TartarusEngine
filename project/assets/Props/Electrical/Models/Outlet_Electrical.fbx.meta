@@ -19,5 +19,9 @@
     "lambert1": "assets/Props/Electrical/Materials/M_Outlet_White.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "cc5512ce671d70f711df8ed6da7a4ec0679a09148ce1e89d4db2a5fb7e999024",
+    "size": 52352
+  }
 }

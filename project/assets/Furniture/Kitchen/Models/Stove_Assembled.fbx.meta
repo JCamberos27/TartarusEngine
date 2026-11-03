@@ -20,5 +20,9 @@
     "Stove": "assets/Furniture/Kitchen/Materials/M_Stove.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "40f09ad71d4a5bb2ceb3fb1c4dea6d0467882e8fa3eada2d0dd21cea429a1afe",
+    "size": 176300
+  }
 }

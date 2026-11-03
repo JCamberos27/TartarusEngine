@@ -20,5 +20,9 @@
     "Urinal": "assets/Environments/OfficeAndPoliceStation/Materials/M_Urinal.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "49504f482e9ead41e37794deef9e47b5d4a512b8b74aa3cdd3d4c6132fe3bf50",
+    "size": 26096
+  }
 }

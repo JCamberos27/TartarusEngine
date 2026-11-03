@@ -19,5 +19,9 @@
     "Wall_default": "assets/Architecture/Building/Materials/M_Wall_Default.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "36c584db1f7a142dfec978969e35bf17657437892f30e4bb8e78909faf98c935",
+    "size": 21616
+  }
 }

@@ -23,5 +23,9 @@
     "Bedroom_Closets": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Bedroom_Closets.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "a9033f125bc3c2254114d94fe2bcd9922d42893bfb5e1ad0a0719c3ff7681a48",
+    "size": 122912
+  }
 }

@@ -5,5 +5,9 @@
     "F_Puffer_Jacket": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Puffer_Jacket/M_Puffer_Jacket_Black_Clear.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "730a5a9a6feb497f8a5236d62ce989f322aafc630a62f8bd53d3ec221c4e2a37",
+    "size": 1487504
+  }
 }

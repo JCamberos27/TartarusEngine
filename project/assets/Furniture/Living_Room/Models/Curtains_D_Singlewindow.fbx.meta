@@ -21,5 +21,9 @@
     "Curtains_CD_rod": "assets/Furniture/Decor/Materials/M_Curtains_Cd.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "972cabeeb53aa3009d1f8055bd501fa4748139c6429fae61a43dc2c0b58d1c4f",
+    "size": 81520
+  }
 }

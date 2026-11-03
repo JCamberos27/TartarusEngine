@@ -19,5 +19,9 @@
     "Sidetables": "assets/Furniture/Bedroom/Materials/M_Sidetables.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "7ed3aadbd6e043387d9eb72f9920c40ac05c6ec6b46a9f83ec283983a32ed160",
+    "size": 245728
+  }
 }

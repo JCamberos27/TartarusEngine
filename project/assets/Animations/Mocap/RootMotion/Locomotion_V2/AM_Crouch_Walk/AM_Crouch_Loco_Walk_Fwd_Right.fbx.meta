@@ -2,5 +2,9 @@
   "folder": "assets/Animations/Mocap/RootMotion/Locomotion_V2/AM_Crouch_Walk",
   "guid": "b667084faf565701",
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "09a861626afe09e7e99fd3fe3340cd6a656861615f449f613b8a01aee6b744b7",
+    "size": 1475904
+  }
 }

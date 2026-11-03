@@ -20,5 +20,9 @@
     "Door_White": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Door_White.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "5e159376a0bfac399f1c489bf65d44470cb7c0b54f38b5136f0902cfcb91eec4",
+    "size": 88000
+  }
 }

@@ -15,5 +15,9 @@
     "BG_Building": "assets/Environments/OfficeAndPoliceStation/Materials/M_BG_Building.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "61ac791e961938a53e5c1804b050bd6b013dc6980cd1774b34baf93dcc64f2b2",
+    "size": 24608
+  }
 }

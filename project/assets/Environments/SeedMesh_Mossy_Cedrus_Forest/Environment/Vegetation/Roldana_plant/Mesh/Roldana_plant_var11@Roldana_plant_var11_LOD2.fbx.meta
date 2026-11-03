@@ -20,5 +20,9 @@
     "Roldana_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Roldana_plant/Textures/M_Roldana_mat.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "016d08dfacf5aa5372fb1b28b0d74fd05f2341be57572d64d7426a3aa2018b22",
+    "size": 657584
+  }
 }

@@ -19,5 +19,9 @@
     "Dressers_A": "assets/Furniture/Bedroom/Materials/M_Dressers_Clean.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "868508ae449d8e97b46cf96fc0bc5f413c22084837c051718ec6391ff80b0692",
+    "size": 49072
+  }
 }

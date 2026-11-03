@@ -2,5 +2,9 @@
   "folder": "assets/Animations/Mocap/RootMotion/Crouch",
   "guid": "85205c3b409224e3",
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "69d5ac7da10ca74c36be52e542b159c2a20bbee4664792e01369c98a335776d9",
+    "size": 1246496
+  }
 }

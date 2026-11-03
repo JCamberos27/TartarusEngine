@@ -19,5 +19,9 @@
     "lambert1": "assets/Props/Electrical/Materials/M_Light_Switch_White.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "9492ec3fcca2941b09d5b29764b61847480f886e546f1791d4ce6c4d051f2c39",
+    "size": 169408
+  }
 }

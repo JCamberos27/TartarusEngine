@@ -19,5 +19,9 @@
     "sofa_02": "assets/Furniture/Seating/Materials/M_Sofa_02.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "801400a7bcfbe631535457dd80fa46e2ac32114966706d9350af4429621a6447",
+    "size": 141004
+  }
 }

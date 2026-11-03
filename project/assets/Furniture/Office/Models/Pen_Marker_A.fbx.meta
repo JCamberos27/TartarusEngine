@@ -19,5 +19,9 @@
     "Office_props": "assets/Furniture/Office/Materials/M_Office_Props.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "41977dffea6c6075aa4b387c68c40c44560e88e63a4fd25c3c4dffd848f8229a",
+    "size": 26496
+  }
 }

@@ -20,5 +20,9 @@
     "Plastic": "assets/Architecture/Building/Materials/M_Plastic_White.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "ed76b1894127c2aa427050b02e4320f59be3b26cfd2868900fbb313fc73f4b54",
+    "size": 24384
+  }
 }

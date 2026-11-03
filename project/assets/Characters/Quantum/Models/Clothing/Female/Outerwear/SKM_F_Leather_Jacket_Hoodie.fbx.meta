@@ -6,5 +6,9 @@
     "M_Hoodie_Hood": "assets/Characters/Quantum/Materials/Clothing/Tops/Hoodie_Hood/M_Hoodie_Hood_Black.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "d67ffde1d00f3287b77e002cceca4bfc2a5a7d1670d192b3af5842632097b3cc",
+    "size": 1633680
+  }
 }

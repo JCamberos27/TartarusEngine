@@ -2,5 +2,9 @@
   "folder": "assets/Effects/Muzzle",
   "guid": "6408da5021e60cad",
   "metaVersion": 1,
-  "type": "texture"
+  "type": "texture",
+  "payload": {
+    "sha256": "18226f9151ddd31784ea76e81bc7b2fd886951a9db8377f6b08dcdcfbc43a391",
+    "size": 234815
+  }
 }

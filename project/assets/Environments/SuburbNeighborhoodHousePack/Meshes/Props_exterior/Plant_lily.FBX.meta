@@ -20,5 +20,9 @@
     "Plant_Treebush": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Plant_Treebush.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "bb43a4917e6a912e8ef1e5cadf4da8c70f6ae37a649e982f95aea731bff4e533",
+    "size": 33040
+  }
 }

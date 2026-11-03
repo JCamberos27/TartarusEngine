@@ -19,5 +19,9 @@
     "lambert1": "assets/Props/Cross/Materials/M_Cross.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "09e8eb7bb29d0810cb5e3465729d890f02e2f855cb8c579ea05d89eb1ba92183",
+    "size": 28800
+  }
 }

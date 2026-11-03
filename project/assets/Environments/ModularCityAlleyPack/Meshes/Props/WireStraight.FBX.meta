@@ -20,5 +20,9 @@
     "Shops_And_Lights": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Shops_And_Lights.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "98e6f62b2f232778e0d714d9c6524e84f9c5fe821e649762a1da5cfbbe93afda",
+    "size": 25856
+  }
 }

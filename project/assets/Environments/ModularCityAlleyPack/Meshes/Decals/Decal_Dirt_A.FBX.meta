@@ -20,5 +20,9 @@
     "Decals_Dirt": "assets/Environments/ModularCityAlleyPack/Materials/Miscellaneous/M_Decals_Dirt.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "df9279114bcc41479d943d1b250d6904f2d22d38dcc7b5cf1ce0f1080a346918",
+    "size": 21088
+  }
 }

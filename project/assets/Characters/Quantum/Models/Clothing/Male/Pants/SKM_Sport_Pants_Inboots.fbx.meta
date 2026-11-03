@@ -5,5 +5,9 @@
     "M_Sport_Pants2": "assets/Characters/Quantum/Materials/Clothing/Pants/Pants_Sport/M_Sport_Pants_Black.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "bada6e51f88f831adc891f445caeb831ac59c27b2b490852346ac35d7e0ee038",
+    "size": 1322384
+  }
 }

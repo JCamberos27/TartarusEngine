@@ -19,5 +19,9 @@
     "Carpets": "assets/Furniture/Decor/Materials/M_Carpets.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "a9688f9210b23ae27c086007dea2a22d7fc72b51e1e17a7e4aa9b2a2e45d9aea",
+    "size": 25616
+  }
 }

@@ -5,5 +5,9 @@
     "Raboch_M_Socks1": "assets/Characters/Quantum/Materials/Clothing/Shoes/Socks/M_Socks_White.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "e487624805021aba630e809689f8e9dcaf3b6bca5df53f992a7a59785952d856",
+    "size": 560112
+  }
 }

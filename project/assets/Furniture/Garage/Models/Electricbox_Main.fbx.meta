@@ -19,5 +19,9 @@
     "Electricbox": "assets/Furniture/Garage/Materials/M_Electricbox.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "0a2b92ac06556791469d43bb6d178a8bb714a4228530c7d4ad7126c3a83e9817",
+    "size": 304352
+  }
 }

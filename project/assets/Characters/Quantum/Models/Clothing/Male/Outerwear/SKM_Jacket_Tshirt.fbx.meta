@@ -6,5 +6,9 @@
     "M_TShirt": "assets/Characters/Quantum/Materials/Clothing/Tops/TShirt/M_TShirt_Black.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "9c382100d19c3065fa4621938a983482d39c9b031d1e3526e48f3fb0874a9f64",
+    "size": 1441664
+  }
 }

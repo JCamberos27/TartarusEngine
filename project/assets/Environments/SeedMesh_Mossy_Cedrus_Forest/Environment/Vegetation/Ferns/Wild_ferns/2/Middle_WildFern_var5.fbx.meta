@@ -16,5 +16,9 @@
     "Middle_Wildfern_billboards": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Wild_ferns/2/M_Middle_Wildfern_billboards.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "e0325a09d639fb569c8183753846613048dc7291c6e6e9c453017537f3372681",
+    "size": 92832
+  }
 }

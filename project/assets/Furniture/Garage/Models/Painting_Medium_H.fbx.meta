@@ -19,5 +19,9 @@
     "Paintings_set": "assets/Furniture/Decor/Materials/M_Paintings_Set.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "3f180f82e438e2c74e9aac08f7daea2ebbf89b44406f77b9986c51aa74079dbb",
+    "size": 28048
+  }
 }

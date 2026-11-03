@@ -20,5 +20,9 @@
     "CouchLeather": "assets/Environments/OfficeAndPoliceStation/Materials/M_CouchLeather.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "84fbb81248ddb0c69defa932ebda6e89f8a05e434da707d6de7a92ebb81861e3",
+    "size": 47984
+  }
 }

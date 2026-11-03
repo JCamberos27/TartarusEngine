@@ -20,5 +20,9 @@
     "WaterSprinklerPipe": "assets/Environments/OfficeAndPoliceStation/Materials/M_WaterSprinklerPipe.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "493fc00638e8ac9a8d287cfef6177382b9ecac453006d282abeef333b255f94a",
+    "size": 46720
+  }
 }

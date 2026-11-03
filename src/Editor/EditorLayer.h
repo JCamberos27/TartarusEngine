@@ -75,7 +75,7 @@ struct AssetGridCell {
     // A file on disk nothing has loaded yet (EditorLayer::m_ProjectAssetIndex): model / texture /
     // material are null until the user acts on it (EditorLayer::LoadUnloadedAsset).
     bool unloaded = false;
-    // Listed in external_assets.csv but not on disk: a Drive file this checkout hasn't fetched.
+    // A Drive payload (its .meta has a "payload" hash) that isn't on disk: a file this checkout hasn't fetched.
     // Shown greyed; dragging it is refused (run tools/assets/fetch-assets.ps1).
     bool unfetched = false;
 };
@@ -2011,7 +2011,7 @@ private:
         std::string Name;
         std::string Folder; // Asset Browser folder: its .meta's chosen folder, else its folder on disk
         bool MetaFolder = false; // Folder came from the .meta (still to register, worker side)
-        bool Unfetched = false;  // an external_assets.csv row with no file on disk (AssetGridCell::unfetched)
+        bool Unfetched = false;  // a payload .meta with no file on disk (AssetGridCell::unfetched)
         AssetGridCell::Kind Kind = AssetGridCell::Kind::Model;
     };
     struct {

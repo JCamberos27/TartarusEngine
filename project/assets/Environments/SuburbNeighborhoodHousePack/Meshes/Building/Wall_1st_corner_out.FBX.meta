@@ -23,5 +23,9 @@
     "WhiteWood_Tiled": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_WhiteWood_Tiled.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "8e5eb4946fc2e69667d20a9a6750188402c0702fc3d2b69cf09f7bff273b2c61",
+    "size": 38880
+  }
 }

@@ -15,5 +15,9 @@
     "Cedrus_leaves_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Textures/M_Cedrus_leaves_BakeMesh.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "d8512aa37d31aa778081e53d41527c747c10afbd09298584055448ed9a88d1c9",
+    "size": 37232
+  }
 }

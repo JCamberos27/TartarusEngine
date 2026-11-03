@@ -19,5 +19,9 @@
     "Garage_props": "assets/Furniture/Garage/Materials/M_Garage_Props.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "959c01fe7ff0eee52a180c4a1510552256bc846b18e1f5c97779a881a9408531",
+    "size": 122640
+  }
 }

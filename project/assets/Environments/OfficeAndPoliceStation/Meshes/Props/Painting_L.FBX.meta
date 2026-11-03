@@ -20,5 +20,9 @@
     "Office_PropSet": "assets/Environments/OfficeAndPoliceStation/Materials/M_Office_PropSet.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "46d3eee5e92aac67bd461be32e87688bc458633fd698de6f499a29fc5e8c6532",
+    "size": 30096
+  }
 }

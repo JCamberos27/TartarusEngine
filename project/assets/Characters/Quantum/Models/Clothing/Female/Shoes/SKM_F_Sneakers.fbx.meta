@@ -5,5 +5,9 @@
     "M_Snaekers": "assets/Characters/Quantum/Materials/Clothing/Shoes/Sneakers/Sneakers_Leather/M_F_Sneakers_Leather_Black.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "1129f7ab9cbb8fd6324dcf37f444ffd165a4fceff0ac8e3bde309a190316abb6",
+    "size": 1396048
+  }
 }

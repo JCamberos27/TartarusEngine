@@ -20,5 +20,9 @@
     "Carpets": "assets/Environments/OfficeAndPoliceStation/Materials/M_Carpets.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "d3845421b49539945c99039a26ff5724e0aef5d4b51f57c95e0d44a5651a7d8a",
+    "size": 26672
+  }
 }

@@ -18,5 +18,9 @@
     "Oreopanax_short_billboards": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Oreopanax_Xalapensis/Textures/Billboards/M_Oreopanax_short_billboards.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "fce7c93f5b6ecee2340ebdb47ee86dfadd4cbbae1b8315c73fad079d824c9e38",
+    "size": 377472
+  }
 }

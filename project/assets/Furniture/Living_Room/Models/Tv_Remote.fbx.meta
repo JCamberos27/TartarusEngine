@@ -19,5 +19,9 @@
     "TV": "assets/Furniture/Living_Room/Materials/M_Tv.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "311d2ad8998da78385ac3927fbf4909094abb25cef1d48e4acb9f6f4b76ca88c",
+    "size": 87792
+  }
 }

@@ -5,5 +5,9 @@
     "Raboch_M_Sneakers_Sport": "assets/Characters/Quantum/Materials/Clothing/Shoes/Sneakers_Sport/M_Sneakers_Sport_Black.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "f28c85f99637d6f861f133843b9d06c75016f6963793c5bf79b698dece2d25ee",
+    "size": 1876464
+  }
 }

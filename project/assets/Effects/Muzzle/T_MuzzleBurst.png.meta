@@ -2,5 +2,11 @@
   "guid": "e49ed56e4bc64b31",
   "metaVersion": 1,
   "type": "texture",
-  "importer": { "isSRGB": false }
+  "importer": {
+    "isSRGB": false
+  },
+  "payload": {
+    "sha256": "2b410342ab8b2dda3ecb0ae07fe6575d5a8da48105ec9690466293ef18a63140",
+    "size": 445251
+  }
 }

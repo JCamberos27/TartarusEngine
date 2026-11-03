@@ -20,5 +20,9 @@
     "Kitchen_TableChair": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Kitchen_TableChair.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "3860150a2f8b177c4d8ec32f7d3b54b07a02f1dab210a4229e14d18819d70aa3",
+    "size": 44000
+  }
 }

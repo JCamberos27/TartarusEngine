@@ -21,5 +21,9 @@
     "Stones": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Stones.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "0b3181e4a63d941bc1ef63a9c45f05cf0c2d9e9a04915f463a2a298a8e71ca98",
+    "size": 40384
+  }
 }

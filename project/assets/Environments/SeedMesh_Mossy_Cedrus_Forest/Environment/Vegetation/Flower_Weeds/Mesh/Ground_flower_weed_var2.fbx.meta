@@ -16,5 +16,9 @@
     "Ground_flowers_billboards": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Flower_Weeds/Texture/Billboard/M_Ground_flowers_billboards.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "b7376d02e9770fa7e2aebecc2905e94bdd5fddf2b282648418d63790cef4cbfa",
+    "size": 71888
+  }
 }

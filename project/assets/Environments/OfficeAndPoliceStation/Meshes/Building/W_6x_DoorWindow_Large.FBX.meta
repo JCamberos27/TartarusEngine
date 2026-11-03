@@ -23,5 +23,9 @@
     "Windowframe": "assets/Environments/OfficeAndPoliceStation/Materials/M_Windowframe.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "fa1d4b4dab98a4bca798d054c0577dd371d4986cbe228ab8d78c5d9a2cb5c691",
+    "size": 45552
+  }
 }

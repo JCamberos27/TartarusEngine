@@ -20,5 +20,9 @@
     "Trashcan_Metal": "assets/Environments/OfficeAndPoliceStation/Materials/M_Trashcan_Metal.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "52163f6e45d4d962f38f391002a18052dcd590c95f7140fdf13de196d492d032",
+    "size": 39840
+  }
 }

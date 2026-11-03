@@ -5,5 +5,9 @@
     "M_Balaclava_Crime": "assets/Characters/Quantum/Materials/Clothing/Balaclava/M_Balaclava_Crime_Black.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "d47d49adcd12c644cc6b9647aecb3c528d2d24ed1b70c87a69c6a2a100e64958",
+    "size": 246432
+  }
 }

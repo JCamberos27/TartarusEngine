@@ -16,5 +16,9 @@
     "Cretan_brake_fern_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Ferns/Cretan_brake_fern/M_cretan_brake_fern_mat.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "7a910542ff5272115b6467ecfcb2d0025a7dca5eb5b0830057892e365a2625ab",
+    "size": 137616
+  }
 }

@@ -21,5 +21,9 @@
     "In_WhitePlaster": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_In_WhitePlaster.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "364431d3742b4d8e351c9e013b39eb53ac6b571928ebf35be2436b840779e73d",
+    "size": 58656
+  }
 }

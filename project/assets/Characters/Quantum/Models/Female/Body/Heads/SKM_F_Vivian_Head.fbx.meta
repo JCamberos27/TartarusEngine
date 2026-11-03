@@ -13,5 +13,9 @@
     "eyeRight_lod0_mesh33": "assets/Characters/Quantum/Materials/Characters/Eyes/M_Eye_Green.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "1664f49fc41558c3d1c8098ed834c29f60edb6b06f49a85ec4cb225f425da851",
+    "size": 3369232
+  }
 }

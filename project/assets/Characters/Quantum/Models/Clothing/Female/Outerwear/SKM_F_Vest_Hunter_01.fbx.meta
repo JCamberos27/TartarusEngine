@@ -5,5 +5,9 @@
     "M_Vest_Hunter": "assets/Characters/Quantum/Materials/Clothing/Outerwear/Vest_Hunter/M_Vest_Hunter_Black.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "0f4378369738267ee49de1a6842819a11c2e99e8e7495895669eb78c65ee557a",
+    "size": 1581568
+  }
 }

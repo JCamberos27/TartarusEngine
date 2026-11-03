@@ -13,5 +13,9 @@
     "M_Teeth": "assets/Characters/Quantum/Materials/Characters/M_Teeth.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "4b94057cc591e0075c1d2b1f36e764ea4d9575122ef35230aa90ccf9fcd44450",
+    "size": 3621616
+  }
 }

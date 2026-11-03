@@ -20,5 +20,9 @@
     "Street_Shops": "assets/Environments/ModularCityAlleyPack/Materials/Walls/M_Street_Shops.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "9bacd2a8dbf3830d94383ea7402586c011967bff3585b5d7226c162b5e1a336d",
+    "size": 23408
+  }
 }

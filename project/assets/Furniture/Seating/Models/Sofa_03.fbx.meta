@@ -20,5 +20,9 @@
     "sofa_03_fringe": "assets/Furniture/Seating/Materials/M_Sofa_03.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "e005a5f5bdebad79c5bd94f72f4050c79ab0ae33ec64bc700b19542dfd59b250",
+    "size": 281644
+  }
 }

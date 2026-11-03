@@ -4,5 +4,9 @@
     "M_Flip_Flops": "assets/Characters/Quantum/Materials/Clothing/Generated/M_Flip_Flops.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "41e63dcd95c233c1f1ebc60e3b9444ecb282237cc9738bd74560b014a700f013",
+    "size": 798400
+  }
 }

@@ -21,5 +21,9 @@
     "Glass": "assets/Environments/OfficeAndPoliceStation/Materials/M_Glass.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "453581270ad7dc6a0facbe43aea0816dd2f233e78b57ed26e5a25d7af7227ae9",
+    "size": 38144
+  }
 }

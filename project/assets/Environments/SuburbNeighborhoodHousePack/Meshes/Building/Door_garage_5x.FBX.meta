@@ -20,5 +20,9 @@
     "Door_GarageWhite": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Door_GarageWhite.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "63c8f1d2db87c1fd149f998b7aa18cabb0a9ce22db667543e1e478c5c1f5f569",
+    "size": 26128
+  }
 }

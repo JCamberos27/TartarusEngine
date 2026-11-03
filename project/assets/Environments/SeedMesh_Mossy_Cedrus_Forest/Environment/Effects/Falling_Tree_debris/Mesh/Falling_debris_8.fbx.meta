@@ -15,5 +15,9 @@
     "Dry_cedrus_leaves_mat": "assets/Environments/SeedMesh_Mossy_Cedrus_Forest/Environment/Vegetation/Cedrus_tree/Dry_cedrus_leaves_debris/M_Dry_cedrus_leaves_mat.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "ad1f8ae3174470947787d4f3ba2a9cfeb137d98c1190c8c97add5b8426e1b5f1",
+    "size": 26752
+  }
 }

@@ -14,5 +14,9 @@
     "spider-mat": "assets/Characters/Spider/M_Spider_Body.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "e62471e72cee13f7baa74fa9b6cc527c1a91b12e9f424fc69a5afbf0e27addb5",
+    "size": 7272732
+  }
 }

@@ -23,5 +23,9 @@
     "Road": "assets/Environments/SuburbNeighborhoodHousePack/Materials/M_Road.mat"
   },
   "metaVersion": 1,
-  "type": "model"
+  "type": "model",
+  "payload": {
+    "sha256": "7780f90e3b41a1c7e81b21dbd5917622d59e3db65a5339231a0f680c23ebc057",
+    "size": 52976
+  }
 }
