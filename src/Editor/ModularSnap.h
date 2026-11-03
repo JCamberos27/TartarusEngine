@@ -69,6 +69,30 @@ inline Result Solve(const AABB& moving, float module, const std::vector<AABB>& n
             r.Delta[a] = std::round(moving.Min[a] / module) * module - moving.Min[a];
         }
     }
+    // Lining fronts up (or the grid) can land a piece inside a neighbour it only half overlapped:
+    // push it out along the shallowest axis, so it sits flush beside that neighbour instead.
+    for (const AABB& n : near) {
+        const glm::vec3 mn = moving.Min + r.Delta, mx = moving.Max + r.Delta;
+        int axis = -1;
+        float depth = 1e30f, push = 0.0f;
+        for (int a = 0; a < 3; ++a) {
+            const float ov = std::min(mx[a], n.Max[a]) - std::max(mn[a], n.Min[a]);
+            if (ov <= 1e-4f) { axis = -1; break; } // touching or apart on this axis: no overlap
+            // Out on the side it came from (where it was before the snap moved it in).
+            const float out = (moving.Min[a] + moving.Max[a]) < (n.Min[a] + n.Max[a]) ? n.Min[a] - mx[a] : n.Max[a] - mn[a];
+            if (ov < depth) { depth = ov; axis = a; push = out; }
+        }
+        if (axis < 0) continue;
+        r.Delta[axis] += push;
+        r.Snapped = true;
+        const int b = (axis + 1) % 3, c = (axis + 2) % 3;
+        const float plane = push > 0.0f ? n.Max[axis] : n.Min[axis];
+        r.Face.Min[axis] = r.Face.Max[axis] = plane;
+        r.Face.Min[b] = std::max(mn[b], n.Min[b]);
+        r.Face.Max[b] = std::min(mx[b], n.Max[b]);
+        r.Face.Min[c] = std::max(mn[c], n.Min[c]);
+        r.Face.Max[c] = std::min(mx[c], n.Max[c]);
+    }
     return r;
 }
 
