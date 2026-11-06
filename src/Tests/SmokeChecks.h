@@ -1,6 +1,10 @@
 #pragma once
 
+#include <functional>
+#include <string>
+
 class AssetLibrary;
+class Camera;
 class ClusterGrid;
 class EditorLayer;
 class World;
@@ -23,5 +27,13 @@ void GlassTheme(EditorLayer& editor, World& world, int frame);
 // cluster matches the CPU copy of the cull test (top-most 256 when clamped), and the clamped clusters are counted.
 // Called on two consecutive frames; checks on the second.
 void DecalStress(const ClusterGrid& grid, int visible, int frame);
+
+// Run once on every scene right after it loads (a smoke_min* one gets the triangle raycast and joint copy checks too): the
+// undo snapshot round-trip and the shared model data. `memSnapshot` writes a TARTARUS_MEM_REPORT snapshot (a no-op without one).
+void SceneLoaded(World& world, AssetLibrary& assets, const std::string& path,
+                 const std::function<void(const std::string&)>& memSnapshot);
+// smoke_play*: what a Play cycle left behind, printed at its end - the bodies, animations, the camera Play ran through,
+// the filtered physics queries (and a deactivated collider leaving the PhysX scene), animators and particles.
+void PlayProbe(World& world, const Camera& playCamera, bool playUsesPlayer);
 
 } // namespace SmokeChecks

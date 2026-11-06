@@ -9,6 +9,12 @@
 #include "DecalTypes.h"
 #include "EditorLayer.h"
 #include "Log.h"
+#include "Model.h"
+#include "ParticleSystem.h"
+#include "PhysicsWorld.h"
+#include "AnimatorController.h"
+#include "Camera.h"
+#include "GameModuleAPI.h"
 #include "MaterialAsset.h"
 #include "MaterialPreviewRenderer.h"
 #include "Core/Paths.h"
@@ -23,6 +29,9 @@
 #include <stb_image_write.h>
 
 #include <algorithm>
+#include <cmath>
+#include <map>
+#include <unordered_map>
 #include <chrono>
 #include <cstring>
 #include <filesystem>
@@ -401,6 +410,199 @@ void DecalStress(const ClusterGrid& grid, int visible, int frame) {
     }
     std::cout << "[SmokeTest]   decal stress OK (" << snap.DecalCount << " decals, " << counted << " clusters clamped, " << full
               << " full, " << blank << " blank, " << total << " list entries)" << std::endl;
+}
+
+// The regression checks run once on every scene right after it loads.
+void SceneLoaded(World& world, AssetLibrary& assets, const std::string& path,
+                 const std::function<void(const std::string&)>& memSnapshot) {
+    // #116 regression: the exact triangle raycast behind editor picking / surface
+    // snapping. smoke_min's cube is centred at y=1 with size 2 (top face y=2), rotated
+    // 20 deg about Y, so a ray straight down from y=10 must hit it 8 units out.
+    if (path.find("smoke_min") != std::string::npos) {
+        float bestT = 1e30f;
+        for (auto re : world.Registry.view<RenderableComponent>()) {
+            const auto& rc = world.Registry.get<RenderableComponent>(re);
+            float t;
+            if (rc.ModelRef && rc.ModelRef->RaycastTriangles(world.ComposeWorldTransform(re),
+                    glm::vec3(0.0f, 10.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f), t))
+                bestT = std::min(bestT, t);
+        }
+        if (std::abs(bestT - 8.0f) > 0.01f)
+            Log::Error("[SmokeTest] triangle raycast expected t=8, got " + std::to_string(bestT));
+        else
+            std::cout << "[SmokeTest]   triangle raycast OK (t=" << bestT << ")" << std::endl;
+
+        // #119 regression: copying a jointed pair (the Duplicate / Paste path) must
+        // connect the copied joint to the copied partner, not the original.
+        entt::entity a = world.CreateEmptyEntity(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "SmokeJointA");
+        entt::entity b = world.CreateEmptyEntity(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "SmokeJointB");
+        world.Registry.emplace_or_replace<JointComponent>(a).ConnectedOrder =
+            world.Registry.get<OrderComponent>(b).Value;
+        std::vector<entt::entity> copies;
+        std::unordered_map<int, entt::entity> srcOrder;
+        const bool appended = SceneSerializer::AppendEntitiesFromString(world, assets,
+            SceneSerializer::SaveEntitiesToString(world, {a, b}), copies, &srcOrder);
+        auto copyOf = [&](entt::entity e) {
+            auto it = srcOrder.find(world.Registry.get<OrderComponent>(e).Value);
+            return it == srcOrder.end() ? entt::null : it->second;
+        };
+        const entt::entity ca = appended ? copyOf(a) : entt::null;
+        const entt::entity cb = appended ? copyOf(b) : entt::null;
+        const auto* cj = ca != entt::null ? world.Registry.try_get<JointComponent>(ca) : nullptr;
+        if (!cj || cb == entt::null || cj->ConnectedOrder != world.Registry.get<OrderComponent>(cb).Value)
+            Log::Error("[SmokeTest] copied joint was not repointed at the copied partner.");
+        else
+            std::cout << "[SmokeTest]   joint copy remap OK" << std::endl;
+        for (entt::entity e : copies) if (world.Registry.valid(e)) world.DestroyEntityAndChildren(e);
+        world.DestroyEntityAndChildren(a);
+        world.DestroyEntityAndChildren(b);
+    }
+    // #81 regression: the undo/redo path round-trips the scene + asset library
+    // through SaveToString/LoadFromString. It must neither throw (GUID PathRef
+    // entries used to crash it) nor drop/re-import library assets.
+    {
+        auto countEntities = [&]() {
+            std::size_t n = 0;
+            world.Registry.view<TransformComponent>().each([&](auto...) { ++n; });
+            return n;
+        };
+        const std::size_t entsBefore = countEntities();
+        const std::size_t modelsBefore = assets.Models().size();
+        const std::size_t texBefore = assets.Textures().size();
+        const std::size_t matsBefore = assets.Materials().size();
+        bool rtOk = false;
+        memSnapshot("pre_rt_" + std::filesystem::path(path).stem().string());
+        try {
+            const std::string snap = SceneSerializer::SaveToString(world, assets);
+            rtOk = SceneSerializer::LoadFromString(world, assets, snap);
+        } catch (const std::exception& e) {
+            Log::Error(std::string("[SmokeTest] undo snapshot round-trip threw: ") + e.what());
+        }
+        if (!rtOk || countEntities() != entsBefore || assets.Models().size() != modelsBefore ||
+            assets.Textures().size() != texBefore || assets.Materials().size() != matsBefore)
+            Log::Error("[SmokeTest] undo snapshot round-trip changed the scene or asset library.");
+        else
+            std::cout << "[SmokeTest]   undo round-trip OK (" << entsBefore << " entities, "
+                      << modelsBefore << " models, " << texBefore << " textures, "
+                      << matsBefore << " materials)" << std::endl;
+    }
+    // #96 regression: placed instances of one imported file share its data (one
+    // import, one set of GPU buffers), also after the undo round-trip above.
+    {
+        std::map<std::string, const Material*> firstMat;
+        for (auto re : world.Registry.view<RenderableComponent>()) {
+            const auto& rc = world.Registry.get<RenderableComponent>(re);
+            if (!rc.ModelRef || rc.ModelRef->MeshCount() == 0 ||
+                rc.ModelRef->Path().rfind("primitive://", 0) == 0) continue;
+            const Material* m0 = &rc.ModelRef->MeshMaterial(0);
+            auto [it, isNew] = firstMat.emplace(rc.ModelRef->Path(), m0);
+            if (!isNew && it->second != m0)
+                Log::Error("[SmokeTest] two instances of '" + rc.ModelRef->Path() +
+                           "' do not share their imported data.");
+            const glm::vec3 bmin = rc.ModelRef->BoundsMin(), bmax = rc.ModelRef->BoundsMax();
+            if (isNew) {
+                const Material& m = rc.ModelRef->MeshMaterial(0);
+                std::cout << "[SmokeTest]   model " << std::filesystem::path(rc.ModelRef->Path()).filename().string()
+                          << " bounds (" << bmin.x << "," << bmin.y << "," << bmin.z << ")-("
+                          << bmax.x << "," << bmax.y << "," << bmax.z << ") albedoMap="
+                          << (m.AlbedoMap ? "yes" : "no")
+                          // #113 - KHR_texture_transform lands here, so a regression shows up
+                          // as uv=1,1+0,0 on a model that should carry a transform.
+                          << " uv=" << m.UVTiling.x << "," << m.UVTiling.y
+                          << "+" << m.UVOffset.x << "," << m.UVOffset.y << std::endl;
+            }
+        }
+    }
+}
+
+// The smoke_play probe, at the end of each Play cycle's run.
+void PlayProbe(World& world, const Camera& playCamera, bool playUsesPlayer) {
+    // #114 regression: every simulated body must still be somewhere sane
+    // (finite, near the scene) — a parented body used to be teleported by
+    // writing its world pose into its local transform.
+    for (entt::entity rbE : world.Registry.view<RigidbodyComponent, TransformComponent>()) {
+        const glm::vec3 p = world.WorldSpaceTransform(rbE).Position;
+        const bool sane = std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z) &&
+                          glm::length(p) < 1000.0f;
+        std::cout << "[SmokeTest]   body " << entt::to_integral(rbE) << " at world (" << p.x
+                  << ", " << p.y << ", " << p.z << ")" << std::endl;
+        if (!sane) Log::Error("[SmokeTest] simulated body ended up at a non-finite / far-away position.");
+    }
+    // #175 — Animation components: which clip is playing, how far in, and where
+    // the last bone sits, so a regression in playback / skinning shows up.
+    for (entt::entity ae : world.Registry.view<SkeletalAnimationComponent, RenderableComponent>()) {
+        const Model* m = world.Registry.get<RenderableComponent>(ae).ModelRef.get();
+        if (!m || !m->HasAnimations()) continue;
+        const int clip = m->CurrentAnimation();
+        const glm::vec3 bone = glm::vec3(m->FinalBoneMatrix(m->BoneCount() - 1)[3]);
+        std::cout << "[SmokeTest]   anim " << entt::to_integral(ae) << " clip="
+                  << (clip >= 0 ? m->AnimationName(clip) : std::string("(none)"))
+                  << " t=" << m->AnimationTime() << " lastBone=(" << bone.x << ", " << bone.y
+                  << ", " << bone.z << ")\n";
+    }
+    { // #165 - which camera Play ran through, and where it ended up
+        const Camera& pc = playCamera;
+        std::cout << "[SmokeTest]   play camera=" << (playUsesPlayer ? "player" : "scene")
+                  << " pos=(" << pc.Position.x << ", " << pc.Position.y << ", " << pc.Position.z
+                  << ") yaw=" << pc.Yaw << " fov=" << pc.Fov << "\n";
+    }
+    { // #170 - filtered queries straight down through the scene origin
+        const float o[3] = {0.0f, 50.0f, 0.0f}, down[3] = {0.0f, -1.0f, 0.0f};
+        const float he[3] = {0.25f, 0.25f, 0.25f}, p1[3] = {-0.5f, 50.0f, 0.0f}, p2[3] = {0.5f, 50.0f, 0.0f};
+        QueryFilter all, none; none.LayerMask = 0u;
+        RaycastHit hits[16], box, cap, masked;
+        const int n = PhysicsWorld::RaycastAll(o, down, 100.0f, all, hits, 16);
+        const bool boxHit = PhysicsWorld::BoxCast(o, he, nullptr, down, 100.0f, all, box);
+        const bool capHit = PhysicsWorld::CapsuleCast(p1, p2, 0.2f, down, 100.0f, all, cap);
+        const bool maskedHit = PhysicsWorld::RaycastFiltered(o, down, 100.0f, none, masked);
+        const float oc[3] = {0.0f, 0.0f, 0.0f}, big[3] = {50.0f, 50.0f, 50.0f};
+        const int overlaps = PhysicsWorld::OverlapBox(oc, big, nullptr, all, nullptr, 0);
+        std::cout << "[SmokeTest]   queries rayAll=" << n
+                  << (n > 0 ? " firstDist=" + std::to_string(hits[0].Distance) : std::string())
+                  << " box=" << boxHit << (boxHit ? "@" + std::to_string(box.Distance) : std::string())
+                  << " capsule=" << capHit << (capHit ? "@" + std::to_string(cap.Distance) : std::string())
+                  << " maskNone=" << maskedHit << " overlapBox=" << overlaps << "\n";
+        // #201 - deactivating the collider under the ray while playing must
+        // take its actor out of the PhysX scene (it used to stay, invisible).
+        if (n > 0 && hits[0].Entity != 0xFFFFFFFFu) {
+            const entt::entity hitE = static_cast<entt::entity>(hits[0].Entity);
+            if (world.Registry.valid(hitE)) {
+                world.Registry.emplace_or_replace<DeactivatedTag>(hitE);
+                world.RebuildWorldTransformCache(); // derives InactiveTag
+                PhysicsWorld::Step(0.0f, world, {});
+                RaycastHit after;
+                const bool again = PhysicsWorld::RaycastFiltered(o, down, 100.0f, all, after) &&
+                                   after.Entity == hits[0].Entity;
+                std::cout << "[SmokeTest]   deactivate-sync hitAgain=" << again << "\n";
+                if (again) Log::Error("[SmokeTest] a deactivated collider was still hit by a raycast.");
+                // Put it back: the scene outlives this check (later Play
+                // cycles re-run it), so the probe must not leave a mark.
+                world.Registry.remove<DeactivatedTag>(hitE);
+                world.RebuildWorldTransformCache();
+                PhysicsWorld::Step(0.0f, world, {});
+            }
+        }
+    }
+    for (auto [ae, ac] : world.Registry.view<const AnimatorControllerComponent>().each()) { // #175 Part B
+        const auto* arc = world.Registry.try_get<RenderableComponent>(ae);
+        const Model* am = arc ? arc->ModelRef.get() : nullptr;
+        std::cout << "[SmokeTest]   animator " << entt::to_integral(ae) << " state=" << ac.StateName
+                  << " clip=" << (am && am->CurrentAnimation() >= 0 ? am->AnimationName(am->CurrentAnimation()) : std::string("(none)"))
+                  << " params=" << ac.Params.size();
+        if (ac.RootMotion.Mode != 0) { // where root motion has taken the object
+            const glm::vec3 p = world.WorldSpaceTransform(ae).Position;
+            std::cout << " rootMotion=" << ac.RootMotion.Mode << " bone=" << ac.RootMotion.ResolvedBone
+                      << " speed=" << ac.RootMotion.Speed << " pos=(" << p.x << ", " << p.y << ", " << p.z << ")";
+        }
+        std::cout << "\n";
+    }
+    for (auto [pe, ps] : world.Registry.view<const ParticleSystemComponent>().each()) { // #177
+        glm::vec3 lo(1e9f), hi(-1e9f);
+        for (const auto& pt : ps.Live) { lo = glm::min(lo, pt.Pos); hi = glm::max(hi, pt.Pos); }
+        std::cout << "[SmokeTest]   particles " << entt::to_integral(pe) << " live=" << ps.Live.size();
+        if (!ps.Live.empty()) std::cout << " y=[" << lo.y << ", " << hi.y << "]";
+        std::cout << "\n";
+    }
 }
 
 } // namespace SmokeChecks
