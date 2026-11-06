@@ -1,0 +1,67 @@
+{
+  "decalVersion": 1,
+  "textures": {
+    "albedo": "assets/Decals/Graffiti/Pieces/Crown/T_Decal_Piece_Crown_Albedo.png",
+    "normal": "assets/Decals/Graffiti/Pieces/Crown/T_Decal_Piece_Crown_Normal.png",
+    "surface": "assets/Decals/Graffiti/Pieces/Crown/T_Decal_Piece_Crown_Surface.png",
+    "aux": "assets/Decals/Graffiti/Pieces/Crown/T_Decal_Piece_Crown_Aux.png"
+  },
+  "lumaMask": false,
+  "invertMask": false,
+  "tier": 1024,
+  "atlas": {
+    "cols": 1,
+    "rows": 1
+  },
+  "defaultSize": [
+    1.2000000476837158,
+    0.6000000238418579,
+    0.25
+  ],
+  "channels": {
+    "albedo": 1.0,
+    "normal": 1.0,
+    "roughness": 1.0,
+    "metal": 0.0,
+    "ao": 0.0,
+    "emissive": 0.0
+  },
+  "baseColor": [
+    1.0,
+    1.0,
+    1.0
+  ],
+  "roughness": 0.44999998807907104,
+  "metal": 0.0,
+  "emissive": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "angleFade": [
+    0.25,
+    0.05000000074505806
+  ],
+  "edgeFade": 0.03999999910593033,
+  "heightBlend": 0.0,
+  "heightContrast": 4.0,
+  "paint": {
+    "enabled": true,
+    "roughness": 0.44999998807907104,
+    "metal": 0.0,
+    "relief": 0.3499999940395355,
+    "uv": false
+  },
+  "weathering": {
+    "fade": 0.0,
+    "bleach": 0.0,
+    "peel": 0.0,
+    "buff": 0.0,
+    "sceneGrading": false
+  },
+  "category": "Graffiti/Pieces",
+  "tags": [
+    "graffiti",
+    "piece"
+  ]
+}
