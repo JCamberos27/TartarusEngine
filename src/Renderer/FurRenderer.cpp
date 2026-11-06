@@ -10,6 +10,7 @@
 #include "Texture.h"
 #include "gl.h"
 #include "Core/Profiler.h"
+#include "Core/Env.h"
 
 #include <algorithm>
 #include <cmath>
@@ -81,13 +82,7 @@ bool FurRenderer::HasFur(const Model& model, const std::vector<std::shared_ptr<M
 }
 
 bool FurRenderer::Disabled() {
-    static const bool off = [] {
-        char* e = nullptr;
-        size_t n = 0;
-        const bool set = _dupenv_s(&e, &n, "TARTARUS_NO_FUR") == 0 && e && *e && *e != '0';
-        std::free(e);
-        return set;
-    }();
+    static const bool off = Env::Flag(Env::Var::NoFur);
     return off;
 }
 

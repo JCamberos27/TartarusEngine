@@ -1,6 +1,7 @@
 #include "UploadStaging.h"
 #include "gl.h"
 #include "ProjectSettings.h"
+#include "Core/Env.h"
 #include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
@@ -66,13 +67,7 @@ Worker& W() {
 }
 
 bool EnvOff() {
-    static const bool off = [] {
-        char* e = nullptr;
-        size_t n = 0;
-        const bool v = _dupenv_s(&e, &n, "TARTARUS_NO_ASYNC_UPLOAD") == 0 && e && e[0] == '1';
-        std::free(e);
-        return v;
-    }();
+    static const bool off = Env::Flag(Env::Var::NoAsyncUpload);
     return off;
 }
 

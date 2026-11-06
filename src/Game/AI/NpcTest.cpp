@@ -14,6 +14,7 @@
 #include "Components.h"
 #include "Npc/NpcRagdoll.h"
 #include "Npc/NpcHitboxes.h"
+#include "Core/Env.h"
 
 #include <algorithm>
 #include <cmath>
@@ -59,11 +60,6 @@ const Npc* NearestInSight(const Player& player, const NpcDirector& npcs, const s
 }
 } // namespace
 
-static const char* EnvVar(const char* n) {
-#pragma warning(suppress : 4996)
-    return std::getenv(n);
-}
-
 NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "watch" : scenario) {
     if (m_Scenario == "fight") m_Duration = 75.0f;
     if (m_Scenario == "die") m_Duration = 60.0f;
@@ -87,12 +83,13 @@ NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "w
     if (m_Scenario == "spiderdoor") m_Duration = 45.0f;
     if (m_Scenario == "spiderdeath") m_Duration = 60.0f; // (done once the last body has settled)
     if (m_Scenario == "ragdoll") m_Duration = 240.0f;
-    if (const char* t = EnvVar("NPC_TEST_SECONDS")) m_Duration = std::max(5.0f, (float)std::atof(t));
-    if (const char* r = EnvVar("NPC_TEST_RECORD")) m_RecordDir = r;
+    if (Env::IsSet(Env::Var::NpcTestSeconds)) m_Duration = std::max(5.0f, Env::Float(Env::Var::NpcTestSeconds, 0.0f));
+    if (Env::IsSet(Env::Var::NpcTestRecord)) m_RecordDir = Env::Str(Env::Var::NpcTestRecord);
     // aptwounds in another room of Apartment Hallway's north row: the same layout (the dummies side by side, the player 1.6 m off
     // toward the corridor) moved into it - a cramped bedroom, a big living room, a small bedroom with the outside wall close behind
     // the dummies. Each unit is one box for the wall check (its outer walls; not the ones inside it).
-    if (const char* room = EnvVar("NPC_TEST_ROOM")) {
+    if (Env::IsSet(Env::Var::NpcTestRoom)) {
+        const std::string room = Env::Str(Env::Var::NpcTestRoom);
         struct Room { const char* Name; float Dx, Dz, X0, Z0, X1, Z1; };
         static const Room kRooms[] = {
             {"302bed", 4.2f, 0.0f, -5.6f, -9.675f, 1.2f, -1.075f},
@@ -100,7 +97,7 @@ NpcTest::NpcTest(const std::string& scenario) : m_Scenario(scenario.empty() ? "w
             {"303bed2", 16.9f, 2.145f, 1.2f, -9.675f, 10.6f, -1.075f},
         };
         for (const Room& r : kRooms)
-            if (m_Room != r.Name && std::string(room) == r.Name) {
+            if (m_Room != r.Name && room == r.Name) {
                 m_Room = r.Name;
                 m_RoomShift = glm::vec3(r.Dx, 0.0f, r.Dz);
                 SetAptExtraRoom(r.X0, r.Z0, r.X1, r.Z1);

@@ -1,63 +1,86 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
-// What the command line asks of this run: the harness and tool modes and their arguments. Parsed once, at the top of
-// main(), before any window or GL context exists. (Tools that run and exit before the editor starts are in CliTools.h.)
-struct LaunchOptions {
-    // --smoke-test: headless-as-possible CI/manual smoke check (audit #187). Loads every scene
-    // under project/scenes/, renders a fixed number of frames of each through the exact same
-    // per-frame render path the interactive editor uses (see the `smokeTestMode` branches
-    // sprinkled through the main loop), then checks for new GL debug-callback errors and
-    // a nonzero draw count before moving to the next scene. Exits 0 if every scene passed, or a
-    // nonzero code if any failed.
-    bool smokeTestMode = false;
-    // --weapon-lab (run-weapon-lab.cmd, or TARTARUS_WEAPON_LAB set): the editor on the WeaponLab scene, the Scene view
-    // (the world body) beside the Game view, and the Weapon Lab panel (WeaponLab) - the third-person weapon animations
-    // worked on by hand.
-    bool weaponLabMode = false;
-    // --npc-test [watch|fight|die]: the smoke harness on scenes/Arena.json with the enemy squad played
-    // against a scripted player (NpcTest) on a fixed 60 Hz step; with --smoke-shots the Scene view
-    // follows the soldiers beside the Game view. Exit code 0 = every check passed.
-    bool npcTestMode = false;
-    std::string npcTestScenario;
-    // --perf-bench [dir|scene.json]: the smoke-test harness with VSync, the FPS cap and GL debug output
-    // off, a longer per-scene run, and an averaged CPU/GPU profiler breakdown printed per scene: edit
-    // mode, then Play in the docked Game view, then Play maximized. --perf-res WxH sizes the window
-    // (default: maximized) so runs at a given resolution are repeatable. --perf-sample adds a
-    // statistical main-thread CPU profile of each phase (SamplingProfiler): the hottest functions.
-    bool perfBenchMode = false, perfSample = false;
-    int perfResW = 0, perfResH = 0;
-    // --smoke-test [dir]: an optional directory of .json scenes to load. Defaults to the
-    // engine's own committed regression scenes (assets/test-scenes/), falling back to the
-    // user project's scenes/ folder - so the harness still means something when the user
-    // project is empty (audit TEST-101).
-    std::string smokeScenesDirArg;
-    // #174 - `--build [outDir]`: File > Build without the UI (CI packaging, scripted builds).
-    // Uses Project Settings > Build; outDir overrides its Output Folder. Exit 0 on success.
-    bool buildMode = false;
-    std::string buildOutArg;
-    // --smoke-shots <dir> (with --smoke-test): saves three Scene-view PNGs per scene - toward the
-    // horizon, a higher angle behind, and up at the sky - for reviewing rendering changes (the
-    // physical sky's, first) without driving the editor.
-    std::string smokeShotsDir;
-    // --editor-shot <dir>: the interactive editor at 1920x1080 (or --perf-res), stepped through a few
-    // fixed views (an entity selected, the Console, the Game view, Settings), each saved as a PNG of the
-    // whole window, then closed - for reviewing editor UI changes without driving the desktop. It runs
-    // on a copy of the user's editor prefs and layout (%LOCALAPPDATA%\TartarusEngine-Shot), never the
-    // real ones. The selected entity is Player Spawn;
-    // --editor-shot-default-layout starts from the default dock layout instead of the user's.
-    std::string editorShotDir;
-    bool editorShotDefaultLayout = false;
-    bool editorShotCurves = false; // capture the real themed recoil curve widget in isolation
-    bool editorShotIDE = false; // one focused IDE capture; use --project with a small fixture
-    // --editor-tests [filter]: end-to-end tests of the editor UI (Tests/EditorUiTests.cpp) in the
-    // real editor: a hidden 1920x1080 window, a fresh scratch user folder
-    // (%LOCALAPPDATA%\TartarusEngine-Test), an empty in-memory scene. Exit code 0 = all passed.
-    bool editorTestsMode = false;
-    std::string editorTestsFilter;
+// What the command line asks of this run. Parsed once, at the top of main(), before any window or GL context exists,
+// from one table of flags (LaunchOptions.cpp) that also prints `--help`. An unknown flag, a missing value, two modes
+// at once or a modifier its mode doesn't use is an error: main prints it and exits 2.
+
+// The one thing this run does. Everything but Editor runs unattended.
+enum class LaunchMode {
+    Editor,       // the interactive editor (or the built game when player.json sits next to the exe)
+    SmokeTest,    // --smoke-test [dir]
+    PerfBench,    // --perf-bench [dir|scene.json]   (the smoke harness, timed)
+    NpcTest,      // --npc-test [scenario]           (the smoke harness, scripted NPC fight)
+    EditorTests,  // --editor-tests [filter]
+    EditorShot,   // --editor-shot <dir>
+    Build,        // --build [outDir]
+    UnitTests,    // --unit-tests [filter]
+    ModelReport,  // --model-report <folder or model>...
+    ModelNodes,   // --model-nodes <folder or fbx>...
+    SceneBounds,  // --scene-bounds <scene.json|prefab dir>... --out <dir>
+    AudioTest,    // --audio-test [scene] [--report <file>]
+    CrashTest,    // --crash-test <kind> [--crash-dialog]
+    Help,         // --help
 };
 
-// The options in argv. Also applies --project <dir> (#151: open that project folder instead of the one found next to
-// the exe) as it goes, as the parse always has.
-LaunchOptions ParseLaunchOptions(int argc, char** argv);
+struct LaunchOptions {
+    LaunchMode mode = LaunchMode::Editor;
+
+    // Derived from `mode` (the harness branches in main read these).
+    // --smoke-test: loads every scene under the folder (default: the engine's assets/test-scenes, falling back to the
+    // project's scenes/), renders a fixed number of frames of each through the editor's own render path, and fails on
+    // new GL errors or a zero draw count. --perf-bench and --npc-test run on the same harness, so they set it too.
+    bool smokeTestMode = false;
+    // --perf-bench: the smoke harness with VSync, the FPS cap and GL debug output off, longer runs, and an averaged
+    // CPU/GPU profiler breakdown per scene (edit mode, docked Play, maximized Play).
+    bool perfBenchMode = false;
+    // --npc-test [watch|fight|die|...]: the enemy squad against a scripted player (NpcTest) on a fixed 60 Hz step.
+    bool npcTestMode = false;
+    // --editor-tests [filter]: end-to-end editor UI tests (Tests/EditorUiTests.cpp) in a hidden 1920x1080 window with
+    // a fresh scratch user folder (%LOCALAPPDATA%\TartarusEngine-Test).
+    bool editorTestsMode = false;
+    // --build [outDir]: File > Build without the UI. outDir overrides Project Settings > Build's Output Folder.
+    bool buildMode = false;
+
+    // The mode's own value.
+    std::string smokeScenesDirArg;  // --smoke-test / --perf-bench [dir|scene.json]
+    std::string npcTestScenario;    // --npc-test [scenario]
+    std::string editorTestsFilter;  // --editor-tests [filter]
+    std::string editorShotDir;      // --editor-shot <dir>
+    std::string buildOutArg;        // --build [outDir]
+    std::string unitTestsFilter;    // --unit-tests [filter]
+    std::string audioTestScene;     // --audio-test [scene]
+    std::string crashTestKind;      // --crash-test <av|overflow|abort|purecall|invalidparam|terminate>
+    std::vector<std::string> inputs; // --model-report / --model-nodes / --scene-bounds inputs
+
+    // Modifiers.
+    // --weapon-lab (or TARTARUS_WEAPON_LAB): the editor on the WeaponLab scene with the Weapon Lab panel.
+    bool weaponLabMode = false;
+    // --perf-sample (perf-bench): a statistical main-thread CPU profile of each phase (SamplingProfiler).
+    bool perfSample = false;
+    // --perf-res WxH (perf-bench, editor-shot, editor-tests): the window size, for repeatable runs.
+    int perfResW = 0, perfResH = 0;
+    // --smoke-shots <dir> (smoke-test, npc-test, perf-bench): three Scene-view PNGs per scene.
+    std::string smokeShotsDir;
+    // --editor-shot-default-layout / -curves / -ide (editor-shot): start from the default dock layout; capture the
+    // recoil curve widget alone; one Script IDE capture (use --project with a small fixture).
+    bool editorShotDefaultLayout = false, editorShotCurves = false, editorShotIDE = false;
+    // --crash-test-in-editor <kind> (editor): crash a few seconds into a normal session with the scene dirty, to
+    // exercise the crash-time recovery save.
+    std::string crashTestInEditor;
+    // --crash-dialog (crash-test, editor with --crash-test-in-editor): show the crash dialog anyway.
+    bool crashDialog = false;
+    std::string sceneBoundsOut;   // --out <dir> (scene-bounds)
+    std::string audioTestReport;  // --report <file> (audio-test)
+    // --project <dir> (any mode): open that project folder instead of the one next to the exe. Applied by the parse.
+    std::string projectDir;
+};
+
+// Parses argv into `out`. On a bad command line returns false with `error` set (and nothing applied). On success
+// also applies --project (ProjectPaths::SetRootOverride).
+bool ParseLaunchOptions(int argc, char** argv, LaunchOptions& out, std::string& error);
+
+// The flag table and the environment variables (Core/Env.h), for --help.
+std::string LaunchHelpText();

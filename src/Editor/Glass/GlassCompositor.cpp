@@ -6,6 +6,7 @@
 #include "GlassTheme.h"
 #include "Profiler.h"
 #include "gl.h"
+#include "Core/Env.h"
 
 #include <backends/imgui_impl_opengl3.h>
 
@@ -218,13 +219,7 @@ void GlassCompositor::Flush(ImDrawData* dd, std::vector<ImDrawList*>& pending, b
 }
 
 bool FullFrameBlur() {
-    static const bool on = [] {
-        char* e = nullptr;
-        size_t n = 0;
-        const bool set = _dupenv_s(&e, &n, "TARTARUS_GLASS_FULL_CAPTURE") == 0 && e && *e && *e != '0';
-        std::free(e);
-        return set;
-    }();
+    static const bool on = Env::Flag(Env::Var::GlassFullCapture);
     return on;
 }
 

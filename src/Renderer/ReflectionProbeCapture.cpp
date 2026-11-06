@@ -7,6 +7,7 @@
 #include "GLStateCache.h"
 #include "gl.h"
 #include "Log.h"
+#include "Core/Env.h"
 #include <cstdio>
 #include <string>
 
@@ -208,13 +209,7 @@ void ReflectionProbeCapture::Step(IblProbe& ibl, ReflectionProbeArray& probes,
         if (++m_Cap.Face == 6) {
             glGenerateTextureMipmap(m_CaptureCube[m_Cap.Buf]);
             m_Cap.Done = true;
-            static const bool kLog = [] {
-                char* e = nullptr;
-                size_t n = 0;
-                const bool on = _dupenv_s(&e, &n, "TARTARUS_PROBE_LOG") == 0 && e && *e;
-                std::free(e);
-                return on;
-            }();
+            static const bool kLog = Env::Flag(Env::Var::ProbeLog);
             if (kLog) { // the six faces' average colour (the 1x1 mip), for a quick check
                 float px[6 * 4] = {};
                 int top = 0;
@@ -224,13 +219,7 @@ void ReflectionProbeCapture::Step(IblProbe& ibl, ReflectionProbeArray& probes,
                 std::snprintf(line, sizeof(line), "ProbeCapture slot %d at (%.1f %.1f %.1f): face avg %.2f %.2f %.2f %.2f %.2f %.2f",
                               m_Cap.Slot, vol.Center.x, vol.Center.y, vol.Center.z, px[0], px[4], px[8], px[12], px[16], px[20]);
                 Log::Info(line);
-                static std::string dir = [] {
-                    char* e = nullptr;
-                    size_t n = 0;
-                    std::string d = _dupenv_s(&e, &n, "TARTARUS_PROBE_DUMP") == 0 && e ? e : "";
-                    std::free(e);
-                    return d;
-                }();
+                static std::string dir = Env::Str(Env::Var::ProbeDump);
                 if (!dir.empty()) { // the six faces side by side, tonemapped (x / (1 + x), gamma 2.2), as a PPM
                     std::vector<float> f((size_t)kFaceSize * kFaceSize * 4 * 6);
                     glGetTextureSubImage(m_CaptureCube[m_Cap.Buf], 0, 0, 0, 0, kFaceSize, kFaceSize, 6, GL_RGBA, GL_FLOAT, (GLsizei)(f.size() * 4), f.data());

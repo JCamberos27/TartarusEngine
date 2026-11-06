@@ -7,6 +7,7 @@
 #include "PhysicsWorld.h"
 #include "Player.h"
 #include "World.h"
+#include "Core/Env.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -60,8 +61,8 @@ void NpcTest::RoamSetUp(World& world, const Player& player) {
                     pts.push_back(p);
             }
     }
-#pragma warning(suppress : 4996)
-    if (const char* own = std::getenv("NPC_TEST_ROAM_POINTS"); own && *own) {
+    if (const std::string ownPoints = Env::Str(Env::Var::NpcTestRoamPoints); !ownPoints.empty()) {
+        const char* own = ownPoints.c_str();
         // "x y z; x y z; ...": walk these instead, from the first (a stairs check, a corridor)
         pts.clear();
         for (const char* c = own; *c;) {
@@ -116,9 +117,8 @@ void NpcTest::RoamDrive(Player& player, float dt, float& wantYaw, float& wantPit
     if (m_RoPath.empty()) {
         // The leg's route from where he stands (a failed leg starts him on its waypoint instead).
         bool partial = false;
-#pragma warning(suppress : 4996)
-        const char* straight = std::getenv("NPC_TEST_ROAM_STRAIGHT"); // straight at each point, no route (a stairs probe)
-        if ((straight && *straight == '1') ||
+        const bool straight = Env::Flag(Env::Var::NpcTestRoamStraight); // straight at each point, no route (a stairs probe)
+        if (straight ||
             !m_RoNav->FindPath(m_RoFrom, m_RoPoints[(size_t)m_RoLeg], m_RoPath, &partial) || m_RoPath.empty())
             m_RoPath.assign(1, m_RoPoints[(size_t)m_RoLeg]);
         else if (partial)
@@ -180,8 +180,7 @@ void NpcTest::Roam(World& world, const Player& player) {
         }
     }
     m_RoPrev = feet;
-#pragma warning(suppress : 4996)
-    if (const char* t = std::getenv("NPC_TEST_ROAM_TRACE"); t && *t == '1' && std::fmod(m_RoClock, 0.25f) < dt)
+    if (Env::Flag(Env::Var::NpcTestRoamTrace) && std::fmod(m_RoClock, 0.25f) < dt)
         std::printf("[NpcTest]   roam t %.2f feet (%.2f %.2f %.2f)\n", m_RoClock, feet.x, feet.y, feet.z);
     const glm::vec3& goal = m_RoPoints[(size_t)m_RoLeg];
     const bool fell = feet.y < m_RoLow - kFall;

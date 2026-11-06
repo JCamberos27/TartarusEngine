@@ -10,6 +10,7 @@
 #include "Log.h"
 #include "TimeService.h"
 #include "gl.h"
+#include "Core/Env.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/packing.hpp>
@@ -61,11 +62,7 @@ DecalSystem* s_Active = nullptr; // MaterialSubstrate()'s system: the one main.c
 
 // TARTARUS_NO_SUBSTRATE=1: every substrate off (before / after comparisons).
 bool SubstratesOff() {
-    static const bool off = [] {
-#pragma warning(suppress : 4996)
-        const char* v = std::getenv("TARTARUS_NO_SUBSTRATE");
-        return v && *v && *v != '0';
-    }();
+    static const bool off = Env::Flag(Env::Var::NoSubstrate);
     return off;
 }
 

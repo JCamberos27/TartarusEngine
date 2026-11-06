@@ -1,5 +1,6 @@
 #include "ShaderVariant.h"
 #include "Material.h"
+#include "Core/Env.h"
 
 #include <cstdlib>
 #include <cstring>
@@ -40,8 +41,7 @@ ShaderVariantKey ShaderVariantKeyForCached(const Material& m, const ShaderAsset&
 }
 
 bool EngineVariantsEnabled() {
-#pragma warning(suppress : 4996)
-    static const bool on = std::getenv("TARTARUS_NO_ENGINE_VARIANTS") == nullptr;
+    static const bool on = !Env::Flag(Env::Var::NoEngineVariants);
     return on;
 }
 

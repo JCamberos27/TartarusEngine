@@ -4,6 +4,7 @@
 #include "../Editor/EditorSettings.h"
 #include "../Editor/EditorSound.h"
 #include "../Core/AppAudioMuter.h"
+#include "../Core/Env.h"
 
 #include <algorithm>
 #include <cmath>
@@ -38,14 +39,6 @@ void WriteToneWav(const std::filesystem::path& path, int rate, float seconds, fl
         const auto s = (std::int16_t)std::lround(amp * std::sin(6.2831853f * 880.0f * (float)i / (float)rate) * 32767.0f);
         f.write(reinterpret_cast<const char*>(&s), 2);
     }
-}
-
-void SetEnv(const char* name, const char* value) {
-#ifdef _WIN32
-    _putenv_s(name, value);
-#else
-    setenv(name, value, 1);
-#endif
 }
 
 void TestEditorSoundEventTable() {
@@ -184,20 +177,11 @@ void TestEditorSoundSeparateOutput() {
     WriteToneWav(tone, rate, 0.2f, 0.5f);
 
     // TARTARUS_MUTE silences the endpoint, editor output included; an offline engine reaches no speaker, so unmute it here.
-    std::string envMute;
-#ifdef _WIN32
-    char* m = nullptr;
-    size_t len = 0;
-    if (_dupenv_s(&m, &len, "TARTARUS_MUTE") == 0 && m) {
-        envMute = m;
-        std::free(m);
-    }
-#else
-    if (const char* m = std::getenv("TARTARUS_MUTE")) envMute = m;
-#endif
-    SetEnv("TARTARUS_MUTE", "0");
+    const bool hadMute = Env::IsSet(Env::Var::Mute);
+    const std::string envMute = Env::Str(Env::Var::Mute);
+    Env::Set(Env::Var::Mute, "0");
     AudioEngine::InitOffline(rate);
-    SetEnv("TARTARUS_MUTE", envMute.c_str());
+    Env::Set(Env::Var::Mute, hadMute ? envMute.c_str() : nullptr);
     CHECK(AudioEngine::IsInitialized());
     if (!AudioEngine::IsInitialized()) return;
     AudioEngine::EnableTaps(true);
@@ -665,20 +649,12 @@ void TestEditorSoundLoops() {
     fs::remove_all(dir, ec);
     fs::create_directories(dir, ec);
     WriteToneWav(dir / "tick.wav", 48000, 0.2f, 0.5f);
-    std::string envMute; // (an offline engine reaches no speaker: unmute it for the test, as the output test does)
-#ifdef _WIN32
-    char* m = nullptr;
-    size_t len = 0;
-    if (_dupenv_s(&m, &len, "TARTARUS_MUTE") == 0 && m) {
-        envMute = m;
-        std::free(m);
-    }
-#else
-    if (const char* m = std::getenv("TARTARUS_MUTE")) envMute = m;
-#endif
-    SetEnv("TARTARUS_MUTE", "0");
+    // (an offline engine reaches no speaker: unmute it for the test, as the output test does)
+    const bool hadMute = Env::IsSet(Env::Var::Mute);
+    const std::string envMute = Env::Str(Env::Var::Mute);
+    Env::Set(Env::Var::Mute, "0");
     AudioEngine::InitOffline(48000);
-    SetEnv("TARTARUS_MUTE", envMute.c_str());
+    Env::Set(Env::Var::Mute, hadMute ? envMute.c_str() : nullptr);
     CHECK(AudioEngine::IsInitialized());
     if (!AudioEngine::IsInitialized()) return;
     AudioEngine::SetEditorVolume(1.0f);

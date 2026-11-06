@@ -1,7 +1,7 @@
 #include "UserPaths.h"
+#include "Core/Env.h"
 
 #include <filesystem>
-#include <cstdlib>
 
 namespace UserPaths {
 namespace {
@@ -11,15 +11,7 @@ std::string& AppName() { static std::string s = "TartarusEngine"; return s; }
 std::string FindRoot() {
     namespace fs = std::filesystem;
 
-    // _dupenv_s rather than getenv: MSVC's secure-CRT form, thread-safe and doesn't trip
-    // C4996 (see GLFramebufferCheck.cpp's own getenv warning for the alternative).
-    char* buf = nullptr;
-    std::size_t len = 0;
-    std::string base;
-    if (_dupenv_s(&buf, &len, "LOCALAPPDATA") == 0 && buf) {
-        base = buf;
-        std::free(buf);
-    }
+    std::string base = Env::Str(Env::Var::LocalAppData);
 
     // LOCALAPPDATA is set for every normal Windows user session; this fallback only matters for
     // an unusual service/sandbox context with no user profile — keep the historical

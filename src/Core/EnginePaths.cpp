@@ -1,6 +1,6 @@
 #include "EnginePaths.h"
+#include "Core/Env.h"
 
-#include <cstdlib>
 #include <filesystem>
 
 namespace EnginePaths {
@@ -11,15 +11,8 @@ namespace fs = std::filesystem;
 std::string s_ExeDir;
 
 fs::path EnvRoot() {
-#ifdef _MSC_VER
-#pragma warning(push)
-#pragma warning(disable: 4996) // getenv is fine for a one-shot read-only override check
-#endif
-    const char* env = std::getenv("TARTARUS_ASSET_ROOT");
-#ifdef _MSC_VER
-#pragma warning(pop)
-#endif
-    if (env && env[0] != '\0') return fs::path(env);
+    const std::string env = Env::Str(Env::Var::AssetRoot);
+    if (!env.empty()) return fs::path(env);
     return {};
 }
 

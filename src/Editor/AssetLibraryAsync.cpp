@@ -16,6 +16,7 @@
 #include "Log.h"
 #include "ProjectPaths.h"
 #include "ProjectSettings.h"
+#include "Core/Env.h"
 
 #include <algorithm>
 #include <atomic>
@@ -78,13 +79,7 @@ std::string AbsoluteAssetPath(const std::string& p) {
 
 // TARTARUS_PUMP_TRACE=1: every PumpAsync step slower than 1 ms, with what it was (finding the stalls).
 bool PumpTrace() {
-    static const bool on = [] {
-        char* e = nullptr;
-        size_t n = 0;
-        const bool v = _dupenv_s(&e, &n, "TARTARUS_PUMP_TRACE") == 0 && e && e[0] == '1';
-        std::free(e);
-        return v;
-    }();
+    static const bool on = Env::Flag(Env::Var::PumpTrace);
     return on;
 }
 struct PumpStepTimer {

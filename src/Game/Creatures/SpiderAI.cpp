@@ -10,6 +10,7 @@
 #include "GameModuleAPI.h" // RaycastHit, QueryFilter
 #include "PhysicsWorld.h"
 #include "World.h"
+#include "Core/Env.h"
 
 #include <algorithm>
 #include <cmath>
@@ -108,7 +109,7 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
     const glm::vec3 pos = b.Mover.Position(), up = b.Mover.Up();
     auto enter = [&](Mode m) {
 #pragma warning(suppress : 4996)
-        static const bool trace = std::getenv("TARTARUS_SPIDER_TRACE") != nullptr; // the hunters' decisions, for tuning
+        static const bool trace = Env::Flag(Env::Var::SpiderTrace); // the hunters' decisions, for tuning
         if (trace)
             std::printf("[Spider] %u: %d -> %d after %.1f s  pos %.2f %.2f %.2f up %.2f  player %.2f %.2f %.2f (%.2f m)%s\n",
                         (unsigned)entt::to_integral(b.Root), (int)ai.State, (int)m, ai.Clock, pos.x, pos.y, pos.z, up.y, t.Feet.x,
@@ -232,7 +233,7 @@ void SpiderSystem::Hunt(World& world, Body& b, SpiderComponent& sc, const Target
             if (anim) anim->SetTrigger("Attack");
         } else if (ai.PounceIn <= 0.0f && dist > 2.2f && dist < 5.0f && b.Mover.Attached() && !LeapClear(b, sc, t, dist)) {
 #pragma warning(suppress : 4996)
-            static const bool trace = std::getenv("TARTARUS_SPIDER_TRACE") != nullptr;
+            static const bool trace = Env::Flag(Env::Var::SpiderTrace);
             if (trace && ai.Clock - dt < std::floor(ai.Clock) + 1e-6f && ai.Clock >= std::floor(ai.Clock)) { // once a second
                 const glm::vec3 from = pos + up * 0.2f, to = t.Feet + glm::vec3(0.0f, 0.8f, 0.0f), d = glm::normalize(to - from);
                 RaycastHit h;

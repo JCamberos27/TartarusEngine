@@ -2,10 +2,10 @@
 #include "GLDebug.h"
 #include "Log.h"
 #include "gl.h" // glEnable (core; already in the loader) — the debug enums below are passed as plain GLenums
+#include "Core/Env.h"
 
 #include <GLFW/glfw3.h>
 #include <atomic>
-#include <cstdlib>
 #include <string>
 
 namespace {
@@ -78,15 +78,7 @@ bool Enabled() {
 #ifndef NDEBUG
     return true; // Debug builds always get it
 #else
-#ifdef _MSC_VER
-#pragma warning(push)
-#pragma warning(disable: 4996) // getenv is fine for a one-shot read-only debug toggle check
-#endif
-    const char* v = std::getenv("TARTARUS_GL_DEBUG");
-#ifdef _MSC_VER
-#pragma warning(pop)
-#endif
-    return v && v[0] == '1';
+    return Env::Flag(Env::Var::GlDebug);
 #endif
 }
 

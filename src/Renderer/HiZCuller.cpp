@@ -4,6 +4,7 @@
 #include "GLStateCache.h"
 #include "InstanceBatch.h"
 #include "ProjectSettings.h"
+#include "Core/Env.h"
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -139,15 +140,6 @@ Resources& Res() {
 }
 std::vector<glm::vec4> g_Boxes;
 
-bool EnvSet(const char* name, const char* value) {
-    char* e = nullptr;
-    size_t n = 0;
-    bool v = false;
-    if (_dupenv_s(&e, &n, name) == 0 && e) v = std::strcmp(e, value) == 0;
-    std::free(e);
-    return v;
-}
-
 bool EnsurePrograms() {
     Resources& r = Res();
     if (r.Cull || r.Failed) return !r.Failed;
@@ -191,7 +183,7 @@ void EnsurePyramid(int w, int h) {
 
 bool HiZCuller::Enabled() {
     static const int gate = [] {
-        if (EnvSet("TARTARUS_NO_HIZ", "1")) return 0;
+        if (Env::Flag(Env::Var::NoHiz)) return 0;
         const char* renderer = reinterpret_cast<const char*>(glGetString(0x1F01 /* GL_RENDERER */));
         if (renderer && std::strstr(renderer, "llvmpipe")) return 0;
         return 1;
@@ -284,7 +276,7 @@ bool HiZCuller::Cull(unsigned depthTex, int w, int h, const glm::vec4& viewport,
     glMemoryBarrier(GL_COMMAND_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 
     // TARTARUS_HIZ_STATS=1: how many copies the test let through, now and then (waits on the GPU; debugging only).
-    static const bool stats = EnvSet("TARTARUS_HIZ_STATS", "1");
+    static const bool stats = Env::Flag(Env::Var::HizStats);
     static int frame = 0;
     if (stats && ++frame % 120 == 0) {
         std::uint32_t total = 0, kept = 0;

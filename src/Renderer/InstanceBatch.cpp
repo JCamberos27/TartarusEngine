@@ -6,6 +6,7 @@
 #include "ProjectSettings.h"
 #include "GLStateCache.h"
 #include "ShaderAsset.h"
+#include "Core/Env.h"
 #include <algorithm>
 #include <cstdlib>
 #include <unordered_map>
@@ -57,13 +58,7 @@ void Upload() {
 } // namespace InstanceBuffer
 
 bool MultiDrawEnabled() {
-    static const bool envOff = [] {
-        char* e = nullptr;
-        size_t n = 0;
-        const bool off = _dupenv_s(&e, &n, "TARTARUS_NO_MDI") == 0 && e && e[0] == '1';
-        std::free(e);
-        return off;
-    }();
+    static const bool envOff = Env::Flag(Env::Var::NoMdi);
     const auto& q = ProjectSettings::Quality();
     return !envOff && q.GpuInstancing && q.GpuDrivenDraws && MeshArena::Enabled();
 }
