@@ -1,4 +1,5 @@
 #include "ProjectSettings.h"
+#include "PlayerConfigJson.h"
 #include "InputMap.h"
 #include "Log.h"
 #include "Paths.h"
@@ -205,37 +206,20 @@ void Load() {
 
     if (const auto it = root.find("build"); it != root.end() && it->is_object()) { // #174
         const json& b = *it;
-        auto str = [&b](const char* key, const std::string& fallback) {
-            const auto f = b.find(key);
-            return (f != b.end() && f->is_string()) ? f->get<std::string>() : fallback;
-        };
-        auto integer = [&b](const char* key, int fallback) {
-            const auto f = b.find(key);
-            return (f != b.end() && f->is_number()) ? f->get<int>() : fallback;
-        };
-        auto boolean = [&b](const char* key, bool fallback) {
-            const auto f = b.find(key);
-            return (f != b.end() && f->is_boolean()) ? f->get<bool>() : fallback;
-        };
-        g_Build.ProductName = str("productName", g_Build.ProductName);
-        g_Build.OutputDir   = str("outputDir", g_Build.OutputDir);
-        g_Build.Width       = std::clamp(integer("width", g_Build.Width), 320, 16384);
-        g_Build.Height      = std::clamp(integer("height", g_Build.Height), 200, 16384);
-        g_Build.Fullscreen  = boolean("fullscreen", g_Build.Fullscreen);
-        g_Build.VSync       = boolean("vsync", g_Build.VSync);
-        g_Build.DevelopmentBuild = boolean("developmentBuild", g_Build.DevelopmentBuild);
-        g_Build.IconPath    = str("iconPath", g_Build.IconPath);     // #174
-        g_Build.SplashPath  = str("splashPath", g_Build.SplashPath); // #174
-        const auto guids = b.find("sceneGuids"); // #132 - parallel to "scenes"
-        if (const auto s = b.find("scenes"); s != b.end() && s->is_array())
-            for (size_t i = 0; i < s->size(); ++i) {
+        BuildFieldsFromJson(b, g_Build);
+        if (const auto f = b.find("outputDir"); f != b.end() && f->is_string()) g_Build.OutputDir = f->get<std::string>();
+        // #132 - "sceneGuids" is parallel to the raw "scenes" array (blanks included). A scene
+        // renamed or moved since follows its GUID, looked up only when the path is gone.
+        const auto guids = b.find("sceneGuids");
+        const auto s = b.find("scenes");
+        if (guids != b.end() && guids->is_array() && s != b.end() && s->is_array()) {
+            size_t kept = 0; // index into g_Build.Scenes, which FieldsFromJson filled minus the blanks
+            for (size_t i = 0; i < s->size() && kept < g_Build.Scenes.size(); ++i) {
                 const json& sc = (*s)[i];
                 if (!sc.is_string() || sc.get<std::string>().empty()) continue;
-                std::string rel = sc.get<std::string>();
-                // A scene renamed or moved since: follow its GUID (looked up only when the path is gone).
+                std::string& rel = g_Build.Scenes[kept++];
                 std::error_code ec;
-                if (guids != b.end() && guids->is_array() && i < guids->size() && (*guids)[i].is_string() &&
-                    !std::filesystem::exists(ProjectPaths::Resolve(rel), ec)) {
+                if (i < guids->size() && (*guids)[i].is_string() && !std::filesystem::exists(ProjectPaths::Resolve(rel), ec)) {
                     const std::string moved = AssetDatabase::PathForGuid(AssetGuid::FromString((*guids)[i].get<std::string>()));
                     if (!moved.empty() && std::filesystem::exists(moved, ec)) {
                         const std::string movedRel = ProjectPaths::Relativize(moved);
@@ -243,8 +227,8 @@ void Load() {
                         rel = movedRel;
                     }
                 }
-                g_Build.Scenes.push_back(rel);
             }
+        }
     }
 
     if (const auto it = root.find("tags"); it != root.end() && it->is_array()) {
@@ -296,26 +280,16 @@ void Save() {
         {"masterVolume", g_Audio.MasterVolume},
         {"busVolumes", std::vector<float>(std::begin(g_Audio.BusVolume), std::end(g_Audio.BusVolume))},
     };
-    root["build"] = {
-        {"productName", g_Build.ProductName},
-        {"outputDir", g_Build.OutputDir},
-        {"scenes", g_Build.Scenes},
-        {"sceneGuids", [] {
-            json a = json::array();
-            for (const std::string& sc : g_Build.Scenes) {
-                const AssetGuid g = AssetDatabase::GuidForPath(ProjectPaths::Resolve(sc));
-                a.push_back(g.IsValid() ? g.ToString() : std::string());
-            }
-            return a;
-        }()},
-        {"width", g_Build.Width},
-        {"height", g_Build.Height},
-        {"fullscreen", g_Build.Fullscreen},
-        {"vsync", g_Build.VSync},
-        {"developmentBuild", g_Build.DevelopmentBuild},
-        {"iconPath", g_Build.IconPath},
-        {"splashPath", g_Build.SplashPath},
-    };
+    json build = json::object();
+    BuildFieldsToJson(g_Build, build);
+    build["outputDir"] = g_Build.OutputDir;
+    json guids = json::array(); // #132 - parallel to "scenes", so a moved scene can be followed
+    for (const std::string& sc : g_Build.Scenes) {
+        const AssetGuid g = AssetDatabase::GuidForPath(ProjectPaths::Resolve(sc));
+        guids.push_back(g.IsValid() ? g.ToString() : std::string());
+    }
+    build["sceneGuids"] = std::move(guids);
+    root["build"] = std::move(build);
     root["tags"] = g_Tags;
     root["assetFolders"] = g_AssetFolders; // #121
 

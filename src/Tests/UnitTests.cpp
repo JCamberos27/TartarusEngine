@@ -54,6 +54,7 @@
 #include "MaterialAsset.h"
 #include "PhysicMaterialAsset.h"
 #include "PlayerConfig.h" // #174 - player.json round-trip
+#include "ProjectSettings.h"
 #include "Player.h"
 #include "PostProcessVolume.h"
 #include "Tonemapper.h"
@@ -1203,6 +1204,22 @@ void TestPlayerConfigRoundTrip() {
 
     // A missing file is a "run as the editor" signal, not an error.
     CHECK(!PlayerConfig::Load((TempDir() / "definitely_absent.json").string(), legacy));
+
+    // The player's user folder name, and Build Settings handing its fields to the player.
+    PlayerConfig named;
+    named.ProductName = "My/Game: 2";
+    CHECK(named.UserFolderName() == "My_Game_ 2");
+    named.ProductName.clear();
+    CHECK(named.UserFolderName() == "TartarusGame");
+    ProjectSettings::BuildSettings bs;
+    bs.ProductName = "Handed Over";
+    bs.Scenes = {"scenes/A.json"};
+    bs.Width = 1024;
+    bs.OutputDir = "D:/Out";
+    PlayerConfig handed;
+    static_cast<PlayerBuildFields&>(handed) = bs;
+    CHECK(handed.ProductName == "Handed Over" && handed.Width == 1024);
+    CHECK(handed.Scenes.size() == 1 && handed.Scenes[0] == "scenes/A.json");
 
     std::error_code ec;
     std::filesystem::remove(path, ec);
