@@ -75,6 +75,8 @@
 #include "PointShadowMap.h"
 #include "LightGather.h"
 #include "ShadowFrame.h"
+#include "SelectionOutline.h"
+#include "ViewPipeline.h"
 #include "IblProbe.h"
 #include "Cubemap.h"               // PR13: HDRI environment cubemap
 #include "ReflectionProbeArray.h"  // PR14: placed reflection probes
@@ -343,79 +345,6 @@ static bool UpdateEditorCamera(Camera& cam, float dt, bool allowLook, bool gizmo
 
 // The first active in-scene Camera entity (creation order), or entt::null. The Game view
 // previews through it while editing so a shot can be framed without walking there (#36 B10).
-// #162 - the scene's post settings for the final tonemap pass.
-// #162 - depth of field reads the view's resolved depth (requested only when DOF is on, so the
-// depth resolve stays off otherwise, #206) and its projection. Game views only: blurring the
-// Scene view would just get in the way of editing.
-// #162 - motion blur joins DOF here: both need this view's resolved depth, so they share the
-// one place that requests it. `viewSlot` picks which previous view-projection to remember -
-// the docked Game view and the maximized player are separate views and must not blur with each
-// other's camera motion.
-static PostSettings WithDepthEffects(PostSettings p, const World& world, const HdrTarget& hdr,
-                                     const glm::mat4& view, const glm::mat4& proj, int viewSlot) {
-    // Remembered per view even when motion blur is off, so switching it on mid-session starts
-    // from the real previous frame rather than a stale one from minutes ago.
-    static constexpr int kViewSlots = 2;
-    static glm::mat4 s_PrevVP[kViewSlots] = {glm::mat4(1.0f), glm::mat4(1.0f)};
-    static bool s_PrevValid[kViewSlots] = {false, false};
-    const int slot = std::clamp(viewSlot, 0, kViewSlots - 1);
-    const glm::mat4 vp = proj * view;
-
-    if (world.MotionBlur) {
-        p.MotionBlur = true;
-        p.MotionBlurIntensity = world.MotionBlurIntensity;
-        p.MotionBlurSamples = world.MotionBlurSamples;
-        p.PrevViewProjValid = s_PrevValid[slot];
-        const glm::mat4 invVP = glm::inverse(vp);
-        std::memcpy(p.InvViewProj, glm::value_ptr(invVP), sizeof(p.InvViewProj));
-        std::memcpy(p.PrevViewProj, glm::value_ptr(s_PrevVP[slot]), sizeof(p.PrevViewProj));
-    }
-    s_PrevVP[slot] = vp;
-    s_PrevValid[slot] = true;
-
-    if (world.DepthOfField) {
-        p.DepthOfField = true;
-        p.ProjA = proj[2][2];
-        p.ProjB = proj[3][2];
-        p.Ortho = proj[2][3] == 0.0f;
-    }
-    if (p.DepthOfField || p.MotionBlur) p.DepthTexture = hdr.ResolvedDepthTexture();
-    return p;
-}
-static PostSettings MakePostSettings(const World& world, unsigned int bloomTex, float bloomIntensity,
-                                     float dt, int exposureSlot, const glm::vec3& cameraPos) {
-    PostSettings p;
-    p.ExposureEV = world.ExposureEV;
-    p.Operator = world.TonemapOperator;
-    p.DeltaTime = dt;
-    p.ExposureSlot = exposureSlot;
-    if (FKeyRow::PostFxOff()) return p; // F8: exposure and the tonemap only - no bloom, grade, lens or auto exposure
-    p.BloomTexture = bloomTex;
-    p.BloomIntensity = bloomIntensity;
-    p.Temperature = world.GradeTemperature;
-    p.Tint = world.GradeTint;
-    p.Contrast = world.GradeContrast;
-    p.Saturation = world.GradeSaturation;
-    for (int i = 0; i < 3; ++i) p.ColorFilter[i] = world.GradeColorFilter[i];
-    p.VignetteIntensity = world.VignetteIntensity;
-    p.VignetteSmoothness = world.VignetteSmoothness;
-    p.ChromaticAberration = world.ChromaticAberration;
-    p.FilmGrain = world.FilmGrain;
-    p.FilmGrainResponse = world.FilmGrainResponse;
-    p.FocusDistance = world.FocusDistance;
-    p.FocusRange = world.FocusRange;
-    p.MaxBlur = world.DofMaxBlur;
-    p.Fxaa = world.EffectiveFxaa(); // TAA replaces it
-    p.AutoExposure = world.AutoExposure;
-    p.AutoExposureMinEV = world.AutoExposureMinEV;
-    p.AutoExposureMaxEV = world.AutoExposureMaxEV;
-    p.AutoExposureSpeedUp = world.AutoExposureSpeedUp;
-    p.AutoExposureSpeedDown = world.AutoExposureSpeedDown;
-    p.DeltaTime = dt;
-    p.ExposureSlot = exposureSlot;
-    ApplyPostProcessVolumes(world, cameraPos, p); // #162 / #203 - local and global volumes
-    return p;
-}
 
 // #165 - the roll that, applied on top of yaw/pitch, lines Camera::Up() up with the entity's own
 // +Y, so a tilted scene Camera plays back tilted exactly like the edit-mode Game preview.
@@ -696,17 +625,11 @@ int main(int argc, char** argv) {
         Shader clusterDecalCullShader(ShaderLibrary::ReadFileRequired("ClusterDecalCull.comp.glsl"), "clusterDecalCullShader"); // decals -> froxel lists (docs/DECALS.md)
         unsigned int fsQuadVao = 0;
         glGenVertexArrays(1, &fsQuadVao); // attribute-less: positions come from gl_VertexID
-        // The selection-outline's multisampled mask target (drawOutline, below) lives here so teardown can free it.
-        unsigned int maskMsFbo = 0, maskMsColor = 0;
-        // Frees the two above while the GL context (window) is still alive.
+        // Frees the VAO above while the GL context (window) is still alive.
         struct GlObjectGuard {
-            unsigned int& vao; unsigned int& fbo; unsigned int& tex;
-            ~GlObjectGuard() {
-                if (fbo) glDeleteFramebuffers(1, &fbo);
-                if (tex) glDeleteTextures(1, &tex);
-                if (vao) glDeleteVertexArrays(1, &vao);
-            }
-        } glObjectGuard{fsQuadVao, maskMsFbo, maskMsColor};
+            unsigned int& vao;
+            ~GlObjectGuard() { if (vao) glDeleteVertexArrays(1, &vao); }
+        } glObjectGuard{fsQuadVao};
         TintOverlayRenderer tintOverlay;
         Grid grid;
         ColliderGizmo colliderGizmo; // #185 PR 2
@@ -719,7 +642,7 @@ int main(int argc, char** argv) {
         bool                      hdriNeedsBake = false; // #200 — set when hdriCube is (re)loaded
         bool                      prevWasHdri = false;
         bool                      prevWasAtmosphere = false;
-        // PR14: reflection probe array — rebuilt from scene each frame, bound per drawScene
+        // PR14: reflection probe array — rebuilt from scene each frame, bound per scene draw
         ReflectionProbeArray probeArray;
         // Room captures for the probes with Capture Scene on: rendered + prefiltered a face per frame, never per frame.
         ReflectionProbeCapture probeCapture;
@@ -1599,7 +1522,7 @@ int main(int argc, char** argv) {
         // The editor's own "Scene" tab renders into this rather than straight into the
         // backbuffer — see the "Scene tab offscreen pass" comment below for why.
         Framebuffer sceneFramebuffer;   // LDR: tonemap output the Scene tab shows via ImGui::Image
-        Framebuffer selectionMaskFbo; // 1-bit silhouette mask for the screen-space selection outline
+        SelectionOutline selectionOutline; // the Scene view's selection outline and its mask targets (Renderer/SelectionOutline)
 
         // The lighting overhaul renders the scene + editor overlays into these linear RGBA16F
         // MSAA targets, then a shared Tonemapper pass resolves + maps them into the LDR
@@ -1626,6 +1549,7 @@ int main(int argc, char** argv) {
         LightGather lightGather; // the frame's light SSBO + shadow slots (Renderer/LightGather)
         ShadowFrame shadowFrame; // the sun cascades and the cached spot/point maps (Renderer/ShadowFrame)
         SceneRenderer sceneRenderer;  // audit #359 pass 2 — the scene-draw pass, formerly a lambda here
+        ViewPipeline viewPipeline;    // the Scene and Game view render paths (Renderer/ViewPipeline)
 
         Camera editorCamera;
         // What Play's state bits mean: PlayState (App/PlaySession.h).
@@ -2888,15 +2812,6 @@ int main(int argc, char** argv) {
                 probeCapture.Sync(probeArray, iblProbe.IsValid(), glfwGetTime());
             }
 
-            // Renders the lit scene (sky + every Transform+Renderable entity) into whatever
-            // framebuffer/viewport is currently bound. Shared by the real on-screen pass below
-            // and GameViewPanel's offscreen framebuffer pass, so the two can never silently
-            // diverge. Editor-only visualization (selection outline/highlight, drag-preview
-            // ghost, grid, wireframe) is deliberately NOT part of this — the Game View should
-            // show exactly what Play Mode does, never editor debug shading.
-            // editorView: the editor Scene viewport (not the Game view). Only that pass applies
-            // editor-only visibility filters — the per-layer visibility mask (#236 A1) and the
-            // per-entity HiddenInSceneTag (#236 B). The running game and its Game view draw everything.
             // audit #359 pass 2: the ~330-line drawScene lambda that used to live here is now
             // SceneRenderer::RenderScene. Its ~25 `[&]`-captures are gathered into this explicit
             // value once per frame (after the shadow / IBL / cluster prerequisite passes above
@@ -2925,7 +2840,7 @@ int main(int argc, char** argv) {
             }
             sceneInputs.decalCullShader    = &clusterDecalCullShader;
             sceneInputs.hdriCube           = hdriCube.get();
-            sceneInputs.sunShadowsReady    = false; // set per view in drawScene (#109)
+            sceneInputs.sunShadowsReady    = false; // set per view in ViewPipeline::DrawScene (#109)
             sceneInputs.frameLightCount    = frameLights.LightCount;
             sceneInputs.sunAngularDeg       = frameLights.SunAngularDeg;
             sceneInputs.sunShadowSoftness   = frameLights.SunShadowSoftness;
@@ -2948,13 +2863,52 @@ int main(int argc, char** argv) {
             sceneInputs.postFxOff        = FKeyRow::PostFxOff(); // F8
             sceneInputs.ssaoIntensity    = world.SsaoIntensity;
             sceneInputs.layerVisibleMask = frameSettings.LayerVisibleMask;
-            auto drawScene = [&](const RenderFrameContext& ctx, EditorLayer::RenderStats* outStats) {
-                // TAA: LOD picks and the sun's cascade fit see the unjittered projection, or the cascades would
-                // re-fit (and shimmer) with every sub-pixel step.
-                const glm::mat4 steadyProj = ctx.TaaVelocity ? TemporalAA::JitterProjection(ctx.Proj, -ctx.TaaJitterNdc) : ctx.Proj;
-                { PROFILE_SCOPE("LOD Select"); world.ApplyLod(ctx.ViewPos, steadyProj); } // #163 - this view's LOD levels (sun shadows too)
-                sceneInputs.sunShadowsReady = shadowFrame.RenderSun(shadowIn, ctx.View, steadyProj); // #109
-                sceneRenderer.RenderScene(world, ctx, sceneInputs, outStats);
+            // The Scene and Game view render paths (Renderer/ViewPipeline) and what they read this frame.
+            ViewPipelineInputs viewIn;
+            viewIn.world = &world;
+            viewIn.window = &window;
+            viewIn.editor = &editor;
+            viewIn.editorCamera = &editorCamera;
+            viewIn.playing = &playing;
+            viewIn.playUsesPlayer = &playUsesPlayer;
+            viewIn.dt = dt;
+            viewIn.sceneRenderer = &sceneRenderer;
+            viewIn.sceneInputs = &sceneInputs;
+            viewIn.shadowFrame = &shadowFrame;
+            viewIn.shadowIn = &shadowIn;
+            viewIn.depthShader = &shadowShader;
+            viewIn.ssaoComputeShader = &ssaoComputeShader;
+            viewIn.ssaoBlurShader = &ssaoBlurShader;
+            viewIn.bloomThreshShader = &bloomThreshShader;
+            viewIn.bloomDownsampleShader = &bloomDownsampleShader;
+            viewIn.bloomUpsampleShader = &bloomUpsampleShader;
+            viewIn.outlineModelShader = &outlineModelShader;
+            viewIn.outlineDilateShader = &outlineDilateShader;
+            viewIn.fsQuadVao = fsQuadVao;
+            viewIn.tonemapper = &tonemapper;
+            viewIn.colliderGizmo = &colliderGizmo;
+            viewIn.scene = {&sceneHdr, &sceneTaa, &sceneOpaqueColor, &ssao, &bloom};
+            viewIn.sceneLdr = &sceneFramebuffer;
+            viewIn.tintOverlay = &tintOverlay;
+            viewIn.grid = &grid;
+            viewIn.selectionOutline = &selectionOutline;
+            viewIn.harnessCleanViews = npcTest && npcTest->WantsCleanViews();
+            viewIn.game = {&gameHdr, &gameTaa, &gameOpaqueColor, &gameSsao, &gameBloom};
+            viewIn.gameLdr = &gameLdr;
+            viewIn.upscaler = &upscaler;
+            viewIn.viewModelFov = [&] { return firstPersonPresentation.ViewModelFov(); };
+            viewIn.weaponOverlay = [&](const glm::mat4& v, const glm::mat4& p, const glm::vec3& eye, int h) {
+                return weaponOverlay(playing && playUsesPlayer, v, p, eye, h);
+            };
+            viewIn.worldExtras = [&](const glm::mat4& v, const glm::mat4& p, const glm::vec3& eye) {
+                if (playing && playUsesPlayer && gravityGunLive() && gravityGun.IsCharging())
+                    drawThrowArc(v, p, eye);
+            };
+            // No crosshair, vitals HUD or combat HUD player half (ammo, kill feed, radio subtitles, awareness chevrons) until
+            // they are redesigned. The combat HUD still draws the AI debug overlay (F9, a dev tool) when it's on.
+            viewIn.hud = [&](unsigned fbo, int w, int h, const glm::mat4& v, const glm::mat4& p) {
+                if (playing && playUsesPlayer && (npcDirector.Active() || FKeyRow::CurrentOverlay() >= FKeyRow::OverlayNav))
+                    drawCombatHud(fbo, w, h, v, p);
             };
 
             // Reflection probe room captures (ReflectionProbeCapture): this frame's share - at most one cube face
@@ -2962,78 +2916,11 @@ int main(int argc, char** argv) {
             if (probeCapture.Busy()) {
                 PROFILE_SCOPE("Probe Capture");
                 PROFILE_GPU_SCOPE("Probe Capture");
-                probeCapture.Step(iblProbe, probeArray, [&](const RenderFrameContext& c) { drawScene(c, nullptr); });
+                probeCapture.Step(iblProbe, probeArray, [&](const RenderFrameContext& c) { viewPipeline.DrawScene(viewIn, c, nullptr); });
                 glBindFramebuffer(GL_FRAMEBUFFER, 0);
                 glViewport(0, 0, window.GetWidth(), window.GetHeight());
                 GLStateCache::Invalidate();
             }
-
-            // #111 — the SSAO depth pre-pass, shared by the Scene view, the docked Game view and
-            // maximised Play (it was pasted three times). Uses the main pass's visibility rules:
-            // inactive entities, and in the editor Scene view HiddenInScene + the layer mask, are
-            // skipped (they used to leave AO "ghosts"); transparent-queue objects write no depth
-            // in the main pass so they don't here either; everything outside the view is culled.
-            // ViewModelTag is skipped unconditionally for the same reason those did: the arms and
-            // weapon are a camera-attached overlay composited over the world in their own
-            // sub-pass, so their depth here would only darken the world pixels hugging them.
-            // The occlusion + blur from `target`'s depth, however that depth was filled.
-            auto ssaoCompute = [&](Ssao& target, const glm::mat4& proj) {
-                PROFILE_GPU_SCOPE("SSAO Compute + Blur");
-                target.Compute(ssaoComputeShader, proj, world.SsaoRadius, world.SsaoBias);
-                target.Blur(ssaoBlurShader);
-                GLStateCache::Invalidate();
-            };
-            auto ssaoDepthPrepass = [&](Ssao& target, int w, int h, const glm::mat4& view,
-                                        const glm::mat4& proj, bool editorView) {
-                world.ApplyLod(glm::vec3(glm::inverse(view)[3]), proj); // #163 - same levels as the draw
-                glBindFramebuffer(GL_FRAMEBUFFER, target.DepthFbo());
-                glViewport(0, 0, w, h);
-                glClear(GL_DEPTH_BUFFER_BIT);
-                glEnable(GL_DEPTH_TEST);
-                glDepthMask(GL_TRUE);
-                glEnable(GL_CULL_FACE);
-                glCullFace(GL_BACK);
-                glDisable(GL_BLEND);
-
-                shadowShader.Bind();
-                shadowShader.SetMat4("uLightViewProj", proj * view);
-                shadowShader.SetInt("uUseSkinning", 0);
-                const Frustum frustum = Frustum::FromViewProj(proj * view);
-                // What the view sees (each view's own copy of a split pose - the player's camera the first-person
-                // one), opaque, in the frustum as posed like the main pass; no view-model geometry (see note above).
-                VisibilityQuery seen;
-                seen.OwnerView = !editorView;
-                seen.EditorView = editorView;
-                seen.LayerVisibleMask = sceneInputs.layerVisibleMask;
-                seen.SkipViewModels = true;
-                // The player's own body in the camera's view: its shoulders and whatever is within Near
-                // Hide are discarded in the main pass, so here they would occlude from nowhere. The main
-                // pass gives these pieces no SSAO to match (SceneRenderer, DrawItem::NoSsao).
-                seen.SkipPlayerBody = !editorView;
-                seen.SkipTransparent = true;
-                seen.Cull = &frustum;
-                // Same small-object cull as the main pass (SceneRenderer), so the two agree on what stands in front.
-                const glm::vec3 seenEye = glm::vec3(glm::inverse(view)[3]);
-                if (std::abs(proj[3][3]) < 0.5f) {
-                    seen.SizeCullEye = &seenEye;
-                    seen.SizeCullProjScale = proj[1][1];
-                    seen.MinScreenHeight = ProjectSettings::Quality().SmallObjectCullHeight;
-                }
-                static std::vector<VisibleRenderable> visible;
-                GatherVisible(world, seen, visible);
-                static std::vector<DepthCaster> draws;
-                draws.clear();
-                for (const VisibleRenderable& v : visible) {
-                    auto& rc = *v.Renderable;
-                    const auto* hide = world.Registry.try_get<OutfitHideTag>(v.Entity);
-                    draws.push_back({rc.ModelRef.get(), &rc.Materials, hide ? hide->Visible.get() : nullptr, &v.Xform});
-                }
-                DrawDepthCasters(shadowShader, draws);
-                glBindFramebuffer(GL_FRAMEBUFFER, 0);
-                GLStateCache::Invalidate();
-
-                ssaoCompute(target, proj);
-            };
 
             // --- Scene tab (editor viewport) offscreen pass -----------------------------------
             // Rendered into its own framebuffer rather than straight into the backbuffer, then
@@ -3052,324 +2939,7 @@ int main(int argc, char** argv) {
             editor.UpdateViewFade(editorCamera, *gameCam, playing);
             if ((editorUIVisible && editor.SceneImageWanted() && !(opt.perfBenchMode && npcTest)) ||
                 (npcTest && playing && !(opt.perfBenchMode && npcTest && opt.smokeShotsDir.empty()))) {
-                PROFILE_SCOPE("Scene View Render");
-                PROFILE_GPU_SCOPE("Scene View Render");
-                glm::vec2 available = editor.GetLastSceneContentRegion();
-                if (available.x < 1.0f || available.y < 1.0f) {
-                    available = {(float)window.GetWidth(), (float)window.GetHeight()};
-                }
-                const int scW = std::max((int)available.x, 1);
-                const int scH = std::max((int)available.y, 1);
-
-                sceneFramebuffer.Resize(scW, scH);
-                sceneHdr.Resize(scW, scH, world.EffectiveMsaaSamples());
-                // TAA: a velocity attachment and the resolved depth for the resolve; jitter goes on below.
-                const bool sceneTaaOn = world.TaaEnabled() && sceneHdr.IsValid();
-                sceneHdr.SetVelocityEnabled(sceneTaaOn);
-                if (sceneTaaOn) sceneHdr.ResolvedDepthTexture(); // provisioned before this frame's ResolveTo
-                else sceneTaa.Reset();
-                sceneHdr.BindForRender();
-                glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-                if (sceneTaaOn) sceneHdr.ClearVelocity(TemporalAA::kVelocityUnknown);
-
-                float sceneAspect = (float)scW / (float)scH;
-                glm::mat4 sceneViewMat = editorCamera.ViewMatrix();
-                glm::mat4 sceneProjMat = editorCamera.ProjectionMatrix(sceneAspect);
-                // The world pass draws through the jittered projection; picking, gizmos, the grid and outlines keep sceneProjMat.
-                const glm::mat4 sceneDrawProj = sceneTaaOn ? sceneTaa.BeginFrame(sceneViewMat, sceneProjMat, scW, scH) : sceneProjMat;
-
-                EditorLayer::ShadingMode shading = editor.GetShadingMode();
-                bool sceneWireframe = shading == EditorLayer::ShadingMode::Wireframe;
-                bool sceneUnlit = shading == EditorLayer::ShadingMode::Unlit;
-                const int sceneDebugView = FKeyRow::DebugViewFor((int)shading); // model shader uDebugView (FKeyRow.h)
-                if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-
-                // PR15: SSAO depth pre-pass — runs before drawScene so the occlusion map is ready.
-                // Reuses shadowShader (ShadowDepth.vert.glsl) with uLightViewProj = proj * view.
-                // Skipped in unlit/wireframe modes where SSAO has no visual effect.
-                if (world.SsaoEnabled && !sceneUnlit) ssao.Resize(scW, scH);
-                // audit #358 — if any SSAO FBO came back incomplete, skip the passes outright
-                // (the scene just renders without ambient occlusion) instead of drawing into a
-                // zero/invalid framebuffer.
-                // With the depth pre-pass on, SSAO takes that pass's depth instead (sceneCtx.SsaoFromPrepass below).
-                const bool sceneSsaoFromPrepass = world.SsaoEnabled && !sceneUnlit && ssao.IsValid() &&
-                                                  ProjectSettings::Quality().DepthPrepass;
-                if (world.SsaoEnabled && !sceneUnlit && ssao.IsValid() && !sceneSsaoFromPrepass) {
-                    PROFILE_SCOPE("SSAO Depth Pre-pass");
-                    PROFILE_GPU_SCOPE("SSAO Depth Pre-pass");
-                    ssaoDepthPrepass(ssao, scW, scH, sceneViewMat, sceneDrawProj, /*editorView=*/true);
-
-                    // Restore HdrTarget for the main scene draw
-                    sceneHdr.BindForRender();
-                }
-
-                EditorLayer::RenderStats sceneStats;
-                {
-                    RenderFrameContext sceneCtx{ sceneViewMat, sceneDrawProj, editorCamera.Position,
-                                                 sceneUnlit, /*EditorView=*/true, /*DebugView=*/sceneDebugView,
-                                                 &sceneHdr, &sceneOpaqueColor, &ssao };
-                    if (sceneSsaoFromPrepass)
-                        sceneCtx.SsaoFromPrepass = [&] { ssaoCompute(ssao, sceneDrawProj); };
-                    sceneCtx.TaaVelocity = sceneTaaOn;
-                    sceneCtx.TaaJitterNdc = sceneTaa.JitterNdc();
-                    sceneCtx.TaaPrevViewProj = sceneTaa.PrevViewProj();
-                    drawScene(sceneCtx, &sceneStats);
-                }
-
-                editor.SetRenderStats(sceneStats);
-
-                // #178 - Search in Scene: while the Hierarchy search is active, wash every visible
-                // object that doesn't match it in flat grey, so the matches stand out (Unity).
-                if (editor.SceneSearchActive() && !editor.OverlaysHidden()) {
-                    if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-                    for (auto e : world.Registry.view<const TransformComponent, const RenderableComponent>()) {
-                        if (world.Registry.any_of<InactiveTag, LodCulledTag, HiddenInSceneTag, PoseSourceTag, OwnerViewOnlyTag>(e)) continue;
-                        if (editor.MatchesSceneSearch(world, e)) continue;
-                        const auto& r = world.Registry.get<const RenderableComponent>(e);
-                        if (!r.ModelRef || r.CastShadows == RenderableComponent::ShadowCasting::ShadowsOnly) continue;
-                        tintOverlay.Render(*r.ModelRef, world.GetCachedWorldTransform(e), sceneViewMat, sceneProjMat,
-                                           glm::vec3(0.18f), 0.85f);
-                    }
-                    if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-                    GLStateCache::Invalidate();
-                }
-                // NB: in Wireframe mode the polygon mode stays GL_LINE through the selection
-                // passes below, so the inverted-hull "outline" draws as an enlarged orange
-                // wireframe over the object rather than a filled orange silhouette that buries
-                // its own wireframe (#13 P2). Reset to GL_FILL before the drag-preview ghost.
-
-                // Selection outline: screen-space. Render the selected meshes' silhouettes to a
-                // 1-bit mask target, then a fullscreen pass paints a uniform-width ring in the
-                // pixels just OUTSIDE that mask. No surface wash — the wash + an inverted-hull
-                // that couldn't widen a flat mesh's silhouette were what turned a selected
-                // flat/thin object into a solid orange blob (audit #51).
-                auto selection = editor.GetSelectedItems();
-                const bool outlinesOn = !editor.OverlaysHidden() && !editor.CleanShots();
-                const glm::vec3 kOutlineColor = editor.SelectionOutlineColor(); // theme-driven: near-white on Glass
-                const int kOutlinePixels = 1; // a thin ring, like Unity's (3 read as a thick band)
-
-                // One outline: the models' silhouettes into the mask, then the ring around it. The
-                // selection draws it opaque (with the sweep-on); the hover pre-highlight is a second,
-                // separate mask draw at ~35% (uFade 0.65): one mask can't carry two entities at two
-                // strengths, and a hovered mesh is a single cheap draw.
-                auto drawOutline = [&](const std::vector<Model*>& models, const std::vector<glm::mat4>& xforms,
-                                       const glm::vec3& outlineColor, float outlineFade, bool outlineSweep) {
-                    // --- Silhouette mask pass: flat white where a selected mesh is, into its
-                    // own target. Depth test off so a partly-occluded selection is still fully
-                    // outlined (Unity's behaviour).
-                    // Drawn at 2x the scene size with 4x MSAA, then resolved: a linear fetch at a
-                    // scene pixel centre averages 2x2 texels of 4 samples, i.e. 16-sample edge
-                    // coverage for the anti-aliased ring (OutlineDilate.frag.glsl).
-                    const int maskW = scW * 2, maskH = scH * 2;
-                    selectionMaskFbo.Resize(maskW, maskH);
-                    static int maskMsW = 0, maskMsH = 0;
-                    if (maskMsW != maskW || maskMsH != maskH) {
-                        if (maskMsFbo) { glDeleteFramebuffers(1, &maskMsFbo); glDeleteTextures(1, &maskMsColor); }
-                        glCreateTextures(GL_TEXTURE_2D_MULTISAMPLE, 1, &maskMsColor);
-                        glTextureStorage2DMultisample(maskMsColor, 4, GL_RGB8, maskW, maskH, GL_TRUE);
-                        glCreateFramebuffers(1, &maskMsFbo);
-                        glNamedFramebufferTexture(maskMsFbo, GL_COLOR_ATTACHMENT0, maskMsColor, 0);
-                        maskMsW = maskW;
-                        maskMsH = maskH;
-                    }
-                    glBindFramebuffer(GL_FRAMEBUFFER, maskMsFbo);
-                    glViewport(0, 0, maskW, maskH);
-                    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-                    glClear(GL_COLOR_BUFFER_BIT);
-                    glDisable(GL_DEPTH_TEST);
-                    glDepthMask(GL_FALSE);
-                    outlineModelShader.Bind();
-                    outlineModelShader.SetMat4("uView", sceneViewMat);
-                    outlineModelShader.SetMat4("uProj", sceneProjMat);
-                    outlineModelShader.SetFloat("uThickness", 0.0f);
-                    outlineModelShader.SetVec3("uOutlineColor", glm::vec3(1.0f));
-                    if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL); // mask must be solid
-                    for (size_t i = 0; i < models.size(); ++i) {
-                        outlineModelShader.SetMat4("uModel", xforms[i]);
-                        models[i]->Draw(outlineModelShader);
-                    }
-                    if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-                    glBlitNamedFramebuffer(maskMsFbo, selectionMaskFbo.Handle(), 0, 0, maskW, maskH, 0, 0, maskW, maskH,
-                                           GL_COLOR_BUFFER_BIT, GL_NEAREST); // MSAA resolve (same RGB8 format as the Framebuffer)
-
-                    // --- Dilate pass: back to the scene target, paint the ring.
-                    sceneHdr.BindForRender();
-                    glEnable(GL_BLEND);
-                    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-                    outlineDilateShader.Bind();
-                    glActiveTexture(GL_TEXTURE0);
-                    glBindTexture(GL_TEXTURE_2D, selectionMaskFbo.ColorTexture());
-                    outlineDilateShader.SetInt("uMask", 0);
-                    outlineDilateShader.SetVec3("uTexel", glm::vec3(1.0f / (float)scW, 1.0f / (float)scH, 0.0f));
-                    outlineDilateShader.SetVec3("uColor", outlineColor);
-                    outlineDilateShader.SetFloat("uFade", outlineFade);
-                    outlineDilateShader.SetInt("uRadius", kOutlinePixels);
-                    {   // Motion v2: the outline sweeps on around the selection's centre after it changes
-                        glm::vec3 c(0.0f);
-                        for (const glm::mat4& x : xforms) c += glm::vec3(x[3]);
-                        if (!xforms.empty()) c /= (float)xforms.size();
-                        const glm::vec4 clip = sceneProjMat * sceneViewMat * glm::vec4(c, 1.0f);
-                        const glm::vec2 uv = clip.w > 1e-4f ? glm::vec2(clip) / clip.w * 0.5f + 0.5f : glm::vec2(0.5f);
-                        outlineDilateShader.SetFloat("uSweepHide", outlineSweep ? 1.0f - editor.SelectionOutlineReveal() : 0.0f);
-                        outlineDilateShader.SetVec2("uSweepCenter", uv);
-                    }
-                    glBindVertexArray(fsQuadVao);
-                    glDrawArrays(GL_TRIANGLES, 0, 6);
-                    glBindVertexArray(0);
-
-                    // Restore.
-                    glDisable(GL_BLEND);
-                    glEnable(GL_DEPTH_TEST);
-                    glDepthMask(GL_TRUE);
-                    GLStateCache::Invalidate(); // raw shader/VAO/texture binds above bypass the cache
-                };
-
-                // Hover pre-highlight: the mesh under the cursor, unless it is already selected.
-                if (outlinesOn && !playing) {
-                    editor.UpdateHoverPick(world, editorCamera);
-                    const entt::entity hovered = editor.HoveredEntity();
-                    if (hovered != entt::null && world.Registry.valid(hovered) && std::find(selection.begin(), selection.end(), hovered) == selection.end()) {
-                        auto* hoverRend = world.Registry.try_get<RenderableComponent>(hovered);
-                        if (hoverRend && hoverRend->ModelRef) {
-                            drawOutline({hoverRend->ModelRef.get()}, {world.GetCachedWorldTransform(hovered)}, kOutlineColor, 0.65f, false);
-                        }
-                    }
-                }
-
-                if (!selection.empty() && outlinesOn) {
-                    std::vector<glm::mat4> xforms;
-                    std::vector<Model*> models;
-                    for (entt::entity entity : selection) {
-                        if (!world.Registry.valid(entity)) continue; // may have been deleted this same frame
-                        // Lights and empties have nothing to outline - they get a screen-space
-                        // selection ring from EditorLayer::DrawEntityIcons instead.
-                        auto* renderablePtr = world.Registry.try_get<RenderableComponent>(entity);
-                        if (!renderablePtr) continue;
-                        xforms.push_back(world.GetCachedWorldTransform(entity));
-                        models.push_back(renderablePtr->ModelRef.get());
-                    }
-                    if (!models.empty()) drawOutline(models, xforms, kOutlineColor, 0.0f, true);
-                }
-
-                if (sceneWireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
-                // "Drag from Asset Browser" placement preview: a translucent ghost at wherever
-                // the dragged model would land if released right now (raycast + grid-snap +
-                // bottom-alignment, computed each frame by EditorLayer::DrawViewportDropTarget
-                // while the drag is over the viewport) - see TintOverlayRenderer's own comment
-                // for why this is a flat tint rather than the real PBR material shader.
-                const EditorLayer::DragPreview& dragPreview = editor.GetDragPreview();
-                if (dragPreview.Active) {
-                    const glm::mat4 pose = glm::translate(glm::mat4(1.0f), dragPreview.Position) *
-                                           glm::mat4_cast(dragPreview.Rotation);
-                    for (const auto& part : dragPreview.Parts)
-                        if (part.ModelRef)
-                            tintOverlay.Render(*part.ModelRef, pose * part.Local, sceneViewMat, sceneProjMat,
-                                glm::vec3(0.3f, 0.85f, 1.0f), dragPreview.Alpha);
-                }
-
-                // Resolve MSAA now, before the grid/axis-line and collider-wireframe overlays
-                // below — this snapshot is what Bloom reads. Editor-only overlays are never real
-                // scene lighting, so they must never bloom/glow; capturing the bloom source here,
-                // before they're drawn, guarantees that regardless of their color or opacity.
-                sceneHdr.ResolveTo();
-
-                // PR16: Bloom — soft-knee threshold + mip-pyramid blur before tonemapping.
-                // Resize takes the FULL scene resolution; Bloom halves it internally for mip 0.
-                unsigned int bloomGlowTex  = 0u;
-                float        bloomIntensity = 0.0f;
-                if (world.BloomEnabled && !FKeyRow::PostFxOff()) { // F8 off: no bloom
-                    PROFILE_GPU_SCOPE("Bloom");
-                    bloom.Resize(scW, scH);
-                    // audit #358 — only run the pyramid passes if every mip FBO validated
-                    // complete; otherwise the frame simply has no bloom glow added.
-                    if (bloom.IsValid()) {
-                        bloom.Compute(bloomThreshShader, bloomDownsampleShader, bloomUpsampleShader,
-                                      sceneHdr.ResolvedColorTexture(),
-                                      world.BloomThreshold,
-                                      world.BloomKnee);
-                        bloomGlowTex  = bloom.GlowTexture();
-                        bloomIntensity = world.BloomIntensity;
-                    }
-                    GLStateCache::Invalidate();
-                }
-
-                // The collider wireframe overlay — drawn AFTER the bloom source snapshot above so it
-                // never contributes to bloom. Bloom::Compute (when it ran) leaves FBO 0 bound, so the
-                // MSAA HDR target is rebound here; the overlay still depth-tests correctly against
-                // the real scene geometry already in that target's depth buffer.
-                sceneHdr.BindForRender();
-                // Collider wireframe overlay (#185 PR 2) — depth-tested so scene geometry
-                // occludes it, no depth write so it never blocks anything drawn after. Also
-                // carries the physics visual debug-draw channels (#185 A), which have their own
-                // toggle, so it runs when either is on.
-                {
-                    const bool showShapes = EditorSettings::Get().ShowColliders;
-                    const bool showDebug  = EditorSettings::Get().PhysicsDebugDrawFlags != 0u || BodyDebug::Enabled();
-                    if ((showShapes || showDebug) && !editor.OverlaysHidden() && !editor.CleanShots() && !(npcTest && npcTest->WantsCleanViews())) {
-                        glEnable(GL_DEPTH_TEST);
-                        glDepthMask(GL_FALSE);
-                        // Selected-only: just the selection's colliders and its descendants' (F3's Play overlay below shows all).
-                        const std::function<bool(entt::entity)> inSelection = [&](entt::entity e) { return editor.InSelectionTree(world, e); };
-                        colliderGizmo.Draw(sceneViewMat, sceneProjMat, world, showShapes,
-                                           EditorSettings::Get().CollidersSelectedOnly ? &inSelection : nullptr);
-                        glDepthMask(GL_TRUE);
-                    }
-                }
-
-                // Resolve again now that the collider overlay is drawn, so the Scene tab
-                // still shows them — only the earlier, overlay-free resolve above ever reached
-                // Bloom. Tonemap the linear-HDR scene into the LDR texture the Scene tab displays
-                // (exposure -> curve -> gamma, once, in Tonemapper).
-                sceneHdr.ResolveTo();
-                unsigned int sceneColorTex = sceneHdr.ResolvedColorTexture();
-                if (sceneTaaOn) {
-                    PROFILE_SCOPE("TAA");
-                    PROFILE_GPU_SCOPE("TAA");
-                    sceneColorTex = sceneTaa.Resolve(sceneColorTex, sceneHdr.ResolvedDepthTexture(), sceneHdr.VelocityTexture(),
-                                                     world.TaaSharpness);
-                }
-                {
-                PROFILE_GPU_SCOPE("Tonemap");
-                tonemapper.Apply(sceneColorTex, sceneFramebuffer.Handle(), scW, scH,
-                                 MakePostSettings(world, bloomGlowTex, bloomIntensity, dt, 0, editorCamera.Position));
-                }
-
-                // Grid / axis lines — drawn AFTER the tonemap, straight into the LDR image the Scene
-                // tab shows, so their colours are the editor's own sRGB values (EditorTheme::Axis*,
-                // the traffic lights' family) rather than linear light pushed through exposure, the
-                // tonemap curve, grading and gamma, which washed them out toward white. Also keeps
-                // them out of bloom, vignette and grain. The grid quad sits at a constant depth and
-                // never occluded against the scene, so no depth test is lost by drawing here.
-                sceneFramebuffer.Bind();
-                if (editor.ShowGrid() && !editor.OverlaysHidden() && !(npcTest && npcTest->WantsCleanViews())) { // (no grid lines through a test's shots)
-                    const GLboolean gridHadDepthTest = glIsEnabled(GL_DEPTH_TEST);
-                    glDisable(GL_DEPTH_TEST);
-                    // The grid shader fades lines by literal world-space distance from the
-                    // camera. That distance is meaningless in orthographic mode — scroll-zoom
-                    // there resizes OrthoHalfHeight without moving the camera (see
-                    // UpdateEditorCamera), so "how zoomed in you are" and "how far the camera
-                    // physically sits" are decoupled, and a fixed fade radius would fade the grid
-                    // out at high zoom for no visual reason. Orthographic views don't need the
-                    // radial fade anyway (no perspective depth cue to blend into), so just push
-                    // it out far enough to never kick in.
-                    const EditorSettings& gset = EditorSettings::Get();
-                    float gridFade = editorCamera.Orthographic ? 100000.0f : gset.GridFadeDistance;
-                    auto toVec3 = [](ImVec4 c) { return glm::vec3(c.x, c.y, c.z); };
-                    GridColors gridColors;
-                    gridColors.AxisX = toVec3(EditorTheme::AxisX);
-                    gridColors.AxisY = toVec3(EditorTheme::AxisY);
-                    gridColors.AxisZ = toVec3(EditorTheme::AxisZ);
-                    grid.Draw(sceneViewMat, sceneProjMat, editorCamera.Position,
-                              gset.GridMinorSpacing, (float)gset.GridMajorEvery, gridFade,
-                              gset.GridOpacity, gset.GridShowAxisLines, gset.GridAxisThickness,
-                              gridColors);
-                    if (gridHadDepthTest) glEnable(GL_DEPTH_TEST);
-                }
-
-                Framebuffer::BindDefault(window.GetWidth(), window.GetHeight());
-                editor.SetSceneTexture(sceneFramebuffer.ColorTexture(), sceneFramebuffer.Width(), sceneFramebuffer.Height());
+                viewPipeline.RenderSceneView(viewIn); // Renderer/ViewPipeline
             }
 
             {
@@ -3536,113 +3106,6 @@ int main(int argc, char** argv) {
                 editor.SetGameViewOpenState(gameView.IsWindowOpen());
             }
 
-            // The game camera's frame, from the HDR clear to the HUD: drawn at rw x rh, shown at outW x outH in `outFbo`
-            // (upscaled when smaller). The docked Game view and Free-Aspect maximized play differ only in what they pass:
-            // `postSlot` is the post chain's motion-blur history, and `overlayInPlayOnly` keeps the physics debug overlay to Play.
-            auto renderGameFrame = [&](const glm::mat4& view, const glm::mat4& proj, const glm::vec3& eye, int rw, int rh,
-                                       unsigned outFbo, int outW, int outH, int postSlot, bool overlayInPlayOnly,
-                                       EditorLayer::RenderStats& stats) {
-                const bool scaled = rw != outW || rh != outH;
-                gameHdr.Resize(rw, rh, world.EffectiveMsaaSamples());
-                const bool gameTaaOn = world.TaaEnabled() && gameHdr.IsValid();
-                gameHdr.SetVelocityEnabled(gameTaaOn);
-                if (gameTaaOn) gameHdr.ResolvedDepthTexture(); // provisioned before this frame's ResolveTo
-                else gameTaa.Reset();
-                // TAA: the world pass (and its SSAO pre-pass) draws jittered; the view-model sub-pass builds its own
-                // unjittered projection (SceneRenderer), and the overlays below keep `proj`.
-                const glm::mat4 drawProj = gameTaaOn ? gameTaa.BeginFrame(view, proj, rw, rh) : proj;
-                gameHdr.BindForRender();
-                glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-                if (gameTaaOn) gameHdr.ClearVelocity(TemporalAA::kVelocityUnknown);
-                // SSAO depth pre-pass - the Game view's own Ssao instance/resolution, apart from the Scene view's (see the
-                // gameSsao declaration). The two callers are mutually exclusive per frame, so no resize thrash.
-                const bool gameSsaoOn = world.SsaoEnabled && !FKeyRow::PostFxOff(); // F8
-                if (gameSsaoOn) gameSsao.Resize(rw, rh);
-                // With the depth pre-pass on, SSAO takes that pass's depth instead (gameCtx.SsaoFromPrepass below).
-                const bool gameSsaoFromPrepass = gameSsaoOn && gameSsao.IsValid() && ProjectSettings::Quality().DepthPrepass;
-                if (gameSsaoOn && gameSsao.IsValid() && !gameSsaoFromPrepass) { // audit #358 - skip if any FBO incomplete
-                    PROFILE_SCOPE("SSAO Depth Pre-pass (Game)");
-                    PROFILE_GPU_SCOPE("SSAO Depth Pre-pass (Game)");
-                    ssaoDepthPrepass(gameSsao, rw, rh, view, drawProj, /*editorView=*/false);
-
-                    gameHdr.BindForRender(); // restore for the main scene draw below
-                }
-
-                // F5's draw mode and F7's light view reach the game camera too (FKeyRow.h).
-                const EditorLayer::ShadingMode gameShading = editor.GetShadingMode();
-                const bool gameWire = gameShading == EditorLayer::ShadingMode::Wireframe;
-                if (gameWire) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-                {
-                    RenderFrameContext gameCtx{ view, drawProj, eye, /*Unlit=*/gameShading == EditorLayer::ShadingMode::Unlit,
-                                                /*EditorView=*/false, /*DebugView=*/FKeyRow::DebugViewFor((int)gameShading),
-                                                &gameHdr, &gameOpaqueColor, &gameSsao,
-                                                firstPersonPresentation.ViewModelFov(),
-                                                weaponOverlay(playing && playUsesPlayer, view, drawProj, eye, rh),
-                                                /*OwnerView=*/playing && playUsesPlayer };
-                    if (gameSsaoFromPrepass)
-                        gameCtx.SsaoFromPrepass = [&] { ssaoCompute(gameSsao, drawProj); };
-                    gameCtx.TaaVelocity = gameTaaOn;
-                    gameCtx.TaaJitterNdc = gameTaa.JitterNdc();
-                    gameCtx.TaaPrevViewProj = gameTaa.PrevViewProj();
-                    drawScene(gameCtx, &stats);
-                }
-                if (gameWire) glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
-                // Physics debug overlay over the game view (#185, F6 Physics) - depth-tested, no depth write.
-                if ((playing || !overlayInPlayOnly) && EditorSettings::Get().PlayDebugOverlay) {
-                    glEnable(GL_DEPTH_TEST); glDepthMask(GL_FALSE);
-                    colliderGizmo.Draw(view, proj, world, EditorSettings::Get().ShowColliders);
-                    glDepthMask(GL_TRUE);
-                }
-                if (playing && playUsesPlayer && gravityGunLive() && gravityGun.IsCharging())
-                    drawThrowArc(view, proj, eye);
-
-                gameHdr.ResolveTo();
-                unsigned int gameColorTex = gameHdr.ResolvedColorTexture();
-                if (gameTaaOn) {
-                    PROFILE_SCOPE("TAA (Game)");
-                    PROFILE_GPU_SCOPE("TAA (Game)");
-                    gameColorTex = gameTaa.Resolve(gameColorTex, gameHdr.ResolvedDepthTexture(), gameHdr.VelocityTexture(),
-                                                   world.TaaSharpness);
-                }
-
-                // PR16: Bloom for the Game view - own Bloom instance (see gameBloom declaration).
-                unsigned int bloomGlowTex   = 0u;
-                float        bloomGlowIntensity = 0.0f;
-                if (world.BloomEnabled && !FKeyRow::PostFxOff()) { // F8 off: no bloom
-                    PROFILE_GPU_SCOPE("Bloom (Game)");
-                    gameBloom.Resize(rw, rh);
-                    if (gameBloom.IsValid()) { // audit #358 - no glow if any mip FBO is incomplete
-                        gameBloom.Compute(bloomThreshShader, bloomDownsampleShader, bloomUpsampleShader,
-                                          gameColorTex,
-                                          world.BloomThreshold,
-                                          world.BloomKnee);
-                        bloomGlowTex       = gameBloom.GlowTexture();
-                        bloomGlowIntensity = world.BloomIntensity;
-                    }
-                    GLStateCache::Invalidate();
-                }
-                {
-                PROFILE_GPU_SCOPE("Tonemap");
-                const PostSettings post = WithDepthEffects(MakePostSettings(world, bloomGlowTex, bloomGlowIntensity, dt, 1, eye), world, gameHdr, view, proj, postSlot);
-                if (scaled) {
-                    gameLdr.Resize(rw, rh);
-                    tonemapper.Apply(gameColorTex, gameLdr.Handle(), rw, rh, post);
-                } else {
-                    tonemapper.Apply(gameColorTex, outFbo, outW, outH, post);
-                }
-                }
-                if (scaled) {
-                    PROFILE_GPU_SCOPE("Upscale");
-                    upscaler.Apply(gameLdr.ColorTexture(), rw, rh, outFbo, 0, 0, outW, outH, EditorSettings::Get().RenderSharpness);
-                }
-                // No crosshair, vitals HUD or combat HUD player half (ammo, kill feed, radio subtitles, awareness chevrons) until
-                // they are redesigned. The combat HUD still draws the AI debug overlay (F9, a dev tool) when it's on.
-                if (playing && playUsesPlayer && (npcDirector.Active() || FKeyRow::CurrentOverlay() >= FKeyRow::OverlayNav))
-                    drawCombatHud(outFbo, outW, outH, view, proj);
-            };
-
             // --- Game View offscreen pass -----------------------------------------------------
             // Rendered whenever the Game panel is actually the visible tab (Scene and Game share
             // one dock node, so only one of them is ever showing - #172) or maximized play has a
@@ -3690,8 +3153,8 @@ int main(int argc, char** argv) {
                     gvEye = gameCam->Position;
                 }
                 EditorLayer::RenderStats gvRenderStats;
-                renderGameFrame(gvView, gvProj, gvEye, gvRw, gvRh, gameView.GetFramebuffer().Handle(), gvWidth, gvHeight,
-                                /*postSlot=*/0, /*overlayInPlayOnly=*/true, gvRenderStats);
+                viewPipeline.RenderGameFrame(viewIn, gvView, gvProj, gvEye, gvRw, gvRh, gameView.GetFramebuffer().Handle(), gvWidth, gvHeight,
+                                                 /*postSlot=*/0, /*overlayInPlayOnly=*/true, gvRenderStats);
                 // With the Scene view hidden (the Game tab in front), the Game view is the frame on
                 // screen: the Statistics panel reports it, so it agrees with the Game view's overlay.
                 if (!editor.SceneImageWanted()) editor.SetRenderStats(gvRenderStats);
@@ -3882,7 +3345,7 @@ int main(int argc, char** argv) {
                 glm::mat4 view = gameCam->ViewMatrix();
                 glm::mat4 proj = gameCam->ProjectionMatrix(aspect);
                 EditorLayer::RenderStats stats;
-                renderGameFrame(view, proj, gameCam->Position, mRw, mRh, 0, mw, mh, /*postSlot=*/1, /*overlayInPlayOnly=*/false, stats);
+                viewPipeline.RenderGameFrame(viewIn, view, proj, gameCam->Position, mRw, mRh, 0, mw, mh, /*postSlot=*/1, /*overlayInPlayOnly=*/false, stats);
                 editor.SetRenderStats(stats);
             }
 
