@@ -3,7 +3,7 @@
   "C:\\Program Files\\Blender Foundation\\Blender 5.2\\5.2\\python\\bin\\python.exe" -I tools/audio/build_editor_overrides.py
       ["G:\\My Drive\\Tartarus Assets\\Raw\\Audio\\SFX"] [--out DIR] [--cc DIR] [--blender PATH]
 
-LICENSING: the sources are two paid sets (SoundShelf Studio SFX, The Sample Stop "Menu Sounds") licensed to the project owner
+LICENSING: the sources are two paid sets (SoundShelf Studio - UI SFX, The Sample Stop - UX Desktop SFX "Menu Sounds") licensed to the project owner
 only. The outputs are local swaps that the editor loads in place of the CC set (EditorSound::Init looks in
 assets/Audio/EditorUI first). `project/assets/**/*.wav` is gitignored; never commit, copy or upload what this writes. The picks
 and the reasons for them are in resources/EditorSounds/overrides.md; this script only converts them.
@@ -53,8 +53,8 @@ DEFAULT_CC = os.path.join(REPO, "resources", "EditorSounds")
 DEFAULT_BLENDER = r"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe"
 PEAK_CEIL_DB = B.PEAK_CEIL_DB   # the CC set's -1 dBTP master ceiling (true peak)
 
-SS = "SoundShelf Studio SFX"
-TSS = os.path.join("UX Desktop SFX", "Menu Sounds")
+SS = "SoundShelf Studio - UI SFX"
+TSS = os.path.join("The Sample Stop - UX Desktop SFX", "Menu Sounds")
 INT, NAV, NOTE = os.path.join(SS, "01 - Interaction"), os.path.join(SS, "02 - Navigation and Panels"), \
     os.path.join(SS, "03 - Notifications and Alerts")
 
@@ -250,7 +250,7 @@ def main():
         decode_worker(argv[1], argv[2])
         return
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("src", nargs="?", default=DEFAULT_SRC, help="raw SFX folder (holds 'SoundShelf Studio SFX', 'UX Desktop SFX')")
+    ap.add_argument("src", nargs="?", default=DEFAULT_SRC, help="raw SFX folder (holds 'SoundShelf Studio - UI SFX', 'The Sample Stop - UX Desktop SFX')")
     ap.add_argument("--out", default=DEFAULT_OUT)
     ap.add_argument("--cc", default=DEFAULT_CC, help="the committed CC set the levels are matched to")
     ap.add_argument("--blender", default=None)

@@ -8,8 +8,8 @@ python.exe). adsp.py / abuild.py import scipy, soundfile and pedalboard at modul
 numpy, with the same definitions.
 
 Sources (the only ones this script reads; both are CC BY-SA, so every output is a CC BY-SA adaptation):
-  <SFX>/KDE Ocean Sound Theme/WAV/*.wav      Ocean Sound Theme, Guilherme Marcal Silva (KDE), CC BY-SA 4.0
-  <SFX>/Ubuntu Yaru Sound Theme/WAV/*.wav    WoodenBeaver / Touch-Remix by madsrh, via Ubuntu Yaru, CC BY-SA 3.0
+  <SFX>/KDE - Ocean Sound Theme/WAV/*.wav    Ocean Sound Theme, Guilherme Marcal Silva (KDE), CC BY-SA 4.0
+  <SFX>/Ubuntu - Yaru Sound Theme/WAV/*.wav  WoodenBeaver / Touch-Remix by madsrh, via Ubuntu Yaru, CC BY-SA 3.0
 An output never mixes the two sets, so each file carries exactly one license.
 Processing is cut / resample-pitch / reverse / glide (varispeed) / layer / high- and low-pass / fade / gain only: nothing
 is synthesised.
@@ -57,9 +57,9 @@ EDGE_HEAD = 0.002                 # |first sample| must stay under this (about -
 EDGE_TAIL = 0.001                 # ...and |last sample| under this, so nothing starts or stops with a click
 
 SETS = {
-    "K": {"dir": os.path.join("KDE Ocean Sound Theme", "WAV"), "license": "CC BY-SA 4.0",
+    "K": {"dir": os.path.join("KDE - Ocean Sound Theme", "WAV"), "license": "CC BY-SA 4.0",
           "credit": "Ocean Sound Theme by Guilherme Marçal Silva (KDE)"},
-    "Y": {"dir": os.path.join("Ubuntu Yaru Sound Theme", "WAV"), "license": "CC BY-SA 3.0",
+    "Y": {"dir": os.path.join("Ubuntu - Yaru Sound Theme", "WAV"), "license": "CC BY-SA 3.0",
           "credit": "WoodenBeaver / Touch-Remix by madsrh, via Ubuntu Yaru"},
 }
 

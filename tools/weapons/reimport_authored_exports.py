@@ -13,16 +13,18 @@ import subprocess
 from fbx_export_edit import load, set_duration, write, zero_translation
 
 ROOT = Path(__file__).resolve().parents[2]
-# The supplied exports live on the shared Drive under
-# "Tartarus Assets\Raw\Weapons\AE_Exports" - point TARTARUS_WEAPON_EXPORTS at it.
+# The supplied exports live on the shared Drive under "Tartarus Assets\Raw\Weapons\<weapon>\Authored Exports".
+# Point TARTARUS_WEAPON_EXPORTS at "Tartarus Assets\Raw\Weapons".
 EXPORTS = Path(os.environ.get('TARTARUS_WEAPON_EXPORTS', ''))
+AK_EXPORTS = 'AKS-74U/Authored Exports'
+R870_EXPORTS = 'Remington 870/Authored Exports'
 WORK = ROOT / 'build/weapon-reimport'
 
 
 def mapping():
     result = []
-    for weapon, folder, prefix, token in [('AKS74U', 'AKS74U', 'AKS-74U', 'AK'),
-                                           ('Remington870', 'Remington 870', 'Remington870', '870')]:
+    for weapon, folder, prefix, token in [('AKS74U', AK_EXPORTS, 'AKS-74U', 'AK'),
+                                           ('Remington870', R870_EXPORTS, 'Remington870', '870')]:
         for source in sorted((EXPORTS / folder).glob('*.fbx')):
             _, kind, _, name = source.stem.split('_', 3)
             name = {'Idle_To_Sprint': 'IdleToSprint', 'Sprint_To_Idle': 'SprintToIdle',
@@ -62,7 +64,7 @@ def write_reports(manifest_records, audits, previous_manifests):
                              'sha256': hashlib.sha256(path.read_bytes()).hexdigest(),
                              'guid': json.loads(path.with_suffix('.fbx.meta').read_text())['guid'],
                              'note': 'Retained authored reference: no replacement provided; shared-rig poses remain compatible.'})
-        manifest = {'source': str(EXPORTS / ('AKS74U' if weapon == 'AKS74U' else 'Remington 870')),
+        manifest = {'source': str(EXPORTS / (AK_EXPORTS if weapon == 'AKS74U' else R870_EXPORTS)),
                     'retainedSource': legacy_source, 'fps': 60,
                     'exports': list(records.values()) + retained}
         (folder / 'export_manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
@@ -83,7 +85,7 @@ def main():
     if args.audit == args.apply:
         parser.error('Choose --audit or --apply')
     if not os.environ.get('TARTARUS_WEAPON_EXPORTS') or not EXPORTS.is_dir():
-        parser.error('Set TARTARUS_WEAPON_EXPORTS to <Drive>\\Tartarus Assets\\Raw\\Weapons\\AE_Exports')
+        parser.error('Set TARTARUS_WEAPON_EXPORTS to <Drive>\\Tartarus Assets\\Raw\\Weapons')
     WORK.joinpath('audit').mkdir(parents=True, exist_ok=True)
     pairs = mapping()
     paths = list(dict.fromkeys([p for pair in pairs for p in pair]))
@@ -132,7 +134,7 @@ def main():
         # These actions have no separate weapon animation in the supplied set.
         # Use its neutral gun pose, with each action's existing range, rather than
         # mixing the old world-baked root and loose-magazine motion into this rig.
-        neutral = EXPORTS / 'AKS74U/A_W_AK_Idle.fbx'
+        neutral = EXPORTS / AK_EXPORTS / 'A_W_AK_Idle.fbx'
         for name in ('Holster', 'IdleToSprint', 'Melee', 'Sprint', 'SprintToIdle'):
             dst = ROOT / f'project/assets/Weapons/AKS74U/Weapon/AKS-74U_A_W_{name}.fbx'
             prepared = WORK / 'staged' / dst.relative_to(ROOT / 'project/assets/Weapons')

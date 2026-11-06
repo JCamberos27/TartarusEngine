@@ -4,7 +4,7 @@ The package itself is not in git; this script reads its Prefabs/*.prefab (Unity 
 and writes the numbers the game needs - each prefab's sprays (sim, transform, playback) and floor decals
 (decal set, box, height response, reveal curve) - converted to this engine's right-handed axes (z negated).
 
-    python tools/gen_blood_presets.py "<path to VolumetricBloodFX>"
+    python tools/gen_blood_presets.py "<path to the VolumetricBloodFX package>"
 """
 import glob, os, re, sys
 
@@ -169,4 +169,4 @@ def main(root):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else r"C:/Users/jacob/OneDrive/Desktop/ASSETS TO IMPORT/VolumetricBloodFX")
+    main(sys.argv[1] if len(sys.argv) > 1 else r"G:/My Drive/Tartarus Assets/Raw/Effects/KriptoFX - Volumetric Blood Fluids")
