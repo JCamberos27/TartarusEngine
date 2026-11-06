@@ -28,13 +28,21 @@ name: Build
 # failed to render, or the engine left a crash dump.
 
 on:
+  # Branches are built through their PR (pull_request = the branch merged into main); a push build on top
+  # of that only ran the same jobs twice. Pushes still build main and release tags.
   push:
-    branches: ['**']
+    branches: [main]
     # Tags are a separate filter, not covered by branches: without this a `v*` tag push runs
     # nothing and the release job below could never fire (#173 suggestion 4).
     tags: ['v*']
   pull_request:
   workflow_dispatch:
+
+# A new commit on a PR cancels that PR's run still in progress (it tests a commit nobody will merge).
+# Pushes to main and tags never cancel each other: every main commit and release keeps its result.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }} # per commit outside PRs: a shared group would drop queued runs
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
