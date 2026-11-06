@@ -10,7 +10,7 @@
 #    Floor_Concrete on the ceiling, PH_Dark_Wooden_Planks on the baseboards (presets, SUBSTRATES below);
 #  * a seeded, layered set of decals goes under a "Corridor Wear" root: per patch a big soft base, a peel layer, then
 #    small sharp flakes and a crack on top. Only the DA_PeelingPaint_* sets (the tile / board-grid ones are skipped) and
-#    a few DA_LiquidSplatter_* floor splashes. Asserted limits: <= 80 decals, <= 22 unique 2K .decal maps, <= 1 4K.
+#    a few DA_LiquidSplatter_* floor splashes. Asserted limits: <= 80 decals, <= 22 unique 2K .decal maps, no 4K (textures are capped at 2K).
 #    Ceiling decals carry a Preset substrate override (Floor_Concrete); wall / skirting decals stay on Auto, so they
 #    show the substrate of whatever they land on (concrete on the wall, wood on the baseboard);
 #  * a "Decal Grading" entity (Age 0.35, Wear 0.4) under that root.
@@ -30,7 +30,7 @@ import random
 import sys
 
 ROOTS = ('Decal Lab', 'Corridor Wear', 'Apartment Wear')   # dress_apartments.py re-adds the last (it runs after)
-MAX_DECALS, MAX_2K, MAX_4K = 80, 22, 1
+MAX_DECALS, MAX_2K, MAX_4K = 80, 22, 0
 D = 'assets/Decals/'
 PEEL = D + 'Grime/PeelingPaint/DA_PeelingPaint_{:03d}{}.decal'
 SPLAT = D + 'Stains/LiquidSplatter/DA_LiquidSplatter_{:03d}.decal'
@@ -39,7 +39,7 @@ SPLAT = D + 'Stains/LiquidSplatter/DA_LiquidSplatter_{:03d}.decal'
 # A subset of each tag keeps the unique-map count under the limit.
 POOL = {'blotch': [7, 9, 13, 26], 'hole': [23, 28, 31, 39], 'strip': [1, 4, 8, 12], 'crack': [5, 18, 27],
         'flake': [2, 6, 14, 16]}
-HERO_4K = 7     # the one 4K map: a blotch
+HERO = 7        # the hero patches' map: a blotch
 
 # Materials (project-relative; guids come from the .meta files). Must match build_apartment_hallway.py.
 WALL_DIR = 'assets/Architecture/Building/Textures/PH_Beige_Wall/beige_wall_001_'
@@ -207,7 +207,7 @@ class Wear:
         """One layered patch on a wall: soft base, peel layer, small sharp flakes, a crack on top."""
         r = random.Random(seed)
         j = (0.0, 0.1) if skirt else (8.0, 0.1)
-        base = PEEL.format(HERO_4K, '_4K') if hero else self.pick(r, 'blotch')
+        base = PEEL.format(HERO, '') if hero else self.pick(r, 'blotch')
         pos, rot = self.spot(wall, u, y)
         self.decal(base, pos, (w, h, 0.25), rot, seed, 0, 0.75 if skirt else 0.55, jitter=j)
         peel_tag = 'strip' if (skirt or r.random() < self.MIDWALL_STRIP) else 'hole'
@@ -247,7 +247,7 @@ def build(d):
         s.decal(s.pick(r, 'crack'), pos, (1.1, 0.5, 0.25), rot, 2000 + n, 4, 0.85, jitter=(0.0, 0.1))
         pos, rot = s.spot(wall, x + side * 0.62, 1.3 + r.random() * 0.5)
         s.decal(s.pick(r, 'flake'), pos, (0.5, 0.5, 0.25), rot, 2100 + n, 5, 0.9, jitter=(180.0, 0.15))
-    # hero patches mid-wall, two a side; the first is the one 4K map
+    # hero patches mid-wall, two a side; the first is map HERO
     for n, (wall, u, y, w, h) in enumerate([('N', 2.5, 1.35, 2.4, 2.1), ('N', -3.5, 1.55, 2.0, 1.7),
                                              ('S', -2.0, 1.45, 2.1, 1.8), ('S', 6.2, 1.25, 2.0, 1.6)]):
         s.patch(wall, u, y, w, h, 3000 + 40 * n, hero=(n == 0), flakes=1, crack=True)

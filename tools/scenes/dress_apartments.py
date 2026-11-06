@@ -25,7 +25,7 @@
 #  * every decal is placed from geometry read off the scene (wall planes and which side faces into the room, door and
 #    window openings, ceiling footprints) and a self-check at the end fails loudly if one is off its wall, faces out of
 #    the room, sits outside the room's footprint or covers an opening. Asserted limits: <= MAX_DECALS decals,
-#    <= 30 unique 2K maps and <= 1 4K map across the corridor AND the apartments (the stains reuse the blotch maps,
+#    <= 30 unique 2K maps and no 4K map across the corridor AND the apartments (the stains reuse the blotch maps,
 #    so the denser dressing adds no texture memory; MAX_DECALS only bounds the per-cluster shading work).
 #
 # Idempotent: it removes "Apartment Wear" and re-adds it, so a second run leaves the file byte-identical.
@@ -40,7 +40,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))     # python -I d
 import dress_corridor as dc                                          # noqa: E402
 
 ROOTS = ('Apartment Wear',)
-MAX_DECALS, MAX_2K, MAX_4K = 600, 30, 1
+MAX_DECALS, MAX_2K, MAX_4K = 600, 30, 0
 # The corridor's pool plus eight more flake / crack maps: more variety, and the chipping the corridor shows.
 APT_POOL = {k: v + {'flake': [21, 25, 29, 36], 'crack': [30, 37, 40, 69]}.get(k, []) for k, v in dc.POOL.items()}
 UNITS = (301, 302, 303, 304, 305, 306)
@@ -273,7 +273,7 @@ class AptWear(dc.Wear):
         r = random.Random(seed)
         pos, rot = self.spot(line, u, y)
         self.stain(r, pos, (w * 1.3, h * 1.25, 0.25), rot, seed + 50, -1, 0.3 + r.random() * 0.12, spin=20.0)
-        base = dc.PEEL.format(dc.HERO_4K, '_4K') if hero else self.pick(r, 'blotch')
+        base = dc.PEEL.format(dc.HERO, '') if hero else self.pick(r, 'blotch')
         self.decal(base, pos, (w, h, 0.25), rot, seed, 0, 0.55, jitter=(25.0, 0.15))
         s = 0.5 + r.random() * 0.2
         pos, rot = self.spot(line, u + (r.random() - 0.5) * 0.3 * w, y + (r.random() - 0.5) * 0.2 * h)
