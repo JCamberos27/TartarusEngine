@@ -69,7 +69,7 @@ references. Migration rescales curve key times into seconds, normalizes curve am
 alphas and target ranges, and converts positions/pivots and rotation signs into Unity axes.
 It maps legacy rates into the new fields; the old spring/summed-shot motion is replaced by the
 Unity solver, so migrated profiles can need tuning. Embedded legacy weapon definitions remain
-compatible. An explicit headless upgrade is `TartarusEngine.exe --migrate-recoil <file.recoil>`.
+compatible.
 
 ## Curve editor
 

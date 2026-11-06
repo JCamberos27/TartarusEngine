@@ -6,8 +6,7 @@
 // Knife Entertainment packs import. Converts the chosen textures of the
 // "Real Blood" and "PRO Effects FPS Muzzle Flashes & Impacts" Unity packs (extracted to plain files
 // under one folder) into the engine's runtime texture libraries under project/assets/Effects/Knife/.
-// The output is git-ignored (the packs can't be redistributed);
-// `TartarusEngine --import-knife-fx <folder holding both packs>` rebuilds it.
+// The output is git-ignored (the packs can't be redistributed).
 //
 // Each library is one texture array: every layer a square image holding a grid of cells (variants
 // of a decal, or the frames of a flipbook), pre-compressed with full mips - colour as BC3 (RGBA),

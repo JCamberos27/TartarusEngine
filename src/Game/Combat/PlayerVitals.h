@@ -65,21 +65,3 @@ private:
     float m_Hitmarker = 0.0f;
     bool m_HitmarkerKill = false, m_HitmarkerHead = false;
 };
-
-// The HUD's numbers for one frame: what PlayerHud's shader takes.
-struct PlayerHudState {
-    bool Visible = false;
-    float Health01 = 1.0f;
-    float HurtFlash = 0.0f;
-    bool Dead = false;
-    float DeathFade = 0.0f;       // 0..1 into the death fade
-    float RespawnProgress = 0.0f; // 0..1
-    bool Protected = false;
-    int Arcs = 0;
-    float ArcAngle[PlayerVitals::kMaxIndicators] = {};  // radians clockwise from ahead
-    float ArcAlpha[PlayerVitals::kMaxIndicators] = {};
-    float Hitmarker = 0.0f;
-    bool HitmarkerKill = false, HitmarkerHead = false;
-};
-// Builds the HUD state from the vitals and the play camera (position, yaw in degrees).
-PlayerHudState MakePlayerHudState(const PlayerVitals& vitals, const glm::vec3& cameraPos, float cameraYawDeg);

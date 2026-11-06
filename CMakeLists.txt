@@ -407,7 +407,6 @@ set(IMGUI_SOURCES
   ${imgui_SOURCE_DIR}/imgui_draw.cpp
   ${imgui_SOURCE_DIR}/imgui_tables.cpp
   ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-  ${imgui_SOURCE_DIR}/imgui_demo.cpp
   ${IMGUI_GLFW_BACKEND}
   ${IMGUI_GL3_BACKEND}
   ${imguizmo_SOURCE_DIR}/src/ImGuizmo.cpp
@@ -504,12 +503,11 @@ tartarus_enable_release_debug_info(TartarusGame)
 add_dependencies(TartarusEngine TartarusGame TartarusEditor)
 
 # The actual DLL filenames the host watches for (rather than a hardcoded "TartarusGame.dll"):
-# CMAKE_DEBUG_POSTFIX is set globally to "d" (originally for the FetchContent'd dependencies),
-# which also applies to these two library targets in Debug builds — TartarusGame.dll becomes
-# TartarusGamed.dll, TartarusEditor.dll becomes TartarusEditord.dll. A hardcoded name only ever
-# matched in Release/RelWithDebInfo, where there's no postfix; hot reload silently never found
-# either DLL in a Debug build. $<TARGET_FILE_NAME:...> always resolves to whatever the linker
-# actually produced for the active config.
+# No CMAKE_DEBUG_POSTFIX is set in this project, so today the names are the same in every
+# config. If a postfix is ever added (globally or per target), it would apply to these two
+# library targets in Debug builds and a hardcoded name would silently stop matching.
+# $<TARGET_FILE_NAME:...> always resolves to whatever the linker actually produced for the
+# active config.
 target_compile_definitions(TartarusEngine PRIVATE
   TARTARUS_GAME_MODULE_FILENAME="$<TARGET_FILE_NAME:TartarusGame>"
   TARTARUS_EDITOR_MODULE_FILENAME="$<TARGET_FILE_NAME:TartarusEditor>"
@@ -732,15 +730,14 @@ install(DIRECTORY "${CMAKE_SOURCE_DIR}/resources/EditorSounds/" DESTINATION "ass
 # the Apartment's baked textures and the prop packs' meshes and textures under assets/Props/.
 # Absent on CI, present locally - so they are excluded here too. What remains is what git
 # tracks (the Apartment meshes, the prop materials and .meta sidecars, ...).
-foreach(_projdir scenes scripts assets/Scripts assets/Audio assets/Environments assets/Props assets/Materials assets/Test
+foreach(_projdir scenes assets/Audio assets/Environments assets/Props assets/Materials assets/Test
                  assets/Animations/Controllers)
   if(EXISTS "${CMAKE_SOURCE_DIR}/project/${_projdir}")
     install(DIRECTORY "${CMAKE_SOURCE_DIR}/project/${_projdir}/"
             DESTINATION "project/${_projdir}"
             PATTERN "*.recovery.json" EXCLUDE
-            PATTERN "obj" EXCLUDE
-            PATTERN "bin" EXCLUDE
             PATTERN "*.json.bak"      EXCLUDE
+            PATTERN "*.log"           EXCLUDE
             REGEX "/assets/Audio/[^/]+/.*\\.wav$" EXCLUDE
             REGEX "/assets/Environments/Apartment/Textures/.*\\.png$" EXCLUDE
             REGEX "/assets/Props/.*\\.(png|fbx)$" EXCLUDE)

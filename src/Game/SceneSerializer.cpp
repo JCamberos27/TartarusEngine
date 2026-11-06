@@ -2493,7 +2493,7 @@ bool SceneSerializer::Load(World& world, AssetLibrary& assets, const std::string
             Save(world, assets, path);
         }
         // persistMigration == false: the migrated data lives only in `world`/`assets` for this
-        // run (a --smoke-test scene, a --resave input) — `path` on disk is never touched.
+        // run (a --smoke-test scene) — `path` on disk is never touched.
     }
     return ok;
 }

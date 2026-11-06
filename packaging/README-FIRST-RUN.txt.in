@@ -11,7 +11,7 @@ WHAT IS IN HERE
   TartarusEditor.dll        editor panels (hot-reloadable)
   TartarusGame.dll          gameplay systems (hot-reloadable)
   PhysX*.dll                NVIDIA PhysX 5 runtime
-  assets/                   engine-owned content: shaders, fonts, branding, smoke-test scenes
+  assets/                   engine-owned content: shaders, fonts, editor sounds, licences, smoke-test scenes
   project/                  the sample project the editor opens on first run
   LICENSE                   this engine's licence
   THIRD-PARTY-NOTICES.md    licences of everything it is built on

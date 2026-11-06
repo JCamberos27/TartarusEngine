@@ -19,17 +19,10 @@ class SplashScreen {
 public:
     ~SplashScreen();
 
-    // Where the editor window is about to open, in the same coordinates Window::Placement uses.
-    struct TargetRect {
-        int X = 0, Y = 0, Width = 0, Height = 0;
-    };
-
-    // Decodes `imagePath` and shows it centred on the monitor that contains `target` (the saved
-    // editor window placement, #155), or on the primary monitor when `target` is null or off
-    // every monitor. `minimumSeconds` is the shortest time the splash will remain up — Close()
+    // Decodes `imagePath` and shows it centred on the primary monitor. `minimumSeconds` is the shortest time the splash will remain up — Close()
     // waits out the remainder, so a fast (warm-cache) start shows a deliberate splash rather
     // than a flicker.
-    void Show(const std::string& imagePath, float minimumSeconds = 1.0f, const TargetRect* target = nullptr);
+    void Show(const std::string& imagePath, float minimumSeconds = 1.0f);
 
     // Honours the minimum display time, then tears the window down. Safe to call when Show()
     // failed or was never called.

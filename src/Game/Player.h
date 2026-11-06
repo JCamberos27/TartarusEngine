@@ -74,7 +74,7 @@ public:
     // for, before root motion), and whether a jump started this frame.
     glm::vec3 WishVelocity{0.0f};
     bool Jumped = false;
-    // A script standing in for the move keys (--stock-probe): with ScriptedMove on, the move is
+    // A script standing in for the move keys (--npc-test): with ScriptedMove on, the move is
     // ScriptMove (x right, y forward, -1..1) and ScriptSprint, whatever the input. Look is untouched.
     bool ScriptedMove = false;
     glm::vec2 ScriptMove{0.0f};

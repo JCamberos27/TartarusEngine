@@ -14,7 +14,7 @@ struct GLFWwindow;
 
 // This frame's third-person weapon pose for WeaponJankMeter: the world gun and the world hands with the third-person
 // clips' own motion taken out (the clips' gun - the arms3p rig on the arms' place - against the world gun, and each world
-// hand on the world gun against the clips' hand on theirs). Shared by --stock-probe's jank sweep and the Weapon Lab.
+// hand on the world gun against the clips' hand on theirs). Used by the Weapon Lab.
 WeaponJankFrame WeaponJankFrameFor(const World& world, const FirstPersonBody& body, const FirstPersonPresentation& p, float dt,
                                    const std::string& label);
 
@@ -28,7 +28,7 @@ class WeaponLab {
 public:
     enum class View { FrontRight, Right, FrontLeft, BackRight, LeftArm, RightArm, Orbit, Free, Count };
 
-    // Each Play frame once the body's arms are on the rig (beside FirstPersonWeaponTest::AfterPose).
+    // Each Play frame once the body's arms are on the rig.
     void AfterPose(const World& world, const FirstPersonBody& body, const FirstPersonPresentation& p, const Camera& player, float dt);
     // Where the Scene view looks from this frame; false = the user's own (Free, or nothing to follow).
     bool SceneCamera(glm::vec3& position, float& yaw, float& pitch) const;

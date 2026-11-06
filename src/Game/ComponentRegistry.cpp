@@ -1930,7 +1930,7 @@ void RegisterEngineComponents() {
               "Flame peak emission intensity (red channel).", 0.0f, 1000.0f },
             { "Muzzle Style", T::Int, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, MuzzleStyle), 1.0f,
               "0: the Tactical Shooter flame alone. 1: plus PRO Effects' flash (star / burst), side jets, core glow, gas puff and barrel smoke "
-              "(needs --import-knife-fx).", 0.0f, 1.0f },
+              "(needs the Knife effects data in assets/Effects/Knife).", 0.0f, 1.0f },
             { "Flame Scale", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, FlameScale), 0.05f,
               "Flame tongue length/width scale vs. tactical shooter pack.", 0.1f, 5.0f },
             { "Beam Range", T::Float, TARTARUS_REFLECT_FIELD(FxHudSettingsComponent, BeamRange), 1.0f,
@@ -1978,7 +1978,7 @@ void RegisterEngineComponents() {
             { "Energy Scale", T::Float, TARTARUS_REFLECT_FIELD(BloodSettingsComponent, EnergyScale), 0.05f,
               "x every hit's energy: how far and fast the spray is thrown, how much mist, whether rounds come out the far side.", 0.2f, 3.0f },
             { "Impact Puffs", T::Bool, TARTARUS_REFLECT_FIELD(BloodSettingsComponent, ImpactPuffs), 0.0f,
-              "The burst, mist and droplets on the frame a round goes in (needs --import-knife-fx)." },
+              "The burst, mist and droplets on the frame a round goes in (needs the Knife effects data in assets/Effects/Knife)." },
             { "Gore", T::Int, TARTARUS_REFLECT_FIELD(BloodSettingsComponent, Gore), 1.0f,
               "0 off (no sprays or stains), 1 on.", 0.0f, 1.0f },
         },

@@ -52,8 +52,7 @@ struct TextureImportSettings {
 // Cumulative timing across every texture this process has loaded (audit ARCH-201 / #375).
 // Decode covers the TextureCache hit-or-miss path (stb_image + DownsampleBox on a miss), which
 // may run on an AsyncAssetLoader worker; Upload covers the GL block, always on the main thread.
-// Add() is locked so workers can report; Get()/Reset() are for a single-threaded reader such as
-// --asset-load-bench, which isolates one batch's cost instead of the process total.
+// Add() is locked so workers can report; Get()/Reset() are for a single-threaded reader that wants one batch's cost instead of the process total.
 struct TextureLoadStats {
     int Count = 0;
     double DecodeMs = 0.0;

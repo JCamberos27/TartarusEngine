@@ -1,6 +1,6 @@
 # Editor Enhancers: handoff for the next session
 
-Status as of 2026-10-07: all six tools and the C++/C# Inspector attributes are integrated in upstream `main`. The historical phase design and branch references below remain an implementation map. Automated native and editor UI checks are available with `--unit-tests` and `--editor-tests`; manual testing of real authoring workflows remains useful. The previously untracked `VINSPECTOR_TEST_SHEET.md` is not part of this checkout.
+Status as of 2026-10-07: all six tools and the Inspector attributes are integrated in upstream `main`. The historical phase design and branch references below remain an implementation map. Automated native and editor UI checks are available with `--unit-tests` and `--editor-tests`; manual testing of real authoring workflows remains useful. The previously untracked `VINSPECTOR_TEST_SHEET.md` is not part of this checkout.
 
 The user-facing docs are in [EDITOR_ENHANCERS.md](EDITOR_ENHANCERS.md). This file preserves the implementation design and follow-up context.
 
@@ -108,7 +108,7 @@ cmake --build build --config Release --target TartarusEngine -- /m /v:minimal
 | Commit | Phase | Contents |
 |---|---|---|
 | 550a5a1e | 0, shared infra | `src/Editor/Enhancers/`: `EnhancerCore` (EditorRef, AddUnique/RemoveRef/FindRef/MoveRef, `NavHistory<T>`, GlobMatch, FuzzyScore, RemapFolderKeys/RemapFolderPath, FormatLength, FA icon table via `tools/gen_fa_icon_table.py` → `FAIconTable.inc`, TreeLineChildMask). `EnhancerUserState`: per-user `enhancers_<hash>.json` with SceneBookmarks, EntityBookmarks, FolderBookmarks, **InspectorBookmarks (already declared, unused so far)** and DefaultParents. `Palette` (per-user `editor_palette.json`). `StyleWidgets` (PaletteColorRow, IconPickerGrid). Hover shortcut contexts. Settings page. Tests in `src/Tests/UnitTests_Enhancers.cpp`. Docs. |
-| 86e2c366 | 1, vHierarchy | `HierarchyStyleComponent` (icon, colour, flat/gradient fill, separator), serialized as "hierStyle". Row wash, tree lines, zebra, minimal mode, component minimap (click jumps to the Inspector; Alt+click opens a **pinned component window**), default parent (D), hover keys E / Shift+E / Ctrl+Shift+E / A / F / X / D, nav bar (scene selector + selection Back/Forward + entity bookmark chips) via API v39 `DrawHierarchyNavBar`. Extracted `DrawReflectedComponentFields` (Inspector.cpp ~3043). This also fixed an old `continue` that skipped removal after a managed C# inspector drew. Inspector scroll-to plus flash. |
+| 86e2c366 | 1, vHierarchy | `HierarchyStyleComponent` (icon, colour, flat/gradient fill, separator), serialized as "hierStyle". Row wash, tree lines, zebra, minimal mode, component minimap (click jumps to the Inspector; Alt+click opens a **pinned component window**), default parent (D), hover keys E / Shift+E / Ctrl+Shift+E / A / F / X / D, nav bar (scene selector + selection Back/Forward + entity bookmark chips) via API v39 `DrawHierarchyNavBar`. Extracted `DrawReflectedComponentFields` (Inspector.cpp ~3043). Inspector scroll-to plus flash. |
 | 501f20b0 | 2, vFolders | `Enhancers/FolderStyles` (project file `project/editor_folders.json`: per-folder style, rules, automatic icons from content), `AssetLibrary::OnFolderPathChanged` hook, API v40 (EditorFolderVisual, folder tree flags, folder context menu, hover folder, folder nav bar). Tree and grid show styled icons, a content minimap, tree lines, zebra, wash and minimal mode. Hover keys `project.hover.*`. |
 
 Two vFolders features already existed before the project and were kept as they were: two-line names in the grid, and folder Back/Forward.
@@ -143,7 +143,7 @@ The original plan file is `C:\Users\Jacob\plans\https-assetstore-unity-com-packa
 
 **Other functions in the same file:**
 
-- `DrawReflectedComponentFields`, l.3043: VisibleIf, groups as TreeNodes, `DrawManagedInspector` for C# scripts, Top/Bottom extras.
+- `DrawReflectedComponentFields`, l.3043: VisibleIf, groups as TreeNodes, Top/Bottom extras.
 - `DrawReflectedField`, l.1775: the widget switch, shared by single- and multi-select.
 - `BeginComponentSection`, l.3154–3355. Declared at `EditorLayer.h` l.2110 with default args.
   - The open state is `ImGui::GetStateStorage()` int at `GetID(icon + "  " + label)`, inside the entity's PushID scope.
@@ -167,7 +167,7 @@ The original plan file is `C:\Users\Jacob\plans\https-assetstore-unity-com-packa
   - Use these for the multi-component clipboard and for keeping play-mode changes.
 - `ComponentRegistry::All()` returns a vector of `RegisteredComponent {Meta (ReflectComponent: Name, Icon, Tooltip, Fields, GenericSerialize, GenericInspector), Has, Get, GetConst, Add, Remove}`.
 - `ReflectField` is in `src/Game/ComponentReflection.h`, l.42. Its fields: Name, Type, Address, Tooltip, Min/Max, Slider, Logarithmic, Format, EnumLabels/EnumCount, `VisibleIfField/Value/Not`, Group, EditorHidden, Key, LegacyNames, AssetPath.
-- Many components have a Bool field named exactly `"Enabled"`, e.g. C# Script, TransformController, IKRig, AudioListener and a few others. Add an inline helper like `const ReflectField* FindEnabledField(const ReflectComponent&)` (a Bool field with `Name == "Enabled"`) instead of editing every registration. It serves the A hover key and an optional dimmed header.
+- Many components have a Bool field named exactly `"Enabled"`, e.g. TransformController, IKRig, AudioListener and a few others. Add an inline helper like `const ReflectField* FindEnabledField(const ReflectComponent&)` (a Bool field with `Name == "Enabled"`) instead of editing every registration. It serves the A hover key and an optional dimmed header.
 
 **Selection history** (`EditorLayer_Hierarchy.cpp` l.271–344; header `EditorLayer.h` l.902–925):
 
@@ -326,24 +326,6 @@ Reset to default:
 
 `DrawReflectedField` (l.1775) gains tab bars, `BeginDisabled`, variant chips and buttons. Write a pure `EvaluateFieldState(rc, field, comp)` (visible / enabled / readOnly) and unit-test it.
 
-**C#** (`managed/Tartarus.Runtime/ScriptFields.cs`): add these attributes:
-
-- Button
-- Foldout
-- Tab
-- ShowInInspector
-- OnValueChanged
-- ReadOnly
-- Variants
-- HideIf
-- DisableIf
-- `Dictionary<string, scalar>` editing
-
-- `Describe` emits the new keys. The Inspector reader is at about l.3517–3566 of `EditorLayer_Inspector.cpp`; search for `Scripting::Describe`.
-- **Cache the Describe JSON per class.** It is currently parsed every frame for every script. Invalidate the cache on assembly reload.
-- `Entry.cs` gets op 13, `InvokeEditorMethod`, and op 14, `Statics`, through the existing JSON `NativeRequest`, so the ABI is unchanged. In edit mode the flow is: make a temporary instance, `Apply`, invoke, `Save`, then write back with undo.
-- Move the C# Script/Source rows under an "Advanced" foldout once a class is set.
-
 **Tests:**
 
 - Field-state evaluation.
@@ -390,7 +372,6 @@ Reuse the Measure tool's raycast and drawing code.
 - No per-row heap allocation: use reused buffers and `char` scratch.
 - Folder summaries are rebuilt only when their signature changes, or at most once a second.
 - User-state writes are debounced: `MarkDirty()` then a once-per-frame `Flush()`.
-- The C# Describe result is cached.
 
 ### Per-phase checklist
 

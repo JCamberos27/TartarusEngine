@@ -31,7 +31,4 @@ const std::string& ExeDir();
 // absolute native path string using the order documented above.
 std::string Resolve(const std::string& relativePath);
 
-// True if Resolve(relativePath) names something that exists on disk.
-bool Exists(const std::string& relativePath);
-
 } // namespace EnginePaths

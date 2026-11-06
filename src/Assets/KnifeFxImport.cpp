@@ -61,7 +61,7 @@ bool ReadLibrary(const std::string& path, LibraryData& lib, std::string* error) 
     f.read(reinterpret_cast<char*>(&lib.Header), sizeof(FileHeader));
     const FileHeader& h = lib.Header;
     if (!f || h.Magic != kMagic) return fail("not a .kfx file");
-    if (h.Version != kVersion) return fail("version " + std::to_string(h.Version) + " (expected " + std::to_string(kVersion) + ") - re-run --import-knife-fx");
+    if (h.Version != kVersion) return fail("version " + std::to_string(h.Version) + " (expected " + std::to_string(kVersion) + ")");
     if (h.Size < 4 || h.Size > 4096 || h.Mips < 1 || h.Mips > 13 || h.EntryCount > 4096 || h.ColorLayers > 256 || h.NormalLayers > 256)
         return fail("corrupt header");
     lib.Entries.resize(h.EntryCount);

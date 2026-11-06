@@ -285,8 +285,6 @@ Report Build(const ProjectSettings::BuildSettings& s, Progress* progress) {
     pc.IconPath = playerIconRel;
     pc.SplashPath = playerSplashRel;
     pc.ProductName = s.ProductName;
-    pc.CompanyName = s.CompanyName;
-    pc.Version = s.Version;
     pc.Scenes = s.Scenes;
     pc.Width = s.Width;
     pc.Height = s.Height;

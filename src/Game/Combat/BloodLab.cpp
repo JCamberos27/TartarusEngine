@@ -13,8 +13,8 @@ void BloodLab::Draw(BloodFx& blood, const Stats& s) {
         return;
     }
     if (!s.BloodData || !s.KnifeData)
-        ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.3f, 1.0f), "Missing data: %s%s", s.BloodData ? "" : "--import-blood-fx ",
-                           s.KnifeData ? "" : "--import-knife-fx");
+        ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.3f, 1.0f), "Missing data: %s%s", s.BloodData ? "" : "blood sims (assets/Effects/Blood) ",
+                           s.KnifeData ? "" : "knife effects (assets/Effects/Knife)");
 
     ImGui::SeparatorText("At the crosshair");
     auto button = [](const char* label, const std::function<void()>& fn) {

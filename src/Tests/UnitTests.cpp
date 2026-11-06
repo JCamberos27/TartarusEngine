@@ -1165,8 +1165,6 @@ void TestPlayerConfigRoundTrip() {
 
     PlayerConfig out;
     out.ProductName      = "Round Trip";
-    out.CompanyName      = "Some Studio";
-    out.Version          = "2.3.4";
     out.Scenes           = {"scenes/First.json", "scenes/Second.json"};
     out.Width            = 1600;
     out.Height           = 900;
@@ -1180,8 +1178,6 @@ void TestPlayerConfigRoundTrip() {
     PlayerConfig in;
     CHECK(PlayerConfig::Load(path.string(), in));
     CHECK(in.ProductName == "Round Trip");
-    CHECK(in.CompanyName == "Some Studio");
-    CHECK(in.Version == "2.3.4");
     CHECK(in.Scenes.size() == 2);
     CHECK(in.Scenes.size() == 2 && in.Scenes[0] == "scenes/First.json");
     CHECK(in.Scenes.size() == 2 && in.Scenes[1] == "scenes/Second.json");

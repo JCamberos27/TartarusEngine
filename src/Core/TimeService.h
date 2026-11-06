@@ -60,7 +60,6 @@ float DebugTimeScale();
 float EffectiveTimeScale();
 
 // Upper bound on UnscaledDeltaTime. Clamped to [0.01, 1] (Unity: Maximum Allowed Timestep).
-float MaximumDeltaTime();
 void  SetMaximumDeltaTime(float seconds);
 
 // Project Settings > Physics > Fixed Timestep (the physics / FixedUpdate step), guarded against

@@ -266,7 +266,7 @@ public:
     void SetGridSnapEnabled(bool on) { m_GridSnapEnabled = on; }
     bool ShowHistory() const { return m_ShowHistory; }
     void SetShowHistory(bool on) { m_ShowHistory = on; }
-    // Scene and Game side by side (Scene left) when they share a tab strip - for --stock-probe,
+    // Scene and Game side by side (Scene left) when they share a tab strip - for --npc-test,
     // which captures both. Done on the next frame's dock pass.
     void RequestSceneGameSplit() { m_SplitSceneGameRequested = true; }
     // Phase 6 item 10 — the four shipped panel arrangements offered alongside user-saved

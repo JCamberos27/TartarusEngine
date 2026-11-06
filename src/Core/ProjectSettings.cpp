@@ -203,8 +203,6 @@ void Load() {
             return (f != b.end() && f->is_boolean()) ? f->get<bool>() : fallback;
         };
         g_Build.ProductName = str("productName", g_Build.ProductName);
-        g_Build.CompanyName = str("companyName", g_Build.CompanyName);
-        g_Build.Version     = str("version", g_Build.Version);
         g_Build.OutputDir   = str("outputDir", g_Build.OutputDir);
         g_Build.Width       = std::clamp(integer("width", g_Build.Width), 320, 16384);
         g_Build.Height      = std::clamp(integer("height", g_Build.Height), 200, 16384);
@@ -285,8 +283,6 @@ void Save() {
     };
     root["build"] = {
         {"productName", g_Build.ProductName},
-        {"companyName", g_Build.CompanyName},
-        {"version", g_Build.Version},
         {"outputDir", g_Build.OutputDir},
         {"scenes", g_Build.Scenes},
         {"sceneGuids", [] {

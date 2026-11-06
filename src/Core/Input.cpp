@@ -8,7 +8,6 @@ GLFWwindow* Input::s_Window = nullptr;
 double Input::s_LastX = 0.0, Input::s_LastY = 0.0;
 double Input::s_DeltaX = 0.0, Input::s_DeltaY = 0.0;
 double Input::s_ScrollAccum = 0.0, Input::s_ScrollY = 0.0;
-double Input::s_ScrollAccumX = 0.0, Input::s_ScrollX = 0.0;
 bool Input::s_FirstMouse = true;
 bool Input::s_PrevKeys[512] = {};
 static bool s_CurKeys[512] = {};
@@ -37,9 +36,8 @@ static void ApplyStickDeadZone(float& x, float& y) {
 // in main()), so ImGui_ImplGlfw_InitForOpenGL's callback-chaining picks this up as the "previous
 // user callback" and still forwards scroll events to ImGui — this doesn't steal ImGui's scroll
 // input, both just see every event.
-void Input::ScrollCallback(GLFWwindow*, double xoffset, double yoffset) {
+void Input::ScrollCallback(GLFWwindow*, double, double yoffset) {
     s_ScrollAccum += yoffset;
-    s_ScrollAccumX += xoffset;
 }
 
 void Input::Init(GLFWwindow* window) {
@@ -88,8 +86,6 @@ void Input::Update() {
 
     s_ScrollY = s_ScrollAccum;
     s_ScrollAccum = 0.0;
-    s_ScrollX = s_ScrollAccumX;
-    s_ScrollAccumX = 0.0;
 
     // #145 - unfocused: everything reads as up (and releases on the frame focus is lost), so a
     // key or button held while switching away can't stay stuck down for the game or the editor.
@@ -165,12 +161,8 @@ bool Input::IsMouseButtonReleased(int button) {
 
 double Input::GetMouseDeltaX() { return s_DeltaX; }
 double Input::GetMouseDeltaY() { return s_DeltaY; }
-double Input::GetMouseX() { return s_LastX; }
-double Input::GetMouseY() { return s_LastY; }
 double Input::GetScrollDeltaY() { return s_ScrollY; }
-double Input::GetScrollDeltaX() { return s_ScrollX; }
 
-bool Input::IsGamepadConnected() { return s_PadConnected; }
 bool Input::IsGamepadButtonDown(int button) {
     return button >= 0 && button < kPadButtons && s_CurPad[button];
 }

@@ -77,8 +77,7 @@ project/assets/**/*.[bB][lL][eE][nN][dD]
 # must not re-create .meta files for local copies of them.
 project/assets/Characters/Quantum/Textures/Clothing/Hats/
 videos/
-# Volumetric blood data converted from the KriptoFX asset (can't be redistributed) - rebuild with
-# TartarusEngine --import-blood-fx <package>.
+# Volumetric blood data converted from the KriptoFX asset (can't be redistributed).
 project/assets/Effects/Blood/
 project/assets/Effects/Knife/
 blood_v2_preview/

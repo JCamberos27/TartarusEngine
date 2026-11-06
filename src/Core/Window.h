@@ -64,7 +64,6 @@ public:
     // drivers without EXT_swap_control_tear. Safe to call every frame; only hits the driver
     // when the mode actually changes.
     void SetVSync(int mode);
-    int VSyncMode() const { return m_VSyncMode; }
     // The refresh rate (Hz) of the monitor the window is on (fullscreen: its monitor); 0 = unknown.
     // Cached: the monitor's video mode is only re-read when the window moves or resizes, goes
     // fullscreen on another monitor, or a monitor is plugged in / removed (on Windows each read is

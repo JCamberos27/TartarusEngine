@@ -23,7 +23,7 @@ namespace SceneSerializer {
     // persistMigration (default true): if the file predates the current format, Load() normally
     // writes the upgraded scene straight back to `path` (see the .cpp for why). Pass false for
     // any caller that's meant to be read-only against the file on disk — headless tooling
-    // (--smoke-test, --resave's input load) must never mutate a scene file just because it was
+    // (--smoke-test) must never mutate a scene file just because it was
     // loaded for inspection (audit #77).
     bool Load(World& world, AssetLibrary& assets, const std::string& path, bool persistMigration = true);
 
