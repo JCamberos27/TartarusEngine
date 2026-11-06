@@ -40,239 +40,8 @@ if(WIN32)
   )
 endif()
 
-include(FetchContent)
-
-# --- GLFW ---
-FetchContent_Declare(
-  glfw
-  GIT_REPOSITORY https://github.com/glfw/glfw.git
-  GIT_TAG 3.4
-)
-set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
-set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(glfw)
-
-# --- GLM ---
-FetchContent_Declare(
-  glm
-  GIT_REPOSITORY https://github.com/g-truc/glm.git
-  GIT_TAG 1.0.1
-)
-FetchContent_MakeAvailable(glm)
-
-# --- Assimp (FBX / glTF / OBJ import + skeletal animation data) ---
-set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(ASSIMP_INSTALL OFF CACHE BOOL "" FORCE)
-set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
-set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "" FORCE)
-set(ASSIMP_NO_EXPORT ON CACHE BOOL "" FORCE)
-set(ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF CACHE BOOL "" FORCE)
-set(ASSIMP_BUILD_FBX_IMPORTER ON CACHE BOOL "" FORCE)
-set(ASSIMP_BUILD_OBJ_IMPORTER ON CACHE BOOL "" FORCE)
-set(ASSIMP_BUILD_GLTF_IMPORTER ON CACHE BOOL "" FORCE)
-set(ASSIMP_WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
-FetchContent_Declare(
-  assimp
-  GIT_REPOSITORY https://github.com/assimp/assimp.git
-  GIT_TAG v5.4.3
-)
-FetchContent_MakeAvailable(assimp)
-
-# --- local assimp patches ---------------------------------------------------------------
-# assimp comes straight off github at a pinned tag rather than forked, so fixes we need
-# locally live in tools/assimp_patches/*.patch and are applied here - configure time, after
-# the sources exist and before any of them compile - which is what makes a fresh clone build
-# correctly with no manual step. CONFIGURE_DEPENDS makes editing a patch re-run configure;
-# tools/apply_assimp_patches.cmake probes with `git apply --check` so each patch applies
-# exactly once and a tag bump that invalidates one fails loudly instead of building without it.
-file(GLOB ASSIMP_LOCAL_PATCHES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/tools/assimp_patches/*.patch")
-if(ASSIMP_LOCAL_PATCHES)
-  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${ASSIMP_LOCAL_PATCHES})
-  execute_process(
-    COMMAND ${CMAKE_COMMAND}
-            -DASSIMP_SRC=${assimp_SOURCE_DIR}
-            -DASSIMP_PATCH_DIR=${CMAKE_SOURCE_DIR}/tools/assimp_patches
-            -P ${CMAKE_SOURCE_DIR}/tools/apply_assimp_patches.cmake
-    RESULT_VARIABLE ASSIMP_PATCH_RESULT)
-  if(NOT ASSIMP_PATCH_RESULT EQUAL 0)
-    message(FATAL_ERROR "Failed to apply local assimp patches (see above)")
-  endif()
-endif()
-
-# --- EnTT (entity-component system) — header-only, ships its own CMake target ---
-# Populated + add_subdirectory(EXCLUDE_FROM_ALL) rather than FetchContent_MakeAvailable: v3.13.2's
-# install() rules are UNCONDITIONAL (no ENTT_INSTALL option to switch off, unlike glfw and
-# assimp above), so a plain MakeAvailable put include/entt - 73 headers - plus lib/EnTT CMake
-# config files and a pkg-config file into the packaged ZIP. CMake ignores install rules from an
-# EXCLUDE_FROM_ALL subdirectory, which is the documented way to consume a dependency you only
-# want to build against. The EnTT::EnTT target is unaffected.
-FetchContent_Declare(
-  entt
-  GIT_REPOSITORY https://github.com/skypjack/entt.git
-  GIT_TAG v3.13.2
-  SOURCE_SUBDIR tartarus-no-cmake # MakeAvailable fetches only; EnTT is added below, EXCLUDE_FROM_ALL
-)
-FetchContent_MakeAvailable(entt)
-add_subdirectory(${entt_SOURCE_DIR} ${entt_BINARY_DIR} EXCLUDE_FROM_ALL)
-
-# --- Dear ImGui (editor UI) — no CMakeLists upstream, so populate + build manually ---
-# On the "docking" branch (not a numbered release) specifically for real dock-node based
-# panel layout: resizing one docked panel resizes its neighbors, independent of whether
-# panels are locked from being moved/rearranged.
-# Pinned to a commit on "docking", never the moving branch name: the host and TartarusEditor.dll
-# each compile their own ImGui while sharing one ImGuiContext, so both must build from identical
-# source for every clone. To upgrade, pick a newer docking commit, replace the SHA and note the
-# date; CI's dependency cache is keyed on this file, so the bump invalidates it.
-FetchContent_Declare(
-  imgui
-  GIT_REPOSITORY https://github.com/ocornut/imgui.git
-  GIT_TAG 545d1a884ab7be89bbab4600a649a206c8667773 # docking, 2026-09-16
-)
-FetchContent_MakeAvailable(imgui)
-
-# --- ImGuizmo (editor viewport translate/rotate/scale gizmos) ---
-# Its own CMakeLists.txt builds a standalone library we don't want (it doesn't know
-# about our ImGui include path), so populate the source only and compile it ourselves.
-# Pinned to a commit on "master" (no tagged releases track current ImGui); upgrade alongside ImGui.
-FetchContent_Declare(
-  imguizmo
-  GIT_REPOSITORY https://github.com/CedricGuillemet/ImGuizmo.git
-  GIT_TAG 18cef5e031d8c6973d80284c67f60549fafd78c1 # master, 2026-08-08
-  SOURCE_SUBDIR tartarus-no-cmake # source only: MakeAvailable fetches it without add_subdirectory
-)
-FetchContent_MakeAvailable(imguizmo)
-
-# --- ImAnim (tweens, springs and easing for Dear ImGui; the opt-in Glass editor theme) ---
-# Source only: one .cpp/.h pair compiled into the host (src/Editor/Glass/GlassMotion.cpp is its
-# only user). Its own CMakeLists builds a demo against every ImPlatform backend, and its
-# submodules (the demo's ImGui, ImPlatform, Sharpmake) are not needed, so they're not fetched.
-# Pinned to a commit on "main" (no tagged releases); upgrade alongside ImGui.
-FetchContent_Declare(
-  imanim
-  GIT_REPOSITORY https://github.com/soufianekhiat/ImAnim.git
-  GIT_TAG 1ea19a55a28d54acb7f7f22a617f969aec2a073e # main
-  GIT_SUBMODULES ""
-  SOURCE_SUBDIR tartarus-no-cmake # source only: MakeAvailable fetches it without add_subdirectory
-)
-FetchContent_MakeAvailable(imanim)
-
-# --- meshoptimizer (triangle order for the GPU's post-transform vertex cache) ---
-# Source only: the engine compiles the files it uses (vertex cache optimizer, simplifier, vertex fetch, index generator, allocator)
-# rather than building the library target, whose install rules would land in the package.
-FetchContent_Declare(
-  meshoptimizer
-  GIT_REPOSITORY https://github.com/zeux/meshoptimizer.git
-  GIT_TAG v1.3
-  SOURCE_SUBDIR tartarus-no-cmake # source only: MakeAvailable fetches it without add_subdirectory
-)
-FetchContent_MakeAvailable(meshoptimizer)
-
-# --- Recast & Detour (navigation meshes, pathfinding and crowd steering for the enemy AI) ---
-# Source only, like meshoptimizer: the engine compiles Recast (navmesh building), Detour (queries)
-# and DetourCrowd (local avoidance) itself rather than building the library targets, whose install
-# rules would land in the package.
-FetchContent_Declare(
-  recastnavigation
-  GIT_REPOSITORY https://github.com/recastnavigation/recastnavigation.git
-  GIT_TAG v1.6.0
-  SOURCE_SUBDIR tartarus-no-cmake # source only: MakeAvailable fetches it without add_subdirectory
-)
-FetchContent_MakeAvailable(recastnavigation)
-
-# --- NVIDIA PhysX 5 (collision / rigid bodies / character mover — #185) --------------
-# Built from source, pinned by git tag, nothing vendored — issue #185's "Path B", but via
-# ExternalProject rather than FetchContent_MakeAvailable. PhysX's public CMake cannot share
-# this tree: it FORCE-overwrites CMAKE_CONFIGURATION_TYPES to its own set
-# (debug/checked/profile/release) and writes binaries under a compiler+CRT-tagged folder that
-# doesn't map to $<CONFIG>. ExternalProject runs it in an isolated CMake invocation instead;
-# tools/physx_harvest.cmake then stages the output into a plain Debug/ Release/ layout.
-#
-# Host-only: linked into TartarusEngine, never the reloadable TartarusGame / TartarusEditor
-# DLLs. PR 1 (#185) uses only PxFoundation/PxPhysics/PxScene/PxDefaultCpuDispatcher/PxMaterial
-# — an empty world stepped during Play. Cooking / character-kinematic libs get added in later
-# PRs as the code that needs them lands.
-include(ExternalProject)
-
-set(PHYSX_GIT_TAG "107.3-physx-5.6.1"  CACHE STRING "NVIDIA PhysX 5 release tag to build")
-# ExternalProject's default prefix for this target (we don't override PREFIX). Clone lands at
-# <prefix>/src/physx_external, and the SDK root (with include/ and compiler/public) is its
-# physx/ subdir.
-set(PHYSX_PREFIX  "${CMAKE_BINARY_DIR}/physx_external-prefix")
-set(PHYSX_SDK_DIR "${PHYSX_PREFIX}/src/physx_external/physx") # PhysX headers live here (include/)
-set(PHYSX_STAGE   "${PHYSX_PREFIX}/stage")                    # harvested libs/dlls: Debug/ Release/
-
-# Engine config -> PhysX config: Debug uses PhysX 'debug' (/MDd, matches the engine's default
-# MSVC Debug CRT); every optimized config uses PhysX 'release' (/MD).
-set(_physx_stage_for_config "$<IF:$<CONFIG:Debug>,Debug,Release>")
-
-# This tag's build emits un-suffixed names (no "_64") into win.x86_64.vc143.md/. The three
-# core modules are DLLs (import lib = <name>.lib); Extensions and PvdSDK are always static.
-set(_physx_link_libs
-  PhysX
-  PhysXCommon
-  PhysXFoundation
-  PhysXCooking                   # PxCreateConvexMesh / PxCreateTriangleMesh (#185 PR 6)
-  PhysXExtensions_static        # PxDefaultCpuDispatcherCreate, PxDefaultPvdSocketTransportCreate
-  PhysXPvdSDK_static            # PxCreatePvd (used only under TARTARUS_PHYSX_PVD, cheap to always link)
-)
-set(_physx_runtime_dlls PhysX PhysXCommon PhysXFoundation PhysXCooking)
-
-# Declared as BUILD_BYPRODUCTS below so a Ninja/Make generator knows these files are produced
-# by the physx_external step and orders the engine link after it.
-set(_physx_byproducts "")
-foreach(_cfg Debug Release)
-  foreach(_lib ${_physx_link_libs})
-    list(APPEND _physx_byproducts "${PHYSX_STAGE}/${_cfg}/${_lib}.lib")
-  endforeach()
-endforeach()
-
-ExternalProject_Add(physx_external
-  GIT_REPOSITORY  https://github.com/NVIDIA-Omniverse/PhysX.git
-  GIT_TAG         ${PHYSX_GIT_TAG}
-  GIT_SHALLOW     TRUE
-  GIT_PROGRESS    TRUE
-  SOURCE_SUBDIR   physx/compiler/public
-  # Skip PhysX's unconditional packman DLL copy so it configures without generate_projects.bat.
-  PATCH_COMMAND   ${CMAKE_COMMAND} -DPHYSX_SRC=<SOURCE_DIR> -P ${CMAKE_SOURCE_DIR}/tools/physx_patch.cmake
-  CMAKE_GENERATOR "${CMAKE_GENERATOR}"
-  CMAKE_GENERATOR_PLATFORM "x64"  # PhysX on Windows is x64-only (win.x86_64); the engine is too
-  CMAKE_CACHE_ARGS
-    -DPHYSX_ROOT_DIR:PATH=${PHYSX_SDK_DIR}
-    -DPX_OUTPUT_LIB_DIR:PATH=${PHYSX_PREFIX}/build-out
-    -DPX_OUTPUT_BIN_DIR:PATH=${PHYSX_PREFIX}/build-out
-    -DTARGET_BUILD_PLATFORM:STRING=windows
-    -DPX_BUILDSNIPPETS:BOOL=OFF
-    -DPX_BUILDPVDRUNTIME:BOOL=OFF
-    -DPX_GENERATE_STATIC_LIBRARIES:BOOL=OFF
-    # Precise math (/fp:precise, not /fp:fast): under /fp:fast, sweep CCD returned a NaN pose for
-    # a CCD sphere hitting a static box at ~15 m/s or more (a thrown ball froze mid-air).
-    -DPX_FLOAT_POINT_PRECISE_MATH:BOOL=ON
-    -DPX_GENERATE_GPU_PROJECTS:BOOL=OFF
-    -DNV_USE_STATIC_WINCRT:BOOL=OFF   # match the engine's /MD (dynamic CRT) — the #1 bring-up footgun
-    -DNV_USE_DEBUG_WINCRT:BOOL=ON     # PhysX 'debug' config -> /MDd, matching engine Debug
-    -DCMAKE_POLICY_VERSION_MINIMUM:STRING=3.5
-  # Build both configs the engine consumes, once. PhysX is a dependency built and cached here,
-  # not part of the per-config engine build.
-  BUILD_COMMAND     ${CMAKE_COMMAND} --build <BINARY_DIR> --config debug
-        COMMAND     ${CMAKE_COMMAND} --build <BINARY_DIR> --config release
-  # PhysX's public build ships no install() rules — stage the tagged output ourselves.
-  INSTALL_COMMAND   ${CMAKE_COMMAND} -DSRC=${PHYSX_PREFIX}/build-out/bin -DDST=${PHYSX_STAGE}
-                    -P ${CMAKE_SOURCE_DIR}/tools/physx_harvest.cmake
-  BUILD_BYPRODUCTS  ${_physx_byproducts}
-)
-
-# INTERFACE target the engine links against. Not IMPORTED (the .libs don't exist at configure
-# time — they're produced by physx_external at build time); a plain INTERFACE lib carrying the
-# paths + a hard dependency is the way to express that.
-add_library(physx INTERFACE)
-add_dependencies(physx physx_external)
-# SYSTEM so PhysX's headers don't flood the engine's /W4 build with their own warnings.
-target_include_directories(physx SYSTEM INTERFACE ${PHYSX_SDK_DIR}/include)
-foreach(_lib ${_physx_link_libs})
-  target_link_libraries(physx INTERFACE "${PHYSX_STAGE}/${_physx_stage_for_config}/${_lib}.lib")
-endforeach()
+include(${CMAKE_SOURCE_DIR}/cmake/Dependencies.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/PhysX.cmake)
 
 file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS
   ${CMAKE_SOURCE_DIR}/src/*.cpp
@@ -321,82 +90,45 @@ endforeach()
 file(WRITE ${CMAKE_BINARY_DIR}/TartarusModules.sources.tmp "${_tartarus_module_manifest}")
 configure_file(${CMAKE_BINARY_DIR}/TartarusModules.sources.tmp ${CMAKE_BINARY_DIR}/TartarusModules.sources COPYONLY)
 
-# The GLFW backend sets every viewport's GLFW_MOUSE_PASSTHROUGH each frame, and GLFW applies it
-# unconditionally: a SetWindowLongW + SetLayeredWindowAttributes round trip per window per frame
-# (~0.3 ms in the Sandbox). Compile a copy that only sets it when it changes. A copy in the build
-# tree, so the fetched source (or a FETCHCONTENT_SOURCE_DIR_IMGUI override) is never modified;
-# if the line isn't there (a newer imgui), the original compiles unchanged.
-set(IMGUI_GLFW_BACKEND ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp)
-file(READ ${IMGUI_GLFW_BACKEND} _imgui_glfw_src)
-set(_imgui_passthrough_line "glfwSetWindowAttrib(window, GLFW_MOUSE_PASSTHROUGH, window_no_input);")
-string(FIND "${_imgui_glfw_src}" "${_imgui_passthrough_line}" _imgui_passthrough_at)
-if(_imgui_passthrough_at GREATER -1)
-  string(REPLACE "${_imgui_passthrough_line}"
-    "if (glfwGetWindowAttrib(window, GLFW_MOUSE_PASSTHROUGH) != (window_no_input ? 1 : 0)) ${_imgui_passthrough_line}"
-    _imgui_glfw_src "${_imgui_glfw_src}")
-  # Two more per-frame Win32 round trips, each only where the line is found:
-  # - GLFW_HOVERED is a WindowFromPoint per viewport per frame (~3% of the play frame). While the
-  #   game has captured the cursor (GLFW_CURSOR_DISABLED) no viewport is hovered in any useful sense.
-  # - The monitor list (EnumDisplaySettings per monitor) is rebuilt every frame: every 0.5 s is
-  #   plenty to follow a display change.
-  string(REPLACE "if (glfwGetWindowAttrib(window, GLFW_HOVERED))"
-    "if (glfwGetInputMode(window, GLFW_CURSOR) != GLFW_CURSOR_DISABLED && glfwGetWindowAttrib(window, GLFW_HOVERED))"
-    _imgui_glfw_src "${_imgui_glfw_src}")
-  string(REPLACE "&io.DisplayFramebufferScale);\n    ImGui_ImplGlfw_UpdateMonitors();"
-    "&io.DisplayFramebufferScale);\n    { static double s_NextMonitors = 0.0; const double now = glfwGetTime(); if (now >= s_NextMonitors) { s_NextMonitors = now + 0.5; ImGui_ImplGlfw_UpdateMonitors(); } }"
-    _imgui_glfw_src "${_imgui_glfw_src}")
-  set(IMGUI_GLFW_BACKEND ${CMAKE_BINARY_DIR}/imgui_patched/imgui_impl_glfw.cpp)
-  set(_imgui_glfw_old "")
-  if(EXISTS ${IMGUI_GLFW_BACKEND})
-    file(READ ${IMGUI_GLFW_BACKEND} _imgui_glfw_old)
-  endif()
-  if(NOT _imgui_glfw_old STREQUAL _imgui_glfw_src) # rewrite only on change: no rebuild per configure
-    file(WRITE ${IMGUI_GLFW_BACKEND} "${_imgui_glfw_src}")
-  endif()
-else()
-  message(WARNING "imgui_impl_glfw.cpp: mouse-passthrough line not found; building it unpatched")
-endif()
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp)
+include(${CMAKE_SOURCE_DIR}/cmake/ImGuiPatches.cmake)
 
-# The OpenGL backend backs up ~20 GL states with glGetIntegerv / glIsEnabled around every render;
-# on a threaded driver each read waits for the driver's worker to drain the frame (~9% of the
-# Sandbox frame). Compile a copy whose reads go to src/Editor/ImGuiGLHooks.cpp, which answers from
-# the loader's state shadow or with the canonical values the engine doesn't depend on. Same
-# build-tree-copy rules as the GLFW patch above.
-set(IMGUI_GL3_BACKEND ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp)
-file(READ ${IMGUI_GL3_BACKEND} _imgui_gl3_src)
-set(_imgui_gl3_anchor "#include \"imgui_impl_opengl3.h\"")
-string(FIND "${_imgui_gl3_src}" "${_imgui_gl3_anchor}" _imgui_gl3_at)
-if(_imgui_gl3_at GREATER -1)
-  string(REPLACE "glGetIntegerv(" "TartarusImGui_GetIntegerv(" _imgui_gl3_src "${_imgui_gl3_src}")
-  string(REPLACE "glIsEnabled(" "TartarusImGui_IsEnabled(" _imgui_gl3_src "${_imgui_gl3_src}")
-  # It also creates and deletes a VAO every render, and creating one returns a name, so it is a
-  # driver round trip too. The engine has one GL context (no ImGui platform windows): keep one.
-  string(REPLACE "GL_CALL(glGenVertexArrays(1, &vertex_array_object));"
-    "{ static GLuint s_Vao = 0; if (!s_Vao) GL_CALL(glGenVertexArrays(1, &s_Vao)); vertex_array_object = s_Vao; }"
-    _imgui_gl3_src "${_imgui_gl3_src}")
-  string(REPLACE "GL_CALL(glDeleteVertexArrays(1, &vertex_array_object));" "" _imgui_gl3_src "${_imgui_gl3_src}")
-  string(REPLACE "${_imgui_gl3_anchor}"
-    "${_imgui_gl3_anchor}\nextern \"C\" void TartarusImGui_GetIntegerv(unsigned int pname, int* data);\nextern \"C\" unsigned char TartarusImGui_IsEnabled(unsigned int cap);"
-    _imgui_gl3_src "${_imgui_gl3_src}")
-  set(IMGUI_GL3_BACKEND ${CMAKE_BINARY_DIR}/imgui_patched/imgui_impl_opengl3.cpp)
-  set(_imgui_gl3_old "")
-  if(EXISTS ${IMGUI_GL3_BACKEND})
-    file(READ ${IMGUI_GL3_BACKEND} _imgui_gl3_old)
+# #202 / #346 - Release keeps its optimisations but now also emits a PDB (/Zi + /DEBUG).
+# Without one, dbghelp has no symbols in the shipped configuration, which made two features
+# silently do nothing there: the Console stack traces on warnings and errors, and the crash
+# handler minidumps - a dump from a Release build could not be symbolicated, so the one artifact
+# produced when the engine actually falls over was unreadable.
+#
+# /DEBUG defaults the linker to /OPT:NOREF, which would stop it folding unused code and bloat the
+# binary, so the usual pair is restored explicitly. Code generation is unaffected: /Zi changes
+# what is written alongside the object, not what is in it. (/Z7 instead was measured in 2026-11:
+# a full engine recompile went 158 s -> 154 s, inside run-to-run noise, so it wasn't adopted.)
+function(tartarus_enable_release_debug_info target)
+  if(MSVC)
+    target_compile_options(${target} PRIVATE $<$<CONFIG:Release,RelWithDebInfo>:/Zi>)
+    target_link_options(${target} PRIVATE $<$<CONFIG:Release,RelWithDebInfo>:/DEBUG /OPT:REF /OPT:ICF>)
   endif()
-  if(NOT _imgui_gl3_old STREQUAL _imgui_gl3_src)
-    file(WRITE ${IMGUI_GL3_BACKEND} "${_imgui_gl3_src}")
-  endif()
-else()
-  message(FATAL_ERROR "imgui_impl_opengl3.cpp: include line not found; ImGuiGLHooks.cpp needs the patched backend")
-endif()
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp)
+endfunction()
 
-set(IMGUI_SOURCES
+# ImGui's core, compiled once and linked into both the host and TartarusEditor.dll. Each module
+# still gets its own copy of the code, as ImGui's multi-module setup needs (they share the host's
+# ImGuiContext), but the two copies can no longer drift: one set of objects, one set of defines.
+# IMGUI_ENABLE_TEST_ENGINE: the --editor-tests item hooks; the DLL forwards them to the host
+# through EditorModuleTestHooks.cpp (see EditorTestHooks.h).
+add_library(tartarus_imgui_core OBJECT
   ${imgui_SOURCE_DIR}/imgui.cpp
   ${imgui_SOURCE_DIR}/imgui_draw.cpp
   ${imgui_SOURCE_DIR}/imgui_tables.cpp
   ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+)
+target_include_directories(tartarus_imgui_core PRIVATE ${imgui_SOURCE_DIR})
+target_compile_definitions(tartarus_imgui_core PRIVATE IMGUI_DEFINE_MATH_OPERATORS IMGUI_ENABLE_TEST_ENGINE)
+target_compile_options(tartarus_imgui_core PRIVATE
+  $<$<CXX_COMPILER_ID:MSVC>:/W1 /MP>
+  $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-w>
+)
+tartarus_enable_release_debug_info(tartarus_imgui_core)
+
+set(IMGUI_SOURCES
   ${IMGUI_GLFW_BACKEND}
   ${IMGUI_GL3_BACKEND}
   ${imguizmo_SOURCE_DIR}/src/ImGuizmo.cpp
@@ -422,7 +154,8 @@ if(WIN32)
   list(APPEND ENGINE_SOURCES ${CMAKE_SOURCE_DIR}/src/TartarusEngine.manifest)
 endif()
 
-add_executable(TartarusEngine ${ENGINE_SOURCES} ${IMGUI_SOURCES} ${MESHOPT_SOURCES} ${RECAST_SOURCES})
+add_executable(TartarusEngine ${ENGINE_SOURCES} ${IMGUI_SOURCES} ${MESHOPT_SOURCES} ${RECAST_SOURCES}
+  $<TARGET_OBJECTS:tartarus_imgui_core>)
 
 add_library(TartarusGame SHARED ${TARTARUS_GAME_MODULE_ONLY_SOURCES} ${TARTARUS_GAME_SHARED_SOURCES})
 
@@ -430,43 +163,22 @@ add_library(TartarusGame SHARED ${TARTARUS_GAME_MODULE_ONLY_SOURCES} ${TARTARUS_
 # EditorLayer's ImGui/undo/scene lifetime across a DLL boundary. That lets a tool panel reload
 # live without invalidating an open scene or an active ImGui frame.
 #
-# The module draws real ImGui panels (the Console, as of the first migrated panel), so it compiles
-# its own ImGui core translation units and is handed the host's ImGuiContext + allocator pair at
+# The module draws real ImGui panels (the Console, as of the first migrated panel), so it links
+# its own copy of ImGui's core (tartarus_imgui_core) and is handed the host's ImGuiContext + allocator pair at
 # Draw() time — ImGui's documented multi-module setup, where all shared state stays in that one
 # host-owned context. Backends (glfw/opengl3) are deliberately NOT built here: the host alone
 # drives platform/renderer. Core/Log.cpp is likewise NOT built here — a second copy would give the
 # DLL its own private, permanently-empty log; it reads the host's through the callback table.
 add_library(TartarusEditor SHARED
   ${TARTARUS_EDITOR_MODULE_SOURCES}
-  ${imgui_SOURCE_DIR}/imgui.cpp
-  ${imgui_SOURCE_DIR}/imgui_draw.cpp
-  ${imgui_SOURCE_DIR}/imgui_tables.cpp
-  ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+  $<TARGET_OBJECTS:tartarus_imgui_core>
 )
 target_include_directories(TartarusEditor PRIVATE
   ${CMAKE_SOURCE_DIR}/src/Editor
   ${CMAKE_SOURCE_DIR}/extern   # IconsFontAwesome6.h
   ${imgui_SOURCE_DIR}
 )
-# #202 / #346 - Release keeps its optimisations but now also emits a PDB (/Zi + /DEBUG).
-# Without one, dbghelp has no symbols in the shipped configuration, which made two features
-# silently do nothing there: the Console stack traces on warnings and errors, and the crash
-# handler minidumps - a dump from a Release build could not be symbolicated, so the one artifact
-# produced when the engine actually falls over was unreadable.
-#
-# /DEBUG defaults the linker to /OPT:NOREF, which would stop it folding unused code and bloat the
-# binary, so the usual pair is restored explicitly. Code generation is unaffected: /Zi changes
-# what is written alongside the object, not what is in it.
-function(tartarus_enable_release_debug_info target)
-  if(MSVC)
-    target_compile_options(${target} PRIVATE $<$<CONFIG:Release,RelWithDebInfo>:/Zi>)
-    target_link_options(${target} PRIVATE $<$<CONFIG:Release,RelWithDebInfo>:/DEBUG /OPT:REF /OPT:ICF>)
-  endif()
-endfunction()
-
-# Must match the host's ImGui configuration exactly — the two copies share one ImGuiContext.
-# IMGUI_ENABLE_TEST_ENGINE as in the host: the module's items reach the --editor-tests registry
-# through the forwarders in EditorModuleTestHooks.cpp (see EditorTestHooks.h).
+# The module's own sources see ImGui configured as tartarus_imgui_core is.
 target_compile_definitions(TartarusEditor PRIVATE IMGUI_DEFINE_MATH_OPERATORS IMGUI_ENABLE_TEST_ENGINE)
 target_compile_options(TartarusEditor PRIVATE
   $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX /MP>
@@ -597,56 +309,44 @@ set_source_files_properties(${TARTARUS_VENDORED_SOURCES} PROPERTIES
   COMPILE_OPTIONS "$<$<CXX_COMPILER_ID:MSVC>:/W1>$<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-w>"
 )
 
-# Editor UI icon font (Font Awesome Free, SIL OFL 1.1), the Inter UI-text fallback face (Inter,
-# SIL OFL 1.1 — #48) and the JetBrains Mono monospace face (SIL OFL 1.1 — Phase 1 item 5, the
-# Console body / numeric-readout face) — copied next to the exe so they can be loaded at runtime
-# by a path relative to the working directory, same as scene.json.
-add_custom_command(TARGET TartarusEngine POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:TartarusEngine>/assets/fonts"
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    "${CMAKE_SOURCE_DIR}/extern/fonts/fa-solid-900.ttf"
-    "$<TARGET_FILE_DIR:TartarusEngine>/assets/fonts/fa-solid-900.ttf"
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    "${CMAKE_SOURCE_DIR}/extern/fonts/InterVariable.ttf"
-    "$<TARGET_FILE_DIR:TartarusEngine>/assets/fonts/InterVariable.ttf"
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    "${CMAKE_SOURCE_DIR}/extern/fonts/JetBrainsMono-Regular.ttf"
-    "$<TARGET_FILE_DIR:TartarusEngine>/assets/fonts/JetBrainsMono-Regular.ttf"
+# Engine-owned content staged next to the exe (POST_BUILD) and shipped in the package (install),
+# from ONE list so the two can't drift. The layout is what EnginePaths resolves against at runtime.
+# Each entry: "<source, relative to the repo>|<destination folder>[|<new file name>]". A source
+# folder copies its contents.
+#   - fonts: Font Awesome Free (icons), Inter (UI text, #48), JetBrains Mono (Console, numbers); SIL OFL 1.1
+#   - editor_sounds: EditorSound's UI sounds (CC BY-SA adaptations, see resources/EditorSounds/LICENSE.md)
+#   - shaders: read by ShaderLibrary from assets/shaders
+#   - licenses: the vendored code editor's MIT attribution
+#   - test-scenes: engine-owned smoke scenes for --smoke-test (audit TEST-101), independent of project/
+set(TARTARUS_STAGED_ASSETS
+  "extern/fonts/fa-solid-900.ttf|assets/fonts"
+  "extern/fonts/InterVariable.ttf|assets/fonts"
+  "extern/fonts/JetBrainsMono-Regular.ttf|assets/fonts"
+  "resources/EditorSounds|assets/editor_sounds"
+  "src/Renderer/shaders|assets/shaders"
+  "extern/ImGuiColorTextEdit/LICENSE|assets/licenses|ImGuiColorTextEdit.txt"
+  "tests/smoke-scenes|assets/test-scenes"
 )
-
-# The editor's UI sounds (EditorSound; CC BY-SA adaptations, see resources/EditorSounds/LICENSE.md), next to the exe like the fonts.
-add_custom_command(TARGET TartarusEngine POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_directory
-    "${CMAKE_SOURCE_DIR}/resources/EditorSounds"
-    "$<TARGET_FILE_DIR:TartarusEngine>/assets/editor_sounds"
-)
-
-# GLSL shader files — copied next to the exe so ShaderLibrary::ReadFile("assets/shaders/...")
-# resolves correctly at runtime.
-add_custom_command(TARGET TartarusEngine POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:TartarusEngine>/assets/shaders"
-  COMMAND ${CMAKE_COMMAND} -E copy_directory
-    "${CMAKE_SOURCE_DIR}/src/Renderer/shaders"
-    "$<TARGET_FILE_DIR:TartarusEngine>/assets/shaders"
-)
-
-# Include the vendored code editor's MIT attribution in staged and exported binaries.
-add_custom_command(TARGET TartarusEngine POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:TartarusEngine>/assets/licenses"
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/extern/ImGuiColorTextEdit/LICENSE"
-    "$<TARGET_FILE_DIR:TartarusEngine>/assets/licenses/ImGuiColorTextEdit.txt"
-)
-install(FILES "${CMAKE_SOURCE_DIR}/extern/ImGuiColorTextEdit/LICENSE" DESTINATION "assets/licenses" RENAME "ImGuiColorTextEdit.txt")
-
-# Engine-owned smoke/regression scenes (audit TEST-101) — staged next to the exe as
-# assets/test-scenes/ so `--smoke-test` has meaningful, version-controlled coverage that does
-# not depend on the (deletable, user-editable) project/scenes/ content.
-add_custom_command(TARGET TartarusEngine POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:TartarusEngine>/assets/test-scenes"
-  COMMAND ${CMAKE_COMMAND} -E copy_directory
-    "${CMAKE_SOURCE_DIR}/tests/smoke-scenes"
-    "$<TARGET_FILE_DIR:TartarusEngine>/assets/test-scenes"
-)
+set(_stage_commands "")
+foreach(_entry IN LISTS TARTARUS_STAGED_ASSETS)
+  string(REPLACE "|" ";" _parts "${_entry}")
+  list(GET _parts 0 _src)
+  list(GET _parts 1 _dst)
+  set(_dst_dir "$<TARGET_FILE_DIR:TartarusEngine>/${_dst}")
+  if(IS_DIRECTORY "${CMAKE_SOURCE_DIR}/${_src}")
+    list(APPEND _stage_commands COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/${_src}" "${_dst_dir}")
+  else()
+    get_filename_component(_name "${_src}" NAME)
+    list(LENGTH _parts _n)
+    if(_n GREATER 2)
+      list(GET _parts 2 _name)
+    endif()
+    list(APPEND _stage_commands
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${_dst_dir}"
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/${_src}" "${_dst_dir}/${_name}")
+  endif()
+endforeach()
+add_custom_command(TARGET TartarusEngine POST_BUILD ${_stage_commands} VERBATIM)
 
 # PhysX runtime DLLs (#185) — copied next to the exe like the fonts above. The set for the
 # CPU-only, non-GPU build is just these three (PhysX.dll load-time-depends on PhysXCommon +
@@ -690,17 +390,22 @@ foreach(_pxdll ${_physx_runtime_dlls})
   install(FILES "${PHYSX_STAGE}/${_physx_stage_for_config}/${_pxdll}.dll" DESTINATION ".")
 endforeach()
 
-# Engine-owned content, from the source tree rather than the build tree so `cpack` does not
-# depend on which config was staged last.
-install(DIRECTORY "${CMAKE_SOURCE_DIR}/src/Renderer/shaders/"    DESTINATION "assets/shaders")
-install(DIRECTORY "${CMAKE_SOURCE_DIR}/tests/smoke-scenes/"      DESTINATION "assets/test-scenes")
-install(FILES
-  "${CMAKE_SOURCE_DIR}/extern/fonts/fa-solid-900.ttf"
-  "${CMAKE_SOURCE_DIR}/extern/fonts/InterVariable.ttf"
-  "${CMAKE_SOURCE_DIR}/extern/fonts/JetBrainsMono-Regular.ttf"
-  DESTINATION "assets/fonts"
-)
-install(DIRECTORY "${CMAKE_SOURCE_DIR}/resources/EditorSounds/" DESTINATION "assets/editor_sounds")
+# Engine-owned content (TARTARUS_STAGED_ASSETS above), from the source tree rather than the
+# build tree so `cpack` does not depend on which config was staged last.
+foreach(_entry IN LISTS TARTARUS_STAGED_ASSETS)
+  string(REPLACE "|" ";" _parts "${_entry}")
+  list(GET _parts 0 _src)
+  list(GET _parts 1 _dst)
+  list(LENGTH _parts _n)
+  if(IS_DIRECTORY "${CMAKE_SOURCE_DIR}/${_src}")
+    install(DIRECTORY "${CMAKE_SOURCE_DIR}/${_src}/" DESTINATION "${_dst}")
+  elseif(_n GREATER 2)
+    list(GET _parts 2 _name)
+    install(FILES "${CMAKE_SOURCE_DIR}/${_src}" DESTINATION "${_dst}" RENAME "${_name}")
+  else()
+    install(FILES "${CMAKE_SOURCE_DIR}/${_src}" DESTINATION "${_dst}")
+  endif()
+endforeach()
 
 # The sample project, as an ALLOW-LIST of directories rather than "project/ minus exclusions".
 #
