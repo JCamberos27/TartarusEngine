@@ -24,6 +24,15 @@ name: Build
 #    pass looks exactly like a check that keeps passing - if you move where an artifact lands,
 #    grep this file for the old path.
 #
+# The work is split so the slow parts run side by side instead of in one 60-minute job:
+#   debug  - static checks + Debug build + unit tests
+#   build  - Release build + unit tests + package (uploaded) + the Release runtime for the test jobs
+#   smoke  - needs build: --smoke-test under Mesa llvmpipe, no rebuild
+#   editor - needs build: --editor-tests in two shards (TARTARUS_EDITOR_TEST_SHARD), only when the change touches the editor
+#   gate   - the one job to require in branch protection: green only if all of the above passed (editor may be skipped)
+# The test jobs run the exe that `build` produced, so the Release rebuild happens once. They check out the repo
+# as well: the engine finds project/ by walking up from build\Release\, which lands on the checkout.
+#
 # So a red build here means something real: it failed to compile, a unit test failed, a scene
 # failed to render, or the engine left a crash dump.
 
@@ -45,67 +54,32 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  build:
-    # Only the release step needs more than read, and only on a tag. Declaring it here rather
-    # than leaving the workflow on the repository default keeps the token narrow.
-    permissions:
-      contents: write
+  # Static checks, then the Debug build + unit tests. Debug only compiles and runs the headless tests: its render
+  # gates gave the same results as Release at twice the time, so no Mesa here.
+  debug:
     runs-on: windows-latest
-    # Backstop: a hung build or smoke test must not sit on a runner until GitHub's 6-hour
-    # job ceiling. The compile + cached deps finish well inside this; anything approaching it
-    # is a hang worth failing fast on. A good Release run takes ~35 min (the editor tests alone ~17),
-    # so the cap sits above the step limits added up: build 15 + smoke 7 + editor 25.
-    timeout-minutes: 65
-    strategy:
-      fail-fast: false
-      matrix:
-        config: [Debug, Release]
+    # Backstop: a hung build must not sit on a runner until GitHub's 6-hour job ceiling.
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 2 # the PR's test merge commit plus its first parent (main), for the change list below
-
-      # The editor smoke test (~17 min) only re-proves the editor when nothing editor-facing changed.
-      # A PR runs it when it touches one of these paths; pushes to main, tags and manual runs always do.
-      - name: Does this change touch the editor?
-        id: scope
-        if: matrix.config == 'Release'
-        shell: pwsh
-        run: |
-          $editor = $true
-          if ("${{ github.event_name }}" -eq "pull_request") {
-            $changed = @(git diff --name-only HEAD^1 HEAD)
-            $paths = '^(src/(Editor|Core|App|Assets|Graffiti)/|src/main\.cpp$|src/Tests/(EditorSmoke/|EditorUiTests)|assets/|project/assets/Decals/|CMakeLists\.txt$|cmake/|\.github/workflows/)'
-            $hits = @($changed | Where-Object { $_ -match $paths })
-            $editor = $hits.Count -gt 0
-            Write-Host "$($changed.Count) changed file(s), $($hits.Count) editor-facing"
-            $hits | Select-Object -First 20 | ForEach-Object { Write-Host "  $_" }
-          }
-          Write-Host "editor smoke: $editor"
-          "editor=$($editor.ToString().ToLower())" >> $env:GITHUB_OUTPUT
 
       - name: Third-party asset policy
-        if: matrix.config == 'Debug'
         run: python tools/assets/check_git_assets.py
 
       - name: Asset export regression
-        if: matrix.config == 'Debug'
         run: python -m unittest discover -s tools/assets -p 'test_*.py'
 
       # Structural guard for #302 / #184: every ECS component must be registered with
       # ComponentRegistry (auto-generates its serialization + Inspector + Add Component) or
-      # explicitly allow-listed with a reason. Pure static check, no build needed — run it
+      # explicitly allow-listed with a reason. Pure static check, no build needed - run it
       # first so "added a component, forgot to wire it up" fails in seconds. Only meaningful on
       # one config; the Debug job is enough.
       - name: Component registration check
-        if: matrix.config == 'Debug'
         run: python tools/check_component_registration.py
 
-      # Structural guard for #160 / Phase 1 item 7: "two — and only two — button treatments"
-      # across the editor. Same pure-static, no-build-needed, Debug-only treatment as the
-      # component check above.
+      # Structural guard for #160 / Phase 1 item 7: "two - and only two - button treatments"
+      # across the editor. Same pure-static, no-build-needed treatment as the component check above.
       - name: Button styling check
-        if: matrix.config == 'Debug'
         run: python tools/check_button_styling.py
 
       # CMake's FetchContent re-clones + rebuilds glfw/glm/assimp/entt/imgui/imguizmo from
@@ -115,7 +89,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: build/_deps
-          key: fetchcontent-${{ matrix.config }}-${{ hashFiles('CMakeLists.txt') }}
+          key: fetchcontent-Debug-${{ hashFiles('CMakeLists.txt') }}
 
       # PhysX is an ExternalProject, not FetchContent, so it lands in build/physx_external-prefix
       # and the cache above never covered it: 1.1 GB of clone plus build, recompiled on every job
@@ -138,8 +112,8 @@ jobs:
       # /fp:fast vs /fp:precise here was already the cause of a real bug (a thrown ball
       # freezing mid-air, #312). Slower and honest beats faster and quietly wrong.
       #
-      # No matrix.config in the key on purpose: PhysX builds debug AND release in one
-      # ExternalProject invocation, so both jobs share one entry. On a cold key they both miss,
+      # No config in the key on purpose: PhysX builds debug AND release in one
+      # ExternalProject invocation, so the debug and build jobs share one entry. On a cold key they both miss,
       # both build it, and both try to save - the loser logs "Cache already exists" and carries
       # on. That is expected, not a failure.
       - name: Cache the PhysX build
@@ -157,11 +131,11 @@ jobs:
         run: cmake -S . -B build -A x64
 
       - name: Build
-        run: cmake --build build --config ${{ matrix.config }} --parallel
+        run: cmake --build build --config Debug --parallel
 
       # #173 - headless unit tests (undo deltas, GUIDs, atomic writes, texture-cache keys,
       # material JSON robustness, component registry). They run before any window / GL context
-      # exists, so unlike the smoke test below they work on this GPU-less runner and DO gate the
+      # exists, so unlike the smoke test they work on this GPU-less runner and DO gate the
       # job: the exit code is the number of failed checks.
       # The exit code is the number of failed checks, and it has to be waited for and asserted
       # explicitly. Release/RelWithDebInfo set WIN32_EXECUTABLE, so the engine is a GUI-subsystem
@@ -177,173 +151,96 @@ jobs:
         timeout-minutes: 5
         shell: pwsh
         run: |
-          $exe = "build\${{ matrix.config }}\TartarusEngine.exe"
+          $exe = "build\Debug\TartarusEngine.exe"
           $p = Start-Process -FilePath $exe -ArgumentList "--unit-tests" -NoNewWindow -PassThru
           $null = $p.Handle; $p.WaitForExit()
           if ($p.ExitCode -ne 0) { throw "unit tests reported $($p.ExitCode) failed check(s)" }
 
-      # #173 suggestion 2 - a software OpenGL 4.6 driver, so the smoke test can actually run on a
-      # GPU-less runner. The engine requires a 4.6 CORE context and fails fast below it
-      # (Window.cpp), and it uses compute shaders, so the basic-display-adapter fallback cannot
-      # serve it; Mesa llvmpipe can.
-      #
-      # There is no official Mesa binary for Windows, so this pulls a community build. It is
-      # pinned two ways and BOTH are load-bearing: an exact release tag, and the SHA-256 that
-      # GitHub publishes for that asset, verified before anything is extracted or executed. A
-      # changed or substituted archive fails the step instead of running.
-      # Release only: the render gates below run on Release (Debug gave the same results at twice the time).
-      - name: Fetch Mesa llvmpipe (software OpenGL 4.6)
-        id: mesa
-        if: matrix.config == 'Release'
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          $ver  = "26.1.8"
-          $name = "mesa3d-$ver-release-msvc.7z"
-          $sha  = "4C6D32E653E0FF9AD07796E40C0BCFABF2764D849E3CE4F3B1590112C87E42F9"
-          $url  = "https://github.com/pal1000/mesa-dist-win/releases/download/$ver/$name"
-          # GitHub's release downloads sometimes answer with a 5xx page; retry those rather than fail
-          # the whole run after the build and unit tests have passed (PR #497's first run).
-          Invoke-WebRequest -Uri $url -OutFile $name -MaximumRetryCount 4 -RetryIntervalSec 15
-          $got = (Get-FileHash -Algorithm SHA256 -Path $name).Hash
-          if ($got -ne $sha) { throw "Mesa archive SHA-256 mismatch: expected $sha, got $got" }
-          Write-Host "Mesa $ver checksum verified"
-          7z x $name -omesa -y | Out-Null
-          # Layout differs between Mesa builds, so find the 64-bit opengl32.dll rather than
-          # assuming a path.
-          $gl = Get-ChildItem -Path mesa -Recurse -Filter opengl32.dll |
-                Where-Object { $_.FullName -match "x64" } | Select-Object -First 1
-          if (-not $gl) { throw "no x64 opengl32.dll in the Mesa archive" }
-          Write-Host "using $($gl.FullName)"
-          Copy-Item -Path (Join-Path $gl.Directory.FullName "*.dll") -Destination "build\${{ matrix.config }}" -Force
+  # The Release build, once. Everything the test jobs need leaves here as an artifact; the package leaves as a
+  # release candidate. Also decides whether the editor tests run (the `scope` step).
+  build:
+    # Only the release step needs more than read, and only on a tag. Declaring it here rather
+    # than leaving the workflow on the repository default keeps the token narrow.
+    permissions:
+      contents: write
+    runs-on: windows-latest
+    # Backstop: a hung build must not sit on a runner until GitHub's 6-hour job ceiling.
+    # Build ~15 + unit tests 5 + package/verify; the render and editor tests are other jobs now.
+    timeout-minutes: 40
+    outputs:
+      editor: ${{ steps.scope.outputs.editor }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2 # the PR's test merge commit plus its first parent (main), for the change list below
 
-      # The crash handler writes dumps to %LOCALAPPDATA%\TartarusEngine\Crashes\, which persists
-      # for the life of the runner. Clearing it first means the assertion after the smoke test can
-      # only ever fire on a dump THIS job produced - nothing carried in from an earlier step.
-      - name: Clear crash dumps before the smoke run
+      # The editor tests (~17 min of work, split in two shards) only re-prove the editor when something
+      # editor-facing changed. A PR runs them when it touches one of these paths; pushes to main, tags and manual runs always do.
+      - name: Does this change touch the editor?
+        id: scope
         shell: pwsh
         run: |
-          $dir = "$env:LOCALAPPDATA\TartarusEngine\Crashes"
-          if (Test-Path $dir) { Remove-Item "$dir\*" -Force -Recurse -ErrorAction SilentlyContinue }
-          Write-Host "cleared $dir"
+          $editor = $true
+          if ("${{ github.event_name }}" -eq "pull_request") {
+            $changed = @(git diff --name-only HEAD^1 HEAD)
+            $paths = '^(src/(Editor|Core|App|Assets|Graffiti)/|src/main\.cpp$|src/Tests/(EditorSmoke/|EditorUiTests)|assets/|project/assets/Decals/|CMakeLists\.txt$|cmake/|\.github/workflows/|\.github/actions/)'
+            $hits = @($changed | Where-Object { $_ -match $paths })
+            $editor = $hits.Count -gt 0
+            Write-Host "$($changed.Count) changed file(s), $($hits.Count) editor-facing"
+            $hits | Select-Object -First 20 | ForEach-Object { Write-Host "  $_" }
+          }
+          Write-Host "editor tests: $editor"
+          "editor=$($editor.ToString().ToLower())" >> $env:GITHUB_OUTPUT
 
-      # A REAL GATE. It was continue-on-error for as long as the runners had no OpenGL 4.6 at
-      # all; with llvmpipe supplying one, every smoke scene passes here (verified: both configs, exit 0,
-      # about 3 minutes each), so a rendering regression must now fail the build rather than being
-      # swallowed. Software rasterisation is slow, hence the much larger timeout - it is roughly
-      # 3 minutes today, and the headroom is for scenes added later, not for a hang.
-      #
-      # The timeout is load-bearing rather than tidiness: a Debug build that cannot create its
-      # window STALLS instead of exiting (the debug CRT's abort path waits on a message box that
-      # a non-interactive desktop never dismisses). Without a cap the job would ride GitHub's
-      # 6-hour ceiling. Start-Process -Wait -PassThru for the usual reason - in Release the engine
-      # is a GUI-subsystem binary and a bare invocation returns immediately (#351, #354).
-      - name: Smoke test (Mesa llvmpipe)
-        if: matrix.config == 'Release' # Debug: build, unit tests and the static checks only
-        timeout-minutes: 25
-        shell: pwsh
-        env:
-          GALLIUM_DRIVER: llvmpipe
-          LIBGL_ALWAYS_SOFTWARE: "1"
-          MESA_GL_VERSION_OVERRIDE: "4.6"
-          MESA_GLSL_VERSION_OVERRIDE: "460"
-        run: |
-          $exe = "build\${{ matrix.config }}\TartarusEngine.exe"
-          $p = Start-Process -FilePath $exe -ArgumentList "--smoke-test" -NoNewWindow -Wait -PassThru
-          Write-Host "smoke test exited with $($p.ExitCode)"
-          exit $p.ExitCode
+      # Same caches as the debug job (see the notes there): FetchContent per config, PhysX shared.
+      - name: Cache FetchContent dependencies
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: fetchcontent-Release-${{ hashFiles('CMakeLists.txt') }}
 
-      # The editor smoke test (--editor-tests, src/Tests/EditorUiTests.cpp + EditorSmoke_*.cpp):
-      # drives every panel, menu and tool of the real editor with synthetic input, under the same
-      # llvmpipe context as the smoke test. Exit code is 0 only when every test passed. It writes
-      # its screenshots to editor-test-shots/, uploaded below whether it passed or not.
-      # Release only: Debug gave identical results at twice the time. The Scenes suite is skipped
-      # because CI has none of the external assets its scenes load (each would wait for nothing).
-      - name: Editor smoke test (Mesa llvmpipe)
-        if: always() && steps.mesa.outcome == 'success' && matrix.config == 'Release' && steps.scope.outputs.editor == 'true'
-        timeout-minutes: 30
+      - name: Cache the PhysX build
+        uses: actions/cache@v4
+        with:
+          path: build/physx_external-prefix
+          key: physx-${{ hashFiles('CMakeLists.txt', 'tools/physx_patch.cmake', 'tools/physx_harvest.cmake') }}
+
+      # No -G, for the reason given in the debug job.
+      - name: Configure
+        run: cmake -S . -B build -A x64
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      # Waited for explicitly, for the reason given in the debug job (Release is a GUI-subsystem binary, #351).
+      - name: Unit tests
+        timeout-minutes: 5
         shell: pwsh
-        env:
-          GALLIUM_DRIVER: llvmpipe
-          LIBGL_ALWAYS_SOFTWARE: "1"
-          MESA_GL_VERSION_OVERRIDE: "4.6"
-          MESA_GLSL_VERSION_OVERRIDE: "460"
-          TARTARUS_EDITOR_TEST_SHOTS: ${{ github.workspace }}\editor-test-shots
-          TARTARUS_EDITOR_TEST_SHOW: "1"
-          TARTARUS_EDITOR_TEST_EXCLUDE: "scenes:"
-          # The run's own watchdog aborts (with a crash dump, uploaded below) before this step's
-          # timeout, so a hang still leaves the log naming the test and step it stopped in.
-          TARTARUS_EDITOR_TEST_DEADLINE: "25"
-          # The hot-reload test's real module rebuild runs MSBuild, whose worker nodes otherwise
-          # stay alive ~15 minutes after the build.
-          MSBUILDDISABLENODEREUSE: "1"
         run: |
-          $exe = "build\${{ matrix.config }}\TartarusEngine.exe"
-          # WaitForExit, not -Wait: Start-Process -Wait also waits for every process the editor
-          # started. After a module rebuild that was MSBuild's idle nodes, and the step outlived the
-          # editor by up to 15 minutes or ran into its timeout.
-          $p = Start-Process -FilePath $exe -ArgumentList "--editor-tests" -NoNewWindow -PassThru
+          $exe = "build\Release\TartarusEngine.exe"
+          $p = Start-Process -FilePath $exe -ArgumentList "--unit-tests" -NoNewWindow -PassThru
           $null = $p.Handle; $p.WaitForExit()
-          Write-Host "editor tests exited with $($p.ExitCode)"
-          Get-CimInstance Win32_Process -Filter "ParentProcessId = $($p.Id)" | ForEach-Object {
-            Write-Host "still running from the editor: $($_.Name) (pid $($_.ProcessId))"
-            Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
-          }
-          exit $p.ExitCode
+          if ($p.ExitCode -ne 0) { throw "unit tests reported $($p.ExitCode) failed check(s)" }
 
-      - name: Upload editor screenshots
-        if: always() && hashFiles('editor-test-shots/**') != ''
+      # What the smoke and editor jobs run: the exe, the engine's DLLs (TartarusEditor/TartarusGame, PhysX) and
+      # the assets staged next to the exe by the POST_BUILD steps. NOT the pdb/lib/exp files (build-time only).
+      # project/ comes from the test jobs' own checkout (ProjectPaths walks up from the exe to find it). The
+      # hot-reload test's real module rebuild needs the CMake build tree, which is not shipped: GameModuleBuild::Available()
+      # is false in the test jobs and that test skips its rebuild (it ran in the old single job).
+      - name: Upload the Release runtime for the test jobs
         uses: actions/upload-artifact@v4
         with:
-          name: editor-test-shots-${{ matrix.config }}
-          path: editor-test-shots/
-          retention-days: 14
-
-      # The smoke step above gates on its own exit code, but a process can render every smoke scene,
-      # report success and THEN fault on the way out. CrashHandler catches that and writes a
-      # minidump, so a dump existing is a failure even when the exit code was 0. That teardown
-      # crash class (e.g. #389 — the registry destroyed after the hot-reload DLLs it bound into
-      # were unloaded) is deterministic C++, not GPU-dependent, which is why it gets its own step.
-      #
-      # LOOK IN THE RIGHT PLACE. This step used to glob build/<config>/, which was correct when it
-      # was written (0e2d843, Sept 10) and stopped being correct eight days later when #148 moved
-      # dumps to %LOCALAPPDATA%\TartarusEngine\Crashes\ (8f95561, Sept 18). Nothing failed; the
-      # glob just matched nothing, every run, for as long as it took to notice (#358). The exe
-      # directory is still checked because ResolveDumpDir() falls back to it when LOCALAPPDATA is
-      # unset — both paths, so neither can go quiet again.
-      #
-      # Only .dmp: the handler writes a minidump and a line to stderr, never a .txt. The old
-      # version cat'd crash_*.txt, which never existed either.
-      - name: Assert smoke test left no crash dump
-        if: always()
-        shell: pwsh
-        run: |
-          $dirs = @("$env:LOCALAPPDATA\TartarusEngine\Crashes", "build\${{ matrix.config }}")
-          $dumps = @($dirs | Where-Object { Test-Path $_ } |
-                     ForEach-Object { Get-ChildItem $_ -Filter "crash_*.dmp" -ErrorAction SilentlyContinue })
-          if ($dumps.Count -gt 0) {
-            foreach ($d in $dumps) { Write-Host "  $($d.FullName)  ($($d.Length) bytes)" }
-            Write-Host "::error::smoke test left $($dumps.Count) crash dump(s) - see the crash-dumps artifact"
-            New-Item -ItemType Directory -Force -Path crash-dumps | Out-Null
-            $dumps | ForEach-Object { Copy-Item $_.FullName crash-dumps -Force }
-            exit 1
-          }
-          Write-Host "no crash dump - ok"
-
-      # A red build that throws the evidence away is half a gate. Only runs when the step above
-      # found something, so a green build uploads nothing.
-      - name: Upload crash dumps
-        if: failure() && hashFiles('crash-dumps/*') != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: crash-dumps-${{ matrix.config }}
-          path: crash-dumps/
-          retention-days: 14
+          name: release-runtime
+          path: |
+            build/Release/*.exe
+            build/Release/*.dll
+            build/Release/assets/
+          if-no-files-found: error
+          retention-days: 1
 
       # --- Packaging (#173 suggestion 4) ---------------------------------------------------
       # Release only: a Debug ZIP would ship the debug CRT, which end users do not have.
       - name: Package (CPack ZIP)
-        if: matrix.config == 'Release'
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -361,7 +258,6 @@ jobs:
       # adding a staged asset without packaging it cannot pass, which a fixed manifest list would
       # not catch.
       - name: Verify the package runs standalone
-        if: matrix.config == 'Release'
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -431,7 +327,6 @@ jobs:
           Write-Host "the packaged engine runs standalone"
 
       - name: Upload the package
-        if: matrix.config == 'Release'
         uses: actions/upload-artifact@v4
         with:
           name: TartarusEngine-win64
@@ -442,7 +337,7 @@ jobs:
       # Uses the gh CLI rather than a third-party release action: one less thing to pin, review
       # and trust with a write token.
       - name: Publish the release
-        if: matrix.config == 'Release' && startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -453,3 +348,223 @@ jobs:
             --repo "${{ github.repository }}" `
             --title "Tartarus Engine ${{ github.ref_name }}" `
             --generate-notes
+
+  # The software-rendered smoke scenes. Runs the exe `build` produced under Mesa llvmpipe.
+  smoke:
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4 # project/ (scenes, settings) and the Mesa composite action
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-runtime
+          path: build/Release
+
+      - name: Fetch Mesa llvmpipe (software OpenGL 4.6)
+        uses: ./.github/actions/mesa
+        with:
+          destination: build\Release
+
+      # The crash handler writes dumps to %LOCALAPPDATA%\TartarusEngine\Crashes\, which persists
+      # for the life of the runner. Clearing it first means the assertion after the smoke test can
+      # only ever fire on a dump THIS job produced - nothing carried in from an earlier step.
+      - name: Clear crash dumps before the smoke run
+        shell: pwsh
+        run: |
+          $dir = "$env:LOCALAPPDATA\TartarusEngine\Crashes"
+          if (Test-Path $dir) { Remove-Item "$dir\*" -Force -Recurse -ErrorAction SilentlyContinue }
+          Write-Host "cleared $dir"
+
+      # A REAL GATE. It was continue-on-error for as long as the runners had no OpenGL 4.6 at
+      # all; with llvmpipe supplying one, every smoke scene passes here (verified: about 3 minutes),
+      # so a rendering regression must now fail the build rather than being
+      # swallowed. Software rasterisation is slow, hence the much larger timeout - it is roughly
+      # 3 minutes today, and the headroom is for scenes added later, not for a hang.
+      #
+      # The timeout is load-bearing rather than tidiness: a build that cannot create its
+      # window can STALL instead of exiting. Without a cap the job would ride GitHub's
+      # 6-hour ceiling. Start-Process -Wait -PassThru for the usual reason - in Release the engine
+      # is a GUI-subsystem binary and a bare invocation returns immediately (#351, #354).
+      - name: Smoke test (Mesa llvmpipe)
+        timeout-minutes: 15
+        shell: pwsh
+        env:
+          GALLIUM_DRIVER: llvmpipe
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          MESA_GL_VERSION_OVERRIDE: "4.6"
+          MESA_GLSL_VERSION_OVERRIDE: "460"
+        run: |
+          $exe = "build\Release\TartarusEngine.exe"
+          $p = Start-Process -FilePath $exe -ArgumentList "--smoke-test" -NoNewWindow -Wait -PassThru
+          Write-Host "smoke test exited with $($p.ExitCode)"
+          exit $p.ExitCode
+
+      # The smoke step above gates on its own exit code, but a process can render every smoke scene,
+      # report success and THEN fault on the way out. CrashHandler catches that and writes a
+      # minidump, so a dump existing is a failure even when the exit code was 0. That teardown
+      # crash class (e.g. #389 - the registry destroyed after the hot-reload DLLs it bound into
+      # were unloaded) is deterministic C++, not GPU-dependent, which is why it gets its own step.
+      #
+      # LOOK IN THE RIGHT PLACE. This step used to glob build/<config>/, which was correct when it
+      # was written (0e2d843, Sept 10) and stopped being correct eight days later when #148 moved
+      # dumps to %LOCALAPPDATA%\TartarusEngine\Crashes\ (8f95561, Sept 18). Nothing failed; the
+      # glob just matched nothing, every run, for as long as it took to notice (#358). The exe
+      # directory is still checked because ResolveDumpDir() falls back to it when LOCALAPPDATA is
+      # unset - both paths, so neither can go quiet again.
+      #
+      # Only .dmp: the handler writes a minidump and a line to stderr, never a .txt. The old
+      # version cat'd crash_*.txt, which never existed either.
+      - name: Assert smoke test left no crash dump
+        if: always()
+        shell: pwsh
+        run: |
+          $dirs = @("$env:LOCALAPPDATA\TartarusEngine\Crashes", "build\Release")
+          $dumps = @($dirs | Where-Object { Test-Path $_ } |
+                     ForEach-Object { Get-ChildItem $_ -Filter "crash_*.dmp" -ErrorAction SilentlyContinue })
+          if ($dumps.Count -gt 0) {
+            foreach ($d in $dumps) { Write-Host "  $($d.FullName)  ($($d.Length) bytes)" }
+            Write-Host "::error::smoke test left $($dumps.Count) crash dump(s) - see the crash-dumps artifact"
+            New-Item -ItemType Directory -Force -Path crash-dumps | Out-Null
+            $dumps | ForEach-Object { Copy-Item $_.FullName crash-dumps -Force }
+            exit 1
+          }
+          Write-Host "no crash dump - ok"
+
+      # A red build that throws the evidence away is half a gate. Only runs when the step above
+      # found something, so a green build uploads nothing.
+      - name: Upload crash dumps
+        if: failure() && hashFiles('crash-dumps/*') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: crash-dumps-smoke
+          path: crash-dumps/
+          retention-days: 14
+
+  # The editor smoke test (--editor-tests, src/Tests/EditorUiTests.cpp + EditorSmoke_*.cpp): drives every panel,
+  # menu and tool of the real editor with synthetic input, under the same llvmpipe context as the smoke test.
+  # Split into two shards (TARTARUS_EDITOR_TEST_SHARD=i/2: the k-th test runs in shard k % 2) that run in parallel.
+  # Exit code is 0 only when every test of the shard passed. Runs only when the change touches the editor.
+  editor:
+    needs: build
+    if: needs.build.outputs.editor == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1]
+    steps:
+      - uses: actions/checkout@v4 # project/ (the scenes and assets the tests open) and the Mesa composite action
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-runtime
+          path: build/Release
+
+      - name: Fetch Mesa llvmpipe (software OpenGL 4.6)
+        uses: ./.github/actions/mesa
+        with:
+          destination: build\Release
+
+      - name: Clear crash dumps before the editor run
+        shell: pwsh
+        run: |
+          $dir = "$env:LOCALAPPDATA\TartarusEngine\Crashes"
+          if (Test-Path $dir) { Remove-Item "$dir\*" -Force -Recurse -ErrorAction SilentlyContinue }
+          Write-Host "cleared $dir"
+
+      # It writes its screenshots to editor-test-shots/, uploaded below whether it passed or not.
+      # The Scenes suite is skipped because CI has none of the external assets its scenes load (each would wait for nothing).
+      - name: Editor smoke test (Mesa llvmpipe, shard ${{ matrix.shard }}/2)
+        timeout-minutes: 22
+        shell: pwsh
+        env:
+          GALLIUM_DRIVER: llvmpipe
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          MESA_GL_VERSION_OVERRIDE: "4.6"
+          MESA_GLSL_VERSION_OVERRIDE: "460"
+          TARTARUS_EDITOR_TEST_SHOTS: ${{ github.workspace }}\editor-test-shots
+          TARTARUS_EDITOR_TEST_SHOW: "1"
+          TARTARUS_EDITOR_TEST_EXCLUDE: "scenes:"
+          TARTARUS_EDITOR_TEST_SHARD: "${{ matrix.shard }}/2"
+          # The run's own watchdog aborts (with a crash dump, uploaded below) before this step's
+          # timeout, so a hang still leaves the log naming the test and step it stopped in.
+          TARTARUS_EDITOR_TEST_DEADLINE: "18"
+          # The hot-reload test's real module rebuild runs MSBuild, whose worker nodes otherwise
+          # stay alive ~15 minutes after the build.
+          MSBUILDDISABLENODEREUSE: "1"
+        run: |
+          $exe = "build\Release\TartarusEngine.exe"
+          # WaitForExit, not -Wait: Start-Process -Wait also waits for every process the editor
+          # started. After a module rebuild that was MSBuild's idle nodes, and the step outlived the
+          # editor by up to 15 minutes or ran into its timeout.
+          $p = Start-Process -FilePath $exe -ArgumentList "--editor-tests" -NoNewWindow -PassThru
+          $null = $p.Handle; $p.WaitForExit()
+          Write-Host "editor tests exited with $($p.ExitCode)"
+          Get-CimInstance Win32_Process -Filter "ParentProcessId = $($p.Id)" | ForEach-Object {
+            Write-Host "still running from the editor: $($_.Name) (pid $($_.ProcessId))"
+            Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+          }
+          exit $p.ExitCode
+
+      - name: Upload editor screenshots
+        if: always() && hashFiles('editor-test-shots/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: editor-test-shots-Release-${{ matrix.shard }}
+          path: editor-test-shots/
+          retention-days: 14
+
+      # Same crash-dump assertion as the smoke job (see the notes there: both dump locations, .dmp only).
+      - name: Assert editor tests left no crash dump
+        if: always()
+        shell: pwsh
+        run: |
+          $dirs = @("$env:LOCALAPPDATA\TartarusEngine\Crashes", "build\Release")
+          $dumps = @($dirs | Where-Object { Test-Path $_ } |
+                     ForEach-Object { Get-ChildItem $_ -Filter "crash_*.dmp" -ErrorAction SilentlyContinue })
+          if ($dumps.Count -gt 0) {
+            foreach ($d in $dumps) { Write-Host "  $($d.FullName)  ($($d.Length) bytes)" }
+            Write-Host "::error::editor tests left $($dumps.Count) crash dump(s) - see the crash-dumps artifact"
+            New-Item -ItemType Directory -Force -Path crash-dumps | Out-Null
+            $dumps | ForEach-Object { Copy-Item $_.FullName crash-dumps -Force }
+            exit 1
+          }
+          Write-Host "no crash dump - ok"
+
+      - name: Upload crash dumps
+        if: failure() && hashFiles('crash-dumps/*') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: crash-dumps-editor-${{ matrix.shard }}
+          path: crash-dumps/
+          retention-days: 14
+
+  # The single required check. A skipped or cancelled job would otherwise look "not failed", so this spells out
+  # what green means: debug, build and smoke succeeded, and editor succeeded or was skipped (a change that touches
+  # nothing editor-facing).
+  gate:
+    needs: [debug, build, smoke, editor]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: All required jobs passed
+        shell: bash
+        env:
+          DEBUG: ${{ needs.debug.result }}
+          BUILD: ${{ needs.build.result }}
+          SMOKE: ${{ needs.smoke.result }}
+          EDITOR: ${{ needs.editor.result }}
+        run: |
+          echo "debug:  $DEBUG"
+          echo "build:  $BUILD"
+          echo "smoke:  $SMOKE"
+          echo "editor: $EDITOR (skipped is fine: nothing editor-facing changed)"
+          ok=1
+          for r in "$DEBUG" "$BUILD" "$SMOKE"; do [ "$r" = "success" ] || ok=0; done
+          case "$EDITOR" in success|skipped) ;; *) ok=0 ;; esac
+          if [ "$ok" != 1 ]; then echo "::error::a required job did not pass"; exit 1; fi
+          echo "all green"

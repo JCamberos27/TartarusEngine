@@ -1,0 +1,42 @@
+name: Fetch Mesa llvmpipe
+description: Software OpenGL 4.6 for GPU-less runners - downloads the pinned Mesa build, verifies its SHA-256 and copies its x64 DLLs into a directory.
+
+# #173 suggestion 2 - the engine requires a 4.6 CORE context and fails fast below it (Window.cpp), and it
+# uses compute shaders, so the basic-display-adapter fallback cannot serve it; Mesa llvmpipe can.
+#
+# There is no official Mesa binary for Windows, so this pulls a community build. It is pinned two ways and
+# BOTH are load-bearing: an exact release tag, and the SHA-256 that GitHub publishes for that asset, verified
+# before anything is extracted or executed. A changed or substituted archive fails the step instead of running.
+
+inputs:
+  destination:
+    description: Directory the Mesa DLLs (opengl32.dll and friends) are copied into, e.g. build\Release.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Download, verify and install Mesa
+      shell: pwsh
+      env:
+        MESA_DEST: ${{ inputs.destination }}
+      run: |
+        $ErrorActionPreference = "Stop"
+        $ver  = "26.1.8"
+        $name = "mesa3d-$ver-release-msvc.7z"
+        $sha  = "4C6D32E653E0FF9AD07796E40C0BCFABF2764D849E3CE4F3B1590112C87E42F9"
+        $url  = "https://github.com/pal1000/mesa-dist-win/releases/download/$ver/$name"
+        # GitHub's release downloads sometimes answer with a 5xx page; retry those rather than fail
+        # the whole run after the build and unit tests have passed (PR #497's first run).
+        Invoke-WebRequest -Uri $url -OutFile $name -MaximumRetryCount 4 -RetryIntervalSec 15
+        $got = (Get-FileHash -Algorithm SHA256 -Path $name).Hash
+        if ($got -ne $sha) { throw "Mesa archive SHA-256 mismatch: expected $sha, got $got" }
+        Write-Host "Mesa $ver checksum verified"
+        7z x $name -omesa -y | Out-Null
+        # Layout differs between Mesa builds, so find the 64-bit opengl32.dll rather than
+        # assuming a path.
+        $gl = Get-ChildItem -Path mesa -Recurse -Filter opengl32.dll |
+              Where-Object { $_.FullName -match "x64" } | Select-Object -First 1
+        if (-not $gl) { throw "no x64 opengl32.dll in the Mesa archive" }
+        Write-Host "using $($gl.FullName)"
+        Copy-Item -Path (Join-Path $gl.Directory.FullName "*.dll") -Destination $env:MESA_DEST -Force

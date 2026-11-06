@@ -175,7 +175,7 @@ void RegisterGraffitiTests() {
         }
         GA::Shown(c.E) = false;
     });
-    Add("graffiti: design a piece, spray it onto a hallway wall, bake it twice identically, see the decal", {
+    Add("graffiti: design a piece, spray it onto a hallway wall, bake again identically, see the decal", {
         Do("reset the test's state", [](Ctx&) { g_State = std::make_shared<State>(); }),
         FreshScene(), Wait(2),
         Do("Scene tab in front", [](Ctx& c) { GA::FocusScene(c.E); }), Wait(2),
@@ -350,19 +350,18 @@ void RegisterGraffitiTests() {
             ImGui::SetWindowCollapsed(EditorPanels::GraffitiDesigner, false);
         }),
         Wait(3),
-        // Bake twice from the button: byte-identical.
-        Do("note the bake count", [](Ctx& c) { g_State->BakesBefore = GA::G(c.E)->Bakes; }),
-        Click(ByLabel("Bake", kDesigner)),
-        UntilSecs("bake A lands", [](Ctx& c) { return BakeIdle(c) && GA::G(c.E)->Bakes == g_State->BakesBefore + 1; }, 60),
-        Do("keep bake A's files", [](Ctx& c) {
+        // Determinism: one more bake from the button must be byte-identical to the bake the wall stroke just
+        // landed (same recipe, so a second full bake of the unchanged piece proves the same thing as bake-twice did).
+        Do("keep the stroke bake's files", [](Ctx& c) {
             GraffitiDesigner* g = GA::G(c.E);
             const char* maps[] = {"Albedo", "Normal", "Surface", "Aux"};
             for (int i = 0; i < 4; ++i) g_State->Bake[i] = ReadAll(g->Piece->MapPath(maps[i]));
             g_State->Hash = g->LastBakeHash;
+            g_State->BakesBefore = g->Bakes;
         }),
         Click(ByLabel("Bake", kDesigner)),
-        UntilSecs("bake B lands", [](Ctx& c) { return BakeIdle(c) && GA::G(c.E)->Bakes == g_State->BakesBefore + 2; }, 60),
-        Expect("bake B is byte-identical to bake A", [](Ctx& c) {
+        UntilSecs("the button bake lands", [](Ctx& c) { return BakeIdle(c) && GA::G(c.E)->Bakes == g_State->BakesBefore + 1; }, 60),
+        Expect("the button bake is byte-identical to the stroke's bake", [](Ctx& c) {
             GraffitiDesigner* g = GA::G(c.E);
             const char* maps[] = {"Albedo", "Normal", "Surface", "Aux"};
             for (int i = 0; i < 4; ++i) {
@@ -371,7 +370,7 @@ void RegisterGraffitiTests() {
                 if (now != g_State->Bake[i]) return std::string(maps[i]) + " map differs between bakes";
             }
             if (g->LastBakeHash != g_State->Hash) return std::string("bake hashes differ");
-            std::printf("    [graffiti] bakes A and B identical: hash %016llx, albedo %zu bytes\n", (unsigned long long)g->LastBakeHash,
+            std::printf("    [graffiti] bakes identical: hash %016llx, albedo %zu bytes\n", (unsigned long long)g->LastBakeHash,
                         g_State->Bake[0].size());
             return std::string();
         }),
