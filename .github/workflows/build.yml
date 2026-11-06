@@ -53,8 +53,8 @@ jobs:
     runs-on: windows-latest
     # Backstop: a hung build or smoke test must not sit on a runner until GitHub's 6-hour
     # job ceiling. The compile + cached deps finish well inside this; anything approaching it
-    # is a hang worth failing fast on. A good Release run takes ~49 min (the editor tests and tour
-    # alone ~30), so the cap sits above the step limits added up: build 15 + smoke 4 + editor 25 + tour 10.
+    # is a hang worth failing fast on. A good Release run takes ~35 min (the editor tests alone ~17),
+    # so the cap sits above the step limits added up: build 15 + smoke 7 + editor 25.
     timeout-minutes: 65
     strategy:
       fail-fast: false
@@ -170,8 +170,10 @@ jobs:
       # pinned two ways and BOTH are load-bearing: an exact release tag, and the SHA-256 that
       # GitHub publishes for that asset, verified before anything is extracted or executed. A
       # changed or substituted archive fails the step instead of running.
+      # Release only: the render gates below run on Release (Debug gave the same results at twice the time).
       - name: Fetch Mesa llvmpipe (software OpenGL 4.6)
         id: mesa
+        if: matrix.config == 'Release'
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -216,6 +218,7 @@ jobs:
       # 6-hour ceiling. Start-Process -Wait -PassThru for the usual reason - in Release the engine
       # is a GUI-subsystem binary and a bare invocation returns immediately (#351, #354).
       - name: Smoke test (Mesa llvmpipe)
+        if: matrix.config == 'Release' # Debug: build, unit tests and the static checks only
         timeout-minutes: 25
         shell: pwsh
         env:
@@ -265,28 +268,6 @@ jobs:
             Write-Host "still running from the editor: $($_.Name) (pid $($_.ProcessId))"
             Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
           }
-          exit $p.ExitCode
-
-      # The editor screenshot tour (--editor-shot) on the default layout: one PNG per main view, for
-      # a human to look over. Not a gate on its own (the editor test above is); the crash-dump step
-      # below still catches a crash here.
-      - name: Editor screenshot tour (Mesa llvmpipe)
-        if: always() && matrix.config == 'Release'
-        timeout-minutes: 10
-        continue-on-error: true
-        shell: pwsh
-        env:
-          GALLIUM_DRIVER: llvmpipe
-          LIBGL_ALWAYS_SOFTWARE: "1"
-          MESA_GL_VERSION_OVERRIDE: "4.6"
-          MESA_GLSL_VERSION_OVERRIDE: "460"
-        run: |
-          # A timed-out step above leaves its editor running (killing the shell doesn't end it).
-          Get-Process TartarusEngine -ErrorAction SilentlyContinue | Stop-Process -Force
-          $exe = "build\${{ matrix.config }}\TartarusEngine.exe"
-          $p = Start-Process -FilePath $exe -ArgumentList "--editor-shot","editor-test-shots\tour","--editor-shot-default-layout" -NoNewWindow -PassThru
-          $null = $p.Handle; $p.WaitForExit()   # not -Wait: see the editor smoke test step
-          Write-Host "editor screenshot tour exited with $($p.ExitCode)"
           exit $p.ExitCode
 
       - name: Upload editor screenshots
