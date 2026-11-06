@@ -620,10 +620,7 @@ int main(int argc, char** argv) {
     const bool playerMode = !headless &&
         PlayerConfig::Load((std::filesystem::path(EnginePaths::ExeDir()) / PlayerConfig::kFileName).string(), playerCfg);
     if (playerMode) {
-        std::string appName;
-        for (char c : playerCfg.ProductName)
-            appName += (std::isalnum((unsigned char)c) || c == ' ' || c == '-' || c == '_') ? c : '_';
-        UserPaths::SetAppName(appName.empty() ? std::string("TartarusGame") : appName);
+        UserPaths::SetAppName(playerCfg.UserFolderName());
         std::error_code pe;
         const std::filesystem::path shipped = std::filesystem::path(EnginePaths::ExeDir()) / "project";
         if (std::filesystem::is_directory(shipped, pe)) ProjectPaths::SetRootOverride(shipped.string());

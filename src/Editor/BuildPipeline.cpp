@@ -281,15 +281,9 @@ Report Build(const ProjectSettings::BuildSettings& s, Progress* progress) {
     stageBranding(s.SplashPath, "player_splash", playerSplashRel);
 
     PlayerConfig pc;
+    static_cast<PlayerBuildFields&>(pc) = s; // then point the branding at the staged copies
     pc.IconPath = playerIconRel;
     pc.SplashPath = playerSplashRel;
-    pc.ProductName = s.ProductName;
-    pc.Scenes = s.Scenes;
-    pc.Width = s.Width;
-    pc.Height = s.Height;
-    pc.Fullscreen = s.Fullscreen;
-    pc.VSync = s.VSync;
-    pc.DevelopmentBuild = s.DevelopmentBuild;
     if (!pc.Save((out / PlayerConfig::kFileName).string())) return fail("couldn't write player.json.");
 
     std::sort(r.LargestFiles.begin(), r.LargestFiles.end(), [](const auto& a, const auto& b) { return a.second > b.second; });

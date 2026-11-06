@@ -1,6 +1,7 @@
 #pragma once
 #include <glm/glm.hpp>
 #include "LayerRegistry.h"
+#include "PlayerConfig.h"
 #include <string>
 #include <vector>
 
@@ -112,18 +113,9 @@ const AudioSettings& Audio();
 AudioSettings&       MutableAudio();
 
 // #174 - Build Settings + the Player settings a build bakes into player.json.
-struct BuildSettings {
-    std::string ProductName = "My Game";
-    std::string OutputDir;           // empty = <folder above the project>/Builds/<ProductName>
-    std::vector<std::string> Scenes; // project-relative; index 0 is the startup scene
-    int  Width = 1280, Height = 720; // windowed size
-    bool Fullscreen = true;
-    bool VSync = true;
-    bool DevelopmentBuild = false;   // keep the stats overlay + physics debug keys in the player
-    // #174 - project-relative paths to the images the built game uses for its window/taskbar
-    // icon and its startup splash. Empty means the player keeps the engine's own defaults.
-    std::string IconPath;
-    std::string SplashPath;
+// The player-facing fields (product name, scenes, window, branding) are shared with player.json.
+struct BuildSettings : PlayerBuildFields {
+    std::string OutputDir; // empty = <folder above the project>/Builds/<ProductName>
 };
 const BuildSettings& Build();
 BuildSettings&       MutableBuild();
