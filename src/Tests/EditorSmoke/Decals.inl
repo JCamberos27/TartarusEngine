@@ -100,7 +100,7 @@ void RegisterDecalsTests() {
         Until("the packs are indexed", [](Ctx& c) { return SA::Ed(c.E).ScanDone; }, 2400),
         ExpectTrue("the library lists decals", [](Ctx& c) { return SA::Ed(c.E).Entries.size() > 900; }), // 963 after the 4K maps were dropped (2K cap)
         ExpectTrue("three palettes found", [](Ctx& c) { return SA::Ed(c.E).Palettes.size() >= 3; }),
-        Wait(40), Shot("library"),
+        Wait(20), Shot("library"),
         Do("close the Decal Library", [](Ctx& c) { SA::Library(c.E, false); }), Wait(4),
         // --- Place
         ChooseDecal("Stain_591"),
@@ -201,7 +201,7 @@ void RegisterDecalsLitTests() {
             c.Cam.Position = glm::vec3(5.3f, 1.5f, -4.9f);
             c.Cam.Yaw = -50.0f;
             c.Cam.Pitch = -3.0f;
-        }), Wait(120), Shot("grime-lit"),
+        }), Wait(60), Shot("grime-lit"),
         Do("gizmos back", [](Ctx& c) { SA::Gizmos(c.E, true); }),
     });
 }

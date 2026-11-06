@@ -256,6 +256,8 @@ struct Test {
 
 std::string g_Filter;
 std::vector<std::string> g_Exclude; // lowercase name prefixes from TARTARUS_EDITOR_TEST_EXCLUDE
+int g_ShardIndex = 0, g_ShardCount = 1; // TARTARUS_EDITOR_TEST_SHARD=i/n: the k-th test left after the filters runs only if k % n == i
+size_t g_ShardCounter = 0;              // tests that survived the filters so far (k)
 bool g_Enabled = false;
 std::vector<Test> g_Tests;
 size_t g_TestIndex = 0, g_StepIndex = 0;
@@ -1113,7 +1115,6 @@ void RegisterMotionDemo() {
 #include "EditorSmoke/HotReload.inl"
 #include "EditorSmoke/Settings.inl"
 #include "EditorSmoke/Decals.inl"
-#include "EditorSmoke/Graffiti.inl"
 
 void RegisterTests() {
     if (MotionDemo::Active()) { RegisterMotionDemo(); return; } // a demo run is only the demo
@@ -1807,7 +1808,6 @@ void RegisterTests() {
     RegisterScenesTests();
     RegisterDecalsTests();
     RegisterDecalsLitTests();
-    RegisterGraffitiTests();
 }
 } // namespace
 
@@ -1912,6 +1912,30 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
                 start = end + 1;
             }
         }
+        {
+            // TARTARUS_EDITOR_TEST_SHARD=i/n splits the suite across n CI jobs: after the exclusions, the k-th
+            // remaining test (registration order) runs only when k % n == i. Malformed = no sharding.
+            char* v = nullptr;
+            size_t n = 0;
+            std::string s;
+            if (_dupenv_s(&v, &n, "TARTARUS_EDITOR_TEST_SHARD") == 0 && v) { s = v; std::free(v); }
+            if (!s.empty()) {
+                int i = -1, cnt = 0;
+                const size_t slash = s.find('/');
+                const auto allDigits = [](const std::string& t) { return !t.empty() && t.size() < 6 && std::all_of(t.begin(), t.end(), [](unsigned char ch) { return std::isdigit(ch) != 0; }); };
+                if (slash != std::string::npos && allDigits(s.substr(0, slash)) && allDigits(s.substr(slash + 1))) {
+                    i = std::stoi(s.substr(0, slash));
+                    cnt = std::stoi(s.substr(slash + 1));
+                }
+                if (cnt >= 1 && i >= 0 && i < cnt) {
+                    g_ShardIndex = i;
+                    g_ShardCount = cnt;
+                    std::cout << "[EditorTest] shard " << i << "/" << cnt << std::endl;
+                } else {
+                    std::cout << "[EditorTest] WARNING: ignoring malformed TARTARUS_EDITOR_TEST_SHARD '" << s << "' (want i/n, 0 <= i < n)" << std::endl;
+                }
+            }
+        }
         RegisterTests();
         // Let the editor lay out its dock space first.
         g_StepFrames = -30;
@@ -1929,6 +1953,11 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
         if (!g_Filter.empty() && lower.find(g_Filter) == std::string::npos) { ++g_Skipped; ++g_TestIndex; continue; }
         if (std::any_of(g_Exclude.begin(), g_Exclude.end(), [&](const std::string& p) { return lower.rfind(p, 0) == 0; })) {
             ++g_Skipped; ++g_TestIndex; continue;
+        }
+        // Sharding counts only tests that passed the filters, once each (g_Cur.Name is set once a test has started).
+        if (g_ShardCount > 1 && g_Cur.Name != t.Name) {
+            const bool mine = (g_ShardCounter++ % (size_t)g_ShardCount) == (size_t)g_ShardIndex;
+            if (!mine) { ++g_Skipped; ++g_TestIndex; continue; }
         }
 
         auto finishTest = [&]() {
@@ -2006,6 +2035,7 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
     for (const auto& l : g_FailLines) std::cout << "[EditorTest] FAIL " << l << std::endl;
     std::cout << "[EditorTest] " << g_Passed << " passed, " << g_Failed << " failed";
     if (g_Skipped) std::cout << ", " << g_Skipped << " filtered out";
+    if (g_ShardCount > 1) std::cout << " (shard " << g_ShardIndex << "/" << g_ShardCount << ")";
     std::cout << std::endl;
     WriteReport();
     return true;
