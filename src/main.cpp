@@ -62,6 +62,9 @@
 #include "Tests/MotionDemo.h"    // --editor-tests "motion demo": the 60 fps recorder
 #include "App/LaunchOptions.h"
 #include "App/CliTools.h"
+#include "App/EditorCamera.h"
+#include "App/ScratchProfile.h"
+#include "App/SystemReport.h"
 #include "App/PlaySession.h"
 #include "Tests/EditorShot.h"
 #include "Tests/FrameCapture.h"
@@ -196,155 +199,6 @@ extern "C" {
 // (#161: the embedded GLSL copies that used to live here were dead — the real shaders load from
 // src/Renderer/shaders/*.glsl via ShaderLibrary.)
 
-// Simple fly-camera controls used only while the editor overlay is open. `orbitPivot`, when
-// non-null, is the current selection's world-space center (see EditorLayer::GetSelectionCenter)
-// — Alt+Left-drag orbits around it instead of the plain free-look that Right-drag still does.
-// Returns true on any frame the fly speed was changed by scroll (so the caller can flash the
-// on-screen "Fly speed: N" readout — #236 R2). `viewportHeightPx` is the Scene view's height,
-// which scales middle-drag pan so the point under the cursor stays under it (#142).
-//
-// A fly-speed change is saved once scrolling has paused for kFlySpeedSaveDelay rather than on
-// every notch (#142: each notch used to be a synchronous settings write).
-constexpr double kFlySpeedSaveDelay = 0.75;
-static double s_FlySpeedDirtySince = -1.0; // glfwGetTime() of the last unsaved change, or -1
-
-static void FlushFlySpeedSave(bool force) {
-    if (s_FlySpeedDirtySince < 0.0) return;
-    if (!force && glfwGetTime() - s_FlySpeedDirtySince < kFlySpeedSaveDelay) return;
-    EditorSettings::Save();
-    s_FlySpeedDirtySince = -1.0;
-}
-
-static bool UpdateEditorCamera(Camera& cam, float dt, bool allowLook, bool gizmoDragging, const glm::vec3* orbitPivot,
-                               float viewportHeightPx) {
-    bool flySpeedChanged = false;
-    auto trimFlySpeed = [&](double notches) {
-        float& fs = EditorSettings::Get().SceneCameraFlySpeed;
-        const float prevFlySpeed = fs;
-        fs = std::clamp(fs * std::pow(1.15f, (float)notches), 0.5f, 200.0f);
-        // Pitched by speed (0.85 at 0.5 up to 1.15 at 200); silent against the clamp, where nothing changed.
-        if (fs != prevFlySpeed)
-            EditorSound::Play(EditorSound::Event::FlySpeed, -1.0f, 0.85f + 0.3f * std::log(fs / 0.5f) / std::log(400.0f));
-        s_FlySpeedDirtySince = glfwGetTime();
-        flySpeedChanged = true;
-    };
-    FlushFlySpeedSave(/*force=*/false);
-
-    // Zoom, dolly and pan all scale with how far the camera is from what it's looking at, like
-    // Unity's Scene view (#142); fixed steps crawl on a terrain and overshoot a small prop. The
-    // distance is to the selection when there is one; otherwise the last one used is kept, so
-    // zooming with nothing selected still accelerates and decelerates smoothly.
-    static float s_FocusDistance = 10.0f;
-    constexpr float kMinFocusDistance = 0.05f, kMaxFocusDistance = 100000.0f;
-    if (orbitPivot)
-        s_FocusDistance = std::clamp(glm::length(cam.Position - *orbitPivot), kMinFocusDistance, kMaxFocusDistance);
-    const bool ctrlHeld = Input::IsKeyDown(GLFW_KEY_LEFT_CONTROL) || Input::IsKeyDown(GLFW_KEY_RIGHT_CONTROL);
-    // WASD/QE flythrough only while Right-drag is held — matches Unity's convention exactly,
-    // and is required now that W/E/R/T also double as gizmo-tool shortcuts (EditorLayer::Draw):
-    // there'd be no way to tell "pressing W to fly" from "pressing W to switch tools" otherwise.
-    // A/S/D/Q were never claimed by a tool shortcut, but gating the whole block together keeps
-    // the behavior simple and predictable instead of only some of WASDQE requiring Right-drag.
-    bool altHeld = Input::IsKeyDown(GLFW_KEY_LEFT_ALT) || Input::IsKeyDown(GLFW_KEY_RIGHT_ALT);
-
-    // Right-drag alone flies the camera (WASDQE + mouselook); Alt+Right-drag is claimed below
-    // for dolly instead (Unity's own Scene View split of the same two mouse buttons), so this
-    // excludes the Alt-held case rather than fighting it for the same drag.
-    if (allowLook && !altHeld && Input::IsMouseButtonDown(GLFW_MOUSE_BUTTON_RIGHT)) {
-        // Scroll while flying (RMB held) trims the fly speed, Unity-style — persisted (#236 R2).
-        if (double sc = Input::GetScrollDeltaY(); sc != 0.0) trimFlySpeed(sc);
-        float speed = EditorSettings::Get().SceneCameraFlySpeed * dt *
-                      (Input::IsKeyDown(GLFW_KEY_LEFT_SHIFT) ? 3.0f : 1.0f);
-        glm::vec3 move{0.0f};
-        if (Input::IsKeyDown(GLFW_KEY_W)) move += cam.Front();
-        if (Input::IsKeyDown(GLFW_KEY_S)) move -= cam.Front();
-        if (Input::IsKeyDown(GLFW_KEY_D)) move += cam.Right();
-        if (Input::IsKeyDown(GLFW_KEY_A)) move -= cam.Right();
-        if (Input::IsKeyDown(GLFW_KEY_E)) move += glm::vec3(0, 1, 0);
-        if (Input::IsKeyDown(GLFW_KEY_Q)) move -= glm::vec3(0, 1, 0);
-        if (glm::length(move) > 0.0001f) {
-            cam.Position += glm::normalize(move) * speed;
-        }
-        cam.ProcessMouseLook((float)Input::GetMouseDeltaX(), (float)Input::GetMouseDeltaY());
-    }
-
-    // Alt+Right-drag dollies the camera along its own view direction - Unity's "hold Alt and
-    // drag with the right mouse button to move closer to/further from" gesture. Works the same
-    // whether or not anything's selected: it just slides the camera forward/back, same as the
-    // scroll-wheel zoom below, just driven by a drag instead of notches. In orthographic mode
-    // moving the position has no visual effect (same reason scroll-zoom special-cases it below),
-    // so this reuses that OrthoHalfHeight path instead of silently doing nothing.
-    if (allowLook && altHeld && Input::IsMouseButtonDown(GLFW_MOUSE_BUTTON_RIGHT)) {
-        // GLFW's mouse-Y delta is screen-down-positive, so dragging UP (delta negative) should
-        // dolly IN - hence the sign flip here.
-        float dollyAmount = -(float)Input::GetMouseDeltaY();
-        if (cam.Orthographic) {
-            const float kDollyZoomFactor = 0.01f;
-            cam.OrthoHalfHeight = std::clamp(cam.OrthoHalfHeight * (1.0f - dollyAmount * kDollyZoomFactor), 0.25f, 250.0f);
-        } else {
-            // 0.5% of the focus distance per pixel: ~200px of drag covers the whole way in.
-            const float step = std::min(dollyAmount * 0.005f * s_FocusDistance,
-                                        s_FocusDistance - kMinFocusDistance); // never through the pivot
-            cam.Position += cam.Front() * step;
-            s_FocusDistance = std::clamp(s_FocusDistance - step, kMinFocusDistance, kMaxFocusDistance);
-        }
-    }
-
-    // gizmoDragging excludes this branch while ImGuizmo actually has the left button captured
-    // for a handle drag (audit #79) — the two would otherwise fight over the same Alt+LMB chord.
-    if (allowLook && orbitPivot && altHeld && !gizmoDragging && Input::IsMouseButtonDown(GLFW_MOUSE_BUTTON_LEFT)) {
-        // Same look-rotation input as free-look above, but the camera's position is then pinned
-        // to a sphere of constant radius around the pivot instead of staying put — the pivot
-        // (the selected object) stays centered in view as the camera swings around it.
-        float radius = std::max(glm::length(cam.Position - *orbitPivot), 0.05f);
-        cam.ProcessMouseLook((float)Input::GetMouseDeltaX(), (float)Input::GetMouseDeltaY());
-        cam.Position = *orbitPivot - cam.Front() * radius;
-    }
-
-    // Scroll wheel zooms. Dollying the camera position (as perspective does below) has NO
-    // visual effect under an orthographic projection, so orthographic mode instead shrinks/grows
-    // OrthoHalfHeight — multiplicatively, so the zoom rate scales with how zoomed-in you already
-    // are instead of crawling at large scales or blowing past small ones with a fixed step.
-    // Ctrl+scroll (no drag needed) also trims the fly speed — Unity's binding — and shows the
-    // same on-screen readout (#236 R2).
-    if (allowLook && ctrlHeld && !Input::IsMouseButtonDown(GLFW_MOUSE_BUTTON_RIGHT)) {
-        if (double sc = Input::GetScrollDeltaY(); sc != 0.0) trimFlySpeed(sc);
-    }
-
-    // ...but not while flying (scroll-while-RMB) or trimming speed (Ctrl+scroll) — both handled above.
-    if (allowLook && !(!altHeld && Input::IsMouseButtonDown(GLFW_MOUSE_BUTTON_RIGHT)) && !ctrlHeld) {
-        double scroll = Input::GetScrollDeltaY();
-        if (scroll != 0.0) {
-            if (cam.Orthographic) {
-                const float kScrollZoomFactor = 0.9f; // per wheel notch
-                cam.OrthoHalfHeight = std::clamp(
-                    cam.OrthoHalfHeight * powf(kScrollZoomFactor, (float)scroll), 0.25f, 250.0f);
-            } else {
-                // Same 0.9-per-notch rate as orthographic: each notch closes 10% of the distance,
-                // so the camera approaches the focus point without ever passing it.
-                const float target = std::clamp(s_FocusDistance * powf(0.9f, (float)scroll),
-                                                kMinFocusDistance, kMaxFocusDistance);
-                cam.Position += cam.Front() * (s_FocusDistance - target);
-                s_FocusDistance = target;
-            }
-        }
-    }
-
-    // Middle-mouse-button drag pans the camera parallel to the view plane — same motion as
-    // dragging the nav gizmo's pan button, but usable from anywhere by holding the scroll
-    // wheel down, matching the Blender/Maya/Unity convention.
-    if (allowLook && Input::IsMouseButtonDown(GLFW_MOUSE_BUTTON_MIDDLE)) {
-        // World units per pixel at the focus distance (#142): the visible height there is
-        // 2 * d * tan(fov/2) (or 2 * OrthoHalfHeight), spread over the viewport's pixel rows.
-        const float visibleHeight = cam.Orthographic
-            ? 2.0f * cam.OrthoHalfHeight
-            : 2.0f * s_FocusDistance * std::tan(glm::radians(cam.Fov) * 0.5f);
-        const float panPerPixel = visibleHeight / std::max(viewportHeightPx, 1.0f);
-        float dx = (float)Input::GetMouseDeltaX();
-        float dy = (float)Input::GetMouseDeltaY(); // inverted: up is positive
-        cam.Position -= (cam.Right() * dx + cam.Up() * dy) * panPerPixel;
-    }
-    return flySpeedChanged;
-}
 
 // The first active in-scene Camera entity (creation order), or entt::null. The Game view
 // previews through it while editing so a shot can be framed without walking there (#36 B10).
@@ -381,51 +235,9 @@ int main(int argc, char** argv) {
     // a nonzero exit instead of a modal MessageBox that a headless/CI desktop never dismisses
     // (audit BUG-102).
     const bool headless = opt.smokeTestMode || opt.editorTestsMode;
-    if (opt.editorTestsMode) {
-        // A fresh scratch user folder every run: default prefs and layout, no bookmarks, tabs or
-        // favorites - the tests start from a known state and never touch the user's own files.
-        namespace fs = std::filesystem;
-        // TARTARUS_EDITOR_TEST_INSTANCE=<name> gives this run its own folder
-        // (TartarusEngine-Test-<name>), so runs from different checkouts at the same time don't
-        // overwrite each other's prefs. Letters, digits, '-' and '_' only.
-        std::string scratchName = "TartarusEngine-Test";
-        if (const std::string s = Env::Str(Env::Var::EditorTestInstance);
-            !s.empty() && std::all_of(s.begin(), s.end(), [](unsigned char ch) { return std::isalnum(ch) || ch == '-' || ch == '_'; }))
-            scratchName += "-" + s;
-        UserPaths::SetAppName(scratchName);
-        const fs::path scratch = UserPaths::Root();
-        if (scratch.filename() != scratchName) {
-            std::cerr << "--editor-tests: could not set up a scratch user folder; refusing to run." << std::endl;
-            return 1;
-        }
-        std::error_code ec;
-        for (const auto& entry : fs::directory_iterator(scratch, ec)) fs::remove_all(entry.path(), ec);
-        // The Script IDE's session (open tabs, unsaved buffers) lives in the project; this run's goes
-        // in the scratch folder instead, so it starts with no tabs and leaves the user's alone.
-        ScriptIDE::SetSessionDirectory(UserPaths::Resolve("IDE"));
-        EditorUiTests::Configure(opt.editorTestsFilter);
-    }
+    if (opt.editorTestsMode && !PrepareEditorTestsProfile(opt)) return 1;
     CrashHandler::SetInteractive(!headless && opt.editorShotDir.empty()); // #148: no crash dialog on an unattended run
-    if (!opt.editorShotDir.empty()) {
-        // The prefs and layout the user sees, copied into a scratch user folder that this run may
-        // freely rewrite (window placement, layout, last scene).
-        // UserPaths::Root() pins on first use, so the real folder comes from BaseDir() instead.
-        namespace fs = std::filesystem;
-        fs::path real;
-        if (const std::string appData = UserPaths::BaseDir(); !appData.empty())
-            real = fs::path(appData) / "TartarusEngine";
-        UserPaths::SetAppName("TartarusEngine-Shot");
-        const fs::path scratch = UserPaths::Root();
-        std::error_code eqEc;
-        if (real.empty() || fs::equivalent(real, scratch, eqEc) || scratch.filename() != "TartarusEngine-Shot") {
-            std::cerr << "--editor-shot: could not set up a scratch user folder; refusing to run." << std::endl;
-            return 1;
-        }
-        std::error_code ec;
-        for (const char* f : {"imgui.ini", "editor_prefs.json", "shortcuts.json"})
-            fs::copy_file(real / f, scratch / f, fs::copy_options::overwrite_existing, ec);
-        if (opt.editorShotDefaultLayout) fs::remove(scratch / "imgui.ini", ec);
-    }
+    if (!opt.editorShotDir.empty() && !PrepareEditorShotProfile(opt)) return 1;
 
     // #148: `--crash-test <kind>` deliberately crashes through one path so the handler (dump,
     // stderr line, dialog) can be checked: av | overflow | abort | purecall | invalidparam | terminate.
@@ -1018,160 +830,15 @@ int main(int argc, char** argv) {
         // One-shot rig dump: OS, CPU, RAM, GPU, driver, display, build. Collected into a block
         // for Preferences > About — no longer spammed line-by-line to the Console (it lives in
         // About now).
-        std::vector<std::string> sysReport;
+        const std::vector<std::string> sysReport = BuildSystemReport(window.Handle());
         {
-            auto report = [&](const std::string& s) { sysReport.push_back(s); };
-            constexpr GLenum kGL_VENDOR = 0x1F00, kGL_RENDERER = 0x1F01, kGL_VERSION = 0x1F02,
-                             kGL_GLSL_VERSION = 0x8B8C, kGL_MAX_TEXTURE_SIZE = 0x0D33,
-                             kGL_MAX_SAMPLES = 0x8D57,
-                             kGL_GPU_MEM_TOTAL_NVX = 0x9048, kGL_GPU_MEM_AVAIL_NVX = 0x9049;
-            auto glStr = [](GLenum e) {
-                const GLubyte* s = glGetString(e);
-                return s ? std::string(reinterpret_cast<const char*>(s)) : std::string("(unknown)");
-            };
-            auto glInt = [](GLenum e) { GLint v = 0; glGetIntegerv(e, &v); return v; };
-
-            // --- CPU: brand string from CPUID leaves 0x80000002..4 (16 bytes each), space-padded.
-            auto cpuName = []() -> std::string {
-                int regs[4] = {0};
-                __cpuid(regs, 0x80000000);
-                if (static_cast<unsigned>(regs[0]) < 0x80000004u) return "(unknown CPU)";
-                char brand[49] = {0};
-                for (unsigned leaf = 0; leaf < 3; ++leaf) {
-                    __cpuid(regs, 0x80000002 + leaf);
-                    std::memcpy(brand + leaf * 16, regs, 16);
-                }
-                std::string s(brand);
-                size_t a = s.find_first_not_of(' ');
-                size_t b = s.find_last_not_of(' ');
-                return (a == std::string::npos) ? "(unknown CPU)" : s.substr(a, b - a + 1);
-            };
-            // Physical core count (distinct from logical/HW-thread count).
-            auto physicalCores = []() -> unsigned {
-                DWORD len = 0;
-                GetLogicalProcessorInformationEx(RelationProcessorCore, nullptr, &len);
-                if (!len) return 0;
-                std::vector<char> buf(len);
-                if (!GetLogicalProcessorInformationEx(RelationProcessorCore,
-                        reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(buf.data()), &len))
-                    return 0;
-                unsigned n = 0;
-                for (char* p = buf.data(); p < buf.data() + len; ) {
-                    auto* info = reinterpret_cast<PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX>(p);
-                    if (info->Relationship == RelationProcessorCore) ++n;
-                    p += info->Size;
-                }
-                return n;
-            };
-            // --- Windows edition/version from the registry (GetVersionEx lies without a manifest).
-            auto regStr = [](const char* value) -> std::string {
-                char b[256]; DWORD sz = sizeof(b);
-                if (RegGetValueA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion",
-                        value, RRF_RT_REG_SZ, nullptr, b, &sz) == ERROR_SUCCESS)
-                    return std::string(b);
-                return {};
-            };
-            auto regDword = [](const char* value) -> DWORD {
-                DWORD v = 0, sz = sizeof(v);
-                RegGetValueA(HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion",
-                    value, RRF_RT_REG_DWORD, nullptr, &v, &sz);
-                return v;
-            };
-
-            int fbw = 0, fbh = 0;
-            glfwGetFramebufferSize(window.Handle(), &fbw, &fbh);
-
-            unsigned threads = std::thread::hardware_concurrency();
-            unsigned pcores = physicalCores();
-
-            MEMORYSTATUSEX mem{}; mem.dwLength = sizeof(mem); GlobalMemoryStatusEx(&mem);
-            double ramTotGiB = mem.ullTotalPhys / (1024.0 * 1024.0 * 1024.0);
-            double ramAvailGiB = mem.ullAvailPhys / (1024.0 * 1024.0 * 1024.0);
-
-            auto gib = [](double v) {
-                char b[32]; snprintf(b, sizeof(b), "%.1f", v); return std::string(b);
-            };
-
-            // Windows line
-            {
-                std::string prod = regStr("ProductName");                 // e.g. "Windows 10 Pro"
-                std::string disp = regStr("DisplayVersion");              // e.g. "23H2"
-                std::string build = regStr("CurrentBuildNumber");
-                DWORD ubr = regDword("UBR");
-                // Registry still says "Windows 10 ..." on 11; correct it from the build number.
-                long bn = build.empty() ? 0 : std::atol(build.c_str());
-                if (bn >= 22000 && prod.rfind("Windows 10", 0) == 0) prod.replace(0, 10, "Windows 11");
-                std::string line = "OS: " + (prod.empty() ? "Windows" : prod);
-                if (!disp.empty())  line += " " + disp;
-                if (!build.empty()) line += "  (build " + build + (ubr ? "." + std::to_string(ubr) : "") + ")";
-                report(line);
-            }
-
-            report("Tartarus Engine - editor up.");
-            Log::Info("Tartarus Engine ready. System details: Preferences > About.");
-
-            {
-                std::string line = "CPU: " + cpuName() + "  (";
-                if (pcores) line += std::to_string(pcores) + " cores / ";
-                line += (threads ? std::to_string(threads) : std::string("?")) + " threads)";
-                report(line);
-            }
-            report("RAM: " + gib(ramTotGiB) + " GiB total  (" + gib(ramAvailGiB) + " GiB free)");
-
-            report("GPU: " + glStr(kGL_RENDERER) + "  (" + glStr(kGL_VENDOR) + ")");
-            // VRAM via GL_NVX_gpu_memory_info (NVIDIA). This build's GL loader has no
-            // glGetStringi to enumerate a core-profile extension list, so just probe the enum:
-            // on a driver without the extension glGetIntegerv leaves the value at 0.
-            {
-                GLint totKiB = 0, availKiB = 0;
-                glGetIntegerv(kGL_GPU_MEM_TOTAL_NVX, &totKiB);
-                glGetIntegerv(kGL_GPU_MEM_AVAIL_NVX, &availKiB);
-                if (totKiB > 0) {
-                    char b[96];
-                    snprintf(b, sizeof(b), "VRAM: %.0f MiB total  (%.0f MiB free)",
-                             totKiB / 1024.0, availKiB / 1024.0);
-                    report(b);
-                }
-            }
-            report("OpenGL " + glStr(kGL_VERSION) + "  |  GLSL " + glStr(kGL_GLSL_VERSION));
-            report("GL limits: max texture " + std::to_string(glInt(kGL_MAX_TEXTURE_SIZE)) +
-                      " px, max MSAA " + std::to_string(glInt(kGL_MAX_SAMPLES)) + "x");
-
-            // Display line — primary monitor mode.
-            if (GLFWmonitor* mon = glfwGetPrimaryMonitor()) {
-                if (const GLFWvidmode* vm = glfwGetVideoMode(mon)) {
-                    const char* mname = glfwGetMonitorName(mon);
-                    char b[160];
-                    snprintf(b, sizeof(b), "Display: %s  %d x %d @ %d Hz",
-                             mname ? mname : "primary", vm->width, vm->height, vm->refreshRate);
-                    report(b);
-                }
-            }
-            report("Framebuffer: " + std::to_string(fbw) + " x " + std::to_string(fbh));
-
-            // Build line
-            {
-#if defined(NDEBUG)
-                const char* cfg = "Release";
-#else
-                const char* cfg = "Debug";
-#endif
-                char b[256];
-                snprintf(b, sizeof(b), "Engine: Tartarus Engine %s (%s)",
-                         TARTARUS_VERSION, TARTARUS_GIT_DESCRIBE);
-                report(b);
-                snprintf(b, sizeof(b), "Build: %s x64, MSVC %d, %s", cfg, (int)_MSC_VER, __DATE__);
-                report(b);
-            }
-            {
-                std::size_t objs = 0;
-                world.Registry.view<TransformComponent>().each([&](auto...) { ++objs; });
-                if (sceneLoaded)
-                    Log::Info("Scene loaded from " + ProjectPaths::Relativize(scenePath) + " - " +
-                              std::to_string(objs) + (objs == 1 ? " object." : " objects."));
-                else
-                    Log::Info("No scene file - started empty.");
-            }
+            std::size_t objs = 0;
+            world.Registry.view<TransformComponent>().each([&](auto...) { ++objs; });
+            if (sceneLoaded)
+                Log::Info("Scene loaded from " + ProjectPaths::Relativize(scenePath) + " - " +
+                          std::to_string(objs) + (objs == 1 ? " object." : " objects."));
+            else
+                Log::Info("No scene file - started empty.");
         }
         editor.SetSystemReport(sysReport); // shown in Preferences > About
 
@@ -1220,6 +887,7 @@ int main(int argc, char** argv) {
         ViewPipeline viewPipeline;    // the Scene and Game view render paths (Renderer/ViewPipeline)
 
         Camera editorCamera;
+        EditorCamera editorCam; // its fly/orbit input (App/EditorCamera.h)
         // What Play's state bits mean: PlayState (App/PlaySession.h).
         bool& editorUIVisible = play.EditorUIVisible;
         bool& playing = play.Playing;
@@ -1705,7 +1373,7 @@ int main(int argc, char** argv) {
                 }
 
                 if (editor.RulerHeld() || editor.DecalToolOwnsWheel()) Input::ConsumeScroll(); // vRuler: the wheel picks the measured object; a decal tool: it turns / sizes the ghost or brush
-                if (UpdateEditorCamera(editorCamera, dt, allowLook || camDragActive, gizmoDragging,
+                if (editorCam.Update(editorCamera, dt, allowLook || camDragActive, gizmoDragging,
                         hasSelection ? &selectionCenter : nullptr, editor.ViewportSize().y))
                     editor.FlashFlySpeedHud(); // #236 R2 — show the transient "Fly speed: N" readout
             } else if (camDragActive) {
@@ -2735,7 +2403,7 @@ int main(int argc, char** argv) {
         // clean scene already matches disk, so rewriting it only churned mtimes/git and could
         // overwrite a scene that failed to load with the empty world that replaced it.
 
-        FlushFlySpeedSave(/*force=*/true); // a fly-speed trim still inside its save debounce (#142)
+        editorCam.FlushFlySpeedSave(/*force=*/true); // a fly-speed trim still inside its save debounce (#142)
         if (!headless) editor.RememberCurrentSceneCamera(editorCamera); // reopen this scene where it was left
         {
             // #143: remember the window placement for next launch (editor.Shutdown() flushes).
