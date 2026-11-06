@@ -20,7 +20,7 @@ import shutil
 import subprocess
 import sys
 
-DEFAULT_RAW = os.path.expanduser(r'~\OneDrive\Desktop\Atrocity Exhibition Drive\Tartarus Assets\Raw')
+DEFAULT_RAW = r'G:\My Drive\Tartarus Assets\Raw'
 
 # --- map types -------------------------------------------------------------------------------------------------
 # Suffix (after the set name) -> slot. Order matters: the first match wins.
@@ -67,11 +67,11 @@ PACKS = [
     room('Bathroom'), room('Bedroom'), room('Decor'), room('Garage'), room('Kids_Room'), room('Kitchen'),
     room('Lighting'), room('Living_Room'), room('Office'),
     {'dest': 'Furniture/Seating',
-     'models': ['Furniture/Arm_Chair_01/Arm_Chair_01.fbx', 'Furniture/Chesterfield_Sofa/Models/Chesterfield_Sofa.fbx',
-                'Furniture/Pillow/Pillow.fbx', 'Furniture/Sofa_01/Sofa_01.fbx', 'Furniture/Sofa_02/Sofa_02.fbx',
-                'Furniture/Sofa_03/Sofa_03.fbx', 'Furniture/Sofa_04/Sofa_04.fbx'],
-     'textures': ['Furniture/Arm_Chair_01/Textures', 'Furniture/Chesterfield_Sofa/Textures/4096',
-                  'Furniture/Sofa_01/Textures', 'Furniture/Sofa_02/Textures', 'Furniture/Sofa_03/Textures']},
+     'models': ['Furniture/Seating/Arm_Chair_01/Arm_Chair_01.fbx', 'Furniture/Seating/Chesterfield_Sofa/Models/Chesterfield_Sofa.fbx',
+                'Furniture/Seating/Pillow/Pillow.fbx', 'Furniture/Seating/Sofa_01/Sofa_01.fbx', 'Furniture/Seating/Sofa_02/Sofa_02.fbx',
+                'Furniture/Seating/Sofa_03/Sofa_03.fbx', 'Furniture/Seating/Sofa_04/Sofa_04.fbx'],
+     'textures': ['Furniture/Seating/Arm_Chair_01/Textures', 'Furniture/Seating/Chesterfield_Sofa/Textures/4096',
+                  'Furniture/Seating/Sofa_01/Textures', 'Furniture/Seating/Sofa_02/Textures', 'Furniture/Seating/Sofa_03/Textures']},
     {'dest': 'Props/Cross', 'models': ['Props/Cross/Cross.fbx'], 'textures': ['Props/Cross/Textures']},
     {'dest': 'Props/Electrical', 'models': ['Props/Electrical/Light_Switches/Models/Light_Switches.fbx',
                                             'Props/Electrical/Outlets/Outlet_Electrical.fbx', 'Props/Electrical/Outlets/Outlet_Gfi.fbx'],

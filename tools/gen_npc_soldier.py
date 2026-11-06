@@ -43,7 +43,7 @@ bumps = [('AM_Stand_React_Bump_Light_Front', 0.0, -1.0), ('AM_Stand_React_Bump_L
 for name, _, _ in bumps:
     if not os.path.exists(os.path.join(proj, MOCAP, 'React_Bump', name + '.fbx')):
         fail(f'missing clip React_Bump/{name}.fbx')
-# Wounded (NpcDirector::BecomeWounded, NpcBody::TickWounded). The clips are the MC Sample pack's (Raw\Animations\Mc_Sample),
+# Wounded (NpcDirector::BecomeWounded, NpcBody::TickWounded). The clips are the MC Sample pack's (Raw\Animations\MoCap Central - Sample Pack),
 # played as authored, in place (the capsule leads), each loop at the rate its own travel matches the capsule's (PlayRate) and
 # the starts and stops distance-matched, as the standing locomotion. Cut by their .meta Clip Trims; one trim per file, so a take
 # used for several states is in the project once per state, under the state's name.

@@ -1,13 +1,13 @@
 # AKS74U and Remington 870 authored-export reimport
 
 The private asset store now retains the supplied inputs under
-`Tartarus Assets/Raw/Weapons/AE_Exports`. Set `TARTARUS_WEAPON_EXPORTS` to that
-folder before repeating the import. The derived FBXs live in `Tartarus Assets/Used`,
+`Tartarus Assets/Raw/Weapons/<weapon>/Authored Exports`. Set `TARTARUS_WEAPON_EXPORTS` to
+`Tartarus Assets/Raw/Weapons` before repeating the import. The derived FBXs live in `Tartarus Assets/Used`,
 at the paths recorded in `project/external_assets.csv`; they are never committed to Git.
 The import report and backups remain local build artifacts.
 
-The October 2026 reimport uses `Raw/Weapons/AE_Exports/AKS74U` and
-`Raw/Weapons/AE_Exports/Remington 870`. The original export folders are read-only
+The October 2026 reimport uses `Raw/Weapons/AKS-74U/Authored Exports` and
+`Raw/Weapons/Remington 870/Authored Exports`. The original export folders are read-only
 inputs. Existing project paths and `.fbx.meta` GUIDs are retained, including the
 AK neutral weapon model's historical `AKS-74U_A_W_ADS.fbx` filename.
 
