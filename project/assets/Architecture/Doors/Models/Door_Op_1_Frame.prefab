@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          1.0405,
+          0.021
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.489,
+          1.0405,
+          0.088
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Door_Op_1_Frame",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Architecture/Doors/Models/Door_Op_1_Frame.fbx",
+      "pathGuid": "f1030a550d066c93",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

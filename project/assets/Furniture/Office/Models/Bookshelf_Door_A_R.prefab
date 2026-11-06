@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -8.2225,
+          1.504,
+          0.255
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.2585,
+          0.552,
+          0.027
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Bookshelf_Door_A_R",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Office/Models/Bookshelf_Door_A_R.fbx",
+      "pathGuid": "60f43f9a4e83f7b2",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

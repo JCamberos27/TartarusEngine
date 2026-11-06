@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          1.038,
+          -0.0005
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.977,
+          1.038,
+          0.5005
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Shower_Stall_190cm_L",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Bathroom/Models/Shower_Stall_190cm_L.fbx",
+      "pathGuid": "69cf5453fb9eafcf",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

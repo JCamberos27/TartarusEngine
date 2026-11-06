@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.0055,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.203,
+          0.0055,
+          0.141
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Book_Drawing_Kid",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Kids_Room/Models/Book_Drawing_Kid.fbx",
+      "pathGuid": "443b68a45f6c48ba",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

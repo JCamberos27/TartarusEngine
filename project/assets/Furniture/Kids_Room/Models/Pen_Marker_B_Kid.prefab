@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.0095,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.01,
+          0.0095,
+          0.068
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Pen_Marker_B_Kid",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Kids_Room/Models/Pen_Marker_B_Kid.fbx",
+      "pathGuid": "7504f168eb74f69d",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.087,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.054,
+          0.087,
+          0.008
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Cross",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Props/Cross/Models/Cross.fbx",
+      "pathGuid": "f77922a90676bafd",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0005,
+          0.997,
+          0.24
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.3955,
+          0.992,
+          0.102
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Fridge_Assembled_Door",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Kitchen/Models/Fridge_Assembled_Door.fbx",
+      "pathGuid": "637e1ff9c570f2cb",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

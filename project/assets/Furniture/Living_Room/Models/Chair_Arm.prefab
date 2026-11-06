@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.519,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.44,
+          0.519,
+          0.44
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Chair_Arm",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Living_Room/Models/Chair_Arm.fbx",
+      "pathGuid": "9e2e994b56c8219b",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0055,
+          1.0035,
+          0.0005
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.4065,
+          0.9965,
+          0.0915
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Door_Op_1_Leaf_Interior",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Architecture/Doors/Models/Door_Op_1_Leaf_Interior.fbx",
+      "pathGuid": "7d76fa5f11c839f6",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

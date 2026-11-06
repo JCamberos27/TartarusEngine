@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0005,
+          0.04,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.1505,
+          0.04,
+          0.256
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Frying_Pan",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Kitchen/Models/Frying_Pan.fbx",
+      "pathGuid": "53e47891afbb4225",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.4755,
+          0.107
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.21,
+          0.0125,
+          0.245
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Toilet_Assembled_Seat",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Bathroom/Models/Toilet_Assembled_Seat.fbx",
+      "pathGuid": "eb899ffa46e3cf6b",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

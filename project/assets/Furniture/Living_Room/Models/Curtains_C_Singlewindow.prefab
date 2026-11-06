@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.879,
+          -0.0005
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.706,
+          0.879,
+          0.0705
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Curtains_C_Singlewindow",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Living_Room/Models/Curtains_C_Singlewindow.fbx",
+      "pathGuid": "7d29ef0ef3e579c1",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

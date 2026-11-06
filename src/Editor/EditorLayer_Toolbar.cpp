@@ -1040,6 +1040,14 @@ void EditorLayer::DrawGridSnapPopupBody() {
         EditorUI::SetTooltip("Also orient the object's up axis to the face it lands on.");
     ImGui::EndDisabled();
 
+    ImGui::Separator();
+    ImGui::TextDisabled("MODULAR KITS  (hold Shift while dragging to invert)");
+    EditorUIPrimitives::Checkbox("Snap kit pieces together", &m_ModularSnap);
+    if (ImGui::IsItemHovered())
+        EditorUI::SetTooltip("Walls, floors and other pieces of a modular pack (asset_library.json \"kits\")\n"
+                             "sit flush against their neighbours and on the kit grid when moved or dropped,\n"
+                             "and turn in quarter turns.");
+
     ImGui::PopItemWidth();
 }
 

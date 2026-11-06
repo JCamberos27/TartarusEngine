@@ -4672,10 +4672,13 @@ int main(int argc, char** argv) {
                 // while the drag is over the viewport) - see TintOverlayRenderer's own comment
                 // for why this is a flat tint rather than the real PBR material shader.
                 const EditorLayer::DragPreview& dragPreview = editor.GetDragPreview();
-                if (dragPreview.Active && dragPreview.ModelRef) {
-                    glm::mat4 ghostTransform = ComposeTransform(dragPreview.Position, glm::vec3(0.0f), glm::vec3(1.0f));
-                    tintOverlay.Render(*dragPreview.ModelRef, ghostTransform, sceneViewMat, sceneProjMat,
-                        glm::vec3(0.3f, 0.85f, 1.0f), 0.45f);
+                if (dragPreview.Active) {
+                    const glm::mat4 pose = glm::translate(glm::mat4(1.0f), dragPreview.Position) *
+                                           glm::mat4_cast(dragPreview.Rotation);
+                    for (const auto& part : dragPreview.Parts)
+                        if (part.ModelRef)
+                            tintOverlay.Render(*part.ModelRef, pose * part.Local, sceneViewMat, sceneProjMat,
+                                glm::vec3(0.3f, 0.85f, 1.0f), dragPreview.Alpha);
                 }
 
                 // Resolve MSAA now, before the grid/axis-line and collider-wireframe overlays

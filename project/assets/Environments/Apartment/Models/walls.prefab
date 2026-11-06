@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          1.35,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          4.481,
+          1.35,
+          2.246
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "walls",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/Apartment/Models/walls.gltf",
+      "pathGuid": "ada7d8a3ca2eb9bf",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

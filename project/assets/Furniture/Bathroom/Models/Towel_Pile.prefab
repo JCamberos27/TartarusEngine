@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.0815,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.18,
+          0.0815,
+          0.219
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Towel_Pile",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Bathroom/Models/Towel_Pile.fbx",
+      "pathGuid": "cf7a943e1c58e6a1",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

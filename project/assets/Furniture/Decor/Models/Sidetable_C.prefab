@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.2685,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.256,
+          0.2685,
+          0.256
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Sidetable_C",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Decor/Models/Sidetable_C.fbx",
+      "pathGuid": "6f95bb55c8162cd8",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0055,
+          0.2085,
+          0.07
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.0065,
+          0.0575,
+          0.035
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Light_Switches_Single",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Props/Electrical/Models/Light_Switches_Single.fbx",
+      "pathGuid": "1bc8df9f46b85c77",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.205,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.193,
+          0.205,
+          0.271
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Storage_Box_A",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Garage/Models/Storage_Box_A.fbx",
+      "pathGuid": "2f5c9ce2b6ea38d3",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

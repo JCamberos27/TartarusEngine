@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0005,
+          0.534,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.3545,
+          0.534,
+          0.345
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Chair_Office",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Office/Models/Chair_Office.fbx",
+      "pathGuid": "e5c21477b1193ce5",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

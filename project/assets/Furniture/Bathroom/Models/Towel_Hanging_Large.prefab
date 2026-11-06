@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.0005,
+          0.3795,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.2595,
+          0.3795,
+          0.062
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Towel_Hanging_Large",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Bathroom/Models/Towel_Hanging_Large.fbx",
+      "pathGuid": "83f31fce00407644",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.417,
+          2.2205,
+          0.24
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.318,
+          0.2065,
+          0.024
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Kitchen_Cabinet_Large_Door_B",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Kitchen/Models/Kitchen_Cabinet_Large_Door_B.fbx",
+      "pathGuid": "27c21aea54de5251",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

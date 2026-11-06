@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.0095,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.063,
+          0.0095,
+          0.202
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Cord_On_Floor_A",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Garage/Models/Cord_On_Floor_A.fbx",
+      "pathGuid": "a2ac0fb98c181977",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

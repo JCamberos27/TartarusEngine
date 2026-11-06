@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.2445,
+          1.3925,
+          0.1665
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.2435,
+          0.3235,
+          0.0405
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Kitchen_Cabinet_B_Door_B_L",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Kitchen/Models/Kitchen_Cabinet_B_Door_B_L.fbx",
+      "pathGuid": "4780dd1b7a6a370b",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

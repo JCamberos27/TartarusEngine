@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.421,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.539,
+          0.421,
+          0.015
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Painting_Large_C",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Garage/Models/Painting_Large_C.fbx",
+      "pathGuid": "7e087db6567b8f84",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

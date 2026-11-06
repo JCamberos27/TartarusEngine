@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.24,
+          0.3495,
+          0.148
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.243,
+          0.3235,
+          0.024
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Kitchen_Cabinet_B_Assembled_Door_A_L",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Kitchen/Models/Kitchen_Cabinet_B_Assembled_Door_A_L.fbx",
+      "pathGuid": "c54a2cf44209dc5d",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

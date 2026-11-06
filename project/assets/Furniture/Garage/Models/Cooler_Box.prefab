@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.207,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.272,
+          0.207,
+          0.193
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Cooler_Box",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Garage/Models/Cooler_Box.fbx",
+      "pathGuid": "7d0ced85ec1941fc",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

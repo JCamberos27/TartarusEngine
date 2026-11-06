@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          1.354,
+          0.288,
+          0.026
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.2,
+          0.2,
+          0.227
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Dresser_D_Drawer_C",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Bedroom/Models/Dresser_D_Drawer_C.fbx",
+      "pathGuid": "c27d50fd5c7a37f3",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

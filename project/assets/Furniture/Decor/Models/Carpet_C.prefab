@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0005,
+          0.0205,
+          -0.0005
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          1.2005,
+          0.0205,
+          1.5175
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Carpet_C",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Decor/Models/Carpet_C.fbx",
+      "pathGuid": "0e73967994459e85",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

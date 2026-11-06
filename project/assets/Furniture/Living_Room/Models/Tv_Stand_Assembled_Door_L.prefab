@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -0.5575,
+          0.2895,
+          0.2225
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.2265,
+          0.1495,
+          0.0275
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Tv_Stand_Assembled_Door_L",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Living_Room/Models/Tv_Stand_Assembled_Door_L.fbx",
+      "pathGuid": "4dc9119ff01794ac",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

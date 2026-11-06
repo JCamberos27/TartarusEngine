@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.6805,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.217,
+          0.6805,
+          0.181
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Bathroom_Shelf_Unit_B",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Bathroom/Models/Bathroom_Shelf_Unit_B.fbx",
+      "pathGuid": "e1200e126beca661",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

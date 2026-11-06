@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.025,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.011,
+          0.025,
+          0.011
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Vial_Anti_Venom_03",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Props/Medical_Supplies/Models/Vial_Anti_Venom_03.fbx",
+      "pathGuid": "3830a7782c162c35",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

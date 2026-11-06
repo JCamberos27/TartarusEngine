@@ -24,6 +24,10 @@
       "color": "#EB8D52",
       "icon": "person-running"
     },
+    "assets/Architecture": {
+      "color": "#EBA052",
+      "icon": "building"
+    },
     "assets/Audio": {
       "color": "#EBC752",
       "icon": "volume-high"
@@ -32,9 +36,9 @@
       "color": "#D3EB52",
       "icon": "person"
     },
-    "assets/Editor": {
-      "color": "#98EB52",
-      "icon": "screwdriver-wrench"
+    "assets/Decals": {
+      "color": "#C7EB52",
+      "icon": "spray-can"
     },
     "assets/Effects": {
       "color": "#5EEB52",
@@ -44,6 +48,10 @@
       "color": "#52EB81",
       "icon": "mountain-sun"
     },
+    "assets/Furniture": {
+      "color": "#52C7EB",
+      "icon": "couch"
+    },
     "assets/Materials": {
       "color": "#52EBBC",
       "icon": "droplet"
@@ -51,10 +59,6 @@
     "assets/Props": {
       "color": "#52DFEB",
       "icon": "box"
-    },
-    "assets/Scripts": {
-      "color": "#52A4EB",
-      "icon": "code"
     },
     "assets/Test": {
       "color": "#7552EB",
@@ -84,6 +88,10 @@
     },
     {
       "color": "#FFFFFF",
+      "pattern": "assets/Architecture/*"
+    },
+    {
+      "color": "#FFFFFF",
       "pattern": "assets/Audio/*"
     },
     {
@@ -92,7 +100,7 @@
     },
     {
       "color": "#FFFFFF",
-      "pattern": "assets/Editor/*"
+      "pattern": "assets/Decals/*"
     },
     {
       "color": "#FFFFFF",
@@ -104,15 +112,15 @@
     },
     {
       "color": "#FFFFFF",
+      "pattern": "assets/Furniture/*"
+    },
+    {
+      "color": "#FFFFFF",
       "pattern": "assets/Materials/*"
     },
     {
       "color": "#FFFFFF",
       "pattern": "assets/Props/*"
-    },
-    {
-      "color": "#FFFFFF",
-      "pattern": "assets/Scripts/*"
     },
     {
       "color": "#FFFFFF",

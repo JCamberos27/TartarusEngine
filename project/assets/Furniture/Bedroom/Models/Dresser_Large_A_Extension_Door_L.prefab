@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          -3.506,
+          1.849,
+          0.1075
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.233,
+          0.303,
+          0.0245
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Dresser_Large_A_Extension_Door_L",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Bedroom/Models/Dresser_Large_A_Extension_Door_L.fbx",
+      "pathGuid": "f8ed748e5d633898",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

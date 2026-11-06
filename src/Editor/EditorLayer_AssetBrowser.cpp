@@ -1229,6 +1229,8 @@ void EditorLayer::RefreshAssetBrowser() {
     m_AssetThumbs.Clear();
     m_AssetListingRefreshTimer = 0.0f;
     m_AssetRefreshFlash = 1.6f; // drives the module's brief "Assets refreshed" confirmation
+    m_LibraryIndex.Load(); // asset_library.json edits show on Refresh
+    m_LibraryViewKey = (size_t)-1;
     Log::Info("Asset Browser refreshed - re-scanned the project folder, dropped thumbnail caches.");
 }
 
@@ -1245,6 +1247,59 @@ void EditorLayer::RefreshScenesListingIfNeeded() {
         m_ScenesListingCache.paths.push_back(entry.path().generic_string());
     }
     m_ScenesListingCache.valid = true;
+}
+
+void EditorLayer::RefreshLibraryView() {
+    const auto& files = m_ProjectAssetIndex.files;
+    const size_t key = std::hash<const void*>{}(files.data()) ^ (files.size() * 1315423911u + m_LibraryIndex.Categories().size());
+    if (key == m_LibraryViewKey) return;
+    m_LibraryViewKey = key;
+    m_LibraryItems.clear();
+
+    // Each category's folder: its name under its parent's ("Asset Library/Architecture/Walls").
+    std::unordered_map<std::string, std::string> catFolder;
+    for (int pass = 0; pass < 3; ++pass) // parents are listed before children, but don't rely on it
+        for (const auto& c : m_LibraryIndex.Categories()) {
+            if (c.Parent.empty()) catFolder[c.Id] = AssetLibraryView::kRoot + "/" + c.Name;
+            else if (auto p = catFolder.find(c.Parent); p != catFolder.end()) catFolder[c.Id] = p->second + "/" + c.Name;
+        }
+    const std::string otherFolder = catFolder.count("other") ? catFolder["other"] : AssetLibraryView::kRoot + "/Other";
+
+    std::set<std::string> folders{AssetLibraryView::kRoot};
+    for (const auto& [id, folder] : catFolder) {
+        (void)id;
+        folders.insert(folder);
+        folders.insert(ParentFolderOf(folder));
+    }
+    for (size_t i = 0; i < files.size(); ++i) {
+        const ProjectAssetFile& f = files[i];
+        if (f.Kind != Cell::Kind::Prefab && f.Kind != Cell::Kind::Decal && f.Kind != Cell::Kind::Hdri) continue;
+        const std::string rel = AssetLibraryIndex::ProjectRelative(f.Path);
+        const auto it = catFolder.find(m_LibraryIndex.CategoryOf(rel));
+        // Grouped by pack: the folder under assets/<Top>/ (a vendor pack, or a library's room set).
+        std::vector<std::string> segs;
+        for (size_t a = 0, b; a < rel.size(); a = b + 1) {
+            b = rel.find('/', a);
+            if (b == std::string::npos) b = rel.size();
+            segs.push_back(rel.substr(a, b - a));
+        }
+        const std::string pack = segs.size() > 3 ? segs[2] : segs.size() > 2 ? segs[1] : segs[0];
+        const std::string folder = (it != catFolder.end() ? it->second : otherFolder) + "/" + pack;
+        folders.insert(folder);
+        m_LibraryItems[folder].push_back(i);
+    }
+    // Empty categories (no pack under them) stay out of the tree.
+    std::vector<std::string>& out = AssetLibraryView::Folders();
+    out.clear();
+    for (const auto& folder : folders) {
+        bool used = m_LibraryItems.count(folder) > 0;
+        for (const auto& [itemFolder, items] : m_LibraryItems) {
+            (void)items;
+            if (used) break;
+            used = itemFolder.rfind(folder + "/", 0) == 0;
+        }
+        if (used) out.push_back(folder);
+    }
 }
 
 // Same idea for project/shaders/ (Phase 6 item 15's browsable Shaders folder) — see
@@ -1294,6 +1349,7 @@ void EditorLayer::RefreshAnimationListingIfNeeded() {
 // file, and the main thread files each entry into the folder tree.
 std::vector<EditorLayer::ProjectAssetFile> EditorLayer::ScanProjectAssetFiles(const std::string& root) {
     namespace fs = std::filesystem;
+    const auto kindOf = [](ProjectAssetFile& f) { return ProjectAssetKindOf(f); };
     std::vector<EditorLayer::ProjectAssetFile> files;
     std::error_code ec;
     for (auto it = fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, ec);
@@ -1309,21 +1365,7 @@ std::vector<EditorLayer::ProjectAssetFile> EditorLayer::ScanProjectAssetFiles(co
         if (!it->is_regular_file(entryEc)) continue;
         EditorLayer::ProjectAssetFile f;
         f.Path = it->path().lexically_normal().string();
-        const std::string type = AssetDatabase::AssetType(f.Path);
-        if (type == "model") f.Kind = Cell::Kind::Model;
-        else if (type == "texture") f.Kind = Cell::Kind::Texture;
-        else if (type == "material") f.Kind = Cell::Kind::Material;
-        else if (type == "audio") f.Kind = Cell::Kind::Sound;
-        else if (type == "prefab") f.Kind = Cell::Kind::Prefab;
-        else if (type == "animatorcontroller") f.Kind = Cell::Kind::Animator;
-        else if (type == "firstpersonanimationset") f.Kind = Cell::Kind::Weapon;
-        else if (type == "recoil") f.Kind = Cell::Kind::Recoil;
-        else if (type == "camerashake") f.Kind = Cell::Kind::CameraShake;
-        else if (type == "hdri") f.Kind = Cell::Kind::Hdri;
-        else if (type == "script") f.Kind = Cell::Kind::Script;
-        else if (type == "decal") f.Kind = Cell::Kind::Decal;
-        else if (type == "graffiti") f.Kind = Cell::Kind::Graffiti;
-        else continue;
+        if (!kindOf(f)) continue;
         f.Key = AssetDatabase::PathKey(f.Path);
         f.Name = it->path().filename().string();
         std::ifstream meta(f.Path + ".meta", std::ios::binary);
@@ -1340,7 +1382,44 @@ std::vector<EditorLayer::ProjectAssetFile> EditorLayer::ScanProjectAssetFiles(co
         if (!f.MetaFolder) (void)ProjectPaths::Relativize(f.Path);
         files.push_back(std::move(f));
     }
+    // Drive files this checkout hasn't fetched: listed in external_assets.csv, not on disk. They get a
+    // greyed tile where the file would be, so a fresh clone shows what's missing instead of hiding it.
+    if (std::ifstream csv(fs::path(root) / "external_assets.csv", std::ios::binary); csv.is_open()) {
+        std::stringstream text;
+        text << csv.rdbuf();
+        for (const std::string& rel : AssetDatabase::ParseExternalAssetList(text.str())) {
+            EditorLayer::ProjectAssetFile f;
+            const fs::path p = (fs::path(root) / rel).lexically_normal();
+            std::error_code existsEc;
+            if (fs::exists(p, existsEc)) continue;
+            f.Path = p.string();
+            if (!kindOf(f)) continue;
+            f.Key = AssetDatabase::PathKey(f.Path);
+            f.Name = p.filename().string();
+            f.Unfetched = true;
+            files.push_back(std::move(f));
+        }
+    }
     return files;
+}
+
+bool EditorLayer::ProjectAssetKindOf(ProjectAssetFile& f) {
+    const std::string type = AssetDatabase::AssetType(f.Path);
+    if (type == "model") f.Kind = Cell::Kind::Model;
+        else if (type == "texture") f.Kind = Cell::Kind::Texture;
+        else if (type == "material") f.Kind = Cell::Kind::Material;
+        else if (type == "audio") f.Kind = Cell::Kind::Sound;
+        else if (type == "prefab") f.Kind = Cell::Kind::Prefab;
+        else if (type == "animatorcontroller") f.Kind = Cell::Kind::Animator;
+        else if (type == "firstpersonanimationset") f.Kind = Cell::Kind::Weapon;
+        else if (type == "recoil") f.Kind = Cell::Kind::Recoil;
+        else if (type == "camerashake") f.Kind = Cell::Kind::CameraShake;
+        else if (type == "hdri") f.Kind = Cell::Kind::Hdri;
+        else if (type == "script") f.Kind = Cell::Kind::Script;
+        else if (type == "decal") f.Kind = Cell::Kind::Decal;
+        else if (type == "graffiti") f.Kind = Cell::Kind::Graffiti;
+        else return false;
+    return true;
 }
 
 void EditorLayer::RefreshProjectAssetIndexIfNeeded(AssetLibrary& assets) {
@@ -1462,16 +1541,19 @@ void EditorLayer::SetAssetTreeWidthPx(float px, bool commit) {
 }
 
 void EditorLayer::AssetBrowserCreateFolder(World& world, AssetLibrary& assets, const std::string& path) {
+    if (AssetLibraryView::IsLibraryFolder(path)) return; // the Library root is a view, not storage
     PushUndo(world, "Create Folder");
     assets.CreateFolder(path);
 }
 void EditorLayer::AssetBrowserRenameFolder(World& world, AssetLibrary& assets,
                                            const std::string& oldPath, const std::string& newPath) {
+    if (AssetLibraryView::IsLibraryFolder(oldPath) || AssetLibraryView::IsLibraryFolder(newPath)) return;
     PushUndo(world, "Move Folder");
     assets.RenameFolder(oldPath, newPath);
 }
 void EditorLayer::AssetBrowserMoveAssetToFolder(World& world, AssetLibrary& assets,
                                                 const std::string& assetKey, const std::string& folder) {
+    if (AssetLibraryView::IsLibraryFolder(folder)) return;
     PushUndo(world, "Move Asset to Folder");
     assets.SetAssetFolder(assetKey, folder);
 }
@@ -1811,6 +1893,32 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
             }
         }
 
+        // The Asset Library root: placeables by category and pack (asset_library.json), without moving
+        // a file. Browsing lists one category folder; a search inside it covers that subtree.
+        // Always kept current (cheap: rebuilt only when the index changes) - the folder tree lists
+        // the Library root from it before anyone has opened it.
+        RefreshProjectAssetIndexIfNeeded(assets);
+        RefreshLibraryView();
+        if (AssetLibraryView::IsLibraryFolder(m_CurrentAssetFolder)) {
+            const std::string& cur = m_CurrentAssetFolder;
+            if (!filtering)
+                for (const auto& folder : AssetLibraryView::Folders())
+                    if (ParentFolderOf(folder) == cur)
+                        cells.push_back({Cell::Kind::Folder, folder, LeafNameOf(folder), nullptr, nullptr});
+            for (const auto& [folder, items] : m_LibraryItems) {
+                if (filtering ? (folder != cur && folder.rfind(cur + "/", 0) != 0) : folder != cur) continue;
+                for (size_t i : items) {
+                    const ProjectAssetFile& f = m_ProjectAssetIndex.files[i];
+                    const char* kindName = f.Kind == Cell::Kind::Prefab ? "prefab" : f.Kind == Cell::Kind::Decal ? "decal" : "hdri";
+                    if (!MatchesAssetSearch(parsedSearch, f.Name, kindName, assets.Labels(f.Path))) continue;
+                    Cell c{f.Kind, f.Path, f.Name, nullptr, nullptr};
+                    c.unloaded = f.Kind == Cell::Kind::Prefab && !f.Unfetched && !m_ListedAssetKeys.count(f.Key);
+                    c.unfetched = f.Unfetched;
+                    cells.push_back(std::move(c));
+                }
+            }
+        }
+
         // Animation assets use their real project folders, like prefabs and scripts.
         // Retire the old all-project shortcut when it has no authored folder behind it.
         // DeleteFolder only changes the browser folder list; it does not delete files.
@@ -1894,7 +2002,8 @@ void EditorLayer::AssetGridFrameBegin(World& world, AssetLibrary& assets) {
             if (!MatchesAssetSearch(parsedSearch, f.Name, kindName, {}) &&
                 !(f.Kind == Cell::Kind::Hdri && MatchesAssetSearch(parsedSearch, f.Name, "texture", {}))) continue;
             Cell c{f.Kind, f.Path, f.Name, nullptr, nullptr};
-            c.unloaded = !fileOnly;
+            c.unloaded = !fileOnly && !f.Unfetched;
+            c.unfetched = f.Unfetched;
             cells.push_back(std::move(c));
         }
 
@@ -2078,7 +2187,15 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
         // Tile image for a file that isn't loaded: a small decode of an image, the last cached
         // render of a model / material.
         AssetThumbnailLoader::Thumb unloadedThumb;
-        if ((cell.unloaded && (cell.kind == Cell::Kind::Texture || cell.kind == Cell::Kind::Model || cell.kind == Cell::Kind::Material)) ||
+        // An unfetched file's tile draws at 40% (ImGui's Alpha also dims the images) until the cell ends.
+        struct DimScope {
+            bool On;
+            explicit DimScope(bool on) : On(on) { if (On) ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * 0.4f); }
+            ~DimScope() { if (On) ImGui::PopStyleVar(); }
+        } dim(cell.unfetched);
+        if (cell.unfetched) {
+            // no decode: there's no file to read
+        } else if ((cell.unloaded && (cell.kind == Cell::Kind::Texture || cell.kind == Cell::Kind::Model || cell.kind == Cell::Kind::Material)) ||
             cell.kind == Cell::Kind::Hdri) // never loaded here: a small tone-mapped decode (stb; .exr keeps the glyph)
             unloadedThumb = m_AssetThumbs.Get(cell.key, cell.kind == Cell::Kind::Texture || cell.kind == Cell::Kind::Hdri
                 ? AssetThumbnailLoader::Source::Image : AssetThumbnailLoader::Source::Cached);
@@ -2406,7 +2523,7 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 Glass::DragGhostLabel(ICON_FA_FOLDER, cell.display.c_str());
                 ImGui::EndDragDropSource();
             }
-            if (ImGui::BeginDragDropTarget()) {
+            if (!AssetLibraryView::IsLibraryFolder(cell.key) && ImGui::BeginDragDropTarget()) {
                 if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("ASSET_MODEL_PATH")) {
                     PushUndo(world, "Move Asset to Folder");
                     assets.SetAssetFolder((const char*)p->Data, cell.key);
@@ -2443,6 +2560,14 @@ void EditorLayer::DrawAssetCell(World& world, AssetLibrary& assets, int index, f
                 }
                 ImGui::EndDragDropTarget();
             }
+        } else if (cell.unfetched) {
+            // Nothing to place: a drag only says why (once per drag), with the invalid bump.
+            if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left) && !m_UnfetchedDragNoted) {
+                m_UnfetchedDragNoted = true;
+                EditorSound::Play(EditorSound::Event::ShortcutInvalid, EditorSound::LastItemScreenX());
+                Log::Warn("Not fetched: " + cell.display + " is a Drive asset this checkout doesn't have yet - run tools/assets/fetch-assets.ps1");
+            }
+            if (!ImGui::IsMouseDown(ImGuiMouseButton_Left)) m_UnfetchedDragNoted = false;
         } else if (cell.kind != Cell::Kind::Scene &&
                    cell.kind != Cell::Kind::Shader) { // not placeable — nothing to drag into the viewport
             const char* payloadType = cell.kind == Cell::Kind::Model ? "ASSET_MODEL_PATH"

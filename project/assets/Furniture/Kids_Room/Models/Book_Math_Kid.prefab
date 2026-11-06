@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          0.0,
+          0.015,
+          0.0
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.095,
+          0.015,
+          0.123
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "Book_Math_Kid",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Furniture/Kids_Room/Models/Book_Math_Kid.fbx",
+      "pathGuid": "bd1e4bdf2bde925c",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}

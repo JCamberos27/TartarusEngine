@@ -1,0 +1,47 @@
+{
+  "boxes": [],
+  "empties": [],
+  "formatVersion": 4,
+  "models": [
+    {
+      "collider": {
+        "center": [
+          4.4165,
+          1.0405,
+          -0.3675
+        ],
+        "friction": 0.6,
+        "halfExtents": [
+          0.0865,
+          1.0405,
+          0.4895
+        ],
+        "isTrigger": false,
+        "shape": 0
+      },
+      "id": 0,
+      "name": "door_entry_frame",
+      "order": 0,
+      "parentId": -1,
+      "path": "assets/Environments/Apartment/Models/door_entry_frame.gltf",
+      "pathGuid": "e140a880a3e51fa4",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "static": true
+    }
+  ]
+}
