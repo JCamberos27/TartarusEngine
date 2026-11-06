@@ -112,12 +112,10 @@ FetchContent_Declare(
   entt
   GIT_REPOSITORY https://github.com/skypjack/entt.git
   GIT_TAG v3.13.2
+  SOURCE_SUBDIR tartarus-no-cmake # MakeAvailable fetches only; EnTT is added below, EXCLUDE_FROM_ALL
 )
-FetchContent_GetProperties(entt)
-if(NOT entt_POPULATED)
-  FetchContent_Populate(entt)
-  add_subdirectory(${entt_SOURCE_DIR} ${entt_BINARY_DIR} EXCLUDE_FROM_ALL)
-endif()
+FetchContent_MakeAvailable(entt)
+add_subdirectory(${entt_SOURCE_DIR} ${entt_BINARY_DIR} EXCLUDE_FROM_ALL)
 
 # --- Dear ImGui (editor UI) — no CMakeLists upstream, so populate + build manually ---
 # On the "docking" branch (not a numbered release) specifically for real dock-node based
@@ -142,11 +140,9 @@ FetchContent_Declare(
   imguizmo
   GIT_REPOSITORY https://github.com/CedricGuillemet/ImGuizmo.git
   GIT_TAG 18cef5e031d8c6973d80284c67f60549fafd78c1 # master, 2026-08-08
+  SOURCE_SUBDIR tartarus-no-cmake # source only: MakeAvailable fetches it without add_subdirectory
 )
-FetchContent_GetProperties(imguizmo)
-if(NOT imguizmo_POPULATED)
-  FetchContent_Populate(imguizmo)
-endif()
+FetchContent_MakeAvailable(imguizmo)
 
 # --- ImAnim (tweens, springs and easing for Dear ImGui; the opt-in Glass editor theme) ---
 # Source only: one .cpp/.h pair compiled into the host (src/Editor/Glass/GlassMotion.cpp is its
@@ -158,11 +154,9 @@ FetchContent_Declare(
   GIT_REPOSITORY https://github.com/soufianekhiat/ImAnim.git
   GIT_TAG 1ea19a55a28d54acb7f7f22a617f969aec2a073e # main
   GIT_SUBMODULES ""
+  SOURCE_SUBDIR tartarus-no-cmake # source only: MakeAvailable fetches it without add_subdirectory
 )
-FetchContent_GetProperties(imanim)
-if(NOT imanim_POPULATED)
-  FetchContent_Populate(imanim)
-endif()
+FetchContent_MakeAvailable(imanim)
 
 # --- meshoptimizer (triangle order for the GPU's post-transform vertex cache) ---
 # Source only: the engine compiles the files it uses (vertex cache optimizer, simplifier, vertex fetch, index generator, allocator)
@@ -171,11 +165,9 @@ FetchContent_Declare(
   meshoptimizer
   GIT_REPOSITORY https://github.com/zeux/meshoptimizer.git
   GIT_TAG v1.3
+  SOURCE_SUBDIR tartarus-no-cmake # source only: MakeAvailable fetches it without add_subdirectory
 )
-FetchContent_GetProperties(meshoptimizer)
-if(NOT meshoptimizer_POPULATED)
-  FetchContent_Populate(meshoptimizer)
-endif()
+FetchContent_MakeAvailable(meshoptimizer)
 
 # --- Recast & Detour (navigation meshes, pathfinding and crowd steering for the enemy AI) ---
 # Source only, like meshoptimizer: the engine compiles Recast (navmesh building), Detour (queries)
@@ -185,11 +177,9 @@ FetchContent_Declare(
   recastnavigation
   GIT_REPOSITORY https://github.com/recastnavigation/recastnavigation.git
   GIT_TAG v1.6.0
+  SOURCE_SUBDIR tartarus-no-cmake # source only: MakeAvailable fetches it without add_subdirectory
 )
-FetchContent_GetProperties(recastnavigation)
-if(NOT recastnavigation_POPULATED)
-  FetchContent_Populate(recastnavigation)
-endif()
+FetchContent_MakeAvailable(recastnavigation)
 
 # --- NVIDIA PhysX 5 (collision / rigid bodies / character mover — #185) --------------
 # Built from source, pinned by git tag, nothing vendored — issue #185's "Path B", but via
@@ -469,8 +459,8 @@ target_include_directories(TartarusEditor PRIVATE
 # what is written alongside the object, not what is in it.
 function(tartarus_enable_release_debug_info target)
   if(MSVC)
-    target_compile_options(${target} PRIVATE $<$<CONFIG:Release>:/Zi>)
-    target_link_options(${target} PRIVATE $<$<CONFIG:Release>:/DEBUG /OPT:REF /OPT:ICF>)
+    target_compile_options(${target} PRIVATE $<$<CONFIG:Release,RelWithDebInfo>:/Zi>)
+    target_link_options(${target} PRIVATE $<$<CONFIG:Release,RelWithDebInfo>:/DEBUG /OPT:REF /OPT:ICF>)
   endif()
 endfunction()
 
