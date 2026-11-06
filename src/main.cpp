@@ -63,7 +63,9 @@
 #include "App/LaunchOptions.h"
 #include "App/CliTools.h"
 #include "App/PlaySession.h"
-#include "Tests/SmokeChecks.h"
+#include "Tests/EditorShot.h"
+#include "Tests/FrameCapture.h"
+#include "Tests/SmokeHarness.h"
 #include "SkinHideBuffer.h"
 #include "LightBuffer.h"
 #include "ClusterGrid.h"
@@ -411,33 +413,6 @@ static PostSettings MakePostSettings(const World& world, unsigned int bloomTex, 
     p.ExposureSlot = exposureSlot;
     ApplyPostProcessVolumes(world, cameraPos, p); // #162 / #203 - local and global volumes
     return p;
-}
-
-// Read `w` x `h` RGBA8 pixels out of the bound READ framebuffer from (x, y), GL's bottom-left origin.
-static std::vector<unsigned char> GrabRegion(int x, int y, int w, int h) {
-    std::vector<unsigned char> px((size_t)std::max(w, 0) * std::max(h, 0) * 4);
-    if (w > 0 && h > 0) glReadPixels(x, y, w, h, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
-    return px;
-}
-
-// The harnesses' PNG captures: framebuffer `fbo`'s w x h pixels, top row first (GL reads bottom up). Leaves the read
-// framebuffer at 0.
-static std::vector<unsigned char> GrabTopDown(unsigned fbo, int w, int h) {
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo);
-    std::vector<unsigned char> px = GrabRegion(0, 0, w, h);
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-    std::vector<unsigned char> flipped(px.size());
-    for (int y = 0; y < h; ++y)
-        std::memcpy(&flipped[(size_t)y * w * 4], &px[(size_t)(h - 1 - y) * w * 4], (size_t)w * 4);
-    return flipped;
-}
-// Writes `rgba` (w x h, top row first) to dir/name.png, making dir if needed. Returns the path.
-static std::string WritePngTo(const std::string& dir, const std::string& name, int w, int h, const std::vector<unsigned char>& rgba) {
-    std::error_code ec;
-    std::filesystem::create_directories(dir, ec);
-    const std::string out = (std::filesystem::path(dir) / (name + ".png")).string();
-    stbi_write_png(out.c_str(), w, h, 4, rgba.data(), w * 4);
-    return out;
 }
 
 // #165 - the roll that, applied on top of yaw/pitch, lines Camera::Up() up with the entity's own
@@ -1764,184 +1739,21 @@ int main(int argc, char** argv) {
                                   !opt.perfBenchMode;
         int startChimeFrames = 0; // counts down from the first presented frame
 
-        // --editor-shot: each view gets kEditorShotFrames frames - set up halfway, captured at the end.
-        const int kEditorShotFrames = 150;
-        const std::vector<const char*> kEditorShots = opt.editorShotIDE ? std::vector<const char*>{"script-ide"} : opt.editorShotCurves ? std::vector<const char*>{"recoil-curves","recoil-targets","recoil-smoothing","recoil-layers","recoil-misc"} : std::vector<const char*>{"overview", "inspector", "enhancers", "bookmarks", "favorites", "console", "game", "settings", "settings-viewport",
-                                                   "settings-performance", "project-settings", "project-tags", "project-build",
-                                                   "lighting", "animator", "settings-sounds", "sound-board"};
-        int editorShotFrame = 0;
+        EditorShot editorShot(opt); // --editor-shot: each view gets 150 frames - set up halfway, captured at the end.
 
         // Monotonically increasing per-frame counter, used by Model::TickAnimationOnce() to
         // dedupe animation updates for models shared by more than one entity (#106) without a
         // per-frame heap allocation.
         uint64_t frameIndex = 0;
 
-        // --smoke-test state (audit #187). Deliberately driven from inside the normal render
-        // loop below rather than a separate loop of its own, so it exercises the exact same
-        // per-frame path (light gather, shadow passes, drawScene, editor.Draw/EndFrame) as an
-        // interactive session — the whole point of the harness is catching a regression that
-        // path could introduce, not a hand-rolled approximation of it.
-        // --perf-bench measures each scene twice: kPerfPhaseFrames in edit mode, then as many in Play.
-        constexpr int kPerfPhaseFrames = 600;
-        // Frames skipped at the start of each phase. TARTARUS_PERF_WARMUP=0 keeps them, to measure first-use hitches.
-        const int kPerfBenchWarmup = std::max(0, Env::Int(Env::Var::PerfWarmup, 100));
-        // --smoke-shots with TARTARUS_SHOT_CAMERAS="name:x,y,z,yaw,pitch;...": those Scene-view poses instead of the
-        // three fixed ones, each saved as <scene>_<name>.png after 30 frames on it (an asset gallery, a set dressing).
-        struct ShotCamera { std::string Name; glm::vec3 Position; float Yaw, Pitch; };
-        std::vector<ShotCamera> shotCameras;
-        if (const std::string cams = Env::Str(Env::Var::ShotCameras); !cams.empty() && !opt.smokeShotsDir.empty()) {
-            std::stringstream all(cams);
-            std::string item;
-            while (std::getline(all, item, ';')) {
-                const size_t colon = item.find(':');
-                if (colon == std::string::npos) continue;
-                ShotCamera c{item.substr(0, colon), glm::vec3(0.0f), 0.0f, 0.0f};
-                if (std::sscanf(item.c_str() + colon + 1, "%f,%f,%f,%f,%f", &c.Position.x, &c.Position.y, &c.Position.z,
-                                &c.Yaw, &c.Pitch) == 5)
-                    shotCameras.push_back(c);
-            }
-        }
-        // TARTARUS_SHOT_START=<frames>: first capture frame (default 40); big packs need longer for their maps to decode.
-        const int kShotCameraStart = Env::IsSet(Env::Var::ShotStart) ? std::max(1, Env::Int(Env::Var::ShotStart, 0)) : 40;
-        constexpr int kShotCameraSettle = 30;
-        const int kSmokeTestFrames = opt.npcTestMode ? 60 * 60 * 6 : opt.perfBenchMode ? 3 * kPerfPhaseFrames
-                                   : !shotCameras.empty() ? kShotCameraStart + kShotCameraSettle * (int)shotCameras.size() + 1 : 100;
-        // TARTARUS_MEM_REPORT=<dir>: a memory snapshot (MemReport) before the first scene and after each one.
-        const std::string memReportDir = Env::Str(Env::Var::MemReport);
-        auto memSnapshot = [&](const std::string& label) {
-            if (memReportDir.empty()) return;
-            std::vector<const Model*> ms;
-            for (const auto& m : assets.Models()) ms.push_back(m.get());
-            for (auto [e, rc] : world.Registry.view<RenderableComponent>().each())
-                if (rc.ModelRef) ms.push_back(rc.ModelRef.get());
-            MemReport::Write(memReportDir, label, ms);
-        };
-        struct PerfAccum { double Sum = 0.0; double Max = 0.0; int N = 0; };
-        std::vector<std::pair<std::string, PerfAccum>> perfCpu, perfGpu;
-        PerfAccum perfFrame;
-        auto perfLastFrameEnd = std::chrono::steady_clock::now();
-        auto perfAdd = [](std::vector<std::pair<std::string, PerfAccum>>& v, const std::string& name, double ms) {
-            auto it = std::find_if(v.begin(), v.end(), [&](const auto& p) { return p.first == name; });
-            if (it == v.end()) { v.emplace_back(name, PerfAccum{}); it = v.end() - 1; }
-            it->second.Sum += ms; it->second.Max = std::max(it->second.Max, ms); ++it->second.N;
-        };
-        // Stutters: every frame's time (for percentiles) and the worst frames with what that frame spent its time on
-        // (the per-scope maxima above are independent, so they can't say which scope made a hitch).
-        // The profiler hands back the frame before (Profiler::GetLastFrame), so a frame's scopes are attached on the next call.
-        struct PerfWorst { double Ms; int Frame; std::string Scopes; };
-        std::vector<double> perfFrameTimes;
-        std::vector<PerfWorst> perfWorst;
-        PerfWorst perfPending{-1.0, 0, {}};
-        auto perfScopesNow = [] {
-            std::vector<std::pair<float, std::string>> scopes;
-            for (const Profiler::Entry& e : Profiler::GetLastFrame())
-                if (e.Name != "Swap Buffers") scopes.emplace_back(e.Milliseconds, e.Name);
-            std::sort(scopes.begin(), scopes.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
-            std::string s;
-            char buf[96];
-            for (size_t i = 0; i < scopes.size() && i < 10 && scopes[i].first >= 0.25f; ++i) {
-                std::snprintf(buf, sizeof(buf), "%s%s %.2f", s.empty() ? "" : ", ", scopes[i].second.c_str(), scopes[i].first);
-                s += buf;
-            }
-            return s;
-        };
-        auto perfSettle = [&](bool haveScopes) {
-            constexpr size_t kKeep = 12;
-            if (perfPending.Ms < 0.0) return;
-            if (perfWorst.size() < kKeep || perfPending.Ms > perfWorst.back().Ms) {
-                if (haveScopes) perfPending.Scopes = perfScopesNow();
-                perfWorst.push_back(std::move(perfPending));
-                std::sort(perfWorst.begin(), perfWorst.end(), [](const PerfWorst& a, const PerfWorst& b) { return a.Ms > b.Ms; });
-                if (perfWorst.size() > kKeep) perfWorst.pop_back();
-            }
-            perfPending = {-1.0, 0, {}};
-        };
-        auto perfRecordFrame = [&](double frameMs, int frame) {
-            perfSettle(true);
-            perfFrameTimes.push_back(frameMs);
-            perfPending = {frameMs, frame, {}};
-        };
-        auto perfReportHitches = [&](const char* label) {
-            perfSettle(false);
-            if (perfFrameTimes.empty()) return;
-            auto report = [&](const char* what, std::vector<double> t) {
-                if (t.empty()) return;
-                std::sort(t.begin(), t.end());
-                auto pct = [&](double p) { return t[std::min(t.size() - 1, (size_t)(p * (double)(t.size() - 1) + 0.5))]; };
-                const double median = pct(0.5);
-                int over2x = 0, over33 = 0;
-                for (double ms : t) { over2x += ms > 2.0 * median; over33 += ms > 33.3; }
-                std::printf("[PerfBench] %s%s frame ms: p50=%.2f p95=%.2f p99=%.2f p99.9=%.2f max=%.2f  hitches(>2x p50)=%d (>33ms)=%d of %zu\n",
-                            label, what, median, pct(0.95), pct(0.99), pct(0.999), t.back(), over2x, over33, t.size());
-            };
-            report("", perfFrameTimes);
-            // Without the first 2 s (Play's start: the squad spawning, the first clips and shaders).
-            if (perfFrameTimes.size() > 240) report(" after 2 s", std::vector<double>(perfFrameTimes.begin() + 120, perfFrameTimes.end()));
-            for (const PerfWorst& w : perfWorst)
-                std::printf("[PerfBench]   worst frame %d %.2f ms: %s\n", w.Frame, w.Ms, w.Scopes.c_str());
-            perfFrameTimes.clear();
-            perfWorst.clear();
-        };
-        struct SmokeResult { std::string scenePath; int frames; int newGlErrors; int newLogErrors;
-                             int drawCalls; bool loadOk; bool pass; std::string cause; };
-        std::vector<std::string> smokeScenePaths;
-        std::vector<SmokeResult> smokeResults;
-        size_t smokeSceneIndex = 0;
-        int smokeFramesRendered = 0;
-        int smokeBaselineGlErrors = 0;
-        int smokeBaselineLogErrors = 0;
-        bool smokeSceneActive = false;
-        bool smokeSceneLoadOk = false;
-        // A scene whose filename contains "smoke_play" additionally gets two Play -> Stop cycles
-        // driven during its frame budget (audit #368 / #389): CI then exercises play-mode entry
-        // / exit, snapshot save+restore, PhysX world create+destroy, the game module's systems
-        // running from TartarusGame.dll, and — via the normal process exit afterwards — the
-        // teardown ordering that #389 broke. smokePlayCycles counts completed Stop transitions.
-        bool smokePlayScene = false;
-        int  smokePlayCycles = 0;
-        if (opt.smokeTestMode) {
-            // Scene source: explicit --smoke-test <dir> arg, else the engine's committed
-            // regression scenes, else the user project's scenes/ (audit TEST-101).
-            std::string scenesDir;
-            if (!opt.smokeScenesDirArg.empty()) {
-                scenesDir = opt.smokeScenesDirArg;
-            } else {
-                std::string engineScenes = EnginePaths::Resolve("assets/test-scenes");
-                std::error_code exEc;
-                bool haveEngineScenes = std::filesystem::is_directory(engineScenes, exEc) && !exEc;
-                scenesDir = haveEngineScenes ? engineScenes : ProjectPaths::Resolve("scenes");
-            }
-            std::error_code dirEc;
-            if (std::filesystem::is_regular_file(scenesDir, dirEc)) smokeScenePaths.push_back(scenesDir);
-            else for (auto& entry : std::filesystem::directory_iterator(scenesDir, dirEc)) {
-                if (dirEc) break;
-                if (entry.is_regular_file() && entry.path().extension() == ".json")
-                    smokeScenePaths.push_back(entry.path().string());
-            }
-            std::sort(smokeScenePaths.begin(), smokeScenePaths.end());
-            if (opt.npcTestMode && opt.smokeScenesDirArg.empty())
-                smokeScenePaths.assign(1, ProjectPaths::Resolve(opt.npcTestScenario == "sandbox" ? "scenes/Arena.json"
-                                                              : opt.npcTestScenario == "blood" ? "scenes/BloodTest.json"
-                                                              : opt.npcTestScenario == "ragdoll" ? "scenes/RagdollTest.json"
-                                                              : opt.npcTestScenario == "escape" || opt.npcTestScenario == "escapeshut" || opt.npcTestScenario == "aptwounds" || opt.npcTestScenario == "aptfight" ? "scenes/Apartment Hallway.json"
-                                                              : opt.npcTestScenario == "decals" || opt.npcTestScenario == "doors" || opt.npcTestScenario == "roam" || opt.npcTestScenario == "spider" || opt.npcTestScenario == "spiderdeath" || opt.npcTestScenario == "spiderhunt" || opt.npcTestScenario == "spiderplay" || opt.npcTestScenario == "spiderdoor" ? "scenes/Apartment Hallway.json"
-                                                                                           : "scenes/Arena.json"));
-#pragma warning(suppress : 4996)
-            if (const std::string scene = Env::Str(Env::Var::NpcTestScene); opt.npcTestMode && !scene.empty()) // e.g. doors in a pack scene
-                smokeScenePaths.assign(1, ProjectPaths::Resolve("scenes/" + scene + ".json"));
-            std::cout << "[SmokeTest] Found " << smokeScenePaths.size() << " scene(s) under "
-                      << scenesDir << std::endl;
-            if (smokeScenePaths.empty()) {
-                std::cout << "[SmokeTest] ERROR: no scenes to test - failing." << std::endl;
-            }
-            if (!GLDebug::IsEnabled()) {
-                // ForceEnable() above still could not wire up the callback (no KHR_debug on this
-                // context, e.g. a GPU-less CI runner). GL error counts will read 0; the harness
-                // still checks load success, log errors and draw count.
-                std::cout << "[SmokeTest] WARNING: GL debug output could not be enabled on this "
-                             "context - newGlErrors will read 0." << std::endl;
-            }
-        }
+        // --smoke-test state (audit #187), --perf-bench measuring and --smoke-shots (Tests/SmokeHarness.cpp). Driven from
+        // inside the normal render loop below rather than a separate loop of its own, so it exercises the exact same
+        // per-frame path as an interactive session.
+        SmokeContext smokeContext{world, assets, editor, editorCamera, sceneFramebuffer, clusterGrid, decalSystem, window,
+                                  npcTest.get(), playing, playMaximized, playUsesPlayer, player.Cam, playSceneCam,
+                                  [&]() { togglePlay(); }, [&](bool maximize) { setMaximized(maximize); },
+                                  [&]() { warmRenderResources(); }};
+        SmokeHarness smoke(opt, smokeContext);
 
         // #89 — see the matching catch after the loop. (Loop body deliberately not re-indented.)
         bool wasFocused = true; // #132 - reimport-on-focus edge detector
@@ -1991,282 +1803,8 @@ int main(int argc, char** argv) {
             // Advance the smoke test: load the next scene (or, once every scene's frame quota is
             // met, fall through and stop the whole loop below).
             if (opt.smokeTestMode) {
-                if (smokeSceneIndex >= smokeScenePaths.size()) break;
-                if (!smokeSceneActive) {
-                    const std::string& path = smokeScenePaths[smokeSceneIndex];
-                    // Baseline BEFORE the load, so an asset error logged *during* Load() (a
-                    // missing model/texture) counts against this scene instead of being folded
-                    // into the baseline and ignored (audit #356).
-                    smokeBaselineGlErrors  = GLDebug::ErrorCount();
-                    smokeBaselineLogErrors = Log::CountOf(LogLevel::Error);
-                    // false: the smoke-test harness only reads these scenes to render and check
-                    // them — it must never rewrite a committed regression fixture on disk just
-                    // from loading it (audit #77; tests/smoke-scenes-invalid/ in particular is
-                    // documented as static, hand-authored fixtures).
-                    if (smokeSceneIndex == 0) memSnapshot("00_start");
-                    smokeSceneLoadOk = SceneSerializer::Load(world, assets, path, /*persistMigration=*/false);
-                    warmRenderResources(); // the editor does the same at startup, before its first frame
-                    std::cout << "[SmokeTest] Loading " << path
-                              << (smokeSceneLoadOk ? "" : "  (Load() reported failure)") << std::endl;
-                    // #116 regression: the exact triangle raycast behind editor picking / surface
-                    // snapping. smoke_min's cube is centred at y=1 with size 2 (top face y=2), rotated
-                    // 20 deg about Y, so a ray straight down from y=10 must hit it 8 units out.
-                    if (smokeSceneLoadOk && path.find("smoke_min") != std::string::npos) {
-                        float bestT = 1e30f;
-                        for (auto re : world.Registry.view<RenderableComponent>()) {
-                            const auto& rc = world.Registry.get<RenderableComponent>(re);
-                            float t;
-                            if (rc.ModelRef && rc.ModelRef->RaycastTriangles(world.ComposeWorldTransform(re),
-                                    glm::vec3(0.0f, 10.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.0f), t))
-                                bestT = std::min(bestT, t);
-                        }
-                        if (std::abs(bestT - 8.0f) > 0.01f)
-                            Log::Error("[SmokeTest] triangle raycast expected t=8, got " + std::to_string(bestT));
-                        else
-                            std::cout << "[SmokeTest]   triangle raycast OK (t=" << bestT << ")" << std::endl;
-
-                        // #119 regression: copying a jointed pair (the Duplicate / Paste path) must
-                        // connect the copied joint to the copied partner, not the original.
-                        entt::entity a = world.CreateEmptyEntity(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "SmokeJointA");
-                        entt::entity b = world.CreateEmptyEntity(glm::vec3(0.0f), glm::vec3(0.0f), glm::vec3(1.0f), "SmokeJointB");
-                        world.Registry.emplace_or_replace<JointComponent>(a).ConnectedOrder =
-                            world.Registry.get<OrderComponent>(b).Value;
-                        std::vector<entt::entity> copies;
-                        std::unordered_map<int, entt::entity> srcOrder;
-                        const bool appended = SceneSerializer::AppendEntitiesFromString(world, assets,
-                            SceneSerializer::SaveEntitiesToString(world, {a, b}), copies, &srcOrder);
-                        auto copyOf = [&](entt::entity e) {
-                            auto it = srcOrder.find(world.Registry.get<OrderComponent>(e).Value);
-                            return it == srcOrder.end() ? entt::null : it->second;
-                        };
-                        const entt::entity ca = appended ? copyOf(a) : entt::null;
-                        const entt::entity cb = appended ? copyOf(b) : entt::null;
-                        const auto* cj = ca != entt::null ? world.Registry.try_get<JointComponent>(ca) : nullptr;
-                        if (!cj || cb == entt::null || cj->ConnectedOrder != world.Registry.get<OrderComponent>(cb).Value)
-                            Log::Error("[SmokeTest] copied joint was not repointed at the copied partner.");
-                        else
-                            std::cout << "[SmokeTest]   joint copy remap OK" << std::endl;
-                        for (entt::entity e : copies) if (world.Registry.valid(e)) world.DestroyEntityAndChildren(e);
-                        world.DestroyEntityAndChildren(a);
-                        world.DestroyEntityAndChildren(b);
-                    }
-                    // #81 regression: the undo/redo path round-trips the scene + asset library
-                    // through SaveToString/LoadFromString. It must neither throw (GUID PathRef
-                    // entries used to crash it) nor drop/re-import library assets.
-                    if (smokeSceneLoadOk) {
-                        auto countEntities = [&]() {
-                            std::size_t n = 0;
-                            world.Registry.view<TransformComponent>().each([&](auto...) { ++n; });
-                            return n;
-                        };
-                        const std::size_t entsBefore = countEntities();
-                        const std::size_t modelsBefore = assets.Models().size();
-                        const std::size_t texBefore = assets.Textures().size();
-                        const std::size_t matsBefore = assets.Materials().size();
-                        bool rtOk = false;
-                        memSnapshot("pre_rt_" + std::filesystem::path(smokeScenePaths[smokeSceneIndex]).stem().string());
-                        try {
-                            const std::string snap = SceneSerializer::SaveToString(world, assets);
-                            rtOk = SceneSerializer::LoadFromString(world, assets, snap);
-                        } catch (const std::exception& e) {
-                            Log::Error(std::string("[SmokeTest] undo snapshot round-trip threw: ") + e.what());
-                        }
-                        if (!rtOk || countEntities() != entsBefore || assets.Models().size() != modelsBefore ||
-                            assets.Textures().size() != texBefore || assets.Materials().size() != matsBefore)
-                            Log::Error("[SmokeTest] undo snapshot round-trip changed the scene or asset library.");
-                        else
-                            std::cout << "[SmokeTest]   undo round-trip OK (" << entsBefore << " entities, "
-                                      << modelsBefore << " models, " << texBefore << " textures, "
-                                      << matsBefore << " materials)" << std::endl;
-                    }
-                    // #96 regression: placed instances of one imported file share its data (one
-                    // import, one set of GPU buffers), also after the undo round-trip above.
-                    if (smokeSceneLoadOk) {
-                        std::map<std::string, const Material*> firstMat;
-                        for (auto re : world.Registry.view<RenderableComponent>()) {
-                            const auto& rc = world.Registry.get<RenderableComponent>(re);
-                            if (!rc.ModelRef || rc.ModelRef->MeshCount() == 0 ||
-                                rc.ModelRef->Path().rfind("primitive://", 0) == 0) continue;
-                            const Material* m0 = &rc.ModelRef->MeshMaterial(0);
-                            auto [it, isNew] = firstMat.emplace(rc.ModelRef->Path(), m0);
-                            if (!isNew && it->second != m0)
-                                Log::Error("[SmokeTest] two instances of '" + rc.ModelRef->Path() +
-                                           "' do not share their imported data.");
-                            const glm::vec3 bmin = rc.ModelRef->BoundsMin(), bmax = rc.ModelRef->BoundsMax();
-                            if (isNew) {
-                                const Material& m = rc.ModelRef->MeshMaterial(0);
-                                std::cout << "[SmokeTest]   model " << std::filesystem::path(rc.ModelRef->Path()).filename().string()
-                                          << " bounds (" << bmin.x << "," << bmin.y << "," << bmin.z << ")-("
-                                          << bmax.x << "," << bmax.y << "," << bmax.z << ") albedoMap="
-                                          << (m.AlbedoMap ? "yes" : "no")
-                                          // #113 - KHR_texture_transform lands here, so a regression shows up
-                                          // as uv=1,1+0,0 on a model that should carry a transform.
-                                          << " uv=" << m.UVTiling.x << "," << m.UVTiling.y
-                                          << "+" << m.UVOffset.x << "," << m.UVOffset.y << std::endl;
-                            }
-                        }
-                    }
-                    smokeFramesRendered = 0;
-                    smokeSceneActive = true;
-                    SceneRendererDebug::ResetVariantDrawCounts(); // #354 per-scene variant tally
-                    smokePlayScene = path.find("smoke_play") != std::string::npos;
-                    smokePlayCycles = 0;
-                }
-
-                // #132 - a smoke_project_sync* scene: the project watcher end to end (Tests/SmokeChecks.cpp).
-                if (smokeSceneActive && smokeFramesRendered == 15 &&
-                    smokeScenePaths[smokeSceneIndex].find("smoke_project_sync") != std::string::npos) {
-                    SmokeChecks::ProjectSync(editor, world, assets);
-                }
-
-                // #107 - a smoke_materials* scene: every material through the material preview (Tests/SmokeChecks.cpp).
-                if (smokeSceneActive && smokeFramesRendered == 15 &&
-                    smokeScenePaths[smokeSceneIndex].find("smoke_materials") != std::string::npos) {
-                    SmokeChecks::MaterialPreviews(world);
-                }
-
-                // smoke_min: the once-per-frame GPU skinning (Model::PreSkin) against the CPU's blend. The committed scenes
-                // have no skinned characters, so this is what runs its shader on CI.
-                if (smokeSceneActive && smokeFramesRendered == 15 &&
-                    smokeScenePaths[smokeSceneIndex].find("smoke_min") != std::string::npos) {
-                    std::string preSkinWhy;
-                    if (Model::PreSkinSelfTest(preSkinWhy)) std::cout << "[SmokeTest]   pre-skin matches the CPU skinning" << std::endl;
-                    else Log::Error("[SmokeTest] pre-skin: " + preSkinWhy);
-                }
-
-                // A smoke_glass* scene: the opt-in Glass editor theme on, drawn, then off (Tests/SmokeChecks.cpp).
-                if (smokeSceneActive && smokeScenePaths[smokeSceneIndex].find("smoke_glass") != std::string::npos)
-                    SmokeChecks::GlassTheme(editor, world, smokeFramesRendered);
-
-                // A smoke_decals* scene (docs/DECALS.md): by frame 80 the textures are resident and the delayed
-                // overflow readback has landed. 574 decals in view; the 270-decal stack must trip the per-cluster
-                // cap (bit 1) and nothing may fill the index list (bit 2).
-                if (smokeSceneActive && smokeFramesRendered == 80 &&
-                    smokeScenePaths[smokeSceneIndex].find("smoke_decals") != std::string::npos) {
-                    const int visible = decalSystem.VisibleCount();
-                    const unsigned overflow = clusterGrid.DecalOverflow();
-                    if (visible < 570) Log::Error("[SmokeTest] decals: expected >= 570 visible, got " + std::to_string(visible));
-                    else if ((overflow & 1u) == 0u) Log::Error("[SmokeTest] decals: the over-cap cluster was not flagged");
-                    else if (overflow & 2u) Log::Error("[SmokeTest] decals: the decal index list overflowed");
-                    else std::cout << "[SmokeTest]   decals OK (" << visible << " visible, overflow " << overflow << ")" << std::endl;
-                }
-
-                // smoke_decals_stress*: the Scene view held square on the wall, then frames 90 and 91 of the still view
-                // read back and compared (Tests/SmokeChecks.cpp).
-                if (smokeSceneActive && smokeScenePaths[smokeSceneIndex].find("smoke_decals_stress") != std::string::npos) {
-                    editorCamera.Position = glm::vec3(0.0f, 3.0f, 2.5f);
-                    editorCamera.Yaw = -90.0f;
-                    editorCamera.Pitch = 0.0f;
-                    if (smokeFramesRendered == 90 || smokeFramesRendered == 91)
-                        SmokeChecks::DecalStress(clusterGrid, decalSystem.VisibleCount(), smokeFramesRendered);
-                }
-
-                // #176 - a smoke_prefab* scene: a Prefab Mode round trip (Tests/SmokeChecks.cpp).
-                if (smokeSceneActive && smokeFramesRendered == 15 &&
-                    smokeScenePaths[smokeSceneIndex].find("smoke_prefab") != std::string::npos) {
-                    SmokeChecks::PrefabMode(editor, world, assets);
-                }
-
-                // Play-mode cycles for a smoke_play* scene: enter at 20 / 55, stop at 40 / 75,
-                // within the kSmokeTestFrames budget. togglePlay() is the same entry the F1 key
-                // and the toolbar button use.
-                if (smokeSceneActive && npcTest) {
-                    if (smokeFramesRendered == 20 && !playing) { std::cout << "[NpcTest] -> Play" << std::endl; togglePlay(); }
-                    if (npcTest->Done()) smokeFramesRendered = std::max(smokeFramesRendered, kSmokeTestFrames - 1);
-                }
-                if (smokeSceneActive && smokePlayScene) {
-                    const int f = smokeFramesRendered;
-                    if ((f == 20 || f == 55) && !playing) { std::cout << "[SmokeTest]   -> Play\n";  togglePlay(); }
-                    if ((f == 40 || f == 75) &&  playing) {
-                        // #114 regression: every simulated body must still be somewhere sane
-                        // (finite, near the scene) — a parented body used to be teleported by
-                        // writing its world pose into its local transform.
-                        for (entt::entity rbE : world.Registry.view<RigidbodyComponent, TransformComponent>()) {
-                            const glm::vec3 p = world.WorldSpaceTransform(rbE).Position;
-                            const bool sane = std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z) &&
-                                              glm::length(p) < 1000.0f;
-                            std::cout << "[SmokeTest]   body " << entt::to_integral(rbE) << " at world (" << p.x
-                                      << ", " << p.y << ", " << p.z << ")" << std::endl;
-                            if (!sane) Log::Error("[SmokeTest] simulated body ended up at a non-finite / far-away position.");
-                        }
-                        // #175 — Animation components: which clip is playing, how far in, and where
-                        // the last bone sits, so a regression in playback / skinning shows up.
-                        for (entt::entity ae : world.Registry.view<SkeletalAnimationComponent, RenderableComponent>()) {
-                            const Model* m = world.Registry.get<RenderableComponent>(ae).ModelRef.get();
-                            if (!m || !m->HasAnimations()) continue;
-                            const int clip = m->CurrentAnimation();
-                            const glm::vec3 bone = glm::vec3(m->FinalBoneMatrix(m->BoneCount() - 1)[3]);
-                            std::cout << "[SmokeTest]   anim " << entt::to_integral(ae) << " clip="
-                                      << (clip >= 0 ? m->AnimationName(clip) : std::string("(none)"))
-                                      << " t=" << m->AnimationTime() << " lastBone=(" << bone.x << ", " << bone.y
-                                      << ", " << bone.z << ")\n";
-                        }
-                        { // #165 - which camera Play ran through, and where it ended up
-                            const Camera& pc = playUsesPlayer ? player.Cam : playSceneCam;
-                            std::cout << "[SmokeTest]   play camera=" << (playUsesPlayer ? "player" : "scene")
-                                      << " pos=(" << pc.Position.x << ", " << pc.Position.y << ", " << pc.Position.z
-                                      << ") yaw=" << pc.Yaw << " fov=" << pc.Fov << "\n";
-                        }
-                        { // #170 - filtered queries straight down through the scene origin
-                            const float o[3] = {0.0f, 50.0f, 0.0f}, down[3] = {0.0f, -1.0f, 0.0f};
-                            const float he[3] = {0.25f, 0.25f, 0.25f}, p1[3] = {-0.5f, 50.0f, 0.0f}, p2[3] = {0.5f, 50.0f, 0.0f};
-                            QueryFilter all, none; none.LayerMask = 0u;
-                            RaycastHit hits[16], box, cap, masked;
-                            const int n = PhysicsWorld::RaycastAll(o, down, 100.0f, all, hits, 16);
-                            const bool boxHit = PhysicsWorld::BoxCast(o, he, nullptr, down, 100.0f, all, box);
-                            const bool capHit = PhysicsWorld::CapsuleCast(p1, p2, 0.2f, down, 100.0f, all, cap);
-                            const bool maskedHit = PhysicsWorld::RaycastFiltered(o, down, 100.0f, none, masked);
-                            const float oc[3] = {0.0f, 0.0f, 0.0f}, big[3] = {50.0f, 50.0f, 50.0f};
-                            const int overlaps = PhysicsWorld::OverlapBox(oc, big, nullptr, all, nullptr, 0);
-                            std::cout << "[SmokeTest]   queries rayAll=" << n
-                                      << (n > 0 ? " firstDist=" + std::to_string(hits[0].Distance) : std::string())
-                                      << " box=" << boxHit << (boxHit ? "@" + std::to_string(box.Distance) : std::string())
-                                      << " capsule=" << capHit << (capHit ? "@" + std::to_string(cap.Distance) : std::string())
-                                      << " maskNone=" << maskedHit << " overlapBox=" << overlaps << "\n";
-                            // #201 - deactivating the collider under the ray while playing must
-                            // take its actor out of the PhysX scene (it used to stay, invisible).
-                            if (n > 0 && hits[0].Entity != 0xFFFFFFFFu) {
-                                const entt::entity hitE = static_cast<entt::entity>(hits[0].Entity);
-                                if (world.Registry.valid(hitE)) {
-                                    world.Registry.emplace_or_replace<DeactivatedTag>(hitE);
-                                    world.RebuildWorldTransformCache(); // derives InactiveTag
-                                    PhysicsWorld::Step(0.0f, world, {});
-                                    RaycastHit after;
-                                    const bool again = PhysicsWorld::RaycastFiltered(o, down, 100.0f, all, after) &&
-                                                       after.Entity == hits[0].Entity;
-                                    std::cout << "[SmokeTest]   deactivate-sync hitAgain=" << again << "\n";
-                                    if (again) Log::Error("[SmokeTest] a deactivated collider was still hit by a raycast.");
-                                    // Put it back: the scene outlives this check (later Play
-                                    // cycles re-run it), so the probe must not leave a mark.
-                                    world.Registry.remove<DeactivatedTag>(hitE);
-                                    world.RebuildWorldTransformCache();
-                                    PhysicsWorld::Step(0.0f, world, {});
-                                }
-                            }
-                        }
-                        for (auto [ae, ac] : world.Registry.view<const AnimatorControllerComponent>().each()) { // #175 Part B
-                            const auto* arc = world.Registry.try_get<RenderableComponent>(ae);
-                            const Model* am = arc ? arc->ModelRef.get() : nullptr;
-                            std::cout << "[SmokeTest]   animator " << entt::to_integral(ae) << " state=" << ac.StateName
-                                      << " clip=" << (am && am->CurrentAnimation() >= 0 ? am->AnimationName(am->CurrentAnimation()) : std::string("(none)"))
-                                      << " params=" << ac.Params.size();
-                            if (ac.RootMotion.Mode != 0) { // where root motion has taken the object
-                                const glm::vec3 p = world.WorldSpaceTransform(ae).Position;
-                                std::cout << " rootMotion=" << ac.RootMotion.Mode << " bone=" << ac.RootMotion.ResolvedBone
-                                          << " speed=" << ac.RootMotion.Speed << " pos=(" << p.x << ", " << p.y << ", " << p.z << ")";
-                            }
-                            std::cout << "\n";
-                        }
-                        for (auto [pe, ps] : world.Registry.view<const ParticleSystemComponent>().each()) { // #177
-                            glm::vec3 lo(1e9f), hi(-1e9f);
-                            for (const auto& pt : ps.Live) { lo = glm::min(lo, pt.Pos); hi = glm::max(hi, pt.Pos); }
-                            std::cout << "[SmokeTest]   particles " << entt::to_integral(pe) << " live=" << ps.Live.size();
-                            if (!ps.Live.empty()) std::cout << " y=[" << lo.y << ", " << hi.y << "]";
-                            std::cout << "\n";
-                        }
-                        std::cout << "[SmokeTest]   -> Stop\n";  togglePlay(); ++smokePlayCycles;
-                    }
-                }
+                if (smoke.AllDone()) break;
+                smoke.BeginFrame();
             }
             // #144: `dt` is unscaled (editor camera, UI, capture polling - never slowed or frozen
             // by the game's time scale); `gameDt` is the scaled step every Play system uses.
@@ -4568,56 +4106,7 @@ int main(int argc, char** argv) {
                 // While the game owns input, the editor viewport's own picking / gizmo keys
                 // stand down (a shoot-click or strafe key shouldn't also poke the editor).
                 editor.SetGameInputActive(gameHasInput);
-                // --editor-shot: set up the next view a second ahead of its capture (below).
-                if (!opt.editorShotDir.empty()) {
-                    const int step = editorShotFrame++ / kEditorShotFrames;
-                    if (editorShotFrame % kEditorShotFrames == kEditorShotFrames / 2 && step < (int)std::size(kEditorShots)) {
-                        const std::string view = kEditorShots[step];
-                        editor.QuietDockSounds(); // the forced tab selections below aren't a person docking or reordering
-                        if(view=="script-ide")editor.OpenScriptIDE(GameModuleBuild::Available() ? (GameModuleBuild::SourceRoot()/"src/Game/LightFlickerSystem.cpp").u8string() : std::string());
-                        auto focus = [](const char* title) {
-                            for (ImGuiWindow* w : ImGui::GetCurrentContext()->Windows)
-                                if (std::strstr(w->Name, title) && std::strncmp(w->Name, "##", 2) != 0 && !(w->Flags & ImGuiWindowFlags_ChildWindow)) {
-                                    // A docked window: select its tab too (focus alone can lose to a tab that asks for focus).
-                                    if (w->DockNode && w->DockNode->TabBar) w->DockNode->TabBar->NextSelectedTabId = w->TabId;
-                                    ImGui::SetWindowFocus(w->Name);
-                                }
-                        };
-                        if (view == "overview") {
-                            EditorModuleHost::ConsoleState().Visible = true; // a tab now, in front for "console"
-                            for (auto [e, n] : world.Registry.view<NameComponent>().each())
-                                if (n.Name == "Player Spawn") {
-                                    if (const auto* o = world.Registry.try_get<OrderComponent>(e)) editor.SelectEntityByOrder(world, o->Value);
-                                    break;
-                                }
-                            focus("###Scene");
-                            focus("###Assets");
-                        }
-                        else if (view == "inspector") editor.SetExpandAllComponents(true);
-                        // Editor Enhancers: the Inspector and Asset Browser in front (their header rows,
-                        // tabs and trees), then the bookmarks list open, then the favorites overlay.
-                        else if (view == "enhancers") { editor.SetExpandAllComponents(false); EditorModuleHost::ConsoleState().Visible = false; focus("###Inspector"); focus("###Assets"); }
-                        else if (view == "bookmarks") editor.ShotOpenInspectorBookmarks();
-                        else if (view == "favorites") { ImGui::ClosePopupsExceptModals(); editor.ShotSetFavoritesLocked(true); }
-                        else if (view == "console") { editor.ShotSetFavoritesLocked(false); EditorModuleHost::ConsoleState().Visible = true; focus("###Console"); }
-                        // The Game tab the way Play brings it forward: focusing the window alone left
-                        // Scene in front, so this shot showed the Scene view.
-                        else if (view == "game") editor.RequestGameTabFocus();
-                        else if (view == "settings") { editor.RequestSceneTabFocus(); editor.OpenPreferences(); }
-                        else if (view == "settings-viewport") editor.OpenSettingsCategory(false, 1);
-                        else if (view == "settings-performance") editor.OpenSettingsCategory(false, 4);
-                        else if (view == "project-settings") editor.OpenProjectSettings();
-                        else if (view == "project-tags") editor.OpenSettingsCategory(true, 1);
-                        else if (view == "project-build") editor.OpenSettingsCategory(true, 2);
-                        else if (view == "lighting") { editor.CloseSettingsWindow(); editor.SetShowLighting(true); }
-                        else if (view == "animator") {
-                            editor.SetShowLighting(false);
-                            editor.OpenAnimatorWindow("assets/Animations/Controllers/fps_body_locomotion.controller");
-                        }
-                        else if (view == "settings-sounds") { editor.SetShowAnimator(false); editor.OpenSettingsCategory(false, 7); }
-                        else if (view == "sound-board") { editor.CloseSettingsWindow(); editor.SetShowSoundBoard(true); focus("###SoundBoard"); }
-                    }
-                }
+                if (editorShot.Active()) editorShot.BeforeUi(editor, world);
                 if (editorUIVisible) { PROFILE_SCOPE("UI Editor Draw"); editor.Draw(world, assets, editorCamera, dt); }
                 else if (playing && devKeys) editor.DrawPlayModeOverlays(world); // #185 — physics panel + HUD over maximized play
                 // F6 Nav while editing: the navmesh this scene baked in its last Play (Library/NavCache/scene_<name>.txt names
@@ -4712,34 +4201,7 @@ int main(int argc, char** argv) {
                 // this frame's pointers first.
                 editorModule.SetFrameContext(&editor, &world, &assets, &editorCamera);
                 if (devKeys) editorModule.Draw(editorUIVisible, dt);
-                if (!opt.editorShotDir.empty() && opt.editorShotCurves) {
-                    static RecoilAsset curvePreview;
-                    static bool loaded = false;
-                    if (!loaded) {
-                        RecoilAsset::LoadFile(ProjectPaths::Resolve("assets/Weapons/AKS74U/AKS74U.recoil"), curvePreview);
-                        loaded = true;
-                    }
-                    ImGui::SetNextWindowPos(ImVec2(600, 120), ImGuiCond_Always);
-                    ImGui::SetNextWindowSize(ImVec2(500, 680), ImGuiCond_Always);
-                    ImGui::Begin("Recoil Curve Editor", nullptr, ImGuiWindowFlags_NoSavedSettings);
-                    ImGui::TextUnformatted("AKS-74U / PROCEDURAL RECOIL");
-                    const int recoilView=std::clamp((editorShotFrame-1)/kEditorShotFrames,0,4);
-                    if (recoilView==0) {
-                    ImGui::TextDisabled("Time in seconds / interpolation alpha");
-                    ImGui::Separator();
-                    ImGui::TextUnformatted("Pitch");
-                    CurveEditor::Options curveOptions; curveOptions.TimeMax=curvePreview.Data.Unity.SemiRotCurve.Length();
-                    CurveEditor::Draw("pitch", curvePreview.Data.Unity.SemiRotCurve.X, ImVec2(0, 150), curveOptions);
-                    ImGui::TextUnformatted("Yaw");
-                    CurveEditor::Draw("yaw", curvePreview.Data.Unity.SemiRotCurve.Y, ImVec2(0, 150), curveOptions);
-                    ImGui::TextUnformatted("Roll");
-                    CurveEditor::Draw("roll", curvePreview.Data.Unity.SemiRotCurve.Z, ImVec2(0, 150), curveOptions);
-                    } else {
-                        bool previewChanged=false; PropertyRows previewRows(150,previewChanged);
-                        RecoilAssetEditor::Draw(previewRows,curvePreview.Data,600,recoilView-1);
-                    }
-                    ImGui::End();
-                }
+                editorShot.DrawPreviewWindows();
 
                 // Staged-undo cleanup + selection-history recording (#38/#236 R2): must run after
                 // every module panel (Inspector, Hierarchy, Asset Browser, Console) has had its
@@ -4965,20 +4427,20 @@ int main(int argc, char** argv) {
                 // --perf-bench --smoke-shots <dir>: one picture of maximized play, to check what was measured.
                 static int perfMaxFrames = 0;
                 if (opt.perfBenchMode && !opt.smokeShotsDir.empty() && playMaxLocked && ++perfMaxFrames == 400) {
-                    std::vector<unsigned char> px = GrabTopDown(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight);
+                    std::vector<unsigned char> px = FrameCapture::GrabTopDown(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight);
                     for (size_t i = 3; i < px.size(); i += 4) px[i] = 255;
-                    WritePngTo(opt.smokeShotsDir, std::filesystem::path(smokeScenePaths[smokeSceneIndex]).stem().string() + "_playmax",
+                    FrameCapture::WritePngTo(opt.smokeShotsDir, std::filesystem::path(smoke.CurrentPath()).stem().string() + "_playmax",
                                gvWidth, gvHeight, px);
                 }
                 // --npc-test --smoke-shots <dir>: the Scene view on the left beside the Game view, as the editor is laid out.
                 const std::string harnessShot = npcTest ? npcTest->ShotName() : std::string();
                 if (npcTest && !opt.smokeShotsDir.empty() && !harnessShot.empty()) {
-                    std::vector<unsigned char> game = GrabTopDown(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight);
+                    std::vector<unsigned char> game = FrameCapture::GrabTopDown(gameView.GetFramebuffer().Handle(), gvWidth, gvHeight);
                     int outW = gvWidth, outH = gvHeight;
                     std::vector<unsigned char> image = std::move(game);
                     if (sceneFramebuffer.IsValid()) {
                         const int sw = sceneFramebuffer.Width(), sh = sceneFramebuffer.Height();
-                        std::vector<unsigned char> scene = GrabTopDown(sceneFramebuffer.Handle(), sw, sh);
+                        std::vector<unsigned char> scene = FrameCapture::GrabTopDown(sceneFramebuffer.Handle(), sw, sh);
                         outW = sw + 8 + gvWidth;
                         outH = std::max(sh, gvHeight);
                         std::vector<unsigned char> both((size_t)outW * outH * 4, 0);
@@ -4989,7 +4451,7 @@ int main(int argc, char** argv) {
                             std::memcpy(&both[((size_t)y * outW + sw + 8) * 4], &image[(size_t)y * gvWidth * 4], (size_t)gvWidth * 4);
                         image = std::move(both);
                     }
-                    WritePngTo(opt.smokeShotsDir, harnessShot, outW, outH, image);
+                    FrameCapture::WritePngTo(opt.smokeShotsDir, harnessShot, outW, outH, image);
                 }
                 // NPC_TEST_RECORD=<dir>: both views every other frame (30 fps of the fixed 60 Hz), for a video.
                 const std::string recordDir = npcTest ? npcTest->RecordDir() : std::string();
@@ -5001,7 +4463,7 @@ int main(int argc, char** argv) {
                         std::filesystem::create_directories(recordDir, ec);
                         auto save = [&](unsigned fbo, int w, int h, const char* stem) {
                             glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo);
-                            std::vector<unsigned char> px = GrabRegion(0, 0, w, h);
+                            std::vector<unsigned char> px = FrameCapture::GrabRegion(0, 0, w, h);
                             stbi_flip_vertically_on_write(1);
                             char name[64];
                             std::snprintf(name, sizeof name, "%s_%05d.jpg", stem, recordFrame / recordStep);
@@ -5198,7 +4660,7 @@ int main(int argc, char** argv) {
                 int shotW = shotFb.Width(), shotH = shotFb.Height();
                 if (!shotFromGame) glfwGetFramebufferSize(window.Handle(), &shotW, &shotH);
                 if (shotW > 0 && shotH > 0) {
-                    std::vector<unsigned char> shotPx = GrabTopDown(shotFromGame ? shotFb.Handle() : 0u, shotW, shotH);
+                    std::vector<unsigned char> shotPx = FrameCapture::GrabTopDown(shotFromGame ? shotFb.Handle() : 0u, shotW, shotH);
                     for (size_t i = 3; i < shotPx.size(); i += 4) shotPx[i] = 255; // the see-through window's alpha isn't the picture's
                     const std::string& shotScenePath = editor.CurrentScenePath();
                     const std::string shotScene = shotScenePath.empty() ? std::string("Untitled")
@@ -5207,25 +4669,13 @@ int main(int argc, char** argv) {
                     const std::time_t shotTime = std::time(nullptr);
                     std::strftime(shotStamp, sizeof(shotStamp), "%Y%m%d_%H%M%S", std::localtime(&shotTime));
                     const std::string shotOut =
-                        WritePngTo(ProjectPaths::Resolve("screenshots"), shotScene + "_" + shotStamp, shotW, shotH, shotPx);
+                        FrameCapture::WritePngTo(ProjectPaths::Resolve("screenshots"), shotScene + "_" + shotStamp, shotW, shotH, shotPx);
                     Log::Info("Screenshot saved: " + ProjectPaths::Relativize(shotOut));
                     EditorSound::Play(EditorSound::Event::Screenshot);
                 }
             }
             {
-                // --editor-shot: the whole window, once each view has settled.
-                if (!opt.editorShotDir.empty() && editorShotFrame > 0 && editorShotFrame % kEditorShotFrames == 0) {
-                    const int step = editorShotFrame / kEditorShotFrames - 1;
-                    if (step < (int)std::size(kEditorShots)) {
-                        int w = 0, h = 0;
-                        glfwGetFramebufferSize(window.Handle(), &w, &h);
-                        std::vector<unsigned char> flipped = GrabTopDown(0, w, h);
-                        for (size_t i = 3; i < flipped.size(); i += 4) flipped[i] = 255;
-                        const std::string out = WritePngTo(opt.editorShotDir, kEditorShots[step], w, h, flipped);
-                        std::cout << "[EditorShot] " << out << std::endl;
-                    }
-                    if (step + 1 >= (int)std::size(kEditorShots)) { exitApproved = true; window.SetShouldClose(true); }
-                }
+                editorShot.AfterFrame(window, exitApproved);
                 editor.SetHideOverlaysThisFrame(false);
             }
             // --editor-tests: a Shot() step's capture of this finished frame.
@@ -5302,202 +4752,7 @@ int main(int argc, char** argv) {
                     editorCamera.Pitch = pitch;
                 }
             }
-            if (opt.smokeTestMode && smokeSceneActive) {
-                ++smokeFramesRendered;
-                if (!opt.smokeShotsDir.empty() && !opt.perfBenchMode && !shotCameras.empty()) {
-                    // TARTARUS_OPEN_ALL=1: every door, drawer and lid shown open, to check each one's hinge.
-                    static const bool openAll = Env::Flag(Env::Var::OpenAll);
-                    if (openAll && smokeFramesRendered == 1) Openable::SetAll(world, 1.0f);
-                    const int shot = (smokeFramesRendered - kShotCameraStart) / kShotCameraSettle;
-                    const bool captureFrame = smokeFramesRendered >= kShotCameraStart &&
-                                              (smokeFramesRendered - kShotCameraStart) % kShotCameraSettle == 0 &&
-                                              shot < (int)shotCameras.size() && sceneFramebuffer.IsValid();
-                    // Decal maps and substrates decode in the background: a fixed frame count caught the hallway's
-                    // peeling paint with or without its concrete depending on how the decodes raced. Each capture
-                    // waits (on the same pose) until they're in, up to kShotStreamHold frames per scene.
-                    static int shotHold = 0;
-                    if (smokeFramesRendered == 1) shotHold = 0;
-                    constexpr int kShotStreamHold = 3000; // a big pack (500 maps) takes a few thousand frames of async uploads
-                    const bool hold = captureFrame && (decalSystem.Streaming() || assets.AsyncInFlight() > 0) && shotHold < kShotStreamHold;
-                    if (hold) {
-                        ++shotHold;
-                        --smokeFramesRendered; // this frame again next time round
-                    } else if (captureFrame && shotHold >= kShotStreamHold && (decalSystem.Streaming() || assets.AsyncInFlight() > 0)) {
-                        Log::Warn("Smoke shots: decal textures still streaming after " + std::to_string(kShotStreamHold) +
-                                  " held frames - captured anyway.");
-                    }
-                    if (captureFrame && !hold) {
-                        const int w = sceneFramebuffer.Width(), h = sceneFramebuffer.Height();
-                        const std::string stem = std::filesystem::path(smokeScenePaths[smokeSceneIndex]).stem().string();
-                        WritePngTo(opt.smokeShotsDir, stem + "_" + shotCameras[shot].Name, w, h, GrabTopDown(sceneFramebuffer.Handle(), w, h));
-                    }
-                    // The pose for the NEXT frame: each camera holds from the previous capture up to its own.
-                    const int next = smokeFramesRendered + 1;
-                    const int pose = std::clamp((next - 1 - kShotCameraStart) / kShotCameraSettle + (next > kShotCameraStart ? 1 : 0), 0,
-                                                (int)shotCameras.size() - 1);
-                    editorCamera.Position = shotCameras[pose].Position;
-                    editorCamera.Yaw = shotCameras[pose].Yaw;
-                    editorCamera.Pitch = shotCameras[pose].Pitch;
-                    // TARTARUS_SHOT_FOV=<vertical degrees>: match another renderer's camera (Unity reference shots)
-                    if (Env::IsSet(Env::Var::ShotFov)) editorCamera.Fov = Env::Float(Env::Var::ShotFov, editorCamera.Fov);
-                } else if (!opt.smokeShotsDir.empty() && !opt.perfBenchMode) {
-                    // Frames 40 / 70 / 100 are captured after 30+ frames at each pose, so
-                    // temporally accumulated effects have converged; the pose for the NEXT frame
-                    // is set here too.
-                    struct ShotPose { int CaptureFrame; float Yaw, Pitch; };
-                    static const ShotPose kPoses[3] = {{40, 180.0f, 5.0f}, {70, 0.0f, 10.0f}, {100, 90.0f, 50.0f}};
-                    for (int p = 0; p < 3; ++p) {
-                        if (smokeFramesRendered != kPoses[p].CaptureFrame || !sceneFramebuffer.IsValid()) continue;
-                        const int w = sceneFramebuffer.Width(), h = sceneFramebuffer.Height();
-                        const std::string stem = std::filesystem::path(smokeScenePaths[smokeSceneIndex]).stem().string();
-                        WritePngTo(opt.smokeShotsDir, stem + "_" + std::to_string(p), w, h, GrabTopDown(sceneFramebuffer.Handle(), w, h));
-                    }
-                    const int next = smokeFramesRendered + 1;
-                    const ShotPose& pose = kPoses[next <= 40 ? 0 : next <= 70 ? 1 : 2];
-                    editorCamera.Position = glm::vec3(0.0f, 2.0f, 12.0f);
-                    editorCamera.Yaw = pose.Yaw;
-                    editorCamera.Pitch = pose.Pitch;
-                }
-                if (npcTest) {
-                    glm::vec3 p;
-                    float yaw, pitch;
-                    if (npcTest->SceneCamera(p, yaw, pitch)) {
-                        editorCamera.Position = p;
-                        editorCamera.Yaw = yaw;
-                        editorCamera.Pitch = pitch;
-                    }
-                }
-                // --npc-test --perf-sample: a CPU profile of the fight itself (the squad up and shooting).
-                if (npcTest && opt.perfSample) {
-                    static bool sampling = false;
-                    if (smokeFramesRendered == 900) { SamplingProfiler::Start(); sampling = true; }
-                    if (sampling && (smokeFramesRendered >= kSmokeTestFrames - 1 || npcTest->Done())) {
-                        SamplingProfiler::Stop();
-                        SamplingProfiler::Report("npc-test", 80);
-                        sampling = false;
-                    }
-                }
-                // --perf-bench <scene> --npc-test <scenario>: the combat bench - the scripted fight in the Game view,
-                // maximized, every Play frame measured (stutters included: TARTARUS_PERF_WARMUP frames skipped, 100 by
-                // default), one report when the fight is over.
-                if (opt.perfBenchMode && npcTest) {
-                    const auto now = std::chrono::steady_clock::now();
-                    const double frameMs = std::chrono::duration<double, std::milli>(now - perfLastFrameEnd).count();
-                    perfLastFrameEnd = now;
-                    SamplingProfiler::EndFrame(frameMs);
-                    static int playFrame = 0;
-                    static bool reported = false;
-                    if (playing && !playMaximized) setMaximized(true);
-                    if (!reported && playing && playMaximized && ++playFrame > kPerfBenchWarmup) {
-                        perfFrame.Sum += frameMs; perfFrame.Max = std::max(perfFrame.Max, frameMs); ++perfFrame.N;
-                        for (const Profiler::Entry& e : Profiler::GetLastFrame()) perfAdd(perfCpu, e.Name, e.Milliseconds);
-                        for (const Profiler::Entry& e : Profiler::GetLastFrameGpu()) perfAdd(perfGpu, e.Name, e.Milliseconds);
-                        perfRecordFrame(frameMs, playFrame);
-                    }
-                    if (!reported && perfFrame.N > 0 && (smokeFramesRendered >= kSmokeTestFrames - 1 || npcTest->Done())) {
-                        reported = true;
-                        std::printf("[PerfBench] %s (combat)  frames=%d  avg=%.3f ms (%.1f fps)  worst=%.3f ms  draws=%d tris=%d  window=%dx%d\n",
-                                    std::filesystem::path(smokeScenePaths[smokeSceneIndex]).filename().string().c_str(), perfFrame.N,
-                                    perfFrame.Sum / perfFrame.N, perfFrame.Sum > 0.0 ? 1000.0 * perfFrame.N / perfFrame.Sum : 0.0,
-                                    perfFrame.Max, editor.GetRenderStats().DrawCalls, editor.GetRenderStats().Triangles, window.GetWidth(), window.GetHeight());
-                        perfReportHitches("combat");
-                        for (auto* v : {&perfCpu, &perfGpu}) {
-                            std::sort(v->begin(), v->end(), [](const auto& a, const auto& b) { return a.second.Sum > b.second.Sum; });
-                            for (const auto& [name, acc] : *v)
-                                std::printf("[PerfBench]   %s %-34s avg=%8.3f ms  max=%8.3f ms\n", v == &perfCpu ? "CPU" : "GPU",
-                                            name.c_str(), acc.Sum / std::max(perfFrame.N, 1), acc.Max);
-                        }
-                        std::fflush(stdout);
-                        perfCpu.clear(); perfGpu.clear(); perfFrame = {};
-                    }
-                } else if (opt.perfBenchMode) {
-                    const auto now = std::chrono::steady_clock::now();
-                    const double frameMs = std::chrono::duration<double, std::milli>(now - perfLastFrameEnd).count();
-                    perfLastFrameEnd = now;
-                    SamplingProfiler::EndFrame(frameMs);
-                    const int phaseFrame = (smokeFramesRendered - 1) % kPerfPhaseFrames + 1;
-                    if (opt.perfSample && phaseFrame == kPerfBenchWarmup) SamplingProfiler::Start();
-                    if (phaseFrame > kPerfBenchWarmup) {
-                        perfFrame.Sum += frameMs; perfFrame.Max = std::max(perfFrame.Max, frameMs); ++perfFrame.N;
-                        for (const Profiler::Entry& e : Profiler::GetLastFrame()) perfAdd(perfCpu, e.Name, e.Milliseconds);
-                        for (const Profiler::Entry& e : Profiler::GetLastFrameGpu()) perfAdd(perfGpu, e.Name, e.Milliseconds);
-                        perfRecordFrame(frameMs, phaseFrame);
-                    }
-                    if (phaseFrame == kPerfPhaseFrames) {
-                        std::printf("[PerfBench] %s (%s)  frames=%d  avg=%.3f ms (%.1f fps)  worst=%.3f ms  draws=%d tris=%d  window=%dx%d\n",
-                                    std::filesystem::path(smokeScenePaths[smokeSceneIndex]).filename().string().c_str(),
-                                    !playing ? "edit" : playMaximized ? "play-max" : "play", perfFrame.N, perfFrame.N ? perfFrame.Sum / perfFrame.N : 0.0,
-                                    perfFrame.Sum > 0.0 ? 1000.0 * perfFrame.N / perfFrame.Sum : 0.0,
-                                    perfFrame.Max, editor.GetRenderStats().DrawCalls, editor.GetRenderStats().Triangles, window.GetWidth(), window.GetHeight());
-                        // Every texture this process has uploaded so far (the editor's own icons included), mips included.
-                        std::printf("[PerfBench]   textures=%d  %.1f MiB on the GPU\n", TextureLoadStats::Get().Count,
-                                    TextureLoadStats::Get().GpuBytes / (1024.0 * 1024.0));
-                        for (auto* v : {&perfCpu, &perfGpu}) {
-                            std::sort(v->begin(), v->end(), [](const auto& a, const auto& b) { return a.second.Sum > b.second.Sum; });
-                            for (const auto& [name, acc] : *v)
-                                std::printf("[PerfBench]   %s %-34s avg=%8.3f ms  max=%8.3f ms\n", v == &perfCpu ? "CPU" : "GPU",
-                                            name.c_str(), acc.Sum / std::max(perfFrame.N, 1), acc.Max);
-                        }
-                        perfReportHitches(!playing ? "edit" : playMaximized ? "play-max" : "play");
-                        std::fflush(stdout);
-                        if (opt.perfSample) SamplingProfiler::Report(!playing ? "edit" : playMaximized ? "play-max" : "play", 60);
-                        perfCpu.clear(); perfGpu.clear(); perfFrame = {};
-                        if (smokeFramesRendered < kSmokeTestFrames) {
-                            if (!playing) togglePlay();
-                            else if (!playMaximized) setMaximized(true);
-                        }
-                    }
-                }
-                if (smokeFramesRendered >= kSmokeTestFrames) {
-                    int newErrors    = GLDebug::ErrorCount() - smokeBaselineGlErrors;
-                    int newLogErrors = Log::CountOf(LogLevel::Error) - smokeBaselineLogErrors;
-                    int drawCalls    = editor.GetRenderStats().DrawCalls;
-                    // A scene is only viable end-to-end if it loaded, introduced no new GL or
-                    // log errors across load+render, and actually drew something (audit #356).
-                    // Leave play mode before scoring / advancing, so the scene snapshot is
-                    // restored and the next scene loads from a clean editor state.
-                    if (playing) { togglePlay(); ++smokePlayCycles; }
-
-                    std::string cause;
-                    if (!smokeSceneLoadOk)   cause += "Load() failed; ";
-                    if (newLogErrors > 0)    cause += std::to_string(newLogErrors) + " new log error(s); ";
-                    if (npcTest) {
-                        if (!npcTest->Done()) cause += "npc test didn't finish; ";
-                        if (npcTest->Failures() > 0)
-                            cause += std::to_string(npcTest->Failures()) + " of " + std::to_string(npcTest->Checks()) + " npc check(s) failed; ";
-                        std::cout << "[NpcTest] " << npcTest->Checks() << " checks, " << npcTest->Failures() << " failure(s)" << std::endl;
-                    }
-                    if (newErrors > 0)       cause += std::to_string(newErrors) + " new GL error(s); ";
-                    if (drawCalls <= 0)      cause += "zero draw calls; ";
-                    // A smoke_play* scene must actually have completed its Play -> Stop cycles.
-                    if (smokePlayScene && smokePlayCycles < 2)
-                        cause += "play-mode cycles incomplete (" + std::to_string(smokePlayCycles) + "/2); ";
-                    bool pass = cause.empty();
-                    const std::string& path = smokeScenePaths[smokeSceneIndex];
-                    memSnapshot(std::to_string(smokeSceneIndex + 1) + "_" + std::filesystem::path(path).stem().string());
-                    smokeResults.push_back({path, smokeFramesRendered, newErrors, newLogErrors,
-                                            drawCalls, smokeSceneLoadOk, pass, cause});
-                    // #354: which ShaderAsset variant keys drew this scene (0 = default program).
-                    std::string variants;
-                    for (const auto& [key, n] : SceneRendererDebug::VariantDrawCounts()) {
-                        char vbuf[48];
-                        std::snprintf(vbuf, sizeof(vbuf), " 0x%02x=%llu", key, (unsigned long long)n);
-                        variants += vbuf;
-                    }
-                    std::cout << "[SmokeTest] " << (pass ? "PASS" : "FAIL") << "  "
-                              << std::filesystem::path(path).filename().string()
-                              << "  frames=" << smokeFramesRendered
-                              << " loadOk=" << (smokeSceneLoadOk ? 1 : 0)
-                              << " newGlErrors=" << newErrors
-                              << " newLogErrors=" << newLogErrors
-                              << " drawCalls=" << drawCalls
-                              << (smokePlayScene ? ("  playCycles=" + std::to_string(smokePlayCycles)) : "")
-                              << (variants.empty() ? "" : ("  variants:" + variants))
-                              << (pass ? "" : ("  cause: " + cause)) << std::endl;
-                    ++smokeSceneIndex;
-                    smokeSceneActive = false;
-                }
-            }
+            if (opt.smokeTestMode) smoke.EndFrame();
         }
         } catch (...) {
             // #89 — an exception escaping the frame used to unwind straight to main()'s outer
@@ -5520,26 +4775,7 @@ int main(int argc, char** argv) {
             return code;
         }
         if (opt.smokeTestMode) {
-            // Deliberately skip the normal exit path entirely (no play-mode revert, no
-            // save-on-exit) — smoke-tested scenes were never really "open" from the user's
-            // point of view and must not get written back to disk.
-            std::cout << "\n[SmokeTest] ==== Summary ====" << std::endl;
-            // No scenes discovered is itself a failure — an empty scene folder must not read
-            // as a green run (audit #356 / TEST-101).
-            bool allPassed = !smokeResults.empty() && smokeScenePaths.size() == smokeResults.size();
-            for (const auto& r : smokeResults) {
-                std::cout << "[SmokeTest] " << (r.pass ? "PASS" : "FAIL") << "  "
-                          << std::filesystem::path(r.scenePath).filename().string()
-                          << "  frames=" << r.frames
-                          << " loadOk=" << (r.loadOk ? 1 : 0)
-                          << " newGlErrors=" << r.newGlErrors
-                          << " newLogErrors=" << r.newLogErrors
-                          << " drawCalls=" << r.drawCalls
-                          << (r.pass ? "" : ("  cause: " + r.cause)) << std::endl;
-                if (!r.pass) allPassed = false;
-            }
-            std::cout << "[SmokeTest] " << smokeResults.size() << " scene(s) - "
-                      << (allPassed ? "ALL PASSED" : "FAILURES DETECTED") << std::endl;
+            const bool allPassed = smoke.Summary();
             editor.Shutdown();
             editorModule.Shutdown();
             AppAudioMuter::Shutdown();
