@@ -10,6 +10,7 @@
 #include "Player.h"
 #include "TimeService.h"
 #include "World.h"
+#include "Core/Env.h"
 
 #include <algorithm>
 #include <cmath>
@@ -49,7 +50,7 @@ constexpr float kSettle = 0.5f; // the camera goes in place this long before its
 // wall (32 a frame) and 400 blood spatters and pools (25 a frame, past the 1024-stain cap) from kFireAt on.
 bool Stress() {
 #pragma warning(suppress : 4996)
-    static const bool on = [] { const char* v = std::getenv("TARTARUS_DECAL_STRESS"); return v && *v && *v != '0'; }();
+    static const bool on = Env::Flag(Env::Var::DecalStress);
     return on;
 }
 

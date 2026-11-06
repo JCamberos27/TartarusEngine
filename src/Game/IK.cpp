@@ -2,6 +2,7 @@
 
 #include "Components.h"
 #include "Model.h"
+#include "Core/Env.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/quaternion.hpp>
@@ -640,12 +641,8 @@ FootSlideOutput FootSlide::Step(const FootSlideSettings& set, const FootSlideInp
 
 int FootSlideProbeMode() {
     static const int mode = [] {
-        char* e = nullptr;
-        size_t n = 0;
-        _dupenv_s(&e, &n, "TARTARUS_FOOT_SLIDE_PROBE");
-        const int m = e && *e ? (std::atoi(e) != 0 ? 1 : 0) : -1;
-        std::free(e);
-        return m;
+        if (!Env::IsSet(Env::Var::FootSlideProbe)) return -1;
+        return Env::Int(Env::Var::FootSlideProbe, 0) != 0 ? 1 : 0;
     }();
     return mode;
 }

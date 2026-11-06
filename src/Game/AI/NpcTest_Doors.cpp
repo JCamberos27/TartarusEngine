@@ -9,6 +9,7 @@
 #include "PhysicsWorld.h"
 #include "Player.h"
 #include "World.h"
+#include "Core/Env.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -91,8 +92,7 @@ void NpcTest::DoorsSetUp(World& world) {
             m_DDoors.push_back(d);
         }
         std::sort(m_DDoors.begin(), m_DDoors.end(), [](const DoorSpot& a, const DoorSpot& b) { return a.Name < b.Name; });
-#pragma warning(suppress : 4996)
-        if (const char* only = std::getenv("NPC_TEST_DOORS_ONLY"); only && *only) // a name fragment: just those doors
+        if (const std::string only = Env::Str(Env::Var::NpcTestDoorsOnly); !only.empty()) // a name fragment: just those doors
             m_DDoors.erase(std::remove_if(m_DDoors.begin(), m_DDoors.end(),
                                           [&](const DoorSpot& d) { return d.Name.find(only) == std::string::npos; }),
                            m_DDoors.end());
@@ -103,9 +103,7 @@ void NpcTest::DoorsSetUp(World& world) {
     }
     std::sort(m_DDoors.begin(), m_DDoors.end(), [](const DoorSpot& a, const DoorSpot& b) { return a.Name < b.Name; });
     Openable::SetAll(world, 1.0f);
-#pragma warning(suppress : 4996)
-    const char* trace = std::getenv("NPC_TEST_DOORS_TRACE");
-    m_DTrace = trace && *trace && *trace != '0';
+    m_DTrace = Env::Flag(Env::Var::NpcTestDoorsTrace);
     std::printf("[NpcTest] doors: %zu doors, all opened\n", m_DDoors.size());
 }
 

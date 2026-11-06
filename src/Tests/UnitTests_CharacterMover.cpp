@@ -7,6 +7,7 @@
 #include "../Core/ProjectSettings.h"
 #include "../Game/Components.h"
 #include "../Game/World.h"
+#include "../Core/Env.h"
 #include <glm/gtc/quaternion.hpp>
 #include <algorithm>
 #include <cmath>
@@ -70,7 +71,7 @@ struct MoverWorld {
             grounded = f.Grounded;
             if (each) each(f);
 #pragma warning(suppress : 4996)
-            if (std::getenv("MOVER_TRACE")) { const glm::vec3 p = Feet(); std::printf("[MoverTrace] %d feet %.3f %.3f %.3f v %.2f %.2f %.2f g %d flags %u step %.3f\n", i, p.x, p.y, p.z, f.Velocity.x, f.Velocity.y, f.Velocity.z, (int)f.Grounded, f.Flags, f.StepDelta); }
+            if (Env::Flag(Env::Var::MoverTrace)) { const glm::vec3 p = Feet(); std::printf("[MoverTrace] %d feet %.3f %.3f %.3f v %.2f %.2f %.2f g %d flags %u step %.3f\n", i, p.x, p.y, p.z, f.Velocity.x, f.Velocity.y, f.Velocity.z, (int)f.Grounded, f.Flags, f.StepDelta); }
         }
     }
 };

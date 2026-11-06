@@ -16,6 +16,7 @@
 #include "SceneRenderer.h"
 #include "SceneSerializer.h"
 #include "World.h"
+#include "Core/Env.h"
 
 #include <glm/gtc/quaternion.hpp>
 
@@ -303,14 +304,7 @@ bool NpcDirector::Start(World& world, AssetLibrary& assets, const FirstPersonCon
         s.Brain = std::clamp(c.Brain, 0, 1);
         s.OutfitSeed = std::clamp(c.OutfitSeed, 0, 100000);
         // NPC_TEST_BARE=1 (--npc-test): every soldier bare, the animation and the skinning seen without clothing.
-        static const bool allBare = [] {
-            char* e = nullptr;
-            size_t n = 0;
-            _dupenv_s(&e, &n, "NPC_TEST_BARE");
-            const bool on = e && *e && *e != '0';
-            std::free(e);
-            return on;
-        }();
+        static const bool allBare = Env::Flag(Env::Var::NpcTestBare);
         s.Bare = c.Bare || allBare;
         const auto* order = reg.try_get<OrderComponent>(e);
         found.push_back({order ? order->Value : (int)entt::to_integral(e), s});

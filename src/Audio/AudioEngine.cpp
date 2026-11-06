@@ -6,6 +6,7 @@
 #include "LoudnessMeter.h"
 #include "MasterLimiter.h"
 #include "miniaudio.h"
+#include "Core/Env.h"
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -451,18 +452,7 @@ bool InitImpl(bool offline, int rate) {
     if (s_Initialized) return true;
     ma_engine_config cfg = ma_engine_config_init();
     std::string capture;
-#ifdef _WIN32
-    {
-        char* env = nullptr;
-        size_t len = 0;
-        if (_dupenv_s(&env, &len, "AUDIO_CAPTURE") == 0 && env) {
-            capture = env;
-            std::free(env);
-        }
-    }
-#else
-    if (const char* env = std::getenv("AUDIO_CAPTURE")) capture = env;
-#endif
+    if (Env::IsSet(Env::Var::AudioCapture)) capture = Env::Str(Env::Var::AudioCapture);
     if (offline) {
         cfg.noDevice = MA_TRUE;
         cfg.channels = 2;
@@ -493,18 +483,7 @@ bool InitImpl(bool offline, int rate) {
                       hz ? 1000.0 * period / hz : 0.0, hz, buffer, hz ? 1000.0 * buffer / hz : 0.0, ma_get_backend_name(dev->pContext->backend));
         Log::Info(line);
     }
-#ifdef _WIN32
-    {
-        char* env = nullptr;
-        size_t len = 0;
-        if (_dupenv_s(&env, &len, "TARTARUS_MUTE") == 0 && env) {
-            s_EnvMuted = *env && *env != '0';
-            std::free(env);
-        }
-    }
-#else
-    if (const char* env = std::getenv("TARTARUS_MUTE")) s_EnvMuted = *env && *env != '0';
-#endif
+    if (Env::IsSet(Env::Var::Mute)) s_EnvMuted = Env::Flag(Env::Var::Mute);
     ApplyMasterVolume(s_Engine);
     s_BusesReady = true;
     for (int b = 0; b < AudioEngine::kBusCount; ++b) {

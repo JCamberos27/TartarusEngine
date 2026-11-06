@@ -1,4 +1,5 @@
 #include "Window.h"
+#include "Core/Env.h"
 #include "Input.h"
 #include "InputMap.h"
 #include "PostProcessVolume.h"
@@ -536,10 +537,18 @@ int main(int argc, char** argv) {
     // and tell the user, instead of vanishing with a bare exit 139 (#148).
     CrashHandler::Install();
 
-    // What the command line asks for (App/LaunchOptions.h); --project applies as it is read.
-    LaunchOptions opt = ParseLaunchOptions(argc, argv);
+    // What the command line asks for (App/LaunchOptions.h); --project applies when the parse succeeds.
+    LaunchOptions opt;
+    if (std::string argError; !ParseLaunchOptions(argc, argv, opt, argError)) {
+        std::cerr << "TartarusEngine: " << argError << "\nRun TartarusEngine --help for the options." << std::endl;
+        return 2;
+    }
+    if (opt.mode == LaunchMode::Help) {
+        std::cout << LaunchHelpText() << std::flush;
+        return 0;
+    }
     // The tools that run and exit before anything is set up (App/CliTools.h): --unit-tests, --model-report, ...
-    if (const int code = RunEarlyCliTool(argc, argv); code >= 0) return code;
+    if (const int code = RunEarlyCliTool(opt, argv[0]); code >= 0) return code;
     // --smoke-test is non-interactive: no splash, and fatal errors go to stderr +
     // a nonzero exit instead of a modal MessageBox that a headless/CI desktop never dismisses
     // (audit BUG-102).
@@ -552,16 +561,9 @@ int main(int argc, char** argv) {
         // (TartarusEngine-Test-<name>), so runs from different checkouts at the same time don't
         // overwrite each other's prefs. Letters, digits, '-' and '_' only.
         std::string scratchName = "TartarusEngine-Test";
-        {
-            char* inst = nullptr;
-            size_t instLen = 0;
-            if (_dupenv_s(&inst, &instLen, "TARTARUS_EDITOR_TEST_INSTANCE") == 0 && inst && inst[0]) {
-                const std::string s(inst);
-                if (std::all_of(s.begin(), s.end(), [](unsigned char ch) { return std::isalnum(ch) || ch == '-' || ch == '_'; }))
-                    scratchName += "-" + s;
-            }
-            free(inst);
-        }
+        if (const std::string s = Env::Str(Env::Var::EditorTestInstance);
+            !s.empty() && std::all_of(s.begin(), s.end(), [](unsigned char ch) { return std::isalnum(ch) || ch == '-' || ch == '_'; }))
+            scratchName += "-" + s;
         UserPaths::SetAppName(scratchName);
         const fs::path scratch = UserPaths::Root();
         if (scratch.filename() != scratchName) {
@@ -582,13 +584,9 @@ int main(int argc, char** argv) {
         // UserPaths resolves its root once, on first use, so the real folder is found from
         // LOCALAPPDATA here rather than through UserPaths::Root() (which would pin the real one).
         namespace fs = std::filesystem;
-        char* appData = nullptr;
-        size_t appDataLen = 0;
         fs::path real;
-        if (_dupenv_s(&appData, &appDataLen, "LOCALAPPDATA") == 0 && appData) {
+        if (const std::string appData = Env::Str(Env::Var::LocalAppData); !appData.empty())
             real = fs::path(appData) / "TartarusEngine";
-            std::free(appData);
-        }
         UserPaths::SetAppName("TartarusEngine-Shot");
         const fs::path scratch = UserPaths::Root();
         std::error_code eqEc;
@@ -604,23 +602,14 @@ int main(int argc, char** argv) {
 
     // #148: `--crash-test <kind>` deliberately crashes through one path so the handler (dump,
     // stderr line, dialog) can be checked: av | overflow | abort | purecall | invalidparam | terminate.
-    for (int i = 1; i + 1 < argc; ++i) {
-        if (std::string(argv[i]) != "--crash-test") continue;
-        CrashHandler::SetInteractive(false);
-        for (int j = 1; j < argc; ++j)
-            if (std::string(argv[j]) == "--crash-dialog") CrashHandler::SetInteractive(true);
-        CrashHandler::CrashForTest(argv[i + 1]);
+    if (opt.mode == LaunchMode::CrashTest) {
+        CrashHandler::SetInteractive(opt.crashDialog);
+        CrashHandler::CrashForTest(opt.crashTestKind.c_str());
     }
     // #148: `--crash-test-in-editor <kind>` crashes the same way, but a few seconds into a normal
     // editor session with the scene marked dirty, to exercise the crash-time recovery save.
-    std::string crashTestInEditor;
-    for (int i = 1; i + 1 < argc; ++i)
-        if (std::string(argv[i]) == "--crash-test-in-editor") crashTestInEditor = argv[i + 1];
-    if (!crashTestInEditor.empty()) {
-        CrashHandler::SetInteractive(false);
-        for (int j = 1; j < argc; ++j)
-            if (std::string(argv[j]) == "--crash-dialog") CrashHandler::SetInteractive(true);
-    }
+    const std::string crashTestInEditor = opt.crashTestInEditor;
+    if (!crashTestInEditor.empty()) CrashHandler::SetInteractive(opt.crashDialog);
 
     // Resolve shipped engine assets (shaders, fonts, branding) relative to the executable, not
     // the working directory, so a launch from the repo root or an unrelated CWD still finds
@@ -658,8 +647,8 @@ int main(int argc, char** argv) {
         EditorSettings::Load();
         // TARTARUS_EDITOR_TEST_SCALE=1 (with TARTARUS_EDITOR_TEST_SIZE=1044x788) reproduces CI's
         // layout on a high-DPI desktop. Only the tests' scratch prefs are changed.
-        if (const char* sc = std::getenv("TARTARUS_EDITOR_TEST_SCALE"); sc && opt.editorTestsMode && std::atof(sc) > 0.0)
-            EditorSettings::Get().UiScaleOverride = (float)std::atof(sc);
+        if (const float sc = Env::Float(Env::Var::EditorTestScale, 0.0f); opt.editorTestsMode && sc > 0.0f)
+            EditorSettings::Get().UiScaleOverride = sc;
         // A benchmark measures native resolution, so its
         // numbers stay comparable from run to run and machine to machine.
         // Glass is the default theme now, but the smoke tests and benchmarks keep the lighter
@@ -690,14 +679,7 @@ int main(int argc, char** argv) {
         // screenshot run so its alpha can be checked.
         bool seeThroughWindow = !playerMode && !headless && EditorSettings::Get().EditorThemeId == 1 &&
                                 EditorSettings::Get().GlassSeeThroughWindow && opt.editorShotDir.empty();
-        {
-            char* forced = nullptr;
-            size_t forcedLen = 0;
-            if (_dupenv_s(&forced, &forcedLen, "TARTARUS_SEE_THROUGH") == 0 && forced) {
-                seeThroughWindow = !playerMode && !headless && forced[0] == '1';
-                std::free(forced);
-            }
-        }
+        if (Env::IsSet(Env::Var::SeeThrough)) seeThroughWindow = !playerMode && !headless && Env::Flag(Env::Var::SeeThrough);
         Window window(1280, 720, playerMode ? playerCfg.ProductName : std::string("Tartarus Engine"), seeThroughWindow);
         // #174 - the product's own icon, if the build was given one. The exe carries no icon of
         // its own, so without one Windows shows its default.
@@ -1298,13 +1280,10 @@ int main(int argc, char** argv) {
             } else if (!opt.editorShotDir.empty() || opt.editorTestsMode) {
                 // TARTARUS_EDITOR_TEST_SIZE=WxH sizes the test window alone (e.g. 1044x788, CI's runner).
                 int testW = opt.perfResW > 0 ? opt.perfResW : 1920, testH = opt.perfResW > 0 ? opt.perfResH : 1080;
-                char* size = nullptr;
-                size_t sizeLen = 0;
-                if (_dupenv_s(&size, &sizeLen, "TARTARUS_EDITOR_TEST_SIZE") == 0 && size) {
+                if (const std::string size = Env::Str(Env::Var::EditorTestSize); !size.empty()) {
                     int w = 0, h = 0;
-                    if (sscanf_s(size, "%dx%d", &w, &h) == 2 && w > 0 && h > 0) { testW = w; testH = h; }
+                    if (sscanf_s(size.c_str(), "%dx%d", &w, &h) == 2 && w > 0 && h > 0) { testW = w; testH = h; }
                 }
-                std::free(size);
                 glfwRestoreWindow(window.Handle());
                 glfwSetWindowSize(window.Handle(), testW, testH);
                 // GLFW adds the OS frame to reach that client size, but the custom frame makes the
@@ -1321,11 +1300,7 @@ int main(int argc, char** argv) {
             // harness drops OS input either way, and a shown window's back buffer is always defined
             // for its screenshots.
             if (opt.editorTestsMode) {
-                char* show = nullptr;
-                size_t showLen = 0;
-                const bool keepShown = _dupenv_s(&show, &showLen, "TARTARUS_EDITOR_TEST_SHOW") == 0 && show && show[0] == '1';
-                std::free(show);
-                if (!keepShown) glfwHideWindow(window.Handle());
+                if (!Env::Flag(Env::Var::EditorTestShow)) glfwHideWindow(window.Handle());
             }
         }
         LayerRegistry::Load(); // LayerComponent slot names (#236 A1)
@@ -1815,19 +1790,12 @@ int main(int argc, char** argv) {
         // --perf-bench measures each scene twice: kPerfPhaseFrames in edit mode, then as many in Play.
         constexpr int kPerfPhaseFrames = 600;
         // Frames skipped at the start of each phase. TARTARUS_PERF_WARMUP=0 keeps them, to measure first-use hitches.
-        const int kPerfBenchWarmup = [] {
-            char* e = nullptr;
-            size_t n = 0;
-            int frames = 100;
-            if (_dupenv_s(&e, &n, "TARTARUS_PERF_WARMUP") == 0 && e && *e) frames = std::max(0, std::atoi(e));
-            std::free(e);
-            return frames;
-        }();
+        const int kPerfBenchWarmup = std::max(0, Env::Int(Env::Var::PerfWarmup, 100));
         // --smoke-shots with TARTARUS_SHOT_CAMERAS="name:x,y,z,yaw,pitch;...": those Scene-view poses instead of the
         // three fixed ones, each saved as <scene>_<name>.png after 30 frames on it (an asset gallery, a set dressing).
         struct ShotCamera { std::string Name; glm::vec3 Position; float Yaw, Pitch; };
         std::vector<ShotCamera> shotCameras;
-        if (const char* cams = std::getenv("TARTARUS_SHOT_CAMERAS"); cams && !opt.smokeShotsDir.empty()) {
+        if (const std::string cams = Env::Str(Env::Var::ShotCameras); !cams.empty() && !opt.smokeShotsDir.empty()) {
             std::stringstream all(cams);
             std::string item;
             while (std::getline(all, item, ';')) {
@@ -1840,14 +1808,14 @@ int main(int argc, char** argv) {
             }
         }
         // TARTARUS_SHOT_START=<frames>: first capture frame (default 40); big packs need longer for their maps to decode.
-        const int kShotCameraStart = [] { const char* e = std::getenv("TARTARUS_SHOT_START"); return e ? std::max(1, std::atoi(e)) : 40; }();
+        const int kShotCameraStart = Env::IsSet(Env::Var::ShotStart) ? std::max(1, Env::Int(Env::Var::ShotStart, 0)) : 40;
         constexpr int kShotCameraSettle = 30;
         const int kSmokeTestFrames = opt.npcTestMode ? 60 * 60 * 6 : opt.perfBenchMode ? 3 * kPerfPhaseFrames
                                    : !shotCameras.empty() ? kShotCameraStart + kShotCameraSettle * (int)shotCameras.size() + 1 : 100;
         // TARTARUS_MEM_REPORT=<dir>: a memory snapshot (MemReport) before the first scene and after each one.
-        const char* const memReportDir = std::getenv("TARTARUS_MEM_REPORT");
+        const std::string memReportDir = Env::Str(Env::Var::MemReport);
         auto memSnapshot = [&](const std::string& label) {
-            if (!memReportDir) return;
+            if (memReportDir.empty()) return;
             std::vector<const Model*> ms;
             for (const auto& m : assets.Models()) ms.push_back(m.get());
             for (auto [e, rc] : world.Registry.view<RenderableComponent>().each())
@@ -1965,8 +1933,8 @@ int main(int argc, char** argv) {
                                                               : opt.npcTestScenario == "decals" || opt.npcTestScenario == "doors" || opt.npcTestScenario == "roam" || opt.npcTestScenario == "spider" || opt.npcTestScenario == "spiderdeath" || opt.npcTestScenario == "spiderhunt" || opt.npcTestScenario == "spiderplay" || opt.npcTestScenario == "spiderdoor" ? "scenes/Apartment Hallway.json"
                                                                                            : "scenes/Arena.json"));
 #pragma warning(suppress : 4996)
-            if (const char* scene = std::getenv("NPC_TEST_SCENE"); opt.npcTestMode && scene && *scene) // e.g. doors in a pack scene
-                smokeScenePaths.assign(1, ProjectPaths::Resolve(std::string("scenes/") + scene + ".json"));
+            if (const std::string scene = Env::Str(Env::Var::NpcTestScene); opt.npcTestMode && !scene.empty()) // e.g. doors in a pack scene
+                smokeScenePaths.assign(1, ProjectPaths::Resolve("scenes/" + scene + ".json"));
             std::cout << "[SmokeTest] Found " << smokeScenePaths.size() << " scene(s) under "
                       << scenesDir << std::endl;
             if (smokeScenePaths.empty()) {
@@ -2350,14 +2318,7 @@ int main(int argc, char** argv) {
             // effect on the very next frame. SetVSync only touches the driver on an actual change.
             // A hidden run (TARTARUS_HIDDEN) has no display to wait for: with the screen asleep, a synced swap held each frame
             // for half a second and an NPC test crawled at 2 fps. (Harness runs step a fixed 1/60 s, so only the speed changes.)
-            static const bool hiddenRun = [] {
-                char* e = nullptr;
-                size_t n = 0;
-                _dupenv_s(&e, &n, "TARTARUS_HIDDEN");
-                const bool on = e && *e && *e != '0';
-                std::free(e);
-                return on;
-            }();
+            static const bool hiddenRun = Env::Flag(Env::Var::Hidden);
             if (const int wantVSync = opt.perfBenchMode || hiddenRun ? 0 : playerMode ? (playerCfg.VSync ? 1 : 0) : EditorSettings::Get().VSyncMode;
                 wantVSync != appliedVSyncMode) {
                 appliedVSyncMode = wantVSync;
@@ -2376,14 +2337,7 @@ int main(int argc, char** argv) {
                     // The exit chime: the window goes at once, then the sound rings out (miniaudio mixes on its own thread):
                     // until no editor voice is left, polled every 10 ms, at most 520 ms (the clip is 480). No wait at all
                     // when it can't be heard: sounds off, master 0, TARTARUS_MUTE, or not played.
-                    static const bool envMuted = [] {
-                        char* muteEnv = nullptr;
-                        size_t muteLen = 0;
-                        _dupenv_s(&muteEnv, &muteLen, "TARTARUS_MUTE");
-                        const bool on = muteEnv && *muteEnv && *muteEnv != '0';
-                        std::free(muteEnv);
-                        return on;
-                    }();
+                    static const bool envMuted = Env::Flag(Env::Var::Mute);
                     if (editorChimes && !envMuted && EditorSound::Current().Enabled && EditorSound::Current().Master > 0.0f) {
                         glfwHideWindow(window.Handle());
                         const int playedBefore = EditorSound::PlayedCount();
@@ -2894,7 +2848,7 @@ int main(int argc, char** argv) {
                         const glm::vec3 wasGoing = player.Velocity;
                         player.Velocity = SpiderSystem::Shove(player.Velocity, h.Push);
 #pragma warning(suppress : 4996)
-                        static const bool traceHits = std::getenv("TARTARUS_SPIDER_TRACE") != nullptr;
+                        static const bool traceHits = Env::Flag(Env::Var::SpiderTrace);
                         if (traceHits)
                             std::printf("[Spider] hit the player at %.2f %.2f: %s, push %.2f %.2f, ground speed %.2f -> %.2f, grounded %d, decel %.2f s, air %.2f s\n",
                                         player.Cam.Position.x, player.Cam.Position.z, h.Pounce ? "pounce" : "bite/drop", h.Push.x,
@@ -5327,14 +5281,7 @@ int main(int argc, char** argv) {
                 if (editorChimes) startChimeFrames = 3;
                 // TARTARUS_HIDDEN=1 (a headless run on a desktop someone is using): the window never shows or takes the
                 // focus; everything renders to its framebuffers the same.
-                static const bool keepHidden = [] {
-                    char* e = nullptr;
-                    size_t n = 0;
-                    _dupenv_s(&e, &n, "TARTARUS_HIDDEN");
-                    const bool on = e && *e && *e != '0';
-                    std::free(e);
-                    return on;
-                }();
+                static const bool keepHidden = Env::Flag(Env::Var::Hidden);
                 if (!keepHidden || !headless) window.Show();
                 if (playerMode && !playerCfg.Fullscreen) {
                     // #174 - centre the windowed game in the primary monitor's work area. Done
@@ -5365,7 +5312,7 @@ int main(int argc, char** argv) {
                 ++smokeFramesRendered;
                 if (!opt.smokeShotsDir.empty() && !opt.perfBenchMode && !shotCameras.empty()) {
                     // TARTARUS_OPEN_ALL=1: every door, drawer and lid shown open, to check each one's hinge.
-                    static const bool openAll = std::getenv("TARTARUS_OPEN_ALL") != nullptr;
+                    static const bool openAll = Env::Flag(Env::Var::OpenAll);
                     if (openAll && smokeFramesRendered == 1) Openable::SetAll(world, 1.0f);
                     const int shot = (smokeFramesRendered - kShotCameraStart) / kShotCameraSettle;
                     const bool captureFrame = smokeFramesRendered >= kShotCameraStart &&
@@ -5398,7 +5345,7 @@ int main(int argc, char** argv) {
                     editorCamera.Yaw = shotCameras[pose].Yaw;
                     editorCamera.Pitch = shotCameras[pose].Pitch;
                     // TARTARUS_SHOT_FOV=<vertical degrees>: match another renderer's camera (Unity reference shots)
-                    if (const char* fov = std::getenv("TARTARUS_SHOT_FOV")) editorCamera.Fov = (float)std::atof(fov);
+                    if (Env::IsSet(Env::Var::ShotFov)) editorCamera.Fov = Env::Float(Env::Var::ShotFov, editorCamera.Fov);
                 } else if (!opt.smokeShotsDir.empty() && !opt.perfBenchMode) {
                     // Frames 40 / 70 / 100 are captured after 30+ frames at each pose, so
                     // temporally accumulated effects have converged; the pose for the NEXT frame

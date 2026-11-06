@@ -3,6 +3,7 @@
 #include "GameModuleAPI.h"
 #include "PhysicsWorld.h"
 #include "World.h"
+#include "Core/Env.h"
 
 #include <algorithm>
 #include <cctype>
@@ -212,7 +213,7 @@ void FoleyAudio::UpdatePlayer(World& world, float dt, const FoleyPlayerInput& in
     }
     // FOLEY_FEET_LOG=1: the feet the steps are read from, a line a frame (time, heights, planted heights, swinging, steps, speed).
 #pragma warning(suppress : 4996)
-    static const bool feetLog = std::getenv("FOLEY_FEET_LOG") != nullptr;
+    static const bool feetLog = Env::Flag(Env::Var::FoleyFeetLog);
     if (feetLog && fromFeet) {
         static double clock = 0.0;
         clock += dt;
@@ -251,7 +252,7 @@ bool FoleyAudio::NpcFeet(World& world, int id, const glm::vec3& feet, const floa
     FootContactDetector& fd = m_NpcFeet[id];
     const int down = fd.Update(height, dt, LiftHeight(m_T, speed), m_T.FootContactHeight);
 #pragma warning(suppress : 4996)
-    static const bool feetLog = std::getenv("FOLEY_FEET_LOG") != nullptr;
+    static const bool feetLog = Env::Flag(Env::Var::FoleyFeetLog);
     if (feetLog) {
         static std::unordered_map<int, double> clock;
         std::printf("[NpcFeet] %d %.3f h %.3f %.3f floor %.3f %.3f up %d %d down %d at %.3f %.3f\n", id, clock[id] += dt, height[0], height[1],

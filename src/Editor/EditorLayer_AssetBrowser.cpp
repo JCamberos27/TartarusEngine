@@ -39,6 +39,7 @@
 #include "GLStateCache.h"
 #include "Framebuffer.h"
 #include "gl.h"
+#include "Core/Env.h"
 
 #include <imgui.h>
 #include <imgui_internal.h> // ImMax/ImFloor, ImGuiWindow, and the item-flag helpers the panels use
@@ -1800,13 +1801,7 @@ std::string EditorLayer::AssetBrowserTreeFrameSetup(AssetLibrary& assets) {
 // Rebuild the per-frame tile list and run the Ctrl+A "select every visible item" shortcut. The
 // module calls this right after ImGui::BeginChild("##AssetList") so IsWindowFocused is meaningful.
 bool EditorLayer::PlayUiThrottle() {
-    static const bool on = [] {
-        char* e = nullptr;
-        size_t n = 0;
-        const bool off = _dupenv_s(&e, &n, "TARTARUS_NO_UI_THROTTLE") == 0 && e && e[0] == '1';
-        std::free(e);
-        return !off;
-    }();
+    static const bool on = !Env::Flag(Env::Var::NoUiThrottle);
     return on;
 }
 

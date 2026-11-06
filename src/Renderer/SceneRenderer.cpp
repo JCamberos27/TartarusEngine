@@ -42,6 +42,7 @@
 #include "HiZCuller.h"
 #include "gl.h"
 #include "Core/Profiler.h"
+#include "Core/Env.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
@@ -1142,7 +1143,7 @@ void SceneRenderer::RenderScene(World& world, const RenderFrameContext& ctx,
     };
     sortOpaque(drawList);
     // TARTARUS_TRIS_REPORT=<frame>: the opaque pass's triangles on that frame of the Game view, by size (for budgeting).
-    if (static const int reportAt = [] { char* e = nullptr; size_t n = 0; int at = -1; if (_dupenv_s(&e, &n, "TARTARUS_TRIS_REPORT") == 0 && e) at = std::atoi(e); std::free(e); return at; }();
+    if (static const int reportAt = Env::Int(Env::Var::TrisReport, -1);
         reportAt >= 0 && !ctx.EditorView) {
         static int frame = 0;
         if (frame++ == reportAt) {

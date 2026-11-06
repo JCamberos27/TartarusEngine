@@ -1,6 +1,7 @@
 #include "SpiderRagdoll.h"
 
 #include "PhysicsWorld.h"
+#include "Core/Env.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -174,7 +175,7 @@ void Settler::Update(float dt, int rootPart, const glm::vec3& upInRoot) {
     float lin = 0.0f, ang = 0.0f;
     if (!PhysicsWorld::RagdollMotion(m_Id, &lin, &ang)) return;
 #pragma warning(suppress : 4996)
-    static const bool trace = std::getenv("TARTARUS_SPIDER_TRACE") != nullptr;
+    static const bool trace = Env::Flag(Env::Var::SpiderTrace);
     if (trace && (int)(m_Age * 4.0f) != (int)((m_Age - dt) * 4.0f))
         std::printf("[SpiderSettle] %d t %.2f up.y %.2f lin %.2f ang %.2f side %d rolling to %.0f\n", m_Id, m_Age, up.y, lin, ang, (int)m_OnSide, m_Target);
     // Slowing: it heavies up, so it comes to rest instead of rocking on its curled legs.

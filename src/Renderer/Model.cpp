@@ -14,6 +14,7 @@
 #include "PrimitiveMeshes.h"
 #include "meshoptimizer.h"
 #include "gl.h"
+#include "Core/Env.h"
 
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -185,14 +186,7 @@ void Model::ImportFromFile(const ModelImportSettings& settings) {
     if (settings.ImportNormals) flags |= aiProcess_GenSmoothNormals | aiProcess_CalcTangentSpace;
     // The skin audit (--model-report with TARTARUS_SKIN_AUDIT set) reads each vertex's true influence count: Assimp's own
     // cap is left off and ExtractBoneWeights' (the same rule - the largest four, renormalized) counts what it drops.
-    static const bool s_SkinAudit = [] {
-        char* e = nullptr;
-        size_t n = 0;
-        _dupenv_s(&e, &n, "TARTARUS_SKIN_AUDIT");
-        const bool on = e && *e;
-        std::free(e);
-        return on;
-    }();
+    static const bool s_SkinAudit = Env::Flag(Env::Var::SkinAudit);
     if (settings.ImportSkeleton && !s_SkinAudit) flags |= aiProcess_LimitBoneWeights;
     importer.SetPropertyInteger(AI_CONFIG_PP_LBW_MAX_WEIGHTS, MAX_BONE_INFLUENCE); // Assimp's default is four
     if (settings.OptimizeGraph) flags |= aiProcess_JoinIdenticalVertices | aiProcess_OptimizeMeshes;
@@ -2328,14 +2322,7 @@ bool Model::UploadBoneMatrices(Shader& shader) const {
 
 void Model::PreSkin(const std::vector<Model*>& models) {
     ++g_SkinFrame; // a second call in one frame rewrites the buffer: what the first one skinned is stale
-    static const bool disabled = [] {
-        char* e = nullptr;
-        size_t n = 0;
-        _dupenv_s(&e, &n, "TARTARUS_NO_PRESKIN");
-        const bool off = e && *e && *e != '0';
-        std::free(e);
-        return off;
-    }();
+    static const bool disabled = Env::Flag(Env::Var::NoPreskin);
     if (disabled || models.empty()) return;
 
     // What gets skinned: each model with bones and every sub-mesh on the GPU, once, while the buffer's cap allows

@@ -1,6 +1,7 @@
 #include "MeshArena.h"
 #include "ModelVertex.h"
 #include "gl.h"
+#include "Core/Env.h"
 #include <cstddef>
 #include <cstdlib>
 #include <memory>
@@ -83,13 +84,7 @@ bool NewPage(std::uint32_t verts, std::uint32_t indices, bool dedicated) {
 } // namespace
 
 bool Enabled() {
-    static const bool on = [] {
-        char* e = nullptr;
-        size_t n = 0;
-        const bool off = _dupenv_s(&e, &n, "TARTARUS_NO_MESH_ARENA") == 0 && e && e[0] == '1';
-        std::free(e);
-        return !off;
-    }();
+    static const bool on = !Env::Flag(Env::Var::NoMeshArena);
     return on;
 }
 
@@ -197,13 +192,7 @@ bool NewSkinPage(std::uint32_t verts, std::uint32_t indices, bool dedicated) {
 } // namespace
 
 bool SkinEnabled() {
-    static const bool on = [] {
-        char* e = nullptr;
-        size_t n = 0;
-        const bool off = _dupenv_s(&e, &n, "TARTARUS_NO_SKIN_ARENA") == 0 && e && e[0] == '1';
-        std::free(e);
-        return !off;
-    }();
+    static const bool on = !Env::Flag(Env::Var::NoSkinArena);
     return on && Enabled();
 }
 

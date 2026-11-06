@@ -5811,6 +5811,7 @@ int RunUnitTests(const char* filter) {
     };
     RegisterRagdollTests(tests);
     RegisterSpiderTests(tests);
+    RegisterLaunchOptionsTests(tests);
     RegisterAnimationTests(tests);
     RegisterEditorTests(tests);
     RegisterEnhancerTests(tests);

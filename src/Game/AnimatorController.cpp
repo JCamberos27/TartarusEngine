@@ -12,6 +12,7 @@
 #include "Profiler.h"
 #include "ProjectPaths.h"
 #include "World.h"
+#include "Core/Env.h"
 
 #include <json.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -1516,14 +1517,7 @@ std::vector<std::string> AnimatorControllerClipFiles(const AnimatorController& c
 
 void PrefetchAnimatorClips(World& world, AssetLibrary& assets) {
     // Twice a second is plenty: a controller or rig that appears is picked up well before Play is pressed.
-    static const bool s_Off = [] { // A/B switch for timing runs
-        char* e = nullptr;
-        size_t n = 0;
-        _dupenv_s(&e, &n, "TARTARUS_NO_ANIM_PREFETCH");
-        const bool off = e && *e;
-        std::free(e);
-        return off;
-    }();
+    static const bool s_Off = Env::Flag(Env::Var::NoAnimPrefetch); // A/B switch for timing runs
     if (s_Off) return;
     static std::chrono::steady_clock::time_point s_Next;
     const auto now = std::chrono::steady_clock::now();

@@ -1,5 +1,7 @@
 #include "App/CliTools.h"
 
+#include "App/LaunchOptions.h"
+
 #include "BuildPipeline.h"
 #include "CrashHandler.h"
 #include "EnginePaths.h"
@@ -39,7 +41,7 @@ namespace {
 // `--model-report <folder or model> [more ...]`: imports each .fbx/.obj/.gltf/.glb with its .meta's import settings
 // (materials skipped) and prints its size in meters, its bounds and its mesh count, one line per model - checks
 // scale and up-axis after an asset import. No GL needed. Exit 1 if any model fails to import.
-int ModelReport(int argc, char** argv, int i) {
+int ModelReport(const std::vector<std::string>& inputs) {
     namespace fs = std::filesystem;
     std::vector<fs::path> files;
     const auto isModel = [](const fs::path& p) {
@@ -47,12 +49,12 @@ int ModelReport(int argc, char** argv, int i) {
         for (char& c : e) c = (char)std::tolower((unsigned char)c);
         return e == ".fbx" || e == ".obj" || e == ".gltf" || e == ".glb";
     };
-    for (int j = i + 1; j < argc && argv[j][0] != '-'; ++j) {
+    for (const std::string& in : inputs) {
         std::error_code ec;
-        if (fs::is_directory(argv[j], ec)) {
-            for (const auto& f : fs::recursive_directory_iterator(argv[j], ec))
+        if (fs::is_directory(in, ec)) {
+            for (const auto& f : fs::recursive_directory_iterator(in, ec))
                 if (f.is_regular_file() && isModel(f.path())) files.push_back(f.path());
-        } else if (isModel(argv[j])) files.push_back(argv[j]);
+        } else if (isModel(in)) files.push_back(in);
     }
     std::sort(files.begin(), files.end());
     int failed = 0;
@@ -153,20 +155,20 @@ void PrintModelNodes(const aiScene* scene, const aiNode* node, const char* paren
     for (unsigned int c = 0; c < node->mNumChildren; ++c) PrintModelNodes(scene, node->mChildren[c], node->mName.C_Str());
 }
 
-int ModelNodes(int argc, char** argv, int i) {
+int ModelNodes(const std::vector<std::string>& inputs) {
     namespace fs = std::filesystem;
     std::vector<fs::path> files;
-    for (int j = i + 1; j < argc && argv[j][0] != '-'; ++j) {
+    for (const std::string& in : inputs) {
         std::error_code ec;
         const auto isFbx = [](const fs::path& p) {
             std::string e = p.extension().string();
             for (char& c : e) c = (char)std::tolower((unsigned char)c);
             return e == ".fbx";
         };
-        if (fs::is_directory(argv[j], ec)) {
-            for (const auto& f : fs::recursive_directory_iterator(argv[j], ec))
+        if (fs::is_directory(in, ec)) {
+            for (const auto& f : fs::recursive_directory_iterator(in, ec))
                 if (f.is_regular_file() && isFbx(f.path())) files.push_back(f.path());
-        } else if (isFbx(argv[j])) files.push_back(argv[j]);
+        } else if (isFbx(in)) files.push_back(in);
     }
     std::sort(files.begin(), files.end());
     int failed = 0;
@@ -257,25 +259,16 @@ nlohmann::json SceneBoundsUnion(const glm::vec3& lo, const glm::vec3& hi, size_t
     return u;
 }
 
-int SceneBounds(int argc, char** argv, int i) {
+int SceneBounds(const std::vector<std::string>& inputArgs, const std::string& out, const char* argv0) {
     namespace fs = std::filesystem;
     using json = nlohmann::json;
-    std::vector<fs::path> inputs;
-    fs::path outDir;
-    for (int j = i + 1; j < argc; ++j) {
-        const std::string a = argv[j];
-        if (a == "--out" && j + 1 < argc) { outDir = argv[++j]; continue; }
-        if (!a.empty() && a[0] == '-') {
-            if (a == "--project") ++j; // its value was consumed by ParseLaunchOptions
-            continue;
-        }
-        inputs.push_back(a);
-    }
+    const std::vector<fs::path> inputs(inputArgs.begin(), inputArgs.end());
+    const fs::path outDir = out;
     if (inputs.empty() || outDir.empty()) {
         std::cerr << "[SceneBounds] usage: --scene-bounds <scene.json|prefab dir>... --out <dir>\n";
         return 2;
     }
-    EnginePaths::Init(argv[0]);
+    EnginePaths::Init(argv0);
     LayerRegistry::Load();
     AssetDatabase::ScanProject();
     ProjectSettings::Load();
@@ -352,34 +345,22 @@ int SceneBounds(int argc, char** argv, int i) {
 
 } // namespace
 
-int RunEarlyCliTool(int argc, char** argv) {
-    // #173 - `--unit-tests`: pure C++ tests, run before any window / GL / audio / PhysX exists
-    // so they work on a GPU-less CI runner. Exit code = failed checks (0 = pass).
-    for (int i = 1; i < argc; ++i) {
-        if (std::string(argv[i]) != "--unit-tests") continue;
-        CrashHandler::SetInteractive(false);
-        const char* filter=i+1<argc && argv[i+1][0]!='-'?argv[i+1]:nullptr;
-        return RunUnitTests(filter) == 0 ? 0 : 1;
+int RunEarlyCliTool(const LaunchOptions& opt, const char* argv0) {
+    switch (opt.mode) {
+        // #173 - pure C++ tests, run before any window / GL / audio / PhysX exists so they work on a GPU-less CI
+        // runner. Exit code = failed checks (0 = pass).
+        case LaunchMode::UnitTests:
+            CrashHandler::SetInteractive(false);
+            return RunUnitTests(opt.unitTestsFilter.empty() ? nullptr : opt.unitTestsFilter.c_str()) == 0 ? 0 : 1;
+        case LaunchMode::ModelReport: CrashHandler::SetInteractive(false); return ModelReport(opt.inputs);
+        case LaunchMode::ModelNodes: CrashHandler::SetInteractive(false); return ModelNodes(opt.inputs);
+        case LaunchMode::SceneBounds:
+            CrashHandler::SetInteractive(false);
+            return SceneBounds(opt.inputs, opt.sceneBoundsOut, argv0);
+        // The audio engine's own test, offline (no window, no audio device): a scripted tour of a scene's reverb zones.
+        case LaunchMode::AudioTest: return RunAudioTest(opt.audioTestScene, opt.audioTestReport);
+        default: return -1;
     }
-    for (int i = 1; i < argc; ++i) {
-        if (std::string(argv[i]) != "--model-report") continue;
-        CrashHandler::SetInteractive(false);
-        return ModelReport(argc, argv, i);
-    }
-    for (int i = 1; i < argc; ++i) {
-        if (std::string(argv[i]) != "--model-nodes") continue;
-        CrashHandler::SetInteractive(false);
-        return ModelNodes(argc, argv, i);
-    }
-    for (int i = 1; i < argc; ++i) {
-        if (std::string(argv[i]) != "--scene-bounds") continue;
-        CrashHandler::SetInteractive(false);
-        return SceneBounds(argc, argv, i);
-    }
-    // `--audio-test [scene]`: the audio engine's own test, offline (no window, no audio device): a scripted tour of a scene's reverb zones.
-    for (int i = 1; i < argc; ++i)
-        if (std::string(argv[i]) == "--audio-test") return RunAudioTest(argc, argv);
-    return -1;
 }
 
 int RunBuildTool(const std::string& outDir) {

@@ -1,5 +1,6 @@
 #include "SamplingProfiler.h"
 #include "DbgSymbols.h"
+#include "Core/Env.h"
 
 #if defined(_WIN32) && defined(_M_X64)
 
@@ -120,9 +121,8 @@ void Report(const char* label, int top) {
     Stop();
     size_t count = g_Count.load();
     // TARTARUS_SAMPLE_HITCH_MS: only the samples from frames slower than that (moved to the front).
-    char hitch[32] = {};
-    if (GetEnvironmentVariableA("TARTARUS_SAMPLE_HITCH_MS", hitch, sizeof(hitch)) > 0) {
-        const float over = (float)std::atof(hitch);
+    if (Env::IsSet(Env::Var::SampleHitchMs)) {
+        const float over = Env::Float(Env::Var::SampleHitchMs, 0.0f);
         size_t kept = 0;
         int frames = 0;
         for (float ms : g_FrameMs) frames += ms > over;
@@ -198,8 +198,8 @@ void Report(const char* label, int top) {
     print("external", calls);
 
     // TARTARUS_SAMPLE_FOCUS=<function substring>: the hottest call chains (6 frames up) through it.
-    char focus[256] = {};
-    if (GetEnvironmentVariableA("TARTARUS_SAMPLE_FOCUS", focus, sizeof(focus)) > 0) {
+    const std::string focus = Env::Str(Env::Var::SampleFocus);
+    if (!focus.empty()) {
         std::unordered_map<std::string, int> chains;
         for (size_t i = 0; i < count; ++i) {
             const Sample& s = g_Samples[i];
@@ -216,9 +216,7 @@ void Report(const char* label, int top) {
     // TARTARUS_SAMPLE_UNDER=<function substring>: what that function's time goes on - every function below it (inclusive),
     // as a share of all samples.
     // Several: separated by ';'.
-    char underList[512] = {};
-    GetEnvironmentVariableA("TARTARUS_SAMPLE_UNDER", underList, sizeof(underList));
-    std::stringstream underItems(underList);
+    std::stringstream underItems(Env::Str(Env::Var::SampleUnder));
     for (std::string underItem; std::getline(underItems, underItem, ';');) {
         if (underItem.empty()) continue;
         const char* under = underItem.c_str();

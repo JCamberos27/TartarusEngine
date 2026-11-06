@@ -228,13 +228,8 @@ void QuietShotExtras(WeaponAudioProfile& p, bool quiet) {
 
 } // namespace
 
-int RunAudioTest(int argc, char** argv) {
-    std::string sceneArg = "AudioLab", reportPath;
-    for (int i = 1; i < argc; ++i) {
-        const std::string a = argv[i];
-        if (a == "--audio-test" && i + 1 < argc && argv[i + 1][0] != '-') sceneArg = argv[++i];
-        else if (a == "--report" && i + 1 < argc) reportPath = argv[++i];
-    }
+int RunAudioTest(const std::string& scene, const std::string& reportPath) {
+    const std::string sceneArg = scene.empty() ? std::string("AudioLab") : scene;
     if (!reportPath.empty()) {
         s_Report.open(reportPath);
         if (!s_Report.is_open()) std::fprintf(stderr, "--audio-test: cannot write the report '%s'\n", reportPath.c_str());

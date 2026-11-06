@@ -12,6 +12,7 @@
 #include "ProjectPaths.h"
 #include "SceneSerializer.h"
 #include "World.h"
+#include "Core/Env.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -381,7 +382,7 @@ glm::vec3 SpiderSystem::Doors(World& world, Body& b, const glm::vec3& aim, float
         b.DoorFor = 0.0f;
         b.DoorPushed = false;
 #pragma warning(suppress : 4996)
-        static const bool trace = std::getenv("TARTARUS_SPIDER_TRACE") != nullptr;
+        static const bool trace = Env::Flag(Env::Var::SpiderTrace);
         if (trace)
             std::printf("[Spider] %u: a shut door on its way at %.2f %.2f %.2f\n", (unsigned)entt::to_integral(b.Root), hinge.x,
                         hinge.y, hinge.z);
@@ -588,7 +589,7 @@ void SpiderSystem::Think(World& world, AssetLibrary& assets, float dt, const Tar
                 const bool sunkAhead = q.Ray(mid, f, ms.BodyFront - 0.03f, h);
                 if (sunkAhead || (q.Ray(mid, -f, ms.BodyBack - 0.03f, h))) {
 #pragma warning(suppress : 4996)
-                    static const bool trace = std::getenv("TARTARUS_SPIDER_TRACE") != nullptr;
+                    static const bool trace = Env::Flag(Env::Var::SpiderTrace);
                     if (trace && st.SunkFrames < 15)
                         std::printf("[SpiderJank] %u sunk at %.2f %.2f %.2f up %.2f %.2f %.2f hit %.2f %s n %.2f %.2f %.2f fwd %.2f %.2f %.2f speed %.2f mode %d corner %d\n",
                                     (unsigned)entt::to_integral(b.Root), b.Mover.Position().x, b.Mover.Position().y, b.Mover.Position().z, u.x, u.y,
@@ -800,7 +801,7 @@ void SpiderSystem::MeasureBody(Body& b, const Spider::SurfaceQuery& q, const Spi
         // Pops: further in a frame than its speed takes it (on a surface its own speed, in the air its fall's).
         const float v = m.Attached() && t.Attached ? std::max(t.Speed, m.Speed()) : std::max(glm::length(t.Vel), glm::length(m.Velocity()));
 #pragma warning(suppress : 4996)
-        static const bool trace = std::getenv("TARTARUS_SPIDER_TRACE") != nullptr;
+        static const bool trace = Env::Flag(Env::Var::SpiderTrace);
         if (trace && (moves & (Spider::Mover::kMoveLetGo | Spider::Mover::kMoveDetach)))
             std::printf("[SpiderJank] %u lets go at %.2f %.2f %.2f up %.2f %.2f %.2f moves 0x%x mode %d\n", (unsigned)entt::to_integral(b.Root),
                         t.Pos.x, t.Pos.y, t.Pos.z, up.x, up.y, up.z, moves, (int)b.Ai.State);
@@ -854,7 +855,7 @@ void SpiderSystem::MeasureBody(Body& b, const Spider::SurfaceQuery& q, const Spi
                 ++j.Refused;
                 static int refusedLines = 0;
 #pragma warning(suppress : 4996)
-                static const bool traceRefused = std::getenv("TARTARUS_SPIDER_TRACE") != nullptr;
+                static const bool traceRefused = Env::Flag(Env::Var::SpiderTrace);
                 if (traceRefused && refusedLines < 40 && (j.Refused % 15) == 1) {
                     ++refusedLines;
                     const glm::vec3 u = m.Up(), f = m.Forward();
@@ -922,7 +923,7 @@ void SpiderSystem::MeasureBody(Body& b, const Spider::SurfaceQuery& q, const Spi
         for (const glm::vec3& r : t.Ring) far = std::max(far, glm::length(r - pos));
         if (far < 0.3f) {
 #pragma warning(suppress : 4996)
-            static const bool trace = std::getenv("TARTARUS_SPIDER_TRACE") != nullptr;
+            static const bool trace = Env::Flag(Env::Var::SpiderTrace);
             if (trace && std::fmod(j.Dither, 1.0f) < dt)
                 std::printf("[SpiderJank] %u dither at %.2f %.2f %.2f up %.2f %.2f %.2f aim %.2f %.2f %.2f speed %.2f corner %d mode %d\n",
                             (unsigned)entt::to_integral(b.Root), pos.x, pos.y, pos.z, up.x, up.y, up.z, aim.x, aim.y, aim.z, m.Speed(),
@@ -974,7 +975,7 @@ void SpiderSystem::MeasureLegs(Body& b, const Spider::SurfaceQuery& q, const Spi
             const bool standing = l.Planted && l.Grounded && b.PrevPlanted[(size_t)i]; // (its travel is the slide)
             if (!standing && glm::length(l.Foot - t.Feet[(size_t)i]) > allowed) {
 #pragma warning(suppress : 4996)
-                static const bool trace = std::getenv("TARTARUS_SPIDER_TRACE") != nullptr;
+                static const bool trace = Env::Flag(Env::Var::SpiderTrace);
                 if (trace && j.LegPops < 25)
                     std::printf("[SpiderJank] %u leg %d pop %.3f allowed %.3f planted %d grounded %d stepping %d wasStepping %d T %.2f attached %d mode %d\n",
                                 (unsigned)entt::to_integral(b.Root), i, glm::length(l.Foot - t.Feet[(size_t)i]), allowed, l.Planted, l.Grounded,
@@ -994,7 +995,7 @@ void SpiderSystem::MeasureLegs(Body& b, const Spider::SurfaceQuery& q, const Spi
         const glm::vec3 n = l.Normal;
         if (!q.Ray(l.Foot + n * 0.06f, -n, 0.06f + std::max(0.0f, r.Lift) + 0.04f, h)) {
 #pragma warning(suppress : 4996)
-            static const bool trace = std::getenv("TARTARUS_SPIDER_TRACE") != nullptr;
+            static const bool trace = Env::Flag(Env::Var::SpiderTrace);
             if (trace && j.FeetInAir < 15)
                 std::printf("[SpiderJank] %u leg %d in air at %.2f %.2f %.2f n %.2f %.2f %.2f reach %.2f/%.2f body %.2f %.2f %.2f corner %d mode %d\n",
                             (unsigned)entt::to_integral(b.Root), i, l.Foot.x, l.Foot.y, l.Foot.z, n.x, n.y, n.z, glm::length(l.Foot - hip), r.Reach,

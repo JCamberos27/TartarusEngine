@@ -42,6 +42,7 @@
 #include "AtomicFile.h" // NoteSelfWrite - scratch files a suite writes are not external changes
 #include "Log.h"
 #include "gl.h"
+#include "Core/Env.h"
 
 #include <GLFW/glfw3.h>
 #include <stb_image_write.h>
@@ -327,12 +328,7 @@ void Note(const std::string& test, const std::string& step, size_t testIndex, si
 }
 
 void Start() {
-    double deadlineMin = 0.0;
-    {
-        char* v = nullptr;
-        size_t n = 0;
-        if (_dupenv_s(&v, &n, "TARTARUS_EDITOR_TEST_DEADLINE") == 0 && v) { deadlineMin = std::atof(v); std::free(v); }
-    }
+    const double deadlineMin = Env::Float(Env::Var::EditorTestDeadline, 0.0f);
     std::thread([deadlineMin] {
         using clock = std::chrono::steady_clock;
         const auto runStart = clock::now();
@@ -1884,9 +1880,7 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
         g_Started = true;
         g_ScratchScene = (std::filesystem::path(UserPaths::Root()) / "editor-tests-scene.json").generic_string();
         {
-            char* v = nullptr;
-            size_t n = 0;
-            if (_dupenv_s(&v, &n, "TARTARUS_EDITOR_TEST_SHOTS") == 0 && v) { g_ShotDir = v; std::free(v); }
+            g_ShotDir = Env::Str(Env::Var::EditorTestShots);
             if (g_ShotDir.empty()) g_ShotDir = (std::filesystem::path(UserPaths::Root()) / "editor-test-shots").string();
             std::error_code ec;
             std::filesystem::remove_all(g_ShotDir, ec);
@@ -1896,10 +1890,7 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
         {
             // TARTARUS_EDITOR_TEST_EXCLUDE=scenes:,assets: skips every test whose name starts with
             // one of the comma-separated prefixes (CI skips the suites that need missing assets).
-            char* v = nullptr;
-            size_t n = 0;
-            std::string list;
-            if (_dupenv_s(&v, &n, "TARTARUS_EDITOR_TEST_EXCLUDE") == 0 && v) { list = v; std::free(v); }
+            std::string list = Env::Str(Env::Var::EditorTestExclude);
             std::transform(list.begin(), list.end(), list.begin(), [](unsigned char ch) { return (char)std::tolower(ch); });
             size_t start = 0;
             while (start <= list.size()) {
@@ -1915,10 +1906,7 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
         {
             // TARTARUS_EDITOR_TEST_SHARD=i/n splits the suite across n CI jobs: after the exclusions, the k-th
             // remaining test (registration order) runs only when k % n == i. Malformed = no sharding.
-            char* v = nullptr;
-            size_t n = 0;
-            std::string s;
-            if (_dupenv_s(&v, &n, "TARTARUS_EDITOR_TEST_SHARD") == 0 && v) { s = v; std::free(v); }
+            const std::string s = Env::Str(Env::Var::EditorTestShard);
             if (!s.empty()) {
                 int i = -1, cnt = 0;
                 const size_t slash = s.find('/');
@@ -1966,12 +1954,7 @@ bool BeforeFrame(EditorLayer& editor, World& world, AssetLibrary& assets, Camera
             for (int b = 0; b < 3; ++b) io.AddMouseButtonEvent(b, false);
             Mods(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiMod_Alt, false);
             if (t.Finally) t.Finally(c);
-            std::string dump;
-            {
-                char* v = nullptr;
-                size_t n = 0;
-                if (_dupenv_s(&v, &n, "TARTARUS_EDITOR_TEST_DUMP") == 0 && v) { dump = v; std::free(v); }
-            }
+            const std::string dump = Env::Str(Env::Var::EditorTestDump);
             if (g_TestFailed && !dump.empty()) {
                 // Diagnostics: every widget the named window drew last frame.
                 for (const UiItem& it : g_Reg.Last)

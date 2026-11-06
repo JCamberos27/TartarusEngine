@@ -1,8 +1,8 @@
 #include "GLFramebufferCheck.h"
 #include "gl.h"
 #include "Log.h"
+#include "Core/Env.h"
 
-#include <cstdlib>
 #include <cstring>
 #include <string>
 
@@ -15,17 +15,10 @@ namespace {
 // value fails every target; a non-empty value fails only owners whose name contains it as a
 // substring (e.g. "Bloom", "Ssao", "IblProbe").
 bool ForcedFail(const char* owner) {
-#ifdef _MSC_VER
-#pragma warning(push)
-#pragma warning(disable : 4996) // getenv: read-only here, and nothing writes the environment
-#endif
-    const char* v = std::getenv("TARTARUS_FORCE_FBO_INCOMPLETE");
-#ifdef _MSC_VER
-#pragma warning(pop)
-#endif
-    if (!v) return false;
-    if (v[0] == '\0') return true;
-    return owner && std::strstr(owner, v) != nullptr;
+    if (!Env::IsSet(Env::Var::ForceFboIncomplete)) return false;
+    const std::string v = Env::Str(Env::Var::ForceFboIncomplete);
+    if (v.empty()) return true;
+    return owner && std::strstr(owner, v.c_str()) != nullptr;
 }
 const char* StatusText(GLenum s) {
     switch (s) {

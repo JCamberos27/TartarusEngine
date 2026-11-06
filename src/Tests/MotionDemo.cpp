@@ -1,6 +1,7 @@
 #include "MotionDemo.h"
 
 #include "gl.h"
+#include "Core/Env.h"
 
 #include <GLFW/glfw3.h>
 #include <imgui.h>
@@ -28,21 +29,14 @@ struct State {
 };
 State s_State;
 
-std::string Env(const char* name) {
-    char* v = nullptr;
-    size_t n = 0;
-    std::string out;
-    if (_dupenv_s(&v, &n, name) == 0 && v) { out = v; std::free(v); }
-    return out;
-}
 } // namespace
 
 bool Active() {
     State& s = s_State;
     if (!s.read) {
         s.read = true;
-        s.out = Env("TARTARUS_MOTION_DEMO");
-        s.ffmpeg = Env("TARTARUS_FFMPEG");
+        s.out = Env::Str(Env::Var::MotionDemo);
+        s.ffmpeg = Env::Str(Env::Var::Ffmpeg);
         s.active = !s.out.empty() && !s.ffmpeg.empty();
     }
     return s.active;
