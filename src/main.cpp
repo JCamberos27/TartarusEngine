@@ -502,6 +502,30 @@ struct StillModelCache {
         out.clear();
         for (size_t c = 0; c < chunks; ++c) out.insert(out.end(), ChunkOut[c].begin(), ChunkOut[c].end());
     }
+    // Gather, reusing the last result when it was made this frame (same `frame`) over the same pool - same world, same
+    // size and storage, same Model::AnimationEpoch(). The animation tick and the pre-skin gather read the same pool
+    // twice a frame; the second one reuses the first. Entities can be destroyed in between, so a caller walking the
+    // result must check each is still valid and still has a RenderableComponent.
+    const std::vector<entt::entity>& GatherCached(World& world, std::uint64_t frame) {
+        const auto& pool = world.Registry.storage<RenderableComponent>();
+        const void* data = static_cast<const entt::sparse_set&>(pool).data();
+        if (!(Memo.Valid && Memo.Frame == frame && Memo.Owner == &world && Memo.Size == pool.size() && Memo.Data == data &&
+              Memo.Epoch == Model::AnimationEpoch())) {
+            Gather(world, Memo.Result);
+            Memo.Frame = frame; Memo.Owner = &world; Memo.Size = pool.size(); Memo.Data = data;
+            Memo.Epoch = Model::AnimationEpoch(); Memo.Valid = true;
+        }
+        return Memo.Result;
+    }
+    struct MemoState {
+        std::uint64_t Frame = 0;
+        const World* Owner = nullptr;
+        size_t Size = 0;
+        const void* Data = nullptr;
+        std::uint64_t Epoch = 0;
+        bool Valid = false;
+        std::vector<entt::entity> Result;
+    } Memo;
     std::vector<std::vector<entt::entity>> ChunkOut;
     std::vector<size_t> ChunkIds;
 };
@@ -3147,9 +3171,8 @@ int main(int argc, char** argv) {
                 // Play: the game's scaled step, frozen while paused. Edit: real time, so a
                 // preview isn't slowed by a time scale left over from the last run.
                 const float animDt = playing ? (simThisFrame ? gameDt : 0.0f) : dt;
-                static std::vector<entt::entity> s_MaybeAnimated;
-                s_StillModels.Gather(world, s_MaybeAnimated); // never-animating models left out (StillModelCache)
-                for (auto entity : s_MaybeAnimated) {
+                // never-animating models left out (StillModelCache); Pre-Skin below reuses this gather
+                for (auto entity : s_StillModels.GatherCached(world, frameIndex)) {
                     if (world.Registry.all_of<InactiveTag>(entity)) continue; // #199 - an inactive object is paused, not just hidden
                     world.Registry.get<RenderableComponent>(entity).ModelRef->TickAnimationOnce(frameIndex, animDt);
                 }
@@ -3655,10 +3678,12 @@ int main(int argc, char** argv) {
                 PROFILE_GPU_SCOPE("Pre-Skin");
                 static std::vector<Model*> s_PreSkinModels;
                 s_PreSkinModels.clear();
-                static std::vector<entt::entity> s_PreSkinCandidates;
-                s_StillModels.Gather(world, s_PreSkinCandidates); // no bones (StillModelCache)
-                for (auto preSkinEntity : s_PreSkinCandidates) {
-                    Model* preSkinModel = world.Registry.get<RenderableComponent>(preSkinEntity).ModelRef.get();
+                // no bones (StillModelCache); shared with the Animation Update gather when it ran this frame
+                for (auto preSkinEntity : s_StillModels.GatherCached(world, frameIndex)) {
+                    if (!world.Registry.valid(preSkinEntity)) continue; // destroyed since the shared gather
+                    const auto* preSkinRend = world.Registry.try_get<RenderableComponent>(preSkinEntity);
+                    Model* preSkinModel = preSkinRend ? preSkinRend->ModelRef.get() : nullptr;
+                    if (!preSkinModel) continue;
                     if (!world.Registry.all_of<TransformComponent>(preSkinEntity)) continue;
                     if (world.Registry.any_of<InactiveTag, LodCulledTag, PoseSourceTag>(preSkinEntity)) continue; // not drawn
                     if (preSkinModel->BoneCount() > 0) s_PreSkinModels.push_back(preSkinModel);
@@ -3680,6 +3705,12 @@ int main(int argc, char** argv) {
                 bool settling; // stopped moving / animating within the last kSettleFrames (see dynamicFor)
                 std::uint64_t settleStart; // the frame it stopped counting as moving / animated
                 bool player; // the player's own body and gun (world copies): no shadow in their own flashlight
+                std::uint64_t hash; // id, model, materials, transform and twoSided folded once (see hashCaster)
+            };
+            auto hashBytes = [](std::uint64_t h, const void* data, size_t n) {
+                const unsigned char* p = static_cast<const unsigned char*>(data);
+                for (size_t i = 0; i < n; ++i) { h ^= p[i]; h *= 1099511628211ull; }
+                return h;
             };
             // Per caster, its transform and when it last changed; drives LocalCaster::moving.
             // A skinned caster counts as animated only while its pose changes (PoseVersion): a corpse at rest, or a body held
@@ -3733,6 +3764,15 @@ int main(int argc, char** argv) {
                     lc.settling = !lc.moving && !lc.animated && now - lc.settleStart < kSettleFrames;
                     lc.bounded = v.Bounded; // as posed, like the main pass
                     lc.bounds = AABB{v.WorldMin, v.WorldMax};
+                    std::uint64_t h = 1469598103934665603ull;
+                    h = hashBytes(h, &lc.id, sizeof lc.id);
+                    h = hashBytes(h, &lc.model, sizeof lc.model);
+                    const void* mats = lc.materials->empty() ? nullptr : lc.materials->front().get();
+                    h = hashBytes(h, &mats, sizeof mats);
+                    const size_t matCount = lc.materials->size();
+                    h = hashBytes(h, &matCount, sizeof matCount);
+                    h = hashBytes(h, &lc.xform, sizeof lc.xform);
+                    lc.hash = hashBytes(h, &lc.twoSided, sizeof lc.twoSided);
                 }
                 // Drop the records of casters gone for a while so the map doesn't grow across scene loads.
                 if ((frameIndex & 255) == 0) {
@@ -3744,21 +3784,9 @@ int main(int argc, char** argv) {
             // A local shadow map is only redrawn when something it sees changed: its light, the
             // map itself, or any caster inside it (moved, swapped model or materials, or animated).
             // Everything static - most lamps, most of the time - keeps last frame's depth.
-            auto hashBytes = [](std::uint64_t h, const void* data, size_t n) {
-                const unsigned char* p = static_cast<const unsigned char*>(data);
-                for (size_t i = 0; i < n; ++i) { h ^= p[i]; h *= 1099511628211ull; }
-                return h;
-            };
-            auto hashCaster = [&](std::uint64_t h, const LocalCaster& c) {
-                h = hashBytes(h, &c.id, sizeof c.id);
-                h = hashBytes(h, &c.model, sizeof c.model);
-                const void* mats = c.materials->empty() ? nullptr : c.materials->front().get();
-                h = hashBytes(h, &mats, sizeof mats);
-                const size_t matCount = c.materials->size();
-                h = hashBytes(h, &matCount, sizeof matCount);
-                h = hashBytes(h, &c.xform, sizeof c.xform);
-                return hashBytes(h, &c.twoSided, sizeof c.twoSided);
-            };
+            // Each caster's own hash (LocalCaster::hash) is computed once when it is gathered; a light folds it into its
+            // signature with one multiply instead of re-hashing ~100 bytes per caster per light.
+            auto hashCaster = [](std::uint64_t h, const LocalCaster& c) { return (h ^ c.hash) * 1099511628211ull; };
             static std::uint64_t s_SpotShadowSig[SpotShadowMap::kMaxSpots] = {}; // the static casters'
             static bool s_SpotHadAnimated[SpotShadowMap::kMaxSpots] = {};
             // Per spot, the texels its animated casters covered when last drawn ({x0, y0, x1, y1}).
