@@ -73,6 +73,8 @@
 #include "CascadedShadowMap.h"
 #include "SpotShadowMap.h"
 #include "PointShadowMap.h"
+#include "LightGather.h"
+#include "ShadowFrame.h"
 #include "IblProbe.h"
 #include "Cubemap.h"               // PR13: HDRI environment cubemap
 #include "ReflectionProbeArray.h"  // PR14: placed reflection probes
@@ -1621,6 +1623,8 @@ int main(int argc, char** argv) {
         CascadedShadowMap shadowMap; // directional-sun CSM; depth array sampled by the model shader
         SpotShadowMap spotShadowMap; // perspective depth per shadow-casting spot light (#119)
         PointShadowMap pointShadowMap; // depth cube per shadow-casting point light (#119)
+        LightGather lightGather; // the frame's light SSBO + shadow slots (Renderer/LightGather)
+        ShadowFrame shadowFrame; // the sun cascades and the cached spot/point maps (Renderer/ShadowFrame)
         SceneRenderer sceneRenderer;  // audit #359 pass 2 — the scene-draw pass, formerly a lambda here
 
         Camera editorCamera;
@@ -2702,452 +2706,57 @@ int main(int argc, char** argv) {
             }
 
             glm::vec3 lightDir(-0.4f, -1.0f, -0.3f);
-
-            // --- Sun shadow map: rendered per view (renderSunShadows, called from drawScene, #109)
-            // and skipped when a second view in the same frame has the same matrices.
             const EditorSettings& frameSettings = EditorSettings::Get();
 
-            // Build the light SSBO ONCE per frame — it used to be rebuilt inside every
-            // drawScene(), i.e. per viewport, though the light set is identical across the
-            // Scene/Game views of one frame (#122). This same walk captures the first active
-            // directional light's aim + disc size for the shadow pass below.
-            glm::vec3 frameSunDir = lightDir;
-            float frameSunAngularDeg = 0.53f; // Earth's sun; drives the penumbra width
-            lightBuffer.Clear();
-            bool frameHaveDirectional = false;
-            bool frameSunCastShadows = false; // the active directional's per-light Shadow.Enabled
-            glm::mat4 spotShadowVP[SpotShadowMap::kMaxSpots] = {};
-            glm::vec3 spotShadowPos[SpotShadowMap::kMaxSpots] = {};
-            float spotShadowFar[SpotShadowMap::kMaxSpots] = {};
-            float spotShadowHalfTan[SpotShadowMap::kMaxSpots] = {}; // tan(half-FOV) of the map — sizes the shader's texel estimate to the real cone, not an assumed 90° (#134)
-            int spotShadowCount = 0; // one past the highest slot in use this frame (#119); spotSlotLive says which are
-            bool spotSlotLive[SpotShadowMap::kMaxSpots] = {};
-            int torchShadowSlot = -1; // the player's flashlight's slot (its casters leave out the player)
-            glm::vec3 pointShadowPos[PointShadowMap::kMaxPoints] = {};
-            float pointShadowFar[PointShadowMap::kMaxPoints] = {};
-            int pointShadowCount = 0; // one past the highest cube in use this frame (#119); pointSlotLive says which are
-            bool pointSlotLive[PointShadowMap::kMaxPoints] = {};
-            // Per-light shadow multipliers (#140 phase 2), parallel to the slot arrays above.
-            // All 1.0 unless the light's ShadowSettings override them -> byte-identical to before.
-            float spotShadowBias[SpotShadowMap::kMaxSpots] = {};
-            float spotShadowNormalBias[SpotShadowMap::kMaxSpots] = {};
-            float spotShadowSoftness[SpotShadowMap::kMaxSpots] = {};
-            float spotShadowNear[SpotShadowMap::kMaxSpots] = {};
-            float pointShadowBias[PointShadowMap::kMaxPoints] = {};
-            float pointShadowNormalBias[PointShadowMap::kMaxPoints] = {};
-            float pointShadowNear[PointShadowMap::kMaxPoints] = {};
-            float frameSunShadowBias = 1.0f, frameSunShadowNormalBias = 1.0f, frameSunShadowSoftness = 1.0f;
-
-            // #110 — shadow slots go to the most important shadowed spot / point lights, not the
-            // first ones in registry order (which let a far light keep its shadow while one right
-            // next to the camera lost it, and reshuffled slots whenever any entity was created).
-            // Score ~ brightness reaching the viewer: intensity * range^2 over the squared
-            // distance from the camera to the light's sphere of influence (inside it = full
-            // score). Last frame's holders get a 25% bonus, so near-ties don't flicker.
-            static std::set<entt::entity> s_PrevShadowed;
-            std::set<entt::entity> frameShadowed;
-            // Each light keeps its shadow slot - its layer, and with it the cached static depth - for as long as it holds a
-            // shadow; a light taking a shadow gets the free slot unused longest. Slots used to be handed out in registry order
-            // every frame, so one light gaining or losing its shadow (a flickering tube, the flashlight switched on, walking
-            // between rooms) shifted every later light to another layer and redrew all their caches at once.
-            struct StableShadowSlots {
-                entt::entity Owner[SpotShadowMap::kMaxSpots];
-                std::uint64_t Used[SpotShadowMap::kMaxSpots] = {};
-                StableShadowSlots() { for (auto& o : Owner) o = entt::null; }
-                void Assign(const std::vector<entt::entity>& want, int budget, std::uint64_t frame, std::unordered_map<entt::entity, int>& out) {
-                    out.clear();
-                    budget = std::clamp(budget, 0, SpotShadowMap::kMaxSpots);
-                    for (int i = budget; i < SpotShadowMap::kMaxSpots; ++i) Owner[i] = entt::null;
-                    bool taken[SpotShadowMap::kMaxSpots] = {};
-                    for (entt::entity e : want)
-                        for (int i = 0; i < budget; ++i)
-                            if (Owner[i] == e && !taken[i]) { taken[i] = true; Used[i] = frame; out[e] = i; break; }
-                    for (entt::entity e : want) {
-                        if (out.count(e)) continue;
-                        int pick = -1;
-                        for (int i = 0; i < budget; ++i)
-                            if (!taken[i] && (pick < 0 || Used[i] < Used[pick])) pick = i;
-                        if (pick < 0) break;
-                        taken[pick] = true; Owner[pick] = e; Used[pick] = frame; out[e] = pick;
-                    }
-                }
-            };
-            static StableShadowSlots s_SpotSlots, s_PointSlots;
-            static std::unordered_map<entt::entity, int> spotSlotOf, pointSlotOf;
-            const entt::entity kTorchSlotKey = static_cast<entt::entity>(0xFFFFFFF0u); // the flashlight's own key (not an entity)
-            std::vector<entt::entity> chosenSpots, chosenPoints;
-            // Per-scene budgets (Lighting > Shadows), clamped to the shader's array ceilings.
-            const int spotShadowBudget = std::clamp(world.MaxSpotShadows, 0, SpotShadowMap::kMaxSpots);
             // The player's flashlight: in Play with a player, it's lit and takes the first spot shadow (the scene's spots share the rest).
             const bool torchLit = playing && playUsesPlayer && flashlight.On;
             if (playing && playUsesPlayer) flashlight.Update(player.Cam, gameDt);
-            const int sceneSpotShadowBudget = std::max(spotShadowBudget - (torchLit ? 1 : 0), 0);
-            const int pointShadowBudget = std::clamp(world.MaxPointShadows, 0, PointShadowMap::kMaxPoints);
-            // The view the point/spot lights fade by (LightBuffer::DistanceFade): a light too small on screen to show
-            // fades out and leaves the buffer, and takes no shadow slot.
-            const Camera& lightViewCam = playing ? *gameCam : editorCamera;
-            const float lightTanHalfFov = std::tan(glm::radians(lightViewCam.Fov) * 0.5f);
-            {
-                const glm::vec3 viewPos = lightViewCam.Position;
-                std::vector<std::pair<float, entt::entity>> spots, points;
-                for (auto e : world.Registry.view<TransformComponent, LightComponent>()) {
-                    const auto& lc = world.Registry.get<LightComponent>(e);
-                    // (Scored on the intensity now: holding a flickering light's shadow through its bright peaks - a TV
-                    // across the living room - cost the main pass ~1.3 ms in Floor3. Its slot, and so its cache, waits for it.)
-                    if (!lc.Shadow.Enabled || !world.ShadowsEnabled || lc.Kind == LightComponent::Type::Directional ||
-                        lc.Intensity <= 0.0f || world.Registry.all_of<InactiveTag>(e) ||
-                        (!playing && editor.IsLightSuppressed(world, e)))
-                        continue;
-                    const glm::vec3 lpos = glm::vec3(world.ComposeWorldTransform(e)[3]);
-                    const float range = std::max(lc.Range, 0.2f);
-                    const float lightDist = glm::length(lpos - viewPos);
-                    if (LightBuffer::DistanceFade(lc.Range, lightDist, lightTanHalfFov) <= 0.0f) continue;
-                    const float gap = std::max(lightDist - range, 0.0f);
-                    float score = lc.Intensity * range * range / (gap * gap + 1.0f);
-                    if (s_PrevShadowed.count(e)) score *= 1.25f;
-                    (lc.Kind == LightComponent::Type::Spot ? spots : points).emplace_back(score, e);
-                }
-                auto take = [&](std::vector<std::pair<float, entt::entity>>& v, size_t n, std::vector<entt::entity>& chosen) {
-                    std::stable_sort(v.begin(), v.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
-                    for (size_t i = 0; i < v.size() && i < n; ++i) { frameShadowed.insert(v[i].second); chosen.push_back(v[i].second); }
-                };
-                take(spots, (size_t)sceneSpotShadowBudget, chosenSpots);
-                take(points, (size_t)pointShadowBudget, chosenPoints);
-                s_PrevShadowed = frameShadowed;
-                if (torchLit && world.ShadowsEnabled && spotShadowBudget > 0) chosenSpots.insert(chosenSpots.begin(), kTorchSlotKey);
-                s_SpotSlots.Assign(chosenSpots, spotShadowBudget, (std::uint64_t)frameIndex + 1, spotSlotOf);
-                s_PointSlots.Assign(chosenPoints, pointShadowBudget, (std::uint64_t)frameIndex + 1, pointSlotOf);
-                // Candidates that didn't get a slot, for the Inspector's over-budget warning.
-                std::set<entt::entity> overBudget;
-                for (const auto* v : {&spots, &points})
-                    for (const auto& [score, e] : *v)
-                        if (!frameShadowed.count(e)) overBudget.insert(e);
-                editor.SetShadowOverBudget(std::move(overBudget), spotShadowBudget, pointShadowBudget);
-            }
-
-            // Physical sky: its clock places the sun and moon, and the first lit directional light
-            // takes the resolved direction and the atmosphere-filtered colour (SkyAtmosphere) -
-            // warm and dim at sunset, the moon's by night.
+            // Physical sky: its clock places the sun and moon, and the first lit directional light takes the resolved direction
+            // and the atmosphere-filtered colour (SkyAtmosphere) - warm and dim at sunset, the moon's by night.
             const bool physicalSky = world.SkySourceMode == World::SkySource::Atmosphere;
             const glm::vec3 skyCameraPos = (playing ? *gameCam : editorCamera).Position;
             if (physicalSky) skyAtmosphere.Tick(world.Sky, playing ? gameDt : dt, playing);
-            SkyLighting frameSky;
-            bool frameSkyResolved = false;
 
-            if (torchLit && lightBuffer.Count() + 2 <= LightBuffer::kMaxLights) {
-                const glm::vec3 pos = flashlight.Position, aim = flashlight.Aim;
-                int slot = -1;
-                if (const auto it = spotSlotOf.find(kTorchSlotKey); it != spotSlotOf.end()) {
-                    slot = torchShadowSlot = it->second;
-                    spotSlotLive[slot] = true;
-                    spotShadowCount = std::max(spotShadowCount, slot + 1);
-                    const glm::vec3 up = std::abs(aim.y) > 0.99f ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
-                    const float fov = glm::radians(flashlight.SpillOuterDeg * 2.0f + 4.0f);
-                    spotShadowFar[slot] = flashlight.HotRange;
-                    spotShadowPos[slot] = pos;
-                    spotShadowHalfTan[slot] = std::tan(0.5f * fov);
-                    spotShadowNear[slot] = flashlight.ShadowNear;
-                    spotShadowBias[slot] = 1.0f;
-                    spotShadowNormalBias[slot] = 1.0f;
-                    spotShadowSoftness[slot] = 1.5f;
-                    spotShadowVP[slot] = MakePerspective(glm::degrees(fov), 1.0f, flashlight.ShadowNear, spotShadowFar[slot]) *
-                                         glm::lookAt(pos, pos + aim, up);
+            // The frame's lights and shadow slots, built ONCE per frame and shared by the Scene and Game views (#122).
+            FrameLights frameLights;
+            {
+                TorchLight torch;
+                if (torchLit) {
+                    torch.Position = flashlight.Position; torch.Aim = flashlight.Aim; torch.Color = flashlight.Color;
+                    torch.HotIntensity = flashlight.HotIntensity; torch.HotRange = flashlight.HotRange;
+                    torch.HotOuterDeg = flashlight.HotOuterDeg; torch.HotInnerDeg = flashlight.HotInnerDeg;
+                    torch.SpillIntensity = flashlight.SpillIntensity; torch.SpillRange = flashlight.SpillRange;
+                    torch.SpillOuterDeg = flashlight.SpillOuterDeg; torch.SpillInnerDeg = flashlight.SpillInnerDeg;
+                    torch.ShadowNear = flashlight.ShadowNear;
                 }
-                // Both cones share the one shadow map (it spans the spill), so the spill's shadows match the hotspot's.
-                lightBuffer.AddSpot(pos, aim, flashlight.Color, flashlight.HotIntensity, flashlight.HotRange,
-                                    std::cos(glm::radians(flashlight.HotOuterDeg)), std::cos(glm::radians(flashlight.HotInnerDeg)), slot, 0u);
-                lightBuffer.AddSpot(pos, aim, flashlight.Color, flashlight.SpillIntensity, flashlight.SpillRange,
-                                    std::cos(glm::radians(flashlight.SpillOuterDeg)), std::cos(glm::radians(flashlight.SpillInnerDeg)), slot, 0u);
+                LightGatherInputs lightIn;
+                lightIn.world = &world;
+                lightIn.lights = &lightBuffer;
+                lightIn.atmosphere = &skyAtmosphere;
+                lightIn.viewCam = playing ? gameCam : &editorCamera; // the view the point/spot lights fade by
+                lightIn.skyCameraPos = skyCameraPos;
+                lightIn.defaultSunDir = lightDir;
+                lightIn.physicalSky = physicalSky;
+                lightIn.prefabMode = editor.InPrefabMode();
+                lightIn.frame = frameIndex;
+                lightIn.torch = torchLit ? &torch : nullptr;
+                // Lights panel solo/mute is an editing aid only - Play renders every light (#140).
+                if (!playing) lightIn.suppressed = [&](entt::entity e) { return editor.IsLightSuppressed(world, e); };
+                lightGather.Gather(lightIn, frameLights);
+                editor.SetShadowOverBudget(std::move(frameLights.OverBudget), frameLights.SpotBudget, frameLights.PointBudget);
             }
-            for (auto e : world.Registry.view<TransformComponent, LightComponent>()) {
-                if (lightBuffer.Count() >= LightBuffer::kMaxLights) { lightBuffer.MarkOverflowed(); break; }
-                if (world.Registry.all_of<InactiveTag>(e)) continue;
-                // Lights panel solo/mute is an editing aid only — Play renders every light (#140).
-                if (!playing && editor.IsLightSuppressed(world, e)) continue;
-                const auto& lc = world.Registry.get<LightComponent>(e);
-                // A dark point or spot light (a scripted flash between flashes) adds nothing, but every fragment in its
-                // range would still shade it. (A directional keeps its slot: it decides the cascade pass below.)
-                if (lc.Kind != LightComponent::Type::Directional &&
-                    (lc.Intensity <= 0.0f || glm::dot(lc.Color, lc.Color) <= 0.0f)) continue;
-                glm::mat4 m = world.ComposeWorldTransform(e);
-                glm::vec3 pos = glm::vec3(m[3]);
-                glm::vec3 aim = glm::normalize(glm::vec3(m * glm::vec4(0, 0, -1, 0)));
-                // A point/spot light too small on screen to show fades out, then drops out (DistanceFade).
-                float localIntensity = lc.Intensity;
-                if (lc.Kind != LightComponent::Type::Directional) {
-                    const float fade = LightBuffer::DistanceFade(lc.Range, glm::length(pos - lightViewCam.Position), lightTanHalfFov);
-                    if (fade <= 0.0f) continue;
-                    localIntensity *= fade;
-                }
-                if (lc.Kind == LightComponent::Type::Directional) {
-                    glm::vec3 dirColor = lc.Color;
-                    float dirIntensity = lc.Intensity;
-                    if (physicalSky && !frameSkyResolved && lc.Intensity > 0.0f) {
-                        frameSky = skyAtmosphere.ResolveLighting(world.Sky, aim, lc.Color * lc.Intensity,
-                                                                 lc.AngularSizeDegrees, skyCameraPos);
-                        frameSkyResolved = true;
-                        aim = -frameSky.LightDir;
-                        dirColor = frameSky.LightRadiance;
-                        dirIntensity = 1.0f;
-                    }
-                    // Only the first lit directional drives the cascade pass (below) - it alone samples it.
-                    lightBuffer.AddDirectional(aim, dirColor, dirIntensity, !frameHaveDirectional && lc.Intensity > 0.0f,
-                                               ~(std::uint32_t)lc.CullingMask, lc.VolumetricIntensity); // #203
-                    // A zero-intensity sun contributes no light, so it must not drive the
-                    // cascaded shadow pass either — it's the way a scene opts out of having a
-                    // directional at all while still suppressing SceneSerializer's synthesised
-                    // fallback sun (which keys off a Directional existing, not its intensity).
-                    if (lc.Intensity > 0.0f) {
-                        if (!frameHaveDirectional) {
-                            frameSunDir = aim;
-                            frameSunAngularDeg = lc.AngularSizeDegrees;
-                            frameSunCastShadows = lc.Shadow.Enabled;
-                            frameSunShadowBias = lc.Shadow.Bias;
-                            frameSunShadowNormalBias = lc.Shadow.NormalBias;
-                            frameSunShadowSoftness = lc.Shadow.Softness;
-                        }
-                        frameHaveDirectional = true;
-                    }
-                } else if (lc.Kind == LightComponent::Type::Spot) {
-                    float cosOuter = cosf(glm::radians(lc.SpotAngleDegrees));
-                    float cosInner = cosf(glm::radians(lc.SpotAngleDegrees * 0.9f));
-                    int slot = -1;
-                    if (const auto it = spotSlotOf.find(e); it != spotSlotOf.end()) {
-                        slot = it->second;
-                        spotSlotLive[slot] = true;
-                        spotShadowCount = std::max(spotShadowCount, slot + 1);
-                        glm::vec3 up = std::abs(aim.y) > 0.99f ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0);
-                        float fov = glm::radians(std::min(lc.SpotAngleDegrees * 2.0f + 4.0f, 175.0f));
-                        float nearP = std::max(lc.Shadow.NearPlane, 1e-3f);
-                        spotShadowFar[slot] = std::max(lc.Range, 0.2f);
-                        spotShadowPos[slot] = pos;
-                        spotShadowHalfTan[slot] = std::tan(0.5f * fov);
-                        spotShadowNear[slot] = nearP;
-                        spotShadowBias[slot] = lc.Shadow.Bias;
-                        spotShadowNormalBias[slot] = lc.Shadow.NormalBias;
-                        spotShadowSoftness[slot] = lc.Shadow.Softness;
-                        // #202 - MakePerspective takes degrees; `fov` above is already radians.
-                        spotShadowVP[slot] = MakePerspective(glm::degrees(fov), 1.0f, nearP, spotShadowFar[slot]) *
-                                             glm::lookAt(pos, pos + aim, up);
-                    }
-                    lightBuffer.AddSpot(pos, aim, lc.Color, localIntensity, lc.Range, cosOuter, cosInner, slot,
-                                        ~(std::uint32_t)lc.CullingMask, lc.VolumetricIntensity); // #203
-                } else {
-                    int slot = -1;
-                    if (const auto it = pointSlotOf.find(e); it != pointSlotOf.end()) {
-                        slot = it->second;
-                        pointSlotLive[slot] = true;
-                        pointShadowCount = std::max(pointShadowCount, slot + 1);
-                        pointShadowPos[slot] = pos;
-                        pointShadowFar[slot] = std::max(lc.Range, 0.2f);
-                        pointShadowNear[slot] = std::max(lc.Shadow.NearPlane, 1e-3f);
-                        pointShadowBias[slot] = lc.Shadow.Bias;
-                        pointShadowNormalBias[slot] = lc.Shadow.NormalBias;
-                    }
-                    lightBuffer.AddPoint(pos, lc.Color, localIntensity, lc.Range, slot, ~(std::uint32_t)lc.CullingMask,
-                                        lc.VolumetricIntensity); // #203
-                }
-            }
-            // Prefab Mode has a render-only sun when the prefab owns no directional light.
-            // There is no helper entity to select, parent or accidentally save into the asset.
-            // An authored directional (even disabled) takes precedence over the preview sun.
-            bool prefabOwnsSun = false;
-            if (editor.InPrefabMode()) {
-                for (auto [e, light] : world.Registry.view<const LightComponent>().each())
-                    if (light.Kind == LightComponent::Type::Directional) { prefabOwnsSun = true; break; }
-                if (!prefabOwnsSun && lightBuffer.Count() < LightBuffer::kMaxLights) {
-                    const glm::vec3 previewSunColor(1.0f, 0.96f, 0.9f);
-                    glm::vec3 radiance = previewSunColor * 5.0f;
-                    frameSunDir = glm::normalize(glm::vec3(-0.4f, -0.8f, -0.3f));
-                    if (physicalSky) {
-                        frameSky = skyAtmosphere.ResolveLighting(world.Sky, frameSunDir, radiance,
-                                                                 frameSunAngularDeg, skyCameraPos);
-                        frameSkyResolved = true;
-                        frameSunDir = -frameSky.LightDir;
-                        radiance = frameSky.LightRadiance;
-                    }
-                    lightBuffer.AddDirectional(frameSunDir, radiance, 1.0f, true);
-                    frameHaveDirectional = true;
-                    frameSunCastShadows = true;
-                }
-            }
-            // Ordinary scenes without lights remain intentionally unlit.
-            lightBuffer.SortLocalNearestFirst(lightViewCam.Position); // the per-cluster cap keeps the near ones
-            lightBuffer.Upload();
-            const int frameLightCount = lightBuffer.Count();
+            ShadowFrameInputs shadowIn;
+            shadowIn.world = &world;
+            shadowIn.lights = &frameLights;
+            shadowIn.sunShader = &shadowShader;
+            shadowIn.localShader = &localShadowShader;
+            shadowIn.sunMap = &shadowMap;
+            shadowIn.spotMap = &spotShadowMap;
+            shadowIn.pointMap = &pointShadowMap;
+            shadowIn.frame = frameIndex;
+            shadowIn.windowWidth = window.GetWidth();
+            shadowIn.windowHeight = window.GetHeight();
 
-            // #109 — the sun's cascades are fitted to the view being RENDERED, per drawScene():
-            // they used to be fitted once per frame to one camera (the player's in Play, else the
-            // editor's) while both the Scene and Game views sampled them, so the other view had
-            // missing or blurry shadows. In the default layout Scene and Game are tabs and only one
-            // renders per frame, so this costs nothing extra; with both on screen the cascades
-            // render twice. A second view with the same matrices in the same frame reuses them.
-            const bool sunShadowsWanted = world.ShadowsEnabled && frameHaveDirectional && frameSunCastShadows;
-            struct SunShadowFit { std::uint64_t frame = ~0ull; glm::mat4 view{0.0f}, proj{0.0f}; };
-            static SunShadowFit lastSunFit;
-            auto renderSunShadows = [&](const glm::mat4& fitView, const glm::mat4& fitProj) -> bool {
-                if (!sunShadowsWanted) return false;
-                if (lastSunFit.frame == (std::uint64_t)frameIndex && lastSunFit.view == fitView && lastSunFit.proj == fitProj)
-                    return true; // already fitted to exactly this view this frame
-                PROFILE_SCOPE("Sun Shadow Pass");
-                PROFILE_GPU_SCOPE("Sun Shadow Pass");
-                // The caller has its own target bound; the pass renders into the cascade array.
-                GLint prevDrawFbo = 0, prevReadFbo = 0, prevViewport[4] = {0, 0, 0, 0};
-                glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prevDrawFbo);
-                glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFbo);
-                glGetIntegerv(GL_VIEWPORT, prevViewport);
-
-                shadowMap.Configure(world.ShadowResolution, world.ShadowCascades);
-                // Gather the casters once - registry lookups, world transform, world bounds - and
-                // reuse the list for every cascade (it used to redo all of it per cascade).
-                struct SunCaster {
-                    Model* model;
-                    const std::vector<std::shared_ptr<MaterialAsset>>* materials;
-                    const VisibleIndexBuffer* visible; // an outfit piece's uncovered triangles (OutfitHideTag)
-                    glm::mat4 xform;
-                    AABB bounds;
-                    bool bounded, twoSided;
-                };
-                static std::vector<SunCaster> sunCasters;
-                sunCasters.clear();
-                // #160 — the cascades' near planes reach every occluder: fitted to a box around everything that can
-                // draw (RenderableBounds, a cheap superset of the casters), so the casters can then be gathered
-                // against the fitted cascades - a forest's casters outside every cascade are never read at all.
-                glm::vec3 casterMin(std::numeric_limits<float>::max()), casterMax(-std::numeric_limits<float>::max());
-                RenderableBounds(world, casterMin, casterMax);
-                shadowMap.SetSplitLambda(world.ShadowCascadeSplit);
-                shadowMap.Update(fitView, fitProj, frameSunDir, world.ShadowDistance, &casterMin, &casterMax);
-                Frustum casterCells[CascadedShadowMap::kMaxCascades];
-                for (int c = 0; c < shadowMap.Count(); ++c) casterCells[c] = Frustum::FromViewProj(shadowMap.LightViewProj(c));
-                VisibilityQuery casts; // #163 - Cast Shadows: Off skips
-                casts.ShadowCasters = true;
-                casts.CellCull = casterCells; // castsInto below draws nothing outside every cascade's frustum
-                casts.CellCullCount = shadowMap.Count();
-                static std::vector<VisibleRenderable> casting;
-                GatherVisible(world, casts, casting);
-                for (const VisibleRenderable& v : casting) {
-                    const auto& r = *v.Renderable;
-                    SunCaster& sc = sunCasters.emplace_back();
-                    sc.model = r.ModelRef.get();
-                    sc.materials = &r.Materials;
-                    const auto* hide = world.Registry.try_get<OutfitHideTag>(v.Entity);
-                    sc.visible = hide ? hide->Visible.get() : nullptr;
-                    sc.xform = v.Xform;
-                    // #163 - Cast Shadows: Two Sided draws without back-face culling.
-                    sc.twoSided = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
-                    // As posed (Model::PosedBounds), the bounds the main pass culls with.
-                    sc.bounded = v.Bounded;
-                    sc.bounds = AABB{v.WorldMin, v.WorldMax};
-                }
-                // Consecutive draws of the same model share its VAO and (usually) its material,
-                // which the state cache then skips rebinding.
-                std::sort(sunCasters.begin(), sunCasters.end(),
-                          [](const SunCaster& a, const SunCaster& b) { return a.model < b.model; });
-
-                glEnable(GL_DEPTH_TEST);
-                glDepthMask(GL_TRUE);
-                // Store the LIGHT-FACING surface (back-face cull), matching the spot/point passes.
-                // Front-face culling stored a caster's far side, which under any convex/curved
-                // occluder (sphere worst) sits far enough behind the contact that the shadow
-                // detached from the object's base at grazing sun angles — the #134 sun-bay gap.
-                // SunShadow()'s bias is texel-proportional and now carries the acne protection;
-                // this polygon offset is just a hair of extra slack for flat lit receivers.
-                glEnable(GL_CULL_FACE);
-                glCullFace(GL_BACK);
-                glEnable(GL_POLYGON_OFFSET_FILL);
-                glPolygonOffset(1.0f, 2.0f);
-
-                shadowShader.Bind();
-                // #194: resolve this hot uniform location once, outside the cascade loop below.
-                int shadowLightViewProjLoc = shadowShader.Loc("uLightViewProj");
-                const int cascadeCount = shadowMap.Count();
-                // A caster goes into a cascade only if its shadow can land where that cascade is read
-                // (CascadedShadowMap::CasterReachesSlice), with the PCF kernel SunShadow uses.
-                const float sunKernelTexels = CascadedShadowMap::SunKernelTexels(frameSunAngularDeg, frameSunShadowSoftness);
-                auto castsInto = [&](const SunCaster& sc, int c, const Frustum& cascadeFrustum) {
-                    if (!sc.bounded) return true;
-                    return cascadeFrustum.Intersects(sc.bounds) &&
-                           shadowMap.CasterReachesSlice(c, sc.bounds.Min, sc.bounds.Max, sunKernelTexels, frameSunShadowNormalBias);
-                };
-                if (CascadedShadowMap::LayeredSupported()) {
-                    // One pass for every cascade: each caster is drawn once, instanced over the
-                    // consecutive cascades its bounds touch, and the vertex shader routes each
-                    // instance to its layer (gl_Layer) — a quarter of the draw calls of the
-                    // per-cascade loop below, which remains the fallback.
-                    shadowMap.BeginLayered();
-                    Frustum cascadeFrustums[CascadedShadowMap::kMaxCascades];
-                    glm::mat4 cascadeVP[CascadedShadowMap::kMaxCascades];
-                    for (int c = 0; c < cascadeCount; ++c) {
-                        cascadeVP[c] = shadowMap.LightViewProj(c);
-                        cascadeFrustums[c] = Frustum::FromViewProj(cascadeVP[c]);
-                    }
-                    shadowShader.SetMat4Array("uCascadeViewProj[0]", cascadeCount, cascadeVP);
-                    shadowShader.SetInt("uCascadeLayered", 1);
-                    const int firstLoc = shadowShader.Loc("uCascadeFirst");
-                    static std::vector<DepthCaster> sunDraws;
-                    sunDraws.clear();
-                    for (const SunCaster& sc : sunCasters) {
-                        unsigned mask = 0;
-                        for (int c = 0; c < cascadeCount; ++c)
-                            if (castsInto(sc, c, cascadeFrustums[c])) mask |= 1u << c;
-                        if (!mask) continue;
-                        // One draw per run of consecutive cascades (almost always one run), instanced over them; the
-                        // copies of a model with the same run draw together (GPU instancing).
-                        for (int c = 0; c < cascadeCount;) {
-                            if (!(mask & (1u << c))) { ++c; continue; }
-                            int end = c;
-                            while (end + 1 < cascadeCount && (mask & (1u << (end + 1)))) ++end;
-                            sunDraws.push_back({sc.model, sc.materials, sc.visible, &sc.xform, sc.twoSided, c, end - c + 1});
-                            c = end + 1;
-                        }
-                    }
-                    // Each cascade rasterises only the texels its slice of the view can read (CascadedShadowMap::
-                    // BeginLayeredScissor): the rest of a layer is never sampled, and the forest's terrain and
-                    // canopy filled all of it - most of the pass's fill cost.
-                    static const bool sliceScissor = CascadedShadowMap::ViewportIndexSupported();
-                    if (sliceScissor) {
-                        shadowMap.BeginLayeredScissor(sunKernelTexels, frameSunShadowNormalBias);
-                        shadowShader.SetInt("uCascadeViewport", 1);
-                    }
-                    DrawDepthCasters(shadowShader, sunDraws, firstLoc);
-                    if (sliceScissor) {
-                        shadowShader.SetInt("uCascadeViewport", 0);
-                        CascadedShadowMap::EndLayeredScissor();
-                    }
-                    // The SSAO depth pre-pass reuses this program with uLightViewProj.
-                    shadowShader.SetInt("uCascadeLayered", 0);
-                }
-                else for (int c = 0; c < cascadeCount; ++c) {
-                    shadowMap.Begin(c);
-                    shadowShader.SetMat4(shadowLightViewProjLoc, shadowMap.LightViewProj(c));
-                    // Cull each cascade's caster list against that cascade's own ortho frustum —
-                    // the near slice covers a few metres yet used to redraw the whole level x4.
-                    // Animated casters cull on their padded bounds too; they used to be drawn
-                    // into every cascade regardless.
-                    const Frustum cascadeFrustum = Frustum::FromViewProj(shadowMap.LightViewProj(c));
-                    static std::vector<DepthCaster> sunDraws;
-                    sunDraws.clear();
-                    for (const SunCaster& sc : sunCasters)
-                        if (castsInto(sc, c, cascadeFrustum)) sunDraws.push_back({sc.model, sc.materials, sc.visible, &sc.xform, sc.twoSided});
-                    DrawDepthCasters(shadowShader, sunDraws);
-                }
-
-                glDisable(GL_POLYGON_OFFSET_FILL);
-                glCullFace(GL_BACK);
-                glBindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint)prevDrawFbo);
-                glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)prevReadFbo);
-                glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
-                GLStateCache::Invalidate();
-                lastSunFit = {(std::uint64_t)frameIndex, fitView, fitProj};
-                return true;
-            };
-
-            // --- Spot-light shadow maps (#119) — once per frame, like the sun CSM ------------
-            // Layers are allocated for the budget, not the hard ceiling (#110); a zero budget
-            // still keeps one layer so sampler unit 9 is never unbound.
-            if (world.ShadowsEnabled) {
-                spotShadowMap.Configure(std::min(world.ShadowResolution, 4096), std::max(spotShadowCount, 1)); // sized to the slots in use (grow-only)
-            }
             // #163 - spot/point shadows render once per frame, so they use the LOD levels of the
             // camera the user is mainly looking through (each view's draw re-applies its own).
             {
@@ -3176,356 +2785,18 @@ int main(int argc, char** argv) {
                 }
                 Model::PreSkin(s_PreSkinModels);
             }
-            // Spot and point casters, gathered once for every light and cube face (each used to
-            // walk the whole registry again). Animated models are culled on bounds padded around
-            // the centre, like the sun and main passes, instead of being drawn into every map.
-            struct LocalCaster {
-                Model* model;
-                const std::vector<std::shared_ptr<MaterialAsset>>* materials;
-                const VisibleIndexBuffer* visible; // an outfit piece's uncovered triangles (OutfitHideTag)
-                glm::mat4 xform;
-                AABB bounds;
-                std::uint32_t id;
-                bool bounded, twoSided, animated;
-                bool moving; // moved within the last kMovingFrames (a rolling ball, a door)
-                bool settling; // stopped moving / animating within the last kSettleFrames (see dynamicFor)
-                std::uint64_t settleStart; // the frame it stopped counting as moving / animated
-                bool player; // the player's own body and gun (world copies): no shadow in their own flashlight
-                std::uint64_t hash; // id, model, materials, transform and twoSided folded once (see hashCaster)
-            };
-            auto hashBytes = [](std::uint64_t h, const void* data, size_t n) {
-                const unsigned char* p = static_cast<const unsigned char*>(data);
-                for (size_t i = 0; i < n; ++i) { h ^= p[i]; h *= 1099511628211ull; }
-                return h;
-            };
-            // Per caster, its transform and when it last changed; drives LocalCaster::moving.
-            // A skinned caster counts as animated only while its pose changes (PoseVersion): a corpse at rest, or a body held
-            // still, is a static caster like any prop instead of being redrawn into every light's map each frame.
-            struct CasterMotion { glm::mat4 xform; std::uint64_t moved; std::uint64_t pose = 0, posed = 0, seen = 0; };
-            static std::unordered_map<std::uint32_t, CasterMotion> s_CasterMotion;
-            constexpr std::uint64_t kMovingFrames = 30;
-            // Smoothness: when casters stop together (everything settling 30 frames after Play), every light that sees
-            // them used to rebuild its whole static cache in the same frame. A caster that just stopped stays "settling"
-            // this many frames, and each light takes it into its static depth on its own turn of them (dynamicFor);
-            // until then that light draws it with the moving casters, over a cache without it - never a missing shadow.
-            constexpr std::uint64_t kSettleFrames = 4;
-            constexpr std::uint64_t kStaleFrames = 600; // a caster unseen this long is gone (scene reload, deleted entity)
-            static std::vector<LocalCaster> localCasters;
-            localCasters.clear();
-            if (world.ShadowsEnabled && (spotShadowCount > 0 || pointShadowCount > 0)) {
-                PROFILE_SCOPE("Local Shadow Gather");
-                VisibilityQuery casts; // #163: not Cast Shadows Off
-                casts.ShadowCasters = true;
-                static std::vector<VisibleRenderable> casting;
-                GatherVisible(world, casts, casting);
-                for (const VisibleRenderable& v : casting) {
-                    const entt::entity entity = v.Entity;
-                    const auto& r = *v.Renderable;
-                    LocalCaster& lc = localCasters.emplace_back();
-                    lc.model = r.ModelRef.get();
-                    lc.materials = &r.Materials;
-                    const auto* hide = world.Registry.try_get<OutfitHideTag>(entity);
-                    lc.visible = hide ? hide->Visible.get() : nullptr;
-                    lc.xform = v.Xform;
-                    lc.id = static_cast<std::uint32_t>(entity);
-                    lc.twoSided = r.CastShadows == RenderableComponent::ShadowCasting::TwoSided;
-                    lc.player = world.Registry.any_of<HiddenFromOwnerTag, PlayerBodyTag>(entity);
-                    // Skinned, not "has its own clips": a character whose clips live in other files (every NPC
-                    // and outfit piece) animates too, and its shadow must follow.
-                    // First seen counts as settled (unsigned wrap keeps that true on early frames).
-                    const std::uint64_t now = (std::uint64_t)frameIndex;
-                    auto [motion, first] = s_CasterMotion.try_emplace(lc.id, CasterMotion{lc.xform, now - kMovingFrames - kSettleFrames, 0, now, now});
-                    // A record not touched for a while belongs to a gone entity: a recycled id starts fresh, not with its history.
-                    if (!first && now - motion->second.seen > kStaleFrames)
-                        motion->second = CasterMotion{lc.xform, now - kMovingFrames - kSettleFrames, 0, now, now};
-                    motion->second.seen = now;
-                    if (motion->second.xform != lc.xform) { motion->second.xform = lc.xform; motion->second.moved = now; }
-                    lc.moving = now - motion->second.moved < kMovingFrames;
-                    if (lc.model->HasBones() && motion->second.pose != lc.model->PoseVersion()) {
-                        motion->second.pose = lc.model->PoseVersion();
-                        motion->second.posed = now;
-                    }
-                    lc.animated = lc.model->HasBones() && now - motion->second.posed < kMovingFrames;
-                    lc.settleStart = std::max(motion->second.moved, lc.model->HasBones() ? motion->second.posed : 0) + kMovingFrames;
-                    lc.settling = !lc.moving && !lc.animated && now - lc.settleStart < kSettleFrames;
-                    lc.bounded = v.Bounded; // as posed, like the main pass
-                    lc.bounds = AABB{v.WorldMin, v.WorldMax};
-                    std::uint64_t h = 1469598103934665603ull;
-                    h = hashBytes(h, &lc.id, sizeof lc.id);
-                    h = hashBytes(h, &lc.model, sizeof lc.model);
-                    const void* mats = lc.materials->empty() ? nullptr : lc.materials->front().get();
-                    h = hashBytes(h, &mats, sizeof mats);
-                    const size_t matCount = lc.materials->size();
-                    h = hashBytes(h, &matCount, sizeof matCount);
-                    h = hashBytes(h, &lc.xform, sizeof lc.xform);
-                    lc.hash = hashBytes(h, &lc.twoSided, sizeof lc.twoSided);
-                }
-                // Drop the records of casters gone for a while so the map doesn't grow across scene loads.
-                if ((frameIndex & 255) == 0) {
-                    const std::uint64_t now = (std::uint64_t)frameIndex;
-                    for (auto it = s_CasterMotion.begin(); it != s_CasterMotion.end();)
-                        it = now - it->second.seen > kStaleFrames ? s_CasterMotion.erase(it) : std::next(it);
-                }
-            }
-            // A local shadow map is only redrawn when something it sees changed: its light, the
-            // map itself, or any caster inside it (moved, swapped model or materials, or animated).
-            // Everything static - most lamps, most of the time - keeps last frame's depth.
-            // Each caster's own hash (LocalCaster::hash) is computed once when it is gathered; a light folds it into its
-            // signature with one multiply instead of re-hashing ~100 bytes per caster per light.
-            auto hashCaster = [](std::uint64_t h, const LocalCaster& c) { return (h ^ c.hash) * 1099511628211ull; };
-            static std::uint64_t s_SpotShadowSig[SpotShadowMap::kMaxSpots] = {}; // the static casters'
-            static bool s_SpotHadAnimated[SpotShadowMap::kMaxSpots] = {};
-            // Per spot, the texels its animated casters covered when last drawn ({x0, y0, x1, y1}).
-            static glm::ivec4 s_SpotDynamicRect[SpotShadowMap::kMaxSpots] = {};
-            static std::uint64_t s_PointShadowSig[PointShadowMap::kMaxPoints] = {}; // the static casters'
-            // Per point light and cube face: moving casters were drawn into the live face last frame.
-            static bool s_PointFaceHadDynamic[PointShadowMap::kMaxPoints][6] = {};
-            // Drawn with the moving casters for this light, this frame: animated, moving, or settling before the light's
-            // turn (kSettleFrames). `turnSlot` spreads the lights over the turns (point lights offset from spots).
-            // A settling caster stays with the moving ones until the light's first turn since it settled, and is static
-            // from then on (so the light's static signature changes once, on its turn).
-            const auto dynamicFor = [&](const LocalCaster& c, int turnSlot) {
-                if (c.animated || c.moving) return true;
-                if (!c.settling) return false;
-                const std::uint64_t k = kSettleFrames;
-                const std::uint64_t turn = c.settleStart + ((std::uint64_t)turnSlot % k + k - c.settleStart % k) % k;
-                return (std::uint64_t)frameIndex < turn;
-            };
-            // Per spot, the static signature its live layer was drawn with when the light moved (a full draw, no cache).
-            static std::uint64_t s_SpotLiveSig[SpotShadowMap::kMaxSpots] = {};
-            if (world.ShadowsEnabled && spotShadowCount > 0) {
-                PROFILE_SCOPE("Spot Shadow Pass");
-                PROFILE_GPU_SCOPE("Spot Shadow Pass");
-                glEnable(GL_DEPTH_TEST);
-                glDepthMask(GL_TRUE);
-                // Store the LIGHT-FACING surface (back-face cull), NOT the far side. The sun CSM
-                // front-face-culls fine because its rays are parallel, but a perspective spot's
-                // rays diverge and a curved caster's back face sits far enough past the contact
-                // that culling front faces detached the contact shadow — the sphere gap in #134.
-                // gl_FragDepth is written linearly here, so glPolygonOffset does nothing; the
-                // bias lives entirely in SpotShadow()'s texel-proportional `ref` term.
-                glEnable(GL_CULL_FACE);
-                glCullFace(GL_BACK);
-
-                localShadowShader.Bind(); // linear distance-to-light depth
-                // The program's sampler2D uAlbedo reads unit 0 at the pass's first clear/blit/draw, before
-                // DrawDepthOnly binds anything there (KHR 131204 on frame 1).
-                GLStateCache::BindTexture2D(0, DefaultTextures::White());
-                // #194: resolve once, outside the per-spot x per-caster loop.
-                int localLightViewProjLoc = localShadowShader.Loc("uLightViewProj");
-                int localLightPosLoc = localShadowShader.Loc("uShadowLightPos");
-                int localFarLoc = localShadowShader.Loc("uShadowFar");
-                static std::vector<const LocalCaster*> visible;
-                // Per spot slot, last frame's view-projection: a light that moves (the flashlight) draws straight into its
-                // live layer - caching static depth it would throw away next frame was a whole extra draw and layer copy.
-                static glm::mat4 s_SpotLastVP[SpotShadowMap::kMaxSpots] = {};
-                for (int s = 0; s < spotShadowCount; ++s) {
-                    if (!spotSlotLive[s]) continue;
-                    const bool lightMoved = spotShadowVP[s] != s_SpotLastVP[s];
-                    s_SpotLastVP[s] = spotShadowVP[s];
-                    Frustum lf = Frustum::FromViewProj(spotShadowVP[s]);
-                    visible.clear();
-                    bool animated = false;
-                    // The static casters' signature: animated ones redraw every frame anyway.
-                    std::uint64_t sig = 1469598103934665603ull;
-                    const unsigned int map = spotShadowMap.DepthArray();
-                    const int res = spotShadowMap.Resolution() * 64 + spotShadowMap.Layers(); // a reallocation
-                    sig = hashBytes(sig, &map, sizeof map);
-                    sig = hashBytes(sig, &res, sizeof res);
-                    sig = hashBytes(sig, &spotShadowVP[s], sizeof spotShadowVP[s]);
-                    sig = hashBytes(sig, &spotShadowPos[s], sizeof spotShadowPos[s]);
-                    sig = hashBytes(sig, &spotShadowFar[s], sizeof spotShadowFar[s]);
-                    for (const LocalCaster& c : localCasters) {
-                        if (c.bounded && !lf.Intersects(c.bounds)) continue;
-                        if (c.player && s == torchShadowSlot) continue; // the torch is in the player's hand
-                        visible.push_back(&c);
-                        // Animated or recently moved casters are drawn over the cached static depth
-                        // every frame; the rest are the static signature.
-                        const bool dynamic = dynamicFor(c, s);
-                        animated = animated || dynamic;
-                        if (!dynamic) sig = hashCaster(sig, c);
-                    }
-                    const bool staticChanged = sig != s_SpotShadowSig[s];
-                    // Drawn whole when the light last moved, nothing has changed or moved in it since, and it isn't this
-                    // light's turn: that layer is still right. Its cache is built on its turn, not all at once the
-                    // frame after a batch of lights is reassigned.
-                    const bool spotTurn = (std::uint64_t)frameIndex % kSettleFrames == (std::uint64_t)s % kSettleFrames;
-                    if (!lightMoved && s_SpotShadowSig[s] == 0 && sig == s_SpotLiveSig[s] && !animated && !s_SpotHadAnimated[s] && !spotTurn)
-                        continue;
-                    // Unchanged, and no animated caster in it now or last frame: keep the layer.
-                    if (!staticChanged && !animated && !s_SpotHadAnimated[s]) continue;
-                    s_SpotHadAnimated[s] = animated;
-                    localShadowShader.SetMat4(localLightViewProjLoc, spotShadowVP[s]);
-                    localShadowShader.SetVec3(localLightPosLoc, spotShadowPos[s]);
-                    localShadowShader.SetFloat(localFarLoc, spotShadowFar[s]);
-                    // Where this frame's animated casters land in the map: their bounds' corners through
-                    // the light, a texel of slack each side. A caster without bounds or reaching behind the
-                    // light covers it all.
-                    const int mapRes = spotShadowMap.Resolution();
-                    glm::ivec4 dynRect(mapRes, mapRes, 0, 0); // empty
-                    for (const LocalCaster* c : visible) {
-                        if (!dynamicFor(*c, s)) continue;
-                        bool whole = !c->bounded;
-                        for (int k = 0; k < 8 && !whole; ++k) {
-                            const glm::vec3 corner((k & 1) ? c->bounds.Max.x : c->bounds.Min.x, (k & 2) ? c->bounds.Max.y : c->bounds.Min.y,
-                                                   (k & 4) ? c->bounds.Max.z : c->bounds.Min.z);
-                            const glm::vec4 clip = spotShadowVP[s] * glm::vec4(corner, 1.0f);
-                            if (clip.w <= 1e-4f) { whole = true; break; }
-                            const glm::vec2 texel = (glm::vec2(clip) / clip.w * 0.5f + 0.5f) * (float)mapRes;
-                            dynRect = glm::ivec4(std::min(dynRect.x, (int)std::floor(texel.x) - 1), std::min(dynRect.y, (int)std::floor(texel.y) - 1),
-                                                 std::max(dynRect.z, (int)std::ceil(texel.x) + 1), std::max(dynRect.w, (int)std::ceil(texel.y) + 1));
-                        }
-                        if (whole) { dynRect = glm::ivec4(0, 0, mapRes, mapRes); break; }
-                    }
-                    auto drawCasters = [&](bool animatedOnes) {
-                        static std::vector<DepthCaster> draws;
-                        draws.clear();
-                        for (const LocalCaster* c : visible)
-                            if (dynamicFor(*c, s) == animatedOnes) draws.push_back({c->model, c->materials, c->visible, &c->xform, c->twoSided});
-                        DrawDepthCasters(localShadowShader, draws);
-                    };
-                    if (lightMoved) {
-                        spotShadowMap.Begin(s);
-                        drawCasters(false);
-                        drawCasters(true);
-                        s_SpotShadowSig[s] = 0; // no cache: built on a later still frame (see spotTurn)
-                        s_SpotLiveSig[s] = sig;
-                        s_SpotDynamicRect[s] = glm::ivec4(0, 0, mapRes, mapRes);
-                        continue;
-                    }
-                    // Static casters into the cache only when they changed; then the live layer is
-                    // that depth plus this frame's animated casters (an NPC standing in the spot
-                    // used to redraw the whole arena into it every frame).
-                    if (staticChanged) {
-                        spotShadowMap.BeginStatic(s);
-                        drawCasters(false);
-                        s_SpotShadowSig[s] = sig;
-                    }
-                    // The live layer is the cache plus last frame's animated casters, which stayed within
-                    // their rect: restoring that rect and this frame's from the cache is the whole layer's
-                    // worth (a new cache is copied whole).
-                    const glm::ivec4 prev = s_SpotDynamicRect[s];
-                    const glm::ivec4 copy = staticChanged ? glm::ivec4(0, 0, mapRes, mapRes)
-                                                          : glm::ivec4(glm::min(glm::ivec2(dynRect), glm::ivec2(prev)), glm::max(glm::ivec2(dynRect.z, dynRect.w), glm::ivec2(prev.z, prev.w)));
-                    spotShadowMap.BeginFromStatic(s, copy.x, copy.y, copy.z, copy.w);
-                    drawCasters(true);
-                    s_SpotDynamicRect[s] = dynRect;
-                }
-
-                glDisable(GL_POLYGON_OFFSET_FILL);
-                glCullFace(GL_BACK);
-                glBindFramebuffer(GL_FRAMEBUFFER, 0);
-                glViewport(0, 0, window.GetWidth(), window.GetHeight());
-                GLStateCache::Invalidate();
-            }
-
-            // --- Point-light cube shadow maps (#119) — six faces per casting point light ------
-            if (world.ShadowsEnabled) {
-                pointShadowMap.Configure(std::min(world.ShadowResolution, 1024), std::max(pointShadowBudget, 1));
-            }
-            if (world.ShadowsEnabled && pointShadowCount > 0) {
-                PROFILE_SCOPE("Point Shadow Pass");
-                PROFILE_GPU_SCOPE("Point Shadow Pass");
-                // Standard GL cube-map face order: +X -X +Y -Y +Z -Z, with the conventional ups.
-                static const glm::vec3 kFaceDir[6] = {
-                    { 1, 0, 0}, {-1, 0, 0}, {0,  1, 0}, {0, -1, 0}, {0, 0,  1}, {0, 0, -1} };
-                static const glm::vec3 kFaceUp[6] = {
-                    {0, -1, 0}, {0, -1, 0}, {0, 0,  1}, {0, 0, -1}, {0, -1, 0}, {0, -1, 0} };
-
-                glEnable(GL_DEPTH_TEST);
-                glDepthMask(GL_TRUE);
-                // Store the LIGHT-FACING surface (back-face cull), matching the spot pass. Front-
-                // face culling here stored a sphere's FAR hemisphere, which under this 90°
-                // perspective sits well past the true contact — that was the sphere peter-panning
-                // in #134. gl_FragDepth is linear, so glPolygonOffset is inert; PointShadow()'s
-                // texel-proportional `ref` term carries all the bias.
-                glEnable(GL_CULL_FACE);
-                glCullFace(GL_BACK);
-
-                localShadowShader.Bind(); // linear distance-to-light depth
-                // The program's sampler2D uAlbedo reads unit 0 at the pass's first clear/blit/draw, before
-                // DrawDepthOnly binds anything there (KHR 131204 on frame 1).
-                GLStateCache::BindTexture2D(0, DefaultTextures::White());
-                // #194: resolve once, outside the per-point x 6-face x per-caster loop.
-                int cubeLightPosLoc = localShadowShader.Loc("uShadowLightPos");
-                int cubeFarLoc = localShadowShader.Loc("uShadowFar");
-                int cubeLightViewProjLoc = localShadowShader.Loc("uLightViewProj");
-                static std::vector<const LocalCaster*> inRange;
-                for (int s = 0; s < pointShadowCount; ++s) {
-                    if (!pointSlotLive[s]) continue;
-                    // The light's whole reach: casters outside it can't show on any face.
-                    const glm::vec3 lp = pointShadowPos[s];
-                    const float reach = pointShadowFar[s];
-                    const AABB range{lp - glm::vec3(reach), lp + glm::vec3(reach)};
-                    inRange.clear();
-                    std::uint64_t sig = 1469598103934665603ull;
-                    const unsigned int map = pointShadowMap.DepthCubeArray();
-                    const int res = pointShadowMap.Resolution() * 64 + pointShadowMap.Cubes(); // a reallocation
-                    sig = hashBytes(sig, &map, sizeof map);
-                    sig = hashBytes(sig, &res, sizeof res);
-                    sig = hashBytes(sig, &lp, sizeof lp);
-                    sig = hashBytes(sig, &pointShadowNear[s], sizeof pointShadowNear[s]);
-                    sig = hashBytes(sig, &reach, sizeof reach);
-                    // Animated or recently moved casters are drawn over each face's cached static depth; the
-                    // rest make the static signature (as the spot maps do). A face redraws only when the static
-                    // casters changed or a moving one is in it (or was, last frame): an NPC walking past a lamp
-                    // used to redraw all six faces of every cube in reach, with every caster, every frame.
-                    for (const LocalCaster& c : localCasters) {
-                        if (c.bounded && !range.Intersects(c.bounds)) continue;
-                        inRange.push_back(&c);
-                        if (!dynamicFor(c, s + 2)) sig = hashCaster(sig, c);
-                    }
-                    const bool staticChanged = sig != s_PointShadowSig[s];
-                    s_PointShadowSig[s] = sig;
-                    glm::mat4 proj = MakePerspective(90.0f, 1.0f, pointShadowNear[s], reach); // #202
-                    localShadowShader.SetVec3(cubeLightPosLoc, lp);
-                    localShadowShader.SetFloat(cubeFarLoc, reach);
-                    for (int f = 0; f < 6; ++f) {
-                        glm::mat4 vp = proj * glm::lookAt(lp, lp + kFaceDir[f], kFaceUp[f]);
-                        Frustum lf = Frustum::FromViewProj(vp);
-                        bool dynamicHere = false;
-                        for (const LocalCaster* c : inRange)
-                            if (dynamicFor(*c, s + 2) && (!c->bounded || lf.Intersects(c->bounds))) { dynamicHere = true; break; }
-                        if (!staticChanged && !dynamicHere && !s_PointFaceHadDynamic[s][f]) continue; // keep the face
-                        s_PointFaceHadDynamic[s][f] = dynamicHere;
-                        localShadowShader.SetMat4(cubeLightViewProjLoc, vp);
-                        const auto drawCasters = [&](bool dynamicOnes) {
-                            static std::vector<DepthCaster> draws;
-                            draws.clear();
-                            for (const LocalCaster* c : inRange) {
-                                if (dynamicFor(*c, s + 2) != dynamicOnes) continue;
-                                if (c->bounded && !lf.Intersects(c->bounds)) continue;
-                                draws.push_back({c->model, c->materials, c->visible, &c->xform, c->twoSided});
-                            }
-                            DrawDepthCasters(localShadowShader, draws);
-                        };
-                        if (staticChanged) {
-                            pointShadowMap.BeginStaticFace(s, f);
-                            drawCasters(false);
-                        }
-                        pointShadowMap.BeginFaceFromStatic(s, f);
-                        if (dynamicHere) drawCasters(true);
-                    }
-                }
-
-                glDisable(GL_POLYGON_OFFSET_FILL);
-                glEnable(GL_CULL_FACE);
-                glCullFace(GL_BACK);
-                glBindFramebuffer(GL_FRAMEBUFFER, 0);
-                glViewport(0, 0, window.GetWidth(), window.GetHeight());
-                GLStateCache::Invalidate();
-            }
+            shadowFrame.RenderLocal(shadowIn); // spot and point maps (#119), once per frame
 
             // Physical sky: the frame's LUTs, cloud shadows and (when the sky has changed) the
             // environment capture the IBL bake below convolves. A scene without a lit directional
             // light still gets a sun in its sky, just no light from it.
             if (physicalSky) {
-                if (!frameSkyResolved)
-                    frameSky = skyAtmosphere.ResolveLighting(world.Sky, glm::normalize(lightDir),
+                if (!frameLights.SkyResolved)
+                    frameLights.Sky = skyAtmosphere.ResolveLighting(world.Sky, glm::normalize(lightDir),
                                                              glm::vec3(1.0f, 0.95f, 0.85f) * 5.0f, 0.53f, skyCameraPos);
                 if (!prevWasAtmosphere) skyAtmosphere.ForceEnvironmentCapture();
-                skyAtmosphere.PrepareFrame(world.Sky, frameSky, skyCameraPos);
-                editor.SetSkyClock(frameSky.ClockHours, skyAtmosphere.ClockOffsetHours() != 0.0f);
+                skyAtmosphere.PrepareFrame(world.Sky, frameLights.Sky, skyCameraPos);
+                editor.SetSkyClock(frameLights.Sky.ClockHours, skyAtmosphere.ClockOffsetHours() != 0.0f);
             }
 
             // --- IBL probes (#196) — baked from the sky, NOT per frame ------------------------
@@ -3550,7 +2821,7 @@ int main(int argc, char** argv) {
                 // #277 — keep the HDRI's sun out of ambient/reflections when a directional light
                 // already supplies it (Auto), so it isn't counted twice.
                 const bool clampSun = world.SkyHdriSun == World::HdriSunMode::Remove ||
-                    (world.SkyHdriSun == World::HdriSunMode::Auto && frameHaveDirectional);
+                    (world.SkyHdriSun == World::HdriSunMode::Auto && frameLights.HaveDirectional);
                 const float sunClamp = clampSun ? world.SkyHdriSunThreshold : 0.0f;
                 if (hdriCube && (hdriNeedsBake || iblProbe.NeedsBake(glm::vec3(-1.0f), glm::vec3(-1.0f)) ||
                                  iblProbe.BakedRotation() != skyRot || iblProbe.BakedRadianceClamp() != sunClamp)) {
@@ -3655,23 +2926,23 @@ int main(int argc, char** argv) {
             sceneInputs.decalCullShader    = &clusterDecalCullShader;
             sceneInputs.hdriCube           = hdriCube.get();
             sceneInputs.sunShadowsReady    = false; // set per view in drawScene (#109)
-            sceneInputs.frameLightCount    = frameLightCount;
-            sceneInputs.sunAngularDeg       = frameSunAngularDeg;
-            sceneInputs.sunShadowSoftness   = frameSunShadowSoftness;
-            sceneInputs.sunShadowBias       = frameSunShadowBias;
-            sceneInputs.sunShadowNormalBias = frameSunShadowNormalBias;
-            sceneInputs.spotShadowCount      = spotShadowCount;
-            sceneInputs.spotShadowVP         = spotShadowVP;
-            sceneInputs.spotShadowPos        = spotShadowPos;
-            sceneInputs.spotShadowFar        = spotShadowFar;
-            sceneInputs.spotShadowHalfTan    = spotShadowHalfTan;
-            sceneInputs.spotShadowBias       = spotShadowBias;
-            sceneInputs.spotShadowNormalBias = spotShadowNormalBias;
-            sceneInputs.spotShadowSoftness   = spotShadowSoftness;
-            sceneInputs.pointShadowCount      = pointShadowCount;
-            sceneInputs.pointShadowFar        = pointShadowFar;
-            sceneInputs.pointShadowBias       = pointShadowBias;
-            sceneInputs.pointShadowNormalBias = pointShadowNormalBias;
+            sceneInputs.frameLightCount    = frameLights.LightCount;
+            sceneInputs.sunAngularDeg       = frameLights.SunAngularDeg;
+            sceneInputs.sunShadowSoftness   = frameLights.SunShadowSoftness;
+            sceneInputs.sunShadowBias       = frameLights.SunShadowBias;
+            sceneInputs.sunShadowNormalBias = frameLights.SunShadowNormalBias;
+            sceneInputs.spotShadowCount      = frameLights.SpotCount;
+            sceneInputs.spotShadowVP         = frameLights.SpotVP;
+            sceneInputs.spotShadowPos        = frameLights.SpotPos;
+            sceneInputs.spotShadowFar        = frameLights.SpotFar;
+            sceneInputs.spotShadowHalfTan    = frameLights.SpotHalfTan;
+            sceneInputs.spotShadowBias       = frameLights.SpotBias;
+            sceneInputs.spotShadowNormalBias = frameLights.SpotNormalBias;
+            sceneInputs.spotShadowSoftness   = frameLights.SpotSoftness;
+            sceneInputs.pointShadowCount      = frameLights.PointCount;
+            sceneInputs.pointShadowFar        = frameLights.PointFar;
+            sceneInputs.pointShadowBias       = frameLights.PointBias;
+            sceneInputs.pointShadowNormalBias = frameLights.PointNormalBias;
             sceneInputs.shadowsEnabled   = world.ShadowsEnabled;
             sceneInputs.ssaoEnabled      = world.SsaoEnabled;
             sceneInputs.postFxOff        = FKeyRow::PostFxOff(); // F8
@@ -3682,7 +2953,7 @@ int main(int argc, char** argv) {
                 // re-fit (and shimmer) with every sub-pixel step.
                 const glm::mat4 steadyProj = ctx.TaaVelocity ? TemporalAA::JitterProjection(ctx.Proj, -ctx.TaaJitterNdc) : ctx.Proj;
                 { PROFILE_SCOPE("LOD Select"); world.ApplyLod(ctx.ViewPos, steadyProj); } // #163 - this view's LOD levels (sun shadows too)
-                sceneInputs.sunShadowsReady = renderSunShadows(ctx.View, steadyProj); // #109
+                sceneInputs.sunShadowsReady = shadowFrame.RenderSun(shadowIn, ctx.View, steadyProj); // #109
                 sceneRenderer.RenderScene(world, ctx, sceneInputs, outStats);
             };
 
