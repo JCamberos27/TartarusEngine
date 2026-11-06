@@ -2,7 +2,7 @@
 #include "ScriptIDE.h"
 #include "../../extern/ImGuiColorTextEdit/TextEditor.h"
 #include "AtomicFile.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "EditorTheme.h"
 #include "ScriptIDEThemes.h"
 #include "GameModuleBuild.h"

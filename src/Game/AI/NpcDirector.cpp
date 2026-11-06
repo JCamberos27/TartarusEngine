@@ -12,7 +12,7 @@
 #include "OutfitSystem.h"
 #include "Profiler.h"
 #include "PhysicsWorld.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "SceneRenderer.h"
 #include "SceneSerializer.h"
 #include "World.h"

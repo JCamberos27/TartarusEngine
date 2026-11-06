@@ -12,7 +12,7 @@
 #include "SubstrateJson.h"
 #include "AssetDatabase.h"
 #include "AssetGuid.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "EditorSettings.h"
 #include "ProjectComponentMigration.h"
 

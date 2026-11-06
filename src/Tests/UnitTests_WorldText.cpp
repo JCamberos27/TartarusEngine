@@ -4,7 +4,7 @@
 #include "../Game/Components.h"
 #include "../Editor/AssetLibrary.h"
 #include "../Game/SceneSerializer.h"
-#include "../Core/EnginePaths.h"
+#include "../Core/Paths.h"
 #include "../Core/Log.h"
 #include <json.hpp>
 #include <cmath>

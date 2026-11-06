@@ -8,7 +8,7 @@
 #include "Log.h"
 #include "Model.h"
 #include "PhysicsWorld.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "World.h"
 
 #include <glm/gtc/constants.hpp>

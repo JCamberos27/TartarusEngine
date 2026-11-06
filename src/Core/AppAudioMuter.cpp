@@ -1,5 +1,5 @@
 #include "AppAudioMuter.h"
-#include "UserPaths.h"
+#include "Paths.h"
 
 #include <algorithm>
 #include <cctype>

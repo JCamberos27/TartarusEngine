@@ -1,5 +1,5 @@
 #include "GraffitiPaint.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 
 #include <algorithm>
 #include <cctype>

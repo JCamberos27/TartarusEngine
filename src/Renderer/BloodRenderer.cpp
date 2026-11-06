@@ -8,7 +8,7 @@
 #include "AABB.h"
 #include "GLStateCache.h"
 #include "Log.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "Shader.h"
 #include "ShaderLibrary.h"
 #include "gl.h"

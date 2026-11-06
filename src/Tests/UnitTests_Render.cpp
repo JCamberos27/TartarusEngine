@@ -16,7 +16,7 @@
 #include "../Game/World.h"
 #include "../Game/Components.h"
 #include "../Physics/Frustum.h"
-#include "../Core/ProjectPaths.h"
+#include "../Core/Paths.h"
 #include "../Core/Log.h"
 #include <algorithm>
 #include <filesystem>

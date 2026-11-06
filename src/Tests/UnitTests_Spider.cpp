@@ -10,7 +10,7 @@
 #include "IK.h"
 #include "Log.h"
 #include "PhysicsWorld.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "Renderer/BloodPalette.h"
 #include "World.h"
 

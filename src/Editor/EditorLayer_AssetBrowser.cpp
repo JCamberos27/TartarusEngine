@@ -28,9 +28,8 @@
 #include "EditorUIHelpers.h"
 #include "AssetImporterInspector.h"
 #include "Profiler.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "AssetDatabase.h"
-#include "UserPaths.h"
 #include "Enhancers/EnhancerUserState.h" // vFavorites pages back the favourite stars
 #include "AtomicFile.h"
 #include "ThumbnailCache.h"
@@ -1240,7 +1239,7 @@ void EditorLayer::RefreshScenesListingIfNeeded() {
     m_ScenesListingCache.paths.clear();
     std::error_code ec;
     // Under the project folder, alongside scene.json — not the working directory (see
-    // ProjectPaths.h), so saved scenes are tracked content rather than build output.
+    // Core/Paths.h), so saved scenes are tracked content rather than build output.
     const std::string scenesDir = ProjectPaths::Resolve("scenes");
     std::filesystem::create_directory(scenesDir, ec);
     for (const auto& entry : std::filesystem::directory_iterator(scenesDir, ec)) {

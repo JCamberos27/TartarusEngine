@@ -2,7 +2,7 @@
 #include "WeaponAttachments.h"
 #include "ProjectComponentMigration.h"
 #include "ComponentJson.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "LiveReload.h"
 #include "AssetDatabase.h"
 #include "SceneReferences.h"

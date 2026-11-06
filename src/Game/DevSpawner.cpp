@@ -15,7 +15,7 @@
 #include "EditorSound.h"
 #include "Shortcuts.h"
 #include "Log.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include <glm/gtc/quaternion.hpp>
 #include <algorithm>
 #include <cmath>

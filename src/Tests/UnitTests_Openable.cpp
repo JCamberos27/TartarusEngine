@@ -4,7 +4,7 @@
 #include "../Game/Components.h"
 #include "../Game/SceneSerializer.h"
 #include "../Renderer/Model.h"
-#include "../Core/ProjectPaths.h"
+#include "../Core/Paths.h"
 #include "../Core/Log.h"
 #include "AssetLibrary.h"
 #include <filesystem>

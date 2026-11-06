@@ -1,7 +1,6 @@
 #include "EditorSettings.h"
 #include "Log.h"
-#include "ProjectPaths.h"
-#include "UserPaths.h"
+#include "Core/Paths.h"
 #include "AtomicFile.h"
 #include "AssetDatabase.h" // #132 - lastSceneGuid
 
@@ -18,7 +17,7 @@ void EditorSettings::ReloadForUndo() {Get()=EditorSettings{};Load();}
 namespace {
 // Per-user, per-machine state (#42) — NOT under the project folder, so two teammates (or two
 // machines) on the same project stop fighting over UI scale/theme/layout on every commit. See
-// UserPaths.h.
+// Core/Paths.h.
 const std::string& PrefsPath() {
     static const std::string path = UserPaths::Resolve("editor_prefs.json");
     return path;

@@ -9,7 +9,7 @@
 // Replaces the scattered `if (io.KeyCtrl && ImGui::IsKeyPressed(...))` sites in EditorLayer
 // with a named table and one edge-triggered query: Shortcuts::Triggered("editor.undo").
 // User overrides persist to per-user storage (UserPaths::Resolve("shortcuts.json"), i.e.
-// %LOCALAPPDATA%\TartarusEngine\shortcuts.json — see UserPaths.h), not project/. This used to be
+// %LOCALAPPDATA%\TartarusEngine\shortcuts.json — see Core/Paths.h), not project/. This used to be
 // project-scoped deliberately ("a shortcut sheet is a per-project preference, not per-user
 // editor chrome" — the idea being a team standardizes on one rebind sheet); #42 moved it to
 // per-user instead, alongside editor_prefs.json, because in practice a committed shortcuts.json

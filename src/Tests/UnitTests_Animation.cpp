@@ -9,7 +9,7 @@
 #include "CameraEffects.h"
 #include "Camera.h"
 #include "FirstPersonAnimation.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "Model.h"
 #include "AnimRetarget.h"
 #include "../Game/IK.h"

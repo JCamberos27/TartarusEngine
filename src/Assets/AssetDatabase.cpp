@@ -1,7 +1,6 @@
 #include "AssetDatabase.h"
 #include "Log.h"
-#include "ProjectPaths.h"
-#include "EnginePaths.h"
+#include "Core/Paths.h"
 #include "AtomicFile.h"
 #include <json.hpp>
 

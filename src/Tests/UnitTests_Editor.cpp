@@ -9,7 +9,7 @@
 #include "OutfitSystem.h"
 #include "Components.h"
 #include "Profiler.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "ProjectSettings.h"
 #include <filesystem>
 #include <fstream>

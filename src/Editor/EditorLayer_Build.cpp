@@ -9,7 +9,7 @@
 #include "AssetPathPicker.h"
 #include "BuildPipeline.h"
 #include "ProjectSettings.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "Log.h"
 
 #include <imgui.h>

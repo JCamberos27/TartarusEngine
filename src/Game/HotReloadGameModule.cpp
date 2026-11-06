@@ -8,7 +8,7 @@
 #include "HotReloadSwap.h"
 #include "TimeService.h"
 #include "AudioEngine.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "Input.h"
 #include "InputMap.h"
 #include <algorithm>

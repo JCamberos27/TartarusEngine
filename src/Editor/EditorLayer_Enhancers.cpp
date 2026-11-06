@@ -20,7 +20,7 @@
 #include "AssetDatabase.h"
 #include "AssetLibrary.h"
 #include "ComponentRegistry.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 
 #include "Enhancers/EnhancerCore.h"
 #include "Enhancers/EnhancerUserState.h"

@@ -14,7 +14,7 @@
 #include "AssetDatabase.h"
 #include "MeshArena.h"
 #include "Log.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "ProjectSettings.h"
 #include "Core/Env.h"
 

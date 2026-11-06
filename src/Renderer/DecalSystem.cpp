@@ -5,7 +5,7 @@
 #include "Components.h"
 #include "Frustum.h"
 #include "LiveReload.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "ProjectSettings.h"
 #include "Log.h"
 #include "TimeService.h"

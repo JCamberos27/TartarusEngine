@@ -33,7 +33,7 @@
 #include <shellapi.h>
 
 #include "HotReloadSwap.h"
-#include "UserPaths.h"
+#include "Core/Paths.h"
 
 namespace fs = std::filesystem;
 

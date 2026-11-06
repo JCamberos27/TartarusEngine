@@ -7,7 +7,7 @@
 #include "Audio/WeaponAudio.h"
 #include "Components.h"
 #include "FxSprites.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "World.h"
 
 #include <algorithm>

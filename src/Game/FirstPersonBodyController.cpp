@@ -1,7 +1,7 @@
 // The sample body graph is authored as a project template; native code fills its clip roles and decodes it.
 #include "FirstPersonBodyContract.h"
 #include "AnimatorController.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include <json.hpp>
 #include <algorithm>
 #include <cctype>

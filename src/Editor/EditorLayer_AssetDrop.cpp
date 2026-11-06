@@ -11,7 +11,7 @@
 #include "World.h"
 #include "Components.h"
 #include <json.hpp>
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "Log.h"
 
 #include <filesystem>

@@ -5,7 +5,7 @@
 #include "ShaderLibrary.h" // engine:// shader references (#104)
 #include "Log.h"
 #include "AtomicFile.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "AssetDatabase.h" // #208 - shaderGuid
 #include "SubstrateJson.h"
 

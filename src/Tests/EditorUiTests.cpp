@@ -27,8 +27,7 @@
 #include "Components.h"
 #include "ComponentRegistry.h"
 #include "SceneSerializer.h"
-#include "ProjectPaths.h"
-#include "UserPaths.h"
+#include "Core/Paths.h"
 #include "ScriptIDE.h"      // CancelPrompts - a test left "Unsaved script" up
 #include "EditorTheme.h"
 #include "Enhancers/EnhancerCore.h"

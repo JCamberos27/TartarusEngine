@@ -16,7 +16,7 @@
 #include "Camera.h"
 #include "Components.h"
 #include "Log.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "SceneSerializer.h"
 #include "World.h"
 

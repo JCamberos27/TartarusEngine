@@ -18,7 +18,7 @@
 #include "PhysicsWorld.h"
 #include "ParticleSystem.h"
 #include "SceneSerializer.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "RotationMath.h"
 #include "World.h"
 #include "TimeService.h"

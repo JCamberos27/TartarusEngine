@@ -8,7 +8,7 @@
 #include "EditorSound.h"
 #include "Log.h"
 #include "Model.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "World.h"
 
 #include <imgui.h>

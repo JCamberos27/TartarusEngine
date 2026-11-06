@@ -25,7 +25,7 @@
 #include "Log.h"
 #include "Model.h"
 #include "OutfitSystem.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "ProjectSettings.h"
 #include "ProjectWatcher.h"
 #include "SceneSerializer.h"

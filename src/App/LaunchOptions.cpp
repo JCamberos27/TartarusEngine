@@ -1,7 +1,7 @@
 #include "App/LaunchOptions.h"
 
 #include "Core/Env.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 
 #include <cstdio>
 #include <string>

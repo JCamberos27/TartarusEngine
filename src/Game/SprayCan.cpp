@@ -2,7 +2,7 @@
 
 #include "Components.h"
 #include "DecalSystem.h"
-#include "EnginePaths.h"
+#include "Core/Paths.h"
 #include "GameModuleAPI.h"
 #include "GeneratedDecalMaps.h"
 #include "GraffitiCompositor.h"
@@ -11,7 +11,6 @@
 #include "GraffitiTimeline.h"
 #include "Log.h"
 #include "PhysicsWorld.h"
-#include "ProjectPaths.h"
 #include "SceneSerializer.h"
 #include "World.h"
 

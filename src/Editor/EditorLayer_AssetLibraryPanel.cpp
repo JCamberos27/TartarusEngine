@@ -13,7 +13,7 @@
 #include "EditorUIHelpers.h"
 #include "FileDialog.h"
 #include "Log.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "Texture.h"
 
 #include <IconsFontAwesome6.h>

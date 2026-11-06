@@ -11,7 +11,7 @@
 #include "Log.h"
 #include "MaterialAsset.h"
 #include "MaterialPreviewRenderer.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "SceneSerializer.h"
 #include "World.h"
 #include "Glass/GlassFeedbackMotion.h"

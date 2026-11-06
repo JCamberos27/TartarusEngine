@@ -26,9 +26,8 @@
 #include "EditorUIHelpers.h"
 #include "AssetImporterInspector.h"
 #include "Profiler.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "AtomicFile.h"
-#include "EnginePaths.h"
 #include "LayerRegistry.h"
 #include "ProjectSettings.h"
 #include "Input.h"    // #145 - Project Settings > Input binding capture
@@ -99,7 +98,6 @@
 #include <glm/gtx/euler_angles.hpp> // extractEulerAngleYXZ — must match ComposeTransform's order (#108)
 
 #include <filesystem>
-#include "UserPaths.h"
 #include <memory>
 #include <algorithm>
 #include <unordered_map>
@@ -145,7 +143,7 @@ void EditorLayer::Init(GLFWwindow* window) {
     Enhancers::UiStyles::Get().Load();     // project/editor_ui_styles.json (tab / header colours)
 
     // Authored content lives in the project folder, not the working directory (build/Release/)
-    // — see ProjectPaths.h. Must match main.cpp's initial load: prefer the last-open scene if
+    // — see Core/Paths.h. Must match main.cpp's initial load: prefer the last-open scene if
     // it still exists, else the built-in default (#95).
     {
         std::error_code ec;
