@@ -98,7 +98,7 @@ void RegisterDecalsTests() {
         // --- Library
         Do("open the Decal Library", [](Ctx& c) { SA::Library(c.E, true); }), Wait(4),
         Until("the packs are indexed", [](Ctx& c) { return SA::Ed(c.E).ScanDone; }, 2400),
-        ExpectTrue("the library lists decals", [](Ctx& c) { return SA::Ed(c.E).Entries.size() > 1000; }),
+        ExpectTrue("the library lists decals", [](Ctx& c) { return SA::Ed(c.E).Entries.size() > 900; }), // 963 after the 4K maps were dropped (2K cap)
         ExpectTrue("three palettes found", [](Ctx& c) { return SA::Ed(c.E).Palettes.size() >= 3; }),
         Wait(40), Shot("library"),
         Do("close the Decal Library", [](Ctx& c) { SA::Library(c.E, false); }), Wait(4),
