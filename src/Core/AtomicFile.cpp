@@ -6,7 +6,14 @@
 
 #include <algorithm>
 #include <fstream>
+#include <chrono>
+#include <cstdint>
+#include <filesystem>
+#include <functional>
 #include <random>
+#include <thread>
+#include <mutex>
+#include <unordered_set>
 #include <string>
 
 #ifdef _WIN32
@@ -32,7 +39,8 @@ namespace {
 // same-filesystem move (atomic) rather than a cross-device copy. Concurrent writers to the same
 // path (two editor instances) get different temps and the last rename wins — no interleaving.
 std::filesystem::path TempPathFor(const std::filesystem::path& target) {
-    static std::mt19937_64 rng{std::random_device{}()};
+    // thread_local: AtomicFile is called off the main thread, and an engine isn't safe to share.
+    thread_local std::mt19937_64 rng{std::random_device{}() ^ (std::uint64_t)std::hash<std::thread::id>{}(std::this_thread::get_id())};
     std::filesystem::path p = target;
     p += ".tmp-" + std::to_string(rng());
     return p;
@@ -120,7 +128,44 @@ bool WrittenBySelfRecently(const std::filesystem::path& path, int withinMs) {
            std::chrono::steady_clock::now() - it->second <= std::chrono::milliseconds(withinMs);
 }
 
+// Removes leftover "<file>.tmp-<n>" temps in the folder (a crash or kill between the temp write and the rename)
+// older than a minute. Errors are ignored; a live writer's temp is always younger than that.
+// Each directory is swept once per process: a batch of .meta writes into one asset folder must
+// not rescan it per file.
+static void SweepOrphanTemps(const std::filesystem::path& path) {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    const fs::path dir = path.has_parent_path() ? path.parent_path() : fs::path(".");
+    {
+        static std::mutex s_Mutex;
+        static std::unordered_set<std::wstring> s_Swept; // wide: string() throws on non-ACP names
+        std::lock_guard<std::mutex> lock(s_Mutex);
+        if (!s_Swept.insert(dir.generic_wstring()).second) return;
+    }
+    const std::wstring prefix = L".tmp-";
+    const auto now = fs::file_time_type::clock::now();
+    for (fs::directory_iterator it(dir, ec), end; !ec && it != end; it.increment(ec)) {
+        const std::wstring name = it->path().filename().wstring();
+        // Only our own temps: "<file>.tmp-<digits>" with nothing after the number.
+        const size_t at = name.rfind(prefix);
+        if (at == std::wstring::npos || at == 0 || at + prefix.size() == name.size() ||
+            name.find_first_not_of(L"0123456789", at + prefix.size()) != std::wstring::npos) continue;
+        std::error_code ec2;
+        const auto t = fs::last_write_time(it->path(), ec2);
+        if (ec2 || now - t < std::chrono::seconds(60)) continue;
+        fs::remove(it->path(), ec2);
+    }
+}
+
+static bool WriteBytesImpl(const std::filesystem::path& path, std::string_view bytes, bool binary);
+
 bool WriteBytes(const std::filesystem::path& path, std::string_view bytes, bool binary) {
+    const bool ok = WriteBytesImpl(path, bytes, binary);
+    if (ok) SweepOrphanTemps(path);
+    return ok;
+}
+
+static bool WriteBytesImpl(const std::filesystem::path& path, std::string_view bytes, bool binary) {
     NotifyWillChange(path);
     NoteSelfWrite(path); // before the rename, so the watcher's event always finds it
     std::error_code ec;
@@ -194,7 +239,16 @@ bool WriteJson(const std::filesystem::path& path, const nlohmann::json& j, int i
     // .meta sidecars are LF in the working tree too (.gitattributes: *.meta eol=lf); writing them CRLF
     // left every one the editor touched showing as modified in git.
     const bool lf = path.extension() == ".meta";
-    return WriteBytes(path, j.dump(indent) + "\n", /*binary=*/lf);
+    std::string text;
+    try {
+        // replace, not the default strict handler: one stray invalid-UTF-8 byte in a string must
+        // not throw out of a save (it becomes U+FFFD).
+        text = j.dump(indent, ' ', false, nlohmann::json::error_handler_t::replace);
+    } catch (const std::exception& e) {
+        Log::Error("AtomicFile: cannot serialize JSON for '" + path.string() + "': " + e.what());
+        return false;
+    }
+    return WriteBytes(path, text + "\n", /*binary=*/lf);
 }
 
 } // namespace AtomicFile

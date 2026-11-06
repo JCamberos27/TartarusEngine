@@ -3,6 +3,7 @@
 #include "Log.h"
 #include "ProjectPaths.h"
 #include "AtomicFile.h"
+#include "Utf8.h"
 #include "AssetDatabase.h" // #132 - build scenes by GUID
 
 #include <json.hpp>
@@ -37,7 +38,7 @@ std::string SanitizeTag(const std::string& in) {
     const auto notSpace = [](unsigned char c) { return !std::isspace(c); };
     s.erase(s.begin(), std::find_if(s.begin(), s.end(), notSpace));
     s.erase(std::find_if(s.rbegin(), s.rend(), notSpace).base(), s.end());
-    if (s.size() > 40) s.resize(40);
+    Utf8TruncateBytes(s, 40); // not resize(): that can split a multi-byte character
     return s;
 }
 
@@ -84,6 +85,9 @@ void SetStartupScene(std::string scene){g_StartupScene=std::move(scene);}
 
 void Load() {
     g_Physics = PhysicsSettings{};
+    g_Time = TimeSettings{};
+    g_Quality = QualitySettings{};
+    g_Audio = AudioSettings{};
     g_Build = BuildSettings{};
     g_StartupScene.clear();
     g_Tags.clear();
@@ -157,17 +161,28 @@ void Load() {
         const auto f = it->find("smallObjectCullHeight");
         if (f != it->end() && f->is_number())
             g_Quality.SmallObjectCullHeight = std::clamp(f->get<float>(), 0.0f, 0.1f);
-        g_Quality.DepthPrepass = it->value("depthPrepass", true);
-        g_Quality.GpuInstancing = it->value("gpuInstancing", true);
-        g_Quality.AsyncUploads = it->value("asyncUploads", true);
-        g_Quality.GpuDrivenDraws = it->value("gpuDrivenDraws", true);
-        g_Quality.GpuOcclusionCulling = it->value("gpuOcclusionCulling", true);
-        g_Quality.DecalTextureBudgetMB = std::clamp(it->value("decalTextureBudgetMB", 1024), 32, 4096);
-        g_Quality.DecalMaxDistance = std::clamp(it->value("decalMaxDistance", 60.0f), 1.0f, 1000.0f);
+        // Type-checked reads (like #152): a wrong-typed value keeps the default instead of throwing.
+        const json& q = *it;
+        auto flag = [&q](const char* key, bool fallback) {
+            const auto f = q.find(key);
+            return (f != q.end() && f->is_boolean()) ? f->get<bool>() : fallback;
+        };
+        auto num = [&q](const char* key, auto fallback) {
+            const auto f = q.find(key);
+            return (f != q.end() && f->is_number()) ? f->get<decltype(fallback)>() : fallback;
+        };
+        g_Quality.DepthPrepass = flag("depthPrepass", true);
+        g_Quality.GpuInstancing = flag("gpuInstancing", true);
+        g_Quality.AsyncUploads = flag("asyncUploads", true);
+        g_Quality.GpuDrivenDraws = flag("gpuDrivenDraws", true);
+        g_Quality.GpuOcclusionCulling = flag("gpuOcclusionCulling", true);
+        g_Quality.DecalTextureBudgetMB = std::clamp(num("decalTextureBudgetMB", 1024), 32, 4096);
+        g_Quality.DecalMaxDistance = std::clamp(num("decalMaxDistance", 60.0f), 1.0f, 1000.0f);
     }
 
     if (const auto it = root.find("audio"); it != root.end() && it->is_object()) { // #171
-        g_Audio.MasterVolume = std::clamp(it->value("masterVolume", 1.0f), 0.0f, 1.0f);
+        const auto mv = it->find("masterVolume");
+        g_Audio.MasterVolume = std::clamp((mv != it->end() && mv->is_number()) ? mv->get<float>() : 1.0f, 0.0f, 1.0f);
         if (const auto b = it->find("busVolumes"); b != it->end() && b->is_array())
             for (int i = 0; i < 5 && i < (int)b->size(); ++i)
                 if ((*b)[i].is_number()) g_Audio.BusVolume[i] = std::clamp((*b)[i].get<float>(), 0.0f, 1.0f);

@@ -1,4 +1,5 @@
 #include "SamplingProfiler.h"
+#include "DbgSymbols.h"
 
 #if defined(_WIN32) && defined(_M_X64)
 
@@ -136,13 +137,9 @@ void Report(const char* label, int top) {
         count = kept;
     }
     HANDLE proc = GetCurrentProcess();
-    static bool symInit = false;
-    if (!symInit) {
-        SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_UNDNAME);
-        SymInitialize(proc, nullptr, TRUE); // fails harmlessly when the Console's stack traces already did it
-        SymRefreshModuleList(proc);
-        symInit = true;
-    }
+    EnsureSymbols(); // shared with the Console's stack traces; dbghelp is single-threaded, so hold the lock
+    std::lock_guard<std::mutex> symLock(DbgHelpLock());
+    SymRefreshModuleList(proc);
     std::unordered_map<std::uint64_t, std::string> nameOf; // pc -> function
     auto name = [&](std::uint64_t pc) -> const std::string& {
         auto it = nameOf.find(pc);
