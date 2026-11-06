@@ -688,6 +688,12 @@ int main(int argc, char** argv) {
         // loaded, below - the window stays hidden until the first frame either way (#143).
 
         AudioEngine::Init();
+        // The session-lifetime audio + PhysX cores (#167) go down last, on every exit path (including exceptions):
+        // declared before every local below, so it is destroyed after all of them (NPC ragdolls, the player, the world
+        // and the spiders may still release PhysX / audio objects in their own destructors).
+        struct CoreShutdownGuard {
+            ~CoreShutdownGuard() { AudioEngine::Shutdown(); PhysicsWorld::Shutdown(); }
+        } coreShutdownGuard;
 
         ShaderLibrary::Init(EnginePaths::Resolve("assets/shaders"));
 
@@ -713,6 +719,17 @@ int main(int argc, char** argv) {
         Shader clusterDecalCullShader(ShaderLibrary::ReadFileRequired("ClusterDecalCull.comp.glsl"), "clusterDecalCullShader"); // decals -> froxel lists (docs/DECALS.md)
         unsigned int fsQuadVao = 0;
         glGenVertexArrays(1, &fsQuadVao); // attribute-less: positions come from gl_VertexID
+        // The selection-outline's multisampled mask target (drawOutline, below) lives here so teardown can free it.
+        unsigned int maskMsFbo = 0, maskMsColor = 0;
+        // Frees the two above while the GL context (window) is still alive.
+        struct GlObjectGuard {
+            unsigned int& vao; unsigned int& fbo; unsigned int& tex;
+            ~GlObjectGuard() {
+                if (fbo) glDeleteFramebuffers(1, &fbo);
+                if (tex) glDeleteTextures(1, &tex);
+                if (vao) glDeleteVertexArrays(1, &vao);
+            }
+        } glObjectGuard{fsQuadVao, maskMsFbo, maskMsColor};
         TintOverlayRenderer tintOverlay;
         Grid grid;
         ColliderGizmo colliderGizmo; // #185 PR 2
@@ -733,13 +750,8 @@ int main(int argc, char** argv) {
         Ssao ssao;
         // #158: every vertex+fragment program above and below re-compiles itself when one of its
         // source files (or an #include) changes on disk - editor only, see the main loop. The
-        // guard drops the raw pointers before these locals are destroyed.
-        struct ShaderHotReloadGuard { ~ShaderHotReloadGuard() { ShaderLibrary::ClearHotReload(); } } shaderHotReloadGuard;
-        ShaderLibrary::RegisterForHotReload(modelShader, "ModelVertex.glsl", "ModelFragment.glsl");
-        ShaderLibrary::RegisterForHotReload(outlineModelShader, "OutlineModel.vert.glsl", "Outline.frag.glsl");
-        ShaderLibrary::RegisterForHotReload(outlineDilateShader, "OutlineDilate.vert.glsl", "OutlineDilate.frag.glsl");
-        ShaderLibrary::RegisterForHotReload(shadowShader, "ShadowDepth.vert.glsl", "ShadowDepth.frag.glsl");
-        ShaderLibrary::RegisterForHotReload(localShadowShader, "ShadowDepth.vert.glsl", "ShadowDepthLocal.frag.glsl");
+        // guard drops the raw pointers before these locals are destroyed (it is declared after the last shader
+        // it covers, so it is destroyed first).
         Shader ssaoComputeShader(ShaderLibrary::ReadFile("Tonemapper.vert.glsl"),
                                  ShaderLibrary::ReadFile("Ssao.frag.glsl"));
         Shader ssaoBlurShader(ShaderLibrary::ReadFile("Tonemapper.vert.glsl"),
@@ -756,6 +768,12 @@ int main(int argc, char** argv) {
                                      ShaderLibrary::ReadFile("BloomDownsample.frag.glsl"));
         Shader bloomUpsampleShader(ShaderLibrary::ReadFile("Tonemapper.vert.glsl"),
                                    ShaderLibrary::ReadFile("BloomUpsample.frag.glsl"));
+        struct ShaderHotReloadGuard { ~ShaderHotReloadGuard() { ShaderLibrary::ClearHotReload(); } } shaderHotReloadGuard;
+        ShaderLibrary::RegisterForHotReload(modelShader, "ModelVertex.glsl", "ModelFragment.glsl");
+        ShaderLibrary::RegisterForHotReload(outlineModelShader, "OutlineModel.vert.glsl", "Outline.frag.glsl");
+        ShaderLibrary::RegisterForHotReload(outlineDilateShader, "OutlineDilate.vert.glsl", "OutlineDilate.frag.glsl");
+        ShaderLibrary::RegisterForHotReload(shadowShader, "ShadowDepth.vert.glsl", "ShadowDepth.frag.glsl");
+        ShaderLibrary::RegisterForHotReload(localShadowShader, "ShadowDepth.vert.glsl", "ShadowDepthLocal.frag.glsl");
         ShaderLibrary::RegisterForHotReload(ssaoComputeShader, "Tonemapper.vert.glsl", "Ssao.frag.glsl");
         ShaderLibrary::RegisterForHotReload(ssaoBlurShader, "Tonemapper.vert.glsl", "SsaoBlur.frag.glsl");
         ShaderLibrary::RegisterForHotReload(bloomThreshShader, "Tonemapper.vert.glsl", "BloomThreshold.frag.glsl");
@@ -945,6 +963,8 @@ int main(int argc, char** argv) {
             // Bloody footprints out of fresh blood; the player's point the way they face (turning on the spot too).
             bloodFx.OnFootstep(walker, feet, vel, foot, walker < 0 ? player.Cam.Front() : glm::vec3(0.0f));
         });
+        // The listener captures bloodFx and player by reference: drop it before they are destroyed.
+        struct StepListenerGuard { ~StepListenerGuard() { FoleyAudio::Get().SetStepListener(nullptr); } } stepListenerGuard;
         bloodFx.SetBodyLookup([&npcDirector, &spiderDamage, &world](unsigned entity, glm::vec3& centre) { // where a corpse lies, for its pool
             if (spiderDamage.BodyCentre(world, entity, centre)) return true;
             for (const auto& n : npcDirector.Npcs()) {
@@ -2619,6 +2639,19 @@ int main(int argc, char** argv) {
             // frozen frame is still fully inspectable.
             const bool simThisFrame = (playing && !paused) || stepThisFrame;
 
+            // Push the editor's physics-debug choices into the sim (#185): draw channels + event logging. Done every
+            // frame, not only while simulating, so the Scene overlay tracks them after Stop / Pause.
+            // Query recording auto-follows the Raycasts channel.
+            {
+                const EditorSettings& es = EditorSettings::Get();
+                PhysicsWorld::SetDebugDrawFlags(es.PhysicsDebugDrawFlags);
+                // The player-body overlay costs ~4.5 ms a frame (its camera probe walks every skinned vertex), so a
+                // benchmark measures the game without it even when the editor has it switched on.
+                BodyDebug::SetEnabled(playing && es.ShowBodyDebug && !opt.perfBenchMode);
+                PhysicsWorld::SetEventLogging(es.LogPhysicsEvents || opt.smokeTestMode); // #169
+                PhysicsWorld::SetQueryRecording((es.PhysicsDebugDrawFlags & PhysicsWorld::PDD_Raycasts) != 0u);
+            }
+
             if (simThisFrame) {
                 // The gravity gun (#185, promoted off its old debug harness) is a normal part of
                 // Play mode, not a debug tool — always live whenever the game has input focus.
@@ -2659,17 +2692,6 @@ int main(int argc, char** argv) {
                                             player.Cam.Position.z};
                         PhysicsWorld::AddExplosionForce(c, 7.0f, 22.0f, 0.4f);
                     }
-                }
-                // Push the editor's physics-debug choices into the sim (#185): draw channels +
-                // slow-mo scale. Query recording auto-follows the Raycasts channel.
-                {
-                    const EditorSettings& es = EditorSettings::Get();
-                    PhysicsWorld::SetDebugDrawFlags(es.PhysicsDebugDrawFlags);
-                    // The player-body overlay costs ~4.5 ms a frame (its camera probe walks every skinned vertex), so a
-                    // benchmark measures the game without it even when the editor has it switched on.
-                    BodyDebug::SetEnabled(playing && es.ShowBodyDebug && !opt.perfBenchMode);
-                    PhysicsWorld::SetEventLogging(es.LogPhysicsEvents || opt.smokeTestMode); // #169
-                    PhysicsWorld::SetQueryRecording((es.PhysicsDebugDrawFlags & PhysicsWorld::PDD_Raycasts) != 0u);
                 }
                 // Step the PhysX world (#185): kinematic bodies pushed from their Transforms,
                 // then the sim, then dynamic bodies' poses written back into theirs.
@@ -3662,7 +3684,7 @@ int main(int argc, char** argv) {
             // Per caster, its transform and when it last changed; drives LocalCaster::moving.
             // A skinned caster counts as animated only while its pose changes (PoseVersion): a corpse at rest, or a body held
             // still, is a static caster like any prop instead of being redrawn into every light's map each frame.
-            struct CasterMotion { glm::mat4 xform; std::uint64_t moved; std::uint64_t pose = 0, posed = 0; };
+            struct CasterMotion { glm::mat4 xform; std::uint64_t moved; std::uint64_t pose = 0, posed = 0, seen = 0; };
             static std::unordered_map<std::uint32_t, CasterMotion> s_CasterMotion;
             constexpr std::uint64_t kMovingFrames = 30;
             // Smoothness: when casters stop together (everything settling 30 frames after Play), every light that sees
@@ -3670,6 +3692,7 @@ int main(int argc, char** argv) {
             // this many frames, and each light takes it into its static depth on its own turn of them (dynamicFor);
             // until then that light draws it with the moving casters, over a cache without it - never a missing shadow.
             constexpr std::uint64_t kSettleFrames = 4;
+            constexpr std::uint64_t kStaleFrames = 600; // a caster unseen this long is gone (scene reload, deleted entity)
             static std::vector<LocalCaster> localCasters;
             localCasters.clear();
             if (world.ShadowsEnabled && (spotShadowCount > 0 || pointShadowCount > 0)) {
@@ -3694,7 +3717,11 @@ int main(int argc, char** argv) {
                     // and outfit piece) animates too, and its shadow must follow.
                     // First seen counts as settled (unsigned wrap keeps that true on early frames).
                     const std::uint64_t now = (std::uint64_t)frameIndex;
-                    auto [motion, first] = s_CasterMotion.try_emplace(lc.id, CasterMotion{lc.xform, now - kMovingFrames - kSettleFrames, 0, now});
+                    auto [motion, first] = s_CasterMotion.try_emplace(lc.id, CasterMotion{lc.xform, now - kMovingFrames - kSettleFrames, 0, now, now});
+                    // A record not touched for a while belongs to a gone entity: a recycled id starts fresh, not with its history.
+                    if (!first && now - motion->second.seen > kStaleFrames)
+                        motion->second = CasterMotion{lc.xform, now - kMovingFrames - kSettleFrames, 0, now, now};
+                    motion->second.seen = now;
                     if (motion->second.xform != lc.xform) { motion->second.xform = lc.xform; motion->second.moved = now; }
                     lc.moving = now - motion->second.moved < kMovingFrames;
                     if (lc.model->HasBones() && motion->second.pose != lc.model->PoseVersion()) {
@@ -3706,6 +3733,12 @@ int main(int argc, char** argv) {
                     lc.settling = !lc.moving && !lc.animated && now - lc.settleStart < kSettleFrames;
                     lc.bounded = v.Bounded; // as posed, like the main pass
                     lc.bounds = AABB{v.WorldMin, v.WorldMax};
+                }
+                // Drop the records of casters gone for a while so the map doesn't grow across scene loads.
+                if ((frameIndex & 255) == 0) {
+                    const std::uint64_t now = (std::uint64_t)frameIndex;
+                    for (auto it = s_CasterMotion.begin(); it != s_CasterMotion.end();)
+                        it = now - it->second.seen > kStaleFrames ? s_CasterMotion.erase(it) : std::next(it);
                 }
             }
             // A local shadow map is only redrawn when something it sees changed: its light, the
@@ -4293,8 +4326,6 @@ int main(int argc, char** argv) {
                                                  &sceneHdr, &sceneOpaqueColor, &ssao };
                     if (sceneSsaoFromPrepass)
                         sceneCtx.SsaoFromPrepass = [&] { ssaoCompute(ssao, sceneDrawProj); };
-                    if (sceneSsaoFromPrepass)
-                        sceneCtx.SsaoFromPrepass = [&] { ssaoCompute(ssao, sceneDrawProj); };
                     sceneCtx.TaaVelocity = sceneTaaOn;
                     sceneCtx.TaaJitterNdc = sceneTaa.JitterNdc();
                     sceneCtx.TaaPrevViewProj = sceneTaa.PrevViewProj();
@@ -4347,7 +4378,6 @@ int main(int argc, char** argv) {
                     // coverage for the anti-aliased ring (OutlineDilate.frag.glsl).
                     const int maskW = scW * 2, maskH = scH * 2;
                     selectionMaskFbo.Resize(maskW, maskH);
-                    static GLuint maskMsFbo = 0, maskMsColor = 0;
                     static int maskMsW = 0, maskMsH = 0;
                     if (maskMsW != maskW || maskMsH != maskH) {
                         if (maskMsFbo) { glDeleteFramebuffers(1, &maskMsFbo); glDeleteTextures(1, &maskMsColor); }
@@ -5518,8 +5548,6 @@ int main(int argc, char** argv) {
             editorModule.Shutdown();
             AppAudioMuter::Shutdown();
             EditorSound::Shutdown();
-            AudioEngine::Shutdown();
-            PhysicsWorld::Shutdown();
             return code;
         }
         if (opt.smokeTestMode) {
@@ -5547,8 +5575,6 @@ int main(int argc, char** argv) {
             editorModule.Shutdown();
             AppAudioMuter::Shutdown();
             EditorSound::Shutdown();
-            AudioEngine::Shutdown();
-            PhysicsWorld::Shutdown(); // #167 - the session-lifetime PhysX core
             return allPassed ? 0 : 1;
         }
 
@@ -5581,8 +5607,6 @@ int main(int argc, char** argv) {
         editorModule.Shutdown();
         AppAudioMuter::Shutdown();
         EditorSound::Shutdown();
-        AudioEngine::Shutdown();
-        PhysicsWorld::Shutdown(); // #167 - the session-lifetime PhysX core
     } catch (const std::exception& e) {
         std::cerr << "Fatal error: " << e.what() << std::endl;
         // Non-interactive runs (--smoke-test) must never block: a modal MessageBox on
@@ -5596,6 +5620,16 @@ int main(int argc, char** argv) {
             // snapshot the main loop's handler just tried to write.
             Window::ShowFatalErrorDialog(std::string("Tartarus Engine hit an unexpected error and has to close.\n\n") +
                 e.what() + "\n\nIf the scene had unsaved changes, a recovery snapshot was written; "
+                "you'll be offered to restore it the next time the editor starts.");
+        }
+        return 1;
+    } catch (...) {
+        // A non-std exception (the frame loop's handler rethrows whatever it caught) would otherwise terminate the
+        // process with no message; handle it like the std::exception case.
+        std::cerr << "Fatal error: unknown exception" << std::endl;
+        if (!headless) {
+            Window::ShowFatalErrorDialog("Tartarus Engine hit an unexpected error and has to close.\n\nUnknown exception"
+                "\n\nIf the scene had unsaved changes, a recovery snapshot was written; "
                 "you'll be offered to restore it the next time the editor starts.");
         }
         return 1;
