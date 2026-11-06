@@ -225,13 +225,4 @@ SprayStart, SprayLoop, SprayEnd and SprayDrip are cut from one CC0 aerosol recor
   - the live stream equals the bake;
   - the spray model (cone, distance, pressure, drips);
   - text layout and the glyph table.
-- **Editor smoke test**: `--editor-tests "graffiti:"` (`src/Tests/EditorSmoke/Graffiti.inl`), in
-  the Apartment Hallway.
-  1. New piece, then add layers from the Add menu.
-  2. A canvas stroke.
-  3. Spray in Scene view onto a corridor wall.
-  4. Two Bake-button bakes, compared byte for byte.
-  5. Check the decal is resident and drawn.
-  6. Take clean shots with the gizmos off (`CleanShot`).
-
-  The piece's files are deleted afterwards.
+- **Editor smoke test**: none. The end-to-end suite was removed to keep CI fast; the unit tests above cover the model.

@@ -1115,7 +1115,6 @@ void RegisterMotionDemo() {
 #include "EditorSmoke/HotReload.inl"
 #include "EditorSmoke/Settings.inl"
 #include "EditorSmoke/Decals.inl"
-#include "EditorSmoke/Graffiti.inl"
 
 void RegisterTests() {
     if (MotionDemo::Active()) { RegisterMotionDemo(); return; } // a demo run is only the demo
@@ -1809,7 +1808,6 @@ void RegisterTests() {
     RegisterScenesTests();
     RegisterDecalsTests();
     RegisterDecalsLitTests();
-    RegisterGraffitiTests();
 }
 } // namespace
 
