@@ -25,11 +25,11 @@
 #   mask      ATS white-on-black sheets (alpha channel opaque, the mask is the luminance). 2048^2.
 #             RGB = 255 so a tint works; A = remap(luminance, 3% -> 0 .. 100% -> 1): the noise floor
 #             under 3% goes to 0, everything above keeps its anti-aliased ramp.
-#   splatter  TW Vol 19 liquid splatter: as mask, times an edge vignette. 2048^2 and 4096^2 (_4K).
+#   splatter  TW Vol 19 liquid splatter: as mask, times an edge vignette. 2048^2.
 #   peel      TW Vol 1 peeling / cracked paint (light paint, dark = peeled / exposed). RGB = the grey
 #             photo; A = smoothstep(PeelLo, PeelHi, 1 - luminance) times the edge vignette, so intact
-#             paint is clear and flakes, cracks and exposed patches show. 2048^2 and 4096^2 (_4K).
-#   grunge    peel without the vignette (tiles in the material Grunge slot). 4096^2, T_Grunge_*.
+#             paint is clear and flakes, cracks and exposed patches show. 2048^2.
+#   grunge    peel without the vignette (tiles in the material Grunge slot). 2048^2, T_Grunge_*.
 #   Vignette: per-axis smoothstep over the outer 6% of the width, multiplied (no hard box edge).
 #   Peel thresholds: see $PeelLo / $PeelHi below and the note there.
 #   relief    (peel, -Relief) a height field in millimetres over the decal's 2 m box, from the photo:

@@ -100,7 +100,7 @@ foreach ($r in $rules) {
     }
 }
 
-# TW Surface Imperfections: a 2K decal, a 4K hero decal and (Vol 1 only) a 4K tiling grunge map each
+# TW Surface Imperfections: a 2K decal and (Vol 1 only) a 2K tiling grunge map each (textures are capped at 2K)
 foreach ($tw in @(
         @{ Dir = $pTw1;  Re = '^TW_Surface Imperfections \((?<n>\d+)\)$'; Cat = 'Grime/PeelingPaint';     Name = 'PeelingPaint';   Kind = 'peel' }
         @{ Dir = $pTw19; Re = '^TW_Surface Imperfection \((?<n>\d+)\)$';  Cat = 'Stains/LiquidSplatter';  Name = 'LiquidSplatter'; Kind = 'splatter' })) {
@@ -112,9 +112,8 @@ foreach ($tw in @(
         $n = [int]$m.Groups['n'].Value
         $src = "$($tw.Dir)\$($f.Name)"
         $rows.Add((Row $src ('{0}/T_Decal_{1}_{2:D3}.png' -f $tw.Cat, $tw.Name, $n) $tw.Kind $tw.Cat 2048))
-        $rows.Add((Row $src ('{0}/T_Decal_{1}_{2:D3}_4K.png' -f $tw.Cat, $tw.Name, $n) $tw.Kind $tw.Cat 4096))
         if ($tw.Kind -eq 'peel') {
-            $rows.Add((Row $src ('{0}/T_Grunge_{1}_{2:D3}.png' -f $tw.Cat, $tw.Name, $n) 'grunge' $tw.Cat 4096))
+            $rows.Add((Row $src ('{0}/T_Grunge_{1}_{2:D3}.png' -f $tw.Cat, $tw.Name, $n) 'grunge' $tw.Cat 2048))
         }
     }
 }
