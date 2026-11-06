@@ -10,8 +10,7 @@
 
 class NpcDirector;
 
-// Everything the combat HUD draws with text and shapes (the health bar, hurt vignette and hitmarker are
-// PlayerHudOverlay's): the ammo counter (bottom right), the kill feed and streak banner (top right /
+// Everything the combat HUD draws with text and shapes: the ammo counter (bottom right), the kill feed and streak banner (top right /
 // top centre), awareness chevrons round the
 // crosshair for soldiers that are suspicious but not yet fighting, a GOD tag, and the AI debug overlay
 // (the director's lines and a label per soldier). One HudText batch, one draw call.

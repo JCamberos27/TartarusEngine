@@ -9,7 +9,7 @@
 namespace CrashHandler {
 void Install();
 
-// False for non-interactive runs (--smoke-test, --resave, ...): report to stderr only, never a
+// False for non-interactive runs (--smoke-test, ...): report to stderr only, never a
 // dialog nobody is there to dismiss. Defaults to true.
 void SetInteractive(bool interactive);
 

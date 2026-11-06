@@ -1630,41 +1630,6 @@ void FirstPersonBody::SkinnedPoints(const World& world, BodyRegion region, std::
     }
 }
 
-void FirstPersonBody::ElbowTorsoGaps(const World& world, float (&gaps)[2]) const {
-    gaps[0] = gaps[1] = -1.0f;
-    std::vector<glm::vec3> torso;
-    SkinnedPoints(world, BodyRegion::Torso, torso);
-    if (torso.empty()) return;
-    static const char* const kArm[2][3] = {{"upperarm_l", "lowerarm_l", "hand_l"}, {"upperarm_r", "lowerarm_r", "hand_r"}};
-    for (int s = 0; s < 2; ++s) {
-        glm::vec3 a, b, c;
-        if (BoneWorld(world, kArm[s][0], a) && BoneWorld(world, kArm[s][1], b) && BoneWorld(world, kArm[s][2], c))
-            gaps[s] = FirstPersonBodyElbowGap(torso, a, b, c);
-    }
-}
-
-float FirstPersonBody::MeshGap(const World& world, BodyRegion region, const glm::vec3& a, const glm::vec3& b, std::string* piece, float* along) const {
-    std::vector<glm::vec3> points;
-    std::vector<int> pieceOf;
-    SkinnedPoints(world, region, points, &pieceOf);
-    const glm::vec3 ab = b - a;
-    const float abLen2 = std::max(glm::dot(ab, ab), 1e-9f);
-    float best = -1.0f;
-    for (size_t n = 0; n < points.size(); ++n) {
-        const float t = std::clamp(glm::dot(points[n] - a, ab) / abLen2, 0.0f, 1.0f);
-        const float d = glm::length(points[n] - (a + ab * t));
-        if (best < 0.0f || d < best) {
-            best = d;
-            if (along) *along = t;
-            if (piece) {
-                const entt::entity e = m_Pieces[pieceOf[n]];
-                *piece = world.Registry.all_of<NameComponent>(e) ? world.Registry.get<NameComponent>(e).Name : std::string();
-            }
-        }
-    }
-    return best;
-}
-
 void FirstPersonBody::ApplyFootIK(World& world, const FirstPersonBodyComponent& cfg, float dt) {
     auto& reg = world.Registry;
     const bool on = cfg.FootIK && m_Grounded && PhysicsWorld::HasCharacter() && reg.valid(m_Driver) &&

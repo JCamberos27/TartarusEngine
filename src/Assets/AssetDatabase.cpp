@@ -116,7 +116,7 @@ std::mutex              g_ScanMutex;
 std::condition_variable g_ScanDone;
 std::atomic<bool>       g_Scanning{false};
 std::thread::id         g_ScanThread;
-// Joined on destruction so an early exit (--resave, a startup error) never destroys a joinable
+// Joined on destruction so an early exit (a startup error) never destroys a joinable
 // std::thread, which would call std::terminate.
 struct ScanWorker {
     std::thread Thread;

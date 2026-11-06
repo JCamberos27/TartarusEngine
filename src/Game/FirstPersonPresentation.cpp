@@ -230,7 +230,6 @@ void FirstPersonPresentation::Stop(World& world) {
     m_SlotAssets = nullptr;
     m_Config.reset();
     m_Ejections.clear();
-    m_EjectedTotal = 0;
 }
 
 bool FirstPersonPresentation::StartSet(World& world, AssetLibrary& assets, int slot, bool holstered) {
@@ -1320,20 +1319,6 @@ void FirstPersonPresentation::PoseWorldWeapon(World& world, const glm::mat4& car
     dst.ApplyLocalPose(pose);
 }
 
-bool FirstPersonPresentation::WorldCarriedBones(const World& world, std::vector<glm::vec3>& out) const {
-    out.clear();
-    const entt::entity e = world.Registry.valid(m_WorldWeapon) ? m_WorldWeapon : m_Weapon;
-    const auto* rc = world.Registry.valid(e) ? world.Registry.try_get<RenderableComponent>(e) : nullptr;
-    if (!rc || !rc->ModelRef || !m_WeaponModel) return false;
-    const glm::mat4 toWorld = world.ComposeWorldTransform(e);
-    for (size_t k = 0; k < m_AnchorBones.size(); ++k) {
-        glm::mat4 m(1.0f);
-        const glm::vec3 centre = k < m_AnchorCentres.size() ? m_AnchorCentres[k] : glm::vec3(0.0f);
-        if (rc->ModelRef->NodeTransform(m_WeaponModel->NodeName(m_AnchorBones[k]), m)) out.push_back(glm::vec3(toWorld * m * glm::vec4(centre, 1.0f)));
-    }
-    return !out.empty();
-}
-
 bool FirstPersonPresentation::HandAnchor(FirstPersonHandAnchor& out) const {
     const auto* rig = m_AnchorLimb >= 0 && m_World && m_World->Registry.valid(m_Arms) ? m_World->Registry.try_get<IKRigComponent>(m_Arms) : nullptr;
     if (!rig) return false;
@@ -1508,9 +1493,6 @@ void FirstPersonPresentation::Eject() {
     c.Rotation = glm::quat_cast(glm::mat3(x, y, z));
     c.AngularVelocity = a * ej.Spin * (0.75f + 0.5f * u(m_Rng)) + glm::vec3(s(m_Rng), s(m_Rng), s(m_Rng)) * ej.Spin * 0.2f;
     m_Ejections.push_back(c);
-    m_LastEjectPoint = port;
-    m_LastEjectThrow = c.Velocity - m_PlayerVelocity;
-    ++m_EjectedTotal;
 }
 
 void FirstPersonPresentation::WriteIK() {

@@ -2,6 +2,7 @@
 #include "Log.h"
 #include "ProjectPaths.h"
 #include "AtomicFile.h"
+#include "Utf8.h"
 
 #include <json.hpp>
 
@@ -41,11 +42,7 @@ std::string Sanitize(const std::string& in) {
     s.erase(std::find_if(s.rbegin(), s.rend(), notSpace).base(), s.end());
     // 24 bytes max, cut on a UTF-8 code-point boundary (#150: a byte cut could split a
     // multi-byte character and leave invalid UTF-8 in the name).
-    if (s.size() > 24) {
-        size_t cut = 24;
-        while (cut > 0 && (static_cast<unsigned char>(s[cut]) & 0xC0) == 0x80) --cut; // continuation byte
-        s.resize(cut);
-    }
+    Utf8TruncateBytes(s, 24);
     return s;
 }
 

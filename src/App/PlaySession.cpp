@@ -18,7 +18,6 @@
 #include "EditorModuleAPI.h"
 #include "FirstPersonBody.h"
 #include "FirstPersonPresentation.h"
-#include "FirstPersonWeaponTest.h"
 #include "Flashlight.h"
 #include "FxSpriteRenderer.h"
 #include "GameModuleAPI.h"
@@ -106,11 +105,10 @@ void PlaySession::Start() {
                                                    (std::uint32_t)entt::to_integral(e));
         if (!r.Ok) Log::Warn("Character Outfit: Randomize On Play - " + r.Error);
     }
-    // Bare Body (debug; the gait probe's and the animation sweep's player body): every item off, so the wardrobe dresses the character in its
+    // Bare Body (debug): every item off, so the wardrobe dresses the character in its
     // own body parts - the animation and skinning seen without clothing. Undone by Stop like the above.
     for (auto [e, outfit] : m_World.Registry.view<CharacterOutfitComponent>(entt::exclude<InactiveTag>).each()) {
-        const bool probeBody = m_WeaponTest && m_WeaponTest->BareBody() && m_World.Registry.all_of<FirstPersonBodyComponent>(e);
-        if (!outfit.BareBody && !probeBody) continue;
+        if (!outfit.BareBody) continue;
         if (OutfitSystem::Pieces(m_World, e).empty()) OutfitSystem::AdoptExisting(m_World, m_Assets, e);
         Wardrobe::Request bare = OutfitSystem::CurrentRequest(m_World, e);
         bare.Items.clear();
@@ -169,7 +167,7 @@ void PlaySession::Start() {
         m_BloodFx.Config.Gore = b.Gore;
     }
     BloodRenderer::Get().Load(); // once; a missing import just leaves the blood off
-    KnifeFxLibrary::Get().Load(); // likewise the Knife packs (--import-knife-fx)
+    KnifeFxLibrary::Get().Load(); // likewise the Knife packs
     if (entt::entity ctrl = m_State.ControllerEntity; ctrl != entt::null) {
         m_State.UsesPlayer=true;
         m_GravityGun.Reset();
@@ -208,35 +206,6 @@ void PlaySession::Start() {
         m_Player.RespawnFeet = glm::vec3(spawn[3]);
         m_Player.Cam.Position = m_Player.RespawnFeet + glm::vec3(0.0f, m_Player.EyeHeight, 0.0f);
         YawPitchFromWorld(spawn, m_Player.Cam.Yaw, m_Player.Cam.Pitch);
-        // --stock-probe runs, strafes and turns for metres at a time: it starts on open ground (the
-        // Sandbox's shooting range lane), wherever the scene's spawn is, so runs stay comparable.
-        if (m_Opt.stockProbeMode) {
-            m_Player.RespawnFeet = glm::vec3(45.0f, 0.1f, -2.5f);
-            // The gait probe walks, jogs and sprints metres every way and films the whole body: the open floor
-            // with the most room round it - rays out at knee and chest height in 16 directions, over ground at about 0.
-            if (m_WeaponTest && m_WeaponTest->OpenFloor()) {
-                QueryFilter f;
-                f.HitTriggers = 0;
-                float best = -1.0f;
-                for (float gx = -54.0f; gx <= 54.0f; gx += 3.0f)
-                    for (float gz = -54.0f; gz <= 54.0f; gz += 3.0f) {
-                        RaycastHit h;
-                        const float top[3] = {gx, 3.0f, gz}, down[3] = {0.0f, -1.0f, 0.0f};
-                        if (!PhysicsWorld::RaycastSolid(top, down, 4.0f, f, h) || !h.Hit || std::abs(h.Point[1]) > 0.15f) continue;
-                        float room = 14.0f;
-                        for (int a = 0; a < 16 && room > best; ++a)
-                            for (float y : {0.4f, 1.3f}) {
-                                const float o[3] = {gx, h.Point[1] + y, gz};
-                                const float d[3] = {std::cos((float)a * 0.3927f), 0.0f, std::sin((float)a * 0.3927f)};
-                                RaycastHit side;
-                                if (PhysicsWorld::RaycastSolid(o, d, room, f, side) && side.Hit) room = std::min(room, side.Distance);
-                            }
-                        if (room > best) { best = room; m_Player.RespawnFeet = glm::vec3(gx, h.Point[1] + 0.1f, gz); }
-                    }
-                std::printf("[Gait] start at (%.0f, %.0f), %.1f m clear all round\n", m_Player.RespawnFeet.x, m_Player.RespawnFeet.z, best);
-            }
-            m_Player.Cam.Position = m_Player.RespawnFeet + glm::vec3(0.0f, m_Player.EyeHeight, 0.0f);
-        }
         // FPS presentation is opt-in on the controller (its Animation Set). With the
         // gravity gun also on, that becomes the unarmed slot - see gravityGunLive.
         m_Presentation.Start(m_World, m_Assets, fp);
@@ -251,10 +220,9 @@ void PlaySession::Start() {
         vitals.RespawnDelay = fp.RespawnDelay;
         vitals.SpawnProtection = fp.SpawnProtection;
         m_PlayerVitals.Reset(vitals);
-        // The enemy squad, when the scene has NPC Spawns - not under --weapon-test / --stock-probe, which put the
-        // player's gun through its paces alone (a squad would shoot the player or step into the muzzle's line).
+        // The enemy squad, when the scene has NPC Spawns.
         if (m_NpcTest) m_NpcTest->AddSceneSquad(m_World, m_Assets);
-        const bool squadStarted = !m_WeaponTest && m_NpcDirector.Start(m_World, m_Assets, &fp);
+        const bool squadStarted = m_NpcDirector.Start(m_World, m_Assets, &fp);
         if (m_NpcTest) std::printf("[NpcTest] squad %s (%zu spawn points)\n", squadStarted ? "started" : "not started", m_NpcDirector.SpawnPoints().size());
         if (squadStarted) {
             m_DevPanel.Reset(m_PlayerVitals, m_NpcDirector);
@@ -267,22 +235,9 @@ void PlaySession::Start() {
             }
         }
         // Play-mode audio (the guns' report layers, gear sounds, foley) and the muzzle effects don't wait for a squad:
-        // a scene with no NPC Spawns, --weapon-test and --stock-probe have the player's gun too.
+        // a scene with no NPC Spawns has the player's gun too.
         if (!m_CombatFx.Active()) {
             m_CombatFx.Start(m_World);
-            if (m_WeaponTest) {
-                // WEAPON_TEST_AUDIO_LOG=<file>, or NPC_TEST_RECORD=<dir> (-> <dir>/audio.txt): every weapon / foley voice, timed.
-#pragma warning(suppress : 4996)
-                const char* logFile = std::getenv("WEAPON_TEST_AUDIO_LOG");
-#pragma warning(suppress : 4996)
-                const char* recordDir = std::getenv("NPC_TEST_RECORD");
-                if (logFile && *logFile) m_CombatFx.SetAudioLog(logFile);
-                else if (recordDir && *recordDir) {
-                    std::error_code ec;
-                    std::filesystem::create_directories(recordDir, ec);
-                    m_CombatFx.SetAudioLog((std::filesystem::path(recordDir) / "audio.txt").string());
-                }
-            }
         }
     } else if ((m_State.CameraEntity = FindActiveSceneCamera(m_World)) != entt::null) {
         m_State.UsesPlayer = false;

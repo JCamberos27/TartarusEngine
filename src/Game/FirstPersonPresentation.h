@@ -169,8 +169,6 @@ public:
     bool HoldsOnBody() const { return HasTag("Reload") || CurrentState() == "MagCheck" || CurrentState() == "Inspect"; }
     // The ADS hand anchor's shape (ads.handAnchor) for the world body's own, with Active = HoldsOnBody(). False without one.
     bool HandAnchor(FirstPersonHandAnchor& out) const;
-    // Diagnostics (--stock-probe): the hand anchor's carried bones (ads.handAnchor.bones), their mesh centres, on the gun every other view sees.
-    bool WorldCarriedBones(const World& world, std::vector<glm::vec3>& out) const;
     // Mid-swap counts as equipped: the weapon is only being traded for another, so e.g. the gravity
     // gun mustn't take the mouse in between.
     bool IsEquipped() const { return m_Equipped || m_PendingSlot >= 0; }
@@ -216,10 +214,6 @@ public:
     // The spent cases thrown out of the port since the last call (FirstPersonEjectSettings), for
     // ShellCasings. The list empties.
     std::vector<CasingSpawn> TakeEjections();
-    // Cases ejected this Play, and where the last one left (world space) - for --weapon-test.
-    int EjectedTotal() const { return m_EjectedTotal; }
-    glm::vec3 LastEjectPoint() const { return m_LastEjectPoint; }
-    glm::vec3 LastEjectThrow() const { return m_LastEjectThrow; } // its velocity off the player's, m/s
     const std::string& CurrentState() const;
     const std::string& LastError() const { return m_LastError; }
     const WeaponProceduralPose& ProceduralPose() const { return m_Procedural.Pose(); }
@@ -239,7 +233,7 @@ public:
     // Where an arms-rig node was drawn last frame, in the camera's view space (-Z ahead; metres).
     bool ArmsNodeInView(const std::string& node, glm::vec3& out) const;
     bool WeaponNodeInView(const std::string& node, glm::vec3& out) const;
-    // Diagnostics (--stock-probe): the gun's butt - its mesh's rearmost vertices along the bore,
+    // The gun's butt - its mesh's rearmost vertices along the bore,
     // skinned as posed - and the bore's forward, world space, as last drawn.
     bool StockWorld(glm::vec3& butt, glm::vec3& forward) const;
     // Split poses: this frame's first-person gun and how the world copy is placed off it, for
@@ -310,8 +304,6 @@ private:
     // Queued like a shot and thrown in LateUpdate from the port as the gun is drawn.
     void Eject();
     int m_PendingEjects = 0;
-    int m_EjectedTotal = 0;
-    glm::vec3 m_LastEjectPoint{0.0f}, m_LastEjectThrow{0.0f};
     std::vector<CasingSpawn> m_Ejections;
     // The weapon root as SEEN this frame (world space, through the view-model FOV stretch): where
     // the port is on screen. Valid once PlaceRigs found the root.

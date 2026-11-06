@@ -109,7 +109,7 @@ void EnsureDpiAware() {
 
 } // namespace
 
-void SplashScreen::Show(const std::string& imagePath, float minimumSeconds, const TargetRect* target) {
+void SplashScreen::Show(const std::string& imagePath, float minimumSeconds) {
     m_MinimumSeconds = minimumSeconds;
     m_ShownAt = NowSeconds();
     EnsureDpiAware();
@@ -132,18 +132,10 @@ void SplashScreen::Show(const std::string& imagePath, float minimumSeconds, cons
     wc.lpszClassName = kClassName;
     RegisterClassExW(&wc); // harmless if already registered
 
-    // #155: centre on the monitor the editor window will open on (its saved placement), not
-    // always the primary one. The placement is in workspace coordinates, which differ from
-    // screen coordinates only by the primary taskbar's thickness - irrelevant for choosing a
-    // monitor. A rect off every monitor (display unplugged) falls back to the primary.
+    // Centred on the primary monitor's work area.
     RECT area = {0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN)};
     {
-        HMONITOR monitor = nullptr;
-        if (target && target->Width > 0 && target->Height > 0) {
-            RECT r = {target->X, target->Y, target->X + target->Width, target->Y + target->Height};
-            monitor = MonitorFromRect(&r, MONITOR_DEFAULTTONULL);
-        }
-        if (!monitor) monitor = MonitorFromPoint(POINT{0, 0}, MONITOR_DEFAULTTOPRIMARY);
+        HMONITOR monitor = MonitorFromPoint(POINT{0, 0}, MONITOR_DEFAULTTOPRIMARY);
         MONITORINFO info = {};
         info.cbSize = sizeof(info);
         if (monitor && GetMonitorInfoW(monitor, &info)) area = info.rcWork;
@@ -239,7 +231,7 @@ SplashScreen::~SplashScreen() { Teardown(); }
 
 #else // non-Windows: no-ops, so callers need no platform guards of their own
 
-void SplashScreen::Show(const std::string&, float, const TargetRect*) {}
+void SplashScreen::Show(const std::string&, float) {}
 void SplashScreen::Close() {}
 void SplashScreen::Teardown() {}
 SplashScreen::~SplashScreen() = default;

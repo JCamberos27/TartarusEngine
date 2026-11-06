@@ -399,7 +399,7 @@ struct EditorSettings {
     // changed (audit CPP-206 / PERF-211).
     static void Flush();
 
-    // This run's editor theme (--perf-glass), not written back: Flush keeps the saved one.
+    // This run's editor theme (--smoke-test / --perf-bench), not written back: Flush keeps the saved one.
     static void SetThemeForRun(int themeId);
 
     // The prefs schema. v2 (clean first launch): Glass theme, colliders off, no stats panel, the

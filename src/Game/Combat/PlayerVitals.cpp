@@ -85,25 +85,3 @@ void PlayerVitals::MarkHit(bool kill, bool head) {
     m_HitmarkerKill = kill;
     m_HitmarkerHead = head;
 }
-
-PlayerHudState MakePlayerHudState(const PlayerVitals& v, const glm::vec3& cameraPos, float cameraYawDeg) {
-    PlayerHudState s;
-    s.Visible = true;
-    s.Health01 = v.Health01();
-    s.HurtFlash = v.HurtFlash();
-    s.Dead = v.IsDead();
-    s.DeathFade = v.IsDead() ? std::clamp(v.DeadTime() / 1.2f, 0.0f, 1.0f) : 0.0f;
-    s.RespawnProgress = v.RespawnProgress();
-    s.Protected = v.Protected();
-    for (const PlayerVitals::Indicator& ind : v.Indicators()) {
-        if (s.Arcs >= PlayerVitals::kMaxIndicators) break;
-        const float life = 1.0f - ind.Age / PlayerVitals::kIndicatorLife;
-        s.ArcAngle[s.Arcs] = DamageIndicatorAngle(cameraPos, cameraYawDeg, ind.Source);
-        s.ArcAlpha[s.Arcs] = std::clamp(life * life * (0.5f + 0.5f * ind.Strength), 0.0f, 1.0f);
-        ++s.Arcs;
-    }
-    s.Hitmarker = v.Hitmarker();
-    s.HitmarkerKill = v.HitmarkerKill();
-    s.HitmarkerHead = v.HitmarkerHead();
-    return s;
-}

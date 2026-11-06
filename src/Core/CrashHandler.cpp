@@ -7,7 +7,9 @@
 #include <shellapi.h>
 #include <cstdlib>
 #include <csignal>
+#include <algorithm>
 #include <exception>
+#include <vector>
 #include <string>
 #include <cstring>
 #pragma comment(lib, "shell32.lib")
@@ -44,6 +46,28 @@ void ResolveDumpDir() {
     n = GetModuleFileNameW(nullptr, g_Dir, MAX_PATH);
     while (n > 0 && g_Dir[n - 1] != L'\\' && g_Dir[n - 1] != L'/') --n;
     g_Dir[n] = L'\0';
+}
+
+// Keeps the newest kKeepDumps dumps in the crash folder and deletes the rest (each is tens of MB).
+// Runs at Install() time, never in the crash path. Errors are ignored.
+void PruneOldDumps() {
+    constexpr size_t kKeepDumps = 10;
+    wchar_t pattern[MAX_PATH + 16];
+    wsprintfW(pattern, L"%scrash_*.dmp", g_Dir);
+    WIN32_FIND_DATAW fd;
+    HANDLE h = FindFirstFileW(pattern, &fd);
+    if (h == INVALID_HANDLE_VALUE) return;
+    struct Dump { ULONGLONG Time; std::wstring Name; };
+    std::vector<Dump> dumps;
+    do {
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
+        dumps.push_back({((ULONGLONG)fd.ftLastWriteTime.dwHighDateTime << 32) | fd.ftLastWriteTime.dwLowDateTime, fd.cFileName});
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+    if (dumps.size() <= kKeepDumps) return;
+    std::sort(dumps.begin(), dumps.end(), [](const Dump& a, const Dump& b) { return a.Time > b.Time; });
+    for (size_t i = kKeepDumps; i < dumps.size(); ++i)
+        DeleteFileW((std::wstring(g_Dir) + dumps[i].Name).c_str());
 }
 
 bool WriteDump() {
@@ -188,6 +212,7 @@ namespace CrashHandler {
 void Install() {
     if (g_Request) return; // installing twice is harmless
     ResolveDumpDir();
+    PruneOldDumps();
     g_Request = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     g_Done = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     if (HANDLE t = CreateThread(nullptr, 256 * 1024, &Watchdog, nullptr, 0, nullptr)) CloseHandle(t);

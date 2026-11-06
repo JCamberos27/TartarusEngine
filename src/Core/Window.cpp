@@ -559,6 +559,8 @@ void Window::SetFullscreen(bool fullscreen) {
     } else {
         if (m_ActiveFsMode == FullscreenMode::Exclusive) {
             glfwSetWindowMonitor(m_Handle, nullptr, m_WindowedX, m_WindowedY, m_WindowedW, m_WindowedH, 0);
+            // The state was recorded on entry (m_PreFullscreen); a window that was maximized comes back maximized.
+            if (m_PreFullscreen.Maximized) glfwMaximizeWindow(m_Handle);
         } else {
             m_IsFullscreen = false;
             if (!ApplyPlacement(m_PreFullscreen))

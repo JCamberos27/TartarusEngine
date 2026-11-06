@@ -2319,7 +2319,7 @@ void NpcTest::Pose(World& world, NpcDirector& npcs, float now) {
 // --- reload: the reloads and the regrip, against the player's ----------------------------------------------------------
 // The two probes (an AK, a Remington), the AI frozen, each facing the arena: aimed, then reloading where they stand; at the
 // hip, then reloading; an empty reload; the idle regrip. Through every one the butt's place against the right
-// shoulder (in the aim's flat frame - what --stock-probe prints for the player's body as "butt-shoulder R U F") and the
+// shoulder (in the aim's flat frame, as "butt-shoulder R U F") and the
 // hands off the rig's are logged every third frame, and the Scene view takes the AK probe from its front right.
 namespace {
 struct ReloadPhase { const char* Name; float Start; bool Aim; int Ammo; bool Fidget; };

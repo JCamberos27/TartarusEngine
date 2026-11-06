@@ -1,10 +1,8 @@
 #include "App/CliTools.h"
 
-#include "BloodFxImport.h"
 #include "BuildPipeline.h"
 #include "CrashHandler.h"
 #include "EnginePaths.h"
-#include "FirstPersonProcedural.h" // RecoilAsset
 #include "Game/Audio/AudioTest.h"
 #include "AssetDatabase.h"
 #include "AssetLibrary.h"
@@ -12,7 +10,6 @@
 #include "SceneSerializer.h"
 #include "Window.h"
 #include "World.h"
-#include "KnifeFxImport.h"
 #include "LayerRegistry.h"
 #include "Log.h"
 #include "Model.h"
@@ -356,14 +353,6 @@ int SceneBounds(int argc, char** argv, int i) {
 } // namespace
 
 int RunEarlyCliTool(int argc, char** argv) {
-    // Explicit, headless upgrade through the same parser/serializer as the Inspector.
-    for (int i=1;i+1<argc;++i) if (std::string(argv[i])=="--migrate-recoil") {
-        RecoilAsset asset; std::string error;
-        if (!RecoilAsset::LoadFile(argv[i+1],asset,&error) || !asset.SaveFile(argv[i+1])) {
-            std::cerr << "[RecoilMigration] " << error << '\n'; return 1;
-        }
-        std::cout << "[RecoilMigration] " << argv[i+1] << " -> RecoilAnimData v2\n"; return 0;
-    }
     // #173 - `--unit-tests`: pure C++ tests, run before any window / GL / audio / PhysX exists
     // so they work on a GPU-less CI runner. Exit code = failed checks (0 = pass).
     for (int i = 1; i < argc; ++i) {
@@ -371,20 +360,6 @@ int RunEarlyCliTool(int argc, char** argv) {
         CrashHandler::SetInteractive(false);
         const char* filter=i+1<argc && argv[i+1][0]!='-'?argv[i+1]:nullptr;
         return RunUnitTests(filter) == 0 ? 0 : 1;
-    }
-    // `--import-blood-fx <VolumetricBloodFX package dir>`: converts the volumetric blood sims and
-    // decals into project/assets/Effects/Blood (git-ignored). No GL needed.
-    for (int i = 1; i + 1 < argc; ++i) {
-        if (std::string(argv[i]) != "--import-blood-fx") continue;
-        CrashHandler::SetInteractive(false);
-        return BloodFxImport::ImportPackage(argv[i + 1], ProjectPaths::Resolve("assets/Effects/Blood")) ? 0 : 1;
-    }
-    // `--import-knife-fx <folder holding the extracted Knife packs>`: the Real Blood and PRO Effects textures
-    // into project/assets/Effects/Knife (git-ignored). No GL needed.
-    for (int i = 1; i + 1 < argc; ++i) {
-        if (std::string(argv[i]) != "--import-knife-fx") continue;
-        CrashHandler::SetInteractive(false);
-        return KnifeFxImport::ImportPacks(argv[i + 1], ProjectPaths::Resolve("assets/Effects/Knife")) ? 0 : 1;
     }
     for (int i = 1; i < argc; ++i) {
         if (std::string(argv[i]) != "--model-report") continue;
@@ -407,7 +382,7 @@ int RunEarlyCliTool(int argc, char** argv) {
     return -1;
 }
 
-int RunBuildTool(const std::string& outDir, int cancelAt) {
+int RunBuildTool(const std::string& outDir) {
     CrashHandler::SetInteractive(false);
     LayerRegistry::Load();
     AssetDatabase::ScanProject(); // #132 - GUIDs, so moved build scenes / shaders resolve
@@ -422,7 +397,6 @@ int RunBuildTool(const std::string& outDir, int cancelAt) {
     int lastShown = -1;
     while (future.wait_for(std::chrono::milliseconds(20)) != std::future_status::ready) {
         const int done = progress.Done.load(), total = progress.Total.load();
-        if (cancelAt >= 0 && done >= cancelAt) progress.Cancel.store(true);
         if (total > 0 && done * 10 / total != lastShown) {
             lastShown = done * 10 / total;
             std::cout << "[Build] " << BuildPipeline::StageLabel((BuildPipeline::Stage)progress.StageNow.load())

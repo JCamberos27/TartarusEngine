@@ -36,9 +36,16 @@ float Pressure() {
     const float s = g_Synthetic.load();
     if (s >= 0.0f) return s;
     const float r = g_Real.load();
-    // A pen held still sends no updates for a moment, but a reading from seconds ago is stale
+    // A pen held still sends no updates for a moment, but a reading from seconds ago may be stale
     // (the pen went out of range without a leave message): drop to mouse behaviour.
-    if (r >= 0.0f && NowMs() - g_ReportedAtMs.load() > 1500) return -1.0f;
+    if (r >= 0.0f && NowMs() - g_ReportedAtMs.load() > 1500) {
+#if defined(_WIN32)
+        // ...unless the pen is still pressed: a held-still pen sends nothing, and Windows promotes
+        // pen contact to the left mouse button.
+        if (GetAsyncKeyState(VK_LBUTTON) & 0x8000) return r;
+#endif
+        return -1.0f;
+    }
     return r;
 }
 

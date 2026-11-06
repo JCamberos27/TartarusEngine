@@ -108,7 +108,6 @@ void SetDebugTimeScale(float scale) { g_DebugTimeScale = std::clamp(scale, 0.0f,
 float DebugTimeScale() { return g_DebugTimeScale; }
 float EffectiveTimeScale() { return g_TimeScale * g_DebugTimeScale; }
 
-float MaximumDeltaTime() { return g_MaxDelta; }
 void SetMaximumDeltaTime(float seconds) { g_MaxDelta = std::clamp(seconds, 0.01f, 1.0f); }
 
 float FixedDeltaTime() {

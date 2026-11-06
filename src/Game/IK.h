@@ -223,7 +223,7 @@ private:
     float m_Slide[2] = {0.0f, 0.0f};
 };
 FootSlideSettings FootSlideFrom(const FirstPersonBodyComponent& body);
-// The measurement hook for --stock-probe / --npc-test: TARTARUS_FOOT_SLIDE_PROBE=0 logs the planted feet's drift with the layers as
+// The measurement hook for --npc-test: TARTARUS_FOOT_SLIDE_PROBE=0 logs the planted feet's drift with the layers as
 // the scene sets them, =1 also forces both layers on at weight 1 (for the before / after); unset = off (-1).
 int FootSlideProbeMode();
 // Adds `stats` to the running window of `who` and prints it (mean / max drift per plant, cm) every 1.5 s of wall time.

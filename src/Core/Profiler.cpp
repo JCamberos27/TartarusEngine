@@ -25,6 +25,7 @@ struct GpuFrame {
 };
 GpuFrame g_GpuFrames[kGpuFrames];
 int g_GpuCurrent = 0;
+unsigned g_GpuFrameSerial = 0; // bumped by BeginFrame so a scope that straddles one is detected
 std::vector<Profiler::Entry> g_GpuLastFrame;
 
 int TakeQuery(GpuFrame& f) {
@@ -68,6 +69,7 @@ void Profiler::BeginFrame() {
     // Swapped, not moved: the moved-from list lost its capacity and regrew from empty every frame.
     std::swap(g_LastFrame, g_CurrentFrame);
     g_CurrentFrame.clear();
+    ++g_GpuFrameSerial;
 
     if (!glQueryCounter || !glGetQueryObjectiv || !glGetQueryObjectui64v) return;
     // Close the frame just recorded, then read back every finished frame oldest-first (so the
@@ -115,13 +117,16 @@ Profiler::GpuScopeTimer::GpuScopeTimer(const char* name) {
     const int begin = TakeQuery(f);
     glQueryCounter(f.Pool[begin], GL_TIMESTAMP);
     m_Record = (int)f.Scopes.size();
+    m_Slot = g_GpuCurrent;
+    m_Serial = g_GpuFrameSerial;
     f.Scopes.push_back({name, begin, -1});
 }
 
 Profiler::GpuScopeTimer::~GpuScopeTimer() {
     if (m_Record < 0) return;
-    GpuFrame& f = g_GpuFrames[g_GpuCurrent];
-    if (m_Record >= (int)f.Scopes.size()) return; // frame rolled over mid-scope (BeginFrame inside it)
+    if (m_Serial != g_GpuFrameSerial) return; // frame rolled over mid-scope (BeginFrame inside it)
+    GpuFrame& f = g_GpuFrames[m_Slot];
+    if (m_Record >= (int)f.Scopes.size()) return;
     const int end = TakeQuery(f);
     glQueryCounter(f.Pool[end], GL_TIMESTAMP);
     f.Scopes[m_Record].End = end;

@@ -35,8 +35,6 @@ bool PlayerConfig::Load(const std::string& path, PlayerConfig& out) {
         return (f != j.end() && f->is_boolean()) ? f->get<bool>() : fallback;
     };
     c.ProductName = str("productName", c.ProductName);
-    c.CompanyName = str("companyName", c.CompanyName);
-    c.Version     = str("version", c.Version);
     c.Width       = std::clamp(integer("width", c.Width), 320, 16384);
     c.Height      = std::clamp(integer("height", c.Height), 200, 16384);
     c.Fullscreen  = boolean("fullscreen", c.Fullscreen);
@@ -54,8 +52,6 @@ bool PlayerConfig::Load(const std::string& path, PlayerConfig& out) {
 bool PlayerConfig::Save(const std::string& path) const {
     json j = {
         {"productName", ProductName},
-        {"companyName", CompanyName},
-        {"version", Version},
         {"scenes", Scenes},
         {"width", Width},
         {"height", Height},

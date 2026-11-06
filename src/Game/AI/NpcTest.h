@@ -38,7 +38,7 @@ class World;
 //   tactics the player pins a soldier behind low cover with bursts over its head (blind fire), the squad bounds under
 //           covering fire, then the player steps up to a soldier and is struck with its rifle butt
 //   reload  the reloads and the regrip: an AK and a Remington soldier aimed, at the hip, empty, and idle; the butt
-//           against the shoulder and the hands logged through each (as --stock-probe logs the player's body), the AK shot
+//           against the shoulder and the hands logged through each the AK shot
 //   flame   the player's muzzle flames: the AK's and the Remington's (second slot), shots from the hip
 //           then on the sights (record it: NPC_TEST_RECORD, every frame)
 //   feet    foot IK: a soldier's feet measured over the ground on the flat, then across and up the Arena's ramp

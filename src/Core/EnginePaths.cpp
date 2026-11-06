@@ -87,10 +87,4 @@ std::string Resolve(const std::string& relativePath) {
     return (cwd / rel).lexically_normal().string();
 }
 
-bool Exists(const std::string& relativePath) {
-    std::error_code ec;
-    bool ok = fs::exists(fs::path(Resolve(relativePath)), ec);
-    return ok && !ec;
-}
-
 } // namespace EnginePaths

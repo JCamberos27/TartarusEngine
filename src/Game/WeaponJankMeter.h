@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-// The third-person weapon animations' smoothness, frame by frame (--stock-probe's jank sweep, the Weapon Lab panel).
+// The third-person weapon animations' smoothness, frame by frame (the Weapon Lab panel).
 // It is fed the world gun and the world hands with the third-person clips' own motion taken out, so what is left is what
 // the procedural hold adds - the shoulder lock, the chest ride, the free hand's anchor - and flags where that jumps or keeps
 // moving on its own:

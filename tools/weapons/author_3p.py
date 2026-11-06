@@ -15,7 +15,7 @@
 # re-keyed every frame as  O * CB_Gun,  O a rigid offset in the rig's camera frame (right = -X, up = +Z,
 # forward = -Y, cm) turned about the stock's butt. Everything else in the action is left as authored.
 #
-# The offsets were measured in the engine (STOCK_PROBE_POSE=1 --stock-probe ak: the world gun's butt against the
+# The offsets were measured in the engine (the world gun's butt against the
 # body's right shoulder joint, right/up/forward cm): hip (-8.7, +3.6, +5.9), sights (-16.4, +6.2, -1.1). The
 # shoulder pocket is about (-4.5, -1.5, +5.5) at the hip; on the sights the butt comes in to (-7, +1.5, +1.5),
 # under the cheek. Tune them here and re-run; the engine needs no change.
@@ -91,7 +91,7 @@ AK = {
 REMINGTON = {
     "arms": "Armature", "weapon": "Armature.001", "prefix": "Remington870",
     # The Remington's own pocket offsets: with the AK's, its butt rode 3.6 cm over the shoulder joint and 9 cm ahead
-    # of it on the sights (STOCK_PROBE_POSE=1 --stock-probe remington). Measured in the engine and aimed at the
+    # of it on the sights. Measured in the engine and aimed at the
     # pocket: sights (-6, -4.5, +3) - below the clavicle, in the pocket (at +0.5 the butt sat on the collarbone) -
     # and hip (-4.5, -2, +3.5), from the shoulder joint (right, up, forward cm).
     # Its sprint arms are the AK's keys, which with the longer gun carried it across the face: low ready instead.

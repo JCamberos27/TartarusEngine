@@ -13,7 +13,6 @@ class DevPanel;
 class EditorLayer;
 class FirstPersonBody;
 class FirstPersonPresentation;
-class FirstPersonWeaponTest;
 struct Flashlight;
 class FxSprites;
 class GameViewPanel;
@@ -27,7 +26,6 @@ class WeaponFxRenderer;
 class WeaponLab;
 class Window;
 class World;
-struct LaunchOptions;
 
 // The play-mode state bits main's frame loop reads. Play is not a whole-screen mode swap: three independent bits
 // describe it -
@@ -65,19 +63,18 @@ struct PlayState {
 // snapshot; PlayState holds the state bits; this sets up and tears down the systems Play runs.
 class PlaySession {
 public:
-    PlaySession(PlayState& state, const LaunchOptions& opt, Window& window, World& world, AssetLibrary& assets,
+    PlaySession(PlayState& state, Window& window, World& world, AssetLibrary& assets,
                 EditorLayer& editor, GameViewPanel& gameView, Camera& editorCamera, Player& player, Flashlight& flashlight,
                 GravityGun& gravityGun, FirstPersonPresentation& presentation, FirstPersonBody& body,
                 CombatFx& combatFx, CombatHud& combatHud, WeaponFxRenderer& weaponFx, BloodFx& bloodFx,
                 FxSprites& fxSprites, PlayerVitals& playerVitals, NpcDirector& npcDirector, DevPanel& devPanel,
-                BulletHoleList& bulletHoles, ShellCasings& shellCasings, FirstPersonWeaponTest* weaponTest,
-                WeaponLab* weaponLab, NpcTest* npcTest)
-        : m_State(state), m_Opt(opt), m_Window(window), m_World(world), m_Assets(assets), m_Editor(editor),
+                BulletHoleList& bulletHoles, ShellCasings& shellCasings, WeaponLab* weaponLab, NpcTest* npcTest)
+        : m_State(state), m_Window(window), m_World(world), m_Assets(assets), m_Editor(editor),
           m_GameView(gameView), m_EditorCamera(editorCamera), m_Player(player), m_Flashlight(flashlight),
           m_GravityGun(gravityGun), m_Presentation(presentation), m_Body(body), m_CombatFx(combatFx),
           m_CombatHud(combatHud), m_WeaponFx(weaponFx), m_BloodFx(bloodFx), m_FxSprites(fxSprites),
           m_PlayerVitals(playerVitals), m_NpcDirector(npcDirector), m_DevPanel(devPanel), m_BulletHoles(bulletHoles),
-          m_ShellCasings(shellCasings), m_WeaponTest(weaponTest), m_WeaponLab(weaponLab), m_NpcTest(npcTest) {}
+          m_ShellCasings(shellCasings), m_WeaponLab(weaponLab), m_NpcTest(npcTest) {}
 
     void Start(); // no-op while playing
     void Stop();  // no-op while stopped
@@ -85,7 +82,6 @@ public:
 
 private:
     PlayState& m_State;
-    const LaunchOptions& m_Opt;
     Window& m_Window;
     World& m_World;
     AssetLibrary& m_Assets;
@@ -107,7 +103,6 @@ private:
     DevPanel& m_DevPanel;
     BulletHoleList& m_BulletHoles;
     ShellCasings& m_ShellCasings;
-    FirstPersonWeaponTest* m_WeaponTest;
     WeaponLab* m_WeaponLab;
     NpcTest* m_NpcTest;
 };

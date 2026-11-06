@@ -6,7 +6,7 @@
 
 // The Knife packs' texture libraries on the GPU: one GL_TEXTURE_2D_ARRAY of
 // BC3 colour and one of BC5 normals per library (KnifeFxImport::Library), read from the git-ignored
-// project/assets/Effects/Knife/*.kfx that `--import-knife-fx` writes. Entries are looked up by name
+// project/assets/Effects/Knife/*.kfx that KnifeFxImport writes. Entries are looked up by name
 // once (an id), then read per spawn.
 class KnifeFxLibrary {
 public:

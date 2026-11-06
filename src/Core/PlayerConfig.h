@@ -7,8 +7,6 @@
 // full window, no editor) instead of as the editor.
 struct PlayerConfig {
     std::string ProductName = "My Game";
-    std::string CompanyName;
-    std::string Version = "1.0";
     std::vector<std::string> Scenes; // project-relative; [0] is loaded at startup
     int  Width = 1280, Height = 720;
     bool Fullscreen = true;

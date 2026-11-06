@@ -148,16 +148,11 @@ public:
     // What the hands are doing, for the idle fidgets: a gun held (the ready stance's own fidgets) and busy with it
     // (aiming, or just fired: no fidget). Set each frame before Tick.
     void SetHands(bool armed, bool busy) { m_Armed = armed; m_Busy = busy; }
-    // Diagnostics (--stock-probe): how far each world twin hand ended from the rig's ([0] left, [1] right), m.
     // Diagnostics: where the body stands (world; the capsule's feet with a stair step eased in).
     const glm::vec3& Feet() const { return m_Feet; }
     float TwinHandGap(int side) const { return m_TwinHandGap[side & 1]; }
-    // ... and how far each world hand is rolled about its forearm (degrees), and what of that the forearm's twist
-    // bones leave at the wrist.
-    float WristRoll(int side) const { return m_WristRoll[side & 1]; }
-    float WristResidual(int side) const { return m_WristResidual[side & 1]; }
 
-    // Diagnostics (--stock-probe): a standard bone's world position as last posed - from the arms
+    // A standard bone's world position as last posed - from the arms
     // piece when it has the bone (the arms after ArmsLateUpdate), else the driver. The world twins' (what every
     // other view shows) when poses are split, unless `worldTwins` is false: then the pieces' (the player's own view).
     bool BoneWorld(const World& world, const std::string& standard, glm::vec3& out, bool worldTwins = true) const;
@@ -166,19 +161,6 @@ public:
     // Each foot's height above the body's feet as last posed (m; [0] left, [1] right), for the footsteps
     // (FoleyAudio). False with no body or no foot bones.
     bool FootHeights(const World& world, float (&out)[2]) const;
-    // Diagnostics (--stock-probe): how close segment a-b (world) comes to the drawn head and neck - every
-    // vertex of the world twins (else the pieces) skinned mostly to neck_01, neck_02 or the head bone, so a
-    // hood or collar counts. Negative when there are none; `piece` / `along` (0..1 on a-b) say where.
-    float HeadMeshGap(const World& world, const glm::vec3& a, const glm::vec3& b, std::string* piece = nullptr,
-                      float* along = nullptr) const { return MeshGap(world, BodyRegion::Head, a, b, piece, along); }
-    // ... the same against the drawn torso (vertices skinned mostly to the pelvis or spine; thinned).
-    float TorsoMeshGap(const World& world, const glm::vec3& a, const glm::vec3& b, std::string* piece = nullptr,
-                       float* along = nullptr) const { return MeshGap(world, BodyRegion::Torso, a, b, piece, along); }
-    // Diagnostics (--stock-probe): how close each world elbow (the arm from half-way down the upper arm, through
-    // the elbow, to half-way down the forearm) comes to the drawn torso - vertices skinned mostly to the pelvis or
-    // spine. -1 when there's no body or no such vertices. [0] left, [1] right.
-    void ElbowTorsoGaps(const World& world, float (&gaps)[2]) const;
-    float WorldElbowSwing(int side) const { return m_WorldElbowClear[side & 1]; } // Elbow Clearance's swing this frame, radians
     float Yaw() const { return m_Yaw; }     // body heading, radians about +Y (model +Z faces the view)
     float Twist() const { return m_Twist; } // view heading minus body heading, radians
 
@@ -321,7 +303,6 @@ private:
     // pelvis / spine (a hoodie's body - the elbows' keep-out; thinned to a few thousand). Per model, (mesh,
     // vertex) pairs found once; SkinnedPoints skins them to world space as posed now, with each one's piece.
     enum class BodyRegion { Head, Torso };
-    float MeshGap(const World& world, BodyRegion region, const glm::vec3& a, const glm::vec3& b, std::string* piece, float* along) const;
     // Each chosen vertex as SkinnedPoints needs it every frame: bind position and its influences with
     // weights already normalized, bones as indices into the few this region uses (Bones).
     struct RegionSkinPoint { glm::vec3 Pos; int Count; std::uint16_t Bone[MAX_BONE_INFLUENCE]; float Weight[MAX_BONE_INFLUENCE]; };

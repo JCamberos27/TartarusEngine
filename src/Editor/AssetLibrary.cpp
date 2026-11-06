@@ -344,7 +344,7 @@ std::shared_ptr<Texture> AssetLibrary::LoadTexture(const std::string& path, Text
     // guaranteed cache miss on every load after the first. In normal project use this was masked
     // by AssetDatabase::ScanProject() registering every known asset's GUID at startup, before any
     // texture is ever loaded — but anything loaded from outside that scan (freshly imported
-    // files, or --asset-load-bench's synthetic textures) hit it on every single load.
+    // files) hit it on every single load.
     AssetDatabase::EnsureGuid(path);
     return RegisterTexture(path, std::make_shared<Texture>(path, GetTextureSettings(path)));
 }

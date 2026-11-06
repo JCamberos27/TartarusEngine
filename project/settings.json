@@ -300,7 +300,6 @@
     "masterVolume": 1.0
   },
   "build": {
-    "companyName": "",
     "developmentBuild": false,
     "fullscreen": true,
     "height": 720,
@@ -310,7 +309,6 @@
     "sceneGuids": [],
     "scenes": [],
     "splashPath": "",
-    "version": "1.0",
     "vsync": true,
     "width": 1280
   },

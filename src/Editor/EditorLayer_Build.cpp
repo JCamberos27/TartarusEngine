@@ -204,8 +204,6 @@ void EditorLayer::DrawBuildSettingsBody() {
     EditorUIPrimitives::SectionHeader("Player");
     changed |= InputString("Product Name", b.ProductName, kw);
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("The game's window title, exe name and default output folder name.");
-    changed |= InputString("Company Name", b.CompanyName, kw);
-    changed |= InputString("Version", b.Version, kw);
     changed |= SettingsCheckbox("Fullscreen", &b.Fullscreen);
     if (ImGui::IsItemHovered()) EditorUI::SetTooltip("Start borderless fullscreen. F11 toggles while playing.");
     ImGui::BeginDisabled(b.Fullscreen);

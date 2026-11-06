@@ -58,8 +58,7 @@ constexpr float kBackedBehind = 0.04f;
 std::vector<std::uint8_t> Backed(const Mesh& body, const Mesh& cloth, const std::vector<std::uint8_t>& only = {},
                                  float reach = kBackedReach, const std::vector<float>* poke = nullptr);
 
-// What the game hides of `under` while `over` is worn over it (OutfitSystem::UpdateHiding; the audit
-// checks the same): Covered then Erode and a kEdgeBand-wide ErodeWithin, plus everything poking out through it up to kPokeReach. `exposed`
+// What the game hides of `under` while `over` is worn over it (OutfitSystem::UpdateHiding): Covered then Erode and a kEdgeBand-wide ErodeWithin, plus everything poking out through it up to kPokeReach. `exposed`
 // (the head: skin that carries on past the clothing, in view) keeps only what's Backed too - with nothing
 // drawn behind it, a hidden neck over a collar's rim is a hole (the torso's neck is hidden as well), where a
 // waistband's underpants have the hips' cloth behind them.
