@@ -77,6 +77,9 @@
 #include "ShadowFrame.h"
 #include "SelectionOutline.h"
 #include "ViewPipeline.h"
+#include "StillModelCache.h"
+#include "App/PlayFrame.h"
+#include "App/CombatWiring.h"
 #include "IblProbe.h"
 #include "Cubemap.h"               // PR13: HDRI environment cubemap
 #include "ReflectionProbeArray.h"  // PR14: placed reflection probes
@@ -354,86 +357,7 @@ static float RollFromWorld(const glm::mat4& m, const Camera& unrolled) {
     return (x * x + y * y) > 1e-12f ? glm::degrees(std::atan2(x, y)) : 0.0f;
 }
 
-// Renderables whose models never animate (Model::NeverAnimates: no bones, no clips - every rock and fern), remembered
-// by their slot in the renderable pool so the per-frame animation tick and the pre-skin gather skip them without
-// touching the Model: reading ~150k of them a frame was 15 ms in the forest. Re-checked whenever the pool changes size
-// or Model::AnimationEpoch() moves.
-struct StillModelCache {
-    std::vector<const Model*> Models;
-    std::vector<std::uint8_t> Still;
-    const World* Owner = nullptr;
-    std::uint64_t Epoch = ~0ull;
-    void Sync(const World& world, size_t poolSize) {
-        if (Owner == &world && Models.size() == poolSize && Epoch == Model::AnimationEpoch()) return;
-        Models.assign(poolSize, nullptr);
-        Still.assign(poolSize, 0);
-        Owner = &world;
-        Epoch = Model::AnimationEpoch();
-    }
-    // Slot k of the pool holds `m`: true when it is known not to animate; otherwise (re)classifies it.
-    bool Skip(size_t k, const Model* m) {
-        if (k >= Models.size()) return false;
-        if (m == Models[k] && Still[k]) return true;
-        Models[k] = m;
-        Still[k] = m && m->NeverAnimates() ? 1 : 0;
-        return Still[k] != 0;
-    }
-    // The renderables that may animate (each one Skip doesn't rule out, with a model), in pool order. The pool is read
-    // across the cores in fixed chunks - one thread reading ~150k components' ModelRef was ~1 ms of the forest's frame,
-    // paid by the animation tick and again by the pre-skin gather. Skip only writes its own slot, so chunks don't meet.
-    void Gather(World& world, std::vector<entt::entity>& out) {
-        const auto& pool = world.Registry.storage<RenderableComponent>();
-        const size_t count = pool.size();
-        Sync(world, count);
-        const auto comps = pool.cbegin();
-        const auto ents = static_cast<const entt::sparse_set&>(pool).begin();
-        constexpr size_t kChunk = 8192;
-        const size_t chunks = (count + kChunk - 1) / kChunk;
-        if (ChunkOut.size() < chunks) ChunkOut.resize(chunks);
-        ChunkIds.resize(chunks);
-        std::iota(ChunkIds.begin(), ChunkIds.end(), size_t(0));
-        auto scan = [&](size_t c) {
-            std::vector<entt::entity>& o = ChunkOut[c];
-            o.clear();
-            const size_t end = std::min(count, (c + 1) * kChunk);
-            for (size_t i = c * kChunk; i < end; ++i) {
-                const Model* m = comps[(std::ptrdiff_t)i].ModelRef.get();
-                if (Skip(i, m) || !m) continue;
-                o.push_back(ents[(std::ptrdiff_t)i]);
-            }
-        };
-        if (chunks > 1) std::for_each(std::execution::par, ChunkIds.begin(), ChunkIds.end(), scan);
-        else if (chunks == 1) scan(0);
-        out.clear();
-        for (size_t c = 0; c < chunks; ++c) out.insert(out.end(), ChunkOut[c].begin(), ChunkOut[c].end());
-    }
-    // Gather, reusing the last result when it was made this frame (same `frame`) over the same pool - same world, same
-    // size and storage, same Model::AnimationEpoch(). The animation tick and the pre-skin gather read the same pool
-    // twice a frame; the second one reuses the first. Entities can be destroyed in between, so a caller walking the
-    // result must check each is still valid and still has a RenderableComponent.
-    const std::vector<entt::entity>& GatherCached(World& world, std::uint64_t frame) {
-        const auto& pool = world.Registry.storage<RenderableComponent>();
-        const void* data = static_cast<const entt::sparse_set&>(pool).data();
-        if (!(Memo.Valid && Memo.Frame == frame && Memo.Owner == &world && Memo.Size == pool.size() && Memo.Data == data &&
-              Memo.Epoch == Model::AnimationEpoch())) {
-            Gather(world, Memo.Result);
-            Memo.Frame = frame; Memo.Owner = &world; Memo.Size = pool.size(); Memo.Data = data;
-            Memo.Epoch = Model::AnimationEpoch(); Memo.Valid = true;
-        }
-        return Memo.Result;
-    }
-    struct MemoState {
-        std::uint64_t Frame = 0;
-        const World* Owner = nullptr;
-        size_t Size = 0;
-        const void* Data = nullptr;
-        std::uint64_t Epoch = 0;
-        bool Valid = false;
-        std::vector<entt::entity> Result;
-    } Memo;
-    std::vector<std::vector<entt::entity>> ChunkOut;
-    std::vector<size_t> ChunkIds;
-};
+// Renderables that never animate, skipped by the animation tick and the pre-skin gather (Renderer/StillModelCache.h).
 static StillModelCache s_StillModels;
 
 int main(int argc, char** argv) {
@@ -729,8 +653,6 @@ int main(int argc, char** argv) {
         std::unique_ptr<NpcTest> npcTest;
         if (opt.npcTestMode) npcTest = std::make_unique<NpcTest>(opt.npcTestScenario);
         NpcTest::BloodView npcTestBlood; // what the blood scenario reads of the blood each frame
-        float npcTestBloodGpuSum = 0.0f;
-        int npcTestBloodGpuFrames = 0;
         if (npcTest) npcTest->BloodStats = &npcTestBlood;
         FirstPersonBody firstPersonBody; // #405 - true first person: the player's own body
         GravityGun gravityGun;
@@ -745,287 +667,36 @@ int main(int argc, char** argv) {
         BloodFx bloodFx;            // the volumetric blood out of every body a round goes into (docs/BLOOD_FX.md)
         SprayCanSystem sprayCans;   // graffiti sprayed on in Play, by the player (F6) or an NPC (docs/GRAFFITI_DESIGNER.md)
         FxSprites fxSprites;        // the Knife flipbook particles: blood mist, impact dust and debris, muzzle smoke
-        bloodFx.SetSprites(&fxSprites);
         ImpactFx impactFx;          // rounds into the world: per-surface holes and bursts (docs/BLOOD_FX.md)
-        impactFx.SetSprites(&fxSprites);
-        combatFx.SetSprites(&fxSprites); // PRO Effects' muzzle layers (Muzzle Style 1)
-        // A round into the world: the surface's burst, and its textured hole on the static world (the procedural
-        // one follows a moving prop).
-        auto worldImpact = [&](std::uint32_t entity, const glm::vec3& point, const glm::vec3& normal, const glm::vec3& dir, float radius) {
-            const glm::vec3 p = point, n = normal;
-            const std::string surface = impactFx.SurfaceOf(world, entity);
-            impactFx.Spawn(surface, p, n, dir);
-            int decal = -1;
-            if (ImpactFx::IsStatic(world, entity)) decal = KnifeFxLibrary::Get().Find(ImpactFx::HoleEntry(surface));
-            bulletHoles.Add(world, static_cast<entt::entity>(entity), point, normal, radius, decal, ImpactFx::HoleSize(surface, radius),
-                            ImpactFx::HoleRim(surface));
-        };
-        if (npcTest)
-            npcTest->ShootWorld = [&](const glm::vec3& from, const glm::vec3& dir) { // --npc-test blood: rounds into the surfaces
-                const float o[3] = {from.x, from.y, from.z}, d[3] = {dir.x, dir.y, dir.z};
-                QueryFilter f;
-                f.HitTriggers = 0;
-                RaycastHit h;
-                if (!PhysicsWorld::RaycastFiltered(o, d, 20.0f, f, h) || !h.Hit) return false;
-                const glm::vec3 p(h.Point[0], h.Point[1], h.Point[2]), n(h.Normal[0], h.Normal[1], h.Normal[2]);
-                combatFx.Impact(world, h.Entity, p);
-                worldImpact(h.Entity, p, n, dir, 0.0027f); // a 5.45 mm round
-                return true;
-            };
-        if (npcTest) // --npc-test decals: stains at fixed spots
-            npcTest->SpawnBlood = [&](int kind, const glm::vec3& at, const glm::vec3& n, float size) {
-                kind == 0 ? bloodFx.SpatterWallAt(at, n, size) : bloodFx.SpawnPoolAt(at, n, size);
-            };
-        if (npcTest) { // --npc-test decals: the spray can
-            npcTest->Spray = [&](const std::string& piece, const glm::vec3& from, const glm::vec3& dir, const std::string& painter, float seconds) {
-                SprayCanAction a;
-                a.Piece = piece; a.From = from; a.Direction = dir; a.Painter = painter; a.Seconds = seconds;
-                return sprayCans.Start(world, a) != entt::null;
-            };
-            npcTest->SprayNpc = [&](const std::string& piece, const glm::vec3& feet, float yawDeg, float seconds) {
-                const entt::entity npc = world.CreateEmptyEntity(feet, glm::vec3(0.0f, yawDeg, 0.0f), glm::vec3(1.0f), "Tenant (painter)");
-                SprayCanAction a = SprayCanAction::ForCharacter(world, npc, piece);
-                a.Seconds = seconds;
-                return sprayCans.Start(world, a) != entt::null;
-            };
-        }
         BloodLab bloodLab;          // F7 -> Blood Lab: fire any blood / impact effect at the crosshair, tune it live
-        // What the crosshair is on: a soldier's part (entity, part) or the world (entity, normal). False: nothing in reach.
-        auto aimAt = [&](glm::vec3& point, glm::vec3& normal, unsigned& entity, int& part, bool& body) {
-            const glm::vec3 o = player.Cam.Position, d = player.Cam.Front();
-            const float oo[3] = {o.x, o.y, o.z}, dd[3] = {d.x, d.y, d.z};
-            PhysicsWorld::BodyPartHit bp;
-            QueryFilter f;
-            f.HitTriggers = 0;
-            RaycastHit h;
-            const bool world_ = PhysicsWorld::RaycastFiltered(oo, dd, 200.0f, f, h) && h.Hit;
-            if (PhysicsWorld::RaycastBodyParts(oo, dd, 200.0f, bp) && (!world_ || glm::length(glm::vec3(bp.Point[0], bp.Point[1], bp.Point[2]) - o) < h.Distance)) {
-                point = glm::vec3(bp.Point[0], bp.Point[1], bp.Point[2]);
-                normal = -d;
-                entity = bp.Entity;
-                part = bp.Part;
-                body = true;
-                return true;
-            }
-            if (!world_) return false;
-            point = glm::vec3(h.Point[0], h.Point[1], h.Point[2]);
-            normal = glm::vec3(h.Normal[0], h.Normal[1], h.Normal[2]);
-            entity = h.Entity;
-            part = -1;
-            body = false;
-            return true;
-        };
-        bloodLab.Actions.FireAtCrosshair = [&](float damage, int pellets, bool head) {
-            glm::vec3 p, n;
-            unsigned e = 0;
-            int part = -1;
-            bool body = false;
-            if (!aimAt(p, n, e, part, body)) return;
-            const glm::vec3 o = player.Cam.Position, d = glm::normalize(p - o);
-            if (!body) { worldImpact(e, p, n, d, 0.0027f); return; }
-            if (head) // on the head whatever part was under the crosshair
-                for (const auto& npc : npcDirector.Npcs())
-                    if (npc && (unsigned)entt::to_integral(npc->Root) == e && npc->Hitboxes && npc->Hitboxes->Active()) p = npc->Hitboxes->Centre(npc->Body, 2);
-            FirstPersonWeaponGameplay w = firstPersonPresentation.Set().Gameplay;
-            w.Damage = damage;
-            w.Pellets = pellets;
-            bool killed = false, headHit = false;
-            for (int i = 0; i < pellets; ++i)
-                npcDirector.OnPlayerHit(world, e, p + glm::vec3((float)(i % 3) - 1.0f, (float)(i / 3) - 1.0f, 0.0f) * (pellets > 1 ? 0.06f : 0.0f), o,
-                                        glm::normalize(p - o), w, &killed, &headHit);
-        };
-        bloodLab.Actions.PoolAtCrosshair = [&] {
-            glm::vec3 p, n;
-            unsigned e = 0;
-            int part = -1;
-            bool body = false;
-            if (aimAt(p, n, e, part, body) && !body && n.y > 0.6f) bloodFx.SpawnPoolAt(p, n, 1.2f);
-        };
-        bloodLab.Actions.DripsAtCrosshair = [&] {
-            glm::vec3 p, n;
-            unsigned e = 0;
-            int part = -1;
-            bool body = false;
-            if (aimAt(p, n, e, part, body) && !body) bloodFx.SpatterWallAt(p, n, 0.6f);
-        };
-        bloodLab.Actions.ImpactAtCrosshair = [&] {
-            glm::vec3 p, n;
-            unsigned e = 0;
-            int part = -1;
-            bool body = false;
-            if (aimAt(p, n, e, part, body) && !body) {
-                combatFx.Impact(world, e, p);
-                worldImpact(e, p, n, glm::normalize(p - player.Cam.Position), 0.0027f);
-            }
-        };
-        int bigHeadshots = 0;       // big headshot kills (the gore sound), for --npc-test blood
-        FoleyAudio::Get().SetStepListener([&bloodFx, &player](int walker, const glm::vec3& feet, const glm::vec3& vel, int foot) {
-            // Bloody footprints out of fresh blood; the player's point the way they face (turning on the spot too).
-            bloodFx.OnFootstep(walker, feet, vel, foot, walker < 0 ? player.Cam.Front() : glm::vec3(0.0f));
-        });
-        // The listener captures bloodFx and player by reference: drop it before they are destroyed.
-        struct StepListenerGuard { ~StepListenerGuard() { FoleyAudio::Get().SetStepListener(nullptr); } } stepListenerGuard;
-        bloodFx.SetBodyLookup([&npcDirector, &spiderDamage, &world](unsigned entity, glm::vec3& centre) { // where a corpse lies, for its pool
-            if (spiderDamage.BodyCentre(world, entity, centre)) return true;
-            for (const auto& n : npcDirector.Npcs()) {
-                if (!n || (unsigned)entt::to_integral(n->Root) != entity) continue;
-                // The middle of the body: pelvis toward chest (its pool spreads from under there).
-                centre = n->Ragdoll ? glm::mix(n->Ragdoll->PartPosition(0), n->Ragdoll->PartPosition(1), 0.4f) : n->Feet + glm::vec3(0.0f, 0.9f, 0.0f);
-                return true;
-            }
-            return false;
-        });
-        // Blood on a soldier is pinned to the bone of the part it struck, in the bind pose every one of his pieces
-        // shares (the driver's); on a loose prop, to its mesh.
-        // A mesh's world -> bind transform through its bone nearest `point` (as posed now), or its own for a rigid
-        // one; false when its nearest bone is further than `reach` (the blood isn't on that piece).
-        auto meshSpace = [&](entt::entity e, const glm::vec3& point, float reach, glm::mat4& worldToBind) {
-            const auto* r = world.Registry.valid(e) ? world.Registry.try_get<RenderableComponent>(e) : nullptr;
-            if (!r || !r->ModelRef) return false;
-            const Model& m = *r->ModelRef;
-            const glm::mat4 w = world.GetCachedWorldTransform(e);
-            if (!m.HasBones()) { worldToBind = glm::inverse(w); return true; }
-            int best = -1;
-            float bestD = reach;
-            for (int i = 0; i < m.NodeCount(); ++i) {
-                const int b = m.BoneId(m.NodeName(i));
-                glm::mat4 node;
-                if (b < 0 || !m.NodeTransformAt(i, node)) continue;
-                if (const float d = glm::length(glm::vec3(w * node[3]) - point); d < bestD) { bestD = d; best = b; }
-            }
-            if (best < 0) return false;
-            worldToBind = glm::inverse(w * m.FinalBoneMatrix(best));
-            return true;
-        };
-        auto gunKey = [](const std::string& model) { return (unsigned)(std::hash<std::string>{}(model) | 1u); };
-        bloodFx.SetMemberResolver([&, gunKey](unsigned key) -> unsigned { // the gun out now, if it's that one
-            if (!firstPersonPresentation.IsActive()) return 0xFFFFFFFFu;
-            const entt::entity g = firstPersonPresentation.WeaponEntity();
-            if (g == entt::null || gunKey(firstPersonPresentation.Set().WeaponModel) != key) return 0xFFFFFFFFu;
-            return (unsigned)entt::to_integral(g);
-        });
-        bloodFx.SetSplatSpace([&](unsigned entity, int part, bool corpse, const glm::vec3& point, BloodFx::SplatSpace& out) {
-            if (entity == kPlayerEntity) { // the player's own body pieces, arms and gun near the point
-                out.Group = entity;
-                glm::mat4 w2b;
-                // Tight reach: the view-model arms and the world body's copies stand in different places, and blood
-                // meant for the hands the player sees mustn't land on the hidden ones (or the other way round).
-                for (auto e : world.Registry.view<PlayerBodyTag, RenderableComponent>())
-                    if (!world.Registry.all_of<PoseSourceTag>(e) && meshSpace(e, point, 0.16f, w2b))
-                        out.Members.emplace_back((unsigned)entt::to_integral(e), w2b);
-                // The gun: speckles off a point-blank hit - never the player's own wound (kBodyOnlyPart). Keyed by its model,
-                // so the blood comes back with it after a weapon swap rebuilds it.
-                if (part != BloodFx::kBodyOnlyPart && firstPersonPresentation.IsActive())
-                    if (entt::entity g = firstPersonPresentation.WeaponEntity(); g != entt::null && meshSpace(g, point, 0.6f, w2b)) {
-                        out.Keys.resize(out.Members.size(), 0u);
-                        out.Members.emplace_back((unsigned)entt::to_integral(g), w2b);
-                        out.Keys.push_back(gunKey(firstPersonPresentation.Set().WeaponModel));
-                    }
-                return !out.Members.empty();
-            }
-            for (const auto& n : npcDirector.Npcs()) {
-                if (!n || (unsigned)entt::to_integral(n->Root) != entity) continue;
-                const Model* m = n->Body.DriverModel();
-                const entt::entity driver = n->Body.Driver();
-                if (!m || driver == entt::null || !world.Registry.valid(driver)) return false;
-                std::string bone = part >= 0 ? (corpse ? NpcRagdollDefOf(part).Bone : NpcPartDefOf(part).Bone) : "";
-                if (bone.empty()) { // the nearest part's bone
-                    float best = 1e9f;
-                    for (int i = 0; i < NpcRagdoll::kParts; ++i) {
-                        glm::vec3 at;
-                        if (!n->Body.BoneWorld(world, NpcPartDefOf(i).Bone, at)) continue;
-                        if (const float d = glm::length(at - point); d < best) { best = d; bone = NpcPartDefOf(i).Bone; }
-                    }
-                }
-                if (bone.empty()) return false;
-                // Each mesh through its own copy of that bone, as posed now: pieces don't share a bind pose.
-                out.Group = entity;
-                auto add = [&](entt::entity piece) {
-                    const auto* r = world.Registry.valid(piece) ? world.Registry.try_get<RenderableComponent>(piece) : nullptr;
-                    if (!r || !r->ModelRef) return;
-                    const int b = r->ModelRef->BoneId(bone);
-                    if (b < 0) return;
-                    out.Members.emplace_back((unsigned)entt::to_integral(piece),
-                                             glm::inverse(world.GetCachedWorldTransform(piece) * r->ModelRef->FinalBoneMatrix(b)));
-                };
-                add(driver);
-                for (entt::entity p : n->Body.Pieces())
-                    if (p != driver) add(p);
-                (void)m;
-                return !out.Members.empty();
-            }
-            if (spiderDamage.Owns(entity)) return spiderDamage.SplatSpace(world, entity, part, point, out);
-            const entt::entity e = static_cast<entt::entity>(entity);
-            if (!world.Registry.valid(e) || !world.Registry.all_of<RigidbodyComponent, RenderableComponent>(e)) return false;
-            out.Group = entity;
-            out.Members.emplace_back(entity, glm::inverse(world.GetCachedWorldTransform(e)));
-            return true;
-        });
-        bloodFx.SetPlayerGear([&](glm::vec3* points, glm::vec3* normals, int max) {
-            // Along the barrel from the muzzle back, and the hands on it (the view model's world positions).
-            int n = 0;
-            glm::vec3 fpMuzzle, worldMuzzle, bore;
-            if (!firstPersonPresentation.IsActive() || !firstPersonPresentation.MuzzleFrames(fpMuzzle, worldMuzzle, bore)) return 0;
-            const glm::vec3 up(0.0f, 1.0f, 0.0f);
-            const glm::vec3 side = glm::normalize(glm::cross(bore, up));
-            for (float t : {0.08f, 0.2f, 0.35f}) {
-                if (n >= max) break;
-                points[n] = fpMuzzle - bore * t + up * 0.02f;
-                normals[n++] = glm::normalize(up + bore * 0.6f);
-            }
-            for (auto e : world.Registry.view<PlayerBodyTag, RenderableComponent, ViewModelTag>()) { // the arms the player sees
-                const auto& r = world.Registry.get<RenderableComponent>(e);
-                if (!r.ModelRef || !r.ModelRef->HasBones()) continue;
-                for (const char* hand : {"hand_r", "hand_l"}) {
-                    glm::mat4 node;
-                    if (n >= max || !r.ModelRef->NodeTransform(hand, node)) continue;
-                    points[n] = glm::vec3(world.GetCachedWorldTransform(e) * node[3]) + up * 0.03f;
-                    normals[n++] = glm::normalize(up + bore * 0.5f + side * (hand[5] == 'r' ? 0.3f : -0.3f));
-                }
-                break; // one piece carries the hand bones for all
-            }
-            return n;
-        });
-        bloodFx.SetSplatMembers([&](unsigned group, std::vector<unsigned>& out) {
-            if (group == kPlayerEntity) return true;
-            for (const auto& n : npcDirector.Npcs())
-                if (n && (unsigned)entt::to_integral(n->Root) == group) return true;
-            if (spiderDamage.Owns(group)) return true;
-            const entt::entity e = static_cast<entt::entity>(group);
-            if (!world.Registry.valid(e) || !world.Registry.all_of<RigidbodyComponent, RenderableComponent>(e)) return false;
-            out.push_back(group);
-            return true;
-        });
-        bloodFx.SetPropRay([&](const glm::vec3& o, const glm::vec3& d, float maxD, glm::vec3& p, glm::vec3& n, unsigned& entity) {
-            const float oo[3] = {o.x, o.y, o.z}, dd[3] = {d.x, d.y, d.z};
-            QueryFilter f;
-            f.HitTriggers = 0;
-            RaycastHit h;
-            if (!PhysicsWorld::RaycastFiltered(oo, dd, maxD, f, h) || !h.Hit) return false;
-            const entt::entity e = static_cast<entt::entity>(h.Entity);
-            if (!world.Registry.valid(e) || !world.Registry.all_of<RigidbodyComponent, RenderableComponent>(e)) return false;
-            p = glm::vec3(h.Point[0], h.Point[1], h.Point[2]);
-            n = glm::vec3(h.Normal[0], h.Normal[1], h.Normal[2]);
-            entity = h.Entity;
-            return true;
-        });
-        npcDirector.Fx = &combatFx;
+        // Play's combat hooked together: blood, impacts, foley and the Blood Lab (App/CombatWiring.h). Declared after
+        // everything it hooks, so its destructor drops the footstep listener before they go.
+        CombatWiring combatWiring;
+        {
+            CombatWiringInputs cw;
+            cw.world = &world;
+            cw.player = &player;
+            cw.firstPersonPresentation = &firstPersonPresentation;
+            cw.npcDirector = &npcDirector;
+            cw.spiderDamage = &spiderDamage;
+            cw.combatFx = &combatFx;
+            cw.bloodFx = &bloodFx;
+            cw.impactFx = &impactFx;
+            cw.fxSprites = &fxSprites;
+            cw.bulletHoles = &bulletHoles;
+            cw.sprayCans = &sprayCans;
+            cw.bloodLab = &bloodLab;
+            cw.npcTest = npcTest.get();
+            combatWiring.Wire(cw);
+        }
         PlayerVitals playerVitals;  // the player's health in Play
-        bloodLab.Actions.ClearAll = [&] {
-            bloodFx.Clear();
-            fxSprites.Clear();
-            bulletHoles.Clear();
-        };
         CombatHud combatHud;        // ammo, kill feed, radio subtitles, awareness chevrons, AI debug overlay
         DevPanel devPanel;          // dev tools in Play (no default keys)
         DevSpawner devSpawner;      // F9-F12: soldiers, spiders and items at the crosshair
         PlayerLook playerLook;      // F7 / F8: the player's look and clothes, kept between Plays
         PlayState play; // Play's state bits (App/PlaySession.h); the locals named after them alias its fields
-        glm::vec3& deathCamOffset = play.DeathCamOffset;
-        float& deathCamRoll = play.DeathCamRoll;
-        int playerAmmoSeen = -1, playerSlotSeen = -1; // for "the player fired this frame"
-        PlayerSnapshot playerSnap;
         ShellCasings shellCasings;  // the spent cases on the ground
+        PlayFrame playFrame;        // Play's per-frame simulation step (App/PlayFrame.h)
         // The predicted flight in linear HDR red (a touch of bloom): the arc to the first contact
         // bright, each bounce after it fainter, a ring at every contact the size of the body.
         auto drawThrowArc = [&](const glm::mat4& v, const glm::mat4& p, const glm::vec3& eye) {
@@ -1040,8 +711,6 @@ int main(int argc, char** argv) {
         };
         bool& playUsesPlayer = play.UsesPlayer;
         bool& playGravityGun = play.GravityGun;
-        float& playBaseFov = play.BaseFov;
-        float& playBaseSensitivity = play.BaseSensitivity;
         // With a weapon (Animation Set) on the controller, the gravity gun is the unarmed slot:
         // live only while the weapon is holstered (2 / scroll / Holster), off while it's in hand.
         auto gravityGunLive = [&] {
@@ -1138,7 +807,6 @@ int main(int argc, char** argv) {
             };
         };
         entt::entity& playCameraEntity = play.CameraEntity;
-        entt::entity& playControllerEntity = play.ControllerEntity;
         Camera playSceneCam;
         // Default spawn/editor-camera start: south of the Sandbox's Character Plaza, looking north
         // over it with the physics playground (east) and movement course (west) in view either side.
@@ -1250,7 +918,7 @@ int main(int argc, char** argv) {
                     return h.Entity;
                 }
                 combatFx.Impact(world, h.Entity, p);
-                worldImpact(h.Entity, p, n, dir, 0.0027f);
+                combatWiring.WorldImpact(h.Entity, p, n, dir, 0.0027f);
                 return h.Entity;
             };
         }
@@ -2090,507 +1758,49 @@ int main(int argc, char** argv) {
                 PhysicsWorld::SetQueryRecording((es.PhysicsDebugDrawFlags & PhysicsWorld::PDD_Raycasts) != 0u);
             }
 
-            if (simThisFrame) {
-                // The gravity gun (#185, promoted off its old debug harness) is a normal part of
-                // Play mode, not a debug tool — always live whenever the game has input focus.
-                if (gameHasInput && playUsesPlayer && gravityGunLive() && !playerVitals.IsDead()) {
-                    gravityGun.Update(gameDt, player);
-                }
-                // F9-F12 (DevSpawner.h) and the items they drop, picked up with Interact.
-                {
-                    DevSpawner::Context dc;
-                    dc.WorldPtr = &world;
-                    dc.Assets = &assets;
-                    dc.Npcs = &npcDirector;
-                    dc.Spiders = &spiders;
-                    dc.SpiderHurt = &spiderDamage;
-                    dc.Gun = &firstPersonPresentation;
-                    dc.Eye = player.Cam.Position;
-                    dc.Front = player.Cam.Front();
-                    dc.Dt = gameDt;
-                    dc.Keys = devKeys && playUsesPlayer && !editor.ScriptIDEHasKeyboardFocus();
-                    dc.Interact = gameHasInput && playUsesPlayer && !playerVitals.IsDead() && InputMap::GetButtonDown("Interact");
-                    dc.StartSquad = [&]() {
-                        auto fps = world.Registry.view<FirstPersonControllerComponent>();
-                        const FirstPersonControllerComponent* fp = fps.begin() != fps.end() ? &fps.get<FirstPersonControllerComponent>(*fps.begin()) : nullptr;
-                        return fp && npcDirector.Start(world, assets, fp, /*allowEmpty=*/true);
-                    };
-                    if (playUsesPlayer) devSpawner.Update(dc);
-                }
-                // Doors, drawers and lids (Openable): Interact opens the one under the crosshair; all of them move.
-                Openable::Update(world, player.Cam.Position, player.Cam.Front(),
-                                 gameHasInput && playUsesPlayer && !playerVitals.IsDead() && InputMap::GetButtonDown("Interact"),
-                                 gameDt);
-                // G = explosion shockwave at the player. A separate physics *debug/test* tool
-                // (not part of the gravity gun above) — stays behind Gizmos > Physics debug input.
-                if (gameHasInput && playUsesPlayer && EditorSettings::Get().PhysicsDebugInput) {
-                    if (Input::IsKeyPressed(GLFW_KEY_G)) {
-                        const float c[3] = {player.Cam.Position.x,
-                                            player.Cam.Position.y - player.EyeHeight,
-                                            player.Cam.Position.z};
-                        PhysicsWorld::AddExplosionForce(c, 7.0f, 22.0f, 0.4f);
-                    }
-                }
-                // Step the PhysX world (#185): kinematic bodies pushed from their Transforms,
-                // then the sim, then dynamic bodies' poses written back into theirs.
-                // Everything in this block runs on the time-scaled step (#169: slow-mo used to
-                // reach physics only). The game module's FixedUpdate rides the physics sub-steps.
-                {
-                PROFILE_SCOPE("Physics Step");
-                PhysicsWorld::Step(gameDt, world,
-                                   [&](float fixedDt) { gameModule.FixedTick(world, fixedDt); });
-                }
-                if (playUsesPlayer) {
-                    PROFILE_SCOPE("Player + FP Update");
-                    // The death camera's drop comes off before anything reads the camera as the player's.
-                    player.Cam.Position -= deathCamOffset;
-                    player.Cam.Roll -= deathCamRoll;
-                    deathCamOffset = glm::vec3(0.0f);
-                    deathCamRoll = 0.0f;
-                    // The weapon's view punch / lean comes off before the player integrates
-                    // its own look and position, and goes back on in Update below.
-                    firstPersonPresentation.RemoveViewKick(player.Cam);
-                    // Last frame's ADS zoom: the look slows with the view so the sights track the same.
-                    player.MouseSensitivity = playBaseSensitivity * firstPersonPresentation.LookScale(playBaseFov);
-                    firstPersonBody.BeforePlayerMove(player, player.Cam); // camera out of the head, root motion in
-                    if (npcTest) npcTest->Drive(player, firstPersonPresentation, npcDirector, playerVitals, gameDt);
-                    player.AimHeld=firstPersonPresentation.IsActive() && firstPersonPresentation.IsEquipped() && !playerVitals.IsDead() &&
-                        ((gameHasInput && InputMap::GetButton("Fire2")) || (npcTest && npcTest->Aiming()));
-                    player.SprintBlocked=firstPersonPresentation.ActionBlocksSprint();
-                    player.Update(gameDt, world, window.Handle(), gameHasInput && !playerVitals.IsDead());
-                    // Before the body places itself: it is the controller's child, posed in world space.
-                    if (playControllerEntity != entt::null && world.Registry.valid(playControllerEntity)) {
-                        const float yaw = glm::radians(player.Cam.Yaw); // Camera forward = (cos, 0, sin)
-                        world.SetWorldPose(playControllerEntity, player.Cam.Position - glm::vec3(0.0f, player.EyeHeight, 0.0f),
-                                           glm::angleAxis(std::atan2(-std::cos(yaw), -std::sin(yaw)), glm::vec3(0.0f, 1.0f, 0.0f)));
-                    }
-                    if (firstPersonBody.OutfitChanged(world)) { // an outfit piece changed in Play: take the new pieces
-                        firstPersonBody.Stop(world);
-                                firstPersonBody.Start(world, player);
-                    }
-                    firstPersonBody.SetHands(firstPersonPresentation.IsActive() && firstPersonPresentation.IsEquipped(),
-                                             firstPersonPresentation.IsActive() && firstPersonPresentation.HandsBusy());
-                    firstPersonBody.Tick(world, player, player.Cam, gameDt);
-                    if (firstPersonPresentation.IsActive()) {
-                        if (!npcTest) firstPersonPresentation.SetPlayerLookInput(player.LookDeltaInput);
-                        if (!npcTest) firstPersonPresentation.SetPlayerMoveInput(player.MoveInput);
-                        firstPersonPresentation.Update(world, player.Cam);
-                        firstPersonPresentation.SetCrouch(player.CrouchBlend); // the crouched ADS pose eases in with the eye height
-                        // The weapon owns Fire1/Fire2/FireMode/Reload/Inspect/Melee while it's in
-                        // hand. With the gravity gun on the controller, holstering hands the mouse
-                        // to it instead (gravityGunLive), so the two never read the same frame.
-                        // Weapon1/Weapon2/Weapon3/Holster always switch between them; F is the flashlight.
-                        const bool weaponInput = gameHasInput && !gravityGunLive() && !playerVitals.IsDead();
-                        if (gameHasInput && !playerVitals.IsDead()) {
-                            const bool wasEquipped = firstPersonPresentation.IsEquipped();
-                            // 1 = the Animation Set, 2 = the Secondary Animation Set, 3 = unarmed (the gravity gun).
-                            if (InputMap::GetButtonDown("Weapon1")) firstPersonPresentation.SelectSlot(0);
-                            if (InputMap::GetButtonDown("Weapon2")) firstPersonPresentation.SelectSlot(1);
-                            if (InputMap::GetButtonDown("Weapon3")) firstPersonPresentation.SetEquipped(false);
-                            if (InputMap::GetButtonDown("Flashlight")) flashlight.Toggle(player.Cam.Position);
-                            // The wheel is the gravity gun's hold distance, so it only switches without one:
-                            // through the weapons, then unarmed.
-                            if (!playGravityGun && Input::GetScrollDeltaY() != 0.0)
-                                firstPersonPresentation.CycleSlot(Input::GetScrollDeltaY() < 0.0 ? 1 : -1);
-                            if (InputMap::GetButtonDown("Holster"))
-                                firstPersonPresentation.SetEquipped(!firstPersonPresentation.IsEquipped());
-                            // Drawing the weapon drops whatever the gravity gun was holding.
-                            if (playGravityGun && !wasEquipped && firstPersonPresentation.IsEquipped()) {
-                                if (PhysicsWorld::IsGrabbing()) PhysicsWorld::ReleaseBody(false, nullptr);
-                                gravityGun.Reset();
-                            }
-                        }
-                        if (weaponInput) {
-                            if (InputMap::GetButtonDown("FireMode")) firstPersonPresentation.ToggleFireMode();
-                            firstPersonPresentation.UpdateTrigger(InputMap::GetButtonDown("Fire1"),
-                                                                  InputMap::GetButton("Fire1"));
-                            // R is tap-to-reload, hold-to-check-the-magazine.
-                            firstPersonPresentation.UpdateReloadKey(InputMap::GetButton("Reload"), gameDt);
-                            if (InputMap::GetButtonDown("Inspect")) firstPersonPresentation.TriggerAction("Inspect");
-                            if (InputMap::GetButtonDown("Melee")) firstPersonPresentation.TriggerAction("Melee");
-                        } else {
-                            firstPersonPresentation.ResetReloadKey(); // focus lost mid-press: never resolve it as a tap
-                        }
-                        if (npcTest && !playerVitals.IsDead()) {
-                            firstPersonPresentation.UpdateTrigger(npcTest->Firing(), npcTest->Firing());
-                            if (npcTest->WantsReload()) firstPersonPresentation.Reload();
-                        }
-                        // No lean key: aiming at a corner peeks around it (the presentation's corner peek).
-                        firstPersonPresentation.Tick(gameDt, player.Velocity, gameHasInput && InputMap::GetButton("Sprint"),
-                                                     (weaponInput && InputMap::GetButton("Fire2")) || (npcTest && npcTest->Aiming()), 0.0f,
-                                                     player.Grounded);
-                        // This frame's recoil on the view (Tick just worked it out), not last frame's.
-                        firstPersonPresentation.RefreshViewKick(player.Cam);
-                    }
-                    player.Cam.Fov = firstPersonPresentation.WorldFov(playBaseFov);
-                }
-                // The enemy squad (scenes with NPC Spawns): they see the player as they are after this
-                // move, and decide, move and aim before the animators pose everyone.
-                if (npcDirector.Active()) {
-                    PROFILE_SCOPE("Enemy AI");
-                    playerSnap = PlayerSnapshot{};
-                    playerSnap.Valid = playUsesPlayer && PhysicsWorld::HasCharacter();
-                    if (playerSnap.Valid) {
-                        float foot[3], r = 0.3f, cyl = 0.6f;
-                        PhysicsWorld::GetCharacterCapsule(foot, &r, &cyl);
-                        playerSnap.Feet = glm::vec3(foot[0], foot[1], foot[2]);
-                        playerSnap.Radius = r;
-                        playerSnap.Height = 2.0f * (r + cyl);
-                        playerSnap.Eye = player.Cam.Position;
-                        playerSnap.Velocity = player.Velocity;
-                        playerSnap.Forward = player.Cam.Front();
-                        playerSnap.Crouched = player.Crouched;
-                        playerSnap.Dead = playerVitals.IsDead();
-                        playerSnap.Health = playerVitals.Health01();
-                        playerSnap.Sprinting = glm::length(glm::vec2(player.Velocity.x, player.Velocity.z)) > player.MoveSpeed * 1.1f;
-                        if (firstPersonPresentation.IsActive()) {
-                            const int ammo = firstPersonPresentation.Ammo(), slot = firstPersonPresentation.Slot();
-                            playerSnap.Fired = slot == playerSlotSeen && playerAmmoSeen >= 0 && ammo < playerAmmoSeen;
-                            playerAmmoSeen = ammo;
-                            playerSlotSeen = slot;
-                            playerSnap.Reloading = firstPersonPresentation.IsReloading();
-                        }
-                    }
-                    if (devPanel.Invisible) playerSnap.Valid = false; // dev panel: the squad can't see or hear the player
-                    npcDirector.Think(world, assets, gameDt, playerSnap);
-                    if (devPanel.InfiniteAmmo && firstPersonPresentation.IsActive()) {
-                        firstPersonPresentation.SetAmmo(firstPersonPresentation.MagazineSize());
-                        playerAmmoSeen = firstPersonPresentation.Ammo();
-                    }
+            // Play's simulation step (App/PlayFrame.h): physics, the player, the enemies, the animators, first-person IK,
+            // shots, impacts, blood and the player's vitals; then the game module, particles and animations every frame.
+            PlayFrameInputs playIn;
+            playIn.dt = dt;
+            playIn.gameDt = gameDt;
+            playIn.simThisFrame = simThisFrame;
+            playIn.gameHasInput = gameHasInput;
+            playIn.devKeys = devKeys;
+            playIn.frameIndex = frameIndex;
+            playIn.gameCam = gameCam;
+            playIn.play = &play;
+            playIn.world = &world;
+            playIn.assets = &assets;
+            playIn.window = &window;
+            playIn.editor = &editor;
+            playIn.gameModule = &gameModule;
+            playIn.stillModels = &s_StillModels;
+            playIn.player = &player;
+            playIn.firstPersonPresentation = &firstPersonPresentation;
+            playIn.firstPersonBody = &firstPersonBody;
+            playIn.playerVitals = &playerVitals;
+            playIn.gravityGun = &gravityGun;
+            playIn.flashlight = &flashlight;
+            playIn.weaponLab = weaponLab.get();
+            playIn.npcTest = npcTest.get();
+            playIn.npcTestBlood = &npcTestBlood;
+            playIn.npcDirector = &npcDirector;
+            playIn.spiders = &spiders;
+            playIn.spiderDamage = &spiderDamage;
+            playIn.devSpawner = &devSpawner;
+            playIn.devPanel = &devPanel;
+            playIn.combatFx = &combatFx;
+            playIn.combatHud = &combatHud;
+            playIn.combat = &combatWiring;
+            playIn.bloodFx = &bloodFx;
+            playIn.impactFx = &impactFx;
+            playIn.fxSprites = &fxSprites;
+            playIn.bulletHoles = &bulletHoles;
+            playIn.shellCasings = &shellCasings;
+            playIn.sprayCans = &sprayCans;
+            if (simThisFrame) playFrame.Simulate(playIn);
 
-                }
-                // The Play-mode camera is the ears: positional sources (#201) attenuate and pan
-                // against wherever the player is looking from, updated after the move so the
-                // listener matches the frame that's about to be rendered.
-                // #171 - or from an Audio Listener entity, when the scene has one.
-                {
-                    entt::entity listener = entt::null;
-                    int bestOrder = 0x7fffffff;
-                    for (auto e : world.Registry.view<const AudioListenerComponent, const TransformComponent>()) {
-                        if (!world.Registry.get<AudioListenerComponent>(e).Enabled || world.Registry.all_of<InactiveTag>(e)) continue;
-                        const auto* ord = world.Registry.try_get<OrderComponent>(e);
-                        const int o = ord ? ord->Value : 0;
-                        if (o < bestOrder) { bestOrder = o; listener = e; }
-                    }
-                    if (listener != entt::null) {
-                        const glm::mat4 lm = world.ComposeWorldTransform(listener);
-                        const glm::vec3 fwd = -glm::vec3(lm[2]), up = glm::vec3(lm[1]);
-                        AudioEngine::SetListener(glm::vec3(lm[3]),
-                                                 glm::length(fwd) > 1e-6f ? glm::normalize(fwd) : glm::vec3(0, 0, -1),
-                                                 glm::length(up) > 1e-6f ? glm::normalize(up) : glm::vec3(0, 1, 0));
-                    } else {
-                        AudioEngine::SetListener(gameCam->Position, gameCam->Front(), gameCam->Up());
-                    }
-                    editor.UpdatePlayModeAudio(world, gameDt,
-                        listener != entt::null ? glm::vec3(world.ComposeWorldTransform(listener)[3]) : gameCam->Position);
-                }
-                // The spiders move over the surfaces before the animators pose them; the hunters among them go after
-                // the player, and what their bites and pounces do lands on the player now.
-                {
-                    SpiderSystem::Target prey;
-                    prey.Valid = playUsesPlayer && PhysicsWorld::HasCharacter() && !devPanel.Invisible;
-                    if (prey.Valid) {
-                        float foot[3], r = 0.3f, cyl = 0.6f;
-                        PhysicsWorld::GetCharacterCapsule(foot, &r, &cyl);
-                        prey.Feet = glm::vec3(foot[0], foot[1], foot[2]);
-                        prey.Radius = r;
-                        prey.Eye = player.Cam.Position;
-                        prey.Velocity = player.Velocity;
-                        prey.Dead = playerVitals.IsDead();
-                        prey.Loud = glm::length(glm::vec2(player.Velocity.x, player.Velocity.z)) > player.MoveSpeed * 1.1f;
-                    }
-                    spiders.Think(world, assets, gameDt, &prey);
-                    for (const SpiderSystem::PlayerHit& h : spiders.TakePlayerHits()) {
-                        const float before = playerVitals.Health();
-                        playerVitals.ApplyDamage(h.Amount, h.Source);
-                        // The shove: along the ground, up to its speed - a bite on a player already reeling back doesn't add
-                        // to it, so a flurry staggers them rather than throwing them across the level.
-                        const glm::vec3 wasGoing = player.Velocity;
-                        player.Velocity = SpiderSystem::Shove(player.Velocity, h.Push);
-#pragma warning(suppress : 4996)
-                        static const bool traceHits = Env::Flag(Env::Var::SpiderTrace);
-                        if (traceHits)
-                            std::printf("[Spider] hit the player at %.2f %.2f: %s, push %.2f %.2f, ground speed %.2f -> %.2f, grounded %d, decel %.2f s, air %.2f s\n",
-                                        player.Cam.Position.x, player.Cam.Position.z, h.Pounce ? "pounce" : "bite/drop", h.Push.x,
-                                        h.Push.z, glm::length(glm::vec2(wasGoing.x, wasGoing.z)),
-                                        glm::length(glm::vec2(player.Velocity.x, player.Velocity.z)), (int)player.Grounded,
-                                        player.GroundDecelTime, player.AirAccelTime);
-                        // The jolt: the view knocked up and aside, harder for a pounce.
-                        const float side = glm::dot(glm::normalize(glm::vec3(h.Push.x, 0.0f, h.Push.z) + glm::vec3(1e-4f, 0.0f, 0.0f)),
-                                                    player.Cam.Right());
-                        player.Cam.Pitch += h.Pounce ? 9.0f : 5.0f;
-                        player.Cam.Yaw += (side >= 0.0f ? 1.0f : -1.0f) * (h.Pounce ? 7.0f : 4.0f);
-                        if (playerVitals.Health() < before) combatFx.Play(CombatFx::Cue::FleshHit, prey.Eye, true, 0.8f);
-                    }
-                }
-                // Procedural spin/orbit/bob/light-hue. Play-only: edit mode keeps the authored
-                // pose, and the play-mode snapshot restores everything this touched on Stop.
-                UpdateAnimators(world, gameDt);
-                {
-                PROFILE_SCOPE("Animators");
-                UpdateSkeletalAnimations(world, assets, gameDt); // #175 — Animation components drive their models' clips
-                PROFILE_SCOPE("Animator Controllers");
-                UpdateAnimatorControllers(world, assets, gameDt); // #175 Part B — state machines
-                }
-                // The spiders' legs onto this frame's footholds, over the pose their animators just gave them.
-                spiders.LatePose(world, gameDt);
-                spiderDamage.LateUpdate(world, spiders, gameDt); // flinches, hitboxes, the dead onto their ragdolls
-                // The arms are posed now (clips + IK): seat the gun in this frame's hands.
-                if (playUsesPlayer) {
-                    PROFILE_SCOPE("First Person IK");
-                    {
-                    PROFILE_SCOPE("FP Body LateUpdate");
-                    firstPersonBody.LateUpdate(world, player.Cam, gameDt, firstPersonPresentation.ArmsEntity(),
-                                               firstPersonPresentation.CameraBone()); // camera into the body's head
-                    }
-                    {
-                    PROFILE_SCOPE("FP Presentation LateUpdate");
-                    firstPersonPresentation.LateUpdate(world, player.Cam);
-                    }
-                    PROFILE_SCOPE("FP Arms + World Gun");
-                    // The body's hands onto the arms rig's, now that the rig is seated.
-                    // Split poses: the body's world twins hold the world gun, the first-person one carried to its
-                    // third-person hold and by their chest.
-                    // The shoulder lock seats that world gun on the twin's shoulder (FirstPersonGunSeat).
-                    FirstPersonWorldGunInput worldGun;
-                    const bool haveWorldGun = firstPersonPresentation.IsActive() && firstPersonPresentation.WorldGunInput(worldGun);
-                    // A reload's pouch and shells: the world body's free hand held to its chest (FirstPersonBody's hand anchor).
-                    FirstPersonHandAnchor handAnchor;
-                    const bool haveAnchor = firstPersonPresentation.IsActive() && firstPersonPresentation.HandAnchor(handAnchor);
-                    firstPersonBody.ArmsLateUpdate(world, firstPersonPresentation.ArmsEntity(),
-                                                   firstPersonPresentation.ViewModelFov(), gameDt, &player.Cam,
-                                                   firstPersonPresentation.ThirdPersonGunCorrection(), haveWorldGun ? &worldGun : nullptr,
-                                                   firstPersonPresentation.ThirdPersonArms(), firstPersonPresentation.GunSocket(),
-                                                   haveAnchor ? &handAnchor : nullptr);
-                    if (firstPersonPresentation.IsActive()) {
-                        glm::mat4 holdingHand(1.0f);
-                        const bool haveHolding = haveAnchor && firstPersonBody.BoneWorldMatrix(world, handAnchor.Hand, holdingHand);
-                        firstPersonPresentation.PlaceWorldWeapon(world, firstPersonBody.SplitPoses(), firstPersonBody.WorldGunDelta(),
-                                                                 firstPersonBody.CarriedMove(), firstPersonBody.TwinAnchorWeight(),
-                                                                 firstPersonBody.CarriedHand(), haveHolding ? &holdingHand : nullptr);
-                    }
-                    if (weaponLab) weaponLab->AfterPose(world, firstPersonBody, firstPersonPresentation, player.Cam, gameDt);
-                    // This frame's rounds, down the bore from the muzzle: a hole where each struck.
-                    PROFILE_SCOPE("Player Shots + Impacts");
-                    for (const FirstPersonPresentation::ShotHit& hit : firstPersonPresentation.TakeShotHits()) {
-                        if (SpiderDamage::Result sr; spiderDamage.OnHit(world, spiders, hit.Entity, hit.Point, hit.Origin, hit.Direction,
-                                                                         firstPersonPresentation.Set().Gameplay, hit.Pellets, sr)) {
-                            bloodFx.OnFleshHit(SpiderDamage::Blood(sr)); // ichor, not a hole in the wall behind it
-                            if (sr.Living) {
-                                playerVitals.MarkHit(sr.Killed, sr.Zone == Spider::PartZone::Head);
-                                combatFx.Play(sr.Killed ? CombatFx::Cue::HitmarkerKill : CombatFx::Cue::Hitmarker, hit.Point);
-                            }
-                            continue;
-                        }
-                        if (npcDirector.Active()) {
-                            bool killed = false, head = false, aliveWhenHit = false;
-                            if (npcDirector.OnPlayerHit(world, hit.Entity, hit.Point, hit.Origin, hit.Direction,
-                                                        firstPersonPresentation.Set().Gameplay, &killed, &head, &aliveWhenHit)) {
-                                if (aliveWhenHit) {
-                                    playerVitals.MarkHit(killed, head);
-                                    combatFx.Play(killed ? CombatFx::Cue::HitmarkerKill : CombatFx::Cue::Hitmarker, hit.Point);
-                                }
-                                if (killed) combatHud.OnKill(npcDirector, hit.Entity, head);
-                                continue; // a soldier, not a wall: no hole
-                            }
-                        }
-                        combatFx.Impact(world, hit.Entity, glm::vec3(hit.Point[0], hit.Point[1], hit.Point[2]));
-                        worldImpact(hit.Entity, hit.Point, hit.Normal, glm::vec3(hit.Direction[0], hit.Direction[1], hit.Direction[2]), hit.HoleRadius);
-                    }
-                    // Every pellet's line: the report, and rounds cracking past soldiers' heads (suppression).
-                    for (const FirstPersonPresentation::ShotTrace& t : firstPersonPresentation.TakeShotTraces()) {
-                        if (npcDirector.Active()) npcDirector.OnPlayerShotLine(t.Origin, t.End);
-                        if (t.FirstPellet) spiders.HearShot(t.Origin);
-                        if (t.FirstPellet)
-                            combatFx.Shot(world, firstPersonPresentation.Set().Gameplay.Pellets > 1 ? CombatFx::Gun::Shotgun : CombatFx::Gun::Rifle,
-                                          t.Origin, t.End, true, false, 0, firstPersonPresentation.MuzzleEffects());
-                    }
-                    // The player's muzzle flames (this frame's too) ride the gun as it kicks and turns.
-                    if (glm::vec3 fpMuzzle, worldMuzzle, bore; combatFx.Active() && firstPersonPresentation.IsActive() &&
-                                                               firstPersonPresentation.MuzzleFrames(fpMuzzle, worldMuzzle, bore))
-                        combatFx.FollowMuzzle(world, fpMuzzle, worldMuzzle, bore);
-                    // The spent cases out of the port, then every case on the ground moved on.
-                    for (const CasingSpawn& spawn : firstPersonPresentation.TakeEjections())
-                        shellCasings.Spawn(world, assets, spawn);
-                    {
-                    PROFILE_SCOPE("Shell Casings");
-                    shellCasings.Update(world, gameDt, player.Cam, player.Cam.Position);
-                    }
-                }
-                // The enemy squad's late pose: spines aimed, guns placed on their eye cameras, hands
-                // onto the guns, this frame's rounds fired. Then what they hit.
-                if (npcDirector.Active()) {
-                    PROFILE_SCOPE("Enemy AI Late");
-                    npcDirector.LateUpdate(world, gameDt, playerSnap);
-                    PROFILE_SCOPE("AI Impacts + Flesh Hits");
-                    for (const NpcDirector::Impact& imp : npcDirector.TakeImpacts()) {
-                        combatFx.Impact(world, imp.Entity, glm::vec3(imp.Point[0], imp.Point[1], imp.Point[2]));
-                        worldImpact(imp.Entity, imp.Point, imp.Normal, -glm::vec3(imp.Normal[0], imp.Normal[1], imp.Normal[2]), imp.Radius);
-                    }
-                    for (const CasingSpawn& spawn : npcDirector.TakeEjections()) shellCasings.Spawn(world, assets, spawn);
-                    for (const DamageEvent& e : npcDirector.TakePlayerDamage()) {
-                        const float before = playerVitals.Health();
-                        playerVitals.ApplyDamage(e.Amount, e.SourcePos);
-                        if (playerVitals.Health() < before) combatFx.Play(CombatFx::Cue::FleshHit, e.Point, true, 0.8f);
-                    }
-                    // Every round that went into a body this frame - theirs and the player's - bleeds.
-                    for (const NpcDirector::FleshHit& f : npcDirector.TakeFleshHits()) {
-                        BloodFx::Hit h;
-                        h.Point = f.Point;
-                        h.Direction = f.Direction;
-                        h.Entity = f.Entity;
-                        h.Part = f.Part;
-                        h.Damage = f.Damage;
-                        h.Killed = f.Killed;
-                        h.Head = f.Head;
-                        h.Corpse = f.Corpse;
-                        h.Player = f.Entity == kPlayerEntity;
-                        h.Pellets = f.Pellets;
-                        h.Origin = f.Origin;
-                        h.ByPlayer = f.ByPlayer;
-                        bloodFx.OnFleshHit(h);
-                        // A big headshot kill: the wet crunch over the flesh hit (AE Master's gore takes).
-                        if (bloodFx.Config.Enabled && BloodFx::BigHeadshot(h, bloodFx.LastEnergy(), bloodFx.Config.Gore)) {
-                            ImpactAudio::Get().Gore(h.Point, 1.0f);
-                            ++bigHeadshots;
-                        }
-                    }
-                    if (npcTest) npcTest->After(world, npcDirector, playerVitals, player);
-                } else if (npcTest && npcTest->RunsWithoutSquad()) {
-                    npcTest->After(world, npcDirector, playerVitals, player);
-                }
-                combatFx.SetListener(player.Cam.Position, player.Cam.Front());
-                {
-                PROFILE_SCOPE("Combat FX + Foley");
-                combatFx.Update(world, gameDt); // (a no-op until Start: runs with or without a squad)
-                if (playUsesPlayer && combatFx.Active()) {
-                    FoleyPlayerInput fi;
-                    fi.Velocity = player.Velocity;
-                    fi.Feet = player.Cam.Position - glm::vec3(0.0f, player.EyeHeight, 0.0f);
-                    if (float foot[3], r = 0.3f, cyl = 0.6f; PhysicsWorld::HasCharacter()) {
-                        PhysicsWorld::GetCharacterCapsule(foot, &r, &cyl);
-                        fi.Feet = glm::vec3(foot[0], foot[1], foot[2]);
-                    }
-                    fi.Grounded = player.Grounded;
-                    fi.Sprinting = !player.AimHeld && !player.SprintBlocked && (gameHasInput && InputMap::GetButton("Sprint"));
-                    fi.Crouched = player.Crouched;
-                    fi.Jumped = player.Jumped;
-                    fi.HaveFootHeights = firstPersonBody.FootHeights(world, fi.FootHeight); // steps on the body's touch-downs
-                    if (firstPersonPresentation.IsActive()) {
-                        fi.WalkStride = firstPersonPresentation.Set().Procedural.Bob.WalkStride;
-                        fi.SprintStride = firstPersonPresentation.Set().Procedural.Bob.SprintStride;
-                    }
-                    FoleyAudio::Get().UpdatePlayer(world, gameDt, fi);
-                }
-                }
-                {
-                    PROFILE_SCOPE("Blood");
-                    bloodFx.SetViewer(player.Cam.Position, player.Cam.Front()); // stains leave only out of view
-                    bloodFx.Update(gameDt);
-                    fxSprites.Update(gameDt);
-                    BloodRenderer::Get().BeginFrame();
-                    bloodFx.Submit(BloodRenderer::Get());
-                    bulletHoles.Submit(world); // every hole a clustered decal, following what it's in (after the blood's BeginFrame)
-                    if (playUsesPlayer && gameHasInput) sprayCans.PlayerKeys(world, player.Cam.Position, player.Cam.Front(), Shortcuts::TriggeredGlfw("dev.sprayCan"));
-                    sprayCans.Update(world, gameDt, player.Cam.Position);
-                    FxSpriteRenderer::Get().BeginFrame();
-                    fxSprites.Submit(FxSpriteRenderer::Get());
-                    if (npcTest) {
-                        npcTestBlood.Loaded = BloodRenderer::Get().Loaded();
-                        npcTestBlood.SpraysSpawned = bloodFx.SpraysSpawned();
-                        npcTestBlood.ActiveSprays = (int)bloodFx.Sprays().size();
-                        npcTestBlood.LastSprayClipped = bloodFx.LastSprayClipped();
-                        npcTestBlood.DecalsSpawned = bloodFx.DecalsSpawned();
-                        npcTestBlood.PoolsSpawned = bloodFx.PoolsSpawned();
-                        npcTestBlood.SplatsSpawned = bloodFx.SplatsSpawned();
-                        npcTestBlood.Puffs = bloodFx.PuffsSpawned();
-                        npcTestBlood.LastExited = bloodFx.LastExited();
-                        npcTestBlood.LastExitFound = bloodFx.LastExitFound();
-                        npcTestBlood.BigHeadshots = bigHeadshots;
-                        npcTestBlood.Impacts = impactFx.Spawned();
-                        npcTestBlood.TexturedHoles = 0;
-                        {
-                            static std::vector<BulletHoleList::Placed> all;
-                            bulletHoles.Resolve(world, all);
-                            for (const auto& hole : all) npcTestBlood.TexturedHoles += hole.Decal >= 0;
-                        }
-                        npcTestBlood.GearSplats = 0;
-                        for (const BloodFx::Splat& s : bloodFx.Splats()) npcTestBlood.GearSplats += s.Group == kPlayerEntity;
-                        for (const Profiler::Entry& e : Profiler::GetLastFrameGpu()) {
-                            if (e.Name != "Blood Sprays") continue;
-                            npcTestBloodGpuSum += e.Milliseconds;
-                            ++npcTestBloodGpuFrames;
-                            npcTestBlood.GpuMsMax = std::max(npcTestBlood.GpuMsMax, e.Milliseconds);
-                        }
-                        npcTestBlood.GpuMsAvg = npcTestBloodGpuFrames ? npcTestBloodGpuSum / (float)npcTestBloodGpuFrames : 0.0f;
-                    }
-                }
-                if (playUsesPlayer) {
-                    playerVitals.Tick(gameDt);
-                    if (playerVitals.JustDied()) {
-                        firstPersonPresentation.SetEquipped(false);
-                        if (PhysicsWorld::IsGrabbing()) PhysicsWorld::ReleaseBody(false, nullptr);
-                        gravityGun.Reset();
-                    }
-                    if (playerVitals.WantsRespawn()) {
-                        // Back at the spawn, full health and ammo, weapon drawn, a moment untouchable.
-                        const float f[3] = {player.RespawnFeet.x, player.RespawnFeet.y, player.RespawnFeet.z};
-                        PhysicsWorld::SetCharacterFootPosition(f);
-                        player.Velocity = glm::vec3(0.0f);
-                        player.Cam.Position = player.RespawnFeet + glm::vec3(0.0f, player.EyeHeight, 0.0f);
-                        if (playControllerEntity != entt::null && world.Registry.valid(playControllerEntity))
-                            YawPitchFromWorld(world.ComposeWorldTransform(playControllerEntity), player.Cam.Yaw, player.Cam.Pitch);
-                        playerVitals.Respawned();
-                        firstPersonPresentation.RefillAmmo();
-                        firstPersonPresentation.SetEquipped(true);
-                        npcDirector.OnPlayerRespawned();
-                    }
-                    // Dead: the view sinks to the floor and rolls over, on the camera only (taken off
-                    // again at the top of the next frame).
-                    if (playerVitals.IsDead()) {
-                        const float t = std::clamp(playerVitals.DeadTime() / 0.9f, 0.0f, 1.0f);
-                        const float ease = t * t * (3.0f - 2.0f * t);
-                        deathCamOffset = glm::vec3(0.0f, -(player.EyeHeight - 0.35f) * ease, 0.0f);
-                        deathCamRoll = 32.0f * ease;
-                        player.Cam.Position += deathCamOffset;
-                        player.Cam.Roll += deathCamRoll;
-                    }
-                }
-            }
-
-            // The gameplay DLL watches its freshly-built source copy even while editing, and
-            // only runs game systems during Play. Rebuilding TartarusGame swaps the module
-            // without closing the editor or discarding this World.
-            {
-                PROFILE_SCOPE("Game Module Tick");
-                gameModule.Tick(world, gameDt, dt, simThisFrame);
-            }
-
-            // #177 - particles run while editing too (real time) so an emitter can be tuned live;
-            // in Play they follow the game clock and freeze while paused.
-            {
-                PROFILE_SCOPE("Particles");
-                UpdateParticleSystems(world, playing ? (simThisFrame ? gameDt : 0.0f) : dt);
-            }
-
-            // Animations advance whenever something is showing them: the editor viewport, or the
-            // running game.
-            if (editorUIVisible || playing) {
-                PROFILE_SCOPE("Animation Update");
-                // Advance each distinct Model once. Scene entities get their own instance
-                // (AssetLibrary::InstantiateModel), so this is normally 1:1 — but dedupe
-                // defensively so a future shared-Model path can't tick one player N*dt (#106).
-                // Model::TickAnimationOnce() compares against its own m_LastTickedFrame instead
-                // of this loop building a heap-allocated std::unordered_set<Model*> every frame.
-                // Play: the game's scaled step, frozen while paused. Edit: real time, so a
-                // preview isn't slowed by a time scale left over from the last run.
-                const float animDt = playing ? (simThisFrame ? gameDt : 0.0f) : dt;
-                // never-animating models left out (StillModelCache); Pre-Skin below reuses this gather
-                for (auto entity : s_StillModels.GatherCached(world, frameIndex)) {
-                    if (world.Registry.all_of<InactiveTag>(entity)) continue; // #199 - an inactive object is paused, not just hidden
-                    world.Registry.get<RenderableComponent>(entity).ModelRef->TickAnimationOnce(frameIndex, animDt);
-                }
-            }
+            playFrame.Advance(playIn);
 
             if (!editorUIVisible) {
                 // Maximized play: editor.Draw() (and the real DockSpace() call inside it) doesn't
