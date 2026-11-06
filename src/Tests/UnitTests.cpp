@@ -40,6 +40,7 @@
 #include "AssetGuid.h"
 #include "Components.h"
 #include "AtomicFile.h"
+#include "Utf8.h"
 #include "Camera.h"
 #include "PhysicsWorld.h"  // #201 - the physics sync regression test
 #include "Combat/Damage.h" // hit regions, damage zones
@@ -1759,6 +1760,30 @@ void TestAtomicFile() {
     CHECK(ReadAll(path) == "second, longer");
     std::error_code ec;
     std::filesystem::remove(path, ec);
+
+    // WriteJson with invalid UTF-8 in a string: used to throw out of dump(); now writes (U+FFFD) and returns true.
+    const auto jsonPath = TempDir() / "atomic_invalid_utf8.json";
+    nlohmann::json bad8;
+    bad8["name"] = std::string("ab\xC3(cd"); // 0xC3 followed by '(' is not valid UTF-8
+    CHECK(AtomicFile::WriteJson(jsonPath, bad8));
+    CHECK(ReadAll(jsonPath).find("\"name\"") != std::string::npos);
+    std::filesystem::remove(jsonPath, ec);
+}
+
+// --- Utf8TruncateBytes: a multi-byte character straddling the cut is dropped whole -----------
+void TestUtf8Truncate() {
+    std::string s = "abc\xC3\xA9"; // "abc" + e-acute (2 bytes); a 4-byte cut would split it
+    Utf8TruncateBytes(s, 4);
+    CHECK(s == "abc");
+    s = "abc\xC3\xA9";
+    Utf8TruncateBytes(s, 5); // fits exactly
+    CHECK(s == "abc\xC3\xA9");
+    s = "x\xE2\x82\xAC"; // 3-byte euro sign after 'x'
+    Utf8TruncateBytes(s, 3);
+    CHECK(s == "x");
+    s = "short";
+    Utf8TruncateBytes(s, 40);
+    CHECK(s == "short");
 }
 
 // --- TextureCache: one texture loaded two ways (a model's own material at the defaults, a material asset at its .meta's)
@@ -5707,6 +5732,7 @@ int RunUnitTests(const char* filter) {
         {"AssetGuid", TestAssetGuid},
         {"UndoDeltaChain", TestUndoDeltaChain},
         {"AtomicFile", TestAtomicFile},
+        {"Utf8Truncate", TestUtf8Truncate},
         {"TextureCacheHash", TestTextureCacheHash},
         {"TextureCacheVariants", TestTextureCacheVariants},
         {"OutfitEdgeBandPosed", TestOutfitEdgeBandPosed},

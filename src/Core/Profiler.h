@@ -63,6 +63,8 @@ public:
         GpuScopeTimer& operator=(const GpuScopeTimer&) = delete;
     private:
         int m_Record = -1; // index of this scope in the current frame's records; -1 = not timed
+        int m_Slot = 0;        // ring slot the scope was recorded in
+        unsigned m_Serial = 0; // frame serial at construction; BeginFrame bumps it
     };
 };
 

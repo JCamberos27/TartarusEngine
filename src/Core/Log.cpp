@@ -1,5 +1,6 @@
 #include "Log.h"
 #include "UserPaths.h"
+#include "DbgSymbols.h"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -53,6 +54,8 @@ struct PendingEntry {
     std::vector<void*> Stack; // #178
 };
 std::vector<PendingEntry> g_Pending;
+constexpr size_t kMaxPending = 10000; // a worker flooding the log between main-thread drains can't grow it without bound
+size_t g_PendingDropped = 0;
 std::atomic<bool> g_HasPending{false};
 
 // Guards the terminal mirror and the log file, which any thread writes immediately (so a
@@ -135,11 +138,16 @@ bool OnMainThread() { return std::this_thread::get_id() == g_MainThread; }
 void DrainPending() {
     if (!g_HasPending.load(std::memory_order_acquire)) return;
     std::vector<PendingEntry> batch;
+    size_t dropped = 0;
     {
         std::lock_guard<std::mutex> lock(g_PendingMutex);
         batch.swap(g_Pending);
+        dropped = g_PendingDropped;
+        g_PendingDropped = 0;
         g_HasPending.store(false, std::memory_order_release);
     }
+    if (dropped > 0)
+        AddEntry(LogLevel::Warning, std::to_string(dropped) + " log lines dropped (logged faster than the main thread could drain them).", {}, {});
     for (auto& p : batch) AddEntry(p.Level, std::move(p.Message), std::move(p.Context), std::move(p.Stack));
 }
 
@@ -169,6 +177,11 @@ void Push(LogLevel level, const std::string& rawMessage, LogContext context = {}
         AddEntry(level, std::move(message), std::move(context), std::move(stack));
     } else {
         std::lock_guard<std::mutex> lock(g_PendingMutex);
+        if (g_Pending.size() >= kMaxPending) { // drop the oldest tenth in one go (erase-from-front is O(n))
+            const size_t n = kMaxPending / 10;
+            g_Pending.erase(g_Pending.begin(), g_Pending.begin() + n);
+            g_PendingDropped += n;
+        }
         g_Pending.push_back({level, std::move(message), std::move(context), std::move(stack)});
         g_HasPending.store(true, std::memory_order_release);
     }
@@ -189,13 +202,8 @@ void Log::Error(const std::string& message, const LogContext& context) { Push(Lo
 std::string Log::ResolveStack(const std::vector<void*>& frames) {
     if (frames.empty()) return {};
 #ifdef _WIN32
-    static bool s_Init = false, s_Ok = false;
-    if (!s_Init) {
-        s_Init = true;
-        SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES | SYMOPT_UNDNAME);
-        s_Ok = SymInitialize(GetCurrentProcess(), nullptr, TRUE) != FALSE;
-    }
-    if (!s_Ok) return {};
+    if (!EnsureSymbols()) return {};
+    std::lock_guard<std::mutex> symLock(DbgHelpLock()); // dbghelp is single-threaded; shared with SamplingProfiler
 
     const HANDLE proc = GetCurrentProcess();
     alignas(SYMBOL_INFO) char buf[sizeof(SYMBOL_INFO) + MAX_SYM_NAME];
@@ -279,11 +287,21 @@ std::string Log::OpenFile(const std::string& fileName) {
 
     std::lock_guard<std::mutex> lock(g_SinkMutex);
     if (g_File) std::fclose(g_File);
+    auto openAt = [](const fs::path& p) {
 #if defined(_MSC_VER)
-    g_File = _wfsopen(path.wstring().c_str(), L"wb", _SH_DENYWR); // readable while we write
+        return _wfsopen(p.wstring().c_str(), L"wb", _SH_DENYWR); // readable while we write
 #else
-    g_File = std::fopen(path.string().c_str(), "wb");
+        return std::fopen(p.string().c_str(), "wb");
 #endif
+    };
+    fs::path openedPath = path;
+    g_File = openAt(path);
+    if (!g_File) {
+        // Another instance (a second editor) holds the file: log to "<name>-<pid>.<ext>" instead of nowhere.
+        openedPath = path;
+        openedPath.replace_filename(path.stem().string() + "-" + std::to_string(GetCurrentProcessId()) + path.extension().string());
+        g_File = openAt(openedPath);
+    }
     if (!g_File) return {};
     // Unbuffered: every line reaches the OS as it's logged, so the file survives a crash with
     // no flush from the crash handler (which must not take our locks).
@@ -303,5 +321,5 @@ std::string Log::OpenFile(const std::string& fileName) {
     // Anything logged before the file existed (main thread only reaches here at startup).
     for (const LogEntry& e : Storage())
         for (int i = 0; i < e.Count; ++i) WriteFileLine(e.Time, e.Level, e.Message);
-    return path.string();
+    return openedPath.string();
 }
