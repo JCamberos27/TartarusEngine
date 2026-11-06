@@ -79,59 +79,59 @@
   },
   "rules": [
     {
-      "color": "#D96262C0",
+      "color": "#FFFFFF",
       "pattern": "assets/AI/*"
     },
     {
-      "color": "#D98F62C0",
+      "color": "#FFFFFF",
       "pattern": "assets/Animations/*"
     },
     {
-      "color": "#D9A062C0",
+      "color": "#FFFFFF",
       "pattern": "assets/Architecture/*"
     },
     {
-      "color": "#D9BD62C0",
+      "color": "#FFFFFF",
       "pattern": "assets/Audio/*"
     },
     {
-      "color": "#C6D962C0",
+      "color": "#FFFFFF",
       "pattern": "assets/Characters/*"
     },
     {
-      "color": "#C4D962C0",
+      "color": "#FFFFFF",
       "pattern": "assets/Decals/*"
     },
     {
-      "color": "#6BD962C0",
+      "color": "#FFFFFF",
       "pattern": "assets/Effects/*"
     },
     {
-      "color": "#62D986C0",
+      "color": "#FFFFFF",
       "pattern": "assets/Environments/*"
     },
     {
-      "color": "#62C4D9C0",
+      "color": "#FFFFFF",
       "pattern": "assets/Furniture/*"
     },
     {
-      "color": "#62D9B4C0",
+      "color": "#FFFFFF",
       "pattern": "assets/Materials/*"
     },
     {
-      "color": "#62D0D9C0",
+      "color": "#FFFFFF",
       "pattern": "assets/Props/*"
     },
     {
-      "color": "#6274D9C0",
+      "color": "#FFFFFF",
       "pattern": "assets/sky/*"
     },
     {
-      "color": "#7D62D9C0",
+      "color": "#FFFFFF",
       "pattern": "assets/Test/*"
     },
     {
-      "color": "#AB62D9C0",
+      "color": "#FFFFFF",
       "pattern": "assets/Weapons/*"
     }
   ],
