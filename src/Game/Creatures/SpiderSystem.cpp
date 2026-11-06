@@ -9,7 +9,7 @@
 #include "Openable.h"
 #include "PhysicsWorld.h"
 #include "Profiler.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "SceneSerializer.h"
 #include "World.h"
 #include "Core/Env.h"

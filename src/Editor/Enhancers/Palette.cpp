@@ -3,7 +3,7 @@
 
 #include "AtomicFile.h"
 #include "Log.h"
-#include "UserPaths.h"
+#include "Core/Paths.h"
 
 #include <cctype>
 #include <cstdio>

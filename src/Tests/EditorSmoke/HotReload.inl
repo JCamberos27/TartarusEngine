@@ -8,7 +8,7 @@
 // runs from its CMake build tree.
 
 } // namespace
-#include "EnginePaths.h"
+#include "Core/Paths.h"
 #include "GameModuleBuild.h"
 struct EditorSmokeAccess_HotReload {
     // Whether the Asset Browser's Scenes listing (refreshed from disk when invalidated) has `path`.

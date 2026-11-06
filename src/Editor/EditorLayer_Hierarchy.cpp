@@ -27,7 +27,7 @@
 #include "EditorUIHelpers.h"
 #include "AssetImporterInspector.h"
 #include "Profiler.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "GLStateCache.h"
 #include "Framebuffer.h"
 #include "gl.h"

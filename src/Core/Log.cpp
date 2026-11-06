@@ -1,5 +1,5 @@
 #include "Log.h"
-#include "UserPaths.h"
+#include "Paths.h"
 #include "DbgSymbols.h"
 
 #ifdef _WIN32

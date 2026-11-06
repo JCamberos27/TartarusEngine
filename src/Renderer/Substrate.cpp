@@ -1,6 +1,6 @@
 #include "Substrate.h"
 #include "SubstrateJson.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "Log.h"
 
 #include <cctype>

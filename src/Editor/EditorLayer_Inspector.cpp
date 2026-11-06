@@ -48,7 +48,7 @@
 #include "ProjectSettings.h" // project-defined tag vocabulary for the Tag dropdown (#236 A4)
 #include "LayerRegistry.h"
 #include "Profiler.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "ShaderLibrary.h"
 #include "AtomicFile.h"   // #178 preset write
 #include "AssetDatabase.h" // #178 preset .meta

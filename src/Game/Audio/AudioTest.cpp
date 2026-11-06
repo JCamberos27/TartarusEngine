@@ -6,7 +6,7 @@
 #include "Audio/WeaponAudio.h"
 #include "Components.h"
 #include "LoudnessMeter.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "SceneSerializer.h"
 #include "Window.h"
 #include "World.h"

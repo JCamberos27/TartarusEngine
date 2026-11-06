@@ -1,7 +1,7 @@
 #include "ProjectSettings.h"
 #include "InputMap.h"
 #include "Log.h"
-#include "ProjectPaths.h"
+#include "Paths.h"
 #include "AtomicFile.h"
 #include "Utf8.h"
 #include "AssetDatabase.h" // #132 - build scenes by GUID

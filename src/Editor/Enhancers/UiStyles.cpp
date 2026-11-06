@@ -3,7 +3,7 @@
 
 #include "AtomicFile.h"
 #include "Log.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 
 #include <algorithm>
 #include <fstream>

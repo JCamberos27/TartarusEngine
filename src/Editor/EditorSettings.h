@@ -383,7 +383,7 @@ struct EditorSettings {
         return instance;
     }
 
-    // Reads editor_prefs.json from per-user storage into Get(), if present (see UserPaths.h).
+    // Reads editor_prefs.json from per-user storage into Get(), if present (see Core/Paths.h).
     // Missing or unparsable file silently keeps the compiled-in defaults above — first launch,
     // or a hand-deleted prefs file, is not an error.
     static void Load();
@@ -418,7 +418,7 @@ struct EditorSettings {
     // clean default dock layout is rebuilt. Clears the flag.
     static bool TakeLayoutResetRequest();
 
-    // Absolute path to editor_prefs.json (per-user storage, see UserPaths.h). Exposed so
+    // Absolute path to editor_prefs.json (per-user storage, see Core/Paths.h). Exposed so
     // SceneSerializer's format-version migration (#9, Phase M item 1) can read a pre-v3 scene's
     // legacy post-processing/shadow values straight off disk — those fields no longer exist on
     // this struct, so they can't be read through Get() any more.

@@ -1,7 +1,7 @@
 #include "AudioEngine.h"
 #include "Log.h"
 #include "AssetDatabase.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "ConvolutionReverb.h"
 #include "LoudnessMeter.h"
 #include "MasterLimiter.h"

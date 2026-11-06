@@ -6,7 +6,7 @@
 #include "Log.h"
 #include "Model.h"
 #include "Profiler.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "Renderer/BloodPalette.h"
 #include "SpiderSystem.h"
 #include "World.h"

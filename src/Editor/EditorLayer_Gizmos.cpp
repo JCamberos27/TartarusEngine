@@ -28,7 +28,7 @@
 #include "PhysicsWorld.h"   // #185 — mirror gizmo edits into the live actor while playing
 #include "AssetImporterInspector.h"
 #include "Profiler.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "LayerRegistry.h"
 #include "GLStateCache.h"
 #include "Framebuffer.h"

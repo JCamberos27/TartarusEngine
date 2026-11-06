@@ -8,7 +8,7 @@
 #include "Model.h"
 #include "OutfitCoverage.h"
 #include "SkinHideBuffer.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "World.h"
 
 #include <glm/gtc/matrix_transform.hpp>

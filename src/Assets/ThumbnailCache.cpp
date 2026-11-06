@@ -1,7 +1,6 @@
 #include "ThumbnailCache.h"
 #include "AssetDatabase.h"
-#include "ProjectPaths.h"
-#include "EnginePaths.h"
+#include "Core/Paths.h"
 #include "Log.h"
 
 #include "stb_image.h"

@@ -1,6 +1,6 @@
 #include "TextureCache.h"
 #include "AssetDatabase.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 
 #include <algorithm>
 #include <atomic>

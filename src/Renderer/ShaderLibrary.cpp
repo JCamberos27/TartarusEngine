@@ -1,7 +1,7 @@
 #include "ShaderLibrary.h"
 #include "Shader.h"
 #include "Log.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include <algorithm>
 #include <fstream>
 #include <sstream>

@@ -1,6 +1,6 @@
 #include "WorldText.h"
 
-#include "EnginePaths.h"
+#include "Core/Paths.h"
 #include "Frustum.h"
 #include "GLStateCache.h"
 #include "Log.h"

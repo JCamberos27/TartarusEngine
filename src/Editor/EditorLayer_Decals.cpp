@@ -20,7 +20,7 @@
 #include "DecalSystem.h"
 #include "DecalEditorState.h"
 #include "Log.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "World.h"
 
 #include "stb_image.h"

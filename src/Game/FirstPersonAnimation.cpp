@@ -2,7 +2,7 @@
 #include "AnimatorController.h"
 #include "AtomicFile.h"
 #include "AssetDatabase.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "WeaponPrefab.h"
 #include <stdexcept>
 

@@ -1,7 +1,7 @@
 #include "AnimationSystem.h"
 #include "Model.h"
 #include "AssetLibrary.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include <filesystem>
 #include <algorithm>
 #include <chrono>

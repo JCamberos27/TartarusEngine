@@ -24,7 +24,7 @@
 #include "DecalAsset.h"
 #include "GLStateCache.h"
 #include "Log.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "World.h"
 #include "gl.h"
 

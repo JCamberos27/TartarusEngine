@@ -4,7 +4,7 @@
 #include "GLStateCache.h"
 #include "RenderFrameContext.h"
 #include "Shader.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "ShaderLibrary.h"
 #include "Texture.h"
 #include "World.h"

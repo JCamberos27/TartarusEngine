@@ -1,6 +1,6 @@
 #include "HudText.h"
 
-#include "EnginePaths.h"
+#include "Core/Paths.h"
 #include "GLStateCache.h"
 #include "Log.h"
 #include "Shader.h"

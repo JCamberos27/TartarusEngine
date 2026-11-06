@@ -10,8 +10,7 @@
 #include "ShaderLibrary.h"
 #include "ComponentRegistry.h"
 #include "SceneReferences.h"
-#include "EnginePaths.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include <filesystem>
 #include <json.hpp>
 #include "World.h"

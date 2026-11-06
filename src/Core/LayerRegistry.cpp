@@ -1,6 +1,6 @@
 #include "LayerRegistry.h"
 #include "Log.h"
-#include "ProjectPaths.h"
+#include "Paths.h"
 #include "AtomicFile.h"
 #include "Utf8.h"
 

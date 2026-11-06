@@ -4,7 +4,7 @@
 
 #include "BuildPipeline.h"
 #include "CrashHandler.h"
-#include "EnginePaths.h"
+#include "Core/Paths.h"
 #include "Game/Audio/AudioTest.h"
 #include "AssetDatabase.h"
 #include "AssetLibrary.h"
@@ -16,7 +16,6 @@
 #include "Log.h"
 #include "Model.h"
 #include "ModelVertex.h" // MAX_BONE_INFLUENCE
-#include "ProjectPaths.h"
 #include "ProjectSettings.h"
 #include "ShaderLibrary.h"
 #include "Tests/UnitTests.h"

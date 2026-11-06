@@ -57,7 +57,7 @@
 #include "Player.h"
 #include "PostProcessVolume.h"
 #include "Tonemapper.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "ProjectWatcher.h"
 #include "TextureCache.h"
 #include "Model.h"       // texture-path resolver

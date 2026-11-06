@@ -5,8 +5,7 @@
 #include "EditorPanels.h"
 #include "EditorSound.h"
 #include "Log.h"
-#include "ProjectPaths.h"
-#include "UserPaths.h"
+#include "Core/Paths.h"
 #include "AtomicFile.h"
 #include "Input.h" // TriggeredGlfw() — main-loop keys, evaluated before an ImGui frame exists
 
@@ -40,7 +39,7 @@ double   g_PrefixTime = 0.0;
 // Frame the last Triggered() edge was recorded on, per shortcut id. Compared against g_Frame.
 std::unordered_map<std::string, std::uint64_t> g_Fired;
 
-// Per-user, per-machine state (#42) — NOT under the project folder; see UserPaths.h.
+// Per-user, per-machine state (#42) — NOT under the project folder; see Core/Paths.h.
 const std::string& Path() {
     static const std::string p = UserPaths::Resolve("shortcuts.json");
     return p;

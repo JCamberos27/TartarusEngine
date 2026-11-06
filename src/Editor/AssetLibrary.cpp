@@ -10,7 +10,7 @@
 #include "AssetImport.h"
 #include "Log.h"
 #include "ProjectSettings.h" // #121 - virtual folders are project data, not scene data
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include <algorithm>
 #include <map>
 #include <set>

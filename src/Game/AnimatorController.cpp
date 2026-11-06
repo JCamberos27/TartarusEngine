@@ -10,7 +10,7 @@
 #include "LiveReload.h"
 #include "Model.h"
 #include "Profiler.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "World.h"
 #include "Core/Env.h"
 

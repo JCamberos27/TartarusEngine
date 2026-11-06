@@ -29,7 +29,7 @@
 #include "Model.h"
 #include "Texture.h"
 #include "AudioEngine.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 #include "Log.h"
 #include "GameModuleBuild.h"
 

@@ -5,7 +5,7 @@
 #include "EditorUIHelpers.h"
 #include "EditorUIPrimitives.h"
 #include "FileDialog.h"
-#include "ProjectPaths.h"
+#include "Core/Paths.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
