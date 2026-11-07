@@ -62,6 +62,9 @@ namespace PhysicsWorld {
 namespace {
 const PxQuat kCapsuleUp(PxHalfPi, PxVec3(0.0f, 0.0f, 1.0f)); // PhysX capsules lie along X
 
+// The CC_ flags (PhysicsWorld.h) are CharacterMover's MoverFlag values; MoveCharacter returns them unconverted.
+static_assert((unsigned)CC_SIDES == (unsigned)MoverSides && (unsigned)CC_UP == (unsigned)MoverUp && (unsigned)CC_DOWN == (unsigned)MoverDown, "CC_ flags must match MoverFlag");
+
 MoverSettings ProjectMoverSettings() {
     const auto& p = ProjectSettings::Physics();
     MoverSettings m;
@@ -120,16 +123,48 @@ std::unique_ptr<CharacterBody> MakeBody(PhysicsState& s, const MoverCapsule& cap
     return b;
 }
 
-// A new cylinder length (crouch / stand), the feet where they were; the shape's filter data carries over.
+// A new cylinder length (crouch / stand), the feet where they were; the shape's filter data and userData carry over.
 void ResizeBody(PhysicsState& s, CharacterBody& b, float cylinderHalfHeight) {
     const PxFilterData sim = b.Shape->getSimulationFilterData();
     MoverCapsule cap = b.Cap;
     cap.HalfHeight = cylinderHalfHeight;
     PxShape* fresh = MakeBodyShape(s, *b.Actor, cap, sim); // made before the old one goes, so a failure leaves the capsule as it was
     if (!fresh) { Log::Error("PhysX: resizing a character capsule failed."); return; }
+    fresh->setQueryFilterData(b.Shape->getQueryFilterData());
+    fresh->userData = b.Shape->userData;
     b.Actor->detachShape(*b.Shape);
     b.Cap = cap;
     b.Shape = fresh;
+}
+
+// Where a character's body is for everyone else's sweeps this same frame, as well as for the simulation: a kinematic target
+// only lands at the next simulate, and two soldiers in one doorway each met the other where he had been a frame before.
+// setGlobalPose is a deliberate teleport here (the feet stay put while the capsule's centre moves with its length, or a
+// body is put down at new feet); the target is set to the same pose so the last move's target can't pull it back.
+void PlaceBody(CharacterBody& b) {
+    const PxTransform t(BodyCentre(b));
+    b.Actor->setGlobalPose(t);
+    b.Actor->setKinematicTarget(t);
+}
+
+// A mover step for either kind of character: sweeps through `w`, records the result and the debug trail, moves the feet.
+void RunMover(CharacterBody& b, IMoverWorld& w, const glm::vec3& velocity, const glm::vec3& delta, const MoverSettings& ms,
+              bool snapToGround) {
+    const bool debug = (g_DebugDrawFlags & PDD_Movers) != 0u;
+    b.Last = CharacterMover::Move(w, b.Cap, b.Feet, velocity, delta, ms, b.Grounded, snapToGround, debug ? &b.Debug : nullptr);
+    if (!debug) b.Debug.Clear();
+    b.Feet = b.Last.Feet;
+    b.Grounded = b.Last.Grounded;
+}
+
+// Whether a capsule of this cylinder length would fit standing at `foot` (its radius `capRadius`).
+bool CapsuleFitsAt(const glm::vec3& foot, float capRadius, float cylinderHalfHeight) {
+    // A hair smaller and lifted, so the floor under the feet and a wall alongside don't count.
+    const float radius = std::max(0.02f, capRadius - 0.03f);
+    const PxVec3 centre(foot.x, foot.y + 0.04f + cylinderHalfHeight + radius, foot.z);
+    QueryFilter f;
+    f.HitTriggers = 0;
+    return OverlapFiltered(PxCapsuleGeometry(radius, cylinderHalfHeight), PxTransform(centre, kCapsuleUp), f, nullptr, 0) == 0;
 }
 
 // The mover's view of the PhysX scene for one character: its collision-matrix row, never itself or a trigger.
@@ -320,15 +355,10 @@ unsigned MoveCharacter(const float disp[3], float dt, bool snapToGround) {
     if (CharacterBody* b = g_State->playerBody.get()) {
         PhysxMoverWorld w(*g_State, b->Actor, layerMask);
         const glm::vec3 delta(d.x, d.y, d.z), velocity = glm::vec3(disp[0], disp[1], disp[2]) / dt;
-        const bool debug = (g_DebugDrawFlags & PDD_Movers) != 0u;
         MoverSettings ms = ProjectMoverSettings();
         ms.DoorAssist = g_State->playerDoorAssist;
         ms.DoorAssistMaxAngle = g_State->playerDoorAssistMaxAngle;
-        b->Last = CharacterMover::Move(w, b->Cap, b->Feet, velocity, delta, ms, b->Grounded, snapToGround,
-                                       debug ? &b->Debug : nullptr);
-        if (!debug) b->Debug.Clear();
-        b->Feet = b->Last.Feet;
-        b->Grounded = b->Last.Grounded;
+        RunMover(*b, w, velocity, delta, ms, snapToGround);
         b->Actor->setKinematicTarget(PxTransform(BodyCentre(*b)));
         // What it ran into: bodies shoved, a platform underfoot carried on.
         const float dl = glm::length(delta);
@@ -360,7 +390,7 @@ bool ResizeCharacter(float cylinderHalfHeight) {
     if (!HasCharacter() || cylinderHalfHeight <= 0.0f) return false;
     if (CharacterBody* b = g_State->playerBody.get()) {
         ResizeBody(*g_State, *b, cylinderHalfHeight);
-        b->Actor->setGlobalPose(PxTransform(BodyCentre(*b))); // the feet stay put
+        PlaceBody(*b); // the feet stay put
         return true;
     }
     return false;
@@ -369,15 +399,7 @@ bool ResizeCharacter(float cylinderHalfHeight) {
 bool CharacterFitsAt(float cylinderHalfHeight) {
     if (!HasCharacter() || cylinderHalfHeight <= 0.0f) return false;
     const CharacterBody* b = g_State->playerBody.get();
-    const glm::vec3 foot = b->Feet;
-    const float capRadius = b->Cap.Radius;
-    // A hair smaller and lifted, so the floor under the feet and a wall alongside don't count.
-    const float radius = std::max(0.02f, capRadius - 0.03f);
-    const PxVec3 centre(foot.x, foot.y + 0.04f + cylinderHalfHeight + radius, foot.z);
-    const PxQuat lieAlongY(PxPi * 0.5f, PxVec3(0.0f, 0.0f, 1.0f)); // PhysX capsules lie along X
-    QueryFilter f;
-    f.HitTriggers = 0;
-    return OverlapFiltered(PxCapsuleGeometry(radius, cylinderHalfHeight), PxTransform(centre, lieAlongY), f, nullptr, 0) == 0;
+    return CapsuleFitsAt(b->Feet, b->Cap.Radius, cylinderHalfHeight);
 }
 } // namespace PhysicsWorld
 
@@ -410,13 +432,6 @@ CharacterId AddNpcSlot(NpcCharacter&& n) {
         if (!g_State->npcs[i].Used()) { g_State->npcs[i] = std::move(n); return (CharacterId)i; }
     g_State->npcs.push_back(std::move(n));
     return (CharacterId)g_State->npcs.size() - 1;
-}
-// Where a soldier's body is for everyone else's sweeps this same frame, as well as for the simulation: a kinematic target
-// only lands at the next simulate, and two soldiers in one doorway each met the other where he had been a frame before.
-void PlaceNpcBody(CharacterBody& b) {
-    const PxTransform t(BodyCentre(b));
-    b.Actor->setGlobalPose(t);
-    b.Actor->setKinematicTarget(t);
 }
 } // namespace
 } // namespace PhysicsWorld
@@ -485,13 +500,8 @@ unsigned MoveNpcCharacter(CharacterId id, const float disp[3], float dt) {
         const glm::vec3 delta(disp[0], disp[1], disp[2]);
         // Walking keeps to the floor down steps and slopes; anything going up is left to his own gravity.
         const bool snap = b->Grounded && delta.y <= 0.0f;
-        const bool debug = (g_DebugDrawFlags & PDD_Movers) != 0u;
-        b->Last = CharacterMover::Move(w, b->Cap, b->Feet, delta / dt, delta, ProjectMoverSettings(), b->Grounded, snap,
-                                       debug ? &b->Debug : nullptr);
-        if (!debug) b->Debug.Clear();
-        b->Feet = b->Last.Feet;
-        b->Grounded = b->Last.Grounded;
-        PlaceNpcBody(*b);
+        RunMover(*b, w, delta / dt, delta, ProjectMoverSettings(), snap);
+        PlaceBody(*b);
         return b->Last.Flags;
     }
     return 0;
@@ -501,7 +511,7 @@ void SetNpcFootPosition(CharacterId id, const float footPos[3]) {
     if (!FiniteVec3(footPos)) return;
     if (CharacterBody* b = NpcBody(id)) {
         b->Feet = glm::vec3(footPos[0], footPos[1], footPos[2]);
-        PlaceNpcBody(*b);
+        PlaceBody(*b);
     }
 }
 
@@ -519,7 +529,7 @@ bool ResizeNpcCharacter(CharacterId id, float cylinderHalfHeight) {
     if (cylinderHalfHeight <= 0.0f) return false;
     if (CharacterBody* b = NpcBody(id)) {
         ResizeBody(*g_State, *b, cylinderHalfHeight);
-        PlaceNpcBody(*b);
+        PlaceBody(*b);
         return true;
     }
     return false;
@@ -527,15 +537,9 @@ bool ResizeNpcCharacter(CharacterId id, float cylinderHalfHeight) {
 
 bool NpcFitsAt(CharacterId id, float cylinderHalfHeight) {
     if (!NpcSlot(id) || cylinderHalfHeight <= 0.0f) return false;
-    float foot[3], capRadius = 0.0f;
-    GetNpcCapsule(id, foot, &capRadius, nullptr);
-    const float radius = std::max(0.02f, capRadius - 0.03f);
-    const PxVec3 centre(foot[0], foot[1] + 0.04f + cylinderHalfHeight + radius, foot[2]);
-    const PxQuat lieAlongY(PxPi * 0.5f, PxVec3(0.0f, 0.0f, 1.0f));
+    const CharacterBody* b = NpcBody(id);
     ScopedQueryPolicy self(g_State->npcs[(size_t)id].entity, /*hitPlayer=*/true);
-    QueryFilter f;
-    f.HitTriggers = 0;
-    return OverlapFiltered(PxCapsuleGeometry(radius, cylinderHalfHeight), PxTransform(centre, lieAlongY), f, nullptr, 0) == 0;
+    return CapsuleFitsAt(b->Feet, b->Cap.Radius, cylinderHalfHeight);
 }
 
 CharacterId NpcCharacterOf(unsigned entity) {
