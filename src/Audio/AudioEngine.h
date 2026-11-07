@@ -3,7 +3,7 @@
 #include <vector>
 #include <cstdint>
 #include <glm/glm.hpp>
-#include "MasterLimiter.h"
+#include "LimiterSettings.h"
 
 // Thin wrapper over miniaudio's ma_engine: loads sounds by path (wav/mp3/flac/ogg) and plays
 // them as individually addressable voices.

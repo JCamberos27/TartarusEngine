@@ -1,4 +1,5 @@
 #pragma once
+#include "Dsp.h"
 
 #include <atomic>
 #include <cstddef>
@@ -32,15 +33,6 @@ public:
     static float PeakDb(const std::vector<float>& stereo, size_t from, size_t to);
 
 private:
-    struct Biquad {
-        double B0 = 1, B1 = 0, B2 = 0, A1 = 0, A2 = 0, Z1 = 0, Z2 = 0;
-        double Run(double x) {
-            const double y = B0 * x + Z1;
-            Z1 = B1 * x - A1 * y + Z2;
-            Z2 = B2 * x - A2 * y;
-            return y;
-        }
-    };
     static void Design(int rate, Biquad& shelf, Biquad& hp);
     static std::vector<double> BlockPowers(const std::vector<float>& stereo, int sampleRate); // K-weighted mean square per 100 ms
     int m_Rate, m_Block;

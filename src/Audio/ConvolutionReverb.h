@@ -1,4 +1,5 @@
 #pragma once
+#include "Dsp.h"
 
 #include "Convolution.h"
 
@@ -64,15 +65,6 @@ public:
     double WorkerMicros() const { return m_Worker ? m_Worker->TotalMicros() : 0.0; }
 
 private:
-    struct Biquad {
-        double B0 = 1, B1 = 0, B2 = 0, A1 = 0, A2 = 0, Z1 = 0, Z2 = 0;
-        double Run(double x) {
-            const double y = B0 * x + Z1;
-            Z1 = B1 * x - A1 * y + Z2;
-            Z2 = B2 * x - A2 * y;
-            return y;
-        }
-    };
     struct Inst {
         std::unique_ptr<Convolver> Conv;
         std::vector<float> Ring;               // input history for the pre-delay
