@@ -7,20 +7,30 @@ namespace {
 PxTransform HitboxPose(const HitCapsule& c) {
     return PxTransform(PxVec3(c.Position[0], c.Position[1], c.Position[2]), ToQuat(c.Rotation));
 }
+// One active set more (or fewer) shadowing its capsule: the capsule is out of queries while any set still stands in for it.
 void ShadowCapsule(PhysicsState::Hitboxes& h, bool on) {
     if (!g_State || !h.Capsule) return;
-    if (on) g_State->hitboxedCapsules.insert(h.Capsule);
-    else g_State->hitboxedCapsules.erase(h.Capsule);
+    auto& shadowed = g_State->hitboxedCapsules;
+    if (on) {
+        ++shadowed[h.Capsule];
+    } else if (auto it = shadowed.find(h.Capsule); it != shadowed.end() && --it->second <= 0) {
+        shadowed.erase(it);
+    }
+}
+
+// The live set `id` names (its slot's current generation, not freed), or null.
+PhysicsState::Hitboxes* HitboxesAt(int id) {
+    PhysicsState::Hitboxes* h = g_State ? HandleTarget(g_State->hitboxes, id) : nullptr;
+    return h && !h->Bodies.empty() ? h : nullptr;
 }
 
 // Kinematic query-only capsules reporting `entity`; `capsule` (may be null) is the character capsule they stand in for.
 int MakeHitboxes(PxRigidActor* capsule, std::uint32_t entity, const HitCapsule* parts, int count) {
     PhysicsState& s = *g_State;
-    int id = -1;
-    for (size_t i = 0; i < s.hitboxes.size(); ++i)
-        if (s.hitboxes[i].Bodies.empty()) { id = (int)i; break; }
-    if (id < 0) { id = (int)s.hitboxes.size(); s.hitboxes.emplace_back(); }
+    const int id = AcquireSlot(s.hitboxes, [](const PhysicsState::Hitboxes& x) { return x.Bodies.empty(); });
+    if (id < 0) { Log::Error("PhysX: out of hitbox slots."); return -1; }
     PhysicsState::Hitboxes& h = s.hitboxes[(size_t)id];
+    h.Gen = NextGen(h.Gen);
     h.Capsule = capsule;
     for (int i = 0; i < count; ++i) {
         PxRigidDynamic* b = s.physics->createRigidDynamic(HitboxPose(parts[i]));
@@ -52,16 +62,25 @@ int MakeHitboxes(PxRigidActor* capsule, std::uint32_t entity, const HitCapsule* 
     }
     h.Active = true;
     ShadowCapsule(h, true);
-    return id;
+    return MakeHandle((size_t)id, h.Gen);
 }
 } // namespace
 } // namespace PhysicsWorld
+
+namespace PhysicsWorld::detail {
+void ForgetHitboxCapsule(PhysicsState& s, const PxRigidActor* capsule) {
+    if (!capsule) return;
+    s.hitboxedCapsules.erase(capsule);
+    for (auto& h : s.hitboxes)
+        if (h.Capsule == capsule) h.Capsule = nullptr; // (a later actor at the same address isn't shadowed by these)
+}
+} // namespace PhysicsWorld::detail
 
 namespace PhysicsWorld {
 int CreateNpcHitboxes(CharacterId owner, const HitCapsule* parts, int count) {
     PxRigidActor* capsule = NpcActor(owner);
     if (!g_State || !g_State->scene || !capsule || !parts || count <= 0) return -1;
-    return MakeHitboxes(capsule, g_State->npcs[(size_t)owner].entity, parts, count);
+    return MakeHitboxes(capsule, UserDataToEntity(capsule->userData), parts, count);
 }
 
 int CreateBodyHitboxes(unsigned entity, const HitCapsule* parts, int count) {
@@ -70,8 +89,9 @@ int CreateBodyHitboxes(unsigned entity, const HitCapsule* parts, int count) {
 }
 
 void SetNpcHitboxPoses(int id, const HitCapsule* parts, int count) {
-    if (!g_State || !parts || id < 0 || id >= (int)g_State->hitboxes.size()) return;
-    auto& h = g_State->hitboxes[(size_t)id];
+    PhysicsState::Hitboxes* hp = HitboxesAt(id);
+    if (!hp || !parts) return;
+    auto& h = *hp;
     for (int i = 0; i < count && i < (int)h.Bodies.size(); ++i) {
         if (!FiniteVec3(parts[i].Position) || !std::isfinite(parts[i].Rotation[0]) || !std::isfinite(parts[i].Rotation[1]) ||
             !std::isfinite(parts[i].Rotation[2]) || !std::isfinite(parts[i].Rotation[3]))
@@ -81,9 +101,9 @@ void SetNpcHitboxPoses(int id, const HitCapsule* parts, int count) {
 }
 
 void SetNpcHitboxesActive(int id, bool active) {
-    if (!g_State || id < 0 || id >= (int)g_State->hitboxes.size()) return;
-    auto& h = g_State->hitboxes[(size_t)id];
-    if (h.Bodies.empty() || h.Active == active) return;
+    PhysicsState::Hitboxes* hp = HitboxesAt(id);
+    if (!hp || hp->Active == active) return;
+    auto& h = *hp;
     h.Active = active;
     for (PxRigidDynamic* b : h.Bodies) {
         PxShape* sh = nullptr;
@@ -122,9 +142,10 @@ void HitboxDebugLines(std::vector<float>& out) {
 }
 
 void DestroyNpcHitboxes(int id) {
-    if (!g_State || id < 0 || id >= (int)g_State->hitboxes.size()) return;
-    auto& h = g_State->hitboxes[(size_t)id];
-    ShadowCapsule(h, false);
+    PhysicsState::Hitboxes* hp = HitboxesAt(id);
+    if (!hp) return;
+    auto& h = *hp;
+    if (h.Active) ShadowCapsule(h, false);
     for (PxRigidDynamic* b : h.Bodies)
         if (b) {
             if (g_State->playerGround == b) g_State->playerGround = nullptr;

@@ -164,7 +164,7 @@ namespace PhysicsWorld::detail {
 // Once a frame: corpses asleep a while freeze; the ones walked into thaw.
 void FreezeRestingRagdolls(PhysicsState& s, float dt) {
     for (int id : s.thawRequests)
-        if (PhysicsState::Ragdoll* rd = RagdollAt(s, id)) ThawRagdoll(s, *rd);
+        if (PhysicsState::Ragdoll* rd = RagdollInSlot(s, id)) ThawRagdoll(s, *rd);
     s.thawRequests.clear();
     constexpr float kFreezeAfter = 1.0f;
     for (auto& rd : s.ragdolls) {
@@ -180,7 +180,23 @@ void FreezeRestingRagdolls(PhysicsState& s, float dt) {
 }
 
 PhysicsState::Ragdoll* RagdollAt(PhysicsState& s, int id) {
-    return id >= 0 && id < (int)s.ragdolls.size() && s.ragdolls[(size_t)id].Art ? &s.ragdolls[(size_t)id] : nullptr;
+    PhysicsState::Ragdoll* rd = HandleTarget(s.ragdolls, id);
+    return rd && rd->Art ? rd : nullptr;
+}
+
+PhysicsState::Ragdoll* RagdollInSlot(PhysicsState& s, int slot) {
+    return slot >= 0 && slot < (int)s.ragdolls.size() && s.ragdolls[(size_t)slot].Art ? &s.ragdolls[(size_t)slot] : nullptr;
+}
+
+void ReleaseRagdollAttachments(PhysicsState& s, const PxRigidActor* actor) {
+    if (!actor) return;
+    for (auto& rd : s.ragdolls)
+        for (PxJoint*& j : rd.Attach) {
+            if (!j) continue;
+            PxRigidActor *a0 = nullptr, *a1 = nullptr;
+            j->getActors(a0, a1);
+            if (a0 == actor || a1 == actor) { j->release(); j = nullptr; } // (RagdollAttachmentHeld then reads false)
+        }
 }
 
 PhysicsState::Ragdoll* RagdollAt(int id) {
@@ -303,12 +319,13 @@ int CreateRagdoll(unsigned entity, const RagdollPart* parts, int count, const Ra
             }
     }
     if ((int)order.size() != count) return -1; // a second root, or a loop
-    int id = -1;
-    for (size_t i = 0; i < s.ragdolls.size(); ++i)
-        if (!s.ragdolls[i].Art) { id = (int)i; break; }
-    if (id < 0) { id = (int)s.ragdolls.size(); s.ragdolls.emplace_back(); }
+    // `id` is the slot (word2's numbering); the caller gets MakeHandle(id, gen).
+    const int id = AcquireSlot(s.ragdolls, [](const PhysicsState::Ragdoll& r) { return !r.Art; });
+    if (id < 0) { Log::Error("PhysX: out of ragdoll slots."); return -1; }
     PhysicsState::Ragdoll& rd = s.ragdolls[(size_t)id];
+    const std::uint16_t gen = NextGen(rd.Gen);
     rd = PhysicsState::Ragdoll();
+    rd.Gen = gen;
     const RagdollParams prm = params ? *params : RagdollParams();
     PxArticulationReducedCoordinate* art = s.physics->createArticulationReducedCoordinate();
     if (!art) return -1;
@@ -598,19 +615,43 @@ int CreateRagdoll(unsigned entity, const RagdollPart* parts, int count, const Ra
     if (TouchesOtherBody(s, rd, 0.0f)) SetPassBodies(s, rd, true);
     rd.Good = art->createCache();
     if (rd.Good) art->copyInternalStateToCache(*rd.Good, PxArticulationCacheFlag::ePOSITION | PxArticulationCacheFlag::eROOT_TRANSFORM);
-    return id;
+    return MakeHandle((size_t)id, gen);
 }
 
 void DestroyRagdoll(int ragdoll) {
-    if (!g_State || ragdoll < 0 || ragdoll >= (int)g_State->ragdolls.size()) return;
-    auto& rd = g_State->ragdolls[(size_t)ragdoll];
+    if (!g_State) return;
+    PhysicsState& s = *g_State;
+    PhysicsState::Ragdoll* rdp = RagdollAt(s, ragdoll);
+    if (!rdp) return;
+    auto& rd = *rdp;
+    const int slot = HandleSlot(ragdoll);
     for (PxJoint* j : rd.Attach) if (j) j->release();
-    if (rd.Frozen) { g_State->scene->removeActor(*rd.Frozen); rd.Frozen->release(); }
+    if (rd.Frozen) { s.scene->removeActor(*rd.Frozen); rd.Frozen->release(); }
     if (rd.Good) rd.Good->release();
     if (rd.Art) rd.Art->release(); // its links, shapes and joints, and out of the scene
     if (rd.Mat) rd.Mat->release();
     if (rd.SlickMat) rd.SlickMat->release();
+    const std::uint16_t gen = rd.Gen;
     rd = PhysicsState::Ragdoll();
+    rd.Gen = gen;
+    // What was told to ignore it lets go: the slot's next ragdoll is someone else's (a dropped gun went on passing through it).
+    auto letGo = [&](PxRigidActor& a) {
+        bool changed = false;
+        for (PxShape* sh : ShapesOf(a)) {
+            PxFilterData f = sh->getSimulationFilterData();
+            if (!IgnoresRagdollSlot(f, slot)) continue;
+            f.word2 = 0u;
+            f.word3 = 0u;
+            sh->setSimulationFilterData(f);
+            changed = true;
+        }
+        if (changed && a.getScene()) s.scene->resetFiltering(a);
+        return changed;
+    };
+    for (auto& [entity, body] : s.bodyByEntity)
+        if (body && letGo(*body)) body->setMaxDepenetrationVelocity(PX_MAX_F32); // (as IgnoreRagdollParts with no mask)
+    for (auto& n : s.npcs)
+        if (PxRigidActor* a = n.Actor()) letGo(*a);
 }
 
 void SetRagdollDamping(int ragdoll, float linear, float angular) {
@@ -917,7 +958,7 @@ bool IgnoreRagdollParts(unsigned entity, int ragdoll, unsigned partMask) {
     for (PxShape* sh : shapes) {
         PxFilterData f = sh->getSimulationFilterData();
         // The ignorer slot of the ragdoll's own numbering: not one of its parts, so only this object's mask decides.
-        f.word2 = on ? (((PxU32)ragdoll + 1u) | (kRagdollIgnorerSlot << 16)) : 0u;
+        f.word2 = on ? (((PxU32)HandleSlot(ragdoll) + 1u) | (kRagdollIgnorerSlot << 16)) : 0u;
         f.word3 = on ? partMask : 0u;
         sh->setSimulationFilterData(f);
     }
