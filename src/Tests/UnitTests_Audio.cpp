@@ -1160,9 +1160,9 @@ void TestReverbZoneContainmentPriorityAndBlend() {
     CHECK(mid.Weights[(int)SpaceClass::IndoorSmall] > 0.05f && mid.Weights[(int)SpaceClass::IndoorSmall] < 0.95f);
     CHECK(mid.Weights[(int)SpaceClass::IndoorLarge] > 0.05f && mid.ProbeShare == 0.0f);
     CHECK(std::fabs(WeightSum(mid.Weights) + mid.ProbeShare - 1.0f) < 1e-5f);
-    CHECK(mid.Gain > 1.0f && mid.Gain < 2.0f && mid.Zones == 2); // the hall's gain is only partly in
+    CHECK(mid.Gain > 1.0f && mid.Gain < 2.0f && mid.ClaimCount == 2); // the hall's gain is only partly in
     const ReverbZoneMix edge = zones.Mix(glm::vec3(21.0f, 0.0f, 0.0f)); // outside both
-    CHECK(edge.ProbeShare == 1.0f && edge.Zones == 0 && edge.Gain == 1.0f && WeightSum(edge.Weights) == 0.0f);
+    CHECK(edge.ProbeShare == 1.0f && edge.ClaimCount == 0 && edge.Gain == 1.0f && WeightSum(edge.Weights) == 0.0f);
     const ReverbZoneMix rim = zones.Mix(glm::vec3(18.0f, 0.0f, 0.0f)); // on the hall's fade: part zone, part probe
     CHECK(rim.ProbeShare > 0.05f && rim.ProbeShare < 0.95f && std::fabs(WeightSum(rim.Weights) + rim.ProbeShare - 1.0f) < 1e-5f);
     // Same priority: the order is by entity id, deterministic.
@@ -1690,7 +1690,7 @@ void TestZonesMoveAtRuntime() {
     t.SetRotationEuler(glm::vec3(0.0f, 90.0f, 0.0f));
     world.Registry.get<ReverbZoneComponent>(zone).Extents = glm::vec3(2.0f, 5.0f, 9.0f); // 9 m along local z = world x after the turn
     CHECK(zones.Refresh(world) && !zones.LastRefreshRebuilt() && zones.Zones().data() == before);
-    CHECK(zones.Mix(glm::vec3(207.0f, 0.0f, 0.0f)).Zones == 1 && zones.Mix(glm::vec3(200.0f, 0.0f, 3.0f)).Zones == 0);
+    CHECK(zones.Mix(glm::vec3(207.0f, 0.0f, 0.0f)).ClaimCount == 1 && zones.Mix(glm::vec3(200.0f, 0.0f, 3.0f)).ClaimCount == 0);
     // Zones that appear, go or are switched off rebuild (rare).
     const entt::entity second = MakeZone(world, glm::vec3(0.0f), (int)SpaceClass::IndoorSmall, glm::vec3(3.0f), "Second");
     CHECK(zones.Refresh(world) && zones.LastRefreshRebuilt() && zones.Zones().size() == 2);
