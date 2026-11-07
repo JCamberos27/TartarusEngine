@@ -40,9 +40,12 @@ public:
     ConvolutionReverb(const ConvolutionReverb&) = delete;
     ConvolutionReverb& operator=(const ConvolutionReverb&) = delete;
 
-    // Game thread. Registers an IR (allocates its convolver and buffers); -1 when all slots are taken. Instances live as long as
-    // the reverb.
-    int AddIr(std::shared_ptr<const IrData> ir);
+    // Game thread. Registers an IR (allocates its convolver and buffers); -1 when all slots are taken. When they are, the least
+    // recently targeted slot that is idle (faded out, not named by the target, nor by `keepMask`'s bits) is given the new IR
+    // instead: the old one is retired and freed once the audio thread has moved past it.
+    int AddIr(std::shared_ptr<const IrData> ir, unsigned keepMask = 0);
+    // Audio thread: stops every running instance (the bus was switched off): a later start begins from an empty history.
+    void Silence();
     // Game thread: where the reverb is heading (picked up by the callback's next block).
     void SetTarget(const ReverbRtTarget& t);
     ReverbRtTarget Target() const;
@@ -74,6 +77,7 @@ private:
         std::unique_ptr<Convolver> Conv;
         std::vector<float> Ring;               // input history for the pre-delay
         unsigned Pos = 0;
+        unsigned LastUse = 0;                  // game thread: when SetTarget last named it (AddIr's pick of a slot to reuse)
         bool On = false;
         float W = 0.0f, Wet = 0.0f, Delay = 0.0f, Hf = 0.0f, Lc = 0.0f; // gliding values (Delay in frames)
         float AppliedHf = -1.0f, AppliedLc = -1.0f;
@@ -82,13 +86,18 @@ private:
         std::atomic<bool> OnReport{false};
     };
     int m_Rate;
+    unsigned m_RingSize;                      // pre-delay ring (a power of two, > the longest pre-delay + a chunk)
     std::unique_ptr<TailWorker> m_Worker;
     std::atomic<Inst*> m_Inst[kMaxInstances]; // published by AddIr (game thread), owned here
     std::atomic<int> m_Count{0};
     mutable std::mutex m_Mail;
     ReverbRtTarget m_Pending;
     std::atomic<unsigned> m_Version{0};
-    unsigned m_Seen = 0;
+    std::atomic<unsigned> m_Seen{0};
+    std::atomic<unsigned> m_Epoch{0};         // Process() entries + exits: odd while the audio thread is inside it
+    unsigned m_UseClock = 0;                  // game thread
+    std::vector<std::pair<Inst*, unsigned>> m_Retired; // game thread: replaced instances and the epoch they were retired at
+    void FreeRetired(bool all);
     ReverbRtTarget m_Cur;
     void Design(Inst& s, float hfDb, float lowCutHz) const;
     void ProcessChunk(const float* mono, float* outL, float* outR, int n);

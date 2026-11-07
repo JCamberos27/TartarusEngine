@@ -3,6 +3,7 @@
 #include "AssetDatabase.h"
 #include "Core/Paths.h"
 #include "ConvolutionReverb.h"
+#include "DenormalGuard.h"
 #include "LoudnessMeter.h"
 #include "MasterLimiter.h"
 #include "miniaudio.h"
@@ -18,6 +19,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <unordered_map>
 #include <vector>
 
@@ -38,14 +40,43 @@ struct PreloadedClip {
     ma_uint64 FrameCount = 0;
 };
 std::unordered_map<std::string, std::shared_ptr<const PreloadedClip>> s_Preloaded;
+// Paths whose decode failed (Load / LoadClip): remembered so the failure is logged once, not on every play. Reload(path) clears one.
+// (A Drive file that is not fetched yet is never remembered: it may arrive.)
+std::set<std::string> s_LoadFailed, s_ClipFailed;
+
+// The occlusion low-pass: a miniaudio low-pass filter in a node of our own, so a new cutoff is applied (ma_lpf_reinit, which keeps
+// the filter's state) by the audio thread itself between two blocks, never under it. The game thread only states the target.
+struct OcclusionNode {
+    ma_node_base Base;
+    ma_lpf Lpf;
+    ma_uint32 Rate = 48000;
+    std::atomic<double> Target{20000.0};
+    double Applied = 20000.0; // audio thread
+};
+void OcclusionProcess(ma_node* pNode, const float** ppIn, ma_uint32* pFrameCountIn, float** ppOut, ma_uint32* pFrameCountOut) {
+    OcclusionNode* n = reinterpret_cast<OcclusionNode*>(pNode);
+    const double want = n->Target.load(std::memory_order_relaxed);
+    if (want != n->Applied) {
+        n->Applied = want;
+        const ma_lpf_config lc = ma_lpf_config_init(ma_format_f32, 2, n->Rate, want, 2);
+        ma_lpf_reinit(&lc, &n->Lpf);
+    }
+    ma_lpf_process_pcm_frames(&n->Lpf, ppOut[0], ppIn[0], *pFrameCountOut);
+    (void)pFrameCountIn;
+}
+ma_node_vtable s_OcclusionVtable = {OcclusionProcess, nullptr, 1, 1, 0};
+void OcclusionUninit(OcclusionNode& n) {
+    ma_node_uninit(&n.Base, nullptr);
+    ma_lpf_uninit(&n.Lpf, nullptr);
+}
 
 // One voice slot per live (or recently live) sound. Slots are recycled rather than erased so a
 // handle's index stays meaningful; Generation is bumped on every reuse so handles into a
 // previous occupant of the slot no longer resolve.
 struct Voice {
     std::unique_ptr<ma_sound> Sound;         // null when the slot is free
-    std::unique_ptr<ma_lpf_node> Lpf;        // occlusion low-pass, between the sound and its splitter / bus
-    double LpfHz = 0.0;                      // its cutoff now (SetOcclusion skips a reinit that changes nothing)
+    std::unique_ptr<OcclusionNode> Lpf;      // occlusion low-pass, between the sound and its splitter / bus
+    double LpfHz = 0.0;                      // its cutoff target (SetOcclusion skips an update that changes nothing)
     std::unique_ptr<ma_splitter_node> Split; // output 0: the bus, output 1: the reverb send (its volume is the send level)
     std::unique_ptr<ma_audio_buffer> Buffer; // non-null only for a voice playing preloaded data (#202)
     std::shared_ptr<const PreloadedClip> Clip; // keeps Buffer's PCM alive past Unload() (#171)
@@ -85,11 +116,14 @@ struct LimiterNode {
     LimiterSettings Pending;
     std::atomic<bool> Dirty{false};
     std::atomic<float> LastGrDb{0.0f}, LastGlueGrDb{0.0f};
+    std::atomic<float> Gain{1.0f};  // master volume x mute (applied here, ramped per block, not as the node's output bus volume)
+    float GainPrev = -1.0f;         // audio thread: the gain at the end of the last block (< 0: none yet)
 };
 LimiterNode* s_Limiter = nullptr;
 MeterNode* s_BusMeters[AudioEngine::kBusCount] = {};
 
 void MeterProcess(ma_node* pNode, const float** ppIn, ma_uint32* pFrameCountIn, float** ppOut, ma_uint32* pFrameCountOut) {
+    DenormalGuard denormals;
     MeterNode* n = reinterpret_cast<MeterNode*>(pNode);
     const ma_uint32 frames = *pFrameCountOut;
     float* out = ppOut[0];
@@ -101,6 +135,7 @@ void MeterProcess(ma_node* pNode, const float** ppIn, ma_uint32* pFrameCountIn, 
 ma_node_vtable s_MeterVtable = {MeterProcess, nullptr, 1, 1, MA_NODE_FLAG_CONTINUOUS_PROCESSING | MA_NODE_FLAG_ALLOW_NULL_INPUT};
 
 void LimiterProcess(ma_node* pNode, const float** ppIn, ma_uint32* pFrameCountIn, float** ppOut, ma_uint32* pFrameCountOut) {
+    DenormalGuard denormals;
     LimiterNode* n = reinterpret_cast<LimiterNode*>(pNode);
     const ma_uint32 frames = *pFrameCountOut;
     float* out = ppOut[0];
@@ -140,6 +175,19 @@ void LimiterProcess(ma_node* pNode, const float** ppIn, ma_uint32* pFrameCountIn
         }
         taps->Written.store(w + frames, std::memory_order_release);
     }
+    // The master level (volume x mute), after the meter and taps: ramped across the block so a change never steps.
+    const float g1 = n->Gain.load(std::memory_order_relaxed);
+    const float g0 = n->GainPrev < 0.0f ? g1 : n->GainPrev;
+    if (g0 != 1.0f || g1 != 1.0f) {
+        const float step = (g1 - g0) / (float)std::max<ma_uint32>(frames, 1);
+        float g = g0;
+        for (ma_uint32 i = 0; i < frames; ++i) {
+            g += step;
+            out[2 * (size_t)i] *= g;
+            out[2 * (size_t)i + 1] *= g;
+        }
+    }
+    n->GainPrev = g1;
     (void)pFrameCountIn;
 }
 ma_node_vtable s_LimiterVtable = {LimiterProcess, nullptr, 1, 1, MA_NODE_FLAG_CONTINUOUS_PROCESSING | MA_NODE_FLAG_ALLOW_NULL_INPUT};
@@ -153,11 +201,14 @@ struct ReverbNode {
     LoudnessMeter* Meter = nullptr;
     std::atomic<float> Return{1.0f};    // linear gain of the wet signal (the reverb return level x the SFX bus volume)
     std::atomic<bool> Enabled{true};
+    bool WasEnabled = true;             // audio thread: Enabled at the last callback (the switch-off resets the reverb)
+    float PrevGain = -1.0f;             // audio thread: Return at the end of the last block (< 0: none yet)
     std::atomic<std::uint64_t> Callbacks{0};
     std::atomic<double> TotalMicros{0.0}, MaxMicros{0.0};
     std::atomic<int> LastFrames{0};
     std::map<std::string, int> IrIndex; // game thread only: path -> the convolver's index
     std::vector<std::string> IrPaths;   // game thread only: by index
+    std::set<std::string> IrFullWarned; // game thread only: paths already warned about for want of a free convolver slot
 };
 ReverbNode* s_Reverbs[2] = {nullptr, nullptr}; // 0: the listener's room, 1: the remote room (a portal voice's own)
 bool s_ReverbInit = false;
@@ -172,6 +223,9 @@ void ReverbProcess(ma_node* pNode, const float** ppIn, ma_uint32* pFrameCountIn,
     float* out = ppOut[0];
     (void)pFrameCountIn;
     if (!n->Verb || !n->Enabled.load(std::memory_order_relaxed)) {
+        if (n->Verb && n->WasEnabled) n->Verb->Silence(); // switched off: the tails stop here, so a re-enable never replays a stale one
+        n->WasEnabled = false;
+        n->PrevGain = -1.0f;
         std::fill(out, out + 2 * (size_t)frames, 0.0f);
         if (n->Meter) n->Meter->Process(out, (int)frames);
         return;
@@ -183,9 +237,22 @@ void ReverbProcess(ma_node* pNode, const float** ppIn, ma_uint32* pFrameCountIn,
         if (silence.size() < 2 * (size_t)frames) silence.assign(2 * (size_t)frames, 0.0f); // (grows once, on the first callback)
         in = silence.data();
     }
+    n->WasEnabled = true;
     n->Verb->Process(in, out, (int)frames);
     const float gain = n->Return.load(std::memory_order_relaxed);
-    for (size_t i = 0; i < 2 * (size_t)frames; ++i) out[i] *= gain;
+    const float g0 = n->PrevGain < 0.0f ? gain : n->PrevGain; // (the return level ramps across the block: no step)
+    if (g0 == gain) {
+        for (size_t i = 0; i < 2 * (size_t)frames; ++i) out[i] *= gain;
+    } else {
+        const float step = (gain - g0) / (float)std::max<ma_uint32>(frames, 1);
+        float g = g0;
+        for (ma_uint32 i = 0; i < frames; ++i) {
+            g += step;
+            out[2 * (size_t)i] *= g;
+            out[2 * (size_t)i + 1] *= g;
+        }
+    }
+    n->PrevGain = gain;
     if (n->Meter) n->Meter->Process(out, (int)frames);
     if (TapRing* taps = s_Taps.load(std::memory_order_acquire)) {
         const unsigned long long w = taps->Written.load(std::memory_order_relaxed);
@@ -363,7 +430,7 @@ ma_node_vtable s_SoftClipVtable = {SoftClipProcess, nullptr, 1, 1, 0}; // (not c
 void ApplyMasterVolume(ma_engine& engine) {
     const float master = s_MutedFlag ? 0.0f : s_MasterVolume;
     if (s_Limiter) {
-        ma_node_set_output_bus_volume(&s_Limiter->Base, 0, master);
+        s_Limiter->Gain.store(master, std::memory_order_relaxed);
         ma_engine_set_volume(&engine, s_EnvMuted ? 0.0f : 1.0f);
     } else {
         ma_engine_set_volume(&engine, s_EnvMuted ? 0.0f : master);
@@ -401,7 +468,7 @@ void FreeSlot(uint32_t index) {
         voice.Split.reset();
     }
     if (voice.Lpf) {
-        ma_lpf_node_uninit(voice.Lpf.get(), nullptr);
+        OcclusionUninit(*voice.Lpf);
         voice.Lpf.reset();
     }
     if (voice.Buffer) {
@@ -617,6 +684,7 @@ void AudioEngine::Shutdown() {
     }
     // (The editor clips stay: plain PCM at their own rate, still playable by a later Init, and their ids stay meaningful.)
     s_Preloaded.clear();
+    s_LoadFailed.clear();
     s_Paused = false;
     if (s_BusesReady) for (int b = 0; b < kBusCount; ++b) ma_sound_group_uninit(&s_Buses[b]);
     s_BusesReady = false;
@@ -685,6 +753,7 @@ void AudioEngine::Update() {
 
 bool AudioEngine::Load(const std::string& path) {
     if (s_Preloaded.find(path) != s_Preloaded.end()) return true; // already preloaded
+    if (s_LoadFailed.count(path)) return false;                    // failed before (logged then); Reload(path) lifts it
 
     // Force the decode to the engine's own output format/rate so playing a preloaded clip needs
     // no per-instance resample - just a straight PCM copy into a fresh ma_audio_buffer.
@@ -696,8 +765,10 @@ bool AudioEngine::Load(const std::string& path) {
     ma_uint64 frameCount = 0;
     void* pFrames = nullptr;
     if (ma_decode_file(path.c_str(), &config, &frameCount, &pFrames) != MA_SUCCESS) {
-        if (!AssetDatabase::IsUnfetchedExternal(path)) // a Drive file not fetched yet: the scan's warning counts it
+        if (!AssetDatabase::IsUnfetchedExternal(path)) { // a Drive file not fetched yet: the scan's warning counts it
             Log::Error("Audio: failed to preload '" + path + "'.", LogContext::Asset(path));
+            s_LoadFailed.insert(path);
+        }
         return false;
     }
 
@@ -718,6 +789,14 @@ bool AudioEngine::Load(const std::string& path) {
 bool AudioEngine::Reload(const std::string& path) {
     namespace fs = std::filesystem;
     const fs::path changed = fs::u8path(path).lexically_normal();
+    auto same = [&](const std::string& key) { return key == path || fs::u8path(ProjectPaths::Resolve(key)).lexically_normal() == changed; };
+    // a fixed file gets another chance: forget its remembered failures (decode, editor clip, impulse response, no-slot index)
+    for (auto it = s_LoadFailed.begin(); it != s_LoadFailed.end();) it = same(*it) ? s_LoadFailed.erase(it) : std::next(it);
+    for (auto it = s_ClipFailed.begin(); it != s_ClipFailed.end();) it = same(*it) ? s_ClipFailed.erase(it) : std::next(it);
+    for (auto it = s_IrCache.begin(); it != s_IrCache.end();) it = same(it->first) ? s_IrCache.erase(it) : std::next(it);
+    for (ReverbNode* r : s_Reverbs)
+        if (r)
+            for (auto it = r->IrIndex.begin(); it != r->IrIndex.end();) it = (it->second < 0 && same(it->first)) ? r->IrIndex.erase(it) : std::next(it);
     std::vector<std::string> keys;
     for (const auto& [key, clip] : s_Preloaded)
         if (key == path || fs::u8path(ProjectPaths::Resolve(key)).lexically_normal() == changed) keys.push_back(key);
@@ -788,19 +867,27 @@ AudioEngine::SoundHandle AudioEngine::Play(const std::string& path, float volume
     }
     // The node chain: sound -> [occlusion low-pass] -> [splitter: bus | reverb send]. Built before the voice starts, so its first
     // block already goes through it. A failure leaves the voice on the plain path.
-    std::unique_ptr<ma_lpf_node> lpf;
+    std::unique_ptr<OcclusionNode> lpf;
     std::unique_ptr<ma_splitter_node> split;
     if (fx && group && ma_engine_get_channels(&s_Engine) == 2) {
         ma_node* tail = sound.get();
         const ma_uint32 sr = ma_engine_get_sample_rate(&s_Engine);
         if (fx->Occlusion) {
-            auto n = std::make_unique<ma_lpf_node>();
-            ma_lpf_node_config lc = ma_lpf_node_config_init(2, sr, std::clamp((double)fx->Cutoff, 80.0, 20000.0), 2);
-            if (ma_lpf_node_init(ma_engine_get_node_graph(&s_Engine), &lc, nullptr, n.get()) == MA_SUCCESS) {
-                ma_node_set_output_bus_volume(n.get(), 0, std::max(fx->Gain, 0.0f));
-                ma_node_attach_output_bus(tail, 0, n.get(), 0);
-                tail = n.get();
-                lpf = std::move(n);
+            auto n = std::make_unique<OcclusionNode>();
+            const double hz = std::clamp((double)fx->Cutoff, 80.0, 20000.0);
+            const ma_lpf_config lc = ma_lpf_config_init(ma_format_f32, 2, sr, hz, 2);
+            if (ma_lpf_init(&lc, nullptr, &n->Lpf) == MA_SUCCESS) {
+                n->Rate = sr;
+                n->Target.store(hz);
+                n->Applied = hz;
+                if (InitNode(&s_OcclusionVtable, &n->Base)) {
+                    ma_node_set_output_bus_volume(&n->Base, 0, std::max(fx->Gain, 0.0f));
+                    ma_node_attach_output_bus(tail, 0, &n->Base, 0);
+                    tail = &n->Base;
+                    lpf = std::move(n);
+                } else {
+                    ma_lpf_uninit(&n->Lpf, nullptr);
+                }
             }
         }
         if (fx->ReverbSend > 0.0f && s_Reverbs[0]) {
@@ -815,11 +902,11 @@ AudioEngine::SoundHandle AudioEngine::Play(const std::string& path, float volume
                 split = std::move(n);
             }
         }
-        if (lpf && !split) ma_node_attach_output_bus(lpf.get(), 0, group, 0);
+        if (lpf && !split) ma_node_attach_output_bus(&lpf->Base, 0, group, 0);
     }
     auto dropChain = [&] {
         if (split) ma_splitter_node_uninit(split.get(), nullptr);
-        if (lpf) ma_lpf_node_uninit(lpf.get(), nullptr);
+        if (lpf) OcclusionUninit(*lpf);
     };
     if (ma_sound_start(sound.get()) != MA_SUCCESS) {
         Log::Error("Audio: failed to start sound '" + path + "'.", LogContext::Asset(path));
@@ -868,14 +955,12 @@ void AudioEngine::SetOcclusion(SoundHandle handle, float cutoffHz, float gain) {
     if (!Resolve(handle)) return;
     Voice& v = s_Voices[handle & kIndexMask];
     if (!v.Lpf) return;
-    ma_node_set_output_bus_volume(v.Lpf.get(), 0, std::max(gain, 0.0f));
+    ma_node_set_output_bus_volume(&v.Lpf->Base, 0, std::max(gain, 0.0f));
     const double hz = (cutoffHz <= 0.0f || cutoffHz >= 20000.0f) ? 20000.0 : std::max(80.0, (double)cutoffHz);
-    // The coefficients are rewritten under the audio thread, which reads them as it filters: only when the cutoff
-    // really moves (half a percent is inaudible), not every frame the glide holds still.
+    // Only when the cutoff really moves (half a percent is inaudible). The audio thread applies the target itself, between blocks.
     if (std::abs(hz - v.LpfHz) <= v.LpfHz * 0.005) return;
     v.LpfHz = hz;
-    ma_lpf_node_config lc = ma_lpf_node_config_init(2, ma_engine_get_sample_rate(&s_Engine), hz, 2);
-    ma_lpf_node_reinit(&lc.lpf, v.Lpf.get());
+    v.Lpf->Target.store(hz, std::memory_order_relaxed);
 }
 
 void AudioEngine::SetReverbSend(SoundHandle handle, float level) {
@@ -909,31 +994,35 @@ std::shared_ptr<const IrData> LoadIr(const std::string& path) {
             ma_free(pcm, nullptr);
             ir = IrData::FromSamples(l.data(), r.data(), (int)frames, (int)ma_engine_get_sample_rate(&s_Engine));
         } else {
+            if (AssetDatabase::IsUnfetchedExternal(path)) return nullptr; // a Drive file not fetched yet: not remembered, it may arrive
             Log::Warn("Audio: could not load the impulse response '" + path + "'.", LogContext::Asset(path));
         }
     }
-    s_IrCache[path] = ir; // (a failure is remembered too: one warning, not one per frame)
+    s_IrCache[path] = ir; // (a failure is remembered too: one warning, not one per frame; Reload(path) forgets it)
     return ir;
 }
 
 // The convolver of `path` on a bus (registered on first use).
-int IrIndexFor(int bus, const std::string& path) {
+// `keepMask`: slots the caller is already using this round (never recycled for this IR).
+int IrIndexFor(int bus, const std::string& path, unsigned keepMask = 0) {
     ReverbNode* r = s_Reverbs[bus];
     if (!r || path.empty()) return -1;
     const auto it = r->IrIndex.find(path);
     if (it != r->IrIndex.end()) return it->second;
     const std::shared_ptr<const IrData> ir = LoadIr(path);
     if (!ir) {
-        r->IrIndex[path] = -1;
+        if (!AssetDatabase::IsUnfetchedExternal(path)) r->IrIndex[path] = -1; // (an unfetched file is asked again next time)
         return -1;
     }
-    const int idx = r->Verb->AddIr(ir);
-    r->IrIndex[path] = idx;
+    const int idx = r->Verb->AddIr(ir, keepMask);
     if (idx >= 0) {
+        r->IrIndex[path] = idx;
         if ((int)r->IrPaths.size() <= idx) r->IrPaths.resize((size_t)idx + 1);
-        r->IrPaths[(size_t)idx] = path;
-    } else {
-        Log::Warn("Audio: too many impulse responses on one reverb bus; '" + path + "' is not used.");
+        std::string& was = r->IrPaths[(size_t)idx];
+        if (!was.empty() && was != path) r->IrIndex.erase(was); // the slot was recycled: its old IR is no longer registered
+        was = path;
+    } else if (r->IrFullWarned.insert(path).second) { // (not remembered as -1: a slot may free up; the warning is once per path)
+        Log::Warn("Audio: too many impulse responses in use on one reverb bus; '" + path + "' is not used for now.");
     }
     return idx;
 }
@@ -953,9 +1042,11 @@ void AudioEngine::SetReverb(const ReverbSpec& spec, int bus) {
     ReverbRtTarget t;
     t.GlideSeconds = s_ReverbGlide;
     float total = 0.0f;
+    unsigned inUse = 0; // the slots this spec's earlier layers took: a later layer's new IR must not recycle them
     for (int i = 0; i < spec.Count && i < 2; ++i) {
         const ReverbLayerSpec& L = spec.Layers[i];
-        const int idx = IrIndexFor(b, L.Ir);
+        const int idx = IrIndexFor(b, L.Ir, inUse);
+        if (idx >= 0) inUse |= 1u << idx;
         if (idx < 0 || L.Weight <= 0.0f) continue;
         ReverbRtLayer& o = t.Layers[t.Count++];
         o.Instance = idx;
@@ -1090,6 +1181,13 @@ size_t AudioEngine::DrainTaps(std::vector<float>& master, std::vector<float>& pr
     if (!t || !s_Taps.load()) return 0;
     const unsigned long long w = t->Written.load(std::memory_order_acquire);
     if (w - t->Read > TapRing::kFrames) {
+        // Overrun: the frames skipped were never read, so the returns have added a lap onto their unread Wet data. Zero those slots
+        // so the next lap starts from silence instead of stale audio.
+        const unsigned long long skipped = std::min<unsigned long long>(w - TapRing::kFrames - t->Read, TapRing::kFrames);
+        for (unsigned long long i = 0; i < skipped; ++i) {
+            const size_t slot = (size_t)((t->Read + i) & (TapRing::kFrames - 1)) * 2;
+            t->Wet[slot] = t->Wet[slot + 1] = 0.0f;
+        }
         t->Read = w - TapRing::kFrames;
     }
     const size_t n = (size_t)(w - t->Read);
@@ -1305,6 +1403,7 @@ void AudioEngine::PlayPreview(const std::string& path) {
 AudioEngine::ClipId AudioEngine::LoadClip(const std::string& path) {
     const auto known = s_EditorClipIds.find(path);
     if (known != s_EditorClipIds.end()) return known->second;
+    if (s_ClipFailed.count(path)) return -1; // failed before (logged then); Reload(path) lifts it
     // The file's own channel count (0 = native: the built-in set is mono, half the memory of stereo) at the engine's rate, so
     // a voice needs no resample; the engine node spreads a mono clip over both channels before it pans.
     ma_decoder_config config = ma_decoder_config_init(ma_format_f32, 0, s_Initialized ? ma_engine_get_sample_rate(&s_Engine) : 48000);
@@ -1312,8 +1411,10 @@ AudioEngine::ClipId AudioEngine::LoadClip(const std::string& path) {
     void* pcm = nullptr;
     if (ma_decode_file(path.c_str(), &config, &frames, &pcm) != MA_SUCCESS || !pcm || frames == 0 || config.channels == 0) {
         ma_free(pcm, nullptr);
-        if (!AssetDatabase::IsUnfetchedExternal(path))
+        if (!AssetDatabase::IsUnfetchedExternal(path)) {
             Log::Error("Audio: failed to load the editor sound '" + path + "'.", LogContext::Asset(path));
+            s_ClipFailed.insert(path);
+        }
         return -1;
     }
     // ma_decode_file grows its buffer by doubling: trim the slack (the decode keeps its own buffer, no copy).

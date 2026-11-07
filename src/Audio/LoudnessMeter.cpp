@@ -39,12 +39,18 @@ LoudnessMeter::LoudnessMeter(int sampleRate) : m_Rate(sampleRate < 8000 ? 8000 :
 void LoudnessMeter::Process(const float* in, int frames) {
     for (int f = 0; f < frames; ++f) {
         for (int c = 0; c < 2; ++c) {
-            const float x = in[2 * (size_t)f + (size_t)c];
+            float x = in[2 * (size_t)f + (size_t)c];
+            if (!std::isfinite(x)) x = 0.0f; // (a NaN / Inf sample would leave the K-weighting filters and the block sum NaN for good)
             m_BlockPeak = std::max(m_BlockPeak, std::fabs(x));
             const double y = m_Hp[c].Run(m_Shelf[c].Run((double)x));
             m_Sum += y * y;
         }
         if (++m_InBlock < m_Block) continue;
+        for (int c = 0; c < 2; ++c) { // a filter state that overflowed is cleared
+            for (Biquad* b : {&m_Shelf[c], &m_Hp[c]})
+                if (!std::isfinite(b->Z1) || !std::isfinite(b->Z2)) b->Z1 = b->Z2 = 0.0;
+        }
+        if (!std::isfinite(m_Sum)) m_Sum = 0.0;
         // a 100 ms block is complete: its mean-square energy (both channels summed, weights 1)
         m_Blocks[m_Head] = m_Sum / (double)m_Block;
         m_Head = (m_Head + 1) % 30;

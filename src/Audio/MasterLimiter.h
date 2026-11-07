@@ -59,6 +59,7 @@ private:
     double m_GlueGr = 0.0;          // the glue's smoothed gain reduction (dB, >= 0)
     double m_GlueAtk = 0.0, m_GlueRel = 0.0;
     float m_Trim = 1.0f;
+    double m_TrimCur = 1.0;         // the trim in use: ramps to m_Trim across a block (a changed trim never steps)
     double m_Alpha = 0.0;
     float m_CeilLin = 0.89f;
 };

@@ -168,9 +168,10 @@ bool TailWorker::Post(Convolver* c, std::int64_t block) {
 }
 
 void TailWorker::Loop() {
-    while (m_Run.load()) {
+    for (;;) {
         const unsigned t = m_TailIdx.load(std::memory_order_relaxed);
         if (t == m_Head.load(std::memory_order_acquire)) {
+            if (!m_Run.load()) break; // (stopping: only once every queued job has run, so no convolver is left counting it in flight)
             std::unique_lock<std::mutex> lock(m_M);
             m_Cv.wait_for(lock, std::chrono::milliseconds(2));
             continue;
@@ -205,7 +206,9 @@ Convolver::Convolver(std::shared_ptr<const IrData> ir, TailWorker* worker)
 }
 
 Convolver::~Convolver() {
-    while (!Idle()) std::this_thread::yield(); // a queued tail block still points here
+    // a queued tail block still points here: wait for the worker to run it, but never forever (a stuck worker must not hang shutdown)
+    const auto give = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (!Idle() && std::chrono::steady_clock::now() < give) std::this_thread::sleep_for(std::chrono::milliseconds(1));
 }
 
 void Convolver::Reset() {

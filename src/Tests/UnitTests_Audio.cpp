@@ -22,6 +22,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <chrono>
 #include <cstdio>
 #include <set>
@@ -2756,7 +2757,218 @@ void TestOfflineEngineLimiterAndReverbCalibration() {
     fs::remove_all(dir, ec);
 }
 
+// --- audit S03: engine bug fixes ---------------------------------------------------------------------------------------------
+
+// S03-14 / S03-19: a NaN / Inf sample never poisons the limiter, the reverb or the meter; a changed trim ramps instead of stepping.
+void TestAudioNonFiniteInputIsScrubbed() {
+    const int rate = 48000;
+    const float nan = std::numeric_limits<float>::quiet_NaN(), inf = std::numeric_limits<float>::infinity();
+    {
+        MasterLimiter lim(rate);
+        LimiterSettings s;
+        s.GlueEnabled = true;
+        lim.Configure(s);
+        const int block = 480;
+        std::vector<float> in((size_t)block * 2, 0.3f), out((size_t)block * 2);
+        lim.Process(in.data(), out.data(), block);
+        in[10] = nan;
+        in[11] = inf;
+        in[300] = -inf;
+        lim.Process(in.data(), out.data(), block);
+        bool finite = true;
+        for (float v : out) finite = finite && std::isfinite(v);
+        CHECK(finite);
+        std::fill(in.begin(), in.end(), 0.3f);
+        for (int k = 0; k < 4; ++k) lim.Process(in.data(), out.data(), block); // and it keeps working afterwards
+        CHECK(std::fabs(out[(size_t)block]) > 0.1f && std::fabs(out[(size_t)block]) <= std::pow(10.0f, -1.0f / 20.0f) + 1e-6f);
+    }
+    {
+        ConvolutionReverb verb(rate, false);
+        const std::vector<float> h = NoiseIr(rate / 4, 0.2f, 31u);
+        verb.AddIr(IrData::FromSamples(h.data(), h.data(), (int)h.size(), rate));
+        ReverbRtTarget t;
+        t.Count = 1;
+        t.Layers[0] = {0, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f};
+        verb.SetTarget(t);
+        Lcg rng;
+        std::vector<float> in(960), out(960);
+        bool finite = true;
+        for (int k = 0; k < 20; ++k) {
+            for (float& v : in) v = 0.3f * rng.Next();
+            if (k == 3) in[100] = nan;
+            if (k == 4) in[200] = inf;
+            verb.Process(in.data(), out.data(), 480);
+            if (k >= 3) for (float v : out) finite = finite && std::isfinite(v);
+        }
+        CHECK(finite);
+    }
+    {
+        LoudnessMeter meter(rate); // (noise, not DC: the K-weighting's high-pass takes DC out)
+        Lcg rng;
+        std::vector<float> in((size_t)rate / 5 * 2);
+        for (float& v : in) v = 0.3f * rng.Next();
+        in[50] = nan;
+        meter.Process(in.data(), (int)in.size() / 2);
+        for (float& v : in) v = 0.3f * rng.Next();
+        meter.Process(in.data(), (int)in.size() / 2);
+        meter.Process(in.data(), (int)in.size() / 2);
+        CHECK(std::isfinite(meter.MomentaryLufs()) && meter.MomentaryLufs() > -40.0f && meter.PeakDb() > -20.0f);
+    }
+    {
+        // a trim change is a ramp across the block, not a step
+        MasterLimiter lim(rate);
+        const int block = 480;
+        std::vector<float> in((size_t)block * 2, 0.1f), out((size_t)block * 2);
+        lim.Process(in.data(), out.data(), block); // (fills the look-ahead)
+        LimiterSettings s;
+        s.TrimDb = -20.0f;
+        lim.Configure(s);
+        lim.Process(in.data(), out.data(), block);
+        float step = 0.0f;
+        for (int i = 1; i < block; ++i) step = std::max(step, std::fabs(out[(size_t)(2 * i)] - out[(size_t)(2 * i - 2)]));
+        CHECK(step < 1e-3f && out[(size_t)(2 * (block - 1))] < 0.1f);
+    }
+}
+
+// S03-15: the pre-delay ring follows the sample rate (a fixed 16384 frames wrapped a 250 ms delay above ~65 kHz).
+void TestConvolutionReverbPreDelayAtHighRates() {
+    for (int rate : {48000, 192000}) {
+        ConvolutionReverb verb(rate, false);
+        std::vector<float> h((size_t)4096, 0.0f);
+        h[0] = 1.0f;
+        verb.AddIr(IrData::FromSamples(h.data(), h.data(), (int)h.size(), rate));
+        ReverbRtTarget t;
+        t.Count = 1;
+        t.Layers[0] = {0, 1.0f, 1.0f, 250.0f, 0.0f, 0.0f};
+        verb.SetTarget(t);
+        const int delay = rate / 4, total = delay + 2000, block = 480;
+        std::vector<float> in((size_t)block * 2, 0.0f), out((size_t)block * 2);
+        int peakAt = -1;
+        float peak = 0.0f;
+        for (int pos = 0; pos < total; pos += block) {
+            std::fill(in.begin(), in.end(), 0.0f);
+            if (pos == 0) in[0] = in[1] = 1.0f;
+            verb.Process(in.data(), out.data(), block);
+            for (int i = 0; i < block; ++i)
+                if (std::fabs(out[(size_t)(2 * i)]) > peak) {
+                    peak = std::fabs(out[(size_t)(2 * i)]);
+                    peakAt = pos + i;
+                }
+        }
+        CHECK(peak > 0.05f && std::abs(peakAt - delay) <= 2);
+    }
+}
+
+// S03-22: two layers on one IR average their settings by weight instead of the last one winning.
+void TestConvolutionReverbSharedInstanceAveragesLayers() {
+    const int rate = 48000;
+    const std::vector<float> h = NoiseIr(rate / 4, 0.2f, 41u);
+    auto run = [&](bool twoLayers) {
+        ConvolutionReverb verb(rate, false);
+        verb.AddIr(IrData::FromSamples(h.data(), h.data(), (int)h.size(), rate));
+        ReverbRtTarget t;
+        t.GlideSeconds = 0.05f;
+        if (twoLayers) {
+            t.Count = 2;
+            t.Layers[0] = {0, 0.5f, 1.0f, 0.0f, 0.0f, 0.0f};
+            t.Layers[1] = {0, 0.5f, 0.0f, 0.0f, 0.0f, 0.0f}; // (the second layer is silent: the last-one-wins bug returned silence)
+        } else {
+            t.Count = 1;
+            t.Layers[0] = {0, 1.0f, 0.5f, 0.0f, 0.0f, 0.0f};
+        }
+        verb.SetTarget(t);
+        Lcg rng;
+        std::vector<float> in(960), out(960);
+        double e = 0.0;
+        for (int k = 0; k < 100; ++k) {
+            for (float& v : in) v = 0.3f * rng.Next();
+            verb.Process(in.data(), out.data(), 480);
+            if (k >= 60) for (float v : out) e += (double)v * v;
+        }
+        return e;
+    };
+    const double a = run(true), b = run(false);
+    CHECK(b > 1e-6 && std::fabs(Db(a / b)) < 0.5);
+}
+
+// S03-17: with every slot taken, an idle one the target does not name is recycled for a new IR.
+void TestConvolutionReverbRecyclesIdleSlots() {
+    const int rate = 48000;
+    ConvolutionReverb verb(rate, false);
+    std::vector<std::shared_ptr<const IrData>> irs;
+    for (int i = 0; i < ConvolutionReverb::kMaxInstances + 2; ++i) {
+        const std::vector<float> h = NoiseIr(rate / 8, 0.1f, 60u + (unsigned)i);
+        irs.push_back(IrData::FromSamples(h.data(), h.data(), (int)h.size(), rate));
+    }
+    for (int i = 0; i < ConvolutionReverb::kMaxInstances; ++i) CHECK(verb.AddIr(irs[(size_t)i]) == i);
+    ReverbRtTarget t;
+    t.Count = 1;
+    t.Layers[0] = {0, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f};
+    verb.SetTarget(t);
+    CHECK(verb.AddIr(irs[12]) == -1); // the audio thread has not picked the target up yet: nothing is recycled
+    std::vector<float> in(960, 0.1f), out(960);
+    verb.Process(in.data(), out.data(), 480);
+    const int a = verb.AddIr(irs[12]);
+    CHECK(a > 0 && a < ConvolutionReverb::kMaxInstances); // never slot 0 (the running one)
+    CHECK(verb.AddIr(irs[13], 1u << 5) != 5);             // a slot the caller still uses is left alone
+    CHECK(verb.GetInfo().Instances == ConvolutionReverb::kMaxInstances);
+    t.Layers[0].Instance = a; // and the recycled slot works
+    verb.SetTarget(t);
+    for (int k = 0; k < 20; ++k) verb.Process(in.data(), out.data(), 480);
+    CHECK(verb.GetInfo().On[a]);
+}
+
+// S03-13: switching a bus off resets the reverb, so switching it on does not replay the old tail.
+void TestConvolutionReverbSilenceDropsTail() {
+    const int rate = 48000;
+    const std::vector<float> h = NoiseIr(rate / 2, 0.5f, 51u);
+    auto tailEnergy = [&](bool silence) {
+        ConvolutionReverb verb(rate, false);
+        verb.AddIr(IrData::FromSamples(h.data(), h.data(), (int)h.size(), rate));
+        ReverbRtTarget t;
+        t.Count = 1;
+        t.Layers[0] = {0, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f};
+        t.GlideSeconds = 0.01f;
+        verb.SetTarget(t);
+        Lcg rng;
+        std::vector<float> in(960), out(960);
+        for (int k = 0; k < 20; ++k) {
+            for (float& v : in) v = 0.3f * rng.Next();
+            verb.Process(in.data(), out.data(), 480);
+        }
+        if (silence) verb.Silence();
+        std::fill(in.begin(), in.end(), 0.0f);
+        double e = 0.0;
+        for (int k = 0; k < 5; ++k) {
+            verb.Process(in.data(), out.data(), 480);
+            for (float v : out) e += (double)v * v;
+        }
+        return e;
+    };
+    CHECK(tailEnergy(false) > 1e-4 && tailEnergy(true) < 1e-9);
+}
+
+// S03-18: a convolver with tail blocks queued on the worker destroys cleanly (the worker drains its queue first).
+void TestConvolverDestroyWithQueuedTail() {
+    const int rate = 48000;
+    const std::vector<float> h = NoiseIr(rate, 0.8f, 71u);
+    auto worker = std::make_unique<TailWorker>();
+    {
+        Convolver c(IrData::FromSamples(h.data(), h.data(), (int)h.size(), rate), worker.get());
+        std::vector<float> in(4096, 0.2f), l(4096), r(4096);
+        for (int k = 0; k < 6; ++k) c.Process(in.data(), l.data(), r.data(), 4096);
+    } // (~Convolver waits, bounded, for the posted blocks)
+    worker.reset();
+    CHECK(true);
+}
+
 void RegisterAudioTests(UnitTestSupport::TestList& tests) {
+    tests.push_back({"AudioNonFiniteInputIsScrubbed", TestAudioNonFiniteInputIsScrubbed});
+    tests.push_back({"ConvolutionReverbPreDelayAtHighRates", TestConvolutionReverbPreDelayAtHighRates});
+    tests.push_back({"ConvolutionReverbSharedInstanceAveragesLayers", TestConvolutionReverbSharedInstanceAveragesLayers});
+    tests.push_back({"ConvolutionReverbRecyclesIdleSlots", TestConvolutionReverbRecyclesIdleSlots});
+    tests.push_back({"ConvolutionReverbSilenceDropsTail", TestConvolutionReverbSilenceDropsTail});
+    tests.push_back({"ConvolverDestroyWithQueuedTail", TestConvolverDestroyWithQueuedTail});
     tests.push_back({"SoundSetRoundRobinNeverRepeats", TestSoundSetRoundRobinNeverRepeats});
     tests.push_back({"SoundSetStealOldest", TestSoundSetStealOldest});
     tests.push_back({"SoundSetJitterPitchAndRequest", TestSoundSetJitterPitchAndRequest});
