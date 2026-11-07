@@ -416,17 +416,19 @@ SoundPlayer::Played SoundPlayer::Start(const SoundSet& set, int idx, const Reque
             }
         }
     }
-    const float jitter = set.VolumeJitterDb > 0.0f ? std::pow(10.0f, (Rand01() * 2.0f - 1.0f) * set.VolumeJitterDb / 20.0f) : 1.0f;
+    const float jitterDb = req.Override ? req.OverrideJitterDb : set.VolumeJitterDb;
+    const float pitchMin = req.Override ? req.OverridePitchMin : set.PitchMin, pitchMax = req.Override ? req.OverridePitchMax : set.PitchMax;
+    const float jitter = jitterDb > 0.0f ? std::pow(10.0f, (Rand01() * 2.0f - 1.0f) * jitterDb / 20.0f) : 1.0f;
     SoundVoice v;
     v.File = set.Files[idx];
     v.Volume = set.Volume * req.Gain * jitter * set.GainLin((size_t)idx);
-    v.Pitch = (set.PitchMin + (set.PitchMax - set.PitchMin) * Rand01()) * req.PitchScale;
+    v.Pitch = (pitchMin + (pitchMax - pitchMin) * Rand01()) * req.PitchScale;
     v.Loop = set.Loop;
     v.Bus = set.Bus;
     v.Spatial = !req.At2D;
     v.Position = req.Position;
-    v.MinDistance = std::max(set.MinDistance, 0.01f); // (Max >= Min > 0: the clamp and the duck's ratio below need it)
-    v.MaxDistance = std::max(set.MaxDistance, v.MinDistance);
+    v.MinDistance = std::max(req.OverrideDistance ? req.OverrideMinDistance : set.MinDistance, 0.01f); // (Max >= Min > 0: the clamp and the duck's ratio below need it)
+    v.MaxDistance = std::max(req.OverrideDistance ? req.OverrideMaxDistance : set.MaxDistance, v.MinDistance);
     v.Rolloff = set.Rolloff;
     if (v.Spatial && set.Distance.Valid()) { // the mix spec's distance model: the level holds at its reference distance, capped close up
         v.Rolloff = AudioEngine::Rolloff::Exponential;
@@ -573,8 +575,16 @@ void SoundPlayer::UpdateOcclusion(float dt) {
         Tracked& t = m_Occluded[(m_OccCursor + k) % n];
         if (t.Raycast && m_Now >= t.NextCheck && (m_Path || (budget > 0 && m_Blocked))) {
             VoicePath vp;
-            if (m_Path) {
+            const bool pathDue = m_Path && m_Now >= t.NextPath;
+            if (pathDue) {
                 vp = m_Path(m_ListenerPos, t.Pos);
+                t.NextPath = m_Now + (double)m_Occ.Interval;
+            } else if (t.Portal) {
+                vp.ViaPortal = true; // (between searches a portal voice keeps its last way round)
+                vp.Virtual = t.TargetPos;
+                vp.Gain = t.TargetGain;
+                vp.CutoffHz = t.TargetPortalCut;
+                vp.Remote = m_RemoteRoom;
             }
             if (vp.ViaPortal) {
                 if (!t.Portal) {
@@ -869,8 +879,11 @@ void WeaponAudio::StartForTest(const std::string& projectRoot, SoundBackend* bac
     m_RetryAt.clear();
     m_Profiles.clear();
     m_Foley.clear();
+    m_FoleyIndex.clear();
     m_History.clear();
+    m_HistoryOn = true;
     m_Manifest = SoundManifest{};
+    CacheClassIrs();
     m_LastTail = -1e9;
     m_Probe = EnvironmentProbe{};
     m_ListenerProbe = EnvironmentProbe{};
@@ -909,6 +922,7 @@ void WeaponAudio::Start(World& world, const std::string& projectRoot) {
     m_Root = projectRoot.empty() ? ProjectPaths::Resolve("") : projectRoot;
     m_Player.SetBackend(nullptr);
     m_Player.Seed(0xA5F00Du);
+    m_HistoryOn = false;
     m_Manifest = SoundManifest{};
     {
         std::ifstream in(std::filesystem::path(m_Root) / "assets/Audio/audio_manifest.json", std::ios::binary);
@@ -918,6 +932,7 @@ void WeaponAudio::Start(World& world, const std::string& projectRoot) {
             SoundManifest::FromJson(ss.str(), m_Manifest);
         }
     }
+    CacheClassIrs();
     for (const char* g : {"ak", "870"}) m_Profiles[g] = WeaponAudioProfile::Default(g);
     for (const entt::entity e : world.Registry.view<WeaponAudioComponent>()) {
         const WeaponAudioComponent& c = world.Registry.get<WeaponAudioComponent>(e);
@@ -1064,6 +1079,7 @@ void WeaponAudio::Stop() {
     m_World = nullptr;
     m_Profiles.clear();
     m_Foley.clear();
+    m_FoleyIndex.clear();
     m_Keyed.clear();
     m_Bursts.clear();
     m_Active = false;
@@ -1086,6 +1102,7 @@ void WeaponAudio::Update(float dt) {
     occ.MinDistance = m_Bus.OcclusionMinDistance;
     occ.GlideRate = m_Bus.OcclusionGlide;
     m_Player.SetOcclusion(occ);
+    m_ListenerMix = m_Zones.Mix(m_Listener); // (once a frame: the reverb below and the ambience read it)
     m_Ducker.Update(dt);
     m_Player.Update(dt);
     // The remote room's reverb (a voice heard through a portal brings its own room's): runs while such voices play, then rings out.
@@ -1111,7 +1128,7 @@ void WeaponAudio::Update(float dt) {
     }
     // The reverb follows the listener's space: told when it changes enough to matter (the DSP glides to what it is told).
     if (m_Bus.Enabled) {
-        const AudioEngine::ReverbSpec spec = ReverbAt(m_Listener);
+        const AudioEngine::ReverbSpec spec = ReverbAt(m_Listener, m_ListenerMix);
         if (!m_ReverbValid || SpecDiffers(spec, m_ReverbSent)) {
             m_Player.Backend().SetReverb(spec, 0);
             m_ReverbSent = spec;
@@ -1124,7 +1141,6 @@ void WeaponAudio::Update(float dt) {
             }
         }
     }
-    m_ListenerMix = m_Zones.Mix(m_Listener);
     UpdateAmbience(dt);
 }
 
@@ -1195,15 +1211,16 @@ float WeaponAudio::SendFor(const std::string& key) const {
     return 0.0f;
 }
 
-std::string WeaponAudio::ClassIr(int tailClass) const {
-    const SoundManifestEntry* e = m_Manifest.FirstFor(std::string("ir.") + SpaceClassName((SpaceClass)std::clamp(tailClass, 0, kSpaceClassCount - 1)));
-    return e ? e->File : std::string();
+void WeaponAudio::CacheClassIrs() {
+    for (int c = 0; c < kSpaceClassCount; ++c) {
+        const SoundManifestEntry* e = m_Manifest.FirstFor(std::string("ir.") + SpaceClassName((SpaceClass)c));
+        m_ClassIr[c] = e ? ClassIrEntry{e->File, e->PreDelayMs} : ClassIrEntry{};
+    }
 }
 
-float WeaponAudio::ClassPreDelayMs(int tailClass) const {
-    const SoundManifestEntry* e = m_Manifest.FirstFor(std::string("ir.") + SpaceClassName((SpaceClass)std::clamp(tailClass, 0, kSpaceClassCount - 1)));
-    return e ? e->PreDelayMs : 0.0f;
-}
+std::string WeaponAudio::ClassIr(int tailClass) const { return m_ClassIr[std::clamp(tailClass, 0, kSpaceClassCount - 1)].File; }
+
+float WeaponAudio::ClassPreDelayMs(int tailClass) const { return m_ClassIr[std::clamp(tailClass, 0, kSpaceClassCount - 1)].PreDelayMs; }
 
 float WeaponAudio::ClassWetDb(int tailClass) const {
     float db = m_Bus.WetIndoorSmallDb;
@@ -1246,8 +1263,9 @@ bool WeaponAudio::SpecDiffers(const AudioEngine::ReverbSpec& a, const AudioEngin
     return false;
 }
 
-AudioEngine::ReverbSpec WeaponAudio::ReverbAt(const glm::vec3& pos) {
-    const ReverbZoneMix z = m_Zones.Mix(pos);
+AudioEngine::ReverbSpec WeaponAudio::ReverbAt(const glm::vec3& pos) { return ReverbAt(pos, m_Zones.Mix(pos)); }
+
+AudioEngine::ReverbSpec WeaponAudio::ReverbAt(const glm::vec3& pos, const ReverbZoneMix& z) {
     AudioEngine::ReverbLayerSpec cands[ReverbZoneMix::kMaxClaims + kSpaceClassCount];
     int n = 0;
     auto add = [&](const ReverbPreset& p, float w) {
@@ -1421,6 +1439,7 @@ WeaponAudioProfile* WeaponAudio::Profile(const std::string& gun) {
 }
 
 void WeaponAudio::Note(const std::string& key, bool at2D, const std::string& space) {
+    if (!m_HistoryOn) return;
     m_History.push_back({m_Player.Now(), key, at2D, space});
     if (m_History.size() > kMaxHistory) m_History.pop_front();
 }
@@ -1614,6 +1633,15 @@ SoundSet* WeaponAudio::EventSet(WeaponAudioProfile& p, const std::string& elemen
 }
 
 SoundSet* WeaponAudio::FoleySet(const std::string& category, const std::string& element) {
+    // (category, element) -> the set, so a step finds its set without building the key string (m_Foley's nodes are stable)
+    auto cat = m_FoleyIndex.find(category);
+    if (cat != m_FoleyIndex.end()) {
+        if (const auto hit = cat->second.find(element); hit != cat->second.end()) {
+            SoundSet* s = hit->second;
+            if (s->Files.empty() && RetryEmptySet(s->Key)) FillSet(*s);
+            return s;
+        }
+    }
     const std::string key = "snd.foley." + category + "." + element;
     auto it = m_Foley.find(key);
     if (it == m_Foley.end()) {
@@ -1630,6 +1658,8 @@ SoundSet* WeaponAudio::FoleySet(const std::string& category, const std::string& 
     } else if (it->second.Files.empty() && RetryEmptySet(key)) {
         FillSet(it->second);
     }
+    if (cat == m_FoleyIndex.end()) cat = m_FoleyIndex.emplace(category, std::map<std::string, SoundSet*, std::less<>>{}).first;
+    cat->second[element] = &it->second;
     return &it->second;
 }
 

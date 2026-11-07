@@ -54,7 +54,7 @@ public:
     void Configure(const AudioMixComponent& s);
     // A loud event at the listener, dB re the player's own shot.
     void Key(float levelDb);
-    void SetFocus(bool on) { m_FocusOn = on; }
+    void SetFocus(bool on) { m_FocusOn = on; }  // takes effect in Update (the gain cache refreshes there)
     void Update(float dt);
     float GainDb(MixGroup g) const;
     float Gain(MixGroup g) const;
@@ -64,10 +64,12 @@ public:
     void Reset();
 
 private:
+    void RefreshGains();
     bool m_Enabled = true, m_FocusEnabled = true, m_FocusOn = false;
     float m_ThresholdDb = -20.0f, m_FullDb = -6.0f;
     float m_Attack = 0.015f, m_Hold = 0.15f, m_Release = 0.8f, m_FocusTime = 0.25f;
     float m_DuckDb[(int)MixGroup::Count] = {};
     float m_FocusDb[(int)MixGroup::Count] = {};
+    float m_Gain[(int)MixGroup::Count] = {1, 1, 1, 1, 1, 1, 1, 1, 1}; // linear gain per group, refreshed whenever the dB state changes
     float m_Amount = 0.0f, m_HoldLeft = 0.0f, m_Focus = 0.0f;
 };

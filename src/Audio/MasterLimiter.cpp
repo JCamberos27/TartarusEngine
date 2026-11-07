@@ -12,7 +12,9 @@ inline float Catmull(float p0, float p1, float p2, float p3, float t) {
 } // namespace
 
 MasterLimiter::MasterLimiter(int sampleRate) : m_Rate(sampleRate < 8000 ? 8000 : sampleRate) {
-    m_Cap = (int)(kMaxLookaheadMs * 0.001f * (float)m_Rate) + 16;
+    m_MaxL = (int)(kMaxLookaheadMs * 0.001f * (float)m_Rate);
+    m_Cap = 1; // power of two >= the longest look-ahead + 16, so ring indices are masks
+    while (m_Cap < m_MaxL + 16) m_Cap <<= 1;
     for (auto& x : m_X) x.assign((size_t)m_Cap, 0.0f);
     m_QIdx.assign((size_t)m_Cap, 0);
     m_QVal.assign((size_t)m_Cap, 1.0f);
@@ -33,7 +35,7 @@ void MasterLimiter::Reset() {
 }
 
 void MasterLimiter::Configure(const LimiterSettings& s) {
-    const int maxL = m_Cap - 16;
+    const int maxL = m_MaxL;
     const int l = std::clamp((int)std::lround(std::clamp(s.LookaheadMs, 0.1f, kMaxLookaheadMs) * 0.001f * (float)m_Rate), 1, maxL);
     const bool restart = l != m_L || m_N == 0;
     m_S = s;
@@ -52,7 +54,7 @@ void MasterLimiter::Configure(const LimiterSettings& s) {
 }
 
 void MasterLimiter::Process(const float* in, float* out, int frames) {
-    const int cap = m_Cap;
+    const size_t mask = (size_t)m_Cap - 1;
     const int L = m_L;
     const float ceil = m_CeilLin;
     float worstGs = 1.0f;
@@ -80,14 +82,14 @@ void MasterLimiter::Process(const float* in, float* out, int frames) {
             worstGlue = std::max(worstGlue, m_GlueGr);
         }
         const long long n = m_N++;
-        m_X[0][(size_t)(n % cap)] = inL;
-        m_X[1][(size_t)(n % cap)] = inR;
+        m_X[0][(size_t)n & mask] = inL;
+        m_X[1][(size_t)n & mask] = inR;
         out[2 * (size_t)f] = 0.0f;
         out[2 * (size_t)f + 1] = 0.0f;
         if (n < 2) continue;
         // required gain of frame j = n - 2: its own peak and the two segments (j - 1, j), (j, j + 1) of the cubic through the samples around
         const long long j = n - 2;
-        auto at = [&](int c, long long k) { return m_X[c][(size_t)(((k % cap) + cap) % cap)]; };
+        auto at = [&](int c, long long k) { return m_X[c][(size_t)k & mask]; };
         float seg = 0.0f;
         float peak = 0.0f;
         for (int c = 0; c < 2; ++c) {
@@ -99,19 +101,19 @@ void MasterLimiter::Process(const float* in, float* out, int frames) {
         m_PrevSeg = seg;
         const float t = (m_S.Enabled && need > ceil) ? ceil / need : 1.0f;
         // sliding minimum of t over the last L + 1 frames (monotonic deque), then a moving average of that over L + 1 frames
-        while (m_QCount > 0 && m_QVal[(size_t)((m_QHead + m_QCount - 1) % cap)] >= t) --m_QCount;
-        const int slot = (m_QHead + m_QCount) % cap;
+        while (m_QCount > 0 && m_QVal[(size_t)(m_QHead + m_QCount - 1) & mask] >= t) --m_QCount;
+        const int slot = (int)((size_t)(m_QHead + m_QCount) & mask);
         m_QIdx[(size_t)slot] = j;
         m_QVal[(size_t)slot] = t;
         ++m_QCount;
         while (m_QCount > 0 && m_QIdx[(size_t)m_QHead] < j - L) {
-            m_QHead = (m_QHead + 1) % cap;
+            m_QHead = (int)((size_t)(m_QHead + 1) & mask);
             --m_QCount;
         }
         const float m = m_QVal[(size_t)m_QHead];
         const long long old = j - L - 1;
-        m_Sum += (double)m - (double)m_Mv[(size_t)(((old % cap) + cap) % cap)];
-        m_Mv[(size_t)(j % cap)] = m;
+        m_Sum += (double)m - (double)m_Mv[(size_t)old & mask];
+        m_Mv[(size_t)j & mask] = m;
         const double g = std::min(m_Sum / (double)(L + 1), 1.0);
         if (g < m_Gs) m_Gs = g;
         else m_Gs += m_Alpha * (g - m_Gs);
