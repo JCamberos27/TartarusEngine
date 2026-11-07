@@ -5204,7 +5204,10 @@ void EditorLayer::DrawReflectedComponentExtra(const char* componentName, World& 
                 PushUndo(world, "Set Physic Material");
                 col->Material.clear();
             }
-            for (const std::string& path : FindPhysicMaterials())
+            // Listed once as the popup opens: the lookup walks the whole project folder.
+            static std::vector<std::string> s_PhysicMaterials;
+            if (ImGui::IsWindowAppearing()) s_PhysicMaterials = FindPhysicMaterials();
+            for (const std::string& path : s_PhysicMaterials)
                 if (ImGui::Selectable(path.c_str(), path == col->Material)) {
                     PushUndo(world, "Set Physic Material");
                     col->Material = path;

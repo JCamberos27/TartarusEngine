@@ -16,7 +16,7 @@
 
 #include <filesystem>
 #include <fstream>
-#include <regex>
+#include <cctype>
 #include <sstream>
 #include <unordered_set>
 
@@ -56,10 +56,34 @@ std::string KeyToString(std::uint64_t key) {
     return buf;
 }
 
+// The first `"guid": "<16 hex>"` in a .meta's text, lower-cased; empty if there is none. (A plain
+// scan: std::regex here cost most of a second at start-up over a project's ~11k sidecars.)
+std::string FindGuid(const std::string& text) {
+    const auto space = [&text](size_t i) {
+        while (i < text.size() && std::isspace((unsigned char)text[i])) ++i;
+        return i;
+    };
+    for (size_t at = text.find("\"guid\""); at != std::string::npos; at = text.find("\"guid\"", at + 1)) {
+        size_t i = space(at + 6);
+        if (i >= text.size() || text[i] != ':') continue;
+        i = space(i + 1);
+        if (i >= text.size() || text[i] != '"') continue;
+        ++i;
+        if (i + 16 >= text.size() || text[i + 16] != '"') continue;
+        std::string g = text.substr(i, 16);
+        bool hex = true;
+        for (char& c : g) {
+            if (!std::isxdigit((unsigned char)c)) { hex = false; break; }
+            c = (char)std::tolower((unsigned char)c);
+        }
+        if (hex) return g;
+    }
+    return {};
+}
+
 // GUIDs of every .meta under `root` (skipping Library/, which holds caches, not assets).
 void CollectMetaGuids(const std::filesystem::path& root, std::unordered_set<std::string>& out) {
     namespace fs = std::filesystem;
-    static const std::regex kGuid("\"guid\"\\s*:\\s*\"([0-9a-fA-F]{16})\"");
     std::error_code ec;
     if (!fs::is_directory(root, ec)) return;
     for (auto it = fs::recursive_directory_iterator(root, fs::directory_options::skip_permission_denied, ec);
@@ -70,13 +94,7 @@ void CollectMetaGuids(const std::filesystem::path& root, std::unordered_set<std:
             continue;
         }
         if (it->path().extension() != ".meta") continue;
-        std::smatch m;
-        const std::string text = ReadAll(it->path().string());
-        if (std::regex_search(text, m, kGuid)) {
-            std::string g = m[1].str();
-            for (char& c : g) c = (char)std::tolower((unsigned char)c);
-            out.insert(g);
-        }
+        if (std::string g = FindGuid(ReadAll(it->path().string())); !g.empty()) out.insert(std::move(g));
     }
 }
 } // namespace
