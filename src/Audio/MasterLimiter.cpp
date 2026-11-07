@@ -29,6 +29,7 @@ void MasterLimiter::Reset() {
     m_Gs = 1.0;
     m_PrevSeg = 0.0f;
     m_GlueGr = 0.0;
+    m_TrimCur = (double)m_Trim;
 }
 
 void MasterLimiter::Configure(const LimiterSettings& s) {
@@ -58,8 +59,13 @@ void MasterLimiter::Process(const float* in, float* out, int frames) {
     double worstGlue = 0.0;
     const bool glue = m_S.GlueEnabled;
     const double gT = m_S.GlueThresholdDb, gW = m_S.GlueKneeDb, gS = 1.0 - 1.0 / (double)m_S.GlueRatio;
+    const double trimStep = frames > 0 ? ((double)m_Trim - m_TrimCur) / (double)frames : 0.0; // (linear ramp to the new trim over the block)
     for (int f = 0; f < frames; ++f) {
-        float inL = in[2 * (size_t)f] * m_Trim, inR = in[2 * (size_t)f + 1] * m_Trim;
+        m_TrimCur += trimStep;
+        const float trim = (float)m_TrimCur;
+        float inL = in[2 * (size_t)f] * trim, inR = in[2 * (size_t)f + 1] * trim;
+        if (!std::isfinite(inL)) inL = 0.0f; // a NaN / Inf sample would poison the gain state for good
+        if (!std::isfinite(inR)) inR = 0.0f;
         if (glue) { // the glue: a soft-knee gain computer on the linked peak, its reduction smoothed (attack / release) in dB
             const double x = 20.0 * std::log10(std::max((double)std::max(std::fabs(inL), std::fabs(inR)), 1e-9));
             const double over = x - gT;
@@ -67,6 +73,7 @@ void MasterLimiter::Process(const float* in, float* out, int frames) {
             if (2.0 * over >= gW) want = gS * over;
             else if (gW > 0.0 && 2.0 * over > -gW) want = gS * (over + gW * 0.5) * (over + gW * 0.5) / (2.0 * gW);
             m_GlueGr += (want > m_GlueGr ? m_GlueAtk : m_GlueRel) * (want - m_GlueGr);
+            if (!std::isfinite(m_GlueGr) || m_GlueGr < 1e-9) m_GlueGr = 0.0; // (the release tail would decay into denormals)
             const float gg = (float)std::pow(10.0, -m_GlueGr / 20.0);
             inL *= gg;
             inR *= gg;
@@ -120,6 +127,12 @@ void MasterLimiter::Process(const float* in, float* out, int frames) {
             out[2 * (size_t)f] = yl;
             out[2 * (size_t)f + 1] = yr;
         }
+    }
+    m_TrimCur = (double)m_Trim;
+    if (!std::isfinite(m_Gs) || !std::isfinite(m_Sum)) { // (cannot happen with finite input; the cheap net that keeps the master alive)
+        const double glueGr = m_GlueGr;
+        Reset();
+        m_GlueGr = glueGr;
     }
     if (worstGlue > 0.0) {
         const float gr = (float)worstGlue;
