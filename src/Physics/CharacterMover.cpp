@@ -150,6 +150,13 @@ MoverResult Move(IMoverWorld& world, const MoverCapsule& cap, const glm::vec3& f
                  const glm::vec3& delta, const MoverSettings& s, bool wasGrounded, bool snapToGround, MoverDebug* debug) {
     MoverResult res;
     if (debug) debug->Clear();
+    // A non-finite feet / move would poison every sweep and the character's position: drop the move, stay where we were.
+    const auto finite = [](const glm::vec3& v) { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); };
+    if (!finite(feet) || !finite(velocity) || !finite(delta)) {
+        res.Feet = feet;
+        res.Grounded = wasGrounded;
+        return res;
+    }
     auto record = [&](const MoverHit& h) {
         if (res.HitCount < MoverResult::kMaxHits) res.Hits[res.HitCount++] = h;
     };

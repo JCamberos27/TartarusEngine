@@ -324,6 +324,9 @@ struct PhysicsState {
     PxRigidDynamic* grabbed = nullptr;
     bool            grabSavedGravityDisabled = false;
     float           grabSavedAngularDamping  = 0.0f;
+    // ReleaseBody's backspin raises a ball's max angular velocity; the old cap comes back on the next grab or when the body is removed.
+    PxRigidDynamic* spunBody = nullptr;
+    float           spunSavedMaxAngVel = 0.0f;
     // The hold point, its velocity and the hold orientation, set once per frame by UpdateGrab and
     // applied every substep (DriveGrab), the point advancing by its velocity between frames.
     bool            grabHasTarget = false;
@@ -684,6 +687,8 @@ void BuildActors(PhysicsState& s, const World& world, const std::unordered_set<s
     Log::Info(msg + (only ? " while playing." : "."));
 }
 
+void PushTriggerEvent(PhysicsState& s, std::uint32_t kind, std::uint32_t trig, std::uint32_t other); // (below)
+
 // #166 / #201 - drops one entity's actor (and every joint attached to it) from the scene, with
 // all the per-body bookkeeping that points at it.
 void RemoveActor(PhysicsState& s, std::uint32_t id) {
@@ -703,6 +708,7 @@ void RemoveActor(PhysicsState& s, std::uint32_t id) {
         s.preStepVel.Erase(b);
         s.jointed.erase(b);
         if (s.grabbed == b) { s.grabbed = nullptr; s.grabHasTarget = false; s.grabHasRotation = false; }
+        if (s.spunBody == b) s.spunBody = nullptr;
         if (s.playerGround == b) s.playerGround = nullptr;
     } else if (auto st = s.staticByEntity.find(id); st != s.staticByEntity.end()) {
         actor = st->second;
@@ -720,9 +726,16 @@ void RemoveActor(PhysicsState& s, std::uint32_t id) {
         }
     }
     s.joints.erase(std::remove(s.joints.begin(), s.joints.end(), nullptr), s.joints.end());
-    for (auto it = s.triggerOverlaps.begin(); it != s.triggerOverlaps.end();)
-        it = (it->first == id || it->second == id) ? s.triggerOverlaps.erase(it) : std::next(it);
-    s.playerTriggers.erase(id);
+    // The game still hears about the pairs that end because an actor went away.
+    for (auto it = s.triggerOverlaps.begin(); it != s.triggerOverlaps.end();) {
+        if (it->first == id || it->second == id) {
+            PushTriggerEvent(s, TriggerEvent::Exit, it->first, it->second);
+            it = s.triggerOverlaps.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    if (s.playerTriggers.erase(id)) PushTriggerEvent(s, TriggerEvent::Exit, id, kPlayerEntity);
     s.scene->removeActor(*actor);
     actor->release();
 }
@@ -1214,6 +1227,21 @@ bool IsActive() {
 
 // Trigger entities whose volume the Player capsule currently overlaps. One overlap query per
 // Step — cheap for the handful of trigger shapes a scene has.
+// Accepts only trigger shapes whose layer can collide with the Player's layer (the matrix row, as
+// MoveCharacter uses); everything else (floors, props, ragdoll links) never reaches the hit buffer.
+struct PlayerTriggerFilter : PxQueryFilterCallback {
+    PxU32 mask = 0xFFFFFFFFu;
+    PxQueryHitType::Enum preFilter(const PxFilterData&, const PxShape* shape, const PxRigidActor*, PxHitFlags&) override {
+        if (!shape || !(shape->getFlags() & PxShapeFlag::eTRIGGER_SHAPE)) return PxQueryHitType::eNONE;
+        const PxU32 layerBit = shape->getSimulationFilterData().word0;
+        if (layerBit && !(layerBit & mask)) return PxQueryHitType::eNONE;
+        return PxQueryHitType::eTOUCH;
+    }
+    PxQueryHitType::Enum postFilter(const PxFilterData&, const PxQueryHit&, const PxShape*, const PxRigidActor*) override {
+        return PxQueryHitType::eTOUCH;
+    }
+};
+
 void CollectPlayerTriggers(std::set<std::uint32_t>& out) {
     out.clear();
     if (!g_State->playerBody) return;
@@ -1224,11 +1252,13 @@ void CollectPlayerTriggers(std::set<std::uint32_t>& out) {
 
     // #191 — the touch buffer grows until PhysX reports every overlap (it used to be a fixed 16,
     // silently dropping Enter / Stay / Exit for any trigger past the 16th).
-    PxQueryFilterData fd(PxQueryFlag::eSTATIC | PxQueryFlag::eDYNAMIC | PxQueryFlag::eNO_BLOCK);
+    PxQueryFilterData fd(PxQueryFlag::eSTATIC | PxQueryFlag::eDYNAMIC | PxQueryFlag::eNO_BLOCK | PxQueryFlag::ePREFILTER);
+    PlayerTriggerFilter filter;
+    filter.mask = ProjectSettings::Physics().LayerCollisionMask[std::clamp(ProjectSettings::Physics().PlayerLayer, 0, 31)];
     static std::vector<PxOverlapHit> hits(64);
     for (;;) {
         PxOverlapBuffer buf(hits.data(), (PxU32)hits.size());
-        if (!g_State->scene->overlap(geom, pose, buf, fd)) return;
+        if (!g_State->scene->overlap(geom, pose, buf, fd, &filter)) return;
         if (buf.getNbTouches() >= (PxU32)hits.size() && hits.size() < 4096) {
             hits.resize(hits.size() * 2); // possibly truncated — retry with room to spare
             continue;
@@ -1363,10 +1393,12 @@ void Step(float dt, World& world, const std::function<void(float fixedDt)>& onFi
     // (A few microseconds of slack: float rounding must not leave the last of a whole number of steps owed.)
     while (g_State->stepAccumulator >= fixedStep - 1e-6f && steps < kMaxSubSteps) {
         if (onFixedStep) onFixedStep(fixedStep); // FixedUpdate runs before the sim, as in Unity
+        if (!g_State || !g_State->scene) return; // game code tore physics down in FixedUpdate
         RunOneSubstep(*g_State, fixedStep);
         g_State->stepAccumulator -= fixedStep;
         ++steps;
     }
+    if (!g_State || !g_State->scene) return;
     if (steps) FreezeRestingRagdolls(*g_State, fixedStep * (float)steps);
     g_State->lastSubsteps = steps;
     g_State->lastStepMillis = steps ? std::chrono::duration<float, std::milli>(
@@ -1413,7 +1445,8 @@ void Step(float dt, World& world, const std::function<void(float fixedDt)>& onFi
         // of a camera that moves every rendered frame, and drawing it a physics step behind
         // (Interpolate) made it judder against the view whenever the player moved.
         const int mode = body == g_State->grabbed ? 2 : (rb ? rb->Interpolation : 1);
-        if (mode == 1) {
+        // (A body asleep shows - and records as settled - its true pose, not a blend toward it.)
+        if (mode == 1 && !body->isSleeping()) {
             if (const PxTransform* prev = g_State->prevPose.Find(body); prev && PoseIsFinite(*prev)) {
                 const PxTransform& a = *prev;
                 shown.p = a.p + (p.p - a.p) * alpha;
@@ -1482,8 +1515,9 @@ bool PolicyRejects(const PxRigidActor* actor, bool solidOnly = false) {
 // Drop the Player capsule from scene queries — a "from the player" ray/sweep almost never
 // wants to hit itself, and its shape sits right on the query origin (#185 hardening).
 struct ExcludeActorFilter : PxQueryFilterCallback {
-    PxQueryHitType::Enum preFilter(const PxFilterData&, const PxShape*, const PxRigidActor* actor,
+    PxQueryHitType::Enum preFilter(const PxFilterData&, const PxShape* shape, const PxRigidActor* actor,
                                    PxHitFlags&) override {
+        if (shape && (shape->getFlags() & PxShapeFlag::eTRIGGER_SHAPE)) return PxQueryHitType::eNONE; // triggers aren't solid
         return PolicyRejects(actor) ? PxQueryHitType::eNONE : PxQueryHitType::eBLOCK;
     }
     PxQueryHitType::Enum postFilter(const PxFilterData&, const PxQueryHit&, const PxShape*,
@@ -1557,8 +1591,14 @@ PxVec3 BodyCentre(const CharacterBody& b) {
     return ToPx(b.Feet + glm::vec3(0.0f, b.Cap.Radius + b.Cap.HalfHeight, 0.0f));
 }
 
+bool FiniteVec3(const float v[3]) {
+    return v && std::isfinite(v[0]) && std::isfinite(v[1]) && std::isfinite(v[2]);
+}
+
 PxShape* MakeBodyShape(PhysicsState& s, PxRigidDynamic& a, const MoverCapsule& cap, const PxFilterData& sim) {
-    PxShape* sh = PxRigidActorExt::createExclusiveShape(a, PxCapsuleGeometry(cap.Radius, cap.HalfHeight), *s.defaultMaterial);
+    PxShape* sh = s.defaultMaterial ? PxRigidActorExt::createExclusiveShape(a, PxCapsuleGeometry(cap.Radius, cap.HalfHeight), *s.defaultMaterial)
+                                    : nullptr;
+    if (!sh) return nullptr;
     sh->setLocalPose(PxTransform(kCapsuleUp));
     sh->setSimulationFilterData(sim);
     return sh;
@@ -1571,8 +1611,18 @@ std::unique_ptr<CharacterBody> MakeBody(PhysicsState& s, const MoverCapsule& cap
     b->Cap = cap;
     b->Feet = feet;
     b->Actor = s.physics->createRigidDynamic(PxTransform(BodyCentre(*b)));
+    if (!b->Actor) {
+        Log::Error("PhysX: createRigidDynamic failed for a character capsule.");
+        return nullptr;
+    }
     b->Actor->setRigidBodyFlag(PxRigidBodyFlag::eKINEMATIC, true);
     b->Shape = MakeBodyShape(s, *b->Actor, cap, sim);
+    if (!b->Shape) {
+        Log::Error("PhysX: creating a character capsule's shape failed.");
+        b->Actor->release();
+        b->Actor = nullptr;
+        return nullptr;
+    }
     b->Actor->userData = reinterpret_cast<void*>(static_cast<std::uintptr_t>(entity));
     s.scene->addActor(*b->Actor);
     return b;
@@ -1581,9 +1631,13 @@ std::unique_ptr<CharacterBody> MakeBody(PhysicsState& s, const MoverCapsule& cap
 // A new cylinder length (crouch / stand), the feet where they were; the shape's filter data carries over.
 void ResizeBody(PhysicsState& s, CharacterBody& b, float cylinderHalfHeight) {
     const PxFilterData sim = b.Shape->getSimulationFilterData();
+    MoverCapsule cap = b.Cap;
+    cap.HalfHeight = cylinderHalfHeight;
+    PxShape* fresh = MakeBodyShape(s, *b.Actor, cap, sim); // made before the old one goes, so a failure leaves the capsule as it was
+    if (!fresh) { Log::Error("PhysX: resizing a character capsule failed."); return; }
     b.Actor->detachShape(*b.Shape);
-    b.Cap.HalfHeight = cylinderHalfHeight;
-    b.Shape = MakeBodyShape(s, *b.Actor, b.Cap, sim);
+    b.Cap = cap;
+    b.Shape = fresh;
 }
 
 // The mover's view of the PhysX scene for one character: its collision-matrix row, never itself or a trigger.
@@ -1666,9 +1720,15 @@ struct PhysxMoverWorld : IMoverWorld {
         const PxQueryFilterData fd(PxQueryFlag::eSTATIC | PxQueryFlag::eDYNAMIC | PxQueryFlag::ePREFILTER | PxQueryFlag::eNO_BLOCK);
         const PxCapsuleGeometry geom(cap.Radius, cap.HalfHeight);
         const PxTransform pose = Pose(cap, feet);
-        PxOverlapHit hits[16];
-        PxOverlapBuffer buf(hits, 16);
-        if (!S.scene->overlap(geom, pose, buf, fd, &f)) return false;
+        // The touch buffer grows until PhysX reports every overlap (a fixed 16 dropped the deepest ones in a crowd).
+        static thread_local std::vector<PxOverlapHit> hits(16);
+        PxOverlapBuffer buf;
+        for (;;) {
+            buf = PxOverlapBuffer(hits.data(), (PxU32)hits.size());
+            if (!S.scene->overlap(geom, pose, buf, fd, &f)) return false;
+            if (buf.getNbTouches() >= (PxU32)hits.size() && hits.size() < 4096) { hits.resize(hits.size() * 2); continue; }
+            break;
+        }
         float deepest = 0.0f;
         PxVec3 way(0.0f);
         for (PxU32 i = 0; i < buf.getNbTouches(); ++i) {
@@ -1693,6 +1753,7 @@ void CreateCharacter(float radius, float cylinderHalfHeight, const float footPos
     if (!g_State || HasCharacter()) return;
     if (radius <= 0.0f || cylinderHalfHeight <= 0.0f) return;
     const PxU32 pl = (PxU32)std::clamp(ProjectSettings::Physics().PlayerLayer, 0, 31);
+    if (!FiniteVec3(footPos)) return;
     g_State->playerBody = MakeBody(*g_State, MoverCapsule{radius, cylinderHalfHeight}, glm::vec3(footPos[0], footPos[1], footPos[2]),
                                    (std::uint32_t)kPlayerEntity, PxFilterData(1u << pl, pl, 0u, 0u));
 }
@@ -1938,10 +1999,15 @@ bool SphereCast(const float origin[3], const float dir[3], float radius, float m
 
 int OverlapSphere(const float center[3], float radius, unsigned* out, int maxEntities) {
     if (!g_State || !g_State->scene || radius <= 0.0f) return 0;
-    PxOverlapHit hits[64];
-    PxOverlapBuffer buf(hits, 64);
+    static thread_local std::vector<PxOverlapHit> hits(64);
+    PxOverlapBuffer buf;
     const PxTransform pose(PxVec3(center[0], center[1], center[2]));
-    if (!g_State->scene->overlap(PxSphereGeometry(radius), pose, buf)) return 0;
+    for (;;) { // grow until PhysX reports every overlap (it used to stop at 64)
+        buf = PxOverlapBuffer(hits.data(), (PxU32)hits.size());
+        if (!g_State->scene->overlap(PxSphereGeometry(radius), pose, buf)) return 0;
+        if (buf.getNbTouches() >= (PxU32)hits.size() && hits.size() < 4096) { hits.resize(hits.size() * 2); continue; }
+        break;
+    }
 
     int count = 0;
     const PxRigidActor* player = PlayerActor();
@@ -2053,12 +2119,17 @@ bool SweepFiltered(const PxGeometry& geom, const PxTransform& pose, const float 
 int OverlapFiltered(const PxGeometry& geom, const PxTransform& pose, const QueryFilter& f,
                     unsigned* out, int maxEntities) {
     if (!g_State || !g_State->scene) return 0;
-    PxOverlapHit hits[256];
-    PxOverlapBuffer buf(hits, 256);
+    static thread_local std::vector<PxOverlapHit> hits(256);
+    PxOverlapBuffer buf;
     LayerQueryFilter lf = MakeFilter(f, /*touchMode=*/true);
     PxQueryFilterData fd(PxQueryFlag::eSTATIC | PxQueryFlag::eDYNAMIC | PxQueryFlag::ePREFILTER |
                          PxQueryFlag::eNO_BLOCK);
-    if (!g_State->scene->overlap(geom, pose, buf, fd, &lf)) return 0;
+    for (;;) { // grow until PhysX reports every overlap
+        buf = PxOverlapBuffer(hits.data(), (PxU32)hits.size());
+        if (!g_State->scene->overlap(geom, pose, buf, fd, &lf)) return 0;
+        if (buf.getNbTouches() >= (PxU32)hits.size() && hits.size() < 4096) { hits.resize(hits.size() * 2); continue; }
+        break;
+    }
     int count = 0;
     std::vector<unsigned> seen;
     for (PxU32 i = 0; i < buf.getNbTouches(); ++i) {
@@ -2131,13 +2202,18 @@ int RaycastAll(const float origin[3], const float dir[3], float maxDistance, con
                RaycastHit* out, int maxHits) {
     PxVec3 d;
     if (!g_State || !g_State->scene || maxDistance <= 0.0f || !NormalizedDir(dir, d)) return 0;
-    PxRaycastHit hits[256];
-    PxRaycastBuffer buf(hits, 256);
+    static thread_local std::vector<PxRaycastHit> hits(256);
+    PxRaycastBuffer buf;
     LayerQueryFilter lf = MakeFilter(f, /*touchMode=*/true);
     PxQueryFilterData fd(PxQueryFlag::eSTATIC | PxQueryFlag::eDYNAMIC | PxQueryFlag::ePREFILTER |
                          PxQueryFlag::eNO_BLOCK);
-    g_State->scene->raycast(PxVec3(origin[0], origin[1], origin[2]), d, maxDistance, buf,
-                            PxHitFlag::eDEFAULT, fd, &lf);
+    for (;;) { // grow until PhysX reports every hit
+        buf = PxRaycastBuffer(hits.data(), (PxU32)hits.size());
+        g_State->scene->raycast(PxVec3(origin[0], origin[1], origin[2]), d, maxDistance, buf,
+                                PxHitFlag::eDEFAULT, fd, &lf);
+        if (buf.getNbTouches() >= (PxU32)hits.size() && hits.size() < 4096) { hits.resize(hits.size() * 2); continue; }
+        break;
+    }
     const PxU32 n = buf.getNbTouches();
     std::vector<const PxRaycastHit*> sorted;
     sorted.reserve(n);
@@ -2372,7 +2448,7 @@ void FreezeRagdoll(PhysicsState& s, PhysicsState::Ragdoll& rd) {
     for (PxArticulationLink* l : rd.Bodies) {
         if (!l) continue;
         const PxTransform pose = l->getGlobalPose();
-        if (!PoseIsFinite(pose)) { copy->release(); return; }
+        if (!PoseIsFinite(pose)) { copy->release(); rd.Rest = 0.0f; return; } // (not retried every frame)
         PxShape* shapes[4];
         const PxU32 n = l->getShapes(shapes, 4);
         for (PxU32 k = 0; k < n; ++k) {
@@ -2540,6 +2616,12 @@ int CreateRagdoll(unsigned entity, const RagdollPart* parts, int count, const Ra
     art->setSleepThreshold(prm.SleepThreshold);
     if (prm.StabilizationThreshold >= 0.0f) art->setStabilizationThreshold(prm.StabilizationThreshold);
     PxMaterial* mat = s.physics->createMaterial(prm.StaticFriction, prm.DynamicFriction, prm.Restitution);
+    if (!mat) {
+        Log::Error("PhysX: createMaterial failed for a ragdoll.");
+        art->release();
+        rd = PhysicsState::Ragdoll();
+        return -1;
+    }
     if (prm.Grip) {
         mat->setFrictionCombineMode(PxCombineMode::eMAX);
         mat->setRestitutionCombineMode(PxCombineMode::eMULTIPLY);
@@ -2551,6 +2633,13 @@ int CreateRagdoll(unsigned entity, const RagdollPart* parts, int count, const Ra
         if (std::fabs(parts[i].FrictionScale - 1.0f) > 1e-3f) {
             slickScale = std::max(parts[i].FrictionScale, 0.0f);
             slick = s.physics->createMaterial(prm.StaticFriction * slickScale, prm.DynamicFriction * slickScale, prm.Restitution);
+            if (!slick) {
+                Log::Error("PhysX: createMaterial failed for a ragdoll's slick material.");
+                art->release();
+                mat->release();
+                rd = PhysicsState::Ragdoll();
+                return -1;
+            }
             slick->setFrictionCombineMode(PxCombineMode::eMIN); // (and the floor's grip doesn't win it back)
             if (prm.Grip) slick->setRestitutionCombineMode(PxCombineMode::eMULTIPLY);
         }
@@ -2644,6 +2733,14 @@ int CreateRagdoll(unsigned entity, const RagdollPart* parts, int count, const Ra
         rd.Shape[(size_t)i] = shapeLocal;
         PxShape* sh = PxRigidActorExt::createExclusiveShape(*link, PxCapsuleGeometry(std::max(p.Radius, 0.01f), std::max(p.HalfLength, 0.005f)),
                                                               slick && std::fabs(p.FrictionScale - 1.0f) > 1e-3f ? *slick : *mat);
+        if (!sh) {
+            Log::Error("PhysX: createExclusiveShape failed for a ragdoll part.");
+            art->release();
+            mat->release();
+            if (slick) slick->release();
+            rd = PhysicsState::Ragdoll();
+            return -1;
+        }
         sh->setLocalPose(shapeLocal);
         sh->setSimulationFilterData(PxFilterData(1u, 0u, ((PxU32)id + 1u) | ((PxU32)i << 16), rd.Ignore[(size_t)i]));
         sh->setQueryFilterData(PxFilterData(1u, 0u, (PxU32)id + 1u, 0u));
@@ -3093,8 +3190,8 @@ bool IgnoreRagdollParts(unsigned entity, int ragdoll, unsigned partMask) {
     if (it == s.bodyByEntity.end() || !it->second) return false;
     PxRigidDynamic* body = it->second;
     const bool on = partMask != 0u && ValidRagdoll(ragdoll);
-    // Whatever it was passing, it is pushed back out gently, not fired out of the body.
-    body->setMaxDepenetrationVelocity(1.5f);
+    // Whatever it was passing, it is pushed back out gently, not fired out of the body; PhysX's default (unlimited) comes back with the mask.
+    body->setMaxDepenetrationVelocity(on ? 1.5f : PX_MAX_F32);
     std::vector<PxShape*> shapes(body->getNbShapes());
     body->getShapes(shapes.data(), (PxU32)shapes.size());
     for (PxShape* sh : shapes) {
@@ -3361,11 +3458,12 @@ void PlaceNpcBody(CharacterBody& b) {
 } // namespace
 
 CharacterId CreateNpcCharacter(unsigned entity, float radius, float cylinderHalfHeight, const float footPos[3]) {
-    if (!g_State || radius <= 0.0f || cylinderHalfHeight <= 0.0f) return kNoCharacter;
+    if (!g_State || !g_State->scene || !(radius > 0.0f) || !(cylinderHalfHeight > 0.0f) || !FiniteVec3(footPos)) return kNoCharacter;
     NpcCharacter n;
     n.entity = entity;
     n.body = MakeBody(*g_State, MoverCapsule{radius, cylinderHalfHeight}, glm::vec3(footPos[0], footPos[1], footPos[2]), entity,
                       PxFilterData(1u, 0u, 0u, 0u)); // the Default layer
+    if (!n.body) return kNoCharacter; // (MakeBody logged why)
     g_State->npcActors.insert(n.body->Actor);
     return AddNpcSlot(std::move(n));
 }
@@ -3415,7 +3513,7 @@ void SetNpcPassesRagdolls(CharacterId id, bool on) {
 
 unsigned MoveNpcCharacter(CharacterId id, const float disp[3], float dt) {
     NpcCharacter* n = NpcSlot(id);
-    if (!n || dt <= 0.0f) return 0;
+    if (!n || !(dt > 0.0f) || !std::isfinite(dt) || !FiniteVec3(disp)) return 0; // a NaN move is dropped: the feet stay at the last good ones
     if (CharacterBody* b = n->body.get()) {
         // The same collision-matrix row, his own hitboxes and (crawling) the dead skipped, as the Default layer's body.
         PhysxMoverWorld w(*g_State, b->Actor, ProjectSettings::Physics().LayerCollisionMask[0]);
@@ -3437,6 +3535,7 @@ unsigned MoveNpcCharacter(CharacterId id, const float disp[3], float dt) {
 }
 
 void SetNpcFootPosition(CharacterId id, const float footPos[3]) {
+    if (!FiniteVec3(footPos)) return;
     if (CharacterBody* b = NpcBody(id)) {
         b->Feet = glm::vec3(footPos[0], footPos[1], footPos[2]);
         PlaceNpcBody(*b);
@@ -3528,8 +3627,20 @@ int MakeHitboxes(PxRigidActor* capsule, std::uint32_t entity, const HitCapsule* 
     h.Capsule = capsule;
     for (int i = 0; i < count; ++i) {
         PxRigidDynamic* b = s.physics->createRigidDynamic(HitboxPose(parts[i]));
-        PxShape* sh = PxRigidActorExt::createExclusiveShape(
-            *b, PxCapsuleGeometry(std::max(parts[i].Radius, 0.01f), std::max(parts[i].HalfLength, 0.005f)), *s.defaultMaterial);
+        PxShape* sh = b && s.defaultMaterial ? PxRigidActorExt::createExclusiveShape(
+            *b, PxCapsuleGeometry(std::max(parts[i].Radius, 0.01f), std::max(parts[i].HalfLength, 0.005f)), *s.defaultMaterial) : nullptr;
+        if (!sh) { // fail cleanly: take back the ones already made
+            Log::Error("PhysX: creating a hitbox capsule failed.");
+            if (b) b->release();
+            for (PxRigidDynamic* made : h.Bodies) {
+                s.hitboxActors.erase(made);
+                s.bodyHitboxActors.erase(made);
+                made->release();
+            }
+            h.Bodies.clear();
+            h.Capsule = nullptr;
+            return -1;
+        }
         sh->setFlag(PxShapeFlag::eSIMULATION_SHAPE, false); // query only
         sh->setFlag(PxShapeFlag::eSCENE_QUERY_SHAPE, true);
         sh->setSimulationFilterData(PxFilterData(1u, 0u, 0u, 0u)); // the Default layer, as the capsule
@@ -3562,7 +3673,12 @@ int CreateBodyHitboxes(unsigned entity, const HitCapsule* parts, int count) {
 void SetNpcHitboxPoses(int id, const HitCapsule* parts, int count) {
     if (!g_State || !parts || id < 0 || id >= (int)g_State->hitboxes.size()) return;
     auto& h = g_State->hitboxes[(size_t)id];
-    for (int i = 0; i < count && i < (int)h.Bodies.size(); ++i) h.Bodies[(size_t)i]->setGlobalPose(HitboxPose(parts[i]), false);
+    for (int i = 0; i < count && i < (int)h.Bodies.size(); ++i) {
+        if (!FiniteVec3(parts[i].Position) || !std::isfinite(parts[i].Rotation[0]) || !std::isfinite(parts[i].Rotation[1]) ||
+            !std::isfinite(parts[i].Rotation[2]) || !std::isfinite(parts[i].Rotation[3]))
+            continue; // keep this hitbox where it was
+        h.Bodies[(size_t)i]->setGlobalPose(HitboxPose(parts[i]), false);
+    }
 }
 
 void SetNpcHitboxesActive(int id, bool active) {
@@ -3901,6 +4017,7 @@ void GrabBody(unsigned entity) {
     if (!g_State) return;
     PxRigidDynamic* b = DynamicFor(entity);
     if (!b) return;
+    if (g_State->spunBody == b) { b->setMaxAngularVelocity(g_State->spunSavedMaxAngVel); g_State->spunBody = nullptr; }
     g_State->grabbed = b;
     g_State->grabHasTarget = false;
     g_State->grabHasRotation = false;
@@ -3946,6 +4063,8 @@ void ReleaseBody(bool launch, const float impulse[3], float backspinRadPerSec) {
                            shape->getGeometry().getType() == PxGeometryType::eSPHERE;
         const PxVec3 right = v.cross(PxVec3(0.0f, 1.0f, 0.0f));
         if (round && right.magnitude() > 1e-4f) {
+            if (g_State->spunBody && g_State->spunBody != b) g_State->spunBody->setMaxAngularVelocity(g_State->spunSavedMaxAngVel);
+            if (g_State->spunBody != b) { g_State->spunBody = b; g_State->spunSavedMaxAngVel = b->getMaxAngularVelocity(); }
             b->setMaxAngularVelocity(std::max(b->getMaxAngularVelocity(), backspinRadPerSec * 1.5f));
             b->setAngularVelocity(right.getNormalized() * backspinRadPerSec);
         }
