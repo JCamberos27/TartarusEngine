@@ -670,7 +670,9 @@ int Application::RunSession() {
         ProjectSettings::Load(); // physics + tags (#236 A4); project/settings.json
         // (#333 PR 1) .meta sidecars for existing assets: scanned in the background since start-up
         // (#132, BeginScanProject above); the scene load below waits for it on its first lookup.
-        ThumbnailCache::PruneOrphans(); // #133 — drop cached thumbnails of deleted assets
+        // #133 — drop cached thumbnails of deleted assets. On a worker: it reads every .meta in the
+        // project (~0.8 s on the main thread). The future joins when the session ends.
+        auto thumbnailPrune = std::async(std::launch::async, ThumbnailCache::PruneOrphans);
         const auto& startup=ProjectSettings::Build().Scenes.empty()?ProjectSettings::StartupScene():ProjectSettings::Build().Scenes.front();
         std::string scenePath=startup.empty()?std::string{}:ProjectPaths::Resolve(startup);
         {

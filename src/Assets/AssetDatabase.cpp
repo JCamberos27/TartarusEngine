@@ -630,7 +630,9 @@ std::uint64_t Revision() {WaitIfScanning();return g_Revision.load();}
 std::string ReadMetaFields(const std::string& path) {
     if (IsSynthetic(path)) return "{}";
     WaitIfScanning();
-    std::lock_guard<std::mutex> lk(g_Mutex);
+    // No g_Mutex: this touches no map, and .meta writes are atomic renames, so a read sees the
+    // old file or the new one. (Held across the read and parse, it stalled every GUID lookup on
+    // the main thread behind the asset-loader workers.)
     json j = ReadMetaFull(MetaPath(path));
     return j.empty() ? "{}" : j.dump();
 }
